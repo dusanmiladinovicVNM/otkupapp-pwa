@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a5e2a">
+    <title>OtkupApp - Terenski otkup</title>
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- html5-qrcode library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #1a5e2a;
+            --primary-light: #2d8a42;
+            --primary-dark: #0f3d1a;
+            --accent: #e8a838;
+            --bg: #f5f5f0;
+            --card: #ffffff;
+            --text: #1a1a1a;
+            --text-muted: #666666;
+            --border: #d4d4d4;
+            --danger: #c0392b;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --radius: 10px;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+        
+        /* --- HEADER --- */
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header .sync-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .sync-online { background: var(--success); color: white; }
+        .sync-offline { background: var(--danger); color: white; }
+        .sync-pending { background: var(--warning); color: white; }
+        
+        /* --- TABS --- */
+        .tab-bar {
+            display: flex;
+            background: white;
+            border-bottom: 2px solid var(--border);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        
+        /* --- CONTENT --- */
+        .tab-content { display: none; padding: 16px; }
+        .tab-content.active { display: block; }
+        
+        /* --- FORM --- */
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 16px;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        /* --- QR SCAN BUTTON --- */
+        .qr-scan-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-light);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 14px;
+        }
+        .qr-scan-btn:active { background: var(--primary-dark); }
+        
+        /* --- QR READER --- */
+        #qr-reader {
+            display: none;
+            margin-bottom: 14px;
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        #qr-reader video { border-radius: var(--radius); }
+        
+        /* --- KOOPERANT DISPLAY --- */
+        .koop-display {
+            background: var(--primary);
+            color: white;
+            padding: 14px;
+            border-radius: var(--radius);
+            margin-bottom: 14px;
+            display: none;
+        }
+        .koop-display.visible { display: block; }
+        .koop-display .koop-name { font-size: 18px; font-weight: 700; }
+        .koop-display .koop-id { font-size: 12px; opacity: 0.8; }
+        
+        /* --- BUTTONS --- */
+        .btn-primary {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn-primary:active { background: var(--primary-dark); }
+        .btn-primary:disabled { background: var(--border); color: var(--text-muted); }
+        
+        .btn-secondary {
+            width: 100%;
+            padding: 12px;
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            border-radius: var(--radius);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        /* --- QUEUE LIST --- */
+        .queue-item {
+            background: white;
+            padding: 14px;
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .queue-item.synced { border-left-color: var(--success); }
+        .queue-item.error { border-left-color: var(--danger); }
+        .queue-item .qi-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .queue-item .qi-koop { font-weight: 600; }
+        .queue-item .qi-time { font-size: 12px; color: var(--text-muted); }
+        .queue-item .qi-detail { font-size: 13px; color: var(--text-muted); }
+        
+        /* --- STATS --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            background: white;
+            padding: 16px;
+            border-radius: var(--radius);
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+        .stat-card .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+        
+        /* --- TOAST --- */
+        .toast {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--primary); }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <h1>OtkupApp</h1>
+    <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
+</div>
+
+<!-- TABS -->
+<div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('otkup')">Novi otkup</button>
+    <button class="tab-btn" onclick="showTab('queue')">Red čekanja</button>
+    <button class="tab-btn" onclick="showTab('stats')">Danas</button>
+</div>
+
+<!-- TAB: NOVI OTKUP -->
+<div class="tab-content active" id="tab-otkup">
+    
+    <!-- QR Scanner -->
+    <button class="qr-scan-btn" onclick="startQRScan()">
+        📷 Skeniraj QR kooperanta
+    </button>
+    <div id="qr-reader"></div>
+    
+    <!-- Kooperant Display -->
+    <div class="koop-display" id="koopDisplay">
+        <div class="koop-name" id="koopName"></div>
+        <div class="koop-id" id="koopId"></div>
+    </div>
+    
+    <!-- Hidden fields -->
+    <input type="hidden" id="fldKooperantID">
+    
+    <!-- Form -->
+    <div class="form-row">
+        <div class="form-group">
+            <label>Vrsta voća</label>
+            <select id="fldVrsta" onchange="onVrstaChange()">
+                <option value="">-- Izaberi --</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Sorta</label>
+            <select id="fldSorta">
+                <option value="">-- Izaberi --</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label>Klasa</label>
+            <select id="fldKlasa">
+                <option value="I">I</option>
+                <option value="II">II</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Količina (kg)</label>
+            <input type="number" id="fldKolicina" inputmode="numeric" placeholder="0">
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <div class="form-group">
+            <label>Cena (RSD/kg)</label>
+            <input type="number" id="fldCena" inputmode="decimal" placeholder="0.00">
+        </div>
+        <div class="form-group">
+            <label>Ambalaža (kom)</label>
+            <input type="number" id="fldAmbalaza" inputmode="numeric" placeholder="0">
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label>Napomena</label>
+        <input type="text" id="fldNapomena" placeholder="Opciono...">
+    </div>
+    
+    <button class="btn-primary" onclick="saveOtkup()">SAČUVAJ OTKUP</button>
+    <button class="btn-secondary" onclick="resetForm()">Poništi</button>
+</div>
+
+<!-- TAB: RED ČEKANJA -->
+<div class="tab-content" id="tab-queue">
+    <div id="queueList"></div>
+    <button class="btn-secondary" onclick="syncNow()" id="btnSync">Sinhronizuj sada</button>
+</div>
+
+<!-- TAB: DANAS -->
+<div class="tab-content" id="tab-stats">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="statCount">0</div>
+            <div class="stat-label">Otkupa danas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statKg">0</div>
+            <div class="stat-label">Ukupno kg</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statPending">0</div>
+            <div class="stat-label">Čeka sync</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statSynced">0</div>
+            <div class="stat-label">Sinhronizovano</div>
+        </div>
+    </div>
+    <div id="todayList"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CONFIG = {
+    // APPS SCRIPT WEB APP URL - zameni sa tvojom URL
+    API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',
+    OTKUPAC_ID: 'ST-00001',  // Identifikacija otkupljivača
+    DB_NAME: 'OtkupAppDB',
+    DB_VERSION: 1,
+    STORE_NAME: 'otkupi',
+    STAMM_STORE: 'stammdaten'
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let db = null;
+let qrScanner = null;
+let stammdaten = { kooperanti: [], kulture: [], config: [] };
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    db = await openDB();
+    await loadStammdaten();
+    populateVrstaDropdown();
+    updateSyncBadge();
+    updateStats();
+    
+    // Online/Offline listeners
+    window.addEventListener('online', () => { updateSyncBadge(); syncQueue(); });
+    window.addEventListener('offline', () => { updateSyncBadge(); });
+    
+    // Auto-sync alle 60 Sekunden
+    setInterval(() => { if (navigator.onLine) syncQueue(); }, 60000);
+});
+
+// ============================================================
+// INDEXEDDB
+// ============================================================
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+        
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
+                const store = db.createObjectStore(CONFIG.STORE_NAME, { keyPath: 'clientRecordID' });
+                store.createIndex('syncStatus', 'syncStatus', { unique: false });
+                store.createIndex('datum', 'datum', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(CONFIG.STAMM_STORE)) {
+                db.createObjectStore(CONFIG.STAMM_STORE, { keyPath: 'key' });
+            }
+        };
+        
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+function dbPut(storeName, data) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).put(data);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target.error);
+    });
+}
+
+function dbGetAll(storeName) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const req = tx.objectStore(storeName).getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+function dbGetByIndex(storeName, indexName, value) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const idx = tx.objectStore(storeName).index(indexName);
+        const req = idx.getAll(value);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+// ============================================================
+// QR SCANNER
+// ============================================================
+function startQRScan() {
+    const readerDiv = document.getElementById('qr-reader');
+    readerDiv.style.display = 'block';
+    
+    if (qrScanner) {
+        qrScanner.clear();
+    }
+    
+    qrScanner = new Html5Qrcode('qr-reader');
+    
+    qrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            onQRScanned(decodedText);
+            qrScanner.stop().then(() => {
+                readerDiv.style.display = 'none';
+            });
+        },
+        () => {} // ignore errors during scanning
+    ).catch(err => {
+        showToast('Kamera nije dostupna: ' + err, 'error');
+        readerDiv.style.display = 'none';
+    });
+}
+
+function onQRScanned(text) {
+    try {
+        // Pokušaj JSON: {"type":"KOOP","id":"KOOP-00123","name":"Petar Petrovic"}
+        const data = JSON.parse(text);
+        if (data.id) {
+            setKooperant(data.id, data.name || data.id);
+            return;
+        }
+    } catch (e) {
+        // Nije JSON — probaj čist ID: "KOOP-00123"
+        if (text.startsWith('KOOP-')) {
+            const koop = stammdaten.kooperanti.find(k => k.KooperantID === text);
+            const name = koop ? (koop.Ime + ' ' + koop.Prezime) : text;
+            setKooperant(text, name);
+            return;
+        }
+    }
+    
+    showToast('Nepoznat QR kod', 'error');
+}
+
+function setKooperant(id, name) {
+    document.getElementById('fldKooperantID').value = id;
+    document.getElementById('koopName').textContent = name;
+    document.getElementById('koopId').textContent = id;
+    document.getElementById('koopDisplay').classList.add('visible');
+    showToast('Kooperant: ' + name, 'success');
+}
+
+// ============================================================
+// STAMMDATEN
+// ============================================================
+async function loadStammdaten() {
+    // Erst aus IndexedDB laden (Offline-Cache)
+    try {
+        const cached = await dbGetAll(CONFIG.STAMM_STORE);
+        if (cached.length > 0) {
+            const obj = cached.find(c => c.key === 'all');
+            if (obj) stammdaten = obj.data;
+        }
+    } catch (e) {}
+    
+    // Online: frische Daten holen
+    if (navigator.onLine) {
+        try {
+            const resp = await fetch(CONFIG.API_URL + '?action=getStammdaten');
+            const json = await resp.json();
+            if (json.success && json.data) {
+                stammdaten = json.data;
+                await dbPut(CONFIG.STAMM_STORE, { key: 'all', data: stammdaten, updatedAt: new Date().toISOString() });
+            }
+        } catch (e) {
+            console.log('Stammdaten fetch failed, using cache');
+        }
+    }
+}
+
+function populateVrstaDropdown() {
+    const sel = document.getElementById('fldVrsta');
+    sel.innerHTML = '<option value="">-- Izaberi --</option>';
+    
+    const vrsteSet = new Set();
+    (stammdaten.kulture || []).forEach(k => {
+        if (k.VrstaVoca && !vrsteSet.has(k.VrstaVoca)) {
+            vrsteSet.add(k.VrstaVoca);
+            const opt = document.createElement('option');
+            opt.value = k.VrstaVoca;
+            opt.textContent = k.VrstaVoca;
+            sel.appendChild(opt);
+        }
+    });
+}
+
+function onVrstaChange() {
+    const vrsta = document.getElementById('fldVrsta').value;
+    const sel = document.getElementById('fldSorta');
+    sel.innerHTML = '<option value="">-- Izaberi --</option>';
+    
+    (stammdaten.kulture || []).filter(k => k.VrstaVoca === vrsta).forEach(k => {
+        if (k.SortaVoca) {
+            const opt = document.createElement('option');
+            opt.value = k.SortaVoca;
+            opt.textContent = k.SortaVoca;
+            sel.appendChild(opt);
+        }
+    });
+}
+
+// ============================================================
+// SAVE OTKUP
+// ============================================================
+async function saveOtkup() {
+    const kooperantID = document.getElementById('fldKooperantID').value;
+    const vrsta = document.getElementById('fldVrsta').value;
+    const kolicina = parseFloat(document.getElementById('fldKolicina').value) || 0;
+    const cena = parseFloat(document.getElementById('fldCena').value) || 0;
+    
+    // Validierung
+    if (!kooperantID) { showToast('Skenirajte QR kooperanta!', 'error'); return; }
+    if (!vrsta) { showToast('Izaberite vrstu voća!', 'error'); return; }
+    if (kolicina <= 0) { showToast('Unesite količinu!', 'error'); return; }
+    if (cena <= 0) { showToast('Unesite cenu!', 'error'); return; }
+    
+    const record = {
+        clientRecordID: crypto.randomUUID(),
+        createdAtClient: new Date().toISOString(),
+        deviceID: getDeviceID(),
+        otkupacID: CONFIG.OTKUPAC_ID,
+        datum: new Date().toISOString().split('T')[0],
+        kooperantID: kooperantID,
+        kooperantName: document.getElementById('koopName').textContent,
+        vrstaVoca: vrsta,
+        sortaVoca: document.getElementById('fldSorta').value,
+        klasa: document.getElementById('fldKlasa').value,
+        kolicina: kolicina,
+        cena: cena,
+        tipAmbalaze: '12/1',
+        kolAmbalaze: parseInt(document.getElementById('fldAmbalaza').value) || 0,
+        parcelaID: '',
+        napomena: document.getElementById('fldNapomena').value,
+        syncStatus: 'pending'
+    };
+    
+    // In IndexedDB speichern
+    await dbPut(CONFIG.STORE_NAME, record);
+    
+    showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
+    resetForm();
+    updateStats();
+    
+    // Sofort synchen wenn online
+    if (navigator.onLine) {
+        syncQueue();
+    }
+}
+
+function resetForm() {
+    document.getElementById('fldKooperantID').value = '';
+    document.getElementById('koopDisplay').classList.remove('visible');
+    document.getElementById('fldVrsta').value = '';
+    document.getElementById('fldSorta').innerHTML = '<option value="">-- Izaberi --</option>';
+    document.getElementById('fldKlasa').value = 'I';
+    document.getElementById('fldKolicina').value = '';
+    document.getElementById('fldCena').value = '';
+    document.getElementById('fldAmbalaza').value = '';
+    document.getElementById('fldNapomena').value = '';
+}
+
+// ============================================================
+// SYNC QUEUE
+// ============================================================
+async function syncQueue() {
+    const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
+    if (pending.length === 0) return;
+    
+    updateSyncBadge('syncing');
+    
+    try {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                otkupacID: CONFIG.OTKUPAC_ID,
+                records: pending
+            })
+        });
+        
+        const json = await resp.json();
+        
+        if (json.success) {
+            // Mark als synced
+            for (const record of pending) {
+                record.syncStatus = 'synced';
+                await dbPut(CONFIG.STORE_NAME, record);
+            }
+            showToast('Sinhronizovano: ' + pending.length + ' stavki', 'success');
+        } else {
+            showToast('Sync greška: ' + (json.error || 'nepoznato'), 'error');
+        }
+    } catch (e) {
+        console.log('Sync failed:', e);
+        // Ostaje pending, pokušaće ponovo
+    }
+    
+    updateSyncBadge();
+    updateStats();
+}
+
+async function syncNow() {
+    if (!navigator.onLine) {
+        showToast('Nema internet konekcije', 'error');
+        return;
+    }
+    await syncQueue();
+    renderQueueList();
+}
+
+// ============================================================
+// UI UPDATES
+// ============================================================
+function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    
+    document.getElementById('tab-' + tabName).classList.add('active');
+    event.target.classList.add('active');
+    
+    if (tabName === 'queue') renderQueueList();
+    if (tabName === 'stats') updateStats();
+}
+
+async function updateSyncBadge(status) {
+    const badge = document.getElementById('syncBadge');
+    
+    if (status === 'syncing') {
+        badge.textContent = 'SYNC...';
+        badge.className = 'sync-badge sync-pending';
+        return;
+    }
+    
+    const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
+    
+    if (!navigator.onLine) {
+        badge.textContent = 'OFFLINE' + (pending.length > 0 ? ' (' + pending.length + ')' : '');
+        badge.className = 'sync-badge sync-offline';
+    } else if (pending.length > 0) {
+        badge.textContent = 'ČEKA: ' + pending.length;
+        badge.className = 'sync-badge sync-pending';
+    } else {
+        badge.textContent = 'ONLINE';
+        badge.className = 'sync-badge sync-online';
+    }
+}
+
+async function updateStats() {
+    const all = await dbGetAll(CONFIG.STORE_NAME);
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecords = all.filter(r => r.datum === today);
+    
+    document.getElementById('statCount').textContent = todayRecords.length;
+    document.getElementById('statKg').textContent = todayRecords.reduce((sum, r) => sum + (r.kolicina || 0), 0).toLocaleString('sr');
+    document.getElementById('statPending').textContent = todayRecords.filter(r => r.syncStatus === 'pending').length;
+    document.getElementById('statSynced').textContent = todayRecords.filter(r => r.syncStatus === 'synced').length;
+    
+    // Today list
+    const list = document.getElementById('todayList');
+    list.innerHTML = todayRecords.sort((a, b) => b.createdAtClient.localeCompare(a.createdAtClient))
+        .map(r => `
+            <div class="queue-item ${r.syncStatus}">
+                <div class="qi-header">
+                    <span class="qi-koop">${r.kooperantName}</span>
+                    <span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span>
+                </div>
+                <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div>
+            </div>
+        `).join('');
+}
+
+async function renderQueueList() {
+    const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
+    const list = document.getElementById('queueList');
+    
+    if (pending.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>';
+        return;
+    }
+    
+    list.innerHTML = pending.map(r => `
+        <div class="queue-item">
+            <div class="qi-header">
+                <span class="qi-koop">${r.kooperantName}</span>
+                <span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span>
+            </div>
+            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div>
+        </div>
+    `).join('');
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function showToast(msg, type = 'info') {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = 'toast show ' + type;
+    setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+function getDeviceID() {
+    let id = localStorage.getItem('deviceID');
+    if (!id) {
+        id = 'DEV-' + crypto.randomUUID().slice(0, 8);
+        localStorage.setItem('deviceID', id);
+    }
+    return id;
+}
+
+// ============================================================
+// SERVICE WORKER REGISTRATION
+// ============================================================
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+        console.log('SW registration failed:', err);
+    });
+}
+</script>
+
+</body>
+</html>
