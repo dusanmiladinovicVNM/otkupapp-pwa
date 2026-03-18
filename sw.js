@@ -1,7 +1,7 @@
 const CACHE_NAME = 'otkupapp-v1';
 const ASSETS = [
-    '/index.html',
-    '/manifest.json',
+    './index.html',
+    './manifest.json',
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
 ];
 

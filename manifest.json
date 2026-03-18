@@ -2,7 +2,7 @@
     "name": "OtkupApp - Terenski otkup",
     "short_name": "OtkupApp",
     "description": "Mobilni unos otkupa voća",
-    "start_url": "/index.html",
+    "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#f5f5f0",
     "theme_color": "#1a5e2a",
