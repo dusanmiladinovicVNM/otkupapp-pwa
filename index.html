@@ -645,7 +645,8 @@ async function syncQueue() {
     try {
         const resp = await fetch(CONFIG.API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({
                 otkupacID: CONFIG.OTKUPAC_ID,
                 records: pending
