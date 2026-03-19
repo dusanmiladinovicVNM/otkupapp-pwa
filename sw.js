@@ -1,4 +1,4 @@
-const CACHE_NAME = 'otkupapp-v2';
+const CACHE_NAME = 'otkupapp-v3';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -23,13 +23,26 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Fetch: cache-first for assets, network-first for API
+// Fetch: network-first for HTML, cache-first for libraries
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
     
-    // API calls: always network
+    // API calls: always network, no SW interception
     if (url.hostname === 'script.google.com') {
-        event.respondWith(fetch(event.request));
+        return;
+    }
+    
+    // HTML pages: network-first (so updates arrive immediately)
+    if (event.request.destination === 'document') {
+        event.respondWith(
+            fetch(event.request).then(response => {
+                const clone = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                return response;
+            }).catch(() => {
+                return caches.match(event.request) || caches.match('./index.html');
+            })
+        );
         return;
     }
     
@@ -37,7 +50,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then(cached => {
             return cached || fetch(event.request).then(response => {
-                // Cache new resources
                 if (response.status === 200) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
@@ -45,9 +57,8 @@ self.addEventListener('fetch', (event) => {
                 return response;
             });
         }).catch(() => {
-            // Offline fallback
             if (event.request.destination === 'document') {
-                return caches.match('/index.html');
+                return caches.match('./index.html');
             }
         })
     );
