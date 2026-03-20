@@ -416,7 +416,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     db = await openDB();
     await loadStammdaten();
     populateVrstaDropdown();
-    
+    applyDefaults();
     document.getElementById('headerStanica').textContent = CONFIG.OTKUPAC_ID;  // ← HIER
     
     updateSyncBadge();
@@ -695,6 +695,42 @@ function populateParcelaDropdown(kooperantID) {
         sel.appendChild(opt);
     });
 }
+
+function applyDefaults() {
+    const config = stammdaten.config || [];
+    
+    // Default Vrsta
+    const defaultVrsta = config.find(c => c.Parameter === 'DefaultVrsta');
+    if (defaultVrsta && defaultVrsta.Vrednost) {
+        document.getElementById('fldVrsta').value = defaultVrsta.Vrednost;
+        onVrstaChange(); // Sorta-Dropdown füllen
+        
+        // Default Sorta
+        const defaultSorta = config.find(c => c.Parameter === 'DefaultSorta');
+        if (defaultSorta && defaultSorta.Vrednost) {
+            document.getElementById('fldSorta').value = defaultSorta.Vrednost;
+        }
+    }
+    
+    // Default Cena basierend auf Vrsta
+    applyDefaultCena();
+}
+
+function applyDefaultCena() {
+    const vrsta = document.getElementById('fldVrsta').value;
+    if (!vrsta) return;
+    
+    const config = stammdaten.config || [];
+    const cenaKey = 'Cena' + vrsta; // z.B. "CenaVisnja"
+    const cenaConfig = config.find(c => c.Parameter === cenaKey);
+    
+    if (cenaConfig && cenaConfig.Vrednost) {
+        const cenaField = document.getElementById('fldCena');
+        if (!cenaField.value || cenaField.value === '0') {
+            cenaField.value = cenaConfig.Vrednost;
+        }
+    }
+}
  
 function onVrstaChange() {
     const vrsta = document.getElementById('fldVrsta').value;
@@ -709,6 +745,8 @@ function onVrstaChange() {
             sel.appendChild(opt);
         }
     });
+    
+    applyDefaultCena(); // ← NEU: Cena auto-fill bei Vrsta-Wechsel
 }
 
 // ============================================================
@@ -776,6 +814,8 @@ function resetForm() {
     document.getElementById('fldCena').value = '';
     document.getElementById('fldAmbalaza').value = '';
     document.getElementById('fldNapomena').value = '';
+
+    applyDefaults(); // ← NEU: Defaults wieder setzen nach Reset
 }
 
 function showOtkupniList(record) {
