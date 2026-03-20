@@ -679,19 +679,15 @@ async function syncQueue() {
     updateSyncBadge('syncing');
     
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                otkupacID: CONFIG.OTKUPAC_ID,
-                records: pending
-            })
-        });
+        const payload = encodeURIComponent(JSON.stringify({
+            otkupacID: CONFIG.OTKUPAC_ID,
+            records: pending
+        }));
         
+        const resp = await fetch(CONFIG.API_URL + '?action=sync&data=' + payload);
         const json = await resp.json();
         
         if (json.success) {
-            // Mark als synced
             for (const record of pending) {
                 record.syncStatus = 'synced';
                 await dbPut(CONFIG.STORE_NAME, record);
@@ -702,7 +698,6 @@ async function syncQueue() {
         }
     } catch (e) {
         console.log('Sync failed:', e);
-        // Ostaje pending, pokušaće ponovo
     }
     
     updateSyncBadge();
