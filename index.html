@@ -251,20 +251,20 @@
     </style>
 </head>
 <body>
-
+ 
 <!-- HEADER -->
 <div class="header">
     <h1>OtkupApp</h1>
     <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
 </div>
-
+ 
 <!-- TABS -->
 <div class="tab-bar">
     <button class="tab-btn active" onclick="showTab('otkup')">Novi otkup</button>
     <button class="tab-btn" onclick="showTab('queue')">Red čekanja</button>
     <button class="tab-btn" onclick="showTab('stats')">Danas</button>
 </div>
-
+ 
 <!-- TAB: NOVI OTKUP -->
 <div class="tab-content active" id="tab-otkup">
     
@@ -290,6 +290,14 @@
     
     <!-- Hidden fields -->
     <input type="hidden" id="fldKooperantID">
+    
+    <!-- Parcela (optional, für Sledljivost) -->
+    <div class="form-group" id="parcelaGroup" style="display:none;">
+        <label>Parcela (opciono)</label>
+        <select id="fldParcela">
+            <option value="">-- Bez parcele --</option>
+        </select>
+    </div>
     
     <!-- Form -->
     <div class="form-row">
@@ -340,13 +348,13 @@
     <button class="btn-primary" onclick="saveOtkup()">SAČUVAJ OTKUP</button>
     <button class="btn-secondary" onclick="resetForm()">Poništi</button>
 </div>
-
+ 
 <!-- TAB: RED ČEKANJA -->
 <div class="tab-content" id="tab-queue">
     <div id="queueList"></div>
     <button class="btn-secondary" onclick="syncNow()" id="btnSync">Sinhronizuj sada</button>
 </div>
-
+ 
 <!-- TAB: DANAS -->
 <div class="tab-content" id="tab-stats">
     <div class="stats-grid">
@@ -369,10 +377,10 @@
     </div>
     <div id="todayList"></div>
 </div>
-
+ 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
-
+ 
 <script>
 // ============================================================
 // CONFIG
@@ -520,6 +528,9 @@ function setKooperant(id, name) {
     document.getElementById('koopId').textContent = id;
     document.getElementById('koopDisplay').classList.add('visible');
     showToast('Kooperant: ' + name, 'success');
+
+    // Parcele für diesen Kooperant laden
+    populateParcelaDropdown(id);
 }
 
 // ============================================================
@@ -593,6 +604,28 @@ function onManualKooperantChange() {
     setKooperant(koopID, name);
 }
 
+function populateParcelaDropdown(kooperantID) {
+    const sel = document.getElementById('fldParcela');
+    const group = document.getElementById('parcelaGroup');
+    sel.innerHTML = '<option value="">-- Bez parcele --</option>';
+    
+    const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === kooperantID);
+    
+    if (parcele.length === 0) {
+        group.style.display = 'none';
+        return;
+    }
+    
+    group.style.display = 'block';
+    
+    parcele.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.ParcelaID;
+        opt.textContent = p.KatBroj + ' - ' + (p.Kultura || '') + ' (' + p.ParcelaID + ')';
+        sel.appendChild(opt);
+    });
+}
+ 
 function onVrstaChange() {
     const vrsta = document.getElementById('fldVrsta').value;
     const sel = document.getElementById('fldSorta');
@@ -660,6 +693,8 @@ function resetForm() {
     document.getElementById('fldKooperantID').value = '';
     document.getElementById('fldKooperantManual').value = '';
     document.getElementById('koopDisplay').classList.remove('visible');
+    document.getElementById('fldParcela').innerHTML = '<option value="">-- Bez parcele --</option>';
+    document.getElementById('parcelaGroup').style.display = 'none';
     document.getElementById('fldVrsta').value = '';
     document.getElementById('fldSorta').innerHTML = '<option value="">-- Izaberi --</option>';
     document.getElementById('fldKlasa').value = 'I';
