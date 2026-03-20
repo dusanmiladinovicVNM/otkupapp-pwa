@@ -652,7 +652,9 @@ function populateKooperantDropdown() {
     const sel = document.getElementById('fldKooperantManual');
     sel.innerHTML = '<option value="">-- Izaberi --</option>';
     
-    (stammdaten.kooperanti || []).forEach(k => {
+    (stammdaten.kooperanti || [])
+        .filter(k => k.StanicaID === CONFIG.OTKUPAC_ID)
+        .forEach(k => {
         const opt = document.createElement('option');
         opt.value = k.KooperantID;
         opt.textContent = k.Ime + ' ' + k.Prezime + ' (' + k.KooperantID + ')';
