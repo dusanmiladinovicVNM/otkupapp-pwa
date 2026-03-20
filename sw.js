@@ -1,4 +1,4 @@
-const CACHE_NAME = 'otkupapp-v5';
+const CACHE_NAME = 'otkupapp-v6';
 const ASSETS = [
     './index.html',
     './manifest.json',
