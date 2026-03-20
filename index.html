@@ -255,6 +255,7 @@
 <!-- HEADER -->
 <div class="header">
     <h1>OtkupApp</h1>
+    <h1>OtkupApp <span style="font-size:12px;opacity:0.7;" id="headerStanica"></span></h1>
     <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
 </div>
  
@@ -388,7 +389,7 @@
 const CONFIG = {
     // APPS SCRIPT WEB APP URL - zameni sa tvojom URL
     API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',    
-    OTKUPAC_ID: 'ST-00001',  // Identifikacija otkupljivača
+    OTKUPAC_ID: localStorage.getItem('otkupacID') || '',
     DB_NAME: 'OtkupAppDB',
     DB_VERSION: 1,
     STORE_NAME: 'otkupi',
@@ -406,9 +407,18 @@ let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [] };
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    // Login-Check
+    if (!localStorage.getItem('otkupacID')) {
+        showLoginScreen();
+        return;
+    }
+    
     db = await openDB();
     await loadStammdaten();
     populateVrstaDropdown();
+    
+    document.getElementById('headerStanica').textContent = CONFIG.OTKUPAC_ID;  // ← HIER
+    
     updateSyncBadge();
     updateStats();
     
@@ -420,6 +430,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(() => { if (navigator.onLine) syncQueue(); }, 60000);
 });
 
+function showLoginScreen() {
+    document.querySelector('.tab-bar').style.display = 'none';
+    document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+    
+    const loginHtml = `
+        <div style="padding:40px 20px;text-align:center;">
+            <h2 style="color:var(--primary);margin-bottom:30px;">Izaberite stanicu</h2>
+            <select id="loginStanica" style="width:100%;padding:14px;font-size:18px;border:2px solid var(--border);border-radius:10px;margin-bottom:20px;">
+                <option value="">-- Izaberite --</option>
+            </select>
+            <button onclick="doLogin()" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:18px;font-weight:700;">Prijavi se</button>
+        </div>`;
+    
+    let container = document.getElementById('loginContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'loginContainer';
+        document.body.appendChild(container);
+    }
+    container.innerHTML = loginHtml;
+    
+    // Stammdaten laden für Dropdown
+    loadStammdatenForLogin();
+}
+
+async function loadStammdatenForLogin() {
+    try {
+        const resp = await fetch(CONFIG.API_URL + '?action=getStammdaten');
+        const json = await resp.json();
+        if (json.success && json.data && json.data.kooperanti) {
+            const sel = document.getElementById('loginStanica');
+            const stanice = new Set();
+            json.data.kooperanti.forEach(k => {
+                if (k.StanicaID && !stanice.has(k.StanicaID)) {
+                    stanice.add(k.StanicaID);
+                    const opt = document.createElement('option');
+                    opt.value = k.StanicaID;
+                    opt.textContent = k.StanicaID;
+                    sel.appendChild(opt);
+                }
+            });
+        }
+    } catch (e) {
+        console.log('Login stammdaten failed:', e);
+    }
+}
+
+async function doLogin() {
+    const stanicaID = document.getElementById('loginStanica').value;
+    if (!stanicaID) {
+        showToast('Izaberite stanicu!', 'error');
+        return;
+    }
+    
+    localStorage.setItem('otkupacID', stanicaID);
+    location.reload();
+}
+    
 // ============================================================
 // INDEXEDDB
 // ============================================================
