@@ -680,6 +680,10 @@ async function saveOtkup() {
     await dbPut(CONFIG.STORE_NAME, record);
     
     showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
+    
+    // Otkupni list anzeigen
+    showOtkupniList(record);
+    
     resetForm();
     updateStats();
     
@@ -702,6 +706,44 @@ function resetForm() {
     document.getElementById('fldCena').value = '';
     document.getElementById('fldAmbalaza').value = '';
     document.getElementById('fldNapomena').value = '';
+}
+
+function showOtkupniList(record) {
+    const vrednost = (record.kolicina * record.cena).toLocaleString('sr');
+    const html = `
+        <div style="padding:20px;font-family:sans-serif;max-width:400px;margin:0 auto;">
+            <h2 style="text-align:center;margin-bottom:20px;">OTKUPNI LIST</h2>
+            <table style="width:100%;border-collapse:collapse;">
+                <tr><td style="padding:6px;color:#666;">Datum:</td><td style="padding:6px;font-weight:600;">${record.datum}</td></tr>
+                <tr><td style="padding:6px;color:#666;">Kooperant:</td><td style="padding:6px;font-weight:600;">${record.kooperantName}</td></tr>
+                <tr><td style="padding:6px;color:#666;">ID:</td><td style="padding:6px;">${record.kooperantID}</td></tr>
+                <tr><td style="padding:6px;color:#666;">Vrsta:</td><td style="padding:6px;">${record.vrstaVoca} ${record.sortaVoca}</td></tr>
+                <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${record.klasa}</td></tr>
+                <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
+                <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
+                <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">Vrednost:</td><td style="padding:8px;font-weight:700;font-size:18px;">${vrednost} RSD</td></tr>
+                <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
+                ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + record.parcelaID + '</td></tr>' : ''}
+            </table>
+            <div style="margin-top:30px;display:flex;justify-content:space-between;">
+                <div style="text-align:center;width:45%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:12px;">Potpis kooperanta</div></div>
+                <div style="text-align:center;width:45%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:12px;">Potpis otkupca</div></div>
+            </div>
+            <div style="text-align:center;margin-top:20px;">
+                <button onclick="document.getElementById('otkupniListModal').style.display='none'" style="padding:12px 30px;font-size:16px;background:#1a5e2a;color:white;border:none;border-radius:8px;">Zatvori</button>
+                <button onclick="window.print()" style="padding:12px 30px;font-size:16px;background:#e8a838;color:white;border:none;border-radius:8px;margin-left:10px;">Štampaj</button>
+            </div>
+        </div>`;
+    
+    let modal = document.getElementById('otkupniListModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'otkupniListModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999;overflow-y:auto;';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = html;
+    modal.style.display = 'block';
 }
 
 // ============================================================
