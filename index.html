@@ -655,7 +655,7 @@ async function saveOtkup() {
     if (!vrsta) { showToast('Izaberite vrstu voća!', 'error'); return; }
     if (kolicina <= 0) { showToast('Unesite količinu!', 'error'); return; }
     if (cena <= 0) { showToast('Unesite cenu!', 'error'); return; }
-    
+    console.log('fldParcela value =', document.getElementById('fldParcela')?.value);
     const record = {
         clientRecordID: crypto.randomUUID(),
         createdAtClient: new Date().toISOString(),
@@ -671,7 +671,7 @@ async function saveOtkup() {
         cena: cena,
         tipAmbalaze: '12/1',
         kolAmbalaze: parseInt(document.getElementById('fldAmbalaza').value) || 0,
-        parcelaID: '',
+        parcelaID: document.getElementById('fldParcela').value || '',
         napomena: document.getElementById('fldNapomena').value,
         syncStatus: 'pending'
     };
