@@ -1015,59 +1015,111 @@ async function renderQueueList() {
 // OTKUP PREGLED
 // ============================================================
 async function loadOtkupPregled() {
-    const all = await dbGetAll(CONFIG.STORE_NAME);
     const od = document.getElementById('fldPregledOd').value;
     const doo = document.getElementById('fldPregledDo').value;
     
-    let filtered = all;
-    if (od) filtered = filtered.filter(r => r.datum >= od);
-    if (doo) filtered = filtered.filter(r => r.datum <= doo);
+    // 1. Lokale Otkupi aus IndexedDB
+    const local = await dbGetAll(CONFIG.STORE_NAME);
     
-    filtered.sort((a, b) => b.datum.localeCompare(a.datum) || b.createdAtClient.localeCompare(a.createdAtClient));
+    // 2. Server-Otkupi aus Google Sheet holen
+    let server = [];
+    try {
+        const resp = await fetch(CONFIG.API_URL + '?action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        const json = await resp.json();
+        if (json.success && json.records) {
+            server = json.records.map(r => ({
+                clientRecordID: r.ClientRecordID || '',
+                datum: formatServerDate(r.Datum),
+                kooperantID: r.KooperantID || '',
+                kooperantName: r.KooperantName || r.KooperantID || '',
+                vrstaVoca: r.VrstaVoca || '',
+                sortaVoca: r.SortaVoca || '',
+                klasa: r.Klasa || 'I',
+                kolicina: parseFloat(r.Kolicina) || 0,
+                cena: parseFloat(r.Cena) || 0,
+                tipAmbalaze: r.TipAmbalaze || '',
+                kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
+                parcelaID: r.ParcelaID || '',
+                napomena: r.Napomena || '',
+                syncStatus: r.SyncStatus || 'synced',
+                source: 'server'
+            }));
+        }
+    } catch (e) {
+        console.log('Server otkupi fetch failed:', e);
+    }
+    
+    // 3. Merge: server-Daten + lokale pending (die noch nicht gesynct sind)
+    const serverIDs = new Set(server.map(r => r.clientRecordID));
+    const pendingLocal = local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID));
+    pendingLocal.forEach(r => r.source = 'local');
+    
+    let all = [...server, ...pendingLocal];
+    
+    // 4. Datumsfilter
+    if (od) all = all.filter(r => r.datum >= od);
+    if (doo) all = all.filter(r => r.datum <= doo);
+    
+    all.sort((a, b) => b.datum.localeCompare(a.datum) || (b.createdAtClient || '').localeCompare(a.createdAtClient || ''));
     
     // Stats
-    const ukupnoKg = filtered.reduce((s, r) => s + (r.kolicina || 0), 0);
-    const ukupnoVrednost = filtered.reduce((s, r) => s + ((r.kolicina || 0) * (r.cena || 0)), 0);
-    const koopSet = new Set(filtered.map(r => r.kooperantID));
+    const ukupnoKg = all.reduce((s, r) => s + (r.kolicina || 0), 0);
+    const ukupnoVrednost = all.reduce((s, r) => s + ((r.kolicina || 0) * (r.cena || 0)), 0);
+    const koopSet = new Set(all.map(r => r.kooperantID));
     
-    document.getElementById('statPregledCount').textContent = filtered.length;
+    document.getElementById('statPregledCount').textContent = all.length;
     document.getElementById('statPregledKg').textContent = ukupnoKg.toLocaleString('sr');
     document.getElementById('statPregledVrednost').textContent = ukupnoVrednost.toLocaleString('sr');
     document.getElementById('statPregledKoop').textContent = koopSet.size;
     
     // Lista
     const list = document.getElementById('pregledList');
-    if (filtered.length === 0) {
+    if (all.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa za izabrani period</p>';
         return;
     }
     
-    list.innerHTML = filtered.map(r => {
+    list.innerHTML = all.map(r => {
         const vrednost = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        const statusClass = r.syncStatus === 'synced' ? 'synced' : '';
+        const statusIcon = r.syncStatus === 'pending' ? '⏳' : 
+                          (r.syncStatus === 'Synced>Master' ? '✅' : '✓');
+        const statusText = r.syncStatus === 'pending' ? 'Čeka sync' : 
+                          (r.syncStatus === 'Synced>Master' ? 'U masteru' : 'Sinhr.');
+        const borderColor = r.syncStatus === 'pending' ? 'var(--warning)' : 
+                           (r.syncStatus === 'Synced>Master' ? 'var(--primary)' : 'var(--success)');
         const parcelaInfo = r.parcelaID ? ' | ' + r.parcelaID : '';
         return `
-            <div class="queue-item ${statusClass}">
+            <div class="queue-item" style="border-left-color:${borderColor};">
                 <div class="qi-header">
-                    <span class="qi-koop">${r.kooperantName || r.kooperantID}</span>
+                    <span class="qi-koop">${r.kooperantName}</span>
                     <span class="qi-time">${r.datum}</span>
                 </div>
                 <div class="qi-detail">
                     ${r.vrstaVoca} ${r.sortaVoca || ''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD = <strong>${vrednost} RSD</strong>${parcelaInfo}
                 </div>
                 <div class="qi-detail" style="font-size:11px;margin-top:2px;">
-                    Amb: ${r.kolAmbalaze || 0} | ${r.syncStatus === 'synced' ? '✓ Sinhr.' : '⏳ Čeka'}
+                    Amb: ${r.kolAmbalaze || 0} | ${statusIcon} ${statusText}
                     ${r.napomena ? ' | ' + r.napomena : ''}
                 </div>
             </div>`;
     }).join('');
 }
 
+function formatServerDate(val) {
+    if (!val) return '';
+    if (typeof val === 'string' && val.length >= 10) return val.substring(0, 10);
+    try {
+        const d = new Date(val);
+        return d.toISOString().split('T')[0];
+    } catch(e) {
+        return String(val);
+    }
+}
+
 // ============================================================
 // OTPREMNICE PREGLED (grupisano po vozaču — placeholder)
 // ============================================================
 async function loadOtpremnicePregled() {
-    const all = await dbGetAll(CONFIG.STORE_NAME);
     const datum = document.getElementById('fldOtpremniceDatum').value;
     
     if (!datum) {
@@ -1075,6 +1127,32 @@ async function loadOtpremnicePregled() {
             '<p style="text-align:center;color:var(--text-muted);padding:40px;">Izaberite datum</p>';
         return;
     }
+    
+    // Otkupi aus Server + lokal
+    let all = [];
+    
+    try {
+        const resp = await fetch(CONFIG.API_URL + '?action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        const json = await resp.json();
+        if (json.success && json.records) {
+            all = json.records.map(r => ({
+                kooperantID: r.KooperantID || '',
+                kooperantName: r.KooperantName || r.KooperantID || '',
+                datum: formatServerDate(r.Datum),
+                vrstaVoca: r.VrstaVoca || '',
+                sortaVoca: r.SortaVoca || '',
+                klasa: r.Klasa || 'I',
+                kolicina: parseFloat(r.Kolicina) || 0,
+                cena: parseFloat(r.Cena) || 0,
+                kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
+                parcelaID: r.ParcelaID || ''
+            }));
+        }
+    } catch (e) {}
+    
+    // Lokale pending dazu
+    const local = await dbGetAll(CONFIG.STORE_NAME);
+    local.filter(r => r.syncStatus === 'pending').forEach(r => all.push(r));
     
     const filtered = all.filter(r => r.datum === datum);
     
@@ -1089,13 +1167,7 @@ async function loadOtpremnicePregled() {
     filtered.forEach(r => {
         const key = r.kooperantID || 'UNKNOWN';
         if (!grouped[key]) {
-            grouped[key] = {
-                name: r.kooperantName || key,
-                items: [],
-                totalKg: 0,
-                totalVrednost: 0,
-                totalAmb: 0
-            };
+            grouped[key] = { name: r.kooperantName || key, items: [], totalKg: 0, totalVrednost: 0, totalAmb: 0 };
         }
         grouped[key].items.push(r);
         grouped[key].totalKg += (r.kolicina || 0);
@@ -1116,7 +1188,6 @@ async function loadOtpremnicePregled() {
                     ${group.totalVrednost.toLocaleString('sr')} RSD | 
                     Amb: ${group.totalAmb}
                 </div>`;
-        
         group.items.forEach(r => {
             html += `
                 <div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">
@@ -1124,7 +1195,6 @@ async function loadOtpremnicePregled() {
                     ${r.parcelaID ? ' | ' + r.parcelaID : ''}
                 </div>`;
         });
-        
         html += `</div>`;
     }
     
