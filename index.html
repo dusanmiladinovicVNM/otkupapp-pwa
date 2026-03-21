@@ -248,23 +248,36 @@
         .toast.success { background: var(--success); }
         .toast.error { background: var(--danger); }
         .toast.info { background: var(--primary); }
+        .agro-btn { display: block; width: 100%; padding: 14px; margin-bottom: 8px; border: 2px solid var(--border); border-radius: var(--radius); background: white; font-size: 16px; text-align: left; cursor: pointer; }
+        .agro-btn.selected { border-color: var(--primary); background: #e8f5e9; }
     </style>
 </head>
 <body>
  
 <!-- HEADER -->
 <div class="header">
-    <h1>OtkupApp</h1>
-    <h1>OtkupApp <span style="font-size:12px;opacity:0.7;" id="headerStanica"></span></h1>
-    <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
+    <div>
+        <h1 style="margin:0;font-size:20px;">OtkupApp</h1>
+        <span style="font-size:11px;opacity:0.7;" id="headerInfo"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
+        <button onclick="doLogout()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">⇄</button>
+    </div>
 </div>
  
 <!-- TABS -->
-<div class="tab-bar">
-    <button class="tab-btn active" onclick="showTab('otkup')">Novi</button>
-    <button class="tab-btn" onclick="showTab('pregled')">Otkupi</button>
-    <button class="tab-btn" onclick="showTab('otpremnice')">Otpremnice</button>
-    <button class="tab-btn" onclick="showTab('queue')">Sync</button>
+<div class="tab-bar" id="tabBar">
+    <button class="tab-btn role-otkupac" onclick="showTab('otkup')">Novi</button>
+    <button class="tab-btn role-otkupac" onclick="showTab('pregled')">Otkupi</button>
+    <button class="tab-btn role-otkupac" onclick="showTab('otpremnice')">Otprem.</button>
+    <button class="tab-btn role-otkupac" onclick="showTab('queue')">Sync</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('kartica')">Kartica</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('parcele')">Parcele</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('agromere')">Agromere</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('koopinfo')">Info</button>
+    <button class="tab-btn role-vozac" onclick="showTab('zbirna')">Zbirna</button>
+    <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
 </div>
  
 <!-- TAB: NOVI OTKUP -->
@@ -350,75 +363,88 @@
     <button class="btn-primary" onclick="saveOtkup()">SAČUVAJ OTKUP</button>
     <button class="btn-secondary" onclick="resetForm()">Poništi</button>
 </div>
- 
-<!-- TAB: RED ČEKANJA -->
-<div class="tab-content" id="tab-queue">
-    <div id="queueList"></div>
-    <button class="btn-secondary" onclick="syncNow()" id="btnSync">Sinhronizuj sada</button>
-</div>
- 
+    
 <!-- TAB: OTKUPI PREGLED -->
 <div class="tab-content" id="tab-pregled">
     <div class="form-row" style="margin-bottom:12px;">
-        <div class="form-group">
-            <label>Od datuma</label>
-            <input type="date" id="fldPregledOd" onchange="loadOtkupPregled()">
-        </div>
-        <div class="form-group">
-            <label>Do datuma</label>
-            <input type="date" id="fldPregledDo" onchange="loadOtkupPregled()">
-        </div>
+        <div class="form-group"><label>Od datuma</label><input type="date" id="fldPregledOd" onchange="loadOtkupPregled()"></div>
+        <div class="form-group"><label>Do datuma</label><input type="date" id="fldPregledDo" onchange="loadOtkupPregled()"></div>
     </div>
     <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-value" id="statPregledCount">0</div>
-            <div class="stat-label">Otkupa</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="statPregledKg">0</div>
-            <div class="stat-label">Ukupno kg</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="statPregledVrednost">0</div>
-            <div class="stat-label">Vrednost RSD</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="statPregledKoop">0</div>
-            <div class="stat-label">Kooperanata</div>
-        </div>
+        <div class="stat-card"><div class="stat-value" id="statPregledCount">0</div><div class="stat-label">Otkupa</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPregledKg">0</div><div class="stat-label">Ukupno kg</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPregledVrednost">0</div><div class="stat-label">Vrednost RSD</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPregledKoop">0</div><div class="stat-label">Kooperanata</div></div>
     </div>
     <div id="pregledList"></div>
 </div>
-
+    
 <!-- TAB: OTPREMNICE -->
 <div class="tab-content" id="tab-otpremnice">
-    <p style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">
-        Otpremnice se automatski kreiraju pri uvozu u master sistem.<br>
-        Ovde vidite otkupe grupisane po vozaču i datumu.
-    </p>
-    <div class="form-group" style="margin-bottom:12px;">
-        <label>Datum</label>
-        <input type="date" id="fldOtpremniceDatum" onchange="loadOtpremnicePregled()">
-    </div>
+    <p style="text-align:center;color:var(--text-muted);padding:10px;font-size:13px;">Otkupi grupisani po kooperantu za izabrani datum</p>
+    <div class="form-group"><label>Datum</label><input type="date" id="fldOtpremniceDatum" onchange="loadOtpremnicePregled()"></div>
     <div id="otpremniceList"></div>
 </div>
-
+    
 <!-- TAB: SYNC -->
 <div class="tab-content" id="tab-queue">
     <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-value" id="statPending">0</div>
-            <div class="stat-label">Čeka sync</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="statSynced">0</div>
-            <div class="stat-label">Sinhronizovano</div>
-        </div>
+        <div class="stat-card"><div class="stat-value" id="statPending">0</div><div class="stat-label">Čeka sync</div></div>
+        <div class="stat-card"><div class="stat-value" id="statSynced">0</div><div class="stat-label">Sinhronizovano</div></div>
     </div>
     <div id="queueList"></div>
-    <button class="btn-secondary" onclick="syncNow()" id="btnSync">Sinhronizuj sada</button>
+    <button class="btn-secondary" onclick="syncNow()">Sinhronizuj sada</button>
 </div>
- 
+
+<!-- ==================== KOOPERANT TABS ==================== -->
+
+<!-- TAB: KARTICA -->
+<div class="tab-content" id="tab-kartica">
+    <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
+        <div style="font-size:18px;font-weight:700;" id="karticaName"></div>
+        <div style="font-size:12px;opacity:0.8;" id="karticaID"></div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="karticaZaduzenje">0</div><div class="stat-label">Zaduženje</div></div>
+        <div class="stat-card"><div class="stat-value" id="karticaRazduzenje">0</div><div class="stat-label">Razduženje</div></div>
+        <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="karticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
+    </div>
+    <div id="karticaList"></div>
+</div>
+
+<!-- TAB: PARCELE -->
+<div class="tab-content" id="tab-parcele">
+    <div id="parceleList"></div>
+</div>
+
+<!-- TAB: AGROMERE -->
+<div class="tab-content" id="tab-agromere">
+    <div class="form-group">
+        <label>Parcela</label>
+        <select id="fldAgroParcela"><option value="">-- Izaberi parcelu --</option></select>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Izaberite izvršenu meru:</p>
+    <button class="agro-btn" onclick="selectMera(this,'Zastita')">🛡️ Zaštita (Pflanzenschutz)</button>
+    <button class="agro-btn" onclick="selectMera(this,'Prihrana')">🌱 Prihrana (Düngung)</button>
+    <button class="agro-btn" onclick="selectMera(this,'Rezidba')">✂️ Rezidba (Schnitt)</button>
+    <button class="agro-btn" onclick="selectMera(this,'Zalivanje')">💧 Zalivanje (Bewässerung)</button>
+    <button class="agro-btn" onclick="selectMera(this,'Berba')">🍎 Berba (Ernte)</button>
+    <div class="form-group" style="margin-top:12px;"><label>Napomena (opciono)</label><input type="text" id="fldAgroNapomena" placeholder="Detalji..."></div>
+    <button class="btn-primary" onclick="saveAgromera()">SAČUVAJ MERU</button>
+    <h3 style="margin-top:20px;margin-bottom:10px;color:var(--primary);font-size:14px;">Istorija mera</h3>
+    <div id="agromereList"></div>
+</div>
+
+<!-- TAB: INFO -->
+<div class="tab-content" id="tab-koopinfo">
+    <div id="koopInfoContent"></div>
+</div>
+
+<!-- ==================== VOZAC TABS ==================== -->
+
+<div class="tab-content" id="tab-zbirna"><p style="text-align:center;color:var(--text-muted);padding:40px;">Zbirna modul - u pripremi</p></div>
+<div class="tab-content" id="tab-transport"><p style="text-align:center;color:var(--text-muted);padding:40px;">Transport modul - u pripremi</p></div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
  
@@ -430,10 +456,15 @@ const CONFIG = {
     // APPS SCRIPT WEB APP URL - zameni sa tvojom URL
     API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',    
     OTKUPAC_ID: localStorage.getItem('otkupacID') || '',
+    USER_ROLE: localStorage.getItem('userRole') || '',
+    ENTITY_ID: localStorage.getItem('entityID') || '',
+    ENTITY_NAME: localStorage.getItem('entityName') || '',
+    TOKEN: localStorage.getItem('authToken') || '',
     DB_NAME: 'OtkupAppDB',
-    DB_VERSION: 1,
+    DB_VERSION: 2,
     STORE_NAME: 'otkupi',
-    STAMM_STORE: 'stammdaten'
+    STAMM_STORE: 'stammdaten',
+    AGRO_STORE: 'agromere'
 };
 
 // ============================================================
@@ -442,94 +473,135 @@ const CONFIG = {
 let db = null;
 let qrScanner = null;
 let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [] };
+let selectedMera = '';
 
 // ============================================================
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Login-Check
-    if (!localStorage.getItem('otkupacID')) {
+    if (!localStorage.getItem('authToken') || !localStorage.getItem('otkupacID')) {
         showLoginScreen();
         return;
     }
-    
+
     db = await openDB();
     await loadStammdaten();
-    populateVrstaDropdown();
-    applyDefaults();
-    // Default Datumsfilter: heute
-    document.getElementById('fldPregledOd').value = new Date().toISOString().split('T')[0];
-    document.getElementById('fldPregledDo').value = new Date().toISOString().split('T')[0];
-    document.getElementById('fldOtpremniceDatum').value = new Date().toISOString().split('T')[0];
-    document.getElementById('headerStanica').textContent = CONFIG.OTKUPAC_ID;  // ← HIER
-    
-    updateSyncBadge();
-    updateStats();
-    
-    // Online/Offline listeners
-    window.addEventListener('online', () => { updateSyncBadge(); syncQueue(); });
-    window.addEventListener('offline', () => { updateSyncBadge(); });
-    
-    // Auto-sync alle 60 Sekunden
-    setInterval(() => { if (navigator.onLine) syncQueue(); }, 60000);
-});
+    applyRoleVisibility();
+    document.getElementById('headerInfo').textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
 
+    if (CONFIG.USER_ROLE === 'Otkupac') {
+        populateVrstaDropdown();
+        applyDefaults();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('fldPregledOd').value = today;
+        document.getElementById('fldPregledDo').value = today;
+        document.getElementById('fldOtpremniceDatum').value = today;
+    }
+
+    if (CONFIG.USER_ROLE === 'Kooperant') {
+        populateAgroParcele();
+    }
+
+    updateSyncBadge();
+    window.addEventListener('online', () => { updateSyncBadge(); if (CONFIG.USER_ROLE === 'Otkupac') syncQueue(); });
+    window.addEventListener('offline', () => updateSyncBadge());
+    setInterval(() => { if (navigator.onLine && CONFIG.USER_ROLE === 'Otkupac') syncQueue(); }, 60000);
+});
+    
+// ============================================================
+// AUTH
+// ============================================================
 function showLoginScreen() {
     document.querySelector('.tab-bar').style.display = 'none';
     document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
-    
-    const loginHtml = `
-        <div style="padding:40px 20px;text-align:center;">
-            <h2 style="color:var(--primary);margin-bottom:30px;">Izaberite stanicu</h2>
-            <select id="loginStanica" style="width:100%;padding:14px;font-size:18px;border:2px solid var(--border);border-radius:10px;margin-bottom:20px;">
-                <option value="">-- Izaberite --</option>
-            </select>
-            <button onclick="doLogin()" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:18px;font-weight:700;">Prijavi se</button>
-        </div>`;
-    
-    let container = document.getElementById('loginContainer');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'loginContainer';
-        document.body.appendChild(container);
-    }
-    container.innerHTML = loginHtml;
-    
-    // Stammdaten laden für Dropdown
-    loadStammdatenForLogin();
-}
 
-async function loadStammdatenForLogin() {
-    try {
-        const resp = await fetch(CONFIG.API_URL + '?action=getStammdaten');
-        const json = await resp.json();
-        if (json.success && json.data && json.data.kooperanti) {
-            const sel = document.getElementById('loginStanica');
-            const stanice = new Set();
-            json.data.kooperanti.forEach(k => {
-                if (k.StanicaID && !stanice.has(k.StanicaID)) {
-                    stanice.add(k.StanicaID);
-                    const opt = document.createElement('option');
-                    opt.value = k.StanicaID;
-                    opt.textContent = k.StanicaID;
-                    sel.appendChild(opt);
-                }
-            });
-        }
-    } catch (e) {
-        console.log('Login stammdaten failed:', e);
-    }
+    let container = document.getElementById('loginContainer');
+    if (!container) { container = document.createElement('div'); container.id = 'loginContainer'; document.body.appendChild(container); }
+    container.innerHTML = `
+        <div style="padding:60px 20px;text-align:center;max-width:360px;margin:0 auto;">
+            <h2 style="color:var(--primary);margin-bottom:40px;">OtkupApp</h2>
+            <div class="form-group">
+                <label>Korisničko ime</label>
+                <input type="text" id="loginUsername" autocapitalize="none" autocorrect="off"
+                       style="width:100%;padding:14px;font-size:18px;border:2px solid var(--border);border-radius:10px;"
+                       placeholder="korisničko ime">
+            </div>
+            <div class="form-group">
+                <label>PIN</label>
+                <input type="password" id="loginPin" inputmode="numeric" maxlength="6"
+                       style="width:100%;padding:14px;font-size:24px;text-align:center;letter-spacing:12px;border:2px solid var(--border);border-radius:10px;"
+                       placeholder="● ● ● ●">
+            </div>
+            <button onclick="doLogin()" id="btnLogin"
+                    style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:18px;font-weight:700;margin-top:20px;">
+                Prijavi se
+            </button>
+            <p id="loginError" style="color:var(--danger);margin-top:12px;font-size:14px;display:none;"></p>
+        </div>`;
+    document.getElementById('loginPin').addEventListener('keyup', e => { if (e.key === 'Enter') doLogin(); });
 }
 
 async function doLogin() {
-    const stanicaID = document.getElementById('loginStanica').value;
-    if (!stanicaID) {
-        showToast('Izaberite stanicu!', 'error');
-        return;
+    const username = (document.getElementById('loginUsername').value || '').trim();
+    const pin = document.getElementById('loginPin').value || '';
+    const errorEl = document.getElementById('loginError');
+    const btnEl = document.getElementById('btnLogin');
+    if (!username) { errorEl.textContent = 'Unesite korisničko ime'; errorEl.style.display = 'block'; return; }
+    if (!pin) { errorEl.textContent = 'Unesite PIN'; errorEl.style.display = 'block'; return; }
+    errorEl.style.display = 'none';
+    btnEl.textContent = 'Prijavljivanje...';
+    btnEl.disabled = true;
+    try {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'login', username: username, pin: pin })
+        });
+        const json = await resp.json();
+        if (json.success) {
+            localStorage.setItem('authToken', json.token);
+            localStorage.setItem('userRole', json.role);
+            localStorage.setItem('otkupacID', json.entityID);
+            localStorage.setItem('entityID', json.entityID);
+            localStorage.setItem('entityName', json.displayName);
+            localStorage.setItem('username', username);
+            location.reload();
+        } else {
+            errorEl.textContent = json.error || 'Prijava neuspešna';
+            errorEl.style.display = 'block';
+            btnEl.textContent = 'Prijavi se';
+            btnEl.disabled = false;
+        }
+    } catch (e) {
+        errorEl.textContent = 'Nema internet konekcije';
+        errorEl.style.display = 'block';
+        btnEl.textContent = 'Prijavi se';
+        btnEl.disabled = false;
     }
-    
-    localStorage.setItem('otkupacID', stanicaID);
+}
+
+function doLogout() {
+    ['userRole','otkupacID','entityID','entityName','authToken','username'].forEach(k => localStorage.removeItem(k));
     location.reload();
+}
+
+function applyRoleVisibility() {
+    const role = CONFIG.USER_ROLE;
+    document.querySelectorAll('.role-otkupac').forEach(el => el.style.display = (role === 'Otkupac') ? '' : 'none');
+    document.querySelectorAll('.role-kooperant').forEach(el => el.style.display = (role === 'Kooperant') ? '' : 'none');
+    document.querySelectorAll('.role-vozac').forEach(el => el.style.display = (role === 'Vozac') ? '' : 'none');
+    const firstBtn = document.querySelector('.tab-btn:not([style*="none"])');
+    if (firstBtn) firstBtn.click();
+}
+
+async function apiFetch(params) {
+    const url = CONFIG.API_URL + '?' + params + '&token=' + encodeURIComponent(CONFIG.TOKEN);
+    try {
+        const resp = await fetch(url);
+        const json = await resp.json();
+        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return null; }
+        return json;
+    } catch (e) { console.log('API fetch failed:', e); return null; }
 }
     
 // ============================================================
@@ -540,14 +612,18 @@ function openDB() {
         const req = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
         
         req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
-                const store = db.createObjectStore(CONFIG.STORE_NAME, { keyPath: 'clientRecordID' });
-                store.createIndex('syncStatus', 'syncStatus', { unique: false });
-                store.createIndex('datum', 'datum', { unique: false });
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains(CONFIG.STORE_NAME)) {
+                const s = d.createObjectStore(CONFIG.STORE_NAME, { keyPath: 'clientRecordID' });
+                s.createIndex('syncStatus', 'syncStatus', { unique: false });
+                s.createIndex('datum', 'datum', { unique: false });
             }
-            if (!db.objectStoreNames.contains(CONFIG.STAMM_STORE)) {
-                db.createObjectStore(CONFIG.STAMM_STORE, { keyPath: 'key' });
+            if (!d.objectStoreNames.contains(CONFIG.STAMM_STORE)) {
+                d.createObjectStore(CONFIG.STAMM_STORE, { keyPath: 'key' });
+            }
+            if (!d.objectStoreNames.contains(CONFIG.AGRO_STORE)) {
+                const a = d.createObjectStore(CONFIG.AGRO_STORE, { keyPath: 'clientRecordID' });
+                a.createIndex('syncStatus', 'syncStatus', { unique: false });
             }
         };
         
@@ -649,27 +725,20 @@ function setKooperant(id, name) {
 // STAMMDATEN
 // ============================================================
 async function loadStammdaten() {
-    // Erst aus IndexedDB laden (Offline-Cache)
     try {
         const cached = await dbGetAll(CONFIG.STAMM_STORE);
-        if (cached.length > 0) {
-            const obj = cached.find(c => c.key === 'all');
-            if (obj) stammdaten = obj.data;
-        }
+        const obj = cached.find(c => c.key === 'all');
+        if (obj) stammdaten = obj.data;
     } catch (e) {}
-    
-    // Online: frische Daten holen
+
     if (navigator.onLine) {
         try {
-            const resp = await fetch(CONFIG.API_URL + '?action=getStammdaten');
-            const json = await resp.json();
-            if (json.success && json.data) {
+            const json = await apiFetch('action=getStammdaten');
+            if (json && json.success && json.data) {
                 stammdaten = json.data;
                 await dbPut(CONFIG.STAMM_STORE, { key: 'all', data: stammdaten, updatedAt: new Date().toISOString() });
             }
-        } catch (e) {
-            console.log('Stammdaten fetch failed, using cache');
-        }
+        } catch (e) {}
     }
 }
 
@@ -906,59 +975,243 @@ function showOtkupniList(record) {
 async function syncQueue() {
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
     if (pending.length === 0) return;
-    
     updateSyncBadge('syncing');
-    
     try {
-        const payload = encodeURIComponent(JSON.stringify({
-            otkupacID: CONFIG.OTKUPAC_ID,
-            records: pending
-        }));
-        
-        const resp = await fetch(CONFIG.API_URL + '?action=sync&data=' + payload);
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'sync', token: CONFIG.TOKEN, otkupacID: CONFIG.OTKUPAC_ID, records: pending })
+        });
         const json = await resp.json();
-        
+        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
         if (json.success) {
-            for (const record of pending) {
-                record.syncStatus = 'synced';
-                await dbPut(CONFIG.STORE_NAME, record);
-            }
-            showToast('Sinhronizovano: ' + pending.length + ' stavki', 'success');
+            for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.STORE_NAME, r); }
+            showToast('Sinhr: ' + pending.length, 'success');
         } else {
-            showToast('Sync greška: ' + (json.error || 'nepoznato'), 'error');
+            showToast('Greška: ' + (json.error || ''), 'error');
         }
-    } catch (e) {
-        console.log('Sync failed:', e);
-    }
-    
+    } catch (e) { console.log('Sync failed:', e); }
     updateSyncBadge();
     updateStats();
 }
 
+async function syncAgromere() {
+    const pending = await dbGetByIndex(CONFIG.AGRO_STORE, 'syncStatus', 'pending');
+    if (pending.length === 0) return;
+    try {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'syncAgromere', token: CONFIG.TOKEN, kooperantID: CONFIG.ENTITY_ID, records: pending })
+        });
+        const json = await resp.json();
+        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
+        if (json.success) {
+            for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.AGRO_STORE, r); }
+            showToast('Agromere sinhr: ' + pending.length, 'success');
+        }
+    } catch (e) { console.log('Agromere sync failed:', e); }
+}
+
 async function syncNow() {
-    if (!navigator.onLine) {
-        showToast('Nema internet konekcije', 'error');
-        return;
-    }
+    if (!navigator.onLine) { showToast('Nema konekcije', 'error'); return; }
     await syncQueue();
     renderQueueList();
 }
 
+// ============================================================
+// OTKUP PREGLED
+// ============================================================
+async function loadOtkupPregled() {
+    const od = document.getElementById('fldPregledOd').value;
+    const doo = document.getElementById('fldPregledDo').value;
+    const local = await dbGetAll(CONFIG.STORE_NAME);
+    let server = [];
+    try {
+        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        if (json && json.success && json.records) server = json.records.map(r => ({
+            clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum), kooperantID: r.KooperantID || '',
+            kooperantName: r.KooperantName || r.KooperantID || '', vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
+            klasa: r.Klasa || 'I', kolicina: parseFloat(r.Kolicina) || 0, cena: parseFloat(r.Cena) || 0,
+            kolAmbalaze: parseInt(r.KolAmbalaze) || 0, parcelaID: r.ParcelaID || '', syncStatus: r.SyncStatus || 'synced', source: 'server'
+        }));
+    } catch (e) {}
+    const serverIDs = new Set(server.map(r => r.clientRecordID));
+    const pendingLocal = local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID));
+    let all = [...server, ...pendingLocal];
+    if (od) all = all.filter(r => r.datum >= od);
+    if (doo) all = all.filter(r => r.datum <= doo);
+    all.sort((a, b) => b.datum.localeCompare(a.datum));
+
+    const kg = all.reduce((s, r) => s + (r.kolicina || 0), 0);
+    const vr = all.reduce((s, r) => s + (r.kolicina || 0) * (r.cena || 0), 0);
+    document.getElementById('statPregledCount').textContent = all.length;
+    document.getElementById('statPregledKg').textContent = kg.toLocaleString('sr');
+    document.getElementById('statPregledVrednost').textContent = vr.toLocaleString('sr');
+    document.getElementById('statPregledKoop').textContent = new Set(all.map(r => r.kooperantID)).size;
+
+    const list = document.getElementById('pregledList');
+    if (all.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa</p>'; return; }
+    list.innerHTML = all.map(r => {
+        const v = ((r.kolicina||0)*(r.cena||0)).toLocaleString('sr');
+        const icon = r.syncStatus==='pending' ? '⏳' : r.syncStatus==='Synced>Master' ? '✅' : '✓';
+        const bc = r.syncStatus==='pending' ? 'var(--warning)' : r.syncStatus==='Synced>Master' ? 'var(--primary)' : 'var(--success)';
+        return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
+            <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca||''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID?' | '+r.parcelaID:''}</div>
+            <div class="qi-detail" style="font-size:11px;margin-top:2px;">Amb: ${r.kolAmbalaze||0} | ${icon}</div></div>`;
+    }).join('');
+}
+
+// ============================================================
+// OTPREMNICE PREGLED
+// ============================================================
+async function loadOtpremnicePregled() {
+    const datum = document.getElementById('fldOtpremniceDatum').value;
+    if (!datum) { document.getElementById('otpremniceList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Izaberite datum</p>'; return; }
+    let all = [];
+    try {
+        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        if (json && json.success && json.records) all = json.records.map(r => ({
+            kooperantID: r.KooperantID||'', kooperantName: r.KooperantName||'', datum: fmtDate(r.Datum),
+            vrstaVoca: r.VrstaVoca||'', klasa: r.Klasa||'I', kolicina: parseFloat(r.Kolicina)||0,
+            cena: parseFloat(r.Cena)||0, kolAmbalaze: parseInt(r.KolAmbalaze)||0, parcelaID: r.ParcelaID||''
+        }));
+    } catch (e) {}
+    const local = await dbGetAll(CONFIG.STORE_NAME);
+    local.filter(r => r.syncStatus === 'pending').forEach(r => all.push(r));
+    const filtered = all.filter(r => r.datum === datum);
+    if (filtered.length === 0) { document.getElementById('otpremniceList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa</p>'; return; }
+    const grouped = {};
+    filtered.forEach(r => {
+        const k = r.kooperantID||'?';
+        if (!grouped[k]) grouped[k] = { name: r.kooperantName||k, items: [], kg: 0, vr: 0, amb: 0 };
+        grouped[k].items.push(r); grouped[k].kg += r.kolicina||0; grouped[k].vr += (r.kolicina||0)*(r.cena||0); grouped[k].amb += r.kolAmbalaze||0;
+    });
+    document.getElementById('otpremniceList').innerHTML = Object.entries(grouped).map(([id, g]) => `
+        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><strong style="color:var(--primary);">${g.name}</strong><span style="font-size:12px;color:var(--text-muted);">${id}</span></div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Ukupno: <strong>${g.kg.toLocaleString('sr')} kg</strong> | ${g.vr.toLocaleString('sr')} RSD | Amb: ${g.amb}</div>
+            ${g.items.map(r => `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${((r.kolicina||0)*(r.cena||0)).toLocaleString('sr')} RSD${r.parcelaID?' | '+r.parcelaID:''}</div>`).join('')}
+        </div>`).join('');
+}
+
+// ============================================================
+// KOOPERANT: PARCELE
+// ============================================================
+async function loadParcele() {
+    const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
+    const list = document.getElementById('parceleList');
+    if (parcele.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>'; return; }
+    list.innerHTML = parcele.map(p => `
+        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><strong>${p.KatBroj||p.ParcelaID}</strong><span style="font-size:12px;color:var(--text-muted);">${p.ParcelaID}</span></div>
+            <div style="font-size:13px;color:var(--text-muted);">${p.Kultura||''} | ${p.PovrsinaHa||'?'} ha | ${p.KatOpstina||''}${p.GGAPStatus?' | GGAP: '+p.GGAPStatus:''}</div>
+        </div>`).join('');
+}
+
+// ============================================================
+// KOOPERANT: AGROMERE
+// ============================================================
+function populateAgroParcele() {
+    const sel = document.getElementById('fldAgroParcela');
+    sel.innerHTML = '<option value="">-- Izaberi parcelu --</option>';
+    (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID).forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.ParcelaID;
+        o.textContent = p.KatBroj + ' - ' + (p.Kultura||'') + ' (' + p.ParcelaID + ')';
+        sel.appendChild(o);
+    });
+}
+
+function selectMera(btn, mera) {
+    document.querySelectorAll('.agro-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedMera = mera;
+}
+
+async function saveAgromera() {
+    const parcelaID = document.getElementById('fldAgroParcela').value;
+    if (!parcelaID) { showToast('Izaberite parcelu!', 'error'); return; }
+    if (!selectedMera) { showToast('Izaberite meru!', 'error'); return; }
+    const now = new Date();
+    const record = {
+        clientRecordID: crypto.randomUUID(), createdAtClient: now.toISOString(),
+        kooperantID: CONFIG.ENTITY_ID, parcelaID: parcelaID,
+        mera: selectedMera, datum: now.toISOString().split('T')[0],
+        vreme: now.toTimeString().split(' ')[0].substring(0, 5),
+        napomena: document.getElementById('fldAgroNapomena').value, syncStatus: 'pending'
+    };
+    await dbPut(CONFIG.AGRO_STORE, record);
+    showToast(selectedMera + ' sačuvano!', 'success');
+    document.querySelectorAll('.agro-btn').forEach(b => b.classList.remove('selected'));
+    selectedMera = '';
+    document.getElementById('fldAgroNapomena').value = '';
+    if (navigator.onLine) syncAgromere();
+    loadAgromereList();
+}
+
+async function loadAgromereList() {
+    const local = await dbGetAll(CONFIG.AGRO_STORE);
+    let server = [];
+    try {
+        const json = await apiFetch('action=getAgromere&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+        if (json && json.success && json.records) server = json.records.map(r => ({
+            mera: r.Mera||'', datum: fmtDate(r.Datum), vreme: r.Vreme||'',
+            parcelaID: r.ParcelaID||'', napomena: r.Napomena||'', syncStatus: 'synced'
+        }));
+    } catch (e) {}
+    const localPending = local.filter(r => r.syncStatus === 'pending');
+    const all = [...server, ...localPending].sort((a, b) => (b.datum||'').localeCompare(a.datum||''));
+    const list = document.getElementById('agromereList');
+    if (all.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema evidentiranih mera</p>'; return; }
+    const icons = { Zastita: '🛡️', Prihrana: '🌱', Rezidba: '✂️', Zalivanje: '💧', Berba: '🍎' };
+    list.innerHTML = all.map(r => `
+        <div class="queue-item" style="border-left-color:${r.syncStatus==='pending'?'var(--warning)':'var(--success)'};">
+            <div class="qi-header"><span class="qi-koop">${icons[r.mera]||''} ${r.mera}</span><span class="qi-time">${r.datum} ${r.vreme||''}</span></div>
+            <div class="qi-detail">${r.parcelaID}${r.napomena ? ' | ' + r.napomena : ''}</div>
+        </div>`).join('');
+}
+
+// ============================================================
+// KOOPERANT: INFO
+// ============================================================
+async function loadKoopInfo() {
+    const config = stammdaten.config || [];
+    const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : '-'; };
+    document.getElementById('koopInfoContent').innerHTML = `
+        <div style="background:white;border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <h3 style="color:var(--primary);margin-bottom:12px;">Otkup informacije</h3>
+            <table style="width:100%;">
+                <tr><td style="padding:8px;color:var(--text-muted);">Status:</td><td style="padding:8px;font-weight:600;">${gv('OtkupAktivan')==='Da'?'🟢 Aktivan':'🔴 Neaktivan'}</td></tr>
+                <tr><td style="padding:8px;color:var(--text-muted);">Radno vreme:</td><td style="padding:8px;">${gv('RadnoVremeOd')} - ${gv('RadnoVremeDo')}</td></tr>
+                <tr><td style="padding:8px;color:var(--text-muted);">Sezona:</td><td style="padding:8px;">${gv('SezonaOd')} - ${gv('SezonaDo')}</td></tr>
+            </table>
+        </div>
+        <div style="background:white;border-radius:var(--radius);padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <h3 style="color:var(--primary);margin-bottom:12px;">Aktuelne cene</h3>
+            <table style="width:100%;">
+                ${config.filter(c => c.Parameter && c.Parameter.startsWith('Cena')).map(c =>
+                    '<tr><td style="padding:8px;color:var(--text-muted);">'+c.Parameter.replace('Cena','')+':</td><td style="padding:8px;font-weight:600;">'+c.Vrednost+' RSD/kg</td></tr>').join('')}
+            </table>
+        </div>`;
+}
+    
 // ============================================================
 // UI UPDATES
 // ============================================================
 function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    
     document.getElementById('tab-' + tabName).classList.add('active');
     event.target.classList.add('active');
-    
     if (tabName === 'queue') { renderQueueList(); updateStats(); }
     if (tabName === 'pregled') loadOtkupPregled();
     if (tabName === 'otpremnice') loadOtpremnicePregled();
+    if (tabName === 'kartica') loadKartica();
+    if (tabName === 'parcele') loadParcele();
+    if (tabName === 'agromere') loadAgromereList();
+    if (tabName === 'koopinfo') loadKoopInfo();
 }
-
 async function updateSyncBadge(status) {
     const badge = document.getElementById('syncBadge');
     
@@ -985,10 +1238,9 @@ async function updateSyncBadge(status) {
 async function updateStats() {
     const all = await dbGetAll(CONFIG.STORE_NAME);
     const today = new Date().toISOString().split('T')[0];
-    const todayRecords = all.filter(r => r.datum === today);
-    
-    document.getElementById('statPending').textContent = todayRecords.filter(r => r.syncStatus === 'pending').length;
-    document.getElementById('statSynced').textContent = todayRecords.filter(r => r.syncStatus === 'synced').length;
+    const t = all.filter(r => r.datum === today);
+    document.getElementById('statPending').textContent = t.filter(r => r.syncStatus === 'pending').length;
+    document.getElementById('statSynced').textContent = t.filter(r => r.syncStatus === 'synced').length;
 }
 
 async function renderQueueList() {
@@ -1011,99 +1263,7 @@ async function renderQueueList() {
     `).join('');
 }
 
-// ============================================================
-// OTKUP PREGLED
-// ============================================================
-async function loadOtkupPregled() {
-    const od = document.getElementById('fldPregledOd').value;
-    const doo = document.getElementById('fldPregledDo').value;
-    
-    // 1. Lokale Otkupi aus IndexedDB
-    const local = await dbGetAll(CONFIG.STORE_NAME);
-    
-    // 2. Server-Otkupi aus Google Sheet holen
-    let server = [];
-    try {
-        const resp = await fetch(CONFIG.API_URL + '?action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-        const json = await resp.json();
-        if (json.success && json.records) {
-            server = json.records.map(r => ({
-                clientRecordID: r.ClientRecordID || '',
-                datum: formatServerDate(r.Datum),
-                kooperantID: r.KooperantID || '',
-                kooperantName: r.KooperantName || r.KooperantID || '',
-                vrstaVoca: r.VrstaVoca || '',
-                sortaVoca: r.SortaVoca || '',
-                klasa: r.Klasa || 'I',
-                kolicina: parseFloat(r.Kolicina) || 0,
-                cena: parseFloat(r.Cena) || 0,
-                tipAmbalaze: r.TipAmbalaze || '',
-                kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-                parcelaID: r.ParcelaID || '',
-                napomena: r.Napomena || '',
-                syncStatus: r.SyncStatus || 'synced',
-                source: 'server'
-            }));
-        }
-    } catch (e) {
-        console.log('Server otkupi fetch failed:', e);
-    }
-    
-    // 3. Merge: server-Daten + lokale pending (die noch nicht gesynct sind)
-    const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const pendingLocal = local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID));
-    pendingLocal.forEach(r => r.source = 'local');
-    
-    let all = [...server, ...pendingLocal];
-    
-    // 4. Datumsfilter
-    if (od) all = all.filter(r => r.datum >= od);
-    if (doo) all = all.filter(r => r.datum <= doo);
-    
-    all.sort((a, b) => b.datum.localeCompare(a.datum) || (b.createdAtClient || '').localeCompare(a.createdAtClient || ''));
-    
-    // Stats
-    const ukupnoKg = all.reduce((s, r) => s + (r.kolicina || 0), 0);
-    const ukupnoVrednost = all.reduce((s, r) => s + ((r.kolicina || 0) * (r.cena || 0)), 0);
-    const koopSet = new Set(all.map(r => r.kooperantID));
-    
-    document.getElementById('statPregledCount').textContent = all.length;
-    document.getElementById('statPregledKg').textContent = ukupnoKg.toLocaleString('sr');
-    document.getElementById('statPregledVrednost').textContent = ukupnoVrednost.toLocaleString('sr');
-    document.getElementById('statPregledKoop').textContent = koopSet.size;
-    
-    // Lista
-    const list = document.getElementById('pregledList');
-    if (all.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa za izabrani period</p>';
-        return;
-    }
-    
-    list.innerHTML = all.map(r => {
-        const vrednost = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        const statusIcon = r.syncStatus === 'pending' ? '⏳' : 
-                          (r.syncStatus === 'Synced>Master' ? '✅' : '✓');
-        const statusText = r.syncStatus === 'pending' ? 'Čeka sync' : 
-                          (r.syncStatus === 'Synced>Master' ? 'U masteru' : 'Sinhr.');
-        const borderColor = r.syncStatus === 'pending' ? 'var(--warning)' : 
-                           (r.syncStatus === 'Synced>Master' ? 'var(--primary)' : 'var(--success)');
-        const parcelaInfo = r.parcelaID ? ' | ' + r.parcelaID : '';
-        return `
-            <div class="queue-item" style="border-left-color:${borderColor};">
-                <div class="qi-header">
-                    <span class="qi-koop">${r.kooperantName}</span>
-                    <span class="qi-time">${r.datum}</span>
-                </div>
-                <div class="qi-detail">
-                    ${r.vrstaVoca} ${r.sortaVoca || ''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD = <strong>${vrednost} RSD</strong>${parcelaInfo}
-                </div>
-                <div class="qi-detail" style="font-size:11px;margin-top:2px;">
-                    Amb: ${r.kolAmbalaze || 0} | ${statusIcon} ${statusText}
-                    ${r.napomena ? ' | ' + r.napomena : ''}
-                </div>
-            </div>`;
-    }).join('');
-}
+
 
 function formatServerDate(val) {
     if (!val) return '';
@@ -1116,91 +1276,6 @@ function formatServerDate(val) {
     }
 }
 
-// ============================================================
-// OTPREMNICE PREGLED (grupisano po vozaču — placeholder)
-// ============================================================
-async function loadOtpremnicePregled() {
-    const datum = document.getElementById('fldOtpremniceDatum').value;
-    
-    if (!datum) {
-        document.getElementById('otpremniceList').innerHTML = 
-            '<p style="text-align:center;color:var(--text-muted);padding:40px;">Izaberite datum</p>';
-        return;
-    }
-    
-    // Otkupi aus Server + lokal
-    let all = [];
-    
-    try {
-        const resp = await fetch(CONFIG.API_URL + '?action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-        const json = await resp.json();
-        if (json.success && json.records) {
-            all = json.records.map(r => ({
-                kooperantID: r.KooperantID || '',
-                kooperantName: r.KooperantName || r.KooperantID || '',
-                datum: formatServerDate(r.Datum),
-                vrstaVoca: r.VrstaVoca || '',
-                sortaVoca: r.SortaVoca || '',
-                klasa: r.Klasa || 'I',
-                kolicina: parseFloat(r.Kolicina) || 0,
-                cena: parseFloat(r.Cena) || 0,
-                kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-                parcelaID: r.ParcelaID || ''
-            }));
-        }
-    } catch (e) {}
-    
-    // Lokale pending dazu
-    const local = await dbGetAll(CONFIG.STORE_NAME);
-    local.filter(r => r.syncStatus === 'pending').forEach(r => all.push(r));
-    
-    const filtered = all.filter(r => r.datum === datum);
-    
-    if (filtered.length === 0) {
-        document.getElementById('otpremniceList').innerHTML = 
-            '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa za izabrani datum</p>';
-        return;
-    }
-    
-    // Grupisanje po kooperantu
-    const grouped = {};
-    filtered.forEach(r => {
-        const key = r.kooperantID || 'UNKNOWN';
-        if (!grouped[key]) {
-            grouped[key] = { name: r.kooperantName || key, items: [], totalKg: 0, totalVrednost: 0, totalAmb: 0 };
-        }
-        grouped[key].items.push(r);
-        grouped[key].totalKg += (r.kolicina || 0);
-        grouped[key].totalVrednost += ((r.kolicina || 0) * (r.cena || 0));
-        grouped[key].totalAmb += (r.kolAmbalaze || 0);
-    });
-    
-    let html = '';
-    for (const [koopID, group] of Object.entries(grouped)) {
-        html += `
-            <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-                <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                    <strong style="color:var(--primary);">${group.name}</strong>
-                    <span style="font-size:12px;color:var(--text-muted);">${koopID}</span>
-                </div>
-                <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
-                    Ukupno: <strong>${group.totalKg.toLocaleString('sr')} kg</strong> | 
-                    ${group.totalVrednost.toLocaleString('sr')} RSD | 
-                    Amb: ${group.totalAmb}
-                </div>`;
-        group.items.forEach(r => {
-            html += `
-                <div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">
-                    ${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr')} RSD
-                    ${r.parcelaID ? ' | ' + r.parcelaID : ''}
-                </div>`;
-        });
-        html += `</div>`;
-    }
-    
-    document.getElementById('otpremniceList').innerHTML = html;
-}
-    
 // ============================================================
 // HELPERS
 // ============================================================
@@ -1220,6 +1295,11 @@ function getDeviceID() {
     return id;
 }
 
+function fmtDate(val) {
+    if (!val) return '';
+    if (typeof val === 'string' && val.length >= 10) return val.substring(0, 10);
+    try { return new Date(val).toISOString().split('T')[0]; } catch(e) { return String(val); }
+}    
 // ============================================================
 // SERVICE WORKER REGISTRATION + AUTO-UPDATE
 // ============================================================
