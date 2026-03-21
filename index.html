@@ -1104,7 +1104,7 @@ async function loadKartica() {
     let records = [];
     try {
         const json = await apiFetch('action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-        if (json && json.success && json.records) records = json.records;
+        if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
     } catch (e) {}
     if (records.length === 0) {
         document.getElementById('karticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Kartica nije dostupna</p>';
