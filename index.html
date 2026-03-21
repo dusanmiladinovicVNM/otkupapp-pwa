@@ -261,9 +261,10 @@
  
 <!-- TABS -->
 <div class="tab-bar">
-    <button class="tab-btn active" onclick="showTab('otkup')">Novi otkup</button>
-    <button class="tab-btn" onclick="showTab('queue')">Red čekanja</button>
-    <button class="tab-btn" onclick="showTab('stats')">Danas</button>
+    <button class="tab-btn active" onclick="showTab('otkup')">Novi</button>
+    <button class="tab-btn" onclick="showTab('pregled')">Otkupi</button>
+    <button class="tab-btn" onclick="showTab('otpremnice')">Otpremnice</button>
+    <button class="tab-btn" onclick="showTab('queue')">Sync</button>
 </div>
  
 <!-- TAB: NOVI OTKUP -->
@@ -356,17 +357,55 @@
     <button class="btn-secondary" onclick="syncNow()" id="btnSync">Sinhronizuj sada</button>
 </div>
  
-<!-- TAB: DANAS -->
-<div class="tab-content" id="tab-stats">
+<!-- TAB: OTKUPI PREGLED -->
+<div class="tab-content" id="tab-pregled">
+    <div class="form-row" style="margin-bottom:12px;">
+        <div class="form-group">
+            <label>Od datuma</label>
+            <input type="date" id="fldPregledOd" onchange="loadOtkupPregled()">
+        </div>
+        <div class="form-group">
+            <label>Do datuma</label>
+            <input type="date" id="fldPregledDo" onchange="loadOtkupPregled()">
+        </div>
+    </div>
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-value" id="statCount">0</div>
-            <div class="stat-label">Otkupa danas</div>
+            <div class="stat-value" id="statPregledCount">0</div>
+            <div class="stat-label">Otkupa</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value" id="statKg">0</div>
+            <div class="stat-value" id="statPregledKg">0</div>
             <div class="stat-label">Ukupno kg</div>
         </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statPregledVrednost">0</div>
+            <div class="stat-label">Vrednost RSD</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statPregledKoop">0</div>
+            <div class="stat-label">Kooperanata</div>
+        </div>
+    </div>
+    <div id="pregledList"></div>
+</div>
+
+<!-- TAB: OTPREMNICE -->
+<div class="tab-content" id="tab-otpremnice">
+    <p style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">
+        Otpremnice se automatski kreiraju pri uvozu u master sistem.<br>
+        Ovde vidite otkupe grupisane po vozaču i datumu.
+    </p>
+    <div class="form-group" style="margin-bottom:12px;">
+        <label>Datum</label>
+        <input type="date" id="fldOtpremniceDatum" onchange="loadOtpremnicePregled()">
+    </div>
+    <div id="otpremniceList"></div>
+</div>
+
+<!-- TAB: SYNC -->
+<div class="tab-content" id="tab-queue">
+    <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-value" id="statPending">0</div>
             <div class="stat-label">Čeka sync</div>
@@ -376,7 +415,8 @@
             <div class="stat-label">Sinhronizovano</div>
         </div>
     </div>
-    <div id="todayList"></div>
+    <div id="queueList"></div>
+    <button class="btn-secondary" onclick="syncNow()" id="btnSync">Sinhronizuj sada</button>
 </div>
  
 <!-- TOAST -->
@@ -417,6 +457,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadStammdaten();
     populateVrstaDropdown();
     applyDefaults();
+    // Default Datumsfilter: heute
+    document.getElementById('fldPregledOd').value = new Date().toISOString().split('T')[0];
+    document.getElementById('fldPregledDo').value = new Date().toISOString().split('T')[0];
+    document.getElementById('fldOtpremniceDatum').value = new Date().toISOString().split('T')[0];
     document.getElementById('headerStanica').textContent = CONFIG.OTKUPAC_ID;  // ← HIER
     
     updateSyncBadge();
@@ -910,8 +954,9 @@ function showTab(tabName) {
     document.getElementById('tab-' + tabName).classList.add('active');
     event.target.classList.add('active');
     
-    if (tabName === 'queue') renderQueueList();
-    if (tabName === 'stats') updateStats();
+    if (tabName === 'queue') { renderQueueList(); updateStats(); }
+    if (tabName === 'pregled') loadOtkupPregled();
+    if (tabName === 'otpremnice') loadOtpremnicePregled();
 }
 
 async function updateSyncBadge(status) {
@@ -942,23 +987,8 @@ async function updateStats() {
     const today = new Date().toISOString().split('T')[0];
     const todayRecords = all.filter(r => r.datum === today);
     
-    document.getElementById('statCount').textContent = todayRecords.length;
-    document.getElementById('statKg').textContent = todayRecords.reduce((sum, r) => sum + (r.kolicina || 0), 0).toLocaleString('sr');
     document.getElementById('statPending').textContent = todayRecords.filter(r => r.syncStatus === 'pending').length;
     document.getElementById('statSynced').textContent = todayRecords.filter(r => r.syncStatus === 'synced').length;
-    
-    // Today list
-    const list = document.getElementById('todayList');
-    list.innerHTML = todayRecords.sort((a, b) => b.createdAtClient.localeCompare(a.createdAtClient))
-        .map(r => `
-            <div class="queue-item ${r.syncStatus}">
-                <div class="qi-header">
-                    <span class="qi-koop">${r.kooperantName}</span>
-                    <span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span>
-                </div>
-                <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div>
-            </div>
-        `).join('');
 }
 
 async function renderQueueList() {
@@ -981,6 +1011,126 @@ async function renderQueueList() {
     `).join('');
 }
 
+// ============================================================
+// OTKUP PREGLED
+// ============================================================
+async function loadOtkupPregled() {
+    const all = await dbGetAll(CONFIG.STORE_NAME);
+    const od = document.getElementById('fldPregledOd').value;
+    const doo = document.getElementById('fldPregledDo').value;
+    
+    let filtered = all;
+    if (od) filtered = filtered.filter(r => r.datum >= od);
+    if (doo) filtered = filtered.filter(r => r.datum <= doo);
+    
+    filtered.sort((a, b) => b.datum.localeCompare(a.datum) || b.createdAtClient.localeCompare(a.createdAtClient));
+    
+    // Stats
+    const ukupnoKg = filtered.reduce((s, r) => s + (r.kolicina || 0), 0);
+    const ukupnoVrednost = filtered.reduce((s, r) => s + ((r.kolicina || 0) * (r.cena || 0)), 0);
+    const koopSet = new Set(filtered.map(r => r.kooperantID));
+    
+    document.getElementById('statPregledCount').textContent = filtered.length;
+    document.getElementById('statPregledKg').textContent = ukupnoKg.toLocaleString('sr');
+    document.getElementById('statPregledVrednost').textContent = ukupnoVrednost.toLocaleString('sr');
+    document.getElementById('statPregledKoop').textContent = koopSet.size;
+    
+    // Lista
+    const list = document.getElementById('pregledList');
+    if (filtered.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa za izabrani period</p>';
+        return;
+    }
+    
+    list.innerHTML = filtered.map(r => {
+        const vrednost = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
+        const statusClass = r.syncStatus === 'synced' ? 'synced' : '';
+        const parcelaInfo = r.parcelaID ? ' | ' + r.parcelaID : '';
+        return `
+            <div class="queue-item ${statusClass}">
+                <div class="qi-header">
+                    <span class="qi-koop">${r.kooperantName || r.kooperantID}</span>
+                    <span class="qi-time">${r.datum}</span>
+                </div>
+                <div class="qi-detail">
+                    ${r.vrstaVoca} ${r.sortaVoca || ''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD = <strong>${vrednost} RSD</strong>${parcelaInfo}
+                </div>
+                <div class="qi-detail" style="font-size:11px;margin-top:2px;">
+                    Amb: ${r.kolAmbalaze || 0} | ${r.syncStatus === 'synced' ? '✓ Sinhr.' : '⏳ Čeka'}
+                    ${r.napomena ? ' | ' + r.napomena : ''}
+                </div>
+            </div>`;
+    }).join('');
+}
+
+// ============================================================
+// OTPREMNICE PREGLED (grupisano po vozaču — placeholder)
+// ============================================================
+async function loadOtpremnicePregled() {
+    const all = await dbGetAll(CONFIG.STORE_NAME);
+    const datum = document.getElementById('fldOtpremniceDatum').value;
+    
+    if (!datum) {
+        document.getElementById('otpremniceList').innerHTML = 
+            '<p style="text-align:center;color:var(--text-muted);padding:40px;">Izaberite datum</p>';
+        return;
+    }
+    
+    const filtered = all.filter(r => r.datum === datum);
+    
+    if (filtered.length === 0) {
+        document.getElementById('otpremniceList').innerHTML = 
+            '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa za izabrani datum</p>';
+        return;
+    }
+    
+    // Grupisanje po kooperantu
+    const grouped = {};
+    filtered.forEach(r => {
+        const key = r.kooperantID || 'UNKNOWN';
+        if (!grouped[key]) {
+            grouped[key] = {
+                name: r.kooperantName || key,
+                items: [],
+                totalKg: 0,
+                totalVrednost: 0,
+                totalAmb: 0
+            };
+        }
+        grouped[key].items.push(r);
+        grouped[key].totalKg += (r.kolicina || 0);
+        grouped[key].totalVrednost += ((r.kolicina || 0) * (r.cena || 0));
+        grouped[key].totalAmb += (r.kolAmbalaze || 0);
+    });
+    
+    let html = '';
+    for (const [koopID, group] of Object.entries(grouped)) {
+        html += `
+            <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                    <strong style="color:var(--primary);">${group.name}</strong>
+                    <span style="font-size:12px;color:var(--text-muted);">${koopID}</span>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
+                    Ukupno: <strong>${group.totalKg.toLocaleString('sr')} kg</strong> | 
+                    ${group.totalVrednost.toLocaleString('sr')} RSD | 
+                    Amb: ${group.totalAmb}
+                </div>`;
+        
+        group.items.forEach(r => {
+            html += `
+                <div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">
+                    ${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr')} RSD
+                    ${r.parcelaID ? ' | ' + r.parcelaID : ''}
+                </div>`;
+        });
+        
+        html += `</div>`;
+    }
+    
+    document.getElementById('otpremniceList').innerHTML = html;
+}
+    
 // ============================================================
 // HELPERS
 // ============================================================
