@@ -549,7 +549,20 @@ let db = null;
 let qrScanner = null;
 let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [] };
 let selectedMera = '';
+let cache = {};
+const CACHE_TTL = 60000; // 60 sekundi
 
+async function cachedApiFetch(key, params) {
+    const now = Date.now();
+    if (cache[key] && (now - cache[key].time) < CACHE_TTL) {
+        return cache[key].data;
+    }
+    const json = await apiFetch(params);
+    if (json && json.success) {
+        cache[key] = { data: json, time: now };
+    }
+    return json;
+}
 // ============================================================
 // INIT
 // ============================================================
@@ -1260,7 +1273,7 @@ async function loadOtkupPregled() {
     const local = await dbGetAll(CONFIG.STORE_NAME);
     let server = [];
     try {
-        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        const json = await cachedApiFetch('otkupi_' + CONFIG.OTKUPAC_ID, 'action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
         if (json && json.success && json.records) server = json.records.map(r => ({
             clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum), kooperantID: r.KooperantID || '',
             kooperantName: r.KooperantName || r.KooperantID || '', vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
@@ -1335,7 +1348,7 @@ async function loadKartica() {
     document.getElementById('karticaID').textContent = CONFIG.ENTITY_ID;
     let records = [];
     try {
-        const json = await apiFetch('action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+        const json = await cachedApiFetch('kartica_' + CONFIG.ENTITY_ID, 'action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
         if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
     } catch (e) {}
     if (records.length === 0) {
@@ -1578,7 +1591,7 @@ async function loadMgmtOtkupi() {
 async function loadMgmtSaldoOM() {
     let records = [];
     try {
-        const json = await apiFetch('action=getMgmtSaldoOM');
+        const json = await cachedApiFetch('saldoOM', 'action=getMgmtSaldoOM');
         if (json && json.success && json.records) records = json.records;
     } catch (e) {}
     
@@ -1596,7 +1609,7 @@ async function loadMgmtSaldoOM() {
 async function loadMgmtKupci() {
     let records = [];
     try {
-        const json = await apiFetch('action=getMgmtSaldoKupci');
+        const json = await cachedApiFetch('saldoKupci', 'action=getMgmtSaldoKupci');
         if (json && json.success && json.records) records = json.records;
     } catch (e) {}
     
@@ -1614,7 +1627,7 @@ async function loadMgmtKupci() {
 async function loadMgmtOtkupPoOM() {
     let records = [];
     try {
-        const json = await apiFetch('action=getMgmtOtkupPoOM');
+        const json = await cachedApiFetch('otkupPoOM', 'action=getMgmtOtkupPoOM');
         if (json && json.success && json.records) records = json.records;
     } catch (e) {}
     
@@ -1660,7 +1673,7 @@ async function loadMgmtOtkupPoOM() {
 async function loadMgmtPredato() {
     let records = [];
     try {
-        const json = await apiFetch('action=getMgmtPredatoPoKupcu');
+        const json = await cachedApiFetch('predato', 'action=getMgmtPredatoPoKupcu');
         if (json && json.success && json.records) records = json.records;
     } catch (e) {}
     
