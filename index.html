@@ -552,6 +552,17 @@ let selectedMera = '';
 let cache = {};
 const CACHE_TTL = 60000; // 60 sekundi
 
+let mgmtData = null;
+
+async function prefetchMgmtData() {
+    try {
+        const json = await apiFetch('action=getMgmtAll');
+        if (json && json.success) {
+            mgmtData = json;
+        }
+    } catch (e) {}
+}
+
 async function cachedApiFetch(key, params) {
     const now = Date.now();
     if (cache[key] && (now - cache[key].time) < CACHE_TTL) {
@@ -575,6 +586,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     db = await openDB();
     await loadStammdaten();
     applyRoleVisibility();
+    if (CONFIG.USER_ROLE === 'Management') {
+        populateMgmtStanice();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('mgmtOtkupiOd').value = today;
+        document.getElementById('mgmtOtkupiDo').value = today;
+        prefetchMgmtData();
+    }
     document.getElementById('headerInfo').textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
 
     if (CONFIG.USER_ROLE === 'Otkupac') {
@@ -1522,11 +1540,17 @@ async function onMgmtKooperantChange() {
     document.getElementById('mgmtKarticaID').textContent = koopID;
     document.getElementById('mgmtKarticaHeader').style.display = 'block';
     
+    // Filtriraj iz prefetch-ovanih podataka
     let records = [];
-    try {
-        const json = await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
-        if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
-    } catch (e) {}
+    if (mgmtData && mgmtData.kartice) {
+        records = mgmtData.kartice.filter(r => r.KooperantID === koopID && r.Opis !== 'UKUPNO');
+    } else {
+        // Fallback na API ako prefetch nije uspeo
+        try {
+            const json = await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
+            if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
+        } catch (e) {}
+    }
     
     if (records.length === 0) {
         document.getElementById('mgmtKarticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
@@ -1591,34 +1615,22 @@ async function loadMgmtOtkupi() {
 }
 
 async function loadMgmtSaldoOM() {
-    document.getElementById('mgmtSaldoOMList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    let records = [];
-    try {
-        const json = await cachedApiFetch('saldoOM', 'action=getMgmtSaldoOM');
-        if (json && json.success && json.records) records = json.records;
-    } catch (e) {}
-    
+    const records = mgmtData ? mgmtData.saldoOM : [];
     const list = document.getElementById('mgmtSaldoOMList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
     list.innerHTML = records.map(r => {
         const saldo = parseFloat(r.Saldo)||0;
         const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header"><span class="qi-koop">${r.Stanica||r.StanicaID||''}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
-            <div class="qi-detail">${r.Opis||'Avans: '+(r.Avans||0)+' | Isplaceno: '+(r.Isplaceno||0)}</div></div>`;
+            <div class="qi-detail">Avans: ${(parseFloat(r.Avans)||0).toLocaleString('sr')} | Isplaceno: ${(parseFloat(r.Isplaceno)||0).toLocaleString('sr')}</div></div>`;
     }).join('');
 }
 
 async function loadMgmtKupci() {
-    document.getElementById('mgmtKupciList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    let records = [];
-    try {
-        const json = await cachedApiFetch('saldoKupci', 'action=getMgmtSaldoKupci');
-        if (json && json.success && json.records) records = json.records;
-    } catch (e) {}
-    
+    const records = mgmtData ? mgmtData.saldoKupci : [];
     const list = document.getElementById('mgmtKupciList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
     list.innerHTML = records.map(r => {
         const saldo = parseFloat(r.Saldo)||0;
         const bc = saldo > 0 ? 'var(--danger)' : 'var(--success)';
@@ -1629,6 +1641,7 @@ async function loadMgmtKupci() {
 }
 
 async function loadMgmtOtkupPoOM() {
+    const records = mgmtData ? mgmtData.otkupPoOM : [];
     document.getElementById('mgmtOtkupPoOMList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     let records = [];
     try {
@@ -1676,6 +1689,7 @@ async function loadMgmtOtkupPoOM() {
 }
 
 async function loadMgmtPredato() {
+    const records = mgmtData ? mgmtData.predatoPoKupcu : [];
     document.getElementById('mgmtPredatoList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     let records = [];
     try {
