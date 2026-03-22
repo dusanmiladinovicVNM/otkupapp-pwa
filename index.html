@@ -1015,43 +1015,180 @@ function resetForm() {
 }
 
 function showOtkupniList(record) {
+    const config = stammdaten.config || [];
+    const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
+    const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === record.kooperantID) || {};
     const vrednost = (record.kolicina * record.cena).toLocaleString('sr');
-    const html = `
-        <div style="padding:20px;font-family:sans-serif;max-width:400px;margin:0 auto;">
-            <h2 style="text-align:center;margin-bottom:20px;">OTKUPNI LIST</h2>
-            <table style="width:100%;border-collapse:collapse;">
-                <tr><td style="padding:6px;color:#666;">Datum:</td><td style="padding:6px;font-weight:600;">${record.datum}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Kooperant:</td><td style="padding:6px;font-weight:600;">${record.kooperantName}</td></tr>
-                <tr><td style="padding:6px;color:#666;">ID:</td><td style="padding:6px;">${record.kooperantID}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Vrsta:</td><td style="padding:6px;">${record.vrstaVoca} ${record.sortaVoca}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${record.klasa}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
-                <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
-                <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">Vrednost:</td><td style="padding:8px;font-weight:700;font-size:18px;">${vrednost} RSD</td></tr>
-                <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
-                ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + record.parcelaID + '</td></tr>' : ''}
-            </table>
-            <div style="margin-top:30px;display:flex;justify-content:space-between;">
-                <div style="text-align:center;width:45%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:12px;">Potpis kooperanta</div></div>
-                <div style="text-align:center;width:45%;"><div style="border-top:1px solid #333;padding-top:4px;font-size:12px;">Potpis otkupca</div></div>
-            </div>
-            <div style="text-align:center;margin-top:20px;">
-                <button onclick="document.getElementById('otkupniListModal').style.display='none'" style="padding:12px 30px;font-size:16px;background:#1a5e2a;color:white;border:none;border-radius:8px;">Zatvori</button>
-                <button onclick="window.print()" style="padding:12px 30px;font-size:16px;background:#e8a838;color:white;border:none;border-radius:8px;margin-left:10px;">Štampaj</button>
-            </div>
-        </div>`;
     
     let modal = document.getElementById('otkupniListModal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'otkupniListModal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999;overflow-y:auto;';
-        document.body.appendChild(modal);
-    }
-    modal.innerHTML = html;
+    if (!modal) { modal = document.createElement('div'); modal.id = 'otkupniListModal'; modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999;overflow-y:auto;'; document.body.appendChild(modal); }
+    
+    modal.innerHTML = `<div style="padding:16px;max-width:420px;margin:0 auto;font-family:sans-serif;">
+        
+        <!-- ZAGLAVLJE FIRME -->
+        <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px;">
+            <div style="font-size:18px;font-weight:700;">${gv('SELLER_NAME')}</div>
+            <div style="font-size:12px;color:#666;">${gv('SELLER_STREET')}, ${gv('SELLER_CITY')} ${gv('SELLER_POSTAL_CODE')}</div>
+            <div style="font-size:12px;color:#666;">PIB: ${gv('SELLER_PIB')} | MB: ${gv('SELLER_MATICNI_BROJ')}</div>
+            <div style="font-size:12px;color:#666;">TR: ${gv('SELLER_ACCOUNT')}</div>
+        </div>
+        
+        <h2 style="text-align:center;margin-bottom:14px;font-size:20px;">OTKUPNI LIST</h2>
+        
+        <!-- PODACI O KOOPERANTU -->
+        <div style="background:#f5f5f0;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px;">
+            <div><strong>${koop.Ime || ''} ${koop.Prezime || ''}</strong></div>
+            <div>${koop.Adresa || ''}, ${koop.Mesto || ''}</div>
+            <div>JMBG: ${koop.JMBG || '________'} | BPG: ${koop.BPGBroj || '________'}</div>
+        </div>
+        
+        <!-- PODACI O OTKUPU -->
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:6px;color:#666;width:40%;">Datum:</td><td style="padding:6px;font-weight:600;">${record.datum}</td></tr>
+            <tr><td style="padding:6px;color:#666;">Proizvod:</td><td style="padding:6px;">${record.vrstaVoca} ${record.sortaVoca}</td></tr>
+            <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${record.klasa}</td></tr>
+            <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
+            <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
+            <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">VREDNOST:</td><td style="padding:8px;font-weight:700;font-size:18px;">${vrednost} RSD</td></tr>
+            <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
+            ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + record.parcelaID + '</td></tr>' : ''}
+            <tr><td style="padding:6px;color:#666;">Rok isplate:</td><td style="padding:6px;">${gv('OtkupRokIsplate') || 'Po dogovoru'}</td></tr>
+        </table>
+        
+        <!-- POTPISI -->
+        <div style="margin-top:20px;">
+            <div style="margin-bottom:16px;">
+                <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis otkupljivača:</div>
+                <canvas id="sigOtkupac" width="360" height="100" style="border:1px solid #ccc;border-radius:6px;width:100%;touch-action:none;"></canvas>
+            </div>
+            <div style="margin-bottom:16px;">
+                <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis kooperanta:</div>
+                <canvas id="sigKooperant" width="360" height="100" style="border:1px solid #ccc;border-radius:6px;width:100%;touch-action:none;"></canvas>
+            </div>
+        </div>
+        
+        <div style="text-align:center;margin-top:16px;display:flex;gap:8px;">
+            <button onclick="clearSignature('sigOtkupac');clearSignature('sigKooperant')" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši potpise</button>
+            <button onclick="saveOtkupniListWithSignatures('${record.clientRecordID}')" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">Potvrdi</button>
+            <button onclick="window.print()" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">Štampaj</button>
+        </div>
+        <button onclick="document.getElementById('otkupniListModal').style.display='none'" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
+    </div>`;
+    
     modal.style.display = 'block';
+    
+    // Inicijalizuj potpis canvase
+    setTimeout(() => {
+        initSignaturePad('sigOtkupac');
+        initSignaturePad('sigKooperant');
+    }, 100);
 }
 
+// ============================================================
+// SIGNATURE PAD
+// ============================================================
+function initSignaturePad(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Podesi canvas resolution za retina ekrane
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * 2;
+    canvas.height = rect.height * 2;
+    ctx.scale(2, 2);
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    let drawing = false;
+    let lastX = 0, lastY = 0;
+    
+    function getPos(e) {
+        const r = canvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        return { x: touch.clientX - r.left, y: touch.clientY - r.top };
+    }
+    
+    function startDraw(e) {
+        e.preventDefault();
+        drawing = true;
+        const p = getPos(e);
+        lastX = p.x; lastY = p.y;
+    }
+    
+    function draw(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        const p = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        lastX = p.x; lastY = p.y;
+    }
+    
+    function stopDraw(e) {
+        if (e) e.preventDefault();
+        drawing = false;
+    }
+    
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDraw);
+    canvas.addEventListener('mouseleave', stopDraw);
+    canvas.addEventListener('touchstart', startDraw, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
+    canvas.addEventListener('touchend', stopDraw, { passive: false });
+}
+
+function clearSignature(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function getSignatureData(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return '';
+    // Proveri da li je canvas prazan
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const hasContent = data.some((val, i) => i % 4 === 3 && val > 0); // alpha kanal
+    if (!hasContent) return '';
+    return canvas.toDataURL('image/png');
+}
+
+async function saveOtkupniListWithSignatures(clientRecordID) {
+    const sigOtkupac = getSignatureData('sigOtkupac');
+    const sigKooperant = getSignatureData('sigKooperant');
+    
+    if (!sigOtkupac) { showToast('Potpišite se kao otkupljivač!', 'error'); return; }
+    if (!sigKooperant) { showToast('Kooperant mora da se potpiše!', 'error'); return; }
+    
+    // Sačuvaj potpise uz otkup record u IndexedDB
+    try {
+        const tx = db.transaction(CONFIG.STORE_NAME, 'readwrite');
+        const store = tx.objectStore(CONFIG.STORE_NAME);
+        const req = store.get(clientRecordID);
+        req.onsuccess = () => {
+            const record = req.result;
+            if (record) {
+                record.sigOtkupac = sigOtkupac;
+                record.sigKooperant = sigKooperant;
+                record.signedAt = new Date().toISOString();
+                store.put(record);
+            }
+        };
+    } catch (e) {
+        console.log('Signature save error:', e);
+    }
+    
+    showToast('Otkupni list potpisan!', 'success');
+    document.getElementById('otkupniListModal').style.display = 'none';
+}
 // ============================================================
 // SYNC QUEUE
 // ============================================================
