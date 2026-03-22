@@ -1591,6 +1591,7 @@ async function loadMgmtOtkupi() {
 }
 
 async function loadMgmtSaldoOM() {
+    document.getElementById('mgmtSaldoOMList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     let records = [];
     try {
         const json = await cachedApiFetch('saldoOM', 'action=getMgmtSaldoOM');
@@ -1609,6 +1610,7 @@ async function loadMgmtSaldoOM() {
 }
 
 async function loadMgmtKupci() {
+    document.getElementById('mgmtKupciList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     let records = [];
     try {
         const json = await cachedApiFetch('saldoKupci', 'action=getMgmtSaldoKupci');
@@ -1627,6 +1629,7 @@ async function loadMgmtKupci() {
 }
 
 async function loadMgmtOtkupPoOM() {
+    document.getElementById('mgmtOtkupPoOMList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     let records = [];
     try {
         const json = await cachedApiFetch('otkupPoOM', 'action=getMgmtOtkupPoOM');
@@ -1673,6 +1676,7 @@ async function loadMgmtOtkupPoOM() {
 }
 
 async function loadMgmtPredato() {
+    document.getElementById('mgmtPredatoList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     let records = [];
     try {
         const json = await cachedApiFetch('predato', 'action=getMgmtPredatoPoKupcu');
