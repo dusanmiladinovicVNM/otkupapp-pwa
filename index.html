@@ -1018,7 +1018,10 @@ function showOtkupniList(record) {
     const config = stammdaten.config || [];
     const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === record.kooperantID) || {};
-    const vrednost = (record.kolicina * record.cena).toLocaleString('sr');
+    const vrednostNum = record.kolicina * record.cena;
+    const pdvStopa = parseFloat(gv('OtkupPDVStopa')) || 8;
+    const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
+    const ukupno = vrednostNum + pdvIznos;
     
     let modal = document.getElementById('otkupniListModal');
     if (!modal) { modal = document.createElement('div'); modal.id = 'otkupniListModal'; modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999;overflow-y:auto;'; document.body.appendChild(modal); }
@@ -1049,7 +1052,16 @@ function showOtkupniList(record) {
             <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${record.klasa}</td></tr>
             <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
             <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
-            <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">VREDNOST:</td><td style="padding:8px;font-weight:700;font-size:18px;">${vrednost} RSD</td></tr>
+            <tr style="border-top:1px solid #ccc;"><td style="padding:6px;color:#666;">Vrednost:</td><td style="padding:6px;font-weight:600;">${vrednostNum.toLocaleString('sr')} RSD</td></tr>
+            <tr><td style="padding:6px;color:#666;">PDV naknada (${pdvStopa}%):</td><td style="padding:6px;">${pdvIznos.toLocaleString('sr')} RSD</td></tr>
+            <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${ukupno.toLocaleString('sr')} RSD</td></tr>
+                        ${pdvStopa > 0 ? `
+            <tr><td style="padding:6px;color:#666;">PDV naknada (${pdvStopa}%):</td><td style="padding:6px;">${pdvIznos.toLocaleString('sr')} RSD</td></tr>
+            <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${ukupno.toLocaleString('sr')} RSD</td></tr>
+            ` : `
+            <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${vrednostNum.toLocaleString('sr')} RSD</td></tr>
+            `}
+            <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${ukupno.toLocaleString('sr')} RSD</td></tr>
             <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
             ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + record.parcelaID + '</td></tr>' : ''}
             <tr><td style="padding:6px;color:#666;">Rok isplate:</td><td style="padding:6px;">${gv('OtkupRokIsplate') || 'Po dogovoru'}</td></tr>
