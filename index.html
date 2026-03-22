@@ -1643,7 +1643,6 @@ async function loadMgmtKupci() {
 async function loadMgmtOtkupPoOM() {
     const records = mgmtData ? mgmtData.otkupPoOM : [];
     document.getElementById('mgmtOtkupPoOMList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    let records = [];
     try {
         const json = await cachedApiFetch('otkupPoOM', 'action=getMgmtOtkupPoOM');
         if (json && json.success && json.records) records = json.records;
@@ -1691,7 +1690,6 @@ async function loadMgmtOtkupPoOM() {
 async function loadMgmtPredato() {
     const records = mgmtData ? mgmtData.predatoPoKupcu : [];
     document.getElementById('mgmtPredatoList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    let records = [];
     try {
         const json = await cachedApiFetch('predato', 'action=getMgmtPredatoPoKupcu');
         if (json && json.success && json.records) records = json.records;
