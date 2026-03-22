@@ -1248,11 +1248,41 @@ async function loadMgmtFakture() {
     if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema faktura</p>'; return; }
     list.innerHTML = records.map(r => {
         const iznos = parseFloat(r.Iznos)||0;
-        const bc = r.Status === 'Placeno' ? 'var(--success)' : 'var(--danger)';
-        return `<div class="queue-item" style="border-left-color:${bc};">
+        const placeno = parseFloat(r.Placeno)||0;
+        const saldo = parseFloat(r.Saldo)||0;
+        const bc = saldo <= 0 ? 'var(--success)' : 'var(--danger)';
+        return `<div class="queue-item" style="border-left-color:${bc};cursor:pointer;" onclick="toggleFakturaStavke('${r.FakturaID}', this)">
             <div class="qi-header"><span class="qi-koop">${r.BrojFakture||r.FakturaID}</span><span class="qi-time">${fmtDate(r.Datum)}</span></div>
-            <div class="qi-detail">${iznos.toLocaleString('sr')} RSD | ${r.Status||'Neplaceno'}${r.SEFStatus?' | SEF: '+r.SEFStatus:''}</div></div>`;
+            <div class="qi-detail">Iznos: <strong>${iznos.toLocaleString('sr')}</strong> | Plaćeno: ${placeno.toLocaleString('sr')} | Saldo: <strong>${saldo.toLocaleString('sr')}</strong></div>
+            <div class="qi-detail" style="font-size:11px;margin-top:2px;">${r.Status||''}${r.SEFStatus?' | SEF: '+r.SEFStatus:''}</div>
+            <div class="faktura-stavke" id="stavke-${r.FakturaID}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #eee;"></div>
+        </div>`;
     }).join('');
+}
+
+async function toggleFakturaStavke(fakturaID, parentEl) {
+    const div = document.getElementById('stavke-' + fakturaID);
+    if (!div) return;
+    if (div.style.display === 'block') { div.style.display = 'none'; return; }
+    div.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Učitavanje...</span>';
+    div.style.display = 'block';
+    let stavke = [];
+    try {
+        const json = await apiFetch('action=getMgmtFakturaStavke&fakturaID=' + encodeURIComponent(fakturaID));
+        if (json && json.success && json.records) stavke = json.records;
+    } catch (e) {}
+    if (stavke.length === 0) { div.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Nema stavki</span>'; return; }
+    div.innerHTML = `<table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <tr style="color:var(--text-muted);"><td>Prijemnica</td><td>Zbirna</td><td>Klasa</td><td style="text-align:right;">Kg</td><td style="text-align:right;">Cena</td><td style="text-align:right;">Iznos</td></tr>
+        ${stavke.map(s => `<tr style="border-top:1px solid #f0f0f0;">
+            <td>${s.BrojPrijemnice||s.PrijemnicaID||''}</td>
+            <td>${s.BrojZbirne||''}</td>
+            <td>${s.Klasa||''}</td>
+            <td style="text-align:right;">${(parseFloat(s.Kolicina)||0).toLocaleString('sr')}</td>
+            <td style="text-align:right;">${(parseFloat(s.Cena)||0).toLocaleString('sr')}</td>
+            <td style="text-align:right;font-weight:600;">${(parseFloat(s.Iznos)||0).toLocaleString('sr')}</td>
+        </tr>`).join('')}
+    </table>`;
 }
 
 function loadMgmtKupci() {
