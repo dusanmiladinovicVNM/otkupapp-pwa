@@ -1268,6 +1268,7 @@ async function syncNow() {
 // OTKUP PREGLED
 // ============================================================
 async function loadOtkupPregled() {
+    document.getElementById('OtkupList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     const od = document.getElementById('fldPregledOd').value;
     const doo = document.getElementById('fldPregledDo').value;
     const local = await dbGetAll(CONFIG.STORE_NAME);
@@ -1344,6 +1345,7 @@ async function loadOtpremnicePregled() {
 // KOOPERANT: KARTICA
 // ============================================================
 async function loadKartica() {
+    document.getElementById('karticaList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     document.getElementById('karticaName').textContent = CONFIG.ENTITY_NAME;
     document.getElementById('karticaID').textContent = CONFIG.ENTITY_ID;
     let records = [];
