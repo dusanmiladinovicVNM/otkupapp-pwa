@@ -25,229 +25,81 @@
             --success: #27ae60;
             --warning: #f39c12;
             --radius: 10px;
-        }
-        
+            }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            padding-bottom: 80px;
-        }
-        
-        /* --- HEADER --- */
-        .header {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            padding: 16px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
+    
+        /* HEADER */
+        .header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .header h1 { font-size: 18px; font-weight: 600; }
-        .header .sync-badge {
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-weight: 600;
-        }
+        .header .sync-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600; }
         .sync-online { background: var(--success); color: white; }
         .sync-offline { background: var(--danger); color: white; }
         .sync-pending { background: var(--warning); color: white; }
-        
-        /* --- TABS --- */
-        .tab-bar {
-            display: flex;
-            background: white;
-            border-bottom: 2px solid var(--border);
-        }
-        .tab-btn {
-            flex: 1;
-            padding: 12px;
-            text-align: center;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-muted);
-            border: none;
-            background: none;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab-btn.active {
-            color: var(--primary);
-            border-bottom-color: var(--primary);
-        }
-        
-        /* --- CONTENT --- */
+    
+        /* MAIN TAB BAR */
+        .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .tab-btn { flex: none; padding: 12px 16px; text-align: center; font-size: 13px; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    
+        /* SUB TAB BAR */
+        .sub-tab-bar { display: flex; background: #f0f0eb; border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .sub-tab-btn { flex: none; padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; }
+        .sub-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: white; }
+    
+        /* CONTENT */
         .tab-content { display: none; padding: 16px; }
         .tab-content.active { display: block; }
-        
-        /* --- FORM --- */
-        .form-group {
-            margin-bottom: 14px;
-        }
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid var(--border);
-            border-radius: var(--radius);
-            font-size: 16px;
-            background: white;
-            transition: border-color 0.2s;
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        
-        /* --- QR SCAN BUTTON --- */
-        .qr-scan-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            padding: 14px;
-            background: var(--primary-light);
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-bottom: 14px;
-        }
+        .sub-content { display: none; }
+        .sub-content.active { display: block; }
+    
+        /* FORM */
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 16px; background: white; transition: border-color 0.2s; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    
+        /* QR */
+        .qr-scan-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; background: var(--primary-light); color: white; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 14px; }
         .qr-scan-btn:active { background: var(--primary-dark); }
-        
-        /* --- QR READER --- */
-        #qr-reader {
-            display: none;
-            margin-bottom: 14px;
-            border-radius: var(--radius);
-            overflow: hidden;
-        }
-        #qr-reader video { border-radius: var(--radius); }
-        
-        /* --- KOOPERANT DISPLAY --- */
-        .koop-display {
-            background: var(--primary);
-            color: white;
-            padding: 14px;
-            border-radius: var(--radius);
-            margin-bottom: 14px;
-            display: none;
-        }
+        #qr-reader { display: none; margin-bottom: 14px; border-radius: var(--radius); overflow: hidden; }
+    
+        /* KOOPERANT DISPLAY */
+        .koop-display { background: var(--primary); color: white; padding: 14px; border-radius: var(--radius); margin-bottom: 14px; display: none; }
         .koop-display.visible { display: block; }
         .koop-display .koop-name { font-size: 18px; font-weight: 700; }
         .koop-display .koop-id { font-size: 12px; opacity: 0.8; }
-        
-        /* --- BUTTONS --- */
-        .btn-primary {
-            width: 100%;
-            padding: 16px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            font-size: 18px;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 10px;
-        }
+    
+        /* BUTTONS */
+        .btn-primary { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-size: 18px; font-weight: 700; cursor: pointer; margin-top: 10px; }
         .btn-primary:active { background: var(--primary-dark); }
         .btn-primary:disabled { background: var(--border); color: var(--text-muted); }
-        
-        .btn-secondary {
-            width: 100%;
-            padding: 12px;
-            background: white;
-            color: var(--primary);
-            border: 2px solid var(--primary);
-            border-radius: var(--radius);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 8px;
-        }
-        
-        /* --- QUEUE LIST --- */
-        .queue-item {
-            background: white;
-            padding: 14px;
-            border-radius: var(--radius);
-            margin-bottom: 8px;
-            border-left: 4px solid var(--accent);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
+        .btn-secondary { width: 100%; padding: 12px; background: white; color: var(--primary); border: 2px solid var(--primary); border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    
+        /* QUEUE / LIST ITEMS */
+        .queue-item { background: white; padding: 14px; border-radius: var(--radius); margin-bottom: 8px; border-left: 4px solid var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
         .queue-item.synced { border-left-color: var(--success); }
         .queue-item.error { border-left-color: var(--danger); }
-        .queue-item .qi-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
+        .queue-item .qi-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
         .queue-item .qi-koop { font-weight: 600; }
         .queue-item .qi-time { font-size: 12px; color: var(--text-muted); }
         .queue-item .qi-detail { font-size: 13px; color: var(--text-muted); }
-        
-        /* --- STATS --- */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .stat-card {
-            background: white;
-            padding: 16px;
-            border-radius: var(--radius);
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
+    
+        /* STATS */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .stat-card { background: white; padding: 16px; border-radius: var(--radius); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
         .stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
         .stat-card .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
-        
-        /* --- TOAST --- */
-        .toast {
-            position: fixed;
-            bottom: 90px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 24px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 600;
-            font-size: 14px;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
+    
+        /* TOAST */
+        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; font-size: 14px; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
         .toast.show { opacity: 1; }
         .toast.success { background: var(--success); }
         .toast.error { background: var(--danger); }
         .toast.info { background: var(--primary); }
+    
+        /* AGRO */
         .agro-btn { display: block; width: 100%; padding: 14px; margin-bottom: 8px; border: 2px solid var(--border); border-radius: var(--radius); background: white; font-size: 16px; text-align: left; cursor: pointer; }
         .agro-btn.selected { border-color: var(--primary); background: #e8f5e9; }
     </style>
@@ -265,114 +117,55 @@
         <button onclick="doLogout()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">⇄</button>
     </div>
 </div>
- 
-<!-- TABS -->
+
+<!-- TAB BAR -->
 <div class="tab-bar" id="tabBar">
+    <!-- Otkupac -->
     <button class="tab-btn role-otkupac" onclick="showTab('otkup')">Novi</button>
     <button class="tab-btn role-otkupac" onclick="showTab('pregled')">Otkupi</button>
     <button class="tab-btn role-otkupac" onclick="showTab('otpremnice')">Otprem.</button>
     <button class="tab-btn role-otkupac" onclick="showTab('queue')">Sync</button>
+    <!-- Kooperant -->
     <button class="tab-btn role-kooperant" onclick="showTab('kartica')">Kartica</button>
     <button class="tab-btn role-kooperant" onclick="showTab('parcele')">Parcele</button>
     <button class="tab-btn role-kooperant" onclick="showTab('agromere')">Agromere</button>
     <button class="tab-btn role-kooperant" onclick="showTab('koopinfo')">Info</button>
+    <!-- Management -->
+    <button class="tab-btn role-management" onclick="showMgmtMain('kooperanti')">Kooperanti</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('stanice')">Stanice</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('kupci')">Kupci</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('agrohemija')">Agrohemija</button>
+    <!-- Vozac -->
     <button class="tab-btn role-vozac" onclick="showTab('zbirna')">Zbirna</button>
     <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
-    <!-- Management Tabs -->
-    <button class="tab-btn role-management" onclick="showTab('mgmtKartica')">Kartica koop.</button>
-    <button class="tab-btn role-management" onclick="showTab('mgmtOtkupi')">Otkupni blokovi</button>
-    <button class="tab-btn role-management" onclick="showTab('mgmtSaldoOM')">Saldo OM</button>
-    <button class="tab-btn role-management" onclick="showTab('mgmtKupci')">Kupci</button>
-    <button class="tab-btn role-management" onclick="showTab('mgmtOtkupPoOM')">Roba OM</button>
-    <button class="tab-btn role-management" onclick="showTab('mgmtPredato')">Roba Kupci</button>
-    <button class="tab-btn role-management" onclick="showTab('mgmtFakture')">Fakture</button>
 </div>
- 
-<!-- TAB: NOVI OTKUP -->
-<div class="tab-content active" id="tab-otkup">
-    
-    <!-- QR Scanner -->
-    <button class="qr-scan-btn" onclick="startQRScan()">
-        📷 Skeniraj QR kooperanta
-    </button>
+
+<!-- ==================== OTKUPAC TABS ==================== -->
+
+<div class="tab-content" id="tab-otkup">
+    <button class="qr-scan-btn" onclick="startQRScan()">📷 Skeniraj QR kooperanta</button>
     <div id="qr-reader"></div>
-    
-    <!-- Manual Kooperant Fallback -->
-    <div class="form-group">
-        <label>Ili izaberi kooperanta ručno</label>
-        <select id="fldKooperantManual" onchange="onManualKooperantChange()">
-            <option value="">-- Izaberi --</option>
-        </select>
-    </div>
-    
-    <!-- Kooperant Display -->
-    <div class="koop-display" id="koopDisplay">
-        <div class="koop-name" id="koopName"></div>
-        <div class="koop-id" id="koopId"></div>
-    </div>
-    
-    <!-- Hidden fields -->
+    <div class="form-group"><label>Ili izaberi kooperanta ručno</label><select id="fldKooperantManual" onchange="onManualKooperantChange()"><option value="">-- Izaberi --</option></select></div>
+    <div class="koop-display" id="koopDisplay"><div class="koop-name" id="koopName"></div><div class="koop-id" id="koopId"></div></div>
     <input type="hidden" id="fldKooperantID">
-    
-    <!-- Parcela (optional, für Sledljivost) -->
-    <div class="form-group" id="parcelaGroup" style="display:none;">
-        <label>Parcela (opciono)</label>
-        <select id="fldParcela">
-            <option value="">-- Bez parcele --</option>
-        </select>
-    </div>
-    
-    <!-- Form -->
+    <div class="form-group" id="parcelaGroup" style="display:none;"><label>Parcela (opciono)</label><select id="fldParcela"><option value="">-- Bez parcele --</option></select></div>
     <div class="form-row">
-        <div class="form-group">
-            <label>Vrsta voća</label>
-            <select id="fldVrsta" onchange="onVrstaChange()">
-                <option value="">-- Izaberi --</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Sorta</label>
-            <select id="fldSorta">
-                <option value="">-- Izaberi --</option>
-            </select>
-        </div>
+        <div class="form-group"><label>Vrsta voća</label><select id="fldVrsta" onchange="onVrstaChange()"><option value="">-- Izaberi --</option></select></div>
+        <div class="form-group"><label>Sorta</label><select id="fldSorta"><option value="">-- Izaberi --</option></select></div>
     </div>
-    
     <div class="form-row">
-        <div class="form-group">
-            <label>Klasa</label>
-            <select id="fldKlasa">
-                <option value="I">I</option>
-                <option value="II">II</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Količina (kg)</label>
-            <input type="number" id="fldKolicina" inputmode="numeric" placeholder="0">
-        </div>
+        <div class="form-group"><label>Klasa</label><select id="fldKlasa"><option value="I">I</option><option value="II">II</option></select></div>
+        <div class="form-group"><label>Količina (kg)</label><input type="number" id="fldKolicina" inputmode="numeric" placeholder="0"></div>
     </div>
-    
     <div class="form-row">
-        <div class="form-group">
-            <label>Cena (RSD/kg)</label>
-            <input type="number" id="fldCena" inputmode="decimal" placeholder="0.00">
-        </div>
-        <div class="form-group">
-            <label>Ambalaža (kom)</label>
-            <input type="number" id="fldAmbalaza" inputmode="numeric" placeholder="0">
-        </div>
+        <div class="form-group"><label>Cena (RSD/kg)</label><input type="number" id="fldCena" inputmode="decimal" placeholder="0.00"></div>
+        <div class="form-group"><label>Ambalaža (kom)</label><input type="number" id="fldAmbalaza" inputmode="numeric" placeholder="0"></div>
     </div>
-    
-    <div class="form-group">
-        <label>Napomena</label>
-        <input type="text" id="fldNapomena" placeholder="Opciono...">
-    </div>
-    
+    <div class="form-group"><label>Napomena</label><input type="text" id="fldNapomena" placeholder="Opciono..."></div>
     <button class="btn-primary" onclick="saveOtkup()">SAČUVAJ OTKUP</button>
     <button class="btn-secondary" onclick="resetForm()">Poništi</button>
 </div>
-    
-<!-- TAB: OTKUPI PREGLED -->
+
 <div class="tab-content" id="tab-pregled">
     <div class="form-row" style="margin-bottom:12px;">
         <div class="form-group"><label>Od datuma</label><input type="date" id="fldPregledOd" onchange="loadOtkupPregled()"></div>
@@ -386,15 +179,13 @@
     </div>
     <div id="pregledList"></div>
 </div>
-    
-<!-- TAB: OTPREMNICE -->
+
 <div class="tab-content" id="tab-otpremnice">
     <p style="text-align:center;color:var(--text-muted);padding:10px;font-size:13px;">Otkupi grupisani po kooperantu za izabrani datum</p>
     <div class="form-group"><label>Datum</label><input type="date" id="fldOtpremniceDatum" onchange="loadOtpremnicePregled()"></div>
     <div id="otpremniceList"></div>
 </div>
-    
-<!-- TAB: SYNC -->
+
 <div class="tab-content" id="tab-queue">
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-value" id="statPending">0</div><div class="stat-label">Čeka sync</div></div>
@@ -406,7 +197,6 @@
 
 <!-- ==================== KOOPERANT TABS ==================== -->
 
-<!-- TAB: KARTICA -->
 <div class="tab-content" id="tab-kartica">
     <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
         <div style="font-size:18px;font-weight:700;" id="karticaName"></div>
@@ -420,111 +210,107 @@
     <div id="karticaList"></div>
 </div>
 
-<!-- TAB: PARCELE -->
-<div class="tab-content" id="tab-parcele">
-    <div id="parceleList"></div>
-</div>
+<div class="tab-content" id="tab-parcele"><div id="parceleList"></div></div>
 
-<!-- TAB: AGROMERE -->
 <div class="tab-content" id="tab-agromere">
-    <div class="form-group">
-        <label>Parcela</label>
-        <select id="fldAgroParcela"><option value="">-- Izaberi parcelu --</option></select>
-    </div>
+    <div class="form-group"><label>Parcela</label><select id="fldAgroParcela"><option value="">-- Izaberi parcelu --</option></select></div>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Izaberite izvršenu meru:</p>
-    <button class="agro-btn" onclick="selectMera(this,'Zastita')">🛡️ Zaštita </button>
-    <button class="agro-btn" onclick="selectMera(this,'Prihrana')">🌱 Prihrana </button>
-    <button class="agro-btn" onclick="selectMera(this,'Rezidba')">✂️ Rezidba </button>
-    <button class="agro-btn" onclick="selectMera(this,'Zalivanje')">💧 Zalivanje </button>
-    <button class="agro-btn" onclick="selectMera(this,'Berba')">🍎 Berba </button>
+    <button class="agro-btn" onclick="selectMera(this,'Zastita')">🛡️ Zaštita</button>
+    <button class="agro-btn" onclick="selectMera(this,'Prihrana')">🌱 Prihrana</button>
+    <button class="agro-btn" onclick="selectMera(this,'Rezidba')">✂️ Rezidba</button>
+    <button class="agro-btn" onclick="selectMera(this,'Zalivanje')">💧 Zalivanje</button>
+    <button class="agro-btn" onclick="selectMera(this,'Berba')">🍎 Berba</button>
     <div class="form-group" style="margin-top:12px;"><label>Napomena (opciono)</label><input type="text" id="fldAgroNapomena" placeholder="Detalji..."></div>
     <button class="btn-primary" onclick="saveAgromera()">SAČUVAJ MERU</button>
     <h3 style="margin-top:20px;margin-bottom:10px;color:var(--primary);font-size:14px;">Istorija mera</h3>
     <div id="agromereList"></div>
 </div>
 
-<!-- TAB: INFO -->
-<div class="tab-content" id="tab-koopinfo">
-    <div id="koopInfoContent"></div>
-</div>
+<div class="tab-content" id="tab-koopinfo"><div id="koopInfoContent"></div></div>
 
-<!-- ==================== MANAGEMENT TABS ==================== -->
+<!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
 
-<!-- TAB: MGMT KARTICA (Kaskade: Stanica → Kooperant → Kartica) -->
-<div class="tab-content" id="tab-mgmtKartica">
-    <div class="form-group">
-        <label>Otkupna stanica</label>
-        <select id="mgmtStanica" onchange="onMgmtStanicaChange()"><option value="">-- Izaberi stanicu --</option></select>
+<div class="tab-content" id="tab-mgmt">
+    <!-- Sub tab bar — popunjava se dinamički iz showMgmtMain() -->
+    <div class="sub-tab-bar" id="mgmtSubBar"></div>
+
+    <!-- === KOOPERANTI sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-koop-kartica">
+        <div class="form-group"><label>Otkupna stanica</label><select id="mgmtStanica" onchange="onMgmtStanicaChange()"><option value="">-- Izaberi stanicu --</option></select></div>
+        <div class="form-group"><label>Kooperant</label><select id="mgmtKooperant" onchange="onMgmtKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select></div>
+        <div id="mgmtKarticaHeader" style="display:none;">
+            <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
+                <div style="font-size:18px;font-weight:700;" id="mgmtKarticaName"></div>
+                <div style="font-size:12px;opacity:0.8;" id="mgmtKarticaID"></div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="mgmtKarticaZad">0</div><div class="stat-label">Zaduženje</div></div>
+                <div class="stat-card"><div class="stat-value" id="mgmtKarticaRaz">0</div><div class="stat-label">Razduženje</div></div>
+                <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="mgmtKarticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
+            </div>
+        </div>
+        <div id="mgmtKarticaList"></div>
     </div>
-    <div class="form-group">
-        <label>Kooperant</label>
-        <select id="mgmtKooperant" onchange="onMgmtKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select>
+
+    <div class="mgmt-sub sub-content" id="mgmt-koop-saldo">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Saldo svih kooperanata</h3>
+        <div id="mgmtKoopSaldoList"></div>
     </div>
-    <div id="mgmtKarticaHeader" style="display:none;">
-        <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
-            <div style="font-size:18px;font-weight:700;" id="mgmtKarticaName"></div>
-            <div style="font-size:12px;opacity:0.8;" id="mgmtKarticaID"></div>
+
+    <!-- === STANICE sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-sta-otkupi">
+        <div class="form-group"><label>Otkupna stanica</label><select id="mgmtOtkupiStanica" onchange="loadMgmtOtkupi()"><option value="">-- Izaberi stanicu --</option></select></div>
+        <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group"><label>Od</label><input type="date" id="mgmtOtkupiOd" onchange="loadMgmtOtkupi()"></div>
+            <div class="form-group"><label>Do</label><input type="date" id="mgmtOtkupiDo" onchange="loadMgmtOtkupi()"></div>
         </div>
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-value" id="mgmtKarticaZad">0</div><div class="stat-label">Zaduženje</div></div>
-            <div class="stat-card"><div class="stat-value" id="mgmtKarticaRaz">0</div><div class="stat-label">Razduženje</div></div>
-            <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="mgmtKarticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiCount">0</div><div class="stat-label">Otkupa</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKg">0</div><div class="stat-label">Ukupno kg</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiVrednost">0</div><div class="stat-label">Vrednost</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKoop">0</div><div class="stat-label">Kooperanata</div></div>
         </div>
+        <div id="mgmtOtkupiList"></div>
     </div>
-    <div id="mgmtKarticaList"></div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-sta-saldo">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Saldo otkupnih mesta</h3>
+        <div id="mgmtSaldoOMList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-sta-roba">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Otkupljene količine po stanicama</h3>
+        <div id="mgmtOtkupPoOMList"></div>
+    </div>
+
+    <!-- === KUPCI sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-kup-fakture">
+        <div class="form-group"><label>Kupac</label><select id="mgmtFaktureKupac" onchange="loadMgmtFakture()"><option value="">-- Izaberi --</option></select></div>
+        <div id="mgmtFaktureList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-kup-saldo">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Saldo kupaca</h3>
+        <div id="mgmtKupciList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-kup-roba">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Predate količine po kupcima</h3>
+        <div id="mgmtPredatoList"></div>
+    </div>
+
+    <!-- === AGROHEMIJA sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-agro-izdavanje">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Izdavanje agrohemije po kooperantima</h3>
+        <div id="mgmtAgroIzdavanjeList"><p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-agro-stanje">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Stanje magacina</h3>
+        <div id="mgmtAgroStanjeList"><p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p></div>
+    </div>
 </div>
 
-<!-- TAB: MGMT OTKUPI PO STANICAMA -->
-<div class="tab-content" id="tab-mgmtOtkupi">
-    <div class="form-group">
-        <label>Otkupna stanica</label>
-        <select id="mgmtOtkupiStanica" onchange="loadMgmtOtkupi()"><option value="">-- Izaberi stanicu --</option></select>
-    </div>
-    <div class="form-row" style="margin-bottom:12px;">
-        <div class="form-group"><label>Od</label><input type="date" id="mgmtOtkupiOd" onchange="loadMgmtOtkupi()"></div>
-        <div class="form-group"><label>Do</label><input type="date" id="mgmtOtkupiDo" onchange="loadMgmtOtkupi()"></div>
-    </div>
-    <div class="stats-grid">
-        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiCount">0</div><div class="stat-label">Otkupa</div></div>
-        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKg">0</div><div class="stat-label">Ukupno kg</div></div>
-        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiVrednost">0</div><div class="stat-label">Vrednost</div></div>
-        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKoop">0</div><div class="stat-label">Kooperanata</div></div>
-    </div>
-    <div id="mgmtOtkupiList"></div>
-</div>
-
-<!-- TAB: MGMT SALDO OM -->
-<div class="tab-content" id="tab-mgmtSaldoOM">
-    <h3 style="color:var(--primary);margin-bottom:12px;">Saldo otkupnih mesta</h3>
-    <div id="mgmtSaldoOMList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
-</div>
-
-<!-- TAB: MGMT KUPCI -->
-<div class="tab-content" id="tab-mgmtKupci">
-    <h3 style="color:var(--primary);margin-bottom:12px;">Saldo kupaca</h3>
-    <div id="mgmtKupciList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
-</div>
-
-<!-- TAB: MGMT OTKUP PO OM -->
-<div class="tab-content" id="tab-mgmtOtkupPoOM">
-    <h3 style="color:var(--primary);margin-bottom:12px;">Otkupljene količine po stanicama</h3>
-    <div id="mgmtOtkupPoOMList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
-</div>
-
-<!-- TAB: MGMT PREDATO PO KUPCU -->
-<div class="tab-content" id="tab-mgmtPredato">
-    <h3 style="color:var(--primary);margin-bottom:12px;">Predate količine po kupcima</h3>
-    <div id="mgmtPredatoList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
-</div>
-    
-<!-- TAB: MGMT Fakture -->
-<div class="tab-content" id="tab-mgmtFakture">
-    <div class="form-group">
-        <label>Kupac</label>
-        <select id="mgmtFaktureKupac" onchange="loadMgmtFakture()"><option value="">-- Izaberi --</option></select>
-    </div>
-    <div id="mgmtFaktureList"></div>
-</div>
 <!-- ==================== VOZAC TABS ==================== -->
 
 <div class="tab-content" id="tab-zbirna"><p style="text-align:center;color:var(--text-muted);padding:40px;">Zbirna modul - u pripremi</p></div>
@@ -538,8 +324,7 @@
 // CONFIG
 // ============================================================
 const CONFIG = {
-    // APPS SCRIPT WEB APP URL - zameni sa tvojom URL
-    API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',    
+    API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',
     OTKUPAC_ID: localStorage.getItem('otkupacID') || '',
     USER_ROLE: localStorage.getItem('userRole') || '',
     ENTITY_ID: localStorage.getItem('entityID') || '',
@@ -559,31 +344,32 @@ let db = null;
 let qrScanner = null;
 let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [] };
 let selectedMera = '';
-let cache = {};
-const CACHE_TTL = 60000; // 60 sekundi
-
 let mgmtData = null;
 
-async function prefetchMgmtData() {
-    try {
-        const json = await apiFetch('action=getMgmtAll');
-        if (json && json.success) {
-            mgmtData = json;
-        }
-    } catch (e) {}
-}
+// ============================================================
+// MANAGEMENT SUB-TAB DEFINITIONS
+// ============================================================
+const MGMT_SUBS = {
+    kooperanti: [
+        { id: 'koop-kartica', label: 'Kartica', load: null },
+        { id: 'koop-saldo', label: 'Saldo', load: loadMgmtKoopSaldo }
+    ],
+    stanice: [
+        { id: 'sta-otkupi', label: 'Otkupi', load: null },
+        { id: 'sta-saldo', label: 'Saldo OM', load: loadMgmtSaldoOM },
+        { id: 'sta-roba', label: 'Roba', load: loadMgmtOtkupPoOM }
+    ],
+    kupci: [
+        { id: 'kup-fakture', label: 'Fakture', load: null },
+        { id: 'kup-saldo', label: 'Saldo', load: loadMgmtKupci },
+        { id: 'kup-roba', label: 'Roba', load: loadMgmtPredato }
+    ],
+    agrohemija: [
+        { id: 'agro-izdavanje', label: 'Izdavanje', load: loadMgmtAgroIzdavanje },
+        { id: 'agro-stanje', label: 'Stanje', load: loadMgmtAgroStanje }
+    ]
+};
 
-async function cachedApiFetch(key, params) {
-    const now = Date.now();
-    if (cache[key] && (now - cache[key].time) < CACHE_TTL) {
-        return cache[key].data;
-    }
-    const json = await apiFetch(params);
-    if (json && json.success) {
-        cache[key] = { data: json, time: now };
-    }
-    return json;
-}
 // ============================================================
 // INIT
 // ============================================================
@@ -592,18 +378,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         showLoginScreen();
         return;
     }
-
     db = await openDB();
     await loadStammdaten();
     applyRoleVisibility();
-    
-    if (CONFIG.USER_ROLE === 'Management') {
-        populateMgmtStanice();
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('mgmtOtkupiOd').value = today;
-        document.getElementById('mgmtOtkupiDo').value = today;
-        prefetchMgmtData();
-    }
     document.getElementById('headerInfo').textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
 
     if (CONFIG.USER_ROLE === 'Otkupac') {
@@ -614,47 +391,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('fldPregledDo').value = today;
         document.getElementById('fldOtpremniceDatum').value = today;
     }
-
     if (CONFIG.USER_ROLE === 'Kooperant') {
         populateAgroParcele();
     }
-    
+    if (CONFIG.USER_ROLE === 'Management') {
+        populateMgmtStanice();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('mgmtOtkupiOd').value = today;
+        document.getElementById('mgmtOtkupiDo').value = today;
+        prefetchMgmtData().then(() => { populateMgmtKupciDropdown(); });
+    }
     updateSyncBadge();
     window.addEventListener('online', () => { updateSyncBadge(); if (CONFIG.USER_ROLE === 'Otkupac') syncQueue(); });
     window.addEventListener('offline', () => updateSyncBadge());
     setInterval(() => { if (navigator.onLine && CONFIG.USER_ROLE === 'Otkupac') syncQueue(); }, 60000);
 });
-    
+
 // ============================================================
 // AUTH
 // ============================================================
 function showLoginScreen() {
     document.querySelector('.tab-bar').style.display = 'none';
     document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
-
     let container = document.getElementById('loginContainer');
     if (!container) { container = document.createElement('div'); container.id = 'loginContainer'; document.body.appendChild(container); }
-    container.innerHTML = `
-        <div style="padding:60px 20px;text-align:center;max-width:360px;margin:0 auto;">
-            <h2 style="color:var(--primary);margin-bottom:40px;">OtkupApp</h2>
-            <div class="form-group">
-                <label>Korisničko ime</label>
-                <input type="text" id="loginUsername" autocapitalize="none" autocorrect="off"
-                       style="width:100%;padding:14px;font-size:18px;border:2px solid var(--border);border-radius:10px;"
-                       placeholder="korisničko ime">
-            </div>
-            <div class="form-group">
-                <label>PIN</label>
-                <input type="password" id="loginPin" inputmode="numeric" maxlength="6"
-                       style="width:100%;padding:14px;font-size:24px;text-align:center;letter-spacing:12px;border:2px solid var(--border);border-radius:10px;"
-                       placeholder="● ● ● ●">
-            </div>
-            <button onclick="doLogin()" id="btnLogin"
-                    style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:18px;font-weight:700;margin-top:20px;">
-                Prijavi se
-            </button>
-            <p id="loginError" style="color:var(--danger);margin-top:12px;font-size:14px;display:none;"></p>
-        </div>`;
+    container.innerHTML = `<div style="padding:60px 20px;text-align:center;max-width:360px;margin:0 auto;">
+        <h2 style="color:var(--primary);margin-bottom:40px;">OtkupApp</h2>
+        <div class="form-group"><label>Korisničko ime</label><input type="text" id="loginUsername" autocapitalize="none" autocorrect="off" style="width:100%;padding:14px;font-size:18px;border:2px solid var(--border);border-radius:10px;" placeholder="korisničko ime"></div>
+        <div class="form-group"><label>PIN</label><input type="password" id="loginPin" inputmode="numeric" maxlength="6" style="width:100%;padding:14px;font-size:24px;text-align:center;letter-spacing:12px;border:2px solid var(--border);border-radius:10px;" placeholder="● ● ● ●"></div>
+        <button onclick="doLogin()" id="btnLogin" style="width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:18px;font-weight:700;margin-top:20px;">Prijavi se</button>
+        <p id="loginError" style="color:var(--danger);margin-top:12px;font-size:14px;display:none;"></p>
+    </div>`;
     document.getElementById('loginPin').addEventListener('keyup', e => { if (e.key === 'Enter') doLogin(); });
 }
 
@@ -666,34 +433,22 @@ async function doLogin() {
     if (!username) { errorEl.textContent = 'Unesite korisničko ime'; errorEl.style.display = 'block'; return; }
     if (!pin) { errorEl.textContent = 'Unesite PIN'; errorEl.style.display = 'block'; return; }
     errorEl.style.display = 'none';
-    btnEl.textContent = 'Prijavljivanje...';
-    btnEl.disabled = true;
+    btnEl.textContent = 'Prijavljivanje...'; btnEl.disabled = true;
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'login', username: username, pin: pin })
-        });
+        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'login', username, pin }) });
         const json = await resp.json();
         if (json.success) {
-            localStorage.setItem('authToken', json.token);
-            localStorage.setItem('userRole', json.role);
-            localStorage.setItem('otkupacID', json.entityID);
-            localStorage.setItem('entityID', json.entityID);
-            localStorage.setItem('entityName', json.displayName);
-            localStorage.setItem('username', username);
+            localStorage.setItem('authToken', json.token); localStorage.setItem('userRole', json.role);
+            localStorage.setItem('otkupacID', json.entityID); localStorage.setItem('entityID', json.entityID);
+            localStorage.setItem('entityName', json.displayName); localStorage.setItem('username', username);
             location.reload();
         } else {
-            errorEl.textContent = json.error || 'Prijava neuspešna';
-            errorEl.style.display = 'block';
-            btnEl.textContent = 'Prijavi se';
-            btnEl.disabled = false;
+            errorEl.textContent = json.error || 'Prijava neuspešna'; errorEl.style.display = 'block';
+            btnEl.textContent = 'Prijavi se'; btnEl.disabled = false;
         }
     } catch (e) {
-        errorEl.textContent = 'Nema internet konekcije';
-        errorEl.style.display = 'block';
-        btnEl.textContent = 'Prijavi se';
-        btnEl.disabled = false;
+        errorEl.textContent = 'Nema internet konekcije'; errorEl.style.display = 'block';
+        btnEl.textContent = 'Prijavi se'; btnEl.disabled = false;
     }
 }
 
@@ -721,14 +476,36 @@ async function apiFetch(params) {
         return json;
     } catch (e) { console.log('API fetch failed:', e); return null; }
 }
-    
+
+// ============================================================
+// PREFETCH
+// ============================================================
+async function prefetchMgmtData() {
+    try {
+        const json = await apiFetch('action=getMgmtAll');
+        if (json && json.success) { mgmtData = json; }
+    } catch (e) {}
+}
+
+function populateMgmtKupciDropdown() {
+    const sel = document.getElementById('mgmtFaktureKupac');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- Izaberi --</option>';
+    const kupci = mgmtData ? (mgmtData.saldoKupci || []) : [];
+    kupci.forEach(k => {
+        const o = document.createElement('option');
+        o.value = k.KupacID || k.Kupac;
+        o.textContent = k.Kupac || k.KupacID;
+        sel.appendChild(o);
+    });
+}
+
 // ============================================================
 // INDEXEDDB
 // ============================================================
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
-        
         req.onupgradeneeded = (e) => {
             const d = e.target.result;
             if (!d.objectStoreNames.contains(CONFIG.STORE_NAME)) {
@@ -744,7 +521,6 @@ function openDB() {
                 a.createIndex('syncStatus', 'syncStatus', { unique: false });
             }
         };
-        
         req.onsuccess = (e) => resolve(e.target.result);
         req.onerror = (e) => reject(e.target.error);
     });
@@ -784,47 +560,23 @@ function dbGetByIndex(storeName, indexName, value) {
 function startQRScan() {
     const readerDiv = document.getElementById('qr-reader');
     readerDiv.style.display = 'block';
-    
-    if (qrScanner) {
-        qrScanner.clear();
-    }
-    
+    if (qrScanner) qrScanner.clear();
     qrScanner = new Html5Qrcode('qr-reader');
-    
     qrScanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-            onQRScanned(decodedText);
-            qrScanner.stop().then(() => {
-                readerDiv.style.display = 'none';
-            });
-        },
-        () => {} // ignore errors during scanning
-    ).catch(err => {
-        showToast('Kamera nije dostupna: ' + err, 'error');
-        readerDiv.style.display = 'none';
-    });
+        (decodedText) => { onQRScanned(decodedText); qrScanner.stop().then(() => { readerDiv.style.display = 'none'; }); },
+        () => {}
+    ).catch(err => { showToast('Kamera nije dostupna: ' + err, 'error'); readerDiv.style.display = 'none'; });
 }
 
 function onQRScanned(text) {
-    try {
-        // Pokušaj JSON: {"type":"KOOP","id":"KOOP-00123","name":"Petar Petrovic"}
-        const data = JSON.parse(text);
-        if (data.id) {
-            setKooperant(data.id, data.name || data.id);
-            return;
-        }
-    } catch (e) {
-        // Nije JSON — probaj čist ID: "KOOP-00123"
-        if (text.startsWith('KOOP-')) {
-            const koop = stammdaten.kooperanti.find(k => k.KooperantID === text);
-            const name = koop ? (koop.Ime + ' ' + koop.Prezime) : text;
-            setKooperant(text, name);
-            return;
-        }
+    try { const data = JSON.parse(text); if (data.id) { setKooperant(data.id, data.name || data.id); return; } } catch (e) {}
+    if (text.startsWith('KOOP-')) {
+        const koop = stammdaten.kooperanti.find(k => k.KooperantID === text);
+        setKooperant(text, koop ? (koop.Ime + ' ' + koop.Prezime) : text);
+        return;
     }
-    
     showToast('Nepoznat QR kod', 'error');
 }
 
@@ -834,8 +586,6 @@ function setKooperant(id, name) {
     document.getElementById('koopId').textContent = id;
     document.getElementById('koopDisplay').classList.add('visible');
     showToast('Kooperant: ' + name, 'success');
-
-    // Parcele für diesen Kooperant laden
     populateParcelaDropdown(id);
 }
 
@@ -843,12 +593,7 @@ function setKooperant(id, name) {
 // STAMMDATEN
 // ============================================================
 async function loadStammdaten() {
-    try {
-        const cached = await dbGetAll(CONFIG.STAMM_STORE);
-        const obj = cached.find(c => c.key === 'all');
-        if (obj) stammdaten = obj.data;
-    } catch (e) {}
-
+    try { const cached = await dbGetAll(CONFIG.STAMM_STORE); const obj = cached.find(c => c.key === 'all'); if (obj) stammdaten = obj.data; } catch (e) {}
     if (navigator.onLine) {
         try {
             const json = await apiFetch('action=getStammdaten');
@@ -863,121 +608,69 @@ async function loadStammdaten() {
 function populateVrstaDropdown() {
     const sel = document.getElementById('fldVrsta');
     sel.innerHTML = '<option value="">-- Izaberi --</option>';
-    
     const vrsteSet = new Set();
     (stammdaten.kulture || []).forEach(k => {
         if (k.VrstaVoca && !vrsteSet.has(k.VrstaVoca)) {
             vrsteSet.add(k.VrstaVoca);
-            const opt = document.createElement('option');
-            opt.value = k.VrstaVoca;
-            opt.textContent = k.VrstaVoca;
-            sel.appendChild(opt);
+            const opt = document.createElement('option'); opt.value = k.VrstaVoca; opt.textContent = k.VrstaVoca; sel.appendChild(opt);
         }
     });
-    
-    // Kooperant-Dropdown füllen
     populateKooperantDropdown();
 }
 
 function populateKooperantDropdown() {
     const sel = document.getElementById('fldKooperantManual');
     sel.innerHTML = '<option value="">-- Izaberi --</option>';
-    
-    (stammdaten.kooperanti || [])
-        .filter(k => k.StanicaID === CONFIG.OTKUPAC_ID)
-        .forEach(k => {
-        const opt = document.createElement('option');
-        opt.value = k.KooperantID;
-        opt.textContent = k.Ime + ' ' + k.Prezime + ' (' + k.KooperantID + ')';
-        sel.appendChild(opt);
+    (stammdaten.kooperanti || []).filter(k => k.StanicaID === CONFIG.OTKUPAC_ID).forEach(k => {
+        const opt = document.createElement('option'); opt.value = k.KooperantID;
+        opt.textContent = k.Ime + ' ' + k.Prezime + ' (' + k.KooperantID + ')'; sel.appendChild(opt);
     });
 }
 
 function onManualKooperantChange() {
-    const sel = document.getElementById('fldKooperantManual');
-    const koopID = sel.value;
-    
+    const koopID = document.getElementById('fldKooperantManual').value;
     if (!koopID) return;
-    
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
-    const name = koop ? (koop.Ime + ' ' + koop.Prezime) : koopID;
-    
-    setKooperant(koopID, name);
+    setKooperant(koopID, koop ? (koop.Ime + ' ' + koop.Prezime) : koopID);
 }
 
 function populateParcelaDropdown(kooperantID) {
     const sel = document.getElementById('fldParcela');
     const group = document.getElementById('parcelaGroup');
     sel.innerHTML = '<option value="">-- Bez parcele --</option>';
-    
     const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === kooperantID);
-    
-    if (parcele.length === 0) {
-        group.style.display = 'none';
-        return;
-    }
-    
+    if (parcele.length === 0) { group.style.display = 'none'; return; }
     group.style.display = 'block';
-    
-    parcele.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.ParcelaID;
-        opt.textContent = p.KatBroj + ' - ' + (p.Kultura || '') + ' (' + p.ParcelaID + ')';
-        sel.appendChild(opt);
-    });
+    parcele.forEach(p => { const opt = document.createElement('option'); opt.value = p.ParcelaID; opt.textContent = p.KatBroj + ' - ' + (p.Kultura || '') + ' (' + p.ParcelaID + ')'; sel.appendChild(opt); });
 }
 
 function applyDefaults() {
     const config = stammdaten.config || [];
-    
-    // Default Vrsta
-    const defaultVrsta = config.find(c => c.Parameter === 'DefaultVrsta');
-    if (defaultVrsta && defaultVrsta.Vrednost) {
-        document.getElementById('fldVrsta').value = defaultVrsta.Vrednost;
-        onVrstaChange(); // Sorta-Dropdown füllen
-        
-        // Default Sorta
-        const defaultSorta = config.find(c => c.Parameter === 'DefaultSorta');
-        if (defaultSorta && defaultSorta.Vrednost) {
-            document.getElementById('fldSorta').value = defaultSorta.Vrednost;
-        }
+    const dv = config.find(c => c.Parameter === 'DefaultVrsta');
+    if (dv && dv.Vrednost) {
+        document.getElementById('fldVrsta').value = dv.Vrednost;
+        onVrstaChange();
+        const ds = config.find(c => c.Parameter === 'DefaultSorta');
+        if (ds && ds.Vrednost) document.getElementById('fldSorta').value = ds.Vrednost;
     }
-    
-    // Default Cena basierend auf Vrsta
     applyDefaultCena();
 }
 
 function applyDefaultCena() {
     const vrsta = document.getElementById('fldVrsta').value;
     if (!vrsta) return;
-    
-    const config = stammdaten.config || [];
-    const cenaKey = 'Cena' + vrsta; // z.B. "CenaVisnja"
-    const cenaConfig = config.find(c => c.Parameter === cenaKey);
-    
-    if (cenaConfig && cenaConfig.Vrednost) {
-        const cenaField = document.getElementById('fldCena');
-        if (!cenaField.value || cenaField.value === '0') {
-            cenaField.value = cenaConfig.Vrednost;
-        }
-    }
+    const cc = (stammdaten.config || []).find(c => c.Parameter === 'Cena' + vrsta);
+    if (cc && cc.Vrednost) { const f = document.getElementById('fldCena'); if (!f.value || f.value === '0') f.value = cc.Vrednost; }
 }
- 
+
 function onVrstaChange() {
     const vrsta = document.getElementById('fldVrsta').value;
     const sel = document.getElementById('fldSorta');
     sel.innerHTML = '<option value="">-- Izaberi --</option>';
-    
     (stammdaten.kulture || []).filter(k => k.VrstaVoca === vrsta).forEach(k => {
-        if (k.SortaVoca) {
-            const opt = document.createElement('option');
-            opt.value = k.SortaVoca;
-            opt.textContent = k.SortaVoca;
-            sel.appendChild(opt);
-        }
+        if (k.SortaVoca) { const opt = document.createElement('option'); opt.value = k.SortaVoca; opt.textContent = k.SortaVoca; sel.appendChild(opt); }
     });
-    
-    applyDefaultCena(); // ← NEU: Cena auto-fill bei Vrsta-Wechsel
+    applyDefaultCena();
 }
 
 // ============================================================
@@ -988,48 +681,25 @@ async function saveOtkup() {
     const vrsta = document.getElementById('fldVrsta').value;
     const kolicina = parseFloat(document.getElementById('fldKolicina').value) || 0;
     const cena = parseFloat(document.getElementById('fldCena').value) || 0;
-    
-    // Validierung
     if (!kooperantID) { showToast('Skenirajte QR kooperanta!', 'error'); return; }
     if (!vrsta) { showToast('Izaberite vrstu voća!', 'error'); return; }
     if (kolicina <= 0) { showToast('Unesite količinu!', 'error'); return; }
     if (cena <= 0) { showToast('Unesite cenu!', 'error'); return; }
-    console.log('fldParcela value =', document.getElementById('fldParcela')?.value);
     const record = {
-        clientRecordID: crypto.randomUUID(),
-        createdAtClient: new Date().toISOString(),
-        deviceID: getDeviceID(),
-        otkupacID: CONFIG.OTKUPAC_ID,
-        datum: new Date().toISOString().split('T')[0],
-        kooperantID: kooperantID,
-        kooperantName: document.getElementById('koopName').textContent,
-        vrstaVoca: vrsta,
-        sortaVoca: document.getElementById('fldSorta').value,
-        klasa: document.getElementById('fldKlasa').value,
-        kolicina: kolicina,
-        cena: cena,
-        tipAmbalaze: '12/1',
-        kolAmbalaze: parseInt(document.getElementById('fldAmbalaza').value) || 0,
+        clientRecordID: crypto.randomUUID(), createdAtClient: new Date().toISOString(), deviceID: getDeviceID(),
+        otkupacID: CONFIG.OTKUPAC_ID, datum: new Date().toISOString().split('T')[0],
+        kooperantID, kooperantName: document.getElementById('koopName').textContent,
+        vrstaVoca: vrsta, sortaVoca: document.getElementById('fldSorta').value,
+        klasa: document.getElementById('fldKlasa').value, kolicina, cena,
+        tipAmbalaze: '12/1', kolAmbalaze: parseInt(document.getElementById('fldAmbalaza').value) || 0,
         parcelaID: document.getElementById('fldParcela').value || '',
-        napomena: document.getElementById('fldNapomena').value,
-        syncStatus: 'pending'
+        napomena: document.getElementById('fldNapomena').value, syncStatus: 'pending'
     };
-    
-    // In IndexedDB speichern
     await dbPut(CONFIG.STORE_NAME, record);
-    
     showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
-    
-    // Otkupni list anzeigen
     showOtkupniList(record);
-    
-    resetForm();
-    updateStats();
-    
-    // Sofort synchen wenn online
-    if (navigator.onLine) {
-        syncQueue();
-    }
+    resetForm(); updateStats();
+    if (navigator.onLine) syncQueue();
 }
 
 function resetForm() {
@@ -1045,10 +715,12 @@ function resetForm() {
     document.getElementById('fldCena').value = '';
     document.getElementById('fldAmbalaza').value = '';
     document.getElementById('fldNapomena').value = '';
-
-    applyDefaults(); // ← NEU: Defaults wieder setzen nach Reset
+    applyDefaults();
 }
 
+// ============================================================
+// OTKUPNI LIST + SIGNATURE PAD
+// ============================================================
 function showOtkupniList(record) {
     const config = stammdaten.config || [];
     const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
@@ -1057,269 +729,164 @@ function showOtkupniList(record) {
     const pdvStopa = parseFloat(gv('OtkupPDVStopa')) || 8;
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
-    
+
     let modal = document.getElementById('otkupniListModal');
     if (!modal) { modal = document.createElement('div'); modal.id = 'otkupniListModal'; modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999;overflow-y:auto;'; document.body.appendChild(modal); }
-    
+
     modal.innerHTML = `<div style="padding:16px;max-width:420px;margin:0 auto;font-family:sans-serif;">
-        
-        <!-- ZAGLAVLJE FIRME -->
         <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px;">
             <div style="font-size:18px;font-weight:700;">${gv('SELLER_NAME')}</div>
             <div style="font-size:12px;color:#666;">${gv('SELLER_STREET')}, ${gv('SELLER_CITY')} ${gv('SELLER_POSTAL_CODE')}</div>
             <div style="font-size:12px;color:#666;">PIB: ${gv('SELLER_PIB')} | MB: ${gv('SELLER_MATICNI_BROJ')}</div>
             <div style="font-size:12px;color:#666;">TR: ${gv('SELLER_ACCOUNT')}</div>
         </div>
-        
         <h2 style="text-align:center;margin-bottom:14px;font-size:20px;">OTKUPNI LIST</h2>
-        
-        <!-- PODACI O KOOPERANTU -->
         <div style="background:#f5f5f0;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px;">
             <div><strong>${koop.Ime || ''} ${koop.Prezime || ''}</strong></div>
             <div>${koop.Adresa || ''}, ${koop.Mesto || ''}</div>
             <div>JMBG: ${koop.JMBG || '________'} | BPG: ${koop.BPGBroj || '________'}</div>
         </div>
-        
-        <!-- PODACI O OTKUPU -->
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
             <tr><td style="padding:6px;color:#666;width:40%;">Datum:</td><td style="padding:6px;font-weight:600;">${record.datum}</td></tr>
-            <tr><td style="padding:6px;color:#666;">Proizvod:</td><td style="padding:6px;">${record.vrstaVoca} ${record.sortaVoca}</td></tr>
+            <tr><td style="padding:6px;color:#666;">Proizvod:</td><td style="padding:6px;">${record.vrstaVoca} ${record.sortaVoca || ''}</td></tr>
             <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${record.klasa}</td></tr>
             <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
             <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
             <tr style="border-top:1px solid #ccc;"><td style="padding:6px;color:#666;">Vrednost:</td><td style="padding:6px;font-weight:600;">${vrednostNum.toLocaleString('sr')} RSD</td></tr>
-            ${pdvStopa > 0 ? `<tr><td style="padding:6px;color:#666;">PDV naknada (${pdvStopa}%):</td><td style="padding:6px;">${pdvIznos.toLocaleString('sr')} RSD</td></tr>` : ''}
+            ${pdvStopa > 0 ? '<tr><td style="padding:6px;color:#666;">PDV naknada (' + pdvStopa + '%):</td><td style="padding:6px;">' + pdvIznos.toLocaleString('sr') + ' RSD</td></tr>' : ''}
             <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${ukupno.toLocaleString('sr')} RSD</td></tr>
             <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
             ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + record.parcelaID + '</td></tr>' : ''}
             <tr><td style="padding:6px;color:#666;">Rok isplate:</td><td style="padding:6px;">${gv('OtkupRokIsplate') || 'Po dogovoru'}</td></tr>
         </table>
-        
-        <!-- POTPISI -->
         <div style="margin-top:20px;">
-            <div style="margin-bottom:16px;">
-                <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis otkupljivača:</div>
-                <canvas id="sigOtkupac" width="360" height="100" style="border:1px solid #ccc;border-radius:6px;width:100%;touch-action:none;"></canvas>
-            </div>
-            <div style="margin-bottom:16px;">
-                <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis kooperanta:</div>
-                <canvas id="sigKooperant" width="360" height="100" style="border:1px solid #ccc;border-radius:6px;width:100%;touch-action:none;"></canvas>
-            </div>
+            <div style="margin-bottom:16px;"><div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis otkupljivača:</div><canvas id="sigOtkupac" width="360" height="100" style="border:1px solid #ccc;border-radius:6px;width:100%;touch-action:none;"></canvas></div>
+            <div style="margin-bottom:16px;"><div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis kooperanta:</div><canvas id="sigKooperant" width="360" height="100" style="border:1px solid #ccc;border-radius:6px;width:100%;touch-action:none;"></canvas></div>
         </div>
-        
         <div style="text-align:center;margin-top:16px;display:flex;gap:8px;">
-            <button onclick="clearSignature('sigOtkupac');clearSignature('sigKooperant')" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši potpise</button>
+            <button onclick="clearSignature('sigOtkupac');clearSignature('sigKooperant')" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši</button>
             <button onclick="saveOtkupniListWithSignatures('${record.clientRecordID}')" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">Potvrdi</button>
             <button onclick="window.print()" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">Štampaj</button>
         </div>
         <button onclick="document.getElementById('otkupniListModal').style.display='none'" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
     </div>`;
-    
     modal.style.display = 'block';
-    
-    // Inicijalizuj potpis canvase
-    setTimeout(() => {
-        initSignaturePad('sigOtkupac');
-        initSignaturePad('sigKooperant');
-    }, 100);
+    setTimeout(() => { initSignaturePad('sigOtkupac'); initSignaturePad('sigKooperant'); }, 100);
 }
 
-// ============================================================
-// SIGNATURE PAD
-// ============================================================
 function initSignaturePad(canvasId) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
+    const canvas = document.getElementById(canvasId); if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
-    // Podesi canvas resolution za retina ekrane
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    ctx.scale(2, 2);
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    
-    let drawing = false;
-    let lastX = 0, lastY = 0;
-    
-    function getPos(e) {
-        const r = canvas.getBoundingClientRect();
-        const touch = e.touches ? e.touches[0] : e;
-        return { x: touch.clientX - r.left, y: touch.clientY - r.top };
-    }
-    
-    function startDraw(e) {
-        e.preventDefault();
-        drawing = true;
-        const p = getPos(e);
-        lastX = p.x; lastY = p.y;
-    }
-    
-    function draw(e) {
-        if (!drawing) return;
-        e.preventDefault();
-        const p = getPos(e);
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-        lastX = p.x; lastY = p.y;
-    }
-    
-    function stopDraw(e) {
-        if (e) e.preventDefault();
-        drawing = false;
-    }
-    
-    canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDraw);
-    canvas.addEventListener('mouseleave', stopDraw);
+    canvas.width = rect.width * 2; canvas.height = rect.height * 2;
+    ctx.scale(2, 2); ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    let drawing = false, lastX = 0, lastY = 0;
+    function getPos(e) { const r = canvas.getBoundingClientRect(); const touch = e.touches ? e.touches[0] : e; return { x: touch.clientX - r.left, y: touch.clientY - r.top }; }
+    function startDraw(e) { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; }
+    function draw(e) { if (!drawing) return; e.preventDefault(); const p = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke(); lastX = p.x; lastY = p.y; }
+    function stopDraw(e) { if (e) e.preventDefault(); drawing = false; }
+    canvas.addEventListener('mousedown', startDraw); canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDraw); canvas.addEventListener('mouseleave', stopDraw);
     canvas.addEventListener('touchstart', startDraw, { passive: false });
     canvas.addEventListener('touchmove', draw, { passive: false });
     canvas.addEventListener('touchend', stopDraw, { passive: false });
 }
 
 function clearSignature(canvasId) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const canvas = document.getElementById(canvasId); if (!canvas) return;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function getSignatureData(canvasId) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return '';
-    // Proveri da li je canvas prazan
-    const ctx = canvas.getContext('2d');
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    const hasContent = data.some((val, i) => i % 4 === 3 && val > 0); // alpha kanal
-    if (!hasContent) return '';
+    const canvas = document.getElementById(canvasId); if (!canvas) return '';
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    if (!data.some((val, i) => i % 4 === 3 && val > 0)) return '';
     return canvas.toDataURL('image/png');
 }
 
 async function saveOtkupniListWithSignatures(clientRecordID) {
-    const sigOtkupac = getSignatureData('sigOtkupac');
-    const sigKooperant = getSignatureData('sigKooperant');
-    
-    if (!sigOtkupac) { showToast('Potpišite se kao otkupljivač!', 'error'); return; }
-    if (!sigKooperant) { showToast('Kooperant mora da se potpiše!', 'error'); return; }
-    
-    // Sačuvaj potpise uz otkup record u IndexedDB
+    const sigO = getSignatureData('sigOtkupac'), sigK = getSignatureData('sigKooperant');
+    if (!sigO) { showToast('Potpišite se kao otkupljivač!', 'error'); return; }
+    if (!sigK) { showToast('Kooperant mora da se potpiše!', 'error'); return; }
     try {
         const tx = db.transaction(CONFIG.STORE_NAME, 'readwrite');
         const store = tx.objectStore(CONFIG.STORE_NAME);
         const req = store.get(clientRecordID);
-        req.onsuccess = () => {
-            const record = req.result;
-            if (record) {
-                record.sigOtkupac = sigOtkupac;
-                record.sigKooperant = sigKooperant;
-                record.signedAt = new Date().toISOString();
-                store.put(record);
-            }
-        };
-    } catch (e) {
-        console.log('Signature save error:', e);
-    }
-    
+        req.onsuccess = () => { const r = req.result; if (r) { r.sigOtkupac = sigO; r.sigKooperant = sigK; r.signedAt = new Date().toISOString(); store.put(r); } };
+    } catch (e) {}
     showToast('Otkupni list potpisan!', 'success');
     document.getElementById('otkupniListModal').style.display = 'none';
 }
+
 // ============================================================
-// SYNC QUEUE
+// SYNC
 // ============================================================
 async function syncQueue() {
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
     if (pending.length === 0) return;
     updateSyncBadge('syncing');
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'sync', token: CONFIG.TOKEN, otkupacID: CONFIG.OTKUPAC_ID, records: pending })
-        });
+        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'sync', token: CONFIG.TOKEN, otkupacID: CONFIG.OTKUPAC_ID, records: pending }) });
         const json = await resp.json();
         if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
-        if (json.success) {
-            for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.STORE_NAME, r); }
-            showToast('Sinhr: ' + pending.length, 'success');
-        } else {
-            showToast('Greška: ' + (json.error || ''), 'error');
-        }
+        if (json.success) { for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.STORE_NAME, r); } showToast('Sinhr: ' + pending.length, 'success'); }
+        else showToast('Greška: ' + (json.error || ''), 'error');
     } catch (e) { console.log('Sync failed:', e); }
-    updateSyncBadge();
-    updateStats();
+    updateSyncBadge(); updateStats();
 }
 
 async function syncAgromere() {
     const pending = await dbGetByIndex(CONFIG.AGRO_STORE, 'syncStatus', 'pending');
     if (pending.length === 0) return;
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'syncAgromere', token: CONFIG.TOKEN, kooperantID: CONFIG.ENTITY_ID, records: pending })
-        });
+        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'syncAgromere', token: CONFIG.TOKEN, kooperantID: CONFIG.ENTITY_ID, records: pending }) });
         const json = await resp.json();
         if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
-        if (json.success) {
-            for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.AGRO_STORE, r); }
-            showToast('Agromere sinhr: ' + pending.length, 'success');
-        }
-    } catch (e) { console.log('Agromere sync failed:', e); }
+        if (json.success) { for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.AGRO_STORE, r); } showToast('Agromere sinhr: ' + pending.length, 'success'); }
+    } catch (e) {}
 }
 
 async function syncNow() {
     if (!navigator.onLine) { showToast('Nema konekcije', 'error'); return; }
-    await syncQueue();
-    renderQueueList();
+    await syncQueue(); renderQueueList();
 }
 
 // ============================================================
 // OTKUP PREGLED
 // ============================================================
 async function loadOtkupPregled() {
-    document.getElementById('PregledList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    const od = document.getElementById('fldPregledOd').value;
-    const doo = document.getElementById('fldPregledDo').value;
+    document.getElementById('pregledList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
+    const od = document.getElementById('fldPregledOd').value, doo = document.getElementById('fldPregledDo').value;
     const local = await dbGetAll(CONFIG.STORE_NAME);
     let server = [];
     try {
-        const json = await cachedApiFetch('otkupi_' + CONFIG.OTKUPAC_ID, 'action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
         if (json && json.success && json.records) server = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum), kooperantID: r.KooperantID || '',
-            kooperantName: r.KooperantName || r.KooperantID || '', vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I', kolicina: parseFloat(r.Kolicina) || 0, cena: parseFloat(r.Cena) || 0,
-            kolAmbalaze: parseInt(r.KolAmbalaze) || 0, parcelaID: r.ParcelaID || '', syncStatus: r.SyncStatus || 'synced', source: 'server'
+            clientRecordID: r.ClientRecordID||'', datum: fmtDate(r.Datum), kooperantID: r.KooperantID||'',
+            kooperantName: r.KooperantName||r.KooperantID||'', vrstaVoca: r.VrstaVoca||'', sortaVoca: r.SortaVoca||'',
+            klasa: r.Klasa||'I', kolicina: parseFloat(r.Kolicina)||0, cena: parseFloat(r.Cena)||0,
+            kolAmbalaze: parseInt(r.KolAmbalaze)||0, parcelaID: r.ParcelaID||'', syncStatus: r.SyncStatus||'synced'
         }));
     } catch (e) {}
     const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const pendingLocal = local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID));
-    let all = [...server, ...pendingLocal];
+    let all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
     if (od) all = all.filter(r => r.datum >= od);
     if (doo) all = all.filter(r => r.datum <= doo);
     all.sort((a, b) => b.datum.localeCompare(a.datum));
-
-    const kg = all.reduce((s, r) => s + (r.kolicina || 0), 0);
-    const vr = all.reduce((s, r) => s + (r.kolicina || 0) * (r.cena || 0), 0);
+    const kg = all.reduce((s, r) => s + (r.kolicina||0), 0);
+    const vr = all.reduce((s, r) => s + (r.kolicina||0)*(r.cena||0), 0);
     document.getElementById('statPregledCount').textContent = all.length;
     document.getElementById('statPregledKg').textContent = kg.toLocaleString('sr');
     document.getElementById('statPregledVrednost').textContent = vr.toLocaleString('sr');
     document.getElementById('statPregledKoop').textContent = new Set(all.map(r => r.kooperantID)).size;
-
     const list = document.getElementById('pregledList');
     if (all.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa</p>'; return; }
     list.innerHTML = all.map(r => {
         const v = ((r.kolicina||0)*(r.cena||0)).toLocaleString('sr');
-        const icon = r.syncStatus==='pending' ? '⏳' : r.syncStatus==='Synced>Master' ? '✅' : '✓';
-        const bc = r.syncStatus==='pending' ? 'var(--warning)' : r.syncStatus==='Synced>Master' ? 'var(--primary)' : 'var(--success)';
-        return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca||''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID?' | '+r.parcelaID:''}</div>
-            <div class="qi-detail" style="font-size:11px;margin-top:2px;">Amb: ${r.kolAmbalaze||0} | ${icon}</div></div>`;
+        const bc = r.syncStatus==='pending' ? 'var(--warning)' : 'var(--success)';
+        return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div><div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca||''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID?' | '+r.parcelaID:''}</div></div>`;
     }).join('');
 }
 
@@ -1335,7 +902,7 @@ async function loadOtpremnicePregled() {
         if (json && json.success && json.records) all = json.records.map(r => ({
             kooperantID: r.KooperantID||'', kooperantName: r.KooperantName||'', datum: fmtDate(r.Datum),
             vrstaVoca: r.VrstaVoca||'', klasa: r.Klasa||'I', kolicina: parseFloat(r.Kolicina)||0,
-            cena: parseFloat(r.Cena)||0, kolAmbalaze: parseInt(r.KolAmbalaze)||0, parcelaID: r.ParcelaID||''
+            cena: parseFloat(r.Cena)||0, kolAmbalaze: parseInt(r.KolAmbalaze)||0
         }));
     } catch (e) {}
     const local = await dbGetAll(CONFIG.STORE_NAME);
@@ -1348,11 +915,11 @@ async function loadOtpremnicePregled() {
         if (!grouped[k]) grouped[k] = { name: r.kooperantName||k, items: [], kg: 0, vr: 0, amb: 0 };
         grouped[k].items.push(r); grouped[k].kg += r.kolicina||0; grouped[k].vr += (r.kolicina||0)*(r.cena||0); grouped[k].amb += r.kolAmbalaze||0;
     });
-    document.getElementById('otpremniceList').innerHTML = Object.entries(grouped).map(([id, g]) => `
-        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    document.getElementById('otpremniceList').innerHTML = Object.entries(grouped).map(([id, g]) =>
+        `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><strong style="color:var(--primary);">${g.name}</strong><span style="font-size:12px;color:var(--text-muted);">${id}</span></div>
             <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Ukupno: <strong>${g.kg.toLocaleString('sr')} kg</strong> | ${g.vr.toLocaleString('sr')} RSD | Amb: ${g.amb}</div>
-            ${g.items.map(r => `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${((r.kolicina||0)*(r.cena||0)).toLocaleString('sr')} RSD${r.parcelaID?' | '+r.parcelaID:''}</div>`).join('')}
+            ${g.items.map(r => `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${((r.kolicina||0)*(r.cena||0)).toLocaleString('sr')} RSD</div>`).join('')}
         </div>`).join('');
 }
 
@@ -1365,14 +932,10 @@ async function loadKartica() {
     document.getElementById('karticaID').textContent = CONFIG.ENTITY_ID;
     let records = [];
     try {
-        const json = await cachedApiFetch('kartica_' + CONFIG.ENTITY_ID, 'action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+        const json = await apiFetch('action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
         if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
     } catch (e) {}
-    if (records.length === 0) {
-        document.getElementById('karticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Kartica nije dostupna</p>';
-        ['karticaZaduzenje','karticaRazduzenje','karticaSaldo'].forEach(id => document.getElementById(id).textContent = '0');
-        return;
-    }
+    if (records.length === 0) { document.getElementById('karticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Kartica nije dostupna</p>'; return; }
     let zad = 0, raz = 0;
     document.getElementById('karticaList').innerHTML = records.map(r => {
         const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
@@ -1389,7 +952,7 @@ async function loadKartica() {
     document.getElementById('karticaRazduzenje').textContent = raz.toLocaleString('sr');
     document.getElementById('karticaSaldo').textContent = (zad - raz).toLocaleString('sr');
 }
-    
+
 // ============================================================
 // KOOPERANT: PARCELE
 // ============================================================
@@ -1397,8 +960,8 @@ async function loadParcele() {
     const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
     const list = document.getElementById('parceleList');
     if (parcele.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>'; return; }
-    list.innerHTML = parcele.map(p => `
-        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
+    list.innerHTML = parcele.map(p =>
+        `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><strong>${p.KatBroj||p.ParcelaID}</strong><span style="font-size:12px;color:var(--text-muted);">${p.ParcelaID}</span></div>
             <div style="font-size:13px;color:var(--text-muted);">${p.Kultura||''} | ${p.PovrsinaHa||'?'} ha | ${p.KatOpstina||''}${p.GGAPStatus?' | GGAP: '+p.GGAPStatus:''}</div>
         </div>`).join('');
@@ -1411,17 +974,14 @@ function populateAgroParcele() {
     const sel = document.getElementById('fldAgroParcela');
     sel.innerHTML = '<option value="">-- Izaberi parcelu --</option>';
     (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID).forEach(p => {
-        const o = document.createElement('option');
-        o.value = p.ParcelaID;
-        o.textContent = p.KatBroj + ' - ' + (p.Kultura||'') + ' (' + p.ParcelaID + ')';
-        sel.appendChild(o);
+        const o = document.createElement('option'); o.value = p.ParcelaID;
+        o.textContent = p.KatBroj + ' - ' + (p.Kultura||'') + ' (' + p.ParcelaID + ')'; sel.appendChild(o);
     });
 }
 
 function selectMera(btn, mera) {
     document.querySelectorAll('.agro-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedMera = mera;
+    btn.classList.add('selected'); selectedMera = mera;
 }
 
 async function saveAgromera() {
@@ -1431,16 +991,14 @@ async function saveAgromera() {
     const now = new Date();
     const record = {
         clientRecordID: crypto.randomUUID(), createdAtClient: now.toISOString(),
-        kooperantID: CONFIG.ENTITY_ID, parcelaID: parcelaID,
-        mera: selectedMera, datum: now.toISOString().split('T')[0],
-        vreme: now.toTimeString().split(' ')[0].substring(0, 5),
+        kooperantID: CONFIG.ENTITY_ID, parcelaID, mera: selectedMera,
+        datum: now.toISOString().split('T')[0], vreme: now.toTimeString().split(' ')[0].substring(0, 5),
         napomena: document.getElementById('fldAgroNapomena').value, syncStatus: 'pending'
     };
     await dbPut(CONFIG.AGRO_STORE, record);
     showToast(selectedMera + ' sačuvano!', 'success');
     document.querySelectorAll('.agro-btn').forEach(b => b.classList.remove('selected'));
-    selectedMera = '';
-    document.getElementById('fldAgroNapomena').value = '';
+    selectedMera = ''; document.getElementById('fldAgroNapomena').value = '';
     if (navigator.onLine) syncAgromere();
     loadAgromereList();
 }
@@ -1455,16 +1013,14 @@ async function loadAgromereList() {
             parcelaID: r.ParcelaID||'', napomena: r.Napomena||'', syncStatus: 'synced'
         }));
     } catch (e) {}
-    const localPending = local.filter(r => r.syncStatus === 'pending');
-    const all = [...server, ...localPending].sort((a, b) => (b.datum||'').localeCompare(a.datum||''));
+    const all = [...server, ...local.filter(r => r.syncStatus === 'pending')].sort((a, b) => (b.datum||'').localeCompare(a.datum||''));
     const list = document.getElementById('agromereList');
     if (all.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema evidentiranih mera</p>'; return; }
     const icons = { Zastita: '🛡️', Prihrana: '🌱', Rezidba: '✂️', Zalivanje: '💧', Berba: '🍎' };
-    list.innerHTML = all.map(r => `
-        <div class="queue-item" style="border-left-color:${r.syncStatus==='pending'?'var(--warning)':'var(--success)'};">
+    list.innerHTML = all.map(r =>
+        `<div class="queue-item" style="border-left-color:${r.syncStatus==='pending'?'var(--warning)':'var(--success)'};">
             <div class="qi-header"><span class="qi-koop">${icons[r.mera]||''} ${r.mera}</span><span class="qi-time">${r.datum} ${r.vreme||''}</span></div>
-            <div class="qi-detail">${r.parcelaID}${r.napomena ? ' | ' + r.napomena : ''}</div>
-        </div>`).join('');
+            <div class="qi-detail">${r.parcelaID}${r.napomena ? ' | ' + r.napomena : ''}</div></div>`).join('');
 }
 
 // ============================================================
@@ -1492,18 +1048,55 @@ async function loadKoopInfo() {
 }
 
 // ============================================================
-// MANAGEMENT
+// MANAGEMENT: NAVIGATION
+// ============================================================
+function showMgmtMain(section) {
+    // Deaktiviraj sve tabove i contente
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+    // Aktiviraj mgmt container
+    document.getElementById('tab-mgmt').classList.add('active');
+    if (event && event.target) event.target.classList.add('active');
+
+    // Popuni sub-bar
+    const subs = MGMT_SUBS[section];
+    const bar = document.getElementById('mgmtSubBar');
+    bar.innerHTML = subs.map((s, i) =>
+        `<button class="sub-tab-btn${i === 0 ? ' active' : ''}" onclick="showMgmtSub('${s.id}', this)">${s.label}</button>`
+    ).join('');
+
+    // Sakrij sve sub-contente, prikaži prvi
+    document.querySelectorAll('.mgmt-sub').forEach(s => s.classList.remove('active'));
+    const firstEl = document.getElementById('mgmt-' + subs[0].id);
+    if (firstEl) firstEl.classList.add('active');
+    if (subs[0].load) subs[0].load();
+}
+
+function showMgmtSub(subId, btn) {
+    document.querySelectorAll('.mgmt-sub').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+    const el = document.getElementById('mgmt-' + subId);
+    if (el) el.classList.add('active');
+    if (btn) btn.classList.add('active');
+
+    // Nađi sub definiciju i pozovi load
+    const allSubs = Object.values(MGMT_SUBS).flat();
+    const sub = allSubs.find(s => s.id === subId);
+    if (sub && sub.load) sub.load();
+}
+
+// ============================================================
+// MANAGEMENT: KOOPERANTI
 // ============================================================
 function populateMgmtStanice() {
     const stanice = new Set();
     (stammdaten.kooperanti || []).forEach(k => { if (k.StanicaID) stanice.add(k.StanicaID); });
-    
     ['mgmtStanica', 'mgmtOtkupiStanica'].forEach(selId => {
         const sel = document.getElementById(selId);
+        if (!sel) return;
         sel.innerHTML = '<option value="">-- Izaberi stanicu --</option>';
-        stanice.forEach(s => {
-            const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
-        });
+        stanice.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
     });
 }
 
@@ -1513,48 +1106,32 @@ function onMgmtStanicaChange() {
     sel.innerHTML = '<option value="">-- Izaberi kooperanta --</option>';
     document.getElementById('mgmtKarticaHeader').style.display = 'none';
     document.getElementById('mgmtKarticaList').innerHTML = '';
-    
     if (!stanicaID) return;
-    
     (stammdaten.kooperanti || []).filter(k => k.StanicaID === stanicaID).forEach(k => {
-        const o = document.createElement('option');
-        o.value = k.KooperantID;
-        o.textContent = k.Ime + ' ' + k.Prezime + ' (' + k.KooperantID + ')';
-        sel.appendChild(o);
+        const o = document.createElement('option'); o.value = k.KooperantID;
+        o.textContent = k.Ime + ' ' + k.Prezime + ' (' + k.KooperantID + ')'; sel.appendChild(o);
     });
 }
 
 async function onMgmtKooperantChange() {
     const koopID = document.getElementById('mgmtKooperant').value;
-    if (!koopID) {
-        document.getElementById('mgmtKarticaHeader').style.display = 'none';
-        document.getElementById('mgmtKarticaList').innerHTML = '';
-        return;
-    }
-    
+    if (!koopID) { document.getElementById('mgmtKarticaHeader').style.display = 'none'; document.getElementById('mgmtKarticaList').innerHTML = ''; return; }
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
     document.getElementById('mgmtKarticaName').textContent = koop ? koop.Ime + ' ' + koop.Prezime : koopID;
     document.getElementById('mgmtKarticaID').textContent = koopID;
     document.getElementById('mgmtKarticaHeader').style.display = 'block';
-    
-    // Filtriraj iz prefetch-ovanih podataka
+
     let records = [];
     if (mgmtData && mgmtData.kartice) {
         records = mgmtData.kartice.filter(r => r.KooperantID === koopID && r.Opis !== 'UKUPNO');
     } else {
-        // Fallback na API ako prefetch nije uspeo
-        try {
-            const json = await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
-            if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
-        } catch (e) {}
+        try { const json = await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID)); if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO'); } catch (e) {}
     }
-    
     if (records.length === 0) {
         document.getElementById('mgmtKarticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
         ['mgmtKarticaZad','mgmtKarticaRaz','mgmtKarticaSaldo'].forEach(id => document.getElementById(id).textContent = '0');
         return;
     }
-    
     let zad = 0, raz = 0;
     document.getElementById('mgmtKarticaList').innerHTML = records.map(r => {
         const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
@@ -1572,36 +1149,48 @@ async function onMgmtKooperantChange() {
     document.getElementById('mgmtKarticaSaldo').textContent = (zad - raz).toLocaleString('sr');
 }
 
+function loadMgmtKoopSaldo() {
+    const kartice = (mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
+    const list = document.getElementById('mgmtKoopSaldoList');
+    const totals = kartice.filter(r => r.Opis === 'UKUPNO');
+    if (totals.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
+    list.innerHTML = totals.map(r => {
+        const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === r.KooperantID);
+        const name = koop ? koop.Ime + ' ' + koop.Prezime : r.KooperantID;
+        const saldo = parseFloat(r.Saldo)||0;
+        const zad = parseFloat(r.Zaduzenje)||0, raz = parseFloat(r.Razduzenje)||0;
+        const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
+        return `<div class="queue-item" style="border-left-color:${bc};">
+            <div class="qi-header"><span class="qi-koop">${name}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-detail">Zaduž: ${zad.toLocaleString('sr')} | Razduž: ${raz.toLocaleString('sr')}</div></div>`;
+    }).join('');
+}
+
+// ============================================================
+// MANAGEMENT: STANICE
+// ============================================================
 async function loadMgmtOtkupi() {
     const stanicaID = document.getElementById('mgmtOtkupiStanica').value;
     if (!stanicaID) { document.getElementById('mgmtOtkupiList').innerHTML = ''; return; }
-    
-    const od = document.getElementById('mgmtOtkupiOd').value;
-    const doo = document.getElementById('mgmtOtkupiDo').value;
-    
+    const od = document.getElementById('mgmtOtkupiOd').value, doo = document.getElementById('mgmtOtkupiDo').value;
     let records = [];
     try {
         const json = await apiFetch('action=getMgmtOtkupiByStanica&stanicaID=' + encodeURIComponent(stanicaID));
         if (json && json.success && json.records) records = json.records.map(r => ({
             datum: fmtDate(r.Datum), kooperantName: r.KooperantName||r.KooperantID||'',
             vrstaVoca: r.VrstaVoca||'', klasa: r.Klasa||'I',
-            kolicina: parseFloat(r.Kolicina)||0, cena: parseFloat(r.Cena)||0,
-            kolAmbalaze: parseInt(r.KolAmbalaze)||0, parcelaID: r.ParcelaID||'',
-            syncStatus: r.SyncStatus||''
+            kolicina: parseFloat(r.Kolicina)||0, cena: parseFloat(r.Cena)||0
         }));
     } catch (e) {}
-    
     if (od) records = records.filter(r => r.datum >= od);
     if (doo) records = records.filter(r => r.datum <= doo);
     records.sort((a, b) => b.datum.localeCompare(a.datum));
-    
     const kg = records.reduce((s, r) => s + (r.kolicina||0), 0);
     const vr = records.reduce((s, r) => s + (r.kolicina||0)*(r.cena||0), 0);
     document.getElementById('mgmtOtkupiCount').textContent = records.length;
     document.getElementById('mgmtOtkupiKg').textContent = kg.toLocaleString('sr');
     document.getElementById('mgmtOtkupiVrednost').textContent = vr.toLocaleString('sr');
     document.getElementById('mgmtOtkupiKoop').textContent = new Set(records.map(r => r.kooperantName)).size;
-    
     const list = document.getElementById('mgmtOtkupiList');
     if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otkupa</p>'; return; }
     list.innerHTML = records.map(r => {
@@ -1611,8 +1200,8 @@ async function loadMgmtOtkupi() {
     }).join('');
 }
 
-async function loadMgmtSaldoOM() {
-    const records = mgmtData ? mgmtData.saldoOM : [];
+function loadMgmtSaldoOM() {
+    const records = (mgmtData && mgmtData.saldoOM) ? mgmtData.saldoOM : [];
     const list = document.getElementById('mgmtSaldoOMList');
     if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
     list.innerHTML = records.map(r => {
@@ -1624,8 +1213,50 @@ async function loadMgmtSaldoOM() {
     }).join('');
 }
 
-async function loadMgmtKupci() {
-    const records = mgmtData ? mgmtData.saldoKupci : [];
+function loadMgmtOtkupPoOM() {
+    const records = (mgmtData && mgmtData.otkupPoOM) ? mgmtData.otkupPoOM : [];
+    const list = document.getElementById('mgmtOtkupPoOMList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
+    const grouped = {};
+    records.forEach(r => {
+        const s = r.StanicaID||'?';
+        if (!grouped[s]) grouped[s] = { items: [], totalKg: 0, totalAmb: 0, totalVr: 0 };
+        const kg = parseFloat(r.Kolicina)||0, amb = parseFloat(r.Ambalaza)||0, vr = parseFloat(r.Vrednost)||0;
+        grouped[s].items.push(r); grouped[s].totalKg += kg; grouped[s].totalAmb += amb; grouped[s].totalVr += vr;
+    });
+    list.innerHTML = Object.entries(grouped).map(([stanica, g]) =>
+        `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${stanica}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD</div>
+            ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${r.VrstaVoca} ${r.Klasa}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${r.BrojOtkupa||0} otk.</span></div>`; }).join('')}
+        </div>`).join('');
+}
+
+// ============================================================
+// MANAGEMENT: KUPCI
+// ============================================================
+async function loadMgmtFakture() {
+    const kupacID = document.getElementById('mgmtFaktureKupac').value;
+    if (!kupacID) { document.getElementById('mgmtFaktureList').innerHTML = ''; return; }
+    document.getElementById('mgmtFaktureList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtFakture&kupacID=' + encodeURIComponent(kupacID));
+        if (json && json.success && json.records) records = json.records;
+    } catch (e) {}
+    const list = document.getElementById('mgmtFaktureList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema faktura</p>'; return; }
+    list.innerHTML = records.map(r => {
+        const iznos = parseFloat(r.Iznos)||0;
+        const bc = r.Status === 'Placeno' ? 'var(--success)' : 'var(--danger)';
+        return `<div class="queue-item" style="border-left-color:${bc};">
+            <div class="qi-header"><span class="qi-koop">${r.BrojFakture||r.FakturaID}</span><span class="qi-time">${fmtDate(r.Datum)}</span></div>
+            <div class="qi-detail">${iznos.toLocaleString('sr')} RSD | ${r.Status||'Neplaceno'}${r.SEFStatus?' | SEF: '+r.SEFStatus:''}</div></div>`;
+    }).join('');
+}
+
+function loadMgmtKupci() {
+    const records = (mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
     const list = document.getElementById('mgmtKupciList');
     if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
     list.innerHTML = records.map(r => {
@@ -1637,102 +1268,38 @@ async function loadMgmtKupci() {
     }).join('');
 }
 
-async function loadMgmtOtkupPoOM() {
-    const records = mgmtData ? mgmtData.otkupPoOM : [];
-    document.getElementById('mgmtOtkupPoOMList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    try {
-        const json = await cachedApiFetch('otkupPoOM', 'action=getMgmtOtkupPoOM');
-        if (json && json.success && json.records) records = json.records;
-    } catch (e) {}
-    
-    const list = document.getElementById('mgmtOtkupPoOMList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
-    
-    // Grupisano po stanici
+function loadMgmtPredato() {
+    const records = (mgmtData && mgmtData.predatoPoKupcu) ? mgmtData.predatoPoKupcu : [];
+    const list = document.getElementById('mgmtPredatoList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
     const grouped = {};
     records.forEach(r => {
-        const s = r.StanicaID || '?';
-        if (!grouped[s]) grouped[s] = { items: [], totalKg: 0, totalAmb: 0, totalVr: 0 };
-        const kg = parseFloat(r.Kolicina) || 0;
-        const amb = parseFloat(r.Ambalaza) || 0;
-        const vr = parseFloat(r.Vrednost) || 0;
-        grouped[s].items.push(r);
-        grouped[s].totalKg += kg;
-        grouped[s].totalAmb += amb;
-        grouped[s].totalVr += vr;
+        const k = r.KupacID||'?';
+        if (!grouped[k]) grouped[k] = { items: [], totalKg: 0, totalAmb: 0, totalVr: 0 };
+        const kg = parseFloat(r.Kolicina)||0, amb = parseFloat(r.Ambalaza)||0, vr = parseFloat(r.Vrednost)||0;
+        grouped[k].items.push(r); grouped[k].totalKg += kg; grouped[k].totalAmb += amb; grouped[k].totalVr += vr;
     });
-    
-    list.innerHTML = Object.entries(grouped).map(([stanica, g]) => `
-        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                <strong style="color:var(--primary);font-size:16px;">${stanica}</strong>
-                <span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span>
-            </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
-                Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD
-            </div>
-            ${g.items.map(r => {
-                const kg = parseFloat(r.Kolicina)||0;
-                const amb = parseFloat(r.Ambalaza)||0;
-                const vr = parseFloat(r.Vrednost)||0;
-                const cnt = r.BrojOtkupa||0;
-                return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;">
-                    <span>${r.VrstaVoca} ${r.Klasa}</span>
-                    <span>${kg.toLocaleString('sr')} kg | Amb: ${amb.toLocaleString('sr')} | ${vr.toLocaleString('sr')} RSD | ${cnt} otk.</span>
-                </div>`;
-            }).join('')}
+    list.innerHTML = Object.entries(grouped).map(([kupac, g]) =>
+        `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--accent);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${kupac}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD</div>
+            ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${r.VrstaVoca} ${r.Klasa}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${r.BrojPrijemnica||0} prij.</span></div>`; }).join('')}
         </div>`).join('');
 }
 
-async function loadMgmtPredato() {
-    const records = mgmtData ? mgmtData.predatoPoKupcu : [];
-    document.getElementById('mgmtPredatoList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    try {
-        const json = await cachedApiFetch('predato', 'action=getMgmtPredatoPoKupcu');
-        if (json && json.success && json.records) records = json.records;
-    } catch (e) {}
-    
-    const list = document.getElementById('mgmtPredatoList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
-    
-    // Grupisano po kupcu (KupacID kolona sadrži naziv jer VBA zamenjuje)
-    const grouped = {};
-    records.forEach(r => {
-        const k = r.KupacID || '?';
-        if (!grouped[k]) grouped[k] = { items: [], totalKg: 0, totalAmb: 0, totalVr: 0 };
-        const kg = parseFloat(r.Kolicina) || 0;
-        const amb = parseFloat(r.Ambalaza) || 0;
-        const vr = parseFloat(r.Vrednost) || 0;
-        grouped[k].items.push(r);
-        grouped[k].totalKg += kg;
-        grouped[k].totalAmb += amb;
-        grouped[k].totalVr += vr;
-    });
-    
-    list.innerHTML = Object.entries(grouped).map(([kupac, g]) => `
-        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--accent);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                <strong style="color:var(--primary);font-size:16px;">${kupac}</strong>
-                <span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span>
-            </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
-                Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD
-            </div>
-            ${g.items.map(r => {
-                const kg = parseFloat(r.Kolicina)||0;
-                const amb = parseFloat(r.Ambalaza)||0;
-                const vr = parseFloat(r.Vrednost)||0;
-                const cnt = r.BrojPrijemnica||0;
-                return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;">
-                    <span>${r.VrstaVoca} ${r.Klasa}</span>
-                    <span>${kg.toLocaleString('sr')} kg | Amb: ${amb.toLocaleString('sr')} | ${vr.toLocaleString('sr')} RSD | ${cnt} prij.</span>
-                </div>`;
-            }).join('')}
-        </div>`).join('');
-}
-    
 // ============================================================
-// UI UPDATES
+// MANAGEMENT: AGROHEMIJA (placeholder)
+// ============================================================
+function loadMgmtAgroIzdavanje() {
+    document.getElementById('mgmtAgroIzdavanjeList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p>';
+}
+
+function loadMgmtAgroStanje() {
+    document.getElementById('mgmtAgroStanjeList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p>';
+}
+
+// ============================================================
+// TAB NAVIGATION (non-management)
 // ============================================================
 function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -1740,6 +1307,7 @@ function showTab(tabName) {
     const tabEl = document.getElementById('tab-' + tabName);
     if (tabEl) tabEl.classList.add('active');
     if (event && event.target) event.target.classList.add('active');
+
     if (tabName === 'queue') { renderQueueList(); updateStats(); }
     if (tabName === 'pregled') loadOtkupPregled();
     if (tabName === 'otpremnice') loadOtpremnicePregled();
@@ -1747,33 +1315,18 @@ function showTab(tabName) {
     if (tabName === 'parcele') loadParcele();
     if (tabName === 'agromere') loadAgromereList();
     if (tabName === 'koopinfo') loadKoopInfo();
-    if (tabName === 'mgmtSaldoOM') loadMgmtSaldoOM();
-    if (tabName === 'mgmtKupci') loadMgmtKupci();
-    if (tabName === 'mgmtOtkupPoOM') loadMgmtOtkupPoOM();
-    if (tabName === 'mgmtPredato') loadMgmtPredato();
-    if (tabName === 'mgmtFakture') loadMgmtFakture();
 }
+
+// ============================================================
+// UI UPDATES
+// ============================================================
 async function updateSyncBadge(status) {
     const badge = document.getElementById('syncBadge');
-    
-    if (status === 'syncing') {
-        badge.textContent = 'SYNC...';
-        badge.className = 'sync-badge sync-pending';
-        return;
-    }
-    
+    if (status === 'syncing') { badge.textContent = 'SYNC...'; badge.className = 'sync-badge sync-pending'; return; }
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
-    
-    if (!navigator.onLine) {
-        badge.textContent = 'OFFLINE' + (pending.length > 0 ? ' (' + pending.length + ')' : '');
-        badge.className = 'sync-badge sync-offline';
-    } else if (pending.length > 0) {
-        badge.textContent = 'ČEKA: ' + pending.length;
-        badge.className = 'sync-badge sync-pending';
-    } else {
-        badge.textContent = 'ONLINE';
-        badge.className = 'sync-badge sync-online';
-    }
+    if (!navigator.onLine) { badge.textContent = 'OFFLINE' + (pending.length > 0 ? ' (' + pending.length + ')' : ''); badge.className = 'sync-badge sync-offline'; }
+    else if (pending.length > 0) { badge.textContent = 'ČEKA: ' + pending.length; badge.className = 'sync-badge sync-pending'; }
+    else { badge.textContent = 'ONLINE'; badge.className = 'sync-badge sync-online'; }
 }
 
 async function updateStats() {
@@ -1787,34 +1340,10 @@ async function updateStats() {
 async function renderQueueList() {
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
     const list = document.getElementById('queueList');
-    
-    if (pending.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>';
-        return;
-    }
-    
-    list.innerHTML = pending.map(r => `
-        <div class="queue-item">
-            <div class="qi-header">
-                <span class="qi-koop">${r.kooperantName}</span>
-                <span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span>
-            </div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div>
-        </div>
-    `).join('');
-}
-
-
-
-function formatServerDate(val) {
-    if (!val) return '';
-    if (typeof val === 'string' && val.length >= 10) return val.substring(0, 10);
-    try {
-        const d = new Date(val);
-        return d.toISOString().split('T')[0];
-    } catch(e) {
-        return String(val);
-    }
+    if (pending.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>'; return; }
+    list.innerHTML = pending.map(r =>
+        `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span></div>
+            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div></div>`).join('');
 }
 
 // ============================================================
@@ -1822,17 +1351,13 @@ function formatServerDate(val) {
 // ============================================================
 function showToast(msg, type = 'info') {
     const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.className = 'toast show ' + type;
+    toast.textContent = msg; toast.className = 'toast show ' + type;
     setTimeout(() => { toast.className = 'toast'; }, 3000);
 }
 
 function getDeviceID() {
     let id = localStorage.getItem('deviceID');
-    if (!id) {
-        id = 'DEV-' + crypto.randomUUID().slice(0, 8);
-        localStorage.setItem('deviceID', id);
-    }
+    if (!id) { id = 'DEV-' + crypto.randomUUID().slice(0, 8); localStorage.setItem('deviceID', id); }
     return id;
 }
 
@@ -1840,26 +1365,19 @@ function fmtDate(val) {
     if (!val) return '';
     if (typeof val === 'string' && val.length >= 10) return val.substring(0, 10);
     try { return new Date(val).toISOString().split('T')[0]; } catch(e) { return String(val); }
-}    
+}
+
 // ============================================================
-// SERVICE WORKER REGISTRATION + AUTO-UPDATE
+// SERVICE WORKER
 // ============================================================
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then(reg => {
-        // Prüfe alle 60 Sekunden auf Updates
         setInterval(() => reg.update(), 60000);
-        
         reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'activated') {
-                    showToast('Nova verzija učitana', 'info');
-                }
-            });
+            const nw = reg.installing;
+            nw.addEventListener('statechange', () => { if (nw.state === 'activated') showToast('Nova verzija učitana', 'info'); });
         });
-    }).catch(err => {
-        console.log('SW registration failed:', err);
-    });
+    }).catch(err => console.log('SW registration failed:', err));
 }
 </script>
 
