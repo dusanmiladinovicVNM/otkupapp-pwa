@@ -283,6 +283,8 @@
     <button class="tab-btn role-management" onclick="showTab('mgmtOtkupi')">Otkupi</button>
     <button class="tab-btn role-management" onclick="showTab('mgmtSaldoOM')">Saldo OM</button>
     <button class="tab-btn role-management" onclick="showTab('mgmtKupci')">Kupci</button>
+    <button class="tab-btn role-management" onclick="showTab('mgmtOtkupPoOM')">Roba OM</button>
+    <button class="tab-btn role-management" onclick="showTab('mgmtPredato')">Roba Kupci</button>
 </div>
  
 <!-- TAB: NOVI OTKUP -->
@@ -501,7 +503,18 @@
     <h3 style="color:var(--primary);margin-bottom:12px;">Saldo kupaca</h3>
     <div id="mgmtKupciList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
 </div>
-    
+
+<!-- TAB: MGMT OTKUP PO OM -->
+<div class="tab-content" id="tab-mgmtOtkupPoOM">
+    <h3 style="color:var(--primary);margin-bottom:12px;">Otkupljene količine po stanicama</h3>
+    <div id="mgmtOtkupPoOMList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
+</div>
+
+<!-- TAB: MGMT PREDATO PO KUPCU -->
+<div class="tab-content" id="tab-mgmtPredato">
+    <h3 style="color:var(--primary);margin-bottom:12px;">Predate količine po kupcima</h3>
+    <div id="mgmtPredatoList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
+</div>
 <!-- ==================== VOZAC TABS ==================== -->
 
 <div class="tab-content" id="tab-zbirna"><p style="text-align:center;color:var(--text-muted);padding:40px;">Zbirna modul - u pripremi</p></div>
@@ -1448,6 +1461,98 @@ async function loadMgmtKupci() {
             <div class="qi-detail">Fakturisano: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} | Placeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div></div>`;
     }).join('');
 }
+
+async function loadMgmtOtkupPoOM() {
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtOtkupPoOM');
+        if (json && json.success && json.records) records = json.records;
+    } catch (e) {}
+    
+    const list = document.getElementById('mgmtOtkupPoOMList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
+    
+    // Grupisano po stanici
+    const grouped = {};
+    records.forEach(r => {
+        const s = r.StanicaID || '?';
+        if (!grouped[s]) grouped[s] = { items: [], totalKg: 0, totalAmb: 0, totalVr: 0 };
+        const kg = parseFloat(r.Kolicina) || 0;
+        const amb = parseFloat(r.Ambalaza) || 0;
+        const vr = parseFloat(r.Vrednost) || 0;
+        grouped[s].items.push(r);
+        grouped[s].totalKg += kg;
+        grouped[s].totalAmb += amb;
+        grouped[s].totalVr += vr;
+    });
+    
+    list.innerHTML = Object.entries(grouped).map(([stanica, g]) => `
+        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                <strong style="color:var(--primary);font-size:16px;">${stanica}</strong>
+                <span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+                Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD
+            </div>
+            ${g.items.map(r => {
+                const kg = parseFloat(r.Kolicina)||0;
+                const amb = parseFloat(r.Ambalaza)||0;
+                const vr = parseFloat(r.Vrednost)||0;
+                const cnt = r.BrojOtkupa||0;
+                return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;">
+                    <span>${r.VrstaVoca} ${r.Klasa}</span>
+                    <span>${kg.toLocaleString('sr')} kg | Amb: ${amb.toLocaleString('sr')} | ${vr.toLocaleString('sr')} RSD | ${cnt} otk.</span>
+                </div>`;
+            }).join('')}
+        </div>`).join('');
+}
+
+async function loadMgmtPredato() {
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtPredatoPoKupcu');
+        if (json && json.success && json.records) records = json.records;
+    } catch (e) {}
+    
+    const list = document.getElementById('mgmtPredatoList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
+    
+    // Grupisano po kupcu (KupacID kolona sadrži naziv jer VBA zamenjuje)
+    const grouped = {};
+    records.forEach(r => {
+        const k = r.KupacID || '?';
+        if (!grouped[k]) grouped[k] = { items: [], totalKg: 0, totalAmb: 0, totalVr: 0 };
+        const kg = parseFloat(r.Kolicina) || 0;
+        const amb = parseFloat(r.Ambalaza) || 0;
+        const vr = parseFloat(r.Vrednost) || 0;
+        grouped[k].items.push(r);
+        grouped[k].totalKg += kg;
+        grouped[k].totalAmb += amb;
+        grouped[k].totalVr += vr;
+    });
+    
+    list.innerHTML = Object.entries(grouped).map(([kupac, g]) => `
+        <div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--accent);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                <strong style="color:var(--primary);font-size:16px;">${kupac}</strong>
+                <span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+                Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD
+            </div>
+            ${g.items.map(r => {
+                const kg = parseFloat(r.Kolicina)||0;
+                const amb = parseFloat(r.Ambalaza)||0;
+                const vr = parseFloat(r.Vrednost)||0;
+                const cnt = r.BrojPrijemnica||0;
+                return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;">
+                    <span>${r.VrstaVoca} ${r.Klasa}</span>
+                    <span>${kg.toLocaleString('sr')} kg | Amb: ${amb.toLocaleString('sr')} | ${vr.toLocaleString('sr')} RSD | ${cnt} prij.</span>
+                </div>`;
+            }).join('')}
+        </div>`).join('');
+}
     
 // ============================================================
 // UI UPDATES
@@ -1466,6 +1571,8 @@ function showTab(tabName) {
     if (tabName === 'koopinfo') loadKoopInfo();
     if (tabName === 'mgmtSaldoOM') loadMgmtSaldoOM();
     if (tabName === 'mgmtKupci') loadMgmtKupci();
+    if (tabName === 'mgmtOtkupPoOM') loadMgmtOtkupPoOM();
+    if (tabName === 'mgmtPredato') loadMgmtPredato();
 }
 async function updateSyncBadge(status) {
     const badge = document.getElementById('syncBadge');
