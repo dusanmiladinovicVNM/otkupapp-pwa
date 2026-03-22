@@ -278,6 +278,11 @@
     <button class="tab-btn role-kooperant" onclick="showTab('koopinfo')">Info</button>
     <button class="tab-btn role-vozac" onclick="showTab('zbirna')">Zbirna</button>
     <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
+    <!-- Management Tabs -->
+    <button class="tab-btn role-management" onclick="showTab('mgmtKartica')">Kartica</button>
+    <button class="tab-btn role-management" onclick="showTab('mgmtOtkupi')">Otkupi</button>
+    <button class="tab-btn role-management" onclick="showTab('mgmtSaldoOM')">Saldo OM</button>
+    <button class="tab-btn role-management" onclick="showTab('mgmtKupci')">Kupci</button>
 </div>
  
 <!-- TAB: NOVI OTKUP -->
@@ -424,11 +429,11 @@
         <select id="fldAgroParcela"><option value="">-- Izaberi parcelu --</option></select>
     </div>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Izaberite izvršenu meru:</p>
-    <button class="agro-btn" onclick="selectMera(this,'Zastita')">🛡️ Zaštita (Pflanzenschutz)</button>
-    <button class="agro-btn" onclick="selectMera(this,'Prihrana')">🌱 Prihrana (Düngung)</button>
-    <button class="agro-btn" onclick="selectMera(this,'Rezidba')">✂️ Rezidba (Schnitt)</button>
-    <button class="agro-btn" onclick="selectMera(this,'Zalivanje')">💧 Zalivanje (Bewässerung)</button>
-    <button class="agro-btn" onclick="selectMera(this,'Berba')">🍎 Berba (Ernte)</button>
+    <button class="agro-btn" onclick="selectMera(this,'Zastita')">🛡️ Zaštita </button>
+    <button class="agro-btn" onclick="selectMera(this,'Prihrana')">🌱 Prihrana </button>
+    <button class="agro-btn" onclick="selectMera(this,'Rezidba')">✂️ Rezidba </button>
+    <button class="agro-btn" onclick="selectMera(this,'Zalivanje')">💧 Zalivanje </button>
+    <button class="agro-btn" onclick="selectMera(this,'Berba')">🍎 Berba </button>
     <div class="form-group" style="margin-top:12px;"><label>Napomena (opciono)</label><input type="text" id="fldAgroNapomena" placeholder="Detalji..."></div>
     <button class="btn-primary" onclick="saveAgromera()">SAČUVAJ MERU</button>
     <h3 style="margin-top:20px;margin-bottom:10px;color:var(--primary);font-size:14px;">Istorija mera</h3>
@@ -440,6 +445,63 @@
     <div id="koopInfoContent"></div>
 </div>
 
+<!-- ==================== MANAGEMENT TABS ==================== -->
+
+<!-- TAB: MGMT KARTICA (Kaskade: Stanica → Kooperant → Kartica) -->
+<div class="tab-content" id="tab-mgmtKartica">
+    <div class="form-group">
+        <label>Otkupna stanica</label>
+        <select id="mgmtStanica" onchange="onMgmtStanicaChange()"><option value="">-- Izaberi stanicu --</option></select>
+    </div>
+    <div class="form-group">
+        <label>Kooperant</label>
+        <select id="mgmtKooperant" onchange="onMgmtKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select>
+    </div>
+    <div id="mgmtKarticaHeader" style="display:none;">
+        <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
+            <div style="font-size:18px;font-weight:700;" id="mgmtKarticaName"></div>
+            <div style="font-size:12px;opacity:0.8;" id="mgmtKarticaID"></div>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value" id="mgmtKarticaZad">0</div><div class="stat-label">Zaduženje</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtKarticaRaz">0</div><div class="stat-label">Razduženje</div></div>
+            <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="mgmtKarticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
+        </div>
+    </div>
+    <div id="mgmtKarticaList"></div>
+</div>
+
+<!-- TAB: MGMT OTKUPI PO STANICAMA -->
+<div class="tab-content" id="tab-mgmtOtkupi">
+    <div class="form-group">
+        <label>Otkupna stanica</label>
+        <select id="mgmtOtkupiStanica" onchange="loadMgmtOtkupi()"><option value="">-- Izaberi stanicu --</option></select>
+    </div>
+    <div class="form-row" style="margin-bottom:12px;">
+        <div class="form-group"><label>Od</label><input type="date" id="mgmtOtkupiOd" onchange="loadMgmtOtkupi()"></div>
+        <div class="form-group"><label>Do</label><input type="date" id="mgmtOtkupiDo" onchange="loadMgmtOtkupi()"></div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiCount">0</div><div class="stat-label">Otkupa</div></div>
+        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKg">0</div><div class="stat-label">Ukupno kg</div></div>
+        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiVrednost">0</div><div class="stat-label">Vrednost</div></div>
+        <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKoop">0</div><div class="stat-label">Kooperanata</div></div>
+    </div>
+    <div id="mgmtOtkupiList"></div>
+</div>
+
+<!-- TAB: MGMT SALDO OM -->
+<div class="tab-content" id="tab-mgmtSaldoOM">
+    <h3 style="color:var(--primary);margin-bottom:12px;">Saldo otkupnih mesta</h3>
+    <div id="mgmtSaldoOMList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
+</div>
+
+<!-- TAB: MGMT KUPCI -->
+<div class="tab-content" id="tab-mgmtKupci">
+    <h3 style="color:var(--primary);margin-bottom:12px;">Saldo kupaca</h3>
+    <div id="mgmtKupciList"><p style="text-align:center;color:var(--text-muted);padding:40px;">Učitavanje...</p></div>
+</div>
+    
 <!-- ==================== VOZAC TABS ==================== -->
 
 <div class="tab-content" id="tab-zbirna"><p style="text-align:center;color:var(--text-muted);padding:40px;">Zbirna modul - u pripremi</p></div>
@@ -502,6 +564,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         populateAgroParcele();
     }
 
+    if (CONFIG.USER_ROLE === 'Management') {
+        populateMgmtStanice();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('mgmtOtkupiOd').value = today;
+        document.getElementById('mgmtOtkupiDo').value = today;
+    }
+    
     updateSyncBadge();
     window.addEventListener('online', () => { updateSyncBadge(); if (CONFIG.USER_ROLE === 'Otkupac') syncQueue(); });
     window.addEventListener('offline', () => updateSyncBadge());
@@ -590,6 +659,7 @@ function applyRoleVisibility() {
     document.querySelectorAll('.role-otkupac').forEach(el => el.style.display = (role === 'Otkupac') ? '' : 'none');
     document.querySelectorAll('.role-kooperant').forEach(el => el.style.display = (role === 'Kooperant') ? '' : 'none');
     document.querySelectorAll('.role-vozac').forEach(el => el.style.display = (role === 'Vozac') ? '' : 'none');
+    document.querySelectorAll('.role-management').forEach(el => el.style.display = (role === 'Management') ? '' : 'none');
     const firstBtn = document.querySelector('.tab-btn:not([style*="none"])');
     if (firstBtn) firstBtn.click();
 }
@@ -1228,6 +1298,156 @@ async function loadKoopInfo() {
             </table>
         </div>`;
 }
+
+// ============================================================
+// MANAGEMENT
+// ============================================================
+function populateMgmtStanice() {
+    const stanice = new Set();
+    (stammdaten.kooperanti || []).forEach(k => { if (k.StanicaID) stanice.add(k.StanicaID); });
+    
+    ['mgmtStanica', 'mgmtOtkupiStanica'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        sel.innerHTML = '<option value="">-- Izaberi stanicu --</option>';
+        stanice.forEach(s => {
+            const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+        });
+    });
+}
+
+function onMgmtStanicaChange() {
+    const stanicaID = document.getElementById('mgmtStanica').value;
+    const sel = document.getElementById('mgmtKooperant');
+    sel.innerHTML = '<option value="">-- Izaberi kooperanta --</option>';
+    document.getElementById('mgmtKarticaHeader').style.display = 'none';
+    document.getElementById('mgmtKarticaList').innerHTML = '';
+    
+    if (!stanicaID) return;
+    
+    (stammdaten.kooperanti || []).filter(k => k.StanicaID === stanicaID).forEach(k => {
+        const o = document.createElement('option');
+        o.value = k.KooperantID;
+        o.textContent = k.Ime + ' ' + k.Prezime + ' (' + k.KooperantID + ')';
+        sel.appendChild(o);
+    });
+}
+
+async function onMgmtKooperantChange() {
+    const koopID = document.getElementById('mgmtKooperant').value;
+    if (!koopID) {
+        document.getElementById('mgmtKarticaHeader').style.display = 'none';
+        document.getElementById('mgmtKarticaList').innerHTML = '';
+        return;
+    }
+    
+    const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
+    document.getElementById('mgmtKarticaName').textContent = koop ? koop.Ime + ' ' + koop.Prezime : koopID;
+    document.getElementById('mgmtKarticaID').textContent = koopID;
+    document.getElementById('mgmtKarticaHeader').style.display = 'block';
+    
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
+        if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
+    } catch (e) {}
+    
+    if (records.length === 0) {
+        document.getElementById('mgmtKarticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
+        ['mgmtKarticaZad','mgmtKarticaRaz','mgmtKarticaSaldo'].forEach(id => document.getElementById(id).textContent = '0');
+        return;
+    }
+    
+    let zad = 0, raz = 0;
+    document.getElementById('mgmtKarticaList').innerHTML = records.map(r => {
+        const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
+        zad += z; raz += ra;
+        return `<div class="queue-item" style="border-left-color:${z>0?'var(--danger)':'var(--success)'};">
+            <div class="qi-header"><span class="qi-koop">${r.BrojDok||''}</span><span class="qi-time">${fmtDate(r.Datum)}</span></div>
+            <div class="qi-detail">${r.Opis||''}</div>
+            <div class="qi-detail" style="font-size:12px;margin-top:2px;">
+                ${z>0?'<span style="color:var(--danger);">Zaduž: '+z.toLocaleString('sr')+'</span> ':''}
+                ${ra>0?'<span style="color:var(--success);">Razduž: '+ra.toLocaleString('sr')+'</span> ':''}
+                | Saldo: <strong>${s.toLocaleString('sr')}</strong></div></div>`;
+    }).join('');
+    document.getElementById('mgmtKarticaZad').textContent = zad.toLocaleString('sr');
+    document.getElementById('mgmtKarticaRaz').textContent = raz.toLocaleString('sr');
+    document.getElementById('mgmtKarticaSaldo').textContent = (zad - raz).toLocaleString('sr');
+}
+
+async function loadMgmtOtkupi() {
+    const stanicaID = document.getElementById('mgmtOtkupiStanica').value;
+    if (!stanicaID) { document.getElementById('mgmtOtkupiList').innerHTML = ''; return; }
+    
+    const od = document.getElementById('mgmtOtkupiOd').value;
+    const doo = document.getElementById('mgmtOtkupiDo').value;
+    
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtOtkupiByStanica&stanicaID=' + encodeURIComponent(stanicaID));
+        if (json && json.success && json.records) records = json.records.map(r => ({
+            datum: fmtDate(r.Datum), kooperantName: r.KooperantName||r.KooperantID||'',
+            vrstaVoca: r.VrstaVoca||'', klasa: r.Klasa||'I',
+            kolicina: parseFloat(r.Kolicina)||0, cena: parseFloat(r.Cena)||0,
+            kolAmbalaze: parseInt(r.KolAmbalaze)||0, parcelaID: r.ParcelaID||'',
+            syncStatus: r.SyncStatus||''
+        }));
+    } catch (e) {}
+    
+    if (od) records = records.filter(r => r.datum >= od);
+    if (doo) records = records.filter(r => r.datum <= doo);
+    records.sort((a, b) => b.datum.localeCompare(a.datum));
+    
+    const kg = records.reduce((s, r) => s + (r.kolicina||0), 0);
+    const vr = records.reduce((s, r) => s + (r.kolicina||0)*(r.cena||0), 0);
+    document.getElementById('mgmtOtkupiCount').textContent = records.length;
+    document.getElementById('mgmtOtkupiKg').textContent = kg.toLocaleString('sr');
+    document.getElementById('mgmtOtkupiVrednost').textContent = vr.toLocaleString('sr');
+    document.getElementById('mgmtOtkupiKoop').textContent = new Set(records.map(r => r.kooperantName)).size;
+    
+    const list = document.getElementById('mgmtOtkupiList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otkupa</p>'; return; }
+    list.innerHTML = records.map(r => {
+        const v = ((r.kolicina||0)*(r.cena||0)).toLocaleString('sr');
+        return `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
+            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong></div></div>`;
+    }).join('');
+}
+
+async function loadMgmtSaldoOM() {
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtSaldoOM');
+        if (json && json.success && json.records) records = json.records;
+    } catch (e) {}
+    
+    const list = document.getElementById('mgmtSaldoOMList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
+    list.innerHTML = records.map(r => {
+        const saldo = parseFloat(r.Saldo)||0;
+        const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
+        return `<div class="queue-item" style="border-left-color:${bc};">
+            <div class="qi-header"><span class="qi-koop">${r.Stanica||r.StanicaID||''}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-detail">${r.Opis||'Avans: '+(r.Avans||0)+' | Isplaceno: '+(r.Isplaceno||0)}</div></div>`;
+    }).join('');
+}
+
+async function loadMgmtKupci() {
+    let records = [];
+    try {
+        const json = await apiFetch('action=getMgmtSaldoKupci');
+        if (json && json.success && json.records) records = json.records;
+    } catch (e) {}
+    
+    const list = document.getElementById('mgmtKupciList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka. Pokrenite ExportMgmtReports iz Excela.</p>'; return; }
+    list.innerHTML = records.map(r => {
+        const saldo = parseFloat(r.Saldo)||0;
+        const bc = saldo > 0 ? 'var(--danger)' : 'var(--success)';
+        return `<div class="queue-item" style="border-left-color:${bc};">
+            <div class="qi-header"><span class="qi-koop">${r.Kupac||r.KupacID||''}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-detail">Fakturisano: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} | Placeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div></div>`;
+    }).join('');
+}
     
 // ============================================================
 // UI UPDATES
@@ -1244,6 +1464,8 @@ function showTab(tabName) {
     if (tabName === 'parcele') loadParcele();
     if (tabName === 'agromere') loadAgromereList();
     if (tabName === 'koopinfo') loadKoopInfo();
+    if (tabName === 'mgmtSaldoOM') loadMgmtSaldoOM();
+    if (tabName === 'mgmtKupci') loadMgmtKupci();
 }
 async function updateSyncBadge(status) {
     const badge = document.getElementById('syncBadge');
