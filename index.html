@@ -257,6 +257,14 @@
         <div id="mgmtKoopSaldoList"></div>
     </div>
 
+     <div class="mgmt-sub sub-content" id="mgmt-koop-pregled">
+        <div class="form-group">
+            <label>Otkupna stanica</label>
+            <select id="mgmtPregledStanica" onchange="renderMgmtKoopPregled()"><option value="">-- Sve stanice --</option></select>
+        </div>
+        <div id="mgmtKoopPregledList"></div>
+    </div>
+
     <!-- === STANICE sub-contenti === -->
     <div class="mgmt-sub sub-content" id="mgmt-sta-otkupi">
         <div class="form-group"><label>Otkupna stanica</label><select id="mgmtOtkupiStanica" onchange="loadMgmtOtkupi()"><option value="">-- Izaberi stanicu --</option></select></div>
@@ -282,6 +290,7 @@
         <h3 style="color:var(--primary);margin-bottom:12px;">Otkupljene količine po stanicama</h3>
         <div id="mgmtOtkupPoOMList"></div>
     </div>
+    
 
     <!-- === KUPCI sub-contenti === -->
     <div class="mgmt-sub sub-content" id="mgmt-kup-fakture">
@@ -353,6 +362,7 @@ const MGMT_SUBS = {
     kooperanti: [
         { id: 'koop-kartica', label: 'Kartica', load: null },
         { id: 'koop-saldo', label: 'Saldo', load: loadMgmtKoopSaldo }
+        { id: 'koop-pregled', label: 'Pregled', load: loadMgmtKoopPregled }
     ],
     stanice: [
         { id: 'sta-otkupi', label: 'Otkupi', load: null },
@@ -1166,6 +1176,67 @@ function loadMgmtKoopSaldo() {
     }).join('');
 }
 
+function loadMgmtKoopPregled() {
+    // Popuni dropdown stanica
+    const sel = document.getElementById('mgmtPregledStanica');
+    if (sel.options.length <= 1) {
+        const stanice = new Set();
+        const data = (mgmtData && mgmtData.saldoOMDetail) ? mgmtData.saldoOMDetail : [];
+        data.forEach(r => { if (r.StanicaID) stanice.add(r.StanicaID); });
+        stanice.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+    }
+    renderMgmtKoopPregled();
+}
+
+function renderMgmtKoopPregled() {
+    const stanicaFilter = document.getElementById('mgmtPregledStanica').value;
+    let records = (mgmtData && mgmtData.saldoOMDetail) ? mgmtData.saldoOMDetail : [];
+    if (stanicaFilter) records = records.filter(r => r.StanicaID === stanicaFilter);
+    
+    const list = document.getElementById('mgmtKoopPregledList');
+    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
+    
+    // Sortiraj po stanici pa po imenu
+    records.sort((a, b) => (a.StanicaID||'').localeCompare(b.StanicaID||'') || (a.Kooperant||'').localeCompare(b.Kooperant||''));
+    
+    // Totali
+    let totKg = 0, totVr = 0, totIsp = 0, totAgro = 0, totSaldo = 0, totAmb = 0;
+    records.forEach(r => {
+        totKg += parseFloat(r.Kolicina)||0; totVr += parseFloat(r.Vrednost)||0;
+        totIsp += parseFloat(r.Isplaceno)||0; totAgro += parseFloat(r.AgroZaduzenje)||0;
+        totSaldo += parseFloat(r.Saldo)||0; totAmb += parseFloat(r.Ambalaza)||0;
+    });
+    
+    list.innerHTML = `
+        <div class="stats-grid" style="margin-bottom:12px;">
+            <div class="stat-card"><div class="stat-value" style="font-size:20px;">${totKg.toLocaleString('sr')}</div><div class="stat-label">Ukupno kg</div></div>
+            <div class="stat-card"><div class="stat-value" style="font-size:20px;">${totVr.toLocaleString('sr')}</div><div class="stat-label">Vrednost</div></div>
+            <div class="stat-card"><div class="stat-value" style="font-size:20px;">${totIsp.toLocaleString('sr')}</div><div class="stat-label">Isplaćeno</div></div>
+            <div class="stat-card"><div class="stat-value" style="font-size:20px;">${totSaldo.toLocaleString('sr')}</div><div class="stat-label">Saldo</div></div>
+        </div>
+        ${records.map(r => {
+            const kg = parseFloat(r.Kolicina)||0;
+            const vr = parseFloat(r.Vrednost)||0;
+            const isp = parseFloat(r.Isplaceno)||0;
+            const agro = parseFloat(r.AgroZaduzenje)||0;
+            const saldo = parseFloat(r.Saldo)||0;
+            const amb = parseFloat(r.Ambalaza)||0;
+            const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
+            return `<div class="queue-item" style="border-left-color:${bc};">
+                <div class="qi-header"><span class="qi-koop">${r.Kooperant||r.KooperantID}</span><span class="qi-time">${r.StanicaID||''}</span></div>
+                <div class="qi-detail">
+                    ${kg.toLocaleString('sr')} kg | Vrednost: ${vr.toLocaleString('sr')}
+                </div>
+                <div class="qi-detail" style="font-size:12px;margin-top:2px;">
+                    Isplaćeno: ${isp.toLocaleString('sr')} | Agro: ${agro.toLocaleString('sr')} | Amb: ${amb.toLocaleString('sr')}
+                </div>
+                <div class="qi-detail" style="font-size:13px;margin-top:4px;font-weight:600;">
+                    Saldo: <span style="color:${saldo>0?'var(--danger)':'var(--success)'};">${saldo.toLocaleString('sr')} RSD</span>
+                </div>
+            </div>`;
+        }).join('')}`;
+}
+    
 // ============================================================
 // MANAGEMENT: STANICE
 // ============================================================
