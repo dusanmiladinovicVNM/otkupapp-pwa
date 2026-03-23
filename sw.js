@@ -1,8 +1,8 @@
-const CACHE_NAME = 'otkupapp-v35';
+const CACHE_NAME = 'otkupapp-v36';
 const ASSETS = [
     './index.html',
     './manifest.json',
-    'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
+    'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js'
 ];
 
