@@ -9,6 +9,7 @@
     
     <!-- html5-qrcode library -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
     
     <style>
         :root {
@@ -918,7 +919,6 @@ async function saveOtkupniListWithSignatures(clientRecordID) {
 }
 
 async function savePdfToDrive(clientRecordID) {
-    // Uzmi record iz IndexedDB
     const record = await new Promise((resolve) => {
         const tx = db.transaction(CONFIG.STORE_NAME, 'readonly');
         const req = tx.objectStore(CONFIG.STORE_NAME).get(clientRecordID);
@@ -935,37 +935,136 @@ async function savePdfToDrive(clientRecordID) {
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
 
-    const pdfData = {
-        action: 'saveOtkupniListPdf',
-        token: CONFIG.TOKEN,
-        fileName: 'OtkupniList_' + record.kooperantID + '_' + record.datum + '_' + clientRecordID.substring(0, 8),
-        firma: {
-            naziv: gv('SELLER_NAME'), ulica: gv('SELLER_STREET'), grad: gv('SELLER_CITY'),
-            pib: gv('SELLER_PIB'), mb: gv('SELLER_MATICNI_BROJ'),
-            racun: gv('SELLER_ACCOUNT'), posta: gv('SELLER_POSTAL_CODE')
-        },
-        kooperant: {
-            ime: (koop.Ime || '') + ' ' + (koop.Prezime || ''),
-            adresa: (koop.Adresa || '') + ', ' + (koop.Mesto || ''),
-            jmbg: koop.JMBG || '', bpg: koop.BPGBroj || ''
-        },
-        otkup: {
-            datum: record.datum, vrsta: record.vrstaVoca, sorta: record.sortaVoca || '',
-            klasa: record.klasa, kolicina: record.kolicina, cena: record.cena,
-            vrednost: vrednostNum, pdvStopa: pdvStopa, pdvIznos: pdvIznos, ukupno: ukupno,
-            ambalaza: record.kolAmbalaze, parcela: record.parcelaID || '',
-            rokIsplate: gv('OtkupRokIsplate') || 'Po dogovoru'
-        },
-        sigOtkupac: record.sigOtkupac || '',
-        sigKooperant: record.sigKooperant || ''
-    };
-        showToast('Čuvanje PDF-a...', 'info');
+    showToast('Generisanje PDF-a...', 'info');
 
     try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ format: 'a5', unit: 'mm' });
+        const w = doc.internal.pageSize.getWidth();
+        let y = 10;
+
+        // --- ZAGLAVLJE FIRME ---
+        doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
+        doc.text(gv('SELLER_NAME'), w / 2, y, { align: 'center' });
+        y += 5;
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text(gv('SELLER_STREET') + ', ' + gv('SELLER_CITY') + ' ' + gv('SELLER_POSTAL_CODE'), w / 2, y, { align: 'center' });
+        y += 4;
+        doc.text('PIB: ' + gv('SELLER_PIB') + ' | MB: ' + gv('SELLER_MATICNI_BROJ'), w / 2, y, { align: 'center' });
+        y += 4;
+        doc.text('TR: ' + gv('SELLER_ACCOUNT'), w / 2, y, { align: 'center' });
+        y += 3;
+        doc.setLineWidth(0.5);
+        doc.line(10, y, w - 10, y);
+        y += 6;
+
+        // --- NASLOV ---
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('OTKUPNI LIST', w / 2, y, { align: 'center' });
+        y += 7;
+
+        // --- KOOPERANT ---
+        doc.setFillColor(240, 240, 234);
+        doc.rect(10, y, w - 20, 14, 'F');
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text((koop.Ime || '') + ' ' + (koop.Prezime || ''), 12, y + 4);
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text((koop.Adresa || '') + ', ' + (koop.Mesto || ''), 12, y + 8);
+        doc.text('JMBG: ' + (koop.JMBG || '________') + '  |  BPG: ' + (koop.BPGBroj || '________'), 12, y + 12);
+        y += 18;
+
+        // --- TABELA ---
+        const lx = 12;
+        const vx = 60;
+        doc.setFontSize(9);
+
+        function addRow(label, value, bold, line) {
+            if (line) { doc.setLineWidth(0.3); doc.line(lx, y, w - 12, y); y += 1; }
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(100);
+            doc.text(label, lx, y + 4);
+            doc.setTextColor(0);
+            if (bold) doc.setFont(undefined, 'bold');
+            doc.text(String(value), vx, y + 4);
+            doc.setFont(undefined, 'normal');
+            y += 6;
+        }
+
+        addRow('Datum:', record.datum, true, false);
+        addRow('Proizvod:', record.vrstaVoca + ' ' + (record.sortaVoca || ''), false, false);
+        addRow('Klasa:', record.klasa, false, false);
+        addRow('Količina:', record.kolicina + ' kg', true, false);
+        addRow('Cena:', record.cena + ' RSD/kg', false, false);
+        addRow('Vrednost:', vrednostNum.toLocaleString('sr') + ' RSD', true, true);
+        if (pdvStopa > 0) {
+            addRow('PDV naknada (' + pdvStopa + '%):', pdvIznos.toLocaleString('sr') + ' RSD', false, false);
+        }
+        // ZA ISPLATU
+        doc.setLineWidth(0.5);
+        doc.line(lx, y, w - 12, y);
+        y += 1;
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(100);
+        doc.text('ZA ISPLATU:', lx, y + 5);
+        doc.setTextColor(0);
+        doc.text(ukupno.toLocaleString('sr') + ' RSD', vx, y + 5);
+        y += 8;
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+
+        addRow('Ambalaža:', record.kolAmbalaze + ' kom', false, false);
+        if (record.parcelaID) addRow('Parcela:', record.parcelaID, false, false);
+        addRow('Rok isplate:', gv('OtkupRokIsplate') || 'Po dogovoru', false, false);
+
+        y += 4;
+
+        // --- POTPISI ---
+        const sigW = (w - 30) / 2;
+        const sigH = 20;
+
+        doc.setFontSize(7);
+        doc.setTextColor(100);
+        doc.text('Potpis otkupljivača:', 12, y);
+        doc.text('Potpis kooperanta:', 17 + sigW, y);
+        y += 2;
+
+        doc.setDrawColor(200);
+        doc.rect(12, y, sigW, sigH);
+        doc.rect(17 + sigW, y, sigW, sigH);
+
+        if (record.sigOtkupac) {
+            try { doc.addImage(record.sigOtkupac, 'PNG', 12, y, sigW, sigH); } catch (e) {}
+        }
+        if (record.sigKooperant) {
+            try { doc.addImage(record.sigKooperant, 'PNG', 17 + sigW, y, sigW, sigH); } catch (e) {}
+        }
+
+        y += sigH + 5;
+
+        // --- FOOTER ---
+        doc.setFontSize(6);
+        doc.setTextColor(150);
+        doc.text('Generisano: ' + new Date().toISOString().substring(0, 19).replace('T', ' '), w / 2, y, { align: 'center' });
+
+        // --- UPLOAD NA DRIVE ---
+        const pdfBase64 = doc.output('datauristring').split(',')[1];
+        const fileName = 'OtkupniList_' + record.kooperantID + '_' + record.datum + '_' + clientRecordID.substring(0, 8);
+
         const resp = await fetch(CONFIG.API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(pdfData)
+            body: JSON.stringify({
+                action: 'uploadPdf',
+                token: CONFIG.TOKEN,
+                fileName: fileName,
+                pdfBase64: pdfBase64
+            })
         });
         const json = await resp.json();
         if (json.success) {
@@ -974,7 +1073,8 @@ async function savePdfToDrive(clientRecordID) {
             showToast('Greška: ' + (json.error || ''), 'error');
         }
     } catch (e) {
-        showToast('Nema konekcije', 'error');
+        console.log('PDF error:', e);
+        showToast('Greška pri generisanju PDF-a', 'error');
     }
 }
 // ============================================================
