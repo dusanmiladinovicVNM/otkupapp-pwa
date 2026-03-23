@@ -103,6 +103,17 @@
         /* AGRO */
         .agro-btn { display: block; width: 100%; padding: 14px; margin-bottom: 8px; border: 2px solid var(--border); border-radius: var(--radius); background: white; font-size: 16px; text-align: left; cursor: pointer; }
         .agro-btn.selected { border-color: var(--primary); background: #e8f5e9; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #otkupniListModal, #otkupniListModal * { visibility: visible; }
+            #otkupniListModal { position: absolute; left: 0; top: 0; width: 100%; }
+            #otkupniListModal button { display: none !important; }
+            @page {
+                size: A5 portrait;
+                margin: 8mm;
+            }
+        }
     </style>
 </head>
 <body>
@@ -837,7 +848,8 @@ function showOtkupniList(record) {
             <button onclick="saveOtkupniListWithSignatures('${record.clientRecordID}')" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">Potvrdi</button>
             <button onclick="window.print()" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">Štampaj</button>
         </div>
-        <button onclick="document.getElementById('otkupniListModal').style.display='none'" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
+        <button onclick="savePdfToDrive('${record.clientRecordID}')" style="width:100%;padding:12px;margin-top:8px;font-size:14px;background:#2196F3;color:white;border:none;border-radius:8px;">📄 Sačuvaj PDF na Drive</button>
+        <button onclick="document.getElementById('otkupniListModal').style.display='none'" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>Zatvori</button>
     </div>`;
     modal.style.display = 'block';
     setTimeout(() => { initSignaturePad('sigOtkupac'); initSignaturePad('sigKooperant'); }, 100);
@@ -887,6 +899,66 @@ async function saveOtkupniListWithSignatures(clientRecordID) {
     document.getElementById('otkupniListModal').style.display = 'none';
 }
 
+async function savePdfToDrive(clientRecordID) {
+    // Uzmi record iz IndexedDB
+    const record = await new Promise((resolve) => {
+        const tx = db.transaction(CONFIG.STORE_NAME, 'readonly');
+        const req = tx.objectStore(CONFIG.STORE_NAME).get(clientRecordID);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+    });
+    if (!record) { showToast('Zapis nije pronađen', 'error'); return; }
+
+    const config = stammdaten.config || [];
+    const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
+    const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === record.kooperantID) || {};
+    const vrednostNum = record.kolicina * record.cena;
+    const pdvStopa = parseFloat(gv('OtkupPDVStopa')) || 8;
+    const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
+    const ukupno = vrednostNum + pdvIznos;
+
+    const pdfData = {
+        action: 'saveOtkupniListPdf',
+        token: CONFIG.TOKEN,
+        fileName: 'OtkupniList_' + record.kooperantID + '_' + record.datum + '_' + clientRecordID.substring(0, 8),
+        firma: {
+            naziv: gv('SELLER_NAME'), ulica: gv('SELLER_STREET'), grad: gv('SELLER_CITY'),
+            pib: gv('SELLER_PIB'), mb: gv('SELLER_MATICNI_BROJ'),
+            racun: gv('SELLER_ACCOUNT'), posta: gv('SELLER_POSTAL_CODE')
+        },
+        kooperant: {
+            ime: (koop.Ime || '') + ' ' + (koop.Prezime || ''),
+            adresa: (koop.Adresa || '') + ', ' + (koop.Mesto || ''),
+            jmbg: koop.JMBG || '', bpg: koop.BPGBroj || ''
+        },
+        otkup: {
+            datum: record.datum, vrsta: record.vrstaVoca, sorta: record.sortaVoca || '',
+            klasa: record.klasa, kolicina: record.kolicina, cena: record.cena,
+            vrednost: vrednostNum, pdvStopa: pdvStopa, pdvIznos: pdvIznos, ukupno: ukupno,
+            ambalaza: record.kolAmbalaze, parcela: record.parcelaID || '',
+            rokIsplate: gv('OtkupRokIsplate') || 'Po dogovoru'
+        },
+        sigOtkupac: record.sigOtkupac || '',
+        sigKooperant: record.sigKooperant || ''
+    };
+        showToast('Čuvanje PDF-a...', 'info');
+
+    try {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(pdfData)
+        });
+        const json = await resp.json();
+        if (json.success) {
+            showToast('PDF sačuvan na Drive!', 'success');
+        } else {
+            showToast('Greška: ' + (json.error || ''), 'error');
+        }
+    } catch (e) {
+        showToast('Nema konekcije', 'error');
+    }
+}
 // ============================================================
 // SYNC
 // ============================================================
