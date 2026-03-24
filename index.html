@@ -935,12 +935,16 @@ async function savePdfToDrive(clientRecordID) {
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
 
+    // Uzmi potpise direktno sa canvas-a (ako je modal otvoren)
+    let sigOtkupac = getSignatureData('sigOtkupac') || (record.sigOtkupac || '');
+    let sigKooperant = getSignatureData('sigKooperant') || (record.sigKooperant || '');
+    
     showToast('Generisanje PDF-a...', 'info');
-
+    
     try {
-        const { jsPDF } = window.jspdf;
+        const jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        if (!jsPDF) { showToast('PDF biblioteka nije učitana', 'error'); return; }
         const doc = new jsPDF({ format: 'a5', unit: 'mm' });
-        const w = doc.internal.pageSize.getWidth();
         let y = 10;
 
         // --- ZAGLAVLJE FIRME ---
@@ -1038,11 +1042,11 @@ async function savePdfToDrive(clientRecordID) {
         doc.rect(12, y, sigW, sigH);
         doc.rect(17 + sigW, y, sigW, sigH);
 
-        if (record.sigOtkupac) {
-            try { doc.addImage(record.sigOtkupac, 'PNG', 12, y, sigW, sigH); } catch (e) {}
+        if (sigOtkupac) {
+            try { doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2); } catch (e) { console.log('sigOtk error:', e); }
         }
-        if (record.sigKooperant) {
-            try { doc.addImage(record.sigKooperant, 'PNG', 17 + sigW, y, sigW, sigH); } catch (e) {}
+        if (sigKooperant) {
+            try { doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2); } catch (e) { console.log('sigKoop error:', e); }
         }
 
         y += sigH + 5;
@@ -1051,6 +1055,9 @@ async function savePdfToDrive(clientRecordID) {
         doc.setFontSize(6);
         doc.setTextColor(150);
         doc.text('Generisano: ' + new Date().toISOString().substring(0, 19).replace('T', ' '), w / 2, y, { align: 'center' });
+
+        console.log('sigOtkupac length:', sigOtkupac.length);
+        console.log('sigKooperant length:', sigKooperant.length);
 
         // --- UPLOAD NA DRIVE ---
         const pdfBase64 = doc.output('datauristring').split(',')[1];
