@@ -1,8 +1,9 @@
-const CACHE_NAME = 'otkupapp-v38';
+const CACHE_NAME = 'otkupapp-v39';
 const ASSETS = [
     './index.html',
     './manifest.json',
-    'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
+    'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+    'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js'
 ];
 
 // Install: cache app shell
