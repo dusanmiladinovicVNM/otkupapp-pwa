@@ -939,6 +939,9 @@ async function savePdfToDrive(clientRecordID) {
     let sigOtkupac = getSignatureData('sigOtkupac') || (record.sigOtkupac || '');
     let sigKooperant = getSignatureData('sigKooperant') || (record.sigKooperant || '');
     
+    console.log('SIG OTK length:', sigOtkupac.length, 'starts:', sigOtkupac.substring(0, 30));
+    console.log('SIG KOOP length:', sigKooperant.length, 'starts:', sigKooperant.substring(0, 30));
+    
     showToast('Generisanje PDF-a...', 'info');
     
     try {
@@ -1043,10 +1046,16 @@ async function savePdfToDrive(clientRecordID) {
         doc.rect(17 + sigW, y, sigW, sigH);
 
         if (sigOtkupac) {
-            try { doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2); } catch (e) { console.log('sigOtk error:', e); }
+            console.log('Adding sigOtkupac to PDF, length:', sigOtkupac.length);
+            try { doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2); console.log('sigOtk added OK'); } catch (e) { console.log('sigOtk ERROR:', e); }
+        } else {
+            console.log('sigOtkupac is EMPTY');
         }
         if (sigKooperant) {
-            try { doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2); } catch (e) { console.log('sigKoop error:', e); }
+            console.log('Adding sigKooperant to PDF, length:', sigKooperant.length);
+            try { doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2); console.log('sigKoop added OK'); } catch (e) { console.log('sigKoop ERROR:', e); }
+        } else {
+            console.log('sigKooperant is EMPTY');
         }
 
         y += sigH + 5;
