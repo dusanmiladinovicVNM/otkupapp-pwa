@@ -935,22 +935,20 @@ async function savePdfToDrive(clientRecordID) {
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
 
-    // Uzmi potpise direktno sa canvas-a (ako je modal otvoren)
     let sigOtkupac = getSignatureData('sigOtkupac') || (record.sigOtkupac || '');
     let sigKooperant = getSignatureData('sigKooperant') || (record.sigKooperant || '');
-    
-    console.log('SIG OTK length:', sigOtkupac.length, 'starts:', sigOtkupac.substring(0, 30));
-    console.log('SIG KOOP length:', sigKooperant.length, 'starts:', sigKooperant.substring(0, 30));
-    
+    console.log('SIG OTK length:', sigOtkupac.length);
+    console.log('SIG KOOP length:', sigKooperant.length);
+
     showToast('Generisanje PDF-a...', 'info');
-    
+
     try {
         const jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
         if (!jsPDF) { showToast('PDF biblioteka nije učitana', 'error'); return; }
         const doc = new jsPDF({ format: 'a5', unit: 'mm' });
+        const w = doc.internal.pageSize.getWidth();
         let y = 10;
 
-        // --- ZAGLAVLJE FIRME ---
         doc.setFontSize(13);
         doc.setFont(undefined, 'bold');
         doc.text(gv('SELLER_NAME'), w / 2, y, { align: 'center' });
@@ -967,13 +965,11 @@ async function savePdfToDrive(clientRecordID) {
         doc.line(10, y, w - 10, y);
         y += 6;
 
-        // --- NASLOV ---
         doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
         doc.text('OTKUPNI LIST', w / 2, y, { align: 'center' });
         y += 7;
 
-        // --- KOOPERANT ---
         doc.setFillColor(240, 240, 234);
         doc.rect(10, y, w - 20, 14, 'F');
         doc.setFontSize(10);
@@ -985,7 +981,6 @@ async function savePdfToDrive(clientRecordID) {
         doc.text('JMBG: ' + (koop.JMBG || '________') + '  |  BPG: ' + (koop.BPGBroj || '________'), 12, y + 12);
         y += 18;
 
-        // --- TABELA ---
         const lx = 12;
         const vx = 60;
         doc.setFontSize(9);
@@ -1011,7 +1006,7 @@ async function savePdfToDrive(clientRecordID) {
         if (pdvStopa > 0) {
             addRow('PDV naknada (' + pdvStopa + '%):', pdvIznos.toLocaleString('sr') + ' RSD', false, false);
         }
-        // ZA ISPLATU
+
         doc.setLineWidth(0.5);
         doc.line(lx, y, w - 12, y);
         y += 1;
@@ -1031,7 +1026,6 @@ async function savePdfToDrive(clientRecordID) {
 
         y += 4;
 
-        // --- POTPISI ---
         const sigW = (w - 30) / 2;
         const sigH = 20;
 
@@ -1046,48 +1040,30 @@ async function savePdfToDrive(clientRecordID) {
         doc.rect(17 + sigW, y, sigW, sigH);
 
         if (sigOtkupac) {
-            console.log('Adding sigOtkupac to PDF, length:', sigOtkupac.length);
-            try { doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2); console.log('sigOtk added OK'); } catch (e) { console.log('sigOtk ERROR:', e); }
-        } else {
-            console.log('sigOtkupac is EMPTY');
+            console.log('Adding sigOtkupac to PDF');
+            try { doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2); console.log('sigOtk OK'); } catch (e) { console.log('sigOtk ERROR:', e); }
         }
         if (sigKooperant) {
-            console.log('Adding sigKooperant to PDF, length:', sigKooperant.length);
-            try { doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2); console.log('sigKoop added OK'); } catch (e) { console.log('sigKoop ERROR:', e); }
-        } else {
-            console.log('sigKooperant is EMPTY');
+            console.log('Adding sigKooperant to PDF');
+            try { doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2); console.log('sigKoop OK'); } catch (e) { console.log('sigKoop ERROR:', e); }
         }
 
         y += sigH + 5;
-
-        // --- FOOTER ---
         doc.setFontSize(6);
         doc.setTextColor(150);
         doc.text('Generisano: ' + new Date().toISOString().substring(0, 19).replace('T', ' '), w / 2, y, { align: 'center' });
 
-        console.log('sigOtkupac length:', sigOtkupac.length);
-        console.log('sigKooperant length:', sigKooperant.length);
-
-        // --- UPLOAD NA DRIVE ---
         const pdfBase64 = doc.output('datauristring').split(',')[1];
         const fileName = 'OtkupniList_' + record.kooperantID + '_' + record.datum + '_' + clientRecordID.substring(0, 8);
 
         const resp = await fetch(CONFIG.API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'uploadPdf',
-                token: CONFIG.TOKEN,
-                fileName: fileName,
-                pdfBase64: pdfBase64
-            })
+            body: JSON.stringify({ action: 'uploadPdf', token: CONFIG.TOKEN, fileName: fileName, pdfBase64: pdfBase64 })
         });
         const json = await resp.json();
-        if (json.success) {
-            showToast('PDF sačuvan na Drive!', 'success');
-        } else {
-            showToast('Greška: ' + (json.error || ''), 'error');
-        }
+        if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
+        else { showToast('Greška: ' + (json.error || ''), 'error'); }
     } catch (e) {
         console.log('PDF error:', e);
         showToast('Greška pri generisanju PDF-a', 'error');
