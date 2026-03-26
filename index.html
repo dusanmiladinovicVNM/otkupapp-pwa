@@ -78,24 +78,42 @@
             cursor: pointer;
         }
 
-        .login-logo {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
+.login-container {
+    min-height: calc(100vh - 60px); /* minus header */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
 
-        .login-logo svg {
-            width: 120px;
-            height: 120px;
-        }
+/* LOGO */
+.login-logo {
+    margin-bottom: 20px;
+}
 
-        .login-title {
-            text-align: center;
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 20px;
-        }
+.login-logo svg {
+    width: 110px;
+    height: 110px;
+}
+
+/* TITLE */
+.login-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 24px;
+}
+
+/* FORM CARD (🔥 important) */
+.login-form {
+    width: 100%;
+    max-width: 340px;
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
         
         /* MAIN TAB BAR */
         .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -210,11 +228,34 @@
     </div>
 </div>
 
-<div class="login-logo">
-  <!-- FULL SVG LOGO HERE -->
-</div>
+<div class="login-container">
 
-<h1 class="login-title">OtkupApp</h1>
+    <!-- LOGO -->
+    <div class="login-logo">
+        <!-- FULL SVG LOGO HERE -->
+    </div>
+
+    <!-- TITLE -->
+    <h1 class="login-title">OtkupApp</h1>
+
+    <!-- FORM -->
+    <div class="login-form">
+
+        <div class="form-group">
+            <label>Korisničko ime</label>
+            <input type="text" placeholder="korisničko ime">
+        </div>
+
+        <div class="form-group">
+            <label>PIN</label>
+            <input type="password" placeholder="••••">
+        </div>
+
+        <button class="btn-primary">Prijavi se</button>
+
+    </div>
+
+</div>
     
 <!-- TAB BAR -->
 <div class="tab-bar" id="tabBar">
