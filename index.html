@@ -394,7 +394,7 @@ const CONFIG = {
 // ============================================================
 let db = null;
 let qrScanner = null;
-let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [] };
+let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [], stanice: [] };
 let selectedMera = '';
 let mgmtData = null;
 
@@ -642,7 +642,7 @@ function setKooperant(id, name) {
     populateParcelaDropdown(id);
 }
 
-    // ============================================================
+// ============================================================
 // QR PROFILE
 // ============================================================
 function showQRProfile() {
@@ -771,7 +771,14 @@ function onVrstaChange() {
     });
     applyDefaultCena();
 }
-
+    
+function fmtStanica(stanicaID) {
+    if (!stanicaID) return '';
+    const s = (stammdaten.stanice || []).find(s => s.StanicaID === stanicaID);
+    const name = s ? (s.Naziv || s.Mesto || stanicaID) : stanicaID;
+    if (name === stanicaID) return stanicaID;
+    return name + ' <span style="font-size:11px;color:var(--text-muted);">' + stanicaID + '</span>';
+}
 // ============================================================
 // SAVE OTKUP
 // ============================================================
@@ -1346,13 +1353,29 @@ function showMgmtSub(subId, btn) {
 // MANAGEMENT: KOOPERANTI
 // ============================================================
 function populateMgmtStanice() {
-    const stanice = new Set();
-    (stammdaten.kooperanti || []).forEach(k => { if (k.StanicaID) stanice.add(k.StanicaID); });
+    const stanice = stammdaten.stanice || [];
+    const fallbackIDs = new Set();
+    if (stanice.length === 0) {
+        (stammdaten.kooperanti || []).forEach(k => { if (k.StanicaID) fallbackIDs.add(k.StanicaID); });
+    }
     ['mgmtStanica', 'mgmtOtkupiStanica'].forEach(selId => {
         const sel = document.getElementById(selId);
         if (!sel) return;
         sel.innerHTML = '<option value="">-- Izaberi stanicu --</option>';
-        stanice.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+        if (stanice.length > 0) {
+            stanice.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.StanicaID;
+                o.textContent = (s.Naziv || s.Mesto || s.StanicaID) + ' (' + s.StanicaID + ')';
+                sel.appendChild(o);
+            });
+        } else {
+            fallbackIDs.forEach(id => {
+                const o = document.createElement('option');
+                o.value = id; o.textContent = id;
+                sel.appendChild(o);
+            });
+        }
     });
 }
 
@@ -1429,7 +1452,7 @@ function loadMgmtKoopPregled() {
         const stanice = new Set();
         const data = (mgmtData && mgmtData.saldoOMDetail) ? mgmtData.saldoOMDetail : [];
         data.forEach(r => { if (r.StanicaID) stanice.add(r.StanicaID); });
-        stanice.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+        stanice.forEach(s => { const o = document.createElement('option'); o.value = s; const st = (stammdaten.stanice||[]).find(x => x.StanicaID === s); o.textContent = st ? (st.Naziv||st.Mesto||s)+' ('+s+')' : s; sel.appendChild(o); });
     }
     renderMgmtKoopPregled();
 }
@@ -1469,7 +1492,7 @@ function renderMgmtKoopPregled() {
             const amb = parseFloat(r.Ambalaza)||0;
             const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
             return `<div class="queue-item" style="border-left-color:${bc};">
-                <div class="qi-header"><span class="qi-koop">${r.Kooperant||r.KooperantID}</span><span class="qi-time">${r.StanicaID||''}</span></div>
+                <div class="qi-header"><span class="qi-koop">${r.Kooperant||r.KooperantID}</span><span class="qi-time">${fmtStanica(r.StanicaID)}</span></div>
                 <div class="qi-detail">
                     ${kg.toLocaleString('sr')} kg | Vrednost: ${vr.toLocaleString('sr')}
                 </div>
@@ -1537,7 +1560,7 @@ function loadMgmtSaldoOM() {
         const saldo = parseFloat(r.Saldo)||0;
         const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
         return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">${r.Stanica||r.StanicaID||''}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-header"><span class="qi-koop">${fmtStanica(r.StanicaID || r.Stanica)}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
             <div class="qi-detail">Avans: ${(parseFloat(r.Avans)||0).toLocaleString('sr')} | Isplaceno: ${(parseFloat(r.Isplaceno)||0).toLocaleString('sr')}</div></div>`;
     }).join('');
 }
@@ -1555,7 +1578,7 @@ function loadMgmtOtkupPoOM() {
     });
     list.innerHTML = Object.entries(grouped).map(([stanica, g]) =>
         `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${stanica}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${fmtStanica(stanica)}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD</div>
             ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${r.VrstaVoca} ${r.Klasa}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${r.BrojOtkupa||0} otk.</span></div>`; }).join('')}
         </div>`).join('');
