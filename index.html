@@ -1532,13 +1532,10 @@ async function startZbirnaCreation() {
     document.getElementById('zbirnaMainView').style.display = 'none';
     document.getElementById('zbirnaCreateView').style.display = 'block';
     
-    // Populate kupci dropdown from stammdaten
     const sel = document.getElementById('fldZbirnaKupac');
     sel.innerHTML = '<option value="">-- Izaberi kupca --</option>';
     
-    // Load kupci from config or stammdaten
-    const sel = document.getElementById('fldZbirnaKupac');
-    sel.innerHTML = '<option value="">-- Izaberi kupca --</option>';
+    // Populate from stammdaten
     (stammdaten.kupci || []).forEach(k => {
         const o = document.createElement('option');
         o.value = k.KupacID;
@@ -1546,18 +1543,22 @@ async function startZbirnaCreation() {
         sel.appendChild(o);
     });
     
-    // Fallback: extract unique kupci from existing data or use hardcoded list
-    // For now, populate from saldoKupci if available, otherwise let user type
+    // Optional fallback from mgmtData
     if (mgmtData && mgmtData.saldoKupci) {
         mgmtData.saldoKupci.forEach(k => {
+            const value = k.KupacID || k.Kupac;
+            if (!value) return;
+
+            const exists = Array.from(sel.options).some(opt => opt.value === value);
+            if (exists) return;
+
             const o = document.createElement('option');
-            o.value = k.KupacID || k.Kupac;
+            o.value = value;
             o.textContent = k.Kupac || k.KupacID;
             sel.appendChild(o);
         });
     }
     
-    // Show summary of today's otkupi
     renderZbirnaSummary();
 }
 
