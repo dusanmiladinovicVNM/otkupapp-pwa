@@ -31,13 +31,62 @@
         body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
     
         /* HEADER */
-        .header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-        .header h1 { font-size: 18px; font-weight: 600; }
+        .header {
+             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+             color: white;
+             padding: 14px 18px; /* slightly tighter */
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             position: sticky;
+             top: 0;
+             z-index: 100;
+             box-shadow: 0 2px 10px rgba(0,0,0,0.18); /* stronger depth */
+         }
         .header .sync-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600; }
         .sync-online { background: var(--success); color: white; }
         .sync-offline { background: var(--danger); color: white; }
         .sync-pending { background: var(--warning); color: white; }
-    
+            
+        /* NEW */
+        .header-left {
+             display: flex;
+             align-items: center;
+             gap: 10px;
+         }
+         .app-logo {
+             width: 28px;
+             height: 28px;
+             display: block;
+         }
+
+         .header-title {
+             font-size: 17px;
+             font-weight: 700;
+         }
+        
+         .header-actions {
+             display: flex;
+             align-items: center;
+             gap: 8px;
+         }
+
+        .header-sub {
+            font-size: 11px;
+            opacity: 0.7;
+            display: block;
+         }
+
+        .header-btn {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
         /* MAIN TAB BAR */
         .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .tab-btn { flex: none; padding: 12px 16px; text-align: center; font-size: 13px; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
@@ -139,17 +188,37 @@
  
 <!-- HEADER -->
 <div class="header">
-    <div>
-        <h1 style="margin:0;font-size:20px;">OtkupApp</h1>
-        <span style="font-size:11px;opacity:0.7;" id="headerInfo"></span>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-        <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
-        <button onclick="showQRProfile()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 10px;border-radius:6px;font-size:14px;cursor:pointer;">⊞</button>
-        <button onclick="doLogout()" style="background:none;border:1px solid rgba(255,255,255,0.4);color:white;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">⇄</button>
-    </div>
-</div>
 
+    <!-- LEFT SIDE -->
+    <div class="header-left">
+        <!-- LOGO -->
+        <svg
+          class="app-logo"
+          viewBox="0 0 300 300"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle cx="150" cy="150" r="120" stroke="#ffffff" stroke-width="20" fill="none"></circle>
+          <line x1="150" y1="50" x2="150" y2="250" stroke="#ffffff" stroke-width="8" opacity="0.2"></line>
+          <line x1="50" y1="150" x2="250" y2="150" stroke="#ffffff" stroke-width="8" opacity="0.2"></line>
+          <rect x="170" y="170" width="60" height="60" rx="8" fill="#e8a838"></rect>
+        </svg>
+
+        <!-- TEXT -->
+        <div>
+            <div class="header-title">OtkupApp</div>
+            <span class="header-sub" id="headerInfo"></span>
+        </div>
+    </div>
+
+    <!-- RIGHT SIDE -->
+    <div class="header-actions">
+        <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
+
+        <button onclick="showQRProfile()" class="header-btn">⊞</button>
+        <button onclick="doLogout()" class="header-btn">⇄</button>
+    </div>
+
+</div>
 <!-- TAB BAR -->
 <div class="tab-bar" id="tabBar">
     <!-- Otkupac -->
