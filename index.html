@@ -181,6 +181,14 @@
     <div class="koop-display" id="koopDisplay"><div class="koop-name" id="koopName"></div><div class="koop-id" id="koopId"></div></div>
     <input type="hidden" id="fldKooperantID">
     <div class="form-group" id="parcelaGroup" style="display:none;"><label>Parcela (opciono)</label><select id="fldParcela"><option value="">-- Bez parcele --</option></select></div>
+    <button class="qr-scan-btn" id="btnVozacScan" onclick="startVozacQRScan()" style="background:var(--accent);">📷 Skeniraj QR vozača (opciono)</button>
+    <div id="qr-reader-vozac" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+    <div class="koop-display" id="vozacDisplay" style="background:var(--accent);">
+        <div class="koop-name" id="vozacName"></div>
+        <div class="koop-id" id="vozacId"></div>
+        <button onclick="clearVozac()" style="background:none;border:none;color:white;font-size:12px;text-decoration:underline;cursor:pointer;margin-top:4px;">Ukloni vozača</button>
+    </div>
+    <input type="hidden" id="fldVozacID">
     <div class="form-row">
         <div class="form-group"><label>Vrsta voća</label><select id="fldVrsta" onchange="onVrstaChange()"><option value="">-- Izaberi --</option></select></div>
         <div class="form-group"><label>Sorta</label><select id="fldSorta"><option value="">-- Izaberi --</option></select></div>
@@ -213,9 +221,35 @@
 </div>
 
 <div class="tab-content" id="tab-otpremnice">
-    <p style="text-align:center;color:var(--text-muted);padding:10px;font-size:13px;">Otkupi grupisani po kooperantu za izabrani datum</p>
-    <div class="form-group"><label>Datum</label><input type="date" id="fldOtpremniceDatum" onchange="loadOtpremnicePregled()"></div>
-    <div id="otpremniceList"></div>
+    <div id="otpremaAssignView" style="display:none;">
+        <div class="koop-display visible" id="otpremaVozacDisplay" style="background:var(--accent);margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div class="koop-name" id="otpremaVozacName"></div>
+                    <div class="koop-id" id="otpremaVozacId"></div>
+                </div>
+                <button onclick="cancelOtprema()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:6px;font-size:12px;">Otkaži</button>
+            </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Izaberite otkupe za ovog vozača:</p>
+        <button onclick="toggleSelectAll()" class="btn-secondary" style="margin-bottom:10px;margin-top:0;">Izaberi sve / Poništi sve</button>
+        <div id="otpremaOtkupList"></div>
+        <div id="otpremaSummary" style="background:var(--primary);color:white;padding:12px;border-radius:var(--radius);margin-top:12px;display:none;">
+            <span id="otpremaSummaryText"></span>
+        </div>
+        <button class="btn-primary" onclick="confirmOtprema()">POTVRDI OTPREMU</button>
+    </div>
+
+    <div id="otpremaMainView">
+        <button class="qr-scan-btn" style="background:var(--accent);" onclick="startOtpremaVozacScan()">📷 Skeniraj QR vozača za otpremu</button>
+        <div id="qr-reader-otprema" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+
+        <h3 style="color:var(--primary);margin:16px 0 8px;font-size:14px;">Danas neraspoređeno</h3>
+        <div id="otpremaUnassignedList"></div>
+
+        <h3 style="color:var(--primary);margin:16px 0 8px;font-size:14px;">Danas otpremljeno</h3>
+        <div id="otpremaAssignedList"></div>
+    </div>
 </div>
 
 <div class="tab-content" id="tab-queue">
@@ -642,6 +676,46 @@ function setKooperant(id, name) {
     populateParcelaDropdown(id);
 }
 
+function startVozacQRScan() {
+    const readerDiv = document.getElementById('qr-reader-vozac');
+    readerDiv.style.display = 'block';
+    const scanner = new Html5Qrcode('qr-reader-vozac');
+    scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            onVozacQRScanned(decodedText);
+            scanner.stop().then(() => { readerDiv.style.display = 'none'; });
+        },
+        () => {}
+    ).catch(err => { showToast('Kamera nije dostupna: ' + err, 'error'); readerDiv.style.display = 'none'; });
+}
+
+function onVozacQRScanned(text) {
+    try {
+        const data = JSON.parse(text);
+        if (data.type === 'VOZ' && data.id) { setVozac(data.id, data.name || data.id); return; }
+    } catch (e) {}
+    if (text.startsWith('VOZ-')) {
+        setVozac(text, text);
+        return;
+    }
+    showToast('Nije QR vozača', 'error');
+}
+
+function setVozac(id, name) {
+    document.getElementById('fldVozacID').value = id;
+    document.getElementById('vozacName').textContent = name;
+    document.getElementById('vozacId').textContent = id;
+    document.getElementById('vozacDisplay').classList.add('visible');
+    showToast('Vozač: ' + name, 'success');
+}
+
+function clearVozac() {
+    document.getElementById('fldVozacID').value = '';
+    document.getElementById('vozacDisplay').classList.remove('visible');
+}
+    
 // ============================================================
 // QR PROFILE
 // ============================================================
@@ -799,7 +873,9 @@ async function saveOtkup() {
         klasa: document.getElementById('fldKlasa').value, kolicina, cena,
         tipAmbalaze: '12/1', kolAmbalaze: parseInt(document.getElementById('fldAmbalaza').value) || 0,
         parcelaID: document.getElementById('fldParcela').value || '',
-        napomena: document.getElementById('fldNapomena').value, syncStatus: 'pending'
+        napomena: document.getElementById('fldNapomena').value,
+        vozacID: document.getElementById('fldVozacID').value || '',
+        syncStatus: 'pending'
     };
     await dbPut(CONFIG.STORE_NAME, record);
     showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
@@ -821,6 +897,8 @@ function resetForm() {
     document.getElementById('fldCena').value = '';
     document.getElementById('fldAmbalaza').value = '';
     document.getElementById('fldNapomena').value = '';
+    document.getElementById('fldVozacID').value = '';
+    document.getElementById('vozacDisplay').classList.remove('visible');
     applyDefaults();
 }
 
@@ -1152,40 +1230,178 @@ async function loadOtkupPregled() {
         return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div><div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca||''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID?' | '+r.parcelaID:''}</div></div>`;
     }).join('');
 }
+    
+// ============================================================
+// OTPREMA (dispatch)
+// ============================================================
+let otpremaVozacID = '';
+let otpremaUnassigned = [];
 
-// ============================================================
-// OTPREMNICE PREGLED
-// ============================================================
-async function loadOtpremnicePregled() {
-    const datum = document.getElementById('fldOtpremniceDatum').value;
-    if (!datum) { document.getElementById('otpremniceList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Izaberite datum</p>'; return; }
-    let all = [];
-    try {
-        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-        if (json && json.success && json.records) all = json.records.map(r => ({
-            kooperantID: r.KooperantID||'', kooperantName: r.KooperantName||'', datum: fmtDate(r.Datum),
-            vrstaVoca: r.VrstaVoca||'', klasa: r.Klasa||'I', kolicina: parseFloat(r.Kolicina)||0,
-            cena: parseFloat(r.Cena)||0, kolAmbalaze: parseInt(r.KolAmbalaze)||0
-        }));
-    } catch (e) {}
-    const local = await dbGetAll(CONFIG.STORE_NAME);
-    local.filter(r => r.syncStatus === 'pending').forEach(r => all.push(r));
-    const filtered = all.filter(r => r.datum === datum);
-    if (filtered.length === 0) { document.getElementById('otpremniceList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa</p>'; return; }
-    const grouped = {};
-    filtered.forEach(r => {
-        const k = r.kooperantID||'?';
-        if (!grouped[k]) grouped[k] = { name: r.kooperantName||k, items: [], kg: 0, vr: 0, amb: 0 };
-        grouped[k].items.push(r); grouped[k].kg += r.kolicina||0; grouped[k].vr += (r.kolicina||0)*(r.cena||0); grouped[k].amb += r.kolAmbalaze||0;
-    });
-    document.getElementById('otpremniceList').innerHTML = Object.entries(grouped).map(([id, g]) =>
-        `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><strong style="color:var(--primary);">${g.name}</strong><span style="font-size:12px;color:var(--text-muted);">${id}</span></div>
-            <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Ukupno: <strong>${g.kg.toLocaleString('sr')} kg</strong> | ${g.vr.toLocaleString('sr')} RSD | Amb: ${g.amb}</div>
-            ${g.items.map(r => `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${((r.kolicina||0)*(r.cena||0)).toLocaleString('sr')} RSD</div>`).join('')}
-        </div>`).join('');
+function startOtpremaVozacScan() {
+    const readerDiv = document.getElementById('qr-reader-otprema');
+    readerDiv.style.display = 'block';
+    const scanner = new Html5Qrcode('qr-reader-otprema');
+    scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            scanner.stop().then(() => { readerDiv.style.display = 'none'; });
+            onOtpremaVozacScanned(decodedText);
+        },
+        () => {}
+    ).catch(err => { showToast('Kamera nije dostupna', 'error'); readerDiv.style.display = 'none'; });
 }
 
+function onOtpremaVozacScanned(text) {
+    let vozID = '', vozName = '';
+    try {
+        const data = JSON.parse(text);
+        if (data.type === 'VOZ' && data.id) { vozID = data.id; vozName = data.name || data.id; }
+    } catch (e) {}
+    if (!vozID && text.startsWith('VOZ-')) { vozID = text; vozName = text; }
+    if (!vozID) { showToast('Nije QR vozača', 'error'); return; }
+
+    otpremaVozacID = vozID;
+    document.getElementById('otpremaVozacName').textContent = vozName;
+    document.getElementById('otpremaVozacId').textContent = vozID;
+    showOtpremaAssignView();
+}
+
+async function showOtpremaAssignView() {
+    document.getElementById('otpremaMainView').style.display = 'none';
+    document.getElementById('otpremaAssignView').style.display = 'block';
+
+    const today = new Date().toISOString().split('T')[0];
+    const all = await dbGetAll(CONFIG.STORE_NAME);
+    otpremaUnassigned = all.filter(r => r.datum === today && !r.vozacID);
+
+    renderOtpremaCheckboxes();
+}
+
+function renderOtpremaCheckboxes() {
+    const list = document.getElementById('otpremaOtkupList');
+    if (otpremaUnassigned.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema neraspoređenih otkupa za danas</p>';
+        return;
+    }
+    list.innerHTML = otpremaUnassigned.map((r, i) => {
+        const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
+        return `<div class="queue-item" style="cursor:pointer;" onclick="toggleOtpremaItem(${i})">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <input type="checkbox" id="otpChk${i}" style="width:20px;height:20px;flex-shrink:0;" onclick="event.stopPropagation();updateOtpremaSummary();">
+                <div style="flex:1;">
+                    <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.klasa || 'I'}</span></div>
+                    <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD</div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+    updateOtpremaSummary();
+}
+
+function toggleOtpremaItem(index) {
+    const chk = document.getElementById('otpChk' + index);
+    chk.checked = !chk.checked;
+    updateOtpremaSummary();
+}
+
+function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('[id^="otpChk"]');
+    const allChecked = Array.from(checkboxes).every(c => c.checked);
+    checkboxes.forEach(c => c.checked = !allChecked);
+    updateOtpremaSummary();
+}
+
+function updateOtpremaSummary() {
+    let kg = 0, count = 0;
+    otpremaUnassigned.forEach((r, i) => {
+        const chk = document.getElementById('otpChk' + i);
+        if (chk && chk.checked) { kg += r.kolicina || 0; count++; }
+    });
+    const div = document.getElementById('otpremaSummary');
+    if (count > 0) {
+        div.style.display = 'block';
+        document.getElementById('otpremaSummaryText').textContent = 
+            'Izabrano: ' + count + ' otkupa | ' + kg.toLocaleString('sr') + ' kg';
+    } else {
+        div.style.display = 'none';
+    }
+}
+
+async function confirmOtprema() {
+    if (!otpremaVozacID) { showToast('Nema vozača', 'error'); return; }
+    
+    let count = 0;
+    for (let i = 0; i < otpremaUnassigned.length; i++) {
+        const chk = document.getElementById('otpChk' + i);
+        if (chk && chk.checked) {
+            otpremaUnassigned[i].vozacID = otpremaVozacID;
+            otpremaUnassigned[i].syncStatus = 'pending';
+            await dbPut(CONFIG.STORE_NAME, otpremaUnassigned[i]);
+            count++;
+        }
+    }
+    
+    if (count === 0) { showToast('Izaberite bar jedan otkup', 'error'); return; }
+    
+    showToast(count + ' otkupa dodeljeno vozaču', 'success');
+    cancelOtprema();
+    loadOtpremaOverview();
+    if (navigator.onLine) syncQueue();
+}
+
+function cancelOtprema() {
+    otpremaVozacID = '';
+    otpremaUnassigned = [];
+    document.getElementById('otpremaAssignView').style.display = 'none';
+    document.getElementById('otpremaMainView').style.display = 'block';
+    loadOtpremaOverview();
+}
+
+async function loadOtpremaOverview() {
+    const today = new Date().toISOString().split('T')[0];
+    const all = await dbGetAll(CONFIG.STORE_NAME);
+    const todayRecords = all.filter(r => r.datum === today);
+    
+    const unassigned = todayRecords.filter(r => !r.vozacID);
+    const assigned = todayRecords.filter(r => r.vozacID);
+    
+    // Neraspoređeno
+    const uList = document.getElementById('otpremaUnassignedList');
+    if (unassigned.length === 0) {
+        uList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Svi otkupi su raspoređeni</p>';
+    } else {
+        uList.innerHTML = unassigned.map(r => {
+            const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
+            return `<div class="queue-item" style="border-left-color:var(--warning);">
+                <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.klasa || 'I'}</span></div>
+                <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} | ${r.kolicina} kg | ${vr} RSD</div>
+            </div>`;
+        }).join('');
+    }
+    
+    // Raspoređeno — grupiši po vozaču
+    const aList = document.getElementById('otpremaAssignedList');
+    if (assigned.length === 0) {
+        aList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Nema otprema za danas</p>';
+    } else {
+        const grouped = {};
+        assigned.forEach(r => {
+            const v = r.vozacID;
+            if (!grouped[v]) grouped[v] = { items: [], kg: 0 };
+            grouped[v].items.push(r);
+            grouped[v].kg += r.kolicina || 0;
+        });
+        aList.innerHTML = Object.entries(grouped).map(([vozID, g]) =>
+            `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--success);">
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                    <strong style="color:var(--primary);">🚛 ${vozID}</strong>
+                    <span style="font-weight:600;">${g.kg.toLocaleString('sr')} kg | ${g.items.length} otk.</span>
+                </div>
+                ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${r.kooperantName} | ${r.vrstaVoca} ${r.klasa || ''} | ${r.kolicina} kg</div>`).join('')}
+            </div>`).join('');
+    }
+}
 // ============================================================
 // KOOPERANT: KARTICA
 // ============================================================
@@ -1706,7 +1922,7 @@ function showTab(tabName) {
 
     if (tabName === 'queue') { renderQueueList(); updateStats(); }
     if (tabName === 'pregled') loadOtkupPregled();
-    if (tabName === 'otpremnice') loadOtpremnicePregled();
+    if (tabName === 'otpremnice') loadOtpremaOverview();
     if (tabName === 'kartica') loadKartica();
     if (tabName === 'parcele') loadParcele();
     if (tabName === 'agromere') loadAgromereList();
