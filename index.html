@@ -1522,7 +1522,8 @@ async function showOtpremaAssignView() {
     const serverIDs = new Set(server.map(r => r.clientRecordID));
     const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
     
-    otpremaUnassigned = all.filter(r => r.datum === today && !r.vozacID);
+    otpremaUnassigned = all.filter(r => !r.vozacID);
+    otpremaUnassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     renderOtpremaCheckboxes();
 }
 
@@ -1538,7 +1539,8 @@ function renderOtpremaCheckboxes() {
             <div style="display:flex;align-items:center;gap:10px;">
                 <input type="checkbox" id="otpChk${i}" style="width:20px;height:20px;flex-shrink:0;" onclick="event.stopPropagation();updateOtpremaSummary();">
                 <div style="flex:1;">
-                    <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.klasa || 'I'}</span></div>
+                    <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
+                    <div class="qi-detail" style="font-size:11px;color:var(--text-muted);">${r.klasa || 'I'}</div>
                     <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD</div>
                 </div>
             </div>
@@ -1627,10 +1629,9 @@ async function loadOtpremaOverview() {
     
     const serverIDs = new Set(server.map(r => r.clientRecordID));
     const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
-    const todayRecords = all.filter(r => r.datum === today);
-    
-    const unassigned = todayRecords.filter(r => !r.vozacID);
-    const assigned = todayRecords.filter(r => r.vozacID);
+    const unassigned = all.filter(r => !r.vozacID);
+    unassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const assigned = all.filter(r => r.vozacID);
     
     const uList = document.getElementById('otpremaUnassignedList');
     if (unassigned.length === 0) {
@@ -1639,8 +1640,8 @@ async function loadOtpremaOverview() {
         uList.innerHTML = unassigned.map(r => {
             const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
             return `<div class="queue-item" style="border-left-color:var(--warning);">
-                <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.klasa || 'I'}</span></div>
-                <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} | ${r.kolicina} kg | ${vr} RSD</div>
+                <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
+                <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} ${r.klasa || 'I'} | ${r.kolicina} kg | ${vr} RSD</div>
             </div>`;
         }).join('');
     }
