@@ -2523,6 +2523,16 @@ function fmtDate(val) {
     try { return new Date(val).toISOString().split('T')[0]; } catch(e) { return String(val); }
 }
 
+function fmtStanica(stanicaID) {
+    const s = (stammdaten.kooperanti || []).find(k => k.StanicaID === stanicaID);
+    const name = s ? s.StanicaID : stanicaID; // fallback
+    // Try to find stanica name from kooperanti (they all share same StanicaID)
+    // But we need actual stanica names - check if stammdaten has stanice
+    const cfg = (stammdaten.config || []).find(c => c.Parameter === 'Stanica_' + stanicaID);
+    if (cfg) return cfg.Vrednost + ' <span style="font-size:11px;color:var(--text-muted);">' + stanicaID + '</span>';
+    return stanicaID;
+}
+
 // ============================================================
 // SERVICE WORKER
 // ============================================================
