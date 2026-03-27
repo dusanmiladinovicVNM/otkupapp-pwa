@@ -106,7 +106,7 @@
 
   <script>
     // ===== CONFIG =====
-    const AUTH_TOKEN = localStorage.getItem('authToken') || '';
+    const authToken = params.get("token") || localStorage.getItem('authToken') || '';
     const API_BASE = "https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec";
 
     // Query string expected:
@@ -334,7 +334,7 @@
 
       const payload = {
         action: "saveParcelPolygon",
-        token: AUTH_TOKEN,
+        token: authToken,
         parcelaId: parcelaId,
         polygonGeoJSON: JSON.stringify(geometry),
         lat: Number(centroid.lat.toFixed(6)),
