@@ -106,13 +106,13 @@
 
   <script>
     // ===== CONFIG =====
-    const authToken = params.get("token") || localStorage.getItem('authToken') || '';
-    const API_BASE = "https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec";
-
+    
     // Query string expected:
     // ?parcelaId=PAR-00001
     const params = new URLSearchParams(window.location.search);
     const parcelaId = params.get("parcelaId") || "";
+    const authToken = params.get("token") || localStorage.getItem('authToken') || '';
+    const API_BASE = "https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec";
 
     document.getElementById("parcelaId").value = parcelaId;
 
