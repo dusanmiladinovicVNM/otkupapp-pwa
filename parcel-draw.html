@@ -163,7 +163,11 @@
     function setJsonPreview(obj) {
       document.getElementById("jsonPreview").value = obj ? JSON.stringify(obj) : "";
     }
-
+    
+    function toNum(v) {
+      if (v === null || v === undefined || v === "") return null;
+      return Number(String(v).replace(",", "."));
+    }
     function polygonCentroid(coords) {
       // coords = [[lng, lat], [lng, lat], ...]
       // shoelace centroid
@@ -262,13 +266,14 @@
       const parcel = data.parcel;
 
       if (parcel.Lat && parcel.Lng) {
-        const lat = Number(parcel.Lat);
-        const lng = Number(parcel.Lng);
-        map.setView([lat, lng], 17);
-        renderPoint(lat, lng);
-        setLatLng(lat, lng);
-      } else {
-        clearLatLng();
+        const lat = toNum(parcel.Lat);
+        const lng = toNum(parcel.Lng);
+
+        if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+          map.setView([lat, lng], 17);
+          renderPoint(lat, lng);
+          setLatLng(lat, lng);
+        }
       }
 
       if (parcel.PolygonGeoJSON) {
