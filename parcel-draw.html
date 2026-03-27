@@ -66,6 +66,21 @@
       font-family: Consolas, monospace;
       font-size: 12px;
     }
+    .parcel-label {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #111;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 2px 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    }
+
+    .leaflet-popup-content {
+      font-size: 14px;
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -151,7 +166,23 @@
     map.addLayer(drawnItems);
 
     let markerLayer = null;
+    let activeParcelLayer = null;
 
+    const parcelStyle = {
+      color: "#ffd60a",
+      weight: 3,
+      opacity: 1,
+      fillColor: "#ffd60a",
+      fillOpacity: 0.18
+    };
+
+    const selectedParcelStyle = {
+      color: "#ff2d55",
+      weight: 4,
+      opacity: 1,
+      fillColor: "#ff2d55",
+      fillOpacity: 0.22
+    };
     const drawControl = new L.Control.Draw({
       edit: {
         featureGroup: drawnItems,
@@ -251,18 +282,35 @@
       markerLayer = L.marker([lat, lng]).addTo(map);
     }
 
-    function renderPolygon(geometry) {
+    function renderPolygon(geometry, parcel = null) {
       drawnItems.clearLayers();
 
       const feature = {
         type: "Feature",
-        properties: {},
+        properties: parcel || {},
         geometry: geometry
       };
 
-      const layer = L.geoJSON(feature);
+      const layer = L.geoJSON(feature, {
+        style: parcelStyle
+      });
+
       layer.eachLayer(l => {
         drawnItems.addLayer(l);
+
+        if (parcel) {
+          l.bindTooltip(`${parcel.KatBroj || ""}`, {
+            permanent: true,
+            direction: "center",
+            className: "parcel-label"
+          });
+
+          l.bindPopup(buildParcelPopup(parcel));
+
+          l.on("click", () => {
+            highlightParcelLayer(l);
+          });
+        }
       });
 
       const bounds = layer.getBounds();
@@ -296,15 +344,22 @@
 
         if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
           map.setView([lat, lng], 17);
-          renderPoint(lat, lng);
           setLatLng(lat, lng);
+
+          // only show point if there is no polygon
+          if (!parcel.PolygonGeoJSON) {
+            renderPoint(lat, lng);
+          } else if (markerLayer) {
+            map.removeLayer(markerLayer);
+            markerLayer = null;
+          }
         }
       }
 
       if (parcel.PolygonGeoJSON) {
         try {
           const geometry = JSON.parse(parcel.PolygonGeoJSON);
-          renderPolygon(geometry);
+          renderPolygon(geometry, parcel);
           setJsonPreview(geometry);
         } catch (e) {
           console.error(e);
@@ -427,6 +482,34 @@
     if (parcelaId) {
       loadParcel();
     }
+
+function resetParcelHighlight() {
+  if (activeParcelLayer) {
+    activeParcelLayer.setStyle(parcelStyle);
+    activeParcelLayer = null;
+  }
+}
+
+function highlightParcelLayer(layer) {
+  resetParcelHighlight();
+  layer.setStyle(selectedParcelStyle);
+  activeParcelLayer = layer;
+}
+
+function buildParcelPopup(parcel) {
+  return `
+    <div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:6px;">
+        ${parcel.KatBroj || ""}
+      </div>
+      <div><b>Kultura:</b> ${parcel.Kultura || "-"}</div>
+      <div><b>Površina:</b> ${parcel.PovrsinaHa || "-"} ha</div>
+      <div><b>KO:</b> ${parcel.KatOpstina || "-"}</div>
+      <div><b>GGAP:</b> ${parcel.GGAPStatus || "-"}</div>
+      <div style="margin-top:6px;color:#666;">${parcel.ParcelaID || ""}</div>
+    </div>
+  `;
+}
   </script>
 </body>
 </html>
