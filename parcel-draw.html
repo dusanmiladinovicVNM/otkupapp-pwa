@@ -106,6 +106,7 @@
 
   <script>
     // ===== CONFIG =====
+    const AUTH_TOKEN = localStorage.getItem('authToken') || '';
     const API_BASE = "https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec";
 
     // Query string expected:
@@ -278,11 +279,11 @@
 
       setStatus("učitavanje...");
 
-      const url = `${API_BASE}?action=getParcelGeo&parcelaId=${encodeURIComponent(parcelaId)}`;
+      const url = `${API_BASE}?action=getParcelGeo&parcelaId=${encodeURIComponent(parcelaId)}&token=${encodeURIComponent(AUTH_TOKEN)}`;
       const res = await fetch(url);
       const data = await res.json();
 
-      if (!data || !data.ok) {
+      if (!data || !data.success) {
         setStatus("greška pri učitavanju");
         return;
       }
@@ -333,6 +334,7 @@
 
       const payload = {
         action: "saveParcelPolygon",
+        token: AUTH_TOKEN,
         parcelaId: parcelaId,
         polygonGeoJSON: JSON.stringify(geometry),
         lat: Number(centroid.lat.toFixed(6)),
@@ -351,7 +353,7 @@
 
       const data = await res.json();
 
-      if (data.ok) {
+      if (data.success) {
         renderPoint(payload.lat, payload.lng);
         setStatus("polygon sačuvan");
       } else {
