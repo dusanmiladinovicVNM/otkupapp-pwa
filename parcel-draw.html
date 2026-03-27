@@ -279,7 +279,7 @@
 
       setStatus("učitavanje...");
 
-      const url = `${API_BASE}?action=getParcelGeo&parcelaId=${encodeURIComponent(parcelaId)}&token=${encodeURIComponent(AUTH_TOKEN)}`;
+      const url = `${API_BASE}?action=getParcelGeo&parcelaId=${encodeURIComponent(parcelaId)}`;
       const res = await fetch(url);
       const data = await res.json();
 
