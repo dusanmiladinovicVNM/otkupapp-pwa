@@ -117,10 +117,34 @@
 
     const map = L.map("map").setView([43.2838, 21.7161], 15);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 22,
-      attribution: "&copy; OpenStreetMap"
-    }).addTo(map);
+    // Esri Satellite (no key)
+    const esriSatellite = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 22,
+        attribution: "Tiles © Esri, Maxar, Earthstar Geographics"
+      }
+    );
+
+    // Optional OSM fallback
+    const osm = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        maxZoom: 22,
+        attribution: "&copy; OpenStreetMap"
+      }
+    );
+
+    // Default = satellite
+    esriSatellite.addTo(map);
+
+    // Layer switcher
+    L.control.layers(
+      {
+        "Satelit": esriSatellite,
+        "OSM": osm
+      }
+    ).addTo(map);
 
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
