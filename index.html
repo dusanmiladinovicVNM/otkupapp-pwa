@@ -266,84 +266,47 @@
                 height: auto !important;
             }
         }
-        
-.wr-col {
-    background: var(--card);
-    border-radius: var(--radius);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    overflow: hidden;
-    margin-bottom: 12px;
-}
-.wr-col-head {
-    padding: 12px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: white;
-}
-.wr-col.supply .wr-col-head { background: var(--primary); }
-.wr-col.transport .wr-col-head { background: var(--accent); }
-.wr-col.demand .wr-col-head { background: #1565c0; }
-.wr-col-body { padding: 10px; }
+.dp-cols { display: flex; flex-direction: column; gap: 12px; }
+@media (min-width: 900px) { .dp-cols { flex-direction: row; align-items: flex-start; } .dp-cols > .dp-col { flex: 1; min-width: 0; } }
+ 
+.dp-col { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 12px; }
+.dp-col-hd { padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; color: white; }
+.dp-col.supply .dp-col-hd { background: var(--primary); }
+.dp-col.transport .dp-col-hd { background: var(--accent); }
+.dp-col.demand .dp-col-hd { background: #1565c0; }
+.dp-col-bd { padding: 10px; max-height: 65vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+ 
+.dp-card { padding: 12px; border-radius: var(--radius); margin-bottom: 8px; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; transition: background 0.15s; background: var(--card); }
+.dp-card:active { background: var(--bg); }
+.dp-card.sel { background: #fff8e1; border-left-color: var(--accent); }
+.dp-card.urgent { border-left-color: var(--danger); }
+.dp-card.trn { border-left-color: var(--accent); }
+.dp-card.dem { border-left-color: #1565c0; }
+.dp-card.planned { border-left-color: var(--success); opacity: 0.7; }
+ 
+.dp-banner { background: var(--accent); color: white; padding: 12px 14px; border-radius: var(--radius); margin-bottom: 12px; display: none; }
+.dp-banner.active { display: block; }
+.dp-banner .dp-bt { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.dp-banner .dp-bs { font-size: 12px; opacity: 0.9; margin-bottom: 8px; }
+.dp-banner button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; margin-right: 6px; }
+ 
+.dp-stb { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.dp-stb button { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; background: white; cursor: pointer; font-weight: 600; }
+.dp-stb button.on { background: var(--primary); color: white; border-color: var(--primary); }
+ 
+.dp-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 6px 0; }
+.dp-bf { height: 100%; border-radius: 3px; transition: width 0.3s; }
+ 
+.dp-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.dp-badge.slobodan { background: #d1fae5; color: #065f46; }
+.dp-badge.utovar { background: #fef3c7; color: #92400e; }
+.dp-badge.naputu { background: #dbeafe; color: #1e40af; }
+.dp-badge.istovar { background: #ede9fe; color: #5b21b6; }
+ 
+.dp-plan-item { background: #e8f5e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+.dp-plan-item .dp-pi-route { font-weight: 600; color: var(--primary-dark); }
+.dp-plan-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; }        
 
-.wr-card {
-    padding: 12px;
-    border-radius: var(--radius);
-    margin-bottom: 8px;
-    border-left: 4px solid var(--primary);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    cursor: pointer;
-    transition: background 0.15s;
-}
-.wr-card:active { background: #f5f5f0; }
-.wr-card.selected { background: #fff8e1; border-left-color: var(--accent); }
-.wr-card.urgent { border-left-color: var(--danger); }
-.wr-card.transport { border-left-color: var(--accent); }
-.wr-card.demand-card { border-left-color: #1565c0; }
-
-.wr-banner {
-    background: var(--accent);
-    color: white;
-    padding: 12px 14px;
-    border-radius: var(--radius);
-    margin-bottom: 12px;
-    display: none;
-}
-.wr-banner.active { display: block; }
-.wr-banner .wb-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-.wr-banner .wb-sub { font-size: 12px; opacity: 0.9; margin-bottom: 8px; }
-.wr-banner button {
-    padding: 8px 16px; border: none; border-radius: 6px;
-    font-size: 13px; font-weight: 700; cursor: pointer; margin-right: 6px;
-}
-
-.wr-status-btns { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-.wr-status-btns button {
-    padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px;
-    font-size: 11px; background: white; cursor: pointer; font-weight: 600;
-}
-.wr-status-btns button.active { background: var(--primary); color: white; border-color: var(--primary); }
-
-.wr-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 6px 0; }
-.wr-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-
-.wk-badge {
-    display: inline-block; padding: 2px 10px; border-radius: 12px;
-    font-size: 11px; font-weight: 600;
-}
-.wk-badge.slobodan { background: #d1fae5; color: #065f46; }
-.wk-badge.utovar { background: #fef3c7; color: #92400e; }
-.wk-badge.naputu { background: #dbeafe; color: #1e40af; }
-.wk-badge.istovar { background: #ede9fe; color: #5b21b6; }
-
-@media (min-width: 900px) {
-    .wr-3col { display: flex; gap: 12px; align-items: flex-start; }
-    .wr-3col > .wr-col { flex: 1; min-width: 0; margin-bottom: 0; }
-}
     </style>
 </head>
 <body>
@@ -377,7 +340,7 @@
     <button class="tab-btn role-kooperant" onclick="showTab('agromere')">Agromere</button>
     <button class="tab-btn role-kooperant" onclick="showTab('koopinfo')">Info</button>
     <!-- Management -->
-    <button class="tab-btn role-management" onclick="showTab('warroom')" style="font-weight:700;">⚡ War Room</button>
+    <button class="tab-btn role-management" onclick="showTab('dispecer')" style="font-weight:700;">📋 Dispečer</button>
     <button class="tab-btn role-management" onclick="showMgmtMain('kooperanti')">Kooperanti</button>
     <button class="tab-btn role-management" onclick="showMgmtMain('stanice')">Stanice</button>
     <button class="tab-btn role-management" onclick="showMgmtMain('kupci')">Kupci</button>
@@ -514,42 +477,62 @@
 <div class="tab-content" id="tab-koopinfo"><div id="koopInfoContent"></div></div>
 
 <!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
-<div class="tab-content" id="tab-warroom">
-    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px;">
-        <div class="stat-card"><div class="stat-value" id="wrK1">—</div><div class="stat-label">kg čeka otpremu</div></div>
-        <div class="stat-card"><div class="stat-value" id="wrK2">—</div><div class="stat-label">kamiona</div></div>
-        <div class="stat-card"><div class="stat-value" id="wrK3">—</div><div class="stat-label">kg traženo</div></div>
+<div class="tab-content" id="tab-dispecer">
+    <!-- KPI -->
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px;">
+        <div class="stat-card"><div class="stat-value" id="dpK1">—</div><div class="stat-label">kg čeka</div></div>
+        <div class="stat-card"><div class="stat-value" id="dpK2">—</div><div class="stat-label">kamiona</div></div>
+        <div class="stat-card"><div class="stat-value" id="dpK3">—</div><div class="stat-label">kg traženo</div></div>
+        <div class="stat-card"><div class="stat-value" id="dpK4">—</div><div class="stat-label">planova</div></div>
     </div>
-    <div class="wr-banner" id="wrBnr">
-        <div class="wbt" id="wrBt">—</div>
-        <div class="wbs" id="wrBs">—</div>
-        <button onclick="wrOK()" style="background:white;color:var(--primary);">✓ Potvrdi</button>
-        <button onclick="wrX()" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
+ 
+    <!-- Plan banner -->
+    <div class="dp-banner" id="dpBnr">
+        <div class="dp-bt" id="dpBt">—</div>
+        <div class="dp-bs" id="dpBs">—</div>
+        <button onclick="dpOK()" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
+        <button onclick="dpX()" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
     </div>
-    <div class="wr-3c">
-        <div class="wr-col supply"><div class="wr-col-head"><span>📦 Stanice</span><span id="wrST">0 kg</span></div><div class="wr-col-body" id="wrSB"></div></div>
-        <div class="wr-col transport"><div class="wr-col-head"><span>🚛 Kamioni</span><span id="wrTT">0</span></div><div class="wr-col-body" id="wrTB"></div></div>
-        <div class="wr-col demand"><div class="wr-col-head"><span>🏭 Hladnjače</span><span id="wrDT">0 kg</span></div>
-            <div class="wr-col-body" id="wrDB">
+ 
+    <!-- Active plans -->
+    <div id="dpPlanList" style="margin-bottom:12px;"></div>
+ 
+    <!-- Three columns -->
+    <div class="dp-cols">
+        <!-- SUPPLY -->
+        <div class="dp-col supply">
+            <div class="dp-col-hd"><span>📦 Stanice — čeka</span><span id="dpST">0 kg</span></div>
+            <div class="dp-col-bd" id="dpSB"></div>
+        </div>
+        <!-- TRANSPORT -->
+        <div class="dp-col transport">
+            <div class="dp-col-hd"><span>🚛 Kamioni</span><span id="dpTT">0</span></div>
+            <div class="dp-col-bd" id="dpTB"></div>
+        </div>
+        <!-- DEMAND -->
+        <div class="dp-col demand">
+            <div class="dp-col-hd"><span>🏭 Hladnjače — traže</span><span id="dpDT">0 kg</span></div>
+            <div class="dp-col-bd" id="dpDB">
                 <div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:10px;">
                     <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Dodaj zahtev</div>
                     <div class="form-row" style="margin-bottom:6px;">
-                        <div class="form-group" style="margin-bottom:0;"><select id="wrDK" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
-                        <div class="form-group" style="margin-bottom:0;"><input type="number" id="wrDG" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
+                        <div class="form-group" style="margin-bottom:0;"><select id="dpDK" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
+                        <div class="form-group" style="margin-bottom:0;"><input type="number" id="dpDG" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
                     </div>
                     <div style="display:flex;gap:6px;">
-                        <select id="wrDV" style="flex:1;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Vrsta...</option></select>
-                        <select id="wrDL" style="width:70px;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
-                        <button onclick="wrAD()" style="padding:8px 14px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;">+</button>
+                        <select id="dpDV" style="flex:1;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Vrsta...</option></select>
+                        <select id="dpDL" style="width:70px;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
+                        <button onclick="dpAD()" style="padding:8px 14px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;">+</button>
                     </div>
                 </div>
-                <div id="wrDL2"></div>
+                <div id="dpDL2"></div>
             </div>
         </div>
     </div>
+ 
     <div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted);">
-        <span id="wrRT">—</span>
-        <button onclick="loadWarRoom()" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
+        <span id="dpRT">—</span>
+        <button onclick="loadDispecer()" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
     </div>
 </div>
     
@@ -766,7 +749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('mgmtOtkupiDo').value = today;
         prefetchMgmtData().then(() => { 
             populateMgmtKupciDropdown();
-            showTab('warroom');
+            showTab('dispecer');
         });
     }
     updateSyncBadge();
@@ -2673,173 +2656,385 @@ function showMgmtSub(subId, btn) {
     const sub = allSubs.find(s => s.id === subId);
     if (sub && sub.load) sub.load();
 }
-// WAR ROOM
-let wrDem=[], wrKap={}, wrKS={}, wrSel=null;
-function wrGK(){try{return JSON.parse(localStorage.getItem('wr_kap')||'{}');}catch(e){return {};}}
-function wrSK(v,k){wrKap[v]=k;localStorage.setItem('wr_kap',JSON.stringify(wrKap));}
-function wrGS(){try{return JSON.parse(localStorage.getItem('wr_ks')||'{}');}catch(e){return {};}}
-function wrSS(v,s,r){wrKS[v]={status:s,ruta:r||''};localStorage.setItem('wr_ks',JSON.stringify(wrKS));}
+    
+// ============================================================
+// DISPEČER — Planski dashboard
+// NE dodeljuje VozacID. Čuva planove na Sheet.
+// ============================================================
+let dpDem = [];        // demand records (danas)
+let dpPlans = [];      // plan records (danas)
+let dpKap = {};        // vozacID → kg kapacitet (localStorage)
+let dpKS = {};         // vozacID → {status, ruta} (localStorage)
+let dpSel = null;      // {step, vid, sid, did}
  
-async function loadWarRoom(){
-    if(!mgmtData){document.getElementById('wrSB').innerHTML='<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';await prefetchMgmtData();}
-    wrKap=wrGK();wrKS=wrGS();wrPD();wrRS();wrRT();
-    wrDem=[];try{const j=await apiFetch('action=getWarRoomDemand');if(j&&j.success&&j.records)wrDem=j.records;}catch(e){}
-    wrRD();wrRK();wrX();
-    document.getElementById('wrRT').textContent='Ažurirano: '+new Date().toLocaleTimeString('sr',{hour:'2-digit',minute:'2-digit'});
+// --- localStorage helpers ---
+function dpGK() { try { return JSON.parse(localStorage.getItem('dp_kap') || '{}'); } catch(e) { return {}; } }
+function dpSetK(v, k) { dpKap[v] = k; localStorage.setItem('dp_kap', JSON.stringify(dpKap)); }
+function dpGS() { try { return JSON.parse(localStorage.getItem('dp_ks') || '{}'); } catch(e) { return {}; } }
+function dpSetS(v, s, r) { dpKS[v] = { status: s, ruta: r || '' }; localStorage.setItem('dp_ks', JSON.stringify(dpKS)); }
+ 
+// ============================================================
+// LOAD
+// ============================================================
+async function loadDispecer() {
+    if (!mgmtData) {
+        document.getElementById('dpSB').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
+        await prefetchMgmtData();
+    }
+    dpKap = dpGK();
+    dpKS = dpGS();
+    dpPD();
+    dpRS();
+    dpRTr();
+ 
+    // Load demand + plans from server
+    dpDem = []; dpPlans = [];
+    try {
+        const j = await apiFetch('action=getDispecer');
+        if (j && j.success) {
+            dpDem = j.demand || [];
+            dpPlans = j.plans || [];
+        }
+    } catch(e) {}
+ 
+    dpRD();
+    dpRP();
+    dpRK();
+    dpX();
+    document.getElementById('dpRT').textContent = 'Ažurirano: ' + new Date().toLocaleTimeString('sr', { hour: '2-digit', minute: '2-digit' });
 }
  
-function wrPD(){
-    const k=document.getElementById('wrDK');if(k.options.length<=1){(stammdaten.kupci||[]).forEach(x=>{const o=document.createElement('option');o.value=x.KupacID;o.textContent=x.Naziv||x.KupacID;k.appendChild(o);});}
-    const v=document.getElementById('wrDV');if(v.options.length<=1){const s=new Set();(stammdaten.kulture||[]).forEach(x=>{if(x.VrstaVoca&&!s.has(x.VrstaVoca)){s.add(x.VrstaVoca);const o=document.createElement('option');o.value=x.VrstaVoca;o.textContent=x.VrstaVoca;v.appendChild(o);}});}
+function dpPD() {
+    const k = document.getElementById('dpDK');
+    if (k.options.length <= 1) {
+        (stammdaten.kupci || []).forEach(x => { const o = document.createElement('option'); o.value = x.KupacID; o.textContent = x.Naziv || x.KupacID; k.appendChild(o); });
+        // Fallback
+        if (mgmtData && mgmtData.saldoKupci) {
+            mgmtData.saldoKupci.forEach(x => {
+                const v = x.KupacID || x.Kupac;
+                if (!v || Array.from(k.options).some(o => o.value === v)) return;
+                const o = document.createElement('option'); o.value = v; o.textContent = x.Kupac || v; k.appendChild(o);
+            });
+        }
+    }
+    const vs = document.getElementById('dpDV');
+    if (vs.options.length <= 1) {
+        const seen = new Set();
+        (stammdaten.kulture || []).forEach(x => { if (x.VrstaVoca && !seen.has(x.VrstaVoca)) { seen.add(x.VrstaVoca); const o = document.createElement('option'); o.value = x.VrstaVoca; o.textContent = x.VrstaVoca; vs.appendChild(o); } });
+    }
 }
  
-// SUPPLY
-function wrGSup(){return((mgmtData&&mgmtData.otkupiAll)||[]).filter(r=>!(r.VozacID||r.VozaciID||''));}
-function wrGAsg(){return((mgmtData&&mgmtData.otkupiAll)||[]).filter(r=>!!(r.VozacID||r.VozaciID||''));}
+// ============================================================
+// SUPPLY — iz mgmtData.otkupiAll (instant, bez API)
+// ============================================================
+function dpGetSup() { return ((mgmtData && mgmtData.otkupiAll) || []).filter(r => !(r.VozacID || r.VozaciID || '')); }
+function dpGetAsg() { return ((mgmtData && mgmtData.otkupiAll) || []).filter(r => !!(r.VozacID || r.VozaciID || '')); }
  
-function wrRS(){
-    const b=document.getElementById('wrSB'),sup=wrGSup(),g={};
-    sup.forEach(r=>{const s=r.OtkupacID||(r._sheetName||'').replace('OTK-','')||'?';if(!g[s])g[s]={items:[],kg:0,amb:0,kp:new Set(),dt:new Set()};g[s].items.push(r);g[s].kg+=parseFloat(r.Kolicina)||0;g[s].amb+=parseInt(r.KolAmbalaze)||0;g[s].kp.add(r.KooperantName||r.KooperantID||'?');const d=fmtDate(r.Datum);if(d)g[s].dt.add(d);});
-    const sorted=Object.entries(g).sort((a,b)=>b[1].kg-a[1].kg);
-    const tot=sorted.reduce((s,[,x])=>s+x.kg,0);
-    document.getElementById('wrST').textContent=tot.toLocaleString('sr')+' kg';
-    if(!sorted.length){b.innerHTML='<p style="text-align:center;color:var(--success);padding:30px;font-weight:600;">✅ Sve otpremljeno</p>';return;}
-    const td=new Date().toISOString().split('T')[0];
-    b.innerHTML=sorted.map(([sid,x])=>{
-        const n=wrSN(sid),old=[...x.dt].sort()[0]||'',isOld=old&&old<td,sl=wrSel&&wrSel.step>=2&&wrSel.sid===sid;
-        return `<div class="wr-card${isOld?' urgent':''}${sl?' sel':''}" onclick="wrTS('${sid}')">
+function dpRS() {
+    const b = document.getElementById('dpSB'), sup = dpGetSup(), g = {};
+    sup.forEach(r => {
+        const s = r.OtkupacID || (r._sheetName || '').replace('OTK-', '') || '?';
+        if (!g[s]) g[s] = { items: [], kg: 0, amb: 0, kp: new Set(), dt: new Set() };
+        g[s].items.push(r); g[s].kg += parseFloat(r.Kolicina) || 0; g[s].amb += parseInt(r.KolAmbalaze) || 0;
+        g[s].kp.add(r.KooperantName || r.KooperantID || '?');
+        const d = fmtDate(r.Datum); if (d) g[s].dt.add(d);
+    });
+    const sorted = Object.entries(g).sort((a, b) => b[1].kg - a[1].kg);
+    const tot = sorted.reduce((s, [, x]) => s + x.kg, 0);
+    document.getElementById('dpST').textContent = tot.toLocaleString('sr') + ' kg';
+ 
+    if (!sorted.length) { b.innerHTML = '<p style="text-align:center;color:var(--success);padding:30px;font-weight:600;">✅ Sve otpremljeno</p>'; return; }
+ 
+    const td = new Date().toISOString().split('T')[0];
+    // Check which stations have plans
+    const plannedSta = new Set(dpPlans.filter(p => p.Status === 'planned').map(p => p.StanicaID));
+ 
+    b.innerHTML = sorted.map(([sid, x]) => {
+        const n = dpSN(sid), old = [...x.dt].sort()[0] || '', isOld = old && old < td;
+        const hasPlan = plannedSta.has(sid);
+        const sl = dpSel && dpSel.step >= 2 && dpSel.sid === sid;
+        return `<div class="dp-card${isOld ? ' urgent' : ''}${sl ? ' sel' : ''}${hasPlan ? ' planned' : ''}" onclick="dpTS('${sid}')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
             <span style="font-weight:700;font-size:14px;">${n}</span>
             <span style="font-size:18px;font-weight:800;color:var(--primary);">${x.kg.toLocaleString('sr')} kg</span>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);">${x.kp.size} koop. · ${x.items.length} otk. · Amb: ${x.amb}${isOld?' · <span style="color:var(--danger);font-weight:600;">od '+old+'</span>':''}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${x.kp.size} koop. · ${x.items.length} otk. · Amb: ${x.amb}${isOld ? ' · <span style="color:var(--danger);font-weight:600;">od ' + old + '</span>' : ''}${hasPlan ? ' · <span style="color:var(--success);font-weight:600;">📋 Plan</span>' : ''}</div>
         <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:4px;">
-            ${x.items.slice(0,5).map(r=>'<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between;"><span>'+(r.KooperantName||'?')+'</span><span>'+(r.VrstaVoca||'')+' '+(r.Klasa||'I')+' · '+(parseFloat(r.Kolicina)||0).toLocaleString('sr')+' kg</span></div>').join('')}
-            ${x.items.length>5?'<div style="font-size:11px;color:var(--text-muted);font-style:italic;">+ još '+(x.items.length-5)+'</div>':''}
+            ${x.items.slice(0, 5).map(r => '<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between;"><span>' + (r.KooperantName || '?') + '</span><span>' + (r.VrstaVoca || '') + ' ' + (r.Klasa || 'I') + ' · ' + (parseFloat(r.Kolicina) || 0).toLocaleString('sr') + ' kg</span></div>').join('')}
+            ${x.items.length > 5 ? '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">+ još ' + (x.items.length - 5) + '</div>' : ''}
         </div></div>`;
     }).join('');
 }
  
-// TRANSPORT
-function wrRT(){
-    const b=document.getElementById('wrTB'),asg=wrGAsg(),vm={};
-    asg.forEach(r=>{const v=r.VozacID||r.VozaciID||'';if(!v)return;if(!vm[v])vm[v]={kg:0,n:0,st:new Set()};vm[v].kg+=parseFloat(r.Kolicina)||0;vm[v].n++;const s=r.OtkupacID||(r._sheetName||'').replace('OTK-','');if(s)vm[v].st.add(s);});
-    Object.keys(wrKap).forEach(v=>{if(!vm[v])vm[v]={kg:0,n:0,st:new Set()};});
-    Object.keys(wrKS).forEach(v=>{if(!vm[v])vm[v]={kg:0,n:0,st:new Set()};});
-    const ids=Object.keys(vm);document.getElementById('wrTT').textContent=ids.length;
-    if(!ids.length){b.innerHTML='<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema vozača</p>';return;}
-    const sl={slobodan:'Slobodan',utovar:'Na utovaru',naputu:'Na putu',istovar:'Na istovaru'};
-    b.innerHTML=ids.map(vid=>{
-        const x=vm[vid],cap=wrKap[vid]||0,ks=wrKS[vid]||{},st=ks.status||'slobodan',ruta=ks.ruta||'';
-        const pct=cap>0?Math.min(100,Math.round(x.kg/cap*100)):0;
-        const bc=pct>=90?'var(--danger)':pct>=50?'var(--accent)':'var(--success)';
-        const isSel=wrSel&&wrSel.step>=1&&wrSel.vid===vid;
-        const staL=[...(x.st||[])].map(s=>wrSN(s)).join(' → ');
-        return `<div class="wr-card trn${isSel?' sel':''}" onclick="wrTK('${vid}')">
+// ============================================================
+// TRANSPORT — vozači iz assigned otkupa + localStorage
+// ============================================================
+function dpRTr() {
+    const b = document.getElementById('dpTB'), asg = dpGetAsg(), vm = {};
+    asg.forEach(r => { const v = r.VozacID || r.VozaciID || ''; if (!v) return; if (!vm[v]) vm[v] = { kg: 0, n: 0, st: new Set() }; vm[v].kg += parseFloat(r.Kolicina) || 0; vm[v].n++; const s = r.OtkupacID || (r._sheetName || '').replace('OTK-', ''); if (s) vm[v].st.add(s); });
+    Object.keys(dpKap).forEach(v => { if (!vm[v]) vm[v] = { kg: 0, n: 0, st: new Set() }; });
+    Object.keys(dpKS).forEach(v => { if (!vm[v]) vm[v] = { kg: 0, n: 0, st: new Set() }; });
+    const ids = Object.keys(vm);
+    document.getElementById('dpTT').textContent = ids.length;
+ 
+    if (!ids.length) { b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema vozača</p>'; return; }
+ 
+    const sl = { slobodan: 'Slobodan', utovar: 'Na utovaru', naputu: 'Na putu', istovar: 'Na istovaru' };
+    b.innerHTML = ids.map(vid => {
+        const x = vm[vid], cap = dpKap[vid] || 0, ks = dpKS[vid] || {}, st = ks.status || 'slobodan', ruta = ks.ruta || '';
+        const pct = cap > 0 ? Math.min(100, Math.round(x.kg / cap * 100)) : 0;
+        const bc = pct >= 90 ? 'var(--danger)' : pct >= 50 ? 'var(--accent)' : 'var(--success)';
+        const isSel = dpSel && dpSel.step >= 1 && dpSel.vid === vid;
+        const staL = [...(x.st || [])].map(s => dpSN(s)).join(' → ');
+        // Check if this vozac has a plan today
+        const vozPlan = dpPlans.find(p => p.VozacID === vid && p.Status === 'planned');
+ 
+        return `<div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <span style="font-weight:700;font-size:14px;">🚛 ${vid}</span>
             <span style="font-size:14px;font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
         </div>
         <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
-            Kap: ${cap>0?cap.toLocaleString('sr')+' kg':'<input type="number" inputmode="numeric" placeholder="kg" value="" style="width:60px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;" onclick="event.stopPropagation()" onchange="wrSK(\''+vid+'\',parseInt(this.value)||0);wrRT()">'} · ${x.n} otk.
+            Kap: ${cap > 0 ? cap.toLocaleString('sr') + ' kg' : '<input type="number" inputmode="numeric" placeholder="kg" style="width:60px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;" onclick="event.stopPropagation()" onchange="dpSetK(\'' + vid + '\',parseInt(this.value)||0);dpRTr()">'} · ${x.n} otk.
         </div>
-        ${cap>0?'<div class="wr-bar"><div class="wr-bf" style="width:'+pct+'%;background:'+bc+';"></div></div>':''}
-        ${staL?'<div style="font-size:11px;color:var(--text-muted);">'+staL+(ruta?' → '+ruta:'')+'</div>':''}
-        ${ruta&&!staL?'<div style="font-size:11px;color:var(--text-muted);">Ruta: '+ruta+'</div>':''}
-        <div style="margin-top:4px;"><span class="wr-badge ${st}">${sl[st]||st}</span></div>
-        <div class="wr-stb" onclick="event.stopPropagation()">
-            ${['slobodan','utovar','naputu','istovar'].map(s=>'<button class="'+(st===s?'on':'')+'" onclick="wrCS(\''+vid+'\',\''+s+'\')">'+sl[s]+'</button>').join('')}
+        ${cap > 0 ? '<div class="dp-bar"><div class="dp-bf" style="width:' + pct + '%;background:' + bc + ';"></div></div>' : ''}
+        ${staL ? '<div style="font-size:11px;color:var(--text-muted);">' + staL + (ruta ? ' → ' + ruta : '') + '</div>' : ''}
+        ${ruta && !staL ? '<div style="font-size:11px;color:var(--text-muted);">Ruta: ' + ruta + '</div>' : ''}
+        ${vozPlan ? '<div style="font-size:11px;margin-top:4px;color:var(--success);font-weight:600;">📋 Plan: ' + (vozPlan.StanicaName || '') + ' → ' + (vozPlan.KupacName || '') + '</div>' : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+            <span class="dp-badge ${st}">${sl[st] || st}</span>
+        </div>
+        <div class="dp-stb" onclick="event.stopPropagation()">
+            ${['slobodan', 'utovar', 'naputu', 'istovar'].map(s => '<button class="' + (st === s ? 'on' : '') + '" onclick="dpCS(\'' + vid + '\',\'' + s + '\')">' + sl[s] + '</button>').join('')}
         </div></div>`;
     }).join('');
 }
  
+// ============================================================
 // DEMAND
-function wrRD(){
-    const l=document.getElementById('wrDL2'),tot=wrDem.reduce((s,d)=>s+(parseInt(d.Kg)||0),0);
-    document.getElementById('wrDT').textContent=tot.toLocaleString('sr')+' kg';
-    if(!wrDem.length){l.innerHTML='<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:12px;">Dodajte dnevne zahteve</p>';return;}
-    l.innerHTML=wrDem.map(d=>{
-        const kg=parseInt(d.Kg)||0,pr=parseInt(d.Primljeno)||0,os=Math.max(0,kg-pr);
-        const pct=kg>0?Math.min(100,Math.round(pr/kg*100)):0;
-        const bc=pct>=100?'var(--success)':pct>=50?'#2196F3':'var(--accent)';
-        const isSel=wrSel&&wrSel.step>=3&&wrSel.did===d.DemandID;
-        return `<div class="wr-card dem${isSel?' sel':''}" onclick="wrTD('${d.DemandID}')">
+// ============================================================
+function dpRD() {
+    const l = document.getElementById('dpDL2'), tot = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0);
+    document.getElementById('dpDT').textContent = tot.toLocaleString('sr') + ' kg';
+    if (!dpDem.length) { l.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:12px;">Dodajte dnevne zahteve</p>'; return; }
+    l.innerHTML = dpDem.map(d => {
+        const kg = parseInt(d.Kg) || 0, pr = parseInt(d.Primljeno) || 0, os = Math.max(0, kg - pr);
+        const pct = kg > 0 ? Math.min(100, Math.round(pr / kg * 100)) : 0;
+        const bc = pct >= 100 ? 'var(--success)' : pct >= 50 ? '#2196F3' : 'var(--accent)';
+        const isSel = dpSel && dpSel.step >= 3 && dpSel.did === d.DemandID;
+        return `<div class="dp-card dem${isSel ? ' sel' : ''}" onclick="dpTD('${d.DemandID}')">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:700;font-size:14px;color:#0d47a1;">${d.KupacName||d.KupacID||'?'}</span>
-            <button onclick="event.stopPropagation();wrRD2('${d.DemandID}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;">✕</button>
+            <span style="font-weight:700;font-size:14px;color:#0d47a1;">${d.KupacName || d.KupacID || '?'}</span>
+            <button onclick="event.stopPropagation();dpRmD('${d.DemandID}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;">✕</button>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);">${d.Vrsta||'Sve'} · Kl. ${d.Klasa||'I+II'}</div>
-        <div class="wr-bar"><div class="wr-bf" style="width:${pct}%;background:${bc};"></div></div>
+        <div style="font-size:11px;color:var(--text-muted);">${d.Vrsta || 'Sve'} · Kl. ${d.Klasa || 'I+II'}</div>
+        <div class="dp-bar"><div class="dp-bf" style="width:${pct}%;background:${bc};"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">
             <span>Traženo: <strong style="color:var(--text);">${kg.toLocaleString('sr')}</strong></span>
             <span>Primljeno: <strong style="color:var(--text);">${pr.toLocaleString('sr')}</strong></span>
             <span>Ostalo: <strong style="color:var(--text);">${os.toLocaleString('sr')}</strong></span>
         </div>
         <div style="margin-top:6px;display:flex;gap:4px;align-items:center;" onclick="event.stopPropagation();">
-            <input type="number" id="wrP_${d.DemandID}" value="${pr}" inputmode="numeric" style="width:80px;padding:6px;font-size:13px;border:2px solid var(--border);border-radius:var(--radius);">
-            <button onclick="wrUP('${d.DemandID}')" style="padding:6px 12px;font-size:12px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-weight:600;cursor:pointer;">Ažuriraj</button>
+            <input type="number" id="dpP_${d.DemandID}" value="${pr}" inputmode="numeric" style="width:80px;padding:6px;font-size:13px;border:2px solid var(--border);border-radius:var(--radius);">
+            <button onclick="dpUP('${d.DemandID}')" style="padding:6px 12px;font-size:12px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-weight:600;cursor:pointer;">Ažuriraj</button>
         </div></div>`;
     }).join('');
 }
  
+// ============================================================
+// PLANS — danas aktivni planovi
+// ============================================================
+function dpRP() {
+    const pl = document.getElementById('dpPlanList');
+    const active = dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku');
+    if (!active.length) { pl.innerHTML = ''; return; }
+    pl.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Današnji planovi</div>' +
+        active.map(p => {
+            const stBadge = p.Status === 'u_toku' ? '<span class="dp-badge naputu">U toku</span>' : '<span class="dp-badge slobodan">Planiran</span>';
+            return `<div class="dp-plan-item">
+                <div>
+                    <span class="dp-pi-route">🚛 ${p.VozacID || '?'} → 📦 ${p.StanicaName || p.StanicaID || '?'} → 🏭 ${p.KupacName || '?'}</span>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${p.PlannedKg ? p.PlannedKg.toLocaleString('sr') + ' kg' : ''} ${stBadge}</div>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="dpChgPlanSt('${p.PlanID}','u_toku')" title="U toku" style="color:var(--primary);">▶</button>
+                    <button onclick="dpChgPlanSt('${p.PlanID}','zavrseno')" title="Završeno" style="color:var(--success);">✓</button>
+                    <button onclick="dpRmPlan('${p.PlanID}')" title="Obriši">✕</button>
+                </div>
+            </div>`;
+        }).join('');
+}
+ 
+// ============================================================
 // KPI
-function wrRK(){
-    document.getElementById('wrK1').textContent=wrGSup().reduce((s,r)=>s+(parseFloat(r.Kolicina)||0),0).toLocaleString('sr');
-    const asg=wrGAsg(),vz=new Set();asg.forEach(r=>{const v=r.VozacID||r.VozaciID||'';if(v)vz.add(v);});
-    Object.keys(wrKap).forEach(v=>vz.add(v));Object.keys(wrKS).forEach(v=>vz.add(v));
-    document.getElementById('wrK2').textContent=vz.size;
-    document.getElementById('wrK3').textContent=wrDem.reduce((s,d)=>s+(parseInt(d.Kg)||0),0).toLocaleString('sr');
+// ============================================================
+function dpRK() {
+    document.getElementById('dpK1').textContent = dpGetSup().reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0).toLocaleString('sr');
+    const asg = dpGetAsg(), vz = new Set();
+    asg.forEach(r => { const v = r.VozacID || r.VozaciID || ''; if (v) vz.add(v); });
+    Object.keys(dpKap).forEach(v => vz.add(v)); Object.keys(dpKS).forEach(v => vz.add(v));
+    document.getElementById('dpK2').textContent = vz.size;
+    document.getElementById('dpK3').textContent = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0).toLocaleString('sr');
+    document.getElementById('dpK4').textContent = dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku').length;
 }
  
-// TAP-TO-ASSIGN
-function wrTK(vid){if(wrSel&&wrSel.vid===vid){wrX();return;}wrSel={step:1,vid};wrBN('🚛 '+vid+' izabran','Korak 2: tapnite STANICU');wrHL();}
-function wrTS(sid){if(!wrSel||wrSel.step<1){showToast('Prvo izaberite kamion','info');return;}if(wrSel.sid===sid){wrSel.step=1;wrSel.sid=null;wrBN('🚛 '+wrSel.vid,'Korak 2: tapnite stanicu');wrHL();return;}wrSel.step=2;wrSel.sid=sid;const kg=wrGSup().filter(r=>(r.OtkupacID||(r._sheetName||'').replace('OTK-',''))===sid).reduce((s,r)=>s+(parseFloat(r.Kolicina)||0),0);wrBN('🚛 '+wrSel.vid+' → 📦 '+wrSN(sid)+' ('+kg.toLocaleString('sr')+' kg)','Korak 3: tapnite HLADNJAČU');wrHL();}
-function wrTD(did){if(!wrSel||wrSel.step<2){showToast(wrSel&&wrSel.step>=1?'Izaberite stanicu':'Prvo kamion, pa stanicu','info');return;}if(wrSel.did===did){wrSel.step=2;wrSel.did=null;wrBN('🚛 '+wrSel.vid+' → 📦 '+wrSN(wrSel.sid),'Korak 3: tapnite hladnjaču');wrHL();return;}wrSel.step=3;wrSel.did=did;const d=wrDem.find(x=>x.DemandID===did);wrBN('🚛 '+wrSel.vid+' → 📦 '+wrSN(wrSel.sid)+' → 🏭 '+(d?d.KupacName:'?'),'Tapnite POTVRDI');wrHL();}
- 
-function wrBN(t,s){document.getElementById('wrBt').textContent=t;document.getElementById('wrBs').textContent=s;document.getElementById('wrBnr').classList.add('on');}
-function wrX(){wrSel=null;document.getElementById('wrBnr').classList.remove('on');wrHL();}
-function wrHL(){wrRS();wrRT();wrRD();}
- 
-async function wrOK(){
-    if(!wrSel||wrSel.step<3){showToast('Završite sva 3 koraka','error');return;}
-    const vid=wrSel.vid,sid=wrSel.sid;
-    const d=wrDem.find(x=>x.DemandID===wrSel.did);
-    const kupN=d?(d.KupacName||d.KupacID):'?';
-    const sup=wrGSup().filter(r=>(r.OtkupacID||(r._sheetName||'').replace('OTK-',''))===sid);
-    const crids=sup.map(r=>r.ClientRecordID).filter(Boolean);
-    if(!crids.length){showToast('Nema otkupa za dodelu','error');return;}
-    showToast('Dodeljivanje '+crids.length+' otkupa...','info');
-    try{
-        const resp=await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'assignVozacToOtkupi',token:CONFIG.TOKEN,vozacID:vid,stanicaID:sid,clientRecordIDs:crids})});
-        const json=await resp.json();
-        if(json.success){
-            const cs=new Set(crids);
-            if(mgmtData&&mgmtData.otkupiAll) mgmtData.otkupiAll.forEach(r=>{if(cs.has(r.ClientRecordID))r.VozacID=vid;});
-            wrSS(vid,'utovar',wrSN(sid)+' → '+kupN);
-            fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateKamionStatus',token:CONFIG.TOKEN,vozacID:vid,status:'utovar',ruta:wrSN(sid)+' → '+kupN})}).catch(()=>{});
-            showToast('✓ '+vid+': '+crids.length+' otk. → '+kupN,'success');
-        } else showToast('Greška: '+(json.error||''),'error');
-    }catch(e){showToast('Nema konekcije','error');}
-    wrX();wrRS();wrRT();wrRK();
+// ============================================================
+// TAP-TO-PLAN: Kamion → Stanica → Hladnjača → Sačuvaj plan
+// NE DIRA OTK SHEET. Samo čuva plan red.
+// ============================================================
+function dpTK(vid) {
+    if (dpSel && dpSel.vid === vid) { dpX(); return; }
+    dpSel = { step: 1, vid };
+    dpBN('🚛 ' + vid + ' izabran', 'Korak 2: tapnite STANICU odakle treba pokupiti robu');
+    dpHL();
+}
+function dpTS(sid) {
+    if (!dpSel || dpSel.step < 1) { showToast('Prvo izaberite kamion', 'info'); return; }
+    if (dpSel.sid === sid) { dpSel.step = 1; dpSel.sid = null; dpBN('🚛 ' + dpSel.vid, 'Korak 2: tapnite stanicu'); dpHL(); return; }
+    dpSel.step = 2; dpSel.sid = sid;
+    const kg = dpGetSup().filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === sid).reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+    dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(sid) + ' (' + kg.toLocaleString('sr') + ' kg)', 'Korak 3: tapnite HLADNJAČU gde ide roba');
+    dpHL();
+}
+function dpTD(did) {
+    if (!dpSel || dpSel.step < 2) { showToast(dpSel && dpSel.step >= 1 ? 'Izaberite stanicu' : 'Prvo kamion, pa stanicu', 'info'); return; }
+    if (dpSel.did === did) { dpSel.step = 2; dpSel.did = null; dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid), 'Korak 3: tapnite hladnjaču'); dpHL(); return; }
+    dpSel.step = 3; dpSel.did = did;
+    const d = dpDem.find(x => x.DemandID === did);
+    const kg = dpGetSup().filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === dpSel.sid).reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+    dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid) + ' (' + kg.toLocaleString('sr') + ' kg) → 🏭 ' + (d ? d.KupacName : '?'), 'Tapnite SAČUVAJ PLAN');
+    dpHL();
 }
  
+function dpBN(t, s) { document.getElementById('dpBt').textContent = t; document.getElementById('dpBs').textContent = s; document.getElementById('dpBnr').classList.add('active'); }
+function dpX() { dpSel = null; document.getElementById('dpBnr').classList.remove('active'); dpHL(); }
+function dpHL() { dpRS(); dpRTr(); dpRD(); }
+ 
+// ============================================================
+// CONFIRM — čuva PLAN na Sheet, NE dira OTK
+// ============================================================
+async function dpOK() {
+    if (!dpSel || dpSel.step < 3) { showToast('Završite sva 3 koraka', 'error'); return; }
+    const vid = dpSel.vid, sid = dpSel.sid;
+    const d = dpDem.find(x => x.DemandID === dpSel.did);
+    const kupN = d ? (d.KupacName || d.KupacID) : '?';
+    const kupID = d ? (d.KupacID || '') : '';
+    const kg = dpGetSup().filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === sid).reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+ 
+    showToast('Čuvanje plana...', 'info');
+    try {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'saveDispecer', token: CONFIG.TOKEN,
+                vozacID: vid, stanicaID: sid, stanicaName: dpSN(sid),
+                kupacID: kupID, kupacName: kupN, plannedKg: Math.round(kg)
+            })
+        });
+        const json = await resp.json();
+        if (json.success) {
+            // Update kamion status locally
+            dpSetS(vid, 'utovar', dpSN(sid) + ' → ' + kupN);
+            // Fire-and-forget server status
+            fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'updateKamionStatus', token: CONFIG.TOKEN, vozacID: vid, status: 'utovar', ruta: dpSN(sid) + ' → ' + kupN }) }).catch(() => {});
+            // Add to local plans
+            dpPlans.push({
+                PlanID: json.planID, VozacID: vid, StanicaID: sid, StanicaName: dpSN(sid),
+                KupacID: kupID, KupacName: kupN, PlannedKg: Math.round(kg), Status: 'planned'
+            });
+            showToast('📋 Plan: ' + vid + ' → ' + dpSN(sid) + ' → ' + kupN, 'success');
+        } else { showToast(json.error || 'Greška', 'error'); }
+    } catch(e) { showToast('Nema konekcije', 'error'); }
+    dpX(); dpRS(); dpRTr(); dpRP(); dpRK();
+}
+ 
+// ============================================================
+// PLAN STATUS CHANGE
+// ============================================================
+async function dpChgPlanSt(planID, newStatus) {
+    try {
+        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'updateDispecer', token: CONFIG.TOKEN, planID, status: newStatus }) });
+        const p = dpPlans.find(x => x.PlanID === planID);
+        if (p) p.Status = newStatus;
+        if (newStatus === 'zavrseno') dpPlans = dpPlans.filter(x => x.PlanID !== planID);
+        dpRP(); dpRK(); dpRS(); dpRTr();
+        showToast(newStatus === 'zavrseno' ? 'Plan završen' : 'Plan u toku', 'success');
+    } catch(e) {}
+}
+ 
+async function dpRmPlan(planID) {
+    try {
+        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'removeDispecer', token: CONFIG.TOKEN, planID }) });
+        dpPlans = dpPlans.filter(x => x.PlanID !== planID);
+        dpRP(); dpRK(); dpRS(); dpRTr();
+        showToast('Plan obrisan', 'info');
+    } catch(e) {}
+}
+ 
+// ============================================================
 // KAMION STATUS
-async function wrCS(vid,st){wrSS(vid,st,(wrKS[vid]||{}).ruta||'');wrRT();fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateKamionStatus',token:CONFIG.TOKEN,vozacID:vid,status:st,ruta:(wrKS[vid]||{}).ruta||''})}).catch(()=>{});}
- 
-// DEMAND CRUD
-async function wrAD(){
-    const kid=document.getElementById('wrDK').value,kg=parseInt(document.getElementById('wrDG').value)||0;
-    if(!kid){showToast('Izaberite kupca','error');return;}if(kg<=0){showToast('Unesite kg','error');return;}
-    const kn=document.getElementById('wrDK').selectedOptions[0].textContent,vr=document.getElementById('wrDV').value,kl=document.getElementById('wrDL').value;
-    try{const r=await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'saveWarRoomDemand',token:CONFIG.TOKEN,kupacID:kid,kupacName:kn,kg,vrsta:vr||'',klasa:kl||'I+II'})});const j=await r.json();
-    if(j.success){showToast(kn+': '+kg.toLocaleString('sr')+' kg','success');document.getElementById('wrDG').value='';document.getElementById('wrDK').value='';
-    wrDem=[];try{const j2=await apiFetch('action=getWarRoomDemand');if(j2&&j2.success&&j2.records)wrDem=j2.records;}catch(e){}wrRD();wrRK();}
-    else showToast(j.error||'Greška','error');}catch(e){showToast('Nema konekcije','error');}
+// ============================================================
+async function dpCS(vid, st) {
+    dpSetS(vid, st, (dpKS[vid] || {}).ruta || '');
+    dpRTr();
+    fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'updateKamionStatus', token: CONFIG.TOKEN, vozacID: vid, status: st, ruta: (dpKS[vid] || {}).ruta || '' }) }).catch(() => {});
 }
-async function wrRD2(did){try{await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'removeWarRoomDemand',token:CONFIG.TOKEN,demandID:did})});wrDem=wrDem.filter(d=>d.DemandID!==did);wrRD();wrRK();showToast('Uklonjeno','info');}catch(e){}}
-async function wrUP(did){const el=document.getElementById('wrP_'+did);if(!el)return;const v=parseInt(el.value)||0;try{await fetch(CONFIG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateDemandPrimljeno',token:CONFIG.TOKEN,demandID:did,primljeno:v})});const d=wrDem.find(x=>x.DemandID===did);if(d)d.Primljeno=v;wrRD();wrRK();showToast('Ažurirano','success');}catch(e){showToast('Greška','error');}}
  
-function wrSN(sid){if(!sid)return'?';const s=(stammdaten.stanice||[]).find(x=>x.StanicaID===sid);return s?(s.Naziv||s.Mesto||sid):sid;}
+// ============================================================
+// DEMAND CRUD
+// ============================================================
+async function dpAD() {
+    const kid = document.getElementById('dpDK').value, kg = parseInt(document.getElementById('dpDG').value) || 0;
+    if (!kid) { showToast('Izaberite kupca', 'error'); return; }
+    if (kg <= 0) { showToast('Unesite kg', 'error'); return; }
+    const kn = document.getElementById('dpDK').selectedOptions[0].textContent;
+    const vr = document.getElementById('dpDV').value, kl = document.getElementById('dpDL').value;
+    try {
+        const r = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'saveWarRoomDemand', token: CONFIG.TOKEN, kupacID: kid, kupacName: kn, kg, vrsta: vr || '', klasa: kl || 'I+II' }) });
+        const j = await r.json();
+        if (j.success) {
+            showToast(kn + ': ' + kg.toLocaleString('sr') + ' kg', 'success');
+            document.getElementById('dpDG').value = ''; document.getElementById('dpDK').value = '';
+            // Reload demand
+            try { const j2 = await apiFetch('action=getDispecer'); if (j2 && j2.success) { dpDem = j2.demand || []; dpPlans = j2.plans || []; } } catch(e) {}
+            dpRD(); dpRK();
+        } else showToast(j.error || 'Greška', 'error');
+    } catch(e) { showToast('Nema konekcije', 'error'); }
+}
+ 
+async function dpRmD(did) {
+    try {
+        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'removeWarRoomDemand', token: CONFIG.TOKEN, demandID: did }) });
+        dpDem = dpDem.filter(d => d.DemandID !== did); dpRD(); dpRK();
+        showToast('Uklonjeno', 'info');
+    } catch(e) {}
+}
+ 
+async function dpUP(did) {
+    const el = document.getElementById('dpP_' + did); if (!el) return;
+    const v = parseInt(el.value) || 0;
+    try {
+        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'updateDemandPrimljeno', token: CONFIG.TOKEN, demandID: did, primljeno: v }) });
+        const d = dpDem.find(x => x.DemandID === did); if (d) d.Primljeno = v;
+        dpRD(); dpRK(); showToast('Ažurirano', 'success');
+    } catch(e) { showToast('Greška', 'error'); }
+}
+ 
+// ============================================================
+// HELPER
+// ============================================================
+function dpSN(sid) {
+    if (!sid) return '?';
+    const s = (stammdaten.stanice || []).find(x => x.StanicaID === sid);
+    return s ? (s.Naziv || s.Mesto || sid) : sid;
+}
     
 // ============================================================
 // MANAGEMENT: KOOPERANTI
@@ -3205,7 +3400,7 @@ function showTab(tabName) {
     if (tabName === 'koopinfo') loadKoopInfo();
     if (tabName === 'zbirna') loadVozacData();
     if (tabName === 'transport') loadVozacTransport();
-    if (tabName === 'warroom') loadWarRoom();
+    if (tabName === 'dispecer') loadDispecer();
 }
 
 // ============================================================
