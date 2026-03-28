@@ -2107,7 +2107,7 @@ async function loadParcele() {
 
                         window._parcelLayers[p.ParcelaID] = l;
                     });
-               } else if (!isNaN(lat) && !isNaN(lng)) {
+               } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
                     const marker = L.circleMarker([lat, lng], {
                         radius: 8,
                         color: '#ffd60a',
