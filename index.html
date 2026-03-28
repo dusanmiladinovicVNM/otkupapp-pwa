@@ -2175,19 +2175,40 @@ function renderMeteoInline(data) {
     const spray = data.sprayWindow;
     const daily = data.daily || [];
     
-    // Current conditions line
-    let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;">';
-    html += `<span style="font-size:16px;font-weight:700;color:var(--primary);">${c.temperature.toFixed(1)}°C</span>`;
-    html += `<span>${weatherCodeIcon(c.weatherCode)}</span>`;
-    html += `<span>💧${c.humidity}%</span>`;
-    html += `<span>💨${c.windSpeed.toFixed(0)} km/h</span>`;
-    if (c.precipitation > 0) html += `<span>🌧️${c.precipitation.toFixed(1)}mm</span>`;
+    let html = '';
+    
+    // Current conditions — two rows
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;">';
+    html += `<span style="font-size:16px;font-weight:700;color:var(--primary);">${(c.temperature || c.Temp || 0).toFixed(1)}°C</span>`;
+    html += `<span>${weatherCodeIcon(c.weatherCode || c.WeatherCode || 0)}</span>`;
+    html += `<span>💧${c.humidity || c.Humidity || 0}%</span>`;
+    html += `<span>💨${(c.windSpeed || c.Wind || 0).toFixed(0)} km/h</span>`;
+    const precip = c.precipitation || c.Precip || 0;
+    if (precip > 0) html += `<span>🌧️${precip.toFixed(1)}mm</span>`;
     html += '</div>';
     
+    // Soil + advanced data row
+    const soilMoist = c.soilMoist_0_1 || c.SoilMoist_0_1cm || null;
+    const soilTemp = c.soilTemp_0 || c.SoilTemp_0cm || null;
+    const et0 = c.et0 || c.ET0 || null;
+    const uv = c.uvIndex || c.UVIndex || null;
+    const solar = c.solarRadiation || c.SolarRadiation || null;
+    
+    if (soilMoist !== null || soilTemp !== null) {
+        html += '<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--text-muted);margin-bottom:4px;">';
+        if (soilTemp !== null) html += `<span>🌡️Zemlj: ${Number(soilTemp).toFixed(1)}°C</span>`;
+        if (soilMoist !== null) html += `<span>🌱Vlažn.z: ${(Number(soilMoist) * 100).toFixed(0)}%</span>`;
+        if (et0 !== null) html += `<span>💦ET₀: ${Number(et0).toFixed(1)}mm</span>`;
+        if (uv !== null && Number(uv) > 0) html += `<span>☀️UV: ${Number(uv).toFixed(0)}</span>`;
+        if (solar !== null && Number(solar) > 0) html += `<span>🔆${Number(solar).toFixed(0)} W/m²</span>`;
+        html += '</div>';
+    }
+    
     // Risk badges
-    if (risk && risk.items && risk.items.length > 0) {
+    const riskItems = risk ? (risk.items || risk.RiskItems || []) : [];
+    if (riskItems.length > 0) {
         html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">';
-        risk.items.forEach(r => {
+        riskItems.forEach(r => {
             const bg = r.level === 'danger' ? '#fee2e2' : '#fef3c7';
             const color = r.level === 'danger' ? '#991b1b' : '#92400e';
             html += `<span style="background:${bg};color:${color};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${r.icon} ${r.message}</span>`;
@@ -2197,9 +2218,10 @@ function renderMeteoInline(data) {
         html += '<div style="margin-bottom:4px;"><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">✅ Bez rizika</span></div>';
     }
     
-    // Spray window — only best one
-    if (spray && spray.length > 0) {
-        const w = spray[0];
+    // Spray window
+    const sprayWindows = spray || data.SprayWindows || [];
+    if (sprayWindows.length > 0) {
+        const w = sprayWindows[0];
         const start = new Date(w.start);
         const end = new Date(w.end);
         const dayNames = ['Ned','Pon','Uto','Sre','Čet','Pet','Sub'];
@@ -2211,7 +2233,7 @@ function renderMeteoInline(data) {
         html += '<div style="font-size:11px;color:var(--warning);">⚠️ Nema termina za prskanje (72h)</div>';
     }
     
-    // Mini 3-day forecast
+    // Mini 3-day forecast (only if daily data available)
     if (daily.length >= 3) {
         const dayNames = ['Ned','Pon','Uto','Sre','Čet','Pet','Sub'];
         html += '<div style="display:flex;gap:8px;margin-top:4px;">';
