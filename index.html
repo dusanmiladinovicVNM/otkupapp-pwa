@@ -266,6 +266,155 @@
                 height: auto !important;
             }
         }
+        <!-- ==================== CSS (dodati u <style>) ==================== -->
+<!--
+/* War Room — koristi iste varijable kao index.html */
+.wr-columns {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+@media (min-width: 900px) {
+    .wr-columns { flex-direction: row; align-items: flex-start; }
+    .wr-columns > .wr-col { flex: 1; min-width: 0; }
+}
+.wr-col {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+.wr-col-head {
+    padding: 12px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.wr-col.supply .wr-col-head { background: var(--primary); color: white; }
+.wr-col.transport .wr-col-head { background: var(--accent); color: white; }
+.wr-col.demand .wr-col-head { background: #1565c0; color: white; }
+
+.wr-col-body {
+    padding: 10px;
+    max-height: 65vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.wr-sta {
+    background: var(--card);
+    padding: 12px;
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    border-left: 4px solid var(--primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.wr-sta:active { background: #e8f5e9; }
+.wr-sta.selected { border-left-color: var(--accent); background: #fff8e1; }
+.wr-sta.urgent { border-left-color: var(--danger); }
+.wr-sta .ws-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+.wr-sta .ws-name { font-weight: 700; font-size: 14px; }
+.wr-sta .ws-kg { font-size: 18px; font-weight: 800; color: var(--primary); }
+.wr-sta .ws-detail { font-size: 11px; color: var(--text-muted); }
+.wr-sta .ws-items { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 4px; }
+.wr-sta .ws-item { font-size: 11px; padding: 2px 0; display: flex; justify-content: space-between; }
+
+.wr-kam {
+    background: var(--card);
+    padding: 12px;
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    border-left: 4px solid var(--accent);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.wr-kam:active { background: #fff8e1; }
+.wr-kam.selected { border-left-color: var(--primary); background: #e8f5e9; }
+.wr-kam .wk-top { display: flex; justify-content: space-between; align-items: center; }
+.wr-kam .wk-name { font-weight: 700; font-size: 14px; }
+.wr-kam .wk-cap { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.wr-kam .wk-load-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 6px 0 4px; }
+.wr-kam .wk-load-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.wr-kam .wk-status {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.wk-status.slobodan { background: #d1fae5; color: #065f46; }
+.wk-status.utovar { background: #fef3c7; color: #92400e; }
+.wk-status.naputu { background: #dbeafe; color: #1e40af; }
+.wk-status.istovar { background: #ede9fe; color: #5b21b6; }
+
+.wr-dem {
+    background: var(--card);
+    padding: 12px;
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    border-left: 4px solid #1565c0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.wr-dem:active { background: #e3f2fd; }
+.wr-dem.selected { border-left-color: var(--accent); background: #fff8e1; }
+.wr-dem .wd-name { font-weight: 700; font-size: 14px; color: #0d47a1; }
+.wr-dem .wd-bar { height: 6px; background: #e3f2fd; border-radius: 3px; overflow: hidden; margin: 6px 0; }
+.wr-dem .wd-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+.wr-dem .wd-nums { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+.wr-dem .wd-nums strong { color: var(--text); }
+
+.wr-assign-banner {
+    background: var(--accent);
+    color: white;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    display: none;
+    font-size: 13px;
+}
+.wr-assign-banner.active { display: block; }
+.wr-assign-banner .ab-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.wr-assign-banner .ab-steps { font-size: 12px; opacity: 0.9; }
+.wr-assign-banner button {
+    margin-top: 8px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.wr-status-select {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.wr-status-select button {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 11px;
+    background: white;
+    cursor: pointer;
+    font-weight: 600;
+}
+.wr-status-select button.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+-->
     </style>
 </head>
 <body>
@@ -299,6 +448,7 @@
     <button class="tab-btn role-kooperant" onclick="showTab('agromere')">Agromere</button>
     <button class="tab-btn role-kooperant" onclick="showTab('koopinfo')">Info</button>
     <!-- Management -->
+    <button class="tab-btn role-management" onclick="showTab('warroom')" style="font-weight:700;">⚡ War Room</button>
     <button class="tab-btn role-management" onclick="showMgmtMain('kooperanti')">Kooperanti</button>
     <button class="tab-btn role-management" onclick="showMgmtMain('stanice')">Stanice</button>
     <button class="tab-btn role-management" onclick="showMgmtMain('kupci')">Kupci</button>
@@ -435,7 +585,57 @@
 <div class="tab-content" id="tab-koopinfo"><div id="koopInfoContent"></div></div>
 
 <!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
+<div class="tab-content" id="tab-warroom">
+    <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 12px;">
+        <div class="stat-card"><div class="stat-value" id="wrKpiKg">—</div><div class="stat-label">kg čeka otpremu</div></div>
+        <div class="stat-card"><div class="stat-value" id="wrKpiKam">—</div><div class="stat-label">kamiona</div></div>
+        <div class="stat-card"><div class="stat-value" id="wrKpiDem">—</div><div class="stat-label">kg traženo</div></div>
+    </div>
 
+    <div class="wr-assign-banner" id="wrAssignBanner">
+        <div class="ab-title" id="wrAssignTitle">—</div>
+        <div class="ab-steps" id="wrAssignSteps">—</div>
+        <div style="display:flex;gap:8px;">
+            <button onclick="wrConfirmAssign()" style="background:white;color:var(--primary);">✓ Potvrdi</button>
+            <button onclick="wrCancelAssign()" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
+        </div>
+    </div>
+
+    <div class="wr-columns">
+        <div class="wr-col supply">
+            <div class="wr-col-head"><span>📦 Stanice</span><span id="wrSupTotal">0 kg</span></div>
+            <div class="wr-col-body" id="wrSupBody"></div>
+        </div>
+        <div class="wr-col transport">
+            <div class="wr-col-head"><span>🚛 Kamioni</span><span id="wrTrnTotal">0</span></div>
+            <div class="wr-col-body" id="wrTrnBody"></div>
+        </div>
+        <div class="wr-col demand">
+            <div class="wr-col-head"><span>🏭 Hladnjače</span><span id="wrDemTotal">0 kg</span></div>
+            <div class="wr-col-body" id="wrDemBody">
+                <div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:10px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Dodaj zahtev</div>
+                    <div class="form-row" style="margin-bottom:6px;">
+                        <div class="form-group" style="margin-bottom:0;"><select id="wrDemKupac" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
+                        <div class="form-group" style="margin-bottom:0;"><input type="number" id="wrDemKg" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <select id="wrDemVrsta" style="flex:1;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Vrsta...</option></select>
+                        <select id="wrDemKlasa" style="width:70px;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
+                        <button onclick="wrAddDemand()" style="padding:8px 14px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;">+</button>
+                    </div>
+                </div>
+                <div id="wrDemList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted);">
+        <span id="wrRefresh">—</span>
+        <button onclick="loadWarRoom()" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
+    </div>
+</div>
+    
 <div class="tab-content" id="tab-mgmt">
     <!-- Sub tab bar — popunjava se dinamički iz showMgmtMain() -->
     <div class="sub-tab-bar" id="mgmtSubBar"></div>
@@ -636,7 +836,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('fldPregledOd').value = today;
         document.getElementById('fldPregledDo').value = today;
-        document.getElementById('fldOtpremniceDatum').value = today;
+        const otpDatumEl = document.getElementById('fldOtpremniceDatum');
+        if (otpDatumEl) otpDatumEl.value = today;
     }
     if (CONFIG.USER_ROLE === 'Kooperant') {
         populateAgroParcele();
@@ -646,7 +847,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('mgmtOtkupiOd').value = today;
         document.getElementById('mgmtOtkupiDo').value = today;
-        prefetchMgmtData().then(() => { populateMgmtKupciDropdown(); });
+        prefetchMgmtData().then(() => { 
+            populateMgmtKupciDropdown();
+            showTab('warroom');
+        });
     }
     updateSyncBadge();
     window.addEventListener('online', () => { updateSyncBadge(); if (CONFIG.USER_ROLE === 'Otkupac') syncQueue(); });
@@ -2552,7 +2756,267 @@ function showMgmtSub(subId, btn) {
     const sub = allSubs.find(s => s.id === subId);
     if (sub && sub.load) sub.load();
 }
+// ============================================================
+// WAR ROOM
+// ============================================================
+let wrData = null;
+let wrAssignState = null;
 
+async function loadWarRoom() {
+    document.getElementById('wrSupBody').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
+    document.getElementById('wrTrnBody').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
+    try {
+        const json = await apiFetch('action=getWarRoomData');
+        if (json && json.success) { wrData = json; }
+        else { showToast('War Room: ' + ((json && json.error) || 'greška'), 'error'); return; }
+    } catch (e) { showToast('War Room nedostupan', 'error'); return; }
+    wrPopulateDropdowns();
+    wrRenderSupply();
+    wrRenderTransport();
+    wrRenderDemand();
+    wrRenderKPI();
+    wrCancelAssign();
+    document.getElementById('wrRefresh').textContent = 'Ažurirano: ' + new Date().toLocaleTimeString('sr', { hour: '2-digit', minute: '2-digit' });
+}
+
+function wrPopulateDropdowns() {
+    const kupSel = document.getElementById('wrDemKupac');
+    if (kupSel.options.length <= 1) {
+        (stammdaten.kupci || []).forEach(k => { const o = document.createElement('option'); o.value = k.KupacID; o.textContent = k.Naziv || k.KupacID; kupSel.appendChild(o); });
+    }
+    const vrstaSel = document.getElementById('wrDemVrsta');
+    if (vrstaSel.options.length <= 1) {
+        const s = new Set();
+        (stammdaten.kulture || []).forEach(k => { if (k.VrstaVoca && !s.has(k.VrstaVoca)) { s.add(k.VrstaVoca); const o = document.createElement('option'); o.value = k.VrstaVoca; o.textContent = k.VrstaVoca; vrstaSel.appendChild(o); } });
+    }
+}
+
+// --- SUPPLY ---
+function wrRenderSupply() {
+    const body = document.getElementById('wrSupBody');
+    const supply = (wrData && wrData.supply) || [];
+    const grouped = {};
+    supply.forEach(r => {
+        const sid = r.stanicaID || '?';
+        if (!grouped[sid]) grouped[sid] = { items: [], kg: 0, amb: 0, koops: new Set(), dates: new Set() };
+        grouped[sid].items.push(r);
+        grouped[sid].kg += r.kolicina || 0;
+        grouped[sid].amb += r.kolAmbalaze || 0;
+        grouped[sid].koops.add(r.kooperantName || r.kooperantID || '?');
+        if (r.datum) grouped[sid].dates.add(r.datum);
+    });
+    const sorted = Object.entries(grouped).sort((a, b) => b[1].kg - a[1].kg);
+    const totalKg = sorted.reduce((s, [, g]) => s + g.kg, 0);
+    document.getElementById('wrSupTotal').textContent = totalKg.toLocaleString('sr') + ' kg';
+    if (sorted.length === 0) { body.innerHTML = '<p style="text-align:center;color:var(--success);padding:30px;font-weight:600;">✅ Sve otpremljeno</p>'; return; }
+    const today = new Date().toISOString().split('T')[0];
+    body.innerHTML = sorted.map(([sid, g]) => {
+        const name = wrStaName(sid);
+        const oldest = [...g.dates].sort()[0] || '';
+        const isOld = oldest && oldest < today;
+        const sel = wrAssignState && wrAssignState.step >= 2 && wrAssignState.stanicaID === sid ? ' selected' : '';
+        return `<div class="wr-sta${isOld ? ' urgent' : ''}${sel}" onclick="wrTapStanica('${sid}')">
+            <div class="ws-top"><span class="ws-name">${name}</span><span class="ws-kg">${g.kg.toLocaleString('sr')} kg</span></div>
+            <div class="ws-detail">${g.koops.size} koop. · ${g.items.length} otk. · Amb: ${g.amb}${isOld ? ' · <span style="color:var(--danger);font-weight:600;">od ' + oldest + '</span>' : ''}</div>
+            <div class="ws-items">${g.items.slice(0, 5).map(r => `<div class="ws-item"><span>${r.kooperantName || '?'}</span><span>${r.vrstaVoca || ''} ${r.klasa} · ${(r.kolicina || 0).toLocaleString('sr')} kg</span></div>`).join('')}${g.items.length > 5 ? '<div class="ws-item" style="color:var(--text-muted);font-style:italic;">+ još ' + (g.items.length - 5) + '</div>' : ''}</div>
+        </div>`;
+    }).join('');
+}
+
+// --- TRANSPORT ---
+function wrRenderTransport() {
+    const body = document.getElementById('wrTrnBody');
+    const transport = (wrData && wrData.transport) || [];
+    const assigned = (wrData && wrData.assigned) || [];
+    const loadMap = {};
+    assigned.forEach(r => {
+        const v = r.vozacID || '';
+        if (!v) return;
+        if (!loadMap[v]) loadMap[v] = { kg: 0, items: 0, stanice: new Set() };
+        loadMap[v].kg += r.kolicina || 0;
+        loadMap[v].items++;
+        if (r.stanicaID) loadMap[v].stanice.add(r.stanicaID);
+    });
+    document.getElementById('wrTrnTotal').textContent = transport.length;
+    if (transport.length === 0) { body.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema vozača.<br>Dodajte KapacitetKg u Users tab.</p>'; return; }
+    const statusLabels = { slobodan: 'Slobodan', utovar: 'Na utovaru', naputu: 'Na putu', istovar: 'Na istovaru' };
+    body.innerHTML = transport.map(v => {
+        const load = loadMap[v.vozacID] || { kg: 0, items: 0, stanice: new Set() };
+        const cap = v.kapacitetKg || 0;
+        const pct = cap > 0 ? Math.min(100, Math.round((load.kg / cap) * 100)) : 0;
+        const barColor = pct >= 90 ? 'var(--danger)' : pct >= 50 ? 'var(--accent)' : 'var(--success)';
+        const status = v.status || 'slobodan';
+        const sel = wrAssignState && wrAssignState.step >= 1 && wrAssignState.kamionID === v.vozacID ? ' selected' : '';
+        const staList = [...(load.stanice || [])].map(s => wrStaName(s)).join(' → ');
+        return `<div class="wr-kam${sel}" onclick="wrTapKamion('${v.vozacID}')">
+            <div class="wk-top"><span class="wk-name">🚛 ${v.name || v.vozacID}</span><span style="font-size:14px;font-weight:700;">${load.kg.toLocaleString('sr')} kg</span></div>
+            <div class="wk-cap">${cap > 0 ? 'Kap: ' + cap.toLocaleString('sr') + ' kg' : 'Kap: ?'} · ${load.items} otk.</div>
+            ${cap > 0 ? '<div class="wk-load-bar"><div class="wk-load-fill" style="width:' + pct + '%;background:' + barColor + ';"></div></div>' : ''}
+            ${staList ? '<div style="font-size:11px;color:var(--text-muted);">' + staList + (v.ruta ? ' → ' + v.ruta : '') + '</div>' : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                <span class="wk-status ${status}">${statusLabels[status] || status}</span>
+            </div>
+            <div class="wr-status-select">
+                ${['slobodan','utovar','naputu','istovar'].map(s => `<button class="${status === s ? 'active' : ''}" onclick="event.stopPropagation();wrSetStatus('${v.vozacID}','${s}')">${statusLabels[s]}</button>`).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// --- DEMAND ---
+function wrRenderDemand() {
+    const demand = (wrData && wrData.demand) || [];
+    const list = document.getElementById('wrDemList');
+    const totalDem = demand.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0);
+    document.getElementById('wrDemTotal').textContent = totalDem.toLocaleString('sr') + ' kg';
+    if (demand.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:12px;">Dodajte dnevne zahteve kupaca</p>'; return; }
+    list.innerHTML = demand.map(d => {
+        const kg = parseInt(d.Kg) || 0, prim = parseInt(d.Primljeno) || 0, ostalo = Math.max(0, kg - prim);
+        const pct = kg > 0 ? Math.min(100, Math.round((prim / kg) * 100)) : 0;
+        const barColor = pct >= 100 ? 'var(--success)' : pct >= 50 ? '#2196F3' : 'var(--accent)';
+        const sel = wrAssignState && wrAssignState.step >= 3 && wrAssignState.kupacID === d.DemandID ? ' selected' : '';
+        return `<div class="wr-dem${sel}" onclick="wrTapDemand('${d.DemandID}')">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span class="wd-name">${d.KupacName || d.KupacID || '?'}</span>
+                <button onclick="event.stopPropagation();wrRemoveDemand('${d.DemandID}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:4px;">✕</button>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);">${d.Vrsta || 'Sve'} · Klasa ${d.Klasa || 'I+II'}</div>
+            <div class="wd-bar"><div class="wd-fill" style="width:${pct}%;background:${barColor};"></div></div>
+            <div class="wd-nums"><span>Traženo: <strong>${kg.toLocaleString('sr')}</strong></span><span>Primljeno: <strong>${prim.toLocaleString('sr')}</strong></span><span>Ostalo: <strong>${ostalo.toLocaleString('sr')}</strong></span></div>
+            <div style="margin-top:6px;display:flex;gap:4px;align-items:center;" onclick="event.stopPropagation();">
+                <input type="number" id="wrPrim_${d.DemandID}" value="${prim}" inputmode="numeric" style="width:80px;padding:6px;font-size:13px;border:2px solid var(--border);border-radius:var(--radius);">
+                <button onclick="wrUpdatePrimljeno('${d.DemandID}')" style="padding:6px 12px;font-size:12px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-weight:600;cursor:pointer;">Ažuriraj</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// --- KPI ---
+function wrRenderKPI() {
+    const supply = (wrData && wrData.supply) || [];
+    const transport = (wrData && wrData.transport) || [];
+    const demand = (wrData && wrData.demand) || [];
+    document.getElementById('wrKpiKg').textContent = supply.reduce((s, r) => s + (r.kolicina || 0), 0).toLocaleString('sr');
+    document.getElementById('wrKpiKam').textContent = transport.length;
+    document.getElementById('wrKpiDem').textContent = demand.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0).toLocaleString('sr');
+}
+
+// --- TAP-TO-ASSIGN ---
+function wrTapKamion(vozacID) {
+    if (wrAssignState && wrAssignState.kamionID === vozacID) { wrCancelAssign(); return; }
+    const v = ((wrData && wrData.transport) || []).find(x => x.vozacID === vozacID);
+    wrAssignState = { step: 1, kamionID: vozacID, kamionName: v ? (v.name || vozacID) : vozacID };
+    wrShowBanner('🚛 ' + wrAssignState.kamionName + ' izabran', 'Korak 2: Tapnite stanicu odakle pokupi robu');
+    wrRefreshAll();
+}
+
+function wrTapStanica(stanicaID) {
+    if (!wrAssignState || wrAssignState.step < 1) { showToast('Prvo izaberite kamion', 'info'); return; }
+    if (wrAssignState.stanicaID === stanicaID) { wrAssignState.step = 1; wrAssignState.stanicaID = null; wrShowBanner('🚛 ' + wrAssignState.kamionName, 'Korak 2: Tapnite stanicu'); wrRefreshAll(); return; }
+    wrAssignState.step = 2;
+    wrAssignState.stanicaID = stanicaID;
+    wrAssignState.stanicaName = wrStaName(stanicaID);
+    wrShowBanner('🚛 ' + wrAssignState.kamionName + ' → 📦 ' + wrAssignState.stanicaName, 'Korak 3: Tapnite hladnjaču gde se vozi roba');
+    wrRefreshAll();
+}
+
+function wrTapDemand(demandID) {
+    if (!wrAssignState || wrAssignState.step < 2) { showToast(wrAssignState && wrAssignState.step >= 1 ? 'Izaberite stanicu' : 'Prvo izaberite kamion, pa stanicu', 'info'); return; }
+    if (wrAssignState.kupacID === demandID) { wrAssignState.step = 2; wrAssignState.kupacID = null; wrShowBanner('🚛 ' + wrAssignState.kamionName + ' → 📦 ' + wrAssignState.stanicaName, 'Korak 3: Tapnite hladnjaču'); wrRefreshAll(); return; }
+    const demand = ((wrData && wrData.demand) || []).find(d => d.DemandID === demandID);
+    wrAssignState.step = 3;
+    wrAssignState.kupacID = demandID;
+    wrAssignState.kupacName = demand ? (demand.KupacName || demand.KupacID) : '?';
+    const staKg = ((wrData && wrData.supply) || []).filter(r => r.stanicaID === wrAssignState.stanicaID).reduce((s, r) => s + (r.kolicina || 0), 0);
+    wrShowBanner(
+        '🚛 ' + wrAssignState.kamionName + ' → 📦 ' + wrAssignState.stanicaName + ' (' + staKg.toLocaleString('sr') + ' kg) → 🏭 ' + wrAssignState.kupacName,
+        'Potvrdi raspored'
+    );
+    wrRefreshAll();
+}
+
+function wrShowBanner(title, steps) {
+    document.getElementById('wrAssignTitle').textContent = title;
+    document.getElementById('wrAssignSteps').textContent = steps;
+    document.getElementById('wrAssignBanner').classList.add('active');
+}
+
+function wrCancelAssign() {
+    wrAssignState = null;
+    document.getElementById('wrAssignBanner').classList.remove('active');
+    wrRefreshAll();
+}
+
+async function wrConfirmAssign() {
+    if (!wrAssignState || wrAssignState.step < 3) { showToast('Završite sva 3 koraka', 'error'); return; }
+    await wrSetStatus(wrAssignState.kamionID, 'utovar', wrAssignState.stanicaName + ' → ' + wrAssignState.kupacName);
+    showToast('🚛 ' + wrAssignState.kamionName + ': ' + wrAssignState.stanicaName + ' → ' + wrAssignState.kupacName, 'success');
+    wrCancelAssign();
+    setTimeout(loadWarRoom, 500);
+}
+
+function wrRefreshAll() { wrRenderSupply(); wrRenderTransport(); wrRenderDemand(); }
+
+// --- KAMION STATUS ---
+async function wrSetStatus(vozacID, status, ruta) {
+    try {
+        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'updateKamionStatus', token: CONFIG.TOKEN, vozacID, status, ruta: ruta || '' }) });
+        if (wrData && wrData.transport) { const v = wrData.transport.find(x => x.vozacID === vozacID); if (v) { v.status = status; if (ruta) v.ruta = ruta; } }
+        wrRenderTransport();
+    } catch (e) { showToast('Status greška', 'error'); }
+}
+
+// --- DEMAND CRUD ---
+async function wrAddDemand() {
+    const kupacID = document.getElementById('wrDemKupac').value;
+    const kg = parseInt(document.getElementById('wrDemKg').value) || 0;
+    if (!kupacID) { showToast('Izaberite kupca', 'error'); return; }
+    if (kg <= 0) { showToast('Unesite količinu', 'error'); return; }
+    const kupacName = document.getElementById('wrDemKupac').selectedOptions[0].textContent;
+    const vrsta = document.getElementById('wrDemVrsta').value;
+    const klasa = document.getElementById('wrDemKlasa').value;
+    try {
+        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'saveWarRoomDemand', token: CONFIG.TOKEN, kupacID, kupacName, kg, vrsta: vrsta || '', klasa: klasa || 'I+II' }) });
+        const json = await resp.json();
+        if (json.success) { showToast(kupacName + ': ' + kg.toLocaleString('sr') + ' kg', 'success'); document.getElementById('wrDemKg').value = ''; document.getElementById('wrDemKupac').value = ''; await wrReloadDemand(); }
+        else { showToast(json.error || 'Greška', 'error'); }
+    } catch (e) { showToast('Nema konekcije', 'error'); }
+}
+
+async function wrRemoveDemand(demandID) {
+    try {
+        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'removeWarRoomDemand', token: CONFIG.TOKEN, demandID }) });
+        const json = await resp.json();
+        if (json.success) { showToast('Zahtev uklonjen', 'info'); await wrReloadDemand(); }
+    } catch (e) {}
+}
+
+async function wrUpdatePrimljeno(demandID) {
+    const el = document.getElementById('wrPrim_' + demandID);
+    if (!el) return;
+    const val = parseInt(el.value) || 0;
+    try {
+        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'updateDemandPrimljeno', token: CONFIG.TOKEN, demandID, primljeno: val }) });
+        if (wrData && wrData.demand) { const d = wrData.demand.find(x => x.DemandID === demandID); if (d) d.Primljeno = val; }
+        wrRenderDemand(); wrRenderKPI();
+        showToast('Primljeno ažurirano', 'success');
+    } catch (e) { showToast('Greška', 'error'); }
+}
+
+async function wrReloadDemand() {
+    try { const json = await apiFetch('action=getWarRoomData'); if (json && json.success) { wrData.demand = json.demand; wrRenderDemand(); wrRenderKPI(); } } catch (e) {}
+}
+
+function wrStaName(staID) {
+    if (!staID) return '?';
+    const s = (stammdaten.stanice || []).find(x => x.StanicaID === staID);
+    return s ? (s.Naziv || s.Mesto || staID) : staID;
+}
+    
 // ============================================================
 // MANAGEMENT: KOOPERANTI
 // ============================================================
@@ -2917,6 +3381,7 @@ function showTab(tabName) {
     if (tabName === 'koopinfo') loadKoopInfo();
     if (tabName === 'zbirna') loadVozacData();
     if (tabName === 'transport') loadVozacTransport();
+    if (tabName === 'warroom') loadWarRoom();
 }
 
 // ============================================================
