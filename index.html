@@ -2667,11 +2667,6 @@ let dpKap = {};        // vozacID → kg kapacitet (localStorage)
 let dpKS = {};         // vozacID → {status, ruta} (localStorage)
 let dpSel = null;      // {step, vid, sid, did}
  
-// --- localStorage helpers ---
-function dpGK() { try { return JSON.parse(localStorage.getItem('dp_kap') || '{}'); } catch(e) { return {}; } }
-function dpSetK(v, k) { dpKap[v] = k; localStorage.setItem('dp_kap', JSON.stringify(dpKap)); }
-function dpGS() { try { return JSON.parse(localStorage.getItem('dp_ks') || '{}'); } catch(e) { return {}; } }
-function dpSetS(v, s, r) { dpKS[v] = { status: s, ruta: r || '' }; localStorage.setItem('dp_ks', JSON.stringify(dpKS)); }
  
 // ============================================================
 // LOAD
@@ -2681,8 +2676,16 @@ async function loadDispecer() {
         document.getElementById('dpSB').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
         await prefetchMgmtData();
     }
-    dpKap = dpGK();
-    dpKS = dpGS();
+dpKap = {};
+dpKS = {};
+try {
+    const ksJson = await apiFetch('action=getKamionStatus');
+    if (ksJson && ksJson.success && ksJson.records) {
+        ksJson.records.forEach(r => {
+            dpKS[r.VozacID] = { status: r.Status || 'slobodan', ruta: r.Ruta || '' };
+        });
+    }
+} catch(e) {}
     dpPD();
     dpRS();
     dpRTr();
@@ -2978,7 +2981,7 @@ async function dpRmPlan(planID) {
 // KAMION STATUS
 // ============================================================
 async function dpCS(vid, st) {
-    dpSetS(vid, st, (dpKS[vid] || {}).ruta || '');
+    dpKS[vid] = { status: st, ruta: (dpKS[vid] || {}).ruta || '' };
     dpRTr();
     fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'updateKamionStatus', token: CONFIG.TOKEN, vozacID: vid, status: st, ruta: (dpKS[vid] || {}).ruta || '' }) }).catch(() => {});
