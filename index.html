@@ -178,6 +178,16 @@
         .koop-display.visible { display: block; }
         .koop-display .koop-name { font-size: 18px; font-weight: 700; }
         .koop-display .koop-id { font-size: 12px; opacity: 0.8; }
+        .parcel-label {
+            background: rgba(255,255,255,0.92);
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #111;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 2px 6px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        }
     
         /* BUTTONS */
         .btn-primary { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-size: 18px; font-weight: 700; cursor: pointer; margin-top: 10px; }
@@ -1984,6 +1994,54 @@ function renderKartica(records) {
 // ============================================================
 let parcelMapInstance = null;
 
+const kooperantParcelStyle = {
+    color: '#ffd60a',
+    weight: 3,
+    opacity: 1,
+    fillColor: '#ffd60a',
+    fillOpacity: 0.18
+};
+
+const kooperantSelectedParcelStyle = {
+    color: '#ff2d55',
+    weight: 4,
+    opacity: 1,
+    fillColor: '#ff2d55',
+    fillOpacity: 0.22
+};
+
+let activeKooperantParcelLayer = null;
+
+function resetKooperantParcelHighlight() {
+    if (activeKooperantParcelLayer && activeKooperantParcelLayer.setStyle) {
+        activeKooperantParcelLayer.setStyle(kooperantParcelStyle);
+    }
+    activeKooperantParcelLayer = null;
+}
+
+function highlightKooperantParcelLayer(layer) {
+    resetKooperantParcelHighlight();
+    if (layer && layer.setStyle) {
+        layer.setStyle(kooperantSelectedParcelStyle);
+        activeKooperantParcelLayer = layer;
+    }
+}
+
+function buildKooperantParcelPopup(p) {
+    return `
+        <div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:6px;">
+                ${p.KatBroj || p.ParcelaID}
+            </div>
+            <div><b>Kultura:</b> ${p.Kultura || '-'}</div>
+            <div><b>Površina:</b> ${p.PovrsinaHa || '?'} ha</div>
+            <div><b>KO:</b> ${p.KatOpstina || '-'}</div>
+            <div><b>GGAP:</b> ${p.GGAPStatus || '-'}</div>
+            <div style="margin-top:6px;color:#666;">${p.ParcelaID}</div>
+        </div>
+    `;
+}
+    
 async function loadParcele() {
     const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
     const list = document.getElementById('parceleList');
@@ -2023,33 +2081,62 @@ async function loadParcele() {
                 const geo = json.parcel;
                 const lat = parseFloat(String(geo.Lat).replace(',', '.'));
                 const lng = parseFloat(String(geo.Lng).replace(',', '.'));
-                const label = (p.KatBroj || p.ParcelaID) + ' - ' + (p.Kultura || '');
-                const popupText = '<b>' + label + '</b><br>' + (p.PovrsinaHa || '?') + ' ha';
+                const popupHtml = buildKooperantParcelPopup(p);
                 
                 if (geo.PolygonGeoJSON) {
                     const geometry = JSON.parse(geo.PolygonGeoJSON);
-                    const feature = { type: 'Feature', properties: {}, geometry: geometry };
+                    const feature = {type: 'Feature',properties: p,geometry: geometry};
                     const layer = L.geoJSON(feature, {
-                        style: { color: '#1a5e2a', weight: 3, fillColor: '#2d8a42', fillOpacity: 0.25 }
+                        style: kooperantParcelStyle
                     }).addTo(parcelMapInstance);
-                    layer.bindPopup(popupText);
-                    const bounds = layer.getBounds();
-                    if (bounds.isValid()) allBounds.push(bounds);
-                    window._parcelLayers[p.ParcelaID] = layer;
-                } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                    const marker = L.marker([lat, lng]).addTo(parcelMapInstance).bindPopup(popupText);
-                    allBounds.push(L.latLngBounds([lat, lng], [lat, lng]));
+                    layer.eachLayer(l => {
+                        l.bindTooltip(`${p.KatBroj || p.ParcelaID}`, {
+                            permanent: true,
+                            direction: 'center',
+                            className: 'parcel-label'
+                    });
+
+                        l.bindPopup(popupHtml);
+
+                        l.on('click', () => {
+                            highlightKooperantParcelLayer(l);
+                        });
+
+                        const bounds = l.getBounds();
+                        if (bounds.isValid()) allBounds.push(bounds);
+
+                        window._parcelLayers[p.ParcelaID] = l;
+                    });
+               } else if (!isNaN(lat) && !isNaN(lng)) {
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 8,
+                        color: '#ffd60a',
+                        weight: 3,
+                        fillColor: '#ffd60a',
+                        fillOpacity: 0.85
+                    }).addTo(parcelMapInstance);
+
+                    marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, {
+                        permanent: true,
+                        direction: 'top',
+                        className: 'parcel-label'
+                    });
+
+                    marker.bindPopup(popupHtml);
+
+                    allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
                     window._parcelLayers[p.ParcelaID] = marker;
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error('Greška pri učitavanju geo za parcelu', p.ParcelaID, e);
+        }
     }
-    
-    // Fit map to show all parcels
+
     if (allBounds.length > 0) {
         let combined = allBounds[0];
         for (let i = 1; i < allBounds.length; i++) {
-            combined = combined.extend(allBounds[i]);
+            combined.extend(allBounds[i]);
         }
         parcelMapInstance.fitBounds(combined.pad(0.2));
     }
@@ -2057,13 +2144,19 @@ async function loadParcele() {
 
 function focusParcel(parcelaID) {
     if (!parcelMapInstance || !window._parcelLayers || !window._parcelLayers[parcelaID]) return;
+
     const layer = window._parcelLayers[parcelaID];
+
     if (layer.getBounds) {
         parcelMapInstance.fitBounds(layer.getBounds().pad(0.3));
+        highlightKooperantParcelLayer(layer);
     } else if (layer.getLatLng) {
         parcelMapInstance.setView(layer.getLatLng(), 17);
+        resetKooperantParcelHighlight();
     }
+
     if (layer.openPopup) layer.openPopup();
+
     document.getElementById('parceleMap').scrollIntoView({ behavior: 'smooth' });
 }
 
