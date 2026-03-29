@@ -2956,21 +2956,22 @@ function dpRTr() {
     const asg = dpGetAsg();
     const vm = {};
 
-    // 1. prvo svi poznati kamioni
+    // 1) svi poznati kamioni
     (dpKamioni || []).forEach(v => {
         const vid = v.id || v.VozacID || v.vozacID || '';
         if (!vid) return;
 
         vm[vid] = {
-            kg: 0,          // stvarno dodeljeno iz otkupa
-            plannedKg: 0,   // planirano kroz dispečer planove
-            n: 0,
-            st: new Set(),
-            name: v.name || v.Naziv || vid
+            kg: 0,              // stvarno dodeljeno kroz otkupe
+            plannedKg: 0,       // planirano kroz dispečer planove
+            n: 0,               // broj stvarno dodeljenih otkupa
+            st: new Set(),      // stanice iz realnih otkupa i planova
+            name: v.name || v.Naziv || vid,
+            plans: []           // svi aktivni planovi za kamion
         };
     });
 
-    // 2. dopuna iz assigned otkupa
+    // 2) stvarno assigned otkupi
     asg.forEach(r => {
         const vid = r.VozacID || r.VozaciID || '';
         if (!vid) return;
@@ -2978,9 +2979,11 @@ function dpRTr() {
         if (!vm[vid]) {
             vm[vid] = {
                 kg: 0,
+                plannedKg: 0,
                 n: 0,
                 st: new Set(),
-                name: vid
+                name: vid,
+                plans: []
             };
         }
 
@@ -2991,25 +2994,69 @@ function dpRTr() {
         if (sid) vm[vid].st.add(sid);
     });
 
-    // 3. fallback iz kapaciteta/statusa
+    // 3) aktivni planovi
+    (dpPlans || []).forEach(p => {
+        const vid = p.VozacID || '';
+        if (!vid) return;
+        if (p.Status !== 'planned' && p.Status !== 'u_toku') return;
+
+        if (!vm[vid]) {
+            vm[vid] = {
+                kg: 0,
+                plannedKg: 0,
+                n: 0,
+                st: new Set(),
+                name: p.VozacName || vid,
+                plans: []
+            };
+        }
+
+        const pKg = parseFloat(p.PlannedKg) || 0;
+        vm[vid].plannedKg += pKg;
+        vm[vid].plans.push(p);
+
+        const sid = p.StanicaID || '';
+        if (sid) vm[vid].st.add(sid);
+    });
+
+    // 4) fallback iz kapaciteta
     Object.keys(dpKap).forEach(vid => {
         if (!vm[vid]) {
-            vm[vid] = { kg: 0, n: 0, st: new Set(), name: vid };
+            vm[vid] = {
+                kg: 0,
+                plannedKg: 0,
+                n: 0,
+                st: new Set(),
+                name: vid,
+                plans: []
+            };
         }
     });
 
+    // 5) fallback iz statusa
     Object.keys(dpKS).forEach(vid => {
         if (!vm[vid]) {
-            vm[vid] = { kg: 0, n: 0, st: new Set(), name: vid };
+            vm[vid] = {
+                kg: 0,
+                plannedKg: 0,
+                n: 0,
+                st: new Set(),
+                name: vid,
+                plans: []
+            };
         }
     });
 
+    // 6) sortiranje — najviše ukupno opterećeni prvi
     const ids = Object.keys(vm).sort((a, b) => {
-        const ak = vm[a].kg || 0;
-        const bk = vm[b].kg || 0;
+        const ak = (vm[a].kg || 0) + (vm[a].plannedKg || 0);
+        const bk = (vm[b].kg || 0) + (vm[b].plannedKg || 0);
         if (bk !== ak) return bk - ak;
-        return a.localeCompare(b);
+        return (vm[a].name || a).localeCompare(vm[b].name || b);
     });
+
+    const tt = document.getElementById('dpTT');
+    if (tt) tt.textContent = ids.length;
 
     if (!ids.length) {
         b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema kamiona za prikaz</p>';
@@ -3023,44 +3070,57 @@ function dpRTr() {
         istovar: 'Istovar'
     };
 
-    (dpPlans || []).forEach(p => {
-        const vid = p.VozacID || '';
-        if (!vid) return;
-        if (p.Status !== 'planned' && p.Status !== 'u_toku') return;
-
-        if (!vm[vid]) {
-            vm[vid] = {
-                kg: 0,
-                plannedKg: 0,
-                n: 0,
-                st: new Set(),
-                name: p.VozacName || vid
-            };
-        }
-
-        vm[vid].plannedKg += parseFloat(p.PlannedKg) || 0;
-
-        const sid = p.StanicaID || '';
-        if (sid) vm[vid].st.add(sid);
-}    );
-    const tt = document.getElementById('dpTT');
-    if (tt) tt.textContent = ids.length;
-    
     b.innerHTML = ids.map(vid => {
         const x = vm[vid];
         const cap = parseInt(dpKap[vid]) || 0;
-        const loadKg = (x.kg || 0) + (x.plannedKg || 0);
+
+        const realKg = x.kg || 0;
+        const plannedKg = x.plannedKg || 0;
+        const loadKg = realKg + plannedKg;
+
         const pct = cap > 0 ? Math.min(100, Math.round((loadKg / cap) * 100)) : 0;
-        const bc = pct >= 90 ? 'var(--danger)' : pct >= 50 ? 'var(--accent)' : 'var(--success)';
+        const freeKg = cap > 0 ? Math.max(0, cap - loadKg) : 0;
+
+        const bc =
+            pct >= 95 ? 'var(--danger)' :
+            pct >= 75 ? 'var(--accent)' :
+            'var(--success)';
+
         const isSel = dpSel && dpSel.step >= 1 && dpSel.vid === vid;
         const st = (dpKS[vid] || {}).status || 'slobodan';
         const ruta = (dpKS[vid] || {}).ruta || '';
-        const staL = [...(x.st || [])].map(s => dpSN(s)).join(' → ');
-        const vozPlans = dpPlans.filter(p => p.VozacID === vid && (p.Status === 'planned' || p.Status === 'u_toku'));
+
+        // sve stanice kroz planove + assigned
+        const stationNames = [...(x.st || [])].map(s => dpSN(s));
+
+        // hladnjače iz aktivnih planova
+        const planKupci = [...new Set(
+            (x.plans || [])
+                .map(p => p.KupacName || p.KupacID || '')
+                .filter(Boolean)
+        )];
+
+        let rutaText = '';
+        if (stationNames.length && planKupci.length) {
+            rutaText = stationNames.join(' → ') + ' → ' + planKupci.join(', ');
+        } else if (stationNames.length && ruta) {
+            rutaText = ruta;
+        } else if (ruta) {
+            rutaText = ruta;
+        }
+
+        const planHtml = (x.plans || []).map(p => {
+            const pKg = parseInt(p.PlannedKg || 0) || 0;
+            return `
+                <div style="font-size:11px;margin-top:3px;color:var(--success);font-weight:600;">
+                    📋 Plan: ${p.StanicaName || p.StanicaID || '?'} → ${p.KupacName || p.KupacID || '?'} (${pKg.toLocaleString('sr')} kg)
+                </div>
+            `;
+        }).join('');
 
         return `
             <div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
                     <span style="font-weight:700;font-size:14px;">🚛 ${x.name || vid}</span>
                     <span style="font-size:14px;font-weight:700;">${loadKg.toLocaleString('sr')} kg</span>
                 </div>
@@ -3072,24 +3132,35 @@ function dpRTr() {
                             : `<input type="number"
                                       inputmode="numeric"
                                       placeholder="kg"
-                                      style="width:60px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;"
+                                      style="width:70px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;"
                                       onclick="event.stopPropagation()"
                                       onchange="dpSetK('${vid}', parseInt(this.value)||0); dpRTr()">`
-                    } · ${x.n} otk. · Popunjeno: ${pct}%
+                    }
+                    · Popunjeno: <strong>${pct}%</strong>
+                    ${cap > 0 ? ` · Slobodno: ${freeKg.toLocaleString('sr')} kg` : ''}
                 </div>
 
-                ${cap > 0 ? `<div class="dp-bar"><div class="dp-bf" style="width:${pct}%;background:${bc};"></div></div>` : ''}
-
-                ${staL ? `<div style="font-size:11px;color:var(--text-muted);">${staL}${ruta ? ' → ' + ruta : ''}</div>` : ''}
-                ${ruta && !staL ? `<div style="font-size:11px;color:var(--text-muted);">Ruta: ${ruta}</div>` : ''}
-
-                ${vozPlans.length ? vozPlans.map(p => `
-                    <div style="font-size:11px;margin-top:4px;color:var(--success);font-weight:600;">
-                    📋 Plan: ${p.StanicaName || p.StanicaID || ''} → ${p.KupacName || p.KupacID || ''}
+                ${cap > 0 ? `
+                    <div class="dp-bar" style="margin-top:6px;">
+                        <div class="dp-bf" style="width:${pct}%;background:${bc};"></div>
                     </div>
-                `).join('') : ''}
+                ` : ''}
 
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                    ${realKg > 0 ? `Realno: ${realKg.toLocaleString('sr')} kg` : 'Realno: 0 kg'}
+                    ${plannedKg > 0 ? ` · Planirano: ${plannedKg.toLocaleString('sr')} kg` : ''}
+                    · ${x.n} otk.
+                </div>
+
+                ${rutaText ? `
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                        Ruta: ${rutaText}
+                    </div>
+                ` : ''}
+
+                ${planHtml}
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
                     <span class="dp-badge ${st}">${sl[st] || st}</span>
                 </div>
 
@@ -3102,7 +3173,6 @@ function dpRTr() {
         `;
     }).join('');
 }
-
 // ============================================================
 // DEMAND
 // ============================================================
