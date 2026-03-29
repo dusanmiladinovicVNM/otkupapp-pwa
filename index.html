@@ -2728,6 +2728,19 @@ function dpGetAsg() {
 async function dpInit() {
     dpKamioni = [];
     dpKS = {};
+    
+    // 0) master lista iz stammdaten
+    (stammdaten.vozaci || []).forEach(v => {
+        const vid = v.VozacID || v.vozacID || v.ID || '';
+        if (!vid) return;
+
+        if (!dpKamioni.some(x => x.id === vid)) {
+            dpKamioni.push({
+                id: vid,
+                name: v.Naziv || v.Ime || v.Vozac || vid
+            });
+        }
+    });
 
     // 1) status kamiona sa servera
     try {
@@ -2803,7 +2816,9 @@ async function dpInit() {
         });
     }
 }
-
+async function loadDispecer() {
+    await dpInit();
+}
 // ============================================================
 // DROPDOWNS
 // ============================================================
@@ -2852,6 +2867,11 @@ function dpRS() {
     if (!b) return;
 
     const sup = dpGetSup();
+    const st = document.getElementById('dpST');
+    if (st) {
+        const totalKg = sup.reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+        st.textContent = totalKg.toLocaleString('sr') + ' kg';
+    }
     const g = {};
 
     sup.forEach(r => {
@@ -2961,7 +2981,10 @@ function dpRTr() {
         naputu: 'Na putu',
         istovar: 'Istovar'
     };
-
+    
+    const tt = document.getElementById('dpTT');
+    if (tt) tt.textContent = ids.length;
+    
     b.innerHTML = ids.map(vid => {
         const x = vm[vid];
         const cap = parseInt(dpKap[vid]) || 0;
@@ -3058,32 +3081,29 @@ function dpRD() {
 // PLANOVI
 // ============================================================
 function dpRP() {
-    const b = document.getElementById('dpPB');
+    const b = document.getElementById('dpPlanList');
     if (!b) return;
 
     if (!dpPlans.length) {
-        b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema planova za danas</p>';
+        b.innerHTML = '';
         return;
     }
 
-    b.innerHTML = dpPlans.map(p => {
-        return `
-            <div class="dp-card">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <strong>🚛 ${p.VozacID}</strong>
-                    <span>${parseInt(p.PlannedKg || 0).toLocaleString('sr')} kg</span>
-                </div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                    ${p.StanicaName || p.StanicaID || '?'} → ${p.KupacName || p.KupacID || '?'}
-                </div>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button onclick="dpChgPlanSt('${p.PlanID}','u_toku')" title="U toku">▶</button>
-                    <button onclick="dpChgPlanSt('${p.PlanID}','zavrseno')" title="Završeno" style="color:var(--success);">✓</button>
-                    <button onclick="dpRmPlan('${p.PlanID}')" title="Obriši">✕</button>
+    b.innerHTML = dpPlans.map(p => `
+        <div class="dp-plan-item">
+            <div>
+                <div class="dp-pi-route">🚛 ${p.VozacID} · ${p.StanicaName || p.StanicaID || '?'} → ${p.KupacName || p.KupacID || '?'}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+                    ${parseInt(p.PlannedKg || 0).toLocaleString('sr')} kg · status: ${p.Status || 'planned'}
                 </div>
             </div>
-        `;
-    }).join('');
+            <div style="display:flex;gap:6px;">
+                <button onclick="dpChgPlanSt('${p.PlanID}','u_toku')" title="U toku">▶</button>
+                <button onclick="dpChgPlanSt('${p.PlanID}','zavrseno')" title="Završeno">✓</button>
+                <button onclick="dpRmPlan('${p.PlanID}')" title="Obriši">✕</button>
+            </div>
+        </div>
+    `).join('');
 }
 
 // ============================================================
