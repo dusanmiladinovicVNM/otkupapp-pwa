@@ -2962,7 +2962,8 @@ function dpRTr() {
         if (!vid) return;
 
         vm[vid] = {
-            kg: 0,
+            kg: 0,          // stvarno dodeljeno iz otkupa
+            plannedKg: 0,   // planirano kroz dispečer planove
             n: 0,
             st: new Set(),
             name: v.name || v.Naziv || vid
@@ -3021,14 +3022,35 @@ function dpRTr() {
         naputu: 'Na putu',
         istovar: 'Istovar'
     };
-    
+
+    (dpPlans || []).forEach(p => {
+        const vid = p.VozacID || '';
+        if (!vid) return;
+        if (p.Status !== 'planned' && p.Status !== 'u_toku') return;
+
+        if (!vm[vid]) {
+            vm[vid] = {
+                kg: 0,
+                plannedKg: 0,
+                n: 0,
+                st: new Set(),
+                name: p.VozacName || vid
+            };
+        }
+
+        vm[vid].plannedKg += parseFloat(p.PlannedKg) || 0;
+
+        const sid = p.StanicaID || '';
+        if (sid) vm[vid].st.add(sid);
+}    );
     const tt = document.getElementById('dpTT');
     if (tt) tt.textContent = ids.length;
     
     b.innerHTML = ids.map(vid => {
         const x = vm[vid];
         const cap = parseInt(dpKap[vid]) || 0;
-        const pct = cap > 0 ? Math.min(100, Math.round((x.kg / cap) * 100)) : 0;
+        const loadKg = (x.kg || 0) + (x.plannedKg || 0);
+        const pct = cap > 0 ? Math.min(100, Math.round((loadKg / cap) * 100)) : 0;
         const bc = pct >= 90 ? 'var(--danger)' : pct >= 50 ? 'var(--accent)' : 'var(--success)';
         const isSel = dpSel && dpSel.step >= 1 && dpSel.vid === vid;
         const st = (dpKS[vid] || {}).status || 'slobodan';
@@ -3040,7 +3062,7 @@ function dpRTr() {
             <div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <span style="font-weight:700;font-size:14px;">🚛 ${x.name || vid}</span>
-                    <span style="font-size:14px;font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
+                    <span style="font-size:14px;font-weight:700;">${loadKg.toLocaleString('sr')} kg</span>
                 </div>
 
                 <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
@@ -3053,7 +3075,7 @@ function dpRTr() {
                                       style="width:60px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;"
                                       onclick="event.stopPropagation()"
                                       onchange="dpSetK('${vid}', parseInt(this.value)||0); dpRTr()">`
-                    } · ${x.n} otk.
+                    } · ${x.n} otk. · Popunjeno: ${pct}%
                 </div>
 
                 ${cap > 0 ? `<div class="dp-bar"><div class="dp-bf" style="width:${pct}%;background:${bc};"></div></div>` : ''}
