@@ -3189,30 +3189,62 @@ function dpRD() {
         return;
     }
 
+    // saberi aktivne planove po DemandID
+    const plannedByDemand = {};
+    (dpPlans || []).forEach(p => {
+        if (p.Status !== 'planned' && p.Status !== 'u_toku') return;
+
+        const did = p.DemandID || '';
+        if (!did) return;
+
+        plannedByDemand[did] = (plannedByDemand[did] || 0) + (parseInt(p.PlannedKg) || 0);
+    });
+
     l.innerHTML = dpDem.map(d => {
-        const did = d.DemandID || d.demandID;
+        const did = d.DemandID || d.demandID || '';
         const isSel = dpSel && dpSel.step >= 3 && dpSel.did === did;
+
         const kup = d.KupacName || d.KupacID || '?';
-        const kg = parseInt(d.Kg) || 0;
-        const prim = parseInt(d.Primljeno) || 0;
+        const trazeno = parseInt(d.Kg) || 0;
+        const primljeno = parseInt(d.Primljeno) || 0;
+        const planirano = plannedByDemand[did] || 0;
+
+        // koliko još nije ni planirano ni primljeno
+        const preostalo = Math.max(0, trazeno - planirano - primljeno);
+
+        // ukupno "pokriveno"
+        const pokriveno = Math.min(trazeno, planirano + primljeno);
+        const pct = trazeno > 0 ? Math.min(100, Math.round((pokriveno / trazeno) * 100)) : 0;
+
+        const barColor =
+            pct >= 100 ? 'var(--success)' :
+            pct >= 70 ? 'var(--accent)' :
+            '#1565c0';
 
         return `
             <div class="dp-card dem${isSel ? ' sel' : ''}" onclick="dpTD('${did}')">
-                <div style="display:flex;justify-content:space-between;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
                     <strong>🏭 ${kup}</strong>
-                    <strong>${kg.toLocaleString('sr')} kg</strong>
+                    <strong>${trazeno.toLocaleString('sr')} kg</strong>
                 </div>
+
                 <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
                     ${d.Vrsta || ''} ${d.Klasa || ''}
                 </div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-                    Primljeno: ${prim.toLocaleString('sr')} kg
+
+                <div class="dp-bar" style="margin-top:8px;">
+                    <div class="dp-bf" style="width:${pct}%;background:${barColor};"></div>
+                </div>
+
+                <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+                    <div>Planirano: <strong style="color:#1565c0;">${planirano.toLocaleString('sr')} kg</strong></div>
+                    <div>Primljeno: <strong style="color:var(--success);">${primljeno.toLocaleString('sr')} kg</strong></div>
+                    <div>Preostalo: <strong style="color:${preostalo > 0 ? 'var(--danger)' : 'var(--success)'};">${preostalo.toLocaleString('sr')} kg</strong></div>
                 </div>
             </div>
         `;
     }).join('');
 }
-
 // ============================================================
 // PLANOVI
 // ============================================================
@@ -3381,6 +3413,7 @@ async function dpOK() {
             body: JSON.stringify({
                 action: 'saveDispecer',
                 token: CONFIG.TOKEN,
+                demandID: dpSel.did,
                 vozacID: vid,
                 stanicaID: sid,
                 stanicaName: dpSN(sid),
@@ -3395,6 +3428,7 @@ async function dpOK() {
         if (json.success) {
             const newPlan = {
                 PlanID: json.planID,
+                DemandID: dpSel.did,
                 VozacID: vid,
                 StanicaID: sid,
                 StanicaName: dpSN(sid),
