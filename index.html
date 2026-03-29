@@ -688,7 +688,7 @@ const CONFIG = {
 // ============================================================
 let db = null;
 let qrScanner = null;
-let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [], stanice: [], kupci: [] };
+let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [], stanice: [], kupci: [], vozaci: [] };
 let selectedMera = '';
 let mgmtData = null;
 
@@ -2658,385 +2658,707 @@ function showMgmtSub(subId, btn) {
 }
     
 // ============================================================
-// DISPEČER — Planski dashboard
-// NE dodeljuje VozacID. Čuva planove na Sheet.
+// DISPECER STATE
 // ============================================================
-let dpDem = [];        // demand records (danas)
-let dpPlans = [];      // plan records (danas)
-let dpKap = {};        // vozacID → kg kapacitet (localStorage)
-let dpKS = {};         // vozacID → {status, ruta} (localStorage)
-let dpSel = null;      // {step, vid, sid, did}
- 
- 
+let dpDem = [];
+let dpPlans = [];
+let dpSel = null;
+
+// kapacitet po kamionu
+let dpKap = JSON.parse(localStorage.getItem('dpKap') || '{}');
+
+// status po kamionu
+let dpKS = {};
+
+// master lista kamiona za prikaz
+let dpKamioni = [];
+
 // ============================================================
-// LOAD
+// HELPERS
 // ============================================================
-async function loadDispecer() {
-    if (!mgmtData) {
-        document.getElementById('dpSB').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
-        await prefetchMgmtData();
-    }
-dpKap = {};
-dpKS = {};
-try {
-    const ksJson = await apiFetch('action=getKamionStatus');
-    if (ksJson && ksJson.success && ksJson.records) {
-        ksJson.records.forEach(r => {
-            dpKS[r.VozacID] = { status: r.Status || 'slobodan', ruta: r.Ruta || '' };
-        });
-    }
-} catch(e) {}
-    dpPD();
-    dpRS();
-    dpRTr();
- 
-    // Load demand + plans from server
-    dpDem = []; dpPlans = [];
+function dpToday() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function dpSN(stanicaID) {
+    if (!stanicaID) return '?';
+    const s = (stammdaten.stanice || []).find(x => x.StanicaID === stanicaID);
+    return s ? (s.Naziv || s.Mesto || stanicaID) : stanicaID;
+}
+
+function dpSaveKap() {
+    localStorage.setItem('dpKap', JSON.stringify(dpKap || {}));
+}
+
+function dpSetK(vid, kg) {
+    dpKap[vid] = parseInt(kg) || 0;
+    dpSaveKap();
+}
+
+function dpSetS(vid, status, ruta) {
+    dpKS[vid] = {
+        status: status || 'slobodan',
+        ruta: ruta || ''
+    };
+}
+
+function dpGetSup() {
+    const today = dpToday();
+    return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
+        !(r.VozacID || r.VozaciID || '') &&
+        fmtDate(r.Datum) === today
+    );
+}
+
+function dpGetAsg() {
+    const today = dpToday();
+    return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
+        !!(r.VozacID || r.VozaciID || '') &&
+        fmtDate(r.Datum) === today
+    );
+}
+
+// ============================================================
+// INIT / REFRESH
+// ============================================================
+async function dpInit() {
+    dpKamioni = [];
+    dpKS = {};
+
+    // 1) status kamiona sa servera
+    try {
+        const json = await apiFetch('action=getKamionStatus');
+        if (json && json.success) {
+            const records = json.records || [];
+
+            records.forEach(r => {
+                const vid = r.VozacID || r.vozacID || '';
+                if (!vid) return;
+
+                dpKS[vid] = {
+                    status: r.Status || r.status || 'slobodan',
+                    ruta: r.Ruta || r.ruta || ''
+                };
+
+                if (!dpKamioni.some(x => x.id === vid)) {
+                    dpKamioni.push({
+                        id: vid,
+                        name: r.VozacName || r.Naziv || vid
+                    });
+                }
+            });
+        }
+    } catch (e) {}
+
+    // 2) dodaj i kamione iz assigned otkupa da ništa ne nestane
+    dpGetAsg().forEach(r => {
+        const vid = r.VozacID || r.VozaciID || '';
+        if (!vid) return;
+        if (!dpKamioni.some(x => x.id === vid)) {
+            dpKamioni.push({ id: vid, name: vid });
+        }
+    });
+
+    // 3) dodaj i kamione iz localStorage kapaciteta/statusa
+    Object.keys(dpKap).forEach(vid => {
+        if (!dpKamioni.some(x => x.id === vid)) {
+            dpKamioni.push({ id: vid, name: vid });
+        }
+    });
+
+    Object.keys(dpKS).forEach(vid => {
+        if (!dpKamioni.some(x => x.id === vid)) {
+            dpKamioni.push({ id: vid, name: vid });
+        }
+    });
+
+    // 4) demand + plans
+    dpDem = [];
+    dpPlans = [];
     try {
         const j = await apiFetch('action=getDispecer');
         if (j && j.success) {
             dpDem = j.demand || [];
             dpPlans = j.plans || [];
         }
-    } catch(e) {}
- 
+    } catch (e) {}
+
+    dpPD();
+    dpRS();
+    dpRTr();
     dpRD();
     dpRP();
     dpRK();
     dpX();
-    document.getElementById('dpRT').textContent = 'Ažurirano: ' + new Date().toLocaleTimeString('sr', { hour: '2-digit', minute: '2-digit' });
+
+    const rt = document.getElementById('dpRT');
+    if (rt) {
+        rt.textContent = 'Ažurirano: ' + new Date().toLocaleTimeString('sr', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
 }
- 
+
+// ============================================================
+// DROPDOWNS
+// ============================================================
 function dpPD() {
     const k = document.getElementById('dpDK');
-    if (k.options.length <= 1) {
-        (stammdaten.kupci || []).forEach(x => { const o = document.createElement('option'); o.value = x.KupacID; o.textContent = x.Naziv || x.KupacID; k.appendChild(o); });
-        // Fallback
+    if (k && k.options.length <= 1) {
+        (stammdaten.kupci || []).forEach(x => {
+            const o = document.createElement('option');
+            o.value = x.KupacID;
+            o.textContent = x.Naziv || x.KupacID;
+            k.appendChild(o);
+        });
+
         if (mgmtData && mgmtData.saldoKupci) {
             mgmtData.saldoKupci.forEach(x => {
                 const v = x.KupacID || x.Kupac;
                 if (!v || Array.from(k.options).some(o => o.value === v)) return;
-                const o = document.createElement('option'); o.value = v; o.textContent = x.Kupac || v; k.appendChild(o);
+                const o = document.createElement('option');
+                o.value = v;
+                o.textContent = x.Kupac || v;
+                k.appendChild(o);
             });
         }
     }
+
     const vs = document.getElementById('dpDV');
-    if (vs.options.length <= 1) {
+    if (vs && vs.options.length <= 1) {
         const seen = new Set();
-        (stammdaten.kulture || []).forEach(x => { if (x.VrstaVoca && !seen.has(x.VrstaVoca)) { seen.add(x.VrstaVoca); const o = document.createElement('option'); o.value = x.VrstaVoca; o.textContent = x.VrstaVoca; vs.appendChild(o); } });
+        (stammdaten.kulture || []).forEach(x => {
+            if (x.VrstaVoca && !seen.has(x.VrstaVoca)) {
+                seen.add(x.VrstaVoca);
+                const o = document.createElement('option');
+                o.value = x.VrstaVoca;
+                o.textContent = x.VrstaVoca;
+                vs.appendChild(o);
+            }
+        });
     }
 }
- 
+
 // ============================================================
-// SUPPLY — iz mgmtData.otkupiAll (instant, bez API)
+// SUPPLY
 // ============================================================
-function dpGetSup() { return ((mgmtData && mgmtData.otkupiAll) || []).filter(r => !(r.VozacID || r.VozaciID || '')); }
-function dpGetAsg() { return ((mgmtData && mgmtData.otkupiAll) || []).filter(r => !!(r.VozacID || r.VozaciID || '')); }
- 
 function dpRS() {
-    const b = document.getElementById('dpSB'), sup = dpGetSup(), g = {};
+    const b = document.getElementById('dpSB');
+    if (!b) return;
+
+    const sup = dpGetSup();
+    const g = {};
+
     sup.forEach(r => {
         const s = r.OtkupacID || (r._sheetName || '').replace('OTK-', '') || '?';
-        if (!g[s]) g[s] = { items: [], kg: 0, amb: 0, kp: new Set(), dt: new Set() };
-        g[s].items.push(r); g[s].kg += parseFloat(r.Kolicina) || 0; g[s].amb += parseInt(r.KolAmbalaze) || 0;
-        g[s].kp.add(r.KooperantName || r.KooperantID || '?');
-        const d = fmtDate(r.Datum); if (d) g[s].dt.add(d);
+        if (!g[s]) g[s] = { kg: 0, n: 0, rows: [] };
+        g[s].kg += parseFloat(r.Kolicina) || 0;
+        g[s].n++;
+        g[s].rows.push(r);
     });
-    const sorted = Object.entries(g).sort((a, b) => b[1].kg - a[1].kg);
-    const tot = sorted.reduce((s, [, x]) => s + x.kg, 0);
-    document.getElementById('dpST').textContent = tot.toLocaleString('sr') + ' kg';
- 
-    if (!sorted.length) { b.innerHTML = '<p style="text-align:center;color:var(--success);padding:30px;font-weight:600;">✅ Sve otpremljeno</p>'; return; }
- 
-    const td = new Date().toISOString().split('T')[0];
-    // Check which stations have plans
-    const plannedSta = new Set(dpPlans.filter(p => p.Status === 'planned').map(p => p.StanicaID));
- 
-    b.innerHTML = sorted.map(([sid, x]) => {
-        const n = dpSN(sid), old = [...x.dt].sort()[0] || '', isOld = old && old < td;
-        const hasPlan = plannedSta.has(sid);
-        const sl = dpSel && dpSel.step >= 2 && dpSel.sid === sid;
-        return `<div class="dp-card${isOld ? ' urgent' : ''}${sl ? ' sel' : ''}${hasPlan ? ' planned' : ''}" onclick="dpTS('${sid}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-            <span style="font-weight:700;font-size:14px;">${n}</span>
-            <span style="font-size:18px;font-weight:800;color:var(--primary);">${x.kg.toLocaleString('sr')} kg</span>
-        </div>
-        <div style="font-size:11px;color:var(--text-muted);">${x.kp.size} koop. · ${x.items.length} otk. · Amb: ${x.amb}${isOld ? ' · <span style="color:var(--danger);font-weight:600;">od ' + old + '</span>' : ''}${hasPlan ? ' · <span style="color:var(--success);font-weight:600;">📋 Plan</span>' : ''}</div>
-        <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:4px;">
-            ${x.items.slice(0, 5).map(r => '<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between;"><span>' + (r.KooperantName || '?') + '</span><span>' + (r.VrstaVoca || '') + ' ' + (r.Klasa || 'I') + ' · ' + (parseFloat(r.Kolicina) || 0).toLocaleString('sr') + ' kg</span></div>').join('')}
-            ${x.items.length > 5 ? '<div style="font-size:11px;color:var(--text-muted);font-style:italic;">+ još ' + (x.items.length - 5) + '</div>' : ''}
-        </div></div>`;
+
+    const ids = Object.keys(g).sort((a, b) => (g[b].kg || 0) - (g[a].kg || 0));
+
+    if (!ids.length) {
+        b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema neraspoređene robe za danas</p>';
+        return;
+    }
+
+    b.innerHTML = ids.map(sid => {
+        const x = g[sid];
+        const isSel = dpSel && dpSel.step >= 2 && dpSel.sid === sid;
+        return `
+            <div class="dp-card sup${isSel ? ' sel' : ''}" onclick="dpTS('${sid}')">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:700;">📦 ${dpSN(sid)}</span>
+                    <span style="font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                    ${x.n} otkupa
+                </div>
+            </div>
+        `;
     }).join('');
 }
- 
+
 // ============================================================
-// TRANSPORT — vozači iz assigned otkupa + localStorage
+// TRANSPORT
 // ============================================================
 function dpRTr() {
-    const b = document.getElementById('dpTB'), asg = dpGetAsg(), vm = {};
-    asg.forEach(r => { const v = r.VozacID || r.VozaciID || ''; if (!v) return; if (!vm[v]) vm[v] = { kg: 0, n: 0, st: new Set() }; vm[v].kg += parseFloat(r.Kolicina) || 0; vm[v].n++; const s = r.OtkupacID || (r._sheetName || '').replace('OTK-', ''); if (s) vm[v].st.add(s); });
-    Object.keys(dpKap).forEach(v => { if (!vm[v]) vm[v] = { kg: 0, n: 0, st: new Set() }; });
-    Object.keys(dpKS).forEach(v => { if (!vm[v]) vm[v] = { kg: 0, n: 0, st: new Set() }; });
-    const ids = Object.keys(vm);
-    document.getElementById('dpTT').textContent = ids.length;
- 
-    if (!ids.length) { b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema vozača</p>'; return; }
- 
-    const sl = { slobodan: 'Slobodan', utovar: 'Na utovaru', naputu: 'Na putu', istovar: 'Na istovaru' };
+    const b = document.getElementById('dpTB');
+    if (!b) return;
+
+    const asg = dpGetAsg();
+    const vm = {};
+
+    // 1. prvo svi poznati kamioni
+    (dpKamioni || []).forEach(v => {
+        const vid = v.id || v.VozacID || v.vozacID || '';
+        if (!vid) return;
+
+        vm[vid] = {
+            kg: 0,
+            n: 0,
+            st: new Set(),
+            name: v.name || v.Naziv || vid
+        };
+    });
+
+    // 2. dopuna iz assigned otkupa
+    asg.forEach(r => {
+        const vid = r.VozacID || r.VozaciID || '';
+        if (!vid) return;
+
+        if (!vm[vid]) {
+            vm[vid] = {
+                kg: 0,
+                n: 0,
+                st: new Set(),
+                name: vid
+            };
+        }
+
+        vm[vid].kg += parseFloat(r.Kolicina) || 0;
+        vm[vid].n++;
+
+        const sid = r.OtkupacID || (r._sheetName || '').replace('OTK-', '');
+        if (sid) vm[vid].st.add(sid);
+    });
+
+    // 3. fallback iz kapaciteta/statusa
+    Object.keys(dpKap).forEach(vid => {
+        if (!vm[vid]) {
+            vm[vid] = { kg: 0, n: 0, st: new Set(), name: vid };
+        }
+    });
+
+    Object.keys(dpKS).forEach(vid => {
+        if (!vm[vid]) {
+            vm[vid] = { kg: 0, n: 0, st: new Set(), name: vid };
+        }
+    });
+
+    const ids = Object.keys(vm).sort((a, b) => {
+        const ak = vm[a].kg || 0;
+        const bk = vm[b].kg || 0;
+        if (bk !== ak) return bk - ak;
+        return a.localeCompare(b);
+    });
+
+    if (!ids.length) {
+        b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema kamiona za prikaz</p>';
+        return;
+    }
+
+    const sl = {
+        slobodan: 'Slobodan',
+        utovar: 'Utovar',
+        naputu: 'Na putu',
+        istovar: 'Istovar'
+    };
+
     b.innerHTML = ids.map(vid => {
-        const x = vm[vid], cap = dpKap[vid] || 0, ks = dpKS[vid] || {}, st = ks.status || 'slobodan', ruta = ks.ruta || '';
-        const pct = cap > 0 ? Math.min(100, Math.round(x.kg / cap * 100)) : 0;
+        const x = vm[vid];
+        const cap = parseInt(dpKap[vid]) || 0;
+        const pct = cap > 0 ? Math.min(100, Math.round((x.kg / cap) * 100)) : 0;
         const bc = pct >= 90 ? 'var(--danger)' : pct >= 50 ? 'var(--accent)' : 'var(--success)';
         const isSel = dpSel && dpSel.step >= 1 && dpSel.vid === vid;
+        const st = (dpKS[vid] || {}).status || 'slobodan';
+        const ruta = (dpKS[vid] || {}).ruta || '';
         const staL = [...(x.st || [])].map(s => dpSN(s)).join(' → ');
-        // Check if this vozac has a plan today
         const vozPlan = dpPlans.find(p => p.VozacID === vid && p.Status === 'planned');
- 
-        return `<div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:700;font-size:14px;">🚛 ${vid}</span>
-            <span style="font-size:14px;font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
-            Kap: ${cap > 0 ? cap.toLocaleString('sr') + ' kg' : '<input type="number" inputmode="numeric" placeholder="kg" style="width:60px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;" onclick="event.stopPropagation()" onchange="dpSetK(\'' + vid + '\',parseInt(this.value)||0);dpRTr()">'} · ${x.n} otk.
-        </div>
-        ${cap > 0 ? '<div class="dp-bar"><div class="dp-bf" style="width:' + pct + '%;background:' + bc + ';"></div></div>' : ''}
-        ${staL ? '<div style="font-size:11px;color:var(--text-muted);">' + staL + (ruta ? ' → ' + ruta : '') + '</div>' : ''}
-        ${ruta && !staL ? '<div style="font-size:11px;color:var(--text-muted);">Ruta: ' + ruta + '</div>' : ''}
-        ${vozPlan ? '<div style="font-size:11px;margin-top:4px;color:var(--success);font-weight:600;">📋 Plan: ' + (vozPlan.StanicaName || '') + ' → ' + (vozPlan.KupacName || '') + '</div>' : ''}
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-            <span class="dp-badge ${st}">${sl[st] || st}</span>
-        </div>
-        <div class="dp-stb" onclick="event.stopPropagation()">
-            ${['slobodan', 'utovar', 'naputu', 'istovar'].map(s => '<button class="' + (st === s ? 'on' : '') + '" onclick="dpCS(\'' + vid + '\',\'' + s + '\')">' + sl[s] + '</button>').join('')}
-        </div></div>`;
+
+        return `
+            <div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:700;font-size:14px;">🚛 ${x.name || vid}</span>
+                    <span style="font-size:14px;font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
+                </div>
+
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                    Kap: ${
+                        cap > 0
+                            ? cap.toLocaleString('sr') + ' kg'
+                            : `<input type="number"
+                                      inputmode="numeric"
+                                      placeholder="kg"
+                                      style="width:60px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;"
+                                      onclick="event.stopPropagation()"
+                                      onchange="dpSetK('${vid}', parseInt(this.value)||0); dpRTr()">`
+                    } · ${x.n} otk.
+                </div>
+
+                ${cap > 0 ? `<div class="dp-bar"><div class="dp-bf" style="width:${pct}%;background:${bc};"></div></div>` : ''}
+
+                ${staL ? `<div style="font-size:11px;color:var(--text-muted);">${staL}${ruta ? ' → ' + ruta : ''}</div>` : ''}
+                ${ruta && !staL ? `<div style="font-size:11px;color:var(--text-muted);">Ruta: ${ruta}</div>` : ''}
+
+                ${vozPlan ? `<div style="font-size:11px;margin-top:4px;color:var(--success);font-weight:600;">📋 Plan: ${vozPlan.StanicaName || ''} → ${vozPlan.KupacName || ''}</div>` : ''}
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                    <span class="dp-badge ${st}">${sl[st] || st}</span>
+                </div>
+
+                <div class="dp-stb" onclick="event.stopPropagation()">
+                    ${['slobodan', 'utovar', 'naputu', 'istovar']
+                        .map(s => `<button class="${st === s ? 'on' : ''}" onclick="dpCS('${vid}','${s}')">${sl[s]}</button>`)
+                        .join('')}
+                </div>
+            </div>
+        `;
     }).join('');
 }
- 
+
 // ============================================================
 // DEMAND
 // ============================================================
 function dpRD() {
-    const l = document.getElementById('dpDL2'), tot = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0);
-    document.getElementById('dpDT').textContent = tot.toLocaleString('sr') + ' kg';
-    if (!dpDem.length) { l.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:12px;">Dodajte dnevne zahteve</p>'; return; }
+    const l = document.getElementById('dpDL2');
+    const t = document.getElementById('dpDT');
+    if (!l || !t) return;
+
+    const tot = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0);
+    t.textContent = tot.toLocaleString('sr') + ' kg';
+
+    if (!dpDem.length) {
+        l.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema demand-a za danas</p>';
+        return;
+    }
+
     l.innerHTML = dpDem.map(d => {
-        const kg = parseInt(d.Kg) || 0, pr = parseInt(d.Primljeno) || 0, os = Math.max(0, kg - pr);
-        const pct = kg > 0 ? Math.min(100, Math.round(pr / kg * 100)) : 0;
-        const bc = pct >= 100 ? 'var(--success)' : pct >= 50 ? '#2196F3' : 'var(--accent)';
-        const isSel = dpSel && dpSel.step >= 3 && dpSel.did === d.DemandID;
-        return `<div class="dp-card dem${isSel ? ' sel' : ''}" onclick="dpTD('${d.DemandID}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:700;font-size:14px;color:#0d47a1;">${d.KupacName || d.KupacID || '?'}</span>
-            <button onclick="event.stopPropagation();dpRmD('${d.DemandID}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;">✕</button>
-        </div>
-        <div style="font-size:11px;color:var(--text-muted);">${d.Vrsta || 'Sve'} · Kl. ${d.Klasa || 'I+II'}</div>
-        <div class="dp-bar"><div class="dp-bf" style="width:${pct}%;background:${bc};"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">
-            <span>Traženo: <strong style="color:var(--text);">${kg.toLocaleString('sr')}</strong></span>
-            <span>Primljeno: <strong style="color:var(--text);">${pr.toLocaleString('sr')}</strong></span>
-            <span>Ostalo: <strong style="color:var(--text);">${os.toLocaleString('sr')}</strong></span>
-        </div>
-        <div style="margin-top:6px;display:flex;gap:4px;align-items:center;" onclick="event.stopPropagation();">
-            <input type="number" id="dpP_${d.DemandID}" value="${pr}" inputmode="numeric" style="width:80px;padding:6px;font-size:13px;border:2px solid var(--border);border-radius:var(--radius);">
-            <button onclick="dpUP('${d.DemandID}')" style="padding:6px 12px;font-size:12px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-weight:600;cursor:pointer;">Ažuriraj</button>
-        </div></div>`;
+        const did = d.DemandID || d.demandID;
+        const isSel = dpSel && dpSel.step >= 3 && dpSel.did === did;
+        const kup = d.KupacName || d.KupacID || '?';
+        const kg = parseInt(d.Kg) || 0;
+        const prim = parseInt(d.Primljeno) || 0;
+
+        return `
+            <div class="dp-card dem${isSel ? ' sel' : ''}" onclick="dpTD('${did}')">
+                <div style="display:flex;justify-content:space-between;">
+                    <strong>🏭 ${kup}</strong>
+                    <strong>${kg.toLocaleString('sr')} kg</strong>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                    ${d.Vrsta || ''} ${d.Klasa || ''}
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                    Primljeno: ${prim.toLocaleString('sr')} kg
+                </div>
+            </div>
+        `;
     }).join('');
 }
- 
+
 // ============================================================
-// PLANS — danas aktivni planovi
+// PLANOVI
 // ============================================================
 function dpRP() {
-    const pl = document.getElementById('dpPlanList');
-    const active = dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku');
-    if (!active.length) { pl.innerHTML = ''; return; }
-    pl.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Današnji planovi</div>' +
-        active.map(p => {
-            const stBadge = p.Status === 'u_toku' ? '<span class="dp-badge naputu">U toku</span>' : '<span class="dp-badge slobodan">Planiran</span>';
-            return `<div class="dp-plan-item">
-                <div>
-                    <span class="dp-pi-route">🚛 ${p.VozacID || '?'} → 📦 ${p.StanicaName || p.StanicaID || '?'} → 🏭 ${p.KupacName || '?'}</span>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${p.PlannedKg ? p.PlannedKg.toLocaleString('sr') + ' kg' : ''} ${stBadge}</div>
+    const b = document.getElementById('dpPB');
+    if (!b) return;
+
+    if (!dpPlans.length) {
+        b.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema planova za danas</p>';
+        return;
+    }
+
+    b.innerHTML = dpPlans.map(p => {
+        return `
+            <div class="dp-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <strong>🚛 ${p.VozacID}</strong>
+                    <span>${parseInt(p.PlannedKg || 0).toLocaleString('sr')} kg</span>
                 </div>
-                <div style="display:flex;gap:4px;">
-                    <button onclick="dpChgPlanSt('${p.PlanID}','u_toku')" title="U toku" style="color:var(--primary);">▶</button>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                    ${p.StanicaName || p.StanicaID || '?'} → ${p.KupacName || p.KupacID || '?'}
+                </div>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button onclick="dpChgPlanSt('${p.PlanID}','u_toku')" title="U toku">▶</button>
                     <button onclick="dpChgPlanSt('${p.PlanID}','zavrseno')" title="Završeno" style="color:var(--success);">✓</button>
                     <button onclick="dpRmPlan('${p.PlanID}')" title="Obriši">✕</button>
                 </div>
-            </div>`;
-        }).join('');
+            </div>
+        `;
+    }).join('');
 }
- 
+
 // ============================================================
 // KPI
 // ============================================================
 function dpRK() {
-    document.getElementById('dpK1').textContent = dpGetSup().reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0).toLocaleString('sr');
-    const asg = dpGetAsg(), vz = new Set();
-    asg.forEach(r => { const v = r.VozacID || r.VozaciID || ''; if (v) vz.add(v); });
-    Object.keys(dpKap).forEach(v => vz.add(v)); Object.keys(dpKS).forEach(v => vz.add(v));
-    document.getElementById('dpK2').textContent = vz.size;
-    document.getElementById('dpK3').textContent = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0).toLocaleString('sr');
-    document.getElementById('dpK4').textContent = dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku').length;
+    const k1 = document.getElementById('dpK1');
+    const k2 = document.getElementById('dpK2');
+    const k3 = document.getElementById('dpK3');
+    const k4 = document.getElementById('dpK4');
+    if (!k1 || !k2 || !k3 || !k4) return;
+
+    k1.textContent = dpGetSup()
+        .reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0)
+        .toLocaleString('sr');
+
+    // ovde sada brojimo master listu kamiona, ne samo assigned
+    const vz = new Set();
+    (dpKamioni || []).forEach(v => vz.add(v.id || v.VozacID || v.vozacID));
+    Object.keys(dpKap).forEach(v => vz.add(v));
+    Object.keys(dpKS).forEach(v => vz.add(v));
+
+    k2.textContent = vz.size;
+    k3.textContent = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0).toLocaleString('sr');
+    k4.textContent = dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku').length;
 }
- 
+
 // ============================================================
-// TAP-TO-PLAN: Kamion → Stanica → Hladnjača → Sačuvaj plan
-// NE DIRA OTK SHEET. Samo čuva plan red.
+// TAP TO PLAN
 // ============================================================
 function dpTK(vid) {
-    if (dpSel && dpSel.vid === vid) { dpX(); return; }
+    if (dpSel && dpSel.vid === vid) {
+        dpX();
+        return;
+    }
     dpSel = { step: 1, vid };
     dpBN('🚛 ' + vid + ' izabran', 'Korak 2: tapnite STANICU odakle treba pokupiti robu');
     dpHL();
 }
+
 function dpTS(sid) {
-    if (!dpSel || dpSel.step < 1) { showToast('Prvo izaberite kamion', 'info'); return; }
-    if (dpSel.sid === sid) { dpSel.step = 1; dpSel.sid = null; dpBN('🚛 ' + dpSel.vid, 'Korak 2: tapnite stanicu'); dpHL(); return; }
-    dpSel.step = 2; dpSel.sid = sid;
-    const kg = dpGetSup().filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === sid).reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
-    dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(sid) + ' (' + kg.toLocaleString('sr') + ' kg)', 'Korak 3: tapnite HLADNJAČU gde ide roba');
+    if (!dpSel || dpSel.step < 1) {
+        showToast('Prvo izaberite kamion', 'info');
+        return;
+    }
+    if (dpSel.sid === sid) {
+        dpSel.step = 1;
+        dpSel.sid = null;
+        dpBN('🚛 ' + dpSel.vid, 'Korak 2: tapnite stanicu');
+        dpHL();
+        return;
+    }
+
+    dpSel.step = 2;
+    dpSel.sid = sid;
+
+    const kg = dpGetSup()
+        .filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === sid)
+        .reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+
+    dpBN(
+        '🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(sid) + ' (' + kg.toLocaleString('sr') + ' kg)',
+        'Korak 3: tapnite HLADNJAČU gde ide roba'
+    );
     dpHL();
 }
+
 function dpTD(did) {
-    if (!dpSel || dpSel.step < 2) { showToast(dpSel && dpSel.step >= 1 ? 'Izaberite stanicu' : 'Prvo kamion, pa stanicu', 'info'); return; }
-    if (dpSel.did === did) { dpSel.step = 2; dpSel.did = null; dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid), 'Korak 3: tapnite hladnjaču'); dpHL(); return; }
-    dpSel.step = 3; dpSel.did = did;
+    if (!dpSel || dpSel.step < 2) {
+        showToast(dpSel && dpSel.step >= 1 ? 'Izaberite stanicu' : 'Prvo kamion, pa stanicu', 'info');
+        return;
+    }
+    if (dpSel.did === did) {
+        dpSel.step = 2;
+        dpSel.did = null;
+        dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid), 'Korak 3: tapnite hladnjaču');
+        dpHL();
+        return;
+    }
+
+    dpSel.step = 3;
+    dpSel.did = did;
+
     const d = dpDem.find(x => x.DemandID === did);
-    const kg = dpGetSup().filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === dpSel.sid).reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
-    dpBN('🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid) + ' (' + kg.toLocaleString('sr') + ' kg) → 🏭 ' + (d ? d.KupacName : '?'), 'Tapnite SAČUVAJ PLAN');
+    const kg = dpGetSup()
+        .filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === dpSel.sid)
+        .reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+
+    dpBN(
+        '🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid) + ' (' + kg.toLocaleString('sr') + ' kg) → 🏭 ' + (d ? d.KupacName : '?'),
+        'Tapnite SAČUVAJ PLAN'
+    );
     dpHL();
 }
- 
-function dpBN(t, s) { document.getElementById('dpBt').textContent = t; document.getElementById('dpBs').textContent = s; document.getElementById('dpBnr').classList.add('active'); }
-function dpX() { dpSel = null; document.getElementById('dpBnr').classList.remove('active'); dpHL(); }
-function dpHL() { dpRS(); dpRTr(); dpRD(); }
- 
+
+function dpBN(t, s) {
+    document.getElementById('dpBt').textContent = t;
+    document.getElementById('dpBs').textContent = s;
+    document.getElementById('dpBnr').classList.add('active');
+}
+
+function dpX() {
+    dpSel = null;
+    document.getElementById('dpBnr').classList.remove('active');
+    dpHL();
+}
+
+function dpHL() {
+    dpRS();
+    dpRTr();
+    dpRD();
+}
+
 // ============================================================
-// CONFIRM — čuva PLAN na Sheet, NE dira OTK
+// SAVE PLAN
 // ============================================================
 async function dpOK() {
-    if (!dpSel || dpSel.step < 3) { showToast('Završite sva 3 koraka', 'error'); return; }
-    const vid = dpSel.vid, sid = dpSel.sid;
+    if (!dpSel || dpSel.step < 3) {
+        showToast('Završite sva 3 koraka', 'error');
+        return;
+    }
+
+    const vid = dpSel.vid;
+    const sid = dpSel.sid;
     const d = dpDem.find(x => x.DemandID === dpSel.did);
     const kupN = d ? (d.KupacName || d.KupacID) : '?';
     const kupID = d ? (d.KupacID || '') : '';
-    const kg = dpGetSup().filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === sid).reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
- 
-    showToast('Čuvanje plana...', 'info');
+
+    const kg = dpGetSup()
+        .filter(r => (r.OtkupacID || (r._sheetName || '').replace('OTK-', '')) === sid)
+        .reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+
+    showToast('Čuvanje plana.', 'info');
+
     try {
         const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({
-                action: 'saveDispecer', token: CONFIG.TOKEN,
-                vozacID: vid, stanicaID: sid, stanicaName: dpSN(sid),
-                kupacID: kupID, kupacName: kupN, plannedKg: Math.round(kg)
+                action: 'saveDispecer',
+                token: CONFIG.TOKEN,
+                vozacID: vid,
+                stanicaID: sid,
+                stanicaName: dpSN(sid),
+                kupacID: kupID,
+                kupacName: kupN,
+                plannedKg: Math.round(kg)
             })
         });
+
         const json = await resp.json();
+
         if (json.success) {
-            // Update kamion status locally
             dpSetS(vid, 'utovar', dpSN(sid) + ' → ' + kupN);
-            // Fire-and-forget server status
-            fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ action: 'updateKamionStatus', token: CONFIG.TOKEN, vozacID: vid, status: 'utovar', ruta: dpSN(sid) + ' → ' + kupN }) }).catch(() => {});
-            // Add to local plans
+
+            fetch(CONFIG.API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'updateKamionStatus',
+                    token: CONFIG.TOKEN,
+                    vozacID: vid,
+                    status: 'utovar',
+                    ruta: dpSN(sid) + ' → ' + kupN
+                })
+            }).catch(() => {});
+
             dpPlans.push({
-                PlanID: json.planID, VozacID: vid, StanicaID: sid, StanicaName: dpSN(sid),
-                KupacID: kupID, KupacName: kupN, PlannedKg: Math.round(kg), Status: 'planned'
+                PlanID: json.planID,
+                VozacID: vid,
+                StanicaID: sid,
+                StanicaName: dpSN(sid),
+                KupacID: kupID,
+                KupacName: kupN,
+                PlannedKg: Math.round(kg),
+                Status: 'planned'
             });
+
+            if (!dpKamioni.some(x => x.id === vid)) {
+                dpKamioni.push({ id: vid, name: vid });
+            }
+
             showToast('📋 Plan: ' + vid + ' → ' + dpSN(sid) + ' → ' + kupN, 'success');
-        } else { showToast(json.error || 'Greška', 'error'); }
-    } catch(e) { showToast('Nema konekcije', 'error'); }
-    dpX(); dpRS(); dpRTr(); dpRP(); dpRK();
+        } else {
+            showToast(json.error || 'Greška', 'error');
+        }
+    } catch (e) {
+        showToast('Nema konekcije', 'error');
+    }
+
+    dpX();
+    dpRS();
+    dpRTr();
+    dpRP();
+    dpRK();
 }
- 
+
 // ============================================================
 // PLAN STATUS CHANGE
 // ============================================================
 async function dpChgPlanSt(planID, newStatus) {
     try {
-        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'updateDispecer', token: CONFIG.TOKEN, planID, status: newStatus }) });
+        await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'updateDispecer',
+                token: CONFIG.TOKEN,
+                planID,
+                status: newStatus
+            })
+        });
+
         const p = dpPlans.find(x => x.PlanID === planID);
         if (p) p.Status = newStatus;
         if (newStatus === 'zavrseno') dpPlans = dpPlans.filter(x => x.PlanID !== planID);
-        dpRP(); dpRK(); dpRS(); dpRTr();
+
+        dpRP();
+        dpRK();
+        dpRS();
+        dpRTr();
+
         showToast(newStatus === 'zavrseno' ? 'Plan završen' : 'Plan u toku', 'success');
-    } catch(e) {}
+    } catch (e) {}
 }
- 
+
 async function dpRmPlan(planID) {
     try {
-        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'removeDispecer', token: CONFIG.TOKEN, planID }) });
+        await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'removeDispecer',
+                token: CONFIG.TOKEN,
+                planID
+            })
+        });
+
         dpPlans = dpPlans.filter(x => x.PlanID !== planID);
-        dpRP(); dpRK(); dpRS(); dpRTr();
+
+        dpRP();
+        dpRK();
+        dpRS();
+        dpRTr();
+
         showToast('Plan obrisan', 'info');
-    } catch(e) {}
+    } catch (e) {}
 }
- 
+
 // ============================================================
 // KAMION STATUS
 // ============================================================
 async function dpCS(vid, st) {
-    dpKS[vid] = { status: st, ruta: (dpKS[vid] || {}).ruta || '' };
+    dpKS[vid] = {
+        status: st,
+        ruta: (dpKS[vid] || {}).ruta || ''
+    };
+
+    if (!dpKamioni.some(x => x.id === vid)) {
+        dpKamioni.push({ id: vid, name: vid });
+    }
+
     dpRTr();
-    fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'updateKamionStatus', token: CONFIG.TOKEN, vozacID: vid, status: st, ruta: (dpKS[vid] || {}).ruta || '' }) }).catch(() => {});
-}
- 
-// ============================================================
-// DEMAND CRUD
-// ============================================================
-async function dpAD() {
-    const kid = document.getElementById('dpDK').value, kg = parseInt(document.getElementById('dpDG').value) || 0;
-    if (!kid) { showToast('Izaberite kupca', 'error'); return; }
-    if (kg <= 0) { showToast('Unesite kg', 'error'); return; }
-    const kn = document.getElementById('dpDK').selectedOptions[0].textContent;
-    const vr = document.getElementById('dpDV').value, kl = document.getElementById('dpDL').value;
-    try {
-        const r = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'saveWarRoomDemand', token: CONFIG.TOKEN, kupacID: kid, kupacName: kn, kg, vrsta: vr || '', klasa: kl || 'I+II' }) });
-        const j = await r.json();
-        if (j.success) {
-            showToast(kn + ': ' + kg.toLocaleString('sr') + ' kg', 'success');
-            document.getElementById('dpDG').value = ''; document.getElementById('dpDK').value = '';
-            // Reload demand
-            try { const j2 = await apiFetch('action=getDispecer'); if (j2 && j2.success) { dpDem = j2.demand || []; dpPlans = j2.plans || []; } } catch(e) {}
-            dpRD(); dpRK();
-        } else showToast(j.error || 'Greška', 'error');
-    } catch(e) { showToast('Nema konekcije', 'error'); }
-}
- 
-async function dpRmD(did) {
-    try {
-        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'removeWarRoomDemand', token: CONFIG.TOKEN, demandID: did }) });
-        dpDem = dpDem.filter(d => d.DemandID !== did); dpRD(); dpRK();
-        showToast('Uklonjeno', 'info');
-    } catch(e) {}
-}
- 
-async function dpUP(did) {
-    const el = document.getElementById('dpP_' + did); if (!el) return;
-    const v = parseInt(el.value) || 0;
-    try {
-        await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'updateDemandPrimljeno', token: CONFIG.TOKEN, demandID: did, primljeno: v }) });
-        const d = dpDem.find(x => x.DemandID === did); if (d) d.Primljeno = v;
-        dpRD(); dpRK(); showToast('Ažurirano', 'success');
-    } catch(e) { showToast('Greška', 'error'); }
-}
- 
-// ============================================================
-// HELPER
-// ============================================================
-function dpSN(sid) {
-    if (!sid) return '?';
-    const s = (stammdaten.stanice || []).find(x => x.StanicaID === sid);
-    return s ? (s.Naziv || s.Mesto || sid) : sid;
+
+    fetch(CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+            action: 'updateKamionStatus',
+            token: CONFIG.TOKEN,
+            vozacID: vid,
+            status: st,
+            ruta: (dpKS[vid] || {}).ruta || ''
+        })
+    }).catch(() => {});
 }
     
 // ============================================================
