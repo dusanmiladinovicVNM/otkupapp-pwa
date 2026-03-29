@@ -2706,6 +2706,28 @@ function dpSetS(vid, status, ruta) {
     };
 }
 
+function dpCalcRuta(vid) {
+    const plans = (dpPlans || [])
+        .filter(p => p.VozacID === vid && (p.Status === 'planned' || p.Status === 'u_toku'));
+
+    if (!plans.length) return '';
+
+    const stanice = [];
+    const kupci = [];
+
+    plans.forEach(p => {
+        const stanica = p.StanicaName || p.StanicaID || '';
+        const kupac = p.KupacName || p.KupacID || '';
+
+        if (stanica && !stanice.includes(stanica)) stanice.push(stanica);
+        if (kupac && !kupci.includes(kupac)) kupci.push(kupac);
+    });
+
+    return [...stanice, ...kupci].join(' → ');
+}
+
+
+
 function dpGetSup() {
     const today = dpToday();
     return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
@@ -2728,8 +2750,8 @@ function dpGetAsg() {
 async function dpInit() {
     dpKamioni = [];
     dpKS = {};
-    
-    // 0) master lista iz stammdaten
+
+    // 0) master lista iz stammdaten + kapacitet iz Vozaci taba
     (stammdaten.vozaci || []).forEach(v => {
         const vid = v.VozacID || v.vozacID || v.ID || '';
         if (!vid) return;
@@ -2740,7 +2762,14 @@ async function dpInit() {
                 name: v.Naziv || v.Ime || v.Vozac || vid
             });
         }
+
+        const kap = parseInt(v.KapacitetKG) || 0;
+        if (kap > 0 && !dpKap[vid]) {
+            dpKap[vid] = kap;
+        }
     });
+
+    dpSaveKap();
 
     // 1) status kamiona sa servera
     try {
@@ -2799,6 +2828,17 @@ async function dpInit() {
             dpPlans = j.plans || [];
         }
     } catch (e) {}
+
+    // 5) uskladi rute po planovima
+    const vozaciSaPlanovima = [...new Set((dpPlans || []).map(p => p.VozacID).filter(Boolean))];
+    vozaciSaPlanovima.forEach(vid => {
+        const ruta = dpCalcRuta(vid);
+        if (!dpKS[vid]) dpKS[vid] = {};
+        dpKS[vid].ruta = ruta;
+        if (!dpKS[vid].status || dpKS[vid].status === 'slobodan') {
+            dpKS[vid].status = 'utovar';
+        }
+    });
 
     dpPD();
     dpRS();
@@ -2994,7 +3034,7 @@ function dpRTr() {
         const st = (dpKS[vid] || {}).status || 'slobodan';
         const ruta = (dpKS[vid] || {}).ruta || '';
         const staL = [...(x.st || [])].map(s => dpSN(s)).join(' → ');
-        const vozPlan = dpPlans.find(p => p.VozacID === vid && p.Status === 'planned');
+        const vozPlans = dpPlans.filter(p => p.VozacID === vid && (p.Status === 'planned' || p.Status === 'u_toku'));
 
         return `
             <div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
@@ -3021,7 +3061,11 @@ function dpRTr() {
                 ${staL ? `<div style="font-size:11px;color:var(--text-muted);">${staL}${ruta ? ' → ' + ruta : ''}</div>` : ''}
                 ${ruta && !staL ? `<div style="font-size:11px;color:var(--text-muted);">Ruta: ${ruta}</div>` : ''}
 
-                ${vozPlan ? `<div style="font-size:11px;margin-top:4px;color:var(--success);font-weight:600;">📋 Plan: ${vozPlan.StanicaName || ''} → ${vozPlan.KupacName || ''}</div>` : ''}
+                ${vozPlans.length ? vozPlans.map(p => `
+                    <div style="font-size:11px;margin-top:4px;color:var(--success);font-weight:600;">
+                    📋 Plan: ${p.StanicaName || p.StanicaID || ''} → ${p.KupacName || p.KupacID || ''}
+                    </div>
+                `).join('') : ''}
 
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
                     <span class="dp-badge ${st}">${sl[st] || st}</span>
@@ -3257,7 +3301,21 @@ async function dpOK() {
         const json = await resp.json();
 
         if (json.success) {
-            dpSetS(vid, 'utovar', dpSN(sid) + ' → ' + kupN);
+            const newPlan = {
+                PlanID: json.planID,
+                VozacID: vid,
+                StanicaID: sid,
+                StanicaName: dpSN(sid),
+                KupacID: kupID,
+                KupacName: kupN,
+                PlannedKg: Math.round(kg),
+                Status: 'planned'
+            };
+
+            dpPlans.push(newPlan);
+
+            const ruta = dpCalcRuta(vid);
+            dpSetS(vid, 'utovar', ruta);
 
             fetch(CONFIG.API_URL, {
                 method: 'POST',
@@ -3267,26 +3325,15 @@ async function dpOK() {
                     token: CONFIG.TOKEN,
                     vozacID: vid,
                     status: 'utovar',
-                    ruta: dpSN(sid) + ' → ' + kupN
+                    ruta: ruta
                 })
             }).catch(() => {});
-
-            dpPlans.push({
-                PlanID: json.planID,
-                VozacID: vid,
-                StanicaID: sid,
-                StanicaName: dpSN(sid),
-                KupacID: kupID,
-                KupacName: kupN,
-                PlannedKg: Math.round(kg),
-                Status: 'planned'
-            });
 
             if (!dpKamioni.some(x => x.id === vid)) {
                 dpKamioni.push({ id: vid, name: vid });
             }
 
-            showToast('📋 Plan: ' + vid + ' → ' + dpSN(sid) + ' → ' + kupN, 'success');
+            showToast('📋 Plan: ' + ruta, 'success');
         } else {
             showToast(json.error || 'Greška', 'error');
         }
@@ -3318,8 +3365,31 @@ async function dpChgPlanSt(planID, newStatus) {
         });
 
         const p = dpPlans.find(x => x.PlanID === planID);
+        const vid = p ? p.VozacID : '';
+
         if (p) p.Status = newStatus;
-        if (newStatus === 'zavrseno') dpPlans = dpPlans.filter(x => x.PlanID !== planID);
+        if (newStatus === 'zavrseno') {
+            dpPlans = dpPlans.filter(x => x.PlanID !== planID);
+        }
+
+        if (vid) {
+            const ruta = dpCalcRuta(vid);
+            const status = ruta ? (newStatus === 'zavrseno' ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : newStatus) : 'slobodan';
+
+            dpSetS(vid, status, ruta);
+
+            fetch(CONFIG.API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'updateKamionStatus',
+                    token: CONFIG.TOKEN,
+                    vozacID: vid,
+                    status: status,
+                    ruta: ruta
+                })
+            }).catch(() => {});
+        }
 
         dpRP();
         dpRK();
@@ -3332,6 +3402,9 @@ async function dpChgPlanSt(planID, newStatus) {
 
 async function dpRmPlan(planID) {
     try {
+        const plan = dpPlans.find(x => x.PlanID === planID);
+        const vid = plan ? plan.VozacID : '';
+
         await fetch(CONFIG.API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -3344,6 +3417,25 @@ async function dpRmPlan(planID) {
 
         dpPlans = dpPlans.filter(x => x.PlanID !== planID);
 
+        if (vid) {
+            const ruta = dpCalcRuta(vid);
+            const status = ruta ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : 'slobodan';
+
+            dpSetS(vid, status, ruta);
+
+            fetch(CONFIG.API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'updateKamionStatus',
+                    token: CONFIG.TOKEN,
+                    vozacID: vid,
+                    status: status,
+                    ruta: ruta
+                })
+            }).catch(() => {});
+        }
+
         dpRP();
         dpRK();
         dpRS();
@@ -3352,6 +3444,7 @@ async function dpRmPlan(planID) {
         showToast('Plan obrisan', 'info');
     } catch (e) {}
 }
+    
 
 // ============================================================
 // KAMION STATUS
