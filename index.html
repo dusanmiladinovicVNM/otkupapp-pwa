@@ -3380,7 +3380,69 @@ async function dpCS(vid, st) {
         })
     }).catch(() => {});
 }
-    
+
+async function dpAD() {
+    const kupacID = document.getElementById('dpDK').value;
+    const kg = parseInt(document.getElementById('dpDG').value) || 0;
+    const vrsta = document.getElementById('dpDV').value || '';
+    const klasa = document.getElementById('dpDL').value || '';
+
+    if (!kupacID) {
+        showToast('Izaberite kupca', 'error');
+        return;
+    }
+    if (kg <= 0) {
+        showToast('Unesite kg', 'error');
+        return;
+    }
+
+    const kupacName =
+        document.getElementById('dpDK').selectedOptions[0]?.textContent || kupacID;
+
+    try {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'saveWarRoomDemand',
+                token: CONFIG.TOKEN,
+                kupacID,
+                kupacName,
+                kg,
+                vrsta,
+                klasa
+            })
+        });
+
+        const json = await resp.json();
+
+        if (!json.success) {
+            showToast(json.error || 'Greška pri čuvanju', 'error');
+            return;
+        }
+
+        dpDem.push({
+            DemandID: json.demandID,
+            KupacID: kupacID,
+            KupacName: kupacName,
+            Kg: kg,
+            Vrsta: vrsta,
+            Klasa: klasa,
+            Primljeno: 0
+        });
+
+        document.getElementById('dpDG').value = '';
+        document.getElementById('dpDV').value = '';
+        document.getElementById('dpDL').value = '';
+
+        dpRD();
+        dpRK();
+
+        showToast('Zahtev dodat', 'success');
+    } catch (e) {
+        showToast('Nema konekcije', 'error');
+    }
+}
 // ============================================================
 // MANAGEMENT: KOOPERANTI
 // ============================================================
