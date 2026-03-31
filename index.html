@@ -305,7 +305,132 @@
  
 .dp-plan-item { background: #e8f5e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
 .dp-plan-item .dp-pi-route { font-weight: 600; color: var(--primary-dark); }
-.dp-plan-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; }        
+.dp-plan-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; }    
+
+.parcel-expert-toggle {
+    margin-top: 10px;
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.parcel-expert-toggle:active {
+    transform: scale(0.995);
+}
+
+.parcel-expert-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.parcel-expert-sub {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.parcel-expert-chevron {
+    font-size: 16px;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.parcel-expert-chevron.open {
+    transform: rotate(180deg);
+}
+
+.parcel-expert-panel {
+    margin-top: 8px;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
+.parcel-expert-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.parcel-expert-item {
+    background: #ffffff;
+    border: 1px solid #eef2f7;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.parcel-expert-k {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.parcel-expert-v {
+    font-size: 15px;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.parcel-mini-forecast {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.parcel-mini-day {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.parcel-mini-day-name {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.parcel-mini-day-icon {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.parcel-mini-day-temp {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.parcel-mini-day-temp-low {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.parcel-mini-day-rain {
+    margin-top: 4px;
+    font-size: 10px;
+    color: #2563eb;
+    min-height: 12px;
+}
 
     </style>
 </head>
@@ -691,6 +816,7 @@ let qrScanner = null;
 let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [], stanice: [], kupci: [], vozaci: [] };
 let selectedMera = '';
 let mgmtData = null;
+let parcelExpertOpen = {};
 
 // ============================================================
 // MANAGEMENT SUB-TAB DEFINITIONS
@@ -2274,41 +2400,24 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
 }
 
 function renderMeteoInline(data) {
-    const c = data.current;
-    const risk = data.risk;
-    const spray = data.sprayWindow;
-    const daily = data.daily || [];
-    
+    const c = data.current || {};
+    const risk = data.risk || {};
+    const spray = data.sprayWindow || data.SprayWindows || [];
+    const daily = data.daily || data.ForecastDaily || [];
+
     let html = '';
-    
-    // Current conditions — two rows
+
+    // Osnovno trenutno stanje
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;">';
-    html += `<span style="font-size:16px;font-weight:700;color:var(--primary);">${(c.temperature || c.Temp || 0).toFixed(1)}°C</span>`;
+    html += `<span style="font-size:16px;font-weight:700;color:var(--primary);">${Number(c.temperature || c.Temp || 0).toFixed(1)}°C</span>`;
     html += `<span>${weatherCodeIcon(c.weatherCode || c.WeatherCode || 0)}</span>`;
     html += `<span>💧${c.humidity || c.Humidity || 0}%</span>`;
-    html += `<span>💨${(c.windSpeed || c.Wind || 0).toFixed(0)} km/h</span>`;
-    const precip = c.precipitation || c.Precip || 0;
+    html += `<span>💨${Number(c.windSpeed || c.Wind || 0).toFixed(0)} km/h</span>`;
+    const precip = Number(c.precipitation || c.Precip || 0);
     if (precip > 0) html += `<span>🌧️${precip.toFixed(1)}mm</span>`;
     html += '</div>';
-    
-    // Soil + advanced data row
-    const soilMoist = c.soilMoist_0_1 || c.SoilMoist_0_1cm || null;
-    const soilTemp = c.soilTemp_0 || c.SoilTemp_0cm || null;
-    const et0 = c.et0 || c.ET0 || null;
-    const uv = c.uvIndex || c.UVIndex || null;
-    const solar = c.solarRadiation || c.SolarRadiation || null;
-    
-    if (soilMoist !== null || soilTemp !== null) {
-        html += '<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--text-muted);margin-bottom:4px;">';
-        if (soilTemp !== null) html += `<span>🌡️Zemlj: ${Number(soilTemp).toFixed(1)}°C</span>`;
-        if (soilMoist !== null) html += `<span>🌱Vlažn.z: ${(Number(soilMoist) * 100).toFixed(0)}%</span>`;
-        if (et0 !== null) html += `<span>💦ET₀: ${Number(et0).toFixed(1)}mm</span>`;
-        if (uv !== null && Number(uv) > 0) html += `<span>☀️UV: ${Number(uv).toFixed(0)}</span>`;
-        if (solar !== null && Number(solar) > 0) html += `<span>🔆${Number(solar).toFixed(0)} W/m²</span>`;
-        html += '</div>';
-    }
-    
-    // Risk badges
+
+    // Rizik
     const riskItems = risk ? (risk.items || risk.RiskItems || []) : [];
     if (riskItems.length > 0) {
         html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">';
@@ -2321,41 +2430,137 @@ function renderMeteoInline(data) {
     } else {
         html += '<div style="margin-bottom:4px;"><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">✅ Bez rizika</span></div>';
     }
-    
-    // Spray window
-    const sprayWindows = spray || data.SprayWindows || [];
-    if (sprayWindows.length > 0) {
-        const w = sprayWindows[0];
+
+    // Prskanje
+    if (spray.length > 0) {
+        const w = spray[0];
         const start = new Date(w.start);
         const end = new Date(w.end);
         const dayNames = ['Ned','Pon','Uto','Sre','Čet','Pet','Sub'];
         const dayStr = dayNames[start.getDay()];
-        const startTime = start.toLocaleTimeString('sr', {hour:'2-digit', minute:'2-digit'});
-        const endTime = end.toLocaleTimeString('sr', {hour:'2-digit', minute:'2-digit'});
-        html += `<div style="font-size:11px;">🎯 Prskanje: <strong>${dayStr} ${startTime}—${endTime}</strong> (${w.hours}h, ${w.avgTemp}°C, vetar ${w.avgWind} km/h)</div>`;
+        const startTime = start.toLocaleTimeString('sr', { hour:'2-digit', minute:'2-digit' });
+        const endTime = end.toLocaleTimeString('sr', { hour:'2-digit', minute:'2-digit' });
+        html += `<div style="font-size:11px;margin-bottom:4px;">🎯 Prskanje: <strong>${dayStr} ${startTime}—${endTime}</strong> (${w.hours}h)</div>`;
     } else {
-        html += '<div style="font-size:11px;color:var(--warning);">⚠️ Nema termina za prskanje (72h)</div>';
+        html += '<div style="font-size:11px;color:var(--warning);margin-bottom:4px;">⚠️ Nema termina za prskanje (72h)</div>';
     }
-    
-    // Mini 3-day forecast (only if daily data available)
-    if (daily.length >= 3) {
+
+    // Osnovna prognoza 3 dana
+    if (daily.length >= 1) {
         const dayNames = ['Ned','Pon','Uto','Sre','Čet','Pet','Sub'];
-        html += '<div style="display:flex;gap:8px;margin-top:4px;">';
-        for (let i = 0; i < 3; i++) {
+        html += '<div class="parcel-mini-forecast">';
+        for (let i = 0; i < Math.min(3, daily.length); i++) {
             const d = daily[i];
             const date = new Date(d.date);
             const name = i === 0 ? 'Danas' : dayNames[date.getDay()];
-            html += `<span style="font-size:10px;background:#f9fafb;padding:3px 6px;border-radius:4px;">
-                ${name} ${weatherCodeIcon(d.weatherCode)} ${Math.round(d.tempMax)}°/${Math.round(d.tempMin)}°
-                ${d.precipSum > 0 ? ' 💧' + d.precipSum.toFixed(1) : ''}
-            </span>`;
+            html += `
+                <div class="parcel-mini-day">
+                    <div class="parcel-mini-day-name">${name}</div>
+                    <div class="parcel-mini-day-icon">${weatherCodeIcon(d.weatherCode || 0)}</div>
+                    <div class="parcel-mini-day-temp">${Math.round(Number(d.tempMax || 0))}°</div>
+                    <div class="parcel-mini-day-temp-low">${Math.round(Number(d.tempMin || 0))}°</div>
+                    <div class="parcel-mini-day-rain">
+                        ${Number(d.precipSum || 0) > 0 ? '💧 ' + Number(d.precipSum).toFixed(1) + 'mm' : '&nbsp;'}
+                    </div>
+                </div>
+            `;
         }
         html += '</div>';
     }
-    
+
     return html;
 }
 
+function renderExpertInfo(parcelId, current) {
+    const soilMoist = current.soilMoist_0_1 ?? current.SoilMoist_0_1cm ?? null;
+    const soilTemp = current.soilTemp_0 ?? current.SoilTemp_0cm ?? null;
+    const et0 = current.et0 ?? current.ET0 ?? null;
+    const uv = current.uvIndex ?? current.UVIndex ?? null;
+    const solar = current.solarRadiation ?? current.SolarRadiation ?? null;
+
+    const hasExpert =
+        soilMoist !== null ||
+        soilTemp !== null ||
+        et0 !== null ||
+        uv !== null ||
+        solar !== null;
+
+    if (!hasExpert) return '';
+
+    const isOpen = !!parcelExpertOpen[parcelId];
+
+    let html = `
+        <button class="parcel-expert-toggle" onclick="toggleParcelExpert('${parcelId}')">
+            <div>
+                <div class="parcel-expert-title">
+                    <span>🧪 Expert info</span>
+                </div>
+                <div class="parcel-expert-sub">Zemljište, ET₀, UV i dodatni agro podaci</div>
+            </div>
+            <span class="parcel-expert-chevron ${isOpen ? 'open' : ''}">⌄</span>
+        </button>
+    `;
+
+    if (!isOpen) return html;
+
+    html += `
+        <div class="parcel-expert-panel">
+            <div class="parcel-expert-grid">
+                ${soilTemp !== null ? `
+                    <div class="parcel-expert-item">
+                        <div class="parcel-expert-k">🌡️ Temperatura zemljišta</div>
+                        <div class="parcel-expert-v">${Number(soilTemp).toFixed(1)}°C</div>
+                    </div>
+                ` : ''}
+
+                ${soilMoist !== null ? `
+                    <div class="parcel-expert-item">
+                        <div class="parcel-expert-k">🌱 Vlažnost zemljišta</div>
+                        <div class="parcel-expert-v">${(Number(soilMoist) * 100).toFixed(0)}%</div>
+                    </div>
+                ` : ''}
+
+                ${et0 !== null ? `
+                    <div class="parcel-expert-item">
+                        <div class="parcel-expert-k">💦 ET₀</div>
+                        <div class="parcel-expert-v">${Number(et0).toFixed(1)} mm</div>
+                    </div>
+                ` : ''}
+
+                ${uv !== null && Number(uv) > 0 ? `
+                    <div class="parcel-expert-item">
+                        <div class="parcel-expert-k">☀️ UV indeks</div>
+                        <div class="parcel-expert-v">${Number(uv).toFixed(1)}</div>
+                    </div>
+                ` : ''}
+
+                ${solar !== null && Number(solar) > 0 ? `
+                    <div class="parcel-expert-item">
+                        <div class="parcel-expert-k">🔆 Solarno zračenje</div>
+                        <div class="parcel-expert-v">${Number(solar).toFixed(0)} W/m²</div>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+function toggleParcelExpert(parcelId) {
+    parcelExpertOpen[parcelId] = !parcelExpertOpen[parcelId];
+
+    const panel = document.getElementById('parceleMeteo');
+    if (panel && panel.dataset && panel.dataset.currentParcelaId === parcelId) {
+        const cached = meteoCache[parcelId];
+        if (cached) renderMeteoPanel(cached);
+    }
+
+    const parcela = (stammdaten.parcele || []).find(p => p.ParcelaID === parcelId);
+    if (parcela) {
+        loadParcelMeteoInline(parcelId, parcela.Kultura || '');
+    }
+}
 function focusParcel(parcelaID) {
     if (!parcelMapInstance || !window._parcelLayers || !window._parcelLayers[parcelaID]) return;
 
@@ -2413,13 +2618,14 @@ async function loadParcelMeteo(parcelaId, kultura) {
 
 function renderMeteoPanel(data) {
     const panel = document.getElementById('parceleMeteo');
-    const c = data.current;
-    const risk = data.risk;
-    const spray = data.sprayWindow;
-    const daily = data.daily || [];
-    
-    const dayNames = ['Ned', 'Pon', 'Uto', 'Sre', 'Čet', 'Pet', 'Sub'];
-    
+    const c = data.current || {};
+    const risk = data.risk || {};
+    const spray = data.sprayWindow || [];
+    const daily = data.daily || data.ForecastDaily || [];
+    const parcelaId = data.parcelaId || '';
+
+    if (panel.dataset) panel.dataset.currentParcelaId = parcelaId;
+
     panel.innerHTML = `
         <div class="meteo-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -2433,23 +2639,23 @@ function renderMeteoPanel(data) {
             
             <div class="meteo-current">
                 <div>
-                    <div class="meteo-temp">${c.temperature.toFixed(1)}°</div>
+                    <div class="meteo-temp">${Number(c.temperature || 0).toFixed(1)}°</div>
                 </div>
                 <div class="meteo-details">
-                    <div>${weatherCodeText(c.weatherCode)}</div>
-                    <div>💧 Vlažnost: ${c.humidity}%</div>
-                    <div>💨 Vetar: ${c.windSpeed.toFixed(1)} km/h (udari: ${c.windGusts.toFixed(1)})</div>
-                    ${c.precipitation > 0 ? '<div>🌧️ Padavine: ' + c.precipitation.toFixed(1) + ' mm</div>' : ''}
+                    <div>${weatherCodeText(c.weatherCode || 0)}</div>
+                    <div>💧 Vlažnost: ${c.humidity || 0}%</div>
+                    <div>💨 Vetar: ${Number(c.windSpeed || 0).toFixed(1)} km/h (udari: ${Number(c.windGusts || 0).toFixed(1)})</div>
+                    ${Number(c.precipitation || 0) > 0 ? '<div>🌧️ Padavine: ' + Number(c.precipitation).toFixed(1) + ' mm</div>' : ''}
                 </div>
             </div>
             
             ${renderRiskSection(risk)}
             ${renderSpraySection(spray, data.kultura)}
-            ${renderForecast(daily, dayNames)}
+            ${renderForecast(daily, ['Ned', 'Pon', 'Uto', 'Sre', 'Čet', 'Pet', 'Sub'])}
+            ${renderExpertInfo(parcelaId, c)}
         </div>
     `;
 }
-
 function renderRiskSection(risk) {
     if (!risk || !risk.items || risk.items.length === 0) {
         return '<div class="meteo-risk ok">✅ Nema rizika — uslovi su povoljni</div>';
@@ -2493,24 +2699,29 @@ function renderSpraySection(windows, kultura) {
 
 function renderForecast(daily, dayNames) {
     if (!daily || daily.length === 0) return '';
-    
-    let html = '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">7-DNEVNA PROGNOZA</div>';
-    html += '<div class="meteo-forecast">';
-    
-    daily.forEach((d, i) => {
+
+    let html = '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">OSNOVNA PROGNOZA — NAREDNA 3 DANA</div>';
+    html += '<div class="parcel-mini-forecast">';
+
+    for (let i = 0; i < Math.min(3, daily.length); i++) {
+        const d = daily[i];
         const date = new Date(d.date);
         const dayName = i === 0 ? 'Danas' : dayNames[date.getDay()];
-        const icon = weatherCodeIcon(d.weatherCode);
-        
-        html += `<div class="meteo-day">
-            <div class="day-name">${dayName}</div>
-            <div class="day-icon">${icon}</div>
-            <div class="day-temp">${Math.round(d.tempMax)}°</div>
-            <div style="color:var(--text-muted);">${Math.round(d.tempMin)}°</div>
-            ${d.precipSum > 0 ? '<div class="day-rain">' + d.precipSum.toFixed(1) + 'mm</div>' : '<div class="day-rain">&nbsp;</div>'}
-        </div>`;
-    });
-    
+        const icon = weatherCodeIcon(d.weatherCode || 0);
+
+        html += `
+            <div class="parcel-mini-day">
+                <div class="parcel-mini-day-name">${dayName}</div>
+                <div class="parcel-mini-day-icon">${icon}</div>
+                <div class="parcel-mini-day-temp">${Math.round(Number(d.tempMax || 0))}°</div>
+                <div class="parcel-mini-day-temp-low">${Math.round(Number(d.tempMin || 0))}°</div>
+                <div class="parcel-mini-day-rain">
+                    ${Number(d.precipSum || 0) > 0 ? '💧 ' + Number(d.precipSum).toFixed(1) + 'mm' : '&nbsp;'}
+                </div>
+            </div>
+        `;
+    }
+
     html += '</div>';
     return html;
 }
