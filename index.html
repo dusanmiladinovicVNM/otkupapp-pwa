@@ -2503,13 +2503,13 @@ function renderMeteoInline(data) {
     // Osnovna prognoza 3 dana
     if (daily.length >= 1) {
         const dayNames = ['Ned','Pon','Uto','Sre','Čet','Pet','Sub'];
-        html += '<div class="parcel-mini-forecast">';
-        for (let i = 0; i < Math.min(3, daily.length); i++) {
-            const d = daily[i];
-            const date = new Date(d.date);
-            const name = i === 0 ? 'Danas' : dayNames[date.getDay()];
-            html += `
-                <div class="parcel-mini-day">
+html += '<div style="display:flex;gap:6px;overflow-x:auto;">';
+for (let i = 0; i < Math.min(3, daily.length); i++) {
+    const d = daily[i];
+    const date = new Date(d.date);
+    const name = i === 0 ? 'Danas' : dayNames[date.getDay()];
+    html += `
+        <div style="min-width:70px;flex:0 0 auto;text-align:center;background:#f9fafb;border-radius:8px;padding:6px;">
                     <div class="parcel-mini-day-name">${name}</div>
                     <div class="parcel-mini-day-icon">${weatherCodeIcon(d.weatherCode || 0)}</div>
                     <div class="parcel-mini-day-temp">${Math.round(Number(d.tempMax || 0))}°</div>
@@ -2517,7 +2517,6 @@ function renderMeteoInline(data) {
                     <div class="parcel-mini-day-rain">
                         ${Number(d.precipSum || 0) > 0 ? '💧 ' + Number(d.precipSum).toFixed(1) + 'mm' : '&nbsp;'}
                     </div>
-                </div>
             `;
         }
         html += '</div>';
