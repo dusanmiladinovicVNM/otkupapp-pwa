@@ -205,6 +205,52 @@
         .spray-window { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; }
         .spray-window .spray-time { font-weight: 700; color: var(--primary); font-size: 14px; }
         .spray-window .spray-details { color: var(--text-muted); margin-top: 2px; }
+
+        .meteo-forecast-3d {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+}
+
+.meteo-forecast-3d .meteo-day {
+    min-width: 78px;
+    flex: 0 0 auto;
+    text-align: center;
+    padding: 8px 6px;
+    background: #f9fafb;
+    border-radius: 8px;
+    font-size: 11px;
+}
+
+.meteo-forecast-3d .day-name {
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.meteo-forecast-3d .day-icon {
+    font-size: 18px;
+    line-height: 1.1;
+    margin: 2px 0;
+}
+
+.meteo-forecast-3d .day-temp {
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.meteo-forecast-3d .day-temp-min {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.meteo-forecast-3d .day-rain {
+    color: #3b82f6;
+    font-size: 10px;
+    margin-top: 2px;
+}
     
         /* BUTTONS */
         .btn-primary { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-size: 18px; font-weight: 700; cursor: pointer; margin-top: 10px; }
@@ -2700,27 +2746,26 @@ function renderSpraySection(windows, kultura) {
 function renderForecast(daily, dayNames) {
     if (!daily || daily.length === 0) return '';
 
-    let html = '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">OSNOVNA PROGNOZA — NAREDNA 3 DANA</div>';
-    html += '<div class="parcel-mini-forecast">';
+    const first3 = daily.slice(0, 3);
 
-    for (let i = 0; i < Math.min(3, daily.length); i++) {
-        const d = daily[i];
+    let html = '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">PROGNOZA — NAREDNA 3 DANA</div>';
+    html += '<div class="meteo-forecast-3d">';
+
+    first3.forEach((d, i) => {
         const date = new Date(d.date);
         const dayName = i === 0 ? 'Danas' : dayNames[date.getDay()];
-        const icon = weatherCodeIcon(d.weatherCode || 0);
+        const icon = weatherCodeIcon(d.weatherCode);
 
         html += `
-            <div class="parcel-mini-day">
-                <div class="parcel-mini-day-name">${dayName}</div>
-                <div class="parcel-mini-day-icon">${icon}</div>
-                <div class="parcel-mini-day-temp">${Math.round(Number(d.tempMax || 0))}°</div>
-                <div class="parcel-mini-day-temp-low">${Math.round(Number(d.tempMin || 0))}°</div>
-                <div class="parcel-mini-day-rain">
-                    ${Number(d.precipSum || 0) > 0 ? '💧 ' + Number(d.precipSum).toFixed(1) + 'mm' : '&nbsp;'}
-                </div>
+            <div class="meteo-day">
+                <div class="day-name">${dayName}</div>
+                <div class="day-icon">${icon}</div>
+                <div class="day-temp">${Math.round(d.tempMax)}°</div>
+                <div class="day-temp-min">${Math.round(d.tempMin)}°</div>
+                <div class="day-rain">${d.precipSum > 0 ? d.precipSum.toFixed(1) + ' mm' : '&nbsp;'}</div>
             </div>
         `;
-    }
+    });
 
     html += '</div>';
     return html;
