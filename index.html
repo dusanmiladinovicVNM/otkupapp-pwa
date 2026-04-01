@@ -3162,7 +3162,7 @@ function izdCalcPreporuka() {
     // Pakovanje zaokruživanje (ceil na cela pakovanja)
     if (pakovanje > 0) {
         const pakCount = Math.ceil(rawQty / pakovanje);
-        finalQty = pakCount * pakovanje;
+        finalQty = pakCount ;
         pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanje)';
     }
 
