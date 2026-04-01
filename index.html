@@ -571,6 +571,21 @@
         .izd-total-bar { background: var(--primary); color: white; padding: 14px; display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; }
         .izd-scan-area { display: flex; gap: 8px; margin-bottom: 12px; }
         .izd-scan-area .qr-scan-btn { margin-bottom: 0; flex: 1; }
+        /* SMART DOSAGE */
+        .izd-preporuka { background: #e8f5e9; border: 2px solid var(--success); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; display: none; }
+        .izd-preporuka.visible { display: block; }
+        .izd-preporuka-title { font-size: 11px; font-weight: 700; color: var(--success); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .izd-preporuka-calc { font-size: 13px; color: var(--text); margin-bottom: 4px; }
+        .izd-preporuka-calc strong { color: var(--primary); }
+        .izd-preporuka-detail { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+        .izd-preporuka-btn { padding: 8px 16px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .izd-preporuka-btn:active { background: #1e8e3e; }
+        .izd-parcele-multi { max-height: 120px; overflow-y: auto; border: 2px solid var(--border); border-radius: var(--radius); padding: 6px; background: white; }
+        .izd-parcela-chk { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+        .izd-parcela-chk:last-child { border-bottom: none; }
+        .izd-parcela-chk input { width: 18px; height: 18px; flex-shrink: 0; }
+        .izd-parcela-chk .parcela-info { flex: 1; }
+        .izd-parcela-chk .parcela-ha { font-weight: 600; color: var(--primary); font-size: 12px; }
     </style>
 </head>
 <body>
@@ -890,10 +905,21 @@
         </div>
         <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
 
-        <!-- Parcela (opciono) -->
+        <!-- Parcele (multi-select za dozažu) -->
         <div class="form-group" id="izdParcelaGroup" style="display:none;">
-            <label>Parcela (opciono)</label>
-            <select id="izdParcela"><option value="">-- Bez parcele --</option></select>
+            <label>Parcele <span style="font-weight:400;text-transform:none;letter-spacing:0;">(izaberite za pametnu dozažu)</span></label>
+            <div class="izd-parcele-multi" id="izdParceleList"></div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                Ukupna površina: <strong id="izdUkupnaHa">0</strong> ha
+            </div>
+        </div>
+
+        <!-- Smart Dosage preporuka -->
+        <div class="izd-preporuka" id="izdPreporuka">
+            <div class="izd-preporuka-title">📋 Preporučena doza</div>
+            <div class="izd-preporuka-calc" id="izdPreporukaCalc">—</div>
+            <div class="izd-preporuka-detail" id="izdPreporukaDetail">—</div>
+            <button class="izd-preporuka-btn" onclick="izdPrimeniPreporuku()">✅ Primeni količinu</button>
         </div>
 
         <!-- Barcode scan + Dropdown -->
@@ -3050,6 +3076,7 @@ function populateIzdDropdowns() {
     const aSel = document.getElementById('izdArtikal');
     if (!aSel || aSel.options.length > 1) return;
     aSel.innerHTML = '<option value="">-- Ili izaberi ručno --</option>';
+    aSel.onchange = function() { izdCalcPreporuka(); };
     (stammdaten.artikli || []).forEach(a => {
         const o = document.createElement('option');
         o.value = a.ArtikalID;
@@ -3065,20 +3092,108 @@ function onIzdKooperantChange() {
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
     izdSelectedKoopName = koop ? (koop.Ime + ' ' + koop.Prezime) : koopID;
 
-    // Parcela dropdown
-    const pSel = document.getElementById('izdParcela');
+    const pList = document.getElementById('izdParceleList');
     const pGroup = document.getElementById('izdParcelaGroup');
-    pSel.innerHTML = '<option value="">-- Bez parcele --</option>';
+    pList.innerHTML = '';
+    document.getElementById('izdUkupnaHa').textContent = '0';
+    izdHidePreporuka();
+
     if (!koopID) { pGroup.style.display = 'none'; return; }
+
     const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === koopID);
     if (parcele.length === 0) { pGroup.style.display = 'none'; return; }
+
     pGroup.style.display = 'block';
-    parcele.forEach(p => {
-        const o = document.createElement('option');
-        o.value = p.ParcelaID;
-        o.textContent = p.KatBroj + ' - ' + (p.Kultura || '') + ' (' + p.ParcelaID + ')';
-        pSel.appendChild(o);
+    pList.innerHTML = parcele.map((p, i) => {
+        const ha = parseFloat(String(p.PovrsinaHa || '0').replace(',', '.')) || 0;
+        return `<label class="izd-parcela-chk">
+            <input type="checkbox" id="izdPChk${i}" value="${p.ParcelaID}" data-ha="${ha}" onchange="izdOnParceleChange()">
+            <div class="parcela-info">${p.KatBroj || p.ParcelaID} — ${p.Kultura || '?'}</div>
+            <div class="parcela-ha">${ha.toFixed(2)} ha</div>
+        </label>`;
+    }).join('');
+}
+
+// --- Parcele checkbox change → recalc ---
+function izdOnParceleChange() {
+    const checked = document.querySelectorAll('#izdParceleList input[type="checkbox"]:checked');
+    let totalHa = 0;
+    checked.forEach(chk => { totalHa += parseFloat(chk.dataset.ha) || 0; });
+    document.getElementById('izdUkupnaHa').textContent = totalHa.toFixed(2);
+
+    // Recalc preporuka ako je artikal izabran
+    izdCalcPreporuka();
+}
+
+// --- Kalkulacija preporuke ---
+function izdCalcPreporuka() {
+    const artID = document.getElementById('izdArtikal').value;
+    const panel = document.getElementById('izdPreporuka');
+
+    if (!artID) { izdHidePreporuka(); return; }
+
+    const art = (stammdaten.artikli || []).find(a => a.ArtikalID === artID);
+    if (!art) { izdHidePreporuka(); return; }
+
+    const dozaPoHa = parseFloat(String(art.DozaPoHa || '0').replace(',', '.')) || 0;
+    if (dozaPoHa <= 0) { izdHidePreporuka(); return; }
+
+    // Izračunaj ukupnu površinu iz izabranih parcela
+    const checked = document.querySelectorAll('#izdParceleList input[type="checkbox"]:checked');
+    let totalHa = 0;
+    const parcelaNames = [];
+    checked.forEach(chk => {
+        totalHa += parseFloat(chk.dataset.ha) || 0;
+        const pid = chk.value;
+        const p = (stammdaten.parcele || []).find(x => x.ParcelaID === pid);
+        parcelaNames.push(p ? (p.KatBroj || pid) : pid);
     });
+
+    if (totalHa <= 0) { izdHidePreporuka(); return; }
+
+    // Osnovna kalkulacija: DozaPoHa × ukupna površina
+    const rawQty = dozaPoHa * totalHa;
+    const jm = art.JedinicaMere || 'kg';
+    const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.')) || 0;
+
+    let finalQty = rawQty;
+    let pakInfo = '';
+
+    // Pakovanje zaokruživanje (ceil na cela pakovanja)
+    if (pakovanje > 0) {
+        const pakCount = Math.ceil(rawQty / pakovanje);
+        finalQty = pakCount * pakovanje;
+        pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanje)';
+    }
+
+    // Prikaži
+    panel.classList.add('visible');
+    document.getElementById('izdPreporukaCalc').innerHTML =
+        '<strong>' + finalQty.toLocaleString('sr') + ' ' + jm + '</strong>' +
+        ' — ' + art.Naziv;
+    document.getElementById('izdPreporukaDetail').innerHTML =
+        dozaPoHa + ' ' + jm + '/ha × ' + totalHa.toFixed(2) + ' ha = ' +
+        rawQty.toLocaleString('sr', {maximumFractionDigits: 2}) + ' ' + jm +
+        (pakInfo ? '<br>' + pakInfo : '') +
+        '<br>Parcele: ' + parcelaNames.join(', ');
+
+    // Sačuvaj za "Primeni"
+    panel._finalQty = finalQty;
+}
+
+function izdHidePreporuka() {
+    const panel = document.getElementById('izdPreporuka');
+    if (panel) {
+        panel.classList.remove('visible');
+        panel._finalQty = null;
+    }
+}
+
+function izdPrimeniPreporuku() {
+    const panel = document.getElementById('izdPreporuka');
+    if (!panel || !panel._finalQty) return;
+    document.getElementById('izdKolicina').value = panel._finalQty;
+    showToast('Količina: ' + panel._finalQty.toLocaleString('sr'), 'success');
 }
 
 // --- QR Scan Kooperant ---
@@ -3243,7 +3358,10 @@ async function izdZavrsi() {
     if (izdKorpa.length === 0) { showToast('Korpa je prazna', 'error'); return; }
 
     const ukupno = izdKorpa.reduce((s, r) => s + r.vrednost, 0);
-    const parcelaID = document.getElementById('izdParcela') ? document.getElementById('izdParcela').value : '';
+    const checkedParcele = document.querySelectorAll('#izdParceleList input[type="checkbox"]:checked');
+    const parcelaIDs = [];
+    checkedParcele.forEach(chk => parcelaIDs.push(chk.value));
+    const parcelaID = parcelaIDs.join(',');
     const napomena = document.getElementById('izdNapomena').value || '';
 
     // Prikaži otpremnicu za potpise
@@ -3496,6 +3614,12 @@ function izdReset() {
     const nap = document.getElementById('izdNapomena');
     if (nap) nap.value = '';
     _lastBarcode = '';
+    
+    // Reset parcele checkboxes
+    document.querySelectorAll('#izdParceleList input[type="checkbox"]').forEach(chk => chk.checked = false);
+    const haEl = document.getElementById('izdUkupnaHa');
+    if (haEl) haEl.textContent = '0';
+    izdHidePreporuka();
 }
                  
 // ============================================================
