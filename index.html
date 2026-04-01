@@ -2418,7 +2418,6 @@ async function loadParcele() {
     const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
     const list = document.getElementById('parceleList');
     const mapDiv = document.getElementById('parceleMap');
-    document.getElementById('parceleMeteo').style.display = 'none';
     
     if (parcele.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>';
