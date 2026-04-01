@@ -80,70 +80,70 @@
             cursor: pointer;
         }
 
-.login-container {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 24px 20px;
-}
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 24px 20px;
+        }
 
-.login-logo {
-    margin-bottom: 18px;
-    display: flex;
-    justify-content: center;
-}
+        .login-logo {
+            margin-bottom: 18px;
+            display: flex;
+            justify-content: center;
+        }
 
-.login-title {
-    color: var(--primary);
-    font-size: 24px;
-    font-weight: 700;
-    margin-bottom: 22px;
-}
+        .login-title {
+            color: var(--primary);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 22px;
+        }
 
-.login-form {
-    width: 100%;
-    max-width: 360px;
-    background: white;
-    border-radius: 18px;
-    padding: 22px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-}
+        .login-form {
+            width: 100%;
+            max-width: 360px;
+            background: white;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        }
 
-.login-form .form-group {
-    margin-bottom: 14px;
-}
+        .login-form .form-group {
+            margin-bottom: 14px;
+        }
 
-.login-form .form-group input {
-    width: 100%;
-    padding: 14px;
-    font-size: 16px;
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    background: #fafafa;
-    transition: all 0.2s;
-}
+        .login-form .form-group input {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            background: #fafafa;
+            transition: all 0.2s;
+        }
 
-.login-form .form-group input:focus {
-    outline: none;
-    border-color: var(--primary);
-    background: white;
-    box-shadow: 0 0 0 2px rgba(26,94,42,0.15);
-}
+        .login-form .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 2px rgba(26,94,42,0.15);
+        }
 
-#loginPin {
-    font-size: 22px;
-    text-align: center;
-    letter-spacing: 10px;
-}
+        #loginPin {
+            font-size: 22px;
+            text-align: center;
+            letter-spacing: 10px;
+        }
 
-.login-error {
-    color: var(--danger);
-    margin-top: 12px;
-    font-size: 14px;
-    text-align: center;
-}      
+        .login-error {
+            color: var(--danger);
+            margin-top: 12px;
+            font-size: 14px;
+            text-align: center;
+        }      
         /* MAIN TAB BAR */
         .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .tab-btn { flex: none; padding: 12px 16px; text-align: center; font-size: 13px; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
@@ -321,172 +321,241 @@
                 height: auto !important;
             }
         }
-.dp-cols { display: flex; flex-direction: column; gap: 12px; }
-@media (min-width: 900px) { .dp-cols { flex-direction: row; align-items: flex-start; } .dp-cols > .dp-col { flex: 1; min-width: 0; } }
+        .dp-cols { display: flex; flex-direction: column; gap: 12px; }
+        @media (min-width: 900px) { .dp-cols { flex-direction: row; align-items: flex-start; } .dp-cols > .dp-col { flex: 1; min-width: 0; } }
  
-.dp-col { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 12px; }
-.dp-col-hd { padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; color: white; }
-.dp-col.supply .dp-col-hd { background: var(--primary); }
-.dp-col.transport .dp-col-hd { background: var(--accent); }
-.dp-col.demand .dp-col-hd { background: #1565c0; }
-.dp-col-bd { padding: 10px; max-height: 65vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .dp-col { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 12px; }
+        .dp-col-hd { padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; color: white; }
+        .dp-col.supply .dp-col-hd { background: var(--primary); }
+        .dp-col.transport .dp-col-hd { background: var(--accent); }
+        .dp-col.demand .dp-col-hd { background: #1565c0; }
+        .dp-col-bd { padding: 10px; max-height: 65vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
  
-.dp-card { padding: 12px; border-radius: var(--radius); margin-bottom: 8px; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; transition: background 0.15s; background: var(--card); }
-.dp-card:active { background: var(--bg); }
-.dp-card.sel { background: #fff8e1; border-left-color: var(--accent); }
-.dp-card.urgent { border-left-color: var(--danger); }
-.dp-card.trn { border-left-color: var(--accent); }
-.dp-card.dem { border-left-color: #1565c0; }
-.dp-card.planned { border-left-color: var(--success); opacity: 0.7; }
+        .dp-card { padding: 12px; border-radius: var(--radius); margin-bottom: 8px; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; transition: background 0.15s; background: var(--card); }
+        .dp-card:active { background: var(--bg); }
+        .dp-card.sel { background: #fff8e1; border-left-color: var(--accent); }
+        .dp-card.urgent { border-left-color: var(--danger); }
+        .dp-card.trn { border-left-color: var(--accent); }
+        .dp-card.dem { border-left-color: #1565c0; }
+        .dp-card.planned { border-left-color: var(--success); opacity: 0.7; }
  
-.dp-banner { background: var(--accent); color: white; padding: 12px 14px; border-radius: var(--radius); margin-bottom: 12px; display: none; }
-.dp-banner.active { display: block; }
-.dp-banner .dp-bt { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-.dp-banner .dp-bs { font-size: 12px; opacity: 0.9; margin-bottom: 8px; }
-.dp-banner button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; margin-right: 6px; }
+        .dp-banner { background: var(--accent); color: white; padding: 12px 14px; border-radius: var(--radius); margin-bottom: 12px; display: none; }
+        .dp-banner.active { display: block; }
+        .dp-banner .dp-bt { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+        .dp-banner .dp-bs { font-size: 12px; opacity: 0.9; margin-bottom: 8px; }
+        .dp-banner button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; margin-right: 6px; }
  
-.dp-stb { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-.dp-stb button { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; background: white; cursor: pointer; font-weight: 600; }
-.dp-stb button.on { background: var(--primary); color: white; border-color: var(--primary); }
+        .dp-stb { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+        .dp-stb button { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; background: white; cursor: pointer; font-weight: 600; }
+        .dp-stb button.on { background: var(--primary); color: white; border-color: var(--primary); }
  
-.dp-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 6px 0; }
-.dp-bf { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .dp-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 6px 0; }
+        .dp-bf { height: 100%; border-radius: 3px; transition: width 0.3s; }
  
-.dp-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-.dp-badge.slobodan { background: #d1fae5; color: #065f46; }
-.dp-badge.utovar { background: #fef3c7; color: #92400e; }
-.dp-badge.naputu { background: #dbeafe; color: #1e40af; }
-.dp-badge.istovar { background: #ede9fe; color: #5b21b6; }
+        .dp-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .dp-badge.slobodan { background: #d1fae5; color: #065f46; }
+        .dp-badge.utovar { background: #fef3c7; color: #92400e; }
+        .dp-badge.naputu { background: #dbeafe; color: #1e40af; }
+        .dp-badge.istovar { background: #ede9fe; color: #5b21b6; }
  
-.dp-plan-item { background: #e8f5e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
-.dp-plan-item .dp-pi-route { font-weight: 600; color: var(--primary-dark); }
-.dp-plan-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; }    
+        .dp-plan-item { background: #e8f5e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .dp-plan-item .dp-pi-route { font-weight: 600; color: var(--primary-dark); }
+        .dp-plan-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; }    
 
-.parcel-expert-toggle {
-    margin-top: 10px;
-    width: 100%;
-    border: 1px solid #e5e7eb;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    border-radius: 12px;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--primary);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-}
+        .parcel-expert-toggle {
+            margin-top: 10px;
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 12px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--primary);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
 
-.parcel-expert-toggle:active {
-    transform: scale(0.995);
-}
+        .parcel-expert-toggle:active {
+            transform: scale(0.995);
+        }
 
-.parcel-expert-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+        .parcel-expert-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-.parcel-expert-sub {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
+        .parcel-expert-sub {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
 
-.parcel-expert-chevron {
-    font-size: 16px;
-    line-height: 1;
-    transition: transform 0.2s ease;
-}
+        .parcel-expert-chevron {
+            font-size: 16px;
+            line-height: 1;
+            transition: transform 0.2s ease;
+        }
 
-.parcel-expert-chevron.open {
-    transform: rotate(180deg);
-}
+        .parcel-expert-chevron.open {
+            transform: rotate(180deg);
+        }
 
-.parcel-expert-panel {
-    margin-top: 8px;
-    padding: 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
-}
+        .parcel-expert-panel {
+            margin-top: 8px;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+        }
 
-.parcel-expert-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
+        .parcel-expert-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
 
-.parcel-expert-item {
-    background: #ffffff;
-    border: 1px solid #eef2f7;
-    border-radius: 10px;
-    padding: 10px;
-}
+        .parcel-expert-item {
+            background: #ffffff;
+            border: 1px solid #eef2f7;
+            border-radius: 10px;
+            padding: 10px;
+        }
 
-.parcel-expert-k {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-    font-weight: 600;
-}
+        .parcel-expert-k {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
 
-.parcel-expert-v {
-    font-size: 15px;
-    color: var(--text);
-    font-weight: 700;
-}
+        .parcel-expert-v {
+            font-size: 15px;
+            color: var(--text);
+            font-weight: 700;
+        }
 
-.parcel-mini-forecast {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-top: 10px;
-}
+        .parcel-mini-forecast {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
 
-.parcel-mini-day {
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 10px 8px;
-    text-align: center;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-}
+        .parcel-mini-day {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 10px 8px;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
 
-.parcel-mini-day-name {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-weight: 700;
-    margin-bottom: 4px;
-}
+        .parcel-mini-day-name {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
 
-.parcel-mini-day-icon {
-    font-size: 18px;
-    margin-bottom: 4px;
-}
+        .parcel-mini-day-icon {
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
 
-.parcel-mini-day-temp {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--primary);
-}
+        .parcel-mini-day-temp {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+        }
 
-.parcel-mini-day-temp-low {
-    font-size: 11px;
-    color: var(--text-muted);
-}
+        .parcel-mini-day-temp-low {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
 
-.parcel-mini-day-rain {
-    margin-top: 4px;
-    font-size: 10px;
-    color: #2563eb;
-    min-height: 12px;
-}
+        .parcel-mini-day-rain {
+            margin-top: 4px;
+            font-size: 10px;
+            color: #2563eb;
+            min-height: 12px;
+        }
 
+        .parcel-meteo-compact {
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: #f8faf8;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .parcel-meteo-topline,
+        .parcel-meteo-midline,
+        .parcel-meteo-bottomline {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .parcel-meteo-topline { margin-bottom: 4px; }
+        .parcel-meteo-midline { margin-bottom: 4px; }
+
+        .parcel-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .parcel-chip.temp {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .parcel-chip.ok {
+            color: #065f46;
+            font-weight: 600;
+        }
+
+        .parcel-chip.warn {
+            color: #92400e;
+            font-weight: 600;
+        }
+
+        .parcel-chip.danger {
+            color: #991b1b;
+            font-weight: 600;
+        }
+
+        .parcel-forecast-inline {
+            display: flex;
+            gap: 10px;
+            flex-wrap: nowrap;
+            overflow: hidden;
+        }
+
+        .parcel-forecast-day {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            color: var(--text-muted);
+        }
+
+        #parceleList > div {
+            max-height: 150px;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
@@ -2460,33 +2529,20 @@ function renderMeteoInline(data) {
     const spray = data.sprayWindow || data.SprayWindows || [];
     const daily = data.daily || data.ForecastDaily || [];
 
-    let html = '';
+    const temp = Number(c.temperature || c.Temp || 0).toFixed(1);
+    const hum = Number(c.humidity || c.Humidity || 0).toFixed(0);
+    const wind = Number(c.windSpeed || c.Wind || 0).toFixed(0);
+    const icon = weatherCodeIcon(c.weatherCode || c.WeatherCode || 0);
 
-    // Osnovno trenutno stanje
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;">';
-    html += `<span style="font-size:16px;font-weight:700;color:var(--primary);">${Number(c.temperature || c.Temp || 0).toFixed(1)}°C</span>`;
-    html += `<span>${weatherCodeIcon(c.weatherCode || c.WeatherCode || 0)}</span>`;
-    html += `<span>💧${c.humidity || c.Humidity || 0}%</span>`;
-    html += `<span>💨${Number(c.windSpeed || c.Wind || 0).toFixed(0)} km/h</span>`;
-    const precip = Number(c.precipitation || c.Precip || 0);
-    if (precip > 0) html += `<span>🌧️${precip.toFixed(1)}mm</span>`;
-    html += '</div>';
-
-    // Rizik
+    let riskHtml = '<span class="parcel-chip ok">✅ Bez rizika</span>';
     const riskItems = risk ? (risk.items || risk.RiskItems || []) : [];
     if (riskItems.length > 0) {
-        html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">';
-        riskItems.forEach(r => {
-            const bg = r.level === 'danger' ? '#fee2e2' : '#fef3c7';
-            const color = r.level === 'danger' ? '#991b1b' : '#92400e';
-            html += `<span style="background:${bg};color:${color};padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${r.icon} ${r.message}</span>`;
-        });
-        html += '</div>';
-    } else {
-        html += '<div style="margin-bottom:4px;"><span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">✅ Bez rizika</span></div>';
+        const first = riskItems[0];
+        const cls = first.level === 'danger' ? 'danger' : 'warn';
+        riskHtml = `<span class="parcel-chip ${cls}">${first.icon} ${first.message}</span>`;
     }
 
-    // Prskanje
+    let sprayHtml = '<span class="parcel-chip warn">⚠️ Nema termina za prskanje</span>';
     if (spray.length > 0) {
         const w = spray[0];
         const start = new Date(w.start);
@@ -2495,34 +2551,47 @@ function renderMeteoInline(data) {
         const dayStr = dayNames[start.getDay()];
         const startTime = start.toLocaleTimeString('sr', { hour:'2-digit', minute:'2-digit' });
         const endTime = end.toLocaleTimeString('sr', { hour:'2-digit', minute:'2-digit' });
-        html += `<div style="font-size:11px;margin-bottom:4px;">🎯 Prskanje: <strong>${dayStr} ${startTime}—${endTime}</strong> (${w.hours}h)</div>`;
-    } else {
-        html += '<div style="font-size:11px;color:var(--warning);margin-bottom:4px;">⚠️ Nema termina za prskanje (72h)</div>';
+        sprayHtml = `<span class="parcel-chip ok">🎯 ${dayStr} ${startTime}-${endTime} (${w.hours}h)</span>`;
     }
 
-    // Osnovna prognoza 3 dana
-    if (daily.length >= 1) {
+    let forecastHtml = '';
+    if (daily.length > 0) {
         const dayNames = ['Ned','Pon','Uto','Sre','Čet','Pet','Sub'];
-html += '<div style="display:flex;gap:6px;overflow-x:auto;">';
-for (let i = 0; i < Math.min(3, daily.length); i++) {
-    const d = daily[i];
-    const date = new Date(d.date);
-    const name = i === 0 ? 'Danas' : dayNames[date.getDay()];
-    html += `
-        <div style="min-width:70px;flex:0 0 auto;text-align:center;background:#f9fafb;border-radius:8px;padding:6px;">
-                    <div class="parcel-mini-day-name">${name}</div>
-                    <div class="parcel-mini-day-icon">${weatherCodeIcon(d.weatherCode || 0)}</div>
-                    <div class="parcel-mini-day-temp">${Math.round(Number(d.tempMax || 0))}°</div>
-                    <div class="parcel-mini-day-temp-low">${Math.round(Number(d.tempMin || 0))}°</div>
-                    <div class="parcel-mini-day-rain">
-                        ${Number(d.precipSum || 0) > 0 ? '💧 ' + Number(d.precipSum).toFixed(1) + 'mm' : '&nbsp;'}
-                    </div>
-            `;
-        }
-        html += '</div>';
+        forecastHtml = `
+            <div class="parcel-forecast-inline">
+                ${daily.slice(0, 3).map((d, i) => {
+                    const dt = new Date(d.date);
+                    const name = i === 0 ? 'Danas' : dayNames[dt.getDay()];
+                    return `
+                        <span class="parcel-forecast-day">
+                            <strong>${name}</strong>
+                            ${weatherCodeIcon(d.weatherCode || 0)}
+                            ${Math.round(Number(d.tempMax || 0))}°/${Math.round(Number(d.tempMin || 0))}°
+                            ${Number(d.precipSum || 0) > 0 ? '💧' + Number(d.precipSum).toFixed(1) : ''}
+                        </span>
+                    `;
+                }).join('')}
+            </div>
+        `;
     }
 
-    return html;
+    return `
+        <div class="parcel-meteo-compact">
+            <div class="parcel-meteo-topline">
+                <span class="parcel-chip temp">${temp}°C</span>
+                <span class="parcel-chip">${icon}</span>
+                <span class="parcel-chip">💧 ${hum}%</span>
+                <span class="parcel-chip">💨 ${wind} km/h</span>
+                ${riskHtml}
+            </div>
+            <div class="parcel-meteo-midline">
+                ${sprayHtml}
+            </div>
+            <div class="parcel-meteo-bottomline">
+                ${forecastHtml}
+            </div>
+        </div>
+    `;
 }
 
 function renderExpertInfo(parcelId, current) {
