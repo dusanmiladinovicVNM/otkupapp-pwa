@@ -153,37 +153,7 @@
         .toast.show { opacity: 1; }
         .toast.success { background: var(--success); }
         .toast.error { background: var(--danger); }
-        .toast.info { background: var(--primary); }
-
-        @media print {
-            /* Sakrij sve osim modala */
-            .header, .tab-bar, .tab-content, .toast { display: none !important; }           
-            #otkupniListModal {
-                position: static !important;
-                width: 100% !important;
-                height: auto !important;
-                overflow: visible !important;
-            }
-            #otkupniListModal > div {
-                max-width: 100% !important;
-                width: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-            }            
-            /* Sakrij dugmiće */
-            #otkupniListModal button { display: none !important; }            
-            /* A5 format */
-            @page {
-                size: 148mm 210mm;
-                margin: 8mm;
-            }
-            /* Potpisi - osiguraj da se renderuju */
-            canvas { 
-                max-width: 100% !important;
-                height: auto !important;
-            }
-        } 
-        
+        .toast.info { background: var(--primary); }        
         
     </style>
 </head>
