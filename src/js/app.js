@@ -8,6 +8,7 @@ let selectedMera = '';
 let mgmtData = null;
 let parcelExpertOpen = {};
 
+console.log('fmtDate exists:', typeof fmtDate);
 
 // ============================================================
 // MANAGEMENT SUB-TAB DEFINITIONS
