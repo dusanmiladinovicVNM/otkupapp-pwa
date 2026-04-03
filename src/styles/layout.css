@@ -1,1 +1,46 @@
+        /* HEADER */
+        .header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header .sync-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600; }
+        .sync-online { background: var(--success); color: white; }
+        .sync-offline { background: var(--danger); color: white; }
+        .sync-pending { background: var(--warning); color: white; }
+            
+        /* NEW */
+        .header-left {
+             display: flex;
+             align-items: center;
+             gap: 10px;
+         }
+         .app-logo {
+             width: 28px;
+             height: 28px;
+             display: block;
+         }
 
+         .header-title {
+             font-size: 17px;
+             font-weight: 700;
+         }
+        
+         .header-actions {
+             display: flex;
+             align-items: center;
+             gap: 8px;
+         }
+
+        .header-sub {
+            font-size: 11px;
+            opacity: 0.7;
+            display: block;
+         }
+
+        .header-btn {
+            background: none;
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
