@@ -192,33 +192,50 @@ function showLoginScreen() {
 }
 
 async function doLogin() {
-    const username = (document.getElementById('loginUsername').value || '').trim();
-    const pin = document.getElementById('loginPin').value || '';
-    const errorEl = document.getElementById('loginError');
-    const btnEl = document.getElementById('btnLogin');
-    if (!username) { errorEl.textContent = 'Unesite korisničko ime'; errorEl.style.display = 'block'; return; }
-    if (!pin) { errorEl.textContent = 'Unesite PIN'; errorEl.style.display = 'block'; return; }
-    errorEl.style.display = 'none';
-    btnEl.textContent = 'Prijavljivanje...'; btnEl.disabled = true;
-    try {
-        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'login', username, pin }) });
-        const json = await resp.json();
-        if (json.success) {
-            setLs('authToken', json.token);
-            setLs('userRole', json.role);
-            setLs('otkupacID', json.entityID);
-            setLs('entityID', json.entityID);
-            setLs('entityName', json.displayName);
-            setLs('username', username);
-            location.reload();
-        } else {
-            errorEl.textContent = json.error || 'Prijava neuspešna'; errorEl.style.display = 'block';
-            btnEl.textContent = 'Prijavi se'; btnEl.disabled = false;
-        }
-    } catch (e) {
-        errorEl.textContent = 'Nema internet konekcije'; errorEl.style.display = 'block';
-        btnEl.textContent = 'Prijavi se'; btnEl.disabled = false;
+    const username = (byId('loginUsername').value || '').trim();
+    const pin = byId('loginPin').value || '';
+    const errorEl = byId('loginError');
+    const btnEl = byId('btnLogin');
+
+    if (!username) {
+        setText(errorEl, 'Unesite korisničko ime');
+        showEl(errorEl, 'block');
+        return;
     }
+
+    if (!pin) {
+        setText(errorEl, 'Unesite PIN');
+        showEl(errorEl, 'block');
+        return;
+    }
+
+    hideEl(errorEl);
+    setText(btnEl, 'Prijavljivanje...');
+    btnEl.disabled = true;
+
+    const json = await apiPost('login', { username, pin });
+
+    if (json && json.success) {
+        setLs('authToken', json.token);
+        setLs('userRole', json.role);
+        setLs('otkupacID', json.entityID);
+        setLs('entityID', json.entityID);
+        setLs('entityName', json.displayName);
+        setLs('username', username);
+        location.reload();
+        return;
+    }
+
+    if (json && !json.success) {
+        setText(errorEl, json.error || 'Prijava neuspešna');
+        showEl(errorEl, 'block');
+    } else {
+        setText(errorEl, 'Nema internet konekcije');
+        showEl(errorEl, 'block');
+    }
+
+    setText(btnEl, 'Prijavi se');
+    btnEl.disabled = false;
 }
 
 function doLogout() {
@@ -234,16 +251,6 @@ function applyRoleVisibility() {
     document.querySelectorAll('.role-management').forEach(el => el.style.display = (role === 'Management') ? '' : 'none');
     const firstBtn = document.querySelector('.tab-btn:not([style*="none"])');
     if (firstBtn) firstBtn.click();
-}
-
-async function apiFetch(params) {
-    const url = CONFIG.API_URL + '?' + params + '&token=' + encodeURIComponent(CONFIG.TOKEN);
-    try {
-        const resp = await fetch(url);
-        const json = await resp.json();
-        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return null; }
-        return json;
-    } catch (e) { console.log('API fetch failed:', e); return null; }
 }
 
 // ============================================================
@@ -838,11 +845,11 @@ async function savePdfToDrive(clientRecordID) {
         const pdfBase64 = doc.output('datauristring').split(',')[1];
         const fileName = 'OtkupniList_' + record.kooperantID + '_' + record.datum + '_' + clientRecordID.substring(0, 8);
 
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'uploadPdf', token: CONFIG.TOKEN, fileName: fileName, pdfBase64: pdfBase64 })
+        const json = await apiPost('uploadPdf', {
+            fileName: fileName,
+            pdfBase64: pdfBase64
         });
+        
         const json = await resp.json();
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
         else { showToast('Greška: ' + (json.error || ''), 'error'); }
@@ -857,28 +864,44 @@ async function savePdfToDrive(clientRecordID) {
 async function syncQueue() {
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
     if (pending.length === 0) return;
+
     updateSyncBadge('syncing');
-    try {
-        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'sync', token: CONFIG.TOKEN, otkupacID: CONFIG.OTKUPAC_ID, records: pending }) });
-        const json = await resp.json();
-        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
-        if (json.success) { for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.STORE_NAME, r); } showToast('Sinhr: ' + pending.length, 'success'); }
-        else showToast('Greška: ' + (json.error || ''), 'error');
-    } catch (e) { console.log('Sync failed:', e); }
-    updateSyncBadge(); updateStats();
+
+    const json = await apiPost('sync', {
+        otkupacID: CONFIG.OTKUPAC_ID,
+        records: pending
+    });
+
+    if (json && json.success) {
+        for (const r of pending) {
+            r.syncStatus = 'synced';
+            await dbPut(CONFIG.STORE_NAME, r);
+        }
+        showToast('Sinhr: ' + pending.length, 'success');
+    } else if (json) {
+        showToast('Greška: ' + (json.error || ''), 'error');
+    }
+
+    updateSyncBadge();
+    updateStats();
 }
 
 async function syncAgromere() {
     const pending = await dbGetByIndex(CONFIG.AGRO_STORE, 'syncStatus', 'pending');
     if (pending.length === 0) return;
-    try {
-        const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'syncAgromere', token: CONFIG.TOKEN, kooperantID: CONFIG.ENTITY_ID, records: pending }) });
-        const json = await resp.json();
-        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
-        if (json.success) { for (const r of pending) { r.syncStatus = 'synced'; await dbPut(CONFIG.AGRO_STORE, r); } showToast('Agromere sinhr: ' + pending.length, 'success'); }
-    } catch (e) {}
+
+    const json = await apiPost('syncAgromere', {
+        kooperantID: CONFIG.ENTITY_ID,
+        records: pending
+    });
+
+    if (json && json.success) {
+        for (const r of pending) {
+            r.syncStatus = 'synced';
+            await dbPut(CONFIG.AGRO_STORE, r);
+        }
+        showToast('Agromere sinhr: ' + pending.length, 'success');
+    }
 }
 
 async function syncNow() {
@@ -1351,24 +1374,19 @@ async function loadVozacZbirne() {
 async function syncZbirne() {
     const pending = await dbGetByIndex('zbirne', 'syncStatus', 'pending');
     if (pending.length === 0) return;
-    try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'syncZbirna',
-                token: CONFIG.TOKEN,
-                vozacID: CONFIG.ENTITY_ID,
-                records: pending
-            })
-        });
-        const json = await resp.json();
-        if (json.code === 401) { showToast('Sesija istekla', 'error'); doLogout(); return; }
-        if (json.success) {
-            for (const r of pending) { r.syncStatus = 'synced'; await dbPut('zbirne', r); }
-            showToast('Zbirna sinhronizovana', 'success');
+
+    const json = await apiPost('syncZbirna', {
+        vozacID: CONFIG.ENTITY_ID,
+        records: pending
+    });
+
+    if (json && json.success) {
+        for (const r of pending) {
+            r.syncStatus = 'synced';
+            await dbPut('zbirne', r);
         }
-    } catch (e) {}
+        showToast('Zbirna sinhronizovana', 'success');
+    }
 }
 
     async function loadVozacTransport() {
@@ -3285,20 +3303,14 @@ async function izdConfirmSave() {
 
     showToast('Čuvanje...', 'info');
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'saveIzdavanje',
-                token: CONFIG.TOKEN,
-                kooperantID: data.kooperantID,
-                kooperantName: data.kooperantName,
-                parcelaID: data.parcelaID,
-                stavke: data.stavke,
-                ukupnaVrednost: data.ukupnaVrednost,
-                izdaoUser: CONFIG.ENTITY_NAME,
-                napomena: data.napomena
-            })
+        const json = await apiPost('saveIzdavanje', {
+            kooperantID: data.kooperantID,
+            kooperantName: data.kooperantName,
+            parcelaID: data.parcelaID,
+            stavke: data.stavke,
+            ukupnaVrednost: data.ukupnaVrednost,
+            izdaoUser: CONFIG.ENTITY_NAME,
+            napomena: data.napomena
         });
         const json = await resp.json();
         if (json.success) {
@@ -3404,10 +3416,9 @@ async function izdSavePdf() {
         const pdfBase64 = doc.output('datauristring').split(',')[1];
         const fileName = 'Otpremnica_Agro_' + data.kooperantID + '_' + data.datum;
 
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'uploadPdf', token: CONFIG.TOKEN, fileName: fileName, pdfBase64: pdfBase64 })
+        const json = await apiPost('uploadPdf', {
+            fileName: fileName,
+            pdfBase64: pdfBase64
         });
         const json = await resp.json();
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
