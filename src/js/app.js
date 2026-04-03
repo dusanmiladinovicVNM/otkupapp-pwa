@@ -4156,34 +4156,6 @@ function showTab(tabName) {
 }
 
 // ============================================================
-// UI UPDATES
-// ============================================================
-
-async function updateStats() {
-    const all = await dbGetAll(db, CONFIG.STORE_NAME);
-    const today = new Date().toISOString().split('T')[0];
-    const t = all.filter(r => r.datum === today);
-    document.getElementById('statPending').textContent = t.filter(r => r.syncStatus === 'pending').length;
-    document.getElementById('statSynced').textContent = t.filter(r => r.syncStatus === 'synced').length;
-}
-
-async function renderQueueList() {
-    const pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
-    const list = byId('queueList');
-    if (!list) return;
-
-    if (pending.length === 0) {
-        setHtml(list, '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>');
-        return;
-    }
-
-    setHtml(list, pending.map(r =>
-        `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div></div>`
-    ).join(''));
-}
-
-// ============================================================
 // HELPERS
 // ============================================================
 function showToast(msg, type = 'info') {
