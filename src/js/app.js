@@ -8,10 +8,6 @@ let selectedMera = '';
 let mgmtData = null;
 let parcelExpertOpen = {};
 
-console.log('fmtDate exists:', typeof fmtDate);
-document.getElementById('toast').textContent = 'fmtDate: ' + typeof fmtDate;
-document.getElementById('toast').className = 'toast show info';
-
 // ============================================================
 // MANAGEMENT SUB-TAB DEFINITIONS
 // ============================================================
