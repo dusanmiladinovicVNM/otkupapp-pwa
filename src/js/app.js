@@ -204,9 +204,12 @@ async function doLogin() {
         const resp = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'login', username, pin }) });
         const json = await resp.json();
         if (json.success) {
-            localStorage.setItem('authToken', json.token); localStorage.setItem('userRole', json.role);
-            localStorage.setItem('otkupacID', json.entityID); localStorage.setItem('entityID', json.entityID);
-            localStorage.setItem('entityName', json.displayName); localStorage.setItem('username', username);
+            setLs('authToken', json.token);
+            setLs('userRole', json.role);
+            setLs('otkupacID', json.entityID);
+            setLs('entityID', json.entityID);
+            setLs('entityName', json.displayName);
+            setLs('username', username);
             location.reload();
         } else {
             errorEl.textContent = json.error || 'Prijava neuspešna'; errorEl.style.display = 'block';
