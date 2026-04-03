@@ -3442,36 +3442,34 @@ function izdReset() {
 // MANAGEMENT: NAVIGATION
 // ============================================================
 function showMgmtMain(section) {
-    // Deaktiviraj sve tabove i contente
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    qsa('.tab-content').forEach(t => removeClass(t, 'active'));
+    qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
 
-    // Aktiviraj mgmt container
-    document.getElementById('tab-mgmt').classList.add('active');
-    if (event && event.target) event.target.classList.add('active');
+    addClass(byId('tab-mgmt'), 'active');
+    if (event && event.target) addClass(event.target, 'active');
 
-    // Popuni sub-bar
     const subs = MGMT_SUBS[section];
-    const bar = document.getElementById('mgmtSubBar');
-    bar.innerHTML = subs.map((s, i) =>
-        `<button class="sub-tab-btn${i === 0 ? ' active' : ''}" onclick="showMgmtSub('${s.id}', this)">${s.label}</button>`
-    ).join('');
+    const bar = byId('mgmtSubBar');
 
-    // Sakrij sve sub-contente, prikaži prvi
-    document.querySelectorAll('.mgmt-sub').forEach(s => s.classList.remove('active'));
-    const firstEl = document.getElementById('mgmt-' + subs[0].id);
-    if (firstEl) firstEl.classList.add('active');
+    setHtml(bar, subs.map((s, i) =>
+        `<button class="sub-tab-btn${i === 0 ? ' active' : ''}" onclick="showMgmtSub('${s.id}', this)">${s.label}</button>`
+    ).join(''));
+
+    qsa('.mgmt-sub').forEach(s => removeClass(s, 'active'));
+
+    const firstEl = byId('mgmt-' + subs[0].id);
+    if (firstEl) addClass(firstEl, 'active');
     if (subs[0].load) subs[0].load();
 }
 
 function showMgmtSub(subId, btn) {
-    document.querySelectorAll('.mgmt-sub').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
-    const el = document.getElementById('mgmt-' + subId);
-    if (el) el.classList.add('active');
-    if (btn) btn.classList.add('active');
+    qsa('.mgmt-sub').forEach(s => removeClass(s, 'active'));
+    qsa('.sub-tab-btn').forEach(b => removeClass(b, 'active'));
 
-    // Nađi sub definiciju i pozovi load
+    const el = byId('mgmt-' + subId);
+    if (el) addClass(el, 'active');
+    if (btn) addClass(btn, 'active');
+
     const allSubs = Object.values(MGMT_SUBS).flat();
     const sub = allSubs.find(s => s.id === subId);
     if (sub && sub.load) sub.load();
@@ -4828,11 +4826,12 @@ function loadMgmtAgroStanje() {
 // TAB NAVIGATION (non-management)
 // ============================================================
 function showTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    const tabEl = document.getElementById('tab-' + tabName);
-    if (tabEl) tabEl.classList.add('active');
-    if (event && event.target) event.target.classList.add('active');
+    qsa('.tab-content').forEach(t => removeClass(t, 'active'));
+    qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
+
+    const tabEl = byId('tab-' + tabName);
+    if (tabEl) addClass(tabEl, 'active');
+    if (event && event.target) addClass(event.target, 'active');
 
     if (tabName === 'queue') { renderQueueList(); updateStats(); }
     if (tabName === 'pregled') loadOtkupPregled();
@@ -4850,12 +4849,24 @@ function showTab(tabName) {
 // UI UPDATES
 // ============================================================
 async function updateSyncBadge(status) {
-    const badge = document.getElementById('syncBadge');
-    if (status === 'syncing') { badge.textContent = 'SYNC...'; badge.className = 'sync-badge sync-pending'; return; }
+    const badge = byId('syncBadge');
+    if (!badge) return;
+    if (status === 'syncing') {
+        setText(badge, 'SYNC...');
+        badge.className = 'sync-badge sync-pending';
+        return;
+    }
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
-    if (!navigator.onLine) { badge.textContent = 'OFFLINE' + (pending.length > 0 ? ' (' + pending.length + ')' : ''); badge.className = 'sync-badge sync-offline'; }
-    else if (pending.length > 0) { badge.textContent = 'ČEKA: ' + pending.length; badge.className = 'sync-badge sync-pending'; }
-    else { badge.textContent = 'ONLINE'; badge.className = 'sync-badge sync-online'; }
+    if (!navigator.onLine) {
+        setText(badge, 'OFFLINE' + (pending.length > 0 ? ' (' + pending.length + ')' : ''));
+        badge.className = 'sync-badge sync-offline';
+    } else if (pending.length > 0) {
+        setText(badge, 'ČEKA: ' + pending.length);
+        badge.className = 'sync-badge sync-pending';
+    } else {
+        setText(badge, 'ONLINE');
+        badge.className = 'sync-badge sync-online';
+    }
 }
 
 async function updateStats() {
@@ -4868,19 +4879,27 @@ async function updateStats() {
 
 async function renderQueueList() {
     const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
-    const list = document.getElementById('queueList');
-    if (pending.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>'; return; }
-    list.innerHTML = pending.map(r =>
+    const list = byId('queueList');
+    if (!list) return;
+
+    if (pending.length === 0) {
+        setHtml(list, '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>');
+        return;
+    }
+
+    setHtml(list, pending.map(r =>
         `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div></div>`).join('');
+            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div></div>`
+    ).join(''));
 }
 
 // ============================================================
 // HELPERS
 // ============================================================
 function showToast(msg, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg; toast.className = 'toast show ' + type;
+    const toast = byId('toast');
+    setText(toast, msg);
+    toast.className = 'toast show ' + type;
     setTimeout(() => { toast.className = 'toast'; }, 3000);
 }
 
