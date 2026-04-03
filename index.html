@@ -363,48 +363,7 @@
                 max-width: 100% !important;
                 height: auto !important;
             }
-        }
-        .dp-cols { display: flex; flex-direction: column; gap: 12px; }
-        @media (min-width: 900px) { .dp-cols { flex-direction: row; align-items: flex-start; } .dp-cols > .dp-col { flex: 1; min-width: 0; } }
- 
-        .dp-col { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 12px; }
-        .dp-col-hd { padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; color: white; }
-        .dp-col.supply .dp-col-hd { background: var(--primary); }
-        .dp-col.transport .dp-col-hd { background: var(--accent); }
-        .dp-col.demand .dp-col-hd { background: #1565c0; }
-        .dp-col-bd { padding: 10px; max-height: 65vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
- 
-        .dp-card { padding: 12px; border-radius: var(--radius); margin-bottom: 8px; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer; transition: background 0.15s; background: var(--card); }
-        .dp-card:active { background: var(--bg); }
-        .dp-card.sel { background: #fff8e1; border-left-color: var(--accent); }
-        .dp-card.urgent { border-left-color: var(--danger); }
-        .dp-card.trn { border-left-color: var(--accent); }
-        .dp-card.dem { border-left-color: #1565c0; }
-        .dp-card.planned { border-left-color: var(--success); opacity: 0.7; }
- 
-        .dp-banner { background: var(--accent); color: white; padding: 12px 14px; border-radius: var(--radius); margin-bottom: 12px; display: none; }
-        .dp-banner.active { display: block; }
-        .dp-banner .dp-bt { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-        .dp-banner .dp-bs { font-size: 12px; opacity: 0.9; margin-bottom: 8px; }
-        .dp-banner button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; margin-right: 6px; }
- 
-        .dp-stb { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-        .dp-stb button { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; background: white; cursor: pointer; font-weight: 600; }
-        .dp-stb button.on { background: var(--primary); color: white; border-color: var(--primary); }
- 
-        .dp-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 6px 0; }
-        .dp-bf { height: 100%; border-radius: 3px; transition: width 0.3s; }
- 
-        .dp-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-        .dp-badge.slobodan { background: #d1fae5; color: #065f46; }
-        .dp-badge.utovar { background: #fef3c7; color: #92400e; }
-        .dp-badge.naputu { background: #dbeafe; color: #1e40af; }
-        .dp-badge.istovar { background: #ede9fe; color: #5b21b6; }
- 
-        .dp-plan-item { background: #e8f5e9; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .dp-plan-item .dp-pi-route { font-weight: 600; color: var(--primary-dark); }
-        .dp-plan-item button { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; }    
-
+        } 
         .parcel-expert-toggle {
             margin-top: 10px;
             width: 100%;
