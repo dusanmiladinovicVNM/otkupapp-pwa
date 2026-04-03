@@ -65,3 +65,53 @@ function onVrstaChange() {
     });
     applyDefaultCena();
 }
+
+// ============================================================
+// SAVE OTKUP
+// ============================================================
+async function saveOtkup() {
+    const kooperantID = document.getElementById('fldKooperantID').value;
+    const vrsta = document.getElementById('fldVrsta').value;
+    const kolicina = parseFloat(document.getElementById('fldKolicina').value) || 0;
+    const cena = parseFloat(document.getElementById('fldCena').value) || 0;
+    if (!kooperantID) { showToast('Skenirajte QR kooperanta!', 'error'); return; }
+    if (!vrsta) { showToast('Izaberite vrstu voća!', 'error'); return; }
+    if (kolicina <= 0) { showToast('Unesite količinu!', 'error'); return; }
+    if (cena <= 0) { showToast('Unesite cenu!', 'error'); return; }
+    const record = {
+        clientRecordID: crypto.randomUUID(), createdAtClient: new Date().toISOString(), deviceID: getDeviceID(),
+        otkupacID: CONFIG.OTKUPAC_ID, datum: new Date().toISOString().split('T')[0],
+        kooperantID, kooperantName: document.getElementById('koopName').textContent,
+        vrstaVoca: vrsta, sortaVoca: document.getElementById('fldSorta').value,
+        klasa: document.getElementById('fldKlasa').value, kolicina, cena,
+        tipAmbalaze: '12/1', kolAmbalaze: parseInt(document.getElementById('fldAmbalaza').value) || 0,
+        parcelaID: document.getElementById('fldParcela').value || '',
+        napomena: document.getElementById('fldNapomena').value,
+        vozacID: document.getElementById('fldVozacID').value || '',
+        syncStatus: 'pending'
+    };
+    await dbPut(db, CONFIG.STORE_NAME, record);
+    showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
+    showOtkupniList(record);
+    resetForm(); updateStats();
+    if (navigator.onLine) syncQueue();
+}
+
+function resetForm() {
+    document.getElementById('fldKooperantID').value = '';
+    document.getElementById('fldKooperantManual').value = '';
+    document.getElementById('koopDisplay').classList.remove('visible');
+    document.getElementById('fldParcela').innerHTML = '<option value="">-- Bez parcele --</option>';
+    document.getElementById('parcelaGroup').style.display = 'none';
+    document.getElementById('fldVrsta').value = '';
+    document.getElementById('fldSorta').innerHTML = '<option value="">-- Izaberi --</option>';
+    document.getElementById('fldKlasa').value = 'I';
+    document.getElementById('fldKolicina').value = '';
+    document.getElementById('fldCena').value = '';
+    document.getElementById('fldAmbalaza').value = '';
+    document.getElementById('fldNapomena').value = '';
+    document.getElementById('fldVozacID').value = '';
+    document.getElementById('vozacDisplay').classList.remove('visible');
+    applyDefaults();
+}
+
