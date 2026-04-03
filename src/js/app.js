@@ -4881,12 +4881,6 @@ function showToast(msg, type = 'info') {
     setTimeout(() => { toast.className = 'toast'; }, 3000);
 }
 
-function getDeviceID() {
-    let id = localStorage.getItem('deviceID');
-    if (!id) { id = 'DEV-' + crypto.randomUUID().slice(0, 8); localStorage.setItem('deviceID', id); }
-    return id;
-}
-
 // ============================================================
 // SERVICE WORKER
 // ============================================================
