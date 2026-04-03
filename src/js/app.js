@@ -219,7 +219,7 @@ async function doLogin() {
 }
 
 function doLogout() {
-    ['userRole','otkupacID','entityID','entityName','authToken','username'].forEach(k => localStorage.removeItem(k));
+    removeLs(['userRole', 'otkupacID', 'entityID', 'entityName', 'authToken', 'username']);
     location.reload();
 }
 
