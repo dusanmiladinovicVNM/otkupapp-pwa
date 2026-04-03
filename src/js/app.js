@@ -37,7 +37,7 @@ const MGMT_SUBS = {
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!localStorage.getItem('authToken') || !localStorage.getItem('otkupacID')) {
+    if (!getLs('authToken', '') || !getLs('otkupacID', '')) {
         showLoginScreen();
         return;
     }
