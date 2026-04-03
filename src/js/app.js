@@ -4236,20 +4236,14 @@ async function dpOK() {
     showToast('Čuvanje plana.', 'info');
 
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'saveDispecer',
-                token: CONFIG.TOKEN,
-                demandID: dpSel.did,
-                vozacID: vid,
-                stanicaID: sid,
-                stanicaName: dpSN(sid),
-                kupacID: kupID,
-                kupacName: kupN,
-                plannedKg: Math.round(kg)
-            })
+        const json = await apiPost('saveDispecer', {
+            demandID: dpSel.did,
+            vozacID: vid,
+            stanicaID: sid,
+            stanicaName: dpSN(sid),
+            kupacID: kupID,
+            kupacName: kupN,
+            plannedKg: Math.round(kg)
         });
 
         const json = await resp.json();
@@ -4308,15 +4302,9 @@ async function dpOK() {
 // ============================================================
 async function dpChgPlanSt(planID, newStatus) {
     try {
-        await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'updateDispecer',
-                token: CONFIG.TOKEN,
-                planID,
-                status: newStatus
-            })
+        await apiPost('updateDispecer', {
+            planID,
+            status: newStatus
         });
 
         const p = dpPlans.find(x => x.PlanID === planID);
@@ -4333,17 +4321,11 @@ async function dpChgPlanSt(planID, newStatus) {
 
             dpSetS(vid, status, ruta);
 
-            fetch(CONFIG.API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    action: 'updateKamionStatus',
-                    token: CONFIG.TOKEN,
-                    vozacID: vid,
-                    status: status,
-                    ruta: ruta
-                })
-            }).catch(() => {});
+            apiPost('updateKamionStatus', {
+                vozacID: vid,
+                status: status,
+                ruta: ruta
+            });
         }
 
         dpRP();
@@ -4360,14 +4342,8 @@ async function dpRmPlan(planID) {
         const plan = dpPlans.find(x => x.PlanID === planID);
         const vid = plan ? plan.VozacID : '';
 
-        await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'removeDispecer',
-                token: CONFIG.TOKEN,
-                planID
-            })
+        await apiPost('removeDispecer', {
+            planID
         });
 
         dpPlans = dpPlans.filter(x => x.PlanID !== planID);
@@ -4416,17 +4392,11 @@ async function dpCS(vid, st) {
 
     dpRTr();
 
-    fetch(CONFIG.API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-            action: 'updateKamionStatus',
-            token: CONFIG.TOKEN,
-            vozacID: vid,
-            status: st,
-            ruta: (dpKS[vid] || {}).ruta || ''
-        })
-    }).catch(() => {});
+    apiPost('updateKamionStatus', {
+        vozacID: vid,
+        status: st,
+        ruta: (dpKS[vid] || {}).ruta || ''
+    });
 }
 
 async function dpAD() {
@@ -4448,18 +4418,12 @@ async function dpAD() {
         document.getElementById('dpDK').selectedOptions[0]?.textContent || kupacID;
 
     try {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'saveWarRoomDemand',
-                token: CONFIG.TOKEN,
-                kupacID,
-                kupacName,
-                kg,
-                vrsta,
-                klasa
-            })
+        const json = await apiPost('saveWarRoomDemand', {
+            kupacID,
+            kupacName,
+            kg,
+            vrsta,
+            klasa
         });
 
         const json = await resp.json();
