@@ -850,7 +850,6 @@ async function savePdfToDrive(clientRecordID) {
             pdfBase64: pdfBase64
         });
         
-        const json = await resp.json();
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
         else { showToast('Greška: ' + (json.error || ''), 'error'); }
     } catch (e) {
