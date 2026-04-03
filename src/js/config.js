@@ -1,7 +1,7 @@
 // ============================================================
 // CONFIG
 // ============================================================
-const CONFIG = {
+window.CONFIG = {
     API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',
     OTKUPAC_ID: localStorage.getItem('otkupacID') || '',
     USER_ROLE: localStorage.getItem('userRole') || '',
