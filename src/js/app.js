@@ -4246,8 +4246,6 @@ async function dpOK() {
             plannedKg: Math.round(kg)
         });
 
-        const json = await resp.json();
-
         if (json.success) {
             const newPlan = {
                 PlanID: json.planID,
@@ -4425,8 +4423,6 @@ async function dpAD() {
             vrsta,
             klasa
         });
-
-        const json = await resp.json();
 
         if (!json.success) {
             showToast(json.error || 'Greška pri čuvanju', 'error');
