@@ -3312,7 +3312,6 @@ async function izdConfirmSave() {
             izdaoUser: CONFIG.ENTITY_NAME,
             napomena: data.napomena
         });
-        const json = await resp.json();
         if (json.success) {
             showToast('Izdavanje sačuvano: ' + json.izdavanjeID, 'success');
             izdReset();
@@ -3420,7 +3419,6 @@ async function izdSavePdf() {
             fileName: fileName,
             pdfBase64: pdfBase64
         });
-        const json = await resp.json();
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
         else { showToast('Greška: ' + (json.error || ''), 'error'); }
     } catch(e) {
