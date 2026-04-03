@@ -1,1 +1,33 @@
-
+        /* QR */
+        .qr-scan-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; background: var(--primary-light); color: white; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 14px; }
+        .qr-scan-btn:active { background: var(--primary-dark); }
+        #qr-reader { display: none; margin-bottom: 14px; border-radius: var(--radius); overflow: hidden; }
+        #qrProfileModal { justify-content: center; align-items: center; flex-direction: column; }
+        
+        /* BUTTONS */
+        .btn-primary { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-size: 18px; font-weight: 700; cursor: pointer; margin-top: 10px; }
+        .btn-primary:active { background: var(--primary-dark); }
+        .btn-primary:disabled { background: var(--border); color: var(--text-muted); }
+        .btn-secondary { width: 100%; padding: 12px; background: white; color: var(--primary); border: 2px solid var(--primary); border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    
+        /* QUEUE / LIST ITEMS */
+        .queue-item { background: white; padding: 14px; border-radius: var(--radius); margin-bottom: 8px; border-left: 4px solid var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .queue-item.synced { border-left-color: var(--success); }
+        .queue-item.error { border-left-color: var(--danger); }
+        .queue-item .qi-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .queue-item .qi-koop { font-weight: 600; }
+        .queue-item .qi-time { font-size: 12px; color: var(--text-muted); }
+        .queue-item .qi-detail { font-size: 13px; color: var(--text-muted); }
+    
+        /* STATS */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .stat-card { background: white; padding: 16px; border-radius: var(--radius); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+        .stat-card .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+    
+        /* TOAST */
+        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; font-size: 14px; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .toast.show { opacity: 1; }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--primary); }  
