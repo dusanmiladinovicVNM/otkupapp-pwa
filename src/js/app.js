@@ -277,70 +277,6 @@ function populateMgmtKupciDropdown() {
 }
 
 // ============================================================
-// INDEXEDDB
-// ============================================================
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
-        req.onupgradeneeded = (e) => {
-            const d = e.target.result;
-            if (!d.objectStoreNames.contains(CONFIG.STORE_NAME)) {
-                const s = d.createObjectStore(CONFIG.STORE_NAME, { keyPath: 'clientRecordID' });
-                s.createIndex('syncStatus', 'syncStatus', { unique: false });
-                s.createIndex('datum', 'datum', { unique: false });
-            }
-            if (!d.objectStoreNames.contains(CONFIG.STAMM_STORE)) {
-                d.createObjectStore(CONFIG.STAMM_STORE, { keyPath: 'key' });
-            }
-            if (!d.objectStoreNames.contains(CONFIG.AGRO_STORE)) {
-                const a = d.createObjectStore(CONFIG.AGRO_STORE, { keyPath: 'clientRecordID' });
-                a.createIndex('syncStatus', 'syncStatus', { unique: false });
-            }
-            if (!d.objectStoreNames.contains('zbirne')) {
-                const z = d.createObjectStore('zbirne', { keyPath: 'clientRecordID' });
-                z.createIndex('syncStatus', 'syncStatus', { unique: false });
-            }
-            if (!d.objectStoreNames.contains('tretmani')) {
-                const t = d.createObjectStore('tretmani', { keyPath: 'clientRecordID' });
-                t.createIndex('syncStatus', 'syncStatus', { unique: false });
-                t.createIndex('datum', 'datum', { unique: false });
-                t.createIndex('parcelaID', 'parcelaID', { unique: false });
-            }
-        };
-        req.onsuccess = (e) => resolve(e.target.result);
-        req.onerror = (e) => reject(e.target.error);
-    });
-}
-
-function dbPut(storeName, data) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).put(data);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e.target.error);
-    });
-}
-
-function dbGetAll(storeName) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const req = tx.objectStore(storeName).getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = (e) => reject(e.target.error);
-    });
-}
-
-function dbGetByIndex(storeName, indexName, value) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const idx = tx.objectStore(storeName).index(indexName);
-        const req = idx.getAll(value);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = (e) => reject(e.target.error);
-    });
-}
-
-// ============================================================
 // QR SCANNER
 // ============================================================
 function startQRScan() {
@@ -576,7 +512,7 @@ async function saveOtkup() {
         vozacID: document.getElementById('fldVozacID').value || '',
         syncStatus: 'pending'
     };
-    await dbPut(CONFIG.STORE_NAME, record);
+    await dbPut(db, CONFIG.STORE_NAME, record);
     showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
     showOtkupniList(record);
     resetForm(); updateStats();
@@ -708,12 +644,7 @@ async function saveOtkupniListWithSignatures(clientRecordID) {
 }
 
 async function savePdfToDrive(clientRecordID) {
-    const record = await new Promise((resolve) => {
-        const tx = db.transaction(CONFIG.STORE_NAME, 'readonly');
-        const req = tx.objectStore(CONFIG.STORE_NAME).get(clientRecordID);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-    });
+    const record = await dbGet(db, CONFIG.STORE_NAME, clientRecordID);
     if (!record) { showToast('Zapis nije pronađen', 'error'); return; }
 
     const config = stammdaten.config || [];
@@ -861,7 +792,7 @@ async function savePdfToDrive(clientRecordID) {
 // SYNC
 // ============================================================
 async function syncQueue() {
-    const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
+    const pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
     if (pending.length === 0) return;
 
     updateSyncBadge('syncing');
@@ -874,7 +805,7 @@ async function syncQueue() {
     if (json && json.success) {
         for (const r of pending) {
             r.syncStatus = 'synced';
-            await dbPut(CONFIG.STORE_NAME, r);
+            await dbPut(db, CONFIG.STORE_NAME, r);
         }
         showToast('Sinhr: ' + pending.length, 'success');
     } else if (json) {
@@ -914,7 +845,7 @@ async function syncNow() {
 async function loadOtkupPregled() {
     document.getElementById('pregledList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
     const od = document.getElementById('fldPregledOd').value, doo = document.getElementById('fldPregledDo').value;
-    const local = await dbGetAll(CONFIG.STORE_NAME);
+    const local = await dbGetAll(db, CONFIG.STORE_NAME);
     let server = [];
     try {
         const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
@@ -987,7 +918,7 @@ async function showOtpremaAssignView() {
 
     const today = new Date().toISOString().split('T')[0];
     
-    const local = await dbGetAll(CONFIG.STORE_NAME);
+    const local = await dbGetAll(db, CONFIG.STORE_NAME);
     
     let server = [];
     try {
@@ -1095,7 +1026,7 @@ function cancelOtprema() {
 async function loadOtpremaOverview() {
     const today = new Date().toISOString().split('T')[0];
     
-    const local = await dbGetAll(CONFIG.STORE_NAME);
+    const local = await dbGetAll(db, CONFIG.STORE_NAME);
     
     let server = [];
     try {
@@ -1318,7 +1249,7 @@ async function confirmZbirna() {
         syncStatus: 'pending'
     };
     
-    await dbPut('zbirne', record);
+    await dbPut(db, 'zbirne', record);
     showToast('Zbirna kreirana!', 'success');
     cancelZbirna();
     
@@ -4824,7 +4755,7 @@ async function updateSyncBadge(status) {
         badge.className = 'sync-badge sync-pending';
         return;
     }
-    const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
+    const pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
     if (!navigator.onLine) {
         setText(badge, 'OFFLINE' + (pending.length > 0 ? ' (' + pending.length + ')' : ''));
         badge.className = 'sync-badge sync-offline';
@@ -4846,7 +4777,7 @@ async function updateStats() {
 }
 
 async function renderQueueList() {
-    const pending = await dbGetByIndex(CONFIG.STORE_NAME, 'syncStatus', 'pending');
+    const pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
     const list = byId('queueList');
     if (!list) return;
 
