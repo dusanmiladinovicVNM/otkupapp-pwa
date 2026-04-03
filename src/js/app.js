@@ -401,13 +401,22 @@ function generateQRCode(canvasId, text) {
 // STAMMDATEN
 // ============================================================
 async function loadStammdaten() {
-    try { const cached = await dbGetAll(CONFIG.STAMM_STORE); const obj = cached.find(c => c.key === 'all'); if (obj) stammdaten = obj.data; } catch (e) {}
+    try {
+        const cached = await dbGetAll(db, CONFIG.STAMM_STORE);
+        const obj = cached.find(c => c.key === 'all');
+        if (obj) stammdaten = obj.data;
+    } catch (e) {}
+
     if (navigator.onLine) {
         try {
             const json = await apiFetch('action=getStammdaten');
             if (json && json.success && json.data) {
                 stammdaten = json.data;
-                await dbPut(CONFIG.STAMM_STORE, { key: 'all', data: stammdaten, updatedAt: new Date().toISOString() });
+                await dbPut(db, CONFIG.STAMM_STORE, {
+                    key: 'all',
+                    data: stammdaten,
+                    updatedAt: new Date().toISOString()
+                });
             }
         } catch (e) {}
     }
@@ -634,9 +643,13 @@ async function saveOtkupniListWithSignatures(clientRecordID) {
     if (!sigO) { showToast('Potpišite se kao otkupljivač!', 'error'); return; }
     if (!sigK) { showToast('Kooperant mora da se potpiše!', 'error'); return; }
     try {
-        const tx = db.transaction(CONFIG.STORE_NAME, 'readwrite');
-        const store = tx.objectStore(CONFIG.STORE_NAME);
-        const req = store.get(clientRecordID);
+        const r = await dbGet(db, CONFIG.STORE_NAME, clientRecordID);
+        if (r) {
+            r.sigOtkupac = sigO;
+            r.sigKooperant = sigK;
+            r.signedAt = new Date().toISOString();
+            await dbPut(db, CONFIG.STORE_NAME, r);
+        }
         req.onsuccess = () => { const r = req.result; if (r) { r.sigOtkupac = sigO; r.sigKooperant = sigK; r.signedAt = new Date().toISOString(); store.put(r); } };
     } catch (e) {}
     showToast('Otkupni list potpisan!', 'success');
@@ -817,7 +830,7 @@ async function syncQueue() {
 }
 
 async function syncAgromere() {
-    const pending = await dbGetByIndex(CONFIG.AGRO_STORE, 'syncStatus', 'pending');
+    const pending = await dbGetByIndex(db, CONFIG.AGRO_STORE, 'syncStatus', 'pending');
     if (pending.length === 0) return;
 
     const json = await apiPost('syncAgromere', {
@@ -828,7 +841,7 @@ async function syncAgromere() {
     if (json && json.success) {
         for (const r of pending) {
             r.syncStatus = 'synced';
-            await dbPut(CONFIG.AGRO_STORE, r);
+            await dbPut(db, CONFIG.AGRO_STORE, r);
         }
         showToast('Agromere sinhr: ' + pending.length, 'success');
     }
@@ -1002,7 +1015,7 @@ async function confirmOtprema() {
         if (chk && chk.checked) {
             otpremaUnassigned[i].vozacID = otpremaVozacID;
             otpremaUnassigned[i].syncStatus = 'pending';
-            await dbPut(CONFIG.STORE_NAME, otpremaUnassigned[i]);
+            await dbPut(db, CONFIG.STORE_NAME, otpremaUnassigned[i]);
             count++;
         }
     }
@@ -1264,8 +1277,8 @@ function cancelZbirna() {
 }
 
 async function loadVozacZbirne() {
-    const local = await dbGetAll('zbirne');
-    
+    const local = await dbGetAll(db, 'zbirne');
+
     let server = [];
     try {
         const json = await apiFetch('action=getVozacZbirne');
@@ -1280,16 +1293,16 @@ async function loadVozacZbirne() {
             syncStatus: 'synced'
         }));
     } catch (e) {}
-    
+
     const serverIDs = new Set(server.map(r => r.clientRecordID));
     const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
-    
+
     const list = document.getElementById('vozacZbirneList');
     if (all.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Nema kreiranih zbirnih</p>';
         return;
     }
-    
+
     list.innerHTML = all.map(r => {
         const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
         const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
@@ -1302,7 +1315,7 @@ async function loadVozacZbirne() {
 }
 
 async function syncZbirne() {
-    const pending = await dbGetByIndex('zbirne', 'syncStatus', 'pending');
+    const pending = await dbGetByIndex(db, 'zbirne', 'syncStatus', 'pending');
     if (pending.length === 0) return;
 
     const json = await apiPost('syncZbirna', {
@@ -1313,7 +1326,7 @@ async function syncZbirne() {
     if (json && json.success) {
         for (const r of pending) {
             r.syncStatus = 'synced';
-            await dbPut('zbirne', r);
+            await dbPut(db, 'zbirne', r);
         }
         showToast('Zbirna sinhronizovana', 'success');
     }
@@ -1321,7 +1334,7 @@ async function syncZbirne() {
 
     async function loadVozacTransport() {
     const list = document.getElementById('transportList');
-    const local = await dbGetAll('zbirne');
+    const local = await dbGetAll(db, 'zbirne');
     if (local.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema transporta</p>';
         return;
@@ -2190,7 +2203,7 @@ async function checkAgroKarenca(parcelaID) {
 
     // Dodaj lokalne pending
     try {
-        const local = await dbGetAll('tretmani');
+        const local = await dbGetAll(db, 'tretmani');
         tretmani = [...tretmani, ...local.filter(r => r.syncStatus === 'pending')];
     } catch(e) {}
 
@@ -2704,7 +2717,7 @@ async function agroSaveTretman() {
     };
 
     // Save to IndexedDB
-    await dbPut('tretmani', record);
+    await dbPut(db, 'tretmani', record);
     showToast('Tretman sačuvan!', 'success');
 
     // Sync immediately
@@ -2721,7 +2734,7 @@ async function agroSaveTretman() {
             const json = await resp.json();
             if (json.success) {
                 record.syncStatus = 'synced';
-                await dbPut('tretmani', record);
+                await dbPut(db, 'tretmani', record);
             }
         } catch(e) {}
     }
@@ -2738,7 +2751,7 @@ async function agroSaveTretman() {
 // ISTORIJA
 // ============================================================
 async function agroLoadIstorija() {
-    const local = await dbGetAll('tretmani');
+    const local = await dbGetAll(db, 'tretmani');
     let server = [];
     try {
         const json = await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
@@ -4769,7 +4782,7 @@ async function updateSyncBadge(status) {
 }
 
 async function updateStats() {
-    const all = await dbGetAll(CONFIG.STORE_NAME);
+    const all = await dbGetAll(db, CONFIG.STORE_NAME);
     const today = new Date().toISOString().split('T')[0];
     const t = all.filter(r => r.datum === today);
     document.getElementById('statPending').textContent = t.filter(r => r.syncStatus === 'pending').length;
