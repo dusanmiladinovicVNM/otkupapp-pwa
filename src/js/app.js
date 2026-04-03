@@ -1,5 +1,3 @@
-<script>
-
 // ============================================================
 // CONFIG
 // ============================================================
@@ -4925,4 +4923,3 @@ if ('serviceWorker' in navigator) {
         });
     }).catch(err => console.log('SW registration failed:', err));
 }
-</script>
