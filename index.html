@@ -3701,6 +3701,9 @@ function agroStartGeo() {
 }
 
 function agroCheckParcelaProximity(lat, lng) {
+    // Ako je parcela već izabrana — ne diraj
+    if (agroState.parcelaID) return;
+    
     const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
     const banner = document.getElementById('agroGeoBanner');
     let bestMatch = null, bestDist = Infinity;
