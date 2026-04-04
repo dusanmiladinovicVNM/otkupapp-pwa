@@ -55,8 +55,8 @@ function onIzdKooperantChange() {
     pList.innerHTML = parcele.map((p, i) => {
         const ha = parseFloat(String(p.PovrsinaHa || '0').replace(',', '.')) || 0;
         return `<label class="izd-parcela-chk">
-            <input type="checkbox" id="izdPChk${i}" value="${p.ParcelaID}" data-ha="${ha}" onchange="izdOnParceleChange()">
-            <div class="parcela-info">${p.KatBroj || p.ParcelaID} — ${p.Kultura || '?'}</div>
+            <input type="checkbox" id="izdPChk${i}" value="${escapeHtml(p.ParcelaID)}" data-ha="${ha}" onchange="izdOnParceleChange()">
+            <div class="parcela-info">${escapeHtml(p.KatBroj || p.ParcelaID)} — ${escapeHtml(p.Kultura || '?')}</div>
             <div class="parcela-ha">${ha.toFixed(2)} ha</div>
         </label>`;
     }).join('');
@@ -117,13 +117,14 @@ function izdCalcPreporuka() {
     // Prikaži
     panel.classList.add('visible');
     document.getElementById('izdPreporukaCalc').innerHTML =
-        '<strong>' + finalQty.toLocaleString('sr') + ' ' + jm + '</strong>' +
-        ' — ' + art.Naziv;
+        '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
+        ' — ' + escapeHtml(art.Naziv);
+    
     document.getElementById('izdPreporukaDetail').innerHTML =
-        dozaPoHa + ' ' + jm + '/ha × ' + totalHa.toFixed(2) + ' ha = ' +
-        rawQty.toLocaleString('sr', {maximumFractionDigits: 2}) + ' ' + jm +
-        (pakInfo ? '<br>' + pakInfo : '') +
-        '<br>Parcele: ' + parcelaNames.join(', ');
+        escapeHtml(dozaPoHa) + ' ' + escapeHtml(jm) + '/ha × ' + escapeHtml(totalHa.toFixed(2)) + ' ha = ' +
+        escapeHtml(rawQty.toLocaleString('sr', {maximumFractionDigits: 2})) + ' ' + escapeHtml(jm) +
+        (pakInfo ? '<br>' + escapeHtml(pakInfo) : '') +
+        '<br>Parcele: ' + escapeHtml(parcelaNames.join(', '));
 
     // Sačuvaj za "Primeni"
     panel._finalQty = finalQty;
@@ -274,13 +275,13 @@ function izdRenderKorpa() {
 
     bd.innerHTML = izdKorpa.map((s, i) => `
         <div class="izd-row">
-            <div class="izd-row-name">${s.naziv}</div>
+            <div class="izd-row-name">${escapeHtml(s.naziv)}</div>
             <div class="izd-row-qty">
                 <input type="number" value="${s.kolicina}" inputmode="decimal"
                     style="width:50px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:13px;"
                     onchange="izdUpdateQty(${i}, this.value)">
             </div>
-            <div class="izd-row-price">${s.cena.toLocaleString('sr')} /${s.jm}</div>
+            <div class="izd-row-price">${s.cena.toLocaleString('sr')} /${escapeHtml(s.jm)}</div>
             <div class="izd-row-total">${s.vrednost.toLocaleString('sr')}</div>
             <button class="izd-row-del" onclick="izdRemoveStavka(${i})">✕</button>
         </div>
@@ -341,8 +342,8 @@ function izdShowOtpremnica(data) {
     const stavkeHtml = data.stavke.map((s, i) =>
         `<tr>
             <td style="padding:6px;font-size:13px;">${i+1}</td>
-            <td style="padding:6px;font-size:13px;">${s.naziv}</td>
-            <td style="padding:6px;font-size:13px;text-align:center;">${s.kolicina} ${s.jm}</td>
+            <td style="padding:6px;font-size:13px;">${escapeHtml(s.naziv)}</td>
+            <td style="padding:6px;font-size:13px;text-align:center;">${escapeHtml(s.kolicina)} ${escapeHtml(s.jm)}</td>
             <td style="padding:6px;font-size:13px;text-align:right;">${s.cena.toLocaleString('sr')}</td>
             <td style="padding:6px;font-size:13px;text-align:right;font-weight:600;">${s.vrednost.toLocaleString('sr')}</td>
         </tr>`
@@ -351,15 +352,15 @@ function izdShowOtpremnica(data) {
     modal.innerHTML = `<div style="padding:16px;max-width:420px;margin:0 auto;font-family:sans-serif;">
         <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px;">
             <div style="font-size:18px;font-weight:700;">${gv('SELLER_NAME')}</div>
-            <div style="font-size:12px;color:#666;">${gv('SELLER_STREET')}, ${gv('SELLER_CITY')} ${gv('SELLER_POSTAL_CODE')}</div>
-            <div style="font-size:12px;color:#666;">PIB: ${gv('SELLER_PIB')} | MB: ${gv('SELLER_MATICNI_BROJ')}</div>
+            <div style="font-size:12px;color:#666;">${escapeHtml(gv('SELLER_STREET'))}, ${escapeHtml(gv('SELLER_CITY'))} ${escapeHtml(gv('SELLER_POSTAL_CODE'))}</div>
+            <div style="font-size:12px;color:#666;">PIB: ${escapeHtml(gv('SELLER_PIB'))} | MB: ${escapeHtml(gv('SELLER_MATICNI_BROJ'))}</div>
         </div>
         <h2 style="text-align:center;margin-bottom:14px;font-size:18px;">OTPREMNICA AGROHEMIJE</h2>
         <div style="background:#f5f5f0;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px;">
             <div><strong>${koop.Ime || ''} ${koop.Prezime || ''}</strong></div>
-            <div>${koop.Adresa || ''}, ${koop.Mesto || ''}</div>
-            <div>JMBG: ${koop.JMBG || '________'} | BPG: ${koop.BPGBroj || '________'}</div>
-            ${data.parcelaID ? '<div>Parcela: ' + data.parcelaID + '</div>' : ''}
+            <div>${escapeHtml(koop.Adresa || '')}, ${escapeHtml(koop.Mesto || '')}</div>
+            <div>JMBG: ${escapeHtml(koop.JMBG || '________')} | BPG: ${escapeHtml(koop.BPGBroj || '________')}</div>
+            ${data.parcelaID ? '<div>Parcela: ' + escapeHtml(data.parcelaID) + '</div>' : ''}
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
             <tr style="background:#f0f0eb;">
@@ -375,7 +376,7 @@ function izdShowOtpremnica(data) {
             <span>UKUPNO:</span>
             <span>${data.ukupnaVrednost.toLocaleString('sr')} RSD</span>
         </div>
-        <div style="font-size:12px;color:#666;margin-bottom:12px;">Datum: ${data.datum}${data.napomena ? ' | Napomena: ' + data.napomena : ''}</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">Datum: ${escapeHtml(data.datum)}${data.napomena ? ' | Napomena: ' + escapeHtml(data.napomena) : ''}</div>
 
         <div style="margin-top:16px;">
             <div style="margin-bottom:16px;">
