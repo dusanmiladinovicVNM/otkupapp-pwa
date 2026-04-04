@@ -45,3 +45,40 @@ function populateMgmtKupciDropdown() {
         sel.appendChild(o);
     });
 }
+
+// ============================================================
+// MANAGEMENT: NAVIGATION
+// ============================================================
+function showMgmtMain(section) {
+    qsa('.tab-content').forEach(t => removeClass(t, 'active'));
+    qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
+
+    addClass(byId('tab-mgmt'), 'active');
+    if (event && event.target) addClass(event.target, 'active');
+
+    const subs = MGMT_SUBS[section];
+    const bar = byId('mgmtSubBar');
+
+    setHtml(bar, subs.map((s, i) =>
+        `<button class="sub-tab-btn${i === 0 ? ' active' : ''}" onclick="showMgmtSub('${s.id}', this)">${s.label}</button>`
+    ).join(''));
+
+    qsa('.mgmt-sub').forEach(s => removeClass(s, 'active'));
+
+    const firstEl = byId('mgmt-' + subs[0].id);
+    if (firstEl) addClass(firstEl, 'active');
+    if (subs[0].load) subs[0].load();
+}
+
+function showMgmtSub(subId, btn) {
+    qsa('.mgmt-sub').forEach(s => removeClass(s, 'active'));
+    qsa('.sub-tab-btn').forEach(b => removeClass(b, 'active'));
+
+    const el = byId('mgmt-' + subId);
+    if (el) addClass(el, 'active');
+    if (btn) addClass(btn, 'active');
+
+    const allSubs = Object.values(MGMT_SUBS).flat();
+    const sub = allSubs.find(s => s.id === subId);
+    if (sub && sub.load) sub.load();
+}
