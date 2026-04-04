@@ -1,21 +1,38 @@
 // ============================================================
-// STATE
+// APP RUNTIME STATE
 // ============================================================
 let db = null;
 let qrScanner = null;
-let stammdaten = { kooperanti: [], kulture: [], config: [], parcele: [], stanice: [], kupci: [], vozaci: [] };
+let stammdaten = {
+    kooperanti: [],
+    kulture: [],
+    config: [],
+    parcele: [],
+    stanice: [],
+    kupci: [],
+    vozaci: []
+};
 let selectedMera = '';
 let mgmtData = null;
 let parcelExpertOpen = {};
 
+const appRuntime = {
+    initStarted: false,
+    appReady: false,
+    stammdatenReady: false,
+    syncInFlight: false,
+    stammdatenRefreshInFlight: false,
+    syncIntervalId: null
+};
+
 // ============================================================
 // INIT
 // ============================================================
-// src/js/app.js
 document.addEventListener('DOMContentLoaded', bootstrapApp);
 
 async function bootstrapApp() {
-    AppState.patch('init', { domReady: true, bootError: null });
+    if (appRuntime.initStarted) return;
+    appRuntime.initStarted = true;
 
     try {
         if (!hasValidSession()) {
@@ -23,29 +40,27 @@ async function bootstrapApp() {
             return;
         }
 
-        const dbInstance = await openDB();
-        AppState.set('db', dbInstance);
-        AppState.patch('init', { dbReady: true });
+        db = await openDB();
 
         await loadStammdatenFromCache();
-        applyShellUI();
-        applyRoleVisibilitySafe();
+
+        applyRoleVisibility();
+        applyHeaderInfo();
+        bindAppShellEvents();
+        setDefaultDates();
 
         await bootstrapRole();
 
-        bindGlobalAppEvents();
-        startBackgroundJobs();
+        updateSyncBadge();
+        bindConnectivityEvents();
+        startBackgroundSync();
 
-        // network refresh after shell is stable
+        appRuntime.stammdatenReady = true;
+        appRuntime.appReady = true;
+
         refreshStammdatenInBackground();
-
-        AppState.patch('init', {
-            stammdatenReady: true,
-            appReady: true
-        });
     } catch (err) {
-        console.error('bootstrap failed', err);
-        AppState.patch('init', { bootError: err });
+        console.error('bootstrapApp failed:', err);
         showToast('Greška pri pokretanju aplikacije', 'error');
     }
 }
@@ -54,237 +69,377 @@ function hasValidSession() {
     return !!getLs('authToken', '') && !!getLs('otkupacID', '');
 }
 
-function applyShellUI() {
-    const headerInfo = document.getElementById('headerInfo');
-    if (headerInfo) {
-        headerInfo.textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
-    }
-    updateSyncBadge();
+function applyHeaderInfo() {
+    const el = document.getElementById('headerInfo');
+    if (!el) return;
+    el.textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
 }
 
-function applyRoleVisibilitySafe() {
-    applyRoleVisibility();
+function setDefaultDates() {
+    const today = new Date().toISOString().split('T')[0];
+
+    const fldPregledOd = document.getElementById('fldPregledOd');
+    const fldPregledDo = document.getElementById('fldPregledDo');
+    const fldOtpremniceDatum = document.getElementById('fldOtpremniceDatum');
+    const mgmtOtkupiOd = document.getElementById('mgmtOtkupiOd');
+    const mgmtOtkupiDo = document.getElementById('mgmtOtkupiDo');
+
+    if (fldPregledOd && !fldPregledOd.value) fldPregledOd.value = today;
+    if (fldPregledDo && !fldPregledDo.value) fldPregledDo.value = today;
+    if (fldOtpremniceDatum && !fldOtpremniceDatum.value) fldOtpremniceDatum.value = today;
+    if (mgmtOtkupiOd && !mgmtOtkupiOd.value) mgmtOtkupiOd.value = today;
+    if (mgmtOtkupiDo && !mgmtOtkupiDo.value) mgmtOtkupiDo.value = today;
 }
 
 async function bootstrapRole() {
-    const today = new Date().toISOString().split('T')[0];
-
     if (CONFIG.USER_ROLE === 'Otkupac') {
-        populateVrstaDropdown();
-        applyDefaults();
-
-        const od = document.getElementById('fldPregledOd');
-        const _do = document.getElementById('fldPregledDo');
-        if (od) od.value = today;
-        if (_do) _do.value = today;
+        if (typeof populateVrstaDropdown === 'function') populateVrstaDropdown();
+        if (typeof applyDefaults === 'function') applyDefaults();
+        safeCall(() => showTab('otkup'));
+        return;
     }
 
     if (CONFIG.USER_ROLE === 'Kooperant') {
-        await guardStammdaten(agroPopulateParcele);
+        await guardStammdaten(async () => {
+            if (typeof agroPopulateParcele === 'function') {
+                await agroPopulateParcele();
+            }
+        });
+        safeCall(() => showTab('kartica'));
+        return;
+    }
+
+    if (CONFIG.USER_ROLE === 'Vozac') {
+        safeCall(() => showTab('zbirna'));
+        return;
     }
 
     if (CONFIG.USER_ROLE === 'Management') {
-        populateMgmtStanice();
+        if (typeof populateMgmtStanice === 'function') populateMgmtStanice();
 
-        const od = document.getElementById('mgmtOtkupiOd');
-        const _do = document.getElementById('mgmtOtkupiDo');
-        if (od) od.value = today;
-        if (_do) _do.value = today;
+        try {
+            if (typeof prefetchMgmtData === 'function') {
+                await prefetchMgmtData();
+            }
+        } catch (err) {
+            console.error('prefetchMgmtData failed:', err);
+        }
 
-        await prefetchMgmtData();
-        populateMgmtKupciDropdown();
-        showTab('dispecer');
+        if (typeof populateMgmtKupciDropdown === 'function') {
+            populateMgmtKupciDropdown();
+        }
+
+        safeCall(() => showTab('dispecer'));
     }
 }
 
-function bindGlobalAppEvents() {
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+function bindAppShellEvents() {
+    const qrProfileModal = document.getElementById('qrProfileModal');
+    if (qrProfileModal && !qrProfileModal.dataset.bound) {
+        qrProfileModal.addEventListener('click', () => {
+            qrProfileModal.style.display = 'none';
+        });
+        qrProfileModal.dataset.bound = '1';
+    }
+
+    window.addEventListener('stammdaten:updated', handleStammdatenUpdated);
 }
 
-function startBackgroundJobs() {
-    if (window.__syncInterval) clearInterval(window.__syncInterval);
+function bindConnectivityEvents() {
+    if (window.__appConnectivityBound) return;
+    window.__appConnectivityBound = true;
 
-    window.__syncInterval = setInterval(() => {
-        if (navigator.onLine && CONFIG.USER_ROLE === 'Otkupac') {
-            syncQueueSafe();
-        }
+    window.addEventListener('online', async () => {
+        updateSyncBadge();
+        await syncQueueSafe();
+        refreshStammdatenInBackground();
+    });
+
+    window.addEventListener('offline', () => {
+        updateSyncBadge();
+    });
+}
+
+function startBackgroundSync() {
+    if (appRuntime.syncIntervalId) {
+        clearInterval(appRuntime.syncIntervalId);
+    }
+
+    appRuntime.syncIntervalId = setInterval(() => {
+        if (!navigator.onLine) return;
+        if (CONFIG.USER_ROLE !== 'Otkupac') return;
+        syncQueueSafe();
     }, 60000);
 }
 
-function handleOnline() {
-    updateSyncBadge();
-    if (CONFIG.USER_ROLE === 'Otkupac') syncQueueSafe();
-}
-
-function handleOffline() {
-    updateSyncBadge();
-}
-
-async function syncQueueSafe() {
-    if (AppState.get('sync.inFlight')) return;
-
-    AppState.patch('sync', { inFlight: true });
-    try {
-        await syncQueue();
-        AppState.patch('sync', { lastRunAt: new Date().toISOString() });
-    } finally {
-        AppState.patch('sync', { inFlight: false });
-    }
-}
-
-
-// ============================================================
-// QR SCANNER
-// ============================================================
-
-function onQRScanned(text) {
-    try { const data = JSON.parse(text); if (data.id) { setKooperant(data.id, data.name || data.id); return; } } catch (e) {}
-    if (text.startsWith('KOOP-')) {
-        const koop = stammdaten.kooperanti.find(k => k.KooperantID === text);
-        setKooperant(text, koop ? (koop.Ime + ' ' + koop.Prezime) : text);
-        return;
-    }
-    showToast('Nepoznat QR kod', 'error');
-}
-
-function setKooperant(id, name) {
-    document.getElementById('fldKooperantID').value = id;
-    document.getElementById('koopName').textContent = name;
-    document.getElementById('koopId').textContent = id;
-    document.getElementById('koopDisplay').classList.add('visible');
-    showToast('Kooperant: ' + name, 'success');
-    populateParcelaDropdown(id);
-}
-
-function startVozacQRScan() {
-    const readerDiv = document.getElementById('qr-reader-vozac');
-    readerDiv.style.display = 'block';
-    const scanner = new Html5Qrcode('qr-reader-vozac');
-    scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-            onVozacQRScanned(decodedText);
-            scanner.stop().then(() => { readerDiv.style.display = 'none'; });
-        },
-        () => {}
-    ).catch(err => { showToast('Kamera nije dostupna: ' + err, 'error'); readerDiv.style.display = 'none'; });
-}
-
-function onVozacQRScanned(text) {
-    try {
-        const data = JSON.parse(text);
-        if (data.type === 'VOZ' && data.id) { setVozac(data.id, data.name || data.id); return; }
-    } catch (e) {}
-    if (text.startsWith('VOZ-')) {
-        setVozac(text, text);
-        return;
-    }
-    showToast('Nije QR vozača', 'error');
-}
-
-function setVozac(id, name) {
-    document.getElementById('fldVozacID').value = id;
-    document.getElementById('vozacName').textContent = name;
-    document.getElementById('vozacId').textContent = id;
-    document.getElementById('vozacDisplay').classList.add('visible');
-    showToast('Vozač: ' + name, 'success');
-}
-
-function clearVozac() {
-    document.getElementById('fldVozacID').value = '';
-    document.getElementById('vozacDisplay').classList.remove('visible');
-}
-    
-// ============================================================
-// QR PROFILE
-// ============================================================
-function showQRProfile() {
-    const modal = document.getElementById('qrProfileModal');
-    document.getElementById('qrProfileName').textContent = CONFIG.ENTITY_NAME;
-    document.getElementById('qrProfileRole').textContent = CONFIG.USER_ROLE;
-    document.getElementById('qrProfileID').textContent = CONFIG.ENTITY_ID;
-    modal.style.display = 'flex';
-    
-    generateQRCode('qrProfileCanvas', JSON.stringify({
-        type: CONFIG.USER_ROLE === 'Kooperant' ? 'KOOP' : CONFIG.USER_ROLE === 'Otkupac' ? 'OTK' : CONFIG.USER_ROLE === 'Vozac' ? 'VOZ' : 'MGMT',
-        id: CONFIG.ENTITY_ID,
-        name: CONFIG.ENTITY_NAME
-    }));
-}
-
-
-    
 // ============================================================
 // STAMMDATEN
 // ============================================================
-async function loadStammdaten() {
-    await safeAsync(async () => {
-        const cached = await dbGetAll(db, CONFIG.STAMM_STORE);
-        const obj = cached.find(c => c.key === 'all');
-        if (obj) stammdaten = obj.data;
-    });
-
-    if (!navigator.onLine) return;
-
-    await safeAsync(async () => {
-        const json = await apiFetch('action=getStammdaten');
-        if (json && json.success && json.data) {
-            stammdaten = json.data;
-            await dbPut(db, CONFIG.STAMM_STORE, {
-                key: 'all',
-                data: stammdaten,
-                updatedAt: new Date().toISOString()
-            });
-        }
-    }, 'Greška pri učitavanju šifarnika');
-}
-
 async function loadStammdatenFromCache() {
-    const db = AppState.get('db');
-    if (!db) throw new Error('DB nije inicijalizovan');
-
     await safeAsync(async () => {
         const cached = await dbGetAll(db, CONFIG.STAMM_STORE);
-        const obj = cached.find(c => c.key === 'all');
+        const obj = (cached || []).find(c => c.key === 'all');
 
         if (obj && obj.data) {
-            AppState.set('stammdaten', obj.data);
+            stammdaten = normalizeStammdaten(obj.data);
+        } else {
+            stammdaten = normalizeStammdaten(null);
         }
     }, 'Greška pri čitanju lokalnih šifarnika');
 }
 
 async function refreshStammdatenInBackground() {
     if (!navigator.onLine) return;
+    if (appRuntime.stammdatenRefreshInFlight) return;
 
-    await safeAsync(async () => {
-        const json = await apiFetch('action=getStammdaten');
-        if (!(json && json.success && json.data)) return;
+    appRuntime.stammdatenRefreshInFlight = true;
 
-        AppState.set('stammdaten', json.data);
+    try {
+        await safeAsync(async () => {
+            const json = await apiFetch('action=getStammdaten');
+            if (!(json && json.success && json.data)) return;
 
-        const db = AppState.get('db');
-        await dbPut(db, CONFIG.STAMM_STORE, {
-            key: 'all',
-            data: json.data,
-            updatedAt: new Date().toISOString()
-        });
+            const nextData = normalizeStammdaten(json.data);
+            stammdaten = nextData;
 
-        window.dispatchEvent(new CustomEvent('stammdaten:updated', {
-            detail: { source: 'network' }
-        }));
-    }, 'Greška pri osvežavanju šifarnika');
+            await dbPut(db, CONFIG.STAMM_STORE, {
+                key: 'all',
+                data: nextData,
+                updatedAt: new Date().toISOString()
+            });
+
+            window.dispatchEvent(new CustomEvent('stammdaten:updated', {
+                detail: { source: 'network' }
+            }));
+        }, 'Greška pri učitavanju šifarnika');
+    } finally {
+        appRuntime.stammdatenRefreshInFlight = false;
+    }
 }
 
+function normalizeStammdaten(data) {
+    const src = data || {};
+    return {
+        kooperanti: Array.isArray(src.kooperanti) ? src.kooperanti : [],
+        kulture: Array.isArray(src.kulture) ? src.kulture : [],
+        config: Array.isArray(src.config) ? src.config : [],
+        parcele: Array.isArray(src.parcele) ? src.parcele : [],
+        stanice: Array.isArray(src.stanice) ? src.stanice : [],
+        kupci: Array.isArray(src.kupci) ? src.kupci : [],
+        vozaci: Array.isArray(src.vozaci) ? src.vozaci : []
+    };
+}
 
+function hasStammdaten() {
+    return !!(
+        stammdaten &&
+        typeof stammdaten === 'object' &&
+        Array.isArray(stammdaten.kooperanti) &&
+        Array.isArray(stammdaten.parcele)
+    );
+}
+
+async function guardStammdaten(fn) {
+    if (!hasStammdaten()) {
+        showToast('Šifarnici još nisu spremni', 'info');
+        return;
+    }
+
+    try {
+        return await fn();
+    } catch (err) {
+        console.error('guardStammdaten failed:', err);
+        showToast('Greška u radu sa šifarnicima', 'error');
+    }
+}
+
+function handleStammdatenUpdated() {
+    try {
+        if (CONFIG.USER_ROLE === 'Kooperant' && typeof agroPopulateParcele === 'function') {
+            agroPopulateParcele();
+        }
+
+        if (CONFIG.USER_ROLE === 'Management') {
+            if (typeof populateMgmtStanice === 'function') populateMgmtStanice();
+            if (typeof populateMgmtKupciDropdown === 'function') populateMgmtKupciDropdown();
+        }
+
+        if (CONFIG.USER_ROLE === 'Otkupac') {
+            if (typeof populateVrstaDropdown === 'function') populateVrstaDropdown();
+        }
+    } catch (err) {
+        console.error('handleStammdatenUpdated failed:', err);
+    }
+}
 
 function fmtStanica(stanicaID) {
     if (!stanicaID) return '';
-    const s = (stammdaten.stanice || []).find(s => s.StanicaID === stanicaID);
+    const s = (stammdaten.stanice || []).find(x => x.StanicaID === stanicaID);
     const name = s ? (s.Naziv || s.Mesto || stanicaID) : stanicaID;
     if (name === stanicaID) return stanicaID;
     return name + ' <span style="font-size:11px;color:var(--text-muted);">' + stanicaID + '</span>';
+}
+
+// ============================================================
+// SYNC
+// ============================================================
+async function syncQueueSafe() {
+    if (!navigator.onLine) return;
+    if (CONFIG.USER_ROLE !== 'Otkupac') return;
+    if (appRuntime.syncInFlight) return;
+    if (typeof syncQueue !== 'function') return;
+
+    appRuntime.syncInFlight = true;
+    updateSyncBadge();
+
+    try {
+        await syncQueue();
+    } catch (err) {
+        console.error('syncQueue failed:', err);
+    } finally {
+        appRuntime.syncInFlight = false;
+        updateSyncBadge();
+    }
+}
+
+// ============================================================
+// QR SCANNER
+// ============================================================
+function onQRScanned(text) {
+    try {
+        const data = JSON.parse(text);
+        if (data.id) {
+            setKooperant(data.id, data.name || data.id);
+            return;
+        }
+    } catch (e) {}
+
+    if (text.startsWith('KOOP-')) {
+        const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === text);
+        setKooperant(text, koop ? (koop.Ime + ' ' + koop.Prezime) : text);
+        return;
+    }
+
+    showToast('Nepoznat QR kod', 'error');
+}
+
+function setKooperant(id, name) {
+    const fldKooperantID = document.getElementById('fldKooperantID');
+    const koopName = document.getElementById('koopName');
+    const koopId = document.getElementById('koopId');
+    const koopDisplay = document.getElementById('koopDisplay');
+
+    if (fldKooperantID) fldKooperantID.value = id;
+    if (koopName) koopName.textContent = name;
+    if (koopId) koopId.textContent = id;
+    if (koopDisplay) koopDisplay.classList.add('visible');
+
+    showToast('Kooperant: ' + name, 'success');
+
+    if (typeof populateParcelaDropdown === 'function') {
+        populateParcelaDropdown(id);
+    }
+}
+
+function startVozacQRScan() {
+    const readerDiv = document.getElementById('qr-reader-vozac');
+    if (!readerDiv) return;
+
+    readerDiv.style.display = 'block';
+
+    const scanner = new Html5Qrcode('qr-reader-vozac');
+    scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            onVozacQRScanned(decodedText);
+            scanner.stop().then(() => {
+                readerDiv.style.display = 'none';
+            }).catch(() => {
+                readerDiv.style.display = 'none';
+            });
+        },
+        () => {}
+    ).catch(err => {
+        showToast('Kamera nije dostupna: ' + err, 'error');
+        readerDiv.style.display = 'none';
+    });
+}
+
+function onVozacQRScanned(text) {
+    try {
+        const data = JSON.parse(text);
+        if (data.type === 'VOZ' && data.id) {
+            setVozac(data.id, data.name || data.id);
+            return;
+        }
+    } catch (e) {}
+
+    if (text.startsWith('VOZ-')) {
+        setVozac(text, text);
+        return;
+    }
+
+    showToast('Nije QR vozača', 'error');
+}
+
+function setVozac(id, name) {
+    const fldVozacID = document.getElementById('fldVozacID');
+    const vozacName = document.getElementById('vozacName');
+    const vozacId = document.getElementById('vozacId');
+    const vozacDisplay = document.getElementById('vozacDisplay');
+
+    if (fldVozacID) fldVozacID.value = id;
+    if (vozacName) vozacName.textContent = name;
+    if (vozacId) vozacId.textContent = id;
+    if (vozacDisplay) vozacDisplay.classList.add('visible');
+
+    showToast('Vozač: ' + name, 'success');
+}
+
+function clearVozac() {
+    const fldVozacID = document.getElementById('fldVozacID');
+    const vozacDisplay = document.getElementById('vozacDisplay');
+
+    if (fldVozacID) fldVozacID.value = '';
+    if (vozacDisplay) vozacDisplay.classList.remove('visible');
+}
+
+// ============================================================
+// QR PROFILE
+// ============================================================
+function showQRProfile() {
+    const modal = document.getElementById('qrProfileModal');
+    const nameEl = document.getElementById('qrProfileName');
+    const roleEl = document.getElementById('qrProfileRole');
+    const idEl = document.getElementById('qrProfileID');
+
+    if (!modal || !nameEl || !roleEl || !idEl) return;
+
+    nameEl.textContent = CONFIG.ENTITY_NAME;
+    roleEl.textContent = CONFIG.USER_ROLE;
+    idEl.textContent = CONFIG.ENTITY_ID;
+    modal.style.display = 'flex';
+
+    generateQRCode('qrProfileCanvas', JSON.stringify({
+        type:
+            CONFIG.USER_ROLE === 'Kooperant' ? 'KOOP' :
+            CONFIG.USER_ROLE === 'Otkupac' ? 'OTK' :
+            CONFIG.USER_ROLE === 'Vozac' ? 'VOZ' : 'MGMT',
+        id: CONFIG.ENTITY_ID,
+        name: CONFIG.ENTITY_NAME
+    }));
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function safeCall(fn) {
+    try {
+        return fn();
+    } catch (err) {
+        console.error('safeCall failed:', err);
+    }
 }
 
 // ============================================================
@@ -293,9 +448,18 @@ function fmtStanica(stanicaID) {
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then(reg => {
         setInterval(() => reg.update(), 60000);
+
         reg.addEventListener('updatefound', () => {
             const nw = reg.installing;
-            nw.addEventListener('statechange', () => { if (nw.state === 'activated') showToast('Nova verzija učitana', 'info'); });
+            if (!nw) return;
+
+            nw.addEventListener('statechange', () => {
+                if (nw.state === 'activated') {
+                    showToast('Nova verzija učitana', 'info');
+                }
+            });
         });
-    }).catch(err => console.log('SW registration failed:', err));
+    }).catch(err => {
+        console.log('SW registration failed:', err);
+    });
 }
