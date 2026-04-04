@@ -26,10 +26,10 @@ async function loadMgmtFakture() {
         const saldo = parseFloat(r.Saldo) || 0;
         const bc = saldo <= 0 ? 'var(--success)' : 'var(--danger)';
         return `<div class="queue-item" style="border-left-color:${bc};cursor:pointer;" onclick="toggleFakturaStavke('${r.FakturaID}', this)">
-            <div class="qi-header"><span class="qi-koop">${r.BrojFakture || r.FakturaID}</span><span class="qi-time">${fmtDate(r.Datum)}</span></div>
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojFakture || r.FakturaID)}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
             <div class="qi-detail">Iznos: <strong>${iznos.toLocaleString('sr')}</strong> | Plaćeno: ${placeno.toLocaleString('sr')} | Saldo: <strong>${saldo.toLocaleString('sr')}</strong></div>
-            <div class="qi-detail" style="font-size:11px;margin-top:2px;">${r.Status || ''}${r.SEFStatus ? ' | SEF: ' + r.SEFStatus : ''}</div>
-            <div class="faktura-stavke" id="stavke-${r.FakturaID}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #eee;"></div>
+            <div class="qi-detail" style="font-size:11px;margin-top:2px;">${escapeHtml(r.Status || '')}${r.SEFStatus ? ' | SEF: ' + escapeHtml(r.SEFStatus) : ''}</div>
+            <div class="faktura-stavke" id="stavke-${escapeHtml(r.FakturaID)}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #eee;"></div>
         </div>`;
     }).join('');
 }
@@ -55,9 +55,9 @@ async function toggleFakturaStavke(fakturaID, parentEl) {
     div.innerHTML = `<table style="width:100%;font-size:11px;border-collapse:collapse;">
         <tr style="color:var(--text-muted);"><td>Prijemnica</td><td>Zbirna</td><td>Klasa</td><td style="text-align:right;">Kg</td><td style="text-align:right;">Cena</td><td style="text-align:right;">Iznos</td></tr>
         ${stavke.map(s => `<tr style="border-top:1px solid #f0f0f0;">
-            <td>${s.BrojPrijemnice || s.PrijemnicaID || ''}</td>
-            <td>${s.BrojZbirne || ''}</td>
-            <td>${s.Klasa || ''}</td>
+            <td>${escapeHtml(s.BrojPrijemnice || s.PrijemnicaID || '')}</td>
+            <td>${escapeHtml(s.BrojZbirne || '')}</td>
+            <td>${escapeHtml(s.Klasa || '')}</td>
             <td style="text-align:right;">${(parseFloat(s.Kolicina) || 0).toLocaleString('sr')}</td>
             <td style="text-align:right;">${(parseFloat(s.Cena) || 0).toLocaleString('sr')}</td>
             <td style="text-align:right;font-weight:600;">${(parseFloat(s.Iznos) || 0).toLocaleString('sr')}</td>
@@ -73,7 +73,7 @@ function loadMgmtKupci() {
         const saldo = parseFloat(r.Saldo)||0;
         const bc = saldo > 0 ? 'var(--danger)' : 'var(--success)';
         return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">${r.Kupac||r.KupacID||''}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.Kupac||r.KupacID||'')}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
             <div class="qi-detail">Fakturisano: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} | Placeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div></div>`;
     }).join('');
 }
@@ -91,9 +91,9 @@ function loadMgmtPredato() {
     });
     list.innerHTML = Object.entries(grouped).map(([kupac, g]) =>
         `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--accent);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${kupac}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${escapeHtml(kupac)}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD</div>
-            ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${r.VrstaVoca} ${r.Klasa}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${r.BrojPrijemnica||0} prij.</span></div>`; }).join('')}
+            ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${escapeHtml(r.VrstaVoca)} ${escapeHtml(r.Klasa)}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${escapeHtml(r.BrojPrijemnica||0)} prij.</span></div>`; }).join('')}
         </div>`).join('');
 }
 
