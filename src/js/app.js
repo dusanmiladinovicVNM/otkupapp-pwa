@@ -30,8 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const otpDatumEl = document.getElementById('fldOtpremniceDatum');
         if (otpDatumEl) otpDatumEl.value = today;
     }
+
     if (CONFIG.USER_ROLE === 'Kooperant') {
-        populateAgroParcele();
+        agroPopulateParcele();
+    }
     }
     if (CONFIG.USER_ROLE === 'Management') {
         populateMgmtStanice();
