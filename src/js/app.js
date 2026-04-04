@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (CONFIG.USER_ROLE === 'Kooperant') {
         agroPopulateParcele();
     }
-    }
+    
     if (CONFIG.USER_ROLE === 'Management') {
         populateMgmtStanice();
         const today = new Date().toISOString().split('T')[0];
