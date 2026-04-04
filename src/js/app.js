@@ -240,7 +240,45 @@ async function loadStammdaten() {
         }
     }, 'Greška pri učitavanju šifarnika');
 }
-    
+
+async function loadStammdatenFromCache() {
+    const db = AppState.get('db');
+    if (!db) throw new Error('DB nije inicijalizovan');
+
+    await safeAsync(async () => {
+        const cached = await dbGetAll(db, CONFIG.STAMM_STORE);
+        const obj = cached.find(c => c.key === 'all');
+
+        if (obj && obj.data) {
+            AppState.set('stammdaten', obj.data);
+        }
+    }, 'Greška pri čitanju lokalnih šifarnika');
+}
+
+async function refreshStammdatenInBackground() {
+    if (!navigator.onLine) return;
+
+    await safeAsync(async () => {
+        const json = await apiFetch('action=getStammdaten');
+        if (!(json && json.success && json.data)) return;
+
+        AppState.set('stammdaten', json.data);
+
+        const db = AppState.get('db');
+        await dbPut(db, CONFIG.STAMM_STORE, {
+            key: 'all',
+            data: json.data,
+            updatedAt: new Date().toISOString()
+        });
+
+        window.dispatchEvent(new CustomEvent('stammdaten:updated', {
+            detail: { source: 'network' }
+        }));
+    }, 'Greška pri osvežavanju šifarnika');
+}
+
+
+
 function fmtStanica(stanicaID) {
     if (!stanicaID) return '';
     const s = (stammdaten.stanice || []).find(s => s.StanicaID === stanicaID);
