@@ -367,30 +367,43 @@ function cancelOtprema() {
 }
 
 async function loadOtpremaOverview() {
-    const today = new Date().toISOString().split('T')[0];
-    
     const local = await dbGetAll(db, CONFIG.STORE_NAME);
-    
+
     let server = [];
     const json = await safeAsync(async () => {
         return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
     }, 'Greška pri učitavanju otpreme');
-    if (json && json.success && json.records) server = json.records.map(r => ({
-             clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum),
-             kooperantID: r.KooperantID || '', kooperantName: r.KooperantName || r.KooperantID || '',
-             vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
-             klasa: r.Klasa || 'I', kolicina: parseFloat(r.Kolicina) || 0,
-             cena: parseFloat(r.Cena) || 0, kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-             parcelaID: r.ParcelaID || '', vozacID: r.VozacID || r.VozaciID || '',
-             napomena: r.Napomena || '', syncStatus: 'synced'
+
+    if (json && json.success && json.records) {
+        server = json.records.map(r => ({
+            clientRecordID: r.ClientRecordID || '',
+            datum: fmtDate(r.Datum),
+            kooperantID: r.KooperantID || '',
+            kooperantName: r.KooperantName || r.KooperantID || '',
+            vrstaVoca: r.VrstaVoca || '',
+            sortaVoca: r.SortaVoca || '',
+            klasa: r.Klasa || 'I',
+            kolicina: parseFloat(r.Kolicina) || 0,
+            cena: parseFloat(r.Cena) || 0,
+            kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
+            parcelaID: r.ParcelaID || '',
+            vozacID: r.VozacID || r.VozaciID || '',
+            napomena: r.Napomena || '',
+            syncStatus: 'synced'
         }));
-    
+    }
+
     const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
+    const all = [
+        ...server,
+        ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))
+    ];
+
     const unassigned = all.filter(r => !r.vozacID);
     unassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+
     const assigned = all.filter(r => r.vozacID);
-    
+
     const uList = document.getElementById('otpremaUnassignedList');
     if (unassigned.length === 0) {
         uList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Svi otkupi su raspoređeni</p>';
@@ -399,11 +412,11 @@ async function loadOtpremaOverview() {
             const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
             return `<div class="queue-item" style="border-left-color:var(--warning);">
                 <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
-                <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} | ${r.kolicina} kg | ${vr} RSD</div>
+                <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} ${escapeHtml(r.klasa || 'I')} | ${r.kolicina} kg | ${vr} RSD</div>
             </div>`;
         }).join('');
     }
-    
+
     const aList = document.getElementById('otpremaAssignedList');
     if (assigned.length === 0) {
         aList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Nema otprema za danas</p>';
@@ -415,13 +428,15 @@ async function loadOtpremaOverview() {
             grouped[v].items.push(r);
             grouped[v].kg += r.kolicina || 0;
         });
+
         aList.innerHTML = Object.entries(grouped).map(([vozID, g]) =>
             `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--success);">
                 <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                    <strong style="color:var(--primary);">🚛 ${vozID}</strong>
+                    <strong style="color:var(--primary);">🚛 ${escapeHtml(vozID)}</strong>
                     <span style="font-weight:600;">${g.kg.toLocaleString('sr')} kg | ${g.items.length} otk.</span>
                 </div>
                 ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa || '')} | ${r.kolicina} kg</div>`).join('')}
-            </div>`).join('');
+            </div>`
+        ).join('');
     }
 }
