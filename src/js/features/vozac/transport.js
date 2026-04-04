@@ -8,7 +8,7 @@
     list.innerHTML = local.map(r => {
         const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
         return `<div class="queue-item">
-            <div class="qi-header"><span class="qi-koop">🏭 ${r.kupacName || r.kupacID}</span><span class="qi-time">${r.datum}</span></div>
+            <div class="qi-header"><span class="qi-koop">🏭 ${escapeHtml(r.kupacName || r.kupacID)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
             <div class="qi-detail">${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0} | ${r.syncStatus === 'synced' ? '✅' : '⏳'}</div>
         </div>`;
     }).join('');
