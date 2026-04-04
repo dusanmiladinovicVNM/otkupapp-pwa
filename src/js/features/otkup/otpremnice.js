@@ -56,21 +56,48 @@ function showOtkupniList(record) {
 }
 
 async function saveOtkupniListWithSignatures(clientRecordID) {
-    const sigO = getSignatureData('sigOtkupac'), sigK = getSignatureData('sigKooperant');
-    if (!sigO) { showToast('Potpišite se kao otkupljivač!', 'error'); return; }
-    if (!sigK) { showToast('Kooperant mora da se potpiše!', 'error'); return; }
+    const sigO = getSignatureData('sigOtkupac');
+    const sigK = getSignatureData('sigKooperant');
+
+    if (!sigO) {
+        showToast('Potpišite se kao otkupljivač!', 'error');
+        return;
+    }
+
+    if (!sigK) {
+        showToast('Kooperant mora da se potpiše!', 'error');
+        return;
+    }
+
     try {
         const r = await dbGet(db, CONFIG.STORE_NAME, clientRecordID);
-        if (r) {
-            r.sigOtkupac = sigO;
-            r.sigKooperant = sigK;
-            r.signedAt = new Date().toISOString();
-            await dbPut(db, CONFIG.STORE_NAME, r);
+
+        if (!r) {
+            showToast('Zapis nije pronađen', 'error');
+            return;
         }
-        req.onsuccess = () => { const r = req.result; if (r) { r.sigOtkupac = sigO; r.sigKooperant = sigK; r.signedAt = new Date().toISOString(); store.put(r); } };
-    } catch (e) {}
-    showToast('Otkupni list potpisan!', 'success');
-    document.getElementById('otkupniListModal').style.display = 'none';
+
+        r.sigOtkupac = sigO;
+        r.sigKooperant = sigK;
+        r.signedAt = new Date().toISOString();
+
+        // ne diraj syncStatus ako su potpisi samo lokalni artefakt
+        // ako želiš da i potpisi idu na server, ovde bi išlo:
+        // r.updatedAtClient = new Date().toISOString();
+        // r.syncStatus = 'pending';
+        // r.lastSyncError = '';
+        // r.lastServerStatus = '';
+
+        await dbPut(db, CONFIG.STORE_NAME, r);
+
+        showToast('Otkupni list potpisan!', 'success');
+
+        const modal = document.getElementById('otkupniListModal');
+        if (modal) modal.style.display = 'none';
+    } catch (e) {
+        console.error('saveOtkupniListWithSignatures failed:', e);
+        showToast('Greška pri čuvanju potpisa', 'error');
+    }
 }
 
 async function savePdfToDrive(clientRecordID) {
@@ -256,32 +283,47 @@ function onOtpremaVozacScanned(text) {
 }
 
 async function showOtpremaAssignView() {
-    document.getElementById('otpremaMainView').style.display = 'none';
-    document.getElementById('otpremaAssignView').style.display = 'block';
+    const mainView = document.getElementById('otpremaMainView');
+    const assignView = document.getElementById('otpremaAssignView');
 
-    const today = new Date().toISOString().split('T')[0];
-    
-    const local = await dbGetAll(db, CONFIG.STORE_NAME);
-    
+    if (mainView) mainView.style.display = 'none';
+    if (assignView) assignView.style.display = 'block';
+
+    let local = [];
     let server = [];
+
     try {
-        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-        if (json && json.success && json.records) server = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum),
-            kooperantID: r.KooperantID || '', kooperantName: r.KooperantName || r.KooperantID || '',
-            vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I', kolicina: parseFloat(r.Kolicina) || 0,
-            cena: parseFloat(r.Cena) || 0, kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-            parcelaID: r.ParcelaID || '', vozacID: r.VozacID || r.VozaciID || '',
-            napomena: r.Napomena || '', syncStatus: 'synced'
-        }));
-    } catch (e) {}
-    
-    const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
-    
+        local = await dbGetAll(db, CONFIG.STORE_NAME);
+    } catch (err) {
+        console.error('showOtpremaAssignView local failed:', err);
+    }
+
+    if (navigator.onLine) {
+        try {
+            const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+            if (json && json.success && Array.isArray(json.records)) {
+                server = json.records.map(mapServerOtpremaRecord);
+            }
+        } catch (e) {
+            console.error('showOtpremaAssignView server failed:', e);
+        }
+    }
+
+    const all = mergeOtpremaRecords(local, server);
+
     otpremaUnassigned = all.filter(r => !r.vozacID);
-    otpremaUnassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    otpremaUnassigned.sort((a, b) => {
+        const byDate = (b.datum || '').localeCompare(a.datum || '');
+        if (byDate !== 0) return byDate;
+
+        const byTime = String(b.updatedAtClient || b.createdAtClient || '').localeCompare(
+            String(a.updatedAtClient || a.createdAtClient || '')
+        );
+        if (byTime !== 0) return byTime;
+
+        return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
+    });
+
     renderOtpremaCheckboxes();
 }
 
@@ -337,25 +379,54 @@ function updateOtpremaSummary() {
 }
 
 async function confirmOtprema() {
-    if (!otpremaVozacID) { showToast('Nema vozača', 'error'); return; }
-    
-    let count = 0;
+    if (!otpremaVozacID) {
+        showToast('Nema vozača', 'error');
+        return;
+    }
+
+    const selected = [];
+
     for (let i = 0; i < otpremaUnassigned.length; i++) {
         const chk = document.getElementById('otpChk' + i);
         if (chk && chk.checked) {
-            otpremaUnassigned[i].vozacID = otpremaVozacID;
-            otpremaUnassigned[i].syncStatus = 'pending';
-            await dbPut(db, CONFIG.STORE_NAME, otpremaUnassigned[i]);
-            count++;
+            selected.push(otpremaUnassigned[i]);
         }
     }
-    
-    if (count === 0) { showToast('Izaberite bar jedan otkup', 'error'); return; }
-    
-    showToast(count + ' otkupa dodeljeno vozaču', 'success');
-    cancelOtprema();
-    loadOtpremaOverview();
-    if (navigator.onLine) syncQueue();
+
+    if (selected.length === 0) {
+        showToast('Izaberite bar jedan otkup', 'error');
+        return;
+    }
+
+    try {
+        const nowIso = new Date().toISOString();
+
+        for (const item of selected) {
+            item.vozacID = otpremaVozacID;
+            item.updatedAtClient = nowIso;
+            item.syncStatus = 'pending';
+            item.lastSyncError = '';
+            item.lastServerStatus = '';
+            item.syncAttemptAt = '';
+            await dbPut(db, CONFIG.STORE_NAME, item);
+        }
+
+        showToast(selected.length + ' otkupa dodeljeno vozaču', 'success');
+
+        cancelOtprema();
+        await loadOtpremaOverview();
+
+        if (navigator.onLine) {
+            if (typeof syncQueueSafe === 'function') {
+                await syncQueueSafe();
+            } else if (typeof syncQueue === 'function') {
+                await syncQueue();
+            }
+        }
+    } catch (err) {
+        console.error('confirmOtprema failed:', err);
+        showToast('Greška pri dodeli otkupa vozaču', 'error');
+    }
 }
 
 function cancelOtprema() {
@@ -367,37 +438,26 @@ function cancelOtprema() {
 }
 
 async function loadOtpremaOverview() {
-    const local = await dbGetAll(db, CONFIG.STORE_NAME);
-
+    let local = [];
     let server = [];
-    const json = await safeAsync(async () => {
-        return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-    }, 'Greška pri učitavanju otpreme');
 
-    if (json && json.success && json.records) {
-        server = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '',
-            datum: fmtDate(r.Datum),
-            kooperantID: r.KooperantID || '',
-            kooperantName: r.KooperantName || r.KooperantID || '',
-            vrstaVoca: r.VrstaVoca || '',
-            sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I',
-            kolicina: parseFloat(r.Kolicina) || 0,
-            cena: parseFloat(r.Cena) || 0,
-            kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-            parcelaID: r.ParcelaID || '',
-            vozacID: r.VozacID || r.VozaciID || '',
-            napomena: r.Napomena || '',
-            syncStatus: 'synced'
-        }));
+    try {
+        local = await dbGetAll(db, CONFIG.STORE_NAME);
+    } catch (err) {
+        console.error('loadOtpremaOverview local failed:', err);
     }
 
-    const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [
-        ...server,
-        ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))
-    ];
+    if (navigator.onLine) {
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        }, 'Greška pri učitavanju otpreme');
+
+        if (json && json.success && Array.isArray(json.records)) {
+            server = json.records.map(mapServerOtpremaRecord);
+        }
+    }
+
+    const all = mergeOtpremaRecords(local, server);
 
     const unassigned = all.filter(r => !r.vozacID);
     unassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -405,38 +465,157 @@ async function loadOtpremaOverview() {
     const assigned = all.filter(r => r.vozacID);
 
     const uList = document.getElementById('otpremaUnassignedList');
-    if (unassigned.length === 0) {
-        uList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Svi otkupi su raspoređeni</p>';
-    } else {
-        uList.innerHTML = unassigned.map(r => {
-            const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-            return `<div class="queue-item" style="border-left-color:var(--warning);">
-                <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
-                <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} ${escapeHtml(r.klasa || 'I')} | ${r.kolicina} kg | ${vr} RSD</div>
-            </div>`;
-        }).join('');
+    if (uList) {
+        if (unassigned.length === 0) {
+            uList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Svi otkupi su raspoređeni</p>';
+        } else {
+            uList.innerHTML = unassigned.map(r => {
+                const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr-RS');
+                const statusText =
+                    r.syncStatus === 'syncing' ? ' | sync...' :
+                    r.syncStatus === 'pending' ? ' | pending' : '';
+
+                return `<div class="queue-item" style="border-left-color:var(--warning);">
+                    <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
+                    <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} ${escapeHtml(r.klasa || 'I')} | ${r.kolicina} kg | ${vr} RSD${statusText}</div>
+                </div>`;
+            }).join('');
+        }
     }
 
     const aList = document.getElementById('otpremaAssignedList');
-    if (assigned.length === 0) {
-        aList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Nema otprema za danas</p>';
-    } else {
-        const grouped = {};
-        assigned.forEach(r => {
-            const v = r.vozacID;
-            if (!grouped[v]) grouped[v] = { items: [], kg: 0 };
-            grouped[v].items.push(r);
-            grouped[v].kg += r.kolicina || 0;
-        });
+    if (aList) {
+        if (assigned.length === 0) {
+            aList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Nema otprema za danas</p>';
+        } else {
+            const grouped = {};
 
-        aList.innerHTML = Object.entries(grouped).map(([vozID, g]) =>
-            `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--success);">
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                    <strong style="color:var(--primary);">🚛 ${escapeHtml(vozID)}</strong>
-                    <span style="font-weight:600;">${g.kg.toLocaleString('sr')} kg | ${g.items.length} otk.</span>
-                </div>
-                ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa || '')} | ${r.kolicina} kg</div>`).join('')}
-            </div>`
-        ).join('');
+            assigned.forEach(r => {
+                const v = r.vozacID;
+                if (!grouped[v]) grouped[v] = { items: [], kg: 0 };
+                grouped[v].items.push(r);
+                grouped[v].kg += r.kolicina || 0;
+            });
+
+            aList.innerHTML = Object.entries(grouped).map(([vozID, g]) =>
+                `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--success);">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                        <strong style="color:var(--primary);">🚛 ${escapeHtml(vozID)}</strong>
+                        <span style="font-weight:600;">${g.kg.toLocaleString('sr-RS')} kg | ${g.items.length} otk.</span>
+                    </div>
+                    ${g.items.map(r => {
+                        const st =
+                            r.syncStatus === 'syncing' ? ' (sync...)' :
+                            r.syncStatus === 'pending' ? ' (pending)' : '';
+                        return `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa || '')} | ${r.kolicina} kg${escapeHtml(st)}</div>`;
+                    }).join('')}
+                </div>`
+            ).join('');
+        }
+    }
+}
+
+
+//HELPERS
+function mapServerOtpremaRecord(r) {
+    return {
+        clientRecordID: r.ClientRecordID || '',
+        serverRecordID: r.ServerRecordID || '',
+        createdAtClient: normalizeDateTime(r.CreatedAtClient),
+        updatedAtClient: normalizeDateTime(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeDateTime(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: normalizeDateTime(r.UpdatedAtServer || r.ReceivedAt),
+
+        datum: fmtDate(r.Datum),
+        kooperantID: r.KooperantID || '',
+        kooperantName: r.KooperantName || r.KooperantID || '',
+        vrstaVoca: r.VrstaVoca || '',
+        sortaVoca: r.SortaVoca || '',
+        klasa: r.Klasa || 'I',
+        kolicina: parseFloat(r.Kolicina) || 0,
+        cena: parseFloat(r.Cena) || 0,
+        kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
+        parcelaID: r.ParcelaID || '',
+        vozacID: r.VozacID || r.VozaciID || '',
+        napomena: r.Napomena || '',
+
+        syncStatus: 'synced',
+        syncAttempts: 0,
+        lastSyncError: '',
+        lastServerStatus: 'server'
+    };
+}
+
+function normalizeLocalOtpremaRecord(r) {
+    return {
+        clientRecordID: r.clientRecordID || '',
+        serverRecordID: r.serverRecordID || '',
+        createdAtClient: normalizeDateTime(r.createdAtClient),
+        updatedAtClient: normalizeDateTime(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: normalizeDateTime(r.updatedAtServer),
+        syncedAt: normalizeDateTime(r.syncedAt),
+
+        datum: r.datum || '',
+        kooperantID: r.kooperantID || '',
+        kooperantName: r.kooperantName || r.kooperantID || '',
+        vrstaVoca: r.vrstaVoca || '',
+        sortaVoca: r.sortaVoca || '',
+        klasa: r.klasa || 'I',
+        kolicina: parseFloat(r.kolicina) || 0,
+        cena: parseFloat(r.cena) || 0,
+        kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
+        parcelaID: r.parcelaID || '',
+        vozacID: r.vozacID || '',
+        napomena: r.napomena || '',
+
+        syncStatus: r.syncStatus || 'pending',
+        syncAttempts: parseInt(r.syncAttempts, 10) || 0,
+        lastSyncError: r.lastSyncError || '',
+        lastServerStatus: r.lastServerStatus || ''
+    };
+}
+
+function mergeOtpremaRecords(local, server) {
+    const merged = new Map();
+
+    (server || []).forEach(r => {
+        if (r && r.clientRecordID) merged.set(r.clientRecordID, r);
+    });
+
+    (local || []).forEach(r => {
+        if (!r || !r.clientRecordID) return;
+
+        const localNorm = normalizeLocalOtpremaRecord(r);
+        const existing = merged.get(localNorm.clientRecordID);
+
+        if (!existing) {
+            merged.set(localNorm.clientRecordID, localNorm);
+            return;
+        }
+
+        if (localNorm.syncStatus === 'pending' || localNorm.syncStatus === 'syncing') {
+            merged.set(localNorm.clientRecordID, localNorm);
+            return;
+        }
+
+        const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
+        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
+
+        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
+            merged.set(localNorm.clientRecordID, localNorm);
+        }
+    });
+
+    return Array.from(merged.values());
+}
+
+function normalizeDateTime(value) {
+    if (!value) return '';
+    try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        return d.toISOString();
+    } catch (_) {
+        return String(value);
     }
 }
