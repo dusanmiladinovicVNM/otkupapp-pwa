@@ -31,6 +31,6 @@ async function loadOtkupPregled() {
     list.innerHTML = all.map(r => {
         const v = ((r.kolicina||0)*(r.cena||0)).toLocaleString('sr');
         const bc = r.syncStatus==='pending' ? 'var(--warning)' : 'var(--success)';
-        return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div><div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca||''} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID?' | '+r.parcelaID:''}</div></div>`;
+        return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div><div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca||'')} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID ? ' | ' + escapeHtml(r.parcelaID) : ''}</div></div>`;
     }).join('');
 }
