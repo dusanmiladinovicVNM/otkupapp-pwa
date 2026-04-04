@@ -1,6 +1,8 @@
 // ============================================================
 // DIGITALNI AGRONOM — Kooperant Agromere Tab
+// PATCHED FOR OFFLINE-FIRST + SYNC CONSISTENCY
 // ============================================================
+
 let agroState = {
     parcelaID: '',
     parcelaData: null,
@@ -22,8 +24,8 @@ let agroState = {
     meteoOverride: false,
     meteoSnapshot: null,
     karencaDana: 0,
-    lager: [],        // artikli na lageru ovog kooperanta
-    opremaList: [],   // oprema ovog kooperanta
+    lager: [],
+    opremaList: [],
     geoWatchId: null
 };
 
@@ -43,15 +45,21 @@ const OPREMA_PREDLOZI = {
 async function loadAgronom() {
     await safeAsync(async () => {
         agroResetState();
-        // Load lager (iz stammdaten.magacinkoop)
         agroLoadLager();
-        // Load oprema (sa servera + lokalna)
         await agroLoadOprema();
         agroPopulateParcele();
         agroStartGeo();
-        agroLoadIstorija();
-        document.getElementById('agroStep1').style.display = 'block';
-        document.getElementById('agroStep2').style.display = 'none';
+        await agroLoadIstorija();
+
+        const step1 = document.getElementById('agroStep1');
+        const step2 = document.getElementById('agroStep2');
+        if (step1) step1.style.display = 'block';
+        if (step2) step2.style.display = 'none';
+
+        // background sync if online
+        if (navigator.onLine && typeof syncTretmani === 'function') {
+            syncTretmani().catch(err => console.error('syncTretmani background failed:', err));
+        }
     }, 'Greška pri učitavanju digitalnog agronoma');
 }
 
@@ -60,27 +68,57 @@ function agroResetState() {
     if (agroState.geoWatchId) navigator.geolocation.clearWatch(agroState.geoWatchId);
 
     agroState = {
-        parcelaID: '', parcelaData: null, mera: '', artikalID: '', artikalData: null,
-        kolicina: 0, dozaPreporucena: 0, opremaTraktor: '', opremaPrskalica: '',
-        opremaOstalo: '', napomena: '', timerStart: null, timerInterval: null,
-        timerResult: null, geoStart: null, geoEnd: null, geoAutoDetect: false,
-        meteoOverride: false, meteoSnapshot: null, karencaDana: 0,
-        lager: agroState.lager || [], opremaList: agroState.opremaList || [],
+        parcelaID: '',
+        parcelaData: null,
+        mera: '',
+        artikalID: '',
+        artikalData: null,
+        kolicina: 0,
+        dozaPreporucena: 0,
+        opremaTraktor: '',
+        opremaPrskalica: '',
+        opremaOstalo: '',
+        napomena: '',
+        timerStart: null,
+        timerInterval: null,
+        timerResult: null,
+        geoStart: null,
+        geoEnd: null,
+        geoAutoDetect: false,
+        meteoOverride: false,
+        meteoSnapshot: null,
+        karencaDana: 0,
+        lager: agroState.lager || [],
+        opremaList: agroState.opremaList || [],
         geoWatchId: null
     };
 
-    // Reset UI
-    document.querySelectorAll('.agro-mera-btn').forEach(b => b.classList.remove('selected'));
-    document.getElementById('agroPreparatSection').classList.remove('visible');
-    document.getElementById('agroPreporuka').classList.remove('visible');
-    document.getElementById('agroKarencaWarn').classList.remove('visible');
-    document.getElementById('agroMeteoWarn').classList.remove('visible');
-    document.getElementById('agroTimerPanel').style.display = 'none';
-    document.getElementById('agroBtnStart').style.display = 'none';
-    document.getElementById('agroBtnStop').style.display = 'none';
-    document.getElementById('agroTimerSticky').classList.remove('active');
-    const karInfo = document.getElementById('agroKarencaInfo');
-    if (karInfo) karInfo.style.display = 'none';
+    document.querySelectorAll('.agro-mera-btn').forEach(btn => btn.classList.remove('active'));
+
+    const idsToClear = [
+        'agroParcelaSel', 'agroArtikal', 'agroKolicina', 'agroNapomena',
+        'agroTraktor', 'agroPrskalica', 'agroOpremaOstalo',
+        'agroTraktorNovi', 'agroPrskalicaNovi',
+        'agroDozaCalc', 'agroJM', 'agroPreporukaCalc', 'agroPreporukaDetail'
+    ];
+
+    idsToClear.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if ('value' in el) el.value = '';
+        else el.textContent = '—';
+    });
+
+    const sticky = document.getElementById('agroTimerSticky');
+    if (sticky) sticky.style.display = 'none';
+
+    const timerPanel = document.getElementById('agroTimerPanel');
+    if (timerPanel) timerPanel.style.display = 'none';
+
+    const btnStart = document.getElementById('agroBtnStart');
+    const btnStop = document.getElementById('agroBtnStop');
+    if (btnStart) btnStart.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'none';
 }
 
 // ============================================================
@@ -106,24 +144,81 @@ function agroLoadLager() {
 }
 
 // ============================================================
-// OPREMA — sa servera + lokalna
+// OPREMA
+// Keeps current direct-save behavior, but hardens local merge
 // ============================================================
-
 async function agroLoadOprema() {
-    agroState.opremaList = [];
+    let serverList = [];
 
     const json = await safeAsync(async () => {
         return await apiFetch('action=getOprema&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
     }, 'Greška pri učitavanju opreme');
 
-    if (json && json.success && json.records) {
-        agroState.opremaList = json.records.map(r => ({
+    if (json && json.success && Array.isArray(json.records)) {
+        serverList = json.records.map(r => ({
+            clientRecordID: r.ClientRecordID || '',
             naziv: r.Naziv || '',
-            tip: r.Tip || ''
+            tip: r.Tip || '',
+            createdAt: agroNormalizeIso(r.CreatedAt),
+            source: 'server'
         }));
     }
 
-    agroPopulateOpremaDropdowns();
+    // lokalni fallback preko stammdaten / predloga / već unetih
+    const merged = new Map();
+
+    serverList.forEach(item => {
+        const key = (item.tip + '|' + item.naziv).trim().toLowerCase();
+        merged.set(key, item);
+    });
+
+    (agroState.opremaList || []).forEach(item => {
+        const key = ((item.tip || '') + '|' + (item.naziv || '')).trim().toLowerCase();
+        if (!merged.has(key) && item.naziv) merged.set(key, item);
+    });
+
+    ['Traktor', 'Prskalica'].forEach(tip => {
+        (OPREMA_PREDLOZI[tip] || []).forEach(naziv => {
+            const key = (tip + '|' + naziv).trim().toLowerCase();
+            if (!merged.has(key)) {
+                merged.set(key, { naziv, tip, source: 'preset' });
+            }
+        });
+    });
+
+    agroState.opremaList = Array.from(merged.values());
+    agroRenderOpremaSelects();
+}
+
+function agroRenderOpremaSelects() {
+    const traktorSel = document.getElementById('agroTraktor');
+    const prskalicaSel = document.getElementById('agroPrskalica');
+
+    if (traktorSel) {
+        traktorSel.innerHTML = '<option value="">-- Bez traktora --</option>';
+        agroState.opremaList
+            .filter(o => o.tip === 'Traktor')
+            .sort((a, b) => String(a.naziv || '').localeCompare(String(b.naziv || '')))
+            .forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.naziv;
+                opt.textContent = o.naziv;
+                traktorSel.appendChild(opt);
+            });
+    }
+
+    if (prskalicaSel) {
+        prskalicaSel.innerHTML = '<option value="">-- Bez prskalice --</option>';
+        agroState.opremaList
+            .filter(o => o.tip === 'Prskalica')
+            .sort((a, b) => String(a.naziv || '').localeCompare(String(b.naziv || '')))
+            .forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.naziv;
+                opt.textContent = o.naziv;
+                prskalicaSel.appendChild(opt);
+            });
+    }
 }
 
 function agroPopulateOpremaDropdowns() {
@@ -169,31 +264,63 @@ function agroPopulateOpremaDropdowns() {
     }
 }
 
-async function agroSaveNovaOprema(tip, naziv) {
-    if (!naziv || !naziv.trim()) return;
-    naziv = naziv.trim();
+async function agroSaveNovaOprema(tip, value) {
+    const naziv = String(value || '').trim();
+    if (!naziv) return;
 
-    // Sačuvaj na server
-    try {
-        await fetch(CONFIG.API_URL, {
-            method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'syncOprema', token: CONFIG.TOKEN,
-                kooperantID: CONFIG.ENTITY_ID,
-                records: [{ clientRecordID: crypto.randomUUID(), naziv: naziv, tip: tip }]
-            })
+    const exists = (agroState.opremaList || []).some(o =>
+        String(o.tip || '').toLowerCase() === String(tip || '').toLowerCase() &&
+        String(o.naziv || '').toLowerCase() === naziv.toLowerCase()
+    );
+
+    if (!exists) {
+        agroState.opremaList.push({
+            clientRecordID: agroGenerateClientRecordID('oprema'),
+            naziv,
+            tip,
+            createdAt: new Date().toISOString(),
+            source: 'local'
         });
-    } catch(e) {}
+        agroRenderOpremaSelects();
+    }
 
-    // Dodaj u lokalni niz i osveži dropdown
-    agroState.opremaList.push({ naziv: naziv, tip: tip });
-    agroPopulateOpremaDropdowns();
+    if (tip === 'Traktor') {
+        const sel = document.getElementById('agroTraktor');
+        if (sel) sel.value = naziv;
+        agroState.opremaTraktor = naziv;
+    } else if (tip === 'Prskalica') {
+        const sel = document.getElementById('agroPrskalica');
+        if (sel) sel.value = naziv;
+        agroState.opremaPrskalica = naziv;
+    }
 
-    // Auto-select
-    if (tip === 'Traktor') document.getElementById('agroTraktor').value = naziv;
-    if (tip === 'Prskalica') document.getElementById('agroPrskalica').value = naziv;
+    // backend save stays direct for now
+    if (navigator.onLine) {
+        try {
+            await apiPost('syncOprema', {
+                kooperantID: CONFIG.ENTITY_ID,
+                records: [{
+                    clientRecordID: agroGenerateClientRecordID('oprema'),
+                    naziv,
+                    tip
+                }]
+            });
+        } catch (e) {
+            console.error('agroSaveNovaOprema sync failed:', e);
+        }
+    }
+}
 
-    showToast('Oprema sačuvana: ' + naziv, 'success');
+// ============================================================
+// OPTIONAL: call after field changes if needed
+// ============================================================
+function agroMarkDraftDirty(record) {
+    if (!record) return record;
+    record.updatedAtClient = new Date().toISOString();
+    record.syncStatus = 'pending';
+    record.lastSyncError = '';
+    record.lastServerStatus = '';
+    return record;
 }
 
 // ============================================================
@@ -234,6 +361,7 @@ function onAgroParcelaChange() {
 }
 
 async function loadAgroMeteoStrip(parcelaID) {
+    window.meteoCache = window.meteoCache || {};
     const strip = document.getElementById('agroMeteoStrip');
     strip.style.display = 'flex';
 
@@ -276,47 +404,51 @@ async function loadAgroMeteoStrip(parcelaID) {
 async function checkAgroKarenca(parcelaID) {
     const warn = document.getElementById('agroKarencaWarn');
     const berbaBtn = document.getElementById('agroBerbaBtn');
+    if (!warn || !berbaBtn) return;
+
     warn.classList.remove('visible');
     berbaBtn.classList.remove('disabled');
 
-    // Čitaj tretmane sa servera
-    let tretmani = [];
+    let server = [];
+    let local = [];
+
     try {
         const json = await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-        if (json && json.success) tretmani = json.records || [];
-    } catch(e) {}
+        if (json && json.success && Array.isArray(json.records)) {
+            server = json.records.map(agroMapServerTretman);
+        }
+    } catch (e) {}
 
-    // Dodaj lokalne pending
     try {
-        const local = await dbGetAll(db, 'tretmani');
-        tretmani = [...tretmani, ...local.filter(r => r.syncStatus === 'pending')];
-    } catch(e) {}
+        local = await dbGetAll(db, 'tretmani');
+    } catch (e) {}
 
-    // Nađi poslednji tretman sa karencom za ovu parcelu
+    const tretmani = agroMergeTretmani(local, server);
+
     const parcelTretmani = tretmani.filter(t =>
-        t.ParcelaID === parcelaID && parseInt(t.KarencaDana) > 0
+        t.parcelaID === parcelaID && parseInt(t.karencaDana, 10) > 0 && !t.deleted
     );
 
     if (parcelTretmani.length === 0) return;
 
-    // Sortiraj po datumu desc
-    parcelTretmani.sort((a, b) => (b.Datum || b.datum || '').localeCompare(a.Datum || a.datum || ''));
+    parcelTretmani.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const last = parcelTretmani[0];
-    const datum = last.Datum || last.datum;
-    const karDana = parseInt(last.KarencaDana || last.karencaDana) || 0;
-    const prepNaziv = last.ArtikalNaziv || last.artikalNaziv || '?';
+    const datum = last.datum;
+    const karDana = parseInt(last.karencaDana, 10) || 0;
+    const prepNaziv = last.artikalNaziv || '?';
 
     const tretmanDate = new Date(datum);
     const berbeDate = new Date(tretmanDate.getTime() + karDana * 24 * 60 * 60 * 1000);
     const today = new Date();
-    today.setHours(0,0,0,0);
+    today.setHours(0, 0, 0, 0);
 
     if (berbeDate > today) {
         const ostalo = Math.ceil((berbeDate - today) / (24 * 60 * 60 * 1000));
         warn.classList.add('visible');
         document.getElementById('agroKarencaText').innerHTML =
             '<strong>' + escapeHtml(prepNaziv) + '</strong> — tretman ' + escapeHtml(datum) +
-            '<br>Berba dozvoljena: <strong>' + escapeHtml(berbeDate.toLocaleDateString('sr')) + '</strong> (još ' + escapeHtml(ostalo) + ' dana)';
+            '<br>Berba dozvoljena: <strong>' + escapeHtml(berbeDate.toLocaleDateString('sr')) +
+            '</strong> (još ' + escapeHtml(String(ostalo)) + ' dana)';
         berbaBtn.classList.add('disabled');
     }
 }
@@ -588,9 +720,12 @@ function agroCheckParcelaProximity(lat, lng) {
         onAgroParcelaChange();
     } else if (bestDist <= 200) {
         banner.className = 'agro-geo-banner nearby';
-        banner.innerHTML = '📍 Blizu parcele: <strong>' + escapeHtml(bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> (' +
-            escapeHtml(Math.round(bestDist)) + 'm) — <a href="#" onclick="document.getElementById(\'agroParcelaSel\').value=\'' +
-+           escapeHtml(bestMatch.ParcelaID) + '\';onAgroParcelaChange();return false;" style="color:#92400e;font-weight:700;">Izaberi</a>';
+        banner.innerHTML =
+            '📍 Blizu parcele: <strong>' + escapeHtml(bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> (' +
+            escapeHtml(String(Math.round(bestDist))) + 'm) — ' +
+            '<a href="#" onclick="document.getElementById(\'agroParcelaSel\').value=\'' +
+            String(bestMatch.ParcelaID).replace(/'/g, "\\'") +
+            '\';onAgroParcelaChange();return false;" style="color:#92400e;font-weight:700;">Izaberi</a>';
     }
 }
 
@@ -759,6 +894,7 @@ async function agroSaveTretman() {
     const art = agroState.artikalData;
     const timer = agroState.timerResult;
     const now = new Date();
+    const nowIso = now.toISOString();
 
     let datumBerbeDozvoljeno = '';
     if (agroState.karencaDana > 0) {
@@ -768,117 +904,123 @@ async function agroSaveTretman() {
     }
 
     const record = {
-        clientRecordID: crypto.randomUUID(),
-        createdAtClient: now.toISOString(),
+        clientRecordID: agroGenerateClientRecordID('tretman'),
+        serverRecordID: '',
+        createdAtClient: nowIso,
+        updatedAtClient: nowIso,
+        updatedAtServer: '',
+        syncedAt: '',
+
         kooperantID: CONFIG.ENTITY_ID,
         parcelaID: agroState.parcelaID,
-        datum: now.toISOString().split('T')[0],
+        datum: nowIso.split('T')[0],
         mera: agroState.mera,
+
         artikalID: art ? art.artikalID : '',
         artikalNaziv: art ? art.naziv : '',
         kolicinaUpotrebljena: agroState.kolicina || '',
         jedinicaMere: art ? art.jm : '',
         dozaPreporucena: agroState.dozaPreporucena || '',
         dozaPrimenjena: agroState.kolicina || '',
+
         opremaTraktor: agroState.opremaTraktor,
         opremaPrskalica: agroState.opremaPrskalica,
         opremaOstalo: agroState.opremaOstalo,
+
         karencaDana: agroState.karencaDana || '',
         datumBerbeDozvoljeno: datumBerbeDozvoljeno,
+
         vremePocetka: timer ? timer.pocetakISO : '',
         vremeZavrsetka: timer ? timer.zavrsetakISO : '',
         trajanjeMinuta: timer ? timer.trajanjeMinuta : '',
+
         geoLatStart: agroState.geoStart ? agroState.geoStart.lat : '',
         geoLngStart: agroState.geoStart ? agroState.geoStart.lng : '',
         geoLatEnd: agroState.geoEnd ? agroState.geoEnd.lat : '',
         geoLngEnd: agroState.geoEnd ? agroState.geoEnd.lng : '',
         geoAutoDetect: agroState.geoAutoDetect ? 'Da' : '',
+
         meteoTemp: agroState.meteoSnapshot ? agroState.meteoSnapshot.temp : '',
         meteoWind: agroState.meteoSnapshot ? agroState.meteoSnapshot.wind : '',
         meteoHumidity: agroState.meteoSnapshot ? agroState.meteoSnapshot.humidity : '',
         meteoOverride: agroState.meteoOverride ? 'Da' : '',
+
         napomena: agroState.napomena,
-        syncStatus: 'pending'
+
+        syncStatus: 'pending',
+        syncAttempts: 0,
+        syncAttemptAt: '',
+        lastSyncError: '',
+        lastServerStatus: '',
+        deleted: false,
+        entityType: 'tretman',
+        schemaVersion: 1
     };
 
-    // Save to IndexedDB
     await dbPut(db, 'tretmani', record);
     showToast('Tretman sačuvan!', 'success');
 
-    // Sync immediately
-    if (navigator.onLine) {
-        try {
-            const resp = await fetch(CONFIG.API_URL, {
-                method: 'POST', headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    action: 'syncTretman', token: CONFIG.TOKEN,
-                    kooperantID: CONFIG.ENTITY_ID,
-                    records: [record]
-                })
-            });
-            const json = await resp.json();
-            if (json.success) {
-                record.syncStatus = 'synced';
-                await dbPut(db, 'tretmani', record);
-            }
-        } catch(e) {}
+    try {
+        await agroLoadIstorija();
+    } catch (e) {
+        console.error('agroLoadIstorija after save failed:', e);
     }
 
-    // Reset
+    if (navigator.onLine && typeof syncTretmani === 'function') {
+        try {
+            await syncTretmani();
+        } catch (e) {
+            console.error('syncTretmani after save failed:', e);
+        }
+    }
+
     agroResetState();
     agroPopulateParcele();
-    agroLoadIstorija();
-    document.getElementById('agroStep1').style.display = 'block';
-    document.getElementById('agroStep2').style.display = 'none';
-}
+    await agroLoadIstorija();
 
+    const step1 = document.getElementById('agroStep1');
+    const step2 = document.getElementById('agroStep2');
+    if (step1) step1.style.display = 'block';
+    if (step2) step2.style.display = 'none';
+}
 // ============================================================
 // ISTORIJA
 // ============================================================
 async function agroLoadIstorija() {
-    const local = await dbGetAll(db, 'tretmani');
-
+    let local = [];
     let server = [];
+
+    try {
+        local = await dbGetAll(db, 'tretmani');
+    } catch (e) {
+        console.error('agroLoadIstorija local failed:', e);
+    }
+
     const json = await safeAsync(async () => {
         return await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
     }, 'Greška pri učitavanju istorije tretmana');
 
-    if (json && json.success && json.records) {
-        server = json.records.map(r => ({
-            mera: r.Mera || '',
-            datum: fmtDate(r.Datum),
-            parcelaID: r.ParcelaID || '',
-            artikalNaziv: r.ArtikalNaziv || '',
-            kolicinaUpotrebljena: r.KolicinaUpotrebljena || '',
-            jedinicaMere: r.JedinicaMere || '',
-            trajanjeMinuta: r.TrajanjeMinuta || '',
-            opremaTraktor: r.OpremaTraktor || '',
-            karencaDana: r.KarencaDana || '',
-            datumBerbeDozvoljeno: r.DatumBerbeDozvoljeno || '',
-            syncStatus: 'synced'
-        }));
+    if (json && json.success && Array.isArray(json.records)) {
+        server = json.records.map(agroMapServerTretman);
     }
 
-    const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [
-        ...server,
-        ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID)).map(r => ({
-            mera: r.mera,
-            datum: r.datum,
-            parcelaID: r.parcelaID,
-            artikalNaziv: r.artikalNaziv,
-            kolicinaUpotrebljena: r.kolicinaUpotrebljena,
-            jedinicaMere: r.jedinicaMere,
-            trajanjeMinuta: r.trajanjeMinuta,
-            opremaTraktor: r.opremaTraktor,
-            karencaDana: r.karencaDana,
-            datumBerbeDozvoljeno: r.datumBerbeDozvoljeno,
-            syncStatus: 'pending'
-        }))
-    ].sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const all = agroMergeTretmani(local, server)
+        .filter(r => !r.deleted)
+        .sort((a, b) => {
+            const byDate = (b.datum || '').localeCompare(a.datum || '');
+            if (byDate !== 0) return byDate;
+
+            const byTime = String(b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '')
+                .localeCompare(String(a.updatedAtClient || a.createdAtClient || a.updatedAtServer || ''));
+            if (byTime !== 0) return byTime;
+
+            return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
+        });
 
     const list = document.getElementById('agroTretmaniList');
     const icons = { Zastita: '🛡️', Prihrana: '🌱', Rezidba: '✂️', Zalivanje: '💧', Berba: '🍎' };
+
+    if (!list) return;
 
     if (all.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema tretmana</p>';
@@ -886,16 +1028,202 @@ async function agroLoadIstorija() {
     }
 
     list.innerHTML = all.map(r => {
-        const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
-        const min = parseInt(r.trajanjeMinuta) || 0;
-        const timeStr = min > 0 ? (Math.floor(min / 60) > 0 ? Math.floor(min / 60) + 'h ' : '') + (min % 60) + 'min' : '';
+        const bc = (r.syncStatus === 'pending' || r.syncStatus === 'syncing')
+            ? 'var(--warning)'
+            : 'var(--success)';
+
+        const min = parseInt(r.trajanjeMinuta, 10) || 0;
+        const timeStr = min > 0
+            ? (Math.floor(min / 60) > 0 ? Math.floor(min / 60) + 'h ' : '') + (min % 60) + 'min'
+            : '';
+
+        const syncText =
+            r.syncStatus === 'syncing' ? ' | sync...' :
+            r.syncStatus === 'pending' ? ' | pending' :
+            (r.serverRecordID ? ' | ' + r.serverRecordID : '');
 
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header">
-                <span class="qi-koop">${icons[r.mera] || ''} ${escapeHtml(r.mera)}</span>
-                <span class="qi-time">${escapeHtml(r.datum)}</span>
+                <span class="qi-koop">${icons[r.mera] || ''} ${escapeHtml(r.mera || '')}</span>
+                <span class="qi-time">${escapeHtml(r.datum || '')}</span>
             </div>
-            <div class="qi-detail">${escapeHtml(r.parcelaID)}${r.artikalNaziv ? ' | ' + escapeHtml(r.artikalNaziv) + ' ' + escapeHtml(r.kolicinaUpotrebljena || '') + ' ' + escapeHtml(r.jedinicaMere || '') : ''}${timeStr ? ' | ⏱️ ' + escapeHtml(timeStr) : ''}${r.opremaTraktor ? ' | 🚜 ' + escapeHtml(r.opremaTraktor) : ''}${r.karencaDana ? ' | Karenca ' + escapeHtml(r.karencaDana) + 'd' : ''}</div>
+            <div class="qi-detail">
+                ${escapeHtml(r.parcelaID || '')}
+                ${r.artikalNaziv ? ' | ' + escapeHtml(r.artikalNaziv) + ' ' + escapeHtml(String(r.kolicinaUpotrebljena || '')) + ' ' + escapeHtml(r.jedinicaMere || '') : ''}
+                ${timeStr ? ' | ⏱️ ' + escapeHtml(timeStr) : ''}
+                ${r.opremaTraktor ? ' | 🚜 ' + escapeHtml(r.opremaTraktor) : ''}
+                ${r.karencaDana ? ' | Karenca ' + escapeHtml(String(r.karencaDana)) + 'd' : ''}
+                ${syncText}
+            </div>
+            ${r.lastSyncError ? `<div style="margin-top:6px;font-size:12px;color:#b42318;">${escapeHtml(r.lastSyncError)}</div>` : ''}
         </div>`;
     }).join('');
+}
+
+
+// ============================================================
+// HELPERS
+// ============================================================
+function agroGenerateClientRecordID(prefix) {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    return (prefix || 'agro') + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
+}
+
+function agroNormalizeIso(value) {
+    if (!value) return '';
+    try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        return d.toISOString();
+    } catch (_) {
+        return String(value);
+    }
+}
+
+function agroMapServerTretman(r) {
+    return {
+        clientRecordID: r.ClientRecordID || '',
+        serverRecordID: r.ServerRecordID || '',
+        createdAtClient: agroNormalizeIso(r.CreatedAtClient),
+        updatedAtClient: agroNormalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: agroNormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: agroNormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+
+        kooperantID: r.KooperantID || '',
+        parcelaID: r.ParcelaID || '',
+        datum: fmtDate(r.Datum),
+        mera: r.Mera || '',
+
+        artikalID: r.ArtikalID || '',
+        artikalNaziv: r.ArtikalNaziv || '',
+        kolicinaUpotrebljena: r.KolicinaUpotrebljena || '',
+        jedinicaMere: r.JedinicaMere || '',
+        dozaPreporucena: r.DozaPreporucena || '',
+        dozaPrimenjena: r.DozaPrimenjena || '',
+
+        opremaTraktor: r.OpremaTraktor || '',
+        opremaPrskalica: r.OpremaPrskalica || '',
+        opremaOstalo: r.OpremaOstalo || '',
+
+        karencaDana: r.KarencaDana || '',
+        datumBerbeDozvoljeno: r.DatumBerbeDozvoljeno || '',
+
+        vremePocetka: r.VremePocetka || '',
+        vremeZavrsetka: r.VremeZavrsetka || '',
+        trajanjeMinuta: r.TrajanjeMinuta || '',
+
+        geoLatStart: r.GeoLatStart || '',
+        geoLngStart: r.GeoLngStart || '',
+        geoLatEnd: r.GeoLatEnd || '',
+        geoLngEnd: r.GeoLngEnd || '',
+        geoAutoDetect: r.GeoAutoDetect || '',
+
+        meteoTemp: r.MeteoTemp || '',
+        meteoWind: r.MeteoWind || '',
+        meteoHumidity: r.MeteoHumidity || '',
+        meteoOverride: r.MeteoOverride || '',
+
+        napomena: r.Napomena || '',
+
+        syncStatus: 'synced',
+        syncAttempts: 0,
+        syncAttemptAt: '',
+        lastSyncError: '',
+        lastServerStatus: 'server',
+        deleted: false,
+        entityType: 'tretman',
+        schemaVersion: 1
+    };
+}
+
+function agroNormalizeLocalTretman(r) {
+    return {
+        clientRecordID: r.clientRecordID || '',
+        serverRecordID: r.serverRecordID || '',
+        createdAtClient: agroNormalizeIso(r.createdAtClient),
+        updatedAtClient: agroNormalizeIso(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: agroNormalizeIso(r.updatedAtServer),
+        syncedAt: agroNormalizeIso(r.syncedAt),
+
+        kooperantID: r.kooperantID || '',
+        parcelaID: r.parcelaID || '',
+        datum: r.datum || '',
+        mera: r.mera || '',
+
+        artikalID: r.artikalID || '',
+        artikalNaziv: r.artikalNaziv || '',
+        kolicinaUpotrebljena: r.kolicinaUpotrebljena || '',
+        jedinicaMere: r.jedinicaMere || '',
+        dozaPreporucena: r.dozaPreporucena || '',
+        dozaPrimenjena: r.dozaPrimenjena || '',
+
+        opremaTraktor: r.opremaTraktor || '',
+        opremaPrskalica: r.opremaPrskalica || '',
+        opremaOstalo: r.opremaOstalo || '',
+
+        karencaDana: r.karencaDana || '',
+        datumBerbeDozvoljeno: r.datumBerbeDozvoljeno || '',
+
+        vremePocetka: r.vremePocetka || '',
+        vremeZavrsetka: r.vremeZavrsetka || '',
+        trajanjeMinuta: r.trajanjeMinuta || '',
+
+        geoLatStart: r.geoLatStart || '',
+        geoLngStart: r.geoLngStart || '',
+        geoLatEnd: r.geoLatEnd || '',
+        geoLngEnd: r.geoLngEnd || '',
+        geoAutoDetect: r.geoAutoDetect || '',
+
+        meteoTemp: r.meteoTemp || '',
+        meteoWind: r.meteoWind || '',
+        meteoHumidity: r.meteoHumidity || '',
+        meteoOverride: r.meteoOverride || '',
+
+        napomena: r.napomena || '',
+
+        syncStatus: r.syncStatus || 'pending',
+        syncAttempts: parseInt(r.syncAttempts, 10) || 0,
+        syncAttemptAt: r.syncAttemptAt || '',
+        lastSyncError: r.lastSyncError || '',
+        lastServerStatus: r.lastServerStatus || '',
+        deleted: !!r.deleted,
+        entityType: r.entityType || 'tretman',
+        schemaVersion: r.schemaVersion || 1
+    };
+}
+
+function agroMergeTretmani(local, server) {
+    const merged = new Map();
+
+    (server || []).forEach(r => {
+        if (r && r.clientRecordID) merged.set(r.clientRecordID, r);
+    });
+
+    (local || []).forEach(r => {
+        if (!r || !r.clientRecordID) return;
+
+        const localNorm = agroNormalizeLocalTretman(r);
+        const existing = merged.get(localNorm.clientRecordID);
+
+        if (!existing) {
+            merged.set(localNorm.clientRecordID, localNorm);
+            return;
+        }
+
+        if (localNorm.syncStatus === 'pending' || localNorm.syncStatus === 'syncing') {
+            merged.set(localNorm.clientRecordID, localNorm);
+            return;
+        }
+
+        const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
+        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
+
+        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
+            merged.set(localNorm.clientRecordID, localNorm);
+        }
+    });
+
+    return Array.from(merged.values());
 }
