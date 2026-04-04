@@ -79,3 +79,7 @@ function renderKartica(records) {
     if (razEl) razEl.textContent = raz.toLocaleString('sr-RS');
     if (saldoEl) saldoEl.textContent = saldo.toLocaleString('sr-RS');
 }
+
+function invalidateKarticaCache() {
+    karticaCache = null;
+}
