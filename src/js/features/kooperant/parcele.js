@@ -79,63 +79,68 @@ async function loadParcele() {
         </div>`).join('');
     
     // Init map
-    if (parcelMapInstance) { parcelMapInstance.remove(); parcelMapInstance = null; }
-    parcelMapInstance = L.map(mapDiv).setView([43.28, 21.72], 13);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 22,
-        attribution: 'Esri, Maxar, Earthstar Geographics'
-    }).addTo(parcelMapInstance);
-    
-    // Load all parcel geo data + meteo
-    const allBounds = [];
-    window._parcelLayers = {};
-    
-    for (const p of parcele) {
-        try {
-            const resp = await fetch(CONFIG.API_URL + '?action=getParcelGeo&parcelaId=' + encodeURIComponent(p.ParcelaID));
-            const json = await resp.json();
-            
-            if (json && json.success && json.parcel) {
-                const geo = json.parcel;
-                const lat = parseFloat(String(geo.Lat).replace(',', '.'));
-                const lng = parseFloat(String(geo.Lng).replace(',', '.'));
-                const popupHtml = buildKooperantParcelPopup(p);
-                
-                if (geo.PolygonGeoJSON) {
-                    const geometry = JSON.parse(geo.PolygonGeoJSON);
-                    const feature = {type: 'Feature', properties: p, geometry: geometry};
-                    const layer = L.geoJSON(feature, { style: kooperantParcelStyle }).addTo(parcelMapInstance);
-                    layer.eachLayer(l => {
-                        l.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'center', className: 'parcel-label' });
-                        l.bindPopup(popupHtml);
-                        l.on('click', () => { highlightKooperantParcelLayer(l); });
-                        const bounds = l.getBounds();
-                        if (bounds.isValid()) allBounds.push(bounds);
-                        window._parcelLayers[p.ParcelaID] = l;
-                    });
-                } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                    const marker = L.circleMarker([lat, lng], {
-                        radius: 8, color: '#ffd60a', weight: 3, fillColor: '#ffd60a', fillOpacity: 0.85
-                    }).addTo(parcelMapInstance);
-                    marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'top', className: 'parcel-label' });
-                    marker.bindPopup(popupHtml);
-                    allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
-                    window._parcelLayers[p.ParcelaID] = marker;
-                }
-            }
-        } catch (e) {}
-        
-        // Load meteo for this parcel (non-blocking per parcel)
-        loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
-    }
-
-    if (allBounds.length > 0) {
-        let combined = allBounds[0];
-        for (let i = 1; i < allBounds.length; i++) {
-            combined.extend(allBounds[i]);
+    await safeAsync(async () => {
+        if (parcelMapInstance) { 
+            parcelMapInstance.remove(); 
+            parcelMapInstance = null; 
         }
-        parcelMapInstance.fitBounds(combined.pad(0.2));
-    }
+        parcelMapInstance = L.map(mapDiv).setView([43.28, 21.72], 13);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 22,
+            attribution: 'Esri, Maxar, Earthstar Geographics'
+        }).addTo(parcelMapInstance);
+    
+        // Load all parcel geo data + meteo
+        const allBounds = [];
+        window._parcelLayers = {};
+    
+        for (const p of parcele) {
+            try {
+                const resp = await fetch(CONFIG.API_URL + '?action=getParcelGeo&parcelaId=' + encodeURIComponent(p.ParcelaID));
+                const json = await resp.json();
+            
+                if (json && json.success && json.parcel) {
+                    const geo = json.parcel;
+                    const lat = parseFloat(String(geo.Lat).replace(',', '.'));
+                    const lng = parseFloat(String(geo.Lng).replace(',', '.'));
+                    const popupHtml = buildKooperantParcelPopup(p);
+                
+                    if (geo.PolygonGeoJSON) {
+                        const geometry = JSON.parse(geo.PolygonGeoJSON);
+                        const feature = {type: 'Feature', properties: p, geometry: geometry};
+                        const layer = L.geoJSON(feature, { style: kooperantParcelStyle }).addTo(parcelMapInstance);
+                        layer.eachLayer(l => {
+                            l.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'center', className: 'parcel-label' });
+                            l.bindPopup(popupHtml);
+                            l.on('click', () => { highlightKooperantParcelLayer(l); });
+                            const bounds = l.getBounds();
+                            if (bounds.isValid()) allBounds.push(bounds);
+                            window._parcelLayers[p.ParcelaID] = l;
+                        });
+                    } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                        const marker = L.circleMarker([lat, lng], {
+                            radius: 8, color: '#ffd60a', weight: 3, fillColor: '#ffd60a', fillOpacity: 0.85
+                        }).addTo(parcelMapInstance);
+                        marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'top', className: 'parcel-label' });
+                        marker.bindPopup(popupHtml);
+                        allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
+                        window._parcelLayers[p.ParcelaID] = marker;
+                    }
+                }
+            } catch (e) {}
+        
+            // Load meteo for this parcel (non-blocking per parcel)
+            loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
+        }
+
+        if (allBounds.length > 0) {
+            let combined = allBounds[0];
+            for (let i = 1; i < allBounds.length; i++) {
+                combined.extend(allBounds[i]);
+            }
+            parcelMapInstance.fitBounds(combined.pad(0.2));
+        }
+    }, 'Greška pri učitavanju parcela');
 }
 
 
@@ -148,27 +153,29 @@ async function loadParcelMeteo(parcelaId, kultura) {
     const panel = document.getElementById('parceleMeteo');
     panel.style.display = 'block';
     panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Učitavanje meteo podataka...</p>';
-    
-    // Check local cache
+
     if (meteoCache[parcelaId] && (Date.now() - meteoCache[parcelaId]._ts < 3600000)) {
         renderMeteoPanel(meteoCache[parcelaId]);
         return;
     }
-    
-    try {
+
+    const json = await safeAsync(async () => {
         const url = CONFIG.API_URL + '?action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId);
         const resp = await fetch(url);
-        const json = await resp.json();
-        
-        if (json && json.success) {
-            json._ts = Date.now();
-            meteoCache[parcelaId] = json;
-            renderMeteoPanel(json);
-        } else {
-            panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">' + (json.error || 'Nema meteo podataka') + '</p>';
-        }
-    } catch (e) {
+        return await resp.json();
+    }, 'Greška pri učitavanju meteo podataka');
+
+    if (!json) {
         panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Greška pri učitavanju</p>';
+        return;
+    }
+
+    if (json.success) {
+        json._ts = Date.now();
+        meteoCache[parcelaId] = json;
+        renderMeteoPanel(json);
+    } else {
+        panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">' + (json.error || 'Nema meteo podataka') + '</p>';
     }
 }
 
@@ -308,27 +315,29 @@ function weatherCodeIcon(code) {
 async function loadParcelMeteoInline(parcelaId, kultura) {
     const el = document.getElementById('parcel-meteo-' + parcelaId);
     if (!el) return;
-    
-    // Check local cache
+
     if (meteoCache[parcelaId] && (Date.now() - meteoCache[parcelaId]._ts < 3600000)) {
         el.innerHTML = renderMeteoInline(meteoCache[parcelaId]);
         return;
     }
-    
-    try {
+
+    const json = await safeAsync(async () => {
         const url = CONFIG.API_URL + '?action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId);
         const resp = await fetch(url);
-        const json = await resp.json();
-        
-        if (json && json.success) {
-            json._ts = Date.now();
-            meteoCache[parcelaId] = json;
-            el.innerHTML = renderMeteoInline(json);
-        } else {
-            el.innerHTML = '<span style="color:var(--text-muted);">Nema meteo podataka</span>';
-        }
-    } catch (e) {
+        return await resp.json();
+    });
+
+    if (!json) {
         el.innerHTML = '<span style="color:var(--text-muted);">—</span>';
+        return;
+    }
+
+    if (json.success) {
+        json._ts = Date.now();
+        meteoCache[parcelaId] = json;
+        el.innerHTML = renderMeteoInline(json);
+    } else {
+        el.innerHTML = '<span style="color:var(--text-muted);">Nema meteo podataka</span>';
     }
 }
 
