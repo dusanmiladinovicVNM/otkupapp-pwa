@@ -6,20 +6,23 @@ let karticaCache = null;
 async function loadKartica() {
     document.getElementById('karticaName').textContent = CONFIG.ENTITY_NAME;
     document.getElementById('karticaID').textContent = CONFIG.ENTITY_ID;
-    
+
     if (karticaCache) {
         renderKartica(karticaCache);
         return;
     }
-    
+
     document.getElementById('karticaList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-    
+
     let records = [];
-    try {
-        const json = await apiFetch('action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-        if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO');
-    } catch (e) {}
-    
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getKartica&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+    }, 'Greška pri učitavanju kartice');
+
+    if (json && json.success && json.records) {
+        records = json.records.filter(r => r.Opis !== 'UKUPNO');
+    }
+
     karticaCache = records;
     renderKartica(records);
 }
