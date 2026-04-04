@@ -139,25 +139,25 @@ function showQRProfile() {
 // STAMMDATEN
 // ============================================================
 async function loadStammdaten() {
-    try {
+    await safeAsync(async () => {
         const cached = await dbGetAll(db, CONFIG.STAMM_STORE);
         const obj = cached.find(c => c.key === 'all');
         if (obj) stammdaten = obj.data;
-    } catch (e) {}
+    });
 
-    if (navigator.onLine) {
-        try {
-            const json = await apiFetch('action=getStammdaten');
-            if (json && json.success && json.data) {
-                stammdaten = json.data;
-                await dbPut(db, CONFIG.STAMM_STORE, {
-                    key: 'all',
-                    data: stammdaten,
-                    updatedAt: new Date().toISOString()
-                });
-            }
-        } catch (e) {}
-    }
+    if (!navigator.onLine) return;
+
+    await safeAsync(async () => {
+        const json = await apiFetch('action=getStammdaten');
+        if (json && json.success && json.data) {
+            stammdaten = json.data;
+            await dbPut(db, CONFIG.STAMM_STORE, {
+                key: 'all',
+                data: stammdaten,
+                updatedAt: new Date().toISOString()
+            });
+        }
+    }, 'Greška pri učitavanju šifarnika');
 }
     
 function fmtStanica(stanicaID) {
