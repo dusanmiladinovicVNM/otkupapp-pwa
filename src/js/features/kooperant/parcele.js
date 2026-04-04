@@ -57,14 +57,18 @@ async function loadParcele() {
         const list = document.getElementById('parceleList');
         const mapDiv = document.getElementById('parceleMap');
 
+        if (!list || !mapDiv) return;
+
         if (parcele.length === 0) {
             list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>';
             mapDiv.style.display = 'none';
             return;
         }
 
+        mapDiv.style.display = '';
+
         list.innerHTML = parcele.map(p =>
-            `<div id="parcel-card-${p.ParcelaID}" style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;" onclick="focusParcel('${p.ParcelaID}')">
+            `<div id="parcel-card-${p.ParcelaID}" style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;" onclick="focusParcel('${String(p.ParcelaID).replace(/'/g, "\\'")}')">
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                     <strong>${escapeHtml(p.KatBroj || p.ParcelaID)}</strong>
                     <span style="font-size:12px;color:var(--text-muted);">${escapeHtml(p.ParcelaID)}</span>
@@ -93,43 +97,61 @@ async function loadParcele() {
         const allBounds = [];
         window._parcelLayers = {};
 
-        for (const p of parcele) {
+        const geoResults = await Promise.all(parcele.map(async (p) => {
             const json = await safeAsync(async () => {
-                const resp = await fetch(CONFIG.API_URL + '?action=getParcelGeo&parcelaId=' + encodeURIComponent(p.ParcelaID));
-                return await resp.json();
+                return await apiFetch('action=getParcelGeo&parcelaId=' + encodeURIComponent(p.ParcelaID));
             });
+            return { parcela: p, json };
+        }));
 
-            if (json && json.success && json.parcel) {
-                const geo = json.parcel;
-                const lat = parseFloat(String(geo.Lat).replace(',', '.'));
-                const lng = parseFloat(String(geo.Lng).replace(',', '.'));
-                const popupHtml = buildKooperantParcelPopup(p);
+        geoResults.forEach(({ parcela: p, json }) => {
+            if (!(json && json.success && json.parcel)) return;
 
-                if (geo.PolygonGeoJSON) {
+            const geo = json.parcel;
+            const lat = parseFloat(String(geo.Lat).replace(',', '.'));
+            const lng = parseFloat(String(geo.Lng).replace(',', '.'));
+            const popupHtml = buildKooperantParcelPopup(p);
+
+            if (geo.PolygonGeoJSON) {
+                try {
                     const geometry = JSON.parse(geo.PolygonGeoJSON);
                     const feature = { type: 'Feature', properties: p, geometry: geometry };
                     const layer = L.geoJSON(feature, { style: kooperantParcelStyle }).addTo(parcelMapInstance);
+
                     layer.eachLayer(l => {
                         l.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'center', className: 'parcel-label' });
                         l.bindPopup(popupHtml);
                         l.on('click', () => { highlightKooperantParcelLayer(l); });
+
                         const bounds = l.getBounds();
-                        if (bounds.isValid()) allBounds.push(bounds);
+                        if (bounds && bounds.isValid()) allBounds.push(bounds);
+
                         window._parcelLayers[p.ParcelaID] = l;
                     });
-                } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                    const marker = L.circleMarker([lat, lng], {
-                        radius: 8, color: '#ffd60a', weight: 3, fillColor: '#ffd60a', fillOpacity: 0.85
-                    }).addTo(parcelMapInstance);
-                    marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'top', className: 'parcel-label' });
-                    marker.bindPopup(popupHtml);
-                    allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
-                    window._parcelLayers[p.ParcelaID] = marker;
+                } catch (e) {
+                    console.error('Invalid polygon geojson for', p.ParcelaID, e);
                 }
-            }
+            } else if (!isNaN(lat) && !isNaN(lng)) {
+                const marker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    color: '#ffd60a',
+                    weight: 3,
+                    fillColor: '#ffd60a',
+                    fillOpacity: 0.85
+                }).addTo(parcelMapInstance);
 
+                marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'top', className: 'parcel-label' });
+                marker.bindPopup(popupHtml);
+
+                allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
+                window._parcelLayers[p.ParcelaID] = marker;
+            }
+        });
+
+        // ne blokiraj map render zbog meteo-a
+        parcele.forEach(p => {
             loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
-        }
+        });
 
         if (allBounds.length > 0) {
             let combined = allBounds[0];
@@ -148,6 +170,8 @@ let meteoCache = {};
 
 async function loadParcelMeteo(parcelaId, kultura) {
     const panel = document.getElementById('parceleMeteo');
+    if (!panel) return;
+
     panel.style.display = 'block';
     panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Učitavanje meteo podataka...</p>';
 
@@ -157,9 +181,7 @@ async function loadParcelMeteo(parcelaId, kultura) {
     }
 
     const json = await safeAsync(async () => {
-        const url = CONFIG.API_URL + '?action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId);
-        const resp = await fetch(url);
-        return await resp.json();
+        return await apiFetch('action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId));
     }, 'Greška pri učitavanju meteo podataka');
 
     if (!json) {
@@ -167,17 +189,19 @@ async function loadParcelMeteo(parcelaId, kultura) {
         return;
     }
 
-    if (json && json.success) {
+    if (json.success) {
         json._ts = Date.now();
         meteoCache[parcelaId] = json;
         renderMeteoPanel(json);
     } else {
-        panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">' + (json.error || 'Nema meteo podataka') + '</p>';
+        panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">' + escapeHtml(json.error || 'Nema meteo podataka') + '</p>';
     }
 }
 
 function renderMeteoPanel(data) {
     const panel = document.getElementById('parceleMeteo');
+    if (!panel) return;
+
     const c = data.current || {};
     const risk = data.risk || {};
     const spray = data.sprayWindow || [];
@@ -186,36 +210,30 @@ function renderMeteoPanel(data) {
 
     if (panel.dataset) panel.dataset.currentParcelaId = parcelaId;
 
+    let fetchedTime = '';
+    try {
+        fetchedTime = data.fetchedAt
+            ? new Date(data.fetchedAt).toLocaleTimeString('sr', { hour: '2-digit', minute: '2-digit' })
+            : '';
+    } catch (_) {
+        fetchedTime = '';
+    }
+
     panel.innerHTML = `
         <div class="meteo-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div style="font-size:14px;font-weight:700;color:var(--primary);">
-                    ${escapeHtml(data.katBroj || data.parcelaId)} — ${escapeHtml(data.kultura || '')}
+                    ${escapeHtml(data.katBroj || data.parcelaId || '')} — ${escapeHtml(data.kultura || '')}
                 </div>
                 <div style="font-size:10px;color:var(--text-muted);">
-                    ${new Date(data.fetchedAt).toLocaleTimeString('sr', {hour:'2-digit',minute:'2-digit'})}
+                    ${escapeHtml(fetchedTime)}
                 </div>
             </div>
-            
-            <div class="meteo-current">
-                <div>
-                    <div class="meteo-temp">${Number(c.temperature || 0).toFixed(1)}°</div>
-                </div>
-                <div class="meteo-details">
-                    <div>${weatherCodeText(c.weatherCode || 0)}</div>
-                    <div>💧 Vlažnost: ${c.humidity || 0}%</div>
-                    <div>💨 Vetar: ${Number(c.windSpeed || 0).toFixed(1)} km/h (udari: ${Number(c.windGusts || 0).toFixed(1)})</div>
-                    ${Number(c.precipitation || 0) > 0 ? '<div>🌧️ Padavine: ' + Number(c.precipitation).toFixed(1) + ' mm</div>' : ''}
-                </div>
-            </div>
-            
-            ${renderRiskSection(risk)}
-            ${renderSpraySection(spray, data.kultura)}
-            ${renderForecast(daily, ['Ned', 'Pon', 'Uto', 'Sre', 'Čet', 'Pet', 'Sub'])}
-            ${renderExpertInfo(parcelaId, c)}
+            ...
         </div>
     `;
 }
+
 function renderRiskSection(risk) {
     if (!risk || !risk.items || risk.items.length === 0) {
         return '<div class="meteo-risk ok">✅ Nema rizika — uslovi su povoljni</div>';
@@ -501,6 +519,7 @@ function toggleParcelExpert(parcelId) {
 }
 
 function focusParcel(parcelaID) {
+    const mapDiv = document.getElementById('parceleMap');
     if (!parcelMapInstance || !window._parcelLayers || !window._parcelLayers[parcelaID]) return;
 
     const layer = window._parcelLayers[parcelaID];
@@ -514,6 +533,5 @@ function focusParcel(parcelaID) {
     }
 
     if (layer.openPopup) layer.openPopup();
-
-    document.getElementById('parceleMap').scrollIntoView({ behavior: 'smooth' });
+    if (mapDiv) mapDiv.scrollIntoView({ behavior: 'smooth' });
 }
