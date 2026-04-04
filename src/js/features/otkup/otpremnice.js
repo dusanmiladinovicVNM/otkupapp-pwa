@@ -16,28 +16,28 @@ function showOtkupniList(record) {
     modal.innerHTML = `<div style="padding:16px;max-width:420px;margin:0 auto;font-family:sans-serif;">
         <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px;">
             <div style="font-size:18px;font-weight:700;">${gv('SELLER_NAME')}</div>
-            <div style="font-size:12px;color:#666;">${gv('SELLER_STREET')}, ${gv('SELLER_CITY')} ${gv('SELLER_POSTAL_CODE')}</div>
-            <div style="font-size:12px;color:#666;">PIB: ${gv('SELLER_PIB')} | MB: ${gv('SELLER_MATICNI_BROJ')}</div>
-            <div style="font-size:12px;color:#666;">TR: ${gv('SELLER_ACCOUNT')}</div>
+            <div style="font-size:12px;color:#666;">${escapeHtml(gv('SELLER_STREET'))}, ${escapeHtml(gv('SELLER_CITY'))} ${escapeHtml(gv('SELLER_POSTAL_CODE'))}</div>
+            <div style="font-size:12px;color:#666;">PIB: ${escapeHtml(gv('SELLER_PIB'))} | MB: ${escapeHtml(gv('SELLER_MATICNI_BROJ'))}</div>
+            <div style="font-size:12px;color:#666;">TR: ${escapeHtml(gv('SELLER_ACCOUNT'))}</div>
         </div>
         <h2 style="text-align:center;margin-bottom:14px;font-size:20px;">OTKUPNI LIST</h2>
         <div style="background:#f5f5f0;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px;">
             <div><strong>${koop.Ime || ''} ${koop.Prezime || ''}</strong></div>
-            <div>${koop.Adresa || ''}, ${koop.Mesto || ''}</div>
-            <div>JMBG: ${koop.JMBG || '________'} | BPG: ${koop.BPGBroj || '________'}</div>
+            <div>${escapeHtml(koop.Adresa || '')}, ${escapeHtml(koop.Mesto || '')}</div>
+            <div>JMBG: ${escapeHtml(koop.JMBG || '________')} | BPG: ${escapeHtml(koop.BPGBroj || '________')}</div>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
-            <tr><td style="padding:6px;color:#666;width:40%;">Datum:</td><td style="padding:6px;font-weight:600;">${record.datum}</td></tr>
-            <tr><td style="padding:6px;color:#666;">Proizvod:</td><td style="padding:6px;">${record.vrstaVoca} ${record.sortaVoca || ''}</td></tr>
-            <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${record.klasa}</td></tr>
+            <tr><td style="padding:6px;color:#666;width:40%;">Datum:</td><td style="padding:6px;font-weight:600;">${escapeHtml(record.datum)}</td></tr>
+            <tr><td style="padding:6px;color:#666;">Proizvod:</td><td style="padding:6px;">${escapeHtml(record.vrstaVoca)} ${escapeHtml(record.sortaVoca || '')}</td></tr>
+            <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${escapeHtml(record.klasa)}</td></tr>
             <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
             <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
             <tr style="border-top:1px solid #ccc;"><td style="padding:6px;color:#666;">Vrednost:</td><td style="padding:6px;font-weight:600;">${vrednostNum.toLocaleString('sr')} RSD</td></tr>
             ${pdvStopa > 0 ? '<tr><td style="padding:6px;color:#666;">PDV naknada (' + pdvStopa + '%):</td><td style="padding:6px;">' + pdvIznos.toLocaleString('sr') + ' RSD</td></tr>' : ''}
             <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${ukupno.toLocaleString('sr')} RSD</td></tr>
             <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
-            ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + record.parcelaID + '</td></tr>' : ''}
-            <tr><td style="padding:6px;color:#666;">Rok isplate:</td><td style="padding:6px;">${gv('OtkupRokIsplate') || 'Po dogovoru'}</td></tr>
+            ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + escapeHtml(record.parcelaID) + '</td></tr>' : ''}
+            <tr><td style="padding:6px;color:#666;">Rok isplate:</td><td style="padding:6px;">${escapeHtml(gv('OtkupRokIsplate') || 'Po dogovoru')}</td></tr>
         </table>
         <div style="margin-top:20px;">
             <div style="margin-bottom:16px;"><div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis otkupljivača:</div><canvas id="sigOtkupac" width="720" height="200" style="border:1px solid #ccc;border-radius:6px;width:100%;height:80px;touch-action:none;"></canvas></div>
@@ -297,9 +297,9 @@ function renderOtpremaCheckboxes() {
             <div style="display:flex;align-items:center;gap:10px;">
                 <input type="checkbox" id="otpChk${i}" style="width:20px;height:20px;flex-shrink:0;" onclick="event.stopPropagation();updateOtpremaSummary();">
                 <div style="flex:1;">
-                    <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
-                    <div class="qi-detail" style="font-size:11px;color:var(--text-muted);">${r.klasa || 'I'}</div>
-                    <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD</div>
+                    <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
+                    <div class="qi-detail" style="font-size:11px;color:var(--text-muted);">${escapeHtml(r.klasa || 'I')}</div>
+                    <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD</div>
                 </div>
             </div>
         </div>`;
@@ -398,8 +398,8 @@ async function loadOtpremaOverview() {
         uList.innerHTML = unassigned.map(r => {
             const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
             return `<div class="queue-item" style="border-left-color:var(--warning);">
-                <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
-                <div class="qi-detail">${r.vrstaVoca} ${r.sortaVoca || ''} ${r.klasa || 'I'} | ${r.kolicina} kg | ${vr} RSD</div>
+                <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
+                <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} | ${r.kolicina} kg | ${vr} RSD</div>
             </div>`;
         }).join('');
     }
@@ -421,7 +421,7 @@ async function loadOtpremaOverview() {
                     <strong style="color:var(--primary);">🚛 ${vozID}</strong>
                     <span style="font-weight:600;">${g.kg.toLocaleString('sr')} kg | ${g.items.length} otk.</span>
                 </div>
-                ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${r.kooperantName} | ${r.vrstaVoca} ${r.klasa || ''} | ${r.kolicina} kg</div>`).join('')}
+                ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa || '')} | ${r.kolicina} kg</div>`).join('')}
             </div>`).join('');
     }
 }
