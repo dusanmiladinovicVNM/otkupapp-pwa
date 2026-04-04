@@ -39,8 +39,8 @@ async function loadMgmtOtkupi() {
     if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otkupa</p>'; return; }
     list.innerHTML = records.map(r => {
         const v = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        return `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${r.datum}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong></div></div>`;
+        return `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
+                <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong></div></div>`;
     }).join('');
 }
 
@@ -52,7 +52,7 @@ function loadMgmtSaldoOM() {
         const saldo = parseFloat(r.Saldo)||0;
         const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
         return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">${fmtStanica(r.StanicaID || r.Stanica)}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(fmtStanica(r.StanicaID || r.Stanica))}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
             <div class="qi-detail">Avans: ${(parseFloat(r.Avans)||0).toLocaleString('sr')} | Isplaceno: ${(parseFloat(r.Isplaceno)||0).toLocaleString('sr')}</div></div>`;
     }).join('');
 }
@@ -70,8 +70,8 @@ function loadMgmtOtkupPoOM() {
     });
     list.innerHTML = Object.entries(grouped).map(([stanica, g]) =>
         `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${fmtStanica(stanica)}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><strong style="color:var(--primary);font-size:16px;">${escapeHtml(fmtStanica(stanica))}</strong><span style="font-size:13px;font-weight:600;">${g.totalKg.toLocaleString('sr')} kg</span></div>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD</div>
-            ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${r.VrstaVoca} ${r.Klasa}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${r.BrojOtkupa||0} otk.</span></div>`; }).join('')}
+            ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${escapeHtml(r.VrstaVoca)} ${escapeHtml(r.Klasa)}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${escapeHtml(r.BrojOtkupa||0)} otk.</span></div>`; }).join('')}
         </div>`).join('');
 }
