@@ -56,18 +56,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================================
 // QR SCANNER
 // ============================================================
-function startQRScan() {
-    const readerDiv = document.getElementById('qr-reader');
-    readerDiv.style.display = 'block';
-    if (qrScanner) qrScanner.clear();
-    qrScanner = new Html5Qrcode('qr-reader');
-    qrScanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => { onQRScanned(decodedText); qrScanner.stop().then(() => { readerDiv.style.display = 'none'; }); },
-        () => {}
-    ).catch(err => { showToast('Kamera nije dostupna: ' + err, 'error'); readerDiv.style.display = 'none'; });
-}
 
 function onQRScanned(text) {
     try { const data = JSON.parse(text); if (data.id) { setKooperant(data.id, data.name || data.id); return; } } catch (e) {}
