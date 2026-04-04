@@ -3,29 +3,41 @@
 // ============================================================
 async function loadMgmtFakture() {
     const kupacID = document.getElementById('mgmtFaktureKupac').value;
-    if (!kupacID) { document.getElementById('mgmtFaktureList').innerHTML = ''; return; }
-    
+    if (!kupacID) {
+        document.getElementById('mgmtFaktureList').innerHTML = '';
+        return;
+    }
+
     let records = [];
     if (mgmtData && mgmtData.fakture) {
-        records = mgmtData.fakture.filter(r => 
+        records = mgmtData.fakture.filter(r =>
             String(r.KupacID) === kupacID || String(r.Kupac) === kupacID
         );
     } else {
         document.getElementById('mgmtFaktureList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
-        try {
-            const json = await apiFetch('action=getMgmtFakture&kupacID=' + encodeURIComponent(kupacID));
-            if (json && json.success && json.records) records = json.records;
-        } catch (e) {}
+
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getMgmtFakture&kupacID=' + encodeURIComponent(kupacID));
+        }, 'Greška pri učitavanju faktura');
+
+        if (json && json.success && json.records) {
+            records = json.records;
+        }
     }
-    
+
     const list = document.getElementById('mgmtFaktureList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema faktura</p>'; return; }
+    if (records.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema faktura</p>';
+        return;
+    }
+
     list.innerHTML = records.map(r => {
         const iznos = parseFloat(r.Iznos) || 0;
         const placeno = parseFloat(r.Placeno) || 0;
         const saldo = parseFloat(r.Saldo) || 0;
         const bc = saldo <= 0 ? 'var(--success)' : 'var(--danger)';
-        return `<div class="queue-item" style="border-left-color:${bc};cursor:pointer;" onclick="toggleFakturaStavke('${r.FakturaID}', this)">
+
+        return `<div class="queue-item" style="border-left-color:${bc};cursor:pointer;" onclick="toggleFakturaStavke('${escapeHtml(r.FakturaID)}', this)">
             <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojFakture || r.FakturaID)}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
             <div class="qi-detail">Iznos: <strong>${iznos.toLocaleString('sr')}</strong> | Plaćeno: ${placeno.toLocaleString('sr')} | Saldo: <strong>${saldo.toLocaleString('sr')}</strong></div>
             <div class="qi-detail" style="font-size:11px;margin-top:2px;">${escapeHtml(r.Status || '')}${r.SEFStatus ? ' | SEF: ' + escapeHtml(r.SEFStatus) : ''}</div>
