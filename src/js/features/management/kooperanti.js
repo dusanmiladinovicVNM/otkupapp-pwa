@@ -65,8 +65,8 @@ async function onMgmtKooperantChange() {
         const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
         zad += z; raz += ra;
         return `<div class="queue-item" style="border-left-color:${z>0?'var(--danger)':'var(--success)'};">
-            <div class="qi-header"><span class="qi-koop">${r.BrojDok||''}</span><span class="qi-time">${fmtDate(r.Datum)}</span></div>
-            <div class="qi-detail">${r.Opis||''}</div>
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojDok||'')}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
+            <div class="qi-detail">${escapeHtml(r.Opis||'')}</div>
             <div class="qi-detail" style="font-size:12px;margin-top:2px;">
                 ${z>0?'<span style="color:var(--danger);">Zaduž: '+z.toLocaleString('sr')+'</span> ':''}
                 ${ra>0?'<span style="color:var(--success);">Razduž: '+ra.toLocaleString('sr')+'</span> ':''}
@@ -89,7 +89,7 @@ function loadMgmtKoopSaldo() {
         const zad = parseFloat(r.Zaduzenje)||0, raz = parseFloat(r.Razduzenje)||0;
         const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
         return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">${name}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(name)}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
             <div class="qi-detail">Zaduž: ${zad.toLocaleString('sr')} | Razduž: ${raz.toLocaleString('sr')}</div></div>`;
     }).join('');
 }
@@ -141,7 +141,7 @@ function renderMgmtKoopPregled() {
             const amb = parseFloat(r.Ambalaza)||0;
             const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
             return `<div class="queue-item" style="border-left-color:${bc};">
-                <div class="qi-header"><span class="qi-koop">${r.Kooperant||r.KooperantID}</span><span class="qi-time">${fmtStanica(r.StanicaID)}</span></div>
+                <div class="qi-header"><span class="qi-koop">${escapeHtml(r.Kooperant||r.KooperantID)}</span><span class="qi-time">${escapeHtml(fmtStanica(r.StanicaID))}</span></div>
                 <div class="qi-detail">
                     ${kg.toLocaleString('sr')} kg | Vrednost: ${vr.toLocaleString('sr')}
                 </div>
