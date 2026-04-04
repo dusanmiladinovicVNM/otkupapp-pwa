@@ -560,3 +560,7 @@ function izdReset() {
     if (haEl) haEl.textContent = '0';
     izdHidePreporuka();
 }     
+
+function loadMgmtAgroStanje() {
+    document.getElementById('mgmtAgroStanjeList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p>';
+}
