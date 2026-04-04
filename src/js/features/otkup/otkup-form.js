@@ -241,7 +241,9 @@ function buildOtkupRecord(input) {
 
         syncStatus: 'pending',
         syncAttempts: 0,
+        syncAttemptAt: '',
         lastSyncError: '',
+        lastServerStatus: '',
         deleted: false,
         entityType: 'otkup',
         schemaVersion: 1
