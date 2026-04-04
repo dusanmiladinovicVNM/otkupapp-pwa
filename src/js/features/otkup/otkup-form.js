@@ -158,11 +158,13 @@ async function saveOtkup() {
         await safeRefreshAfterSave();
 
         if (navigator.onLine) {
-            if (typeof syncQueueSafe === 'function') {
-                await syncQueueSafe();
-            } else if (typeof syncQueue === 'function') {
-                await syncQueue();
-            }
+            setTimeout(() => {
+                if (typeof syncQueueSafe === 'function') {
+                    syncQueueSafe();
+                } else if (typeof syncQueue === 'function') {
+                    syncQueue();
+                }
+            }, 0);
         }
     } catch (err) {
         console.error('saveOtkup failed:', err);
@@ -212,7 +214,7 @@ function buildOtkupRecord(input) {
     const today = nowIso.split('T')[0];
 
     return {
-        clientRecordID: crypto.randomUUID(),
+        clientRecordID: generateClientRecordID(),
         serverRecordID: '',
         createdAtClient: nowIso,
         updatedAtClient: nowIso,
@@ -336,4 +338,12 @@ function safeGetDeviceID() {
     } catch (e) {
         return '';
     }
+}
+
+function generateClientRecordID() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+
+    return 'loc-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
 }
