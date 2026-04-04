@@ -3,15 +3,8 @@
 // ============================================================
 
 async function syncQueue() {
-    if (!db) {
-        console.warn('syncQueue: db not ready');
-        return { ok: false, reason: 'db-not-ready' };
-    }
-
-    if (!navigator.onLine) {
-        updateSyncBadge();
-        return { ok: false, reason: 'offline' };
-    }
+    if (!db) return { ok: false, reason: 'db-not-ready' };
+    if (!navigator.onLine) return { ok: false, reason: 'offline' };
 
     if (window.appRuntime && window.appRuntime.syncInFlight) {
         return { ok: false, reason: 'already-running' };
@@ -26,7 +19,7 @@ async function syncQueue() {
     try {
         pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
 
-        if (!Array.isArray(pending) || pending.length === 0) {
+        if (!pending.length) {
             await updateSyncBadge();
             await updateStats();
             return { ok: true, synced: 0, failed: 0 };
@@ -34,11 +27,10 @@ async function syncQueue() {
 
         await updateSyncBadge('syncing');
 
-        // mark as syncing before request
-        for (const record of pending) {
-            record.syncStatus = 'syncing';
-            record.syncAttemptAt = new Date().toISOString();
-            await dbPut(db, CONFIG.STORE_NAME, record);
+        for (const r of pending) {
+            r.syncStatus = 'syncing';
+            r.syncAttemptAt = new Date().toISOString();
+            await dbPut(db, CONFIG.STORE_NAME, r);
         }
 
         const json = await apiPost('sync', {
@@ -46,141 +38,95 @@ async function syncQueue() {
             records: pending
         });
 
-        // network / hard failure
         if (!json || json.success === false) {
-            for (const record of pending) {
-                record.syncStatus = 'pending';
-                record.lastSyncError = json && json.error ? String(json.error) : 'Sync neuspešan';
-                await dbPut(db, CONFIG.STORE_NAME, record);
+            for (const r of pending) {
+                r.syncStatus = 'pending';
+                r.lastSyncError = json && json.error ? json.error : 'Sync neuspešan';
+                r.syncAttempts = (r.syncAttempts || 0) + 1;
+                await dbPut(db, CONFIG.STORE_NAME, r);
             }
 
-            if (json && json.error) {
-                showToast('Greška: ' + json.error, 'error');
-            } else {
-                showToast('Sinhronizacija nije uspela', 'error');
-            }
-
+            showToast('Sinhronizacija nije uspela', 'error');
             return { ok: false, synced: 0, failed: pending.length };
         }
-
-        // --------------------------------------------
-        // 1) NEW BACKEND MODE:
-        // backend can return per-record results
-        // expected examples:
-        // { success:true, results:[{clientRecordID:'x', success:true, serverRecordID:123}] }
-        // { success:true, synced:[...ids], failed:[...ids] }
-        // --------------------------------------------
-        let syncedCount = 0;
-        let failedCount = 0;
 
         if (Array.isArray(json.results)) {
             const byClientId = new Map(
                 pending.map(r => [r.clientRecordID, r])
             );
 
+            let syncedCount = 0;
+            let failedCount = 0;
+
             for (const result of json.results) {
                 const record = byClientId.get(result.clientRecordID);
                 if (!record) continue;
+
+                record.syncAttempts = (record.syncAttempts || 0) + 1;
 
                 if (result.success) {
                     record.syncStatus = 'synced';
                     record.lastSyncError = '';
                     record.syncedAt = new Date().toISOString();
-
-                    if (result.serverRecordID) {
-                        record.serverRecordID = result.serverRecordID;
-                    }
-                    if (result.updatedAtServer) {
-                        record.updatedAtServer = result.updatedAtServer;
-                    }
-
+                    record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
+                    record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
+                    record.lastServerStatus = result.status || 'synced';
                     syncedCount++;
                 } else {
                     record.syncStatus = 'pending';
                     record.lastSyncError = result.error || 'Sync stavke neuspešan';
+                    record.lastServerStatus = result.status || 'failed';
                     failedCount++;
                 }
 
                 await dbPut(db, CONFIG.STORE_NAME, record);
             }
 
-            // any pending record not mentioned by backend -> return to pending
             for (const record of pending) {
                 const mentioned = json.results.some(x => x.clientRecordID === record.clientRecordID);
                 if (!mentioned) {
                     record.syncStatus = 'pending';
                     record.lastSyncError = 'Nema potvrde sa servera';
+                    record.syncAttempts = (record.syncAttempts || 0) + 1;
                     failedCount++;
                     await dbPut(db, CONFIG.STORE_NAME, record);
                 }
             }
-        }
 
-        // --------------------------------------------
-        // 2) ALT BACKEND MODE:
-        // { success:true, synced:["id1"], failed:["id2"] }
-        // --------------------------------------------
-        else if (Array.isArray(json.synced) || Array.isArray(json.failed)) {
-            const syncedSet = new Set(Array.isArray(json.synced) ? json.synced : []);
-            const failedSet = new Set(Array.isArray(json.failed) ? json.failed : []);
-
-            for (const record of pending) {
-                if (syncedSet.has(record.clientRecordID)) {
-                    record.syncStatus = 'synced';
-                    record.lastSyncError = '';
-                    record.syncedAt = new Date().toISOString();
-                    syncedCount++;
-                } else if (failedSet.has(record.clientRecordID)) {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = 'Server odbio zapis';
-                    failedCount++;
-                } else {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = 'Nema potvrde sa servera';
-                    failedCount++;
-                }
-
-                await dbPut(db, CONFIG.STORE_NAME, record);
+            if (syncedCount > 0 && failedCount === 0) {
+                showToast('Sinhronizovano: ' + syncedCount, 'success');
+            } else if (syncedCount > 0) {
+                showToast('Sinhronizovano: ' + syncedCount + ', neuspešno: ' + failedCount, 'info');
+            } else {
+                showToast('Nijedna stavka nije sinhronizovana', 'error');
             }
+
+            return { ok: failedCount === 0, synced: syncedCount, failed: failedCount };
         }
 
-        // --------------------------------------------
-        // 3) LEGACY BACKEND MODE:
-        // { success:true } => treat all as synced
-        // --------------------------------------------
-        else {
-            for (const record of pending) {
-                record.syncStatus = 'synced';
-                record.lastSyncError = '';
-                record.syncedAt = new Date().toISOString();
-                await dbPut(db, CONFIG.STORE_NAME, record);
-                syncedCount++;
-            }
+        // legacy fallback
+        for (const r of pending) {
+            r.syncStatus = 'synced';
+            r.lastSyncError = '';
+            r.syncedAt = new Date().toISOString();
+            r.syncAttempts = (r.syncAttempts || 0) + 1;
+            await dbPut(db, CONFIG.STORE_NAME, r);
         }
 
-        if (syncedCount > 0 && failedCount === 0) {
-            showToast('Sinhronizovano: ' + syncedCount, 'success');
-        } else if (syncedCount > 0 && failedCount > 0) {
-            showToast('Sinhronizovano: ' + syncedCount + ', neuspešno: ' + failedCount, 'info');
-        } else if (failedCount > 0) {
-            showToast('Nijedna stavka nije sinhronizovana', 'error');
-        }
-
-        return { ok: failedCount === 0, synced: syncedCount, failed: failedCount };
+        showToast('Sinhronizovano: ' + pending.length, 'success');
+        return { ok: true, synced: pending.length, failed: 0 };
     } catch (err) {
         console.error('syncQueue failed:', err);
 
-        // rollback syncing -> pending
-        for (const record of pending) {
+        for (const r of pending) {
             try {
-                if (record.syncStatus === 'syncing') {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = err && err.message ? err.message : 'Greška pri sync-u';
-                    await dbPut(db, CONFIG.STORE_NAME, record);
+                if (r.syncStatus === 'syncing') {
+                    r.syncStatus = 'pending';
+                    r.lastSyncError = err.message || 'Greška pri sync-u';
+                    r.syncAttempts = (r.syncAttempts || 0) + 1;
+                    await dbPut(db, CONFIG.STORE_NAME, r);
                 }
-            } catch (rollbackErr) {
-                console.error('sync rollback failed:', rollbackErr);
-            }
+            } catch (_) {}
         }
 
         showToast('Greška pri sinhronizaciji', 'error');
@@ -192,11 +138,7 @@ async function syncQueue() {
 
         try { await updateSyncBadge(); } catch (_) {}
         try { await updateStats(); } catch (_) {}
-        try {
-            if (typeof renderQueueList === 'function') {
-                await renderQueueList();
-            }
-        } catch (_) {}
+        try { await renderQueueList(); } catch (_) {}
     }
 }
 
