@@ -184,9 +184,12 @@ async function loadVozacZbirne() {
     const local = await dbGetAll(db, 'zbirne');
 
     let server = [];
-    try {
-        const json = await apiFetch('action=getVozacZbirne');
-        if (json && json.success && json.records) server = json.records.map(r => ({
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getVozacZbirne');
+    }, 'Greška pri učitavanju zbirnih');
+
+    if (json && json.success && json.records) {
+        server = json.records.map(r => ({
             clientRecordID: r.ClientRecordID || '',
             datum: fmtDate(r.Datum),
             kupacName: r.KupacName || r.KupacID || '',
@@ -196,10 +199,13 @@ async function loadVozacZbirne() {
             vrstaVoca: r.VrstaVoca || '',
             syncStatus: 'synced'
         }));
-    } catch (e) {}
+    }
 
     const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
+    const all = [
+        ...server,
+        ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))
+    ];
 
     const list = document.getElementById('vozacZbirneList');
     if (all.length === 0) {
@@ -210,10 +216,11 @@ async function loadVozacZbirne() {
     list.innerHTML = all.map(r => {
         const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
         const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
+
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header"><span class="qi-koop">🏭 ${escapeHtml(r.kupacName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
             <div class="qi-detail">${escapeHtml(r.vrstaVoca)} | ${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0}</div>
-            ${r.kolicinaKlII > 0 ? '<div class="qi-detail" style="font-size:11px;">Kl.I: ' + (r.kolicinaKlI||0).toLocaleString('sr') + ' kg | Kl.II: ' + (r.kolicinaKlII||0).toLocaleString('sr') + ' kg</div>' : ''}
+            ${r.kolicinaKlII > 0 ? '<div class="qi-detail" style="font-size:11px;">Kl.I: ' + (r.kolicinaKlI || 0).toLocaleString('sr') + ' kg | Kl.II: ' + (r.kolicinaKlII || 0).toLocaleString('sr') + ' kg</div>' : ''}
         </div>`;
     }).join('');
 }
