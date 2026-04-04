@@ -40,13 +40,13 @@ function buildKooperantParcelPopup(p) {
     return `
         <div>
             <div style="font-size:18px;font-weight:700;margin-bottom:6px;">
-                ${p.KatBroj || p.ParcelaID}
+                ${escapeHtml(p.KatBroj || p.ParcelaID)}
             </div>
-            <div><b>Kultura:</b> ${p.Kultura || '-'}</div>
-            <div><b>Površina:</b> ${p.PovrsinaHa || '?'} ha</div>
-            <div><b>KO:</b> ${p.KatOpstina || '-'}</div>
-            <div><b>GGAP:</b> ${p.GGAPStatus || '-'}</div>
-            <div style="margin-top:6px;color:#666;">${p.ParcelaID}</div>
+            <div><b>Kultura:</b> ${escapeHtml(p.Kultura || '-')}</div>
+            <div><b>Površina:</b> ${escapeHtml(p.PovrsinaHa || '?')} ha</div>
+            <div><b>KO:</b> ${escapeHtml(p.KatOpstina || '-')}</div>
+            <div><b>GGAP:</b> ${escapeHtml(p.GGAPStatus || '-')}</div>
+            <div style="margin-top:6px;color:#666;">${escapeHtml(p.ParcelaID)}</div>
         </div>
     `;
 }
@@ -66,10 +66,15 @@ async function loadParcele() {
     list.innerHTML = parcele.map(p =>
         `<div id="parcel-card-${p.ParcelaID}" style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;" onclick="focusParcel('${p.ParcelaID}')">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <strong>${p.KatBroj || p.ParcelaID}</strong>
-                <span style="font-size:12px;color:var(--text-muted);">${p.ParcelaID}</span>
+                <strong>${escapeHtml(p.KatBroj || p.ParcelaID)}</strong>
+                <span style="font-size:12px;color:var(--text-muted);">${escapeHtml(p.ParcelaID)}</span>
             </div>
-            <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">${p.Kultura || ''} | ${p.PovrsinaHa || '?'} ha | ${p.KatOpstina || ''}${p.GGAPStatus ? ' | GGAP: ' + p.GGAPStatus : ''}</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
+                ${escapeHtml(p.Kultura || '')} |
+                ${escapeHtml(p.PovrsinaHa || '?')} ha |
+                ${escapeHtml(p.KatOpstina || '')}
+                ${p.GGAPStatus ? ' | GGAP: ' + escapeHtml(p.GGAPStatus) : ''}
+            </div>
             <div id="parcel-meteo-${p.ParcelaID}" style="font-size:12px;color:var(--text-muted);">⏳ Meteo...</div>
         </div>`).join('');
     
@@ -181,7 +186,7 @@ function renderMeteoPanel(data) {
         <div class="meteo-panel">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div style="font-size:14px;font-weight:700;color:var(--primary);">
-                    ${data.katBroj || data.parcelaId} — ${data.kultura || ''}
+                    ${escapeHtml(data.katBroj || data.parcelaId)} — ${escapeHtml(data.kultura || '')}
                 </div>
                 <div style="font-size:10px;color:var(--text-muted);">
                     ${new Date(data.fetchedAt).toLocaleTimeString('sr', {hour:'2-digit',minute:'2-digit'})}
@@ -217,7 +222,7 @@ function renderRiskSection(risk) {
         risk.items.map(r =>
             `<div class="meteo-risk ${r.level}">
                 <span style="font-size:18px;">${r.icon}</span>
-                <span>${r.message}</span>
+                <span>${escapeHtml(r.message)}</span>
             </div>`
         ).join('') +
     '</div>';
@@ -343,7 +348,7 @@ function renderMeteoInline(data) {
     if (riskItems.length > 0) {
         const first = riskItems[0];
         const cls = first.level === 'danger' ? 'danger' : 'warn';
-        riskHtml = `<span class="parcel-chip ${cls}">${first.icon} ${first.message}</span>`;
+        riskHtml = `<span class="parcel-chip ${cls}">${first.icon} ${escapeHtml(first.message)}</span>`;
     }
 
     let sprayHtml = '<span class="parcel-chip warn">⚠️ Nema termina za prskanje</span>';
