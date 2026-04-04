@@ -173,7 +173,5 @@ function applyRoleVisibility() {
     document.querySelectorAll('.role-kooperant').forEach(el => el.style.display = (role === 'Kooperant') ? '' : 'none');
     document.querySelectorAll('.role-vozac').forEach(el => el.style.display = (role === 'Vozac') ? '' : 'none');
     document.querySelectorAll('.role-management').forEach(el => el.style.display = (role === 'Management') ? '' : 'none');
-    const firstBtn = document.querySelector('.tab-btn:not([style*="none"])');
-    if (firstBtn) firstBtn.click();
 }
 
