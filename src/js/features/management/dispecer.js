@@ -276,7 +276,7 @@ function dpRS() {
         return `
             <div class="dp-card sup${isSel ? ' sel' : ''}" onclick="dpTS('${sid}')">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-weight:700;">📦 ${dpSN(sid)}</span>
+                    <span style="font-weight:700;">📦 ${escapeHtml(dpSN(sid))}</span>
                     <span style="font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
                 </div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
@@ -454,7 +454,7 @@ function dpRTr() {
             const pKg = parseInt(p.PlannedKg || 0) || 0;
             return `
                 <div style="font-size:11px;margin-top:3px;color:var(--success);font-weight:600;">
-                    📋 Plan: ${p.StanicaName || p.StanicaID || '?'} → ${p.KupacName || p.KupacID || '?'} (${pKg.toLocaleString('sr')} kg)
+                    📋 Plan: ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')} (${pKg.toLocaleString('sr')} kg)
                 </div>
             `;
         }).join('');
@@ -462,7 +462,7 @@ function dpRTr() {
         return `
             <div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-                    <span style="font-weight:700;font-size:14px;">🚛 ${x.name || vid}</span>
+                    <span style="font-weight:700;font-size:14px;">🚛 ${escapeHtml(x.name || vid)}</span>
                     <span style="font-size:14px;font-weight:700;">${loadKg.toLocaleString('sr')} kg</span>
                 </div>
 
@@ -495,14 +495,14 @@ function dpRTr() {
 
                 ${rutaText ? `
                     <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-                        Ruta: ${rutaText}
+                        Ruta: ${escapeHtml(rutaText)}
                     </div>
                 ` : ''}
 
                 ${planHtml}
 
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-                    <span class="dp-badge ${st}">${sl[st] || st}</span>
+                    <span class="dp-badge ${st}">${escapeHtml(sl[st] || st)}</span>
                 </div>
 
                 <div class="dp-stb" onclick="event.stopPropagation()">
@@ -565,12 +565,12 @@ function dpRD() {
         return `
             <div class="dp-card dem${isSel ? ' sel' : ''}" onclick="dpTD('${did}')">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <strong>🏭 ${kup}</strong>
+                    <strong>🏭 ${escapeHtml(kup)}</strong>
                     <strong>${trazeno.toLocaleString('sr')} kg</strong>
                 </div>
 
                 <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                    ${d.Vrsta || ''} ${d.Klasa || ''}
+                    ${escapeHtml(d.Vrsta || '')} ${escapeHtml(d.Klasa || '')}
                 </div>
 
                 <div class="dp-bar" style="margin-top:8px;">
@@ -601,9 +601,9 @@ function dpRP() {
     b.innerHTML = dpPlans.map(p => `
         <div class="dp-plan-item">
             <div>
-                <div class="dp-pi-route">🚛 ${p.VozacID} · ${p.StanicaName || p.StanicaID || '?'} → ${p.KupacName || p.KupacID || '?'}</div>
+                <div class="dp-pi-route">🚛 ${escapeHtml(p.VozacID)} · ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')}</div>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
-                    ${parseInt(p.PlannedKg || 0).toLocaleString('sr')} kg · status: ${p.Status || 'planned'}
+                    ${parseInt(p.PlannedKg || 0).toLocaleString('sr')} kg · status: ${escapeHtml(p.Status || 'planned')}
                 </div>
             </div>
             <div style="display:flex;gap:6px;">
@@ -674,7 +674,7 @@ function dpTS(sid) {
         .reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
 
     dpBN(
-        '🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(sid) + ' (' + kg.toLocaleString('sr') + ' kg)',
+        '🚛 ' + escapeHtml(dpSel.vid) + ' → 📦 ' + escapeHtml(dpSN(sid)) + ' (' + kg.toLocaleString('sr') + ' kg)',
         'Korak 3: tapnite HLADNJAČU gde ide roba'
     );
     dpHL();
@@ -702,7 +702,7 @@ function dpTD(did) {
         .reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
 
     dpBN(
-        '🚛 ' + dpSel.vid + ' → 📦 ' + dpSN(dpSel.sid) + ' (' + kg.toLocaleString('sr') + ' kg) → 🏭 ' + (d ? d.KupacName : '?'),
+        '🚛 ' + escapeHtml(dpSel.vid) + ' → 📦 ' + escapeHtml(dpSN(dpSel.sid)) + ' (' + kg.toLocaleString('sr') + ' kg) → 🏭 ' + escapeHtml(d ? d.KupacName : '?'),
         'Tapnite SAČUVAJ PLAN'
     );
     dpHL();
@@ -792,7 +792,7 @@ async function dpOK() {
                 dpKamioni.push({ id: vid, name: vid });
             }
 
-            showToast('📋 Plan: ' + ruta, 'success');
+            showToast('📋 Plan: ' + escapeHtml(ruta), 'success');
         } else {
             showToast(json.error || 'Greška', 'error');
         }
