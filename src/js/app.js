@@ -11,46 +11,127 @@ let parcelExpertOpen = {};
 // ============================================================
 // INIT
 // ============================================================
-document.addEventListener('DOMContentLoaded', async () => {
-    if (!getLs('authToken', '') || !getLs('otkupacID', '')) {
-        showLoginScreen();
-        return;
+// src/js/app.js
+document.addEventListener('DOMContentLoaded', bootstrapApp);
+
+async function bootstrapApp() {
+    AppState.patch('init', { domReady: true, bootError: null });
+
+    try {
+        if (!hasValidSession()) {
+            showLoginScreen();
+            return;
+        }
+
+        const dbInstance = await openDB();
+        AppState.set('db', dbInstance);
+        AppState.patch('init', { dbReady: true });
+
+        await loadStammdatenFromCache();
+        applyShellUI();
+        applyRoleVisibilitySafe();
+
+        await bootstrapRole();
+
+        bindGlobalAppEvents();
+        startBackgroundJobs();
+
+        // network refresh after shell is stable
+        refreshStammdatenInBackground();
+
+        AppState.patch('init', {
+            stammdatenReady: true,
+            appReady: true
+        });
+    } catch (err) {
+        console.error('bootstrap failed', err);
+        AppState.patch('init', { bootError: err });
+        showToast('Greška pri pokretanju aplikacije', 'error');
     }
-    db = await openDB();
-    await loadStammdaten();
+}
+
+function hasValidSession() {
+    return !!getLs('authToken', '') && !!getLs('otkupacID', '');
+}
+
+function applyShellUI() {
+    const headerInfo = document.getElementById('headerInfo');
+    if (headerInfo) {
+        headerInfo.textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
+    }
+    updateSyncBadge();
+}
+
+function applyRoleVisibilitySafe() {
     applyRoleVisibility();
-    document.getElementById('headerInfo').textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
+}
+
+async function bootstrapRole() {
+    const today = new Date().toISOString().split('T')[0];
 
     if (CONFIG.USER_ROLE === 'Otkupac') {
         populateVrstaDropdown();
         applyDefaults();
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('fldPregledOd').value = today;
-        document.getElementById('fldPregledDo').value = today;
-        const otpDatumEl = document.getElementById('fldOtpremniceDatum');
-        if (otpDatumEl) otpDatumEl.value = today;
+
+        const od = document.getElementById('fldPregledOd');
+        const _do = document.getElementById('fldPregledDo');
+        if (od) od.value = today;
+        if (_do) _do.value = today;
     }
 
     if (CONFIG.USER_ROLE === 'Kooperant') {
-        agroPopulateParcele();
+        await guardStammdaten(agroPopulateParcele);
     }
-    
+
     if (CONFIG.USER_ROLE === 'Management') {
         populateMgmtStanice();
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('mgmtOtkupiOd').value = today;
-        document.getElementById('mgmtOtkupiDo').value = today;
-        prefetchMgmtData().then(() => { 
-            populateMgmtKupciDropdown();
-            showTab('dispecer');
-        });
-    }
-    updateSyncBadge();
-    window.addEventListener('online', () => { updateSyncBadge(); if (CONFIG.USER_ROLE === 'Otkupac') syncQueue(); });
-    window.addEventListener('offline', () => updateSyncBadge());
-    setInterval(() => { if (navigator.onLine && CONFIG.USER_ROLE === 'Otkupac') syncQueue(); }, 60000);
-});
 
+        const od = document.getElementById('mgmtOtkupiOd');
+        const _do = document.getElementById('mgmtOtkupiDo');
+        if (od) od.value = today;
+        if (_do) _do.value = today;
+
+        await prefetchMgmtData();
+        populateMgmtKupciDropdown();
+        showTab('dispecer');
+    }
+}
+
+function bindGlobalAppEvents() {
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+}
+
+function startBackgroundJobs() {
+    if (window.__syncInterval) clearInterval(window.__syncInterval);
+
+    window.__syncInterval = setInterval(() => {
+        if (navigator.onLine && CONFIG.USER_ROLE === 'Otkupac') {
+            syncQueueSafe();
+        }
+    }, 60000);
+}
+
+function handleOnline() {
+    updateSyncBadge();
+    if (CONFIG.USER_ROLE === 'Otkupac') syncQueueSafe();
+}
+
+function handleOffline() {
+    updateSyncBadge();
+}
+
+async function syncQueueSafe() {
+    if (AppState.get('sync.inFlight')) return;
+
+    AppState.patch('sync', { inFlight: true });
+    try {
+        await syncQueue();
+        AppState.patch('sync', { lastRunAt: new Date().toISOString() });
+    } finally {
+        AppState.patch('sync', { inFlight: false });
+    }
+}
 
 
 // ============================================================
