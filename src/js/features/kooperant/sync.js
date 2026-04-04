@@ -1,90 +1,231 @@
-async function agroSaveTretman() {
-    const art = agroState.artikalData;
-    const timer = agroState.timerResult;
-    const now = new Date();
-    const nowIso = now.toISOString();
+// ============================================================
+// KOOPERANT SYNC
+// Covers:
+// - CONFIG.AGRO_STORE  -> action: syncAgromere
+// - 'tretmani'         -> action: syncTretman
+//
+// Note:
+// This file assumes the following globals already exist:
+// db, CONFIG, dbGetByIndex, dbPut, apiPost, showToast
+// ============================================================
 
-    let datumBerbeDozvoljeno = '';
-    if (agroState.karencaDana > 0) {
-        const d = new Date();
-        d.setDate(d.getDate() + agroState.karencaDana);
-        datumBerbeDozvoljeno = d.toISOString().split('T')[0];
+(function () {
+    function ensureKooperantRuntime() {
+        window.appRuntime = window.appRuntime || {};
+
+        if (!window.appRuntime.kooperantSync) {
+            window.appRuntime.kooperantSync = {
+                agromereInFlight: false,
+                tretmaniInFlight: false
+            };
+        }
+
+        return window.appRuntime.kooperantSync;
     }
 
-    const record = {
-        clientRecordID: (window.crypto && typeof window.crypto.randomUUID === 'function')
-            ? window.crypto.randomUUID()
-            : ('agro-' + Date.now() + '-' + Math.floor(Math.random() * 1000000)),
-        serverRecordID: '',
-        createdAtClient: nowIso,
-        updatedAtClient: nowIso,
-        updatedAtServer: '',
-        syncedAt: '',
+    async function syncEntityStore(options) {
+        const {
+            storeName,
+            action,
+            inFlightKey,
+            successLabel
+        } = options;
 
-        kooperantID: CONFIG.ENTITY_ID,
-        parcelaID: agroState.parcelaID,
-        datum: nowIso.split('T')[0],
-        mera: agroState.mera,
+        if (!db) return { ok: false, reason: 'db-not-ready' };
+        if (!navigator.onLine) return { ok: false, reason: 'offline' };
 
-        artikalID: art ? art.artikalID : '',
-        artikalNaziv: art ? art.naziv : '',
-        kolicinaUpotrebljena: agroState.kolicina || '',
-        jedinicaMere: art ? art.jm : '',
-        dozaPreporucena: agroState.dozaPreporucena || '',
-        dozaPrimenjena: agroState.kolicina || '',
+        const runtime = ensureKooperantRuntime();
 
-        opremaTraktor: agroState.opremaTraktor,
-        opremaPrskalica: agroState.opremaPrskalica,
-        opremaOstalo: agroState.opremaOstalo,
+        if (runtime[inFlightKey]) {
+            return { ok: false, reason: 'already-running' };
+        }
 
-        karencaDana: agroState.karencaDana || '',
-        datumBerbeDozvoljeno: datumBerbeDozvoljeno,
+        runtime[inFlightKey] = true;
 
-        vremePocetka: timer ? timer.pocetakISO : '',
-        vremeZavrsetka: timer ? timer.zavrsetakISO : '',
-        trajanjeMinuta: timer ? timer.trajanjeMinuta : '',
+        let pending = [];
 
-        geoLatStart: agroState.geoStart ? agroState.geoStart.lat : '',
-        geoLngStart: agroState.geoStart ? agroState.geoStart.lng : '',
-        geoLatEnd: agroState.geoEnd ? agroState.geoEnd.lat : '',
-        geoLngEnd: agroState.geoEnd ? agroState.geoEnd.lng : '',
-        geoAutoDetect: agroState.geoAutoDetect ? 'Da' : '',
+        try {
+            pending = await dbGetByIndex(db, storeName, 'syncStatus', 'pending');
 
-        meteoTemp: agroState.meteoSnapshot ? agroState.meteoSnapshot.temp : '',
-        meteoWind: agroState.meteoSnapshot ? agroState.meteoSnapshot.wind : '',
-        meteoHumidity: agroState.meteoSnapshot ? agroState.meteoSnapshot.humidity : '',
-        meteoOverride: agroState.meteoOverride ? 'Da' : '',
+            if (!Array.isArray(pending) || pending.length === 0) {
+                return { ok: true, synced: 0, failed: 0 };
+            }
 
-        napomena: agroState.napomena,
+            for (const record of pending) {
+                record.syncStatus = 'syncing';
+                record.syncAttemptAt = new Date().toISOString();
+                await dbPut(db, storeName, record);
+            }
 
-        syncStatus: 'pending',
-        syncAttempts: 0,
-        syncAttemptAt: '',
-        lastSyncError: '',
-        lastServerStatus: '',
-        deleted: false,
-        entityType: 'tretman',
-        schemaVersion: 1
-    };
+            const json = await apiPost(action, {
+                kooperantID: CONFIG.ENTITY_ID,
+                records: pending
+            });
 
-    await dbPut(db, CONFIG.AGRO_STORE, record);
-    showToast('Tretman sačuvan!', 'success');
+            if (!json || json.success === false) {
+                for (const record of pending) {
+                    record.syncStatus = 'pending';
+                    record.lastSyncError = json && json.error ? json.error : 'Sync neuspešan';
+                    record.lastServerStatus = 'request-failed';
+                    record.syncAttempts = (record.syncAttempts || 0) + 1;
+                    await dbPut(db, storeName, record);
+                }
 
-    try {
-        await agroLoadIstorija();
-    } catch (e) {
-        console.error('agroLoadIstorija after save failed:', e);
-    }
+                showToast(successLabel + ' sync nije uspeo', 'error');
+                return { ok: false, synced: 0, failed: pending.length };
+            }
 
-    if (navigator.onLine) {
-        if (typeof syncAgromere === 'function') {
-            await syncAgromere();
+            if (Array.isArray(json.results)) {
+                const byClientId = new Map(
+                    pending.map(r => [r.clientRecordID, r])
+                );
+
+                const mentionedIds = new Set(
+                    json.results.map(r => r.clientRecordID).filter(Boolean)
+                );
+
+                let syncedCount = 0;
+                let failedCount = 0;
+
+                for (const result of json.results) {
+                    const record = byClientId.get(result.clientRecordID);
+                    if (!record) continue;
+
+                    record.syncAttempts = (record.syncAttempts || 0) + 1;
+
+                    const isSuccess =
+                        !!result.success ||
+                        result.status === 'synced' ||
+                        result.status === 'duplicate' ||
+                        result.status === 'existing' ||
+                        result.status === 'inserted' ||
+                        result.status === 'updated';
+
+                    if (isSuccess) {
+                        record.syncStatus = 'synced';
+                        record.lastSyncError = '';
+                        record.syncedAt = new Date().toISOString();
+                        record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
+                        record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
+                        record.lastServerStatus = result.status || 'synced';
+                        syncedCount++;
+                    } else {
+                        record.syncStatus = 'pending';
+                        record.lastSyncError = result.error || 'Sync stavke neuspešan';
+                        record.lastServerStatus = result.status || 'failed';
+                        failedCount++;
+                    }
+
+                    await dbPut(db, storeName, record);
+                }
+
+                for (const record of pending) {
+                    if (!mentionedIds.has(record.clientRecordID)) {
+                        record.syncStatus = 'pending';
+                        record.lastSyncError = 'Nema potvrde sa servera';
+                        record.lastServerStatus = 'missing-result';
+                        record.syncAttempts = (record.syncAttempts || 0) + 1;
+                        failedCount++;
+                        await dbPut(db, storeName, record);
+                    }
+                }
+
+                if (syncedCount > 0 && failedCount === 0) {
+                    showToast(successLabel + ': ' + syncedCount, 'success');
+                } else if (syncedCount > 0 && failedCount > 0) {
+                    showToast(successLabel + ': ' + syncedCount + ' uspešno, ' + failedCount + ' neuspešno', 'info');
+                } else {
+                    showToast(successLabel + ' nisu sinhronizovane', 'error');
+                }
+
+                return { ok: failedCount === 0, synced: syncedCount, failed: failedCount };
+            }
+
+            // Legacy fallback for older backend responses: { success: true }
+            for (const record of pending) {
+                record.syncStatus = 'synced';
+                record.lastSyncError = '';
+                record.syncedAt = new Date().toISOString();
+                record.lastServerStatus = 'legacy-success';
+                record.syncAttempts = (record.syncAttempts || 0) + 1;
+                await dbPut(db, storeName, record);
+            }
+
+            showToast(successLabel + ': ' + pending.length, 'success');
+            return { ok: true, synced: pending.length, failed: 0 };
+        } catch (err) {
+            console.error(action + ' failed:', err);
+
+            for (const record of pending) {
+                try {
+                    if (record.syncStatus === 'syncing') {
+                        record.syncStatus = 'pending';
+                        record.lastSyncError = err && err.message ? err.message : 'Greška pri sync-u';
+                        record.lastServerStatus = 'exception';
+                        record.syncAttempts = (record.syncAttempts || 0) + 1;
+                        await dbPut(db, storeName, record);
+                    }
+                } catch (rollbackErr) {
+                    console.error('rollback failed:', rollbackErr);
+                }
+            }
+
+            showToast('Greška pri sinhronizaciji', 'error');
+            return { ok: false, synced: 0, failed: pending.length || 0 };
+        } finally {
+            runtime[inFlightKey] = false;
         }
     }
 
-    agroResetState();
-    agroPopulateParcele();
-    agroLoadIstorija();
-    document.getElementById('agroStep1').style.display = 'block';
-    document.getElementById('agroStep2').style.display = 'none';
-}
+    // ------------------------------------------------------------
+    // AGROMERE (legacy/simple agro store)
+    // Backend action: syncAgromere
+    // Store: CONFIG.AGRO_STORE
+    // ------------------------------------------------------------
+    window.syncAgromere = async function syncAgromere() {
+        return syncEntityStore({
+            storeName: CONFIG.AGRO_STORE,
+            action: 'syncAgromere',
+            inFlightKey: 'agromereInFlight',
+            successLabel: 'Agromere sinhronizovane'
+        });
+    };
+
+    // ------------------------------------------------------------
+    // TRETMANI (digitalni agronom)
+    // Backend action: syncTretman
+    // Store: 'tretmani'
+    // ------------------------------------------------------------
+    window.syncTretmani = async function syncTretmani() {
+        return syncEntityStore({
+            storeName: 'tretmani',
+            action: 'syncTretman',
+            inFlightKey: 'tretmaniInFlight',
+            successLabel: 'Tretmani sinhronizovani'
+        });
+    };
+
+    // ------------------------------------------------------------
+    // Optional convenience helper
+    // ------------------------------------------------------------
+    window.syncKooperantNow = async function syncKooperantNow() {
+        const results = [];
+
+        // syncAgromere only if store exists in config and function is meaningful in your app
+        if (CONFIG && CONFIG.AGRO_STORE) {
+            try {
+                results.push({ type: 'agromere', ...(await window.syncAgromere()) });
+            } catch (e) {
+                results.push({ type: 'agromere', ok: false, error: e.message || 'syncAgromere failed' });
+            }
+        }
+
+        try {
+            results.push({ type: 'tretmani', ...(await window.syncTretmani()) });
+        } catch (e) {
+            results.push({ type: 'tretmani', ok: false, error: e.message || 'syncTretmani failed' });
+        }
+
+        return results;
+    };
+})();
