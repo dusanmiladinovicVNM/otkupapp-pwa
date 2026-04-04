@@ -91,7 +91,7 @@ async function saveOtkup() {
         syncStatus: 'pending'
     };
     await dbPut(db, CONFIG.STORE_NAME, record);
-    showToast('Otkup sačuvan! ' + kolicina + ' kg', 'success');
+    showToast('Otkup sačuvan! ' + escapeHtml(String(kolicina)) + ' kg', 'success');
     showOtkupniList(record);
     resetForm(); updateStats();
     if (navigator.onLine) syncQueue();
