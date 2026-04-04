@@ -2181,21 +2181,6 @@ async function loadKoopInfo() {
         </div>`;
 }
 
-           
-
-
-    
-
-
-
-// ============================================================
-// MANAGEMENT: AGROHEMIJA (placeholder)
-// ============================================================
-
-function loadMgmtAgroStanje() {
-    document.getElementById('mgmtAgroStanjeList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p>';
-}
-
 // ============================================================
 // TAB NAVIGATION (non-management)
 // ============================================================
