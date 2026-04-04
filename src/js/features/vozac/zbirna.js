@@ -55,12 +55,12 @@ function renderVozacOtpremnice() {
     list.innerHTML = Object.entries(grouped).map(([sta, g]) =>
         `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
             <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                <strong style="color:var(--primary);">${fmtStanica(sta)}</strong>
+                <strong style="color:var(--primary);">${escapeHtml(fmtStanica(sta))}</strong>
                 <span style="font-weight:600;">${g.kg.toLocaleString('sr')} kg</span>
             </div>
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">${g.items.length} otkupa | Amb: ${g.amb}</div>
             ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">
-                ${r.kooperantName} | ${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg | ${r.kolAmbalaze} amb
+               ${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg | ${r.kolAmbalaze} amb
             </div>`).join('')}
         </div>`).join('');
 }
@@ -119,8 +119,8 @@ function renderZbirnaSummary() {
     document.getElementById('zbirnaOtkupiList').innerHTML = todayOtkupi.map(r => {
         const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
         return `<div class="queue-item">
-            <div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${fmtStanica(r.stanicaID)}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD | Amb: ${r.kolAmbalaze}</div>
+             <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(fmtStanica(r.stanicaID))}</span></div>
+             <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD | Amb: ${r.kolAmbalaze}</div>
         </div>`;
     }).join('');
 }
@@ -209,8 +209,8 @@ async function loadVozacZbirne() {
         const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
         const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
         return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">🏭 ${r.kupacName}</span><span class="qi-time">${r.datum}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} | ${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0}</div>
+            <div class="qi-header"><span class="qi-koop">🏭 ${escapeHtml(r.kupacName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
+            <div class="qi-detail">${escapeHtml(r.vrstaVoca)} | ${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0}</div>
             ${r.kolicinaKlII > 0 ? '<div class="qi-detail" style="font-size:11px;">Kl.I: ' + (r.kolicinaKlI||0).toLocaleString('sr') + ' kg | Kl.II: ' + (r.kolicinaKlII||0).toLocaleString('sr') + ' kg</div>' : ''}
         </div>`;
     }).join('');
