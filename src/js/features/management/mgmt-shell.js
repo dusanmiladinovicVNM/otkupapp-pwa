@@ -22,3 +22,26 @@ const MGMT_SUBS = {
         { id: 'agro-stanje', label: 'Stanje', load: loadMgmtAgroStanje }
     ]
 };
+
+// ============================================================
+// PREFETCH
+// ============================================================
+async function prefetchMgmtData() {
+    try {
+        const json = await apiFetch('action=getMgmtAll');
+        if (json && json.success) { mgmtData = json; }
+    } catch (e) {}
+}
+
+function populateMgmtKupciDropdown() {
+    const sel = document.getElementById('mgmtFaktureKupac');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- Izaberi --</option>';
+    const kupci = mgmtData ? (mgmtData.saldoKupci || []) : [];
+    kupci.forEach(k => {
+        const o = document.createElement('option');
+        o.value = k.KupacID || k.Kupac;
+        o.textContent = k.Kupac || k.KupacID;
+        sel.appendChild(o);
+    });
+}
