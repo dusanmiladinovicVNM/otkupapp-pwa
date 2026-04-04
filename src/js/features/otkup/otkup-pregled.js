@@ -2,59 +2,237 @@
 // OTKUP PREGLED
 // ============================================================
 async function loadOtkupPregled() {
-    document.getElementById('pregledList').innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
+    const list = document.getElementById('pregledList');
+    const fldOd = document.getElementById('fldPregledOd');
+    const fldDo = document.getElementById('fldPregledDo');
 
-    const od = document.getElementById('fldPregledOd').value;
-    const doo = document.getElementById('fldPregledDo').value;
-    const local = await dbGetAll(db, CONFIG.STORE_NAME);
+    if (!list) return;
 
+    list.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
+
+    const od = fldOd ? fldOd.value : '';
+    const doo = fldDo ? fldDo.value : '';
+
+    let local = [];
     let server = [];
-    const json = await safeAsync(async () => {
-        return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-    }, 'Greška pri učitavanju otkupa');
 
-    if (json && json.success && json.records) {
-        server = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '',
-            datum: fmtDate(r.Datum),
-            kooperantID: r.KooperantID || '',
-            kooperantName: r.KooperantName || r.KooperantID || '',
-            vrstaVoca: r.VrstaVoca || '',
-            sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I',
-            kolicina: parseFloat(r.Kolicina) || 0,
-            cena: parseFloat(r.Cena) || 0,
-            kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-            parcelaID: r.ParcelaID || '',
-            syncStatus: r.SyncStatus || 'synced'
-        }));
+    try {
+        if (db) {
+            local = await dbGetAll(db, CONFIG.STORE_NAME);
+        }
+    } catch (err) {
+        console.error('loadOtkupPregled local failed:', err);
     }
 
-    const serverIDs = new Set(server.map(r => r.clientRecordID));
-    let all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
+    if (navigator.onLine) {
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        }, 'Greška pri učitavanju otkupa');
 
-    if (od) all = all.filter(r => r.datum >= od);
-    if (doo) all = all.filter(r => r.datum <= doo);
+        if (json && json.success && Array.isArray(json.records)) {
+            server = json.records.map(mapServerOtkupRecord);
+        }
+    }
 
-    all.sort((a, b) => b.datum.localeCompare(a.datum));
+    let all = mergeOtkupPregledRecords(local, server);
 
-    const kg = all.reduce((s, r) => s + (r.kolicina || 0), 0);
-    const vr = all.reduce((s, r) => s + (r.kolicina || 0) * (r.cena || 0), 0);
+    if (od) all = all.filter(r => (r.datum || '') >= od);
+    if (doo) all = all.filter(r => (r.datum || '') <= doo);
 
-    document.getElementById('statPregledCount').textContent = all.length;
-    document.getElementById('statPregledKg').textContent = kg.toLocaleString('sr');
-    document.getElementById('statPregledVrednost').textContent = vr.toLocaleString('sr');
-    document.getElementById('statPregledKoop').textContent = new Set(all.map(r => r.kooperantID)).size;
+    all.sort(compareOtkupPregledRecordsDesc);
 
-    const list = document.getElementById('pregledList');
-    if (all.length === 0) {
+    renderOtkupPregledStats(all);
+    renderOtkupPregledList(list, all);
+}
+
+function mapServerOtkupRecord(r) {
+    return {
+        clientRecordID: r.ClientRecordID || '',
+        serverRecordID: r.ServerRecordID || '',
+        createdAtClient: normalizeDateTime(r.CreatedAtClient),
+        updatedAtClient: normalizeDateTime(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeDateTime(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: normalizeDateTime(r.UpdatedAtServer || r.ReceivedAt),
+
+        datum: fmtDate(r.Datum),
+        kooperantID: r.KooperantID || '',
+        kooperantName: r.KooperantName || r.KooperantID || '',
+        vrstaVoca: r.VrstaVoca || '',
+        sortaVoca: r.SortaVoca || '',
+        klasa: r.Klasa || 'I',
+        kolicina: parseFloat(r.Kolicina) || 0,
+        cena: parseFloat(r.Cena) || 0,
+        kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
+        parcelaID: r.ParcelaID || '',
+        vozacID: r.VozacID || '',
+        napomena: r.Napomena || '',
+
+        syncStatus: 'synced',
+        syncAttempts: 0,
+        lastSyncError: '',
+        lastServerStatus: 'server'
+    };
+}
+
+function mergeOtkupPregledRecords(local, server) {
+    const merged = new Map();
+
+    // prvo ubaci server snapshot
+    for (const rec of (server || [])) {
+        if (!rec || !rec.clientRecordID) continue;
+        merged.set(rec.clientRecordID, rec);
+    }
+
+    // onda lokalni prepisuje server ako je unsynced ili noviji
+    for (const rec of (local || [])) {
+        if (!rec || !rec.clientRecordID) continue;
+
+        const existing = merged.get(rec.clientRecordID);
+
+        if (!existing) {
+            merged.set(rec.clientRecordID, normalizeLocalPregledRecord(rec));
+            continue;
+        }
+
+        const localNorm = normalizeLocalPregledRecord(rec);
+
+        // lokalni unsynced uvek ima prioritet u pregledu
+        if (localNorm.syncStatus === 'pending' || localNorm.syncStatus === 'syncing') {
+            merged.set(rec.clientRecordID, localNorm);
+            continue;
+        }
+
+        // fallback: ako je lokalni synced ali noviji od server snapshot-a
+        const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
+        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
+
+        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
+            merged.set(rec.clientRecordID, localNorm);
+        }
+    }
+
+    return Array.from(merged.values());
+}
+
+function normalizeLocalPregledRecord(r) {
+    return {
+        clientRecordID: r.clientRecordID || '',
+        serverRecordID: r.serverRecordID || '',
+        createdAtClient: normalizeDateTime(r.createdAtClient),
+        updatedAtClient: normalizeDateTime(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: normalizeDateTime(r.updatedAtServer),
+        syncedAt: normalizeDateTime(r.syncedAt),
+
+        datum: r.datum || '',
+        kooperantID: r.kooperantID || '',
+        kooperantName: r.kooperantName || r.kooperantID || '',
+        vrstaVoca: r.vrstaVoca || '',
+        sortaVoca: r.sortaVoca || '',
+        klasa: r.klasa || 'I',
+        kolicina: parseFloat(r.kolicina) || 0,
+        cena: parseFloat(r.cena) || 0,
+        kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
+        parcelaID: r.parcelaID || '',
+        vozacID: r.vozacID || '',
+        napomena: r.napomena || '',
+
+        syncStatus: r.syncStatus || 'pending',
+        syncAttempts: parseInt(r.syncAttempts, 10) || 0,
+        lastSyncError: r.lastSyncError || '',
+        lastServerStatus: r.lastServerStatus || ''
+    };
+}
+
+function compareOtkupPregledRecordsDesc(a, b) {
+    const aTime = a.updatedAtClient || a.createdAtClient || a.updatedAtServer || '';
+    const bTime = b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '';
+
+    const byDate = (b.datum || '').localeCompare(a.datum || '');
+    if (byDate !== 0) return byDate;
+
+    const byTime = String(bTime).localeCompare(String(aTime));
+    if (byTime !== 0) return byTime;
+
+    return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
+}
+
+function renderOtkupPregledStats(all) {
+    const countEl = document.getElementById('statPregledCount');
+    const kgEl = document.getElementById('statPregledKg');
+    const vrednostEl = document.getElementById('statPregledVrednost');
+    const koopEl = document.getElementById('statPregledKoop');
+
+    const kg = all.reduce((s, r) => s + (parseFloat(r.kolicina) || 0), 0);
+    const vr = all.reduce((s, r) => s + ((parseFloat(r.kolicina) || 0) * (parseFloat(r.cena) || 0)), 0);
+    const koopCount = new Set(all.map(r => r.kooperantID).filter(Boolean)).size;
+
+    if (countEl) countEl.textContent = String(all.length);
+    if (kgEl) kgEl.textContent = kg.toLocaleString('sr-RS');
+    if (vrednostEl) vrednostEl.textContent = vr.toLocaleString('sr-RS');
+    if (koopEl) koopEl.textContent = String(koopCount);
+}
+
+function renderOtkupPregledList(list, all) {
+    if (!all.length) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema otkupa</p>';
         return;
     }
 
     list.innerHTML = all.map(r => {
-        const v = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
-        return `<div class="queue-item" style="border-left-color:${bc};"><div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div><div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong>${r.parcelaID ? ' | ' + escapeHtml(r.parcelaID) : ''}</div></div>`;
+        const vrednost = ((parseFloat(r.kolicina) || 0) * (parseFloat(r.cena) || 0)).toLocaleString('sr-RS');
+        const meta = buildPregledStatusMeta(r);
+
+        return `
+            <div class="queue-item" style="border-left-color:${meta.color};">
+                <div class="qi-header">
+                    <span class="qi-koop">${escapeHtml(r.kooperantName || '')}</span>
+                    <span class="qi-time">${escapeHtml(r.datum || '')}</span>
+                </div>
+                <div class="qi-detail">
+                    ${escapeHtml(r.vrstaVoca || '')}
+                    ${escapeHtml(r.sortaVoca || '')}
+                    ${escapeHtml(r.klasa || '')}
+                    | ${escapeHtml(String(r.kolicina || 0))} kg × ${escapeHtml(String(r.cena || 0))}
+                    = <strong>${escapeHtml(vrednost)} RSD</strong>
+                    ${r.parcelaID ? ' | ' + escapeHtml(r.parcelaID) : ''}
+                </div>
+                <div style="margin-top:6px;font-size:12px;color:var(--text-muted);">
+                    ${escapeHtml(meta.label)}
+                    ${r.lastSyncError ? ' | ' + escapeHtml(r.lastSyncError) : ''}
+                </div>
+            </div>
+        `;
     }).join('');
+}
+
+function buildPregledStatusMeta(r) {
+    if (r.syncStatus === 'syncing') {
+        return {
+            color: 'var(--warning)',
+            label: 'Sinhronizacija u toku'
+        };
+    }
+
+    if (r.syncStatus === 'pending') {
+        return {
+            color: 'var(--warning)',
+            label: 'Čeka sinhronizaciju'
+        };
+    }
+
+    return {
+        color: 'var(--success)',
+        label: r.serverRecordID ? ('Sinhronizovano • ' + r.serverRecordID) : 'Sinhronizovano'
+    };
+}
+
+function normalizeDateTime(value) {
+    if (!value) return '';
+    try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        return d.toISOString();
+    } catch (_) {
+        return String(value);
+    }
 }
