@@ -35,8 +35,8 @@ function renderKartica(records) {
         const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
         zad += z; raz += ra;
         return `<div class="queue-item" style="border-left-color:${z>0?'var(--danger)':'var(--success)'};">
-            <div class="qi-header"><span class="qi-koop">${r.BrojDok||''}</span><span class="qi-time">${fmtDate(r.Datum)}</span></div>
-            <div class="qi-detail">${r.Opis||''}</div>
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojDok||'')}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
+            <div class="qi-detail">${escapeHtml(r.Opis||'')}</div>
             <div class="qi-detail" style="font-size:12px;margin-top:2px;">
                 ${z>0?'<span style="color:var(--danger);">Zaduž: '+z.toLocaleString('sr')+'</span> ':''}
                 ${ra>0?'<span style="color:var(--success);">Razduž: '+ra.toLocaleString('sr')+'</span> ':''}
