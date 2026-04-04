@@ -4,28 +4,30 @@
 let vozacOtkupi = [];
 
 async function loadVozacData() {
-    // Load otkupi assigned to this vozac
     vozacOtkupi = [];
-    try {
-        const json = await apiFetch('action=getVozacOtkupi');
-        if (json && json.success && json.records) {
-            vozacOtkupi = json.records.map(r => ({
-                clientRecordID: r.ClientRecordID || '',
-                datum: fmtDate(r.Datum),
-                kooperantName: r.KooperantName || r.KooperantID || '',
-                kooperantID: r.KooperantID || '',
-                vrstaVoca: r.VrstaVoca || '',
-                sortaVoca: r.SortaVoca || '',
-                klasa: r.Klasa || 'I',
-                kolicina: parseFloat(r.Kolicina) || 0,
-                cena: parseFloat(r.Cena) || 0,
-                tipAmbalaze: r.TipAmbalaze || '',
-                kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-                stanicaID: r.OtkupacID || r._source || '',
-                zbirnaID: r._zbirnaID || ''
-            }));
-        }
-    } catch (e) {}
+
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getVozacOtkupi');
+    }, 'Greška pri učitavanju podataka vozača');
+
+    if (json && json.success && json.records) {
+        vozacOtkupi = json.records.map(r => ({
+            clientRecordID: r.ClientRecordID || '',
+            datum: fmtDate(r.Datum),
+            kooperantName: r.KooperantName || r.KooperantID || '',
+            kooperantID: r.KooperantID || '',
+            vrstaVoca: r.VrstaVoca || '',
+            sortaVoca: r.SortaVoca || '',
+            klasa: r.Klasa || 'I',
+            kolicina: parseFloat(r.Kolicina) || 0,
+            cena: parseFloat(r.Cena) || 0,
+            tipAmbalaze: r.TipAmbalaze || '',
+            kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
+            stanicaID: r.OtkupacID || r._source || '',
+            zbirnaID: r._zbirnaID || ''
+        }));
+    }
+
     renderVozacOtpremnice();
     loadVozacZbirne();
 }
