@@ -329,10 +329,13 @@ async function showOtpremaAssignView() {
 
 function renderOtpremaCheckboxes() {
     const list = document.getElementById('otpremaOtkupList');
+    if (!list) return;
+
     if (otpremaUnassigned.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema neraspoređenih otkupa za danas</p>';
         return;
     }
+
     list.innerHTML = otpremaUnassigned.map((r, i) => {
         const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
         return `<div class="queue-item" style="cursor:pointer;" onclick="toggleOtpremaItem(${i})">
@@ -346,9 +349,9 @@ function renderOtpremaCheckboxes() {
             </div>
         </div>`;
     }).join('');
+
     updateOtpremaSummary();
 }
-
 function toggleOtpremaItem(index) {
     const chk = document.getElementById('otpChk' + index);
     chk.checked = !chk.checked;
@@ -363,16 +366,24 @@ function toggleSelectAll() {
 }
 
 function updateOtpremaSummary() {
-    let kg = 0, count = 0;
+    const div = document.getElementById('otpremaSummary');
+    const text = document.getElementById('otpremaSummaryText');
+    if (!div || !text) return;
+
+    let kg = 0;
+    let count = 0;
+
     otpremaUnassigned.forEach((r, i) => {
         const chk = document.getElementById('otpChk' + i);
-        if (chk && chk.checked) { kg += r.kolicina || 0; count++; }
+        if (chk && chk.checked) {
+            kg += r.kolicina || 0;
+            count++;
+        }
     });
-    const div = document.getElementById('otpremaSummary');
+
     if (count > 0) {
         div.style.display = 'block';
-        document.getElementById('otpremaSummaryText').textContent = 
-            'Izabrano: ' + count + ' otkupa | ' + kg.toLocaleString('sr') + ' kg';
+        text.textContent = 'Izabrano: ' + count + ' otkupa | ' + kg.toLocaleString('sr') + ' kg';
     } else {
         div.style.display = 'none';
     }
@@ -429,12 +440,17 @@ async function confirmOtprema() {
     }
 }
 
-function cancelOtprema() {
+async function cancelOtprema() {
     otpremaVozacID = '';
     otpremaUnassigned = [];
-    document.getElementById('otpremaAssignView').style.display = 'none';
-    document.getElementById('otpremaMainView').style.display = 'block';
-    loadOtpremaOverview();
+
+    const assignView = document.getElementById('otpremaAssignView');
+    const mainView = document.getElementById('otpremaMainView');
+
+    if (assignView) assignView.style.display = 'none';
+    if (mainView) mainView.style.display = 'block';
+
+    await loadOtpremaOverview();
 }
 
 async function loadOtpremaOverview() {
