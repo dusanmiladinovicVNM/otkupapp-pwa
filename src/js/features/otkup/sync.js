@@ -68,8 +68,8 @@ async function renderQueueList() {
     }
 
     setHtml(list, pending.map(r =>
-        `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${r.kooperantName}</span><span class="qi-time">${new Date(r.createdAtClient).toLocaleTimeString('sr')}</span></div>
-            <div class="qi-detail">${r.vrstaVoca} ${r.klasa} | ${r.kolicina} kg × ${r.cena} RSD</div></div>`
+        `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(new Date(r.createdAtClient).toLocaleTimeString('sr'))}</span></div>
+            <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} RSD</div></div>`
     ).join(''));
 }
 
