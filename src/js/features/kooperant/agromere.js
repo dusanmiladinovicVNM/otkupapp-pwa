@@ -41,27 +41,18 @@ const OPREMA_PREDLOZI = {
 // INIT — poziva se iz showTab('agromere')
 // ============================================================
 async function loadAgronom() {
-    // Reset state
-    agroResetState();
-
-    // Load lager (iz stammdaten.magacinkoop)
-    agroLoadLager();
-
-    // Load oprema (sa servera + lokalna)
-    await agroLoadOprema();
-
-    // Populate parcele dropdown
-    agroPopulateParcele();
-
-    // Start GPS
-    agroStartGeo();
-
-    // Load istorija
-    agroLoadIstorija();
-
-    // Show step 1
-    document.getElementById('agroStep1').style.display = 'block';
-    document.getElementById('agroStep2').style.display = 'none';
+    await safeAsync(async () => {
+        agroResetState();
+        // Load lager (iz stammdaten.magacinkoop)
+        agroLoadLager();
+        // Load oprema (sa servera + lokalna)
+        await agroLoadOprema();
+        agroPopulateParcele();
+        agroStartGeo();
+        agroLoadIstorija();
+        document.getElementById('agroStep1').style.display = 'block';
+        document.getElementById('agroStep2').style.display = 'none';
+    }, 'Greška pri učitavanju digitalnog agronoma');
 }
 
 function agroResetState() {
@@ -117,16 +108,20 @@ function agroLoadLager() {
 // ============================================================
 // OPREMA — sa servera + lokalna
 // ============================================================
+
 async function agroLoadOprema() {
     agroState.opremaList = [];
-    try {
-        const json = await apiFetch('action=getOprema&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-        if (json && json.success && json.records) {
-            agroState.opremaList = json.records.map(r => ({
-                naziv: r.Naziv || '', tip: r.Tip || ''
-            }));
-        }
-    } catch(e) {}
+
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getOprema&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+    }, 'Greška pri učitavanju opreme');
+
+    if (json && json.success && json.records) {
+        agroState.opremaList = json.records.map(r => ({
+            naziv: r.Naziv || '',
+            tip: r.Tip || ''
+        }));
+    }
 
     agroPopulateOpremaDropdowns();
 }
@@ -842,32 +837,43 @@ async function agroSaveTretman() {
 // ============================================================
 async function agroLoadIstorija() {
     const local = await dbGetAll(db, 'tretmani');
+
     let server = [];
-    try {
-        const json = await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-        if (json && json.success && json.records) {
-            server = json.records.map(r => ({
-                mera: r.Mera || '', datum: fmtDate(r.Datum),
-                parcelaID: r.ParcelaID || '', artikalNaziv: r.ArtikalNaziv || '',
-                kolicinaUpotrebljena: r.KolicinaUpotrebljena || '',
-                jedinicaMere: r.JedinicaMere || '',
-                trajanjeMinuta: r.TrajanjeMinuta || '',
-                opremaTraktor: r.OpremaTraktor || '',
-                karencaDana: r.KarencaDana || '',
-                datumBerbeDozvoljeno: r.DatumBerbeDozvoljeno || '',
-                syncStatus: 'synced'
-            }));
-        }
-    } catch(e) {}
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+    }, 'Greška pri učitavanju istorije tretmana');
+
+    if (json && json.success && json.records) {
+        server = json.records.map(r => ({
+            mera: r.Mera || '',
+            datum: fmtDate(r.Datum),
+            parcelaID: r.ParcelaID || '',
+            artikalNaziv: r.ArtikalNaziv || '',
+            kolicinaUpotrebljena: r.KolicinaUpotrebljena || '',
+            jedinicaMere: r.JedinicaMere || '',
+            trajanjeMinuta: r.TrajanjeMinuta || '',
+            opremaTraktor: r.OpremaTraktor || '',
+            karencaDana: r.KarencaDana || '',
+            datumBerbeDozvoljeno: r.DatumBerbeDozvoljeno || '',
+            syncStatus: 'synced'
+        }));
+    }
 
     const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))
-        .map(r => ({
-            mera: r.mera, datum: r.datum, parcelaID: r.parcelaID,
-            artikalNaziv: r.artikalNaziv, kolicinaUpotrebljena: r.kolicinaUpotrebljena,
-            jedinicaMere: r.jedinicaMere, trajanjeMinuta: r.trajanjeMinuta,
-            opremaTraktor: r.opremaTraktor, karencaDana: r.karencaDana,
-            datumBerbeDozvoljeno: r.datumBerbeDozvoljeno, syncStatus: 'pending'
+    const all = [
+        ...server,
+        ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID)).map(r => ({
+            mera: r.mera,
+            datum: r.datum,
+            parcelaID: r.parcelaID,
+            artikalNaziv: r.artikalNaziv,
+            kolicinaUpotrebljena: r.kolicinaUpotrebljena,
+            jedinicaMere: r.jedinicaMere,
+            trajanjeMinuta: r.trajanjeMinuta,
+            opremaTraktor: r.opremaTraktor,
+            karencaDana: r.karencaDana,
+            datumBerbeDozvoljeno: r.datumBerbeDozvoljeno,
+            syncStatus: 'pending'
         }))
     ].sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
 
@@ -876,14 +882,14 @@ async function agroLoadIstorija() {
 
     if (all.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema tretmana</p>';
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema tretmana</p>';
         return;
     }
 
     list.innerHTML = all.map(r => {
         const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
         const min = parseInt(r.trajanjeMinuta) || 0;
-        const timeStr = min > 0 ? (Math.floor(min/60) > 0 ? Math.floor(min/60) + 'h ' : '') + (min%60) + 'min' : '';
+        const timeStr = min > 0 ? (Math.floor(min / 60) > 0 ? Math.floor(min / 60) + 'h ' : '') + (min % 60) + 'min' : '';
+
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header">
                 <span class="qi-koop">${icons[r.mera] || ''} ${escapeHtml(r.mera)}</span>
