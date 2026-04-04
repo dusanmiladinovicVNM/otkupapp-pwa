@@ -372,18 +372,18 @@ async function loadOtpremaOverview() {
     const local = await dbGetAll(db, CONFIG.STORE_NAME);
     
     let server = [];
-    try {
-        const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-        if (json && json.success && json.records) server = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum),
-            kooperantID: r.KooperantID || '', kooperantName: r.KooperantName || r.KooperantID || '',
-            vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
-            klasa: r.Klasa || 'I', kolicina: parseFloat(r.Kolicina) || 0,
-            cena: parseFloat(r.Cena) || 0, kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-            parcelaID: r.ParcelaID || '', vozacID: r.VozacID || r.VozaciID || '',
-            napomena: r.Napomena || '', syncStatus: 'synced'
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+    }, 'Greška pri učitavanju otpreme');
+    if (json && json.success && json.records) server = json.records.map(r => ({
+             clientRecordID: r.ClientRecordID || '', datum: fmtDate(r.Datum),
+             kooperantID: r.KooperantID || '', kooperantName: r.KooperantName || r.KooperantID || '',
+             vrstaVoca: r.VrstaVoca || '', sortaVoca: r.SortaVoca || '',
+             klasa: r.Klasa || 'I', kolicina: parseFloat(r.Kolicina) || 0,
+             cena: parseFloat(r.Cena) || 0, kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
+             parcelaID: r.ParcelaID || '', vozacID: r.VozacID || r.VozaciID || '',
+             napomena: r.Napomena || '', syncStatus: 'synced'
         }));
-    } catch (e) {}
     
     const serverIDs = new Set(server.map(r => r.clientRecordID));
     const all = [...server, ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))];
