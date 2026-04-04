@@ -52,84 +52,82 @@ function buildKooperantParcelPopup(p) {
 }
     
 async function loadParcele() {
-    const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
-    const list = document.getElementById('parceleList');
-    const mapDiv = document.getElementById('parceleMap');
-    
-    if (parcele.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>';
-        mapDiv.style.display = 'none';
-        return;
-    }
-    
-    // Render list with loading placeholders
-    list.innerHTML = parcele.map(p =>
-        `<div id="parcel-card-${p.ParcelaID}" style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;" onclick="focusParcel('${p.ParcelaID}')">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <strong>${escapeHtml(p.KatBroj || p.ParcelaID)}</strong>
-                <span style="font-size:12px;color:var(--text-muted);">${escapeHtml(p.ParcelaID)}</span>
-            </div>
-            <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
-                ${escapeHtml(p.Kultura || '')} |
-                ${escapeHtml(p.PovrsinaHa || '?')} ha |
-                ${escapeHtml(p.KatOpstina || '')}
-                ${p.GGAPStatus ? ' | GGAP: ' + escapeHtml(p.GGAPStatus) : ''}
-            </div>
-            <div id="parcel-meteo-${p.ParcelaID}" style="font-size:12px;color:var(--text-muted);">⏳ Meteo...</div>
-        </div>`).join('');
-    
-    // Init map
     await safeAsync(async () => {
-        if (parcelMapInstance) { 
-            parcelMapInstance.remove(); 
-            parcelMapInstance = null; 
+        const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
+        const list = document.getElementById('parceleList');
+        const mapDiv = document.getElementById('parceleMap');
+
+        if (parcele.length === 0) {
+            list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>';
+            mapDiv.style.display = 'none';
+            return;
         }
+
+        list.innerHTML = parcele.map(p =>
+            `<div id="parcel-card-${p.ParcelaID}" style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;" onclick="focusParcel('${p.ParcelaID}')">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <strong>${escapeHtml(p.KatBroj || p.ParcelaID)}</strong>
+                    <span style="font-size:12px;color:var(--text-muted);">${escapeHtml(p.ParcelaID)}</span>
+                </div>
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">
+                    ${escapeHtml(p.Kultura || '')} |
+                    ${escapeHtml(p.PovrsinaHa || '?')} ha |
+                    ${escapeHtml(p.KatOpstina || '')}
+                    ${p.GGAPStatus ? ' | GGAP: ' + escapeHtml(p.GGAPStatus) : ''}
+                </div>
+                <div id="parcel-meteo-${p.ParcelaID}" style="font-size:12px;color:var(--text-muted);">⏳ Meteo...</div>
+            </div>`
+        ).join('');
+
+        if (parcelMapInstance) {
+            parcelMapInstance.remove();
+            parcelMapInstance = null;
+        }
+
         parcelMapInstance = L.map(mapDiv).setView([43.28, 21.72], 13);
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 22,
             attribution: 'Esri, Maxar, Earthstar Geographics'
         }).addTo(parcelMapInstance);
-    
-        // Load all parcel geo data + meteo
+
         const allBounds = [];
         window._parcelLayers = {};
-    
+
         for (const p of parcele) {
-            try {
+            const json = await safeAsync(async () => {
                 const resp = await fetch(CONFIG.API_URL + '?action=getParcelGeo&parcelaId=' + encodeURIComponent(p.ParcelaID));
-                const json = await resp.json();
-            
-                if (json && json.success && json.parcel) {
-                    const geo = json.parcel;
-                    const lat = parseFloat(String(geo.Lat).replace(',', '.'));
-                    const lng = parseFloat(String(geo.Lng).replace(',', '.'));
-                    const popupHtml = buildKooperantParcelPopup(p);
-                
-                    if (geo.PolygonGeoJSON) {
-                        const geometry = JSON.parse(geo.PolygonGeoJSON);
-                        const feature = {type: 'Feature', properties: p, geometry: geometry};
-                        const layer = L.geoJSON(feature, { style: kooperantParcelStyle }).addTo(parcelMapInstance);
-                        layer.eachLayer(l => {
-                            l.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'center', className: 'parcel-label' });
-                            l.bindPopup(popupHtml);
-                            l.on('click', () => { highlightKooperantParcelLayer(l); });
-                            const bounds = l.getBounds();
-                            if (bounds.isValid()) allBounds.push(bounds);
-                            window._parcelLayers[p.ParcelaID] = l;
-                        });
-                    } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                        const marker = L.circleMarker([lat, lng], {
-                            radius: 8, color: '#ffd60a', weight: 3, fillColor: '#ffd60a', fillOpacity: 0.85
-                        }).addTo(parcelMapInstance);
-                        marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'top', className: 'parcel-label' });
-                        marker.bindPopup(popupHtml);
-                        allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
-                        window._parcelLayers[p.ParcelaID] = marker;
-                    }
+                return await resp.json();
+            });
+
+            if (json && json.success && json.parcel) {
+                const geo = json.parcel;
+                const lat = parseFloat(String(geo.Lat).replace(',', '.'));
+                const lng = parseFloat(String(geo.Lng).replace(',', '.'));
+                const popupHtml = buildKooperantParcelPopup(p);
+
+                if (geo.PolygonGeoJSON) {
+                    const geometry = JSON.parse(geo.PolygonGeoJSON);
+                    const feature = { type: 'Feature', properties: p, geometry: geometry };
+                    const layer = L.geoJSON(feature, { style: kooperantParcelStyle }).addTo(parcelMapInstance);
+                    layer.eachLayer(l => {
+                        l.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'center', className: 'parcel-label' });
+                        l.bindPopup(popupHtml);
+                        l.on('click', () => { highlightKooperantParcelLayer(l); });
+                        const bounds = l.getBounds();
+                        if (bounds.isValid()) allBounds.push(bounds);
+                        window._parcelLayers[p.ParcelaID] = l;
+                    });
+                } else if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 8, color: '#ffd60a', weight: 3, fillColor: '#ffd60a', fillOpacity: 0.85
+                    }).addTo(parcelMapInstance);
+                    marker.bindTooltip(`${p.KatBroj || p.ParcelaID}`, { permanent: true, direction: 'top', className: 'parcel-label' });
+                    marker.bindPopup(popupHtml);
+                    allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
+                    window._parcelLayers[p.ParcelaID] = marker;
                 }
-            } catch (e) {}
-        
-            // Load meteo for this parcel (non-blocking per parcel)
+            }
+
             loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
         }
 
@@ -142,7 +140,6 @@ async function loadParcele() {
         }
     }, 'Greška pri učitavanju parcela');
 }
-
 
 // ============================================================
 // KOOPERANT: PARCELA METEO + RISK
@@ -170,7 +167,7 @@ async function loadParcelMeteo(parcelaId, kultura) {
         return;
     }
 
-    if (json.success) {
+    if (json && json.success) {
         json._ts = Date.now();
         meteoCache[parcelaId] = json;
         renderMeteoPanel(json);
@@ -332,7 +329,7 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
         return;
     }
 
-    if (json.success) {
+    if (json && json.success) {
         json._ts = Date.now();
         meteoCache[parcelaId] = json;
         el.innerHTML = renderMeteoInline(json);
