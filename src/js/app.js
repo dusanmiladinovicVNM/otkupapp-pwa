@@ -51,28 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(() => { if (navigator.onLine && CONFIG.USER_ROLE === 'Otkupac') syncQueue(); }, 60000);
 });
 
-// ============================================================
-// PREFETCH
-// ============================================================
-async function prefetchMgmtData() {
-    try {
-        const json = await apiFetch('action=getMgmtAll');
-        if (json && json.success) { mgmtData = json; }
-    } catch (e) {}
-}
 
-function populateMgmtKupciDropdown() {
-    const sel = document.getElementById('mgmtFaktureKupac');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">-- Izaberi --</option>';
-    const kupci = mgmtData ? (mgmtData.saldoKupci || []) : [];
-    kupci.forEach(k => {
-        const o = document.createElement('option');
-        o.value = k.KupacID || k.Kupac;
-        o.textContent = k.Kupac || k.KupacID;
-        sel.appendChild(o);
-    });
-}
 
 // ============================================================
 // QR SCANNER
