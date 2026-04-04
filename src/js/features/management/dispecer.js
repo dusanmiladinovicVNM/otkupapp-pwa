@@ -92,7 +92,6 @@ async function dpInit() {
     dpKamioni = [];
     dpKS = {};
 
-    // 0) master lista iz stammdaten + kapacitet iz Vozaci taba
     (stammdaten.vozaci || []).forEach(v => {
         const vid = v.VozacID || v.vozacID || v.ID || '';
         if (!vid) return;
@@ -112,8 +111,7 @@ async function dpInit() {
 
     dpSaveKap();
 
-    // 1) status kamiona sa servera
-    try {
+    await safeAsync(async () => {
         const json = await apiFetch('action=getKamionStatus');
         if (json && json.success) {
             const records = json.records || [];
@@ -135,9 +133,8 @@ async function dpInit() {
                 }
             });
         }
-    } catch (e) {}
+    }, 'Greška pri učitavanju statusa kamiona');
 
-    // 2) dodaj i kamione iz assigned otkupa da ništa ne nestane
     dpGetAsg().forEach(r => {
         const vid = r.VozacID || r.VozaciID || '';
         if (!vid) return;
@@ -146,7 +143,6 @@ async function dpInit() {
         }
     });
 
-    // 3) dodaj i kamione iz localStorage kapaciteta/statusa
     Object.keys(dpKap).forEach(vid => {
         if (!dpKamioni.some(x => x.id === vid)) {
             dpKamioni.push({ id: vid, name: vid });
@@ -159,18 +155,17 @@ async function dpInit() {
         }
     });
 
-    // 4) demand + plans
     dpDem = [];
     dpPlans = [];
-    try {
+
+    await safeAsync(async () => {
         const j = await apiFetch('action=getDispecer');
         if (j && j.success) {
             dpDem = j.demand || [];
             dpPlans = j.plans || [];
         }
-    } catch (e) {}
+    }, 'Greška pri učitavanju dispečera');
 
-    // 5) uskladi rute po planovima
     const vozaciSaPlanovima = [...new Set((dpPlans || []).map(p => p.VozacID).filter(Boolean))];
     vozaciSaPlanovima.forEach(vid => {
         const ruta = dpCalcRuta(vid);
@@ -196,9 +191,6 @@ async function dpInit() {
             minute: '2-digit'
         });
     }
-}
-async function loadDispecer() {
-    await dpInit();
 }
 // ============================================================
 // DROPDOWNS
@@ -747,36 +739,47 @@ async function dpOK() {
 
     showToast('Čuvanje plana.', 'info');
 
-    try {
-        const json = await apiPost('saveDispecer', {
-            demandID: dpSel.did,
-            vozacID: vid,
-            stanicaID: sid,
-            stanicaName: dpSN(sid),
-            kupacID: kupID,
-            kupacName: kupN,
-            plannedKg: Math.round(kg)
+    const json = await safeAsync(async () => {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'saveDispecer',
+                token: CONFIG.TOKEN,
+                demandID: dpSel.did,
+                vozacID: vid,
+                stanicaID: sid,
+                stanicaName: dpSN(sid),
+                kupacID: kupID,
+                kupacName: kupN,
+                plannedKg: Math.round(kg)
+            })
         });
+        return await resp.json();
+    }, 'Greška pri čuvanju plana');
 
-        if (json.success) {
-            const newPlan = {
-                PlanID: json.planID,
-                DemandID: dpSel.did,
-                VozacID: vid,
-                StanicaID: sid,
-                StanicaName: dpSN(sid),
-                KupacID: kupID,
-                KupacName: kupN,
-                PlannedKg: Math.round(kg),
-                Status: 'planned'
-            };
+    if (!json) return;
 
-            dpPlans.push(newPlan);
+    if (json.success) {
+        const newPlan = {
+            PlanID: json.planID,
+            DemandID: dpSel.did,
+            VozacID: vid,
+            StanicaID: sid,
+            StanicaName: dpSN(sid),
+            KupacID: kupID,
+            KupacName: kupN,
+            PlannedKg: Math.round(kg),
+            Status: 'planned'
+        };
 
-            const ruta = dpCalcRuta(vid);
-            dpSetS(vid, 'utovar', ruta);
+        dpPlans.push(newPlan);
 
-            fetch(CONFIG.API_URL, {
+        const ruta = dpCalcRuta(vid);
+        dpSetS(vid, 'utovar', ruta);
+
+        safeAsync(async () => {
+            await fetch(CONFIG.API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({
@@ -786,18 +789,16 @@ async function dpOK() {
                     status: 'utovar',
                     ruta: ruta
                 })
-            }).catch(() => {});
+            });
+        });
 
-            if (!dpKamioni.some(x => x.id === vid)) {
-                dpKamioni.push({ id: vid, name: vid });
-            }
-
-            showToast('📋 Plan: ' + escapeHtml(ruta), 'success');
-        } else {
-            showToast(json.error || 'Greška', 'error');
+        if (!dpKamioni.some(x => x.id === vid)) {
+            dpKamioni.push({ id: vid, name: vid });
         }
-    } catch (e) {
-        showToast('Nema konekcije', 'error');
+
+        showToast('📋 Plan: ' + ruta, 'success');
+    } else {
+        showToast(json.error || 'Greška', 'error');
     }
 
     dpX();
@@ -806,65 +807,42 @@ async function dpOK() {
     dpRP();
     dpRK();
 }
-
 // ============================================================
 // PLAN STATUS CHANGE
 // ============================================================
 async function dpChgPlanSt(planID, newStatus) {
-    try {
-        await apiPost('updateDispecer', {
-            planID,
-            status: newStatus
+    const ok = await safeAsync(async () => {
+        await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'updateDispecer',
+                token: CONFIG.TOKEN,
+                planID,
+                status: newStatus
+            })
         });
+        return true;
+    }, 'Greška pri izmeni statusa plana');
 
-        const p = dpPlans.find(x => x.PlanID === planID);
-        const vid = p ? p.VozacID : '';
+    if (!ok) return;
 
-        if (p) p.Status = newStatus;
-        if (newStatus === 'zavrseno') {
-            dpPlans = dpPlans.filter(x => x.PlanID !== planID);
-        }
+    const p = dpPlans.find(x => x.PlanID === planID);
+    const vid = p ? p.VozacID : '';
 
-        if (vid) {
-            const ruta = dpCalcRuta(vid);
-            const status = ruta ? (newStatus === 'zavrseno' ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : newStatus) : 'slobodan';
-
-            dpSetS(vid, status, ruta);
-
-            apiPost('updateKamionStatus', {
-                vozacID: vid,
-                status: status,
-                ruta: ruta
-            });
-        }
-
-        dpRP();
-        dpRK();
-        dpRS();
-        dpRTr();
-
-        showToast(newStatus === 'zavrseno' ? 'Plan završen' : 'Plan u toku', 'success');
-    } catch (e) {}
-}
-
-async function dpRmPlan(planID) {
-    try {
-        const plan = dpPlans.find(x => x.PlanID === planID);
-        const vid = plan ? plan.VozacID : '';
-
-        await apiPost('removeDispecer', {
-            planID
-        });
-
+    if (p) p.Status = newStatus;
+    if (newStatus === 'zavrseno') {
         dpPlans = dpPlans.filter(x => x.PlanID !== planID);
+    }
 
-        if (vid) {
-            const ruta = dpCalcRuta(vid);
-            const status = ruta ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : 'slobodan';
+    if (vid) {
+        const ruta = dpCalcRuta(vid);
+        const status = ruta ? (newStatus === 'zavrseno' ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : newStatus) : 'slobodan';
 
-            dpSetS(vid, status, ruta);
+        dpSetS(vid, status, ruta);
 
-            fetch(CONFIG.API_URL, {
+        safeAsync(async () => {
+            await fetch(CONFIG.API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({
@@ -874,16 +852,66 @@ async function dpRmPlan(planID) {
                     status: status,
                     ruta: ruta
                 })
-            }).catch(() => {});
-        }
+            });
+        });
+    }
 
-        dpRP();
-        dpRK();
-        dpRS();
-        dpRTr();
+    dpRP();
+    dpRK();
+    dpRS();
+    dpRTr();
 
-        showToast('Plan obrisan', 'info');
-    } catch (e) {}
+    showToast(newStatus === 'zavrseno' ? 'Plan završen' : 'Plan u toku', 'success');
+}
+
+async function dpRmPlan(planID) {
+    const plan = dpPlans.find(x => x.PlanID === planID);
+    const vid = plan ? plan.VozacID : '';
+
+    const ok = await safeAsync(async () => {
+        await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'removeDispecer',
+                token: CONFIG.TOKEN,
+                planID
+            })
+        });
+        return true;
+    }, 'Greška pri brisanju plana');
+
+    if (!ok) return;
+
+    dpPlans = dpPlans.filter(x => x.PlanID !== planID);
+
+    if (vid) {
+        const ruta = dpCalcRuta(vid);
+        const status = ruta ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : 'slobodan';
+
+        dpSetS(vid, status, ruta);
+
+        safeAsync(async () => {
+            await fetch(CONFIG.API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'updateKamionStatus',
+                    token: CONFIG.TOKEN,
+                    vozacID: vid,
+                    status: status,
+                    ruta: ruta
+                })
+            });
+        });
+    }
+
+    dpRP();
+    dpRK();
+    dpRS();
+    dpRTr();
+
+    showToast('Plan obrisan', 'info');
 }
     
 
@@ -902,11 +930,19 @@ async function dpCS(vid, st) {
 
     dpRTr();
 
-    apiPost('updateKamionStatus', {
-        vozacID: vid,
-        status: st,
-        ruta: (dpKS[vid] || {}).ruta || ''
-    });
+    await safeAsync(async () => {
+        await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'updateKamionStatus',
+                token: CONFIG.TOKEN,
+                vozacID: vid,
+                status: st,
+                ruta: (dpKS[vid] || {}).ruta || ''
+            })
+        });
+    }, 'Greška pri čuvanju statusa kamiona');
 }
 
 async function dpAD() {
@@ -927,39 +963,46 @@ async function dpAD() {
     const kupacName =
         document.getElementById('dpDK').selectedOptions[0]?.textContent || kupacID;
 
-    try {
-        const json = await apiPost('saveWarRoomDemand', {
-            kupacID,
-            kupacName,
-            kg,
-            vrsta,
-            klasa
+    const json = await safeAsync(async () => {
+        const resp = await fetch(CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'saveWarRoomDemand',
+                token: CONFIG.TOKEN,
+                kupacID,
+                kupacName,
+                kg,
+                vrsta,
+                klasa
+            })
         });
+        return await resp.json();
+    }, 'Greška pri čuvanju zahteva');
 
-        if (!json.success) {
-            showToast(json.error || 'Greška pri čuvanju', 'error');
-            return;
-        }
+    if (!json) return;
 
-        dpDem.push({
-            DemandID: json.demandID,
-            KupacID: kupacID,
-            KupacName: kupacName,
-            Kg: kg,
-            Vrsta: vrsta,
-            Klasa: klasa,
-            Primljeno: 0
-        });
-
-        document.getElementById('dpDG').value = '';
-        document.getElementById('dpDV').value = '';
-        document.getElementById('dpDL').value = '';
-
-        dpRD();
-        dpRK();
-
-        showToast('Zahtev dodat', 'success');
-    } catch (e) {
-        showToast('Nema konekcije', 'error');
+    if (!json.success) {
+        showToast(json.error || 'Greška pri čuvanju', 'error');
+        return;
     }
+
+    dpDem.push({
+        DemandID: json.demandID,
+        KupacID: kupacID,
+        KupacName: kupacName,
+        Kg: kg,
+        Vrsta: vrsta,
+        Klasa: klasa,
+        Primljeno: 0
+    });
+
+    document.getElementById('dpDG').value = '';
+    document.getElementById('dpDV').value = '';
+    document.getElementById('dpDL').value = '';
+
+    dpRD();
+    dpRK();
+
+    showToast('Zahtev dodat', 'success');
 }
