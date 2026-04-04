@@ -320,8 +320,8 @@ async function checkAgroKarenca(parcelaID) {
         const ostalo = Math.ceil((berbeDate - today) / (24 * 60 * 60 * 1000));
         warn.classList.add('visible');
         document.getElementById('agroKarencaText').innerHTML =
-            '<strong>' + prepNaziv + '</strong> — tretman ' + datum +
-            '<br>Berba dozvoljena: <strong>' + berbeDate.toLocaleDateString('sr') + '</strong> (još ' + ostalo + ' dana)';
+            '<strong>' + escapeHtml(prepNaziv) + '</strong> — tretman ' + escapeHtml(datum) +
+            '<br>Berba dozvoljena: <strong>' + escapeHtml(berbeDate.toLocaleDateString('sr')) + '</strong> (još ' + escapeHtml(ostalo) + ' dana)';
         berbaBtn.classList.add('disabled');
     }
 }
@@ -415,8 +415,8 @@ function onAgroPreparatChange() {
         const berbeDate = new Date();
         berbeDate.setDate(berbeDate.getDate() + art.karencaDana);
         document.getElementById('agroKarencaInfoText').innerHTML =
-            '⏱️ Karenca: <strong>' + art.karencaDana + ' dana</strong> — berba dozvoljena od ' +
-            berbeDate.toLocaleDateString('sr');
+            '⏱️ Karenca: <strong>' + escapeHtml(art.karencaDana) + ' dana</strong> — berba dozvoljena od ' +
+            escapeHtml(berbeDate.toLocaleDateString('sr'));
         agroState.karencaDana = art.karencaDana;
     } else {
         karInfo.style.display = 'none';
@@ -463,11 +463,11 @@ function agroCalcPreporuka() {
 
     panel.classList.add('visible');
     document.getElementById('agroPreporukaCalc').innerHTML =
-        '<strong>' + finalQty.toLocaleString('sr') + (art.pakovanje > 0 ? ' pak.' : ' ' + art.jm) + '</strong> — ' + art.naziv;
+        '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + (art.pakovanje > 0 ? ' pak.' : ' ' + escapeHtml(art.jm)) + '</strong> — ' + escapeHtml(art.naziv);
     document.getElementById('agroPreporukaDetail').innerHTML =
-        art.dozaPoHa + ' ' + art.jm + '/ha × ' + ha.toFixed(2) + ' ha = ' +
-        rawQty.toLocaleString('sr', {maximumFractionDigits:2}) + ' ' + art.jm +
-        (pakInfo ? '<br>' + pakInfo : '') + lagerWarn;
+        escapeHtml(art.dozaPoHa) + ' ' + escapeHtml(art.jm) + '/ha × ' + escapeHtml(ha.toFixed(2)) + ' ha = ' +
+        escapeHtml(rawQty.toLocaleString('sr', {maximumFractionDigits:2})) + ' ' + escapeHtml(art.jm) +
+        (pakInfo ? '<br>' + escapeHtml(pakInfo) : '') + lagerWarn;
 
     agroState.dozaPreporucena = finalQty;
     panel._finalQty = finalQty;
@@ -586,16 +586,16 @@ function agroCheckParcelaProximity(lat, lng) {
 
     if (bestDist <= 50) {
         banner.className = 'agro-geo-banner detected';
-        banner.innerHTML = '📍 Detektovana parcela: <strong>' + (bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> ' +
-            (bestMatch.Kultura || '') + ' (' + ha.toFixed(2) + ' ha)';
+        banner.innerHTML = '📍 Detektovana parcela: <strong>' + escapeHtml(bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> ' +
+             escapeHtml(bestMatch.Kultura || '') + ' (' + escapeHtml(ha.toFixed(2)) + ' ha)';
         sel.value = bestMatch.ParcelaID;
         agroState.geoAutoDetect = true;
         onAgroParcelaChange();
     } else if (bestDist <= 200) {
         banner.className = 'agro-geo-banner nearby';
-        banner.innerHTML = '📍 Blizu parcele: <strong>' + (bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> (' +
-            Math.round(bestDist) + 'm) — <a href="#" onclick="document.getElementById(\'agroParcelaSel\').value=\'' +
-            bestMatch.ParcelaID + '\';onAgroParcelaChange();return false;" style="color:#92400e;font-weight:700;">Izaberi</a>';
+        banner.innerHTML = '📍 Blizu parcele: <strong>' + escapeHtml(bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> (' +
+            escapeHtml(Math.round(bestDist)) + 'm) — <a href="#" onclick="document.getElementById(\'agroParcelaSel\').value=\'' +
++           escapeHtml(bestMatch.ParcelaID) + '\';onAgroParcelaChange();return false;" style="color:#92400e;font-weight:700;">Izaberi</a>';
     }
 }
 
@@ -748,7 +748,7 @@ function agroShowConfirm() {
     if (agroState.geoAutoDetect) rows.push(['GPS', '📍 Auto-detect']);
 
     document.getElementById('agroConfirmPanel').innerHTML = rows.map(r =>
-        '<div class="agro-confirm-row"><span class="label">' + r[0] + '</span><span class="value">' + r[1] + '</span></div>'
+         '<div class="agro-confirm-row"><span class="label">' + escapeHtml(r[0]) + '</span><span class="value">' + escapeHtml(r[1]) + '</span></div>'
     ).join('');
 }
 
@@ -876,6 +876,7 @@ async function agroLoadIstorija() {
 
     if (all.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema tretmana</p>';
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema tretmana</p>';
         return;
     }
 
@@ -885,10 +886,10 @@ async function agroLoadIstorija() {
         const timeStr = min > 0 ? (Math.floor(min/60) > 0 ? Math.floor(min/60) + 'h ' : '') + (min%60) + 'min' : '';
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header">
-                <span class="qi-koop">${icons[r.mera] || ''} ${r.mera}</span>
-                <span class="qi-time">${r.datum}</span>
+                <span class="qi-koop">${icons[r.mera] || ''} ${escapeHtml(r.mera)}</span>
+                <span class="qi-time">${escapeHtml(r.datum)}</span>
             </div>
-            <div class="qi-detail">${r.parcelaID}${r.artikalNaziv ? ' | ' + r.artikalNaziv + ' ' + (r.kolicinaUpotrebljena || '') + ' ' + (r.jedinicaMere || '') : ''}${timeStr ? ' | ⏱️ ' + timeStr : ''}${r.opremaTraktor ? ' | 🚜 ' + r.opremaTraktor : ''}${r.karencaDana ? ' | Karenca ' + r.karencaDana + 'd' : ''}</div>
+            <div class="qi-detail">${escapeHtml(r.parcelaID)}${r.artikalNaziv ? ' | ' + escapeHtml(r.artikalNaziv) + ' ' + escapeHtml(r.kolicinaUpotrebljena || '') + ' ' + escapeHtml(r.jedinicaMere || '') : ''}${timeStr ? ' | ⏱️ ' + escapeHtml(timeStr) : ''}${r.opremaTraktor ? ' | 🚜 ' + escapeHtml(r.opremaTraktor) : ''}${r.karencaDana ? ' | Karenca ' + escapeHtml(r.karencaDana) + 'd' : ''}</div>
         </div>`;
     }).join('');
 }
