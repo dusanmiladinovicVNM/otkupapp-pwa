@@ -212,7 +212,9 @@ function normalizeStammdaten(data) {
         parcele: Array.isArray(src.parcele) ? src.parcele : [],
         stanice: Array.isArray(src.stanice) ? src.stanice : [],
         kupci: Array.isArray(src.kupci) ? src.kupci : [],
-        vozaci: Array.isArray(src.vozaci) ? src.vozaci : []
+        vozaci: Array.isArray(src.vozaci) ? src.vozaci : [],
+        artikli: Array.isArray(src.artikli) ? src.artikli : [],
+        magacinkoop: Array.isArray(src.magacinkoop) ? src.magacinkoop : []
     };
 }
 
