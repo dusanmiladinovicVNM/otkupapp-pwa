@@ -127,6 +127,175 @@ function renderZbirnaSummary() {
     }).join('');
 }
 
+function mapServerZbirnaRecord(r) {
+    return {
+        clientRecordID: r.ClientRecordID || '',
+        serverRecordID: r.ServerRecordID || '',
+        createdAtClient: normalizeZbirnaDateTime(r.CreatedAtClient),
+        updatedAtClient: normalizeZbirnaDateTime(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeZbirnaDateTime(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: normalizeZbirnaDateTime(r.UpdatedAtServer || r.ReceivedAt),
+
+        datum: fmtDate(r.Datum),
+        kupacID: r.KupacID || '',
+        kupacName: r.KupacName || r.KupacID || '',
+        vrstaVoca: r.VrstaVoca || '',
+        sortaVoca: r.SortaVoca || '',
+        kolicinaKlI: parseFloat(r.KolicinaKlI) || 0,
+        kolicinaKlII: parseFloat(r.KolicinaKlII) || 0,
+        kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
+        tipAmbalaze: r.TipAmbalaze || '',
+        klasa: r.Klasa || '',
+        otkupRecordIDs: r.OtkupRecordIDs || '',
+
+        syncStatus: 'synced',
+        syncAttempts: 0,
+        lastSyncError: '',
+        lastServerStatus: 'server'
+    };
+}
+
+function normalizeLocalZbirnaRecord(r) {
+    return {
+        clientRecordID: r.clientRecordID || '',
+        serverRecordID: r.serverRecordID || '',
+        createdAtClient: normalizeZbirnaDateTime(r.createdAtClient),
+        updatedAtClient: normalizeZbirnaDateTime(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: normalizeZbirnaDateTime(r.updatedAtServer),
+        syncedAt: normalizeZbirnaDateTime(r.syncedAt),
+
+        datum: r.datum || '',
+        kupacID: r.kupacID || '',
+        kupacName: r.kupacName || r.kupacID || '',
+        vrstaVoca: r.vrstaVoca || '',
+        sortaVoca: r.sortaVoca || '',
+        kolicinaKlI: parseFloat(r.kolicinaKlI) || 0,
+        kolicinaKlII: parseFloat(r.kolicinaKlII) || 0,
+        kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
+        tipAmbalaze: r.tipAmbalaze || '',
+        klasa: r.klasa || '',
+        otkupRecordIDs: r.otkupRecordIDs || '',
+
+        syncStatus: r.syncStatus || 'pending',
+        syncAttempts: parseInt(r.syncAttempts, 10) || 0,
+        lastSyncError: r.lastSyncError || '',
+        lastServerStatus: r.lastServerStatus || ''
+    };
+}
+
+function mergeZbirneRecords(local, server) {
+    const merged = new Map();
+
+    (server || []).forEach(r => {
+        if (r && r.clientRecordID) merged.set(r.clientRecordID, r);
+    });
+
+    (local || []).forEach(r => {
+        if (!r || !r.clientRecordID) return;
+
+        const localNorm = normalizeLocalZbirnaRecord(r);
+        const existing = merged.get(localNorm.clientRecordID);
+
+        if (!existing) {
+            merged.set(localNorm.clientRecordID, localNorm);
+            return;
+        }
+
+        if (localNorm.syncStatus === 'pending' || localNorm.syncStatus === 'syncing') {
+            merged.set(localNorm.clientRecordID, localNorm);
+            return;
+        }
+
+        const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
+        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
+
+        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
+            merged.set(localNorm.clientRecordID, localNorm);
+        }
+    });
+
+    return Array.from(merged.values());
+}
+
+function normalizeZbirnaDateTime(value) {
+    if (!value) return '';
+    try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        return d.toISOString();
+    } catch (_) {
+        return String(value);
+    }
+}
+
+async function loadVozacZbirne() {
+    let local = [];
+    let server = [];
+
+    try {
+        local = await dbGetAll(db, 'zbirne');
+    } catch (err) {
+        console.error('loadVozacZbirne local failed:', err);
+    }
+
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getVozacZbirne');
+    }, 'Greška pri učitavanju zbirnih');
+
+    if (json && json.success && Array.isArray(json.records)) {
+        server = json.records.map(mapServerZbirnaRecord);
+    }
+
+    const all = mergeZbirneRecords(local, server)
+        .filter(r => !r.deleted)
+        .sort((a, b) => {
+            const byDate = (b.datum || '').localeCompare(a.datum || '');
+            if (byDate !== 0) return byDate;
+
+            const byTime = String(b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '')
+                .localeCompare(String(a.updatedAtClient || a.createdAtClient || a.updatedAtServer || ''));
+            if (byTime !== 0) return byTime;
+
+            return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
+        });
+
+    const list = document.getElementById('vozacZbirneList');
+    if (!list) return;
+
+    if (all.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Nema kreiranih zbirnih</p>';
+        return;
+    }
+
+    list.innerHTML = all.map(r => {
+        const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
+        const bc = (r.syncStatus === 'pending' || r.syncStatus === 'syncing')
+            ? 'var(--warning)'
+            : 'var(--success)';
+
+        const syncText =
+            r.syncStatus === 'syncing' ? ' | sync...' :
+            r.syncStatus === 'pending' ? ' | pending' :
+            (r.serverRecordID ? ' | ' + r.serverRecordID : '');
+
+        return `<div class="queue-item" style="border-left-color:${bc};">
+            <div class="qi-header">
+                <span class="qi-koop">🏭 ${escapeHtml(r.kupacName)}</span>
+                <span class="qi-time">${escapeHtml(r.datum)}</span>
+            </div>
+            <div class="qi-detail">
+                ${escapeHtml(r.vrstaVoca)} | ${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0}${escapeHtml(syncText)}
+            </div>
+            ${r.kolicinaKlII > 0
+                ? '<div class="qi-detail" style="font-size:11px;">Kl.I: ' + (r.kolicinaKlI || 0).toLocaleString('sr') + ' kg | Kl.II: ' + (r.kolicinaKlII || 0).toLocaleString('sr') + ' kg</div>'
+                : ''}
+            ${r.lastSyncError
+                ? '<div class="qi-detail" style="font-size:11px;color:#b42318;">' + escapeHtml(r.lastSyncError) + '</div>'
+                : ''}
+        </div>`;
+    }).join('');
+}
+
 async function confirmZbirna() {
     const kupacSel = document.getElementById('fldZbirnaKupac');
     if (!kupacSel || !kupacSel.value) {
@@ -210,19 +379,146 @@ async function confirmZbirna() {
 }
 
 async function syncZbirne() {
-    const pending = await dbGetByIndex(db, 'zbirne', 'syncStatus', 'pending');
-    if (pending.length === 0) return;
+    if (!db) return { ok: false, reason: 'db-not-ready' };
+    if (!navigator.onLine) return { ok: false, reason: 'offline' };
 
-    const json = await apiPost('syncZbirna', {
-        vozacID: CONFIG.ENTITY_ID,
-        records: pending
-    });
+    window.appRuntime = window.appRuntime || {};
+    if (window.appRuntime.zbirnaSyncInFlight) {
+        return { ok: false, reason: 'already-running' };
+    }
 
-    if (json && json.success) {
-        for (const r of pending) {
-            r.syncStatus = 'synced';
-            await dbPut(db, 'zbirne', r);
+    window.appRuntime.zbirnaSyncInFlight = true;
+
+    let pending = [];
+
+    try {
+        pending = await dbGetByIndex(db, 'zbirne', 'syncStatus', 'pending');
+
+        if (!Array.isArray(pending) || pending.length === 0) {
+            return { ok: true, synced: 0, failed: 0 };
         }
+
+        for (const record of pending) {
+            record.syncStatus = 'syncing';
+            record.syncAttemptAt = new Date().toISOString();
+            await dbPut(db, 'zbirne', record);
+        }
+
+        const json = await apiPost('syncZbirna', {
+            vozacID: CONFIG.ENTITY_ID,
+            records: pending
+        });
+
+        if (!json || json.success === false) {
+            for (const record of pending) {
+                record.syncStatus = 'pending';
+                record.lastSyncError = json && json.error ? json.error : 'Sync neuspešan';
+                record.lastServerStatus = 'request-failed';
+                record.syncAttempts = (record.syncAttempts || 0) + 1;
+                await dbPut(db, 'zbirne', record);
+            }
+
+            showToast('Zbirna sync nije uspeo', 'error');
+            return { ok: false, synced: 0, failed: pending.length };
+        }
+
+        if (Array.isArray(json.results)) {
+            const byClientId = new Map(
+                pending.map(r => [r.clientRecordID, r])
+            );
+
+            const mentionedIds = new Set(
+                json.results.map(x => x.clientRecordID).filter(Boolean)
+            );
+
+            let syncedCount = 0;
+            let failedCount = 0;
+
+            for (const result of json.results) {
+                const record = byClientId.get(result.clientRecordID);
+                if (!record) continue;
+
+                record.syncAttempts = (record.syncAttempts || 0) + 1;
+
+                const isSuccess =
+                    !!result.success ||
+                    result.status === 'synced' ||
+                    result.status === 'duplicate' ||
+                    result.status === 'existing' ||
+                    result.status === 'inserted' ||
+                    result.status === 'updated';
+
+                if (isSuccess) {
+                    record.syncStatus = 'synced';
+                    record.lastSyncError = '';
+                    record.syncedAt = new Date().toISOString();
+                    record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
+                    record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
+                    record.lastServerStatus = result.status || 'synced';
+                    syncedCount++;
+                } else {
+                    record.syncStatus = 'pending';
+                    record.lastSyncError = result.error || 'Sync stavke neuspešan';
+                    record.lastServerStatus = result.status || 'failed';
+                    failedCount++;
+                }
+
+                await dbPut(db, 'zbirne', record);
+            }
+
+            for (const record of pending) {
+                if (!mentionedIds.has(record.clientRecordID)) {
+                    record.syncStatus = 'pending';
+                    record.lastSyncError = 'Nema potvrde sa servera';
+                    record.lastServerStatus = 'missing-result';
+                    record.syncAttempts = (record.syncAttempts || 0) + 1;
+                    failedCount++;
+                    await dbPut(db, 'zbirne', record);
+                }
+            }
+
+            if (syncedCount > 0 && failedCount === 0) {
+                showToast('Zbirna sinhronizovana: ' + syncedCount, 'success');
+            } else if (syncedCount > 0) {
+                showToast('Zbirna sync: ' + syncedCount + ' uspešno, ' + failedCount + ' neuspešno', 'info');
+            } else {
+                showToast('Zbirne nisu sinhronizovane', 'error');
+            }
+
+            return { ok: failedCount === 0, synced: syncedCount, failed: failedCount };
+        }
+
+        // legacy fallback
+        for (const record of pending) {
+            record.syncStatus = 'synced';
+            record.lastSyncError = '';
+            record.syncedAt = new Date().toISOString();
+            record.lastServerStatus = 'legacy-success';
+            record.syncAttempts = (record.syncAttempts || 0) + 1;
+            await dbPut(db, 'zbirne', record);
+        }
+
         showToast('Zbirna sinhronizovana', 'success');
+        return { ok: true, synced: pending.length, failed: 0 };
+    } catch (err) {
+        console.error('syncZbirne failed:', err);
+
+        for (const record of pending) {
+            try {
+                if (record.syncStatus === 'syncing') {
+                    record.syncStatus = 'pending';
+                    record.lastSyncError = err.message || 'Greška pri sync-u';
+                    record.lastServerStatus = 'exception';
+                    record.syncAttempts = (record.syncAttempts || 0) + 1;
+                    await dbPut(db, 'zbirne', record);
+                }
+            } catch (_) {}
+        }
+
+        showToast('Greška pri sinhronizaciji zbirnih', 'error');
+        return { ok: false, synced: 0, failed: pending.length || 0 };
+    } finally {
+        window.appRuntime.zbirnaSyncInFlight = false;
+        try { await loadVozacZbirne(); } catch (_) {}
     }
 }
