@@ -427,6 +427,7 @@ async function izdConfirmSave() {
             izdaoUser: CONFIG.ENTITY_NAME,
             napomena: data.napomena
         });
+        if (!json) { showToast('Nema konekcije', 'error'); return; }
         if (json.success) {
             showToast('Izdavanje sačuvano: ' + json.izdavanjeID, 'success');
             izdReset();
@@ -534,6 +535,7 @@ async function izdSavePdf() {
             fileName: fileName,
             pdfBase64: pdfBase64
         });
+        if (!json) { showToast('Nema konekcije', 'error'); return; }
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
         else { showToast('Greška: ' + (json.error || ''), 'error'); }
     } catch(e) {
