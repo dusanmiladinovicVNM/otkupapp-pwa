@@ -10,9 +10,10 @@ async function loadVozacData() {
         return await apiFetch('action=getVozacOtkupi');
     }, 'Greška pri učitavanju podataka vozača');
 
-    if (json && json.success && json.records) {
+    if (json && json.success && Array.isArray(json.records)) {
         vozacOtkupi = json.records.map(r => ({
             clientRecordID: r.ClientRecordID || '',
+            serverRecordID: r.ServerRecordID || '',
             datum: fmtDate(r.Datum),
             kooperantName: r.KooperantName || r.KooperantID || '',
             kooperantID: r.KooperantID || '',
@@ -22,14 +23,27 @@ async function loadVozacData() {
             kolicina: parseFloat(r.Kolicina) || 0,
             cena: parseFloat(r.Cena) || 0,
             tipAmbalaze: r.TipAmbalaze || '',
-            kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-            stanicaID: r.OtkupacID || r._source || '',
-            zbirnaID: r._zbirnaID || ''
+            kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
+            stanicaID: r.OtkupacID || extractStanicaIdFromSource(r._source) || '',
+            vozacID: r.VozacID || '',
+            updatedAtServer: r.UpdatedAtServer || r.ReceivedAt || '',
+            syncStatus: 'synced'
         }));
     }
 
+    const zbirne = await getMergedZbirneForVozac();
+    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
+
+    vozacOtkupi = vozacOtkupi.filter(r => !consumedIds.has(r.clientRecordID));
+
     renderVozacOtpremnice();
-    loadVozacZbirne();
+    await loadVozacZbirne();
+}
+
+function extractStanicaIdFromSource(source) {
+    const s = String(source || '');
+    if (s.startsWith('OTK-')) return s.substring(4);
+    return s;
 }
 
 function renderVozacOtpremnice() {
@@ -305,7 +319,12 @@ async function confirmZbirna() {
 
     const kupacID = kupacSel.value;
     const today = new Date().toISOString().split('T')[0];
-    const todayOtkupi = (vozacOtkupi || []).filter(r => r.datum === today);
+    const zbirne = await getMergedZbirneForVozac();
+    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
+
+    const todayOtkupi = (vozacOtkupi || []).filter(r =>
+        r.datum === today && !consumedIds.has(r.clientRecordID)
+    );
 
     if (todayOtkupi.length === 0) {
         showToast('Nema otkupa za danas', 'error');
@@ -376,6 +395,7 @@ async function confirmZbirna() {
             await syncZbirne();
         }
     }
+    await loadVozacData();
 }
 
 async function syncZbirne() {
@@ -521,4 +541,41 @@ async function syncZbirne() {
         window.appRuntime.zbirnaSyncInFlight = false;
         try { await loadVozacZbirne(); } catch (_) {}
     }
+}
+
+function getConsumedOtkupIdsFromZbirne(zbirne) {
+    const used = new Set();
+
+    (zbirne || []).forEach(z => {
+        const raw = String(z.otkupRecordIDs || '').trim();
+        if (!raw) return;
+
+        raw.split(',')
+            .map(x => x.trim())
+            .filter(Boolean)
+            .forEach(id => used.add(id));
+    });
+
+    return used;
+}
+
+async function getMergedZbirneForVozac() {
+    let local = [];
+    let server = [];
+
+    try {
+        local = await dbGetAll(db, 'zbirne');
+    } catch (err) {
+        console.error('getMergedZbirneForVozac local failed:', err);
+    }
+
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getVozacZbirne');
+    }, 'Greška pri učitavanju zbirnih');
+
+    if (json && json.success && Array.isArray(json.records)) {
+        server = json.records.map(mapServerZbirnaRecord);
+    }
+
+    return mergeZbirneRecords(local, server).filter(r => !r.deleted);
 }
