@@ -310,6 +310,12 @@ async function loadVozacZbirne() {
     }).join('');
 }
 
+function cancelZbirna() {
+    document.getElementById('zbirnaCreateView').style.display = 'none';
+    document.getElementById('zbirnaMainView').style.display = 'block';
+    loadVozacZbirne();
+}
+
 async function confirmZbirna() {
     const kupacSel = document.getElementById('fldZbirnaKupac');
     if (!kupacSel || !kupacSel.value) {
