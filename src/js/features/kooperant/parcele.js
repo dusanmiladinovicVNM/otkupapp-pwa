@@ -175,8 +175,8 @@ async function loadParcelMeteo(parcelaId, kultura) {
     panel.style.display = 'block';
     panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Učitavanje meteo podataka...</p>';
 
-    if (meteoCache[parcelaId] && (Date.now() - meteoCache[parcelaId]._ts < 3600000)) {
-        renderMeteoPanel(meteoCache[parcelaId]);
+    if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < 3600000)) {
+        renderMeteoPanel(window.meteoCache[parcelaId]);
         return;
     }
 
@@ -191,7 +191,7 @@ async function loadParcelMeteo(parcelaId, kultura) {
 
     if (json.success) {
         json._ts = Date.now();
-        meteoCache[parcelaId] = json;
+        window.meteoCache[parcelaId] = json;
         renderMeteoPanel(json);
     } else {
         panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">' + escapeHtml(json.error || 'Nema meteo podataka') + '</p>';
@@ -347,8 +347,8 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
     const el = document.getElementById('parcel-meteo-' + parcelaId);
     if (!el) return;
 
-    if (meteoCache[parcelaId] && (Date.now() - meteoCache[parcelaId]._ts < 3600000)) {
-        el.innerHTML = renderMeteoInline(meteoCache[parcelaId]);
+    if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < 3600000)) {
+        el.innerHTML = renderMeteoInline(window.meteoCache[parcelaId]);
         return;
     }
 
@@ -365,7 +365,7 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
 
     if (json && json.success) {
         json._ts = Date.now();
-        meteoCache[parcelaId] = json;
+        window.meteoCache[parcelaId] = json;
         el.innerHTML = renderMeteoInline(json);
     } else {
         el.innerHTML = '<span style="color:var(--text-muted);">Nema meteo podataka</span>';
@@ -524,7 +524,7 @@ function toggleParcelExpert(parcelId) {
 
     const panel = document.getElementById('parceleMeteo');
     if (panel && panel.dataset && panel.dataset.currentParcelaId === parcelId) {
-        const cached = meteoCache[parcelId];
+        const cached = window.meteoCache[parcelId];
         if (cached) renderMeteoPanel(cached);
     }
 
