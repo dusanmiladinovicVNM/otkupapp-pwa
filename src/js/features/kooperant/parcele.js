@@ -166,7 +166,7 @@ async function loadParcele() {
 // ============================================================
 // KOOPERANT: PARCELA METEO + RISK
 // ============================================================
-let meteoCache = {};
+window.meteoCache = window.meteoCache || {};
 
 async function loadParcelMeteo(parcelaId, kultura) {
     const panel = document.getElementById('parceleMeteo');
