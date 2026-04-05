@@ -7,3 +7,11 @@ window.fmtDate = function (val) {
         return String(val);
     }
 };
+
+window.fmtStanica = function(stanicaID) {
+    if (!stanicaID) return '';
+    const s = (stammdaten.stanice || []).find(x => x.StanicaID === stanicaID);
+    const name = s ? (s.Naziv || s.Mesto || stanicaID) : stanicaID;
+    if (name === stanicaID) return stanicaID;
+    return name + ' (' + stanicaID + ')';
+};
