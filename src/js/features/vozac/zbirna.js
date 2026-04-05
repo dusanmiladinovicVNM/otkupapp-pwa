@@ -128,101 +128,85 @@ function renderZbirnaSummary() {
 }
 
 async function confirmZbirna() {
-    const kupacID = document.getElementById('fldZbirnaKupac').value;
-    if (!kupacID) { showToast('Izaberite kupca!', 'error'); return; }
-    
+    const kupacSel = document.getElementById('fldZbirnaKupac');
+    if (!kupacSel || !kupacSel.value) {
+        showToast('Izaberite kupca', 'error');
+        return;
+    }
+
+    const kupacID = kupacSel.value;
     const today = new Date().toISOString().split('T')[0];
-    const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
-    
-    if (todayOtkupi.length === 0) { showToast('Nema otkupa za danas', 'error'); return; }
-    
-    let totalKgI = 0, totalKgII = 0, totalAmb = 0;
-    const vrste = new Set(), sorte = new Set();
+    const todayOtkupi = (vozacOtkupi || []).filter(r => r.datum === today);
+
+    if (todayOtkupi.length === 0) {
+        showToast('Nema otkupa za danas', 'error');
+        return;
+    }
+
+    let totalKgI = 0;
+    let totalKgII = 0;
+    let totalAmb = 0;
+    const vrste = new Set();
+    const sorte = new Set();
+
     todayOtkupi.forEach(r => {
         if (r.klasa === 'II') totalKgII += r.kolicina || 0;
         else totalKgI += r.kolicina || 0;
+
         totalAmb += r.kolAmbalaze || 0;
         if (r.vrstaVoca) vrste.add(r.vrstaVoca);
         if (r.sortaVoca) sorte.add(r.sortaVoca);
     });
-    
-    const kupacName = document.getElementById('fldZbirnaKupac').selectedOptions[0].textContent;
-    
+
+    const kupacName = kupacSel.selectedOptions[0]
+        ? kupacSel.selectedOptions[0].textContent
+        : kupacID;
+
+    const nowIso = new Date().toISOString();
+
     const record = {
-        clientRecordID: crypto.randomUUID(),
-        createdAtClient: new Date().toISOString(),
+        clientRecordID: (window.crypto && typeof window.crypto.randomUUID === 'function')
+            ? window.crypto.randomUUID()
+            : ('zbr-' + Date.now() + '-' + Math.floor(Math.random() * 1000000)),
+        serverRecordID: '',
+        createdAtClient: nowIso,
+        updatedAtClient: nowIso,
+        updatedAtServer: '',
+        syncedAt: '',
+
         vozacID: CONFIG.ENTITY_ID,
         datum: today,
         kupacID: kupacID,
         kupacName: kupacName,
-        vrstaVoca: [...vrste].join(', '),
-        sortaVoca: [...sorte].join(', '),
+        vrstaVoca: Array.from(vrste).join(', '),
+        sortaVoca: Array.from(sorte).join(', '),
         kolicinaKlI: totalKgI,
         kolicinaKlII: totalKgII,
         tipAmbalaze: todayOtkupi[0].tipAmbalaze || '',
         kolAmbalaze: totalAmb,
         klasa: totalKgII > 0 ? 'I+II' : 'I',
         otkupRecordIDs: todayOtkupi.map(r => r.clientRecordID).join(','),
-        syncStatus: 'pending'
+
+        syncStatus: 'pending',
+        syncAttempts: 0,
+        syncAttemptAt: '',
+        lastSyncError: '',
+        lastServerStatus: '',
+        deleted: false,
+        entityType: 'zbirna',
+        schemaVersion: 1
     };
-    
+
     await dbPut(db, 'zbirne', record);
     showToast('Zbirna kreirana!', 'success');
+
     cancelZbirna();
-    
-    // Sync immediately
-    if (navigator.onLine) syncZbirne();
-}
 
-function cancelZbirna() {
-    document.getElementById('zbirnaCreateView').style.display = 'none';
-    document.getElementById('zbirnaMainView').style.display = 'block';
-    loadVozacZbirne();
-}
-
-async function loadVozacZbirne() {
-    const local = await dbGetAll(db, 'zbirne');
-
-    let server = [];
-    const json = await safeAsync(async () => {
-        return await apiFetch('action=getVozacZbirne');
-    }, 'Greška pri učitavanju zbirnih');
-
-    if (json && json.success && json.records) {
-        server = json.records.map(r => ({
-            clientRecordID: r.ClientRecordID || '',
-            datum: fmtDate(r.Datum),
-            kupacName: r.KupacName || r.KupacID || '',
-            kolicinaKlI: parseFloat(r.KolicinaKlI) || 0,
-            kolicinaKlII: parseFloat(r.KolicinaKlII) || 0,
-            kolAmbalaze: parseInt(r.KolAmbalaze) || 0,
-            vrstaVoca: r.VrstaVoca || '',
-            syncStatus: 'synced'
-        }));
+    if (navigator.onLine) {
+        if (typeof syncZbirne === 'function') {
+            await syncZbirne();
+        }
     }
-
-    const serverIDs = new Set(server.map(r => r.clientRecordID));
-    const all = [
-        ...server,
-        ...local.filter(r => r.syncStatus === 'pending' && !serverIDs.has(r.clientRecordID))
-    ];
-
-    const list = document.getElementById('vozacZbirneList');
-    if (all.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Nema kreiranih zbirnih</p>';
-        return;
-    }
-
-    list.innerHTML = all.map(r => {
-        const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
-        const bc = r.syncStatus === 'pending' ? 'var(--warning)' : 'var(--success)';
-
-        return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">🏭 ${escapeHtml(r.kupacName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
-            <div class="qi-detail">${escapeHtml(r.vrstaVoca)} | ${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0}</div>
-            ${r.kolicinaKlII > 0 ? '<div class="qi-detail" style="font-size:11px;">Kl.I: ' + (r.kolicinaKlI || 0).toLocaleString('sr') + ' kg | Kl.II: ' + (r.kolicinaKlII || 0).toLocaleString('sr') + ' kg</div>' : ''}
-        </div>`;
-    }).join('');
 }
 
 async function syncZbirne() {
