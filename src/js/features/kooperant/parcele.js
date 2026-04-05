@@ -229,7 +229,23 @@ function renderMeteoPanel(data) {
                     ${escapeHtml(fetchedTime)}
                 </div>
             </div>
-            ...
+            
+            <div class="meteo-current">
+                <div>
+                    <div class="meteo-temp">${Number(c.temperature || 0).toFixed(1)}°</div>
+                </div>
+                <div class="meteo-details">
+                    <div>${escapeHtml(weatherCodeText(c.weatherCode || 0))}</div>
+                    <div>💧 Vlažnost: ${c.humidity || 0}%</div>
+                    <div>💨 Vetar: ${Number(c.windSpeed || 0).toFixed(1)} km/h (udari: ${Number(c.windGusts || 0).toFixed(1)})</div>
+                    ${Number(c.precipitation || 0) > 0 ? '<div>🌧️ Padavine: ' + Number(c.precipitation).toFixed(1) + ' mm</div>' : ''}
+                </div>
+            </div>
+            
+            ${renderRiskSection(risk)}
+            ${renderSpraySection(spray, data.kultura)}
+            ${renderForecast(daily, ['Ned', 'Pon', 'Uto', 'Sre', 'Čet', 'Pet', 'Sub'])}
+            ${renderExpertInfo(parcelaId, c)}
         </div>
     `;
 }
