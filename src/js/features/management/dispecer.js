@@ -1006,3 +1006,5 @@ async function dpAD() {
 
     showToast('Zahtev dodat', 'success');
 }
+
+async function loadDispecer() { await dpInit(); }
