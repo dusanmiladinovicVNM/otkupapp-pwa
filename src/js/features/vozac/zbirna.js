@@ -208,37 +208,7 @@ function normalizeLocalZbirnaRecord(r) {
 }
 
 function mergeZbirneRecords(local, server) {
-    const merged = new Map();
-
-    (server || []).forEach(r => {
-        if (r && r.clientRecordID) merged.set(r.clientRecordID, r);
-    });
-
-    (local || []).forEach(r => {
-        if (!r || !r.clientRecordID) return;
-
-        const localNorm = normalizeLocalZbirnaRecord(r);
-        const existing = merged.get(localNorm.clientRecordID);
-
-        if (!existing) {
-            merged.set(localNorm.clientRecordID, localNorm);
-            return;
-        }
-
-        if (localNorm.syncStatus === 'pending' || localNorm.syncStatus === 'syncing') {
-            merged.set(localNorm.clientRecordID, localNorm);
-            return;
-        }
-
-        const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
-        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
-
-        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
-            merged.set(localNorm.clientRecordID, localNorm);
-        }
-    });
-
-    return Array.from(merged.values());
+    return mergeOfflineRecords(local, server, normalizeLocalZbirnaRecord);
 }
 
 function renderVozacZbirneFromData(allZbirne) {
