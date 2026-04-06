@@ -25,6 +25,15 @@
     <link rel="stylesheet" href="./src/styles/features-vozac.css">
 
     <link rel="stylesheet" href="./src/styles/print.css">
+
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' https://cdnjs.cloudflare.com https://unpkg.com;
+        style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com;
+        img-src 'self' data: https://api.qrserver.com https://server.arcgisonline.com https://*.tile.openstreetmap.org;
+        connect-src 'self' https://script.google.com https://script.googleusercontent.com;
+        font-src 'self' https://cdnjs.cloudflare.com;
+    ">
 </head>
 <body>
     
