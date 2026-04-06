@@ -29,6 +29,9 @@ let agroState = {
     geoWatchId: null
 };
 
+let _tretmaniCache = { data: null, ts: 0 };
+const TRETMANI_CACHE_TTL = 30000; // 30s
+
 // --- Baza čestih naziva opreme za autocomplete ---
 const OPREMA_PREDLOZI = {
     Traktor: ['IMT 533', 'IMT 539', 'IMT 542', 'IMT 560', 'IMT 577',
@@ -401,6 +404,43 @@ async function loadAgroMeteoStrip(parcelaID) {
 // ============================================================
 // KARENCA CHECK — za izabranu parcelu
 // ============================================================
+
+async function getTretmaniCached(forceRefresh) {
+    if (
+        !forceRefresh &&
+        _tretmaniCache.data &&
+        (Date.now() - _tretmaniCache.ts < TRETMANI_CACHE_TTL)
+    ) {
+        return _tretmaniCache.data;
+    }
+
+    let local = [];
+    let server = [];
+
+    try {
+        local = await dbGetAll(db, 'tretmani');
+    } catch (e) {
+        console.error('getTretmaniCached local failed:', e);
+    }
+
+    const json = await safeAsync(async () => {
+        return await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+    }, 'Greška pri učitavanju tretmana');
+
+    if (json && json.success && Array.isArray(json.records)) {
+        server = json.records.map(agroMapServerTretman);
+    }
+
+    const merged = agroMergeTretmani(local, server);
+
+    _tretmaniCache = { data: merged, ts: Date.now() };
+    return merged;
+}
+
+function invalidateTretmaniCache() {
+    _tretmaniCache = { data: null, ts: 0 };
+}
+
 async function checkAgroKarenca(parcelaID) {
     const warn = document.getElementById('agroKarencaWarn');
     const berbaBtn = document.getElementById('agroBerbaBtn');
@@ -409,21 +449,7 @@ async function checkAgroKarenca(parcelaID) {
     warn.classList.remove('visible');
     berbaBtn.classList.remove('disabled');
 
-    let server = [];
-    let local = [];
-
-    try {
-        const json = await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-        if (json && json.success && Array.isArray(json.records)) {
-            server = json.records.map(agroMapServerTretman);
-        }
-    } catch (e) {}
-
-    try {
-        local = await dbGetAll(db, 'tretmani');
-    } catch (e) {}
-
-    const tretmani = agroMergeTretmani(local, server);
+    const tretmani = await getTretmaniCached(false);
 
     const parcelTretmani = tretmani.filter(t =>
         t.parcelaID === parcelaID && parseInt(t.karencaDana, 10) > 0 && !t.deleted
@@ -960,22 +986,24 @@ async function agroSaveTretman() {
     await dbPut(db, 'tretmani', record);
     showToast('Tretman sačuvan!', 'success');
 
-    try {
-        await agroLoadIstorija();
-    } catch (e) {
-        console.error('agroLoadIstorija after save failed:', e);
-    }
+    // Invalidate cache jer smo dodali nov record
+    invalidateTretmaniCache();
 
+    // Sync ako smo online
     if (navigator.onLine && typeof syncTretmani === 'function') {
         try {
             await syncTretmani();
+            invalidateTretmaniCache(); // ponovo invalidate jer sync menja statuse
         } catch (e) {
             console.error('syncTretmani after save failed:', e);
         }
     }
 
+    // Reset UI
     agroResetState();
     agroPopulateParcele();
+
+    // Jedan poziv istorije (ne dva kao pre)
     await agroLoadIstorija();
 
     const step1 = document.getElementById('agroStep1');
@@ -987,24 +1015,7 @@ async function agroSaveTretman() {
 // ISTORIJA
 // ============================================================
 async function agroLoadIstorija() {
-    let local = [];
-    let server = [];
-
-    try {
-        local = await dbGetAll(db, 'tretmani');
-    } catch (e) {
-        console.error('agroLoadIstorija local failed:', e);
-    }
-
-    const json = await safeAsync(async () => {
-        return await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
-    }, 'Greška pri učitavanju istorije tretmana');
-
-    if (json && json.success && Array.isArray(json.records)) {
-        server = json.records.map(agroMapServerTretman);
-    }
-
-    const all = agroMergeTretmani(local, server)
+    const all = (await getTretmaniCached(false))
         .filter(r => !r.deleted)
         .sort((a, b) => {
             const byDate = (b.datum || '').localeCompare(a.datum || '');
