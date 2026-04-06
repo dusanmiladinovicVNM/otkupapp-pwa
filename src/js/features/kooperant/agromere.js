@@ -162,7 +162,7 @@ async function agroLoadOprema() {
             clientRecordID: r.ClientRecordID || '',
             naziv: r.Naziv || '',
             tip: r.Tip || '',
-            createdAt: NormalizeIso(r.CreatedAt),
+            createdAt: normalizeIso(r.CreatedAt),
             source: 'server'
         }));
     }
@@ -1094,10 +1094,10 @@ function agroMapServerTretman(r) {
     return {
         clientRecordID: r.ClientRecordID || '',
         serverRecordID: r.ServerRecordID || '',
-        createdAtClient: NormalizeIso(r.CreatedAtClient),
-        updatedAtClient: NormalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
-        updatedAtServer: NormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
-        syncedAt: NormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        createdAtClient: normalizeIso(r.CreatedAtClient),
+        updatedAtClient: normalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
 
         kooperantID: r.KooperantID || '',
         parcelaID: r.ParcelaID || '',
@@ -1150,10 +1150,10 @@ function agroNormalizeLocalTretman(r) {
     return {
         clientRecordID: r.clientRecordID || '',
         serverRecordID: r.serverRecordID || '',
-        createdAtClient: NormalizeIso(r.createdAtClient),
-        updatedAtClient: NormalizeIso(r.updatedAtClient || r.createdAtClient),
-        updatedAtServer: NormalizeIso(r.updatedAtServer),
-        syncedAt: NormalizeIso(r.syncedAt),
+        createdAtClient: normalizeIso(r.createdAtClient),
+        updatedAtClient: normalizeIso(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: normalizeIso(r.updatedAtServer),
+        syncedAt: normalizeIso(r.syncedAt),
 
         kooperantID: r.kooperantID || '',
         parcelaID: r.parcelaID || '',
