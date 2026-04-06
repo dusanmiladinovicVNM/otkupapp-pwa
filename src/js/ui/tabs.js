@@ -1,13 +1,17 @@
 // ============================================================
 // TAB NAVIGATION (non-management)
 // ============================================================
-function showTab(tabName) {
+function showTab(tabName, btn) {
     qsa('.tab-content').forEach(t => removeClass(t, 'active'));
     qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
 
     const tabEl = byId('tab-' + tabName);
     if (tabEl) addClass(tabEl, 'active');
-    if (event && event.target) addClass(event.target, 'active');
+
+    // btn dolazi iz onclick="showTab('xxx', this)"
+    if (btn && btn.classList) {
+        addClass(btn, 'active');
+    }
 
     if (tabName === 'queue') { renderQueueList(); updateStats(); }
     if (tabName === 'pregled') loadOtkupPregled();
