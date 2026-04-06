@@ -543,6 +543,13 @@ async function izdSavePdf() {
     }
 }
 
+function closeIzdOtpremnicaModal() {
+    destroySignaturePad('sigIzdavalac');
+    destroySignaturePad('sigPrimalac');
+    const modal = document.getElementById('izdOtpremnicaModal');
+    if (modal) modal.style.display = 'none';
+}
+
 // --- Reset ---
 function izdReset() {
     izdKorpa = [];
