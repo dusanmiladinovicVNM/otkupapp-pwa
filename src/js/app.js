@@ -205,17 +205,21 @@ async function refreshStammdatenInBackground() {
 
 function normalizeStammdaten(data) {
     const src = data || {};
-    return {
-        kooperanti: Array.isArray(src.kooperanti) ? src.kooperanti : [],
-        kulture: Array.isArray(src.kulture) ? src.kulture : [],
-        config: Array.isArray(src.config) ? src.config : [],
-        parcele: Array.isArray(src.parcele) ? src.parcele : [],
-        stanice: Array.isArray(src.stanice) ? src.stanice : [],
-        kupci: Array.isArray(src.kupci) ? src.kupci : [],
-        vozaci: Array.isArray(src.vozaci) ? src.vozaci : [],
-        artikli: Array.isArray(src.artikli) ? src.artikli : [],
-        magacinkoop: Array.isArray(src.magacinkoop) ? src.magacinkoop : []
+    const known = {
+        kooperanti: [], 
+        kulture: [], 
+        config: [], 
+        parcele: [],
+        stanice: [], 
+        kupci: [], vozaci: [], 
+        artikli: [], 
+        magacinkoop: []
     };
+    const result = { ...src };
+    Object.keys(known).forEach(k => {
+        result[k] = Array.isArray(src[k]) ? src[k] : known[k];
+    });
+    return result;
 }
 
 function hasStammdaten() {
