@@ -1,3 +1,4 @@
+
 (function () {
     const signaturePads = new Map();
 
@@ -18,7 +19,6 @@
 
         const ctx = canvas.getContext('2d');
 
-        // reset transform before applying DPR scale
         if (typeof ctx.resetTransform === 'function') {
             ctx.resetTransform();
         } else {
@@ -47,12 +47,36 @@
         };
     }
 
+    function unbindPad(canvasId) {
+        const pad = signaturePads.get(canvasId);
+        if (!pad) return;
+
+        const canvas = pad.canvas;
+        if (canvas && pad._handlers) {
+            canvas.removeEventListener('mousedown', pad._handlers.startDraw);
+            canvas.removeEventListener('mousemove', pad._handlers.draw);
+            canvas.removeEventListener('mouseup', pad._handlers.stopDraw);
+            canvas.removeEventListener('mouseleave', pad._handlers.stopDraw);
+            canvas.removeEventListener('touchstart', pad._handlers.startDraw);
+            canvas.removeEventListener('touchmove', pad._handlers.draw);
+            canvas.removeEventListener('touchend', pad._handlers.stopDraw);
+            canvas.removeEventListener('touchcancel', pad._handlers.stopDraw);
+        }
+
+        signaturePads.delete(canvasId);
+    }
+
     function bindPad(canvasId) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return null;
 
+        // Ako već postoji — unbind stari, bind novi (modal se mogao ponovo kreirati)
         if (signaturePads.has(canvasId)) {
-            return signaturePads.get(canvasId);
+            const existing = signaturePads.get(canvasId);
+            // Isti canvas element — vrati existing
+            if (existing.canvas === canvas) return existing;
+            // Različit canvas (modal recreated) — čisti stari
+            unbindPad(canvasId);
         }
 
         const padState = {
@@ -61,7 +85,8 @@
             drawing: false,
             lastX: 0,
             lastY: 0,
-            hasInk: false
+            hasInk: false,
+            _handlers: null
         };
 
         setupCanvas(canvas, padState);
@@ -96,6 +121,9 @@
             padState.drawing = false;
         }
 
+        // Sačuvaj reference za kasniji removeEventListener
+        padState._handlers = { startDraw, draw, stopDraw };
+
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDraw);
@@ -114,16 +142,10 @@
         const pad = bindPad(canvasId);
         if (!pad) return;
 
-        // ako se layout promenio od poslednjeg otvaranja modala, re-setup canvas
         const { cssWidth, cssHeight } = getCanvasSize(pad.canvas);
         if (cssWidth !== pad.cssWidth || cssHeight !== pad.cssHeight) {
-            const hadInk = pad.hasInk;
             setupCanvas(pad.canvas, pad);
-            if (hadInk) {
-                // ovde ne pokušavamo da restauriramo postojeći potpis
-                // da ne komplikujemo stabilization fazu
-                pad.hasInk = false;
-            }
+            pad.hasInk = false;
         }
     };
 
@@ -150,10 +172,19 @@
     };
 
     window.getSignatureData = function (canvasId) {
-        const pad = bindPad(canvasId);
+        const pad = signaturePads.get(canvasId);
         if (!pad) return '';
         if (!pad.hasInk) return '';
 
         return pad.canvas.toDataURL('image/png');
+    };
+
+    window.destroySignaturePad = function (canvasId) {
+        unbindPad(canvasId);
+    };
+
+    window.destroyAllSignaturePads = function () {
+        const ids = Array.from(signaturePads.keys());
+        ids.forEach(id => unbindPad(id));
     };
 })();
