@@ -49,10 +49,10 @@ function mapServerOtkupRecord(r) {
     return {
         clientRecordID: r.ClientRecordID || '',
         serverRecordID: r.ServerRecordID || '',
-        createdAtClient: normalizeDateTime(r.CreatedAtClient),
-        updatedAtClient: normalizeDateTime(r.UpdatedAtClient || r.CreatedAtClient),
-        updatedAtServer: normalizeDateTime(r.UpdatedAtServer || r.ReceivedAt),
-        syncedAt: normalizeDateTime(r.UpdatedAtServer || r.ReceivedAt),
+        createdAtClient: normalizeIso(r.CreatedAtClient),
+        updatedAtClient: normalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
 
         datum: fmtDate(r.Datum),
         kooperantID: r.KooperantID || '',
@@ -118,10 +118,10 @@ function normalizeLocalPregledRecord(r) {
     return {
         clientRecordID: r.clientRecordID || '',
         serverRecordID: r.serverRecordID || '',
-        createdAtClient: normalizeDateTime(r.createdAtClient),
-        updatedAtClient: normalizeDateTime(r.updatedAtClient || r.createdAtClient),
-        updatedAtServer: normalizeDateTime(r.updatedAtServer),
-        syncedAt: normalizeDateTime(r.syncedAt),
+        createdAtClient: normalizeIso(r.createdAtClient),
+        updatedAtClient: normalizeIso(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: normalizeIso(r.updatedAtServer),
+        syncedAt: normalizeIso(r.syncedAt),
 
         datum: r.datum || '',
         kooperantID: r.kooperantID || '',
