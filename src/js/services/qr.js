@@ -1,23 +1,48 @@
 function startQRScan() {
     const readerDiv = document.getElementById('qr-reader');
+    if (!readerDiv) return;
+
     readerDiv.style.display = 'block';
-    if (qrScanner) qrScanner.clear();
+
+    // Čisti prethodni scanner ako postoji
+    if (qrScanner) {
+        try {
+            qrScanner.stop().catch(() => {});
+        } catch (e) {}
+        try {
+            qrScanner.clear();
+        } catch (e) {}
+        qrScanner = null;
+    }
+
     qrScanner = new Html5Qrcode('qr-reader');
     qrScanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => { onQRScanned(decodedText); qrScanner.stop().then(() => { readerDiv.style.display = 'none'; }); },
+        (decodedText) => {
+            qrScanner.stop().then(() => {
+                readerDiv.style.display = 'none';
+                qrScanner = null; // Oslobodi referencu
+            }).catch(() => {
+                readerDiv.style.display = 'none';
+                qrScanner = null;
+            });
+            onQRScanned(decodedText);
+        },
         () => {}
-    ).catch(err => { showToast('Kamera nije dostupna: ' + err, 'error'); readerDiv.style.display = 'none'; });
+    ).catch(err => {
+        showToast('Kamera nije dostupna: ' + err, 'error');
+        readerDiv.style.display = 'none';
+        qrScanner = null;
+    });
 }
 
 function generateQRCode(canvasId, text) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    
-    // Koristi QR generisanje iz eksternog CDN-a
+
     const img = new Image();
-    img.onload = function() {
+    img.onload = function () {
         canvas.width = 250;
         canvas.height = 250;
         const ctx = canvas.getContext('2d');
@@ -25,8 +50,7 @@ function generateQRCode(canvasId, text) {
         ctx.fillRect(0, 0, 250, 250);
         ctx.drawImage(img, 0, 0, 250, 250);
     };
-    img.onerror = function() {
-        // Fallback: prikaži tekst ako API ne radi
+    img.onerror = function () {
         canvas.width = 250;
         canvas.height = 250;
         const ctx = canvas.getContext('2d');
