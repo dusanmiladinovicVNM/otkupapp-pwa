@@ -4,6 +4,8 @@
 let izdKorpa = []; // {artikalID, naziv, jm, cena, kolicina, vrednost}
 let izdSelectedKoopID = '';
 let izdSelectedKoopName = '';
+let izdPreporukaQty = null;
+
 
 // --- Populate ---
 function populateIzdDropdowns() {
@@ -86,7 +88,6 @@ function izdCalcPreporuka() {
     const dozaPoHa = parseFloat(String(art.DozaPoHa || '0').replace(',', '.')) || 0;
     if (dozaPoHa <= 0) { izdHidePreporuka(); return; }
 
-    // Izračunaj ukupnu površinu iz izabranih parcela
     const checked = document.querySelectorAll('#izdParceleList input[type="checkbox"]:checked');
     let totalHa = 0;
     const parcelaNames = [];
@@ -99,7 +100,6 @@ function izdCalcPreporuka() {
 
     if (totalHa <= 0) { izdHidePreporuka(); return; }
 
-    // Osnovna kalkulacija: DozaPoHa × ukupna površina
     const rawQty = dozaPoHa * totalHa;
     const jm = art.JedinicaMere || 'kg';
     const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.')) || 0;
@@ -107,42 +107,37 @@ function izdCalcPreporuka() {
     let finalQty = rawQty;
     let pakInfo = '';
 
-    // Pakovanje zaokruživanje (ceil na cela pakovanja)
     if (pakovanje > 0) {
         const pakCount = Math.ceil(rawQty / pakovanje);
-        finalQty = pakCount ;
+        finalQty = pakCount;
         pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanje)';
     }
 
-    // Prikaži
     panel.classList.add('visible');
     document.getElementById('izdPreporukaCalc').innerHTML =
         '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
         ' — ' + escapeHtml(art.Naziv);
-    
+
     document.getElementById('izdPreporukaDetail').innerHTML =
-        escapeHtml(dozaPoHa) + ' ' + escapeHtml(jm) + '/ha × ' + escapeHtml(totalHa.toFixed(2)) + ' ha = ' +
-        escapeHtml(rawQty.toLocaleString('sr', {maximumFractionDigits: 2})) + ' ' + escapeHtml(jm) +
+        escapeHtml(String(dozaPoHa)) + ' ' + escapeHtml(jm) + '/ha × ' + escapeHtml(totalHa.toFixed(2)) + ' ha = ' +
+        escapeHtml(rawQty.toLocaleString('sr', { maximumFractionDigits: 2 })) + ' ' + escapeHtml(jm) +
         (pakInfo ? '<br>' + escapeHtml(pakInfo) : '') +
         '<br>Parcele: ' + escapeHtml(parcelaNames.join(', '));
 
-    // Sačuvaj za "Primeni"
-    panel._finalQty = finalQty;
+    // Module scope umesto DOM property
+    izdPreporukaQty = finalQty;
 }
 
 function izdHidePreporuka() {
     const panel = document.getElementById('izdPreporuka');
-    if (panel) {
-        panel.classList.remove('visible');
-        panel._finalQty = null;
-    }
+    if (panel) panel.classList.remove('visible');
+    izdPreporukaQty = null;
 }
 
 function izdPrimeniPreporuku() {
-    const panel = document.getElementById('izdPreporuka');
-    if (!panel || !panel._finalQty) return;
-    document.getElementById('izdKolicina').value = panel._finalQty;
-    showToast('Količina: ' + panel._finalQty.toLocaleString('sr'), 'success');
+    if (izdPreporukaQty === null) return;
+    document.getElementById('izdKolicina').value = izdPreporukaQty;
+    showToast('Količina: ' + izdPreporukaQty.toLocaleString('sr'), 'success');
 }
 
 // --- QR Scan Kooperant ---
