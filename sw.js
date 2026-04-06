@@ -4,7 +4,7 @@ const ASSETS = [
     './manifest.json',
 
         // Styles
-    '.Œ/src/styles/main.css',
+    './src/styles/main.css',
 
     // Utils
     './src/js/utils/dom.js',
