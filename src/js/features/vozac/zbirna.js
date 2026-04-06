@@ -155,10 +155,10 @@ function mapServerZbirnaRecord(r) {
     return {
         clientRecordID: r.ClientRecordID || '',
         serverRecordID: r.ServerRecordID || '',
-        createdAtClient: normalizeZbirnaDateTime(r.CreatedAtClient),
-        updatedAtClient: normalizeZbirnaDateTime(r.UpdatedAtClient || r.CreatedAtClient),
-        updatedAtServer: normalizeZbirnaDateTime(r.UpdatedAtServer || r.ReceivedAt),
-        syncedAt: normalizeZbirnaDateTime(r.UpdatedAtServer || r.ReceivedAt),
+        createdAtClient: normalizeIso(r.CreatedAtClient),
+        updatedAtClient: normalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
 
         datum: fmtDate(r.Datum),
         kupacID: r.KupacID || '',
@@ -183,10 +183,10 @@ function normalizeLocalZbirnaRecord(r) {
     return {
         clientRecordID: r.clientRecordID || '',
         serverRecordID: r.serverRecordID || '',
-        createdAtClient: normalizeZbirnaDateTime(r.createdAtClient),
-        updatedAtClient: normalizeZbirnaDateTime(r.updatedAtClient || r.createdAtClient),
-        updatedAtServer: normalizeZbirnaDateTime(r.updatedAtServer),
-        syncedAt: normalizeZbirnaDateTime(r.syncedAt),
+        createdAtClient: normalizeIso(r.createdAtClient),
+        updatedAtClient: normalizeIso(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: normalizeIso(r.updatedAtServer),
+        syncedAt: normalizeIso(r.syncedAt),
 
         datum: r.datum || '',
         kupacID: r.kupacID || '',
