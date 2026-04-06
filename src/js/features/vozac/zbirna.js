@@ -2,6 +2,7 @@
 // VOZAC: ZBIRNA
 // ============================================================
 let vozacOtkupi = [];
+let _lastMergedZbirne = null;
 
 async function loadVozacData() {
     vozacOtkupi = [];
@@ -31,13 +32,22 @@ async function loadVozacData() {
         }));
     }
 
+    // Jedan fetch za zbirne — koristi se i za filter i za renderovanje
     const zbirne = await getMergedZbirneForVozac();
-    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
+    _lastMergedZbirne = zbirne;
 
+    const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
     vozacOtkupi = vozacOtkupi.filter(r => !consumedIds.has(r.clientRecordID));
 
     renderVozacOtpremnice();
-    await loadVozacZbirne();
+    renderVozacZbirneFromData(zbirne);
+}
+
+async function loadVozacZbirne() {
+    // Standalone poziv — kad se zove van loadVozacData (npr. posle cancelZbirna)
+    const zbirne = await getMergedZbirneForVozac();
+    _lastMergedZbirne = zbirne;
+    renderVozacZbirneFromData(zbirne);
 }
 
 function extractStanicaIdFromSource(source) {
@@ -242,25 +252,8 @@ function normalizeZbirnaDateTime(value) {
     }
 }
 
-async function loadVozacZbirne() {
-    let local = [];
-    let server = [];
-
-    try {
-        local = await dbGetAll(db, 'zbirne');
-    } catch (err) {
-        console.error('loadVozacZbirne local failed:', err);
-    }
-
-    const json = await safeAsync(async () => {
-        return await apiFetch('action=getVozacZbirne');
-    }, 'Greška pri učitavanju zbirnih');
-
-    if (json && json.success && Array.isArray(json.records)) {
-        server = json.records.map(mapServerZbirnaRecord);
-    }
-
-    const all = mergeZbirneRecords(local, server)
+function renderVozacZbirneFromData(allZbirne) {
+    const all = (allZbirne || [])
         .filter(r => !r.deleted)
         .sort((a, b) => {
             const byDate = (b.datum || '').localeCompare(a.datum || '');
@@ -325,7 +318,9 @@ async function confirmZbirna() {
 
     const kupacID = kupacSel.value;
     const today = new Date().toISOString().split('T')[0];
-    const zbirne = await getMergedZbirneForVozac();
+
+    // Koristi cached zbirne umesto novog API call-a
+    const zbirne = _lastMergedZbirne || await getMergedZbirneForVozac();
     const consumedIds = getConsumedOtkupIdsFromZbirne(zbirne);
 
     const todayOtkupi = (vozacOtkupi || []).filter(r =>
