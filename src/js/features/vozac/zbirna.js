@@ -241,17 +241,6 @@ function mergeZbirneRecords(local, server) {
     return Array.from(merged.values());
 }
 
-function normalizeZbirnaDateTime(value) {
-    if (!value) return '';
-    try {
-        const d = new Date(value);
-        if (isNaN(d.getTime())) return String(value);
-        return d.toISOString();
-    } catch (_) {
-        return String(value);
-    }
-}
-
 function renderVozacZbirneFromData(allZbirne) {
     const all = (allZbirne || [])
         .filter(r => !r.deleted)
