@@ -5,14 +5,26 @@ let dpDem = [];
 let dpPlans = [];
 let dpSel = null;
 
-// kapacitet po kamionu
-let dpKap = JSON.parse(localStorage.getItem('dpKap') || '{}');
-
 // status po kamionu
 let dpKS = {};
 
 // master lista kamiona za prikaz
 let dpKamioni = [];
+
+let dpKap = {};
+try {
+    const raw = localStorage.getItem('dpKap');
+    if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            dpKap = parsed;
+        }
+    }
+} catch (e) {
+    console.error('dpKap localStorage corrupted, resetting:', e);
+    dpKap = {};
+    try { localStorage.removeItem('dpKap'); } catch (_) {}
+}
 
 // ============================================================
 // HELPERS
