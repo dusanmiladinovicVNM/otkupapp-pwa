@@ -64,7 +64,7 @@ function mapServerOtkupRecord(r) {
         cena: parseFloat(r.Cena) || 0,
         kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
         parcelaID: r.ParcelaID || '',
-        vozacID: r.VozacID || '',
+        vozacID: r.VozacID || r.VozaciID || '',
         napomena: r.Napomena || '',
 
         syncStatus: 'synced',
