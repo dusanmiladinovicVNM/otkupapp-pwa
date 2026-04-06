@@ -15,3 +15,14 @@ window.fmtStanica = function(stanicaID) {
     if (name === stanicaID) return stanicaID;
     return name + ' (' + stanicaID + ')';
 };
+
+window.normalizeIso = function (value) {
+    if (!value) return '';
+    try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        return d.toISOString();
+    } catch (_) {
+        return String(value);
+    }
+};
