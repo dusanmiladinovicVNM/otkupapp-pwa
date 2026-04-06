@@ -366,19 +366,25 @@ function onAgroParcelaChange() {
 async function loadAgroMeteoStrip(parcelaID) {
     window.meteoCache = window.meteoCache || {};
     const strip = document.getElementById('agroMeteoStrip');
+    if (!strip) return;
+
     strip.style.display = 'flex';
 
-    // Iz meteoCache ako postoji
     let data = null;
-    if (meteoCache[parcelaID] && (Date.now() - meteoCache[parcelaID]._ts < 3600000)) {
-        data = meteoCache[parcelaID];
+
+    // Iz cache-a ako je svež
+    if (window.meteoCache[parcelaID] && (Date.now() - window.meteoCache[parcelaID]._ts < 3600000)) {
+        data = window.meteoCache[parcelaID];
     } else {
-        try {
-            const url = CONFIG.API_URL + '?action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaID);
-            const resp = await fetch(url);
-            const json = await resp.json();
-            if (json && json.success) { json._ts = Date.now(); meteoCache[parcelaID] = json; data = json; }
-        } catch(e) {}
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaID));
+        }, 'Greška pri učitavanju meteo podataka');
+
+        if (json && json.success) {
+            json._ts = Date.now();
+            window.meteoCache[parcelaID] = json;
+            data = json;
+        }
     }
 
     if (!data || !data.current) {
@@ -388,17 +394,22 @@ async function loadAgroMeteoStrip(parcelaID) {
     }
 
     const c = data.current;
-    const temp = (c.temperature || c.Temp || 0);
-    const wind = (c.windSpeed || c.Wind || 0);
-    const hum = (c.humidity || c.Humidity || 0);
-    const precip = (c.precipitation || c.Precip || 0);
+    const temp = Number(c.temperature || c.Temp || 0);
+    const wind = Number(c.windSpeed || c.Wind || 0);
+    const hum = Number(c.humidity || c.Humidity || 0);
+    const precip = Number(c.precipitation || c.Precip || 0);
 
     agroState.meteoSnapshot = { temp: temp, wind: wind, humidity: hum };
 
-    document.getElementById('agroMeteoTemp').textContent = '🌡️ ' + temp.toFixed(1) + '°C';
-    document.getElementById('agroMeteoWind').textContent = '💨 ' + wind.toFixed(0) + ' km/h';
-    document.getElementById('agroMeteoHumidity').textContent = '💧 ' + hum + '%';
-    document.getElementById('agroMeteoPrecip').textContent = precip > 0 ? '🌧️ ' + precip.toFixed(1) + 'mm' : '☀️ Suvo';
+    const tempEl = document.getElementById('agroMeteoTemp');
+    const windEl = document.getElementById('agroMeteoWind');
+    const humEl = document.getElementById('agroMeteoHumidity');
+    const precipEl = document.getElementById('agroMeteoPrecip');
+
+    if (tempEl) tempEl.textContent = '🌡️ ' + temp.toFixed(1) + '°C';
+    if (windEl) windEl.textContent = '💨 ' + wind.toFixed(0) + ' km/h';
+    if (humEl) humEl.textContent = '💧 ' + hum + '%';
+    if (precipEl) precipEl.textContent = precip > 0 ? '🌧️ ' + precip.toFixed(1) + 'mm' : '☀️ Suvo';
 }
 
 // ============================================================
