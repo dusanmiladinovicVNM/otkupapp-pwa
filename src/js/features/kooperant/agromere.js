@@ -197,73 +197,70 @@ function agroRenderOpremaSelects() {
     const traktorSel = document.getElementById('agroTraktor');
     const prskalicaSel = document.getElementById('agroPrskalica');
 
-    if (traktorSel) {
-        traktorSel.innerHTML = '<option value="">-- Bez traktora --</option>';
-        agroState.opremaList
-            .filter(o => o.tip === 'Traktor')
-            .sort((a, b) => String(a.naziv || '').localeCompare(String(b.naziv || '')))
-            .forEach(o => {
-                const opt = document.createElement('option');
-                opt.value = o.naziv;
-                opt.textContent = o.naziv;
-                traktorSel.appendChild(opt);
-            });
-    }
+    if (!traktorSel || !prskalicaSel) return;
 
-    if (prskalicaSel) {
-        prskalicaSel.innerHTML = '<option value="">-- Bez prskalice --</option>';
-        agroState.opremaList
-            .filter(o => o.tip === 'Prskalica')
-            .sort((a, b) => String(a.naziv || '').localeCompare(String(b.naziv || '')))
-            .forEach(o => {
-                const opt = document.createElement('option');
-                opt.value = o.naziv;
-                opt.textContent = o.naziv;
-                prskalicaSel.appendChild(opt);
-            });
-    }
-}
+    // --- Traktor ---
+    traktorSel.innerHTML = '<option value="">-- Bez traktora --</option>';
 
-function agroPopulateOpremaDropdowns() {
-    const tSel = document.getElementById('agroTraktor');
-    const pSel = document.getElementById('agroPrskalica');
-    if (!tSel || !pSel) return;
+    const traktori = (agroState.opremaList || [])
+        .filter(o => o.tip === 'Traktor')
+        .sort((a, b) => String(a.naziv || '').localeCompare(String(b.naziv || '')));
 
-    tSel.innerHTML = '<option value="">-- Bez traktora --</option>';
-    pSel.innerHTML = '<option value="">-- Bez prskalice --</option>';
+    const tNames = new Set(traktori.map(o => String(o.naziv || '').toLowerCase()));
 
-    // Kooperantova oprema (sa servera)
-    const traktori = agroState.opremaList.filter(o => o.tip === 'Traktor');
-    const prskalice = agroState.opremaList.filter(o => o.tip === 'Prskalica' || o.tip === 'Atomizer');
-
+    // Kooperantova oprema (server + lokalna)
     traktori.forEach(o => {
-        const op = document.createElement('option'); op.value = o.naziv; op.textContent = o.naziv;
-        tSel.appendChild(op);
+        const opt = document.createElement('option');
+        opt.value = o.naziv;
+        opt.textContent = o.naziv;
+        traktorSel.appendChild(opt);
     });
+
+    // Predlozi — samo oni koje kooperant još nema
+    const tPredlozi = (OPREMA_PREDLOZI.Traktor || []).filter(n =>
+        !tNames.has(String(n).toLowerCase())
+    );
+    if (tPredlozi.length > 0) {
+        const og = document.createElement('optgroup');
+        og.label = '— Česti modeli —';
+        tPredlozi.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            og.appendChild(opt);
+        });
+        traktorSel.appendChild(og);
+    }
+
+    // --- Prskalica ---
+    prskalicaSel.innerHTML = '<option value="">-- Bez prskalice --</option>';
+
+    const prskalice = (agroState.opremaList || [])
+        .filter(o => o.tip === 'Prskalica' || o.tip === 'Atomizer')
+        .sort((a, b) => String(a.naziv || '').localeCompare(String(b.naziv || '')));
+
+    const pNames = new Set(prskalice.map(o => String(o.naziv || '').toLowerCase()));
 
     prskalice.forEach(o => {
-        const op = document.createElement('option'); op.value = o.naziv; op.textContent = o.naziv;
-        pSel.appendChild(op);
+        const opt = document.createElement('option');
+        opt.value = o.naziv;
+        opt.textContent = o.naziv;
+        prskalicaSel.appendChild(opt);
     });
 
-    // Predlozi (samo oni koje kooperant još nema)
-    const tNames = new Set(traktori.map(o => o.naziv));
-    const pNames = new Set(prskalice.map(o => o.naziv));
-
-    if (traktori.length === 0) {
-        const og = document.createElement('optgroup'); og.label = '— Česti modeli —';
-        OPREMA_PREDLOZI.Traktor.forEach(n => {
-            if (!tNames.has(n)) { const op = document.createElement('option'); op.value = n; op.textContent = n; og.appendChild(op); }
+    const pPredlozi = (OPREMA_PREDLOZI.Prskalica || []).filter(n =>
+        !pNames.has(String(n).toLowerCase())
+    );
+    if (pPredlozi.length > 0) {
+        const og = document.createElement('optgroup');
+        og.label = '— Česti modeli —';
+        pPredlozi.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            og.appendChild(opt);
         });
-        if (og.children.length > 0) tSel.appendChild(og);
-    }
-
-    if (prskalice.length === 0) {
-        const og = document.createElement('optgroup'); og.label = '— Česti modeli —';
-        OPREMA_PREDLOZI.Prskalica.forEach(n => {
-            if (!pNames.has(n)) { const op = document.createElement('option'); op.value = n; op.textContent = n; og.appendChild(op); }
-        });
-        if (og.children.length > 0) pSel.appendChild(og);
+        prskalicaSel.appendChild(og);
     }
 }
 
