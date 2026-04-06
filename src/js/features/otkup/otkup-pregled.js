@@ -75,43 +75,7 @@ function mapServerOtkupRecord(r) {
 }
 
 function mergeOtkupPregledRecords(local, server) {
-    const merged = new Map();
-
-    // prvo ubaci server snapshot
-    for (const rec of (server || [])) {
-        if (!rec || !rec.clientRecordID) continue;
-        merged.set(rec.clientRecordID, rec);
-    }
-
-    // onda lokalni prepisuje server ako je unsynced ili noviji
-    for (const rec of (local || [])) {
-        if (!rec || !rec.clientRecordID) continue;
-
-        const existing = merged.get(rec.clientRecordID);
-
-        if (!existing) {
-            merged.set(rec.clientRecordID, normalizeLocalPregledRecord(rec));
-            continue;
-        }
-
-        const localNorm = normalizeLocalPregledRecord(rec);
-
-        // lokalni unsynced uvek ima prioritet u pregledu
-        if (localNorm.syncStatus === 'pending' || localNorm.syncStatus === 'syncing') {
-            merged.set(rec.clientRecordID, localNorm);
-            continue;
-        }
-
-        // fallback: ako je lokalni synced ali noviji od server snapshot-a
-        const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
-        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
-
-        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
-            merged.set(rec.clientRecordID, localNorm);
-        }
-    }
-
-    return Array.from(merged.values());
+    return mergeOfflineRecords(local, server, normalizeLocalPregledRecord);
 }
 
 function normalizeLocalPregledRecord(r) {
