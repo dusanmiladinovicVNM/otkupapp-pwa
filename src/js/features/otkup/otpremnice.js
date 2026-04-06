@@ -1,6 +1,10 @@
 // ============================================================
 // OTKUPNI LIST + SIGNATURE PAD
 // ============================================================
+
+let _otpremaServerCache = { data: null, ts: 0 };
+const OTPREMA_CACHE_TTL = 15000; // 15s
+
 function showOtkupniList(record) {
     const config = stammdaten.config || [];
     const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
@@ -252,6 +256,45 @@ async function savePdfToDrive(clientRecordID) {
 let otpremaVozacID = '';
 let otpremaUnassigned = [];
 
+async function getOtpremaOtkupiCached(forceRefresh) {
+    if (
+        !forceRefresh &&
+        _otpremaServerCache.data &&
+        (Date.now() - _otpremaServerCache.ts < OTPREMA_CACHE_TTL)
+    ) {
+        return _otpremaServerCache.data;
+    }
+
+    let local = [];
+    let server = [];
+
+    try {
+        local = await dbGetAll(db, CONFIG.STORE_NAME);
+    } catch (err) {
+        console.error('getOtpremaOtkupiCached local failed:', err);
+    }
+
+    if (navigator.onLine) {
+        try {
+            const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+            if (json && json.success && Array.isArray(json.records)) {
+                server = json.records.map(mapServerOtpremaRecord);
+            }
+        } catch (e) {
+            console.error('getOtpremaOtkupiCached server failed:', e);
+        }
+    }
+
+    const all = mergeOtpremaRecords(local, server);
+
+    _otpremaServerCache = { data: all, ts: Date.now() };
+    return all;
+}
+
+function invalidateOtpremaCache() {
+    _otpremaServerCache = { data: null, ts: 0 };
+}
+
 function startOtpremaVozacScan() {
     const readerDiv = document.getElementById('qr-reader-otprema');
     readerDiv.style.display = 'block';
@@ -289,27 +332,7 @@ async function showOtpremaAssignView() {
     if (mainView) mainView.style.display = 'none';
     if (assignView) assignView.style.display = 'block';
 
-    let local = [];
-    let server = [];
-
-    try {
-        local = await dbGetAll(db, CONFIG.STORE_NAME);
-    } catch (err) {
-        console.error('showOtpremaAssignView local failed:', err);
-    }
-
-    if (navigator.onLine) {
-        try {
-            const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-            if (json && json.success && Array.isArray(json.records)) {
-                server = json.records.map(mapServerOtpremaRecord);
-            }
-        } catch (e) {
-            console.error('showOtpremaAssignView server failed:', e);
-        }
-    }
-
-    const all = mergeOtpremaRecords(local, server);
+    const all = await getOtpremaOtkupiCached(true);
 
     otpremaUnassigned = all.filter(r => !r.vozacID);
     otpremaUnassigned.sort((a, b) => {
@@ -424,8 +447,8 @@ async function confirmOtprema() {
 
         showToast(selected.length + ' otkupa dodeljeno vozaču', 'success');
 
+        invalidateOtpremaCache();
         cancelOtprema();
-        await loadOtpremaOverview();
 
         if (navigator.onLine) {
             if (typeof syncQueueSafe === 'function') {
@@ -454,26 +477,7 @@ async function cancelOtprema() {
 }
 
 async function loadOtpremaOverview() {
-    let local = [];
-    let server = [];
-
-    try {
-        local = await dbGetAll(db, CONFIG.STORE_NAME);
-    } catch (err) {
-        console.error('loadOtpremaOverview local failed:', err);
-    }
-
-    if (navigator.onLine) {
-        const json = await safeAsync(async () => {
-            return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-        }, 'Greška pri učitavanju otpreme');
-
-        if (json && json.success && Array.isArray(json.records)) {
-            server = json.records.map(mapServerOtpremaRecord);
-        }
-    }
-
-    const all = mergeOtpremaRecords(local, server);
+    const all = await getOtpremaOtkupiCached(false);
 
     const unassigned = all.filter(r => !r.vozacID);
     unassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
