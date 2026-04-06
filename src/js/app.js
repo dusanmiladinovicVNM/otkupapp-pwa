@@ -247,8 +247,22 @@ async function guardStammdaten(fn) {
 
 function handleStammdatenUpdated() {
     try {
-        if (CONFIG.USER_ROLE === 'Kooperant' && typeof agroPopulateParcele === 'function') {
-            agroPopulateParcele();
+        // Invalidate caches koji zavise od stammdaten
+        if (typeof invalidateKarticaCache === 'function') {
+            invalidateKarticaCache();
+        }
+
+        if (typeof invalidateTretmaniCache === 'function') {
+            invalidateTretmaniCache();
+        }
+
+        if (typeof invalidateOtpremaCache === 'function') {
+            invalidateOtpremaCache();
+        }
+
+        // Repopulate dropdowns per role
+        if (CONFIG.USER_ROLE === 'Kooperant') {
+            if (typeof agroPopulateParcele === 'function') agroPopulateParcele();
         }
 
         if (CONFIG.USER_ROLE === 'Management') {
