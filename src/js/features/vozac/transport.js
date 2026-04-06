@@ -73,43 +73,5 @@ async function loadVozacTransport() {
 }
 
 function mergeTransportZbirne(local, server) {
-    const merged = new Map();
-
-    (server || []).forEach(r => {
-        if (r && r.clientRecordID) merged.set(r.clientRecordID, r);
-    });
-
-    (local || []).forEach(r => {
-        if (!r || !r.clientRecordID) return;
-
-        const existing = merged.get(r.clientRecordID);
-
-        if (!existing) {
-            merged.set(r.clientRecordID, r);
-            return;
-        }
-
-        if (r.syncStatus === 'pending' || r.syncStatus === 'syncing') {
-            merged.set(r.clientRecordID, r);
-            return;
-        }
-
-        const localUpdated = r.updatedAtClient || r.createdAtClient || '';
-        const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
-
-        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
-            merged.set(r.clientRecordID, r);
-        }
-    });
-
-    return Array.from(merged.values()).sort((a, b) => {
-        const byDate = (b.datum || '').localeCompare(a.datum || '');
-        if (byDate !== 0) return byDate;
-
-        const byTime = String(b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '')
-            .localeCompare(String(a.updatedAtClient || a.createdAtClient || a.updatedAtServer || ''));
-        if (byTime !== 0) return byTime;
-
-        return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
-    });
+    return mergeOfflineRecords(local, server, normalizeLocalZbirnaRecord);
 }
