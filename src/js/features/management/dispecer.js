@@ -740,25 +740,18 @@ async function dpOK() {
     showToast('Čuvanje plana.', 'info');
 
     const json = await safeAsync(async () => {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'saveDispecer',
-                token: CONFIG.TOKEN,
-                demandID: dpSel.did,
-                vozacID: vid,
-                stanicaID: sid,
-                stanicaName: dpSN(sid),
-                kupacID: kupID,
-                kupacName: kupN,
-                plannedKg: Math.round(kg)
-            })
+        return await apiPost('saveDispecer', {
+            demandID: dpSel.did,
+            vozacID: vid,
+            stanicaID: sid,
+            stanicaName: dpSN(sid),
+            kupacID: kupID,
+            kupacName: kupN,
+            plannedKg: Math.round(kg)
         });
-        return await resp.json();
     }, 'Greška pri čuvanju plana');
 
-    if (!json) return;
+    if (!json) { dpX(); return; }
 
     if (json.success) {
         const newPlan = {
@@ -778,19 +771,12 @@ async function dpOK() {
         const ruta = dpCalcRuta(vid);
         dpSetS(vid, 'utovar', ruta);
 
-        safeAsync(async () => {
-            await fetch(CONFIG.API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    action: 'updateKamionStatus',
-                    token: CONFIG.TOKEN,
-                    vozacID: vid,
-                    status: 'utovar',
-                    ruta: ruta
-                })
-            });
-        });
+        // Fire-and-forget status update
+        apiPost('updateKamionStatus', {
+            vozacID: vid,
+            status: 'utovar',
+            ruta: ruta
+        }).catch(() => {});
 
         if (!dpKamioni.some(x => x.id === vid)) {
             dpKamioni.push({ id: vid, name: vid });
@@ -811,21 +797,14 @@ async function dpOK() {
 // PLAN STATUS CHANGE
 // ============================================================
 async function dpChgPlanSt(planID, newStatus) {
-    const ok = await safeAsync(async () => {
-        await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'updateDispecer',
-                token: CONFIG.TOKEN,
-                planID,
-                status: newStatus
-            })
+    const json = await safeAsync(async () => {
+        return await apiPost('updateDispecer', {
+            planID: planID,
+            status: newStatus
         });
-        return true;
     }, 'Greška pri izmeni statusa plana');
 
-    if (!ok) return;
+    if (!json) return;
 
     const p = dpPlans.find(x => x.PlanID === planID);
     const vid = p ? p.VozacID : '';
@@ -837,23 +816,17 @@ async function dpChgPlanSt(planID, newStatus) {
 
     if (vid) {
         const ruta = dpCalcRuta(vid);
-        const status = ruta ? (newStatus === 'zavrseno' ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : newStatus) : 'slobodan';
+        const status = ruta
+            ? (newStatus === 'zavrseno' ? ((dpKS[vid] && dpKS[vid].status) || 'utovar') : newStatus)
+            : 'slobodan';
 
         dpSetS(vid, status, ruta);
 
-        safeAsync(async () => {
-            await fetch(CONFIG.API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    action: 'updateKamionStatus',
-                    token: CONFIG.TOKEN,
-                    vozacID: vid,
-                    status: status,
-                    ruta: ruta
-                })
-            });
-        });
+        apiPost('updateKamionStatus', {
+            vozacID: vid,
+            status: status,
+            ruta: ruta
+        }).catch(() => {});
     }
 
     dpRP();
@@ -868,20 +841,11 @@ async function dpRmPlan(planID) {
     const plan = dpPlans.find(x => x.PlanID === planID);
     const vid = plan ? plan.VozacID : '';
 
-    const ok = await safeAsync(async () => {
-        await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'removeDispecer',
-                token: CONFIG.TOKEN,
-                planID
-            })
-        });
-        return true;
+    const json = await safeAsync(async () => {
+        return await apiPost('removeDispecer', { planID: planID });
     }, 'Greška pri brisanju plana');
 
-    if (!ok) return;
+    if (!json) return;
 
     dpPlans = dpPlans.filter(x => x.PlanID !== planID);
 
@@ -891,19 +855,11 @@ async function dpRmPlan(planID) {
 
         dpSetS(vid, status, ruta);
 
-        safeAsync(async () => {
-            await fetch(CONFIG.API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    action: 'updateKamionStatus',
-                    token: CONFIG.TOKEN,
-                    vozacID: vid,
-                    status: status,
-                    ruta: ruta
-                })
-            });
-        });
+        apiPost('updateKamionStatus', {
+            vozacID: vid,
+            status: status,
+            ruta: ruta
+        }).catch(() => {});
     }
 
     dpRP();
@@ -918,6 +874,7 @@ async function dpRmPlan(planID) {
 // ============================================================
 // KAMION STATUS
 // ============================================================
+
 async function dpCS(vid, st) {
     dpKS[vid] = {
         status: st,
@@ -931,16 +888,10 @@ async function dpCS(vid, st) {
     dpRTr();
 
     await safeAsync(async () => {
-        await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'updateKamionStatus',
-                token: CONFIG.TOKEN,
-                vozacID: vid,
-                status: st,
-                ruta: (dpKS[vid] || {}).ruta || ''
-            })
+        return await apiPost('updateKamionStatus', {
+            vozacID: vid,
+            status: st,
+            ruta: (dpKS[vid] || {}).ruta || ''
         });
     }, 'Greška pri čuvanju statusa kamiona');
 }
@@ -964,20 +915,13 @@ async function dpAD() {
         document.getElementById('dpDK').selectedOptions[0]?.textContent || kupacID;
 
     const json = await safeAsync(async () => {
-        const resp = await fetch(CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                action: 'saveWarRoomDemand',
-                token: CONFIG.TOKEN,
-                kupacID,
-                kupacName,
-                kg,
-                vrsta,
-                klasa
-            })
+        return await apiPost('saveWarRoomDemand', {
+            kupacID: kupacID,
+            kupacName: kupacName,
+            kg: kg,
+            vrsta: vrsta,
+            klasa: klasa
         });
-        return await resp.json();
     }, 'Greška pri čuvanju zahteva');
 
     if (!json) return;
