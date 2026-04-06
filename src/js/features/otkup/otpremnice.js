@@ -250,6 +250,13 @@ async function savePdfToDrive(clientRecordID) {
     }
 }
 
+function closeOtkupniListModal() {
+    destroySignaturePad('sigOtkupac');
+    destroySignaturePad('sigKooperant');
+    const modal = document.getElementById('otkupniListModal');
+    if (modal) modal.style.display = 'none';
+}
+
 // ============================================================
 // OTPREMA (dispatch)
 // ============================================================
