@@ -162,7 +162,7 @@ async function agroLoadOprema() {
             clientRecordID: r.ClientRecordID || '',
             naziv: r.Naziv || '',
             tip: r.Tip || '',
-            createdAt: agroNormalizeIso(r.CreatedAt),
+            createdAt: NormalizeIso(r.CreatedAt),
             source: 'server'
         }));
     }
@@ -1090,25 +1090,14 @@ function agroGenerateClientRecordID(prefix) {
     return (prefix || 'agro') + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
 }
 
-function agroNormalizeIso(value) {
-    if (!value) return '';
-    try {
-        const d = new Date(value);
-        if (isNaN(d.getTime())) return String(value);
-        return d.toISOString();
-    } catch (_) {
-        return String(value);
-    }
-}
-
 function agroMapServerTretman(r) {
     return {
         clientRecordID: r.ClientRecordID || '',
         serverRecordID: r.ServerRecordID || '',
-        createdAtClient: agroNormalizeIso(r.CreatedAtClient),
-        updatedAtClient: agroNormalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
-        updatedAtServer: agroNormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
-        syncedAt: agroNormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        createdAtClient: NormalizeIso(r.CreatedAtClient),
+        updatedAtClient: NormalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
+        updatedAtServer: NormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
+        syncedAt: NormalizeIso(r.UpdatedAtServer || r.ReceivedAt),
 
         kooperantID: r.KooperantID || '',
         parcelaID: r.ParcelaID || '',
@@ -1161,10 +1150,10 @@ function agroNormalizeLocalTretman(r) {
     return {
         clientRecordID: r.clientRecordID || '',
         serverRecordID: r.serverRecordID || '',
-        createdAtClient: agroNormalizeIso(r.createdAtClient),
-        updatedAtClient: agroNormalizeIso(r.updatedAtClient || r.createdAtClient),
-        updatedAtServer: agroNormalizeIso(r.updatedAtServer),
-        syncedAt: agroNormalizeIso(r.syncedAt),
+        createdAtClient: NormalizeIso(r.createdAtClient),
+        updatedAtClient: NormalizeIso(r.updatedAtClient || r.createdAtClient),
+        updatedAtServer: NormalizeIso(r.updatedAtServer),
+        syncedAt: NormalizeIso(r.syncedAt),
 
         kooperantID: r.kooperantID || '',
         parcelaID: r.parcelaID || '',
