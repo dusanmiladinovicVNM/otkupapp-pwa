@@ -2,6 +2,66 @@ const CACHE_NAME = 'otkupapp-v140';
 const ASSETS = [
     './index.html',
     './manifest.json',
+
+        // Styles
+    './src/styles/main.css',
+
+    // Utils
+    './src/js/utils/dom.js',
+    './src/js/utils/storage.js',
+    './src/js/utils/sanitize.js',
+    './src/js/utils/format.js',
+    './src/js/utils/async.js',
+    './src/js/utils/merge.js',
+
+    // Config + State
+    './src/js/config.js',
+    './src/js/state.js',
+
+    // Services
+    './src/js/services/db.js',
+    './src/js/services/api.js',
+    './src/js/services/auth.js',
+    './src/js/services/qr.js',
+
+    // UI
+    './src/js/ui/toast.js',
+    './src/js/ui/signatures.js',
+    './src/js/ui/tabs.js',
+
+    // Features — kooperant
+    './src/js/features/kooperant/kartica.js',
+    './src/js/features/kooperant/koopinfo.js',
+    './src/js/features/kooperant/parcele.js',
+    './src/js/features/kooperant/sync.js',
+    './src/js/features/kooperant/agromere.js',
+
+    // Features — otkup
+    './src/js/features/otkup/otkup-form.js',
+    './src/js/features/otkup/otkup-pregled.js',
+    './src/js/features/otkup/otkupni-list.js',
+    './src/js/features/otkup/otpremnice.js',
+    './src/js/features/otkup/sync.js',
+
+    // Features — vozac
+    './src/js/features/vozac/zbirna.js',
+    './src/js/features/vozac/transport.js',
+
+    // Features — management
+    './src/js/features/management/kooperanti.js',
+    './src/js/features/management/stanice.js',
+    './src/js/features/management/kupci.js',
+    './src/js/features/management/agrohemija.js',
+    './src/js/features/management/dispecer.js',
+    './src/js/features/management/mgmt-shell.js',
+
+    // App bootstrap
+    './src/js/app.js',
+
+    // Icons
+    './icons/icon-192x192.png',
+    './icons/icon-512x512.png',
+    
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
     'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js'
 ];
