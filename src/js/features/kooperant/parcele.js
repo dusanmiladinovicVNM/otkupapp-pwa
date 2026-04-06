@@ -2,6 +2,7 @@
 // KOOPERANT: PARCELE
 // ============================================================
 let parcelMapInstance = null;
+let parcelLayers = {};
 
 const kooperantParcelStyle = {
     color: '#ffd60a',
@@ -95,7 +96,8 @@ async function loadParcele() {
         }).addTo(parcelMapInstance);
 
         const allBounds = [];
-        window._parcelLayers = {};
+        parcelLayers = {};
+
 
         const geoResults = await Promise.all(parcele.map(async (p) => {
             const json = await safeAsync(async () => {
@@ -126,7 +128,7 @@ async function loadParcele() {
                         const bounds = l.getBounds();
                         if (bounds && bounds.isValid()) allBounds.push(bounds);
 
-                        window._parcelLayers[p.ParcelaID] = l;
+                        parcelLayers[p.ParcelaID] = l;
                     });
                 } catch (e) {
                     console.error('Invalid polygon geojson for', p.ParcelaID, e);
@@ -144,7 +146,7 @@ async function loadParcele() {
                 marker.bindPopup(popupHtml);
 
                 allBounds.push(L.latLngBounds([marker.getLatLng(), marker.getLatLng()]));
-                window._parcelLayers[p.ParcelaID] = marker;
+                parcelLayers[p.ParcelaID] = marker;
             }
         });
 
@@ -536,9 +538,9 @@ function toggleParcelExpert(parcelId) {
 
 function focusParcel(parcelaID) {
     const mapDiv = document.getElementById('parceleMap');
-    if (!parcelMapInstance || !window._parcelLayers || !window._parcelLayers[parcelaID]) return;
+    if (!parcelMapInstance || !parcelLayers[parcelaID]) return;
 
-    const layer = window._parcelLayers[parcelaID];
+    const layer = parcelLayers[parcelaID];
 
     if (layer.getBounds) {
         parcelMapInstance.fitBounds(layer.getBounds().pad(0.3));
