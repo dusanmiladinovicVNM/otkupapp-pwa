@@ -2,6 +2,11 @@
 // TAB NAVIGATION (non-management)
 // ============================================================
 function showTab(tabName, btn) {
+    // Cleanup agromere GPS kad se napusti tab
+    if (tabName !== 'agromere' && agroState && agroState.geoWatchId) {
+        navigator.geolocation.clearWatch(agroState.geoWatchId);
+        agroState.geoWatchId = null;
+    }
     qsa('.tab-content').forEach(t => removeClass(t, 'active'));
     qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
 
