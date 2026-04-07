@@ -10,7 +10,7 @@ const ASSETS = [
     './src/styles/features-kooperant.css',
     './src/styles/features-management.css',
     './src/styles/features-otkup.css',
-    './src/styles/vozac.css',
+    './src/styles/features-vozac.css',
     './src/styles/layout.css',
     './src/styles/print.css',
 
