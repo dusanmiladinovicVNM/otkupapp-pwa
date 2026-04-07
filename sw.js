@@ -4,7 +4,15 @@ const ASSETS = [
     './manifest.json',
 
         // Styles
-    './src/styles/main.css',
+    './src/styles/auth.css',
+    './src/styles/base.css',
+    './src/styles/components.css',
+    './src/styles/features-kooperant.css',
+    './src/styles/features-management.css',
+    './src/styles/features-otkup.css',
+    './src/styles/vozac.css',
+    './src/styles/layout.css',
+    './src/styles/print.css',
 
     // Utils
     './src/js/utils/dom.js',
