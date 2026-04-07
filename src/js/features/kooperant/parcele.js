@@ -355,9 +355,7 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
     }
 
     const json = await safeAsync(async () => {
-        const url = CONFIG.API_URL + '?action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId);
-        const json = await apiFetch('action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId));
-        return await resp.json();
+        return await apiFetch('action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId));
     });
 
     if (!json) {
