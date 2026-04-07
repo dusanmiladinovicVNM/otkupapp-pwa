@@ -53,6 +53,12 @@ function buildKooperantParcelPopup(p) {
 }
     
 async function loadParcele() {
+    if (_parceleLoaded && parcelMapInstance) {
+        // Samo refreshuj meteo, ne celu mapu
+        const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
+        parcele.forEach(p => loadParcelMeteoInline(p.ParcelaID, p.Kultura || ''));
+        return;
+    }
     await safeAsync(async () => {
         const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
         const list = document.getElementById('parceleList');
@@ -165,6 +171,10 @@ async function loadParcele() {
     }, 'Greška pri učitavanju parcela');
 }
 
+// Invalidate kad se stammdaten refreshuju
+function invalidateParceleCache() {
+    _parceleLoaded = false;
+}
 // ============================================================
 // KOOPERANT: PARCELA METEO + RISK
 // ============================================================
