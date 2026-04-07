@@ -43,6 +43,8 @@ async function bootstrapApp() {
 
         appRuntime.stammdatenReady = true;
         appRuntime.appReady = true;
+        const loader = document.getElementById('appLoader');
+        if (loader) loader.style.display = 'none';
 
         refreshStammdatenInBackground();
     } catch (err) {
