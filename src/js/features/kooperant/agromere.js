@@ -697,17 +697,18 @@ function agroMeteoOverride() {
 // ============================================================
 // GEOFENCING
 // ============================================================
+let _lastGeoCheck = 0;
 function agroStartGeo() {
     if (!navigator.geolocation) return;
-
     agroState.geoWatchId = navigator.geolocation.watchPosition(
         pos => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            agroState.geoStart = { lat, lng };
-            agroCheckParcelaProximity(lat, lng);
+            const now = Date.now();
+            if (now - _lastGeoCheck < 5000) return; // max jednom u 5s
+            _lastGeoCheck = now;
+            agroState.geoStart = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            agroCheckParcelaProximity(pos.coords.latitude, pos.coords.longitude);
         },
-        () => { /* silent — ručni fallback */ },
+        () => {},
         { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
     );
 }
