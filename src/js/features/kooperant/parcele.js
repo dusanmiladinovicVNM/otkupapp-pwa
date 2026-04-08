@@ -363,7 +363,7 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
 
     // Ako imamo cached podatke mlađe od 6h — prikaži iz keša, ne zovi API
     if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < METEO_CACHE_TTL)) {
-        el.innerHTML = renderMeteoInline(window.meteoCache[parcelaId]);
+        el.innerHTML = renderMeteoInline(window.meteoCache[parcelaId], parcelaId);
         return;
     }
 
@@ -379,14 +379,15 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
     if (json && json.success) {
         json._ts = Date.now();
         window.meteoCache[parcelaId] = json;
-        el.innerHTML = renderMeteoInline(json);
+        el.innerHTML = renderMeteoInline(json, parcelaId);
     } else {
         el.innerHTML = '<span style="color:var(--text-muted);">Nema meteo podataka</span>';
     }
 }
 
-function renderMeteoInline(data) {
+function renderMeteoInline(data, parcelaId) {
     const c = data.current || {};
+    const pid = parcelaId || data.parcelaId || '';
     const risk = data.risk || {};
     const spray = data.sprayWindow || data.SprayWindows || [];
     const daily = data.daily || data.ForecastDaily || [];
@@ -438,7 +439,7 @@ function renderMeteoInline(data) {
     }
 
     // Expert info — dodato
-    const expertHtml = renderExpertInfo(parcelaId, c);
+    const expertHtml = renderExpertInfo(pid, c);
     
     return `
         <div class="parcel-meteo-compact">
