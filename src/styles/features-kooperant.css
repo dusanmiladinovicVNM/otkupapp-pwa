@@ -287,6 +287,74 @@
             overflow: hidden;
         }
 
+/* Expert info panel - dozvoli overflow na parcela kartici */
+#parceleList > div {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+.parcel-meteo-compact {
+    overflow: visible !important;
+}
+
+.parcel-expert-wrapper {
+    position: relative;
+    margin-top: 8px;
+}
+
+.parcel-expert-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 8px 10px;
+    background: #f8f8f4;
+    border: 1px solid #e8e8e0;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 12px;
+}
+
+.parcel-expert-panel {
+    margin-top: 6px;
+    padding: 10px;
+    background: #f8f8f4;
+    border: 1px solid #e8e8e0;
+    border-radius: 8px;
+}
+
+.parcel-expert-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.parcel-expert-item {
+    padding: 6px 0;
+}
+
+.parcel-expert-k {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.parcel-expert-v {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.parcel-expert-chevron {
+    transition: transform 0.2s;
+    font-size: 16px;
+}
+
+.parcel-expert-chevron.open {
+    transform: rotate(180deg);
+}
+
         /* DIGITALNI AGRONOM */
         .agro-geo-banner { padding: 12px; border-radius: var(--radius); margin-bottom: 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .agro-geo-banner.detected { background: #d1fae5; color: #065f46; border: 2px solid var(--success); }
