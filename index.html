@@ -329,12 +329,83 @@
         <button class="btn-secondary" onclick="agroBackToStep1()">← Nazad</button>
     </div>
 
+    <div style="margin-top:16px;padding-top:16px;border-top:2px solid var(--border);">
+        <h3 style="color:var(--primary);margin-bottom:10px;font-size:14px;">📱 Fiskalni račun → Lager</h3>
+        <button class="qr-scan-btn" onclick="startFiskalniScan()" style="background:var(--accent);">📷 Skeniraj fiskalni račun</button>
+        <div id="qr-reader-fiskalni" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+        <div id="fiskalniResult" style="display:none;">
+            <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
+            <div id="fiskalniStavke"></div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn-primary" onclick="fiskalniSaveToLager()" style="flex:1;">✅ Prenesi u lager</button>
+                <button class="btn-secondary" onclick="fiskalniCancel()" style="flex:1;margin-top:0;">Otkaži</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Istorija -->
     <h3 style="margin-top:20px;margin-bottom:10px;color:var(--primary);font-size:14px;">Istorija tretmana</h3>
     <div id="agroTretmaniList"></div>
 </div>
 
 <div class="tab-content" id="tab-koopinfo"><div id="koopInfoContent"></div></div>
+
+<div class="tab-content" id="tab-knjigapolja">
+    <div class="form-row" style="margin-bottom:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Parcela</label>
+            <select id="kpParcelaSel" onchange="kpLoadBilans()">
+                <option value="">-- Sve parcele --</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Sezona</label>
+            <select id="kpSezona" onchange="kpLoadBilans()">
+                <option value="">Tekuća</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="kp-bilans" id="kpBilans">
+        <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:10px;">📊 Bilans</div>
+        <div id="kpBilansRows">
+            <p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>
+        </div>
+    </div>
+
+    <div id="kpSummary"></div>
+
+    <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
+    <div id="kpTretmaniList"></div>
+
+    <div class="kp-section-title" id="kpOtkupiTitle" style="display:none;">Proizvodnja (otkupi)</div>
+    <div id="kpOtkupiList"></div>
+
+    <div class="kp-section-title" id="kpTroskoviTitle" style="display:none;">Troškovi</div>
+    <div id="kpTroskoviList"></div>
+
+    <div style="margin-top:16px;">
+        <div class="kp-section-title">💰 Dodaj trošak</div>
+        <div style="background:var(--bg);border-radius:var(--radius);padding:12px;">
+            <div class="trosak-kat-grid" id="trosakKatGrid"></div>
+            <div class="form-group"><label>Opis</label><input type="text" id="trosakOpis" placeholder="Npr. Dizel za oranje"></div>
+            <div class="form-row">
+                <div class="form-group"><label>Iznos (RSD)</label><input type="number" id="trosakIznos" inputmode="numeric" placeholder="0"></div>
+                <div class="form-group"><label>Parcela (opciono)</label>
+                    <select id="trosakParcela"><option value="">-- Opšti trošak --</option></select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Datum</label><input type="date" id="trosakDatum"></div>
+                <div class="form-group"><label>Br. dokumenta</label><input type="text" id="trosakDokBroj" placeholder="Opciono"></div>
+            </div>
+            <button class="btn-primary" onclick="kpSaveTrosak()" style="margin-top:4px;">💾 Sačuvaj trošak</button>
+        </div>
+    </div>
+
+    <div class="kp-section-title">🧪 Lager preparata</div>
+    <div id="kpLagerList"></div>
+</div>
 
 <!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
 <div class="tab-content" id="tab-dispecer">
@@ -624,6 +695,8 @@
 <script src="/otkupapp-pwa/src/js/features/kooperant/koopinfo.js"></script>
 <script src="/otkupapp-pwa/src/js/features/kooperant/parcele.js"></script>
 <script src="/otkupapp-pwa/src/js/features/kooperant/agromere.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/knjiga-polja.js"></script>
+<script src="/otkupapp-pwa/src/src/js/features/kooperant/fiskalni.js"></script>
 <script src="/otkupapp-pwa/src/js/features/kooperant/sync.js"></script>
 
 
