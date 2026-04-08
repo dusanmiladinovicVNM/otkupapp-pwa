@@ -12,5 +12,6 @@ window.CONFIG = {
     DB_VERSION: 4,
     STORE_NAME: 'otkupi',
     STAMM_STORE: 'stammdaten',
-    AGRO_STORE: 'agromere'
+    AGRO_STORE: 'agromere',
+    APP_VERSION = '2.0.1'
 };
