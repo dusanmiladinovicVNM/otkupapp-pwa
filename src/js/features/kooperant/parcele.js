@@ -455,7 +455,7 @@ function renderMeteoInline(data) {
             <div class="parcel-meteo-bottomline">
                 ${forecastHtml}
             </div>
-            ${expertHtm
+            ${expertHtml}
         </div>
     `;
 }
