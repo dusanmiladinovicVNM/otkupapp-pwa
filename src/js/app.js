@@ -220,14 +220,23 @@ function normalizeStammdaten(data) {
         config: [], 
         parcele: [],
         stanice: [], 
-        kupci: [], vozaci: [], 
+        kupci: [], 
+        vozaci: [], 
         artikli: [], 
-        magacinkoop: []
+        magacinkoop: [],
+        meteoLatest: []
     };
     const result = { ...src };
     Object.keys(known).forEach(k => {
         result[k] = Array.isArray(src[k]) ? src[k] : known[k];
     });
+    
+    // MeteoLatest dolazi sa servera kao "meteolatest" (lowercase)
+    // ali PWA koristi "meteoLatest" (camelCase)
+    if (!result.meteoLatest || !result.meteoLatest.length) {
+        result.meteoLatest = Array.isArray(src.meteolatest) ? src.meteolatest : [];
+    }
+    
     return result;
 }
 
