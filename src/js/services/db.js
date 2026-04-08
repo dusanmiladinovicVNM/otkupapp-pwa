@@ -31,6 +31,12 @@ window.openDB = function () {
                 t.createIndex('datum', 'datum', { unique: false });
                 t.createIndex('parcelaID', 'parcelaID', { unique: false });
             }
+            
+            if (!d.objectStoreNames.contains('troskovi')) {
+                const ts = d.createObjectStore('troskovi', { keyPath: 'clientRecordID' });
+                ts.createIndex('syncStatus', 'syncStatus', { unique: false });
+                ts.createIndex('datum', 'datum', { unique: false });
+            }
         };
 
         req.onsuccess = (e) => resolve(e.target.result);
