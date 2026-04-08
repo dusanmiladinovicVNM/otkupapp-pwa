@@ -477,80 +477,94 @@ function renderExpertInfo(parcelId, current) {
 
     if (!hasExpert) return '';
 
-    const isOpen = !!parcelExpertOpen[parcelId];
-
-    let html = `
-        <button class="parcel-expert-toggle" onclick="toggleParcelExpert('${parcelId}')">
-            <div>
-                <div class="parcel-expert-title">
-                    <span>🧪 Expert info</span>
+    return `
+        <div class="parcel-expert-wrapper" id="expert-wrapper-${parcelId}">
+            <button class="parcel-expert-toggle" onclick="event.stopPropagation(); toggleExpertPanel('${String(parcelId).replace(/'/g, "\\'")}')">
+                <div>
+                    <div class="parcel-expert-title"><span>🧪 Expert info</span></div>
+                    <div class="parcel-expert-sub">Zemljište, ET₀, UV i dodatni agro podaci</div>
                 </div>
-                <div class="parcel-expert-sub">Zemljište, ET₀, UV i dodatni agro podaci</div>
-            </div>
-            <span class="parcel-expert-chevron ${isOpen ? 'open' : ''}">⌄</span>
-        </button>
-    `;
-
-    if (!isOpen) return html;
-
-    html += `
-        <div class="parcel-expert-panel">
-            <div class="parcel-expert-grid">
-                ${soilTemp !== null ? `
-                    <div class="parcel-expert-item">
-                        <div class="parcel-expert-k">🌡️ Temperatura zemljišta</div>
-                        <div class="parcel-expert-v">${Number(soilTemp).toFixed(1)}°C</div>
-                    </div>
-                ` : ''}
-
-                ${soilMoist !== null ? `
-                    <div class="parcel-expert-item">
-                        <div class="parcel-expert-k">🌱 Vlažnost zemljišta</div>
-                        <div class="parcel-expert-v">${(Number(soilMoist) * 100).toFixed(0)}%</div>
-                    </div>
-                ` : ''}
-
-                ${et0 !== null ? `
-                    <div class="parcel-expert-item">
-                        <div class="parcel-expert-k">💦 ET₀</div>
-                        <div class="parcel-expert-v">${Number(et0).toFixed(1)} mm</div>
-                    </div>
-                ` : ''}
-
-                ${uv !== null && Number(uv) > 0 ? `
-                    <div class="parcel-expert-item">
-                        <div class="parcel-expert-k">☀️ UV indeks</div>
-                        <div class="parcel-expert-v">${Number(uv).toFixed(1)}</div>
-                    </div>
-                ` : ''}
-
-                ${solar !== null && Number(solar) > 0 ? `
-                    <div class="parcel-expert-item">
-                        <div class="parcel-expert-k">🔆 Solarno zračenje</div>
-                        <div class="parcel-expert-v">${Number(solar).toFixed(0)} W/m²</div>
-                    </div>
-                ` : ''}
+                <span class="parcel-expert-chevron" id="expert-chevron-${parcelId}">⌄</span>
+            </button>
+            <div class="parcel-expert-panel" id="expert-panel-${parcelId}" style="display:none;">
+                <div class="parcel-expert-grid">
+                    ${soilTemp !== null ? `
+                        <div class="parcel-expert-item">
+                            <div class="parcel-expert-k">🌡️ Temperatura zemljišta</div>
+                            <div class="parcel-expert-v">${Number(soilTemp).toFixed(1)}°C</div>
+                        </div>
+                    ` : ''}
+                    ${soilMoist !== null ? `
+                        <div class="parcel-expert-item">
+                            <div class="parcel-expert-k">🌱 Vlažnost zemljišta</div>
+                            <div class="parcel-expert-v">${(Number(soilMoist) * 100).toFixed(0)}%</div>
+                        </div>
+                    ` : ''}
+                    ${et0 !== null ? `
+                        <div class="parcel-expert-item">
+                            <div class="parcel-expert-k">💦 ET₀</div>
+                            <div class="parcel-expert-v">${Number(et0).toFixed(1)} mm</div>
+                        </div>
+                    ` : ''}
+                    ${uv !== null && Number(uv) > 0 ? `
+                        <div class="parcel-expert-item">
+                            <div class="parcel-expert-k">☀️ UV indeks</div>
+                            <div class="parcel-expert-v">${Number(uv).toFixed(1)}</div>
+                        </div>
+                    ` : ''}
+                    ${solar !== null && Number(solar) > 0 ? `
+                        <div class="parcel-expert-item">
+                            <div class="parcel-expert-k">🔆 Solarno zračenje</div>
+                            <div class="parcel-expert-v">${Number(solar).toFixed(0)} W/m²</div>
+                        </div>
+                    ` : ''}
+                </div>
             </div>
         </div>
     `;
-
-    return html;
 }
 
-function toggleParcelExpert(parcelId) {
-    parcelExpertOpen[parcelId] = !parcelExpertOpen[parcelId];
+let _activeExpertPanel = null;
 
-    const panel = document.getElementById('parceleMeteo');
-    if (panel && panel.dataset && panel.dataset.currentParcelaId === parcelId) {
-        const cached = window.meteoCache[parcelId];
-        if (cached) renderMeteoPanel(cached);
+function toggleExpertPanel(parcelId) {
+    const panel = document.getElementById('expert-panel-' + parcelId);
+    const chevron = document.getElementById('expert-chevron-' + parcelId);
+    if (!panel) return;
+
+    // Ako kliknemo na isti koji je otvoren — zatvori
+    if (_activeExpertPanel === parcelId) {
+        panel.style.display = 'none';
+        if (chevron) chevron.classList.remove('open');
+        _activeExpertPanel = null;
+        return;
     }
 
-    const parcela = (stammdaten.parcele || []).find(p => p.ParcelaID === parcelId);
-    if (parcela) {
-        loadParcelMeteoInline(parcelId, parcela.Kultura || '');
-    }
+    // Zatvori prethodni ako postoji
+    closeActiveExpertPanel();
+
+    // Otvori novi
+    panel.style.display = 'block';
+    if (chevron) chevron.classList.add('open');
+    _activeExpertPanel = parcelId;
 }
+
+function closeActiveExpertPanel() {
+    if (!_activeExpertPanel) return;
+    const panel = document.getElementById('expert-panel-' + _activeExpertPanel);
+    const chevron = document.getElementById('expert-chevron-' + _activeExpertPanel);
+    if (panel) panel.style.display = 'none';
+    if (chevron) chevron.classList.remove('open');
+    _activeExpertPanel = null;
+}
+
+// Klik bilo gde van expert panela — zatvori
+document.addEventListener('click', function(e) {
+    if (!_activeExpertPanel) return;
+    const wrapper = document.getElementById('expert-wrapper-' + _activeExpertPanel);
+    if (wrapper && !wrapper.contains(e.target)) {
+        closeActiveExpertPanel();
+    }
+});
 
 function focusParcel(parcelaID) {
     const mapDiv = document.getElementById('parceleMap');
