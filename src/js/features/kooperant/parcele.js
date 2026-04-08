@@ -53,8 +53,6 @@ function buildKooperantParcelPopup(p) {
     `;
 }
 
-let _parceleLoaded = false;
-
 async function loadParcele() {
     // Ako je već učitano — ne radi ništa
     if (_parceleLoaded && parcelMapInstance) {
