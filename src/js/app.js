@@ -70,7 +70,7 @@ function applyHeaderInfo() {
     el.textContent = CONFIG.USER_ROLE + ': ' + CONFIG.ENTITY_NAME;
     
     // Version u footer ili kao data atribut
-    document.body.dataset.version = APP_VERSION;
+    document.body.dataset.version = CONFIG.APP_VERSION;
 }
 
 function setDefaultDates() {
