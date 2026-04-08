@@ -52,14 +52,15 @@ function buildKooperantParcelPopup(p) {
         </div>
     `;
 }
-    
+
+let _parceleLoaded = false;
+
 async function loadParcele() {
+    // Ako je već učitano — ne radi ništa
     if (_parceleLoaded && parcelMapInstance) {
-        // Samo refreshuj meteo, ne celu mapu
-        const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
-        parcele.forEach(p => loadParcelMeteoInline(p.ParcelaID, p.Kultura || ''));
         return;
     }
+
     await safeAsync(async () => {
         const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
         const list = document.getElementById('parceleList');
@@ -104,7 +105,6 @@ async function loadParcele() {
 
         const allBounds = [];
         parcelLayers = {};
-
 
         const geoResults = await Promise.all(parcele.map(async (p) => {
             const json = await safeAsync(async () => {
@@ -157,7 +157,7 @@ async function loadParcele() {
             }
         });
 
-        // ne blokiraj map render zbog meteo-a
+        // Meteo — samo jednom pri prvom učitavanju
         parcele.forEach(p => {
             loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
         });
@@ -169,6 +169,8 @@ async function loadParcele() {
             }
             parcelMapInstance.fitBounds(combined.pad(0.2));
         }
+
+        _parceleLoaded = true;
     }, 'Greška pri učitavanju parcela');
 }
 
