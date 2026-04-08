@@ -3,6 +3,7 @@
 // ============================================================
 let parcelMapInstance = null;
 let parcelLayers = {};
+let _parceleLoaded = false;
 
 const kooperantParcelStyle = {
     color: '#ffd60a',
