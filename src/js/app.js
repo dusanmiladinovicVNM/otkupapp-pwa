@@ -22,6 +22,7 @@ async function bootstrapApp() {
 
     try {
         if (!hasValidSession()) {
+            hideLoader();
             showLoginScreen();
             return;
         }
@@ -43,14 +44,20 @@ async function bootstrapApp() {
 
         appRuntime.stammdatenReady = true;
         appRuntime.appReady = true;
-        const loader = document.getElementById('appLoader');
-        if (loader) loader.style.display = 'none';
 
         refreshStammdatenInBackground();
     } catch (err) {
         console.error('bootstrapApp failed:', err);
         showToast('Greška pri pokretanju aplikacije', 'error');
+    } finally {
+        // UVEK sakrij loader — čak i ako boot pukne
+        hideLoader();
     }
+}
+
+function hideLoader() {
+    const loader = document.getElementById('appLoader');
+    if (loader) loader.style.display = 'none';
 }
 
 function hasValidSession() {
