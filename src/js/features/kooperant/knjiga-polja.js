@@ -209,7 +209,7 @@ function kpLoadBilans() {
 
     // Calc
     const proizvodnjaTotal = proizvodnja.reduce((s, r) =>
-        s + (parseFloat(r.Kolicina) || 0) * (parseFloat(r.Cena) || 0), 0);
+        s + (parseFloat(r.Vrednost) || (parseFloat(r.Kolicina) || 0) * (parseFloat(r.Cena) || 0)), 0);
 
     let agrohemijaTotal = 0;
     tretmani.forEach(t => {
