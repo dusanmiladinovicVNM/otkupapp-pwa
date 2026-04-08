@@ -180,6 +180,7 @@ function invalidateParceleCache() {
 // KOOPERANT: PARCELA METEO + RISK
 // ============================================================
 window.meteoCache = window.meteoCache || {};
+const METEO_CACHE_TTL = 6 * 60 * 60 * 1000;
 
 async function loadParcelMeteo(parcelaId, kultura) {
     const panel = document.getElementById('parceleMeteo');
@@ -188,11 +189,11 @@ async function loadParcelMeteo(parcelaId, kultura) {
     panel.style.display = 'block';
     panel.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Učitavanje meteo podataka...</p>';
 
-    if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < 3600000)) {
+    if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < METEO_CACHE_TTL)) {
         renderMeteoPanel(window.meteoCache[parcelaId]);
         return;
     }
-
+    
     const json = await safeAsync(async () => {
         return await apiFetch('action=getParcelMeteo&parcelaId=' + encodeURIComponent(parcelaId));
     }, 'Greška pri učitavanju meteo podataka');
@@ -360,7 +361,8 @@ async function loadParcelMeteoInline(parcelaId, kultura) {
     const el = document.getElementById('parcel-meteo-' + parcelaId);
     if (!el) return;
 
-    if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < 3600000)) {
+    // Ako imamo cached podatke mlađe od 6h — prikaži iz keša, ne zovi API
+    if (window.meteoCache[parcelaId] && (Date.now() - window.meteoCache[parcelaId]._ts < METEO_CACHE_TTL)) {
         el.innerHTML = renderMeteoInline(window.meteoCache[parcelaId]);
         return;
     }
