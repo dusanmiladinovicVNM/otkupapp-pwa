@@ -9,7 +9,7 @@ window.CONFIG = {
     ENTITY_NAME: getLs('entityName', ''),
     TOKEN: getLs('authToken', ''),
     DB_NAME: 'OtkupAppDB',
-    DB_VERSION: 4,
+    DB_VERSION: 5,
     STORE_NAME: 'otkupi',
     STAMM_STORE: 'stammdaten',
     AGRO_STORE: 'agromere',
