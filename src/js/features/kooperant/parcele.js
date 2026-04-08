@@ -437,6 +437,9 @@ function renderMeteoInline(data) {
         `;
     }
 
+    // Expert info — dodato
+    const expertHtml = renderExpertInfo(parcelaId, c);
+    
     return `
         <div class="parcel-meteo-compact">
             <div class="parcel-meteo-topline">
@@ -452,6 +455,7 @@ function renderMeteoInline(data) {
             <div class="parcel-meteo-bottomline">
                 ${forecastHtml}
             </div>
+            ${expertHtm
         </div>
     `;
 }
