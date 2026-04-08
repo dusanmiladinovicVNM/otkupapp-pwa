@@ -28,4 +28,5 @@ function showTab(tabName, btn) {
     if (tabName === 'zbirna') loadVozacData();
     if (tabName === 'transport') loadVozacTransport();
     if (tabName === 'dispecer') loadDispecer();
+    if (tabName === 'knjigapolja') loadKnjigaPolja();
 }
