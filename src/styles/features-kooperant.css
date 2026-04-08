@@ -395,3 +395,36 @@
         .agro-confirm-row:last-child { border-bottom: none; }
         .agro-confirm-row .label { color: var(--text-muted); }
         .agro-confirm-row .value { font-weight: 600; }
+
+        /* KNJIGA POLJA */
+        .kp-bilans { background: white; border-radius: var(--radius); padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .kp-bilans-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+        .kp-bilans-row:last-child { border-bottom: none; }
+        .kp-bilans-row .kp-label { color: var(--text-muted); }
+        .kp-bilans-row .kp-value { font-weight: 600; }
+        .kp-bilans-row.kp-total { border-top: 2px solid var(--primary); padding-top: 12px; font-size: 16px; }
+        .kp-bilans-row.kp-total .kp-value { color: var(--primary); font-weight: 700; }
+        .kp-bilans-row .kp-neg { color: var(--danger); }
+        .kp-bilans-row .kp-pos { color: var(--success); }
+
+        .kp-section-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 8px; }
+
+        .kp-summary-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .kp-summary-table th { background: var(--primary); color: white; padding: 10px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
+        .kp-summary-table td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+        .kp-summary-table tr:last-child td { border-bottom: none; }
+        .kp-summary-table .kp-row-total { background: #f0f0eb; font-weight: 700; }
+
+        /* FISKALNI */
+        .fis-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 12px; }
+        .fis-table th { background: var(--accent); color: white; padding: 8px; text-align: left; font-size: 11px; }
+        .fis-table td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+        .fis-match-exact { color: var(--success); font-weight: 600; }
+        .fis-match-fuzzy { color: var(--warning); font-weight: 600; }
+        .fis-match-none { color: var(--danger); }
+
+        /* TROŠKOVI FORMA */
+        .trosak-kat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+        .trosak-kat-btn { padding: 10px 8px; border: 2px solid var(--border); border-radius: var(--radius); background: white; font-size: 12px; text-align: center; cursor: pointer; transition: all 0.15s; }
+        .trosak-kat-btn:active { transform: scale(0.97); }
+        .trosak-kat-btn.selected { border-color: var(--primary); background: #e8f5e9; }
