@@ -66,6 +66,50 @@ async function loadParcele() {
 
         if (!list || !mapDiv) return;
 
+        // Prepopulate meteoCache iz stammdaten — ODMAH, bez API poziva
+        (stammdaten.meteoLatest || []).forEach(m => {
+            const pid = String(m.ParcelaID || '').trim();
+            if (!pid) return;
+            if (window.meteoCache[pid] && (Date.now() - window.meteoCache[pid]._ts < METEO_CACHE_TTL)) return;
+
+            try {
+                const riskItems = typeof m.RiskItems === 'string' ? JSON.parse(m.RiskItems || '[]') : (m.RiskItems || []);
+                const sprayWindows = typeof m.SprayWindows === 'string' ? JSON.parse(m.SprayWindows || '[]') : (m.SprayWindows || []);
+                const forecastDaily = typeof m.ForecastDaily === 'string' ? JSON.parse(m.ForecastDaily || '[]') : (m.ForecastDaily || []);
+
+                window.meteoCache[pid] = {
+                    success: true,
+                    parcelaId: pid,
+                    kultura: m.Kultura || '',
+                    fetchedAt: m.LastFetch || '',
+                    _ts: Date.now(),
+                    current: {
+                        temperature: Number(m.Temp) || 0,
+                        humidity: Number(m.Humidity) || 0,
+                        windSpeed: Number(m.Wind) || 0,
+                        windGusts: Number(m.WindGusts) || 0,
+                        precipitation: Number(m.Precip) || 0,
+                        weatherCode: Number(m.WeatherCode) || 0,
+                        dewPoint: Number(m.DewPoint) || 0,
+                        cloudCover: Number(m.CloudCover) || 0,
+                        uvIndex: Number(m.UVIndex) || 0,
+                        solarRadiation: Number(m.SolarRadiation) || 0,
+                        soilMoist_0_1: Number(m.SoilMoist_0_1cm) || 0,
+                        soilTemp_0: Number(m.SoilTemp_0cm) || 0,
+                        et0: Number(m.ET0) || 0
+                    },
+                    risk: {
+                        level: m.RiskLevel || 'ok',
+                        items: riskItems
+                    },
+                    sprayWindow: sprayWindows,
+                    daily: forecastDaily
+                };
+            } catch (e) {
+                console.error('meteoLatest parse error for ' + pid, e);
+            }
+        });
+        
         if (parcele.length === 0) {
             list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema parcela</p>';
             mapDiv.style.display = 'none';
@@ -155,9 +199,11 @@ async function loadParcele() {
             }
         });
 
-        // Meteo — samo jednom pri prvom učitavanju
+        // Meteo fallback — samo za parcele koje NEMAJU cached podatke
         parcele.forEach(p => {
-            loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
+            if (!window.meteoCache[p.ParcelaID]) {
+                loadParcelMeteoInline(p.ParcelaID, p.Kultura || '');
+            }
         });
 
         if (allBounds.length > 0) {
