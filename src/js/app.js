@@ -281,6 +281,10 @@ function handleStammdatenUpdated() {
             invalidateOtpremaCache();
         }
 
+        if (typeof invalidateKpCache === 'function') { 
+            invalidateKpCache();
+        }
+        
         // Repopulate dropdowns per role
         if (CONFIG.USER_ROLE === 'Kooperant') {
             if (typeof agroPopulateParcele === 'function') agroPopulateParcele();
