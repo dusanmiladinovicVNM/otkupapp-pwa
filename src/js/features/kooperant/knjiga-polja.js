@@ -305,20 +305,52 @@ function kpRenderOtkupi(otkupi) {
 
     if (title) title.style.display = 'block';
 
-    list.innerHTML = otkupi.map(r => {
-        const vr = ((parseFloat(r.Kolicina) || 0) * (parseFloat(r.Cena) || 0)).toLocaleString('sr');
-        return `<div class="queue-item" style="border-left-color:var(--success);">
+    // Grupiši po VrstaVoca + Klasa
+    const grouped = {};
+    otkupi.forEach(r => {
+        const key = (r.VrstaVoca || '?') + ' ' + (r.Klasa || 'I');
+        if (!grouped[key]) grouped[key] = { vrsta: r.VrstaVoca || '?', klasa: r.Klasa || 'I', kg: 0, vrednost: 0, items: [] };
+        const kol = parseFloat(r.Kolicina) || 0;
+        const vr = parseFloat(r.Vrednost) || (kol * (parseFloat(r.Cena) || 0));
+        grouped[key].kg += kol;
+        grouped[key].vrednost += vr;
+        grouped[key].items.push(r);
+    });
+
+    const groups = Object.values(grouped).sort((a, b) => b.vrednost - a.vrednost);
+
+    list.innerHTML = groups.map((g, gi) => {
+        const itemsHtml = g.items
+            .sort((a, b) => (b.Datum || '').localeCompare(a.Datum || ''))
+            .map(r => {
+                const kol = parseFloat(r.Kolicina) || 0;
+                const cena = parseFloat(r.Cena) || 0;
+                const vr = parseFloat(r.Vrednost) || (kol * cena);
+                return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #f0f0f0;font-size:12px;">
+                    <span style="color:var(--text-muted);">${escapeHtml(fmtDate(r.Datum))}${r.ParcelaID ? ' · ' + escapeHtml(r.ParcelaID) : ''}${r.BrojDok ? ' · ' + escapeHtml(r.BrojDok) : ''}</span>
+                    <span>${kol.toLocaleString('sr')} kg × ${cena.toLocaleString('sr')} = <strong>${vr.toLocaleString('sr')}</strong></span>
+                </div>`;
+            }).join('');
+
+        return `<div class="queue-item" style="border-left-color:var(--success);cursor:pointer;" onclick="toggleKpOtkupiGroup(${gi})">
             <div class="qi-header">
-                <span class="qi-koop">${escapeHtml(r.VrstaVoca || '')} ${escapeHtml(r.Klasa || 'I')}</span>
-                <span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span>
+                <span class="qi-koop">🍎 ${escapeHtml(g.vrsta)} ${escapeHtml(g.klasa)}</span>
+                <span class="qi-time">${g.kg.toLocaleString('sr')} kg</span>
             </div>
             <div class="qi-detail">
-                ${(parseFloat(r.Kolicina) || 0).toLocaleString('sr')} kg × ${(parseFloat(r.Cena) || 0).toLocaleString('sr')}
-                = <strong>${vr} RSD</strong>
-                ${r.ParcelaID ? ' | ' + escapeHtml(r.ParcelaID) : ''}
+                ${g.items.length} otkupa | <strong>${g.vrednost.toLocaleString('sr')} RSD</strong>
+            </div>
+            <div id="kpOtkupiGroup${gi}" style="display:none;margin-top:8px;">
+                ${itemsHtml}
             </div>
         </div>`;
     }).join('');
+}
+
+function toggleKpOtkupiGroup(index) {
+    const div = document.getElementById('kpOtkupiGroup' + index);
+    if (!div) return;
+    div.style.display = div.style.display === 'none' ? 'block' : 'none';
 }
 
 function kpRenderTroskovi(troskovi) {
