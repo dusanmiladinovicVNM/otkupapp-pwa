@@ -179,23 +179,19 @@ function fileToBase64(file) {
 // PARSE
 // ============================================================
 async function onFiskalniScanned(text) {
-    // DEBUG — prikaži šta je skenirano
-    showToast('QR: ' + text.substring(0, 80), 'info');
-    console.log('FISKALNI QR RAW:', text);
-    
-    let url = text;
-    if (!text.includes('suf.purs.gov.rs') && !text.startsWith('https://')) {
+    var url = text;
+    if (!text.startsWith('http')) {
         try { url = decodeURIComponent(text); } catch (e) { url = text; }
     }
 
     if (!url.startsWith('http')) {
-        showToast('Nije fiskalni QR kod: ' + text.substring(0, 50), 'error');
+        showToast('Nije fiskalni QR kod', 'error');
         return;
     }
 
     showToast('Učitavanje fiskalnog...', 'info');
 
-    const json = await safeAsync(async () => {
+    var json = await safeAsync(async function() {
         return await apiPost('parseFiskalni', {
             kooperantID: CONFIG.ENTITY_ID,
             verificationUrl: url
@@ -203,16 +199,10 @@ async function onFiskalniScanned(text) {
     }, 'Greška pri učitavanju fiskalnog računa');
 
     if (!json) return;
+    if (json.duplicate) { showToast('Ovaj račun je već skeniran', 'error'); return; }
+    if (!json.success) { showToast(json.error || 'Greška', 'error'); return; }
 
-    if (json.duplicate) {
-        showToast('Ovaj račun je već skeniran', 'error');
-        return;
-    }
-
-    if (!json.success) {
-        showToast(json.error || 'Greška', 'error');
-        return;
-    }
+    document.getElementById('qr-reader-fiskalni').style.display = 'none';
 
     fiskalniMeta = {
         invoiceNumber: json.invoiceNumber,
@@ -221,7 +211,6 @@ async function onFiskalniScanned(text) {
         totalAmount: json.totalAmount,
         verificationUrl: url
     };
-
     fiskalniStavke = json.items || [];
     renderFiskalniResult();
 }
