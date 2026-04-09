@@ -216,30 +216,29 @@ async function refreshStammdatenInBackground() {
 }
 
 function normalizeStammdaten(data) {
-    const src = data || {};
-    const known = {
-        kooperanti: [], 
-        kulture: [], 
-        config: [], 
+    var src = data || {};
+    var known = {
+        kooperanti: [],
+        kulture: [],
+        config: [],
         parcele: [],
-        stanice: [], 
-        kupci: [], 
-        vozaci: [], 
-        artikli: [], 
+        stanice: [],
+        kupci: [],
+        vozaci: [],
+        artikli: [],
         magacinkoop: [],
-        meteoLatest: []
+        meteoLatest: [],
+        kartice: []
     };
-    const result = { ...src };
-    Object.keys(known).forEach(k => {
+    var result = Object.assign({}, src);
+    Object.keys(known).forEach(function(k) {
         result[k] = Array.isArray(src[k]) ? src[k] : known[k];
     });
-    
-    // MeteoLatest dolazi sa servera kao "meteolatest" (lowercase)
-    // ali PWA koristi "meteoLatest" (camelCase)
+
     if (!result.meteoLatest || !result.meteoLatest.length) {
         result.meteoLatest = Array.isArray(src.meteolatest) ? src.meteolatest : [];
     }
-    
+
     return result;
 }
 
