@@ -35,7 +35,8 @@ async function scanFiskalniFromPhoto(input) {
     showToast('Čitam QR sa slike...', 'info');
 
     try {
-        var base64 = await fileToBase64(input.files[0]);
+        // Smanji sliku na max 1024px pre slanja
+        var base64 = await resizeImageForQR(input.files[0], 1024);
 
         var json = await safeAsync(async function() {
             return await apiPost('parseFiskalniImage', {
@@ -59,13 +60,46 @@ async function scanFiskalniFromPhoto(input) {
         };
         fiskalniStavke = json.items || [];
         renderFiskalniResult();
-
     } catch (err) {
         showToast('Greška: ' + err.message, 'error');
     }
 
     input.value = '';
 }
+
+function resizeImageForQR(file, maxSize) {
+    return new Promise(function(resolve, reject) {
+        var img = new Image();
+        img.onload = function() {
+            var w = img.width;
+            var h = img.height;
+
+            // Smanji ako je veće od maxSize
+            if (w > maxSize || h > maxSize) {
+                if (w > h) {
+                    h = Math.round(h * maxSize / w);
+                    w = maxSize;
+                } else {
+                    w = Math.round(w * maxSize / h);
+                    h = maxSize;
+                }
+            }
+
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            // JPEG kvalitet 0.85 — dovoljno za QR, manja veličina
+            var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve(dataUrl.split(',')[1]);
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+    });
+}
+
 
 function fileToBase64(file) {
     return new Promise(function(resolve, reject) {
