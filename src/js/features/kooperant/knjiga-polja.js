@@ -81,43 +81,75 @@ function kpPopulateDropdowns() {
 // FETCH ALL DATA
 // ============================================================
 async function kpFetchAll() {
-    // Proizvodnja
-    const pJson = await safeAsync(async () => {
-        return await apiFetch('action=getKooperantProizvodnja&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+    // Proizvodnja — iz stammdaten.kartice (prefetched)
+    var kartice = stammdaten.kartice || [];
+    var koopKartice = kartice.filter(function(r) {
+        return String(r.KooperantID || '').trim() === CONFIG.ENTITY_ID;
     });
-    if (pJson && pJson.success) kpData.proizvodnja = pJson.records || [];
 
-    // Tretmani — koristi getTretmaniCached ako postoji, inače API
+    kpData.proizvodnja = [];
+    koopKartice.forEach(function(r) {
+        var opis = String(r.Opis || '');
+        var zaduzenje = parseFloat(r.Zaduzenje) || 0;
+
+        if (zaduzenje <= 0 || !opis.startsWith('Otkup')) return;
+        if (opis === 'UKUPNO') return;
+
+        var parsed = kpParseOpisOtkupa(opis);
+
+        kpData.proizvodnja.push({
+            Datum: fmtDate(r.Datum),
+            BrojDok: r.BrojDok || '',
+            ParcelaID: String(r.BrojParcele || '').trim(),
+            VrstaVoca: parsed.vrsta,
+            Klasa: parsed.klasa,
+            Kolicina: parsed.kolicina,
+            Cena: parsed.kolicina > 0 ? Math.round(zaduzenje / parsed.kolicina) : 0,
+            Vrednost: zaduzenje
+        });
+    });
+
+    // Tretmani — iz cache
     if (typeof getTretmaniCached === 'function') {
-        const cached = await getTretmaniCached(false);
+        var cached = await getTretmaniCached(false);
         kpData.tretmani = cached || [];
     } else {
-        const tJson = await safeAsync(async () => {
-            return await apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+        var tJson = await safeAsync(function() {
+            return apiFetch('action=getTretmani&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
         });
         if (tJson && tJson.success) kpData.tretmani = tJson.records || [];
     }
 
     // Troškovi — iz IndexedDB + server
-    let localTroskovi = [];
+    var localTroskovi = [];
     try {
         localTroskovi = await dbGetAll(db, 'troskovi');
     } catch (e) {}
 
-    const trJson = await safeAsync(async () => {
-        return await apiFetch('action=getTroskovi&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
+    var trJson = await safeAsync(function() {
+        return apiFetch('action=getTroskovi&kooperantID=' + encodeURIComponent(CONFIG.ENTITY_ID));
     });
 
-    const serverTroskovi = (trJson && trJson.success) ? (trJson.records || []) : [];
-
-    // Merge local pending + server
+    var serverTroskovi = (trJson && trJson.success) ? (trJson.records || []) : [];
     kpData.troskovi = kpMergeTroskovi(localTroskovi, serverTroskovi);
 
     // Lager
-    kpData.lager = (stammdaten.magacinkoop || []).filter(r => r.KooperantID === CONFIG.ENTITY_ID);
+    kpData.lager = (stammdaten.magacinkoop || []).filter(function(r) {
+        return r.KooperantID === CONFIG.ENTITY_ID;
+    });
 
-    // Auto-generated radna snaga troškovi
+    // Auto radna snaga
     kpCalcRadnaSnaga();
+}
+
+function kpParseOpisOtkupa(opis) {
+    var m = opis.match(/^Otkup\s+(\S+)\s+(I{1,2})\s+([\d.]+)\s*kg/i);
+    if (!m) return { vrsta: '', klasa: 'I', kolicina: 0 };
+    return {
+        vrsta: m[1],
+        klasa: m[2],
+        kolicina: parseFloat(m[3].replace(/\./g, '')) || 0
+    };
 }
 
 function kpMergeTroskovi(local, server) {
