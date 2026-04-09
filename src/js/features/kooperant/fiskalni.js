@@ -39,13 +39,17 @@ function startFiskalniScan() {
 // PARSE
 // ============================================================
 async function onFiskalniScanned(text) {
+    // DEBUG — prikaži šta je skenirano
+    showToast('QR: ' + text.substring(0, 80), 'info');
+    console.log('FISKALNI QR RAW:', text);
+    
     let url = text;
     if (!text.includes('suf.purs.gov.rs') && !text.startsWith('https://')) {
         try { url = decodeURIComponent(text); } catch (e) { url = text; }
     }
 
     if (!url.startsWith('http')) {
-        showToast('Nije fiskalni QR kod', 'error');
+        showToast('Nije fiskalni QR kod: ' + text.substring(0, 50), 'error');
         return;
     }
 
