@@ -11,30 +11,34 @@ let fiskalniMeta = {};
 // QR SCAN
 // ============================================================
 function startFiskalniScan() {
-    const readerDiv = document.getElementById('qr-reader-fiskalni');
+    var readerDiv = document.getElementById('qr-reader-fiskalni');
     if (!readerDiv) return;
 
     readerDiv.style.display = 'block';
-    const scanner = new Html5Qrcode('qr-reader-fiskalni');
+    var scanner = new Html5Qrcode('qr-reader-fiskalni');
 
     scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (text) => {
-            scanner.stop().then(() => {
+        { 
+            fps: 15,
+            qrbox: { width: 300, height: 300 },
+            aspectRatio: 1.0,
+            disableFlip: false
+        },
+        function(text) {
+            scanner.stop().then(function() {
                 readerDiv.style.display = 'none';
-            }).catch(() => {
+            }).catch(function() {
                 readerDiv.style.display = 'none';
             });
             onFiskalniScanned(text);
         },
-        () => {}
-    ).catch(err => {
+        function() {}
+    ).catch(function(err) {
         showToast('Kamera nije dostupna: ' + err, 'error');
         readerDiv.style.display = 'none';
     });
 }
-
 // ============================================================
 // PARSE
 // ============================================================
