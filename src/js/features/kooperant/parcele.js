@@ -163,6 +163,9 @@ async function loadParcele() {
             const lng = parseFloat(String(geo.Lng).replace(',', '.'));
             const popupHtml = buildKooperantParcelPopup(p);
 
+            // Preskoči parcele bez validnih koordinata
+            if (!lat || !lng || isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
             if (geo.PolygonGeoJSON) {
                 try {
                     const geometry = JSON.parse(geo.PolygonGeoJSON);
