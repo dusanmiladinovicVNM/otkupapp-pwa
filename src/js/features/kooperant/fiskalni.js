@@ -17,141 +17,63 @@ function startFiskalniScan() {
     readerDiv.style.display = 'block';
     readerDiv.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:10px;padding:12px;">
-            <button class="btn-primary" onclick="startFiskalniNative()" style="background:var(--primary);">📷 Skeniraj QR</button>
-            <button class="btn-primary" onclick="document.getElementById('fiskalniFileInput').click()" style="background:var(--accent);">🖼️ Slika računa</button>
-            <input type="file" id="fiskalniFileInput" accept="image/*" capture="environment" style="display:none;" onchange="scanFiskalniFromFile(this)">
-            <video id="fiskalniVideo" playsinline style="display:none;width:100%;border-radius:var(--radius);"></video>
-            <canvas id="fiskalniCanvas" style="display:none;"></canvas>
+            <label class="btn-primary" style="background:var(--primary);text-align:center;cursor:pointer;">
+                📷 Slikaj QR kod računa
+                <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="scanFiskalniFromPhoto(this)">
+            </label>
+            <label class="btn-primary" style="background:var(--accent);text-align:center;cursor:pointer;">
+                🖼️ Izaberi sliku iz galerije
+                <input type="file" accept="image/*" style="display:none;" onchange="scanFiskalniFromPhoto(this)">
+            </label>
         </div>
     `;
 }
 
-async function startFiskalniNative() {
-    // Opcija 1: Native BarcodeDetector (Chrome 83+, Safari 16.4+)
-    if ('BarcodeDetector' in window) {
-        try {
-            var detector = new BarcodeDetector({ formats: ['qr_code'] });
-            var stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-            });
-
-            var video = document.getElementById('fiskalniVideo');
-            video.style.display = 'block';
-            video.srcObject = stream;
-            await video.play();
-
-            var scanning = true;
-
-            async function scanFrame() {
-                if (!scanning) return;
-                try {
-                    var barcodes = await detector.detect(video);
-                    if (barcodes.length > 0) {
-                        scanning = false;
-                        stream.getTracks().forEach(function(t) { t.stop(); });
-                        video.style.display = 'none';
-                        document.getElementById('qr-reader-fiskalni').style.display = 'none';
-                        onFiskalniScanned(barcodes[0].rawValue);
-                        return;
-                    }
-                } catch (e) {}
-                if (scanning) requestAnimationFrame(scanFrame);
-            }
-
-            requestAnimationFrame(scanFrame);
-
-            // Timeout posle 30s
-            setTimeout(function() {
-                if (scanning) {
-                    scanning = false;
-                    stream.getTracks().forEach(function(t) { t.stop(); });
-                    video.style.display = 'none';
-                    showToast('QR nije pronađen. Probajte opciju "Slika računa"', 'info');
-                }
-            }, 30000);
-
-            return;
-        } catch (err) {
-            console.log('BarcodeDetector failed, fallback to Html5Qrcode:', err);
-        }
-    }
-
-    // Opcija 2: Fallback na Html5Qrcode
-    startFiskalniHtml5Qr();
-}
-
-function startFiskalniHtml5Qr() {
-    var readerDiv = document.getElementById('qr-reader-fiskalni');
-    var cameraDiv = document.createElement('div');
-    cameraDiv.id = 'fiskalniCameraDiv';
-    readerDiv.querySelector('div').appendChild(cameraDiv);
-
-    var scanner = new Html5Qrcode('fiskalniCameraDiv');
-    scanner.start(
-        { facingMode: 'environment' },
-        { fps: 15, qrbox: { width: 300, height: 300 } },
-        function(text) {
-            scanner.stop().then(function() {
-                readerDiv.style.display = 'none';
-            }).catch(function() {
-                readerDiv.style.display = 'none';
-            });
-            onFiskalniScanned(text);
-        },
-        function() {}
-    ).catch(function(err) {
-        showToast('Kamera nije dostupna: ' + err, 'error');
-    });
-}
-
-function scanFiskalniFromFile(input) {
+async function scanFiskalniFromPhoto(input) {
     if (!input.files || !input.files[0]) return;
 
-    showToast('Skeniram sliku...', 'info');
+    showToast('Čitam QR sa slike...', 'info');
 
-    var file = input.files[0];
+    try {
+        var base64 = await fileToBase64(input.files[0]);
 
-    // Probaj native BarcodeDetector na slici
-    if ('BarcodeDetector' in window) {
-        createImageBitmap(file).then(function(bitmap) {
-            var detector = new BarcodeDetector({ formats: ['qr_code'] });
-            return detector.detect(bitmap);
-        }).then(function(barcodes) {
-            if (barcodes.length > 0) {
-                document.getElementById('qr-reader-fiskalni').style.display = 'none';
-                onFiskalniScanned(barcodes[0].rawValue);
-            } else {
-                // Fallback na Html5Qrcode file scan
-                scanFiskalniFileHtml5(file);
-            }
-        }).catch(function() {
-            scanFiskalniFileHtml5(file);
-        });
-    } else {
-        scanFiskalniFileHtml5(file);
+        var json = await safeAsync(async function() {
+            return await apiPost('parseFiskalniImage', {
+                kooperantID: CONFIG.ENTITY_ID,
+                imageBase64: base64
+            });
+        }, 'Greška pri čitanju računa');
+
+        if (!json) return;
+        if (json.duplicate) { showToast('Ovaj račun je već skeniran', 'error'); return; }
+        if (!json.success) { showToast(json.error || 'QR nije pronađen', 'error'); return; }
+
+        document.getElementById('qr-reader-fiskalni').style.display = 'none';
+
+        fiskalniMeta = {
+            invoiceNumber: json.invoiceNumber,
+            company: json.company,
+            date: json.date,
+            totalAmount: json.totalAmount,
+            verificationUrl: json.verificationUrl || ''
+        };
+        fiskalniStavke = json.items || [];
+        renderFiskalniResult();
+
+    } catch (err) {
+        showToast('Greška: ' + err.message, 'error');
     }
 
     input.value = '';
 }
 
-function scanFiskalniFileHtml5(file) {
-    var tempDiv = document.getElementById('fiskalniCameraDiv');
-    if (!tempDiv) {
-        tempDiv = document.createElement('div');
-        tempDiv.id = 'fiskalniCameraDiv';
-        tempDiv.style.display = 'none';
-        document.getElementById('qr-reader-fiskalni').querySelector('div').appendChild(tempDiv);
-    }
-
-    var scanner = new Html5Qrcode('fiskalniCameraDiv');
-    scanner.scanFile(file, true)
-        .then(function(text) {
-            document.getElementById('qr-reader-fiskalni').style.display = 'none';
-            onFiskalniScanned(text);
-        })
-        .catch(function() {
-            showToast('QR nije pronađen na slici. Pokušajte bližu i oštriju sliku.', 'error');
-        });
+function fileToBase64(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result.split(',')[1]); };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 // ============================================================
 // PARSE
