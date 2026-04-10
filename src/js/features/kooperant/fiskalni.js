@@ -251,12 +251,19 @@ function renderFiskalniResult() {
                     (s.matchConfidence === 'exact' || s.matchConfidence === 'mapped') ? 'fis-match-exact' :
                     s.matchConfidence === 'fuzzy' ? 'fis-match-fuzzy' : 'fis-match-none';
 
-                const artikalCell = s.artikalID
-                    ? '<span class="' + matchClass + '">✅ ' + escapeHtml(s.artikalNaziv) + '</span>'
-                    : '<select id="fisMap' + i + '" style="font-size:11px;padding:4px;max-width:120px;" onchange="onFiskalniMap(' + i + ', this.value)">' +
-                      '<option value="">❓ Izaberi...</option>' +
-                      artikli.map(a => '<option value="' + escapeHtml(a.ArtikalID) + '">' + escapeHtml(a.Naziv) + '</option>').join('') +
-                      '</select>';
+                let artikalCell = '';
+                if (s.artikalID) {
+                    artikalCell = '<span class="' + matchClass + '">✅ ' + escapeHtml(s.artikalNaziv) + '</span>';
+                } else {
+                    artikalCell = `
+                        <select id="fisMap${i}" style="font-size:11px;padding:4px;max-width:120px;" onchange="onFiskalniMap(${i}, this.value)">
+                            <option value="">❓ Izaberi...</option>
+                            <option value="__NEW__">➕ Novi artikal</option>
+                            ${artikli.map(a => '<option value="' + escapeHtml(a.ArtikalID) + '">' + escapeHtml(a.Naziv) + '</option>').join('')}
+                        </select>
+                        <div id="fisNewArt${i}" style="display:none;margin-top:4px;"></div>
+                    `;
+                }
 
                 return `<tr>
                     <td><input type="checkbox" id="fisChk${i}" ${isPrep ? 'checked' : ''} style="width:18px;height:18px;"></td>
@@ -274,17 +281,134 @@ function renderFiskalniResult() {
 // ============================================================
 // MAP ARTIKAL
 // ============================================================
-function onFiskalniMap(index, artikalID) {
-    if (!artikalID) return;
-    const art = (stammdaten.artikli || []).find(a => a.ArtikalID === artikalID);
+function onFiskalniMap(index, value) {
+    const newArtDiv = document.getElementById('fisNewArt' + index);
+
+    if (value === '__NEW__') {
+        // Prikaži formu za novi artikal
+        if (newArtDiv) {
+            newArtDiv.style.display = 'block';
+            newArtDiv.innerHTML = `
+                <div style="background:#f8f8f4;padding:8px;border-radius:6px;font-size:11px;">
+                    <input type="text" id="fisNewNaziv${index}" placeholder="Naziv artikla"
+                        value="${escapeHtml(fiskalniStavke[index].naziv)}"
+                        style="width:100%;padding:4px;font-size:12px;margin-bottom:4px;border:1px solid var(--border);border-radius:4px;">
+                    <select id="fisNewTip${index}" style="width:100%;padding:4px;font-size:11px;margin-bottom:4px;border:1px solid var(--border);border-radius:4px;">
+                        <option value="Pesticid">Pesticid</option>
+                        <option value="Djubrivo">Đubrivo</option>
+                        <option value="Ostalo">Ostalo</option>
+                    </select>
+                    <select id="fisNewJM${index}" style="width:100%;padding:4px;font-size:11px;margin-bottom:4px;border:1px solid var(--border);border-radius:4px;">
+                        <option value="l">Litar (l)</option>
+                        <option value="kg">Kilogram (kg)</option>
+                        <option value="kom">Komad (kom)</option>
+                    </select>
+                    <button onclick="fiskalniCreateNewArtikal(${index})" class="btn-primary" style="width:100%;padding:6px;font-size:11px;margin-top:2px;">
+                        ✅ Kreiraj artikal
+                    </button>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    // Sakrij new art formu ako je bila otvorena
+    if (newArtDiv) newArtDiv.style.display = 'none';
+
+    if (!value) return;
+
+    const art = (stammdaten.artikli || []).find(a => a.ArtikalID === value);
     if (!art) return;
 
-    fiskalniStavke[index].artikalID = artikalID;
+    fiskalniStavke[index].artikalID = value;
     fiskalniStavke[index].artikalNaziv = art.Naziv;
     fiskalniStavke[index].matchConfidence = 'manual';
 
     const chk = document.getElementById('fisChk' + index);
     if (chk) chk.checked = true;
+}
+
+async function fiskalniCreateNewArtikal(index) {
+    const naziv = (document.getElementById('fisNewNaziv' + index).value || '').trim();
+    const tip = document.getElementById('fisNewTip' + index).value || 'Ostalo';
+    const jm = document.getElementById('fisNewJM' + index).value || 'kom';
+
+    if (!naziv) {
+        showToast('Unesite naziv artikla', 'error');
+        return;
+    }
+
+    // Generiši privremeni ID
+    const tempID = 'ART-NEW-' + Date.now() + '-' + index;
+
+    showToast('Kreiranje artikla...', 'info');
+
+    // Sačuvaj na server
+    const json = await safeAsync(async function() {
+        return await apiPost('createArtikal', {
+            naziv: naziv,
+            tip: tip,
+            jedinicaMere: jm,
+            cenaPoJedinici: fiskalniStavke[index].jedCena || 0
+        });
+    }, 'Greška pri kreiranju artikla');
+
+    let artikalID = tempID;
+    let artikalNaziv = naziv;
+
+    if (json && json.success && json.artikalID) {
+        artikalID = json.artikalID;
+
+        // Dodaj u lokalne stammdaten da bude odmah dostupan
+        stammdaten.artikli = stammdaten.artikli || [];
+        stammdaten.artikli.push({
+            ArtikalID: artikalID,
+            Naziv: naziv,
+            Tip: tip,
+            JedinicaMere: jm,
+            CenaPoJedinici: fiskalniStavke[index].jedCena || 0
+        });
+
+        showToast('Artikal kreiran: ' + escapeHtml(naziv), 'success');
+    } else {
+        // Offline ili error — koristi privremeni ID, sync će rešiti
+        stammdaten.artikli = stammdaten.artikli || [];
+        stammdaten.artikli.push({
+            ArtikalID: tempID,
+            Naziv: naziv,
+            Tip: tip,
+            JedinicaMere: jm,
+            CenaPoJedinici: fiskalniStavke[index].jedCena || 0
+        });
+
+        showToast('Artikal sačuvan lokalno: ' + escapeHtml(naziv), 'info');
+    }
+
+    // Ažuriraj stavku
+    fiskalniStavke[index].artikalID = artikalID;
+    fiskalniStavke[index].artikalNaziv = artikalNaziv;
+    fiskalniStavke[index].matchConfidence = 'new';
+
+    // Auto-check
+    const chk = document.getElementById('fisChk' + index);
+    if (chk) chk.checked = true;
+
+    // Sakrij formu, prikaži match
+    const newArtDiv = document.getElementById('fisNewArt' + index);
+    if (newArtDiv) {
+        newArtDiv.style.display = 'block';
+        newArtDiv.innerHTML = '<span class="fis-match-exact">✅ ' + escapeHtml(naziv) + ' (novi)</span>';
+    }
+
+    // Sačuvaj mapiranje za buduće
+    apiPost('saveFiskalniMapiranje', {
+        mappings: [{
+            fiskalniNaziv: fiskalniStavke[index].naziv,
+            artikalID: artikalID,
+            artikalNaziv: naziv,
+            kooperantID: CONFIG.ENTITY_ID
+        }]
+    }).catch(function() {});
 }
 
 // ============================================================
