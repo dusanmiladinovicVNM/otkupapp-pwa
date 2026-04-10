@@ -338,77 +338,28 @@ async function fiskalniCreateNewArtikal(index) {
         return;
     }
 
-    // Generiši privremeni ID
-    const tempID = 'ART-NEW-' + Date.now() + '-' + index;
+    // Koristi fiskalni naziv kao privremeni ID — ne piše u Artikli sheet
+    const tempID = 'PRIV-' + Date.now() + '-' + index;
 
-    showToast('Kreiranje artikla...', 'info');
-
-    // Sačuvaj na server
-    const json = await safeAsync(async function() {
-        return await apiPost('createArtikal', {
-            naziv: naziv,
-            tip: tip,
-            jedinicaMere: jm,
-            cenaPoJedinici: fiskalniStavke[index].jedCena || 0
-        });
-    }, 'Greška pri kreiranju artikla');
-
-    let artikalID = tempID;
-    let artikalNaziv = naziv;
-
-    if (json && json.success && json.artikalID) {
-        artikalID = json.artikalID;
-
-        // Dodaj u lokalne stammdaten da bude odmah dostupan
-        stammdaten.artikli = stammdaten.artikli || [];
-        stammdaten.artikli.push({
-            ArtikalID: artikalID,
-            Naziv: naziv,
-            Tip: tip,
-            JedinicaMere: jm,
-            CenaPoJedinici: fiskalniStavke[index].jedCena || 0
-        });
-
-        showToast('Artikal kreiran: ' + escapeHtml(naziv), 'success');
-    } else {
-        // Offline ili error — koristi privremeni ID, sync će rešiti
-        stammdaten.artikli = stammdaten.artikli || [];
-        stammdaten.artikli.push({
-            ArtikalID: tempID,
-            Naziv: naziv,
-            Tip: tip,
-            JedinicaMere: jm,
-            CenaPoJedinici: fiskalniStavke[index].jedCena || 0
-        });
-
-        showToast('Artikal sačuvan lokalno: ' + escapeHtml(naziv), 'info');
-    }
-
-    // Ažuriraj stavku
-    fiskalniStavke[index].artikalID = artikalID;
-    fiskalniStavke[index].artikalNaziv = artikalNaziv;
-    fiskalniStavke[index].matchConfidence = 'new';
+    // Ažuriraj stavku — čuva se samo u FISKALNI-KOOP sheetu
+    fiskalniStavke[index].artikalID = tempID;
+    fiskalniStavke[index].artikalNaziv = naziv;
+    fiskalniStavke[index].matchConfidence = 'new-private';
+    fiskalniStavke[index].tip = tip;
+    fiskalniStavke[index].jedinicaMere = jm;
 
     // Auto-check
     const chk = document.getElementById('fisChk' + index);
     if (chk) chk.checked = true;
 
-    // Sakrij formu, prikaži match
+    // Prikaži potvrdu
     const newArtDiv = document.getElementById('fisNewArt' + index);
     if (newArtDiv) {
         newArtDiv.style.display = 'block';
-        newArtDiv.innerHTML = '<span class="fis-match-exact">✅ ' + escapeHtml(naziv) + ' (novi)</span>';
+        newArtDiv.innerHTML = '<span class="fis-match-fuzzy">📦 ' + escapeHtml(naziv) + ' (privatni)</span>';
     }
 
-    // Sačuvaj mapiranje za buduće
-    apiPost('saveFiskalniMapiranje', {
-        mappings: [{
-            fiskalniNaziv: fiskalniStavke[index].naziv,
-            artikalID: artikalID,
-            artikalNaziv: naziv,
-            kooperantID: CONFIG.ENTITY_ID
-        }]
-    }).catch(function() {});
+    showToast('Artikal dodat: ' + escapeHtml(naziv), 'success');
 }
 
 // ============================================================
