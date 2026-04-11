@@ -1,1 +1,415 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgriX Otkup — Softver za otkup voća za hladnjače i organizatore otkupa</title>
+<meta name="description" content="AgriX Otkup je softver za otkup voća za hladnjače, otkupne firme i organizatore otkupa. Jednokratan unos podataka, štampa na klik, SEF iz sistema i uvek ažurne kartice partnera.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+/* Page-specific */
+.hero__title { font-size: clamp(2.5rem, 5vw, 4.2rem); }
 
+.benefits-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem; margin-top: 3rem;
+}
+.benefit {
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  padding: 2rem; opacity: 0; transform: translateY(14px);
+  transition: opacity 0.5s, transform 0.5s, border-color 0.2s;
+}
+.benefit.visible { opacity: 1; transform: translateY(0); }
+.benefit:hover { border-color: var(--border-strong); }
+.benefit__num {
+  font-family: var(--font-display); font-size: 2rem; font-weight: 700;
+  color: var(--cream-deep); line-height: 1; margin-bottom: 0.75rem;
+}
+.benefit h3 { font-size: 0.95rem; font-weight: 600; color: var(--forest); margin-bottom: 0.5rem; }
+.benefit p { font-size: 0.87rem; color: var(--text-muted); line-height: 1.7; }
+
+.steps {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 0; margin-top: 3rem; position: relative;
+}
+.steps::before {
+  content: ''; position: absolute; top: 28px; left: 10%; right: 10%;
+  height: 2px; background: linear-gradient(to right, var(--gold), var(--accent));
+  opacity: 0.2;
+}
+.step {
+  text-align: center; padding: 0 0.75rem; position: relative; z-index: 1;
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.step.visible { opacity: 1; transform: translateY(0); }
+.step__num {
+  width: 56px; height: 56px; background: var(--forest); color: var(--gold);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 1.2rem; font-weight: 700;
+  margin: 0 auto 1rem; box-shadow: 0 0 0 5px var(--cream);
+}
+.step h3 { font-size: 0.85rem; font-weight: 600; color: var(--forest); margin-bottom: 0.4rem; }
+.step p { font-size: 0.78rem; color: var(--text-muted); line-height: 1.55; }
+
+.func-list {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem; margin-top: 2.5rem;
+}
+.func-item {
+  font-size: 0.88rem; color: var(--text-secondary); padding: 0.75rem 1rem;
+  background: var(--cream); border-radius: 8px; border: 1px solid var(--border);
+  display: flex; gap: 0.6rem; align-items: flex-start;
+}
+.func-item::before {
+  content: '→'; color: var(--accent); font-weight: 700; flex-shrink: 0; margin-top: 0.05rem;
+}
+
+.audience-list {
+  display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 2rem;
+}
+.audience-tag {
+  padding: 0.5rem 1.25rem; border-radius: 100px; font-size: 0.85rem;
+  font-weight: 500; background: var(--white); border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.reasons-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem; margin-top: 2.5rem;
+}
+.reason {
+  padding: 1.75rem; background: var(--cream); border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.reason h3 { font-size: 0.92rem; font-weight: 600; color: var(--forest); margin-bottom: 0.4rem; }
+.reason p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.65; }
+
+.koop-section {
+  display: grid; grid-template-columns: 1fr 260px; gap: 3rem; align-items: center;
+  margin-top: 2.5rem;
+}
+.koop-section__text ul {
+  list-style: none; margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem;
+}
+.koop-section__text li {
+  font-size: 0.88rem; color: var(--text-secondary); display: flex; gap: 0.5rem;
+}
+.koop-section__text li::before { content: '→'; color: var(--accent); font-weight: 700; }
+.koop-section__phone {
+  background: var(--white); border-radius: 24px;
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--border); overflow: hidden;
+}
+.koop-section__phone img { width: 100%; height: auto; display: block; }
+
+.seo-block {
+  margin-top: 0; padding: 2.5rem 2rem; background: var(--cream-warm);
+  border-top: 1px solid var(--border);
+}
+.seo-block__inner {
+  max-width: var(--content-max); margin: 0 auto;
+}
+.seo-block h2 {
+  font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
+  color: var(--text-muted); margin-bottom: 0.75rem;
+}
+.seo-block p {
+  font-size: 0.85rem; color: var(--text-light); line-height: 1.7; max-width: 800px;
+}
+
+/* Stagger */
+.benefit:nth-child(1) { transition-delay: .05s; }
+.benefit:nth-child(2) { transition-delay: .1s; }
+.benefit:nth-child(3) { transition-delay: .15s; }
+.benefit:nth-child(4) { transition-delay: .2s; }
+.benefit:nth-child(5) { transition-delay: .25s; }
+.benefit:nth-child(6) { transition-delay: .3s; }
+.benefit:nth-child(7) { transition-delay: .35s; }
+.step:nth-child(1) { transition-delay: 0s; }
+.step:nth-child(2) { transition-delay: .08s; }
+.step:nth-child(3) { transition-delay: .16s; }
+.step:nth-child(4) { transition-delay: .24s; }
+.step:nth-child(5) { transition-delay: .32s; }
+
+@media (max-width: 1024px) {
+  .koop-section { grid-template-columns: 1fr; }
+  .koop-section__phone { max-width: 260px; margin: 0 auto; }
+  .steps { grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .steps::before { display: none; }
+}
+@media (max-width: 768px) {
+  .benefits-grid, .reasons-grid, .func-list { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav"><div class="nav__inner">
+  <a class="nav__brand" href="/">
+    <div class="nav__icon">A<span class="x">X</span></div>
+    <span class="nav__wordmark">Agri<span class="green">X</span></span>
+  </a>
+  <ul class="nav__links">
+    <li><a href="/" class="active">Otkup</a></li>
+    <li><a href="gazdinstvo.html">Gazdinstvo</a></li>
+    <li><a href="ggap.html">GGAP</a></li>
+    <li><a href="#kontakt" class="nav__cta">Kontakt</a></li>
+  </ul>
+  <button class="nav__mobile" aria-label="Meni">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+</div></nav>
+
+<!-- HERO -->
+<section class="hero hero--center">
+  <div class="hero__bg"></div>
+  <div class="hero__grid"></div>
+  <div class="hero__inner">
+    <div class="hero__badge"><span class="hero__badge-dot"></span>AgriX Otkup</div>
+    <h1 class="hero__title">Tačan otkup, ažurno stanje<br>i manje grešaka</h1>
+    <p class="hero__desc">
+      AgriX Otkup je softver za otkup voća koji povezuje otkupno mesto, transport, hladnjaču i fakturisanje u jednom sistemu. Podaci se unose jednom pri otkupu, a dalje se roba i dokumentacija vode kroz QR kodove, uz štampu na klik kada je potrebna.
+    </p>
+    <div class="hero__actions">
+      <a href="#kontakt" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
+      <a href="#kako-radi" class="btn btn--secondary">Kako funkcioniše</a>
+    </div>
+  </div>
+</section>
+
+<!-- UVOD -->
+<section class="section section--surface"><div class="container">
+  <h2 class="section__title" style="max-width:640px">Softver za otkup voća koji uvodi red u ceo proces</h2>
+  <p class="section__desc" style="max-width:640px">
+    U otkupu najveći problem nisu samo papir i administracija, već greške koje nastaju kada se isti podaci više puta prepisuju. AgriX Otkup rešava to tako što se ključni podaci unose pri samom otkupu, a zatim se dalje koriste kroz ceo tok robe, dokumentacije i fakturisanja.
+  </p>
+  <p class="section__desc" style="max-width:640px;margin-top:1rem">
+    Rezultat je manje grešaka, brži rad i tačan pregled onoga što je otkupljeno, prevezeno, primljeno i fakturisano. Kada je papir potreban, dokument se štampa odmah iz sistema — bez ručnog pisanja.
+  </p>
+</div></section>
+
+<!-- KLJUČNE PREDNOSTI -->
+<section class="section"><div class="container">
+  <div class="section__label">Prednosti</div>
+  <h2 class="section__title">Šta dobijate sa AgriX Otkup</h2>
+
+  <div class="benefits-grid">
+    <div class="benefit">
+      <div class="benefit__num">01</div>
+      <h3>Podaci se unose jednom</h3>
+      <p>Najvažniji podaci unose se pri otkupu. Nakon toga se roba i dokumentacija dalje vode kroz QR kodove, bez ponovnog prepisivanja.</p>
+    </div>
+    <div class="benefit">
+      <div class="benefit__num">02</div>
+      <h3>Manje grešaka u toku robe</h3>
+      <p>Kada nema višestrukog unosa istih podataka, manji je prostor za greške između otkupnog mesta, transporta, hladnjače i kancelarije.</p>
+    </div>
+    <div class="benefit">
+      <div class="benefit__num">03</div>
+      <h3>Štampa na klik</h3>
+      <p>Proces se vodi digitalno, ali se svi potrebni dokumenti mogu odmah odštampati iz sistema.</p>
+    </div>
+    <div class="benefit">
+      <div class="benefit__num">04</div>
+      <h3>Tačan dnevni uvid u otkup</h3>
+      <p>Otkupci i menadžment u svakom trenutku vide stanje dnevnog otkupa po lokaciji, partneru, robi i transportu.</p>
+    </div>
+    <div class="benefit">
+      <div class="benefit__num">05</div>
+      <h3>Uvek ažurne kartice partnera</h3>
+      <p>Kartice kupaca i dobavljača ažuriraju se kroz sam proces rada i kroz automatsku obradu bankarskih izvoda.</p>
+    </div>
+    <div class="benefit">
+      <div class="benefit__num">06</div>
+      <h3>Transparentniji rad sa kooperantima</h3>
+      <p>Kooperanti u AgriX Gazdinstvo vide svoju karticu, preuzimanje agrohemije, predaju robe, uplate od firme i aktuelnu cenu.</p>
+    </div>
+    <div class="benefit">
+      <div class="benefit__num">07</div>
+      <h3>Bolje planiranje otkupa</h3>
+      <p>Kooperanti svakog dana kroz aplikaciju unose planiranu količinu za sutra, što firmi olakšava planiranje dnevnog otkupa i logistike.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- KAKO RADI -->
+<section class="section section--surface" id="kako-radi"><div class="container">
+  <div class="section__label">Proces</div>
+  <h2 class="section__title" style="text-align:center;max-width:500px;margin:0 auto 0">Kako funkcioniše AgriX Otkup</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step__num">1</div>
+      <h3>Unos pri otkupu</h3>
+      <p>Količina, ambalaža i drugi ključni podaci unose se na otkupnom mestu.</p>
+    </div>
+    <div class="step">
+      <div class="step__num">2</div>
+      <h3>QR tok robe</h3>
+      <p>Roba i dokumentacija dalje se vode kroz QR kodove i povezane procese.</p>
+    </div>
+    <div class="step">
+      <div class="step__num">3</div>
+      <h3>Dokumenti iz sistema</h3>
+      <p>Otkupni listovi, otpremnice i druga dokumentacija nastaju iz unetih podataka i štampaju se na klik.</p>
+    </div>
+    <div class="step">
+      <div class="step__num">4</div>
+      <h3>Faktura i SEF</h3>
+      <p>Unosom prijemnice svi podaci za fakturu već postoje. Registracija na SEF direktno iz sistema.</p>
+    </div>
+    <div class="step">
+      <div class="step__num">5</div>
+      <h3>Ažurne kartice</h3>
+      <p>Bankarski izvodi se automatski razvrstavaju na kupce i dobavljače. Kartice su tačne svakog dana.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- FUNKCIONALNOSTI -->
+<section class="section"><div class="container">
+  <div class="section__label">Funkcionalnosti</div>
+  <h2 class="section__title">Ključne funkcionalnosti</h2>
+
+  <div class="func-list">
+    <div class="func-item">Jednokratan unos podataka pri otkupu</div>
+    <div class="func-item">QR raspodela robe i dokumentacije</div>
+    <div class="func-item">Štampa dokumenata na klik</div>
+    <div class="func-item">Dnevni pregled otkupa po lokaciji i partneru</div>
+    <div class="func-item">Ažurne kartice kupaca i dobavljača</div>
+    <div class="func-item">SEF registracija direktno iz sistema</div>
+    <div class="func-item">Automatsko razvrstavanje uplata sa izvoda</div>
+    <div class="func-item">Sledljivost robe od otkupa do fakture</div>
+    <div class="func-item">Kartica kooperanta u AgriX Gazdinstvo</div>
+    <div class="func-item">Unos planirane količine za naredni dan</div>
+  </div>
+</div></section>
+
+<!-- ZA KOGA JE -->
+<section class="section section--surface"><div class="container">
+  <h2 class="section__title">Kome je namenjen AgriX Otkup</h2>
+  <div class="audience-list">
+    <span class="audience-tag">Hladnjačama</span>
+    <span class="audience-tag">Otkupnim firmama</span>
+    <span class="audience-tag">Organizatorima otkupa</span>
+    <span class="audience-tag">Firmama sa mrežom kooperanata</span>
+    <span class="audience-tag">Izvoznicima</span>
+  </div>
+</div></section>
+
+<!-- ZAŠTO FIRME BIRAJU -->
+<section class="section"><div class="container">
+  <div class="section__label">Rezultati</div>
+  <h2 class="section__title">Zašto firme biraju AgriX Otkup</h2>
+
+  <div class="reasons-grid">
+    <div class="reason">
+      <h3>Brži i sigurniji rad</h3>
+      <p>Podaci se unose tamo gde proces počinje, a ne kasnije kroz više tabela i papira.</p>
+    </div>
+    <div class="reason">
+      <h3>Pregled stanja dok otkup traje</h3>
+      <p>Dnevni otkup nije nešto što se sabira na kraju dana. Vidljiv je u trenutku kada se dešava.</p>
+    </div>
+    <div class="reason">
+      <h3>Brže fakturisanje</h3>
+      <p>Kada prijemnica već sadrži sve podatke za fakturu, registracija na SEF postaje samo sledeći korak u istom sistemu.</p>
+    </div>
+    <div class="reason">
+      <h3>Svakodnevno tačne kartice</h3>
+      <p>Automatska obrada izvoda obezbeđuje da kupci i dobavljači imaju ažurne kartice svakog dana.</p>
+    </div>
+    <div class="reason">
+      <h3>Manje poziva i više transparentnosti</h3>
+      <p>Kooperanti u aplikaciji vide svoju karticu, cenu i sve transakcije sa firmom.</p>
+    </div>
+    <div class="reason">
+      <h3>Bolje planiranje</h3>
+      <p>Kada firma unapred vidi planirane količine za sutra, lakše organizuje otkup, transport i kapacitete.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- POVEZAN RAD SA KOOPERANTIMA -->
+<section class="section section--forest"><div class="container">
+  <div class="section__label">Ekosistem</div>
+  <h2 class="section__title">Povezan rad sa kooperantima kroz AgriX Gazdinstvo</h2>
+
+  <div class="koop-section">
+    <div class="koop-section__text">
+      <p class="section__desc" style="color:rgba(247,244,238,0.7)">
+        Kada je AgriX Otkup povezan sa AgriX Gazdinstvo, kooperanti na svom telefonu vide:
+      </p>
+      <ul>
+        <li>Svoju karticu</li>
+        <li>Preuzimanje agrohemije</li>
+        <li>Predaju robe</li>
+        <li>Uplate od firme</li>
+        <li>Aktuelnu cenu</li>
+        <li>Unos planirane količine za naredni dan</li>
+      </ul>
+      <p style="font-size:0.9rem;color:rgba(247,244,238,0.6);margin-top:1.5rem;line-height:1.7">
+        To firmi donosi veću transparentnost, a kooperantu jasniji odnos sa otkupljivačem.
+      </p>
+      <a href="gazdinstvo.html" class="btn btn--secondary" style="margin-top:1.5rem;border-color:rgba(255,255,255,0.2);color:var(--cream)">Pogledaj AgriX Gazdinstvo →</a>
+    </div>
+    <div class="koop-section__phone">
+      <img src="img/IMG_6749.png" alt="Kartica kooperanta u AgriX Gazdinstvo" loading="lazy">
+    </div>
+  </div>
+</div></section>
+
+<!-- CTA -->
+<section class="cta-final" id="kontakt"><div class="container"><div class="cta-final__inner">
+  <h2 class="section__title" style="text-align:center">
+    Pogledajte kako AgriX Otkup funkcioniše<br>u vašem modelu otkupa.
+  </h2>
+  <p class="section__desc">
+    Pokazaćemo vam kako sistem omogućava jednokratan unos podataka, QR vođenje robe, štampu na klik, SEF iz sistema i automatski ažurne kartice partnera.
+  </p>
+  <div class="cta-final__actions">
+    <a href="mailto:office@agrix.rs" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
+    <a href="mailto:dusan@agrix.rs" class="btn btn--secondary">Kontaktirajte nas</a>
+  </div>
+  <div class="cta-final__contact">
+    <a href="https://www.agrix.rs">www.agrix.rs</a>
+    <a href="mailto:office@agrix.rs">office@agrix.rs</a>
+    <a href="mailto:dusan@agrix.rs">Dušan Miladinović</a>
+  </div>
+</div></div></section>
+
+<!-- SEO BLOK -->
+<div class="seo-block"><div class="seo-block__inner">
+  <h2>Softver za otkup voća za firme koje traže tačnost i kontrolu</h2>
+  <p>AgriX Otkup je softver za otkup voća namenjen hladnjačama, otkupnim firmama i organizatorima otkupa koji žele manje grešaka, bolju sledljivost robe i tačan uvid u dnevni otkup. Sistem povezuje otkupno mesto, transport, dokumentaciju, prijem, fakturisanje, SEF i rad sa kooperantima u jednom procesu. Zahvaljujući jednokratnom unosu podataka, štampi na klik i automatski ažurnim karticama kupaca i dobavljača, otkup postaje pregledniji, tačniji i lakši za upravljanje.</p>
+</div></div>
+
+<!-- FOOTER -->
+<footer class="footer"><div class="footer__inner">
+  <span class="footer__brand">Agri<span class="green">X</span></span>
+  <p>© 2026 · Digitalna infrastruktura za savremenu poljoprivredu</p>
+  <p>AgriX Otkup · AgriX Gazdinstvo · AgriX GGAP</p>
+</div></footer>
+
+<script>
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.benefit, .step, .product-card').forEach(el => observer.observe(el));
+window.addEventListener('scroll', () => {
+  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20);
+}, { passive: true });
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const t = document.querySelector(a.getAttribute('href'));
+    if (t) { e.preventDefault(); window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' }); }
+  });
+});
+</script>
+</body>
+</html>
