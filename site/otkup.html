@@ -316,48 +316,105 @@
   </div>
 </div></section>
 
-<!-- POVEZAN RAD SA KOOPERANTIMA -->
-<section class="section section--forest"><div class="container">
+<!-- ═══════════════════════════════════════════════════
+     SECTION: Povezan rad sa kooperantima
+     Drop-in replacement for the existing section in otkup.html
+     ═══════════════════════════════════════════════════ -->
+ 
+<section class="section section--forest">
+<div class="container">
+ 
   <div class="section__label">Ekosistem</div>
-  <h2 class="section__title">Povezan rad sa kooperantima kroz AgriX Gazdinstvo</h2>
-
-  <div class="koop-section">
-    <div class="koop-section__text">
-      <p class="section__desc" style="color:rgba(247,244,238,0.7)">
-        Kada je AgriX Otkup povezan sa AgriX Gazdinstvo, kooperanti na svom telefonu vide:
+  <h2 class="section__title">Povezan rad sa kooperantima<br>kroz AgriX Gazdinstvo</h2>
+ 
+  <div class="koop">
+ 
+    <!-- ── LEFT: Content ── -->
+    <div class="koop__content">
+      <p class="koop__intro">
+        Kada je AgriX Otkup povezan sa AgriX Gazdinstvo, kooperanti na svom telefonu vide sve što im je potrebno — bez poziva firmi.
       </p>
-      <ul>
-        <li>Svoju karticu</li>
-        <li>Preuzimanje agrohemije</li>
-        <li>Predaju robe</li>
-        <li>Uplate od firme</li>
-        <li>Aktuelnu cenu</li>
-        <li>Unos planirane količine za naredni dan</li>
+ 
+      <ul class="koop__features">
+        <li class="koop__feature">
+          <span class="koop__feature-icon koop__feature-icon--green">📋</span>
+          <span class="koop__feature-text">Karticu sa zaduženjima i razduženjima</span>
+        </li>
+        <li class="koop__feature">
+          <span class="koop__feature-icon koop__feature-icon--green">🧪</span>
+          <span class="koop__feature-text">Preuzimanje agrohemije od firme</span>
+        </li>
+        <li class="koop__feature">
+          <span class="koop__feature-icon koop__feature-icon--gold">📦</span>
+          <span class="koop__feature-text">Predaju robe sa količinama i cenama</span>
+        </li>
+        <li class="koop__feature">
+          <span class="koop__feature-icon koop__feature-icon--gold">💳</span>
+          <span class="koop__feature-text">Uplate i isplate od firme</span>
+        </li>
+        <li class="koop__feature">
+          <span class="koop__feature-icon koop__feature-icon--cream">📊</span>
+          <span class="koop__feature-text">Aktuelnu cenu otkupa po robi</span>
+        </li>
+        <li class="koop__feature">
+          <span class="koop__feature-icon koop__feature-icon--cream">📅</span>
+          <span class="koop__feature-text">Planiranu količinu za sutrašnji dan</span>
+        </li>
       </ul>
-      <p style="font-size:0.9rem;color:rgba(247,244,238,0.6);margin-top:1.5rem;line-height:1.7">
-        To firmi donosi veću transparentnost, a kooperantu jasniji odnos sa otkupljivačem.
+ 
+      <div class="koop__divider"></div>
+ 
+      <p class="koop__note">
+        Firmi donosi veću transparentnost, a kooperantu jasniji odnos i poverenje u radu sa otkupljivačem.
       </p>
-      <a href="gazdinstvo.html" class="btn btn--secondary" style="margin-top:1.5rem;border-color:rgba(255,255,255,0.2);color:var(--cream)">Pogledaj AgriX Gazdinstvo →</a>
+ 
+      <a href="gazdinstvo.html" class="btn koop__cta">
+        Pogledaj AgriX Gazdinstvo <span class="btn__arrow">→</span>
+      </a>
     </div>
-    <div class="koop-section__phone">
-      <div class="koop-proof">
-        <div class="koop-proof__glow"></div>
-          <div class="device device--tilt">
-            <div class="device__speaker"></div>
-              <div class="device__screen device__screen--crop-header">
-                <img src="img/KarticaKooperanta.PNG" alt="Kartica kooperanta u AgriX Gazdinstvo" loading="lazy">
-              </div>
-            </div>
-          <div class="device-callout device-callout--top">
-          Kartica kooperanta u realnom vremenu
+ 
+    <!-- ── RIGHT: Device mockup ── -->
+    <div class="koop__device-col">
+      <div class="koop__scene">
+ 
+        <!-- Ambient glow -->
+        <div class="koop__glow"></div>
+ 
+        <!-- Callout: Kartica (left of phone) -->
+        <div class="koop__callout koop__callout--kartica">
+          <span class="koop__callout-label">Real-time</span>
+          Kartica kooperanta
         </div>
-        <div class="device-callout device-callout--bottom">
-          Saldo, zaduženje i istorija transakcija
+ 
+        <!-- Phone -->
+        <div class="koop__phone">
+          <div class="koop__notch"></div>
+          <div class="koop__screen">
+            <img src="img/KarticaKooperanta.jpg"
+                 alt="Kartica kooperanta u AgriX Gazdinstvo — prikaz salda, zaduženja i istorije transakcija"
+                 loading="lazy">
+          </div>
         </div>
+ 
+        <!-- Callout: Saldo (right of phone) -->
+        <div class="koop__callout koop__callout--saldo">
+          <span class="koop__callout-label">Automatski</span>
+          Saldo u realnom vremenu
+        </div>
+ 
+        <!-- Callout: Transakcije (right of phone, lower) -->
+        <div class="koop__callout koop__callout--trans">
+          <span class="koop__callout-label">Hronološki</span>
+          Istorija transakcija
+        </div>
+ 
       </div>
     </div>
+ 
   </div>
-</div></section>
+ 
+</div>
+</section>
 
 <!-- CTA -->
 <section class="cta-final" id="kontakt"><div class="container"><div class="cta-final__inner">
