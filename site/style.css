@@ -312,8 +312,7 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 }
 
 .device--tilt {
-  transform: perspective(1200px) rotateY(-8deg) rotateX(2deg);
-  transform-origin: center center;
+  transform: none;
 }
 
 .device::before {
@@ -414,8 +413,8 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 }
 
 .device-callout--top {
-  top: 110px;
-  left: -18px;
+  top: 44px;
+  left: -165px;
 }
 
 .device-callout--top::before {
@@ -424,8 +423,8 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 }
 
 .device-callout--bottom {
-  right: -12px;
-  bottom: 120px;
+  right: -170px;
+  bottom: 34px;
 }
 
 .device-callout--bottom::before {
