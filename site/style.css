@@ -131,14 +131,79 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 .wf-step__tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 1rem; }
 .wf-step__tags span { font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.7rem; border-radius: 100px; background: var(--white); color: var(--text-secondary); border: 1px solid var(--border); }
 
-/* ── PHONE GALLERY ── */
+/* ── DEVICE MOCKUP ── */
+.device {
+  position: relative;
+  width: 260px;
+  background: #0a0a0a;
+  border-radius: 40px;
+  padding: 12px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.1),
+    0 20px 60px rgba(0,0,0,0.25),
+    0 4px 16px rgba(0,0,0,0.15),
+    inset 0 0 0 1.5px rgba(255,255,255,0.05);
+}
+.device::before {
+  /* Dynamic island */
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 26px;
+  background: #0a0a0a;
+  border-radius: 20px;
+  z-index: 3;
+}
+.device__screen {
+  border-radius: 30px;
+  overflow: hidden;
+  position: relative;
+  background: var(--cream);
+}
+.device__screen img {
+  width: 100%;
+  height: auto;
+  display: block;
+  /* Crop: hide status bar (top ~45px of a 750px wide screenshot) */
+  margin-top: -6%;
+}
+.device__screen--crop-header img {
+  /* Crop: hide status bar + app header (top ~130px of screenshot) */
+  margin-top: -17%;
+}
+.device--light {
+  background: #e8e8e8;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.08),
+    0 20px 60px rgba(0,0,0,0.12),
+    0 4px 16px rgba(0,0,0,0.08),
+    inset 0 0 0 1.5px rgba(255,255,255,0.6);
+}
+.device--light::before { background: #1a1a1a; }
+
+/* Standalone device (for product sections) */
+.device--standalone {
+  flex-shrink: 0;
+}
+
+/* ── PHONE GALLERY (using device mockups) ── */
 .phone-gallery { margin-top: 3rem; }
-.phone-gallery__track { display: flex; gap: 1.5rem; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; padding: 1rem 0 2rem; scrollbar-width: none; }
+.phone-gallery__track {
+  display: flex; gap: 2rem; overflow-x: auto;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  padding: 1.5rem 0 2.5rem; scrollbar-width: none;
+}
 .phone-gallery__track::-webkit-scrollbar { display: none; }
 .phone-gallery__item { flex: 0 0 auto; scroll-snap-align: start; text-align: center; }
-.phone-gallery__frame { width: 220px; background: var(--white); border-radius: 24px; box-shadow: var(--shadow-lg), 0 0 0 1px var(--border); overflow: hidden; }
-.phone-gallery__frame img { width: 100%; height: auto; display: block; }
-.phone-gallery__caption { margin-top: 0.75rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+.phone-gallery__item .device { width: 220px; padding: 10px; border-radius: 32px; }
+.phone-gallery__item .device::before { width: 72px; height: 22px; top: 13px; border-radius: 16px; }
+.phone-gallery__item .device__screen { border-radius: 24px; }
+.phone-gallery__caption {
+  margin-top: 1rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+}
 .phone-gallery__hint { text-align: center; font-size: 0.72rem; color: var(--text-light); margin-top: 0.5rem; }
 
 /* ── SHOWCASE ── */
@@ -250,7 +315,11 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
   .pain-grid, .features-grid, .showcase__grid { grid-template-columns: 1fr; }
   .pricing-grid { grid-template-columns: 1fr; max-width: 400px; margin-left: auto; margin-right: auto; }
   .hero { padding-top: calc(60px + 3rem); }
-  .phone-gallery__frame { width: 180px; }
+  .phone-gallery__item .device { width: 180px; padding: 8px; border-radius: 28px; }
+  .phone-gallery__item .device::before { width: 60px; height: 18px; top: 11px; }
+  .phone-gallery__item .device__screen { border-radius: 22px; }
+  .device { width: 220px; padding: 10px; border-radius: 34px; }
+  .device::before { width: 72px; height: 22px; top: 14px; }
 }
 @media (max-width: 480px) { .btn { padding: 0.75rem 1.4rem; font-size: 0.85rem; } }
 
