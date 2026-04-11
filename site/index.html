@@ -519,59 +519,109 @@ body::before {
 }
 
 /* ══════════════════════
-   SOLUTION / FLOW
+   WORKFLOW — vertical step-by-step
    ══════════════════════ */
-.flow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0;
+.workflow {
   margin-top: 3.5rem;
   position: relative;
 }
-.flow::before {
-  content: '';
-  position: absolute;
-  top: 40px; left: 12.5%; right: 12.5%;
-  height: 2px;
-  background: linear-gradient(to right, var(--accent) 0%, var(--gold) 50%, var(--accent) 100%);
-  opacity: 0.2;
-  z-index: 0;
-}
-.flow__step {
-  text-align: center;
-  padding: 0 1.25rem;
-  position: relative; z-index: 1;
-  opacity: 0; transform: translateY(16px);
-  transition: opacity 0.5s, transform 0.5s;
-}
-.flow__step.visible { opacity: 1; transform: translateY(0); }
 
-.flow__icon {
-  width: 80px; height: 80px;
-  background: var(--cream);
-  border: 2px solid var(--border-strong);
+.wf-step {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 1.5rem;
+  margin-bottom: 0;
+}
+.wf-step__marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wf-step__num {
+  width: 48px; height: 48px;
+  background: var(--forest);
+  color: var(--gold);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 1.25rem;
-  font-size: 1.6rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
-}
-.flow__step:hover .flow__icon {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 6px rgba(94,161,53,0.08);
-}
-.flow__step h3 {
   font-family: var(--font-display);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  color: var(--forest);
+  flex-shrink: 0;
+  z-index: 1;
+  box-shadow: 0 0 0 5px var(--cream);
+}
+.wf-step__line {
+  width: 2px;
+  flex: 1;
+  background: linear-gradient(to bottom, var(--accent), var(--gold-pale));
+  margin: 0.25rem 0;
+  opacity: 0.4;
+}
+.wf-step--last .wf-step__line { display: none; }
+
+.wf-step__content {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  opacity: 0; transform: translateY(16px);
+  transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s;
+}
+.wf-step__content.visible { opacity: 1; transform: translateY(0); }
+.wf-step__content:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.wf-step__role {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
   margin-bottom: 0.5rem;
 }
-.flow__step p {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  line-height: 1.6;
+.wf-step__content h3 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--forest);
+  margin-bottom: 0.6rem;
 }
+.wf-step__content p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.wf-step__content strong {
+  color: var(--forest);
+  font-weight: 600;
+}
+.wf-step__tags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+.wf-step__tags span {
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.25rem 0.7rem;
+  border-radius: 100px;
+  background: var(--cream);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+/* Stagger workflow items */
+.wf-step:nth-child(1) .wf-step__content { transition-delay: 0.0s; }
+.wf-step:nth-child(2) .wf-step__content { transition-delay: 0.08s; }
+.wf-step:nth-child(3) .wf-step__content { transition-delay: 0.16s; }
+.wf-step:nth-child(4) .wf-step__content { transition-delay: 0.24s; }
+.wf-step:nth-child(5) .wf-step__content { transition-delay: 0.32s; }
+.wf-step:nth-child(6) .wf-step__content { transition-delay: 0.40s; }
 
 /* ══════════════════════
    ECOSYSTEM / AgriX
@@ -949,8 +999,6 @@ body::before {
   .hero__stats { justify-content: center; }
   .hero__actions { justify-content: center; }
   .hero__float { display: none; }
-  .flow { grid-template-columns: 1fr 1fr; }
-  .flow::before { display: none; }
   .eco-grid { grid-template-columns: 1fr; }
 }
 
@@ -962,7 +1010,6 @@ body::before {
   .pain-grid { grid-template-columns: 1fr; }
   .features-grid { grid-template-columns: 1fr; }
   .pricing-grid { grid-template-columns: 1fr; max-width: 400px; margin-left: auto; margin-right: auto; }
-  .flow { grid-template-columns: 1fr; gap: 2rem; }
   .hero { padding-top: calc(60px + 3rem); }
   .hero__phone { width: 240px; }
 }
@@ -979,10 +1026,6 @@ body::before {
 .pain-card:nth-child(4) { transition-delay: 0.20s; }
 .pain-card:nth-child(5) { transition-delay: 0.25s; }
 .pain-card:nth-child(6) { transition-delay: 0.30s; }
-.flow__step:nth-child(1) { transition-delay: 0.0s; }
-.flow__step:nth-child(2) { transition-delay: 0.1s; }
-.flow__step:nth-child(3) { transition-delay: 0.2s; }
-.flow__step:nth-child(4) { transition-delay: 0.3s; }
 .feature:nth-child(n) { transition-delay: calc(var(--i, 0) * 0.06s); }
 </style>
 </head>
@@ -1022,7 +1065,7 @@ body::before {
         do <span class="em-gold">hladnjače.</span>
       </h1>
       <p class="hero__desc">
-        Kompletan digitalni sistem za upravljanje otkupom voća. VBA/Excel platforma sa mobilnom aplikacijom — otkupni list za 30 sekundi, stanje u realnom vremenu, e-faktura jednim klikom.
+        Kompletan digitalni sistem za upravljanje otkupom voća. QR skeniranje, digitalni potpis, automatska dokumentacija — od otkupnog bloka na terenu do e-fakture za kupca.
       </p>
       <div class="hero__stats">
         <div>
@@ -1125,33 +1168,117 @@ body::before {
   </div>
 </section>
 
-<!-- ═══════════ SOLUTION ═══════════ -->
+<!-- ═══════════ SOLUTION — QR WORKFLOW ═══════════ -->
 <section class="section" id="resenje">
   <div class="container">
     <div class="section__label">Rešenje</div>
-    <h2 class="section__title">Jedan sistem.<br>Sve u realnom vremenu.</h2>
-    <p class="section__desc">OtkupApp digitalizuje ceo tok — od otkupnog lista na terenu do e-fakture za kupca. VBA/Excel platforma sa mobilnom aplikacijom za teren i kooperante.</p>
-    <div class="flow">
-      <div class="flow__step">
-        <div class="flow__icon">📱</div>
-        <h3>Teren</h3>
-        <p>Otkupljivač skenira QR kod kooperanta. Otkupni list gotov za 30 sekundi — i odmah u sistemu.</p>
+    <h2 class="section__title">Jedan QR kod.<br>Ceo lanac — digitalan.</h2>
+    <p class="section__desc">Svaki korak u otkupnom lancu počinje skeniranjem QR koda. Bez papira, bez prepisivanja, bez grešaka. Svaki dokument se čuva automatski u bazi firme.</p>
+
+    <div class="workflow">
+
+      <div class="wf-step">
+        <div class="wf-step__marker">
+          <div class="wf-step__num">1</div>
+          <div class="wf-step__line"></div>
+        </div>
+        <div class="wf-step__content">
+          <div class="wf-step__role">Otkupac × Kooperant</div>
+          <h3>QR skeniranje → Otkupni blok</h3>
+          <p>Otkupac na terenu skenira <strong>QR kod proizvođača</strong>. Automatski se otvaraju podaci kooperanta. Unosi količinu, klasu, cenu — i za 30 sekundi otkupni blok je generisan digitalno. <strong>Obojica potpisuju na uređaju otkupca.</strong> PDF dokument se automatski čuva u bazi firme.</p>
+          <div class="wf-step__tags">
+            <span>QR scan</span>
+            <span>Digitalni potpis</span>
+            <span>Auto-PDF</span>
+            <span>Štampa na dugme</span>
+          </div>
+        </div>
       </div>
-      <div class="flow__step">
-        <div class="flow__icon">💻</div>
-        <h3>Kancelarija</h3>
-        <p>Excel platforma — svi otkupi, stanja, dugovanja, manjak. Real-time sinhronizacija sa terenom.</p>
+
+      <div class="wf-step">
+        <div class="wf-step__marker">
+          <div class="wf-step__num">2</div>
+          <div class="wf-step__line"></div>
+        </div>
+        <div class="wf-step__content">
+          <div class="wf-step__role">Otkupac × Vozač</div>
+          <h3>Kamion dolazi → Čeklista za utovar</h3>
+          <p>Kada kamion stigne, otkupac skenira <strong>QR kod vozača</strong>. Automatski dobija čeklistu: koji otkupni blokovi se tovare kod tog vozača. Čekira otkupe koji se utovaruju, potvrdi — <strong>i ti blokovi sa tačnom težinom i ambalažom se odmah pojavljuju u dashboard-u vozača.</strong></p>
+          <div class="wf-step__tags">
+            <span>QR scan vozača</span>
+            <span>Auto-čeklista</span>
+            <span>Kg + ambalaža</span>
+          </div>
+        </div>
       </div>
-      <div class="flow__step">
-        <div class="flow__icon">🚛</div>
-        <h3>Transport</h3>
-        <p>Otpremnice automatski. Dispečer dashboard za logistiku. Evidencija ambalaže. Manjak se računa sam.</p>
+
+      <div class="wf-step">
+        <div class="wf-step__marker">
+          <div class="wf-step__num">3</div>
+          <div class="wf-step__line"></div>
+        </div>
+        <div class="wf-step__content">
+          <div class="wf-step__role">Vozač</div>
+          <h3>Obilazak stanica → Sve na dashboard-u</h3>
+          <p>Vozač obilazi više otkupaca u toku dana. Svaki otkupac skenira isti QR kod vozača i dodaje svoje blokove. <strong>Vozač na svom dashboard-u vidi ukupnu količinu koja raste sa svakom stanicom</strong> — kilogrami, ambalaža, kulture. Sve u realnom vremenu.</p>
+          <div class="wf-step__tags">
+            <span>Više stanica</span>
+            <span>Live dashboard</span>
+            <span>Kapacitet kamiona</span>
+          </div>
+        </div>
       </div>
-      <div class="flow__step">
-        <div class="flow__icon">📄</div>
-        <h3>Fakturisanje</h3>
-        <p>Faktura iz sistema. SEF jednim klikom. Bankarski izvodi se razvrstavaju automatski.</p>
+
+      <div class="wf-step">
+        <div class="wf-step__marker">
+          <div class="wf-step__num">4</div>
+          <div class="wf-step__line"></div>
+        </div>
+        <div class="wf-step__content">
+          <div class="wf-step__role">Vozač</div>
+          <h3>Zbirna otpremnica → Jedan tap</h3>
+          <p>Na kraju rute, vozač pravi zbirnu otpremnica iz aplikacije. <strong>Izabere hladnjaču iz padajućeg menija — količina i ambalaža su već izračunate.</strong> Otpremnica i zbirna su digitalni dokumenti. Mogu se odštampati na dugme iz PWA ako je štampač dostupan u prostoriji otkupca.</p>
+          <div class="wf-step__tags">
+            <span>Dropdown hladnjača</span>
+            <span>Auto-kalkulacija</span>
+            <span>Štampa iz PWA</span>
+          </div>
+        </div>
       </div>
+
+      <div class="wf-step">
+        <div class="wf-step__marker">
+          <div class="wf-step__num">5</div>
+          <div class="wf-step__line"></div>
+        </div>
+        <div class="wf-step__content">
+          <div class="wf-step__role">Kancelarija</div>
+          <h3>Excel sinhronizacija → Kontrola</h3>
+          <p>Svi podaci sa terena se sinhronizuju u centralnu VBA/Excel platformu. Operator vidi sve otkupe, otpremnice, zbirne — <strong>ne unosi ništa ručno, samo kontroliše.</strong> Prijemnica, manjak, faktura — sve iz jednog sistema.</p>
+          <div class="wf-step__tags">
+            <span>Auto-sync</span>
+            <span>Real-time pregled</span>
+            <span>Nula ručnog unosa</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="wf-step wf-step--last">
+        <div class="wf-step__marker">
+          <div class="wf-step__num">6</div>
+        </div>
+        <div class="wf-step__content">
+          <div class="wf-step__role">Sistem</div>
+          <h3>SEF e-faktura → Banka → Gotovo</h3>
+          <p>Faktura se kreira iz sistema. Slanje na SEF jednim klikom. Bankarski izvodi se razvrstavaju automatski. <strong>Kompletna sledljivost: parcela → otkup → otpremnica → zbirna → prijemnica → faktura.</strong></p>
+          <div class="wf-step__tags">
+            <span>SEF jednim klikom</span>
+            <span>Auto-banka</span>
+            <span>Sledljivost 100%</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -1322,23 +1449,33 @@ body::before {
     <div class="timeline">
       <div class="timeline__item">
         <div class="timeline__dot"></div>
-        <div class="timeline__time">06:00 — Teren</div>
-        <p>Otkupljivač <strong>Petar</strong> otvori OtkupApp na telefonu. Kooperant <strong>Marko</strong> pokaže QR kod. Skeniranje — 500 kg višnje, I klasa, 120 din/kg. <strong>Otkupni list gotov za 30 sekundi.</strong> Podatak je odmah u Excel sistemu u kancelariji.</p>
+        <div class="timeline__time">06:00 — Otkupno mesto</div>
+        <p>Otkupljivač <strong>Petar</strong> otvori OtkupApp. Kooperant <strong>Marko</strong> pokaže QR kod — Petar ga skenira, automatski se učitaju svi podaci. Unosi: 500 kg višnje, I klasa, 120 din/kg. <strong>Obojica potpisuju na ekranu.</strong> PDF otkupni blok se automatski čuva u bazi. Ako treba — štampa se jednim dugmetom.</p>
       </div>
       <div class="timeline__item">
         <div class="timeline__dot"></div>
-        <div class="timeline__time">10:00 — Kancelarija</div>
-        <p>U Excel sistemu vidite da je Petar do sada otkupio <strong>3.200 kg od četiri kooperanta</strong>. Dispečer dashboard pokazuje kapacitet kamiona. <strong>Bez ijednog papira. Bez ijednog poziva.</strong></p>
+        <div class="timeline__time">09:30 — Dolazak kamiona</div>
+        <p>Vozač <strong>Milan</strong> stiže na stanicu. Petar skenira <strong>QR kod Milana</strong> — dobija čeklistu svih otkupa spremnih za utovar. Čekira 4 bloka, potvrdi. <strong>3.200 kg sa ambalažom se odmah pojavljuju na Milan-ovom dashboard-u.</strong></p>
       </div>
       <div class="timeline__item">
         <div class="timeline__dot"></div>
-        <div class="timeline__time">12:00 — Kooperant</div>
-        <p>Marko otvara aplikaciju na svom telefonu. Vidi karticu: <strong>500 kg višnje, 60.000 dinara.</strong> Vidi parcele na mapi, meteo prognozu, spray window za tretman. Agrohemija zaduženje: 4.500 din. <strong>Ne mora da zove nikoga.</strong></p>
+        <div class="timeline__time">10:00–14:00 — Ruta</div>
+        <p>Milan obilazi još <strong>tri otkupne stanice</strong>. Na svakoj stanici otkupac skenira isti QR. Milan na dashboard-u vidi kako <strong>ukupna količina raste: 3.200 → 5.800 → 8.100 → 9.500 kg</strong>. Kapacitet kamiona se puni u realnom vremenu.</p>
       </div>
       <div class="timeline__item">
         <div class="timeline__dot"></div>
-        <div class="timeline__time">17:00 — Hladnjača</div>
-        <p>Kamion stiže. Prijemnica se pravi automatski iz zbirne otpremnice. <strong>Manjak izračunat u sekundi.</strong> Faktura kreirana, poslata na SEF jednim klikom. Bankarski izvod već razvrstan. <strong>Sve u Excel sistemu — bez papira, bez grešaka.</strong></p>
+        <div class="timeline__time">14:30 — Kraj rute</div>
+        <p>Milan pravi zbirnu otpremnicu u aplikaciji. <strong>Izabere hladnjaču iz menija — količina i ambalaža su već izračunate.</strong> Sve otpremnice i zbirna su digitalni dokumenti, povezani sa svakim otkupnim blokom.</p>
+      </div>
+      <div class="timeline__item">
+        <div class="timeline__dot"></div>
+        <div class="timeline__time">15:00 — Kancelarija</div>
+        <p>U Excel sistemu je sve već tu. Operator pravi prijemnicu — <strong>manjak izračunat u sekundi</strong>. Faktura kreirana, poslata na SEF jednim klikom. Bankarski izvod razvrstan automatski. <strong>Ceo lanac — od Markovog QR koda do e-fakture — bez jednog papira.</strong></p>
+      </div>
+      <div class="timeline__item">
+        <div class="timeline__dot"></div>
+        <div class="timeline__time">Bilo kad — Kooperant</div>
+        <p>Marko otvori aplikaciju. Vidi <strong>karticu, parcele na satelitu, meteo prognozu.</strong> Sve svoje otkupe, isplate, agrohemiju. <strong>Ne mora da zove nikoga — sve je na dlanu.</strong></p>
       </div>
     </div>
   </div>
@@ -1443,7 +1580,7 @@ const observer = new IntersectionObserver((entries) => {
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
 document.querySelectorAll(
-  '.pain-card, .flow__step, .feature, .eco-card, .timeline__item'
+  '.pain-card, .wf-step__content, .feature, .eco-card, .timeline__item'
 ).forEach(el => observer.observe(el));
 
 // ── Nav shadow on scroll ──
