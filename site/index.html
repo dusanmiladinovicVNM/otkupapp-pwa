@@ -3,1604 +3,536 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OtkupApp by AgriX — Od njive do hladnjače</title>
+<title>AgriX — Digitalna platforma za poljoprivredu</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 <style>
-/* ═══════════════════════════════════════════════════
-   DESIGN SYSTEM — derived from AgriX brand identity
-   Forest #1E2D14 · Accent #5EA135 · Gold #C8A84B
-   App UI: warm cream bg, white cards, deep green CTAs
-   ═══════════════════════════════════════════════════ */
 :root {
-  /* Brand core */
-  --forest: #1E2D14;
-  --forest-90: #2a3d1e;
-  --forest-80: #354a28;
-  --accent: #5EA135;
-  --accent-light: #7dbf55;
-  --accent-pale: #c4e4a8;
-  --gold: #C8A84B;
-  --gold-light: #d4b962;
-  --gold-pale: #f0e2b8;
-
-  /* Surface system — warm, light, agricultural */
-  --cream: #F7F4EE;
-  --cream-warm: #F2EDE4;
-  --cream-deep: #EBE5D8;
-  --white: #FFFFFF;
-  --sand: #E8E0D0;
-
-  /* Text */
-  --text-primary: #1E2D14;
-  --text-secondary: #4A5A3C;
-  --text-muted: #7A856E;
-  --text-light: #9FA894;
-
-  /* Borders & dividers */
-  --border: rgba(30,45,20,0.08);
-  --border-strong: rgba(30,45,20,0.15);
-  --border-gold: rgba(200,168,75,0.25);
-
-  /* Shadows */
+  --forest: #1E2D14; --forest-90: #2a3d1e; --forest-80: #354a28;
+  --accent: #5EA135; --accent-light: #7dbf55; --accent-pale: #c4e4a8;
+  --gold: #C8A84B; --gold-light: #d4b962; --gold-pale: #f0e2b8;
+  --cream: #F7F4EE; --cream-warm: #F2EDE4; --cream-deep: #EBE5D8;
+  --white: #FFFFFF; --sand: #E8E0D0;
+  --text-primary: #1E2D14; --text-secondary: #4A5A3C;
+  --text-muted: #7A856E; --text-light: #9FA894;
+  --border: rgba(30,45,20,0.08); --border-strong: rgba(30,45,20,0.15);
   --shadow-sm: 0 1px 3px rgba(30,45,20,0.06);
   --shadow-md: 0 4px 16px rgba(30,45,20,0.08);
   --shadow-lg: 0 8px 32px rgba(30,45,20,0.1);
   --shadow-xl: 0 16px 48px rgba(30,45,20,0.12);
-
-  /* Typography */
   --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'DM Sans', -apple-system, sans-serif;
-
-  /* Spacing */
   --section-pad: clamp(5rem, 8vw, 9rem);
-  --content-max: 1140px;
-  --content-narrow: 720px;
+  --content-max: 1140px; --content-narrow: 720px;
 }
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
-
-body {
-  font-family: var(--font-body);
-  background: var(--cream);
-  color: var(--text-primary);
-  overflow-x: hidden;
-  line-height: 1.6;
-}
-
-/* ── UTILITY ── */
+body { font-family: var(--font-body); background: var(--cream); color: var(--text-primary); overflow-x: hidden; line-height: 1.6; }
+body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.025; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 200px; }
 .container { max-width: var(--content-max); margin: 0 auto; padding: 0 2rem; }
 .container--narrow { max-width: var(--content-narrow); margin: 0 auto; padding: 0 2rem; }
 
-/* ── SUBTLE TEXTURE ── */
-body::before {
-  content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px;
-}
-
-/* ══════════════════════
-   NAVIGATION
-   ══════════════════════ */
-.nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  padding: 0 2rem;
-  background: rgba(247,244,238,0.92);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  border-bottom: 1px solid var(--border);
-  transition: box-shadow 0.3s;
-}
+/* NAV */
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 0 2rem; background: rgba(247,244,238,0.92); backdrop-filter: blur(20px) saturate(1.2); -webkit-backdrop-filter: blur(20px) saturate(1.2); border-bottom: 1px solid var(--border); transition: box-shadow 0.3s; }
 .nav.scrolled { box-shadow: var(--shadow-sm); }
-.nav__inner {
-  max-width: var(--content-max);
-  margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  height: 72px;
-}
-.nav__brand {
-  display: flex; align-items: center; gap: 0.75rem;
-  text-decoration: none;
-}
-.nav__icon {
-  width: 36px; height: 36px;
-  background: var(--forest);
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1;
-  color: var(--gold);
-  letter-spacing: -0.03em;
-  flex-shrink: 0;
-}
+.nav__inner { max-width: var(--content-max); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 72px; }
+.nav__brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; }
+.nav__icon { width: 36px; height: 36px; background: var(--forest); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; color: var(--gold); flex-shrink: 0; }
 .nav__icon .x { color: var(--accent); }
-.nav__wordmark {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 600;
-  color: var(--forest);
-  letter-spacing: -0.01em;
-}
-.nav__wordmark .app { color: var(--accent); }
-.nav__sep {
-  display: inline-block;
-  width: 1px; height: 18px;
-  background: var(--sand);
-  margin: 0 0.4rem;
-  vertical-align: middle;
-}
-
+.nav__wordmark { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; color: var(--forest); }
+.nav__wordmark .green { color: var(--accent); }
 .nav__links { display: flex; align-items: center; gap: 2.5rem; list-style: none; }
-.nav__links a {
-  font-size: 0.82rem; font-weight: 500;
-  letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: color 0.2s;
-  position: relative;
-}
-.nav__links a::after {
-  content: ''; position: absolute; bottom: -4px; left: 0; right: 0;
-  height: 1.5px; background: var(--accent); transform: scaleX(0);
-  transition: transform 0.2s; transform-origin: left;
-}
+.nav__links a { font-size: 0.82rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); text-decoration: none; transition: color 0.2s; position: relative; }
+.nav__links a::after { content: ''; position: absolute; bottom: -4px; left: 0; right: 0; height: 1.5px; background: var(--accent); transform: scaleX(0); transition: transform 0.2s; transform-origin: left; }
 .nav__links a:hover { color: var(--forest); }
 .nav__links a:hover::after { transform: scaleX(1); }
-
-.nav__cta {
-  background: var(--forest) !important;
-  color: var(--cream) !important;
-  padding: 0.55rem 1.4rem !important;
-  border-radius: 6px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.02em !important;
-  transition: background 0.2s, transform 0.15s !important;
-}
+.nav__cta { background: var(--forest) !important; color: var(--cream) !important; padding: 0.55rem 1.4rem !important; border-radius: 6px !important; font-weight: 600 !important; transition: background 0.2s, transform 0.15s !important; }
 .nav__cta::after { display: none !important; }
 .nav__cta:hover { background: var(--forest-90) !important; transform: translateY(-1px); }
-
 .nav__mobile { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; }
 .nav__mobile svg { width: 24px; height: 24px; color: var(--forest); }
 
-/* ══════════════════════
-   HERO
-   ══════════════════════ */
-.hero {
-  min-height: 100vh;
-  display: flex; align-items: center;
-  padding: calc(72px + 4rem) 2rem 4rem;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Organic gradient — soft sage/gold glow */
-.hero__bg {
-  position: absolute; inset: 0; z-index: 0;
-  background:
-    radial-gradient(ellipse 70% 50% at 20% 80%, rgba(94,161,53,0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 40% at 80% 20%, rgba(200,168,75,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(94,161,53,0.05) 0%, transparent 50%);
-}
-
-/* Decorative grid lines */
-.hero__grid {
-  position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  opacity: 0.04;
-  background-image:
-    linear-gradient(var(--forest) 1px, transparent 1px),
-    linear-gradient(90deg, var(--forest) 1px, transparent 1px);
-  background-size: 80px 80px;
-  mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 0%, transparent 70%);
-  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 0%, transparent 70%);
-}
-
-.hero__inner {
-  max-width: var(--content-max);
-  margin: 0 auto;
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
-  align-items: center;
-  position: relative; z-index: 1;
-}
-
-.hero__content { max-width: 540px; }
-
-.hero__badge {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  background: var(--white);
-  border: 1px solid var(--border-strong);
-  padding: 0.4rem 1rem 0.4rem 0.6rem;
-  border-radius: 100px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin-bottom: 2rem;
-  animation: fadeUp 0.6s ease both;
-}
-.hero__badge-dot {
-  width: 7px; height: 7px;
-  background: var(--accent);
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-
-.hero__title {
-  font-family: var(--font-display);
-  font-size: clamp(2.8rem, 5.5vw, 4.8rem);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-  color: var(--forest);
-  margin-bottom: 1.5rem;
-  animation: fadeUp 0.6s 0.1s ease both;
-}
-.hero__title .em-gold {
-  color: var(--gold);
-  font-style: italic;
-  font-weight: 400;
-}
+/* HERO */
+.hero { min-height: 100vh; display: flex; align-items: center; padding: calc(72px + 5rem) 2rem 5rem; position: relative; overflow: hidden; text-align: center; }
+.hero__bg { position: absolute; inset: 0; z-index: 0; background: radial-gradient(ellipse 70% 50% at 20% 80%, rgba(94,161,53,0.08) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 80% 20%, rgba(200,168,75,0.06) 0%, transparent 60%), radial-gradient(ellipse 80% 60% at 50% 110%, rgba(94,161,53,0.05) 0%, transparent 50%); }
+.hero__grid { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.04; background-image: linear-gradient(var(--forest) 1px, transparent 1px), linear-gradient(90deg, var(--forest) 1px, transparent 1px); background-size: 80px 80px; mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 0%, transparent 70%); -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 0%, transparent 70%); }
+.hero__inner { max-width: 800px; margin: 0 auto; position: relative; z-index: 1; }
+.hero__badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--white); border: 1px solid var(--border-strong); padding: 0.4rem 1rem 0.4rem 0.6rem; border-radius: 100px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 2rem; animation: fadeUp 0.6s ease both; }
+.hero__badge-dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+.hero__title { font-family: var(--font-display); font-size: clamp(3rem, 6vw, 5.5rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.03em; color: var(--forest); margin-bottom: 1.5rem; animation: fadeUp 0.6s 0.1s ease both; }
+.hero__title .em-gold { color: var(--gold); font-style: italic; font-weight: 400; }
 .hero__title .em-green { color: var(--accent); }
+.hero__desc { font-size: 1.15rem; line-height: 1.7; color: var(--text-secondary); max-width: 580px; margin: 0 auto 3rem; animation: fadeUp 0.6s 0.2s ease both; }
+.hero__actions { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; animation: fadeUp 0.6s 0.3s ease both; }
 
-.hero__desc {
-  font-size: 1.1rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
-  margin-bottom: 2rem;
-  max-width: 460px;
-  animation: fadeUp 0.6s 0.2s ease both;
-}
-
-.hero__stats {
-  display: flex; gap: 2.5rem;
-  margin-bottom: 2.5rem;
-  animation: fadeUp 0.6s 0.3s ease both;
-}
-.hero__stat-num {
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--forest);
-  line-height: 1;
-}
-.hero__stat-label {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-top: 0.25rem;
-  letter-spacing: 0.02em;
-}
-
-.hero__actions {
-  display: flex; gap: 1rem; flex-wrap: wrap;
-  animation: fadeUp 0.6s 0.4s ease both;
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  padding: 0.85rem 1.8rem;
-  font-family: var(--font-body);
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: 8px;
-  text-decoration: none;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  letter-spacing: 0.01em;
-}
-.btn--primary {
-  background: var(--forest);
-  color: var(--cream);
-}
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.85rem 1.8rem; font-family: var(--font-body); font-size: 0.9rem; font-weight: 600; border-radius: 8px; text-decoration: none; cursor: pointer; border: none; transition: all 0.2s; letter-spacing: 0.01em; }
+.btn--primary { background: var(--forest); color: var(--cream); }
 .btn--primary:hover { background: var(--forest-90); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.btn--secondary {
-  background: transparent;
-  color: var(--forest);
-  border: 1.5px solid var(--border-strong);
-}
+.btn--secondary { background: transparent; color: var(--forest); border: 1.5px solid var(--border-strong); }
 .btn--secondary:hover { border-color: var(--forest); background: rgba(30,45,20,0.03); }
-.btn__arrow {
-  transition: transform 0.2s;
-  font-size: 1.1em;
-}
+.btn__arrow { transition: transform 0.2s; }
 .btn:hover .btn__arrow { transform: translateX(3px); }
 
-/* Hero right side — app preview */
-.hero__visual {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  animation: fadeUp 0.8s 0.3s ease both;
-}
-
-.hero__phone {
-  width: 280px;
-  background: var(--white);
-  border-radius: 28px;
-  box-shadow: var(--shadow-xl), 0 0 0 1px var(--border);
-  overflow: hidden;
-  position: relative;
-  z-index: 2;
-}
-.hero__phone-notch {
-  width: 120px; height: 28px;
-  background: var(--forest);
-  border-radius: 0 0 16px 16px;
-  margin: 0 auto;
-}
-.hero__phone-screen {
-  padding: 1.5rem 1.25rem 2rem;
-}
-.hero__phone-logo {
-  text-align: center;
-  margin-bottom: 1.25rem;
-}
-.hero__phone-logo-icon {
-  width: 52px; height: 52px;
-  background: var(--forest);
-  border-radius: 14px;
-  margin: 0 auto 0.75rem;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.3rem;
-  color: var(--gold);
-}
-.hero__phone-logo-icon .x { color: var(--accent); }
-.hero__phone-app-name {
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--forest);
-}
-.hero__phone-app-name .by {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-left: 0.4rem;
-}
-
-/* Simulated app card inside phone */
-.phone-card {
-  background: var(--cream);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 0.75rem;
-}
-.phone-card__header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 0.6rem;
-}
-.phone-card__label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.phone-card__badge {
-  font-size: 0.58rem;
-  font-weight: 600;
-  padding: 0.15rem 0.5rem;
-  border-radius: 100px;
-  background: rgba(94,161,53,0.12);
-  color: var(--accent);
-}
-.phone-card__value {
-  font-family: var(--font-display);
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--forest);
-}
-.phone-card__sub {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  margin-top: 0.15rem;
-}
-.phone-card--row {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
-}
-.phone-card--row .phone-card { margin-bottom: 0; }
-
-/* Floating badge behind phone */
-.hero__float {
-  position: absolute;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
-  box-shadow: var(--shadow-md);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-  z-index: 3;
-  animation: float 6s ease-in-out infinite;
-}
-.hero__float--top { top: 8%; right: -10%; animation-delay: 0s; }
-.hero__float--bottom { bottom: 12%; left: -5%; animation-delay: 3s; }
-.hero__float-icon { font-size: 1.2rem; margin-right: 0.4rem; vertical-align: -0.1em; }
-
-
-/* ══════════════════════
-   SECTION TYPOGRAPHY
-   ══════════════════════ */
+/* SECTIONS */
 .section { padding: var(--section-pad) 0; position: relative; z-index: 1; }
 .section--surface { background: var(--white); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .section--forest { background: var(--forest); color: var(--cream); }
 .section--forest .section__label { color: var(--gold); }
 .section--forest .section__label::before { background: var(--gold); }
+.section__label { font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem; }
+.section__label::before { content: ''; display: block; width: 28px; height: 1.5px; background: var(--accent); }
+.section__title { font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 1rem; }
+.section__desc { font-size: 1.05rem; color: var(--text-secondary); max-width: 560px; line-height: 1.7; }
 
-.section__label {
-  font-size: 0.68rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-  font-weight: 600;
-  margin-bottom: 1rem;
-  display: flex; align-items: center; gap: 0.75rem;
-}
-.section__label::before {
-  content: '';
-  display: block;
-  width: 28px; height: 1.5px;
-  background: var(--accent);
-}
+/* THREE PRODUCTS */
+.products { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 3.5rem; }
+.product-card { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem 2rem 2rem; position: relative; overflow: hidden; transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s; opacity: 0; transform: translateY(20px); }
+.product-card.visible { opacity: 1; transform: translateY(0); transition: opacity 0.5s, transform 0.5s, box-shadow 0.25s, border-color 0.25s; }
+.product-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.product-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+.product-card--otkup::before { background: var(--gold); } .product-card--otkup:hover { border-color: var(--gold); }
+.product-card--gazd::before { background: var(--accent); } .product-card--gazd:hover { border-color: var(--accent); }
+.product-card--ggap::before { background: var(--forest); } .product-card--ggap:hover { border-color: var(--forest-80); }
+.product-card__icon { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 1.5rem; }
+.product-card--otkup .product-card__icon { background: var(--gold-pale); }
+.product-card--gazd .product-card__icon { background: var(--accent-pale); }
+.product-card--ggap .product-card__icon { background: var(--cream-deep); }
+.product-card__name { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; color: var(--forest); margin-bottom: 0.25rem; }
+.product-card__tagline { font-size: 0.82rem; color: var(--text-muted); font-weight: 500; margin-bottom: 1.25rem; }
+.product-card__desc { font-size: 0.88rem; color: var(--text-secondary); line-height: 1.65; margin-bottom: 1.5rem; }
+.product-card__features { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.75rem; }
+.product-card__features li { font-size: 0.82rem; color: var(--text-secondary); display: flex; gap: 0.5rem; align-items: flex-start; }
+.product-card__features li::before { content: '→'; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+.product-card__link { font-size: 0.82rem; font-weight: 600; color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; transition: gap 0.2s; }
+.product-card__link:hover { gap: 0.6rem; }
+.products__note { text-align: center; margin-top: 2.5rem; font-size: 0.9rem; color: var(--text-muted); max-width: 620px; margin-left: auto; margin-right: auto; }
 
-.section__title {
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  margin-bottom: 1rem;
-}
-
-.section__desc {
-  font-size: 1.05rem;
-  color: var(--text-secondary);
-  max-width: 560px;
-  line-height: 1.7;
-}
-
-/* ══════════════════════
-   PAIN / PROBLEM
-   ══════════════════════ */
-.pain-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--border-strong);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-top: 3.5rem;
-}
-.pain-card {
-  background: var(--white);
-  padding: 2rem;
-  position: relative;
-  opacity: 0; transform: translateY(16px);
-  transition: opacity 0.5s, transform 0.5s, background 0.2s;
-}
+/* PAIN */
+.pain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border-strong); border-radius: 12px; overflow: hidden; margin-top: 3.5rem; }
+.pain-card { background: var(--white); padding: 2rem; opacity: 0; transform: translateY(16px); transition: opacity 0.5s, transform 0.5s, background 0.2s; }
 .pain-card.visible { opacity: 1; transform: translateY(0); }
 .pain-card:hover { background: var(--cream); }
-.pain-card__num {
-  font-family: var(--font-display);
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--cream-deep);
-  line-height: 1;
-  margin-bottom: 0.75rem;
-}
-.pain-card h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--forest);
-  margin-bottom: 0.5rem;
-}
-.pain-card p {
-  font-size: 0.87rem;
-  color: var(--text-muted);
-  line-height: 1.65;
-}
+.pain-card__num { font-family: var(--font-display); font-size: 2.5rem; font-weight: 700; color: var(--cream-deep); line-height: 1; margin-bottom: 0.75rem; }
+.pain-card h3 { font-size: 0.95rem; font-weight: 600; color: var(--forest); margin-bottom: 0.5rem; }
+.pain-card p { font-size: 0.87rem; color: var(--text-muted); line-height: 1.65; }
 
-/* ══════════════════════
-   WORKFLOW — vertical step-by-step
-   ══════════════════════ */
-.workflow {
-  margin-top: 3.5rem;
-  position: relative;
-}
-
-.wf-step {
-  display: grid;
-  grid-template-columns: 48px 1fr;
-  gap: 1.5rem;
-  margin-bottom: 0;
-}
-.wf-step__marker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.wf-step__num {
-  width: 48px; height: 48px;
-  background: var(--forest);
-  color: var(--gold);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  font-weight: 700;
-  flex-shrink: 0;
-  z-index: 1;
-  box-shadow: 0 0 0 5px var(--cream);
-}
-.wf-step__line {
-  width: 2px;
-  flex: 1;
-  background: linear-gradient(to bottom, var(--accent), var(--gold-pale));
-  margin: 0.25rem 0;
-  opacity: 0.4;
-}
+/* WORKFLOW */
+.workflow { margin-top: 3.5rem; }
+.wf-step { display: grid; grid-template-columns: 48px 1fr; gap: 1.5rem; }
+.wf-step__marker { display: flex; flex-direction: column; align-items: center; }
+.wf-step__num { width: 48px; height: 48px; background: var(--forest); color: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; flex-shrink: 0; z-index: 1; box-shadow: 0 0 0 5px var(--white); }
+.wf-step__line { width: 2px; flex: 1; background: linear-gradient(to bottom, var(--accent), var(--gold-pale)); margin: 0.25rem 0; opacity: 0.4; }
 .wf-step--last .wf-step__line { display: none; }
-
-.wf-step__content {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2rem;
-  margin-bottom: 1.5rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  opacity: 0; transform: translateY(16px);
-  transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s;
-}
+.wf-step__content { background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; opacity: 0; transform: translateY(16px); transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s; }
 .wf-step__content.visible { opacity: 1; transform: translateY(0); }
-.wf-step__content:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-}
+.wf-step__content:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.wf-step__role { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem; }
+.wf-step__content h3 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; color: var(--forest); margin-bottom: 0.6rem; }
+.wf-step__content p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; }
+.wf-step__content strong { color: var(--forest); font-weight: 600; }
+.wf-step__tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 1rem; }
+.wf-step__tags span { font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.7rem; border-radius: 100px; background: var(--white); color: var(--text-secondary); border: 1px solid var(--border); }
 
-.wf-step__role {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 0.5rem;
-}
-.wf-step__content h3 {
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--forest);
-  margin-bottom: 0.6rem;
-}
-.wf-step__content p {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  line-height: 1.7;
-}
-.wf-step__content strong {
-  color: var(--forest);
-  font-weight: 600;
-}
-.wf-step__tags {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  margin-top: 1rem;
-}
-.wf-step__tags span {
-  font-size: 0.72rem;
-  font-weight: 500;
-  padding: 0.25rem 0.7rem;
-  border-radius: 100px;
-  background: var(--cream);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
+/* PHONE GALLERY */
+.phone-gallery { margin-top: 3rem; position: relative; overflow: hidden; }
+.phone-gallery__track { display: flex; gap: 1.5rem; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; padding: 1rem 0 2rem; scrollbar-width: none; }
+.phone-gallery__track::-webkit-scrollbar { display: none; }
+.phone-gallery__item { flex: 0 0 auto; scroll-snap-align: start; text-align: center; }
+.phone-gallery__frame { width: 220px; background: var(--white); border-radius: 24px; box-shadow: var(--shadow-lg), 0 0 0 1px var(--border); overflow: hidden; position: relative; }
+.phone-gallery__frame img { width: 100%; height: auto; display: block; }
+.phone-gallery__caption { margin-top: 0.75rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.04em; }
+.phone-gallery__hint { text-align: center; font-size: 0.72rem; color: var(--text-light); margin-top: 0.5rem; }
 
-/* Stagger workflow items */
-.wf-step:nth-child(1) .wf-step__content { transition-delay: 0.0s; }
-.wf-step:nth-child(2) .wf-step__content { transition-delay: 0.08s; }
-.wf-step:nth-child(3) .wf-step__content { transition-delay: 0.16s; }
-.wf-step:nth-child(4) .wf-step__content { transition-delay: 0.24s; }
-.wf-step:nth-child(5) .wf-step__content { transition-delay: 0.32s; }
-.wf-step:nth-child(6) .wf-step__content { transition-delay: 0.40s; }
+/* SHOWCASE */
+.showcase { margin-top: 3.5rem; }
+.showcase__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 2.5rem; }
+.showcase__card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem 1.5rem; opacity: 0; transform: translateY(12px); transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s; }
+.showcase__card.visible { opacity: 1; transform: translateY(0); }
+.showcase__card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.showcase__card-icon { font-size: 1.5rem; margin-bottom: 0.75rem; display: block; }
+.showcase__card h3 { font-size: 0.92rem; font-weight: 600; color: var(--forest); margin-bottom: 0.35rem; }
+.showcase__card p { font-size: 0.83rem; color: var(--text-muted); line-height: 1.6; }
+.showcase__highlight { background: var(--cream-warm); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 2.5rem; margin-top: 2rem; display: flex; gap: 1.5rem; align-items: center; }
+.showcase__highlight-icon { font-size: 2.5rem; flex-shrink: 0; }
+.showcase__highlight h3 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--forest); margin-bottom: 0.3rem; }
+.showcase__highlight p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+.section--forest .showcase__card { background: rgba(247,244,238,0.07); border-color: rgba(255,255,255,0.1); }
+.section--forest .showcase__card:hover { background: rgba(247,244,238,0.12); border-color: rgba(255,255,255,0.2); }
+.section--forest .showcase__card h3 { color: var(--cream); }
+.section--forest .showcase__card p { color: rgba(247,244,238,0.6); }
+.section--forest .showcase__highlight { background: rgba(247,244,238,0.06); border-color: rgba(255,255,255,0.1); }
+.section--forest .showcase__highlight h3 { color: var(--gold-pale); }
+.section--forest .showcase__highlight p { color: rgba(247,244,238,0.65); }
 
-/* ══════════════════════
-   ECOSYSTEM / AgriX
-   ══════════════════════ */
-.eco-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-top: 3.5rem;
-}
-.eco-card {
-  background: rgba(247,244,238,0.6);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 12px;
-  padding: 2.5rem 2rem;
-  position: relative;
-  overflow: hidden;
-  opacity: 0; transform: translateY(16px);
-  transition: opacity 0.5s, transform 0.5s;
-}
-.eco-card.visible { opacity: 1; transform: translateY(0); }
-.eco-card--full { grid-column: 1 / -1; }
-
-.eco-card__icon {
-  width: 48px; height: 48px;
-  background: rgba(94,161,53,0.12);
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.3rem;
-  margin-bottom: 1.25rem;
-}
-.eco-card h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-.eco-card p {
-  font-size: 0.9rem;
-  color: rgba(247,244,238,0.6);
-  line-height: 1.65;
-}
-
-/* ══════════════════════
-   FEATURES GRID
-   ══════════════════════ */
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  margin-top: 3.5rem;
-}
-.feature {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2rem 1.75rem;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-  opacity: 0; transform: translateY(12px);
-  transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s;
-}
+/* FEATURES */
+.features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 3.5rem; }
+.feature { background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 1.75rem; opacity: 0; transform: translateY(12px); transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s; }
 .feature.visible { opacity: 1; transform: translateY(0); }
-.feature:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-2px);
-}
-.feature__icon {
-  width: 44px; height: 44px;
-  background: var(--cream);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.3rem;
-  margin-bottom: 1.25rem;
-}
-.feature h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--forest);
-  margin-bottom: 0.4rem;
-}
-.feature p {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  line-height: 1.65;
-}
+.feature:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
+.feature__icon { width: 44px; height: 44px; background: var(--white); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 1.25rem; }
+.feature h3 { font-size: 0.95rem; font-weight: 600; color: var(--forest); margin-bottom: 0.4rem; }
+.feature p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.65; }
 
-/* ══════════════════════
-   COMPARISON TABLE
-   ══════════════════════ */
-.compare-wrap {
-  margin-top: 3.5rem;
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--white);
-}
-.compare-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 600px;
-}
+/* COMPARISON */
+.compare-wrap { margin-top: 3.5rem; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); background: var(--white); }
+.compare-table { width: 100%; border-collapse: collapse; min-width: 600px; }
 .compare-table thead { background: var(--cream); }
-.compare-table th {
-  padding: 1rem 1.5rem;
-  text-align: left;
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
-}
-.compare-table th:last-child {
-  color: var(--accent);
-  background: rgba(94,161,53,0.04);
-}
-.compare-table td {
-  padding: 0.95rem 1.5rem;
-  font-size: 0.88rem;
-  border-bottom: 1px solid var(--border);
-}
+.compare-table th { padding: 1rem 1.5rem; text-align: left; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.compare-table th:last-child { color: var(--accent); background: rgba(94,161,53,0.04); }
+.compare-table td { padding: 0.95rem 1.5rem; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
 .compare-table tbody tr:last-child td { border-bottom: none; }
 .compare-table td:first-child { font-weight: 500; color: var(--text-secondary); }
 .compare-table td:nth-child(2) { color: var(--text-light); }
-.compare-table td:last-child {
-  color: var(--accent);
-  font-weight: 600;
-  background: rgba(94,161,53,0.02);
-}
+.compare-table td:last-child { color: var(--accent); font-weight: 600; background: rgba(94,161,53,0.02); }
 .compare-table tbody tr { transition: background 0.15s; }
 .compare-table tbody tr:hover { background: var(--cream); }
-
 .x-mark { color: #c0392b; }
-.check { color: var(--accent); }
 
-/* ══════════════════════
-   DAY IN LIFE / TIMELINE
-   ══════════════════════ */
-.timeline {
-  position: relative;
-  padding-left: 3rem;
-  margin-top: 3.5rem;
-}
-.timeline::before {
-  content: '';
-  position: absolute; left: 6px; top: 0; bottom: 0;
-  width: 2px;
-  background: linear-gradient(to bottom, var(--accent), var(--gold), var(--accent-pale));
-  border-radius: 1px;
-}
-.timeline__item {
-  position: relative;
-  margin-bottom: 2.5rem;
-  opacity: 0; transform: translateX(-12px);
-  transition: opacity 0.5s, transform 0.5s;
-}
+/* TIMELINE */
+.timeline { position: relative; padding-left: 3rem; margin-top: 3.5rem; }
+.timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--accent), var(--gold), var(--accent-pale)); border-radius: 1px; }
+.timeline__item { position: relative; margin-bottom: 2.5rem; opacity: 0; transform: translateX(-12px); transition: opacity 0.5s, transform 0.5s; }
 .timeline__item.visible { opacity: 1; transform: translateX(0); }
 .timeline__item:last-child { margin-bottom: 0; }
-
-.timeline__dot {
-  position: absolute; left: -3rem; top: 0.35rem;
-  width: 14px; height: 14px;
-  background: var(--white);
-  border: 3px solid var(--accent);
-  border-radius: 50%;
-  z-index: 1;
-}
-
-.timeline__time {
-  font-size: 0.72rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--accent);
-  font-weight: 600;
-  margin-bottom: 0.35rem;
-}
-.timeline__item p {
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-  line-height: 1.7;
-}
+.timeline__dot { position: absolute; left: -3rem; top: 0.35rem; width: 14px; height: 14px; background: var(--white); border: 3px solid var(--accent); border-radius: 50%; z-index: 1; }
+.timeline__time { font-size: 0.72rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 0.35rem; }
+.timeline__item p { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.7; }
 .timeline__item strong { color: var(--forest); font-weight: 600; }
 
-/* ══════════════════════
-   PRICING
-   ══════════════════════ */
-.pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  margin-top: 3.5rem;
-}
-.plan {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2.25rem 2rem;
-  position: relative;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
+/* PRICING */
+.pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 3.5rem; }
+.plan { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 2.25rem 2rem; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
 .plan:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-
-.plan--featured {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), var(--shadow-md);
-}
-.plan__badge {
-  position: absolute; top: -1px; right: 1.5rem;
-  background: var(--accent);
-  color: white;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 0.3rem 0.75rem;
-  border-radius: 0 0 6px 6px;
-}
-
-.plan__tier {
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-.plan h3 {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--forest);
-  margin-bottom: 0.25rem;
-}
-.plan__limit {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-bottom: 1.5rem;
-}
-.plan__price {
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--gold);
-  margin-bottom: 1.75rem;
-  padding-bottom: 1.75rem;
-  border-bottom: 1px solid var(--border);
-}
-.plan__features {
-  list-style: none;
-  display: flex; flex-direction: column; gap: 0.65rem;
-  margin-bottom: 2rem;
-}
-.plan__features li {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  display: flex; gap: 0.6rem; align-items: flex-start;
-}
-.plan__features li::before {
-  content: '✓';
-  color: var(--accent);
-  font-weight: 700;
-  flex-shrink: 0;
-  margin-top: 0.05rem;
-}
-
-.plan__cta {
-  display: block;
-  width: 100%;
-  padding: 0.8rem;
-  text-align: center;
-  border-radius: 8px;
-  font-family: var(--font-body);
-  font-size: 0.88rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.2s;
-  border: 1.5px solid var(--border-strong);
-  background: transparent;
-  color: var(--forest);
-  cursor: pointer;
-}
+.plan--featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-md); }
+.plan__badge { position: absolute; top: -1px; right: 1.5rem; background: var(--accent); color: white; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; padding: 0.3rem 0.75rem; border-radius: 0 0 6px 6px; }
+.plan__color { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 12px 12px 0 0; }
+.plan__color--gold { background: var(--gold); } .plan__color--green { background: var(--accent); } .plan__color--forest { background: var(--forest); }
+.plan__tier { font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem; }
+.plan h3 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; color: var(--forest); margin-bottom: 0.25rem; }
+.plan__for { font-size: 0.82rem; color: var(--accent); font-weight: 500; margin-bottom: 0.5rem; }
+.plan__limit { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+.plan__price { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; color: var(--gold); margin-bottom: 1.75rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--border); }
+.plan__features { list-style: none; display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 2rem; }
+.plan__features li { font-size: 0.85rem; color: var(--text-secondary); display: flex; gap: 0.6rem; align-items: flex-start; }
+.plan__features li::before { content: '✓'; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+.plan__cta { display: block; width: 100%; padding: 0.8rem; text-align: center; border-radius: 8px; font-family: var(--font-body); font-size: 0.88rem; font-weight: 600; text-decoration: none; transition: all 0.2s; border: 1.5px solid var(--border-strong); background: transparent; color: var(--forest); cursor: pointer; }
 .plan__cta:hover { background: var(--forest); border-color: var(--forest); color: var(--cream); }
-.plan--featured .plan__cta {
-  background: var(--forest);
-  border-color: var(--forest);
-  color: var(--cream);
-}
+.plan--featured .plan__cta { background: var(--forest); border-color: var(--forest); color: var(--cream); }
 .plan--featured .plan__cta:hover { background: var(--forest-80); }
 
-/* ══════════════════════
-   FINAL CTA
-   ══════════════════════ */
-.cta-final {
-  padding: var(--section-pad) 0;
-  text-align: center;
-  position: relative; z-index: 1;
-}
-.cta-final__inner {
-  max-width: 640px;
-  margin: 0 auto;
-}
-.cta-final .section__title {
-  font-size: clamp(2.2rem, 4vw, 3.2rem);
-  margin-bottom: 1rem;
-}
-.cta-final .section__desc {
-  max-width: 480px;
-  margin: 0 auto 2.5rem;
-  text-align: center;
-}
-.cta-final__actions {
-  display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
-  margin-bottom: 3rem;
-}
-.cta-final__contact {
-  display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;
-}
-.cta-final__contact a {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: color 0.2s;
-}
+/* CTA + FOOTER */
+.cta-final { padding: var(--section-pad) 0; text-align: center; position: relative; z-index: 1; }
+.cta-final__inner { max-width: 640px; margin: 0 auto; }
+.cta-final .section__title { font-size: clamp(2.2rem, 4vw, 3.2rem); margin-bottom: 1rem; }
+.cta-final .section__desc { max-width: 480px; margin: 0 auto 2.5rem; text-align: center; }
+.cta-final__actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 3rem; }
+.cta-final__contact { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; }
+.cta-final__contact a { font-size: 0.85rem; color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
 .cta-final__contact a:hover { color: var(--forest); }
-
-/* ══════════════════════
-   FOOTER
-   ══════════════════════ */
-.footer {
-  padding: 2rem 2rem;
-  border-top: 1px solid var(--border);
-  position: relative; z-index: 1;
-}
-.footer__inner {
-  max-width: var(--content-max);
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-.footer__brand {
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--forest);
-}
-.footer__brand .app { color: var(--accent); }
+.footer { padding: 2rem; border-top: 1px solid var(--border); position: relative; z-index: 1; }
+.footer__inner { max-width: var(--content-max); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.footer__brand { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; color: var(--forest); }
+.footer__brand .green { color: var(--accent); }
 .footer p { font-size: 0.78rem; color: var(--text-light); }
 
-/* ══════════════════════
-   ANIMATIONS
-   ══════════════════════ */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-/* ══════════════════════
-   RESPONSIVE
-   ══════════════════════ */
 @media (max-width: 1024px) {
-  .hero__inner { grid-template-columns: 1fr; gap: 3rem; }
-  .hero__visual { order: -1; }
-  .hero__content { max-width: 100%; text-align: center; margin: 0 auto; }
-  .hero__desc { margin-left: auto; margin-right: auto; }
-  .hero__stats { justify-content: center; }
-  .hero__actions { justify-content: center; }
-  .hero__float { display: none; }
-  .eco-grid { grid-template-columns: 1fr; }
+  .products { grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto; }
+  .showcase__grid { grid-template-columns: 1fr 1fr; }
+  .showcase__highlight { flex-direction: column; text-align: center; }
 }
-
 @media (max-width: 768px) {
   :root { --section-pad: 4rem; }
-  .nav__links { display: none; }
-  .nav__mobile { display: block; }
-  .nav__inner { height: 60px; }
-  .pain-grid { grid-template-columns: 1fr; }
-  .features-grid { grid-template-columns: 1fr; }
+  .nav__links { display: none; } .nav__mobile { display: block; } .nav__inner { height: 60px; }
+  .pain-grid, .features-grid, .showcase__grid { grid-template-columns: 1fr; }
   .pricing-grid { grid-template-columns: 1fr; max-width: 400px; margin-left: auto; margin-right: auto; }
   .hero { padding-top: calc(60px + 3rem); }
-  .hero__phone { width: 240px; }
+  .phone-gallery__frame { width: 180px; }
 }
 
-@media (max-width: 480px) {
-  .hero__stats { flex-direction: column; gap: 1rem; align-items: center; }
-  .btn { padding: 0.75rem 1.4rem; font-size: 0.85rem; }
-}
-
-/* Stagger delays for animated elements */
-.pain-card:nth-child(1) { transition-delay: 0.05s; }
-.pain-card:nth-child(2) { transition-delay: 0.10s; }
-.pain-card:nth-child(3) { transition-delay: 0.15s; }
-.pain-card:nth-child(4) { transition-delay: 0.20s; }
-.pain-card:nth-child(5) { transition-delay: 0.25s; }
-.pain-card:nth-child(6) { transition-delay: 0.30s; }
-.feature:nth-child(n) { transition-delay: calc(var(--i, 0) * 0.06s); }
+.pain-card:nth-child(1){transition-delay:.05s}.pain-card:nth-child(2){transition-delay:.1s}.pain-card:nth-child(3){transition-delay:.15s}.pain-card:nth-child(4){transition-delay:.2s}.pain-card:nth-child(5){transition-delay:.25s}.pain-card:nth-child(6){transition-delay:.3s}
+.wf-step:nth-child(1) .wf-step__content{transition-delay:0s}.wf-step:nth-child(2) .wf-step__content{transition-delay:.08s}.wf-step:nth-child(3) .wf-step__content{transition-delay:.16s}.wf-step:nth-child(4) .wf-step__content{transition-delay:.24s}.wf-step:nth-child(5) .wf-step__content{transition-delay:.32s}.wf-step:nth-child(6) .wf-step__content{transition-delay:.4s}
+.product-card:nth-child(1){transition-delay:.05s}.product-card:nth-child(2){transition-delay:.15s}.product-card:nth-child(3){transition-delay:.25s}
+.feature:nth-child(n){transition-delay:calc(var(--i,0)*.06s)}
+.showcase__card:nth-child(1){transition-delay:.05s}.showcase__card:nth-child(2){transition-delay:.1s}.showcase__card:nth-child(3){transition-delay:.15s}.showcase__card:nth-child(4){transition-delay:.2s}.showcase__card:nth-child(5){transition-delay:.25s}.showcase__card:nth-child(6){transition-delay:.3s}
 </style>
 </head>
 <body>
 
-<!-- ═══════════ NAV ═══════════ -->
-<nav class="nav" id="nav">
-  <div class="nav__inner">
-    <a class="nav__brand" href="#">
-      <div class="nav__icon">A<span class="x">X</span></div>
-      <span class="nav__wordmark">OtkupApp</span>
-    </a>
-    <ul class="nav__links">
-      <li><a href="#resenje">Rešenje</a></li>
-      <li><a href="#funkcije">Funkcije</a></li>
-      <li><a href="#cene">Cene</a></li>
-      <li><a href="#kontakt" class="nav__cta">Kontakt</a></li>
-    </ul>
-    <button class="nav__mobile" aria-label="Menu" onclick="document.querySelector('.nav__links').classList.toggle('nav__links--open')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
+<nav class="nav" id="nav"><div class="nav__inner">
+  <a class="nav__brand" href="#"><div class="nav__icon">A<span class="x">X</span></div><span class="nav__wordmark">Agri<span class="green">X</span></span></a>
+  <ul class="nav__links">
+    <li><a href="#proizvodi">Proizvodi</a></li>
+    <li><a href="#otkup">Otkup</a></li>
+    <li><a href="#gazdinstvo">Gazdinstvo</a></li>
+    <li><a href="#ggap">GGAP</a></li>
+    <li><a href="#kontakt" class="nav__cta">Kontakt</a></li>
+  </ul>
+  <button class="nav__mobile" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+</div></nav>
+
+<section class="hero"><div class="hero__bg"></div><div class="hero__grid"></div><div class="hero__inner">
+  <div class="hero__badge"><span class="hero__badge-dot"></span>AgriX Platforma</div>
+  <h1 class="hero__title">Tri proizvoda.<br><span class="em-gold">Jedan</span> <span class="em-green">ekosistem.</span></h1>
+  <p class="hero__desc">Digitalna platforma za ceo poljoprivredni lanac. Upravljanje otkupom, vođenje gazdinstva i priprema za GlobalGAP — sve na jednom mestu.</p>
+  <div class="hero__actions">
+    <a href="#proizvodi" class="btn btn--primary">Upoznajte proizvode <span class="btn__arrow">→</span></a>
+    <a href="#kontakt" class="btn btn--secondary">Zakažite prezentaciju</a>
   </div>
-</nav>
+</div></section>
 
-<!-- ═══════════ HERO ═══════════ -->
-<section class="hero">
-  <div class="hero__bg"></div>
-  <div class="hero__grid"></div>
-  <div class="hero__inner">
-    <div class="hero__content">
-      <div class="hero__badge">
-        <span class="hero__badge-dot"></span>
-        AgriX Ekosistem
-      </div>
-      <h1 class="hero__title">
-        Od <span class="em-green">njive</span><br>
-        do <span class="em-gold">hladnjače.</span>
-      </h1>
-      <p class="hero__desc">
-        Kompletan digitalni sistem za upravljanje otkupom voća. QR skeniranje, digitalni potpis, automatska dokumentacija — od otkupnog bloka na terenu do e-fakture za kupca.
-      </p>
-      <div class="hero__stats">
-        <div>
-          <div class="hero__stat-num">30s</div>
-          <div class="hero__stat-label">Otkupni list</div>
-        </div>
-        <div>
-          <div class="hero__stat-num">100%</div>
-          <div class="hero__stat-label">Sledljivost</div>
-        </div>
-        <div>
-          <div class="hero__stat-num">0</div>
-          <div class="hero__stat-label">Papirnih blokova</div>
-        </div>
-      </div>
-      <div class="hero__actions">
-        <a href="#kontakt" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
-        <a href="#resenje" class="btn btn--secondary">Kako radi?</a>
-      </div>
+<!-- THREE PRODUCTS -->
+<section class="section section--surface" id="proizvodi"><div class="container">
+  <div class="section__label" style="justify-content:center">Platforma</div>
+  <h2 class="section__title" style="text-align:center">Tri proizvoda. Jedna platforma.</h2>
+  <p class="section__desc" style="text-align:center;margin:0 auto">Svaki proizvod radi samostalno. Zajedno čine jedinstven ekosistem — od njive do hladnjače i nazad.</p>
+  <div class="products">
+    <div class="product-card product-card--otkup">
+      <div class="product-card__icon">🏭</div>
+      <div class="product-card__name">AgriX Otkup</div>
+      <div class="product-card__tagline">Tok robe</div>
+      <p class="product-card__desc">Za otkupne firme, hladnjače i organizatore otkupa. QR skeniranje, digitalni potpis, transport, dokumentacija, SEF, banka.</p>
+      <ul class="product-card__features">
+        <li>QR otkup sa digitalnim potpisom</li>
+        <li>Otpremnice, zbirne, prijemnice</li>
+        <li>Dispečer dashboard za logistiku</li>
+        <li>E-faktura (SEF) jednim klikom</li>
+        <li>Automatski bankarski izvodi</li>
+        <li>Kartica i saldo u realnom vremenu</li>
+      </ul>
+      <a href="#otkup" class="product-card__link">Detaljnije →</a>
     </div>
-
-    <div class="hero__visual">
-      <div class="hero__float hero__float--top">
-        <span class="hero__float-icon">📊</span> Stanje u realnom vremenu
-      </div>
-      <div class="hero__float hero__float--bottom">
-        <span class="hero__float-icon">✓</span> Sinhronizovano
-      </div>
-      <div class="hero__phone">
-        <div class="hero__phone-notch"></div>
-        <div class="hero__phone-screen">
-          <div class="hero__phone-logo">
-            <div class="hero__phone-logo-icon">A<span class="x">X</span></div>
-            <div class="hero__phone-app-name">
-              OtkupApp <span class="by">by AgriX</span>
-            </div>
-          </div>
-          <div class="phone-card">
-            <div class="phone-card__header">
-              <span class="phone-card__label">Danas otkupljeno</span>
-              <span class="phone-card__badge">Uživo</span>
-            </div>
-            <div class="phone-card__value">3.200 kg</div>
-            <div class="phone-card__sub">Višnja, I klasa · 4 kooperanta</div>
-          </div>
-          <div class="phone-card--row">
-            <div class="phone-card">
-              <div class="phone-card__label">Isplaćeno</div>
-              <div class="phone-card__value" style="font-size:1.1rem;">₂₄₀K</div>
-            </div>
-            <div class="phone-card">
-              <div class="phone-card__label">Otpremnice</div>
-              <div class="phone-card__value" style="font-size:1.1rem;">7</div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="product-card product-card--gazd">
+      <div class="product-card__icon">🌱</div>
+      <div class="product-card__name">AgriX Gazdinstvo</div>
+      <div class="product-card__tagline">Tok proizvodnje</div>
+      <p class="product-card__desc">Za proizvođače. Knjiga polja koja se vodi skoro sama — agromere u 3 tapa, automatska lokacija, meteo sa spray window-om, lager sa WAC vrednošću, fiskalni QR scan.</p>
+      <ul class="product-card__features">
+        <li>Agromere — 3 tapa, bez pisanja</li>
+        <li>Automatska lokacija i parcela</li>
+        <li>Preporučena doza po hektaru</li>
+        <li>Fiskalni račun → lager</li>
+        <li>Bilans sezone po parceli i voću</li>
+        <li>11 kategorija troškova</li>
+      </ul>
+      <a href="#gazdinstvo" class="product-card__link">Detaljnije →</a>
+    </div>
+    <div class="product-card product-card--ggap">
+      <div class="product-card__icon">🛡️</div>
+      <div class="product-card__name">AgriX GGAP</div>
+      <div class="product-card__tagline">Tok usklađenosti</div>
+      <p class="product-card__desc">Compliance engine za GlobalGAP. Vodi proizvođača kroz checkpoint-e koristeći realne podatke iz proizvodnje i sledljivosti.</p>
+      <ul class="product-card__features">
+        <li>Svi checkpoint-i po standardu</li>
+        <li>Povezan sa realnim radovima</li>
+        <li>Pregled spremnosti cele mreže</li>
+        <li>Automatska dokumentacija</li>
+        <li>Priprema za eksternu kontrolu</li>
+        <li>Audit trail iz stvarnih podataka</li>
+      </ul>
+      <a href="#ggap" class="product-card__link">Zatražite demo →</a>
     </div>
   </div>
-</section>
+  <p class="products__note"><strong>AgriX Otkup</strong> i <strong>AgriX Gazdinstvo</strong> rade nezavisno. <strong>AgriX GGAP</strong> ih povezuje u compliance sloj.</p>
+</div></section>
 
-<!-- ═══════════ PROBLEM ═══════════ -->
-<section class="section section--surface">
-  <div class="container">
-    <div class="section__label">Problem</div>
-    <h2 class="section__title">Poznajete ovu situaciju?</h2>
-    <p class="section__desc">Sezona otkupa donosi haos — papiri, greške u računanju, kooperanti koji zovu, i vi koji pokušavate da spojite brojke iz deset različitih izvora.</p>
-    <div class="pain-grid">
-      <div class="pain-card">
-        <div class="pain-card__num">01</div>
-        <h3>Ručni otkupni blokovi</h3>
-        <p>Otkupljivači pišu papirne blokove na terenu. Podaci stižu u kancelariju tek uveče — ako stignu uopšte.</p>
-      </div>
-      <div class="pain-card">
-        <div class="pain-card__num">02</div>
-        <h3>Kooperanti stalno zovu</h3>
-        <p>„Koliko sam isporučio? Koliko mi dugujete?" Svaki poziv oduzima vreme koje nemate.</p>
-      </div>
-      <div class="pain-card">
-        <div class="pain-card__num">03</div>
-        <h3>Manjak — tek u hladnjači</h3>
-        <p>Koliko robe je nestalo između otkupa i prijemnice? Saznate tek na kraju, kada je kasno.</p>
-      </div>
-      <div class="pain-card">
-        <div class="pain-card__num">04</div>
-        <h3>Bankarski izvodi ručno</h3>
-        <p>Ko je platio, koji kooperant, koja faktura? Sate provodite razvrstavajući izvode koji bi mogli ići automatski.</p>
-      </div>
-      <div class="pain-card">
-        <div class="pain-card__num">05</div>
-        <h3>E-faktura — ručni unos</h3>
-        <p>SEF zahteva e-fakture, ali svaki unos je ručan, spor i podložan greškama.</p>
-      </div>
-      <div class="pain-card">
-        <div class="pain-card__num">06</div>
-        <h3>Inspekcija i sledljivost</h3>
-        <p>Parcela, kultura, pesticidi, transport — sve na papiru. Inspekcija dolazi i vi tražite po fasciklama.</p>
-      </div>
+<!-- PROBLEM -->
+<section class="section"><div class="container">
+  <div class="section__label">Problem</div>
+  <h2 class="section__title">Poznajete ovu situaciju?</h2>
+  <p class="section__desc">Sezona donosi haos — i firmama i proizvođačima. Papiri, greške, nedostatak podataka, i kontrole za koje niko nije spreman.</p>
+  <div class="pain-grid">
+    <div class="pain-card"><div class="pain-card__num">01</div><h3>Otkup na papiru</h3><p>Papirni blokovi, ručni unos, podaci stižu kasno. Greške se otkrivaju tek na kraju sezone.</p></div>
+    <div class="pain-card"><div class="pain-card__num">02</div><h3>Kooperant ne zna ništa</h3><p>Koliko je isporučio, koliko mu duguju — sve zahteva telefonski poziv.</p></div>
+    <div class="pain-card"><div class="pain-card__num">03</div><h3>Knjiga polja ne postoji</h3><p>Tretmani se upisuju naknadno ili nikako. Troškovi se gube. Niko ne zna bilans sezone.</p></div>
+    <div class="pain-card"><div class="pain-card__num">04</div><h3>Manjak i transport</h3><p>Koliko robe je nestalo između otkupa i hladnjače? Saznate tek kad je kasno.</p></div>
+    <div class="pain-card"><div class="pain-card__num">05</div><h3>SEF i banka ručno</h3><p>E-fakture, bankarski izvodi — sate provodite na poslu koji bi mogao ići automatski.</p></div>
+    <div class="pain-card"><div class="pain-card__num">06</div><h3>GlobalGAP improvizacija</h3><p>Kontrola dolazi, vi tražite po fasciklama. Dokumentacija se sprema u panici.</p></div>
+  </div>
+</div></section>
+
+<!-- AGRIX OTKUP — QR WORKFLOW -->
+<section class="section section--surface" id="otkup"><div class="container">
+  <div class="section__label">AgriX Otkup — Tok robe</div>
+  <h2 class="section__title">Jedan QR kod.<br>Ceo lanac — digitalan.</h2>
+  <p class="section__desc">Svaki korak počinje skeniranjem QR koda. Bez papira, bez grešaka. Svaki dokument se čuva automatski.</p>
+  <div class="workflow">
+    <div class="wf-step"><div class="wf-step__marker"><div class="wf-step__num">1</div><div class="wf-step__line"></div></div><div class="wf-step__content"><div class="wf-step__role">Otkupac × Kooperant</div><h3>QR skeniranje → Otkupni blok</h3><p>Otkupac skenira <strong>QR kod proizvođača</strong>. Unosi količinu, klasu, cenu — za 30 sekundi blok je generisan. <strong>Obojica potpisuju na uređaju.</strong> PDF se čuva automatski. Štampa jednim dugmetom.</p><div class="wf-step__tags"><span>QR scan</span><span>Digitalni potpis</span><span>Auto-PDF</span><span>Štampa</span></div></div></div>
+    <div class="wf-step"><div class="wf-step__marker"><div class="wf-step__num">2</div><div class="wf-step__line"></div></div><div class="wf-step__content"><div class="wf-step__role">Otkupac × Vozač</div><h3>Kamion dolazi → Čeklista za utovar</h3><p>Otkupac skenira <strong>QR kod vozača</strong> — dobija čeklistu otkupa za utovar. Čekira, potvrdi — <strong>blokovi sa težinom i ambalažom se pojavljuju na dashboard-u vozača.</strong></p><div class="wf-step__tags"><span>QR scan vozača</span><span>Auto-čeklista</span><span>Kg + ambalaža</span></div></div></div>
+    <div class="wf-step"><div class="wf-step__marker"><div class="wf-step__num">3</div><div class="wf-step__line"></div></div><div class="wf-step__content"><div class="wf-step__role">Vozač</div><h3>Obilazak stanica → Live dashboard</h3><p>Vozač obilazi više otkupaca. <strong>Dashboard raste sa svakom stanicom</strong> — kilogrami, ambalaža, kulture. Kapacitet kamiona u realnom vremenu.</p><div class="wf-step__tags"><span>Više stanica</span><span>Live dashboard</span><span>Kapacitet</span></div></div></div>
+    <div class="wf-step"><div class="wf-step__marker"><div class="wf-step__num">4</div><div class="wf-step__line"></div></div><div class="wf-step__content"><div class="wf-step__role">Vozač</div><h3>Zbirna otpremnica → Jedan tap</h3><p><strong>Izabere hladnjaču iz menija — količina i ambalaža su već izračunate.</strong> Digitalni dokumenti. Štampa iz PWA.</p><div class="wf-step__tags"><span>Dropdown hladnjača</span><span>Auto-kalkulacija</span><span>Štampa iz PWA</span></div></div></div>
+    <div class="wf-step"><div class="wf-step__marker"><div class="wf-step__num">5</div><div class="wf-step__line"></div></div><div class="wf-step__content"><div class="wf-step__role">Kancelarija</div><h3>Excel sinhronizacija → Kontrola</h3><p>Podaci se sinhronizuju u VBA/Excel platformu. <strong>Operator ne unosi ništa — samo kontroliše.</strong></p><div class="wf-step__tags"><span>Auto-sync</span><span>Real-time</span><span>Nula ručnog unosa</span></div></div></div>
+    <div class="wf-step wf-step--last"><div class="wf-step__marker"><div class="wf-step__num">6</div></div><div class="wf-step__content"><div class="wf-step__role">Sistem</div><h3>SEF → Banka → Gotovo</h3><p>Faktura jednim klikom. Banka automatski. <strong>Sledljivost: parcela → otkup → otpremnica → zbirna → prijemnica → faktura.</strong></p><div class="wf-step__tags"><span>SEF</span><span>Auto-banka</span><span>100% sledljivost</span></div></div></div>
+  </div>
+</div></section>
+
+<!-- AGRIX GAZDINSTVO -->
+<section class="section" id="gazdinstvo"><div class="container">
+  <div class="section__label">AgriX Gazdinstvo — Tok proizvodnje</div>
+  <h2 class="section__title">Knjiga polja koja se<br>vodi dok radite.</h2>
+  <p class="section__desc">Sistem pravi evidenciju dok posao traje. Agromere u 3 tapa sa automatskom lokacijom, meteo upozorenjem za vlažnost, preporučenom dozom po hektaru i pakovanju. Bez naknadnog prepisivanja.</p>
+
+  <!-- SCREENSHOT GALLERY -->
+  <div class="phone-gallery">
+    <div class="phone-gallery__track">
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6752.png" alt="Agromere" loading="lazy"></div><div class="phone-gallery__caption">Agromere — izaberi meru</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6760.png" alt="Meteo upozorenje" loading="lazy"></div><div class="phone-gallery__caption">Meteo upozorenje</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6761.png" alt="Preporučena doza" loading="lazy"></div><div class="phone-gallery__caption">Preporučena doza</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6753.png" alt="GIS parcele" loading="lazy"></div><div class="phone-gallery__caption">GIS parcele</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6754.png" alt="Meteo + Expert info" loading="lazy"></div><div class="phone-gallery__caption">Meteo + Expert info</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6755.png" alt="Knjiga polja — bilans" loading="lazy"></div><div class="phone-gallery__caption">Bilans po parceli</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6757.png" alt="Tretmani i proizvodnja" loading="lazy"></div><div class="phone-gallery__caption">Tretmani + proizvodnja</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6756.png" alt="Lager preparata" loading="lazy"></div><div class="phone-gallery__caption">Lager sa WAC vrednošću</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6758.png" alt="Troškovi" loading="lazy"></div><div class="phone-gallery__caption">11 kategorija troškova</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6749.png" alt="Kartica kooperanta" loading="lazy"></div><div class="phone-gallery__caption">Kartica kooperanta</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6759.png" alt="Fiskalni i istorija" loading="lazy"></div><div class="phone-gallery__caption">Fiskalni scan + istorija</div></div>
+      <div class="phone-gallery__item"><div class="phone-gallery__frame"><img src="img/IMG_6750.png" alt="Info tab" loading="lazy"></div><div class="phone-gallery__caption">Info — cene i status</div></div>
+    </div>
+    <div class="phone-gallery__hint">← Prevucite za više ekrana →</div>
+  </div>
+
+  <div class="showcase">
+    <div class="showcase__grid">
+      <div class="showcase__card"><span class="showcase__card-icon">👆</span><h3>Agromere — 3 tapa</h3><p>Izaberite meru (zaštita, prihrana, rezidba, zalivanje, berba) i opremu (traktor, prskalica). App automatski dodaje parcelu, vremenske uslove, početak i kraj radova.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">📍</span><h3>Automatska lokacija</h3><p>Kliknete agromere — app prepoznaje GPS poziciju i dodeljuje parcelu. Bez biranja iz liste. Meteo uslovi se učitavaju odmah: temperatura, vlažnost, vetar, stanje tla.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">💊</span><h3>Preporučena doza</h3><p>Izaberete preparat iz lagera — sistem automatski računa dozu: l/ha × površina parcele = ukupna potreba. Prikazuje i koliko pakovanja treba (npr. 3 × 1l).</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">⚠️</span><h3>Meteo override</h3><p>Vlažnost 92%? App upozorava da je smanjena efikasnost preparata. Možete nastaviti na sopstvenu odgovornost — sistem beleži da je upozorenje dato.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🌤️</span><h3>Expert info po parceli</h3><p>Temperatura i vlažnost zemljišta, ET₀, solarno zračenje, UV indeks. Spray window sa tačnim satima. Prognoza za naredne dane — sve po parceli.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🧾</span><h3>Fiskalni račun → lager</h3><p>QR scan fiskalnog računa sa telefona. App prikaže stavke — izaberete koje idu u lager. Auto-prepoznavanje artikala iz prethodnih unosa. WAC cena se računa automatski.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">📊</span><h3>Bilans sezone</h3><p>Po voću i po parceli: proizvodnja, agrohemija, ostali troškovi, radni sati, rezultat. Tabela sa svim parcelama i uporednim pregledom za celu sezonu.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">💰</span><h3>11 kategorija troškova</h3><p>Gorivo, popravka, osiguranje, sertifikacija, analiza, navodnjavanje, ambalaža, radna snaga, zakup, transport, ostalo. Svaki se može vezati za parcelu ili ostaviti kao opšti.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🗺️</span><h3>GIS parcele</h3><p>Satelitska mapa (Esri/Maxar). Svaka parcela sa kulturom, površinom, KO, GGAP statusom. Meteo markeri. Expert info za svaku parcelu posebno.</p></div>
+    </div>
+    <div class="showcase__highlight">
+      <div class="showcase__highlight-icon">💡</div>
+      <div><h3>Dostupno i kao samostalan proizvod</h3><p>AgriX Gazdinstvo radi nezavisno od AgriX Otkup-a. Proizvođači ga mogu koristiti bez obzira da li su u otkupnom lancu. Unutar ekosistema, kooperanti dobijaju i karticu sa firmom (zaduženje, razduženje, saldo), aktuelne cene i status otkupa.</p></div>
     </div>
   </div>
-</section>
+</div></section>
 
-<!-- ═══════════ SOLUTION — QR WORKFLOW ═══════════ -->
-<section class="section" id="resenje">
-  <div class="container">
-    <div class="section__label">Rešenje</div>
-    <h2 class="section__title">Jedan QR kod.<br>Ceo lanac — digitalan.</h2>
-    <p class="section__desc">Svaki korak u otkupnom lancu počinje skeniranjem QR koda. Bez papira, bez prepisivanja, bez grešaka. Svaki dokument se čuva automatski u bazi firme.</p>
-
-    <div class="workflow">
-
-      <div class="wf-step">
-        <div class="wf-step__marker">
-          <div class="wf-step__num">1</div>
-          <div class="wf-step__line"></div>
-        </div>
-        <div class="wf-step__content">
-          <div class="wf-step__role">Otkupac × Kooperant</div>
-          <h3>QR skeniranje → Otkupni blok</h3>
-          <p>Otkupac na terenu skenira <strong>QR kod proizvođača</strong>. Automatski se otvaraju podaci kooperanta. Unosi količinu, klasu, cenu — i za 30 sekundi otkupni blok je generisan digitalno. <strong>Obojica potpisuju na uređaju otkupca.</strong> PDF dokument se automatski čuva u bazi firme.</p>
-          <div class="wf-step__tags">
-            <span>QR scan</span>
-            <span>Digitalni potpis</span>
-            <span>Auto-PDF</span>
-            <span>Štampa na dugme</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step__marker">
-          <div class="wf-step__num">2</div>
-          <div class="wf-step__line"></div>
-        </div>
-        <div class="wf-step__content">
-          <div class="wf-step__role">Otkupac × Vozač</div>
-          <h3>Kamion dolazi → Čeklista za utovar</h3>
-          <p>Kada kamion stigne, otkupac skenira <strong>QR kod vozača</strong>. Automatski dobija čeklistu: koji otkupni blokovi se tovare kod tog vozača. Čekira otkupe koji se utovaruju, potvrdi — <strong>i ti blokovi sa tačnom težinom i ambalažom se odmah pojavljuju u dashboard-u vozača.</strong></p>
-          <div class="wf-step__tags">
-            <span>QR scan vozača</span>
-            <span>Auto-čeklista</span>
-            <span>Kg + ambalaža</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step__marker">
-          <div class="wf-step__num">3</div>
-          <div class="wf-step__line"></div>
-        </div>
-        <div class="wf-step__content">
-          <div class="wf-step__role">Vozač</div>
-          <h3>Obilazak stanica → Sve na dashboard-u</h3>
-          <p>Vozač obilazi više otkupaca u toku dana. Svaki otkupac skenira isti QR kod vozača i dodaje svoje blokove. <strong>Vozač na svom dashboard-u vidi ukupnu količinu koja raste sa svakom stanicom</strong> — kilogrami, ambalaža, kulture. Sve u realnom vremenu.</p>
-          <div class="wf-step__tags">
-            <span>Više stanica</span>
-            <span>Live dashboard</span>
-            <span>Kapacitet kamiona</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step__marker">
-          <div class="wf-step__num">4</div>
-          <div class="wf-step__line"></div>
-        </div>
-        <div class="wf-step__content">
-          <div class="wf-step__role">Vozač</div>
-          <h3>Zbirna otpremnica → Jedan tap</h3>
-          <p>Na kraju rute, vozač pravi zbirnu otpremnica iz aplikacije. <strong>Izabere hladnjaču iz padajućeg menija — količina i ambalaža su već izračunate.</strong> Otpremnica i zbirna su digitalni dokumenti. Mogu se odštampati na dugme iz PWA ako je štampač dostupan u prostoriji otkupca.</p>
-          <div class="wf-step__tags">
-            <span>Dropdown hladnjača</span>
-            <span>Auto-kalkulacija</span>
-            <span>Štampa iz PWA</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="wf-step">
-        <div class="wf-step__marker">
-          <div class="wf-step__num">5</div>
-          <div class="wf-step__line"></div>
-        </div>
-        <div class="wf-step__content">
-          <div class="wf-step__role">Kancelarija</div>
-          <h3>Excel sinhronizacija → Kontrola</h3>
-          <p>Svi podaci sa terena se sinhronizuju u centralnu VBA/Excel platformu. Operator vidi sve otkupe, otpremnice, zbirne — <strong>ne unosi ništa ručno, samo kontroliše.</strong> Prijemnica, manjak, faktura — sve iz jednog sistema.</p>
-          <div class="wf-step__tags">
-            <span>Auto-sync</span>
-            <span>Real-time pregled</span>
-            <span>Nula ručnog unosa</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="wf-step wf-step--last">
-        <div class="wf-step__marker">
-          <div class="wf-step__num">6</div>
-        </div>
-        <div class="wf-step__content">
-          <div class="wf-step__role">Sistem</div>
-          <h3>SEF e-faktura → Banka → Gotovo</h3>
-          <p>Faktura se kreira iz sistema. Slanje na SEF jednim klikom. Bankarski izvodi se razvrstavaju automatski. <strong>Kompletna sledljivost: parcela → otkup → otpremnica → zbirna → prijemnica → faktura.</strong></p>
-          <div class="wf-step__tags">
-            <span>SEF jednim klikom</span>
-            <span>Auto-banka</span>
-            <span>Sledljivost 100%</span>
-          </div>
-        </div>
-      </div>
-
+<!-- AGRIX GGAP -->
+<section class="section section--forest" id="ggap"><div class="container">
+  <div class="section__label">AgriX GGAP — Tok usklađenosti</div>
+  <h2 class="section__title">GlobalGAP priprema koja ne<br>počinje pred kontrolu.</h2>
+  <p class="section__desc" style="color:rgba(247,244,238,0.65)">AgriX GGAP koristi stvarne podatke iz proizvodnje i sledljivosti. Nije forma — živi engine.</p>
+  <div class="showcase">
+    <div class="showcase__grid">
+      <div class="showcase__card"><span class="showcase__card-icon">✅</span><h3>Svi checkpoint-i</h3><p>Kompletan engine sa svim tačkama kontrole po GlobalGAP standardu. Korak po korak.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🔗</span><h3>Realni podaci</h3><p>Checkpoint-i se popunjavaju iz tretmana, meteo, parcela, lagera — ne iz naknadnog sećanja.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">📋</span><h3>Auto dokumentacija</h3><p>Sistem priprema proizvođača za kontrolu. Audit trail iz operativnih podataka Gazdinstva i Otkupa.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🏢</span><h3>Pregled za firmu</h3><p>Firma vidi spremnost cele mreže kooperanata. Ko je spreman, ko kasni, gde je rizik.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🌱</span><h3>Spaja obe strane</h3><p>Compliance sloj koji povezuje AgriX Otkup i AgriX Gazdinstvo. Firma i proizvođač rade svako svoje — sistem ih spaja.</p></div>
+      <div class="showcase__card"><span class="showcase__card-icon">🛡️</span><h3>Bez improvizacije</h3><p>Sistem zna šta treba jer već ima podatke iz svakodnevnog rada. Od checkpoint-a do kontrole.</p></div>
+    </div>
+    <div class="showcase__highlight">
+      <div class="showcase__highlight-icon">⚡</div>
+      <div><h3>Nije mrtva checklista</h3><p>GGAP ne traži naknadno unošenje. Koristi ono što je već vođeno u Gazdinstvu i Otkupu — tretmani, sledljivost, meteo, lager — i pravi compliance priču. Živi engine, ne forma.</p></div>
     </div>
   </div>
-</section>
+</div></section>
 
-<!-- ═══════════ ECOSYSTEM ═══════════ -->
-<section class="section section--forest">
-  <div class="container">
-    <div class="section__label">Ekosistem</div>
-    <h2 class="section__title">AgriX platforma</h2>
-    <p class="section__desc" style="color:rgba(247,244,238,0.65);">OtkupApp je srce AgriX ekosistema — VBA/Excel aplikacija za kompletno upravljanje otkupom, povezana sa mobilnom PWA platformom za teren, vozače i kooperante.</p>
-    <div class="eco-grid">
-      <div class="eco-card">
-        <div class="eco-card__icon">🖥️</div>
-        <h3>VBA/Excel platforma</h3>
-        <p>Centralni sistem u Excelu. Kompletan workflow: dokumenti, finansije, magacin, agrohemija, SEF fakture, bankarski izvodi. Operator ne unosi — kontroliše.</p>
-      </div>
-      <div class="eco-card">
-        <div class="eco-card__icon">📱</div>
-        <h3>PWA mobilna aplikacija</h3>
-        <p>Četiri uloge: Otkupac (digitalni otkupni list), Vozač (zbirne otpremnice), Kooperant (kartica, parcele, meteo), Management (izveštaji). Radi i offline.</p>
-      </div>
-      <div class="eco-card eco-card--full">
-        <div class="eco-card__icon">🌱</div>
-        <h3>Kooperant aplikacija — zaseban proizvod</h3>
-        <p>Kooperant na svom telefonu vidi karticu, parcele na satelitu, meteo prognozu, spray window, agrohemiju, knjiga polja sa bilansom proizvodnje. Fiskalni skener za privatne nabavke. Toliko moćna da je nudimo i kao zaseban proizvod za proizvođače — bez obzira da li su u otkupnom lancu.</p>
-      </div>
-    </div>
+<!-- AGRIX OTKUP FEATURES -->
+<section class="section section--surface" id="funkcije"><div class="container">
+  <div class="section__label">AgriX Otkup — Funkcije</div>
+  <h2 class="section__title">Kompletna operativa otkupa.</h2>
+  <p class="section__desc">VBA/Excel platforma sa PWA mobilnom aplikacijom. Četiri uloge: Otkupac, Vozač, Kooperant, Management.</p>
+  <div class="features-grid">
+    <div class="feature" style="--i:0"><div class="feature__icon">🍒</div><h3>Otkup na terenu</h3><p>QR skeniranje. Digitalni potpis. Otkupni list za 30 sekundi. Radi i offline.</p></div>
+    <div class="feature" style="--i:1"><div class="feature__icon">🚛</div><h3>Transport i dispečer</h3><p>Otpremnice i zbirne. Dispečer dashboard. Kapacitet kamiona. Ambalaža.</p></div>
+    <div class="feature" style="--i:2"><div class="feature__icon">📦</div><h3>Hladnjača</h3><p>Prijemnice iz zbirnih. Automatski manjak. Evidencija po kupcu.</p></div>
+    <div class="feature" style="--i:3"><div class="feature__icon">💰</div><h3>Finansije</h3><p>Keš, virman, avansi. Kartica kooperanta. PDF eksport.</p></div>
+    <div class="feature" style="--i:4"><div class="feature__icon">🏦</div><h3>Banka</h3><p>Automatsko čitanje izvoda. Razvrstavanje. Rekonsilijacija.</p></div>
+    <div class="feature" style="--i:5"><div class="feature__icon">📄</div><h3>E-faktura (SEF)</h3><p>Iz sistema. Jednim klikom. Status. Storniranje.</p></div>
+    <div class="feature" style="--i:6"><div class="feature__icon">🌱</div><h3>Agrohemija</h3><p>Doza po hektaru. Magacin. Zaduženje. Karenca.</p></div>
+    <div class="feature" style="--i:7"><div class="feature__icon">🔍</div><h3>Sledljivost</h3><p>Parcela → hladnjača. LOT. Tretmani. Audit trail.</p></div>
+    <div class="feature" style="--i:8"><div class="feature__icon">📊</div><h3>Izveštaji</h3><p>Saldo, kartica, roba, manjak, marža. Management dashboard.</p></div>
   </div>
-</section>
+</div></section>
 
-<!-- ═══════════ FEATURES ═══════════ -->
-<section class="section section--surface" id="funkcije">
-  <div class="container">
-    <div class="section__label">Funkcije</div>
-    <h2 class="section__title">Sve što vam treba.</h2>
-    <p class="section__desc">Od otkupnog lista do GlobalGAP sertifikacije — jedan sistem pokriva ceo poslovni tok.</p>
-    <div class="features-grid">
-      <div class="feature" style="--i:0">
-        <div class="feature__icon">🍒</div>
-        <h3>Otkup na terenu</h3>
-        <p>Mobilna aplikacija za otkupljivače. QR skeniranje kooperanta. Automatski otkupni list. Radi i bez interneta.</p>
-      </div>
-      <div class="feature" style="--i:1">
-        <div class="feature__icon">🚛</div>
-        <h3>Transport i otpremnice</h3>
-        <p>Otpremnice i zbirne otpremnice. Dispečer dashboard sa tri kolone. Kapacitet kamiona. Evidencija ambalaže.</p>
-      </div>
-      <div class="feature" style="--i:2">
-        <div class="feature__icon">📦</div>
-        <h3>Hladnjača i prijemnice</h3>
-        <p>Prijemnice na osnovu zbirnih otpremnica. Automatski obračun manjka. Evidencija po kupcu.</p>
-      </div>
-      <div class="feature" style="--i:3">
-        <div class="feature__icon">💰</div>
-        <h3>Finansije i plaćanja</h3>
-        <p>Keš isplate na terenu. Virman plaćanja. Avansi. Kartica kooperanta sa kompletnim prometom i PDF eksportom.</p>
-      </div>
-      <div class="feature" style="--i:4">
-        <div class="feature__icon">🏦</div>
-        <h3>Banka</h3>
-        <p>Automatsko čitanje bankarskih izvoda. Razvrstavanje transakcija po partnerima. Rekonsilijacija faktura.</p>
-      </div>
-      <div class="feature" style="--i:5">
-        <div class="feature__icon">📄</div>
-        <h3>E-faktura (SEF)</h3>
-        <p>Fakturisanje iz sistema. Slanje na SEF jednim klikom. Praćenje statusa. Storniranje. Bez ručnog unosa.</p>
-      </div>
-      <div class="feature" style="--i:6">
-        <div class="feature__icon">🌱</div>
-        <h3>Agrohemija i magacin</h3>
-        <p>Evidencija pesticida sa dozom po hektaru. Magacin ulaz/izlaz. Zaduženje kooperanta. Karenca kontrola.</p>
-      </div>
-      <div class="feature" style="--i:7">
-        <div class="feature__icon">🔍</div>
-        <h3>Sledljivost i GlobalGAP</h3>
-        <p>Od parcele do hladnjače. LOT brojevi. Tretmani i berba. Audit trail. Spremno za inspekciju — uvek.</p>
-      </div>
-      <div class="feature" style="--i:8">
-        <div class="feature__icon">🌤️</div>
-        <h3>Meteo inteligencija</h3>
-        <p>Prognoza po parceli. Risk assessment. Spray window za tretmane. Automatski 4× dnevno. Expert info: UV, ET₀, solar.</p>
-      </div>
-      <div class="feature" style="--i:9">
-        <div class="feature__icon">📊</div>
-        <h3>Izveštaji i analitika</h3>
-        <p>Saldo po stanicama. Kartica kooperanta. Otkupljena roba. Manjak. Marža po kupcu. Management dashboard.</p>
-      </div>
-      <div class="feature" style="--i:10">
-        <div class="feature__icon">🗺️</div>
-        <h3>GIS parcele</h3>
-        <p>Parcele na satelitskoj mapi. Poligon crtanje. GeoSrbija integracija. Kooperant vidi svoje parcele na telefonu.</p>
-      </div>
-      <div class="feature" style="--i:11">
-        <div class="feature__icon">📋</div>
-        <h3>Knjiga polja</h3>
-        <p>Bilans po parceli: proizvodnja vs troškovi. Tretmani, otkupi, rashodi. Fiskalni skener za privatne nabavke.</p>
-      </div>
-    </div>
-  </div>
-</section>
+<!-- COMPARISON -->
+<section class="section"><div class="container">
+  <div class="section__label">Poređenje</div>
+  <h2 class="section__title">Pre i posle AgriX</h2>
+  <div class="compare-wrap"><table class="compare-table">
+    <thead><tr><th>Proces</th><th>Danas</th><th>AgriX</th></tr></thead>
+    <tbody>
+      <tr><td>Otkupni list</td><td class="x-mark">Papir, greške</td><td>30s, QR, digitalni potpis</td></tr>
+      <tr><td>Pregled stanja</td><td class="x-mark">Kraj sezone</td><td>U realnom vremenu</td></tr>
+      <tr><td>Knjiga polja</td><td class="x-mark">Ne postoji</td><td>Automatska, iz rada</td></tr>
+      <tr><td>Tretmani</td><td class="x-mark">Naknadno, ako uopšte</td><td>Agromere — 3 tapa</td></tr>
+      <tr><td>Lager</td><td class="x-mark">Sveske, okvirno</td><td>WAC, fiskalni scan</td></tr>
+      <tr><td>Manjak</td><td class="x-mark">Tek u hladnjači</td><td>Automatski, odmah</td></tr>
+      <tr><td>E-faktura</td><td class="x-mark">Ručni unos</td><td>SEF jednim klikom</td></tr>
+      <tr><td>GlobalGAP</td><td class="x-mark">Improvizacija</td><td>Stalni compliance engine</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
 
-<!-- ═══════════ COMPARISON ═══════════ -->
-<section class="section">
-  <div class="container">
-    <div class="section__label">Poređenje</div>
-    <h2 class="section__title">Pre i posle OtkupApp</h2>
-    <div class="compare-wrap">
-      <table class="compare-table">
-        <thead>
-          <tr>
-            <th>Proces</th>
-            <th>Danas (papir + Excel)</th>
-            <th>OtkupApp</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Otkupni list</td>
-            <td class="x-mark">Ručno, papir, greške</td>
-            <td>30 sekundi, telefon</td>
-          </tr>
-          <tr>
-            <td>Pregled stanja</td>
-            <td class="x-mark">Kraj sezone, ručno</td>
-            <td>U realnom vremenu</td>
-          </tr>
-          <tr>
-            <td>Kooperant info</td>
-            <td class="x-mark">Zove telefonom, čeka</td>
-            <td>Vidi na svom telefonu</td>
-          </tr>
-          <tr>
-            <td>Manjak kontrola</td>
-            <td class="x-mark">Tek u hladnjači</td>
-            <td>Automatski, odmah</td>
-          </tr>
-          <tr>
-            <td>E-faktura (SEF)</td>
-            <td class="x-mark">Ručni unos, greške</td>
-            <td>Jednim klikom iz sistema</td>
-          </tr>
-          <tr>
-            <td>Bankarski izvod</td>
-            <td class="x-mark">Ručno sortiranje — sati</td>
-            <td>Automatsko razvrstavanje</td>
-          </tr>
-          <tr>
-            <td>Sledljivost</td>
-            <td class="x-mark">Papir, fascikle</td>
-            <td>Parcela → hladnjača, uvek</td>
-          </tr>
-          <tr>
-            <td>Agrohemija</td>
-            <td class="x-mark">Blokčići, sveske</td>
-            <td>Digitalno, sa karencom</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+<!-- DAY IN LIFE -->
+<section class="section section--surface"><div class="container--narrow">
+  <div class="section__label">Dan u sistemu</div>
+  <h2 class="section__title">Kako izgleda jedan<br>radni dan?</h2>
+  <div class="timeline">
+    <div class="timeline__item"><div class="timeline__dot"></div><div class="timeline__time">06:00 — Otkupno mesto</div><p>Otkupljivač <strong>Petar</strong> otvori AgriX Otkup. Kooperant <strong>Marko</strong> pokaže QR kod — Petar skenira, unosi 500 kg višnje, I klasa. <strong>Obojica potpisuju na ekranu.</strong> PDF se čuva automatski.</p></div>
+    <div class="timeline__item"><div class="timeline__dot"></div><div class="timeline__time">09:30 — Dolazak kamiona</div><p>Vozač <strong>Milan</strong> stiže. Petar skenira <strong>QR kod Milana</strong> — čeklista, čekira 4 bloka. <strong>3.200 kg sa ambalažom odmah na Milan-ovom dashboard-u.</strong></p></div>
+    <div class="timeline__item"><div class="timeline__dot"></div><div class="timeline__time">10:00–14:00 — Ruta</div><p>Milan obilazi još <strong>tri stanice</strong>. Dashboard: <strong>3.200 → 5.800 → 8.100 → 9.500 kg</strong>. Zbirna — <strong>hladnjača iz menija, količina izračunata.</strong></p></div>
+    <div class="timeline__item"><div class="timeline__dot"></div><div class="timeline__time">15:00 — Kancelarija</div><p>Sve u Excel sistemu. Prijemnica, manjak, faktura, SEF, banka — <strong>ceo lanac bez jednog papira.</strong></p></div>
+    <div class="timeline__item"><div class="timeline__dot"></div><div class="timeline__time">Bilo kad — Marko na polju</div><p>Marko otvara AgriX Gazdinstvo. <strong>Klikne agromere, izabere zaštitu i IMT 542</strong> — app dodaje parcelu 123, vreme (5.9°C, 92%, suvo), meri trajanje. Vidi karticu: zaduženje 17.893.073, saldo 16.261.273. <strong>Evidencija bez pisanja.</strong></p></div>
   </div>
-</section>
+</div></section>
 
-<!-- ═══════════ DAY IN LIFE ═══════════ -->
-<section class="section section--surface">
-  <div class="container--narrow">
-    <div class="section__label">Dan u sistemu</div>
-    <h2 class="section__title">Kako izgleda jedan<br>radni dan?</h2>
-    <div class="timeline">
-      <div class="timeline__item">
-        <div class="timeline__dot"></div>
-        <div class="timeline__time">06:00 — Otkupno mesto</div>
-        <p>Otkupljivač <strong>Petar</strong> otvori OtkupApp. Kooperant <strong>Marko</strong> pokaže QR kod — Petar ga skenira, automatski se učitaju svi podaci. Unosi: 500 kg višnje, I klasa, 120 din/kg. <strong>Obojica potpisuju na ekranu.</strong> PDF otkupni blok se automatski čuva u bazi. Ako treba — štampa se jednim dugmetom.</p>
-      </div>
-      <div class="timeline__item">
-        <div class="timeline__dot"></div>
-        <div class="timeline__time">09:30 — Dolazak kamiona</div>
-        <p>Vozač <strong>Milan</strong> stiže na stanicu. Petar skenira <strong>QR kod Milana</strong> — dobija čeklistu svih otkupa spremnih za utovar. Čekira 4 bloka, potvrdi. <strong>3.200 kg sa ambalažom se odmah pojavljuju na Milan-ovom dashboard-u.</strong></p>
-      </div>
-      <div class="timeline__item">
-        <div class="timeline__dot"></div>
-        <div class="timeline__time">10:00–14:00 — Ruta</div>
-        <p>Milan obilazi još <strong>tri otkupne stanice</strong>. Na svakoj stanici otkupac skenira isti QR. Milan na dashboard-u vidi kako <strong>ukupna količina raste: 3.200 → 5.800 → 8.100 → 9.500 kg</strong>. Kapacitet kamiona se puni u realnom vremenu.</p>
-      </div>
-      <div class="timeline__item">
-        <div class="timeline__dot"></div>
-        <div class="timeline__time">14:30 — Kraj rute</div>
-        <p>Milan pravi zbirnu otpremnicu u aplikaciji. <strong>Izabere hladnjaču iz menija — količina i ambalaža su već izračunate.</strong> Sve otpremnice i zbirna su digitalni dokumenti, povezani sa svakim otkupnim blokom.</p>
-      </div>
-      <div class="timeline__item">
-        <div class="timeline__dot"></div>
-        <div class="timeline__time">15:00 — Kancelarija</div>
-        <p>U Excel sistemu je sve već tu. Operator pravi prijemnicu — <strong>manjak izračunat u sekundi</strong>. Faktura kreirana, poslata na SEF jednim klikom. Bankarski izvod razvrstan automatski. <strong>Ceo lanac — od Markovog QR koda do e-fakture — bez jednog papira.</strong></p>
-      </div>
-      <div class="timeline__item">
-        <div class="timeline__dot"></div>
-        <div class="timeline__time">Bilo kad — Kooperant</div>
-        <p>Marko otvori aplikaciju. Vidi <strong>karticu, parcele na satelitu, meteo prognozu.</strong> Sve svoje otkupe, isplate, agrohemiju. <strong>Ne mora da zove nikoga — sve je na dlanu.</strong></p>
-      </div>
-    </div>
+<!-- PRICING -->
+<section class="section" id="cene"><div class="container">
+  <div class="section__label" style="justify-content:center">Cene</div>
+  <h2 class="section__title" style="text-align:center">Tri proizvoda. Vaš izbor.</h2>
+  <p class="section__desc" style="text-align:center;margin:0 auto">Svaki proizvod ima svoj model. Koristite ih zajedno ili pojedinačno.</p>
+  <div class="pricing-grid">
+    <div class="plan"><div class="plan__color plan__color--gold"></div><div class="plan__tier">Proizvod</div><h3>AgriX Otkup</h3><div class="plan__for">Za otkupne firme i hladnjače</div><div class="plan__limit">Start / Standard / Enterprise</div><div class="plan__price">Po dogovoru</div><ul class="plan__features"><li>VBA/Excel platforma</li><li>PWA mobilna aplikacija (4 uloge)</li><li>QR otkup + digitalni potpis</li><li>Transport, dispečer, dokumenti</li><li>SEF e-faktura + banka</li><li>Sledljivost od njive do hladnjače</li><li>Kooperant Core portal uključen</li><li>Obuka + sezonska podrška</li></ul><a href="#kontakt" class="plan__cta">Kontaktirajte nas</a></div>
+    <div class="plan plan--featured"><div class="plan__badge">I SAMOSTALNO</div><div class="plan__tier">Proizvod</div><h3>AgriX Gazdinstvo</h3><div class="plan__for">Za proizvođače</div><div class="plan__limit">Standalone ili deo ekosistema</div><div class="plan__price">Po dogovoru</div><ul class="plan__features"><li>Agromere — 3 tapa, automatska parcela</li><li>GIS parcele + satelitska mapa</li><li>Meteo + spray window + expert info</li><li>Preporučena doza po ha i pakovanju</li><li>Fiskalni račun → lager sa WAC</li><li>Knjiga polja + bilans sezone</li><li>11 kategorija troškova</li><li>Radi i bez AgriX Otkup-a</li></ul><a href="#kontakt" class="plan__cta">Kontaktirajte nas</a></div>
+    <div class="plan"><div class="plan__color plan__color--forest"></div><div class="plan__tier">Compliance sloj</div><h3>AgriX GGAP</h3><div class="plan__for">Za firme i proizvođače</div><div class="plan__limit">Premium layer</div><div class="plan__price">Po dogovoru</div><ul class="plan__features"><li>Svi GlobalGAP checkpoint-i</li><li>Povezan sa realnim podacima</li><li>Automatska dokumentacija</li><li>Pregled spremnosti mreže</li><li>Priprema za eksternu kontrolu</li><li>Audit trail iz Gazdinstva i Otkupa</li><li>Živi engine, ne forma</li></ul><a href="#kontakt" class="plan__cta">Kontaktirajte nas</a></div>
   </div>
-</section>
+  <p style="text-align:center;margin-top:2rem;font-size:.82rem;color:var(--text-light)">AgriX Otkup i AgriX Gazdinstvo rade nezavisno. AgriX GGAP je compliance sloj unutar platforme. Svi paketi uključuju postavljanje, obuku i podršku.</p>
+</div></section>
 
-<!-- ═══════════ PRICING ═══════════ -->
-<section class="section" id="cene">
-  <div class="container">
-    <div class="section__label" style="justify-content:center;">Cene</div>
-    <h2 class="section__title" style="text-align:center;">Prilagođeno vašem poslovanju.</h2>
-    <p class="section__desc" style="text-align:center;margin:0 auto 0;">Ne plaćate za funkcije koje vam ne trebaju. Sistem se prilagođava vašim potrebama.</p>
-    <div class="pricing-grid">
-      <div class="plan">
-        <div class="plan__tier">Paket</div>
-        <h3>Start</h3>
-        <div class="plan__limit">do 50 kooperanata</div>
-        <div class="plan__price">Po dogovoru</div>
-        <ul class="plan__features">
-          <li>Excel platforma — kompletan workflow</li>
-          <li>Mobilna aplikacija za otkupljivače</li>
-          <li>Otkupni listovi i otpremnice</li>
-          <li>Kartica kooperanta</li>
-          <li>Osnovni izveštaji</li>
-          <li>Obuka tima + podrška</li>
-        </ul>
-        <a href="#kontakt" class="plan__cta">Kontaktirajte nas</a>
-      </div>
-      <div class="plan plan--featured">
-        <div class="plan__badge">NAJPOPULARNIJI</div>
-        <div class="plan__tier">Paket</div>
-        <h3>Standard</h3>
-        <div class="plan__limit">do 200 kooperanata</div>
-        <div class="plan__price">Po dogovoru</div>
-        <ul class="plan__features">
-          <li>Sve iz Start paketa</li>
-          <li>E-faktura (SEF integracija)</li>
-          <li>Automatski bankarski izvodi</li>
-          <li>Kooperant aplikacija</li>
-          <li>Sledljivost (GlobalGAP)</li>
-          <li>Agrohemija, magacin, knjiga polja</li>
-          <li>Meteo inteligencija</li>
-          <li>Prioritetna podrška</li>
-        </ul>
-        <a href="#kontakt" class="plan__cta">Kontaktirajte nas</a>
-      </div>
-      <div class="plan">
-        <div class="plan__tier">Paket</div>
-        <h3>Enterprise</h3>
-        <div class="plan__limit">200+ kooperanata</div>
-        <div class="plan__price">Po dogovoru</div>
-        <ul class="plan__features">
-          <li>Sve iz Standard paketa</li>
-          <li>Više stanica i lokacija</li>
-          <li>Dispečer dashboard</li>
-          <li>Prilagođeni izveštaji</li>
-          <li>API integracije</li>
-          <li>Dedicated podrška</li>
-          <li>Prilagođena implementacija</li>
-        </ul>
-        <a href="#kontakt" class="plan__cta">Kontaktirajte nas</a>
-      </div>
-    </div>
-    <p style="text-align:center;margin-top:2rem;font-size:0.82rem;color:var(--text-light);">Svi paketi uključuju: postavljanje sistema, obuku vašeg tima, mobilnu aplikaciju i tehničku podršku tokom sezone. Nula troškovi infrastrukture.</p>
+<!-- CTA -->
+<section class="cta-final" id="kontakt"><div class="container"><div class="cta-final__inner">
+  <div class="section__label" style="justify-content:center">Kontakt</div>
+  <h2 class="section__title" style="text-align:center">Spremni za sledeću sezonu?</h2>
+  <p class="section__desc">Pokazaćemo vam platformu uživo — AgriX Otkup, Gazdinstvo ili GGAP — na vašim podacima. Bez obaveza.</p>
+  <div class="cta-final__actions">
+    <a href="mailto:office@agrix.rs" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
+    <a href="mailto:dusan@agrix.rs" class="btn btn--secondary">Pišite nam</a>
   </div>
-</section>
+  <div class="cta-final__contact">
+    <a href="https://www.agrix.rs">www.agrix.rs</a>
+    <a href="mailto:office@agrix.rs">office@agrix.rs</a>
+    <a href="mailto:dusan@agrix.rs">Dušan Miladinović</a>
+  </div>
+</div></div></section>
 
-<!-- ═══════════ FINAL CTA ═══════════ -->
-<section class="cta-final" id="kontakt">
-  <div class="container">
-    <div class="cta-final__inner">
-      <div class="section__label" style="justify-content:center;">Kontakt</div>
-      <h2 class="section__title" style="text-align:center;">Spremni za sezonu?</h2>
-      <p class="section__desc">Pokazaćemo vam sistem uživo, na vašim podacima, za vaše poslovanje. Bez obaveza.</p>
-      <div class="cta-final__actions">
-        <a href="mailto:office@otkupapp.rs" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
-        <a href="mailto:dusan@otkupapp.rs" class="btn btn--secondary">Pišite nam</a>
-      </div>
-      <div class="cta-final__contact">
-        <a href="https://www.otkupapp.rs">www.otkupapp.rs</a>
-        <a href="mailto:office@otkupapp.rs">office@otkupapp.rs</a>
-        <a href="mailto:dusan@otkupapp.rs">Dušan Miladinović</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════ FOOTER ═══════════ -->
-<footer class="footer">
-  <div class="footer__inner">
-    <span class="footer__brand">Otkup<span class="app">App</span></span>
-    <p>© 2026 AgriX · www.otkupapp.rs</p>
-    <p>Digitalni sistem za upravljanje otkupom voća</p>
-  </div>
-</footer>
+<footer class="footer"><div class="footer__inner">
+  <span class="footer__brand">Agri<span class="green">X</span></span>
+  <p>© 2026 AgriX · Strateški partner za poljoprivredu</p>
+  <p>AgriX Otkup · AgriX Gazdinstvo · AgriX GGAP</p>
+</div></footer>
 
 <script>
-// ── Scroll animations ──
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (e.isIntersecting) e.target.classList.add('visible');
-  });
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
-document.querySelectorAll(
-  '.pain-card, .wf-step__content, .feature, .eco-card, .timeline__item'
-).forEach(el => observer.observe(el));
-
-// ── Nav shadow on scroll ──
-const nav = document.getElementById('nav');
-window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 20);
-}, { passive: true });
-
-// ── Smooth anchor scroll offset ──
+document.querySelectorAll('.pain-card,.wf-step__content,.feature,.product-card,.showcase__card,.timeline__item').forEach(el => observer.observe(el));
+document.getElementById('nav').addEventListener('scroll', () => {}, { passive: true });
+window.addEventListener('scroll', () => { document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20); }, { passive: true });
 document.querySelectorAll('a[href^="#"]').forEach(a => {
-  a.addEventListener('click', (e) => {
-    const target = document.querySelector(a.getAttribute('href'));
-    if (target) {
-      e.preventDefault();
-      const y = target.getBoundingClientRect().top + window.pageYOffset - 80;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
+  a.addEventListener('click', e => {
+    const t = document.querySelector(a.getAttribute('href'));
+    if (t) { e.preventDefault(); window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' }); }
   });
 });
 </script>
-
 </body>
 </html>
