@@ -279,7 +279,7 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 .koop-proof {
   position: relative;
   width: 100%;
-  min-height: 760px;
+  min-height: 640px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -389,27 +389,21 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 .device-callout {
   position: absolute;
   z-index: 4;
-  max-width: 210px;
-  padding: 0.7rem 0.9rem;
-  border-radius: 12px;
-  background: rgba(247,244,238,0.10);
-  border: 1px solid rgba(255,255,255,0.14);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  max-width: 190px;
+  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(247,244,238,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   color: var(--cream);
-  font-size: 0.78rem;
-  line-height: 1.45;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  box-shadow: 0 16px 36px rgba(0,0,0,0.18);
 }
 
 .device-callout::before {
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(94,161,53,0.16);
+  display: none;
 }
 
 .device-callout--top {
