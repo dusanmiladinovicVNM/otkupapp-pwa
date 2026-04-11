@@ -312,11 +312,13 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  font-size: 0.95rem;
 }
-.koop__feature-icon--green  { background: rgba(94,161,53,0.15); }
-.koop__feature-icon--gold   { background: rgba(200,168,75,0.12); }
-.koop__feature-icon--cream  { background: rgba(247,244,238,0.07); }
+.koop__feature-icon svg {
+  display: block;
+}
+.koop__feature-icon--green  { background: rgba(94,161,53,0.12); color: var(--accent); }
+.koop__feature-icon--gold   { background: rgba(200,168,75,0.10); color: var(--gold); }
+.koop__feature-icon--cream  { background: rgba(247,244,238,0.06); color: rgba(247,244,238,0.5); }
  
 .koop__feature-text {
   font-size: 0.88rem;
