@@ -60,6 +60,38 @@
 .step:nth-child(1){transition-delay:0s}.step:nth-child(2){transition-delay:.08s}
 .step:nth-child(3){transition-delay:.16s}.step:nth-child(4){transition-delay:.24s}
 
+/* Visual steps — text + device mockup alternating */
+.vsteps { margin-top: 3rem; display: flex; flex-direction: column; gap: 3rem; }
+.vstep {
+  display: grid; grid-template-columns: 1fr 240px; gap: 3rem; align-items: center;
+}
+.vstep:nth-child(even) { grid-template-columns: 240px 1fr; }
+.vstep:nth-child(even) .vstep__device { order: -1; }
+.vstep__num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; background: var(--forest); color: var(--gold);
+  border-radius: 50%; font-family: var(--font-display); font-size: 0.95rem;
+  font-weight: 700; margin-bottom: 0.75rem;
+}
+.vstep__text h3 {
+  font-family: var(--font-display); font-size: 1.15rem; font-weight: 700;
+  color: var(--forest); margin-bottom: 0.5rem;
+}
+.vstep__text p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.7; }
+.vstep__device { width: 240px; }
+.vstep__device .device { width: 240px; padding: 10px; border-radius: 34px; }
+.vstep__device .device::before { width: 76px; height: 22px; top: 13px; }
+.vstep__device .device__screen { border-radius: 26px; }
+
+/* Section with device beside header */
+.section-with-device {
+  display: grid; grid-template-columns: 1fr 240px; gap: 3rem; align-items: start;
+}
+.section-with-device__device { width: 240px; }
+.section-with-device__device .device { width: 240px; padding: 10px; border-radius: 34px; }
+.section-with-device__device .device::before { width: 76px; height: 22px; top: 13px; }
+.section-with-device__device .device__screen { border-radius: 26px; }
+
 /* Expandable detail sections */
 .detail-grid {
   display: grid; grid-template-columns: repeat(2, 1fr);
@@ -181,6 +213,11 @@
   .steps { grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
   .steps::before { display: none; }
   .detail-card__mini-grid { grid-template-columns: 1fr; }
+  .vstep, .vstep:nth-child(even) { grid-template-columns: 1fr; }
+  .vstep__device { margin: 0 auto; order: -1 !important; }
+  .vstep:nth-child(even) .vstep__device { order: -1; }
+  .section-with-device { grid-template-columns: 1fr; }
+  .section-with-device__device { margin: 0 auto; }
 }
 @media (max-width: 768px) {
   .benefits-grid, .reasons-grid, .detail-grid { grid-template-columns: 1fr; }
@@ -233,40 +270,54 @@
 <!-- ŠTA POVEZUJE -->
 <section class="section"><div class="container">
   <div class="section__label">Jedan sistem</div>
-  <h2 class="section__title" style="max-width:560px">Teren, logistika i management u istoj operaciji.</h2>
 
-  <div class="benefits-grid">
-    <div class="benefit">
-      <div class="benefit__num">01</div>
-      <h3>Otkup na terenu</h3>
-      <p>QR kooperant, unos robe, klase, količine, cene i ambalaže. Strukturiran početak procesa bez naknadnog prepisivanja.</p>
+  <div class="section-with-device">
+    <div>
+      <h2 class="section__title" style="max-width:560px">Teren, logistika i management u istoj operaciji.</h2>
+
+      <div class="benefits-grid" style="margin-top:2rem">
+        <div class="benefit">
+          <div class="benefit__num">01</div>
+          <h3>Otkup na terenu</h3>
+          <p>QR kooperant, unos robe, klase, količine, cene i ambalaže. Strukturiran početak procesa bez naknadnog prepisivanja.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit__num">02</div>
+          <h3>Dispečer i otprema</h3>
+          <p>Pregled stanica koje čekaju, kamiona koji su raspoloživi i hladnjača ili kupaca koji traže robu. Planiranje utovara i raspodele u realnom vremenu.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit__num">03</div>
+          <h3>Dokumentacija i obračun</h3>
+          <p>Otkupni list, obračun, potpisi, štampa, PDF, fakture i SEF nastaju iz istog toka rada.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit__num">04</div>
+          <h3>Kooperanti i agrohemija</h3>
+          <p>Izdavanje agrohemije kroz izbor kooperanta, barkod, korpu i otpremnicu sa potpisima. Preporučena doza po površini parcele.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit__num">05</div>
+          <h3>Kupci i naplata</h3>
+          <p>Pregled kupaca, faktura, salda i robe po kupcima povezuje operativu sa komercijalnim delom poslovanja.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit__num">06</div>
+          <h3>Pregledi za management</h3>
+          <p>Pregled po kooperantima, otkupnim stanicama, kupcima, robi i stanju magacina daje firmi kontrolu dok proces traje.</p>
+        </div>
+      </div>
     </div>
-    <div class="benefit">
-      <div class="benefit__num">02</div>
-      <h3>Dispečer i otprema</h3>
-      <p>Pregled stanica koje čekaju, kamiona koji su raspoloživi i hladnjača ili kupaca koji traže robu. Planiranje utovara i raspodele u realnom vremenu.</p>
-    </div>
-    <div class="benefit">
-      <div class="benefit__num">03</div>
-      <h3>Dokumentacija i obračun</h3>
-      <p>Otkupni list, obračun, potpisi, štampa, PDF, fakture i SEF nastaju iz istog toka rada.</p>
-    </div>
-    <div class="benefit">
-      <div class="benefit__num">04</div>
-      <h3>Kooperanti i agrohemija</h3>
-      <p>Izdavanje agrohemije kroz izbor kooperanta, barkod, korpu i otpremnicu sa potpisima. Preporučena doza po površini parcele.</p>
-    </div>
-    <div class="benefit">
-      <div class="benefit__num">05</div>
-      <h3>Kupci i naplata</h3>
-      <p>Pregled kupaca, faktura, salda i robe po kupcima povezuje operativu sa komercijalnim delom poslovanja.</p>
-    </div>
-    <div class="benefit">
-      <div class="benefit__num">06</div>
-      <h3>Pregledi za management</h3>
-      <p>Pregled po kooperantima, otkupnim stanicama, kupcima, robi i stanju magacina daje firmi kontrolu dok proces traje.</p>
+
+    <div class="section-with-device__device">
+      <div class="device">
+        <div class="device__screen device__screen--crop-header">
+          <img src="img/QRKooperant.PNG" alt="QR skeniranje kooperanta pri otkupu voća" loading="lazy">
+        </div>
+      </div>
     </div>
   </div>
+
 </div></section>
 
 <!-- KORISTI -->
@@ -308,33 +359,75 @@
   </div>
 </div></section>
 
-<!-- KAKO FUNKCIONIŠE -->
+<!-- KAKO FUNKCIONIŠE — visual steps -->
 <section class="section" id="kako-radi"><div class="container">
   <div class="section__label">Proces</div>
-  <h2 class="section__title" style="text-align:center;max-width:480px;margin:0 auto 0">Kako funkcioniše AgriX Otkup.</h2>
+  <h2 class="section__title" style="max-width:480px">Kako funkcioniše AgriX Otkup.</h2>
 
-  <div class="steps">
-    <div class="step">
-      <div class="step__num">1</div>
-      <h3>Otkup počinje na terenu</h3>
-      <p>Otkupac skenira ili bira kooperanta, unosi robu i osnovne podatke, a sistem odmah formira digitalni trag otkupa.</p>
+  <div class="vsteps">
+
+    <div class="vstep">
+      <div class="vstep__text">
+        <div class="vstep__num">1</div>
+        <h3>Otkup počinje na terenu</h3>
+        <p>Otkupac skenira ili bira kooperanta, bira parcelu, unosi robu i osnovne podatke. Sistem odmah formira digitalni trag otkupa.</p>
+      </div>
+      <div class="vstep__device">
+        <div class="device">
+          <div class="device__screen device__screen--crop-header">
+            <img src="img/KooperantUnosParcele.PNG" alt="Unos otkupa sa kooperantom i parcelom" loading="lazy">
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="step">
-      <div class="step__num">2</div>
-      <h3>Roba ulazi u tok logistike</h3>
-      <p>Dispečer modul povezuje otkupne stanice, kamione i odredišta. Firma vidi raspoložive kapacitete i tražene količine.</p>
+
+    <div class="vstep">
+      <div class="vstep__text">
+        <div class="vstep__num">2</div>
+        <h3>Roba ulazi u tok logistike</h3>
+        <p>Otkupac skenira QR vozača i bira koji otkupi idu na kamion. Dispečer modul povezuje stanice, kamione i odredišta. Firma vidi raspoložive kapacitete i tražene količine.</p>
+      </div>
+      <div class="vstep__device">
+        <div class="device">
+          <div class="device__screen device__screen--crop-header">
+            <img src="img/OtpremaIzborBlokova.PNG" alt="Izbor otkupa za vozača i otpremu" loading="lazy">
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="step">
-      <div class="step__num">3</div>
-      <h3>Dokumentacija nastaje iz procesa</h3>
-      <p>Otkupni list, obračun, potpisi i štampa oslanjaju se na podatke koji već postoje u sistemu.</p>
+
+    <div class="vstep">
+      <div class="vstep__text">
+        <div class="vstep__num">3</div>
+        <h3>Dokumentacija nastaje iz procesa</h3>
+        <p>Otkupni list, obračun, potpisi i štampa oslanjaju se na podatke koji već postoje u sistemu. Dokument se potvrdi, odštampa ili sačuva kao PDF — jednim klikom.</p>
+      </div>
+      <div class="vstep__device">
+        <div class="device">
+          <div class="device__screen device__screen--crop-header">
+            <img src="img/OtkupniList2.PNG" alt="Otkupni list sa obračunom, potpisima i štampom" loading="lazy">
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="step">
-      <div class="step__num">4</div>
-      <h3>Komercijalni i management sloj</h3>
-      <p>Kupci, fakture, saldo, izdavanje agrohemije i pregledi po stanicama i kooperantima vode se bez izlaska iz sistema.</p>
+
+    <div class="vstep">
+      <div class="vstep__text">
+        <div class="vstep__num">4</div>
+        <h3>Komercijalni i management sloj</h3>
+        <p>Kupci, fakture, saldo, izdavanje agrohemije i pregledi po stanicama i kooperantima vode se bez izlaska iz sistema.</p>
+      </div>
+      <div class="vstep__device">
+        <div class="device">
+          <div class="device__screen device__screen--crop-header">
+            <img src="img/KupciFakture.PNG" alt="Fakture kupaca sa saldom i statusima" loading="lazy">
+          </div>
+        </div>
+      </div>
     </div>
+
   </div>
+
 </div></section>
 
 <!-- DETALJNE SEKCIJE — expandable -->
@@ -407,6 +500,13 @@
       <div class="detail-card__body"><div class="detail-card__content">
         <p>Kooperant se bira ili skenira, artikli se dodaju barkodom ili ručno, sistem formira korpu, ukupan iznos i završnu otpremnicu sa potpisima. Kada su povezane parcele, AgriX prikazuje i preporučenu dozu po površini.</p>
         <p>Firma pritom ima pregled po kooperantima, po izdatim artiklima i po stanju magacina agrohemije.</p>
+        <div style="margin-top:1.5rem;display:flex;justify-content:center">
+          <div class="device" style="width:220px;padding:10px;border-radius:32px">
+            <div class="device__screen device__screen--crop-header" style="border-radius:24px">
+              <img src="img/AgrohemijaPreporucenaDoza.PNG" alt="Preporučena doza agrohemije po površini parcele" loading="lazy">
+            </div>
+          </div>
+        </div>
       </div></div>
     </div>
 
@@ -424,6 +524,13 @@
       </button>
       <div class="detail-card__body"><div class="detail-card__content">
         <p>AgriX Otkup ne pokazuje samo šta je otkupljeno. Pokazuje i kome je roba prodata, šta je fakturisano, šta je naplaćeno i gde postoji otvoren saldo. Operativa i komercijala rade nad istim podacima.</p>
+        <div style="margin-top:1.5rem;display:flex;justify-content:center">
+          <div class="device" style="width:220px;padding:10px;border-radius:32px">
+            <div class="device__screen device__screen--crop-header" style="border-radius:24px">
+              <img src="img/KupciKolicine.PNG" alt="Predate količine po kupcima" loading="lazy">
+            </div>
+          </div>
+        </div>
       </div></div>
     </div>
 
