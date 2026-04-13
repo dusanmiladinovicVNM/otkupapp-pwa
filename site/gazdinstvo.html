@@ -10,6 +10,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="otkup.css">
+<style>
+.plan { opacity: 0; transform: translateY(14px); transition: opacity 0.5s, transform 0.5s, box-shadow 0.2s, border-color 0.2s; }
+.plan.visible { opacity: 1; transform: translateY(0); }
+@media (max-width: 768px) {
+  #paketi .section__label { justify-content: flex-start !important; }
+  #paketi .section__title, #paketi p { text-align: left !important; }
+  #paketi .pricing-grid { max-width: none !important; }
+}
+</style>
 </head>
 <body>
 
@@ -30,8 +39,8 @@
   <div class="hero__bg"></div><div class="hero__grid"></div>
   <div class="hero__inner">
     <div class="hero__badge"><span class="hero__badge-dot"></span>AgriX Gazdinstvo</div>
-    <h1 class="hero__title" style="font-size:clamp(2.4rem,4.5vw,3.8rem)">Od parcele i tretmana do troškova i rezultata sezone.<br>U jednom sistemu.</h1>
-    <p class="hero__desc">AgriX Gazdinstvo je operativni sistem za vođenje gazdinstva koji povezuje knjigu polja, evidenciju tretmana, troškove, lager preparata, parcele, meteo uslove i bilans proizvodnje u jedinstven tok rada.</p>
+    <h1 class="hero__title" style="font-size:clamp(2.4rem,4.5vw,3.8rem)">Knjiga polja koja nastaje dok radite.</h1>
+    <p class="hero__desc">AgriX Gazdinstvo povezuje parcele, tretmane, karencu, lager preparata, troškove i rezultat sezone u jednom sistemu za vođenje proizvodnje.</p>
     <div class="hero__actions">
       <a href="#kontakt" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
       <a href="#kako-radi" class="btn btn--secondary">Kako funkcioniše</a>
@@ -42,7 +51,7 @@
 <!-- UVOD -->
 <section class="section section--surface"><div class="container">
   <div class="section__label">Knjiga polja i vođenje gazdinstva</div>
-  <h2 class="section__title" style="max-width:540px">Gazdinstvo koje se vodi u radu, ne naknadno.</h2>
+  <h2 class="section__title" style="max-width:540px">Proizvodnja koja se vodi u radu, ne naknadno.</h2>
   <p class="section__desc" style="max-width:640px">AgriX Gazdinstvo nije samo digitalna knjiga polja. To je sistem koji povezuje rad po parcelama, tretmane, prihranu, rezidbu, zalivanje, berbu, troškove, lager preparata i pregled rezultata sezone. Podaci nastaju tamo gde se posao obavlja i ostaju povezani kroz celu proizvodnju.</p>
 </div></section>
 
@@ -67,17 +76,40 @@
   </div>
 </div></section>
 
-<!-- KORISTI -->
+<!-- KNJIGA POLJA -->
 <section class="section section--surface"><div class="container">
-  <div class="section__label">Koristi</div>
-  <h2 class="section__title">Šta dobijate sa AgriX Gazdinstvo.</h2>
+  <div class="section__label">Knjiga polja</div>
+  <h2 class="section__title" style="max-width:620px">Knjiga polja bez naknadnog prepisivanja.</h2>
+  <p class="section__desc" style="max-width:680px">Tretmani, prihrana, rezidba, zalivanje i ostale mere ne vode se naknadno kroz beležnice i tabele. Evidencija nastaje u radu, na parceli na kojoj je posao zaista obavljen.</p>
+  <p style="font-size:0.95rem;color:var(--text-secondary);line-height:1.8;max-width:700px;margin-top:1.25rem">Tako knjiga polja postaje stvarni zapis proizvodnje, a ne administracija koja se popunjava naknadno.</p>
   <div class="benefits-grid">
-    <div class="benefit"><div class="benefit__num">01</div><h3>Knjigu polja koja nastaje iz rada</h3><p>Tretmani i ostale mere ne unose se naknadno u sveske i tabele. Evidencija nastaje dok se posao zaista obavlja.</p></div>
-    <div class="benefit"><div class="benefit__num">02</div><h3>Jasniji pregled svake parcele</h3><p>Za svaku parcelu vide se mere, preparati, troškovi, proizvodnja i rezultat.</p></div>
-    <div class="benefit"><div class="benefit__num">03</div><h3>Precizniju evidenciju tretmana</h3><p>Sistem povezuje parcelu, meru, preparat, količinu, opremu i vreme rada u jedinstven zapis.</p></div>
-    <div class="benefit"><div class="benefit__num">04</div><h3>Više kontrole nad lagerom i inputima</h3><p>Preparati i đubriva se vode kroz stanje lagera, preporučenu dozu i istoriju korišćenja.</p></div>
-    <div class="benefit"><div class="benefit__num">05</div><h3>Troškove koji više nisu rasuti po papiru</h3><p>Troškovi proizvodnje ostaju povezani sa sezonom i, kada je potrebno, sa parcelom.</p></div>
-    <div class="benefit"><div class="benefit__num">06</div><h3>Rezultat sezone koji se vidi, ne nagađa</h3><p>Bilans proizvodnje pokazuje koliko je gazdinstvo zaista proizvelo, potrošilo i ostvarilo.</p></div>
+    <div class="benefit"><div class="benefit__num">01</div><h3>Evidencija nastaje na parceli</h3><p>Rad se beleži tamo gde je obavljen, uz jasan trag parcele, mere i vremena rada.</p></div>
+    <div class="benefit"><div class="benefit__num">02</div><h3>Manje naknadnog prepisivanja</h3><p>Podaci ne ostaju rasuti po sveskama, porukama i tabelama koje kasnije treba prepisivati.</p></div>
+    <div class="benefit"><div class="benefit__num">03</div><h3>Stvarni zapis proizvodnje</h3><p>Knjiga polja ostaje povezana sa inputima, troškovima i rezultatom sezone.</p></div>
+  </div>
+</div></section>
+
+<!-- ZAŠTITA BILJA -->
+<section class="section"><div class="container">
+  <div class="section__label">Zaštita bilja</div>
+  <h2 class="section__title" style="max-width:620px">Karenca pod većom kontrolom, sa manje prostora za grešku.</h2>
+  <p class="section__desc" style="max-width:700px">AgriX Gazdinstvo čuva jasan trag tretmana i pomaže da se proizvodnja vodi sa više sigurnosti. Kada su zaštita i evidencija uredno povezane, firma i proizvođač imaju bolji pregled rokova i manje rizika u radu sa robom.</p>
+  <div class="benefits-grid">
+    <div class="benefit"><div class="benefit__num">01</div><h3>Jasna evidencija tretmana</h3><p>Svaki tretman ostaje povezan sa parcelom, datumom i upotrebljenim preparatom.</p></div>
+    <div class="benefit"><div class="benefit__num">02</div><h3>Više sigurnosti u radu</h3><p>Bolji pregled evidencije znači manje prostora za grešku i improvizaciju.</p></div>
+    <div class="benefit"><div class="benefit__num">03</div><h3>Spremnije za proveru</h3><p>Zaštita ostaje dokumentovana kroz isti sistem u kome se vodi proizvodnja.</p></div>
+  </div>
+</div></section>
+
+<!-- LAGER I INPUTI -->
+<section class="section section--surface"><div class="container">
+  <div class="section__label">Lager i inputi</div>
+  <h2 class="section__title" style="max-width:620px">Znajte šta je potrošeno, a šta je ostalo u lageru.</h2>
+  <p class="section__desc" style="max-width:700px">Preparati i đubriva nisu samo stavke za evidenciju. AgriX Gazdinstvo povezuje stanje lagera, potrošnju po parceli i istoriju korišćenja, kako bi firma i proizvođač imali više kontrole nad inputima i troškovima.</p>
+  <div class="benefits-grid">
+    <div class="benefit"><div class="benefit__num">01</div><h3>Stanje lagera</h3><p>Pregled preparata i đubriva u svakom trenutku, bez odvojenih tabela i naknadnih provera.</p></div>
+    <div class="benefit"><div class="benefit__num">02</div><h3>Potrošnja po parceli</h3><p>Jasno se vidi gde je input korišćen, u kojoj količini i kroz koju meru rada.</p></div>
+    <div class="benefit"><div class="benefit__num">03</div><h3>Manje gubitaka</h3><p>Više kontrole nad inputima znači manje rasipanja i manje nejasnoća u radu.</p></div>
   </div>
 </div></section>
 
@@ -254,10 +286,38 @@
   <p style="font-size:1rem;color:var(--text-secondary);line-height:1.8;max-width:680px;margin-top:1.5rem">Za proizvođače, organizatore proizvodnje, hladnjače i firme koje rade sa mrežom kooperanata i žele tačniju evidenciju, bolju kontrolu inputa i jasniji pregled rezultata proizvodnje.</p>
 </div></section>
 
+<!-- PRICING -->
+<section class="section section--surface" id="paketi"><div class="container">
+  <div class="section__label" style="justify-content:center">Cena</div>
+  <h2 class="section__title" style="text-align:center">Jednostavna cena za vođenje proizvodnje.</h2>
+  <p style="text-align:center;font-size:0.95rem;color:var(--text-secondary);max-width:680px;margin:0 auto 0;line-height:1.7">AgriX Gazdinstvo se obračunava po površini u sistemu: <strong>1 € / ha godišnje</strong>, uz <strong>minimum 29 € godišnje</strong>.</p>
+
+  <div class="pricing-grid" style="grid-template-columns:minmax(280px,420px);justify-content:center;max-width:420px;margin-left:auto;margin-right:auto;">
+    <div class="plan plan--featured">
+      <div class="plan__badge">Gazdinstvo</div>
+      <div class="plan__color plan__color--green"></div>
+      <h3>AgriX Gazdinstvo</h3>
+      <div class="plan__for">Za firme i proizvođače koji žele urednu evidenciju i kontrolu</div>
+      <div class="plan__limit">1 € / ha godišnje · minimum 29 € godišnje</div>
+      <div class="plan__price">1 € / ha<span style="font-size:0.7em;font-weight:400;color:var(--text-muted)"> godišnje</span></div>
+      <ul class="plan__features">
+        <li>Knjiga polja i evidencija tretmana</li>
+        <li>Parcele, istorija rada i preporučena doza</li>
+        <li>Karenca, lager preparata i potrošnja po parceli</li>
+        <li>Troškovi proizvodnje i bilans sezone</li>
+        <li>Meteo podaci i pregled uslova rada</li>
+      </ul>
+      <a href="#kontakt" class="plan__cta">Zakažite prezentaciju</a>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:0.84rem;color:var(--text-muted);max-width:680px;margin:1.25rem auto 0;line-height:1.7">Ako je ukupna površina mala, primenjuje se minimalna godišnja cena od 29 €. Za veće sisteme cena raste proporcionalno broju hektara u sistemu.</p>
+</div></section>
+
 <!-- CTA -->
 <section class="cta-final" id="kontakt"><div class="container"><div class="cta-final__inner">
   <h2 class="section__title" style="text-align:center">Pogledajte kako AgriX Gazdinstvo funkcioniše<br>u vašem modelu rada.</h2>
-  <p class="section__desc">Pokazaćemo vam kako AgriX Gazdinstvo povezuje knjigu polja, evidenciju tretmana, lager, troškove, parcele, meteo uslove i rezultat proizvodnje u jednom operativnom sistemu.</p>
+  <p class="section__desc">Pokazaćemo vam kako AgriX Gazdinstvo povezuje knjigu polja, tretmane, karencu, lager, troškove i rezultat sezone u jednom operativnom sistemu za vođenje proizvodnje.</p>
   <div class="cta-final__actions">
     <a href="mailto:office@agrix.rs" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
     <a href="mailto:dusan@agrix.rs" class="btn btn--secondary">Kontaktirajte nas</a>
@@ -286,7 +346,7 @@
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.benefit, .step').forEach(el => observer.observe(el));
+document.querySelectorAll('.benefit, .reason, .role-card, .plan').forEach(el => observer.observe(el));
 window.addEventListener('scroll', () => { document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20); }, { passive: true });
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
