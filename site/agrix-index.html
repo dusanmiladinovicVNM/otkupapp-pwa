@@ -12,49 +12,90 @@
 <style>
 .hero__title { font-size: clamp(2.6rem, 5vw, 4.4rem); }
 
-/* Proof cards */
+.proof-intro {
+  max-width: 760px;
+  font-size: 1.02rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
 .proof-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem; margin-top: 3rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 3rem;
 }
 .proof-card {
-  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   padding: 2.25rem 2rem;
-  opacity: 0; transform: translateY(16px);
-  transition: opacity 0.5s, transform 0.5s, border-color 0.2s;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s;
 }
 .proof-card.visible { opacity: 1; transform: translateY(0); }
-.proof-card:hover { border-color: var(--border-strong); }
+.proof-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
 .proof-card__label {
-  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--accent); margin-bottom: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.9rem;
 }
 .proof-card h3 {
-  font-size: 1rem; font-weight: 600; color: var(--forest); margin-bottom: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--forest);
+  margin-bottom: 0.75rem;
+  line-height: 1.35;
 }
 .proof-card p {
-  font-size: 0.88rem; color: var(--text-muted); line-height: 1.7;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.75;
 }
+.proof-card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1.25rem;
+  color: var(--forest);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.proof-card__cta:hover { color: var(--accent); }
 .proof-card:nth-child(1) { transition-delay: .05s; }
 .proof-card:nth-child(2) { transition-delay: .12s; }
 .proof-card:nth-child(3) { transition-delay: .19s; }
 
-/* Why grid */
 .why-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 1px; background: var(--border-strong); border-radius: 12px;
-  overflow: hidden; margin-top: 3rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 3rem;
 }
 .why-card {
-  background: var(--white); padding: 2.5rem 2rem;
-  opacity: 0; transform: translateY(16px);
+  background: var(--white);
+  padding: 2.5rem 2rem;
+  opacity: 0;
+  transform: translateY(16px);
   transition: opacity 0.5s, transform 0.5s, background 0.2s;
 }
 .why-card.visible { opacity: 1; transform: translateY(0); }
 .why-card:hover { background: var(--cream); }
 .why-card__num {
-  font-family: var(--font-display); font-size: 3rem; font-weight: 700;
-  color: var(--cream-deep); line-height: 1; margin-bottom: 1rem;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--cream-deep);
+  line-height: 1;
+  margin-bottom: 1rem;
 }
 .why-card h3 { font-size: 1rem; font-weight: 600; color: var(--forest); margin-bottom: 0.6rem; }
 .why-card p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.7; }
@@ -62,27 +103,82 @@
 .why-card:nth-child(2) { transition-delay: .12s; }
 .why-card:nth-child(3) { transition-delay: .19s; }
 
-/* Audience */
 .audience {
-  max-width: 680px; margin-top: 2rem;
-  font-size: 1rem; color: var(--text-secondary); line-height: 1.8;
+  max-width: 680px;
+  margin-top: 2rem;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
 }
 
-/* Note */
-.note {
-  text-align: center; margin-top: 2.5rem;
-  font-size: 0.88rem; color: var(--text-muted);
-  max-width: 620px; margin-left: auto; margin-right: auto; line-height: 1.7;
+.form-wrap {
+  max-width: 760px;
+  margin: 2.5rem auto 0;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: var(--shadow-sm);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+.form-field { display: flex; flex-direction: column; gap: 0.45rem; }
+.form-field--full { grid-column: 1 / -1; }
+.form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--forest);
+}
+.form-input,
+.form-textarea {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--cream);
+  padding: 0.9rem 1rem;
+  font: inherit;
+  color: var(--text-primary);
+}
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(94,161,53,0.08);
+}
+.form-textarea { min-height: 130px; resize: vertical; }
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.25rem;
+}
+.form-microcopy {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.7;
+}
+.cta-note {
+  margin-top: 1.25rem;
+  font-size: 0.82rem;
+  color: var(--text-light);
+  text-align: center;
+  line-height: 1.6;
 }
 
 @media (max-width: 768px) {
-  .proof-grid, .why-grid { grid-template-columns: 1fr; }
+  .proof-grid, .why-grid, .form-grid { grid-template-columns: 1fr; }
+  .form-wrap { padding: 1.25rem; }
 }
 </style>
 </head>
 <body>
 
-<!-- NAV -->
 <nav class="nav" id="nav"><div class="nav__inner">
   <a class="nav__brand" href="/">
     <div class="nav__icon">A<span class="x">X</span></div>
@@ -99,7 +195,6 @@
   </button>
 </div></nav>
 
-<!-- HERO -->
 <section class="hero hero--center">
   <div class="hero__bg"></div>
   <div class="hero__grid"></div>
@@ -110,79 +205,39 @@
       AgriX je platforma za otkup voća, vođenje proizvodnje i GlobalGAP usklađenost. Povezuje teren, kooperante, logistiku, dokumentaciju i management pregled u jedan tok rada.
     </p>
     <div class="hero__actions">
-      <a href="#proizvodi" class="btn btn--primary">Upoznajte proizvode <span class="btn__arrow">→</span></a>
+      <a href="#platforma" class="btn btn--primary">Upoznajte proizvode <span class="btn__arrow">→</span></a>
       <a href="#kontakt" class="btn btn--secondary">Zakažite prezentaciju</a>
     </div>
   </div>
 </section>
 
-<!-- PROOF -->
-<section class="section section--surface"><div class="container">
-  <div class="section__label">Jedan sistem</div>
-  <h2 class="section__title" style="max-width:600px">AgriX povezuje procese koji su danas nepovezani.</h2>
+<section class="section section--surface" id="platforma"><div class="container">
+  <div class="section__label">Jedna platforma</div>
+  <h2 class="section__title" style="max-width:700px">AgriX povezuje procese koji su danas nepovezani.</h2>
+  <p class="proof-intro">Teren, logistika, dokumentacija, kooperanti i kontrola rada vode se kroz jedan operativni sistem — bez duplih evidencija i naknadnog prepisivanja.</p>
 
   <div class="proof-grid">
     <div class="proof-card">
-      <div class="proof-card__label">Teren</div>
-      <h3>Podaci nastaju tamo gde posao počinje</h3>
-      <p>Pri otkupu voća, u radu na parceli i u izdavanju inputa kooperantima.</p>
+      <div class="proof-card__label">AgriX Otkup</div>
+      <h3>Od unosa na terenu do otpremnice i fakture.</h3>
+      <p>AgriX Otkup povezuje otkupca, dispečera, dokumentaciju, kupce i sledljivost u isti tok rada.</p>
+      <a href="otkup.html" class="proof-card__cta">Pogledaj AgriX Otkup →</a>
     </div>
     <div class="proof-card">
-      <div class="proof-card__label">Operativa</div>
-      <h3>Otkup, logistika i dokumentacija ostaju povezani</h3>
-      <p>Bez duplih evidencija i naknadnog prepisivanja.</p>
+      <div class="proof-card__label">AgriX Gazdinstvo</div>
+      <h3>Knjiga polja koja nastaje dok radite.</h3>
+      <p>AgriX Gazdinstvo povezuje parcele, tretmane, lager, troškove i rezultat sezone u jedan pregled proizvodnje.</p>
+      <a href="gazdinstvo.html" class="proof-card__cta">Pogledaj AgriX Gazdinstvo →</a>
     </div>
     <div class="proof-card">
-      <div class="proof-card__label">Kontrola</div>
-      <h3>Firma vidi sve u istom sistemu</h3>
-      <p>Kooperante, robu, inpute, kupce, saldo i sledljivost.</p>
+      <div class="proof-card__label">AgriX GGAP</div>
+      <h3>GlobalGAP priprema bez dodatnog unosa podataka.</h3>
+      <p>AgriX GGAP nije poseban sistem za novi unos. To je sloj usklađenosti koji koristi stvarne podatke iz Otkupa i Gazdinstva kako bi firma videla spremnost mreže kooperanata za kontrolu.</p>
+      <a href="ggap.html" class="proof-card__cta">Pogledaj AgriX GGAP →</a>
     </div>
   </div>
 </div></section>
 
-<!-- PROIZVODI -->
-<section class="section" id="proizvodi"><div class="container">
-  <div class="section__label">Tri proizvoda</div>
-  <h2 class="section__title" style="max-width:660px">Jedna platforma za otkup voća, vođenje gazdinstva i GlobalGAP pripremu.</h2>
-
-  <div class="products">
-
-    <div class="product-card product-card--otkup">
-      <div class="product-card__icon">🏭</div>
-      <div class="product-card__name">AgriX Otkup</div>
-      <div class="product-card__tagline">Od otkupa na terenu do logistike i dokumentacije.</div>
-      <p class="product-card__desc">
-        AgriX Otkup povezuje unos otkupa, dispečer modul, kooperante, kupce, agrohemiju, sledljivost i dokumentaciju u jedan operativni sistem za tok robe.
-      </p>
-      <a href="otkup.html" class="product-card__cta">Pogledaj AgriX Otkup →</a>
-    </div>
-
-    <div class="product-card product-card--gazd">
-      <div class="product-card__icon">🌱</div>
-      <div class="product-card__name">AgriX Gazdinstvo</div>
-      <div class="product-card__tagline">Proizvodnja vođena podacima, ne beleškama.</div>
-      <p class="product-card__desc">
-        AgriX Gazdinstvo je rešenje za vođenje gazdinstva i digitalnu knjigu polja. Tretmani, troškovi, lager i rad po parcelama beleže se u radu, uz jasan pregled proizvodnje i rezultata sezone.
-      </p>
-      <a href="gazdinstvo.html" class="product-card__cta">Pogledaj AgriX Gazdinstvo →</a>
-    </div>
-
-    <div class="product-card product-card--ggap">
-      <div class="product-card__icon">🛡️</div>
-      <div class="product-card__name">AgriX GGAP</div>
-      <div class="product-card__tagline">Usklađenost koja se gradi tokom cele sezone.</div>
-      <p class="product-card__desc">
-        AgriX GGAP koristi stvarne podatke iz proizvodnje i sledljivosti kako bi firma u svakom trenutku videla spremnost mreže kooperanata za GlobalGAP kontrolu.
-      </p>
-      <a href="ggap.html" class="product-card__cta">Pogledaj AgriX GGAP →</a>
-    </div>
-
-  </div>
-
-  <p class="note">AgriX Otkup i AgriX Gazdinstvo rade samostalno. AgriX GGAP ih povezuje u sloj usklađenosti za celu mrežu kooperanata.</p>
-</div></section>
-
-<!-- ZAŠTO AGRIX -->
 <section class="section section--surface"><div class="container">
   <div class="section__label">Zašto AgriX</div>
   <h2 class="section__title" style="text-align:center;max-width:500px;margin:0 auto 0">Za firme koje traže više od softvera.</h2>
@@ -206,7 +261,6 @@
   </div>
 </div></section>
 
-<!-- ZA KOGA JE -->
 <section class="section"><div class="container">
   <div class="section__label">Za koga je</div>
   <h2 class="section__title" style="max-width:640px">AgriX je namenjen firmama koje vode ozbiljan sistem, ne samo pojedinačne korake.</h2>
@@ -215,18 +269,42 @@
   </p>
 </div></section>
 
-<!-- CTA -->
 <section class="cta-final" id="kontakt"><div class="container"><div class="cta-final__inner">
-  <h2 class="section__title" style="text-align:center">
-    Pogledajte kako AgriX funkcioniše<br>u vašem modelu rada.
-  </h2>
-  <p class="section__desc">
-    Pokazaćemo vam kako AgriX povezuje otkup voća, vođenje proizvodnje, logistiku, dokumentaciju, kooperante i GlobalGAP pripremu u jedan operativni sistem. Bez obaveza.
-  </p>
-  <div class="cta-final__actions">
-    <a href="mailto:office@agrix.rs" class="btn btn--primary">Zakažite prezentaciju <span class="btn__arrow">→</span></a>
-    <a href="mailto:dusan@agrix.rs" class="btn btn--secondary">Kontaktirajte nas</a>
+  <h2 class="section__title" style="text-align:center">Pogledajte kako AgriX funkcioniše u vašem modelu rada.</h2>
+  <p class="section__desc">Pokazaćemo vam kako AgriX povezuje otkup, proizvodnju, kooperante, logistiku i pripremu za GlobalGAP u jedan operativni sistem.</p>
+
+  <div class="form-wrap">
+    <form id="leadForm">
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label" for="ime">Ime i prezime</label>
+          <input class="form-input" id="ime" name="ime" type="text" placeholder="Vaše ime" required>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="firma">Firma</label>
+          <input class="form-input" id="firma" name="firma" type="text" placeholder="Naziv firme" required>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="email">Email</label>
+          <input class="form-input" id="email" name="email" type="email" placeholder="ime@firma.rs" required>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="telefon">Telefon</label>
+          <input class="form-input" id="telefon" name="telefon" type="text" placeholder="Broj telefona">
+        </div>
+        <div class="form-field form-field--full">
+          <label class="form-label" for="poruka">Kako danas radite?</label>
+          <textarea class="form-textarea" id="poruka" name="poruka" placeholder="Napišite ukratko da li vas najviše zanima otkup, gazdinstvo, kooperanti, logistika ili GlobalGAP."></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn--primary">Pošaljite upit <span class="btn__arrow">→</span></button>
+        <p class="form-microcopy">Ostavite kontakt i javljamo se da pokažemo sistem na vašim procesima.</p>
+      </div>
+    </form>
+    <p class="cta-note">Ova forma u front-end verziji otvara pripremljen email. Kada povežete backend ili CRM endpoint, može ostati isti dizajn.</p>
   </div>
+
   <div class="cta-final__contact">
     <a href="https://www.agrix.rs">www.agrix.rs</a>
     <a href="mailto:office@agrix.rs">office@agrix.rs</a>
@@ -234,7 +312,6 @@
   </div>
 </div></div></section>
 
-<!-- FOOTER -->
 <footer class="footer"><div class="footer__inner">
   <span class="footer__brand">Agri<span class="green">X</span></span>
   <p>© 2026 · Digitalna infrastruktura za savremenu poljoprivredu</p>
@@ -245,15 +322,34 @@
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.proof-card, .product-card, .why-card').forEach(el => observer.observe(el));
+document.querySelectorAll('.proof-card, .why-card').forEach(el => observer.observe(el));
 window.addEventListener('scroll', () => {
   document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20);
 }, { passive: true });
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
     const t = document.querySelector(a.getAttribute('href'));
-    if (t) { e.preventDefault(); window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' }); }
+    if (t) {
+      e.preventDefault();
+      window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' });
+    }
   });
+});
+
+document.getElementById('leadForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  const ime = document.getElementById('ime').value.trim();
+  const firma = document.getElementById('firma').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const telefon = document.getElementById('telefon').value.trim();
+  const poruka = document.getElementById('poruka').value.trim();
+
+  const subject = encodeURIComponent(`AgriX upit${firma ? ' — ' + firma : ''}`);
+  const body = encodeURIComponent(
+`Ime i prezime: ${ime}\nFirma: ${firma}\nEmail: ${email}\nTelefon: ${telefon}\n\nKako danas rade / šta ih zanima:\n${poruka}`
+  );
+
+  window.location.href = `mailto:office@agrix.rs?subject=${subject}&body=${body}`;
 });
 </script>
 </body>
