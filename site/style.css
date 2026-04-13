@@ -32,6 +32,23 @@ body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-event
 .nav.scrolled { box-shadow: var(--shadow-sm); }
 .nav__inner { max-width: var(--content-max); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .nav__brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; }
+.nav__brand--logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.nav__logo {
+  height: 54px;
+  width: auto;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .nav__logo {
+    height: 42px;
+  }
+}
 .nav__icon { width: 40px; height: 40px; background: var(--forest); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(30,45,20,0.16), 0 1px 3px rgba(30,45,20,0.1); }
 .nav__icon--ax svg { width: 25px; height: 25px; display: block; }
 .nav__wordmark { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; color: var(--forest); }
