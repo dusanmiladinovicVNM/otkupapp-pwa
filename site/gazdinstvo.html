@@ -16,7 +16,7 @@
 @media (max-width: 768px) {
   #paketi .section__label { justify-content: flex-start !important; }
   #paketi .section__title, #paketi p { text-align: left !important; }
-  #paketi .pricing-grid { max-width: none !important; }
+  #paketi .pricing-grid { max-width: none !important; grid-template-columns: 1fr !important; }
 }
 </style>
 </head>
@@ -288,16 +288,34 @@
 
 <!-- PRICING -->
 <section class="section section--surface" id="paketi"><div class="container">
-  <div class="section__label" style="justify-content:center">Cena</div>
-  <h2 class="section__title" style="text-align:center">Jednostavna cena za vođenje proizvodnje.</h2>
-  <p style="text-align:center;font-size:0.95rem;color:var(--text-secondary);max-width:680px;margin:0 auto 0;line-height:1.7">AgriX Gazdinstvo se obračunava po površini u sistemu: <strong>1 € / ha godišnje</strong>, uz <strong>minimum 29 € godišnje</strong>.</p>
+  <div class="section__label" style="justify-content:center">Paketi</div>
+  <h2 class="section__title" style="text-align:center">Izaberite paket za svoj model vođenja proizvodnje.</h2>
+  <p style="text-align:center;font-size:0.95rem;color:var(--text-secondary);max-width:760px;margin:0 auto 0;line-height:1.7">AgriX Gazdinstvo je dostupno kroz tri paketa — od osnovne evidencije do punog operativnog sistema za veće firme i organizatore proizvodnje.</p>
 
-  <div class="pricing-grid" style="grid-template-columns:minmax(280px,420px);justify-content:center;max-width:420px;margin-left:auto;margin-right:auto;">
+  <div class="pricing-grid" style="grid-template-columns:repeat(3,minmax(260px,1fr));justify-content:center;max-width:none;margin-left:auto;margin-right:auto;gap:1.25rem;">
+    <div class="plan">
+      <div class="plan__badge">Basic</div>
+      <div class="plan__color plan__color--gold"></div>
+      <h3>Basic</h3>
+      <div class="plan__for">Za manja gazdinstva i korisnike kojima treba osnovna evidencija</div>
+      <div class="plan__limit">9 € godišnje</div>
+      <div class="plan__price">9 €<span style="font-size:0.7em;font-weight:400;color:var(--text-muted)"> godišnje</span></div>
+      <ul class="plan__features">
+        <li>Osnovna evidencija proizvodnje i rada po parceli</li>
+        <li>Ručni unos podataka i aktivnosti</li>
+        <li>Bez meteo podataka</li>
+        <li>Bez karence</li>
+        <li>Bez bilansa proizvodnje</li>
+        <li>Bez QR unosa</li>
+      </ul>
+      <a href="#kontakt" class="plan__cta">Zatražite ponudu</a>
+    </div>
+
     <div class="plan plan--featured">
-      <div class="plan__badge">Gazdinstvo</div>
+      <div class="plan__badge">Standard</div>
       <div class="plan__color plan__color--green"></div>
-      <h3>AgriX Gazdinstvo</h3>
-      <div class="plan__for">Za firme i proizvođače koji žele urednu evidenciju i kontrolu</div>
+      <h3>Standard</h3>
+      <div class="plan__for">Za firme i proizvođače koji žele punu kontrolu nad proizvodnjom</div>
       <div class="plan__limit">1 € / ha godišnje · minimum 29 € godišnje</div>
       <div class="plan__price">1 € / ha<span style="font-size:0.7em;font-weight:400;color:var(--text-muted)"> godišnje</span></div>
       <ul class="plan__features">
@@ -306,12 +324,30 @@
         <li>Karenca, lager preparata i potrošnja po parceli</li>
         <li>Troškovi proizvodnje i bilans sezone</li>
         <li>Meteo podaci i pregled uslova rada</li>
+        <li>QR unos i napredniji operativni tok rada</li>
       </ul>
       <a href="#kontakt" class="plan__cta">Zakažite prezentaciju</a>
     </div>
+
+    <div class="plan">
+      <div class="plan__badge">Premium</div>
+      <div class="plan__color"></div>
+      <h3>Premium</h3>
+      <div class="plan__for">Za velike klijente, organizatore proizvodnje i kompleksne sisteme</div>
+      <div class="plan__limit">Cena po dogovoru</div>
+      <div class="plan__price">Po dogovoru</div>
+      <ul class="plan__features">
+        <li>Za veće timove i naprednije operativne potrebe</li>
+        <li>Prilagođavanje obima sistema i procesa</li>
+        <li>Komercijalni model prema veličini klijenta</li>
+        <li>Podrška za kompleksnije organizacije rada</li>
+        <li>Dogovor prema broju parcela, korisnika i obimu procesa</li>
+      </ul>
+      <a href="#kontakt" class="plan__cta">Kontaktirajte nas</a>
+    </div>
   </div>
 
-  <p style="text-align:center;font-size:0.84rem;color:var(--text-muted);max-width:680px;margin:1.25rem auto 0;line-height:1.7">Ako je ukupna površina mala, primenjuje se minimalna godišnja cena od 29 €. Za veće sisteme cena raste proporcionalno broju hektara u sistemu.</p>
+  <p style="text-align:center;font-size:0.84rem;color:var(--text-muted);max-width:760px;margin:1.25rem auto 0;line-height:1.7">Standard paket se obračunava po površini u sistemu: <strong>1 € / ha godišnje</strong>, uz <strong>minimum 29 € godišnje</strong>. Premium paket se formira po dogovoru za velike klijente i složenije operativne modele.</p>
 </div></section>
 
 <!-- CTA -->
