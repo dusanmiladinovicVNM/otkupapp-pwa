@@ -10,6 +10,69 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="otkup.css">
+
+<style>
+.offline-strip {
+  position: relative;
+  z-index: 2;
+  padding: 1.25rem 0 0;
+}
+.offline-strip__inner {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 1.1rem 1.35rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.offline-strip__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-pale);
+  color: var(--forest);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.offline-strip__eyebrow {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.35rem;
+}
+.offline-strip h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--forest);
+  margin-bottom: 0.3rem;
+}
+.offline-strip p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0;
+}
+@media (max-width: 768px) {
+  .offline-strip { padding-top: 0.5rem; }
+  .offline-strip__inner {
+    grid-template-columns: 1fr;
+    text-align: left;
+    padding: 1rem;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -39,11 +102,25 @@
   </div>
 </section>
 
+<!-- OFFLINE TRUST STRIP -->
+<section class="offline-strip" aria-label="Pouzdan rad bez interneta">
+  <div class="container">
+    <div class="offline-strip__inner">
+      <div class="offline-strip__icon">↻</div>
+      <div>
+        <div class="offline-strip__eyebrow">Rad na terenu</div>
+        <h2>Pouzdan rad i kada nema interneta.</h2>
+        <p>AgriX Otkup radi i u uslovima slabog ili nestabilnog signala. Podaci se unose na terenu, a sistem ih sinhronizuje automatski čim se uređaj ponovo poveže na mrežu.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- UVOD -->
 <section class="section section--surface"><div class="container">
   <div class="section__label">Softver za otkup voća</div>
-  <h2 class="section__title" style="max-width:580px">Otkup koji ne staje na unosu robe.</h2>
-  <p class="section__desc" style="max-width:640px">AgriX Otkup nije samo softver za evidentiranje otkupa voća. To je sistem koji povezuje unos na terenu, logistiku, dokumentaciju, izdavanje agrohemije, pregled kupaca i operativnu kontrolu firme. Jedan tok rada. Jedan izvor podataka. Jedan pregled nad celim procesom.</p>
+  <h2 class="section__title" style="max-width:580px">Otkup koji ne staje ni kada teren izgubi signal.</h2>
+  <p class="section__desc" style="max-width:640px">AgriX Otkup nije samo softver za evidentiranje otkupa voća. To je sistem koji povezuje unos na terenu, logistiku, dokumentaciju, izdavanje agrohemije, pregled kupaca i operativnu kontrolu firme. Jedan tok rada. Jedan izvor podataka. Jedan pregled nad celim procesom — i kada je signal slab ili nestabilan.</p>
 </div></section>
 
 <!-- ŠTA POVEZUJE + QR screenshot -->
@@ -358,7 +435,7 @@
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.benefit, .step').forEach(el => observer.observe(el));
+document.querySelectorAll('.benefit, .vstep, .role-card, .reason, .plan').forEach(el => observer.observe(el));
 window.addEventListener('scroll', () => { document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20); }, { passive: true });
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
