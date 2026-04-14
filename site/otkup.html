@@ -626,8 +626,9 @@ const observer = new IntersectionObserver(entries => {
   });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
-document.querySelectorAll('.benefit, .vstep, .detail-card, .role-card, .pricing-card, .faq-item')
-  .forEach(el => observer.observe(el));
+document.querySelectorAll(
+  '.benefit, .vstep, .detail-card, .role-card, .pricing-card, .package-card, .faq-item'
+).forEach(el => observer.observe(el));
 
 const nav = document.getElementById('nav');
 const navToggle = document.getElementById('navToggle');
