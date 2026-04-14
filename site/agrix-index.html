@@ -342,37 +342,86 @@
 
 <script>
 const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add('visible');
+  });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
 document.querySelectorAll('.proof-card, .why-card').forEach(el => observer.observe(el));
+
+const nav = document.getElementById('nav');
+const navToggle = document.getElementById('navToggle');
+const navLinks = document.getElementById('navLinks');
+
 window.addEventListener('scroll', () => {
-  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20);
+  nav.classList.toggle('scrolled', window.scrollY > 20);
 }, { passive: true });
+
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
-    const t = document.querySelector(a.getAttribute('href'));
+    const href = a.getAttribute('href');
+    const t = document.querySelector(href);
     if (t) {
       e.preventDefault();
-      window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' });
+      window.scrollTo({
+        top: t.getBoundingClientRect().top + window.pageYOffset - 80,
+        behavior: 'smooth'
+      });
+
+      if (navLinks && navLinks.classList.contains('open')) {
+        navLinks.classList.remove('open');
+        if (navToggle) navToggle.setAttribute('aria-expanded', 'false');
+      }
     }
   });
 });
- 
-document.getElementById('leadForm').addEventListener('submit', function (e) {
-  e.preventDefault();
-  const ime = document.getElementById('ime').value.trim();
-  const firma = document.getElementById('firma').value.trim();
-  const email = document.getElementById('email').value.trim();
-  const telefon = document.getElementById('telefon').value.trim();
-  const poruka = document.getElementById('poruka').value.trim();
 
-  const subject = encodeURIComponent(`AgriX upit${firma ? ' — ' + firma : ''}`);
-  const body = encodeURIComponent(
-`Ime i prezime: ${ime}\nFirma: ${firma}\nEmail: ${email}\nTelefon: ${telefon}\n\nKako danas rade / šta ih zanima:\n${poruka}`
-  );
+if (navToggle && navLinks) {
+  navToggle.addEventListener('click', () => {
+    const isOpen = navLinks.classList.toggle('open');
+    navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
 
-  window.location.href = `mailto:office@agrix.rs?subject=${subject}&body=${body}`;
-});
+  navLinks.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      navLinks.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!nav.contains(e.target)) {
+      navLinks.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+const leadForm = document.getElementById('leadForm');
+if (leadForm) {
+  leadForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const ime = document.getElementById('ime').value.trim();
+    const firma = document.getElementById('firma').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const telefon = document.getElementById('telefon').value.trim();
+    const poruka = document.getElementById('poruka').value.trim();
+
+    const subject = encodeURIComponent(`AgriX upit${firma ? ' — ' + firma : ''}`);
+    const body = encodeURIComponent(
+`Ime i prezime: ${ime}
+Firma: ${firma}
+Email: ${email}
+Telefon: ${telefon}
+
+Kako danas rade / šta ih zanima:
+${poruka}`
+    );
+
+    window.location.href = `mailto:office@agrix.rs?subject=${subject}&body=${body}`;
+  });
+}
 </script>
 </body>
 </html>
