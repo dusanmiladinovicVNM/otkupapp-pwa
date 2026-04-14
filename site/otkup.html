@@ -254,19 +254,27 @@
 <body>
 
 <!-- NAV -->
-<nav class="nav" id="nav"><div class="nav__inner">
-  <a class="nav__brand nav__brand--logo" href="agrix-index.html" aria-label="AgriX početna">
-    <img src="img/AgriX-Logo-Final_Novi.png" alt="AgriX" class="nav__logo">
-  </a>
-  <ul class="nav__links">
-    <li><a class="active" href="otkup.html">Otkup</a></li>
-    <li><a href="gazdinstvo.html">Gazdinstvo</a></li>
-    <li><a href="ggap.html">GGAP</a></li>
-    <li><a href="o-nama.html">O nama</a></li>
-    <li><a href="#kontakt" class="nav__cta">Kontakt</a></li>
-  </ul>
-  <button class="nav__mobile" aria-label="Meni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-</div></nav>
+<nav class="nav" id="nav">
+  <div class="nav__inner">
+    <a class="nav__brand nav__brand--logo" href="agrix-index.html" aria-label="AgriX početna">
+      <img src="img/AgriX-Logo-Final.png" alt="AgriX" class="nav__logo">
+    </a>
+
+    <ul class="nav__links" id="navLinks">
+      <li><a class="active" href="otkup.html">Otkup</a></li>
+      <li><a href="gazdinstvo.html">Gazdinstvo</a></li>
+      <li><a href="ggap.html">GGAP</a></li>
+      <li><a href="o-nama.html">O nama</a></li>
+      <li><a href="agrix-index.html#kontakt" class="nav__cta">Kontakt</a></li>
+    </ul>
+
+    <button class="nav__mobile" id="navToggle" aria-label="Meni" aria-expanded="false" aria-controls="navLinks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+    </button>
+  </div>
+</nav>
 
 <!-- HERO -->
 <section class="hero hero--center">
@@ -613,24 +621,42 @@
 
 <script>
 const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  entries.forEach(entry => {
+    if (entry.isIntersecting) entry.target.classList.add('visible');
+  });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.benefit, .vstep, .role-card, .reason, .plan').forEach(el => observer.observe(el));
-window.addEventListener('scroll', () => { document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20); }, { passive: true });
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-  a.addEventListener('click', e => {
-    const t = document.querySelector(a.getAttribute('href'));
-    if (t) { e.preventDefault(); window.scrollTo({ top: t.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' }); }
+
+document.querySelectorAll('.benefit, .vstep, .detail-card, .role-card, .pricing-card, .faq-item')
+  .forEach(el => observer.observe(el));
+
+const nav = document.getElementById('nav');
+const navToggle = document.getElementById('navToggle');
+const navLinks = document.getElementById('navLinks');
+
+window.addEventListener('scroll', () => {
+  if (nav) nav.classList.toggle('scrolled', window.scrollY > 20);
+}, { passive: true });
+
+if (navToggle && navLinks) {
+  navToggle.addEventListener('click', () => {
+    const isOpen = navLinks.classList.toggle('open');
+    navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   });
-});
-document.querySelectorAll('.detail-card__toggle').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const card = btn.closest('.detail-card');
-    const isOpen = card.classList.contains('open');
-    document.querySelectorAll('.detail-card.open').forEach(c => { c.classList.remove('open'); c.querySelector('.detail-card__toggle').setAttribute('aria-expanded','false'); });
-    if (!isOpen) { card.classList.add('open'); btn.setAttribute('aria-expanded','true'); }
+
+  navLinks.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      navLinks.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    });
   });
-});
+
+  document.addEventListener('click', (e) => {
+    if (nav && !nav.contains(e.target)) {
+      navLinks.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
 </script>
 </body>
 </html>
