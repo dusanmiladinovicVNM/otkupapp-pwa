@@ -1,1 +1,725 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a5e2a">
+    <title>OtkupApp - Terenski otkup</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    
+    <!-- html5-qrcode library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <link rel="stylesheet" href="./src/styles/base.css">
+    <link rel="stylesheet" href="./src/styles/layout.css">
+    <link rel="stylesheet" href="./src/styles/components.css">
+    <link rel="stylesheet" href="./src/styles/auth.css">
 
+    <link rel="stylesheet" href="./src/styles/features-otkup.css">
+    <link rel="stylesheet" href="./src/styles/features-kooperant.css">
+    <link rel="stylesheet" href="./src/styles/features-management.css">
+    <link rel="stylesheet" href="./src/styles/features-vozac.css">
+
+    <link rel="stylesheet" href="./src/styles/print.css">
+
+    <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com;
+    style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com;
+    img-src 'self' data: blob: https://api.qrserver.com https://server.arcgisonline.com https://*.tile.openstreetmap.org;
+    connect-src 'self' https://script.google.com https://script.googleusercontent.com https://unpkg.com https://cdnjs.cloudflare.com https://api.open-meteo.com;
+    font-src 'self' https://cdnjs.cloudflare.com;
+">
+</head>
+<body>
+
+<div id="appLoader" style="position:fixed;inset:0;background:#f5f5f0;display:flex;align-items:center;justify-content:center;z-index:99999;">
+    <div style="text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">🌿</div>
+        <div style="font-size:16px;color:#1a5e2a;font-weight:600;">OtkupApp</div>
+        <div style="font-size:12px;color:#999;margin-top:4px;">Učitavanje...</div>
+    </div>
+</div>
+    
+<!-- HEADER-->
+<div class="header">
+    <div class="header-left">
+        <div>
+            <div class="header-title">OtkupApp</div>
+            <span class="header-sub" id="headerInfo"></span>
+        </div>
+    </div>
+
+    <div class="header-actions">
+        <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
+        <button onclick="showQRProfile()" class="header-btn">⊞</button>
+        <button onclick="doLogout()" class="header-btn">⇄</button>
+    </div>
+</div>
+    
+<!-- TAB BAR -->
+<div class="tab-bar" id="tabBar">
+    <!-- Otkupac -->
+    <button class="tab-btn role-otkupac" onclick="showTab('otkup')">Novi</button>
+    <button class="tab-btn role-otkupac" onclick="showTab('pregled', this)">Otkupi</button>
+    <button class="tab-btn role-otkupac" onclick="showTab('otpremnice')">Otprem.</button>
+    <button class="tab-btn role-otkupac" onclick="showTab('queue')">Sync</button>
+    <!-- Kooperant -->
+    <button class="tab-btn role-kooperant" onclick="showTab('kartica')">Kartica koop.</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('parcele')">Parcele</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('agromere')">Agromere</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('koopinfo')">Info</button>
+    <button class="tab-btn role-kooperant" onclick="showTab('knjigapolja', this)">Knjiga polja</button>
+    <!-- Management -->
+    <button class="tab-btn role-management" onclick="showTab('dispecer')" style="font-weight:700;">📋 Dispečer</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('kooperanti', this)">Kooperanti</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('stanice')">Stanice</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('kupci')">Kupci</button>
+    <button class="tab-btn role-management" onclick="showMgmtMain('agrohemija')">Agrohemija</button>
+    <!-- Vozac -->
+    <button class="tab-btn role-vozac" onclick="showTab('zbirna')">Zbirna</button>
+    <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
+</div>
+
+<!-- ==================== OTKUPAC TABS ==================== -->
+
+<div class="tab-content" id="tab-otkup">
+    <button class="qr-scan-btn" onclick="startQRScan()">📷 Skeniraj QR kooperanta</button>
+    <div id="qr-reader"></div>
+    <div class="form-group"><label>Ili izaberi kooperanta ručno</label><select id="fldKooperantManual" onchange="onManualKooperantChange()"><option value="">-- Izaberi --</option></select></div>
+    <div class="koop-display" id="koopDisplay"><div class="koop-name" id="koopName"></div><div class="koop-id" id="koopId"></div></div>
+    <input type="hidden" id="fldKooperantID">
+    <div class="form-group" id="parcelaGroup" style="display:none;"><label>Parcela (opciono)</label><select id="fldParcela"><option value="">-- Bez parcele --</option></select></div>
+    <button class="qr-scan-btn" id="btnVozacScan" onclick="startVozacQRScan()" style="background:var(--accent);">📷 Skeniraj QR vozača (opciono)</button>
+    <div id="qr-reader-vozac" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+    <div class="koop-display" id="vozacDisplay" style="background:var(--accent);">
+        <div class="koop-name" id="vozacName"></div>
+        <div class="koop-id" id="vozacId"></div>
+        <button onclick="clearVozac()" style="background:none;border:none;color:white;font-size:12px;text-decoration:underline;cursor:pointer;margin-top:4px;">Ukloni vozača</button>
+    </div>
+    <input type="hidden" id="fldVozacID">
+    <div class="form-row">
+        <div class="form-group"><label>Vrsta voća</label><select id="fldVrsta" onchange="onVrstaChange()"><option value="">-- Izaberi --</option></select></div>
+        <div class="form-group"><label>Sorta</label><select id="fldSorta"><option value="">-- Izaberi --</option></select></div>
+    </div>
+    <div class="form-row">
+        <div class="form-group"><label>Klasa</label><select id="fldKlasa"><option value="I">I</option><option value="II">II</option></select></div>
+        <div class="form-group"><label>Količina (kg)</label><input type="number" id="fldKolicina" inputmode="numeric" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+        <div class="form-group"><label>Cena (RSD/kg)</label><input type="number" id="fldCena" inputmode="decimal" placeholder="0.00"></div>
+        <div class="form-group"><label>Ambalaža (kom)</label><input type="number" id="fldAmbalaza" inputmode="numeric" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label>Napomena</label><input type="text" id="fldNapomena" placeholder="Opciono..."></div>
+    <button class="btn-primary" onclick="saveOtkup()">SAČUVAJ OTKUP</button>
+    <button class="btn-secondary" onclick="resetForm()">Poništi</button>
+</div>
+
+<div class="tab-content" id="tab-pregled">
+    <div class="form-row" style="margin-bottom:12px;">
+        <div class="form-group"><label>Od datuma</label><input type="date" id="fldPregledOd" onchange="loadOtkupPregled()"></div>
+        <div class="form-group"><label>Do datuma</label><input type="date" id="fldPregledDo" onchange="loadOtkupPregled()"></div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="statPregledCount">0</div><div class="stat-label">Otkupa</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPregledKg">0</div><div class="stat-label">Ukupno kg</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPregledVrednost">0</div><div class="stat-label">Vrednost RSD</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPregledKoop">0</div><div class="stat-label">Kooperanata</div></div>
+    </div>
+    <div id="pregledList"></div>
+</div>
+
+<div class="tab-content" id="tab-otpremnice">
+    <div id="otpremaAssignView" style="display:none;">
+        <div class="koop-display visible" id="otpremaVozacDisplay" style="background:var(--accent);margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div class="koop-name" id="otpremaVozacName"></div>
+                    <div class="koop-id" id="otpremaVozacId"></div>
+                </div>
+                <button onclick="cancelOtprema()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:6px;font-size:12px;">Otkaži</button>
+            </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Izaberite otkupe za ovog vozača:</p>
+        <button onclick="toggleSelectAll()" class="btn-secondary" style="margin-bottom:10px;margin-top:0;">Izaberi sve / Poništi sve</button>
+        <div id="otpremaOtkupList"></div>
+        <div id="otpremaSummary" style="background:var(--primary);color:white;padding:12px;border-radius:var(--radius);margin-top:12px;display:none;">
+            <span id="otpremaSummaryText"></span>
+        </div>
+        <button class="btn-primary" onclick="confirmOtprema()">POTVRDI OTPREMU</button>
+    </div>
+
+    <div id="otpremaMainView">
+        <button class="qr-scan-btn" style="background:var(--accent);" onclick="startOtpremaVozacScan()">📷 Skeniraj QR vozača za otpremu</button>
+        <div id="qr-reader-otprema" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+
+        <h3 style="color:var(--primary);margin:16px 0 8px;font-size:14px;">Danas neraspoređeno</h3>
+        <div id="otpremaUnassignedList"></div>
+
+        <h3 style="color:var(--primary);margin:16px 0 8px;font-size:14px;">Danas otpremljeno</h3>
+        <div id="otpremaAssignedList"></div>
+    </div>
+</div>
+
+<div class="tab-content" id="tab-queue">
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="statPending">0</div><div class="stat-label">Čeka sync</div></div>
+        <div class="stat-card"><div class="stat-value" id="statSynced">0</div><div class="stat-label">Sinhronizovano</div></div>
+    </div>
+    <div id="queueList"></div>
+    <button class="btn-secondary" onclick="syncNow()">Sinhronizuj sada</button>
+</div>
+
+<!-- ==================== KOOPERANT TABS ==================== -->
+
+<div class="tab-content" id="tab-kartica">
+    <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
+        <div style="font-size:18px;font-weight:700;" id="karticaName"></div>
+        <div style="font-size:12px;opacity:0.8;" id="karticaID"></div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="karticaZaduzenje">0</div><div class="stat-label">Zaduženje</div></div>
+        <div class="stat-card"><div class="stat-value" id="karticaRazduzenje">0</div><div class="stat-label">Razduženje</div></div>
+        <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="karticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
+    </div>
+    <div id="karticaList"></div>
+</div>
+    
+<div class="tab-content" id="tab-parcele">
+    <div id="parceleMap" style="height:300px;border-radius:var(--radius);overflow:hidden;margin-bottom:12px;"></div>
+    <div id="parceleMeteo" style="display:none;"></div>
+    <div id="parceleList"></div>
+</div>
+    <!-- ==================== Agromere ==================== -->
+<div class="tab-content" id="tab-agromere">
+    <!-- Sticky timer bar -->
+    <div class="agro-timer-sticky" id="agroTimerSticky">
+        <span id="agroTimerStickyText">⏱️ 00:00:00</span>
+    </div>
+
+    <!-- Step 1: Parcela (geo auto-detect + fallback) -->
+    <div id="agroStep1">
+        <div class="agro-geo-banner manual" id="agroGeoBanner">
+            📍 Izaberite parcelu ili dozvolite GPS pristup
+        </div>
+        <div class="form-group">
+            <label>Parcela</label>
+            <select id="agroParcelaSel" onchange="onAgroParcelaChange()">
+                <option value="">-- Izaberi parcelu --</option>
+            </select>
+        </div>
+
+        <!-- Meteo strip za izabranu parcelu -->
+        <div class="agro-meteo-strip" id="agroMeteoStrip" style="display:none;">
+            <span id="agroMeteoTemp">—</span>
+            <span id="agroMeteoWind">—</span>
+            <span id="agroMeteoHumidity">—</span>
+            <span id="agroMeteoPrecip">—</span>
+        </div>
+
+        <!-- Karenca upozorenje za parcelu -->
+        <div class="agro-karenca-warn" id="agroKarencaWarn">
+            <div style="font-weight:700;margin-bottom:4px;">🚫 KARENCA AKTIVNA</div>
+            <div id="agroKarencaText">—</div>
+        </div>
+
+        <!-- Mera selection -->
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Izaberite meru</div>
+        <div class="agro-mera-grid">
+            <button class="agro-mera-btn" onclick="selectAgroMera(this,'Zastita')">🛡️ Zaštita</button>
+            <button class="agro-mera-btn" onclick="selectAgroMera(this,'Prihrana')">🌱 Prihrana</button>
+            <button class="agro-mera-btn" onclick="selectAgroMera(this,'Rezidba')">✂️ Rezidba</button>
+            <button class="agro-mera-btn" onclick="selectAgroMera(this,'Zalivanje')">💧 Zalivanje</button>
+            <button class="agro-mera-btn" id="agroBerbaBtn" onclick="selectAgroMera(this,'Berba')">🍎 Berba</button>
+            <div></div><!-- spacer -->
+        </div>
+
+        <!-- Meteo warning (za Zastita) -->
+        <div class="agro-meteo-warn" id="agroMeteoWarn">
+            <div style="font-weight:700;margin-bottom:4px;" id="agroMeteoWarnTitle">⚠️ Upozorenje</div>
+            <div id="agroMeteoWarnText">—</div>
+            <button onclick="agroMeteoOverride()" style="margin-top:8px;padding:8px 16px;background:var(--warning);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Nastavi ipak</button>
+        </div>
+
+        <!-- Preparat section (samo za Zastita/Prihrana) -->
+        <div class="agro-preparat-section" id="agroPreparatSection">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Preparat sa lagera</div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <select id="agroPreparatSel" onchange="onAgroPreparatChange()" style="padding:10px;font-size:13px;">
+                    <option value="">-- Izaberi preparat --</option>
+                </select>
+            </div>
+            <div class="form-row" style="margin-bottom:8px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Količina</label>
+                    <input type="number" id="agroKolicina" inputmode="decimal" placeholder="0" style="padding:10px;font-size:13px;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>JM</label>
+                    <input type="text" id="agroJM" readonly style="padding:10px;font-size:13px;background:#f0f0f0;">
+                </div>
+            </div>
+
+            <!-- Preporuka -->
+            <div class="agro-preporuka" id="agroPreporuka">
+                <div style="font-size:11px;font-weight:700;color:var(--success);text-transform:uppercase;margin-bottom:6px;">📋 Preporučena doza</div>
+                <div id="agroPreporukaCalc" style="font-size:14px;font-weight:600;color:var(--primary);margin-bottom:4px;">—</div>
+                <div id="agroPreporukaDetail" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">—</div>
+                <button onclick="agroPrimeniPreporuku()" style="padding:8px 16px;background:var(--success);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">✅ Primeni količinu</button>
+            </div>
+
+            <!-- Karenca info za izabrani preparat -->
+            <div id="agroKarencaInfo" style="display:none;background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:12px;margin-top:8px;">
+                <span id="agroKarencaInfoText">—</span>
+            </div>
+        </div>
+
+        <!-- Oprema section -->
+        <div class="agro-oprema-section">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">🚜 Oprema (opciono)</div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <label>Traktor</label>
+                <div style="display:flex;gap:6px;">
+                    <select id="agroTraktor" style="flex:1;padding:8px;font-size:13px;">
+                        <option value="">-- Bez traktora --</option>
+                    </select>
+                    <input type="text" id="agroTraktorNovi" placeholder="Ili unesi novi..." style="flex:1;padding:8px;font-size:12px;" onchange="agroSaveNovaOprema('Traktor', this.value)">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <label>Prskalica / Atomizer</label>
+                <div style="display:flex;gap:6px;">
+                    <select id="agroPrskalica" style="flex:1;padding:8px;font-size:13px;">
+                        <option value="">-- Bez prskalice --</option>
+                    </select>
+                    <input type="text" id="agroPrskalicaNovi" placeholder="Ili unesi novu..." style="flex:1;padding:8px;font-size:12px;" onchange="agroSaveNovaOprema('Prskalica', this.value)">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Ostala oprema</label>
+                <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:8px;font-size:13px;">
+            </div>
+        </div>
+
+        <!-- Napomena -->
+        <div class="form-group">
+            <label>Napomena (opciono)</label>
+            <input type="text" id="agroNapomena" placeholder="Detalji...">
+        </div>
+
+        <!-- Timer + Start -->
+        <div class="agro-timer" id="agroTimerPanel" style="display:none;">
+            <div class="agro-timer-display" id="agroTimerDisplay">00:00:00</div>
+            <div class="agro-timer-label" id="agroTimerLabel">—</div>
+        </div>
+
+        <button class="btn-primary" id="agroBtnStart" onclick="agroStartRad()" style="display:none;">▶ POČNI RAD</button>
+        <button class="btn-primary" id="agroBtnStop" onclick="agroStopRad()" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
+    </div>
+
+    <!-- Step 2: Potvrda -->
+    <div id="agroStep2" style="display:none;">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Potvrda tretmana</h3>
+        <div class="agro-confirm" id="agroConfirmPanel"></div>
+        <button class="btn-primary" onclick="agroSaveTretman()">💾 SAČUVAJ</button>
+        <button class="btn-secondary" onclick="agroBackToStep1()">← Nazad</button>
+    </div>
+
+    <div style="margin-top:16px;padding-top:16px;border-top:2px solid var(--border);">
+        <h3 style="color:var(--primary);margin-bottom:10px;font-size:14px;">📱 Fiskalni račun → Lager</h3>
+        <button class="qr-scan-btn" onclick="startFiskalniScan()" style="background:var(--accent);">📷 Skeniraj fiskalni račun</button>
+        <div id="qr-reader-fiskalni" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+        <div id="fiskalniResult" style="display:none;">
+            <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
+            <div id="fiskalniStavke"></div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn-primary" onclick="fiskalniSaveToLager()" style="flex:1;">✅ Prenesi u lager</button>
+                <button class="btn-secondary" onclick="fiskalniCancel()" style="flex:1;margin-top:0;">Otkaži</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Istorija -->
+    <h3 style="margin-top:20px;margin-bottom:10px;color:var(--primary);font-size:14px;">Istorija tretmana</h3>
+    <div id="agroTretmaniList"></div>
+</div>
+
+<div class="tab-content" id="tab-koopinfo"><div id="koopInfoContent"></div></div>
+
+<div class="tab-content" id="tab-knjigapolja">
+    <div class="form-row" style="margin-bottom:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Parcela</label>
+            <select id="kpParcelaSel" onchange="kpLoadBilans()">
+                <option value="">-- Sve parcele --</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Sezona</label>
+            <select id="kpSezona" onchange="kpLoadBilans()">
+                <option value="">Tekuća</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="kp-bilans" id="kpBilans">
+        <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:10px;">📊 Bilans</div>
+        <div id="kpBilansRows">
+            <p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>
+        </div>
+    </div>
+
+    <div id="kpSummary"></div>
+
+    <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
+    <div id="kpTretmaniList"></div>
+
+    <div class="kp-section-title" id="kpOtkupiTitle" style="display:none;">Proizvodnja (otkupi)</div>
+    <div id="kpOtkupiList"></div>
+
+    <div class="kp-section-title" id="kpTroskoviTitle" style="display:none;">Troškovi</div>
+    <div id="kpTroskoviList"></div>
+
+    <div style="margin-top:16px;">
+        <div class="kp-section-title">💰 Dodaj trošak</div>
+        <div style="background:var(--bg);border-radius:var(--radius);padding:12px;">
+            <div class="trosak-kat-grid" id="trosakKatGrid"></div>
+            <div class="form-group"><label>Opis</label><input type="text" id="trosakOpis" placeholder="Npr. Dizel za oranje"></div>
+            <div class="form-row">
+                <div class="form-group"><label>Iznos (RSD)</label><input type="number" id="trosakIznos" inputmode="numeric" placeholder="0"></div>
+                <div class="form-group"><label>Parcela (opciono)</label>
+                    <select id="trosakParcela"><option value="">-- Opšti trošak --</option></select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Datum</label><input type="date" id="trosakDatum"></div>
+                <div class="form-group"><label>Br. dokumenta</label><input type="text" id="trosakDokBroj" placeholder="Opciono"></div>
+            </div>
+            <button class="btn-primary" onclick="kpSaveTrosak()" style="margin-top:4px;">💾 Sačuvaj trošak</button>
+        </div>
+    </div>
+
+    <div class="kp-section-title">🧪 Lager preparata</div>
+    <div id="kpLagerList"></div>
+</div>
+
+<!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
+<div class="tab-content" id="tab-dispecer">
+    <!-- KPI -->
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px;">
+        <div class="stat-card"><div class="stat-value" id="dpK1">—</div><div class="stat-label">kg čeka</div></div>
+        <div class="stat-card"><div class="stat-value" id="dpK2">—</div><div class="stat-label">kamiona</div></div>
+        <div class="stat-card"><div class="stat-value" id="dpK3">—</div><div class="stat-label">kg traženo</div></div>
+        <div class="stat-card"><div class="stat-value" id="dpK4">—</div><div class="stat-label">planova</div></div>
+    </div>
+ 
+    <!-- Plan banner -->
+    <div class="dp-banner" id="dpBnr">
+        <div class="dp-bt" id="dpBt">—</div>
+        <div class="dp-bs" id="dpBs">—</div>
+        <button onclick="dpOK()" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
+        <button onclick="dpX()" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
+    </div>
+ 
+    <!-- Active plans -->
+    <div id="dpPlanList" style="margin-bottom:12px;"></div>
+ 
+    <!-- Three columns -->
+    <div class="dp-cols">
+        <!-- SUPPLY -->
+        <div class="dp-col supply">
+            <div class="dp-col-hd"><span>📦 Stanice — čeka</span><span id="dpST">0 kg</span></div>
+            <div class="dp-col-bd" id="dpSB"></div>
+        </div>
+        <!-- TRANSPORT -->
+        <div class="dp-col transport">
+            <div class="dp-col-hd"><span>🚛 Kamioni</span><span id="dpTT">0</span></div>
+            <div class="dp-col-bd" id="dpTB"></div>
+        </div>
+        <!-- DEMAND -->
+        <div class="dp-col demand">
+            <div class="dp-col-hd"><span>🏭 Hladnjače — traže</span><span id="dpDT">0 kg</span></div>
+            <div class="dp-col-bd" id="dpDB">
+                <div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:10px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Dodaj zahtev</div>
+                    <div class="form-row" style="margin-bottom:6px;">
+                        <div class="form-group" style="margin-bottom:0;"><select id="dpDK" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
+                        <div class="form-group" style="margin-bottom:0;"><input type="number" id="dpDG" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <select id="dpDV" style="flex:1;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Vrsta...</option></select>
+                        <select id="dpDL" style="width:70px;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
+                        <button onclick="dpAD()" style="padding:8px 14px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;">+</button>
+                    </div>
+                </div>
+                <div id="dpDL2"></div>
+            </div>
+        </div>
+    </div>
+ 
+    <div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted);">
+        <span id="dpRT">—</span>
+        <button onclick="loadDispecer()" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
+    </div>
+</div>
+    
+<div class="tab-content" id="tab-mgmt">
+    <!-- Sub tab bar — popunjava se dinamički iz showMgmtMain() -->
+    <div class="sub-tab-bar" id="mgmtSubBar"></div>
+
+    <!-- === KOOPERANTI sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-koop-kartica">
+        <div class="form-group"><label>Otkupna stanica</label><select id="mgmtStanica" onchange="onMgmtStanicaChange()"><option value="">-- Izaberi stanicu --</option></select></div>
+        <div class="form-group"><label>Kooperant</label><select id="mgmtKooperant" onchange="onMgmtKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select></div>
+        <div id="mgmtKarticaHeader" style="display:none;">
+            <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
+                <div style="font-size:18px;font-weight:700;" id="mgmtKarticaName"></div>
+                <div style="font-size:12px;opacity:0.8;" id="mgmtKarticaID"></div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="mgmtKarticaZad">0</div><div class="stat-label">Zaduženje</div></div>
+                <div class="stat-card"><div class="stat-value" id="mgmtKarticaRaz">0</div><div class="stat-label">Razduženje</div></div>
+                <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="mgmtKarticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
+            </div>
+        </div>
+        <div id="mgmtKarticaList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-koop-saldo">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Saldo svih kooperanata</h3>
+        <div id="mgmtKoopSaldoList"></div>
+    </div>
+
+     <div class="mgmt-sub sub-content" id="mgmt-koop-pregled">
+        <div class="form-group">
+            <label>Otkupna stanica</label>
+            <select id="mgmtPregledStanica" onchange="renderMgmtKoopPregled()"><option value="">-- Sve stanice --</option></select>
+        </div>
+        <div id="mgmtKoopPregledList"></div>
+    </div>
+
+    <!-- === STANICE sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-sta-otkupi">
+        <div class="form-group"><label>Otkupna stanica</label><select id="mgmtOtkupiStanica" onchange="loadMgmtOtkupi()"><option value="">-- Izaberi stanicu --</option></select></div>
+        <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group"><label>Od</label><input type="date" id="mgmtOtkupiOd" onchange="loadMgmtOtkupi()"></div>
+            <div class="form-group"><label>Do</label><input type="date" id="mgmtOtkupiDo" onchange="loadMgmtOtkupi()"></div>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiCount">0</div><div class="stat-label">Otkupa</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKg">0</div><div class="stat-label">Ukupno kg</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiVrednost">0</div><div class="stat-label">Vrednost</div></div>
+            <div class="stat-card"><div class="stat-value" id="mgmtOtkupiKoop">0</div><div class="stat-label">Kooperanata</div></div>
+        </div>
+        <div id="mgmtOtkupiList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-sta-saldo">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Saldo otkupnih mesta</h3>
+        <div id="mgmtSaldoOMList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-sta-roba">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Otkupljene količine po stanicama</h3>
+        <div id="mgmtOtkupPoOMList"></div>
+    </div>
+    
+
+    <!-- === KUPCI sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-kup-fakture">
+        <div class="form-group"><label>Kupac</label><select id="mgmtFaktureKupac" onchange="loadMgmtFakture()"><option value="">-- Izaberi --</option></select></div>
+        <div id="mgmtFaktureList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-kup-saldo">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Saldo kupaca</h3>
+        <div id="mgmtKupciList"></div>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-kup-roba">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Predate količine po kupcima</h3>
+        <div id="mgmtPredatoList"></div>
+    </div>
+
+    <!-- === AGROHEMIJA sub-contenti === -->
+    <div class="mgmt-sub sub-content" id="mgmt-agro-izdavanje">
+        <!-- Kooperant -->
+        <div class="form-group">
+            <label>Kooperant</label>
+            <div style="display:flex;gap:8px;">
+                <select id="izdKooperant" style="flex:1;" onchange="onIzdKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select>
+                <button class="qr-scan-btn" onclick="startIzdKoopScan()" style="width:auto;padding:10px 14px;margin:0;font-size:14px;">📷</button>
+            </div>
+        </div>
+        <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+
+        <!-- Parcele (multi-select za dozažu) -->
+        <div class="form-group" id="izdParcelaGroup" style="display:none;">
+            <label>Parcele <span style="font-weight:400;text-transform:none;letter-spacing:0;">(izaberite za pametnu dozažu)</span></label>
+            <div class="izd-parcele-multi" id="izdParceleList"></div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                Ukupna površina: <strong id="izdUkupnaHa">0</strong> ha
+            </div>
+        </div>
+
+        <!-- Smart Dosage preporuka -->
+        <div class="izd-preporuka" id="izdPreporuka">
+            <div class="izd-preporuka-title">📋 Preporučena doza</div>
+            <div class="izd-preporuka-calc" id="izdPreporukaCalc">—</div>
+            <div class="izd-preporuka-detail" id="izdPreporukaDetail">—</div>
+            <button class="izd-preporuka-btn" onclick="izdPrimeniPreporuku()">✅ Primeni količinu</button>
+        </div>
+
+        <!-- Barcode scan + Dropdown -->
+        <div style="background:var(--bg);border-radius:var(--radius);padding:12px;margin-bottom:12px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Dodaj artikal</div>
+            <div class="izd-scan-area">
+                <button class="qr-scan-btn" onclick="startIzdBarcodeScan()" style="background:var(--accent);">📷 Skeniraj barkod</button>
+            </div>
+            <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
+            <div class="form-row" style="margin-bottom:8px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <select id="izdArtikal" style="padding:10px;font-size:13px;">
+                        <option value="">-- Ili izaberi ručno --</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <input type="number" id="izdKolicina" placeholder="Količina" inputmode="decimal" style="padding:10px;font-size:13px;" value="1">
+                </div>
+            </div>
+            <button onclick="izdDodajStavku()" style="width:100%;padding:10px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;">+ Dodaj u korpu</button>
+        </div>
+
+        <!-- Korpa -->
+        <div class="izd-korpa">
+            <div class="izd-korpa-hd">
+                <span>🛒 Korpa</span>
+                <span id="izdKorpaCount">0 stavki</span>
+            </div>
+            <div class="izd-korpa-bd" id="izdKorpaBd">
+                <p style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">Skenirajte barkod ili izaberite artikal</p>
+            </div>
+            <div class="izd-total-bar">
+                <span>UKUPNO:</span>
+                <span id="izdUkupno">0 RSD</span>
+            </div>
+        </div>
+
+        <!-- Napomena -->
+        <div class="form-group">
+            <label>Napomena (opciono)</label>
+            <input type="text" id="izdNapomena" placeholder="Detalji...">
+        </div>
+
+        <!-- Akcije -->
+        <button class="btn-primary" onclick="izdZavrsi()">✅ ZAVRŠI IZDAVANJE</button>
+        <button class="btn-secondary" onclick="izdReset()">Poništi</button>
+    </div>
+
+    <div class="mgmt-sub sub-content" id="mgmt-agro-stanje">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Stanje magacina</h3>
+        <div id="mgmtAgroStanjeList"><p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p></div>
+    </div>
+</div>
+
+<!-- ==================== VOZAC TABS ==================== -->
+
+<div class="tab-content" id="tab-zbirna">
+    <div id="zbirnaCreateView" style="display:none;">
+        <h3 style="color:var(--primary);margin-bottom:12px;">Nova zbirna</h3>
+        <div class="form-group"><label>Kupac / Hladnjača</label><select id="fldZbirnaKupac"><option value="">-- Izaberi kupca --</option></select></div>
+        <div id="zbirnaOtkupiSummary" style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;"></div>
+        <div id="zbirnaOtkupiList"></div>
+        <button class="btn-primary" onclick="confirmZbirna()">KREIRAJ ZBIRNU</button>
+        <button class="btn-secondary" onclick="cancelZbirna()">Otkaži</button>
+    </div>
+    <div id="zbirnaMainView">
+        <h3 style="color:var(--primary);margin-bottom:8px;">Moje otpremnice (danas)</h3>
+        <div id="vozacOtpremniceList"></div>
+        <button class="btn-primary" onclick="startZbirnaCreation()" id="btnNovaZbirna" style="margin-top:12px;">NOVA ZBIRNA</button>
+        <h3 style="color:var(--primary);margin:16px 0 8px;">Kreirane zbirne</h3>
+        <div id="vozacZbirneList"></div>
+    </div>
+</div>
+
+<div class="tab-content" id="tab-transport">
+    <h3 style="color:var(--primary);margin-bottom:12px;">Pregled transporta</h3>
+    <div id="transportList"></div>
+</div>
+
+<!-- QR PROFILE MODAL -->
+<div id="qrProfileModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;justify-content:center;align-items:center;flex-direction:column;" onclick="this.style.display='none'">
+    <div style="background:white;padding:30px;border-radius:16px;text-align:center;max-width:320px;">
+        <div style="font-size:18px;font-weight:700;color:var(--primary);margin-bottom:4px;" id="qrProfileName"></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;" id="qrProfileRole"></div>
+        <canvas id="qrProfileCanvas" style="width:250px;height:250px;"></canvas>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:12px;" id="qrProfileID"></div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">Tap za zatvaranje</p>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- 1. Utils (nema zavisnosti) -->
+<script src="/otkupapp-pwa/src/js/utils/storage.js"></script>
+<script src="/otkupapp-pwa/src/js/utils/format.js"></script>
+<script src="/otkupapp-pwa/src/js/utils/dom.js"></script>
+<script src="/otkupapp-pwa/src/js/utils/sanitize.js"></script>
+<script src="/otkupapp-pwa/src/js/services/db.js"></script>
+<script src="/otkupapp-pwa/src/js/utils/async.js"></script>
+<script src="/otkupapp-pwa/src/js/utils/merge.js"></script> 
+    
+<!-- 2. Config + State -->
+<script src="/otkupapp-pwa/src/js/config.js"></script>
+<script src="/otkupapp-pwa/src/js/state.js"></script>
+
+<!-- 3. Services (zavise od config/utils) -->
+<script src="/otkupapp-pwa/src/js/services/db.js"></script>
+<script src="/otkupapp-pwa/src/js/services/api.js"></script>
+<script src="/otkupapp-pwa/src/js/services/auth.js"></script>
+<script src="/otkupapp-pwa/src/js/services/qr.js"></script>
+
+<!-- 4. UI (zavise od utils) -->
+<script src="/otkupapp-pwa/src/js/ui/toast.js"></script>
+<script src="/otkupapp-pwa/src/js/ui/signatures.js"></script>
+<script src="/otkupapp-pwa/src/js/ui/tabs.js"></script>
+
+
+<!-- 5. Features — kooperant (zavise od services) -->
+<script src="/otkupapp-pwa/src/js/features/kooperant/kartica.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/koopinfo.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/parcele.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/agromere.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/knjiga-polja.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/fiskalni.js"></script>
+<script src="/otkupapp-pwa/src/js/features/kooperant/sync.js"></script>
+
+
+<!-- 6. Features — otkup -->
+<script src="/otkupapp-pwa/src/js/features/otkup/otkup-form.js"></script>
+<script src="/otkupapp-pwa/src/js/features/otkup/otkup-pregled.js"></script>
+<script src="/otkupapp-pwa/src/js/features/otkup/otkupni-list.js"></script>
+<script src="/otkupapp-pwa/src/js/features/otkup/otpremnice.js"></script>
+<script src="/otkupapp-pwa/src/js/features/otkup/sync.js"></script>
+
+<!-- 7. Features — vozac -->
+<script src="/otkupapp-pwa/src/js/features/vozac/zbirna.js"></script>
+<script src="/otkupapp-pwa/src/js/features/vozac/transport.js"></script>
+
+<!-- 8. Features — management (SVE feature fajlove PRE mgmt-shell!) -->
+<script src="/otkupapp-pwa/src/js/features/management/kooperanti.js"></script>
+<script src="/otkupapp-pwa/src/js/features/management/stanice.js"></script>
+<script src="/otkupapp-pwa/src/js/features/management/kupci.js"></script>
+<script src="/otkupapp-pwa/src/js/features/management/agrohemija.js"></script>
+<script src="/otkupapp-pwa/src/js/features/management/dispecer.js"></script>
+<script src="/otkupapp-pwa/src/js/features/management/mgmt-shell.js"></script>
+
+<!-- 9. App bootstrap (poslednji) -->
+<script src="/otkupapp-pwa/src/js/app.js"></script>
+</body>
+</html>
