@@ -26,6 +26,7 @@
   margin-top: 3rem;
 }
 .proof-card {
+  text-align: left;
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -33,6 +34,14 @@
   opacity: 0;
   transform: translateY(16px);
   transition: opacity 0.5s, transform 0.5s, border-color 0.2s, box-shadow 0.2s;
+}
+.proof-card__logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  max-width: 100%;
+  margin-top: 0.25rem;
+  margin-bottom: 1.25rem;
 }
 .proof-card.visible { opacity: 1; transform: translateY(0); }
 .proof-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
@@ -57,16 +66,18 @@
   line-height: 1.75;
 }
 .proof-card__cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
+  display: inline-block;
   margin-top: 1.25rem;
-  color: var(--forest);
-  text-decoration: none;
   font-size: 0.88rem;
   font-weight: 600;
+  color: var(--forest);
+  text-decoration: none;
+  transition: color 0.2s, transform 0.2s;
 }
-.proof-card__cta:hover { color: var(--accent); }
+.proof-card__cta:hover {
+  color: var(--accent);
+  transform: translateX(2px);
+}
 .proof-card:nth-child(1) { transition-delay: .05s; }
 .proof-card:nth-child(2) { transition-delay: .12s; }
 .proof-card:nth-child(3) { transition-delay: .19s; }
@@ -174,6 +185,9 @@
 @media (max-width: 768px) {
   .proof-grid, .why-grid, .form-grid { grid-template-columns: 1fr; }
   .form-wrap { padding: 1.25rem; }
+  .proof-card__logo {
+    height: 48px;
+  }
 }
 </style>
 </head>
