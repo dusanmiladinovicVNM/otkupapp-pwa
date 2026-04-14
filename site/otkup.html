@@ -621,14 +621,12 @@
 
 <script>
 const observer = new IntersectionObserver(entries => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) entry.target.classList.add('visible');
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add('visible');
   });
 }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
-document.querySelectorAll(
-  '.benefit, .vstep, .detail-card, .role-card, .pricing-card, .package-card, .faq-item'
-).forEach(el => observer.observe(el));
+document.querySelectorAll('.benefit, .vstep, .role-card, .reason, .plan').forEach(el => observer.observe(el));
 
 const nav = document.getElementById('nav');
 const navToggle = document.getElementById('navToggle');
@@ -637,6 +635,41 @@ const navLinks = document.getElementById('navLinks');
 window.addEventListener('scroll', () => {
   if (nav) nav.classList.toggle('scrolled', window.scrollY > 20);
 }, { passive: true });
+
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const t = document.querySelector(a.getAttribute('href'));
+    if (t) {
+      e.preventDefault();
+      window.scrollTo({
+        top: t.getBoundingClientRect().top + window.pageYOffset - 80,
+        behavior: 'smooth'
+      });
+
+      if (navLinks && navLinks.classList.contains('open')) {
+        navLinks.classList.remove('open');
+        if (navToggle) navToggle.setAttribute('aria-expanded', 'false');
+      }
+    }
+  });
+});
+
+document.querySelectorAll('.detail-card__toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const card = btn.closest('.detail-card');
+    const isOpen = card.classList.contains('open');
+
+    document.querySelectorAll('.detail-card.open').forEach(c => {
+      c.classList.remove('open');
+      c.querySelector('.detail-card__toggle').setAttribute('aria-expanded', 'false');
+    });
+
+    if (!isOpen) {
+      card.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+});
 
 if (navToggle && navLinks) {
   navToggle.addEventListener('click', () => {
