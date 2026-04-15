@@ -21,8 +21,6 @@ function showLoginScreen() {
     container.innerHTML = `
         <div class="login-screen">
             <div class="login-shell">
-                <div class="login-bg-shape1"></div>
-                <div class="login-bg-shape2"></div>
 
                 <div class="login-top-area">
                     <a class="login-top-logo-link" href="index.html" aria-label="AgriX Gazdinstvo">
