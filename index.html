@@ -854,6 +854,82 @@
     <div id="transportList"></div>
 </div>
 
+<!-- VISE -->
+<div class="tab-content" id="tab-more">
+    <section class="more-screen">
+        <div class="more-shell">
+
+            <div class="more-card">
+                <div class="more-title">Više</div>
+                <div class="more-subtitle">Dodatne opcije gazdinstva</div>
+
+                <div class="more-menu">
+                    <button class="more-menu-item" onclick="showTab('kartica', findLegacyTabBtn('kartica'))">
+                        <span class="more-menu-icon">📒</span>
+                        <span class="more-menu-text">
+                            <strong>Kartica sa otkupljivačem</strong>
+                            <small>Pregled zaduženja, razduženja i salda</small>
+                        </span>
+                    </button>
+
+                    <button class="more-menu-item" onclick="showTab('koopinfo', findLegacyTabBtn('koopinfo'))">
+                        <span class="more-menu-icon">ℹ</span>
+                        <span class="more-menu-text">
+                            <strong>Otkup informacije</strong>
+                            <small>Status otkupa, radno vreme i aktuelne cene</small>
+                        </span>
+                    </button>
+
+                    <button class="more-menu-item" onclick="showTab('agromere', findLegacyTabBtn('agromere')); setTimeout(() => { if (typeof startFiskalniScan === 'function') startFiskalniScan(); }, 250);">
+                        <span class="more-menu-icon">🧾</span>
+                        <span class="more-menu-text">
+                            <strong>Fiskalni računi</strong>
+                            <small>Skeniranje i prenos u lager</small>
+                        </span>
+                    </button>
+
+                    <button class="more-menu-item" onclick="syncKooperantFromMore()">
+                        <span class="more-menu-icon">↻</span>
+                        <span class="more-menu-text">
+                            <strong>Offline i sinhronizacija</strong>
+                            <small>Pokreni ručni sync i proveri stanje</small>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </section>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav role-kooperant" id="koopBottomNav">
+    <button class="bottom-nav-btn active" data-tab="home" onclick="showBottomTab('home', this)">
+        <span class="bottom-nav-icon">⌂</span>
+        <span class="bottom-nav-label">Pregled</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="parcele" onclick="showBottomTab('parcele', this)">
+        <span class="bottom-nav-icon">▣</span>
+        <span class="bottom-nav-label">Parcele</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="agromere" onclick="showBottomTab('agromere', this)">
+        <span class="bottom-nav-icon">✿</span>
+        <span class="bottom-nav-label">Radovi</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="knjigapolja" onclick="showBottomTab('knjigapolja', this)">
+        <span class="bottom-nav-icon">☰</span>
+        <span class="bottom-nav-label">Knjiga</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="more" onclick="showBottomTab('more', this)">
+        <span class="bottom-nav-icon">⋯</span>
+        <span class="bottom-nav-label">Više</span>
+    </button>
+</div>
+    
 <!-- QR PROFILE MODAL -->
 <div id="qrProfileModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;justify-content:center;align-items:center;flex-direction:column;" onclick="this.style.display='none'">
     <div style="background:white;padding:30px;border-radius:16px;text-align:center;max-width:320px;">
