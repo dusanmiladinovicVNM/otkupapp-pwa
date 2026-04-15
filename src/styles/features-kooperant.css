@@ -23,13 +23,13 @@
           margin-bottom: 12px;
         }
 
-.kartica-hero--simple {
-  padding: 16px 18px;
-}
+        .kartica-hero--simple {
+          padding: 16px 18px;
+        }
 
-.kartica-hero--simple .kartica-hero-text {
-  width: 100%;
-}
+        .kartica-hero--simple .kartica-hero-text {
+          width: 100%;
+        }
 
 .kartica-eyebrow {
   font-size: 12px;
@@ -242,24 +242,31 @@
 
   .kartica-row {
     grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 16px 18px;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .kartica-opis {
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   .kartica-amount {
     text-align: left;
     display: flex;
     justify-content: space-between;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 12px;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 10px;
     background: rgba(97, 112, 83, 0.05);
+    font-size: 13px;
   }
 
   .kartica-amount::before {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-muted);
   }
@@ -271,20 +278,80 @@
 
 @media (max-width: 640px) {
   #tab-kartica {
-    padding: 8px;
+    padding: 6px;
   }
 
+  .kartica-hero,
   .kartica-hero--simple {
-    padding: 14px;
-    margin-bottom: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-radius: 16px;
+  }
+
+  .kartica-eyebrow {
+    font-size: 10px;
+    margin-bottom: 4px;
   }
 
   .kartica-title {
-    font-size: 18px;
+    font-size: 17px;
+  }
+
+  .kartica-subline {
+    margin-top: 3px;
+    font-size: 12px;
+  }
+
+  .kartica-summary-grid {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .kartica-summary-card {
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .kartica-summary-label {
+    font-size: 10px;
+    margin-bottom: 4px;
   }
 
   .kartica-summary-value {
-    font-size: 24px;
+    font-size: 20px;
+  }
+
+  .kartica-table-card {
+    border-radius: 16px;
+  }
+
+  .kartica-table-top {
+    padding: 12px 14px 8px;
+  }
+
+  .kartica-table-title {
+    font-size: 16px;
+  }
+
+  .kartica-table-subtitle {
+    font-size: 12px;
+  }
+
+  .kartica-list {
+    padding: 4px 0;
+  }
+
+  .kartica-row {
+    padding: 10px 12px;
+    gap: 7px;
+  }
+
+  .kartica-doc {
+    font-size: 13px;
+  }
+
+  .kartica-date {
+    font-size: 11px;
   }
 }
         
@@ -293,18 +360,6 @@
         .koop-display.visible { display: block; }
         .koop-display .koop-name { font-size: 18px; font-weight: 700; }
         .koop-display .koop-id { font-size: 12px; opacity: 0.8; }
-
-        .kartica-hero--simple { padding: 22px 24px; }
-        .kartica-hero--simple .kartica-hero-text { width: 100%; }
-        .kartica-screen { background: transparent; padding: 0; }
-        .kartica-shell { max-width: 100%; }
-        #tab-kartica { padding: 12px; box-sizing: border-box; }
-
-        @media (max-width: 640px) {
-          #tab-kartica { padding: 10px; }
-          .kartica-hero--simple { padding: 16px; }
-          .kartica-title { font-size: 20px; }
-        }
 
         .parcel-label {
             background: rgba(255,255,255,0.92);
