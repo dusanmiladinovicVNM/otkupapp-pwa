@@ -3,6 +3,19 @@
         .koop-display.visible { display: block; }
         .koop-display .koop-name { font-size: 18px; font-weight: 700; }
         .koop-display .koop-id { font-size: 12px; opacity: 0.8; }
+
+        .kartica-hero--simple { padding: 22px 24px; }
+        .kartica-hero--simple .kartica-hero-text { width: 100%; }
+        .kartica-screen { background: transparent; padding: 0; }
+        .kartica-shell { max-width: 100%; }
+        #tab-kartica { padding: 12px; box-sizing: border-box; }
+
+        @media (max-width: 640px) {
+          #tab-kartica { padding: 10px; }
+          .kartica-hero--simple { padding: 16px; }
+          .kartica-title { font-size: 20px; }
+        }
+
         .parcel-label {
             background: rgba(255,255,255,0.92);
             border: 1px solid #333;
