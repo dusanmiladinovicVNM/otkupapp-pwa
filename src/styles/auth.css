@@ -45,30 +45,6 @@ body {
   align-items: center;
 }
 
-.login-bg-shape1,
-.login-bg-shape2 {
-  position: absolute;
-  border-radius: 28px;
-  pointer-events: none;
-}
-
-.login-bg-shape1 {
-  top: 24px;
-  right: 18px;
-  width: 260px;
-  height: 160px;
-  background: rgba(188, 198, 160, 0.12);
-}
-
-.login-bg-shape2 {
-  top: 110px;
-  left: -36px;
-  width: 120px;
-  height: 240px;
-  background: var(--dark);
-  border-radius: 0 32px 32px 0;
-}
-
 /* TOP LOGO */
 .login-top-area {
   position: relative;
