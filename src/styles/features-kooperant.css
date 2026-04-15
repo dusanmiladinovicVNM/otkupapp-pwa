@@ -18,13 +18,13 @@
           background: linear-gradient(135deg, rgba(22, 53, 15, 0.98), rgba(33, 72, 24, 0.96));
           color: #f5f4ee;
           border-radius: 24px;
-          padding: 26px 28px;
+          padding: 16px 18px;
           box-shadow: 0 18px 40px rgba(31, 41, 24, 0.08);
-          margin-bottom: 18px;
+          margin-bottom: 12px;
         }
 
 .kartica-hero--simple {
-  padding: 22px 24px;
+  padding: 16px 18px;
 }
 
 .kartica-hero--simple .kartica-hero-text {
@@ -36,7 +36,7 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: rgba(245, 244, 238, 0.72);
-  margin-bottom: 8px;
+  margin-bottom: 5px;
 }
 
 .kartica-title {
@@ -48,7 +48,7 @@
 }
 
 .kartica-subline {
-  margin-top: 8px;
+  margin-top: 4px;
   font-size: 14px;
   color: rgba(245, 244, 238, 0.82);
 }
@@ -56,8 +56,8 @@
 .kartica-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .kartica-summary-card {
@@ -65,7 +65,7 @@
   border: 1px solid rgba(255,255,255,0.55);
   border-radius: 18px;
   box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
-  padding: 18px 18px 16px;
+  padding: 14px 16px 12px;
 }
 
 .kartica-summary-card--saldo {
@@ -79,11 +79,11 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .kartica-summary-value {
-  font-size: 30px;
+  font-size: 26px;
   line-height: 1;
   font-weight: 800;
   color: var(--primary);
@@ -107,7 +107,7 @@
 }
 
 .kartica-table-top {
-  padding: 22px 22px 14px;
+  padding: 16px 18px 10px;
   border-bottom: 1px solid rgba(92, 108, 77, 0.14);
 }
 
@@ -118,7 +118,7 @@
 }
 
 .kartica-table-subtitle {
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -127,7 +127,7 @@
   display: grid;
   grid-template-columns: 1.2fr 1.6fr 0.7fr 0.7fr 0.7fr;
   gap: 14px;
-  padding: 14px 22px;
+  padding: 10px 18px;
   background: rgba(97, 112, 83, 0.05);
   border-bottom: 1px solid rgba(92, 108, 77, 0.14);
   font-size: 11px;
@@ -150,7 +150,7 @@
   grid-template-columns: 1.2fr 1.6fr 0.7fr 0.7fr 0.7fr;
   gap: 14px;
   align-items: center;
-  padding: 16px 22px;
+  padding: 12px 18px;
   border-bottom: 1px solid rgba(92, 108, 77, 0.14);
   transition: background 0.18s ease;
 }
@@ -166,7 +166,7 @@
 .kartica-docblock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .kartica-doc {
@@ -271,15 +271,16 @@
 
 @media (max-width: 640px) {
   #tab-kartica {
-    padding: 10px;
+    padding: 8px;
   }
 
   .kartica-hero--simple {
-    padding: 16px;
+    padding: 14px;
+    margin-bottom: 10px;
   }
 
   .kartica-title {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .kartica-summary-value {
