@@ -180,6 +180,128 @@
 
 <!-- ==================== KOOPERANT TABS ==================== -->
 
+<div class="tab-content" id="tab-home">
+    <section class="home-screen">
+        <div class="home-shell">
+
+            <div class="home-hero">
+                <div class="home-hero-top">
+                    <div>
+                        <div class="home-eyebrow">Pregled gazdinstva</div>
+                        <h1 class="home-title" id="homeName">Gazdinstvo</h1>
+                        <div class="home-subline">
+                            Kooperant:
+                            <span id="homeKoopId">-</span>
+                        </div>
+                    </div>
+
+                    <button class="home-add-btn" onclick="openHomeQuickActions()">+ Dodaj</button>
+                </div>
+            </div>
+
+            <div class="home-kpi-grid">
+                <div class="home-kpi-card">
+                    <div class="home-kpi-label">Današnji radovi</div>
+                    <div class="home-kpi-value" id="homeKpiRadovi">0</div>
+                </div>
+
+                <div class="home-kpi-card">
+                    <div class="home-kpi-label">Aktivna upozorenja</div>
+                    <div class="home-kpi-value is-warning" id="homeKpiAlerts">0</div>
+                </div>
+
+                <div class="home-kpi-card">
+                    <div class="home-kpi-label">Saldo</div>
+                    <div class="home-kpi-value" id="homeKpiSaldo">0</div>
+                </div>
+            </div>
+
+            <div class="home-grid">
+                <div class="home-card">
+                    <div class="home-card-head">
+                        <div>
+                            <div class="home-card-title">Upozorenja</div>
+                            <div class="home-card-subtitle">Meteo, sync i otvorene stavke</div>
+                        </div>
+                        <button class="home-card-link" onclick="showHomeAlerts()">Sve</button>
+                    </div>
+                    <div id="homeAlertsList" class="home-list"></div>
+                </div>
+
+                <div class="home-card">
+                    <div class="home-card-head">
+                        <div>
+                            <div class="home-card-title">Brze akcije</div>
+                            <div class="home-card-subtitle">Najčešće radnje</div>
+                        </div>
+                    </div>
+                    <div class="home-actions-grid">
+                        <button class="home-action-btn" onclick="goToNewRad()">Novi rad</button>
+                        <button class="home-action-btn" onclick="goToNewTrosak()">Novi trošak</button>
+                        <button class="home-action-btn" onclick="goToScanRacun()">Slikaj račun</button>
+                        <button class="home-action-btn" onclick="showTab('knjigapolja')">Knjiga polja</button>
+                    </div>
+                </div>
+
+                <div class="home-card">
+                    <div class="home-card-head">
+                        <div>
+                            <div class="home-card-title">Mini bilans</div>
+                            <div class="home-card-subtitle">Sažetak tekuće sezone</div>
+                        </div>
+                        <button class="home-card-link" onclick="showTab('knjigapolja')">Otvori</button>
+                    </div>
+                    <div class="home-bilans-grid">
+                        <div class="home-bilans-item">
+                            <span>Proizvodnja</span>
+                            <strong id="homeBilansProizvodnja">0</strong>
+                        </div>
+                        <div class="home-bilans-item">
+                            <span>Troškovi</span>
+                            <strong id="homeBilansTroskovi">0</strong>
+                        </div>
+                        <div class="home-bilans-item">
+                            <span>Agrohemija</span>
+                            <strong id="homeBilansAgro">0</strong>
+                        </div>
+                        <div class="home-bilans-item">
+                            <span>Rezultat</span>
+                            <strong id="homeBilansRezultat">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="home-card">
+                    <div class="home-card-head">
+                        <div>
+                            <div class="home-card-title">Sažetak kartice</div>
+                            <div class="home-card-subtitle">Poslednje stanje sa otkupljivačem</div>
+                        </div>
+                        <button class="home-card-link" onclick="showTab('kartica')">Kartica</button>
+                    </div>
+
+                    <div class="home-kartica-summary">
+                        <div class="home-kartica-row">
+                            <span>Zaduženje</span>
+                            <strong id="homeKarticaZad">0</strong>
+                        </div>
+                        <div class="home-kartica-row">
+                            <span>Razduženje</span>
+                            <strong id="homeKarticaRaz">0</strong>
+                        </div>
+                        <div class="home-kartica-row home-kartica-row--saldo">
+                            <span>Saldo</span>
+                            <strong id="homeKarticaSaldo">0</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+</div>
+
+<!-- ==================== Kartica ==================== -->
 <div class="tab-content" id="tab-kartica">
     <section class="kartica-screen">
         <div class="kartica-shell">
