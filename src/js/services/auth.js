@@ -25,23 +25,13 @@ function showLoginScreen() {
             <div class="login-bg-shape2"></div>
 
             <div class="login-top-area">
-                <div class="login-app-icon">
-                    <a class="nav__brand nav__brand--logo" href="index.html" aria-label="AgriX početna">
-                        <img src="site/img/AgriX-Logo-Final_Novi.png" alt="AgriX" class="nav__logo">
+                <div class="login-brand-wrap">
+                    <a class="nav__brand nav__brand--logo" href="index.html" aria-label="AgriX Gazdinstvo">
+                        <img src="site/img/AgriX-Logo-Final_Novi.png" alt="AgriX Gazdinstvo" class="login-brand-logo">
                     </a>
-                </div>
-
-                <div class="login-brand-lockup">
-                    <div class="login-brand-name">
-                        <span class="otkup">Otkup</span><span class="app">App</span>
-                    </div>
-                    <div class="login-brand-divider"></div>
-                    <div class="login-brand-sub">
-                        <span>by AgriX</span>
-                    </div>
+                    <div class="login-brand-title">AgriX Gazdinstvo</div>
                 </div>
             </div>
-
             <div class="login-card">
                 <div class="login-card-title">Prijava</div>
 
