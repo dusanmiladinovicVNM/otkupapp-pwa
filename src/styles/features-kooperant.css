@@ -302,6 +302,15 @@
   }
 }
 
+.home-alert-list {
+  margin-top: 6px;
+}
+
+.home-alert-list-item {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
 /* =========================================================
    KOOPERANT — PREGLED QUICK ACTIONS
    ========================================================= */
