@@ -1,4 +1,4 @@
-const CACHE_NAME = 'otkupapp-v171';
+const CACHE_NAME = 'AgriX-v1';
 const ASSETS = [
     './index.html',
     './manifest.json',
