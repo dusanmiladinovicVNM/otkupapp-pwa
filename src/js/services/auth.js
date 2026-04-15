@@ -26,14 +26,9 @@ function showLoginScreen() {
 
             <div class="login-top-area">
                 <div class="login-app-icon">
-                    <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="OtkupApp logo">
-                        <line x1="10" y1="50" x2="32" y2="10" stroke="#c8a84b" stroke-width="6.5" stroke-linecap="round"/>
-                        <line x1="32" y1="10" x2="44" y2="50" stroke="#c8a84b" stroke-width="6.5" stroke-linecap="round"/>
-                        <line x1="19" y1="34" x2="38" y2="34" stroke="#c8a84b" stroke-width="4.5" stroke-linecap="round"/>
-                        <rect x="42" y="8" width="6" height="46" fill="#1e2d14"/>
-                        <line x1="49" y1="10" x2="62" y2="50" stroke="#5ea135" stroke-width="6.5" stroke-linecap="round"/>
-                        <line x1="62" y1="10" x2="49" y2="50" stroke="#5ea135" stroke-width="5" stroke-linecap="round"/>
-                    </svg>
+                    <a class="nav__brand nav__brand--logo" href="index.html" aria-label="AgriX početna">
+                        <img src="img/AgriX-Logo-Final_Novi.png" alt="AgriX" class="nav__logo">
+                    </a>
                 </div>
 
                 <div class="login-brand-lockup">
