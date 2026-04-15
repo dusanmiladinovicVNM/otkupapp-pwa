@@ -1,4 +1,309 @@
         /* =========================================================
+           KOOPERANT — PREGLED
+           ========================================================= */
+
+        .home-screen {
+          background: transparent;
+          padding: 0;
+        }
+
+        .home-shell {
+          width: 100%;
+          max-width: 1120px;
+          margin: 0 auto;
+        }
+
+        #tab-home {
+          padding: 12px;
+          box-sizing: border-box;
+        }
+
+        .home-hero {
+          background: linear-gradient(135deg, rgba(22, 53, 15, 0.98), rgba(33, 72, 24, 0.96));
+          color: #f5f4ee;
+          border-radius: 24px;
+          padding: 18px 20px;
+          box-shadow: 0 18px 40px rgba(31, 41, 24, 0.08);
+          margin-bottom: 12px;
+        }
+
+        .home-hero-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 14px;
+        }
+
+.home-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(245, 244, 238, 0.72);
+  margin-bottom: 6px;
+}
+
+.home-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.home-subline {
+  margin-top: 4px;
+  font-size: 14px;
+  color: rgba(245, 244, 238, 0.82);
+}
+
+.home-add-btn {
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.14);
+  color: white;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.home-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.home-kpi-card,
+.home-card {
+  background: var(--koop-surface, rgba(255,255,255,0.82));
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+}
+
+.home-kpi-card {
+  padding: 14px 16px 12px;
+}
+
+.home-kpi-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.home-kpi-value {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-kpi-value.is-warning {
+  color: var(--warning);
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+}
+
+.home-card {
+  padding: 16px;
+}
+
+.home-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.home-card-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.home-card-subtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.home-card-link {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.home-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-alert-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(97, 112, 83, 0.05);
+}
+
+.home-alert-item.is-danger {
+  background: rgba(180, 77, 77, 0.08);
+}
+
+.home-alert-item.is-warning {
+  background: rgba(245, 158, 11, 0.10);
+}
+
+.home-alert-item.is-ok {
+  background: rgba(61, 141, 75, 0.08);
+}
+
+.home-alert-icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.home-alert-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.home-alert-text {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.home-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-action-btn {
+  min-height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: white;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.home-bilans-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-bilans-item,
+.home-kartica-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(97, 112, 83, 0.05);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.home-bilans-item strong,
+.home-kartica-row strong {
+  font-size: 15px;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-kartica-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-kartica-row--saldo {
+  background: rgba(199, 163, 63, 0.08);
+}
+
+@media (max-width: 900px) {
+  .home-kpi-grid,
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  #tab-home {
+    padding: 8px;
+  }
+
+  .home-hero {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .home-hero-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-title {
+    font-size: 20px;
+  }
+
+  .home-subline {
+    font-size: 12px;
+  }
+
+  .home-kpi-card,
+  .home-card {
+    border-radius: 16px;
+  }
+
+  .home-kpi-card {
+    padding: 12px;
+  }
+
+  .home-kpi-value {
+    font-size: 22px;
+  }
+
+  .home-card {
+    padding: 14px;
+  }
+
+  .home-card-title {
+    font-size: 16px;
+  }
+
+  .home-actions-grid,
+  .home-bilans-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+        /* =========================================================
            KOOPERANT — KARTICA
            ========================================================= */
 
