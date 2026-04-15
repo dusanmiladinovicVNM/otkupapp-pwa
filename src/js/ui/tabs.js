@@ -21,6 +21,7 @@ function showTab(tabName, btn) {
     if (tabName === 'queue') { renderQueueList(); updateStats(); }
     if (tabName === 'pregled') loadOtkupPregled();
     if (tabName === 'otpremnice') loadOtpremaOverview();
+    if (tabName === 'home') loadPregled();
     if (tabName === 'kartica') loadKartica();
     if (tabName === 'parcele') loadParcele();
     if (tabName === 'agromere') loadAgronom();
