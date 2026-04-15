@@ -17,7 +17,7 @@ async function loadKartica() {
         return;
     }
 
-    listEl.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
+    listEl.innerHTML = '<div class="kartica-loading">Učitavanje kartice...</div>';
 
     let records = [];
     const json = await safeAsync(async () => {
@@ -41,7 +41,12 @@ function renderKartica(records) {
     if (!listEl) return;
 
     if (!records.length) {
-        listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Kartica nije dostupna</p>';
+        listEl.innerHTML = `
+            <div class="kartica-empty">
+                <div class="kartica-empty-title">Nema stavki kartice</div>
+                <div class="kartica-empty-text">Trenutno nema dostupnih zaduženja ni razduženja.</div>
+            </div>
+        `;
         if (zadEl) zadEl.textContent = '0';
         if (razEl) razEl.textContent = '0';
         if (saldoEl) saldoEl.textContent = '0';
@@ -61,18 +66,28 @@ function renderKartica(records) {
         raz += ra;
         saldo = s;
 
-        return `<div class="queue-item" style="border-left-color:${z > 0 ? 'var(--danger)' : 'var(--success)'};">
-            <div class="qi-header">
-                <span class="qi-koop">${escapeHtml(r.BrojDok || '')}</span>
-                <span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span>
+        return `
+            <div class="kartica-row">
+                <div class="kartica-docblock">
+                    <div class="kartica-doc">${escapeHtml(r.BrojDok || '-')}</div>
+                    <div class="kartica-date">${escapeHtml(fmtDate(r.Datum))}</div>
+                </div>
+
+                <div class="kartica-opis">${escapeHtml(r.Opis || '-')}</div>
+
+                <div class="kartica-amount kartica-amount--zad ${z > 0 ? 'is-danger' : ''}">
+                    ${z > 0 ? z.toLocaleString('sr-RS') : '—'}
+                </div>
+
+                <div class="kartica-amount kartica-amount--raz ${ra > 0 ? 'is-success' : ''}">
+                    ${ra > 0 ? ra.toLocaleString('sr-RS') : '—'}
+                </div>
+
+                <div class="kartica-amount kartica-amount--saldo is-saldo">
+                    ${s.toLocaleString('sr-RS')}
+                </div>
             </div>
-            <div class="qi-detail">${escapeHtml(r.Opis || '')}</div>
-            <div class="qi-detail" style="font-size:12px;margin-top:2px;">
-                ${z > 0 ? '<span style="color:var(--danger);">Zaduž: ' + z.toLocaleString('sr-RS') + '</span> ' : ''}
-                ${ra > 0 ? '<span style="color:var(--success);">Razduž: ' + ra.toLocaleString('sr-RS') + '</span> ' : ''}
-                | Saldo: <strong>${s.toLocaleString('sr-RS')}</strong>
-            </div>
-        </div>`;
+        `;
     }).join('');
 
     if (zadEl) zadEl.textContent = zad.toLocaleString('sr-RS');
