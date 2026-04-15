@@ -168,12 +168,27 @@ async function buildPregledData() {
             return !!mera && d < todayIso && !t.deleted;
         });
 
-        if (todayRadovi.length === 0 && kasneRadove.length > 0) {
+        if (todayRadovi.length === 0) {
+            const kulturaCounts = {};
+            const parcele = (stammdaten.parcele || []).filter(p => p.KooperantID === CONFIG.ENTITY_ID);
+
+            parcele.forEach(p => {
+                const k = String(p.Kultura || '').trim();
+                if (!k) return;
+                kulturaCounts[k] = (kulturaCounts[k] || 0) + 1;
+            });
+
+            const dominantnaKultura = Object.keys(kulturaCounts)
+                .sort((a, b) => kulturaCounts[b] - kulturaCounts[a])[0] || '';
+
+            const predlog = getRadoviPredlogZaKulturu(dominantnaKultura);
+
             data.alerts.push({
-                type: 'warning',
-                icon: '🛠️',
-                title: 'Radovi',
-                text: `Imate ${kasneRadove.length} ranijih evidentiranih radova za pregled.`,
+                type: 'ok',
+                icon: predlog.icon,
+                title: predlog.title,
+                text: predlog.text,
+                items: predlog.items,
                 action: 'agromere'
             });
         }
@@ -388,9 +403,14 @@ function renderPregled(data) {
                     <div>
                         <div class="home-alert-title">${escapeHtml(a.title || '')}</div>
                         <div class="home-alert-text">${escapeHtml(a.text || '')}</div>
-                    </div>
-                </button>
-            `).join('');
+                        ${Array.isArray(a.items) && a.items.length ? `
+                            <div class="home-alert-list">
+                                ${a.items.map(item => `<div class="home-alert-list-item">• ${escapeHtml(item)}</div>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </button>
+        `).join('');
         }
     }
 
@@ -493,4 +513,57 @@ function findTabBtnByTabName(tabName) {
         const onclick = String(btn.getAttribute('onclick') || '');
         return onclick.includes(`showTab('${tabName}'`) || onclick.includes(`showTab("${tabName}"`);
     }) || null;
+}
+
+function getRadoviPredlogZaKulturu(kultura) {
+    const k = String(kultura || '').trim().toLowerCase();
+
+    if (k === 'jabuka') {
+        return {
+            icon: '🍎',
+            title: 'Planirani radovi',
+            text: 'Za kulturu jabuka dostupan je predlog sledećih radova.',
+            items: [
+                'Zaštita zasada',
+                'Prihrana',
+                'Pregled i korekcija opreme'
+            ]
+        };
+    }
+
+    if (k === 'visnja' || k === 'višnja') {
+        return {
+            icon: '🍒',
+            title: 'Planirani radovi',
+            text: 'Za kulturu višnja dostupan je predlog sledećih radova.',
+            items: [
+                'Zaštita zasada',
+                'Praćenje zrenja i priprema berbe',
+                'Rezidba po potrebi'
+            ]
+        };
+    }
+
+    if (k === 'sljiva' || k === 'šljiva') {
+        return {
+            icon: '🍑',
+            title: 'Planirani radovi',
+            text: 'Za kulturu šljiva dostupan je predlog sledećih radova.',
+            items: [
+                'Zaštita zasada',
+                'Prihrana',
+                'Planiranje berbe'
+            ]
+        };
+    }
+
+    return {
+        icon: '📅',
+        title: 'Planirani radovi',
+        text: 'Dostupan je automatski predlog sledećih radova.',
+        items: [
+            'Pregled parcele',
+            'Planiranje narednog rada'
+        ]
+    };
 }
