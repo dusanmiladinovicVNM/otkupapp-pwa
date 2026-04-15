@@ -297,7 +297,41 @@
                     </div>
                 </div>
             </div>
+            <div class="home-quick-modal" id="homeQuickActionsModal" onclick="closeHomeQuickActions()">
+    <div class="home-quick-sheet" onclick="event.stopPropagation()">
+        <div class="home-quick-handle"></div>
+        <div class="home-quick-title">Brze akcije</div>
 
+        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToNewRad();">
+            <span>🛠️</span>
+            <span>Novi rad</span>
+        </button>
+
+        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToNewTrosak();">
+            <span>💰</span>
+            <span>Novi trošak</span>
+        </button>
+
+        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToScanRacun();">
+            <span>🧾</span>
+            <span>Slikaj račun</span>
+        </button>
+
+        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToKartica();">
+            <span>📒</span>
+            <span>Kartica</span>
+        </button>
+
+        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToKnjigaPolja();">
+            <span>📘</span>
+            <span>Knjiga polja</span>
+        </button>
+
+        <button class="home-quick-cancel" onclick="closeHomeQuickActions()">
+            Otkaži
+        </button>
+    </div>
+</div>
         </div>
     </section>
 </div>
