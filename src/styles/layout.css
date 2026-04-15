@@ -187,3 +187,25 @@ body.has-koop-bottom-nav #tab-knjigapolja,
 body.has-koop-bottom-nav #tab-more {
   padding-bottom: 92px;
 }
+
+/* desktop = top nav */
+@media (min-width: 901px) {
+  .tab-bar .role-kooperant {
+    display: inline-flex !important;
+  }
+
+  .bottom-nav.role-kooperant {
+    display: none !important;
+  }
+}
+
+/* mobile = bottom nav */
+@media (max-width: 900px) {
+  .tab-bar .role-kooperant {
+    display: none !important;
+  }
+
+  .bottom-nav.role-kooperant {
+    display: grid !important;
+  }
+}
