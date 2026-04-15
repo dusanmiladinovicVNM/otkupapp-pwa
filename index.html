@@ -177,16 +177,68 @@
 <!-- ==================== KOOPERANT TABS ==================== -->
 
 <div class="tab-content" id="tab-kartica">
-    <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
-        <div style="font-size:18px;font-weight:700;" id="karticaName"></div>
-        <div style="font-size:12px;opacity:0.8;" id="karticaID"></div>
-    </div>
-    <div class="stats-grid">
-        <div class="stat-card"><div class="stat-value" id="karticaZaduzenje">0</div><div class="stat-label">Zaduženje</div></div>
-        <div class="stat-card"><div class="stat-value" id="karticaRazduzenje">0</div><div class="stat-label">Razduženje</div></div>
-        <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="karticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
-    </div>
-    <div id="karticaList"></div>
+    <section class="kartica-screen">
+        <div class="kartica-shell">
+
+            <div class="kartica-hero">
+                <div class="kartica-hero-left">
+                    <div class="kartica-logo-wrap">
+                        <img
+                            src="site/img/AgriX-Gazdinstvo-Logo-Final.png"
+                            alt="AgriX Gazdinstvo"
+                            class="kartica-logo"
+                        >
+                    </div>
+
+                    <div class="kartica-hero-text">
+                        <div class="kartica-eyebrow">Finansijska kartica</div>
+                        <h1 class="kartica-title" id="karticaName">Naziv gazdinstva</h1>
+                        <div class="kartica-subline">
+                            ID kooperanta:
+                            <span id="karticaID">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kartica-summary-grid">
+                <div class="kartica-summary-card">
+                    <div class="kartica-summary-label">Zaduženje</div>
+                    <div class="kartica-summary-value is-danger" id="karticaZaduzenje">0</div>
+                </div>
+
+                <div class="kartica-summary-card">
+                    <div class="kartica-summary-label">Razduženje</div>
+                    <div class="kartica-summary-value is-success" id="karticaRazduzenje">0</div>
+                </div>
+
+                <div class="kartica-summary-card kartica-summary-card--saldo">
+                    <div class="kartica-summary-label">Trenutni saldo</div>
+                    <div class="kartica-summary-value" id="karticaSaldo">0</div>
+                </div>
+            </div>
+
+            <div class="kartica-table-card">
+                <div class="kartica-table-top">
+                    <div>
+                        <div class="kartica-table-title">Stavke kartice</div>
+                        <div class="kartica-table-subtitle">Pregled svih knjiženja i stanja</div>
+                    </div>
+                </div>
+
+                <div class="kartica-table-head">
+                    <div>Dokument / datum</div>
+                    <div>Opis</div>
+                    <div class="kartica-ta-right">Zaduženje</div>
+                    <div class="kartica-ta-right">Razduženje</div>
+                    <div class="kartica-ta-right">Saldo</div>
+                </div>
+
+                <div id="karticaList" class="kartica-list"></div>
+            </div>
+
+        </div>
+    </section>
 </div>
     
 <div class="tab-content" id="tab-parcele">
