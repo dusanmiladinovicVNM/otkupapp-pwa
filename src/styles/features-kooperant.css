@@ -1,3 +1,236 @@
+        /* =========================================================
+           KOOPERANT — KARTICA
+           ========================================================= */
+
+        .kartica-screen { background: transparent; padding: 0; }
+        .kartica-shell {
+          width: 100%;
+          max-width: 1120px;
+          margin: 0 auto;
+        }
+
+        #tab-kartica {
+          padding: 12px;
+          box-sizing: border-box;
+        }
+
+        .kartica-hero {
+          background: linear-gradient(135deg, rgba(22, 53, 15, 0.98), rgba(33, 72, 24, 0.96));
+          color: #f5f4ee;
+          border-radius: 24px;
+          padding: 26px 28px;
+          box-shadow: 0 18px 40px rgba(31, 41, 24, 0.08);
+          margin-bottom: 18px;
+        }
+
+.kartica-hero--simple {
+  padding: 22px 24px;
+}
+
+.kartica-hero--simple .kartica-hero-text {
+  width: 100%;
+}
+
+.kartica-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(245, 244, 238, 0.72);
+  margin-bottom: 8px;
+}
+
+.kartica-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.kartica-subline {
+  margin-top: 8px;
+  font-size: 14px;
+  color: rgba(245, 244, 238, 0.82);
+}
+
+.kartica-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.kartica-summary-card {
+  background: var(--koop-surface, rgba(255,255,255,0.82));
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  padding: 18px 18px 16px;
+}
+
+.kartica-summary-card--saldo {
+  background: linear-gradient(135deg, rgba(255,255,255,0.88), rgba(247,248,243,0.96));
+  border-color: rgba(199, 163, 63, 0.22);
+}
+
+.kartica-summary-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.kartica-summary-value {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.kartica-summary-value.is-danger {
+  color: var(--danger);
+}
+
+.kartica-summary-value.is-success {
+  color: var(--success);
+}
+
+.kartica-table-card {
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 24px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  overflow: hidden;
+}
+
+.kartica-table-top {
+  padding: 22px 22px 14px;
+  border-bottom: 1px solid rgba(92, 108, 77, 0.14);
+}
+
+.kartica-table-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.kartica-table-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.kartica-table-head {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 0.7fr 0.7fr 0.7fr;
+  gap: 14px;
+  padding: 14px 22px;
+  background: rgba(97, 112, 83, 0.05);
+  border-bottom: 1px solid rgba(92, 108, 77, 0.14);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.kartica-ta-right {
+  text-align: right;
+}
+
+.kartica-list {
+  padding: 8px 0;
+}
+
+.kartica-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 0.7fr 0.7fr 0.7fr;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(92, 108, 77, 0.14);
+  transition: background 0.18s ease;
+}
+
+.kartica-row:hover {
+  background: rgba(255,255,255,0.5);
+}
+
+.kartica-row:last-child {
+  border-bottom: 0;
+}
+
+.kartica-docblock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kartica-doc {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.kartica-date {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.kartica-opis {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.kartica-amount {
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.kartica-amount.is-danger {
+  color: var(--danger);
+}
+
+.kartica-amount.is-success {
+  color: var(--success);
+}
+
+.kartica-amount.is-saldo {
+  color: var(--primary-dark);
+}
+
+.kartica-empty {
+  padding: 42px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.kartica-empty-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.kartica-empty-text {
+  font-size: 14px;
+}
+
+.kartica-loading {
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+        
         /* KOOPERANT DISPLAY */
         .koop-display { background: var(--primary); color: white; padding: 14px; border-radius: var(--radius); margin-bottom: 14px; display: none; }
         .koop-display.visible { display: block; }
