@@ -431,7 +431,13 @@ function onPregledAlertClick(index) {
 }
 
 function openHomeQuickActions() {
-    showToast('Brze akcije: Novi rad, Novi trošak, Slikaj račun', 'info');
+    const modal = document.getElementById('homeQuickActionsModal');
+    if (modal) modal.classList.add('visible');
+}
+
+function closeHomeQuickActions() {
+    const modal = document.getElementById('homeQuickActionsModal');
+    if (modal) modal.classList.remove('visible');
 }
 
 function goToNewRad() {
