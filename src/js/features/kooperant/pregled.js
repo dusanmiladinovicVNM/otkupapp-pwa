@@ -181,7 +181,11 @@ async function buildPregledData() {
             const dominantnaKultura = Object.keys(kulturaCounts)
                 .sort((a, b) => kulturaCounts[b] - kulturaCounts[a])[0] || '';
 
-            const predlog = getRadoviPredlogZaKulturu(dominantnaKultura);
+            const dominantnaParcela = parcele.find(p => String(p.Kultura || '').trim() === dominantnaKultura);
+            const predlog = getDynamicRadoviPredlog(
+                dominantnaKultura,
+                dominantnaParcela ? dominantnaParcela.ParcelaID : ''
+            );
 
             data.alerts.push({
                 type: 'ok',
@@ -515,55 +519,213 @@ function findTabBtnByTabName(tabName) {
     }) || null;
 }
 
-function getRadoviPredlogZaKulturu(kultura) {
+function getDynamicRadoviPredlog(kultura, parcelaId) {
     const k = String(kultura || '').trim().toLowerCase();
+    const mesec = new Date().getMonth() + 1;
 
-    if (k === 'jabuka') {
-        return {
-            icon: '🍎',
-            title: 'Planirani radovi',
-            text: 'Za kulturu jabuka dostupan je predlog sledećih radova.',
-            items: [
-                'Zaštita zasada',
-                'Prihrana',
-                'Pregled i korekcija opreme'
-            ]
-        };
-    }
+    const meteo = (window.meteoCache && parcelaId) ? window.meteoCache[parcelaId] : null;
+    const riskItems = meteo && meteo.risk && Array.isArray(meteo.risk.items) ? meteo.risk.items : [];
+    const sprayWindows = meteo && Array.isArray(meteo.sprayWindow) ? meteo.sprayWindow : [];
 
-    if (k === 'visnja' || k === 'višnja') {
-        return {
-            icon: '🍒',
-            title: 'Planirani radovi',
-            text: 'Za kulturu višnja dostupan je predlog sledećih radova.',
-            items: [
-                'Zaštita zasada',
-                'Praćenje zrenja i priprema berbe',
-                'Rezidba po potrebi'
-            ]
-        };
-    }
+    const imaRizik = riskItems.length > 0;
+    const imaDanger = riskItems.some(r => r.level === 'danger');
+    const nemaSprayProzora = !sprayWindows.length;
 
-    if (k === 'sljiva' || k === 'šljiva') {
-        return {
-            icon: '🍑',
-            title: 'Planirani radovi',
-            text: 'Za kulturu šljiva dostupan je predlog sledećih radova.',
-            items: [
-                'Zaštita zasada',
-                'Prihrana',
-                'Planiranje berbe'
-            ]
-        };
-    }
-
-    return {
+    let base = {
         icon: '📅',
         title: 'Planirani radovi',
         text: 'Dostupan je automatski predlog sledećih radova.',
-        items: [
-            'Pregled parcele',
-            'Planiranje narednog rada'
-        ]
+        items: ['Pregled parcele', 'Planiranje narednog rada']
     };
+
+    // --------------------------------------------------------
+    // JABUKA
+    // --------------------------------------------------------
+    if (k === 'jabuka') {
+        if (mesec <= 2) {
+            base = {
+                icon: '🍎',
+                title: 'Planirani radovi',
+                text: 'Za jabuku je aktuelan zimski plan radova.',
+                items: ['Rezidba', 'Pregled zasada', 'Plan zaštite']
+            };
+        } else if (mesec <= 4) {
+            base = {
+                icon: '🍎',
+                title: 'Planirani radovi',
+                text: 'Za jabuku su aktuelni prolećni radovi.',
+                items: ['Zaštita zasada', 'Prihrana', 'Praćenje cvetanja i zametanja']
+            };
+        } else if (mesec <= 6) {
+            base = {
+                icon: '🍎',
+                title: 'Planirani radovi',
+                text: 'Za jabuku su aktuelni radovi intenzivnog porasta.',
+                items: ['Zaštita zasada', 'Folijarna prihrana', 'Praćenje zdravstvenog stanja plodova']
+            };
+        } else if (mesec <= 8) {
+            base = {
+                icon: '🍎',
+                title: 'Planirani radovi',
+                text: 'Za jabuku je aktuelna letnja operativa.',
+                items: ['Zaštita zasada', 'Navodnjavanje po potrebi', 'Priprema za berbu ranijih sorti']
+            };
+        } else if (mesec <= 10) {
+            base = {
+                icon: '🍎',
+                title: 'Planirani radovi',
+                text: 'Za jabuku je aktuelan period berbe i završnih radova.',
+                items: ['Berba', 'Evidencija prinosa', 'Planiranje postberbenih radova']
+            };
+        } else {
+            base = {
+                icon: '🍎',
+                title: 'Planirani radovi',
+                text: 'Za jabuku su aktuelni jesenji i pripremni radovi.',
+                items: ['Sanitarni pregled zasada', 'Jesenja prihrana po potrebi', 'Priprema za mirovanje']
+            };
+        }
+    }
+
+    // --------------------------------------------------------
+    // VIŠNJA
+    // --------------------------------------------------------
+    if (k === 'visnja' || k === 'višnja') {
+        if (mesec <= 2) {
+            base = {
+                icon: '🍒',
+                title: 'Planirani radovi',
+                text: 'Za višnju je aktuelan zimski plan radova.',
+                items: ['Rezidba', 'Pregled zasada', 'Priprema zaštite za sezonu']
+            };
+        } else if (mesec <= 4) {
+            base = {
+                icon: '🍒',
+                title: 'Planirani radovi',
+                text: 'Za višnju su aktuelni prolećni radovi.',
+                items: ['Zaštita zasada', 'Praćenje cvetanja', 'Prihrana po potrebi']
+            };
+        } else if (mesec <= 6) {
+            base = {
+                icon: '🍒',
+                title: 'Planirani radovi',
+                text: 'Za višnju je aktuelna priprema i organizacija berbe.',
+                items: ['Zaštita pred berbu', 'Praćenje zrenja', 'Priprema berbe']
+            };
+        } else if (mesec === 7) {
+            base = {
+                icon: '🍒',
+                title: 'Planirani radovi',
+                text: 'Za višnju je aktuelan period berbe i završetka sezone.',
+                items: ['Berba', 'Evidencija prinosa', 'Postberbeni pregled zasada']
+            };
+        } else if (mesec <= 9) {
+            base = {
+                icon: '🍒',
+                title: 'Planirani radovi',
+                text: 'Za višnju su aktuelni postberbeni radovi.',
+                items: ['Postberbena zaštita', 'Dopunska prihrana', 'Sanitarni pregled zasada']
+            };
+        } else {
+            base = {
+                icon: '🍒',
+                title: 'Planirani radovi',
+                text: 'Za višnju su aktuelni jesenji i pripremni radovi.',
+                items: ['Priprema za mirovanje', 'Pregled stabala', 'Plan rezidbe']
+            };
+        }
+    }
+
+    // --------------------------------------------------------
+    // ŠLJIVA
+    // --------------------------------------------------------
+    if (k === 'sljiva' || k === 'šljiva') {
+        if (mesec <= 2) {
+            base = {
+                icon: '🟣',
+                title: 'Planirani radovi',
+                text: 'Za šljivu je aktuelan zimski plan radova.',
+                items: ['Rezidba', 'Pregled stabala', 'Plan zaštite']
+            };
+        } else if (mesec <= 4) {
+            base = {
+                icon: '🟣',
+                title: 'Planirani radovi',
+                text: 'Za šljivu su aktuelni prolećni radovi.',
+                items: ['Zaštita zasada', 'Prihrana', 'Praćenje cvetanja i zametanja']
+            };
+        } else if (mesec <= 6) {
+            base = {
+                icon: '🟣',
+                title: 'Planirani radovi',
+                text: 'Za šljivu su aktuelni radovi razvoja ploda.',
+                items: ['Zaštita zasada', 'Praćenje zdravstvenog stanja', 'Navodnjavanje po potrebi']
+            };
+        } else if (mesec <= 8) {
+            base = {
+                icon: '🟣',
+                title: 'Planirani radovi',
+                text: 'Za šljivu je aktuelan period pripreme i organizacije berbe.',
+                items: ['Praćenje zrenja', 'Zaštita pred berbu', 'Planiranje berbe']
+            };
+        } else if (mesec <= 10) {
+            base = {
+                icon: '🟣',
+                title: 'Planirani radovi',
+                text: 'Za šljivu je aktuelna berba i završetak sezone.',
+                items: ['Berba', 'Evidencija prinosa', 'Postberbeni pregled']
+            };
+        } else {
+            base = {
+                icon: '🟣',
+                title: 'Planirani radovi',
+                text: 'Za šljivu su aktuelni jesenji radovi i priprema zasada.',
+                items: ['Sanitarni pregled', 'Jesenja prihrana po potrebi', 'Priprema za mirovanje']
+            };
+        }
+    }
+
+    // --------------------------------------------------------
+    // METEO KOREKCIJA
+    // --------------------------------------------------------
+    if (imaDanger) {
+        return {
+            icon: '⛔',
+            title: 'Planirani radovi',
+            text: 'Meteo rizik je trenutno visok — preporučuje se odlaganje tretmana i fokus na pregled parcele.',
+            items: [
+                'Pregled parcele',
+                'Praćenje upozorenja',
+                'Sačekati povoljniji termin'
+            ]
+        };
+    }
+
+    if (imaRizik) {
+        return {
+            icon: '⚠️',
+            title: base.title,
+            text: base.text + ' Prisutan je meteo rizik, pa preporuke treba prilagoditi uslovima.',
+            items: [
+                base.items[0],
+                'Praćenje meteo upozorenja',
+                'Provera bezbednog termina za rad'
+            ]
+        };
+    }
+
+    if (nemaSprayProzora && base.items.some(i => i.toLowerCase().includes('zaštita'))) {
+        return {
+            icon: '🌦️',
+            title: base.title,
+            text: base.text + ' Trenutno nema dobrog prozora za prskanje.',
+            items: [
+                'Pregled zasada',
+                'Priprema opreme',
+                'Sačekati povoljan termin za zaštitu'
+            ]
+        };
+    }
+
+    return base;
 }
