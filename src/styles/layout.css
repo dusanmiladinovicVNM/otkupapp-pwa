@@ -188,6 +188,25 @@ body.has-koop-bottom-nav #tab-more {
   padding-bottom: 92px;
 }
 
+.tab-bar .role-kooperant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-btn.role-kooperant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.tab-btn.role-kooperant.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 700;
+}
+
 /* desktop = top nav */
 @media (min-width: 901px) {
   .tab-bar .role-kooperant {
