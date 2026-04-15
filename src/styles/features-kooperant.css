@@ -1,4 +1,127 @@
-        /* =========================================================
+/* =========================================================
+   KOOPERANT — MORE
+   ========================================================= */
+
+.more-screen {
+  background: transparent;
+  padding: 0;
+}
+
+.more-shell {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+#tab-more {
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.more-card {
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 22px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  padding: 18px 16px;
+}
+
+.more-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.more-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.more-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.more-menu-item {
+  width: 100%;
+  border: 0;
+  background: rgba(97, 112, 83, 0.05);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  cursor: pointer;
+}
+
+.more-menu-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.more-menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.more-menu-text strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.more-menu-text small {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+@media (min-width: 901px) {
+  .bottom-nav.role-kooperant {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .bottom-nav.role-kooperant {
+    display: grid;
+  }
+
+  .tab-bar .role-kooperant {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  #tab-home,
+  #tab-parcele,
+  #tab-agromere,
+  #tab-knjigapolja,
+  #tab-more {
+    padding: 8px;
+  }
+
+  .more-card {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .more-title {
+    font-size: 18px;
+  }
+
+  .more-menu-item {
+    padding: 12px;
+    border-radius: 14px;
+  }
+}
+
+/* =========================================================
            KOOPERANT — PREGLED
            ========================================================= */
 
