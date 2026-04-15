@@ -125,3 +125,65 @@
         .tab-content.active { display: block; }
         .sub-content { display: none; }
         .sub-content.active { display: block; }
+
+/* =========================================================
+   KOOPERANT — BOTTOM NAV
+   ========================================================= */
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 74px;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(92, 108, 77, 0.12);
+  display: none;
+  grid-template-columns: repeat(5, 1fr);
+  z-index: 110;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -6px 22px rgba(31, 41, 24, 0.08);
+}
+
+.bottom-nav.visible {
+  display: grid;
+}
+
+.bottom-nav-btn {
+  border: 0;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px 4px;
+}
+
+.bottom-nav-btn.active {
+  color: var(--primary);
+}
+
+.bottom-nav-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bottom-nav-label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Kooperant root tabovi dobijaju prostor za bottom nav */
+body.has-koop-bottom-nav .tab-content.role-kooperant-root,
+body.has-koop-bottom-nav #tab-home,
+body.has-koop-bottom-nav #tab-parcele,
+body.has-koop-bottom-nav #tab-agromere,
+body.has-koop-bottom-nav #tab-knjigapolja,
+body.has-koop-bottom-nav #tab-more {
+  padding-bottom: 92px;
+}
