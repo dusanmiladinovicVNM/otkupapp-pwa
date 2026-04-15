@@ -27,7 +27,7 @@ function showLoginScreen() {
             <div class="login-top-area">
                 <div class="login-app-icon">
                     <a class="nav__brand nav__brand--logo" href="index.html" aria-label="AgriX početna">
-                        <img src="img/AgriX-Logo-Final_Novi.png" alt="AgriX" class="nav__logo">
+                        <img src="site/img/AgriX-Logo-Final_Novi.png" alt="AgriX" class="nav__logo">
                     </a>
                 </div>
 
