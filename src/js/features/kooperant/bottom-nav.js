@@ -15,24 +15,35 @@ function updateKoopBottomNavVisibility() {
     const loginContainer = document.getElementById('loginContainer');
     const appContainer = document.getElementById('appContainer');
 
-    const isLoginVisible = !!(
+    const role = String((CONFIG && CONFIG.USER_ROLE) || '').trim().toLowerCase();
+    const isKooperant = role === 'kooperant';
+
+    const loginVisible = !!(
         loginContainer &&
         loginContainer.offsetParent !== null &&
-        loginContainer.innerHTML.trim() !== ''
+        loginContainer.innerHTML.trim() !== '' &&
+        getComputedStyle(loginContainer).display !== 'none'
     );
-
-    const role = String((CONFIG && CONFIG.USER_ROLE) || '').toLowerCase();
-    const isKooperant = role === 'kooperant';
 
     const appVisible = !!(
         appContainer &&
-        appContainer.offsetParent !== null
+        appContainer.offsetParent !== null &&
+        getComputedStyle(appContainer).display !== 'none'
     );
 
-    const shouldShow = isKooperant && appVisible && !isLoginVisible;
+    const shouldShow = isKooperant && appVisible && !loginVisible;
 
     nav.classList.toggle('visible', shouldShow);
     document.body.classList.toggle('has-koop-bottom-nav', shouldShow);
+
+    console.log('BOTTOM NAV', {
+        role,
+        isKooperant,
+        appVisible,
+        loginVisible,
+        shouldShow,
+        navClass: nav.className
+    });
 }
 
 function showBottomTab(tabName, btn) {
