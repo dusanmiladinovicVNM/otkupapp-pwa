@@ -1206,3 +1206,20 @@ function agroNormalizeLocalTretman(r) {
 function agroMergeTretmani(local, server) {
     return mergeOfflineRecords(local, server, agroNormalizeLocalTretman);
 }
+
+function showRadoviSection(name, btn) {
+    document.querySelectorAll('.radovi-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.radovi-subnav-btn').forEach(el => el.classList.remove('active'));
+
+    const section = document.getElementById('radovi-section-' + name);
+    if (section) section.classList.add('active');
+
+    if (btn && btn.classList) {
+        btn.classList.add('active');
+    }
+}
+
+function scrollRadoviFormIntoView() {
+    const el = document.getElementById('radoviFormAnchor');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
