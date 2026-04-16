@@ -2375,3 +2375,51 @@
     padding: 12px;
   }
 }
+
+/* KNJIGA POLJA — LAGER COMPACT */
+#knjiga-section-lager #kpLagerList {
+  gap: 8px;
+}
+
+#knjiga-section-lager #kpLagerList .queue-item {
+  padding: 10px 14px;
+  border-radius: 14px;
+  margin: 0;
+}
+
+#knjiga-section-lager #kpLagerList .qi-header {
+  margin-bottom: 4px;
+}
+
+#knjiga-section-lager #kpLagerList .qi-koop {
+  font-size: 14px;
+}
+
+#knjiga-section-lager #kpLagerList .qi-time {
+  font-size: 12px;
+}
+
+#knjiga-section-lager #kpLagerList .qi-detail {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  #knjiga-section-lager #kpLagerList .queue-item {
+    padding: 9px 12px;
+    border-radius: 12px;
+  }
+
+  #knjiga-section-lager #kpLagerList .qi-header {
+    margin-bottom: 3px;
+  }
+
+  #knjiga-section-lager #kpLagerList .qi-koop {
+    font-size: 13px;
+  }
+
+  #knjiga-section-lager #kpLagerList .qi-detail,
+  #knjiga-section-lager #kpLagerList .qi-time {
+    font-size: 11px;
+  }
+}
