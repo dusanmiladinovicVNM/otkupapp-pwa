@@ -1223,3 +1223,35 @@ function scrollRadoviFormIntoView() {
     const el = document.getElementById('radoviFormAnchor');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+function initRadoviOpremaPreview() {
+    const traktorSel = document.getElementById('agroTraktor');
+    const prskalicaSel = document.getElementById('agroPrskalica');
+    const ostaloInp = document.getElementById('agroOpremaOstalo');
+
+    const traktorPreview = document.getElementById('radoviDefaultTraktorPreview');
+    const prskalicaPreview = document.getElementById('radoviDefaultPrskalicaPreview');
+    const ostaloPreview = document.getElementById('radoviDefaultOstaloPreview');
+
+    function updatePreview() {
+        if (traktorPreview && traktorSel) {
+            const txt = traktorSel.options[traktorSel.selectedIndex]?.text || '';
+            traktorPreview.textContent = traktorSel.value ? txt : 'Nije izabran';
+        }
+
+        if (prskalicaPreview && prskalicaSel) {
+            const txt = prskalicaSel.options[prskalicaSel.selectedIndex]?.text || '';
+            prskalicaPreview.textContent = prskalicaSel.value ? txt : 'Nije izabrana';
+        }
+
+        if (ostaloPreview && ostaloInp) {
+            ostaloPreview.textContent = ostaloInp.value.trim() || 'Nije uneto';
+        }
+    }
+
+    if (traktorSel) traktorSel.addEventListener('change', updatePreview);
+    if (prskalicaSel) prskalicaSel.addEventListener('change', updatePreview);
+    if (ostaloInp) ostaloInp.addEventListener('input', updatePreview);
+
+    updatePreview();
+}
