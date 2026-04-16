@@ -103,7 +103,7 @@ async function bootstrapRole() {
                 await agroPopulateParcele();
             }
         });
-        safeCall(() => showTab('pregled'));
+        safeCall(() => showTab('home'));
         return;
     }
 
