@@ -473,8 +473,15 @@ function goToNewTrosak() {
 }
 
 function goToScanRacun() {
-    showTab('agromere', findTabBtnByTabName('agromere'));
+    showTab('knjigapolja', findLegacyTabBtn('knjigapolja'));
+
     setTimeout(() => {
+        if (typeof showKnjigaSection === 'function') {
+            const lagerBtn = Array.from(document.querySelectorAll('.knjiga-subnav-btn'))
+                .find(btn => btn.textContent.trim().toLowerCase().includes('lager'));
+            showKnjigaSection('lager', lagerBtn || null);
+        }
+
         if (typeof startFiskalniScan === 'function') {
             startFiskalniScan();
         }
