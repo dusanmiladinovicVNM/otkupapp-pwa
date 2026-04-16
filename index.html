@@ -544,34 +544,96 @@
                         </div>
 
                         <!-- Oprema section -->
-                        <div class="agro-oprema-section">
-                            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">
-                                🚜 Oprema (opciono)
-                            </div>
+                        <<div class="radovi-section" id="radovi-section-oprema">
+                            <div class="radovi-oprema-shell">
 
-                            <div class="form-group" style="margin-bottom:8px;">
-                                <label>Traktor</label>
-                                <div style="display:flex;gap:6px;">
-                                    <select id="agroTraktor" style="flex:1;padding:8px;font-size:13px;">
-                                        <option value="">-- Bez traktora --</option>
-                                    </select>
-                                    <input type="text" id="agroTraktorNovi" placeholder="Ili unesi novi..." style="flex:1;padding:8px;font-size:12px;" onchange="agroSaveNovaOprema('Traktor', this.value)">
+                                <div class="radovi-section-card">
+                                    <div class="radovi-section-head">
+                                        <div>
+                                            <div class="radovi-section-title">Oprema</div>
+                                            <div class="radovi-section-subtitle">Unos opreme i podešavanje podrazumevanih vrednosti</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="radovi-info-box">
+                                        Oprema se unosi ovde, a podrazumevane vrednosti se zatim automatski prikazuju u sekciji Tretmani.
+                                    </div>
+
+                                    <div class="radovi-oprema-grid">
+                                        <div class="radovi-oprema-card">
+                                            <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
+                                            <div class="form-group" style="margin-bottom:10px;">
+                                                <label>Izaberi traktor</label>
+                                                <select id="agroTraktor" style="padding:10px;font-size:13px;">
+                                                    <option value="">-- Bez traktora --</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group" style="margin-bottom:0;">
+                                                <label>Unesi novi traktor</label>
+                                                <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;" onchange="agroSaveNovaOprema('Traktor', this.value)">
+                                            </div>
+                                        </div>
+
+                                        <div class="radovi-oprema-card">
+                                            <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
+                                            <div class="form-group" style="margin-bottom:10px;">
+                                                <label>Izaberi prskalicu / atomizer</label>
+                                                <select id="agroPrskalica" style="padding:10px;font-size:13px;">
+                                                    <option value="">-- Bez prskalice --</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group" style="margin-bottom:0;">
+                                                <label>Unesi novu prskalicu</label>
+                                                <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;" onchange="agroSaveNovaOprema('Prskalica', this.value)">
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div class="form-group" style="margin-bottom:8px;">
-                                <label>Prskalica / Atomizer</label>
-                                <div style="display:flex;gap:6px;">
-                                    <select id="agroPrskalica" style="flex:1;padding:8px;font-size:13px;">
-                                        <option value="">-- Bez prskalice --</option>
-                                    </select>
-                                    <input type="text" id="agroPrskalicaNovi" placeholder="Ili unesi novu..." style="flex:1;padding:8px;font-size:12px;" onchange="agroSaveNovaOprema('Prskalica', this.value)">
+                                <div class="radovi-section-card">
+                                    <div class="radovi-section-head">
+                                        <div>
+                                            <div class="radovi-section-title">Dodatna oprema</div>
+                                            <div class="radovi-section-subtitle">Ova vrednost može biti prikazana kao podrazumevana u Tretmanima</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label>Ostala oprema</label>
+                                        <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label>Ostala oprema</label>
-                                <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:8px;font-size:13px;">
+                                <div class="radovi-section-card">
+                                    <div class="radovi-section-head">
+                                        <div>
+                                            <div class="radovi-section-title">Upotreba u Tretmanima</div>
+                                            <div class="radovi-section-subtitle">Podrazumevane vrednosti će se nuditi pri unosu rada</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="radovi-oprema-summary">
+                                        <div class="radovi-oprema-summary-row">
+                                            <span>Traktor</span>
+                                            <strong id="radoviDefaultTraktorPreview">Biće prikazan iz izabrane vrednosti</strong>
+                                        </div>
+                                        <div class="radovi-oprema-summary-row">
+                                            <span>Prskalica</span>
+                                            <strong id="radoviDefaultPrskalicaPreview">Biće prikazana iz izabrane vrednosti</strong>
+                                        </div>
+                                        <div class="radovi-oprema-summary-row">
+                                            <span>Ostala oprema</span>
+                                            <strong id="radoviDefaultOstaloPreview">Može se menjati po radu</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="radovi-inline-actions">
+                                        <button class="radovi-secondary-btn" type="button" onclick="showRadoviSection('tretmani', document.querySelector('.radovi-subnav-btn'))">
+                                            Otvori Tretmane
+                                        </button>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
 
