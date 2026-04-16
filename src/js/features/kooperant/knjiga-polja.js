@@ -283,6 +283,9 @@ function kpLoadBilans() {
         const sumDiv = document.getElementById('kpSummary');
         if (sumDiv) sumDiv.innerHTML = '';
     }
+    if (typeof syncKnjigaKpiFromBilans === 'function') {
+        syncKnjigaKpiFromBilans();
+    }
 }
 
 // ============================================================
@@ -598,3 +601,63 @@ function invalidateKpCache() {
     kpData = { proizvodnja: [], tretmani: [], troskovi: [], lager: [] };
 }
 
+// ============================================================
+// NOVI UI
+// ============================================================
+function showKnjigaSection(name, btn) {
+    document.querySelectorAll('.knjiga-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.knjiga-subnav-btn').forEach(el => el.classList.remove('active'));
+
+    const section = document.getElementById('knjiga-section-' + name);
+    if (section) section.classList.add('active');
+
+    if (btn && btn.classList) {
+        btn.classList.add('active');
+    }
+}
+
+function scrollKnjigaTrosakFormIntoView() {
+    const el = document.getElementById('knjigaTrosakFormAnchor');
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function syncKnjigaKpiFromBilans() {
+    const bilansRows = document.getElementById('kpBilansRows');
+    if (!bilansRows) return;
+
+    const rowText = bilansRows.innerText || '';
+    const lines = rowText.split('\n').map(s => s.trim()).filter(Boolean);
+
+    function findLine(label) {
+        return lines.find(line => line.toLowerCase().includes(label.toLowerCase())) || '';
+    }
+
+    function extractValue(line) {
+        const m = line.match(/([+\-]?[\d\.\,]+)\s*RSD/i);
+        return m ? m[1] : '';
+    }
+
+    function extractHours(line) {
+        return line.replace(/^.*radni sati/i, '').trim() || '';
+    }
+
+    const proizvodnja = extractValue(findLine('Proizvodnja'));
+    const agrohemija = extractValue(findLine('Agrohemija'));
+    const troskovi = extractValue(findLine('Ostali troškovi'));
+    const radniSati = extractHours(findLine('Radni sati'));
+    const rezultat = extractValue(findLine('REZULTAT'));
+
+    const p = document.getElementById('knjigaKpiProizvodnja');
+    const a = document.getElementById('knjigaKpiAgrohemija');
+    const t = document.getElementById('knjigaKpiTroskovi');
+    const r = document.getElementById('knjigaKpiRadniSati');
+    const rez = document.getElementById('knjigaKpiRezultat');
+
+    if (p) p.textContent = proizvodnja || '0';
+    if (a) a.textContent = agrohemija || '0';
+    if (t) t.textContent = troskovi || '0';
+    if (r) r.textContent = radniSati || '0';
+    if (rez) rez.textContent = rezultat || '0';
+}
