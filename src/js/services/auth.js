@@ -138,6 +138,7 @@ async function doLogin() {
 function doLogout() {
     removeLs(['userRole', 'otkupacID', 'entityID', 'entityName', 'authToken', 'username']);
     location.reload();
+    updateKoopBottomNavVisibility();
 }
 
 function applyRoleVisibility() {
