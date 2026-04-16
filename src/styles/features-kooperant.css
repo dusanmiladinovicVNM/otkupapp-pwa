@@ -1819,6 +1819,42 @@
   text-align: right;
 }
 
+.radovi-default-oprema {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(97, 112, 83, 0.05);
+  border: 1px solid rgba(92, 108, 77, 0.10);
+}
+
+.radovi-default-oprema-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.radovi-default-oprema-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radovi-default-oprema-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.8);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .radovi-oprema-grid {
     grid-template-columns: 1fr;
@@ -1838,5 +1874,17 @@
 
   .radovi-oprema-summary-row strong {
     text-align: left;
+  }
+  .radovi-default-oprema {
+    padding: 10px 12px;
+  }
+
+  .radovi-default-oprema-list {
+    gap: 6px;
+  }
+
+  .radovi-default-oprema-chip {
+    font-size: 11px;
+    min-height: 30px;
   }
 }
