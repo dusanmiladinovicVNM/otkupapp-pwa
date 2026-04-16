@@ -21,12 +21,8 @@ function updateKoopBottomNavVisibility() {
         loginContainer.innerHTML.trim() !== ''
     );
 
-    const isKooperant =
-        CONFIG &&
-        (
-            CONFIG.USER_ROLE === 'Kooperant' ||
-            CONFIG.USER_ROLE === 'kooperant'
-        );
+    const role = String((CONFIG && CONFIG.USER_ROLE) || '').toLowerCase();
+    const isKooperant = role === 'kooperant';
 
     const appVisible = !!(
         appContainer &&
