@@ -286,6 +286,7 @@ function kpLoadBilans() {
     if (typeof syncKnjigaKpiFromBilans === 'function') {
         syncKnjigaKpiFromBilans();
     }
+    kpRenderPotrosnja();
 }
 
 // ============================================================
@@ -660,4 +661,47 @@ function syncKnjigaKpiFromBilans() {
     if (t) t.textContent = troskovi || '0';
     if (r) r.textContent = radniSati || '0';
     if (rez) rez.textContent = rezultat || '0';
+}
+
+function kpRenderPotrosnja() {
+    const list = document.getElementById('kpPotrosnjaList');
+    if (!list) return;
+
+    const usage = {};
+
+    (kpData.tretmani || []).forEach(t => {
+        const artID = t.ArtikalID || t.artikalID || '';
+        const artNaziv = t.ArtikalNaziv || t.artikalNaziv || artID;
+        const kol = parseFloat(t.KolicinaUpotrebljena || t.kolicinaUpotrebljena) || 0;
+        const jm = t.JedinicaMere || t.jedinicaMere || '';
+
+        if (!artID || kol <= 0) return;
+
+        if (!usage[artID]) {
+            usage[artID] = {
+                naziv: artNaziv,
+                jm: jm,
+                utroseno: 0
+            };
+        }
+
+        usage[artID].utroseno += kol;
+    });
+
+    const rows = Object.values(usage).sort((a, b) => b.utroseno - a.utroseno);
+
+    if (!rows.length) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;">Nema evidentirane potrošnje</p>';
+        return;
+    }
+
+    list.innerHTML = rows.map(r => {
+        return `<div class="queue-item">
+            <div class="qi-header">
+                <span class="qi-koop">${escapeHtml(r.naziv)}</span>
+                <span class="qi-time">${r.utroseno.toLocaleString('sr')} ${escapeHtml(r.jm || '')}</span>
+            </div>
+            <div class="qi-detail">Utrošeno u sezoni</div>
+        </div>`;
+    }).join('');
 }
