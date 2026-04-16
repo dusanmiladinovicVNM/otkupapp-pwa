@@ -151,5 +151,23 @@ function applyRoleVisibility() {
     document.querySelectorAll('.role-kooperant').forEach(el => el.style.display = (role === 'Kooperant') ? '' : 'none');
     document.querySelectorAll('.role-vozac').forEach(el => el.style.display = (role === 'Vozac') ? '' : 'none');
     document.querySelectorAll('.role-management').forEach(el => el.style.display = (role === 'Management') ? '' : 'none');
+
+    applyHeaderBranding();
 }
 
+function applyHeaderBranding() {
+    const logoEl = document.getElementById('headerBrandLogo');
+    if (!logoEl) return;
+
+    const role = String((CONFIG && CONFIG.USER_ROLE) || '').toLowerCase();
+
+    const isKooperant = role === 'kooperant';
+
+    if (isKooperant) {
+        logoEl.src = 'site/img/AgriX-Gazdinstvo-Logo-Final.png';
+        logoEl.alt = 'AgriX Gazdinstvo';
+    } else {
+        logoEl.src = 'site/img/AgriX-Otkup-Logo-Final.png';
+        logoEl.alt = 'AgriX Otkup';
+    }
+}
