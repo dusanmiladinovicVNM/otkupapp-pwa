@@ -1083,7 +1083,99 @@ async function agroLoadIstorija() {
     }).join('');
 }
 
+// ============================================================
+// KALENDAR
+// ============================================================
+async function renderRadoviKalendarV1() {
+    const listEl = document.getElementById('radoviKalendarList');
+    if (!listEl) return;
 
+    listEl.innerHTML = '<div class="koop-loading">Učitavanje kalendara...</div>';
+
+    let tretmani = [];
+    try {
+        if (typeof getTretmaniCached === 'function') {
+            tretmani = await getTretmaniCached(false) || [];
+        }
+    } catch (e) {
+        console.error(e);
+    }
+
+    if (!Array.isArray(tretmani) || !tretmani.length) {
+        listEl.innerHTML = `
+            <div class="radovi-kalendar-empty">
+                <div class="radovi-kalendar-empty-title">Nema aktivnosti</div>
+                <div class="radovi-kalendar-empty-text">Još nema evidentiranih radova za prikaz u kalendaru.</div>
+            </div>
+        `;
+        return;
+    }
+
+    const sorted = [...tretmani]
+        .filter(t => !t.deleted)
+        .sort((a, b) => {
+            const da = new Date(a.datum || a.Datum || 0).getTime();
+            const db = new Date(b.datum || b.Datum || 0).getTime();
+            return db - da;
+        });
+
+    const groups = {};
+    sorted.forEach(t => {
+        const rawDate = t.datum || t.Datum || '';
+        const key = String(rawDate).split('T')[0] || 'Bez datuma';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(t);
+    });
+
+    const dayKeys = Object.keys(groups).sort((a, b) => {
+        if (a === 'Bez datuma') return 1;
+        if (b === 'Bez datuma') return -1;
+        return new Date(b).getTime() - new Date(a).getTime();
+    });
+
+    listEl.innerHTML = dayKeys.map(dayKey => {
+        const items = groups[dayKey];
+        const dayLabel = dayKey === 'Bez datuma' ? 'Bez datuma' : fmtDate(dayKey);
+
+        return `
+            <div class="radovi-kalendar-day">
+                <div class="radovi-kalendar-day-head">
+                    <div class="radovi-kalendar-day-title">${escapeHtml(dayLabel)}</div>
+                    <div class="radovi-kalendar-day-subtitle">${items.length} aktivnosti</div>
+                </div>
+
+                <div class="radovi-kalendar-items">
+                    ${items.map(t => {
+                        const mera = t.mera || t.Mera || 'Rad';
+                        const parcela = t.parcelaNaziv || t.ParcelaNaziv || t.parcela || t.Parcela || 'Parcela';
+                        const vreme = formatRadoviKalendarTime(t.datum || t.Datum || '');
+                        const oprema = [t.opremaTraktor, t.opremaPrskalica].filter(Boolean).join(' • ');
+
+                        return `
+                            <div class="radovi-kalendar-item">
+                                <div class="radovi-kalendar-item-main">
+                                    <div class="radovi-kalendar-item-title">${escapeHtml(mera)}</div>
+                                    <div class="radovi-kalendar-item-meta">
+                                        ${escapeHtml(parcela)}
+                                        ${oprema ? ' • ' + escapeHtml(oprema) : ''}
+                                    </div>
+                                </div>
+                                <div class="radovi-kalendar-item-time">${escapeHtml(vreme)}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatRadoviKalendarTime(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' });
+}
 // ============================================================
 // HELPERS
 // ============================================================
@@ -1221,6 +1313,7 @@ function showRadoviSection(name, btn) {
         btn.classList.add('active');
     }
     if (name === 'tretmani') refreshRadoviOpremaInfo();
+    if (name === 'kalendar') renderRadoviKalendarV1();
 }
 
 function scrollRadoviFormIntoView() {
