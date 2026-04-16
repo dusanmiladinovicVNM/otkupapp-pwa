@@ -2423,3 +2423,25 @@
     font-size: 11px;
   }
 }
+
+#knjiga-section-lager #kpLagerList,
+#knjiga-section-lager #kpPotrosnjaList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#knjiga-section-lager .queue-item {
+  padding: 10px 14px;
+  border-radius: 14px;
+  margin: 0;
+}
+
+#knjiga-section-lager .qi-header {
+  margin-bottom: 4px;
+}
+
+#knjiga-section-lager .qi-detail {
+  font-size: 12px;
+  line-height: 1.35;
+}
