@@ -223,7 +223,9 @@ body.has-koop-bottom-nav #tab-more {
   .tab-bar .role-kooperant {
     display: none !important;
   }
-
+  .bottom-nav.role-kooperant {
+    display: none !important;
+  }
   .bottom-nav.role-kooperant {
     display: grid !important;
   }
