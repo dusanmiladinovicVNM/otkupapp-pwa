@@ -4,9 +4,15 @@
 function showLoginScreen() {
     const header = document.querySelector('.header');
     const tabBar = document.querySelector('.tab-bar');
+    const appContainer = document.getElementById('appContainer');
+    const nav = document.getElementById('koopBottomNav');
 
     if (header) header.style.display = 'none';
     if (tabBar) tabBar.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'none';
+
+    if (nav) nav.classList.remove('visible');
+    document.body.classList.remove('has-koop-bottom-nav');
 
     document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
     document.querySelectorAll('.sub-tab-bar').forEach(t => t.style.display = 'none');
