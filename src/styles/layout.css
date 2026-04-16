@@ -224,11 +224,11 @@ body.has-koop-bottom-nav #tab-more {
     display: none !important;
   }
 
-  .bottom-nav.role-kooperant {
+  .bottom-nav {
     display: none !important;
   }
 
-  .bottom-nav.role-kooperant.visible {
+  .bottom-nav.visible {
     display: grid !important;
   }
 }
