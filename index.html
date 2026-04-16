@@ -633,7 +633,7 @@
                                 <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
                                 <div class="form-group" style="margin-bottom:10px;">
                                     <label>Izaberi traktor</label>
-                                    <select id="agroTraktor" style="padding:10px;font-size:13px;">
+                                    <select id="agroTraktor" onchange="refreshRadoviOpremaInfo()" style="padding:10px;font-size:13px;">
                                         <option value="">-- Bez traktora --</option>
                                     </select>
                                 </div>
@@ -647,7 +647,7 @@
                                 <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
                                 <div class="form-group" style="margin-bottom:10px;">
                                     <label>Izaberi prskalicu / atomizer</label>
-                                    <select id="agroPrskalica" style="padding:10px;font-size:13px;">
+                                    <select id="agroPrskalica" onchange="refreshRadoviOpremaInfo()" style="padding:10px;font-size:13px;">
                                         <option value="">-- Bez prskalice --</option>
                                     </select>
                                 </div>
@@ -669,7 +669,7 @@
 
                         <div class="form-group" style="margin-bottom:0;">
                             <label>Ostala oprema</label>
-                            <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
+                            <input type="text" id="agroOpremaOstalo" oninput="refreshRadoviOpremaInfo()" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
                         </div>
                     </div>
 
