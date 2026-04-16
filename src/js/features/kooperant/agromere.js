@@ -1220,6 +1220,7 @@ function showRadoviSection(name, btn) {
     if (btn && btn.classList) {
         btn.classList.add('active');
     }
+    if (name === 'tretmani') refreshRadoviOpremaInfo();
 }
 
 function scrollRadoviFormIntoView() {
