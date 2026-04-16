@@ -603,16 +603,35 @@
 
             <!-- EVIDENCIJA -->
             <div class="radovi-section" id="radovi-section-istorija">
-                <div class="radovi-section-card">
-                    <div class="radovi-section-head">
+                <div class="radovi-evidencija-shell">
+
+                    <div class="radovi-evidencija-hero">
                         <div>
                             <div class="radovi-section-title">Evidencija rada</div>
-                            <div class="radovi-section-subtitle">Pregled ranije evidentiranih tretmana</div>
+                            <div class="radovi-section-subtitle">Pregled ranije evidentiranih tretmana i aktivnosti</div>
                         </div>
                     </div>
 
-                    <h3 style="margin-bottom:10px;color:var(--primary);font-size:14px;">Istorija tretmana</h3>
-                    <div id="agroTretmaniList"></div>
+                    <div class="radovi-evidencija-toolbar">
+                        <div class="radovi-evidencija-chip">
+                            <span>📋</span>
+                            <span>Istorija tretmana</span>
+                        </div>
+                        <div class="radovi-evidencija-chip radovi-evidencija-chip--muted">
+                            <span>↻</span>
+                            <span>Prikaz koristi postojeće podatke iz modula Radovi</span>
+                        </div>
+                    </div>
+
+                    <div class="radovi-evidencija-card">
+                        <div class="radovi-evidencija-card-head">
+                            <div class="radovi-evidencija-card-title">Sve evidentirane aktivnosti</div>
+                            <div class="radovi-evidencija-card-subtitle">Najnovije stavke su prikazane prve</div>
+                        </div>
+
+                        <div id="agroTretmaniList" class="radovi-evidencija-list"></div>
+                    </div>
+
                 </div>
             </div>
 
