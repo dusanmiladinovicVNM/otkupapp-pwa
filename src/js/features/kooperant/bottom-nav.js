@@ -13,37 +13,20 @@ function updateKoopBottomNavVisibility() {
     if (!nav) return;
 
     const loginContainer = document.getElementById('loginContainer');
-    const appContainer = document.getElementById('appContainer');
-
     const role = String((CONFIG && CONFIG.USER_ROLE) || '').trim().toLowerCase();
     const isKooperant = role === 'kooperant';
 
-    const loginVisible = !!(
+    const isLoginVisible = !!(
         loginContainer &&
         loginContainer.offsetParent !== null &&
         loginContainer.innerHTML.trim() !== '' &&
         getComputedStyle(loginContainer).display !== 'none'
     );
 
-    const appVisible = !!(
-        appContainer &&
-        appContainer.offsetParent !== null &&
-        getComputedStyle(appContainer).display !== 'none'
-    );
-
-    const shouldShow = isKooperant && appVisible && !loginVisible;
+    const shouldShow = isKooperant && !isLoginVisible;
 
     nav.classList.toggle('visible', shouldShow);
     document.body.classList.toggle('has-koop-bottom-nav', shouldShow);
-
-    console.log('BOTTOM NAV', {
-        role,
-        isKooperant,
-        appVisible,
-        loginVisible,
-        shouldShow,
-        navClass: nav.className
-    });
 }
 
 function showBottomTab(tabName, btn) {
