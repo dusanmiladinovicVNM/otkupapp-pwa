@@ -29,7 +29,7 @@ function showLoginScreen() {
                 <div class="login-top-area">
                     <a class="login-top-logo-link" href="index.html" aria-label="AgriX Gazdinstvo">
                         <img
-                            src="site/img/AgriX-Gazdinstvo-Logo-Final.png"
+                            src="site/img/AgriX-Logo-Final_Novi.png"
                             alt="AgriX Gazdinstvo"
                             class="login-top-logo"
                         >
