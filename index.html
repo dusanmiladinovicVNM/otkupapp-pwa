@@ -708,18 +708,35 @@
 
             <!-- KALENDAR -->
             <div class="radovi-section" id="radovi-section-kalendar">
-                <div class="radovi-section-card">
-                    <div class="radovi-section-head">
+                <div class="radovi-kalendar-shell">
+
+                    <div class="radovi-kalendar-hero">
                         <div>
                             <div class="radovi-section-title">Kalendar radova</div>
-                            <div class="radovi-section-subtitle">Prikaz po datumima dolazi u sledećoj fazi</div>
+                            <div class="radovi-section-subtitle">Pregled aktivnosti po datumima</div>
                         </div>
                     </div>
 
-                    <div class="radovi-empty">
-                        <div class="radovi-empty-title">Kalendar uskoro</div>
-                        <div class="radovi-empty-text">Za sada koristi evidenciju rada i istoriju tretmana.</div>
+                    <div class="radovi-kalendar-toolbar">
+                        <div class="radovi-kalendar-chip">
+                            <span>🗓️</span>
+                            <span>Hronološki pregled</span>
+                        </div>
+                        <div class="radovi-kalendar-chip radovi-kalendar-chip--muted">
+                            <span>↓</span>
+                            <span>Najnovije prvo</span>
+                        </div>
                     </div>
+
+                    <div class="radovi-kalendar-card">
+                        <div class="radovi-kalendar-card-head">
+                            <div class="radovi-kalendar-card-title">Plan i istorija aktivnosti</div>
+                            <div class="radovi-kalendar-card-subtitle">Za v1 se prikazuju evidentirani radovi grupisani po datumu</div>
+                        </div>
+
+                        <div id="radoviKalendarList" class="radovi-kalendar-list"></div>
+                    </div>
+
                 </div>
             </div>
 
