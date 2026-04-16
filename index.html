@@ -945,6 +945,32 @@
 
             <!-- LAGER -->
             <div class="knjiga-section" id="knjiga-section-lager">
+                <!-- 1. RAČUNI I ULAZ ROBE -->
+                <div class="knjiga-card">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Računi i ulaz robe</div>
+                            <div class="knjiga-card-subtitle">Unos računa i prenos artikala u lager</div>
+                        </div>
+                    </div>
+
+                    <button class="qr-scan-btn" onclick="startFiskalniScan()" style="background:var(--accent);">
+                        📷 Skeniraj fiskalni račun
+                    </button>
+
+                    <div id="qr-reader-fiskalni" style="display:none;margin:10px 0 14px;border-radius:var(--radius);overflow:hidden;"></div>
+
+                    <div id="fiskalniResult" style="display:none;">
+                        <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
+                        <div id="fiskalniStavke"></div>
+                        <div style="display:flex;gap:8px;margin-top:8px;">
+                            <button class="btn-primary" onclick="fiskalniSaveToLager()" style="flex:1;">✅ Prenesi u lager</button>
+                            <button class="btn-secondary" onclick="fiskalniCancel()" style="flex:1;margin-top:0;">Otkaži</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. LAGER PREPARATA -->
                 <div class="knjiga-card">
                     <div class="knjiga-card-head">
                         <div>
@@ -956,30 +982,27 @@
                     <div id="kpLagerList"></div>
                 </div>
 
+                <!-- 3. POTROŠNJA U SEZONI -->
                 <div class="knjiga-card">
                     <div class="knjiga-card-head">
                         <div>
-                            <div class="knjiga-card-title">Računi i ulaz robe</div>
-                            <div class="knjiga-card-subtitle">Ovde kasnije prebaci fiskalni skener iz Radova</div>
+                            <div class="knjiga-card-title">Potrošnja u sezoni</div>
+                            <div class="knjiga-card-subtitle">Pregled utroška iz evidentiranih tretmana</div>
                         </div>
                     </div>
 
-                    <div class="knjiga-empty">
-                        <div class="knjiga-empty-title">Fiskalni unos uskoro</div>
-                        <div class="knjiga-empty-text">Brza akcija sa Pregleda može ostati, ali vlasništvo toka ide ovde.</div>
-                    </div>
+                    <div id="kpPotrosnjaList"></div>
                 </div>
             </div>
+                        <!-- stari tretmani ostaju skriveni / sekundarni -->
+                        <div style="display:none;">
+                            <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
+                            <div id="kpTretmaniList"></div>
+                        </div>
 
-            <!-- stari tretmani ostaju skriveni / sekundarni -->
-            <div style="display:none;">
-                <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
-                <div id="kpTretmaniList"></div>
+                    </div>
+                </section>
             </div>
-
-        </div>
-    </section>
-</div>
 <!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
 <div class="tab-content" id="tab-dispecer">
     <!-- KPI -->
