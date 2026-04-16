@@ -1236,20 +1236,30 @@ function initRadoviOpremaPreview() {
     const prskalicaPreview = document.getElementById('radoviDefaultPrskalicaPreview');
     const ostaloPreview = document.getElementById('radoviDefaultOstaloPreview');
 
+    const traktorChip = document.getElementById('radoviDefaultTraktorChip');
+    const prskalicaChip = document.getElementById('radoviDefaultPrskalicaChip');
+    const ostaloChip = document.getElementById('radoviDefaultOstaloChip');
+
     function updatePreview() {
-        if (traktorPreview && traktorSel) {
-            const txt = traktorSel.options[traktorSel.selectedIndex]?.text || '';
-            traktorPreview.textContent = traktorSel.value ? txt : 'Nije izabran';
-        }
+        const traktorText = traktorSel && traktorSel.value
+            ? (traktorSel.options[traktorSel.selectedIndex]?.text || 'Izabran traktor')
+            : 'Traktor nije izabran';
 
-        if (prskalicaPreview && prskalicaSel) {
-            const txt = prskalicaSel.options[prskalicaSel.selectedIndex]?.text || '';
-            prskalicaPreview.textContent = prskalicaSel.value ? txt : 'Nije izabrana';
-        }
+        const prskalicaText = prskalicaSel && prskalicaSel.value
+            ? (prskalicaSel.options[prskalicaSel.selectedIndex]?.text || 'Izabrana prskalica')
+            : 'Prskalica nije izabrana';
 
-        if (ostaloPreview && ostaloInp) {
-            ostaloPreview.textContent = ostaloInp.value.trim() || 'Nije uneto';
-        }
+        const ostaloText = ostaloInp && ostaloInp.value.trim()
+            ? ostaloInp.value.trim()
+            : 'Bez dodatne opreme';
+
+        if (traktorPreview) traktorPreview.textContent = traktorText;
+        if (prskalicaPreview) prskalicaPreview.textContent = prskalicaText;
+        if (ostaloPreview) ostaloPreview.textContent = ostaloText;
+
+        if (traktorChip) traktorChip.textContent = '🚜 ' + traktorText;
+        if (prskalicaChip) prskalicaChip.textContent = '💨 ' + prskalicaText;
+        if (ostaloChip) ostaloChip.textContent = '🧰 ' + ostaloText;
     }
 
     if (traktorSel) traktorSel.addEventListener('change', updatePreview);
