@@ -1268,3 +1268,37 @@ function initRadoviOpremaPreview() {
 
     updatePreview();
 }
+
+function refreshRadoviOpremaInfo() {
+    const traktorSel = document.getElementById('agroTraktor');
+    const prskalicaSel = document.getElementById('agroPrskalica');
+    const ostaloInp = document.getElementById('agroOpremaOstalo');
+
+    const traktorChip = document.getElementById('radoviDefaultTraktorChip');
+    const prskalicaChip = document.getElementById('radoviDefaultPrskalicaChip');
+    const ostaloChip = document.getElementById('radoviDefaultOstaloChip');
+
+    if (traktorChip) {
+        traktorChip.textContent = '🚜 ' + (
+            traktorSel && traktorSel.value
+                ? traktorSel.options[traktorSel.selectedIndex].text
+                : 'Traktor nije izabran'
+        );
+    }
+
+    if (prskalicaChip) {
+        prskalicaChip.textContent = '💨 ' + (
+            prskalicaSel && prskalicaSel.value
+                ? prskalicaSel.options[prskalicaSel.selectedIndex].text
+                : 'Prskalica nije izabrana'
+        );
+    }
+
+    if (ostaloChip) {
+        ostaloChip.textContent = '🧰 ' + (
+            ostaloInp && ostaloInp.value.trim()
+                ? ostaloInp.value.trim()
+                : 'Bez dodatne opreme'
+        );
+    }
+}
