@@ -63,6 +63,9 @@ async function loadAgronom() {
         if (navigator.onLine && typeof syncTretmani === 'function') {
             syncTretmani().catch(err => console.error('syncTretmani background failed:', err));
         }
+        if (typeof initRadoviOpremaPreview === 'function') {
+            initRadoviOpremaPreview();
+        }
     }, 'Greška pri učitavanju digitalnog agronoma');
 }
 
