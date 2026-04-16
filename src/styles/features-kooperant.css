@@ -1764,3 +1764,79 @@
     white-space: normal;
   }
 }
+
+/* =========================================================
+   KOOPERANT — RADOVI OPREMA
+   ========================================================= */
+
+.radovi-oprema-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radovi-oprema-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.radovi-oprema-card {
+  background: rgba(97, 112, 83, 0.04);
+  border: 1px solid rgba(92, 108, 77, 0.10);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.radovi-oprema-card-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.radovi-oprema-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radovi-oprema-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(97, 112, 83, 0.05);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.radovi-oprema-summary-row strong {
+  color: var(--primary);
+  font-size: 14px;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .radovi-oprema-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .radovi-oprema-card {
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .radovi-oprema-summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .radovi-oprema-summary-row strong {
+    text-align: left;
+  }
+}
