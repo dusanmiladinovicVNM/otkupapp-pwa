@@ -1888,3 +1888,191 @@
     min-height: 30px;
   }
 }
+
+/* =========================================================
+   KOOPERANT — RADOVI KALENDAR
+   ========================================================= */
+
+.radovi-kalendar-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radovi-kalendar-hero {
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  padding: 16px;
+}
+
+.radovi-kalendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radovi-kalendar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(116, 184, 47, 0.10);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.radovi-kalendar-chip--muted {
+  background: rgba(97, 112, 83, 0.08);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.radovi-kalendar-card {
+  background: var(--koop-surface, rgba(255,255,255,0.82));
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 22px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  overflow: hidden;
+}
+
+.radovi-kalendar-card-head {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(92, 108, 77, 0.14);
+}
+
+.radovi-kalendar-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.radovi-kalendar-card-subtitle {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.radovi-kalendar-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radovi-kalendar-day {
+  background: rgba(97, 112, 83, 0.04);
+  border: 1px solid rgba(92, 108, 77, 0.10);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.radovi-kalendar-day-head {
+  padding: 12px 14px;
+  background: rgba(97, 112, 83, 0.06);
+  border-bottom: 1px solid rgba(92, 108, 77, 0.10);
+}
+
+.radovi-kalendar-day-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.radovi-kalendar-day-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.radovi-kalendar-items {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radovi-kalendar-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.72);
+}
+
+.radovi-kalendar-item-main {
+  min-width: 0;
+}
+
+.radovi-kalendar-item-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.radovi-kalendar-item-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.radovi-kalendar-item-time {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.radovi-kalendar-empty {
+  padding: 28px 14px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.radovi-kalendar-empty-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.radovi-kalendar-empty-text {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .radovi-kalendar-hero {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .radovi-kalendar-card {
+    border-radius: 18px;
+  }
+
+  .radovi-kalendar-card-head {
+    padding: 14px 14px 10px;
+  }
+
+  .radovi-kalendar-list {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .radovi-kalendar-item {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .radovi-kalendar-item-time {
+    white-space: normal;
+  }
+}
