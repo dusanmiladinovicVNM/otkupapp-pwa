@@ -767,6 +767,219 @@
     </section>
 </div>
 
+<div class="tab-content" id="tab-knjigapolja">
+    <section class="knjiga-screen">
+        <div class="knjiga-shell">
+
+            <div class="knjiga-hero">
+                <div class="knjiga-hero-top">
+                    <div>
+                        <div class="knjiga-eyebrow">Evidencija gazdinstva</div>
+                        <h1 class="knjiga-title">Knjiga polja</h1>
+                        <div class="knjiga-subline">Bilans, proizvodnja, troškovi i lager</div>
+                    </div>
+
+                    <button class="knjiga-primary-btn" type="button" onclick="showKnjigaSection('troskovi', this); scrollKnjigaTrosakFormIntoView();">
+                        + Novi trošak
+                    </button>
+                </div>
+            </div>
+
+            <!-- FILTERI -->
+            <div class="knjiga-filters-card">
+                <div class="form-row knjiga-filters-row">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Parcela</label>
+                        <select id="kpParcelaSel" onchange="kpLoadBilans()">
+                            <option value="">-- Sve parcele --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Sezona</label>
+                        <select id="kpSezona" onchange="kpLoadBilans()">
+                            <option value="">Tekuća</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI / BILANS -->
+            <div class="knjiga-kpi-grid" id="knjigaKpiGrid">
+                <div class="knjiga-kpi-card">
+                    <div class="knjiga-kpi-label">Proizvodnja</div>
+                    <div class="knjiga-kpi-value kp-pos" id="knjigaKpiProizvodnja">0</div>
+                </div>
+
+                <div class="knjiga-kpi-card">
+                    <div class="knjiga-kpi-label">Agrohemija</div>
+                    <div class="knjiga-kpi-value kp-neg" id="knjigaKpiAgrohemija">0</div>
+                </div>
+
+                <div class="knjiga-kpi-card">
+                    <div class="knjiga-kpi-label">Troškovi</div>
+                    <div class="knjiga-kpi-value kp-neg" id="knjigaKpiTroskovi">0</div>
+                </div>
+
+                <div class="knjiga-kpi-card">
+                    <div class="knjiga-kpi-label">Radni sati</div>
+                    <div class="knjiga-kpi-value" id="knjigaKpiRadniSati">0</div>
+                </div>
+
+                <div class="knjiga-kpi-card knjiga-kpi-card--result">
+                    <div class="knjiga-kpi-label">Rezultat</div>
+                    <div class="knjiga-kpi-value" id="knjigaKpiRezultat">0</div>
+                </div>
+            </div>
+
+            <!-- stari bilans ostaje skriven kao data/render source -->
+            <div class="kp-bilans" id="kpBilans" style="display:none;">
+                <div id="kpBilansRows"></div>
+            </div>
+
+            <!-- SUBNAV -->
+            <div class="knjiga-subnav">
+                <button class="knjiga-subnav-btn active" type="button" onclick="showKnjigaSection('pregled', this)">
+                    Pregled parcela
+                </button>
+                <button class="knjiga-subnav-btn" type="button" onclick="showKnjigaSection('proizvodnja', this)">
+                    Proizvodnja
+                </button>
+                <button class="knjiga-subnav-btn" type="button" onclick="showKnjigaSection('troskovi', this)">
+                    Troškovi
+                </button>
+                <button class="knjiga-subnav-btn" type="button" onclick="showKnjigaSection('lager', this)">
+                    Lager
+                </button>
+            </div>
+
+            <!-- PREGLED PARCELA -->
+            <div class="knjiga-section active" id="knjiga-section-pregled">
+                <div class="knjiga-card">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Pregled parcela</div>
+                            <div class="knjiga-card-subtitle">Sažetak proizvodnje, troškova i rezultata po parceli</div>
+                        </div>
+                    </div>
+
+                    <div id="kpSummary"></div>
+                </div>
+            </div>
+
+            <!-- PROIZVODNJA -->
+            <div class="knjiga-section" id="knjiga-section-proizvodnja">
+                <div class="knjiga-card">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Proizvodnja</div>
+                            <div class="knjiga-card-subtitle">Otkupi i realizacija po vrstama i klasama</div>
+                        </div>
+                    </div>
+
+                    <div class="kp-section-title" id="kpOtkupiTitle" style="display:none;">Proizvodnja (otkupi)</div>
+                    <div id="kpOtkupiList"></div>
+                </div>
+            </div>
+
+            <!-- TROŠKOVI -->
+            <div class="knjiga-section" id="knjiga-section-troskovi">
+                <div class="knjiga-card">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Troškovi</div>
+                            <div class="knjiga-card-subtitle">Pregled evidentiranih troškova i unos novog troška</div>
+                        </div>
+                    </div>
+
+                    <div class="kp-section-title" id="kpTroskoviTitle" style="display:none;">Troškovi</div>
+                    <div id="kpTroskoviList"></div>
+                </div>
+
+                <div class="knjiga-card knjiga-card-form" id="knjigaTrosakFormAnchor">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Novi trošak</div>
+                            <div class="knjiga-card-subtitle">Trošak možete vezati za parcelu ili uneti kao opšti</div>
+                        </div>
+                    </div>
+
+                    <div class="knjiga-form-wrap">
+                        <div class="trosak-kat-grid" id="trosakKatGrid"></div>
+
+                        <div class="form-group">
+                            <label>Opis</label>
+                            <input type="text" id="trosakOpis" placeholder="Npr. Dizel za oranje">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Iznos (RSD)</label>
+                                <input type="number" id="trosakIznos" inputmode="numeric" placeholder="0">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Parcela (opciono)</label>
+                                <select id="trosakParcela">
+                                    <option value="">-- Opšti trošak --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Datum</label>
+                                <input type="date" id="trosakDatum">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Br. dokumenta</label>
+                                <input type="text" id="trosakDokBroj" placeholder="Opciono">
+                            </div>
+                        </div>
+
+                        <button class="btn-primary" onclick="kpSaveTrosak()" style="margin-top:4px;">💾 Sačuvaj trošak</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LAGER -->
+            <div class="knjiga-section" id="knjiga-section-lager">
+                <div class="knjiga-card">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Lager preparata</div>
+                            <div class="knjiga-card-subtitle">Stanje preparata i ulaza na gazdinstvu</div>
+                        </div>
+                    </div>
+
+                    <div id="kpLagerList"></div>
+                </div>
+
+                <div class="knjiga-card">
+                    <div class="knjiga-card-head">
+                        <div>
+                            <div class="knjiga-card-title">Računi i ulaz robe</div>
+                            <div class="knjiga-card-subtitle">Ovde kasnije prebaci fiskalni skener iz Radova</div>
+                        </div>
+                    </div>
+
+                    <div class="knjiga-empty">
+                        <div class="knjiga-empty-title">Fiskalni unos uskoro</div>
+                        <div class="knjiga-empty-text">Brza akcija sa Pregleda može ostati, ali vlasništvo toka ide ovde.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- stari tretmani ostaju skriveni / sekundarni -->
+            <div style="display:none;">
+                <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
+                <div id="kpTretmaniList"></div>
+            </div>
+
+        </div>
+    </section>
+</div>
 <!-- ==================== MANAGEMENT (dvonivovska navigacija) ==================== -->
 <div class="tab-content" id="tab-dispecer">
     <!-- KPI -->
