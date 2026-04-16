@@ -1609,3 +1609,158 @@
     font-size: 13px;
   }
 }
+
+/* =========================================================
+   KOOPERANT — RADOVI EVIDENCIJA
+   ========================================================= */
+
+.radovi-evidencija-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radovi-evidencija-hero {
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  padding: 16px;
+}
+
+.radovi-evidencija-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radovi-evidencija-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(116, 184, 47, 0.10);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.radovi-evidencija-chip--muted {
+  background: rgba(97, 112, 83, 0.08);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.radovi-evidencija-card {
+  background: var(--koop-surface, rgba(255,255,255,0.82));
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 22px;
+  box-shadow: 0 10px 24px rgba(31, 41, 24, 0.06);
+  overflow: hidden;
+}
+
+.radovi-evidencija-card-head {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(92, 108, 77, 0.14);
+}
+
+.radovi-evidencija-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.radovi-evidencija-card-subtitle {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.radovi-evidencija-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Stil za postojeće stavke koje već renderuje agroTretmaniList */
+.radovi-evidencija-list .queue-item {
+  background: rgba(97, 112, 83, 0.04);
+  border: 1px solid rgba(92, 108, 77, 0.10);
+  border-left: 4px solid var(--primary);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: none;
+  margin: 0;
+}
+
+.radovi-evidencija-list .qi-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.radovi-evidencija-list .qi-koop {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.radovi-evidencija-list .qi-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.radovi-evidencija-list .qi-detail {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.radovi-evidencija-list:empty::before {
+  content: "Još nema evidentiranih radova.";
+  display: block;
+  padding: 28px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .radovi-evidencija-hero {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .radovi-evidencija-card {
+    border-radius: 18px;
+  }
+
+  .radovi-evidencija-card-head {
+    padding: 14px 14px 10px;
+  }
+
+  .radovi-evidencija-list {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .radovi-evidencija-list .queue-item {
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+
+  .radovi-evidencija-list .qi-header {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .radovi-evidencija-list .qi-time {
+    white-space: normal;
+  }
+}
