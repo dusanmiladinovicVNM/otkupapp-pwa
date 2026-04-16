@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v2';
+const CACHE_NAME = 'AgriX-v3';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -38,6 +38,7 @@ const ASSETS = [
     './src/js/ui/tabs.js',
 
     // Features — kooperant
+    './src/js/features/kooperant/pregled.js',
     './src/js/features/kooperant/kartica.js',
     './src/js/features/kooperant/koopinfo.js',
     './src/js/features/kooperant/parcele.js',
@@ -45,6 +46,7 @@ const ASSETS = [
     './src/js/features/kooperant/agromere.js',
     './src/js/features/kooperant/knjiga-polja.js',
     './src/js/features/kooperant/fiskalni.js',
+    './src/js/features/kooperant/bottom-nav.js,
 
     // Features — otkup
     './src/js/features/otkup/otkup-form.js',
