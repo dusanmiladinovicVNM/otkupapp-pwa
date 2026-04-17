@@ -249,15 +249,18 @@ function buildOtpremaRootSections() {
     );
 
     const groupsMap = new Map();
+
     todayAssigned.forEach(row => {
         const key = row.vozacID || 'NEPOZNAT';
+
         if (!groupsMap.has(key)) {
             groupsMap.set(key, {
                 vozacID: row.vozacID || '',
-                vozacName: row.vozacName || row.vozacID || 'Vozač',
+                vozacName: resolveVozacName(row.vozacID),
                 items: []
             });
         }
+
         groupsMap.get(key).items.push(row);
     });
 
@@ -510,7 +513,9 @@ async function confirmOtpremaAssign() {
     }
 
     const nowIso = new Date().toISOString();
-    const updatedRows = selectedRows.map(row => buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso));
+    const updatedRows = selectedRows.map(row =>
+        buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso)
+    );
 
     try {
         for (const row of updatedRows) {
@@ -519,15 +524,20 @@ async function confirmOtpremaAssign() {
 
         otpremaState.successRows = updatedRows;
         renderOtpremaSuccessView(updatedRows, otpremaState.selectedVozac);
+        showOtpremaSuccessView();
 
         if (typeof updateSyncBadge === 'function') updateSyncBadge();
+
         if (navigator.onLine && typeof syncQueueSafe === 'function') {
             syncQueueSafe();
         }
 
-        // osveži state
-        await loadOtpremaOverview();
-        showOtpremaSuccessView();
+        // osveži lokalni state posle success prikaza
+        otpremaState.rows = otpremaState.rows.map(row => {
+            const match = updatedRows.find(u => getOtpremaRecordKey(u) === getOtpremaRecordKey(row));
+            return match || row;
+        });
+
     } catch (err) {
         console.error('confirmOtpremaAssign failed:', err);
         showToast('Greška pri potvrdi otpreme', 'error');
@@ -535,8 +545,12 @@ async function confirmOtpremaAssign() {
 }
 
 function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
+    if (!row.clientRecordID) {
+        throw new Error('Otprema zahteva postojeći clientRecordID');
+    }
+
     return {
-        clientRecordID: row.clientRecordID || ('upd-' + Date.now() + '-' + Math.floor(Math.random() * 100000)),
+        clientRecordID: row.clientRecordID,
         serverRecordID: row.serverRecordID || '',
         createdAtClient: row.createdAtClient || nowIso,
         updatedAtClient: nowIso,
@@ -544,7 +558,7 @@ function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
         syncedAt: '',
         deviceID: typeof getDeviceID === 'function' ? getDeviceID() : '',
 
-        otkupacID: CONFIG.OTKUPAC_ID,
+        otkupacID: row.otkupacID || CONFIG.OTKUPAC_ID,
         datum: row.datum || getTodayIsoDate(),
 
         kooperantID: row.kooperantID || '',
@@ -568,9 +582,9 @@ function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
         syncAttemptAt: '',
         lastSyncError: '',
         lastServerStatus: '',
-        deleted: false,
-        entityType: 'otkup',
-        schemaVersion: 1
+        deleted: !!row.deleted,
+        entityType: row.entityType || 'otkup',
+        schemaVersion: row.schemaVersion || 1
     };
 }
 
@@ -702,7 +716,7 @@ function enrichOtpremaRecord(r) {
     return {
         ...r,
         datum: toIsoDateOnly(r.datum || ''),
-        vozacName: r.vozacName || resolveVozacName(r.vozacID)
+        vozacName: resolveVozacName(r.vozacID) || r.vozacName || ''
     };
 }
 
@@ -723,6 +737,7 @@ function getOtpremaRecordKey(r) {
 
 function resolveVozacName(vozacID) {
     if (!vozacID) return '';
+
     const vozac = (stammdaten.vozaci || []).find(v => (v.VozacID || v.ID) === vozacID);
     return vozac ? (vozac.ImePrezime || vozac.Naziv || vozac.Ime || vozacID) : vozacID;
 }
@@ -732,7 +747,7 @@ function getOtpremaAssignedDate(row) {
         row.updatedAtClient ||
         row.updatedAtServer ||
         row.syncedAt ||
-        row.datum
+        ''
     );
 }
 
@@ -776,4 +791,11 @@ function toIsoDateOnly(input) {
 
 function getTodayIsoDate() {
     return new Date().toISOString().slice(0, 10);
+}
+
+function getSelectedOtpremaRows() {
+    return otpremaState.rows.filter(r =>
+        otpremaState.selectedKeys.has(getOtpremaRecordKey(r)) &&
+        !r.vozacID
+    );
 }
