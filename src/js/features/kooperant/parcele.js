@@ -218,6 +218,7 @@ async function loadParcele() {
         }
 
         _parceleLoaded = true;
+        populateParceleKulturaFilter();
     }, 'Greška pri učitavanju parcela');
 }
 
@@ -631,4 +632,67 @@ function focusParcel(parcelaID) {
 
     if (layer.openPopup) layer.openPopup();
     if (mapDiv) mapDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+
+function showParceleSection(name, btn) {
+    document.querySelectorAll('.parcele-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.parcele-subnav-btn').forEach(el => el.classList.remove('active'));
+
+    const section = document.getElementById('parcele-section-' + name);
+    if (section) section.classList.add('active');
+
+    if (btn && btn.classList) {
+        btn.classList.add('active');
+    }
+
+    const toggleBtn = document.querySelector('.parcele-primary-btn');
+    if (toggleBtn) {
+        toggleBtn.textContent = name === 'mapa' ? 'Prikaži listu' : 'Prikaži mapu';
+    }
+}
+
+function toggleParceleView() {
+    const mapaActive = document.getElementById('parcele-section-mapa')?.classList.contains('active');
+    const buttons = document.querySelectorAll('.parcele-subnav-btn');
+
+    if (mapaActive) {
+        showParceleSection('lista', buttons[1] || null);
+    } else {
+        showParceleSection('mapa', buttons[0] || null);
+    }
+}
+
+function populateParceleKulturaFilter() {
+    const sel = document.getElementById('parceleKulturaFilter');
+    if (!sel) return;
+    if (sel.options.length > 1) return;
+
+    const values = Array.from(new Set(
+        (stammdaten.parcele || [])
+            .filter(p => p.KooperantID === CONFIG.ENTITY_ID)
+            .map(p => String(p.Kultura || '').trim())
+            .filter(Boolean)
+    )).sort();
+
+    values.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = v;
+        sel.appendChild(o);
+    });
+}
+
+function applyParceleFilters() {
+    const search = String(document.getElementById('parceleSearch')?.value || '').toLowerCase().trim();
+    const kultura = String(document.getElementById('parceleKulturaFilter')?.value || '').trim();
+    const list = document.getElementById('parceleList');
+    if (!list) return;
+
+    Array.from(list.children).forEach(item => {
+        const text = (item.innerText || '').toLowerCase();
+        const matchSearch = !search || text.includes(search);
+        const matchKultura = !kultura || text.includes(kultura.toLowerCase());
+        item.style.display = (matchSearch && matchKultura) ? '' : 'none';
+    });
 }
