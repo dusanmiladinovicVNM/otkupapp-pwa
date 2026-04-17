@@ -33,7 +33,6 @@ async function bootstrapApp() {
 
         applyRoleVisibility();
         if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
-        if (typeof updateBottomNavActive === 'function') updateBottomNavActive();
         applyHeaderInfo();
         bindAppShellEvents();
         setDefaultDates();
