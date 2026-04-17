@@ -1,11 +1,93 @@
 const OTKUP_TIP_AMBALAZE_OPTIONS = ['12/1', '6/1', '2/1'];
 
-function initOtkupFormUI() {
+function initOtkupFormUI(options) {
+    const opts = options || {};
+    const preserveSelection = !!opts.preserveSelection;
+
+    const prev = preserveSelection ? {
+        kooperantID: getFieldValue('fldKooperantID'),
+        vrsta: getFieldValue('fldVrsta'),
+        sorta: getFieldValue('fldSorta'),
+        klasa: getFieldValue('fldKlasa'),
+        tipAmbalaze: getFieldValue('fldTipAmbalaze'),
+        parcelaID: getFieldValue('fldParcela')
+    } : null;
+
     populateVrstaDropdown();
-    populateTipAmbalazeDropdown();
+    populateTipAmbalazeDropdown(prev ? prev.tipAmbalaze : '');
     applyDefaults();
+
+    if (preserveSelection && prev) {
+        if (prev.vrsta) {
+            setFieldValue('fldVrsta', prev.vrsta);
+            onVrstaChange();
+        }
+        if (prev.sorta) setFieldValue('fldSorta', prev.sorta);
+        if (prev.klasa) setFieldValue('fldKlasa', prev.klasa);
+        if (prev.tipAmbalaze) setFieldValue('fldTipAmbalaze', prev.tipAmbalaze);
+
+        if (prev.kooperantID) {
+            populateParcelaDropdown(prev.kooperantID);
+            if (prev.parcelaID) setFieldValue('fldParcela', prev.parcelaID);
+        }
+    }
+
+    bindOtkupFormUIEvents();
     clearOtkupValidation();
     updateTipAmbalazeHint();
+}
+
+function bindOtkupFormUIEvents() {
+    const root = document.getElementById('tab-otkup');
+    if (!root || root.dataset.otkupUiBound === '1') return;
+
+    const fldVrsta = document.getElementById('fldVrsta');
+    const fldTipAmbalaze = document.getElementById('fldTipAmbalaze');
+    const fldKooperantManual = document.getElementById('fldKooperantManual');
+    const fldKolicina = document.getElementById('fldKolicina');
+    const fldCena = document.getElementById('fldCena');
+    const fldAmbalaza = document.getElementById('fldAmbalaza');
+
+    if (fldVrsta) {
+        fldVrsta.addEventListener('change', () => {
+            clearOtkupError('errVrsta', 'fldVrsta');
+            clearOtkupError('errTipAmbalaze', 'fldTipAmbalaze');
+            updateTipAmbalazeHint();
+        });
+    }
+
+    if (fldTipAmbalaze) {
+        fldTipAmbalaze.addEventListener('change', () => {
+            clearOtkupError('errTipAmbalaze', 'fldTipAmbalaze');
+            updateTipAmbalazeHint();
+        });
+    }
+
+    if (fldKooperantManual) {
+        fldKooperantManual.addEventListener('change', () => {
+            clearOtkupError('errKooperant', 'fldKooperantManual');
+        });
+    }
+
+    if (fldKolicina) {
+        fldKolicina.addEventListener('input', () => {
+            clearOtkupError('errKolicina', 'fldKolicina');
+        });
+    }
+
+    if (fldCena) {
+        fldCena.addEventListener('input', () => {
+            clearOtkupError('errCena', 'fldCena');
+        });
+    }
+
+    if (fldAmbalaza) {
+        fldAmbalaza.addEventListener('input', () => {
+            clearOtkupError('errAmbalaza', 'fldAmbalaza');
+        });
+    }
+
+    root.dataset.otkupUiBound = '1';
 }
 
 function populateVrstaDropdown() {
