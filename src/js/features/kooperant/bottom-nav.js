@@ -202,7 +202,3 @@ window.addEventListener('resize', () => {
     updateBottomNavVisibility();
     updateBottomNavActive();
 });
-
-document.addEventListener('DOMContentLoaded', function () {
-    initBottomNav();
-});
