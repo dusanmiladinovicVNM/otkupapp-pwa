@@ -1,20 +1,61 @@
 // ============================================================
-// KOOPERANT — BOTTOM NAV
+// ROLE-AWARE BOTTOM NAV
 // Koristi postojeći showTab(tabName, btn)
+// Podržava:
+// - Kooperant: #koopBottomNav
+// - Otkupac:   #otkupBottomNav
 // ============================================================
 
-function initKoopBottomNav() {
-    updateKoopBottomNavVisibility();
-    updateKoopBottomNavActive();
+function getCurrentRole() {
+    return String((CONFIG && CONFIG.USER_ROLE) || '').trim().toLowerCase();
 }
 
-function updateKoopBottomNavVisibility() {
-    const nav = document.getElementById('koopBottomNav');
-    if (!nav) return;
+function getActiveBottomNavConfig() {
+    const role = getCurrentRole();
 
+    if (role === 'kooperant') {
+        return {
+            role: 'kooperant',
+            navId: 'koopBottomNav',
+            bodyClass: 'has-koop-bottom-nav',
+            rootTabs: ['home', 'parcele', 'agromere', 'knjigapolja', 'more'],
+            tabMap: {
+                'tab-home': 'home',
+                'tab-parcele': 'parcele',
+                'tab-agromere': 'agromere',
+                'tab-knjigapolja': 'knjigapolja',
+                'tab-more': 'more',
+                'tab-kartica': 'more',
+                'tab-koopinfo': 'more'
+            }
+        };
+    }
+
+    if (role === 'otkupac') {
+        return {
+            role: 'otkupac',
+            navId: 'otkupBottomNav',
+            bodyClass: 'has-otkup-bottom-nav',
+            rootTabs: ['otkup', 'pregled', 'otpremnice', 'queue'],
+            tabMap: {
+                'tab-otkup': 'otkup',
+                'tab-pregled': 'pregled',
+                'tab-otpremnice': 'otpremnice',
+                'tab-queue': 'queue'
+            }
+        };
+    }
+
+    return null;
+}
+
+function initBottomNav() {
+    updateBottomNavVisibility();
+    updateBottomNavActive();
+}
+
+function updateBottomNavVisibility() {
     const loginContainer = document.getElementById('loginContainer');
-    const role = String((CONFIG && CONFIG.USER_ROLE) || '').trim().toLowerCase();
-    const isKooperant = role === 'kooperant';
 
     const isLoginVisible = !!(
         loginContainer &&
@@ -23,30 +64,60 @@ function updateKoopBottomNavVisibility() {
         getComputedStyle(loginContainer).display !== 'none'
     );
 
-    const shouldShow = isKooperant && !isLoginVisible;
+    const cfg = getActiveBottomNavConfig();
 
-    nav.classList.toggle('visible', shouldShow);
-    document.body.classList.toggle('has-koop-bottom-nav', shouldShow);
+    // sakrij oba bottom nav-a
+    ['koopBottomNav', 'otkupBottomNav'].forEach(id => {
+        const nav = document.getElementById(id);
+        if (nav) nav.classList.remove('visible');
+    });
+
+    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
+
+    // za ove role koristimo bottom nav, ne top tab bar
+    const tabBar = document.getElementById('tabBar');
+    if (tabBar) {
+        if (cfg && !isLoginVisible) {
+            tabBar.style.display = 'none';
+        } else {
+            tabBar.style.display = '';
+        }
+    }
+
+    if (!cfg || isLoginVisible) return;
+
+    const nav = document.getElementById(cfg.navId);
+    if (!nav) return;
+
+    nav.classList.add('visible');
+    document.body.classList.add(cfg.bodyClass);
 }
 
 function showBottomTab(tabName, btn) {
-    if (tabName === 'more') {
+    const cfg = getActiveBottomNavConfig();
+    if (!cfg) return;
+
+    // "more" za kooperanta je specijalan screen bez legacy top btn fokusa
+    if (cfg.role === 'kooperant' && tabName === 'more') {
         qsa('.tab-content').forEach(t => removeClass(t, 'active'));
         qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
 
         const tabEl = byId('tab-more');
         if (tabEl) addClass(tabEl, 'active');
 
-        updateBottomNavButtons(tabName, btn);
+        updateBottomNavButtons(tabName, btn, cfg.navId);
         return;
     }
 
     showTab(tabName, findLegacyTabBtn(tabName) || btn);
-    updateBottomNavButtons(tabName, btn);
+    updateBottomNavButtons(tabName, btn, cfg.navId);
 }
 
-function updateBottomNavButtons(tabName, btn) {
-    document.querySelectorAll('#koopBottomNav .bottom-nav-btn').forEach(b => {
+function updateBottomNavButtons(tabName, btn, navId) {
+    const root = document.getElementById(navId);
+    if (!root) return;
+
+    root.querySelectorAll('.bottom-nav-btn').forEach(b => {
         b.classList.remove('active');
     });
 
@@ -55,29 +126,22 @@ function updateBottomNavButtons(tabName, btn) {
         return;
     }
 
-    const activeBtn = document.querySelector(`#koopBottomNav .bottom-nav-btn[data-tab="${tabName}"]`);
+    const activeBtn = root.querySelector(`.bottom-nav-btn[data-tab="${tabName}"]`);
     if (activeBtn) activeBtn.classList.add('active');
 }
 
-function updateKoopBottomNavActive() {
+function updateBottomNavActive() {
+    const cfg = getActiveBottomNavConfig();
+    if (!cfg) return;
+
     const activeTab = document.querySelector('.tab-content.active');
     if (!activeTab) return;
 
     const id = activeTab.id || '';
-    const map = {
-        'tab-home': 'home',
-        'tab-parcele': 'parcele',
-        'tab-agromere': 'agromere',
-        'tab-knjigapolja': 'knjigapolja',
-        'tab-more': 'more',
-        'tab-kartica': 'more',
-        'tab-koopinfo': 'more'
-    };
-
-    const navTab = map[id];
+    const navTab = cfg.tabMap[id];
     if (!navTab) return;
 
-    updateBottomNavButtons(navTab);
+    updateBottomNavButtons(navTab, null, cfg.navId);
 }
 
 function findLegacyTabBtn(tabName) {
@@ -114,16 +178,25 @@ function invalidatePregledCacheSafe() {
 }
 
 // Hook na postojeći showTab tok
-(function attachKoopBottomNavHook() {
+(function attachBottomNavHook() {
     const originalShowTab = window.showTab;
     if (typeof originalShowTab !== 'function') return;
+    if (window.__bottomNavHookAttached) return;
+
+    window.__bottomNavHookAttached = true;
 
     window.showTab = function patchedShowTab(tabName, btn) {
         originalShowTab(tabName, btn);
-        updateKoopBottomNavActive();
+        updateBottomNavVisibility();
+        updateBottomNavActive();
     };
 })();
 
+// expose helpers ako treba da ih zove app shell
+window.initBottomNav = initBottomNav;
+window.updateBottomNavVisibility = updateBottomNavVisibility;
+window.updateBottomNavActive = updateBottomNavActive;
+
 document.addEventListener('DOMContentLoaded', function () {
-    initKoopBottomNav();
+    initBottomNav();
 });
