@@ -479,6 +479,111 @@
                             </div>
                         </div>
 
+                        <div class="parcele-section" id="parcele-section-detail">
+                            <div class="parcela-detail-shell">
+
+                                <div class="parcela-detail-hero">
+                                    <div class="parcela-detail-top">
+                                        <button class="parcela-back-btn" type="button" onclick="closeParcelaDetail()">
+                                            ← Nazad
+                                        </button>
+
+                                        <div class="parcela-detail-actions">
+                                            <button class="parcela-detail-cta" type="button" onclick="goToNewRadFromParcela()">
+                                                + Dodaj rad
+                                            </button>
+                                            <button class="parcela-detail-cta parcela-detail-cta--secondary" type="button" onclick="goToNewTrosakFromParcela()">
+                                                Dodaj trošak
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="parcela-detail-headline">
+                                        <div class="parcele-eyebrow">Detalj parcele</div>
+                                        <h2 class="parcela-detail-title" id="parcelaDetailTitle">Parcela</h2>
+                                        <div class="parcela-detail-subline">
+                                            <span id="parcelaDetailKultura">—</span>
+                                            <span>•</span>
+                                            <span id="parcelaDetailPovrsina">—</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="parcela-detail-subnav">
+                                    <button class="parcela-detail-subnav-btn active" type="button" onclick="showParcelaDetailSection('osnovno', this)">Osnovno</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('meteo', this)">Meteo</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('radovi', this)">Radovi</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('troskovi', this)">Troškovi</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('proizvodnja', this)">Proizvodnja</button>
+                                </div>
+
+                                <div class="parcela-detail-section active" id="parcela-detail-section-osnovno">
+                                    <div class="parcele-card">
+                                        <div class="parcele-card-head">
+                                            <div>
+                                                <div class="parcele-card-title">Osnovno</div>
+                                                <div class="parcele-card-subtitle">Osnovni podaci o parceli</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="parcela-osnovno-grid" id="parcelaOsnovnoGrid"></div>
+                                    </div>
+                                </div>
+
+                                <div class="parcela-detail-section" id="parcela-detail-section-meteo">
+                                    <div class="parcele-card">
+                                        <div class="parcele-card-head">
+                                            <div>
+                                                <div class="parcele-card-title">Meteo</div>
+                                                <div class="parcele-card-subtitle">Mikro meteo, rizik i prozor za prskanje</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="parcelaDetailMeteo"></div>
+                                    </div>
+                                </div>
+
+                                <div class="parcela-detail-section" id="parcela-detail-section-radovi">
+                                    <div class="parcele-card">
+                                        <div class="parcele-card-head">
+                                            <div>
+                                                <div class="parcele-card-title">Radovi</div>
+                                                <div class="parcele-card-subtitle">Evidentirani radovi za ovu parcelu</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="parcelaDetailRadovi"></div>
+                                    </div>
+                                </div>
+
+                                <div class="parcela-detail-section" id="parcela-detail-section-troskovi">
+                                    <div class="parcele-card">
+                                        <div class="parcele-card-head">
+                                            <div>
+                                                <div class="parcele-card-title">Troškovi</div>
+                                                <div class="parcele-card-subtitle">Troškovi vezani za ovu parcelu</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="parcelaDetailTroskovi"></div>
+                                    </div>
+                                </div>
+
+                                <div class="parcela-detail-section" id="parcela-detail-section-proizvodnja">
+                                    <div class="parcele-card">
+                                        <div class="parcele-card-head">
+                                            <div>
+                                                <div class="parcele-card-title">Proizvodnja</div>
+                                                <div class="parcele-card-subtitle">Otkupi i realizacija za ovu parcelu</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="parcelaDetailProizvodnja"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </section>
             </div>
