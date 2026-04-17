@@ -93,37 +93,192 @@
 <!-- ==================== OTKUPAC TABS ==================== -->
 
 <div class="tab-content" id="tab-otkup">
-    <button class="qr-scan-btn" onclick="startQRScan()">📷 Skeniraj QR kooperanta</button>
-    <div id="qr-reader"></div>
-    <div class="form-group"><label>Ili izaberi kooperanta ručno</label><select id="fldKooperantManual" onchange="onManualKooperantChange()"><option value="">-- Izaberi --</option></select></div>
-    <div class="koop-display" id="koopDisplay"><div class="koop-name" id="koopName"></div><div class="koop-id" id="koopId"></div></div>
-    <input type="hidden" id="fldKooperantID">
-    <div class="form-group" id="parcelaGroup" style="display:none;"><label>Parcela (opciono)</label><select id="fldParcela"><option value="">-- Bez parcele --</option></select></div>
-    <button class="qr-scan-btn" id="btnVozacScan" onclick="startVozacQRScan()" style="background:var(--accent);">📷 Skeniraj QR vozača (opciono)</button>
-    <div id="qr-reader-vozac" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
-    <div class="koop-display" id="vozacDisplay" style="background:var(--accent);">
-        <div class="koop-name" id="vozacName"></div>
-        <div class="koop-id" id="vozacId"></div>
-        <button onclick="clearVozac()" style="background:none;border:none;color:white;font-size:12px;text-decoration:underline;cursor:pointer;margin-top:4px;">Ukloni vozača</button>
-    </div>
-    <input type="hidden" id="fldVozacID">
-    <div class="form-row">
-        <div class="form-group"><label>Vrsta voća</label><select id="fldVrsta" onchange="onVrstaChange()"><option value="">-- Izaberi --</option></select></div>
-        <div class="form-group"><label>Sorta</label><select id="fldSorta"><option value="">-- Izaberi --</option></select></div>
-    </div>
-    <div class="form-row">
-        <div class="form-group"><label>Klasa</label><select id="fldKlasa"><option value="I">I</option><option value="II">II</option></select></div>
-        <div class="form-group"><label>Količina (kg)</label><input type="number" id="fldKolicina" inputmode="numeric" placeholder="0"></div>
-    </div>
-    <div class="form-row">
-        <div class="form-group"><label>Cena (RSD/kg)</label><input type="number" id="fldCena" inputmode="decimal" placeholder="0.00"></div>
-        <div class="form-group"><label>Ambalaža (kom)</label><input type="number" id="fldAmbalaza" inputmode="numeric" placeholder="0"></div>
-    </div>
-    <div class="form-group"><label>Napomena</label><input type="text" id="fldNapomena" placeholder="Opciono..."></div>
-    <button class="btn-primary" onclick="saveOtkup()">SAČUVAJ OTKUP</button>
-    <button class="btn-secondary" onclick="resetForm()">Poništi</button>
-</div>
+    <section class="otk-screen">
+        <div class="otk-shell">
 
+            <div class="otk-hero">
+                <div class="otk-eyebrow">Terenski unos</div>
+                <h1 class="otk-title">Novi otkup</h1>
+                <div class="otk-subline">Unos otkupa za kooperanta i obavezni otkupni list</div>
+            </div>
+
+            <!-- KOOPERANT -->
+            <div class="otk-card">
+                <div class="otk-card-head">
+                    <div>
+                        <div class="otk-card-title">1. Kooperant</div>
+                        <div class="otk-card-subtitle">Skeniraj QR ili izaberi ručno</div>
+                    </div>
+                </div>
+
+                <button class="qr-scan-btn" type="button" onclick="startQRScan()">
+                    📷 Skeniraj QR kooperanta
+                </button>
+
+                <div id="qr-reader" class="otk-qr-reader" style="display:none;"></div>
+
+                <div class="form-group" style="margin-top:12px;">
+                    <label for="fldKooperantManual">Ili izaberi kooperanta ručno</label>
+                    <select id="fldKooperantManual" onchange="onManualKooperantChange()">
+                        <option value="">-- Izaberi --</option>
+                    </select>
+                    <div class="otk-field-error" id="errKooperant" hidden></div>
+                </div>
+
+                <div class="koop-display" id="koopDisplay">
+                    <div class="koop-name" id="koopName"></div>
+                    <div class="koop-id" id="koopId"></div>
+                </div>
+
+                <input type="hidden" id="fldKooperantID">
+            </div>
+
+            <!-- PARCELA + VOZAČ -->
+            <div class="otk-card">
+                <div class="otk-card-head">
+                    <div>
+                        <div class="otk-card-title">2. Parcela i vozač</div>
+                        <div class="otk-card-subtitle">Parcela je opciona, vozač može odmah ili kasnije kroz Otpremu</div>
+                    </div>
+                </div>
+
+                <div class="form-row otk-form-row-2">
+                    <div class="form-group" id="parcelaGroup" style="display:none;">
+                        <label for="fldParcela">Parcela (opciono)</label>
+                        <select id="fldParcela">
+                            <option value="">-- Bez parcele --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Vozač (opciono)</label>
+                        <button
+                            class="qr-scan-btn otk-vozac-btn"
+                            id="btnVozacScan"
+                            type="button"
+                            onclick="startVozacQRScan()"
+                        >
+                            📷 Skeniraj QR vozača
+                        </button>
+                    </div>
+                </div>
+
+                <div id="qr-reader-vozac" class="otk-qr-reader" style="display:none;"></div>
+
+                <div class="koop-display otk-vozac-display" id="vozacDisplay">
+                    <div class="koop-name" id="vozacName"></div>
+                    <div class="koop-id" id="vozacId"></div>
+                    <button type="button" class="otk-inline-link" onclick="clearVozac()">Ukloni vozača</button>
+                </div>
+
+                <input type="hidden" id="fldVozacID">
+            </div>
+
+            <!-- ROBA -->
+            <div class="otk-card">
+                <div class="otk-card-head">
+                    <div>
+                        <div class="otk-card-title">3. Roba</div>
+                        <div class="otk-card-subtitle">Vrsta je obavezna, sorta je opciona</div>
+                    </div>
+                </div>
+
+                <div class="form-row otk-form-row-2">
+                    <div class="form-group">
+                        <label for="fldVrsta">Vrsta voća</label>
+                        <select id="fldVrsta" onchange="onVrstaChange()">
+                            <option value="">-- Izaberi --</option>
+                        </select>
+                        <div class="otk-field-error" id="errVrsta" hidden></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fldSorta">Sorta</label>
+                        <select id="fldSorta">
+                            <option value="">-- Izaberi --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row otk-form-row-2">
+                    <div class="form-group">
+                        <label for="fldKlasa">Klasa</label>
+                        <select id="fldKlasa">
+                            <option value="I">I</option>
+                            <option value="II">II</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fldKolicina">Količina (kg)</label>
+                        <input type="number" id="fldKolicina" inputmode="numeric" placeholder="0">
+                        <div class="otk-field-error" id="errKolicina" hidden></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENA I AMBALAŽA -->
+            <div class="otk-card">
+                <div class="otk-card-head">
+                    <div>
+                        <div class="otk-card-title">4. Cena i ambalaža</div>
+                        <div class="otk-card-subtitle">Tip ambalaže je uvek birljiv, komada ambalaže je obavezno</div>
+                    </div>
+                </div>
+
+                <div class="form-row otk-form-row-2">
+                    <div class="form-group">
+                        <label for="fldCena">Cena (RSD/kg)</label>
+                        <input type="number" id="fldCena" inputmode="decimal" placeholder="0.00">
+                        <div class="otk-field-error" id="errCena" hidden></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fldTipAmbalaze">Tip ambalaže</label>
+                        <select id="fldTipAmbalaze"></select>
+                        <div class="otk-field-error" id="errTipAmbalaze" hidden></div>
+                        <div class="otk-field-help" id="tipAmbalazeHint"></div>
+                    </div>
+                </div>
+
+                <div class="form-row otk-form-row-1">
+                    <div class="form-group">
+                        <label for="fldAmbalaza">Ambalaža (kom)</label>
+                        <input type="number" id="fldAmbalaza" inputmode="numeric" placeholder="0">
+                        <div class="otk-field-error" id="errAmbalaza" hidden></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NAPOMENA -->
+            <div class="otk-card">
+                <div class="otk-card-head">
+                    <div>
+                        <div class="otk-card-title">5. Napomena</div>
+                        <div class="otk-card-subtitle">Opciono</div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="fldNapomena">Napomena</label>
+                    <input type="text" id="fldNapomena" placeholder="Opciono...">
+                </div>
+            </div>
+
+            <div class="otk-info-strip">
+                Posle čuvanja automatski se otvara otkupni list za potpis i PDF.
+            </div>
+
+            <div class="otk-sticky-actions">
+                <button class="btn-secondary otk-secondary-btn" type="button" onclick="resetForm()">Poništi</button>
+                <button class="btn-primary otk-primary-btn" type="button" onclick="saveOtkup()">Sačuvaj otkup</button>
+            </div>
+
+        </div>
+    </section>
+</div>
+    
+<!-- ==================== Pregled TAB ==================== -->
 <div class="tab-content" id="tab-pregled">
     <div class="form-row" style="margin-bottom:12px;">
         <div class="form-group"><label>Od datuma</label><input type="date" id="fldPregledOd" onchange="loadOtkupPregled()"></div>
