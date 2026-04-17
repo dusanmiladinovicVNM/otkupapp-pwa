@@ -358,44 +358,120 @@
 
 <!-- ==================== Otprema TAB ==================== -->
 <div class="tab-content" id="tab-otpremnice">
-    <div id="otpremaAssignView" style="display:none;">
-        <div class="koop-display visible" id="otpremaVozacDisplay" style="background:var(--accent);margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <div class="koop-name" id="otpremaVozacName"></div>
-                    <div class="koop-id" id="otpremaVozacId"></div>
+    <section class="otprema-screen">
+
+        <!-- ROOT VIEW -->
+        <div class="otprema-shell" id="otpremaRootView">
+            <div class="otprema-hero">
+                <div class="otprema-eyebrow">Operativna dodela</div>
+                <h1 class="otprema-title">Otprema</h1>
+                <div class="otprema-subline">Dodela otkupa vozaču i pregled današnjih isporuka</div>
+            </div>
+
+            <div class="otprema-cta-card">
+                <button class="btn-primary otprema-scan-btn" type="button" onclick="startOtpremaVozacQRScan()">
+                    📷 Skeniraj QR vozača
+                </button>
+
+                <button class="otprema-link-btn" type="button" onclick="toggleOtpremaFallback()">
+                    Ne mogu da skeniram
+                </button>
+
+                <div class="otprema-fallback-panel" id="otpremaFallbackPanel" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fldOtpremaFallbackVozac">Vozač</label>
+                            <select id="fldOtpremaFallbackVozac">
+                                <option value="">-- Izaberi vozača --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-secondary" type="button" onclick="applyOtpremaFallbackDriver()">Potvrdi vozača</button>
                 </div>
-                <button onclick="cancelOtprema()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:6px;font-size:12px;">Otkaži</button>
+
+                <div id="qr-reader-otprema-vozac" class="otprema-qr-reader" style="display:none;"></div>
+            </div>
+
+            <div class="otprema-summary-grid" id="otpremaSummaryGrid">
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otpremaTodayUnassignedCount">0</div>
+                    <div class="otprema-summary-label">Današnji bez vozača</div>
+                    <div class="otprema-summary-sub" id="otpremaTodayUnassignedKg">0 kg</div>
+                </div>
+
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otpremaOlderUnassignedCount">0</div>
+                    <div class="otprema-summary-label">Raniji bez vozača</div>
+                    <div class="otprema-summary-sub" id="otpremaOlderUnassignedKg">0 kg</div>
+                </div>
+
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otpremaTodayAssignedCount">0</div>
+                    <div class="otprema-summary-label">Danas otpremljeno</div>
+                    <div class="otprema-summary-sub" id="otpremaTodayAssignedKg">0 kg</div>
+                </div>
+            </div>
+
+            <div class="otprema-sections" id="otpremaRootSections"></div>
+        </div>
+
+        <!-- ASSIGN VIEW -->
+        <div class="otprema-shell" id="otpremaAssignView" style="display:none;">
+            <div class="otprema-assign-head">
+                <div>
+                    <div class="otprema-eyebrow">Dodela vozaču</div>
+                    <h2 class="otprema-assign-title">Izaberi otkupe</h2>
+                </div>
+                <button class="otprema-icon-btn" type="button" onclick="cancelOtpremaAssign()">✕</button>
+            </div>
+
+            <div class="otprema-driver-card" id="otpremaAssignDriverCard"></div>
+
+            <div class="otprema-toolbar">
+                <button class="btn-secondary" type="button" onclick="selectAllOtpremaToday()">Izaberi sve današnje</button>
+                <button class="btn-secondary" type="button" onclick="clearOtpremaSelection()">Poništi izbor</button>
+                <button class="otprema-link-btn" type="button" onclick="startOtpremaVozacQRScan()">Promeni vozača</button>
+            </div>
+
+            <div class="otprema-sections" id="otpremaAssignSections"></div>
+
+            <div class="otprema-sticky-bar">
+                <div class="otprema-sticky-meta">
+                    <div><strong id="otpremaSelectedCount">0</strong> stavki</div>
+                    <div><strong id="otpremaSelectedKg">0 kg</strong></div>
+                </div>
+                <button class="btn-primary" type="button" onclick="confirmOtpremaAssign()">Potvrdi otpremu</button>
             </div>
         </div>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Izaberite otkupe za ovog vozača:</p>
-        <button onclick="toggleSelectAll()" class="btn-secondary" style="margin-bottom:10px;margin-top:0;">Izaberi sve / Poništi sve</button>
-        <div id="otpremaOtkupList"></div>
-        <div id="otpremaSummary" style="background:var(--primary);color:white;padding:12px;border-radius:var(--radius);margin-top:12px;display:none;">
-            <span id="otpremaSummaryText"></span>
+
+        <!-- SUCCESS VIEW -->
+        <div class="otprema-shell" id="otpremaSuccessView" style="display:none;">
+            <div class="otprema-success-card">
+                <div class="otprema-success-icon">✓</div>
+                <div class="otprema-success-title">Otprema potvrđena</div>
+                <div class="otprema-success-sub" id="otpremaSuccessDriver">-</div>
+            </div>
+
+            <div class="otprema-summary-grid">
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otpremaSuccessCount">0</div>
+                    <div class="otprema-summary-label">Dodeljenih stavki</div>
+                </div>
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otpremaSuccessKg">0</div>
+                    <div class="otprema-summary-label">Ukupno kg</div>
+                </div>
+            </div>
+
+            <div class="otprema-sections" id="otpremaSuccessList"></div>
+
+            <div class="otprema-success-actions">
+                <button class="btn-secondary" type="button" onclick="backToOtpremaRoot()">Nazad na Otpremu</button>
+                <button class="btn-primary" type="button" onclick="startOtpremaVozacQRScan()">Nova dodela</button>
+            </div>
         </div>
-        <button class="btn-primary" onclick="confirmOtprema()">POTVRDI OTPREMU</button>
-    </div>
 
-    <div id="otpremaMainView">
-        <button class="qr-scan-btn" style="background:var(--accent);" onclick="startOtpremaVozacScan()">📷 Skeniraj QR vozača za otpremu</button>
-        <div id="qr-reader-otprema" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
-
-        <h3 style="color:var(--primary);margin:16px 0 8px;font-size:14px;">Danas neraspoređeno</h3>
-        <div id="otpremaUnassignedList"></div>
-
-        <h3 style="color:var(--primary);margin:16px 0 8px;font-size:14px;">Danas otpremljeno</h3>
-        <div id="otpremaAssignedList"></div>
-    </div>
-</div>
-
-<div class="tab-content" id="tab-queue">
-    <div class="stats-grid">
-        <div class="stat-card"><div class="stat-value" id="statPending">0</div><div class="stat-label">Čeka sync</div></div>
-        <div class="stat-card"><div class="stat-value" id="statSynced">0</div><div class="stat-label">Sinhronizovano</div></div>
-    </div>
-    <div id="queueList"></div>
-    <button class="btn-secondary" onclick="syncNow()">Sinhronizuj sada</button>
+    </section>
 </div>
 
 <!-- ==================== KOOPERANT TABS ==================== -->
