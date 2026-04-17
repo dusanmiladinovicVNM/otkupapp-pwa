@@ -74,18 +74,20 @@ function updateBottomNavVisibility() {
 
     document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
-    // desktop koristi legacy top tabove
-    // mobile koristi bottom nav samo za Kooperant/Otkupac
+    const useOtkupDesktopTopNav = !!(cfg && cfg.role === 'otkupac' && !isMobile);
+    const useMobileBottomNav = !!(cfg && isMobile);
+    const shouldShowBottomNav = !isLoginVisible && (useMobileBottomNav || useOtkupDesktopTopNav);
+
     const tabBar = document.getElementById('tabBar');
     if (tabBar) {
-        if (cfg && isMobile) {
+        if (shouldShowBottomNav) {
             tabBar.style.display = 'none';
         } else {
             tabBar.style.display = '';
         }
     }
 
-    if (!cfg || isLoginVisible || !isMobile) return;
+    if (!cfg || !shouldShowBottomNav) return;
 
     const nav = document.getElementById(cfg.navId);
     if (!nav) return;
