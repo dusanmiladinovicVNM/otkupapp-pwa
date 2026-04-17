@@ -64,9 +64,7 @@ function updateBottomNavVisibility() {
     );
 
     const cfg = getActiveBottomNavConfig();
-    const isMobile = window.matchMedia('(max-width: 900px)').matches;
 
-    // sakrij oba bottom nav-a
     ['koopBottomNav', 'otkupBottomNav'].forEach(id => {
         const nav = document.getElementById(id);
         if (nav) nav.classList.remove('visible');
@@ -74,20 +72,16 @@ function updateBottomNavVisibility() {
 
     document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
-    const useOtkupDesktopTopNav = !!(cfg && cfg.role === 'otkupac' && !isMobile);
-    const useMobileBottomNav = !!(cfg && isMobile);
-    const shouldShowBottomNav = !isLoginVisible && (useMobileBottomNav || useOtkupDesktopTopNav);
-
     const tabBar = document.getElementById('tabBar');
     if (tabBar) {
-        if (shouldShowBottomNav) {
+        if (cfg && !isLoginVisible) {
             tabBar.style.display = 'none';
         } else {
             tabBar.style.display = '';
         }
     }
 
-    if (!cfg || !shouldShowBottomNav) return;
+    if (!cfg || isLoginVisible) return;
 
     const nav = document.getElementById(cfg.navId);
     if (!nav) return;
