@@ -65,6 +65,7 @@ function updateBottomNavVisibility() {
     );
 
     const cfg = getActiveBottomNavConfig();
+    const isMobile = window.matchMedia('(max-width: 900px)').matches;
 
     // sakrij oba bottom nav-a
     ['koopBottomNav', 'otkupBottomNav'].forEach(id => {
@@ -74,17 +75,14 @@ function updateBottomNavVisibility() {
 
     document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
-    // za ove role koristimo bottom nav, ne top tab bar
+    // TAB BAR više ne gasimo globalno;
+    // desktop koristi legacy top tabove, mobile koristi bottom nav
     const tabBar = document.getElementById('tabBar');
     if (tabBar) {
-        if (cfg && !isLoginVisible) {
-            tabBar.style.display = 'none';
-        } else {
-            tabBar.style.display = '';
-        }
+        tabBar.style.display = '';
     }
 
-    if (!cfg || isLoginVisible) return;
+    if (!cfg || isLoginVisible || !isMobile) return;
 
     const nav = document.getElementById(cfg.navId);
     if (!nav) return;
@@ -196,6 +194,11 @@ function invalidatePregledCacheSafe() {
 window.initBottomNav = initBottomNav;
 window.updateBottomNavVisibility = updateBottomNavVisibility;
 window.updateBottomNavActive = updateBottomNavActive;
+
+window.addEventListener('resize', () => {
+    updateBottomNavVisibility();
+    updateBottomNavActive();
+});
 
 document.addEventListener('DOMContentLoaded', function () {
     initBottomNav();
