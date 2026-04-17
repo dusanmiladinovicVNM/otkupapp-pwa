@@ -1,28 +1,33 @@
 // ============================================================
 // OTKUP PREGLED / DANAS
+// Finalna očišćena verzija
 // ============================================================
 
 const otkupPregledState = {
     quickFilter: 'danas',
     rows: [],
-    detailRecord: null
+    detailRecord: null,
+    eventsBound: false
 };
 
 async function loadOtkupPregled() {
-    const list = document.getElementById('pregledList');
-    if (!list) return;
+    const listEl = byId('pregledList');
+    if (!listEl) return;
 
     ensurePregledDefaultDates();
     bindPregledEventsOnce();
 
-    list.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>';
+    setHtml(
+        listEl,
+        '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>'
+    );
 
-    let local = [];
-    let server = [];
+    let localRows = [];
+    let serverRows = [];
 
     try {
         if (db) {
-            local = await dbGetAll(db, CONFIG.STORE_NAME);
+            localRows = await dbGetAll(db, CONFIG.STORE_NAME);
         }
     } catch (err) {
         console.error('loadOtkupPregled local failed:', err);
@@ -34,25 +39,22 @@ async function loadOtkupPregled() {
         }, 'Greška pri učitavanju otkupa');
 
         if (json && json.success && Array.isArray(json.records)) {
-            server = json.records.map(mapServerOtkupRecord);
+            serverRows = json.records.map(mapServerOtkupRecord);
         }
     }
 
-    const merged = mergeOtkupPregledRecords(local, server)
+    const mergedRows = mergePregledRecords(localRows, serverRows)
         .map(enrichPregledRecord)
-        .sort(compareOtkupPregledRecordsDesc);
+        .sort(comparePregledRowsDesc);
 
-    otkupPregledState.rows = merged;
+    otkupPregledState.rows = mergedRows;
 
-    const filtered = getFilteredPregledRows();
-    renderOtkupPregledStats(filtered);
-    renderOtkupPregledList(list, filtered);
-    updatePregledQuickFiltersUI();
+    rerenderPregled();
 }
 
 function ensurePregledDefaultDates() {
-    const fldOd = document.getElementById('fldPregledOd');
-    const fldDo = document.getElementById('fldPregledDo');
+    const fldOd = byId('fldPregledOd');
+    const fldDo = byId('fldPregledDo');
     const today = getTodayIsoDate();
 
     if (fldOd && !fldOd.value) fldOd.value = today;
@@ -60,10 +62,22 @@ function ensurePregledDefaultDates() {
 }
 
 function bindPregledEventsOnce() {
-    const root = document.getElementById('tab-pregled');
-    if (!root || root.dataset.boundPregled === '1') return;
+    if (otkupPregledState.eventsBound) return;
 
-    root.dataset.boundPregled = '1';
+    const listEl = byId('pregledList');
+    if (listEl) {
+        listEl.addEventListener('click', function (e) {
+            const card = e.target.closest('.danas-card');
+            if (!card) return;
+
+            const recordKey = card.getAttribute('data-record-key') || '';
+            if (!recordKey) return;
+
+            openPregledDetail(recordKey);
+        });
+    }
+
+    otkupPregledState.eventsBound = true;
 }
 
 function onPregledDateChange() {
@@ -75,8 +89,8 @@ function onPregledDateChange() {
 function setPregledQuickFilter(filterName, btn) {
     otkupPregledState.quickFilter = filterName;
 
-    const fldOd = document.getElementById('fldPregledOd');
-    const fldDo = document.getElementById('fldPregledDo');
+    const fldOd = byId('fldPregledOd');
+    const fldDo = byId('fldPregledDo');
 
     const today = getTodayIsoDate();
     const juce = getRelativeIsoDate(-1);
@@ -102,50 +116,50 @@ function setPregledQuickFilter(filterName, btn) {
     rerenderPregled();
 }
 
-function rerenderPregled() {
-    const list = document.getElementById('pregledList');
-    if (!list) return;
-
-    const filtered = getFilteredPregledRows();
-    renderOtkupPregledStats(filtered);
-    renderOtkupPregledList(list, filtered);
-}
-
 function updatePregledQuickFiltersUI(btn) {
-    document.querySelectorAll('#pregledQuickFilters .danas-pill').forEach(el => {
-        el.classList.remove('active');
+    qsa('#pregledQuickFilters .danas-pill').forEach(el => {
+        removeClass(el, 'active');
     });
 
     if (btn && btn.classList) {
-        btn.classList.add('active');
+        addClass(btn, 'active');
         return;
     }
 
-    const active = document.querySelector(`#pregledQuickFilters .danas-pill[data-filter="${otkupPregledState.quickFilter}"]`);
-    if (active) active.classList.add('active');
+    const activeBtn = qs('#pregledQuickFilters .danas-pill[data-filter="' + otkupPregledState.quickFilter + '"]');
+    if (activeBtn) addClass(activeBtn, 'active');
+}
+
+function rerenderPregled() {
+    const listEl = byId('pregledList');
+    if (!listEl) return;
+
+    const rows = getFilteredPregledRows();
+    renderOtkupPregledStats(rows);
+    renderOtkupPregledList(listEl, rows);
 }
 
 function getFilteredPregledRows() {
-    const fldOd = document.getElementById('fldPregledOd');
-    const fldDo = document.getElementById('fldPregledDo');
+    const fldOd = byId('fldPregledOd');
+    const fldDo = byId('fldPregledDo');
 
     const od = fldOd ? fldOd.value : '';
     const doo = fldDo ? fldDo.value : '';
 
-    let all = [...otkupPregledState.rows];
+    let rows = otkupPregledState.rows.slice();
 
-    if (od) all = all.filter(r => (r.datum || '') >= od);
-    if (doo) all = all.filter(r => (r.datum || '') <= doo);
+    if (od) rows = rows.filter(r => (r.datum || '') >= od);
+    if (doo) rows = rows.filter(r => (r.datum || '') <= doo);
 
     if (otkupPregledState.quickFilter === 'bez_vozaca') {
-        all = all.filter(r => !r.vozacID);
+        rows = rows.filter(r => !r.vozacID);
     }
 
     if (otkupPregledState.quickFilter === 'problemi') {
-        all = all.filter(r => isPregledProblem(r));
+        rows = rows.filter(isPregledProblem);
     }
 
-    return all;
+    return rows;
 }
 
 function mapServerOtkupRecord(r) {
@@ -158,7 +172,7 @@ function mapServerOtkupRecord(r) {
         syncedAt: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
 
         datum: toIsoDateOnly(r.Datum),
-        datumLabel: safeFmtDate(r.Datum),
+        datumLabel: fmtDate(r.Datum),
 
         kooperantID: r.KooperantID || '',
         kooperantName: r.KooperantName || r.KooperantID || '',
@@ -176,12 +190,9 @@ function mapServerOtkupRecord(r) {
         syncStatus: 'synced',
         syncAttempts: 0,
         lastSyncError: '',
-        lastServerStatus: 'server'
+        lastServerStatus: 'server',
+        deleted: false
     };
-}
-
-function mergeOtkupPregledRecords(local, server) {
-    return mergeOfflineRecords(local, server, normalizeLocalPregledRecord);
 }
 
 function normalizeLocalPregledRecord(r) {
@@ -194,7 +205,7 @@ function normalizeLocalPregledRecord(r) {
         syncedAt: normalizeIso(r.syncedAt),
 
         datum: toIsoDateOnly(r.datum || ''),
-        datumLabel: safeFmtDate(r.datum || ''),
+        datumLabel: fmtDate(r.datum || ''),
 
         kooperantID: r.kooperantID || '',
         kooperantName: r.kooperantName || r.kooperantID || '',
@@ -212,83 +223,127 @@ function normalizeLocalPregledRecord(r) {
         syncStatus: r.syncStatus || 'pending',
         syncAttempts: parseInt(r.syncAttempts, 10) || 0,
         lastSyncError: r.lastSyncError || '',
-        lastServerStatus: r.lastServerStatus || ''
+        lastServerStatus: r.lastServerStatus || '',
+        deleted: !!r.deleted
     };
 }
 
+function mergePregledRecords(localRows, serverRows) {
+    const map = new Map();
+
+    serverRows.forEach(row => {
+        const key = getPregledRecordKey(row);
+        if (!key) return;
+        map.set(key, row);
+    });
+
+    localRows
+        .map(normalizeLocalPregledRecord)
+        .forEach(row => {
+            const key = getPregledRecordKey(row);
+            if (!key) return;
+
+            const existing = map.get(key);
+
+            if (!existing) {
+                map.set(key, row);
+                return;
+            }
+
+            // Ako lokalni zapis nije sinhronizovan ili ima grešku, lokalni ima prednost
+            if (row.syncStatus !== 'synced' || row.lastSyncError) {
+                map.set(key, row);
+                return;
+            }
+
+            // Ako je lokalni noviji od server rendera, uzmi lokalni
+            if ((row.updatedAtClient || '') > (existing.updatedAtClient || '')) {
+                map.set(key, row);
+            }
+        });
+
+    return Array.from(map.values()).filter(r => !r.deleted);
+}
+
+function getPregledRecordKey(r) {
+    if (r.serverRecordID) return 'srv:' + r.serverRecordID;
+    if (r.clientRecordID) return 'cli:' + r.clientRecordID;
+    return '';
+}
+
 function enrichPregledRecord(r) {
-    const vrednost = ((parseFloat(r.kolicina) || 0) * (parseFloat(r.cena) || 0));
+    const vrednost = (parseFloat(r.kolicina) || 0) * (parseFloat(r.cena) || 0);
+
     return {
         ...r,
         datum: toIsoDateOnly(r.datum || ''),
-        datumLabel: r.datumLabel || safeFmtDate(r.datum || ''),
-        vrednost,
+        datumLabel: r.datumLabel || fmtDate(r.datum || ''),
+        vrednost: vrednost,
         statusMeta: buildPregledStatusMeta(r)
     };
 }
 
-function compareOtkupPregledRecordsDesc(a, b) {
-    const aTime = a.updatedAtClient || a.createdAtClient || a.updatedAtServer || '';
-    const bTime = b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '';
-
+function comparePregledRowsDesc(a, b) {
     const byDate = String(b.datum || '').localeCompare(String(a.datum || ''));
     if (byDate !== 0) return byDate;
 
+    const aTime = a.updatedAtClient || a.createdAtClient || a.updatedAtServer || '';
+    const bTime = b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '';
     const byTime = String(bTime).localeCompare(String(aTime));
     if (byTime !== 0) return byTime;
 
     return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
 }
 
-function renderOtkupPregledStats(all) {
-    const countEl = document.getElementById('statPregledCount');
-    const kgEl = document.getElementById('statPregledKg');
-    const vrednostEl = document.getElementById('statPregledVrednost');
-    const koopEl = document.getElementById('statPregledKoop');
+function renderOtkupPregledStats(rows) {
+    const countEl = byId('statPregledCount');
+    const kgEl = byId('statPregledKg');
+    const vrednostEl = byId('statPregledVrednost');
+    const koopEl = byId('statPregledKoop');
 
-    const kg = all.reduce((s, r) => s + (parseFloat(r.kolicina) || 0), 0);
-    const vr = all.reduce((s, r) => s + (parseFloat(r.vrednost) || 0), 0);
-    const koopCount = new Set(all.map(r => r.kooperantID).filter(Boolean)).size;
+    const count = rows.length;
+    const kg = rows.reduce((sum, r) => sum + (parseFloat(r.kolicina) || 0), 0);
+    const vrednost = rows.reduce((sum, r) => sum + (parseFloat(r.vrednost) || 0), 0);
+    const koopCount = new Set(rows.map(r => r.kooperantID).filter(Boolean)).size;
 
-    if (countEl) countEl.textContent = String(all.length);
-    if (kgEl) kgEl.textContent = kg.toLocaleString('sr-RS');
-    if (vrednostEl) vrednostEl.textContent = vr.toLocaleString('sr-RS');
-    if (koopEl) koopEl.textContent = String(koopCount);
+    setText(countEl, String(count));
+    setText(kgEl, kg.toLocaleString('sr-RS'));
+    setText(vrednostEl, vrednost.toLocaleString('sr-RS'));
+    setText(koopEl, String(koopCount));
 }
 
-function renderOtkupPregledList(list, all) {
-    if (!all.length) {
-        list.innerHTML = `
+function renderOtkupPregledList(listEl, rows) {
+    if (!rows.length) {
+        setHtml(listEl, `
             <div class="danas-empty">
                 <div class="danas-empty-title">Nema otkupa za izabrani prikaz</div>
-                <div class="danas-empty-text">Promenite filter ili datum da biste videli stavke.</div>
+                <div class="danas-empty-text">Promeni filter ili datum da bi video stavke.</div>
             </div>
-        `;
+        `);
         return;
     }
 
-    const sections = buildPregledSections(all);
+    const sections = buildPregledSections(rows)
+        .filter(section => section.items.length > 0);
 
-    list.innerHTML = sections
-        .filter(section => section.items.length > 0)
-        .map(section => `
-            <section class="danas-section">
-                <div class="danas-section-head">
-                    <div class="danas-section-title">${escapeHtml(section.title)}</div>
-                    <div class="danas-section-count">${section.items.length}</div>
-                </div>
+    setHtml(listEl, sections.map(section => `
+        <section class="danas-section">
+            <div class="danas-section-head">
+                <div class="danas-section-title">${escapeHtml(section.title)}</div>
+                <div class="danas-section-count">${section.items.length}</div>
+            </div>
 
-                <div class="danas-cards">
-                    ${section.items.map(renderPregledCard).join('')}
-                </div>
-            </section>
-        `).join('');
+            <div class="danas-cards">
+                ${section.items.map(renderPregledCard).join('')}
+            </div>
+        </section>
+    `).join(''));
 }
 
-function buildPregledSections(all) {
-    const problemi = all.filter(isPregledProblem);
-    const bezVozaca = all.filter(r => !r.vozacID && !isPregledProblem(r));
-    const saVozacem = all.filter(r => !!r.vozacID && !isPregledProblem(r));
+function buildPregledSections(rows) {
+    const problemi = rows.filter(isPregledProblem);
+    const bezVozaca = rows.filter(r => !r.vozacID && !isPregledProblem(r));
+    const saVozacem = rows.filter(r => !!r.vozacID && !isPregledProblem(r));
 
     return [
         { key: 'bez_vozaca', title: 'Danas bez vozača', items: bezVozaca },
@@ -298,12 +353,13 @@ function buildPregledSections(all) {
 }
 
 function renderPregledCard(r) {
-    const sortaPart = r.sortaVoca ? ` / ${r.sortaVoca}` : '';
-    const parcelaPart = r.parcelaID ? ` • Parcela ${r.parcelaID}` : '';
+    const key = getPregledRecordKey(r);
     const status = r.statusMeta || buildPregledStatusMeta(r);
+    const sortaPart = r.sortaVoca ? ' / ' + r.sortaVoca : '';
+    const parcelaPart = r.parcelaID ? ' • Parcela ' + r.parcelaID : '';
 
     return `
-        <button type="button" class="danas-card" onclick="openPregledDetail('${escapeHtmlJs(r.clientRecordID || r.serverRecordID || '')}')">
+        <button type="button" class="danas-card" data-record-key="${escapeHtml(key)}">
             <div class="danas-card-top">
                 <div class="danas-card-koop">${escapeHtml(r.kooperantName || '-')}</div>
                 <div class="danas-card-date">${escapeHtml(r.datumLabel || r.datum || '-')}</div>
@@ -323,7 +379,7 @@ function renderPregledCard(r) {
             </div>
 
             <div class="danas-card-bottom">
-                <span class="danas-badge danas-badge--${status.kind}">${escapeHtml(status.label)}</span>
+                <span class="danas-badge danas-badge--${escapeHtml(status.kind)}">${escapeHtml(status.label)}</span>
                 <strong class="danas-card-value">${escapeHtml(formatMoney(r.vrednost))}</strong>
             </div>
         </button>
@@ -332,14 +388,14 @@ function renderPregledCard(r) {
 
 function buildPregledStatusMeta(r) {
     if (isPregledProblem(r)) {
-        return { kind: 'problem', label: 'Sync problem', color: '#c62828' };
+        return { kind: 'problem', label: 'Sync problem' };
     }
 
     if (!r.vozacID) {
-        return { kind: 'warning', label: 'Bez vozača', color: '#ef6c00' };
+        return { kind: 'warning', label: 'Bez vozača' };
     }
 
-    return { kind: 'success', label: 'Dodeljen', color: '#2e7d32' };
+    return { kind: 'success', label: 'Dodeljen' };
 }
 
 function isPregledProblem(r) {
@@ -350,24 +406,19 @@ function isPregledProblem(r) {
 }
 
 function openPregledDetail(recordKey) {
-    const modal = document.getElementById('pregledDetailModal');
-    const dateEl = document.getElementById('pregledDetailDate');
-    const grid = document.getElementById('pregledDetailGrid');
-
-    if (!modal || !dateEl || !grid) return;
-
-    const row = otkupPregledState.rows.find(r =>
-        (r.clientRecordID && r.clientRecordID === recordKey) ||
-        (r.serverRecordID && r.serverRecordID === recordKey)
-    );
-
+    const row = otkupPregledState.rows.find(r => getPregledRecordKey(r) === recordKey);
     if (!row) return;
+
+    const modal = byId('pregledDetailModal');
+    const dateEl = byId('pregledDetailDate');
+    const gridEl = byId('pregledDetailGrid');
+    if (!modal || !dateEl || !gridEl) return;
 
     otkupPregledState.detailRecord = row;
 
-    dateEl.textContent = row.datumLabel || row.datum || '-';
+    setText(dateEl, row.datumLabel || row.datum || '-');
 
-    grid.innerHTML = [
+    setHtml(gridEl, [
         ['Kooperant', row.kooperantName || '-'],
         ['Kooperant ID', row.kooperantID || '-'],
         ['Vrsta', row.vrstaVoca || '-'],
@@ -377,7 +428,7 @@ function openPregledDetail(recordKey) {
         ['Cena', formatMoney(row.cena)],
         ['Vrednost', formatMoney(row.vrednost)],
         ['Vozač', row.vozacID || 'Nije dodeljen'],
-        ['Ambalaža', row.kolAmbalaze ? `${row.kolAmbalaze} kom` : '-'],
+        ['Ambalaža', row.kolAmbalaze ? row.kolAmbalaze + ' kom' : '-'],
         ['Tip ambalaže', row.tipAmbalaze || '-'],
         ['Parcela', row.parcelaID || '-'],
         ['Sync', (row.statusMeta || buildPregledStatusMeta(row)).label],
@@ -387,14 +438,14 @@ function openPregledDetail(recordKey) {
             <span>${escapeHtml(label)}</span>
             <strong>${escapeHtml(String(value))}</strong>
         </div>
-    `).join('');
+    `).join(''));
 
-    modal.classList.add('visible');
+    addClass(modal, 'visible');
 }
 
 function closePregledDetail() {
-    const modal = document.getElementById('pregledDetailModal');
-    if (modal) modal.classList.remove('visible');
+    const modal = byId('pregledDetailModal');
+    if (modal) removeClass(modal, 'visible');
     otkupPregledState.detailRecord = null;
 }
 
@@ -424,37 +475,22 @@ function toIsoDateOnly(input) {
 
     if (/^\d{2}\.\d{2}\.\d{4}\.?$/.test(s)) {
         const clean = s.replace(/\.$/, '');
-        const [dd, mm, yyyy] = clean.split('.');
-        return `${yyyy}-${mm}-${dd}`;
+        const parts = clean.split('.');
+        return parts[2] + '-' + parts[1] + '-' + parts[0];
     }
 
-    const d = new Date(s);
-    if (!isNaN(d.getTime())) {
-        return d.toISOString().slice(0, 10);
-    }
+    try {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    } catch (_) {}
 
     return s;
 }
 
-function safeFmtDate(input) {
-    try {
-        return typeof fmtDate === 'function' ? fmtDate(input) : (toIsoDateOnly(input) || '');
-    } catch (_) {
-        return toIsoDateOnly(input) || '';
-    }
+function formatMoney(value) {
+    return (parseFloat(value) || 0).toLocaleString('sr-RS') + ' RSD';
 }
 
-function formatMoney(v) {
-    return `${(parseFloat(v) || 0).toLocaleString('sr-RS')} RSD`;
-}
-
-function formatKg(v) {
-    return `${(parseFloat(v) || 0).toLocaleString('sr-RS')} kg`;
-}
-
-function escapeHtmlJs(value) {
-    return String(value || '')
-        .replaceAll('\\', '\\\\')
-        .replaceAll("'", "\\'")
-        .replaceAll('"', '\\"');
+function formatKg(value) {
+    return (parseFloat(value) || 0).toLocaleString('sr-RS') + ' kg';
 }
