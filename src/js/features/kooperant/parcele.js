@@ -710,12 +710,22 @@ function applyParceleFilters() {
 let currentParcelaDetailId = '';
 let currentParcelaDetailBack = 'mapa';
 
-function openParcelaDetail(parcelaId, backView = 'mapa') {
-    const parcela = (stammdaten.parcele || []).find(p => p.ParcelaID === parcelaId && p.KooperantID === CONFIG.ENTITY_ID);
+let currentParcelaDetailId = '';
+let currentParcelaDetailBack = 'mapa';
+
+async function openParcelaDetail(parcelaId, backView = 'mapa') {
+    const parcela = (stammdaten.parcele || []).find(
+        p => p.ParcelaID === parcelaId && p.KooperantID === CONFIG.ENTITY_ID
+    );
     if (!parcela) return;
 
     currentParcelaDetailId = parcelaId;
     currentParcelaDetailBack = backView;
+
+    // Obezbedi da kpData bude učitan
+    if (typeof loadKnjigaPolja === 'function') {
+        await loadKnjigaPolja();
+    }
 
     showParceleSection('detail');
 
@@ -739,7 +749,6 @@ function openParcelaDetail(parcelaId, backView = 'mapa') {
     const firstBtn = document.querySelector('.parcela-detail-subnav-btn');
     showParcelaDetailSection('osnovno', firstBtn || null);
 }
-
 function closeParcelaDetail() {
     if (currentParcelaDetailBack === 'lista') {
         const btns = document.querySelectorAll('.parcele-subnav-btn');
@@ -819,7 +828,7 @@ function renderParcelaDetailRadovi(parcelaId) {
     const el = document.getElementById('parcelaDetailRadovi');
     if (!el) return;
 
-    const rows = (window.kpData && kpData.tretmani ? kpData.tretmani : []).filter(r =>
+    const rows = (kpData?.tretmani || []).filter(r =>
         (r.ParcelaID || r.parcelaID) === parcelaId
     );
 
@@ -837,13 +846,19 @@ function renderParcelaDetailRadovi(parcelaId) {
         const mera = r.Mera || r.mera || 'Rad';
         const datum = fmtDate(r.Datum || r.datum || '');
         const art = r.ArtikalNaziv || r.artikalNaziv || '';
+        const kol = r.KolicinaUpotrebljena || r.kolicinaUpotrebljena || '';
+        const jm = r.JedinicaMere || r.jedinicaMere || '';
+
         return `
             <div class="queue-item">
                 <div class="qi-header">
                     <span class="qi-koop">${escapeHtml(mera)}</span>
                     <span class="qi-time">${escapeHtml(datum)}</span>
                 </div>
-                <div class="qi-detail">${escapeHtml(art || 'Bez artikla')}</div>
+                <div class="qi-detail">
+                    ${escapeHtml(art || 'Bez artikla')}
+                    ${kol ? ' | ' + escapeHtml(String(kol)) + ' ' + escapeHtml(jm || '') : ''}
+                </div>
             </div>
         `;
     }).join('');
@@ -853,7 +868,7 @@ function renderParcelaDetailTroskovi(parcelaId) {
     const el = document.getElementById('parcelaDetailTroskovi');
     if (!el) return;
 
-    const rows = (window.kpData && kpData.troskovi ? kpData.troskovi : []).filter(r =>
+    const rows = (kpData?.troskovi || []).filter(r =>
         (r.ParcelaID || r.parcelaID) === parcelaId
     );
 
@@ -871,13 +886,17 @@ function renderParcelaDetailTroskovi(parcelaId) {
         const iznos = parseFloat(r.Iznos || r.iznos) || 0;
         const datum = fmtDate(r.Datum || r.datum || '');
         const opis = r.Opis || r.opis || 'Trošak';
+        const kat = r.Kategorija || r.kategorija || '';
+
         return `
             <div class="queue-item" style="border-left-color:var(--warning);">
                 <div class="qi-header">
                     <span class="qi-koop">${escapeHtml(opis)}</span>
                     <span class="qi-time">${escapeHtml(datum)}</span>
                 </div>
-                <div class="qi-detail"><strong>${iznos.toLocaleString('sr')} RSD</strong></div>
+                <div class="qi-detail">
+                    ${escapeHtml(kat)} | <strong>${iznos.toLocaleString('sr')} RSD</strong>
+                </div>
             </div>
         `;
     }).join('');
@@ -887,7 +906,7 @@ function renderParcelaDetailProizvodnja(parcelaId) {
     const el = document.getElementById('parcelaDetailProizvodnja');
     if (!el) return;
 
-    const rows = (window.kpData && kpData.proizvodnja ? kpData.proizvodnja : []).filter(r =>
+    const rows = (kpData?.proizvodnja || []).filter(r =>
         r.ParcelaID === parcelaId
     );
 
@@ -904,14 +923,19 @@ function renderParcelaDetailProizvodnja(parcelaId) {
     el.innerHTML = rows.map(r => {
         const kol = parseFloat(r.Kolicina) || 0;
         const cena = parseFloat(r.Cena) || 0;
+        const vrednost = parseFloat(r.Vrednost) || (kol * cena);
         const datum = fmtDate(r.Datum || '');
+
         return `
             <div class="queue-item" style="border-left-color:var(--success);">
                 <div class="qi-header">
                     <span class="qi-koop">${escapeHtml(r.VrstaVoca || 'Proizvodnja')} ${escapeHtml(r.Klasa || '')}</span>
                     <span class="qi-time">${escapeHtml(datum)}</span>
                 </div>
-                <div class="qi-detail">${kol.toLocaleString('sr')} kg × ${cena.toLocaleString('sr')} RSD</div>
+                <div class="qi-detail">
+                    ${kol.toLocaleString('sr')} kg × ${cena.toLocaleString('sr')} RSD
+                    | <strong>${vrednost.toLocaleString('sr')} RSD</strong>
+                </div>
             </div>
         `;
     }).join('');
