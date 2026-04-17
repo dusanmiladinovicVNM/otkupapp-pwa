@@ -150,3 +150,328 @@
 .otk-primary-btn {
     margin: 0;
 }
+
+/* =========================================================
+   DANAS / PREGLED
+   ========================================================= */
+
+.danas-screen {
+  padding-bottom: 96px;
+}
+
+.danas-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.danas-hero {
+  padding: 4px 2px 2px;
+}
+
+.danas-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.danas-title {
+  margin: 4px 0 2px;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.danas-subline {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.danas-filters-card {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+}
+
+.danas-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.danas-pill {
+  border: 1px solid rgba(26, 94, 42, 0.12);
+  background: #fff;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.danas-pill.active {
+  background: rgba(26, 94, 42, 0.08);
+  color: var(--primary);
+  border-color: rgba(26, 94, 42, 0.18);
+}
+
+.danas-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.danas-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.danas-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.danas-section-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.danas-section-count {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(26, 94, 42, 0.08);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.danas-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.danas-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.04);
+  cursor: pointer;
+}
+
+.danas-card-top,
+.danas-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.danas-card-top {
+  margin-bottom: 8px;
+}
+
+.danas-card-koop {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.danas-card-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.danas-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.danas-card-line {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.danas-card-line--muted {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.danas-card-class {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.danas-card-value {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.danas-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.danas-badge--warning {
+  background: rgba(239, 108, 0, 0.12);
+  color: #ef6c00;
+}
+
+.danas-badge--success {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+
+.danas-badge--problem {
+  background: rgba(198, 40, 40, 0.12);
+  color: #c62828;
+}
+
+.danas-empty {
+  padding: 32px 16px;
+  text-align: center;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px dashed rgba(0,0,0,0.12);
+}
+
+.danas-empty-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.danas-empty-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.danas-detail-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.danas-detail-modal.visible {
+  display: flex;
+}
+
+.danas-detail-card {
+  width: 100%;
+  max-width: 640px;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 16px;
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.danas-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.danas-detail-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.danas-detail-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.danas-detail-close {
+  border: 0;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.danas-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.danas-detail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f7f7f4;
+}
+
+.danas-detail-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.danas-detail-item strong {
+  color: var(--text);
+  font-size: 13px;
+  text-align: right;
+}
+
+.danas-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+@media (min-width: 901px) {
+  .danas-detail-modal {
+    align-items: center;
+    padding: 24px;
+  }
+
+  .danas-detail-card {
+    border-radius: 18px;
+  }
+}
