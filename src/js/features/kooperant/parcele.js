@@ -49,6 +49,14 @@ function buildKooperantParcelPopup(p) {
             <div><b>KO:</b> ${escapeHtml(p.KatOpstina || '-')}</div>
             <div><b>GGAP:</b> ${escapeHtml(p.GGAPStatus || '-')}</div>
             <div style="margin-top:6px;color:#666;">${escapeHtml(p.ParcelaID)}</div>
+
+            <button
+                type="button"
+                onclick="openParcelaDetail('${String(p.ParcelaID).replace(/'/g, "\\'")}', 'mapa')"
+                style="margin-top:10px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:var(--primary);color:white;font-size:13px;font-weight:700;cursor:pointer;"
+            >
+                Otvori detalj parcele
+            </button>
         </div>
     `;
 }
@@ -632,6 +640,8 @@ function focusParcel(parcelaID) {
 
     if (layer.openPopup) layer.openPopup();
     if (mapDiv) mapDiv.scrollIntoView({ behavior: 'smooth' });
+
+    openParcelaDetail(parcelaID, 'mapa');
 }
 
 
