@@ -1,3 +1,13 @@
+const OTKUP_TIP_AMBALAZE_OPTIONS = ['12/1', '6/1', '2/1'];
+
+function initOtkupFormUI() {
+    populateVrstaDropdown();
+    populateTipAmbalazeDropdown();
+    applyDefaults();
+    clearOtkupValidation();
+    updateTipAmbalazeHint();
+}
+
 function populateVrstaDropdown() {
     const sel = document.getElementById('fldVrsta');
     if (!sel) return;
@@ -44,8 +54,8 @@ function onManualKooperantChange() {
 
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
     setKooperant(koopID, koop ? `${koop.Ime || ''} ${koop.Prezime || ''}`.trim() : koopID);
+    clearOtkupError('errKooperant', 'fldKooperantManual');
 }
-
 function populateParcelaDropdown(kooperantID) {
     const sel = document.getElementById('fldParcela');
     const group = document.getElementById('parcelaGroup');
@@ -71,8 +81,88 @@ function populateParcelaDropdown(kooperantID) {
     });
 }
 
+function populateTipAmbalazeDropdown(selectedValue) {
+    const sel = document.getElementById('fldTipAmbalaze');
+    if (!sel) return;
+
+    const current = selectedValue || sel.value || '';
+    sel.innerHTML = '<option value="">-- Izaberi --</option>';
+
+    OTKUP_TIP_AMBALAZE_OPTIONS.forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        sel.appendChild(opt);
+    });
+
+    if (current && OTKUP_TIP_AMBALAZE_OPTIONS.includes(current)) {
+        sel.value = current;
+    }
+}
+
+function normalizeVrsta(vrsta) {
+    return String(vrsta || '')
+        .trim()
+        .toLowerCase()
+        .replaceAll('š', 's')
+        .replaceAll('đ', 'dj')
+        .replaceAll('č', 'c')
+        .replaceAll('ć', 'c')
+        .replaceAll('ž', 'z');
+}
+
+function getDefaultTipAmbalazeForVrsta(vrsta) {
+    const v = normalizeVrsta(vrsta);
+
+    if (v === 'visnja' || v === 'sljiva') {
+        return '12/1';
+    }
+
+    return '6/1';
+}
+
+function updateTipAmbalazeHint() {
+    const hint = document.getElementById('tipAmbalazeHint');
+    const fldVrsta = document.getElementById('fldVrsta');
+    const fldTip = document.getElementById('fldTipAmbalaze');
+    if (!hint || !fldVrsta || !fldTip) return;
+
+    const vrsta = fldVrsta.value || '';
+    const selected = fldTip.value || '';
+
+    if (!vrsta) {
+        hint.textContent = 'Izaberi vrstu voća da se predloži podrazumevani tip ambalaže.';
+        return;
+    }
+
+    const def = getDefaultTipAmbalazeForVrsta(vrsta);
+    hint.textContent = `Podrazumevano za ${vrsta}: ${def}. Trenutno izabrano: ${selected || 'nije izabrano'}.`;
+}
+
+function syncTipAmbalazeWithVrsta(force) {
+    const fldVrsta = document.getElementById('fldVrsta');
+    const fldTip = document.getElementById('fldTipAmbalaze');
+    if (!fldVrsta || !fldTip) return;
+
+    const vrsta = fldVrsta.value || '';
+    if (!vrsta) {
+        if (force) fldTip.value = '';
+        updateTipAmbalazeHint();
+        return;
+    }
+
+    const defaultTip = getDefaultTipAmbalazeForVrsta(vrsta);
+    if (force || !fldTip.value) {
+        fldTip.value = defaultTip;
+    }
+
+    updateTipAmbalazeHint();
+}
+
 function applyDefaults() {
     const config = stammdaten.config || [];
+
+    populateTipAmbalazeDropdown();
 
     const dv = config.find(c => c.Parameter === 'DefaultVrsta');
     if (dv && dv.Vrednost) {
@@ -86,6 +176,8 @@ function applyDefaults() {
             const fldSorta = document.getElementById('fldSorta');
             if (fldSorta) fldSorta.value = ds.Vrednost;
         }
+    } else {
+        syncTipAmbalazeWithVrsta(true);
     }
 
     applyDefaultCena();
@@ -128,6 +220,9 @@ function onVrstaChange() {
         });
 
     applyDefaultCena();
+    syncTipAmbalazeWithVrsta(true);
+    clearOtkupError('errVrsta', 'fldVrsta');
+    clearOtkupError('errTipAmbalaze', 'fldTipAmbalaze');
 }
 
 // ============================================================
@@ -180,6 +275,7 @@ function readOtkupForm() {
     const klasa = getFieldValue('fldKlasa') || 'I';
     const kolicina = parseFloat(getFieldValue('fldKolicina')) || 0;
     const cena = parseFloat(getFieldValue('fldCena')) || 0;
+    const tipAmbalaze = getFieldValue('fldTipAmbalaze') || getDefaultTipAmbalazeForVrsta(vrstaVoca);
     const kolAmbalaze = parseInt(getFieldValue('fldAmbalaza'), 10) || 0;
     const parcelaID = getFieldValue('fldParcela') || '';
     const napomena = getFieldValue('fldNapomena') || '';
@@ -193,6 +289,7 @@ function readOtkupForm() {
         klasa,
         kolicina,
         cena,
+        tipAmbalaze,
         kolAmbalaze,
         parcelaID,
         napomena,
@@ -201,10 +298,37 @@ function readOtkupForm() {
 }
 
 function validateOtkupInput(input) {
-    if (!input.kooperantID) return 'Skenirajte ili izaberite kooperanta';
-    if (!input.vrstaVoca) return 'Izaberite vrstu voća';
-    if (input.kolicina <= 0) return 'Unesite količinu';
-    if (input.cena <= 0) return 'Unesite cenu';
+    clearOtkupValidation();
+
+    if (!input.kooperantID) {
+        setOtkupError('errKooperant', 'fldKooperantManual', 'Skenirajte ili izaberite kooperanta');
+        return 'Skenirajte ili izaberite kooperanta';
+    }
+
+    if (!input.vrstaVoca) {
+        setOtkupError('errVrsta', 'fldVrsta', 'Izaberite vrstu voća');
+        return 'Izaberite vrstu voća';
+    }
+
+    if (input.kolicina <= 0) {
+        setOtkupError('errKolicina', 'fldKolicina', 'Unesite količinu');
+        return 'Unesite količinu';
+    }
+
+    if (input.cena <= 0) {
+        setOtkupError('errCena', 'fldCena', 'Unesite cenu');
+        return 'Unesite cenu';
+    }
+
+    if (!input.tipAmbalaze) {
+        setOtkupError('errTipAmbalaze', 'fldTipAmbalaze', 'Izaberite tip ambalaže');
+        return 'Izaberite tip ambalaže';
+    }
+
+    if (input.kolAmbalaze <= 0) {
+        setOtkupError('errAmbalaza', 'fldAmbalaza', 'Unesite broj komada ambalaže');
+        return 'Unesite broj komada ambalaže';
+    }
 
     return '';
 }
@@ -234,7 +358,7 @@ function buildOtkupRecord(input) {
         kolicina: input.kolicina,
         cena: input.cena,
 
-        tipAmbalaze: '12/1',
+        tipAmbalaze: input.tipAmbalaze,
         kolAmbalaze: input.kolAmbalaze,
 
         parcelaID: input.parcelaID || '',
@@ -279,6 +403,8 @@ async function safeRefreshAfterSave() {
 }
 
 function resetForm() {
+    clearOtkupValidation();
+
     setFieldValue('fldKooperantID', '');
     setFieldValue('fldKooperantManual', '');
 
@@ -303,6 +429,7 @@ function resetForm() {
     setFieldValue('fldKlasa', 'I');
     setFieldValue('fldKolicina', '');
     setFieldValue('fldCena', '');
+    setFieldValue('fldTipAmbalaze', '');
     setFieldValue('fldAmbalaza', '');
     setFieldValue('fldNapomena', '');
     setFieldValue('fldVozacID', '');
@@ -310,7 +437,53 @@ function resetForm() {
     const vozacDisplay = document.getElementById('vozacDisplay');
     if (vozacDisplay) vozacDisplay.classList.remove('visible');
 
+    populateTipAmbalazeDropdown();
     applyDefaults();
+    updateTipAmbalazeHint();
+}
+
+// ============================================================
+// VALIDATION HELPERS
+// ============================================================
+
+function clearOtkupValidation() {
+    document.querySelectorAll('#tab-otkup .otk-field-error').forEach(el => {
+        el.hidden = true;
+        el.textContent = '';
+    });
+
+    document.querySelectorAll('#tab-otkup .is-invalid').forEach(el => {
+        el.classList.remove('is-invalid');
+    });
+}
+
+function setOtkupError(errorId, fieldId, message) {
+    const err = document.getElementById(errorId);
+    const field = document.getElementById(fieldId);
+
+    if (err) {
+        err.hidden = false;
+        err.textContent = message;
+    }
+
+    if (field) {
+        field.classList.add('is-invalid');
+        try { field.focus(); } catch (_) {}
+    }
+}
+
+function clearOtkupError(errorId, fieldId) {
+    const err = document.getElementById(errorId);
+    const field = document.getElementById(fieldId);
+
+    if (err) {
+        err.hidden = true;
+        err.textContent = '';
+    }
+
+    if (field) {
+        field.classList.remove('is-invalid');
+    }
 }
 
 // ============================================================
