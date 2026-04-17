@@ -220,59 +220,21 @@ body.has-otkup-bottom-nav #tab-queue {
 
 /* =========================================================
    RESPONSIVE ROLE NAV
+   desktop = legacy top tabovi
    mobile = bottom nav
-   desktop = isti nav gore kao topnav
    ========================================================= */
 
 @media (min-width: 901px) {
   .tab-bar .role-kooperant,
   .tab-bar .role-otkupac {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .bottom-nav.role-kooperant,
+  .bottom-nav.role-otkupac {
     display: none !important;
-  }
-
-  .bottom-nav.visible {
-    display: flex !important;
-    position: fixed;
-    top: 72px;          /* ispod headera */
-    left: 0;
-    right: 0;
-    bottom: auto;
-    height: 56px;
-    padding: 0 16px;
-    background: #fff;
-    border-top: 0;
-    border-bottom: 1px solid rgba(92, 108, 77, 0.12);
-    box-shadow: 0 4px 14px rgba(31, 41, 24, 0.06);
-    backdrop-filter: none;
-    z-index: 95;
-    align-items: stretch;
-    gap: 4px;
-  }
-
-  .bottom-nav.visible .bottom-nav-btn {
-    flex: 0 0 auto;
-    min-width: 110px;
-    padding: 0 16px;
-    flex-direction: row;
-    gap: 8px;
-    border-bottom: 3px solid transparent;
-    border-radius: 0;
-    justify-content: center;
-  }
-
-  .bottom-nav.visible .bottom-nav-btn.active {
-    border-bottom-color: var(--primary);
-    color: var(--primary);
-    font-weight: 700;
-  }
-
-  .bottom-nav.visible .bottom-nav-icon {
-    font-size: 14px;
-  }
-
-  .bottom-nav.visible .bottom-nav-label {
-    font-size: 13px;
-    line-height: 1;
   }
 
   body.has-koop-bottom-nav #tab-home,
@@ -284,8 +246,12 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-otkup-bottom-nav #tab-pregled,
   body.has-otkup-bottom-nav #tab-otpremnice,
   body.has-otkup-bottom-nav #tab-queue {
-    padding-top: 72px;   /* header 72 + nav 56 prilagodi po potrebi */
     padding-bottom: 16px;
+  }
+
+  body.has-koop-bottom-nav,
+  body.has-otkup-bottom-nav {
+    padding-bottom: 0;
   }
 }
 
