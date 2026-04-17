@@ -1,6 +1,7 @@
 // ============================================================
 // ROLE-AWARE BOTTOM NAV
-// Koristi postojeći showTab(tabName, btn)
+// desktop = legacy top tabovi
+// mobile  = bottom nav
 // Podržava:
 // - Kooperant: #koopBottomNav
 // - Otkupac:   #otkupBottomNav
@@ -18,7 +19,6 @@ function getActiveBottomNavConfig() {
             role: 'kooperant',
             navId: 'koopBottomNav',
             bodyClass: 'has-koop-bottom-nav',
-            rootTabs: ['home', 'parcele', 'agromere', 'knjigapolja', 'more'],
             tabMap: {
                 'tab-home': 'home',
                 'tab-parcele': 'parcele',
@@ -36,7 +36,6 @@ function getActiveBottomNavConfig() {
             role: 'otkupac',
             navId: 'otkupBottomNav',
             bodyClass: 'has-otkup-bottom-nav',
-            rootTabs: ['otkup', 'pregled', 'otpremnice', 'queue'],
             tabMap: {
                 'tab-otkup': 'otkup',
                 'tab-pregled': 'pregled',
@@ -75,11 +74,15 @@ function updateBottomNavVisibility() {
 
     document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
-    // TAB BAR više ne gasimo globalno;
-    // desktop koristi legacy top tabove, mobile koristi bottom nav
+    // desktop koristi legacy top tabove
+    // mobile koristi bottom nav samo za Kooperant/Otkupac
     const tabBar = document.getElementById('tabBar');
     if (tabBar) {
-        tabBar.style.display = '';
+        if (cfg && isMobile) {
+            tabBar.style.display = 'none';
+        } else {
+            tabBar.style.display = '';
+        }
     }
 
     if (!cfg || isLoginVisible || !isMobile) return;
@@ -95,7 +98,7 @@ function showBottomTab(tabName, btn) {
     const cfg = getActiveBottomNavConfig();
     if (!cfg) return;
 
-    // "more" za kooperanta je specijalan screen bez legacy top btn fokusa
+    // Kooperant "more" ide direktno na tab-more
     if (cfg.role === 'kooperant' && tabName === 'more') {
         qsa('.tab-content').forEach(t => removeClass(t, 'active'));
         qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
@@ -190,7 +193,7 @@ function invalidatePregledCacheSafe() {
     };
 })();
 
-// expose helpers ako treba da ih zove app shell
+// expose helpers
 window.initBottomNav = initBottomNav;
 window.updateBottomNavVisibility = updateBottomNavVisibility;
 window.updateBottomNavActive = updateBottomNavActive;
