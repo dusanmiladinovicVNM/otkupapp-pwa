@@ -696,3 +696,239 @@ function applyParceleFilters() {
         item.style.display = (matchSearch && matchKultura) ? '' : 'none';
     });
 }
+
+let currentParcelaDetailId = '';
+let currentParcelaDetailBack = 'mapa';
+
+function openParcelaDetail(parcelaId, backView = 'mapa') {
+    const parcela = (stammdaten.parcele || []).find(p => p.ParcelaID === parcelaId && p.KooperantID === CONFIG.ENTITY_ID);
+    if (!parcela) return;
+
+    currentParcelaDetailId = parcelaId;
+    currentParcelaDetailBack = backView;
+
+    showParceleSection('detail');
+
+    const titleEl = document.getElementById('parcelaDetailTitle');
+    const kulturaEl = document.getElementById('parcelaDetailKultura');
+    const povrsinaEl = document.getElementById('parcelaDetailPovrsina');
+
+    if (titleEl) titleEl.textContent = parcela.KatBroj || parcela.ParcelaID || 'Parcela';
+    if (kulturaEl) kulturaEl.textContent = parcela.Kultura || '—';
+    if (povrsinaEl) {
+        const pov = parcela.Povrsina || parcela.PovrsinaHa || parcela.Povrsina_ha || '';
+        povrsinaEl.textContent = pov ? `${pov} ha` : 'Površina nije uneta';
+    }
+
+    renderParcelaOsnovno(parcela);
+    renderParcelaDetailMeteo(parcela);
+    renderParcelaDetailRadovi(parcelaId);
+    renderParcelaDetailTroskovi(parcelaId);
+    renderParcelaDetailProizvodnja(parcelaId);
+
+    const firstBtn = document.querySelector('.parcela-detail-subnav-btn');
+    showParcelaDetailSection('osnovno', firstBtn || null);
+}
+
+function closeParcelaDetail() {
+    if (currentParcelaDetailBack === 'lista') {
+        const btns = document.querySelectorAll('.parcele-subnav-btn');
+        showParceleSection('lista', btns[1] || null);
+    } else {
+        const btns = document.querySelectorAll('.parcele-subnav-btn');
+        showParceleSection('mapa', btns[0] || null);
+    }
+}
+
+function showParcelaDetailSection(name, btn) {
+    document.querySelectorAll('.parcela-detail-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.parcela-detail-subnav-btn').forEach(el => el.classList.remove('active'));
+
+    const section = document.getElementById('parcela-detail-section-' + name);
+    if (section) section.classList.add('active');
+    if (btn && btn.classList) btn.classList.add('active');
+}
+
+function renderParcelaOsnovno(parcela) {
+    const el = document.getElementById('parcelaOsnovnoGrid');
+    if (!el) return;
+
+    const rows = [
+        ['Šifra', parcela.KatBroj || parcela.ParcelaID || '—'],
+        ['Kultura', parcela.Kultura || '—'],
+        ['Površina', parcela.Povrsina || parcela.PovrsinaHa || parcela.Povrsina_ha || '—'],
+        ['GGAP', parcela.GGAP || parcela.Ggap || '—'],
+        ['KO', parcela.KO || parcela.KatastarskaOpstina || '—'],
+        ['Parcela ID', parcela.ParcelaID || '—']
+    ];
+
+    el.innerHTML = rows.map(([k, v]) => `
+        <div class="parcela-osnovno-item">
+            <div class="parcela-osnovno-k">${escapeHtml(k)}</div>
+            <div class="parcela-osnovno-v">${escapeHtml(String(v || '—'))}</div>
+        </div>
+    `).join('');
+}
+
+function renderParcelaDetailMeteo(parcela) {
+    const el = document.getElementById('parcelaDetailMeteo');
+    if (!el) return;
+
+    const cache = window.meteoCache && window.meteoCache[parcela.ParcelaID];
+    if (cache) {
+        // privremeno koristi isti renderer, pa kopira rezultat
+        const temp = document.createElement('div');
+        temp.id = 'parcelaDetailMeteoTemp';
+        temp.style.display = 'none';
+        document.body.appendChild(temp);
+
+        const old = document.getElementById('parceleMeteo');
+        const oldHtml = old ? old.innerHTML : '';
+        const oldDisplay = old ? old.style.display : '';
+
+        if (old) {
+            renderMeteoPanel(cache);
+            el.innerHTML = old.innerHTML;
+            old.innerHTML = oldHtml;
+            old.style.display = oldDisplay;
+        }
+
+        temp.remove();
+        return;
+    }
+
+    el.innerHTML = `
+        <div class="koop-empty">
+            <div class="koop-empty-title">Meteo podaci nisu dostupni</div>
+            <div class="koop-empty-text">Izaberi parcelu na mapi ili sačekaj učitavanje meteo podataka.</div>
+        </div>
+    `;
+}
+
+function renderParcelaDetailRadovi(parcelaId) {
+    const el = document.getElementById('parcelaDetailRadovi');
+    if (!el) return;
+
+    const rows = (window.kpData && kpData.tretmani ? kpData.tretmani : []).filter(r =>
+        (r.ParcelaID || r.parcelaID) === parcelaId
+    );
+
+    if (!rows.length) {
+        el.innerHTML = `
+            <div class="koop-empty">
+                <div class="koop-empty-title">Nema radova za ovu parcelu</div>
+                <div class="koop-empty-text">Radovi će biti prikazani kada budu evidentirani.</div>
+            </div>
+        `;
+        return;
+    }
+
+    el.innerHTML = rows.map(r => {
+        const mera = r.Mera || r.mera || 'Rad';
+        const datum = fmtDate(r.Datum || r.datum || '');
+        const art = r.ArtikalNaziv || r.artikalNaziv || '';
+        return `
+            <div class="queue-item">
+                <div class="qi-header">
+                    <span class="qi-koop">${escapeHtml(mera)}</span>
+                    <span class="qi-time">${escapeHtml(datum)}</span>
+                </div>
+                <div class="qi-detail">${escapeHtml(art || 'Bez artikla')}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderParcelaDetailTroskovi(parcelaId) {
+    const el = document.getElementById('parcelaDetailTroskovi');
+    if (!el) return;
+
+    const rows = (window.kpData && kpData.troskovi ? kpData.troskovi : []).filter(r =>
+        (r.ParcelaID || r.parcelaID) === parcelaId
+    );
+
+    if (!rows.length) {
+        el.innerHTML = `
+            <div class="koop-empty">
+                <div class="koop-empty-title">Nema troškova za ovu parcelu</div>
+                <div class="koop-empty-text">Troškovi će biti prikazani kada budu uneti.</div>
+            </div>
+        `;
+        return;
+    }
+
+    el.innerHTML = rows.map(r => {
+        const iznos = parseFloat(r.Iznos || r.iznos) || 0;
+        const datum = fmtDate(r.Datum || r.datum || '');
+        const opis = r.Opis || r.opis || 'Trošak';
+        return `
+            <div class="queue-item" style="border-left-color:var(--warning);">
+                <div class="qi-header">
+                    <span class="qi-koop">${escapeHtml(opis)}</span>
+                    <span class="qi-time">${escapeHtml(datum)}</span>
+                </div>
+                <div class="qi-detail"><strong>${iznos.toLocaleString('sr')} RSD</strong></div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderParcelaDetailProizvodnja(parcelaId) {
+    const el = document.getElementById('parcelaDetailProizvodnja');
+    if (!el) return;
+
+    const rows = (window.kpData && kpData.proizvodnja ? kpData.proizvodnja : []).filter(r =>
+        r.ParcelaID === parcelaId
+    );
+
+    if (!rows.length) {
+        el.innerHTML = `
+            <div class="koop-empty">
+                <div class="koop-empty-title">Nema evidentirane proizvodnje</div>
+                <div class="koop-empty-text">Otkupi za ovu parcelu će biti prikazani ovde.</div>
+            </div>
+        `;
+        return;
+    }
+
+    el.innerHTML = rows.map(r => {
+        const kol = parseFloat(r.Kolicina) || 0;
+        const cena = parseFloat(r.Cena) || 0;
+        const datum = fmtDate(r.Datum || '');
+        return `
+            <div class="queue-item" style="border-left-color:var(--success);">
+                <div class="qi-header">
+                    <span class="qi-koop">${escapeHtml(r.VrstaVoca || 'Proizvodnja')} ${escapeHtml(r.Klasa || '')}</span>
+                    <span class="qi-time">${escapeHtml(datum)}</span>
+                </div>
+                <div class="qi-detail">${kol.toLocaleString('sr')} kg × ${cena.toLocaleString('sr')} RSD</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function goToNewRadFromParcela() {
+    if (!currentParcelaDetailId) return;
+    showTab('agromere', findLegacyTabBtn('agromere'));
+    setTimeout(() => {
+        const sel = document.getElementById('agroParcelaSel');
+        if (sel) {
+            sel.value = currentParcelaDetailId;
+            if (typeof onAgroParcelaChange === 'function') onAgroParcelaChange();
+        }
+    }, 250);
+}
+
+function goToNewTrosakFromParcela() {
+    if (!currentParcelaDetailId) return;
+    showTab('knjigapolja', findLegacyTabBtn('knjigapolja'));
+    setTimeout(() => {
+        if (typeof showKnjigaSection === 'function') {
+            const btns = document.querySelectorAll('.knjiga-subnav-btn');
+            showKnjigaSection('troskovi', btns[2] || null);
+        }
+        const sel = document.getElementById('trosakParcela');
+        if (sel) sel.value = currentParcelaDetailId;
+        scrollKnjigaTrosakFormIntoView();
+    }, 250);
+}
