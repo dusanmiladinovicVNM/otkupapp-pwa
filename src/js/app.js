@@ -91,11 +91,15 @@ function setDefaultDates() {
 
 async function bootstrapRole() {
     if (CONFIG.USER_ROLE === 'Otkupac') {
-        if (typeof populateVrstaDropdown === 'function') populateVrstaDropdown();
-        if (typeof applyDefaults === 'function') applyDefaults();
+        if (typeof initOtkupFormUI === 'function') {
+            initOtkupFormUI();
+        } else {
+            if (typeof populateVrstaDropdown === 'function') populateVrstaDropdown();
+            if (typeof applyDefaults === 'function') applyDefaults();
+        }
         safeCall(() => showTab('otkup'));
-        return;
-    }
+         return;
+     }
 
     if (CONFIG.USER_ROLE === 'Kooperant') {
         await guardStammdaten(async () => {
@@ -295,7 +299,11 @@ function handleStammdatenUpdated() {
         }
 
         if (CONFIG.USER_ROLE === 'Otkupac') {
-            if (typeof populateVrstaDropdown === 'function') populateVrstaDropdown();
+            if (typeof initOtkupFormUI === 'function') {
+                initOtkupFormUI({ preserveSelection: true });
+            } else if (typeof populateVrstaDropdown === 'function') {
+                populateVrstaDropdown();
+            }
         }
     } catch (err) {
         console.error('handleStammdatenUpdated failed:', err);
