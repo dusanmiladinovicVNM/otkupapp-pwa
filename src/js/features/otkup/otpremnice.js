@@ -1,290 +1,608 @@
 // ============================================================
-// OTPREMA (dispatch)
+// OTPREMA
+// UI first + osnovna lokalna logika dodele
 // ============================================================
-let otpremaVozacID = '';
-let otpremaUnassigned = [];
 
-async function getOtpremaOtkupiCached(forceRefresh) {
-    if (
-        !forceRefresh &&
-        _otpremaServerCache.data &&
-        (Date.now() - _otpremaServerCache.ts < OTPREMA_CACHE_TTL)
-    ) {
-        return _otpremaServerCache.data;
+const otpremaState = {
+    rows: [],
+    selectedVozac: null,
+    selectedKeys: new Set(),
+    successRows: [],
+    eventsBound: false
+};
+
+async function loadOtpremaOverview() {
+    bindOtpremaEventsOnce();
+    populateOtpremaFallbackDrivers();
+    showOtpremaRootView();
+
+    const rootEl = byId('otpremaRootSections');
+    if (rootEl) {
+        setHtml(rootEl, '<p style="text-align:center;padding:20px;color:var(--text-muted);">Učitavanje...</p>');
     }
 
-    let local = [];
-    let server = [];
+    let localRows = [];
+    let serverRows = [];
 
     try {
-        local = await dbGetAll(db, CONFIG.STORE_NAME);
+        if (db) {
+            localRows = await dbGetAll(db, CONFIG.STORE_NAME);
+        }
     } catch (err) {
-        console.error('getOtpremaOtkupiCached local failed:', err);
+        console.error('loadOtpremaOverview local failed:', err);
     }
 
     if (navigator.onLine) {
-        try {
-            const json = await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
-            if (json && json.success && Array.isArray(json.records)) {
-                server = json.records.map(mapServerOtpremaRecord);
-            }
-        } catch (e) {
-            console.error('getOtpremaOtkupiCached server failed:', e);
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getOtkupi&otkupacID=' + encodeURIComponent(CONFIG.OTKUPAC_ID));
+        }, 'Greška pri učitavanju otpreme');
+
+        if (json && json.success && Array.isArray(json.records)) {
+            serverRows = json.records.map(mapServerOtpremaRecord);
         }
     }
 
-    const all = mergeOtpremaRecords(local, server);
+    const mergedRows = mergeOtpremaRecords(localRows, serverRows)
+        .map(enrichOtpremaRecord)
+        .sort(compareOtpremaRowsDesc);
 
-    _otpremaServerCache = { data: all, ts: Date.now() };
-    return all;
+    otpremaState.rows = mergedRows;
+    renderOtpremaRoot();
 }
 
-function invalidateOtpremaCache() {
-    _otpremaServerCache = { data: null, ts: 0 };
+function bindOtpremaEventsOnce() {
+    if (otpremaState.eventsBound) return;
+
+    const rootSections = byId('otpremaRootSections');
+    if (rootSections) {
+        rootSections.addEventListener('click', function (e) {
+            const card = e.target.closest('.otprema-card');
+            if (!card) return;
+        });
+    }
+
+    const assignSections = byId('otpremaAssignSections');
+    if (assignSections) {
+        assignSections.addEventListener('change', function (e) {
+            const checkbox = e.target.closest('.otprema-check');
+            if (!checkbox) return;
+
+            const key = checkbox.getAttribute('data-record-key') || '';
+            if (!key) return;
+
+            if (checkbox.checked) {
+                otpremaState.selectedKeys.add(key);
+            } else {
+                otpremaState.selectedKeys.delete(key);
+            }
+
+            updateOtpremaAssignSummary();
+        });
+    }
+
+    otpremaState.eventsBound = true;
 }
 
-function startOtpremaVozacScan() {
-    const readerDiv = document.getElementById('qr-reader-otprema');
+function populateOtpremaFallbackDrivers() {
+    const sel = byId('fldOtpremaFallbackVozac');
+    if (!sel) return;
+
+    const current = sel.value || '';
+    sel.innerHTML = '<option value="">-- Izaberi vozača --</option>';
+
+    (stammdaten.vozaci || []).forEach(v => {
+        const id = v.VozacID || v.ID || '';
+        const name = v.ImePrezime || v.Naziv || v.Ime || id;
+        if (!id) return;
+
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = name + ' (' + id + ')';
+        sel.appendChild(opt);
+    });
+
+    if (current) sel.value = current;
+}
+
+function toggleOtpremaFallback() {
+    const panel = byId('otpremaFallbackPanel');
+    if (!panel) return;
+
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function applyOtpremaFallbackDriver() {
+    const sel = byId('fldOtpremaFallbackVozac');
+    if (!sel || !sel.value) {
+        showToast('Izaberi vozača', 'error');
+        return;
+    }
+
+    const id = sel.value;
+    const vozac = (stammdaten.vozaci || []).find(v => (v.VozacID || v.ID) === id);
+    const name = vozac ? (vozac.ImePrezime || vozac.Naziv || vozac.Ime || id) : id;
+
+    setOtpremaVozac(id, name);
+}
+
+function startOtpremaVozacQRScan() {
+    const readerDiv = byId('qr-reader-otprema-vozac');
+    if (!readerDiv) return;
+
     readerDiv.style.display = 'block';
-    const scanner = new Html5Qrcode('qr-reader-otprema');
+
+    const scanner = new Html5Qrcode('qr-reader-otprema-vozac');
     scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { fps: 10, qrbox: { width: 260, height: 260 } },
         (decodedText) => {
-            scanner.stop().then(() => { readerDiv.style.display = 'none'; });
-            onOtpremaVozacScanned(decodedText);
+            onOtpremaVozacQRScanned(decodedText);
+            scanner.stop().then(() => {
+                readerDiv.style.display = 'none';
+            }).catch(() => {
+                readerDiv.style.display = 'none';
+            });
         },
         () => {}
-    ).catch(err => { showToast('Kamera nije dostupna', 'error'); readerDiv.style.display = 'none'; });
+    ).catch(err => {
+        showToast('Kamera nije dostupna: ' + err, 'error');
+        readerDiv.style.display = 'none';
+    });
 }
 
-function onOtpremaVozacScanned(text) {
-    let vozID = '', vozName = '';
+function onOtpremaVozacQRScanned(text) {
     try {
         const data = JSON.parse(text);
-        if (data.type === 'VOZ' && data.id) { vozID = data.id; vozName = data.name || data.id; }
-    } catch (e) {}
-    if (!vozID && text.startsWith('VOZ-')) { vozID = text; vozName = text; }
-    if (!vozID) { showToast('Nije QR vozača', 'error'); return; }
+        if (data.type === 'VOZ' && data.id) {
+            setOtpremaVozac(data.id, data.name || data.id);
+            return;
+        }
+    } catch (_) {}
 
-    otpremaVozacID = vozID;
-    document.getElementById('otpremaVozacName').textContent = vozName;
-    document.getElementById('otpremaVozacId').textContent = vozID;
-    showOtpremaAssignView();
-}
-
-async function showOtpremaAssignView() {
-    const mainView = document.getElementById('otpremaMainView');
-    const assignView = document.getElementById('otpremaAssignView');
-
-    if (mainView) mainView.style.display = 'none';
-    if (assignView) assignView.style.display = 'block';
-
-    const all = await getOtpremaOtkupiCached(true);
-
-    otpremaUnassigned = all.filter(r => !r.vozacID);
-    otpremaUnassigned.sort((a, b) => {
-        const byDate = (b.datum || '').localeCompare(a.datum || '');
-        if (byDate !== 0) return byDate;
-
-        const byTime = String(b.updatedAtClient || b.createdAtClient || '').localeCompare(
-            String(a.updatedAtClient || a.createdAtClient || '')
-        );
-        if (byTime !== 0) return byTime;
-
-        return String(b.clientRecordID || '').localeCompare(String(a.clientRecordID || ''));
-    });
-
-    renderOtpremaCheckboxes();
-}
-
-function renderOtpremaCheckboxes() {
-    const list = document.getElementById('otpremaOtkupList');
-    if (!list) return;
-
-    if (otpremaUnassigned.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema neraspoređenih otkupa za danas</p>';
+    if (String(text).startsWith('VOZ-')) {
+        const vozac = (stammdaten.vozaci || []).find(v => (v.VozacID || v.ID) === text);
+        const name = vozac ? (vozac.ImePrezime || vozac.Naziv || vozac.Ime || text) : text;
+        setOtpremaVozac(text, name);
         return;
     }
 
-    list.innerHTML = otpremaUnassigned.map((r, i) => {
-        const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        return `<div class="queue-item" style="cursor:pointer;" onclick="toggleOtpremaItem(${i})">
-            <div style="display:flex;align-items:center;gap:10px;">
-                <input type="checkbox" id="otpChk${i}" style="width:20px;height:20px;flex-shrink:0;" onclick="event.stopPropagation();updateOtpremaSummary();">
-                <div style="flex:1;">
-                    <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
-                    <div class="qi-detail" style="font-size:11px;color:var(--text-muted);">${escapeHtml(r.klasa || 'I')}</div>
-                    <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD</div>
+    showToast('Nije QR vozača', 'error');
+}
+
+function setOtpremaVozac(id, name) {
+    otpremaState.selectedVozac = { id, name };
+    otpremaState.selectedKeys.clear();
+    openOtpremaAssignView();
+}
+
+function cancelOtpremaAssign() {
+    otpremaState.selectedKeys.clear();
+    otpremaState.selectedVozac = null;
+    showOtpremaRootView();
+    renderOtpremaRoot();
+}
+
+function showOtpremaRootView() {
+    showEl(byId('otpremaRootView'), '');
+    hideEl(byId('otpremaAssignView'));
+    hideEl(byId('otpremaSuccessView'));
+}
+
+function openOtpremaAssignView() {
+    hideEl(byId('otpremaRootView'));
+    showEl(byId('otpremaAssignView'), '');
+    hideEl(byId('otpremaSuccessView'));
+
+    renderOtpremaAssignView();
+}
+
+function showOtpremaSuccessView() {
+    hideEl(byId('otpremaRootView'));
+    hideEl(byId('otpremaAssignView'));
+    showEl(byId('otpremaSuccessView'), '');
+}
+
+function renderOtpremaRoot() {
+    const sectionsEl = byId('otpremaRootSections');
+    if (!sectionsEl) return;
+
+    const sections = buildOtpremaRootSections();
+    renderOtpremaSummary(sections);
+
+    const html = `
+        ${renderOtpremaSection('Današnji bez vozača', sections.todayUnassigned, true)}
+        ${renderOtpremaSection('Raniji bez vozača', sections.olderUnassigned, true)}
+        ${renderOtpremaAssignedGroups(sections.todayAssignedGroups)}
+    `;
+
+    setHtml(sectionsEl, html);
+}
+
+function renderOtpremaSummary(sections) {
+    setText(byId('otpremaTodayUnassignedCount'), String(sections.todayUnassigned.length));
+    setText(byId('otpremaTodayUnassignedKg'), formatOtpremaKg(sumOtpremaKg(sections.todayUnassigned)));
+
+    setText(byId('otpremaOlderUnassignedCount'), String(sections.olderUnassigned.length));
+    setText(byId('otpremaOlderUnassignedKg'), formatOtpremaKg(sumOtpremaKg(sections.olderUnassigned)));
+
+    const todayAssignedRows = sections.todayAssignedGroups.flatMap(g => g.items);
+    setText(byId('otpremaTodayAssignedCount'), String(todayAssignedRows.length));
+    setText(byId('otpremaTodayAssignedKg'), formatOtpremaKg(sumOtpremaKg(todayAssignedRows)));
+}
+
+function buildOtpremaRootSections() {
+    const today = getTodayIsoDate();
+
+    const todayUnassigned = otpremaState.rows.filter(r =>
+        !r.vozacID &&
+        r.datum === today
+    );
+
+    const olderUnassigned = otpremaState.rows.filter(r =>
+        !r.vozacID &&
+        r.datum !== today
+    );
+
+    const todayAssigned = otpremaState.rows.filter(r =>
+        !!r.vozacID &&
+        getOtpremaAssignedDate(r) === today
+    );
+
+    const groupsMap = new Map();
+    todayAssigned.forEach(row => {
+        const key = row.vozacID || 'NEPOZNAT';
+        if (!groupsMap.has(key)) {
+            groupsMap.set(key, {
+                vozacID: row.vozacID || '',
+                vozacName: row.vozacName || row.vozacID || 'Vozač',
+                items: []
+            });
+        }
+        groupsMap.get(key).items.push(row);
+    });
+
+    const todayAssignedGroups = Array.from(groupsMap.values()).sort((a, b) =>
+        String(a.vozacName || '').localeCompare(String(b.vozacName || ''))
+    );
+
+    return {
+        todayUnassigned,
+        olderUnassigned,
+        todayAssignedGroups
+    };
+}
+
+function renderOtpremaSection(title, items, showWarnings) {
+    if (!items.length) {
+        return `
+            <section class="otprema-section">
+                <div class="otprema-section-head">
+                    <div class="otprema-section-title">${escapeHtml(title)}</div>
+                    <div class="otprema-section-count">0</div>
+                </div>
+                <div class="otprema-empty">Nema stavki</div>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="otprema-section">
+            <div class="otprema-section-head">
+                <div class="otprema-section-title">${escapeHtml(title)}</div>
+                <div class="otprema-section-count">${items.length}</div>
+            </div>
+            <div class="otprema-cards">
+                ${items.map(row => renderOtpremaCard(row, showWarnings)).join('')}
+            </div>
+        </section>
+    `;
+}
+
+function renderOtpremaAssignedGroups(groups) {
+    if (!groups.length) {
+        return `
+            <section class="otprema-section">
+                <div class="otprema-section-head">
+                    <div class="otprema-section-title">Danas otpremljeno</div>
+                    <div class="otprema-section-count">0</div>
+                </div>
+                <div class="otprema-empty">Nema današnjih dodela</div>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="otprema-section">
+            <div class="otprema-section-head">
+                <div class="otprema-section-title">Danas otpremljeno</div>
+                <div class="otprema-section-count">${groups.reduce((s, g) => s + g.items.length, 0)}</div>
+            </div>
+
+            <div class="otprema-groups">
+                ${groups.map(group => `
+                    <div class="otprema-driver-group">
+                        <div class="otprema-driver-group-head">
+                            <div>
+                                <div class="otprema-driver-group-name">${escapeHtml(group.vozacName)}</div>
+                                <div class="otprema-driver-group-sub">${escapeHtml(group.vozacID)} • ${group.items.length} stavki • ${escapeHtml(formatOtpremaKg(sumOtpremaKg(group.items)))}</div>
+                            </div>
+                        </div>
+                        <div class="otprema-cards">
+                            ${group.items.map(row => renderOtpremaCard(row, false, true)).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </section>
+    `;
+}
+
+function renderOtpremaCard(row, showWarning, isAssigned) {
+    const note = row.napomena ? `<div class="otprema-card-note">${escapeHtml(row.napomena)}</div>` : '';
+    const warning = showWarning && row.datum !== getTodayIsoDate()
+        ? `<span class="otprema-badge otprema-badge--warning">Raniji otkup</span>`
+        : '';
+    const status = isAssigned
+        ? `<span class="otprema-badge otprema-badge--success">Dodeljen</span>`
+        : `<span class="otprema-badge otprema-badge--pending">Bez vozača</span>`;
+
+    return `
+        <div class="otprema-card">
+            <div class="otprema-card-top">
+                <div class="otprema-card-koop">${escapeHtml(row.kooperantName || '-')}</div>
+                <div class="otprema-card-date">${escapeHtml(row.datum || '-')}</div>
+            </div>
+
+            <div class="otprema-card-main">
+                <div class="otprema-card-line">
+                    ${escapeHtml(row.vrstaVoca || '-')}
+                    ${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
+                    <span class="otprema-card-class">Kl. ${escapeHtml(row.klasa || 'I')}</span>
+                </div>
+
+                <div class="otprema-card-line otprema-card-line--muted">
+                    ${escapeHtml(formatOtpremaKg(row.kolicina))} • ${escapeHtml(formatOtpremaAmbalaza(row))}
+                </div>
+
+                ${note}
+            </div>
+
+            <div class="otprema-card-bottom">
+                <div class="otprema-card-badges">
+                    ${status}
+                    ${warning}
                 </div>
             </div>
-        </div>`;
-    }).join('');
-
-    updateOtpremaSummary();
-}
-function toggleOtpremaItem(index) {
-    const chk = document.getElementById('otpChk' + index);
-    chk.checked = !chk.checked;
-    updateOtpremaSummary();
+        </div>
+    `;
 }
 
-function toggleSelectAll() {
-    const checkboxes = document.querySelectorAll('[id^="otpChk"]');
-    const allChecked = Array.from(checkboxes).every(c => c.checked);
-    checkboxes.forEach(c => c.checked = !allChecked);
-    updateOtpremaSummary();
+function renderOtpremaAssignView() {
+    const driverCard = byId('otpremaAssignDriverCard');
+    const sectionsEl = byId('otpremaAssignSections');
+    if (!driverCard || !sectionsEl || !otpremaState.selectedVozac) return;
+
+    setHtml(driverCard, `
+        <div class="otprema-driver-card-label">Vozač</div>
+        <div class="otprema-driver-card-name">${escapeHtml(otpremaState.selectedVozac.name)}</div>
+        <div class="otprema-driver-card-sub">${escapeHtml(otpremaState.selectedVozac.id)}</div>
+    `);
+
+    const sections = buildOtpremaAssignSections();
+
+    setHtml(sectionsEl, `
+        ${renderOtpremaAssignSection('Današnji bez vozača', sections.todayUnassigned)}
+        ${renderOtpremaAssignSection('Raniji bez vozača', sections.olderUnassigned, true)}
+    `);
+
+    updateOtpremaAssignSummary();
 }
 
-function updateOtpremaSummary() {
-    const div = document.getElementById('otpremaSummary');
-    const text = document.getElementById('otpremaSummaryText');
-    if (!div || !text) return;
+function buildOtpremaAssignSections() {
+    const today = getTodayIsoDate();
 
-    let kg = 0;
-    let count = 0;
+    return {
+        todayUnassigned: otpremaState.rows.filter(r => !r.vozacID && r.datum === today),
+        olderUnassigned: otpremaState.rows.filter(r => !r.vozacID && r.datum !== today)
+    };
+}
 
-    otpremaUnassigned.forEach((r, i) => {
-        const chk = document.getElementById('otpChk' + i);
-        if (chk && chk.checked) {
-            kg += r.kolicina || 0;
-            count++;
-        }
-    });
-
-    if (count > 0) {
-        div.style.display = 'block';
-        text.textContent = 'Izabrano: ' + count + ' otkupa | ' + kg.toLocaleString('sr') + ' kg';
-    } else {
-        div.style.display = 'none';
+function renderOtpremaAssignSection(title, items, showWarning) {
+    if (!items.length) {
+        return `
+            <section class="otprema-section">
+                <div class="otprema-section-head">
+                    <div class="otprema-section-title">${escapeHtml(title)}</div>
+                    <div class="otprema-section-count">0</div>
+                </div>
+                <div class="otprema-empty">Nema stavki</div>
+            </section>
+        `;
     }
+
+    return `
+        <section class="otprema-section">
+            <div class="otprema-section-head">
+                <div class="otprema-section-title">${escapeHtml(title)}</div>
+                <div class="otprema-section-count">${items.length}</div>
+            </div>
+
+            <div class="otprema-check-cards">
+                ${items.map(row => renderOtpremaAssignCard(row, showWarning)).join('')}
+            </div>
+        </section>
+    `;
 }
 
-async function confirmOtprema() {
-    if (!otpremaVozacID) {
-        showToast('Nema vozača', 'error');
+function renderOtpremaAssignCard(row, showWarning) {
+    const key = getOtpremaRecordKey(row);
+    const checked = otpremaState.selectedKeys.has(key) ? 'checked' : '';
+    const note = row.napomena ? `<div class="otprema-card-note">${escapeHtml(row.napomena)}</div>` : '';
+    const warning = showWarning
+        ? `<span class="otprema-badge otprema-badge--warning">Raniji otkup</span>`
+        : '';
+
+    return `
+        <label class="otprema-check-card">
+            <div class="otprema-check-col">
+                <input class="otprema-check" type="checkbox" data-record-key="${escapeHtml(key)}" ${checked}>
+            </div>
+
+            <div class="otprema-check-body">
+                <div class="otprema-card-top">
+                    <div class="otprema-card-koop">${escapeHtml(row.kooperantName || '-')}</div>
+                    <div class="otprema-card-date">${escapeHtml(row.datum || '-')}</div>
+                </div>
+
+                <div class="otprema-card-main">
+                    <div class="otprema-card-line">
+                        ${escapeHtml(row.vrstaVoca || '-')}
+                        ${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
+                        <span class="otprema-card-class">Kl. ${escapeHtml(row.klasa || 'I')}</span>
+                    </div>
+
+                    <div class="otprema-card-line otprema-card-line--muted">
+                        ${escapeHtml(formatOtpremaKg(row.kolicina))} • ${escapeHtml(formatOtpremaAmbalaza(row))}
+                    </div>
+
+                    ${note}
+                </div>
+
+                <div class="otprema-card-bottom">
+                    <div class="otprema-card-badges">${warning}</div>
+                </div>
+            </div>
+        </label>
+    `;
+}
+
+function selectAllOtpremaToday() {
+    const todayRows = otpremaState.rows.filter(r => !r.vozacID && r.datum === getTodayIsoDate());
+    otpremaState.selectedKeys = new Set(todayRows.map(getOtpremaRecordKey));
+    renderOtpremaAssignView();
+}
+
+function clearOtpremaSelection() {
+    otpremaState.selectedKeys.clear();
+    renderOtpremaAssignView();
+}
+
+function updateOtpremaAssignSummary() {
+    const selectedRows = getSelectedOtpremaRows();
+    setText(byId('otpremaSelectedCount'), String(selectedRows.length));
+    setText(byId('otpremaSelectedKg'), formatOtpremaKg(sumOtpremaKg(selectedRows)));
+}
+
+function getSelectedOtpremaRows() {
+    return otpremaState.rows.filter(r => otpremaState.selectedKeys.has(getOtpremaRecordKey(r)));
+}
+
+async function confirmOtpremaAssign() {
+    if (!otpremaState.selectedVozac) {
+        showToast('Prvo izaberi vozača', 'error');
         return;
     }
 
-    const selected = [];
-
-    for (let i = 0; i < otpremaUnassigned.length; i++) {
-        const chk = document.getElementById('otpChk' + i);
-        if (chk && chk.checked) {
-            selected.push(otpremaUnassigned[i]);
-        }
-    }
-
-    if (selected.length === 0) {
-        showToast('Izaberite bar jedan otkup', 'error');
+    const selectedRows = getSelectedOtpremaRows();
+    if (!selectedRows.length) {
+        showToast('Izaberi najmanje jednu stavku', 'error');
         return;
     }
+
+    const nowIso = new Date().toISOString();
+    const updatedRows = selectedRows.map(row => buildUpdatedOtpremaRecord(row, otpremaState.selectedVozac, nowIso));
 
     try {
-        const nowIso = new Date().toISOString();
-
-        for (const item of selected) {
-            item.vozacID = otpremaVozacID;
-            item.updatedAtClient = nowIso;
-            item.syncStatus = 'pending';
-            item.lastSyncError = '';
-            item.lastServerStatus = '';
-            item.syncAttemptAt = '';
-            await dbPut(db, CONFIG.STORE_NAME, item);
+        for (const row of updatedRows) {
+            await dbPut(db, CONFIG.STORE_NAME, row);
         }
 
-        showToast(selected.length + ' otkupa dodeljeno vozaču', 'success');
+        otpremaState.successRows = updatedRows;
+        renderOtpremaSuccessView(updatedRows, otpremaState.selectedVozac);
 
-        invalidateOtpremaCache();
-        cancelOtprema();
-
-        if (navigator.onLine) {
-            if (typeof syncQueueSafe === 'function') {
-                await syncQueueSafe();
-            } else if (typeof syncQueue === 'function') {
-                await syncQueue();
-            }
+        if (typeof updateSyncBadge === 'function') updateSyncBadge();
+        if (navigator.onLine && typeof syncQueueSafe === 'function') {
+            syncQueueSafe();
         }
+
+        // osveži state
+        await loadOtpremaOverview();
+        showOtpremaSuccessView();
     } catch (err) {
-        console.error('confirmOtprema failed:', err);
-        showToast('Greška pri dodeli otkupa vozaču', 'error');
+        console.error('confirmOtpremaAssign failed:', err);
+        showToast('Greška pri potvrdi otpreme', 'error');
     }
 }
 
-async function cancelOtprema() {
-    otpremaVozacID = '';
-    otpremaUnassigned = [];
+function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
+    return {
+        clientRecordID: row.clientRecordID || ('upd-' + Date.now() + '-' + Math.floor(Math.random() * 100000)),
+        serverRecordID: row.serverRecordID || '',
+        createdAtClient: row.createdAtClient || nowIso,
+        updatedAtClient: nowIso,
+        updatedAtServer: row.updatedAtServer || '',
+        syncedAt: '',
+        deviceID: typeof getDeviceID === 'function' ? getDeviceID() : '',
 
-    const assignView = document.getElementById('otpremaAssignView');
-    const mainView = document.getElementById('otpremaMainView');
+        otkupacID: CONFIG.OTKUPAC_ID,
+        datum: row.datum || getTodayIsoDate(),
 
-    if (assignView) assignView.style.display = 'none';
-    if (mainView) mainView.style.display = 'block';
+        kooperantID: row.kooperantID || '',
+        kooperantName: row.kooperantName || '',
+        vrstaVoca: row.vrstaVoca || '',
+        sortaVoca: row.sortaVoca || '',
+        klasa: row.klasa || 'I',
+        kolicina: parseFloat(row.kolicina) || 0,
+        cena: parseFloat(row.cena) || 0,
 
-    await loadOtpremaOverview();
+        tipAmbalaze: row.tipAmbalaze || '',
+        kolAmbalaze: parseInt(row.kolAmbalaze, 10) || 0,
+
+        parcelaID: row.parcelaID || '',
+        napomena: row.napomena || '',
+        vozacID: vozac.id,
+        vozacName: vozac.name,
+
+        syncStatus: 'pending',
+        syncAttempts: 0,
+        syncAttemptAt: '',
+        lastSyncError: '',
+        lastServerStatus: '',
+        deleted: false,
+        entityType: 'otkup',
+        schemaVersion: 1
+    };
 }
 
-async function loadOtpremaOverview() {
-    const all = await getOtpremaOtkupiCached(false);
+function renderOtpremaSuccessView(rows, vozac) {
+    setText(byId('otpremaSuccessDriver'), vozac.name + ' (' + vozac.id + ')');
+    setText(byId('otpremaSuccessCount'), String(rows.length));
+    setText(byId('otpremaSuccessKg'), formatOtpremaKg(sumOtpremaKg(rows)));
 
-    const unassigned = all.filter(r => !r.vozacID);
-    unassigned.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const listEl = byId('otpremaSuccessList');
+    if (!listEl) return;
 
-    const assigned = all.filter(r => r.vozacID);
-
-    const uList = document.getElementById('otpremaUnassignedList');
-    if (uList) {
-        if (unassigned.length === 0) {
-            uList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Svi otkupi su raspoređeni</p>';
-        } else {
-            uList.innerHTML = unassigned.map(r => {
-                const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr-RS');
-                const statusText =
-                    r.syncStatus === 'syncing' ? ' | sync...' :
-                    r.syncStatus === 'pending' ? ' | pending' : '';
-
-                return `<div class="queue-item" style="border-left-color:var(--warning);">
-                    <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
-                    <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.sortaVoca || '')} ${escapeHtml(r.klasa || 'I')} | ${r.kolicina} kg | ${vr} RSD${statusText}</div>
-                </div>`;
-            }).join('');
-        }
-    }
-
-    const aList = document.getElementById('otpremaAssignedList');
-    if (aList) {
-        if (assigned.length === 0) {
-            aList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:12px;font-size:13px;">Nema otprema za danas</p>';
-        } else {
-            const grouped = {};
-
-            assigned.forEach(r => {
-                const v = r.vozacID;
-                if (!grouped[v]) grouped[v] = { items: [], kg: 0 };
-                grouped[v].items.push(r);
-                grouped[v].kg += r.kolicina || 0;
-            });
-
-            aList.innerHTML = Object.entries(grouped).map(([vozID, g]) =>
-                `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--success);">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                        <strong style="color:var(--primary);">🚛 ${escapeHtml(vozID)}</strong>
-                        <span style="font-weight:600;">${g.kg.toLocaleString('sr-RS')} kg | ${g.items.length} otk.</span>
-                    </div>
-                    ${g.items.map(r => {
-                        const st =
-                            r.syncStatus === 'syncing' ? ' (sync...)' :
-                            r.syncStatus === 'pending' ? ' (pending)' : '';
-                        return `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa || '')} | ${r.kolicina} kg${escapeHtml(st)}</div>`;
-                    }).join('')}
-                </div>`
-            ).join('');
-        }
-    }
+    setHtml(listEl, `
+        <section class="otprema-section">
+            <div class="otprema-section-head">
+                <div class="otprema-section-title">Dodeljene stavke</div>
+                <div class="otprema-section-count">${rows.length}</div>
+            </div>
+            <div class="otprema-cards">
+                ${rows.map(row => renderOtpremaCard(row, false, true)).join('')}
+            </div>
+        </section>
+    `);
 }
 
+function backToOtpremaRoot() {
+    otpremaState.selectedKeys.clear();
+    otpremaState.selectedVozac = null;
+    otpremaState.successRows = [];
+    showOtpremaRootView();
+    renderOtpremaRoot();
+}
 
-//HELPERS
 function mapServerOtpremaRecord(r) {
     return {
         clientRecordID: r.ClientRecordID || '',
@@ -294,7 +612,7 @@ function mapServerOtpremaRecord(r) {
         updatedAtServer: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
         syncedAt: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
 
-        datum: fmtDate(r.Datum),
+        datum: toIsoDateOnly(r.Datum),
         kooperantID: r.KooperantID || '',
         kooperantName: r.KooperantName || r.KooperantID || '',
         vrstaVoca: r.VrstaVoca || '',
@@ -302,15 +620,16 @@ function mapServerOtpremaRecord(r) {
         klasa: r.Klasa || 'I',
         kolicina: parseFloat(r.Kolicina) || 0,
         cena: parseFloat(r.Cena) || 0,
+        tipAmbalaze: r.TipAmbalaze || '',
         kolAmbalaze: parseInt(r.KolAmbalaze, 10) || 0,
         parcelaID: r.ParcelaID || '',
-        vozacID: r.VozacID || r.VozaciID || '',
         napomena: r.Napomena || '',
+        vozacID: r.VozacID || r.VozaciID || '',
+        vozacName: r.VozacName || '',
 
         syncStatus: 'synced',
-        syncAttempts: 0,
         lastSyncError: '',
-        lastServerStatus: 'server'
+        deleted: false
     };
 }
 
@@ -323,7 +642,7 @@ function normalizeLocalOtpremaRecord(r) {
         updatedAtServer: normalizeIso(r.updatedAtServer),
         syncedAt: normalizeIso(r.syncedAt),
 
-        datum: r.datum || '',
+        datum: toIsoDateOnly(r.datum || ''),
         kooperantID: r.kooperantID || '',
         kooperantName: r.kooperantName || r.kooperantID || '',
         vrstaVoca: r.vrstaVoca || '',
@@ -331,19 +650,130 @@ function normalizeLocalOtpremaRecord(r) {
         klasa: r.klasa || 'I',
         kolicina: parseFloat(r.kolicina) || 0,
         cena: parseFloat(r.cena) || 0,
+        tipAmbalaze: r.tipAmbalaze || '',
         kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
         parcelaID: r.parcelaID || '',
-        vozacID: r.vozacID || '',
         napomena: r.napomena || '',
+        vozacID: r.vozacID || '',
+        vozacName: r.vozacName || '',
 
         syncStatus: r.syncStatus || 'pending',
-        syncAttempts: parseInt(r.syncAttempts, 10) || 0,
         lastSyncError: r.lastSyncError || '',
-        lastServerStatus: r.lastServerStatus || ''
+        deleted: !!r.deleted
     };
 }
 
-function mergeOtpremaRecords(local, server) {
-    return mergeOfflineRecords(local, server, normalizeLocalOtpremaRecord);
+function mergeOtpremaRecords(localRows, serverRows) {
+    const map = new Map();
+
+    serverRows.forEach(row => {
+        const key = getOtpremaRecordKey(row);
+        if (!key) return;
+        map.set(key, row);
+    });
+
+    localRows
+        .map(normalizeLocalOtpremaRecord)
+        .forEach(row => {
+            const key = getOtpremaRecordKey(row);
+            if (!key) return;
+
+            const existing = map.get(key);
+
+            if (!existing) {
+                map.set(key, row);
+                return;
+            }
+
+            if (row.syncStatus !== 'synced' || row.lastSyncError) {
+                map.set(key, row);
+                return;
+            }
+
+            if ((row.updatedAtClient || '') > (existing.updatedAtClient || '')) {
+                map.set(key, row);
+            }
+        });
+
+    return Array.from(map.values()).filter(r => !r.deleted);
 }
 
+function enrichOtpremaRecord(r) {
+    return {
+        ...r,
+        datum: toIsoDateOnly(r.datum || ''),
+        vozacName: r.vozacName || resolveVozacName(r.vozacID)
+    };
+}
+
+function compareOtpremaRowsDesc(a, b) {
+    const byDate = String(b.datum || '').localeCompare(String(a.datum || ''));
+    if (byDate !== 0) return byDate;
+
+    const aTime = a.updatedAtClient || a.createdAtClient || a.updatedAtServer || '';
+    const bTime = b.updatedAtClient || b.createdAtClient || b.updatedAtServer || '';
+    return String(bTime).localeCompare(String(aTime));
+}
+
+function getOtpremaRecordKey(r) {
+    if (r.serverRecordID) return 'srv:' + r.serverRecordID;
+    if (r.clientRecordID) return 'cli:' + r.clientRecordID;
+    return '';
+}
+
+function resolveVozacName(vozacID) {
+    if (!vozacID) return '';
+    const vozac = (stammdaten.vozaci || []).find(v => (v.VozacID || v.ID) === vozacID);
+    return vozac ? (vozac.ImePrezime || vozac.Naziv || vozac.Ime || vozacID) : vozacID;
+}
+
+function getOtpremaAssignedDate(row) {
+    return toIsoDateOnly(
+        row.updatedAtClient ||
+        row.updatedAtServer ||
+        row.syncedAt ||
+        row.datum
+    );
+}
+
+function sumOtpremaKg(rows) {
+    return rows.reduce((sum, r) => sum + (parseFloat(r.kolicina) || 0), 0);
+}
+
+function formatOtpremaKg(value) {
+    return (parseFloat(value) || 0).toLocaleString('sr-RS') + ' kg';
+}
+
+function formatOtpremaAmbalaza(row) {
+    const kom = parseInt(row.kolAmbalaze, 10) || 0;
+    const tip = row.tipAmbalaze || '';
+    if (!kom && !tip) return 'Bez ambalaže';
+    if (!kom) return tip;
+    if (!tip) return kom + ' kom';
+    return kom + ' kom • ' + tip;
+}
+
+function toIsoDateOnly(input) {
+    if (!input) return '';
+
+    const s = String(input).trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+    if (/^\d{2}\.\d{2}\.\d{4}\.?$/.test(s)) {
+        const clean = s.replace(/\.$/, '');
+        const parts = clean.split('.');
+        return parts[2] + '-' + parts[1] + '-' + parts[0];
+    }
+
+    try {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    } catch (_) {}
+
+    return s;
+}
+
+function getTodayIsoDate() {
+    return new Date().toISOString().slice(0, 10);
+}
