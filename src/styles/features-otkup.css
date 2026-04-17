@@ -1,1 +1,152 @@
+/* ============================================================
+   OTKUP TAB — UI PATCH
+   ============================================================ */
 
+.otk-screen {
+    padding-bottom: 96px;
+}
+
+.otk-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.otk-hero {
+    padding: 4px 2px 2px;
+}
+
+.otk-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.otk-title {
+    margin: 4px 0 2px;
+    font-size: 26px;
+    line-height: 1.15;
+    color: var(--text);
+}
+
+.otk-subline {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.otk-card {
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+}
+
+.otk-card-head {
+    margin-bottom: 12px;
+}
+
+.otk-card-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.otk-card-subtitle {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.otk-form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.otk-form-row-1 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .otk-form-row-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.otk-qr-reader {
+    display: none;
+    margin-top: 10px;
+    margin-bottom: 2px;
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.otk-vozac-btn {
+    background: var(--accent);
+    margin-top: 0;
+}
+
+.otk-vozac-display {
+    background: var(--accent);
+}
+
+.otk-inline-link {
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #fff;
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.otk-field-help {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.otk-field-error {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #c62828;
+}
+
+#tab-otkup .is-invalid {
+    border-color: #c62828 !important;
+    box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.08);
+}
+
+.otk-info-strip {
+    padding: 12px 14px;
+    background: rgba(26, 94, 42, 0.08);
+    border: 1px solid rgba(26, 94, 42, 0.12);
+    border-radius: 14px;
+    font-size: 12px;
+    color: var(--primary);
+}
+
+.otk-sticky-actions {
+    position: sticky;
+    bottom: 12px;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(245, 245, 240, 0.9);
+    backdrop-filter: blur(10px);
+    border-radius: 18px;
+}
+
+.otk-secondary-btn,
+.otk-primary-btn {
+    margin: 0;
+}
