@@ -1,4 +1,7 @@
-/* HEADER */
+/* =========================================================
+   HEADER
+   ========================================================= */
+
 .header {
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: white;
@@ -73,7 +76,7 @@
   cursor: pointer;
 }
 
-/* KOOPERANT — HEADER BRAND */
+/* Kooperant / brand header */
 .header-brand {
   display: flex;
   flex-direction: column;
@@ -90,44 +93,116 @@
   margin-bottom: 2px;
 }
 
-@media (max-width: 640px) {
-  .header {
-    padding: 12px 12px;
-  }
+/* =========================================================
+   MAIN TAB BAR
+   ========================================================= */
 
-  .header-brand-logo {
-    width: 132px;
-    max-width: 40vw;
-  }
-
-  .header-btn {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
-
-  .header-actions {
-    gap: 6px;
-  }
+.tab-bar {
+  display: flex;
+  background: white;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-        /* MAIN TAB BAR */
-        .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .tab-btn { flex: none; padding: 12px 16px; text-align: center; font-size: 13px; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
-        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
-    
-        /* SUB TAB BAR */
-        .sub-tab-bar { display: flex; background: #f0f0eb; border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .sub-tab-btn { flex: none; padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; }
-        .sub-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: white; }
-    
-        /* CONTENT */
-        .tab-content { display: none; padding: 16px; }
-        .tab-content.active { display: block; }
-        .sub-content { display: none; }
-        .sub-content.active { display: block; }
+.tab-btn {
+  flex: none;
+  padding: 12px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* role top tabovi */
+.tab-bar .role-kooperant,
+.tab-bar .role-otkupac {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-btn.role-kooperant,
+.tab-btn.role-otkupac {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.tab-btn.role-kooperant.active,
+.tab-btn.role-otkupac.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 700;
+}
 
 /* =========================================================
-   KOOPERANT — BOTTOM NAV
+   SUB TAB BAR
+   ========================================================= */
+
+.sub-tab-bar {
+  display: flex;
+  background: #f0f0eb;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sub-tab-btn {
+  flex: none;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.sub-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: white;
+}
+
+/* =========================================================
+   CONTENT
+   ========================================================= */
+
+.tab-content {
+  display: none;
+  padding: 16px;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.sub-content {
+  display: none;
+}
+
+.sub-content.active {
+  display: block;
+}
+
+/* =========================================================
+   BOTTOM NAV BASE
    ========================================================= */
 
 .bottom-nav {
@@ -140,7 +215,6 @@
   backdrop-filter: blur(12px);
   border-top: 1px solid rgba(92, 108, 77, 0.12);
   display: none;
-  grid-template-columns: repeat(5, 1fr);
   z-index: 110;
   padding-bottom: env(safe-area-inset-bottom);
   box-shadow: 0 -6px 22px rgba(31, 41, 24, 0.08);
@@ -148,6 +222,14 @@
 
 .bottom-nav.visible {
   display: grid;
+}
+
+#koopBottomNav {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+#otkupBottomNav {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .bottom-nav-btn {
@@ -178,7 +260,10 @@
   line-height: 1;
 }
 
-/* Kooperant root tabovi dobijaju prostor za bottom nav */
+/* =========================================================
+   MOBILE SPACING ZA BOTTOM NAV
+   ========================================================= */
+
 body.has-koop-bottom-nav .tab-content.role-kooperant-root,
 body.has-koop-bottom-nav #tab-home,
 body.has-koop-bottom-nav #tab-parcele,
@@ -188,34 +273,15 @@ body.has-koop-bottom-nav #tab-more {
   padding-bottom: 92px;
 }
 
-
-.tab-bar .role-kooperant {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tab-btn.role-kooperant {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.tab-btn.role-kooperant.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
-  font-weight: 700;
-}
-
 body.has-otkup-bottom-nav #tab-otkup,
 body.has-otkup-bottom-nav #tab-pregled,
 body.has-otkup-bottom-nav #tab-otpremnice,
 body.has-otkup-bottom-nav #tab-queue {
   padding-bottom: 92px;
 }
+
 .otk-screen {
-    padding-bottom: 88px;
+  padding-bottom: 88px;
 }
 
 /* =========================================================
@@ -267,5 +333,29 @@ body.has-otkup-bottom-nav #tab-queue {
 
   .bottom-nav.visible {
     display: grid !important;
+  }
+}
+
+/* =========================================================
+   SMALL SCREEN HEADER TWEAKS
+   ========================================================= */
+
+@media (max-width: 640px) {
+  .header {
+    padding: 12px 12px;
+  }
+
+  .header-brand-logo {
+    width: 132px;
+    max-width: 40vw;
+  }
+
+  .header-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .header-actions {
+    gap: 6px;
   }
 }
