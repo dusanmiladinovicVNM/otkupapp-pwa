@@ -32,6 +32,8 @@ async function bootstrapApp() {
         await loadStammdatenFromCache();
 
         applyRoleVisibility();
+        if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
+        if (typeof updateBottomNavActive === 'function') updateBottomNavActive();
         applyHeaderInfo();
         bindAppShellEvents();
         setDefaultDates();
