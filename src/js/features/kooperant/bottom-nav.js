@@ -1,10 +1,9 @@
 // ============================================================
 // ROLE-AWARE BOTTOM NAV
-// desktop = legacy top tabovi
-// mobile  = bottom nav
-// Podržava:
-// - Kooperant: #koopBottomNav
-// - Otkupac:   #otkupBottomNav
+// Kooperant + Otkupac:
+// - mobile  = bottom nav
+// - desktop = isti nav gore kao topnav
+// Vozac + Management koriste legacy tabBar
 // ============================================================
 
 function getCurrentRole() {
@@ -48,11 +47,6 @@ function getActiveBottomNavConfig() {
     return null;
 }
 
-function initBottomNav() {
-    updateBottomNavVisibility();
-    updateBottomNavActive();
-}
-
 function updateBottomNavVisibility() {
     const loginContainer = document.getElementById('loginContainer');
 
@@ -73,18 +67,23 @@ function updateBottomNavVisibility() {
     document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
     const tabBar = document.getElementById('tabBar');
-    if (tabBar) {
-        if (cfg && !isLoginVisible) {
-            tabBar.style.display = 'none';
-        } else {
-            tabBar.style.display = '';
-        }
+
+    // ako nema role-nav ili je login ekran, vrati legacy tabBar
+    if (!cfg || isLoginVisible) {
+        if (tabBar) tabBar.style.display = '';
+        return;
     }
 
-    if (!cfg || isLoginVisible) return;
-
     const nav = document.getElementById(cfg.navId);
-    if (!nav) return;
+
+    // fallback: ako nav ne postoji, vrati legacy tabBar
+    if (!nav) {
+        if (tabBar) tabBar.style.display = '';
+        return;
+    }
+
+    // za Kooperant/Otkupac koristimo role nav umesto legacy tabBar
+    if (tabBar) tabBar.style.display = 'none';
 
     nav.classList.add('visible');
     document.body.classList.add(cfg.bodyClass);
@@ -94,7 +93,6 @@ function showBottomTab(tabName, btn) {
     const cfg = getActiveBottomNavConfig();
     if (!cfg) return;
 
-    // Kooperant "more" ide direktno na tab-more
     if (cfg.role === 'kooperant' && tabName === 'more') {
         qsa('.tab-content').forEach(t => removeClass(t, 'active'));
         qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
@@ -174,7 +172,6 @@ function invalidatePregledCacheSafe() {
     }
 }
 
-// Hook na postojeći showTab tok
 (function attachBottomNavHook() {
     const originalShowTab = window.showTab;
     if (typeof originalShowTab !== 'function') return;
@@ -189,8 +186,11 @@ function invalidatePregledCacheSafe() {
     };
 })();
 
-// expose helpers
-window.initBottomNav = initBottomNav;
+window.initBottomNav = function () {
+    updateBottomNavVisibility();
+    updateBottomNavActive();
+};
+
 window.updateBottomNavVisibility = updateBottomNavVisibility;
 window.updateBottomNavActive = updateBottomNavActive;
 
