@@ -280,19 +280,83 @@
     
 <!-- ==================== Pregled TAB ==================== -->
 <div class="tab-content" id="tab-pregled">
-    <div class="form-row" style="margin-bottom:12px;">
-        <div class="form-group"><label>Od datuma</label><input type="date" id="fldPregledOd" onchange="loadOtkupPregled()"></div>
-        <div class="form-group"><label>Do datuma</label><input type="date" id="fldPregledDo" onchange="loadOtkupPregled()"></div>
+    <section class="danas-screen">
+        <div class="danas-shell">
+
+            <div class="danas-hero">
+                <div>
+                    <div class="danas-eyebrow">Operativni pregled</div>
+                    <h1 class="danas-title">Danas</h1>
+                    <div class="danas-subline">Pregled unosa, vozača i sync statusa</div>
+                </div>
+            </div>
+
+            <div class="danas-filters-card">
+                <div class="danas-pills" id="pregledQuickFilters">
+                    <button class="danas-pill active" type="button" data-filter="danas" onclick="setPregledQuickFilter('danas', this)">Danas</button>
+                    <button class="danas-pill" type="button" data-filter="juce" onclick="setPregledQuickFilter('juce', this)">Juče</button>
+                    <button class="danas-pill" type="button" data-filter="sve" onclick="setPregledQuickFilter('sve', this)">Sve</button>
+                    <button class="danas-pill" type="button" data-filter="bez_vozaca" onclick="setPregledQuickFilter('bez_vozaca', this)">Bez vozača</button>
+                    <button class="danas-pill" type="button" data-filter="problemi" onclick="setPregledQuickFilter('problemi', this)">Problemi</button>
+                </div>
+
+                <div class="form-row" style="margin-bottom:0;">
+                    <div class="form-group">
+                        <label>Od datuma</label>
+                        <input type="date" id="fldPregledOd" onchange="onPregledDateChange()">
+                    </div>
+                    <div class="form-group">
+                        <label>Do datuma</label>
+                        <input type="date" id="fldPregledDo" onchange="onPregledDateChange()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="statPregledCount">0</div>
+                    <div class="stat-label">Otkupa</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statPregledKg">0</div>
+                    <div class="stat-label">Ukupno kg</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statPregledVrednost">0</div>
+                    <div class="stat-label">Vrednost RSD</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statPregledKoop">0</div>
+                    <div class="stat-label">Kooperanata</div>
+                </div>
+            </div>
+
+            <div id="pregledList" class="danas-sections"></div>
+
+        </div>
+    </section>
+
+    <div class="danas-detail-modal" id="pregledDetailModal" onclick="closePregledDetail()">
+        <div class="danas-detail-card" onclick="event.stopPropagation()">
+            <div class="danas-detail-head">
+                <div>
+                    <div class="danas-detail-title">Detalj otkupa</div>
+                    <div class="danas-detail-subtitle" id="pregledDetailDate">-</div>
+                </div>
+                <button class="danas-detail-close" type="button" onclick="closePregledDetail()">✕</button>
+            </div>
+
+            <div class="danas-detail-grid" id="pregledDetailGrid"></div>
+
+            <div class="danas-detail-actions">
+                <button class="btn-secondary" type="button" onclick="closePregledDetail()">Zatvori</button>
+                <button class="btn-primary" type="button" onclick="openPregledDetailOtkupniList()">Otvori otkupni list</button>
+            </div>
+        </div>
     </div>
-    <div class="stats-grid">
-        <div class="stat-card"><div class="stat-value" id="statPregledCount">0</div><div class="stat-label">Otkupa</div></div>
-        <div class="stat-card"><div class="stat-value" id="statPregledKg">0</div><div class="stat-label">Ukupno kg</div></div>
-        <div class="stat-card"><div class="stat-value" id="statPregledVrednost">0</div><div class="stat-label">Vrednost RSD</div></div>
-        <div class="stat-card"><div class="stat-value" id="statPregledKoop">0</div><div class="stat-label">Kooperanata</div></div>
-    </div>
-    <div id="pregledList"></div>
 </div>
 
+<!-- ==================== Otprema TAB ==================== -->
 <div class="tab-content" id="tab-otpremnice">
     <div id="otpremaAssignView" style="display:none;">
         <div class="koop-display visible" id="otpremaVozacDisplay" style="background:var(--accent);margin-bottom:12px;">
