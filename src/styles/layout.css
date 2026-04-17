@@ -207,6 +207,10 @@ body.has-koop-bottom-nav #tab-more {
   font-weight: 700;
 }
 
+.otk-screen {
+    padding-bottom: 88px;
+}
+
 /* desktop = top nav */
 @media (min-width: 901px) {
   .tab-bar .role-kooperant {
