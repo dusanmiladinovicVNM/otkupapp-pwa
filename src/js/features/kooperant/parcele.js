@@ -710,9 +710,6 @@ function applyParceleFilters() {
 let currentParcelaDetailId = '';
 let currentParcelaDetailBack = 'mapa';
 
-let currentParcelaDetailId = '';
-let currentParcelaDetailBack = 'mapa';
-
 async function openParcelaDetail(parcelaId, backView = 'mapa') {
     const parcela = (stammdaten.parcele || []).find(
         p => p.ParcelaID === parcelaId && p.KooperantID === CONFIG.ENTITY_ID
