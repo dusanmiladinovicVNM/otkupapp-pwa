@@ -152,8 +152,6 @@ function applyRoleVisibility() {
     // DODAJ — resetuj header koji je možda sakriven od showLoginScreen()
     const header = document.querySelector('.header');
     if (header) header.style.display = '';
-
-    const role = String(CONFIG.USER_ROLE || '').trim();
     const role = String(CONFIG.USER_ROLE || '').trim();
     const isMobile = window.matchMedia('(max-width: 900px)').matches;
     const isKooperant = role === 'Kooperant';
