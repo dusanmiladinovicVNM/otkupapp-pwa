@@ -188,6 +188,7 @@ body.has-koop-bottom-nav #tab-more {
   padding-bottom: 92px;
 }
 
+
 .tab-bar .role-kooperant {
   display: inline-flex;
   align-items: center;
@@ -207,6 +208,12 @@ body.has-koop-bottom-nav #tab-more {
   font-weight: 700;
 }
 
+body.has-otkup-bottom-nav #tab-otkup,
+body.has-otkup-bottom-nav #tab-pregled,
+body.has-otkup-bottom-nav #tab-otpremnice,
+body.has-otkup-bottom-nav #tab-queue {
+  padding-bottom: 92px;
+}
 .otk-screen {
     padding-bottom: 88px;
 }
