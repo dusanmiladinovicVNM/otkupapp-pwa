@@ -146,11 +146,60 @@ function doLogout() {
 }
 
 function applyRoleVisibility() {
-    const role = CONFIG.USER_ROLE;
-    document.querySelectorAll('.role-otkupac').forEach(el => el.style.display = (role === 'Otkupac') ? '' : 'none');
-    document.querySelectorAll('.role-kooperant').forEach(el => el.style.display = (role === 'Kooperant') ? '' : 'none');
-    document.querySelectorAll('.role-vozac').forEach(el => el.style.display = (role === 'Vozac') ? '' : 'none');
-    document.querySelectorAll('.role-management').forEach(el => el.style.display = (role === 'Management') ? '' : 'none');
+    const role = String(CONFIG.USER_ROLE || '').trim();
+    const isMobile = window.matchMedia('(max-width: 900px)').matches;
+    const isKooperant = role === 'Kooperant';
+    const isOtkupac = role === 'Otkupac';
+    const isBottomNavRole = isKooperant || isOtkupac;
+
+    // 1) prvo sakrij sve role-specifične elemente
+    document.querySelectorAll('.role-otkupac, .role-kooperant, .role-vozac, .role-management')
+        .forEach(el => {
+            el.style.display = 'none';
+        });
+
+    // 2) helper za aktivnu rolu
+    const activeSelector =
+        isOtkupac ? '.role-otkupac' :
+        isKooperant ? '.role-kooperant' :
+        role === 'Vozac' ? '.role-vozac' :
+        role === 'Management' ? '.role-management' :
+        '';
+
+    if (activeSelector) {
+        document.querySelectorAll(activeSelector).forEach(el => {
+            // Bottom nav: samo mobile za Kooperant/Otkupac
+            if (el.classList.contains('bottom-nav')) {
+                el.style.display = (isBottomNavRole && isMobile) ? '' : 'none';
+                return;
+            }
+
+            // Tab buttons: desktop za Kooperant/Otkupac, uvek za ostale role
+            if (el.classList.contains('tab-btn')) {
+                if (isBottomNavRole) {
+                    el.style.display = isMobile ? 'none' : '';
+                } else {
+                    el.style.display = '';
+                }
+                return;
+            }
+
+            // Svi ostali role elementi
+            el.style.display = '';
+        });
+    }
+
+    // 3) tab bar kontejner:
+    // - mobile: sakriven za Kooperant/Otkupac
+    // - desktop: prikazan
+    const tabBar = document.querySelector('.tab-bar');
+    if (tabBar) {
+        if (isBottomNavRole && isMobile) {
+            tabBar.style.display = 'none';
+        } else {
+            tabBar.style.display = 'flex';
+        }
+    }
 
     applyHeaderBranding();
 }
@@ -171,3 +220,9 @@ function applyHeaderBranding() {
         logoEl.alt = 'AgriX Otkup';
     }
 }
+
+window.addEventListener('resize', () => {
+    applyRoleVisibility();
+    if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
+    if (typeof updateBottomNavActive === 'function') updateBottomNavActive();
+});
