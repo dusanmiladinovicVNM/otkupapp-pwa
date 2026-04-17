@@ -225,20 +225,18 @@ body.has-otkup-bottom-nav #tab-queue {
    ========================================================= */
 
 @media (min-width: 901px) {
-  /* legacy role tabovi se ne koriste za Kooperant/Otkupac */
   .tab-bar .role-kooperant,
   .tab-bar .role-otkupac {
     display: none !important;
   }
 
-  /* isti bottom nav postaje desktop top nav */
   .bottom-nav.visible {
     display: flex !important;
-    position: sticky;
-    top: 72px; /* prilagodi ako ti je header viši/niži */
+    position: fixed;
+    top: 72px;          /* ispod headera */
+    left: 0;
+    right: 0;
     bottom: auto;
-    left: auto;
-    right: auto;
     height: 56px;
     padding: 0 16px;
     background: #fff;
@@ -286,6 +284,7 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-otkup-bottom-nav #tab-pregled,
   body.has-otkup-bottom-nav #tab-otpremnice,
   body.has-otkup-bottom-nav #tab-queue {
+    padding-top: 72px;   /* header 72 + nav 56 prilagodi po potrebi */
     padding-bottom: 16px;
   }
 }
