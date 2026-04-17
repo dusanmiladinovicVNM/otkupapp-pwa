@@ -32,12 +32,14 @@ async function bootstrapApp() {
         await loadStammdatenFromCache();
 
         applyRoleVisibility();
-        if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
         applyHeaderInfo();
         bindAppShellEvents();
         setDefaultDates();
 
         await bootstrapRole();
+
+        if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
+        if (typeof updateBottomNavActive === 'function') updateBottomNavActive();
 
         updateSyncBadge();
         bindConnectivityEvents();
