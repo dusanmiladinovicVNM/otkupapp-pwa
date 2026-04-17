@@ -263,14 +263,61 @@ body.has-otkup-bottom-nav #tab-queue {
 
 /* =========================================================
    RESPONSIVE ROLE NAV
-   desktop = legacy top tabovi
-   mobile = bottom nav
+   desktop = bottom nav kao topnav
+   mobile = bottom nav dole
    ========================================================= */
 
 @media (min-width: 901px) {
-  .bottom-nav.role-kooperant,
-  .bottom-nav.role-otkupac {
+  /* legacy role tabovi se ne koriste */
+  .tab-bar .role-kooperant,
+  .tab-bar .role-otkupac {
     display: none !important;
+  }
+
+  /* isti bottom nav postaje topnav na desktopu */
+  .bottom-nav.visible {
+    display: flex !important;
+    position: fixed;
+    top: 82px;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    height: 56px;
+    padding: 0 16px;
+    background: #fff;
+    border-top: 0;
+    border-bottom: 1px solid rgba(92, 108, 77, 0.12);
+    box-shadow: 0 4px 14px rgba(31, 41, 24, 0.06);
+    backdrop-filter: none;
+    z-index: 95;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .bottom-nav.visible .bottom-nav-btn {
+    flex: 0 0 auto;
+    min-width: 110px;
+    padding: 0 16px;
+    flex-direction: row;
+    gap: 8px;
+    border-radius: 0;
+    border-bottom: 3px solid transparent;
+    justify-content: center;
+  }
+
+  .bottom-nav.visible .bottom-nav-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 700;
+  }
+
+  .bottom-nav.visible .bottom-nav-icon {
+    font-size: 14px;
+  }
+
+  .bottom-nav.visible .bottom-nav-label {
+    font-size: 13px;
+    line-height: 1;
   }
 
   body.has-koop-bottom-nav #tab-home,
@@ -282,12 +329,28 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-otkup-bottom-nav #tab-pregled,
   body.has-otkup-bottom-nav #tab-otpremnice,
   body.has-otkup-bottom-nav #tab-queue {
+    padding-top: 72px;
     padding-bottom: 16px;
   }
 
   body.has-koop-bottom-nav,
   body.has-otkup-bottom-nav {
     padding-bottom: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .tab-bar .role-kooperant,
+  .tab-bar .role-otkupac {
+    display: none !important;
+  }
+
+  .bottom-nav {
+    display: none !important;
+  }
+
+  .bottom-nav.visible {
+    display: grid !important;
   }
 }
 
