@@ -268,28 +268,6 @@ body.has-otkup-bottom-nav #tab-queue {
    ========================================================= */
 
 @media (min-width: 901px) {
-  .tab-bar .role-kooperant,
-  .tab-bar .role-otkupac {
-    display: inline-flex !important;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .tab-btn.role-kooperant,
-  .tab-btn.role-otkupac {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-  }
-
-  .tab-btn.role-kooperant.active,
-  .tab-btn.role-otkupac.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-    font-weight: 700;
-  }
-
   .bottom-nav.role-kooperant,
   .bottom-nav.role-otkupac {
     display: none !important;
@@ -312,6 +290,7 @@ body.has-otkup-bottom-nav #tab-queue {
     padding-bottom: 0;
   }
 }
+
 @media (max-width: 900px) {
   .tab-bar .role-kooperant,
   .tab-bar .role-otkupac {
