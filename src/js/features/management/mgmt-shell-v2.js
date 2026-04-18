@@ -62,8 +62,7 @@ function showMgmtRoot(root, btn) {
 
 function showMgmtBottomRoot(root, btn) {
     showMgmtRoot(root);
-    document.querySelectorAll('#mgmtBottomNav .bottom-nav-btn').forEach(el => el.classList.remove('active'));
-    if (btn && btn.classList) btn.classList.add('active');
+    updateMgmtBottomNavActive();
 }
 
 function updateMgmtBottomNavActive() {
