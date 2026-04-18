@@ -144,10 +144,16 @@ async function doLogin() {
 
 function doLogout() {
     removeLs(['userRole', 'otkupacID', 'entityID', 'entityName', 'authToken', 'username']);
-    location.reload();
-    if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
-}
 
+    ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav'].forEach(id => {
+        const nav = document.getElementById(id);
+        if (nav) nav.classList.remove('visible');
+    });
+
+    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav', 'has-mgmt-bottom-nav');
+
+    location.reload();
+}
 function applyRoleVisibility() {
     const role = CONFIG.USER_ROLE;
 
