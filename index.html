@@ -80,11 +80,11 @@
     <button class="tab-btn role-kooperant" onclick="showTab('knjigapolja', this)">☰ Knjiga polja</button>
     <button class="tab-btn role-kooperant" onclick="showTab('more', this)">⋯ Više</button>
     <!-- Management -->
-    <button class="tab-btn role-management" onclick="showTab('dispecer')" style="font-weight:700;">📋 Dispečer</button>
-    <button class="tab-btn role-management" onclick="showMgmtMain('kooperanti', this)">Kooperanti</button>
-    <button class="tab-btn role-management" onclick="showMgmtMain('stanice')">Stanice</button>
-    <button class="tab-btn role-management" onclick="showMgmtMain('kupci')">Kupci</button>
-    <button class="tab-btn role-management" onclick="showMgmtMain('agrohemija')">Agrohemija</button>
+    <button class="tab-btn role-management" data-mgmt-root="pregled" onclick="showMgmtRoot('pregled', this)">Pregled</button>
+    <button class="tab-btn role-management" data-mgmt-root="dispecer" onclick="showMgmtRoot('dispecer', this)">📋 Dispečer</button>
+    <button class="tab-btn role-management" data-mgmt-root="otkup" onclick="showMgmtRoot('otkup', this)">Otkup</button>
+    <button class="tab-btn role-management" data-mgmt-root="partneri" onclick="showMgmtRoot('partneri', this)">Partneri</button>
+    <button class="tab-btn role-management" data-mgmt-root="agro" onclick="showMgmtRoot('agro', this)">Agrohemija</button>
     <!-- Vozac -->
     <button class="tab-btn role-vozac" onclick="showTab('zbirna')">Zbirna</button>
     <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
@@ -1797,6 +1797,181 @@
     </div>
 </div>
 
+<!-- ==================== MANAGEMENT V2 SHELL ==================== -->
+<div class="tab-content" id="tab-mgmt-pregled">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
+            <div class="mgmt-hero">
+                <div>
+                    <div class="mgmt-eyebrow">Management overview</div>
+                    <h1 class="mgmt-title">Pregled</h1>
+                    <div class="mgmt-subline">Pregled sistema, operative i ključnih odstupanja</div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="mgmtOverviewOtkupi">0</div>
+                    <div class="stat-label">Današnji otkupi</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="mgmtOverviewKg">0</div>
+                    <div class="stat-label">Ukupno kg danas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="mgmtOverviewCeka">0</div>
+                    <div class="stat-label">Kg čeka</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="mgmtOverviewPlanovi">0</div>
+                    <div class="stat-label">Aktivni planovi</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="mgmtOverviewKamioni">0</div>
+                    <div class="stat-label">Aktivni kamioni</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="mgmtOverviewDemand">0</div>
+                    <div class="stat-label">Današnji demand</div>
+                </div>
+            </div>
+
+            <div class="mgmt-grid-2" style="display:grid;gap:12px;">
+                <section class="otk-more-card">
+                    <div class="otk-more-card-head">
+                        <div>
+                            <div class="otk-more-card-title">Traži pažnju</div>
+                            <div class="otk-more-card-sub">Najbitnija odstupanja i operativni signali</div>
+                        </div>
+                    </div>
+                    <div id="mgmtOverviewAlerts"></div>
+                </section>
+
+                <section class="otk-more-card">
+                    <div class="otk-more-card-head">
+                        <div>
+                            <div class="otk-more-card-title">Operativni sažetak</div>
+                            <div class="otk-more-card-sub">Brzi ulazi u ključne MGMT module</div>
+                        </div>
+                    </div>
+                    <div id="mgmtOverviewOps"></div>
+                </section>
+
+                <section class="otk-more-card">
+                    <div class="otk-more-card-head">
+                        <div>
+                            <div class="otk-more-card-title">Finansijski sažetak</div>
+                            <div class="otk-more-card-sub">Pregled otvorenih izloženosti</div>
+                        </div>
+                    </div>
+                    <div id="mgmtOverviewFinance"></div>
+                </section>
+
+                <section class="otk-more-card">
+                    <div class="otk-more-card-head">
+                        <div>
+                            <div class="otk-more-card-title">Brzi ulazi</div>
+                            <div class="otk-more-card-sub">Prelaz na detaljne root module</div>
+                        </div>
+                    </div>
+                    <div id="mgmtOverviewQuickLinks"></div>
+                </section>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="tab-content" id="tab-mgmt-dispecer">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
+            <div class="mgmt-hero">
+                <div>
+                    <div class="mgmt-eyebrow">Operativni centar</div>
+                    <h1 class="mgmt-title">Dispečer</h1>
+                    <div class="mgmt-subline">Planiranje transporta i usklađivanje ponude i tražnje</div>
+                </div>
+            </div>
+
+            <div id="mgmtDispecerMount"></div>
+        </div>
+    </section>
+</div>
+
+<div class="tab-content" id="tab-mgmt-otkup">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
+            <div class="mgmt-hero">
+                <div>
+                    <div class="mgmt-eyebrow">Operativa otkupa</div>
+                    <h1 class="mgmt-title">Otkup</h1>
+                    <div class="mgmt-subline">Pregled otkupa, robe i salda po otkupnim mestima</div>
+                </div>
+            </div>
+
+            <div class="sub-tab-bar" id="mgmtOtkupSubBar">
+                <button class="sub-tab-btn active" data-sub="otkupi" onclick="showMgmtOtkupSub('otkupi', this)">Otkupi</button>
+                <button class="sub-tab-btn" data-sub="roba" onclick="showMgmtOtkupSub('roba', this)">Roba</button>
+                <button class="sub-tab-btn" data-sub="saldo" onclick="showMgmtOtkupSub('saldo', this)">Saldo mesta</button>
+            </div>
+
+            <div id="mgmtOtkupMount"></div>
+        </div>
+    </section>
+</div>
+
+<div class="tab-content" id="tab-mgmt-partneri">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
+            <div class="mgmt-hero">
+                <div>
+                    <div class="mgmt-eyebrow">Partner kontrola</div>
+                    <h1 class="mgmt-title">Partneri</h1>
+                    <div class="mgmt-subline">Pregled odnosa, salda i tokova sa kooperantima i kupcima</div>
+                </div>
+            </div>
+
+            <div class="sub-tab-bar" id="mgmtPartnerSegmentBar">
+                <button class="sub-tab-btn active" data-segment="kooperanti" onclick="showMgmtPartnerSegment('kooperanti', this)">Kooperanti</button>
+                <button class="sub-tab-btn" data-segment="kupci" onclick="showMgmtPartnerSegment('kupci', this)">Kupci</button>
+            </div>
+
+            <div class="sub-tab-bar" id="mgmtPartnerKoopSubBar">
+                <button class="sub-tab-btn active" data-sub="pregled" onclick="showMgmtKoopSub('pregled', this)">Pregled</button>
+                <button class="sub-tab-btn" data-sub="kartica" onclick="showMgmtKoopSub('kartica', this)">Kartica</button>
+                <button class="sub-tab-btn" data-sub="saldo" onclick="showMgmtKoopSub('saldo', this)">Saldo</button>
+            </div>
+
+            <div class="sub-tab-bar" id="mgmtPartnerKupSubBar" style="display:none;">
+                <button class="sub-tab-btn active" data-sub="fakture" onclick="showMgmtKupSub('fakture', this)">Fakture</button>
+                <button class="sub-tab-btn" data-sub="saldo" onclick="showMgmtKupSub('saldo', this)">Saldo</button>
+                <button class="sub-tab-btn" data-sub="roba" onclick="showMgmtKupSub('roba', this)">Roba</button>
+            </div>
+
+            <div id="mgmtPartneriMount"></div>
+        </div>
+    </section>
+</div>
+
+<div class="tab-content" id="tab-mgmt-agro">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
+            <div class="mgmt-hero">
+                <div>
+                    <div class="mgmt-eyebrow">Agrohemija</div>
+                    <h1 class="mgmt-title">Agrohemija</h1>
+                    <div class="mgmt-subline">Izdavanje artikala i pregled stanja magacina</div>
+                </div>
+            </div>
+
+            <div class="sub-tab-bar" id="mgmtAgroSubBar">
+                <button class="sub-tab-btn active" data-sub="izdavanje" onclick="showMgmtAgroSub('izdavanje', this)">Izdavanje</button>
+                <button class="sub-tab-btn" data-sub="stanje" onclick="showMgmtAgroSub('stanje', this)">Stanje</button>
+            </div>
+
+            <div id="mgmtAgroMount"></div>
+        </div>
+    </section>
+</div>
 <!-- ==================== VOZAC TABS ==================== -->
 
 <div class="tab-content" id="tab-zbirna">
@@ -1920,6 +2095,34 @@
         <span class="bottom-nav-label">Više</span>
     </button>
 </div>
+
+<!-- MGMT BOTTOM NAV -->
+<div class="bottom-nav role-management" id="mgmtBottomNav">
+    <button class="bottom-nav-btn active" data-tab="pregled" onclick="showMgmtBottomRoot('pregled', this)">
+        <span class="bottom-nav-icon">⌂</span>
+        <span class="bottom-nav-label">Pregled</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="dispecer" onclick="showMgmtBottomRoot('dispecer', this)">
+        <span class="bottom-nav-icon">📋</span>
+        <span class="bottom-nav-label">Dispečer</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="otkup" onclick="showMgmtBottomRoot('otkup', this)">
+        <span class="bottom-nav-icon">◷</span>
+        <span class="bottom-nav-label">Otkup</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="partneri" onclick="showMgmtBottomRoot('partneri', this)">
+        <span class="bottom-nav-icon">◎</span>
+        <span class="bottom-nav-label">Partneri</span>
+    </button>
+
+    <button class="bottom-nav-btn" data-tab="agro" onclick="showMgmtBottomRoot('agro', this)">
+        <span class="bottom-nav-icon">✿</span>
+        <span class="bottom-nav-label">Agro</span>
+    </button>
+</div>
     
 <!-- QR PROFILE MODAL -->
 <div id="qrProfileModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;justify-content:center;align-items:center;flex-direction:column;" onclick="this.style.display='none'">
@@ -1990,6 +2193,7 @@
 <script src="/src/js/features/management/kupci.js"></script>
 <script src="/src/js/features/management/agrohemija.js"></script>
 <script src="/src/js/features/management/dispecer.js"></script>
+<script src="/src/js/features/management/mgmt-shell-v2.js"></script>
 <script src="/src/js/features/management/mgmt-shell.js"></script>
 
 <!-- 9. App bootstrap (poslednji) -->
