@@ -46,6 +46,7 @@ const ASSETS = [
     './src/js/features/kooperant/agromere.js',
     './src/js/features/kooperant/knjiga-polja.js',
     './src/js/features/kooperant/fiskalni.js',
+    './src/js/features/kooperant/otkup-more.js',
     './src/js/features/kooperant/bottom-nav.js',
 
     // Features — otkup
