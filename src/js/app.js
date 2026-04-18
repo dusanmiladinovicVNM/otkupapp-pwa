@@ -134,7 +134,12 @@ async function bootstrapRole() {
             populateMgmtKupciDropdown();
         }
 
-        safeCall(() => showTab('dispecer'));
+        if (typeof mgmtShellInit === 'function') {
+            safeCall(() => mgmtShellInit());
+        } else {
+            safeCall(() => showTab('dispecer'));
+        }
+        return;
     }
 }
 
