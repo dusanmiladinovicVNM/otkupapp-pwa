@@ -154,23 +154,24 @@ function doLogout() {
 
     location.reload();
 }
+
 function applyRoleVisibility() {
-    const role = CONFIG.USER_ROLE;
+    const role = String((CONFIG && CONFIG.USER_ROLE) || '').trim().toLowerCase();
 
     document.querySelectorAll('.role-otkupac').forEach(el => {
-        el.style.display = (role === 'Otkupac') ? '' : 'none';
+        el.style.display = (role === 'otkupac') ? '' : 'none';
     });
 
     document.querySelectorAll('.role-kooperant').forEach(el => {
-        el.style.display = (role === 'Kooperant') ? '' : 'none';
+        el.style.display = (role === 'kooperant') ? '' : 'none';
     });
 
     document.querySelectorAll('.role-vozac').forEach(el => {
-        el.style.display = (role === 'Vozac') ? '' : 'none';
+        el.style.display = (role === 'vozac') ? '' : 'none';
     });
 
     document.querySelectorAll('.role-management').forEach(el => {
-        el.style.display = (role === 'Management') ? '' : 'none';
+        el.style.display = (role === 'management') ? '' : 'none';
     });
 
     applyHeaderBranding();
