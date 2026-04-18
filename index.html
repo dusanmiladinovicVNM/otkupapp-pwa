@@ -90,7 +90,7 @@
     <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
 </div>
 
-<!-- ==================== OTKUPAC TABS ==================== -->
+<!-- ==================== OTKUP TAB ==================== -->
 
 <div class="tab-content" id="tab-otkup">
     <section class="otk-screen">
@@ -471,6 +471,93 @@
             </div>
         </div>
 
+    </section>
+</div>
+
+<!-- ==================== Vise TAB ==================== -->
+<div class="tab-content" id="tab-queue">
+    <section class="otk-more-screen">
+        <div class="otk-more-shell">
+
+            <div class="otk-more-hero">
+                <div class="otk-more-eyebrow">Podešavanja i status</div>
+                <h1 class="otk-more-title">Više</h1>
+                <div class="otk-more-subline">Potpis Otkupca, sync status i pomoćne radnje</div>
+            </div>
+
+            <div class="otk-more-grid">
+                <section class="otk-more-card">
+                    <div class="otk-more-card-head">
+                        <div>
+                            <div class="otk-more-card-title">Moj profil</div>
+                            <div class="otk-more-card-sub">Aktivna stanica i korisnik</div>
+                        </div>
+                    </div>
+
+                    <div class="otk-more-profile">
+                        <div class="otk-more-profile-name" id="otkMoreProfileName">-</div>
+                        <div class="otk-more-profile-meta" id="otkMoreProfileRole">-</div>
+                        <div class="otk-more-profile-meta" id="otkMoreProfileEntity">-</div>
+                    </div>
+
+                    <div class="otk-more-actions">
+                        <button type="button" class="btn-secondary" onclick="showQRProfile()">Prikaži moj QR</button>
+                        <button type="button" class="btn-primary" onclick="syncOtkupacFromMore()">Sinhronizuj sada</button>
+                    </div>
+                </section>
+
+                <section class="otk-more-card">
+                    <div class="otk-more-card-head">
+                        <div>
+                            <div class="otk-more-card-title">Potpis Otkupca</div>
+                            <div class="otk-more-card-sub">Ovaj potpis se koristi u PDF otkupnog lista</div>
+                        </div>
+                        <span class="otk-more-badge" id="otkMoreSignatureBadge">Nije unet</span>
+                    </div>
+
+                    <div class="otk-more-signature-wrap">
+                        <canvas id="otkupacSignatureCanvas" class="otk-more-signature-canvas"></canvas>
+                    </div>
+
+                    <div class="otk-more-signature-help">
+                        U otkupnom listu ostaje samo polje za potpis kooperanta. Potpis Otkupca se povlači odavde.
+                    </div>
+
+                    <div class="otk-more-actions">
+                        <button type="button" class="btn-secondary" onclick="clearOtkupacSignature()">Obriši</button>
+                        <button type="button" class="btn-primary" onclick="saveOtkupacSignature()">Sačuvaj potpis</button>
+                    </div>
+                </section>
+            </div>
+
+            <section class="otk-more-card">
+                <div class="otk-more-card-head">
+                    <div>
+                        <div class="otk-more-card-title">Sync status</div>
+                        <div class="otk-more-card-sub">Pregled lokalnih stavki koje čekaju sinhronizaciju</div>
+                    </div>
+                </div>
+
+                <div class="otk-more-stats">
+                    <div class="otk-more-stat">
+                        <div class="otk-more-stat-value" id="otkMorePendingCount">0</div>
+                        <div class="otk-more-stat-label">Na čekanju</div>
+                    </div>
+                    <div class="otk-more-stat">
+                        <div class="otk-more-stat-value" id="otkMoreErrorCount">0</div>
+                        <div class="otk-more-stat-label">Greške</div>
+                    </div>
+                    <div class="otk-more-stat">
+                        <div class="otk-more-stat-value" id="otkMoreSyncedCount">0</div>
+                        <div class="otk-more-stat-label">Sinhronizovano</div>
+                    </div>
+                </div>
+
+                <div class="otk-more-last-sync" id="otkMoreLastSync">Poslednja sinhronizacija: —</div>
+                <div class="otk-more-queue-list" id="otkMoreQueueList"></div>
+            </section>
+
+        </div>
     </section>
 </div>
 
