@@ -101,13 +101,17 @@ function drawSavedOtkupacSignature(dataUrl) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.scale(dpr, dpr);
 
-        const pad = 12;
-        ctx.drawImage(img, pad, pad, cssWidth - pad * 2, cssHeight - pad * 2);
+        const pad = 16;
+        const boxW = cssWidth - pad * 2;
+        const boxH = cssHeight - pad * 2;
 
-        ctx.strokeStyle = '#1a1a1a';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+        const ratio = Math.min(boxW / img.width, boxH / img.height);
+        const drawW = img.width * ratio;
+        const drawH = img.height * ratio;
+        const x = pad + (boxW - drawW) / 2;
+        const y = pad + (boxH - drawH) / 2;
+
+        ctx.drawImage(img, x, y, drawW, drawH);
     };
     img.src = dataUrl;
 }
