@@ -51,10 +51,17 @@ function updateBottomNavVisibility() {
     const isMobile = window.innerWidth <= 900;
     const role = CONFIG.USER_ROLE;
 
+    const tabBar = document.getElementById('tabBar');
     const koopNav = document.getElementById('koopBottomNav');
     const otkupNav = document.getElementById('otkupBottomNav');
     const mgmtNav = document.getElementById('mgmtBottomNav');
 
+    // Desktop: tab bar mora biti vidljiv za sve ulogovane role
+    if (tabBar) {
+        tabBar.style.display = isMobile ? 'none' : '';
+    }
+
+    // Bottom nav samo na mobile
     if (koopNav) koopNav.classList.toggle('visible', role === 'Kooperant' && isMobile);
     if (otkupNav) otkupNav.classList.toggle('visible', role === 'Otkupac' && isMobile);
     if (mgmtNav) mgmtNav.classList.toggle('visible', role === 'Management' && isMobile);
