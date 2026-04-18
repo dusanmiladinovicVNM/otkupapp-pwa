@@ -569,19 +569,18 @@
 
         </div>
     </section>
-</div>
+    <div class="otprema-detail-modal" id="otpremaDetailModal" onclick="closeOtpremaDetail()">
+        <div class="otprema-detail-card" onclick="event.stopPropagation()">
+            <div class="otprema-detail-head">
+                <div class="otprema-detail-title" id="otpremaDetailTitle">Detalj otpreme</div>
+                <button type="button" class="otprema-detail-close" onclick="closeOtpremaDetail()">✕</button>
+            </div>
 
-<div class="otprema-detail-modal" id="otpremaDetailModal" onclick="closeOtpremaDetail()">
-    <div class="otprema-detail-card" onclick="event.stopPropagation()">
-        <div class="otprema-detail-head">
-            <div class="otprema-detail-title" id="otpremaDetailTitle">Detalj otpreme</div>
-            <button type="button" class="otprema-detail-close" onclick="closeOtpremaDetail()">✕</button>
-        </div>
+            <div class="otprema-detail-body" id="otpremaDetailBody"></div>
 
-        <div class="otprema-detail-body" id="otpremaDetailBody"></div>
-
-        <div class="otprema-detail-actions">
-            <button type="button" class="btn-secondary" onclick="closeOtpremaDetail()">Zatvori</button>
+            <div class="otprema-detail-actions">
+                <button type="button" class="btn-secondary" onclick="closeOtpremaDetail()">Zatvori</button>
+            </div>
         </div>
     </div>
 </div>
