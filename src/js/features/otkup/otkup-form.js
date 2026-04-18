@@ -645,20 +645,24 @@ function isMobileViewport() {
     return window.matchMedia('(max-width: 900px)').matches;
 }
 
-function scrollToOtkupStep(stepId, delay = 180) {
+function scrollToOtkupStep(stepId) {
     if (!isMobileViewport()) return;
 
-    const el = document.getElementById(stepId);
-    if (!el) return;
+    const run = () => {
+        const el = document.getElementById(stepId);
+        if (!el) return;
 
-    setTimeout(() => {
         const rect = el.getBoundingClientRect();
         const absoluteTop = window.scrollY + rect.top;
-        const targetY = absoluteTop - 16;
+        const targetY = absoluteTop - 72;
 
         window.scrollTo({
             top: Math.max(0, targetY),
             behavior: 'smooth'
         });
-    }, delay);
+    };
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(run);
+    });
 }
