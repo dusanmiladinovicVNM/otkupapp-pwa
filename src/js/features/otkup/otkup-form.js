@@ -654,7 +654,7 @@ function scrollToOtkupStep(stepId) {
 
         const rect = el.getBoundingClientRect();
         const absoluteTop = window.scrollY + rect.top;
-        const targetY = absoluteTop - 72;
+        const targetY = absoluteTop - 96;
 
         window.scrollTo({
             top: Math.max(0, targetY),
