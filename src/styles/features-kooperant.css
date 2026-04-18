@@ -81,12 +81,6 @@
   line-height: 1.35;
 }
 
-@media (min-width: 901px) {
-  .bottom-nav.role-kooperant {
-    display: none !important;
-  }
-}
-
 @media (max-width: 900px) {
   .bottom-nav.role-kooperant {
     display: grid;
