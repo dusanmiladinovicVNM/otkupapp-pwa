@@ -656,7 +656,13 @@ function openOtpremaDetail(recordKey) {
         </div>
     `);
 
-    add
+    addClass(modal, 'visible');
+}
+
+function closeOtpremaDetail() {
+    const modal = byId('otpremaDetailModal');
+    if (modal) removeClass(modal, 'visible');
+}
 
 function backToOtpremaRoot() {
     otpremaState.selectedKeys.clear();
