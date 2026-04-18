@@ -48,44 +48,44 @@ function getActiveBottomNavConfig() {
 }
 
 function updateBottomNavVisibility() {
-    const loginContainer = document.getElementById('loginContainer');
+    const isMobile = window.innerWidth <= 900;
+    const role = CONFIG.USER_ROLE;
 
-    const isLoginVisible = !!(
-        loginContainer &&
-        loginContainer.offsetParent !== null &&
-        loginContainer.innerHTML.trim() !== '' &&
-        getComputedStyle(loginContainer).display !== 'none'
-    );
+    const koopNav = document.getElementById('koopBottomNav');
+    const otkupNav = document.getElementById('otkupBottomNav');
+    const mgmtNav = document.getElementById('mgmtBottomNav');
 
-    const cfg = getActiveBottomNavConfig();
+    if (koopNav) koopNav.classList.toggle('visible', role === 'Kooperant' && isMobile);
+    if (otkupNav) otkupNav.classList.toggle('visible', role === 'Otkupac' && isMobile);
+    if (mgmtNav) mgmtNav.classList.toggle('visible', role === 'Management' && isMobile);
 
-    ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav'].forEach(id => {
-        const nav = document.getElementById(id);
-        if (nav) nav.classList.remove('visible');
-    });
-    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav', 'has-mgmt-bottom-nav');
+    document.body.classList.toggle('has-koop-bottom-nav', role === 'Kooperant' && isMobile);
+    document.body.classList.toggle('has-otkup-bottom-nav', role === 'Otkupac' && isMobile);
+    document.body.classList.toggle('has-mgmt-bottom-nav', role === 'Management' && isMobile);
+}
 
-    const tabBar = document.getElementById('tabBar');
-
-    // ako nema role-nav ili je login ekran, vrati legacy tabBar
-    if (!cfg || isLoginVisible) {
-        if (tabBar) tabBar.style.display = '';
+function updateBottomNavActive() {
+    if (CONFIG.USER_ROLE === 'Management' && typeof updateMgmtBottomNavActive === 'function') {
+        updateMgmtBottomNavActive();
         return;
     }
 
-    const nav = document.getElementById(cfg.navId);
-
-    // fallback: ako nav ne postoji, vrati legacy tabBar
-    if (!nav) {
-        if (tabBar) tabBar.style.display = '';
+    if (CONFIG.USER_ROLE === 'Kooperant') {
+        const active = document.querySelector('.tab-content.active');
+        const activeId = active ? active.id.replace('tab-', '') : '';
+        document.querySelectorAll('#koopBottomNav .bottom-nav-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === activeId);
+        });
         return;
     }
 
-    // za Kooperant/Otkupac koristimo role nav umesto legacy tabBar
-    if (tabBar) tabBar.style.display = 'none';
-
-    nav.classList.add('visible');
-    document.body.classList.add(cfg.bodyClass);
+    if (CONFIG.USER_ROLE === 'Otkupac') {
+        const active = document.querySelector('.tab-content.active');
+        const activeId = active ? active.id.replace('tab-', '') : '';
+        document.querySelectorAll('#otkupBottomNav .bottom-nav-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === activeId);
+        });
+    }
 }
 
 function showBottomTab(tabName, btn) {
