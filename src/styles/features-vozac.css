@@ -1,1 +1,20 @@
+#vozacBottomNav {
+  grid-template-columns: repeat(2, 1fr);
+}
 
+body.has-vozac-bottom-nav #tab-zbirna,
+body.has-vozac-bottom-nav #tab-transport {
+  padding-bottom: 92px;
+}
+
+@media (min-width: 901px) {
+  body.has-vozac-bottom-nav #tab-zbirna,
+  body.has-vozac-bottom-nav #tab-transport {
+    padding-top: 72px;
+    padding-bottom: 16px;
+  }
+
+  body.has-vozac-bottom-nav {
+    padding-bottom: 0;
+  }
+}
