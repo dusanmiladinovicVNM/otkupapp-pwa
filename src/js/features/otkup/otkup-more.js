@@ -303,7 +303,8 @@ function exportTrimmedSignature(canvas) {
 
     const width = canvas.width;
     const height = canvas.height;
-    const imageData = ctx.getImageData(0, 0, width, height).data;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
 
     let minX = width;
     let minY = height;
@@ -313,7 +314,7 @@ function exportTrimmedSignature(canvas) {
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const i = (y * width + x) * 4;
-            const alpha = imageData[i + 3];
+            const alpha = data[i + 3];
 
             if (alpha > 10) {
                 minX = Math.min(minX, x);
@@ -341,7 +342,27 @@ function exportTrimmedSignature(canvas) {
 
     const outCtx = out.getContext('2d');
     outCtx.clearRect(0, 0, cropW, cropH);
-    outCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+
+    const cropped = ctx.getImageData(minX, minY, cropW, cropH);
+    const cd = cropped.data;
+
+    for (let i = 0; i < cd.length; i += 4) {
+        const alpha = cd[i + 3];
+
+        if (alpha > 10) {
+            cd[i] = 0;
+            cd[i + 1] = 0;
+            cd[i + 2] = 0;
+            cd[i + 3] = 255;
+        } else {
+            cd[i] = 255;
+            cd[i + 1] = 255;
+            cd[i + 2] = 255;
+            cd[i + 3] = 0;
+        }
+    }
+
+    outCtx.putImageData(cropped, 0, 0);
 
     return out.toDataURL('image/png');
 }
