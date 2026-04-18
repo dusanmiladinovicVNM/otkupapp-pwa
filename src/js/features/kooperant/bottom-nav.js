@@ -50,32 +50,7 @@ function getActiveBottomNavConfig() {
     return null;
 }
 
-function updateBottomNavVisibility() {
-    const cfg = getActiveBottomNavConfig();
 
-    const koopNav = document.getElementById('koopBottomNav');
-    const otkupNav = document.getElementById('otkupBottomNav');
-
-    // reset
-    if (koopNav) koopNav.classList.remove('visible');
-    if (otkupNav) otkupNav.classList.remove('visible');
-
-    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
-
-    if (!cfg) return;
-
-    const nav = document.getElementById(cfg.navId);
-    if (!nav) return;
-
-    // Za Kooperant i Otkupac nav je source of truth i na mobile i na desktop:
-    // mobile = dole, desktop = gore (preko CSS-a)
-    nav.classList.add('visible');
-
-    // body klase treba samo na mobile, zbog padding-bottom
-    if (window.innerWidth <= 900) {
-        document.body.classList.add(cfg.bodyClass);
-    }
-}
 
 function updateBottomNavButtons(tabName, btn, navId) {
     const root = document.getElementById(navId);
@@ -94,19 +69,7 @@ function updateBottomNavButtons(tabName, btn, navId) {
     if (activeBtn) activeBtn.classList.add('active');
 }
 
-function updateBottomNavActive() {
-    const cfg = getActiveBottomNavConfig();
-    if (!cfg) return;
 
-    const activeTab = document.querySelector('.tab-content.active');
-    if (!activeTab) return;
-
-    const id = activeTab.id || '';
-    const navTab = cfg.tabMap[id];
-    if (!navTab) return;
-
-    updateBottomNavButtons(navTab, null, cfg.navId);
-}
 
 function findLegacyTabBtn(tabName) {
     const buttons = Array.from(document.querySelectorAll('.tab-btn'));
@@ -116,24 +79,7 @@ function findLegacyTabBtn(tabName) {
     }) || null;
 }
 
-function showBottomTab(tabName, btn) {
-    const cfg = getActiveBottomNavConfig();
-    if (!cfg) return;
 
-    if (cfg.role === 'kooperant' && tabName === 'more') {
-        qsa('.tab-content').forEach(t => removeClass(t, 'active'));
-        qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
-
-        const tabEl = byId('tab-more');
-        if (tabEl) addClass(tabEl, 'active');
-
-        updateBottomNavButtons(tabName, btn, cfg.navId);
-        return;
-    }
-
-    showTab(tabName, findLegacyTabBtn(tabName) || btn);
-    updateBottomNavButtons(tabName, btn, cfg.navId);
-}
 
 async function syncKooperantFromMore() {
     if (typeof syncKooperantNow !== 'function') {
@@ -159,16 +105,3 @@ function invalidatePregledCacheSafe() {
         invalidatePregledCache();
     }
 }
-
-window.initBottomNav = function () {
-    updateBottomNavVisibility();
-    updateBottomNavActive();
-};
-
-window.updateBottomNavVisibility = updateBottomNavVisibility;
-window.updateBottomNavActive = updateBottomNavActive;
-
-window.addEventListener('resize', () => {
-    updateBottomNavVisibility();
-    updateBottomNavActive();
-});
