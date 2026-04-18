@@ -868,3 +868,254 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   OTKUPAC - VISE
+   ========================================================= */
+
+.otk-more-screen {
+  padding-bottom: 110px;
+}
+
+.otk-more-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.otk-more-hero {
+  padding: 4px 2px 2px;
+}
+
+.otk-more-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.otk-more-title {
+  margin: 4px 0 2px;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.otk-more-subline {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.otk-more-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 14px;
+}
+
+.otk-more-card {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 18px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+  padding: 14px;
+}
+
+.otk-more-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.otk-more-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.otk-more-card-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.otk-more-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.otk-more-profile-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.otk-more-profile-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.otk-more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.otk-more-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(183, 110, 13, 0.14);
+  color: #9a6700;
+}
+
+.otk-more-badge.is-ready {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+
+.otk-more-signature-wrap {
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.otk-more-signature-canvas {
+  display: block;
+  width: 100%;
+  height: 210px;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.otk-more-signature-help {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.otk-more-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.otk-more-stat {
+  background: #fafaf7;
+  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 14px;
+  padding: 14px;
+  text-align: center;
+}
+
+.otk-more-stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.1;
+}
+
+.otk-more-stat-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.otk-more-last-sync {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.otk-more-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.otk-more-queue-card {
+  border: 1px solid rgba(0,0,0,0.06);
+  background: #fafaf7;
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.otk-more-queue-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.otk-more-queue-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.otk-more-queue-line {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.otk-more-queue-muted {
+  color: var(--text-muted);
+}
+
+.otk-more-queue-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.otk-more-queue-badge.is-pending {
+  background: rgba(239, 108, 0, 0.12);
+  color: #ef6c00;
+}
+
+.otk-more-queue-badge.is-error {
+  background: rgba(198, 40, 40, 0.12);
+  color: #c62828;
+}
+
+.otk-more-queue-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #c62828;
+}
+
+.otk-more-empty {
+  padding: 18px 12px;
+  text-align: center;
+  border: 1px dashed rgba(0,0,0,0.1);
+  border-radius: 14px;
+  color: var(--text-muted);
+  background: #fbfbf8;
+}
+
+@media (max-width: 900px) {
+  .otk-more-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .otk-more-stats {
+    grid-template-columns: 1fr;
+  }
+}
