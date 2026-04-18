@@ -195,6 +195,7 @@ function applyHeaderBranding() {
 
 window.addEventListener('resize', () => {
     applyRoleVisibility();
-    if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
-    if (typeof updateBottomNavActive === 'function') updateBottomNavActive();
+
+    if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+    if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
 });
