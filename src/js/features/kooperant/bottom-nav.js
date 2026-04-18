@@ -3,7 +3,10 @@
 // Kooperant + Otkupac:
 // - mobile  = bottom nav
 // - desktop = isti nav gore kao topnav
-// Vozac + Management koriste legacy tabBar
+//
+// Management ima svoj poseban shell/nav layer.
+// Ovaj fajl NE SME da preuzima ownership nad MGMT navigacijom
+// niti da patchuje globalni showTab.
 // ============================================================
 
 function getCurrentRole() {
@@ -48,70 +51,24 @@ function getActiveBottomNavConfig() {
 }
 
 function updateBottomNavVisibility() {
+    const cfg = getActiveBottomNavConfig();
     const isMobile = window.innerWidth <= 900;
-    const role = CONFIG.USER_ROLE;
 
-    const tabBar = document.getElementById('tabBar');
     const koopNav = document.getElementById('koopBottomNav');
     const otkupNav = document.getElementById('otkupBottomNav');
-    const mgmtNav = document.getElementById('mgmtBottomNav');
 
-    // Desktop: tab bar mora biti vidljiv za sve ulogovane role
-    if (tabBar) {
-        tabBar.style.display = isMobile ? 'none' : '';
-    }
+    // Reset oba nav-a
+    if (koopNav) koopNav.classList.remove('visible');
+    if (otkupNav) otkupNav.classList.remove('visible');
 
-    // Bottom nav samo na mobile
-    if (koopNav) koopNav.classList.toggle('visible', role === 'Kooperant' && isMobile);
-    if (otkupNav) otkupNav.classList.toggle('visible', role === 'Otkupac' && isMobile);
-    if (mgmtNav) mgmtNav.classList.toggle('visible', role === 'Management' && isMobile);
+    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
-    document.body.classList.toggle('has-koop-bottom-nav', role === 'Kooperant' && isMobile);
-    document.body.classList.toggle('has-otkup-bottom-nav', role === 'Otkupac' && isMobile);
-    document.body.classList.toggle('has-mgmt-bottom-nav', role === 'Management' && isMobile);
-}
+    // Ovaj fajl upravlja samo Kooperant/Otkupac mobile bottom nav-om
+    if (!cfg || !isMobile) return;
 
-function updateBottomNavActive() {
-    if (CONFIG.USER_ROLE === 'Management' && typeof updateMgmtBottomNavActive === 'function') {
-        updateMgmtBottomNavActive();
-        return;
-    }
-
-    if (CONFIG.USER_ROLE === 'Kooperant') {
-        const active = document.querySelector('.tab-content.active');
-        const activeId = active ? active.id.replace('tab-', '') : '';
-        document.querySelectorAll('#koopBottomNav .bottom-nav-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === activeId);
-        });
-        return;
-    }
-
-    if (CONFIG.USER_ROLE === 'Otkupac') {
-        const active = document.querySelector('.tab-content.active');
-        const activeId = active ? active.id.replace('tab-', '') : '';
-        document.querySelectorAll('#otkupBottomNav .bottom-nav-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === activeId);
-        });
-    }
-}
-
-function showBottomTab(tabName, btn) {
-    const cfg = getActiveBottomNavConfig();
-    if (!cfg) return;
-
-    if (cfg.role === 'kooperant' && tabName === 'more') {
-        qsa('.tab-content').forEach(t => removeClass(t, 'active'));
-        qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
-
-        const tabEl = byId('tab-more');
-        if (tabEl) addClass(tabEl, 'active');
-
-        updateBottomNavButtons(tabName, btn, cfg.navId);
-        return;
-    }
-
-    showTab(tabName, findLegacyTabBtn(tabName) || btn);
-    updateBottomNavButtons(tabName, btn, cfg.navId);
+    const nav = document.getElementById(cfg.navId);
+    if (nav) nav.classList.add('visible');
+    document.body.classList.add(cfg.bodyClass);
 }
 
 function updateBottomNavButtons(tabName, btn, navId) {
@@ -153,6 +110,25 @@ function findLegacyTabBtn(tabName) {
     }) || null;
 }
 
+function showBottomTab(tabName, btn) {
+    const cfg = getActiveBottomNavConfig();
+    if (!cfg) return;
+
+    if (cfg.role === 'kooperant' && tabName === 'more') {
+        qsa('.tab-content').forEach(t => removeClass(t, 'active'));
+        qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
+
+        const tabEl = byId('tab-more');
+        if (tabEl) addClass(tabEl, 'active');
+
+        updateBottomNavButtons(tabName, btn, cfg.navId);
+        return;
+    }
+
+    showTab(tabName, findLegacyTabBtn(tabName) || btn);
+    updateBottomNavButtons(tabName, btn, cfg.navId);
+}
+
 async function syncKooperantFromMore() {
     if (typeof syncKooperantNow !== 'function') {
         showToast('Sync nije dostupan', 'error');
@@ -177,20 +153,6 @@ function invalidatePregledCacheSafe() {
         invalidatePregledCache();
     }
 }
-
-(function attachBottomNavHook() {
-    const originalShowTab = window.showTab;
-    if (typeof originalShowTab !== 'function') return;
-    if (window.__bottomNavHookAttached) return;
-
-    window.__bottomNavHookAttached = true;
-
-    window.showTab = function patchedShowTab(tabName, btn) {
-        originalShowTab(tabName, btn);
-        updateBottomNavVisibility();
-        updateBottomNavActive();
-    };
-})();
 
 window.initBottomNav = function () {
     updateBottomNavVisibility();
