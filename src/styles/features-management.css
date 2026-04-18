@@ -68,3 +68,109 @@
         .izd-parcela-chk input { width: 18px; height: 18px; flex-shrink: 0; }
         .izd-parcela-chk .parcela-info { flex: 1; }
         .izd-parcela-chk .parcela-ha { font-weight: 600; color: var(--primary); font-size: 12px; }
+
+
+/* ============================================================
+   MGMT SHELL V2
+============================================================ */
+
+.mgmt-screen {
+    padding: 0;
+}
+
+.mgmt-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.mgmt-hero {
+    background: linear-gradient(180deg, rgba(26,94,42,0.08) 0%, rgba(26,94,42,0.03) 100%);
+    border: 1px solid rgba(26,94,42,0.10);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+}
+
+.mgmt-eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.mgmt-title {
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 800;
+    color: var(--primary);
+    margin: 0 0 6px 0;
+}
+
+.mgmt-subline {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.mgmt-grid-2 {
+    grid-template-columns: 1fr;
+}
+
+#mgmtDispecerMount,
+#mgmtOtkupMount,
+#mgmtPartneriMount,
+#mgmtAgroMount {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#mgmtDispecerMount > .tab-content,
+#mgmtOtkupMount > .mgmt-sub,
+#mgmtPartneriMount > .mgmt-sub,
+#mgmtAgroMount > .mgmt-sub {
+    display: none;
+}
+
+#mgmtOtkupMount > .mgmt-sub.active,
+#mgmtPartneriMount > .mgmt-sub.active,
+#mgmtAgroMount > .mgmt-sub.active {
+    display: block;
+}
+
+.bottom-nav.role-management {
+    display: none;
+}
+
+.bottom-nav.role-management.visible {
+    display: flex;
+}
+
+body.has-mgmt-bottom-nav .tab-content {
+    padding-bottom: 88px;
+}
+
+@media (min-width: 901px) {
+    .mgmt-grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .bottom-nav.role-management {
+        display: none !important;
+    }
+}
+
+@media (max-width: 900px) {
+    .tab-btn.role-management {
+        display: none !important;
+    }
+
+    .mgmt-title {
+        font-size: 24px;
+    }
+
+    .mgmt-hero {
+        padding: 16px 14px;
+    }
+}
