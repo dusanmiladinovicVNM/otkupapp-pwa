@@ -52,23 +52,29 @@ function getActiveBottomNavConfig() {
 
 function updateBottomNavVisibility() {
     const cfg = getActiveBottomNavConfig();
-    const isMobile = window.innerWidth <= 900;
 
     const koopNav = document.getElementById('koopBottomNav');
     const otkupNav = document.getElementById('otkupBottomNav');
 
-    // Reset oba nav-a
+    // reset
     if (koopNav) koopNav.classList.remove('visible');
     if (otkupNav) otkupNav.classList.remove('visible');
 
     document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
 
-    // Ovaj fajl upravlja samo Kooperant/Otkupac mobile bottom nav-om
-    if (!cfg || !isMobile) return;
+    if (!cfg) return;
 
     const nav = document.getElementById(cfg.navId);
-    if (nav) nav.classList.add('visible');
-    document.body.classList.add(cfg.bodyClass);
+    if (!nav) return;
+
+    // Za Kooperant i Otkupac nav je source of truth i na mobile i na desktop:
+    // mobile = dole, desktop = gore (preko CSS-a)
+    nav.classList.add('visible');
+
+    // body klase treba samo na mobile, zbog padding-bottom
+    if (window.innerWidth <= 900) {
+        document.body.classList.add(cfg.bodyClass);
+    }
 }
 
 function updateBottomNavButtons(tabName, btn, navId) {
