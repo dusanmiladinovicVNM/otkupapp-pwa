@@ -50,38 +50,85 @@ function populateMgmtKupciDropdown() {
 // MANAGEMENT: NAVIGATION
 // ============================================================
 function showMgmtMain(section, btn) {
-    qsa('.tab-content').forEach(t => removeClass(t, 'active'));
-    qsa('.tab-btn').forEach(b => removeClass(b, 'active'));
+    // Legacy compatibility only.
+    // Novi MGMT shell koristi showMgmtRoot(...) iz mgmt-shell-v2.js
+    if (typeof showMgmtRoot === 'function') {
+        const map = {
+            kooperanti: 'partneri',
+            stanice: 'otkup',
+            kupci: 'partneri',
+            agrohemija: 'agro'
+        };
 
-    addClass(byId('tab-mgmt'), 'active');
+        const targetRoot = map[section] || 'pregled';
+        showMgmtRoot(targetRoot, btn);
 
-    if (btn && btn.classList) {
-        addClass(btn, 'active');
+        if (targetRoot === 'partneri') {
+            if (section === 'kooperanti' && typeof showMgmtPartnerSegment === 'function') {
+                showMgmtPartnerSegment('kooperanti');
+            }
+            if (section === 'kupci' && typeof showMgmtPartnerSegment === 'function') {
+                showMgmtPartnerSegment('kupci');
+            }
+        }
+        return;
     }
-
-    const subs = MGMT_SUBS[section];
-    if (!subs) return;
-
-    const bar = byId('mgmtSubBar');
-    setHtml(bar, subs.map((s, i) =>
-        `<button class="sub-tab-btn${i === 0 ? ' active' : ''}" onclick="showMgmtSub('${s.id}', this)">${s.label}</button>`
-    ).join(''));
-
-    qsa('.mgmt-sub').forEach(s => removeClass(s, 'active'));
-    const firstEl = byId('mgmt-' + subs[0].id);
-    if (firstEl) addClass(firstEl, 'active');
-    if (subs[0].load) subs[0].load();
 }
 
 function showMgmtSub(subId, btn) {
-    qsa('.mgmt-sub').forEach(s => removeClass(s, 'active'));
-    qsa('.sub-tab-btn').forEach(b => removeClass(b, 'active'));
+    // Legacy compatibility only.
+    if (typeof showMgmtRoot !== 'function') return;
 
-    const el = byId('mgmt-' + subId);
-    if (el) addClass(el, 'active');
-    if (btn) addClass(btn, 'active');
+    const koopMap = {
+        'koop-pregled': 'pregled',
+        'koop-kartica': 'kartica',
+        'koop-saldo': 'saldo'
+    };
 
-    const allSubs = Object.values(MGMT_SUBS).flat();
-    const sub = allSubs.find(s => s.id === subId);
-    if (sub && sub.load) sub.load();
+    const kupMap = {
+        'kup-fakture': 'fakture',
+        'kup-saldo': 'saldo',
+        'kup-roba': 'roba'
+    };
+
+    const otkupMap = {
+        'sta-otkupi': 'otkupi',
+        'sta-saldo': 'saldo',
+        'sta-roba': 'roba'
+    };
+
+    const agroMap = {
+        'agro-izdavanje': 'izdavanje',
+        'agro-stanje': 'stanje'
+    };
+
+    if (koopMap[subId]) {
+        showMgmtRoot('partneri');
+        if (typeof showMgmtPartnerSegment === 'function') showMgmtPartnerSegment('kooperanti');
+        if (typeof showMgmtKoopSub === 'function') showMgmtKoopSub(koopMap[subId], btn);
+        return;
+    }
+
+    if (kupMap[subId]) {
+        showMgmtRoot('partneri');
+        if (typeof showMgmtPartnerSegment === 'function') showMgmtPartnerSegment('kupci');
+        if (typeof showMgmtKupSub === 'function') showMgmtKupSub(kupMap[subId], btn);
+        return;
+    }
+
+    if (otkupMap[subId]) {
+        showMgmtRoot('otkup');
+        if (typeof showMgmtOtkupSub === 'function') showMgmtOtkupSub(otkupMap[subId], btn);
+        return;
+    }
+
+    if (agroMap[subId]) {
+        showMgmtRoot('agro');
+        if (typeof showMgmtAgroSub === 'function') showMgmtAgroSub(agroMap[subId], btn);
+    }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const oldBar = document.getElementById('mgmtSubBar');
+    if (oldBar) oldBar.style.display = 'none';
+});
