@@ -37,6 +37,11 @@ function initOtkupFormUI(options) {
     updateTipAmbalazeHint();
 }
 
+// UX flow na mobile:
+// 1 -> 2 nakon kooperanta
+// 2 -> 3 nakon parcele
+// 3 -> 4 nakon količine
+// blok 4 se smatra završenim tek nakon ambalaže, bez auto-scroll dalje
 function bindOtkupFormUIEvents() {
     const root = document.getElementById('tab-otkup');
     if (!root || root.dataset.otkupUiBound === '1') return;
@@ -47,7 +52,8 @@ function bindOtkupFormUIEvents() {
     const fldKolicina = document.getElementById('fldKolicina');
     const fldCena = document.getElementById('fldCena');
     const fldAmbalaza = document.getElementById('fldAmbalaza');
-
+    const fldParcela = document.getElementById('fldParcela');
+    
     if (fldVrsta) {
         fldVrsta.addEventListener('change', () => {
             clearOtkupError('errVrsta', 'fldVrsta');
@@ -68,10 +74,26 @@ function bindOtkupFormUIEvents() {
             clearOtkupError('errKooperant', 'fldKooperantManual');
         });
     }
+    
+    if (fldParcela) {
+        fldParcela.addEventListener('change', () => {
+            scrollToOtkupStep('otkupStep3Roba');
+        });
+    }
 
     if (fldKolicina) {
         fldKolicina.addEventListener('input', () => {
             clearOtkupError('errKolicina', 'fldKolicina');
+        });
+
+        fldKolicina.addEventListener('change', () => {
+            if (!fldKolicina.value) return;
+            scrollToOtkupStep('otkupStep4CenaAmbalaza');
+        });
+
+        fldKolicina.addEventListener('blur', () => {
+            if (!fldKolicina.value) return;
+            scrollToOtkupStep('otkupStep4CenaAmbalaza');
         });
     }
 
@@ -84,6 +106,20 @@ function bindOtkupFormUIEvents() {
     if (fldAmbalaza) {
         fldAmbalaza.addEventListener('input', () => {
             clearOtkupError('errAmbalaza', 'fldAmbalaza');
+        });
+
+        fldAmbalaza.addEventListener('change', () => {
+            if (!fldAmbalaza.value) return;
+
+            // blok 4 je tek sada kompletan
+            // za sada nema auto-scroll ka Napredno
+        });
+
+        fldAmbalaza.addEventListener('blur', () => {
+            if (!fldAmbalaza.value) return;
+
+            // blok 4 je tek sada kompletan
+            // za sada nema auto-scroll ka Napredno
         });
     }
 
@@ -137,7 +173,9 @@ function onManualKooperantChange() {
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
     setKooperant(koopID, koop ? `${koop.Ime || ''} ${koop.Prezime || ''}`.trim() : koopID);
     clearOtkupError('errKooperant', 'fldKooperantManual');
+    scrollToOtkupStep('otkupStep2ParcelaVozac');
 }
+
 function populateParcelaDropdown(kooperantID) {
     const sel = document.getElementById('fldParcela');
     const group = document.getElementById('parcelaGroup');
@@ -601,4 +639,26 @@ function generateClientRecordID() {
     }
 
     return 'loc-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
+}
+
+function isMobileViewport() {
+    return window.matchMedia('(max-width: 900px)').matches;
+}
+
+function scrollToOtkupStep(stepId, delay = 180) {
+    if (!isMobileViewport()) return;
+
+    const el = document.getElementById(stepId);
+    if (!el) return;
+
+    setTimeout(() => {
+        const rect = el.getBoundingClientRect();
+        const absoluteTop = window.scrollY + rect.top;
+        const targetY = absoluteTop - 16;
+
+        window.scrollTo({
+            top: Math.max(0, targetY),
+            behavior: 'smooth'
+        });
+    }, delay);
 }
