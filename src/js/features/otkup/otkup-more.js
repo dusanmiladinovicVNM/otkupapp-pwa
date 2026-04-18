@@ -291,7 +291,3 @@ function debounce(fn, wait) {
         t = setTimeout(() => fn.apply(this, args), wait);
     };
 }
-
-if (typeof destroySignaturePad === 'function') {
-    destroySignaturePad('otkupacSignatureCanvas');
-}
