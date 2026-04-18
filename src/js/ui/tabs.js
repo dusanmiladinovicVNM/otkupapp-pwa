@@ -18,7 +18,14 @@ function showTab(tabName, btn) {
         addClass(btn, 'active');
     }
 
-    if (tabName === 'queue') { renderQueueList(); updateStats(); }
+    if (tabName === 'queue') {
+        if (CONFIG.USER_ROLE === 'Otkupac' && typeof loadOtkupacMore === 'function') {
+            loadOtkupacMore();
+        } else {
+            renderQueueList();
+            updateStats();
+        }
+    }
     if (tabName === 'pregled') loadOtkupPregled();
     if (tabName === 'otpremnice') loadOtpremaOverview();
     if (tabName === 'home') loadPregled();
