@@ -35,8 +35,8 @@ const ASSETS = [
     // UI
     './src/js/ui/toast.js',
     './src/js/ui/signatures.js',
-    './src/js/ui/role-nav.js',
     './src/js/ui/tabs.js',
+    './src/js/ui/role-nav.js',
 
     // Features — kooperant
     './src/js/features/kooperant/pregled.js',
