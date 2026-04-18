@@ -80,11 +80,6 @@ function showOtkupniList(record) {
 
             <div style="margin-top:20px;">
                 <div style="margin-bottom:16px;">
-                    <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis otkupljivača:</div>
-                    ${otkupacSignatureHtml}
-                </div>
-
-                <div style="margin-bottom:16px;">
                     <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis kooperanta:</div>
                     <canvas id="sigKooperant" width="720" height="200" style="border:1px solid #ccc;border-radius:6px;width:100%;height:80px;touch-action:none;"></canvas>
                 </div>
