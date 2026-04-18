@@ -38,12 +38,13 @@ function bindOtkupacMoreEventsOnce() {
     if (otkupacMoreState.uiBound) return;
 
     const canvas = byId('otkupacSignatureCanvas');
-    if (canvas) {
-        initOtkupacSignaturePad(canvas);
+    if (canvas && typeof initSignaturePad === 'function') {
+        initSignaturePad('otkupacSignatureCanvas');
     }
 
     otkupacMoreState.uiBound = true;
 }
+
 
 function renderOtkupacMoreProfile() {
     setText(byId('otkMoreProfileName'), (CONFIG && CONFIG.ENTITY_NAME) || '-');
@@ -53,24 +54,59 @@ function renderOtkupacMoreProfile() {
 
 function renderOtkupacSignaturePad() {
     const badge = byId('otkMoreSignatureBadge');
+    const saved = getSavedOtkupacSignature();
+
     if (badge) {
-        badge.textContent = hasSavedOtkupacSignature() ? 'Sačuvan' : 'Nije unet';
-        toggleClass(badge, 'is-ready', hasSavedOtkupacSignature());
+        badge.textContent = saved ? 'Sačuvan' : 'Nije unet';
+        toggleClass(badge, 'is-ready', !!saved);
     }
 
     const canvas = byId('otkupacSignatureCanvas');
-    if (!canvas) return;
+    if (!canvas || typeof initSignaturePad !== 'function') return;
 
-    resizeOtkupacSignatureCanvas();
+    initSignaturePad('otkupacSignatureCanvas');
 
-    const saved = getSavedOtkupacSignature();
     if (saved) {
-        drawSignatureImageToCanvas(saved);
-    } else {
-        clearSignatureCanvasVisualOnly();
+        drawSavedOtkupacSignature(saved);
+    } else if (typeof clearSignature === 'function') {
+        clearSignature('otkupacSignatureCanvas');
     }
 
     otkupacMoreState.signatureDirty = false;
+}
+
+function drawSavedOtkupacSignature(dataUrl) {
+    const canvas = byId('otkupacSignatureCanvas');
+    if (!canvas || !dataUrl) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = Math.max(window.devicePixelRatio || 1, 1);
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.round(rect.width || canvas.clientWidth || 300));
+    const cssHeight = Math.max(1, Math.round(rect.height || canvas.clientHeight || 150));
+
+    const img = new Image();
+    img.onload = function () {
+        if (typeof ctx.resetTransform === 'function') {
+            ctx.resetTransform();
+        } else {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(dpr, dpr);
+
+        const pad = 12;
+        ctx.drawImage(img, pad, pad, cssWidth - pad * 2, cssHeight - pad * 2);
+
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+    };
+    img.src = dataUrl;
 }
 
 async function renderOtkupacMoreSyncStats() {
@@ -180,13 +216,19 @@ async function syncOtkupacFromMore() {
 }
 
 function saveOtkupacSignature() {
-    const canvas = byId('otkupacSignatureCanvas');
-    if (!canvas) return;
+    if (typeof getSignatureData !== 'function') {
+        showToast('Potpis nije dostupan', 'error');
+        return;
+    }
 
     try {
-        const dataUrl = canvas.toDataURL('image/png');
+        const dataUrl = getSignatureData('otkupacSignatureCanvas');
+        if (!dataUrl) {
+            showToast('Prvo unesite potpis', 'error');
+            return;
+        }
+
         localStorage.setItem(getOtkupacSignatureStorageKey(), dataUrl);
-        otkupacMoreState.signatureDirty = false;
         renderOtkupacSignaturePad();
         showToast('Potpis je sačuvan', 'success');
     } catch (err) {
@@ -198,7 +240,11 @@ function saveOtkupacSignature() {
 function clearOtkupacSignature() {
     try {
         localStorage.removeItem(getOtkupacSignatureStorageKey());
-        otkupacMoreState.signatureDirty = false;
+
+        if (typeof clearSignature === 'function') {
+            clearSignature('otkupacSignatureCanvas');
+        }
+
         renderOtkupacSignaturePad();
         showToast('Potpis je obrisan', 'info');
     } catch (err) {
@@ -244,4 +290,8 @@ function debounce(fn, wait) {
         clearTimeout(t);
         t = setTimeout(() => fn.apply(this, args), wait);
     };
+}
+
+if (typeof destroySignaturePad === 'function') {
+    destroySignaturePad('otkupacSignatureCanvas');
 }
