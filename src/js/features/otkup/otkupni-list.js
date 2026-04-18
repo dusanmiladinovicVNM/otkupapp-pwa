@@ -24,8 +24,20 @@ function showOtkupniList(record) {
             : '';
 
     const otkupacSignatureHtml = savedOtkupacSignature
-        ? `<img src="${savedOtkupacSignature}" alt="Potpis Otkupca" style="display:block;width:100%;height:80px;object-fit:contain;border:1px solid #ccc;border-radius:6px;background:#fff;">`
-        : `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:80px;border:1px dashed #ccc;border-radius:6px;background:#fafaf7;color:#777;font-size:12px;text-align:center;padding:8px;">Potpis Otkupca nije unet u tabu Više</div>`;
+        ? `
+            <div style="display:flex;align-items:center;justify-content:center;width:100%;height:96px;border:1px solid #ccc;border-radius:6px;background:#fff;padding:8px;overflow:hidden;">
+                <img
+                    src="${savedOtkupacSignature}"
+                    alt="Potpis Otkupca"
+                    style="display:block;max-width:100%;max-height:100%;object-fit:contain;"
+                >
+            </div>
+          `
+        : `
+            <div style="display:flex;align-items:center;justify-content:center;width:100%;height:96px;border:1px dashed #ccc;border-radius:6px;background:#fafaf7;color:#777;font-size:12px;text-align:center;padding:8px;">
+                Potpis Otkupca nije unet u tabu Više
+            </div>
+          `;
 
     let modal = document.getElementById('otkupniListModal');
     if (!modal) {
