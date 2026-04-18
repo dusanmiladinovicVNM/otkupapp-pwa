@@ -38,8 +38,8 @@ async function bootstrapApp() {
 
         await bootstrapRole();
 
-        if (typeof updateBottomNavVisibility === 'function') updateBottomNavVisibility();
-        if (typeof updateBottomNavActive === 'function') updateBottomNavActive();
+        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
 
         updateSyncBadge();
         bindConnectivityEvents();
@@ -100,9 +100,13 @@ async function bootstrapRole() {
             if (typeof populateVrstaDropdown === 'function') populateVrstaDropdown();
             if (typeof applyDefaults === 'function') applyDefaults();
         }
+
         safeCall(() => showTab('otkup'));
-         return;
-     }
+
+        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
+        return;
+    }
 
     if (CONFIG.USER_ROLE === 'Kooperant') {
         await guardStammdaten(async () => {
@@ -110,12 +114,19 @@ async function bootstrapRole() {
                 await agroPopulateParcele();
             }
         });
+
         safeCall(() => showTab('home'));
+
+        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 
     if (CONFIG.USER_ROLE === 'Vozac') {
         safeCall(() => showTab('zbirna'));
+
+        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 
@@ -139,6 +150,9 @@ async function bootstrapRole() {
         } else {
             safeCall(() => showTab('dispecer'));
         }
+
+        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 }
