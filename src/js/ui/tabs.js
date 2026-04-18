@@ -38,3 +38,22 @@ function showTab(tabName, btn) {
     if (tabName === 'dispecer') loadDispecer();
     if (tabName === 'knjigapolja') loadKnjigaPolja();
 }
+
+const __oldShowTab = window.showTab;
+window.showTab = function(tabName, btn) {
+    if (CONFIG.USER_ROLE === 'Management') {
+        const mgmtRoots = {
+            pregled: 'pregled',
+            dispecer: 'dispecer',
+            otkup: 'otkup',
+            partneri: 'partneri',
+            agro: 'agro'
+        };
+
+        if (mgmtRoots[tabName] && typeof showMgmtRoot === 'function') {
+            return showMgmtRoot(mgmtRoots[tabName], btn);
+        }
+    }
+
+    return __oldShowTab ? __oldShowTab(tabName, btn) : undefined;
+};
