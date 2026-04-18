@@ -91,7 +91,6 @@ function showLoginScreen() {
     document.getElementById('loginPin').addEventListener('keyup', e => {
         if (e.key === 'Enter') doLogin();
     });
-    updateKoopBottomNavVisibility();
     document.getElementById('loginUsername').focus();
 }
 
