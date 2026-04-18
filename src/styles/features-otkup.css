@@ -1135,3 +1135,78 @@
   border-radius: 16px;
   cursor: crosshair;
 }
+
+.otprema-detail-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1300;
+}
+
+.otprema-detail-modal.visible {
+  display: flex;
+}
+
+.otprema-detail-card {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.otprema-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.otprema-detail-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.otprema-detail-close {
+  border: 0;
+  background: none;
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.otprema-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.otprema-detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.otprema-detail-grid > div {
+  background: #fafaf7;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.otprema-detail-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
