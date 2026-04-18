@@ -66,6 +66,7 @@ const ASSETS = [
     './src/js/features/management/kupci.js',
     './src/js/features/management/agrohemija.js',
     './src/js/features/management/dispecer.js',
+    './src/js/features/management/mgmt-shell-v2.js',
     './src/js/features/management/mgmt-shell.js',
 
     // App bootstrap
