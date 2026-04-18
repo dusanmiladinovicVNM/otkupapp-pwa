@@ -68,8 +68,11 @@ function renderOtkupacSignaturePad() {
 
     if (saved) {
         drawSavedOtkupacSignature(saved);
-    } else if (typeof clearSignature === 'function') {
-        clearSignature('otkupacSignatureCanvas');
+    } else {
+        if (typeof clearSignature === 'function') {
+            clearSignature('otkupacSignatureCanvas');
+        }
+        drawEmptyOtkupacSignaturePlaceholder();
     }
 
     otkupacMoreState.signatureDirty = false;
@@ -107,6 +110,41 @@ function drawSavedOtkupacSignature(dataUrl) {
         ctx.lineJoin = 'round';
     };
     img.src = dataUrl;
+}
+
+function drawEmptyOtkupacSignaturePlaceholder() {
+    const canvas = byId('otkupacSignatureCanvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = Math.max(window.devicePixelRatio || 1, 1);
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.round(rect.width || canvas.clientWidth || 300));
+    const cssHeight = Math.max(1, Math.round(rect.height || canvas.clientHeight || 150));
+
+    if (typeof ctx.resetTransform === 'function') {
+        ctx.resetTransform();
+    } else {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(dpr, dpr);
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(18, cssHeight - 36);
+    ctx.lineTo(cssWidth - 18, cssHeight - 36);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Potpiši se ovde', 18, cssHeight - 42);
 }
 
 async function renderOtkupacMoreSyncStats() {
