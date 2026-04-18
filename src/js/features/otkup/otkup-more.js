@@ -254,19 +254,20 @@ async function syncOtkupacFromMore() {
 }
 
 function saveOtkupacSignature() {
-    if (typeof getSignatureData !== 'function') {
+    const canvas = byId('otkupacSignatureCanvas');
+    if (!canvas) {
         showToast('Potpis nije dostupan', 'error');
         return;
     }
 
     try {
-        const dataUrl = getSignatureData('otkupacSignatureCanvas');
-        if (!dataUrl) {
+        const trimmed = exportTrimmedSignature(canvas);
+        if (!trimmed) {
             showToast('Prvo unesite potpis', 'error');
             return;
         }
 
-        localStorage.setItem(getOtkupacSignatureStorageKey(), dataUrl);
+        localStorage.setItem(getOtkupacSignatureStorageKey(), trimmed);
         renderOtkupacSignaturePad();
         showToast('Potpis je sačuvan', 'success');
     } catch (err) {
@@ -274,6 +275,7 @@ function saveOtkupacSignature() {
         showToast('Greška pri čuvanju potpisa', 'error');
     }
 }
+
 
 function clearOtkupacSignature() {
     try {
@@ -290,6 +292,56 @@ function clearOtkupacSignature() {
         showToast('Greška pri brisanju potpisa', 'error');
     }
 }
+
+function exportTrimmedSignature(canvas) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const alpha = imageData[i + 3];
+
+            if (alpha > 10) {
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x);
+                maxY = Math.max(maxY, y);
+            }
+        }
+    }
+
+    if (maxX < 0 || maxY < 0) return '';
+
+    const pad = 24;
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(width - 1, maxX + pad);
+    maxY = Math.min(height - 1, maxY + pad);
+
+    const cropW = maxX - minX + 1;
+    const cropH = maxY - minY + 1;
+
+    const out = document.createElement('canvas');
+    out.width = cropW;
+    out.height = cropH;
+
+    const outCtx = out.getContext('2d');
+    outCtx.clearRect(0, 0, cropW, cropH);
+    outCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+
+    return out.toDataURL('image/png');
+}
+
 
 function getLastSyncStamp(rows) {
     const stamps = (rows || [])
