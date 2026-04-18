@@ -304,6 +304,7 @@ function handleStammdatenUpdated() {
         if (CONFIG.USER_ROLE === 'Management') {
             if (typeof populateMgmtStanice === 'function') populateMgmtStanice();
             if (typeof populateMgmtKupciDropdown === 'function') populateMgmtKupciDropdown();
+            if (typeof mgmtRenderOverview === 'function') mgmtRenderOverview();
         }
 
         if (CONFIG.USER_ROLE === 'Otkupac') {
