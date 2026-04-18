@@ -59,12 +59,11 @@ function updateBottomNavVisibility() {
 
     const cfg = getActiveBottomNavConfig();
 
-    ['koopBottomNav', 'otkupBottomNav'].forEach(id => {
+    ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav'].forEach(id => {
         const nav = document.getElementById(id);
         if (nav) nav.classList.remove('visible');
     });
-
-    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
+    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav', 'has-mgmt-bottom-nav');
 
     const tabBar = document.getElementById('tabBar');
 
