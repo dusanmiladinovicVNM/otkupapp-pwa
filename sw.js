@@ -46,7 +46,6 @@ const ASSETS = [
     './src/js/features/kooperant/agromere.js',
     './src/js/features/kooperant/knjiga-polja.js',
     './src/js/features/kooperant/fiskalni.js',
-    './src/js/features/kooperant/otkup-more.js',
     './src/js/features/kooperant/bottom-nav.js',
 
     // Features — otkup
@@ -54,6 +53,7 @@ const ASSETS = [
     './src/js/features/otkup/otkup-pregled.js',
     './src/js/features/otkup/otkupni-list.js',
     './src/js/features/otkup/otpremnice.js',
+    './src/js/features/otkup/otkup-more.js',
     './src/js/features/otkup/sync.js',
 
     // Features — vozac
