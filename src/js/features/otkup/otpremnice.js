@@ -58,6 +58,11 @@ function bindOtpremaEventsOnce() {
         rootSections.addEventListener('click', function (e) {
             const card = e.target.closest('.otprema-card');
             if (!card) return;
+
+            const key = card.getAttribute('data-record-key') || '';
+            if (!key) return;
+
+            openOtpremaDetail(key);
         });
     }
 
@@ -341,16 +346,32 @@ function renderOtpremaAssignedGroups(groups) {
 }
 
 function renderOtpremaCard(row, showWarning, isAssigned) {
+    const key = getOtpremaRecordKey(row);
     const note = row.napomena ? `<div class="otprema-card-note">${escapeHtml(row.napomena)}</div>` : '';
     const warning = showWarning && row.datum !== getTodayIsoDate()
         ? `<span class="otprema-badge otprema-badge--warning">Raniji otkup</span>`
         : '';
-    const status = isAssigned
-        ? `<span class="otprema-badge otprema-badge--success">Dodeljen</span>`
-        : `<span class="otprema-badge otprema-badge--pending">Bez vozača</span>`;
+
+    const statusBadges = [];
+
+    if (isAssigned) {
+        statusBadges.push(`<span class="otprema-badge otprema-badge--success">Dodeljen</span>`);
+
+        if (row.syncStatus && row.syncStatus !== 'synced') {
+            statusBadges.push(`<span class="otprema-badge otprema-badge--pending">Čeka sync</span>`);
+        }
+
+        if (row.lastSyncError) {
+            statusBadges.push(`<span class="otprema-badge otprema-badge--error">Sync greška</span>`);
+        }
+    } else {
+        statusBadges.push(`<span class="otprema-badge otprema-badge--pending">Bez vozača</span>`);
+    }
+
+    if (warning) statusBadges.push(warning);
 
     return `
-        <div class="otprema-card">
+        <div class="otprema-card" data-record-key="${escapeHtml(key)}">
             <div class="otprema-card-top">
                 <div class="otprema-card-koop">${escapeHtml(row.kooperantName || '-')}</div>
                 <div class="otprema-card-date">${escapeHtml(row.datum || '-')}</div>
@@ -372,8 +393,7 @@ function renderOtpremaCard(row, showWarning, isAssigned) {
 
             <div class="otprema-card-bottom">
                 <div class="otprema-card-badges">
-                    ${status}
-                    ${warning}
+                    ${statusBadges.join('')}
                 </div>
             </div>
         </div>
@@ -496,10 +516,6 @@ function updateOtpremaAssignSummary() {
     setText(byId('otpremaSelectedKg'), formatOtpremaKg(sumOtpremaKg(selectedRows)));
 }
 
-function getSelectedOtpremaRows() {
-    return otpremaState.rows.filter(r => otpremaState.selectedKeys.has(getOtpremaRecordKey(r)));
-}
-
 async function confirmOtpremaAssign() {
     if (!otpremaState.selectedVozac) {
         showToast('Prvo izaberi vozača', 'error');
@@ -608,6 +624,39 @@ function renderOtpremaSuccessView(rows, vozac) {
         </section>
     `);
 }
+
+function openOtpremaDetail(recordKey) {
+    const row = otpremaState.rows.find(r => getOtpremaRecordKey(r) === recordKey);
+    if (!row) return;
+
+    const modal = byId('otpremaDetailModal');
+    const body = byId('otpremaDetailBody');
+    const title = byId('otpremaDetailTitle');
+
+    if (!modal || !body || !title) return;
+
+    setText(title, row.kooperantName || row.kooperantID || 'Detalj otpreme');
+
+    const badges = [];
+    if (row.vozacID) badges.push('Dodeljen: ' + resolveVozacName(row.vozacID));
+    if (row.syncStatus && row.syncStatus !== 'synced') badges.push('Čeka sync');
+    if (row.lastSyncError) badges.push('Sync greška');
+
+    setHtml(body, `
+        <div class="otprema-detail-grid">
+            <div><strong>Datum:</strong> ${escapeHtml(row.datum || '-')}</div>
+            <div><strong>Kooperant:</strong> ${escapeHtml(row.kooperantName || row.kooperantID || '-')}</div>
+            <div><strong>Roba:</strong> ${escapeHtml(row.vrstaVoca || '-')} ${row.sortaVoca ? '/ ' + escapeHtml(row.sortaVoca) : ''}</div>
+            <div><strong>Klasa:</strong> ${escapeHtml(row.klasa || 'I')}</div>
+            <div><strong>Količina:</strong> ${escapeHtml(formatOtpremaKg(row.kolicina))}</div>
+            <div><strong>Ambalaža:</strong> ${escapeHtml(formatOtpremaAmbalaza(row))}</div>
+            <div><strong>Vozač:</strong> ${escapeHtml(resolveVozacName(row.vozacID) || 'Nije dodeljen')}</div>
+            ${row.napomena ? `<div><strong>Napomena:</strong> ${escapeHtml(row.napomena)}</div>` : ''}
+            ${badges.length ? `<div><strong>Status:</strong> ${escapeHtml(badges.join(' • '))}</div>` : ''}
+        </div>
+    `);
+
+    add
 
 function backToOtpremaRoot() {
     otpremaState.selectedKeys.clear();
