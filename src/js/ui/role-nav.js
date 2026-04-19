@@ -153,7 +153,11 @@ function showRoleNavTab(tabKey, btn) {
     }
 
     // Posle promene taba ponovo sinhronizuj iz DOM-a
-    setTimeout(() => updateRoleNavActive(), 0);
+    setTimeout(() => {
+        if (typeof updateRoleNavActive === 'function') {
+            updateRoleNavActive();
+        }
+    }, 0);
 }
 
 function clearAllRoleNavActiveStates() {
