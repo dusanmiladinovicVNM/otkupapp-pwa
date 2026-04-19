@@ -104,7 +104,7 @@ function updateRoleNavActive(targetKey) {
     const nav = document.getElementById(cfg.navId);
     if (!nav) return;
 
-    const finalKey = targetKey || resolveActiveRoleNavKey() || cfg.defaultKey;
+    const finalKey = targetKey || resolveActiveNavKeyFromDom() || cfg.defaultTab;
 
     // Prvo očisti active sa svih role nav-ova
     clearAllRoleNavActiveStates();
