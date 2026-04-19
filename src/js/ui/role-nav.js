@@ -92,9 +92,9 @@ function updateRoleNavVisibility() {
 
     nav.classList.add('visible');
 
-    if (window.innerWidth <= 900) {
-        document.body.classList.add(cfg.bodyClass);
-    }
+    // body klasa mora da postoji i na desktopu i na mobile-u,
+    // jer spacing/layout koristi istu klasu u oba režima
+    document.body.classList.add(cfg.bodyClass);
 }
 
 function updateRoleNavActive(targetKey) {
@@ -118,6 +118,13 @@ function updateRoleNavActive(targetKey) {
 function resolveActiveNavKeyFromDom() {
     const cfg = getRoleNavConfig();
     if (!cfg) return null;
+
+    if (cfg.navId === 'mgmtBottomNav') {
+        if (window.mgmtShellState && window.mgmtShellState.activeRoot) {
+            return window.mgmtShellState.activeRoot;
+        }
+        return cfg.defaultTab;
+    }
 
     const activeTab = document.querySelector('.tab-content.active');
     if (!activeTab) return cfg.defaultTab;
