@@ -16,8 +16,8 @@ function mgmtShellInit() {
     mgmtMountLegacyBlocks();
     mgmtRenderOverview();
     showMgmtRoot('pregled');
-    updateMgmtBottomNavVisibility();
-    updateMgmtBottomNavActive();
+    if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
+    if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
 }
 
 function showMgmtRoot(root, btn) {
@@ -57,7 +57,6 @@ function showMgmtRoot(root, btn) {
         showMgmtAgroSub(window.mgmtShellState.agroSub || 'izdavanje');
     }
 
-    updateMgmtBottomNavActive();
     setTimeout(() => {
         if (typeof updateRoleNavActive === 'function') {
             updateRoleNavActive();
@@ -67,7 +66,7 @@ function showMgmtRoot(root, btn) {
 
 function showMgmtBottomRoot(root, btn) {
     showMgmtRoot(root);
-    updateMgmtBottomNavActive();
+    if (typeof updateRoleNavActive === 'function') updateRoleNavActive(root);
 }
 
 function updateMgmtBottomNavActive() {
@@ -427,8 +426,3 @@ function setTextSafe(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
 }
-
-window.addEventListener('resize', function() {
-    updateMgmtBottomNavVisibility();
-    updateMgmtBottomNavActive();
-});
