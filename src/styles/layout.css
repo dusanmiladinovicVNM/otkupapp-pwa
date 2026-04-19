@@ -1,6 +1,6 @@
 :root {
-  --app-header-h: 68px;
-  --app-role-nav-h: 56px;
+  --app-header-h: 58px;
+  --app-role-nav-h: 50px;
 }
 
 /* =========================================================
@@ -268,7 +268,10 @@ body.has-otkup-bottom-nav #tab-queue {
 @media (min-width: 901px) {
   /* legacy role tabovi se ne koriste za ove dve role */
   .tab-bar .role-kooperant,
-  .tab-bar .role-otkupac {
+  .tab-bar .role-otkupac,
+  .tab-bar .role-management,
+  .tab-bar .role-vozac {
+    display: none !important;
     display: none !important;
   }
 
@@ -339,7 +342,7 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-mgmt-bottom-nav #tab-mgmt-agro,
   body.has-vozac-bottom-nav #tab-zbirna,
   body.has-vozac-bottom-nav #tab-transport {
-    padding-top: calc(var(--app-header-h) + var(--app-role-nav-h));
+    padding-top: calc(var(--app-header-h) + var(--app-role-nav-h) + 16px);
     padding-bottom: 16px;
   }
 
