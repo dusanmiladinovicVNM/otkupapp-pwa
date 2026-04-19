@@ -97,15 +97,21 @@ function updateRoleNavVisibility() {
     }
 }
 
-function updateRoleNavActive(activeKey) {
+function updateRoleNavActive(targetKey) {
     const cfg = getRoleNavConfig();
     if (!cfg) return;
 
     const nav = document.getElementById(cfg.navId);
     if (!nav) return;
 
+    const finalKey = targetKey || resolveActiveRoleNavKey() || cfg.defaultKey;
+
+    // Prvo očisti active sa svih role nav-ova
+    clearAllRoleNavActiveStates();
+
+    // Onda aktiviraj samo odgovarajući button za aktivnu rolu
     nav.querySelectorAll('.bottom-nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === activeKey);
+        btn.classList.toggle('active', btn.dataset.tab === finalKey);
     });
 }
 
@@ -125,22 +131,48 @@ function syncRoleNavActiveFromDom() {
     if (key) updateRoleNavActive(key);
 }
 
-function showRoleNavTab(tabName, btn) {
+function showRoleNavTab(tabKey, btn) {
     const cfg = getRoleNavConfig();
     if (!cfg) return;
 
-    if (cfg.type === 'showMgmtRoot') {
+    // Odmah prebaci aktivno stanje u nav-u
+    updateRoleNavActive(tabKey);
+
+    if (cfg.showMode === 'showMgmtRoot') {
         if (typeof showMgmtRoot === 'function') {
-            showMgmtRoot(tabName);
+            showMgmtRoot(tabKey);
         }
-        updateRoleNavActive(tabName);
+
+        // Posle rendera ponovo sinhronizuj iz stvarnog state-a
+        setTimeout(() => updateRoleNavActive(), 0);
         return;
     }
 
     if (typeof showTab === 'function') {
-        showTab(tabName);
+        showTab(tabKey);
     }
-    updateRoleNavActive(tabName);
+
+    // Posle promene taba ponovo sinhronizuj iz DOM-a
+    setTimeout(() => updateRoleNavActive(), 0);
+}
+
+function clearAllRoleNavActiveStates() {
+    getAllRoleNavIds().forEach(id => {
+        const nav = document.getElementById(id);
+        if (!nav) return;
+
+        nav.querySelectorAll('.bottom-nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+    });
+}
+
+function initRoleNavEngine() {
+    updateRoleNavVisibility();
+
+    // Ukloni svaki statički active iz HTML-a pa sinhronizuj iz stvarnog state-a
+    clearAllRoleNavActiveStates();
+    updateRoleNavActive();
 }
 
 window.updateRoleNavVisibility = updateRoleNavVisibility;
