@@ -38,8 +38,9 @@ async function bootstrapApp() {
 
         await bootstrapRole();
 
-        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
-        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
+        if (typeof initRoleNavEngine === 'function') {
+            initRoleNavEngine();
+        }
 
         updateSyncBadge();
         bindConnectivityEvents();
@@ -102,9 +103,6 @@ async function bootstrapRole() {
         }
 
         safeCall(() => showTab('otkup'));
-
-        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
-        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 
@@ -116,17 +114,11 @@ async function bootstrapRole() {
         });
 
         safeCall(() => showTab('home'));
-
-        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
-        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 
     if (CONFIG.USER_ROLE === 'Vozac') {
         safeCall(() => showTab('zbirna'));
-
-        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
-        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 
@@ -150,9 +142,6 @@ async function bootstrapRole() {
         } else {
             safeCall(() => showTab('dispecer'));
         }
-
-        if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
-        if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
         return;
     }
 }
