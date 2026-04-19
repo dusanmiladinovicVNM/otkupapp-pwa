@@ -179,11 +179,18 @@ function initRoleNavEngine() {
     updateRoleNavActive();
 }
 
+function getAllRoleNavIds() {
+    return ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav', 'vozacBottomNav'];
+}
+
 window.updateRoleNavVisibility = updateRoleNavVisibility;
-window.updateRoleNavActive = syncRoleNavActiveFromDom;
+window.updateRoleNavActive = updateRoleNavActive;
+window.syncRoleNavActiveFromDom = syncRoleNavActiveFromDom;
 window.showRoleNavTab = showRoleNavTab;
+window.initRoleNavEngine = initRoleNavEngine;
 
 window.addEventListener('resize', () => {
     updateRoleNavVisibility();
-    syncRoleNavActiveFromDom();
+    updateRoleNavActive();
 });
+
