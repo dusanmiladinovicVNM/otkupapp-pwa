@@ -58,6 +58,11 @@ function showMgmtRoot(root, btn) {
     }
 
     updateMgmtBottomNavActive();
+    setTimeout(() => {
+        if (typeof updateRoleNavActive === 'function') {
+            updateRoleNavActive();
+        }
+    }, 0);
 }
 
 function showMgmtBottomRoot(root, btn) {
