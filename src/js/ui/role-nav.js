@@ -145,7 +145,7 @@ function showRoleNavTab(tabKey, btn) {
     // Odmah prebaci aktivno stanje u nav-u
     updateRoleNavActive(tabKey);
 
-    if (cfg.showMode === 'showMgmtRoot') {
+    if (cfg.type === 'showMgmtRoot') {
         if (typeof showMgmtRoot === 'function') {
             showMgmtRoot(tabKey);
         }
