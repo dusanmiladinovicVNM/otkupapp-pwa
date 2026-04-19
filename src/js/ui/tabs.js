@@ -37,6 +37,12 @@ function showTab(tabName, btn) {
     if (tabName === 'transport') loadVozacTransport();
     if (tabName === 'dispecer') loadDispecer();
     if (tabName === 'knjigapolja') loadKnjigaPolja();
+
+    setTimeout(() => {
+        if (typeof updateRoleNavActive === 'function') {
+            updateRoleNavActive();
+        }
+    }, 0);
 }
 
 const __oldShowTab = window.showTab;
