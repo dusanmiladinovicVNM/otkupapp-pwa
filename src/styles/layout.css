@@ -1,11 +1,17 @@
+:root {
+  --app-header-h: 68px;
+  --app-role-nav-h: 56px;
+}
+
 /* =========================================================
    HEADER
    ========================================================= */
-
 .header {
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: white;
-  padding: 14px 16px;
+  padding: 0 16px;
+  min-height: var(--app-header-h);
+  height: var(--app-header-h);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -268,33 +274,38 @@ body.has-otkup-bottom-nav #tab-queue {
 
   /* isti nav ide gore kao topnav */
   .bottom-nav.visible {
-    display: flex !important;
     position: fixed;
-    top: 82px;
+    top: var(--app-header-h);
     left: 0;
     right: 0;
     bottom: auto;
-    height: 56px;
-    padding: 0 16px;
+    height: var(--app-role-nav-h);    
+    display: grid !important;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    align-items: stretch;
     background: #fff;
     border-top: 0;
     border-bottom: 1px solid rgba(92, 108, 77, 0.12);
     box-shadow: 0 4px 14px rgba(31, 41, 24, 0.06);
     backdrop-filter: none;
     z-index: 95;
-    align-items: stretch;
-    gap: 4px;
+    padding: 0;
+    gap: 0;
   }
 
   .bottom-nav.visible .bottom-nav-btn {
-    flex: 0 0 auto;
-    min-width: 110px;
-    padding: 0 16px;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0 12px;
+    display: flex;
     flex-direction: row;
     gap: 8px;
+    justify-content: center;
+    align-items: center;
     border-radius: 0;
     border-bottom: 3px solid transparent;
-    justify-content: center;
   }
 
   .bottom-nav.visible .bottom-nav-btn.active {
@@ -320,13 +331,22 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-otkup-bottom-nav #tab-otkup,
   body.has-otkup-bottom-nav #tab-pregled,
   body.has-otkup-bottom-nav #tab-otpremnice,
-  body.has-otkup-bottom-nav #tab-queue {
-    padding-top: 72px;
+  body.has-otkup-bottom-nav #tab-queue,
+  body.has-mgmt-bottom-nav #tab-mgmt-pregled,
+  body.has-mgmt-bottom-nav #tab-mgmt-dispecer,
+  body.has-mgmt-bottom-nav #tab-mgmt-otkup,
+  body.has-mgmt-bottom-nav #tab-mgmt-partneri,
+  body.has-mgmt-bottom-nav #tab-mgmt-agro,
+  body.has-vozac-bottom-nav #tab-zbirna,
+  body.has-vozac-bottom-nav #tab-transport {
+    padding-top: calc(var(--app-header-h) + var(--app-role-nav-h));
     padding-bottom: 16px;
   }
 
   body.has-koop-bottom-nav,
-  body.has-otkup-bottom-nav {
+  body.has-otkup-bottom-nav,
+  body.has-mgmt-bottom-nav,
+  body.has-vozac-bottom-nav {
     padding-bottom: 0;
   }
 }
@@ -352,7 +372,7 @@ body.has-otkup-bottom-nav #tab-queue {
 
 @media (max-width: 640px) {
   .header {
-    padding: 12px 12px;
+    padding: 0 12px;
   }
 
   .header-brand-logo {
