@@ -60,13 +60,13 @@
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .header-sub {
   font-size: 11px;
-  opacity: 0.85;
+  opacity: 0.9;
   display: block;
   width: 100%;
   min-width: 0;
@@ -79,10 +79,11 @@
   background: none;
   border: 1px solid rgba(255,255,255,0.4);
   color: white;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* Kooperant / brand header */
@@ -357,6 +358,37 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-mgmt-bottom-nav,
   body.has-vozac-bottom-nav {
     padding-bottom: 0;
+  }
+  
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .header-brand {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .header-brand-logo {
+    width: 116px;
+    max-width: 116px;
+  }
+
+  .header-sub {
+    font-size: 11px;
+    opacity: 0.92;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-btn {
+    min-width: 34px;
+    width: 34px;
+    padding: 0;
   }
 }
 
