@@ -42,7 +42,8 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .app-logo {
@@ -65,8 +66,10 @@
 
 .header-sub {
   font-size: 11px;
-  opacity: 0.7;
+  opacity: 0.85;
   display: block;
+  width: 100%;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -88,15 +91,18 @@
   flex-direction: column;
   justify-content: center;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .header-brand-logo {
   display: block;
-  width: 150px;
-  max-width: 42vw;
+  width: 132px;
+  max-width: 34vw;
   height: auto;
   object-fit: contain;
   margin-bottom: 2px;
+  flex-shrink: 0;
 }
 
 /* =========================================================
