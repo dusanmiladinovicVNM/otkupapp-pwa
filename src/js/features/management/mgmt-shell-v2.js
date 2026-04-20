@@ -522,49 +522,6 @@ function mgmtDashBuildSeries(otkupiAll, period) {
     }));
 }
 
-function mgmtDashBuild7DaySeries(otkupiAll) {
-    const days = mgmtDashGetLastNDays(7);
-    const sums = {};
-    days.forEach(day => { sums[day] = 0; });
-
-    (otkupiAll || []).forEach(r => {
-        const day = mgmtDashFmtDate(r.Datum);
-        if (!Object.prototype.hasOwnProperty.call(sums, day)) return;
-        sums[day] += mgmtDashNum(r.Kolicina);
-    });
-
-    return days.map(day => ({
-        day,
-        value: sums[day] || 0
-    }));
-}
-
-function mgmtDashGetWeekStats(otkupiAll) {
-    const days = new Set(mgmtDashGetLastNDays(7));
-    let weekKg = 0;
-    let weightedSum = 0;
-    const koops = new Set();
-
-    (otkupiAll || []).forEach(r => {
-        const day = mgmtDashFmtDate(r.Datum);
-        if (!days.has(day)) return;
-
-        const kg = mgmtDashNum(r.Kolicina);
-        const cena = mgmtDashNum(r.Cena);
-
-        weekKg += kg;
-        weightedSum += kg * cena;
-
-        if (r.KooperantID) koops.add(r.KooperantID);
-    });
-
-    return {
-        weekKg,
-        activeKoops: koops.size,
-        avgPrice: weekKg > 0 ? (weightedSum / weekKg) : 0
-    };
-}
-
 function mgmtDashGetKoopSaldoFromKartice(kartice) {
     const lastByKoop = {};
 
@@ -1039,4 +996,69 @@ function mgmtDashUpdateChartMeta(period, series) {
             legendEl.textContent = `Ukupno za 7 dana: ${Math.round(total).toLocaleString('sr')} kg`;
         }
     }
+}
+
+function setMgmtDashboardPeriod(period, btn) {
+    window.mgmtShellState.dashboardPeriod = period;
+
+    document.querySelectorAll('#mgmtDashPeriodSwitch .mgmt-dash-period-btn')
+        .forEach(el => el.classList.toggle('active', el.dataset.period === period));
+
+    mgmtRenderDashboard();
+}
+
+function mgmtDashGetSeasonStart(otkupiAll) {
+    const validDates = (otkupiAll || [])
+        .map(r => mgmtDashFmtDate(r.Datum))
+        .filter(Boolean)
+        .sort();
+
+    return validDates.length ? validDates[0] : mgmtDashTodayISO();
+}
+
+function mgmtDashGetPeriodDays(period, otkupiAll) {
+    if (period === 'today') return [mgmtDashTodayISO()];
+    if (period === '7d') return mgmtDashGetLastNDays(7);
+
+    const start = mgmtDashGetSeasonStart(otkupiAll);
+    const out = [];
+    const from = new Date(start);
+    const to = new Date();
+
+    from.setHours(0, 0, 0, 0);
+    to.setHours(0, 0, 0, 0);
+
+    const cursor = new Date(from);
+    while (cursor <= to) {
+        out.push(cursor.toISOString().split('T')[0]);
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return out;
+}
+
+function mgmtDashGetPeriodStats(otkupiAll, period) {
+    const days = new Set(mgmtDashGetPeriodDays(period, otkupiAll));
+    let totalKg = 0;
+    let weightedSum = 0;
+    const koops = new Set();
+
+    (otkupiAll || []).forEach(r => {
+        const day = mgmtDashFmtDate(r.Datum);
+        if (!days.has(day)) return;
+
+        const kg = mgmtDashNum(r.Kolicina);
+        const cena = mgmtDashNum(r.Cena);
+
+        totalKg += kg;
+        weightedSum += kg * cena;
+
+        if (r.KooperantID) koops.add(r.KooperantID);
+    });
+
+    return {
+        totalKg,
+        activeKoops: koops.size,
+        avgPrice: totalKg > 0 ? (weightedSum / totalKg) : 0
+    };
 }
