@@ -578,3 +578,41 @@ body.has-mgmt-bottom-nav .tab-content {
         font-size: 28px;
     }
 }
+
+.mgmt-dash-period-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    background: #f4f1e8;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+
+.mgmt-dash-period-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.mgmt-dash-period-btn.active {
+    background: var(--primary);
+    color: white;
+}
+
+@media (max-width: 767px) {
+    .mgmt-dash-period-switch {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .mgmt-dash-period-btn {
+        flex: 1 1 0;
+        text-align: center;
+    }
+}
