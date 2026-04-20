@@ -45,6 +45,7 @@ function getRoleNavConfig() {
             type: 'showMgmtRoot',
             defaultTab: 'pregled',
             tabMap: {
+                dashboard: 'dashboard',
                 pregled: 'pregled',
                 dispecer: 'dispecer',
                 otkup: 'otkup',
