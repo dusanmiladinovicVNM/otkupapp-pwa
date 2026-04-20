@@ -13,6 +13,7 @@
     <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     
     <link rel="stylesheet" href="./src/styles/base.css">
     <link rel="stylesheet" href="./src/styles/layout.css">
@@ -1934,7 +1935,7 @@
                     </div>
 
                     <div class="mgmt-dash-chart-wrap">
-                        <svg id="mgmtDashChart" class="mgmt-dash-chart" viewBox="0 0 680 260" preserveAspectRatio="none"></svg>
+                        <canvas id="mgmtDashChart" class="mgmt-dash-chart"></canvas>
                     </div>
                     <div class="mgmt-dash-chart-legend" id="mgmtDashChartLegend"></div>
                 </section>
