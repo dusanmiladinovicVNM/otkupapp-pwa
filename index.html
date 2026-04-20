@@ -1893,6 +1893,12 @@
                 </div>
 
                 <div class="mgmt-dash-hero-meta">
+                    <div class="mgmt-dash-period-switch" id="mgmtDashPeriodSwitch">
+                        <button type="button" class="mgmt-dash-period-btn" data-period="today" onclick="setMgmtDashboardPeriod('today', this)">Danas</button>
+                        <button type="button" class="mgmt-dash-period-btn active" data-period="7d" onclick="setMgmtDashboardPeriod('7d', this)">7 dana</button>
+                        <button type="button" class="mgmt-dash-period-btn" data-period="season" onclick="setMgmtDashboardPeriod('season', this)">Sezona</button>
+                    </div>
+
                     <span class="mgmt-dash-pill">Live operativa</span>
                     <span class="mgmt-dash-pill mgmt-dash-pill--muted" id="mgmtDashUpdatedAt">Ažurirano: —</span>
                 </div>
