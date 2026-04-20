@@ -9,6 +9,7 @@ window.mgmtShellState = {
     kupSub: 'fakture',
     otkupSub: 'otkupi',
     agroSub: 'izdavanje',
+    dashboardPeriod: '7d',
     mounted: false
 };
 
@@ -483,6 +484,44 @@ function mgmtDashGetLastNDays(n) {
     return out;
 }
 
+function mgmtDashBuildSeries(otkupiAll, period) {
+    if (period === 'today') {
+        const today = mgmtDashTodayISO();
+        const grouped = {};
+
+        (otkupiAll || []).forEach(r => {
+            const day = mgmtDashFmtDate(r.Datum);
+            if (day !== today) return;
+
+            const label = mgmtDashGetStationName(r);
+            if (!grouped[label]) grouped[label] = 0;
+            grouped[label] += mgmtDashNum(r.Kolicina);
+        });
+
+        return Object.keys(grouped)
+            .map(label => ({
+                label,
+                value: grouped[label]
+            }))
+            .sort((a, b) => b.value - a.value);
+    }
+
+    const days = mgmtDashGetPeriodDays(period, otkupiAll);
+    const sums = {};
+    days.forEach(day => { sums[day] = 0; });
+
+    (otkupiAll || []).forEach(r => {
+        const day = mgmtDashFmtDate(r.Datum);
+        if (!Object.prototype.hasOwnProperty.call(sums, day)) return;
+        sums[day] += mgmtDashNum(r.Kolicina);
+    });
+
+    return days.map(day => ({
+        day,
+        value: sums[day] || 0
+    }));
+}
+
 function mgmtDashBuild7DaySeries(otkupiAll) {
     const days = mgmtDashGetLastNDays(7);
     const sums = {};
@@ -616,47 +655,68 @@ let mgmtDashChartInstance = null;
 
 function mgmtDashRenderChart(series) {
     const canvas = document.getElementById('mgmtDashChart');
-    const legend = document.getElementById('mgmtDashChartLegend');
     if (!canvas || typeof Chart === 'undefined') return;
 
-    const labels = series.map(item => {
-        const d = new Date(item.day);
-        return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-    });
+    const period = window.mgmtShellState.dashboardPeriod || '7d';
+    const isToday = period === 'today';
+
+    const labels = isToday
+        ? series.map(item => item.label)
+        : series.map(item => {
+            const d = new Date(item.day);
+            return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+        });
 
     const data = series.map(item => Math.round(item.value || 0));
 
     if (mgmtDashChartInstance) {
         mgmtDashChartInstance.destroy();
+        mgmtDashChartInstance = null;
     }
 
     const ctx = canvas.getContext('2d');
 
     mgmtDashChartInstance = new Chart(ctx, {
-        type: 'line',
+        type: isToday ? 'bar' : 'line',
         data: {
             labels,
             datasets: [
-                {
-                    label: 'Otkup kg',
-                    data,
-                    borderColor: '#1a5e2a',
-                    backgroundColor: 'rgba(26,94,42,0.10)',
-                    fill: true,
-                    tension: 0.35,
-                    pointRadius: 4,
-                    pointHoverRadius: 5,
-                    pointBackgroundColor: '#1a5e2a',
-                    pointBorderColor: '#1a5e2a',
-                    borderWidth: 3
-                }
+                isToday
+                    ? {
+                        label: 'Otkup kg',
+                        data,
+                        backgroundColor: 'rgba(26,94,42,0.85)',
+                        borderRadius: 8,
+                        borderSkipped: false,
+                        barThickness: 18,
+                        maxBarThickness: 22
+                    }
+                    : {
+                        label: 'Otkup kg',
+                        data,
+                        borderColor: '#1a5e2a',
+                        backgroundColor: 'rgba(26,94,42,0.10)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#1a5e2a',
+                        pointBorderColor: '#1a5e2a',
+                        pointBorderWidth: 0
+                    }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            indexAxis: isToday ? 'y' : 'x',
             animation: {
                 duration: 450
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
             },
             plugins: {
                 legend: {
@@ -667,55 +727,98 @@ function mgmtDashRenderChart(series) {
                     titleColor: '#ffffff',
                     bodyColor: '#ffffff',
                     displayColors: false,
+                    padding: 10,
                     callbacks: {
                         label(context) {
-                            const value = context.parsed.y || 0;
-                            return `${value.toLocaleString('sr')} kg`;
+                            const value = context.parsed.x ?? context.parsed.y ?? 0;
+                            return `${Number(value).toLocaleString('sr')} kg`;
                         }
                     }
                 }
             },
-            scales: {
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    border: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#7b7b72',
-                        font: {
-                            size: 11
-                        }
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: '#e8e3d6'
-                    },
-                    border: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#7b7b72',
-                        font: {
-                            size: 11
+            layout: {
+                padding: {
+                    top: 8,
+                    right: 8,
+                    bottom: 0,
+                    left: 8
+                }
+            },
+            scales: isToday
+                ? {
+                    x: {
+                        beginAtZero: true,
+                        grace: '8%',
+                        grid: {
+                            color: '#e8e3d6'
                         },
-                        callback(value) {
-                            return Number(value).toLocaleString('sr');
+                        border: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#7b7b72',
+                            font: {
+                                size: 11
+                            },
+                            callback(value) {
+                                return Number(value).toLocaleString('sr');
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false
+                        },
+                        border: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#7b7b72',
+                            font: {
+                                size: 11
+                            }
                         }
                     }
                 }
-            }
+                : {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        border: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#7b7b72',
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grace: '8%',
+                        grid: {
+                            color: '#e8e3d6'
+                        },
+                        border: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#7b7b72',
+                            font: {
+                                size: 11
+                            },
+                            callback(value) {
+                                return Number(value).toLocaleString('sr');
+                            }
+                        }
+                    }
+                }
         }
     });
 
-    if (legend) {
-        const total = data.reduce((sum, value) => sum + value, 0);
-        legend.textContent = `Ukupno za 7 dana: ${total.toLocaleString('sr')} kg`;
-    }
+    mgmtDashUpdateChartMeta(period, series);
 }
 
 function mgmtDashStatusLabel(status) {
@@ -766,17 +869,25 @@ function mgmtDashRenderDispatcher() {
 
 async function mgmtRenderDashboard() {
     if (!window.mgmtData && typeof prefetchMgmtData === 'function') {
-        try { await prefetchMgmtData(); } catch (e) {}
+        try {
+            await prefetchMgmtData();
+        } catch (e) {}
     }
 
     if (typeof loadDispecer === 'function' && (!window.dpPlans || !window.dpDem)) {
-        try { await loadDispecer(); } catch (e) {}
+        try {
+            await loadDispecer();
+        } catch (e) {}
     }
 
     const otkupiAll = (window.mgmtData && mgmtData.otkupiAll) ? mgmtData.otkupiAll : [];
     const saldoKupci = (window.mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
     const saldoOM = (window.mgmtData && mgmtData.saldoOM) ? mgmtData.saldoOM : [];
     const kartice = (window.mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
+
+    const period = window.mgmtShellState?.dashboardPeriod || '7d';
+    const stats = mgmtDashGetPeriodStats(otkupiAll, period);
+    const series = mgmtDashBuildSeries(otkupiAll, period);
 
     let kgCeka = 0;
     if (typeof dpGetSup === 'function') {
@@ -790,16 +901,13 @@ async function mgmtRenderDashboard() {
         demandKg = dpDem.reduce((s, d) => s + mgmtDashNum(d.Kg), 0);
     }
 
-    const weekStats = mgmtDashGetWeekStats(otkupiAll);
-    const series = mgmtDashBuild7DaySeries(otkupiAll);
-
     const koopSaldo = mgmtDashGetKoopSaldoFromKartice(kartice);
     const kupSaldo = saldoKupci.reduce((s, r) => s + mgmtDashNum(r.Saldo), 0);
     const omSaldo = saldoOM.reduce((s, r) => s + mgmtDashNum(r.Saldo), 0);
 
-    mgmtDashSetText('mgmtDashWeekKg', mgmtDashFmtInt(weekStats.weekKg));
-    mgmtDashSetText('mgmtDashActiveKoops', mgmtDashFmtInt(weekStats.activeKoops));
-    mgmtDashSetText('mgmtDashAvgPrice', mgmtDashFmtDec(weekStats.avgPrice, 1));
+    mgmtDashSetText('mgmtDashWeekKg', mgmtDashFmtInt(stats.totalKg));
+    mgmtDashSetText('mgmtDashActiveKoops', mgmtDashFmtInt(stats.activeKoops));
+    mgmtDashSetText('mgmtDashAvgPrice', mgmtDashFmtDec(stats.avgPrice, 1));
     mgmtDashSetText('mgmtDashGGAP', '86%');
 
     const updatedEl = document.getElementById('mgmtDashUpdatedAt');
@@ -810,25 +918,62 @@ async function mgmtRenderDashboard() {
         });
     }
 
+    const kgSub = document.querySelector('#mgmtDashWeekKg')?.nextElementSibling;
+    const koopSub = document.querySelector('#mgmtDashActiveKoops')?.nextElementSibling;
+    const avgSub = document.querySelector('#mgmtDashAvgPrice')?.nextElementSibling;
+
+    if (kgSub) {
+        kgSub.textContent =
+            period === 'today' ? 'kg danas' :
+            period === 'season' ? 'kg u sezoni' :
+            'kg u poslednjih 7 dana';
+    }
+
+    if (koopSub) {
+        koopSub.textContent =
+            period === 'today' ? 'jedinstveni danas' :
+            period === 'season' ? 'jedinstveni u sezoni' :
+            'jedinstveni u 7 dana';
+    }
+
+    if (avgSub) {
+        avgSub.textContent =
+            period === 'today' ? 'ponderisana RSD/kg · danas' :
+            period === 'season' ? 'ponderisana RSD/kg · sezona' :
+            'ponderisana RSD/kg · 7 dana';
+    }
+
     const alertItems = [];
-    if (kgCeka > 0) alertItems.push({
-        title: 'Roba čeka',
-        value: `${mgmtDashFmtInt(kgCeka)} kg`,
-        text: 'Postoje neraspoređene količine koje čekaju transport.'
-    });
-    if (demandKg > 0) alertItems.push({
-        title: 'Otvoren demand',
-        value: `${mgmtDashFmtInt(demandKg)} kg`,
-        text: 'Postoji aktivna tražnja kupaca u sistemu.'
-    });
-    if (saldoKupci.some(r => mgmtDashNum(r.Saldo) > 0)) alertItems.push({
-        title: 'Kupci sa saldom',
-        text: 'Postoje kupci sa otvorenim finansijskim stanjem.'
-    });
-    if (saldoOM.some(r => mgmtDashNum(r.Saldo) > 0)) alertItems.push({
-        title: 'Otkupna mesta sa saldom',
-        text: 'Postoje mesta sa otvorenim saldom.'
-    });
+
+    if (kgCeka > 0) {
+        alertItems.push({
+            title: 'Roba čeka',
+            value: `${mgmtDashFmtInt(kgCeka)} kg`,
+            text: 'Postoje neraspoređene količine koje čekaju transport.'
+        });
+    }
+
+    if (demandKg > 0) {
+        alertItems.push({
+            title: 'Otvoren demand',
+            value: `${mgmtDashFmtInt(demandKg)} kg`,
+            text: 'Postoji aktivna tražnja kupaca u sistemu.'
+        });
+    }
+
+    if (saldoKupci.some(r => mgmtDashNum(r.Saldo) > 0)) {
+        alertItems.push({
+            title: 'Kupci sa saldom',
+            text: 'Postoje kupci sa otvorenim finansijskim stanjem.'
+        });
+    }
+
+    if (saldoOM.some(r => mgmtDashNum(r.Saldo) > 0)) {
+        alertItems.push({
+            title: 'Otkupna mesta sa saldom',
+            text: 'Postoje mesta sa otvorenim saldom.'
+        });
+    }
 
     const financeItems = [
         {
@@ -853,4 +998,45 @@ async function mgmtRenderDashboard() {
     mgmtDashRenderQuickLinks();
     mgmtDashRenderChart(series);
     mgmtDashRenderDispatcher();
+}
+function mgmtDashGetStationName(record) {
+    const stationId = record?.OtkupacID || '';
+    if (stationId && window.stammdaten && Array.isArray(stammdaten.stanice)) {
+        const hit = stammdaten.stanice.find(s => s.StanicaID === stationId);
+        if (hit) return hit.Naziv || hit.Mesto || hit.StanicaID || stationId;
+    }
+
+    if (stationId) return stationId;
+
+    const sheetName = record?._sheetName || '';
+    if (sheetName.startsWith('OTK-')) return sheetName.replace('OTK-', '');
+
+    return 'Nepoznato';
+}
+
+function mgmtDashUpdateChartMeta(period, series) {
+    const subtitleEl = document.getElementById('mgmtDashChartSubtitle');
+    const legendEl = document.getElementById('mgmtDashChartLegend');
+
+    if (subtitleEl) {
+        if (period === 'today') {
+            subtitleEl.textContent = 'Danas · kg po stanici';
+        } else if (period === 'season') {
+            subtitleEl.textContent = 'Sezona · kg po danu';
+        } else {
+            subtitleEl.textContent = 'Poslednjih 7 dana · kg po danu';
+        }
+    }
+
+    if (legendEl) {
+        const total = (series || []).reduce((sum, item) => sum + (item.value || 0), 0);
+
+        if (period === 'today') {
+            legendEl.textContent = `Ukupno danas: ${Math.round(total).toLocaleString('sr')} kg`;
+        } else if (period === 'season') {
+            legendEl.textContent = `Ukupno u sezoni: ${Math.round(total).toLocaleString('sr')} kg`;
+        } else {
+            legendEl.textContent = `Ukupno za 7 dana: ${Math.round(total).toLocaleString('sr')} kg`;
+        }
+    }
 }
