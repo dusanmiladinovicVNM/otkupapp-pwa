@@ -612,63 +612,109 @@ function mgmtDashRenderQuickLinks() {
     `;
 }
 
+let mgmtDashChartInstance = null;
+
 function mgmtDashRenderChart(series) {
-    const svg = document.getElementById('mgmtDashChart');
+    const canvas = document.getElementById('mgmtDashChart');
     const legend = document.getElementById('mgmtDashChartLegend');
-    if (!svg) return;
+    if (!canvas || typeof Chart === 'undefined') return;
 
-    const width = 680;
-    const height = 260;
-    const pad = { top: 16, right: 18, bottom: 34, left: 42 };
-    const innerW = width - pad.left - pad.right;
-    const innerH = height - pad.top - pad.bottom;
-    const maxVal = Math.max(1, ...series.map(x => x.value));
-    const stepX = series.length > 1 ? innerW / (series.length - 1) : innerW;
-
-    const points = series.map((item, i) => {
-        const x = pad.left + (i * stepX);
-        const y = pad.top + innerH - ((item.value / maxVal) * innerH);
-        return { ...item, x, y };
+    const labels = series.map(item => {
+        const d = new Date(item.day);
+        return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
     });
 
-    const polyline = points.map(p => `${p.x},${p.y}`).join(' ');
-    const area = [
-        `${pad.left},${pad.top + innerH}`,
-        ...points.map(p => `${p.x},${p.y}`),
-        `${pad.left + innerW},${pad.top + innerH}`
-    ].join(' ');
+    const data = series.map(item => Math.round(item.value || 0));
 
-    const grid = [];
-    const ticks = 4;
-    for (let i = 0; i <= ticks; i++) {
-        const y = pad.top + ((innerH / ticks) * i);
-        const value = Math.round(maxVal - ((maxVal / ticks) * i));
-        grid.push(`
-            <line x1="${pad.left}" y1="${y}" x2="${pad.left + innerW}" y2="${y}" stroke="#e8e3d6" stroke-width="1" />
-            <text x="${pad.left - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="#7b7b72">${mgmtDashFmtInt(value)}</text>
-        `);
+    if (mgmtDashChartInstance) {
+        mgmtDashChartInstance.destroy();
     }
 
-    const labels = points.map(p => {
-        const d = new Date(p.day);
-        const txt = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-        return `<text x="${p.x}" y="${height - 10}" text-anchor="middle" font-size="11" fill="#7b7b72">${txt}</text>`;
+    const ctx = canvas.getContext('2d');
+
+    mgmtDashChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Otkup kg',
+                    data,
+                    borderColor: '#1a5e2a',
+                    backgroundColor: 'rgba(26,94,42,0.10)',
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 4,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: '#1a5e2a',
+                    pointBorderColor: '#1a5e2a',
+                    borderWidth: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 450
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: '#1f2937',
+                    titleColor: '#ffffff',
+                    bodyColor: '#ffffff',
+                    displayColors: false,
+                    callbacks: {
+                        label(context) {
+                            const value = context.parsed.y || 0;
+                            return `${value.toLocaleString('sr')} kg`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    border: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#7b7b72',
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: '#e8e3d6'
+                    },
+                    border: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#7b7b72',
+                        font: {
+                            size: 11
+                        },
+                        callback(value) {
+                            return Number(value).toLocaleString('sr');
+                        }
+                    }
+                }
+            }
+        }
     });
 
-    const dots = points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="4" fill="#1a5e2a"></circle>`);
-
-    svg.innerHTML = `
-        <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
-        ${grid.join('')}
-        <polygon points="${area}" fill="rgba(26,94,42,0.10)"></polygon>
-        <polyline points="${polyline}" fill="none" stroke="#1a5e2a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
-        ${dots.join('')}
-        ${labels.join('')}
-    `;
-
     if (legend) {
-        const total = series.reduce((s, x) => s + x.value, 0);
-        legend.textContent = `Ukupno za 7 dana: ${mgmtDashFmtInt(total)} kg`;
+        const total = data.reduce((sum, value) => sum + value, 0);
+        legend.textContent = `Ukupno za 7 dana: ${total.toLocaleString('sr')} kg`;
     }
 }
 
