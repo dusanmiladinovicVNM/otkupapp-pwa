@@ -1880,6 +1880,114 @@
     </section>
 </div>
 
+<div class="tab-content" id="tab-mgmt-dashboard">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
+
+            <div class="mgmt-hero mgmt-dash-hero">
+                <div>
+                    <div class="mgmt-eyebrow">Executive dashboard</div>
+                    <h1 class="mgmt-title">Dashboard</h1>
+                    <div class="mgmt-subline">KPI, trend otkupa i aktuelni dispečer</div>
+                </div>
+
+                <div class="mgmt-dash-hero-meta">
+                    <span class="mgmt-dash-pill">Live operativa</span>
+                    <span class="mgmt-dash-pill mgmt-dash-pill--muted" id="mgmtDashUpdatedAt">Ažurirano: —</span>
+                </div>
+            </div>
+
+            <div class="mgmt-dash-kpi-grid">
+                <div class="mgmt-dash-kpi-card">
+                    <div class="mgmt-dash-kpi-label">Otkup · 7 dana</div>
+                    <div class="mgmt-dash-kpi-value" id="mgmtDashWeekKg">0</div>
+                    <div class="mgmt-dash-kpi-sub">kg u poslednjih 7 dana</div>
+                </div>
+
+                <div class="mgmt-dash-kpi-card">
+                    <div class="mgmt-dash-kpi-label">Aktivni kooperanti</div>
+                    <div class="mgmt-dash-kpi-value" id="mgmtDashActiveKoops">0</div>
+                    <div class="mgmt-dash-kpi-sub">jedinstveni u 7 dana</div>
+                </div>
+
+                <div class="mgmt-dash-kpi-card">
+                    <div class="mgmt-dash-kpi-label">Prosečna cena</div>
+                    <div class="mgmt-dash-kpi-value" id="mgmtDashAvgPrice">0</div>
+                    <div class="mgmt-dash-kpi-sub">ponderisana RSD/kg</div>
+                </div>
+
+                <div class="mgmt-dash-kpi-card">
+                    <div class="mgmt-dash-kpi-label">GGAP spremnost</div>
+                    <div class="mgmt-dash-kpi-value" id="mgmtDashGGAP">86%</div>
+                    <div class="mgmt-dash-kpi-sub">mock za sada</div>
+                </div>
+            </div>
+
+            <div class="mgmt-dash-main-grid">
+                <section class="mgmt-dash-panel">
+                    <div class="mgmt-dash-panel-head">
+                        <div>
+                            <div class="mgmt-dash-panel-title">Otkup u toku</div>
+                            <div class="mgmt-dash-panel-subtitle">Poslednjih 7 dana · kg po danu</div>
+                        </div>
+                        <button class="mgmt-dash-link-btn" type="button" onclick="showMgmtRoot('otkup')">Otvori otkup</button>
+                    </div>
+
+                    <div class="mgmt-dash-chart-wrap">
+                        <svg id="mgmtDashChart" class="mgmt-dash-chart" viewBox="0 0 680 260" preserveAspectRatio="none"></svg>
+                    </div>
+                    <div class="mgmt-dash-chart-legend" id="mgmtDashChartLegend"></div>
+                </section>
+
+                <section class="mgmt-dash-panel">
+                    <div class="mgmt-dash-panel-head">
+                        <div>
+                            <div class="mgmt-dash-panel-title">Aktuelni dispečer</div>
+                            <div class="mgmt-dash-panel-subtitle">Aktivni planovi i status transporta</div>
+                        </div>
+                        <button class="mgmt-dash-link-btn" type="button" onclick="showMgmtRoot('dispecer')">Otvori dispečer</button>
+                    </div>
+
+                    <div class="mgmt-dash-dispatch-list" id="mgmtDashDispatcher"></div>
+                </section>
+            </div>
+
+            <div class="mgmt-dash-bottom-grid">
+                <section class="mgmt-dash-panel">
+                    <div class="mgmt-dash-panel-head">
+                        <div>
+                            <div class="mgmt-dash-panel-title">Traži pažnju</div>
+                            <div class="mgmt-dash-panel-subtitle">Najbitnija odstupanja i signali</div>
+                        </div>
+                    </div>
+                    <div class="mgmt-dash-list" id="mgmtDashAlerts"></div>
+                </section>
+
+                <section class="mgmt-dash-panel">
+                    <div class="mgmt-dash-panel-head">
+                        <div>
+                            <div class="mgmt-dash-panel-title">Finansijski sažetak</div>
+                            <div class="mgmt-dash-panel-subtitle">Otvorene izloženosti</div>
+                        </div>
+                    </div>
+                    <div class="mgmt-dash-list" id="mgmtDashFinance"></div>
+                </section>
+
+                <section class="mgmt-dash-panel">
+                    <div class="mgmt-dash-panel-head">
+                        <div>
+                            <div class="mgmt-dash-panel-title">Brzi ulazi</div>
+                            <div class="mgmt-dash-panel-subtitle">Prelaz na ostale MGMT module</div>
+                        </div>
+                    </div>
+                    <div class="mgmt-dash-quicklinks" id="mgmtDashQuickLinks"></div>
+                </section>
+            </div>
+
+        </div>
+    </section>
+</div>
+
 <div class="tab-content" id="tab-mgmt-dispecer">
     <section class="mgmt-screen">
         <div class="mgmt-shell">
