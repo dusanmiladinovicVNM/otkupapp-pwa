@@ -13,15 +13,22 @@ window.mgmtShellState = {
     mounted: false
 };
 
-function mgmtShellInit() {
+async function mgmtShellInit() {
     mgmtMountLegacyBlocks();
-    mgmtRenderOverview();
-    showMgmtRoot('pregled');
+
+    if (typeof loadDispecer === 'function') {
+        try {
+            await loadDispecer();
+        } catch (e) {}
+    }
+
+    await showMgmtRoot('pregled');
+
     if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
     if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
 }
 
-function showMgmtRoot(root, btn) {
+async function showMgmtRoot(root, btn) {
     window.mgmtShellState.activeRoot = root;
 
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -48,11 +55,16 @@ function showMgmtRoot(root, btn) {
     }
 
     if (root === 'dashboard') {
-        mgmtRenderDashboard();
+        await mgmtRenderDashboard();
     } else if (root === 'pregled') {
         mgmtRenderOverview();
     } else if (root === 'dispecer') {
-        if (typeof loadDispecer === 'function') loadDispecer();
+        if (typeof loadDispecer === 'function') {
+            try {
+                await loadDispecer();
+            } catch (e) {}
+        }
+        mgmtRenderOverview();
     } else if (root === 'otkup') {
         showMgmtOtkupSub(window.mgmtShellState.otkupSub || 'otkupi');
     } else if (root === 'partneri') {
@@ -68,8 +80,8 @@ function showMgmtRoot(root, btn) {
     }, 0);
 }
 
-function showMgmtBottomRoot(root, btn) {
-    showMgmtRoot(root);
+async function showMgmtBottomRoot(root, btn) {
+    await showMgmtRoot(root, btn);
     if (typeof updateRoleNavActive === 'function') updateRoleNavActive(root);
 }
 
@@ -866,7 +878,7 @@ async function mgmtRenderDashboard() {
         } catch (e) {}
     }
 
-    if (typeof loadDispecer === 'function' && (!window.dpPlans || !window.dpDem)) {
+    if (typeof loadDispecer === 'function') {
         try {
             await loadDispecer();
         } catch (e) {}
@@ -914,14 +926,14 @@ async function mgmtRenderDashboard() {
     const kgSub = document.querySelector('#mgmtDashWeekKg')?.nextElementSibling;
     const koopSub = document.querySelector('#mgmtDashActiveKoops')?.nextElementSibling;
     const avgSub = document.querySelector('#mgmtDashAvgPrice')?.nextElementSibling;
-    
+
     if (kgLabel) {
         kgLabel.textContent =
             period === 'today' ? 'Otkup · danas' :
             period === 'season' ? 'Otkup · sezona' :
             'Otkup · 7 dana';
     }
-    
+
     if (kgSub) {
         kgSub.textContent =
             period === 'today' ? 'kg danas' :
@@ -999,6 +1011,7 @@ async function mgmtRenderDashboard() {
     mgmtDashRenderChart(series);
     mgmtDashRenderDispatcher();
 }
+
 function mgmtDashGetStationName(record) {
     const stationId = record?.OtkupacID || '';
     if (stationId && window.stammdaten && Array.isArray(stammdaten.stanice)) {
