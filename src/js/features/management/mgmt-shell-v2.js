@@ -722,8 +722,8 @@ function mgmtDashRenderChart(series) {
                     padding: 10,
                     callbacks: {
                         label(context) {
-                            const value = context.parsed.x ?? context.parsed.y ?? 0;
-                            return `${Number(value).toLocaleString('sr')} kg`;
+                            const value = Number(context.raw || 0);
+                            return `${value.toLocaleString('sr')} kg`;
                         }
                     }
                 }
