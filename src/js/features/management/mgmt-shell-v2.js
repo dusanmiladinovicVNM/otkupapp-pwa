@@ -854,7 +854,7 @@ function mgmtDashRenderDispatcher() {
             <div class="mgmt-dash-dispatch-item">
                 <div class="mgmt-dash-dispatch-top">
                     <div>
-                        <div class="mgmt-dash-dispatch-name">${mgmtDashEscape(p.VozacName || p.VozacID || '?')}</div>
+                        <div class="mgmt-dash-dispatch-name">${mgmtDashEscape(mgmtDashGetDriverName(p))}</div>
                         <div class="mgmt-dash-dispatch-route">
                             ${mgmtDashEscape(p.StanicaName || p.StanicaID || '?')} → ${mgmtDashEscape(p.KupacName || p.KupacID || '?')}
                         </div>
@@ -1025,6 +1025,31 @@ function mgmtDashGetStationName(record) {
     if (sheetName.startsWith('OTK-')) return sheetName.replace('OTK-', '');
 
     return 'Nepoznato';
+}
+
+function mgmtDashGetDriverName(plan) {
+    if (!plan) return '?';
+
+    if (plan.VozacName) return plan.VozacName;
+
+    const vozacID = plan.VozacID || '';
+    if (!vozacID) return '?';
+
+    if (Array.isArray(dpKamioni)) {
+        const hit = dpKamioni.find(v =>
+            (v.id || v.VozacID || v.vozacID || '') === vozacID
+        );
+        if (hit && hit.name) return hit.name;
+    }
+
+    if (window.stammdaten && Array.isArray(stammdaten.vozaci)) {
+        const hit = stammdaten.vozaci.find(v =>
+            (v.VozacID || v.vozacID || v.ID || '') === vozacID
+        );
+        if (hit) return hit.Naziv || hit.Ime || hit.Vozac || vozacID;
+    }
+
+    return vozacID;
 }
 
 function mgmtDashUpdateChartMeta(period, series) {
