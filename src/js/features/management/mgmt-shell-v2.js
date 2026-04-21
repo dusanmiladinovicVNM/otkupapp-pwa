@@ -910,10 +910,18 @@ async function mgmtRenderDashboard() {
         });
     }
 
+    const kgLabel = document.getElementById('mgmtDashKgLabel');
     const kgSub = document.querySelector('#mgmtDashWeekKg')?.nextElementSibling;
     const koopSub = document.querySelector('#mgmtDashActiveKoops')?.nextElementSibling;
     const avgSub = document.querySelector('#mgmtDashAvgPrice')?.nextElementSibling;
-
+    
+    if (kgLabel) {
+        kgLabel.textContent =
+            period === 'today' ? 'Otkup · danas' :
+            period === 'season' ? 'Otkup · sezona' :
+            'Otkup · 7 dana';
+    }
+    
     if (kgSub) {
         kgSub.textContent =
             period === 'today' ? 'kg danas' :
