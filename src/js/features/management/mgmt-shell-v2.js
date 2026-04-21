@@ -335,19 +335,19 @@ function mgmtRenderOverview() {
     }
 
     let aktivniPlanovi = 0;
-    if (window.dpPlans && Array.isArray(dpPlans)) {
+    if (Array.isArray(dpPlans)) {
         aktivniPlanovi = dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku').length;
     }
 
     let aktivniKamioni = 0;
-    if (window.dpKamioni && Array.isArray(dpKamioni)) {
+    if (Array.isArray(dpKamioni)) {
         aktivniKamioni = dpKamioni.length;
     } else if (stammdaten && Array.isArray(stammdaten.vozaci)) {
         aktivniKamioni = stammdaten.vozaci.length;
     }
 
     let demandKg = 0;
-    if (window.dpDem && Array.isArray(dpDem)) {
+    if (Array.isArray(dpDem)) {
         demandKg = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0);
     }
 
@@ -838,7 +838,7 @@ function mgmtDashRenderDispatcher() {
     const el = document.getElementById('mgmtDashDispatcher');
     if (!el) return;
 
-    const plans = (window.dpPlans && Array.isArray(dpPlans))
+    const plans = Array.isArray(dpPlans)
         ? dpPlans.filter(p => p.Status === 'planned' || p.Status === 'u_toku')
         : [];
 
@@ -901,7 +901,7 @@ async function mgmtRenderDashboard() {
     }
 
     let demandKg = 0;
-    if (window.dpDem && Array.isArray(dpDem)) {
+    if (Array.isArray(dpDem)) {
         demandKg = dpDem.reduce((s, d) => s + mgmtDashNum(d.Kg), 0);
     }
 
