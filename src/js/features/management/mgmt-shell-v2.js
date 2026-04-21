@@ -305,7 +305,7 @@ function showMgmtAgroSub(sub, btn) {
 }
 
 function mgmtRenderOverview() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = mgmtDashTodayISO();
     const otkupiAll = (window.mgmtData && mgmtData.otkupiAll) ? mgmtData.otkupiAll : [];
     const saldoKupci = (window.mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
     const saldoOM = (window.mgmtData && mgmtData.saldoOM) ? mgmtData.saldoOM : [];
@@ -448,8 +448,33 @@ function mgmtDashFmtDec(v, digits = 1) {
 
 function mgmtDashFmtDate(v) {
     if (!v) return '';
-    const s = String(v);
-    return s.length >= 10 ? s.slice(0, 10) : s;
+
+    if (v instanceof Date && !isNaN(v.getTime())) {
+        return mgmtDashLocalISO(v);
+    }
+
+    const s = String(v).trim();
+
+    // Najčešći slučaj: već je ISO ili ISO-like
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+    // Ako nekad stigne sr/evropski format tipa 20.04.2026 ili 20/04/2026
+    const localMatch = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    if (localMatch) {
+        const dd = String(localMatch[1]).padStart(2, '0');
+        const mm = String(localMatch[2]).padStart(2, '0');
+        const yyyy = localMatch[3];
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
+    // Fallback: pokušaj parse, ali vrati lokalni datum, ne UTC ISO
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+        return mgmtDashLocalISO(parsed);
+    }
+
+    return '';
 }
 
 function mgmtDashSetText(id, text) {
@@ -467,7 +492,17 @@ function mgmtDashEscape(value) {
 }
 
 function mgmtDashTodayISO() {
-    return new Date().toISOString().split('T')[0];
+    return mgmtDashLocalISO(new Date());
+}
+
+function mgmtDashLocalISO(date) {
+    if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+
+    return `${y}-${m}-${d}`;
 }
 
 function mgmtDashGetLastNDays(n) {
@@ -478,7 +513,7 @@ function mgmtDashGetLastNDays(n) {
     for (let i = n - 1; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        out.push(d.toISOString().split('T')[0]);
+        out.push(mgmtDashLocalISO(d));
     }
 
     return out;
@@ -1022,15 +1057,18 @@ function mgmtDashGetPeriodDays(period, otkupiAll) {
 
     const start = mgmtDashGetSeasonStart(otkupiAll);
     const out = [];
+
     const from = new Date(start);
     const to = new Date();
+
+    if (isNaN(from.getTime())) return [mgmtDashTodayISO()];
 
     from.setHours(0, 0, 0, 0);
     to.setHours(0, 0, 0, 0);
 
     const cursor = new Date(from);
     while (cursor <= to) {
-        out.push(cursor.toISOString().split('T')[0]);
+        out.push(mgmtDashLocalISO(cursor));
         cursor.setDate(cursor.getDate() + 1);
     }
 
