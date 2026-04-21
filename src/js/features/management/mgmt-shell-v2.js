@@ -1030,26 +1030,32 @@ function mgmtDashGetStationName(record) {
 function mgmtDashGetDriverName(plan) {
     if (!plan) return '?';
 
-    if (plan.VozacName) return plan.VozacName;
-
     const vozacID = plan.VozacID || '';
-    if (!vozacID) return '?';
+    const vozacName = plan.VozacName || '';
 
-    if (Array.isArray(dpKamioni)) {
+    if (vozacID && Array.isArray(dpKamioni)) {
         const hit = dpKamioni.find(v =>
             (v.id || v.VozacID || v.vozacID || '') === vozacID
         );
-        if (hit && hit.name) return hit.name;
+        if (hit && hit.name && hit.name !== vozacID) return hit.name;
     }
 
-    if (window.stammdaten && Array.isArray(stammdaten.vozaci)) {
+    if (window.stammdaten && Array.isArray(stammdaten.vozaci) && vozacID) {
         const hit = stammdaten.vozaci.find(v =>
             (v.VozacID || v.vozacID || v.ID || '') === vozacID
         );
-        if (hit) return hit.Naziv || hit.Ime || hit.Vozac || vozacID;
+        if (hit) {
+            const fullName =
+                [hit.Ime, hit.Prezime].filter(Boolean).join(' ').trim() ||
+                hit.Naziv ||
+                hit.Vozac ||
+                '';
+            if (fullName && fullName !== vozacID) return fullName;
+        }
     }
 
-    return vozacID;
+    if (vozacName && vozacName !== vozacID) return vozacName;
+    return vozacID || vozacName || '?';
 }
 
 function mgmtDashUpdateChartMeta(period, series) {
