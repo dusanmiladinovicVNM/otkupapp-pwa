@@ -155,6 +155,7 @@ function mapServerZbirnaRecord(r) {
     return {
         clientRecordID: r.ClientRecordID || '',
         serverRecordID: r.ServerRecordID || '',
+        brojZbirne: r.BrojZbirne || '',
         createdAtClient: normalizeIso(r.CreatedAtClient),
         updatedAtClient: normalizeIso(r.UpdatedAtClient || r.CreatedAtClient),
         updatedAtServer: normalizeIso(r.UpdatedAtServer || r.ReceivedAt),
@@ -183,6 +184,7 @@ function normalizeLocalZbirnaRecord(r) {
     return {
         clientRecordID: r.clientRecordID || '',
         serverRecordID: r.serverRecordID || '',
+        brojZbirne: r.brojZbirne || '',
         createdAtClient: normalizeIso(r.createdAtClient),
         updatedAtClient: normalizeIso(r.updatedAtClient || r.createdAtClient),
         updatedAtServer: normalizeIso(r.updatedAtServer),
@@ -242,7 +244,8 @@ function renderVozacZbirneFromData(allZbirne) {
         const syncText =
             r.syncStatus === 'syncing' ? ' | sync...' :
             r.syncStatus === 'pending' ? ' | pending' :
-            (r.serverRecordID ? ' | ' + r.serverRecordID : '');
+            (r.brojZbirne ? ' | ' + r.brojZbirne :
+             r.serverRecordID ? ' | ' + r.serverRecordID : '');
 
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header">
@@ -317,6 +320,7 @@ async function confirmZbirna() {
             ? window.crypto.randomUUID()
             : ('zbr-' + Date.now() + '-' + Math.floor(Math.random() * 1000000)),
         serverRecordID: '',
+        brojZbirne: '',
         createdAtClient: nowIso,
         updatedAtClient: nowIso,
         updatedAtServer: '',
@@ -434,6 +438,7 @@ async function syncZbirne() {
                     record.syncedAt = new Date().toISOString();
                     record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
                     record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
+                    record.brojZbirne = result.brojZbirne || record.brojZbirne || '';
                     record.lastServerStatus = result.status || 'synced';
                     syncedCount++;
                 } else {
