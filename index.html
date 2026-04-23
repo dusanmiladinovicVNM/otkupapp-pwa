@@ -383,11 +383,11 @@
             </div>
 
             <div class="otprema-cta-card">
-                <button class="btn-primary otprema-scan-btn" type="button" onclick="startOtpremaVozacQRScan()">
+                <button class="btn-primary otprema-scan-btn" type="button" data-action="start-otprema-vozac-qr-scan">
                     📷 Skeniraj QR vozača
                 </button>
 
-                <button class="otprema-link-btn" type="button" onclick="toggleOtpremaFallback()">
+                <button class="otprema-link-btn" type="button" data-action="toggle-otprema-fallback">
                     Ne mogu da skeniram
                 </button>
 
@@ -400,7 +400,7 @@
                             </select>
                         </div>
                     </div>
-                    <button class="btn-secondary" type="button" onclick="applyOtpremaFallbackDriver()">Potvrdi vozača</button>
+                    <button class="btn-secondary" type="button" data-action="apply-otprema-fallback-driver">Potvrdi vozača</button>
                 </div>
 
                 <div id="qr-reader-otprema-vozac" class="otprema-qr-reader" style="display:none;"></div>
@@ -436,15 +436,15 @@
                     <div class="otprema-eyebrow">Dodela vozaču</div>
                     <h2 class="otprema-assign-title">Izaberi otkupe</h2>
                 </div>
-                <button class="otprema-icon-btn" type="button" onclick="cancelOtpremaAssign()">✕</button>
+                <button class="otprema-icon-btn" type="button" data-action="cancel-otprema-assign">✕</button>
             </div>
 
             <div class="otprema-driver-card" id="otpremaAssignDriverCard"></div>
 
             <div class="otprema-toolbar">
-                <button class="btn-secondary" type="button" onclick="selectAllOtpremaToday()">Izaberi sve današnje</button>
-                <button class="btn-secondary" type="button" onclick="clearOtpremaSelection()">Poništi izbor</button>
-                <button class="otprema-link-btn" type="button" onclick="startOtpremaVozacQRScan()">Promeni vozača</button>
+                <button class="btn-secondary" type="button" data-action="select-all-otprema-today">Izaberi sve današnje</button>
+                <button class="btn-secondary" type="button" data-action="clear-otprema-selection">Poništi izbor</button>
+                <button class="otprema-link-btn" type="button" data-action="start-otprema-vozac-qr-scan">Promeni vozača</button>
             </div>
 
             <div class="otprema-sections" id="otpremaAssignSections"></div>
@@ -454,7 +454,7 @@
                     <div><strong id="otpremaSelectedCount">0</strong> stavki</div>
                     <div><strong id="otpremaSelectedKg">0 kg</strong></div>
                 </div>
-                <button class="btn-primary" type="button" onclick="confirmOtpremaAssign()">Potvrdi otpremu</button>
+                <button class="btn-primary" type="button" data-action="confirm-otprema-assign">Potvrdi otpremu</button>
             </div>
         </div>
 
@@ -480,8 +480,8 @@
             <div class="otprema-sections" id="otpremaSuccessList"></div>
 
             <div class="otprema-success-actions">
-                <button class="btn-secondary" type="button" onclick="backToOtpremaRoot()">Nazad na Otpremu</button>
-                <button class="btn-primary" type="button" onclick="startOtpremaVozacQRScan()">Nova dodela</button>
+                <button class="btn-secondary" type="button" data-action="back-to-otprema-root">Nazad na Otpremu</button>
+                <button class="btn-primary" type="button" data-action="start-otprema-vozac-qr-scan">Nova dodela</button>
             </div>
         </div>
 
@@ -515,8 +515,8 @@
                     </div>
 
                     <div class="otk-more-actions">
-                        <button type="button" class="btn-secondary" onclick="showQRProfile()">Prikaži moj QR</button>
-                        <button type="button" class="btn-primary" onclick="syncOtkupacFromMore()">Sinhronizuj sada</button>
+                        <button type="button" class="btn-secondary" data-action="show-qr-profile">Prikaži moj QR</button>
+                        <button type="button" class="btn-primary" data-action="sync-otkupac-now">Sinhronizuj sada</button>
                     </div>
                 </section>
 
@@ -538,8 +538,8 @@
                     </div>
 
                     <div class="otk-more-actions">
-                        <button type="button" class="btn-secondary" onclick="clearOtkupacSignature()">Obriši</button>
-                        <button type="button" class="btn-primary" onclick="saveOtkupacSignature()">Sačuvaj potpis</button>
+                        <button type="button" class="btn-secondary" data-action="clear-otkupac-signature">Obriši</button>
+                        <button type="button" class="btn-primary" data-action="save-otkupac-signature">Sačuvaj potpis</button>
                     </div>
                 </section>
             </div>
@@ -573,17 +573,17 @@
 
         </div>
     </section>
-    <div class="otprema-detail-modal" id="otpremaDetailModal" onclick="closeOtpremaDetail()">
-        <div class="otprema-detail-card" onclick="event.stopPropagation()">
+    <div class="otprema-detail-modal" id="otpremaDetailModal">
+        <div class="otprema-detail-card">
             <div class="otprema-detail-head">
                 <div class="otprema-detail-title" id="otpremaDetailTitle">Detalj otpreme</div>
-                <button type="button" class="otprema-detail-close" onclick="closeOtpremaDetail()">✕</button>
+                <button type="button" class="otprema-detail-close" data-action="close-otprema-detail">✕</button>
             </div>
 
             <div class="otprema-detail-body" id="otpremaDetailBody"></div>
 
             <div class="otprema-detail-actions">
-                <button type="button" class="btn-secondary" onclick="closeOtpremaDetail()">Zatvori</button>
+                <button type="button" class="btn-secondary" data-action="close-otprema-detail">Zatvori</button>
             </div>
         </div>
     </div>
@@ -606,7 +606,7 @@
                         </div>
                     </div>
 
-                    <button class="home-add-btn" onclick="openHomeQuickActions()">Akcije</button>
+                    <button class="home-add-btn" data-action="open-home-quick-actions">Akcije</button>
                 </div>
             </div>
 
