@@ -184,7 +184,7 @@ function startBackgroundSync() {
 
     appRuntime.syncIntervalId = setInterval(() => {
         if (!navigator.onLine) return;
-        if (CONFIG.USER_ROLE !== 'Otkupac') return;
+        if (CONFIG.USER_ROLE === 'Management') return;
         syncQueueSafe();
     }, 60000);
 }
@@ -329,19 +329,42 @@ function handleStammdatenUpdated() {
 // ============================================================
 // SYNC
 // ============================================================
+async function runRoleSync() {
+    if (!navigator.onLine) return { ok: false, reason: 'offline' };
+
+    if (CONFIG.USER_ROLE === 'Otkupac') {
+        if (typeof syncQueue !== 'function') return { ok: false, reason: 'missing-syncQueue' };
+        await syncQueue();
+        return { ok: true, role: 'Otkupac' };
+    }
+
+    if (CONFIG.USER_ROLE === 'Kooperant') {
+        if (typeof syncKooperantNow !== 'function') return { ok: false, reason: 'missing-syncKooperantNow' };
+        await syncKooperantNow();
+        return { ok: true, role: 'Kooperant' };
+    }
+
+    if (CONFIG.USER_ROLE === 'Vozac') {
+        if (typeof syncZbirne !== 'function') return { ok: false, reason: 'missing-syncZbirne' };
+        await syncZbirne();
+        return { ok: true, role: 'Vozac' };
+    }
+
+    return { ok: false, reason: 'no-sync-for-role' };
+}
+
 async function syncQueueSafe() {
     if (!navigator.onLine) return;
-    if (CONFIG.USER_ROLE !== 'Otkupac') return;
+    if (CONFIG.USER_ROLE === 'Management') return;
     if (appRuntime.syncInFlight) return;
-    if (typeof syncQueue !== 'function') return;
 
     appRuntime.syncInFlight = true;
     updateSyncBadge();
 
     try {
-        await syncQueue();
+        await runRoleSync();
     } catch (err) {
-        console.error('syncQueue failed:', err);
+        console.error('runRoleSync failed:', err);
     } finally {
         appRuntime.syncInFlight = false;
         updateSyncBadge();
