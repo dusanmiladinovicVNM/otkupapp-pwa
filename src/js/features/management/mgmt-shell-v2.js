@@ -116,8 +116,6 @@ const MGMT_DASH_PERIOD_COPY = {
 };
 
 async function mgmtShellInit() {
-    mgmtMountLegacyBlocks();
-
     if (typeof loadDispecer === 'function') {
         try {
             await loadDispecer();
@@ -184,62 +182,6 @@ async function showMgmtRoot(root, btn) {
             updateRoleNavActive();
         }
     }, 0);
-}
-
-function mgmtMountLegacyBlocks() {
-    if (window.mgmtShellState.mounted) return;
-    window.mgmtShellState.mounted = true;
-
-    // Dispecer
-    const oldDispecer = document.getElementById('tab-dispecer');
-    const dispecerMount = document.getElementById('mgmtDispecerMount');
-    if (oldDispecer && dispecerMount && oldDispecer !== dispecerMount) {
-        while (oldDispecer.firstChild) {
-            dispecerMount.appendChild(oldDispecer.firstChild);
-        }
-        oldDispecer.remove();
-    }
-
-    // Otkup
-    const otkupMount = document.getElementById('mgmtOtkupMount');
-    if (otkupMount) {
-        const otkupi = document.getElementById('mgmt-sta-otkupi');
-        const roba = document.getElementById('mgmt-sta-roba');
-        const saldo = document.getElementById('mgmt-sta-saldo');
-
-        if (otkupi) otkupMount.appendChild(otkupi);
-        if (roba) otkupMount.appendChild(roba);
-        if (saldo) otkupMount.appendChild(saldo);
-    }
-
-    // Partneri
-    const partneriMount = document.getElementById('mgmtPartneriMount');
-    if (partneriMount) {
-        [
-            'mgmt-koop-pregled',
-            'mgmt-koop-kartica',
-            'mgmt-koop-saldo',
-            'mgmt-kup-fakture',
-            'mgmt-kup-saldo',
-            'mgmt-kup-roba'
-        ].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) partneriMount.appendChild(el);
-        });
-    }
-
-    // Agro
-    const agroMount = document.getElementById('mgmtAgroMount');
-    if (agroMount) {
-        const izd = document.getElementById('mgmt-agro-izdavanje');
-        const stanje = document.getElementById('mgmt-agro-stanje');
-        if (izd) agroMount.appendChild(izd);
-        if (stanje) agroMount.appendChild(stanje);
-    }
-
-    // Sakrij legacy wrapper ako ostane
-    const legacy = document.getElementById('tab-mgmt');
-    if (legacy) legacy.style.display = 'none';
 }
 
 function showMgmtOtkupSub(sub, btn) {
