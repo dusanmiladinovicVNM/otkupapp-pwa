@@ -1,7 +1,6 @@
 // ============================================================
 // KOOPERANT SYNC
 // Covers:
-// - CONFIG.AGRO_STORE  -> action: syncAgromere
 // - 'tretmani'         -> action: syncTretman
 //
 // Note:
@@ -15,7 +14,6 @@
 
         if (!window.appRuntime.kooperantSync) {
             window.appRuntime.kooperantSync = {
-                agromereInFlight: false,
                 tretmaniInFlight: false
             };
         }
@@ -178,20 +176,6 @@
     }
 
     // ------------------------------------------------------------
-    // AGROMERE (legacy/simple agro store)
-    // Backend action: syncAgromere
-    // Store: CONFIG.AGRO_STORE
-    // ------------------------------------------------------------
-    window.syncAgromere = async function syncAgromere() {
-        return syncEntityStore({
-            storeName: CONFIG.AGRO_STORE,
-            action: 'syncAgromere',
-            inFlightKey: 'agromereInFlight',
-            successLabel: 'Agromere sinhronizovane'
-        });
-    };
-
-    // ------------------------------------------------------------
     // TRETMANI (digitalni agronom)
     // Backend action: syncTretman
     // Store: 'tretmani'
@@ -210,15 +194,6 @@
     // ------------------------------------------------------------
     window.syncKooperantNow = async function syncKooperantNow() {
         const results = [];
-
-        // syncAgromere only if store exists in config and function is meaningful in your app
-        if (CONFIG && CONFIG.AGRO_STORE) {
-            try {
-                results.push({ type: 'agromere', ...(await window.syncAgromere()) });
-            } catch (e) {
-                results.push({ type: 'agromere', ok: false, error: e.message || 'syncAgromere failed' });
-            }
-        }
 
         try {
             results.push({ type: 'tretmani', ...(await window.syncTretmani()) });
