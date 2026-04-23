@@ -587,6 +587,11 @@ function handleAppShellClick(event) {
             syncKooperantFromMore();
             return;
         }
+
+        if (action === 'role-nav-tab') {
+            showRoleNavTab(actionEl.dataset.tab, actionEl);
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
