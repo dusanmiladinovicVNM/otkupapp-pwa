@@ -77,7 +77,7 @@ const ASSETS = [
     './icons/icon-512x512.png',
     
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
-    'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js'
+    'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js'
