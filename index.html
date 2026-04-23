@@ -62,33 +62,36 @@
 
     <div class="header-actions">
         <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
-        <button onclick="showQRProfile()" class="header-btn">⊞</button>
-        <button onclick="doLogout()" class="header-btn">⇄</button>
+        <button data-action="show-qr-profile" class="header-btn">⊞</button>
+        <button data-action="logout" class="header-btn">⇄</button>
     </div>
 </div>
     
 <!-- TAB BAR -->
 <div class="tab-bar" id="tabBar">
     <!-- Otkupac -->
-    <button class="tab-btn role-otkupac" onclick="showTab('otkup')">Novi</button>
-    <button class="tab-btn role-otkupac" onclick="showTab('pregled', this)">Otkupi</button>
-    <button class="tab-btn role-otkupac" onclick="showTab('otpremnice')">Otprem.</button>
-    <button class="tab-btn role-otkupac" onclick="showTab('queue')">Sync</button>
+    <button class="tab-btn role-otkupac" data-route="tab" data-tab="otkup">Novi</button>
+    <button class="tab-btn role-otkupac" data-route="tab" data-tab="pregled">Otkupi</button>
+    <button class="tab-btn role-otkupac" data-route="tab" data-tab="otpremnice">Otprem.</button>
+    <button class="tab-btn role-otkupac" data-route="tab" data-tab="queue">Sync</button>
+
     <!-- Kooperant -->
-    <button class="tab-btn role-kooperant" onclick="showTab('home', this)">⌂ Pregled</button>
-    <button class="tab-btn role-kooperant" onclick="showTab('parcele', this)">▣ Parcele</button>
-    <button class="tab-btn role-kooperant" onclick="showTab('agromere', this)">✿ Radovi</button>
-    <button class="tab-btn role-kooperant" onclick="showTab('knjigapolja', this)">☰ Knjiga polja</button>
-    <button class="tab-btn role-kooperant" onclick="showTab('more', this)">⋯ Više</button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="home">⌂ Pregled</button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="parcele">▣ Parcele</button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="agromere">✿ Radovi</button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="knjigapolja">☰ Knjiga polja</button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="more">⋯ Više</button>
+
     <!-- Management -->
-    <button class="tab-btn role-management" data-mgmt-root="pregled" onclick="showMgmtRoot('pregled', this)">Pregled</button>
-    <button class="tab-btn role-management" data-mgmt-root="dispecer" onclick="showMgmtRoot('dispecer', this)">📋 Dispečer</button>
-    <button class="tab-btn role-management" data-mgmt-root="otkup" onclick="showMgmtRoot('otkup', this)">Otkup</button>
-    <button class="tab-btn role-management" data-mgmt-root="partneri" onclick="showMgmtRoot('partneri', this)">Partneri</button>
-    <button class="tab-btn role-management" data-mgmt-root="agro" onclick="showMgmtRoot('agro', this)">Agrohemija</button>
+    <button class="tab-btn role-management" data-route="mgmt-root" data-root="pregled" data-mgmt-root="pregled">Pregled</button>
+    <button class="tab-btn role-management" data-route="mgmt-root" data-root="dispecer" data-mgmt-root="dispecer">📋 Dispečer</button>
+    <button class="tab-btn role-management" data-route="mgmt-root" data-root="otkup" data-mgmt-root="otkup">Otkup</button>
+    <button class="tab-btn role-management" data-route="mgmt-root" data-root="partneri" data-mgmt-root="partneri">Partneri</button>
+    <button class="tab-btn role-management" data-route="mgmt-root" data-root="agro" data-mgmt-root="agro">Agrohemija</button>
+
     <!-- Vozac -->
-    <button class="tab-btn role-vozac" onclick="showTab('zbirna')">Zbirna</button>
-    <button class="tab-btn role-vozac" onclick="showTab('transport')">Transport</button>
+    <button class="tab-btn role-vozac" data-route="tab" data-tab="zbirna">Zbirna</button>
+    <button class="tab-btn role-vozac" data-route="tab" data-tab="transport">Transport</button>
 </div>
 
 <!-- ==================== OTKUP TAB ==================== -->
