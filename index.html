@@ -1673,9 +1673,9 @@
 
                 <div class="mgmt-dash-hero-meta">
                     <div class="mgmt-dash-period-switch" id="mgmtDashPeriodSwitch">
-                        <button type="button" class="mgmt-dash-period-btn" data-period="today" onclick="setMgmtDashboardPeriod('today', this)">Danas</button>
-                        <button type="button" class="mgmt-dash-period-btn active" data-period="7d" onclick="setMgmtDashboardPeriod('7d', this)">7 dana</button>
-                        <button type="button" class="mgmt-dash-period-btn" data-period="season" onclick="setMgmtDashboardPeriod('season', this)">Sezona</button>
+                        <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="today">Danas</button>
+                        <button type="button" class="mgmt-dash-period-btn active" data-action="mgmt-dash-period" data-period="7d">7 dana</button>
+                        <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="season">Sezona</button>
                     </div>
 
                     <span class="mgmt-dash-pill">Live operativa</span>
@@ -1716,7 +1716,7 @@
                             <div class="mgmt-dash-panel-title">Otkup u toku</div>
                             <div class="mgmt-dash-panel-subtitle" id="mgmtDashChartSubtitle">Poslednjih 7 dana · kg po danu</div>
                         </div>
-                        <button class="mgmt-dash-link-btn" type="button" onclick="showMgmtRoot('otkup')">Otvori otkup</button>
+                        <button class="mgmt-dash-link-btn" type="button" data-route="mgmt-root" data-root="otkup">Otvori otkup</button>
                     </div>
 
                     <div class="mgmt-dash-chart-wrap">
@@ -1731,7 +1731,7 @@
                             <div class="mgmt-dash-panel-title">Aktuelni dispečer</div>
                             <div class="mgmt-dash-panel-subtitle">Aktivni planovi i status transporta</div>
                         </div>
-                        <button class="mgmt-dash-link-btn" type="button" onclick="showMgmtRoot('dispecer')">Otvori dispečer</button>
+                        <button class="mgmt-dash-link-btn" type="button" data-route="mgmt-root" data-root="dispecer">Otvori dispečer</button>
                     </div>
 
                     <div class="mgmt-dash-dispatch-list" id="mgmtDashDispatcher"></div>
@@ -1798,8 +1798,8 @@
                 <div class="dp-banner" id="dpBnr">
                     <div class="dp-bt" id="dpBt">—</div>
                     <div class="dp-bs" id="dpBs">—</div>
-                    <button onclick="dpOK()" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
-                    <button onclick="dpX()" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
+                    <button data-action="dp-ok" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
+                    <button data-action="dp-x" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
                 </div>
  
                 <!-- Active plans -->
@@ -1830,7 +1830,7 @@
                                 <div style="display:flex;gap:6px;">
                                     <select id="dpDV" style="flex:1;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Vrsta...</option></select>
                                     <select id="dpDL" style="width:70px;padding:8px;font-size:12px;border:2px solid var(--border);border-radius:var(--radius);"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
-                                    <button onclick="dpAD()" style="padding:8px 14px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;">+</button>
+                                    <button data-action="dp-ad" style="padding:8px 14px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;">+</button>
                                 </div>
                             </div>
                             <div id="dpDL2"></div>
@@ -1840,7 +1840,7 @@
  
                 <div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted);">
                     <span id="dpRT">—</span>
-                    <button onclick="loadDispecer()" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
+                    <button data-action="load-dispecer" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
                 </div>
             </div>
         </div>
@@ -1859,17 +1859,17 @@
             </div>
 
             <div class="sub-tab-bar" id="mgmtOtkupSubBar">
-                <button class="sub-tab-btn active" data-sub="otkupi" onclick="showMgmtOtkupSub('otkupi', this)">Otkupi</button>
-                <button class="sub-tab-btn" data-sub="roba" onclick="showMgmtOtkupSub('roba', this)">Roba</button>
-                <button class="sub-tab-btn" data-sub="saldo" onclick="showMgmtOtkupSub('saldo', this)">Saldo mesta</button>
+                <button class="sub-tab-btn active" data-action="mgmt-otkup-sub" data-sub="otkupi">Otkupi</button>
+                <button class="sub-tab-btn" data-action="mgmt-otkup-sub" data-sub="roba">Roba</button>
+                <button class="sub-tab-btn" data-action="mgmt-otkup-sub" data-sub="saldo">Saldo mesta</button>
             </div>
 
             <div id="mgmtOtkupMount">
                 <div class="mgmt-sub sub-content" id="mgmt-sta-otkupi">
-                    <div class="form-group"><label>Otkupna stanica</label><select id="mgmtOtkupiStanica" onchange="loadMgmtOtkupi()"><option value="">-- Izaberi stanicu --</option></select></div>
+                    <div class="form-group"><label>Otkupna stanica</label><select id="mgmtOtkupiStanica"><option value="">-- Izaberi stanicu --</option></select></div>
                     <div class="form-row" style="margin-bottom:12px;">
-                        <div class="form-group"><label>Od</label><input type="date" id="mgmtOtkupiOd" onchange="loadMgmtOtkupi()"></div>
-                        <div class="form-group"><label>Do</label><input type="date" id="mgmtOtkupiDo" onchange="loadMgmtOtkupi()"></div>
+                        <div class="form-group"><label>Od</label><input type="date" id="mgmtOtkupiOd"></div>
+                        <div class="form-group"><label>Do</label><input type="date" id="mgmtOtkupiDo"></div>
                     </div>
                     <div class="stats-grid">
                         <div class="stat-card"><div class="stat-value" id="mgmtOtkupiCount">0</div><div class="stat-label">Otkupa</div></div>
@@ -1907,33 +1907,33 @@
             </div>
 
             <div class="sub-tab-bar" id="mgmtPartnerSegmentBar">
-                <button class="sub-tab-btn active" data-segment="kooperanti" onclick="showMgmtPartnerSegment('kooperanti', this)">Kooperanti</button>
-                <button class="sub-tab-btn" data-segment="kupci" onclick="showMgmtPartnerSegment('kupci', this)">Kupci</button>
+                <button class="sub-tab-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti</button>
+                <button class="sub-tab-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci</button>
             </div>
 
             <div class="sub-tab-bar" id="mgmtPartnerKoopSubBar">
-                <button class="sub-tab-btn active" data-sub="pregled" onclick="showMgmtKoopSub('pregled', this)">Pregled</button>
-                <button class="sub-tab-btn" data-sub="kartica" onclick="showMgmtKoopSub('kartica', this)">Kartica</button>
-                <button class="sub-tab-btn" data-sub="saldo" onclick="showMgmtKoopSub('saldo', this)">Saldo</button>
+                <button class="sub-tab-btn active" data-action="mgmt-koop-sub" data-sub="pregled">Pregled</button>
+                <button class="sub-tab-btn" data-action="mgmt-koop-sub" data-sub="kartica">Kartica</button>
+                <button class="sub-tab-btn" data-action="mgmt-koop-sub" data-sub="saldo">Saldo</button>
             </div>
 
             <div class="sub-tab-bar" id="mgmtPartnerKupSubBar" style="display:none;">
-                <button class="sub-tab-btn active" data-sub="fakture" onclick="showMgmtKupSub('fakture', this)">Fakture</button>
-                <button class="sub-tab-btn" data-sub="saldo" onclick="showMgmtKupSub('saldo', this)">Saldo</button>
-                <button class="sub-tab-btn" data-sub="roba" onclick="showMgmtKupSub('roba', this)">Roba</button>
+                <button class="sub-tab-btn active" data-action="mgmt-kup-sub" data-sub="fakture">Fakture</button>
+                <button class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="saldo">Saldo</button>
+                <button class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="roba">Roba</button>
             </div>
 
             <div id="mgmtPartneriMount">
                 <div class="mgmt-sub sub-content" id="mgmt-koop-pregled">
                     <div class="form-group">
                         <label>Otkupna stanica</label>
-                        <select id="mgmtPregledStanica" onchange="renderMgmtKoopPregled()"><option value="">-- Sve stanice --</option></select>
+                        <select id="mgmtPregledStanica"><option value="">-- Sve stanice --</option></select>
                     </div>
                     <div id="mgmtKoopPregledList"></div>
                 </div>
                 <div class="mgmt-sub sub-content" id="mgmt-koop-kartica">
-                    <div class="form-group"><label>Otkupna stanica</label><select id="mgmtStanica" onchange="onMgmtStanicaChange()"><option value="">-- Izaberi stanicu --</option></select></div>
-                    <div class="form-group"><label>Kooperant</label><select id="mgmtKooperant" onchange="onMgmtKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select></div>
+                    <div class="form-group"><label>Otkupna stanica</label><select id="mgmtStanica"><option value="">-- Izaberi stanicu --</option></select></div>
+                    <div class="form-group"><label>Kooperant</label><select id="mgmtKooperant"><option value="">-- Izaberi kooperanta --</option></select></div>
                     <div id="mgmtKarticaHeader" style="display:none;">
                         <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
                             <div style="font-size:18px;font-weight:700;" id="mgmtKarticaName"></div>
@@ -1953,7 +1953,7 @@
                 </div>
 
                 <div class="mgmt-sub sub-content" id="mgmt-kup-fakture">
-                    <div class="form-group"><label>Kupac</label><select id="mgmtFaktureKupac" onchange="loadMgmtFakture()"><option value="">-- Izaberi --</option></select></div>
+                    <div class="form-group"><label>Kupac</label><select id="mgmtFaktureKupac"><option value="">-- Izaberi --</option></select></div>
                     <div id="mgmtFaktureList"></div>
                 </div>
                 <div class="mgmt-sub sub-content" id="mgmt-kup-saldo">
@@ -1981,8 +1981,8 @@
             </div>
 
             <div class="sub-tab-bar" id="mgmtAgroSubBar">
-                <button class="sub-tab-btn active" data-sub="izdavanje" onclick="showMgmtAgroSub('izdavanje', this)">Izdavanje</button>
-                <button class="sub-tab-btn" data-sub="stanje" onclick="showMgmtAgroSub('stanje', this)">Stanje</button>
+                <button class="sub-tab-btn active" data-action="mgmt-agro-sub" data-sub="izdavanje">Izdavanje</button>
+                <button class="sub-tab-btn" data-action="mgmt-agro-sub" data-sub="stanje">Stanje</button>
             </div>
 
             <div id="mgmtAgroMount">
@@ -1991,8 +1991,8 @@
                     <div class="form-group">
                         <label>Kooperant</label>
                         <div style="display:flex;gap:8px;">
-                            <select id="izdKooperant" style="flex:1;" onchange="onIzdKooperantChange()"><option value="">-- Izaberi kooperanta --</option></select>
-                            <button class="qr-scan-btn" onclick="startIzdKoopScan()" style="width:auto;padding:10px 14px;margin:0;font-size:14px;">📷</button>
+                            <select id="izdKooperant" style="flex:1;"><option value="">-- Izaberi kooperanta --</option></select>
+                            <button class="qr-scan-btn" data-action="start-izd-koop-scan" style="width:auto;padding:10px 14px;margin:0;font-size:14px;">📷</button>
                         </div>
                     </div>
                     <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
@@ -2011,14 +2011,14 @@
                         <div class="izd-preporuka-title">📋 Preporučena doza</div>
                         <div class="izd-preporuka-calc" id="izdPreporukaCalc">—</div>
                         <div class="izd-preporuka-detail" id="izdPreporukaDetail">—</div>
-                        <button class="izd-preporuka-btn" onclick="izdPrimeniPreporuku()">✅ Primeni količinu</button>
+                        <button class="izd-preporuka-btn" data-action="izd-primeni-preporuku">✅ Primeni količinu</button>
                     </div>
 
                     <!-- Barcode scan + Dropdown -->
                     <div style="background:var(--bg);border-radius:var(--radius);padding:12px;margin-bottom:12px;">
                         <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Dodaj artikal</div>
                         <div class="izd-scan-area">
-                            <button class="qr-scan-btn" onclick="startIzdBarcodeScan()" style="background:var(--accent);">📷 Skeniraj barkod</button>
+                            <button class="qr-scan-btn" data-action="start-izd-barcode-scan" style="background:var(--accent);">📷 Skeniraj barkod</button>
                         </div>
                         <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
                         <div class="form-row" style="margin-bottom:8px;">
@@ -2031,7 +2031,7 @@
                                 <input type="number" id="izdKolicina" placeholder="Količina" inputmode="decimal" style="padding:10px;font-size:13px;" value="1">
                             </div>
                         </div>
-                        <button onclick="izdDodajStavku()" style="width:100%;padding:10px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;">+ Dodaj u korpu</button>
+                        <button data-action="izd-dodaj-stavku" style="width:100%;padding:10px;background:var(--primary);color:white;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;">+ Dodaj u korpu</button>
                     </div>
 
                     <!-- Korpa -->
@@ -2056,8 +2056,8 @@
                     </div>
 
                     <!-- Akcije -->
-                    <button class="btn-primary" onclick="izdZavrsi()">✅ ZAVRŠI IZDAVANJE</button>
-                    <button class="btn-secondary" onclick="izdReset()">Poništi</button>
+                    <button class="btn-primary" data-action="izd-zavrsi">✅ ZAVRŠI IZDAVANJE</button>
+                    <button class="btn-secondary" data-action="izd-reset">Poništi</button>
                 </div>
 
                 <div class="mgmt-sub sub-content" id="mgmt-agro-stanje">
@@ -2076,8 +2076,8 @@
         <div class="form-group"><label>Kupac / Hladnjača</label><select id="fldZbirnaKupac"><option value="">-- Izaberi kupca --</option></select></div>
         <div id="zbirnaOtkupiSummary" style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;"></div>
         <div id="zbirnaOtkupiList"></div>
-        <button class="btn-primary" onclick="confirmZbirna()">KREIRAJ ZBIRNU</button>
-        <button class="btn-secondary" onclick="cancelZbirna()">Otkaži</button>
+        <button class="btn-primary" data-action="confirm-zbirna">KREIRAJ ZBIRNU</button>
+        <button class="btn-secondary" data-action="cancel-zbirna">Otkaži</button>
     </div>
     <div id="zbirnaMainView">
         <h3 style="color:var(--primary);margin-bottom:8px;">Moje otpremnice (danas)</h3>
@@ -2103,7 +2103,7 @@
                 <div class="more-subtitle">Dodatne opcije gazdinstva</div>
 
                 <div class="more-menu">
-                    <button class="more-menu-item" onclick="showTab('kartica', findLegacyTabBtn('kartica'))">
+                    <button class="more-menu-item" data-route="tab" data-tab="kartica">
                         <span class="more-menu-icon">📒</span>
                         <span class="more-menu-text">
                             <strong>Kartica sa otkupljivačem</strong>
@@ -2111,7 +2111,7 @@
                         </span>
                     </button>
 
-                    <button class="more-menu-item" onclick="showTab('koopinfo', findLegacyTabBtn('koopinfo'))">
+                    <button class="more-menu-item" data-route="tab" data-tab="koopinfo">
                         <span class="more-menu-icon">ℹ</span>
                         <span class="more-menu-text">
                             <strong>Otkup informacije</strong>
@@ -2119,7 +2119,7 @@
                         </span>
                     </button>
 
-                    <button class="more-menu-item" onclick="showTab('agromere', findLegacyTabBtn('agromere')); setTimeout(() => { if (typeof startFiskalniScan === 'function') startFiskalniScan(); }, 250);">
+                    <button class="more-menu-item" data-action="more-fiskalni-racuni">
                         <span class="more-menu-icon">🧾</span>
                         <span class="more-menu-text">
                             <strong>Fiskalni računi</strong>
@@ -2127,7 +2127,7 @@
                         </span>
                     </button>
 
-                    <button class="more-menu-item" onclick="syncKooperantFromMore()">
+                    <button class="more-menu-item" data-action="sync-kooperant-from-more">
                         <span class="more-menu-icon">↻</span>
                         <span class="more-menu-text">
                             <strong>Offline i sinhronizacija</strong>
