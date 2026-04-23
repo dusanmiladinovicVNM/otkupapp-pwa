@@ -152,6 +152,12 @@ function bindAppShellEvents() {
         qrProfileModal.dataset.bound = '1';
     }
 
+    if (!window.__appShellDelegatedBound) {
+        window.__appShellDelegatedBound = true;
+        document.addEventListener('click', handleAppShellClick);
+        document.addEventListener('change', handleAppShellChange);
+    }
+
     window.addEventListener('stammdaten:updated', handleStammdatenUpdated);
 }
 
@@ -168,6 +174,43 @@ function bindConnectivityEvents() {
     window.addEventListener('offline', () => {
         updateSyncBadge();
     });
+}
+
+function handleAppShellClick(event) {
+    const actionEl = event.target.closest('[data-action]');
+    if (actionEl) {
+        const action = actionEl.dataset.action;
+
+        if (action === 'show-qr-profile') {
+            showQRProfile();
+            return;
+        }
+
+        if (action === 'logout') {
+            doLogout();
+            return;
+        }
+    }
+
+    const routeEl = event.target.closest('[data-route]');
+    if (routeEl) {
+        const routeType = routeEl.dataset.route;
+
+        if (routeType === 'tab') {
+            showTab(routeEl.dataset.tab, routeEl);
+            return;
+        }
+
+        if (routeType === 'mgmt-root') {
+            showMgmtRoot(routeEl.dataset.root, routeEl);
+            return;
+        }
+    }
+}
+
+function handleAppShellChange(event) {
+    const el = event.target;
+    if (!el || !el.id) return;
 }
 
 function startBackgroundSync() {
