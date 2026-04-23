@@ -65,7 +65,11 @@ function hideLoader() {
 }
 
 function hasValidSession() {
-    return !!getLs('authToken', '') && !!getLs('otkupacID', '');
+    return !!getLs('authToken', '') && !!getSessionEntityID();
+}
+
+function getSessionEntityID() {
+    return getLs('entityID', '') || getLs('otkupacID', '');
 }
 
 function applyHeaderInfo() {
