@@ -354,9 +354,9 @@ function mgmtRenderOverview() {
     const saldoOM = (window.mgmtData && mgmtData.saldoOM) ? mgmtData.saldoOM : [];
     const kartice = (window.mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
 
-    const danas = otkupiAll.filter(r => fmtDate(r.Datum) === today);
+    const danas = otkupiAll.filter(r => mgmtDashFmtDate(mgmtGetOtkupDate(r)) === today);
     const danasCount = danas.length;
-    const danasKg = danas.reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+    const danasKg = danas.reduce((s, r) => s + mgmtGetOtkupKg(r), 0);
 
     let kgCeka = 0;
     if (typeof dpGetSup === 'function') {
@@ -474,6 +474,24 @@ function setTextSafe(id, text) {
     if (el) el.textContent = text;
 }
 
+// ============================================================
+// CANONICAL FIELD ACCESSORS
+// Svi mgmt dashboard/overview funkcije moraju koristiti ove
+// umesto direktnog r.Datum / r.Kolicina pristupa.
+// ============================================================
+
+function mgmtGetOtkupDate(record) {
+    return record?.Datum || record?.datum || '';
+}
+
+function mgmtGetOtkupKg(record) {
+    return parseFloat(record?.Kolicina || record?.kolicina || 0) || 0;
+}
+
+// ============================================================
+// DATE / NUMBER FORMATTING
+// ============================================================
+
 function mgmtDashNum(v) {
     return parseFloat(v) || 0;
 }
@@ -489,21 +507,53 @@ function mgmtDashFmtDec(v, digits = 1) {
     });
 }
 
-function mgmtDashFmtDate(v) {
-    if (!v) return '';
+function mgmtDashExcelSerialToISO(value) {
+    const serial = Number(value);
+    if (!Number.isFinite(serial)) return '';
 
+    const base = new Date(Date.UTC(1899, 11, 30));
+    const date = new Date(base.getTime() + Math.round(serial * 86400000));
+
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+
+    return `${y}-${m}-${d}`;
+}
+
+function mgmtDashFmtDate(v) {
+    if (v === null || v === undefined || v === '') return '';
+
+    // Number → Excel serial
+    if (typeof v === 'number') {
+        return mgmtDashExcelSerialToISO(v);
+    }
+
+    // Date objekat
     if (v instanceof Date && !isNaN(v.getTime())) {
         return mgmtDashLocalISO(v);
     }
 
     const s = String(v).trim();
+    if (!s) return '';
 
-    // Najčešći slučaj: već je ISO ili ISO-like
+    // Excel/Sheets serial kao string (5-cifreni broj, opcioni decimali)
+    if (/^\d{5}(\.\d+)?$/.test(s)) {
+        return mgmtDashExcelSerialToISO(Number(s));
+    }
+
+    // ISO / ISO-like (2026-04-23 ili 2026-04-23T12:00:00)
     const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    if (isoMatch) {
+        return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
 
-    // Ako nekad stigne sr/evropski format tipa 20.04.2026 ili 20/04/2026
-    const localMatch = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    // Srpski/evropski formati:
+    // 23.04.2026 / 23.04.2026. / 23/04/2026 / 23-04-2026
+    // plus opcioni time suffix (npr. 23.04.2026 14:30)
+    const localMatch = s.match(
+        /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\.)?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/
+    );
     if (localMatch) {
         const dd = String(localMatch[1]).padStart(2, '0');
         const mm = String(localMatch[2]).padStart(2, '0');
@@ -511,7 +561,7 @@ function mgmtDashFmtDate(v) {
         return `${yyyy}-${mm}-${dd}`;
     }
 
-    // Fallback: pokušaj parse, ali vrati lokalni datum, ne UTC ISO
+    // Poslednji fallback: native Date parse, ali lokalni ISO (ne UTC)
     const parsed = new Date(s);
     if (!isNaN(parsed.getTime())) {
         return mgmtDashLocalISO(parsed);
@@ -568,12 +618,12 @@ function mgmtDashBuildSeries(otkupiAll, period) {
         const grouped = {};
 
         (otkupiAll || []).forEach(r => {
-            const day = mgmtDashFmtDate(r.Datum);
+            const day = mgmtDashFmtDate(mgmtGetOtkupDate(r));
             if (day !== today) return;
 
             const label = mgmtDashGetStationName(r);
             if (!grouped[label]) grouped[label] = 0;
-            grouped[label] += mgmtDashNum(r.Kolicina);
+            grouped[label] += mgmtGetOtkupKg(r);
         });
 
         return Object.keys(grouped)
@@ -589,9 +639,9 @@ function mgmtDashBuildSeries(otkupiAll, period) {
     days.forEach(day => { sums[day] = 0; });
 
     (otkupiAll || []).forEach(r => {
-        const day = mgmtDashFmtDate(r.Datum);
+        const day = mgmtDashFmtDate(mgmtGetOtkupDate(r));
         if (!Object.prototype.hasOwnProperty.call(sums, day)) return;
-        sums[day] += mgmtDashNum(r.Kolicina);
+        sums[day] += mgmtGetOtkupKg(r);
     });
 
     return days.map(day => ({
@@ -1039,15 +1089,17 @@ async function mgmtRenderDashboard() {
     mgmtDashRenderList('mgmtDashAlerts', alertItems);
     mgmtDashRenderList('mgmtDashFinance', financeItems);
     mgmtDashRenderQuickLinks();
-    
-console.log('mgmt otkupi sample', (otkupiAll || []).slice(0, 5).map(r => ({
-    rawDatum: r.Datum,
-    rawdatum: r.datum,
-    parsed: mgmtDashFmtDate(mgmtDashGetRawDate(r)),
-    kolicina: r.Kolicina
-})));
 
-console.log('mgmt chart series', series);
+    // Debug log — ukloniti posle potvrde da chart radi
+    console.log('mgmt chart sample', (otkupiAll || []).slice(0, 5).map(r => ({
+        rawDate: mgmtGetOtkupDate(r),
+        parsedDate: mgmtDashFmtDate(mgmtGetOtkupDate(r)),
+        rawKg: r.Kolicina,
+        parsedKg: mgmtGetOtkupKg(r)
+    })));
+
+    console.log('mgmt chart series', series);
+
     mgmtDashRenderChart(series);
     mgmtDashRenderDispatcher();
 }
@@ -1136,7 +1188,7 @@ function setMgmtDashboardPeriod(period, btn) {
 
 function mgmtDashGetSeasonStart(otkupiAll) {
     const validDates = (otkupiAll || [])
-        .map(r => mgmtDashFmtDate(r.Datum))
+        .map(r => mgmtDashFmtDate(mgmtGetOtkupDate(r)))
         .filter(Boolean)
         .sort();
 
@@ -1174,10 +1226,10 @@ function mgmtDashGetPeriodStats(otkupiAll, period) {
     const koops = new Set();
 
     (otkupiAll || []).forEach(r => {
-        const day = mgmtDashFmtDate(r.Datum);
+        const day = mgmtDashFmtDate(mgmtGetOtkupDate(r));
         if (!days.has(day)) return;
 
-        const kg = mgmtDashNum(r.Kolicina);
+        const kg = mgmtGetOtkupKg(r);
         const cena = mgmtDashNum(r.Cena);
 
         totalKg += kg;
