@@ -147,26 +147,18 @@ function showRoleNavTab(tabKey, btn) {
     updateRoleNavActive(tabKey);
 
     if (cfg.type === 'showMgmtRoot') {
-        if (typeof showMgmtRoot === 'function') {
-            showMgmtRoot(tabKey);
+
+        if (typeof showTab === 'function') {
+            showTab(tabKey);
         }
 
-        // Posle rendera ponovo sinhronizuj iz stvarnog state-a
-        setTimeout(() => updateRoleNavActive(), 0);
-        return;
+        // Posle promene taba ponovo sinhronizuj iz DOM-a
+        setTimeout(() => {
+            if (typeof updateRoleNavActive === 'function') {
+                updateRoleNavActive();
+            }
+        }, 0);
     }
-
-    if (typeof showTab === 'function') {
-        showTab(tabKey);
-    }
-
-    // Posle promene taba ponovo sinhronizuj iz DOM-a
-    setTimeout(() => {
-        if (typeof updateRoleNavActive === 'function') {
-            updateRoleNavActive();
-        }
-    }, 0);
-}
 
 function clearAllRoleNavActiveStates() {
     getAllRoleNavIds().forEach(id => {
