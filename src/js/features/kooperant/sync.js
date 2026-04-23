@@ -10,15 +10,15 @@
 
 (function () {
     function ensureKooperantRuntime() {
-        window.appRuntime = window.appRuntime || {};
+        const runtime = window.appRuntime || {};
 
-        if (!window.appRuntime.kooperantSync) {
-            window.appRuntime.kooperantSync = {
+        if (!runtime.kooperantSync) {
+            runtime.kooperantSync = {
                 tretmaniInFlight: false
             };
         }
 
-        return window.appRuntime.kooperantSync;
+        return runtime.kooperantSync;
     }
 
     async function syncEntityStore(options) {
