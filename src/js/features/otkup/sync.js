@@ -34,7 +34,7 @@ async function syncQueue() {
         }
 
         const json = await apiPost('sync', {
-            otkupacID: CONFIG.OTKUPAC_ID,
+            otkupacID: CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID,
             records: pending
         });
 
