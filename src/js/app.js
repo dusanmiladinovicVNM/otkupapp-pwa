@@ -152,6 +152,12 @@ function bindAppShellEvents() {
         qrProfileModal.dataset.bound = '1';
     }
 
+    const pregledDetailCard = document.querySelector('#pregledDetailModal .danas-detail-card');
+    if (pregledDetailCard && !pregledDetailCard.dataset.bound) {
+        pregledDetailCard.addEventListener('click', (e) => e.stopPropagation());
+        pregledDetailCard.dataset.bound = '1';
+    }
+    
     if (!window.__appShellDelegatedBound) {
         window.__appShellDelegatedBound = true;
         document.addEventListener('click', handleAppShellClick);
@@ -190,6 +196,46 @@ function handleAppShellClick(event) {
             doLogout();
             return;
         }
+
+        if (action === 'start-qr-scan') {
+            startQRScan();
+            return;
+        }
+
+        if (action === 'start-vozac-qr-scan') {
+            startVozacQRScan();
+            return;
+        }
+
+        if (action === 'clear-vozac') {
+            clearVozac();
+            return;
+        }
+
+        if (action === 'reset-otkup-form') {
+            resetForm();
+            return;
+        }
+
+        if (action === 'save-otkup') {
+            saveOtkup();
+            return;
+        }
+
+        if (action === 'pregled-filter') {
+            setPregledQuickFilter(actionEl.dataset.filter, actionEl);
+            return;
+        }
+
+        if (action === 'close-pregled-detail') {
+            closePregledDetail();
+            return;
+        }
+
+        if (action === 'open-pregled-otkupni-list') {
+            openPregledDetailOtkupniList();
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
@@ -206,11 +252,31 @@ function handleAppShellClick(event) {
             return;
         }
     }
+
+    if (event.target.id === 'pregledDetailModal') {
+        closePregledDetail();
+        return;
+    }
 }
 
 function handleAppShellChange(event) {
     const el = event.target;
     if (!el || !el.id) return;
+
+    if (el.id === 'fldKooperantManual') {
+        onManualKooperantChange();
+        return;
+    }
+
+    if (el.id === 'fldVrsta') {
+        onVrstaChange();
+        return;
+    }
+
+    if (el.id === 'fldPregledOd' || el.id === 'fldPregledDo') {
+        onPregledDateChange();
+        return;
+    }
 }
 
 function startBackgroundSync() {
