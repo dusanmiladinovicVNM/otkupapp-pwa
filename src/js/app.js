@@ -157,6 +157,12 @@ function bindAppShellEvents() {
         pregledDetailCard.addEventListener('click', (e) => e.stopPropagation());
         pregledDetailCard.dataset.bound = '1';
     }
+
+    const otpremaDetailCard = document.querySelector('#otpremaDetailModal .otprema-detail-card');
+        if (otpremaDetailCard && !otpremaDetailCard.dataset.bound) {
+        otpremaDetailCard.addEventListener('click', (e) => e.stopPropagation());
+        otpremaDetailCard.dataset.bound = '1';
+    }
     
     if (!window.__appShellDelegatedBound) {
         window.__appShellDelegatedBound = true;
@@ -255,6 +261,76 @@ function handleAppShellClick(event) {
 
     if (event.target.id === 'pregledDetailModal') {
         closePregledDetail();
+        return;
+    }
+
+    if (action === 'start-otprema-vozac-qr-scan') {
+        startOtpremaVozacQRScan();
+        return;
+    }
+
+    if (action === 'toggle-otprema-fallback') {
+        toggleOtpremaFallback();
+        return;
+    }
+
+    if (action === 'apply-otprema-fallback-driver') {
+        applyOtpremaFallbackDriver();
+        return;
+    }
+
+    if (action === 'cancel-otprema-assign') {
+        cancelOtpremaAssign();
+        return;
+}
+
+if (action === 'select-all-otprema-today') {
+    selectAllOtpremaToday();
+    return;
+    }
+
+    if (action === 'clear-otprema-selection') {
+        clearOtpremaSelection();
+        return;
+    }
+
+    if (action === 'confirm-otprema-assign') {
+        confirmOtpremaAssign();
+        return;
+    }
+
+    if (action === 'back-to-otprema-root') {
+        backToOtpremaRoot();
+        return;
+    }
+
+    if (action === 'close-otprema-detail') {
+        closeOtpremaDetail();
+        return;
+    }
+
+    if (action === 'sync-otkupac-now') {
+        syncOtkupacFromMore();
+        return;
+    }
+
+    if (action === 'clear-otkupac-signature') {
+        clearOtkupacSignature();
+        return;
+    }
+
+    if (action === 'save-otkupac-signature') {
+        saveOtkupacSignature();
+        return;
+    }
+
+    if (action === 'open-home-quick-actions') {
+        openHomeQuickActions();
+        return;
+    }
+
+    if (event.target.id === 'otpremaDetailModal') {
+        closeOtpremaDetail();
         return;
     }
 }
