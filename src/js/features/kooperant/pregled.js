@@ -519,11 +519,7 @@ function toSrNum(value) {
 }
 
 function findTabBtnByTabName(tabName) {
-    const buttons = Array.from(document.querySelectorAll('.tab-btn'));
-    return buttons.find(btn => {
-        const onclick = String(btn.getAttribute('onclick') || '');
-        return onclick.includes(`showTab('${tabName}'`) || onclick.includes(`showTab("${tabName}"`);
-    }) || null;
+    return document.querySelector('.tab-btn[data-route="tab"][data-tab="' + tabName + '"]');
 }
 
 function getDynamicRadoviPredlog(kultura, parcelaId) {
