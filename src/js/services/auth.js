@@ -70,7 +70,7 @@ function showLoginScreen() {
 
                     <p id="loginError" class="login-error" style="display:none;"></p>
 
-                    <button onclick="doLogin()" id="btnLogin" class="btn-login">
+                    <button id="btnLogin" class="btn-login">
                         Prijavi se
                     </button>
                 </div>
@@ -87,7 +87,13 @@ function showLoginScreen() {
             </div>
         </div>
     `;
-
+    
+    const loginBtn = document.getElementById('btnLogin');
+    if (loginBtn && !loginBtn.dataset.bound) {
+        loginBtn.addEventListener('click', doLogin);
+        loginBtn.dataset.bound = '1';
+    }
+    
     document.getElementById('loginPin').addEventListener('keyup', e => {
         if (e.key === 'Enter') doLogin();
     });
