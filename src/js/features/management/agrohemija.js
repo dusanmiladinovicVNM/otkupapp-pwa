@@ -9,8 +9,6 @@ let izdPreporukaQty = null;
 
 // --- Populate ---
 function populateIzdDropdowns() {
-    console.log('stammdaten.artikli:', stammdaten.artikli);
-    console.log('artikli length:', (stammdaten.artikli || []).length);
     // Kooperanti
     const kSel = document.getElementById('izdKooperant');
     if (!kSel || kSel.options.length > 1) return;
