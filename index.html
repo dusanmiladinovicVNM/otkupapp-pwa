@@ -116,7 +116,7 @@
                     </div>
                 </div>
 
-                <button class="qr-scan-btn" type="button" onclick="startQRScan()">
+                <button class="qr-scan-btn" type="button" data-action="start-qr-scan">
                     📷 Skeniraj QR kooperanta
                 </button>
 
@@ -124,7 +124,7 @@
 
                 <div class="form-group" style="margin-top:12px;">
                     <label for="fldKooperantManual">Ili izaberi kooperanta ručno</label>
-                    <select id="fldKooperantManual" onchange="onManualKooperantChange()">
+                    <select id="fldKooperantManual">
                         <option value="">-- Izaberi --</option>
                     </select>
                     <div class="otk-field-error" id="errKooperant" hidden></div>
@@ -163,7 +163,7 @@
                             class="qr-scan-btn otk-vozac-btn"
                             id="btnVozacScan"
                             type="button"
-                            onclick="startVozacQRScan()"
+                            data-action="start-vozac-qr-scan"
                         >
                             📷 Skeniraj QR vozača
                         </button>
@@ -175,7 +175,7 @@
                 <div class="koop-display otk-vozac-display" id="vozacDisplay">
                     <div class="koop-name" id="vozacName"></div>
                     <div class="koop-id" id="vozacId"></div>
-                    <button type="button" class="otk-inline-link" onclick="clearVozac()">Ukloni vozača</button>
+                    <button type="button" class="otk-inline-link" data-action="clear-vozac">Ukloni vozača</button>
                 </div>
 
                 <input type="hidden" id="fldVozacID">
@@ -195,7 +195,7 @@
                 <div class="form-row otk-form-row-2">
                     <div class="form-group">
                         <label for="fldVrsta">Vrsta voća</label>
-                        <select id="fldVrsta" onchange="onVrstaChange()">
+                        <select id="fldVrsta">
                             <option value="">-- Izaberi --</option>
                         </select>
                         <div class="otk-field-error" id="errVrsta" hidden></div>
@@ -284,8 +284,8 @@
             </div>
 
             <div class="otk-sticky-actions">
-                <button class="btn-secondary otk-secondary-btn" type="button" onclick="resetForm()">Poništi</button>
-                <button class="btn-primary otk-primary-btn" type="button" onclick="saveOtkup()">Sačuvaj otkup</button>
+                <button class="btn-secondary otk-secondary-btn" type="button" data-action="reset-otkup-form">Poništi</button>
+                <button class="btn-primary otk-primary-btn" type="button" data-action="save-otkup">Sačuvaj otkup</button>
             </div>
 
         </div>
@@ -307,21 +307,21 @@
 
             <div class="danas-filters-card">
                 <div class="danas-pills" id="pregledQuickFilters">
-                    <button class="danas-pill active" type="button" data-filter="danas" onclick="setPregledQuickFilter('danas', this)">Danas</button>
-                    <button class="danas-pill" type="button" data-filter="juce" onclick="setPregledQuickFilter('juce', this)">Juče</button>
-                    <button class="danas-pill" type="button" data-filter="sve" onclick="setPregledQuickFilter('sve', this)">Sve</button>
-                    <button class="danas-pill" type="button" data-filter="bez_vozaca" onclick="setPregledQuickFilter('bez_vozaca', this)">Bez vozača</button>
-                    <button class="danas-pill" type="button" data-filter="problemi" onclick="setPregledQuickFilter('problemi', this)">Problemi</button>
+                    <button class="danas-pill active" type="button" data-action="pregled-filter" data-filter="danas">Danas</button>
+                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="juce">Juče</button>
+                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="sve">Sve</button>
+                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="bez_vozaca">Bez vozača</button>
+                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="problemi">Problemi</button>
                 </div>
 
                 <div class="form-row" style="margin-bottom:0;">
                     <div class="form-group">
                         <label>Od datuma</label>
-                        <input type="date" id="fldPregledOd" onchange="onPregledDateChange()">
+                        <input type="date" id="fldPregledOd">
                     </div>
                     <div class="form-group">
                         <label>Do datuma</label>
-                        <input type="date" id="fldPregledDo" onchange="onPregledDateChange()">
+                        <input type="date" id="fldPregledDo"> 
                     </div>
                 </div>
             </div>
@@ -350,21 +350,21 @@
         </div>
     </section>
 
-    <div class="danas-detail-modal" id="pregledDetailModal" onclick="closePregledDetail()">
-        <div class="danas-detail-card" onclick="event.stopPropagation()">
+    <div class="danas-detail-modal" id="pregledDetailModal">
+        <div class="danas-detail-card">
             <div class="danas-detail-head">
                 <div>
                     <div class="danas-detail-title">Detalj otkupa</div>
                     <div class="danas-detail-subtitle" id="pregledDetailDate">-</div>
                 </div>
-                <button class="danas-detail-close" type="button" onclick="closePregledDetail()">✕</button>
+                <button class="danas-detail-close" type="button" data-action="close-pregled-detail">✕</button>
             </div>
 
             <div class="danas-detail-grid" id="pregledDetailGrid"></div>
 
             <div class="danas-detail-actions">
-                <button class="btn-secondary" type="button" onclick="closePregledDetail()">Zatvori</button>
-                <button class="btn-primary" type="button" onclick="openPregledDetailOtkupniList()">Otvori otkupni list</button>
+                <button class="btn-secondary" type="button" data-action="close-pregled-detail">Zatvori</button>
+                <button class="btn-primary" type="button" data-action="open-pregled-otkupni-list">Otvori otkupni list</button>
             </div>
         </div>
     </div>
