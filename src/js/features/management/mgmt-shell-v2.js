@@ -13,6 +13,37 @@ window.mgmtShellState = {
     mounted: false
 };
 
+// ============================================================
+// MGMT DATA PREFETCH + BOOT HELPERS
+// moved from legacy mgmt-shell.js
+// ============================================================
+
+async function prefetchMgmtData() {
+    try {
+        const json = await apiFetch('action=getMgmtAll');
+        if (json && json.success) {
+            mgmtData = json;
+        }
+    } catch (e) {
+        console.error('prefetchMgmtData failed:', e);
+    }
+}
+
+function populateMgmtKupciDropdown() {
+    const sel = document.getElementById('mgmtFaktureKupac');
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="">-- Izaberi --</option>';
+
+    const kupci = mgmtData ? (mgmtData.saldoKupci || []) : [];
+    kupci.forEach(k => {
+        const o = document.createElement('option');
+        o.value = k.KupacID || k.Kupac;
+        o.textContent = k.Kupac || k.KupacID;
+        sel.appendChild(o);
+    });
+}
+
 async function mgmtShellInit() {
     mgmtMountLegacyBlocks();
 
