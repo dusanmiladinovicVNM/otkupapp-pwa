@@ -1039,6 +1039,15 @@ async function mgmtRenderDashboard() {
     mgmtDashRenderList('mgmtDashAlerts', alertItems);
     mgmtDashRenderList('mgmtDashFinance', financeItems);
     mgmtDashRenderQuickLinks();
+    
+console.log('mgmt otkupi sample', (otkupiAll || []).slice(0, 5).map(r => ({
+    rawDatum: r.Datum,
+    rawdatum: r.datum,
+    parsed: mgmtDashFmtDate(mgmtDashGetRawDate(r)),
+    kolicina: r.Kolicina
+})));
+
+console.log('mgmt chart series', series);
     mgmtDashRenderChart(series);
     mgmtDashRenderDispatcher();
 }
