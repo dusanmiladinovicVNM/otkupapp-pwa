@@ -1,4 +1,5 @@
 // src/js/state.js
+
 (function () {
     const initialState = {
         db: null,
@@ -15,16 +16,17 @@
         qrScanner: null,
         selectedMera: '',
         parcelExpertOpen: {},
-        init: {
-            domReady: false,
-            dbReady: false,
-            stammdatenReady: false,
+        runtime: {
+            initStarted: false,
             appReady: false,
-            bootError: null
-        },
-        sync: {
-            inFlight: false,
-            lastRunAt: null
+            stammdatenReady: false,
+            syncInFlight: false,
+            stammdatenRefreshInFlight: false,
+            syncIntervalId: null,
+            kooperantSync: {
+                tretmaniInFlight: false
+            },
+            zbirnaSyncInFlight: false
         }
     };
 
@@ -112,5 +114,10 @@
     Object.defineProperty(window, 'parcelExpertOpen', {
         get() { return window.AppState.get('parcelExpertOpen'); },
         set(v) { window.AppState.set('parcelExpertOpen', v); }
+    });
+
+    Object.defineProperty(window, 'appRuntime', {
+        get() { return window.AppState.get('runtime'); },
+        set(v) { window.AppState.set('runtime', v); }
     });
 })();
