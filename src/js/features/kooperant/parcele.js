@@ -52,11 +52,13 @@ function buildKooperantParcelPopup(p) {
 
             <button
                 type="button"
-                onclick="openParcelaDetail('${String(p.ParcelaID).replace(/'/g, "\\'")}', 'mapa')"
+                data-action="open-parcela-detail"
+                data-parcela-id="${escapeHtml(String(p.ParcelaID || ''))}"
+                data-source="mapa"
                 style="margin-top:10px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:var(--primary);color:white;font-size:13px;font-weight:700;cursor:pointer;"
             >
-                Otvori detalj parcele
-            </button>
+    Otvori detalj parcele
+</button>
         </div>
     `;
 }
@@ -127,7 +129,12 @@ async function loadParcele() {
         mapDiv.style.display = '';
 
         list.innerHTML = parcele.map(p =>
-            `<div id="parcel-card-${p.ParcelaID}" style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;" onclick="focusParcel('${String(p.ParcelaID).replace(/'/g, "\\'")}')">
+            `<div
+                id="parcel-card-${p.ParcelaID}"
+                style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);cursor:pointer;"
+                data-action="focus-parcel"
+                data-parcela-id="${escapeHtml(String(p.ParcelaID || ''))}"
+            >
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                     <strong>${escapeHtml(p.KatBroj || p.ParcelaID)}</strong>
                     <span style="font-size:12px;color:var(--text-muted);">${escapeHtml(p.ParcelaID)}</span>
@@ -537,7 +544,11 @@ function renderExpertInfo(parcelId, current) {
 
     return `
         <div class="parcel-expert-wrapper" id="expert-wrapper-${parcelId}">
-            <button class="parcel-expert-toggle" onclick="event.stopPropagation(); toggleExpertPanel('${String(parcelId).replace(/'/g, "\\'")}')">
+            <button
+                class="parcel-expert-toggle"
+                data-action="toggle-expert-panel"
+                data-parcela-id="${escapeHtml(String(parcelId || ''))}"
+            >
                 <div>
                     <div class="parcel-expert-title"><span>🧪 Expert info</span></div>
                     <div class="parcel-expert-sub">Zemljište, ET₀, UV i dodatni agro podaci</div>
