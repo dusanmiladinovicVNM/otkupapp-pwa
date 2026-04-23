@@ -78,7 +78,7 @@ function showLoginScreen() {
                 <div class="login-bottom-area">
                     <a class="login-footer-logo-link" href="index.html" aria-label="AgriX">
                         <img
-                            src="site/img/AgriX-Logo-Final_Novi.png"
+                            src="img/AgriX-Logo-Final_Novi.png"
                             alt="AgriX"
                             class="login-footer-logo"
                         >
@@ -194,10 +194,10 @@ function applyHeaderBranding() {
     const isKooperant = role === 'kooperant';
 
     if (isKooperant) {
-        logoEl.src = 'site/img/AgriX-Gazdinstvo-Logo-Final.png';
+        logoEl.src = 'img/AgriX-Gazdinstvo-Logo-Final.png';
         logoEl.alt = 'AgriX Gazdinstvo';
     } else {
-        logoEl.src = 'site/img/AgriX-Otkup-Logo-Final.png';
+        logoEl.src = 'img/AgriX-Otkup-Logo-Final.png';
         logoEl.alt = 'AgriX Otkup';
     }
 }
