@@ -1,0 +1,17 @@
+﻿Private Sub Workbook_Open()
+    Application.Visible = False
+    frmSplash.Show
+    'frmOtkupAPP.Show
+    
+    On Error GoTo EH
+    
+    ImportBankaInbox_TX
+    Exit Sub
+    
+EH:
+    MsgBox "Banka import error: " & Err.Description, vbExclamation
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    Application.Visible = True
+End Sub
