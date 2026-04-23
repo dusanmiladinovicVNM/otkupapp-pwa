@@ -362,16 +362,20 @@ async function confirmZbirna() {
     await loadVozacData();
 }
 
+function getVozacRuntime() {
+    return window.appRuntime || {};
+}
+
 async function syncZbirne() {
+    const runtime = getVozacRuntime();
+    
     if (!db) return { ok: false, reason: 'db-not-ready' };
     if (!navigator.onLine) return { ok: false, reason: 'offline' };
 
-    window.appRuntime = window.appRuntime || {};
-    if (window.appRuntime.zbirnaSyncInFlight) {
+    if (runtime.zbirnaSyncInFlight) {
         return { ok: false, reason: 'already-running' };
     }
-
-    window.appRuntime.zbirnaSyncInFlight = true;
+    runtime.zbirnaSyncInFlight = true;
 
     let pending = [];
 
@@ -503,7 +507,7 @@ async function syncZbirne() {
         showToast('Greška pri sinhronizaciji zbirnih', 'error');
         return { ok: false, synced: 0, failed: pending.length || 0 };
     } finally {
-        window.appRuntime.zbirnaSyncInFlight = false;
+       runtime.zbirnaSyncInFlight = false;
         try { await loadVozacZbirne(); } catch (_) {}
     }
 }
