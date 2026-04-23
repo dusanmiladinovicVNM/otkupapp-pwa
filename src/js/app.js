@@ -209,10 +209,16 @@ async function refreshStammdatenInBackground() {
 
     try {
         await safeAsync(async () => {
-            const json = await apiFetch('action=getStammdaten');
-            if (!(json && json.success && json.data)) return;
+            const result = await apiFetchSafe('action=getStammdaten');
 
-            const nextData = normalizeStammdaten(json.data);
+            if (!result.ok || !(result.data && result.data.success && result.data.data)) {
+                if (result.error) {
+                    console.error('getStammdaten failed:', result.error, result);
+                }
+                return;
+            }
+
+            const nextData = normalizeStammdaten(result.data.data);
             stammdaten = nextData;
 
             await dbPut(db, CONFIG.STAMM_STORE, {
