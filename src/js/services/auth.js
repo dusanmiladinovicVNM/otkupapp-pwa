@@ -119,12 +119,21 @@ async function doLogin() {
     const json = await apiPost('login', { username, pin });
 
     if (json && json.success) {
+        const entityID = json.entityID || json.otkupacID || '';
+
         setLs('authToken', json.token);
         setLs('userRole', json.role);
-        setLs('otkupacID', json.entityID);
-        setLs('entityID', json.entityID);
+        setLs('entityID', entityID);
         setLs('entityName', json.displayName);
         setLs('username', username);
+
+        // legacy alias ostaje samo za Otkupac flow
+        if (json.role === 'Otkupac') {
+            setLs('otkupacID', entityID);
+        } else {
+            removeLs('otkupacID');
+        }
+
         location.reload();
         return;
     }
