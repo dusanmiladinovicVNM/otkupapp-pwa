@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v6';
+const CACHE_NAME = 'AgriX-v7';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -68,7 +68,6 @@ const ASSETS = [
     './src/js/features/management/agrohemija.js',
     './src/js/features/management/dispecer.js',
     './src/js/features/management/mgmt-shell-v2.js',
-    './src/js/features/management/mgmt-shell.js',
 
     // App bootstrap
     './src/js/app.js',
@@ -79,13 +78,27 @@ const ASSETS = [
     
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
     'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js'
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js',
 ];
 
 // Install: cache app shell
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-    );
+    event.waitUntil((async () => {
+        const cache = await caches.open(CACHE_NAME);
+
+        await Promise.allSettled(
+            ASSETS.map(async (url) => {
+                try {
+                    await cache.add(url);
+                } catch (err) {
+                    console.warn('[SW] asset cache failed:', url, err);
+                }
+            })
+        );
+    })());
+
     self.skipWaiting();
 });
 
