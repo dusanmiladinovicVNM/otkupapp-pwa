@@ -159,17 +159,22 @@ function bindAppShellEvents() {
     }
 
     const otpremaDetailCard = document.querySelector('#otpremaDetailModal .otprema-detail-card');
-        if (otpremaDetailCard && !otpremaDetailCard.dataset.bound) {
+    if (otpremaDetailCard && !otpremaDetailCard.dataset.bound) {
         otpremaDetailCard.addEventListener('click', (e) => e.stopPropagation());
         otpremaDetailCard.dataset.bound = '1';
     }
 
-    document.addEventListener('input', handleAppShellInput);
+    const homeQuickActionsCard = document.querySelector('#homeQuickActionsModal .home-quick-sheet');
+    if (homeQuickActionsCard && !homeQuickActionsCard.dataset.bound) {
+        homeQuickActionsCard.addEventListener('click', (e) => e.stopPropagation());
+        homeQuickActionsCard.dataset.bound = '1';
+    }
     
     if (!window.__appShellDelegatedBound) {
         window.__appShellDelegatedBound = true;
         document.addEventListener('click', handleAppShellClick);
         document.addEventListener('change', handleAppShellChange);
+        document.addEventListener('input', handleAppShellInput);
     }
 
     window.addEventListener('stammdaten:updated', handleStammdatenUpdated);
