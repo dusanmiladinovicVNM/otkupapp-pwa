@@ -479,6 +479,114 @@ function handleAppShellClick(event) {
             fiskalniCancel();
             return;
         }
+
+        if (action === 'mgmt-dash-period') {
+            setMgmtDashboardPeriod(actionEl.dataset.period, actionEl);
+            return;
+        }
+
+        if (action === 'dp-ok') {
+            dpOK();
+            return;
+        }
+
+        if (action === 'dp-x') {
+            dpX();
+            return;
+        }
+
+        if (action === 'dp-ad') {
+            dpAD();
+            return;
+        }
+
+        if (action === 'load-dispecer') {
+            loadDispecer();
+            return;
+        }
+
+        if (action === 'mgmt-otkup-sub') {
+            showMgmtOtkupSub(actionEl.dataset.sub, actionEl);
+            return;
+        }
+
+        if (action === 'mgmt-partner-segment') {
+            showMgmtPartnerSegment(actionEl.dataset.segment, actionEl);
+            return;
+        }
+
+        if (action === 'mgmt-koop-sub') {
+            showMgmtKoopSub(actionEl.dataset.sub, actionEl);
+            return;
+        }
+
+        if (action === 'mgmt-kup-sub') {
+            showMgmtKupSub(actionEl.dataset.sub, actionEl);
+            return;
+        }
+
+        if (action === 'mgmt-agro-sub') {
+            showMgmtAgroSub(actionEl.dataset.sub, actionEl);
+            return;
+        }
+
+        if (action === 'start-izd-koop-scan') {
+            startIzdKoopScan();
+            return;
+        }
+
+        if (action === 'izd-primeni-preporuku') {
+            izdPrimeniPreporuku();
+            return;
+        }
+
+        if (action === 'start-izd-barcode-scan') {
+            startIzdBarcodeScan();
+            return;
+        }
+
+        if (action === 'izd-dodaj-stavku') {
+            izdDodajStavku();
+            return;
+        }
+
+        if (action === 'izd-zavrsi') {
+            izdZavrsi();
+            return;
+        }
+
+        if (action === 'izd-reset') {
+            izdReset();
+            return;
+        }
+
+        if (action === 'confirm-zbirna') {
+            confirmZbirna();
+            return;
+        }
+
+        if (action === 'cancel-zbirna') {
+            cancelZbirna();
+            return;
+        }
+
+        if (action === 'start-zbirna-creation') {
+            startZbirnaCreation();
+            return;
+        }
+
+        if (action === 'more-fiskalni-racuni') {
+            showTab('agromere', findTabBtnByTabName('agromere'));
+            setTimeout(() => {
+                if (typeof startFiskalniScan === 'function') startFiskalniScan();
+            }, 250);
+            return;
+        }
+
+        if (action === 'sync-kooperant-from-more') {
+            syncKooperantFromMore();
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
@@ -558,6 +666,36 @@ function handleAppShellChange(event) {
 
     if (el.id === 'kpParcelaSel' || el.id === 'kpSezona') {
         kpLoadBilans();
+        return;
+    }
+
+    if (el.id === 'mgmtOtkupiStanica' || el.id === 'mgmtOtkupiOd' || el.id === 'mgmtOtkupiDo') {
+        loadMgmtOtkupi();
+        return;
+    }
+
+    if (el.id === 'mgmtPregledStanica') {
+        renderMgmtKoopPregled();
+        return;
+    }
+
+    if (el.id === 'mgmtStanica') {
+        onMgmtStanicaChange();
+        return;
+    }
+
+    if (el.id === 'mgmtKooperant') {
+        onMgmtKooperantChange();
+        return;
+    }
+
+    if (el.id === 'mgmtFaktureKupac') {
+        loadMgmtFakture();
+        return;
+    }
+
+    if (el.id === 'izdKooperant') {
+        onIzdKooperantChange();
         return;
     }
 }
