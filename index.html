@@ -2143,27 +2143,27 @@
 
 <!-- BOTTOM NAV -->
 <div class="bottom-nav role-kooperant" id="koopBottomNav">
-    <button class="bottom-nav-btn" data-tab="home" onclick="showRoleNavTab('home', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="home">
         <span class="bottom-nav-icon">⌂</span>
         <span class="bottom-nav-label">Pregled</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="parcele" onclick="showRoleNavTab('parcele', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="parcele">
         <span class="bottom-nav-icon">▣</span>
         <span class="bottom-nav-label">Parcele</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="agromere" onclick="showRoleNavTab('agromere', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="agromere">
         <span class="bottom-nav-icon">✿</span>
         <span class="bottom-nav-label">Radovi</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="knjigapolja" onclick="showRoleNavTab('knjigapolja', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="knjigapolja">
         <span class="bottom-nav-icon">☰</span>
         <span class="bottom-nav-label">Knjiga</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="more" onclick="showRoleNavTab('more', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="more">
         <span class="bottom-nav-icon">⋯</span>
         <span class="bottom-nav-label">Više</span>
     </button>
@@ -2171,22 +2171,22 @@
 
 <!-- OTKUPAC BOTTOM NAV -->
 <div class="bottom-nav role-otkupac" id="otkupBottomNav">
-    <button class="bottom-nav-btn" data-tab="otkup" onclick="showRoleNavTab('otkup', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otkup">
         <span class="bottom-nav-icon">＋</span>
         <span class="bottom-nav-label">Otkup</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="pregled" onclick="showRoleNavTab('pregled', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled">
         <span class="bottom-nav-icon">◷</span>
         <span class="bottom-nav-label">Danas</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="otpremnice" onclick="showRoleNavTab('otpremnice', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otpremnice">
         <span class="bottom-nav-icon">🚛</span>
         <span class="bottom-nav-label">Otprema</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="queue" onclick="showRoleNavTab('queue', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="queue">
         <span class="bottom-nav-icon">⋯</span>
         <span class="bottom-nav-label">Više</span>
     </button>
@@ -2194,51 +2194,51 @@
 
 <!-- MGMT BOTTOM NAV -->
 <div class="bottom-nav role-management" id="mgmtBottomNav">
-    <button class="bottom-nav-btn" data-tab="dashboard" onclick="showMgmtRoot('dashboard', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="dashboard">
         <span class="bottom-nav-icon">📊</span>
         <span class="bottom-nav-label">Dashboard</span>
     </button>
     
-    <button class="bottom-nav-btn" data-tab="pregled" onclick="showRoleNavTab('pregled', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled">
         <span class="bottom-nav-icon">⌂</span>
         <span class="bottom-nav-label">Pregled</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="dispecer" onclick="showRoleNavTab('dispecer', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="dispecer">
         <span class="bottom-nav-icon">📋</span>
         <span class="bottom-nav-label">Dispečer</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="otkup" onclick="showRoleNavTab('otkup', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otkup">
         <span class="bottom-nav-icon">◷</span>
         <span class="bottom-nav-label">Otkup</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="partneri" onclick="showRoleNavTab('partneri', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="partneri">
         <span class="bottom-nav-icon">◎</span>
         <span class="bottom-nav-label">Partneri</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="agro" onclick="showRoleNavTab('agro', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="agro">
         <span class="bottom-nav-icon">✿</span>
         <span class="bottom-nav-label">Agro</span>
     </button>
 </div>
 
 <div class="bottom-nav role-vozac" id="vozacBottomNav">
-    <button class="bottom-nav-btn" data-tab="zbirna" onclick="showRoleNavTab('zbirna', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="zbirna">
         <span class="bottom-nav-icon">📦</span>
         <span class="bottom-nav-label">Zbirna</span>
     </button>
 
-    <button class="bottom-nav-btn" data-tab="transport" onclick="showRoleNavTab('transport', this)">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="transport">
         <span class="bottom-nav-icon">🚚</span>
         <span class="bottom-nav-label">Transport</span>
     </button>
 </div>
     
 <!-- QR PROFILE MODAL -->
-<div id="qrProfileModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;justify-content:center;align-items:center;flex-direction:column;" onclick="this.style.display='none'">
+<div id="qrProfileModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;justify-content:center;align-items:center;flex-direction:column;">   
     <div style="background:white;padding:30px;border-radius:16px;text-align:center;max-width:320px;">
         <div style="font-size:18px;font-weight:700;color:var(--primary);margin-bottom:4px;" id="qrProfileName"></div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;" id="qrProfileRole"></div>
