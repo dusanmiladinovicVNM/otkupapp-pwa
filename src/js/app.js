@@ -708,6 +708,16 @@ function handleAppShellChange(event) {
         onIzdKooperantChange();
         return;
     }
+
+    if (el.id === 'agroTraktorNovi') {
+        agroSaveNovaOprema('Traktor', el.value);
+        return;
+    }
+
+    if (el.id === 'agroPrskalicaNovi') {
+        agroSaveNovaOprema('Prskalica', el.value);
+        return;
+    }
 }
 
 function handleAppShellInput(event) {
