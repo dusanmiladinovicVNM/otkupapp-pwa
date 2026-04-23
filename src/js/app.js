@@ -163,6 +163,8 @@ function bindAppShellEvents() {
         otpremaDetailCard.addEventListener('click', (e) => e.stopPropagation());
         otpremaDetailCard.dataset.bound = '1';
     }
+
+    document.addEventListener('input', handleAppShellInput);
     
     if (!window.__appShellDelegatedBound) {
         window.__appShellDelegatedBound = true;
@@ -242,6 +244,241 @@ function handleAppShellClick(event) {
             openPregledDetailOtkupniList();
             return;
         }
+
+        if (action === 'start-otprema-vozac-qr-scan') {
+            startOtpremaVozacQRScan();
+            return;
+        }
+
+        if (action === 'toggle-otprema-fallback') {
+            toggleOtpremaFallback();
+            return;
+        }
+
+        if (action === 'apply-otprema-fallback-driver') {
+            applyOtpremaFallbackDriver();
+            return;
+        }
+
+        if (action === 'cancel-otprema-assign') {
+            cancelOtpremaAssign();
+            return;
+        }
+
+        if (action === 'select-all-otprema-today') {
+            selectAllOtpremaToday();
+            return;
+        }
+
+        if (action === 'clear-otprema-selection') {
+            clearOtpremaSelection();
+            return;
+        }
+
+        if (action === 'confirm-otprema-assign') {
+            confirmOtpremaAssign();
+            return;
+        }
+
+        if (action === 'back-to-otprema-root') {
+            backToOtpremaRoot();
+            return;
+        }
+
+        if (action === 'close-otprema-detail') {
+            closeOtpremaDetail();
+            return;
+        }
+
+        if (action === 'sync-otkupac-now') {
+            syncOtkupacFromMore();
+            return;
+        }
+
+        if (action === 'clear-otkupac-signature') {
+            clearOtkupacSignature();
+            return;
+        }
+
+        if (action === 'save-otkupac-signature') {
+            saveOtkupacSignature();
+            return;
+        }
+
+        if (action === 'open-home-quick-actions') {
+            openHomeQuickActions();
+            return;
+        }
+
+        if (action === 'home-show-alerts') {
+            showHomeAlerts();
+            return;
+        }
+
+        if (action === 'home-go-new-rad') {
+            goToNewRad();
+            return;
+        }
+
+        if (action === 'home-go-new-trosak') {
+            goToNewTrosak();
+            return;
+        }
+
+        if (action === 'home-go-scan-racun') {
+            goToScanRacun();
+            return;
+        }
+
+        if (action === 'close-home-quick-actions') {
+            closeHomeQuickActions();
+            return;
+        }
+
+        if (action === 'home-quick-new-rad') {
+            closeHomeQuickActions();
+            goToNewRad();
+            return;
+        }
+
+        if (action === 'home-quick-new-trosak') {
+            closeHomeQuickActions();
+            goToNewTrosak();
+            return;
+        }
+
+        if (action === 'home-quick-scan-racun') {
+            closeHomeQuickActions();
+            goToScanRacun();
+            return;
+        }
+
+        if (action === 'home-quick-kartica') {
+            closeHomeQuickActions();
+            goToKartica();
+            return;
+        }
+
+        if (action === 'home-quick-knjiga-polja') {
+            closeHomeQuickActions();
+            goToKnjigaPolja();
+            return;
+        }
+
+        if (action === 'toggle-parcele-view') {
+            toggleParceleView();
+            return;
+        }
+
+        if (action === 'show-parcele-section') {
+            showParceleSection(actionEl.dataset.section, actionEl);
+            return;
+        }
+
+        if (action === 'close-parcela-detail') {
+            closeParcelaDetail();
+            return;
+        }
+
+        if (action === 'go-new-rad-from-parcela') {
+            goToNewRadFromParcela();
+            return;
+        }
+
+        if (action === 'go-new-trosak-from-parcela') {
+            goToNewTrosakFromParcela();
+            return;
+        }
+
+        if (action === 'show-parcela-detail-section') {
+            showParcelaDetailSection(actionEl.dataset.section, actionEl);
+            return;
+        }
+
+        if (action === 'radovi-open-new') {
+            showRadoviSection('tretmani', document.querySelector('.radovi-subnav-btn'));
+            scrollRadoviFormIntoView();
+            return;
+        }
+
+        if (action === 'show-radovi-section') {
+            showRadoviSection(actionEl.dataset.section, actionEl);
+            return;
+        }
+
+        if (action === 'select-agro-mera') {
+            selectAgroMera(actionEl, actionEl.dataset.mera);
+            return;
+        }
+
+        if (action === 'agro-meteo-override') {
+            agroMeteoOverride();
+            return;
+        }
+
+        if (action === 'agro-primeni-preporuku') {
+            agroPrimeniPreporuku();
+            return;
+        }
+
+        if (action === 'agro-start-rad') {
+            agroStartRad();
+            return;
+        }
+
+        if (action === 'agro-stop-rad') {
+            agroStopRad();
+            return;
+        }
+
+        if (action === 'agro-save-tretman') {
+            agroSaveTretman();
+            return;
+        }
+
+        if (action === 'agro-back-to-step1') {
+            agroBackToStep1();
+            return;
+        }
+
+        if (action === 'radovi-open-tretmani') {
+            showRadoviSection('tretmani', document.querySelector('.radovi-subnav-btn'));
+            return;
+        }
+
+        if (action === 'knjiga-open-new-trosak') {
+            showKnjigaSection(
+                'troskovi',
+                document.querySelector('.knjiga-subnav-btn[data-action="show-knjiga-section"][data-section="troskovi"]')
+            );
+            scrollKnjigaTrosakFormIntoView();
+            return;
+        }
+
+        if (action === 'show-knjiga-section') {
+            showKnjigaSection(actionEl.dataset.section, actionEl);
+            return;
+        }
+
+        if (action === 'kp-save-trosak') {
+            kpSaveTrosak();
+            return;
+        }
+
+        if (action === 'start-fiskalni-scan') {
+            startFiskalniScan();
+            return;
+        }
+
+        if (action === 'fiskalni-save-to-lager') {
+            fiskalniSaveToLager();
+            return;
+        }
+
+        if (action === 'fiskalni-cancel') {
+            fiskalniCancel();
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
@@ -264,73 +501,13 @@ function handleAppShellClick(event) {
         return;
     }
 
-    if (action === 'start-otprema-vozac-qr-scan') {
-        startOtpremaVozacQRScan();
-        return;
-    }
-
-    if (action === 'toggle-otprema-fallback') {
-        toggleOtpremaFallback();
-        return;
-    }
-
-    if (action === 'apply-otprema-fallback-driver') {
-        applyOtpremaFallbackDriver();
-        return;
-    }
-
-    if (action === 'cancel-otprema-assign') {
-        cancelOtpremaAssign();
-        return;
-}
-
-if (action === 'select-all-otprema-today') {
-    selectAllOtpremaToday();
-    return;
-    }
-
-    if (action === 'clear-otprema-selection') {
-        clearOtpremaSelection();
-        return;
-    }
-
-    if (action === 'confirm-otprema-assign') {
-        confirmOtpremaAssign();
-        return;
-    }
-
-    if (action === 'back-to-otprema-root') {
-        backToOtpremaRoot();
-        return;
-    }
-
-    if (action === 'close-otprema-detail') {
-        closeOtpremaDetail();
-        return;
-    }
-
-    if (action === 'sync-otkupac-now') {
-        syncOtkupacFromMore();
-        return;
-    }
-
-    if (action === 'clear-otkupac-signature') {
-        clearOtkupacSignature();
-        return;
-    }
-
-    if (action === 'save-otkupac-signature') {
-        saveOtkupacSignature();
-        return;
-    }
-
-    if (action === 'open-home-quick-actions') {
-        openHomeQuickActions();
-        return;
-    }
-
     if (event.target.id === 'otpremaDetailModal') {
         closeOtpremaDetail();
+        return;
+    }
+
+    if (event.target.id === 'homeQuickActionsModal') {
+        closeHomeQuickActions();
         return;
     }
 }
@@ -351,6 +528,51 @@ function handleAppShellChange(event) {
 
     if (el.id === 'fldPregledOd' || el.id === 'fldPregledDo') {
         onPregledDateChange();
+        return;
+    }
+    
+    if (el.id === 'parceleKulturaFilter') {
+        applyParceleFilters();
+        return;
+    }
+
+    if (el.id === 'agroParcelaSel') {
+        onAgroParcelaChange();
+        return;
+    }
+
+    if (el.id === 'agroPreparatSel') {
+        onAgroPreparatChange();
+        return;
+    }
+
+    if (el.id === 'agroTraktor') {
+        refreshRadoviOpremaInfo();
+        return;
+    }
+
+    if (el.id === 'agroPrskalica') {
+        refreshRadoviOpremaInfo();
+        return;
+    }
+
+    if (el.id === 'kpParcelaSel' || el.id === 'kpSezona') {
+        kpLoadBilans();
+        return;
+    }
+}
+
+function handleAppShellInput(event) {
+    const el = event.target;
+    if (!el || !el.id) return;
+
+    if (el.id === 'parceleSearch') {
+        applyParceleFilters();
+        return;
+    }
+
+    if (el.id === 'agroOpremaOstalo') {
+        refreshRadoviOpremaInfo();
         return;
     }
 }
