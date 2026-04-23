@@ -5,6 +5,10 @@ window.openDB = function () {
         req.onupgradeneeded = (e) => {
             const d = e.target.result;
 
+            if (d.objectStoreNames.contains('agromere')) {
+                d.deleteObjectStore('agromere');
+            }
+
             if (!d.objectStoreNames.contains(CONFIG.STORE_NAME)) {
                 const s = d.createObjectStore(CONFIG.STORE_NAME, { keyPath: 'clientRecordID' });
                 s.createIndex('syncStatus', 'syncStatus', { unique: false });
@@ -13,11 +17,6 @@ window.openDB = function () {
 
             if (!d.objectStoreNames.contains(CONFIG.STAMM_STORE)) {
                 d.createObjectStore(CONFIG.STAMM_STORE, { keyPath: 'key' });
-            }
-
-            if (!d.objectStoreNames.contains(CONFIG.AGRO_STORE)) {
-                const a = d.createObjectStore(CONFIG.AGRO_STORE, { keyPath: 'clientRecordID' });
-                a.createIndex('syncStatus', 'syncStatus', { unique: false });
             }
 
             if (!d.objectStoreNames.contains('zbirne')) {
