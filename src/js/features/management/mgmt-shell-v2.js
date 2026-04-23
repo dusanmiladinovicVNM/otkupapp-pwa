@@ -44,13 +44,86 @@ function populateMgmtKupciDropdown() {
     });
 }
 
+function mgmtLogError(scope, error) {
+    console.error(`[mgmt-shell-v2] ${scope} failed:`, error);
+}
+
+function mgmtGetDataSlices() {
+    const data = window.mgmtData || {};
+
+    return {
+        otkupiAll: Array.isArray(data.otkupiAll) ? data.otkupiAll : [],
+        saldoKupci: Array.isArray(data.saldoKupci) ? data.saldoKupci : [],
+        saldoOM: Array.isArray(data.saldoOM) ? data.saldoOM : [],
+        kartice: Array.isArray(data.kartice) ? data.kartice : []
+    };
+}
+
+function mgmtSetText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+function mgmtActivateButton(btn, fallbackSelector) {
+    if (btn && btn.classList) {
+        btn.classList.add('active');
+        return;
+    }
+
+    const autoBtn = document.querySelector(fallbackSelector);
+    if (autoBtn) autoBtn.classList.add('active');
+}
+
+function mgmtClearActive(selector) {
+    document.querySelectorAll(selector).forEach(el => el.classList.remove('active'));
+}
+
+function mgmtHidePanels(ids) {
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+}
+
+const MGMT_PARTNER_PANEL_IDS = [
+    'mgmt-koop-pregled',
+    'mgmt-koop-kartica',
+    'mgmt-koop-saldo',
+    'mgmt-kup-fakture',
+    'mgmt-kup-saldo',
+    'mgmt-kup-roba'
+];
+
+const MGMT_DASH_PERIOD_COPY = {
+    today: {
+        kgLabel: 'Otkup · danas',
+        kgSub: 'kg danas',
+        koopSub: 'jedinstveni danas',
+        avgSub: 'ponderisana RSD/kg · danas'
+    },
+    season: {
+        kgLabel: 'Otkup · sezona',
+        kgSub: 'kg u sezoni',
+        koopSub: 'jedinstveni u sezoni',
+        avgSub: 'ponderisana RSD/kg · sezona'
+    },
+    '7d': {
+        kgLabel: 'Otkup · 7 dana',
+        kgSub: 'kg u poslednjih 7 dana',
+        koopSub: 'jedinstveni u 7 dana',
+        avgSub: 'ponderisana RSD/kg · 7 dana'
+    }
+};
+
 async function mgmtShellInit() {
     mgmtMountLegacyBlocks();
 
     if (typeof loadDispecer === 'function') {
         try {
             await loadDispecer();
-        } catch (e) {}
+        } catch (e) {
+            mgmtLogError('loadDispecer in mgmtShellInit', e);
+        }
     }
 
     await showMgmtRoot('pregled');
@@ -93,7 +166,9 @@ async function showMgmtRoot(root, btn) {
         if (typeof loadDispecer === 'function') {
             try {
                 await loadDispecer();
-            } catch (e) {}
+            } catch (e) {
+                    mgmtLogError('showMgmtRoot', e);
+            }
         }
         mgmtRenderOverview();
     } else if (root === 'otkup') {
@@ -109,31 +184,6 @@ async function showMgmtRoot(root, btn) {
             updateRoleNavActive();
         }
     }, 0);
-}
-
-async function showMgmtBottomRoot(root, btn) {
-    await showMgmtRoot(root, btn);
-    if (typeof updateRoleNavActive === 'function') updateRoleNavActive(root);
-}
-
-function updateMgmtBottomNavActive() {
-    const nav = document.getElementById('mgmtBottomNav');
-    if (!nav) return;
-
-    nav.querySelectorAll('.bottom-nav-btn').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === window.mgmtShellState.activeRoot);
-    });
-}
-
-function updateMgmtBottomNavVisibility() {
-    const nav = document.getElementById('mgmtBottomNav');
-    if (!nav) return;
-
-    const isMgmt = CONFIG.USER_ROLE === 'Management';
-    const isMobile = window.innerWidth <= 900;
-
-    nav.classList.toggle('visible', !!(isMgmt && isMobile));
-    document.body.classList.toggle('has-mgmt-bottom-nav', !!(isMgmt && isMobile));
 }
 
 function mgmtMountLegacyBlocks() {
@@ -201,49 +251,17 @@ function showMgmtOtkupSub(sub, btn) {
         saldo: 'mgmt-sta-saldo'
     };
 
-    ['mgmt-sta-otkupi', 'mgmt-sta-roba', 'mgmt-sta-saldo'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
+    mgmtHidePanels(['mgmt-sta-otkupi', 'mgmt-sta-roba', 'mgmt-sta-saldo']);
 
     const target = document.getElementById(map[sub]);
     if (target) target.classList.add('active');
 
-    document.querySelectorAll('#mgmtOtkupSubBar .sub-tab-btn').forEach(el => el.classList.remove('active'));
-    if (btn && btn.classList) {
-        btn.classList.add('active');
-    } else {
-        const autoBtn = document.querySelector('#mgmtOtkupSubBar .sub-tab-btn[data-sub="' + sub + '"]');
-        if (autoBtn) autoBtn.classList.add('active');
-    }
+    mgmtClearActive('#mgmtOtkupSubBar .sub-tab-btn');
+    mgmtActivateButton(btn, `#mgmtOtkupSubBar .sub-tab-btn[data-sub="${sub}"]`);
 
     if (sub === 'otkupi' && typeof loadMgmtOtkupi === 'function') loadMgmtOtkupi();
     if (sub === 'roba' && typeof loadMgmtOtkupPoOM === 'function') loadMgmtOtkupPoOM();
     if (sub === 'saldo' && typeof loadMgmtSaldoOM === 'function') loadMgmtSaldoOM();
-}
-
-function showMgmtPartnerSegment(segment, btn) {
-    window.mgmtShellState.partnerSegment = segment;
-
-    document.querySelectorAll('#mgmtPartnerSegmentBar .sub-tab-btn').forEach(el => el.classList.remove('active'));
-    if (btn && btn.classList) {
-        btn.classList.add('active');
-    } else {
-        const autoBtn = document.querySelector('#mgmtPartnerSegmentBar .sub-tab-btn[data-segment="' + segment + '"]');
-        if (autoBtn) autoBtn.classList.add('active');
-    }
-
-    const koopBar = document.getElementById('mgmtPartnerKoopSubBar');
-    const kupBar = document.getElementById('mgmtPartnerKupSubBar');
-
-    if (koopBar) koopBar.style.display = segment === 'kooperanti' ? '' : 'none';
-    if (kupBar) kupBar.style.display = segment === 'kupci' ? '' : 'none';
-
-    if (segment === 'kooperanti') {
-        showMgmtKoopSub(window.mgmtShellState.koopSub || 'pregled');
-    } else {
-        showMgmtKupSub(window.mgmtShellState.kupSub || 'fakture');
-    }
 }
 
 function showMgmtKoopSub(sub, btn) {
@@ -255,28 +273,13 @@ function showMgmtKoopSub(sub, btn) {
         saldo: 'mgmt-koop-saldo'
     };
 
-    [
-        'mgmt-koop-pregled',
-        'mgmt-koop-kartica',
-        'mgmt-koop-saldo',
-        'mgmt-kup-fakture',
-        'mgmt-kup-saldo',
-        'mgmt-kup-roba'
-    ].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
+    mgmtHidePanels(MGMT_PARTNER_PANEL_IDS);
 
     const target = document.getElementById(map[sub]);
     if (target) target.classList.add('active');
 
-    document.querySelectorAll('#mgmtPartnerKoopSubBar .sub-tab-btn').forEach(el => el.classList.remove('active'));
-    if (btn && btn.classList) {
-        btn.classList.add('active');
-    } else {
-        const autoBtn = document.querySelector('#mgmtPartnerKoopSubBar .sub-tab-btn[data-sub="' + sub + '"]');
-        if (autoBtn) autoBtn.classList.add('active');
-    }
+    mgmtClearActive('#mgmtPartnerKoopSubBar .sub-tab-btn');
+    mgmtActivateButton(btn, `#mgmtPartnerKoopSubBar .sub-tab-btn[data-sub="${sub}"]`);
 
     if (sub === 'pregled' && typeof loadMgmtKoopPregled === 'function') loadMgmtKoopPregled();
     if (sub === 'saldo' && typeof loadMgmtKoopSaldo === 'function') loadMgmtKoopSaldo();
@@ -291,28 +294,13 @@ function showMgmtKupSub(sub, btn) {
         roba: 'mgmt-kup-roba'
     };
 
-    [
-        'mgmt-koop-pregled',
-        'mgmt-koop-kartica',
-        'mgmt-koop-saldo',
-        'mgmt-kup-fakture',
-        'mgmt-kup-saldo',
-        'mgmt-kup-roba'
-    ].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
+    mgmtHidePanels(MGMT_PARTNER_PANEL_IDS);
 
     const target = document.getElementById(map[sub]);
     if (target) target.classList.add('active');
 
-    document.querySelectorAll('#mgmtPartnerKupSubBar .sub-tab-btn').forEach(el => el.classList.remove('active'));
-    if (btn && btn.classList) {
-        btn.classList.add('active');
-    } else {
-        const autoBtn = document.querySelector('#mgmtPartnerKupSubBar .sub-tab-btn[data-sub="' + sub + '"]');
-        if (autoBtn) autoBtn.classList.add('active');
-    }
+    mgmtClearActive('#mgmtPartnerKupSubBar .sub-tab-btn');
+    mgmtActivateButton(btn, `#mgmtPartnerKupSubBar .sub-tab-btn[data-sub="${sub}"]`);
 
     if (sub === 'fakture' && typeof loadMgmtFakture === 'function') loadMgmtFakture();
     if (sub === 'saldo' && typeof loadMgmtKupci === 'function') loadMgmtKupci();
@@ -327,32 +315,40 @@ function showMgmtAgroSub(sub, btn) {
         stanje: 'mgmt-agro-stanje'
     };
 
-    ['mgmt-agro-izdavanje', 'mgmt-agro-stanje'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
+    mgmtHidePanels(['mgmt-agro-izdavanje', 'mgmt-agro-stanje']);
 
     const target = document.getElementById(map[sub]);
     if (target) target.classList.add('active');
 
-    document.querySelectorAll('#mgmtAgroSubBar .sub-tab-btn').forEach(el => el.classList.remove('active'));
-    if (btn && btn.classList) {
-        btn.classList.add('active');
-    } else {
-        const autoBtn = document.querySelector('#mgmtAgroSubBar .sub-tab-btn[data-sub="' + sub + '"]');
-        if (autoBtn) autoBtn.classList.add('active');
-    }
+    mgmtClearActive('#mgmtAgroSubBar .sub-tab-btn');
+    mgmtActivateButton(btn, `#mgmtAgroSubBar .sub-tab-btn[data-sub="${sub}"]`);
 
     if (sub === 'izdavanje' && typeof populateIzdDropdowns === 'function') populateIzdDropdowns();
     if (sub === 'stanje' && typeof loadMgmtAgroStanje === 'function') loadMgmtAgroStanje();
 }
 
+function showMgmtPartnerSegment(segment, btn) {
+    window.mgmtShellState.partnerSegment = segment;
+
+    mgmtClearActive('#mgmtPartnerSegmentBar .sub-tab-btn');
+    mgmtActivateButton(btn, `#mgmtPartnerSegmentBar .sub-tab-btn[data-segment="${segment}"]`);
+
+    const koopBar = document.getElementById('mgmtPartnerKoopSubBar');
+    const kupBar = document.getElementById('mgmtPartnerKupSubBar');
+
+    if (koopBar) koopBar.style.display = segment === 'kooperanti' ? '' : 'none';
+    if (kupBar) kupBar.style.display = segment === 'kupci' ? '' : 'none';
+
+    if (segment === 'kooperanti') {
+        showMgmtKoopSub(window.mgmtShellState.koopSub || 'pregled');
+    } else {
+        showMgmtKupSub(window.mgmtShellState.kupSub || 'fakture');
+    }
+}
+
 function mgmtRenderOverview() {
     const today = mgmtDashTodayISO();
-    const otkupiAll = (window.mgmtData && mgmtData.otkupiAll) ? mgmtData.otkupiAll : [];
-    const saldoKupci = (window.mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
-    const saldoOM = (window.mgmtData && mgmtData.saldoOM) ? mgmtData.saldoOM : [];
-    const kartice = (window.mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
+    const { otkupiAll, saldoKupci, saldoOM, kartice } = mgmtGetDataSlices();
 
     const danas = otkupiAll.filter(r => mgmtDashFmtDate(mgmtGetOtkupDate(r)) === today);
     const danasCount = danas.length;
@@ -362,7 +358,9 @@ function mgmtRenderOverview() {
     if (typeof dpGetSup === 'function') {
         try {
             kgCeka = dpGetSup().reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
-        } catch (e) {}
+        } catch (e) {
+                mgmtLogError('mgmtRenderOverview u dpGetSup', e);
+        }
     }
 
     let aktivniPlanovi = 0;
@@ -382,12 +380,12 @@ function mgmtRenderOverview() {
         demandKg = dpDem.reduce((s, d) => s + (parseInt(d.Kg) || 0), 0);
     }
 
-    setTextSafe('mgmtOverviewOtkupi', danasCount.toLocaleString('sr'));
-    setTextSafe('mgmtOverviewKg', danasKg.toLocaleString('sr'));
-    setTextSafe('mgmtOverviewCeka', kgCeka.toLocaleString('sr'));
-    setTextSafe('mgmtOverviewPlanovi', aktivniPlanovi.toLocaleString('sr'));
-    setTextSafe('mgmtOverviewKamioni', aktivniKamioni.toLocaleString('sr'));
-    setTextSafe('mgmtOverviewDemand', demandKg.toLocaleString('sr'));
+    mgmtSetText('mgmtOverviewOtkupi', danasCount.toLocaleString('sr'));
+    mgmtSetText('mgmtOverviewKg', danasKg.toLocaleString('sr'));
+    mgmtSetText('mgmtOverviewCeka', kgCeka.toLocaleString('sr'));
+    mgmtSetText('mgmtOverviewPlanovi', aktivniPlanovi.toLocaleString('sr'));
+    mgmtSetText('mgmtOverviewKamioni', aktivniKamioni.toLocaleString('sr'));
+    mgmtSetText('mgmtOverviewDemand', demandKg.toLocaleString('sr'));
 
     const alerts = [];
 
@@ -467,11 +465,6 @@ function mgmtRenderOverview() {
             </div>
         `;
     }
-}
-
-function setTextSafe(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
 }
 
 // ============================================================
@@ -568,20 +561,6 @@ function mgmtDashFmtDate(v) {
     }
 
     return '';
-}
-
-function mgmtDashSetText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-}
-
-function mgmtDashEscape(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 function mgmtDashTodayISO() {
@@ -681,10 +660,10 @@ function mgmtDashRenderList(elId, items) {
     el.innerHTML = items.map(item => `
         <div class="mgmt-dash-list-item">
             <div class="mgmt-dash-list-top">
-                <span class="mgmt-dash-list-title">${mgmtDashEscape(item.title || '')}</span>
-                ${item.value ? `<span class="mgmt-dash-list-value">${mgmtDashEscape(item.value)}</span>` : ''}
+                <span class="mgmt-dash-list-title">${escapeHtml(item.title || '')}</span>
+                ${item.value ? `<span class="mgmt-dash-list-value">${escapeHtml(item.value)}</span>` : ''}
             </div>
-            ${item.text ? `<div class="mgmt-dash-list-text">${mgmtDashEscape(item.text)}</div>` : ''}
+            ${item.text ? `<div class="mgmt-dash-list-text">${escapeHtml(item.text)}</div>` : ''}
         </div>
     `).join('');
 }
@@ -935,17 +914,17 @@ function mgmtDashRenderDispatcher() {
             <div class="mgmt-dash-dispatch-item">
                 <div class="mgmt-dash-dispatch-top">
                     <div>
-                        <div class="mgmt-dash-dispatch-name">${mgmtDashEscape(mgmtDashGetDriverName(p))}</div>
+                        <div class="mgmt-dash-dispatch-name">${escapeHtml(mgmtDashGetDriverName(p))}</div>
                         <div class="mgmt-dash-dispatch-route">
-                            ${mgmtDashEscape(p.StanicaName || p.StanicaID || '?')} → ${mgmtDashEscape(p.KupacName || p.KupacID || '?')}
+                            ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')}
                         </div>
                     </div>
-                    <span class="mgmt-dash-status ${mgmtDashEscape(p.Status || 'planned')}">${mgmtDashEscape(mgmtDashStatusLabel(p.Status))}</span>
+                    <span class="mgmt-dash-status ${escapeHtml(p.Status || 'planned')}">${escapeHtml(mgmtDashStatusLabel(p.Status))}</span>
                 </div>
 
                 <div class="mgmt-dash-dispatch-meta">
                     <span><strong>${mgmtDashFmtInt(p.PlannedKg || 0)}</strong> kg</span>
-                    <span>Demand: ${mgmtDashEscape(p.DemandID || '-')}</span>
+                    <span>Demand: ${escapeHtml(p.DemandID || '-')}</span>
                 </div>
             </div>
         `)
@@ -956,19 +935,20 @@ async function mgmtRenderDashboard() {
     if (!window.mgmtData && typeof prefetchMgmtData === 'function') {
         try {
             await prefetchMgmtData();
-        } catch (e) {}
+        } catch (e) {
+            mgmtLogError('mgmtRenderDashboard u prefetchMgmtData', e);
+        }
     }
 
     if (typeof loadDispecer === 'function') {
         try {
             await loadDispecer();
-        } catch (e) {}
+        } catch (e) {
+            mgmtLogError('mgmtRenderDashboard u loadDispecer', e);
+        }
     }
 
-    const otkupiAll = (window.mgmtData && mgmtData.otkupiAll) ? mgmtData.otkupiAll : [];
-    const saldoKupci = (window.mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
-    const saldoOM = (window.mgmtData && mgmtData.saldoOM) ? mgmtData.saldoOM : [];
-    const kartice = (window.mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
+    const { otkupiAll, saldoKupci, saldoOM, kartice } = mgmtGetDataSlices();
 
     const period = window.mgmtShellState?.dashboardPeriod || '7d';
     const stats = mgmtDashGetPeriodStats(otkupiAll, period);
@@ -978,7 +958,9 @@ async function mgmtRenderDashboard() {
     if (typeof dpGetSup === 'function') {
         try {
             kgCeka = dpGetSup().reduce((s, r) => s + mgmtDashNum(r.Kolicina), 0);
-        } catch (e) {}
+        } catch (e) {
+            mgmtLogError('mgmtRenderDashboard u dpGetSup', e);
+        }
     }
 
     let demandKg = 0;
@@ -990,10 +972,10 @@ async function mgmtRenderDashboard() {
     const kupSaldo = saldoKupci.reduce((s, r) => s + mgmtDashNum(r.Saldo), 0);
     const omSaldo = saldoOM.reduce((s, r) => s + mgmtDashNum(r.Saldo), 0);
 
-    mgmtDashSetText('mgmtDashWeekKg', mgmtDashFmtInt(stats.totalKg));
-    mgmtDashSetText('mgmtDashActiveKoops', mgmtDashFmtInt(stats.activeKoops));
-    mgmtDashSetText('mgmtDashAvgPrice', mgmtDashFmtDec(stats.avgPrice, 1));
-    mgmtDashSetText('mgmtDashGGAP', '86%');
+    mgmtSetText('mgmtDashWeekKg', mgmtDashFmtInt(stats.totalKg));
+    mgmtSetText('mgmtDashActiveKoops', mgmtDashFmtInt(stats.activeKoops));
+    mgmtSetText('mgmtDashAvgPrice', mgmtDashFmtDec(stats.avgPrice, 1));
+    mgmtSetText('mgmtDashGGAP', '86%');
 
     const updatedEl = document.getElementById('mgmtDashUpdatedAt');
     if (updatedEl) {
@@ -1008,33 +990,12 @@ async function mgmtRenderDashboard() {
     const koopSub = document.querySelector('#mgmtDashActiveKoops')?.nextElementSibling;
     const avgSub = document.querySelector('#mgmtDashAvgPrice')?.nextElementSibling;
 
-    if (kgLabel) {
-        kgLabel.textContent =
-            period === 'today' ? 'Otkup · danas' :
-            period === 'season' ? 'Otkup · sezona' :
-            'Otkup · 7 dana';
-    }
+    const periodCopy = MGMT_DASH_PERIOD_COPY[period] || MGMT_DASH_PERIOD_COPY['7d'];
 
-    if (kgSub) {
-        kgSub.textContent =
-            period === 'today' ? 'kg danas' :
-            period === 'season' ? 'kg u sezoni' :
-            'kg u poslednjih 7 dana';
-    }
-
-    if (koopSub) {
-        koopSub.textContent =
-            period === 'today' ? 'jedinstveni danas' :
-            period === 'season' ? 'jedinstveni u sezoni' :
-            'jedinstveni u 7 dana';
-    }
-
-    if (avgSub) {
-        avgSub.textContent =
-            period === 'today' ? 'ponderisana RSD/kg · danas' :
-            period === 'season' ? 'ponderisana RSD/kg · sezona' :
-            'ponderisana RSD/kg · 7 dana';
-    }
+    if (kgLabel) kgLabel.textContent = periodCopy.kgLabel;
+    if (kgSub) kgSub.textContent = periodCopy.kgSub;
+    if (koopSub) koopSub.textContent = periodCopy.koopSub;
+    if (avgSub) avgSub.textContent = periodCopy.avgSub;
 
     const alertItems = [];
 
@@ -1089,17 +1050,6 @@ async function mgmtRenderDashboard() {
     mgmtDashRenderList('mgmtDashAlerts', alertItems);
     mgmtDashRenderList('mgmtDashFinance', financeItems);
     mgmtDashRenderQuickLinks();
-
-    // Debug log — ukloniti posle potvrde da chart radi
-    console.log('mgmt chart sample', (otkupiAll || []).slice(0, 5).map(r => ({
-        rawDate: mgmtGetOtkupDate(r),
-        parsedDate: mgmtDashFmtDate(mgmtGetOtkupDate(r)),
-        rawKg: r.Kolicina,
-        parsedKg: mgmtGetOtkupKg(r)
-    })));
-
-    console.log('mgmt chart series', series);
-
     mgmtDashRenderChart(series);
     mgmtDashRenderDispatcher();
 }
