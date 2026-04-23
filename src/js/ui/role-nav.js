@@ -143,22 +143,32 @@ function showRoleNavTab(tabKey, btn) {
     const cfg = getRoleNavConfig();
     if (!cfg) return;
 
-    // Odmah prebaci aktivno stanje u nav-u
     updateRoleNavActive(tabKey);
 
     if (cfg.type === 'showMgmtRoot') {
-
-        if (typeof showTab === 'function') {
-            showTab(tabKey);
+        if (typeof showMgmtRoot === 'function') {
+            showMgmtRoot(tabKey);
         }
 
-        // Posle promene taba ponovo sinhronizuj iz DOM-a
         setTimeout(() => {
             if (typeof updateRoleNavActive === 'function') {
                 updateRoleNavActive();
             }
         }, 0);
+
+        return;
     }
+
+    if (typeof showTab === 'function') {
+        showTab(tabKey, btn);
+    }
+
+    setTimeout(() => {
+        if (typeof updateRoleNavActive === 'function') {
+            updateRoleNavActive();
+        }
+    }, 0);
+}
 
 function clearAllRoleNavActiveStates() {
     getAllRoleNavIds().forEach(id => {
