@@ -634,7 +634,7 @@
                             <div class="home-card-title">Upozorenja</div>
                             <div class="home-card-subtitle">Meteo, sync i otvorene stavke</div>
                         </div>
-                        <button class="home-card-link" onclick="showHomeAlerts()">Sve</button>
+                        <button class="home-card-link" data-action="home-show-alerts">Sve</button>
                     </div>
                     <div id="homeAlertsList" class="home-list"></div>
                 </div>
@@ -647,10 +647,10 @@
                         </div>
                     </div>
                     <div class="home-actions-grid">
-                        <button class="home-action-btn" onclick="goToNewRad()">Novi rad</button>
-                        <button class="home-action-btn" onclick="goToNewTrosak()">Novi trošak</button>
-                        <button class="home-action-btn" onclick="goToScanRacun()">Slikaj račun</button>
-                        <button class="home-action-btn" onclick="showTab('knjigapolja')">Knjiga polja</button>
+                        <button class="home-action-btn" data-action="home-go-new-rad">Novi rad</button>
+                        <button class="home-action-btn" data-action="home-go-new-trosak">Novi trošak</button>
+                        <button class="home-action-btn" data-action="home-go-scan-racun">Slikaj račun</button>
+                        <button class="home-action-btn" data-route="tab" data-tab="knjigapolja">Knjiga polja</button>
                     </div>
                 </div>
 
@@ -660,7 +660,7 @@
                             <div class="home-card-title">Mini bilans</div>
                             <div class="home-card-subtitle">Sažetak tekuće sezone</div>
                         </div>
-                        <button class="home-card-link" onclick="showTab('knjigapolja')">Otvori</button>
+                        <button class="home-card-link" data-route="tab" data-tab="knjigapolja">Otvori</button>
                     </div>
                     <div class="home-bilans-grid">
                         <div class="home-bilans-item">
@@ -688,7 +688,7 @@
                             <div class="home-card-title">Sažetak kartice</div>
                             <div class="home-card-subtitle">Poslednje stanje sa otkupljivačem</div>
                         </div>
-                        <button class="home-card-link" onclick="showTab('kartica')">Kartica</button>
+                        <button class="home-card-link" data-route="tab" data-tab="kartica">Kartica</button>
                     </div>
 
                     <div class="home-kartica-summary">
@@ -708,37 +708,37 @@
                 </div>
             </div>
             
-    <div class="home-quick-modal" id="homeQuickActionsModal" onclick="closeHomeQuickActions()">
-    <div class="home-quick-sheet" onclick="event.stopPropagation()">
+    <div class="home-quick-modal" id="homeQuickActionsModal">
+    <div class="home-quick-sheet">
         <div class="home-quick-handle"></div>
         <div class="home-quick-title">Brze akcije</div>
 
-        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToNewRad();">
+        <button class="home-quick-item" data-action="home-quick-new-rad">
             <span>🛠️</span>
             <span>Novi rad</span>
         </button>
 
-        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToNewTrosak();">
+        <button class="home-quick-item" data-action="home-quick-new-trosak">
             <span>💰</span>
             <span>Novi trošak</span>
         </button>
 
-        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToScanRacun();">
+        <button class="home-quick-item" data-action="home-quick-scan-racun">
             <span>🧾</span>
             <span>Slikaj račun</span>
         </button>
 
-        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToKartica();">
+        <button class="home-quick-item" data-action="home-quick-kartica">
             <span>📒</span>
             <span>Kartica</span>
         </button>
 
-        <button class="home-quick-item" onclick="closeHomeQuickActions(); goToKnjigaPolja();">
+        <button class="home-quick-item" data-action="closeHomeQuickActions(); goToKnjigaPolja();">
             <span>📘</span>
             <span>Knjiga polja</span>
         </button>
 
-        <button class="home-quick-cancel" onclick="closeHomeQuickActions()">
+        <button class="home-quick-item" data-action="home-quick-knjiga-polja">
             Otkaži
         </button>
     </div>
@@ -815,7 +815,7 @@
                                     <div class="parcele-subline">Pregled mapa, liste, kulture i meteo rizika</div>
                                 </div>
 
-                                <button class="parcele-primary-btn" type="button" onclick="toggleParceleView()">
+                                <button class="parcele-primary-btn" type="button" data-action="toggle-parcele-view">
                                     Prikaži listu
                                 </button>
                             </div>
@@ -825,12 +825,12 @@
                             <div class="parcele-filters-grid">
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Pretraga</label>
-                                    <input type="text" id="parceleSearch" placeholder="Šifra, kultura, KO..." oninput="applyParceleFilters()">
+                                    <input type="text" id="parceleSearch" placeholder="Šifra, kultura, KO...">
                                 </div>
 
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Kultura</label>
-                                    <select id="parceleKulturaFilter" onchange="applyParceleFilters()">
+                                    <select id="parceleKulturaFilter">
                                         <option value="">-- Sve kulture --</option>
                                     </select>
                                 </div>
@@ -838,10 +838,10 @@
                         </div>
 
                         <div class="parcele-subnav">
-                            <button class="parcele-subnav-btn active" type="button" onclick="showParceleSection('mapa', this)">
+                            <button class="parcele-subnav-btn active" type="button" data-action="show-parcele-section" data-section="mapa">
                                 Mapa
                             </button>
-                            <button class="parcele-subnav-btn" type="button" onclick="showParceleSection('lista', this)">
+                            <button class="parcele-subnav-btn" type="button" data-action="show-parcele-section" data-section="lista">
                                 Lista
                             </button>
                         </div>
@@ -894,15 +894,15 @@
 
                                 <div class="parcela-detail-hero">
                                     <div class="parcela-detail-top">
-                                        <button class="parcela-back-btn" type="button" onclick="closeParcelaDetail()">
+                                        <button class="parcela-back-btn" type="button" data-action="close-parcela-detail">
                                             ← Nazad
                                         </button>
 
                                         <div class="parcela-detail-actions">
-                                            <button class="parcela-detail-cta" type="button" onclick="goToNewRadFromParcela()">
+                                            <button class="parcela-detail-cta" type="button" data-action="go-new-rad-from-parcela">
                                                 + Dodaj rad
                                             </button>
-                                            <button class="parcela-detail-cta parcela-detail-cta--secondary" type="button" onclick="goToNewTrosakFromParcela()">
+                                            <button class="parcela-detail-cta parcela-detail-cta--secondary" type="button" data-action="go-new-trosak-from-parcela">
                                                 Dodaj trošak
                                             </button>
                                         </div>
@@ -920,11 +920,11 @@
                                 </div>
 
                                 <div class="parcela-detail-subnav">
-                                    <button class="parcela-detail-subnav-btn active" type="button" onclick="showParcelaDetailSection('osnovno', this)">Osnovno</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('meteo', this)">Meteo</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('radovi', this)">Radovi</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('troskovi', this)">Troškovi</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" onclick="showParcelaDetailSection('proizvodnja', this)">Proizvodnja</button>
+                                    <button class="parcela-detail-subnav-btn active" type="button" data-action="show-parcela-detail-section" data-section="osnovno">Osnovno</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="meteo">Meteo</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="radovi">Radovi</button>
+                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="troskovi">Troškovi</button>                                   
+                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="proizvodnja">Proizvodnja</button>    
                                 </div>
 
                                 <div class="parcela-detail-section active" id="parcela-detail-section-osnovno">
@@ -1009,29 +1009,23 @@
                                     <h1 class="radovi-title">Radovi</h1>
                                     <div class="radovi-subline">Tretmani, evidencija rada, oprema i kalendar</div>
                                 </div>
-
-                                <button class="radovi-primary-btn" type="button"
-                                    onclick="showRadoviSection('tretmani', this); scrollRadoviFormIntoView();">
+                                <button class="radovi-primary-btn" type="button" data-action="radovi-open-new">
                                     + Novi rad
                                 </button>
                             </div>
                         </div>
 
                         <div class="radovi-subnav">
-                            <button class="radovi-subnav-btn active" type="button"
-                                onclick="showRadoviSection('tretmani', this)">
+                            <button class="radovi-subnav-btn active" type="button" data-action="show-radovi-section" data-section="tretmani">            
                                 Tretmani
                             </button>
-                            <button class="radovi-subnav-btn" type="button"
-                                onclick="showRadoviSection('istorija', this)">
+                            <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="istorija">
                                 Evidencija
                             </button>
-                            <button class="radovi-subnav-btn" type="button"
-                                onclick="showRadoviSection('oprema', this)">
+                            <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="oprema">
                                 Oprema
                             </button>
-                            <button class="radovi-subnav-btn" type="button"
-                                onclick="showRadoviSection('kalendar', this)">
+                            <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="kalendar">
                                 Kalendar
                             </button>
                         </div>
@@ -1069,7 +1063,7 @@
 
                                     <div class="form-group">
                                         <label>Parcela</label>
-                                        <select id="agroParcelaSel" onchange="onAgroParcelaChange()">
+                                        <select id="agroParcelaSel">
                                             <option value="">-- Izaberi parcelu --</option>
                                         </select>
                                     </div>
@@ -1094,11 +1088,11 @@
                                     </div>
 
                                     <div class="agro-mera-grid">
-                                        <button class="agro-mera-btn" onclick="selectAgroMera(this,'Zastita')">🛡️ Zaštita</button>
-                                        <button class="agro-mera-btn" onclick="selectAgroMera(this,'Prihrana')">🌱 Prihrana</button>
-                                        <button class="agro-mera-btn" onclick="selectAgroMera(this,'Rezidba')">✂️ Rezidba</button>
-                                        <button class="agro-mera-btn" onclick="selectAgroMera(this,'Zalivanje')">💧 Zalivanje</button>
-                                        <button class="agro-mera-btn" id="agroBerbaBtn" onclick="selectAgroMera(this,'Berba')">🍎 Berba</button>
+                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Zastita">🛡️ Zaštita</button>
+                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Prihrana">🌱 Prihrana</button>
+                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Rezidba">✂️ Rezidba</button>
+                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Zalivanje">💧 Zalivanje</button>
+                                        <button class="agro-mera-btn" id="agroBerbaBtn" data-action="select-agro-mera" data-mera="Berba">🍎 Berba</button>
                                         <div></div>
                                     </div>
 
@@ -1106,7 +1100,7 @@
                                     <div class="agro-meteo-warn" id="agroMeteoWarn">
                                         <div style="font-weight:700;margin-bottom:4px;" id="agroMeteoWarnTitle">⚠️ Upozorenje</div>
                                         <div id="agroMeteoWarnText">—</div>
-                                        <button onclick="agroMeteoOverride()"
+                                        <button data-action="agro-meteo-override"
                                             style="margin-top:8px;padding:8px 16px;background:var(--warning);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
                                             Nastavi ipak
                                         </button>
@@ -1119,7 +1113,7 @@
                                         </div>
 
                                         <div class="form-group" style="margin-bottom:8px;">
-                                            <select id="agroPreparatSel" onchange="onAgroPreparatChange()" style="padding:10px;font-size:13px;">
+                                            <select id="agroPreparatSel" style="padding:10px;font-size:13px;">
                                                 <option value="">-- Izaberi preparat --</option>
                                             </select>
                                         </div>
@@ -1141,7 +1135,7 @@
                                             </div>
                                             <div id="agroPreporukaCalc" style="font-size:14px;font-weight:600;color:var(--primary);margin-bottom:4px;">—</div>
                                             <div id="agroPreporukaDetail" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">—</div>
-                                            <button onclick="agroPrimeniPreporuku()"
+                                            <button data-action="agro-primeni-preporuku"
                                                 style="padding:8px 16px;background:var(--success);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
                                                 ✅ Primeni količinu
                                             </button>
@@ -1164,16 +1158,16 @@
                                         <div class="agro-timer-label" id="agroTimerLabel">—</div>
                                     </div>
 
-                                    <button class="btn-primary" id="agroBtnStart" onclick="agroStartRad()" style="display:none;">▶ POČNI RAD</button>
-                                    <button class="btn-primary" id="agroBtnStop" onclick="agroStopRad()" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
+                                    <button class="btn-primary" id="agroBtnStart" data-action="agro-start-rad" style="display:none;">▶ POČNI RAD</button>
+                                    <button class="btn-primary" id="agroBtnStop" data-action="agro-stop-rad" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
                                 </div>
 
                                 <!-- Step 2 -->
                                 <div id="agroStep2" style="display:none;">
                                     <h3 style="color:var(--primary);margin-bottom:12px;">Potvrda tretmana</h3>
                                     <div class="agro-confirm" id="agroConfirmPanel"></div>
-                                    <button class="btn-primary" onclick="agroSaveTretman()">💾 SAČUVAJ</button>
-                                    <button class="btn-secondary" onclick="agroBackToStep1()">← Nazad</button>
+                                    <button class="btn-primary" data-action="agro-save-tretman">💾 SAČUVAJ</button>
+                                    <button class="btn-secondary" data-action="agro-back-to-step1">← Nazad</button>
                                 </div>
                             </div>
                         </div>
@@ -1234,13 +1228,13 @@
                                             <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
                                             <div class="form-group" style="margin-bottom:10px;">
                                                 <label>Izaberi traktor</label>
-                                                <select id="agroTraktor" onchange="refreshRadoviOpremaInfo()" style="padding:10px;font-size:13px;">
+                                                <select id="agroTraktor" style="padding:10px;font-size:13px;">
                                                     <option value="">-- Bez traktora --</option>
                                                 </select>
                                             </div>
                                             <div class="form-group" style="margin-bottom:0;">
                                                 <label>Unesi novi traktor</label>
-                                                <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;" onchange="agroSaveNovaOprema('Traktor', this.value)">
+                                                <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;">
                                             </div>
                                         </div>
 
@@ -1248,13 +1242,13 @@
                                             <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
                                             <div class="form-group" style="margin-bottom:10px;">
                                                 <label>Izaberi prskalicu / atomizer</label>
-                                                <select id="agroPrskalica" onchange="refreshRadoviOpremaInfo()" style="padding:10px;font-size:13px;">
+                                                <select id="agroPrskalica" style="padding:10px;font-size:13px;">
                                                     <option value="">-- Bez prskalice --</option>
                                                 </select>
                                             </div>
                                             <div class="form-group" style="margin-bottom:0;">
                                                 <label>Unesi novu prskalicu</label>
-                                                <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;" onchange="agroSaveNovaOprema('Prskalica', this.value)">
+                                              <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;">
                                             </div>
                                         </div>
                                     </div>
@@ -1270,7 +1264,7 @@
 
                                     <div class="form-group" style="margin-bottom:0;">
                                         <label>Ostala oprema</label>
-                                        <input type="text" id="agroOpremaOstalo" oninput="refreshRadoviOpremaInfo()" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
+                                        <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
                                     </div>
                                 </div>
 
@@ -1298,7 +1292,7 @@
                                     </div>
 
                                     <div class="radovi-inline-actions">
-                                        <button class="radovi-secondary-btn" type="button" onclick="showRadoviSection('tretmani', document.querySelector('.radovi-subnav-btn'))">
+                                        <button class="radovi-secondary-btn" type="button" data-action="radovi-open-tretmani">
                                             Otvori Tretmane
                                         </button>
                                     </div>
@@ -1357,7 +1351,7 @@
                         <div class="knjiga-subline">Bilans, proizvodnja, troškovi i lager</div>
                     </div>
 
-                    <button class="knjiga-primary-btn" type="button" onclick="showKnjigaSection('troskovi', this); scrollKnjigaTrosakFormIntoView();">
+                    <button class="knjiga-primary-btn" type="button" data-action="knjiga-open-new-trosak">
                         + Novi trošak
                     </button>
                 </div>
@@ -1368,14 +1362,14 @@
                 <div class="form-row knjiga-filters-row">
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Parcela</label>
-                        <select id="kpParcelaSel" onchange="kpLoadBilans()">
+                        <select id="kpParcelaSel">
                             <option value="">-- Sve parcele --</option>
                         </select>
                     </div>
 
                     <div class="form-group" style="margin-bottom:0;">
                         <label>Sezona</label>
-                        <select id="kpSezona" onchange="kpLoadBilans()">
+                        <select id="kpSezona">
                             <option value="">Tekuća</option>
                         </select>
                     </div>
@@ -1417,16 +1411,16 @@
 
             <!-- SUBNAV -->
             <div class="knjiga-subnav">
-                <button class="knjiga-subnav-btn active" type="button" onclick="showKnjigaSection('pregled', this)">
+                <button class="knjiga-subnav-btn active" type="button" data-action="show-knjiga-section" data-section="pregled">
                     Pregled parcela
                 </button>
-                <button class="knjiga-subnav-btn" type="button" onclick="showKnjigaSection('proizvodnja', this)">
+                <button class="knjiga-subnav-btn" type="button" data-action="show-knjiga-section" data-section="proizvodnja">
                     Proizvodnja
                 </button>
-                <button class="knjiga-subnav-btn" type="button" onclick="showKnjigaSection('troskovi', this)">
+                <button class="knjiga-subnav-btn" type="button" data-action="show-knjiga-section" data-section="troskovi">
                     Troškovi
                 </button>
-                <button class="knjiga-subnav-btn" type="button" onclick="showKnjigaSection('lager', this)">
+                <button class="knjiga-subnav-btn" type="button" data-action="show-knjiga-section" data-section="lager">
                     Lager
                 </button>
             </div>
@@ -1516,7 +1510,7 @@
                             </div>
                         </div>
 
-                        <button class="btn-primary" onclick="kpSaveTrosak()" style="margin-top:4px;">💾 Sačuvaj trošak</button>
+                        <button class="btn-primary" data-action="kp-save-trosak" style="margin-top:4px;">💾 Sačuvaj trošak</button>
                     </div>
                 </div>
             </div>
@@ -1532,7 +1526,7 @@
                         </div>
                     </div>
 
-                    <button class="qr-scan-btn" onclick="startFiskalniScan()" style="background:var(--accent);">
+                    <button class="qr-scan-btn" data-action="start-fiskalni-scan" style="background:var(--accent);">
                         📷 Slikaj račun
                     </button>
 
@@ -1542,8 +1536,8 @@
                         <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
                         <div id="fiskalniStavke"></div>
                         <div style="display:flex;gap:8px;margin-top:8px;">
-                            <button class="btn-primary" onclick="fiskalniSaveToLager()" style="flex:1;">✅ Prenesi u lager</button>
-                            <button class="btn-secondary" onclick="fiskalniCancel()" style="flex:1;margin-top:0;">Otkaži</button>
+                            <button class="btn-primary" data-action="fiskalni-save-to-lager" style="flex:1;">✅ Prenesi u lager</button>
+                            <button class="btn-secondary" data-action="fiskalni-cancel" style="flex:1;margin-top:0;">Otkaži</button>
                         </div>
                     </div>
                 </div>
