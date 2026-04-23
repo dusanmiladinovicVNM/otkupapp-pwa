@@ -1,24 +1,17 @@
 // ============================================================
-// APP RUNTIME STATE
-// ============================================================
-
-const appRuntime = {
-    initStarted: false,
-    appReady: false,
-    stammdatenReady: false,
-    syncInFlight: false,
-    stammdatenRefreshInFlight: false,
-    syncIntervalId: null
-};
-
-// ============================================================
 // INIT
 // ============================================================
+function getAppRuntime() {
+    return window.appRuntime;
+}
+
 document.addEventListener('DOMContentLoaded', bootstrapApp);
 
 async function bootstrapApp() {
-    if (appRuntime.initStarted) return;
-    appRuntime.initStarted = true;
+    const runtime = getAppRuntime();
+    
+    if (runtime.initStarted) return;
+    runtime.initStarted = true;
 
     try {
         if (!hasValidSession()) {
@@ -46,8 +39,8 @@ async function bootstrapApp() {
         bindConnectivityEvents();
         startBackgroundSync();
 
-        appRuntime.stammdatenReady = true;
-        appRuntime.appReady = true;
+        runtime.stammdatenReady = true;
+        runtime.appReady = true;
 
         refreshStammdatenInBackground();
     } catch (err) {
@@ -178,11 +171,13 @@ function bindConnectivityEvents() {
 }
 
 function startBackgroundSync() {
-    if (appRuntime.syncIntervalId) {
-        clearInterval(appRuntime.syncIntervalId);
+    const runtime = getAppRuntime();
+    
+    if (runtime.syncIntervalId) {
+        clearInterval(runtime.syncIntervalId);
     }
 
-    appRuntime.syncIntervalId = setInterval(() => {
+    runtime.syncIntervalId = setInterval(() => {
         if (!navigator.onLine) return;
         if (CONFIG.USER_ROLE === 'Management') return;
         syncQueueSafe();
@@ -206,10 +201,11 @@ async function loadStammdatenFromCache() {
 }
 
 async function refreshStammdatenInBackground() {
+    const runtime = getAppRuntime();
     if (!navigator.onLine) return;
-    if (appRuntime.stammdatenRefreshInFlight) return;
+    if (runtime.stammdatenRefreshInFlight) return;
 
-    appRuntime.stammdatenRefreshInFlight = true;
+    runtime.stammdatenRefreshInFlight = true;
 
     try {
         await safeAsync(async () => {
@@ -230,7 +226,7 @@ async function refreshStammdatenInBackground() {
             }));
         }, 'Greška pri učitavanju šifarnika');
     } finally {
-        appRuntime.stammdatenRefreshInFlight = false;
+        runtime.stammdatenRefreshInFlight = false;
     }
 }
 
@@ -354,11 +350,13 @@ async function runRoleSync() {
 }
 
 async function syncQueueSafe() {
+    const runtime = getAppRuntime();
+    
     if (!navigator.onLine) return;
     if (CONFIG.USER_ROLE === 'Management') return;
-    if (appRuntime.syncInFlight) return;
+    if (runtime.syncInFlight) return;
 
-    appRuntime.syncInFlight = true;
+    runtime.syncInFlight = true;
     updateSyncBadge();
 
     try {
@@ -366,7 +364,7 @@ async function syncQueueSafe() {
     } catch (err) {
         console.error('runRoleSync failed:', err);
     } finally {
-        appRuntime.syncInFlight = false;
+        runtime.syncInFlight = false;
         updateSyncBadge();
     }
 }
