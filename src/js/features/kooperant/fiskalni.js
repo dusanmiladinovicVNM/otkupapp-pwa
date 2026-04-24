@@ -22,10 +22,18 @@ async function startFiskalniScan() {
             <div style="padding:12px;">
                 <label class="btn-primary" style="background:var(--primary);text-align:center;cursor:pointer;display:block;">
                     📷 Slikaj QR kod računa
-                    <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="scanFiskalniFromPhoto(this)">
+                    <input id="fiskalniPhotoInput" type="file" accept="image/*" capture="environment" style="display:none;">
                 </label>
             </div>
         `;
+
+        var fiskalniPhotoInput = document.getElementById('fiskalniPhotoInput');
+        if (fiskalniPhotoInput && !fiskalniPhotoInput.dataset.bound) {
+            fiskalniPhotoInput.addEventListener('change', function () {
+                scanFiskalniFromPhoto(fiskalniPhotoInput);
+            });
+            fiskalniPhotoInput.dataset.bound = '1';
+        }
         return;
     }
 
@@ -43,9 +51,14 @@ async function startFiskalniScan() {
             <div style="position:relative;">
                 <video id="fiskalniVideo" playsinline autoplay style="width:100%;border-radius:var(--radius);"></video>
                 <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:250px;height:250px;border:3px solid #ffd60a;border-radius:12px;"></div>
-                <button onclick="stopFiskalniScan()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;">✕</button>
+                <button type="button" id="fiskalniScanCloseBtn" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;">✕</button>
             </div>
         `;
+        var fiskalniScanCloseBtn = document.getElementById('fiskalniScanCloseBtn');
+        if (fiskalniScanCloseBtn && !fiskalniScanCloseBtn.dataset.bound) {
+            fiskalniScanCloseBtn.addEventListener('click', stopFiskalniScan);
+            fiskalniScanCloseBtn.dataset.bound = '1';
+        }
 
         var video = document.getElementById('fiskalniVideo');
         video.srcObject = stream;
@@ -256,7 +269,7 @@ function renderFiskalniResult() {
                     artikalCell = '<span class="' + matchClass + '">✅ ' + escapeHtml(s.artikalNaziv) + '</span>';
                 } else {
                     artikalCell = `
-                        <select id="fisMap${i}" style="font-size:11px;padding:4px;max-width:120px;" onchange="onFiskalniMap(${i}, this.value)">
+                        <select class="fis-map-select" data-index="${i}" id="fisMap${i}" style="font-size:11px;padding:4px;max-width:120px;">
                             <option value="">❓ Izaberi...</option>
                             <option value="__NEW__">➕ Novi artikal</option>
                             ${artikli.map(a => '<option value="' + escapeHtml(a.ArtikalID) + '">' + escapeHtml(a.Naziv) + '</option>').join('')}
@@ -276,6 +289,31 @@ function renderFiskalniResult() {
             }).join('')}
         </table>
     `;
+    if (!stavkeDiv.dataset.bound) {
+        stavkeDiv.addEventListener('change', function (event) {
+            var el = event.target;
+            if (!el) return;
+
+            if (el.classList && el.classList.contains('fis-map-select')) {
+                var index = parseInt(el.dataset.index || '', 10);
+                if (!isNaN(index)) {
+                    onFiskalniMap(index, el.value);
+                }
+            }
+        });
+
+        stavkeDiv.addEventListener('click', function (event) {
+            var btn = event.target.closest('[data-action="fiskalni-create-new-artikal"]');
+            if (!btn) return;
+
+            var index = parseInt(btn.dataset.index || '', 10);
+            if (!isNaN(index)) {
+                fiskalniCreateNewArtikal(index);
+            }
+        });
+
+        stavkeDiv.dataset.bound = '1';
+    }
 }
 
 // ============================================================
@@ -303,9 +341,9 @@ function onFiskalniMap(index, value) {
                         <option value="kg">Kilogram (kg)</option>
                         <option value="kom">Komad (kom)</option>
                     </select>
-                    <button onclick="fiskalniCreateNewArtikal(${index})" class="btn-primary" style="width:100%;padding:6px;font-size:11px;margin-top:2px;">
-                        ✅ Kreiraj artikal
-                    </button>
+                <button type="button" data-action="fiskalni-create-new-artikal" data-index="${index}" class="btn-primary" style="width:100%;padding:6px;font-size:11px;margin-top:2px;">
+                    ✅ Kreiraj artikal
+                </button>
                 </div>
             `;
         }
