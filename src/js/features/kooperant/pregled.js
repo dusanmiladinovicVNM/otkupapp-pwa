@@ -402,7 +402,7 @@ function renderPregled(data) {
             `;
         } else {
             alertsEl.innerHTML = data.alerts.map((a, idx) => `
-                <button class="home-alert-item is-${escapeHtml(a.type || 'ok')}" onclick="onPregledAlertClick(${idx})" type="button">
+                <button class="home-alert-item is-${escapeHtml(a.type || 'ok')}" data-action="pregled-alert-click" data-index="${idx}" type="button">
                     <div class="home-alert-icon">${escapeHtml(a.icon || '•')}</div>
                     <div>
                         <div class="home-alert-title">${escapeHtml(a.title || '')}</div>
@@ -473,7 +473,7 @@ function goToNewTrosak() {
 }
 
 function goToScanRacun() {
-    showTab('knjigapolja', findLegacyTabBtn('knjigapolja'));
+    showTab('knjigapolja', findTabBtnByTabName('knjigapolja'));
 
     setTimeout(() => {
         if (typeof showKnjigaSection === 'function') {
