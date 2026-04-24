@@ -388,19 +388,22 @@ function mgmtRenderOverview() {
     if (quickEl) {
         quickEl.innerHTML = `
             <div class="more-menu">
-                <button class="more-menu-item" onclick="showMgmtRoot('dispecer')">
+                <button class="more-menu-item" type="button" data-route="mgmt-root" data-root="dispecer">
                     <span class="more-menu-icon">${agIcon('clipboard', '20px')}</span>
                     <span class="more-menu-text"><strong>Dispečer</strong><small>Transport i planovi</small></span>
                 </button>
-                <button class="more-menu-item" onclick="showMgmtRoot('otkup')">
+
+                <button class="more-menu-item" type="button" data-route="mgmt-root" data-root="otkup">
                     <span class="more-menu-icon">${agIcon('coin', '20px')}</span>
                     <span class="more-menu-text"><strong>Otkup</strong><small>Otkupi, roba i saldo mesta</small></span>
                 </button>
-                <button class="more-menu-item" onclick="showMgmtRoot('partneri')">
+
+                <button class="more-menu-item" type="button" data-route="mgmt-root" data-root="partneri">
                     <span class="more-menu-icon">${agIcon('user', '20px')}</span>
                     <span class="more-menu-text"><strong>Partneri</strong><small>Kooperanti i kupci</small></span>
                 </button>
-                <button class="more-menu-item" onclick="showMgmtRoot('agro')">
+
+                <button class="more-menu-item" type="button" data-route="mgmt-root" data-root="agro">
                     <span class="more-menu-icon">${agIcon('sprout', '20px')}</span>
                     <span class="more-menu-text"><strong>Agrohemija</strong><small>Izdavanje i stanje</small></span>
                 </button>
@@ -615,7 +618,7 @@ function mgmtDashRenderQuickLinks() {
     if (!el) return;
 
     el.innerHTML = `
-        <button class="mgmt-dash-quicklink" type="button" onclick="showMgmtRoot('pregled')">
+        <button class="mgmt-dash-quicklink" type="button" data-route="mgmt-root" data-root="pregled">
             <span class="mgmt-dash-quicklink-icon">${agIcon('home', '22px')}</span>
             <span class="mgmt-dash-quicklink-text">
                 <strong>Pregled</strong>
@@ -623,7 +626,7 @@ function mgmtDashRenderQuickLinks() {
             </span>
         </button>
 
-        <button class="mgmt-dash-quicklink" type="button" onclick="showMgmtRoot('dispecer')">
+        <button class="mgmt-dash-quicklink" type="button" data-route="mgmt-root" data-root="dispecer">
             <span class="mgmt-dash-quicklink-icon">${agIcon('clipboard', '22px')}</span>
             <span class="mgmt-dash-quicklink-text">
                 <strong>Dispečer</strong>
@@ -631,7 +634,7 @@ function mgmtDashRenderQuickLinks() {
             </span>
         </button>
 
-        <button class="mgmt-dash-quicklink" type="button" onclick="showMgmtRoot('otkup')">
+        <button class="mgmt-dash-quicklink" type="button" data-route="mgmt-root" data-root="otkup">
             <span class="mgmt-dash-quicklink-icon">${agIcon('coin', '22px')}</span>
             <span class="mgmt-dash-quicklink-text">
                 <strong>Otkup</strong>
@@ -639,7 +642,7 @@ function mgmtDashRenderQuickLinks() {
             </span>
         </button>
 
-        <button class="mgmt-dash-quicklink" type="button" onclick="showMgmtRoot('partneri')">
+        <button class="mgmt-dash-quicklink" type="button" data-route="mgmt-root" data-root="partneri">
             <span class="mgmt-dash-quicklink-icon">${agIcon('user', '22px')}</span>
             <span class="mgmt-dash-quicklink-text">
                 <strong>Partneri</strong>
@@ -647,7 +650,7 @@ function mgmtDashRenderQuickLinks() {
             </span>
         </button>
 
-        <button class="mgmt-dash-quicklink" type="button" onclick="showMgmtRoot('agro')">
+        <button class="mgmt-dash-quicklink" type="button" data-route="mgmt-root" data-root="agro">
             <span class="mgmt-dash-quicklink-icon">${agIcon('sprout', '22px')}</span>
             <span class="mgmt-dash-quicklink-text">
                 <strong>Agrohemija</strong>
