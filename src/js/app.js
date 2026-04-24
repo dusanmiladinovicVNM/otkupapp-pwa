@@ -613,6 +613,15 @@ function handleAppShellClick(event) {
             toggleExpertPanel(actionEl.dataset.parcelaId);
             return;
         }
+
+        if (action === 'agro-select-nearby-parcela') {
+            const parcelaSel = document.getElementById('agroParcelaSel');
+            if (parcelaSel) {
+                parcelaSel.value = actionEl.dataset.parcelaId || '';
+            }
+            onAgroParcelaChange();
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
