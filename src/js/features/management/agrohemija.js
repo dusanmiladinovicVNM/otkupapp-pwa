@@ -221,7 +221,7 @@ function onBarcodeScanned(code) {
 
     // Dodaj u korpu sa količinom 1
     izdDodajUKorpu(artikal.ArtikalID, 1);
-    showToast('✅ ' + artikal.Naziv, 'success');
+    showToast('Artikal dodat: ' + artikal.Naziv, 'success');
 }
 
 // --- Dodaj stavku (iz dropdown-a ili barkoda) ---
@@ -287,7 +287,9 @@ function izdRenderKorpa() {
             </div>
             <div class="izd-row-price">${s.cena.toLocaleString('sr')} /${escapeHtml(s.jm)}</div>
             <div class="izd-row-total">${s.vrednost.toLocaleString('sr')}</div>
-            <button type="button" class="izd-row-del" data-action="izd-remove-stavka" data-index="${i}">✕</button>
+            <button type="button" class="izd-row-del" data-action="izd-remove-stavka" data-index="${i}" aria-label="Obriši">
+                ${agIcon('x', '14px')}
+            </button>
         </div>
     `).join('');
 
@@ -419,10 +421,10 @@ function izdShowOtpremnica(data) {
 
         <div style="text-align:center;margin-top:16px;display:flex;gap:8px;">
             <button type="button" data-action="izd-clear-signatures" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši</button>
-            <button type="button" data-action="izd-confirm-save" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">✅ Potvrdi</button>
-            <button type="button" data-action="izd-print" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">🖨️ Štampaj</button>
+            <button type="button" data-action="izd-confirm-save" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">${agIcon('check', '16px')} Potvrdi</button>
+            <button type="button" data-action="izd-print" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">${agIcon('print', '16px')} Štampaj</button>
         </div>
-        <button type="button" data-action="izd-save-pdf" style="width:100%;padding:12px;margin-top:8px;font-size:14px;background:#2196F3;color:white;border:none;border-radius:8px;">📄 Sačuvaj PDF na Drive</button>
+        <button type="button" data-action="izd-save-pdf" style="width:100%;padding:12px;margin-top:8px;font-size:14px;background:#2196F3;color:white;border:none;border-radius:8px;">${agIcon('doc', '16px')} Sačuvaj PDF na Drive</button>
        <button type="button" data-action="close-izd-otpremnica-modal" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
     </div>`;
 
