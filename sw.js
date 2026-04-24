@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v10';
+const CACHE_NAME = 'AgriX-v11';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -33,6 +33,7 @@ const ASSETS = [
     './src/js/services/qr.js',
 
     // UI
+    './src/js/ui/agrix-icons.js',
     './src/js/ui/toast.js',
     './src/js/ui/signatures.js',
     './src/js/ui/tabs.js',
