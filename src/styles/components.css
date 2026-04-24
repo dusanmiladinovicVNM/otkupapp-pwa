@@ -1,6 +1,6 @@
 /* SVG icons */
 .i {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
     width: var(--is, 1.25em);
@@ -44,6 +44,19 @@
 
 .dp-plan-actions button .i {
     --is: 14px;
+}
+
+.bottom-nav-icon.i,
+.bottom-nav-btn .i,
+.more-menu-icon .i,
+.mgmt-dash-quicklink-icon .i {
+    --is: 22px;
+}
+
+.bottom-nav-btn,
+.more-menu-item,
+.mgmt-dash-quicklink {
+    gap: 6px;
 }
 
         /* QR */
