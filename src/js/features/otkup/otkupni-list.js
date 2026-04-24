@@ -86,15 +86,50 @@ function showOtkupniList(record) {
             </div>
 
             <div style="text-align:center;margin-top:16px;display:flex;gap:8px;">
-                <button onclick="clearSignature('sigKooperant')" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši</button>
-                <button onclick="saveOtkupniListWithSignatures('${record.clientRecordID}')" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">Potvrdi</button>
-                <button onclick="window.print()" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">Štampaj</button>
+                <button type="button" data-action="otkupni-clear-signature">Obriši</button>
+                <button type="button" data-action="otkupni-confirm" data-client-record-id="${escapeHtml(String(record.clientRecordID || ''))}">Potvrdi</button>
+                <button type="button" data-action="otkupni-print">Štampaj</button>
             </div>
 
-            <button onclick="savePdfToDrive('${record.clientRecordID}')" style="width:100%;padding:12px;margin-top:8px;font-size:14px;background:#2196F3;color:white;border:none;border-radius:8px;">📄 Sačuvaj PDF na Drive</button>
-            <button onclick="closeOtkupniListModal()" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
+            <button type="button" data-action="otkupni-save-pdf" data-client-record-id="${escapeHtml(String(record.clientRecordID || ''))}">📄 Sačuvaj PDF na Drive</button>
+            <button type="button" data-action="close-otkupni-list-modal">Zatvori</button>
         </div>
     `;
+
+    if (!modal.dataset.bound) {
+        modal.addEventListener('click', function (event) {
+            const actionEl = event.target.closest('[data-action]');
+            if (!actionEl) return;
+
+            const action = actionEl.dataset.action;
+
+            if (action === 'otkupni-clear-signature') {
+                clearSignature('sigKooperant');
+                return;
+            }
+    
+            if (action === 'otkupni-confirm') {
+                saveOtkupniListWithSignatures(actionEl.dataset.clientRecordId || '');
+                return;
+            }
+
+            if (action === 'otkupni-print') {
+                window.print();
+                return;
+            }
+
+            if (action === 'otkupni-save-pdf') {
+                savePdfToDrive(actionEl.dataset.clientRecordId || '');
+                return;
+            }
+    
+            if (action === 'close-otkupni-list-modal') {
+                closeOtkupniListModal();
+            }
+        });
+
+        modal.dataset.bound = '1';
+    }
 
     modal.style.display = 'block';
 
