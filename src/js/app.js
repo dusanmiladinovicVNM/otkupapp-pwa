@@ -635,6 +635,14 @@ function handleAppShellClick(event) {
             }
             return;
         }
+
+        if (action === 'pregled-alert-click') {
+            const index = parseInt(actionEl.dataset.index || '', 10);
+            if (!isNaN(index)) {
+                onPregledAlertClick(index);
+            }
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
