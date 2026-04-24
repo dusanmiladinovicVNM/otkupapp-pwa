@@ -277,12 +277,23 @@ async function agroSaveNovaOprema(tip, value) {
     );
 
     if (!exists) {
+        const clientRecordID = agroGenerateClientRecordID('oprema');
+
         agroState.opremaList.push({
-            clientRecordID: agroGenerateClientRecordID('oprema'),
+            clientRecordID,
             naziv,
             tip,
             createdAt: new Date().toISOString(),
             source: 'local'
+        });
+
+        await apiPost('syncOprema', {
+            kooperantID: CONFIG.ENTITY_ID,
+            records: [{
+                clientRecordID,
+                naziv,
+                tip
+            }]
         });
         agroRenderOpremaSelects();
     }
@@ -761,9 +772,9 @@ function agroCheckParcelaProximity(lat, lng) {
         banner.innerHTML =
             '📍 Blizu parcele: <strong>' + escapeHtml(bestMatch.KatBroj || bestMatch.ParcelaID) + '</strong> (' +
             escapeHtml(String(Math.round(bestDist))) + 'm) — ' +
-            '<a href="#" onclick="document.getElementById(\'agroParcelaSel\').value=\'' +
-            String(bestMatch.ParcelaID).replace(/'/g, "\\'") +
-            '\';onAgroParcelaChange();return false;" style="color:#92400e;font-weight:700;">Izaberi</a>';
+            '<button type="button" data-action="agro-select-nearby-parcela" data-parcela-id="' +
+            escapeHtml(String(bestMatch.ParcelaID || '')) +
+            '" style="color:#92400e;font-weight:700;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;">Izaberi</button>';
     }
 }
 
