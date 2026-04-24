@@ -597,6 +597,22 @@ function handleAppShellClick(event) {
             showRoleNavTab(actionEl.dataset.tab, actionEl);
             return;
         }
+
+        if (action === 'open-parcela-detail') {
+            openParcelaDetail(actionEl.dataset.parcelaId, actionEl.dataset.source || '');
+            return;
+        }
+
+        if (action === 'focus-parcel') {
+            focusParcel(actionEl.dataset.parcelaId);
+            return;
+        }
+
+        if (action === 'toggle-expert-panel') {
+            event.stopPropagation();
+            toggleExpertPanel(actionEl.dataset.parcelaId);
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
