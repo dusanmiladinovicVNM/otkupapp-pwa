@@ -1,8 +1,23 @@
 // ============================================================
 // MANAGEMENT: KUPCI
 // ============================================================
+function bindMgmtFaktureDelegates() {
+    const list = document.getElementById('mgmtFaktureList');
+    if (!list || list.dataset.bound) return;
+
+    list.addEventListener('click', function (event) {
+        const item = event.target.closest('[data-action="toggle-faktura-stavke"]');
+        if (!item) return;
+
+        toggleFakturaStavke(item.dataset.fakturaId || '', item);
+    });
+
+    list.dataset.bound = '1';
+}
+
 async function loadMgmtFakture() {
     const kupacID = document.getElementById('mgmtFaktureKupac').value;
+    bindMgmtFaktureDelegates();
     if (!kupacID) {
         document.getElementById('mgmtFaktureList').innerHTML = '';
         return;
@@ -37,7 +52,7 @@ async function loadMgmtFakture() {
         const saldo = parseFloat(r.Saldo) || 0;
         const bc = saldo <= 0 ? 'var(--success)' : 'var(--danger)';
 
-        return `<div class="queue-item" style="border-left-color:${bc};cursor:pointer;" onclick="toggleFakturaStavke('${escapeHtml(r.FakturaID)}', this)">
+        return `<div class="queue-item" style="border-left-color:${bc};cursor:pointer;" data-action="toggle-faktura-stavke" data-faktura-id="${escapeHtml(String(r.FakturaID || ''))}">
             <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojFakture || r.FakturaID)}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
             <div class="qi-detail">Iznos: <strong>${iznos.toLocaleString('sr')}</strong> | Plaćeno: ${placeno.toLocaleString('sr')} | Saldo: <strong>${saldo.toLocaleString('sr')}</strong></div>
             <div class="qi-detail" style="font-size:11px;margin-top:2px;">${escapeHtml(r.Status || '')}${r.SEFStatus ? ' | SEF: ' + escapeHtml(r.SEFStatus) : ''}</div>
