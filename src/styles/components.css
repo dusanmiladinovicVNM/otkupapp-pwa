@@ -1,3 +1,51 @@
+/* SVG icons */
+.i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--is, 1.25em);
+    height: var(--is, 1.25em);
+    color: currentColor;
+    flex-shrink: 0;
+    vertical-align: -0.18em;
+}
+
+.i svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.icon-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-btn .i {
+    --is: 20px;
+}
+
+.tab-btn .i {
+    --is: 16px;
+    margin-right: 4px;
+}
+
+.qr-scan-btn .i,
+.otprema-scan-btn .i {
+    --is: 18px;
+}
+
+.dp-icon-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dp-plan-actions button .i {
+    --is: 14px;
+}
+
         /* QR */
         .qr-scan-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; background: var(--primary-light); color: white; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 14px; }
         .qr-scan-btn:active { background: var(--primary-dark); }
