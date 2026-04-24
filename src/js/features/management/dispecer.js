@@ -187,7 +187,9 @@ async function dpInit() {
             dpKS[vid].status = 'utovar';
         }
     });
-
+    
+    dpBindDelegates();
+    
     dpPD();
     dpRS();
     dpRTr();
@@ -244,6 +246,73 @@ function dpPD() {
     }
 }
 
+function dpBindDelegates() {
+    const sb = document.getElementById('dpSB');
+    if (sb && !sb.dataset.bound) {
+        sb.addEventListener('click', function (event) {
+            const card = event.target.closest('[data-action="dp-select-supply"]');
+            if (!card) return;
+            dpTS(card.dataset.sid || '');
+        });
+        sb.dataset.bound = '1';
+    }
+
+    const tb = document.getElementById('dpTB');
+    if (tb && !tb.dataset.bound) {
+        tb.addEventListener('click', function (event) {
+            const statusBtn = event.target.closest('[data-action="dp-set-status"]');
+            if (statusBtn) {
+                dpCS(statusBtn.dataset.vid || '', statusBtn.dataset.status || '');
+                return;
+            }
+
+            const card = event.target.closest('[data-action="dp-select-truck"]');
+            if (!card) return;
+
+            if (event.target.closest('.dp-cap-input')) return;
+            dpTK(card.dataset.vid || '');
+        });
+
+        tb.addEventListener('change', function (event) {
+            const input = event.target.closest('.dp-cap-input');
+            if (!input) return;
+
+            dpSetK(input.dataset.vid || '', parseInt(input.value, 10) || 0);
+            dpRTr();
+        });
+
+        tb.dataset.bound = '1';
+    }
+
+    const dl = document.getElementById('dpDL2');
+    if (dl && !dl.dataset.bound) {
+        dl.addEventListener('click', function (event) {
+            const card = event.target.closest('[data-action="dp-select-demand"]');
+            if (!card) return;
+            dpTD(card.dataset.did || '');
+        });
+        dl.dataset.bound = '1';
+    }
+
+    const planList = document.getElementById('dpPlanList');
+    if (planList && !planList.dataset.bound) {
+        planList.addEventListener('click', function (event) {
+            const statusBtn = event.target.closest('[data-action="dp-plan-status"]');
+            if (statusBtn) {
+                dpChgPlanSt(statusBtn.dataset.planId || '', statusBtn.dataset.status || '');
+                return;
+            }
+
+            const removeBtn = event.target.closest('[data-action="dp-remove-plan"]');
+            if (removeBtn) {
+                dpRmPlan(removeBtn.dataset.planId || '');
+            }
+        });
+
+        planList.dataset.bound = '1';
+    }
+}
+
 // ============================================================
 // SUPPLY
 // ============================================================
@@ -278,7 +347,7 @@ function dpRS() {
         const x = g[sid];
         const isSel = dpSel && dpSel.step >= 2 && dpSel.sid === sid;
         return `
-            <div class="dp-card sup${isSel ? ' sel' : ''}" onclick="dpTS('${sid}')">
+            <div class="dp-card sup${isSel ? ' sel' : ''}" data-action="dp-select-supply" data-sid="${escapeHtml(String(sid || ''))}">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <span style="font-weight:700;">📦 ${escapeHtml(dpSN(sid))}</span>
                     <span style="font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
@@ -464,7 +533,7 @@ function dpRTr() {
         }).join('');
 
         return `
-            <div class="dp-card trn${isSel ? ' sel' : ''}" onclick="dpTK('${vid}')">
+            <div class="dp-card trn${isSel ? ' sel' : ''}" data-action="dp-select-truck" data-vid="${escapeHtml(String(vid || ''))}">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
                     <span style="font-weight:700;font-size:14px;">🚛 ${escapeHtml(x.name || vid)}</span>
                     <span style="font-size:14px;font-weight:700;">${loadKg.toLocaleString('sr')} kg</span>
@@ -477,9 +546,9 @@ function dpRTr() {
                             : `<input type="number"
                                       inputmode="numeric"
                                       placeholder="kg"
-                                      style="width:70px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;"
-                                      onclick="event.stopPropagation()"
-                                      onchange="dpSetK('${vid}', parseInt(this.value)||0); dpRTr()">`
+                                      class="dp-cap-input"
+                                      data-vid="${escapeHtml(String(vid || ''))}"
+                                      style="width:70px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;">
                     }
                     · Popunjeno: <strong>${pct}%</strong>
                     ${cap > 0 ? ` · Slobodno: ${freeKg.toLocaleString('sr')} kg` : ''}
@@ -509,9 +578,9 @@ function dpRTr() {
                     <span class="dp-badge ${st}">${escapeHtml(sl[st] || st)}</span>
                 </div>
 
-                <div class="dp-stb" onclick="event.stopPropagation()">
+                <div class="dp-stb">
                     ${['slobodan', 'utovar', 'naputu', 'istovar']
-                        .map(s => `<button class="${st === s ? 'on' : ''}" onclick="dpCS('${vid}','${s}')">${sl[s]}</button>`)
+                        .map(s => `<button type="button" class="${st === s ? 'on' : ''}" data-action="dp-set-status" data-vid="${escapeHtml(String(vid || ''))}" data-status="${s}">${sl[s]}</button>`)
                         .join('')}
                 </div>
             </div>
@@ -567,7 +636,7 @@ function dpRD() {
             '#1565c0';
 
         return `
-            <div class="dp-card dem${isSel ? ' sel' : ''}" onclick="dpTD('${did}')">
+            <div class="dp-card dem${isSel ? ' sel' : ''}" data-action="dp-select-demand" data-did="${escapeHtml(String(did || ''))}">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <strong>🏭 ${escapeHtml(kup)}</strong>
                     <strong>${trazeno.toLocaleString('sr')} kg</strong>
@@ -611,9 +680,9 @@ function dpRP() {
                 </div>
             </div>
             <div style="display:flex;gap:6px;">
-                <button onclick="dpChgPlanSt('${p.PlanID}','u_toku')" title="U toku">▶</button>
-                <button onclick="dpChgPlanSt('${p.PlanID}','zavrseno')" title="Završeno">✓</button>
-                <button onclick="dpRmPlan('${p.PlanID}')" title="Obriši">✕</button>
+                <button type="button" data-action="dp-plan-status" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" data-status="u_toku" title="U toku">▶</button>
+                <button type="button" data-action="dp-plan-status" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" data-status="zavrseno" title="Završeno">✓</button>
+                <button type="button" data-action="dp-remove-plan" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" title="Obriši">✕</button>
             </div>
         </div>
     `).join('');
