@@ -59,6 +59,27 @@
     gap: 6px;
 }
 
+.icon-inline-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.icon-inline-btn .i,
+.btn-primary .i,
+.btn-secondary .i,
+.more-menu-icon .i,
+.mgmt-dash-quicklink-icon .i {
+    flex-shrink: 0;
+}
+
+.btn-primary.icon-inline-btn,
+.btn-secondary.icon-inline-btn {
+    width: 100%;
+}
+
+
         /* QR */
         .qr-scan-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; background: var(--primary-light); color: white; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 14px; }
         .qr-scan-btn:active { background: var(--primary-dark); }
