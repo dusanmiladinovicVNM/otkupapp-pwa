@@ -55,11 +55,21 @@ function onIzdKooperantChange() {
     pList.innerHTML = parcele.map((p, i) => {
         const ha = parseFloat(String(p.PovrsinaHa || '0').replace(',', '.')) || 0;
         return `<label class="izd-parcela-chk">
-            <input type="checkbox" id="izdPChk${i}" value="${escapeHtml(p.ParcelaID)}" data-ha="${ha}" onchange="izdOnParceleChange()">
+            <input type="checkbox" class="izd-parcela-checkbox" id="izdPChk${i}" value="${escapeHtml(p.ParcelaID)}" data-ha="${ha}">
             <div class="parcela-info">${escapeHtml(p.KatBroj || p.ParcelaID)} — ${escapeHtml(p.Kultura || '?')}</div>
             <div class="parcela-ha">${ha.toFixed(2)} ha</div>
         </label>`;
     }).join('');
+    
+    if (!pList.dataset.bound) {
+        pList.addEventListener('change', function (event) {
+            const el = event.target;
+            if (el && el.classList && el.classList.contains('izd-parcela-checkbox')) {
+                izdOnParceleChange();
+            }
+        });
+        pList.dataset.bound = '1';
+    }
 }
 
 // --- Parcele checkbox change → recalc ---
@@ -271,14 +281,39 @@ function izdRenderKorpa() {
             <div class="izd-row-name">${escapeHtml(s.naziv)}</div>
             <div class="izd-row-qty">
                 <input type="number" value="${s.kolicina}" inputmode="decimal"
-                    style="width:50px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:13px;"
-                    onchange="izdUpdateQty(${i}, this.value)">
+                    class="izd-qty-input"
+                    data-index="${i}"
+                    style="width:50px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:13px;">
             </div>
             <div class="izd-row-price">${s.cena.toLocaleString('sr')} /${escapeHtml(s.jm)}</div>
             <div class="izd-row-total">${s.vrednost.toLocaleString('sr')}</div>
-            <button class="izd-row-del" onclick="izdRemoveStavka(${i})">✕</button>
+            <button type="button" class="izd-row-del" data-action="izd-remove-stavka" data-index="${i}">✕</button>
         </div>
     `).join('');
+
+    if (!bd.dataset.bound) {
+        bd.addEventListener('change', function (event) {
+            const el = event.target;
+            if (el && el.classList && el.classList.contains('izd-qty-input')) {
+                const index = parseInt(el.dataset.index || '', 10);
+                if (!isNaN(index)) {
+                    izdUpdateQty(index, el.value);
+                }
+            }
+        });
+
+        bd.addEventListener('click', function (event) {
+            const btn = event.target.closest('[data-action="izd-remove-stavka"]');
+            if (!btn) return;
+
+            const index = parseInt(btn.dataset.index || '', 10);
+            if (!isNaN(index)) {
+                izdRemoveStavka(index);
+            }
+        });
+
+        bd.dataset.bound = '1';
+    }
 }
 
 function izdUpdateQty(index, val) {
@@ -383,13 +418,49 @@ function izdShowOtpremnica(data) {
         </div>
 
         <div style="text-align:center;margin-top:16px;display:flex;gap:8px;">
-            <button onclick="clearSignature('sigIzdavalac');clearSignature('sigPrimalac')" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši</button>
-            <button onclick="izdConfirmSave()" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">✅ Potvrdi</button>
-            <button onclick="window.print()" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">🖨️ Štampaj</button>
+            <button type="button" data-action="izd-clear-signatures" style="flex:1;padding:12px;font-size:14px;background:#f5f5f0;color:#666;border:1px solid #ccc;border-radius:8px;">Obriši</button>
+            <button type="button" data-action="izd-confirm-save" style="flex:1;padding:12px;font-size:14px;background:var(--primary);color:white;border:none;border-radius:8px;">✅ Potvrdi</button>
+            <button type="button" data-action="izd-print" style="flex:1;padding:12px;font-size:14px;background:var(--accent);color:white;border:none;border-radius:8px;">🖨️ Štampaj</button>
         </div>
-        <button onclick="izdSavePdf()" style="width:100%;padding:12px;margin-top:8px;font-size:14px;background:#2196F3;color:white;border:none;border-radius:8px;">📄 Sačuvaj PDF na Drive</button>
-        <button onclick="closeIzdOtpremnicaModal()" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
+        <button type="button" data-action="izd-save-pdf" style="width:100%;padding:12px;margin-top:8px;font-size:14px;background:#2196F3;color:white;border:none;border-radius:8px;">📄 Sačuvaj PDF na Drive</button>
+       <button type="button" data-action="close-izd-otpremnica-modal" style="width:100%;padding:10px;margin-top:8px;font-size:14px;background:none;color:#666;border:1px solid #ccc;border-radius:8px;">Zatvori</button>
     </div>`;
+
+    if (!modal.dataset.bound) {
+        modal.addEventListener('click', function (event) {
+            const actionEl = event.target.closest('[data-action]');
+            if (!actionEl) return;
+
+            const action = actionEl.dataset.action;
+
+            if (action === 'izd-clear-signatures') {
+                clearSignature('sigIzdavalac');
+                clearSignature('sigPrimalac');
+                return;
+            }
+
+            if (action === 'izd-confirm-save') {
+                izdConfirmSave();
+                return;
+            }
+
+            if (action === 'izd-print') {
+                window.print();
+                return;
+            }
+
+            if (action === 'izd-save-pdf') {
+                izdSavePdf();
+                return;
+            }
+
+            if (action === 'close-izd-otpremnica-modal') {
+                closeIzdOtpremnicaModal();
+            }
+        });
+
+        modal.dataset.bound = '1';
+    }
 
     modal.style.display = 'block';
     modal._data = data; // sačuvaj za PDF
