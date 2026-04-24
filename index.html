@@ -40,7 +40,9 @@
 
 <div id="appLoader" style="position:fixed;inset:0;background:#f5f5f0;display:flex;align-items:center;justify-content:center;z-index:99999;">
     <div style="text-align:center;">
-        <div style="font-size:48px;margin-bottom:12px;">🌿</div>
+        <div style="font-size:48px;margin-bottom:12px;color:#1a5e2a;">
+            <span data-ag-icon="sprout" data-ag-icon-size="48px"></span>
+        </div>
         <div style="font-size:16px;color:#1a5e2a;font-weight:600;">OtkupApp</div>
         <div style="font-size:12px;color:#999;margin-top:4px;">Učitavanje...</div>
     </div>
@@ -62,8 +64,12 @@
 
     <div class="header-actions">
         <span class="sync-badge sync-online" id="syncBadge">ONLINE</span>
-        <button data-action="show-qr-profile" class="header-btn">⊞</button>
-        <button data-action="logout" class="header-btn">⇄</button>
+        <button data-action="show-qr-profile" class="header-btn" type="button" aria-label="Prikaži moj QR">
+            <span data-ag-icon="qr"></span>
+        </button>
+        <button data-action="logout" class="header-btn" type="button" aria-label="Odjavi se">
+            <span data-ag-icon="arrow-left"></span>
+        </button>
     </div>
 </div>
     
@@ -76,15 +82,27 @@
     <button class="tab-btn role-otkupac" data-route="tab" data-tab="queue">Sync</button>
 
     <!-- Kooperant -->
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="home">⌂ Pregled</button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="parcele">▣ Parcele</button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="agromere">✿ Radovi</button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="knjigapolja">☰ Knjiga polja</button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="more">⋯ Više</button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="home">
+        <span data-ag-icon="home"></span>Pregled
+    </button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="parcele">
+        <span data-ag-icon="map"></span>Parcele
+    </button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="agromere">
+        <span data-ag-icon="tractor"></span>Radovi
+    </button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="knjigapolja">
+        <span data-ag-icon="clipboard"></span>Knjiga polja
+    </button>
+    <button class="tab-btn role-kooperant" data-route="tab" data-tab="more">
+        <span data-ag-icon="info"></span>Više
+    </button>
 
     <!-- Management -->
     <button class="tab-btn role-management" data-route="mgmt-root" data-root="pregled" data-mgmt-root="pregled">Pregled</button>
-    <button class="tab-btn role-management" data-route="mgmt-root" data-root="dispecer" data-mgmt-root="dispecer">📋 Dispečer</button>
+    <button class="tab-btn role-management" data-route="mgmt-root" data-root="dispecer" data-mgmt-root="dispecer">
+        <span data-ag-icon="clipboard"></span>Dispečer
+    </button>
     <button class="tab-btn role-management" data-route="mgmt-root" data-root="otkup" data-mgmt-root="otkup">Otkup</button>
     <button class="tab-btn role-management" data-route="mgmt-root" data-root="partneri" data-mgmt-root="partneri">Partneri</button>
     <button class="tab-btn role-management" data-route="mgmt-root" data-root="agro" data-mgmt-root="agro">Agrohemija</button>
@@ -117,7 +135,7 @@
                 </div>
 
                 <button class="qr-scan-btn" type="button" data-action="start-qr-scan">
-                    📷 Skeniraj QR kooperanta
+                    <span data-ag-icon="camera"></span>Skeniraj QR kooperanta
                 </button>
 
                 <div id="qr-reader" class="otk-qr-reader" style="display:none;"></div>
@@ -165,7 +183,7 @@
                             type="button"
                             data-action="start-vozac-qr-scan"
                         >
-                            📷 Skeniraj QR vozača
+                            <span data-ag-icon="camera"></span>Skeniraj QR vozača
                         </button>
                     </div>
                 </div>
@@ -357,7 +375,9 @@
                     <div class="danas-detail-title">Detalj otkupa</div>
                     <div class="danas-detail-subtitle" id="pregledDetailDate">-</div>
                 </div>
-                <button class="danas-detail-close" type="button" data-action="close-pregled-detail">✕</button>
+                <button class="danas-detail-close" type="button" data-action="close-pregled-detail" aria-label="Zatvori">
+                    <span data-ag-icon="x"></span>
+                </button>
             </div>
 
             <div class="danas-detail-grid" id="pregledDetailGrid"></div>
@@ -384,7 +404,7 @@
 
             <div class="otprema-cta-card">
                 <button class="btn-primary otprema-scan-btn" type="button" data-action="start-otprema-vozac-qr-scan">
-                    📷 Skeniraj QR vozača
+                    <span data-ag-icon="camera"></span>Skeniraj QR vozača
                 </button>
 
                 <button class="otprema-link-btn" type="button" data-action="toggle-otprema-fallback">
@@ -436,7 +456,9 @@
                     <div class="otprema-eyebrow">Dodela vozaču</div>
                     <h2 class="otprema-assign-title">Izaberi otkupe</h2>
                 </div>
-                <button class="otprema-icon-btn" type="button" data-action="cancel-otprema-assign">✕</button>
+                <button class="otprema-icon-btn" type="button" data-action="cancel-otprema-assign" aria-label="Zatvori">
+                    <span data-ag-icon="x"></span>
+                </button>
             </div>
 
             <div class="otprema-driver-card" id="otpremaAssignDriverCard"></div>
@@ -461,7 +483,9 @@
         <!-- SUCCESS VIEW -->
         <div class="otprema-shell" id="otpremaSuccessView" style="display:none;">
             <div class="otprema-success-card">
-                <div class="otprema-success-icon">✓</div>
+                <div class="otprema-success-icon">
+                    <span data-ag-icon="check" data-ag-icon-size="32px"></span>
+                </div>
                 <div class="otprema-success-title">Otprema potvrđena</div>
                 <div class="otprema-success-sub" id="otpremaSuccessDriver">-</div>
             </div>
@@ -577,7 +601,9 @@
         <div class="otprema-detail-card">
             <div class="otprema-detail-head">
                 <div class="otprema-detail-title" id="otpremaDetailTitle">Detalj otpreme</div>
-                <button type="button" class="otprema-detail-close" data-action="close-otprema-detail">✕</button>
+                <button type="button" class="otprema-detail-close" data-action="close-otprema-detail" aria-label="Zatvori">
+                    <span data-ag-icon="x"></span>
+                </button>
             </div>
 
             <div class="otprema-detail-body" id="otpremaDetailBody"></div>
@@ -2256,6 +2282,7 @@
 <script src="/src/js/utils/format.js"></script>
 <script src="/src/js/utils/dom.js"></script>
 <script src="/src/js/utils/sanitize.js"></script>
+<script src="./src/js/ui/agrix-icons.js"></script>
 <script src="/src/js/utils/async.js"></script>
 <script src="/src/js/utils/merge.js"></script> 
     
