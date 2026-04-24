@@ -548,7 +548,7 @@ function dpRTr() {
                                       placeholder="kg"
                                       class="dp-cap-input"
                                       data-vid="${escapeHtml(String(vid || ''))}"
-                                      style="width:70px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;">
+                                      style="width:70px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;">`
                     }
                     · Popunjeno: <strong>${pct}%</strong>
                     ${cap > 0 ? ` · Slobodno: ${freeKg.toLocaleString('sr')} kg` : ''}
