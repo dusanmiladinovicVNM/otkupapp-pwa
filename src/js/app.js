@@ -622,6 +622,19 @@ function handleAppShellClick(event) {
             onAgroParcelaChange();
             return;
         }
+
+        if (action === 'select-trosak-kat') {
+            selectTrosakKat(actionEl, actionEl.dataset.kat || '');
+            return;
+        }
+
+        if (action === 'toggle-kp-otkupi-group') {
+            const index = parseInt(actionEl.dataset.index || '', 10);
+            if (!isNaN(index)) {
+                toggleKpOtkupiGroup(index);
+            }
+            return;
+        }
     }
 
     const routeEl = event.target.closest('[data-route]');
