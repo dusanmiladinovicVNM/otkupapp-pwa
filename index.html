@@ -2044,7 +2044,9 @@
                     <div style="background:var(--bg);border-radius:var(--radius);padding:12px;margin-bottom:12px;">
                         <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Dodaj artikal</div>
                         <div class="izd-scan-area">
-                            <button class="qr-scan-btn" data-action="start-izd-barcode-scan" style="background:var(--accent);">📷 Skeniraj barkod</button>
+                            <button class="qr-scan-btn" data-action="start-izd-barcode-scan" style="background:var(--accent);">
+                                <span data-ag-icon="camera"></span>Skeniraj barkod
+                            </button>
                         </div>
                         <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
                         <div class="form-row" style="margin-bottom:8px;">
@@ -2063,7 +2065,7 @@
                     <!-- Korpa -->
                     <div class="izd-korpa">
                         <div class="izd-korpa-hd">
-                            <span>🛒 Korpa</span>
+                            <span data-ag-icon="cart"></span>KORPA
                             <span id="izdKorpaCount">0 stavki</span>
                         </div>
                         <div class="izd-korpa-bd" id="izdKorpaBd">
@@ -2221,32 +2223,32 @@
 <!-- MGMT BOTTOM NAV -->
 <div class="bottom-nav role-management" id="mgmtBottomNav">
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="dashboard">
-        <span class="bottom-nav-icon">📊</span>
+        <span class="bottom-nav-icon" data-ag-icon="chart"></span>
         <span class="bottom-nav-label">Dashboard</span>
     </button>
     
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled">
-        <span class="bottom-nav-icon">⌂</span>
+        <span class="bottom-nav-icon" data-ag-icon="home"></span>
         <span class="bottom-nav-label">Pregled</span>
     </button>
 
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="dispecer">
-        <span class="bottom-nav-icon">📋</span>
+        <span class="bottom-nav-icon" data-ag-icon="clipboard"></span>
         <span class="bottom-nav-label">Dispečer</span>
     </button>
 
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otkup">
-        <span class="bottom-nav-icon">◷</span>
+        <span class="bottom-nav-icon" data-ag-icon="coin"></span>
         <span class="bottom-nav-label">Otkup</span>
     </button>
 
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="partneri">
-        <span class="bottom-nav-icon">◎</span>
+        <span class="bottom-nav-icon" data-ag-icon="user"></span>
         <span class="bottom-nav-label">Partneri</span>
     </button>
 
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="agro">
-        <span class="bottom-nav-icon">✿</span>
+        <span class="bottom-nav-icon" data-ag-icon="sprout"></span>
         <span class="bottom-nav-label">Agro</span>
     </button>
 </div>
