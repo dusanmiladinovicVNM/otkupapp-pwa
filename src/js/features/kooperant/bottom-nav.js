@@ -2,7 +2,7 @@
 // bottom-nav.js
 // ============================================================
 
-function findLegacyTabBtn(tabName) {
+function findTabBtnByTabName(tabName) {
     return document.querySelector('.tab-btn[data-route="tab"][data-tab="' + tabName + '"]') || null;
 }
 
