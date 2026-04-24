@@ -68,7 +68,7 @@ function kpPopulateDropdowns() {
     const katGrid = document.getElementById('trosakKatGrid');
     if (katGrid && !katGrid.children.length) {
         katGrid.innerHTML = TROSAK_KATEGORIJE.map(k =>
-            `<button class="trosak-kat-btn" onclick="selectTrosakKat(this,'${k.id}')">${k.label}</button>`
+            `<button class="trosak-kat-btn" data-action="select-trosak-kat" data-kat="${escapeHtml(k.id)}">${k.label}</button>`
         ).join('');
     }
 
@@ -368,7 +368,7 @@ function kpRenderOtkupi(otkupi) {
                 </div>`;
             }).join('');
 
-        return `<div class="queue-item" style="border-left-color:var(--success);cursor:pointer;" onclick="toggleKpOtkupiGroup(${gi})">
+        return `<div class="queue-item" style="border-left-color:var(--success);cursor:pointer;" data-action="toggle-kp-otkupi-group" data-index="${gi}">
             <div class="qi-header">
                 <span class="qi-koop">🍎 ${escapeHtml(g.vrsta)} ${escapeHtml(g.klasa)}</span>
                 <span class="qi-time">${g.kg.toLocaleString('sr')} kg</span>
