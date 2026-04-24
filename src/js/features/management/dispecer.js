@@ -349,7 +349,9 @@ function dpRS() {
         return `
             <div class="dp-card sup${isSel ? ' sel' : ''}" data-action="dp-select-supply" data-sid="${escapeHtml(String(sid || ''))}">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-weight:700;">📦 ${escapeHtml(dpSN(sid))}</span>
+                    <span class="dp-icon-line" style="font-weight:700;">
+                        ${agIcon('package', '16px')} ${escapeHtml(dpSN(sid))}
+                    </span>
                     <span style="font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
                 </div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
@@ -527,7 +529,7 @@ function dpRTr() {
             const pKg = parseInt(p.PlannedKg || 0) || 0;
             return `
                 <div style="font-size:11px;margin-top:3px;color:var(--success);font-weight:600;">
-                    📋 Plan: ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')} (${pKg.toLocaleString('sr')} kg)
+                    ${agIcon('clipboard', '13px')} Plan: ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')} (${pKg.toLocaleString('sr')} kg)
                 </div>
             `;
         }).join('');
@@ -535,7 +537,9 @@ function dpRTr() {
         return `
             <div class="dp-card trn${isSel ? ' sel' : ''}" data-action="dp-select-truck" data-vid="${escapeHtml(String(vid || ''))}">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-                    <span style="font-weight:700;font-size:14px;">🚛 ${escapeHtml(x.name || vid)}</span>
+                    <span class="dp-icon-line" style="font-weight:700;font-size:14px;">
+                        ${agIcon('truck', '16px')} ${escapeHtml(x.name || vid)}
+                    </span>
                     <span style="font-size:14px;font-weight:700;">${loadKg.toLocaleString('sr')} kg</span>
                 </div>
 
@@ -638,7 +642,9 @@ function dpRD() {
         return `
             <div class="dp-card dem${isSel ? ' sel' : ''}" data-action="dp-select-demand" data-did="${escapeHtml(String(did || ''))}">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <strong>🏭 ${escapeHtml(kup)}</strong>
+                    <strong class="dp-icon-line">
+                        ${agIcon('factory', '16px')} ${escapeHtml(kup)}
+                    </strong>
                     <strong>${trazeno.toLocaleString('sr')} kg</strong>
                 </div>
 
@@ -674,15 +680,23 @@ function dpRP() {
     b.innerHTML = dpPlans.map(p => `
         <div class="dp-plan-item">
             <div>
-                <div class="dp-pi-route">🚛 ${escapeHtml(p.VozacID)} · ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')}</div>
+                <div class="dp-pi-route dp-icon-line">
+                    ${agIcon('truck', '15px')} ${escapeHtml(p.VozacID)} · ${escapeHtml(p.StanicaName || p.StanicaID || '?')} → ${escapeHtml(p.KupacName || p.KupacID || '?')}
+                </div>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
                     ${parseInt(p.PlannedKg || 0).toLocaleString('sr')} kg · status: ${escapeHtml(p.Status || 'planned')}
                 </div>
             </div>
             <div style="display:flex;gap:6px;">
-                <button type="button" data-action="dp-plan-status" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" data-status="u_toku" title="U toku">▶</button>
-                <button type="button" data-action="dp-plan-status" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" data-status="zavrseno" title="Završeno">✓</button>
-                <button type="button" data-action="dp-remove-plan" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" title="Obriši">✕</button>
+                <button type="button" data-action="dp-plan-status" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" data-status="u_toku" title="U toku" aria-label="U toku">
+                    ${agIcon('arrow-right', '14px')}
+                </button>
+                <button type="button" data-action="dp-plan-status" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" data-status="zavrseno" title="Završeno" aria-label="Završeno">
+                    ${agIcon('check', '14px')}
+                </button>
+                <button type="button" data-action="dp-remove-plan" data-plan-id="${escapeHtml(String(p.PlanID || ''))}" title="Obriši" aria-label="Obriši">
+                    ${agIcon('x', '14px')}
+                </button>
             </div>
         </div>
     `).join('');
