@@ -159,6 +159,79 @@ const FISKALNI_MAP_COLUMNS = [
 
 const GEO_SPREADSHEET_ID = '1hOkvtcHhnGXc5FKv9gG6lRMvxxGK1rOEYo8EjZPJG24';
 const GEO_SHEET_PARCELE = 'Parcele';
+
+// ============================================================
+// ERROR LOGGER
+// ============================================================
+function logError(source, action, message, details, entityID) {
+  try {
+    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    var files = folder.getFilesByName('ErrorLog');
+    var ss;
+    if (files.hasNext()) {
+      ss = SpreadsheetApp.open(files.next());
+    } else {
+      ss = SpreadsheetApp.create('ErrorLog');
+      var file = DriveApp.getFileById(ss.getId());
+      folder.addFile(file);
+      DriveApp.getRootFolder().removeFile(file);
+      var sheet = ss.getSheets()[0];
+      sheet.getRange(1, 1, 1, 7).setValues([[
+        'Timestamp', 'Source', 'Action', 'Message', 'Details', 'EntityID', 'Severity'
+      ]]);
+      sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+
+    var severity = 'error';
+    if (String(message || '').indexOf('timeout') >= 0 || String(message || '').indexOf('Timeout') >= 0) {
+      severity = 'warning';
+    }
+
+    ss.getSheets()[0].appendRow([
+      new Date().toISOString(),
+      source || 'unknown',
+      action || '',
+      String(message || '').substring(0, 500),
+      String(details || '').substring(0, 1000),
+      entityID || '',
+      severity
+    ]);
+  } catch (e) {
+    // logError sam ne sme da baci grešku — best-effort only
+    Logger.log('logError failed: ' + e.message);
+  }
+}
+
+function purgeOldErrorLogs() {
+  try {
+    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    var files = folder.getFilesByName('ErrorLog');
+    if (!files.hasNext()) return;
+    var sheet = SpreadsheetApp.open(files.next()).getSheets()[0];
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    var cutoffMs = cutoff.getTime();
+
+    // broji odozdo naviše i briši stare redove
+    var deleted = 0;
+    for (var i = data.length - 1; i >= 1; i--) {
+      var ts = new Date(data[i][0]).getTime();
+      if (!isNaN(ts) && ts < cutoffMs) {
+        sheet.deleteRow(i + 1);
+        deleted++;
+      }
+    }
+
+    if (deleted > 0) Logger.log('Purged ' + deleted + ' old error log rows');
+  } catch (e) {
+    Logger.log('purgeOldErrorLogs failed: ' + e.message);
+  }
+}
+
 // ============================================================
 // ENDPOINTS
 // ============================================================
@@ -171,6 +244,29 @@ function getJsonBody(e) {
         return {};
     }
 }
+
+// ============================================================
+// AUTHZ HELPERS
+// ============================================================
+function isManagement(tokenData) {
+  return !!tokenData && tokenData.role === 'Management';
+}
+
+function requireRole(tokenData, allowedRoles) {
+  if (!tokenData || !tokenData.role) return false;
+  var roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  return roles.indexOf(tokenData.role) >= 0;
+}
+
+function requireEntity(tokenData, entityID) {
+  if (!tokenData || !entityID) return false;
+  return String(tokenData.entityID || '') === String(entityID || '');
+}
+
+function forbiddenResponse() {
+  return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+}
+
 
 function handleAuthorizedRead(data, tokenData) {
   const action = data.action || '';
@@ -392,19 +488,44 @@ function doPost(e) {
       return jsonResponse(saveParcelPolygon(data));
     }
 
+    // === OVDE IDE logClientError ===
+    if (data.action === 'logClientError') {
+      var errorEntityID = '';
+      try {
+        if (data.token && validateToken(data.token)) {
+          var td = getTokenData(data.token);
+          if (td) errorEntityID = td.entityID || '';
+        }
+      } catch (e) {}
+      logError(
+        'PWA',
+        data.errorAction || '',
+        data.message || '',
+        data.details || data.stack || '',
+        errorEntityID || data.entityID || ''
+      );
+      return jsonResponse({ success: true });
+    }
+    // === KRAJ logClientError ===
+
     if (!validateToken(data.token)) {
       return jsonResponse({ success: false, error: 'Neautorizovan pristup', code: 401 });
     }
 
     const tokenData = getTokenData(data.token);
+    if (!tokenData) {
+      return jsonResponse({ success: false, error: 'Neautorizovan pristup', code: 401 });
+    }
     const readResponse = handleAuthorizedRead(data, tokenData);
     if (readResponse) return readResponse;
 
     if (data.action === 'sync') {
+      if (!requireRole(tokenData, ['Otkupac', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.otkupacID)) return forbiddenResponse();
       if (!Array.isArray(data.records)) {
         return jsonResponse({ success: false, error: 'records must be an array' });
       }
-      const lockResult = withLock(function() {
+      return jsonResponse(withLock(function() {
         const results = data.records.map(r => processRecord(r, data.otkupacID));
         return {
           success: true,
@@ -413,15 +534,16 @@ function doPost(e) {
           failed: results.filter(r => !r || !r.success).length,
           results: results
         };
-      });
-      return jsonResponse(lockResult);
+      }));
     }
 
     if (data.action === 'syncAgromere') {
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
       if (!Array.isArray(data.records)) {
         return jsonResponse({ success: false, error: 'records must be an array' });
       }
-      const lockResult = withLock(function() {
+      return jsonResponse(withLock(function() {
         const results = data.records.map(r => processAgromereRecord(r, data.kooperantID));
         return {
           success: true,
@@ -430,15 +552,16 @@ function doPost(e) {
           failed: results.filter(r => !r || !r.success).length,
           results: results
         };
-      });
-      return jsonResponse(lockResult);
+      }));
     }
 
     if (data.action === 'syncZbirna') {
+      if (!requireRole(tokenData, ['Vozac', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.vozacID)) return forbiddenResponse();
       if (!Array.isArray(data.records)) {
         return jsonResponse({ success: false, error: 'records must be an array' });
       }
-      const lockResult = withLock(function() {
+      return jsonResponse(withLock(function() {
         const results = data.records.map(r => processZbirnaRecord(r, data.vozacID));
         return {
           success: true,
@@ -447,15 +570,16 @@ function doPost(e) {
           failed: results.filter(r => !r || !r.success).length,
           results: results
         };
-      });
-      return jsonResponse(lockResult);
+      }));
     }
 
     if (data.action === 'syncTretman') {
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
       if (!Array.isArray(data.records)) {
         return jsonResponse({ success: false, error: 'records must be an array' });
       }
-      const lockResult = withLock(function() {
+      return jsonResponse(withLock(function() {
         const results = data.records.map(r => processTretmanRecord(r, data.kooperantID));
         return {
           success: true,
@@ -464,15 +588,16 @@ function doPost(e) {
           failed: results.filter(r => !r || !r.success).length,
           results: results
         };
-      });
-      return jsonResponse(lockResult);
+      }));
     }
 
     if (data.action === 'syncOprema') {
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
       if (!Array.isArray(data.records)) {
         return jsonResponse({ success: false, error: 'records must be an array' });
       }
-      const lockResult = withLock(function() {
+      return jsonResponse(withLock(function() {
         const results = data.records.map(r => processOpremaRecord(r, data.kooperantID));
         return {
           success: true,
@@ -481,15 +606,16 @@ function doPost(e) {
           failed: results.filter(r => !r || !r.success).length,
           results: results
         };
-      });
-      return jsonResponse(lockResult);
+      }));
     }
 
     if (data.action === 'syncTrosak') {
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
       if (!Array.isArray(data.records)) {
         return jsonResponse({ success: false, error: 'records must be an array' });
       }
-      const lockResult = withLock(function() {
+      return jsonResponse(withLock(function() {
         const results = data.records.map(r => processTrosakRecord(r, data.kooperantID));
         return {
           success: true,
@@ -498,92 +624,129 @@ function doPost(e) {
           failed: results.filter(r => !r || !r.success).length,
           results: results
         };
-      });
-      return jsonResponse(lockResult);
+      }));
     }
 
     if (data.action === 'saveOtkupniListPdf') {
-      return jsonResponse(generateOtkupniListPdf(data));
+      if (!requireRole(tokenData, ['Otkupac', 'Management'])) return forbiddenResponse();
+      if (tokenData.role === 'Otkupac') {
+        data.otkupacID = data.otkupacID || tokenData.entityID;
+        if (!requireEntity(tokenData, data.otkupacID)) return forbiddenResponse();
+      }
+      return jsonResponse(withLock(function() {
+        return generateOtkupniListPdf(data);
+      }));
     }
 
     if (data.action === 'uploadPdf') {
-      return jsonResponse(uploadPdfToDrive(data));
+      if (!requireRole(tokenData, ['Otkupac', 'Management'])) return forbiddenResponse();
+      if (tokenData.role === 'Otkupac') {
+        data.otkupacID = data.otkupacID || tokenData.entityID;
+        if (!requireEntity(tokenData, data.otkupacID)) return forbiddenResponse();
+      }
+      return jsonResponse(withLock(function() {
+        return uploadPdfToDrive(data);
+      }));
     }
 
     if (data.action === 'saveWarRoomDemand') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(saveWarRoomDemand(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return saveWarRoomDemand(data);
+      }));
     }
 
     if (data.action === 'removeWarRoomDemand') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(removeWarRoomDemand(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return removeWarRoomDemand(data);
+      }));
     }
 
     if (data.action === 'updateDemandPrimljeno') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(updateDemandPrimljeno(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return updateDemandPrimljeno(data);
+      }));
     }
 
     if (data.action === 'updateKamionStatus') {
-      return jsonResponse(updateKamionStatus(data));
+      if (!requireRole(tokenData, ['Vozac', 'Management'])) return forbiddenResponse();
+      if (tokenData.role === 'Vozac') {
+        data.vozacID = tokenData.entityID;
+      }
+      return jsonResponse(withLock(function() {
+        return updateKamionStatus(data);
+      }));
     }
 
     if (data.action === 'saveDispecer') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(saveDispecer(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return saveDispecer(data);
+      }));
     }
 
     if (data.action === 'updateDispecer') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(updateDispecer(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return updateDispecer(data);
+      }));
     }
 
     if (data.action === 'removeDispecer') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(removeDispecer(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return removeDispecer(data);
+      }));
     }
 
     if (data.action === 'saveIzdavanje') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(saveIzdavanje(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return saveIzdavanje(data);
+      }));
     }
 
     if (data.action === 'parseFiskalniImage') {
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (tokenData.role === 'Kooperant' && data.kooperantID && !requireEntity(tokenData, data.kooperantID)) {
+        return forbiddenResponse();
+      }
       return jsonResponse(parseFiskalniImage(data));
     }
 
     if (data.action === 'parseFiskalni') {
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (tokenData.role === 'Kooperant' && data.kooperantID && !requireEntity(tokenData, data.kooperantID)) {
+        return forbiddenResponse();
+      }
       return jsonResponse(parseFiskalni(data));
     }
 
     if (data.action === 'saveFiskalni') {
-      return jsonResponse(saveFiskalni(data));
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (tokenData.role === 'Kooperant') {
+        data.kooperantID = data.kooperantID || tokenData.entityID;
+        if (!requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
+      }
+      return jsonResponse(withLock(function() {
+        return saveFiskalni(data);
+      }));
     }
 
     if (data.action === 'saveFiskalniMapiranje') {
-      return jsonResponse(saveFiskalniMapiranje(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return saveFiskalniMapiranje(data);
+      }));
     }
     
     if (data.action === 'createArtikal') {
-      if (tokenData.role !== 'Management') {
-        return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
-      }
-      return jsonResponse(createArtikal(data));
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      return jsonResponse(withLock(function() {
+        return createArtikal(data);
+      }));
     }
 
     return jsonResponse({ success: false, error: 'Unknown action' });
@@ -682,6 +845,7 @@ function authenticateUser(username, pin) {
     logLoginAttempt(username, '', false, 'Username not found');
     return { success: false, error: 'Pogrešno korisničko ime ili PIN' };
   } catch (err) {
+    logError('GAS', 'authenticateUser', err.message, err.stack || '', username || '');
     return { success: false, error: 'System error' };
   }
 }
@@ -694,18 +858,134 @@ function generateToken() {
 }
 
 function saveToken(token, entityID, role) {
-  CacheService.getScriptCache().put('TOKEN_' + token,
-    JSON.stringify({ entityID: entityID, role: role, created: new Date().toISOString() }), 86400);
+  var payload = JSON.stringify({ entityID: entityID, role: role, created: new Date().toISOString() });
+  var key = 'TOKEN_' + token;
+  
+  // brzi sloj — 24h cache
+  CacheService.getScriptCache().put(key, payload, 86400);
+  
+  // trajni sloj — PropertiesService
+  try {
+    PropertiesService.getScriptProperties().setProperty(key, payload);
+  } catch (e) {}
 }
 
 function validateToken(token) {
   if (!token || token.length < 10) return false;
-  return CacheService.getScriptCache().get('TOKEN_' + token) !== null;
+  
+  var key = 'TOKEN_' + token;
+  
+  // pokušaj cache prvo
+  if (CacheService.getScriptCache().get(key) !== null) return true;
+  
+  // fallback na properties
+  try {
+    var stored = PropertiesService.getScriptProperties().getProperty(key);
+    if (stored) {
+      // proveri starost — odbaci tokene starije od 48h
+      var data = JSON.parse(stored);
+      var created = new Date(data.created).getTime();
+      if (Date.now() - created > 48 * 60 * 60 * 1000) {
+        // istekao — čisti
+        PropertiesService.getScriptProperties().deleteProperty(key);
+        return false;
+      }
+      // restoruj u cache za buduće pozive
+      CacheService.getScriptCache().put(key, stored, 86400);
+      return true;
+    }
+  } catch (e) {}
+  
+  return false;
 }
 
 function getTokenData(token) {
-  const d = CacheService.getScriptCache().get('TOKEN_' + token);
-  return d ? JSON.parse(d) : null;
+  var key = 'TOKEN_' + token;
+  
+  // pokušaj cache
+  var d = CacheService.getScriptCache().get(key);
+  if (d) return JSON.parse(d);
+  
+  // fallback na properties
+  try {
+    var stored = PropertiesService.getScriptProperties().getProperty(key);
+    if (stored) {
+      var data = JSON.parse(stored);
+      var created = new Date(data.created).getTime();
+      if (Date.now() - created > 48 * 60 * 60 * 1000) {
+        PropertiesService.getScriptProperties().deleteProperty(key);
+        return null;
+      }
+      // restoruj u cache
+      CacheService.getScriptCache().put(key, stored, 86400);
+      return data;
+    }
+  } catch (e) {}
+  
+  return null;
+}
+
+function purgeExpiredTokens() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var all = props.getProperties();
+    var now = Date.now();
+    var maxAge = 48 * 60 * 60 * 1000;
+    var purged = 0;
+    
+    for (var key in all) {
+      if (key.startsWith('TOKEN_')) {
+        try {
+          var data = JSON.parse(all[key]);
+          var created = new Date(data.created).getTime();
+          if (now - created > maxAge) {
+            props.deleteProperty(key);
+            purged++;
+          }
+        } catch (e) {
+          props.deleteProperty(key);
+          purged++;
+        }
+      }
+    }
+    
+    Logger.log('Purged ' + purged + ' expired tokens');
+    // also purge old error logs
+    purgeOldErrorLogs();
+
+    return { success: true, purged: purged };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function setupTokenPurgeTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'purgeExpiredTokens') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  ScriptApp.newTrigger('purgeExpiredTokens')
+    .timeBased()
+    .atHour(3)
+    .everyDays(1)
+    .inTimezone('Europe/Belgrade')
+    .create();
+
+  Logger.log('Token purge trigger created: 03:00 daily');
+}
+
+// token expiry proveravati i iz cache-a
+function isTokenPayloadValid(payload) {
+  try {
+    var data = JSON.parse(payload);
+    var created = new Date(data.created).getTime();
+    if (!created || isNaN(created)) return false;
+    return Date.now() - created <= 48 * 60 * 60 * 1000;
+  } catch (e) {
+    return false;
+  }
 }
 
 function logLoginAttempt(username, entityID, success, message) {
@@ -787,7 +1067,6 @@ function processRecord(record, otkupacID) {
       if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
         sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
       }
-
       return {
         clientRecordID: record.clientRecordID,
         success: true,
@@ -840,6 +1119,7 @@ function processRecord(record, otkupacID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
+    logError('GAS', 'processRecord', err.message, err.stack || '', otkupacID || '');
     return {
       clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
       success: false,
@@ -862,7 +1142,8 @@ function uploadPdfToDrive(data) {
 
     return { success: true, fileId: file.getId(), fileName: file.getName() };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'uploadPdfToDrive', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -962,6 +1243,7 @@ function processZbirnaRecord(record, vozacID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
+    logError('GAS', 'processZbirnaRecord', err.message, err.stack || '', vozacID || '');
     return {
       clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
       success: false,
@@ -1009,7 +1291,10 @@ function getOtkupiForVozac(vozacID) {
       }
     }
     return { success: true, records: allRecords };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) { 
+      logError('GAS', 'getOtkupiForVozac', err.message, err.stack || '', vozacID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 function getZbirneForVozac(vozacID) {
@@ -1019,7 +1304,10 @@ function getZbirneForVozac(vozacID) {
     const files = folder.getFilesByName('VOZ-' + vozacID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) { 
+      logError('GAS', 'getZbirneForVozac', err.message, err.stack || '', vozacID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 // ============================================================
@@ -1071,6 +1359,7 @@ function processAgromereRecord(record, kooperantID) {
 
     return { clientRecordID: record.clientRecordID, success: true, status: 'inserted', row: sheet.getLastRow() };
   } catch (err) {
+    logError('GAS', 'processAgromereRecord', err.message, err.stack || '', kooperantID || '');
     return { clientRecordID: record && record.clientRecordID ? record.clientRecordID : '', success: false, error: err.message };
   }
 }
@@ -1200,6 +1489,7 @@ function processTretmanRecord(record, kooperantID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
+    logError('GAS', 'processTretmanRecord', err.message, err.stack || '', kooperantID || '');
     return {
       clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
       success: false,
@@ -1302,7 +1592,10 @@ function getTretmaniForKooperant(kooperantID) {
     const files = folder.getFilesByName('TRETMAN-' + kooperantID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) { 
+      logError('GAS', 'getTretmaniForKooperant', err.message, err.stack || '', kooperantID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 function getOpremaForKooperant(kooperantID) {
@@ -1312,17 +1605,25 @@ function getOpremaForKooperant(kooperantID) {
     const files = folder.getFilesByName('OPREMA-' + kooperantID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) {
+      logError('GAS', 'getOpremaForKooperant', err.message, err.stack || '', kooperantID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 function getTroskoviForKooperant(kooperantID) {
   try {
     if (!kooperantID) return { success: false, error: 'kooperantID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('TROSKOVI-' + kooperantID);
-    if (!files.hasNext()) return { success: true, records: [] };
-    return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
-  } catch (err) { return { success: false, error: err.message }; }
+
+    var registry = getSheetRegistry();
+    var ss = openSheetByRegistry('TROSKOVI-' + kooperantID, registry);
+
+    if (!ss) return { success: true, records: [] };
+    return { success: true, records: sheetToArray(ss.getSheets()[0]) };
+  } catch (err) {
+      logError('GAS', 'getTroskoviForKooperant', err.message, err.stack || '', kooperantID || '');
+      return { success: false, error: err.message };
+  }
 }
 
 // ============================================================
@@ -1340,6 +1641,7 @@ function getOtkupiForOtkupac(otkupacID) {
     const ss = SpreadsheetApp.open(files.next());
     return { success: true, records: sheetToArray(ss.getSheets()[0]) };
   } catch (err) {
+    logError('GAS', 'getOtkupiForOtkupac', err.message, err.stack || '', otkupacID || '');
     return { success: false, error: err.message };
   }
 }
@@ -1371,6 +1673,7 @@ function getKarticaForKooperant(kooperantID) {
     }
     return { success: true, records: records };
   } catch (err) {
+    logError('GAS', 'getKarticaForKooperant', err.message, err.stack || '', kooperantID || '');
     return { success: false, error: err.message };
   }
 }
@@ -1410,6 +1713,7 @@ function getStammdaten() {
 
         return { success: true, data: result };
     } catch (err) {
+        logError('GAS', 'getStammdaten', err.message, err.stack || '', '');
         return { success: false, error: err.message };
     }
 }
@@ -1483,7 +1787,10 @@ function getOtkupiByStanica(stanicaID) {
     const files = folder.getFilesByName('OTK-' + stanicaID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) { 
+      logError('GAS', 'getOtkupiByStanica', err.message, err.stack || '', stanicaID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 function getMgmtReport(tabName) {
@@ -1503,7 +1810,10 @@ function getMgmtReport(tabName) {
     }
     if (!sheet) return { success: true, records: [] };
     return { success: true, records: sheetToArray(sheet) };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) { 
+      logError('GAS', 'getMgmtReport:' + tabName, err.message, err.stack || '', '');
+      return { success: false, error: err.message }; 
+    }
 }
 function getSaldoOM() { return getMgmtReport('SaldoOM'); }
 function getSaldoKupci() { return getMgmtReport('SaldoKupci'); }
@@ -1540,7 +1850,10 @@ function getFaktureByKupac(kupacID) {
       String(r.KupacID) === kupacID || String(r.Kupac) === kupacID
     );
     return { success: true, records: filtered };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) { 
+      logError('GAS', 'getFaktureByKupac', err.message, err.stack || '', kupacID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 function getFakturaStavke(fakturaID) {
@@ -1563,7 +1876,10 @@ function getFakturaStavke(fakturaID) {
     
     const all = sheetToArray(sheet);
     return { success: true, records: all.filter(r => String(r.FakturaID) === fakturaID) };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) {
+      logError('GAS', 'getFakturaStavke', err.message, err.stack || '', fakturaID || '');
+      return { success: false, error: err.message }; 
+    }
 }
 
 function getAllOtkupiSheets() {
@@ -1639,7 +1955,8 @@ function saveIzdavanje(data) {
 
     return { success: true, izdavanjeID: izdavanjeID };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'saveIzdavanje', err.message, err.stack || '', data.kooperantID || '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -1687,7 +2004,8 @@ function getParcelGeo(parcelaId) {
     }
     return { success: false, error: 'Parcel not found' };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'getParcelGeo', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -1885,6 +2203,7 @@ function getParcelMeteo(parcelaId) {
     };
 
   } catch (err) {
+    logError('GAS', 'getParcelMeteo', err.message, err.stack || '', '');
     return { success: false, error: err.message };
   }
 }
@@ -2175,7 +2494,8 @@ function getParcelMeteoLatest(parcelaId) {
 
     return { success: false, error: 'Parcel not found' };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'getParcelMeteoLatest', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -2226,7 +2546,8 @@ function getAllMeteoLatest() {
 
     return { success: true, records: records };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'getAllMeteoLatest', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -2405,6 +2726,7 @@ function scheduledMeteoFetch() {
         Logger.log('Meteo fetch complete: ' + historyRows.length + ' locations, ' + latestRows.length + ' parcels updated');
     } catch (err) {
         Logger.log('scheduledMeteoFetch error: ' + err.message);
+        logError('GAS', 'scheduledMeteoFetch', err.message, err.stack || '', '');
     }
 }
 
@@ -2718,6 +3040,7 @@ function getKooperantProizvodnja(kooperantID) {
 
         return { success: true, records: records };
     } catch (err) {
+        logError('GAS', 'getKooperantProizvodnja', err.message, err.stack || '', kooperantID || '');
         return { success: false, error: err.message };
     }
 }
@@ -2764,7 +3087,8 @@ function getWarRoomDemand() {
     
     return { success: true, records: records };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'saveWarRoomDemand', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 // ============================================================
@@ -2833,7 +3157,8 @@ function removeWarRoomDemand(data) {
     }
     return { success: false, error: 'Demand not found' };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'removeWarRoomDemand', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -2863,7 +3188,8 @@ function updateDemandPrimljeno(data) {
     }
     return { success: false, error: 'Not found' };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'updateDemandPrimljeno', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -2959,6 +3285,7 @@ function getDispecer() {
  
         return { success: true, demand, plans };
     } catch (err) {
+        logError('GAS', 'getDispecer', err.message, err.stack || '', '');
         return { success: false, error: err.message };
     }
 }
@@ -2994,6 +3321,7 @@ function saveDispecer(data) {
  
         return { success: true, planID };
     } catch (err) {
+        logError('GAS', 'saveDispecer', err.message, err.stack || '', '');
         return { success: false, error: err.message };
     }
 }
@@ -3025,6 +3353,7 @@ function updateDispecer(data) {
         }
         return { success: false, error: 'Plan not found' };
     } catch (err) {
+        logError('GAS', 'updateDispecer', err.message, err.stack || '', '');
         return { success: false, error: err.message };
     }
 }
@@ -3050,6 +3379,7 @@ function removeDispecer(data) {
         }
         return { success: false, error: 'Not found' };
     } catch (err) {
+        logError('GAS', 'removeDispecer', err.message, err.stack || '', '');
         return { success: false, error: err.message };
     }
 }
@@ -3073,6 +3403,7 @@ function getKamionStatus() {
         }
         return { success: true, records };
     } catch (err) {
+        logError('GAS', 'getKamionStatus', err.message, err.stack || '', '');
         return { success: false, error: err.message };
     }
 }
@@ -3122,6 +3453,7 @@ function parseFiskalniImage(data) {
             kooperantID: kooperantID
         });
     } catch (err) {
+        logError('GAS', 'parseFiskalniImage', err.message, err.stack || '', data.kooperantID || '');
         Logger.log('parseFiskalniImage error: ' + err.message);
         return { success: false, error: err.message };
     }
@@ -3200,6 +3532,7 @@ function parseFiskalni(data) {
             items: matchedItems
         };
     } catch (err) {
+        logError('GAS', 'parseFiskalni', err.message, err.stack || '', kooperantID || '');
         return { success: false, error: err.message };
     }
 }
@@ -3424,6 +3757,7 @@ function saveFiskalni(data) {
 
         return { success: true, saved: count };
     } catch (err) {
+        logError('GAS', 'saveFiskalni', err.message, err.stack || '', kooperantID || '');
         return { success: false, error: err.message };
     }
 }
@@ -3460,7 +3794,8 @@ function saveFiskalniMapiranje(data) {
     }
     return { success: true, saved: count };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'saveFiskalniMapiranje', err.message, err.stack || '', data.kooperantID || '');
+      return { success: false, error: err.message };
   }
 }
 
@@ -3490,7 +3825,8 @@ function createArtikal(data) {
 
     return { success: true, artikalID: artikalID, naziv: data.naziv };
   } catch (err) {
-    return { success: false, error: err.message };
+      logError('GAS', 'createArtikal', err.message, err.stack || '', '');
+      return { success: false, error: err.message };
   }
 }
 // ============================================================
