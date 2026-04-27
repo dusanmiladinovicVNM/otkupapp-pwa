@@ -4,48 +4,67 @@ Option Explicit
 Public Function GetParceleByKooperant(ByVal kooperantID As String) As Variant
     Dim data As Variant
     data = GetTableData(TBL_PARCELE)
+
     If IsEmpty(data) Then
         GetParceleByKooperant = Empty
         Exit Function
     End If
-    
+
     Dim colKoop As Long, colID As Long, colKat As Long
     Dim colOpstina As Long, colKultura As Long, colPovrsina As Long
+
     colID = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
     colKoop = GetColumnIndex(TBL_PARCELE, COL_PAR_KOOP)
     colKat = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ)
     colOpstina = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_OPSTINA)
     colKultura = GetColumnIndex(TBL_PARCELE, COL_PAR_KULTURA)
     colPovrsina = GetColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA)
-    
+
+    If colID = 0 Or colKoop = 0 Or colKat = 0 Or colOpstina = 0 Or _
+       colKultura = 0 Or colPovrsina = 0 Then
+        GetParceleByKooperant = Empty
+        Exit Function
+    End If
+
     Dim count As Long, i As Long
+
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) = kooperantID Then count = count + 1
     Next i
-    
+
     If count = 0 Then
         GetParceleByKooperant = Empty
         Exit Function
     End If
-    
+
     Dim result() As Variant
     ReDim result(1 To count, 1 To 6)
+
     Dim idx As Long
-    
+    Dim pov As Double
+
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) = kooperantID Then
             idx = idx + 1
+
+            If IsNumeric(data(i, colPovrsina)) Then
+                pov = CDbl(data(i, colPovrsina))
+            Else
+                pov = 0#
+            End If
+
             result(idx, 1) = CStr(data(i, colID))
             result(idx, 2) = CStr(data(i, colKat))
             result(idx, 3) = CStr(data(i, colOpstina))
             result(idx, 4) = CStr(data(i, colKultura))
-            result(idx, 5) = CDbl(data(i, colPovrsina))
-            result(idx, 6) = CStr(data(i, colKat)) & " " & CStr(data(i, colOpstina)) & _
-                             " (" & CStr(data(i, colKultura)) & ", " & _
-                             Format$(CDbl(data(i, colPovrsina)), "0.00") & " ha)"
+            result(idx, 5) = pov
+            result(idx, 6) = CStr(data(i, colKat)) & " " & _
+                             CStr(data(i, colOpstina)) & " (" & _
+                             CStr(data(i, colKultura)) & ", " & _
+                             Format$(pov, "0.00") & " ha)"
         End If
     Next i
-    
+
     GetParceleByKooperant = result
 End Function
 
@@ -68,29 +87,57 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
                              Optional ByVal parcelaID As String = "", _
                              Optional ByVal brojDok As String = "", _
                              Optional ByVal napomena As String = "", _
-                             Optional ByVal dobavljacID As String = "") As String
+                             Optional ByVal dobavljacID As String = "", _
+                             Optional ByVal overrideCena As Variant) As String
+    On Error GoTo EH
+
     Dim newID As String
     newID = GetNextID(TBL_MAGACIN, COL_MAG_ID, "MAG-")
-    
-    ' Cena aus Artikli
+
+    If newID = "" Then
+        SaveMagacin = ""
+        Exit Function
+    End If
+
     Dim cena As Double
-    Dim cenaStr As String
-    cenaStr = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_CENA))
-    If IsNumeric(cenaStr) Then cena = CDbl(cenaStr)
-    If IsNumeric(kolicina) Then kolicina = CDbl(kolicina)
+
+    If Not IsMissing(overrideCena) Then
+        If IsNumeric(overrideCena) Then
+            cena = CDbl(overrideCena)
+        End If
+    Else
+        Dim cenaStr As String
+        cenaStr = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_CENA))
+
+        If IsNumeric(cenaStr) Then
+            cena = CDbl(cenaStr)
+        End If
+    End If
+
+    If kolicina <= 0 Then
+        SaveMagacin = ""
+        Exit Function
+    End If
+
     Dim vrednost As Double
     vrednost = kolicina * cena
-    
+
     Dim rowData As Variant
     rowData = Array(newID, datum, artikalID, tip, kolicina, _
                     kooperantID, parcelaID, brojDok, cena, vrednost, _
                     napomena, "", dobavljacID)
-    
+
     If AppendRow(TBL_MAGACIN, rowData) > 0 Then
         SaveMagacin = newID
     Else
         SaveMagacin = ""
     End If
+
+    Exit Function
+
+EH:
+    LogErr "SaveMagacin"
+    SaveMagacin = ""
 End Function
 
 Public Function SaveMagacin_TX(ByVal datum As Date, ByVal artikalID As String, _
@@ -99,21 +146,43 @@ Public Function SaveMagacin_TX(ByVal datum As Date, ByVal artikalID As String, _
                                 Optional ByVal parcelaID As String = "", _
                                 Optional ByVal brojDok As String = "", _
                                 Optional ByVal napomena As String = "", _
-                                Optional ByVal dobavljacID As String = "") As String
-    Dim tx As New clsTransaction
-    
+                                Optional ByVal dobavljacID As String = "", _
+                                Optional ByVal overrideCena As Variant) As String
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_MAGACIN
-    
-    SaveMagacin_TX = SaveMagacin(datum, artikalID, tip, kolicina, kooperantID, parcelaID, brojDok, napomena, dobavljacID)
-    
-    tx.CommitTx
+
+    If IsMissing(overrideCena) Then
+        SaveMagacin_TX = SaveMagacin(datum, artikalID, tip, kolicina, _
+                                     kooperantID, parcelaID, brojDok, _
+                                     napomena, dobavljacID)
+    Else
+        SaveMagacin_TX = SaveMagacin(datum, artikalID, tip, kolicina, _
+                                     kooperantID, parcelaID, brojDok, _
+                                     napomena, dobavljacID, overrideCena)
+    End If
+
+    If SaveMagacin_TX = "" Then
+        tx.RollbackTx
+    Else
+        tx.CommitTx
+    End If
+
+    Set tx = Nothing
     Exit Function
+
 EH:
     LogErr "SaveMagacin_TX"
-    tx.RollbackTx
-    MsgBox "Greska pri unosu magacina, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    MsgBox "Greška pri unosu magacina, promene vracene: " & Err.Description, vbCritical, APP_NAME
     SaveMagacin_TX = ""
 End Function
 
@@ -309,7 +378,7 @@ NextDob:
 End Function
 
 Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
-    ' Summe aller Izlaz-Vrednosti f�r diesen Kooperant
+    ' Summe aller Izlaz-Vrednosti für diesen Kooperant
     Dim data As Variant
     data = GetTableData(TBL_MAGACIN)
     If IsEmpty(data) Then Exit Function
@@ -331,4 +400,5 @@ Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
         End If
     Next i
 End Function
+
 
