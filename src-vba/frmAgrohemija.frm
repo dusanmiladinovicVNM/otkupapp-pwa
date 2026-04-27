@@ -38,7 +38,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -57,7 +57,7 @@ End Sub
 
 Private Sub UserForm_Activate()
     If Not mChromeRemoved Then
-        Me.Caption = ""
+        Me.caption = ""
         RemoveTitleBar
         mChromeRemoved = True
     End If
@@ -106,14 +106,14 @@ Private Sub cmbKooperant_Change()
     lstParcele.Clear
     Erase m_ParcelaIDs
     Erase m_ParcelaHa
-    lblPreporuka.Caption = ""
-    lblVrednost.Caption = ""
-    txtKolicina.Value = ""
+    lblPreporuka.caption = ""
+    lblVrednost.caption = ""
+    txtKolicina.value = ""
     
-    If cmbKooperant.Value = "" Then Exit Sub
+    If cmbKooperant.value = "" Then Exit Sub
     
     Dim koopID As String
-    koopID = ExtractIDFromDisplay(cmbKooperant.Value)
+    koopID = ExtractIDFromDisplay(cmbKooperant.value)
     
     Dim parcele As Variant
     parcele = GetParceleByKooperant(koopID)
@@ -133,9 +133,9 @@ Private Sub cmbKooperant_Change()
     Dim dug As Double
     dug = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
     If dug > 0 Then
-        lblDug.Caption = "Dug: " & Format$(dug, "#,##0") & " RSD"
+        lblDug.caption = "Dug: " & Format$(dug, "#,##0") & " RSD"
     Else
-        lblDug.Caption = ""
+        lblDug.caption = ""
     End If
 End Sub
 
@@ -148,13 +148,13 @@ Private Sub lstParcele_Click()
 End Sub
 
 Private Sub UpdatePreporuka()
-    lblPreporuka.Caption = ""
-    lblVrednost.Caption = ""
-    txtKolicina.Value = ""
+    lblPreporuka.caption = ""
+    lblVrednost.caption = ""
+    txtKolicina.value = ""
     
-    If cmbArtikal.Value = "" Then Exit Sub
+    If cmbArtikal.value = "" Then Exit Sub
     
-    ' Summiere ha aller ausgewählten Parcele
+    ' Summiere ha aller ausgewÃ¤hlten Parcele
     Dim totalHa As Double
     Dim selectedParcele As String
     Dim i As Long
@@ -169,7 +169,7 @@ Private Sub UpdatePreporuka()
     If totalHa = 0 Then Exit Sub
     
     Dim artikalID As String
-    artikalID = ExtractIDFromDisplay(cmbArtikal.Value)
+    artikalID = ExtractIDFromDisplay(cmbArtikal.value)
     
     Dim preporuka As Double
     preporuka = CalculatePreporuka(artikalID, totalHa)
@@ -190,12 +190,12 @@ Private Sub UpdatePreporuka()
         Dim izdajKol As Double
         izdajKol = brojPakovanja * pakovanje
         
-        lblPreporuka.Caption = "Doza: " & Format$(preporuka, "0.00") & " " & jm & " za " & Format$(totalHa, "0.00") & " ha" & vbCrLf & _
+        lblPreporuka.caption = "Doza: " & Format$(preporuka, "0.00") & " " & jm & " za " & Format$(totalHa, "0.00") & " ha" & vbCrLf & _
                                "Izdavanje: " & brojPakovanja & " x " & FormatKol(pakovanje) & " " & jm & " = " & FormatKol(izdajKol) & " " & jm
-        txtKolicina.Value = FormatKol(izdajKol)
+        txtKolicina.value = FormatKol(izdajKol)
     Else
-        lblPreporuka.Caption = "Doza: " & Format$(preporuka, "0.00") & " " & jm & " za " & Format$(totalHa, "0.00") & " ha"
-        txtKolicina.Value = Format$(preporuka, "0.00")
+        lblPreporuka.caption = "Doza: " & Format$(preporuka, "0.00") & " " & jm & " za " & Format$(totalHa, "0.00") & " ha"
+        txtKolicina.value = Format$(preporuka, "0.00")
     End If
     
     UpdateVrednost
@@ -206,12 +206,12 @@ Private Sub txtKolicina_Change()
 End Sub
 
 Private Sub UpdateVrednost()
-    lblVrednost.Caption = ""
-    If cmbArtikal.Value = "" Then Exit Sub
-    If Not IsNumeric(txtKolicina.Value) Then Exit Sub
+    lblVrednost.caption = ""
+    If cmbArtikal.value = "" Then Exit Sub
+    If Not IsNumeric(txtKolicina.value) Then Exit Sub
     
     Dim artikalID As String
-    artikalID = ExtractIDFromDisplay(cmbArtikal.Value)
+    artikalID = ExtractIDFromDisplay(cmbArtikal.value)
     
     Dim cena As Double
     Dim cenaStr As String
@@ -219,24 +219,24 @@ Private Sub UpdateVrednost()
     If IsNumeric(cenaStr) Then cena = CDbl(cenaStr)
     
     Dim vrednost As Double
-    vrednost = CDbl(txtKolicina.Value) * cena
+    vrednost = CDbl(txtKolicina.value) * cena
     
-    lblVrednost.Caption = "Vrednost: " & Format$(vrednost, "#,##0") & " RSD"
+    lblVrednost.caption = "Vrednost: " & Format$(vrednost, "#,##0") & " RSD"
 End Sub
 
 Private Sub btnDodajIzlaz_Click()
     On Error GoTo EH
     
-    If cmbArtikal.Value = "" Then
+    If cmbArtikal.value = "" Then
         MsgBox "Izaberite artikal!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If Not IsNumeric(txtKolicina.Value) Or CDbl(txtKolicina.Value) <= 0 Then
+    If Not IsNumeric(txtKolicina.value) Or CDbl(txtKolicina.value) <= 0 Then
         MsgBox "Unesite validnu kolicinu!", vbExclamation, APP_NAME
         Exit Sub
     End If
     
-    ' Mindestens eine Parcela ausgewählt
+    ' Mindestens eine Parcela ausgewÃ¤hlt
     Dim hasSelection As Boolean
     Dim i As Long
     For i = 0 To lstParcele.ListCount - 1
@@ -248,7 +248,7 @@ Private Sub btnDodajIzlaz_Click()
     End If
     
     Dim artikalID As String
-    artikalID = ExtractIDFromDisplay(cmbArtikal.Value)
+    artikalID = ExtractIDFromDisplay(cmbArtikal.value)
     
     Dim artNaziv As String
     artNaziv = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_NAZIV))
@@ -260,9 +260,9 @@ Private Sub btnDodajIzlaz_Click()
     If IsNumeric(cenaStr) Then cena = CDbl(cenaStr)
     
     Dim kol As Double
-    kol = CDbl(txtKolicina.Value)
+    kol = CDbl(txtKolicina.value)
     
-    ' Nach Kolicina-Prüfung:
+    ' Nach Kolicina-PrÃ¼fung:
     Dim pakStr2 As String
     pakStr2 = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_PAKOVANJE))
     If IsNumeric(pakStr2) And CDbl(pakStr2) > 0 Then
@@ -298,11 +298,11 @@ Private Sub btnDodajIzlaz_Click()
     ' ListBox aktualisieren
     lstKorpa.AddItem artNaziv & " - " & Format$(kol, "0.00") & " " & jm & " = " & Format$(kol * cena, "#,##0") & " RSD"
     
-    ' Felder zurücksetzen
-    cmbArtikal.Value = ""
-    txtKolicina.Value = ""
-    lblPreporuka.Caption = ""
-    lblVrednost.Caption = ""
+    ' Felder zurÃ¼cksetzen
+    cmbArtikal.value = ""
+    txtKolicina.value = ""
+    lblPreporuka.caption = ""
+    lblVrednost.caption = ""
     
     Exit Sub
 EH:
@@ -317,21 +317,21 @@ Private Sub btnZavrsiIzlaz_Click()
         MsgBox "Korpa je prazna!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If cmbKooperant.Value = "" Then
+    If cmbKooperant.value = "" Then
         MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
         Exit Sub
     End If
     
     Dim koopID As String
-    koopID = ExtractIDFromDisplay(cmbKooperant.Value)
+    koopID = ExtractIDFromDisplay(cmbKooperant.value)
     
     ' BrojDokumenta generieren
-    If txtBrojDokIzlaz.Value = "" Then
+    If txtBrojDokIzlaz.value = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         Exit Sub
     End If
     Dim brojDok As String
-    brojDok = txtBrojDokIzlaz.Value
+    brojDok = txtBrojDokIzlaz.value
     
     ' TX starten
     Dim tx As New clsTransaction
@@ -358,8 +358,8 @@ Private Sub btnZavrsiIzlaz_Click()
     
     ' Reset
     ClearKorpaIzlaz
-    cmbKooperant.Value = ""
-    txtBrojDokIzlaz.Value = ""
+    cmbKooperant.value = ""
+    txtBrojDokIzlaz.value = ""
     
     Exit Sub
 EH:
@@ -399,26 +399,26 @@ Private Sub LoadArtikliUlaz()
 End Sub
 
 Private Sub cmbArtikalUlaz_Change()
-    lblUlazDoza.Caption = ""
-    txtCenaUlaz.Value = ""
-    lblUlazVrednost.Caption = ""
+    lblUlazDoza.caption = ""
+    txtCenaUlaz.value = ""
+    lblUlazVrednost.caption = ""
     
-    If cmbArtikalUlaz.Value = "" Then Exit Sub
+    If cmbArtikalUlaz.value = "" Then Exit Sub
     
     Dim artID As String
-    artID = ExtractIDFromDisplay(cmbArtikalUlaz.Value)
+    artID = ExtractIDFromDisplay(cmbArtikalUlaz.value)
     
     ' Doza anzeigen
     Dim dozaStr As String
     dozaStr = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artID, COL_ART_DOZA))
     Dim jm As String
     jm = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artID, COL_ART_JM))
-    lblUlazDoza.Caption = "Doza: " & dozaStr & " " & jm & "/ha"
+    lblUlazDoza.caption = "Doza: " & dozaStr & " " & jm & "/ha"
     
-    ' Cena vorausfüllen
+    ' Cena vorausfÃ¼llen
     Dim cenaStr As String
     cenaStr = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artID, COL_ART_CENA))
-    If IsNumeric(cenaStr) Then txtCenaUlaz.Value = cenaStr
+    If IsNumeric(cenaStr) Then txtCenaUlaz.value = cenaStr
 End Sub
 
 Private Sub txtKolicinaUlaz_Change()
@@ -430,41 +430,41 @@ Private Sub txtCenaUlaz_Change()
 End Sub
 
 Private Sub UpdateUlazVrednost()
-    lblUlazVrednost.Caption = ""
-    If Not IsNumeric(txtKolicinaUlaz.Value) Then Exit Sub
-    If Not IsNumeric(txtCenaUlaz.Value) Then Exit Sub
+    lblUlazVrednost.caption = ""
+    If Not IsNumeric(txtKolicinaUlaz.value) Then Exit Sub
+    If Not IsNumeric(txtCenaUlaz.value) Then Exit Sub
     
     Dim vrednost As Double
-    vrednost = CDbl(txtKolicinaUlaz.Value) * CDbl(txtCenaUlaz.Value)
-    lblUlazVrednost.Caption = "Vrednost: " & Format$(vrednost, "#,##0") & " RSD"
+    vrednost = CDbl(txtKolicinaUlaz.value) * CDbl(txtCenaUlaz.value)
+    lblUlazVrednost.caption = "Vrednost: " & Format$(vrednost, "#,##0") & " RSD"
 End Sub
 
 Private Sub btnDodajUlaz_Click()
     On Error GoTo EH
     
-    If cmbArtikalUlaz.Value = "" Then
+    If cmbArtikalUlaz.value = "" Then
         MsgBox "Izaberite artikal!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If Not IsNumeric(txtKolicinaUlaz.Value) Or CDbl(txtKolicinaUlaz.Value) <= 0 Then
+    If Not IsNumeric(txtKolicinaUlaz.value) Or CDbl(txtKolicinaUlaz.value) <= 0 Then
         MsgBox "Unesite validnu kolicinu!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If Not IsNumeric(txtCenaUlaz.Value) Or CDbl(txtCenaUlaz.Value) <= 0 Then
+    If Not IsNumeric(txtCenaUlaz.value) Or CDbl(txtCenaUlaz.value) <= 0 Then
         MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
         Exit Sub
     End If
     
     Dim artikalID As String
-    artikalID = ExtractIDFromDisplay(cmbArtikalUlaz.Value)
+    artikalID = ExtractIDFromDisplay(cmbArtikalUlaz.value)
     
     Dim artNaziv As String
     artNaziv = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_NAZIV))
     Dim jm As String
     jm = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_JM))
     
-    Dim kol As Double: kol = CDbl(txtKolicinaUlaz.Value)
-    Dim cena As Double: cena = CDbl(txtCenaUlaz.Value)
+    Dim kol As Double: kol = CDbl(txtKolicinaUlaz.value)
+    Dim cena As Double: cena = CDbl(txtCenaUlaz.value)
     
     m_KorpaUlazCount = m_KorpaUlazCount + 1
     ReDim Preserve m_KorpaUlaz(1 To m_KorpaUlazCount)
@@ -481,11 +481,11 @@ Private Sub btnDodajUlaz_Click()
     lstKorpaUlaz.AddItem artNaziv & " - " & Format$(kol, "0.00") & " " & jm & _
                          " x " & Format$(cena, "#,##0") & " = " & Format$(kol * cena, "#,##0") & " RSD"
     
-    cmbArtikalUlaz.Value = ""
-    txtKolicinaUlaz.Value = ""
-    txtCenaUlaz.Value = ""
-    lblUlazVrednost.Caption = ""
-    lblUlazDoza.Caption = ""
+    cmbArtikalUlaz.value = ""
+    txtKolicinaUlaz.value = ""
+    txtCenaUlaz.value = ""
+    lblUlazVrednost.caption = ""
+    lblUlazDoza.caption = ""
     
     Exit Sub
 EH:
@@ -500,16 +500,16 @@ Private Sub btnZavrsiUlaz_Click()
         MsgBox "Korpa je prazna!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If txtBrojDokUlaz.Value = "" Then
+    If txtBrojDokUlaz.value = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         Exit Sub
     End If
     
     Dim brojDok As String
-    brojDok = txtBrojDokUlaz.Value
+    brojDok = txtBrojDokUlaz.value
     
     Dim dobavljacID As String
-    dobavljacID = cmbDobavljac.Value
+    dobavljacID = cmbDobavljac.value
     
     Dim tx As New clsTransaction
     tx.BeginTx
@@ -519,7 +519,8 @@ Private Sub btnZavrsiUlaz_Click()
     For i = 1 To m_KorpaUlazCount
         Dim result As String
         result = SaveMagacin(Date, m_KorpaUlaz(i).artikalID, MAG_ULAZ, _
-                              m_KorpaUlaz(i).kolicina, "", "", brojDok, "", dobavljacID)
+                              m_KorpaUlaz(i).kolicina, "", "", brojDok, "", _
+                              dobavljacID, m_KorpaUlaz(i).cena)
         If result = "" Then
             tx.RollbackTx
             MsgBox "Greska pri cuvanju!", vbCritical, APP_NAME
@@ -533,7 +534,7 @@ Private Sub btnZavrsiUlaz_Click()
            m_KorpaUlazCount & " stavki", vbInformation, APP_NAME
     
     ClearKorpaUlaz
-    txtBrojDokUlaz.Value = ""
+    txtBrojDokUlaz.value = ""
     
     Exit Sub
 EH:
@@ -559,3 +560,4 @@ Private Function FormatKol(ByVal val As Double) As String
         FormatKol = Format$(val, "0.##")
     End If
 End Function
+
