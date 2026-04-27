@@ -14,7 +14,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 ' ============================================================
-' frmOtkupniBlokovi – Sledljivost & Povezivanje
+' frmOtkupniBlokovi â€“ Sledljivost & Povezivanje
 ' ============================================================
 Option Explicit
 
@@ -26,7 +26,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -38,7 +38,7 @@ End Sub
 
 Private Sub UserForm_Activate()
     If Not mChromeRemoved Then
-        Me.Caption = ""
+        Me.caption = ""
         RemoveTitleBar
         mChromeRemoved = True
     End If
@@ -118,7 +118,7 @@ Private Sub UpdateStatus()
     Dim unlinkedCount As Long
     If Not IsEmpty(unlinked) Then unlinkedCount = UBound(unlinked, 1)
     
-    lblStatus.Caption = "Povezano: " & (totalOtkup - unlinkedCount) & " od " & totalOtkup
+    lblStatus.caption = "Povezano: " & (totalOtkup - unlinkedCount) & " od " & totalOtkup
 End Sub
 
 ' ============================================================
@@ -129,7 +129,7 @@ Private Sub btnAutoLink_Click()
     On Error GoTo EH
     
     Dim linked As Long
-    linked = AutoLinkOtkupOtpremnica()
+    linked = AutoLinkOtkupOtpremnica_TX()
     
     MsgBox "Automatski povezano: " & linked & " otkupa", vbInformation, APP_NAME
     
@@ -142,7 +142,7 @@ EH:
 End Sub
 
 ' ============================================================
-' NEPOVEZANI (Unverknüpfte Otkupi)
+' NEPOVEZANI (UnverknÃ¼pfte Otkupi)
 ' ============================================================
 
 Private Sub LoadNepovezani()
@@ -178,7 +178,7 @@ Private Sub LoadNepovezani()
 End Sub
 
 Private Sub lstNepovezani_Click()
-    ' Zeige mögliche Otpremnice für ausgewählten Otkup
+    ' Zeige mÃ¶gliche Otpremnice fÃ¼r ausgewÃ¤hlten Otkup
     LstOtpremnice.Clear
     Erase m_CandidateOtpIDs
     
@@ -190,7 +190,7 @@ Private Sub lstNepovezani_Click()
     Dim stanicaID As String: stanicaID = CStr(m_UnlinkedData(idx, 3))
     Dim datum As Date: datum = CDate(m_UnlinkedData(idx, 2))
     
-    ' Alle Otpremnice für diese Station + Datum
+    ' Alle Otpremnice fÃ¼r diese Station + Datum
     Dim otpData As Variant
     otpData = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(otpData) Then Exit Sub
@@ -241,7 +241,7 @@ Private Sub lstNepovezani_Click()
 End Sub
 
 ' ============================================================
-' MANUELLES VERKNÜPFEN
+' MANUELLES VERKNÃœPFEN
 ' ============================================================
 
 Private Sub btnPovezi_Click()
@@ -264,9 +264,14 @@ Private Sub btnPovezi_Click()
     
     Dim rows As Collection
     Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-    If rows.count > 0 Then
-        UpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, otpremnicaID
+
+    If rows.count = 0 Then
+        Err.Raise vbObjectError + 1910, "frmSledljivost.btnPovezi", _
+                "Otkup row nije pronaden: " & otkupID
     End If
+
+RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
+                  otpremnicaID, "frmSledljivost.btnPovezi"
     
     LoadNepovezani
     UpdateStatus
@@ -282,10 +287,10 @@ End Sub
 
 Private Sub cmbZbirna_Change()
     lstTrace.Clear
-    If cmbZbirna.Value = "" Then Exit Sub
+    If cmbZbirna.value = "" Then Exit Sub
     
     Dim traceData As Variant
-    traceData = TraceByZbirna(cmbZbirna.Value)
+    traceData = TraceByZbirna(cmbZbirna.value)
     If IsEmpty(traceData) Then Exit Sub
     
     Dim i As Long
@@ -306,13 +311,13 @@ End Sub
 Private Sub btnStampaj_Click()
     On Error GoTo EH
     
-    If cmbZbirna.Value = "" Then
+    If cmbZbirna.value = "" Then
         MsgBox "Izaberite zbirnu!", vbExclamation, APP_NAME
         Exit Sub
     End If
     
 
-    PrintTracePDF cmbZbirna.Value
+    PrintTracePDF cmbZbirna.value
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnStampaj"
@@ -320,7 +325,7 @@ EH:
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)
-    ' Template Sheet prüfen
+    ' Template Sheet prÃ¼fen
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
@@ -375,18 +380,18 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim kupacNaziv As String
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
     
-    ' Header befüllen
+    ' Header befÃ¼llen
     Application.ScreenUpdating = False
     
-    ws.Range("LOTBroj").Value = brojZbirne
-    ws.Range("DatumOtpreme").Value = Format$(CDate(zbrData(zbrRow, colZbrDatum)), "DD.MM.YYYY")
-    ws.Range("VozacNaziv").Value = vozacNaziv
-    ws.Range("KupacNaziv").Value = kupacNaziv
-    ws.Range("VrstaVoca").Value = CStr(zbrData(zbrRow, colZbrVrsta))
+    ws.Range("LOTBroj").value = brojZbirne
+    ws.Range("DatumOtpreme").value = Format$(CDate(zbrData(zbrRow, colZbrDatum)), "DD.MM.YYYY")
+    ws.Range("VozacNaziv").value = vozacNaziv
+    ws.Range("KupacNaziv").value = kupacNaziv
+    ws.Range("VrstaVoca").value = CStr(zbrData(zbrRow, colZbrVrsta))
     
     Const NUM_COLS As Long = 12      ' <-- war 10, jetzt 12
     
-    ' Alte Daten löschen
+    ' Alte Daten lÃ¶schen
     Dim startRow As Long
     startRow = ws.Range("TraceStart").row
     Dim lastRow As Long
@@ -396,12 +401,12 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
     End If
     
-    ' Text-Format für BPG + KatParcela + KatBroj(Parcela)
+    ' Text-Format fÃ¼r BPG + KatParcela + KatBroj(Parcela)
     ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 50, 4)).NumberFormat = "@"
     
     
     
-    ' Trace-Zeilen einfügen
+    ' Trace-Zeilen einfÃ¼gen
     Dim totalOtkupKg As Double
     Dim i As Long
     For i = 1 To UBound(traceData, 1)
@@ -412,18 +417,18 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
         Dim stNaziv As String
         stNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(traceData(i, 4)), "Naziv"))
         
-        ws.cells(outRow, 1).Value = i                          ' Rb
-        ws.cells(outRow, 2).Value = CStr(traceData(i, 1))      ' Kooperant
-        ws.cells(outRow, 3).Value = CStr(traceData(i, 8))      ' BPG
-        ws.cells(outRow, 4).Value = CStr(traceData(i, 9))      ' KatBroj (Parcela)
-        ws.cells(outRow, 5).Value = CStr(traceData(i, 10))     ' GGAP (Parcela)
-        ws.cells(outRow, 6).Value = CStr(traceData(i, 13))     ' Kultura (Parcela)
-        ws.cells(outRow, 7).Value = CStr(traceData(i, 14))     ' Povrsina (Parcela)
-        ws.cells(outRow, 8).Value = stNaziv                     ' Stanica
-        ws.cells(outRow, 9).Value = Format$(CDate(traceData(i, 5)), "DD.MM.YYYY")
-        ws.cells(outRow, 10).Value = CDbl(traceData(i, 2))     ' Kg
-        ws.cells(outRow, 11).Value = CStr(traceData(i, 11))    ' Klasa
-        ws.cells(outRow, 12).Value = CStr(traceData(i, 6))     ' OtkupID
+        ws.cells(outRow, 1).value = i                          ' Rb
+        ws.cells(outRow, 2).value = CStr(traceData(i, 1))      ' Kooperant
+        ws.cells(outRow, 3).value = CStr(traceData(i, 8))      ' BPG
+        ws.cells(outRow, 4).value = CStr(traceData(i, 9))      ' KatBroj (Parcela)
+        ws.cells(outRow, 5).value = CStr(traceData(i, 10))     ' GGAP (Parcela)
+        ws.cells(outRow, 6).value = CStr(traceData(i, 13))     ' Kultura (Parcela)
+        ws.cells(outRow, 7).value = CStr(traceData(i, 14))     ' Povrsina (Parcela)
+        ws.cells(outRow, 8).value = stNaziv                     ' Stanica
+        ws.cells(outRow, 9).value = Format$(CDate(traceData(i, 5)), "DD.MM.YYYY")
+        ws.cells(outRow, 10).value = CDbl(traceData(i, 2))     ' Kg
+        ws.cells(outRow, 11).value = CStr(traceData(i, 11))    ' Klasa
+        ws.cells(outRow, 12).value = CStr(traceData(i, 6))     ' OtkupID
         
         totalOtkupKg = totalOtkupKg + CDbl(traceData(i, 2))
     Next i
@@ -481,17 +486,17 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim manjakPct As Double
     If totalOtkupKg > 0 Then manjakPct = manjak / totalOtkupKg * 100
     
-    ws.cells(sumRow, 1).Value = "Ukupno otkup:"
-    ws.cells(sumRow, 10).Value = totalOtkupKg           ' <-- war 8, jetzt 10
-    ws.cells(sumRow + 1, 1).Value = "Ukupno prijemnica:"
-    ws.cells(sumRow + 1, 10).Value = prijKg              ' <-- war 8
-    ws.cells(sumRow + 2, 1).Value = "Manjak:"
-    ws.cells(sumRow + 2, 10).Value = manjak              ' <-- war 8
-    ws.cells(sumRow + 2, 11).Value = Format$(manjakPct, "0.00") & "%"  ' <-- war 9
+    ws.cells(sumRow, 1).value = "Ukupno otkup:"
+    ws.cells(sumRow, 10).value = totalOtkupKg           ' <-- war 8, jetzt 10
+    ws.cells(sumRow + 1, 1).value = "Ukupno prijemnica:"
+    ws.cells(sumRow + 1, 10).value = prijKg              ' <-- war 8
+    ws.cells(sumRow + 2, 1).value = "Manjak:"
+    ws.cells(sumRow + 2, 10).value = manjak              ' <-- war 8
+    ws.cells(sumRow + 2, 11).value = Format$(manjakPct, "0.00") & "%"  ' <-- war 9
     
-    ws.cells(sumRow + 4, 1).Value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
-    ws.cells(sumRow + 5, 1).Value = "Potpis: ___________"
-    ws.cells(sumRow + 5, 8).Value = "Pecat: ___________"  ' <-- war 6
+    ws.cells(sumRow + 4, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(sumRow + 5, 1).value = "Potpis: ___________"
+    ws.cells(sumRow + 5, 8).value = "Pecat: ___________"  ' <-- war 6
     
     ' PDF Export
     Dim pdfPath As String
@@ -509,4 +514,5 @@ Private Sub btnPovratak_Click()
     Me.Hide
     frmOtkupAPP.Show
 End Sub
+
 
