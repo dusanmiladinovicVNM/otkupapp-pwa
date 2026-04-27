@@ -1,5 +1,5 @@
 Attribute VB_Name = "modSEFStatusSync"
-Option Explicit
+ Option Explicit
 
 ' =========================================================
 ' OUTBOUND STATUS MODEL
@@ -62,9 +62,9 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
     
     If response.Accepted Then
         
-        Call UpdateFakturaSEFState_Row( _
+        Call ApplySEFStateOrRefreshOnly( _
             fakturaID:=fakturaID, _
-            newState:=WF_SEF_ACCEPTED, _
+            targetWorkflowState:=WF_SEF_ACCEPTED, _
             sefStatus:="ACCEPTED", _
             sefDocumentId:=response.sefDocumentId, _
             errorCode:="", _
@@ -79,9 +79,9 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
     
     ElseIf response.Rejected Then
         
-        Call UpdateFakturaSEFState_Row( _
+        Call ApplySEFStateOrRefreshOnly( _
             fakturaID:=fakturaID, _
-            newState:=WF_SEF_REJECTED, _
+            targetWorkflowState:=WF_SEF_REJECTED, _
             sefStatus:="REJECTED", _
             sefDocumentId:=response.sefDocumentId, _
             errorCode:=response.errorCode, _
@@ -124,9 +124,9 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                     message:="SEF status unchanged (pending).", _
                     details:=apiStatus)
             
-            Case "STORNO", "CANCELLED"
-                
-                If currentState <> WF_SEF_SENT Then
+            Case "STORNO", "CANCELLED", "CANCELED"
+    
+                If UCase$(Trim$(currentState)) = UCase$(WF_SEF_SYNC_ERROR) Then
                     Call UpdateFakturaSEFState_Row( _
                         fakturaID:=fakturaID, _
                         newState:=WF_SEF_SENT, _
@@ -212,49 +212,169 @@ EH:
     Err.Raise Err.Number, "RefreshSEFStatus_TX", Err.Description
 End Function
 
-Public Sub RefreshPendingOutboundInvoices_TX()
-    
-    Dim data As Variant
-    Dim colFakturaID As Long
-    Dim colWorkflow As Long
-    Dim i As Long
-    Dim fakturaID As String
-    Dim workflowState As String
-    
+Private Sub ApplySEFStateOrRefreshOnly(ByVal fakturaID As String, _
+                                       ByVal targetWorkflowState As String, _
+                                       ByVal sefStatus As String, _
+                                       Optional ByVal sefDocumentId As String = "", _
+                                       Optional ByVal errorCode As String = "", _
+                                       Optional ByVal errorMessage As String = "")
     On Error GoTo EH
-    
-    data = GetTableData(TBL_FAKTURE)
-    If IsEmpty(data) Then Exit Sub
-    
-    colFakturaID = GetColumnIndex(TBL_FAKTURE, "FakturaID")
-    colWorkflow = GetColumnIndex(TBL_FAKTURE, "SEFWorkflowState")
-    
-    If colFakturaID = 0 Or colWorkflow = 0 Then
-        Err.Raise ERR_SEF_STATE, "RefreshPendingOutboundInvoices_TX", _
-            "Required columns missing in tblFakture."
+
+    Dim currentState As String
+    currentState = UCase$(Trim$(GetFakturaSEFWorkflowState(fakturaID)))
+
+    Dim targetState As String
+    targetState = UCase$(Trim$(targetWorkflowState))
+
+    If currentState = "" Then
+        UpdateFakturaSEFState_Row _
+            fakturaID:=fakturaID, _
+            newState:=targetWorkflowState, _
+            sefStatus:=sefStatus, _
+            sefDocumentId:=sefDocumentId, _
+            errorCode:=errorCode, _
+            errorMessage:=errorMessage
+        Exit Sub
     End If
-    
-    For i = 1 To UBound(data, 1)
-        
-        fakturaID = Trim$(CStr(data(i, colFakturaID)))
-        workflowState = UCase$(Trim$(CStr(data(i, colWorkflow))))
-        
-        Select Case workflowState
-            Case UCase$(WF_SEF_SENT), UCase$(WF_SEF_SYNC_ERROR)
-                On Error Resume Next
-                Call RefreshSEFStatus_TX(fakturaID)
-                Application.Wait Now + TimeSerial(0, 0, 2)
-                On Error GoTo EH
+
+    ' Idempotent refresh:
+    ' ako je workflow vec u ciljnom stanju, ne radimo transition sam u sebe.
+    If currentState = targetState Then
+        UpdateFakturaSEFRefreshFields_Row _
+            fakturaID:=fakturaID, _
+            sefStatus:=sefStatus, _
+            sefDocumentId:=sefDocumentId, _
+            errorCode:=errorCode, _
+            errorMessage:=errorMessage
+        Exit Sub
+    End If
+
+    ' Ne vracamo finalne lokalne state-ove nazad u SEF_SENT samo zato
+    ' što eksterni API vrati pending/non-final status.
+    If targetState = UCase$(WF_SEF_SENT) Then
+        If IsFinalLocalSEFWorkflowState(currentState) Then
+            UpdateFakturaSEFRefreshFields_Row _
+                fakturaID:=fakturaID, _
+                sefStatus:=sefStatus, _
+                sefDocumentId:=sefDocumentId, _
+                errorCode:=errorCode, _
+                errorMessage:=errorMessage
+            Exit Sub
+        End If
+    End If
+
+    ' Ako je prethodni refresh pao i faktura je u SEF_SYNC_ERROR,
+    ' a novi refresh sada vraca finalni status, prvo je vratimo u SEF_SENT,
+    ' jer state machine dozvoljava SEF_SYNC_ERROR -> SEF_SENT,
+    ' pa zatim SEF_SENT -> finalni state.
+    If currentState = UCase$(WF_SEF_SYNC_ERROR) Then
+        Select Case targetState
+            Case UCase$(WF_SEF_ACCEPTED), UCase$(WF_SEF_REJECTED)
+                UpdateFakturaSEFState_Row _
+                    fakturaID:=fakturaID, _
+                    newState:=WF_SEF_SENT, _
+                    sefStatus:=sefStatus, _
+                    sefDocumentId:=sefDocumentId, _
+                    errorCode:=errorCode, _
+                    errorMessage:=errorMessage
         End Select
-        
-    Next i
-    
+    End If
+
+    UpdateFakturaSEFState_Row _
+        fakturaID:=fakturaID, _
+        newState:=targetWorkflowState, _
+        sefStatus:=sefStatus, _
+        sefDocumentId:=sefDocumentId, _
+        errorCode:=errorCode, _
+        errorMessage:=errorMessage
+
     Exit Sub
 
 EH:
-    LogErr "RefreshPendingOutboundInvoices_TX"
-    Err.Raise Err.Number, "RefreshPendingOutboundInvoices_TX", Err.Description
+    LogErr "modSEFStatusSync.ApplySEFStateOrRefreshOnly"
+    Err.Raise Err.Number, "modSEFStatusSync.ApplySEFStateOrRefreshOnly", Err.Description
 End Sub
+
+Private Function IsFinalLocalSEFWorkflowState(ByVal workflowState As String) As Boolean
+    Select Case UCase$(Trim$(workflowState))
+        Case UCase$(WF_SEF_ACCEPTED), _
+             UCase$(WF_SEF_REJECTED), _
+             UCase$(WF_SEF_STORNO)
+            IsFinalLocalSEFWorkflowState = True
+        Case Else
+            IsFinalLocalSEFWorkflowState = False
+    End Select
+End Function
+
+Private Function IsTerminalExternalRefreshStatus(ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(sefStatus))
+        Case "STORNO", "CANCELLED", "CANCELED"
+            IsTerminalExternalRefreshStatus = True
+        Case Else
+            IsTerminalExternalRefreshStatus = False
+    End Select
+End Function
+
+Public Sub RefreshPendingOutboundInvoices_TX()
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFStatusSync.RefreshPendingOutboundInvoices_TX"
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colFakturaID As Long
+    Dim colWorkflow As Long
+    Dim colSEFStatus As Long
+
+    colFakturaID = RequireColumnIndex(TBL_FAKTURE, "FakturaID", SRC)
+    colWorkflow = RequireColumnIndex(TBL_FAKTURE, "SEFWorkflowState", SRC)
+    colSEFStatus = RequireColumnIndex(TBL_FAKTURE, "SEFStatus", SRC)
+
+    Dim i As Long
+    Dim fakturaID As String
+    Dim workflowState As String
+    Dim sefStatus As String
+
+    For i = 1 To UBound(data, 1)
+
+        fakturaID = Trim$(CStr(data(i, colFakturaID)))
+        workflowState = UCase$(Trim$(CStr(data(i, colWorkflow))))
+        sefStatus = UCase$(Trim$(CStr(data(i, colSEFStatus))))
+
+        Select Case workflowState
+
+            Case UCase$(WF_SEF_SENT), UCase$(WF_SEF_SYNC_ERROR)
+                
+                If IsTerminalExternalRefreshStatus(sefStatus) Then GoTo NextInvoice
+
+                On Error Resume Next
+                RefreshSEFStatus_TX fakturaID
+
+                If Err.Number <> 0 Then
+                    LogErr SRC & ".Invoice." & fakturaID
+                    Err.Clear
+                End If
+
+                On Error GoTo EH
+
+                Application.Wait Now + TimeSerial(0, 0, 2)
+
+        End Select
+
+NextInvoice:
+    Next i
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
+End Sub
+
 
 Public Sub Test2_RefreshSEFStatus_TX()
 
