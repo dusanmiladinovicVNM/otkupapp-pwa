@@ -26,7 +26,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -37,21 +37,30 @@ Private Sub RemoveTitleBar()
 End Sub
 
 Private Sub UserForm_Initialize()
+    On Error GoTo EH
+
     ResizeMainForm
     
-    'SetupShell
+    SetupShell
     SetupHeader
     SetupSidebar
     SetupButtons
     SetupCards
     
     SetupShellResponsive
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.UserForm_Initialize"
+    MsgBox "Greška pri pokretanju glavnog ekrana: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
-
+    On Error GoTo EH
+    
     If Not mChromeRemoved Then
-        Me.Caption = ""
+        Me.caption = ""
         RemoveTitleBar
         mChromeRemoved = True
     End If
@@ -61,14 +70,23 @@ Private Sub UserForm_Activate()
 
     If warnText <> "" Then
         lblStatus.Visible = True
-        lblStatus.Caption = warnText
+        lblStatus.caption = warnText
         lblStatus.foreColor = RGB(255, 80, 80)
         lblStatus.Font.Bold = True
     Else
         lblStatus.Visible = False
     End If
-End Sub
+    Exit Sub
+    
+EH:
+    LogErr "frmOtkupAPP.UserForm_Activate"
 
+    On Error Resume Next
+    lblStatus.Visible = True
+    lblStatus.caption = "Greška pri proveri dokumenata. Pogledajte log."
+    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.Font.Bold = True
+End Sub
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = vbFormControlMenu Then
         Cancel = True
@@ -187,6 +205,9 @@ Private Sub LayoutSidebarButtons()
 
     btnInvoicing.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
+    
+    btnBanka.Move leftPos, btnTop, btnW, btnH
+    btnTop = btnTop + btnH + gap
 
     btnMargin.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
@@ -206,7 +227,7 @@ End Sub
 Private Sub SetupHeader()
     With lblTitleBar
         .BackColor = BG_TOP
-        .Caption = vbNullString
+        .caption = vbNullString
         .Left = 0
         .Top = 0
         .Width = Me.InsideWidth
@@ -215,7 +236,7 @@ Private Sub SetupHeader()
 
     With lblAppTitle
         '.Caption = APP_NAME & " v" & APP_VERSION
-        .Caption = ""
+        .caption = ""
         .foreColor = TXT_LIGHT
         .BackStyle = fmBackStyleTransparent
         .Font.Name = "Segoe UI Semibold"
@@ -227,7 +248,7 @@ Private Sub SetupHeader()
     End With
     
     With btnMaticni
-        .Caption = "Maticni podaci"
+        .caption = "Maticni podaci"
         .Left = Me.InsideWidth - 170
         .Top = 7
         .Width = 125
@@ -240,7 +261,7 @@ Private Sub SetupHeader()
     End With
 
     With lblClose
-        .Caption = ChrW(&H2715)
+        .caption = ChrW(&H2715)
         .foreColor = TXT_MUTED
         .BackStyle = fmBackStyleTransparent
         .TextAlign = fmTextAlignCenter
@@ -255,7 +276,7 @@ End Sub
 
 Private Sub SetupSidebar()
     With fraSidebar
-        .Caption = vbNullString
+        .caption = vbNullString
         .BackColor = BG_PANEL
         .BorderStyle = fmBorderStyleSingle
         .Left = 18
@@ -278,16 +299,19 @@ Private Sub SetupButtons()
     StyleNavButton btnAgro, "Agrohemija", topPos
     topPos = topPos + 42
 
-    StyleNavButton btnReports, "Izve�taj", topPos
+    StyleNavButton btnReports, "Izveštaj", topPos
     topPos = topPos + 42
 
     StyleNavButton btnInvoicing, "Fakturisanje", topPos
     topPos = topPos + 42
-
-    StyleNavButton btnMargin, "Mar�a", topPos
+    
+    StyleNavButton btnBanka, "Banka import i mapiranje", topPos
     topPos = topPos + 42
 
-    StyleNavButton btnTrace, "Izve�taj o sledljivosti", topPos
+    StyleNavButton btnMargin, "Marža", topPos
+    topPos = topPos + 42
+
+    StyleNavButton btnTrace, "Izveštaj o sledljivosti", topPos
     topPos = topPos + 42
 
     StyleNavButton btnOpenExcel, "Otvori Excel", topPos
@@ -304,6 +328,7 @@ Private Sub SetupButtons()
     navButtons.Add btnAgro
     navButtons.Add btnReports
     navButtons.Add btnInvoicing
+    navButtons.Add btnBanka
     navButtons.Add btnMargin
     navButtons.Add btnTrace
     navButtons.Add btnOpenExcel
@@ -315,7 +340,7 @@ End Sub
 
 Private Sub StyleNavButton(btn As MSForms.CommandButton, txt As String, topPos As Double)
     With btn
-        .Caption = "   " & txt
+        .caption = "   " & txt
         .Left = 16
         .Top = topPos
         .Width = 200
@@ -342,7 +367,7 @@ Private Sub SetupCards()
         .Height = 380
         .BackColor = RGB(36, 42, 54)
         .BorderStyle = fmBorderStyleSingle
-        .Caption = ""
+        .caption = ""
     End With
 
     With lblStatus
@@ -365,7 +390,7 @@ Private Sub SetupCards()
         .Height = 30
         .BackColor = RGB(36, 42, 54)
         .BorderStyle = fmBorderStyleSingle
-        .Caption = ""
+        .caption = ""
     End With
 End Sub
 
@@ -405,7 +430,14 @@ End Sub
 ' =========================
 
 Private Sub lblClose_Click()
-    Unload Me
+    On Error GoTo EH
+
+    ShutdownApp
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.lblClose_Click"
+    Application.Visible = True
 End Sub
 
 Private Sub lblClose_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
@@ -423,6 +455,10 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
 End Sub
 
 Private Sub ResetHover()
+    On Error GoTo EH
+
+    If navButtons Is Nothing Then Exit Sub
+
     Dim btn As MSForms.CommandButton
 
     For Each btn In navButtons
@@ -430,6 +466,11 @@ Private Sub ResetHover()
             btn.BackColor = BTN_BG
         End If
     Next btn
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.ResetHover"
 End Sub
 
 ' =========================
@@ -438,28 +479,28 @@ End Sub
 
 Private Sub btnBlocks_Click()
     HighlightActive btnBlocks
-    lblStatus.Caption = "Sekcija: Otkupni blokovi"
+    lblStatus.caption = "Sekcija: Otkupni blokovi"
     Me.Hide
     frmOtkup.Show
 End Sub
 
 Private Sub btnPurchase_Click()
     HighlightActive btnPurchase
-    lblStatus.Caption = "Sekcija: Otkup i prodaja"
+    lblStatus.caption = "Sekcija: Otkup i prodaja"
     Me.Hide
     frmDokumenta.Show
 End Sub
 
 Private Sub btnAgro_Click()
     HighlightActive btnAgro
-    lblStatus.Caption = "Sekcija: Agrohemija"
+    lblStatus.caption = "Sekcija: Agrohemija"
     Me.Hide
     frmAgrohemija.Show
 End Sub
 
 Private Sub btnReports_Click()
     HighlightActive btnReports
-    lblStatus.Caption = "Sekcija: Izvestaj"
+    lblStatus.caption = "Sekcija: Izvestaj"
     Me.Hide
     frmIzvestaj.Show
     Me.Show
@@ -467,28 +508,79 @@ End Sub
 
 Private Sub btnInvoicing_Click()
     HighlightActive btnInvoicing
-    lblStatus.Caption = "Sekcija: Fakturisanje"
+    lblStatus.caption = "Sekcija: Fakturisanje"
     Me.Hide
     frmFakturisanje.Show
 End Sub
 
+Private Sub btnBanka_Click()
+    On Error GoTo EH
+
+    Dim oldPointer As Integer
+    oldPointer = Me.MousePointer
+
+    HighlightActive btnBanka
+
+    Me.MousePointer = fmMousePointerHourGlass
+    btnBanka.Enabled = False
+
+    lblStatus.Visible = True
+    lblStatus.caption = "Uvozim nove bankovne izvode..."
+    lblStatus.foreColor = RGB(220, 220, 220)
+    lblStatus.Font.Bold = False
+
+    ImportBankaInbox_TX
+
+    lblStatus.caption = "Banka uvezena. Otvaram mapiranje..."
+
+    Me.Hide
+    frmBankaImport.Show
+    Me.Show
+
+CleanExit:
+    btnBanka.Enabled = True
+    Me.MousePointer = oldPointer
+    Exit Sub
+
+EH:
+    Dim errDesc As String
+    errDesc = Err.Description
+
+    LogErr "frmOtkupAPP.btnBanka_Click"
+
+    On Error Resume Next
+    lblStatus.Visible = True
+    lblStatus.caption = "Greška pri uvozu banke. Otvaram mapiranje za postojece stavke."
+    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.Font.Bold = True
+
+    MsgBox "Greška pri uvozu bankovnih izvoda:" & vbCrLf & errDesc & vbCrLf & vbCrLf & _
+           "Mapiranje ce biti otvoreno za postojece neuparene stavke.", vbExclamation
+
+    Me.Hide
+    frmBankaImport.Show
+    Me.Show
+
+    Resume CleanExit
+End Sub
+
 Private Sub btnMargin_Click()
     HighlightActive btnMargin
-    lblStatus.Caption = "Sekcija: Mar�a"
+    lblStatus.caption = "Sekcija: Marža"
     Me.Hide
     frmMarza.Show
 End Sub
 
 Private Sub btnTrace_Click()
     HighlightActive btnTrace
-    lblStatus.Caption = "Sekcija: Izve�taj o sledljivosti"
+    lblStatus.caption = "Sekcija: Izveštaj o sledljivosti"
     Me.Hide
     frmSledljivost.Show
 End Sub
 
 Private Sub btnOpenExcel_Click()
     HighlightActive btnOpenExcel
-    lblStatus.Caption = "Sekcija: Otvori Excel"
+    lblStatus.caption = "Sekcija: Otvori Excel"
 
     Me.Hide
     Application.Visible = True
@@ -496,39 +588,91 @@ Private Sub btnOpenExcel_Click()
 End Sub
 
 Private Sub btnSnapshot_Click()
+    On Error GoTo EH
+
     HighlightActive btnSnapshot
-    lblStatus.Caption = "Sekcija: Snimi"
+
+    lblStatus.Visible = True
+    lblStatus.caption = "Snimam podatke..."
+    lblStatus.foreColor = RGB(220, 220, 220)
+    lblStatus.Font.Bold = False
+
+    SaveApp
+
+    lblStatus.caption = "Sacuvano."
+    lblStatus.foreColor = RGB(120, 220, 140)
+    lblStatus.Font.Bold = True
+
+    MsgBox "Sacuvano!", vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.btnSnapshot_Click"
+
+    lblStatus.Visible = True
+    lblStatus.caption = "Greška pri snimanju. Pogledajte log."
+    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.Font.Bold = True
+
+    MsgBox "Greška pri snimanju: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnExit_Click()
     On Error GoTo EH
 
     ThisWorkbook.Save
-    Application.Visible = True
+    ShutdownApp
+
+    Application.DisplayAlerts = False
     Application.Quit
+
+CleanExit:
+    On Error Resume Next
+    Application.DisplayAlerts = True
+    On Error GoTo 0
     Exit Sub
 
 EH:
-    MsgBox "Fajl nije uspe�no sacuvan: " & Err.Description, vbExclamation
+    LogErr "frmOtkupAPP.btnExit_Click"
+
+    On Error Resume Next
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+    MsgBox "Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: " & Err.Description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub btnMaticni_Click()
-    OpenMaticniForm
+    On Error GoTo EH
+
     HighlightActive btnMaticni
-    lblStatus.Caption = "Sekcija: Maticni podaci"
-    'frmMaticniPodaci.Show
+    lblStatus.caption = "Sekcija: Maticni podaci"
+    OpenMaticniForm
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.btnMaticni_Click"
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Public Sub OpenMaticniForm()
+    On Error GoTo EH
+
     Load frmMaticniPodaci
 
     With frmMaticniPodaci
         .StartUpPosition = 0
         .Left = Me.Left + btnMaticni.Left + 2
         .Top = Me.Top + btnMaticni.Top + btnMaticni.Height
-        
         .Show vbModeless
     End With
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.OpenMaticniForm"
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 ' =========================
@@ -558,6 +702,11 @@ End Sub
 Private Sub btnInvoicing_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetHover
     SetHover btnInvoicing, True
+End Sub
+
+Private Sub btnBanka_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetHover
+    SetHover btnBanka, True
 End Sub
 
 Private Sub btnMargin_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
