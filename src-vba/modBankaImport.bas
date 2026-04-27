@@ -1,6 +1,6 @@
 Attribute VB_Name = "modBankaImport"
 Option Explicit
-'TODO: Matematische prüfen der Korrektheit der Auszug selber und prüfung ps+saldo=konacno stanje, und falls einige Izvodi vermisst sind in getverwaisteDokumente
+'TODO: Matematische prÃ¼fen der Korrektheit der Auszug selber und prÃ¼fung ps+saldo=konacno stanje, und falls einige Izvodi vermisst sind in getverwaisteDokumente
 Public Sub ImportBankaInbox_TX()
     Dim tx As clsTransaction
     
@@ -305,7 +305,7 @@ Public Sub Test_SaveBankaImportRows()
     parsed = ParseBankaIzvodForImport(txt, Dir$(pdfPath))
     
     If IsEmpty(parsed) Then
-        Debug.Print "Keine Daten für Import."
+        Debug.Print "Keine Daten fÃ¼r Import."
         Exit Sub
     End If
     
@@ -328,15 +328,15 @@ Private Function GetFileNameFromPath(ByVal filePath As String) As String
     End If
 End Function
 
-Private Function NzBIM(ByVal v As Variant, Optional ByVal fallback As Variant = "") As Variant
+Private Function NzBIM(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
     If IsError(v) Then
-        NzBIM = fallback
+        NzBIM = Fallback
     ElseIf IsNull(v) Then
-        NzBIM = fallback
+        NzBIM = Fallback
     ElseIf IsEmpty(v) Then
-        NzBIM = fallback
+        NzBIM = Fallback
     ElseIf Trim$(CStr(v)) = "" Then
-        NzBIM = fallback
+        NzBIM = Fallback
     Else
         NzBIM = v
     End If
