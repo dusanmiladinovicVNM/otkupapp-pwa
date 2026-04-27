@@ -50,24 +50,33 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
                               Optional ByVal napomena As String = "", _
                               Optional ByVal otkupID As String = "") As String
     Dim tx As New clsTransaction
-    
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_OTKUP    ' ? NEU (UpdateOtkupStatus)
-    
+    tx.AddTableSnapshot TBL_OTKUP
+
     SaveNovac_TX = SaveNovac(brojDok, datum, partner, partnerID, _
                               entitetTip, omID, kooperantID, fakturaID, _
                               vrstaVoca, tip, uplata, isplata, napomena, otkupID)
-    
+
+    If SaveNovac_TX = "" Then
+        Err.Raise vbObjectError + 1015, "SaveNovac_TX", _
+                  "SaveNovac fehlgeschlagen"
+    End If
+
     tx.CommitTx
     Exit Function
+
 EH:
     LogErr "SaveNovac_TX"
+
+    On Error Resume Next
     tx.RollbackTx
-    MsgBox "Greska pri unosu novca, promene vracene: " & Err.Description, _
-           vbCritical, APP_NAME
+    On Error GoTo 0
+
     SaveNovac_TX = ""
 End Function
 
@@ -128,7 +137,7 @@ End Function
 
 Public Function savePartnerMap(ByVal bankaName As String, ByVal partnerID As String, _
                                ByVal entitetTip As String, ByVal omID As String) As Boolean
-    ' Prüfe ob schon existiert
+    ' PrÃ¼fe ob schon existiert
     Dim existing As Variant
     existing = LookupPartnerMap(bankaName)
     If Not IsEmpty(existing) Then
@@ -254,27 +263,37 @@ End Function
 Public Function ApplyAvansToFaktura_TX(ByVal kupacID As String, _
                                         ByVal fakturaID As String) As Boolean
     Dim tx As New clsTransaction
-    
+
     On Error GoTo EH
+
+    If kupacID = "" Or fakturaID = "" Then
+        Err.Raise vbObjectError + 1016, "ApplyAvansToFaktura_TX", _
+                  "KupacID i FakturaID su obavezni."
+    End If
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
-    
+
     ApplyAvansToFaktura kupacID, fakturaID
-    ApplyAvansToFaktura_TX = True
-    
+
     tx.CommitTx
+
+    ApplyAvansToFaktura_TX = True
     Exit Function
+
 EH:
     LogErr "ApplyAvansToFaktura_TX"
+
+    On Error Resume Next
     tx.RollbackTx
-    MsgBox "Greska pri raspodeli avansa, promene vracene: " & Err.Description, _
-           vbCritical, APP_NAME
+    On Error GoTo 0
+
     ApplyAvansToFaktura_TX = False
 End Function
 
 Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As String)
-    ' Suche alle unverbrauchten Avans-Zahlungen für diesen Kupac
+    ' Suche alle unverbrauchten Avans-Zahlungen fÃ¼r diesen Kupac
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
@@ -296,7 +315,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     
     If preostalo <= 0 Then Exit Sub
     
-    ' Alle Avans-Zeilen für diesen Kupac sammeln (chronologisch)
+    ' Alle Avans-Zeilen fÃ¼r diesen Kupac sammeln (chronologisch)
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
@@ -315,7 +334,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
             ' Ganzer Avans wird verbraucht
             apply = avansIznos
         Else
-            ' Avans ist größer als Restbetrag ? aufteilen
+            ' Avans ist grÃ¶ÃŸer als Restbetrag ? aufteilen
             apply = preostalo
         End If
         
@@ -327,7 +346,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
                 UpdateCell TBL_NOVAC, rows(1), COL_NOV_FAKTURA_ID, fakturaID
             End If
         Else
-            ' Avans aufteilen: Original reduzieren, neue Zeile für den verrechneten Teil
+            ' Avans aufteilen: Original reduzieren, neue Zeile fÃ¼r den verrechneten Teil
             Dim origRows As Collection
             Set origRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
             If origRows.count > 0 Then
@@ -335,7 +354,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
                 UpdateCell TBL_NOVAC, origRows(1), COL_NOV_UPLATA, avansIznos - apply
             End If
             
-            ' Neue Zeile für verrechneten Teil
+            ' Neue Zeile fÃ¼r verrechneten Teil
             SaveNovac CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK))), _
                       CDate(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_DATUM))), _
                       CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER))), _
@@ -347,7 +366,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
 NextAvans:
     Next i
     
-    ' Faktura-Status prüfen
+    ' Faktura-Status prÃ¼fen
     If preostalo <= 0 Then
         UpdateFakturaStatus fakturaID
     End If
@@ -375,7 +394,7 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
     colIznos = GetColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS)
     colStatus = GetColumnIndex(TBL_FAKTURE, COL_FAK_STATUS)
     
-    ' Erst zählen
+    ' Erst zÃ¤hlen
     Dim count As Long
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -583,7 +602,7 @@ Public Function GetOpenOtkupi(ByVal kooperantID As String) As Variant
     Dim isplataDict As Object
     Set isplataDict = BuildIsplataDictByOtkup()
     
-    ' Zählen
+    ' ZÃ¤hlen
     Dim count As Long, i As Long
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) = kooperantID And _
@@ -743,23 +762,35 @@ End Sub
 
 Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
                                       ByVal otkupID As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
+    If Trim$(kooperantID) = "" Or Trim$(otkupID) = "" Then
+        Err.Raise vbObjectError + 1017, "ApplyAvansToOtkup_TX", _
+                  "KooperantID i OtkupID su obavezni."
+    End If
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
-    
+
     ApplyAvansToOtkup kooperantID, otkupID
-    ApplyAvansToOtkup_TX = True
-    
+
     tx.CommitTx
+    Set tx = Nothing
+
+    ApplyAvansToOtkup_TX = True
     Exit Function
+
 EH:
     LogErr "ApplyAvansToOtkup_TX"
-    tx.RollbackTx
-    MsgBox "Greska pri raspodeli avansa, promene vracene: " & Err.Description, _
-           vbCritical, APP_NAME
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
     ApplyAvansToOtkup_TX = False
 End Function
 
