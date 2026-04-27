@@ -13,10 +13,11 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 
+
 Option Explicit
 
 ' ============================================================
-' frmDokumenta v2.1 � Otpremnica + Zbirna + Prijemnica
+' frmDokumenta v2.1 – Otpremnica + Zbirna + Prijemnica
 ' Ein Form, 6 Frames, kein MultiPage
 ' ============================================================
 
@@ -29,7 +30,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -40,10 +41,11 @@ Private Sub RemoveTitleBar()
 End Sub
 
 Private Sub UserForm_Activate()
+    On Error GoTo EH
 
     If Not mChromeRemoved Then
-        Me.Caption = ""
         RemoveTitleBar
+        Me.caption = ""
         mChromeRemoved = True
     End If
     
@@ -79,42 +81,39 @@ Private Sub UserForm_Activate()
     StyleFrame fraIzlazKupci
     StyleFrame fraStorno
         
-    'Me.Caption = "Dokumenta - Otpremnica / Zbirna / Prijemnica"
-    
-    txtDatum.Value = Format$(Date, "d.m.yyyy")
+    txtDatum.value = Format$(Date, "d.m.yyyy")
     
     FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca")
-    FillCmb cmbOtkupnoMesto, GetLookupList(TBL_STANICE, "Naziv")
-    FillCmb cmbKupac, GetLookupList(TBL_KUPCI, "Naziv")
+    FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
+    FillComboDisplayID cmbKupac, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
     FillCmb cmbVozac, GetVozacDisplayList()
     FillCmb cmbTipAmbOtp, Array(AMB_12_1, AMB_6_1)
     FillCmb cmbTipAmbZbr, Array(AMB_12_1, AMB_6_1)
     FillCmb cmbTipAmbPrij, Array(AMB_12_1, AMB_6_1)
     FillCmb cmbTipAmbOMUlaz, Array(AMB_12_1, AMB_6_1)
     FillCmb cmbTipAmbIzlaz, Array(AMB_12_1, AMB_6_1)
-
     
-    lblValidacijaKG.Caption = ""
-    lblValidacijaAmb.Caption = ""
-    lblManjak.Caption = ""
+    lblValidacijaKG.caption = ""
+    lblValidacijaAmb.caption = ""
+    lblManjak.caption = ""
     
     ' Druga klasa:
     DisableField txtKolicinaKlIIOtp
     DisableField txtCenaKlIIOtp
-    chkDveKlaseOtp.Value = False
-    lblUkupnoKgOtp.Caption = ""
+    chkDveKlaseOtp.value = False
+    lblUkupnoKgOtp.caption = ""
     
     DisableField txtUkupnoKgKlIIZbr
-    chkDveKlaseZbr.Value = False
-    lblUkupnoKgZbr.Caption = ""
+    chkDveKlaseZbr.value = False
+    lblUkupnoKgZbr.caption = ""
     
     DisableField txtKolicinaKlIIPrij
     DisableField txtCenaKlIIPrij
-    chkDveKlasePrij.Value = False
-    lblUkupnoKgPrij.Caption = ""
-    lblProsekGajbe.Caption = ""
+    chkDveKlasePrij.value = False
+    lblUkupnoKgPrij.caption = ""
+    lblProsekGajbe.caption = ""
     
-        ' Storno ComboBox f�llen
+    ' Storno ComboBox füllen
     With cmbStornoDokument
         .Clear
         .AddItem "Otkup"
@@ -126,10 +125,16 @@ Private Sub UserForm_Activate()
     End With
     
     CheckVerwaisteDokumente
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.UserForm_Activate"
+    MsgBox "Greška pri otvaranju dokumenata: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Private Sub chkDveKlaseOtp_Click()
-    If chkDveKlaseOtp.Value Then
+    If chkDveKlaseOtp.value Then
         EnableField txtKolicinaKlIIOtp
         EnableField txtCenaKlIIOtp
         StyleTextBox txtKolicinaKlIIOtp
@@ -137,12 +142,12 @@ Private Sub chkDveKlaseOtp_Click()
     Else
         DisableField txtKolicinaKlIIOtp
         DisableField txtCenaKlIIOtp
-        lblUkupnoKgOtp.Caption = ""
+        lblUkupnoKgOtp.caption = ""
     End If
 End Sub
 
 Private Sub chkDveKlaseZbr_Click()
-    If chkDveKlaseZbr.Value Then
+    If chkDveKlaseZbr.value Then
         EnableField txtUkupnoKgKlIIZbr
         StyleTextBox txtUkupnoKgKlIIZbr
     Else
@@ -151,7 +156,7 @@ Private Sub chkDveKlaseZbr_Click()
 End Sub
 
 Private Sub chkDveKlasePrij_Click()
-    If chkDveKlasePrij.Value Then
+    If chkDveKlasePrij.value Then
         EnableField txtKolicinaKlIIPrij
         EnableField txtCenaKlIIPrij
         StyleTextBox txtKolicinaKlIIPrij
@@ -171,50 +176,67 @@ Private Sub txtKolicinaKlIIOtp_Change()
 End Sub
 
 Private Sub UpdateUkupnoKgOtp()
-    If Not chkDveKlaseOtp.Value Then
-        lblUkupnoKgOtp.Caption = ""
+    If Not chkDveKlaseOtp.value Then
+        lblUkupnoKgOtp.caption = ""
         Exit Sub
     End If
     Dim kl1 As Double, kl2 As Double
-    If IsNumeric(txtKolicinaOtp.Value) Then kl1 = CDbl(txtKolicinaOtp.Value)
-    If IsNumeric(txtKolicinaKlIIOtp.Value) Then kl2 = CDbl(txtKolicinaKlIIOtp.Value)
-    lblUkupnoKgOtp.Caption = "Ukupno: " & Format$(kl1 + kl2, "#,##0.00") & " kg"
+    If IsNumeric(txtKolicinaOtp.value) Then kl1 = CDbl(txtKolicinaOtp.value)
+    If IsNumeric(txtKolicinaKlIIOtp.value) Then kl2 = CDbl(txtKolicinaKlIIOtp.value)
+    lblUkupnoKgOtp.caption = "Ukupno: " & Format$(kl1 + kl2, "#,##0.00") & " kg"
 End Sub
 
 Private Sub txtKolicinaPrij_Change()
-    If txtBrojZbirnePrij.Value <> "" Then
-        UpdateManjak txtBrojZbirnePrij.Value
+    If txtBrojZbirnePrij.value <> "" Then
+        UpdateManjak txtBrojZbirnePrij.value
     End If
     ' Prosek Gajbe auch updaten
     txtKolAmbPrij_Change
 End Sub
 
 Private Sub txtKolicinaKlIIPrij_Change()
-    If txtBrojZbirnePrij.Value <> "" Then
-        UpdateManjak txtBrojZbirnePrij.Value
+    If txtBrojZbirnePrij.value <> "" Then
+        UpdateManjak txtBrojZbirnePrij.value
     End If
 End Sub
 
 Private Sub txtKolAmbPrij_Change()
-    If IsNumeric(txtKolicinaPrij.Value) And IsNumeric(txtKolAmbPrij.Value) Then
-        If CLng(txtKolAmbPrij.Value) > 0 Then
-            lblProsekGajbe.Caption = "Prosek gajbe: " & _
-                Format$(CDbl(txtKolicinaPrij.Value) / CLng(txtKolAmbPrij.Value), "#,##0.00") & " kg"
+    If IsNumeric(txtKolicinaPrij.value) And IsNumeric(txtKolAmbPrij.value) Then
+        If CLng(txtKolAmbPrij.value) > 0 Then
+            lblProsekGajbe.caption = "Prosek gajbe: " & _
+                Format$(CDbl(txtKolicinaPrij.value) / CLng(txtKolAmbPrij.value), "#,##0.00") & " kg"
         End If
     Else
-        lblProsekGajbe.Caption = ""
+        lblProsekGajbe.caption = ""
     End If
 End Sub
 
 Private Sub cmbOtkupnoMesto_Change()
+    On Error GoTo EH
+
     Dim stanicaID As String
-    If cmbOtkupnoMesto.Value = "" Then
+
+    If cmbOtkupnoMesto.value = "" Then
         cmbPrimalacOMUlaz.Clear
+        lblOMAvansSaldo.caption = ""
         Exit Sub
     End If
-    stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbOtkupnoMesto.Value, "StanicaID"))
+
+    stanicaID = GetComboID(cmbOtkupnoMesto)
+
+    If stanicaID = "" Then
+        cmbPrimalacOMUlaz.Clear
+        lblOMAvansSaldo.caption = ""
+        Exit Sub
+    End If
+
     FillComboKooperantiByStanica cmbPrimalacOMUlaz, stanicaID
     UpdateOMAvansSaldo
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.cmbOtkupnoMesto_Change"
 End Sub
 
 ' ============================================================
@@ -223,26 +245,35 @@ End Sub
 
 Private Sub cmbVrstaVoca_Change()
     cmbSortaVoca.Clear
-    If cmbVrstaVoca.Value <> "" Then
+    If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
-            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.Value)
+            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
     End If
 End Sub
 
 Private Sub cmbKupac_Change()
+    On Error GoTo EH
+
     cmbHladnjaca.Clear
     cmbPogon.Clear
-    
-    If cmbKupac.Value <> "" Then
+
+    If cmbKupac.value <> "" Then
         Dim kupacID As String
-        kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbKupac.Value, "KupacID"))
-        
-        Dim hlad As String
-        hlad = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Hladnjaca"))
-        If hlad <> "" Then cmbHladnjaca.AddItem hlad
+        kupacID = GetComboID(cmbKupac)
+
+        If kupacID <> "" Then
+            Dim hlad As String
+            hlad = CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"))
+
+            If hlad <> "" Then cmbHladnjaca.AddItem hlad
+        End If
     End If
-    
+
     FillOpenFakture
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.cmbKupac_Change"
 End Sub
 
 ' ============================================================
@@ -251,257 +282,457 @@ End Sub
 
 Private Sub btnUnosOtp_Click()
     On Error GoTo EH
-    ' Validierung
-    If cmbOtkupnoMesto.Value = "" Then
+
+    ' Validacija
+    If cmbOtkupnoMesto.value = "" Then
         MsgBox "Izaberite otkupno mesto!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If cmbVozac.Value = "" Then
+
+    If cmbVozac.value = "" Then
         MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If Not IsNumeric(txtKolicinaOtp.Value) Or val(txtKolicinaOtp.Value) <= 0 Then
+
+    If Not IsNumeric(txtKolicinaOtp.value) Or val(txtKolicinaOtp.value) <= 0 Then
         MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
         txtKolicinaOtp.SetFocus
         Exit Sub
     End If
-    
-    If chkDveKlaseOtp.Value Then
-        If Not IsNumeric(txtKolicinaKlIIOtp.Value) Or val(txtKolicinaKlIIOtp.Value) <= 0 Then
+
+    If chkDveKlaseOtp.value Then
+        If Not IsNumeric(txtKolicinaKlIIOtp.value) Or val(txtKolicinaKlIIOtp.value) <= 0 Then
             MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKlIIOtp.SetFocus
             Exit Sub
         End If
-        If Not IsNumeric(txtCenaKlIIOtp.Value) Or val(txtCenaKlIIOtp.Value) <= 0 Then
+
+        If Not IsNumeric(txtCenaKlIIOtp.value) Or val(txtCenaKlIIOtp.value) <= 0 Then
             MsgBox "Unesite cenu za II klasu!", vbExclamation, APP_NAME
             txtCenaKlIIOtp.SetFocus
             Exit Sub
         End If
     End If
-    
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then
+        MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
+        txtDatum.SetFocus
+        Exit Sub
+    End If
+
     Dim stanicaID As String
-    stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbOtkupnoMesto.Value, "StanicaID"))
-    
+    stanicaID = GetComboID(cmbOtkupnoMesto)
+
+    If stanicaID = "" Then
+        MsgBox "Nije pronaden ID otkupnog mesta!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim vozacID As String
-    vozacID = ExtractIDFromDisplay(cmbVozac.Value)
-    
-    Dim cena As Double
-    If IsNumeric(txtCenaOtp.Value) Then cena = CDbl(txtCenaOtp.Value)
-    
+    vozacID = ExtractIDFromDisplay(cmbVozac.value)
+
+    If vozacID = "" Then
+        MsgBox "Nije pronaden ID vozaca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim kolicinaI As Double
+    If Not TryParseDouble(txtKolicinaOtp.value, kolicinaI) Or kolicinaI <= 0 Then
+        MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+        txtKolicinaOtp.SetFocus
+        Exit Sub
+    End If
+
+    Dim cenaI As Double
+    If txtCenaOtp.value <> "" Then
+        If Not TryParseDouble(txtCenaOtp.value, cenaI) Or cenaI < 0 Then
+            MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
+            txtCenaOtp.SetFocus
+            Exit Sub
+        End If
+    End If
+
     Dim kolAmb As Long
-    If IsNumeric(txtKolAmbOtp.Value) Then kolAmb = CLng(txtKolAmbOtp.Value)
-    
-    'Duplikat Check
-    If txtBrojOtp.Value <> "" Then
+    If txtKolAmbOtp.value <> "" Then
+        If Not TryParseLong(txtKolAmbOtp.value, kolAmb) Then
+            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            txtKolAmbOtp.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    ' Duplikat check
+    If txtBrojOtp.value <> "" Then
         Dim dupMsg As String
-        dupMsg = CheckDuplicate(TBL_OTPREMNICA, COL_OTP_BROJ, txtBrojOtp.Value, COL_OTP_DATUM)
+        dupMsg = CheckDuplicate(TBL_OTPREMNICA, COL_OTP_BROJ, txtBrojOtp.value, COL_OTP_DATUM)
+
         If dupMsg <> "" Then
             MsgBox dupMsg, vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
-    
-    ' --- Klasa I ---
+
+    ' Klasa II vrednosti pripremiti bez IIf,
+    ' jer VBA IIf evaluira obe grane.
+    Dim kolicinaII As Double
+    Dim cenaII As Double
+
+    If chkDveKlaseOtp.value Then
+        If Not TryParseDouble(txtKolicinaKlIIOtp.value, kolicinaII) Or kolicinaII <= 0 Then
+            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            txtKolicinaKlIIOtp.SetFocus
+            Exit Sub
+        End If
+
+        If Not TryParseDouble(txtCenaKlIIOtp.value, cenaII) Or cenaII <= 0 Then
+            MsgBox "Unesite cenu za II klasu!", vbExclamation, APP_NAME
+            txtCenaKlIIOtp.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    ' Atomicni save kroz modDokumenta wrapper
     Dim result As String
-    result = SaveOtpremnica_TX( _
-        datum:=CDate(txtDatum.Value), _
+
+    result = SaveOtpremnicaMulti_TX( _
+        datum:=datumDok, _
         stanicaID:=stanicaID, _
         vozacID:=vozacID, _
-        brojOtp:=txtBrojOtp.Value, _
-        brojZbirne:=txtBrojZbirneOtp.Value, _
-        vrsta:=cmbVrstaVoca.Value, _
-        sorta:=cmbSortaVoca.Value, _
-        kolicina:=CDbl(txtKolicinaOtp.Value), _
-        cena:=cena, _
-        tipAmb:=cmbTipAmbOtp.Value, _
+        brojOtp:=txtBrojOtp.value, _
+        brojZbirne:=txtBrojZbirneOtp.value, _
+        vrsta:=cmbVrstaVoca.value, _
+        sorta:=cmbSortaVoca.value, _
+        kolicinaI:=kolicinaI, _
+        cenaI:=cenaI, _
+        tipAmb:=cmbTipAmbOtp.value, _
         kolAmb:=kolAmb, _
-        klasa:=KLASA_I)
-    
+        hasKlasaII:=chkDveKlaseOtp.value, _
+        kolicinaII:=kolicinaII, _
+        cenaII:=cenaII)
+
     If result = "" Then
-        MsgBox "Greska!", vbCritical, APP_NAME
+        MsgBox "Greška pri cuvanju otpremnice. Promene su vracene.", vbCritical, APP_NAME
         Exit Sub
     End If
-    
-    ' --- Klasa II ---
-    If chkDveKlaseOtp.Value Then
-        Dim resultII As String
-        resultII = SaveOtpremnica_TX( _
-            datum:=CDate(txtDatum.Value), _
-            stanicaID:=stanicaID, _
-            vozacID:=vozacID, _
-            brojOtp:=txtBrojOtp.Value, _
-            brojZbirne:=txtBrojZbirneOtp.Value, _
-            vrsta:=cmbVrstaVoca.Value, _
-            sorta:=cmbSortaVoca.Value, _
-            kolicina:=CDbl(txtKolicinaKlIIOtp.Value), _
-            cena:=CDbl(txtCenaKlIIOtp.Value), _
-            tipAmb:=cmbTipAmbOtp.Value, _
-            kolAmb:=0, _
-            klasa:=KLASA_II)
-        
-        If resultII <> "" Then
-            MsgBox "Otpremnica sacuvana: " & result & " + " & resultII, vbInformation, APP_NAME
-        Else
-            MsgBox "Klasa I sacuvana, greska pri Klasi II!", vbExclamation, APP_NAME
-        End If
-    Else
-        MsgBox "Otpremnica sacuvana: " & result, vbInformation, APP_NAME
-    End If
-    
+
+    MsgBox "Otpremnica sacuvana: " & result, vbInformation, APP_NAME
+
     ClearOtpremnicaFields
-    If txtBrojZbirne.Value <> "" Then UpdateValidacija
+
+    If txtBrojZbirne.value <> "" Then
+        UpdateValidacija
+    End If
+
     Exit Sub
+
 EH:
     LogErr "frmDokumenta.btnUnosOtp"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
 End Sub
-
 Private Sub ClearOtpremnicaFields()
-    txtBrojOtp.Value = ""
-    txtKolicinaOtp.Value = ""
-    txtCenaOtp.Value = ""
-    txtKolAmbOtp.Value = ""
-    chkDveKlaseOtp.Value = False
+    txtBrojOtp.value = ""
+    txtKolicinaOtp.value = ""
+    txtCenaOtp.value = ""
+    txtKolAmbOtp.value = ""
+    chkDveKlaseOtp.value = False
     DisableField txtKolicinaKlIIOtp
     DisableField txtCenaKlIIOtp
-    lblUkupnoKgOtp.Caption = ""
+    lblUkupnoKgOtp.caption = ""
 End Sub
+
+Public Function SaveOMUlaz_TX(ByVal datum As Date, _
+                              ByVal brojDok As String, _
+                              ByVal stanicaNaziv As String, _
+                              ByVal stanicaID As String, _
+                              ByVal vozacID As String, _
+                              ByVal tipAmb As String, _
+                              ByVal kolAmb As Long, _
+                              ByVal vrstaVoca As String, _
+                              ByVal novac As Double, _
+                              ByVal kooperantID As String, _
+                              ByVal primalacDisplay As String, _
+                              ByVal otkupID As String, _
+                              ByVal tipNovca As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    If kolAmb <= 0 And novac <= 0 Then
+        Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
+                  "Nema ambalaže ni novca za cuvanje."
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_OTKUP
+
+    If kolAmb > 0 Then
+        TrackAmbalaza datum, tipAmb, kolAmb, _
+                      "Ulaz", stanicaID, "Stanica", _
+                      vozacID, brojDok, DOK_TIP_OM_ULAZ
+    End If
+
+    If novac > 0 Then
+        Dim novacID As String
+
+        novacID = SaveNovac( _
+            brojDok:=brojDok, _
+            datum:=datum, _
+            partner:=stanicaNaziv, _
+            partnerID:=stanicaID, _
+            entitetTip:="OM", _
+            omID:=stanicaID, _
+            kooperantID:=kooperantID, _
+            fakturaID:="", _
+            vrstaVoca:=vrstaVoca, _
+            tip:=tipNovca, _
+            uplata:=0, _
+            isplata:=novac, _
+            napomena:=primalacDisplay, _
+            otkupID:=otkupID)
+
+        If novacID = "" Then
+            Err.Raise vbObjectError + 1502, "SaveOMUlaz_TX", _
+                      "SaveNovac fehlgeschlagen"
+        End If
+
+        If otkupID <> "" Then
+            UpdateOtkupStatus otkupID
+        End If
+    End If
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    SaveOMUlaz_TX = True
+    Exit Function
+
+EH:
+    LogErr "SaveOMUlaz_TX"
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    SaveOMUlaz_TX = False
+End Function
 
 Private Sub btnUnosOMUlaz_Click()
     On Error GoTo EH
-    If cmbOtkupnoMesto.Value = "" Then
+
+    If cmbOtkupnoMesto.value = "" Then
         MsgBox "Izaberite otkupno mesto!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then
+        MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
+        txtDatum.SetFocus
+        Exit Sub
+    End If
+
     Dim stanicaID As String
-    stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbOtkupnoMesto.Value, "StanicaID"))
-    
+    stanicaID = GetComboID(cmbOtkupnoMesto)
+
+    If stanicaID = "" Then
+        MsgBox "Nije pronaden ID otkupnog mesta!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim vozacID As String
-    If cmbVozac.Value <> "" Then vozacID = ExtractIDFromDisplay(cmbVozac.Value)
-    
-    ' Duplikat-Check
-    If txtBrojDokOMUlaz.Value <> "" Then
+    If cmbVozac.value <> "" Then
+        vozacID = ExtractIDFromDisplay(cmbVozac.value)
+    End If
+
+    Dim brojDok As String
+    brojDok = Trim$(txtBrojDokOMUlaz.value)
+
+    If brojDok <> "" Then
         Dim dupMsg As String
-        dupMsg = CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, txtBrojDokOMUlaz.Value, COL_AMB_DATUM)
+
+        dupMsg = CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, brojDok, COL_AMB_DATUM)
+        If dupMsg <> "" Then
+            MsgBox dupMsg, vbExclamation, APP_NAME
+            Exit Sub
+        End If
+
+        dupMsg = CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, brojDok, COL_NOV_DATUM)
         If dupMsg <> "" Then
             MsgBox dupMsg, vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
-    
-    ' Ambalaza
+
     Dim kolAmb As Long
-    If IsNumeric(txtKolAmbOMUlaz.Value) Then kolAmb = CLng(txtKolAmbOMUlaz.Value)
-    
-    If kolAmb > 0 Then
-        TrackAmbalaza CDate(txtDatum.Value), cmbTipAmbOMUlaz.Value, kolAmb, _
-                      "Ulaz", stanicaID, "Stanica", _
-                      vozacID, txtBrojDokOMUlaz.Value, DOK_TIP_OM_ULAZ
+    If Trim$(txtKolAmbOMUlaz.value) <> "" Then
+        If Not TryParseLong(txtKolAmbOMUlaz.value, kolAmb) Then
+            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            txtKolAmbOMUlaz.SetFocus
+            Exit Sub
+        End If
     End If
-    
-    ' Novac
+
     Dim novac As Double
+    If Trim$(txtNovacOMUlaz.value) <> "" Then
+        If Not TryParseDouble(txtNovacOMUlaz.value, novac) Or novac < 0 Then
+            MsgBox "Unesite ispravan iznos novca!", vbExclamation, APP_NAME
+            txtNovacOMUlaz.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    If kolAmb <= 0 And novac <= 0 Then
+        MsgBox "Unesite ambalažu ili novac za OM ulaz.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If kolAmb > 0 And cmbTipAmbOMUlaz.value = "" Then
+        MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim kooperantID As String
     Dim otkupID As String
-    Dim tip As String
-    
-    If IsNumeric(txtNovacOMUlaz.Value) Then novac = CDbl(txtNovacOMUlaz.Value)
-    If novac > 0 Then
-        ' Primalac = Kooperant der das Geld bekommt
+    Dim tipNovca As String
 
-        If cmbPrimalacOMUlaz.Value <> "" Then
-            kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.Value)
-            
+    If novac > 0 Then
+        If cmbPrimalacOMUlaz.value <> "" Then
+            kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+
+            If kooperantID = "" Then
+                MsgBox "Nije pronaden ID primaoca.", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
             If cmbOtkupBlok.ListIndex >= 0 Then
                 otkupID = m_OtkupIDs(cmbOtkupBlok.ListIndex)
-                
-                ' Validierung: nicht mehr als Restbetrag
+
                 Dim otkupi As Variant
                 otkupi = GetOpenOtkupi(kooperantID)
+
                 If Not IsEmpty(otkupi) Then
                     Dim preostalo As Double
-                    preostalo = CDbl(otkupi(cmbOtkupBlok.ListIndex + 1, 5))
-                    If novac > preostalo Then
-                        MsgBox "Iznos (" & Format$(novac, "#,##0") & ") veci od preostalog (" & _
-                               Format$(preostalo, "#,##0") & ")!", vbExclamation, APP_NAME
-                        Exit Sub
+                    If TryParseDouble(NzToText(otkupi(cmbOtkupBlok.ListIndex + 1, 5)), preostalo) Then
+                        If novac > preostalo Then
+                            MsgBox "Iznos (" & Format$(novac, "#,##0") & _
+                                   ") veci od preostalog (" & _
+                                   Format$(preostalo, "#,##0") & ")!", _
+                                   vbExclamation, APP_NAME
+                            Exit Sub
+                        End If
                     End If
                 End If
-                
-                If tglIzOMAvansa.Value Then
+
+                If tglIzOMAvansa.value Then
                     Dim omSaldo As Double
                     omSaldo = GetOMAvansSaldo(stanicaID)
+
                     If novac > omSaldo Then
-                        MsgBox "Nedovoljno OM avansa! Raspolozivo: " & _
-                               Format$(omSaldo, "#,##0") & " RSD", vbExclamation, APP_NAME
+                        MsgBox "Nedovoljno OM avansa! Raspoloživo: " & _
+                               Format$(omSaldo, "#,##0") & " RSD", _
+                               vbExclamation, APP_NAME
                         Exit Sub
                     End If
-                    tip = NOV_KES_OTKUPAC_KOOP
+
+                    tipNovca = NOV_KES_OTKUPAC_KOOP
                 Else
-                    tip = NOV_VIRMAN_FIRMA_KOOP
+                    tipNovca = NOV_VIRMAN_FIRMA_KOOP
                 End If
             Else
-                tip = NOV_VIRMAN_AVANS_KOOP
+                tipNovca = NOV_VIRMAN_AVANS_KOOP
             End If
         Else
             kooperantID = ""
             otkupID = ""
-            tip = NOV_KES_FIRMA_OTKUPAC
+            tipNovca = NOV_KES_FIRMA_OTKUPAC
         End If
-
-        SaveNovac_TX txtBrojDokOMUlaz.Value, CDate(txtDatum.Value), _
-                     cmbOtkupnoMesto.Value, stanicaID, "OM", stanicaID, _
-                     kooperantID, "", cmbVrstaVoca.Value, tip, 0, novac, _
-                     cmbPrimalacOMUlaz.Value, otkupID
-
-        ' Otkup Status aktualisieren
-        If otkupID <> "" Then UpdateOtkupStatus otkupID
-        UpdateOMAvansSaldo
     End If
-    
+
+    If Not SaveOMUlaz_TX( _
+        datum:=datumDok, _
+        brojDok:=brojDok, _
+        stanicaNaziv:=cmbOtkupnoMesto.value, _
+        stanicaID:=stanicaID, _
+        vozacID:=vozacID, _
+        tipAmb:=cmbTipAmbOMUlaz.value, _
+        kolAmb:=kolAmb, _
+        vrstaVoca:=cmbVrstaVoca.value, _
+        novac:=novac, _
+        kooperantID:=kooperantID, _
+        primalacDisplay:=cmbPrimalacOMUlaz.value, _
+        otkupID:=otkupID, _
+        tipNovca:=tipNovca) Then
+
+        MsgBox "Greška pri cuvanju OM ulaza. Promene su vracene.", vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    UpdateOMAvansSaldo
+
     MsgBox "Sacuvano!", vbInformation, APP_NAME
-    txtBrojDokOMUlaz.Value = ""
-    txtKolAmbOMUlaz.Value = ""
-    txtNovacOMUlaz.Value = ""
-    cmbPrimalacOMUlaz.Value = ""
+
+    txtBrojDokOMUlaz.value = ""
+    txtKolAmbOMUlaz.value = ""
+    txtNovacOMUlaz.value = ""
+    cmbPrimalacOMUlaz.value = ""
     cmbOtkupBlok.Clear
+    tglIzOMAvansa.value = False
+
     Exit Sub
+
 EH:
     LogErr "frmDokumenta.btnUnosOMUlaz"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Private Sub cmbPrimalacOMUlaz_Change()
     cmbOtkupBlok.Clear
-    tglIzOMAvansa.Enabled = (cmbPrimalacOMUlaz.Value <> "")
+    tglIzOMAvansa.Enabled = (cmbPrimalacOMUlaz.value <> "")
     
-    If cmbPrimalacOMUlaz.Value = "" Then
-        tglIzOMAvansa.Value = False
+    If cmbPrimalacOMUlaz.value = "" Then
+        tglIzOMAvansa.value = False
         Exit Sub
     End If
     
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.Value)
+    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
     FillOpenOtkupi
 End Sub
 
 Private Sub UpdateOMAvansSaldo()
-    If cmbOtkupnoMesto.Value = "" Then
-        lblOMAvansSaldo.Caption = ""
+    On Error GoTo EH
+
+    If cmbOtkupnoMesto.value = "" Then
+        lblOMAvansSaldo.caption = ""
         Exit Sub
     End If
+
     Dim stanicaID As String
-    stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbOtkupnoMesto.Value, "StanicaID"))
-    
+    stanicaID = GetComboID(cmbOtkupnoMesto)
+
+    If stanicaID = "" Then
+        lblOMAvansSaldo.caption = ""
+        Exit Sub
+    End If
+
     Dim saldo As Double
     saldo = GetOMAvansSaldo(stanicaID)
-    
+
     If saldo > 0 Then
-        lblOMAvansSaldo.Caption = "OM Avans: " & Format$(saldo, "#,##0") & " RSD"
+        lblOMAvansSaldo.caption = "OM Avans: " & Format$(saldo, "#,##0") & " RSD"
     Else
-        lblOMAvansSaldo.Caption = ""
+        lblOMAvansSaldo.caption = ""
     End If
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.UpdateOMAvansSaldo"
+    lblOMAvansSaldo.caption = ""
 End Sub
 
 ' ============================================================
@@ -509,146 +740,177 @@ End Sub
 ' ============================================================
 
 Private Sub btnUnosZbr_Click()
-On Error GoTo EH
-    If cmbVozac.Value = "" Then
+    On Error GoTo EH
+
+    If cmbVozac.value = "" Then
         MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If cmbKupac.Value = "" Then
+
+    If cmbKupac.value = "" Then
         MsgBox "Izaberite kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If txtBrojZbirne.Value = "" Then
+
+    If Trim$(txtBrojZbirne.value) = "" Then
         MsgBox "Unesite broj zbirne!", vbExclamation, APP_NAME
         txtBrojZbirne.SetFocus
         Exit Sub
     End If
-    If Not IsNumeric(txtUkupnoKGZbr.Value) Or val(txtUkupnoKGZbr.Value) <= 0 Then
+    
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then
+        MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
+        txtDatum.SetFocus
+        Exit Sub
+    End If
+
+    Dim ukupnoKolI As Double
+    If Not TryParseDouble(txtUkupnoKGZbr.value, ukupnoKolI) Or ukupnoKolI <= 0 Then
         MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
         txtUkupnoKGZbr.SetFocus
         Exit Sub
     End If
     
-    If chkDveKlaseZbr.Value Then
-        If Not IsNumeric(txtUkupnoKgKlIIZbr.Value) Or val(txtUkupnoKgKlIIZbr.Value) <= 0 Then
+    Dim ukupnoKolII As Double
+    If chkDveKlaseZbr.value Then
+        If Not TryParseDouble(txtUkupnoKgKlIIZbr.value, ukupnoKolII) Or ukupnoKolII <= 0 Then
             MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
             txtUkupnoKgKlIIZbr.SetFocus
             Exit Sub
         End If
     End If
-    
-    Dim kupacID As String
-    kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbKupac.Value, "KupacID"))
-    
-    Dim vozacID As String
-    vozacID = ExtractIDFromDisplay(cmbVozac.Value)
-    
-    Dim hladnjaca As String
-    hladnjaca = cmbHladnjaca.Value
-    
-    Dim pogon As String
-    pogon = cmbPogon.Value
-    
+
     Dim ukupnoAmb As Long
-    If IsNumeric(txtUkupnoAmbZbr.Value) Then ukupnoAmb = CLng(txtUkupnoAmbZbr.Value)
-    
-    If Not UpdateValidacija() Then
-        MsgBox "Validacija nije zelena. Proverite kg i ambala�u (razlika mora biti 0).", vbExclamation, APP_NAME
+    If Trim$(txtUkupnoAmbZbr.value) <> "" Then
+        If Not TryParseLong(txtUkupnoAmbZbr.value, ukupnoAmb) Then
+            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            txtUkupnoAmbZbr.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    Dim kupacID As String
+    kupacID = GetComboID(cmbKupac)
+
+    If kupacID = "" Then
+        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
-    'Duplikat Check
-    If txtBrojZbirne.Value <> "" Then
+    If kupacID = "" Then
+        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim vozacID As String
+    vozacID = ExtractIDFromDisplay(cmbVozac.value)
+
+    If vozacID = "" Then
+        MsgBox "Nije pronaden ID vozaca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If Not UpdateValidacija() Then
+        MsgBox "Validacija nije prošla. Proverite kg i ambalažu (razlika mora biti 0).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    ' Duplikat check
+    If txtBrojZbirne.value <> "" Then
         Dim dupMsg As String
-        dupMsg = CheckDuplicate(TBL_ZBIRNA, COL_ZBR_BROJ, txtBrojZbirne.Value, COL_ZBR_DATUM)
+        dupMsg = CheckDuplicate(TBL_ZBIRNA, COL_ZBR_BROJ, txtBrojZbirne.value, COL_ZBR_DATUM)
+
         If dupMsg <> "" Then
             MsgBox dupMsg, vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
-    
-    ' --- Klasa I ---
+
+    ' Atomicni save kroz modDokumenta wrapper
     Dim result As String
-    result = SaveZbirna_TX( _
-        datum:=CDate(txtDatum.Value), _
-        vozacID:=ExtractIDFromDisplay(cmbVozac.Value), _
-        brojZbirne:=txtBrojZbirne.Value, _
+
+    result = SaveZbirnaMulti_TX( _
+        datum:=datumDok, _
+        vozacID:=vozacID, _
+        brojZbirne:=txtBrojZbirne.value, _
         kupacID:=kupacID, _
-        hladnjaca:=cmbHladnjaca.Value, _
-        pogon:=cmbPogon.Value, _
-        vrstaVoca:=cmbVrstaVoca.Value, _
-        sortaVoca:=cmbSortaVoca.Value, _
-        ukupnoKol:=CDbl(txtUkupnoKGZbr.Value), _
-        tipAmb:=cmbTipAmbZbr.Value, _
+        hladnjaca:=cmbHladnjaca.value, _
+        pogon:=cmbPogon.value, _
+        vrstaVoca:=cmbVrstaVoca.value, _
+        sortaVoca:=cmbSortaVoca.value, _
+         ukupnoKolI:=ukupnoKolI, _
+        tipAmb:=cmbTipAmbZbr.value, _
         ukupnoAmb:=ukupnoAmb, _
-        klasa:=KLASA_I)
-    
+        hasKlasaII:=chkDveKlaseZbr.value, _
+        ukupnoKolII:=ukupnoKolII)
+
     If result = "" Then
-        MsgBox "Greska!", vbCritical, APP_NAME
+        MsgBox "Greška pri cuvanju zbirne. Promene su vracene.", vbCritical, APP_NAME
         Exit Sub
     End If
-    
-    ' --- Klasa II ---
-    If chkDveKlaseZbr.Value Then
-        Dim resultII As String
-        resultII = SaveZbirna_TX( _
-            datum:=CDate(txtDatum.Value), _
-            vozacID:=ExtractIDFromDisplay(cmbVozac.Value), _
-            brojZbirne:=txtBrojZbirne.Value, _
-            kupacID:=kupacID, _
-            hladnjaca:=cmbHladnjaca.Value, _
-            pogon:=cmbPogon.Value, _
-            vrstaVoca:=cmbVrstaVoca.Value, _
-            sortaVoca:=cmbSortaVoca.Value, _
-            ukupnoKol:=CDbl(txtUkupnoKgKlIIZbr.Value), _
-            tipAmb:=cmbTipAmbZbr.Value, _
-            ukupnoAmb:=0, _
-            klasa:=KLASA_II)
-        
-        If resultII <> "" Then
-            MsgBox "Zbirna sacuvana: " & result & " + " & resultII, vbInformation, APP_NAME
-        Else
-            MsgBox "Klasa I sacuvana, greska pri Klasi II!", vbExclamation, APP_NAME
-        End If
-    Else
-        MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
-    End If
-    
+
+    MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
+
     UpdateValidacija
+
     Exit Sub
+
 EH:
     LogErr "frmDokumenta.btnUnosZbr"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' ZBIRNA VALIDIERUNG � Live-Update
+' ZBIRNA VALIDIERUNG – Live-Update
 ' ============================================================
 
 Private Sub txtBrojZbirne_AfterUpdate()
     ' BrojZbirne auch in Otpremnica-Feld setzen
-    txtBrojZbirneOtp.Value = txtBrojZbirne.Value
+    txtBrojZbirneOtp.value = txtBrojZbirne.value
     UpdateValidacija
 End Sub
 
 Private Function UpdateValidacija() As Boolean
     UpdateValidacija = False
     
-    If txtBrojZbirne.Value = "" Then
-        lblValidacijaKG.Caption = ""
-        lblValidacijaAmb.Caption = ""
+    If txtBrojZbirne.value = "" Then
+        lblValidacijaKG.caption = ""
+        lblValidacijaAmb.caption = ""
         Exit Function
     End If
     
-    Dim inputKgKlI As Double, inputKgKlII As Double, inputAmb As Long
-    If IsNumeric(txtUkupnoKGZbr.Value) Then inputKgKlI = CDbl(txtUkupnoKGZbr.Value)
-    If chkDveKlaseZbr.Value Then
-        If IsNumeric(txtUkupnoKgKlIIZbr.Value) Then inputKgKlII = CDbl(txtUkupnoKgKlIIZbr.Value)
+    Dim inputKgKlI As Double
+    Dim inputKgKlII As Double
+    Dim inputAmb As Long
+    If Trim$(txtUkupnoKGZbr.value) <> "" Then
+        If Not TryParseDouble(txtUkupnoKGZbr.value, inputKgKlI) Then
+            lblValidacijaKG.caption = "Neispravna kolicina Kl.I"
+            lblValidacijaKG.foreColor = CLR_ERROR()
+            Exit Function
+        End If
     End If
-    If IsNumeric(txtUkupnoAmbZbr.Value) Then inputAmb = CLng(txtUkupnoAmbZbr.Value)
+
+    If chkDveKlaseZbr.value Then
+        If Trim$(txtUkupnoKgKlIIZbr.value) <> "" Then
+            If Not TryParseDouble(txtUkupnoKgKlIIZbr.value, inputKgKlII) Then
+                lblValidacijaKG.caption = "Neispravna kolicina Kl.II"
+                lblValidacijaKG.foreColor = CLR_ERROR()
+                Exit Function
+            End If
+        End If
+    End If
+
+    If Trim$(txtUkupnoAmbZbr.value) <> "" Then
+        If Not TryParseLong(txtUkupnoAmbZbr.value, inputAmb) Then
+            lblValidacijaAmb.caption = "Neispravna kolicina ambalaže"
+            lblValidacijaAmb.foreColor = CLR_ERROR()
+            Exit Function
+        End If
+    End If
     
     Dim val As Variant
-    val = ValidateZbirnaPreUnosa(txtBrojZbirne.Value, inputKgKlI, inputKgKlII, inputAmb)
+    val = ValidateZbirnaPreUnosa(txtBrojZbirne.value, inputKgKlI, inputKgKlII, inputAmb)
     
     ' val(0-3): KlI  |  val(4-7): KlII  |  val(8-10): Amb
     Dim sumaKgI As Double: sumaKgI = CDbl(val(0))
@@ -667,18 +929,18 @@ Private Function UpdateValidacija() As Boolean
                 "Zbr: " & Format$(zbrKgI, "#,##0.0") & " kg | " & _
                 "Raz: " & Format$(razKgI, "#,##0.0") & " kg"
     
-    ' KlII hinzuf�gen wenn aktiv
-    If chkDveKlaseZbr.Value Then
+    ' KlII hinzufügen wenn aktiv
+    If chkDveKlaseZbr.value Then
         kgCaption = kgCaption & "  ||  Kl.II - Otp: " & Format$(sumaKgII, "#,##0.0") & _
                     " | Zbr: " & Format$(zbrKgII, "#,##0.0") & _
                     " | Raz: " & Format$(razKgII, "#,##0.0")
     End If
     
-    lblValidacijaKG.Caption = kgCaption
+    lblValidacijaKG.caption = kgCaption
     
-    ' Farbe: beide Klassen m�ssen stimmen
+    ' Farbe: beide Klassen müssen stimmen
     Dim kgValid As Boolean
-    If chkDveKlaseZbr.Value Then
+    If chkDveKlaseZbr.value Then
         kgValid = validKgI And validKgII
     Else
         kgValid = validKgI
@@ -697,7 +959,7 @@ Private Function UpdateValidacija() As Boolean
     Dim zbrAmb As Long: zbrAmb = CLng(val(9))
     Dim razAmb As Long: razAmb = CLng(val(10))
     
-    lblValidacijaAmb.Caption = "Amb Otp: " & sumaAmb & " | " & _
+    lblValidacijaAmb.caption = "Amb Otp: " & sumaAmb & " | " & _
                                 "Amb Zbr: " & zbrAmb & " | " & _
                                 "Raz: " & razAmb
     
@@ -718,135 +980,194 @@ End Function
 
 Private Sub btnUnosPrij_Click()
     On Error GoTo EH
-    If cmbKupac.Value = "" Then
+
+    If cmbKupac.value = "" Then
         MsgBox "Izaberite kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If txtBrojZbirnePrij.Value = "" Then
+
+    If cmbVozac.value = "" Then
+        MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If Trim$(txtBrojPrij.value) = "" Then
+        MsgBox "Unesite broj prijemnice!", vbExclamation, APP_NAME
+        txtBrojPrij.SetFocus
+        Exit Sub
+    End If
+
+    If Trim$(txtBrojZbirnePrij.value) = "" Then
         MsgBox "Unesite broj zbirne!", vbExclamation, APP_NAME
         txtBrojZbirnePrij.SetFocus
         Exit Sub
     End If
-    If Not IsNumeric(txtKolicinaPrij.Value) Or val(txtKolicinaPrij.Value) <= 0 Then
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then
+        MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
+        txtDatum.SetFocus
+        Exit Sub
+    End If
+
+    Dim kolicinaI As Double
+    If Not TryParseDouble(txtKolicinaPrij.value, kolicinaI) Or kolicinaI <= 0 Then
         MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
         txtKolicinaPrij.SetFocus
         Exit Sub
     End If
-    
-    If chkDveKlasePrij.Value Then
-        If Not IsNumeric(txtKolicinaKlIIPrij.Value) Or val(txtKolicinaKlIIPrij.Value) <= 0 Then
+
+    Dim cenaI As Double
+    If Trim$(txtCenaPrij.value) <> "" Then
+        If Not TryParseDouble(txtCenaPrij.value, cenaI) Or cenaI < 0 Then
+            MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
+            txtCenaPrij.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    Dim kolAmb As Long
+    If Trim$(txtKolAmbPrij.value) <> "" Then
+        If Not TryParseLong(txtKolAmbPrij.value, kolAmb) Then
+            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            txtKolAmbPrij.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    Dim kolAmbVracena As Long
+    If Trim$(txtKolAmbVracena.value) <> "" Then
+        If Not TryParseLong(txtKolAmbVracena.value, kolAmbVracena) Then
+            MsgBox "Unesite ispravnu kolicinu vracene ambalaže!", vbExclamation, APP_NAME
+            txtKolAmbVracena.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    Dim kolicinaII As Double
+    Dim cenaII As Double
+
+    If chkDveKlasePrij.value Then
+        If Not TryParseDouble(txtKolicinaKlIIPrij.value, kolicinaII) Or kolicinaII <= 0 Then
             MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKlIIPrij.SetFocus
             Exit Sub
         End If
-        If Not IsNumeric(txtCenaKlIIPrij.Value) Or val(txtCenaKlIIPrij.Value) <= 0 Then
+
+        If Not TryParseDouble(txtCenaKlIIPrij.value, cenaII) Or cenaII <= 0 Then
             MsgBox "Unesite cenu za II klasu!", vbExclamation, APP_NAME
             txtCenaKlIIPrij.SetFocus
             Exit Sub
         End If
     End If
-    
+
     Dim kupacID As String
-    kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbKupac.Value, "KupacID"))
-    
-    Dim cena As Double
-    If IsNumeric(txtCenaPrij.Value) Then cena = CDbl(txtCenaPrij.Value)
-    
-    Dim kolAmb As Long
-    If IsNumeric(txtKolAmbPrij.Value) Then kolAmb = CLng(txtKolAmbPrij.Value)
-    
-    Dim kolAmbVracena As Long
-    If IsNumeric(txtKolAmbVracena.Value) Then kolAmbVracena = CLng(txtKolAmbVracena.Value)
-    
-    'Duplikat Check
-    If txtBrojPrij.Value <> "" Then
+    kupacID = GetComboID(cmbKupac)
+
+    If kupacID = "" Then
+        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If kupacID = "" Then
+        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim vozacID As String
+    vozacID = ExtractIDFromDisplay(cmbVozac.value)
+
+    If vozacID = "" Then
+        MsgBox "Nije pronaden ID vozaca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If txtBrojPrij.value <> "" Then
         Dim dupMsg As String
-        dupMsg = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, txtBrojPrij.Value, COL_PRJ_DATUM)
+        dupMsg = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, txtBrojPrij.value, COL_PRJ_DATUM)
+
         If dupMsg <> "" Then
             MsgBox dupMsg, vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
-    
-    ' --- Klasa I ---
+
     Dim result As String
-    result = SavePrijemnica_TX( _
-        datum:=CDate(txtDatum.Value), _
+
+    result = SavePrijemnicaMulti_TX( _
+        datum:=datumDok, _
         kupacID:=kupacID, _
-        vozacID:=ExtractIDFromDisplay(cmbVozac.Value), _
-        brojPrij:=txtBrojPrij.Value, _
-        brojZbirne:=txtBrojZbirnePrij.Value, _
-        vrstaVoca:=cmbVrstaVoca.Value, _
-        sortaVoca:=cmbSortaVoca.Value, _
-        kolicina:=CDbl(txtKolicinaPrij.Value), _
-        cena:=cena, _
-        tipAmb:=cmbTipAmbPrij.Value, _
+        vozacID:=vozacID, _
+        brojPrij:=txtBrojPrij.value, _
+        brojZbirne:=txtBrojZbirnePrij.value, _
+        vrstaVoca:=cmbVrstaVoca.value, _
+        sortaVoca:=cmbSortaVoca.value, _
+        kolicinaI:=kolicinaI, _
+        cenaI:=cenaI, _
+        tipAmb:=cmbTipAmbPrij.value, _
         kolAmb:=kolAmb, _
         kolAmbVracena:=kolAmbVracena, _
-        klasa:=KLASA_I)
-    
+        hasKlasaII:=chkDveKlasePrij.value, _
+        kolicinaII:=kolicinaII, _
+        cenaII:=cenaII)
+
     If result = "" Then
-        MsgBox "Greska!", vbCritical, APP_NAME
+        MsgBox "Greška pri cuvanju prijemnice. Promene su vracene.", vbCritical, APP_NAME
         Exit Sub
     End If
-    
-    ' --- Klasa II ---
-    If chkDveKlasePrij.Value Then
-        Dim resultII As String
-        resultII = SavePrijemnica_TX( _
-            datum:=CDate(txtDatum.Value), _
-            kupacID:=kupacID, _
-            vozacID:=ExtractIDFromDisplay(cmbVozac.Value), _
-            brojPrij:=txtBrojPrij.Value, _
-            brojZbirne:=txtBrojZbirnePrij.Value, _
-            vrstaVoca:=cmbVrstaVoca.Value, _
-            sortaVoca:=cmbSortaVoca.Value, _
-            kolicina:=CDbl(txtKolicinaKlIIPrij.Value), _
-            cena:=CDbl(txtCenaKlIIPrij.Value), _
-            tipAmb:=cmbTipAmbPrij.Value, _
-            kolAmb:=0, _
-            kolAmbVracena:=0, _
-            klasa:=KLASA_II)
-        
-        If resultII <> "" Then
-            MsgBox "Prijemnica sacuvana: " & result & " + " & resultII, vbInformation, APP_NAME
-        Else
-            MsgBox "Klasa I sacuvana, greska pri Klasi II!", vbExclamation, APP_NAME
-        End If
-    Else
-        MsgBox "Prijemnica sacuvana: " & result, vbInformation, APP_NAME
+
+    MsgBox "Prijemnica sacuvana: " & result, vbInformation, APP_NAME
+
+    txtBrojPrij.value = ""
+    txtKolicinaPrij.value = ""
+    txtCenaPrij.value = ""
+    txtKolAmbPrij.value = ""
+    txtKolAmbVracena.value = ""
+
+    chkDveKlasePrij.value = False
+    DisableField txtKolicinaKlIIPrij
+    DisableField txtCenaKlIIPrij
+    txtKolicinaKlIIPrij.value = ""
+    txtCenaKlIIPrij.value = ""
+
+    lblUkupnoKgPrij.caption = ""
+    lblProsekGajbe.caption = ""
+
+    If txtBrojZbirnePrij.value <> "" Then
+        UpdateManjak txtBrojZbirnePrij.value
     End If
-    
-    UpdateManjak txtBrojZbirnePrij.Value
-    ClearPrijemnicaFields
+
+    FillOpenFakture
+
     Exit Sub
+
 EH:
     LogErr "frmDokumenta.btnUnosPrij"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
 End Sub
 Private Sub ClearPrijemnicaFields()
-    txtBrojPrij.Value = ""
-    txtKolicinaPrij.Value = ""
-    txtCenaPrij.Value = ""
-    txtKolAmbPrij.Value = ""
-    txtKolAmbVracena.Value = ""
-    chkDveKlasePrij.Value = False
+    txtBrojPrij.value = ""
+    txtKolicinaPrij.value = ""
+    txtCenaPrij.value = ""
+    txtKolAmbPrij.value = ""
+    txtKolAmbVracena.value = ""
+    chkDveKlasePrij.value = False
     DisableField txtKolicinaKlIIPrij
     DisableField txtCenaKlIIPrij
 End Sub
 
 Private Sub txtBrojZbirnePrij_AfterUpdate()
-    If txtBrojZbirnePrij.Value <> "" Then
-        UpdateManjak txtBrojZbirnePrij.Value
+    If txtBrojZbirnePrij.value <> "" Then
+        UpdateManjak txtBrojZbirnePrij.value
     End If
 End Sub
 
 Private Sub UpdateManjak(ByVal brojZbirne As String)
 
     Dim pendingKlI As Double, pendingKlII As Double
-    If IsNumeric(txtKolicinaPrij.Value) Then pendingKlI = CDbl(txtKolicinaPrij.Value)
-    If chkDveKlasePrij.Value Then
-        If IsNumeric(txtKolicinaKlIIPrij.Value) Then pendingKlII = CDbl(txtKolicinaKlIIPrij.Value)
+    If IsNumeric(txtKolicinaPrij.value) Then pendingKlI = CDbl(txtKolicinaPrij.value)
+    If chkDveKlasePrij.value Then
+        If IsNumeric(txtKolicinaKlIIPrij.value) Then pendingKlII = CDbl(txtKolicinaKlIIPrij.value)
     End If
     
     Dim manjak As Variant
@@ -860,7 +1181,7 @@ Private Sub UpdateManjak(ByVal brojZbirne As String)
     Dim manjakKg As Double: manjakKg = CDbl(manjak(2))
     Dim manjakPct As Double: manjakPct = CDbl(manjak(3))
     
-    lblManjak.Caption = "Zbirna: " & Format$(zbrKg, "#,##0.0") & " kg | " & _
+    lblManjak.caption = "Zbirna: " & Format$(zbrKg, "#,##0.0") & " kg | " & _
                          "Prijemnica: " & Format$(prijKg, "#,##0.0") & " kg | " & _
                          "Manjak: " & Format$(manjakKg, "#,##0.0") & " kg (" & _
                          Format$(manjakPct, "#,##0.00") & "%)"
@@ -877,9 +1198,9 @@ Private Sub UpdateManjak(ByVal brojZbirne As String)
     Dim prosek As Double
     prosek = CalculateProsekGajbeByZbirna(brojZbirne)
     If prosek > 0 Then
-        lblProsekGajbe.Caption = "Prosek gajbe: " & Format$(prosek, "#,##0.00") & " kg"
+        lblProsekGajbe.caption = "Prosek gajbe: " & Format$(prosek, "#,##0.00") & " kg"
     Else
-        lblProsekGajbe.Caption = ""
+        lblProsekGajbe.caption = ""
     End If
 End Sub
 
@@ -889,98 +1210,240 @@ End Sub
 
 Private Sub btnUnosIzlaz_Click()
     On Error GoTo EH
-    If cmbKupac.Value = "" Then
+
+    If cmbKupac.value = "" Then
         MsgBox "Izaberite kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    Dim kupacNaziv As String
-    kupacNaziv = cmbKupac.Value
-    
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then
+        MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
+        txtDatum.SetFocus
+        Exit Sub
+    End If
+
     Dim kupacID As String
-    kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", kupacNaziv, "KupacID"))
-    
-    ' Duplikat-Check
-    If txtBrojIzlaz.Value <> "" Then
+    kupacID = GetComboID(cmbKupac)
+
+    If kupacID = "" Then
+        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim vozacID As String
+    If cmbVozac.value <> "" Then
+        vozacID = ExtractIDFromDisplay(cmbVozac.value)
+    End If
+
+    Dim brojDok As String
+    brojDok = Trim$(txtBrojDokIzlaz.value)
+
+    If brojDok <> "" Then
         Dim dupMsg As String
-        dupMsg = CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, txtBrojIzlaz.Value, COL_NOV_DATUM)
+
+        dupMsg = CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, brojDok, COL_AMB_DATUM)
+        If dupMsg <> "" Then
+            MsgBox dupMsg, vbExclamation, APP_NAME
+            Exit Sub
+        End If
+
+        dupMsg = CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, brojDok, COL_NOV_DATUM)
         If dupMsg <> "" Then
             MsgBox dupMsg, vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
-    
-    ' FakturaID aus ComboBox
-    Dim fakturaID As String
-    If cmbFakturaIzlaz.Value <> "" Then
-        ' BrojFakture aus ComboBox zu FakturaID nachschlagen
-        Dim brojFakture As String
-        brojFakture = Left$(cmbFakturaIzlaz.Value, InStr(cmbFakturaIzlaz.Value, " - ") - 1)
-        fakturaID = CStr(LookupValue(TBL_FAKTURE, COL_FAK_BROJ, brojFakture, COL_FAK_ID))
+
+    Dim kolAmb As Long
+    If Trim$(txtKolAmbIzlaz.value) <> "" Then
+        If Not TryParseLong(txtKolAmbIzlaz.value, kolAmb) Then
+            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            txtKolAmbIzlaz.SetFocus
+            Exit Sub
+        End If
     End If
-    
-    ' Novac
+
     Dim novac As Double
-    If IsNumeric(txtNovacIzlaz.Value) Then novac = CDbl(txtNovacIzlaz.Value)
-    
+    If Trim$(txtNovacIzlaz.value) <> "" Then
+        If Not TryParseDouble(txtNovacIzlaz.value, novac) Or novac < 0 Then
+            MsgBox "Unesite ispravan iznos novca!", vbExclamation, APP_NAME
+            txtNovacIzlaz.SetFocus
+            Exit Sub
+        End If
+    End If
+
+    If kolAmb <= 0 And novac <= 0 Then
+        MsgBox "Unesite ambalažu ili uplatu kupca.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If kolAmb > 0 And cmbTipAmbIzlaz.value = "" Then
+        MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim fakturaID As String
+    Dim tipNovca As String
+    Dim napomena As String
+
     If novac > 0 Then
-        Dim tip As String
-        If cmbFakturaIzlaz.Value <> "" Then
-            tip = NOV_KUPCI_UPLATA
+        If cmbFakturaIzlaz.value <> "" Then
+            fakturaID = GetComboID(cmbFakturaIzlaz)
+
+            If fakturaID = "" Then
+                MsgBox "Nije pronaden ID izabrane fakture.", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            Dim fakIznos As Double
+            Dim uplaceno As Double
+            Dim preostalo As Double
+
+            If TryParseDouble(NzToText(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS)), fakIznos) Then
+                uplaceno = GetUplataForFaktura(fakturaID)
+                preostalo = fakIznos - uplaceno
+
+                If preostalo > 0 And novac > preostalo Then
+                    MsgBox "Uplata (" & Format$(novac, "#,##0") & _
+                           ") je veca od preostalog iznosa fakture (" & _
+                           Format$(preostalo, "#,##0") & ").", _
+                           vbExclamation, APP_NAME
+                    Exit Sub
+                End If
+            End If
+
+            tipNovca = NOV_KUPCI_UPLATA
+            napomena = "Uplata po fakturi: " & cmbFakturaIzlaz.value
         Else
-            tip = NOV_KUPCI_AVANS
-        End If
-        SaveNovac_TX txtBrojIzlaz.Value, CDate(txtDatum.Value), _
-                     cmbKupac.Value, kupacID, "Kupac", "", _
-                     "", fakturaID, "", tip, novac, 0, ""
-        
-        ' Faktura Status aktualisieren wenn voll bezahlt
-        If fakturaID <> "" Then
-            UpdateFakturaStatus fakturaID
+            fakturaID = ""
+            tipNovca = NOV_KUPCI_AVANS
+            napomena = "Avans kupca"
         End If
     End If
-    
-    ' Ambalaza zur�ck vom Kunden
-    Dim kolAmbIzlaz As Long
-    If IsNumeric(txtKolAmbIzlaz.Value) Then kolAmbIzlaz = CLng(txtKolAmbIzlaz.Value)
-    
-    If kolAmbIzlaz > 0 Then
-        Dim vozacID As String
-        If cmbVozac.Value <> "" Then vozacID = ExtractIDFromDisplay(cmbVozac.Value)
-        
-        TrackAmbalaza CDate(txtDatum.Value), cmbTipAmbIzlaz.Value, kolAmbIzlaz, "Ulaz", kupacID, "Kupac", vozacID, txtBrojIzlaz.Value, DOK_TIP_IZLAZ_KUPCI
+
+    If Not SaveKupciIzlaz_TX( _
+        datum:=datumDok, _
+        brojDok:=brojDok, _
+        kupacNaziv:=cmbKupac.value, _
+        kupacID:=kupacID, _
+        vozacID:=vozacID, _
+        tipAmb:=cmbTipAmbIzlaz.value, _
+        kolAmb:=kolAmb, _
+        vrstaVoca:=cmbVrstaVoca.value, _
+        novac:=novac, _
+        fakturaID:=fakturaID, _
+        napomena:=napomena, _
+        tipNovca:=tipNovca) Then
+
+        MsgBox "Greška pri cuvanju izlaza kupca. Promene su vracene.", vbCritical, APP_NAME
+        Exit Sub
     End If
-    
-    
+
     MsgBox "Sacuvano!", vbInformation, APP_NAME
-    txtBrojIzlaz.Value = ""
-    txtNovacIzlaz.Value = ""
-    txtKolAmbIzlaz.Value = ""
-    cmbFakturaIzlaz.Value = ""
-    FillOpenFakture    ' ? fehlt
+
+    txtBrojDokIzlaz.value = ""
+    txtKolAmbIzlaz.value = ""
+    txtNovacIzlaz.value = ""
+    cmbFakturaIzlaz.value = ""
+
+    FillOpenFakture
+
     Exit Sub
+
 EH:
     LogErr "frmDokumenta.btnUnosIzlaz"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillOpenFakture()
+    On Error GoTo EH
+
     cmbFakturaIzlaz.Clear
-    If cmbKupac.Value = "" Then Exit Sub
-    
+    cmbFakturaIzlaz.ColumnCount = 2
+    cmbFakturaIzlaz.ColumnWidths = "300 pt;0 pt"
+    cmbFakturaIzlaz.BoundColumn = 1
+    cmbFakturaIzlaz.TextColumn = 1
+
+    If cmbKupac.value = "" Then Exit Sub
+
     Dim kupacID As String
-    kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbKupac.Value, "KupacID"))
-    
-    Dim fakture As Variant
-    fakture = GetOpenFakture(kupacID)
-    If IsEmpty(fakture) Then Exit Sub
-    
+    kupacID = GetComboID(cmbKupac)
+
+    If kupacID = "" Then Exit Sub
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colID As Long
+    Dim colBroj As Long
+    Dim colDatum As Long
+    Dim colKupac As Long
+    Dim colIznos As Long
+    Dim colStatus As Long
+
+    colID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, "frmDokumenta.FillOpenFakture")
+    colBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, "frmDokumenta.FillOpenFakture")
+    colDatum = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM, "frmDokumenta.FillOpenFakture")
+    colKupac = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, "frmDokumenta.FillOpenFakture")
+    colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, "frmDokumenta.FillOpenFakture")
+    colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, "frmDokumenta.FillOpenFakture")
+
     Dim i As Long
-    For i = 1 To UBound(fakture, 1)
-        cmbFakturaIzlaz.AddItem CStr(fakture(i, 1)) & " - " & _
-            Format$(CDbl(fakture(i, 5)), "#,##0.00") & " od " & _
-            Format$(CDbl(fakture(i, 3)), "#,##0.00") & " RSD"
+    Dim fakturaID As String
+    Dim brojFakture As String
+    Dim status As String
+    Dim iznos As Double
+    Dim uplaceno As Double
+    Dim preostalo As Double
+    Dim datumTxt As String
+    Dim displayText As String
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, colKupac))) = kupacID Then
+
+            status = Trim$(NzToText(data(i, colStatus)))
+
+            If status <> STATUS_PLACENO Then
+                fakturaID = Trim$(NzToText(data(i, colID)))
+                brojFakture = Trim$(NzToText(data(i, colBroj)))
+
+                iznos = 0
+                If TryParseDouble(NzToText(data(i, colIznos)), iznos) Then
+                    uplaceno = GetUplataForFaktura(fakturaID)
+                    preostalo = iznos - uplaceno
+                Else
+                    uplaceno = 0
+                    preostalo = 0
+                End If
+
+                datumTxt = ""
+                If IsDate(data(i, colDatum)) Then
+                    datumTxt = Format$(CDate(data(i, colDatum)), "dd.mm.yyyy")
+                End If
+
+                displayText = brojFakture
+
+                If datumTxt <> "" Then
+                    displayText = displayText & " | " & datumTxt
+                End If
+
+                displayText = displayText & " | iznos " & Format$(iznos, "#,##0") & _
+                              " | preostalo " & Format$(preostalo, "#,##0")
+
+                cmbFakturaIzlaz.AddItem displayText
+                cmbFakturaIzlaz.List(cmbFakturaIzlaz.ListCount - 1, 1) = fakturaID
+            End If
+        End If
     Next i
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.FillOpenFakture"
+    cmbFakturaIzlaz.Clear
 End Sub
 
 ' ============================================================
@@ -991,10 +1454,10 @@ End Sub
 Private Sub btnStorno_Click()
     On Error GoTo EH
     Dim tipDok As String
-    tipDok = cmbStornoDokument.Value
+    tipDok = cmbStornoDokument.value
     
     Dim brDok As String
-    brDok = Trim$(txtStornoBroj.Value)
+    brDok = Trim$(txtStornoBroj.value)
     
     If tipDok = "" Then
         MsgBox "Izaberite tip dokumenta!", vbExclamation, APP_NAME
@@ -1054,7 +1517,7 @@ Private Sub btnStorno_Click()
     
     If Success Then
         MsgBox "Stornirano!", vbInformation, APP_NAME
-        txtStornoBroj.Value = ""
+        txtStornoBroj.value = ""
         CheckVerwaisteDokumente
     End If
     Exit Sub
@@ -1100,7 +1563,7 @@ Private Sub CheckVerwaisteDokumente()
         Next i
     End If
     
-    lblStornoWarning.Caption = msg
+    lblStornoWarning.caption = msg
     lblStornoWarning.foreColor = CLR_WARNING()
     lblStornoWarning.Visible = True
 End Sub
@@ -1176,10 +1639,10 @@ Private Sub FillOpenOtkupi()
     cmbOtkupBlok.Clear
     Erase m_OtkupIDs
     
-    If cmbPrimalacOMUlaz.Value = "" Then Exit Sub
+    If cmbPrimalacOMUlaz.value = "" Then Exit Sub
     
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.Value)
+    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
     
     Dim otkupi As Variant
     otkupi = GetOpenOtkupi(kooperantID)
