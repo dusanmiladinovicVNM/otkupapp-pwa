@@ -2,130 +2,142 @@ Attribute VB_Name = "modSEFMapper"
 Option Explicit
 
 Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSnapshot
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFMapper.BuildSEFInvoiceDto"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "FakturaID is required."
+    End If
+
     Dim dto As clsSEFInvoiceSnapshot
     Set dto = New clsSEFInvoiceSnapshot
-    
+
     Dim fakture As Variant
     Dim stavke As Variant
-    
+
     Dim colFakturaID As Long
     Dim colKupacID As Long
     Dim colBroj As Long
     Dim colDatum As Long
     Dim colIznos As Long
-    
+
+    fakture = GetTableData(TBL_FAKTURE)
+
+    If IsEmpty(fakture) Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "TBL_FAKTURE is empty."
+    End If
+
+    colFakturaID = RequireColumnIndex(TBL_FAKTURE, "FakturaID", SRC)
+    colKupacID = RequireColumnIndex(TBL_FAKTURE, "KupacID", SRC)
+    colBroj = RequireColumnIndex(TBL_FAKTURE, "BrojFakture", SRC)
+    colDatum = RequireColumnIndex(TBL_FAKTURE, "Datum", SRC)
+    colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", SRC)
+
     Dim kupacID As String
     Dim i As Long
     Dim found As Boolean
-    
-    ' ========================
-    ' tblFakture
-    ' ========================
-    
-    fakture = GetTableData(TBL_FAKTURE)
-    
-    If IsEmpty(fakture) Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", "TBL_FAKTURE is empty."
+
+    Dim taxPercent As Double
+    taxPercent = GetDefaultTaxPercent()
+
+    If taxPercent < 0 Then
+        Err.Raise ERR_SEF_CONFIG, SRC, "SEF tax percent cannot be negative."
     End If
-    
-    colFakturaID = GetColumnIndex(TBL_FAKTURE, "FakturaID")
-    colKupacID = GetColumnIndex(TBL_FAKTURE, "KupacID")
-    colBroj = GetColumnIndex(TBL_FAKTURE, "BrojFakture")
-    colDatum = GetColumnIndex(TBL_FAKTURE, "Datum")
-    colIznos = GetColumnIndex(TBL_FAKTURE, "Iznos")
-    
-    If colFakturaID = 0 Or colKupacID = 0 Or colBroj = 0 Or colDatum = 0 Or colIznos = 0 Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", _
-            "Required columns missing in tblFakture."
-    End If
-    
+
     For i = 1 To UBound(fakture, 1)
         If CStr(fakture(i, colFakturaID)) = fakturaID Then
             found = True
-            
+
+            If Not IsDate(fakture(i, colDatum)) Then
+                Err.Raise ERR_SEF_VALIDATION, SRC, _
+                          "Invoice date is not valid for faktura " & fakturaID
+            End If
+
+            If Not IsNumeric(fakture(i, colIznos)) Then
+                Err.Raise ERR_SEF_VALIDATION, SRC, _
+                          "Invoice amount is not numeric for faktura " & fakturaID
+            End If
+
             dto.fakturaID = fakturaID
-            dto.InvoiceNumber = CStr(fakture(i, colBroj))
+            dto.InvoiceNumber = Trim$(CStr(fakture(i, colBroj)))
             dto.InvoiceDate = CDate(fakture(i, colDatum))
+            dto.DeliveryDate = GetInvoiceDeliveryDate(fakturaID)
+            
             dto.TotalNet = CDbl(fakture(i, colIznos))
-            dto.TotalVat = Round(dto.TotalNet * 0.1, 2)
+            dto.TotalVat = Round(dto.TotalNet * taxPercent / 100, 2)
             dto.TotalGross = Round(dto.TotalNet + dto.TotalVat, 2)
             
-            kupacID = CStr(fakture(i, colKupacID))
+
+            kupacID = Trim$(CStr(fakture(i, colKupacID)))
             Exit For
         End If
     Next i
-    
+
     If Not found Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", _
-            "Faktura not found: " & fakturaID
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Faktura not found: " & fakturaID
     End If
-    
-    ' ========================
-    ' tblKupci
-    ' ========================
-    
+
+    If Len(Trim$(dto.InvoiceNumber)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Invoice number is missing."
+    End If
+
+    If dto.TotalNet <= 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Invoice net amount must be > 0."
+    End If
+
+    If Len(kupacID) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "KupacID is missing."
+    End If
+
     dto.BuyerID = kupacID
-    dto.BuyerName = CStr(LookupValue("tblKupci", "KupacID", kupacID, "Naziv"))
-    dto.BuyerPIB = CStr(LookupValue("tblKupci", "KupacID", kupacID, "PIB"))
-    
+    dto.BuyerName = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
+    dto.BuyerPIB = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "PIB"))
+
     If Len(Trim$(dto.BuyerName)) = 0 Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", "Buyer name missing."
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Buyer name missing."
     End If
-    
+
     If Len(Trim$(dto.BuyerPIB)) = 0 Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", "Buyer PIB missing."
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Buyer PIB missing."
     End If
-    
-    ' ========================
-    ' Seller from tblConfig
-    ' ========================
-    
+
     dto.SellerName = GetConfigValue("SELLER_NAME")
     dto.SellerPIB = GetConfigValue("SELLER_PIB")
-    
+
     If Len(Trim$(dto.SellerName)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "BuildSEFInvoiceDto", "SELLER_NAME missing in tblConfig."
+        Err.Raise ERR_SEF_CONFIG, SRC, "SELLER_NAME missing in tblConfig."
     End If
-    
+
     If Len(Trim$(dto.SellerPIB)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "BuildSEFInvoiceDto", "SELLER_PIB missing in tblConfig."
+        Err.Raise ERR_SEF_CONFIG, SRC, "SELLER_PIB missing in tblConfig."
     End If
-    
+
     dto.CurrencyCode = "RSD"
     dto.versionNo = GetNextSEFVersionNo(fakturaID)
-    
-    ' ========================
-    ' Lines from tblFakturaStavke + tblPrijemnica
-    ' ========================
-    
+
     Set dto.Lines = New Collection
-    
-    stavke = GetTableData("tblFakturaStavke")
-    
+
+    stavke = GetTableData(TBL_FAKTURA_STAVKE)
+
     If IsEmpty(stavke) Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", "tblFakturaStavke is empty."
+        Err.Raise ERR_SEF_VALIDATION, SRC, "tblFakturaStavke is empty."
     End If
-    
+
     Dim colStFakturaID As Long
     Dim colPrijemnicaID As Long
     Dim colKolicina As Long
     Dim colCena As Long
     Dim colKlasa As Long
     Dim colBrojPrijemnice As Long
-    
-    colStFakturaID = GetColumnIndex("tblFakturaStavke", "FakturaID")
-    colPrijemnicaID = GetColumnIndex("tblFakturaStavke", "PrijemnicaID")
-    colKolicina = GetColumnIndex("tblFakturaStavke", "Kolicina")
-    colCena = GetColumnIndex("tblFakturaStavke", "Cena")
-    colKlasa = GetColumnIndex("tblFakturaStavke", "Klasa")
-    colBrojPrijemnice = GetColumnIndex("tblFakturaStavke", "BrojPrijemnice")
-    
-    If colStFakturaID = 0 Or colPrijemnicaID = 0 Or colKolicina = 0 Or colCena = 0 Or colKlasa = 0 Or colBrojPrijemnice = 0 Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", _
-            "Required columns missing in tblFakturaStavke."
-    End If
-    
+
+    colStFakturaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID", SRC)
+    colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID", SRC)
+    colKolicina = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Kolicina", SRC)
+    colCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Cena", SRC)
+    colKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Klasa", SRC)
+    colBrojPrijemnice = RequireColumnIndex(TBL_FAKTURA_STAVKE, "BrojPrijemnice", SRC)
+
     Dim line As clsSEFLine
     Dim prijemnicaID As String
     Dim brojPrijemnice As String
@@ -133,6 +145,8 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim sortaVoca As String
     Dim opis As String
 
+    Dim qty As Double
+    Dim price As Double
     Dim lineNet As Double
     Dim lineVat As Double
     Dim lineGross As Double
@@ -141,80 +155,94 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim calcTotalVat As Double
     Dim calcTotalGross As Double
 
-    calcTotalNet = 0
-    calcTotalVat = 0
-    calcTotalGross = 0
-
     For i = 1 To UBound(stavke, 1)
-    
+
         If CStr(stavke(i, colStFakturaID)) = fakturaID Then
-        
-            prijemnicaID = CStr(stavke(i, colPrijemnicaID))
-            brojPrijemnice = CStr(stavke(i, colBrojPrijemnice))
-        
-            vrstaVoca = CStr(LookupValue("tblPrijemnica", "PrijemnicaID", prijemnicaID, "VrstaVoca"))
-            sortaVoca = CStr(LookupValue("tblPrijemnica", "PrijemnicaID", prijemnicaID, "SortaVoca"))
-        
+
+            prijemnicaID = Trim$(CStr(stavke(i, colPrijemnicaID)))
+            brojPrijemnice = Trim$(CStr(stavke(i, colBrojPrijemnice)))
+
+            If Len(prijemnicaID) = 0 Then
+                Err.Raise ERR_SEF_VALIDATION, SRC, _
+                          "PrijemnicaID missing in invoice line for " & fakturaID
+            End If
+
+            If Not TryParseDouble(CStr(stavke(i, colKolicina)), qty) Or qty <= 0 Then
+                Err.Raise ERR_SEF_VALIDATION, SRC, _
+                          "Invalid line quantity for faktura " & fakturaID
+            End If
+
+            If Not TryParseDouble(CStr(stavke(i, colCena)), price) Or price < 0 Then
+                Err.Raise ERR_SEF_VALIDATION, SRC, _
+                          "Invalid line price for faktura " & fakturaID
+            End If
+
+            vrstaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "VrstaVoca"))
+            sortaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "SortaVoca"))
+
             opis = Trim$(vrstaVoca & " " & sortaVoca)
             opis = Trim$(opis & " po prijemnici " & brojPrijemnice)
-        
-            lineNet = CDbl(stavke(i, colKolicina)) * CDbl(stavke(i, colCena))
-            lineVat = Round(lineNet * 0.1, 2)
+
+            If Len(Trim$(opis)) = 0 Then
+                opis = "Roba po prijemnici " & brojPrijemnice
+            End If
+
+            lineNet = Round(qty * price, 2)
+            lineVat = Round(lineNet * taxPercent / 100, 2)
             lineGross = Round(lineNet + lineVat, 2)
-        
+
             Set line = New clsSEFLine
-        
+
             line.prijemnicaID = prijemnicaID
             line.brojPrijemnice = brojPrijemnice
-            line.Naziv = opis
-            line.kolicina = CDbl(stavke(i, colKolicina))
-            line.cena = CDbl(stavke(i, colCena))
+            line.naziv = opis
+            line.kolicina = qty
+            line.cena = price
             line.klasa = CStr(stavke(i, colKlasa))
             line.Neto = lineNet
             line.PDV = lineVat
             line.iznos = lineGross
-            
+
             dto.Lines.Add line
-        
+
             calcTotalNet = calcTotalNet + lineNet
             calcTotalVat = calcTotalVat + lineVat
             calcTotalGross = calcTotalGross + lineGross
-        
+
         End If
-    
+
     Next i
 
-If dto.Lines.count = 0 Then
-    Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", _
-        "Invoice has no lines."
-End If
     If dto.Lines.count = 0 Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", _
-        "Invoice has no lines."
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Invoice has no lines."
     End If
 
-    ' Optionaler Abgleich Kopf vs. Zeilen
+    ' Za sada ostaje soft check kao i ranije.
+    ' Ako kasnije ≈æeli≈° stro≈æi SEF re≈æim, ovo mo≈æe postati Err.Raise.
     If Round(calcTotalNet, 2) <> Round(dto.TotalNet, 2) Then
-    ' erstmal kein harter Fehler, nur vorbereitet
-    ' sp‰ter kann das zu Err.Raise werden
+        ' Soft mismatch: header total differs from line total.
     End If
 
-    If dto.Lines.count = 0 Then
-        Err.Raise ERR_SEF_VALIDATION, "BuildSEFInvoiceDto", _
-            "Invoice has no lines."
+    If Round(calcTotalVat, 2) <> Round(dto.TotalVat, 2) Then
+        ' Soft mismatch: header VAT differs from line VAT.
     End If
-    
-    ' optional sanity check
-    If Round(dto.TotalNet + dto.TotalVat, 2) <> Round(dto.TotalGross, 2) Then
-        ' Noch kein harter Fehler, aber fachlich auff‰llig
-        ' Kann sp‰ter zu Err.Raise werden, wenn du streng sein willst
+
+    If Round(calcTotalGross, 2) <> Round(dto.TotalGross, 2) Then
+        ' Soft mismatch: header gross differs from line gross.
     End If
-    
+
     Set BuildSEFInvoiceDto = dto
+    Exit Function
 
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
+' Legacy/debug JSON snapshot serializer.
+' Not used for actual SEF UBL submission.
 Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As String
+    On Error GoTo EH
     
     Dim sb As String
     Dim i As Long
@@ -259,7 +287,7 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         sb = sb & "{"
         sb = sb & """PrijemnicaID"":" & JsonString(ln.prijemnicaID) & ","
         sb = sb & """BrojPrijemnice"":" & JsonString(ln.brojPrijemnice) & ","
-        sb = sb & """Naziv"":" & JsonString(ln.Naziv) & ","
+        sb = sb & """Naziv"":" & JsonString(ln.naziv) & ","
         sb = sb & """Kolicina"":" & JsonNumber(ln.kolicina) & ","
         sb = sb & """Cena"":" & JsonNumber(ln.cena) & ","
         sb = sb & """Klasa"":" & JsonString(ln.klasa) & ","
@@ -273,6 +301,11 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     sb = sb & "}"
     
     SerializeSEFRequest = sb
+    Exit Function
+    
+EH:
+    LogErr "SerializeSEFRequest"
+    Err.Raise Err.Number, "SerializeSEFRequest", Err.Description
 
 End Function
 
@@ -300,7 +333,8 @@ End Function
 
 
 Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As String
-    
+    On Error GoTo EH
+        
     Dim xml As String
     Dim i As Long
     Dim ln As clsSEFLine
@@ -325,11 +359,8 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     Dim buyerEmail As String
     
     Dim dueDate As Date
-    Dim deliveryDate As Date
     
-    If dto Is Nothing Then
-        Err.Raise ERR_SEF_VALIDATION, "SerializeUBLInvoiceV2", "DTO is Nothing."
-    End If
+    ValidateSEFDtoForUBL dto
     
     sellerMaticni = GetConfigValue("SELLER_MATICNI_BROJ")
     sellerStreet = GetConfigValue("SELLER_STREET")
@@ -346,15 +377,9 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     If Len(Trim$(paymentMeansCode)) = 0 Then paymentMeansCode = "30"
     If Len(Trim$(noteText)) = 0 Then noteText = "Otkupljena roba prema prijemnici"
     
-    If Len(Trim$(GetConfigValue("SEF_PAYMENT_DUE_DAYS"))) = 0 Then
-        paymentDueDays = 15
-    Else
-        paymentDueDays = CLng(GetConfigValue("SEF_PAYMENT_DUE_DAYS"))
-    End If
+    paymentDueDays = GetSEFPaymentDueDays()
     
     dueDate = DateAdd("d", paymentDueDays, dto.InvoiceDate)
-    
-    deliveryDate = GetInvoiceDeliveryDate(dto.fakturaID, dto.InvoiceDate)
     
     buyerMaticni = NzStr(LookupValue("tblKupci", "KupacID", dto.BuyerID, "MaticniBroj"))
     buyerStreet = NzStr(LookupValue("tblKupci", "KupacID", dto.BuyerID, "Ulica"))
@@ -491,7 +516,7 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     ' Delivery
     ' ========================
     xml = xml & "  <cac:Delivery>" & vbCrLf
-    xml = xml & "    <cbc:ActualDeliveryDate>" & Format$(deliveryDate, "yyyy-mm-dd") & "</cbc:ActualDeliveryDate>" & vbCrLf
+    xml = xml & "    <cbc:ActualDeliveryDate>" & Format$(dto.DeliveryDate, "yyyy-mm-dd") & "</cbc:ActualDeliveryDate>" & vbCrLf
     xml = xml & "  </cac:Delivery>" & vbCrLf
     
     ' ========================
@@ -547,7 +572,7 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         xml = xml & "    <cbc:LineExtensionAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.Neto) & "</cbc:LineExtensionAmount>" & vbCrLf
         
         xml = xml & "    <cac:Item>" & vbCrLf
-        xml = xml & "      <cbc:Name>" & XmlEscape(ln.Naziv) & "</cbc:Name>" & vbCrLf
+        xml = xml & "      <cbc:Name>" & XmlEscape(ln.naziv) & "</cbc:Name>" & vbCrLf
         xml = xml & "      <cac:SellersItemIdentification>" & vbCrLf
         xml = xml & "        <cbc:ID>" & XmlEscape(ln.prijemnicaID) & "</cbc:ID>" & vbCrLf
         xml = xml & "      </cac:SellersItemIdentification>" & vbCrLf
@@ -568,8 +593,30 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     
     xml = xml & "</Invoice>"
     
+    ValidateGeneratedUBL xml, "modSEFMapper.SerializeUBLInvoice"
     SerializeUBLInvoice = xml
+    Exit Function
+    
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
 
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
+    LogErr "SerializeUBLInvoice"
+    On Error GoTo 0
+
+    If errNum <> 0 Then
+        Err.Raise errNum, "SerializeUBLInvoice", _
+                  "Source=" & errSrc & " | " & errDesc
+    Else
+        Err.Raise ERR_SEF_VALIDATION, "SerializeUBLInvoice", _
+                  "Unexpected error during UBL serialization."
+    End If
 End Function
 
 Private Function XmlEscape(ByVal s As String) As String
@@ -606,41 +653,105 @@ Private Function NzStr(ByVal v As Variant) As String
     End If
 End Function
 
-Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String, ByVal fallbackDate As Date) As Date
-    
-    Dim stavke As Variant
-    Dim colFakturaID As Long
-    Dim colPrijemnicaID As Long
-    Dim i As Long
-    Dim prijemnicaID As String
-    Dim v As Variant
-    
-    stavke = GetTableData("tblFakturaStavke")
-    
-    If IsEmpty(stavke) Then
-        GetInvoiceDeliveryDate = fallbackDate
+Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFMapper.GetInvoiceDeliveryDate"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "FakturaID is required."
+    End If
+
+    Dim InvoiceDate As Date
+    InvoiceDate = GetFakturaDateForSEF(fakturaID)
+
+    Dim stavkeData As Variant
+    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(stavkeData) Then
+        GetInvoiceDeliveryDate = InvoiceDate
         Exit Function
     End If
-    
-    colFakturaID = GetColumnIndex("tblFakturaStavke", "FakturaID")
-    colPrijemnicaID = GetColumnIndex("tblFakturaStavke", "PrijemnicaID")
-    
-    For i = 1 To UBound(stavke, 1)
-        If CStr(stavke(i, colFakturaID)) = fakturaID Then
-            prijemnicaID = CStr(stavke(i, colPrijemnicaID))
-            v = LookupValue("tblPrijemnica", "PrijemnicaID", prijemnicaID, "Datum")
-            
-            If IsDate(v) Then
-                GetInvoiceDeliveryDate = CDate(v)
-            Else
-                GetInvoiceDeliveryDate = fallbackDate
-            End If
-            Exit Function
-        End If
-    Next i
-    
-    GetInvoiceDeliveryDate = fallbackDate
 
+    Dim colStFakturaID As Long
+    Dim colPrijemnicaID As Long
+
+    colStFakturaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID", SRC)
+    colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID", SRC)
+
+    RequireColumnIndex TBL_PRIJEMNICA, "PrijemnicaID", SRC
+    RequireColumnIndex TBL_PRIJEMNICA, "Datum", SRC
+
+    Dim latestDeliveryDate As Date
+    latestDeliveryDate = 0
+
+    Dim i As Long
+    For i = 1 To UBound(stavkeData, 1)
+
+        If Trim$(CStr(stavkeData(i, colStFakturaID))) = fakturaID Then
+
+            Dim prijemnicaID As String
+            prijemnicaID = Trim$(CStr(stavkeData(i, colPrijemnicaID)))
+
+            If Len(prijemnicaID) > 0 Then
+
+                Dim v As Variant
+                v = LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "Datum")
+
+                If Not IsEmpty(v) And Not IsNull(v) And IsDate(v) Then
+                    If CDate(v) > latestDeliveryDate Then
+                        latestDeliveryDate = CDate(v)
+                    End If
+                Else
+                    Err.Raise ERR_SEF_VALIDATION, SRC, _
+                              "Prijemnica date missing or invalid. PrijemnicaID=" & prijemnicaID
+                End If
+
+            End If
+
+        End If
+
+    Next i
+
+    If latestDeliveryDate = 0 Then
+        GetInvoiceDeliveryDate = InvoiceDate
+    Else
+        GetInvoiceDeliveryDate = latestDeliveryDate
+    End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
+End Function
+
+Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFMapper.GetFakturaDateForSEF"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "FakturaID is required."
+    End If
+
+    RequireColumnIndex TBL_FAKTURE, "FakturaID", SRC
+    RequireColumnIndex TBL_FAKTURE, "Datum", SRC
+
+    Dim v As Variant
+    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "Datum")
+
+    If IsEmpty(v) Or IsNull(v) Or Not IsDate(v) Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Faktura date is missing or invalid for " & fakturaID
+    End If
+
+    GetFakturaDateForSEF = CDate(v)
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 Public Function ComputePayloadHash(ByVal payload As String) As String
@@ -658,7 +769,7 @@ Public Function ComputePayloadHash(ByVal payload As String) As String
         ' Rolling hash ohne Bitoperatoren
         h = (h * 33#) + c
         
-        ' manuelles Modulo, damit h nie zu groﬂ wird
+        ' manuelles Modulo, damit h nie zu gro√ü wird
         h = h - Int(h / 2147483647#) * 2147483647#
         
     Next i
@@ -667,7 +778,215 @@ Public Function ComputePayloadHash(ByVal payload As String) As String
 
 End Function
 
+Private Function GetSEFPaymentDueDays() As Long
+    On Error GoTo EH
 
+    Const SRC As String = "modSEFMapper.GetSEFPaymentDueDays"
+
+    Dim rawValue As String
+    rawValue = Trim$(GetConfigValue("SEF_PAYMENT_DUE_DAYS"))
+
+    If rawValue = "" Then
+        GetSEFPaymentDueDays = 15
+        Exit Function
+    End If
+
+    Dim daysValue As Long
+
+    If Not TryParseLong(rawValue, daysValue) Then
+        Err.Raise ERR_SEF_CONFIG, SRC, _
+                  "SEF_PAYMENT_DUE_DAYS must be numeric."
+    End If
+
+    If daysValue < 0 Then
+        Err.Raise ERR_SEF_CONFIG, SRC, _
+                  "SEF_PAYMENT_DUE_DAYS cannot be negative."
+    End If
+
+    GetSEFPaymentDueDays = daysValue
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
+End Function
+
+Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
+                                     ByVal sourceName As String) As Date
+    On Error GoTo EH
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, "FakturaID is required."
+    End If
+
+    RequireColumnIndex TBL_FAKTURE, "FakturaID", sourceName
+    RequireColumnIndex TBL_FAKTURE, COL_FAK_DATUM, sourceName
+
+    Dim v As Variant
+    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, COL_FAK_DATUM)
+
+    If IsEmpty(v) Or IsNull(v) Or Not IsDate(v) Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, _
+                  "Faktura date is missing or invalid for " & fakturaID
+    End If
+
+    GetFakturaIssueDate = CDate(v)
+    Exit Function
+
+EH:
+    LogErr sourceName
+    Err.Raise Err.Number, sourceName, Err.Description
+End Function
+
+
+
+Private Sub ValidateSEFDtoForUBL(ByVal dto As clsSEFInvoiceSnapshot)
+    Const SRC As String = "modSEFMapper.ValidateSEFDtoForUBL"
+
+    If dto Is Nothing Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "DTO is Nothing."
+    End If
+
+    If Len(Trim$(dto.fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "FakturaID is missing."
+    End If
+
+    If Len(Trim$(dto.InvoiceNumber)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "InvoiceNumber is missing."
+    End If
+
+    If Len(Trim$(dto.CurrencyCode)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "CurrencyCode is missing."
+    End If
+
+    If Len(Trim$(dto.SellerName)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "SellerName is missing."
+    End If
+
+    If Len(Trim$(dto.SellerPIB)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "SellerPIB is missing."
+    End If
+
+    If Len(Trim$(dto.BuyerName)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "BuyerName is missing."
+    End If
+
+    If Len(Trim$(dto.BuyerPIB)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "BuyerPIB is missing."
+    End If
+
+    If dto.TotalNet <= 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "TotalNet must be > 0."
+    End If
+
+    If dto.TotalVat < 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "TotalVat cannot be negative."
+    End If
+
+    If dto.TotalGross <= 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "TotalGross must be > 0."
+    End If
+
+    If dto.Lines Is Nothing Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "DTO lines collection is Nothing."
+    End If
+
+    If dto.Lines.count = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "DTO has no lines."
+    End If
+    
+    If dto.InvoiceDate = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, "modSEFMapper.ValidateSEFDtoForUBL", _
+              "InvoiceDate is missing."
+    End If
+
+    If dto.DeliveryDate = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, "modSEFMapper.ValidateSEFDtoForUBL", _
+              "DeliveryDate is missing."
+    End If
+
+    If dto.DeliveryDate > dto.InvoiceDate Then
+        Err.Raise ERR_SEF_VALIDATION, "modSEFMapper.ValidateSEFDtoForUBL", _
+              "DeliveryDate must not be later than InvoiceDate. DeliveryDate=" & _
+              Format$(dto.DeliveryDate, "yyyy-mm-dd") & _
+              " InvoiceDate=" & Format$(dto.InvoiceDate, "yyyy-mm-dd")
+    End If
+    
+    Dim i As Long
+    Dim ln As clsSEFLine
+
+    For i = 1 To dto.Lines.count
+        Set ln = dto.Lines(i)
+
+        If Len(Trim$(ln.naziv)) = 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Line " & i & " has no item name."
+        End If
+
+        If ln.kolicina <= 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Line " & i & " quantity must be > 0."
+        End If
+
+        If ln.cena < 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Line " & i & " price cannot be negative."
+        End If
+
+        If ln.Neto < 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Line " & i & " net amount cannot be negative."
+        End If
+
+        If ln.PDV < 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Line " & i & " VAT amount cannot be negative."
+        End If
+
+        If ln.iznos < 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Line " & i & " gross amount cannot be negative."
+        End If
+    Next i
+End Sub
+
+Private Function GetRequiredSEFConfig(ByVal keyName As String, _
+                                      ByVal sourceName As String) As String
+    On Error GoTo EH
+
+    Dim valueText As String
+    valueText = Trim$(GetConfigValue(keyName))
+
+    If valueText = "" Then
+        Err.Raise ERR_SEF_CONFIG, sourceName, _
+                  keyName & " missing in configuration."
+    End If
+
+    GetRequiredSEFConfig = valueText
+    Exit Function
+
+EH:
+    LogErr "modSEFMapper.GetRequiredSEFConfig"
+    Err.Raise Err.Number, "modSEFMapper.GetRequiredSEFConfig", Err.Description
+End Function
+
+Private Sub ValidateGeneratedUBL(ByVal xml As String, ByVal sourceName As String)
+    If Len(Trim$(xml)) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, "Generated UBL XML is empty."
+    End If
+
+    If InStr(1, xml, "<Invoice ", vbTextCompare) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, "Generated UBL XML has no Invoice root."
+    End If
+
+    If InStr(1, xml, "<cbc:ID>", vbTextCompare) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, "Generated UBL XML has no invoice ID."
+    End If
+
+    If InStr(1, xml, "<cac:InvoiceLine>", vbTextCompare) = 0 Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, "Generated UBL XML has no invoice lines."
+    End If
+End Sub
 
 Public Sub Test_BuildSEFInvoiceDto()
 
@@ -697,7 +1016,7 @@ Public Sub Test_BuildSEFInvoiceDto()
     Set ln = dto.Lines.Item(1)
     
     Debug.Print "LINE OK"
-    Debug.Print "Naziv: "; ln.Naziv
+    Debug.Print "Naziv: "; ln.naziv
     Debug.Print "Neto: "; ln.Neto
     Debug.Print "PDV: "; ln.PDV
     Debug.Print "Iznos: "; ln.iznos
@@ -760,4 +1079,51 @@ Public Sub Test_SerializeUBLInvoice()
 EH:
     Debug.Print "ERR " & Err.Number & " - " & Err.Description
 
+End Sub
+
+Public Sub DebugSEFDates(ByVal fakturaID As String)
+    On Error GoTo EH
+
+    Dim dto As clsSEFInvoiceSnapshot
+    Set dto = BuildSEFInvoiceDto(fakturaID)
+
+    Debug.Print "=============================="
+    Debug.Print "SEF DATE DEBUG"
+    Debug.Print "FakturaID=" & fakturaID
+    Debug.Print "DTO InvoiceDate=" & Format$(dto.InvoiceDate, "yyyy-mm-dd")
+    Debug.Print "DTO DeliveryDate=" & Format$(dto.DeliveryDate, "yyyy-mm-dd")
+
+    Dim stavkeData As Variant
+    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(stavkeData) Then Exit Sub
+
+    Dim colFakturaID As Long
+    Dim colPrijemnicaID As Long
+
+    colFakturaID = GetColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID")
+    colPrijemnicaID = GetColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID")
+
+    Dim i As Long
+    For i = 1 To UBound(stavkeData, 1)
+
+        If Trim$(CStr(stavkeData(i, colFakturaID))) = fakturaID Then
+
+            Dim prjID As String
+            prjID = Trim$(CStr(stavkeData(i, colPrijemnicaID)))
+
+            Debug.Print "Stavka row=" & i & _
+                        " | PrijemnicaID=" & prjID & _
+                        " | Prijemnica.Datum=" & _
+                        CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prjID, "Datum"))
+
+        End If
+
+    Next i
+
+    Debug.Print "=============================="
+    Exit Sub
+
+EH:
+    Debug.Print "DebugSEFDates ERR " & Err.Number & " - " & Err.Description
 End Sub
