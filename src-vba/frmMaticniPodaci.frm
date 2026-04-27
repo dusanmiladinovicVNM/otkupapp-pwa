@@ -15,13 +15,22 @@ Attribute VB_Exposed = False
 
 Option Explicit
 
-Private isOpeningChild As Boolean
+' ============================================================
+' frmStammdatenMenu / popup menu
+' Responsibility:
+'   - UI navigation only
+'   - no business logic
+'   - no data writes
+' ============================================================
+
+Private m_IsOpeningChild As Boolean
+Private m_IsClosing As Boolean
 
 Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
 
-    ' pronadi prozor po klasi ThunderDFrame (VBA UserForm)
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    ' Pronadi prozor po klasi ThunderDFrame (VBA UserForm)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         Dim style As Long
@@ -33,9 +42,13 @@ Private Sub RemoveTitleBar()
 End Sub
 
 Private Sub UserForm_Initialize()
+    On Error GoTo EH
+
     Me.StartUpPosition = 0
-    isOpeningChild = False
-    
+
+    m_IsOpeningChild = False
+    m_IsClosing = False
+
     ApplyFormTheme Me, BG_PANEL
 
     StyleMenuButton btnKooperanti, "Kooperanti"
@@ -46,59 +59,163 @@ Private Sub UserForm_Initialize()
     StyleMenuButton btnParcele, "Parcele"
     StyleExitButton btnExit, "Izadji"
 
+    Exit Sub
+
+EH:
+    LogErr "frmStammdatenMenu.UserForm_Initialize"
+    MsgBox "Greška pri otvaranju menija šifarnika: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
-    Me.Caption = ""
+    On Error GoTo EH
+
+    ' Vrati na stari working pattern.
+    ' Bitno: ne koristiti mChromeRemoved ovde.
+    Me.caption = ""
     RemoveTitleBar
+
+    Exit Sub
+
+EH:
+    LogErr "frmStammdatenMenu.UserForm_Activate"
 End Sub
 
 Private Sub UserForm_Deactivate()
-    If Not isOpeningChild Then
-        Unload Me
+    On Error GoTo EH
+
+    If m_IsOpeningChild Then Exit Sub
+    If m_IsClosing Then Exit Sub
+
+    CloseMenuAndReturn
+    Exit Sub
+
+EH:
+    LogErr "frmStammdatenMenu.UserForm_Deactivate"
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = vbFormControlMenu Then
+        Cancel = True
+        CloseMenuAndReturn
     End If
 End Sub
 
+Private Sub CloseMenuAndReturn()
+    On Error GoTo EH
 
+    If m_IsClosing Then Exit Sub
+    m_IsClosing = True
+
+    On Error Resume Next
+    frmOtkupAPP.Show
+    On Error GoTo EH
+
+    Unload Me
+    Exit Sub
+
+EH:
+    LogErr "frmStammdatenMenu.CloseMenuAndReturn"
+    Unload Me
+End Sub
+
+Private Sub ResetMenuButtons()
+    ResetButtonGroupWithExit btnExit, _
+                             btnKooperanti, _
+                             btnStanice, _
+                             btnKupci, _
+                             btnVozaci, _
+                             btnArtikli, _
+                             btnParcele
+End Sub
+
+Private Sub HoverMenuButton(ByVal btn As Object)
+    On Error GoTo EH
+
+    ResetMenuButtons
+    ButtonHover btn
+
+    Exit Sub
+
+EH:
+    LogErr "frmStammdatenMenu.HoverMenuButton"
+End Sub
+
+Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
+    On Error GoTo EH
+
+    If Trim$(nazivSekcije) = "" Then
+        Err.Raise vbObjectError + 7601, "frmStammdatenMenu.OpenStammdatenForm", _
+                  "Naziv sekcije je obavezan."
+    End If
+
+    Dim frm As frmStammdaten
+    Set frm = New frmStammdaten
+
+    m_IsOpeningChild = True
+
+    Me.Hide
+    frmOtkupAPP.Hide
+
+    frm.Tag = nazivSekcije
+    frm.StartUpPosition = 2
+    frm.Show
+
+    Unload Me
+    Exit Sub
+
+EH:
+    LogErr "frmStammdatenMenu.OpenStammdatenForm"
+
+    m_IsOpeningChild = False
+
+    On Error Resume Next
+    Me.Show
+    frmOtkupAPP.Show
+    On Error GoTo 0
+
+    MsgBox "Greška pri otvaranju šifarnika: " & Err.Description, vbCritical, APP_NAME
+End Sub
+
+' ============================================================
+' HOVER
+' ============================================================
 
 Private Sub btnKooperanti_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnKooperanti
+    HoverMenuButton btnKooperanti
 End Sub
 
 Private Sub btnStanice_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnStanice
+    HoverMenuButton btnStanice
 End Sub
 
 Private Sub btnKupci_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnKupci
+    HoverMenuButton btnKupci
 End Sub
 
 Private Sub btnVozaci_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnVozaci
+    HoverMenuButton btnVozaci
 End Sub
 
 Private Sub btnArtikli_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnArtikli
+    HoverMenuButton btnArtikli
 End Sub
 
 Private Sub btnParcele_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnParcele
+    HoverMenuButton btnParcele
 End Sub
 
 Private Sub btnExit_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
-    ButtonHover btnExit
+    HoverMenuButton btnExit
 End Sub
 
 Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    ResetButtonGroupWithExit btnExit, btnKooperanti, btnStanice, btnKupci, btnVozaci, btnArtikli, btnParcele
+    On Error Resume Next
+    ResetMenuButtons
 End Sub
+
+' ============================================================
+' CLICKS
+' ============================================================
 
 Private Sub btnKooperanti_Click()
     ButtonActive btnKooperanti
@@ -131,20 +248,6 @@ Private Sub btnParcele_Click()
 End Sub
 
 Private Sub btnExit_Click()
-    Unload Me
+    CloseMenuAndReturn
 End Sub
 
-Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
-    Dim frm As New frmStammdaten
-
-    isOpeningChild = True
-
-    Me.Hide
-    frmOtkupAPP.Hide
-
-    frm.Tag = nazivSekcije
-    frm.StartUpPosition = 2
-    frm.Show
-
-    Unload Me
-End Sub
