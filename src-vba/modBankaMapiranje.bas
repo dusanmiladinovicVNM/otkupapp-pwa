@@ -819,10 +819,10 @@ End Function
 
 
 ' ============================================================
-' PRIVATE - FACTURA MATCH
+' PUBLIC - FACTURA MATCH
 ' ============================================================
 
-Private Function TryResolveFakturaForKupac(ByVal bankaImportID As String, ByVal kupacID As String) As String
+Public Function TryResolveFakturaForKupac(ByVal bankaImportID As String, ByVal kupacID As String) As String
     Dim bim As Variant
     Dim faktData As Variant
     Dim colFID As Long, colBroj As Long, colKup As Long, colIznos As Long, colStatus As Long
@@ -921,7 +921,7 @@ NextI:
     End If
 End Function
 
-Private Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String, _
+Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String, _
                                                      ByVal brojBloka As String) As Variant
     Dim data As Variant
     Dim result() As Variant
@@ -1010,13 +1010,14 @@ NextI:
     
     GetOtkupCandidatesForKooperantBlock = finalResult
 End Function
+
 ' ============================================================
-' PRIVATE - ACCESS
+' PUBLIC - ACCESS
 ' ============================================================
 
-Private Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
+Public Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
     Dim data As Variant
-    Dim result(1 To 1, 1 To 9) As Variant
+    Dim result(1 To 1, 1 To 10) As Variant
     Dim colID As Long
     Dim colBrojDok As Long
     Dim colDatumTx As Long
@@ -1027,6 +1028,7 @@ Private Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
     Dim colOpis As Long
     Dim colSvrha As Long
     Dim colRef As Long
+    Dim colPoziv As Long
     Dim i As Long
     
     data = GetTableData(TBL_BANKA_IMPORT)
@@ -1051,6 +1053,7 @@ Private Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
     colOpis = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OPIS)
     colSvrha = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_SVRHA_PLACANJA)
     colRef = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ)
+    colPoziv = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ)
     
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colID)) = bankaImportID Then
@@ -1063,6 +1066,7 @@ Private Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
             result(1, 7) = CStr(data(i, colOpis))
             result(1, 8) = CStr(data(i, colSvrha))
             result(1, 9) = CStr(data(i, colRef))
+            result(1, 10) = CStr(data(i, colPoziv))
             GetBankaImportRowByID = result
             Exit Function
         End If
@@ -1141,10 +1145,10 @@ End Sub
 
 
 ' ============================================================
-' PRIVATE - ENTITY RESOLUTION
+' PUBLIC - ENTITY RESOLUTION
 ' ============================================================
 
-Private Function TryResolveKupacBIM(ByVal partnerName As String) As Variant
+Public Function TryResolveKupacBIM(ByVal partnerName As String) As Variant
     Dim data As Variant
     Dim colID As Long
     Dim colNaziv As Long
@@ -1171,7 +1175,7 @@ Private Function TryResolveKupacBIM(ByVal partnerName As String) As Variant
     If hits = 1 Then TryResolveKupacBIM = Array(hitID, "Kupac", "")
 End Function
 
-Private Function TryResolveKooperantBIM(ByVal partnerName As String) As Variant
+Public Function TryResolveKooperantBIM(ByVal partnerName As String) As Variant
     Dim data As Variant
     Dim colID As Long
     Dim colIme As Long
@@ -1210,7 +1214,7 @@ Private Function TryResolveKooperantBIM(ByVal partnerName As String) As Variant
     If hits = 1 Then TryResolveKooperantBIM = Array(hitID, "Kooperant", hitOMID)
 End Function
 
-Private Function TryResolveOMBIM(ByVal partnerName As String) As Variant
+Public Function TryResolveOMBIM(ByVal partnerName As String) As Variant
     Dim data As Variant
     Dim colID As Long
     Dim colNaziv As Long
@@ -1245,7 +1249,7 @@ End Function
 
 
 ' ============================================================
-' PRIVATE - HELPERS
+' PRIVATE/PUBLIC - HELPERS
 ' ============================================================
 
 Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
@@ -1266,7 +1270,7 @@ Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
     BuildBIMNapomena = s
 End Function
 
-Private Function NormalizeLooseBIM(ByVal s As String) As String
+Public Function NormalizeLooseBIM(ByVal s As String) As String
     s = UCase$(Trim$(s))
     s = Replace(s, vbTab, " ")
     s = Replace(s, ",", " ")
@@ -1281,20 +1285,25 @@ Private Function NormalizeLooseBIM(ByVal s As String) As String
     NormalizeLooseBIM = Trim$(s)
 End Function
 
-Private Function NzBIM(ByVal v As Variant, Optional ByVal fallback As Variant = "") As Variant
+Public Function NzBIM(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
     If IsError(v) Then
-        NzBIM = fallback
+        NzBIM = Fallback
     ElseIf IsNull(v) Then
-        NzBIM = fallback
+        NzBIM = Fallback
     ElseIf IsEmpty(v) Then
-        NzBIM = fallback
+        NzBIM = Fallback
     ElseIf Trim$(CStr(v)) = "" Then
-        NzBIM = fallback
+        NzBIM = Fallback
     Else
         NzBIM = v
     End If
 End Function
 
+Public Function GetKooperantNaziv(ByVal kooperantID As String) As String
+    GetKooperantNaziv = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime")) & _
+                        " " & _
+                        CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime"))
+End Function
 
 ' ============================================================
 ' TESTS
