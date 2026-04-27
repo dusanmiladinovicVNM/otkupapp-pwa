@@ -2,346 +2,402 @@ Attribute VB_Name = "modSEFClient"
 Option Explicit
 
 Public Function SubmitUBLInvoice(ByVal ublXml As String, ByVal requestId As String) As clsSEFResponse
-    
+
     Dim resp As clsSEFResponse
     Dim http As Object
-    
+
     Dim baseUrl As String
     Dim apiKey As String
     Dim envName As String
     Dim submitUrl As String
-    
+
     On Error GoTo EH
-    
+
     Set resp = New clsSEFResponse
-    
+
     If Len(Trim$(ublXml)) = 0 Then
         Err.Raise ERR_SEF_HTTP, "SubmitUBLInvoice", "UBL XML is empty."
     End If
-    
+
     If Len(Trim$(requestId)) = 0 Then
         Err.Raise ERR_SEF_HTTP, "SubmitUBLInvoice", "requestId is empty."
     End If
-    
-    baseUrl = GetConfigValue("SEF_BASE_URL")
-    apiKey = GetConfigValue("SEF_API_KEY")
-    envName = GetConfigValue("SEF_ENV")
-    
-    If Len(Trim$(baseUrl)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "SubmitUBLInvoice", "SEF_BASE_URL missing in tblSEFConfig."
-    End If
-    
-    If Len(Trim$(apiKey)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "SubmitUBLInvoice", "SEF_API_KEY missing in tblSEFConfig."
-    End If
-    
+
+    GetSEFClientConfig baseUrl, apiKey, envName, "SubmitUBLInvoice"
+
     submitUrl = BuildSubmitUBLUrl(baseUrl, requestId)
-    
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    
-    http.SetTimeouts HTTP_TIMEOUT_RESOLVE_MS, _
-                     HTTP_TIMEOUT_CONNECT_MS, _
-                     HTTP_TIMEOUT_SEND_MS, _
-                     HTTP_TIMEOUT_RECEIVE_MS
-    
+
+    Set http = CreateSEFHttpRequest()
+
     http.Open "POST", submitUrl, False
-    
-    http.SetRequestHeader "Accept", "application/json"
-    http.SetRequestHeader "Content-Type", "application/xml; charset=utf-8"
-    http.SetRequestHeader "ApiKey", apiKey
-    
-    If Len(Trim$(envName)) > 0 Then
-        http.SetRequestHeader "X-SEF-ENV", envName
-    End If
-    
+    ApplySEFHeaders http, apiKey, envName, "application/xml; charset=utf-8"
+
     http.Send ublXml
-    
-    Debug.Print "--------------------------------"
-    Debug.Print "RequestId: " & requestId
-    Debug.Print "Invoice XML ID marker: " & ExtractTagValue(ublXml, "cbc:ID")
-    Debug.Print "HTTP Status: " & http.Status
-    Debug.Print "ResponseText: " & CStr(http.responseText)
-    Debug.Print "--------------------------------"
-     
-    resp.HttpStatus = CLng(http.Status)
-    resp.RawBody = CStr(http.responseText)
-    
-    ParseSubmitResponse resp
-    
+
+    resp.httpStatus = CLng(http.status)
+    resp.rawBody = CStr(http.responseText)
+
+    If resp.httpStatus = 429 Then
+        ApplyRateLimitResponse resp, http
+    Else
+        ParseSubmitResponse resp
+    End If
+
+    DebugSEFHttp "SEF submit response", requestId, resp.httpStatus, _
+                 resp.rawBody, ExtractTagValue(ublXml, "cbc:ID")
+
     Set SubmitUBLInvoice = resp
     Exit Function
 
 EH:
     LogErr "SubmitUBLInvoice"
+
     Set resp = New clsSEFResponse
-    resp.HttpStatus = 0
+    resp.httpStatus = 0
     resp.Success = False
     resp.Accepted = False
     resp.Rejected = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
     resp.errorMessage = Err.Description
-    resp.RawBody = ""
-    
+    resp.rawBody = ""
+
     Set SubmitUBLInvoice = resp
 End Function
 
 Public Function GetInvoiceStatus(ByVal sefDocumentId As String) As clsSEFResponse
-    
+
     Dim resp As clsSEFResponse
     Dim http As Object
-    
+
     Dim baseUrl As String
     Dim apiKey As String
     Dim envName As String
     Dim statusUrl As String
-    
+
     On Error GoTo EH
-    
+
     Set resp = New clsSEFResponse
-    
+
     If Len(Trim$(sefDocumentId)) = 0 Then
         Err.Raise ERR_SEF_HTTP, "GetInvoiceStatus", "SEF document ID is empty."
     End If
-    
-    baseUrl = GetConfigValue("SEF_BASE_URL")
-    apiKey = GetConfigValue("SEF_API_KEY")
-    envName = GetConfigValue("SEF_ENV")
-    
-    If Len(Trim$(baseUrl)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "GetInvoiceStatus", "SEF_BASE_URL missing in tblSEFConfig."
-    End If
-    
-    If Len(Trim$(apiKey)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "GetInvoiceStatus", "SEF_API_KEY missing in tblSEFConfig."
-    End If
-    
+
+    GetSEFClientConfig baseUrl, apiKey, envName, "GetInvoiceStatus"
+
     statusUrl = BuildStatusUrl(baseUrl, sefDocumentId)
-    
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    
-    http.SetTimeouts HTTP_TIMEOUT_RESOLVE_MS, _
-                     HTTP_TIMEOUT_CONNECT_MS, _
-                     HTTP_TIMEOUT_SEND_MS, _
-                     HTTP_TIMEOUT_RECEIVE_MS
-    
+
+    Set http = CreateSEFHttpRequest()
+
     http.Open "GET", statusUrl, False
-    http.SetRequestHeader "Accept", "application/json"
-    http.SetRequestHeader "ApiKey", apiKey
-    
-    If Len(Trim$(envName)) > 0 Then
-        http.SetRequestHeader "X-SEF-ENV", envName
-    End If
-    
+    ApplySEFHeaders http, apiKey, envName, ""
+
     http.Send
-    
-    resp.HttpStatus = CLng(http.Status)
-    resp.RawBody = CStr(http.responseText)
+
+    resp.httpStatus = CLng(http.status)
+    resp.rawBody = CStr(http.responseText)
     resp.sefDocumentId = sefDocumentId
-    
+
+    If resp.httpStatus = 429 Then
+        ApplyRateLimitResponse resp, http
+    Else
     ParseStatusResponse resp
-    
+    End If
+    DebugSEFHttp "SEF status response", sefDocumentId, resp.httpStatus, resp.rawBody
+
     Set GetInvoiceStatus = resp
     Exit Function
 
 EH:
     LogErr "GetInvoiceStatus"
+
     Set resp = New clsSEFResponse
-    resp.HttpStatus = 0
+    resp.httpStatus = 0
     resp.Success = False
     resp.Accepted = False
     resp.Rejected = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
     resp.errorMessage = Err.Description
-    resp.RawBody = ""
+    resp.rawBody = ""
     resp.sefDocumentId = sefDocumentId
-    
+
     Set GetInvoiceStatus = resp
 End Function
 
 Public Function CancelInvoiceOnSEF(ByVal sefDocumentId As String, ByVal cancelComment As String) As clsSEFResponse
-    
+
     Dim resp As clsSEFResponse
     Dim http As Object
-    
+
     Dim baseUrl As String
     Dim apiKey As String
     Dim envName As String
     Dim cancelUrl As String
     Dim body As String
-    
+
     On Error GoTo EH
-    
+
     Set resp = New clsSEFResponse
-    
+
     If Len(Trim$(sefDocumentId)) = 0 Then
         Err.Raise ERR_SEF_HTTP, "CancelInvoiceOnSEF", "SEF document ID is empty."
     End If
-    
+
     If Len(Trim$(cancelComment)) = 0 Then
         Err.Raise ERR_SEF_VALIDATION, "CancelInvoiceOnSEF", "Cancel comment is required."
     End If
-    
-    baseUrl = GetConfigValue("SEF_BASE_URL")
-    apiKey = GetConfigValue("SEF_API_KEY")
-    envName = GetConfigValue("SEF_ENV")
-    
-    If Len(Trim$(baseUrl)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "CancelInvoiceOnSEF", "SEF_BASE_URL missing in tblSEFConfig."
-    End If
-    
-    If Len(Trim$(apiKey)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "CancelInvoiceOnSEF", "SEF_API_KEY missing in tblSEFConfig."
-    End If
-    
+
+    GetSEFClientConfig baseUrl, apiKey, envName, "CancelInvoiceOnSEF"
+
     cancelUrl = BuildCancelUrl(baseUrl)
-    
-    body = "{""invoiceId"":" & CLng(sefDocumentId) & ",""cancelComments"":""" & JsonEscape(cancelComment) & """}"
-    
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    
-    http.SetTimeouts HTTP_TIMEOUT_RESOLVE_MS, _
-                     HTTP_TIMEOUT_CONNECT_MS, _
-                     HTTP_TIMEOUT_SEND_MS, _
-                     HTTP_TIMEOUT_RECEIVE_MS
-    
+    body = "{""invoiceId"":" & GetJsonNumericIdLiteral(sefDocumentId, "CancelInvoiceOnSEF") & _
+       ",""cancelComments"":""" & JsonEscape(cancelComment) & """}"
+
+    Set http = CreateSEFHttpRequest()
+
     http.Open "POST", cancelUrl, False
-    http.SetRequestHeader "Accept", "application/json"
-    http.SetRequestHeader "Content-Type", "application/json; charset=utf-8"
-    http.SetRequestHeader "ApiKey", apiKey
-    
-    If Len(Trim$(envName)) > 0 Then
-        http.SetRequestHeader "X-SEF-ENV", envName
-    End If
-    
+    ApplySEFHeaders http, apiKey, envName, "application/json; charset=utf-8"
+
     http.Send body
-    
-    resp.HttpStatus = CLng(http.Status)
-    resp.RawBody = CStr(http.responseText)
+
+    resp.httpStatus = CLng(http.status)
+    resp.rawBody = CStr(http.responseText)
     resp.sefDocumentId = sefDocumentId
-    
-    If resp.HttpStatus >= 200 And resp.HttpStatus < 300 Then
+
+    If resp.httpStatus = 429 Then
+        ApplyRateLimitResponse resp, http
+
+    ElseIf resp.httpStatus >= 200 And resp.httpStatus < 300 Then
         resp.Success = True
         resp.apiStatus = UCase$(FirstNonEmpty( _
-            ExtractJsonString(resp.RawBody, "Status"), _
+            ExtractJsonString(resp.rawBody, "Status"), _
             "CANCELLED"))
     Else
         resp.Success = False
         resp.apiStatus = "FAILED"
-        resp.errorCode = CStr(resp.HttpStatus)
-        resp.errorMessage = FirstNonEmpty( _
-            ExtractJsonString(resp.RawBody, "Message"), _
-            ExtractJsonString(resp.RawBody, "message"), _
-            ExtractJsonString(resp.RawBody, "error"), _
-            "HTTP error during SEF cancel.")
+        resp.errorCode = CStr(resp.httpStatus)
+        resp.errorMessage = BuildHttpErrorMessage( _
+            "HTTP error during SEF cancel.", resp.rawBody)
     End If
-    
+
+    DebugSEFHttp "SEF cancel response", sefDocumentId, resp.httpStatus, resp.rawBody
+
     Set CancelInvoiceOnSEF = resp
     Exit Function
 
 EH:
-    LogErr "CancelInvoiceOnSef"
+    LogErr "CancelInvoiceOnSEF"
+
     Set resp = New clsSEFResponse
-    resp.HttpStatus = 0
+    resp.httpStatus = 0
     resp.Success = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
     resp.errorMessage = Err.Description
     resp.sefDocumentId = sefDocumentId
+
     Set CancelInvoiceOnSEF = resp
 End Function
 
 Public Function StornoInvoiceOnSEF(ByVal sefDocumentId As String, ByVal stornoComment As String, Optional ByVal stornoNumber As String = "") As clsSEFResponse
-    
+
     Dim resp As clsSEFResponse
     Dim http As Object
-    
+
     Dim baseUrl As String
     Dim apiKey As String
     Dim envName As String
     Dim stornoUrl As String
     Dim body As String
-    
+
     On Error GoTo EH
-    
+
     Set resp = New clsSEFResponse
-    
+
     If Len(Trim$(sefDocumentId)) = 0 Then
         Err.Raise ERR_SEF_HTTP, "StornoInvoiceOnSEF", "SEF document ID is empty."
     End If
-    
+
     If Len(Trim$(stornoComment)) = 0 Then
         Err.Raise ERR_SEF_VALIDATION, "StornoInvoiceOnSEF", "Storno comment is required."
     End If
-    
-    baseUrl = GetConfigValue("SEF_BASE_URL")
-    apiKey = GetConfigValue("SEF_API_KEY")
-    envName = GetConfigValue("SEF_ENV")
-    
-    If Len(Trim$(baseUrl)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "StornoInvoiceOnSEF", "SEF_BASE_URL missing in tblSEFConfig."
-    End If
-    
-    If Len(Trim$(apiKey)) = 0 Then
-        Err.Raise ERR_SEF_CONFIG, "StornoInvoiceOnSEF", "SEF_API_KEY missing in tblSEFConfig."
-    End If
-    
+
+    GetSEFClientConfig baseUrl, apiKey, envName, "StornoInvoiceOnSEF"
+
     stornoUrl = BuildStornoUrl(baseUrl)
-    
-    body = "{""invoiceId"":" & CLng(sefDocumentId) & ",""stornoNumber"":""" & JsonEscape(stornoNumber) & """,""stornoComment"":""" & JsonEscape(stornoComment) & """}"
-    
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    
-    http.SetTimeouts HTTP_TIMEOUT_RESOLVE_MS, _
-                     HTTP_TIMEOUT_CONNECT_MS, _
-                     HTTP_TIMEOUT_SEND_MS, _
-                     HTTP_TIMEOUT_RECEIVE_MS
-    
+    body = "{""invoiceId"":" & GetJsonNumericIdLiteral(sefDocumentId, "StornoInvoiceOnSEF") & _
+            ",""stornoNumber"":""" & JsonEscape(stornoNumber) & _
+            """,""stornoComment"":""" & JsonEscape(stornoComment) & """}"
+
+    Set http = CreateSEFHttpRequest()
+
     http.Open "POST", stornoUrl, False
-    http.SetRequestHeader "Accept", "application/json"
-    http.SetRequestHeader "Content-Type", "application/json; charset=utf-8"
-    http.SetRequestHeader "ApiKey", apiKey
-    
-    If Len(Trim$(envName)) > 0 Then
-        http.SetRequestHeader "X-SEF-ENV", envName
-    End If
-    
+    ApplySEFHeaders http, apiKey, envName, "application/json; charset=utf-8"
+
     http.Send body
-    
-    resp.HttpStatus = CLng(http.Status)
-    resp.RawBody = CStr(http.responseText)
+
+    resp.httpStatus = CLng(http.status)
+    resp.rawBody = CStr(http.responseText)
     resp.sefDocumentId = sefDocumentId
-    
-    If resp.HttpStatus >= 200 And resp.HttpStatus < 300 Then
+
+    If resp.httpStatus = 429 Then
+        ApplyRateLimitResponse resp, http
+
+    ElseIf resp.httpStatus >= 200 And resp.httpStatus < 300 Then
         resp.Success = True
         resp.apiStatus = UCase$(FirstNonEmpty( _
-            ExtractJsonString(resp.RawBody, "Status"), _
+            ExtractJsonString(resp.rawBody, "Status"), _
             "STORNO"))
     Else
         resp.Success = False
         resp.apiStatus = "FAILED"
-        resp.errorCode = CStr(resp.HttpStatus)
-        resp.errorMessage = FirstNonEmpty( _
-            ExtractJsonString(resp.RawBody, "Message"), _
-            ExtractJsonString(resp.RawBody, "message"), _
-            ExtractJsonString(resp.RawBody, "error"), _
-            "HTTP error during SEF storno.")
+        resp.errorCode = CStr(resp.httpStatus)
+        resp.errorMessage = BuildHttpErrorMessage( _
+            "HTTP error during SEF storno.", resp.rawBody)
     End If
-    
+
+    DebugSEFHttp "SEF storno response", sefDocumentId, resp.httpStatus, resp.rawBody
+
     Set StornoInvoiceOnSEF = resp
     Exit Function
 
 EH:
-    LogErr "StornoInvoiceOnSef"
+    LogErr "StornoInvoiceOnSEF"
+
     Set resp = New clsSEFResponse
-    resp.HttpStatus = 0
+    resp.httpStatus = 0
     resp.Success = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
     resp.errorMessage = Err.Description
     resp.sefDocumentId = sefDocumentId
+
     Set StornoInvoiceOnSEF = resp
+End Function
+Private Sub GetSEFClientConfig(ByRef baseUrl As String, _
+                               ByRef apiKey As String, _
+                               ByRef envName As String, _
+                               ByVal sourceName As String)
+    On Error GoTo EH
+
+    baseUrl = Trim$(GetConfigValue("SEF_BASE_URL"))
+    apiKey = Trim$(GetConfigValue("SEF_API_KEY"))
+    envName = Trim$(GetConfigValue("SEF_ENV"))
+
+    If Len(baseUrl) = 0 Then
+        Err.Raise ERR_SEF_CONFIG, sourceName, _
+                  "SEF_BASE_URL missing in tblSEFConfig."
+    End If
+
+    If Len(apiKey) = 0 Then
+        Err.Raise ERR_SEF_CONFIG, sourceName, _
+                  "SEF_API_KEY missing in tblSEFConfig."
+    End If
+
+    If InStr(1, baseUrl, "http://", vbTextCompare) <> 1 _
+       And InStr(1, baseUrl, "https://", vbTextCompare) <> 1 Then
+        Err.Raise ERR_SEF_CONFIG, sourceName, _
+                  "SEF_BASE_URL must start with http:// or https://."
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr "modSEFClient.GetSEFClientConfig"
+    Err.Raise Err.Number, sourceName, Err.Description
+End Sub
+
+Private Function CreateSEFHttpRequest() As Object
+    On Error GoTo EH
+
+    Dim http As Object
+    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+
+    http.SetTimeouts HTTP_TIMEOUT_RESOLVE_MS, _
+                     HTTP_TIMEOUT_CONNECT_MS, _
+                     HTTP_TIMEOUT_SEND_MS, _
+                     HTTP_TIMEOUT_RECEIVE_MS
+
+    Set CreateSEFHttpRequest = http
+    Exit Function
+
+EH:
+    LogErr "modSEFClient.CreateSEFHttpRequest"
+    Err.Raise Err.Number, "modSEFClient.CreateSEFHttpRequest", Err.Description
+End Function
+
+Private Sub ApplySEFHeaders(ByVal http As Object, _
+                            ByVal apiKey As String, _
+                            ByVal envName As String, _
+                            ByVal contentType As String)
+    On Error GoTo EH
+
+    If http Is Nothing Then
+        Err.Raise ERR_SEF_HTTP, "modSEFClient.ApplySEFHeaders", _
+                  "HTTP object is Nothing."
+    End If
+
+    http.SetRequestHeader "Accept", "application/json"
+
+    If Len(Trim$(contentType)) > 0 Then
+        http.SetRequestHeader "Content-Type", contentType
+    End If
+
+    http.SetRequestHeader "ApiKey", apiKey
+
+    If Len(Trim$(envName)) > 0 Then
+        http.SetRequestHeader "X-SEF-ENV", envName
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr "modSEFClient.ApplySEFHeaders"
+    Err.Raise Err.Number, "modSEFClient.ApplySEFHeaders", Err.Description
+End Sub
+
+Private Function IsSEFDebugEnabled() As Boolean
+    IsSEFDebugEnabled = (UCase$(Trim$(GetConfigValue("SEF_DEBUG_LOG"))) = "DA")
+End Function
+
+Private Sub DebugSEFHttp(ByVal caption As String, _
+                         ByVal requestId As String, _
+                         ByVal httpStatus As Long, _
+                         ByVal responseText As String, _
+                         Optional ByVal xmlIdMarker As String = "")
+    On Error Resume Next
+
+    If Not IsSEFDebugEnabled() Then Exit Sub
+
+    Debug.Print "--------------------------------"
+    Debug.Print caption
+
+    If Len(Trim$(requestId)) > 0 Then
+        Debug.Print "RequestId: " & requestId
+    End If
+
+    If Len(Trim$(xmlIdMarker)) > 0 Then
+        Debug.Print "Invoice XML ID marker: " & xmlIdMarker
+    End If
+
+    Debug.Print "HTTP Status: " & CStr(httpStatus)
+    Debug.Print "ResponseText: " & Left$(responseText, 2000)
+    Debug.Print "--------------------------------"
+End Sub
+
+Private Function GetHeaderSafe(ByVal http As Object, ByVal headerName As String) As String
+    On Error Resume Next
+    GetHeaderSafe = Trim$(CStr(http.GetResponseHeader(headerName)))
+End Function
+
+Private Function BuildHttpErrorMessage(ByVal defaultMessage As String, _
+                                       ByVal rawBody As String) As String
+    BuildHttpErrorMessage = FirstNonEmpty( _
+        ExtractJsonString(rawBody, "Message"), _
+        ExtractJsonString(rawBody, "message"), _
+        ExtractJsonString(rawBody, "error"), _
+        defaultMessage)
 End Function
 
 Private Function BuildSubmitUBLUrl(ByVal baseUrl As String, ByVal requestId As String) As String
@@ -395,9 +451,9 @@ End Function
 Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
     
     Dim body As String
-    body = resp.RawBody
+    body = resp.rawBody
     
-    Select Case resp.HttpStatus
+    Select Case resp.httpStatus
         
         Case 200, 201, 202
             resp.Success = True
@@ -426,6 +482,7 @@ Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
                 "SEF rejected request.")
         
         ' In ParseStatusResponse / ParseSubmitResponse:
+        ' Fallback only. Normal 429 handling is done before parser.
         Case 429
             resp.Success = False
             resp.apiStatus = "RATE_LIMITED"
@@ -436,7 +493,7 @@ Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
         Case Else
             resp.Success = False
             resp.apiStatus = "FAILED"
-            resp.errorCode = CStr(resp.HttpStatus)
+            resp.errorCode = CStr(resp.httpStatus)
             resp.errorMessage = FirstNonEmpty( _
                 ExtractJsonString(body, "message"), _
                 ExtractJsonString(body, "error"), _
@@ -449,14 +506,14 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
     Dim body As String
     Dim statusValue As String
     
-    body = resp.RawBody
+    body = resp.rawBody
     
-    If resp.HttpStatus < 200 Or resp.HttpStatus >= 300 Then
+    If resp.httpStatus < 200 Or resp.httpStatus >= 300 Then
         resp.Success = False
         resp.Accepted = False
         resp.Rejected = False
         resp.apiStatus = "FAILED"
-        resp.errorCode = CStr(resp.HttpStatus)
+        resp.errorCode = CStr(resp.httpStatus)
         resp.errorMessage = FirstNonEmpty( _
             ExtractJsonString(body, "Message"), _
             ExtractJsonString(body, "message"), _
@@ -706,7 +763,58 @@ Private Function ExtractTagValue(ByVal xml As String, ByVal tagName As String) A
 
 End Function
 
+Private Function GetJsonNumericIdLiteral(ByVal rawID As String, _
+                                         ByVal sourceName As String) As String
+    On Error GoTo EH
 
+    Dim s As String
+    s = Trim$(rawID)
+
+    If s = "" Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, _
+                  "SEF document ID is empty."
+    End If
+
+    Dim i As Long
+    Dim ch As String
+
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+
+        If ch < "0" Or ch > "9" Then
+            Err.Raise ERR_SEF_VALIDATION, sourceName, _
+                      "SEF document ID must be numeric for this endpoint: " & s
+        End If
+    Next i
+
+    GetJsonNumericIdLiteral = s
+    Exit Function
+
+EH:
+    LogErr "modSEFClient.GetJsonNumericIdLiteral"
+    Err.Raise Err.Number, sourceName, Err.Description
+End Function
+
+
+Private Sub ApplyRateLimitResponse(ByVal resp As clsSEFResponse, _
+                                   ByVal http As Object)
+    On Error Resume Next
+
+    resp.Success = False
+    resp.Accepted = False
+    resp.Rejected = False
+    resp.apiStatus = "RATE_LIMITED"
+    resp.errorCode = "429"
+
+    Dim retryAfter As String
+    retryAfter = GetHeaderSafe(http, "Retry-After")
+
+    If Len(retryAfter) > 0 Then
+        resp.errorMessage = "Rate limit exceeded. Retry-After: " & retryAfter
+    Else
+        resp.errorMessage = "Rate limit exceeded. Retry after delay."
+    End If
+End Sub
 
 Public Sub Test_SubmitUBLInvoice()
 
@@ -725,7 +833,7 @@ Public Sub Test_SubmitUBLInvoice()
     Set resp = SubmitUBLInvoice(xml, requestId)
     
     Debug.Print "RequestId: "; requestId
-    Debug.Print "HTTP: "; resp.HttpStatus
+    Debug.Print "HTTP: "; resp.httpStatus
     Debug.Print "Success: "; resp.Success
     Debug.Print "Accepted: "; resp.Accepted
     Debug.Print "Rejected: "; resp.Rejected
@@ -733,7 +841,7 @@ Public Sub Test_SubmitUBLInvoice()
     Debug.Print "SEFDocumentId: "; resp.sefDocumentId
     Debug.Print "ErrorCode: "; resp.errorCode
     Debug.Print "ErrorMessage: "; resp.errorMessage
-    Debug.Print "RawBody: "; resp.RawBody
+    Debug.Print "RawBody: "; resp.rawBody
     
     Exit Sub
 
