@@ -248,7 +248,7 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
         submissionID:=submissionID, _
         eventType:=SEF_EVT_HTTP_RESPONSE, _
         message:="SEF response saved.", _
-        details:="HTTP=" & CStr(response.HttpStatus) & _
+        details:="HTTP=" & CStr(response.httpStatus) & _
                  "; ApiStatus=" & response.apiStatus & _
                  "; SEFDocumentId=" & response.sefDocumentId)
     
@@ -258,13 +258,28 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     Exit Function
 
 EH:
-    LogErr "SendInvoiceToSEF_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
     On Error Resume Next
+    LogErr "SendInvoiceToSEF_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     If Not txPrep Is Nothing Then txPrep.RollbackTx
     On Error GoTo 0
-    
-    Err.Raise Err.Number, "SendInvoiceToSEF_TX", Err.Description
+
+    If errNum <> 0 Then
+        Err.Raise errNum, "SendInvoiceToSEF_TX", _
+                  "Source=" & errSrc & " | " & errDesc
+    Else
+        Err.Raise ERR_SEF_STATE, "SendInvoiceToSEF_TX", _
+                  "Unexpected SEF send error; original Err was lost before EH capture."
+    End If
 End Function
 
 Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelComment As String) As Boolean
@@ -324,10 +339,23 @@ Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelCom
 
 EH:
     LogErr "CancelInvoiceOnSEF_TX"
+
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    Err.Raise Err.Number, "CancelInvoiceOnSEF_TX", Err.Description
+
+    If errNum <> 0 Then
+        Err.Raise errNum, "CancelInvoiceOnSEF_TX", errDesc
+    Else
+        Err.Raise ERR_SEF_STATE, "CancelInvoiceOnSEF_TX", _
+                  "Unexpected error during SEF cancel."
+    End If
 End Function
 
 Public Function StornoInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal stornoComment As String, Optional ByVal stornoNumber As String = "") As Boolean
@@ -387,10 +415,23 @@ Public Function StornoInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal stornoCom
 
 EH:
     LogErr "StornoInvoiceOnSEF_TX"
+
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    Err.Raise Err.Number, "StornoInvoiceOnSEF_TX", Err.Description
+
+    If errNum <> 0 Then
+        Err.Raise errNum, "StornoInvoiceOnSEF_TX", errDesc
+    Else
+        Err.Raise ERR_SEF_STATE, "StornoInvoiceOnSEF_TX", _
+                  "Unexpected error during SEF storno."
+    End If
 End Function
 
 Private Function ShouldReuseLastSubmission(ByVal fakturaID As String) As Boolean
@@ -415,130 +456,138 @@ Private Function ShouldReuseLastSubmission(ByVal fakturaID As String) As Boolean
 
 End Function
 
-Public Sub RecoverStuckSEFSendingInvoice(ByVal fakturaID As String)
-    
+ Public Sub RecoverStuckSEFSendingInvoice(ByVal fakturaID As String)
+
     Dim tx As clsTransaction
     Dim currentState As String
     Dim submissionID As String
     Dim sefDocumentId As String
-    
+
     On Error GoTo EH
-    
+
     If Len(Trim$(fakturaID)) = 0 Then
         Err.Raise ERR_SEF_STATE, "RecoverStuckSEFSendingInvoice", _
-            "FakturaID is required."
+                  "FakturaID is required."
     End If
-    
+
     currentState = GetFakturaSEFWorkflowState(fakturaID)
-    
+
     If currentState <> WF_SEF_SENDING Then
         Err.Raise ERR_SEF_STATE, "RecoverStuckSEFSendingInvoice", _
-            "Invoice is not in SEF_SENDING state: " & currentState
+                  "Invoice is not in SEF_SENDING state: " & currentState
     End If
-    
+
     submissionID = GetLastSEFSubmissionID(fakturaID)
     sefDocumentId = GetFakturaSEFDocumentId(fakturaID)
-    
-    ' If SEF already knows the document, prefer refresh
+
+    ' If SEF already knows the document, prefer refresh.
     If Len(Trim$(sefDocumentId)) > 0 Then
-        Call RefreshSEFStatus_TX(fakturaID)
-        
-        Call AppendSEFEvent_Row( _
+        RefreshSEFStatus_TX fakturaID
+
+        AppendSEFEvent_Row _
             fakturaID:=fakturaID, _
             submissionID:=submissionID, _
             eventType:=SEF_EVT_STATE_CHANGED, _
             message:="Recovered stuck SEF_SENDING invoice via status refresh.", _
-            details:="SEFDocumentId=" & sefDocumentId)
-        
+            details:="SEFDocumentId=" & sefDocumentId
+
         Exit Sub
     End If
-    
-    ' Otherwise mark as technical failure so normal retry logic can reuse same submission
+
+    ' Otherwise mark as technical failure so normal retry logic can reuse same submission.
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot "tblSEFEventLog"
-    
-    Call UpdateFakturaSEFState_Row( _
+
+    UpdateFakturaSEFState_Row _
         fakturaID:=fakturaID, _
         newState:=WF_SEF_TECH_FAILED, _
         sefStatus:=WF_SEF_TECH_FAILED, _
         errorCode:="SEF_SENDING_RECOVERY", _
         errorMessage:="Recovered from stuck SEF_SENDING state.", _
-        submissionID:=submissionID)
-    
-    Call AppendSEFEvent_Row( _
+        submissionID:=submissionID
+
+    AppendSEFEvent_Row _
         fakturaID:=fakturaID, _
         submissionID:=submissionID, _
         eventType:=SEF_EVT_STATE_CHANGED, _
         message:="Recovered stuck SEF_SENDING invoice to SEF_TECH_FAILED.", _
-        details:="SubmissionID=" & submissionID)
-    
+        details:="SubmissionID=" & submissionID
+
     tx.CommitTx
+    Set tx = Nothing
     Exit Sub
 
 EH:
-    LogErr "RecoverStuckSEFSendingInvoice_TX"
+    LogErr "RecoverStuckSEFSendingInvoice"
+
     Dim errNum As Long
     Dim errDesc As String
-    
+
     errNum = Err.Number
     errDesc = Err.Description
-    
+
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    
+
     If errNum <> 0 Then
         Err.Raise errNum, "RecoverStuckSEFSendingInvoice", errDesc
     Else
         Err.Raise ERR_SEF_STATE, "RecoverStuckSEFSendingInvoice", _
-            "Unexpected error recovering stuck SEF_SENDING invoice."
+                  "Unexpected error recovering stuck SEF_SENDING invoice."
     End If
 End Sub
 
 Public Sub RecoverAllStuckSEFSendingInvoices()
-    
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFService.RecoverAllStuckSEFSendingInvoices"
+
     Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+
+    If IsEmpty(data) Then Exit Sub
+
     Dim colFakturaID As Long
     Dim colWorkflow As Long
+
+    colFakturaID = RequireColumnIndex(TBL_FAKTURE, "FakturaID", SRC)
+    colWorkflow = RequireColumnIndex(TBL_FAKTURE, "SEFWorkflowState", SRC)
+
     Dim i As Long
     Dim fakturaID As String
     Dim workflowState As String
-    
-    On Error GoTo EH
-    
-    data = GetTableData(TBL_FAKTURE)
-    If IsEmpty(data) Then Exit Sub
-    
-    colFakturaID = GetColumnIndex(TBL_FAKTURE, "FakturaID")
-    colWorkflow = GetColumnIndex(TBL_FAKTURE, "SEFWorkflowState")
-    
-    If colFakturaID = 0 Or colWorkflow = 0 Then
-        Err.Raise ERR_SEF_STATE, "RecoverAllStuckSEFSendingInvoices", _
-            "Required columns missing in tblFakture."
-    End If
-    
+
     For i = 1 To UBound(data, 1)
-        
+
         fakturaID = Trim$(CStr(data(i, colFakturaID)))
         workflowState = UCase$(Trim$(CStr(data(i, colWorkflow))))
-        
+
         If workflowState = UCase$(WF_SEF_SENDING) Then
+
             On Error Resume Next
-            Call RecoverStuckSEFSendingInvoice(fakturaID)
+            RecoverStuckSEFSendingInvoice fakturaID
+
+            If Err.Number <> 0 Then
+                LogErr SRC & ".Invoice." & fakturaID
+                Err.Clear
+            End If
+
             On Error GoTo EH
+
         End If
-        
+
     Next i
-    
+
     Exit Sub
 
 EH:
-    LogErr "RecoverAllStuckSEFSendingInvoice_TX"
-    Err.Raise Err.Number, "RecoverAllStuckSEFSendingInvoices", Err.Description
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
-
 
 
 
