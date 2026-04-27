@@ -1,7 +1,7 @@
 Attribute VB_Name = "modAmbalaza"
 Option Explicit
 ' ============================================================
-' modAmbalaza v2.1 – Verpackung-Tracking
+' modAmbalaza v2.1 â€“ Verpackung-Tracking
 ' NEU: VozacID-Parameter
 ' ============================================================
 
@@ -111,9 +111,9 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
         If CStr(data(i, colVozac)) = vozacID Then
             ' Datum-Filter wenn angegeben
             If datumOd <> 0 Then
-                Dim D As Date
-                D = CDate(data(i, colDatum))
-                If D < datumOd Or D > datumDo Then GoTo NextRow
+                Dim d As Date
+                d = CDate(data(i, colDatum))
+                If d < datumOd Or d > datumDo Then GoTo NextRow
             End If
             
             Dim key As String
