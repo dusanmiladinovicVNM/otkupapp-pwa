@@ -3,79 +3,78 @@ Option Explicit
 
 ' =========================================================
 ' modSEFPersistence
-' Alle SEF-Reads/Writes laufen über modDataAccess
+' Alle SEF-Reads/Writes laufen Ã¼ber modDataAccess
 ' =========================================================
+Private Const TBL_SEF_SUBMISSION As String = "tblSEFSubmission"
+Private Const TBL_SEF_EVENT_LOG As String = "tblSEFEventLog"
 
 ' =========================
 ' READ HELPERS
 ' =========================
 
 Public Function GetFakturaSEFWorkflowState(ByVal fakturaID As String) As String
-    Dim v As Variant
-    
-    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState")
-    
-    If IsEmpty(v) Then
-        GetFakturaSEFWorkflowState = ""
-    Else
-        GetFakturaSEFWorkflowState = Trim$(CStr(v))
-    End If
+    GetFakturaSEFWorkflowState = GetFakturaSEFFieldText( _
+        fakturaID, "SEFWorkflowState", "modSEFPersistance.GetFakturaSEFWorkflowState")
 End Function
 
 Public Function GetFakturaSEFDocumentId(ByVal fakturaID As String) As String
-    Dim v As Variant
-    
-    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId")
-    
-    If IsEmpty(v) Then
-        GetFakturaSEFDocumentId = ""
-    Else
-        GetFakturaSEFDocumentId = Trim$(CStr(v))
-    End If
+    GetFakturaSEFDocumentId = GetFakturaSEFFieldText( _
+        fakturaID, "SEFDocumentId", "modSEFPersistance.GetFakturaSEFDocumentId")
 End Function
 
 Public Function GetLastSEFSubmissionID(ByVal fakturaID As String) As String
-    Dim v As Variant
-    
-    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFSubmissionIDLast")
-    
-    If IsEmpty(v) Then
-        GetLastSEFSubmissionID = ""
-    Else
-        GetLastSEFSubmissionID = Trim$(CStr(v))
-    End If
+    GetLastSEFSubmissionID = GetFakturaSEFFieldText( _
+        fakturaID, "SEFSubmissionIDLast", "modSEFPersistance.GetLastSEFSubmissionID")
 End Function
 
 Public Function GetNextSEFVersionNo(ByVal fakturaID As String) As Long
-    Dim v As Variant
-    
-    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFVersionNo")
-    
-    If IsEmpty(v) Then
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetNextSEFVersionNo"
+
+    Dim rawValue As String
+    Dim currentVersion As Long
+
+    rawValue = GetFakturaSEFFieldText(fakturaID, "SEFVersionNo", SRC)
+
+    If rawValue = "" Then
         GetNextSEFVersionNo = 1
-    ElseIf Len(Trim$(CStr(v))) = 0 Then
-        GetNextSEFVersionNo = 1
-    ElseIf Not IsNumeric(v) Then
+    ElseIf Not TryParseLong(rawValue, currentVersion) Then
         GetNextSEFVersionNo = 1
     Else
-        GetNextSEFVersionNo = CLng(v) + 1
+        GetNextSEFVersionNo = currentVersion + 1
     End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 Public Function GetCurrentSEFVersionNo(ByVal fakturaID As String) As Long
-    Dim v As Variant
-    
-    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFVersionNo")
-    
-    If IsEmpty(v) Then
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetCurrentSEFVersionNo"
+
+    Dim rawValue As String
+    Dim currentVersion As Long
+
+    rawValue = GetFakturaSEFFieldText(fakturaID, "SEFVersionNo", SRC)
+
+    If rawValue = "" Then
         GetCurrentSEFVersionNo = 0
-    ElseIf Len(Trim$(CStr(v))) = 0 Then
-        GetCurrentSEFVersionNo = 0
-    ElseIf Not IsNumeric(v) Then
+    ElseIf Not TryParseLong(rawValue, currentVersion) Then
         GetCurrentSEFVersionNo = 0
     Else
-        GetCurrentSEFVersionNo = CLng(v)
+        GetCurrentSEFVersionNo = currentVersion
     End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 ' =========================
@@ -96,81 +95,78 @@ Public Sub UpdateFakturaSEFState_Row( _
     Optional ByVal payloadHash As String = "", _
     Optional ByVal submissionID As String = "", _
     Optional ByVal versionNo As Long = 0)
-    
-    Dim rowIndex As Long
-    Dim oldState As String
-    Dim ok As Boolean
-    
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.UpdateFakturaSEFState_Row"
+
     If Len(Trim$(fakturaID)) = 0 Then
-        Err.Raise ERR_SEF_STATE, "UpdateFakturaSEFState_Row", "FakturaID is required."
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
-    
+
     If Len(Trim$(newState)) = 0 Then
-        Err.Raise ERR_SEF_STATE, "UpdateFakturaSEFState_Row", "newState is required."
+        Err.Raise ERR_SEF_STATE, SRC, "newState is required."
     End If
-    
+
+    RequireFaktureSEFSchema SRC
+
+    Dim rowIndex As Long
     rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
-    
+
+    Dim oldState As String
     oldState = GetFakturaSEFWorkflowState(fakturaID)
+
     If Len(oldState) > 0 Then
-        Call ValidateAllowedTransition(oldState, newState)
+        ValidateAllowedTransition oldState, newState
     End If
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFWorkflowState", newState)
-    If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFWorkflowState", fakturaID
-    
+
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFWorkflowState", newState, SRC
+
     If Len(sefStatus) > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFStatus", sefStatus)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFStatus", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFStatus", sefStatus, SRC
     End If
-    
+
     If Len(sefDocumentId) > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFDocumentId", sefDocumentId)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFDocumentId", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFDocumentId", sefDocumentId, SRC
     End If
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFLastErrorCode", errorCode)
-    If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFLastErrorCode", fakturaID
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFLastErrorMessage", errorMessage)
-    If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFLastErrorMessage", fakturaID
-    
+
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFLastErrorCode", errorCode, SRC
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFLastErrorMessage", errorMessage, SRC
+
     If Len(payloadHash) > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFPayloadHash", payloadHash)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFPayloadHash", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFPayloadHash", payloadHash, SRC
     End If
-    
+
     If Len(submissionID) > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFSubmissionIDLast", submissionID)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFSubmissionIDLast", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFSubmissionIDLast", submissionID, SRC
     End If
-    
+
     If versionNo > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFVersionNo", versionNo)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFVersionNo", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFVersionNo", versionNo, SRC
     End If
-    
+
     Select Case newState
         Case WF_SEF_SENT, WF_SEF_ACCEPTED
-            ok = UpdateCell(TBL_FAKTURE, rowIndex, "PoslatNaSEF", "Da")
-            If Not ok Then RaiseUpdateError TBL_FAKTURE, "PoslatNaSEF", fakturaID
-            
+            RequireUpdateCell TBL_FAKTURE, rowIndex, "PoslatNaSEF", "Da", SRC
+
             If Len(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFSentAt")))) = 0 Then
-                ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFSentAt", Now)
-                If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFSentAt", fakturaID
+                RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFSentAt", Now, SRC
             End If
-        
+
         Case WF_SEF_SENDING
-            ok = UpdateCell(TBL_FAKTURE, rowIndex, "PoslatNaSEF", "Ne")
-            If Not ok Then RaiseUpdateError TBL_FAKTURE, "PoslatNaSEF", fakturaID
+            RequireUpdateCell TBL_FAKTURE, rowIndex, "PoslatNaSEF", "Ne", SRC
     End Select
-    
+
     Select Case newState
         Case WF_SEF_SENT, WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_SYNC_ERROR
-            ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFLastSyncAt", Now)
-            If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFLastSyncAt", fakturaID
+            RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFLastSyncAt", Now, SRC
     End Select
-    
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
 
 ' NOTE:
@@ -184,31 +180,36 @@ Public Sub UpdateFakturaSEFRefreshFields_Row( _
     Optional ByVal sefDocumentId As String = "", _
     Optional ByVal errorCode As String = "", _
     Optional ByVal errorMessage As String = "")
-    
-    Dim rowIndex As Long
-    Dim ok As Boolean
-    
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.UpdateFakturaSEFRefreshFields_Row"
+
     If Len(Trim$(fakturaID)) = 0 Then
-        Err.Raise ERR_SEF_STATE, "UpdateFakturaSEFRefreshFields_Row", "FakturaID is required."
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
-    
+
+    RequireFaktureSEFSchema SRC
+
+    Dim rowIndex As Long
     rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
-    
+
     If Len(sefStatus) > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFStatus", sefStatus)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFStatus", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFStatus", sefStatus, SRC
     End If
-    
+
     If Len(sefDocumentId) > 0 Then
-        ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFDocumentId", sefDocumentId)
-        If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFDocumentId", fakturaID
+        RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFDocumentId", sefDocumentId, SRC
     End If
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFLastErrorCode", errorCode)
-    If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFLastErrorCode", fakturaID
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFLastErrorMessage", errorMessage)
-    If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFLastErrorMessage", fakturaID
+
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFLastErrorCode", errorCode, SRC
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFLastErrorMessage", errorMessage, SRC
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
 
 Public Function CreateSEFSubmission_Row( _
@@ -218,60 +219,101 @@ Public Function CreateSEFSubmission_Row( _
     ByVal payloadHash As String, _
     ByVal requestBody As String, _
     ByVal requestFormat As String) As String
-    
-    Dim submissionID As String
-    Dim rowData(1 To 20) As Variant
-    Dim newRowIndex As Long
-    
-    submissionID = GetNextID("tblSEFSubmission", "SEFSubmissionID", "SFS-")
-    
-    rowData(1) = submissionID            ' SEFSubmissionID
-    rowData(2) = fakturaID               ' FakturaID
-    rowData(3) = versionNo               ' VersionNo
-    rowData(4) = workflowState           ' WorkflowStateAtSubmit
-    rowData(5) = Now                     ' CreatedAt
-    rowData(6) = Empty                   ' SubmittedAt
-    rowData(7) = SEF_SUB_CREATED         ' SubmissionStatus
-    rowData(8) = payloadHash             ' PayloadHash
-    rowData(9) = requestFormat           ' RequestFormat
-    rowData(10) = requestBody            ' RequestBody
-    rowData(11) = Empty                  ' ResponseBody
-    rowData(12) = Empty                  ' HttpStatus
-    rowData(13) = Empty                  ' ApiStatus
-    rowData(14) = Empty                  ' CorrelationId
-    rowData(15) = Empty                  ' SEFDocumentId
-    rowData(16) = Empty                  ' ErrorCode
-    rowData(17) = Empty                  ' ErrorMessage
-    rowData(18) = GetCurrentOperatorName() ' OperatorName
-    rowData(19) = "Ne"                   ' Stornirano
-    rowData(20) = Empty                  ' FinishedAt
-    
-    newRowIndex = AppendRow("tblSEFSubmission", rowData)
-    
-    If newRowIndex <= 0 Then
-        Err.Raise ERR_SEF_STATE, "CreateSEFSubmission_Row", _
-            "Could not append row to tblSEFSubmission."
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.CreateSEFSubmission_Row"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
-    
+
+    If versionNo <= 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "VersionNo must be > 0."
+    End If
+
+    If Len(Trim$(workflowState)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "WorkflowStateAtSubmit is required."
+    End If
+
+    If Len(Trim$(requestBody)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "RequestBody is required."
+    End If
+
+    If Len(Trim$(requestFormat)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "RequestFormat is required."
+    End If
+
+    RequireSEFSubmissionSchema SRC
+
+    Dim submissionID As String
+    submissionID = GetNextID(TBL_SEF_SUBMISSION, "SEFSubmissionID", "SFS-")
+
+    If Len(Trim$(submissionID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "GetNextID did not return SEFSubmissionID."
+    End If
+
+    Dim rowData(1 To 20) As Variant
+
+    rowData(1) = submissionID
+    rowData(2) = fakturaID
+    rowData(3) = versionNo
+    rowData(4) = workflowState
+    rowData(5) = Now
+    rowData(6) = Empty
+    rowData(7) = SEF_SUB_CREATED
+    rowData(8) = payloadHash
+    rowData(9) = requestFormat
+    rowData(10) = requestBody
+    rowData(11) = Empty
+    rowData(12) = Empty
+    rowData(13) = Empty
+    rowData(14) = Empty
+    rowData(15) = Empty
+    rowData(16) = Empty
+    rowData(17) = Empty
+    rowData(18) = GetCurrentOperatorName()
+    rowData(19) = "Ne"
+    rowData(20) = Empty
+
+    Dim newRowIndex As Long
+    newRowIndex = AppendRow(TBL_SEF_SUBMISSION, rowData)
+
+    If newRowIndex <= 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Could not append row to tblSEFSubmission."
+    End If
+
     CreateSEFSubmission_Row = submissionID
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
+
 Public Sub SaveSEFSubmissionResult_Row( _
     ByVal submissionID As String, _
     ByVal response As clsSEFResponse)
-    
-    Dim rowIndex As Long
-    Dim ok As Boolean
-    Dim subStatus As String
-    
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.SaveSEFSubmissionResult_Row"
+
     If Len(Trim$(submissionID)) = 0 Then Exit Sub
-    
+
     If response Is Nothing Then
-        Err.Raise ERR_SEF_RESPONSE_PARSE, "SaveSEFSubmissionResult_Row", _
-            "Response object is Nothing."
+        Err.Raise ERR_SEF_RESPONSE_PARSE, SRC, _
+                  "Response object is Nothing."
     End If
-    
-    rowIndex = GetSingleRowIndexByKey("tblSEFSubmission", "SEFSubmissionID", submissionID, True)
-    
+
+    RequireSEFSubmissionSchema SRC
+
+    Dim rowIndex As Long
+    rowIndex = GetSingleRowIndexByKey(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, True)
+
+    Dim subStatus As String
+
     If response.Accepted Then
         subStatus = SEF_SUB_ACCEPTED
     ElseIf response.Rejected Then
@@ -281,36 +323,23 @@ Public Sub SaveSEFSubmissionResult_Row( _
     Else
         subStatus = SEF_SUB_FAILED
     End If
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "SubmittedAt", Now)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "SubmittedAt", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "FinishedAt", Now)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "FinishedAt", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "SubmissionStatus", subStatus)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "SubmissionStatus", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "HttpStatus", response.HttpStatus)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "HttpStatus", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "ApiStatus", response.apiStatus)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "ApiStatus", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "CorrelationId", response.CorrelationId)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "CorrelationId", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "ResponseBody", response.RawBody)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "ResponseBody", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "SEFDocumentId", response.sefDocumentId)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "SEFDocumentId", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "ErrorCode", response.errorCode)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "ErrorCode", submissionID
-    
-    ok = UpdateCell("tblSEFSubmission", rowIndex, "ErrorMessage", response.errorMessage)
-    If Not ok Then RaiseUpdateError "tblSEFSubmission", "ErrorMessage", submissionID
+
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SubmittedAt", Now, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "FinishedAt", Now, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SubmissionStatus", subStatus, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "HttpStatus", response.httpStatus, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ApiStatus", response.apiStatus, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "CorrelationId", response.CorrelationId, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ResponseBody", response.rawBody, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SEFDocumentId", response.sefDocumentId, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ErrorCode", response.errorCode, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ErrorMessage", response.errorMessage, SRC
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
 
 Public Sub AppendSEFEvent_Row( _
@@ -319,29 +348,45 @@ Public Sub AppendSEFEvent_Row( _
     ByVal eventType As String, _
     ByVal message As String, _
     Optional ByVal details As String = "")
-    
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.AppendSEFEvent_Row"
+
+    RequireSEFEventLogSchema SRC
+
     Dim eventID As String
-    Dim rowData(1 To 9) As Variant
-    Dim newRowIndex As Long
-    
-    eventID = GetNextID("tblSEFEventLog", "SEFEventID", "SFE-")
-    
-    rowData(1) = eventID                         ' SEFEventID
-    rowData(2) = fakturaID                       ' FakturaID
-    rowData(3) = submissionID                    ' SEFSubmissionID
-    rowData(4) = Now                             ' EventTime
-    rowData(5) = eventType                       ' EventType
-    rowData(6) = message                         ' Message
-    rowData(7) = details                         ' Details
-    rowData(8) = GetCurrentOperatorName()        ' OperatorName
-    rowData(9) = "Ne"                            ' Stornirano
-    
-    newRowIndex = AppendRow("tblSEFEventLog", rowData)
-    
-    If newRowIndex <= 0 Then
-        Err.Raise ERR_SEF_STATE, "AppendSEFEvent_Row", _
-            "Could not append row to tblSEFEventLog."
+    eventID = GetNextID(TBL_SEF_EVENT_LOG, "SEFEventID", "SFE-")
+
+    If Len(Trim$(eventID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "GetNextID did not return SEFEventID."
     End If
+
+    Dim rowData(1 To 9) As Variant
+
+    rowData(1) = eventID
+    rowData(2) = fakturaID
+    rowData(3) = submissionID
+    rowData(4) = Now
+    rowData(5) = eventType
+    rowData(6) = message
+    rowData(7) = details
+    rowData(8) = GetCurrentOperatorName()
+    rowData(9) = "Ne"
+
+    Dim newRowIndex As Long
+    newRowIndex = AppendRow(TBL_SEF_EVENT_LOG, rowData)
+
+    If newRowIndex <= 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Could not append row to tblSEFEventLog."
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
 
 ' =========================
@@ -375,23 +420,27 @@ Private Function GetSingleRowIndexByKey( _
     GetSingleRowIndexByKey = CLng(rowsFound(1))
 End Function
 Public Sub UpdateSEFLastSyncAt_Row(ByVal fakturaID As String)
+    On Error GoTo EH
 
-    Dim rowIndex As Long
-    Dim ok As Boolean
-    
-    rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFLastSyncAt", Now)
-    
-    If Not ok Then
-        RaiseUpdateError TBL_FAKTURE, "SEFLastSyncAt", fakturaID
+    Const SRC As String = "modSEFPersistance.UpdateSEFLastSyncAt_Row"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
 
-End Sub
+    RequireColumnIndex TBL_FAKTURE, "FakturaID", SRC
+    RequireColumnIndex TBL_FAKTURE, "SEFLastSyncAt", SRC
 
-Private Sub RaiseUpdateError(ByVal tblName As String, ByVal colName As String, ByVal keyValue As String)
-    Err.Raise ERR_SEF_STATE, "modSEFPersistence", _
-        "Failed to update " & tblName & "." & colName & " for key " & keyValue
+    Dim rowIndex As Long
+    rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
+
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFLastSyncAt", Now, SRC
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
 
 Private Function GetCurrentOperatorName() As String
@@ -410,63 +459,81 @@ End Function
 
 
 Public Function GetSEFSubmissionsForFaktura(ByVal fakturaID As String) As Variant
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetSEFSubmissionsForFaktura"
+
     Dim data As Variant
-    Dim filters As Collection
-    Dim fp As clsFilterParam
-    
-    data = GetTableData("tblSEFSubmission")
+    data = GetTableData(TBL_SEF_SUBMISSION)
+
     If IsEmpty(data) Then
         GetSEFSubmissionsForFaktura = Empty
         Exit Function
     End If
-    
-    Set filters = New Collection
-    
-    Set fp = New clsFilterParam
-    filters.Add fp.Init(GetColumnIndex("tblSEFSubmission", "FakturaID"), "=", fakturaID)
-    
-    GetSEFSubmissionsForFaktura = FilterArray(data, filters)
 
+    Dim filters As Collection
+    Dim fp As clsFilterParam
+
+    Set filters = New Collection
+    Set fp = New clsFilterParam
+
+    filters.Add fp.Init(RequireColumnIndex(TBL_SEF_SUBMISSION, "FakturaID", SRC), "=", fakturaID)
+
+    GetSEFSubmissionsForFaktura = FilterArray(data, filters)
+    Exit Function
+
+EH:
+    LogErr SRC
+    GetSEFSubmissionsForFaktura = Empty
 End Function
 
 Public Function GetSEFEventsForFaktura(ByVal fakturaID As String) As Variant
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetSEFEventsForFaktura"
+
     Dim data As Variant
-    Dim filters As Collection
-    Dim fp As clsFilterParam
-    
-    data = GetTableData("tblSEFEventLog")
+    data = GetTableData(TBL_SEF_EVENT_LOG)
+
     If IsEmpty(data) Then
         GetSEFEventsForFaktura = Empty
         Exit Function
     End If
-    
-    Set filters = New Collection
-    
-    Set fp = New clsFilterParam
-    filters.Add fp.Init(GetColumnIndex("tblSEFEventLog", "FakturaID"), "=", fakturaID)
-    
-    GetSEFEventsForFaktura = FilterArray(data, filters)
 
+    Dim filters As Collection
+    Dim fp As clsFilterParam
+
+    Set filters = New Collection
+    Set fp = New clsFilterParam
+
+    filters.Add fp.Init(RequireColumnIndex(TBL_SEF_EVENT_LOG, "FakturaID", SRC), "=", fakturaID)
+
+    GetSEFEventsForFaktura = FilterArray(data, filters)
+    Exit Function
+
+EH:
+    LogErr SRC
+    GetSEFEventsForFaktura = Empty
 End Function
 
 Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.HasSuccessfulSEFSubmission"
+
     Dim data As Variant
-    Dim filters As Collection
-    Dim fp As clsFilterParam
-    Dim colStatus As Long
-    Dim i As Long
-    
     data = GetSEFSubmissionsForFaktura(fakturaID)
+
     If IsEmpty(data) Then
         HasSuccessfulSEFSubmission = False
         Exit Function
     End If
-    
-    colStatus = GetColumnIndex("tblSEFSubmission", "SubmissionStatus")
-    
+
+    Dim colStatus As Long
+    colStatus = RequireColumnIndex(TBL_SEF_SUBMISSION, "SubmissionStatus", SRC)
+
+    Dim i As Long
+
     For i = 1 To UBound(data, 1)
         Select Case Trim$(CStr(data(i, colStatus)))
             Case SEF_SUB_SENT, SEF_SUB_ACCEPTED
@@ -474,70 +541,193 @@ Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
                 Exit Function
         End Select
     Next i
-    
-    HasSuccessfulSEFSubmission = False
 
+    HasSuccessfulSEFSubmission = False
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 Public Function GetLastSEFSubmissionStatus(ByVal fakturaID As String) As String
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetLastSEFSubmissionStatus"
+
     Dim data As Variant
-    Dim colCreatedAt As Long
-    Dim colStatus As Long
-    
     data = GetSEFSubmissionsForFaktura(fakturaID)
+
     If IsEmpty(data) Then
         GetLastSEFSubmissionStatus = ""
         Exit Function
     End If
-    
-    colCreatedAt = GetColumnIndex("tblSEFSubmission", "CreatedAt")
-    colStatus = GetColumnIndex("tblSEFSubmission", "SubmissionStatus")
-    
-    data = SortArray(data, colCreatedAt, False)
-    
-    GetLastSEFSubmissionStatus = Trim$(CStr(data(1, colStatus)))
 
+    Dim colCreatedAt As Long
+    Dim colStatus As Long
+
+    colCreatedAt = RequireColumnIndex(TBL_SEF_SUBMISSION, "CreatedAt", SRC)
+    colStatus = RequireColumnIndex(TBL_SEF_SUBMISSION, "SubmissionStatus", SRC)
+
+    data = SortArray(data, colCreatedAt, False)
+
+    GetLastSEFSubmissionStatus = Trim$(CStr(data(1, colStatus)))
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 Public Function GetSubmissionRequestBody(ByVal submissionID As String) As String
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetSubmissionRequestBody"
+
+    If Len(Trim$(submissionID)) = 0 Then Exit Function
+
+    RequireColumnIndex TBL_SEF_SUBMISSION, "SEFSubmissionID", SRC
+    RequireColumnIndex TBL_SEF_SUBMISSION, "RequestBody", SRC
+
     Dim v As Variant
-    v = LookupValue("tblSEFSubmission", "SEFSubmissionID", submissionID, "RequestBody")
-    
-    If IsEmpty(v) Then
+    v = LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "RequestBody")
+
+    If IsEmpty(v) Or IsNull(v) Then
         GetSubmissionRequestBody = ""
     Else
         GetSubmissionRequestBody = CStr(v)
     End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 Public Function GetSubmissionPayloadHash(ByVal submissionID As String) As String
-    
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.GetSubmissionPayloadHash"
+
+    If Len(Trim$(submissionID)) = 0 Then Exit Function
+
+    RequireColumnIndex TBL_SEF_SUBMISSION, "SEFSubmissionID", SRC
+    RequireColumnIndex TBL_SEF_SUBMISSION, "PayloadHash", SRC
+
     Dim v As Variant
-    v = LookupValue("tblSEFSubmission", "SEFSubmissionID", submissionID, "PayloadHash")
-    
-    If IsEmpty(v) Then
+    v = LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "PayloadHash")
+
+    If IsEmpty(v) Or IsNull(v) Then
         GetSubmissionPayloadHash = ""
     Else
         GetSubmissionPayloadHash = Trim$(CStr(v))
     End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Function
 
 Public Sub ClearFakturaLastSubmission_Row(ByVal fakturaID As String)
-    
-    Dim rowIndex As Long
-    Dim ok As Boolean
-    
-    If Len(Trim$(fakturaID)) = 0 Then
-        Err.Raise ERR_SEF_STATE, "ClearFakturaLastSubmission_Row", _
-            "FakturaID is required."
-    End If
-    
-    rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
-    
-    ok = UpdateCell(TBL_FAKTURE, rowIndex, "SEFSubmissionIDLast", "")
-    If Not ok Then RaiseUpdateError TBL_FAKTURE, "SEFSubmissionIDLast", fakturaID
+    On Error GoTo EH
 
+    Const SRC As String = "modSEFPersistance.ClearFakturaLastSubmission_Row"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
+    End If
+
+    RequireColumnIndex TBL_FAKTURE, "FakturaID", SRC
+    RequireColumnIndex TBL_FAKTURE, "SEFSubmissionIDLast", SRC
+
+    Dim rowIndex As Long
+    rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
+
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFSubmissionIDLast", "", SRC
+
+    Exit Sub
+
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
 End Sub
+
+Private Sub RequireFaktureSEFSchema(ByVal sourceName As String)
+    RequireColumnIndex TBL_FAKTURE, "FakturaID", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFWorkflowState", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFStatus", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFDocumentId", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFLastErrorCode", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFLastErrorMessage", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFPayloadHash", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFSubmissionIDLast", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFVersionNo", sourceName
+    RequireColumnIndex TBL_FAKTURE, "PoslatNaSEF", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFSentAt", sourceName
+    RequireColumnIndex TBL_FAKTURE, "SEFLastSyncAt", sourceName
+End Sub
+
+Private Sub RequireSEFSubmissionSchema(ByVal sourceName As String)
+    RequireColumnIndex TBL_SEF_SUBMISSION, "SEFSubmissionID", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "FakturaID", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "VersionNo", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "WorkflowStateAtSubmit", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "CreatedAt", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "SubmittedAt", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "SubmissionStatus", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "PayloadHash", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "RequestFormat", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "RequestBody", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "ResponseBody", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "HttpStatus", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "ApiStatus", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "CorrelationId", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "SEFDocumentId", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "ErrorCode", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "ErrorMessage", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "OperatorName", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "Stornirano", sourceName
+    RequireColumnIndex TBL_SEF_SUBMISSION, "FinishedAt", sourceName
+End Sub
+
+Private Sub RequireSEFEventLogSchema(ByVal sourceName As String)
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "SEFEventID", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "FakturaID", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "SEFSubmissionID", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "EventTime", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "EventType", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "Message", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "Details", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "OperatorName", sourceName
+    RequireColumnIndex TBL_SEF_EVENT_LOG, "Stornirano", sourceName
+End Sub
+
+Private Function GetFakturaSEFFieldText(ByVal fakturaID As String, _
+                                        ByVal fieldName As String, _
+                                        ByVal sourceName As String) As String
+    On Error GoTo EH
+
+    If Len(Trim$(fakturaID)) = 0 Then Exit Function
+
+    RequireColumnIndex TBL_FAKTURE, "FakturaID", sourceName
+    RequireColumnIndex TBL_FAKTURE, fieldName, sourceName
+
+    Dim v As Variant
+    v = LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, fieldName)
+
+    If IsEmpty(v) Or IsNull(v) Then
+        GetFakturaSEFFieldText = ""
+    Else
+        GetFakturaSEFFieldText = Trim$(CStr(v))
+    End If
+
+    Exit Function
+
+EH:
+    LogErr sourceName
+    Err.Raise Err.Number, sourceName, Err.Description
+End Function
 
