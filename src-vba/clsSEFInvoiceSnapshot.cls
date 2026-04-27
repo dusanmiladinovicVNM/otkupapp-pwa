@@ -21,6 +21,7 @@ Public SellerPIB As String
 
 Public InvoiceNumber As String
 Public InvoiceDate As Date
+Public DeliveryDate As Date
 Public CurrencyCode As String
 
 Public TotalNet As Double
