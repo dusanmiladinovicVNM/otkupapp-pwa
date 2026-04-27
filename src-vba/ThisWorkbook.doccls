@@ -1,17 +1,22 @@
-﻿Private Sub Workbook_Open()
-    Application.Visible = False
-    frmSplash.Show
-    'frmOtkupAPP.Show
-    
+Private Sub Workbook_Open()
     On Error GoTo EH
-    
-    ImportBankaInbox_TX
+    StartApp
     Exit Sub
-    
 EH:
-    MsgBox "Banka import error: " & Err.Description, vbExclamation
+    Application.Visible = True
+    LogErr "ThisWorkbook.Workbook_Open"
+
+    MsgBox "Greška pri pokretanju aplikacije. Pogledajte log.", vbCritical
 End Sub
 
+
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
-    Application.Visible = True
+    On Error GoTo EH
+
+    modMain.ShutdownApp
+
+    Exit Sub
+
+EH:
+    LogErr "ThisWorkbook.Workbook_BeforeClose"
 End Sub
