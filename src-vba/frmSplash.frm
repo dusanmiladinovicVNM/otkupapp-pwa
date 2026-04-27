@@ -13,13 +13,25 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+Option Explicit
+
+' ============================================================
+' frmSplash / startup splash
+' Responsibility:
+'   - show branding briefly
+'   - then open frmOtkupAPP
+'   - no business logic
+' ============================================================
+
 Private mChromeRemoved As Boolean
+Private m_Started As Boolean
+Private m_IsNavigating As Boolean
 
 Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -29,30 +41,91 @@ Private Sub RemoveTitleBar()
     End If
 End Sub
 
-
 Private Sub UserForm_Initialize()
-    lblApp.Caption = "OtkupApp"
-    lblVersion.Caption = "v2.1.0"
-    lblBy.Caption = "Powered by AgriX"
-End Sub
+    On Error GoTo EH
 
-Private Sub UserForm_Activate()
+    mChromeRemoved = False
+    m_Started = False
+    m_IsNavigating = False
+
+    lblApp.caption = "OtkupApp"
+    lblVersion.caption = "v" & APP_VERSION
+    lblBy.caption = "Powered by AgriX"
+
     Me.BackColor = BG_MAIN()
-    If Not mChromeRemoved Then
-        Me.Caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+
     StyleLabel lblApp, TXT_MUTED(), True
     StyleLabel lblVersion, TXT_MUTED(), True
     StyleLabel lblBy, TXT_MUTED(), True
-    Dim t As Single
-    t = Timer
 
-    Do While Timer < t + 2
+    Exit Sub
+
+EH:
+    LogErr "frmSplash.UserForm_Initialize"
+End Sub
+
+Private Sub UserForm_Activate()
+    On Error GoTo EH
+
+    Me.BackColor = BG_MAIN()
+
+    If Not mChromeRemoved Then
+        Me.caption = ""
+        RemoveTitleBar
+        mChromeRemoved = True
+    End If
+
+    If m_Started Then Exit Sub
+    m_Started = True
+
+    WaitSeconds 2
+    OpenAppShell
+
+    Exit Sub
+
+EH:
+    LogErr "frmSplash.UserForm_Activate"
+    OpenAppShell
+End Sub
+
+Private Sub WaitSeconds(ByVal secondsToWait As Double)
+    On Error GoTo EH
+
+    Dim endTime As Date
+    endTime = DateAdd("s", secondsToWait, Now)
+
+    Do While Now < endTime
         DoEvents
     Loop
 
+    Exit Sub
+
+EH:
+    LogErr "frmSplash.WaitSeconds"
+End Sub
+
+Private Sub OpenAppShell()
+    On Error GoTo EH
+
+    If m_IsNavigating Then Exit Sub
+    m_IsNavigating = True
+
     Unload Me
     frmOtkupAPP.Show
+
+    Exit Sub
+
+EH:
+    LogErr "frmSplash.OpenAppShell"
+
+    On Error Resume Next
+    frmOtkupAPP.Show
 End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = vbFormControlMenu Then
+        Cancel = True
+        OpenAppShell
+    End If
+End Sub
+
