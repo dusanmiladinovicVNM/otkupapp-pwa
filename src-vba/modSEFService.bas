@@ -6,13 +6,6 @@ Option Explicit
 ' WF_SEF_SENT means the outbound send pipeline succeeded locally.
 ' The exact external SEF status is tracked separately in SEFStatus
 ' and may later become SENT, DRAFT, STORNO, CANCELLED, ACCEPTED, etc.
-Option Explicit
-'Call UpdateFakturaSEFState_Row("FAK-00006", WF_SEF_READY, WF_SEF_READY)
-
-' NOTE:
-' WF_SEF_SENT means the outbound send pipeline succeeded locally.
-' The exact external SEF status is tracked separately in SEFStatus
-' and may later become SENT, DRAFT, STORNO, CANCELLED, ACCEPTED, etc.
 Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     
     Dim tx As clsTransaction
@@ -363,23 +356,26 @@ Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelCom
     Exit Function
 
 EH:
-    LogErr "CancelInvoiceOnSEF_TX"
-
     Dim errNum As Long
     Dim errDesc As String
+    Dim errSrc As String
 
     errNum = Err.Number
     errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "CancelInvoiceOnSEF_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     If errNum <> 0 Then
-        Err.Raise errNum, "CancelInvoiceOnSEF_TX", errDesc
+        Err.Raise errNum, "CancelInvoiceOnSEF_TX", _
+                  "Source=" & errSrc & " | " & errDesc
     Else
         Err.Raise ERR_SEF_STATE, "CancelInvoiceOnSEF_TX", _
-                  "Unexpected error during SEF cancel."
+                  "Unexpected error during SEF cancel; original Err was lost before EH capture."
     End If
 End Function
 
@@ -439,23 +435,26 @@ Public Function StornoInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal stornoCom
     Exit Function
 
 EH:
-    LogErr "StornoInvoiceOnSEF_TX"
-
     Dim errNum As Long
     Dim errDesc As String
+    Dim errSrc As String
 
     errNum = Err.Number
     errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "StornoInvoiceOnSEF_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     If errNum <> 0 Then
-        Err.Raise errNum, "StornoInvoiceOnSEF_TX", errDesc
+        Err.Raise errNum, "StornoInvoiceOnSEF_TX", _
+                  "Source=" & errSrc & " | " & errDesc
     Else
         Err.Raise ERR_SEF_STATE, "StornoInvoiceOnSEF_TX", _
-                  "Unexpected error during SEF storno."
+                  "Unexpected error during SEF storno; original Err was lost before EH capture."
     End If
 End Function
 
@@ -545,26 +544,28 @@ End Function
     Exit Sub
 
 EH:
-    LogErr "RecoverStuckSEFSendingInvoice"
-
     Dim errNum As Long
     Dim errDesc As String
+    Dim errSrc As String
 
     errNum = Err.Number
     errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "RecoverStuckSEFSendingInvoice"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     If errNum <> 0 Then
-        Err.Raise errNum, "RecoverStuckSEFSendingInvoice", errDesc
+        Err.Raise errNum, "RecoverStuckSEFSendingInvoice", _
+                  "Source=" & errSrc & " | " & errDesc
     Else
         Err.Raise ERR_SEF_STATE, "RecoverStuckSEFSendingInvoice", _
-                  "Unexpected error recovering stuck SEF_SENDING invoice."
+                  "Unexpected error recovering stuck SEF_SENDING invoice; original Err was lost before EH capture."
     End If
 End Sub
-
 Public Sub RecoverAllStuckSEFSendingInvoices()
 
     On Error GoTo EH
