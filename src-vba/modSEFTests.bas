@@ -172,6 +172,25 @@ EH:
     FinishSuite
 End Sub
 
+Public Sub RunSEFStateTransitionSuite()
+    On Error GoTo EH
+
+    ResetSEFCounters
+    InitSEFTestLog
+
+    StartSuite "SEF STATE TRANSITION SUITE"
+
+    Test_SEFAllowedTransitions
+    Test_SEFBlockedTransitions
+
+    FinishSuite
+    Exit Sub
+
+EH:
+    LogFatal "RunSEFStateTransitionSuite", Err.Number, Err.Description
+    FinishSuite
+End Sub
+
 ' ============================================================
 ' OFFLINE TESTS
 ' ============================================================
@@ -313,6 +332,84 @@ EH:
     LogSkip "ValidateFakturaForSEF for " & fakturaID, Err.Description
 End Sub
 
+Private Sub Test_SEFAllowedTransitions()
+    AssertTransitionAllowed WF_LOCAL_DRAFT, WF_LOCAL_FINALIZED
+
+    AssertTransitionAllowed WF_LOCAL_FINALIZED, WF_SEF_READY
+    AssertTransitionAllowed WF_SEF_READY, WF_SEF_SENDING
+
+    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_SENT
+    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_ACCEPTED
+    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_REJECTED
+    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_TECH_FAILED
+    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_UNKNOWN
+
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_ACCEPTED
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_REJECTED
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_SYNC_ERROR
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_STORNO
+
+    AssertTransitionAllowed WF_SEF_TECH_FAILED, WF_SEF_READY
+    AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_SENT
+    AssertTransitionAllowed WF_SEF_ACCEPTED, WF_SEF_STORNO
+    AssertTransitionAllowed WF_SEF_REJECTED, WF_SEF_READY
+End Sub
+
+Private Sub Test_SEFBlockedTransitions()
+    AssertTransitionBlocked WF_LOCAL_DRAFT, WF_SEF_READY
+    AssertTransitionBlocked WF_LOCAL_FINALIZED, WF_SEF_SENT
+    AssertTransitionBlocked WF_SEF_READY, WF_SEF_SENT
+
+    AssertTransitionBlocked WF_SEF_SENT, WF_SEF_SENT
+    AssertTransitionBlocked WF_SEF_SENT, WF_SEF_READY
+    AssertTransitionBlocked WF_SEF_SENT, WF_SEF_SENDING
+
+    AssertTransitionBlocked WF_SEF_ACCEPTED, WF_SEF_ACCEPTED
+    AssertTransitionBlocked WF_SEF_ACCEPTED, WF_SEF_SENT
+    AssertTransitionBlocked WF_SEF_ACCEPTED, WF_SEF_REJECTED
+
+    AssertTransitionBlocked WF_SEF_REJECTED, WF_SEF_SENT
+    AssertTransitionBlocked WF_SEF_REJECTED, WF_SEF_ACCEPTED
+
+    AssertTransitionBlocked WF_SEF_TECH_FAILED, WF_SEF_SENT
+    AssertTransitionBlocked WF_SEF_SYNC_ERROR, WF_SEF_ACCEPTED
+
+    AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_SENT
+    AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_READY
+    AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_STORNO
+
+    AssertTransitionBlocked "BOGUS_STATE", WF_SEF_SENT
+End Sub
+
+Private Sub AssertTransitionAllowed(ByVal oldState As String, _
+                                    ByVal newState As String)
+    On Error GoTo EH
+
+    ValidateAllowedTransition oldState, newState
+
+    LogPass "Transition allowed: " & oldState & " -> " & newState
+    Exit Sub
+
+EH:
+    LogFail "Transition should be allowed: " & oldState & " -> " & newState, _
+            "Err.Number=" & CStr(Err.Number) & _
+            " | Source=" & Err.Source & _
+            " | Description=" & Err.Description
+End Sub
+
+Private Sub AssertTransitionBlocked(ByVal oldState As String, _
+                                    ByVal newState As String)
+    On Error GoTo ExpectedError
+
+    ValidateAllowedTransition oldState, newState
+
+    LogFail "Transition should be blocked: " & oldState & " -> " & newState, _
+            "Expected validation error, but transition was allowed."
+    Exit Sub
+
+ExpectedError:
+    LogPass "Transition blocked: " & oldState & " -> " & newState
+End Sub
 ' ============================================================
 ' LIVE TESTS
 ' ============================================================
