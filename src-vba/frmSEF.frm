@@ -22,7 +22,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -33,27 +33,32 @@ Private Sub RemoveTitleBar()
 End Sub
 
 Private Sub UserForm_Activate()
+    On Error GoTo EH
+
     If Not mChromeRemoved Then
-        Me.Caption = ""
+        Me.caption = ""
         RemoveTitleBar
         mChromeRemoved = True
     End If
-    
+
     ApplyTheme Me, BG_MAIN
+
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
-    
-    Me.Caption = "SEF upravljanje"
-    
+
+    Me.caption = "SEF upravljanje"
+
     Call SetupSEFEventList
     Call LoadFaktureIntoCombo
     Call ClearSEFInfo
     
-    ' NEW: auto refresh pending invoices
-    On Error Resume Next
-    'Call RefreshPendingOutboundInvoices_TX
-    On Error GoTo 0
-    
+    Call SetupHelpPage
+
+    Exit Sub
+
+EH:
+    LogErr "frmSEF.UserForm_Activate"
+    MsgBox "Greška pri otvaranju SEF forme: " & Err.Description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub SetupSEFEventList()
@@ -92,20 +97,20 @@ End Sub
 
 Private Function GetSelectedFakturaID() As String
     
-    GetSelectedFakturaID = Trim$(CStr(Me.cmbFaktura.Value))
+    GetSelectedFakturaID = Trim$(CStr(Me.cmbFaktura.value))
     
 End Function
 
 Private Sub ClearSEFInfo()
     
-    Me.lblFakturaID.Caption = ""
-    Me.lblBrojFakture.Caption = ""
-    Me.lblKupacNaziv.Caption = ""
-    Me.lblWorkflow.Caption = ""
-    Me.lblSEFStatus.Caption = ""
-    Me.lblSEFDocumentID.Caption = ""
-    Me.lblVersion.Caption = ""
-    Me.lblLastError.Caption = ""
+    Me.lblFakturaID.caption = ""
+    Me.lblBrojFakture.caption = ""
+    Me.lblKupacNaziv.caption = ""
+    Me.lblWorkflow.caption = ""
+    Me.lblSEFStatus.caption = ""
+    Me.lblSEFDocumentID.caption = ""
+    Me.lblVersion.caption = ""
+    Me.lblLastError.caption = ""
     
     Me.lstSEFEvents.Clear
     Call UpdateSEFButtonStates
@@ -125,19 +130,19 @@ Private Sub LoadSelectedFakturaInfo()
     
     kupacID = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "KupacID"))
     
-    Me.lblFakturaID.Caption = fakturaID
-    Me.lblBrojFakture.Caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "BrojFakture"))
-    Me.lblKupacNaziv.Caption = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
-    Me.lblWorkflow.Caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState"))
-    Me.lblSEFStatus.Caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))
-    Me.lblSEFDocumentID.Caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId"))
-    Me.lblVersion.Caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFVersionNo"))
-    Me.lblLastError.Caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFLastErrorMessage"))
+    Me.lblFakturaID.caption = fakturaID
+    Me.lblBrojFakture.caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "BrojFakture"))
+    Me.lblKupacNaziv.caption = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
+    Me.lblWorkflow.caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState"))
+    Me.lblSEFStatus.caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))
+    Me.lblSEFDocumentID.caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId"))
+    Me.lblVersion.caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFVersionNo"))
+    Me.lblLastError.caption = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFLastErrorMessage"))
     
     Call LoadSEFEventsForSelectedFaktura
     Call UpdateSEFButtonStates
     
-    Select Case UCase$(Me.lblSEFStatus.Caption)
+    Select Case UCase$(Me.lblSEFStatus.caption)
     Case "SENT"
         Me.lblSEFStatus.foreColor = vbBlue
     Case "ACCEPTED"
@@ -193,42 +198,42 @@ Private Sub UpdateSEFButtonStates()
     fakturaID = GetSelectedFakturaID()
     
     If Len(fakturaID) = 0 Then
-        Me.btnPosalji.Enabled = False
-        Me.btnOsvezi.Enabled = False
-        Me.btnPrepareResubmit.Enabled = False
-        Me.btnCancel.Enabled = False
-        Me.btnStorno.Enabled = False
-        Me.btnRecoverSending.Enabled = False
+        Me.btnPosalji.enabled = False
+        Me.btnOsvezi.enabled = False
+        Me.btnPrepareResubmit.enabled = False
+        Me.btnCancel.enabled = False
+        Me.btnStorno.enabled = False
+        Me.btnRecoverSending.enabled = False
         Exit Sub
     End If
     
     workflowState = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState"))))
     sefStatus = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))))
     
-    Me.btnPosalji.Enabled = (workflowState = UCase$(WF_LOCAL_FINALIZED) Or _
+    Me.btnPosalji.enabled = (workflowState = UCase$(WF_LOCAL_FINALIZED) Or _
                              workflowState = UCase$(WF_SEF_READY) Or _
                              workflowState = UCase$(WF_SEF_TECH_FAILED))
     
     If workflowState = UCase$(WF_SEF_TECH_FAILED) Then
-        Me.btnPosalji.Caption = "Retry slanje na SEF"
+        Me.btnPosalji.caption = "Retry slanje na SEF"
     Else
-        Me.btnPosalji.Caption = "Po�alji na SEF"
+        Me.btnPosalji.caption = "Pošalji na SEF"
     End If
     
-    If Not Me.btnPosalji.Enabled Then
-        Me.btnPosalji.Caption = "Po�alji na SEF"
+    If Not Me.btnPosalji.enabled Then
+        Me.btnPosalji.caption = "Pošalji na SEF"
     End If
     
-    Me.btnOsvezi.Enabled = (workflowState = UCase$(WF_SEF_SENT) Or _
+    Me.btnOsvezi.enabled = (workflowState = UCase$(WF_SEF_SENT) Or _
                             workflowState = UCase$(WF_SEF_SYNC_ERROR))
     
-    Me.btnPrepareResubmit.Enabled = (workflowState = UCase$(WF_SEF_REJECTED))
+    Me.btnPrepareResubmit.enabled = (workflowState = UCase$(WF_SEF_REJECTED))
     
-    Me.btnCancel.Enabled = (sefStatus = "DRAFT" Or sefStatus = "NEW" Or sefStatus = "ERROR")
+    Me.btnCancel.enabled = (sefStatus = "DRAFT" Or sefStatus = "NEW" Or sefStatus = "ERROR")
     
-    Me.btnStorno.Enabled = (sefStatus = "SENT" Or sefStatus = "ACCEPTED" Or sefStatus = "REJECTED")
+    Me.btnStorno.enabled = (sefStatus = "SENT" Or sefStatus = "ACCEPTED" Or sefStatus = "REJECTED")
     
-    Me.btnRecoverSending.Enabled = (workflowState = UCase$(WF_SEF_SENDING))
+    Me.btnRecoverSending.enabled = (workflowState = UCase$(WF_SEF_SENDING))
     
 End Sub
 
@@ -244,36 +249,41 @@ EH:
 End Sub
 
 Private Sub btnPosalji_Click()
-
     On Error GoTo EH
-    
-    Me.btnPosalji.Enabled = False
-    DoEvents
-    
-    
+
     Dim fakturaID As String
     Dim submissionID As String
-    
+
+    Me.btnPosalji.enabled = False
+    DoEvents
+
     fakturaID = GetSelectedFakturaID()
+
     If Len(fakturaID) = 0 Then
         MsgBox "Izaberite fakturu.", vbExclamation, APP_NAME
-        Exit Sub
+        GoTo CleanExit
     End If
-    
-    If MsgBox("Poslati fakturu " & fakturaID & " na SEF?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
-    
+
+    If MsgBox("Poslati fakturu " & fakturaID & " na SEF?", _
+              vbQuestion + vbYesNo, APP_NAME) = vbNo Then
+        GoTo CleanExit
+    End If
+
     submissionID = SendInvoiceToSEF_TX(fakturaID)
-    
+
     Call LoadSelectedFakturaInfo
-    
+
     MsgBox "Faktura poslata. SubmissionID: " & submissionID, vbInformation, APP_NAME
-    Me.btnPosalji.Enabled = True
+
+CleanExit:
+    Me.btnPosalji.enabled = True
+    Call UpdateSEFButtonStates
     Exit Sub
 
 EH:
     LogErr "frmSEF.btnPosalji"
     MsgBox Err.Description, vbCritical, APP_NAME
-    Me.btnPosalji.Enabled = True
+    Resume CleanExit
 End Sub
 
 Private Sub btnOsvezi_Click()
@@ -290,7 +300,7 @@ Private Sub btnOsvezi_Click()
     Call RefreshSEFStatus_TX(fakturaID)
     Call LoadSelectedFakturaInfo
     
-    MsgBox "SEF status osve�en.", vbInformation, APP_NAME
+    MsgBox "SEF status osvežen.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -338,12 +348,15 @@ Private Sub btnCancel_Click()
     commentText = InputBox("Unesite komentar za cancel:", "SEF cancel")
     If Len(Trim$(commentText)) = 0 Then Exit Sub
     
+    If MsgBox("Otkazati fakturu " & fakturaID & " na SEF?", _
+          vbExclamation + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+    
     ok = CancelInvoiceOnSEF_TX(fakturaID, commentText)
     
     Call LoadSelectedFakturaInfo
     
     If ok Then
-        MsgBox "Cancel uspe�no poslat.", vbInformation, APP_NAME
+        MsgBox "Cancel uspešno poslat.", vbInformation, APP_NAME
     Else
         MsgBox "Cancel nije uspeo.", vbExclamation, APP_NAME
     End If
@@ -373,12 +386,15 @@ Private Sub btnStorno_Click()
     
     stornoNumber = InputBox("Unesite storno broj (opciono):", "SEF storno")
     
+    If MsgBox("Stornirati fakturu " & fakturaID & " na SEF?", _
+          vbExclamation + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+    
     ok = StornoInvoiceOnSEF_TX(fakturaID, stornoComment, stornoNumber)
     
     Call LoadSelectedFakturaInfo
     
     If ok Then
-        MsgBox "Storno uspe�no poslat.", vbInformation, APP_NAME
+        MsgBox "Storno uspešno poslat.", vbInformation, APP_NAME
     Else
         MsgBox "Storno nije uspeo.", vbExclamation, APP_NAME
     End If
@@ -403,7 +419,7 @@ Private Sub btnRecoverSending_Click()
     Call RecoverStuckSEFSendingInvoice(fakturaID)
     Call LoadSelectedFakturaInfo
     
-    MsgBox "Recovery zavr�en.", vbInformation, APP_NAME
+    MsgBox "Recovery završen.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -417,7 +433,7 @@ Private Sub btnRefreshPending_Click()
     Call RefreshPendingOutboundInvoices_TX
     Call LoadSelectedFakturaInfo
     
-    MsgBox "Pending fakture osve�ene.", vbInformation, APP_NAME
+    MsgBox "Pending fakture osvežene.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -431,7 +447,7 @@ Private Sub btnRecoverAllSending_Click()
     Call RecoverAllStuckSEFSendingInvoices
     Call LoadSelectedFakturaInfo
     
-    MsgBox "SEF_SENDING recovery zavr�en.", vbInformation, APP_NAME
+    MsgBox "SEF_SENDING recovery završen.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -443,3 +459,24 @@ Private Sub btnZatvori_Click()
     Unload Me
 End Sub
 
+
+Private Sub SetupHelpPage()
+    Dim helpText As String
+    
+    helpText = "UPUTSTVO ZA SEF UPRAVLJANJE" & vbCrLf & _
+               "============================" & vbCrLf & vbCrLf & _
+               "1. STATUSI FAKTURE:" & vbCrLf & _
+               "- READY: Faktura je spremna." & vbCrLf & _
+               "- SENDING: Faktura se trenutno šalje." & vbCrLf & _
+               "- SENT: Faktura uspešno primljena na SEF." & vbCrLf & _
+               "- ACCEPTED: Faktura potvrdena." & vbCrLf & _
+               "- REJECTED: Greška! Proveri 'Poslednja greška'." & vbCrLf & vbCrLf & _
+               "2. PROCEDURA SLANJA:" & vbCrLf & _
+               "Izaberi fakturu iz liste -> Klikni 'Pošalji na SEF'." & vbCrLf & _
+               "Ako se pojavi status REJECTED, klikni 'Pripremi za ponovno slanje'." & vbCrLf & vbCrLf & _
+               "3. TEHNICKA PODRŠKA:" & vbCrLf & _
+               "Za sve probleme koji se ne rešavaju sa 'Osveži status'," & vbCrLf & _
+               "kontaktiraj administratora i pošalji SEF Event Log (donja tabela)."
+
+    Me.txtHelpBox.value = helpText
+End Sub
