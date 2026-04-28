@@ -217,19 +217,9 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
         Err.Raise ERR_SEF_VALIDATION, SRC, "Invoice has no lines."
     End If
 
-    ' Za sada ostaje soft check kao i ranije.
-    ' Ako kasnije želiš stroži SEF režim, ovo može postati Err.Raise.
-    If Round(calcTotalNet, 2) <> Round(dto.TotalNet, 2) Then
-        ' Soft mismatch: header total differs from line total.
-    End If
-
-    If Round(calcTotalVat, 2) <> Round(dto.TotalVat, 2) Then
-        ' Soft mismatch: header VAT differs from line VAT.
-    End If
-
-    If Round(calcTotalGross, 2) <> Round(dto.TotalGross, 2) Then
-        ' Soft mismatch: header gross differs from line gross.
-    End If
+    ValidateSEFTotalMatch "TotalNet", calcTotalNet, dto.TotalNet, fakturaID, SRC
+    ValidateSEFTotalMatch "TotalVat", calcTotalVat, dto.TotalVat, fakturaID, SRC
+    ValidateSEFTotalMatch "TotalGross", calcTotalGross, dto.TotalGross, fakturaID, SRC
 
     Set BuildSEFInvoiceDto = dto
     Exit Function
@@ -985,6 +975,26 @@ Private Sub ValidateGeneratedUBL(ByVal xml As String, ByVal sourceName As String
 
     If InStr(1, xml, "<cac:InvoiceLine>", vbTextCompare) = 0 Then
         Err.Raise ERR_SEF_VALIDATION, sourceName, "Generated UBL XML has no invoice lines."
+    End If
+End Sub
+
+Private Sub ValidateSEFTotalMatch(ByVal fieldName As String, _
+                                  ByVal lineTotal As Double, _
+                                  ByVal headerTotal As Double, _
+                                  ByVal fakturaID As String, _
+                                  ByVal sourceName As String)
+    Const TOLERANCE As Double = 0.02
+
+    Dim diff As Double
+    diff = Abs(Round(lineTotal, 2) - Round(headerTotal, 2))
+
+    If diff > TOLERANCE Then
+        Err.Raise ERR_SEF_VALIDATION, sourceName, _
+                  "SEF total mismatch for " & fakturaID & _
+                  ". Field=" & fieldName & _
+                  " LineTotal=" & Format$(Round(lineTotal, 2), "0.00") & _
+                  " HeaderTotal=" & Format$(Round(headerTotal, 2), "0.00") & _
+                  " Diff=" & Format$(Round(diff, 2), "0.00")
     End If
 End Sub
 
