@@ -1,0 +1,67 @@
+OTKUPAPP - PRIPREMA PRE INSTALACIJE
+
+Pre lokalne instalacije potrebno je pripremiti Google i SEF podatke.
+
+1. GOOGLE NALOG I DRIVE FOLDER
+
+Za korisnika otvoriti ili koristiti postojeći Google nalog.
+
+Preporuka:
+- namenski Google nalog po firmi/klijentu
+- poseban Google Drive folder za OtkupApp
+
+Na Google Drive napraviti folder:
+OtkupApp
+
+Iz URL-a foldera kopirati folder ID.
+
+Primer:
+https://drive.google.com/drive/folders/1AbCDefGhIJkLmNoPQRsTuVwxyz
+
+GOOGLE_PWA_FOLDER_ID je:
+1AbCDefGhIJkLmNoPQRsTuVwxyz
+
+2. GOOGLE OAUTH
+
+U Google Cloud Console pripremiti OAuth credentials.
+
+Potrebne vrednosti:
+- GOOGLE_CLIENT_ID
+- GOOGLE_CLIENT_SECRET
+
+Za VBA desktop aplikaciju koristiti OAuth client tip:
+Desktop app
+
+Ako je OAuth aplikacija u test modu, dodati korisnički Google nalog kao test user.
+
+U OtkupApp tblConfig moraju postojati redovi:
+
+Kljuc                 Vrednost
+GOOGLE_CLIENT_ID      <client id>
+GOOGLE_CLIENT_SECRET  <client secret>
+GOOGLE_PWA_FOLDER_ID  <drive folder id>
+
+3. SEF API KEY
+
+Ulogovati se u SEF/eFaktura kao ovlašćeni korisnik firme.
+
+U podešavanjima / integracijama / API pristupu generisati ili kopirati API ključ.
+
+U OtkupApp tblSEFConfig moraju postojati:
+
+ConfigKey       ConfigValue
+SEF_BASE_URL    <SEF endpoint>
+SEF_API_KEY     <API ključ>
+SEF_ENV         PROD ili TEST/DEMO
+
+API ključ je tajna vrednost i ne sme se slati javno niti commitovati u GitHub.
+
+4. LOKALNA INSTALACIJA
+
+Pokrenuti:
+Setup-OtkupApp.ps1
+
+Zatim otvoriti OtkupApp i pokrenuti:
+SetupNewPC
+
+Ako setup prođe, APP_SETUP_COMPLETED biće DA.
