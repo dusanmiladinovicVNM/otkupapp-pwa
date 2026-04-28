@@ -360,6 +360,12 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
     LogInfo "ErrorCode=" & errorCode
     LogInfo "ErrorMessage=" & errorMessage
 
+    AssertTrue Len(Trim$(resultSubmissionID)) > 0, _
+                "SendInvoiceToSEF_TX returned SubmissionID"
+
+    AssertEquals submissionID, resultSubmissionID, _
+                "Returned SubmissionID matches Faktura last submission"
+             
     Select Case UCase$(Trim$(afterSendState))
 
         Case UCase$(WF_SEF_REJECTED)
@@ -379,9 +385,14 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
         Case UCase$(WF_SEF_SENT), UCase$(WF_SEF_ACCEPTED)
             ' Refresh only makes sense if SEFDocumentId exists.
             If Len(Trim$(sefDocumentId)) = 0 Then
-                LogSkip "Refresh after live send", _
-                        "No SEFDocumentId after state " & afterSendState
-                LogPass "Live send completed without refresh"
+                LogFail "Live send missing SEFDocumentId", _
+                        "Workflow=" & afterSendState & _
+                        " | SubmissionID=" & submissionID & _
+                        " | ResultSubmissionID=" & resultSubmissionID & _
+                        " | SubmissionStatus=" & subStatus & _
+                        " | HttpStatus=" & httpStatus & _
+                        " | ErrorCode=" & errorCode & _
+                        " | ErrorMessage=" & errorMessage
                 Exit Sub
             End If
 
@@ -440,7 +451,20 @@ Private Sub Test_RefreshTwiceDoesNotBreakState(ByVal fakturaID As String)
 
     AssertTrue Len(Trim$(state2)) > 0, "State exists after first refresh"
     AssertTrue Len(Trim$(state3)) > 0, "State exists after second refresh"
+    
+    ' Ako je bio ACCEPTED/REJECTED pre refresha, mora ostati
+    If UCase$(Trim$(state1)) = UCase$(WF_SEF_ACCEPTED) Or _
+        UCase$(Trim$(state1)) = UCase$(WF_SEF_REJECTED) Then
+        AssertEquals state1, state2, "Final state preserved after first refresh"
+        AssertEquals state1, state3, "Final state preserved after second refresh"
+    End If
 
+    ' State nikad ne sme da regredira u sending
+    AssertTrue UCase$(Trim$(state2)) <> UCase$(WF_SEF_SENDING), _
+            "State not regressed to SENDING after first refresh"
+    AssertTrue UCase$(Trim$(state3)) <> UCase$(WF_SEF_SENDING), _
+            "State not regressed to SENDING after second refresh"
+            
     LogPass "Refresh twice did not break state for " & fakturaID
     Exit Sub
 
@@ -870,8 +894,10 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
         Exit Sub
     End If
 
-    ' Change only this line if your service signature is different.
-    Call CancelInvoiceOnSEF_TX(fakturaID, commentText)
+    Dim cancelOk As Boolean
+    cancelOk = CancelInvoiceOnSEF_TX(fakturaID, commentText)
+
+    AssertTrue cancelOk, "CancelInvoiceOnSEF_TX returned True"
 
     On Error Resume Next
     RefreshSEFStatus_TX fakturaID
@@ -885,11 +911,25 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
 
     LogInfo "After cancel Workflow=" & afterWorkflow
     LogInfo "After cancel SEFStatus=" & afterStatus
-    LogInfo "After cancel SEFDocumentId=" & afterDocID
 
+    ' Workflow ne sme da regredira
     AssertTrue Len(Trim$(afterWorkflow)) > 0, "Cancel leaves workflow state populated"
-    AssertTrue Len(Trim$(afterStatus)) > 0, "Cancel leaves SEFStatus populated"
+
+    ' SEFStatus mora biti terminalan nakon cancel
+    Dim afterStatusUC As String
+    afterStatusUC = UCase$(Trim$(afterStatus))
+    AssertTrue afterStatusUC = "CANCELLED" Or _
+                afterStatusUC = "CANCELED" Or _
+                afterStatusUC = "STORNO" Or _
+                afterStatusUC = "DRAFT" Or _
+                afterStatusUC = "NEW", _
+                "Cancel leaves SEFStatus in expected post-cancel range: " & afterStatus
+
+    ' Event log mora rasti
     AssertTrue afterEvents > beforeEvents, "Cancel writes SEF event log"
+
+    ' DocID mora ostati isti
+    AssertEquals beforeDocID, afterDocID, "SEFDocumentId unchanged after cancel"
 
     LogPass "Live cancel completed for " & fakturaID
     Exit Sub
@@ -939,8 +979,11 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
         Exit Sub
     End If
 
-    ' Change only this line if your service signature is different.
-    Call StornoInvoiceOnSEF_TX(fakturaID, stornoNumber, commentText)
+    ' ISPRAVNO — commentText je drugi param, stornoNumber je treci
+    Dim stornoOk As Boolean
+    stornoOk = StornoInvoiceOnSEF_TX(fakturaID, commentText, stornoNumber)
+
+    AssertTrue stornoOk, "StornoInvoiceOnSEF_TX returned True"
 
     On Error Resume Next
     RefreshSEFStatus_TX fakturaID
@@ -954,11 +997,18 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
 
     LogInfo "After storno Workflow=" & afterWorkflow
     LogInfo "After storno SEFStatus=" & afterStatus
-    LogInfo "After storno SEFDocumentId=" & afterDocID
 
     AssertTrue Len(Trim$(afterWorkflow)) > 0, "Storno leaves workflow state populated"
-    AssertTrue Len(Trim$(afterStatus)) > 0, "Storno leaves SEFStatus populated"
+
+    Dim afterStatusUC As String
+    afterStatusUC = UCase$(Trim$(afterStatus))
+    AssertTrue afterStatusUC = "STORNO" Or _
+                afterStatusUC = "CANCELLED" Or _
+                afterStatusUC = "CANCELED", _
+                "Storno leaves SEFStatus in expected post-storno range: " & afterStatus
+
     AssertTrue afterEvents > beforeEvents, "Storno writes SEF event log"
+    AssertEquals beforeDocID, afterDocID, "SEFDocumentId unchanged after storno"
 
     LogPass "Live storno completed for " & fakturaID
     Exit Sub
@@ -1039,8 +1089,12 @@ Private Function IsExpectedSEFBusinessBlock(ByVal textValue As String) As Boolea
 
     IsExpectedSEFBusinessBlock = _
         InStr(1, s, "NOT ALLOWED", vbTextCompare) > 0 Or _
-        InStr(1, s, "CANNOT", vbTextCompare) > 0 Or _
+        InStr(1, s, "CANNOT BE CANCELLED", vbTextCompare) > 0 Or _
+        InStr(1, s, "CANNOT BE STORNO", vbTextCompare) > 0 Or _
         InStr(1, s, "CURRENT STATE", vbTextCompare) > 0 Or _
-        InStr(1, s, "STATUS", vbTextCompare) > 0 Or _
-        InStr(1, s, "VALIDATION", vbTextCompare) > 0
+        InStr(1, s, "INVOICE CANNOT", vbTextCompare) > 0 Or _
+        InStr(1, s, "IN STATUS:", vbTextCompare) > 0 Or _
+        InStr(1, s, "NO SEFDOCUMENTID", vbTextCompare) > 0 Or _
+        InStr(1, s, "DESTRUCTIVE SEF TEST CANCELLED", vbTextCompare) > 0
 End Function
+
