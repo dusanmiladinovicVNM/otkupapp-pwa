@@ -459,14 +459,14 @@ Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
             resp.Success = True
             resp.apiStatus = "SENT"
             resp.sefDocumentId = FirstNonEmpty( _
-                ExtractJsonNumberAsString(body, "SalesInvoiceId"), _
-                ExtractJsonNumberAsString(body, "InvoiceId"), _
-                ExtractJsonNumberAsString(body, "PurchaseInvoiceId"))
+                ExtractJsonNumberOrStringAsString(body, "SalesInvoiceId"), _
+                ExtractJsonNumberOrStringAsString(body, "InvoiceId"), _
+                ExtractJsonNumberOrStringAsString(body, "PurchaseInvoiceId"))
 
             resp.SEFInvoiceNumber = ""
             resp.CorrelationId = ""
             
-            If InStr(1, body, """accepted"":true", vbTextCompare) > 0 Then
+            If ExtractJsonBoolean(body, "accepted", False) Then
                 resp.Accepted = True
                 resp.apiStatus = "ACCEPTED"
             End If
@@ -530,7 +530,7 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
         ExtractJsonString(body, "invoiceStatus"))))
     
     resp.sefDocumentId = FirstNonEmpty( _
-        ExtractJsonNumberAsString(body, "InvoiceId"), _
+        ExtractJsonNumberOrStringAsString(body, "InvoiceId"), _
         resp.sefDocumentId)
     
     resp.CorrelationId = ExtractJsonString(body, "GlobUniqId")
@@ -691,6 +691,81 @@ Private Function ExtractJsonNumberAsString(ByVal json As String, ByVal key As St
     
     ExtractJsonNumberAsString = Trim$(result)
 
+End Function
+
+Private Function ExtractJsonNumberOrStringAsString(ByVal json As String, _
+                                                   ByVal key As String) As String
+    Dim asNumber As String
+    Dim asString As String
+
+    asNumber = ExtractJsonNumberAsString(json, key)
+
+    If Len(Trim$(asNumber)) > 0 Then
+        ExtractJsonNumberOrStringAsString = asNumber
+        Exit Function
+    End If
+
+    asString = ExtractJsonString(json, key)
+
+    If Len(Trim$(asString)) > 0 Then
+        ExtractJsonNumberOrStringAsString = Trim$(asString)
+    End If
+End Function
+
+Private Function ExtractJsonBoolean(ByVal json As String, _
+                                    ByVal key As String, _
+                                    Optional ByVal defaultValue As Boolean = False) As Boolean
+    Dim pattern As String
+    Dim p As Long
+    Dim startPos As Long
+    Dim token As String
+    Dim ch As String
+
+    pattern = """" & key & """"
+    p = InStr(1, json, pattern, vbTextCompare)
+
+    If p = 0 Then
+        ExtractJsonBoolean = defaultValue
+        Exit Function
+    End If
+
+    startPos = p + Len(pattern)
+
+    Do While startPos <= Len(json)
+        ch = Mid$(json, startPos, 1)
+
+        Select Case ch
+            Case " ", vbTab, vbCr, vbLf
+                startPos = startPos + 1
+            Case ":"
+                startPos = startPos + 1
+                Exit Do
+            Case Else
+                ExtractJsonBoolean = defaultValue
+                Exit Function
+        End Select
+    Loop
+
+    Do While startPos <= Len(json)
+        ch = Mid$(json, startPos, 1)
+
+        Select Case ch
+            Case " ", vbTab, vbCr, vbLf
+                startPos = startPos + 1
+            Case Else
+                Exit Do
+        End Select
+    Loop
+
+    token = UCase$(Mid$(json, startPos, 5))
+
+    If Left$(token, 4) = "TRUE" Then
+        ExtractJsonBoolean = True
+    ElseIf Left$(token, 5) = "FALSE" Then
+        ExtractJsonBoolean = False
+    Else
+        ExtractJsonBoolean = defaultValue
+    End If
 End Function
 
 Private Function JsonEscape(ByVal s As String) As String
