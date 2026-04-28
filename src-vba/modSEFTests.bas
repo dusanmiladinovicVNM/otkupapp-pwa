@@ -897,6 +897,13 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
     Dim cancelOk As Boolean
     cancelOk = CancelInvoiceOnSEF_TX(fakturaID, commentText)
 
+    If Not cancelOk Then
+        LogFail "CancelInvoiceOnSEF_TX returned False for " & fakturaID, _
+                "BeforeStatus=" & beforeStatus & _
+                " | SEFDocumentId=" & beforeDocID
+        Exit Sub
+    End If
+    
     AssertTrue cancelOk, "CancelInvoiceOnSEF_TX returned True"
 
     On Error Resume Next
@@ -931,7 +938,14 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
     ' DocID mora ostati isti
     AssertEquals beforeDocID, afterDocID, "SEFDocumentId unchanged after cancel"
 
-    LogPass "Live cancel completed for " & fakturaID
+    If IsCancelFinalStatus(afterStatus) Then
+        LogPass "Live cancel completed and external status is cancel-like for " & fakturaID
+    Else
+        LogSkip "Live cancel API call completed, but final cancel status is not verified", _
+                "BeforeStatus=" & beforeStatus & _
+                " | AfterStatus=" & afterStatus & _
+                " | SEFDocumentId=" & afterDocID
+    End If
     Exit Sub
 
 EH:
@@ -968,7 +982,13 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
     beforeStatus = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))
     beforeDocID = GetFakturaSEFDocumentId(fakturaID)
     beforeEvents = CountSEFEventsForFaktura(fakturaID)
-
+    
+    If UCase$(Trim$(beforeStatus)) = "STORNO" Then
+        LogSkip "Live storno " & fakturaID, _
+                "Invoice is already in SEFStatus=STORNO."
+        Exit Sub
+    End If
+  
     LogInfo "Before storno Workflow=" & beforeWorkflow
     LogInfo "Before storno SEFStatus=" & beforeStatus
     LogInfo "Before storno SEFDocumentId=" & beforeDocID
@@ -981,7 +1001,16 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
 
     ' ISPRAVNO — commentText je drugi param, stornoNumber je treci
     Dim stornoOk As Boolean
+
     stornoOk = StornoInvoiceOnSEF_TX(fakturaID, commentText, stornoNumber)
+
+    If Not stornoOk Then
+        LogFail "StornoInvoiceOnSEF_TX returned False for " & fakturaID, _
+                "BeforeStatus=" & beforeStatus & _
+                " | SEFDocumentId=" & beforeDocID & _
+                " | StornoNumber=" & stornoNumber
+        Exit Sub
+    End If
 
     AssertTrue stornoOk, "StornoInvoiceOnSEF_TX returned True"
 
@@ -1010,7 +1039,15 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
     AssertTrue afterEvents > beforeEvents, "Storno writes SEF event log"
     AssertEquals beforeDocID, afterDocID, "SEFDocumentId unchanged after storno"
 
-    LogPass "Live storno completed for " & fakturaID
+    If UCase$(Trim$(afterStatus)) = "STORNO" Then
+        LogPass "Live storno completed and external status is STORNO for " & fakturaID
+    Else
+        LogSkip "Live storno API call completed, but final STORNO status is not verified", _
+                "BeforeStatus=" & beforeStatus & _
+                " | AfterStatus=" & afterStatus & _
+                " | SEFDocumentId=" & afterDocID & _
+                " | StornoNumber=" & stornoNumber
+    End If
     Exit Sub
 
 EH:
@@ -1098,3 +1135,11 @@ Private Function IsExpectedSEFBusinessBlock(ByVal textValue As String) As Boolea
         InStr(1, s, "DESTRUCTIVE SEF TEST CANCELLED", vbTextCompare) > 0
 End Function
 
+Private Function IsCancelFinalStatus(ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(sefStatus))
+        Case "CANCELLED", "CANCELED", "CANCEL"
+            IsCancelFinalStatus = True
+        Case Else
+            IsCancelFinalStatus = False
+    End Select
+End Function
