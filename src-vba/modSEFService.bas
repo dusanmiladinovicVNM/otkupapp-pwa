@@ -6,6 +6,13 @@ Option Explicit
 ' WF_SEF_SENT means the outbound send pipeline succeeded locally.
 ' The exact external SEF status is tracked separately in SEFStatus
 ' and may later become SENT, DRAFT, STORNO, CANCELLED, ACCEPTED, etc.
+Option Explicit
+'Call UpdateFakturaSEFState_Row("FAK-00006", WF_SEF_READY, WF_SEF_READY)
+
+' NOTE:
+' WF_SEF_SENT means the outbound send pipeline succeeded locally.
+' The exact external SEF status is tracked separately in SEFStatus
+' and may later become SENT, DRAFT, STORNO, CANCELLED, ACCEPTED, etc.
 Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     
     Dim tx As clsTransaction
@@ -149,6 +156,23 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     Set response = SubmitUBLInvoice(ublXml, submissionID)
     
     ' =========================
+    ' Guard: successful SEF submit must return SEFDocumentId
+    ' =========================
+    If Not response Is Nothing Then
+        If response.Success Then
+            If Len(Trim$(response.sefDocumentId)) = 0 Then
+                response.Success = False
+                response.Accepted = False
+                response.Rejected = False
+                response.apiStatus = "FAILED"
+                response.errorCode = "MISSING_SEF_DOCUMENT_ID"
+                response.errorMessage = _
+                    "SEF submit returned success but SEFDocumentId is missing."
+            End If
+        End If
+    End If
+    
+    ' =========================
     ' TX 2: save result + set final state
     ' =========================
     Set tx = New clsTransaction
@@ -166,7 +190,7 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
             Call UpdateFakturaSEFState_Row( _
                 fakturaID:=fakturaID, _
                 newState:=WF_SEF_ACCEPTED, _
-                sefStatus:=WF_SEF_ACCEPTED, _
+                sefStatus:=response.apiStatus, _
                 sefDocumentId:=response.sefDocumentId, _
                 errorCode:="", _
                 errorMessage:="", _
@@ -186,7 +210,7 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
             Call UpdateFakturaSEFState_Row( _
                 fakturaID:=fakturaID, _
                 newState:=WF_SEF_SENT, _
-                sefStatus:=WF_SEF_SENT, _
+                sefStatus:=response.apiStatus, _
                 sefDocumentId:=response.sefDocumentId, _
                 errorCode:="", _
                 errorMessage:="", _
@@ -198,8 +222,9 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
                 fakturaID:=fakturaID, _
                 submissionID:=submissionID, _
                 eventType:=SEF_EVT_STATE_CHANGED, _
-                message:="Invoice sent to SEF.", _
-                details:="SEFDocumentId=" & response.sefDocumentId)
+                message:="Invoice submitted to SEF and SEFDocumentId received.", _
+                details:="ApiStatus=" & response.apiStatus & _
+                         "; SEFDocumentId=" & response.sefDocumentId)
         
         End If
     
@@ -208,7 +233,7 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
         Call UpdateFakturaSEFState_Row( _
             fakturaID:=fakturaID, _
             newState:=WF_SEF_REJECTED, _
-            sefStatus:=WF_SEF_REJECTED, _
+            sefStatus:=response.apiStatus, _
             errorCode:=response.errorCode, _
             errorMessage:=response.errorMessage, _
             payloadHash:=payloadHash, _
@@ -227,7 +252,7 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
         Call UpdateFakturaSEFState_Row( _
             fakturaID:=fakturaID, _
             newState:=WF_SEF_TECH_FAILED, _
-            sefStatus:=WF_SEF_TECH_FAILED, _
+            sefStatus:=response.apiStatus, _
             errorCode:=response.errorCode, _
             errorMessage:=response.errorMessage, _
             payloadHash:=payloadHash, _
