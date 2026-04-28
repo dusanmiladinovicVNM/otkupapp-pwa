@@ -33,13 +33,24 @@ Public Function CreateFaktura_TX(ByVal kupacID As String, _
     Exit Function
 
 EH:
-    LogErr "CreateFaktura_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr "CreateFaktura_TX"
+    tx.RollbackTx
     On Error GoTo 0
 
-    CreateFaktura_TX = ""
+     CreateFaktura_TX = ""
+
+    Debug.Print " CreateFaktura_TX failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
 End Function
 
 Public Function CreateFaktura(ByVal kupacID As String, _
@@ -81,6 +92,10 @@ Public Function CreateFaktura(ByVal kupacID As String, _
     RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, "CreateFaktura"
     RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, "CreateFaktura"
     RequireColumnIndex TBL_PRIJEMNICA, COL_STORNIRANO, "CreateFaktura"
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "CreateFaktura"
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_CENA, "CreateFaktura"
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_KLASA, "CreateFaktura"
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_BROJ, "CreateFaktura"
 
     Dim fakturaID As String
     fakturaID = GetNextID(TBL_FAKTURE, COL_FAK_ID, "FAK-")
@@ -97,32 +112,46 @@ Public Function CreateFaktura(ByVal kupacID As String, _
         Err.Raise vbObjectError + 1706, "CreateFaktura", _
                   "GenerateBrojFakture nije vratio broj fakture."
     End If
+    
+        Dim prijData As Variant
+    prijData = GetTableData(TBL_PRIJEMNICA)
+
+    If IsEmpty(prijData) Then
+        Err.Raise vbObjectError + 1717, "CreateFaktura", _
+                  "Tabela prijemnica je prazna."
+    End If
+
+    Dim colPrjKol As Long
+    Dim colPrjCena As Long
+    Dim colPrjKlasa As Long
+    Dim colPrjBroj As Long
+
+    colPrjKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "CreateFaktura")
+    colPrjCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "CreateFaktura")
+    colPrjKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "CreateFaktura")
+    colPrjBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "CreateFaktura")
 
     ' Pre-validacija svih prijemnica pre bilo kog upisa.
+    ' Business module trusts only PrijemnicaID from caller.
+    ' Kolicina/Cena/Klasa/BrojPrijemnice are derived from tblPrijemnica.
     Dim s As Variant
     Dim prijemnicaID As String
     Dim rows As Collection
     Dim prijRows As Object
+    Dim prijValues As Object
+
     Set prijRows = CreateObject("Scripting.Dictionary")
+    Set prijValues = CreateObject("Scripting.Dictionary")
 
     For Each s In stavke
-        prijemnicaID = Trim$(CStr(s(0)))
 
-        If prijemnicaID = "" Then
-            Err.Raise vbObjectError + 1707, "CreateFaktura", _
-                      "Stavka nema PrijemnicaID."
-        End If
+        prijemnicaID = GetPrijemnicaIDFromFakturaStavka(s, "CreateFaktura")
 
         Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
 
-        If rows.count = 0 Then
+        If rows Is Nothing Or rows.count = 0 Then
             Err.Raise vbObjectError + 1708, "CreateFaktura", _
                       "Prijemnica nije pronadena: " & prijemnicaID
-        End If
-
-        If Not IsPrijemnicaAvailableForFaktura(rows(1), prijemnicaID) Then
-            Err.Raise vbObjectError + 1709, "CreateFaktura", _
-                      "Prijemnica je vec fakturisana ili stornirana: " & prijemnicaID
         End If
 
         If prijRows.Exists(prijemnicaID) Then
@@ -130,35 +159,58 @@ Public Function CreateFaktura(ByVal kupacID As String, _
                       "Dupla prijemnica u izboru: " & prijemnicaID
         End If
 
-        prijRows.Add prijemnicaID, rows(1)
-    Next s
+        Dim rowPrijValidate As Long
+        rowPrijValidate = CLng(rows(1))
 
-    ' Ukupan iznos
-    Dim ukupno As Double
-    Dim kolicina As Double
-    Dim cena As Double
+        If Not IsPrijemnicaAvailableForFaktura(rowPrijValidate, prijemnicaID) Then
+            Err.Raise vbObjectError + 1709, "CreateFaktura", _
+                      "Prijemnica je vec fakturisana ili stornirana: " & prijemnicaID
+        End If
 
-    For Each s In stavke
-        If Not IsNumeric(s(1)) Or Not IsNumeric(s(2)) Then
+        If Not IsNumeric(prijData(rowPrijValidate, colPrjKol)) Then
             Err.Raise vbObjectError + 1711, "CreateFaktura", _
-                      "Kolicina ili cena nisu numericke vrednosti."
+                      "Kolicina nije numericka za prijemnicu: " & prijemnicaID
         End If
 
-        kolicina = CDbl(s(1))
-        cena = CDbl(s(2))
+        If Not IsNumeric(prijData(rowPrijValidate, colPrjCena)) Then
+            Err.Raise vbObjectError + 1711, "CreateFaktura", _
+                      "Cena nije numericka za prijemnicu: " & prijemnicaID
+        End If
 
-        If kolicina <= 0 Then
+        Dim prjKolicina As Double
+        Dim prjCena As Double
+        Dim prjKlasa As String
+        Dim prjBroj As String
+
+        prjKolicina = CDbl(prijData(rowPrijValidate, colPrjKol))
+        prjCena = CDbl(prijData(rowPrijValidate, colPrjCena))
+        prjKlasa = CStr(prijData(rowPrijValidate, colPrjKlasa))
+        prjBroj = CStr(prijData(rowPrijValidate, colPrjBroj))
+
+        If prjKolicina <= 0 Then
             Err.Raise vbObjectError + 1712, "CreateFaktura", _
-                      "Kolicina mora biti veca od nule."
+                      "Kolicina mora biti veca od nule. PrijemnicaID=" & prijemnicaID
         End If
 
-        If cena < 0 Then
+        If prjCena < 0 Then
             Err.Raise vbObjectError + 1713, "CreateFaktura", _
-                      "Cena ne sme biti negativna."
+                      "Cena ne sme biti negativna. PrijemnicaID=" & prijemnicaID
         End If
 
-        ukupno = ukupno + (kolicina * cena)
+        prijRows.Add prijemnicaID, rowPrijValidate
+        prijValues.Add prijemnicaID, Array(prjKolicina, prjCena, prjKlasa, prjBroj)
+
     Next s
+
+    ' Ukupan iznos se racuna iz canonical tblPrijemnica vrednosti.
+    Dim ukupno As Double
+    Dim key As Variant
+    Dim prjVals As Variant
+
+    For Each key In prijValues.keys
+        prjVals = prijValues(CStr(key))
+        ukupno = ukupno + (CDbl(prjVals(0)) * CDbl(prjVals(1)))
+    Next key
 
     If ukupno <= 0 Then
         Err.Raise vbObjectError + 1714, "CreateFaktura", _
@@ -206,17 +258,19 @@ Public Function CreateFaktura(ByVal kupacID As String, _
         stavkaNum = stavkaNum + 1
         stavkaID = fakturaID & "-" & Format$(stavkaNum, "00")
 
-        prijemnicaID = Trim$(CStr(s(0)))
+        prijemnicaID = GetPrijemnicaIDFromFakturaStavka(s, "CreateFaktura")
         rowPrij = CLng(prijRows(prijemnicaID))
+
+        prjVals = prijValues(prijemnicaID)
 
         stavkaRow = Array( _
             stavkaID, _
             fakturaID, _
             prijemnicaID, _
-            CDbl(s(1)), _
-            CDbl(s(2)), _
-            CStr(s(3)), _
-            CStr(s(4)), _
+            CDbl(prjVals(0)), _
+            CDbl(prjVals(1)), _
+            CStr(prjVals(2)), _
+            CStr(prjVals(3)), _
             "", _
             "" _
         )
@@ -242,8 +296,20 @@ Public Function CreateFaktura(ByVal kupacID As String, _
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
     LogErr "CreateFaktura"
-    CreateFaktura = ""
+    On Error GoTo 0
+
+    Err.Raise errNum, "CreateFaktura", _
+              "Source=" & errSrc & " | " & errDesc
 End Function
 
 Private Function GenerateBrojFakture() As String
@@ -325,6 +391,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     Dim colFakDatum As Long
     Dim colFakKupac As Long
     Dim colFakIznos As Long
+    Dim colFakStornirano As Long
 
     colFakBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, _
                                     "PrintFaktura")
@@ -334,9 +401,16 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
                                      "PrintFaktura")
     colFakIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, _
                                      "PrintFaktura")
+    colFakStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, _
+                                     "PrintFaktura")
 
     Dim fRow As Long
-    fRow = rows(1)
+    fRow = CLng(rows(1))
+
+    If UCase$(Trim$(CStr(data(fRow, colFakStornirano)))) = "DA" Then
+        Err.Raise vbObjectError + 1736, "PrintFaktura", _
+              "Stornirana faktura se ne može štampati kao aktivna faktura: " & fakturaID
+    End If
 
     Dim kupacID As String
     kupacID = Trim$(CStr(data(fRow, colFakKupac)))
@@ -466,54 +540,104 @@ End Sub
 Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
     On Error GoTo EH
 
+    Const SRC As String = "UpdateFakturaStatus"
+
     If Trim$(fakturaID) = "" Then Exit Sub
 
-    RequireColumnIndex TBL_FAKTURE, COL_FAK_ID, "UpdateFakturaStatus"
-    RequireColumnIndex TBL_FAKTURE, COL_FAK_IZNOS, "UpdateFakturaStatus"
-    RequireColumnIndex TBL_FAKTURE, COL_FAK_STATUS, "UpdateFakturaStatus"
-    RequireColumnIndex TBL_FAKTURE, COL_FAK_DATUM_PLACANJA, "UpdateFakturaStatus"
+    Dim colID As Long
+    Dim colIznos As Long
+    Dim colStatus As Long
+    Dim colDatumPlacanja As Long
+    Dim colStornirano As Long
 
-    Dim fakturaIznosVal As Variant
-    fakturaIznosVal = LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS)
-
-    If Not IsNumeric(fakturaIznosVal) Then
-        Err.Raise vbObjectError + 1720, "UpdateFakturaStatus", _
-                  "Iznos fakture nije numericki: " & fakturaID
-    End If
-
-    Dim fakturaIznos As Double
-    fakturaIznos = CDbl(fakturaIznosVal)
-
-    Dim uplaceno As Double
-    uplaceno = GetUplataForFaktura(fakturaID)
+    colID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
+    colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, SRC)
+    colDatumPlacanja = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM_PLACANJA, SRC)
+    colStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
 
     Dim rows As Collection
     Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
 
-    If rows.count = 0 Then
-        Err.Raise vbObjectError + 1721, "UpdateFakturaStatus", _
+    If rows Is Nothing Or rows.count = 0 Then
+        Err.Raise vbObjectError + 1721, SRC, _
                   "Faktura nije pronadena: " & fakturaID
     End If
 
+    Dim r As Long
+    r = CLng(rows(1))
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+
+    If IsEmpty(data) Then
+        Err.Raise vbObjectError + 1722, SRC, _
+                  "Tabela faktura je prazna."
+    End If
+
+    If UCase$(Trim$(CStr(data(r, colStornirano)))) = "DA" Then
+        Exit Sub
+    End If
+
+    If Not IsNumeric(data(r, colIznos)) Then
+        Err.Raise vbObjectError + 1720, SRC, _
+                  "Iznos fakture nije numericki: " & fakturaID
+    End If
+
+    Dim fakturaIznos As Double
+    fakturaIznos = CDbl(data(r, colIznos))
+
+    Dim uplaceno As Double
+    uplaceno = GetUplataForFaktura(fakturaID)
+
+    Dim currentStatus As String
+    Dim currentDatumPlacanja As String
+
+    currentStatus = Trim$(CStr(data(r, colStatus)))
+    currentDatumPlacanja = Trim$(CStr(data(r, colDatumPlacanja)))
+
     If uplaceno >= fakturaIznos And fakturaIznos > 0 Then
-        RequireUpdateCell TBL_FAKTURE, rows(1), COL_FAK_STATUS, _
-                          STATUS_PLACENO, "UpdateFakturaStatus"
 
-        RequireUpdateCell TBL_FAKTURE, rows(1), COL_FAK_DATUM_PLACANJA, _
-                          Date, "UpdateFakturaStatus"
+        If currentStatus <> STATUS_PLACENO Then
+            RequireUpdateCell TBL_FAKTURE, r, COL_FAK_STATUS, _
+                              STATUS_PLACENO, SRC
+        End If
+
+        If Len(currentDatumPlacanja) = 0 Then
+            RequireUpdateCell TBL_FAKTURE, r, COL_FAK_DATUM_PLACANJA, _
+                              Date, SRC
+        End If
+
     Else
-        RequireUpdateCell TBL_FAKTURE, rows(1), COL_FAK_STATUS, _
-                          STATUS_NEPLACENO, "UpdateFakturaStatus"
 
-        RequireUpdateCell TBL_FAKTURE, rows(1), COL_FAK_DATUM_PLACANJA, _
-                          Empty, "UpdateFakturaStatus"
+        If currentStatus <> STATUS_NEPLACENO Then
+            RequireUpdateCell TBL_FAKTURE, r, COL_FAK_STATUS, _
+                              STATUS_NEPLACENO, SRC
+        End If
+
+        If Len(currentDatumPlacanja) > 0 Then
+            RequireUpdateCell TBL_FAKTURE, r, COL_FAK_DATUM_PLACANJA, _
+                              Empty, SRC
+        End If
+
     End If
 
     Exit Sub
 
 EH:
-    LogErr "UpdateFakturaStatus"
-    Err.Raise Err.Number, "UpdateFakturaStatus", Err.Description
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
 Private Function IsPrijemnicaAvailableForFaktura(ByVal rowIndex As Long, _
@@ -549,3 +673,22 @@ EH:
     LogErr "IsPrijemnicaAvailableForFaktura"
     IsPrijemnicaAvailableForFaktura = False
 End Function
+
+Private Function GetPrijemnicaIDFromFakturaStavka(ByVal stavka As Variant, _
+                                                  ByVal sourceName As String) As String
+    On Error GoTo EH
+
+    GetPrijemnicaIDFromFakturaStavka = Trim$(CStr(stavka(0)))
+
+    If Len(GetPrijemnicaIDFromFakturaStavka) = 0 Then
+        Err.Raise vbObjectError + 1718, sourceName, _
+                  "Stavka nema PrijemnicaID."
+    End If
+
+    Exit Function
+
+EH:
+    Err.Raise vbObjectError + 1719, sourceName, _
+              "Neispravan oblik stavke fakture. Ocekuje se da stavka(0) bude PrijemnicaID."
+End Function
+
