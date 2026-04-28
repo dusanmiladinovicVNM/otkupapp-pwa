@@ -9,35 +9,49 @@ Public Function GetBankaByPartner(ByVal partnerNaziv As String, _
                                   ByVal datumOd As Date, _
                                   ByVal datumDo As Date, _
                                   Optional ByVal omID As String = "") As Variant
+    Const SRC As String = "GetBankaByPartner"
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If IsEmpty(data) Then
         GetBankaByPartner = Empty
         Exit Function
     End If
+
     data = ExcludeStornirano(data, TBL_NOVAC)
+
     If IsEmpty(data) Then
         GetBankaByPartner = Empty
         Exit Function
     End If
-    
+
+    Dim colPartner As Long
+    Dim colDatum As Long
+    Dim colOMID As Long
+
+    colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
+    colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
+
     Dim filters As New Collection
     Dim fp As clsFilterParam
-    
+
     Set fp = New clsFilterParam
-    fp.Init GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER), "=", partnerNaziv
+    fp.Init colPartner, "=", partnerNaziv
     filters.Add fp
-    
+
     Set fp = New clsFilterParam
-    fp.Init GetColumnIndex(TBL_NOVAC, COL_NOV_DATUM), "BETWEEN", datumOd, datumDo
+    fp.Init colDatum, "BETWEEN", datumOd, datumDo
     filters.Add fp
-    
-    If omID <> "" Then
+
+    If Len(Trim$(omID)) > 0 Then
+        colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
+
         Set fp = New clsFilterParam
-        fp.Init GetColumnIndex(TBL_NOVAC, COL_NOV_OM_ID), "=", omID
+        fp.Init colOMID, "=", omID
         filters.Add fp
     End If
-    
+
     GetBankaByPartner = FilterArray(data, filters)
 End Function
 
@@ -71,15 +85,25 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
     Exit Function
 
 EH:
-    LogErr "SaveNovac_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "SaveNovac_TX"
     tx.RollbackTx
     On Error GoTo 0
 
     SaveNovac_TX = ""
-End Function
 
+    Debug.Print "SaveNovac_TX failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+End Function
 Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
                           ByVal partner As String, ByVal partnerID As String, _
                           ByVal entitetTip As String, ByVal omID As String, _
@@ -88,6 +112,19 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
                           ByVal uplata As Double, ByVal isplata As Double, _
                           Optional ByVal napomena As String = "", _
                           Optional ByVal otkupID As String = "") As String
+                          
+    Const SRC As String = "SaveNovac"
+
+    Call ValidateNovacInput( _
+        brojDok:=brojDok, _
+        datum:=datum, _
+        partner:=partner, _
+        partnerID:=partnerID, _
+        entitetTip:=entitetTip, _
+        tip:=tip, _
+        uplata:=uplata, _
+        isplata:=isplata, _
+        sourceName:=SRC)
     
     Dim newID As String
     newID = GetNextID(TBL_NOVAC, COL_NOV_ID, "NOV-")
@@ -106,23 +143,29 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
 End Function
 
 Public Function LookupPartnerMap(ByVal bankaName As String) As Variant
-    ' Returns: Array(PartnerID, EntitetTip, OMID) oder Empty
-    
+    Const SRC As String = "LookupPartnerMap"
+
     Dim data As Variant
     data = GetTableData(TBL_PARTNER_MAP)
+
     If IsEmpty(data) Then
         LookupPartnerMap = Empty
         Exit Function
     End If
-    
-    Dim colName As Long, colPID As Long, colTip As Long, colOM As Long
-    colName = GetColumnIndex(TBL_PARTNER_MAP, COL_PM_BANKA_NAME)
-    colPID = GetColumnIndex(TBL_PARTNER_MAP, COL_PM_PARTNER_ID)
-    colTip = GetColumnIndex(TBL_PARTNER_MAP, COL_PM_ENTITET_TIP)
-    colOM = GetColumnIndex(TBL_PARTNER_MAP, COL_PM_OM_ID)
-    
+
+    Dim colName As Long
+    Dim colPID As Long
+    Dim colTip As Long
+    Dim colOM As Long
+
+    colName = RequireColumnIndex(TBL_PARTNER_MAP, COL_PM_BANKA_NAME, SRC)
+    colPID = RequireColumnIndex(TBL_PARTNER_MAP, COL_PM_PARTNER_ID, SRC)
+    colTip = RequireColumnIndex(TBL_PARTNER_MAP, COL_PM_ENTITET_TIP, SRC)
+    colOM = RequireColumnIndex(TBL_PARTNER_MAP, COL_PM_OM_ID, SRC)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
+
         If UCase$(Trim$(CStr(data(i, colName)))) = UCase$(Trim$(bankaName)) Then
             LookupPartnerMap = Array( _
                 CStr(data(i, colPID)), _
@@ -130,50 +173,111 @@ Public Function LookupPartnerMap(ByVal bankaName As String) As Variant
                 CStr(data(i, colOM)))
             Exit Function
         End If
+
     Next i
-    
+
     LookupPartnerMap = Empty
 End Function
 
-Public Function savePartnerMap(ByVal bankaName As String, ByVal partnerID As String, _
-                               ByVal entitetTip As String, ByVal omID As String) As Boolean
-    ' Prüfe ob schon existiert
+Public Function savePartnerMap(ByVal bankaName As String, _
+                               ByVal partnerID As String, _
+                               ByVal entitetTip As String, _
+                               ByVal omID As String) As Boolean
+    Const SRC As String = "savePartnerMap"
+
+    If Len(Trim$(bankaName)) = 0 Then
+        Err.Raise vbObjectError + 1036, SRC, _
+                  "BankaName je obavezan za partner mapu."
+    End If
+
+    If Len(Trim$(partnerID)) = 0 Then
+        Err.Raise vbObjectError + 1037, SRC, _
+                  "PartnerID je obavezan za partner mapu."
+    End If
+
+    If Len(Trim$(entitetTip)) = 0 Then
+        Err.Raise vbObjectError + 1038, SRC, _
+                  "EntitetTip je obavezan za partner mapu."
+    End If
+
     Dim existing As Variant
     existing = LookupPartnerMap(bankaName)
+
     If Not IsEmpty(existing) Then
-        savePartnerMap = True
-        Exit Function
+
+        If UCase$(Trim$(CStr(existing(0)))) = UCase$(Trim$(partnerID)) And _
+           UCase$(Trim$(CStr(existing(1)))) = UCase$(Trim$(entitetTip)) And _
+           UCase$(Trim$(CStr(existing(2)))) = UCase$(Trim$(omID)) Then
+
+            savePartnerMap = True
+            Exit Function
+
+        End If
+
+        Err.Raise vbObjectError + 1039, SRC, _
+                  "BankaName already mapped to a different partner. " & _
+                  "BankaName=" & bankaName & _
+                  " ExistingPartnerID=" & CStr(existing(0)) & _
+                  " ExistingEntitetTip=" & CStr(existing(1)) & _
+                  " ExistingOMID=" & CStr(existing(2)) & _
+                  " NewPartnerID=" & partnerID & _
+                  " NewEntitetTip=" & entitetTip & _
+                  " NewOMID=" & omID
     End If
-    
+
     Dim rowData As Variant
     rowData = Array(bankaName, partnerID, entitetTip, omID)
-    
-    savePartnerMap = (AppendRow(TBL_PARTNER_MAP, rowData) > 0)
+
+    If AppendRow(TBL_PARTNER_MAP, rowData) <= 0 Then
+        Err.Raise vbObjectError + 1040, SRC, _
+                  "Failed to append partner map row. BankaName=" & bankaName
+    End If
+
+    savePartnerMap = True
 End Function
 
 Private Function GetVrstaFromFaktura(ByVal fakturaID As String) As String
+    Const SRC As String = "GetVrstaFromFaktura"
+
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
+
     If IsEmpty(stavkeData) Then
         GetVrstaFromFaktura = "(Nepoznato)"
         Exit Function
     End If
-    
-    Dim colFID As Long, colPrijemnicaID As Long
-    colFID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
-    colPrijemnicaID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID)
-    
+
+    stavkeData = ExcludeStornirano(stavkeData, TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(stavkeData) Then
+        GetVrstaFromFaktura = "(Nepoznato)"
+        Exit Function
+    End If
+
+    Dim colFID As Long
+    Dim colPrijemnicaID As Long
+
+    colFID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+
     Dim i As Long
     For i = 1 To UBound(stavkeData, 1)
-        If CStr(stavkeData(i, colFID)) = fakturaID Then
+
+        If Trim$(CStr(stavkeData(i, colFID))) = Trim$(fakturaID) Then
             Dim prijID As String
-            prijID = CStr(stavkeData(i, colPrijemnicaID))
+            prijID = Trim$(CStr(stavkeData(i, colPrijemnicaID)))
+
             GetVrstaFromFaktura = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_VRSTA))
-            If GetVrstaFromFaktura = "" Then GetVrstaFromFaktura = "(Nepoznato)"
+
+            If Len(Trim$(GetVrstaFromFaktura)) = 0 Then
+                GetVrstaFromFaktura = "(Nepoznato)"
+            End If
+
             Exit Function
         End If
+
     Next i
-    
+
     GetVrstaFromFaktura = "(Nepoznato)"
 End Function
 
@@ -190,16 +294,25 @@ Public Function GetUplataByVrsta(ByVal kupacID As String, _
         Exit Function
     End If
     
+    novacData = ExcludeStornirano(novacData, TBL_NOVAC)
+    
+    If IsEmpty(novacData) Then
+        Set GetUplataByVrsta = dict
+        Exit Function
+    End If
+    
     ' Cache: FakturaID ? VrstaVoca
     Dim vrstaFakCache As Object
     Set vrstaFakCache = BuildVrstaFakturaCache()
     
+    Const SRC As String = "GetUplataByVrsta"
+
     Dim colPID As Long, colUplata As Long, colDatum As Long, colFakID As Long, colVrsta As Long
-    colPID = GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID)
-    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-    colDatum = GetColumnIndex(TBL_NOVAC, COL_NOV_DATUM)
-    colFakID = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
-    colVrsta = GetColumnIndex(TBL_NOVAC, COL_NOV_VRSTA)
+    colPID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
+    colUplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+    colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
+    colFakID = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC)
+    colVrsta = RequireColumnIndex(TBL_NOVAC, COL_NOV_VRSTA, SRC)
     
     Dim n As Long
     For n = 1 To UBound(novacData, 1)
@@ -238,25 +351,36 @@ End Function
 Public Function GetUplataForFaktura(ByVal fakturaID As String) As Double
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If IsEmpty(data) Then
         GetUplataForFaktura = 0
         Exit Function
     End If
-    
+
+    data = ExcludeStornirano(data, TBL_NOVAC)
+
+    If IsEmpty(data) Then
+        GetUplataForFaktura = 0
+        Exit Function
+    End If
+
+    Const SRC As String = "GetUplataForFaktura"
+
     Dim colFakID As Long, colUplata As Long
-    colFakID = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
-    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-    
+    colFakID = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC)
+    colUplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+
     Dim total As Double
     Dim i As Long
+
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colFakID)) = fakturaID Then
+        If Trim$(CStr(data(i, colFakID))) = Trim$(fakturaID) Then
             If IsNumeric(data(i, colUplata)) Then
                 total = total + CDbl(data(i, colUplata))
             End If
         End If
     Next i
-    
+
     GetUplataForFaktura = total
 End Function
 
@@ -283,13 +407,25 @@ Public Function ApplyAvansToFaktura_TX(ByVal kupacID As String, _
     Exit Function
 
 EH:
-    LogErr "ApplyAvansToFaktura_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
-    tx.RollbackTx
+    LogErr "ApplyAvansToFaktura_TX"
+
+    If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     ApplyAvansToFaktura_TX = False
+
+    Debug.Print "ApplyAvansToFaktura_TX failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
 End Function
 
 Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As String)
@@ -297,13 +433,23 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Sub
     
+    Const SRC As String = "ApplyAvansToFaktura"
+
     Dim colID As Long, colPID As Long, colTip As Long, colUplata As Long, colFakID As Long
-    colID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
-    colPID = GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID)
-    colTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
-    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-    colFakID = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
+    Dim colBrojDok As Long, colDatum As Long, colPartner As Long
+
+    colID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC)
+    colPID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colUplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+    colFakID = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC)
+
+    colBrojDok = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+    colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
+    colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
     
     ' Faktura-Iznos und bereits bezahlt
     Dim fakIznos As Double
@@ -339,27 +485,51 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
         End If
         
         If avansIznos <= preostalo Then
-            ' Ganzer Avans ? FakturaID setzen
+            ' Full avans consumption: link existing avans row to faktura.
             Dim rows As Collection
             Set rows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
-            If rows.count > 0 Then
-                UpdateCell TBL_NOVAC, rows(1), COL_NOV_FAKTURA_ID, fakturaID
+
+            If rows Is Nothing Or rows.count = 0 Then
+                Err.Raise vbObjectError + 1024, "ApplyAvansToFaktura", _
+                    "Avans row not found for NovacID=" & CStr(data(i, colID))
             End If
+
+            RequireUpdateCell TBL_NOVAC, rows(1), COL_NOV_FAKTURA_ID, fakturaID, _
+                        "ApplyAvansToFaktura"
+
         Else
-            ' Avans aufteilen: Original reduzieren, neue Zeile für den verrechneten Teil
+            ' Partial avans consumption: reduce original row and create consumed split row.
             Dim origRows As Collection
             Set origRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
-            If origRows.count > 0 Then
-                ' Original auf Rest reduzieren
-                UpdateCell TBL_NOVAC, origRows(1), COL_NOV_UPLATA, avansIznos - apply
+
+            If origRows Is Nothing Or origRows.count = 0 Then
+                    Err.Raise vbObjectError + 1025, "ApplyAvansToFaktura", _
+                        "Avans row not found for split. NovacID=" & CStr(data(i, colID))
             End If
-            
-            ' Neue Zeile für verrechneten Teil
-            SaveNovac CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK))), _
-                      CDate(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_DATUM))), _
-                      CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER))), _
-                      kupacID, "Kupac", "", "", fakturaID, "", _
-                      NOV_KUPCI_AVANS, apply, 0, "Avans raspodela"
+
+            RequireUpdateCell TBL_NOVAC, origRows(1), COL_NOV_UPLATA, avansIznos - apply, _
+                            "ApplyAvansToFaktura"
+
+            Dim splitNovacID As String
+            splitNovacID = SaveNovac( _
+                CStr(data(i, colBrojDok)), _
+                CDate(data(i, colDatum)), _
+                CStr(data(i, colPartner)), _
+                kupacID, _
+                "Kupac", _
+                "", _
+                "", _
+                fakturaID, _
+                "", _
+                NOV_KUPCI_AVANS, _
+                apply, _
+                0, _
+                "Avans raspodela")
+
+            If Len(Trim$(splitNovacID)) = 0 Then
+                Err.Raise vbObjectError + 1026, "ApplyAvansToFaktura", _
+                        "Failed to create split avans row for FakturaID=" & fakturaID
+            End If
         End If
         
         preostalo = preostalo - apply
@@ -382,17 +552,25 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
         GetOpenFakture = Empty
         Exit Function
     End If
+    data = ExcludeStornirano(data, TBL_FAKTURE)
+
+    If IsEmpty(data) Then
+        GetOpenFakture = Empty
+        Exit Function
+    End If
     
     ' Uplata-Dict vorberechnen
     Dim uplataDict As Object
     Set uplataDict = BuildUplataDictByFaktura()
     
+    Const SRC As String = "GetOpenFakture"
+
     Dim colID As Long, colBroj As Long, colKupac As Long, colIznos As Long, colStatus As Long
-    colID = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
-    colBroj = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
-    colKupac = GetColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC)
-    colIznos = GetColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS)
-    colStatus = GetColumnIndex(TBL_FAKTURE, COL_FAK_STATUS)
+    colID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    colBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, SRC)
+    colKupac = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
+    colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
+    colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, SRC)
     
     ' Erst zählen
     Dim count As Long
@@ -438,30 +616,44 @@ End Function
 Public Function BuildUplataDictByFaktura() As Object
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If Not IsArray(data) Then
         Set BuildUplataDictByFaktura = dict
         Exit Function
     End If
-    
+
+    data = ExcludeStornirano(data, TBL_NOVAC)
+
+    If Not IsArray(data) Then
+        Set BuildUplataDictByFaktura = dict
+        Exit Function
+    End If
+
+    Const SRC As String = "BuildUplataDictByFaktura"
+
     Dim colFakID As Long, colUplata As Long
-    colFakID = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
-    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-    
+    colFakID = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC)
+    colUplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
+
         Dim fID As String
-        fID = CStr(data(i, colFakID))
-        If fID <> "" Then
+        fID = Trim$(CStr(data(i, colFakID)))
+
+        If Len(fID) > 0 Then
             If Not dict.Exists(fID) Then dict.Add fID, 0#
+
             If IsNumeric(data(i, colUplata)) Then
                 dict(fID) = dict(fID) + CDbl(data(i, colUplata))
             End If
         End If
+
     Next i
-    
+
     Set BuildUplataDictByFaktura = dict
 End Function
 
@@ -475,10 +667,20 @@ Private Function BuildVrstaFakturaCache() As Object
         Set BuildVrstaFakturaCache = dict
         Exit Function
     End If
+    stavkeData = ExcludeStornirano(stavkeData, TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(stavkeData) Then
+        Set BuildVrstaFakturaCache = dict
+        Exit Function
+    End If
     
-    Dim colFID As Long, colPrijID As Long
-    colFID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
-    colPrijID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID)
+    Const SRC As String = "BuildVrstaFakturaCache"
+
+    Dim colFID As Long
+    Dim colPrijID As Long
+
+    colFID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
     
     Dim i As Long
     For i = 1 To UBound(stavkeData, 1)
@@ -498,49 +700,106 @@ End Function
 
 
 Public Function GetUplataForOtkup(ByVal otkupID As String) As Double
+    ' Historical name: returns total Isplata linked to OtkupID.
+    Const SRC As String = "GetUplataForOtkup"
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Function
+
     data = ExcludeStornirano(data, TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Function
-    
-    Dim colOtkID As Long, colIsplata As Long
-    colOtkID = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
-    colIsplata = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
-    
+
+    Dim colOtkID As Long
+    Dim colIsplata As Long
+
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colOtkID)) = otkupID Then
+
+        If Trim$(CStr(data(i, colOtkID))) = Trim$(otkupID) Then
             If IsNumeric(data(i, colIsplata)) Then
                 GetUplataForOtkup = GetUplataForOtkup + CDbl(data(i, colIsplata))
             End If
         End If
+
     Next i
 End Function
 
 Public Sub UpdateOtkupStatus(ByVal otkupID As String)
+    Const SRC As String = "UpdateOtkupStatus"
+
+    If Len(Trim$(otkupID)) = 0 Then
+        Err.Raise vbObjectError + 1043, SRC, _
+                  "OtkupID je obavezan."
+    End If
+
     Dim otkupData As Variant
     otkupData = GetTableData(TBL_OTKUP)
-    
+
+    If IsEmpty(otkupData) Then Exit Sub
+
     Dim rows As Collection
     Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-    If rows.count = 0 Then Exit Sub
-    
-    Dim r As Long: r = rows(1)
-    Dim colKol As Long, colCena As Long
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    
+
+    If rows Is Nothing Or rows.count = 0 Then
+        Err.Raise vbObjectError + 1044, SRC, _
+                  "Otkup row not found. OtkupID=" & otkupID
+    End If
+
+    Dim r As Long
+    r = CLng(rows(1))
+
+    Dim colKol As Long
+    Dim colCena As Long
+    Dim colDatumIsplate As Long
+    Dim colStornirano As Long
+
+    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
+    colDatumIsplate = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM_ISPLATE, SRC)
+
+    colStornirano = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+
+    If colStornirano > 0 Then
+        If UCase$(Trim$(CStr(otkupData(r, colStornirano)))) = "DA" Then
+            Exit Sub
+        End If
+    End If
+
     Dim vrednost As Double
+    vrednost = 0#
+
     If IsNumeric(otkupData(r, colKol)) And IsNumeric(otkupData(r, colCena)) Then
         vrednost = CDbl(otkupData(r, colKol)) * CDbl(otkupData(r, colCena))
     End If
-    
-    If GetUplataForOtkup(otkupID) >= vrednost And vrednost > 0 Then
-        UpdateCell TBL_OTKUP, r, COL_OTK_ISPLACENO, STATUS_ISPLACENO
-        UpdateCell TBL_OTKUP, r, COL_OTK_DATUM_ISPLATE, Date
+
+    Dim placeno As Double
+    placeno = GetIsplataForOtkup(otkupID)
+
+    If vrednost > 0 And placeno >= vrednost Then
+
+        RequireUpdateCell TBL_OTKUP, r, COL_OTK_ISPLACENO, STATUS_ISPLACENO, SRC
+
+        If Len(Trim$(CStr(otkupData(r, colDatumIsplate)))) = 0 Then
+            RequireUpdateCell TBL_OTKUP, r, COL_OTK_DATUM_ISPLATE, Date, SRC
+        End If
+
+    Else
+
+        RequireUpdateCell TBL_OTKUP, r, COL_OTK_ISPLACENO, "", SRC
+        RequireUpdateCell TBL_OTKUP, r, COL_OTK_DATUM_ISPLATE, "", SRC
+
     End If
 End Sub
+
+Public Function GetIsplataForOtkup(ByVal otkupID As String) As Double
+    GetIsplataForOtkup = GetUplataForOtkup(otkupID)
+End Function
 
 Public Function BuildIsplataDictByOtkup() As Object
     Dim dict As Object
@@ -558,9 +817,11 @@ Public Function BuildIsplataDictByOtkup() As Object
         Exit Function
     End If
     
+    Const SRC As String = "BuildIsplataDictByOtkup"
+
     Dim colOtkID As Long, colIsplata As Long
-    colOtkID = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
-    colIsplata = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -590,14 +851,16 @@ Public Function GetOpenOtkupi(ByVal kooperantID As String) As Variant
         Exit Function
     End If
     
+    Const SRC As String = "GetOpenOtkupi"
+
     Dim colID As Long, colBrDok As Long, colKoop As Long
     Dim colKol As Long, colCena As Long, colIspl As Long
-    colID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    colBrDok = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    colKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    colIspl = GetColumnIndex(TBL_OTKUP, COL_OTK_ISPLACENO)
+    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
+    colIspl = RequireColumnIndex(TBL_OTKUP, COL_OTK_ISPLACENO, SRC)
     
     Dim isplataDict As Object
     Set isplataDict = BuildIsplataDictByOtkup()
@@ -650,33 +913,45 @@ Public Function GetOpenOtkupi(ByVal kooperantID As String) As Variant
 End Function
 
 Public Function GetOMAvansSaldo(ByVal omID As String) As Double
+    Const SRC As String = "GetOMAvansSaldo"
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Function
+
     data = ExcludeStornirano(data, TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Function
-    
-    Dim colOMID As Long, colTip As Long, colIsplata As Long
-    colOMID = GetColumnIndex(TBL_NOVAC, COL_NOV_OM_ID)
-    colTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
-    colIsplata = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
-    
-    Dim avansTotal As Double, isplataTotal As Double
-    
+
+    Dim colOMID As Long
+    Dim colTip As Long
+    Dim colIsplata As Long
+
+    colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+
+    Dim avansTotal As Double
+    Dim isplataTotal As Double
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colOMID)) <> omID Then GoTo NextRow
+
+        If Trim$(CStr(data(i, colOMID))) <> Trim$(omID) Then GoTo NextRow
         If Not IsNumeric(data(i, colIsplata)) Then GoTo NextRow
-        
+
         Select Case CStr(data(i, colTip))
             Case NOV_KES_FIRMA_OTKUPAC
                 avansTotal = avansTotal + CDbl(data(i, colIsplata))
+
             Case NOV_KES_OTKUPAC_KOOP
                 isplataTotal = isplataTotal + CDbl(data(i, colIsplata))
         End Select
+
 NextRow:
     Next i
-    
+
     GetOMAvansSaldo = avansTotal - isplataTotal
 End Function
 
@@ -687,13 +962,24 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     data = ExcludeStornirano(data, TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
     
+    Const SRC As String = "ApplyAvansToOtkup"
+
     Dim colID As Long, colKoopID As Long, colTip As Long
     Dim colIsplata As Long, colOtkID As Long
-    colID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
-    colKoopID = GetColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID)
-    colTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
-    colIsplata = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
-    colOtkID = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    Dim colBrojDok As Long, colDatum As Long, colPartner As Long
+    Dim colPartnerID As Long, colOMID As Long
+
+    colID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC)
+    colKoopID = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+
+    colBrojDok = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+    colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
+    colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
+    colPartnerID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
+    colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
     
     ' Otkup-Vrednost
     Dim otkData As Variant
@@ -733,24 +1019,49 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
         
         If avansIznos <= preostalo Then
             applyAmt = avansIznos
+
             Set avansRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
-            If avansRows.count > 0 Then
-                UpdateCell TBL_NOVAC, avansRows(1), COL_NOV_OTKUP_ID, otkupID
+
+            If avansRows Is Nothing Or avansRows.count = 0 Then
+                Err.Raise vbObjectError + 1027, SRC, _
+                        "Avans row not found for NovacID=" & CStr(data(i, colID))
             End If
+
+            RequireUpdateCell TBL_NOVAC, avansRows(1), COL_NOV_OTKUP_ID, otkupID, SRC
+
         Else
             applyAmt = preostalo
+
             Set avansRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
-            If avansRows.count > 0 Then
-                UpdateCell TBL_NOVAC, avansRows(1), COL_NOV_ISPLATA, avansIznos - applyAmt
+
+            If avansRows Is Nothing Or avansRows.count = 0 Then
+                Err.Raise vbObjectError + 1028, SRC, _
+                        "Avans row not found for split. NovacID=" & CStr(data(i, colID))
             End If
-            SaveNovac CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK))), _
-                      CDate(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_DATUM))), _
-                      CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER))), _
-                      CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID))), _
-                      "Kooperant", _
-                      CStr(data(i, GetColumnIndex(TBL_NOVAC, COL_NOV_OM_ID))), _
-                      kooperantID, "", "", _
-                      NOV_VIRMAN_AVANS_KOOP, 0, applyAmt, "Avans raspodela", otkupID
+
+            RequireUpdateCell TBL_NOVAC, avansRows(1), COL_NOV_ISPLATA, avansIznos - applyAmt, SRC
+
+            Dim splitNovacID As String
+            splitNovacID = SaveNovac( _
+                CStr(data(i, colBrojDok)), _
+                CDate(data(i, colDatum)), _
+                CStr(data(i, colPartner)), _
+                CStr(data(i, colPartnerID)), _
+                "Kooperant", _
+                CStr(data(i, colOMID)), _
+                kooperantID, _
+                "", _
+                "", _
+                NOV_VIRMAN_AVANS_KOOP, _
+                0, _
+                applyAmt, _
+                "Avans raspodela", _
+                otkupID)
+
+            If Len(Trim$(splitNovacID)) = 0 Then
+                Err.Raise vbObjectError + 1029, SRC, _
+                        "Failed to create split avans row for OtkupID=" & otkupID
+            End If
         End If
         
         preostalo = preostalo - applyAmt
@@ -785,51 +1096,182 @@ Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
     Exit Function
 
 EH:
-    LogErr "ApplyAvansToOtkup_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "ApplyAvansToOtkup_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     ApplyAvansToOtkup_TX = False
-End Function
 
+    Debug.Print "ApplyAvansToOtkup_TX failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+End Function
 Public Sub ResetNovacOtkupLink(ByVal otkupID As String)
+    Const SRC As String = "ResetNovacOtkupLink"
+
+    If Len(Trim$(otkupID)) = 0 Then
+        Err.Raise vbObjectError + 1041, SRC, _
+                  "OtkupID je obavezan."
+    End If
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Sub
-    
+
     Dim colOtkID As Long
-    colOtkID = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
-    
+    Dim colStornirano As Long
+
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    colStornirano = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colOtkID)) = otkupID Then
-            UpdateCell TBL_NOVAC, i, COL_NOV_OTKUP_ID, ""
+
+        If colStornirano > 0 Then
+            If UCase$(Trim$(CStr(data(i, colStornirano)))) = "DA" Then
+                GoTo NextRow
+            End If
         End If
+
+        If Trim$(CStr(data(i, colOtkID))) = Trim$(otkupID) Then
+            RequireUpdateCell TBL_NOVAC, i, COL_NOV_OTKUP_ID, "", SRC
+        End If
+
+NextRow:
     Next i
 End Sub
 
+Public Function ResetNovacOtkupLink_TX(ByVal otkupID As String) As Boolean
+    Const SRC As String = "ResetNovacOtkupLink_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    If Len(Trim$(otkupID)) = 0 Then
+        Err.Raise vbObjectError + 1042, SRC, _
+                  "OtkupID je obavezan."
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_OTKUP
+
+    Call ResetNovacOtkupLink(otkupID)
+    Call UpdateOtkupStatus(otkupID)
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    ResetNovacOtkupLink_TX = True
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
+    LogErr SRC
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    ResetNovacOtkupLink_TX = False
+
+    Debug.Print SRC & " failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+End Function
+
 Public Function GetAgroAbzug(ByVal kooperantID As String) As Double
+    Const SRC As String = "GetAgroAbzug"
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Function
+
     data = ExcludeStornirano(data, TBL_NOVAC)
+
     If IsEmpty(data) Then Exit Function
-    
-    Dim colKoop As Long, colTip As Long, colUplata As Long
-    colKoop = GetColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID)
-    colTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
-    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-    
+
+    Dim colKoop As Long
+    Dim colTip As Long
+    Dim colUplata As Long
+
+    colKoop = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colUplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colKoop)) = kooperantID And _
+
+        If Trim$(CStr(data(i, colKoop))) = Trim$(kooperantID) And _
            CStr(data(i, colTip)) = "AgroAbzug" Then
+
             If IsNumeric(data(i, colUplata)) Then
                 GetAgroAbzug = GetAgroAbzug + CDbl(data(i, colUplata))
             End If
+
         End If
+
     Next i
 End Function
 
+Private Sub ValidateNovacInput(ByVal brojDok As String, _
+                               ByVal datum As Date, _
+                               ByVal partner As String, _
+                               ByVal partnerID As String, _
+                               ByVal entitetTip As String, _
+                               ByVal tip As String, _
+                               ByVal uplata As Double, _
+                               ByVal isplata As Double, _
+                               ByVal sourceName As String)
+
+    If Len(Trim$(tip)) = 0 Then
+        Err.Raise vbObjectError + 1030, sourceName, _
+                  "Tip novca je obavezan."
+    End If
+
+    If uplata < 0 Or isplata < 0 Then
+        Err.Raise vbObjectError + 1031, sourceName, _
+                  "Uplata/Isplata ne sme biti negativna."
+    End If
+
+    If uplata > 0 And isplata > 0 Then
+        Err.Raise vbObjectError + 1032, sourceName, _
+                  "Novac red ne sme imati i uplatu i isplatu."
+    End If
+
+    If uplata = 0 And isplata = 0 Then
+        Err.Raise vbObjectError + 1033, sourceName, _
+                  "Novac red mora imati uplatu ili isplatu."
+    End If
+
+    If Len(Trim$(partnerID)) = 0 And Len(Trim$(partner)) = 0 Then
+        Err.Raise vbObjectError + 1034, sourceName, _
+                  "Partner ili PartnerID je obavezan."
+    End If
+
+    If Len(Trim$(entitetTip)) = 0 Then
+        Err.Raise vbObjectError + 1035, sourceName, _
+                  "EntitetTip je obavezan."
+    End If
+End Sub
