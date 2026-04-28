@@ -39,6 +39,9 @@ Public Sub ValidateAllowedTransition(ByVal oldState As String, ByVal newState As
 
         Case WF_SEF_REJECTED
             If newState <> WF_SEF_READY Then GoTo InvalidTransition
+            
+        Case WF_SEF_STORNO
+            GoTo InvalidTransition
         
         Case Else
             Err.Raise ERR_SEF_STATE, "ValidateAllowedTransition", _
@@ -422,22 +425,26 @@ Public Sub PrepareRejectedInvoiceForResubmit(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogErr "PrepareRejectedInvoiceForResubmit"
     Dim errNum As Long
     Dim errDesc As String
-    
+    Dim errSrc As String
+
     errNum = Err.Number
     errDesc = Err.Description
-    
+    errSrc = Err.Source
+
     On Error Resume Next
+    LogErr "PrepareRejectedInvoiceForResubmit"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    
+
     If errNum <> 0 Then
-        Err.Raise errNum, "PrepareRejectedInvoiceForResubmit", errDesc
+        Err.Raise errNum, "PrepareRejectedInvoiceForResubmit", _
+                  "Source=" & errSrc & " | " & errDesc
     Else
         Err.Raise ERR_SEF_STATE, "PrepareRejectedInvoiceForResubmit", _
-            "Unexpected error preparing rejected invoice."
+                  "Unexpected error preparing rejected invoice; original Err was lost before EH capture."
     End If
 End Sub
 
