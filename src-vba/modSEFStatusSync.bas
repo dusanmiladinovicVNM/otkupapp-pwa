@@ -100,22 +100,13 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
             
             Case "SENT", "NEW", "DRAFT"
                 
-                If currentState <> WF_SEF_SENT Then
-                    Call UpdateFakturaSEFState_Row( _
-                        fakturaID:=fakturaID, _
-                        newState:=WF_SEF_SENT, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:="", _
-                        errorMessage:="")
-                Else
-                    Call UpdateFakturaSEFRefreshFields_Row( _
-                        fakturaID:=fakturaID, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:="", _
-                        errorMessage:="")
-                End If
+                Call ApplySEFStateOrRefreshOnly( _
+                    fakturaID:=fakturaID, _
+                    targetWorkflowState:=WF_SEF_SENT, _
+                    sefStatus:=apiStatus, _
+                    sefDocumentId:=response.sefDocumentId, _
+                    errorCode:="", _
+                    errorMessage:="")
                 
                 Call AppendSEFEvent_Row( _
                     fakturaID:=fakturaID, _
@@ -152,22 +143,13 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
             
             Case Else
                 
-                If currentState <> WF_SEF_SENT Then
-                    Call UpdateFakturaSEFState_Row( _
-                        fakturaID:=fakturaID, _
-                        newState:=WF_SEF_SENT, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:="", _
-                        errorMessage:="")
-                Else
-                    Call UpdateFakturaSEFRefreshFields_Row( _
-                        fakturaID:=fakturaID, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:="", _
-                        errorMessage:="")
-                End If
+                Call ApplySEFStateOrRefreshOnly( _
+                    fakturaID:=fakturaID, _
+                    targetWorkflowState:=WF_SEF_SENT, _
+                    sefStatus:=apiStatus, _
+                    sefDocumentId:=response.sefDocumentId, _
+                    errorCode:="", _
+                    errorMessage:="")
                 
                 Call AppendSEFEvent_Row( _
                     fakturaID:=fakturaID, _
