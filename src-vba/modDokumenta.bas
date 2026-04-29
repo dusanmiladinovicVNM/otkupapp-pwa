@@ -788,14 +788,28 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
     End If
 
     Dim rowData As Variant
-    rowData = Array(newID, datum, kupacID, vozacID, brojPrij, brojZbirne, _
-                    vrstaVoca, sortaVoca, kolicina, cena, tipAmb, kolAmb, _
-                    kolAmbVracena, klasa, "Ne", "")
+    rowData = BuildPrijemnicaRowData( _
+                newID, datum, kupacID, vozacID, brojPrij, brojZbirne, _
+                vrstaVoca, sortaVoca, kolicina, cena, tipAmb, kolAmb, _
+                kolAmbVracena, klasa)
+
 
     If AppendRow(TBL_PRIJEMNICA, rowData) <= 0 Then
         Err.Raise vbObjectError + 1014, "SavePrijemnica", _
                   "AppendRow fehlgeschlagen für tblPrijemnica."
     End If
+    
+    Dim prjRows As Collection
+    Set prjRows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, newID)
+
+    If prjRows Is Nothing Or prjRows.count = 0 Then
+        Err.Raise vbObjectError + 1431, "SavePrijemnica", _
+              "New prijemnica row not found after append. PrijemnicaID=" & newID
+    End If
+
+    RequireUpdateCell TBL_PRIJEMNICA, CLng(prjRows(1)), _
+                  "KolAmbVracena", kolAmbVracena, _
+                  "SavePrijemnica"
 
     If kolAmb > 0 Then
         TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kupacID, "Kupac", _
@@ -827,6 +841,57 @@ EH:
 
     Err.Raise errNum, "SavePrijemnica", _
               "Source=" & errSrc & " | " & errDesc
+End Function
+
+Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
+                                        ByVal datum As Date, _
+                                        ByVal kupacID As String, _
+                                        ByVal vozacID As String, _
+                                        ByVal brojPrij As String, _
+                                        ByVal brojZbirne As String, _
+                                        ByVal vrstaVoca As String, _
+                                        ByVal sortaVoca As String, _
+                                        ByVal kolicina As Double, _
+                                        ByVal cena As Double, _
+                                        ByVal tipAmb As String, _
+                                        ByVal kolAmb As Long, _
+                                        ByVal kolAmbVracena As Long, _
+                                        ByVal klasa As String) As Variant
+    Const SRC As String = "BuildPrijemnicaRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_PRIJEMNICA)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1430, SRC, _
+                  "Could not resolve tblPrijemnica column count."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_DATUM, datum, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KUPAC, kupacID, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_VOZAC, vozacID, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ, brojPrij, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_VRSTA, vrstaVoca, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_SORTA, sortaVoca, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, kolicina, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_CENA, cena, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_TIP_AMB, tipAmb, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, kolAmb, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA, kolAmbVracena, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KLASA, klasa, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, "Ne", SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, "", SRC
+
+    If GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO) > 0 Then
+        SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_STORNIRANO, "", SRC
+    End If
+
+    BuildPrijemnicaRowData = rowData
 End Function
 
 Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
@@ -1843,4 +1908,27 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     RequireValidDocumentClass klasa, SRC
 End Sub
 
+Private Sub SetRowValueByColumn(ByRef rowData() As Variant, _
+                                ByVal tableName As String, _
+                                ByVal columnName As String, _
+                                ByVal value As Variant, _
+                                ByVal sourceName As String)
+    Dim colIndex As Long
+    colIndex = RequireColumnIndex(tableName, columnName, sourceName)
 
+    rowData(colIndex - 1) = value
+End Sub
+
+Private Function GetDokumentaTableColumnCount(ByVal tableName As String) As Long
+    Dim ws As Worksheet
+    Dim lo As ListObject
+
+    For Each ws In ThisWorkbook.Worksheets
+        For Each lo In ws.ListObjects
+            If StrComp(lo.Name, tableName, vbTextCompare) = 0 Then
+                GetDokumentaTableColumnCount = lo.ListColumns.count
+                Exit Function
+            End If
+        Next lo
+    Next ws
+End Function
