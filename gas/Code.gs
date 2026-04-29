@@ -237,12 +237,56 @@ function purgeOldErrorLogs() {
 // ============================================================
 
 function getJsonBody(e) {
-    try {
-        if (!e || !e.postData || !e.postData.contents) return {};
-        return JSON.parse(e.postData.contents || '{}') || {};
-    } catch (err) {
-        return {};
-    }
+  if (!e || !e.postData || !e.postData.contents) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(e.postData.contents || '{}') || {};
+  } catch (err) {
+    var badJsonError = new Error('Malformed JSON body');
+    badJsonError.code = 'BAD_JSON';
+    throw badJsonError;
+  }
+}
+
+function newRequestId() {
+  return 'REQ-' + Utilities.getUuid();
+}
+
+function safeErrorResponse(requestId) {
+  return jsonResponse({
+    success: false,
+    error: 'Interna greška. Pokušaj ponovo ili prijavi podršci.',
+    code: 'INTERNAL_ERROR',
+    requestId: requestId || ''
+  });
+}
+
+function badJsonResponse(requestId) {
+  return jsonResponse({
+    success: false,
+    error: 'Neispravan JSON zahtev.',
+    code: 'BAD_JSON',
+    requestId: requestId || ''
+  });
+}
+
+function logUnhandledGasError(source, action, err, requestId, entityID) {
+  try {
+    var message = err && err.message ? err.message : String(err || 'Unknown error');
+    var details = err && err.stack ? err.stack : '';
+
+    logError(
+      source || 'GAS',
+      action || '',
+      message,
+      'requestId=' + (requestId || '') + '\n' + String(details || '').substring(0, 2000),
+      entityID || ''
+    );
+  } catch (logErr) {
+    Logger.log('logUnhandledGasError failed: ' + logErr.message);
+  }
 }
 
 // ============================================================
@@ -472,8 +516,12 @@ function handlePublicRead(data) {
 }
 
 function doPost(e) {
+  const requestId = newRequestId();
+  let action = '';
+
   try {
     const data = getJsonBody(e);
+    action = data.action || '';
 
     const publicReadResponse = handlePublicRead(data);
     if (publicReadResponse) return publicReadResponse;
@@ -491,19 +539,24 @@ function doPost(e) {
     // === OVDE IDE logClientError ===
     if (data.action === 'logClientError') {
       var errorEntityID = '';
+
       try {
         if (data.token && validateToken(data.token)) {
           var td = getTokenData(data.token);
           if (td) errorEntityID = td.entityID || '';
         }
-      } catch (e) {}
+      } catch (e) {
+        // logging endpoint must stay best-effort
+      }
+
       logError(
         'PWA',
-        data.errorAction || '',
-        data.message || '',
-        data.details || data.stack || '',
-        errorEntityID || data.entityID || ''
+        sanitizeClientLogField(data.errorAction || '', 120),
+        sanitizeClientLogField(data.message || '', 500),
+        sanitizeClientLogField(data.details || data.stack || '', 1500),
+        sanitizeClientLogField(errorEntityID || data.entityID || '', 120)
       );
+
       return jsonResponse({ success: true });
     }
     // === KRAJ logClientError ===
@@ -527,13 +580,7 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processRecord(r, data.otkupacID));
-        return {
-          success: true,
-          processed: results.length,
-          succeeded: results.filter(r => r && r.success).length,
-          failed: results.filter(r => !r || !r.success).length,
-          results: results
-        };
+        return buildBatchSyncResponse(results);
       }));
     }
 
@@ -545,13 +592,7 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processAgromereRecord(r, data.kooperantID));
-        return {
-          success: true,
-          processed: results.length,
-          succeeded: results.filter(r => r && r.success).length,
-          failed: results.filter(r => !r || !r.success).length,
-          results: results
-        };
+        return buildBatchSyncResponse(results);
       }));
     }
 
@@ -563,13 +604,7 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processZbirnaRecord(r, data.vozacID));
-        return {
-          success: true,
-          processed: results.length,
-          succeeded: results.filter(r => r && r.success).length,
-          failed: results.filter(r => !r || !r.success).length,
-          results: results
-        };
+        return buildBatchSyncResponse(results);
       }));
     }
 
@@ -581,13 +616,7 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processTretmanRecord(r, data.kooperantID));
-        return {
-          success: true,
-          processed: results.length,
-          succeeded: results.filter(r => r && r.success).length,
-          failed: results.filter(r => !r || !r.success).length,
-          results: results
-        };
+        return buildBatchSyncResponse(results);
       }));
     }
 
@@ -599,43 +628,24 @@ function doPost(e) {
       }
       return jsonResponse(withLock(function() {
         const results = data.records.map(r => processOpremaRecord(r, data.kooperantID));
-        return {
-          success: true,
-          processed: results.length,
-          succeeded: results.filter(r => r && r.success).length,
-          failed: results.filter(r => !r || !r.success).length,
-          results: results
-        };
+        return buildBatchSyncResponse(results);
       }));
     }
 
     if (data.action === 'syncTrosak') {
-      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
-      if (!isManagement(tokenData) && !requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
-      if (!Array.isArray(data.records)) {
-        return jsonResponse({ success: false, error: 'records must be an array' });
-      }
-      return jsonResponse(withLock(function() {
-        const results = data.records.map(r => processTrosakRecord(r, data.kooperantID));
-        return {
-          success: true,
-          processed: results.length,
-          succeeded: results.filter(r => r && r.success).length,
-          failed: results.filter(r => !r || !r.success).length,
-          results: results
-        };
-      }));
+      return jsonResponse({
+        success: false,
+        code: 'FEATURE_DISABLED',
+        error: 'Sync troškova trenutno nije aktivan.'
+      });
     }
 
     if (data.action === 'saveOtkupniListPdf') {
-      if (!requireRole(tokenData, ['Otkupac', 'Management'])) return forbiddenResponse();
-      if (tokenData.role === 'Otkupac') {
-        data.otkupacID = data.otkupacID || tokenData.entityID;
-        if (!requireEntity(tokenData, data.otkupacID)) return forbiddenResponse();
-      }
-      return jsonResponse(withLock(function() {
-        return generateOtkupniListPdf(data);
-      }));
+      return jsonResponse({
+        success: false,
+        code: 'FEATURE_DISABLED',
+        error: 'Generisanje otkupnog lista u GAS sloju trenutno nije aktivno.'
+      });
     }
 
     if (data.action === 'uploadPdf') {
@@ -750,14 +760,24 @@ function doPost(e) {
     }
 
     return jsonResponse({ success: false, error: 'Unknown action' });
-  } catch (err) {
-    return jsonResponse({ success: false, error: err.message });
+
+    } catch (err) {
+    if (err && err.code === 'BAD_JSON') {
+      logUnhandledGasError('GAS', 'doPost:BAD_JSON', err, requestId, '');
+      return badJsonResponse(requestId);
+    }
+
+    logUnhandledGasError('GAS', 'doPost:' + action, err, requestId, '');
+    return safeErrorResponse(requestId);
   }
 }
 
 function doGet(e) {
+  const requestId = newRequestId();
+  let action = '';
+
   try {
-    const action = (e && e.parameter && e.parameter.action) || '';
+    action = (e && e.parameter && e.parameter.action) || '';
 
     if (action === 'ping') {
       return jsonResponse({ success: true, timestamp: new Date().toISOString() });
@@ -780,8 +800,9 @@ function doGet(e) {
     }
 
     return jsonResponse({ success: false, error: 'Unknown action' });
-  } catch (err) {
-    return jsonResponse({ success: false, error: err.message });
+    } catch (err) {
+    logUnhandledGasError('GAS', 'doGet:' + action, err, requestId, '');
+    return safeErrorResponse(requestId);
   }
 }
 
@@ -791,14 +812,19 @@ function doGet(e) {
 
 function authenticateUser(username, pin) {
   try {
-    if (!username || !pin) return { success: false, error: 'Username i PIN su obavezni' };
+    const normalizedUsername = normalizeUsername(username);
+    const pinValue = String(pin || '');
+
+    if (!normalizedUsername || !pinValue) {
+      return { success: false, error: 'Username i PIN su obavezni' };
+    }
     
     const cache = CacheService.getScriptCache();
-    const attemptsKey = 'ATTEMPTS_' + username.toLowerCase();
-    const attempts = parseInt(cache.get(attemptsKey) || '0');
+    const attemptsKey = 'ATTEMPTS_' + normalizedUsername;
+    const attempts = parseInt(cache.get(attemptsKey) || '0', 10);
     
     if (attempts >= 5) {
-      logLoginAttempt(username, '', false, 'BLOCKED');
+      logLoginAttempt(normalizedUsername, '', false, 'BLOCKED');
       return { success: false, error: 'Previše pokušaja. Sačekajte 15 minuta.' };
     }
     
@@ -813,115 +839,180 @@ function authenticateUser(username, pin) {
     const data = sheet.getDataRange().getValues();
     if (data.length < 2) return { success: false, error: 'System error' };
     
-    const headers = data[0];
-    const colUser = headers.indexOf('Username');
-    const colPin = headers.indexOf('PIN');
-    const colRole = headers.indexOf('Role');
-    const colEntity = headers.indexOf('EntityID');
-    const colName = headers.indexOf('DisplayName');
+    const headers = data[0].map(h => String(h || '').trim());
+
+    const colUser = requireHeaderIndexFromArray(headers, 'Username', 'Users');
+    const colPin = requireHeaderIndexFromArray(headers, 'PIN', 'Users');
+    const colRole = requireHeaderIndexFromArray(headers, 'Role', 'Users');
+    const colEntity = requireHeaderIndexFromArray(headers, 'EntityID', 'Users');
+    const colName = requireHeaderIndexFromArray(headers, 'DisplayName', 'Users');
     
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][colUser]).toLowerCase().trim() === username.toLowerCase().trim()) {
-        if (String(data[i][colPin]) === pin) {
+      if (normalizeUsername(data[i][colUser]) === normalizedUsername) {
+        if (String(data[i][colPin]) === pinValue) {
           cache.remove(attemptsKey);
+          const loginConfig = validateLoginUserConfig(data[i][colRole], data[i][colEntity]);
+
           const token = generateToken();
-          const entityID = String(data[i][colEntity]);
-          const role = String(data[i][colRole]);
+          const entityID = loginConfig.entityID;
+          const role = loginConfig.role;
+
           saveToken(token, entityID, role);
-          logLoginAttempt(username, entityID, true, 'OK');
+          logLoginAttempt(normalizedUsername, entityID, true, 'OK');
+
           return {
-            success: true, token: token, role: role,
-            entityID: entityID, displayName: data[i][colName]
+            success: true,
+            token: token,
+            role: role,
+            entityID: entityID,
+            displayName: String(data[i][colName] || '').trim()
           };
         } else {
           cache.put(attemptsKey, String(attempts + 1), 900);
-          logLoginAttempt(username, '', false, 'Wrong PIN');
+          logLoginAttempt(normalizedUsername, '', false, 'Wrong PIN');
           return { success: false, error: 'Pogrešan PIN' };
         }
       }
     }
     
     cache.put(attemptsKey, String(attempts + 1), 900);
-    logLoginAttempt(username, '', false, 'Username not found');
+    logLoginAttempt(normalizedUsername, '', false, 'Username not found');
     return { success: false, error: 'Pogrešno korisničko ime ili PIN' };
   } catch (err) {
-    logError('GAS', 'authenticateUser', err.message, err.stack || '', username || '');
+    logError('GAS', 'authenticateUser', err.message, err.stack || '', normalizedUsername || '');
     return { success: false, error: 'System error' };
   }
 }
 
 function generateToken() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let token = '';
-  for (let i = 0; i < 64; i++) token += chars.charAt(Math.floor(Math.random() * chars.length));
-  return token;
+  // Apps Script nema Web Crypto API; UUID chain je bolji minimum od Math.random tokena.
+  return [
+    Utilities.getUuid(),
+    Utilities.getUuid(),
+    Utilities.getUuid()
+  ].join('').replace(/-/g, '');
 }
 
 function saveToken(token, entityID, role) {
-  var payload = JSON.stringify({ entityID: entityID, role: role, created: new Date().toISOString() });
-  var key = 'TOKEN_' + token;
-  
-  // brzi sloj — 24h cache
+  const tokenValue = String(token || '').trim();
+  const loginConfig = validateLoginUserConfig(role, entityID);
+
+  if (tokenValue.length < 32) {
+    const err = new Error('Invalid token length');
+    err.code = 'AUTH_TOKEN_INVALID';
+    throw err;
+  }
+
+  const payload = JSON.stringify({
+    entityID: loginConfig.entityID,
+    role: loginConfig.role,
+    created: new Date().toISOString()
+  });
+
+  const key = 'TOKEN_' + tokenValue;
+
   CacheService.getScriptCache().put(key, payload, 86400);
-  
-  // trajni sloj — PropertiesService
+
   try {
     PropertiesService.getScriptProperties().setProperty(key, payload);
-  } catch (e) {}
+  } catch (e) {
+    logError(
+      'GAS',
+      'saveToken',
+      e && e.message ? e.message : String(e || 'Unknown error'),
+      e && e.stack ? e.stack : '',
+      loginConfig.entityID || ''
+    );
+
+    const err = new Error('Failed to persist auth token');
+    err.code = 'AUTH_TOKEN_PERSIST_FAILED';
+    throw err;
+  }
 }
 
 function validateToken(token) {
-  if (!token || token.length < 10) return false;
-  
-  var key = 'TOKEN_' + token;
-  
-  // pokušaj cache prvo
-  if (CacheService.getScriptCache().get(key) !== null) return true;
-  
+  if (!token || String(token).length < 10) return false;
+
+  var key = 'TOKEN_' + String(token);
+
+  // pokušaj cache prvo, ali ne veruj samom postojanju cache key-a
+  var cached = CacheService.getScriptCache().get(key);
+  if (cached !== null) {
+    if (isTokenPayloadValid(cached)) {
+      return true;
+    }
+
+    // cache je stale/corrupt; ne može se obrisati pojedinačni cache key pouzdano bez remove
+    try {
+      CacheService.getScriptCache().remove(key);
+    } catch (e) {}
+
+    try {
+      PropertiesService.getScriptProperties().deleteProperty(key);
+    } catch (e) {}
+
+    return false;
+  }
+
   // fallback na properties
   try {
     var stored = PropertiesService.getScriptProperties().getProperty(key);
     if (stored) {
-      // proveri starost — odbaci tokene starije od 48h
-      var data = JSON.parse(stored);
-      var created = new Date(data.created).getTime();
-      if (Date.now() - created > 48 * 60 * 60 * 1000) {
-        // istekao — čisti
+      if (!isTokenPayloadValid(stored)) {
         PropertiesService.getScriptProperties().deleteProperty(key);
         return false;
       }
-      // restoruj u cache za buduće pozive
+
       CacheService.getScriptCache().put(key, stored, 86400);
       return true;
     }
-  } catch (e) {}
-  
+  } catch (e) {
+    logError('GAS', 'validateToken', e.message || String(e), e.stack || '', '');
+  }
+
   return false;
 }
 
 function getTokenData(token) {
-  var key = 'TOKEN_' + token;
-  
+  if (!token || String(token).length < 10) return null;
+
+  var key = 'TOKEN_' + String(token);
+
   // pokušaj cache
-  var d = CacheService.getScriptCache().get(key);
-  if (d) return JSON.parse(d);
-  
+  var cached = CacheService.getScriptCache().get(key);
+  if (cached) {
+    if (isTokenPayloadValid(cached)) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        try { CacheService.getScriptCache().remove(key); } catch (removeErr) {}
+        try { PropertiesService.getScriptProperties().deleteProperty(key); } catch (deleteErr) {}
+        return null;
+      }
+    }
+
+    try { CacheService.getScriptCache().remove(key); } catch (removeErr2) {}
+    try { PropertiesService.getScriptProperties().deleteProperty(key); } catch (deleteErr2) {}
+    return null;
+  }
+
   // fallback na properties
   try {
     var stored = PropertiesService.getScriptProperties().getProperty(key);
     if (stored) {
-      var data = JSON.parse(stored);
-      var created = new Date(data.created).getTime();
-      if (Date.now() - created > 48 * 60 * 60 * 1000) {
+      if (!isTokenPayloadValid(stored)) {
         PropertiesService.getScriptProperties().deleteProperty(key);
         return null;
       }
-      // restoruj u cache
+
+      var data = JSON.parse(stored);
       CacheService.getScriptCache().put(key, stored, 86400);
       return data;
     }
-  } catch (e) {}
-  
+  } catch (e) {
+    logError('GAS', 'getTokenData', e.message || String(e), e.stack || '', '');
+  }
+
   return null;
 }
 
@@ -938,7 +1029,8 @@ function purgeExpiredTokens() {
         try {
           var data = JSON.parse(all[key]);
           var created = new Date(data.created).getTime();
-          if (now - created > maxAge) {
+
+          if (!created || isNaN(created) || now - created > maxAge) {
             props.deleteProperty(key);
             purged++;
           }
@@ -950,12 +1042,37 @@ function purgeExpiredTokens() {
     }
     
     Logger.log('Purged ' + purged + ' expired tokens');
-    // also purge old error logs
-    purgeOldErrorLogs();
 
-    return { success: true, purged: purged };
+    try {
+      purgeOldErrorLogs();
+    } catch (logPurgeErr) {
+      logError(
+        'GAS',
+        'purgeExpiredTokens.purgeOldErrorLogs',
+        logPurgeErr && logPurgeErr.message ? logPurgeErr.message : String(logPurgeErr || ''),
+        logPurgeErr && logPurgeErr.stack ? logPurgeErr.stack : '',
+        ''
+      );
+    }
+
+    return {
+      success: true,
+      purged: purged
+    };
   } catch (err) {
-    return { success: false, error: err.message };
+    logError(
+      'GAS',
+      'purgeExpiredTokens',
+      err && err.message ? err.message : String(err || 'Unknown error'),
+      err && err.stack ? err.stack : '',
+      ''
+    );
+
+    return {
+      success: false,
+      error: 'Token cleanup failed.',
+      code: 'TOKEN_PURGE_FAILED'
+    };
   }
 }
 
@@ -993,6 +1110,7 @@ function logLoginAttempt(username, entityID, success, message) {
     const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
     let files = folder.getFilesByName('LoginLog');
     let ss;
+
     if (files.hasNext()) {
       ss = SpreadsheetApp.open(files.next());
     } else {
@@ -1000,15 +1118,68 @@ function logLoginAttempt(username, entityID, success, message) {
       const file = DriveApp.getFileById(ss.getId());
       folder.addFile(file);
       DriveApp.getRootFolder().removeFile(file);
-      ss.getSheets()[0].getRange(1, 1, 1, 5).setValues([['Timestamp', 'Username', 'EntityID', 'Success', 'Message']]);
+
+      const sheet = ss.getSheets()[0];
+      sheet.getRange(1, 1, 1, 5).setValues([[
+        'Timestamp', 'Username', 'EntityID', 'Success', 'Message'
+      ]]);
+      sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+      sheet.setFrozenRows(1);
     }
-    ss.getSheets()[0].appendRow([new Date().toISOString(), username, entityID, success ? 'Da' : 'Ne', message]);
-  } catch (e) {}
+
+    ss.getSheets()[0].appendRow([
+      new Date().toISOString(),
+      sanitizeLoginLogValue(normalizeUsername(username), 120),
+      sanitizeLoginLogValue(entityID || '', 120),
+      success ? 'Da' : 'Ne',
+      sanitizeLoginLogValue(message || '', 250)
+    ]);
+  } catch (e) {
+    // login logging must not break auth flow
+  }
 }
 
+function normalizeUsername(username) {
+  return String(username || '').trim().toLowerCase();
+}
+
+function sanitizeLoginLogValue(value, maxLen) {
+  return truncateForLog(redactSensitiveText(value), maxLen || 200);
+}
+
+function validateLoginUserConfig(role, entityID) {
+  const roleValue = String(role || '').trim();
+  const entityValue = String(entityID || '').trim();
+
+  if (!requireRole({ role: roleValue }, ['Management', 'Otkupac', 'Kooperant', 'Vozac'])) {
+    const err = new Error('Invalid user role: ' + roleValue);
+    err.code = 'AUTH_CONFIG_INVALID';
+    throw err;
+  }
+
+  if (roleValue !== 'Management' && !entityValue) {
+    const err = new Error('EntityID required for role: ' + roleValue);
+    err.code = 'AUTH_CONFIG_INVALID';
+    throw err;
+  }
+
+  return {
+    role: roleValue,
+    entityID: entityValue
+  };
+}
 // ============================================================
 // OTKUP PROCESSING
 // ============================================================
+function isTerminalSyncStatus(status) {
+  const s = String(status || '').trim();
+
+  return (
+    s === 'Synced>Master' ||
+    s === 'Duplicate' ||
+    s.indexOf('SyncError') === 0
+  );
+}
 
 function processRecord(record, otkupacID) {
   try {
@@ -1022,15 +1193,41 @@ function processRecord(record, otkupacID) {
     const idx = headerIndexMap(headers);
     const nowIso = new Date().toISOString();
 
-    if (!record || !record.clientRecordID) {
+    requireHeaderIndex(idx, 'ClientRecordID', 'processRecord');
+    requireHeaderIndex(idx, 'ServerRecordID', 'processRecord');
+    requireHeaderIndex(idx, 'SyncStatus', 'processRecord');
+    requireHeaderIndex(idx, 'UpdatedAtServer', 'processRecord');
+    requireHeaderIndex(idx, 'ReceivedAt', 'processRecord');
+
+    if (!record || !String(record.clientRecordID || '').trim()) {
       return {
         clientRecordID: '',
         success: false,
+        code: 'CLIENT_RECORD_ID_MISSING',
         error: 'Missing clientRecordID'
       };
     }
 
-    const existingRow = findByColumn(sheet, idx.ClientRecordID, record.clientRecordID);
+    const clientRecordID = String(record.clientRecordID).trim();
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    const canonicalOtkupacID = String(otkupacID || '').trim();
+
+    if (!canonicalOtkupacID) {
+      const err = new Error('OtkupacID is required');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const recordOtkupacID = String(record.otkupacID || '').trim();
+
+    if (recordOtkupacID && recordOtkupacID !== canonicalOtkupacID) {
+      const err = new Error(
+        'OtkupacID mismatch. Request=' + canonicalOtkupacID + ', Record=' + recordOtkupacID
+      );
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
 
     // --------------------------------------------------
     // EXISTING RECORD -> idempotent return / light update
@@ -1038,39 +1235,53 @@ function processRecord(record, otkupacID) {
     if (existingRow > 0) {
       const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '');
-      const currentVozacID = String(getCell(existingValues, idx.VozacID, '') || '');
+      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
+      const currentVozacID = String(getCell(existingValues, idx.VozacID, '') || '').trim();
+      const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
+      const isTerminal = isTerminalSyncStatus(currentSyncStatus);
 
-      // optional enrichment: fill missing VozacID
-      if (typeof idx.VozacID === 'number' && idx.VozacID >= 0) {
-        if (record.vozacID && !currentVozacID) {
-          sheet.getRange(existingRow, idx.VozacID + 1).setValue(record.vozacID);
+      // Only non-terminal records may receive light enrichment.
+      // Terminal/master/error records must stay untouched by PWA retry.
+      if (!isTerminal) {
+        // optional enrichment: fill missing VozacID only
+        if (typeof idx.VozacID === 'number' && idx.VozacID >= 0) {
+          if (record.vozacID && !currentVozacID) {
+            sheet.getRange(existingRow, idx.VozacID + 1).setValue(record.vozacID);
+          }
+        }
+
+        // optional enrichment: keep latest UpdatedAtClient from client
+        if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0) {
+          if (record.updatedAtClient) {
+            sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
+          }
+        }
+
+        // stamp server-side confirmation time
+        if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
+          sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
         }
       }
 
-      // optional enrichment: keep latest UpdatedAtClient from client
-      if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0) {
-        if (record.updatedAtClient) {
-          sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
+      // Do NOT reset master/error/duplicate statuses back to Synced.
+      if (!isTerminal && typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
+        sheet.getRange(existingRow, idx.SyncStatus + 1).setValue(currentSyncStatus || 'Synced');
+      }
+
+      // ReceivedAt is first-received timestamp. Do not rewrite it on idempotent retry.
+      if (!isTerminal && typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
+        const currentReceivedAt = String(getCell(existingValues, idx.ReceivedAt, '') || '').trim();
+        if (!currentReceivedAt) {
+          sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
         }
       }
 
-      // always stamp server-side confirmation time
-      if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
-        sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
-      }
-
-      if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
-        sheet.getRange(existingRow, idx.SyncStatus + 1).setValue('Synced');
-      }
-
-      if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
-        sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
-      }
       return {
-        clientRecordID: record.clientRecordID,
+        clientRecordID: clientRecordID,
         success: true,
         status: 'existing',
+        terminal: isTerminal,
+        syncStatus: currentSyncStatus || 'Synced',
         serverRecordID: currentServerRecordID,
         updatedAtServer: nowIso,
         row: existingRow
@@ -1080,27 +1291,42 @@ function processRecord(record, otkupacID) {
     // --------------------------------------------------
     // NEW RECORD -> insert
     // --------------------------------------------------
-    const serverRecordID = generateServerRecordID(otkupacID);
+    const serverRecordID = generateServerRecordID(canonicalOtkupacID);
+
+    const datum = requireNonEmptyString(record.datum, 'Datum');
+    const kooperantID = requireNonEmptyString(record.kooperantID, 'KooperantID');
+    const vrstaVoca = requireNonEmptyString(record.vrstaVoca, 'VrstaVoca');
+
+    const kolicina = parsePositiveNumber(record.kolicina, 'Kolicina');
+    const cena = parsePositiveNumber(record.cena, 'Cena');
+
+    const klasa = String(record.klasa || 'I').trim();
+    if (['I', 'II', 'III'].indexOf(klasa) === -1) {
+      const err = new Error('Klasa invalid: ' + klasa);
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    const kolAmbalaze = parseNonNegativeNumber(record.kolAmbalaze, 'KolAmbalaze', 0);
 
     const rowObj = {
-      ClientRecordID: record.clientRecordID || '',
+      ClientRecordID: clientRecordID,
       ServerRecordID: serverRecordID,
       CreatedAtClient: record.createdAtClient || '',
       UpdatedAtClient: record.updatedAtClient || record.createdAtClient || '',
       UpdatedAtServer: nowIso,
       SyncStatus: 'Synced',
       DeviceID: record.deviceID || '',
-      OtkupacID: otkupacID || '',
-      Datum: record.datum || '',
-      KooperantID: record.kooperantID || '',
+      OtkupacID: canonicalOtkupacID,
+      Datum: datum,
+      KooperantID: kooperantID,
       KooperantName: record.kooperantName || '',
-      VrstaVoca: record.vrstaVoca || '',
+      VrstaVoca: vrstaVoca,
       SortaVoca: record.sortaVoca || '',
-      Klasa: record.klasa || 'I',
-      Kolicina: record.kolicina || 0,
-      Cena: record.cena || 0,
+      Klasa: klasa,
+      Kolicina: kolicina,
+      Cena: cena,
       TipAmbalaze: record.tipAmbalaze || '',
-      KolAmbalaze: record.kolAmbalaze || 0,
+      KolAmbalaze: kolAmbalaze,
       ParcelaID: record.parcelaID || '',
       VozacID: record.vozacID || '',
       Napomena: record.napomena || '',
@@ -1111,7 +1337,7 @@ function processRecord(record, otkupacID) {
     sheet.appendRow(rowValues);
 
     return {
-      clientRecordID: record.clientRecordID,
+      clientRecordID: clientRecordID,
       success: true,
       status: 'inserted',
       serverRecordID: serverRecordID,
@@ -1119,12 +1345,23 @@ function processRecord(record, otkupacID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
-    logError('GAS', 'processRecord', err.message, err.stack || '', otkupacID || '');
+    const safeClientRecordID =
+      record && record.clientRecordID ? String(record.clientRecordID).trim() : '';
+
+    logError(
+      'GAS',
+      'processRecord',
+      err && err.message ? err.message : String(err || 'Unknown error'),
+      err && err.stack ? err.stack : '',
+      otkupacID || ''
+    );
+
     return {
-      clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
+      clientRecordID: safeClientRecordID,
       success: false,
-      error: err.message
-    };
+      code: errorCodeOf(err, 'PROCESS_RECORD_FAILED'),
+      error: clientSafeErrorMessage(err)
+    };  
   }
 }
 
@@ -1152,90 +1389,154 @@ function uploadPdfToDrive(data) {
 // ============================================================
 function processZbirnaRecord(record, vozacID) {
   try {
-    const sheetName = 'VOZ-' + (vozacID || 'UNKNOWN');
+    const canonicalVozacID = String(vozacID || '').trim();
+
+    if (!canonicalVozacID) {
+      const err = new Error('VozacID is required');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const sheetName = 'VOZ-' + canonicalVozacID;
     const ss = getOrCreateSheet(sheetName, ZBIRNA_COLUMNS);
     const sheet = ss.getSheets()[0];
 
     ensureSheetColumns(sheet, ZBIRNA_COLUMNS);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getValues()[0]
+      .map(h => String(h || '').trim());
+
     const idx = headerIndexMap(headers);
+
+    requireHeaderIndex(idx, 'ClientRecordID', 'processZbirnaRecord');
+    requireHeaderIndex(idx, 'ServerRecordID', 'processZbirnaRecord');
+    requireHeaderIndex(idx, 'SyncStatus', 'processZbirnaRecord');
+    requireHeaderIndex(idx, 'UpdatedAtServer', 'processZbirnaRecord');
+    requireHeaderIndex(idx, 'ReceivedAt', 'processZbirnaRecord');
+    requireHeaderIndex(idx, 'VozacID', 'processZbirnaRecord');
+
     ensurePlainTextColumn(sheet, headers, 'TipAmbalaze');
     ensurePlainTextColumn(sheet, headers, 'BrojZbirne');
+
     const nowIso = new Date().toISOString();
 
-    if (!record || !record.clientRecordID) {
+    if (!record || !String(record.clientRecordID || '').trim()) {
       return {
         clientRecordID: '',
         success: false,
-        error: 'Missing clientRecordID'
+        code: 'CLIENT_RECORD_ID_MISSING',
+        error: 'ClientRecordID je obavezan.'
       };
     }
 
-    const existingRow = findByColumn(sheet, idx.ClientRecordID, record.clientRecordID);
+    const clientRecordID = String(record.clientRecordID).trim();
 
-    // Existing record -> idempotent return / light update
+    const recordVozacID = String(record.vozacID || '').trim();
+    if (recordVozacID && recordVozacID !== canonicalVozacID) {
+      const err = new Error(
+        'VozacID mismatch. Request=' + canonicalVozacID + ', Record=' + recordVozacID
+      );
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    // --------------------------------------------------
+    // EXISTING RECORD -> idempotent return / no terminal mutation
+    // --------------------------------------------------
     if (existingRow > 0) {
-      const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '');
+      const existingValues = sheet
+        .getRange(existingRow, 1, 1, sheet.getLastColumn())
+        .getValues()[0];
 
-      if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0 && record.updatedAtClient) {
-        sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
-      }
+      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
+      const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
+      const isTerminal = isTerminalSyncStatus(currentSyncStatus);
 
-      if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
-        sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
-      }
+      // Only non-terminal records may receive light retry enrichment.
+      if (!isTerminal) {
+        if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0 && record.updatedAtClient) {
+          sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
+        }
 
-      if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
-        sheet.getRange(existingRow, idx.SyncStatus + 1).setValue('Synced');
-      }
+        if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
+          sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
+        }
 
-      if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
-        sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
+        if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
+          sheet.getRange(existingRow, idx.SyncStatus + 1).setValue(currentSyncStatus || 'Synced');
+        }
+
+        if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
+          const currentReceivedAt = String(getCell(existingValues, idx.ReceivedAt, '') || '').trim();
+          if (!currentReceivedAt) {
+            sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
+          }
+        }
       }
 
       return {
-        clientRecordID: record.clientRecordID,
+        clientRecordID: clientRecordID,
         success: true,
         status: 'existing',
+        terminal: isTerminal,
+        syncStatus: currentSyncStatus || 'Synced',
         serverRecordID: currentServerRecordID,
         updatedAtServer: nowIso,
         row: existingRow
       };
     }
 
-    // New insert
-    const serverRecordID = generateEntityServerID('ZBR', vozacID);
+    // --------------------------------------------------
+    // NEW RECORD -> validate + insert
+    // --------------------------------------------------
+    const datum = requireNonEmptyString(record.datum, 'Datum');
+    const kupacID = requireNonEmptyString(record.kupacID, 'KupacID');
+    const vrstaVoca = requireNonEmptyString(record.vrstaVoca, 'VrstaVoca');
+
+    const kolicinaKlI = parseNonNegativeNumber(record.kolicinaKlI, 'KolicinaKlI', 0);
+    const kolicinaKlII = parseNonNegativeNumber(record.kolicinaKlII, 'KolicinaKlII', 0);
+    const kolAmbalaze = parseNonNegativeNumber(record.kolAmbalaze, 'KolAmbalaze', 0);
+
+    if (kolicinaKlI <= 0 && kolicinaKlII <= 0) {
+      const err = new Error('At least one quantity must be > 0');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const serverRecordID = generateEntityServerID('ZBR', canonicalVozacID);
 
     const rowObj = {
-      ClientRecordID: record.clientRecordID || '',
+      ClientRecordID: clientRecordID,
       ServerRecordID: serverRecordID,
       CreatedAtClient: record.createdAtClient || '',
       UpdatedAtClient: record.updatedAtClient || record.createdAtClient || '',
       UpdatedAtServer: nowIso,
       SyncStatus: 'Synced',
-      VozacID: vozacID || '',
-      Datum: record.datum || '',
-      KupacID: record.kupacID || '',
+      VozacID: canonicalVozacID,
+      Datum: datum,
+      KupacID: kupacID,
       KupacName: record.kupacName || '',
-      VrstaVoca: record.vrstaVoca || '',
+      VrstaVoca: vrstaVoca,
       SortaVoca: record.sortaVoca || '',
-      KolicinaKlI: record.kolicinaKlI || 0,
-      KolicinaKlII: record.kolicinaKlII || 0,
+      KolicinaKlI: kolicinaKlI,
+      KolicinaKlII: kolicinaKlII,
       TipAmbalaze: record.tipAmbalaze || '',
-      KolAmbalaze: record.kolAmbalaze || 0,
+      KolAmbalaze: kolAmbalaze,
       Klasa: record.klasa || '',
       OtkupRecordIDs: record.otkupRecordIDs || '',
       ReceivedAt: nowIso,
-      BrojZbirne: record.brojZbirne || '',
+      BrojZbirne: record.brojZbirne || ''
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
     sheet.appendRow(rowValues);
 
     return {
-      clientRecordID: record.clientRecordID,
+      clientRecordID: clientRecordID,
       success: true,
       status: 'inserted',
       serverRecordID: serverRecordID,
@@ -1243,11 +1544,22 @@ function processZbirnaRecord(record, vozacID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
-    logError('GAS', 'processZbirnaRecord', err.message, err.stack || '', vozacID || '');
+    const safeClientRecordID =
+      record && record.clientRecordID ? String(record.clientRecordID).trim() : '';
+
+    logError(
+      'GAS',
+      'processZbirnaRecord',
+      err && err.message ? err.message : String(err || 'Unknown error'),
+      err && err.stack ? err.stack : '',
+      vozacID || ''
+    );
+
     return {
-      clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
+      clientRecordID: safeClientRecordID,
       success: false,
-      error: err.message
+      code: errorCodeOf(err, 'PROCESS_ZBIRNA_RECORD_FAILED'),
+      error: clientSafeErrorMessage(err)
     };
   }
 }
@@ -1385,93 +1697,185 @@ function getAgromereForKooperant(kooperantID) {
 
 function processTretmanRecord(record, kooperantID) {
   try {
-    const sheetName = 'TRETMAN-' + (kooperantID || 'UNKNOWN');
+    const canonicalKooperantID = String(kooperantID || '').trim();
+
+    if (!canonicalKooperantID) {
+      const err = new Error('KooperantID is required');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const sheetName = 'TRETMAN-' + canonicalKooperantID;
     const ss = getOrCreateSheet(sheetName, TRETMAN_COLUMNS);
     const sheet = ss.getSheets()[0];
 
     ensureSheetColumns(sheet, TRETMAN_COLUMNS);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getValues()[0]
+      .map(h => String(h || '').trim());
+
     const idx = headerIndexMap(headers);
+
+    requireHeaderIndex(idx, 'ClientRecordID', 'processTretmanRecord');
+    requireHeaderIndex(idx, 'ServerRecordID', 'processTretmanRecord');
+    requireHeaderIndex(idx, 'SyncStatus', 'processTretmanRecord');
+    requireHeaderIndex(idx, 'UpdatedAtServer', 'processTretmanRecord');
+    requireHeaderIndex(idx, 'ReceivedAt', 'processTretmanRecord');
+    requireHeaderIndex(idx, 'KooperantID', 'processTretmanRecord');
+
     const nowIso = new Date().toISOString();
 
-    if (!record || !record.clientRecordID) {
+    if (!record || !String(record.clientRecordID || '').trim()) {
       return {
         clientRecordID: '',
         success: false,
-        error: 'Missing clientRecordID'
+        code: 'CLIENT_RECORD_ID_MISSING',
+        error: 'ClientRecordID je obavezan.'
       };
     }
 
-    const existingRow = findByColumn(sheet, idx.ClientRecordID, record.clientRecordID);
+    const clientRecordID = String(record.clientRecordID).trim();
 
-    // Existing record -> idempotent return / light update
+    const recordKooperantID = String(record.kooperantID || '').trim();
+    if (recordKooperantID && recordKooperantID !== canonicalKooperantID) {
+      const err = new Error(
+        'KooperantID mismatch. Request=' + canonicalKooperantID + ', Record=' + recordKooperantID
+      );
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    // --------------------------------------------------
+    // EXISTING RECORD -> idempotent return / no terminal mutation
+    // --------------------------------------------------
     if (existingRow > 0) {
-      const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '');
+      const existingValues = sheet
+        .getRange(existingRow, 1, 1, sheet.getLastColumn())
+        .getValues()[0];
 
-      if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0 && record.updatedAtClient) {
-        sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
-      }
+      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
+      const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
+      const isTerminal = isTerminalSyncStatus(currentSyncStatus);
 
-      if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
-        sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
-      }
+      // Only non-terminal records may receive light retry enrichment.
+      if (!isTerminal) {
+        if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0 && record.updatedAtClient) {
+          sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
+        }
 
-      if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
-        sheet.getRange(existingRow, idx.SyncStatus + 1).setValue('Synced');
-      }
+        if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
+          sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
+        }
 
-      if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
-        sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
+        if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
+          sheet.getRange(existingRow, idx.SyncStatus + 1).setValue(currentSyncStatus || 'Synced');
+        }
+
+        if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
+          const currentReceivedAt = String(getCell(existingValues, idx.ReceivedAt, '') || '').trim();
+          if (!currentReceivedAt) {
+            sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
+          }
+        }
       }
 
       return {
-        clientRecordID: record.clientRecordID,
+        clientRecordID: clientRecordID,
         success: true,
         status: 'existing',
+        terminal: isTerminal,
+        syncStatus: currentSyncStatus || 'Synced',
         serverRecordID: currentServerRecordID,
         updatedAtServer: nowIso,
         row: existingRow
       };
     }
 
-    // New insert
-    const serverRecordID = generateEntityServerID('TRT', kooperantID);
+    // --------------------------------------------------
+    // NEW RECORD -> validate + insert
+    // --------------------------------------------------
+    const datum = requireNonEmptyString(record.datum, 'Datum');
+    const parcelaID = requireNonEmptyString(record.parcelaID, 'ParcelaID');
+    const mera = requireNonEmptyString(record.mera, 'Mera');
+
+    const kolicinaUpotrebljena = parseOptionalNonNegativeNumber(
+      record.kolicinaUpotrebljena,
+      'KolicinaUpotrebljena',
+      ''
+    );
+
+    const dozaPreporucena = parseOptionalNonNegativeNumber(
+      record.dozaPreporucena,
+      'DozaPreporucena',
+      ''
+    );
+
+    const dozaPrimenjena = parseOptionalNonNegativeNumber(
+      record.dozaPrimenjena,
+      'DozaPrimenjena',
+      ''
+    );
+
+    const karencaDana = parseOptionalNonNegativeNumber(
+      record.karencaDana,
+      'KarencaDana',
+      ''
+    );
+
+    const trajanjeMinuta = parseOptionalNonNegativeNumber(
+      record.trajanjeMinuta,
+      'TrajanjeMinuta',
+      ''
+    );
+
+    const geoLatStart = parseOptionalNumber(record.geoLatStart, 'GeoLatStart', '');
+    const geoLngStart = parseOptionalNumber(record.geoLngStart, 'GeoLngStart', '');
+    const geoLatEnd = parseOptionalNumber(record.geoLatEnd, 'GeoLatEnd', '');
+    const geoLngEnd = parseOptionalNumber(record.geoLngEnd, 'GeoLngEnd', '');
+
+    const meteoTemp = parseOptionalNumber(record.meteoTemp, 'MeteoTemp', '');
+    const meteoWind = parseOptionalNonNegativeNumber(record.meteoWind, 'MeteoWind', '');
+    const meteoHumidity = parseOptionalNonNegativeNumber(record.meteoHumidity, 'MeteoHumidity', '');
+
+    const serverRecordID = generateEntityServerID('TRT', canonicalKooperantID);
 
     const rowObj = {
-      ClientRecordID: record.clientRecordID || '',
+      ClientRecordID: clientRecordID,
       ServerRecordID: serverRecordID,
       CreatedAtClient: record.createdAtClient || '',
       UpdatedAtClient: record.updatedAtClient || record.createdAtClient || '',
       UpdatedAtServer: nowIso,
       SyncStatus: 'Synced',
-      KooperantID: kooperantID || '',
-      ParcelaID: record.parcelaID || '',
-      Datum: record.datum || '',
-      Mera: record.mera || '',
+      KooperantID: canonicalKooperantID,
+      ParcelaID: parcelaID,
+      Datum: datum,
+      Mera: mera,
       ArtikalID: record.artikalID || '',
       ArtikalNaziv: record.artikalNaziv || '',
-      KolicinaUpotrebljena: record.kolicinaUpotrebljena || '',
+      KolicinaUpotrebljena: kolicinaUpotrebljena,
       JedinicaMere: record.jedinicaMere || '',
-      DozaPreporucena: record.dozaPreporucena || '',
-      DozaPrimenjena: record.dozaPrimenjena || '',
+      DozaPreporucena: dozaPreporucena,
+      DozaPrimenjena: dozaPrimenjena,
       OpremaTraktor: record.opremaTraktor || '',
       OpremaPrskalica: record.opremaPrskalica || '',
       OpremaOstalo: record.opremaOstalo || '',
-      KarencaDana: record.karencaDana || '',
+      KarencaDana: karencaDana,
       DatumBerbeDozvoljeno: record.datumBerbeDozvoljeno || '',
       VremePocetka: record.vremePocetka || '',
       VremeZavrsetka: record.vremeZavrsetka || '',
-      TrajanjeMinuta: record.trajanjeMinuta || '',
-      GeoLatStart: record.geoLatStart || '',
-      GeoLngStart: record.geoLngStart || '',
-      GeoLatEnd: record.geoLatEnd || '',
-      GeoLngEnd: record.geoLngEnd || '',
+      TrajanjeMinuta: trajanjeMinuta,
+      GeoLatStart: geoLatStart,
+      GeoLngStart: geoLngStart,
+      GeoLatEnd: geoLatEnd,
+      GeoLngEnd: geoLngEnd,
       GeoAutoDetect: record.geoAutoDetect || '',
-      MeteoTemp: record.meteoTemp || '',
-      MeteoWind: record.meteoWind || '',
-      MeteoHumidity: record.meteoHumidity || '',
+      MeteoTemp: meteoTemp,
+      MeteoWind: meteoWind,
+      MeteoHumidity: meteoHumidity,
       MeteoOverride: record.meteoOverride || '',
       Napomena: record.napomena || '',
       ReceivedAt: nowIso
@@ -1481,7 +1885,7 @@ function processTretmanRecord(record, kooperantID) {
     sheet.appendRow(rowValues);
 
     return {
-      clientRecordID: record.clientRecordID,
+      clientRecordID: clientRecordID,
       success: true,
       status: 'inserted',
       serverRecordID: serverRecordID,
@@ -1489,79 +1893,137 @@ function processTretmanRecord(record, kooperantID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
-    logError('GAS', 'processTretmanRecord', err.message, err.stack || '', kooperantID || '');
+    const safeClientRecordID =
+      record && record.clientRecordID ? String(record.clientRecordID).trim() : '';
+
+    logError(
+      'GAS',
+      'processTretmanRecord',
+      err && err.message ? err.message : String(err || 'Unknown error'),
+      err && err.stack ? err.stack : '',
+      kooperantID || ''
+    );
+
     return {
-      clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
+      clientRecordID: safeClientRecordID,
       success: false,
-      error: err.message
+      code: errorCodeOf(err, 'PROCESS_TRETMAN_RECORD_FAILED'),
+      error: clientSafeErrorMessage(err)
     };
   }
 }
 
 function processOpremaRecord(record, kooperantID) {
   try {
-    const sheetName = 'OPREMA-' + (kooperantID || 'UNKNOWN');
+    const canonicalKooperantID = String(kooperantID || '').trim();
+
+    if (!canonicalKooperantID) {
+      const err = new Error('KooperantID is required');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const sheetName = 'OPREMA-' + canonicalKooperantID;
     const ss = getOrCreateSheet(sheetName, OPREMA_COLUMNS);
     const sheet = ss.getSheets()[0];
 
     ensureSheetColumns(sheet, OPREMA_COLUMNS);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getValues()[0]
+      .map(h => String(h || '').trim());
+
     const idx = headerIndexMap(headers);
+
+    requireHeaderIndex(idx, 'ClientRecordID', 'processOpremaRecord');
+    requireHeaderIndex(idx, 'ServerRecordID', 'processOpremaRecord');
+    requireHeaderIndex(idx, 'SyncStatus', 'processOpremaRecord');
+    requireHeaderIndex(idx, 'UpdatedAtServer', 'processOpremaRecord');
+    requireHeaderIndex(idx, 'ReceivedAt', 'processOpremaRecord');
+    requireHeaderIndex(idx, 'KooperantID', 'processOpremaRecord');
+
     const nowIso = new Date().toISOString();
 
-    if (!record || !record.clientRecordID) {
+    if (!record || !String(record.clientRecordID || '').trim()) {
       return {
         clientRecordID: '',
         success: false,
-        error: 'Missing clientRecordID'
+        code: 'CLIENT_RECORD_ID_MISSING',
+        error: 'ClientRecordID je obavezan.'
       };
     }
 
-    const existingRow = findByColumn(sheet, idx.ClientRecordID, record.clientRecordID);
+    const clientRecordID = String(record.clientRecordID).trim();
+
+    const recordKooperantID = String(record.kooperantID || '').trim();
+    if (recordKooperantID && recordKooperantID !== canonicalKooperantID) {
+      const err = new Error(
+        'KooperantID mismatch. Request=' + canonicalKooperantID + ', Record=' + recordKooperantID
+      );
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
 
     if (existingRow > 0) {
-      const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '');
+      const existingValues = sheet
+        .getRange(existingRow, 1, 1, sheet.getLastColumn())
+        .getValues()[0];
 
-      if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0 && record.updatedAtClient) {
-        sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
-      }
+      const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
+      const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
+      const isTerminal = isTerminalSyncStatus(currentSyncStatus);
 
-      if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
-        sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
-      }
+      if (!isTerminal) {
+        if (typeof idx.UpdatedAtClient === 'number' && idx.UpdatedAtClient >= 0 && record.updatedAtClient) {
+          sheet.getRange(existingRow, idx.UpdatedAtClient + 1).setValue(record.updatedAtClient);
+        }
 
-      if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
-        sheet.getRange(existingRow, idx.SyncStatus + 1).setValue('Synced');
-      }
+        if (typeof idx.UpdatedAtServer === 'number' && idx.UpdatedAtServer >= 0) {
+          sheet.getRange(existingRow, idx.UpdatedAtServer + 1).setValue(nowIso);
+        }
 
-      if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
-        sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
+        if (typeof idx.SyncStatus === 'number' && idx.SyncStatus >= 0) {
+          sheet.getRange(existingRow, idx.SyncStatus + 1).setValue(currentSyncStatus || 'Synced');
+        }
+
+        if (typeof idx.ReceivedAt === 'number' && idx.ReceivedAt >= 0) {
+          const currentReceivedAt = String(getCell(existingValues, idx.ReceivedAt, '') || '').trim();
+          if (!currentReceivedAt) {
+            sheet.getRange(existingRow, idx.ReceivedAt + 1).setValue(nowIso);
+          }
+        }
       }
 
       return {
-        clientRecordID: record.clientRecordID,
+        clientRecordID: clientRecordID,
         success: true,
         status: 'existing',
+        terminal: isTerminal,
+        syncStatus: currentSyncStatus || 'Synced',
         serverRecordID: currentServerRecordID,
         updatedAtServer: nowIso,
         row: existingRow
       };
     }
 
-    const serverRecordID = generateEntityServerID('OPR', kooperantID);
+    const naziv = requireNonEmptyString(record.naziv, 'Naziv');
+    const tip = requireNonEmptyString(record.tip, 'Tip');
+
+    const serverRecordID = generateEntityServerID('OPR', canonicalKooperantID);
 
     const rowObj = {
-      ClientRecordID: record.clientRecordID || '',
+      ClientRecordID: clientRecordID,
       ServerRecordID: serverRecordID,
       CreatedAtClient: record.createdAtClient || nowIso,
       UpdatedAtClient: record.updatedAtClient || record.createdAtClient || nowIso,
       UpdatedAtServer: nowIso,
       SyncStatus: 'Synced',
-      KooperantID: kooperantID || '',
-      Naziv: record.naziv || '',
-      Tip: record.tip || '',
+      KooperantID: canonicalKooperantID,
+      Naziv: naziv,
+      Tip: tip,
       ReceivedAt: nowIso
     };
 
@@ -1569,7 +2031,7 @@ function processOpremaRecord(record, kooperantID) {
     sheet.appendRow(rowValues);
 
     return {
-      clientRecordID: record.clientRecordID,
+      clientRecordID: clientRecordID,
       success: true,
       status: 'inserted',
       serverRecordID: serverRecordID,
@@ -1577,10 +2039,22 @@ function processOpremaRecord(record, kooperantID) {
       row: sheet.getLastRow()
     };
   } catch (err) {
+    const safeClientRecordID =
+      record && record.clientRecordID ? String(record.clientRecordID).trim() : '';
+
+    logError(
+      'GAS',
+      'processOpremaRecord',
+      err && err.message ? err.message : String(err || 'Unknown error'),
+      err && err.stack ? err.stack : '',
+      kooperantID || ''
+    );
+
     return {
-      clientRecordID: record && record.clientRecordID ? record.clientRecordID : '',
+      clientRecordID: safeClientRecordID,
       success: false,
-      error: err.message
+      code: errorCodeOf(err, 'PROCESS_OPREMA_RECORD_FAILED'),
+      error: clientSafeErrorMessage(err)
     };
   }
 }
@@ -1756,11 +2230,28 @@ function getOrCreateSheet(sheetName, columns) {
 }
 
 function findByColumn(sheet, colIndex, value) {
-  if (!value) return 0;
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][colIndex] === value) return i + 1;
+  if (!sheet) {
+    const err = new Error('findByColumn: sheet is required');
+    err.code = 'SHEET_MISSING';
+    throw err;
   }
+
+  if (typeof colIndex !== 'number' || colIndex < 0) {
+    const err = new Error('findByColumn: invalid colIndex ' + colIndex);
+    err.code = 'SCHEMA_DRIFT';
+    throw err;
+  }
+
+  const target = String(value || '').trim();
+  if (!target) return 0;
+
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    const current = String(data[i][colIndex] || '').trim();
+    if (current === target) return i + 1;
+  }
+
   return 0;
 }
 
@@ -3832,19 +4323,206 @@ function createArtikal(data) {
 // ============================================================
 // HELPERS
 // ============================================================
+function isTerminalSyncStatus(status) {
+  const s = String(status || '').trim();
+
+  return (
+    s === 'Synced>Master' ||
+    s === 'Duplicate' ||
+    s.indexOf('SyncError') === 0
+  );
+}
+
+function truncateForLog(value, maxLen) {
+  const s = String(value || '');
+  const n = maxLen || 1000;
+  return s.length > n ? s.substring(0, n) + '...[truncated]' : s;
+}
+
+function redactSensitiveText(value) {
+  let s = String(value || '');
+
+  s = s.replace(/("token"\s*:\s*")[^"]+(")/gi, '$1***REDACTED_TOKEN***$2');
+  s = s.replace(/("pin"\s*:\s*")[^"]+(")/gi, '$1***REDACTED_PIN***$2');
+  s = s.replace(/("password"\s*:\s*")[^"]+(")/gi, '$1***REDACTED_PASSWORD***$2');
+  s = s.replace(/(token=)[^&\s]+/gi, '$1***REDACTED_TOKEN***');
+  s = s.replace(/(pin=)[^&\s]+/gi, '$1***REDACTED_PIN***');
+
+  // crude base64/data-url guard
+  s = s.replace(/data:[^;]+;base64,[A-Za-z0-9+/=]{100,}/g, 'data:***REDACTED_BASE64***');
+  s = s.replace(/[A-Za-z0-9+/=]{500,}/g, '***REDACTED_LONG_BLOB***');
+
+  return s;
+}
+
+function sanitizeClientLogField(value, maxLen) {
+  return truncateForLog(redactSensitiveText(value), maxLen || 1000);
+}
 
 function withLock(fn) {
   const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    lock.waitLock(15000); // čekaj do 15s
+    lock.waitLock(15000);
+    lockAcquired = true;
   } catch (e) {
-    return { success: false, error: 'Server zauzet, pokušajte ponovo', code: 503 };
+    logError(
+      'GAS',
+      'withLock',
+      'Lock timeout',
+      e && e.message ? e.message : String(e || ''),
+      ''
+    );
+
+    return {
+      success: false,
+      error: 'Server je zauzet, pokušajte ponovo.',
+      code: 'LOCK_TIMEOUT'
+    };
   }
+
   try {
     return fn();
+  } catch (err) {
+    logError(
+      'GAS',
+      'withLock',
+      err && err.message ? err.message : String(err || 'Unknown error'),
+      err && err.stack ? err.stack : '',
+      ''
+    );
+
+    return {
+      success: false,
+      error: 'Greška pri obradi zahteva.',
+      code: err && err.code ? err.code : 'LOCKED_OPERATION_FAILED'
+    };
   } finally {
-    lock.releaseLock();
+    if (lockAcquired) {
+      try {
+        lock.releaseLock();
+      } catch (releaseErr) {
+        logError(
+          'GAS',
+          'withLock.releaseLock',
+          releaseErr && releaseErr.message ? releaseErr.message : String(releaseErr || ''),
+          releaseErr && releaseErr.stack ? releaseErr.stack : '',
+          ''
+        );
+      }
+    }
   }
+}
+
+function errorCodeOf(err, fallbackCode) {
+  return err && err.code ? String(err.code) : (fallbackCode || 'INTERNAL_ERROR');
+}
+
+function clientSafeErrorMessage(err) {
+  const code = errorCodeOf(err, 'INTERNAL_ERROR');
+
+  if (code === 'CLIENT_RECORD_ID_MISSING') return 'ClientRecordID je obavezan.';
+  if (code === 'VALIDATION_ERROR') return 'Neispravan zapis. Proveri obavezna polja.';
+  if (code === 'AUTH_SCHEMA_DRIFT') return 'Auth konfiguracija nije ispravna.';
+  if (code === 'SCHEMA_DRIFT') return 'Schema drift u Google Sheet-u. Sync je zaustavljen.';
+  if (code === 'SHEET_MISSING') return 'Google Sheet nije pronađen.';
+  if (code === 'LOCK_TIMEOUT') return 'Server je zauzet, pokušajte ponovo.';
+
+  return 'Greška pri obradi zapisa.';
+}
+
+function parsePositiveNumber(value, fieldName) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n) || n <= 0) {
+    const err = new Error(fieldName + ' must be > 0');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  return n;
+}
+
+function requireNonEmptyString(value, fieldName) {
+  const s = String(value || '').trim();
+
+  if (!s) {
+    const err = new Error(fieldName + ' is required');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  return s;
+}
+
+function parseNonNegativeNumber(value, fieldName, defaultValue) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue || 0;
+  }
+
+  const n = Number(value);
+
+  if (!Number.isFinite(n) || n < 0) {
+    const err = new Error(fieldName + ' must be >= 0');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  return n;
+}
+
+function parseOptionalNumber(value, fieldName, defaultValue) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    const err = new Error(fieldName + ' must be a number');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  return n;
+}
+
+function parseOptionalNonNegativeNumber(value, fieldName, defaultValue) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  const n = Number(value);
+
+  if (!Number.isFinite(n) || n < 0) {
+    const err = new Error(fieldName + ' must be >= 0');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  return n;
+}
+
+function buildBatchSyncResponse(results) {
+  const safeResults = Array.isArray(results) ? results : [];
+  const processed = safeResults.length;
+  const succeeded = safeResults.filter(r => r && r.success).length;
+  const failed = safeResults.filter(r => !r || !r.success).length;
+
+  let code = 'OK';
+  if (failed > 0 && succeeded > 0) code = 'PARTIAL_FAILURE';
+  if (failed > 0 && succeeded === 0) code = 'BATCH_FAILED';
+
+  return {
+    success: failed === 0,
+    partial: failed > 0 && succeeded > 0,
+    code: code,
+    processed: processed,
+    succeeded: succeeded,
+    failed: failed,
+    results: safeResults
+  };
 }
 
 function getSheetRegistry() {
@@ -3937,16 +4615,101 @@ function headerIndexMap(headers) {
   return map;
 }
 
+function requireHeaderIndex(idx, columnName, sourceName) {
+  if (!idx || typeof idx[columnName] !== 'number' || idx[columnName] < 0) {
+    const err = new Error(
+      'SCHEMA_DRIFT: missing required column ' + columnName + ' in ' + sourceName
+    );
+    err.code = 'SCHEMA_DRIFT';
+    throw err;
+  }
+
+  return idx[columnName];
+}
+
+function requireHeaderIndexFromArray(headers, columnName, sourceName) {
+  const idx = headers.indexOf(columnName);
+
+  if (idx < 0) {
+    const err = new Error(
+      'AUTH_SCHEMA_DRIFT: missing required column ' + columnName + ' in ' + sourceName
+    );
+    err.code = 'AUTH_SCHEMA_DRIFT';
+    throw err;
+  }
+
+  return idx;
+}
+
 function ensureSheetColumns(sheet, requiredColumns) {
+  if (!sheet) {
+    const err = new Error('Sheet is required');
+    err.code = 'SHEET_MISSING';
+    throw err;
+  }
+
+  if (!Array.isArray(requiredColumns) || requiredColumns.length === 0) {
+    const err = new Error('requiredColumns is empty');
+    err.code = 'SCHEMA_CONFIG_INVALID';
+    throw err;
+  }
+
+  const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
 
-  const missing = requiredColumns.filter(col => headers.indexOf(col) === -1);
-  if (missing.length === 0) return;
+  // New/empty sheet: create canonical header.
+  if (lastRow === 0 || lastCol === 0) {
+    sheet.getRange(1, 1, 1, requiredColumns.length).setValues([requiredColumns]);
+    sheet.getRange(1, 1, 1, requiredColumns.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    return;
+  }
 
-  const nextHeaders = headers.concat(missing);
-  sheet.getRange(1, 1, 1, nextHeaders.length).setValues([nextHeaders]);
-  sheet.getRange(1, 1, 1, nextHeaders.length).setFontWeight('bold');
+  const width = Math.max(lastCol, requiredColumns.length);
+  const headers = sheet
+    .getRange(1, 1, 1, width)
+    .getValues()[0]
+    .map(h => String(h || '').trim());
+
+  const problems = [];
+
+  for (let i = 0; i < requiredColumns.length; i++) {
+    const expected = String(requiredColumns[i] || '').trim();
+    const actual = String(headers[i] || '').trim();
+
+    if (actual !== expected) {
+      problems.push({
+        col: i + 1,
+        expected: expected,
+        actual: actual
+      });
+    }
+  }
+
+  // Extra named columns after canonical schema are schema drift too.
+  for (let i = requiredColumns.length; i < headers.length; i++) {
+    const extra = String(headers[i] || '').trim();
+    if (extra) {
+      problems.push({
+        col: i + 1,
+        expected: '',
+        actual: extra
+      });
+    }
+  }
+
+  if (problems.length > 0) {
+    const err = new Error(
+      'SCHEMA_DRIFT: ' +
+      sheet.getName() +
+      ' header mismatch: ' +
+      JSON.stringify(problems).substring(0, 1000)
+    );
+    err.code = 'SCHEMA_DRIFT';
+    throw err;
+  }
+
+  sheet.getRange(1, 1, 1, requiredColumns.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
 }
 
@@ -3980,6 +4743,56 @@ function ensurePlainTextColumn(sheet, headers, columnName) {
   const col = idx + 1;
   const rows = Math.max(sheet.getMaxRows() - 1, 1);
   sheet.getRange(2, col, rows, 1).setNumberFormat('@');
+}
+
+function runGasRouteHealthCheck() {
+  const checks = [
+    ['handlePublicRead', typeof handlePublicRead],
+    ['handleAuthorizedRead', typeof handleAuthorizedRead],
+    ['authenticateUser', typeof authenticateUser],
+    ['validateToken', typeof validateToken],
+    ['getTokenData', typeof getTokenData],
+    ['withLock', typeof withLock],
+    ['processRecord', typeof processRecord],
+    ['processAgromereRecord', typeof processAgromereRecord],
+    ['processZbirnaRecord', typeof processZbirnaRecord],
+    ['processTretmanRecord', typeof processTretmanRecord],
+    ['processOpremaRecord', typeof processOpremaRecord],
+    ['uploadPdfToDrive', typeof uploadPdfToDrive],
+    ['saveWarRoomDemand', typeof saveWarRoomDemand],
+    ['removeWarRoomDemand', typeof removeWarRoomDemand],
+    ['updateDemandPrimljeno', typeof updateDemandPrimljeno],
+    ['updateKamionStatus', typeof updateKamionStatus],
+    ['saveDispecer', typeof saveDispecer],
+    ['updateDispecer', typeof updateDispecer],
+    ['removeDispecer', typeof removeDispecer],
+    ['saveIzdavanje', typeof saveIzdavanje],
+    ['parseFiskalniImage', typeof parseFiskalniImage],
+    ['parseFiskalni', typeof parseFiskalni],
+    ['saveFiskalni', typeof saveFiskalni],
+    ['saveFiskalniMapiranje', typeof saveFiskalniMapiranje],
+    ['createArtikal', typeof createArtikal],
+    ['getParcelGeo', typeof getParcelGeo],
+    ['getParcelMeteo', typeof getParcelMeteo],
+    ['getParcelMeteoLatest', typeof getParcelMeteoLatest],
+    ['getAllMeteoLatest', typeof getAllMeteoLatest]
+  ];
+
+  const missing = checks
+    .filter(row => row[1] !== 'function')
+    .map(row => row[0]);
+
+  if (missing.length > 0) {
+    const message = 'Missing GAS route handlers: ' + missing.join(', ');
+    logError('GAS', 'runGasRouteHealthCheck', message, '', '');
+    throw new Error(message);
+  }
+
+  Logger.log('GAS route healthcheck PASS: ' + checks.length + ' handlers present');
+  return {
+    success: true,
+    checked: checks.length
+  };
 }
 
 function quickMeteoDebug() {
