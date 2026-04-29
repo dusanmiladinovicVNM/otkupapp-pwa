@@ -4809,3 +4809,192 @@ function quickMeteoDebug() {
     // Probaj fetch za jednu parcelu
     scheduledMeteoFetch();
 }
+
+function runGasSmokeSuite() {
+  const results = [];
+
+  function pass(name) {
+    results.push({ name: name, success: true });
+    Logger.log('PASS | ' + name);
+  }
+
+  function fail(name, err) {
+    const message = err && err.message ? err.message : String(err || 'Unknown error');
+    results.push({ name: name, success: false, error: message });
+    Logger.log('FAIL | ' + name + ' | ' + message);
+  }
+
+  function run(name, fn) {
+    try {
+      fn();
+      pass(name);
+    } catch (err) {
+      fail(name, err);
+    }
+  }
+
+  run('route healthcheck', function() {
+    const r = runGasRouteHealthCheck();
+    if (!r || !r.success) throw new Error('route healthcheck failed');
+  });
+
+  run('buildBatchSyncResponse all ok', function() {
+    const r = buildBatchSyncResponse([
+      { success: true },
+      { success: true }
+    ]);
+
+    if (r.success !== true) throw new Error('success should be true');
+    if (r.code !== 'OK') throw new Error('code should be OK');
+    if (r.processed !== 2) throw new Error('processed should be 2');
+    if (r.succeeded !== 2) throw new Error('succeeded should be 2');
+    if (r.failed !== 0) throw new Error('failed should be 0');
+  });
+
+  run('buildBatchSyncResponse partial failure', function() {
+    const r = buildBatchSyncResponse([
+      { success: true },
+      { success: false }
+    ]);
+
+    if (r.success !== false) throw new Error('success should be false');
+    if (r.partial !== true) throw new Error('partial should be true');
+    if (r.code !== 'PARTIAL_FAILURE') throw new Error('code should be PARTIAL_FAILURE');
+    if (r.processed !== 2) throw new Error('processed should be 2');
+    if (r.succeeded !== 1) throw new Error('succeeded should be 1');
+    if (r.failed !== 1) throw new Error('failed should be 1');
+  });
+
+  run('buildBatchSyncResponse batch failed', function() {
+    const r = buildBatchSyncResponse([
+      { success: false },
+      null
+    ]);
+
+    if (r.success !== false) throw new Error('success should be false');
+    if (r.partial !== false) throw new Error('partial should be false');
+    if (r.code !== 'BATCH_FAILED') throw new Error('code should be BATCH_FAILED');
+    if (r.processed !== 2) throw new Error('processed should be 2');
+    if (r.succeeded !== 0) throw new Error('succeeded should be 0');
+    if (r.failed !== 2) throw new Error('failed should be 2');
+  });
+
+  run('authz helpers basic', function() {
+    const mgmt = { role: 'Management', entityID: '' };
+    const otkupac = { role: 'Otkupac', entityID: 'OTK-1' };
+
+    if (!isManagement(mgmt)) throw new Error('Management should be management');
+    if (isManagement(otkupac)) throw new Error('Otkupac should not be management');
+
+    if (!requireRole(otkupac, ['Otkupac', 'Management'])) throw new Error('Otkupac role check failed');
+    if (requireRole(otkupac, ['Vozac'])) throw new Error('Vozac role should fail');
+
+    if (!requireEntity(otkupac, 'OTK-1')) throw new Error('entity check should pass');
+    if (requireEntity(otkupac, 'OTK-2')) throw new Error('entity check should fail');
+  });
+
+  run('login config validation', function() {
+    const ok = validateLoginUserConfig('Otkupac', 'OTK-1');
+    if (ok.role !== 'Otkupac') throw new Error('role mismatch');
+    if (ok.entityID !== 'OTK-1') throw new Error('entity mismatch');
+
+    let failed = false;
+    try {
+      validateLoginUserConfig('BadRole', 'X');
+    } catch (e) {
+      failed = e.code === 'AUTH_CONFIG_INVALID';
+    }
+    if (!failed) throw new Error('BadRole should fail');
+
+    failed = false;
+    try {
+      validateLoginUserConfig('Kooperant', '');
+    } catch (e) {
+      failed = e.code === 'AUTH_CONFIG_INVALID';
+    }
+    if (!failed) throw new Error('Kooperant without EntityID should fail');
+  });
+
+  run('schema guard creates header on empty temp sheet', function() {
+    const ss = SpreadsheetApp.create('TST-GAS-SMOKE-SCHEMA-' + Utilities.getUuid());
+    try {
+      const sheet = ss.getSheets()[0];
+      ensureSheetColumns(sheet, ['A', 'B', 'C']);
+
+      const headers = sheet.getRange(1, 1, 1, 3).getValues()[0].map(h => String(h || '').trim());
+      if (headers.join('|') !== 'A|B|C') throw new Error('header not created');
+    } finally {
+      DriveApp.getFileById(ss.getId()).setTrashed(true);
+    }
+  });
+
+  run('schema guard rejects mismatch', function() {
+    const ss = SpreadsheetApp.create('TST-GAS-SMOKE-DRIFT-' + Utilities.getUuid());
+    try {
+      const sheet = ss.getSheets()[0];
+      sheet.getRange(1, 1, 1, 3).setValues([['A', 'X', 'C']]);
+
+      let failed = false;
+      try {
+        ensureSheetColumns(sheet, ['A', 'B', 'C']);
+      } catch (e) {
+        failed = e.code === 'SCHEMA_DRIFT';
+      }
+
+      if (!failed) throw new Error('schema drift should fail');
+    } finally {
+      DriveApp.getFileById(ss.getId()).setTrashed(true);
+    }
+  });
+
+  run('findByColumn normalized lookup', function() {
+    const ss = SpreadsheetApp.create('TST-GAS-SMOKE-FIND-' + Utilities.getUuid());
+    try {
+      const sheet = ss.getSheets()[0];
+      sheet.getRange(1, 1, 2, 1).setValues([
+        ['ClientRecordID'],
+        [' TST-1 ']
+      ]);
+
+      const row = findByColumn(sheet, 0, 'TST-1');
+      if (row !== 2) throw new Error('expected row 2, got ' + row);
+    } finally {
+      DriveApp.getFileById(ss.getId()).setTrashed(true);
+    }
+  });
+
+  run('disabled endpoint payload contract', function() {
+    const disabled = {
+      success: false,
+      code: 'FEATURE_DISABLED'
+    };
+
+    if (disabled.success !== false) throw new Error('disabled success should be false');
+    if (disabled.code !== 'FEATURE_DISABLED') throw new Error('disabled code mismatch');
+  });
+
+  const failed = results.filter(r => !r.success).length;
+  const passed = results.length - failed;
+
+  Logger.log('GAS SMOKE SUITE END | TOTAL=' + results.length + ' PASS=' + passed + ' FAIL=' + failed);
+
+  if (failed > 0) {
+    logError(
+      'GAS',
+      'runGasSmokeSuite',
+      'GAS smoke suite failed',
+      JSON.stringify(results).substring(0, 2000),
+      ''
+    );
+
+    throw new Error('GAS smoke suite FAIL: ' + failed + '/' + results.length);
+  }
+
+  return {
+    success: true,
+    total: results.length,
+    passed: passed,
+    failed: failed,
+    results: results
+  };
+}
