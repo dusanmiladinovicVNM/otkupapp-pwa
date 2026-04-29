@@ -2,28 +2,30 @@ Attribute VB_Name = "modMasterSync"
  Option Explicit
 
 ' ============================================================
-' modMasterSync – Import OTK-Sheets ? tblOtkup
+' modMasterSync â€“ Import OTK-Sheets ? tblOtkup
 '
 ' Liest alle Google Sheets "OTK-*" aus dem PWA-Folder,
 ' importiert neue Zeilen (SyncStatus != "Synced?Master")
-' in tblOtkup, und schreibt SyncStatus zurück.
+' in tblOtkup, und schreibt SyncStatus zurÃ¼ck.
 '
 ' Flow:
 '   1. Liste alle OTK-* Sheets im PWA-Folder
-'   2. Pro Sheet: ReadSheetData ? prüfe SyncStatus
+'   2. Pro Sheet: ReadSheetData ? prÃ¼fe SyncStatus
 '   3. Neue Zeilen ? Validierung ? AppendRow tblOtkup
-'   4. SyncStatus ? "Synced?Master" zurückschreiben
+'   4. SyncStatus ? "Synced?Master" zurÃ¼ckschreiben
 '
 ' Config-Keys:
 '   GOOGLE_PWA_FOLDER_ID (bereits vorhanden)
 '
 ' Aufruf: Button in frmMain "Uvezi otkupe iz terena"
 ' ============================================================
+Private mLastPWAFatalSyncError As Boolean
 
 Private Const SYNC_STATUS_PENDING As String = "Synced"
 Private Const SYNC_STATUS_MASTER As String = "Synced>Master"
 Private Const SYNC_STATUS_ERROR As String = "SyncError"
 Private Const SYNC_STATUS_DUPLICATE As String = "Duplicate"
+
 
 ' Google Sheet Spaltenindizes (0-based, Header in Row 1)
 Private Const GS_CLIENT_RECORD_ID As Long = 1    ' A
@@ -72,12 +74,13 @@ Private Const VS_RECEIVED_AT As Long = 19       ' S
 Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
 
 ' ============================================================
-' PUBLIC — Hauptfunktion
+' PUBLIC â€” Hauptfunktion
 ' ============================================================
-
 Public Sub ImportOtkupFromPWA()
-    ' Importiert alle neuen Otkupi aus OTK-* Google Sheets
-    
+    Call ImportOtkupFromPWA_Core(True)
+End Sub
+
+Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection
@@ -85,79 +88,109 @@ Public Sub ImportOtkupFromPWA()
     Dim totalImported As Long
     Dim totalSkipped As Long
     Dim totalErrors As Long
-    
+
     On Error GoTo EH
-    
-    ' Auth prüfen
+
+    mLastPWAFatalSyncError = False
+
     If Not IsGoogleAuthConfigured() Then
-        MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
-        Exit Sub
+        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", "Google OAuth2 nije konfigurisan."
+        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        ImportOtkupFromPWA_Core = False
+        Exit Function
     End If
-    
+
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(Trim$(folderID)) = 0 Then
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
-        Exit Sub
+        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", "GOOGLE_PWA_FOLDER_ID nije postavljen."
+        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        ImportOtkupFromPWA_Core = False
+        Exit Function
     End If
-    
+
     LogInfo "ImportOtkupFromPWA", "Import gestartet"
-    
-    ' Alle OTK-* Sheets finden
+
     Set sheetIDs = New Collection
     Set sheetNames = New Collection
-    Call FindOTKSheets(folderID, sheetIDs, sheetNames)
-    
-    If sheetIDs.count = 0 Then
-        MsgBox "Nema OTK-* fajlova u PWA folderu.", vbInformation, APP_NAME
-        Exit Sub
+
+    If Not FindOTKSheets(folderID, sheetIDs, sheetNames) Then
+        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", _
+            "FindOTKSheets failed. Drive list could not be loaded."
+        If showMessages Then MsgBox "Google Drive lista OTK fajlova nije ucitana. Proveri log.", vbCritical, APP_NAME
+        ImportOtkupFromPWA_Core = False
+        Exit Function
     End If
-    
-    ' Pro Sheet importieren
+
+    If sheetIDs.count = 0 Then
+        If showMessages Then MsgBox "Nema OTK-* fajlova u PWA folderu.", vbInformation, APP_NAME
+        ImportOtkupFromPWA_Core = True
+        Exit Function
+    End If
+
     For i = 1 To sheetIDs.count
-        Dim imported As Long, skipped As Long, errors As Long
-        
+        Dim imported As Long
+        Dim skipped As Long
+        Dim errors As Long
+
         Call ImportOneOTKSheet(CStr(sheetIDs(i)), CStr(sheetNames(i)), imported, skipped, errors)
-        
+
         totalImported = totalImported + imported
         totalSkipped = totalSkipped + skipped
         totalErrors = totalErrors + errors
     Next i
-    
-    LogInfo "ImportOtkupFromPWA", "Import abgeschlossen: " & totalImported & " importiert, " & _
+
+    LogInfo "ImportOtkupFromPWA", _
+            "Import abgeschlossen: " & totalImported & " importiert, " & _
             totalSkipped & " preskoceno, " & totalErrors & " greske aus " & sheetIDs.count & " fajlova"
-    
-    MsgBox "Uvoz zavrsen!" & vbCrLf & vbCrLf & _
-           "Fajlova: " & sheetIDs.count & vbCrLf & _
-           "Uvezeno: " & totalImported & vbCrLf & _
-           "Preskoceno: " & totalSkipped & vbCrLf & _
-           "Greske: " & totalErrors, _
-           vbInformation, APP_NAME
-    Exit Sub
+
+    If showMessages Then
+        MsgBox "Uvoz zavrsen!" & vbCrLf & vbCrLf & _
+               "Fajlova: " & sheetIDs.count & vbCrLf & _
+               "Uvezeno: " & totalImported & vbCrLf & _
+               "Preskoceno: " & totalSkipped & vbCrLf & _
+               "Greske: " & totalErrors, _
+               vbInformation, APP_NAME
+    End If
+
+    ImportOtkupFromPWA_Core = Not mLastPWAFatalSyncError
+    Exit Function
 
 EH:
-    LogErr "ImportOtkupFromPWA"
-    MsgBox "Greska pri uvozu: " & Err.Description, vbCritical, APP_NAME
-End Sub
+    MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", Err.description
+    LogErr "ImportOtkupFromPWA_Core"
+    If showMessages Then MsgBox "Greska pri uvozu: " & Err.description, vbCritical, APP_NAME
+    ImportOtkupFromPWA_Core = False
+End Function
+
 
 Public Sub ImportOtkupFromPWA_TX()
     Dim tx As clsTransaction
-    
+    Dim ok As Boolean
+
     On Error GoTo EH
-    
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
-    
-    Call ImportOtkupFromPWA
-    
+
+    ok = ImportOtkupFromPWA_Core(False)
+
+    If Not ok Then
+        tx.RollbackTx
+        MsgBox "PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greÅ¡ke. Proveri log.", _
+               vbCritical, APP_NAME
+        Exit Sub
+    End If
+
     tx.CommitTx
+    MsgBox "PWA uvoz zavrÅ¡en i potvrden.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogErr "ImportOtkupFromPWA_TX"
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri uvozu, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri uvozu, promene vracene: " & Err.description, vbCritical, APP_NAME
 End Sub
 'TODO definieren wo dies stehen soll. Logisch bei Stammdaten sync und syncen immer wenn stammdaten gesynct sind.
 Public Sub CreateOTKSheetsForAllStanice()
@@ -234,11 +267,11 @@ Public Sub CreateOTKSheetsForAllStanice()
 
 EH:
     LogErr "CreateOTKSheetsForAllStanice"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Function AutoCreateOtpremniceFromPWA() As Long
-    ' Nach ImportOtkupFromPWA: erstellt Otpremnice für PWA-Otkupi mit VozacID
+    ' Nach ImportOtkupFromPWA: erstellt Otpremnice fÃ¼r PWA-Otkupi mit VozacID
     ' Gruppierung: StanicaID + Datum + VozacID + Klasa (= AutoLink Key)
     ' Returns: Anzahl erstellter Otpremnice
     
@@ -265,7 +298,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     colTipAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
     colKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
     
-    ' Sammle unverknüpfte Otkupi MIT VozacID ? gruppiere nach Key
+    ' Sammle unverknÃ¼pfte Otkupi MIT VozacID ? gruppiere nach Key
     ' Key = StanicaID|Datum|VozacID|Klasa
     Dim groups As Object
     Set groups = CreateObject("Scripting.Dictionary")
@@ -295,12 +328,12 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         Exit Function
     End If
     
-    ' Für jede Gruppe: Otpremnica erstellen + Otkupi verknüpfen
+    ' FÃ¼r jede Gruppe: Otpremnica erstellen + Otkupi verknÃ¼pfen
     Dim created As Long
     Dim keys As Variant: keys = groups.keys
     Dim k As Long
     
-    ' Otpremnica-Zähler pro Stanica+Datum vorladen
+    ' Otpremnica-ZÃ¤hler pro Stanica+Datum vorladen
     Dim otpAll As Variant
     otpAll = GetTableData(TBL_OTPREMNICA)
     If Not IsEmpty(otpAll) Then otpAll = ExcludeStornirano(otpAll, TBL_OTPREMNICA)
@@ -367,7 +400,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         Dim brojOtp As String
         brojOtp = staNum & "/" & ddmm & "-" & seq
         
-        ' Otpremnica erstellen (BrojZbirne leer — Vozac/Operator setzt später)
+        ' Otpremnica erstellen (BrojZbirne leer â€” Vozac/Operator setzt spÃ¤ter)
         Dim newOtpID As String
         newOtpID = SaveOtpremnica_TX( _
             CDate(parts(1)), _
@@ -385,7 +418,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         )
         
         If newOtpID <> "" Then
-            ' Alle Otkupi dieser Gruppe verknüpfen
+            ' Alle Otkupi dieser Gruppe verknÃ¼pfen
             For r = 1 To grpRows.count
                 ri = grpRows(r)
                 Dim otkupID As String: otkupID = CStr(data(ri, colID))
@@ -403,48 +436,88 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
 End Function
 
 ' ============================================================
-' PRIVATE — Find OTK-* Sheets in Folder
+' PRIVATE â€” Find OTK-* Sheets in Folder
 ' ============================================================
 
-Private Sub FindOTKSheets(ByVal folderID As String, _
-                          ByRef outIDs As Collection, _
-                          ByRef outNames As Collection)
+Private Function FindOTKSheets(ByVal folderID As String, _
+                               ByRef outIDs As Collection, _
+                               ByRef outNames As Collection) As Boolean
+    Const SOURCE As String = "FindOTKSheets"
+
     Dim accessToken As String
     Dim url As String
     Dim http As Object
     Dim query As String
     Dim responseText As String
-    
-    accessToken = GetAccessToken()
-    If Len(accessToken) = 0 Then Exit Sub
-    
-    query = "name contains 'OTK-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
-            " and '" & folderID & "' in parents and trashed=false"
-    
-    url = "https://www.googleapis.com/drive/v3/files" & _
-          "?q=" & UrlEncodeGoogle(query) & _
-          "&fields=files(id,name)" & _
-          "&pageSize=100"
-    
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    http.SetTimeouts 10000, 10000, 30000, 30000
-    
-    http.Open "GET", url, False
-    http.SetRequestHeader "Authorization", "Bearer " & accessToken
-    http.Send
-    
-    If http.Status <> 200 Then
-        LogError "FindOTKSheets", "HTTP " & http.Status & ": " & http.responseText, http.Status
-        Exit Sub
+    Dim nextPageToken As String
+    Dim tokenPos As Long
+
+    On Error GoTo EH
+
+    If Len(Trim$(folderID)) = 0 Then
+        LogError SOURCE, "folderID je prazan."
+        FindOTKSheets = False
+        Exit Function
     End If
-    
-    responseText = http.responseText
-    
-    ' Parse file list aus JSON
-    Call ParseFileList(responseText, outIDs, outNames)
-    
-    LogInfo "FindOTKSheets", "Gefunden: " & outIDs.count & " OTK-Sheets"
-End Sub
+
+    accessToken = GetAccessToken()
+    If Len(accessToken) = 0 Then
+        LogError SOURCE, "Kein Access Token"
+        FindOTKSheets = False
+        Exit Function
+    End If
+
+    query = "name contains 'OTK-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
+            " and '" & EscapeDriveQueryValueMasterSync(folderID) & "' in parents and trashed=false"
+
+    nextPageToken = ""
+
+    Do
+        url = "https://www.googleapis.com/drive/v3/files" & _
+              "?q=" & UrlEncodeGoogle(query) & _
+              "&fields=nextPageToken,files(id,name)" & _
+              "&pageSize=100"
+
+        If Len(nextPageToken) > 0 Then
+            url = url & "&pageToken=" & UrlEncodeGoogle(nextPageToken)
+        End If
+
+        Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+        http.SetTimeouts 10000, 10000, 30000, 30000
+
+        http.Open "GET", url, False
+        http.SetRequestHeader "Authorization", "Bearer " & accessToken
+        http.Send
+
+        responseText = CStr(http.responseText)
+
+        If http.status <> 200 Then
+            LogError SOURCE, _
+                     "HTTP " & http.status & ": " & Left$(responseText, 1000), _
+                     http.status
+            FindOTKSheets = False
+            Exit Function
+        End If
+
+        Call ParseFileList(responseText, outIDs, outNames)
+
+        tokenPos = InStr(1, responseText, """nextPageToken""", vbTextCompare)
+        If tokenPos > 0 Then
+            nextPageToken = ExtractJsonValueAt(responseText, tokenPos)
+        Else
+            nextPageToken = ""
+        End If
+    Loop While Len(nextPageToken) > 0
+
+    LogInfo SOURCE, "Gefunden: " & outIDs.count & " OTK-Sheets"
+
+    FindOTKSheets = True
+    Exit Function
+
+EH:
+    LogErr SOURCE
+    FindOTKSheets = False
+End Function
 
 Private Sub ParseFileList(ByVal json As String, _
                           ByRef outIDs As Collection, _
@@ -455,7 +528,7 @@ Private Sub ParseFileList(ByVal json As String, _
     
     pos = 1
     Do
-        ' Suche nächstes "id"
+        ' Suche nÃ¤chstes "id"
         pos = InStr(pos, json, """id""", vbTextCompare)
         If pos = 0 Then Exit Do
         
@@ -496,10 +569,108 @@ Private Function ExtractJsonValueAt(ByVal json As String, ByVal startPos As Long
     
     ExtractJsonValueAt = Mid$(json, p, q - p)
 End Function
+Private Function EscapeDriveQueryValueMasterSync(ByVal value As String) As String
+    Dim result As String
+
+    result = CStr(value)
+    result = Replace(result, "\", "\\")
+    result = Replace(result, "'", "\'")
+
+    EscapeDriveQueryValueMasterSync = result
+End Function
+
+Private Function ValidateOTKSheetHeader(ByVal data As Variant, _
+                                        ByVal sheetName As String) As Boolean
+    Const SOURCE As String = "ValidateOTKSheetHeader"
+
+    On Error GoTo EH
+
+    If IsEmpty(data) Then
+        LogError SOURCE, "Sheet data is Empty: " & sheetName
+        ValidateOTKSheetHeader = False
+        Exit Function
+    End If
+
+    If UBound(data, 1) < 1 Then
+        LogError SOURCE, "Sheet nema header row: " & sheetName
+        ValidateOTKSheetHeader = False
+        Exit Function
+    End If
+
+    If UBound(data, 2) < 22 Then
+        LogError SOURCE, _
+                 "OTK schema drift: premalo kolona u sheetu " & sheetName & _
+                 ". Expected=22, Actual=" & CStr(UBound(data, 2))
+        ValidateOTKSheetHeader = False
+        Exit Function
+    End If
+
+    If Not RequireOTKHeaderValue(data, sheetName, GS_CLIENT_RECORD_ID, "ClientRecordID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_SERVER_RECORD_ID, "ServerRecordID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_CREATED_AT, "CreatedAtClient") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_UPDATED_AT_CLIENT, "UpdatedAtClient") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_UPDATED_AT_SERVER, "UpdatedAtServer") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_SYNC_STATUS, "SyncStatus") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_DEVICE_ID, "DeviceID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_OTKUPAC_ID, "OtkupacID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_DATUM, "Datum") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_KOOPERANT_ID, "KooperantID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_KOOPERANT_NAME, "KooperantName") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_VRSTA, "VrstaVoca") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_SORTA, "SortaVoca") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_KLASA, "Klasa") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_KOLICINA, "Kolicina") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_CENA, "Cena") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_TIP_AMB, "TipAmbalaze") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_KOL_AMB, "KolAmbalaze") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_PARCELA_ID, "ParcelaID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_VOZAC_ID, "VozacID") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_NAPOMENA, "Napomena") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_RECEIVED_AT, "ReceivedAt") Then Exit Function
+
+    ValidateOTKSheetHeader = True
+    Exit Function
+
+EH:
+    LogErr SOURCE, "Sheet: " & sheetName
+    ValidateOTKSheetHeader = False
+End Function
+
+Private Function RequireOTKHeaderValue(ByVal data As Variant, _
+                                       ByVal sheetName As String, _
+                                       ByVal colIndex As Long, _
+                                       ByVal expectedHeader As String) As Boolean
+    Dim actualHeader As String
+
+    actualHeader = Trim$(CStr(data(1, colIndex)))
+
+    If StrComp(actualHeader, expectedHeader, vbBinaryCompare) <> 0 Then
+        LogError "ValidateOTKSheetHeader", _
+                 "OTK schema drift in " & sheetName & _
+                 ". Col=" & CStr(colIndex) & _
+                 ", Expected='" & expectedHeader & "'" & _
+                 ", Actual='" & actualHeader & "'"
+        RequireOTKHeaderValue = False
+        Exit Function
+    End If
+
+    RequireOTKHeaderValue = True
+End Function
 
 ' ============================================================
-' PRIVATE — Import eines einzelnen OTK-Sheets
+' PRIVATE â€” Import eines einzelnen OTK-Sheets
 ' ============================================================
+Public Sub TestHook_ImportOneOTKSheet(ByVal spreadsheetID As String, _
+                                      ByVal sheetName As String, _
+                                      ByRef outImported As Long, _
+                                      ByRef outSkipped As Long, _
+                                      ByRef outErrors As Long)
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Keeps ImportOneOTKSheet private for production callers,
+    ' but allows isolated fixture-based sync tests.
+
+    Call ImportOneOTKSheet(spreadsheetID, sheetName, outImported, outSkipped, outErrors)
+End Sub
 
 Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                               ByVal sheetName As String, _
@@ -525,6 +696,13 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
         Exit Sub
     End If
     
+    If Not ValidateOTKSheetHeader(data, sheetName) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneOTKSheet", _
+            "Import aborted because OTK header schema is invalid. Sheet=" & sheetName
+        Exit Sub
+    End If
+    
     ' Erste Zeile = Header, ab Zeile 2 = Daten
     If UBound(data, 1) < 2 Then
         LogInfo "ImportOneOTKSheet", "Keine Daten in: " & sheetName
@@ -534,7 +712,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Set statusUpdates = New Collection
     
     For i = 2 To UBound(data, 1)
-        ' Prüfe SyncStatus
+        ' PrÃ¼fe SyncStatus
         syncStatus = Trim$(CStr(data(i, GS_SYNC_STATUS)))
         
         ' Nur "Synced" importieren (= vom Apps Script geschrieben, noch nicht im Master)
@@ -542,7 +720,15 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
             
             Dim clientRecordID As String
             clientRecordID = Trim$(CStr(data(i, GS_CLIENT_RECORD_ID)))
-            
+
+            If Len(clientRecordID) = 0 Then
+                statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":ClientRecordID missing", "")
+                outErrors = outErrors + 1
+                LogWarn "ImportOneOTKSheet", _
+                        sheetName & " Row " & i & ": ClientRecordID missing. Import skipped."
+                GoTo NextImportRow
+            End If
+
             ' Duplikat-Check im Master
             If IsDuplicateInMaster(clientRecordID) Then
                 ' Proveri da li je VozacID update (Otprema tab)
@@ -581,14 +767,20 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 End If
             End If
         Else
-            ' Bereits importiert oder Error ? überspringen
+            ' Bereits importiert oder Error ? Ã¼berspringen
             outSkipped = outSkipped + 1
         End If
+
+NextImportRow:
     Next i
     
-    ' SyncStatus zurückschreiben in Google Sheet
+    ' SyncStatus zurÃ¼ckschreiben in Google Sheet
     If statusUpdates.count > 0 Then
-        Call WriteBackSyncStatus(spreadsheetID, statusUpdates)
+        If Not WriteBackSyncStatus(spreadsheetID, statusUpdates) Then
+            outErrors = outErrors + 1
+            MarkPWAFatalSyncError "ImportOneOTKSheet", _
+                "WriteBackSyncStatus failed. Local import may have succeeded, but Google Sheet status was not updated. Sheet=" & sheetName
+        End If
     End If
     
     LogInfo "ImportOneOTKSheet", sheetName & ": " & outImported & " importiert, " & _
@@ -601,11 +793,11 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIVATE — Validierung
+' PRIVATE â€” Validierung
 ' ============================================================
 
 Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As String
-    ' Prüft Pflichtfelder und Plausibilität
+    ' PrÃ¼ft Pflichtfelder und PlausibilitÃ¤t
     ' Returns "" wenn OK, sonst Fehlermeldung
     
     Dim koopID As String
@@ -657,7 +849,8 @@ End Function
 
 Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
     If Len(Trim$(clientRecordID)) = 0 Then
-        IsDuplicateInMaster = False
+        LogError "IsDuplicateInMaster", "ClientRecordID je prazan. Duplicate check nije validan."
+        IsDuplicateInMaster = True
         Exit Function
     End If
     
@@ -669,7 +862,7 @@ Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
     End If
     
     Dim colCRID As Long
-    colCRID = GetColumnIndex(TBL_OTKUP, "ClientRecordID")
+    colCRID = RequireColumnIndex(TBL_OTKUP, "ClientRecordID", "IsDuplicateInMaster")
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -683,7 +876,7 @@ Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE — Import Row
+' PRIVATE â€” Import Row
 ' ============================================================
 
 Private Function ImportRowToTblOtkup(ByVal data As Variant, _
@@ -750,7 +943,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     newID = GetNextID(TBL_OTKUP, COL_OTK_ID, "OTK-")
     
     ' VozacID
-    ' BrojDokumenta = "PWA:" & clientRecordID (für Duplikat-Check)
+    ' BrojDokumenta = "PWA:" & clientRecordID (fÃ¼r Duplikat-Check)
     ' Novac = 0, PrimalacNovca = ""
     
     Dim rowData As Variant
@@ -773,7 +966,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
                 " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
         ImportRowToTblOtkup = newID
     Else
-        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen für PWA:" & clientRecordID
+        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen fÃ¼r PWA:" & clientRecordID
         ImportRowToTblOtkup = ""
     End If
     Exit Function
@@ -784,80 +977,135 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — SyncStatus zurückschreiben
+' PRIVATE â€” SyncStatus zurÃ¼ckschreiben
 ' ============================================================
 
-Private Sub WriteBackSyncStatus(ByVal spreadsheetID As String, _
-                                ByVal updates As Collection)
-    ' Schreibt SyncStatus für jede verarbeitete Zeile zurück
-    ' updates = Collection of Array(rowIndex, newStatus)
-    
+Private Function WriteBackSyncStatus(ByVal spreadsheetID As String, _
+                                     ByVal updates As Collection) As Boolean
+    Const SOURCE As String = "WriteBackSyncStatus"
+
     Dim accessToken As String
     Dim url As String
     Dim body As String
     Dim http As Object
     Dim i As Long
     Dim update As Variant
-    
-    On Error GoTo EH
-    
-    accessToken = GetAccessToken()
-    If Len(accessToken) = 0 Then Exit Sub
-    
-    ' Batch-Update: ein Request pro Zeile (SyncStatus = Spalte C)
-    ' Nutze values:batchUpdate
-    
-    body = "{""valueInputOption"":""RAW"",""data"":["
-    
+    Dim rowNum As Long
+    Dim syncStatus As String
+    Dim serverRecordID As String
     Dim isFirst As Boolean
+
+    On Error GoTo EH
+
+    If Len(Trim$(spreadsheetID)) = 0 Then
+        LogError SOURCE, "spreadsheetID je prazan."
+        WriteBackSyncStatus = False
+        Exit Function
+    End If
+
+    If updates Is Nothing Then
+        LogError SOURCE, "updates je Nothing."
+        WriteBackSyncStatus = False
+        Exit Function
+    End If
+
+    If updates.count = 0 Then
+        WriteBackSyncStatus = True
+        Exit Function
+    End If
+
+    accessToken = GetAccessToken()
+    If Len(accessToken) = 0 Then
+        LogError SOURCE, "Kein Access Token"
+        WriteBackSyncStatus = False
+        Exit Function
+    End If
+
+    body = "{""valueInputOption"":""RAW"",""data"":["
     isFirst = True
-    
+
     For i = 1 To updates.count
         update = updates(i)
-        
+
+        rowNum = CLng(update(0))
+        syncStatus = Trim$(CStr(update(1)))
+
+        If rowNum < 2 Then
+            LogError SOURCE, "Invalid row number: " & CStr(rowNum)
+            WriteBackSyncStatus = False
+            Exit Function
+        End If
+
+        If Len(syncStatus) = 0 Then
+            LogError SOURCE, "SyncStatus je prazan za row: " & CStr(rowNum)
+            WriteBackSyncStatus = False
+            Exit Function
+        End If
+
         If Not isFirst Then body = body & ","
         isFirst = False
-        
-        ' Kolona C — SyncStatus
-        body = body & "{""range"":""Sheet1!F" & CStr(update(0)) & """," & _
-               """values"":[[""" & JsonEscapeGoogle(CStr(update(1))) & """]]}"
-        
-        ' Kolona T — ServerRecordID
+
+        ' F = SyncStatus
+        body = body & "{""range"":""Sheet1!F" & CStr(rowNum) & """," & _
+               """values"":[[""" & JsonEscapeMasterSync(syncStatus) & """]]}"
+
+        ' B = ServerRecordID
         If UBound(update) >= 2 Then
-            If Len(CStr(update(2))) > 0 Then
-                body = body & ",{""range"":""Sheet1!B" & CStr(update(0)) & """," & _
-                       """values"":[[""" & JsonEscapeGoogle(CStr(update(2))) & """]]}"
+            serverRecordID = Trim$(CStr(update(2)))
+
+            If Len(serverRecordID) > 0 Then
+                body = body & ",{""range"":""Sheet1!B" & CStr(rowNum) & """," & _
+                       """values"":[[""" & JsonEscapeMasterSync(serverRecordID) & """]]}"
             End If
         End If
     Next i
-    
+
     body = body & "]}"
-    
+
     url = "https://sheets.googleapis.com/v4/spreadsheets/" & spreadsheetID & _
           "/values:batchUpdate"
-    
+
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 10000, 10000, 30000, 30000
-    
+
     http.Open "POST", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.SetRequestHeader "Content-Type", "application/json"
     http.Send body
-    
-    If http.Status >= 200 And http.Status < 300 Then
-        LogInfo "WriteBackSyncStatus", updates.count & " Status-Updates geschrieben"
+
+    If http.status >= 200 And http.status < 300 Then
+        LogInfo SOURCE, CStr(updates.count) & " Status-Updates geschrieben"
+        WriteBackSyncStatus = True
     Else
-        LogError "WriteBackSyncStatus", "HTTP " & http.Status & ": " & http.responseText, http.Status
+        LogError SOURCE, _
+                 "HTTP " & http.status & ": " & Left$(CStr(http.responseText), 1000), _
+                 http.status
+        WriteBackSyncStatus = False
     End If
-    Exit Sub
+
+    Exit Function
 
 EH:
-    LogErr "WriteBackSyncStatus"
-End Sub
+    LogErr SOURCE
+    WriteBackSyncStatus = False
+End Function
+
+Private Function JsonEscapeMasterSync(ByVal value As String) As String
+    Dim result As String
+
+    result = CStr(value)
+    result = Replace(result, "\", "\\")
+    result = Replace(result, """", "\""")
+    result = Replace(result, vbCrLf, "\n")
+    result = Replace(result, vbCr, "\n")
+    result = Replace(result, vbLf, "\n")
+
+    JsonEscapeMasterSync = result
+End Function
 
 Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
                                    ByVal newVozacID As String) As Boolean
-    ' Ako Otkup u masteru nema VozacID a sheet ga ima — updateuj
+    ' Ako Otkup u masteru nema VozacID a sheet ga ima â€” updateuj
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
@@ -883,18 +1131,18 @@ Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
 End Function
 
 ' ============================================================
-' PRIVATE — Helpers
+' PRIVATE â€” Helpers
 ' ============================================================
 
-Private Function Nz(ByVal v As Variant, Optional ByVal fallback As Variant = "") As Variant
+Private Function Nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
     If IsError(v) Then
-        Nz = fallback
+        Nz = Fallback
     ElseIf IsNull(v) Then
-        Nz = fallback
+        Nz = Fallback
     ElseIf IsEmpty(v) Then
-        Nz = fallback
+        Nz = Fallback
     ElseIf Trim$(CStr(v)) = "" Then
-        Nz = fallback
+        Nz = Fallback
     Else
         Nz = v
     End If
@@ -928,12 +1176,12 @@ End Function
 
 
 ' ============================================================
-' modMasterSync — ZBIRNA IMPORT (dodati u postojeci modMasterSync)
+' modMasterSync â€” ZBIRNA IMPORT (dodati u postojeci modMasterSync)
 ' ============================================================
 
 
 ' ============================================================
-' PUBLIC — Hauptfunktion Zbirna Import
+' PUBLIC â€” Hauptfunktion Zbirna Import
 ' ============================================================
 
 Public Sub ImportZbirneFromPWA()
@@ -993,7 +1241,7 @@ Public Sub ImportZbirneFromPWA()
 
 EH:
     LogErr "ImportZbirneFromPWA"
-    MsgBox "Greska pri uvozu zbirnih: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri uvozu zbirnih: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub ImportZbirneFromPWA_TX()
@@ -1015,11 +1263,11 @@ Public Sub ImportZbirneFromPWA_TX()
 EH:
     LogErr "ImportZbirneFromPWA_TX"
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri uvozu zbirnih, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri uvozu zbirnih, promene vracene: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' PRIVATE — Find VOZ-* Sheets in Folder
+' PRIVATE â€” Find VOZ-* Sheets in Folder
 ' ============================================================
 
 Private Sub FindVOZSheets(ByVal folderID As String, _
@@ -1049,8 +1297,8 @@ Private Sub FindVOZSheets(ByVal folderID As String, _
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.Send
     
-    If http.Status <> 200 Then
-        LogError "FindVOZSheets", "HTTP " & http.Status & ": " & http.responseText, http.Status
+    If http.status <> 200 Then
+        LogError "FindVOZSheets", "HTTP " & http.status & ": " & http.responseText, http.status
         Exit Sub
     End If
     
@@ -1094,7 +1342,7 @@ Private Sub ParseFileListVOZ(ByVal json As String, _
 End Sub
 
 ' ============================================================
-' PRIVATE — Import eines einzelnen VOZ-Sheets
+' PRIVATE â€” Import eines einzelnen VOZ-Sheets
 ' ============================================================
 
 Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
@@ -1182,7 +1430,7 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIVATE — Validierung
+' PRIVATE â€” Validierung
 ' ============================================================
 
 Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As String
@@ -1254,7 +1502,7 @@ Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Bo
 End Function
 
 ' ============================================================
-' PRIVATE — Import Row to tblZbirna
+' PRIVATE â€” Import Row to tblZbirna
 ' ============================================================
 
 Private Function ImportRowToTblZbirna(ByVal data As Variant, _
@@ -1339,7 +1587,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
                 " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"
         ImportRowToTblZbirna = newID
     Else
-        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen für PWA:" & clientRecordID
+        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen fÃ¼r PWA:" & clientRecordID
         ImportRowToTblZbirna = ""
     End If
     Exit Function
@@ -1350,7 +1598,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
+' PRIVATE â€” Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
 ' ============================================================
 
 Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
@@ -1429,7 +1677,7 @@ NextCRID:
 End Sub
 
 ' ============================================================
-' PRIVATE — Helper: BrojZbirne aus ZbirnaID
+' PRIVATE â€” Helper: BrojZbirne aus ZbirnaID
 ' ============================================================
 
 Private Function GetBrojZbirneForID(ByVal zbirnaID As String) As String
@@ -1443,7 +1691,7 @@ Private Function GetBrojZbirneForID(ByVal zbirnaID As String) As String
 End Function
 
 ' ============================================================
-' PRIVATE — WriteBack VOZ SyncStatus + ServerRecordID
+' PRIVATE â€” WriteBack VOZ SyncStatus + ServerRecordID
 ' ============================================================
 
 Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
@@ -1474,11 +1722,11 @@ Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
         If Not isFirst Then body = body & ","
         isFirst = False
         
-        ' Kolona F — SyncStatus
+        ' Kolona F â€” SyncStatus
         body = body & "{""range"":""Sheet1!F" & CStr(update(0)) & """," & _
                """values"":[[""" & JsonEscapeGoogle(CStr(update(1))) & """]]}"
         
-        ' Kolona B — ServerRecordID (2. kolona = B)
+        ' Kolona B â€” ServerRecordID (2. kolona = B)
         If UBound(update) >= 2 Then
             If Len(CStr(update(2))) > 0 Then
                 body = body & ",{""range"":""Sheet1!B" & CStr(update(0)) & """," & _
@@ -1507,10 +1755,10 @@ Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
     http.SetRequestHeader "Content-Type", "application/json"
     http.Send body
     
-    If http.Status >= 200 And http.Status < 300 Then
+    If http.status >= 200 And http.status < 300 Then
         LogInfo "WriteBackVOZSyncStatus", updates.count & " Status-Updates geschrieben"
     Else
-        LogError "WriteBackVOZSyncStatus", "HTTP " & http.Status & ": " & http.responseText, http.Status
+        LogError "WriteBackVOZSyncStatus", "HTTP " & http.status & ": " & http.responseText, http.status
     End If
     Exit Sub
 
@@ -1574,6 +1822,11 @@ Private Function ExtractNumericVozacBroj(ByVal vozacID As String) As String
         ExtractNumericVozacBroj = CStr(CLng(digits))
     End If
 End Function
+
+Private Sub MarkPWAFatalSyncError(ByVal sourceName As String, ByVal message As String)
+    mLastPWAFatalSyncError = True
+    LogError sourceName, message
+End Sub
 
 ' ============================================================
 ' TEST
