@@ -2,15 +2,15 @@ Attribute VB_Name = "modGoogleAuth"
 Option Explicit
 
 ' ============================================================
-' modGoogleAuth – OAuth2 für Google APIs aus VBA
+' modGoogleAuth â€“ OAuth2 fÃ¼r Google APIs aus VBA
 '
 ' Flow:
-' 1. Erster Start: GetAuthorizationCode ? Browser öffnet Google Login
+' 1. Erster Start: GetAuthorizationCode ? Browser Ã¶ffnet Google Login
 ' 2. User kopiert Authorization Code ? ExchangeCodeForTokens
-' 3. Access Token + Refresh Token werden in tblConfig gespeichert
-' 4. Bei jedem API-Call: GetAccessToken prüft Ablauf, refresht wenn nötig
+' 3. Access Token + Refresh Token werden in tblSEFConfig gespeichert
+' 4. Bei jedem API-Call: GetAccessToken prÃ¼ft Ablauf, refresht wenn nÃ¶tig
 '
-' Config-Keys in tblConfig:
+' Config-Keys in central ConfigKey/ConfigValue table: tblSEFConfig
 '   GOOGLE_CLIENT_ID
 '   GOOGLE_CLIENT_SECRET
 '   GOOGLE_ACCESS_TOKEN
@@ -19,8 +19,8 @@ Option Explicit
 '
 ' Setup:
 ' 1. Google Cloud Console ? OAuth 2.0 Client ID (Desktop App) erstellen
-' 2. client_id und client_secret in tblConfig eintragen
-' 3. Einmalig: RunGoogleAuthSetup ausführen
+' 2. client_id und client_secret in tblSEFConfig eintragen
+' 3. Einmalig: RunGoogleAuthSetup ausfÃ¼hren
 ' ============================================================
 
 Private Const GOOGLE_AUTH_URL As String = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -29,11 +29,11 @@ Private Const GOOGLE_REDIRECT_URI As String = "urn:ietf:wg:oauth:2.0:oob"
 Private Const GOOGLE_SCOPE As String = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive"
 
 ' ============================================================
-' PUBLIC — Setup (einmalig)
+' PUBLIC â€” Setup (einmalig)
 ' ============================================================
 
 Public Sub RunGoogleAuthSetup()
-    ' Schritt 1: Browser öffnet Google Login
+    ' Schritt 1: Browser Ã¶ffnet Google Login
     ' Schritt 2: User kopiert Code
     ' Schritt 3: Code ? Tokens
     
@@ -44,12 +44,12 @@ Public Sub RunGoogleAuthSetup()
     clientSecret = GetConfigValue("GOOGLE_CLIENT_SECRET")
     
     If Len(Trim$(clientID)) = 0 Or Len(Trim$(clientSecret)) = 0 Then
-        MsgBox "GOOGLE_CLIENT_ID und GOOGLE_CLIENT_SECRET muessen in tblConfig eingetragen sein!", _
-               vbCritical, APP_NAME
+        MsgBox "GOOGLE_CLIENT_ID i GOOGLE_CLIENT_SECRET moraju biti upisani u tblSEFConfig.", _
+                vbCritical, APP_NAME
         Exit Sub
     End If
     
-    ' Browser öffnen
+    ' Browser Ã¶ffnen
     Dim authUrl As String
     authUrl = GOOGLE_AUTH_URL & _
               "?client_id=" & UrlEncodeGoogle(clientID) & _
@@ -78,16 +78,16 @@ Public Sub RunGoogleAuthSetup()
     If ExchangeCodeForTokens(authCode) Then
         MsgBox "Google OAuth2 erfolgreich eingerichtet!", vbInformation, APP_NAME
     Else
-        MsgBox "Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.", vbCritical, APP_NAME
+        MsgBox "Token-Austausch fehlgeschlagen. PrÃ¼fe Client ID/Secret.", vbCritical, APP_NAME
     End If
 End Sub
 
 ' ============================================================
-' PUBLIC — Access Token holen (für jeden API-Call)
+' PUBLIC â€” Access Token holen (fÃ¼r jeden API-Call)
 ' ============================================================
 
 Public Function GetAccessToken() As String
-    ' Gibt gültigen Access Token zurück
+    ' Gibt gÃ¼ltigen Access Token zurÃ¼ck
     ' Refresht automatisch wenn abgelaufen
     ' Returns "" bei Fehler
     
@@ -103,7 +103,7 @@ Public Function GetAccessToken() As String
         Exit Function
     End If
     
-    ' Prüfe ob abgelaufen (mit 60s Puffer)
+    ' PrÃ¼fe ob abgelaufen (mit 60s Puffer)
     If IsTokenExpired(expiresAt) Then
         If RefreshAccessToken() Then
             GetAccessToken = GetConfigValue("GOOGLE_ACCESS_TOKEN")
@@ -120,7 +120,7 @@ Public Function IsGoogleAuthConfigured() As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE — Token Exchange
+' PRIVATE â€” Token Exchange
 ' ============================================================
 
 Private Function ExchangeCodeForTokens(ByVal authCode As String) As Boolean
@@ -145,8 +145,10 @@ Private Function ExchangeCodeForTokens(ByVal authCode As String) As Boolean
     
     responseText = http.responseText
     
-    If http.Status <> 200 Then
-        LogError "ExchangeCodeForTokens", "HTTP " & http.Status & ": " & responseText, http.Status
+    If http.status <> 200 Then
+        LogError "ExchangeCodeForTokens", _
+             "HTTP " & http.status & ": " & RedactGoogleSecrets(responseText), _
+             http.status
         ExchangeCodeForTokens = False
         Exit Function
     End If
@@ -158,7 +160,7 @@ Private Function ExchangeCodeForTokens(ByVal authCode As String) As Boolean
     
     accessToken = ExtractJsonStringGoogle(responseText, "access_token")
     refreshToken = ExtractJsonStringGoogle(responseText, "refresh_token")
-    expiresIn = CLng(val(ExtractJsonStringGoogle(responseText, "expires_in")))
+    expiresIn = ParseGoogleExpiresIn(responseText, "ExchangeCodeForTokens")
     
     If Len(accessToken) = 0 Then
         LogError "ExchangeCodeForTokens", "Kein access_token in Response"
@@ -211,8 +213,10 @@ Private Function RefreshAccessToken() As Boolean
     
     responseText = http.responseText
     
-    If http.Status <> 200 Then
-        LogError "RefreshAccessToken", "HTTP " & http.Status & ": " & responseText, http.Status
+    If http.status <> 200 Then
+        LogError "RefreshAccessToken", _
+             "HTTP " & http.status & ": " & RedactGoogleSecrets(responseText), _
+             http.status
         RefreshAccessToken = False
         Exit Function
     End If
@@ -221,7 +225,7 @@ Private Function RefreshAccessToken() As Boolean
     Dim expiresIn As Long
     
     accessToken = ExtractJsonStringGoogle(responseText, "access_token")
-    expiresIn = CLng(val(ExtractJsonStringGoogle(responseText, "expires_in")))
+    expiresIn = ParseGoogleExpiresIn(responseText, "RefreshAccessToken")
     
     If Len(accessToken) = 0 Then
         LogError "RefreshAccessToken", "Kein access_token in Refresh-Response"
@@ -249,54 +253,39 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Config Read/Write
+' PRIVATE â€” Helpers
 ' ============================================================
 
-Public Sub SetConfigValue(ByVal configKey As String, ByVal configValue As String)
-    ' Schreibt in tblSEFConfig (ConfigKey/ConfigValue)
-    ' Gleiche Tabelle wie GetConfigValue in modConfig liest
-    ' Wenn Key existiert ? Update, sonst ? Append
-    
-    Dim tblName As String
-    Dim data As Variant
-    Dim colKey As Long
-    Dim i As Long
-    Dim found As Boolean
-    
-    tblName = "tblSEFConfig"
-    
-    data = GetTableData(tblName)
-    colKey = GetColumnIndex(tblName, "ConfigKey")
-    
-    If Not IsEmpty(data) Then
-        For i = 1 To UBound(data, 1)
-            If CStr(data(i, colKey)) = configKey Then
-                UpdateCell tblName, i, "ConfigValue", configValue
-                found = True
-                Exit For
-            End If
-        Next i
-    End If
-    
-    If Not found Then
-        ' tblSEFConfig: ConfigKey | ConfigValue (2 Spalten)
-        Dim lo As ListObject
-        Set lo = GetTable(tblName)
-        Dim colCount As Long
-        colCount = lo.ListColumns.count
-        
-        Dim rowData() As Variant
-        ReDim rowData(1 To colCount)
-        rowData(1) = configKey
-        rowData(2) = configValue
-        
-        AppendRow tblName, rowData
-    End If
-End Sub
+Private Function RedactGoogleSecrets(ByVal textValue As String) As String
+    Dim result As String
+    Dim secretValue As String
 
-' ============================================================
-' PRIVATE — Helpers
-' ============================================================
+    result = CStr(textValue)
+
+    secretValue = Trim$(GetConfigValue("GOOGLE_CLIENT_SECRET"))
+    If Len(secretValue) > 0 Then result = Replace(result, secretValue, "***GOOGLE_CLIENT_SECRET***")
+
+    secretValue = Trim$(GetConfigValue("GOOGLE_ACCESS_TOKEN"))
+    If Len(secretValue) > 0 Then result = Replace(result, secretValue, "***GOOGLE_ACCESS_TOKEN***")
+
+    secretValue = Trim$(GetConfigValue("GOOGLE_REFRESH_TOKEN"))
+    If Len(secretValue) > 0 Then result = Replace(result, secretValue, "***GOOGLE_REFRESH_TOKEN***")
+
+    RedactGoogleSecrets = Left$(result, 1000)
+End Function
+
+Private Function ParseGoogleExpiresIn(ByVal responseText As String, ByVal sourceName As String) As Long
+    Dim expiresIn As Long
+
+    expiresIn = CLng(val(ExtractJsonStringGoogle(responseText, "expires_in")))
+
+    If expiresIn <= 0 Then
+        LogWarn sourceName, "expires_in missing/invalid in Google token response. Using 3600 seconds fallback."
+        expiresIn = 3600
+    End If
+
+    ParseGoogleExpiresIn = expiresIn
+End Function
 
 Private Function IsTokenExpired(ByVal expiresAt As String) As Boolean
     If Len(Trim$(expiresAt)) = 0 Then
@@ -323,18 +312,18 @@ Private Function CalculateExpiryTimestamp(ByVal expiresInSeconds As Long) As Str
 End Function
 
 Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As String) As String
-    ' Einfacher JSON-String-Extraktor (kein vollständiger Parser)
+    ' Einfacher JSON-String-Extraktor (kein vollstÃ¤ndiger Parser)
     Dim pattern As String
     Dim p As Long, startPos As Long, endPos As Long
     
-    ' Suche "key" : "value" oder "key": value (für Zahlen)
+    ' Suche "key" : "value" oder "key": value (fÃ¼r Zahlen)
     pattern = """" & key & """"
     p = InStr(1, json, pattern, vbTextCompare)
     If p = 0 Then Exit Function
     
     startPos = p + Len(pattern)
     
-    ' Überspringe : und Whitespace
+    ' Ãœberspringe : und Whitespace
     Do While startPos <= Len(json)
         Select Case Mid$(json, startPos, 1)
             Case ":", " ", vbTab: startPos = startPos + 1
@@ -342,7 +331,7 @@ Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As Strin
         End Select
     Loop
     
-    ' String-Wert (in Anführungszeichen)
+    ' String-Wert (in AnfÃ¼hrungszeichen)
     If Mid$(json, startPos, 1) = """" Then
         startPos = startPos + 1
         endPos = InStr(startPos, json, """")
@@ -350,7 +339,7 @@ Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As Strin
             ExtractJsonStringGoogle = Mid$(json, startPos, endPos - startPos)
         End If
     Else
-        ' Numerischer Wert (ohne Anführungszeichen)
+        ' Numerischer Wert (ohne AnfÃ¼hrungszeichen)
         endPos = startPos
         Do While endPos <= Len(json)
             Select Case Mid$(json, endPos, 1)
