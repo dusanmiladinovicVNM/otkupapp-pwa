@@ -90,8 +90,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveNovac_TX"
@@ -412,8 +412,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "ApplyAvansToFaktura_TX"
@@ -1101,8 +1101,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "ApplyAvansToOtkup_TX"
@@ -1184,8 +1184,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr SRC
