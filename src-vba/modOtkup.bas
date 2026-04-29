@@ -41,13 +41,23 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
     Exit Function
 
 EH:
-    LogErr "SaveOtkup_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "SaveOtkup_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SaveOtkup_TX = ""
+
+    PrintOtkupTxFailure "SaveOtkup_TX", errSrc, errNum, errDesc
 End Function
 
 Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
@@ -211,13 +221,23 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
     Exit Function
 
 EH:
-    LogErr "SaveOtkupMulti_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "SaveOtkupMulti_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SaveOtkupMulti_TX = ""
+
+    PrintOtkupTxFailure "SaveOtkupMulti_TX", errSrc, errNum, errDesc
 End Function
 
 Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
@@ -271,6 +291,8 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
         Err.Raise vbObjectError + 1827, "SaveOtkup", _
                   "Tip ambalaze je obavezan kada postoji ambalaza."
     End If
+    
+    Call RequireValidOtkupClass(klasa, "SaveOtkup")
 
     RequireColumns TBL_OTKUP, "SaveOtkup", _
                    COL_OTK_ID, _
@@ -352,8 +374,20 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
     LogErr "SaveOtkup"
-    SaveOtkup = ""
+    On Error GoTo 0
+
+    Err.Raise errNum, "SaveOtkup", _
+              "Source=" & errSrc & " | " & errDesc
 End Function
 
 Private Function GetKooperantNazivForNovac(ByVal kooperantID As String) As String
@@ -390,6 +424,13 @@ Public Function GetOtkupByStation(ByVal stanicaID As String, _
         GetOtkupByStation = Empty
         Exit Function
     End If
+    
+    data = ExcludeStornirano(data, TBL_OTKUP)
+
+    If IsEmpty(data) Then
+        GetOtkupByStation = Empty
+        Exit Function
+    End If
 
     Dim filters As New Collection
     Dim fp As clsFilterParam
@@ -421,6 +462,13 @@ Public Function GetOtkupByKooperant(ByVal kooperantID As String, _
 
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
+
+    If IsEmpty(data) Then
+        GetOtkupByKooperant = Empty
+        Exit Function
+    End If
+    
+    data = ExcludeStornirano(data, TBL_OTKUP)
 
     If IsEmpty(data) Then
         GetOtkupByKooperant = Empty
@@ -530,4 +578,26 @@ EH:
     LogErr "modOtkup.GetSaldoByStation"
     GetSaldoByStation = Empty
 End Function
+
+
+Private Sub PrintOtkupTxFailure(ByVal sourceName As String, _
+                                ByVal errSrc As String, _
+                                ByVal errNum As Long, _
+                                ByVal errDesc As String)
+    Debug.Print sourceName & " failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+End Sub
+
+Private Sub RequireValidOtkupClass(ByVal klasa As String, _
+                                   ByVal sourceName As String)
+
+    Select Case Trim$(CStr(klasa))
+        Case KLASA_I, KLASA_II
+            Exit Sub
+    End Select
+
+    Err.Raise vbObjectError + 1830, sourceName, _
+              "Neispravna klasa otkupa: " & klasa
+End Sub
 
