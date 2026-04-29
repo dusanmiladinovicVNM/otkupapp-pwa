@@ -124,13 +124,23 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
     Exit Function
 
 EH:
-    LogErr "SaveOtpremnica_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "SaveOtpremnica_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SaveOtpremnica_TX = ""
+
+    PrintTxFailure "SaveOtpremnica_TX", errSrc, errNum, errDesc
 End Function
 
 Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
@@ -141,10 +151,8 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
                                ByVal kolAmb As Long, _
                                Optional ByVal klasa As String = "I") As String
     
-    If stanicaID = "" Or vozacID = "" Or kolicina <= 0 Then
-        Err.Raise vbObjectError + 1002, "SaveOtpremnica", _
-                  "Stanica, vozac i kolicina su obavezni!"
-    End If
+    Call ValidateOtpremnicaInput(stanicaID, vozacID, brojOtp, brojZbirne, _
+                             kolicina, cena, tipAmb, kolAmb, klasa)
     
     Dim newID As String
     newID = GetNextID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-")
@@ -174,6 +182,12 @@ Public Function GetOtpremniceByZbirna(ByVal brojZbirne As String) As Variant
         GetOtpremniceByZbirna = Empty
         Exit Function
     End If
+    data = ExcludeStornirano(data, TBL_OTPREMNICA)
+
+    If IsEmpty(data) Then
+        GetOtpremniceByZbirna = Empty
+        Exit Function
+    End If
 
     Dim filters As New Collection
     Dim fp As clsFilterParam
@@ -198,6 +212,13 @@ Public Function GetOtpremniceByStation(ByVal stanicaID As String, _
 
     Dim data As Variant
     data = GetTableData(TBL_OTPREMNICA)
+
+    If IsEmpty(data) Then
+        GetOtpremniceByStation = Empty
+        Exit Function
+    End If
+    
+    data = ExcludeStornirano(data, TBL_OTPREMNICA)
 
     If IsEmpty(data) Then
         GetOtpremniceByStation = Empty
@@ -303,13 +324,23 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
     Exit Function
 
 EH:
-    LogErr "SaveZbirnaMulti_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "SaveZbirnaMulti_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SaveZbirnaMulti_TX = ""
+
+    PrintTxFailure "SaveZbirnaMulti_TX", errSrc, errNum, errDesc
 End Function
 
 Public Function SaveZbirna_TX(ByVal datum As Date, ByVal vozacID As String, _
@@ -339,13 +370,23 @@ Public Function SaveZbirna_TX(ByVal datum As Date, ByVal vozacID As String, _
     Exit Function
 
 EH:
-    LogErr "SaveZbirna_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
-    tx.RollbackTx
+    LogErr "SaveZbirna_TX"
+
+    If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SaveZbirna_TX = ""
+
+    PrintTxFailure "SaveZbirna_TX", errSrc, errNum, errDesc
 End Function
 
 Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
@@ -357,15 +398,8 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
                            Optional ByVal klasa As String = "I") As String
     On Error GoTo EH
 
-    If vozacID = "" Or brojZbirne = "" Then
-        Err.Raise vbObjectError + 1007, "SaveZbirna", _
-                  "Vozac i broj zbirne su obavezni."
-    End If
-
-    If ukupnoKol <= 0 Then
-        Err.Raise vbObjectError + 1008, "SaveZbirna", _
-                  "Ukupna kolicina mora biti veca od nule."
-    End If
+    Call ValidateZbirnaInput(vozacID, brojZbirne, kupacID, ukupnoKol, _
+                         tipAmb, ukupnoAmb, klasa)
 
     Dim newID As String
     newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
@@ -390,8 +424,20 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
     LogErr "SaveZbirna"
-    SaveZbirna = ""
+    On Error GoTo 0
+
+    Err.Raise errNum, "SaveZbirna", _
+              "Source=" & errSrc & " | " & errDesc
 End Function
 
 Public Function GetZbirnaByKupac(ByVal kupacID As String, _
@@ -401,6 +447,13 @@ Public Function GetZbirnaByKupac(ByVal kupacID As String, _
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
+
+    If IsEmpty(data) Then
+        GetZbirnaByKupac = Empty
+        Exit Function
+    End If
+    
+    data = ExcludeStornirano(data, TBL_ZBIRNA)
 
     If IsEmpty(data) Then
         GetZbirnaByKupac = Empty
@@ -644,13 +697,23 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Exit Function
 
 EH:
-    LogErr "SavePrijemnicaMulti_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
+    LogErr "SavePrijemnicaMulti_TX"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SavePrijemnicaMulti_TX = ""
+
+    PrintTxFailure "SavePrijemnicaMulti_TX", errSrc, errNum, errDesc
 End Function
 
 Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, _
@@ -684,13 +747,23 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
     Exit Function
 
 EH:
-    LogErr "SavePrijemnica_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
 
     On Error Resume Next
-    tx.RollbackTx
+    LogErr "SavePrijemnica_TX"
+
+    If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     SavePrijemnica_TX = ""
+
+    PrintTxFailure "SavePrijemnica_TX", errSrc, errNum, errDesc
 End Function
     
 Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
@@ -702,10 +775,9 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                                Optional ByVal klasa As String = "I") As String
     On Error GoTo EH
 
-    If kupacID = "" Or brojZbirne = "" Or kolicina <= 0 Then
-        Err.Raise vbObjectError + 1012, "SavePrijemnica", _
-                  "Kupac, broj zbirne i kolicina su obavezni."
-    End If
+    Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
+                             kolicina, cena, tipAmb, kolAmb, _
+                             kolAmbVracena, klasa)
 
     Dim newID As String
     newID = GetNextID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-")
@@ -741,8 +813,20 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    On Error Resume Next
     LogErr "SavePrijemnica"
-    SavePrijemnica = ""
+    On Error GoTo 0
+
+    Err.Raise errNum, "SavePrijemnica", _
+              "Source=" & errSrc & " | " & errDesc
 End Function
 
 Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
@@ -753,6 +837,13 @@ Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
 
     Dim data As Variant
     data = GetTableData(TBL_PRIJEMNICA)
+
+    If IsEmpty(data) Then
+        GetPrijemniceByKupac = Empty
+        Exit Function
+    End If
+    
+    data = ExcludeStornirano(data, TBL_PRIJEMNICA)
 
     If IsEmpty(data) Then
         GetPrijemniceByKupac = Empty
@@ -1598,4 +1689,158 @@ EH:
     LogErr "modDokumenta.GetVrstaFromCache"
     GetVrstaFromCache = ""
 End Function
+
+Private Sub PrintTxFailure(ByVal sourceName As String, _
+                           ByVal errSrc As String, _
+                           ByVal errNum As Long, _
+                           ByVal errDesc As String)
+    Debug.Print sourceName & " failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+End Sub
+
+Private Sub RequireValidDocumentClass(ByVal klasa As String, _
+                                      ByVal sourceName As String)
+
+    Select Case Trim$(CStr(klasa))
+        Case KLASA_I, KLASA_II
+            Exit Sub
+    End Select
+
+    Err.Raise vbObjectError + 1400, sourceName, _
+              "Neispravna klasa dokumenta: " & klasa
+End Sub
+
+Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
+                                    ByVal vozacID As String, _
+                                    ByVal brojOtp As String, _
+                                    ByVal brojZbirne As String, _
+                                    ByVal kolicina As Double, _
+                                    ByVal cena As Double, _
+                                    ByVal tipAmb As String, _
+                                    ByVal kolAmb As Long, _
+                                    ByVal klasa As String)
+
+    Const SRC As String = "ValidateOtpremnicaInput"
+
+    If Len(Trim$(stanicaID)) = 0 Then
+        Err.Raise vbObjectError + 1401, SRC, "StanicaID je obavezan."
+    End If
+
+    If Len(Trim$(vozacID)) = 0 Then
+        Err.Raise vbObjectError + 1402, SRC, "VozacID je obavezan."
+    End If
+
+    If Len(Trim$(brojOtp)) = 0 Then
+        Err.Raise vbObjectError + 1403, SRC, "Broj otpremnice je obavezan."
+    End If
+
+    If Len(Trim$(brojZbirne)) = 0 Then
+        Err.Raise vbObjectError + 1404, SRC, "Broj zbirne je obavezan."
+    End If
+
+    If kolicina <= 0 Then
+        Err.Raise vbObjectError + 1405, SRC, "Kolicina mora biti veca od nule."
+    End If
+
+    If cena < 0 Then
+        Err.Raise vbObjectError + 1406, SRC, "Cena ne sme biti negativna."
+    End If
+
+    If kolAmb < 0 Then
+        Err.Raise vbObjectError + 1407, SRC, "Kolicina ambalaze ne sme biti negativna."
+    End If
+
+    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise vbObjectError + 1408, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+    End If
+
+    RequireValidDocumentClass klasa, SRC
+End Sub
+
+Private Sub ValidateZbirnaInput(ByVal vozacID As String, _
+                                ByVal brojZbirne As String, _
+                                ByVal kupacID As String, _
+                                ByVal ukupnoKol As Double, _
+                                ByVal tipAmb As String, _
+                                ByVal ukupnoAmb As Long, _
+                                ByVal klasa As String)
+
+    Const SRC As String = "ValidateZbirnaInput"
+
+    If Len(Trim$(vozacID)) = 0 Then
+        Err.Raise vbObjectError + 1410, SRC, "VozacID je obavezan."
+    End If
+
+    If Len(Trim$(brojZbirne)) = 0 Then
+        Err.Raise vbObjectError + 1411, SRC, "Broj zbirne je obavezan."
+    End If
+
+    If Len(Trim$(kupacID)) = 0 Then
+        Err.Raise vbObjectError + 1412, SRC, "KupacID je obavezan."
+    End If
+
+    If ukupnoKol <= 0 Then
+        Err.Raise vbObjectError + 1413, SRC, "Ukupna kolicina mora biti veca od nule."
+    End If
+
+    If ukupnoAmb < 0 Then
+        Err.Raise vbObjectError + 1414, SRC, "Ukupna ambalaza ne sme biti negativna."
+    End If
+
+    If ukupnoAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise vbObjectError + 1415, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+    End If
+
+    RequireValidDocumentClass klasa, SRC
+End Sub
+
+Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
+                                    ByVal vozacID As String, _
+                                    ByVal brojPrij As String, _
+                                    ByVal brojZbirne As String, _
+                                    ByVal kolicina As Double, _
+                                    ByVal cena As Double, _
+                                    ByVal tipAmb As String, _
+                                    ByVal kolAmb As Long, _
+                                    ByVal kolAmbVracena As Long, _
+                                    ByVal klasa As String)
+
+    Const SRC As String = "ValidatePrijemnicaInput"
+
+    If Len(Trim$(kupacID)) = 0 Then
+        Err.Raise vbObjectError + 1420, SRC, "KupacID je obavezan."
+    End If
+
+    If Len(Trim$(vozacID)) = 0 Then
+        Err.Raise vbObjectError + 1421, SRC, "VozacID je obavezan."
+    End If
+
+    If Len(Trim$(brojPrij)) = 0 Then
+        Err.Raise vbObjectError + 1422, SRC, "Broj prijemnice je obavezan."
+    End If
+
+    If Len(Trim$(brojZbirne)) = 0 Then
+        Err.Raise vbObjectError + 1423, SRC, "Broj zbirne je obavezan."
+    End If
+
+    If kolicina <= 0 Then
+        Err.Raise vbObjectError + 1424, SRC, "Kolicina mora biti veca od nule."
+    End If
+
+    If cena < 0 Then
+        Err.Raise vbObjectError + 1425, SRC, "Cena ne sme biti negativna."
+    End If
+
+    If kolAmb < 0 Or kolAmbVracena < 0 Then
+        Err.Raise vbObjectError + 1426, SRC, "Kolicina ambalaze ne sme biti negativna."
+    End If
+
+    If (kolAmb > 0 Or kolAmbVracena > 0) And Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise vbObjectError + 1427, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+    End If
+
+    RequireValidDocumentClass klasa, SRC
+End Sub
+
 
