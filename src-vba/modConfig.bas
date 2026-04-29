@@ -2,14 +2,14 @@ Attribute VB_Name = "modConfig"
 Option Explicit
 
 ' ============================================================
-' modConfig ñ Zentrale Konfiguration
+' modConfig ‚Äì Zentrale Konfiguration
 ' Alle Konstanten, Tabellennamen, Spaltenindizes
 ' KEINE Hardcoded Zellreferenzen im restlichen Code!
 ' ============================================================
 
 ' --- App Info ---
 Public Const APP_NAME As String = "OtkupApp"
-Public Const APP_VERSION As String = "2.1"
+Public Const APP_VERSION As String = "2.2.1"
 
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
@@ -293,7 +293,7 @@ Public Const COL_FS_CENA As String = "Cena"
 Public Const COL_FS_KLASA As String = "Klasa"
 Public Const COL_FS_BROJ_PRIJEMNICE As String = "BrojPrijemnice"
 
-' --- Typen Ambalaûe ---
+' --- Typen Ambala≈æe ---
 Public Const AMB_12_1 As String = "12/1"
 Public Const AMB_6_1 As String = "6/1"
 
@@ -372,7 +372,7 @@ Public Const BIM_MAPTIP_KOOPERANT As String = "KooperantIsplata"
 Public Const BIM_MAPTIP_NEP As String = "Nepoznato"
 Public Const BIM_MAPTIP_PROVIZIJA As String = "Provizija"
 
-' --- Izveötaj tipovi ---
+' --- Izve≈°taj tipovi ---
 Public Const IZV_POJEDINACNI As String = "Pojedinacni"
 Public Const IZV_ZBIRNI As String = "Zbirni"
 
@@ -396,3 +396,61 @@ Public Function GetConfigValue(ByVal configKey As String) As String
     End If
 
 End Function
+
+Public Sub SetConfigValue(ByVal configKey As String, ByVal configValue As String)
+    Const SOURCE As String = "SetConfigValue"
+
+    Dim data As Variant
+    Dim colKey As Long
+    Dim colValue As Long
+    Dim i As Long
+    Dim found As Boolean
+    Dim lo As ListObject
+    Dim rowData() As Variant
+    Dim newRowIndex As Long
+
+    On Error GoTo EH
+
+    If Len(Trim$(configKey)) = 0 Then
+        Err.Raise vbObjectError + 7500, SOURCE, "ConfigKey je prazan."
+    End If
+
+    Set lo = GetTable(TBL_SEF_CONFIG)
+    If lo Is Nothing Then
+        Err.Raise vbObjectError + 7501, SOURCE, "Tabela ne postoji: " & TBL_SEF_CONFIG
+    End If
+
+    colKey = RequireColumnIndex(TBL_SEF_CONFIG, "ConfigKey", SOURCE)
+    colValue = RequireColumnIndex(TBL_SEF_CONFIG, "ConfigValue", SOURCE)
+
+    data = GetTableData(TBL_SEF_CONFIG)
+
+    If Not IsEmpty(data) Then
+        For i = 1 To UBound(data, 1)
+            If Trim$(CStr(data(i, colKey))) = Trim$(configKey) Then
+                RequireUpdateCell TBL_SEF_CONFIG, i, "ConfigValue", configValue, SOURCE
+                found = True
+                Exit For
+            End If
+        Next i
+    End If
+
+    If Not found Then
+        ReDim rowData(1 To lo.ListColumns.count)
+
+        rowData(colKey) = Trim$(configKey)
+        rowData(colValue) = configValue
+
+        newRowIndex = AppendRow(TBL_SEF_CONFIG, rowData)
+        If newRowIndex = 0 Then
+            Err.Raise vbObjectError + 7502, SOURCE, _
+                      "AppendRow nije uspeo za config key: " & configKey
+        End If
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr SOURCE
+    Err.Raise Err.Number, SOURCE, Err.description
+End Sub
