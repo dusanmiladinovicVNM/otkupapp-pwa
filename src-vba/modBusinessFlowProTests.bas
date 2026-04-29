@@ -69,6 +69,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_FullDocumentChainHappyPath
     Test_DuplicateFakturaIsBlocked
     Test_InvalidSavesDoNotAppend
+    Test_OtkupInputValidationHardening
+    Test_OtkupReadHelpersExcludeStornirano
+    Test_DokumentaInputValidationHardening
+    Test_DokumentaReadHelpersExcludeStornirano
+    Test_DualClassDocumentWrappers
 
     Test_AutoLinkPositiveUniqueMatch
     Test_AutoLinkMustNotCrossBrojZbirne
@@ -174,7 +179,7 @@ Private Sub Test_CoreTablesAndColumnsExist()
     RequireColumnsExist TBL_PRIJEMNICA, Array( _
         "PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", _
         "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
-        "TipAmbalaze", "KolAmbalaze", "KolAmbalazeVracena", "Klasa", _
+        "TipAmbalaze", "KolAmbalaze", "KolAmbVracena", "Klasa", _
         "Fakturisano", "FakturaID")
 
     RequireColumnsExist TBL_FAKTURE, Array( _
@@ -362,6 +367,16 @@ Private Sub Test_FullDocumentChainHappyPath()
     AssertTrue Len(prjI) > 0, "Prijemnica class I created"
     AssertTrue Len(prjII) > 0, "Prijemnica class II created"
     AssertEquals CStr(beforePrj + 2), CStr(CountRows(TBL_PRIJEMNICA)), "Exactly two prijemnica rows appended"
+    
+    ' Kooperant je trebao dobiti Izlaz na otkupu
+    Dim koopAmbSaldo As Variant
+    koopAmbSaldo = GetAmbalazeStanje(TEST_KOOP_ID, "Kooperant")
+    AssertTrue Not IsEmpty(koopAmbSaldo), "Kooperant has ambalaza movements after otkup"
+
+    ' Vozac je trebao dobiti Izlaz na otpremnici
+    Dim vozAmbSaldo As Variant
+    vozAmbSaldo = GetVozacAmbSaldo(TEST_VOZ_ID)
+    AssertTrue Not IsEmpty(vozAmbSaldo), "Vozac has ambalaza movements after otpremnica"
 
     Dim manjak As Variant
     manjak = CalculateManjak(brojZbirne)
@@ -403,6 +418,16 @@ Private Sub Test_FullDocumentChainHappyPath()
     fakturaID = CreateFaktura_TX(TEST_KUP_ID, stavke)
 
     AssertTrue Len(fakturaID) > 0, "CreateFaktura_TX returns FakturaID"
+    Dim expectedIznos As Double
+    expectedIznos = (990# * 120#) + (190# * 80#)   ' 118800 + 15200 = 134000
+
+    Dim actualIznos As Double
+    Dim iznosVal As Variant
+    iznosVal = GetValueByKey(TBL_FAKTURE, "FakturaID", fakturaID, "Iznos")
+    If IsNumeric(iznosVal) Then actualIznos = CDbl(iznosVal)
+
+    AssertDoubleNear expectedIznos, actualIznos, 0.01, _
+                 "Faktura iznos matches sum of prijemnica stavke"
     AssertEquals CStr(beforeFak + 1), CStr(CountRows(TBL_FAKTURE)), "Exactly one faktura row appended"
     AssertTrue CountRows(TBL_FAKTURA_STAVKE) >= beforeStavke + 2, "At least two faktura stavke appended"
 
@@ -490,6 +515,7 @@ End Sub
 Private Sub Test_InvalidSavesDoNotAppend()
     On Error GoTo EH
 
+    Test_InvalidOtkupDoesNotAppend
     Test_InvalidOtpremnicaDoesNotAppend
     Test_InvalidPrijemnicaDoesNotAppend
 
@@ -497,6 +523,34 @@ Private Sub Test_InvalidSavesDoNotAppend()
 
 EH:
     LogFail "Invalid saves do not append", Err.Description
+End Sub
+
+Private Sub Test_InvalidOtkupDoesNotAppend()
+    On Error GoTo ExpectedError
+
+    Dim beforeCount As Long
+    beforeCount = CountRows(TBL_OTKUP)
+
+    ' Prazan kooperantID treba da blokira
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        NextTestDate(), "", TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 100#, TEST_TIP_AMB, 0, TEST_VOZ_ID, _
+        TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("BAD"), _
+        0#, "", "", "", False, 0#, 0#)
+
+    If Len(Trim$(result)) = 0 Then
+        AssertEquals CStr(beforeCount), CStr(CountRows(TBL_OTKUP)), _
+                     "Invalid otkup did not append row"
+        Exit Sub
+    End If
+
+    LogFail "Invalid otkup rejected", "SaveOtkupMulti_TX returned ID: " & result
+    Exit Sub
+
+ExpectedError:
+    AssertEquals CStr(beforeCount), CStr(CountRows(TBL_OTKUP)), _
+                 "Invalid otkup raised and did not append row"
 End Sub
 
 Private Sub Test_InvalidOtpremnicaDoesNotAppend()
@@ -548,6 +602,426 @@ ExpectedError:
     AssertEquals CStr(beforeCount), CStr(CountRows(TBL_PRIJEMNICA)), _
                  "Invalid prijemnica raised and did not append row"
 End Sub
+
+Private Sub Test_OtkupInputValidationHardening()
+    On Error GoTo EH
+
+    Test_InvalidOtkupNegativeCenaDoesNotAppend
+    Test_InvalidOtkupInvalidClassDoesNotAppend
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup input validation hardening", Err.Description
+End Sub
+
+Private Sub Test_InvalidOtkupNegativeCenaDoesNotAppend()
+    On Error GoTo EH
+
+    Dim beforeOtkup As Long
+    beforeOtkup = CountRows(TBL_OTKUP)
+
+    Dim result As String
+    result = SaveOtkup_TX( _
+        NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, -1#, TEST_TIP_AMB, 1, _
+        TEST_VOZ_ID, TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("NEGPRICE"), _
+        0#, "TEST OPERATOR", KLASA_I, GetTestParcelaID(), _
+        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("NEGPRICE"))
+
+    AssertEquals "", result, "Invalid otkup negative cena returns empty"
+    AssertEquals CStr(beforeOtkup), CStr(CountRows(TBL_OTKUP)), _
+                 "Invalid otkup negative cena did not append row"
+
+    Exit Sub
+
+EH:
+    LogFail "Invalid otkup negative cena", Err.Description
+End Sub
+
+Private Sub Test_InvalidOtkupInvalidClassDoesNotAppend()
+    On Error GoTo EH
+
+    Dim beforeOtkup As Long
+    beforeOtkup = CountRows(TBL_OTKUP)
+
+    Dim result As String
+    result = SaveOtkup_TX( _
+        NextTestDate(), TEST_KOOP_ID, TEST_ST_ID, _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 1, _
+        TEST_VOZ_ID, TEST_PREFIX & "-BAD-OTK-" & NewScenarioCode("BADCLASS"), _
+        0#, "TEST OPERATOR", "BAD", GetTestParcelaID(), _
+        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BADCLASS"))
+
+    AssertEquals "", result, "Invalid otkup class returns empty"
+    AssertEquals CStr(beforeOtkup), CStr(CountRows(TBL_OTKUP)), _
+                 "Invalid otkup class did not append row"
+
+    Exit Sub
+
+EH:
+    LogFail "Invalid otkup invalid class", Err.Description
+End Sub
+
+Private Sub Test_DokumentaInputValidationHardening()
+    On Error GoTo EH
+
+    Test_InvalidOtpremnicaNegativeCenaDoesNotAppend
+    Test_InvalidOtpremnicaMissingAmbTypeDoesNotAppend
+    Test_InvalidZbirnaInvalidClassDoesNotAppend
+    Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend
+
+    Exit Sub
+
+EH:
+    LogFail "Dokumenta input validation hardening", Err.Description
+End Sub
+
+Private Sub Test_InvalidOtpremnicaNegativeCenaDoesNotAppend()
+    On Error GoTo EH
+
+    Dim beforeCount As Long
+    beforeCount = CountRows(TBL_OTPREMNICA)
+
+    Dim result As String
+    result = SaveOtpremnica_TX( _
+        NextTestDate(), TEST_ST_ID, TEST_VOZ_ID, _
+        TEST_PREFIX & "-BAD-OTP-" & NewScenarioCode("NEGPRICE"), _
+        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("NEGPRICE"), _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, -1#, TEST_TIP_AMB, 1, KLASA_I)
+
+    AssertEquals "", result, "Invalid otpremnica negative cena returns empty"
+    AssertEquals CStr(beforeCount), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "Invalid otpremnica negative cena did not append row"
+
+    Exit Sub
+
+EH:
+    LogFail "Invalid otpremnica negative cena", Err.Description
+End Sub
+
+Private Sub Test_InvalidOtpremnicaMissingAmbTypeDoesNotAppend()
+    On Error GoTo EH
+
+    Dim beforeOtp As Long
+    Dim beforeAmb As Long
+
+    beforeOtp = CountRows(TBL_OTPREMNICA)
+    beforeAmb = CountRows(TBL_AMBALAZA)
+
+    Dim result As String
+    result = SaveOtpremnica_TX( _
+        NextTestDate(), TEST_ST_ID, TEST_VOZ_ID, _
+        TEST_PREFIX & "-BAD-OTP-" & NewScenarioCode("NOAMBTYPE"), _
+        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("NOAMBTYPE"), _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, "", 1, KLASA_I)
+
+    AssertEquals "", result, "Invalid otpremnica missing amb type returns empty"
+    AssertEquals CStr(beforeOtp), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "Invalid otpremnica missing amb type did not append otpremnica"
+    AssertEquals CStr(beforeAmb), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Invalid otpremnica missing amb type did not append ambalaza"
+
+    Exit Sub
+
+EH:
+    LogFail "Invalid otpremnica missing amb type", Err.Description
+End Sub
+
+Private Sub Test_InvalidZbirnaInvalidClassDoesNotAppend()
+    On Error GoTo EH
+
+    Dim beforeCount As Long
+    beforeCount = CountRows(TBL_ZBIRNA)
+
+    Dim result As String
+    result = SaveZbirna_TX( _
+        NextTestDate(), TEST_VOZ_ID, _
+        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BADCLASS"), _
+        TEST_KUP_ID, "Test Hladnjaca", "Test Pogon", _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, TEST_TIP_AMB, 1, "BAD")
+
+    AssertEquals "", result, "Invalid zbirna class returns empty"
+    AssertEquals CStr(beforeCount), CStr(CountRows(TBL_ZBIRNA)), _
+                 "Invalid zbirna class did not append row"
+
+    Exit Sub
+
+EH:
+    LogFail "Invalid zbirna invalid class", Err.Description
+End Sub
+
+Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
+    On Error GoTo EH
+
+    Dim beforePrj As Long
+    Dim beforeAmb As Long
+
+    beforePrj = CountRows(TBL_PRIJEMNICA)
+    beforeAmb = CountRows(TBL_AMBALAZA)
+
+    Dim result As String
+    result = SavePrijemnica_TX( _
+        NextTestDate(), TEST_KUP_ID, TEST_VOZ_ID, _
+        TEST_PREFIX & "-BAD-PRJ-" & NewScenarioCode("NEGAMB"), _
+        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("NEGAMB"), _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, -1, 0, KLASA_I)
+
+    AssertEquals "", result, "Invalid prijemnica negative ambalaza returns empty"
+    AssertEquals CStr(beforePrj), CStr(CountRows(TBL_PRIJEMNICA)), _
+                 "Invalid prijemnica negative ambalaza did not append prijemnica"
+    AssertEquals CStr(beforeAmb), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Invalid prijemnica negative ambalaza did not append ambalaza"
+
+    Exit Sub
+
+EH:
+    LogFail "Invalid prijemnica negative ambalaza", Err.Description
+End Sub
+
+Private Sub Test_DokumentaReadHelpersExcludeStornirano()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("STOFILTER")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    Dim brojOtpActive As String
+    Dim brojOtpStorno As String
+    Dim brojPrijActive As String
+    Dim brojPrijStorno As String
+
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+    brojOtpActive = TEST_PREFIX & "-OTP-A-" & scenario
+    brojOtpStorno = TEST_PREFIX & "-OTP-S-" & scenario
+    brojPrijActive = TEST_PREFIX & "-PRJ-A-" & scenario
+    brojPrijStorno = TEST_PREFIX & "-PRJ-S-" & scenario
+
+    Dim otpActive As String
+    Dim otpStorno As String
+    Dim zbrActive As String
+    Dim zbrStorno As String
+    Dim prjActive As String
+    Dim prjStorno As String
+
+    otpActive = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtpActive, brojZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 1, KLASA_I)
+
+    otpStorno = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtpStorno, brojZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 200#, 10#, TEST_TIP_AMB, 1, KLASA_I)
+
+    zbrActive = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                              "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                              100#, TEST_TIP_AMB, 1, KLASA_I)
+
+    zbrStorno = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                              "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                              200#, TEST_TIP_AMB, 1, KLASA_I)
+
+    prjActive = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrijActive, brojZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 1, 0, KLASA_I)
+
+    prjStorno = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrijStorno, brojZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 200#, 10#, TEST_TIP_AMB, 1, 0, KLASA_I)
+
+    AssertTrue Len(otpActive) > 0 And Len(otpStorno) > 0, "Storno filter fixture otpremnice created"
+    AssertTrue Len(zbrActive) > 0 And Len(zbrStorno) > 0, "Storno filter fixture zbirne created"
+    AssertTrue Len(prjActive) > 0 And Len(prjStorno) > 0, "Storno filter fixture prijemnice created"
+
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", otpStorno
+    MarkTestRowStornirano TBL_ZBIRNA, "ZbirnaID", zbrStorno
+    MarkTestRowStornirano TBL_PRIJEMNICA, "PrijemnicaID", prjStorno
+
+    AssertFalse ArrayContainsKeyValue(GetOtpremniceByZbirna(brojZbirne), TBL_OTPREMNICA, _
+                                      "OtpremnicaID", otpStorno), _
+                "GetOtpremniceByZbirna excludes stornirano"
+
+    AssertFalse ArrayContainsKeyValue(GetOtpremniceByStation(TEST_ST_ID, testDate, testDate), TBL_OTPREMNICA, _
+                                      "OtpremnicaID", otpStorno), _
+                "GetOtpremniceByStation excludes stornirano"
+
+    AssertFalse ArrayContainsKeyValue(GetZbirnaByKupac(TEST_KUP_ID, testDate, testDate), TBL_ZBIRNA, _
+                                      "ZbirnaID", zbrStorno), _
+                "GetZbirnaByKupac excludes stornirano"
+
+    AssertFalse ArrayContainsKeyValue(GetPrijemniceByKupac(TEST_KUP_ID, testDate, testDate), TBL_PRIJEMNICA, _
+                                      "PrijemnicaID", prjStorno), _
+                "GetPrijemniceByKupac excludes stornirano"
+
+    Exit Sub
+
+EH:
+    LogFail "Dokumenta read helpers exclude stornirano", Err.Description
+End Sub
+
+Private Sub Test_OtkupReadHelpersExcludeStornirano()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKSTO")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojActive As String
+    Dim brojStorno As String
+    Dim brojZbirne As String
+
+    brojActive = TEST_PREFIX & "-OTK-A-" & scenario
+    brojStorno = TEST_PREFIX & "-OTK-S-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim activeID As String
+    Dim stornoID As String
+
+    activeID = SaveOtkup_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 1, _
+        TEST_VOZ_ID, brojActive, _
+        0#, "TEST OPERATOR", KLASA_I, GetTestParcelaID(), brojZbirne)
+
+    stornoID = SaveOtkup_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, _
+        TEST_VRSTA, TEST_SORTA, _
+        200#, 10#, TEST_TIP_AMB, 1, _
+        TEST_VOZ_ID, brojStorno, _
+        0#, "TEST OPERATOR", KLASA_I, GetTestParcelaID(), brojZbirne)
+
+    AssertTrue Len(activeID) > 0 And Len(stornoID) > 0, _
+               "Otkup storno filter fixture rows created"
+
+    MarkTestRowStornirano TBL_OTKUP, "OtkupID", stornoID
+
+    AssertFalse ArrayContainsKeyValue(GetOtkupByStation(TEST_ST_ID, testDate, testDate), _
+                                      TBL_OTKUP, "OtkupID", stornoID), _
+                "GetOtkupByStation excludes stornirano"
+
+    AssertFalse ArrayContainsKeyValue(GetOtkupByKooperant(TEST_KOOP_ID, testDate, testDate), _
+                                      TBL_OTKUP, "OtkupID", stornoID), _
+                "GetOtkupByKooperant excludes stornirano"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup read helpers exclude stornirano", Err.Description
+End Sub
+
+Private Sub Test_DualClassDocumentWrappers()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("DOCMULTI")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojOtp As String
+    Dim brojZbirne As String
+    Dim brojPrij As String
+
+    brojOtp = TEST_PREFIX & "-OTP-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+    brojPrij = TEST_PREFIX & "-PRJ-" & scenario
+
+    Dim beforeOtp As Long
+    Dim beforeZbr As Long
+    Dim beforePrj As Long
+
+    beforeOtp = CountRows(TBL_OTPREMNICA)
+    beforeZbr = CountRows(TBL_ZBIRNA)
+    beforePrj = CountRows(TBL_PRIJEMNICA)
+
+    Dim otpResult As String
+    otpResult = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                                       TEST_VRSTA, TEST_SORTA, 111#, 10#, TEST_TIP_AMB, 5, _
+                                       True, 22#, 8#)
+
+    AssertTrue Len(otpResult) > 0, "SaveOtpremnicaMulti_TX returns IDs"
+    AssertEquals CStr(beforeOtp + 2), CStr(CountRows(TBL_OTPREMNICA)), _
+                 "SaveOtpremnicaMulti_TX appends two rows"
+
+    Dim otpI As String
+    Dim otpII As String
+    otpI = FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_I)
+    otpII = FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_II)
+
+    AssertTrue Len(otpI) > 0, "Dual otpremnica class I found"
+    AssertTrue Len(otpII) > 0, "Dual otpremnica class II found"
+
+    AssertEquals "5", CStr(GetValueByKey(TBL_OTPREMNICA, "OtpremnicaID", otpI, "KolAmbalaze")), _
+                 "Otpremnica class I carries ambalaza"
+
+    AssertEquals "0", CStr(GetValueByKey(TBL_OTPREMNICA, "OtpremnicaID", otpII, "KolAmbalaze")), _
+                 "Otpremnica class II carries zero ambalaza"
+
+    Dim zbrResult As String
+    zbrResult = SaveZbirnaMulti_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                                   111#, TEST_TIP_AMB, 5, True, 22#)
+
+    AssertTrue Len(zbrResult) > 0, "SaveZbirnaMulti_TX returns IDs"
+    AssertEquals CStr(beforeZbr + 2), CStr(CountRows(TBL_ZBIRNA)), _
+                 "SaveZbirnaMulti_TX appends two rows"
+
+    Dim zbrI As String
+    Dim zbrII As String
+    zbrI = FindZbirnaIDByBrojAndKlasa(brojZbirne, KLASA_I)
+    zbrII = FindZbirnaIDByBrojAndKlasa(brojZbirne, KLASA_II)
+
+    AssertTrue Len(zbrI) > 0, "Dual zbirna class I found"
+    AssertTrue Len(zbrII) > 0, "Dual zbirna class II found"
+
+    AssertEquals "5", CStr(GetValueByKey(TBL_ZBIRNA, "ZbirnaID", zbrI, "UkupnoAmbalaze")), _
+                 "Zbirna class I carries ambalaza"
+
+    AssertEquals "0", CStr(GetValueByKey(TBL_ZBIRNA, "ZbirnaID", zbrII, "UkupnoAmbalaze")), _
+                 "Zbirna class II carries zero ambalaza"
+
+    Dim prjResult As String
+    prjResult = SavePrijemnicaMulti_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                                       TEST_VRSTA, TEST_SORTA, 111#, 10#, TEST_TIP_AMB, 5, 4, _
+                                       True, 22#, 8#)
+
+    AssertTrue Len(prjResult) > 0, "SavePrijemnicaMulti_TX returns IDs"
+    AssertEquals CStr(beforePrj + 2), CStr(CountRows(TBL_PRIJEMNICA)), _
+                 "SavePrijemnicaMulti_TX appends two rows"
+
+    Dim prjI As String
+    Dim prjII As String
+    prjI = FindPrijemnicaIDByBrojAndKlasa(brojPrij, KLASA_I)
+    prjII = FindPrijemnicaIDByBrojAndKlasa(brojPrij, KLASA_II)
+
+    AssertTrue Len(prjI) > 0, "Dual prijemnica class I found"
+    AssertTrue Len(prjII) > 0, "Dual prijemnica class II found"
+
+    AssertEquals "5", CStr(GetValueByKey(TBL_PRIJEMNICA, "PrijemnicaID", prjI, "KolAmbalaze")), _
+                 "Prijemnica class I carries ambalaza"
+
+    AssertEquals "0", CStr(GetValueByKey(TBL_PRIJEMNICA, "PrijemnicaID", prjII, "KolAmbalaze")), _
+                 "Prijemnica class II carries zero ambalaza"
+
+    AssertEquals "4", CStr(GetValueByKey(TBL_PRIJEMNICA, "PrijemnicaID", prjI, "KolAmbVracena")), _
+                 "Prijemnica class I carries returned ambalaza"
+
+    AssertEquals "0", CStr(GetValueByKey(TBL_PRIJEMNICA, "PrijemnicaID", prjII, "KolAmbVracena")), _
+                 "Prijemnica class II carries zero returned ambalaza"
+
+    Exit Sub
+
+EH:
+    LogFail "Dual-class document wrappers", Err.Description
+End Sub
+
 
 ' ============================================================
 ' TRACEABILITY / AUTOLINK REGRESSION TESTS
@@ -1106,6 +1580,97 @@ Private Function GetTestParcelaID() As String
     End If
 End Function
 
+Private Sub AssertFalse(ByVal condition As Boolean, ByVal testName As String)
+    AssertTrue Not condition, testName
+End Sub
+
+Private Sub MarkTestRowStornirano(ByVal tableName As String, _
+                                  ByVal idColumn As String, _
+                                  ByVal idValue As String)
+    Const SRC As String = "MarkTestRowStornirano"
+
+    Dim rows As Collection
+    Set rows = FindRows(tableName, idColumn, idValue)
+
+    If rows Is Nothing Or rows.count = 0 Then
+        Err.Raise vbObjectError + 9301, SRC, _
+                  "Row not found. Table=" & tableName & " ID=" & idValue
+    End If
+
+    RequireUpdateCell tableName, CLng(rows(1)), COL_STORNIRANO, "Da", SRC
+End Sub
+
+Private Function ArrayContainsKeyValue(ByVal data As Variant, _
+                                       ByVal tableName As String, _
+                                       ByVal keyColumn As String, _
+                                       ByVal keyValue As String) As Boolean
+    If IsEmpty(data) Then Exit Function
+    If Not IsArray(data) Then Exit Function
+
+    Dim colKey As Long
+    colKey = RequireColumnIndex(tableName, keyColumn, "ArrayContainsKeyValue")
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colKey))) = Trim$(keyValue) Then
+            ArrayContainsKeyValue = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Function FindOtpremnicaIDByBrojAndKlasa(ByVal brojOtp As String, _
+                                                ByVal klasa As String) As String
+    FindOtpremnicaIDByBrojAndKlasa = FindIDByTwoColumns( _
+        TBL_OTPREMNICA, "OtpremnicaID", "BrojOtpremnice", brojOtp, "Klasa", klasa)
+End Function
+
+Private Function FindZbirnaIDByBrojAndKlasa(ByVal brojZbirne As String, _
+                                            ByVal klasa As String) As String
+    FindZbirnaIDByBrojAndKlasa = FindIDByTwoColumns( _
+        TBL_ZBIRNA, "ZbirnaID", "BrojZbirne", brojZbirne, "Klasa", klasa)
+End Function
+
+Private Function FindPrijemnicaIDByBrojAndKlasa(ByVal brojPrij As String, _
+                                                ByVal klasa As String) As String
+    FindPrijemnicaIDByBrojAndKlasa = FindIDByTwoColumns( _
+        TBL_PRIJEMNICA, "PrijemnicaID", "BrojPrijemnice", brojPrij, "Klasa", klasa)
+End Function
+
+Private Function FindIDByTwoColumns(ByVal tableName As String, _
+                                    ByVal idColumn As String, _
+                                    ByVal keyColumn1 As String, _
+                                    ByVal keyValue1 As String, _
+                                    ByVal keyColumn2 As String, _
+                                    ByVal keyValue2 As String) As String
+    Dim data As Variant
+    data = GetTableData(tableName)
+
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, tableName)
+
+    If IsEmpty(data) Then Exit Function
+
+    Dim colID As Long
+    Dim colKey1 As Long
+    Dim colKey2 As Long
+
+    colID = RequireColumnIndex(tableName, idColumn, "FindIDByTwoColumns")
+    colKey1 = RequireColumnIndex(tableName, keyColumn1, "FindIDByTwoColumns")
+    colKey2 = RequireColumnIndex(tableName, keyColumn2, "FindIDByTwoColumns")
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colKey1))) = Trim$(keyValue1) And _
+           Trim$(CStr(data(i, colKey2))) = Trim$(keyValue2) Then
+
+            FindIDByTwoColumns = Trim$(CStr(data(i, colID)))
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' ============================================================
 ' RUN / SCENARIO HELPERS
 ' ============================================================
@@ -1187,8 +1752,8 @@ Private Sub AssertEquals(ByVal expected As String, ByVal actual As String, ByVal
 End Sub
 
 Private Sub AssertDoubleNear(ByVal expected As Double, ByVal actual As Double, _
-                             ByVal tolerance As Double, ByVal testName As String)
-    If Abs(expected - actual) <= tolerance Then
+                             ByVal TOLERANCE As Double, ByVal testName As String)
+    If Abs(expected - actual) <= TOLERANCE Then
         LogPass testName
     Else
         LogFail testName, "Expected [" & CStr(expected) & "], got [" & CStr(actual) & "]."
@@ -1382,14 +1947,20 @@ Public Function CreateSEFLiveDummyFaktura() As String
     brojOtp = TEST_PREFIX & "-OTP-" & scenario
     brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
     brojPrij = TEST_PREFIX & "-PRJ-" & scenario
-
+    
     Dim otkupResult As String
+
     otkupResult = SaveOtkupMulti_TX( _
         d, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
         1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojOtk, _
         0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
         True, 200#, 80#)
 
+    If Len(Trim$(otkupResult)) = 0 Then          ' ? ovde
+        Err.Raise vbObjectError + 9301, "CreateSEFLiveDummyFaktura", _
+              "SaveOtkupMulti_TX failed."
+    End If
+    
     Dim otpI As String
     Dim otpII As String
 
@@ -1401,9 +1972,14 @@ Public Function CreateSEFLiveDummyFaktura() As String
         d, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
         TEST_VRSTA, TEST_SORTA, 200#, 80#, TEST_TIP_AMB, 0, "II")
 
+    If Len(Trim$(otpI)) = 0 Or Len(Trim$(otpII)) = 0 Then     ' ? ovde
+        Err.Raise vbObjectError + 9302, "CreateSEFLiveDummyFaktura", _
+              "SaveOtpremnica_TX failed."
+    End If
+
     Dim zbrI As String
     Dim zbrII As String
-
+    
     zbrI = SaveZbirna_TX( _
         d, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
         "Test Hladnjaca", "Test Pogon", _
@@ -1414,6 +1990,11 @@ Public Function CreateSEFLiveDummyFaktura() As String
         "Test Hladnjaca", "Test Pogon", _
         TEST_VRSTA, TEST_SORTA, 200#, TEST_TIP_AMB, 0, "II")
 
+    If Len(Trim$(zbrI)) = 0 Or Len(Trim$(zbrII)) = 0 Then     ' ? ovde
+        Err.Raise vbObjectError + 9303, "CreateSEFLiveDummyFaktura", _
+              "SaveZbirna_TX failed."
+    End If
+    
     Dim prjI As String
     Dim prjII As String
 
@@ -1424,6 +2005,11 @@ Public Function CreateSEFLiveDummyFaktura() As String
     prjII = SavePrijemnica_TX( _
         d, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
         TEST_VRSTA, TEST_SORTA, 190#, 80#, TEST_TIP_AMB, 0, 0, "II")
+
+    If Len(Trim$(prjI)) = 0 Or Len(Trim$(prjII)) = 0 Then     ' ? ovde
+        Err.Raise vbObjectError + 9304, "CreateSEFLiveDummyFaktura", _
+              "SavePrijemnica_TX failed."
+    End If
 
     AutoLinkOtkupOtpremnica_TX
 
@@ -1457,3 +2043,134 @@ EH:
     CreateSEFLiveDummyFaktura = ""
     EndRun
 End Function
+
+
+
+Public Sub HardDeleteBusinessFlowTestRows()
+    On Error GoTo EH
+
+    Dim answer As String
+    answer = InputBox( _
+        "Ovo CE FIZICKI OBRISATI sve TST-PRO-* redove iz svih tabela." & vbCrLf & _
+        "Ova operacija je NEPOVRATNA." & vbCrLf & vbCrLf & _
+        "Ukucaj BRISI da nastavis:", _
+        "Potvrda brisanja test podataka")
+
+    If answer <> "BRISI" Then
+        MsgBox "Brisanje otkazano.", vbInformation
+        Exit Sub
+    End If
+
+    Dim deleted As Long
+    Dim total As Long
+
+    deleted = DeleteTestRowsFromTable(TBL_FAKTURA_STAVKE, Array("FakturaID", "BrojPrijemnice"))
+    total = total + deleted
+    Debug.Print "tblFakturaStavke: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_FAKTURE, Array("BrojFakture"))
+    total = total + deleted
+    Debug.Print "tblFakture: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_PRIJEMNICA, Array("BrojPrijemnice", "BrojZbirne"))
+    total = total + deleted
+    Debug.Print "tblPrijemnica: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_ZBIRNA, Array("BrojZbirne"))
+    total = total + deleted
+    Debug.Print "tblZbirna: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_OTPREMNICA, Array("BrojOtpremnice", "BrojZbirne"))
+    total = total + deleted
+    Debug.Print "tblOtpremnica: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_OTKUP, Array("BrojDokumenta", "BrojZbirne"))
+    total = total + deleted
+    Debug.Print "tblOtkup: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_AMBALAZA, Array("DokumentID"))
+    total = total + deleted
+    Debug.Print "tblAmbalaza: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable(TBL_NOVAC, Array("BrojDokumenta"))
+    total = total + deleted
+    Debug.Print "tblNovac: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable("tblSEFSubmission", Array("FakturaID"))
+    total = total + deleted
+    Debug.Print "tblSEFSubmission: " & deleted & " obrisano"
+
+    deleted = DeleteTestRowsFromTable("tblSEFEventLog", Array("FakturaID"))
+    total = total + deleted
+    Debug.Print "tblSEFEventLog: " & deleted & " obrisano"
+
+    MsgBox "Obrisano ukupno " & total & " test redova.", vbInformation
+    Exit Sub
+
+EH:
+    MsgBox "Greska pri brisanju: " & Err.Description, vbCritical
+End Sub
+
+Private Function DeleteTestRowsFromTable(ByVal tableName As String, _
+                                         ByVal markerColumns As Variant) As Long
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = GetTable(tableName)
+
+    If lo Is Nothing Then Exit Function
+    If lo.DataBodyRange Is Nothing Then Exit Function
+
+    Dim data As Variant
+    data = lo.DataBodyRange.Value2
+
+    If IsEmpty(data) Then Exit Function
+
+    ' Sakupi indekse redova koji treba brisati — od dna ka vrhu
+    Dim toDelete() As Long
+    Dim deleteCount As Long
+    ReDim toDelete(1 To lo.DataBodyRange.rows.count)
+
+    Dim i As Long
+    For i = UBound(data, 1) To 1 Step -1
+        If RowHasTestPrefix(data, i, tableName, markerColumns) Then
+            deleteCount = deleteCount + 1
+            toDelete(deleteCount) = i
+        End If
+    Next i
+
+    If deleteCount = 0 Then Exit Function
+
+    ' Brisi od dna ka vrhu da ne pomeramo indekse
+    Dim j As Long
+    For j = 1 To deleteCount
+        lo.ListRows(toDelete(j)).Delete
+    Next j
+
+    DeleteTestRowsFromTable = deleteCount
+    Exit Function
+
+EH:
+    Debug.Print "DeleteTestRowsFromTable greska (" & tableName & "): " & Err.Description
+    DeleteTestRowsFromTable = 0
+End Function
+
+Private Function RowHasTestPrefix(ByVal data As Variant, ByVal rowIndex As Long, _
+                                   ByVal tableName As String, _
+                                   ByVal markerColumns As Variant) As Boolean
+    Const PREFIX As String = "TST-PRO"
+
+    Dim c As Variant
+    For Each c In markerColumns
+        Dim colIdx As Long
+        colIdx = GetColumnIndex(tableName, CStr(c))
+
+        If colIdx > 0 Then
+            If InStr(1, CStr(data(rowIndex, colIdx)), PREFIX, vbTextCompare) > 0 Then
+                RowHasTestPrefix = True
+                Exit Function
+            End If
+        End If
+    Next c
+End Function
+
