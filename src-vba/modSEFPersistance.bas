@@ -49,7 +49,7 @@ Public Function GetNextSEFVersionNo(ByVal fakturaID As String) As Long
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Function GetCurrentSEFVersionNo(ByVal fakturaID As String) As Long
@@ -74,7 +74,7 @@ Public Function GetCurrentSEFVersionNo(ByVal fakturaID As String) As Long
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 ' =========================
@@ -166,7 +166,7 @@ Public Sub UpdateFakturaSEFState_Row( _
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 ' NOTE:
@@ -209,7 +209,7 @@ Public Sub UpdateFakturaSEFRefreshFields_Row( _
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Public Function CreateSEFSubmission_Row( _
@@ -289,7 +289,7 @@ Public Function CreateSEFSubmission_Row( _
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Sub SaveSEFSubmissionResult_Row( _
@@ -339,7 +339,7 @@ Public Sub SaveSEFSubmissionResult_Row( _
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Public Sub AppendSEFEvent_Row( _
@@ -386,7 +386,7 @@ Public Sub AppendSEFEvent_Row( _
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 ' =========================
@@ -440,7 +440,7 @@ Public Sub UpdateSEFLastSyncAt_Row(ByVal fakturaID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Private Function GetCurrentOperatorName() As String
@@ -547,7 +547,7 @@ Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Function GetLastSEFSubmissionStatus(ByVal fakturaID As String) As String
@@ -576,7 +576,7 @@ Public Function GetLastSEFSubmissionStatus(ByVal fakturaID As String) As String
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Function GetSubmissionRequestBody(ByVal submissionID As String) As String
@@ -602,7 +602,7 @@ Public Function GetSubmissionRequestBody(ByVal submissionID As String) As String
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Function GetSubmissionPayloadHash(ByVal submissionID As String) As String
@@ -628,7 +628,7 @@ Public Function GetSubmissionPayloadHash(ByVal submissionID As String) As String
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Sub ClearFakturaLastSubmission_Row(ByVal fakturaID As String)
@@ -652,7 +652,7 @@ Public Sub ClearFakturaLastSubmission_Row(ByVal fakturaID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Private Sub RequireFaktureSEFSchema(ByVal sourceName As String)
@@ -728,6 +728,6 @@ Private Function GetFakturaSEFFieldText(ByVal fakturaID As String, _
 
 EH:
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.Description
+    Err.Raise Err.Number, sourceName, Err.description
 End Function
 
