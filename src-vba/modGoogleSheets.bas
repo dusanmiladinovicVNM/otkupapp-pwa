@@ -104,7 +104,7 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
     body = BuildValuesJson(data)
     
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
-          "/values/" & UrlEncodeGoogle(tabName) & "!A1" & _
+          "/values/" & UrlEncode(tabName) & "!A1" & _
           "?valueInputOption=RAW"
     
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
@@ -160,7 +160,7 @@ Public Function ReadSheetData(ByVal spreadsheetID As String, _
     End If
 
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
-          "/values/" & UrlEncodeGoogle(tabName)
+          "/values/" & UrlEncode(tabName)
 
     Set http = CreateGoogleHttpRequest("ReadSheetData")
 
@@ -214,7 +214,7 @@ Public Function ClearSheet(ByVal spreadsheetID As String, _
     End If
 
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
-          "/values/" & UrlEncodeGoogle(tabName) & ":clear"
+          "/values/" & UrlEncode(tabName) & ":clear"
 
     Set http = CreateGoogleHttpRequest("ClearSheet")
 
@@ -268,7 +268,7 @@ Public Function CreateSpreadsheet(ByVal title As String, _
     End If
     
     url = SHEETS_API_BASE
-    body = "{""properties"":{""title"":""" & JsonEscapeGoogle(title) & """}}"
+    body = "{""properties"":{""title"":""" & JsonEscape(title) & """}}"
     
     Set http = CreateGoogleHttpRequest("CreateSpreadsheet")
     
@@ -347,7 +347,7 @@ Public Function GetSpreadsheetID(ByVal title As String, _
         query = query & " and '" & EscapeDriveQueryValue(folderID) & "' in parents"
     End If
 
-    url = DRIVE_API_BASE & "/files?q=" & UrlEncodeGoogle(query) & _
+    url = DRIVE_API_BASE & "/files?q=" & UrlEncode(query) & _
           "&fields=files(id,name)&pageSize=10"
 
     Set http = CreateGoogleHttpRequest("GetSpreadsheetID")
@@ -476,7 +476,7 @@ Public Function AddSheetTab(ByVal spreadsheetID As String, _
     End If
 
     url = SHEETS_API_BASE & "/" & spreadsheetID & ":batchUpdate"
-    body = "{""requests"":[{""addSheet"":{""properties"":{""title"":""" & JsonEscapeGoogle(tabName) & """}}}]}"
+    body = "{""requests"":[{""addSheet"":{""properties"":{""title"":""" & JsonEscape(tabName) & """}}}]}"
 
     Set http = CreateGoogleHttpRequest("AddSheetTab")
 
@@ -555,12 +555,12 @@ Private Function MoveFileToFolder(ByVal fileID As String, ByVal folderID As Stri
         LogWarn "MoveFileToFolder", _
                 "No current parent detected for fileID=" & fileID & ". Adding new parent without removeParents."
         url = DRIVE_API_BASE & "/files/" & fileID & _
-              "?addParents=" & UrlEncodeGoogle(folderID) & _
+              "?addParents=" & UrlEncode(folderID) & _
               "&fields=id,parents"
     Else
         url = DRIVE_API_BASE & "/files/" & fileID & _
-              "?addParents=" & UrlEncodeGoogle(folderID) & _
-              "&removeParents=" & UrlEncodeGoogle(oldParent) & _
+              "?addParents=" & UrlEncode(folderID) & _
+              "&removeParents=" & UrlEncode(oldParent) & _
               "&fields=id,parents"
     End If
 
@@ -632,7 +632,7 @@ Private Function BuildValuesJson(ByVal data As Variant) As String
                 sVal = CStr(val)
             End If
             
-            sb = sb & """" & JsonEscapeGoogle(sVal) & """"
+            sb = sb & """" & JsonEscape(sVal) & """"
         Next j
         
         sb = sb & "]"
@@ -750,14 +750,4 @@ Private Function CleanJsonValue(ByVal s As String) As String
     s = Replace(s, "\n", vbLf)
     CleanJsonValue = s
 End Function
-
-Private Function JsonEscapeGoogle(ByVal s As String) As String
-    s = Replace(s, "\", "\\")
-    s = Replace(s, """", "\""")
-    s = Replace(s, vbCrLf, "\n")
-    s = Replace(s, vbCr, "\n")
-    s = Replace(s, vbLf, "\n")
-    JsonEscapeGoogle = s
-End Function
-
 
