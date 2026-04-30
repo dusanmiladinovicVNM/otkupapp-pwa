@@ -52,10 +52,10 @@ Public Sub RunGoogleAuthSetup()
     ' Browser öffnen
     Dim authUrl As String
     authUrl = GOOGLE_AUTH_URL & _
-              "?client_id=" & UrlEncodeGoogle(clientID) & _
-              "&redirect_uri=" & UrlEncodeGoogle(GOOGLE_REDIRECT_URI) & _
+              "?client_id=" & UrlEncode(clientID) & _
+              "&redirect_uri=" & UrlEncode(GOOGLE_REDIRECT_URI) & _
               "&response_type=code" & _
-              "&scope=" & UrlEncodeGoogle(GOOGLE_SCOPE) & _
+              "&scope=" & UrlEncode(GOOGLE_SCOPE) & _
               "&access_type=offline" & _
               "&prompt=consent"
     
@@ -133,10 +133,10 @@ Private Function ExchangeCodeForTokens(ByVal authCode As String) As Boolean
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 10000, 10000, 30000, 30000
     
-    body = "code=" & UrlEncodeGoogle(Trim$(authCode)) & _
-           "&client_id=" & UrlEncodeGoogle(GetConfigValue("GOOGLE_CLIENT_ID")) & _
-           "&client_secret=" & UrlEncodeGoogle(GetConfigValue("GOOGLE_CLIENT_SECRET")) & _
-           "&redirect_uri=" & UrlEncodeGoogle(GOOGLE_REDIRECT_URI) & _
+    body = "code=" & UrlEncode(Trim$(authCode)) & _
+           "&client_id=" & UrlEncode(GetConfigValue("GOOGLE_CLIENT_ID")) & _
+           "&client_secret=" & UrlEncode(GetConfigValue("GOOGLE_CLIENT_SECRET")) & _
+           "&redirect_uri=" & UrlEncode(GOOGLE_REDIRECT_URI) & _
            "&grant_type=authorization_code"
     
     http.Open "POST", GOOGLE_TOKEN_URL, False
@@ -202,9 +202,9 @@ Private Function RefreshAccessToken() As Boolean
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 10000, 10000, 30000, 30000
     
-    body = "refresh_token=" & UrlEncodeGoogle(refreshToken) & _
-           "&client_id=" & UrlEncodeGoogle(GetConfigValue("GOOGLE_CLIENT_ID")) & _
-           "&client_secret=" & UrlEncodeGoogle(GetConfigValue("GOOGLE_CLIENT_SECRET")) & _
+    body = "refresh_token=" & UrlEncode(refreshToken) & _
+           "&client_id=" & UrlEncode(GetConfigValue("GOOGLE_CLIENT_ID")) & _
+           "&client_secret=" & UrlEncode(GetConfigValue("GOOGLE_CLIENT_SECRET")) & _
            "&grant_type=refresh_token"
     
     http.Open "POST", GOOGLE_TOKEN_URL, False
@@ -352,22 +352,4 @@ Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As Strin
         End If
     End If
 End Function
-
-Public Function UrlEncodeGoogle(ByVal s As String) As String
-    Dim i As Long, ch As String, code As Long, result As String
-    
-    For i = 1 To Len(s)
-        ch = Mid$(s, i, 1)
-        code = Asc(ch)
-        Select Case code
-            Case 48 To 57, 65 To 90, 97 To 122, 45, 46, 95, 126
-                result = result & ch
-            Case Else
-                result = result & "%" & Right$("0" & Hex$(code), 2)
-        End Select
-    Next i
-    
-    UrlEncodeGoogle = result
-End Function
-
 
