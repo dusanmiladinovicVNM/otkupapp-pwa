@@ -166,7 +166,7 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 
@@ -193,7 +193,7 @@ Private Sub ValidateFakturaHasStavke(ByVal fakturaID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Public Sub ValidateSEFPayload(ByVal payload As String)
@@ -215,7 +215,7 @@ Public Sub ValidateSEFPayload(ByVal payload As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 Private Sub ValidateKupacForSEF(ByVal kupacID As String)
     On Error GoTo EH
@@ -250,7 +250,7 @@ Private Sub ValidateKupacForSEF(ByVal kupacID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Private Sub ValidateSEFConfig()
@@ -274,17 +274,16 @@ Private Sub ValidateSEFConfig()
                   "SEF_API_KEY missing in tblSEFConfig."
     End If
 
-    If InStr(1, baseUrl, "http://", vbTextCompare) <> 1 _
-       And InStr(1, baseUrl, "https://", vbTextCompare) <> 1 Then
+    If LCase$(Left$(baseUrl, 8)) <> "https://" Then
         Err.Raise ERR_SEF_CONFIG, SRC, _
-                  "SEF_BASE_URL must start with http:// or https://."
+              "SEF_BASE_URL must start with https://. Plain HTTP is not allowed for SEF."
     End If
 
     Exit Sub
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Private Function GetFakturaSEFStatusText(ByVal fakturaID As String, _
@@ -311,7 +310,7 @@ Private Function GetFakturaSEFStatusText(ByVal fakturaID As String, _
 
 EH:
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.Description
+    Err.Raise Err.Number, sourceName, Err.description
 End Function
 
 Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
@@ -344,7 +343,7 @@ Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
@@ -377,7 +376,7 @@ Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 
 Public Sub PrepareRejectedInvoiceForResubmit(ByVal fakturaID As String)
@@ -422,6 +421,7 @@ Public Sub PrepareRejectedInvoiceForResubmit(ByVal fakturaID As String)
         details:="PreviousState=" & currentState)
     
     tx.CommitTx
+    
     Exit Sub
 
 EH:
@@ -430,8 +430,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "PrepareRejectedInvoiceForResubmit"
