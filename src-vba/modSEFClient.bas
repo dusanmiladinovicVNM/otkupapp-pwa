@@ -59,7 +59,7 @@ EH:
     resp.Rejected = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
-    resp.errorMessage = Err.Description
+    resp.errorMessage = Err.description
     resp.rawBody = ""
 
     Set SubmitUBLInvoice = resp
@@ -118,7 +118,7 @@ EH:
     resp.Rejected = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
-    resp.errorMessage = Err.Description
+    resp.errorMessage = Err.description
     resp.rawBody = ""
     resp.sefDocumentId = sefDocumentId
 
@@ -194,7 +194,7 @@ EH:
     resp.Success = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
-    resp.errorMessage = Err.Description
+    resp.errorMessage = Err.description
     resp.sefDocumentId = sefDocumentId
 
     Set CancelInvoiceOnSEF = resp
@@ -270,7 +270,7 @@ EH:
     resp.Success = False
     resp.apiStatus = "HTTP_ERROR"
     resp.errorCode = "HTTP_EXCEPTION"
-    resp.errorMessage = Err.Description
+    resp.errorMessage = Err.description
     resp.sefDocumentId = sefDocumentId
 
     Set StornoInvoiceOnSEF = resp
@@ -295,17 +295,16 @@ Private Sub GetSEFClientConfig(ByRef baseUrl As String, _
                   "SEF_API_KEY missing in tblSEFConfig."
     End If
 
-    If InStr(1, baseUrl, "http://", vbTextCompare) <> 1 _
-       And InStr(1, baseUrl, "https://", vbTextCompare) <> 1 Then
+    If LCase$(Left$(baseUrl, 8)) <> "https://" Then
         Err.Raise ERR_SEF_CONFIG, sourceName, _
-                  "SEF_BASE_URL must start with http:// or https://."
+              "SEF_BASE_URL must start with https://. Plain HTTP is not allowed for SEF."
     End If
 
     Exit Sub
 
 EH:
     LogErr "modSEFClient.GetSEFClientConfig"
-    Err.Raise Err.Number, sourceName, Err.Description
+    Err.Raise Err.Number, sourceName, Err.description
 End Sub
 
 Private Function CreateSEFHttpRequest() As Object
@@ -324,7 +323,7 @@ Private Function CreateSEFHttpRequest() As Object
 
 EH:
     LogErr "modSEFClient.CreateSEFHttpRequest"
-    Err.Raise Err.Number, "modSEFClient.CreateSEFHttpRequest", Err.Description
+    Err.Raise Err.Number, "modSEFClient.CreateSEFHttpRequest", Err.description
 End Function
 
 Private Sub ApplySEFHeaders(ByVal http As Object, _
@@ -354,7 +353,7 @@ Private Sub ApplySEFHeaders(ByVal http As Object, _
 
 EH:
     LogErr "modSEFClient.ApplySEFHeaders"
-    Err.Raise Err.Number, "modSEFClient.ApplySEFHeaders", Err.Description
+    Err.Raise Err.Number, "modSEFClient.ApplySEFHeaders", Err.description
 End Sub
 
 Private Function IsSEFDebugEnabled() As Boolean
@@ -768,17 +767,6 @@ Private Function ExtractJsonBoolean(ByVal json As String, _
     End If
 End Function
 
-Private Function JsonEscape(ByVal s As String) As String
-    Dim t As String
-    t = s
-    t = Replace(t, "\", "\\")
-    t = Replace(t, """", "\""")
-    t = Replace(t, vbCrLf, "\n")
-    t = Replace(t, vbCr, "\n")
-    t = Replace(t, vbLf, "\n")
-    JsonEscape = t
-End Function
-
 Private Function FirstNonEmpty(ParamArray values() As Variant) As String
     
     Dim i As Long
@@ -791,30 +779,6 @@ Private Function FirstNonEmpty(ParamArray values() As Variant) As String
     Next i
     
     FirstNonEmpty = ""
-End Function
-
-Private Function UrlEncode(ByVal s As String) As String
-    
-    Dim i As Long
-    Dim ch As String
-    Dim code As Long
-    Dim result As String
-    
-    result = ""
-    
-    For i = 1 To Len(s)
-        ch = Mid$(s, i, 1)
-        code = Asc(ch)
-        
-        Select Case code
-            Case 48 To 57, 65 To 90, 97 To 122
-                result = result & ch
-            Case Else
-                result = result & "%" & Right$("0" & Hex$(code), 2)
-        End Select
-    Next i
-    
-    UrlEncode = result
 End Function
 
 Private Function ExtractTagValue(ByVal xml As String, ByVal tagName As String) As String
@@ -867,7 +831,7 @@ Private Function GetJsonNumericIdLiteral(ByVal rawID As String, _
 
 EH:
     LogErr "modSEFClient.GetJsonNumericIdLiteral"
-    Err.Raise Err.Number, sourceName, Err.Description
+    Err.Raise Err.Number, sourceName, Err.description
 End Function
 
 
@@ -921,5 +885,25 @@ Public Sub Test_SubmitUBLInvoice()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
+End Sub
+
+Public Sub RunSEFClientParserSmokeSuite()
+    Dim failed As Long
+
+    If ExtractJsonString("{""message"":""OK""}", "message") <> "OK" Then failed = failed + 1
+    If ExtractJsonNumberOrStringAsString("{""InvoiceId"":12345}", "InvoiceId") <> "12345" Then failed = failed + 1
+    If ExtractJsonNumberOrStringAsString("{""InvoiceId"":""12345""}", "InvoiceId") <> "12345" Then failed = failed + 1
+    If ExtractJsonBoolean("{""accepted"": true}", "accepted", False) <> True Then failed = failed + 1
+    If ExtractJsonBoolean("{""accepted"": false}", "accepted", True) <> False Then failed = failed + 1
+
+    ' Known weakness documentation: escaped strings are not fully decoded by manual parser.
+    Debug.Print "Escaped message parser result: "; ExtractJsonString("{""message"":""A \""quoted\"" value""}", "message")
+
+    If failed > 0 Then
+        Err.Raise ERR_SEF_VALIDATION, "RunSEFClientParserSmokeSuite", _
+                  "SEF client parser smoke failed: " & failed
+    End If
+
+    Debug.Print "RunSEFClientParserSmokeSuite PASS"
 End Sub
