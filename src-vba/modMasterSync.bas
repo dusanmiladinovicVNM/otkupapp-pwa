@@ -184,6 +184,7 @@ Public Sub ImportOtkupFromPWA_TX()
     End If
 
     tx.CommitTx
+
     MsgBox "PWA uvoz završen i potvrden.", vbInformation, APP_NAME
     Exit Sub
 
@@ -474,12 +475,12 @@ Private Function FindOTKSheets(ByVal folderID As String, _
 
     Do
         url = "https://www.googleapis.com/drive/v3/files" & _
-              "?q=" & UrlEncodeGoogle(query) & _
+              "?q=" & UrlEncode(query) & _
               "&fields=nextPageToken,files(id,name)" & _
               "&pageSize=100"
 
         If Len(nextPageToken) > 0 Then
-            url = url & "&pageToken=" & UrlEncodeGoogle(nextPageToken)
+            url = url & "&pageToken=" & UrlEncode(nextPageToken)
         End If
 
         Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
@@ -1148,32 +1149,6 @@ Private Function Nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "")
     End If
 End Function
 
-Private Function JsonEscapeGoogle(ByVal s As String) As String
-    s = Replace(s, "\", "\\")
-    s = Replace(s, """", "\""")
-    s = Replace(s, vbCrLf, "\n")
-    s = Replace(s, vbCr, "\n")
-    s = Replace(s, vbLf, "\n")
-    JsonEscapeGoogle = s
-End Function
-
-Private Function UrlEncodeGoogle(ByVal s As String) As String
-    Dim i As Long, ch As String, code As Long, result As String
-    
-    For i = 1 To Len(s)
-        ch = Mid$(s, i, 1)
-        code = Asc(ch)
-        Select Case code
-            Case 48 To 57, 65 To 90, 97 To 122, 45, 46, 95, 126
-                result = result & ch
-            Case Else
-                result = result & "%" & Right$("0" & Hex$(code), 2)
-        End Select
-    Next i
-    
-    UrlEncodeGoogle = result
-End Function
-
 
 ' ============================================================
 ' modMasterSync — ZBIRNA IMPORT (dodati u postojeci modMasterSync)
@@ -1258,6 +1233,7 @@ Public Sub ImportZbirneFromPWA_TX()
     Call ImportZbirneFromPWA
     
     tx.CommitTx
+
     Exit Sub
 
 EH:
@@ -1286,7 +1262,7 @@ Private Sub FindVOZSheets(ByVal folderID As String, _
             " and '" & folderID & "' in parents and trashed=false"
     
     url = "https://www.googleapis.com/drive/v3/files" & _
-          "?q=" & UrlEncodeGoogle(query) & _
+          "?q=" & UrlEncode(query) & _
           "&fields=files(id,name)" & _
           "&pageSize=100"
     
@@ -1724,20 +1700,20 @@ Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
         
         ' Kolona F — SyncStatus
         body = body & "{""range"":""Sheet1!F" & CStr(update(0)) & """," & _
-               """values"":[[""" & JsonEscapeGoogle(CStr(update(1))) & """]]}"
+               """values"":[[""" & JsonEscape(CStr(update(1))) & """]]}"
         
         ' Kolona B — ServerRecordID (2. kolona = B)
         If UBound(update) >= 2 Then
             If Len(CStr(update(2))) > 0 Then
                 body = body & ",{""range"":""Sheet1!B" & CStr(update(0)) & """," & _
-                       """values"":[[""" & JsonEscapeGoogle(CStr(update(2))) & """]]}"
+                       """values"":[[""" & JsonEscape(CStr(update(2))) & """]]}"
             End If
         End If
         
         If UBound(update) >= 2 Then
             If Len(CStr(update(2))) > 0 Then
                 body = body & ",{""range"":""Sheet1!T" & CStr(update(0)) & """," & _
-                       """values"":[[""" & JsonEscapeGoogle(CStr(update(2))) & """]]}"
+                       """values"":[[""" & JsonEscape(CStr(update(2))) & """]]}"
             End If
         End If
     Next i
