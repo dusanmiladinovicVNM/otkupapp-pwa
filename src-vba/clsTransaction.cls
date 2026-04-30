@@ -59,8 +59,20 @@ End Sub
 
 Public Sub CommitTx()
     If Not mActive Then Exit Sub
+    
+    ' Capture snapshot summary BEFORE Cleanup destroys mSnapshots reference,
+    ' so AutoSave log gets a meaningful source name.
+    Dim sourceName As String
+    sourceName = BuildAutoSaveSourceName()
+    
     Cleanup
     mActive = False
+    
+    ' AR-002: AutoSave after successful TX commit.
+    ' modJournal.AutoSaveAfterCommit handles debounce, ReadOnly check,
+    ' DisplayAlerts suppression and best-effort error handling.
+    ' Failure NEVER propagates here - the TX is already committed.
+    Call AutoSaveAfterCommit(sourceName)
 End Sub
 
 Public Sub RollbackTx()
@@ -129,3 +141,48 @@ Private Sub RestoreTable(ByVal tableName As String, ByVal snap As Variant)
     
     lo.DataBodyRange.Value2 = snapData
 End Sub
+
+Private Function BuildAutoSaveSourceName() As String
+    ' Builds a source identifier for the AutoSave log line that lists
+    ' the tables snapshotted in this transaction. Useful for post-mortem
+    ' investigation when something goes wrong.
+    '
+    ' Example output:
+    '   "clsTransaction[tblOtkup,tblNovac,tblAmbalaza]"
+    '
+    ' Failure to build a name must not block save - returns generic fallback.
+    
+    On Error GoTo Fallback
+    
+    If mSnapshots Is Nothing Then
+        BuildAutoSaveSourceName = "clsTransaction[no-snapshots]"
+        Exit Function
+    End If
+    
+    If mSnapshots.count = 0 Then
+        BuildAutoSaveSourceName = "clsTransaction[empty]"
+        Exit Function
+    End If
+    
+    Dim names As String
+    Dim k As Variant
+    Dim count As Long
+    count = 0
+    
+    For Each k In mSnapshots.keys
+        If Len(names) > 0 Then names = names & ","
+        names = names & CStr(k)
+        count = count + 1
+        ' Cap at 10 table names to keep log line readable.
+        If count >= 10 Then
+            names = names & ",..."
+            Exit For
+        End If
+    Next k
+    
+    BuildAutoSaveSourceName = "clsTransaction[" & names & "]"
+    Exit Function
+    
+Fallback:
+    BuildAutoSaveSourceName = "clsTransaction[unknown]"
+End Function
