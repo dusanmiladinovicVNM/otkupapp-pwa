@@ -22,19 +22,8 @@ Private dragOffsetY As Double
 
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
+Private mActiveContent As Object
+Private Const CONTENT_PAD As Single = 0
 
 Private Sub UserForm_Initialize()
     On Error GoTo EH
@@ -53,17 +42,13 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmOtkupAPP.UserForm_Initialize"
-    MsgBox "Greška pri pokretanju glavnog ekrana: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri pokretanju glavnog ekrana: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
 
     Dim warnText As String
     warnText = CheckVerwaisteDokumente()
@@ -176,6 +161,7 @@ Private Sub SetupShellResponsive()
     lblCardSummary.Height = summaryH
 
     LayoutSidebarButtons
+    FitActiveContent
 End Sub
 
 Private Sub LayoutSidebarButtons()
@@ -239,7 +225,7 @@ Private Sub SetupHeader()
         .caption = ""
         .foreColor = TXT_LIGHT
         .BackStyle = fmBackStyleTransparent
-        .Font.Name = "Segoe UI Semibold"
+        .Font.name = "Segoe UI Semibold"
         .Font.Size = 14
         .Left = 18
         .Top = 10
@@ -255,7 +241,7 @@ Private Sub SetupHeader()
         .Height = 28
         .BackColor = BTN_ACTIVE
         .foreColor = vbWhite
-        .Font.Name = "Segoe UI Semibold"
+        .Font.name = "Segoe UI Semibold"
         .Font.Size = 9
         .TakeFocusOnClick = False
     End With
@@ -265,7 +251,7 @@ Private Sub SetupHeader()
         .foreColor = TXT_MUTED
         .BackStyle = fmBackStyleTransparent
         .TextAlign = fmTextAlignCenter
-        .Font.Name = "Segoe UI Symbol"
+        .Font.name = "Segoe UI Symbol"
         .Font.Size = 13
         .Left = Me.InsideWidth - 34
         .Top = 12
@@ -347,7 +333,7 @@ Private Sub StyleNavButton(btn As MSForms.CommandButton, txt As String, topPos A
         .Height = 34
         .BackColor = BTN_BG
         .foreColor = TXT_LIGHT
-        .Font.Name = "Segoe UI"
+        .Font.name = "Segoe UI"
         .Font.Size = 10
         .Font.Bold = False
         .TakeFocusOnClick = False
@@ -377,7 +363,7 @@ Private Sub SetupCards()
         .Height = 370
         .BackStyle = fmBackStyleTransparent
         .foreColor = RGB(255, 120, 120)
-        .Font.Name = "Segoe UI"
+        .Font.name = "Segoe UI"
         .Font.Size = 10
         .Font.Bold = True
         .ZOrder 0   ' bring to front
@@ -480,22 +466,19 @@ End Sub
 Private Sub btnBlocks_Click()
     HighlightActive btnBlocks
     lblStatus.caption = "Sekcija: Otkupni blokovi"
-    Me.Hide
-    frmOtkup.Show
+    OpenContentForm frmOtkup, btnBlocks, "Otkupni blokovi"
 End Sub
 
 Private Sub btnPurchase_Click()
     HighlightActive btnPurchase
     lblStatus.caption = "Sekcija: Otkup i prodaja"
-    Me.Hide
-    frmDokumenta.Show
+    OpenContentForm frmDokumenta, btnPurchase, "Otkup i prodaja"
 End Sub
 
 Private Sub btnAgro_Click()
     HighlightActive btnAgro
     lblStatus.caption = "Sekcija: Agrohemija"
-    Me.Hide
-    frmAgrohemija.Show
+    OpenContentForm frmAgrohemija, btnAgro, "Agrohemija"
 End Sub
 
 Private Sub btnReports_Click()
@@ -522,7 +505,7 @@ Private Sub btnBanka_Click()
     HighlightActive btnBanka
 
     Me.MousePointer = fmMousePointerHourGlass
-    btnBanka.Enabled = False
+    btnBanka.enabled = False
 
     lblStatus.Visible = True
     lblStatus.caption = "Uvozim nove bankovne izvode..."
@@ -538,13 +521,13 @@ Private Sub btnBanka_Click()
     Me.Show
 
 CleanExit:
-    btnBanka.Enabled = True
+    btnBanka.enabled = True
     Me.MousePointer = oldPointer
     Exit Sub
 
 EH:
     Dim errDesc As String
-    errDesc = Err.Description
+    errDesc = Err.description
 
     LogErr "frmOtkupAPP.btnBanka_Click"
 
@@ -614,7 +597,7 @@ EH:
     lblStatus.foreColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "Greška pri snimanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri snimanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnExit_Click()
@@ -639,7 +622,7 @@ EH:
     Application.DisplayAlerts = True
     On Error GoTo 0
 
-    MsgBox "Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: " & Err.Description, vbExclamation, APP_NAME
+    MsgBox "Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub btnMaticni_Click()
@@ -653,7 +636,7 @@ Private Sub btnMaticni_Click()
 
 EH:
     LogErr "frmOtkupAPP.btnMaticni_Click"
-    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub OpenMaticniForm()
@@ -672,7 +655,7 @@ Public Sub OpenMaticniForm()
 
 EH:
     LogErr "frmOtkupAPP.OpenMaticniForm"
-    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' =========================
@@ -736,4 +719,95 @@ End Sub
 
 Private Sub btnMaticni_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     btnMaticni.BackColor = BTN_HOVER
+End Sub
+
+Private Sub CloseActiveContent()
+    On Error Resume Next
+
+    If Not mActiveContent Is Nothing Then
+        Unload mActiveContent
+    End If
+
+    Set mActiveContent = Nothing
+
+    On Error GoTo 0
+End Sub
+
+Private Sub FitActiveContent()
+    On Error GoTo EH
+
+    If mActiveContent Is Nothing Then Exit Sub
+
+    With mActiveContent
+        .StartUpPosition = 0
+
+        ' Poravnanje sa desnim content delom
+        .Left = Me.Left + lblCardAlerts.Left
+        .Top = Me.Top + fraSidebar.Top
+
+        ' Pokriva i lblCardAlerts i lblCardSummary,
+        ' i ravna se gore/dole sa sidebarom
+        .Width = lblCardAlerts.Width
+        .Height = fraSidebar.Height
+    End With
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.FitActiveContent"
+End Sub
+
+Private Sub OpenContentForm(ByVal contentForm As Object, _
+                            ByVal activeBtn As MSForms.CommandButton, _
+                            ByVal sectionTitle As String)
+    On Error GoTo EH
+
+    CloseActiveContent
+
+    HighlightActive activeBtn
+
+    lblStatus.Visible = False
+    lblCardAlerts.Visible = False
+    lblCardSummary.Visible = False
+
+    Set mActiveContent = contentForm
+
+    FitActiveContent
+
+    mActiveContent.Show vbModeless
+
+    FitActiveContent
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.OpenContentForm"
+
+    lblStatus.Visible = True
+    lblStatus.caption = "Greška pri otvaranju sekcije: " & sectionTitle
+    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.Font.Bold = True
+
+    MsgBox "Greška pri otvaranju sekcije '" & sectionTitle & "': " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Public Sub ReturnToDashboard(Optional ByVal statusText As String = "")
+    On Error Resume Next
+
+    Set mActiveContent = Nothing
+
+    lblCardAlerts.Visible = True
+    lblCardSummary.Visible = True
+    lblStatus.Visible = True
+
+    If Len(statusText) > 0 Then
+        lblStatus.caption = statusText
+    Else
+        lblStatus.caption = ""
+    End If
+
+    lblStatus.foreColor = RGB(220, 220, 220)
+    lblStatus.Font.Bold = False
+
+    On Error GoTo 0
 End Sub
