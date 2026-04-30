@@ -64,7 +64,7 @@ Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")
     Exit Sub
 
 EH:
-    LogFatal "RunSEFOfflineSuite", Err.Number, Err.Description
+    LogFatal "RunSEFOfflineSuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -93,7 +93,7 @@ Public Sub RunSEFLiveSendSuite(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogFatal "RunSEFLiveSendSuite", Err.Number, Err.Description
+    LogFatal "RunSEFLiveSendSuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -120,7 +120,7 @@ Public Sub RunSEFRefreshIdempotencySuite(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogFatal "RunSEFRefreshIdempotencySuite", Err.Number, Err.Description
+    LogFatal "RunSEFRefreshIdempotencySuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -147,7 +147,7 @@ Public Sub RunSEFRecoverySuite(ByVal stuckFakturaID As String)
     Exit Sub
 
 EH:
-    LogFatal "RunSEFRecoverySuite", Err.Number, Err.Description
+    LogFatal "RunSEFRecoverySuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -168,7 +168,7 @@ Public Sub RunSEFBatchMaintenanceSmoke()
     Exit Sub
 
 EH:
-    LogFatal "RunSEFBatchMaintenanceSmoke", Err.Number, Err.Description
+    LogFatal "RunSEFBatchMaintenanceSmoke", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -187,7 +187,7 @@ Public Sub RunSEFStateTransitionSuite()
     Exit Sub
 
 EH:
-    LogFatal "RunSEFStateTransitionSuite", Err.Number, Err.Description
+    LogFatal "RunSEFStateTransitionSuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -233,7 +233,7 @@ Private Sub Test_SEFConfigLooksUsable()
     Exit Sub
 
 EH:
-    LogFail "SEF config looks usable", Err.Description
+    LogFail "SEF config looks usable", Err.description
 End Sub
 
 Private Sub Test_BuildDtoAndUBL(ByVal fakturaID As String)
@@ -265,14 +265,14 @@ Private Sub Test_BuildDtoAndUBL(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    If InStr(1, Err.Description, "DeliveryDate must not be later than InvoiceDate", vbTextCompare) > 0 Then
+    If InStr(1, Err.description, "DeliveryDate must not be later than InvoiceDate", vbTextCompare) > 0 Then
         LogSkip "Build DTO and UBL for " & fakturaID, _
-                "Local SEF validation blocked invalid dates: " & Err.Description
+                "Local SEF validation blocked invalid dates: " & Err.description
     Else
         LogFail "Build DTO and UBL for " & fakturaID, _
                 "Err.Number=" & CStr(Err.Number) & _
-                " Source=" & Err.Source & _
-                " Description=" & Err.Description
+                " Source=" & Err.SOURCE & _
+                " Description=" & Err.description
     End If
 End Sub
 
@@ -316,7 +316,7 @@ Private Sub Test_PersistenceReadHelpers(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogFail "Persistence read helpers for " & fakturaID, Err.Description
+    LogFail "Persistence read helpers for " & fakturaID, Err.description
 End Sub
 
 Private Sub Test_ValidateFakturaForSEF_DoesNotCrash(ByVal fakturaID As String)
@@ -329,7 +329,7 @@ Private Sub Test_ValidateFakturaForSEF_DoesNotCrash(ByVal fakturaID As String)
 EH:
     ' This can be an expected business validation failure if the invoice is
     ' already sent/accepted/rejected. It is still useful to record.
-    LogSkip "ValidateFakturaForSEF for " & fakturaID, Err.Description
+    LogSkip "ValidateFakturaForSEF for " & fakturaID, Err.description
 End Sub
 
 Private Sub Test_SEFAllowedTransitions()
@@ -393,8 +393,8 @@ Private Sub AssertTransitionAllowed(ByVal oldState As String, _
 EH:
     LogFail "Transition should be allowed: " & oldState & " -> " & newState, _
             "Err.Number=" & CStr(Err.Number) & _
-            " | Source=" & Err.Source & _
-            " | Description=" & Err.Description
+            " | Source=" & Err.SOURCE & _
+            " | Description=" & Err.description
 End Sub
 
 Private Sub AssertTransitionBlocked(ByVal oldState As String, _
@@ -508,14 +508,14 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
     End Select
 
 EH:
-    If InStr(1, Err.Description, "DeliveryDate must not be later than InvoiceDate", vbTextCompare) > 0 Then
+    If InStr(1, Err.description, "DeliveryDate must not be later than InvoiceDate", vbTextCompare) > 0 Then
         LogSkip "Live send + refresh for " & fakturaID, _
-                "Local SEF validation blocked invalid dates: " & Err.Description
+                "Local SEF validation blocked invalid dates: " & Err.description
     Else
         LogFail "Live send + refresh for " & fakturaID, _
                 "Err.Number=" & CStr(Err.Number) & _
-                " | Source=" & Err.Source & _
-                " | Description=" & Err.Description
+                " | Source=" & Err.SOURCE & _
+                " | Description=" & Err.description
     End If
 End Sub
 
@@ -566,7 +566,7 @@ Private Sub Test_RefreshTwiceDoesNotBreakState(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogFail "Refresh twice for " & fakturaID, Err.Description
+    LogFail "Refresh twice for " & fakturaID, Err.description
 End Sub
 
 Private Sub Test_RecoverStuckSendingInvoice(ByVal fakturaID As String)
@@ -594,7 +594,7 @@ Private Sub Test_RecoverStuckSendingInvoice(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogFail "Recover stuck SEF_SENDING for " & fakturaID, Err.Description
+    LogFail "Recover stuck SEF_SENDING for " & fakturaID, Err.description
 End Sub
 
 Private Sub Test_BatchRefreshPendingDoesNotCrash()
@@ -605,7 +605,7 @@ Private Sub Test_BatchRefreshPendingDoesNotCrash()
     Exit Sub
 
 EH:
-    LogFail "RefreshPendingOutboundInvoices_TX", Err.Description
+    LogFail "RefreshPendingOutboundInvoices_TX", Err.description
 End Sub
 
 Private Sub Test_BatchRecoverStuckDoesNotCrash()
@@ -616,7 +616,7 @@ Private Sub Test_BatchRecoverStuckDoesNotCrash()
     Exit Sub
 
 EH:
-    LogFail "RecoverAllStuckSEFSendingInvoices", Err.Description
+    LogFail "RecoverAllStuckSEFSendingInvoices", Err.description
 End Sub
 
 ' ============================================================
@@ -648,7 +648,7 @@ Private Function FindFirstFakturaID() As String
     Exit Function
 
 EH:
-    LogFail "FindFirstFakturaID", Err.Description
+    LogFail "FindFirstFakturaID", Err.description
 End Function
 
 Private Sub RequireLiveSEFTestsAllowed(ByVal sourceName As String)
@@ -681,7 +681,7 @@ Private Sub RequireLiveSEFTestsAllowed(ByVal sourceName As String)
 
 EH:
     LogErr "modSEFTests.RequireLiveSEFTestsAllowed"
-    Err.Raise Err.Number, sourceName, Err.Description
+    Err.Raise Err.Number, sourceName, Err.description
 End Sub
 
 Private Function IsLikelyProductionSEF(ByVal envName As String, ByVal baseUrl As String) As Boolean
@@ -830,7 +830,7 @@ Private Sub InitSEFTestLog()
 
     If ws Is Nothing Then
         Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
-        ws.Name = TEST_LOG_SHEET
+        ws.name = TEST_LOG_SHEET
         ws.Range("A1:F1").value = Array("Timestamp", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
     End If
@@ -874,7 +874,7 @@ Private Sub LogSEFFakturaSnapshot(ByVal fakturaID As String, ByVal labelText As 
     Exit Sub
 
 EH:
-    LogInfo labelText & " Faktura snapshot failed: " & Err.Description
+    LogInfo labelText & " Faktura snapshot failed: " & Err.description
 End Sub
 
 Private Sub LogSEFSubmissionSnapshot(ByVal submissionID As String, ByVal labelText As String)
@@ -896,7 +896,7 @@ Private Sub LogSEFSubmissionSnapshot(ByVal submissionID As String, ByVal labelTe
     Exit Sub
 
 EH:
-    LogInfo labelText & " Submission snapshot failed: " & Err.Description
+    LogInfo labelText & " Submission snapshot failed: " & Err.description
 End Sub
 
 ' ============================================================
@@ -926,7 +926,7 @@ Public Sub RunSEFCancelLiveSuite(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    LogFatal "RunSEFCancelLiveSuite", Err.Number, Err.Description
+    LogFatal "RunSEFCancelLiveSuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -958,7 +958,7 @@ Public Sub RunSEFStornoLiveSuite(ByVal fakturaID As String, _
     Exit Sub
 
 EH:
-    LogFatal "RunSEFStornoLiveSuite", Err.Number, Err.Description
+    LogFatal "RunSEFStornoLiveSuite", Err.Number, Err.description
     FinishSuite
 End Sub
 
@@ -1046,16 +1046,16 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    If IsExpectedSEFBusinessBlock(Err.Description) Then
+    If IsExpectedSEFBusinessBlock(Err.description) Then
         LogSkip "Live cancel blocked by SEF/service rule for " & fakturaID, _
                 "Err.Number=" & CStr(Err.Number) & _
-                " Source=" & Err.Source & _
-                " Description=" & Err.Description
+                " Source=" & Err.SOURCE & _
+                " Description=" & Err.description
     Else
         LogFail "Live cancel for " & fakturaID, _
                 "Err.Number=" & CStr(Err.Number) & _
-                " Source=" & Err.Source & _
-                " Description=" & Err.Description
+                " Source=" & Err.SOURCE & _
+                " Description=" & Err.description
     End If
 End Sub
 
@@ -1148,16 +1148,16 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
     Exit Sub
 
 EH:
-    If IsExpectedSEFBusinessBlock(Err.Description) Then
+    If IsExpectedSEFBusinessBlock(Err.description) Then
         LogSkip "Live storno blocked by SEF/service rule for " & fakturaID, _
                 "Err.Number=" & CStr(Err.Number) & _
-                " Source=" & Err.Source & _
-                " Description=" & Err.Description
+                " Source=" & Err.SOURCE & _
+                " Description=" & Err.description
     Else
         LogFail "Live storno for " & fakturaID, _
                 "Err.Number=" & CStr(Err.Number) & _
-                " Source=" & Err.Source & _
-                " Description=" & Err.Description
+                " Source=" & Err.SOURCE & _
+                " Description=" & Err.description
     End If
 End Sub
 
@@ -1240,3 +1240,99 @@ Private Function IsCancelFinalStatus(ByVal sefStatus As String) As Boolean
             IsCancelFinalStatus = False
     End Select
 End Function
+
+' ============================================================
+' PATCH 5 — RunHttpUtilsSmokeSuite
+' Dodaje se u modSEFTests (postojeci modul, postojeca konvencija)
+' ============================================================
+'
+' Lokacija: dodaj na kraj modSEFTests, ispred sekcije "DESTRUCTIVE LIVE TESTS".
+' Ne pravi novi test modul - postojeca konvencija nalaze da SEF testovi idu u modSEFTests.
+'
+' Pozivaj sa: ?RunHttpUtilsSmokeSuite
+' Ocekivano: PASS=18 FAIL=0
+'
+' ============================================================
+
+Public Sub RunHttpUtilsSmokeSuite()
+    On Error GoTo EH
+
+    ResetSEFCounters
+    InitSEFTestLog
+
+    StartSuite "HTTP UTILS SMOKE SUITE (UrlEncode + JsonEscape)"
+
+    ' --- UrlEncode: ASCII passthrough
+    AssertEquals "hello-world", UrlEncode("hello-world"), _
+                 "UrlEncode ASCII passthrough"
+    
+    ' --- UrlEncode: reserved characters
+    AssertEquals "a%20b", UrlEncode("a b"), _
+                 "UrlEncode space -> %20"
+    AssertEquals "a%2Fb", UrlEncode("a/b"), _
+                 "UrlEncode slash -> %2F"
+    
+    ' --- UrlEncode: Serbian diacritics (the whole point of this rewrite)
+    ' c (U+010D) -> UTF-8 0xC4 0x8D
+    AssertEquals "%C4%8D", UrlEncode(ChrW(&H10D)), _
+                 "UrlEncode c (U+010D)"
+    
+    ' c (U+0107) -> UTF-8 0xC4 0x87
+    AssertEquals "%C4%87", UrlEncode(ChrW(&H107)), _
+                 "UrlEncode c (U+0107)"
+    
+    ' s (U+0161) -> UTF-8 0xC5 0xA1
+    AssertEquals "%C5%A1", UrlEncode(ChrW(&H161)), _
+                 "UrlEncode s (U+0161)"
+    
+    ' z (U+017E) -> UTF-8 0xC5 0xBE
+    AssertEquals "%C5%BE", UrlEncode(ChrW(&H17E)), _
+                 "UrlEncode z (U+017E)"
+    
+    ' dj (U+0111) -> UTF-8 0xC4 0x91
+    AssertEquals "%C4%91", UrlEncode(ChrW(&H111)), _
+                 "UrlEncode dj (U+0111)"
+    
+    ' Dj (U+0110) -> UTF-8 0xC4 0x90
+    AssertEquals "%C4%90", UrlEncode(ChrW(&H110)), _
+                 "UrlEncode Dj (U+0110)"
+    
+    ' --- UrlEncode: real-world combination
+    AssertEquals "%C4%90or%C4%91evi%C4%87", _
+                 UrlEncode(ChrW(&H110) & "or" & ChrW(&H111) & "evi" & ChrW(&H107)), _
+                 "UrlEncode real surname Djordjevic"
+    
+    ' --- UrlEncode: RFC 3986 unreserved must NOT encode
+    AssertEquals "a-b", UrlEncode("a-b"), "UrlEncode hyphen passthrough"
+    AssertEquals "a.b", UrlEncode("a.b"), "UrlEncode period passthrough"
+    AssertEquals "a_b", UrlEncode("a_b"), "UrlEncode underscore passthrough"
+    AssertEquals "a~b", UrlEncode("a~b"), "UrlEncode tilde passthrough"
+    
+    ' --- UrlEncode: edge cases
+    AssertEquals "", UrlEncode(""), "UrlEncode empty string"
+    
+    ' --- UrlEncode: stability under repeated calls (no shared mutable state)
+    AssertEquals "%C5%A0abac", UrlEncode(ChrW(&H160) & "abac"), _
+                 "UrlEncode Sabac repeat 1"
+    AssertEquals "%C5%A0abac", UrlEncode(ChrW(&H160) & "abac"), _
+                 "UrlEncode Sabac repeat 2"
+    
+    ' --- JsonEscape: passthrough
+    AssertEquals "hello", JsonEscape("hello"), _
+                 "JsonEscape ASCII passthrough"
+    
+    ' --- JsonEscape: backslash and quote
+    AssertEquals "He said \""hi\""", JsonEscape("He said ""hi"""), _
+                 "JsonEscape double quote"
+    AssertEquals "C:\\path", JsonEscape("C:\path"), _
+                 "JsonEscape backslash"
+    
+    FinishSuite
+    Exit Sub
+
+EH:
+    LogFatal "RunHttpUtilsSmokeSuite", Err.Number, Err.description
+    FinishSuite
+End Sub
+
+
