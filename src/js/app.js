@@ -968,21 +968,15 @@ async function runRoleSync() {
 
 async function syncQueueSafe() {
     const runtime = getAppRuntime();
-    
+
     if (!navigator.onLine) return;
     if (CONFIG.USER_ROLE === 'Management') return;
     if (runtime.syncInFlight) return;
-
-    runtime.syncInFlight = true;
-    updateSyncBadge();
 
     try {
         await runRoleSync();
     } catch (err) {
         console.error('runRoleSync failed:', err);
-    } finally {
-        runtime.syncInFlight = false;
-        updateSyncBadge();
     }
 }
 
