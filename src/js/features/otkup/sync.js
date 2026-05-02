@@ -1,193 +1,36 @@
 // ============================================================
-// SYNC
+// OTKUPAC SYNC
+// Thin wrapper around the shared sync engine (utils/sync-engine.js).
 // ============================================================
 
-let otkupSyncInFlight = false;
-
-function buildOtkupSyncResult(overrides) {
-    return Object.assign({
-        ok: false,
-        role: 'Otkupac',
-        synced: 0,
-        failed: 0,
-        results: [],
-        reason: '',
-        code: '',
-        partial: false
-    }, overrides || {});
-}
-
 async function syncQueue() {
-    if (!db) return buildOtkupSyncResult({ reason: 'db-not-ready' });
-    if (!navigator.onLine) return buildOtkupSyncResult({ reason: 'offline' });
+    await updateSyncBadge('syncing');
 
-    if (otkupSyncInFlight) {
-        return buildOtkupSyncResult({ reason: 'already-running' });
-    }
+    const result = await syncStore({
+        storeName: CONFIG.STORE_NAME,
+        action: 'sync',
+        inFlightKey: 'otkupacInFlight',
+        entityIdField: 'otkupacID',
+        successLabel: 'Sinhronizovano'
+    });
 
-    otkupSyncInFlight = true;
-    
-    let pending = [];
+    try { await updateSyncBadge(); } catch (_) {}
+    try { await updateStats(); } catch (_) {}
+    try { await renderQueueList(); } catch (_) {}
 
-    try {
-        pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
-
-        if (!pending.length) {
-            await updateSyncBadge();
-            await updateStats();
-            return buildOtkupSyncResult({
-                ok: true,
-                reason: 'no-pending'
-            });
-        }
-
-        await updateSyncBadge('syncing');
-
-        for (const r of pending) {
-            r.syncStatus = 'syncing';
-            r.syncAttemptAt = new Date().toISOString();
-            await dbPut(db, CONFIG.STORE_NAME, r);
-        }
-
-        const json = await apiPost('sync', {
-            otkupacID: CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID,
-            records: pending
-        });
-
-        if (!json || json.success === false) {
-            const errorMessage = json && json.error ? json.error : 'Sync neuspešan';
-
-            for (const r of pending) {
-                r.syncStatus = 'pending';
-                r.lastSyncError = errorMessage;
-                r.syncAttempts = (r.syncAttempts || 0) + 1;
-                await dbPut(db, CONFIG.STORE_NAME, r);
-            }
-
-            showToast('Sinhronizacija nije uspela', 'error');
-            return buildOtkupSyncResult({
-                failed: pending.length,
-                results: Array.isArray(json && json.results) ? json.results : [],
-                reason: 'server-failed',
-                code: (json && json.code) || ''
-            });
-        }
-
-        if (Array.isArray(json.results)) {
-            const byClientId = new Map(
-                pending.map(r => [r.clientRecordID, r])
-            );
-
-            let syncedCount = 0;
-            let failedCount = 0;
-
-            for (const result of json.results) {
-                const record = byClientId.get(result.clientRecordID);
-                if (!record) continue;
-
-                record.syncAttempts = (record.syncAttempts || 0) + 1;
-
-                if (result.success) {
-                    record.syncStatus = 'synced';
-                    record.lastSyncError = '';
-                    record.syncedAt = new Date().toISOString();
-                    record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
-                    record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
-                    record.lastServerStatus = result.status || 'synced';
-                    syncedCount++;
-                } else {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = result.error || 'Sync stavke neuspešan';
-                    record.lastServerStatus = result.status || 'failed';
-                    failedCount++;
-                }
-
-                await dbPut(db, CONFIG.STORE_NAME, record);
-            }
-
-            for (const record of pending) {
-                const mentioned = json.results.some(x => x.clientRecordID === record.clientRecordID);
-                if (!mentioned) {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = 'Nema potvrde sa servera';
-                    record.syncAttempts = (record.syncAttempts || 0) + 1;
-                    failedCount++;
-                    await dbPut(db, CONFIG.STORE_NAME, record);
-                }
-            }
-
-            if (syncedCount > 0 && failedCount === 0) {
-                showToast('Sinhronizovano: ' + syncedCount, 'success');
-            } else if (syncedCount > 0) {
-                showToast('Sinhronizovano: ' + syncedCount + ', neuspešno: ' + failedCount, 'info');
-            } else {
-                showToast('Nijedna stavka nije sinhronizovana', 'error');
-            }
-
-            return buildOtkupSyncResult({
-                ok: failedCount === 0,
-                synced: syncedCount,
-                failed: failedCount,
-                results: json.results,
-                reason: failedCount === 0 ? '' : 'partial-failure',
-                code: json.code || '',
-                partial: syncedCount > 0 && failedCount > 0
-            });
-        }
-
-        // legacy fallback
-        for (const r of pending) {
-            r.syncStatus = 'synced';
-            r.lastSyncError = '';
-            r.syncedAt = new Date().toISOString();
-            r.syncAttempts = (r.syncAttempts || 0) + 1;
-            await dbPut(db, CONFIG.STORE_NAME, r);
-        }
-
-        showToast('Sinhronizovano: ' + pending.length, 'success');
-        return buildOtkupSyncResult({
-            ok: true,
-            synced: pending.length,
-            reason: 'legacy-success'
-        });
-    } catch (err) {
-        console.error('syncQueue failed:', err);
-
-        for (const r of pending) {
-            try {
-                if (r.syncStatus === 'syncing') {
-                    r.syncStatus = 'pending';
-                    r.lastSyncError = err.message || 'Greška pri sync-u';
-                    r.syncAttempts = (r.syncAttempts || 0) + 1;
-                    await dbPut(db, CONFIG.STORE_NAME, r);
-                }
-            } catch (_) {}
-        }
-
-        showToast('Greška pri sinhronizaciji', 'error');
-        return buildOtkupSyncResult({
-            failed: pending.length || 0,
-            reason: 'exception',
-            code: err && err.name ? err.name : ''
-        });
-    } finally {
-        otkupSyncInFlight = false;
-
-        try { await updateSyncBadge(); } catch (_) {}
-        try { await updateStats(); } catch (_) {}
-        try { await renderQueueList(); } catch (_) {}
-    }
+    return result;
 }
 
 async function syncNow() {
     if (!navigator.onLine) {
         showToast('Nema konekcije', 'error');
-        return buildOtkupSyncResult({ reason: 'offline' });
+        return buildSyncResult({ reason: 'offline' });
     }
 
-    if (otkupSyncInFlight) {
+    const runtimeSync = (window.appRuntime || {}).sync || {};
+    if (runtimeSync.otkupacInFlight) {
         showToast('Sinhronizacija je već u toku', 'info');
-        return buildOtkupSyncResult({ reason: 'already-running' });
+        return buildSyncResult({ reason: 'already-running' });
     }
 
     return await syncQueue();
@@ -223,7 +66,7 @@ async function updateSyncBadge(status) {
     if (!navigator.onLine) {
         setText(badge, 'OFFLINE' + (waitCount > 0 ? ' (' + waitCount + ')' : ''));
         badge.className = 'sync-badge sync-offline';
-    } else if ((syncing?.length || 0) > 0 || otkupSyncInFlight || (window.appRuntime && window.appRuntime.syncInFlight)) {
+    } else if ((syncing?.length || 0) > 0 || isAnySyncInFlight()) {
         setText(badge, 'SYNC...');
         badge.className = 'sync-badge sync-pending';
     } else if (waitCount > 0) {
