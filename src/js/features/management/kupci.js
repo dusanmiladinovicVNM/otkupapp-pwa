@@ -72,10 +72,14 @@ async function toggleFakturaStavke(fakturaID, parentEl) {
         stavke = mgmtData.fakturaStavke.filter(r => String(r.FakturaID) === fakturaID);
     } else {
         div.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Učitavanje...</span>';
-        try {
-            const json = await apiFetch('action=getMgmtFakturaStavke&fakturaID=' + encodeURIComponent(fakturaID));
-            if (json && json.success && json.records) stavke = json.records;
-        } catch (e) {}
+
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getMgmtFakturaStavke&fakturaID=' + encodeURIComponent(fakturaID));
+        }, 'Greška pri učitavanju stavki fakture');
+
+        if (json && json.success && json.records) {
+            stavke = json.records;
+        }
     }
     
     if (stavke.length === 0) { div.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Nema stavki</span>'; return; }
