@@ -21,6 +21,7 @@ const ASSETS = [
     './src/js/utils/format.js',
     './src/js/utils/async.js',
     './src/js/utils/merge.js',
+    './src/js/utils/sync-engine.js',
 
     // Config + State
     './src/js/config.js',
