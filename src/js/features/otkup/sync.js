@@ -2,18 +2,31 @@
 // SYNC
 // ============================================================
 
+let otkupSyncInFlight = false;
+
+function buildOtkupSyncResult(overrides) {
+    return Object.assign({
+        ok: false,
+        role: 'Otkupac',
+        synced: 0,
+        failed: 0,
+        results: [],
+        reason: '',
+        code: '',
+        partial: false
+    }, overrides || {});
+}
+
 async function syncQueue() {
-    if (!db) return { ok: false, reason: 'db-not-ready' };
-    if (!navigator.onLine) return { ok: false, reason: 'offline' };
+    if (!db) return buildOtkupSyncResult({ reason: 'db-not-ready' });
+    if (!navigator.onLine) return buildOtkupSyncResult({ reason: 'offline' });
 
-    if (window.appRuntime && window.appRuntime.syncInFlight) {
-        return { ok: false, reason: 'already-running' };
+    if (otkupSyncInFlight) {
+        return buildOtkupSyncResult({ reason: 'already-running' });
     }
 
-    if (window.appRuntime) {
-        window.appRuntime.syncInFlight = true;
-    }
-
+    otkupSyncInFlight = true;
+    
     let pending = [];
 
     try {
@@ -22,7 +35,10 @@ async function syncQueue() {
         if (!pending.length) {
             await updateSyncBadge();
             await updateStats();
-            return { ok: true, synced: 0, failed: 0 };
+            return buildOtkupSyncResult({
+                ok: true,
+                reason: 'no-pending'
+            });
         }
 
         await updateSyncBadge('syncing');
@@ -39,15 +55,22 @@ async function syncQueue() {
         });
 
         if (!json || json.success === false) {
+            const errorMessage = json && json.error ? json.error : 'Sync neuspešan';
+
             for (const r of pending) {
                 r.syncStatus = 'pending';
-                r.lastSyncError = json && json.error ? json.error : 'Sync neuspešan';
+                r.lastSyncError = errorMessage;
                 r.syncAttempts = (r.syncAttempts || 0) + 1;
                 await dbPut(db, CONFIG.STORE_NAME, r);
             }
 
             showToast('Sinhronizacija nije uspela', 'error');
-            return { ok: false, synced: 0, failed: pending.length };
+            return buildOtkupSyncResult({
+                failed: pending.length,
+                results: Array.isArray(json && json.results) ? json.results : [],
+                reason: 'server-failed',
+                code: (json && json.code) || ''
+            });
         }
 
         if (Array.isArray(json.results)) {
@@ -101,7 +124,15 @@ async function syncQueue() {
                 showToast('Nijedna stavka nije sinhronizovana', 'error');
             }
 
-            return { ok: failedCount === 0, synced: syncedCount, failed: failedCount };
+            return buildOtkupSyncResult({
+                ok: failedCount === 0,
+                synced: syncedCount,
+                failed: failedCount,
+                results: json.results,
+                reason: failedCount === 0 ? '' : 'partial-failure',
+                code: json.code || '',
+                partial: syncedCount > 0 && failedCount > 0
+            });
         }
 
         // legacy fallback
@@ -114,7 +145,11 @@ async function syncQueue() {
         }
 
         showToast('Sinhronizovano: ' + pending.length, 'success');
-        return { ok: true, synced: pending.length, failed: 0 };
+        return buildOtkupSyncResult({
+            ok: true,
+            synced: pending.length,
+            reason: 'legacy-success'
+        });
     } catch (err) {
         console.error('syncQueue failed:', err);
 
@@ -130,11 +165,13 @@ async function syncQueue() {
         }
 
         showToast('Greška pri sinhronizaciji', 'error');
-        return { ok: false, synced: 0, failed: pending.length || 0 };
+        return buildOtkupSyncResult({
+            failed: pending.length || 0,
+            reason: 'exception',
+            code: err && err.name ? err.name : ''
+        });
     } finally {
-        if (window.appRuntime) {
-            window.appRuntime.syncInFlight = false;
-        }
+        otkupSyncInFlight = false;
 
         try { await updateSyncBadge(); } catch (_) {}
         try { await updateStats(); } catch (_) {}
@@ -145,15 +182,15 @@ async function syncQueue() {
 async function syncNow() {
     if (!navigator.onLine) {
         showToast('Nema konekcije', 'error');
-        return;
+        return buildOtkupSyncResult({ reason: 'offline' });
     }
 
-    if (window.appRuntime && window.appRuntime.syncInFlight) {
+    if (otkupSyncInFlight) {
         showToast('Sinhronizacija je već u toku', 'info');
-        return;
+        return buildOtkupSyncResult({ reason: 'already-running' });
     }
 
-    await syncQueue();
+    return await syncQueue();
 }
 
 async function updateSyncBadge(status) {
@@ -186,7 +223,7 @@ async function updateSyncBadge(status) {
     if (!navigator.onLine) {
         setText(badge, 'OFFLINE' + (waitCount > 0 ? ' (' + waitCount + ')' : ''));
         badge.className = 'sync-badge sync-offline';
-    } else if ((syncing?.length || 0) > 0 || (window.appRuntime && window.appRuntime.syncInFlight)) {
+    } else if ((syncing?.length || 0) > 0 || otkupSyncInFlight || (window.appRuntime && window.appRuntime.syncInFlight)) {
         setText(badge, 'SYNC...');
         badge.className = 'sync-badge sync-pending';
     } else if (waitCount > 0) {
