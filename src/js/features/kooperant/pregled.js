@@ -154,9 +154,9 @@ async function buildPregledData() {
             tretmani = await getTretmaniCached(false) || [];
         }
 
-        const todayIso = new Date().toISOString().split('T')[0];
+        const todayIso = getTodayIsoDate();
         const todayRadovi = tretmani.filter(t => {
-            const d = String(t.datum || t.Datum || '').split('T')[0];
+            const d = toIsoDateOnly(t.datum || t.Datum || '');
             return d === todayIso && !t.deleted;
         });
 
@@ -164,7 +164,7 @@ async function buildPregledData() {
 
         const kasneRadove = tretmani.filter(t => {
             const mera = String(t.mera || t.Mera || '');
-            const d = String(t.datum || t.Datum || '').split('T')[0];
+            const d = toIsoDateOnly(t.datum || t.Datum || '');
             return !!mera && d < todayIso && !t.deleted;
         });
 
