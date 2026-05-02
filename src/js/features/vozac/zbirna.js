@@ -376,154 +376,24 @@ async function confirmZbirna() {
     }
 }
 
-function getVozacRuntime() {
-    return window.appRuntime || {};
-}
-
 async function syncZbirne() {
-    const runtime = getVozacRuntime();
-    
-    if (!db) return { ok: false, reason: 'db-not-ready' };
-    if (!navigator.onLine) return { ok: false, reason: 'offline' };
-
-    if (runtime.zbirnaSyncInFlight) {
-        return { ok: false, reason: 'already-running' };
-    }
-    runtime.zbirnaSyncInFlight = true;
-
-    let pending = [];
-
-    try {
-        pending = await dbGetByIndex(db, 'zbirne', 'syncStatus', 'pending');
-
-        if (!Array.isArray(pending) || pending.length === 0) {
-            return { ok: true, synced: 0, failed: 0 };
-        }
-
-        for (const record of pending) {
-            record.syncStatus = 'syncing';
-            record.syncAttemptAt = new Date().toISOString();
-            await dbPut(db, 'zbirne', record);
-        }
-
-        const json = await apiPost('syncZbirna', {
-            vozacID: CONFIG.ENTITY_ID,
-            records: pending
-        });
-
-        if (!json || json.success === false) {
-            for (const record of pending) {
-                record.syncStatus = 'pending';
-                record.lastSyncError = json && json.error ? json.error : 'Sync neuspešan';
-                record.lastServerStatus = 'request-failed';
-                record.syncAttempts = (record.syncAttempts || 0) + 1;
-                await dbPut(db, 'zbirne', record);
+    const result = await syncStore({
+        storeName: 'zbirne',
+        action: 'syncZbirna',
+        inFlightKey: 'zbirnaInFlight',
+        entityIdField: 'vozacID',
+        successLabel: 'Zbirna sinhronizovana',
+        onResultRecord: (record, serverResult) => {
+            // Zbirna-specific: backend returns brojZbirne on success
+            if (serverResult.brojZbirne) {
+                record.brojZbirne = serverResult.brojZbirne;
             }
-
-            showToast('Zbirna sync nije uspeo', 'error');
-            return { ok: false, synced: 0, failed: pending.length };
         }
+    });
 
-        if (Array.isArray(json.results)) {
-            const byClientId = new Map(
-                pending.map(r => [r.clientRecordID, r])
-            );
+    try { await loadVozacZbirne(); } catch (_) {}
 
-            const mentionedIds = new Set(
-                json.results.map(x => x.clientRecordID).filter(Boolean)
-            );
-
-            let syncedCount = 0;
-            let failedCount = 0;
-
-            for (const result of json.results) {
-                const record = byClientId.get(result.clientRecordID);
-                if (!record) continue;
-
-                record.syncAttempts = (record.syncAttempts || 0) + 1;
-
-                const isSuccess =
-                    !!result.success ||
-                    result.status === 'synced' ||
-                    result.status === 'duplicate' ||
-                    result.status === 'existing' ||
-                    result.status === 'inserted' ||
-                    result.status === 'updated';
-
-                if (isSuccess) {
-                    record.syncStatus = 'synced';
-                    record.lastSyncError = '';
-                    record.syncedAt = new Date().toISOString();
-                    record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
-                    record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
-                    record.brojZbirne = result.brojZbirne || record.brojZbirne || '';
-                    record.lastServerStatus = result.status || 'synced';
-                    syncedCount++;
-                } else {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = result.error || 'Sync stavke neuspešan';
-                    record.lastServerStatus = result.status || 'failed';
-                    failedCount++;
-                }
-
-                await dbPut(db, 'zbirne', record);
-            }
-
-            for (const record of pending) {
-                if (!mentionedIds.has(record.clientRecordID)) {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = 'Nema potvrde sa servera';
-                    record.lastServerStatus = 'missing-result';
-                    record.syncAttempts = (record.syncAttempts || 0) + 1;
-                    failedCount++;
-                    await dbPut(db, 'zbirne', record);
-                }
-            }
-
-            if (syncedCount > 0 && failedCount === 0) {
-                showToast('Zbirna sinhronizovana: ' + syncedCount, 'success');
-            } else if (syncedCount > 0) {
-                showToast('Zbirna sync: ' + syncedCount + ' uspešno, ' + failedCount + ' neuspešno', 'info');
-            } else {
-                showToast('Zbirne nisu sinhronizovane', 'error');
-            }
-
-            return { ok: failedCount === 0, synced: syncedCount, failed: failedCount };
-        }
-
-        // legacy fallback
-        for (const record of pending) {
-            record.syncStatus = 'synced';
-            record.lastSyncError = '';
-            record.syncedAt = new Date().toISOString();
-            record.lastServerStatus = 'legacy-success';
-            record.syncAttempts = (record.syncAttempts || 0) + 1;
-            await dbPut(db, 'zbirne', record);
-        }
-
-        showToast('Zbirna sinhronizovana', 'success');
-        return { ok: true, synced: pending.length, failed: 0 };
-    } catch (err) {
-        console.error('syncZbirne failed:', err);
-
-        for (const record of pending) {
-            try {
-                if (record.syncStatus === 'syncing') {
-                    record.syncStatus = 'pending';
-                    record.lastSyncError = err.message || 'Greška pri sync-u';
-                    record.lastServerStatus = 'exception';
-                    record.syncAttempts = (record.syncAttempts || 0) + 1;
-                    await dbPut(db, 'zbirne', record);
-                }
-            } catch (_) {}
-        }
-
-        showToast('Greška pri sinhronizaciji zbirnih', 'error');
-        return { ok: false, synced: 0, failed: pending.length || 0 };
-    } finally {
-       runtime.zbirnaSyncInFlight = false;
-        try { await loadVozacZbirne(); } catch (_) {}
-    }
+    return result;
 }
 
 function getConsumedOtkupIdsFromZbirne(zbirne) {
