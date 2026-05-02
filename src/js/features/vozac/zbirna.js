@@ -61,12 +61,15 @@ function renderVozacOtpremnice() {
     const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
     
     const list = document.getElementById('vozacOtpremniceList');
+    if (!list) return;
     if (todayOtkupi.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otpremnica za danas</p>';
-        document.getElementById('btnNovaZbirna').style.display = 'none';
+        const btn = document.getElementById('btnNovaZbirna');
+        if (btn) btn.style.display = 'none';
         return;
     }
-    document.getElementById('btnNovaZbirna').style.display = '';
+    const btn = document.getElementById('btnNovaZbirna');
+    if (btn) btn.style.display = '';
     
     // Group by stanica
     const grouped = {};
@@ -349,17 +352,28 @@ async function confirmZbirna() {
         schemaVersion: 1
     };
 
-    await dbPut(db, 'zbirne', record);
-    showToast('Zbirna kreirana!', 'success');
+    try {
+        await dbPut(db, 'zbirne', record);
+    } catch (err) {
+        console.error('confirmZbirna dbPut failed:', err);
+        showToast('Greška pri čuvanju zbirne', 'error');
+        return;
+    }
 
+    showToast('Zbirna kreirana!', 'success');
     cancelZbirna();
 
     if (navigator.onLine) {
         if (typeof syncZbirne === 'function') {
-            await syncZbirne();
+            try { await syncZbirne(); } catch (_) {}
         }
     }
-    await loadVozacData();
+    
+    try {
+        await loadVozacData();
+    } catch (err) {
+        console.error('confirmZbirna loadVozacData failed:', err);
+    }
 }
 
 function getVozacRuntime() {
