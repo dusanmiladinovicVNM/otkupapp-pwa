@@ -75,9 +75,7 @@ function applyHeaderInfo() {
 }
 
 function setDefaultDates() {
-    const today = typeof getTodayIsoDate === 'function'
-    ? getTodayIsoDate()
-    : new Date().toISOString().slice(0, 10);
+    const today = getTodayIsoDate();
 
     const fldPregledOd = document.getElementById('fldPregledOd');
     const fldPregledDo = document.getElementById('fldPregledDo');
