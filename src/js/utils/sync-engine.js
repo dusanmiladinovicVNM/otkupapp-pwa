@@ -186,35 +186,71 @@
 
             await markPendingAsSyncing(storeName, pending);
 
+            const entityID = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID || '';
+
+            if (!entityID) {
+                await rollbackPendingFromError(
+                    storeName,
+                    pending,
+                    'Nedostaje entityID za sync',
+                    'missing-entity-id'
+                );
+
+                return buildSyncResult({
+                    failed: pending.length,
+                    reason: 'missing-entity-id',
+                    code: 'MISSING_ENTITY_ID'
+                });
+            }
+
             const payload = { records: pending };
-            payload[entityIdField] = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID;
+            payload[entityIdField] = entityID;
 
             const json = await apiPost(action, payload);
 
+            if (!json) {
+                await rollbackPendingFromError(
+                    storeName,
+                    pending,
+                    'Prazan odgovor servera',
+                    'empty-response'
+                );
+
+            toast('Greška pri sinhronizaciji', 'error');
+
+                return buildSyncResult({
+                    failed: pending.length,
+                    reason: 'empty-response'
+                });
+            }
+
             if (isFeatureDisabled(json)) {
                 await rollbackPendingAsFeatureDisabled(storeName, pending);
+
                 return buildSyncResult({
                     reason: 'feature-disabled',
-                    code: (json && json.code) || 'FEATURE_DISABLED'
+                    code: json.code || 'FEATURE_DISABLED'
                 });
             }
 
             if (isAuthError(json)) {
-                await rollbackPendingFromError(storeName, pending, 'Sesija istekla', 'auth-error');
-                return buildSyncResult({ reason: 'auth-error', code: (json && json.code) || 401 });
-            }
+                await rollbackPendingFromError(
+                    storeName,
+                    pending,
+                    'Sesija istekla',
+                    'auth-error'
+                );
 
-            if (!json || json.success === false) {
-                const errorMessage = (json && json.error) || 'Sync neuspešan';
-                await rollbackPendingFromError(storeName, pending, errorMessage, 'request-failed');
-                toast(successLabel + ' nije uspeo', 'error');
                 return buildSyncResult({
                     failed: pending.length,
-                    reason: 'server-failed',
-                    code: (json && json.code) || ''
+                    reason: 'auth-error',
+                    code: json.code || 401
                 });
             }
 
+            // GAS batch contract:
+            // success=false može i dalje imati results[].
+            // Zato results[] mora da se obradi pre generic success=false grane.
             if (Array.isArray(json.results)) {
                 const { syncedCount, failedCount } = await applyServerResults(
                     storeName, pending, json.results, onResultRecord
@@ -233,7 +269,30 @@
                     synced: syncedCount,
                     failed: failedCount,
                     results: json.results,
+                    reason: failedCount > 0
+                        ? (json.code === 'BATCH_FAILED' ? 'batch-failed' : 'partial-failure')
+                        : '',
+                    code: json.code || '',
                     partial: syncedCount > 0 && failedCount > 0
+                });
+            }
+
+            if (json.success === false) {
+                const errorMessage = json.error || 'Sync neuspešan';
+
+                await rollbackPendingFromError(
+                    storeName,
+                    pending,
+                    errorMessage,
+                    'request-failed'
+                );
+
+                toast(successLabel + ' nije uspeo', 'error');
+
+                return buildSyncResult({
+                    failed: pending.length,
+                    reason: 'server-failed',
+                    code: json.code || ''
                 });
             }
 
