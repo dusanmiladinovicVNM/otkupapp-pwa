@@ -153,27 +153,27 @@ function kpParseOpisOtkupa(opis) {
 }
 
 function kpNormalizeTrosakRecord(r) {
+    const rawSyncStatus = r.syncStatus || r.SyncStatus || 'synced';
+
     return {
         clientRecordID: r.clientRecordID || r.ClientRecordID || '',
         createdAtClient: normalizeIso(r.createdAtClient || r.CreatedAtClient),
-        updatedAtClient: normalizeIso(r.updatedAtClient || r.UpdatedAtClient || r.createdAtClient || r.CreatedAtClient),
+        updatedAtClient: normalizeIso(
+            r.updatedAtClient ||
+            r.UpdatedAtClient ||
+            r.createdAtClient ||
+            r.CreatedAtClient
+        ),
         updatedAtServer: normalizeIso(r.updatedAtServer || r.UpdatedAtServer || r.ReceivedAt),
         kooperantID: r.kooperantID || r.KooperantID || '',
         parcelaID: r.parcelaID || r.ParcelaID || '',
         datum: r.datum || r.Datum || '',
-        Datum: r.datum || r.Datum || '',
         kategorija: r.kategorija || r.Kategorija || '',
-        Kategorija: r.kategorija || r.Kategorija || '',
         opis: r.opis || r.Opis || '',
-        Opis: r.opis || r.Opis || '',
         iznos: parseFloat(r.iznos || r.Iznos) || 0,
-        Iznos: parseFloat(r.iznos || r.Iznos) || 0,
         dokumentBroj: r.dokumentBroj || r.DokumentBroj || '',
-        DokumentBroj: r.dokumentBroj || r.DokumentBroj || '',
         napomena: r.napomena || r.Napomena || '',
-        Napomena: r.napomena || r.Napomena || '',
-        ParcelaID: r.parcelaID || r.ParcelaID || '',
-        syncStatus: r.syncStatus || r.SyncStatus || 'synced',
+        syncStatus: String(rawSyncStatus || 'synced').toLowerCase(),
         lastSyncError: r.lastSyncError || ''
     };
 }
