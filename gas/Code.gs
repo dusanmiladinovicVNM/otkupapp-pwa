@@ -1187,9 +1187,15 @@ function processRecord(record, otkupacID) {
     const ss = getOrCreateSheet(sheetName, COLUMNS);
     const sheet = ss.getSheets()[0];
 
-    ensureSheetColumns(sheet, COLUMNS);
+  ensureSheetColumns(sheet, COLUMNS);
 
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(h => String(h || '').trim());
+
+  ensurePlainTextColumn(sheet, headers, 'TipAmbalaze');
+
     const idx = headerIndexMap(headers);
     const nowIso = new Date().toISOString();
 
@@ -2258,14 +2264,60 @@ function findByColumn(sheet, colIndex, value) {
 function sheetToArray(sheet) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
-  const headers = data[0];
+
+  const headers = data[0].map(function(h) {
+    return String(h || '').trim();
+  });
+
   const result = [];
+
   for (let i = 1; i < data.length; i++) {
     const obj = {};
-    for (let j = 0; j < headers.length; j++) obj[headers[j]] = data[i][j];
+
+    for (let j = 0; j < headers.length; j++) {
+      const key = headers[j];
+      const value = data[i][j];
+
+      obj[key] = serializeSheetCellForApi(key, value);
+    }
+
     result.push(obj);
   }
+
   return result;
+}
+
+function serializeSheetCellForApi(columnName, value) {
+  if (!(value instanceof Date)) {
+    return value;
+  }
+
+  if (isDateOnlyColumn(columnName)) {
+    return Utilities.formatDate(value, 'Europe/Belgrade', 'yyyy-MM-dd');
+  }
+
+  if (isPlainTextDateLikeColumn(columnName)) {
+    return value.getDate() + '/' + (value.getMonth() + 1);
+  }
+
+  return value.toISOString();
+}
+
+function isDateOnlyColumn(columnName) {
+  return [
+    'Datum',
+    'DatumRacuna',
+    'DatumBerbeDozvoljeno'
+  ].indexOf(String(columnName || '').trim()) >= 0;
+}
+
+function isPlainTextDateLikeColumn(columnName) {
+  return [
+    'TipAmbalaze',
+    'BrojZbirne',
+    'DokumentBroj',
+    'InvoiceNumber'
+  ].indexOf(String(columnName || '').trim()) >= 0;
 }
 
 // ============================================================
