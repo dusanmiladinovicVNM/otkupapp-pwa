@@ -152,40 +152,63 @@ function kpParseOpisOtkupa(opis) {
     };
 }
 
+function kpNormalizeTrosakRecord(r) {
+    return {
+        clientRecordID: r.clientRecordID || r.ClientRecordID || '',
+        createdAtClient: normalizeIso(r.createdAtClient || r.CreatedAtClient),
+        updatedAtClient: normalizeIso(r.updatedAtClient || r.UpdatedAtClient || r.createdAtClient || r.CreatedAtClient),
+        updatedAtServer: normalizeIso(r.updatedAtServer || r.UpdatedAtServer || r.ReceivedAt),
+        kooperantID: r.kooperantID || r.KooperantID || '',
+        parcelaID: r.parcelaID || r.ParcelaID || '',
+        datum: r.datum || r.Datum || '',
+        Datum: r.datum || r.Datum || '',
+        kategorija: r.kategorija || r.Kategorija || '',
+        Kategorija: r.kategorija || r.Kategorija || '',
+        opis: r.opis || r.Opis || '',
+        Opis: r.opis || r.Opis || '',
+        iznos: parseFloat(r.iznos || r.Iznos) || 0,
+        Iznos: parseFloat(r.iznos || r.Iznos) || 0,
+        dokumentBroj: r.dokumentBroj || r.DokumentBroj || '',
+        DokumentBroj: r.dokumentBroj || r.DokumentBroj || '',
+        napomena: r.napomena || r.Napomena || '',
+        Napomena: r.napomena || r.Napomena || '',
+        ParcelaID: r.parcelaID || r.ParcelaID || '',
+        syncStatus: r.syncStatus || r.SyncStatus || 'synced',
+        lastSyncError: r.lastSyncError || ''
+    };
+}
+
 function kpMergeTroskovi(local, server) {
+    const normalizedServer = (server || [])
+        .map(kpNormalizeTrosakRecord)
+        .filter(r => r.clientRecordID);
+
     if (typeof mergeOfflineRecords === 'function') {
-        return mergeOfflineRecords(local, server, function (r) {
-            return {
-                clientRecordID: r.clientRecordID || '',
-                createdAtClient: normalizeIso(r.createdAtClient),
-                updatedAtClient: normalizeIso(r.updatedAtClient || r.createdAtClient),
-                updatedAtServer: normalizeIso(r.updatedAtServer),
-                kooperantID: r.kooperantID || r.KooperantID || '',
-                parcelaID: r.parcelaID || r.ParcelaID || '',
-                datum: r.datum || r.Datum || '',
-                Datum: r.datum || r.Datum || '',
-                Kategorija: r.kategorija || r.Kategorija || '',
-                Opis: r.opis || r.Opis || '',
-                Iznos: parseFloat(r.iznos || r.Iznos) || 0,
-                DokumentBroj: r.dokumentBroj || r.DokumentBroj || '',
-                Napomena: r.napomena || r.Napomena || '',
-                ParcelaID: r.parcelaID || r.ParcelaID || '',
-                syncStatus: r.syncStatus || 'synced'
-            };
-        });
+        return mergeOfflineRecords(
+            local || [],
+            normalizedServer,
+            kpNormalizeTrosakRecord,
+            'clientRecordID'
+        );
     }
 
-    // Fallback bez mergeOfflineRecords
     const merged = new Map();
-    (server || []).forEach(r => {
-        const id = r.ClientRecordID || r.clientRecordID || '';
-        if (id) merged.set(id, r);
+
+    normalizedServer.forEach(r => {
+        if (r.clientRecordID) merged.set(r.clientRecordID, r);
     });
+
     (local || []).forEach(r => {
-        if (!r || !r.clientRecordID) return;
-        if (r.syncStatus === 'pending') merged.set(r.clientRecordID, r);
-        else if (!merged.has(r.clientRecordID)) merged.set(r.clientRecordID, r);
+        const normalized = kpNormalizeTrosakRecord(r);
+        if (!normalized.clientRecordID) return;
+
+        if (normalized.syncStatus === 'pending' || normalized.syncStatus === 'syncing') {
+            merged.set(normalized.clientRecordID, normalized);
+        } else if (!merged.has(normalized.clientRecordID)) {
+            merged.set(normalized.clientRecordID, normalized);
+        }
     });
+
     return Array.from(merged.values());
 }
 
@@ -562,23 +585,14 @@ async function kpSaveTrosak() {
     await dbPut(db, 'troskovi', record);
     showToast('Trošak sačuvan: ' + iznos.toLocaleString('sr') + ' RSD', 'success');
 
-    // Sync
-    if (navigator.onLine) {
-        const json = await safeAsync(async () => {
-            return await apiPost('syncTrosak', {
-                kooperantID: CONFIG.ENTITY_ID,
-                records: [record]
-            });
-        });
+    // Sync through shared engine.
+    if (navigator.onLine && typeof syncTroskovi === 'function') {
+        const syncResult = await safeAsync(async () => {
+            return await syncTroskovi();
+        }, 'Greška pri sinhronizaciji troškova');
 
-        if (json && json.success) {
-            record.syncStatus = 'synced';
-            record.lastSyncError = '';
-            await dbPut(db, 'troskovi', record);
-        } else {
-            record.lastSyncError = (json && json.error) ? json.error : 'Sync neuspešan';
-            record.syncAttempts = 1;
-            await dbPut(db, 'troskovi', record);
+        if (syncResult && syncResult.ok === false && syncResult.reason !== 'no-pending') {
+            console.warn('syncTroskovi failed:', syncResult);
         }
     }
 
