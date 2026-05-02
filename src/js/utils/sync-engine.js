@@ -155,6 +155,41 @@
         return { syncedCount, failedCount };
     }
 
+    async function recoverStaleSyncingRecords(storeName) {
+        let syncing = [];
+
+        try {
+            syncing = await dbGetByIndex(db, storeName, 'syncStatus', 'syncing');
+        } catch (err) {
+            console.error('[sync-engine] stale syncing lookup failed:', err);
+            return 0;
+        }
+
+        if (!Array.isArray(syncing) || syncing.length === 0) {
+            return 0;
+        }
+
+        let recovered = 0;
+
+        for (const record of syncing) {
+            try {
+                record.syncStatus = 'pending';
+                record.lastServerStatus = record.lastServerStatus || 'stale-syncing-recovered';
+
+                if (!record.lastSyncError) {
+                    record.lastSyncError = 'Recovered from stale syncing state';
+                }
+
+                await dbPut(db, storeName, record);
+                recovered++;
+            } catch (err) {
+                console.error('[sync-engine] stale syncing recovery failed:', err);
+            }
+        }
+
+        return recovered;
+    }
+
     window.syncStore = async function syncStore(options) {
         const {
             storeName,
@@ -179,6 +214,8 @@
         const toast = (msg, kind) => { if (showToasts) showToast(msg, kind); };
 
         try {
+            await recoverStaleSyncingRecords(storeName);
+            
             pending = await dbGetByIndex(db, storeName, 'syncStatus', 'pending');
             if (!Array.isArray(pending) || pending.length === 0) {
                 return buildSyncResult({ ok: true, reason: 'no-pending' });
