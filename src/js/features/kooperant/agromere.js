@@ -307,22 +307,6 @@ async function agroSaveNovaOprema(tip, value) {
         if (sel) sel.value = naziv;
         agroState.opremaPrskalica = naziv;
     }
-
-    // backend save stays direct for now
-    if (navigator.onLine) {
-        try {
-            await apiPost('syncOprema', {
-                kooperantID: CONFIG.ENTITY_ID,
-                records: [{
-                    clientRecordID: agroGenerateClientRecordID('oprema'),
-                    naziv,
-                    tip
-                }]
-            });
-        } catch (e) {
-            console.error('agroSaveNovaOprema sync failed:', e);
-        }
-    }
 }
 
 // ============================================================
