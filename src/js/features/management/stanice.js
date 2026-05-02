@@ -16,14 +16,20 @@ async function loadMgmtOtkupi() {
                 kolicina: parseFloat(r.Kolicina) || 0, cena: parseFloat(r.Cena) || 0
             }));
     } else {
-        try {
-            const json = await apiFetch('action=getMgmtOtkupiByStanica&stanicaID=' + encodeURIComponent(stanicaID));
-            if (json && json.success && json.records) records = json.records.map(r => ({
-                datum: fmtDate(r.Datum), kooperantName: r.KooperantName || r.KooperantID || '',
-                vrstaVoca: r.VrstaVoca || '', klasa: r.Klasa || 'I',
-                kolicina: parseFloat(r.Kolicina) || 0, cena: parseFloat(r.Cena) || 0
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getMgmtOtkupiByStanica&stanicaID=' + encodeURIComponent(stanicaID));
+        }, 'Greška pri učitavanju otkupa za stanicu');
+
+        if (json && json.success && json.records) {
+            records = json.records.map(r => ({
+                datum: fmtDate(r.Datum),
+                kooperantName: r.KooperantName || r.KooperantID || '',
+                vrstaVoca: r.VrstaVoca || '',
+                klasa: r.Klasa || 'I',
+                kolicina: parseFloat(r.Kolicina) || 0,
+                cena: parseFloat(r.Cena) || 0
             }));
-        } catch (e) {}
+        }
     }
     
     if (od) records = records.filter(r => r.datum >= od);
