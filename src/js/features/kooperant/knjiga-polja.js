@@ -74,7 +74,7 @@ function kpPopulateDropdowns() {
 
     // Datum default
     const dEl = document.getElementById('trosakDatum');
-    if (dEl && !dEl.value) dEl.value = new Date().toISOString().split('T')[0];
+    if (dEl && !dEl.value) dEl.value = getTodayIsoDate();
 }
 
 // ============================================================
@@ -571,7 +571,7 @@ async function kpSaveTrosak() {
         updatedAtClient: nowIso,
         kooperantID: CONFIG.ENTITY_ID,
         parcelaID: document.getElementById('trosakParcela').value || '',
-        datum: document.getElementById('trosakDatum').value || nowIso.split('T')[0],
+        datum: document.getElementById('trosakDatum').value || getTodayIsoDate(),
         kategorija: selectedTrosakKat,
         opis: document.getElementById('trosakOpis').value || '',
         iznos: iznos,
