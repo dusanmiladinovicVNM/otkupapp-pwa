@@ -823,31 +823,6 @@ function formatOtpremaAmbalaza(row) {
     return kom + ' kom • ' + tip;
 }
 
-function toIsoDateOnly(input) {
-    if (!input) return '';
-
-    const s = String(input).trim();
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-
-    if (/^\d{2}\.\d{2}\.\d{4}\.?$/.test(s)) {
-        const clean = s.replace(/\.$/, '');
-        const parts = clean.split('.');
-        return parts[2] + '-' + parts[1] + '-' + parts[0];
-    }
-
-    try {
-        const d = new Date(s);
-        if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    } catch (_) {}
-
-    return s;
-}
-
-function getTodayIsoDate() {
-    return new Date().toISOString().slice(0, 10);
-}
-
 function getSelectedOtpremaRows() {
     return otpremaState.rows.filter(r =>
         otpremaState.selectedKeys.has(getOtpremaRecordKey(r)) &&
