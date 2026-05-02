@@ -351,18 +351,20 @@ function mgmtRenderOverview() {
     const opsEl = document.getElementById('mgmtOverviewOps');
     if (opsEl) {
         opsEl.innerHTML = `
-            <div class="queue-item" onclick="showMgmtRoot('dispecer')" style="cursor:pointer;">
+            <button class="queue-item" type="button" data-route="mgmt-root" data-root="dispecer" style="cursor:pointer;width:100%;text-align:left;border:0;">
                 <div class="qi-header"><span class="qi-koop">Dispečer</span><span class="qi-time">${aktivniPlanovi}</span></div>
                 <div class="qi-detail">Aktivni planovi i stanje transporta</div>
-            </div>
-            <div class="queue-item" onclick="showMgmtRoot('otkup')" style="cursor:pointer;">
+            </button>
+
+            <button class="queue-item" type="button" data-route="mgmt-root" data-root="otkup" style="cursor:pointer;width:100%;text-align:left;border:0;">
                 <div class="qi-header"><span class="qi-koop">Otkup</span><span class="qi-time">${danasKg.toLocaleString('sr')} kg</span></div>
                 <div class="qi-detail">Današnji otkupi i roba po mestima</div>
-            </div>
-            <div class="queue-item" onclick="showMgmtRoot('agro')" style="cursor:pointer;">
+            </button>
+
+            <button class="queue-item" type="button" data-route="mgmt-root" data-root="agro" style="cursor:pointer;width:100%;text-align:left;border:0;">
                 <div class="qi-header"><span class="qi-koop">Agrohemija</span><span class="qi-time">modul</span></div>
                 <div class="qi-detail">Izdavanje i stanje magacina</div>
-            </div>
+            </button>
         `;
     }
 
