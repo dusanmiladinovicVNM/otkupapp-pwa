@@ -23,13 +23,15 @@
             syncInFlight: false,
             stammdatenRefreshInFlight: false,
             syncIntervalId: null,
-            kooperantSync: {
-                tretmaniInFlight: false
-            },
-            zbirnaSyncInFlight: false
+            sync: {
+                queueInFlight: false,
+                otkupacInFlight: false,
+                tretmaniInFlight: false,
+                troskoviInFlight: false,
+                zbirnaInFlight: false
         }
-    };
-
+    }
+};
     const state = structuredClone(initialState);
     const listeners = new Map();
 
