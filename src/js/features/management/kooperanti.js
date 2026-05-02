@@ -53,7 +53,13 @@ async function onMgmtKooperantChange() {
     if (mgmtData && mgmtData.kartice) {
         records = mgmtData.kartice.filter(r => r.KooperantID === koopID && r.Opis !== 'UKUPNO');
     } else {
-        try { const json = await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID)); if (json && json.success && json.records) records = json.records.filter(r => r.Opis !== 'UKUPNO'); } catch (e) {}
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
+        }, 'Greška pri učitavanju kartice kooperanta');
+
+        if (json && json.success && json.records) {
+            records = json.records.filter(r => r.Opis !== 'UKUPNO');
+        }
     }
     if (records.length === 0) {
         document.getElementById('mgmtKarticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
