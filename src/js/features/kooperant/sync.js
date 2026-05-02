@@ -14,7 +14,8 @@
 
         if (!runtime.kooperantSync) {
             runtime.kooperantSync = {
-                tretmaniInFlight: false
+                tretmaniInFlight: false,
+                troskToviInFlight: false
             };
         }
 
@@ -190,6 +191,21 @@
     };
 
     // ------------------------------------------------------------
+    // TROSKOVI (knjiga polja)
+    // Backend action: syncTrosak
+    // Store: 'troskovi'
+    // ------------------------------------------------------------
+    window.syncTroskovi = async function syncTroskovi() {
+        return syncEntityStore({
+            storeName: 'troskovi',
+            action: 'syncTrosak',
+            inFlightKey: 'troskToviInFlight',
+            successLabel: 'Troškovi sinhronizovani'
+        });
+    };
+
+
+    // ------------------------------------------------------------
     // Optional convenience helper
     // ------------------------------------------------------------
     window.syncKooperantNow = async function syncKooperantNow() {
@@ -199,6 +215,12 @@
             results.push({ type: 'tretmani', ...(await window.syncTretmani()) });
         } catch (e) {
             results.push({ type: 'tretmani', ok: false, error: e.message || 'syncTretmani failed' });
+        }
+
+        try {
+            results.push({ type: 'troskovi', ...(await window.syncTroskovi()) });
+        } catch (e) {
+            results.push({ type: 'troskovi', ok: false, error: e.message || 'syncTroskovi failed' });
         }
 
         return results;
