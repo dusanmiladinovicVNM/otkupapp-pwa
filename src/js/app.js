@@ -942,41 +942,155 @@ function handleStammdatenUpdated() {
 // ============================================================
 // SYNC
 // ============================================================
+
+function normalizeRoleSyncResult(result, roleName) {
+    const role = roleName || (CONFIG && CONFIG.USER_ROLE) || '';
+
+    if (!result || typeof result !== 'object') {
+        return {
+            ok: true,
+            role,
+            synced: 0,
+            failed: 0,
+            results: [],
+            reason: 'completed',
+            code: '',
+            partial: false
+        };
+    }
+
+    const results = Array.isArray(result.results) ? result.results : [];
+
+    let synced = Number.isFinite(result.synced)
+        ? result.synced
+        : results.filter(r => r && (r.success === true || r.status === 'synced' || r.ok === true)).length;
+
+    let failed = Number.isFinite(result.failed)
+        ? result.failed
+        : results.filter(r => r && (r.success === false || r.ok === false)).length;
+
+    if (!Number.isFinite(synced)) synced = 0;
+    if (!Number.isFinite(failed)) failed = 0;
+
+    let ok;
+    if (typeof result.ok === 'boolean') {
+        ok = result.ok;
+    } else if (typeof result.success === 'boolean') {
+        ok = result.success;
+    } else {
+        ok = failed === 0;
+    }
+
+    return {
+        ok,
+        role: result.role || role,
+        synced,
+        failed,
+        results,
+        reason: result.reason || result.error || '',
+        code: result.code || '',
+        partial: !!result.partial || (synced > 0 && failed > 0)
+    };
+}
+
 async function runRoleSync() {
-    if (!navigator.onLine) return { ok: false, reason: 'offline' };
+    const role = CONFIG.USER_ROLE || '';
 
-    if (CONFIG.USER_ROLE === 'Otkupac') {
-        if (typeof syncQueue !== 'function') return { ok: false, reason: 'missing-syncQueue' };
-        await syncQueue();
-        return { ok: true, role: 'Otkupac' };
+    if (!navigator.onLine) {
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'offline'
+        }, role);
     }
 
-    if (CONFIG.USER_ROLE === 'Kooperant') {
-        if (typeof syncKooperantNow !== 'function') return { ok: false, reason: 'missing-syncKooperantNow' };
-        await syncKooperantNow();
-        return { ok: true, role: 'Kooperant' };
+    if (role === 'Otkupac') {
+        if (typeof syncQueue !== 'function') {
+            return normalizeRoleSyncResult({
+                ok: false,
+                reason: 'missing-syncQueue'
+            }, 'Otkupac');
+        }
+
+        return normalizeRoleSyncResult(await syncQueue(), 'Otkupac');
     }
 
-    if (CONFIG.USER_ROLE === 'Vozac') {
-        if (typeof syncZbirne !== 'function') return { ok: false, reason: 'missing-syncZbirne' };
-        await syncZbirne();
-        return { ok: true, role: 'Vozac' };
+    if (role === 'Kooperant') {
+        if (typeof syncKooperantNow !== 'function') {
+            return normalizeRoleSyncResult({
+                ok: false,
+                reason: 'missing-syncKooperantNow'
+            }, 'Kooperant');
+        }
+
+        return normalizeRoleSyncResult(await syncKooperantNow(), 'Kooperant');
     }
 
-    return { ok: false, reason: 'no-sync-for-role' };
+    if (role === 'Vozac') {
+        if (typeof syncZbirne !== 'function') {
+            return normalizeRoleSyncResult({
+                ok: false,
+                reason: 'missing-syncZbirne'
+            }, 'Vozac');
+        }
+
+        return normalizeRoleSyncResult(await syncZbirne(), 'Vozac');
+    }
+
+    return normalizeRoleSyncResult({
+        ok: false,
+        reason: 'no-sync-for-role'
+    }, role);
 }
 
 async function syncQueueSafe() {
     const runtime = getAppRuntime();
+    const runtimeSync = runtime.sync || (runtime.sync = {});
 
-    if (!navigator.onLine) return;
-    if (CONFIG.USER_ROLE === 'Management') return;
-    if (runtime.syncInFlight) return;
+    const role = CONFIG.USER_ROLE || '';
+
+    if (!navigator.onLine) {
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'offline'
+        }, role);
+    }
+
+    if (role === 'Management') {
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'no-sync-for-role'
+        }, 'Management');
+    }
+
+    if (runtimeSync.queueInFlight) {
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'already-running'
+        }, role);
+    }
+
+    runtimeSync.queueInFlight = true;
 
     try {
-        await runRoleSync();
+        if (typeof updateSyncBadge === 'function') {
+            try { await updateSyncBadge('syncing'); } catch (_) {}
+        }
+
+        return await runRoleSync();
     } catch (err) {
         console.error('runRoleSync failed:', err);
+
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: (err && err.message) || 'sync-error',
+            code: (err && err.name) || ''
+        }, role);
+    } finally {
+        runtimeSync.queueInFlight = false;
+
+        if (typeof updateSyncBadge === 'function') {
+            try { await updateSyncBadge(); } catch (_) {}
+        }
     }
 }
 
