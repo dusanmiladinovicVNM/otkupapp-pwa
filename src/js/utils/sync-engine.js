@@ -18,6 +18,7 @@
 // ============================================================
 
 (function () {
+    const STALE_SYNCING_MAX_AGE_MS = 2 * 60 * 1000;
     function getRuntimeSync() {
         const runtime = window.appRuntime || {};
         if (!runtime.sync) {
@@ -78,15 +79,20 @@
     }
 
     async function rollbackPendingFromError(storeName, pending, errorMessage, serverStatus) {
-        for (const r of pending) {
+        const records = Array.isArray(pending) ? pending : [];
+
+        for (const record of records) {
             try {
-                if (r.syncStatus === 'syncing') {
-                    r.syncStatus = 'pending';
-                    r.lastSyncError = errorMessage;
-                    r.lastServerStatus = serverStatus || 'request-failed';
-                    r.syncAttempts = (r.syncAttempts || 0) + 1;
-                    await dbPut(db, storeName, r);
-                }
+                if (!record || !record.clientRecordID) continue;
+
+                // Request-level failure means every record from the current batch
+                // that did not receive a confirmed server result must become retryable.
+                record.syncStatus = 'pending';
+                record.lastSyncError = errorMessage || 'Sync neuspešan';
+                record.lastServerStatus = serverStatus || 'request-failed';
+                record.syncAttempts = (parseInt(record.syncAttempts, 10) || 0) + 1;
+
+                await dbPut(db, storeName, record);
             } catch (rbErr) {
                 console.error('[sync-engine] rollback failed:', rbErr);
             }
@@ -94,15 +100,20 @@
     }
 
     async function rollbackPendingAsFeatureDisabled(storeName, pending) {
-        // FEATURE_DISABLED: revert syncing -> pending without polluting attempts/errors.
-        for (const r of pending) {
+        // FEATURE_DISABLED: revert current batch to pending without polluting attempts/errors.
+        const records = Array.isArray(pending) ? pending : [];
+
+        for (const record of records) {
             try {
-                if (r.syncStatus === 'syncing') {
-                    r.syncStatus = 'pending';
-                    r.lastServerStatus = 'feature-disabled';
-                    await dbPut(db, storeName, r);
-                }
-            } catch (_) {}
+                if (!record || !record.clientRecordID) continue;
+
+                record.syncStatus = 'pending';
+                record.lastServerStatus = 'feature-disabled';
+
+                await dbPut(db, storeName, record);
+            } catch (rbErr) {
+                console.error('[sync-engine] feature-disabled rollback failed:', rbErr);
+            }
         }
     }
 
@@ -155,6 +166,24 @@
         return { syncedCount, failedCount };
     }
 
+    function isStaleSyncingRecord(record, nowMs) {
+        if (!record || record.syncStatus !== 'syncing') return false;
+
+        const rawTs =
+            record.syncAttemptAt ||
+            record.updatedAtClient ||
+            record.createdAtClient ||
+            '';
+
+        if (!rawTs) return true;
+
+        const ts = new Date(rawTs).getTime();
+
+        if (!Number.isFinite(ts)) return true;
+
+        return nowMs - ts > STALE_SYNCING_MAX_AGE_MS;
+    }
+
     async function recoverStaleSyncingRecords(storeName) {
         let syncing = [];
 
@@ -169,10 +198,15 @@
             return 0;
         }
 
+        const nowMs = Date.now();
         let recovered = 0;
 
         for (const record of syncing) {
             try {
+                if (!isStaleSyncingRecord(record, nowMs)) {
+                    continue;
+                }
+
                 record.syncStatus = 'pending';
                 record.lastServerStatus = record.lastServerStatus || 'stale-syncing-recovered';
 
@@ -253,7 +287,7 @@
                     'empty-response'
                 );
 
-            toast('Greška pri sinhronizaciji', 'error');
+                toast('Greška pri sinhronizaciji', 'error');
 
                 return buildSyncResult({
                     failed: pending.length,
