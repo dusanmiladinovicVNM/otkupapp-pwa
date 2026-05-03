@@ -455,7 +455,7 @@ function validateOtkupInput(input) {
 
 function buildOtkupRecord(input) {
     const nowIso = new Date().toISOString();
-    const today = nowIso.split('T')[0];
+    const today = getTodayIsoDate();
 
     return {
         clientRecordID: generateClientRecordID(),
