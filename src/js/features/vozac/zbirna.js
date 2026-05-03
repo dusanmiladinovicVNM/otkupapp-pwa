@@ -57,7 +57,7 @@ function extractStanicaIdFromSource(source) {
 }
 
 function renderVozacOtpremnice() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayIsoDate();
     const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
     
     const list = document.getElementById('vozacOtpremniceList');
@@ -129,7 +129,7 @@ async function startZbirnaCreation() {
 }
 
 function renderZbirnaSummary() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayIsoDate();
     const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
     
     let totalKgI = 0, totalKgII = 0, totalAmb = 0;
@@ -282,7 +282,7 @@ async function confirmZbirna() {
     }
 
     const kupacID = kupacSel.value;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayIsoDate();
 
     // Koristi cached zbirne umesto novog API call-a
     const zbirne = _lastMergedZbirne || await getMergedZbirneForVozac();
