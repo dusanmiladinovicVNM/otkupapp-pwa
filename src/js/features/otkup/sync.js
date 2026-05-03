@@ -88,7 +88,7 @@ async function updateStats() {
 
     try {
         const all = await dbGetAll(db, CONFIG.STORE_NAME);
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayIsoDate();
         const t = (all || []).filter(r => r.datum === today);
 
         statPending.textContent = t.filter(r =>
