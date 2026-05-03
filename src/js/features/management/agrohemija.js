@@ -351,7 +351,7 @@ async function izdZavrsi() {
         stavke: [...izdKorpa],
         ukupnaVrednost: ukupno,
         napomena: napomena,
-        datum: new Date().toISOString().split('T')[0]
+        datum: getTodayIsoDate()
     });
 }
 
