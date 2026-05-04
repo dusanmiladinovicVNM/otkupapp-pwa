@@ -926,6 +926,18 @@ function agroBackToStep1() {
 // SAVE TRETMAN
 // ============================================================
 async function agroSaveTretman() {
+    if (typeof withSubmitLock !== 'function') {
+        return agroSaveTretmanUnlocked();
+    }
+
+    return withSubmitLock('agro:tretman:save', agroSaveTretmanUnlocked, {
+        action: 'agro-save-tretman',
+        reason: 'agroSaveTretman',
+        alreadyMessage: 'Čuvanje tretmana je već u toku'
+    });
+}
+
+async function agroSaveTretmanUnlocked() {
     const art = agroState.artikalData;
     const timer = agroState.timerResult;
     const now = new Date();
@@ -1001,7 +1013,9 @@ async function agroSaveTretman() {
     // Sync ako smo online
     if (navigator.onLine && typeof syncTretmani === 'function') {
         try {
-            await syncTretmani();
+            if (navigator.onLine && typeof syncQueueSafe === 'function') {
+                syncQueueSafe('post-save');
+            }
             invalidateTretmaniCache(); // ponovo invalidate jer sync menja statuse
         } catch (e) {
             console.error('syncTretmani after save failed:', e);
