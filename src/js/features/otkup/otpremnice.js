@@ -42,7 +42,9 @@ async function loadOtpremaOverview() {
         }
     }
 
-    const mergedRows = mergeOtpremaRecords(localRows, serverRows)
+    const mergedRows = dedupeRecordsForRender(
+        mergeOtpremaRecords(localRows, serverRows)
+    )
         .map(enrichOtpremaRecord)
         .sort(compareOtpremaRowsDesc);
 
@@ -549,10 +551,12 @@ async function confirmOtpremaAssign() {
         }
 
         // osveži lokalni state posle success prikaza
-        otpremaState.rows = otpremaState.rows.map(row => {
-            const match = updatedRows.find(u => getOtpremaRecordKey(u) === getOtpremaRecordKey(row));
-            return match || row;
-        });
+        otpremaState.rows = dedupeRecordsForRender(
+            otpremaState.rows.map(row => {
+                const match = updatedRows.find(u => getOtpremaRecordKey(u) === getOtpremaRecordKey(row));
+                return match || row;
+            })
+        );
 
     } catch (err) {
         console.error('confirmOtpremaAssign failed:', err);
