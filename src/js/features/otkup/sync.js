@@ -110,7 +110,10 @@ async function renderQueueList() {
     try {
         const pending = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'pending');
         const syncing = await dbGetByIndex(db, CONFIG.STORE_NAME, 'syncStatus', 'syncing');
-        const items = [...(syncing || []), ...(pending || [])];
+        const items = dedupeRecordsForRender([
+            ...(syncing || []),
+            ...(pending || [])
+        ]);
 
         if (items.length === 0) {
             setHtml(list, '<p style="text-align:center;color:var(--text-muted);padding:40px;">Nema stavki za sinhronizaciju</p>');
