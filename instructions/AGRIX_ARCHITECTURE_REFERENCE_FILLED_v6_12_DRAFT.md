@@ -1,11 +1,11 @@
 # AgriX / OtkupApp Architecture Reference
 
-**Version:** v6.12 draft canonical snapshot  
+**Version:** v6.13 final canonical snapshot  
 **Last Updated:** 2026-05-04  
-**Status:** Canonical / Active Reference Draft  
-**Scope:** VBA/Excel desktop backend + desktop app lifecycle + Google Apps Script + Google Sheets + AgriX PWA + PWA-first otkup/traceability + document flow + finance + modNovac v6.8 hardening + frmSEF operator-shell hardening + modFaktura canonical-prijemnica hardening + modDokumenta EH/input/stornirano hardening + modOtkup validation/read-helper hardening + Google VBA/GAS v6.10 hardening + AR-002 transaction AutoSave + canonical HTTP utilities + SEF HTTPS/UTF-8 hardening + v6.11 data-health cleanup + Agrohemija/Stammdaten + GIS + meteo + dispatch + Knjiga Polja + Fiskalni + SEF P0/P1 hardening + tested SEF live baseline + SEF v6.7 state/parser/total-consistency hardening + professional regression suites + strict BrojZbirne trace bridge + shell/update-guard convergence + PWA launch-smoke hardening + canonical sync-result convergence + business-date cleanup + client error reporting + syncTrosak activation + VOZ/BrojZbirne post-VBA ownership clarification  
+**Status:** Canonical / Active Reference FINAL  
+**Scope:** VBA/Excel desktop backend + desktop app lifecycle + Google Apps Script + Google Sheets + AgriX PWA + PWA-first otkup/traceability + document flow + finance + modNovac v6.8 hardening + frmSEF operator-shell hardening + modFaktura canonical-prijemnica hardening + modDokumenta EH/input/stornirano hardening + modOtkup validation/read-helper hardening + Google VBA/GAS v6.10 hardening + AR-002 transaction AutoSave + canonical HTTP utilities + SEF HTTPS/UTF-8 hardening + v6.11 data-health cleanup + Agrohemija/Stammdaten + GIS + meteo + dispatch + Knjiga Polja + Fiskalni + SEF P0/P1 hardening + tested SEF live baseline + SEF v6.7 state/parser/total-consistency hardening + professional regression suites + strict BrojZbirne trace bridge + shell/update-guard convergence + PWA launch-smoke hardening + canonical sync-result convergence + business-date cleanup + client error reporting + syncTrosak activation + VOZ/BrojZbirne post-VBA ownership clarification + v6.13 PWA pre-launch P0 runtime hardening + app-shell/cache stability + unified render dedupe + single sync trigger entrypoint + bootstrap stale-syncing recovery + critical submit-lock protection  
 **Owner:** Architecture documentation compiled from supplied reference set  
-**Supersedes:** OtkupApp / AgriX reference versions v2.2.1–v6.11 
+**Supersedes:** OtkupApp / AgriX reference versions v2.2.1–v6.12 
 **Audience:** Engineering, Product, Operations, Onboarding, Review  
 
 ---
@@ -155,7 +155,7 @@ Required v6.11 verification set:
 
 ## 1.7 v6.12 PWA Launch-Smoke, Sync and Observability Delta
 
-v6.12 is the active PWA launch-readiness hardening layer on top of the v6.11 desktop persistence/security baseline. It closes the concrete runtime defects found during role-by-role smoke testing and clarifies the cross-system boundary between PWA/GAS technical sync identifiers and VBA-owned business document numbering.
+v6.12 introduced the PWA launch-readiness hardening layer on top of the v6.11 desktop persistence/security baseline. It closes the concrete runtime defects found during role-by-role smoke testing and clarifies the cross-system boundary between PWA/GAS technical sync identifiers and VBA-owned business document numbering.
 
 ### 1.7.1 PWA Business-Date Contract
 
@@ -308,6 +308,371 @@ Writing `update(2)` to both B and T is invalid because it stores the internal/ma
 v6.12 does not require production-data migration. Test sheets and test records are not canonical production data and do not require repair/backfill documentation.
 
 The only remaining cross-system P1 before full document-flow launch is the VBA VOZ writeback correction for `BrojZbirne` column T. PWA launch smoke itself is complete.
+
+
+## 1.8 v6.13 PWA Pre-Launch P0 Runtime Hardening Delta
+
+v6.13 is the active PWA pre-launch runtime-hardening layer on top of the v6.12 launch-smoke baseline. It does not introduce new business features and does not require production-data migration.
+
+The release closes the field-stability risks tracked in the P0 pre-launch issue set:
+
+- app-shell and cache consistency defects;
+- duplicate UI rows from local/server merge edge cases;
+- parallel sync triggers from manual, online, interval and post-save paths;
+- stale IndexedDB records stuck in `syncing`;
+- double-submit/double-tap creation of local records.
+
+The minimal unit-test safety net for sync, merge, dedupe and stale recovery is intentionally deferred and remains tracked as a separate P-1/post-launch item.
+
+### 1.8.1 Runtime / App-Shell Stability Contract
+
+The following runtime/app-shell issues are closed in v6.13:
+
+- `tabs.js` protects access to `window.agroState` for non-Kooperant roles.
+- `role-nav.js` uses the canonical `cfg.type` routing model and no longer depends on mismatched `cfg.showMode` behavior.
+- `index.html` must load `src/js/services/db.js` only once.
+- `sw.js` must bump `CACHE_NAME` whenever critical JS/runtime assets are changed.
+- `sw.js` must include critical app-shell assets needed for consistent low-connectivity behavior.
+- Leaflet offline marker images are present and must be included in the service-worker asset list when the map surface is launch-relevant:
+  - `./vendor/images/marker-icon.png`
+  - `./vendor/images/marker-icon-2x.png`
+  - `./vendor/images/marker-shadow.png`
+
+The service-worker cache version is part of the deployment contract. Whenever any critical runtime asset changes, `CACHE_NAME` must be bumped to prevent an old/new asset mix after deploy.
+
+Critical runtime assets include:
+
+- `src/js/utils/format.js`
+- `src/js/utils/async.js`
+- `src/js/utils/merge.js`
+- `src/js/utils/sync-engine.js`
+- `src/js/app.js`
+- role feature files participating in save/sync/render flows
+- self-hosted vendor assets used by offline app-shell behavior
+
+### 1.8.2 Unified Render Dedupe Contract
+
+Before rendering key UI lists, merged local/server datasets must pass through one shared dedupe helper:
+
+```js
+dedupeRecordsForRender(records, aliasesFn?)
+```
+
+`src/js/utils/merge.js` owns this helper.
+
+The helper is alias-aware across both identity fields:
+
+```js
+serverRecordID
+clientRecordID
+```
+
+The canonical aliases are:
+
+```js
+srv:<serverRecordID>
+cli:<clientRecordID>
+```
+
+This is required because the same logical record may appear as one copy with both `serverRecordID` and `clientRecordID`, and another local copy with only `clientRecordID`.
+
+Canonical dedupe rules:
+
+1. Identity aliases are `serverRecordID` and `clientRecordID`.
+2. A local priority record beats a server-synced version.
+3. Local priority means `syncStatus === 'pending'`, `syncStatus === 'syncing'`, or non-empty `lastSyncError`.
+4. If both candidates are synced/non-priority, the newer timestamp wins.
+5. Timestamp priority uses `updatedAtServer`, `syncedAt`, `updatedAtClient`, `createdAtClient`, then `receivedAt` / `ReceivedAt`.
+6. Records without identity aliases are preserved and not collapsed, to avoid hiding legitimate distinct rows.
+
+The helper must run before render in these paths:
+
+- Otkup queue;
+- Otkup pregled;
+- Vozač zbirna pregled;
+- Kooperant istorija tretmana;
+- Otkup otprema overview;
+- Otkup otprema assign runtime state.
+
+Verified alias edge case:
+
+```js
+dedupeRecordsForRender([
+  {
+    clientRecordID: 'CLI-1',
+    serverRecordID: 'SRV-1',
+    syncStatus: 'synced',
+    updatedAtServer: '2026-05-04T08:00:00.000Z',
+    value: 'server'
+  },
+  {
+    clientRecordID: 'CLI-1',
+    serverRecordID: '',
+    syncStatus: 'pending',
+    updatedAtClient: '2026-05-04T07:00:00.000Z',
+    value: 'local-pending'
+  }
+]).map(r => r.value)
+```
+
+Expected result in both input orders:
+
+```js
+['local-pending']
+```
+
+### 1.8.3 Single Sync Trigger Entrypoint Contract
+
+All sync triggers must go through a single app-level wrapper:
+
+```js
+syncQueueSafe(reason)
+```
+
+Supported trigger reasons:
+
+```text
+manual
+online
+interval
+post-save
+```
+
+`syncQueueSafe(reason)` calls:
+
+```js
+requestRoleSync(reason)
+```
+
+Role dispatch:
+
+- Otkupac -> `requestOtkupSync(reason)`;
+- Kooperant -> `requestKooperantSync(reason)`;
+- Vozac -> role-level gate to `syncZbirne()` until a dedicated `requestVozacSync(reason)` wrapper is introduced;
+- Management -> canonical `no-sync-for-role`.
+
+`runRoleSync(reason)` remains only as a compatibility alias:
+
+```js
+async function runRoleSync(reason) {
+    return requestRoleSync(reason || 'manual');
+}
+```
+
+It must not contain direct role routing to low-level sync functions.
+
+Low-level functions remain implementation internals:
+
+- `syncQueue()`;
+- `syncTretmani()`;
+- `syncTroskovi()`;
+- `syncKooperantNow()`;
+- `syncZbirne()`.
+
+UI triggers, online handlers, intervals and post-save flows must not call low-level sync functions directly.
+
+The active trigger contract is:
+
+- online event -> `syncQueueSafe('online')`;
+- background interval -> `syncQueueSafe('interval')`;
+- post-save otkup -> `syncQueueSafe('post-save')`;
+- post-save zbirna -> `syncQueueSafe('post-save')`;
+- manual More sync -> `syncQueueSafe('manual')`.
+
+`syncQueueSafe(reason)` owns the role-level guard:
+
+- if no sync is running, it starts one;
+- if one is already running, it returns canonical `already-running` and/or marks a requested follow-up pass;
+- runtime flags are cleared in `finally`.
+
+Store-level guards remain inside `syncStore(...)` through `inFlightKey`.
+
+Verified as Otkupac:
+
+```js
+const a = syncQueueSafe('manual');
+const b = syncQueueSafe('online');
+const rr = await Promise.all([a, b]);
+```
+
+Observed valid result:
+
+- first call returned `reason: 'no-pending'`;
+- second call returned `reason: 'already-running'`, `code: 'ALREADY_RUNNING'`;
+- runtime flags reset to `false` after completion.
+
+### 1.8.4 Bootstrap Stale Syncing Recovery Contract
+
+Records may become stuck in IndexedDB as:
+
+```js
+syncStatus: 'syncing'
+```
+
+after a crash, browser kill, refresh, deploy, network break or interrupted sync.
+
+v6.13 requires stale recovery at bootstrap, not only at the next sync attempt.
+
+`src/js/utils/sync-engine.js` exports:
+
+```js
+recoverStaleSyncingRecords(storeName)
+recoverStaleSyncingStores(storeNames)
+```
+
+`src/js/app.js` owns role-aware bootstrap recovery:
+
+```js
+recoverStaleSyncingForCurrentRole(reason)
+```
+
+After `openDB()` and before role render/sync badge calculation, bootstrap must call:
+
+```js
+await recoverStaleSyncingForCurrentRole('bootstrap');
+```
+
+Role store mapping:
+
+- Otkupac -> `CONFIG.STORE_NAME`;
+- Kooperant -> `tretmani`, `troskovi`;
+- Vozac -> `zbirne`;
+- Management -> no local sync recovery.
+
+A stale `syncing` record is restored to:
+
+```js
+syncStatus: 'pending'
+lastServerStatus: 'stale-syncing-recovered'
+```
+
+The canonical diagnostic field for this case is `lastServerStatus`. Recovery should avoid presenting a false business error to the user.
+
+Runtime verification confirmed:
+
+- all recovery helpers exist globally;
+- `bootstrapApp()` calls `recoverStaleSyncingForCurrentRole('bootstrap')`;
+- a manually created stale `syncing` test record was restored to `pending`;
+- `lastServerStatus` was set to `stale-syncing-recovered`.
+
+### 1.8.5 Submit Lock Contract for Critical Save Flows
+
+Critical save flows must be protected against double-tap / repeated-click duplicate local record creation.
+
+`src/js/utils/async.js` owns the canonical helper:
+
+```js
+withSubmitLock(lockKey, fn, options)
+```
+
+The helper:
+
+- stores lock state in `window.appRuntime.submitLocks`;
+- returns early if the same lock is already active;
+- can show a user-facing "already saving" toast;
+- disables matching `[data-action="..."]` elements while the save is in progress;
+- restores button state and clears lock in `finally`.
+
+Critical public save functions must be thin lock wrappers around unlocked implementations:
+
+```js
+saveOtkup()       -> saveOtkupUnlocked()
+confirmZbirna()   -> confirmZbirnaUnlocked()
+agroSaveTretman() -> agroSaveTretmanUnlocked()
+```
+
+Canonical locks:
+
+```text
+otkup:save
+zbirna:confirm
+agro:tretman:save
+```
+
+`confirmZbirnaUnlocked()` must not call low-level `syncZbirne()` as a post-save trigger. It must call:
+
+```js
+syncQueueSafe('post-save')
+```
+
+This preserves the single sync-entrypoint architecture from v6.13.
+
+Runtime verification confirmed:
+
+- `withSubmitLock` exists globally;
+- `saveOtkup()` uses `withSubmitLock`;
+- `confirmZbirna()` uses `withSubmitLock`;
+- `agroSaveTretman()` uses `withSubmitLock`;
+- `confirmZbirnaUnlocked()` uses `syncQueueSafe('post-save')`;
+- `confirmZbirnaUnlocked()` does not call `syncZbirne()` directly;
+- Otkupac double-tap smoke produced one local record for one user submit.
+
+Strict full acceptance still recommends role smoke for:
+
+- Vozač `confirmZbirna` double-tap;
+- Kooperant `agroSaveTretman` double-tap.
+
+### 1.8.6 v6.13 Pre-Launch Decision Register
+
+`saveParcelPolygon` remains an explicit architecture decision.
+
+Canonical choices:
+
+1. Lock it under token before launch:
+   - Kooperant may edit only own parcel geometry;
+   - Management may edit all;
+   - other roles forbidden.
+2. Leave it public intentionally and document accepted risk.
+
+Recommended launch-safe choice: lock under token.
+
+The v6.12 VBA note remains active:
+
+- `WriteBackVOZSyncStatus` column B / `ServerRecordID` must use `update(2)`;
+- `WriteBackVOZSyncStatus` column T / `BrojZbirne` must use `update(3)`.
+
+This is not a PWA runtime blocker, but it is a full document-flow launch blocker if VBA Master import is part of immediate launch scope.
+
+### 1.8.7 v6.13 Current Launch Status
+
+Closed PWA pre-launch items:
+
+- runtime/app-shell stability;
+- unified render dedupe;
+- single sync trigger entrypoint and parallel sync guard;
+- bootstrap stale syncing recovery;
+- submit lock implementation for critical save functions;
+- Otkupac submit-lock double-tap smoke.
+
+Remaining strict checks/decisions before full GO:
+
+- Vozač `confirmZbirna` double-tap smoke;
+- Kooperant `agroSaveTretman` double-tap smoke;
+- decision or patch for `saveParcelPolygon` public write endpoint;
+- VBA `WriteBackVOZSyncStatus` correction if VBA document-flow launch is in scope;
+- final `CACHE_NAME` bump before production deploy.
+
+### 1.8.8 GitHub Issue Mapping
+
+| Issue | Title | v6.13 Status |
+|---|---|---|
+| #6 | P0 runtime / PWA stability | Closed |
+| #5 | P0 dedupe merged records before render | Closed |
+| #4 | P0 single sync entrypoint and parallel sync guard | Closed |
+| #3 | P0 bootstrap stale syncing recovery | Closed |
+| #2 | P0 submit lock critical save flows | Implemented; Otkupac smoke passed; remaining role smoke recommended |
+| #1 | P-1 minimal unit test safety net | Deferred / not part of v6.13 launch gate |
+
+### 1.8.9 No Data Migration Rule
+
+v6.13 does not define or require repair of existing test data.
+
+Existing test rows, stale test rows or obsolete schema test sheets are not production migration targets.
+
+The rule for this project remains:
+
+- fix the future code path;
+- do not write repair/backfill logic for disposable test data unless explicitly requested.
 
 ### 1.3 Major Components
 | Component | Purpose | Owner | Notes |
