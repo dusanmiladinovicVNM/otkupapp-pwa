@@ -933,7 +933,7 @@ async function agroSaveTretman() {
     if (agroState.karencaDana > 0) {
         const d = new Date();
         d.setDate(d.getDate() + agroState.karencaDana);
-        datumBerbeDozvoljeno = d.toISOString().split('T')[0];
+        datumBerbeDozvoljeno = localIsoDateFromDate(d);
     }
 
     const record = {
@@ -946,7 +946,7 @@ async function agroSaveTretman() {
 
         kooperantID: CONFIG.ENTITY_ID,
         parcelaID: agroState.parcelaID,
-        datum: nowIso.split('T')[0],
+        datum: localIsoDateFromDate(now),
         mera: agroState.mera,
 
         artikalID: art ? art.artikalID : '',
