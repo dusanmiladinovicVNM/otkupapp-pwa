@@ -194,7 +194,7 @@ function bindConnectivityEvents() {
 
     window.addEventListener('online', async () => {
         updateSyncBadge();
-        await syncQueueSafe();
+        syncQueueSafe('interval');
         refreshStammdatenInBackground();
     });
 
@@ -799,7 +799,7 @@ function startBackgroundSync() {
     runtime.syncIntervalId = setInterval(() => {
         if (!navigator.onLine) return;
         if (CONFIG.USER_ROLE === 'Management') return;
-        syncQueueSafe();
+        syncQueueSafe('interval'););
     }, 60000);
 }
 
@@ -1009,6 +1009,69 @@ function normalizeRoleSyncResult(result, roleName) {
     };
 }
 
+async function requestRoleSync(reason) {
+    const role = CONFIG.USER_ROLE || '';
+    const syncReason = reason || 'manual';
+
+    if (role === 'Management') {
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'no-sync-for-role',
+            code: 'NO_SYNC_FOR_ROLE'
+        }, role);
+    }
+
+    if (role === 'Otkupac') {
+        if (typeof requestOtkupSync === 'function') {
+            return normalizeRoleSyncResult(await requestOtkupSync(syncReason), 'Otkupac');
+        }
+
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'missing-requestOtkupSync',
+            code: 'MISSING_SYNC_WRAPPER'
+        }, 'Otkupac');
+    }
+
+    if (role === 'Kooperant') {
+        if (typeof requestKooperantSync === 'function') {
+            return normalizeRoleSyncResult(await requestKooperantSync(syncReason), 'Kooperant');
+        }
+
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'missing-requestKooperantSync',
+            code: 'MISSING_SYNC_WRAPPER'
+        }, 'Kooperant');
+    }
+
+    if (role === 'Vozac') {
+        // Vozac ostaje kroz role-level gate dok ne uvedemo requestVozacSync u vozac/zbirna.js.
+        // Bitno: i dalje ide kroz syncQueueSafe/requestRoleSync, ne direktno iz triggera.
+        if (typeof syncZbirne === 'function') {
+            return normalizeRoleSyncResult(await syncZbirne(), 'Vozac');
+        }
+
+        return normalizeRoleSyncResult({
+            ok: false,
+            reason: 'missing-syncZbirne',
+            code: 'MISSING_SYNC_FUNCTION'
+        }, 'Vozac');
+    }
+
+    return normalizeRoleSyncResult({
+        ok: false,
+        reason: 'no-sync-for-role',
+        code: 'NO_SYNC_FOR_ROLE'
+    }, role);
+}
+
+window.requestRoleSync = requestRoleSync;
+
+async function runRoleSync(reason) {
+    return requestRoleSync(reason || 'manual');
+}
+
 async function runRoleSync() {
     const role = CONFIG.USER_ROLE || '';
 
@@ -1058,51 +1121,84 @@ async function runRoleSync() {
     }, role);
 }
 
-async function syncQueueSafe() {
+async function syncQueueSafe(reason) {
     const runtime = getAppRuntime();
     const runtimeSync = runtime.sync || (runtime.sync = {});
 
     const role = CONFIG.USER_ROLE || '';
+    const syncReason = reason || 'manual';
 
     if (!navigator.onLine) {
         return normalizeRoleSyncResult({
             ok: false,
-            reason: 'offline'
+            reason: 'offline',
+            code: 'OFFLINE'
         }, role);
     }
 
     if (role === 'Management') {
         return normalizeRoleSyncResult({
             ok: false,
-            reason: 'no-sync-for-role'
+            reason: 'no-sync-for-role',
+            code: 'NO_SYNC_FOR_ROLE'
         }, 'Management');
     }
 
+    // Global role-level guard: svi triggeri ulaze ovde.
     if (runtimeSync.queueInFlight) {
+        runtimeSync.queueRequested = true;
+        runtimeSync.queueRequestedReason = syncReason;
+
         return normalizeRoleSyncResult({
-            ok: false,
-            reason: 'already-running'
+            ok: true,
+            reason: 'already-running',
+            code: 'ALREADY_RUNNING'
         }, role);
     }
 
     runtimeSync.queueInFlight = true;
+    runtimeSync.queueReason = syncReason;
 
     try {
         if (typeof updateSyncBadge === 'function') {
             try { await updateSyncBadge('syncing'); } catch (_) {}
         }
 
-        return await runRoleSync();
+        let result = await requestRoleSync(syncReason);
+
+        // Ako je manual/online/interval/post-save stigao dok je sync trajao,
+        // ne pokrećemo paralelno, nego radimo još jedan serijski pass.
+        if (runtimeSync.queueRequested) {
+            const nextReason = runtimeSync.queueRequestedReason || 'requested';
+
+            runtimeSync.queueRequested = false;
+            runtimeSync.queueRequestedReason = '';
+            runtimeSync.queueReason = nextReason;
+
+            result = await requestRoleSync(nextReason);
+        }
+
+        return normalizeRoleSyncResult(result, role);
     } catch (err) {
-        console.error('runRoleSync failed:', err);
+        console.error('syncQueueSafe failed:', err);
+
+        if (typeof window.reportClientError === 'function') {
+            window.reportClientError(err, {
+                source: 'app',
+                errorAction: 'syncQueueSafe',
+                reason: syncReason,
+                role
+            });
+        }
 
         return normalizeRoleSyncResult({
             ok: false,
             reason: (err && err.message) || 'sync-error',
-            code: (err && err.name) || ''
+            code: (err && err.name) || 'SYNC_ERROR'
         }, role);
     } finally {
         runtimeSync.queueInFlight = false;
+        runtimeSync.queueReason = '';
 
         if (typeof updateSyncBadge === 'function') {
             try { await updateSyncBadge(); } catch (_) {}
