@@ -177,5 +177,73 @@
         });
     };
 
+        window.withSubmitLock = async function withSubmitLock(lockKey, fn, options) {
+        const key = String(lockKey || 'submit');
+        const opts = options || {};
+
+        const runtime = typeof getAppRuntime === 'function'
+            ? getAppRuntime()
+            : (window.appRuntime || (window.appRuntime = {}));
+
+        const locks = runtime.submitLocks || (runtime.submitLocks = {});
+
+        if (locks[key]) {
+            if (opts.alreadyMessage && typeof showToast === 'function') {
+                showToast(opts.alreadyMessage, 'info');
+            }
+            return null;
+        }
+
+        locks[key] = {
+            startedAt: new Date().toISOString(),
+            reason: opts.reason || ''
+        };
+
+        const selector = opts.selector || (
+            opts.action ? '[data-action="' + String(opts.action).replace(/"/g, '\\"') + '"]' : ''
+        );
+
+        const lockedElements = selector
+            ? Array.from(document.querySelectorAll(selector)).map(el => ({
+                el,
+                disabled: !!el.disabled,
+                ariaBusy: el.getAttribute('aria-busy'),
+                ariaDisabled: el.getAttribute('aria-disabled')
+            }))
+            : [];
+
+        lockedElements.forEach(item => {
+            const el = item.el;
+            el.classList.add('is-submitting');
+            el.setAttribute('aria-busy', 'true');
+            el.setAttribute('aria-disabled', 'true');
+
+            if ('disabled' in el) {
+                el.disabled = true;
+            }
+        });
+
+        try {
+            return await fn();
+        } finally {
+            delete locks[key];
+
+            lockedElements.forEach(item => {
+                const el = item.el;
+                el.classList.remove('is-submitting');
+
+                if (item.ariaBusy === null) el.removeAttribute('aria-busy');
+                else el.setAttribute('aria-busy', item.ariaBusy);
+
+                if (item.ariaDisabled === null) el.removeAttribute('aria-disabled');
+                else el.setAttribute('aria-disabled', item.ariaDisabled);
+
+                if ('disabled' in el) {
+                    el.disabled = item.disabled;
+                }
+            });
+        }
+    };
+
     window.installGlobalErrorReporting();
 })();
