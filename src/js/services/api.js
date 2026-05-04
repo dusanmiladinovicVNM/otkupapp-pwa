@@ -7,7 +7,7 @@ function apiHandleAuthFailure(json) {
     return false;
 }
 
-function apiNormalizePayload(actionOrParams, payload = {}) {
+function apiNormalizePayload(actionOrParams, payload = {}, options = {}) {
     let bodyPayload = {};
 
     if (typeof actionOrParams === 'string' && actionOrParams.indexOf('=') !== -1) {
@@ -19,11 +19,18 @@ function apiNormalizePayload(actionOrParams, payload = {}) {
         bodyPayload.action = actionOrParams;
     }
 
-    return {
-        token: CONFIG.TOKEN,
+    const normalized = {
         ...bodyPayload,
         ...payload
     };
+
+    if (options.includeToken !== false) {
+        normalized.token = CONFIG.TOKEN;
+    } else {
+        delete normalized.token;
+    }
+
+    return normalized;
 }
 
 function apiBuildResult(fields) {
@@ -46,7 +53,7 @@ async function apiRequestSafe(actionOrParams, payload = {}, options = {}) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-        const requestBody = apiNormalizePayload(actionOrParams, payload);
+        const requestBody = apiNormalizePayload(actionOrParams, payload, options);
 
         const resp = await fetch(CONFIG.API_URL, {
             method: 'POST',
