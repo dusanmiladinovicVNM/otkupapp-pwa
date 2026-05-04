@@ -547,7 +547,7 @@ async function confirmOtpremaAssign() {
         if (typeof updateSyncBadge === 'function') updateSyncBadge();
 
         if (navigator.onLine && typeof syncQueueSafe === 'function') {
-            syncQueueSafe();
+            syncQueueSafe('post-save');
         }
 
         // osveži lokalni state posle success prikaza
