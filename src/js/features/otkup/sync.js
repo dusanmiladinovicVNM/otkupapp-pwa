@@ -21,19 +21,68 @@ async function syncQueue() {
     return result;
 }
 
-async function syncNow() {
+async function requestOtkupSync(reason) {
+    const runtime = getAppRuntime ? getAppRuntime() : (window.appRuntime || {});
+    const runtimeSync = runtime.sync || (runtime.sync = {});
+
+    const syncReason = reason || 'manual';
+
     if (!navigator.onLine) {
+        return buildSyncResult({
+            reason: 'offline',
+            code: 'OFFLINE'
+        });
+    }
+
+    if (runtimeSync.otkupacRequestInFlight || runtimeSync.otkupacInFlight) {
+        runtimeSync.otkupacSyncRequested = true;
+        runtimeSync.otkupacSyncRequestedReason = syncReason;
+
+        return buildSyncResult({
+            reason: 'already-running',
+            code: 'ALREADY_RUNNING'
+        });
+    }
+
+    runtimeSync.otkupacRequestInFlight = true;
+    runtimeSync.otkupacLastSyncReason = syncReason;
+
+    try {
+        let result = await syncQueue();
+
+        // Ako je tokom sync-a stigao novi zahtev, odradi još jedan pass.
+        // Ovo hvata online + manual + post-save overlap bez paralelnog sync-a.
+        if (runtimeSync.otkupacSyncRequested) {
+            runtimeSync.otkupacSyncRequested = false;
+            runtimeSync.otkupacLastSyncReason = runtimeSync.otkupacSyncRequestedReason || 'requested';
+            runtimeSync.otkupacSyncRequestedReason = '';
+
+            const secondResult = await syncQueue();
+
+            result = normalizeRoleSyncResult
+                ? normalizeRoleSyncResult(secondResult, 'Otkupac')
+                : secondResult;
+        }
+
+        return result;
+    } finally {
+        runtimeSync.otkupacRequestInFlight = false;
+        try { await updateSyncBadge(); } catch (_) {}
+    }
+}
+
+window.requestOtkupSync = requestOtkupSync;
+
+async function syncNow() {
+    const result = await requestOtkupSync('manual');
+
+    if (result && result.reason === 'offline') {
         showToast('Nema konekcije', 'error');
-        return buildSyncResult({ reason: 'offline' });
-    }
-
-    const runtimeSync = (window.appRuntime || {}).sync || {};
-    if (runtimeSync.otkupacInFlight) {
+    } else if (result && result.reason === 'already-running') {
         showToast('Sinhronizacija je već u toku', 'info');
-        return buildSyncResult({ reason: 'already-running' });
     }
 
-    return await syncQueue();
+    return result;
 }
 
 async function updateSyncBadge(status) {
