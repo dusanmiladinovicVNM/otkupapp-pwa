@@ -22,6 +22,8 @@ async function bootstrapApp() {
 
         db = await openDB();
 
+        await recoverStaleSyncingForCurrentRole('bootstrap');
+
         await loadStammdatenFromCache();
 
         applyRoleVisibility();
@@ -1156,6 +1158,64 @@ async function syncQueueSafe(reason) {
         }
     }
 }
+
+async function recoverStaleSyncingForCurrentRole(reason) {
+    if (!db || typeof recoverStaleSyncingStores !== 'function') {
+        return [];
+    }
+
+    const role = CONFIG.USER_ROLE || '';
+    const stores = [];
+
+    if (role === 'Otkupac') {
+        stores.push(CONFIG.STORE_NAME);
+    } else if (role === 'Kooperant') {
+        stores.push('tretmani', 'troskovi');
+    } else if (role === 'Vozac') {
+        stores.push('zbirne');
+    } else {
+        return [];
+    }
+
+    const uniqueStores = Array.from(new Set(stores.filter(Boolean)));
+
+    try {
+        const results = await recoverStaleSyncingStores(uniqueStores);
+
+        const recoveredTotal = results.reduce((sum, r) => {
+            return sum + (parseInt(r.recovered, 10) || 0);
+        }, 0);
+
+        const runtime = getAppRuntime();
+        const runtimeSync = runtime.sync || (runtime.sync = {});
+
+        runtimeSync.lastStaleRecoveryReason = reason || 'bootstrap';
+        runtimeSync.lastStaleRecoveryAt = new Date().toISOString();
+        runtimeSync.lastStaleRecoveryCount = recoveredTotal;
+        runtimeSync.lastStaleRecoveryResults = results;
+
+        if (recoveredTotal > 0) {
+            console.info('[app] stale syncing recovered:', results);
+        }
+
+        return results;
+    } catch (err) {
+        console.error('recoverStaleSyncingForCurrentRole failed:', err);
+
+        if (typeof window.reportClientError === 'function') {
+            window.reportClientError(err, {
+                source: 'app',
+                errorAction: 'recoverStaleSyncingForCurrentRole',
+                reason: reason || 'bootstrap',
+                role
+            });
+        }
+
+        return [];
+    }
+}
+
+window.recoverStaleSyncingForCurrentRole = recoverStaleSyncingForCurrentRole;
 
 // ============================================================
 // QR SCANNER
