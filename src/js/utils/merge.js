@@ -54,3 +54,87 @@ window.mergeOfflineRecords = function (local, server, normalizeLocal, primaryKey
 
     return Array.from(merged.values());
 };
+
+window.getRecordDedupeKey = function getRecordDedupeKey(record) {
+    if (!record) return '';
+
+    const serverRecordID = String(record.serverRecordID || record.ServerRecordID || '').trim();
+    if (serverRecordID) return 'srv:' + serverRecordID;
+
+    const clientRecordID = String(record.clientRecordID || record.ClientRecordID || '').trim();
+    if (clientRecordID) return 'cli:' + clientRecordID;
+
+    return '';
+};
+
+window.getRecordFreshnessTs = function getRecordFreshnessTs(record) {
+    if (!record) return '';
+
+    return String(
+        record.updatedAtServer ||
+        record.UpdatedAtServer ||
+        record.syncedAt ||
+        record.SyncedAt ||
+        record.updatedAtClient ||
+        record.UpdatedAtClient ||
+        record.createdAtClient ||
+        record.CreatedAtClient ||
+        record.ReceivedAt ||
+        record.receivedAt ||
+        ''
+    );
+};
+
+window.isLocalPriorityRecord = function isLocalPriorityRecord(record) {
+    if (!record) return false;
+
+    const status = String(record.syncStatus || record.SyncStatus || '').toLowerCase();
+    const err = String(record.lastSyncError || record.LastSyncError || '').trim();
+
+    return status === 'pending' || status === 'syncing' || !!err;
+};
+
+window.pickPreferredRecordForRender = function pickPreferredRecordForRender(existing, candidate) {
+    if (!existing) return candidate;
+    if (!candidate) return existing;
+
+    const existingPriority = window.isLocalPriorityRecord(existing);
+    const candidatePriority = window.isLocalPriorityRecord(candidate);
+
+    if (candidatePriority && !existingPriority) return candidate;
+    if (existingPriority && !candidatePriority) return existing;
+
+    const candidateTs = window.getRecordFreshnessTs(candidate);
+    const existingTs = window.getRecordFreshnessTs(existing);
+
+    if (candidateTs && existingTs) {
+        return candidateTs >= existingTs ? candidate : existing;
+    }
+
+    if (candidateTs && !existingTs) return candidate;
+
+    return existing;
+};
+
+window.dedupeRecordsForRender = function dedupeRecordsForRender(records, keyFn) {
+    const out = new Map();
+    const getKey = typeof keyFn === 'function' ? keyFn : window.getRecordDedupeKey;
+
+    (records || []).forEach(record => {
+        if (!record) return;
+
+        const key = getKey(record);
+        if (!key) {
+            // Bez ključa ne dedupujemo, da ne sakrijemo legitimno različite zapise.
+            out.set('nokey:' + out.size, record);
+            return;
+        }
+
+        out.set(
+            key,
+            window.pickPreferredRecordForRender(out.get(key), record)
+        );
+    });
+
+    return Array.from(out.values());
+};
