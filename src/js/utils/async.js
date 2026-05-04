@@ -12,6 +12,25 @@
         return s.length > limit ? s.substring(0, limit) : s;
     }
 
+    function redactSensitiveText(value) {
+        let out = String(value || '');
+
+        let currentToken = '';
+        try {
+            currentToken = (window.CONFIG && CONFIG.TOKEN) || '';
+        } catch (_) {}
+
+        out = out
+            .replace(/(\b(?:token|authToken)\b\s*[:=]\s*["']?)[^"',\s&}]+/gi, '$1[REDACTED]')
+            .replace(/((?:token|authToken)=)[^&\s]+/gi, '$1[REDACTED]');
+
+        if (currentToken && currentToken.length >= 8) {
+            out = out.split(currentToken).join('[REDACTED]');
+        }
+
+        return out;
+    }
+
     function getErrorMessage(err) {
         if (!err) return 'Unknown error';
         if (err.message) return String(err.message);
@@ -30,13 +49,11 @@
         let role = '';
         let entityID = '';
         let appVersion = '';
-        let token = '';
 
         try {
             role = (window.CONFIG && CONFIG.USER_ROLE) || '';
             entityID = (window.CONFIG && (CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID)) || '';
             appVersion = (window.CONFIG && CONFIG.APP_VERSION) || '';
-            token = (window.CONFIG && CONFIG.TOKEN) || '';
         } catch (_) {}
 
         return {
@@ -46,7 +63,6 @@
             role,
             entityID: ctx.entityID || entityID,
             appVersion,
-            token,
             url: window.location ? window.location.href : '',
             userAgent: navigator.userAgent || ''
         };
@@ -55,7 +71,10 @@
     async function sendClientErrorPayload(payload) {
         // Prefer normalized API helper when available.
         if (typeof window.apiPostSafe === 'function') {
-            await window.apiPostSafe('logClientError', payload, { timeoutMs: 8000 });
+            await window.apiPostSafe('logClientError', payload, {
+                timeoutMs: 8000,
+                includeToken: false
+            });
             return;
         }
 
@@ -82,8 +101,8 @@
         try {
             if (clientErrorCount >= CLIENT_ERROR_MAX_PER_PAGE) return;
 
-            const message = getErrorMessage(err);
-            const stack = getErrorStack(err);
+            const message = redactSensitiveText(getErrorMessage(err));
+            const stack = redactSensitiveText(getErrorStack(err));
             const meta = getClientErrorMeta(context);
 
             const dedupeKey = [
@@ -115,12 +134,11 @@
             ].filter(Boolean).join('\n');
 
             await sendClientErrorPayload({
-                token: meta.token,
                 entityID: meta.entityID,
-                errorAction: safeString(meta.errorAction, 120),
-                message: safeString(message, 500),
-                details: safeString(details, 1500),
-                stack: safeString(stack, 1500)
+                errorAction: safeString(redactSensitiveText(meta.errorAction), 120),
+                message: safeString(redactSensitiveText(message), 500),
+                details: safeString(redactSensitiveText(details), 1500),
+                stack: safeString(redactSensitiveText(stack), 1500)
             });
         } catch (reportErr) {
             // Logging must never break app runtime.
