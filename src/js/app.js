@@ -194,7 +194,7 @@ function bindConnectivityEvents() {
 
     window.addEventListener('online', async () => {
         updateSyncBadge();
-        syncQueueSafe('interval');
+        await syncQueueSafe('online');
         refreshStammdatenInBackground();
     });
 
@@ -1070,55 +1070,6 @@ window.requestRoleSync = requestRoleSync;
 
 async function runRoleSync(reason) {
     return requestRoleSync(reason || 'manual');
-}
-
-async function runRoleSync() {
-    const role = CONFIG.USER_ROLE || '';
-
-    if (!navigator.onLine) {
-        return normalizeRoleSyncResult({
-            ok: false,
-            reason: 'offline'
-        }, role);
-    }
-
-    if (role === 'Otkupac') {
-        if (typeof syncQueue !== 'function') {
-            return normalizeRoleSyncResult({
-                ok: false,
-                reason: 'missing-syncQueue'
-            }, 'Otkupac');
-        }
-
-        return normalizeRoleSyncResult(await syncQueue(), 'Otkupac');
-    }
-
-    if (role === 'Kooperant') {
-        if (typeof syncKooperantNow !== 'function') {
-            return normalizeRoleSyncResult({
-                ok: false,
-                reason: 'missing-syncKooperantNow'
-            }, 'Kooperant');
-        }
-
-        return normalizeRoleSyncResult(await syncKooperantNow(), 'Kooperant');
-    }
-
-    if (role === 'Vozac') {
-        if (typeof syncZbirne !== 'function') {
-            return normalizeRoleSyncResult({
-                ok: false,
-                reason: 'missing-syncZbirne'
-            }, 'Vozac');
-        }
-
-        return normalizeRoleSyncResult(await syncZbirne(), 'Vozac');
-    }
-
-    return normalizeRoleSyncResult({
-        ok: false,
-        reason: 'no-sync-for-role'
-    }, role);
 }
 
 async function syncQueueSafe(reason) {
