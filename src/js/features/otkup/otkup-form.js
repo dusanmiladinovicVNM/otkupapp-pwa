@@ -375,9 +375,7 @@ async function saveOtkup() {
         if (navigator.onLine) {
             setTimeout(() => {
                 if (typeof syncQueueSafe === 'function') {
-                    syncQueueSafe();
-                } else if (typeof syncQueue === 'function') {
-                    syncQueue();
+                    syncQueueSafe('post-save');
                 }
             }, 0);
         }
