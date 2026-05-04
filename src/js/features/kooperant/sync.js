@@ -25,12 +25,10 @@
     // TROSKOVI (knjiga polja)
     // Backend action: syncTrosak
     // Store: 'troskovi'
-    //
-    // NOTE: GAS endpoint currently returns FEATURE_DISABLED.
-    // Engine handles this gracefully — records stay 'pending'
-    // without polluting attempt counters or error fields.
-    // When GAS implements the endpoint, this will start working
-    // automatically with no frontend changes required.
+
+    // Troškovi koriste isti shared sync engine kao tretmani.
+    // Backend action syncTrosak je aktivan; FEATURE_DISABLED ostaje
+    // podržan samo kao generic fallback u sync-engine.js.
     // ------------------------------------------------------------
     window.syncTroskovi = async function syncTroskovi() {
         return syncStore({
