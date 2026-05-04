@@ -45,6 +45,14 @@ async function bootstrapApp() {
         refreshStammdatenInBackground();
     } catch (err) {
         console.error('bootstrapApp failed:', err);
+
+        if (typeof window.reportClientError === 'function') {
+            window.reportClientError(err, {
+                source: 'app',
+                errorAction: 'bootstrapApp'
+            });
+        }        
+
         showToast('Greška pri pokretanju aplikacije', 'error');
     } finally {
         // UVEK sakrij loader — čak i ako boot pukne
@@ -893,6 +901,14 @@ async function guardStammdaten(fn) {
         return await fn();
     } catch (err) {
         console.error('guardStammdaten failed:', err);
+
+        if (typeof window.reportClientError === 'function') {
+            window.reportClientError(err, {
+                source: 'app',
+                errorAction: 'guardStammdaten'
+            });
+        }
+        
         showToast('Greška u radu sa šifarnicima', 'error');
     }
 }
