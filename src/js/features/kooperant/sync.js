@@ -84,6 +84,69 @@
 
         return aggregateKooperantSyncResult(unitResults);
     };
+
+    window.requestKooperantSync = async function requestKooperantSync(reason) {
+        const runtime = typeof getAppRuntime === 'function'
+            ? getAppRuntime()
+            : (window.appRuntime || {});
+
+        const runtimeSync = runtime.sync || (runtime.sync = {});
+        const syncReason = reason || 'manual';
+
+        if (!navigator.onLine) {
+            return {
+                ok: false,
+                role: 'Kooperant',
+                synced: 0,
+                failed: 0,
+                results: [],
+                reason: 'offline',
+                code: 'OFFLINE',
+                partial: false
+            };
+        }
+
+        if (runtimeSync.kooperantRequestInFlight || runtimeSync.tretmaniInFlight || runtimeSync.troskoviInFlight) {
+            runtimeSync.kooperantSyncRequested = true;
+            runtimeSync.kooperantSyncRequestedReason = syncReason;
+
+            return {
+                ok: true,
+                role: 'Kooperant',
+                synced: 0,
+                failed: 0,
+                results: [],
+                reason: 'already-running',
+                code: 'ALREADY_RUNNING',
+                partial: false
+            };
+        }
+
+        runtimeSync.kooperantRequestInFlight = true;
+        runtimeSync.kooperantLastSyncReason = syncReason;
+
+        try {
+            let result = await window.syncKooperantNow();
+
+            // Ako je stigao novi zahtev dok je prvi sync trajao, uradi još jedan serijski pass.
+            if (runtimeSync.kooperantSyncRequested) {
+                runtimeSync.kooperantSyncRequested = false;
+                runtimeSync.kooperantLastSyncReason = runtimeSync.kooperantSyncRequestedReason || 'requested';
+                runtimeSync.kooperantSyncRequestedReason = '';
+
+                result = await window.syncKooperantNow();
+            }
+
+            return result;
+        } finally {
+            runtimeSync.kooperantRequestInFlight = false;
+
+            try {
+                if (typeof updateSyncBadge === 'function') await updateSyncBadge();
+            } catch (_) {}
+        }
+    };
+    
     function normalizeKooperantSyncUnit(type, result) {
         const r = result && typeof result === 'object' ? result : {};
 
