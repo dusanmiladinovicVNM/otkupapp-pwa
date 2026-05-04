@@ -83,7 +83,10 @@ const ASSETS = [
     './vendor/jspdf.umd.min.js',
     './vendor/leaflet.css',
     './vendor/leaflet.js',
-    './vendor/chart.umd.min.js'
+    './vendor/chart.umd.min.js',
+    './vendor/images/marker-icon.png',
+    './vendor/images/marker-icon-2x.png',
+    './vendor/images/marker-shadow.png'
     ];
 
 // Install: cache app shell
