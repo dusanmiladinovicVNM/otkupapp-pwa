@@ -229,40 +229,13 @@ function normalizeLocalPregledRecord(r) {
 }
 
 function mergePregledRecords(localRows, serverRows) {
-    const map = new Map();
+    const normalizedLocal = (localRows || []).map(normalizeLocalPregledRecord);
+    const normalizedServer = serverRows || [];
 
-    serverRows.forEach(row => {
-        const key = getPregledRecordKey(row);
-        if (!key) return;
-        map.set(key, row);
-    });
-
-    localRows
-        .map(normalizeLocalPregledRecord)
-        .forEach(row => {
-            const key = getPregledRecordKey(row);
-            if (!key) return;
-
-            const existing = map.get(key);
-
-            if (!existing) {
-                map.set(key, row);
-                return;
-            }
-
-            // Ako lokalni zapis nije sinhronizovan ili ima grešku, lokalni ima prednost
-            if (row.syncStatus !== 'synced' || row.lastSyncError) {
-                map.set(key, row);
-                return;
-            }
-
-            // Ako je lokalni noviji od server rendera, uzmi lokalni
-            if ((row.updatedAtClient || '') > (existing.updatedAtClient || '')) {
-                map.set(key, row);
-            }
-        });
-
-    return Array.from(map.values()).filter(r => !r.deleted);
+    return dedupeRecordsForRender([
+        ...normalizedServer,
+        ...normalizedLocal
+    ]).filter(r => !r.deleted);
 }
 
 function getPregledRecordKey(r) {
