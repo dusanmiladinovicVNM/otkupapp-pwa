@@ -3,6 +3,9 @@
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `AGRIX_ARCHITECTURE_REFERENCE_FILLED.md`  
 **Owner:** Architecture documentation compiled from supplied reference set  
+**Current Version:** v6.13  
+**Last Updated:** 2026-05-04  
+**Status:** Complete changelog updated through v6.13  
 
 ---
 
@@ -47,6 +50,7 @@ Koristi sledeće tagove:
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.13 | 2026-05-04 | PWA pre-launch P0 runtime hardening: app-shell/cache stability, unified render dedupe, single sync trigger entrypoint, bootstrap stale-syncing recovery and submit locks for critical save flows | Yes | no production data migration; unit tests deferred; saveParcelPolygon decision and selected final role smoke remain open |
 | v2.2 | 2026-03-08 | Sledljivost v2.0, novac renaming, Agrohemija, report refactor | Yes | post-session stabilization |
 | v2.3 | 2026-03-13 | BankaImport + mapping matured, Kartica Kooperanta, orphan checks | Yes | finance/reporting expansion |
 | v2.4 | 2026-03-17 | SEF v1.0 introduced | Yes | major e-faktura milestone |
@@ -84,6 +88,147 @@ Slede svi popunjeni changelog unosi iz dostavljenog reference seta, normalizovan
 
 
 
+
+
+
+## v6.13 — 2026-05-04
+
+### Summary
+- v6.13 closes the remaining PWA pre-launch P0 runtime-hardening issues after the v6.12 launch-smoke baseline.
+- The release stabilizes app-shell/cache behavior, unified render dedupe, sync trigger ownership, stale `syncing` recovery and critical save submit-locking.
+- No production-data migration is included.
+- Minimal unit tests remain deferred as a separate P-1/post-launch safety-net item.
+
+### ADDED
+- [Layer: PWA/Merge + Render] Canonical alias-aware render dedupe helper `dedupeRecordsForRender(records, aliasesFn?)` in `src/js/utils/merge.js`.
+  - What changed: key UI lists now use one shared dedupe helper before render.
+  - Why: local/server merge, reconnect refresh, partial sync and stale-cache/fresh-response combinations must not render the same logical row twice.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Sync] Public sync request wrappers.
+  - What changed: `requestRoleSync(reason)`, `requestOtkupSync(reason)` and `requestKooperantSync(reason)` are active wrapper entrypoints around role/store sync.
+  - Why: manual, online, interval and post-save triggers must not call low-level sync functions directly.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Sync Recovery] Bootstrap stale-`syncing` recovery helpers.
+  - What changed: `recoverStaleSyncingRecords(storeName)`, `recoverStaleSyncingStores(storeNames)` and `recoverStaleSyncingForCurrentRole(reason)` are exposed and used during bootstrap.
+  - Why: rows stuck in `syncing` after a crash/reload/network interruption must become retryable before the first role render and sync badge update.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Runtime UX] Shared critical-submit lock helper `withSubmitLock(lockKey, fn, options)`.
+  - What changed: the helper stores locks in `window.appRuntime.submitLocks`, can disable matching action buttons and clears locks in `finally`.
+  - Why: double-tap or repeated clicks on field devices must not create duplicate local records.
+  - Reference update required: Yes
+  - Migration required: No
+
+### CHANGED
+- [Layer: PWA/App Shell] Runtime stability items were closed for role navigation and app-shell loading.
+  - What changed: `tabs.js` guards `agroState` for non-Kooperant roles; `role-nav.js` uses canonical `cfg.type`; `db.js` is expected to load once; service-worker cache discipline was tightened.
+  - Why: non-Kooperant roles, management navigation and mixed-cache deploys must not crash field usage.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Service Worker] Critical runtime asset deploy discipline was tightened.
+  - What changed: `CACHE_NAME` must be bumped when critical JS/runtime assets change, and Leaflet marker image assets are part of the offline app-shell contract when maps are launch-relevant.
+  - Why: deploys must not leave users with a mixed old/new runtime asset set.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Render Paths] Main list render paths now pass through unified dedupe.
+  - What changed: dedupe is applied to Otkup queue, Otkup pregled, Vozač zbirna pregled, Kooperant treatment history, Otkup otprema overview and Otkup otprema assign runtime state.
+  - Why: duplicate record display must be solved centrally rather than by feature-specific local maps.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Sync] `syncQueueSafe(reason)` is the single app-level sync trigger entrypoint.
+  - What changed: online, interval, manual and post-save paths pass explicit reason strings to `syncQueueSafe(...)`; `runRoleSync(reason)` is now only a legacy alias to `requestRoleSync(reason)`.
+  - Why: parallel sync attempts must be prevented at the trigger layer before reaching store-level sync.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Vozac Zbirna] Zbirna post-save sync now follows the app-level sync gate.
+  - What changed: `confirmZbirnaUnlocked()` uses `syncQueueSafe('post-save')` instead of direct low-level `syncZbirne()`.
+  - Why: the single sync-entrypoint rule must also apply to Vozač post-save flows.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Save Flow] Critical save functions were split into locked public wrappers and unlocked implementations.
+  - What changed: `saveOtkup()`, `confirmZbirna()` and `agroSaveTretman()` call `withSubmitLock(...)` and delegate to `saveOtkupUnlocked()`, `confirmZbirnaUnlocked()` and `agroSaveTretmanUnlocked()`.
+  - Why: business logic stays unchanged while double-submit protection is centralized.
+  - Reference update required: Yes
+  - Migration required: No
+
+### FIXED
+- [Layer: PWA/Render Dedupe] Alias-case duplicate rows.
+  - Symptom: the same logical record could render twice when one copy had `{ serverRecordID, clientRecordID }` and another local copy had only `{ clientRecordID }`.
+  - Resolution: `dedupeRecordsForRender(...)` groups identity aliases and keeps the local pending/syncing/error version over server-synced rows.
+  - Reference update required: Yes
+
+- [Layer: PWA/Sync] Parallel sync trigger race.
+  - Symptom: manual sync plus online event/background interval/post-save could attempt overlapping sync operations.
+  - Resolution: all triggers now go through `syncQueueSafe(reason)` and role/store wrappers with runtime in-flight flags.
+  - Reference update required: Yes
+
+- [Layer: PWA/Sync Recovery] Stale rows stuck as `syncing` before first sync.
+  - Symptom: after interruption, rows could stay visually/internally stuck as `syncing` until another sync attempt started.
+  - Resolution: role-aware stale recovery now runs during bootstrap, before role render and sync badge calculation.
+  - Reference update required: Yes
+
+- [Layer: PWA/Save UX] Double-tap duplicate local record risk.
+  - Symptom: rapid repeated taps on critical save buttons could create more than one local record.
+  - Resolution: shared submit locks now wrap Otkup save, Zbirna confirm and Kooperant treatment save flows.
+  - Reference update required: Yes
+
+### VERIFIED
+- [Layer: PWA/Dedupe] Runtime coverage confirmed.
+  - Evidence: `dedupeRecordsForRender` is available and used by Otkup queue, Otkup pregled, Zbirna pregled, treatment history, Otprema overview and Otprema assign state.
+  - Acceptance: alias test returns one row `['local-pending']` in both input orders.
+
+- [Layer: PWA/Sync] Runtime routing and parallel guard confirmed.
+  - Evidence: `requestRoleSync`, `requestOtkupSync`, `requestKooperantSync` exist; online and interval use explicit reasons; Otkup post-save has no low-level `syncQueue()` fallback.
+  - Acceptance: concurrent `syncQueueSafe('manual')` + `syncQueueSafe('online')` as Otkupac returned one normal/no-pending result and one `already-running / ALREADY_RUNNING`; runtime flags reset afterwards.
+
+- [Layer: PWA/Stale Recovery] Bootstrap recovery confirmed.
+  - Evidence: recovery helpers exist globally and `bootstrapApp()` calls `recoverStaleSyncingForCurrentRole('bootstrap')`.
+  - Acceptance: manual stale test restored a `syncing` row to `pending` and set `lastServerStatus = 'stale-syncing-recovered'`.
+
+- [Layer: PWA/Submit Lock] Submit-lock structure confirmed.
+  - Evidence: `withSubmitLock` exists; `saveOtkup`, `confirmZbirna` and `agroSaveTretman` use it; `confirmZbirnaUnlocked` uses `syncQueueSafe('post-save')`.
+  - Acceptance: Otkupac double-tap smoke created one record in the 5-minute test window.
+
+### DEFERRED
+- [Layer: Tests] Minimal unit test safety net.
+  - What changed: unit tests for sync, merge, dedupe and stale recovery remain deferred.
+  - Why: v6.13 is pre-launch runtime hardening; unit tests remain a P-1/post-launch safety item.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: PWA/Submit Lock Smoke] Remaining role double-tap smoke.
+  - What changed: implementation is complete and Otkupac smoke passed; strict acceptance should still smoke Vozač `confirmZbirna` and Kooperant `agroSaveTretman`.
+  - Why: both flows are structurally locked but still deserve role-specific field confirmation.
+  - Reference update required: Yes
+  - Migration required: No
+
+### KNOWN ISSUE
+- [Layer: GAS/Auth] `saveParcelPolygon` public write decision remains open unless explicitly accepted.
+  - Current state: endpoint is a known public-write decision point.
+  - Recommended outcome: lock under token before real production launch.
+  - Reference update required: Yes
+  - Migration required: No
+
+- [Layer: VBA/VOZ Writeback] `BrojZbirne` writeback fix remains relevant if VBA document-flow launch is in scope.
+  - Current state: `WriteBackVOZSyncStatus` must write column B / `ServerRecordID` from `update(2)` and column T / `BrojZbirne` from `update(3)`.
+  - Why: `BrojZbirne` is the VBA-owned business document number, not the technical sync ID.
+  - Reference update required: Already documented in v6.12/v6.13 reference
+  - Migration required: No test-data backfill
+
+### Migration / Data Notes
+- No production-data migration.
+- No repair/backfill for disposable test data.
+- Service-worker cache version must be bumped before production deploy.
 
 
 
