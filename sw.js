@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v19';
+const CACHE_NAME = 'AgriX-v20';
 const ASSETS = [
     './index.html',
     './manifest.json',
