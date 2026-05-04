@@ -437,11 +437,13 @@ async function getTretmaniCached(forceRefresh) {
         server = json.records.map(agroMapServerTretman);
     }
 
-    const merged = agroMergeTretmani(local, server);
+    const merged = dedupeRecordsForRender(
+        agroMergeTretmani(local, server)
+    );
 
     _tretmaniCache = { data: merged, ts: Date.now() };
     return merged;
-}
+    }
 
 function invalidateTretmaniCache() {
     _tretmaniCache = { data: null, ts: 0 };
