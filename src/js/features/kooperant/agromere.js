@@ -619,7 +619,7 @@ function agroCalcPreporuka() {
     const needed = art.pakovanje > 0 ? finalQty * art.pakovanje : finalQty;
     if (needed > art.stanje) {
         lagerWarn = '<br><span style="color:var(--danger);font-weight:600;">⚠️ Nedovoljno na lageru! Imate: ' +
-            art.stanje.toLocaleString('sr') + ' ' + art.jm + '</span>';
+            escapeHtml((art.stanje || 0).toLocaleString('sr')) + ' ' + escapeHtml(art.jm || '') + '</span>';
     }
 
     panel.classList.add('visible');
