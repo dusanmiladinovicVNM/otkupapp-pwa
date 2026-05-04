@@ -188,9 +188,6 @@ async function savePdfToDrive(clientRecordID) {
 
     const sigKooperant = getSignatureData('sigKooperant') || (record.sigKooperant || '');
 
-    console.log('SIG OTK length:', sigOtkupac ? sigOtkupac.length : 0);
-    console.log('SIG KOOP length:', sigKooperant ? sigKooperant.length : 0);
-
     showToast('Generisanje PDF-a...', 'info');
 
     try {
@@ -291,12 +288,29 @@ async function savePdfToDrive(clientRecordID) {
         doc.rect(17 + sigW, y, sigW, sigH);
 
         if (sigOtkupac) {
-            console.log('Adding sigOtkupac to PDF');
-            try { doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2); console.log('sigOtk OK'); } catch (e) { console.log('sigOtk ERROR:', e); }
+            try {
+                doc.addImage(sigOtkupac, 'PNG', 13, y + 1, sigW - 2, sigH - 2);
+            } catch (e) {
+                if (typeof reportClientError === 'function') {
+                    reportClientError(e, {
+                        source: 'otkupni-list',
+                        errorAction: 'pdf-add-signature-otkupac'
+                    });
+                }
+            }
         }
+
         if (sigKooperant) {
-            console.log('Adding sigKooperant to PDF');
-            try { doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2); console.log('sigKoop OK'); } catch (e) { console.log('sigKoop ERROR:', e); }
+            try {
+                doc.addImage(sigKooperant, 'PNG', 18 + sigW, y + 1, sigW - 2, sigH - 2);
+            } catch (e) {
+                if (typeof reportClientError === 'function') {
+                    reportClientError(e, {
+                        source: 'otkupni-list',
+                        errorAction: 'pdf-add-signature-kooperant'
+                    });
+                }
+            }
         }
 
         y += sigH + 5;
@@ -315,7 +329,15 @@ async function savePdfToDrive(clientRecordID) {
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
         else { showToast('Greška: ' + (json.error || ''), 'error'); }
     } catch (e) {
-        console.log('PDF error:', e);
+        console.error('PDF error:', e);
+
+        if (typeof reportClientError === 'function') {
+            reportClientError(e, {
+                source: 'otkupni-list',
+                errorAction: 'savePdfToDrive'
+            });
+        }
+
         showToast('Greška pri generisanju PDF-a', 'error');
     }
 }
