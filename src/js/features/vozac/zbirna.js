@@ -430,5 +430,6 @@ async function getMergedZbirneForVozac() {
         server = json.records.map(mapServerZbirnaRecord);
     }
 
-    return mergeZbirneRecords(local, server).filter(r => !r.deleted);
+    return dedupeRecordsForRender(mergeZbirneRecords(local, server))
+    .filter(r => !r.deleted);
 }
