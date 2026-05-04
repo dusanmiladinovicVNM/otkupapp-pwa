@@ -881,7 +881,8 @@ function authenticateUser(username, pin) {
             expiresAt: tokenPayload.expiresAt,
             role: role,
             entityID: entityID,
-            displayName: String(data[i][colName] || '').trim()
+            displayName: String(data[i][colName] || '').trim(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
           };
         } else {
           cache.put(attemptsKey, String(attempts + 1), 900);
