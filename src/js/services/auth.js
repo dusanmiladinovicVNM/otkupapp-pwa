@@ -128,6 +128,7 @@ async function doLogin() {
         const entityID = json.entityID || json.otkupacID || '';
 
         setLs('authToken', json.token);
+        setLs('authExpiresAt', json.expiresAt || '');
         setLs('userRole', json.role);
         setLs('entityID', entityID);
         setLs('entityName', json.displayName);
@@ -157,7 +158,7 @@ async function doLogin() {
 }
 
 function doLogout() {
-    removeLs(['userRole', 'otkupacID', 'entityID', 'entityName', 'authToken', 'username']);
+    removeLs(['userRole', 'otkupacID', 'entityID', 'entityName', 'authToken', 'authExpiresAt', 'username']);
 
     ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav'].forEach(id => {
         const nav = document.getElementById(id);
