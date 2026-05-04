@@ -408,6 +408,34 @@
         }
     };
 
+    window.recoverStaleSyncingRecords = recoverStaleSyncingRecords;
+
+    window.recoverStaleSyncingStores = async function recoverStaleSyncingStores(storeNames) {
+        const stores = Array.isArray(storeNames) ? storeNames : [];
+        const results = [];
+
+        for (const storeName of stores) {
+            if (!storeName) continue;
+
+            try {
+                const recovered = await recoverStaleSyncingRecords(storeName);
+                results.push({
+                    storeName,
+                    recovered
+                });
+            } catch (err) {
+                console.error('[sync-engine] bootstrap stale recovery failed:', storeName, err);
+                results.push({
+                    storeName,
+                    recovered: 0,
+                    error: err && err.message ? err.message : String(err || '')
+                });
+            }
+        }
+
+        return results;
+    };
+
     window.buildSyncResult = buildSyncResult;
 
     window.isAnySyncInFlight = function isAnySyncInFlight() {
