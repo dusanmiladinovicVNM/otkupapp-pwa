@@ -381,6 +381,17 @@
 
         } catch (err) {
             console.error('[sync-engine] ' + action + ' failed:', err);
+            
+                if (typeof window.reportClientError === 'function') {
+                window.reportClientError(err, {
+                    source: 'sync-engine',
+                    errorAction: 'sync:' + action,
+                    details: 'storeName=' + storeName +
+                        '\ninFlightKey=' + inFlightKey +
+                        '\npending=' + (Array.isArray(pending) ? pending.length : 0)
+                });
+            }
+            
             await rollbackPendingFromError(
                 storeName, pending,
                 (err && err.message) || 'Greška pri sync-u',
