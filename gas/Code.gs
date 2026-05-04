@@ -633,11 +633,24 @@ function doPost(e) {
     }
 
     if (data.action === 'syncTrosak') {
-      return jsonResponse({
-        success: false,
-        code: 'FEATURE_DISABLED',
-        error: 'Sync troškova trenutno nije aktivan.'
-      });
+      if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
+      if (!isManagement(tokenData) && !requireEntity(tokenData, data.kooperantID)) return forbiddenResponse();
+
+      if (!Array.isArray(data.records)) {
+        return jsonResponse({
+          success: false,
+          error: 'records must be an array',
+          code: 'BAD_RECORDS'
+        });
+      }
+
+      return jsonResponse(withLock(function() {
+        const results = data.records.map(function(r) {
+          return processTrosakRecord(r, data.kooperantID);
+        });
+
+        return buildBatchSyncResponse(results);
+      }));
     }
 
     if (data.action === 'saveOtkupniListPdf') {
@@ -2093,17 +2106,277 @@ function getOpremaForKooperant(kooperantID) {
 
 function getTroskoviForKooperant(kooperantID) {
   try {
-    if (!kooperantID) return { success: false, error: 'kooperantID required' };
+    const normalizedKooperantID = String(kooperantID || '').trim();
 
-    var registry = getSheetRegistry();
-    var ss = openSheetByRegistry('TROSKOVI-' + kooperantID, registry);
+    if (!normalizedKooperantID) {
+      return {
+        success: false,
+        records: [],
+        error: 'Nedostaje kooperantID.'
+      };
+    }
 
-    if (!ss) return { success: true, records: [] };
-    return { success: true, records: sheetToArray(ss.getSheets()[0]) };
+    const sheetName = getTroskoviSheetName(normalizedKooperantID);
+    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const files = folder.getFilesByName(sheetName);
+
+    if (!files.hasNext()) {
+      return {
+        success: true,
+        records: []
+      };
+    }
+
+    const ss = SpreadsheetApp.open(files.next());
+    const sheet = ss.getSheets()[0];
+
+    ensureSheetColumns(sheet, TROSKOVI_COLUMNS);
+
+    const records = sheetToArray(sheet).filter(function(r) {
+      return String(r.KooperantID || '').trim() === normalizedKooperantID;
+    });
+
+    return {
+      success: true,
+      records: records
+    };
+
   } catch (err) {
-      logError('GAS', 'getTroskoviForKooperant', err.message, err.stack || '', kooperantID || '');
-      return { success: false, error: err.message };
+    logError(
+      'GAS',
+      'getTroskoviForKooperant',
+      err && err.message ? err.message : String(err || ''),
+      err && err.stack ? err.stack : '',
+      kooperantID || ''
+    );
+
+    return {
+      success: false,
+      records: [],
+      error: 'Greška pri učitavanju troškova.'
+    };
   }
+}
+
+function processTrosakRecord(record, kooperantID) {
+  const clientRecordID = record && record.clientRecordID
+    ? String(record.clientRecordID).trim()
+    : '';
+
+  try {
+    const normalizedKooperantID = String(kooperantID || '').trim();
+
+    if (!normalizedKooperantID) {
+      return {
+        clientRecordID: clientRecordID,
+        success: false,
+        status: 'error',
+        code: 'KOOPERANT_ID_MISSING',
+        error: 'Nedostaje kooperantID.'
+      };
+    }
+
+    if (!clientRecordID) {
+      return {
+        clientRecordID: '',
+        success: false,
+        status: 'error',
+        code: 'CLIENT_RECORD_ID_MISSING',
+        error: 'Nedostaje clientRecordID.'
+      };
+    }
+
+    const datum = normalizeTrosakDateOnly(record.datum || record.Datum);
+    const kategorija = String(record.kategorija || record.Kategorija || '').trim();
+    const opis = String(record.opis || record.Opis || '').trim();
+    const iznos = parseFloat(record.iznos || record.Iznos || 0) || 0;
+
+    if (!datum) {
+      return {
+        clientRecordID: clientRecordID,
+        success: false,
+        status: 'error',
+        code: 'VALIDATION_ERROR',
+        error: 'Datum troška je obavezan.'
+      };
+    }
+
+    if (!kategorija) {
+      return {
+        clientRecordID: clientRecordID,
+        success: false,
+        status: 'error',
+        code: 'VALIDATION_ERROR',
+        error: 'Kategorija troška je obavezna.'
+      };
+    }
+
+    if (iznos <= 0) {
+      return {
+        clientRecordID: clientRecordID,
+        success: false,
+        status: 'error',
+        code: 'VALIDATION_ERROR',
+        error: 'Iznos troška mora biti veći od 0.'
+      };
+    }
+
+    const sheet = getOrCreateTroskoviSheet(normalizedKooperantID);
+
+    ensureSheetColumns(sheet, TROSKOVI_COLUMNS);
+
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getValues()[0]
+      .map(function(h) {
+        return String(h || '').trim();
+      });
+
+    // Dokument brojevi često mogu sadržati "/" i ne smeju postati Date.
+    if (typeof ensurePlainTextColumn === 'function') {
+      ensurePlainTextColumn(sheet, headers, 'DokumentBroj');
+    }
+
+    const idx = headerIndexMap(headers);
+    const nowIso = new Date().toISOString();
+
+    const rowValuesByColumn = {
+      ClientRecordID: clientRecordID,
+      CreatedAtClient: record.createdAtClient || record.CreatedAtClient || nowIso,
+      SyncStatus: 'Synced',
+      KooperantID: normalizedKooperantID,
+      ParcelaID: String(record.parcelaID || record.ParcelaID || '').trim(),
+      Datum: datum,
+      Kategorija: kategorija,
+      Opis: opis,
+      Iznos: iznos,
+      DokumentBroj: String(record.dokumentBroj || record.DokumentBroj || '').trim(),
+      Napomena: String(record.napomena || record.Napomena || '').trim(),
+      ReceivedAt: nowIso
+    };
+
+    const rowValues = TROSKOVI_COLUMNS.map(function(col) {
+      return Object.prototype.hasOwnProperty.call(rowValuesByColumn, col)
+        ? rowValuesByColumn[col]
+        : '';
+    });
+
+    const existingRow = findTrosakRowByClientRecordID(sheet, idx, clientRecordID);
+
+    if (existingRow > 0) {
+      sheet.getRange(existingRow, 1, 1, TROSKOVI_COLUMNS.length).setValues([rowValues]);
+
+      return {
+        clientRecordID: clientRecordID,
+        success: true,
+        status: 'updated',
+        updatedAtServer: nowIso
+      };
+    }
+
+    sheet.appendRow(rowValues);
+
+    return {
+      clientRecordID: clientRecordID,
+      success: true,
+      status: 'inserted',
+      updatedAtServer: nowIso
+    };
+
+  } catch (err) {
+    logError(
+      'GAS',
+      'processTrosakRecord',
+      err && err.message ? err.message : String(err || ''),
+      err && err.stack ? err.stack : '',
+      kooperantID || ''
+    );
+
+    return {
+      clientRecordID: clientRecordID,
+      success: false,
+      status: 'error',
+      code: err && err.code ? err.code : 'TROSAK_PROCESS_FAILED',
+      error: err && err.message ? err.message : 'Greška pri obradi troška.'
+    };
+  }
+}
+
+function getTroskoviSheetName(kooperantID) {
+  return 'TROSKOVI-' + String(kooperantID || '').trim();
+}
+
+function getOrCreateTroskoviSheet(kooperantID) {
+  const sheetName = getTroskoviSheetName(kooperantID);
+  const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+  const files = folder.getFilesByName(sheetName);
+
+  let ss;
+
+  if (files.hasNext()) {
+    ss = SpreadsheetApp.open(files.next());
+  } else {
+    ss = SpreadsheetApp.create(sheetName);
+
+    const file = DriveApp.getFileById(ss.getId());
+    folder.addFile(file);
+    DriveApp.getRootFolder().removeFile(file);
+  }
+
+  const sheet = ss.getSheets()[0];
+
+  ensureSheetColumns(sheet, TROSKOVI_COLUMNS);
+  sheet.getRange(1, 1, 1, TROSKOVI_COLUMNS.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  return sheet;
+}
+
+function findTrosakRowByClientRecordID(sheet, idx, clientRecordID) {
+  if (!clientRecordID) return -1;
+
+  const colIndex = idx.ClientRecordID;
+  if (typeof colIndex !== 'number' || colIndex < 0) return -1;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+
+  const values = sheet.getRange(2, colIndex + 1, lastRow - 1, 1).getValues();
+
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0] || '').trim() === clientRecordID) {
+      return i + 2;
+    }
+  }
+
+  return -1;
+}
+
+function normalizeTrosakDateOnly(value) {
+  if (!value) return '';
+
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, 'Europe/Belgrade', 'yyyy-MM-dd');
+  }
+
+  const s = String(value || '').trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return s;
+  }
+
+  if (/^\d{2}\.\d{2}\.\d{4}\.?$/.test(s)) {
+    const clean = s.replace(/\.$/, '');
+    const parts = clean.split('.');
+    return parts[2] + '-' + parts[1] + '-' + parts[0];
+  }
+
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    return Utilities.formatDate(parsed, 'Europe/Belgrade', 'yyyy-MM-dd');
+  }
+
+  return '';
 }
 
 // ============================================================
