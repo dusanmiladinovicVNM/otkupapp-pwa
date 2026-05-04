@@ -275,6 +275,18 @@ function cancelZbirna() {
 }
 
 async function confirmZbirna() {
+    if (typeof withSubmitLock !== 'function') {
+        return confirmZbirnaUnlocked();
+    }
+
+    return withSubmitLock('zbirna:confirm', confirmZbirnaUnlocked, {
+        action: 'confirm-zbirna',
+        reason: 'confirmZbirna',
+        alreadyMessage: 'Kreiranje zbirne je već u toku'
+    });
+}
+
+async function confirmZbirnaUnlocked() {
     const kupacSel = document.getElementById('fldZbirnaKupac');
     if (!kupacSel || !kupacSel.value) {
         showToast('Izaberite kupca', 'error');
@@ -363,12 +375,10 @@ async function confirmZbirna() {
     showToast('Zbirna kreirana!', 'success');
     cancelZbirna();
 
-    if (navigator.onLine) {
-        if (typeof syncZbirne === 'function') {
-            try { await syncZbirne(); } catch (_) {}
-        }
+    if (navigator.onLine && typeof syncQueueSafe === 'function') {
+        syncQueueSafe('post-save');
     }
-    
+
     try {
         await loadVozacData();
     } catch (err) {
