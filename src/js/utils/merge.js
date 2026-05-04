@@ -55,16 +55,18 @@ window.mergeOfflineRecords = function (local, server, normalizeLocal, primaryKey
     return Array.from(merged.values());
 };
 
-window.getRecordDedupeKey = function getRecordDedupeKey(record) {
-    if (!record) return '';
+window.getRecordIdentityAliases = function getRecordIdentityAliases(record) {
+    if (!record) return [];
 
     const serverRecordID = String(record.serverRecordID || record.ServerRecordID || '').trim();
-    if (serverRecordID) return 'srv:' + serverRecordID;
-
     const clientRecordID = String(record.clientRecordID || record.ClientRecordID || '').trim();
-    if (clientRecordID) return 'cli:' + clientRecordID;
 
-    return '';
+    const aliases = [];
+
+    if (serverRecordID) aliases.push('srv:' + serverRecordID);
+    if (clientRecordID) aliases.push('cli:' + clientRecordID);
+
+    return aliases;
 };
 
 window.getRecordFreshnessTs = function getRecordFreshnessTs(record) {
@@ -79,8 +81,8 @@ window.getRecordFreshnessTs = function getRecordFreshnessTs(record) {
         record.UpdatedAtClient ||
         record.createdAtClient ||
         record.CreatedAtClient ||
-        record.ReceivedAt ||
         record.receivedAt ||
+        record.ReceivedAt ||
         ''
     );
 };
@@ -89,9 +91,9 @@ window.isLocalPriorityRecord = function isLocalPriorityRecord(record) {
     if (!record) return false;
 
     const status = String(record.syncStatus || record.SyncStatus || '').toLowerCase();
-    const err = String(record.lastSyncError || record.LastSyncError || '').trim();
+    const error = String(record.lastSyncError || record.LastSyncError || '').trim();
 
-    return status === 'pending' || status === 'syncing' || !!err;
+    return status === 'pending' || status === 'syncing' || !!error;
 };
 
 window.pickPreferredRecordForRender = function pickPreferredRecordForRender(existing, candidate) {
@@ -104,8 +106,8 @@ window.pickPreferredRecordForRender = function pickPreferredRecordForRender(exis
     if (candidatePriority && !existingPriority) return candidate;
     if (existingPriority && !candidatePriority) return existing;
 
-    const candidateTs = window.getRecordFreshnessTs(candidate);
     const existingTs = window.getRecordFreshnessTs(existing);
+    const candidateTs = window.getRecordFreshnessTs(candidate);
 
     if (candidateTs && existingTs) {
         return candidateTs >= existingTs ? candidate : existing;
@@ -116,25 +118,62 @@ window.pickPreferredRecordForRender = function pickPreferredRecordForRender(exis
     return existing;
 };
 
-window.dedupeRecordsForRender = function dedupeRecordsForRender(records, keyFn) {
-    const out = new Map();
-    const getKey = typeof keyFn === 'function' ? keyFn : window.getRecordDedupeKey;
+window.dedupeRecordsForRender = function dedupeRecordsForRender(records, aliasesFn) {
+    const getAliases = typeof aliasesFn === 'function'
+        ? aliasesFn
+        : window.getRecordIdentityAliases;
+
+    const recordsByMainKey = new Map();
+    const aliasToMainKey = new Map();
+
+    let noKeyCounter = 0;
 
     (records || []).forEach(record => {
         if (!record) return;
 
-        const key = getKey(record);
-        if (!key) {
-            // Bez ključa ne dedupujemo, da ne sakrijemo legitimno različite zapise.
-            out.set('nokey:' + out.size, record);
+        const aliases = (getAliases(record) || [])
+            .map(a => String(a || '').trim())
+            .filter(Boolean);
+
+        if (!aliases.length) {
+            recordsByMainKey.set('nokey:' + (++noKeyCounter), record);
             return;
         }
 
-        out.set(
-            key,
-            window.pickPreferredRecordForRender(out.get(key), record)
-        );
+        let mainKey = '';
+
+        for (const alias of aliases) {
+            if (aliasToMainKey.has(alias)) {
+                mainKey = aliasToMainKey.get(alias);
+                break;
+            }
+        }
+
+        if (!mainKey) {
+            mainKey = aliases[0];
+        }
+
+        const existing = recordsByMainKey.get(mainKey);
+        const preferred = window.pickPreferredRecordForRender(existing, record);
+
+        recordsByMainKey.set(mainKey, preferred);
+
+        // Važno: svi poznati aliasi sada pokazuju na isti canonical slot.
+        aliases.forEach(alias => {
+            aliasToMainKey.set(alias, mainKey);
+        });
+
+        // Ako je existing imao alias koji candidate nema, zadrži i njih.
+        if (existing) {
+            const existingAliases = (getAliases(existing) || [])
+                .map(a => String(a || '').trim())
+                .filter(Boolean);
+
+            existingAliases.forEach(alias => {
+                aliasToMainKey.set(alias, mainKey);
+            });
+        }
     });
 
-    return Array.from(out.values());
+    return Array.from(recordsByMainKey.values());
 };
