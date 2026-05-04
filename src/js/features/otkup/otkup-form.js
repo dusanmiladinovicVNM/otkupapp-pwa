@@ -350,6 +350,18 @@ function onVrstaChange() {
 // ============================================================
 
 async function saveOtkup() {
+    if (typeof withSubmitLock !== 'function') {
+        return saveOtkupUnlocked();
+    }
+
+    return withSubmitLock('otkup:save', saveOtkupUnlocked, {
+        action: 'save-otkup',
+        reason: 'saveOtkup',
+        alreadyMessage: 'Čuvanje otkupa je već u toku'
+    });
+}
+
+async function saveOtkupUnlocked() {
     try {
         const input = readOtkupForm();
         const validationError = validateOtkupInput(input);
