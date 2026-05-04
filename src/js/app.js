@@ -799,7 +799,7 @@ function startBackgroundSync() {
     runtime.syncIntervalId = setInterval(() => {
         if (!navigator.onLine) return;
         if (CONFIG.USER_ROLE === 'Management') return;
-        syncQueueSafe('interval'););
+        syncQueueSafe('interval');
     }, 60000);
 }
 
