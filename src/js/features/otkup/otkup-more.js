@@ -248,7 +248,7 @@ async function syncOtkupacFromMore() {
     showToast('Pokrećem sinhronizaciju...', 'info');
 
     try {
-        await syncQueueSafe();
+        await syncQueueSafe('manual');
         await renderOtkupacMoreSyncStats();
         showToast('Sinhronizacija završena', 'success');
     } catch (err) {
