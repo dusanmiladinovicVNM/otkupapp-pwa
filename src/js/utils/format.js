@@ -73,3 +73,31 @@ window.normalizeIso = function normalizeIso(value) {
         return String(value);
     }
 };
+
+window.formatNumber = function formatNumber(value, options) {
+    const n = Number(value);
+    const opts = options || {};
+
+    if (!Number.isFinite(n)) {
+        return opts.fallback || '0';
+    }
+
+    return n.toLocaleString('sr-RS', {
+        minimumFractionDigits: opts.minimumFractionDigits || 0,
+        maximumFractionDigits: typeof opts.maximumFractionDigits === 'number'
+            ? opts.maximumFractionDigits
+            : 2
+    });
+};
+
+window.formatKg = function formatKg(value) {
+    return window.formatNumber(value, {
+        maximumFractionDigits: 2
+    }) + ' kg';
+};
+
+window.formatMoney = function formatMoney(value) {
+    return window.formatNumber(value, {
+        maximumFractionDigits: 2
+    }) + ' RSD';
+};
