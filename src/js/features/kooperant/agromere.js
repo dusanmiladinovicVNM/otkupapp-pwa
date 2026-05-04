@@ -644,6 +644,21 @@ function agroPrimeniPreporuku() {
 // ============================================================
 // METEO VALIDATION (samo za Zastita)
 // ============================================================
+function setAgroTextLines(elementId, lines) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    el.replaceChildren();
+
+    (lines || []).forEach((line, index) => {
+        if (index > 0) {
+            el.appendChild(document.createElement('br'));
+        }
+
+        el.appendChild(document.createTextNode(String(line || '')));
+    });
+}
+
 function agroCheckMeteo() {
     const warn = document.getElementById('agroMeteoWarn');
     warn.classList.remove('visible', 'danger');
@@ -685,7 +700,7 @@ function agroCheckMeteo() {
     if (isDanger) warn.classList.add('danger');
 
     document.getElementById('agroMeteoWarnTitle').textContent = isDanger ? '🚫 BLOKADA — Nepovoljni uslovi' : '⚠️ Upozorenje';
-    document.getElementById('agroMeteoWarnText').innerHTML = warnings.map(w => w.text).join('<br>');
+    setAgroTextLines('agroMeteoWarnText', warnings.map(w => w.text));
 }
 
 function agroMeteoOverride() {
