@@ -822,6 +822,8 @@ function doGet(e) {
 // ============================================================
 // AUTH
 // ============================================================
+const AUTH_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
+const AUTH_TOKEN_CACHE_TTL_SECONDS = 21600; // CacheService safe window; ScriptProperties ostaje canonical fallback
 
 function authenticateUser(username, pin) {
   try {
@@ -870,12 +872,13 @@ function authenticateUser(username, pin) {
           const entityID = loginConfig.entityID;
           const role = loginConfig.role;
 
-          saveToken(token, entityID, role);
+          const tokenPayload = saveToken(token, entityID, role);
           logLoginAttempt(normalizedUsername, entityID, true, 'OK');
 
           return {
             success: true,
             token: token,
+            expiresAt: tokenPayload.expiresAt,
             role: role,
             entityID: entityID,
             displayName: String(data[i][colName] || '').trim()
@@ -916,15 +919,21 @@ function saveToken(token, entityID, role) {
     throw err;
   }
 
-  const payload = JSON.stringify({
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + AUTH_TOKEN_TTL_MS).toISOString();
+
+  const tokenPayload = {
     entityID: loginConfig.entityID,
     role: loginConfig.role,
-    created: new Date().toISOString()
-  });
+    created: now.toISOString(),
+    expiresAt: expiresAt
+  };
+
+  const payload = JSON.stringify(tokenPayload);
 
   const key = 'TOKEN_' + tokenValue;
 
-  CacheService.getScriptCache().put(key, payload, 86400);
+  CacheService.getScriptCache().put(key, payload, AUTH_TOKEN_CACHE_TTL_SECONDS);
 
   try {
     PropertiesService.getScriptProperties().setProperty(key, payload);
@@ -941,6 +950,8 @@ function saveToken(token, entityID, role) {
     err.code = 'AUTH_TOKEN_PERSIST_FAILED';
     throw err;
   }
+
+  return tokenPayload;
 }
 
 function validateToken(token) {
@@ -976,7 +987,7 @@ function validateToken(token) {
         return false;
       }
 
-      CacheService.getScriptCache().put(key, stored, 86400);
+      CacheService.getScriptCache().put(key, stored, AUTH_TOKEN_CACHE_TTL_SECONDS);
       return true;
     }
   } catch (e) {
@@ -1019,7 +1030,7 @@ function getTokenData(token) {
       }
 
       var data = JSON.parse(stored);
-      CacheService.getScriptCache().put(key, stored, 86400);
+      CacheService.getScriptCache().put(key, stored, AUTH_TOKEN_CACHE_TTL_SECONDS);
       return data;
     }
   } catch (e) {
@@ -1033,17 +1044,12 @@ function purgeExpiredTokens() {
   try {
     var props = PropertiesService.getScriptProperties();
     var all = props.getProperties();
-    var now = Date.now();
-    var maxAge = 48 * 60 * 60 * 1000;
     var purged = 0;
     
     for (var key in all) {
       if (key.startsWith('TOKEN_')) {
         try {
-          var data = JSON.parse(all[key]);
-          var created = new Date(data.created).getTime();
-
-          if (!created || isNaN(created) || now - created > maxAge) {
+          if (!isTokenPayloadValid(all[key])) {
             props.deleteProperty(key);
             purged++;
           }
@@ -1110,9 +1116,18 @@ function setupTokenPurgeTrigger() {
 function isTokenPayloadValid(payload) {
   try {
     var data = JSON.parse(payload);
+
+    if (data.expiresAt) {
+      var exp = new Date(data.expiresAt).getTime();
+      if (!exp || isNaN(exp)) return false;
+      return Date.now() <= exp;
+    }
+
+    // Backward compatibility za stare tokene koji imaju samo created.
     var created = new Date(data.created).getTime();
     if (!created || isNaN(created)) return false;
-    return Date.now() - created <= 48 * 60 * 60 * 1000;
+
+    return Date.now() - created <= AUTH_TOKEN_TTL_MS;
   } catch (e) {
     return false;
   }
