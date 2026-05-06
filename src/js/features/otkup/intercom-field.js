@@ -56,6 +56,10 @@ function _initFirebase() {
     throw new Error('firebase-app-compat.js nije učitan');
   }
 
+  // Forsiraj WebSocket — sprečava long-polling i frame fallback (čistiji CSP)
+  if (firebase.database?.INTERNAL?.forceWebSockets) {
+    firebase.database.INTERNAL.forceWebSockets();
+
   const existing = firebase.apps.find(a => a.name === 'agrix-intercom');
   const app = existing || firebase.initializeApp({
     apiKey:      CONFIG.FIREBASE_API_KEY,
