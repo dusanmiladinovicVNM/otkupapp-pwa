@@ -46,9 +46,14 @@ const _f = {
 
 function _initFirebase() {
   if (_f.db) return;
-  console.log('[intercom-field] firebase loaded?', typeof firebase, 
-              'apps:', firebase.apps?.length,
-              'has database?', typeof firebase.database);
+  
+  if (typeof firebase === 'undefined') {
+    throw new Error('Firebase global nije učitan');
+  }
+  if (typeof firebase.initializeApp !== 'function') {
+    throw new Error('firebase-app-compat.js nije učitan');
+  }
+  
   const existing = firebase.apps.find(a => a.name === 'agrix-intercom');
   const app = existing || firebase.initializeApp({
     apiKey:      CONFIG.FIREBASE_API_KEY,
@@ -56,10 +61,19 @@ function _initFirebase() {
     appId:       CONFIG.FIREBASE_APP_ID,
     databaseURL: CONFIG.FIREBASE_RTDB_URL
   }, 'agrix-intercom');
-  console.log('[intercom-field] app created:', !!app, 'name:', app?.name);
-  console.log('[intercom-field] CONFIG.FIREBASE_RTDB_URL:', CONFIG.FIREBASE_RTDB_URL);
-  _f.db = firebase.app('agrix-intercom').database();
-  console.log('[intercom-field] _f.db:', _f.db);
+  
+  if (typeof app.database !== 'function') {
+    throw new Error('firebase-database-compat.js nije učitan');
+  }
+  if (typeof app.auth !== 'function') {
+    throw new Error('firebase-auth-compat.js nije učitan');
+  }
+  
+  _f.db = app.database();
+  
+  if (!_f.db) {
+    throw new Error('app.database() vratio null/undefined');
+  }
 }
 
 // ─── Bootstrap — called from app.js Otkupac role bootstrap ───────────────────
