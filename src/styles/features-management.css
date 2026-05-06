@@ -616,3 +616,73 @@ body.has-mgmt-bottom-nav .tab-content {
         text-align: center;
     }
 }
+
+/* ── Intercom ────────────────────────────────────────────── */
+.intercom-header-dot {
+  font-size: 0.7rem;
+  margin-left: 6px;
+  vertical-align: middle;
+  animation: intercom-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes intercom-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.intercom-perm-ok     { color: #388e3c; font-size: 0.85rem; }
+.intercom-perm-denied { color: #d32f2f; font-size: 0.85rem; }
+.intercom-perm-prompt { color: #f57c00; font-size: 0.85rem; }
+
+.intercom-listen-banner {
+  background: #e3f2fd;
+  border-left: 3px solid #1976d2;
+  padding: 0.6rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.intercom-session-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  background: #fff;
+}
+
+.intercom-card--active {
+  border-color: #1976d2;
+  background: #e3f2fd;
+}
+
+.intercom-card-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.intercom-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #bdbdbd;
+  flex-shrink: 0;
+}
+
+.intercom-dot--live {
+  background: #4caf50;
+  animation: intercom-pulse 1.5s ease-in-out infinite;
+}
+
+.intercom-station   { color: #757575; font-size: 0.8rem; }
+.intercom-waiting   { color: #f57c00; font-size: 0.85rem; }
+.intercom-live-label { color: #388e3c; font-size: 0.85rem; font-weight: 600; }
+.intercom-empty     { color: #9e9e9e; font-size: 0.85rem; font-style: italic; }
