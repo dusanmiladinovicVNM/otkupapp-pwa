@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v20';
+const CACHE_NAME = 'AgriX-v21';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -58,6 +58,7 @@ const ASSETS = [
     './src/js/features/otkup/otpremnice.js',
     './src/js/features/otkup/otkup-more.js',
     './src/js/features/otkup/sync.js',
+    './src/js/features/otkup/intercom-field.js',
 
     // Features — vozac
     './src/js/features/vozac/zbirna.js',
@@ -70,6 +71,7 @@ const ASSETS = [
     './src/js/features/management/agrohemija.js',
     './src/js/features/management/dispecer.js',
     './src/js/features/management/mgmt-shell-v2.js',
+    './src/js/features/management/intercom-monitor.js',
 
     // App bootstrap
     './src/js/app.js',
@@ -84,6 +86,9 @@ const ASSETS = [
     './vendor/leaflet.css',
     './vendor/leaflet.js',
     './vendor/chart.umd.min.js',
+    './vendor/firebase-app-compat.js',
+    './vendor/firebase-auth-compat.js',
+    './vendor/firebase-database-compat.js',
     './vendor/images/marker-icon.png',
     './vendor/images/marker-icon-2x.png',
     './vendor/images/marker-shadow.png'
