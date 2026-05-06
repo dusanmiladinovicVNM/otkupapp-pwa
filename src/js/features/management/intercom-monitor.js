@@ -49,7 +49,7 @@ const _m = {
 // ─── Firebase init + anon auth ────────────────────────────────────────────────
 
 function _initFirebase() {
-  if (_m.db) return;
+  if (_f.db) return;
 
   if (typeof firebase === 'undefined') {
     throw new Error('Firebase global nije učitan');
@@ -57,6 +57,10 @@ function _initFirebase() {
   if (typeof firebase.initializeApp !== 'function') {
     throw new Error('firebase-app-compat.js nije učitan');
   }
+
+  // Forsiraj WebSocket — sprečava long-polling i frame fallback (čistiji CSP)
+  if (firebase.database?.INTERNAL?.forceWebSockets) {
+    firebase.database.INTERNAL.forceWebSockets();
 
   const existing = firebase.apps.find(a => a.name === 'agrix-intercom');
   const app = existing || firebase.initializeApp({
