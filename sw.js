@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v22';
+const CACHE_NAME = 'AgriX-v23';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -125,10 +125,24 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: network-first for HTML, cache-first for libraries
 self.addEventListener('fetch', (event) => {
+    // Bypass non-GET (POST/PUT/DELETE ne mogu u Cache API)
+    if (event.request.method !== 'GET') return;
+    
     const url = new URL(event.request.url);
     
-    // API calls: always network, no SW interception
-    if (url.hostname === 'script.google.com') {
+    // API/external calls: always network, no SW interception
+    if (
+        url.hostname === 'script.google.com' ||
+        url.hostname === 'script.googleusercontent.com' ||
+        url.hostname === 'identitytoolkit.googleapis.com' ||
+        url.hostname === 'securetoken.googleapis.com' ||
+        url.hostname.endsWith('.firebaseio.com') ||
+        url.hostname.endsWith('.firebasedatabase.app') ||
+        url.hostname === 'api.open-meteo.com' ||
+        url.hostname === 'api.qrserver.com' ||
+        url.hostname === 'server.arcgisonline.com' ||
+        url.hostname.endsWith('.tile.openstreetmap.org')
+    ) {
         return;
     }
     
@@ -160,7 +174,6 @@ self.addEventListener('fetch', (event) => {
             if (event.request.destination === 'document') {
                 return caches.match('./index.html');
             }
-            // Za skripte i ostalo — propusti na mrežu direktno
             return fetch(event.request);
         })
     );
