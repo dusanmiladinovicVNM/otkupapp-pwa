@@ -30,6 +30,8 @@
 
 'use strict';
 
+(function () {
+
 // ─── Module state ─────────────────────────────────────────────────────────────
 
 const _f = {
@@ -46,14 +48,14 @@ const _f = {
 
 function _initFirebase() {
   if (_f.db) return;
-  
+
   if (typeof firebase === 'undefined') {
     throw new Error('Firebase global nije učitan');
   }
   if (typeof firebase.initializeApp !== 'function') {
     throw new Error('firebase-app-compat.js nije učitan');
   }
-  
+
   const existing = firebase.apps.find(a => a.name === 'agrix-intercom');
   const app = existing || firebase.initializeApp({
     apiKey:      CONFIG.FIREBASE_API_KEY,
@@ -61,19 +63,25 @@ function _initFirebase() {
     appId:       CONFIG.FIREBASE_APP_ID,
     databaseURL: CONFIG.FIREBASE_RTDB_URL
   }, 'agrix-intercom');
-  
+
   if (typeof app.database !== 'function') {
     throw new Error('firebase-database-compat.js nije učitan');
   }
   if (typeof app.auth !== 'function') {
     throw new Error('firebase-auth-compat.js nije učitan');
   }
-  
+
   _f.db = app.database();
-  
+
   if (!_f.db) {
     throw new Error('app.database() vratio null/undefined');
   }
+}
+
+async function _ensureAuth() {
+  const auth = firebase.app('agrix-intercom').auth();
+  if (auth.currentUser) return;
+  await auth.signInAnonymously();
 }
 
 // ─── Bootstrap — called from app.js Otkupac role bootstrap ───────────────────
@@ -338,3 +346,5 @@ window.intercomField = {
   renderPermissionStatus: _renderPermissionStatus,
   get status() { return _f.status; }
 };
+
+})();
