@@ -46,6 +46,9 @@ const _f = {
 
 function _initFirebase() {
   if (_f.db) return;
+  console.log('[intercom-field] firebase loaded?', typeof firebase, 
+              'apps:', firebase.apps?.length,
+              'has database?', typeof firebase.database);
   const existing = firebase.apps.find(a => a.name === 'agrix-intercom');
   const app = existing || firebase.initializeApp({
     apiKey:      CONFIG.FIREBASE_API_KEY,
@@ -53,13 +56,10 @@ function _initFirebase() {
     appId:       CONFIG.FIREBASE_APP_ID,
     databaseURL: CONFIG.FIREBASE_RTDB_URL
   }, 'agrix-intercom');
+  console.log('[intercom-field] app created:', !!app, 'name:', app?.name);
+  console.log('[intercom-field] CONFIG.FIREBASE_RTDB_URL:', CONFIG.FIREBASE_RTDB_URL);
   _f.db = firebase.app('agrix-intercom').database();
-}
-
-async function _ensureAuth() {
-  const auth = firebase.app('agrix-intercom').auth();
-  if (auth.currentUser) return;
-  await auth.signInAnonymously();
+  console.log('[intercom-field] _f.db:', _f.db);
 }
 
 // ─── Bootstrap — called from app.js Otkupac role bootstrap ───────────────────
