@@ -1,4 +1,4 @@
-const CACHE_NAME = 'AgriX-v21';
+const CACHE_NAME = 'AgriX-v22';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -160,6 +160,8 @@ self.addEventListener('fetch', (event) => {
             if (event.request.destination === 'document') {
                 return caches.match('./index.html');
             }
+            // Za skripte i ostalo — propusti na mrežu direktno
+            return fetch(event.request);
         })
     );
 });
