@@ -571,6 +571,16 @@
                         <button type="button" class="btn-secondary" data-action="clear-otkupac-signature">Obriši</button>
                         <button type="button" class="btn-primary" data-action="save-otkupac-signature">Sačuvaj potpis</button>
                     </div>
+                    <div class="queue-device-row">
+                          <span>🎙️ Interkom</span>
+                          <span id="intercom-permission-status"></span>
+                          <button id="btn-intercom-permission"
+                              class="btn-sm"
+                              data-action="intercom-request-permission"
+                              style="display:none">
+                                Dozvoli mikrofon
+                          </button>
+                    </div>
                 </section>
             </div>
 
@@ -1874,6 +1884,19 @@
                     <span id="dpRT">—</span>
                     <button data-action="load-dispecer" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
                 </div>
+            </div>
+        </div>
+        <div id="intercom-monitor-section" class="mgmt-section">
+            <div class="mgmt-section-title">🎧 Interkom — Stanice</div>
+            <div id="intercom-active-listen-banner"
+                class="intercom-listen-banner"
+                style="display:none">
+                🎧 Slušate: <strong><span id="intercom-listen-name"></span></strong>
+                <button class="btn-sm btn-danger"
+                        data-action="intercom-stop">■ Stop</button>
+            </div>
+            <div id="intercom-session-list">
+                <p class="intercom-empty">Nema aktivnih stanica</p>
             </div>
         </div>
     </section>
