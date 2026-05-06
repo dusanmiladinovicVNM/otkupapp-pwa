@@ -7,10 +7,10 @@
         base-uri 'self';
         form-action 'self';
         object-src 'none';
-        script-src 'self';
+        script-src 'self' https://*.firebasedatabase.app https://*.firebaseio.com;
         style-src 'self' 'unsafe-inline';
         img-src 'self' data: blob: https://api.qrserver.com https://server.arcgisonline.com https://*.tile.openstreetmap.org;
-        connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.open-meteo.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com;
+        connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.open-meteo.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app;
         font-src 'self';
     ">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
