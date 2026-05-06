@@ -110,6 +110,11 @@ async function bootstrapRole() {
         }
 
         safeCall(() => showTab('otkup'));
+        if (window.intercomField) {
+            window.intercomField.init().catch(err =>
+                console.warn('[app] intercom field init skipped:', err)
+            );
+        }
         return;
     }
 
@@ -148,6 +153,12 @@ async function bootstrapRole() {
             safeCall(() => mgmtShellInit());
         } else {
             safeCall(() => showTab('dispecer'));
+        }
+        if (window.intercomMonitor && stammdaten && Array.isArray(stammdaten.stanice)) {
+            const activeStations = _intercomActiveStations(stammdaten.stanice);
+            window.intercomMonitor.init(activeStations).catch(err =>
+                console.warn('[app] intercom monitor init skipped:', err)
+            );
         }
         return;
     }
@@ -651,6 +662,18 @@ function handleAppShellClick(event) {
             if (!isNaN(index)) {
                 onPregledAlertClick(index);
             }
+            return;
+        }
+        if (action === 'intercom-request-permission') {
+            if (window.intercomField) window.intercomField.handle(action);
+            return;
+        }
+        if (action === 'intercom-listen') {
+            if (window.intercomMonitor) window.intercomMonitor.handle(action, actionEl.dataset);
+            return;
+        }
+        if (action === 'intercom-stop') {
+            if (window.intercomMonitor) window.intercomMonitor.handle(action, actionEl.dataset);
             return;
         }
     }
@@ -1377,4 +1400,19 @@ if ('serviceWorker' in navigator) {
     }).catch(err => {
         console.log('SW registration failed:', err);
     });
+}
+
+function _intercomActiveStations(stanice) {
+    const now  = new Date();
+    const hhmm = now.getHours() * 100 + now.getMinutes();
+    return (stanice || [])
+        .filter(s => {
+            if (!s.radnoVremeOd && !s.radnoVremeDo) return true;
+            return hhmm >= (s.radnoVremeOd || 0) && hhmm <= (s.radnoVremeDo || 2359);
+        })
+        .map(s => ({
+            entityID:  s.OtkupacID  || s.StanicaID || '',
+            name:      s.Naziv      || s.OtkupacID || '',
+            stationID: s.StanicaID  || ''
+        }));
 }
