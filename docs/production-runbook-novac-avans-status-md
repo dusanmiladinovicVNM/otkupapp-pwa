@@ -1,0 +1,738 @@
+# Production runbook: Novac, avans i status plaćanja/isplate
+
+Status: **operativni runbook za incidente oko `tblNovac`, avansa, plaćenosti fakture, isplaćenosti otkupa i korekcija posle knjiženja.**
+
+Aplikacija: **OtkupApp / AgriX**
+Domen: **Finansijski ledger → Faktura status → Otkup status → Avans allocation**
+Glavni kod: `src-vba/modNovac.bas`, `src-vba/modFaktura.bas`, `src-vba/modBankaMapiranje.bas`, `src-vba/modNovacTests.bas`
+
+---
+
+## 1. Kada korisnik kaže problem
+
+Tipični incidenti:
+
+* “Faktura je plaćena, ali stoji neplaćeno.”
+* “Kupac je uplatio, ali uplata nije vezana za fakturu.”
+* “Avans je potrošen na pogrešnu fakturu.”
+* “Avans je splitovan, ali saldo kupca nije jasan.”
+* “Otkup je isplaćen, ali stoji neisplaćeno.”
+* “Isplata kooperantu je otišla na pogrešan otkup.”
+* “Stornirali smo novčani red, ali status se nije promenio.”
+* “Jedan `NOV-*` red je dupliran.”
+* “Uplata je u avansu, a trebalo je da zatvori fakturu.”
+* “Faktura je stornirana/SEF poslata, a neko hoće da menja uplatu.”
+
+Prvo pravilo:
+
+> `tblNovac` je finansijski ledger. Ne pravi drugi `NOV-*` red da “popraviš stanje” dok ne znaš šta se desilo sa originalnim `NOV-*` redom i koje statuse je već promenio.
+
+Minimalni podaci koje operator mora da prikupi:
+
+```text
+NovacID / NOV-ID:
+BrojDokumenta:
+Datum:
+Partner:
+PartnerID:
+EntitetTip:
+OMID:
+KooperantID:
+FakturaID:
+OtkupID:
+Tip:
+Uplata:
+Isplata:
+Napomena:
+Stornirano:
+OsirocenoOD:
+Ako je faktura: BrojFakture, Iznos, Status, DatumPlacanja, SEF state
+Ako je otkup: OtkupID, Kolicina, Cena, Isplaceno, DatumIsplate
+Ako je avans: original NOV-ID i eventualni split NOV-ID
+```
+
+---
+
+## 2. Source of truth: gde se gleda
+
+### 2.1. Prvo mesto: `tblNovac`
+
+`tblNovac` je canonical ledger za uplatu/isplatu.
+
+Obavezno proveriti:
+
+| Kolona          | Značenje                                          |
+| --------------- | ------------------------------------------------- |
+| `NovacID`       | interni finansijski ID, npr. `NOV-*`              |
+| `BrojDokumenta` | izvod, ručni dokument ili drugi izvor             |
+| `Datum`         | datum knjiženja                                   |
+| `Partner`       | naziv partnera                                    |
+| `PartnerID`     | interni partner ID                                |
+| `EntitetTip`    | `Kupac`, `OM`, itd.                               |
+| `OMID`          | otkupno mesto / stanica                           |
+| `KooperantID`   | kooperant kod isplata                             |
+| `FakturaID`     | faktura koju uplata zatvara                       |
+| `VrstaVoca`     | segmentacija po robi ako postoji                  |
+| `Tip`           | finansijski tip knjiženja                         |
+| `Uplata`        | priliv novca                                      |
+| `Isplata`       | odliv novca                                       |
+| `Napomena`      | trag: često `BIM:<id>`, avans raspodela, komentar |
+| `Stornirano`    | ako je red isključen iz obračuna                  |
+| `OtkupID`       | otkup koji isplata zatvara                        |
+| `OsirocenoOD`   | orphan indikator ako postoji                      |
+
+### 2.2. Drugo mesto: `tblFakture`
+
+Za fakturu proveriti:
+
+| Kolona             | Značenje                                           |
+| ------------------ | -------------------------------------------------- |
+| `FakturaID`        | faktura                                            |
+| `BrojFakture`      | poslovni broj                                      |
+| `KupacID`          | kupac                                              |
+| `Iznos`            | iznos fakture                                      |
+| `Status`           | `Plaćeno` / `Neplaćeno` ili odgovarajuće konstante |
+| `DatumPlacanja`    | datum kada je status prešao u plaćeno              |
+| `Stornirano`       | faktura je isključena                              |
+| `SEFWorkflowState` | ako postoji SEF tok                                |
+| `SEFDocumentId`    | ako je poslata SEF-u                               |
+
+### 2.3. Treće mesto: `tblOtkup`
+
+Za otkup proveriti:
+
+| Kolona         | Značenje               |
+| -------------- | ---------------------- |
+| `OtkupID`      | otkup                  |
+| `KooperantID`  | kooperant              |
+| `Kolicina`     | kg                     |
+| `Cena`         | cena                   |
+| `Isplaceno`    | status isplate         |
+| `DatumIsplate` | datum kada je zatvoren |
+| `Stornirano`   | ako je otkup isključen |
+
+### 2.4. Četvrto mesto: izvor novca
+
+Ako je `NOV-*` nastao iz banke, proveri:
+
+* `tblBankaImport` po `BIM-*` iz `Napomena`;
+* `BankaReferenz`;
+* `BrojDokumenta`;
+* `PartnerMap`.
+
+Ako je `NOV-*` nastao iz ručnog unosa, proveri operatora/ticket/napomenu.
+
+### 2.5. Stornirani redovi
+
+Funkcije za obračun koriste `ExcludeStornirano`, što znači:
+
+* storniran `NOV-*` ne ulazi u `GetUplataForFaktura`;
+* storniran `NOV-*` ne ulazi u isplatu otkupa;
+* storniran red se ne briše, nego ostaje audit trag.
+
+---
+
+## 3. Koji ID pratiš
+
+Uvek prati ove ID-jeve zajedno:
+
+```text
+NovacID             = primarni ledger red
+BankaImportID       = ako je nastao iz bankarskog import-a
+BrojDokumenta       = izvod/dokument
+PartnerID           = kupac/stanica/partner
+FakturaID           = ako uplata zatvara fakturu
+BrojFakture         = poslovni broj fakture
+OtkupID             = ako isplata zatvara otkup
+KooperantID         = za isplate kooperantu
+OriginalAvansNOV    = kod split-a avansa
+SplitAvansNOV       = kod delimičnog trošenja avansa
+```
+
+Incident ticket minimum:
+
+```text
+NOV-ID:
+Tip:
+Uplata:
+Isplata:
+FakturaID:
+OtkupID:
+PartnerID:
+KooperantID:
+BIM-ID ako postoji:
+Stornirano:
+Faktura status pre/posle:
+Otkup status pre/posle:
+Avans original/split:
+Odluka:
+```
+
+---
+
+## 4. Tipovi knjiženja
+
+Najvažniji tipovi u toku:
+
+| Tip                     | Značenje                            | Tipični link                         |
+| ----------------------- | ----------------------------------- | ------------------------------------ |
+| `NOV_KUPCI_UPLATA`      | kupac plaća fakturu                 | `FakturaID` popunjen                 |
+| `NOV_KUPCI_AVANS`       | kupac plaća unapred / neraspoređeno | `FakturaID` prazan dok se ne primeni |
+| `NOV_VIRMAN_FIRMA_KOOP` | isplata kooperantu za otkup         | `OtkupID` popunjen                   |
+| `NOV_VIRMAN_AVANS_KOOP` | isplata kooperantu kao avans        | `OtkupID` prazan dok se ne rasporedi |
+| `NOV_KES_FIRMA_OTKUPAC` | OM/stanica tok novca                | `OMID` / `PartnerID`                 |
+
+Pravilo:
+
+> Smer novca mora biti čist: `Uplata > 0` i `Isplata = 0`, ili `Isplata > 0` i `Uplata = 0`. Red sa oba iznosa je incident validacije.
+
+---
+
+## 5. Normalan tok: uplata kupca na fakturu
+
+1. Nastaje `NOV-*` red sa `Uplata > 0`.
+2. Ako je poznata faktura, `FakturaID` je popunjen.
+3. `GetUplataForFaktura(fakturaID)` sabira sve nestornirane uplate za tu fakturu.
+4. `UpdateFakturaStatus(fakturaID)` poredi:
+
+```text
+uplaceno >= tblFakture.Iznos
+```
+
+5. Ako je pokriveno:
+
+   * status ide na `STATUS_PLACENO`;
+   * `DatumPlacanja` se popunjava ako je prazan.
+6. Ako nije pokriveno:
+
+   * status ostaje/ide na `STATUS_NEPLACENO`;
+   * `DatumPlacanja` se čisti ako više nije plaćena.
+
+---
+
+## 6. Normalan tok: kupčev avans na fakturu
+
+`ApplyAvansToFaktura(kupacID, fakturaID)` radi:
+
+1. Uzima sve nestornirane `NOV_KUPCI_AVANS` redove za kupca.
+2. Gleda samo avanse gde je `FakturaID` prazan.
+3. Računa preostali iznos fakture:
+
+```text
+preostalo = Faktura.Iznos - GetUplataForFaktura(fakturaID)
+```
+
+4. Troši avanse hronološki.
+5. Ako je avans manji ili jednak preostalom iznosu:
+
+   * postojeći avans `NOV-*` dobija `FakturaID`.
+6. Ako je avans veći od preostalog iznosa:
+
+   * originalni avans red se smanjuje za potrošeni iznos;
+   * pravi se novi split `NOV-*` red sa `FakturaID` i iznosom koji je potrošen;
+   * `Napomena = Avans raspodela`.
+7. Kada je faktura pokrivena, poziva `UpdateFakturaStatus`.
+
+Ključno pravilo:
+
+> Kod delimičnog trošenja avansa postoje najmanje dva bitna reda: originalni avans koji je smanjen i split red koji zatvara fakturu. Nikada ne koriguj samo jedan bez drugog.
+
+---
+
+## 7. Normalan tok: isplata kooperantu na otkup
+
+1. Nastaje `NOV-*` red sa `Isplata > 0`.
+2. Ako je poznat otkup, `OtkupID` je popunjen.
+3. `GetIsplataForOtkup` / `GetUplataForOtkup` sabira nestornirane isplate za taj `OtkupID`.
+4. `UpdateOtkupStatus(otkupID)` računa vrednost otkupa:
+
+```text
+vrednost = Kolicina × Cena
+```
+
+5. Ako je `placeno >= vrednost`:
+
+   * otkup ide u status isplaćeno;
+   * `DatumIsplate` se popunjava.
+6. Ako nije pokriveno:
+
+   * otkup ostaje neisplaćen/delimičan u zavisnosti od modela.
+
+---
+
+## 8. Standardni incident flow
+
+### Korak 1: Nađi `NOV-*`
+
+Traži po:
+
+```text
+NovacID
+BIM-ID u Napomena
+BrojDokumenta
+Datum
+PartnerID
+FakturaID
+OtkupID
+Iznos Uplata/Isplata
+```
+
+Zapiši:
+
+```text
+NOV-ID:
+Tip:
+Uplata:
+Isplata:
+FakturaID:
+OtkupID:
+Stornirano:
+Napomena:
+```
+
+### Korak 2: Odredi smer i domen
+
+| Signal            | Domen                               |
+| ----------------- | ----------------------------------- |
+| `Uplata > 0`      | kupac/faktura/avans                 |
+| `Isplata > 0`     | kooperant/otkup/avans               |
+| oba su 0          | nevalidan finansijski red           |
+| oba su > 0        | nevalidan finansijski red           |
+| `Stornirano = Da` | ne ulazi u status, ali ostaje audit |
+
+### Korak 3: Ako je faktura
+
+Proveri:
+
+```text
+FakturaID:
+BrojFakture:
+KupacID:
+Iznos:
+Status:
+DatumPlacanja:
+Stornirano:
+SEFWorkflowState:
+SEFDocumentId:
+Ukupno uplaceno iz tblNovac:
+```
+
+Ako postoji `SEFDocumentId`, finansijska korekcija može imati pravne/SEF posledice.
+
+### Korak 4: Ako je otkup
+
+Proveri:
+
+```text
+OtkupID:
+KooperantID:
+Kolicina:
+Cena:
+Vrednost:
+Isplaceno:
+DatumIsplate:
+Stornirano:
+Ukupno isplaceno iz tblNovac:
+```
+
+### Korak 5: Klasifikuj problem
+
+| Signal                                              | Kategorija            | Sledeći korak                                     |
+| --------------------------------------------------- | --------------------- | ------------------------------------------------- |
+| uplata postoji, `FakturaID` prazan                  | avans/neraspoređeno   | odlučiti da li se vezuje na fakturu               |
+| uplata vezana na pogrešnu fakturu                   | pogrešna alokacija    | finansijski owner, korekcija oba statusa          |
+| faktura status ne prati uplate                      | recalculation problem | `UpdateFakturaStatus` posle provere               |
+| avans split nejasan                                 | split recovery        | naći original i split `NOV-*`                     |
+| isplata postoji, `OtkupID` prazan                   | kooperantski avans    | odlučiti da li se vezuje na otkup                 |
+| isplata vezana na pogrešan otkup                    | pogrešna alokacija    | finansijski owner, korekcija oba statusa          |
+| otkup status ne prati isplate                       | recalculation problem | `UpdateOtkupStatus` posle provere                 |
+| storniran `NOV-*`, status i dalje plaćeno/isplaćeno | status stale          | rerun statusa                                     |
+| dupli `NOV-*`                                       | ledger duplicate      | stop, finansijski owner odlučuje storno/korekciju |
+
+---
+
+## 9. Dozvoljene akcije po stanju
+
+| Stanje                                | Dozvoljena akcija                                             |
+| ------------------------------------- | ------------------------------------------------------------- |
+| Uplata je avans, faktura jednoznačna  | `ApplyAvansToFaktura_TX` uz finansijsku odluku                |
+| Faktura status pogrešan, ledger tačan | `UpdateFakturaStatus`                                         |
+| Isplata je avans, otkup jednoznačan   | korekcija linka ili procedura raspodele uz finansijsku odluku |
+| Otkup status pogrešan, ledger tačan   | `UpdateOtkupStatus`                                           |
+| Pogrešna faktura/otkup veza           | ne menjati naslepo; finansijska korekcija                     |
+| Faktura ima `SEFDocumentId`           | SEF/legal runbook pre korekcije                               |
+| Dupli `NOV-*`                         | finansijski owner odlučuje koji se stornira                   |
+| Nevalidan smer novca                  | tehnički recovery + audit                                     |
+
+---
+
+## 10. Recovery scenariji
+
+### 10.1. Faktura je plaćena, ali status je `Neplaćeno`
+
+Postupak:
+
+1. Proveri `FakturaID`.
+2. Saberi nestornirane `tblNovac.Uplata` redove gde je `FakturaID` jednak toj fakturi.
+3. Uporedi sa `tblFakture.Iznos`.
+4. Ako je `uplaceno >= iznos`, pokreni:
+
+```vb
+Call UpdateFakturaStatus("FAK-...")
+```
+
+5. Proveri da li se status promenio i `DatumPlacanja` popunio.
+6. Ako se ne promeni, proveri da li je faktura stornirana ili je iznos nenumerički.
+
+### 10.2. Faktura je `Plaćeno`, ali uplata je stornirana
+
+Postupak:
+
+1. Proveri sve `NOV-*` redove za `FakturaID`.
+2. Isključi `Stornirano = Da`.
+3. Ponovo izračunaj `uplaceno`.
+4. Ako više ne pokriva fakturu, pokreni `UpdateFakturaStatus`.
+5. Proveri da li je `DatumPlacanja` obrisan.
+6. Ako je faktura poslata SEF-u, obavesti finansijskog owner-a; status plaćanja nije isto što i SEF validnost, ali utiče na izveštaje.
+
+### 10.3. Uplata je ostala kao avans, a treba da zatvori fakturu
+
+Postupak:
+
+1. Nađi `NOV_KUPCI_AVANS` red.
+2. Proveri da `FakturaID` nije popunjen.
+3. Proveri kupca i otvorene fakture.
+4. Ako postoji jedna jasna faktura, finansijski owner odobrava primenu.
+5. Pokreni:
+
+```vb
+Debug.Print ApplyAvansToFaktura_TX("KUP-...", "FAK-...")
+```
+
+6. Proveri da li je avans ceo potrošen ili splitovan.
+7. Proveri status fakture.
+
+### 10.4. Avans je splitovan, ali saldo kupca nije jasan
+
+Postupak:
+
+1. Nađi originalni avans `NOV-*`.
+2. Nađi split `NOV-*` redove. Tipično imaju:
+
+   * isti `BrojDokumenta`;
+   * isti datum;
+   * isti kupac;
+   * `Tip = NOV_KUPCI_AVANS`;
+   * popunjen `FakturaID`;
+   * `Napomena = Avans raspodela`.
+3. Saberite:
+
+```text
+original preostali avans + svi splitovi = početni avans iznos
+```
+
+4. Ako zbir ne odgovara, ne korigovati ručno bez backup-a.
+5. Tehnički owner proverava istoriju/journal.
+
+### 10.5. Avans je primenjen na pogrešnu fakturu
+
+Postupak:
+
+1. Identifikuj split ili full avans red koji je dobio pogrešan `FakturaID`.
+2. Identifikuj pogrešnu fakturu i ispravnu fakturu.
+3. Proveri da li je pogrešna faktura promenila status na plaćeno.
+4. Proveri da li je ispravna faktura ostala neplaćena.
+5. Finansijski owner mora odobriti korekciju.
+6. Ako je faktura sa pogrešnom alokacijom poslata na SEF, uključiti pravno/računovodstvo.
+7. Nakon korekcije, pokrenuti `UpdateFakturaStatus` za obe fakture.
+
+### 10.6. Otkup je isplaćen, ali status nije isplaćen
+
+Postupak:
+
+1. Proveri `OtkupID`.
+2. Saberi nestornirane `tblNovac.Isplata` redove gde je `OtkupID` jednak tom otkupu.
+3. Izračunaj vrednost otkupa:
+
+```text
+vrednost = Kolicina × Cena
+```
+
+4. Ako je `isplaceno >= vrednost`, pokreni:
+
+```vb
+Call UpdateOtkupStatus("OTK-...")
+```
+
+5. Proveri `Isplaceno` i `DatumIsplate`.
+6. Ako status ne menja, proveri da li je otkup storniran ili vrednost nije numerička.
+
+### 10.7. Isplata je vezana na pogrešan otkup
+
+Postupak:
+
+1. Identifikuj `NOV-*` red.
+2. Identifikuj pogrešan `OtkupID` i ispravan `OtkupID`.
+3. Proveri statuse oba otkupa pre korekcije.
+4. Finansijski owner odobrava korekciju.
+5. Korekcija mora ažurirati oba otkupa:
+
+```vb
+Call UpdateOtkupStatus("OTK-pogresan")
+Call UpdateOtkupStatus("OTK-ispravan")
+```
+
+6. Ako je isplata nastala iz `BIM-*`, proveriti da li je pogrešan `PartnerMap` ili blok.
+
+### 10.8. Kooperantski avans treba da se veže na otkup
+
+Postupak:
+
+1. Nađi `NOV_VIRMAN_AVANS_KOOP` red.
+2. Proveri `KooperantID` i `OMID`.
+3. Proveri otvorene otkupe kooperanta.
+4. Ako postoji jedan jasan otkup/blok, finansijski owner odobrava vezivanje.
+5. Povezati `OtkupID` kroz definisanu proceduru ili tehnički recovery.
+6. Pokrenuti `UpdateOtkupStatus`.
+7. Ako je avans veći od vrednosti otkupa, višak mora ostati kao avans ili se splituje po odobrenoj proceduri.
+
+### 10.9. Dupli `NOV-*` red
+
+Postupak:
+
+1. Utvrdi da li su redovi stvarno duplikat ili dve realne transakcije.
+2. Ako su iz banke, proveri `BIM-*`, `BankaReferenz`, `BrojDokumenta`.
+3. Ako oba zatvaraju istu fakturu/otkup, status može biti lažno plaćen/isplaćen.
+4. Finansijski owner odlučuje koji red se stornira.
+5. Posle storna, pokrenuti status update za pogođenu fakturu/otkup.
+
+### 10.10. `NOV-*` red nema čist smer
+
+Simptom:
+
+* `Uplata = 0` i `Isplata = 0`; ili
+* `Uplata > 0` i `Isplata > 0`.
+
+Postupak:
+
+1. Tretirati kao data integrity incident.
+2. Ne uključivati u status dok se ne razjasni.
+3. Proveriti izvor: ručni unos, banka import, avans split.
+4. Tehnički owner popravlja validaciju ili red uz finansijsku odluku.
+
+### 10.11. Faktura je poslata SEF-u, a plaćanje je pogrešno
+
+Postupak:
+
+1. Ne menjati fakturu/stavke/SEF podatke.
+2. Finansijska uplata se može korigovati samo uz računovodstvenu odluku.
+3. Ako korekcija menja samo status plaćanja, proveriti izveštaje.
+4. Ako korekcija znači da je faktura poslovno pogrešna, preći na SEF runbook.
+5. Ako postoji `SEFDocumentId`, ne praviti novu fakturu bez cancel/storno odluke.
+
+---
+
+## 11. Recalculate procedure
+
+### 11.1. Faktura
+
+Koristi kada je ledger tačan, ali status nije:
+
+```vb
+Call UpdateFakturaStatus("FAK-...")
+```
+
+Pre toga proveri:
+
+```text
+Faktura nije stornirana
+Iznos je numerički
+Uplate nisu stornirane
+FakturaID je tačan na NOV redovima
+```
+
+### 11.2. Otkup
+
+Koristi kada je ledger tačan, ali status nije:
+
+```vb
+Call UpdateOtkupStatus("OTK-...")
+```
+
+Pre toga proveri:
+
+```text
+Otkup nije storniran
+Kolicina i Cena su numerički
+Isplate nisu stornirane
+OtkupID je tačan na NOV redovima
+```
+
+---
+
+## 12. Kako sprečavaš duple/kvarne finansijske efekte
+
+Sistem ima zaštite:
+
+1. `SaveNovac_TX` snapshotuje `tblNovac`, `tblFakture`, `tblOtkup`.
+2. `SaveNovac` validira ulaz kroz `ValidateNovacInput`.
+3. `GetUplataForFaktura` i isplata za otkup koriste samo nestornirane redove.
+4. Avans allocation ne troši red koji već ima `FakturaID`.
+5. Partial avans pravi split red, ne menja fakturu direktno bez ledger traga.
+6. `UpdateFakturaStatus` i `UpdateOtkupStatus` računaju status iz ledger-a, ne iz ručnog statusa.
+7. Stornirani redovi ostaju audit trag i ispadaju iz obračuna.
+
+Operativno pravilo:
+
+> Status fakture/otkupa je izvedeno stanje. Ako se ne slaže, prvo popravi/proveri `tblNovac`, pa tek onda rerun statusa.
+
+---
+
+## 13. Admin/VBA komande
+
+Koristiti samo ako UI nije dovoljan ili ako tehnički/finansijski owner radi incident.
+
+```vb
+' Ručno čuvanje novčanog reda kroz TX
+Debug.Print SaveNovac_TX( _
+    "IZVOD-001", Date, "Kupac ABC", "KUP-001", "Kupac", _
+    "", "", "FAK-001", "", NOV_KUPCI_UPLATA, _
+    100000, 0, "Ručna korekcija po ticketu", "")
+
+' Primena kupčevog avansa na fakturu
+Debug.Print ApplyAvansToFaktura_TX("KUP-001", "FAK-001")
+
+' Recalculate fakture
+Call UpdateFakturaStatus("FAK-001")
+
+' Recalculate otkupa
+Call UpdateOtkupStatus("OTK-001")
+
+' Provera uplata fakture
+Debug.Print GetUplataForFaktura("FAK-001")
+
+' Provera otvorenih faktura kupca
+' U Immediate Window detaljno pregledati rezultat funkcije
+Debug.Print IsEmpty(GetOpenFakture("KUP-001"))
+
+' Provera isplate otkupa
+Debug.Print GetUplataForOtkup("OTK-001")
+```
+
+Ne koristiti direktni edit ćelija osim kao poslednju meru uz backup, ticket i finansijsko odobrenje.
+
+---
+
+## 14. Ko donosi odluku
+
+### Operator sme sam
+
+* proveriti `NOV-*` redove;
+* proveriti da li je `FakturaID` / `OtkupID` popunjen;
+* pokrenuti status recalculation kada je ledger očigledno tačan;
+* prijaviti avans koji čeka raspodelu;
+* odbiti ručno dupliranje novčanog reda.
+
+### Tehnički owner odlučuje
+
+* ručno menjanje `FakturaID` / `OtkupID` na `NOV-*` redovima;
+* recovery posle partial avans split-a;
+* popravku nekonzistentnog `NOV-*` reda;
+* vraćanje iz journal/backup-a;
+* stanja gde `SaveNovac_TX` rollback nije očekivano vratio status.
+
+### Finansijski / računovodstveni owner odlučuje
+
+* da li uplata ide na fakturu ili ostaje avans;
+* na koju fakturu ide uplata ako postoji više otvorenih;
+* da li se isplata veže na otkup ili ostaje avans;
+* koji `NOV-*` red se stornira ako postoji duplikat;
+* šta raditi ako je faktura već poslata SEF-u;
+* korekcije posle zatvaranja perioda.
+
+### Niko ne sme bez odobrenja
+
+* brisati `NOV-*` red;
+* menjati iznose originalnog/split avansa bez razumevanja para;
+* ručno postaviti fakturu na plaćeno bez ledger-a;
+* ručno postaviti otkup na isplaćeno bez ledger-a;
+* menjati finansijske veze na fakturi koja ima `SEFDocumentId` bez računovodstva;
+* praviti korekcioni red bez jasne napomene i odluke.
+
+---
+
+## 15. Checklist za zatvaranje incidenta
+
+```text
+[ ] Identifikovan NOV-ID
+[ ] Proveren Tip
+[ ] Proveren smer: Uplata ili Isplata
+[ ] Proveren Stornirano status
+[ ] Ako je iz banke, identifikovan BIM-ID
+[ ] Ako je faktura, proveren FakturaID i BrojFakture
+[ ] Ako je otkup, proveren OtkupID
+[ ] Ako je avans, identifikovan originalni avans red
+[ ] Ako je split, identifikovan split red
+[ ] Proveren zbir uplata/isplata iz nestorniranih redova
+[ ] Pokrenut UpdateFakturaStatus ako je faktura pogođena
+[ ] Pokrenut UpdateOtkupStatus ako je otkup pogođen
+[ ] Ako je SEF faktura, provereno da li postoji SEFDocumentId
+[ ] Ako je korekcija, postoji finansijsko odobrenje
+[ ] Ako je ručna tehnička intervencija, postoji backup/ticket
+[ ] Korisnik obavešten
+```
+
+---
+
+## 16. Primeri odluke
+
+### Primer A: Kupac uplatio 100.000, faktura 100.000, status neplaćeno
+
+Zaključak: ili `NOV.FakturaID` nije popunjen, ili status nije recalculisan.
+Akcija: proveri `NOV-*`; ako je veza tačna, `UpdateFakturaStatus`.
+
+### Primer B: Kupac uplatio 150.000 avans, faktura je 100.000
+
+Zaključak: partial avans split.
+Akcija: originalni avans treba da ostane 50.000, split red 100.000 treba da dobije `FakturaID`.
+
+### Primer C: Avans zatvorio pogrešnu fakturu
+
+Zaključak: finansijska alokacija pogrešna.
+Akcija: finansijski owner odobrava korekciju; update statusa obe fakture.
+
+### Primer D: Kooperant isplaćen, ali otkup neisplaćen
+
+Zaključak: isplata verovatno nema `OtkupID` ili je na pogrešnom otkupu.
+Akcija: proveriti `NOV.OtkupID`, zatim `UpdateOtkupStatus`.
+
+### Primer E: Dupli `NOV-*` zatvara istu fakturu
+
+Zaključak: lažno plaćena/preplaćena faktura.
+Akcija: naći izvor duplikata; finansijski owner odlučuje storno/korekciju; rerun statusa.
+
+### Primer F: `NOV-*` je storniran, ali status nije vraćen
+
+Zaključak: status je stale.
+Akcija: rerun `UpdateFakturaStatus` ili `UpdateOtkupStatus`.
+
+---
+
+## 17. Poznate production rupe koje treba zatvoriti
+
+1. Dodati `tblNovacEventLog`: create, update, avans split, link, unlink, storno, operator, razlog.
+2. Dodati eksplicitnu `OriginalNovacID` kolonu za avans split, umesto oslanjanja na napomenu.
+3. Dodati `BankaImportID` kolonu u `tblNovac`, ne samo `Napomena`.
+4. Dodati kontrolisanu proceduru `CorrectNovacAllocation_TX` za prebacivanje uplate/isplate sa pogrešne fakture/otkupa.
+5. Dodati kontrolisanu proceduru `StornoNovac_TX` koja automatski rerun-uje pogođene statuse.
+6. Dodati dashboard: fakture gde status ne odgovara zbiru uplata.
+7. Dodati dashboard: otkupi gde status ne odgovara zbiru isplata.
+8. Dodati dashboard: avansi sa `FakturaID` prazno stariji od X dana.
+9. Dodati dashboard: kooperantski avansi bez `OtkupID` stariji od X dana.
+10. Dodati testove za partial avans split i rollback.
+11. Dodati zabranu direktnog editovanja statusa fakture/otkupa bez ledger razloga.
+12. Dodati pravilo zatvorenog perioda: kada je period zaključan, korekcije idu samo preko storno/korekcioni red.
+
+Do tada važi konzervativno pravilo:
+
+> `tblNovac` je izvor istine za plaćeno/isplaćeno. Statusi na fakturi i otkupu su izvedeni. Ako status izgleda pogrešno, ne menjaj status — pronađi i popravi finansijski trag.
