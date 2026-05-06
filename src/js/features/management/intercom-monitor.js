@@ -29,6 +29,8 @@
 
 'use strict';
 
+(function () {
+
 // ─── Module state ─────────────────────────────────────────────────────────────
 
 const _m = {
@@ -48,14 +50,34 @@ const _m = {
 
 function _initFirebase() {
   if (_m.db) return;
+
+  if (typeof firebase === 'undefined') {
+    throw new Error('Firebase global nije učitan');
+  }
+  if (typeof firebase.initializeApp !== 'function') {
+    throw new Error('firebase-app-compat.js nije učitan');
+  }
+
   const existing = firebase.apps.find(a => a.name === 'agrix-intercom');
-  existing || firebase.initializeApp({
+  const app = existing || firebase.initializeApp({
     apiKey:      CONFIG.FIREBASE_API_KEY,
     projectId:   CONFIG.FIREBASE_PROJECT_ID,
     appId:       CONFIG.FIREBASE_APP_ID,
     databaseURL: CONFIG.FIREBASE_RTDB_URL
   }, 'agrix-intercom');
-  _m.db = firebase.app('agrix-intercom').database();
+
+  if (typeof app.database !== 'function') {
+    throw new Error('firebase-database-compat.js nije učitan');
+  }
+  if (typeof app.auth !== 'function') {
+    throw new Error('firebase-auth-compat.js nije učitan');
+  }
+
+  _m.db = app.database();
+
+  if (!_m.db) {
+    throw new Error('app.database() vratio null/undefined');
+  }
 }
 
 async function _ensureAuth() {
@@ -364,3 +386,5 @@ window.intercomMonitor = {
   get listeningTo()  { return _m.listeningTo; },
   get reqStatus()    { return _m.reqStatus; }
 };
+
+})();
