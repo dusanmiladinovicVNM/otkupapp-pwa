@@ -245,10 +245,12 @@ function renderVozacZbirneFromData(allZbirne) {
             : 'var(--success)';
 
         const syncText =
-            r.syncStatus === 'syncing' ? ' | sync...' :
-            r.syncStatus === 'pending' ? ' | pending' :
-            (r.brojZbirne ? ' | ' + r.brojZbirne :
-             r.serverRecordID ? ' | ' + r.serverRecordID : '');
+            r.brojZbirne 
+                ? ' | ' + r.brojZbirne + (r.syncStatus === 'pending' ? ' (čeka sync)' : 
+                                    r.syncStatus === 'syncing' ? ' (sync...)' : '')
+                : (r.syncStatus === 'syncing' ? ' | sync...' :
+                   r.syncStatus === 'pending' ? ' | pending' :
+                   r.serverRecordID ? ' | ' + r.serverRecordID : '');
 
         return `<div class="queue-item" style="border-left-color:${bc};">
             <div class="qi-header">
@@ -330,12 +332,32 @@ async function confirmZbirnaUnlocked() {
 
     const nowIso = new Date().toISOString();
 
+    // === BrojZbirne PWA-side generation ===
+    const vozacBrojX = parseInt(String(CONFIG.ENTITY_ID || '').replace(/\D/g, ''), 10);
+    if (!vozacBrojX || isNaN(vozacBrojX)) {
+        showToast('Greška: VozacID nije validan za generaciju broja zbirne', 'error');
+        return;
+    }
+
+    const ddmmyy = formatDdmmyy(today);
+
+    // Sequence: count današnjih ne-deleted zbirni iz cached merged set
+    const todayZbirneCount = (zbirne || [])
+        .filter(z => z.datum === today)
+        .length;
+
+    const seq = todayZbirneCount + 1;
+    const brojZbirne = (seq === 1)
+        ? `${vozacBrojX}/${ddmmyy}`
+        : `${vozacBrojX}/${ddmmyy}-${seq}`;
+    // === end BrojZbirne ===
+
     const record = {
         clientRecordID: (window.crypto && typeof window.crypto.randomUUID === 'function')
             ? window.crypto.randomUUID()
             : ('zbr-' + Date.now() + '-' + Math.floor(Math.random() * 1000000)),
         serverRecordID: '',
-        brojZbirne: '',
+        brojZbirne: brojZbirne,
         createdAtClient: nowIso,
         updatedAtClient: nowIso,
         updatedAtServer: '',
@@ -442,4 +464,13 @@ async function getMergedZbirneForVozac() {
 
     return dedupeRecordsForRender(mergeZbirneRecords(local, server))
     .filter(r => !r.deleted);
+}
+
+function formatDdmmyy(isoDate) {
+    // '2026-05-06' → '060526'
+    if (!isoDate || typeof isoDate !== 'string') return '';
+    const parts = isoDate.split('-');
+    if (parts.length !== 3) return '';
+    const [y, m, d] = parts;
+    return d + m + y.slice(2);
 }
