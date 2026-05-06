@@ -1403,16 +1403,11 @@ if ('serviceWorker' in navigator) {
 }
 
 function _intercomActiveStations(stanice) {
-    const now  = new Date();
-    const hhmm = now.getHours() * 100 + now.getMinutes();
     return (stanice || [])
-        .filter(s => {
-            if (!s.radnoVremeOd && !s.radnoVremeDo) return true;
-            return hhmm >= (s.radnoVremeOd || 0) && hhmm <= (s.radnoVremeDo || 2359);
-        })
+        .filter(s => s && s.StanicaID)
         .map(s => ({
-            entityID:  s.OtkupacID  || s.StanicaID || '',
-            name:      s.Naziv      || s.OtkupacID || '',
-            stationID: s.StanicaID  || ''
+            entityID:  s.StanicaID,
+            name:      s.Naziv || s.StanicaID,
+            stationID: s.StanicaID
         }));
 }
