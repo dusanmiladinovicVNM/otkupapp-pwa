@@ -49,7 +49,7 @@ const _m = {
 // ─── Firebase init + anon auth ────────────────────────────────────────────────
 
 function _initFirebase() {
-  if (_f.db) return;
+  if (_m.db) return;
 
   if (typeof firebase === 'undefined') {
     throw new Error('Firebase global nije učitan');
