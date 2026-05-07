@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSEFValidator"
 Option Explicit
 
 Public Sub ValidateAllowedTransition(ByVal oldState As String, ByVal newState As String)
