@@ -1,4 +1,3 @@
-Attribute VB_Name = "modMain"
 Option Explicit
 
 ' ============================================================
@@ -9,31 +8,104 @@ Private m_Initialized As Boolean
 Private mIsShuttingDown As Boolean
 
 Public Sub StartApp()
+    On Error GoTo EH
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="VBA_STARTAPP_START", _
+        severity:="INFO", _
+        message:="StartApp started", _
+        userId:="Operator", _
+        moduleName:="modMain", _
+        procedureName:="StartApp", _
+        entityType:="App", _
+        entityId:="Startup", _
+        correlationId:="VBA-STARTUP"
+    On Error GoTo EH
+
     If Not m_Initialized Then InitApp
+
     Application.Visible = False
+
     frmSplash.Show             ' <-- splash pre main forme
+
     Call BackupFileOnStart
     Call PurgeOldBackups
     Call PurgeOldJournals
     Call PurgeOldLogs
     Call LogAppStart
-    
+
+    ' SEF recovery ostaje non-blocking za startup.
+    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada šalje monitoring.
     On Error Resume Next
     Call RecoverAllStuckSEFSendingInvoices
-    On Error GoTo 0
-    
+    On Error GoTo EH
+
     Dim journalWarning As String
     journalWarning = CheckJournalForRecovery()
+
     If journalWarning <> "" Then
+        On Error Resume Next
+        Monitor_Event _
+            eventType:="JOURNAL_RECOVERY_WARN", _
+            severity:="WARN", _
+            message:=journalWarning, _
+            userId:="Operator", _
+            moduleName:="modMain", _
+            procedureName:="StartApp", _
+            entityType:="Journal", _
+            entityId:="Recovery", _
+            correlationId:="JOURNAL-STARTUP-RECOVERY"
+        On Error GoTo EH
+
         MsgBox "UPOZORENJE - Moguc gubitak podataka!" & vbCrLf & vbCrLf & _
                journalWarning & vbCrLf & vbCrLf & _
                "Proverite Journal folder i reimportujte ako je potrebno.", _
                vbExclamation, APP_NAME
     End If
-    
-    ' frmSplash sam sebe Unloaduje i pokrece frmOtkupAPP
-End Sub
 
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="VBA_STARTAPP_SUCCESS", _
+        severity:="INFO", _
+        message:="StartApp completed successfully", _
+        userId:="Operator", _
+        moduleName:="modMain", _
+        procedureName:="StartApp", _
+        entityType:="App", _
+        entityId:="Startup", _
+        correlationId:="VBA-STARTUP"
+    On Error GoTo 0
+
+    ' frmSplash sam sebe Unloaduje i pokrece frmOtkupAPP
+    Exit Sub
+
+EH:
+    Dim errNo As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNo = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
+    Monitor_Error _
+        moduleName:="modMain", _
+        procedureName:="StartApp", _
+        entityType:="App", _
+        entityId:="Startup", _
+        correlationId:="VBA-STARTUP", _
+        errorNumber:=errNo, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    LogErr "modMain.StartApp"
+
+    On Error GoTo 0
+    Err.Raise errNo, errSrc, errDesc
+End Sub
 Public Sub InitApp()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
@@ -50,7 +122,7 @@ Cleanup:
     Exit Sub
     
 ErrHandler:
-    MsgBox "Greska pri inicijalizaciji: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri inicijalizaciji: " & Err.description, vbCritical, APP_NAME
     Resume Cleanup
 End Sub
 
