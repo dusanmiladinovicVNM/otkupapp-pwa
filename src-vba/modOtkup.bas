@@ -1,4 +1,3 @@
-Attribute VB_Name = "modOtkup"
 Option Explicit
 
 ' ============================================================
@@ -37,6 +36,23 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
     End If
 
     tx.CommitTx
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="OTKUP_SAVE_SUCCESS", _
+        severity:="INFO", _
+        message:="Otkup saved. KooperantID=" & kooperantID & _
+                 "; StanicaID=" & stanicaID & _
+                 "; Vrsta=" & vrstaVoca & _
+                 "; Kolicina=" & CStr(kolicina), _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:="SaveOtkup_TX", _
+        entityType:="Otkup", _
+        entityId:=SaveOtkup_TX, _
+        correlationId:=SaveOtkup_TX
+    On Error GoTo 0
+
     Set tx = Nothing
     Exit Function
 
@@ -46,11 +62,34 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveOtkup_TX"
+    Monitor_Error _
+        moduleName:="modOtkup", _
+        procedureName:="SaveOtkup_TX", _
+        entityType:="Otkup", _
+        entityId:=SaveOtkup_TX, _
+        correlationId:=brDok, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="OTKUP_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="Otkup save failed. KooperantID=" & kooperantID & _
+                 "; StanicaID=" & stanicaID & _
+                 "; BrDok=" & brDok & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:="SaveOtkup_TX", _
+        entityType:="Otkup", _
+        entityId:=SaveOtkup_TX, _
+        correlationId:=brDok
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -185,7 +224,7 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
             brojDok:=brDok, _
             datum:=datum, _
             partner:=koopNaziv, _
-            partnerID:=kooperantID, _
+            partnerId:=kooperantID, _
             entitetTip:="Kooperant", _
             omID:=stanicaID, _
             kooperantID:=kooperantID, _
@@ -218,6 +257,24 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
         SaveOtkupMulti_TX = resultI
     End If
 
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="OTKUP_MULTI_SAVE_SUCCESS", _
+        severity:="INFO", _
+        message:="Otkup multi saved. KooperantID=" & kooperantID & _
+                 "; StanicaID=" & stanicaID & _
+                 "; Vrsta=" & vrstaVoca & _
+                 "; ResultI=" & resultI & _
+                 "; ResultII=" & resultII & _
+                 "; HasKlasaII=" & CStr(hasKlasaII), _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:="SaveOtkupMulti_TX", _
+        entityType:="Otkup", _
+        entityId:=SaveOtkupMulti_TX, _
+        correlationId:=resultI
+    On Error GoTo 0
+
     Exit Function
 
 EH:
@@ -226,11 +283,34 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveOtkupMulti_TX"
+    Monitor_Error _
+        moduleName:="modOtkup", _
+        procedureName:="SaveOtkupMulti_TX", _
+        entityType:="Otkup", _
+        entityId:=SaveOtkupMulti_TX, _
+        correlationId:=brDok, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="OTKUP_MULTI_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="Otkup multi save failed. KooperantID=" & kooperantID & _
+                 "; StanicaID=" & stanicaID & _
+                 "; BrDok=" & brDok & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:="SaveOtkupMulti_TX", _
+        entityType:="Otkup", _
+        entityId:=SaveOtkupMulti_TX, _
+        correlationId:=brDok
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -379,8 +459,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveOtkup"
