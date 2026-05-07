@@ -1,4 +1,3 @@
-Attribute VB_Name = "modDokumenta"
 
 Option Explicit
 
@@ -85,10 +84,46 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
     Exit Function
 
 EH:
-    LogErr "SaveOtpremnicaMulti_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
+
+    LogErr "SaveOtpremnicaMulti_TX"
+
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveOtpremnicaMulti_TX", _
+        entityType:="Otpremnica", _
+        entityId:=SaveOtpremnicaMulti_TX, _
+        correlationId:=brojOtp, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="SaveOtpremnicaMulti_TX failed. BrojOtp=" & brojOtp & _
+                 "; BrojZbirne=" & brojZbirne & _
+                 "; StanicaID=" & stanicaID & _
+                 "; VozacID=" & vozacID & _
+                 "; HasKlasaII=" & CStr(hasKlasaII) & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveOtpremnicaMulti_TX", _
+        entityType:="Otpremnica", _
+        entityId:=SaveOtpremnicaMulti_TX, _
+        correlationId:=brojOtp
+
     If Not tx Is Nothing Then tx.RollbackTx
+
     On Error GoTo 0
 
     SaveOtpremnicaMulti_TX = ""
@@ -120,6 +155,7 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
     End If
 
     tx.CommitTx
+
     Set tx = Nothing
     Exit Function
 
@@ -129,11 +165,35 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveOtpremnica_TX"
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveOtpremnica_TX", _
+        entityType:="Otpremnica", _
+        entityId:=SaveOtpremnica_TX, _
+        correlationId:=brojOtp, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="SaveOtpremnica_TX failed. BrojOtp=" & brojOtp & _
+                "; BrojZbirne=" & brojZbirne & _
+                "; StanicaID=" & stanicaID & _
+                "; VozacID=" & vozacID & _
+                "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveOtpremnica_TX", _
+        entityType:="Otpremnica", _
+        entityId:=SaveOtpremnica_TX, _
+        correlationId:=brojOtp
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -320,6 +380,7 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
     End If
 
     tx.CommitTx
+
     Set tx = Nothing
     Exit Function
 
@@ -329,11 +390,35 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveZbirnaMulti_TX"
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveZbirnaMulti_TX", _
+        entityType:="Zbirna", _
+        entityId:=SaveZbirnaMulti_TX, _
+        correlationId:=brojZbirne, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="SaveZbirnaMulti_TX failed. BrojZbirne=" & brojZbirne & _
+             "; VozacID=" & vozacID & _
+             "; KupacID=" & kupacID & _
+             "; HasKlasaII=" & CStr(hasKlasaII) & _
+             "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveZbirnaMulti_TX", _
+        entityType:="Zbirna", _
+        entityId:=SaveZbirnaMulti_TX, _
+        correlationId:=brojZbirne
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -367,6 +452,7 @@ Public Function SaveZbirna_TX(ByVal datum As Date, ByVal vozacID As String, _
     End If
 
     tx.CommitTx
+
     Exit Function
 
 EH:
@@ -375,11 +461,34 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveZbirna_TX"
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveZbirna_TX", _
+        entityType:="Zbirna", _
+        entityId:=SaveZbirna_TX, _
+        correlationId:=brojZbirne, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="SaveZbirna_TX failed. BrojZbirne=" & brojZbirne & _
+             "; VozacID=" & vozacID & _
+             "; KupacID=" & kupacID & _
+             "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="SaveZbirna_TX", _
+        entityType:="Zbirna", _
+        entityId:=SaveZbirna_TX, _
+        correlationId:=brojZbirne
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -429,8 +538,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SaveZbirna"
@@ -693,6 +802,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     End If
 
     tx.CommitTx
+
     Set tx = Nothing
     Exit Function
 
@@ -702,11 +812,36 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SavePrijemnicaMulti_TX"
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="SavePrijemnicaMulti_TX", _
+        entityType:="Prijemnica", _
+        entityId:=SavePrijemnicaMulti_TX, _
+        correlationId:=brojPrij, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="SavePrijemnicaMulti_TX failed. BrojPrij=" & brojPrij & _
+             "; BrojZbirne=" & brojZbirne & _
+             "; KupacID=" & kupacID & _
+             "; VozacID=" & vozacID & _
+             "; HasKlasaII=" & CStr(hasKlasaII) & _
+             "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="SavePrijemnicaMulti_TX", _
+        entityType:="Prijemnica", _
+        entityId:=SavePrijemnicaMulti_TX, _
+        correlationId:=brojPrij
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -744,6 +879,7 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
     End If
 
     tx.CommitTx
+
     Exit Function
 
 EH:
@@ -752,11 +888,35 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SavePrijemnica_TX"
+    Monitor_Error _
+        moduleName:="modDokumenta", _
+        procedureName:="SavePrijemnica_TX", _
+        entityType:="Prijemnica", _
+        entityId:=SavePrijemnica_TX, _
+        correlationId:=brojPrij, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="SavePrijemnica_TX failed. BrojPrij=" & brojPrij & _
+             "; BrojZbirne=" & brojZbirne & _
+             "; KupacID=" & kupacID & _
+             "; VozacID=" & vozacID & _
+             "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modDokumenta", _
+        procedureName:="SavePrijemnica_TX", _
+        entityType:="Prijemnica", _
+        entityId:=SavePrijemnica_TX, _
+        correlationId:=brojPrij
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -832,8 +992,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SavePrijemnica"
@@ -990,7 +1150,7 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
             brojDok:=brojDok, _
             datum:=datum, _
             partner:=kupacNaziv, _
-            partnerID:=kupacID, _
+            partnerId:=kupacID, _
             entitetTip:="Kupac", _
             omID:="", _
             kooperantID:="", _
@@ -1645,7 +1805,7 @@ NextStavka:
 
 EH:
     LogErr "modDokumenta.RelinkFakturaStavke"
-    Err.Raise Err.Number, "modDokumenta.RelinkFakturaStavke", Err.Description
+    Err.Raise Err.Number, "modDokumenta.RelinkFakturaStavke", Err.description
 End Sub
 
 ' ============================================================
@@ -1800,9 +1960,9 @@ Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
         Err.Raise vbObjectError + 1403, SRC, "Broj otpremnice je obavezan."
     End If
 
-    If Len(Trim$(brojZbirne)) = 0 Then
-        Err.Raise vbObjectError + 1404, SRC, "Broj zbirne je obavezan."
-    End If
+    'If Len(Trim$(brojZbirne)) = 0 Then
+    '    Err.Raise vbObjectError + 1404, SRC, "Broj zbirne je obavezan."
+    'End If
 
     If kolicina <= 0 Then
         Err.Raise vbObjectError + 1405, SRC, "Kolicina mora biti veca od nule."
@@ -1925,7 +2085,7 @@ Private Function GetDokumentaTableColumnCount(ByVal tableName As String) As Long
 
     For Each ws In ThisWorkbook.Worksheets
         For Each lo In ws.ListObjects
-            If StrComp(lo.Name, tableName, vbTextCompare) = 0 Then
+            If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
                 GetDokumentaTableColumnCount = lo.ListColumns.count
                 Exit Function
             End If
