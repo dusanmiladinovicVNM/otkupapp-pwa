@@ -1,4 +1,3 @@
-Attribute VB_Name = "modBankaMapiranje"
 Option Explicit
 
 ' ============================================================
@@ -150,13 +149,43 @@ Public Function AutoMapBankaImportRow_TX(ByVal bankaImportID As String) As Strin
     AutoMapBankaImportRow_TX = AutoMapBankaImportRow(bankaImportID)
     
     tx.CommitTx
+
+    If Len(Trim$(AutoMapBankaImportRow_TX)) > 0 Then
+        Monitor_BankaMapSuccess _
+            procedureName:="AutoMapBankaImportRow_TX", _
+            bankaImportID:=bankaImportID, _
+            resultId:=AutoMapBankaImportRow_TX, _
+            partnerType:="AUTO"
+    End If
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "AutoMapBankaImportRow_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="AutoMapBankaImportRow_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="AUTO"
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri automatskom mapiranju banke, promene vracene: " & Err.Description, _
+
+    MsgBox "Greska pri automatskom mapiranju banke, promene vracene: " & errDesc, _
            vbCritical, APP_NAME
+
     AutoMapBankaImportRow_TX = ""
 End Function
 
@@ -243,12 +272,46 @@ Public Function MapBankaImportAsKupac_TX(ByVal bankaImportID As String, _
     MapBankaImportAsKupac_TX = MapBankaImportAsKupac(bankaImportID, kupacID, fakturaID, savePartnerMapFlag)
     
     tx.CommitTx
+
+    If Len(Trim$(MapBankaImportAsKupac_TX)) > 0 Then
+        Monitor_BankaMapSuccess _
+            procedureName:="MapBankaImportAsKupac_TX", _
+            bankaImportID:=bankaImportID, _
+            resultId:=MapBankaImportAsKupac_TX, _
+            partnerType:="Kupac", _
+            partnerId:=kupacID, _
+            linkedEntityId:=fakturaID
+    End If
+
     Exit Function
     
 EH:
-    LogErr "MapBankaImportasKupac_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
+    LogErr "MapBankaImportAsKupac_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="MapBankaImportAsKupac_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="Kupac", _
+        partnerId:=kupacID, _
+        linkedEntityId:=fakturaID
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri mapiranju kupca, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri mapiranju kupca, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     MapBankaImportAsKupac_TX = ""
 End Function
 
@@ -352,12 +415,46 @@ Public Function MapBankaImportAsKooperant_TX(ByVal bankaImportID As String, _
     MapBankaImportAsKooperant_TX = MapBankaImportAsKooperant(bankaImportID, kooperantID, otkupID, vrstaVoca, savePartnerMapFlag)
     
     tx.CommitTx
+
+    If Len(Trim$(MapBankaImportAsKooperant_TX)) > 0 Then
+        Monitor_BankaMapSuccess _
+            procedureName:="MapBankaImportAsKooperant_TX", _
+            bankaImportID:=bankaImportID, _
+            resultId:=MapBankaImportAsKooperant_TX, _
+            partnerType:="Kooperant", _
+            partnerId:=kooperantID, _
+            linkedEntityId:=otkupID
+    End If
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "MapBankaImportAsKooperant_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="MapBankaImportAsKooperant_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="Kooperant", _
+        partnerId:=kooperantID, _
+        linkedEntityId:=otkupID
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri mapiranju kooperanta, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri mapiranju kooperanta, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     MapBankaImportAsKooperant_TX = ""
 End Function
 
@@ -434,12 +531,44 @@ Public Function MapBankaImportAsOM_TX(ByVal bankaImportID As String, _
     MapBankaImportAsOM_TX = MapBankaImportAsOM(bankaImportID, omID, vrstaVoca, savePartnerMapFlag)
     
     tx.CommitTx
+
+    If Len(Trim$(MapBankaImportAsOM_TX)) > 0 Then
+        Monitor_BankaMapSuccess _
+            procedureName:="MapBankaImportAsOM_TX", _
+            bankaImportID:=bankaImportID, _
+            resultId:=MapBankaImportAsOM_TX, _
+            partnerType:="OM", _
+            partnerId:=omID
+    End If
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "MapBankaImportAsOM_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="MapBankaImportAsOM_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="OM", _
+        partnerId:=omID
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri mapiranju OM, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri mapiranju OM, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     MapBankaImportAsOM_TX = ""
 End Function
 
@@ -470,12 +599,45 @@ Public Function MapBankaImportAsKooperantBlock_TX(ByVal bankaImportID As String,
     MapBankaImportAsKooperantBlock_TX = MapBankaImportAsKooperantBlock(bankaImportID, kooperantID, savePartnerMapFlag)
     
     tx.CommitTx
+
+    If MapBankaImportAsKooperantBlock_TX > 0 Then
+        Monitor_BankaMapSuccess _
+            procedureName:="MapBankaImportAsKooperantBlock_TX", _
+            bankaImportID:=bankaImportID, _
+            resultId:=CStr(MapBankaImportAsKooperantBlock_TX), _
+            partnerType:="KooperantBlock", _
+            partnerId:=kooperantID, _
+            linkedEntityId:=CStr(MapBankaImportAsKooperantBlock_TX)
+    End If
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "MapBankaImportAsKooperantBlock_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="MapBankaImportAsKooperantBlock_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="KooperantBlock", _
+        partnerId:=kooperantID
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri mapiranju kooperanta po bloku, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri mapiranju kooperanta po bloku, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     MapBankaImportAsKooperantBlock_TX = 0
 End Function
 
@@ -506,12 +668,46 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
         bankaImportID, kooperantID, brojBloka, savePartnerMapFlag)
     
     tx.CommitTx
+
+    If MapBankaImportAsKooperantBlockManual_TX > 0 Then
+        Monitor_BankaMapSuccess _
+            procedureName:="MapBankaImportAsKooperantBlockManual_TX", _
+            bankaImportID:=bankaImportID, _
+            resultId:=CStr(MapBankaImportAsKooperantBlockManual_TX), _
+            partnerType:="KooperantBlockManual", _
+            partnerId:=kooperantID, _
+            linkedEntityId:=brojBloka
+    End If
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "MapBankaImportAsKooperantBlockManual_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="MapBankaImportAsKooperantBlockManual_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="KooperantBlockManual", _
+        partnerId:=kooperantID, _
+        linkedEntityId:=brojBloka
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri rucnom mapiranju kooperanta po bloku, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri rucnom mapiranju kooperanta po bloku, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     MapBankaImportAsKooperantBlockManual_TX = 0
 End Function
 
@@ -687,12 +883,49 @@ Public Function SkipBankaImportRow_TX(ByVal bankaImportID As String) As Boolean
     SkipBankaImportRow_TX = SkipBankaImportRow(bankaImportID)
     
     tx.CommitTx
+
+    If SkipBankaImportRow_TX Then
+        On Error Resume Next
+        Monitor_Event _
+            eventType:="BANKA_IMPORT_SKIP", _
+            severity:="WARN", _
+            message:="Bank import row skipped. BankaImportID=" & bankaImportID, _
+            userId:="Operator", _
+            moduleName:="modBankaMapiranje", _
+            procedureName:="SkipBankaImportRow_TX", _
+            entityType:="BankaImport", _
+            entityId:=bankaImportID, _
+            correlationId:=bankaImportID
+        On Error GoTo 0
+    End If
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "SkipBankaImportRow_TX"
+
+    Monitor_BankaMapFail _
+        procedureName:="SkipBankaImportRow_TX", _
+        bankaImportID:=bankaImportID, _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        partnerType:="Skip"
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri preskakanju bank stavke, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri preskakanju bank stavke, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     SkipBankaImportRow_TX = False
 End Function
 
@@ -702,6 +935,8 @@ Public Function AutoMapAllBankaImport_TX() As Long
     Dim colID As Long
     Dim i As Long
     Dim novID As String
+    Dim openCount As Long
+    Dim failedCount As Long
     
     On Error GoTo EH
     
@@ -710,6 +945,21 @@ Public Function AutoMapAllBankaImport_TX() As Long
         AutoMapAllBankaImport_TX = 0
         Exit Function
     End If
+    
+    openCount = UBound(data, 1)
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="BANKA_AUTOMAP_ALL_START", _
+        severity:="INFO", _
+        message:="Started auto mapping all bank import rows. OpenRows=" & CStr(openCount), _
+        userId:="Operator", _
+        moduleName:="modBankaMapiranje", _
+        procedureName:="AutoMapAllBankaImport_TX", _
+        entityType:="BankaImport", _
+        entityId:="Batch", _
+        correlationId:="BANKA-AUTOMAP-ALL"
+    On Error GoTo EH
     
     colID = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID)
     
@@ -720,18 +970,75 @@ Public Function AutoMapAllBankaImport_TX() As Long
     tx.AddTableSnapshot TBL_PARTNER_MAP
     tx.AddTableSnapshot TBL_OTKUP
     
-    For i = 1 To UBound(data, 1)
+        For i = 1 To UBound(data, 1)
         novID = AutoMapBankaImportRow(CStr(data(i, colID)))
-        If novID <> "" Then AutoMapAllBankaImport_TX = AutoMapAllBankaImport_TX + 1
+
+        If novID <> "" Then
+            AutoMapAllBankaImport_TX = AutoMapAllBankaImport_TX + 1
+        Else
+            failedCount = failedCount + 1
+        End If
     Next i
-    
+
     tx.CommitTx
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="BANKA_AUTOMAP_ALL_SUMMARY", _
+        severity:="INFO", _
+        message:="Bank auto mapping completed. OpenRows=" & CStr(openCount) & _
+                 "; Mapped=" & CStr(AutoMapAllBankaImport_TX) & _
+                 "; NotMapped=" & CStr(failedCount), _
+        userId:="Operator", _
+        moduleName:="modBankaMapiranje", _
+        procedureName:="AutoMapAllBankaImport_TX", _
+        entityType:="BankaImport", _
+        entityId:="Batch", _
+        correlationId:="BANKA-AUTOMAP-ALL"
+    On Error GoTo 0
+
     Exit Function
     
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "AutoMapAllBankaImport_TX"
+
+    Monitor_Error _
+        moduleName:="modBankaMapiranje", _
+        procedureName:="AutoMapAllBankaImport_TX", _
+        entityType:="BankaImport", _
+        entityId:="Batch", _
+        correlationId:="BANKA-AUTOMAP-ALL", _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="BANKA_AUTOMAP_ALL_FAIL", _
+        severity:="CRITICAL", _
+        message:="Auto mapping all bank import rows failed. OpenRows=" & CStr(openCount) & _
+                 "; MappedBeforeFail=" & CStr(AutoMapAllBankaImport_TX) & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modBankaMapiranje", _
+        procedureName:="AutoMapAllBankaImport_TX", _
+        entityType:="BankaImport", _
+        entityId:="Batch", _
+        correlationId:="BANKA-AUTOMAP-ALL"
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri automatskom mapiranju svih bank stavki, promene vracene: " & Err.Description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri automatskom mapiranju svih bank stavki, promene vracene: " & errDesc, vbCritical, APP_NAME
+
     AutoMapAllBankaImport_TX = 0
 End Function
 
@@ -1304,6 +1611,66 @@ Public Function GetKooperantNaziv(ByVal kooperantID As String) As String
                         " " & _
                         CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime"))
 End Function
+
+Private Sub Monitor_BankaMapSuccess(ByVal procedureName As String, _
+                                    ByVal bankaImportID As String, _
+                                    ByVal resultId As String, _
+                                    ByVal partnerType As String, _
+                                    Optional ByVal partnerId As String = "", _
+                                    Optional ByVal linkedEntityId As String = "")
+    On Error Resume Next
+
+    Monitor_Event _
+        eventType:="BANKA_MAP_SUCCESS", _
+        severity:="INFO", _
+        message:="Bank import mapping succeeded. Type=" & partnerType & _
+                 "; BankaImportID=" & bankaImportID & _
+                 "; ResultID=" & resultId & _
+                 "; PartnerID=" & partnerId & _
+                 "; LinkedEntityID=" & linkedEntityId, _
+        userId:="Operator", _
+        moduleName:="modBankaMapiranje", _
+        procedureName:=procedureName, _
+        entityType:="BankaImport", _
+        entityId:=bankaImportID, _
+        correlationId:=bankaImportID
+End Sub
+
+Private Sub Monitor_BankaMapFail(ByVal procedureName As String, _
+                                 ByVal bankaImportID As String, _
+                                 ByVal errNum As Long, _
+                                 ByVal errDesc As String, _
+                                 ByVal errSrc As String, _
+                                 Optional ByVal partnerType As String = "", _
+                                 Optional ByVal partnerId As String = "", _
+                                 Optional ByVal linkedEntityId As String = "")
+    On Error Resume Next
+
+    Monitor_Error _
+        moduleName:="modBankaMapiranje", _
+        procedureName:=procedureName, _
+        entityType:="BankaImport", _
+        entityId:=bankaImportID, _
+        correlationId:=bankaImportID, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="BANKA_MAP_FAIL", _
+        severity:="ERROR", _
+        message:="Bank import mapping failed. Type=" & partnerType & _
+                 "; BankaImportID=" & bankaImportID & _
+                 "; PartnerID=" & partnerId & _
+                 "; LinkedEntityID=" & linkedEntityId & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modBankaMapiranje", _
+        procedureName:=procedureName, _
+        entityType:="BankaImport", _
+        entityId:=bankaImportID, _
+        correlationId:=bankaImportID
+End Sub
 
 ' ============================================================
 ' TESTS
