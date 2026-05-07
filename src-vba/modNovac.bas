@@ -1,4 +1,3 @@
-Attribute VB_Name = "modNovac"
 Option Explicit
 
 ' ============================================================
@@ -56,7 +55,7 @@ Public Function GetBankaByPartner(ByVal partnerNaziv As String, _
 End Function
 
 Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
-                              ByVal partner As String, ByVal partnerID As String, _
+                              ByVal partner As String, ByVal partnerId As String, _
                               ByVal entitetTip As String, ByVal omID As String, _
                               ByVal kooperantID As String, ByVal fakturaID As String, _
                               ByVal vrstaVoca As String, ByVal tip As String, _
@@ -72,7 +71,7 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_OTKUP
 
-    SaveNovac_TX = SaveNovac(brojDok, datum, partner, partnerID, _
+    SaveNovac_TX = SaveNovac(brojDok, datum, partner, partnerId, _
                               entitetTip, omID, kooperantID, fakturaID, _
                               vrstaVoca, tip, uplata, isplata, napomena, otkupID)
 
@@ -82,8 +81,24 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
     End If
 
     tx.CommitTx
-    Exit Function
 
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="NOVAC_SAVE_SUCCESS", _
+        severity:="INFO", _
+        message:="Novac transaction saved. Tip=" & tip & _
+                 "; Uplata=" & CStr(uplata) & _
+                 "; Isplata=" & CStr(isplata), _
+        userId:="Operator", _
+        moduleName:="modNovac", _
+        procedureName:="SaveNovac_TX", _
+        entityType:="Novac", _
+        entityId:=SaveNovac_TX, _
+        correlationId:=SaveNovac_TX
+    On Error GoTo 0
+
+    Exit Function
+    
 EH:
     Dim errNum As Long
     Dim errDesc As String
@@ -92,10 +107,47 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     errSrc = Err.SOURCE
-
+    
+    Dim corrId As String
+    If Len(Trim$(fakturaID)) > 0 Then
+        corrId = fakturaID
+    ElseIf Len(Trim$(otkupID)) > 0 Then
+        corrId = otkupID
+    Else
+        corrId = partnerId
+    End If
+    
     On Error Resume Next
+
     LogErr "SaveNovac_TX"
-    tx.RollbackTx
+
+    Monitor_Error _
+        moduleName:="modNovac", _
+        procedureName:="SaveNovac_TX", _
+        entityType:="Novac", _
+        entityId:=SaveNovac_TX, _
+        correlationId:=corrId, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="NOVAC_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="Novac transaction failed. Tip=" & tip & _
+                 "; EntitetTip=" & entitetTip & _
+                 "; FakturaID=" & fakturaID & _
+                 "; OtkupID=" & otkupID & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modNovac", _
+        procedureName:="SaveNovac_TX", _
+        entityType:="Novac", _
+        entityId:=SaveNovac_TX, _
+        correlationId:=IIf(Len(Trim$(fakturaID)) > 0, fakturaID, otkupID)
+
+    If Not tx Is Nothing Then tx.RollbackTx
+
     On Error GoTo 0
 
     SaveNovac_TX = ""
@@ -105,7 +157,7 @@ EH:
                 " Desc=" & errDesc
 End Function
 Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
-                          ByVal partner As String, ByVal partnerID As String, _
+                          ByVal partner As String, ByVal partnerId As String, _
                           ByVal entitetTip As String, ByVal omID As String, _
                           ByVal kooperantID As String, ByVal fakturaID As String, _
                           ByVal vrstaVoca As String, ByVal tip As String, _
@@ -119,7 +171,7 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
         brojDok:=brojDok, _
         datum:=datum, _
         partner:=partner, _
-        partnerID:=partnerID, _
+        partnerId:=partnerId, _
         entitetTip:=entitetTip, _
         tip:=tip, _
         uplata:=uplata, _
@@ -130,7 +182,7 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
     newID = GetNextID(TBL_NOVAC, COL_NOV_ID, "NOV-")
     
     Dim rowData As Variant
-    rowData = Array(newID, brojDok, datum, partner, partnerID, _
+    rowData = Array(newID, brojDok, datum, partner, partnerId, _
                     entitetTip, omID, kooperantID, fakturaID, _
                     vrstaVoca, tip, uplata, isplata, napomena, _
                     "", otkupID, "") ' Stornirano, OtkupID, OsirocenoOD
@@ -180,7 +232,7 @@ Public Function LookupPartnerMap(ByVal bankaName As String) As Variant
 End Function
 
 Public Function savePartnerMap(ByVal bankaName As String, _
-                               ByVal partnerID As String, _
+                               ByVal partnerId As String, _
                                ByVal entitetTip As String, _
                                ByVal omID As String) As Boolean
     Const SRC As String = "savePartnerMap"
@@ -190,7 +242,7 @@ Public Function savePartnerMap(ByVal bankaName As String, _
                   "BankaName je obavezan za partner mapu."
     End If
 
-    If Len(Trim$(partnerID)) = 0 Then
+    If Len(Trim$(partnerId)) = 0 Then
         Err.Raise vbObjectError + 1037, SRC, _
                   "PartnerID je obavezan za partner mapu."
     End If
@@ -205,7 +257,7 @@ Public Function savePartnerMap(ByVal bankaName As String, _
 
     If Not IsEmpty(existing) Then
 
-        If UCase$(Trim$(CStr(existing(0)))) = UCase$(Trim$(partnerID)) And _
+        If UCase$(Trim$(CStr(existing(0)))) = UCase$(Trim$(partnerId)) And _
            UCase$(Trim$(CStr(existing(1)))) = UCase$(Trim$(entitetTip)) And _
            UCase$(Trim$(CStr(existing(2)))) = UCase$(Trim$(omID)) Then
 
@@ -220,13 +272,13 @@ Public Function savePartnerMap(ByVal bankaName As String, _
                   " ExistingPartnerID=" & CStr(existing(0)) & _
                   " ExistingEntitetTip=" & CStr(existing(1)) & _
                   " ExistingOMID=" & CStr(existing(2)) & _
-                  " NewPartnerID=" & partnerID & _
+                  " NewPartnerID=" & partnerId & _
                   " NewEntitetTip=" & entitetTip & _
                   " NewOMID=" & omID
     End If
 
     Dim rowData As Variant
-    rowData = Array(bankaName, partnerID, entitetTip, omID)
+    rowData = Array(bankaName, partnerId, entitetTip, omID)
 
     If AppendRow(TBL_PARTNER_MAP, rowData) <= 0 Then
         Err.Raise vbObjectError + 1040, SRC, _
@@ -402,7 +454,7 @@ Public Function ApplyAvansToFaktura_TX(ByVal kupacID As String, _
     ApplyAvansToFaktura kupacID, fakturaID
 
     tx.CommitTx
-
+   
     ApplyAvansToFaktura_TX = True
     Exit Function
 
@@ -1090,6 +1142,7 @@ Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
     ApplyAvansToOtkup kooperantID, otkupID
 
     tx.CommitTx
+ 
     Set tx = Nothing
 
     ApplyAvansToOtkup_TX = True
@@ -1238,7 +1291,7 @@ End Function
 Private Sub ValidateNovacInput(ByVal brojDok As String, _
                                ByVal datum As Date, _
                                ByVal partner As String, _
-                               ByVal partnerID As String, _
+                               ByVal partnerId As String, _
                                ByVal entitetTip As String, _
                                ByVal tip As String, _
                                ByVal uplata As Double, _
@@ -1265,7 +1318,7 @@ Private Sub ValidateNovacInput(ByVal brojDok As String, _
                   "Novac red mora imati uplatu ili isplatu."
     End If
 
-    If Len(Trim$(partnerID)) = 0 And Len(Trim$(partner)) = 0 Then
+    If Len(Trim$(partnerId)) = 0 And Len(Trim$(partner)) = 0 Then
         Err.Raise vbObjectError + 1034, sourceName, _
                   "Partner ili PartnerID je obavezan."
     End If
