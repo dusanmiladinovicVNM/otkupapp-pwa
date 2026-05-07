@@ -1,4 +1,3 @@
-Attribute VB_Name = "modFaktura"
 
 Option Explicit
 
@@ -29,6 +28,20 @@ Public Function CreateFaktura_TX(ByVal kupacID As String, _
     End If
 
     tx.CommitTx
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="FAKTURA_CREATE_SUCCESS", _
+        severity:="INFO", _
+        message:="Faktura created successfully", _
+        userId:="Operator", _
+        moduleName:="modFaktura", _
+        procedureName:="CreateFaktura_TX", _
+        entityType:="Faktura", _
+        entityId:=CreateFaktura_TX, _
+        correlationId:=CreateFaktura_TX
+    On Error GoTo 0
+
     Set tx = Nothing
     Exit Function
 
@@ -38,15 +51,39 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
+
     LogErr "CreateFaktura_TX"
-    tx.RollbackTx
+
+    Monitor_Error _
+        moduleName:="modFaktura", _
+        procedureName:="CreateFaktura_TX", _
+        entityType:="Faktura", _
+        entityId:=CreateFaktura_TX, _
+        correlationId:=CreateFaktura_TX, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="FAKTURA_CREATE_FAIL", _
+        severity:="ERROR", _
+        message:=errDesc, _
+        userId:="Operator", _
+        moduleName:="modFaktura", _
+        procedureName:="CreateFaktura_TX", _
+        entityType:="Faktura", _
+        entityId:=CreateFaktura_TX, _
+        correlationId:=CreateFaktura_TX
+
+    If Not tx Is Nothing Then tx.RollbackTx
+
     On Error GoTo 0
 
-     CreateFaktura_TX = ""
+    CreateFaktura_TX = ""
 
     Debug.Print " CreateFaktura_TX failed. Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _
@@ -301,8 +338,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "CreateFaktura"
@@ -517,7 +554,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
 
 EH:
     LogErr "PrintFaktura"
-    Err.Raise Err.Number, "PrintFaktura", Err.Description
+    Err.Raise Err.Number, "PrintFaktura", Err.description
 End Sub
 
 Private Sub ClearFakturaStavkeArea(ByVal ws As Worksheet)
@@ -534,7 +571,7 @@ Private Sub ClearFakturaStavkeArea(ByVal ws As Worksheet)
 
 EH:
     LogErr "ClearFakturaStavkeArea"
-    Err.Raise Err.Number, "ClearFakturaStavkeArea", Err.Description
+    Err.Raise Err.Number, "ClearFakturaStavkeArea", Err.description
 End Sub
 
 Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
@@ -630,8 +667,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr SRC
