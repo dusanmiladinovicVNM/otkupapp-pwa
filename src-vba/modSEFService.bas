@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSEFService"
 Option Explicit
 'Call UpdateFakturaSEFState_Row("FAK-00006", WF_SEF_READY, WF_SEF_READY)
 
@@ -20,6 +19,7 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     Dim response As clsSEFResponse
     
     Dim reuseLastSubmission As Boolean
+    Dim localSendingCommitted As Boolean
     
     On Error GoTo EH
     
@@ -141,6 +141,23 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     
     tx.CommitTx
     Set tx = Nothing
+    
+    localSendingCommitted = True
+
+    On Error Resume Next
+    Monitor_SEF _
+        eventType:="SEF_SEND_START", _
+        severity:="INFO", _
+        invoiceLocalId:=fakturaID, _
+        businessInvoiceNo:=fakturaID, _
+        sefStatus:=WF_SEF_SENDING, _
+        localStatus:=WF_SEF_SENDING, _
+        sefRequestId:=submissionID, _
+        attemptCount:=0, _
+        lastError:="", _
+        nextAction:="WAIT", _
+        needsManualReview:=False
+    On Error GoTo EH
     
     ' =========================
     ' HTTP call outside TX
@@ -271,6 +288,97 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
                  "; SEFDocumentId=" & response.sefDocumentId)
     
     tx.CommitTx
+
+    On Error Resume Next
+
+    If response Is Nothing Then
+
+        Monitor_SEF _
+            eventType:="SEF_SEND_FAIL", _
+            severity:="ERROR", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:="FAILED", _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:="", _
+            attemptCount:=0, _
+            lastHttpCode:="0", _
+            lastError:="SEF response object is Nothing after submit.", _
+            nextAction:="RETRY", _
+            needsManualReview:=False
+
+    ElseIf response.Accepted Then
+
+        Monitor_SEF _
+            eventType:="SEF_SEND_ACCEPTED", _
+            severity:="INFO", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:=response.apiStatus, _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:="", _
+            nextAction:="WAIT", _
+            needsManualReview:=False
+
+    ElseIf response.Success Then
+
+        Monitor_SEF _
+            eventType:="SEF_SEND_SUCCESS", _
+            severity:="INFO", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:=response.apiStatus, _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:="", _
+            nextAction:="WAIT", _
+            needsManualReview:=False
+
+    ElseIf response.Rejected Then
+
+        Monitor_SEF _
+            eventType:="SEF_SEND_REJECTED", _
+            severity:="WARN", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:=response.apiStatus, _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:=response.errorCode & " | " & response.errorMessage, _
+            nextAction:="MANUAL_REVIEW", _
+            needsManualReview:=True
+
+    Else
+
+        Monitor_SEF _
+            eventType:="SEF_SEND_FAIL", _
+            severity:="ERROR", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:=response.apiStatus, _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:=response.errorCode & " | " & response.errorMessage, _
+            nextAction:="RETRY", _
+            needsManualReview:=False
+
+    End If
+
+    On Error GoTo 0
     
     SendInvoiceToSEF_TX = submissionID
     Exit Function
@@ -281,10 +389,45 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
+
+    LogErr "SendInvoiceToSEF_TX"
+
+    Monitor_Error _
+        moduleName:="modSEFService", _
+        procedureName:="SendInvoiceToSEF_TX", _
+        entityType:="Faktura", _
+        entityId:=fakturaID, _
+        correlationId:=fakturaID, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    If localSendingCommitted Then
+        Monitor_SEF _
+            eventType:="SEF_SEND_EXCEPTION_AFTER_LOCAL_SENDING", _
+            severity:="CRITICAL", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:="UNKNOWN", _
+            localStatus:=WF_SEF_SENDING, _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:="", _
+            attemptCount:=0, _
+            lastHttpCode:="vba-exception", _
+            lastError:=errDesc, _
+            nextAction:="CHECK_SEF_PORTAL", _
+            needsManualReview:=True
+    End If
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    If Not txPrep Is Nothing Then txPrep.RollbackTx
+
+    On Error GoTo 0
+    
     LogErr "SendInvoiceToSEF_TX"
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -361,8 +504,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "CancelInvoiceOnSEF_TX"
@@ -440,8 +583,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "StornoInvoiceOnSEF_TX"
@@ -549,8 +692,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "RecoverStuckSEFSendingInvoice"
@@ -566,16 +709,34 @@ EH:
                   "Unexpected error recovering stuck SEF_SENDING invoice; original Err was lost before EH capture."
     End If
 End Sub
+
 Public Sub RecoverAllStuckSEFSendingInvoices()
 
     On Error GoTo EH
 
     Const SRC As String = "modSEFService.RecoverAllStuckSEFSendingInvoices"
 
+    Dim foundCount As Long
+    Dim recoveredCount As Long
+    Dim failedCount As Long
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="SEF_STARTUP_RECOVERY_START", _
+        severity:="INFO", _
+        message:="Started recovery for stuck SEF_SENDING invoices", _
+        userId:="Operator", _
+        moduleName:="modSEFService", _
+        procedureName:="RecoverAllStuckSEFSendingInvoices", _
+        entityType:="SEF", _
+        entityId:="StartupRecovery", _
+        correlationId:="SEF-STARTUP-RECOVERY"
+    On Error GoTo EH
+
     Dim data As Variant
     data = GetTableData(TBL_FAKTURE)
 
-    If IsEmpty(data) Then Exit Sub
+    If IsEmpty(data) Then GoTo SuccessExit
 
     Dim colFakturaID As Long
     Dim colWorkflow As Long
@@ -594,12 +755,80 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
 
         If workflowState = UCase$(WF_SEF_SENDING) Then
 
+            foundCount = foundCount + 1
+
+            On Error Resume Next
+            Monitor_SEF _
+                eventType:="SEF_RECOVERY_INVOICE_FOUND", _
+                severity:="WARN", _
+                invoiceLocalId:=fakturaID, _
+                businessInvoiceNo:=fakturaID, _
+                sefStatus:=WF_SEF_SENDING, _
+                localStatus:=WF_SEF_SENDING, _
+                sefRequestId:=GetLastSEFSubmissionID(fakturaID), _
+                attemptCount:=0, _
+                lastError:="Stuck SEF_SENDING invoice found during startup recovery", _
+                nextAction:="WAIT", _
+                needsManualReview:=False
+            On Error GoTo EH
+
             On Error Resume Next
             RecoverStuckSEFSendingInvoice fakturaID
 
             If Err.Number <> 0 Then
+                failedCount = failedCount + 1
+
+                Dim itemErrNo As Long
+                Dim itemErrDesc As String
+                Dim itemErrSrc As String
+
+                itemErrNo = Err.Number
+                itemErrDesc = Err.description
+                itemErrSrc = Err.SOURCE
+
                 LogErr SRC & ".Invoice." & fakturaID
+
+                Monitor_SEF _
+                    eventType:="SEF_RECOVERY_INVOICE_FAIL", _
+                    severity:="CRITICAL", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:="UNKNOWN", _
+                    localStatus:=WF_SEF_SENDING, _
+                    sefRequestId:=GetLastSEFSubmissionID(fakturaID), _
+                    attemptCount:=0, _
+                    lastHttpCode:="vba-error", _
+                    lastError:=itemErrDesc, _
+                    nextAction:="CHECK_SEF_PORTAL", _
+                    needsManualReview:=True
+
+                Monitor_Error _
+                    moduleName:="modSEFService", _
+                    procedureName:="RecoverAllStuckSEFSendingInvoices.Invoice", _
+                    entityType:="Faktura", _
+                    entityId:=fakturaID, _
+                    correlationId:=fakturaID, _
+                    errorNumber:=itemErrNo, _
+                    errorDescription:=itemErrDesc, _
+                    errorSource:=itemErrSrc
+
                 Err.Clear
+            Else
+                recoveredCount = recoveredCount + 1
+
+                Monitor_SEF _
+                    eventType:="SEF_RECOVERY_INVOICE_SUCCESS", _
+                    severity:="INFO", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=GetLastSEFSubmissionID(fakturaID), _
+                    sefInvoiceId:=GetFakturaSEFDocumentId(fakturaID), _
+                    attemptCount:=0, _
+                    lastError:="", _
+                    nextAction:="WAIT", _
+                    needsManualReview:=False
             End If
 
             On Error GoTo EH
@@ -608,14 +837,61 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
 
     Next i
 
+SuccessExit:
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="SEF_STARTUP_RECOVERY_SUCCESS", _
+        severity:="INFO", _
+        message:="Startup SEF recovery completed. Found=" & foundCount & _
+                 "; Recovered=" & recoveredCount & _
+                 "; Failed=" & failedCount, _
+        userId:="Operator", _
+        moduleName:="modSEFService", _
+        procedureName:="RecoverAllStuckSEFSendingInvoices", _
+        entityType:="SEF", _
+        entityId:="StartupRecovery", _
+        correlationId:="SEF-STARTUP-RECOVERY"
+    On Error GoTo 0
+
     Exit Sub
 
 EH:
+    Dim errNo As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNo = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+
+    Monitor_Error _
+        moduleName:="modSEFService", _
+        procedureName:="RecoverAllStuckSEFSendingInvoices", _
+        entityType:="SEF", _
+        entityId:="StartupRecovery", _
+        correlationId:="SEF-STARTUP-RECOVERY", _
+        errorNumber:=errNo, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="SEF_STARTUP_RECOVERY_FAIL", _
+        severity:="CRITICAL", _
+        message:=errDesc, _
+        userId:="Operator", _
+        moduleName:="modSEFService", _
+        procedureName:="RecoverAllStuckSEFSendingInvoices", _
+        entityType:="SEF", _
+        entityId:="StartupRecovery", _
+        correlationId:="SEF-STARTUP-RECOVERY"
+
+    On Error GoTo 0
+    Err.Raise errNo, SRC, errDesc
 End Sub
-
-
 
 
 
@@ -635,7 +911,7 @@ Public Sub Test_SendInvoiceToSEF_TX()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_SendInvoiceToSEF_TX_Debug()
@@ -657,7 +933,7 @@ Public Sub Test_SendInvoiceToSEF_TX_Debug()
 
 EH:
     Debug.Print "ERR.Number=" & Err.Number
-    Debug.Print "ERR.Description=" & Err.Description
+    Debug.Print "ERR.Description=" & Err.description
 End Sub
 
 Public Sub Test_CancelInvoiceOnSEF_TX()
@@ -668,7 +944,7 @@ Public Sub Test_CancelInvoiceOnSEF_TX()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_StornoInvoiceOnSEF_TX()
@@ -679,7 +955,7 @@ Public Sub Test_StornoInvoiceOnSEF_TX()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_SendInvoiceToSEF_TX_RetryCheck()
@@ -732,7 +1008,7 @@ Public Sub Test_SendInvoiceToSEF_TX_RetryCheck()
 
 EH:
     Debug.Print "ERR.Number=" & Err.Number
-    Debug.Print "ERR.Description=" & Err.Description
+    Debug.Print "ERR.Description=" & Err.description
 End Sub
 
 Public Sub Test_SendInvoiceToSEF_TX_RetryCheck_One(ByVal fakturaID As String)
@@ -782,7 +1058,7 @@ Public Sub Test_SendInvoiceToSEF_TX_RetryCheck_One(ByVal fakturaID As String)
 
 EH:
     Debug.Print "ERR.Number=" & Err.Number
-    Debug.Print "ERR.Description=" & Err.Description
+    Debug.Print "ERR.Description=" & Err.description
 End Sub
 
 Public Sub Test_PrepareRejectedInvoiceForResubmit()
@@ -800,7 +1076,7 @@ Public Sub Test_PrepareRejectedInvoiceForResubmit()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_RecoverStuckSEFSendingInvoice()
@@ -817,7 +1093,7 @@ Public Sub Test_RecoverStuckSEFSendingInvoice()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_RefreshPendingOutboundInvoices_TX()
@@ -829,7 +1105,7 @@ Public Sub Test_RefreshPendingOutboundInvoices_TX()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_RecoverAllStuckSEFSendingInvoices()
@@ -841,5 +1117,5 @@ Public Sub Test_RecoverAllStuckSEFSendingInvoices()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
