@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSEFClient"
 Option Explicit
 
 Public Function SubmitUBLInvoice(ByVal ublXml As String, ByVal requestId As String) As clsSEFResponse
@@ -463,7 +462,7 @@ Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
                 ExtractJsonNumberOrStringAsString(body, "PurchaseInvoiceId"))
 
             resp.SEFInvoiceNumber = ""
-            resp.CorrelationId = ""
+            resp.correlationId = ""
             
             If ExtractJsonBoolean(body, "accepted", False) Then
                 resp.Accepted = True
@@ -532,7 +531,7 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
         ExtractJsonNumberOrStringAsString(body, "InvoiceId"), _
         resp.sefDocumentId)
     
-    resp.CorrelationId = ExtractJsonString(body, "GlobUniqId")
+    resp.correlationId = ExtractJsonString(body, "GlobUniqId")
     
     ' ApiStatus is the exact external SEF status.
     ' Higher layers decide whether that status changes internal workflow.
@@ -804,35 +803,109 @@ End Function
 
 Private Function GetJsonNumericIdLiteral(ByVal rawID As String, _
                                          ByVal sourceName As String) As String
+    ' Returns a JSON-ready literal for SEF document IDs.
+    ' - Pure numeric digits: returns raw digits for embedding as JSON number.
+    ' - GUID-like (hex+hyphens): returns quoted string literal with quotes
+    '   already applied, so caller-side concatenation produces valid JSON.
+    ' - Empty or unrecognized shape: raises ERR_SEF_VALIDATION.
+    
     On Error GoTo EH
-
+    
     Dim s As String
     s = Trim$(rawID)
-
+    
     If s = "" Then
         Err.Raise ERR_SEF_VALIDATION, sourceName, _
                   "SEF document ID is empty."
     End If
-
-    Dim i As Long
-    Dim ch As String
-
-    For i = 1 To Len(s)
-        ch = Mid$(s, i, 1)
-
-        If ch < "0" Or ch > "9" Then
-            Err.Raise ERR_SEF_VALIDATION, sourceName, _
-                      "SEF document ID must be numeric for this endpoint: " & s
-        End If
-    Next i
-
-    GetJsonNumericIdLiteral = s
+    
+    If IsAllDigits(s) Then
+        ' JSON numeric literal - no quotes, exact digits preserved.
+        ' Works for IDs beyond VBA Long range because we never CLng the value.
+        GetJsonNumericIdLiteral = s
+        Exit Function
+    End If
+    
+    If IsGuidLike(s) Then
+        ' JSON string literal - quoted. GUID characters do not need escaping.
+        GetJsonNumericIdLiteral = """" & s & """"
+        Exit Function
+    End If
+    
+    Err.Raise ERR_SEF_VALIDATION, sourceName, _
+              "SEF document ID has unrecognized shape: " & s
     Exit Function
 
 EH:
     LogErr "modSEFClient.GetJsonNumericIdLiteral"
     Err.Raise Err.Number, sourceName, Err.description
 End Function
+
+Private Function IsAllDigits(ByVal s As String) As Boolean
+    Dim i As Long
+    Dim ch As String
+    
+    If Len(s) = 0 Then
+        IsAllDigits = False
+        Exit Function
+    End If
+    
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If ch < "0" Or ch > "9" Then
+            IsAllDigits = False
+            Exit Function
+        End If
+    Next i
+    
+    IsAllDigits = True
+End Function
+
+Private Function IsGuidLike(ByVal s As String) As Boolean
+    ' Accepts:
+    '   - hyphenated GUID: 8-4-4-4-12 hex digits (with optional curly braces)
+    '   - bare 32-hex (no hyphens)
+    '   - vendor-specific opaque IDs that mix hex digits and hyphens
+    ' Rejects:
+    '   - empty/whitespace
+    '   - strings with non-hex non-hyphen characters
+    '   - all-numeric strings (those are NUMERIC shape, not GUID)
+    
+    Dim s2 As String
+    Dim i As Long
+    Dim ch As String
+    Dim hasNonDigit As Boolean
+    
+    s2 = s
+    
+    ' Strip optional curly braces
+    If Left$(s2, 1) = "{" And Right$(s2, 1) = "}" Then
+        s2 = Mid$(s2, 2, Len(s2) - 2)
+    End If
+    
+    If Len(s2) < 8 Then
+        IsGuidLike = False
+        Exit Function
+    End If
+    
+    For i = 1 To Len(s2)
+        ch = LCase$(Mid$(s2, i, 1))
+        Select Case ch
+            Case "0" To "9", "a" To "f", "-"
+                If (ch >= "a" And ch <= "f") Or ch = "-" Then
+                    hasNonDigit = True
+                End If
+            Case Else
+                IsGuidLike = False
+                Exit Function
+        End Select
+    Next i
+    
+    ' Must contain at least one hex letter or hyphen, otherwise IsAllDigits
+    ' would already have matched and we would not be in IsGuidLike check.
+    IsGuidLike = hasNonDigit
+End Function
+
 
 
 Private Sub ApplyRateLimitResponse(ByVal resp As clsSEFResponse, _
@@ -907,3 +980,14 @@ Public Sub RunSEFClientParserSmokeSuite()
 
     Debug.Print "RunSEFClientParserSmokeSuite PASS"
 End Sub
+
+Public Function TestProxyForGetJsonNumericIdLiteral(ByVal rawID As String) As String
+    ' Test-only proxy. Forwards to the private GetJsonNumericIdLiteral
+    ' so RunSEFDocumentIdShapeSuite in modSEFTests can verify behavior.
+    ' Not for production use - business code calls the private helper
+    ' directly within modSEFClient (CancelInvoiceOnSEF, StornoInvoiceOnSEF).
+    
+    TestProxyForGetJsonNumericIdLiteral = _
+        GetJsonNumericIdLiteral(rawID, "TestProxyForGetJsonNumericIdLiteral")
+End Function
+
