@@ -1,21 +1,20 @@
-Attribute VB_Name = "modStammdatenSync"
 Option Explicit
 
 ' ============================================================
-' modStammdatenSync – Export Stammdaten zu Google Sheet
+' modStammdatenSync â€“ Export Stammdaten zu Google Sheet
 '
 ' Schreibt tblKooperanti, tblKulture, tblConfig (Cene)
-' in ein Google Sheet "Stammdaten" für die PWA.
+' in ein Google Sheet "Stammdaten" fÃ¼r die PWA.
 '
 ' Config-Keys in tblConfig:
 '   GOOGLE_STAMMDATEN_SHEET_ID   (wird automatisch erstellt)
-'   GOOGLE_PWA_FOLDER_ID         (Drive Folder für PWA-Sheets)
+'   GOOGLE_PWA_FOLDER_ID         (Drive Folder fÃ¼r PWA-Sheets)
 '
 ' Aufruf: Button in frmMain oder manuell via SyncStammdatenToGoogle
 ' ============================================================
 
 ' ============================================================
-' PUBLIC — Hauptfunktion
+' PUBLIC â€” Hauptfunktion
 ' ============================================================
 
 Public Sub SyncStammdatenToGoogle()
@@ -24,11 +23,21 @@ Public Sub SyncStammdatenToGoogle()
     
     Dim folderID As String
     Dim sheetID As String
+    Dim successCount As Long
+    
+    Const TOTAL_STAMMDATEN_TABS As Long = 13
     
     On Error GoTo EH
     
-    ' Auth prüfen
+    ' Auth prÃ¼fen
     If Not IsGoogleAuthConfigured() Then
+        Monitor_StammdatenSyncFail _
+            errNum:=0, _
+            errDesc:="Google OAuth2 nije konfigurisan.", _
+            errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+            successCount:=0, _
+            totalTabs:=TOTAL_STAMMDATEN_TABS
+        
         MsgBox "Google OAuth2 nije konfigurisan!" & vbCrLf & _
                "Pokrenite RunGoogleAuthSetup iz modGoogleAuth.", _
                vbCritical, APP_NAME
@@ -37,6 +46,13 @@ Public Sub SyncStammdatenToGoogle()
     
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(Trim$(folderID)) = 0 Then
+        Monitor_StammdatenSyncFail _
+            errNum:=0, _
+            errDesc:="GOOGLE_PWA_FOLDER_ID nije postavljen.", _
+            errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+            successCount:=0, _
+            totalTabs:=TOTAL_STAMMDATEN_TABS
+        
         MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen u tblConfig!" & vbCrLf & _
                "Unesite ID Google Drive foldera za PWA.", _
                vbCritical, APP_NAME
@@ -55,6 +71,13 @@ Public Sub SyncStammdatenToGoogle()
         ' Erstelle neues
         sheetID = CreateSpreadsheet("Stammdaten", folderID)
         If Len(sheetID) = 0 Then
+            Monitor_StammdatenSyncFail _
+                errNum:=0, _
+                errDesc:="Google Stammdaten sheet could not be created.", _
+                errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+                successCount:=0, _
+                totalTabs:=TOTAL_STAMMDATEN_TABS
+            
             MsgBox "Google Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
             Exit Sub
         End If
@@ -79,8 +102,6 @@ Public Sub SyncStammdatenToGoogle()
     Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
     
     ' Daten exportieren
-    Dim successCount As Long
-    
     If ExportKooperanti(sheetID) Then successCount = successCount + 1
     If ExportKulture(sheetID) Then successCount = successCount + 1
     If ExportParcele(sheetID) Then successCount = successCount + 1
@@ -97,13 +118,45 @@ Public Sub SyncStammdatenToGoogle()
     
     LogInfo "SyncStammdatenToGoogle", "Export abgeschlossen: " & successCount & "/13 Tabs"
     
+    If successCount = TOTAL_STAMMDATEN_TABS Then
+        Monitor_StammdatenSyncSuccess _
+            successCount:=successCount, _
+            totalTabs:=TOTAL_STAMMDATEN_TABS, _
+            sheetID:=sheetID
+    Else
+        Monitor_StammdatenSyncFail _
+            errNum:=0, _
+            errDesc:="Stammdaten partial export. SuccessTabs=" & CStr(successCount) & "/" & CStr(TOTAL_STAMMDATEN_TABS), _
+            errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+            successCount:=successCount, _
+            totalTabs:=TOTAL_STAMMDATEN_TABS
+    End If
+    
     MsgBox "Stammdaten exportiert: " & successCount & " od 13 tabova.", _
            vbInformation, APP_NAME
     Exit Sub
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+    
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    
+    On Error Resume Next
+    
     LogErr "SyncStammdatenToGoogle"
-    MsgBox "Greska pri eksportu stammdaten: " & Err.Description, vbCritical, APP_NAME
+    
+    Monitor_StammdatenSyncFail _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        successCount:=successCount, _
+        totalTabs:=TOTAL_STAMMDATEN_TABS
+    
+    MsgBox "Greska pri eksportu stammdaten: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 Public Sub ExportKarticeToGoogle()
@@ -168,7 +221,7 @@ Public Sub ExportKarticeToGoogle()
     
     If koopCount = 0 Then Exit Sub
 
-    ' Kartice generieren und Zeilen zählen
+    ' Kartice generieren und Zeilen zÃ¤hlen
     Dim karticaResults() As Variant
     ReDim karticaResults(1 To koopCount)
     totalRows = 1 ' Header
@@ -210,7 +263,7 @@ Public Sub ExportKarticeToGoogle()
         End If
     Next i
     
-    ' Kürzen und schreiben
+    ' KÃ¼rzen und schreiben
     If outRow < totalRows Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
@@ -231,7 +284,7 @@ Public Sub ExportKarticeToGoogle()
 
 EH:
     LogErr "ExportKarticeToGoogle"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub ExportMgmtReports()
@@ -270,7 +323,7 @@ Public Sub ExportMgmtReports()
     Exit Sub
 EH:
     LogErr "ExportMgmtReports"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
@@ -438,7 +491,7 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
     
     On Error GoTo EH
     
-    ' ReportSaldoOM gibt Daten in ein ListBox — wir brauchen die Rohdaten
+    ' ReportSaldoOM gibt Daten in ein ListBox â€” wir brauchen die Rohdaten
     ' Hier vereinfacht: OM-Saldo aus tblNovac berechnen
     Dim data As Variant
     Dim colOMID As Long, colTip As Long, colIsplata As Long, colUplata As Long
@@ -743,7 +796,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Export einzelner Tabellen
+' PRIVATE â€” Export einzelner Tabellen
 ' ============================================================
 
 Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
@@ -979,7 +1032,7 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_STANICE, "Mesto")
     colAktivan = GetColumnIndex(TBL_STANICE, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zÃ¤hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
@@ -1034,7 +1087,7 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
     colAktivan = GetColumnIndex(TBL_KUPCI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zÃ¤hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
@@ -1091,7 +1144,7 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     colKapacitetKG = GetColumnIndex(TBL_VOZACI, "KapacitetKG")
     colAktivan = GetColumnIndex(TBL_VOZACI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zÃ¤hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
@@ -1156,7 +1209,7 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     Dim colKarenca As Long: colKarenca = GetColumnIndex(TBL_ARTIKLI, "KarencaDana")
     Dim colAktivan As Long: colAktivan = GetColumnIndex(TBL_ARTIKLI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zÃ¤hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
@@ -1387,7 +1440,7 @@ Private Function ExportConfig(ByVal sheetID As String) As Boolean
                     "SELLER_STREET", "SELLER_CITY", "SELLER_POSTAL_CODE", _
                     "SELLER_ACCOUNT")
     
-    ' Zählen
+    ' ZÃ¤hlen
     Dim matchCount As Long
     For i = 1 To UBound(data, 1)
         keyStr = CStr(data(i, colKey))
@@ -1429,7 +1482,7 @@ EH:
 End Function
 
 Private Function IsPwaConfigKey(ByVal keyStr As String, ByVal pwaKeys As Variant) As Boolean
-    ' Credentials ausschließen
+    ' Credentials ausschlieÃŸen
     If Left$(keyStr, 7) = "GOOGLE_" Then Exit Function
     If Left$(keyStr, 4) = "SEF_" Then Exit Function
     ' SELLER_* je DOZVOLJEN (za otkupni list)
@@ -1622,7 +1675,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         Next i
     End If
     
-    ' Auf tatsächliche Größe kürzen
+    ' Auf tatsÃ¤chliche GrÃ¶ÃŸe kÃ¼rzen
     If outRow < totalRows Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
@@ -1824,9 +1877,55 @@ EH:
     ExportFakturaStavke = False
 End Function
 
+Private Sub Monitor_StammdatenSyncSuccess(ByVal successCount As Long, _
+                                          ByVal totalTabs As Long, _
+                                          ByVal sheetID As String)
+    On Error Resume Next
+
+    Monitor_Event _
+        eventType:="STAMMDATEN_SYNC_SUCCESS", _
+        severity:="INFO", _
+        message:="Stammdaten sync completed. SuccessTabs=" & CStr(successCount) & "/" & CStr(totalTabs), _
+        userId:="Operator", _
+        moduleName:="modStammdatenSync", _
+        procedureName:="SyncStammdatenToGoogle", _
+        entityType:="MasterData", _
+        entityId:="Stammdaten", _
+        correlationId:="STAMMDATEN-SYNC"
+End Sub
+
+Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
+                                       ByVal errDesc As String, _
+                                       ByVal errSrc As String, _
+                                       Optional ByVal successCount As Long = 0, _
+                                       Optional ByVal totalTabs As Long = 13)
+    On Error Resume Next
+
+    Monitor_Error _
+        moduleName:="modStammdatenSync", _
+        procedureName:="SyncStammdatenToGoogle", _
+        entityType:="MasterData", _
+        entityId:="Stammdaten", _
+        correlationId:="STAMMDATEN-SYNC", _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="STAMMDATEN_SYNC_FAIL", _
+        severity:="CRITICAL", _
+        message:="Stammdaten sync failed. SuccessTabs=" & CStr(successCount) & "/" & CStr(totalTabs) & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modStammdatenSync", _
+        procedureName:="SyncStammdatenToGoogle", _
+        entityType:="MasterData", _
+        entityId:="Stammdaten", _
+        correlationId:="STAMMDATEN-SYNC"
+End Sub
 
 ' ============================================================
-' PUBLIC — Test
+' PUBLIC â€” Test
 ' ============================================================
 
 Public Sub Test_SyncStammdaten()
