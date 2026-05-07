@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSEFPersistance"
 Option Explicit
 
 ' =========================================================
@@ -127,6 +126,7 @@ Public Sub UpdateFakturaSEFState_Row( _
     End If
 
     If Len(sefDocumentId) > 0 Then
+        EnsureSEFDocumentIdTextFormat TBL_FAKTURE, rowIndex
         RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFDocumentId", sefDocumentId, SRC
     End If
 
@@ -199,6 +199,7 @@ Public Sub UpdateFakturaSEFRefreshFields_Row( _
     End If
 
     If Len(sefDocumentId) > 0 Then
+        EnsureSEFDocumentIdTextFormat TBL_FAKTURE, rowIndex
         RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFDocumentId", sefDocumentId, SRC
     End If
 
@@ -329,8 +330,18 @@ Public Sub SaveSEFSubmissionResult_Row( _
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SubmissionStatus", subStatus, SRC
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "HttpStatus", response.httpStatus, SRC
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ApiStatus", response.apiStatus, SRC
-    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "CorrelationId", response.CorrelationId, SRC
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "CorrelationId", response.correlationId, SRC
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ResponseBody", response.rawBody, SRC
+    ' Ensure text format on tblSEFSubmission.SEFDocumentId column too
+    Dim subDocCol As ListColumn
+    On Error Resume Next
+    Set subDocCol = GetTable(TBL_SEF_SUBMISSION).ListColumns("SEFDocumentId")
+    If Not subDocCol Is Nothing Then
+        If Not subDocCol.DataBodyRange Is Nothing Then
+            subDocCol.DataBodyRange.cells(rowIndex, 1).NumberFormat = "@"
+        End If
+    End If
+    On Error GoTo EH
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SEFDocumentId", response.sefDocumentId, SRC
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ErrorCode", response.errorCode, SRC
     RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "ErrorMessage", response.errorMessage, SRC
@@ -419,6 +430,37 @@ Private Function GetSingleRowIndexByKey( _
     
     GetSingleRowIndexByKey = CLng(rowsFound(1))
 End Function
+
+Private Sub EnsureSEFDocumentIdTextFormat(ByVal tblName As String, _
+                                          ByVal rowIndex As Long)
+    ' Forces the SEFDocumentId cell to Text format BEFORE RequireUpdateCell
+    ' writes the value. This prevents Excel from:
+    '   - converting "5317568" to Double (precision loss for 12+ digits)
+    '   - rendering large IDs as scientific notation ("5.31757E+06")
+    '   - rejecting GUID values as #NAME? errors
+    '
+    ' RequireUpdateCell remains the canonical write helper - this just
+    ' prepares the cell so the write is preserved exactly as text.
+    
+    Dim lo As ListObject
+    Dim col As ListColumn
+    Dim cell As Range
+    
+    On Error Resume Next
+    
+    Set lo = GetTable(tblName)
+    If lo Is Nothing Then Exit Sub
+    
+    Set col = lo.ListColumns("SEFDocumentId")
+    If col Is Nothing Then Exit Sub
+    If col.DataBodyRange Is Nothing Then Exit Sub
+    
+    Set cell = col.DataBodyRange.cells(rowIndex, 1)
+    cell.NumberFormat = "@"
+    
+    On Error GoTo 0
+End Sub
+
 Public Sub UpdateSEFLastSyncAt_Row(ByVal fakturaID As String)
     On Error GoTo EH
 
@@ -449,7 +491,7 @@ Private Function GetCurrentOperatorName() As String
     GetCurrentOperatorName = Environ$("Username")
     
     If Len(Trim$(GetCurrentOperatorName)) = 0 Then
-        GetCurrentOperatorName = Application.UserName
+        GetCurrentOperatorName = Application.userName
     End If
     
     If Len(Trim$(GetCurrentOperatorName)) = 0 Then
@@ -705,6 +747,7 @@ Private Sub RequireSEFEventLogSchema(ByVal sourceName As String)
     RequireColumnIndex TBL_SEF_EVENT_LOG, "Stornirano", sourceName
 End Sub
 
+
 Private Function GetFakturaSEFFieldText(ByVal fakturaID As String, _
                                         ByVal fieldName As String, _
                                         ByVal sourceName As String) As String
@@ -720,10 +763,21 @@ Private Function GetFakturaSEFFieldText(ByVal fakturaID As String, _
 
     If IsEmpty(v) Or IsNull(v) Then
         GetFakturaSEFFieldText = ""
-    Else
-        GetFakturaSEFFieldText = Trim$(CStr(v))
+        Exit Function
     End If
-
+    
+    ' Defensive guard for legacy rows where Excel may have stored a numeric
+    ' SEFDocumentId as Double before the Text format migration. CStr on
+    ' a Double can produce scientific notation for large values, which
+    ' would corrupt the ID downstream. Format$(raw, "0") preserves all
+    ' integer digits without scientific notation or decimal artifacts.
+    Select Case VarType(v)
+        Case vbDouble, vbSingle, vbCurrency, vbDecimal, vbLong, vbInteger
+            GetFakturaSEFFieldText = Format$(v, "0")
+        Case Else
+            GetFakturaSEFFieldText = Trim$(CStr(v))
+    End Select
+    
     Exit Function
 
 EH:
