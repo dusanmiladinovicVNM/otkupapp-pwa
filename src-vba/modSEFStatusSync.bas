@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSEFStatusSync"
  Option Explicit
 
 ' =========================================================
@@ -181,17 +180,178 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
     Call UpdateSEFLastSyncAt_Row(fakturaID)
     
     tx.CommitTx
+
+    On Error Resume Next
+
+    If response Is Nothing Then
+
+        Monitor_SEF _
+            eventType:="SEF_STATUS_REFRESH_FAIL", _
+            severity:="ERROR", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:="UNKNOWN", _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:="0", _
+            lastError:="SEF status response object is Nothing.", _
+            nextAction:="RETRY", _
+            needsManualReview:=False
+
+    ElseIf response.Accepted Then
+
+        Monitor_SEF _
+            eventType:="SEF_STATUS_ACCEPTED", _
+            severity:="INFO", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:="ACCEPTED", _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:="", _
+            nextAction:="WAIT", _
+            needsManualReview:=False
+
+    ElseIf response.Rejected Then
+
+        Monitor_SEF _
+            eventType:="SEF_STATUS_REJECTED", _
+            severity:="WARN", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:="REJECTED", _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:=response.errorCode & " | " & response.errorMessage, _
+            nextAction:="MANUAL_REVIEW", _
+            needsManualReview:=True
+
+    ElseIf response.Success Then
+
+        Select Case UCase$(Trim$(response.apiStatus))
+            Case "SENT", "NEW", "DRAFT"
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_PENDING", _
+                    severity:="INFO", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=response.apiStatus, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:="", _
+                    nextAction:="WAIT", _
+                    needsManualReview:=False
+
+            Case "STORNO", "CANCELLED", "CANCELED"
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_TERMINAL", _
+                    severity:="INFO", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=response.apiStatus, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:="", _
+                    nextAction:="WAIT", _
+                    needsManualReview:=False
+
+            Case Else
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_UPDATE", _
+                    severity:="INFO", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=response.apiStatus, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:="", _
+                    nextAction:="WAIT", _
+                    needsManualReview:=False
+        End Select
+
+    Else
+
+        Monitor_SEF _
+            eventType:="SEF_STATUS_REFRESH_FAIL", _
+            severity:="ERROR", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:=response.apiStatus, _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:=response.errorCode & " | " & response.errorMessage, _
+            nextAction:="RETRY", _
+            needsManualReview:=False
+
+    End If
+
+    On Error GoTo 0
     
     RefreshSEFStatus_TX = True
     Exit Function
 
 EH:
-    LogErr "RefreshSEFStatus_TX"
+    Dim errNo As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNo = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     On Error Resume Next
+
+    LogErr "RefreshSEFStatus_TX"
+
+    Monitor_Error _
+        moduleName:="modSEFStatusSync", _
+        procedureName:="RefreshSEFStatus_TX", _
+        entityType:="Faktura", _
+        entityId:=fakturaID, _
+        correlationId:=fakturaID, _
+        errorNumber:=errNo, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_SEF _
+        eventType:="SEF_STATUS_REFRESH_EXCEPTION", _
+        severity:="ERROR", _
+        invoiceLocalId:=fakturaID, _
+        businessInvoiceNo:=fakturaID, _
+        sefStatus:="UNKNOWN", _
+        localStatus:=currentState, _
+        sefRequestId:=submissionID, _
+        sefInvoiceId:=sefDocumentId, _
+        attemptCount:=0, _
+        lastHttpCode:="vba-exception", _
+        lastError:=errDesc, _
+        nextAction:="RETRY", _
+        needsManualReview:=False
+
     If Not tx Is Nothing Then tx.RollbackTx
+
     On Error GoTo 0
-    
-    Err.Raise Err.Number, "RefreshSEFStatus_TX", Err.Description
+    Err.Raise errNo, "RefreshSEFStatus_TX", errDesc
 End Function
 
 Private Sub ApplySEFStateOrRefreshOnly(ByVal fakturaID As String, _
@@ -274,7 +434,7 @@ Private Sub ApplySEFStateOrRefreshOnly(ByVal fakturaID As String, _
 
 EH:
     LogErr "modSEFStatusSync.ApplySEFStateOrRefreshOnly"
-    Err.Raise Err.Number, "modSEFStatusSync.ApplySEFStateOrRefreshOnly", Err.Description
+    Err.Raise Err.Number, "modSEFStatusSync.ApplySEFStateOrRefreshOnly", Err.description
 End Sub
 
 Private Function IsFinalLocalSEFWorkflowState(ByVal workflowState As String) As Boolean
@@ -302,6 +462,19 @@ Public Sub RefreshPendingOutboundInvoices_TX()
     On Error GoTo EH
 
     Const SRC As String = "modSEFStatusSync.RefreshPendingOutboundInvoices_TX"
+    
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="SEF_REFRESH_PENDING_START", _
+        severity:="INFO", _
+        message:="Started pending outbound SEF refresh", _
+        userId:="Operator", _
+        moduleName:="modSEFStatusSync", _
+        procedureName:="RefreshPendingOutboundInvoices_TX", _
+        entityType:="SEF", _
+        entityId:="PendingOutbound", _
+        correlationId:="SEF-PENDING-REFRESH"
+    On Error GoTo EH
 
     Dim data As Variant
     data = GetTableData(TBL_FAKTURE)
@@ -320,6 +493,10 @@ Public Sub RefreshPendingOutboundInvoices_TX()
     Dim fakturaID As String
     Dim workflowState As String
     Dim sefStatus As String
+    Dim scannedCount As Long
+    Dim refreshedCount As Long
+    Dim skippedTerminalCount As Long
+    Dim failedCount As Long
 
     For i = 1 To UBound(data, 1)
 
@@ -330,15 +507,57 @@ Public Sub RefreshPendingOutboundInvoices_TX()
         Select Case workflowState
 
             Case UCase$(WF_SEF_SENT), UCase$(WF_SEF_SYNC_ERROR)
+                scannedCount = scannedCount + 1
                 
-                If IsTerminalExternalRefreshStatus(sefStatus) Then GoTo NextInvoice
+                If IsTerminalExternalRefreshStatus(sefStatus) Then
+                    skippedTerminalCount = skippedTerminalCount + 1
+                    GoTo NextInvoice
+                End If
 
                 On Error Resume Next
                 RefreshSEFStatus_TX fakturaID
 
                 If Err.Number <> 0 Then
+                    failedCount = failedCount + 1
+
+                    Dim itemErrNo As Long
+                    Dim itemErrDesc As String
+                    Dim itemErrSrc As String
+
+                    itemErrNo = Err.Number
+                    itemErrDesc = Err.description
+                    itemErrSrc = Err.SOURCE
+
                     LogErr SRC & ".Invoice." & fakturaID
+
+                    Monitor_Error _
+                        moduleName:="modSEFStatusSync", _
+                        procedureName:="RefreshPendingOutboundInvoices_TX.Invoice", _
+                        entityType:="Faktura", _
+                        entityId:=fakturaID, _
+                        correlationId:=fakturaID, _
+                        errorNumber:=itemErrNo, _
+                        errorDescription:=itemErrDesc, _
+                        errorSource:=itemErrSrc
+
+                    Monitor_SEF _
+                        eventType:="SEF_PENDING_REFRESH_INVOICE_FAIL", _
+                        severity:="ERROR", _
+                        invoiceLocalId:=fakturaID, _
+                        businessInvoiceNo:=fakturaID, _
+                        sefStatus:="UNKNOWN", _
+                        localStatus:=workflowState, _
+                        sefRequestId:=GetLastSEFSubmissionID(fakturaID), _
+                        sefInvoiceId:=GetFakturaSEFDocumentId(fakturaID), _
+                        attemptCount:=0, _
+                        lastHttpCode:="vba-exception", _
+                        lastError:=itemErrDesc, _
+                        nextAction:="RETRY", _
+                        needsManualReview:=False
+
                     Err.Clear
+                Else
+                    refreshedCount = refreshedCount + 1
                 End If
 
                 On Error GoTo EH
@@ -350,11 +569,61 @@ Public Sub RefreshPendingOutboundInvoices_TX()
 NextInvoice:
     Next i
 
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="SEF_REFRESH_PENDING_SUMMARY", _
+        severity:="INFO", _
+        message:="Pending SEF refresh completed. Scanned=" & scannedCount & _
+                 "; Refreshed=" & refreshedCount & _
+                 "; SkippedTerminal=" & skippedTerminalCount & _
+                 "; Failed=" & failedCount, _
+        userId:="Operator", _
+        moduleName:="modSEFStatusSync", _
+        procedureName:="RefreshPendingOutboundInvoices_TX", _
+        entityType:="SEF", _
+        entityId:="PendingOutbound", _
+        correlationId:="SEF-PENDING-REFRESH"
+    On Error GoTo 0
+
+    Exit Sub
     Exit Sub
 
 EH:
+    Dim errNo As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNo = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+
+    Monitor_Error _
+        moduleName:="modSEFStatusSync", _
+        procedureName:="RefreshPendingOutboundInvoices_TX", _
+        entityType:="SEF", _
+        entityId:="PendingOutbound", _
+        correlationId:="SEF-PENDING-REFRESH", _
+        errorNumber:=errNo, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="SEF_REFRESH_PENDING_FAIL", _
+        severity:="CRITICAL", _
+        message:=errDesc, _
+        userId:="Operator", _
+        moduleName:="modSEFStatusSync", _
+        procedureName:="RefreshPendingOutboundInvoices_TX", _
+        entityType:="SEF", _
+        entityId:="PendingOutbound", _
+        correlationId:="SEF-PENDING-REFRESH"
+
+    On Error GoTo 0
+    Err.Raise errNo, SRC, errDesc
 End Sub
 
 
@@ -380,7 +649,7 @@ Public Sub Test2_RefreshSEFStatus_TX()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test1_RefreshSEFStatus_TX()
@@ -400,5 +669,5 @@ Public Sub Test1_RefreshSEFStatus_TX()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
