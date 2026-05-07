@@ -1,4 +1,3 @@
-Attribute VB_Name = "modJournaling"
 Option Explicit
 
 ' ============================================================
@@ -230,6 +229,10 @@ End Function
 ' ============================================================
 
 Public Sub BackupFileOnStart()
+
+    Dim t0 As Single
+    t0 = Timer
+
     Dim backupPath As String
     Dim srcPath As String
     Dim destName As String
@@ -276,9 +279,49 @@ Public Sub BackupFileOnStart()
     ThisWorkbook.SaveCopyAs destPath
     
     LogInfo "BackupFileOnStart", "Backup erstellt: " & destName
+    On Error Resume Next
+        Monitor_Backup _
+            backupType:="STARTUP_BACKUP", _
+            status:="SUCCESS", _
+            backupLocation:="Startup backup completed", _
+            durationMs:=CLng((Timer - t0) * 1000), _
+            errorMessage:=""
+    On Error GoTo 0
+
+Exit Sub
     Exit Sub
 EH:
-    LogErr "BackupFileOnStart"
+    Dim errNo As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNo = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
+    Monitor_Backup _
+        backupType:="STARTUP_BACKUP", _
+        status:="FAILED", _
+        backupLocation:="Startup backup failed", _
+        durationMs:=CLng((Timer - t0) * 1000), _
+        errorMessage:=errDesc
+
+    Monitor_Error _
+        moduleName:="modMain", _
+        procedureName:="BackupFileOnStart", _
+        entityType:="Backup", _
+        entityId:="STARTUP_BACKUP", _
+        correlationId:="BACKUP-STARTUP", _
+        errorNumber:=errNo, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    LogErr "modJournaling.BackupFileOnStart"
+
+    On Error GoTo 0
+    Err.Raise errNo, errSrc, errDesc
 End Sub
 
 Public Sub PurgeOldBackups()
