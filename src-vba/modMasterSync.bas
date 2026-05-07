@@ -1,4 +1,3 @@
-Attribute VB_Name = "modMasterSync"
  Option Explicit
 
 ' ============================================================
@@ -88,6 +87,7 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
     Dim totalImported As Long
     Dim totalSkipped As Long
     Dim totalErrors As Long
+    Dim filesCount As Long
 
     On Error GoTo EH
 
@@ -122,10 +122,19 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
     End If
 
     If sheetIDs.count = 0 Then
+        Monitor_MasterSyncSuccess _
+            procedureName:="ImportOtkupFromPWA_Core", _
+            importedCount:=0, _
+            skippedCount:=0, _
+            errorCount:=0, _
+            filesCount:=0
+
         If showMessages Then MsgBox "Nema OTK-* fajlova u PWA folderu.", vbInformation, APP_NAME
         ImportOtkupFromPWA_Core = True
         Exit Function
     End If
+
+    filesCount = sheetIDs.count
 
     For i = 1 To sheetIDs.count
         Dim imported As Long
@@ -152,12 +161,38 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
                vbInformation, APP_NAME
     End If
 
+    If mLastPWAFatalSyncError Then
+        Monitor_MasterSyncFail _
+            procedureName:="ImportOtkupFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="Fatal PWA sync error occurred during import", _
+            errSrc:="modMasterSync.ImportOtkupFromPWA_Core", _
+            importedCount:=totalImported, _
+            skippedCount:=totalSkipped, _
+            errorCount:=totalErrors
+    Else
+        Monitor_MasterSyncSuccess _
+            procedureName:="ImportOtkupFromPWA_Core", _
+            importedCount:=totalImported, _
+            skippedCount:=totalSkipped, _
+            errorCount:=totalErrors, _
+            filesCount:=filesCount
+    End If
+    
     ImportOtkupFromPWA_Core = Not mLastPWAFatalSyncError
     Exit Function
 
 EH:
     MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", Err.description
     LogErr "ImportOtkupFromPWA_Core"
+    Monitor_MasterSyncFail _
+    procedureName:="ImportOtkupFromPWA_Core", _
+    errNum:=Err.Number, _
+    errDesc:=Err.description, _
+    errSrc:=Err.SOURCE, _
+    importedCount:=totalImported, _
+    skippedCount:=totalSkipped, _
+    errorCount:=totalErrors
     If showMessages Then MsgBox "Greska pri uvozu: " & Err.description, vbCritical, APP_NAME
     ImportOtkupFromPWA_Core = False
 End Function
@@ -178,8 +213,15 @@ Public Sub ImportOtkupFromPWA_TX()
 
     If Not ok Then
         tx.RollbackTx
+
+        Monitor_MasterSyncFail _
+            procedureName:="ImportOtkupFromPWA_TX", _
+            errNum:=0, _
+            errDesc:="PWA import was not confirmed. Transaction rolled back because of fatal sync error.", _
+            errSrc:="modMasterSync.ImportOtkupFromPWA_TX"
+
         MsgBox "PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greške. Proveri log.", _
-               vbCritical, APP_NAME
+            vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -189,9 +231,27 @@ Public Sub ImportOtkupFromPWA_TX()
     Exit Sub
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
     LogErr "ImportOtkupFromPWA_TX"
+
+    Monitor_MasterSyncFail _
+        procedureName:="ImportOtkupFromPWA_TX", _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc
+
     If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri uvozu, promene vracene: " & Err.description, vbCritical, APP_NAME
+
+    MsgBox "Greska pri uvozu, promene vracene: " & errDesc, vbCritical, APP_NAME
 End Sub
 'TODO definieren wo dies stehen soll. Logisch bei Stammdaten sync und syncen immer wenn stammdaten gesynct sind.
 Public Sub CreateOTKSheetsForAllStanice()
@@ -1149,17 +1209,15 @@ Private Function Nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "")
     End If
 End Function
 
-
 ' ============================================================
 ' modMasterSync — ZBIRNA IMPORT (dodati u postojeci modMasterSync)
 ' ============================================================
-
 
 ' ============================================================
 ' PUBLIC — Hauptfunktion Zbirna Import
 ' ============================================================
 
-Public Sub ImportZbirneFromPWA()
+Private Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection
@@ -1170,31 +1228,40 @@ Public Sub ImportZbirneFromPWA()
     
     On Error GoTo EH
     
+    ImportZbirneFromPWA_Core = False
+    
     If Not IsGoogleAuthConfigured() Then
-        MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
-        Exit Sub
+        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        Exit Function
     End If
     
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(Trim$(folderID)) = 0 Then
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
-        Exit Sub
+        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        Exit Function
     End If
     
     LogInfo "ImportZbirneFromPWA", "Import gestartet"
     
     Set sheetIDs = New Collection
     Set sheetNames = New Collection
+    
     Call FindVOZSheets(folderID, sheetIDs, sheetNames)
     
     If sheetIDs.count = 0 Then
-        MsgBox "Nema VOZ-* fajlova u PWA folderu.", vbInformation, APP_NAME
-        Exit Sub
+        If showMessages Then MsgBox "Nema VOZ-* fajlova u PWA folderu.", vbInformation, APP_NAME
+        ImportZbirneFromPWA_Core = True
+        Exit Function
     End If
     
     For i = 1 To sheetIDs.count
-        Dim imported As Long, skipped As Long, errors As Long
-        imported = 0: skipped = 0: errors = 0
+        Dim imported As Long
+        Dim skipped As Long
+        Dim errors As Long
+        
+        imported = 0
+        skipped = 0
+        errors = 0
         
         Call ImportOneVOZSheet(CStr(sheetIDs(i)), CStr(sheetNames(i)), imported, skipped, errors)
         
@@ -1206,21 +1273,27 @@ Public Sub ImportZbirneFromPWA()
     LogInfo "ImportZbirneFromPWA", "Import abgeschlossen: " & totalImported & " importiert, " & _
             totalSkipped & " preskoceno, " & totalErrors & " greske aus " & sheetIDs.count & " fajlova"
     
-    MsgBox "Uvoz zbirnih zavrsen!" & vbCrLf & vbCrLf & _
-           "Fajlova: " & sheetIDs.count & vbCrLf & _
-           "Uvezeno: " & totalImported & vbCrLf & _
-           "Preskoceno: " & totalSkipped & vbCrLf & _
-           "Greske: " & totalErrors, _
-           vbInformation, APP_NAME
-    Exit Sub
+    If showMessages Then
+        MsgBox "Uvoz zbirnih zavrsen!" & vbCrLf & vbCrLf & _
+               "Fajlova: " & sheetIDs.count & vbCrLf & _
+               "Uvezeno: " & totalImported & vbCrLf & _
+               "Preskoceno: " & totalSkipped & vbCrLf & _
+               "Greske: " & totalErrors, _
+               IIf(totalErrors > 0, vbExclamation, vbInformation), APP_NAME
+    End If
+    
+    ImportZbirneFromPWA_Core = (totalErrors = 0)
+    Exit Function
 
 EH:
-    LogErr "ImportZbirneFromPWA"
-    MsgBox "Greska pri uvozu zbirnih: " & Err.description, vbCritical, APP_NAME
-End Sub
+    LogErr "ImportZbirneFromPWA_Core"
+    If showMessages Then MsgBox "Greska pri uvozu zbirnih: " & Err.description, vbCritical, APP_NAME
+    ImportZbirneFromPWA_Core = False
+End Function
 
 Public Sub ImportZbirneFromPWA_TX()
     Dim tx As clsTransaction
+    Dim ok As Boolean
     
     On Error GoTo EH
     
@@ -1230,10 +1303,18 @@ Public Sub ImportZbirneFromPWA_TX()
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTKUP
     
-    Call ImportZbirneFromPWA
+    ok = ImportZbirneFromPWA_Core(False)
+    
+    If Not ok Then
+        tx.RollbackTx
+        MsgBox "Uvoz zbirnih nije potvrden. Promene su vracene zbog greške u sync/import toku.", _
+               vbCritical, APP_NAME
+        Exit Sub
+    End If
     
     tx.CommitTx
-
+    
+    MsgBox "Uvoz zbirnih završen i potvrden.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -1355,6 +1436,13 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
             Dim clientRecordID As String
             clientRecordID = Trim$(CStr(data(i, VS_CLIENT_RECORD_ID)))
             
+            If Len(clientRecordID) = 0 Then
+                statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":ClientRecordID missing", "")
+                outErrors = outErrors + 1
+                LogWarn "ImportOneVOZSheet", sheetName & " Row " & i & ": ClientRecordID missing. Import skipped."
+                GoTo NextImportRow
+            End If
+            
             If IsDuplicateZbirnaInMaster(clientRecordID) Then
                 statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE, "")
                 outSkipped = outSkipped + 1
@@ -1390,10 +1478,15 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
         Else
             outSkipped = outSkipped + 1
         End If
+NextImportRow:
     Next i
     
     If statusUpdates.count > 0 Then
-        Call WriteBackVOZSyncStatus(spreadsheetID, statusUpdates)
+        If Not WriteBackVOZSyncStatus(spreadsheetID, statusUpdates) Then
+            outErrors = outErrors + 1
+            MarkPWAFatalSyncError "ImportOneVOZSheet", _
+                "WriteBackVOZSyncStatus failed. Sheet=" & sheetName
+        End If
     End If
     
     LogInfo "ImportOneVOZSheet", sheetName & ": " & outImported & " importiert, " & _
@@ -1522,12 +1615,27 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     
     If Len(tipAmb) = 0 Then tipAmb = "12/1"
     
-    brojZbirne = GenerateBrojZbirne(vozacID, datum)
+    ' Procitaj BrojZbirne iz VOZ sheet-a (PWA-generated, kolona 20)
+    brojZbirne = Trim$(CStr(Nz(data(row, VS_BROJ_ZBIRNE), "")))
+
+    ' Fallback: prazno znaci legacy zapis ili PWA pre-rollout-a
     If Len(brojZbirne) = 0 Then
+        brojZbirne = GenerateBrojZbirne(vozacID, datum)
+        If Len(brojZbirne) = 0 Then
             LogError "ImportRowToTblZbirna", "Nije moguce generisati BrojZbirne za VozacID=" & vozacID
             ImportRowToTblZbirna = ""
             Exit Function
+        End If
+        LogWarn "ImportRowToTblZbirna", "BrojZbirne fallback-generated lokalno za " & clientRecordID
+    Else
+        ' Validacija formata za PWA-generated broj
+        If Not IsValidBrojZbirneFormat(brojZbirne) Then
+            LogError "ImportRowToTblZbirna", "Invalid BrojZbirne format: " & brojZbirne & " (CRID=" & clientRecordID & ")"
+            ImportRowToTblZbirna = ""
+            Exit Function
+        End If
     End If
+    
     ' Hladnjaca iz KupacID
     Dim hladnjaca As String
     hladnjaca = CStr(Nz(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Hladnjaca"), ""))
@@ -1624,7 +1732,8 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
                 Dim otkRows As Collection
                 Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
                 If otkRows.count > 0 Then
-                    UpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne
+                    RequireUpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne, _
+                    "LinkZbirnaToOtkupAndOtpremnica"
                 End If
                 
                 ' 2. Postavi BrojZbirne na otpremnici (ako postoji i ako vec nije)
@@ -1636,7 +1745,8 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
                         Dim otpRows As Collection
                         Set otpRows = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
                         If otpRows.count > 0 Then
-                            UpdateCell TBL_OTPREMNICA, otpRows(1), COL_OTP_BROJ_ZBIRNE, brojZbirne
+                            RequireUpdateCell TBL_OTPREMNICA, otpRows(1), COL_OTP_BROJ_ZBIRNE, brojZbirne, _
+                            "LinkZbirnaToOtkupAndOtpremnica"
                         End If
                         updatedOtp.Add otpID, True
                     End If
@@ -1666,12 +1776,21 @@ Private Function GetBrojZbirneForID(ByVal zbirnaID As String) As String
     End If
 End Function
 
+Private Function IsValidBrojZbirneFormat(ByVal s As String) As Boolean
+    ' Format: x/ddmmyy ili x/ddmmyy-N
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.pattern = "^\d+/\d{6}(-\d+)?$"
+    re.Global = False
+    IsValidBrojZbirneFormat = re.Test(s)
+End Function
+
 ' ============================================================
 ' PRIVATE — WriteBack VOZ SyncStatus + ServerRecordID
 ' ============================================================
 
-Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
-                                    ByVal updates As Collection)
+Private Function WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
+                                        ByVal updates As Collection) As Boolean
     ' Isti pattern kao WriteBackSyncStatus za OTK
     ' Kolona F = SyncStatus, Kolona B = ServerRecordID
     
@@ -1685,7 +1804,7 @@ Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
     On Error GoTo EH
     
     accessToken = GetAccessToken()
-    If Len(accessToken) = 0 Then Exit Sub
+    If Len(accessToken) = 0 Then Exit Function
     
     body = "{""valueInputOption"":""RAW"",""data"":["
     
@@ -1710,10 +1829,11 @@ Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
             End If
         End If
         
-        If UBound(update) >= 2 Then
-            If Len(CStr(update(2))) > 0 Then
+        ' T = BrojZbirne
+        If UBound(update) >= 3 Then
+            If Len(CStr(update(3))) > 0 Then
                 body = body & ",{""range"":""Sheet1!T" & CStr(update(0)) & """," & _
-                       """values"":[[""" & JsonEscape(CStr(update(2))) & """]]}"
+                    """values"":[[""" & JsonEscape(CStr(update(3))) & """]]}"
             End If
         End If
     Next i
@@ -1732,15 +1852,19 @@ Private Sub WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
     http.Send body
     
     If http.status >= 200 And http.status < 300 Then
-        LogInfo "WriteBackVOZSyncStatus", updates.count & " Status-Updates geschrieben"
+        LogInfo "WriteBackVOZSyncStatus", CStr(updates.count) & " Status-Updates geschrieben"
+        WriteBackVOZSyncStatus = True
     Else
         LogError "WriteBackVOZSyncStatus", "HTTP " & http.status & ": " & http.responseText, http.status
+        WriteBackVOZSyncStatus = False
     End If
-    Exit Sub
+
+    Exit Function
 
 EH:
     LogErr "WriteBackVOZSyncStatus"
-End Sub
+    WriteBackVOZSyncStatus = False
+End Function
 
 Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date) As String
     Dim vozacBroj As String
@@ -1804,6 +1928,61 @@ Private Sub MarkPWAFatalSyncError(ByVal sourceName As String, ByVal message As S
     LogError sourceName, message
 End Sub
 
+Private Sub Monitor_MasterSyncSuccess(ByVal procedureName As String, _
+                                      ByVal importedCount As Long, _
+                                      ByVal skippedCount As Long, _
+                                      ByVal errorCount As Long, _
+                                      ByVal filesCount As Long)
+    On Error Resume Next
+
+    Monitor_Event _
+        eventType:="MASTERDATA_SYNC_SUCCESS", _
+        severity:="INFO", _
+        message:="Master sync completed. Files=" & CStr(filesCount) & _
+                 "; Imported=" & CStr(importedCount) & _
+                 "; Skipped=" & CStr(skippedCount) & _
+                 "; Errors=" & CStr(errorCount), _
+        userId:="Operator", _
+        moduleName:="modMasterSync", _
+        procedureName:=procedureName, _
+        entityType:="MasterData", _
+        entityId:="PWA-OTKUP", _
+        correlationId:="MASTERDATA-SYNC-PWA"
+End Sub
+
+Private Sub Monitor_MasterSyncFail(ByVal procedureName As String, _
+                                   ByVal errNum As Long, _
+                                   ByVal errDesc As String, _
+                                   ByVal errSrc As String, _
+                                   Optional ByVal importedCount As Long = 0, _
+                                   Optional ByVal skippedCount As Long = 0, _
+                                   Optional ByVal errorCount As Long = 0)
+    On Error Resume Next
+
+    Monitor_Error _
+        moduleName:="modMasterSync", _
+        procedureName:=procedureName, _
+        entityType:="MasterData", _
+        entityId:="PWA-OTKUP", _
+        correlationId:="MASTERDATA-SYNC-PWA", _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="MASTERDATA_SYNC_FAIL", _
+        severity:="CRITICAL", _
+        message:="Master sync failed. Imported=" & CStr(importedCount) & _
+                 "; Skipped=" & CStr(skippedCount) & _
+                 "; Errors=" & CStr(errorCount) & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modMasterSync", _
+        procedureName:=procedureName, _
+        entityType:="MasterData", _
+        entityId:="PWA-OTKUP", _
+        correlationId:="MASTERDATA-SYNC-PWA"
+End Sub
 ' ============================================================
 ' TEST
 ' ============================================================
