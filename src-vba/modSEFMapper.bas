@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSEFMapper"
 Option Explicit
 
 Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSnapshot
@@ -226,7 +225,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 ' Legacy/debug JSON snapshot serializer.
@@ -295,7 +294,7 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     
 EH:
     LogErr "SerializeSEFRequest"
-    Err.Raise Err.Number, "SerializeSEFRequest", Err.Description
+    Err.Raise Err.Number, "SerializeSEFRequest", Err.description
 
 End Function
 
@@ -593,8 +592,8 @@ EH:
     Dim errSrc As String
 
     errNum = Err.Number
-    errDesc = Err.Description
-    errSrc = Err.Source
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
     LogErr "SerializeUBLInvoice"
@@ -713,7 +712,7 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
@@ -741,7 +740,7 @@ Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Public Function ComputePayloadHash(ByVal payload As String) As String
@@ -798,7 +797,7 @@ Private Function GetSEFPaymentDueDays() As Long
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
@@ -825,7 +824,7 @@ Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
 
 EH:
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.Description
+    Err.Raise Err.Number, sourceName, Err.description
 End Function
 
 
@@ -957,7 +956,7 @@ Private Function GetRequiredSEFConfig(ByVal keyName As String, _
 
 EH:
     LogErr "modSEFMapper.GetRequiredSEFConfig"
-    Err.Raise Err.Number, "modSEFMapper.GetRequiredSEFConfig", Err.Description
+    Err.Raise Err.Number, "modSEFMapper.GetRequiredSEFConfig", Err.description
 End Function
 
 Private Sub ValidateGeneratedUBL(ByVal xml As String, ByVal sourceName As String)
@@ -1034,7 +1033,7 @@ Public Sub Test_BuildSEFInvoiceDto()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
 Public Sub Test_SerializeSEFRequest()
@@ -1052,7 +1051,7 @@ Public Sub Test_SerializeSEFRequest()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 
 End Sub
 
@@ -1087,7 +1086,7 @@ Public Sub Test_SerializeUBLInvoice()
     Exit Sub
 
 EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "ERR " & Err.Number & " - " & Err.description
 
 End Sub
 
@@ -1135,5 +1134,5 @@ Public Sub DebugSEFDates(ByVal fakturaID As String)
     Exit Sub
 
 EH:
-    Debug.Print "DebugSEFDates ERR " & Err.Number & " - " & Err.Description
+    Debug.Print "DebugSEFDates ERR " & Err.Number & " - " & Err.description
 End Sub
