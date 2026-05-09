@@ -211,11 +211,18 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
                                ByVal kolAmb As Long, _
                                Optional ByVal klasa As String = "I") As String
     
+    On Error GoTo EH
+
     Call ValidateOtpremnicaInput(stanicaID, vozacID, brojOtp, brojZbirne, _
                              kolicina, cena, tipAmb, kolAmb, klasa)
     
     Dim newID As String
     newID = GetNextID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-")
+    
+    If Len(Trim$(newID)) = 0 Then
+        Err.Raise vbObjectError + 1002, "SaveOtpremnica", _
+                "GetNextID nije vratio OtpremnicaID."
+    End If
     
     Dim rowData As Variant
     rowData = Array(newID, datum, stanicaID, vozacID, brojOtp, _
@@ -230,6 +237,23 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
         Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
                   "AppendRow fehlgeschlagen für tblOtpremnica"
     End If
+    Exit Function
+    
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr "SaveOtpremnica"
+    On Error GoTo 0
+
+    Err.Raise errNum, "SaveOtpremnica", _
+              "Source=" & errSrc & " | " & errDesc
 End Function
 
 Public Function GetOtpremniceByZbirna(ByVal brojZbirne As String) As Variant
@@ -954,22 +978,13 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 kolAmbVracena, klasa)
 
 
-    If AppendRow(TBL_PRIJEMNICA, rowData) <= 0 Then
+    Dim appendedRow As Long
+    appendedRow = AppendRow(TBL_PRIJEMNICA, rowData)
+
+    If appendedRow <= 0 Then
         Err.Raise vbObjectError + 1014, "SavePrijemnica", _
-                  "AppendRow fehlgeschlagen für tblPrijemnica."
+                "AppendRow fehlgeschlagen für tblPrijemnica."
     End If
-    
-    Dim prjRows As Collection
-    Set prjRows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, newID)
-
-    If prjRows Is Nothing Or prjRows.count = 0 Then
-        Err.Raise vbObjectError + 1431, "SavePrijemnica", _
-              "New prijemnica row not found after append. PrijemnicaID=" & newID
-    End If
-
-    RequireUpdateCell TBL_PRIJEMNICA, CLng(prjRows(1)), _
-                  "KolAmbVracena", kolAmbVracena, _
-                  "SavePrijemnica"
 
     If kolAmb > 0 Then
         TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kupacID, "Kupac", _
@@ -1751,6 +1766,7 @@ Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
     Dim colPrijID As Long
     Dim colOsir As Long
     Dim colFakID As Long
+    Dim colFsKlasa As Long
 
     colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, _
                                    "modDokumenta.RelinkFakturaStavke")
@@ -1758,6 +1774,8 @@ Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
                                  "modDokumenta.RelinkFakturaStavke")
     colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, _
                                   "modDokumenta.RelinkFakturaStavke")
+    colFsKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA, _
+                                "modDokumenta.RelinkFakturaStavke")
 
     Dim i As Long
     Dim oldPrijID As String
@@ -1766,6 +1784,8 @@ Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
     Dim newPrijRows As Collection
 
     For i = 1 To UBound(stavkeData, 1)
+        Dim stavkaKlasa As String
+        stavkaKlasa = Trim$(NzToText(stavkeData(i, colFsKlasa)))
 
         If Trim$(NzToText(stavkeData(i, colOsir))) = "" Then GoTo NextStavka
 
@@ -1784,18 +1804,27 @@ Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
             RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
                               "", "modDokumenta.RelinkFakturaStavke"
 
-            Set newPrijRows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, newPrijemnicaID)
+            Dim newPrijRow As Long
+            newPrijRow = FindPrijemnicaRowByIDAndKlasa(newPrijemnicaID, stavkaKlasa, _
+                                           "modDokumenta.RelinkFakturaStavke")
 
-            If newPrijRows.count = 0 Then
+            If newPrijRow <= 0 Then
                 Err.Raise vbObjectError + 7410, "modDokumenta.RelinkFakturaStavke", _
-                          "Nova prijemnica nije pronadena za relink: " & newPrijemnicaID
+                        "Nova prijemnica nije pronadena za relink. PrijemnicaID=" & _
+                        newPrijemnicaID & "; Klasa=" & stavkaKlasa
             End If
 
-            RequireUpdateCell TBL_PRIJEMNICA, newPrijRows(1), COL_PRJ_FAKTURISANO, _
-                              "Da", "modDokumenta.RelinkFakturaStavke"
+            RequireUpdateCell TBL_PRIJEMNICA, newPrijRow, COL_PRJ_FAKTURISANO, _
+                            "Da", "modDokumenta.RelinkFakturaStavke"
 
-            RequireUpdateCell TBL_PRIJEMNICA, newPrijRows(1), COL_PRJ_FAKTURA_ID, _
-                              fakID, "modDokumenta.RelinkFakturaStavke"
+            RequireUpdateCell TBL_PRIJEMNICA, newPrijRow, COL_PRJ_FAKTURA_ID, _
+                            fakID, "modDokumenta.RelinkFakturaStavke"
+
+
+            If Len(Trim$(fakID)) > 0 Then
+                UpdateFakturaStatus fakID
+            End If
+
         End If
 
 NextStavka:
@@ -1819,6 +1848,13 @@ Public Function GetVozacDokumenta(ByVal vozacID As String, _
 
     Dim data As Variant
     data = GetTableData(TBL_OTPREMNICA)
+
+    If IsEmpty(data) Then
+        GetVozacDokumenta = Empty
+        Exit Function
+    End If
+
+    data = ExcludeStornirano(data, TBL_OTPREMNICA)
 
     If IsEmpty(data) Then
         GetVozacDokumenta = Empty
@@ -1856,6 +1892,13 @@ Public Function BuildZbirnaVrstaCache() As Object
 
     Dim otpData As Variant
     otpData = GetTableData(TBL_OTPREMNICA)
+
+    If IsEmpty(otpData) Then
+        Set BuildZbirnaVrstaCache = dict
+        Exit Function
+    End If
+    
+    otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
 
     If IsEmpty(otpData) Then
         Set BuildZbirnaVrstaCache = dict
@@ -2092,3 +2135,40 @@ Private Function GetDokumentaTableColumnCount(ByVal tableName As String) As Long
         Next lo
     Next ws
 End Function
+
+Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
+                                               ByVal klasa As String, _
+                                               ByVal sourceName As String) As Long
+    Dim data As Variant
+    data = GetTableData(TBL_PRIJEMNICA)
+
+    If IsEmpty(data) Then Exit Function
+
+    Dim colID As Long
+    Dim colKlasa As Long
+
+    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, sourceName)
+    colKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, sourceName)
+
+    Dim i As Long
+    Dim foundRow As Long
+    Dim foundCount As Long
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, colID))) = Trim$(prijemnicaID) And _
+           Trim$(NzToText(data(i, colKlasa))) = Trim$(klasa) Then
+
+            foundRow = i
+            foundCount = foundCount + 1
+        End If
+    Next i
+
+    If foundCount > 1 Then
+        Err.Raise vbObjectError + 7412, sourceName, _
+                  "Dupli redovi za PrijemnicaID + Klasa. PrijemnicaID=" & _
+                  prijemnicaID & "; Klasa=" & klasa
+    End If
+
+    FindPrijemnicaRowByIDAndKlasa = foundRow
+End Function
+
