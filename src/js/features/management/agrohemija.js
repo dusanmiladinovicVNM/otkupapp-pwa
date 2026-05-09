@@ -6,6 +6,11 @@ let izdSelectedKoopID = '';
 let izdSelectedKoopName = '';
 let izdPreporukaQty = null;
 
+function izdGenerateClientRecordID() {
+    const device = (window.CONFIG && (CONFIG.DEVICE_ID || CONFIG.ENTITY_ID)) || 'device';
+    return 'IZD-' + Date.now() + '-' + String(device).replace(/[^a-zA-Z0-9_-]/g, '') + '-' +
+        Math.random().toString(36).slice(2, 8);
+}
 
 // --- Populate ---
 function populateIzdDropdowns() {
@@ -117,7 +122,7 @@ function izdCalcPreporuka() {
 
     if (pakovanje > 0) {
         const pakCount = Math.ceil(rawQty / pakovanje);
-        finalQty = pakCount;
+        finalQty = pakCount * pakovanje;
         pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanje)';
     }
 
@@ -340,15 +345,23 @@ async function izdZavrsi() {
     const checkedParcele = document.querySelectorAll('#izdParceleList input[type="checkbox"]:checked');
     const parcelaIDs = [];
     checkedParcele.forEach(chk => parcelaIDs.push(chk.value));
-    const parcelaID = parcelaIDs.join(',');
+    const parcelaID = parcelaIDs.join(';');
     const napomena = document.getElementById('izdNapomena').value || '';
 
     // Prikaži otpremnicu za potpise
     izdShowOtpremnica({
+        clientRecordID: izdGenerateClientRecordID(),
         kooperantID: izdSelectedKoopID,
         kooperantName: izdSelectedKoopName,
         parcelaID: parcelaID,
-        stavke: [...izdKorpa],
+        stavke: izdKorpa.map(s => ({
+            artikalID: s.artikalID,
+            naziv: s.naziv,
+            jm: s.jm,
+            cena: Number(s.cena) || 0,
+            kolicina: Number(s.kolicina) || 0,
+            vrednost: Number(s.vrednost) || 0
+        })),
         ukupnaVrednost: ukupno,
         napomena: napomena,
         datum: getTodayIsoDate()
@@ -406,7 +419,10 @@ function izdShowOtpremnica(data) {
             <span>UKUPNO:</span>
             <span>${data.ukupnaVrednost.toLocaleString('sr')} RSD</span>
         </div>
-        <div style="font-size:12px;color:#666;margin-bottom:12px;">Datum: ${escapeHtml(data.datum)}${data.napomena ? ' | Napomena: ' + escapeHtml(data.napomena) : ''}</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">
+            Broj: ${escapeHtml(data.clientRecordID || '')}<br>
+            Datum: ${escapeHtml(data.datum)}${data.napomena ? ' | Napomena: ' + escapeHtml(data.napomena) : ''}
+        </div>
 
         <div style="margin-top:16px;">
             <div style="margin-bottom:16px;">
@@ -474,34 +490,87 @@ function izdShowOtpremnica(data) {
 
 // --- Confirm + Save to Server ---
 async function izdConfirmSave() {
+    if (typeof withSubmitLock === 'function') {
+        return withSubmitLock('management-izdavanje-save', izdConfirmSaveUnlocked, {
+            action: 'izd-confirm-save',
+            alreadyMessage: 'Čuvanje je već u toku...'
+        });
+    }
+
+    return izdConfirmSaveUnlocked();
+}
+
+async function izdConfirmSaveUnlocked() {
     const sigI = getSignatureData('sigIzdavalac');
     const sigP = getSignatureData('sigPrimalac');
-    if (!sigI) { showToast('Potpišite se kao izdavalac!', 'error'); return; }
-    if (!sigP) { showToast('Kooperant mora da se potpiše!', 'error'); return; }
+
+    if (!sigI) {
+        showToast('Potpišite se kao izdavalac!', 'error');
+        return;
+    }
+
+    if (!sigP) {
+        showToast('Kooperant mora da se potpiše!', 'error');
+        return;
+    }
 
     const modal = document.getElementById('izdOtpremnicaModal');
-    const data = modal._data;
+    const data = modal && modal._data;
+
+    if (!data) {
+        showToast('Nema podataka za izdavanje', 'error');
+        return;
+    }
+
+    const clientRecordID = data.clientRecordID || izdGenerateClientRecordID();
+    data.clientRecordID = clientRecordID;
 
     showToast('Čuvanje...', 'info');
+
     try {
         const json = await apiPost('saveIzdavanje', {
+            clientRecordID: clientRecordID,
+            izdavanjeID: clientRecordID,
             kooperantID: data.kooperantID,
             kooperantName: data.kooperantName,
             parcelaID: data.parcelaID,
             stavke: data.stavke,
             ukupnaVrednost: data.ukupnaVrednost,
             izdaoUser: CONFIG.ENTITY_NAME,
-            napomena: data.napomena
+            napomena: data.napomena,
+            sigIzdavalac: sigI,
+            sigPrimalac: sigP
         });
-        if (!json) { showToast('Nema konekcije', 'error'); return; }
+
+        if (!json) {
+            showToast('Nema konekcije', 'error');
+            return;
+        }
+
         if (json.success) {
-            showToast('Izdavanje sačuvano: ' + json.izdavanjeID, 'success');
+            const statusText = json.status === 'already-exists'
+                ? 'Izdavanje je već sačuvano'
+                : 'Izdavanje sačuvano';
+
+            showToast(statusText + ': ' + (json.izdavanjeID || clientRecordID), 'success');
+
             izdReset();
             modal.style.display = 'none';
-        } else {
-            showToast(json.error || 'Greška', 'error');
+            return;
         }
-    } catch(e) {
+
+        showToast(json.error || 'Greška', 'error');
+    } catch (e) {
+        console.error('izdConfirmSave failed:', e);
+
+        if (typeof reportClientError === 'function') {
+            reportClientError(e, {
+                source: 'management/agrohemija',
+                errorAction: 'saveIzdavanje',
+                entityID: data.kooperantID || ''
+            });
+        }
+
         showToast('Nema konekcije', 'error');
     }
 }
@@ -621,22 +690,43 @@ function izdReset() {
     izdKorpa = [];
     izdSelectedKoopID = '';
     izdSelectedKoopName = '';
-    izdRenderKorpa();
+    izdPreporukaQty = null;
+
+    _lastBarcode = '';
+    _lastBarcodeTime = 0;
+
+    const modal = document.getElementById('izdOtpremnicaModal');
+    if (modal) {
+        modal._data = null;
+    }
+
     const koopSel = document.getElementById('izdKooperant');
     if (koopSel) koopSel.value = '';
-    const pGroup = document.getElementById('izdParcelaGroup');
-    if (pGroup) pGroup.style.display = 'none';
+
+    const artSel = document.getElementById('izdArtikal');
+    if (artSel) artSel.value = '';
+
+    const kolInput = document.getElementById('izdKolicina');
+    if (kolInput) kolInput.value = '';
+
     const nap = document.getElementById('izdNapomena');
     if (nap) nap.value = '';
-    _lastBarcode = '';
-    
-    // Reset parcele checkboxes
-    document.querySelectorAll('#izdParceleList input[type="checkbox"]').forEach(chk => chk.checked = false);
+
+    const pGroup = document.getElementById('izdParcelaGroup');
+    if (pGroup) pGroup.style.display = 'none';
+
+    const pList = document.getElementById('izdParceleList');
+    if (pList) pList.innerHTML = '';
+
     const haEl = document.getElementById('izdUkupnaHa');
     if (haEl) haEl.textContent = '0';
+
     izdHidePreporuka();
-}     
+    izdRenderKorpa();
+}  
 
 function loadMgmtAgroStanje() {
     document.getElementById('mgmtAgroStanjeList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p>';
 }
+
+
