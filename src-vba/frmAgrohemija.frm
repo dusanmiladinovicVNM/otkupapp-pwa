@@ -34,20 +34,6 @@ Private m_ParcelaHa() As Double
 
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
-
 Private Sub UserForm_Initialize()
     ApplyTheme Me, BG_MAIN()
     LoadKooperanti
@@ -56,11 +42,7 @@ Private Sub UserForm_Initialize()
 End Sub
 
 Private Sub UserForm_Activate()
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
 End Sub
 
 Private Sub LoadKooperanti()
@@ -262,6 +244,25 @@ Private Sub btnDodajIzlaz_Click()
     Dim kol As Double
     kol = CDbl(txtKolicina.value)
     
+    Dim trenutnoUKorpi As Double
+    trenutnoUKorpi = GetKorpaIzlazKolicinaZaArtikal(artikalID)
+
+    Dim stanjeDict As Object
+    Set stanjeDict = BuildArtikalStanjeDict()
+
+    Dim dostupno As Double
+    dostupno = 0#
+    If stanjeDict.Exists(artikalID) Then dostupno = CDbl(stanjeDict(artikalID))
+
+    If trenutnoUKorpi + kol > dostupno Then
+        MsgBox "Nedovoljno stanje za artikal!" & vbCrLf & _
+            "Na stanju: " & FormatKol(dostupno) & " " & jm & vbCrLf & _
+            "Vec u korpi: " & FormatKol(trenutnoUKorpi) & " " & jm & vbCrLf & _
+            "Pokušavate dodati: " & FormatKol(kol) & " " & jm, _
+            vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    
     ' Nach Kolicina-Prüfung:
     Dim pakStr2 As String
     pakStr2 = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artikalID, COL_ART_PAKOVANJE))
@@ -307,64 +308,96 @@ Private Sub btnDodajIzlaz_Click()
     Exit Sub
 EH:
     LogErr "frmAgrohemija.btnDodajIzlaz"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnZavrsiIzlaz_Click()
+    Const SRC As String = "frmAgrohemija.btnZavrsiIzlaz"
+
+    Dim tx As clsTransaction
+    Dim txStarted As Boolean
+
     On Error GoTo EH
-    
+
     If m_KorpaIzlazCount = 0 Then
         MsgBox "Korpa je prazna!", vbExclamation, APP_NAME
         Exit Sub
     End If
+
     If cmbKooperant.value = "" Then
         MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    Dim koopID As String
-    koopID = ExtractIDFromDisplay(cmbKooperant.value)
-    
-    ' BrojDokumenta generieren
-    If txtBrojDokIzlaz.value = "" Then
+
+    If Trim$(txtBrojDokIzlaz.value) = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         Exit Sub
     End If
+
+    Dim koopID As String
+    koopID = ExtractIDFromDisplay(cmbKooperant.value)
+
     Dim brojDok As String
-    brojDok = txtBrojDokIzlaz.value
-    
-    ' TX starten
-    Dim tx As New clsTransaction
+    brojDok = Trim$(txtBrojDokIzlaz.value)
+
+    ' Pre-TX UX/business check: agregirano po artiklu.
+    ' SaveMagacin takode radi finalni check, ali ovde dobijamo bolju poruku
+    ' i sprecavamo delimican loop pre rollback-a.
+    ValidateKorpaIzlazStanje
+
+    Set tx = New clsTransaction
     tx.BeginTx
+    txStarted = True
     tx.AddTableSnapshot TBL_MAGACIN
-    
+
     Dim i As Long
     For i = 1 To m_KorpaIzlazCount
         Dim result As String
-        result = SaveMagacin(Date, m_KorpaIzlaz(i).artikalID, MAG_IZLAZ, _
-                              m_KorpaIzlaz(i).kolicina, koopID, _
-                              m_KorpaIzlaz(i).parcelaID, brojDok)
-        If result = "" Then
-            tx.RollbackTx
-            MsgBox "Greska pri cuvanju!", vbCritical, APP_NAME
-            Exit Sub
+
+        result = SaveMagacin( _
+            Date, _
+            m_KorpaIzlaz(i).artikalID, _
+            MAG_IZLAZ, _
+            m_KorpaIzlaz(i).kolicina, _
+            koopID, _
+            m_KorpaIzlaz(i).parcelaID, _
+            brojDok)
+
+        If Len(Trim$(result)) = 0 Then
+            Err.Raise vbObjectError + 4301, SRC, _
+                      "Greška pri cuvanju izlaza. ArtikalID=" & _
+                      m_KorpaIzlaz(i).artikalID & _
+                      "; Kolicina=" & CStr(m_KorpaIzlaz(i).kolicina)
         End If
     Next i
-    
+
     tx.CommitTx
-    
-    MsgBox "Izdavanje zavrseno: " & brojDok & vbCrLf & _
+    txStarted = False
+
+    MsgBox "Izdavanje završeno: " & brojDok & vbCrLf & _
            m_KorpaIzlazCount & " stavki", vbInformation, APP_NAME
-    
-    ' Reset
+
     ClearKorpaIzlaz
     cmbKooperant.value = ""
     txtBrojDokIzlaz.value = ""
-    
+
+    Set tx = Nothing
     Exit Sub
+
 EH:
-    LogErr "frmAgrohemija.btnZavrsiIzlaz"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    Dim errDesc As String
+    errDesc = Err.description
+
+    LogErr SRC
+
+    On Error Resume Next
+    If txStarted And Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    MsgBox "Greška pri cuvanju izdavanja, promene vracene: " & errDesc, _
+           vbCritical, APP_NAME
+
+    Set tx = Nothing
 End Sub
 
 Private Sub ClearKorpaIzlaz()
@@ -490,56 +523,88 @@ Private Sub btnDodajUlaz_Click()
     Exit Sub
 EH:
     LogErr "frmAgrohemija.btnDodajUlaz"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnZavrsiUlaz_Click()
+    Const SRC As String = "frmAgrohemija.btnZavrsiUlaz"
+
+    Dim tx As clsTransaction
+    Dim txStarted As Boolean
+
     On Error GoTo EH
-    
+
     If m_KorpaUlazCount = 0 Then
         MsgBox "Korpa je prazna!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If txtBrojDokUlaz.value = "" Then
+
+    If Trim$(txtBrojDokUlaz.value) = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
+
     Dim brojDok As String
-    brojDok = txtBrojDokUlaz.value
-    
+    brojDok = Trim$(txtBrojDokUlaz.value)
+
     Dim dobavljacID As String
-    dobavljacID = cmbDobavljac.value
-    
-    Dim tx As New clsTransaction
+    dobavljacID = Trim$(cmbDobavljac.value)
+
+    Set tx = New clsTransaction
     tx.BeginTx
+    txStarted = True
     tx.AddTableSnapshot TBL_MAGACIN
-    
+
     Dim i As Long
     For i = 1 To m_KorpaUlazCount
         Dim result As String
-        result = SaveMagacin(Date, m_KorpaUlaz(i).artikalID, MAG_ULAZ, _
-                              m_KorpaUlaz(i).kolicina, "", "", brojDok, "", _
-                              dobavljacID, m_KorpaUlaz(i).cena)
-        If result = "" Then
-            tx.RollbackTx
-            MsgBox "Greska pri cuvanju!", vbCritical, APP_NAME
-            Exit Sub
+
+        result = SaveMagacin( _
+            Date, _
+            m_KorpaUlaz(i).artikalID, _
+            MAG_ULAZ, _
+            m_KorpaUlaz(i).kolicina, _
+            "", _
+            "", _
+            brojDok, _
+            "", _
+            dobavljacID, _
+            m_KorpaUlaz(i).cena)
+
+        If Len(Trim$(result)) = 0 Then
+            Err.Raise vbObjectError + 4311, SRC, _
+                      "Greška pri cuvanju ulaza. ArtikalID=" & _
+                      m_KorpaUlaz(i).artikalID & _
+                      "; Kolicina=" & CStr(m_KorpaUlaz(i).kolicina)
         End If
     Next i
-    
+
     tx.CommitTx
-    
-    MsgBox "Prijem zavrsen: " & brojDok & vbCrLf & _
+    txStarted = False
+
+    MsgBox "Prijem završen: " & brojDok & vbCrLf & _
            m_KorpaUlazCount & " stavki", vbInformation, APP_NAME
-    
+
     ClearKorpaUlaz
     txtBrojDokUlaz.value = ""
-    
+
+    Set tx = Nothing
     Exit Sub
+
 EH:
-    LogErr "frmAgrohemija.btnZavrsiUlaz"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    Dim errDesc As String
+    errDesc = Err.description
+
+    LogErr SRC
+
+    On Error Resume Next
+    If txStarted And Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    MsgBox "Greška pri cuvanju prijema, promene vracene: " & errDesc, _
+           vbCritical, APP_NAME
+
+    Set tx = Nothing
 End Sub
 
 Private Sub ClearKorpaUlaz()
@@ -549,8 +614,26 @@ Private Sub ClearKorpaUlaz()
 End Sub
 
 Private Sub btnPovratak_Click()
+    On Error GoTo EH
+
+    frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
     Unload Me
-    frmOtkupAPP.Show
+
+    Exit Sub
+
+EH:
+    LogErr "frmAgrohemija.btnPovratak_Click"
+    Unload Me
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
+    If CloseMode = vbFormControlMenu Then
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    End If
+
+    On Error GoTo 0
 End Sub
 
 Private Function FormatKol(ByVal val As Double) As String
@@ -559,5 +642,101 @@ Private Function FormatKol(ByVal val As Double) As String
     Else
         FormatKol = Format$(val, "0.##")
     End If
+End Function
+
+Private Sub ValidateKorpaIzlazStanje()
+    Const SRC As String = "frmAgrohemija.ValidateKorpaIzlazStanje"
+
+    If m_KorpaIzlazCount = 0 Then Exit Sub
+
+    Dim stanjeDict As Object
+    Set stanjeDict = BuildArtikalStanjeDict()
+
+    Dim needDict As Object
+    Set needDict = CreateObject("Scripting.Dictionary")
+
+    Dim nameDict As Object
+    Set nameDict = CreateObject("Scripting.Dictionary")
+
+    Dim jmDict As Object
+    Set jmDict = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    For i = 1 To m_KorpaIzlazCount
+        Dim artID As String
+        artID = Trim$(m_KorpaIzlaz(i).artikalID)
+
+        If Len(artID) = 0 Then
+            Err.Raise vbObjectError + 4320, SRC, "Korpa sadrži stavku bez ArtikalID."
+        End If
+
+        If Not needDict.Exists(artID) Then
+            needDict.Add artID, 0#
+            nameDict.Add artID, m_KorpaIzlaz(i).ArtikalNaziv
+            jmDict.Add artID, m_KorpaIzlaz(i).jm
+        End If
+
+        needDict(artID) = CDbl(needDict(artID)) + CDbl(m_KorpaIzlaz(i).kolicina)
+    Next i
+
+    Dim key As Variant
+    For Each key In needDict.keys
+        Dim available As Double
+        available = 0#
+
+        If stanjeDict.Exists(CStr(key)) Then
+            available = CDbl(stanjeDict(CStr(key)))
+        End If
+
+        Dim needed As Double
+        needed = CDbl(needDict(CStr(key)))
+
+        If available < needed Then
+            Err.Raise vbObjectError + 4321, SRC, _
+                      "Nedovoljno stanje za artikal: " & _
+                      CStr(nameDict(CStr(key))) & " (" & CStr(key) & ")." & vbCrLf & _
+                      "Na stanju: " & FormatKol(available) & " " & CStr(jmDict(CStr(key))) & vbCrLf & _
+                      "U korpi: " & FormatKol(needed) & " " & CStr(jmDict(CStr(key)))
+        End If
+    Next key
+End Sub
+
+Private Function BuildArtikalStanjeDict() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    Dim stanje As Variant
+    stanje = GetMagacinStanje()
+
+    If IsEmpty(stanje) Then
+        Set BuildArtikalStanjeDict = dict
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To UBound(stanje, 1)
+        Dim artID As String
+        artID = Trim$(CStr(stanje(i, 1)))
+
+        If Len(artID) > 0 Then
+            If IsNumeric(stanje(i, 7)) Then
+                dict(artID) = CDbl(stanje(i, 7))
+            Else
+                dict(artID) = 0#
+            End If
+        End If
+    Next i
+
+    Set BuildArtikalStanjeDict = dict
+End Function
+
+Private Function GetKorpaIzlazKolicinaZaArtikal(ByVal artikalID As String) As Double
+    Dim i As Long
+    For i = 1 To m_KorpaIzlazCount
+        If Trim$(m_KorpaIzlaz(i).artikalID) = Trim$(artikalID) Then
+            GetKorpaIzlazKolicinaZaArtikal = _
+                GetKorpaIzlazKolicinaZaArtikal + CDbl(m_KorpaIzlaz(i).kolicina)
+        End If
+    Next i
 End Function
 
