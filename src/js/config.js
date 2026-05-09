@@ -33,7 +33,7 @@ window.CONFIG = {
     DB_VERSION: 6,
     STORE_NAME: 'otkupi',
     STAMM_STORE: 'stammdaten',
-    APP_VERSION: '2.0.1',
+    APP_VERSION: '1.0.0-C001'
     FIREBASE_API_KEY:    'AIzaSyAh-OhV1qAYl3blAPrvt3Kg9TUjeaNSlMw',
     FIREBASE_PROJECT_ID: 'agrix-25e20',
     FIREBASE_APP_ID:     '1:154375753183:web:ff37154f6c8ce10526486a',
