@@ -99,7 +99,9 @@ function agroResetState() {
         geoWatchId: null
     };
 
-    document.querySelectorAll('.agro-mera-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.agro-mera-btn').forEach(btn => {
+        btn.classList.remove('active', 'selected');
+    });
 
     const idsToClear = [
         'agroParcelaSel', 'agroArtikal', 'agroKolicina', 'agroNapomena',
@@ -555,10 +557,23 @@ function agroPopulatePreparati(mera) {
 function onAgroPreparatChange() {
     const artID = document.getElementById('agroPreparatSel').value;
     if (!artID) {
-        document.getElementById('agroPreporuka').classList.remove('visible');
-        document.getElementById('agroKarencaInfo').style.display = 'none';
+        const prep = document.getElementById('agroPreporuka');
+        if (prep) {
+            prep.classList.remove('visible');
+            prep._finalQty = 0;
+        }
+
+        const karInfo = document.getElementById('agroKarencaInfo');
+        if (karInfo) karInfo.style.display = 'none';
+
+        const qtyInput = document.getElementById('agroKolicina');
+        if (qtyInput) qtyInput.value = '';
+
         agroState.artikalID = '';
         agroState.artikalData = null;
+        agroState.kolicina = 0;
+        agroState.dozaPreporucena = 0;
+        agroState.karencaDana = 0;
         return;
     }
 
@@ -596,39 +611,65 @@ function agroCalcPreporuka() {
     const art = agroState.artikalData;
     const parcela = agroState.parcelaData;
 
+    if (!panel) return;
+
     if (!art || !parcela || art.dozaPoHa <= 0) {
         panel.classList.remove('visible');
+        agroState.dozaPreporucena = 0;
+        panel._finalQty = 0;
         return;
     }
 
     const ha = parseFloat(String(parcela.PovrsinaHa || '0').replace(',', '.')) || 0;
-    if (ha <= 0) { panel.classList.remove('visible'); return; }
-
-    const rawQty = art.dozaPoHa * ha;
-    let finalQty = rawQty;
-    let pakInfo = '';
-
-    if (art.pakovanje > 0) {
-        const pakCount = Math.ceil(rawQty / art.pakovanje);
-        finalQty = pakCount;
-        pakInfo = pakCount + ' × ' + art.pakovanje + ' ' + art.jm + ' (pakovanje)';
+    if (ha <= 0) {
+        panel.classList.remove('visible');
+        agroState.dozaPreporucena = 0;
+        panel._finalQty = 0;
+        return;
     }
 
-    // Proveri da li ima dovoljno na lageru
+    const rawQty = art.dozaPoHa * ha;
+    const jm = art.jm || 'kg';
+    const pakovanje = parseFloat(String(art.pakovanje || '0').replace(',', '.')) || 0;
+
+    let finalQty = rawQty;       // uvek stvarna količina u JM
+    let pakInfo = '';
+
+    if (pakovanje > 0) {
+        const pakCount = Math.ceil(rawQty / pakovanje);
+        finalQty = pakCount * pakovanje;
+        pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanje)';
+    }
+
+    // Proveri da li ima dovoljno na lageru.
+    // Pošto je finalQty sada stvarna količina u JM, nema dodatnog množenja pakovanjem.
     let lagerWarn = '';
-    const needed = art.pakovanje > 0 ? finalQty * art.pakovanje : finalQty;
+    const needed = finalQty;
+
     if (needed > art.stanje) {
         lagerWarn = '<br><span style="color:var(--danger);font-weight:600;">⚠️ Nedovoljno na lageru! Imate: ' +
-            escapeHtml((art.stanje || 0).toLocaleString('sr')) + ' ' + escapeHtml(art.jm || '') + '</span>';
+            escapeHtml((art.stanje || 0).toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</span>';
     }
 
     panel.classList.add('visible');
-    document.getElementById('agroPreporukaCalc').innerHTML =
-        '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + (art.pakovanje > 0 ? ' pak.' : ' ' + escapeHtml(art.jm)) + '</strong> — ' + escapeHtml(art.naziv);
-    document.getElementById('agroPreporukaDetail').innerHTML =
-        escapeHtml(art.dozaPoHa) + ' ' + escapeHtml(art.jm) + '/ha × ' + escapeHtml(ha.toFixed(2)) + ' ha = ' +
-        escapeHtml(rawQty.toLocaleString('sr', {maximumFractionDigits:2})) + ' ' + escapeHtml(art.jm) +
-        (pakInfo ? '<br>' + escapeHtml(pakInfo) : '') + lagerWarn;
+
+    const calcEl = document.getElementById('agroPreporukaCalc');
+    if (calcEl) {
+        calcEl.innerHTML =
+            '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong> — ' +
+            escapeHtml(art.naziv || art.artikalID || '');
+    }
+
+    const detailEl = document.getElementById('agroPreporukaDetail');
+    if (detailEl) {
+        detailEl.innerHTML =
+            escapeHtml(String(art.dozaPoHa)) + ' ' + escapeHtml(jm) + '/ha × ' +
+            escapeHtml(ha.toFixed(2)) + ' ha = ' +
+            escapeHtml(rawQty.toLocaleString('sr', { maximumFractionDigits: 2 })) + ' ' + escapeHtml(jm) +
+            (pakInfo ? '<br>' + escapeHtml(pakInfo) : '') +
+            '<br>Za primenu: <strong>' + escapeHtml(finalQty.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
+            lagerWarn;
+    }
 
     agroState.dozaPreporucena = finalQty;
     panel._finalQty = finalQty;
@@ -636,11 +677,43 @@ function agroCalcPreporuka() {
 
 function agroPrimeniPreporuku() {
     const panel = document.getElementById('agroPreporuka');
-    if (!panel || !panel._finalQty) return;
-    document.getElementById('agroKolicina').value = panel._finalQty;
-    showToast('Količina: ' + panel._finalQty.toLocaleString('sr'), 'success');
+    const qty = panel ? Number(panel._finalQty || 0) : 0;
+
+    if (!qty || qty <= 0) return;
+
+    const input = document.getElementById('agroKolicina');
+    if (input) input.value = qty;
+
+    agroState.kolicina = qty;
+    showToast('Količina: ' + qty.toLocaleString('sr') + ' ' + ((agroState.artikalData && agroState.artikalData.jm) || ''), 'success');
 }
 
+function agroValidateKolicinaNaLageru() {
+    const art = agroState.artikalData;
+    if (!art) return true;
+
+    const input = document.getElementById('agroKolicina');
+    const qty = input ? (parseFloat(String(input.value || '0').replace(',', '.')) || 0) : 0;
+
+    if (qty <= 0) {
+        showToast('Unesite količinu', 'error');
+        return false;
+    }
+
+    const stanje = parseFloat(String(art.stanje || '0').replace(',', '.')) || 0;
+
+    if (qty > stanje) {
+        showToast(
+            'Nedovoljno na lageru. Imate ' +
+            stanje.toLocaleString('sr') + ' ' + (art.jm || '') +
+            ', a unos je ' + qty.toLocaleString('sr') + ' ' + (art.jm || ''),
+            'error'
+        );
+        return false;
+    }
+    agroState.kolicina = qty;
+    return true;
+}
 // ============================================================
 // METEO VALIDATION (samo za Zastita)
 // ============================================================
@@ -964,7 +1037,10 @@ async function agroSaveTretmanUnlocked() {
         d.setDate(d.getDate() + agroState.karencaDana);
         datumBerbeDozvoljeno = localIsoDateFromDate(d);
     }
-
+    
+    if ((agroState.mera === 'Zastita' || agroState.mera === 'Prihrana') && !agroValidateKolicinaNaLageru()) {
+        return;
+    }
     const record = {
         clientRecordID: agroGenerateClientRecordID('tretman'),
         serverRecordID: '',
