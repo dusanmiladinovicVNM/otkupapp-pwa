@@ -554,8 +554,8 @@ async function izdConfirmSaveUnlocked() {
 
             showToast(statusText + ': ' + (json.izdavanjeID || clientRecordID), 'success');
 
-            izdReset();
             modal.style.display = 'none';
+            izdReset();
             return;
         }
 
@@ -647,6 +647,7 @@ async function izdSavePdf() {
 
         // Info
         doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
+        doc.text('Broj: ' + (data.clientRecordID || ''), 12, y); y += 4;
         doc.text('Datum: ' + data.datum + (data.napomena ? '  |  ' + data.napomena : ''), 12, y); y += 6;
 
         // Signatures
@@ -665,6 +666,7 @@ async function izdSavePdf() {
         // Upload
         const pdfBase64 = doc.output('datauristring').split(',')[1];
         const fileName = 'Otpremnica_Agro_' + data.kooperantID + '_' + data.datum;
+        
 
         const json = await apiPost('uploadPdf', {
             fileName: fileName,
