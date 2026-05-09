@@ -1,4 +1,3 @@
-Attribute VB_Name = "modSledljivost"
 Option Explicit
 
 ' ============================================================
@@ -25,13 +24,57 @@ Public Function AutoLinkOtkupOtpremnica_TX() As Long
     AutoLinkOtkupOtpremnica_TX = AutoLinkOtkupOtpremnica()
 
     tx.CommitTx
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="SLEDLJIVOST_AUTOLINK_SUCCESS", _
+        severity:="INFO", _
+        message:="AutoLinkOtkupOtpremnica_TX completed. Linked=" & _
+             CStr(AutoLinkOtkupOtpremnica_TX), _
+        userId:="Operator", _
+        moduleName:="modSledljivost", _
+        procedureName:="AutoLinkOtkupOtpremnica_TX", _
+        entityType:="Otkup", _
+        entityId:="", _
+        correlationId:="AutoLinkOtkupOtpremnica"
+    On Error GoTo 0
+
     Set tx = Nothing
     Exit Function
 
 EH:
-    LogErr "modSledljivost.AutoLinkOtkupOtpremnica_TX"
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
 
     On Error Resume Next
+
+    LogErr "modSledljivost.AutoLinkOtkupOtpremnica_TX"
+
+    Monitor_Error _
+        moduleName:="modSledljivost", _
+        procedureName:="AutoLinkOtkupOtpremnica_TX", _
+        entityType:="Otkup", _
+        entityId:="", _
+        correlationId:="AutoLinkOtkupOtpremnica", _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="SLEDLJIVOST_AUTOLINK_FAIL", _
+        severity:="ERROR", _
+        message:="AutoLinkOtkupOtpremnica_TX failed. Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modSledljivost", _
+        procedureName:="AutoLinkOtkupOtpremnica_TX", _
+        entityType:="Otkup", _
+        entityId:="", _
+        correlationId:="AutoLinkOtkupOtpremnica"
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
@@ -74,7 +117,7 @@ Public Function AutoLinkOtkupOtpremnica() As Long
     colOtkVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
     colOtkOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
     colOtkKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
-    colOtkZbirna = RequireColumnIndex(TBL_OTKUP, "BrojZbirne", SRC)
+    colOtkZbirna = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
 
     ' Otpremnica columns
     Dim colOtpID As Long
@@ -191,13 +234,21 @@ Public Function AutoLinkOtkupOtpremnica() As Long
             Dim otkRows As Collection
             Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
 
-            If Not otkRows Is Nothing Then
-                If otkRows.count > 0 Then
-                    RequireUpdateCell TBL_OTKUP, otkRows(1), _
-                                      COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
-                    linked = linked + 1
-                End If
+            If otkRows Is Nothing Then
+                Err.Raise vbObjectError + 4501, SRC, _
+                        "FindRows nije vratio kolekciju za OtkupID=" & otkupID
             End If
+
+            If otkRows.count <> 1 Then
+                Err.Raise vbObjectError + 4502, SRC, _
+                        "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & _
+                        otkupID & "; Count=" & CStr(otkRows.count)
+            End If
+
+            RequireUpdateCell TBL_OTKUP, otkRows(1), _
+                            COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
+
+            linked = linked + 1
         End If
 
 NextOtkup:
@@ -208,7 +259,7 @@ NextOtkup:
 
 EH:
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.Description
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 Private Function BuildAutoLinkKey(ByVal stanicaID As Variant, _
