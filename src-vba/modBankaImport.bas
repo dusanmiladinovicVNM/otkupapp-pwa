@@ -3,13 +3,13 @@ Option Explicit
 'TODO: Matematische prüfen der Korrektheit der Auszug selber und prüfung ps+saldo=konacno stanje, und falls einige Izvodi vermisst sind in getverwaisteDokumente
 Public Sub ImportBankaInbox_TX()
     Dim tx As clsTransaction
-    
+
     On Error GoTo EH
-    
-    EnsureFolderExists APP_BANKA_INBOX
-    EnsureFolderExists APP_BANKA_PROCESSED
-    EnsureFolderExists APP_BANKA_ERROR
-    
+
+    EnsureFolderExists GetBankaInboxPath()
+    EnsureFolderExists GetBankaProcessedPath()
+    EnsureFolderExists GetBankaErrorPath()
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_BANKA_IMPORT
@@ -17,33 +17,46 @@ Public Sub ImportBankaInbox_TX()
     ImportBankaInbox
 
     tx.CommitTx
+
     Exit Sub
-    
+
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    
     LogErr "ImportBankaInbox_TX"
+    
     If Not tx Is Nothing Then
         On Error Resume Next
         tx.RollbackTx
         On Error GoTo 0
     End If
-    Err.Raise Err.Number, "ImportBankaInbox_TX", Err.Description
+    
+    Err.Raise errNum, "ImportBankaInbox_TX", errDesc
 End Sub
 
 Public Sub ImportBankaInbox()
     Dim files As Collection
     Dim fileName As Variant
     Dim fullPath As String
-    
+    Dim inboxPath As String
+
+    inboxPath = GetBankaInboxPath()
+
     Set files = New Collection
-    
-    fileName = Dir$(APP_BANKA_INBOX & "\*.pdf")
+
+    fileName = Dir$(inboxPath & "\*.pdf")
     Do While fileName <> ""
         files.Add CStr(fileName)
         fileName = Dir$
     Loop
-    
+
     For Each fileName In files
-        fullPath = APP_BANKA_INBOX & "\" & CStr(fileName)
+        fullPath = inboxPath & "\" & CStr(fileName)
         ImportOnePdfIntoBankaImport fullPath
     Next fileName
 End Sub
@@ -60,29 +73,29 @@ Public Sub ImportOnePdfIntoBankaImport(ByVal pdfPath As String)
     txt = ExtractTextFromPdf(pdfPath)
     
     If Trim$(txt) = "" Then
-        MoveFileSafe pdfPath, APP_BANKA_ERROR & "\" & fileName
+        MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
         Exit Sub
     End If
     
     parsed = ParseBankaIzvodForImport(txt, fileName)
     
     If IsEmpty(parsed) Then
-        MoveFileSafe pdfPath, APP_BANKA_ERROR & "\" & fileName
+        MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
         Exit Sub
     End If
     
     savedCount = SaveBankaImportRows(parsed)
     
-    MoveFileSafe pdfPath, APP_BANKA_PROCESSED & "\" & fileName
+    MoveFileSafe pdfPath, GetBankaProcessedPath() & "\" & fileName
     Exit Sub
     
 EH:
     LogErr "ImportOnePdfIntoBankaImport_TX"
     On Error Resume Next
-    MoveFileSafe pdfPath, APP_BANKA_ERROR & "\" & fileName
+    MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
     On Error GoTo 0
     
-    Err.Raise Err.Number, "ImportOnePdfIntoBankaImport", Err.Description
+    Err.Raise Err.Number, "ImportOnePdfIntoBankaImport", Err.description
 End Sub
 
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
@@ -397,4 +410,16 @@ Private Function GetUniqueTargetPath(ByVal targetPath As String) As String
         End If
         n = n + 1
     Loop
+End Function
+
+Private Function GetBankaInboxPath() As String
+    GetBankaInboxPath = GetLocalConfigValue("BANKA_INBOX_PATH", APP_BANKA_INBOX)
+End Function
+
+Private Function GetBankaProcessedPath() As String
+    GetBankaProcessedPath = GetLocalConfigValue("BANKA_PROCESSED_PATH", APP_BANKA_PROCESSED)
+End Function
+
+Private Function GetBankaErrorPath() As String
+    GetBankaErrorPath = GetLocalConfigValue("BANKA_ERROR_PATH", APP_BANKA_ERROR)
 End Function
