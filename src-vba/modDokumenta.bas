@@ -996,7 +996,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                       vozacID, newID, DOK_TIP_PRIJEMNICA
     End If
 
-    RelinkFakturaStavke newID, brojPrij
+    RelinkFakturaStavke newID, brojPrij, klasa
 
     SavePrijemnica = newID
     Exit Function
@@ -1751,7 +1751,8 @@ EH:
 End Function
 
 Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
-                               ByVal brojPrijemnice As String)
+                               ByVal brojPrijemnice As String, _
+                               Optional ByVal klasaFilter As String = "")
     ' Sucht verwaiste FakturaStavke die auf eine stornierte Prijemnica
     ' mit gleichem BrojPrijemnice zeigen, und verlinkt sie auf die neue.
     On Error GoTo EH
@@ -1781,11 +1782,14 @@ Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
     Dim oldPrijID As String
     Dim oldBroj As String
     Dim fakID As String
-    Dim newPrijRows As Collection
 
     For i = 1 To UBound(stavkeData, 1)
+    
         Dim stavkaKlasa As String
         stavkaKlasa = Trim$(NzToText(stavkeData(i, colFsKlasa)))
+        If Len(Trim$(klasaFilter)) > 0 Then
+            If UCase$(stavkaKlasa) <> UCase$(Trim$(klasaFilter)) Then GoTo NextStavka
+        End If
 
         If Trim$(NzToText(stavkeData(i, colOsir))) = "" Then GoTo NextStavka
 
