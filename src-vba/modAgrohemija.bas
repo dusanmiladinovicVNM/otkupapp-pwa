@@ -1,4 +1,3 @@
-Attribute VB_Name = "modAgrohemija"
 Option Explicit
 
 Public Function GetParceleByKooperant(ByVal kooperantID As String) As Variant
@@ -13,18 +12,14 @@ Public Function GetParceleByKooperant(ByVal kooperantID As String) As Variant
     Dim colKoop As Long, colID As Long, colKat As Long
     Dim colOpstina As Long, colKultura As Long, colPovrsina As Long
 
-    colID = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
-    colKoop = GetColumnIndex(TBL_PARCELE, COL_PAR_KOOP)
-    colKat = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ)
-    colOpstina = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_OPSTINA)
-    colKultura = GetColumnIndex(TBL_PARCELE, COL_PAR_KULTURA)
-    colPovrsina = GetColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA)
+    Const SRC As String = "GetParceleByKooperant"
 
-    If colID = 0 Or colKoop = 0 Or colKat = 0 Or colOpstina = 0 Or _
-       colKultura = 0 Or colPovrsina = 0 Then
-        GetParceleByKooperant = Empty
-        Exit Function
-    End If
+    colID = RequireColumnIndex(TBL_PARCELE, COL_PAR_ID, SRC)
+    colKoop = RequireColumnIndex(TBL_PARCELE, COL_PAR_KOOP, SRC)
+    colKat = RequireColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ, SRC)
+    colOpstina = RequireColumnIndex(TBL_PARCELE, COL_PAR_KAT_OPSTINA, SRC)
+    colKultura = RequireColumnIndex(TBL_PARCELE, COL_PAR_KULTURA, SRC)
+    colPovrsina = RequireColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA, SRC)
 
     Dim count As Long, i As Long
 
@@ -90,6 +85,14 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
                              Optional ByVal dobavljacID As String = "", _
                              Optional ByVal overrideCena As Variant) As String
     On Error GoTo EH
+    
+    Call ValidateMagacinInput( _
+        datum:=datum, _
+        artikalID:=artikalID, _
+        tip:=tip, _
+        kolicina:=kolicina, _
+        kooperantID:=kooperantID, _
+        dobavljacID:=dobavljacID)
 
     Dim newID As String
     newID = GetNextID(TBL_MAGACIN, COL_MAG_ID, "MAG-")
@@ -113,10 +116,12 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
             cena = CDbl(cenaStr)
         End If
     End If
-
-    If kolicina <= 0 Then
-        SaveMagacin = ""
-        Exit Function
+    
+    If tip = MAG_IZLAZ Then
+        If GetArtikalStanje(artikalID) < kolicina Then
+            Err.Raise vbObjectError + 4205, "SaveMagacin", _
+                    "Nedovoljno stanje za artikal " & artikalID
+        End If
     End If
 
     Dim vrednost As Double
@@ -137,6 +142,8 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
 
 EH:
     LogErr "SaveMagacin"
+    Debug.Print "SaveMagacin failed. Err=" & Err.Number & _
+                " Desc=" & Err.description
     SaveMagacin = ""
 End Function
 
@@ -165,24 +172,76 @@ Public Function SaveMagacin_TX(ByVal datum As Date, ByVal artikalID As String, _
                                      kooperantID, parcelaID, brojDok, _
                                      napomena, dobavljacID, overrideCena)
     End If
-
+    
     If SaveMagacin_TX = "" Then
-        tx.RollbackTx
+        Err.Raise vbObjectError + 4210, "SaveMagacin_TX", _
+          "SaveMagacin nije uspeo. Tip=" & tip & _
+          "; ArtikalID=" & artikalID & _
+          "; Kolicina=" & CStr(kolicina)
     Else
         tx.CommitTx
+
+        On Error Resume Next
+        Monitor_Event _
+            eventType:="MAGACIN_SAVE_SUCCESS", _
+            severity:="INFO", _
+            message:="Magacin transaction saved. Tip=" & tip & _
+                    "; ArtikalID=" & artikalID & _
+                    "; Kolicina=" & CStr(kolicina), _
+            userId:="Operator", _
+            moduleName:="modAgrohemija", _
+            procedureName:="SaveMagacin_TX", _
+            entityType:="Magacin", _
+            entityId:=SaveMagacin_TX, _
+            correlationId:=SaveMagacin_TX
+        On Error GoTo 0
     End If
 
     Set tx = Nothing
     Exit Function
 
 EH:
+
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    
     LogErr "SaveMagacin_TX"
 
     On Error Resume Next
+
+    Monitor_Error _
+        moduleName:="modAgrohemija", _
+        procedureName:="SaveMagacin_TX", _
+        entityType:="Magacin", _
+        entityId:=SaveMagacin_TX, _
+        correlationId:=brojDok, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="MAGACIN_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="Magacin transaction failed. Tip=" & tip & _
+             "; ArtikalID=" & artikalID & _
+             "; Kolicina=" & CStr(kolicina) & _
+             "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modAgrohemija", _
+        procedureName:="SaveMagacin_TX", _
+        entityType:="Magacin", _
+        entityId:=SaveMagacin_TX, _
+        correlationId:=brojDok
+
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-
-    MsgBox "Greška pri unosu magacina, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    
+    MsgBox "Greška pri unosu magacina, promene vracene: " & errDesc, vbCritical, APP_NAME
     SaveMagacin_TX = ""
 End Function
 
@@ -201,9 +260,11 @@ Public Function GetMagacinStanje() As Variant
     End If
     
     Dim colArt As Long, colTip As Long, colKol As Long
-    colArt = GetColumnIndex(TBL_MAGACIN, COL_MAG_ARTIKAL)
-    colTip = GetColumnIndex(TBL_MAGACIN, COL_MAG_TIP)
-    colKol = GetColumnIndex(TBL_MAGACIN, COL_MAG_KOLICINA)
+    Const SRC As String = "GetMagacinStanje"
+
+    colArt = RequireColumnIndex(TBL_MAGACIN, COL_MAG_ARTIKAL, SRC)
+    colTip = RequireColumnIndex(TBL_MAGACIN, COL_MAG_TIP, SRC)
+    colKol = RequireColumnIndex(TBL_MAGACIN, COL_MAG_KOLICINA, SRC)
     
     ' Dict: ArtikalID ? Array(Ulaz, Izlaz)
     Dim dict As Object
@@ -264,10 +325,12 @@ Public Function ReportIzdavanjePoKooperantu(Optional ByVal datumOd As Date = 0, 
     End If
     
     Dim colKoop As Long, colTip As Long, colVrednost As Long, colDat As Long
-    colKoop = GetColumnIndex(TBL_MAGACIN, COL_MAG_KOOP)
-    colTip = GetColumnIndex(TBL_MAGACIN, COL_MAG_TIP)
-    colVrednost = GetColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST)
-    colDat = GetColumnIndex(TBL_MAGACIN, COL_MAG_DATUM)
+    Const SRC As String = "ReportIzdavanjePoKooperantu"
+
+    colKoop = RequireColumnIndex(TBL_MAGACIN, COL_MAG_KOOP, SRC)
+    colTip = RequireColumnIndex(TBL_MAGACIN, COL_MAG_TIP, SRC)
+    colVrednost = RequireColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST, SRC)
+    colDat = RequireColumnIndex(TBL_MAGACIN, COL_MAG_DATUM, SRC)
     
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
@@ -277,11 +340,17 @@ Public Function ReportIzdavanjePoKooperantu(Optional ByVal datumOd As Date = 0, 
         If CStr(data(i, colTip)) <> MAG_IZLAZ Then GoTo NextRow
         If CStr(data(i, colKoop)) = "" Then GoTo NextRow
         
-        If datumOd > 0 Then
+        If datumOd > 0 Or datumDo > 0 Then
             If IsDate(data(i, colDat)) Then
-                If CDate(data(i, colDat)) < datumOd Or CDate(data(i, colDat)) > datumDo Then GoTo NextRow
+                    Dim d As Date
+                    d = CDate(data(i, colDat))
+
+                    If datumOd > 0 And d < datumOd Then GoTo NextRow
+                    If datumDo > 0 And d > datumDo Then GoTo NextRow
+                Else
+                    GoTo NextRow
+                End If
             End If
-        End If
         
         Dim koopID As String
         koopID = CStr(data(i, colKoop))
@@ -320,6 +389,10 @@ NextRow:
     ReportIzdavanjePoKooperantu = result
 End Function
 
+Public Function ReportStanjePoDobavljacu() As Variant
+    ReportStanjePoDobavljacu = ReportStanjePoDoabvljacu()
+End Function
+
 Public Function ReportStanjePoDoabvljacu() As Variant
     Dim data As Variant
     data = GetTableData(TBL_MAGACIN)
@@ -334,9 +407,11 @@ Public Function ReportStanjePoDoabvljacu() As Variant
     End If
     
     Dim colDobavljac As Long, colTip As Long, colVrednost As Long
-    colDobavljac = GetColumnIndex(TBL_MAGACIN, COL_MAG_DOBAVLJAC)
-    colTip = GetColumnIndex(TBL_MAGACIN, COL_MAG_TIP)
-    colVrednost = GetColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST)
+    Const SRC As String = "ReportStanjePoDoabvljacu"
+
+    colDobavljac = RequireColumnIndex(TBL_MAGACIN, COL_MAG_DOBAVLJAC, SRC)
+    colTip = RequireColumnIndex(TBL_MAGACIN, COL_MAG_TIP, SRC)
+    colVrednost = RequireColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST, SRC)
     
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
@@ -386,9 +461,11 @@ Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
     If IsEmpty(data) Then Exit Function
     
     Dim colKoop As Long, colTip As Long, colVrednost As Long
-    colKoop = GetColumnIndex(TBL_MAGACIN, COL_MAG_KOOP)
-    colTip = GetColumnIndex(TBL_MAGACIN, COL_MAG_TIP)
-    colVrednost = GetColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST)
+    Const SRC As String = "GetAgrohemijaDug"
+
+    colKoop = RequireColumnIndex(TBL_MAGACIN, COL_MAG_KOOP, SRC)
+    colTip = RequireColumnIndex(TBL_MAGACIN, COL_MAG_TIP, SRC)
+    colVrednost = RequireColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST, SRC)
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -401,4 +478,44 @@ Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
     Next i
 End Function
 
+Private Sub ValidateMagacinInput(ByVal datum As Date, _
+                                 ByVal artikalID As String, _
+                                 ByVal tip As String, _
+                                 ByVal kolicina As Double, _
+                                 Optional ByVal kooperantID As String = "", _
+                                 Optional ByVal dobavljacID As String = "")
+    Const SRC As String = "ValidateMagacinInput"
 
+    If Len(Trim$(artikalID)) = 0 Then
+        Err.Raise vbObjectError + 4201, SRC, "ArtikalID je obavezan."
+    End If
+
+    If tip <> MAG_ULAZ And tip <> MAG_IZLAZ Then
+        Err.Raise vbObjectError + 4202, SRC, "Nepoznat tip magacina: " & tip
+    End If
+
+    If kolicina <= 0 Then
+        Err.Raise vbObjectError + 4203, SRC, "Kolicina mora biti veca od 0."
+    End If
+
+    If tip = MAG_IZLAZ And Len(Trim$(kooperantID)) = 0 Then
+        Err.Raise vbObjectError + 4204, SRC, "KooperantID je obavezan za izlaz."
+    End If
+End Sub
+
+Private Function GetArtikalStanje(ByVal artikalID As String) As Double
+    Dim stanje As Variant
+    stanje = GetMagacinStanje()
+
+    If IsEmpty(stanje) Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(stanje, 1)
+        If CStr(stanje(i, 1)) = artikalID Then
+            If IsNumeric(stanje(i, 7)) Then
+                GetArtikalStanje = CDbl(stanje(i, 7))
+            End If
+            Exit Function
+        End If
+    Next i
+End Function
