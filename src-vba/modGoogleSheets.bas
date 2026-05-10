@@ -49,6 +49,26 @@ Private Function GoogleHttpBodyForLog(ByVal responseText As String) As String
     GoogleHttpBodyForLog = Left$(CStr(responseText), 1000)
 End Function
 
+Private Function IsTwoDimArray(ByVal value As Variant) As Boolean
+    On Error GoTo EH
+
+    Dim lb1 As Long
+    Dim ub1 As Long
+    Dim lb2 As Long
+    Dim ub2 As Long
+
+    lb1 = LBound(value, 1)
+    ub1 = UBound(value, 1)
+    lb2 = LBound(value, 2)
+    ub2 = UBound(value, 2)
+
+    IsTwoDimArray = (ub1 >= lb1 And ub2 >= lb2)
+    Exit Function
+
+EH:
+    IsTwoDimArray = False
+End Function
+
 ' ============================================================
 ' PUBLIC — Write
 ' ============================================================
@@ -84,6 +104,12 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
         Exit Function
     End If
 
+    If Not IsTwoDimArray(data) Then
+        LogError "WriteSheetData", "data mora biti 2D array."
+        WriteSheetData = False
+        Exit Function
+    End If
+
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
         LogError "WriteSheetData", "Kein Access Token"
@@ -107,8 +133,7 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
           "/values/" & UrlEncode(tabName) & "!A1" & _
           "?valueInputOption=RAW"
     
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    http.SetTimeouts 10000, 10000, 30000, 30000
+    Set http = CreateGoogleHttpRequest("WriteSheetData")
     
     http.Open "PUT", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
@@ -119,7 +144,9 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
         LogInfo "WriteSheetData", tabName & ": " & UBound(data, 1) & " rows written"
         WriteSheetData = True
     Else
-        LogError "WriteSheetData", "HTTP " & http.status & ": " & http.responseText, http.status
+        LogError "WriteSheetData", _
+         "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
+         http.status
         WriteSheetData = False
     End If
     
@@ -587,15 +614,26 @@ EH:
 End Function
 
 Private Function GetFirstParent(ByVal json As String) As String
-    ' Extrahiert erste Parent-ID aus "parents":["xxx"]
-    Dim p As Long, startPos As Long, endPos As Long
-    p = InStr(json, """parents""")
+    Dim p As Long
+    Dim bracketPos As Long
+    Dim quoteStart As Long
+    Dim quoteEnd As Long
+
+    p = InStr(1, json, """parents""", vbTextCompare)
     If p = 0 Then Exit Function
-    startPos = InStr(p, json, """") + 1
-    startPos = InStr(startPos, json, "[") + 1
-    startPos = InStr(startPos, json, """") + 1
-    endPos = InStr(startPos, json, """")
-    If endPos > startPos Then GetFirstParent = Mid$(json, startPos, endPos - startPos)
+
+    bracketPos = InStr(p, json, "[")
+    If bracketPos = 0 Then Exit Function
+
+    quoteStart = InStr(bracketPos, json, """")
+    If quoteStart = 0 Then Exit Function
+
+    quoteStart = quoteStart + 1
+    quoteEnd = InStr(quoteStart, json, """")
+
+    If quoteEnd > quoteStart Then
+        GetFirstParent = Mid$(json, quoteStart, quoteEnd - quoteStart)
+    End If
 End Function
 
 ' ============================================================
@@ -605,8 +643,10 @@ End Function
 Private Function BuildValuesJson(ByVal data As Variant) As String
     ' Baut JSON body für values:update API
     ' {"values":[["a","b"],["c","d"]]}
-    ' ALLES als String schreiben — Google Sheets erkennt Zahlen/Daten automatisch
-    ' Verhindert Oktal-Problem bei führenden Nullen (Telefonnummern, BPG etc.)
+    ' ALLES als String schreiben uz valueInputOption=RAW.
+    ' Ovo cuva vodece nule i ID vrednosti kao tekst.
+    ' Ako treba Google parsiranje brojeva/datuma, koristiti USER_ENTERED
+    ' i selektivno emitovati numericke JSON vrednosti.
     
     Dim sb As String
     Dim i As Long, j As Long
