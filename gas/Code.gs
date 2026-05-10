@@ -561,11 +561,16 @@ function doPost(e) {
     }
     // === KRAJ logClientError ===
 
+    var publicMonitoringResponse = handlePublicMonitoringAction(data);
+    if (publicMonitoringResponse) return jsonResponse(publicMonitoringResponse);
+
     if (!validateToken(data.token)) {
       return jsonResponse({ success: false, error: 'Neautorizovan pristup', code: 401 });
     }
 
     const tokenData = getTokenData(data.token);
+    var monitoringResponse = handleMonitoringAction(data, tokenData);
+    if (monitoringResponse) return jsonResponse(monitoringResponse);
     if (!tokenData) {
       return jsonResponse({ success: false, error: 'Neautorizovan pristup', code: 401 });
     }
