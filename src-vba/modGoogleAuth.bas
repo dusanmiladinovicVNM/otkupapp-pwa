@@ -107,16 +107,25 @@ Public Function GetAccessToken() As String
     If IsTokenExpired(expiresAt) Then
         If RefreshAccessToken() Then
             GetAccessToken = GetConfigValue("GOOGLE_ACCESS_TOKEN")
+
+            If Len(Trim$(GetAccessToken)) = 0 Then
+                LogError "GetAccessToken", _
+                        "RefreshAccessToken returned True, but GOOGLE_ACCESS_TOKEN is empty."
+            End If
         Else
+            LogError "GetAccessToken", "RefreshAccessToken failed."
             GetAccessToken = ""
-        End If
-    Else
-        GetAccessToken = accessToken
     End If
+Else
+    GetAccessToken = accessToken
+End If
 End Function
 
 Public Function IsGoogleAuthConfigured() As Boolean
-    IsGoogleAuthConfigured = Len(Trim$(GetConfigValue("GOOGLE_REFRESH_TOKEN"))) > 0
+    IsGoogleAuthConfigured = _
+        Len(Trim$(GetConfigValue("GOOGLE_CLIENT_ID"))) > 0 And _
+        Len(Trim$(GetConfigValue("GOOGLE_CLIENT_SECRET"))) > 0 And _
+        Len(Trim$(GetConfigValue("GOOGLE_REFRESH_TOKEN"))) > 0
 End Function
 
 ' ============================================================
@@ -129,6 +138,11 @@ Private Function ExchangeCodeForTokens(ByVal authCode As String) As Boolean
     Dim responseText As String
     
     On Error GoTo EH
+    
+    If Not RequireGoogleOAuthConfig("ExchangeCodeForTokens") Then
+        ExchangeCodeForTokens = False
+        Exit Function
+    End If
     
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 10000, 10000, 30000, 30000
@@ -191,6 +205,11 @@ Private Function RefreshAccessToken() As Boolean
     Dim refreshToken As String
     
     On Error GoTo EH
+    
+    If Not RequireGoogleOAuthConfig("RefreshAccessToken") Then
+        RefreshAccessToken = False
+        Exit Function
+    End If
     
     refreshToken = GetConfigValue("GOOGLE_REFRESH_TOKEN")
     If Len(Trim$(refreshToken)) = 0 Then
@@ -255,6 +274,23 @@ End Function
 ' ============================================================
 ' PRIVATE — Helpers
 ' ============================================================
+
+Private Function RequireGoogleOAuthConfig(ByVal sourceName As String) As Boolean
+    If Len(Trim$(GetConfigValue("GOOGLE_CLIENT_ID"))) = 0 Then
+        LogError sourceName, "GOOGLE_CLIENT_ID nije konfigurisan."
+        RequireGoogleOAuthConfig = False
+        Exit Function
+    End If
+
+    If Len(Trim$(GetConfigValue("GOOGLE_CLIENT_SECRET"))) = 0 Then
+        LogError sourceName, "GOOGLE_CLIENT_SECRET nije konfigurisan."
+        RequireGoogleOAuthConfig = False
+        Exit Function
+    End If
+
+    RequireGoogleOAuthConfig = True
+End Function
+
 
 Private Function RedactGoogleSecrets(ByVal textValue As String) As String
     Dim result As String
