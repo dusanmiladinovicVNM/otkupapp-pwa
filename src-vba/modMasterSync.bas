@@ -849,6 +849,10 @@ NextImportRow:
     Exit Sub
 
 EH:
+    MarkPWAFatalSyncError "ImportOneOTKSheet", _
+        "Unexpected error while importing OTK sheet=" & sheetName & _
+        "; Error=" & Err.description
+
     LogErr "ImportOneOTKSheet", "Sheet: " & sheetName
     outErrors = outErrors + 1
 End Sub
@@ -972,7 +976,10 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     vozacID = Trim$(CStr(data(row, GS_VOZAC_ID)))
     
     If Len(klasa) = 0 Then klasa = "I"
-    If Len(tipAmb) = 0 Then tipAmb = "12/1"
+    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise vbObjectError + 8101, "ImportRowToTblOtkup", _
+                "TipAmbalaze je obavezan kada je KolAmbalaze > 0. ClientRecordID=" & clientRecordID
+    End If
     
     ' Datum parsen
     On Error Resume Next
@@ -1033,8 +1040,20 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
     LogErr "ImportRowToTblOtkup", "ClientRecordID: " & clientRecordID
-    ImportRowToTblOtkup = ""
+    On Error GoTo 0
+
+    Err.Raise errNum, "ImportRowToTblOtkup", _
+              "Source=" & errSrc & " | " & errDesc
 End Function
 
 ' ============================================================
@@ -1246,7 +1265,13 @@ Private Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Bool
     Set sheetIDs = New Collection
     Set sheetNames = New Collection
     
-    Call FindVOZSheets(folderID, sheetIDs, sheetNames)
+    If Not FindVOZSheets(folderID, sheetIDs, sheetNames) Then
+        MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", _
+            "FindVOZSheets failed. Drive list could not be loaded."
+        If showMessages Then MsgBox "Google Drive lista VOZ fajlova nije ucitana. Proveri log.", vbCritical, APP_NAME
+        ImportZbirneFromPWA_Core = False
+        Exit Function
+    End If
     
     If sheetIDs.count = 0 Then
         If showMessages Then MsgBox "Nema VOZ-* fajlova u PWA folderu.", vbInformation, APP_NAME
@@ -1327,9 +1352,9 @@ End Sub
 ' PRIVATE — Find VOZ-* Sheets in Folder
 ' ============================================================
 
-Private Sub FindVOZSheets(ByVal folderID As String, _
-                          ByRef outIDs As Collection, _
-                          ByRef outNames As Collection)
+Private Function FindVOZSheets(ByVal folderID As String, _
+                               ByRef outIDs As Collection, _
+                               ByRef outNames As Collection) As Boolean
     Dim accessToken As String
     Dim url As String
     Dim http As Object
@@ -1337,7 +1362,7 @@ Private Sub FindVOZSheets(ByVal folderID As String, _
     Dim responseText As String
     
     accessToken = GetAccessToken()
-    If Len(accessToken) = 0 Then Exit Sub
+    If Len(accessToken) = 0 Then Exit Function
     
     query = "name contains 'VOZ-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
             " and '" & folderID & "' in parents and trashed=false"
@@ -1356,7 +1381,7 @@ Private Sub FindVOZSheets(ByVal folderID As String, _
     
     If http.status <> 200 Then
         LogError "FindVOZSheets", "HTTP " & http.status & ": " & http.responseText, http.status
-        Exit Sub
+        Exit Function
     End If
     
     responseText = http.responseText
@@ -1365,7 +1390,7 @@ Private Sub FindVOZSheets(ByVal folderID As String, _
     Call ParseFileListVOZ(responseText, outIDs, outNames)
     
     LogInfo "FindVOZSheets", "Gefunden: " & outIDs.count & " VOZ-Sheets"
-End Sub
+End Function
     
 
 Private Sub ParseFileListVOZ(ByVal json As String, _
@@ -1421,6 +1446,13 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
         Exit Sub
     End If
     
+    If Not ValidateVOZSheetHeader(data, sheetName) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneVOZSheet", _
+            "Import aborted because VOZ header schema is invalid. Sheet=" & sheetName
+        Exit Sub
+    End If
+    
     If UBound(data, 1) < 2 Then
         LogInfo "ImportOneVOZSheet", "Keine Daten in: " & sheetName
         Exit Sub
@@ -1464,7 +1496,12 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
                         If Len(brojZbirne) > 0 Then
                             Dim otkupRecordIDs As String
                             otkupRecordIDs = Trim$(CStr(Nz(data(i, VS_OTKUP_RECORD_IDS), "")))
-                            Call LinkZbirnaToOtkupAndOtpremnica(brojZbirne, otkupRecordIDs)
+                            If Not LinkZbirnaToOtkupAndOtpremnica(brojZbirne, otkupRecordIDs) Then
+                                MarkPWAFatalSyncError "ImportOneVOZSheet", _
+                                    "LinkZbirnaToOtkupAndOtpremnica failed. BrojZbirne=" & brojZbirne
+                                outErrors = outErrors + 1
+                                GoTo NextImportRow
+                            End If
                         End If
                         
                         statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newZbirnaID, brojZbirne)
@@ -1685,8 +1722,8 @@ End Function
 ' PRIVATE — Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
 ' ============================================================
 
-Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
-                                            ByVal otkupRecordIDs As String)
+Private Function LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
+                                                ByVal otkupRecordIDs As String) As Boolean
     ' otkupRecordIDs = comma-separated ClientRecordIDs iz VOZ sheeta
     ' Flow:
     '   1. Za svaki ClientRecordID -> nadji OtkupID u tblOtkup
@@ -1694,7 +1731,13 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
     '   3. Iz tog otkupa citaj OtpremnicaID
     '   4. Postavi tblOtpremnica.BrojZbirne = brojZbirne (ako vec nije)
     
-    If Len(Trim$(otkupRecordIDs)) = 0 Then Exit Sub
+    If Len(Trim$(brojZbirne)) = 0 Then Exit Function
+        If Len(Trim$(otkupRecordIDs)) = 0 Then
+        LinkZbirnaToOtkupAndOtpremnica = True
+        Exit Function
+    End If
+    
+    If Len(Trim$(otkupRecordIDs)) = 0 Then Exit Function
     
     Dim crIDs() As String
     crIDs = Split(otkupRecordIDs, ",")
@@ -1702,7 +1745,7 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
     ' Ucitaj tblOtkup jednom
     Dim otkData As Variant
     otkData = GetTableData(TBL_OTKUP)
-    If IsEmpty(otkData) Then Exit Sub
+    If IsEmpty(otkData) Then Exit Function
     
     Dim colCRID As Long, colOtkID As Long, colOtkBrZbr As Long, colOtkOtpID As Long
     colCRID = GetColumnIndex(TBL_OTKUP, "ClientRecordID")
@@ -1731,10 +1774,15 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
                 
                 Dim otkRows As Collection
                 Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-                If otkRows.count > 0 Then
-                    RequireUpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne, _
-                    "LinkZbirnaToOtkupAndOtpremnica"
+                If otkRows Is Nothing Or otkRows.count <> 1 Then
+                    LogError "LinkZbirnaToOtkupAndOtpremnica", _
+                        "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & otkupID
+                    LinkZbirnaToOtkupAndOtpremnica = False
+                    Exit Function
                 End If
+
+                RequireUpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne, _
+                                "LinkZbirnaToOtkupAndOtpremnica"
                 
                 ' 2. Postavi BrojZbirne na otpremnici (ako postoji i ako vec nije)
                 Dim otpID As String
@@ -1758,9 +1806,10 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
 NextCRID:
     Next c
     
+    LinkZbirnaToOtkupAndOtpremnica = True
     LogInfo "LinkZbirnaToOtkupAndOtpremnica", "BrojZbirne=" & brojZbirne & _
             " linked " & (UBound(crIDs) + 1) & " otkupa, " & updatedOtp.count & " otpremnica"
-End Sub
+End Function
 
 ' ============================================================
 ' PRIVATE — Helper: BrojZbirne aus ZbirnaID
@@ -1904,6 +1953,82 @@ Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date
     Else
         GenerateBrojZbirne = baza & "-" & seq
     End If
+End Function
+
+Private Function ValidateVOZSheetHeader(ByVal data As Variant, _
+                                        ByVal sheetName As String) As Boolean
+    Const SOURCE As String = "ValidateVOZSheetHeader"
+
+    On Error GoTo EH
+
+    If IsEmpty(data) Then
+        LogError SOURCE, "Sheet data is Empty: " & sheetName
+        ValidateVOZSheetHeader = False
+        Exit Function
+    End If
+
+    If UBound(data, 1) < 1 Then
+        LogError SOURCE, "Sheet nema header row: " & sheetName
+        ValidateVOZSheetHeader = False
+        Exit Function
+    End If
+
+    If UBound(data, 2) < 20 Then
+        LogError SOURCE, _
+                 "VOZ schema drift: premalo kolona u sheetu " & sheetName & _
+                 ". Expected=20, Actual=" & CStr(UBound(data, 2))
+        ValidateVOZSheetHeader = False
+        Exit Function
+    End If
+
+    If Not RequireVOZHeaderValue(data, sheetName, VS_CLIENT_RECORD_ID, "ClientRecordID") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_SERVER_RECORD_ID, "ServerRecordID") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_CREATED_AT, "CreatedAtClient") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_UPDATED_AT_CLIENT, "UpdatedAtClient") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_UPDATED_AT_SERVER, "UpdatedAtServer") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_SYNC_STATUS, "SyncStatus") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_VOZAC_ID, "VozacID") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_DATUM, "Datum") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_KUPAC_ID, "KupacID") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_KUPAC_NAME, "KupacName") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_VRSTA, "VrstaVoca") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_SORTA, "SortaVoca") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_KOLICINA_KL_I, "KolicinaKlI") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_KOLICINA_KL_II, "KolicinaKlII") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_TIP_AMB, "TipAmbalaze") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_KOL_AMB, "KolAmbalaze") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_KLASA, "Klasa") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_OTKUP_RECORD_IDS, "OtkupRecordIDs") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_RECEIVED_AT, "ReceivedAt") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_BROJ_ZBIRNE, "BrojZbirne") Then Exit Function
+
+    ValidateVOZSheetHeader = True
+    Exit Function
+
+EH:
+    LogErr SOURCE, "Sheet: " & sheetName
+    ValidateVOZSheetHeader = False
+End Function
+
+Private Function RequireVOZHeaderValue(ByVal data As Variant, _
+                                       ByVal sheetName As String, _
+                                       ByVal colIndex As Long, _
+                                       ByVal expectedHeader As String) As Boolean
+    Dim actualHeader As String
+
+    actualHeader = Trim$(CStr(data(1, colIndex)))
+
+    If StrComp(actualHeader, expectedHeader, vbBinaryCompare) <> 0 Then
+        LogError "ValidateVOZSheetHeader", _
+                 "VOZ schema drift in " & sheetName & _
+                 ". Col=" & CStr(colIndex) & _
+                 ", Expected='" & expectedHeader & "'" & _
+                 ", Actual='" & actualHeader & "'"
+        RequireVOZHeaderValue = False
+        Exit Function
+    End If
+
+    RequireVOZHeaderValue = True
 End Function
 
 Private Function ExtractNumericVozacBroj(ByVal vozacID As String) As String
