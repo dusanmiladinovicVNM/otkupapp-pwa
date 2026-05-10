@@ -817,7 +817,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 Else
                     ' Import in tblOtkup
                     Dim newOtkupID As String
-                    newOtkupID = ImportRowToTblOtkup(data, i, clientRecordID)
+                    newOtkupID = ImportRowToTblOtkup_RowTX(data, i, clientRecordID)
                     If Len(newOtkupID) > 0 Then
                         statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newOtkupID)
                         outImported = outImported + 1
@@ -909,6 +909,25 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As S
         Exit Function
     End If
     
+    Dim kolAmb As Long
+    Dim tipAmb As String
+
+    tipAmb = Trim$(CStr(Nz(data(row, GS_TIP_AMB), "")))
+
+    On Error Resume Next
+    kolAmb = CLng(Nz(data(row, GS_KOL_AMB), 0))
+    On Error GoTo 0
+
+    If kolAmb < 0 Then
+        ValidatePWAOtkup = "KolAmbalaze < 0"
+        Exit Function
+    End If
+
+    If kolAmb > 0 And Len(tipAmb) = 0 Then
+        ValidatePWAOtkup = "TipAmbalaze missing while KolAmbalaze > 0"
+        Exit Function
+    End If
+    
     ValidatePWAOtkup = ""
 End Function
 
@@ -943,6 +962,36 @@ End Function
 ' ============================================================
 ' PRIVATE — Import Row
 ' ============================================================
+Private Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
+                                           ByVal row As Long, _
+                                           ByVal clientRecordID As String) As String
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    ImportRowToTblOtkup_RowTX = ImportRowToTblOtkup(data, row, clientRecordID)
+
+    If Len(Trim$(ImportRowToTblOtkup_RowTX)) = 0 Then
+        Err.Raise vbObjectError + 8301, "ImportRowToTblOtkup_RowTX", _
+                  "ImportRowToTblOtkup nije vratio OtkupID. ClientRecordID=" & clientRecordID
+    End If
+
+    tx.CommitTx
+    Exit Function
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr "ImportRowToTblOtkup_RowTX", "ClientRecordID=" & clientRecordID
+    On Error GoTo 0
+
+    ImportRowToTblOtkup_RowTX = ""
+End Function
 
 Private Function ImportRowToTblOtkup(ByVal data As Variant, _
                                      ByVal row As Long, _
@@ -976,10 +1025,6 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     vozacID = Trim$(CStr(data(row, GS_VOZAC_ID)))
     
     If Len(klasa) = 0 Then klasa = "I"
-    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 8101, "ImportRowToTblOtkup", _
-                "TipAmbalaze je obavezan kada je KolAmbalaze > 0. ClientRecordID=" & clientRecordID
-    End If
     
     ' Datum parsen
     On Error Resume Next
@@ -995,6 +1040,16 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     kolAmb = CLng(data(row, GS_KOL_AMB))
     On Error GoTo EH
     
+    If kolAmb < 0 Then
+        Err.Raise vbObjectError + 8100, "ImportRowToTblOtkup", _
+              "KolAmbalaze ne sme biti negativan. ClientRecordID=" & clientRecordID
+    End If
+
+    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise vbObjectError + 8101, "ImportRowToTblOtkup", _
+              "TipAmbalaze je obavezan kada je KolAmbalaze > 0. ClientRecordID=" & clientRecordID
+    End If
+    
     ' StanicaID aus Kooperant holen
     stanicaID = CStr(Nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     
@@ -1009,6 +1064,10 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     
     ' Neue ID
     newID = GetNextID(TBL_OTKUP, COL_OTK_ID, "OTK-")
+    If Len(Trim$(newID)) = 0 Then
+        Err.Raise vbObjectError + 8302, "ImportRowToTblOtkup", _
+              "GetNextID nije vratio OtkupID. ClientRecordID=" & clientRecordID
+    End If
     
     ' VozacID
     ' BrojDokumenta = "PWA:" & clientRecordID (für Duplikat-Check)
@@ -1127,7 +1186,7 @@ Private Function WriteBackSyncStatus(ByVal spreadsheetID As String, _
 
         ' F = SyncStatus
         body = body & "{""range"":""Sheet1!F" & CStr(rowNum) & """," & _
-               """values"":[[""" & JsonEscapeMasterSync(syncStatus) & """]]}"
+               """values"":[[""" & JsonEscape(syncStatus) & """]]}"
 
         ' B = ServerRecordID
         If UBound(update) >= 2 Then
@@ -1135,7 +1194,7 @@ Private Function WriteBackSyncStatus(ByVal spreadsheetID As String, _
 
             If Len(serverRecordID) > 0 Then
                 body = body & ",{""range"":""Sheet1!B" & CStr(rowNum) & """," & _
-                       """values"":[[""" & JsonEscapeMasterSync(serverRecordID) & """]]}"
+                       """values"":[[""" & JsonEscape(serverRecordID) & """]]}"
             End If
         End If
     Next i
@@ -1168,19 +1227,6 @@ Private Function WriteBackSyncStatus(ByVal spreadsheetID As String, _
 EH:
     LogErr SOURCE
     WriteBackSyncStatus = False
-End Function
-
-Private Function JsonEscapeMasterSync(ByVal value As String) As String
-    Dim result As String
-
-    result = CStr(value)
-    result = Replace(result, "\", "\\")
-    result = Replace(result, """", "\""")
-    result = Replace(result, vbCrLf, "\n")
-    result = Replace(result, vbCr, "\n")
-    result = Replace(result, vbLf, "\n")
-
-    JsonEscapeMasterSync = result
 End Function
 
 Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
@@ -1266,9 +1312,14 @@ Private Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Bool
     Set sheetNames = New Collection
     
     If Not FindVOZSheets(folderID, sheetIDs, sheetNames) Then
-        MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", _
-            "FindVOZSheets failed. Drive list could not be loaded."
-        If showMessages Then MsgBox "Google Drive lista VOZ fajlova nije ucitana. Proveri log.", vbCritical, APP_NAME
+        LogWarn "ImportZbirneFromPWA_Core", _
+            "FindVOZSheets failed. Drive list could not be loaded. Retry later."
+
+        If showMessages Then
+            MsgBox "Google Drive lista VOZ fajlova nije ucitana. Proveri konekciju i probaj ponovo.", _
+               vbExclamation, APP_NAME
+        End If
+
         ImportZbirneFromPWA_Core = False
         Exit Function
     End If
@@ -1355,41 +1406,63 @@ End Sub
 Private Function FindVOZSheets(ByVal folderID As String, _
                                ByRef outIDs As Collection, _
                                ByRef outNames As Collection) As Boolean
+    Const SOURCE As String = "FindVOZSheets"
+
     Dim accessToken As String
     Dim url As String
     Dim http As Object
     Dim query As String
     Dim responseText As String
-    
+
+    On Error GoTo EH
+
+    If Len(Trim$(folderID)) = 0 Then
+        LogError SOURCE, "folderID je prazan."
+        FindVOZSheets = False
+        Exit Function
+    End If
+
     accessToken = GetAccessToken()
-    If Len(accessToken) = 0 Then Exit Function
-    
+    If Len(accessToken) = 0 Then
+        LogError SOURCE, "Kein Access Token"
+        FindVOZSheets = False
+        Exit Function
+    End If
+
     query = "name contains 'VOZ-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
-            " and '" & folderID & "' in parents and trashed=false"
-    
+            " and '" & EscapeDriveQueryValueMasterSync(folderID) & "' in parents and trashed=false"
+
     url = "https://www.googleapis.com/drive/v3/files" & _
           "?q=" & UrlEncode(query) & _
           "&fields=files(id,name)" & _
           "&pageSize=100"
-    
+
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
     http.SetTimeouts 10000, 10000, 30000, 30000
-    
+
     http.Open "GET", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.Send
-    
+
+    responseText = CStr(http.responseText)
+
     If http.status <> 200 Then
-        LogError "FindVOZSheets", "HTTP " & http.status & ": " & http.responseText, http.status
+        LogError SOURCE, _
+                 "HTTP " & http.status & ": " & Left$(responseText, 1000), _
+                 http.status
+        FindVOZSheets = False
         Exit Function
     End If
-    
-    responseText = http.responseText
-    
-    ' Reuse ParseFileList ali filtrira VOZ- umesto OTK-
+
     Call ParseFileListVOZ(responseText, outIDs, outNames)
-    
-    LogInfo "FindVOZSheets", "Gefunden: " & outIDs.count & " VOZ-Sheets"
+
+    LogInfo SOURCE, "Gefunden: " & outIDs.count & " VOZ-Sheets"
+    FindVOZSheets = True
+    Exit Function
+
+EH:
+    LogErr SOURCE
+    FindVOZSheets = False
 End Function
     
 
@@ -1488,26 +1561,13 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
                     LogWarn "ImportOneVOZSheet", sheetName & " Row " & i & ": " & validationError
                 Else
                     Dim newZbirnaID As String
-                    newZbirnaID = ImportRowToTblZbirna(data, i, clientRecordID)
-                    If Len(newZbirnaID) > 0 Then
-                        ' Kaskadno povezivanje: Zbirna -> Otpremnice -> Otkupi
-                        Dim brojZbirne As String
-                        brojZbirne = GetBrojZbirneForID(newZbirnaID)
-                        If Len(brojZbirne) > 0 Then
-                            Dim otkupRecordIDs As String
-                            otkupRecordIDs = Trim$(CStr(Nz(data(i, VS_OTKUP_RECORD_IDS), "")))
-                            If Not LinkZbirnaToOtkupAndOtpremnica(brojZbirne, otkupRecordIDs) Then
-                                MarkPWAFatalSyncError "ImportOneVOZSheet", _
-                                    "LinkZbirnaToOtkupAndOtpremnica failed. BrojZbirne=" & brojZbirne
-                                outErrors = outErrors + 1
-                                GoTo NextImportRow
-                            End If
-                        End If
-                        
+                    Dim brojZbirne As String
+
+                    If ImportVOZRow_RowTX(data, i, clientRecordID, newZbirnaID, brojZbirne) Then
                         statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newZbirnaID, brojZbirne)
                         outImported = outImported + 1
                     Else
-                        statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":AppendRow failed", "")
+                        statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":Import/link failed", "")
                         outErrors = outErrors + 1
                     End If
                 End If
@@ -1535,6 +1595,57 @@ EH:
     outErrors = outErrors + 1
 End Sub
 
+Private Function ImportVOZRow_RowTX(ByVal data As Variant, _
+                                    ByVal row As Long, _
+                                    ByVal clientRecordID As String, _
+                                    ByRef outZbirnaID As String, _
+                                    ByRef outBrojZbirne As String) As Boolean
+    Dim tx As clsTransaction
+    Dim otkupRecordIDs As String
+
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    outZbirnaID = ImportRowToTblZbirna(data, row, clientRecordID)
+
+    If Len(Trim$(outZbirnaID)) = 0 Then
+        Err.Raise vbObjectError + 8401, "ImportVOZRow_RowTX", _
+                  "ImportRowToTblZbirna nije vratio ZbirnaID. ClientRecordID=" & clientRecordID
+    End If
+
+    outBrojZbirne = GetBrojZbirneForID(outZbirnaID)
+
+    If Len(Trim$(outBrojZbirne)) = 0 Then
+        Err.Raise vbObjectError + 8402, "ImportVOZRow_RowTX", _
+                  "BrojZbirne nije pronaden za ZbirnaID=" & outZbirnaID
+    End If
+
+    otkupRecordIDs = Trim$(CStr(Nz(data(row, VS_OTKUP_RECORD_IDS), "")))
+
+    If Not LinkZbirnaToOtkupAndOtpremnica(outBrojZbirne, otkupRecordIDs) Then
+        Err.Raise vbObjectError + 8403, "ImportVOZRow_RowTX", _
+                  "LinkZbirnaToOtkupAndOtpremnica failed. BrojZbirne=" & outBrojZbirne
+    End If
+
+    tx.CommitTx
+    ImportVOZRow_RowTX = True
+    Exit Function
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr "ImportVOZRow_RowTX", "ClientRecordID=" & clientRecordID
+    On Error GoTo 0
+
+    outZbirnaID = ""
+    outBrojZbirne = ""
+    ImportVOZRow_RowTX = False
+End Function
 ' ============================================================
 ' PRIVATE — Validierung
 ' ============================================================
@@ -1646,11 +1757,22 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     kolKlI = CDbl(data(row, VS_KOLICINA_KL_I))
     kolKlII = CDbl(data(row, VS_KOLICINA_KL_II))
     kolAmb = CLng(data(row, VS_KOL_AMB))
+    If kolAmb < 0 Then
+        LogError "ImportRowToTblZbirna", _
+             "KolAmbalaze ne sme biti negativan. CRID=" & clientRecordID
+        ImportRowToTblZbirna = ""
+        Exit Function
+    End If
     On Error GoTo EH
     
     ukupnoKol = kolKlI + kolKlII
     
-    If Len(tipAmb) = 0 Then tipAmb = "12/1"
+    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
+        LogError "ImportRowToTblZbirna", _
+             "TipAmbalaze je obavezan kada je KolAmbalaze > 0. CRID=" & clientRecordID
+        ImportRowToTblZbirna = ""
+        Exit Function
+    End If
     
     ' Procitaj BrojZbirne iz VOZ sheet-a (PWA-generated, kolona 20)
     brojZbirne = Trim$(CStr(Nz(data(row, VS_BROJ_ZBIRNE), "")))
@@ -1678,9 +1800,15 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     hladnjaca = CStr(Nz(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Hladnjaca"), ""))
     
     newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
-    
+    If Len(Trim$(newID)) = 0 Then
+        LogError "ImportRowToTblZbirna", _
+             "GetNextID nije vratio ZbirnaID. CRID=" & clientRecordID
+        ImportRowToTblZbirna = ""
+        Exit Function
+    End If
     ' tblZbirna Schema:
-    ' ZbirnaID | BrojZbirne | Datum | VozacID | KupacID | Hladnjaca | Pogon |
+    ' tblZbirna Schema:
+    ' ZbirnaID | Datum | VozacID | BrojZbirne | KupacID | Hladnjaca | Pogon |
     ' VrstaVoca | SortaVoca | UkupnoKolicina | TipAmbalaze | UkupnoAmbalaze | Klasa |
     ' Stornirano | ClientRecordID | SyncSource
     '
@@ -1724,91 +1852,116 @@ End Function
 
 Private Function LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
                                                 ByVal otkupRecordIDs As String) As Boolean
-    ' otkupRecordIDs = comma-separated ClientRecordIDs iz VOZ sheeta
-    ' Flow:
-    '   1. Za svaki ClientRecordID -> nadji OtkupID u tblOtkup
-    '   2. Postavi tblOtkup.BrojZbirne = brojZbirne
-    '   3. Iz tog otkupa citaj OtpremnicaID
-    '   4. Postavi tblOtpremnica.BrojZbirne = brojZbirne (ako vec nije)
-    
-    If Len(Trim$(brojZbirne)) = 0 Then Exit Function
-        If Len(Trim$(otkupRecordIDs)) = 0 Then
+    Const SRC As String = "LinkZbirnaToOtkupAndOtpremnica"
+
+    On Error GoTo EH
+
+    If Len(Trim$(brojZbirne)) = 0 Then
+        LogError SRC, "BrojZbirne je prazan."
+        LinkZbirnaToOtkupAndOtpremnica = False
+        Exit Function
+    End If
+
+    If Len(Trim$(otkupRecordIDs)) = 0 Then
         LinkZbirnaToOtkupAndOtpremnica = True
         Exit Function
     End If
-    
-    If Len(Trim$(otkupRecordIDs)) = 0 Then Exit Function
-    
+
     Dim crIDs() As String
     crIDs = Split(otkupRecordIDs, ",")
-    
-    ' Ucitaj tblOtkup jednom
+
     Dim otkData As Variant
     otkData = GetTableData(TBL_OTKUP)
-    If IsEmpty(otkData) Then Exit Function
-    
-    Dim colCRID As Long, colOtkID As Long, colOtkBrZbr As Long, colOtkOtpID As Long
-    colCRID = GetColumnIndex(TBL_OTKUP, "ClientRecordID")
-    colOtkID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    colOtkBrZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-    colOtkOtpID = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    
-    ' Dict za Otpremnice koje smo vec updateovali (da ne radimo duple)
+    If IsEmpty(otkData) Then
+        LogError SRC, "tblOtkup je prazan, a VOZ ima OtkupRecordIDs."
+        LinkZbirnaToOtkupAndOtpremnica = False
+        Exit Function
+    End If
+
+    Dim colCRID As Long
+    Dim colOtkID As Long
+    Dim colOtkOtpID As Long
+
+    colCRID = RequireColumnIndex(TBL_OTKUP, "ClientRecordID", SRC)
+    colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colOtkOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
+
     Dim updatedOtp As Object
     Set updatedOtp = CreateObject("Scripting.Dictionary")
-    
+
     Dim c As Long
     For c = 0 To UBound(crIDs)
         Dim searchCRID As String
         searchCRID = Trim$(crIDs(c))
+
         If Len(searchCRID) = 0 Then GoTo NextCRID
-        
-        ' Nadji red u tblOtkup po ClientRecordID
+
+        Dim foundCount As Long
+        Dim foundRow As Long
         Dim i As Long
+
         For i = 1 To UBound(otkData, 1)
             If CStr(Nz(otkData(i, colCRID), "")) = searchCRID Then
-                
-                ' 1. Postavi BrojZbirne na otkupu
-                Dim otkupID As String
-                otkupID = CStr(otkData(i, colOtkID))
-                
-                Dim otkRows As Collection
-                Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-                If otkRows Is Nothing Or otkRows.count <> 1 Then
-                    LogError "LinkZbirnaToOtkupAndOtpremnica", _
-                        "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & otkupID
+                foundCount = foundCount + 1
+                foundRow = i
+            End If
+        Next i
+
+        If foundCount <> 1 Then
+            LogError SRC, _
+                     "ClientRecordID nije jedinstven ili nije pronaden u tblOtkup. CRID=" & _
+                     searchCRID & "; Count=" & CStr(foundCount)
+            LinkZbirnaToOtkupAndOtpremnica = False
+            Exit Function
+        End If
+
+        Dim otkupID As String
+        otkupID = CStr(otkData(foundRow, colOtkID))
+
+        Dim otkRows As Collection
+        Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+
+        If otkRows Is Nothing Or otkRows.count <> 1 Then
+            LogError SRC, _
+                     "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & otkupID
+            LinkZbirnaToOtkupAndOtpremnica = False
+            Exit Function
+        End If
+
+        RequireUpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne, SRC
+
+        Dim otpID As String
+        otpID = Trim$(CStr(Nz(otkData(foundRow, colOtkOtpID), "")))
+
+        If Len(otpID) > 0 Then
+            If Not updatedOtp.Exists(otpID) Then
+                Dim otpRows As Collection
+                Set otpRows = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+
+                If otpRows Is Nothing Or otpRows.count <> 1 Then
+                    LogError SRC, _
+                             "OtpremnicaID nije jedinstven ili nije pronaden. OtpremnicaID=" & otpID
                     LinkZbirnaToOtkupAndOtpremnica = False
                     Exit Function
                 End If
 
-                RequireUpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne, _
-                                "LinkZbirnaToOtkupAndOtpremnica"
-                
-                ' 2. Postavi BrojZbirne na otpremnici (ako postoji i ako vec nije)
-                Dim otpID As String
-                otpID = Trim$(CStr(Nz(otkData(i, colOtkOtpID), "")))
-                
-                If Len(otpID) > 0 Then
-                    If Not updatedOtp.Exists(otpID) Then
-                        Dim otpRows As Collection
-                        Set otpRows = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
-                        If otpRows.count > 0 Then
-                            RequireUpdateCell TBL_OTPREMNICA, otpRows(1), COL_OTP_BROJ_ZBIRNE, brojZbirne, _
-                            "LinkZbirnaToOtkupAndOtpremnica"
-                        End If
-                        updatedOtp.Add otpID, True
-                    End If
-                End If
-                
-                Exit For  ' Nasli smo otkup, idemo na sledeci CRID
+                RequireUpdateCell TBL_OTPREMNICA, otpRows(1), COL_OTP_BROJ_ZBIRNE, brojZbirne, SRC
+                updatedOtp.Add otpID, True
             End If
-        Next i
+        End If
+
 NextCRID:
     Next c
-    
+
     LinkZbirnaToOtkupAndOtpremnica = True
-    LogInfo "LinkZbirnaToOtkupAndOtpremnica", "BrojZbirne=" & brojZbirne & _
-            " linked " & (UBound(crIDs) + 1) & " otkupa, " & updatedOtp.count & " otpremnica"
+    LogInfo SRC, "BrojZbirne=" & brojZbirne & _
+                 " linked " & CStr(UBound(crIDs) + 1) & _
+                 " otkupa, " & CStr(updatedOtp.count) & " otpremnica"
+    Exit Function
+
+EH:
+    LogErr SRC
+    LinkZbirnaToOtkupAndOtpremnica = False
 End Function
 
 ' ============================================================
@@ -1973,10 +2126,11 @@ Private Function ValidateVOZSheetHeader(ByVal data As Variant, _
         Exit Function
     End If
 
-    If UBound(data, 2) < 20 Then
+    If UBound(data, 2) < VS_BROJ_ZBIRNE Then
         LogError SOURCE, _
-                 "VOZ schema drift: premalo kolona u sheetu " & sheetName & _
-                 ". Expected=20, Actual=" & CStr(UBound(data, 2))
+             "VOZ schema drift: premalo kolona u sheetu " & sheetName & _
+             ". ExpectedAtLeast=" & CStr(VS_BROJ_ZBIRNE) & _
+             ", Actual=" & CStr(UBound(data, 2))
         ValidateVOZSheetHeader = False
         Exit Function
     End If
