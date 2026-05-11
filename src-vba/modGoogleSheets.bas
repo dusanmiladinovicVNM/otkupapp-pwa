@@ -49,6 +49,19 @@ Private Function GoogleHttpBodyForLog(ByVal responseText As String) As String
     GoogleHttpBodyForLog = Left$(CStr(responseText), 1000)
 End Function
 
+Private Function IsGoogleSheetAlreadyExistsError(ByVal httpStatus As Long, _
+                                                 ByVal responseText As String) As Boolean
+    Dim s As String
+
+    If httpStatus <> 400 Then Exit Function
+
+    s = LCase$(CStr(responseText))
+
+    IsGoogleSheetAlreadyExistsError = _
+        (InStr(1, s, "a sheet with the name", vbTextCompare) > 0 And _
+         InStr(1, s, "already exists", vbTextCompare) > 0)
+End Function
+
 Private Function IsTwoDimArray(ByVal value As Variant) As Boolean
     On Error GoTo EH
 
@@ -513,6 +526,9 @@ Public Function AddSheetTab(ByVal spreadsheetID As String, _
     http.Send body
 
     If http.status >= 200 And http.status < 300 Then
+        AddSheetTab = True
+    ElseIf IsGoogleSheetAlreadyExistsError(http.status, CStr(http.responseText)) Then
+        LogInfo "AddSheetTab", "Tab already exists, treated as OK: " & tabName
         AddSheetTab = True
     Else
         LogError "AddSheetTab", _
