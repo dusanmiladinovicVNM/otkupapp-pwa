@@ -239,7 +239,7 @@ Public Sub ExportKarticeToGoogle()
     ReDim koopList(1 To UBound(koopData, 1))
     
     For i = 1 To UBound(koopData, 1)
-        If CStr(koopData(i, colAktivan)) <> "Ne" Then
+        If IsPWAActive(koopData(i, colAktivan)) Then
             koopCount = koopCount + 1
             koopList(koopCount) = CStr(koopData(i, colKoopID))
         End If
@@ -1108,6 +1108,12 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_STANICE)
+
+    If IsEmpty(data) Then
+        ExportStanice = WriteHeaderOnly(sheetID, "Stanice", _
+            "StanicaID", "Naziv", "Mesto")
+        Exit Function
+    End If
     
     colID = GetColumnIndex(TBL_STANICE, "StanicaID")
     colNaziv = GetColumnIndex(TBL_STANICE, "Naziv")
@@ -1165,6 +1171,11 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_KUPCI)
+    If IsEmpty(data) Then
+        ExportKupci = WriteHeaderOnly(sheetID, "Kupci", _
+            "KupacID", "Naziv", "Mesto")
+        Exit Function
+    End If
     
     colID = GetColumnIndex(TBL_KUPCI, "KupacID")
     colNaziv = GetColumnIndex(TBL_KUPCI, "Naziv")
@@ -1222,6 +1233,11 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_VOZACI)
+    If IsEmpty(data) Then
+        ExportVozaci = WriteHeaderOnly(sheetID, "Vozaci", _
+            "VozacID", "Ime", "Prezime", "Telefon", "KapacitetKG")
+        Exit Function
+    End If
     
     colID = GetColumnIndex(TBL_VOZACI, "VozacID")
     colIme = GetColumnIndex(TBL_VOZACI, "Ime")
@@ -1285,6 +1301,12 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_ARTIKLI)
+    If IsEmpty(data) Then
+        ExportArtikli = WriteHeaderOnly(sheetID, "Artikli", _
+            "ArtikalID", "Naziv", "Tip", "JedinicaMere", "CenaPoJedinici", _
+            "DozaPoHa", "Kultura", "Pakovanje", "BarKod", "Karenca", "Aktivan")
+        Exit Function
+    End If
     
     Dim colArtID As Long: colArtID = GetColumnIndex(TBL_ARTIKLI, "ArtikalID")
     Dim colNaziv As Long: colNaziv = GetColumnIndex(TBL_ARTIKLI, "Naziv")
@@ -1532,7 +1554,8 @@ Private Function ExportConfig(ByVal sheetID As String) As Boolean
     
     data = GetTableData("tblSEFConfig")
     If IsEmpty(data) Then
-        ExportConfig = False
+        ExportConfig = WriteHeaderOnly(sheetID, "Config", _
+            "Parameter", "Vrednost")
         Exit Function
     End If
     
@@ -1658,7 +1681,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         
         If colKPIN > 0 Then
             For i = 1 To UBound(koopData, 1)
-                If CStr(koopData(i, colKAktivan)) <> "Ne" Then
+                If IsPWAActive(koopData(i, colKAktivan)) Then
                     Dim kPin As String
                     kPin = Trim$(CStr(Nz(koopData(i, colKPIN), "")))
                     If Len(kPin) > 0 Then
@@ -1691,7 +1714,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         
         If colSPIN > 0 And colSIme > 0 And colSPrezime > 0 Then
             For i = 1 To UBound(staData, 1)
-                If CStr(staData(i, colSAktivan)) <> "Ne" Then
+                If IsPWAActive(staData(i, colSAktivan)) Then
                     Dim sPin As String
                     sPin = Trim$(CStr(Nz(staData(i, colSPIN), "")))
                     If Len(sPin) > 0 Then
@@ -1723,7 +1746,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         
         If colVPIN > 0 Then
             For i = 1 To UBound(vozData, 1)
-                If CStr(vozData(i, colVAktivan)) <> "Ne" Then
+                If IsPWAActive(vozData(i, colVAktivan)) Then
                     Dim vPin As String
                     vPin = Trim$(CStr(Nz(vozData(i, colVPIN), "")))
                     If Len(vPin) > 0 Then
