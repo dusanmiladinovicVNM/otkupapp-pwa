@@ -23,7 +23,13 @@ Private dragOffsetY As Double
 Private mChromeRemoved As Boolean
 
 Private mActiveContent As Object
+' v6.11 UI
+Private Const SIDEBAR_KPI_H As Single = 92
+Private mIsSwitchingContent As Boolean
 Private Const CONTENT_PAD As Single = 0
+
+Private mPWASyncLog As Collection
+Private mPWASyncLogActive As Boolean
 
 Private Sub UserForm_Initialize()
     On Error GoTo EH
@@ -37,7 +43,7 @@ Private Sub UserForm_Initialize()
     SetupCards
     
     SetupShellResponsive
-
+    SetupTopBarStatus
     Exit Sub
 
 EH:
@@ -50,16 +56,32 @@ Private Sub UserForm_Activate()
     
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 
+    ' Ako je otvorena neka sekcija u desnom delu,
+    ' ne prikazuj dashboard/card/status pri aktiviranju shell-a.
+    If mIsSwitchingContent Or Not mActiveContent Is Nothing Then
+        HideDashboardArea
+        Exit Sub
+    End If
+
     Dim warnText As String
     warnText = CheckVerwaisteDokumente()
 
     If warnText <> "" Then
         lblStatus.Visible = True
         lblStatus.caption = warnText
-        lblStatus.foreColor = RGB(255, 80, 80)
+        lblStatus.ForeColor = RGB(255, 80, 80)
         lblStatus.Font.Bold = True
     Else
         lblStatus.Visible = False
+    End If
+    
+    ' v6.11 UI refresh
+    RefreshSidebarKpi
+    RefreshBankaBadge
+    PositionAccentBar
+    ' v6.11 UI: nakon final layout-a, repozicioniraj accent bar na aktivno dugme
+    If Not navButtons Is Nothing Then
+        HighlightActive btnBlocks
     End If
     Exit Sub
     
@@ -69,9 +91,10 @@ EH:
     On Error Resume Next
     lblStatus.Visible = True
     lblStatus.caption = "Greška pri proveri dokumenata. Pogledajte log."
-    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 End Sub
+
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = vbFormControlMenu Then
         Cancel = True
@@ -88,11 +111,40 @@ Private Sub SetupShell()
 End Sub
 
 Private Sub ResizeMainForm()
+    On Error GoTo EH
+
+    Dim targetW As Single
+    Dim targetH As Single
+
     Me.StartUpPosition = 0
     Me.Left = 0
     Me.Top = 0
-    Me.Width = Application.Width - 10
-    Me.Height = Application.Height - 10
+
+    ' Ne oslanjamo se na Application.Width/Height jer je Excel sakriven.
+    targetW = ScreenWidthPoints()
+    targetH = ScreenHeightPoints()
+
+    ' Mali odbitak da forma ne ode ispod taskbara / ivica.
+    targetW = targetW
+    targetH = targetH - 30
+
+    If targetW < 900 Then targetW = 900
+    If targetH < 600 Then targetH = 600
+
+    Me.Width = targetW
+    Me.Height = targetH
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.ResizeMainForm"
+
+    ' fallback, ali tek ako WinAPI ne uspe
+    Me.StartUpPosition = 0
+    Me.Left = 0
+    Me.Top = 0
+    Me.Width = 1200
+    Me.Height = 750
 End Sub
 
 Private Sub SetupShellResponsive()
@@ -141,12 +193,15 @@ Private Sub SetupShellResponsive()
     rightLeft = fraSidebar.Left + fraSidebar.Width + padInner
     rightW = Me.InsideWidth - rightLeft - padOuter
     rightH = Me.InsideHeight - contentTop - padOuter
+    If rightW < 100 Then rightW = 100
+    If rightH < 100 Then rightH = 100
 
     ' big card
     lblCardAlerts.Left = rightLeft
     lblCardAlerts.Top = contentTop + 4
     lblCardAlerts.Width = rightW
     lblCardAlerts.Height = rightH - summaryH - 14
+    If lblCardAlerts.Height < 50 Then lblCardAlerts.Height = 50
 
     ' red status text inside big card
     lblStatus.Left = lblCardAlerts.Left + 15
@@ -194,6 +249,9 @@ Private Sub LayoutSidebarButtons()
     
     btnBanka.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
+    
+    btnSyncPWA.Move leftPos, btnTop, btnW, btnH
+    btnTop = btnTop + btnH + gap
 
     btnMargin.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
@@ -208,6 +266,28 @@ Private Sub LayoutSidebarButtons()
     btnTop = btnTop + btnH + gap
 
     btnExit.Move leftPos, btnTop, btnW, btnH
+    
+    ' v6.11 UI: pomeri accent bar na aktivno nav dugme
+    PositionAccentBar
+
+    ' v6.11 UI: layout KPI kartice na dnu sidebara
+    LayoutSidebarKpiCard
+End Sub
+
+Private Sub SetSidebarEnabled(ByVal enabled As Boolean)
+    Dim btn As Object
+
+    If navButtons Is Nothing Then Exit Sub
+
+    On Error Resume Next
+
+    For Each btn In navButtons
+        btn.enabled = enabled
+    Next btn
+
+    btnMaticni.enabled = enabled
+
+    On Error GoTo 0
 End Sub
 
 Private Sub SetupHeader()
@@ -223,7 +303,7 @@ Private Sub SetupHeader()
     With lblAppTitle
         '.Caption = APP_NAME & " v" & APP_VERSION
         .caption = ""
-        .foreColor = TXT_LIGHT
+        .ForeColor = TXT_LIGHT
         .BackStyle = fmBackStyleTransparent
         .Font.name = "Segoe UI Semibold"
         .Font.Size = 14
@@ -240,7 +320,7 @@ Private Sub SetupHeader()
         .Width = 125
         .Height = 28
         .BackColor = BTN_ACTIVE
-        .foreColor = vbWhite
+        .ForeColor = vbWhite
         .Font.name = "Segoe UI Semibold"
         .Font.Size = 9
         .TakeFocusOnClick = False
@@ -248,7 +328,7 @@ Private Sub SetupHeader()
 
     With lblClose
         .caption = ChrW(&H2715)
-        .foreColor = TXT_MUTED
+        .ForeColor = TXT_MUTED
         .BackStyle = fmBackStyleTransparent
         .TextAlign = fmTextAlignCenter
         .Font.name = "Segoe UI Symbol"
@@ -293,6 +373,9 @@ Private Sub SetupButtons()
     
     StyleNavButton btnBanka, "Banka import i mapiranje", topPos
     topPos = topPos + 42
+    
+    StyleNavButton btnSyncPWA, "Sinhronizuj PWA", topPos
+    topPos = topPos + 42
 
     StyleNavButton btnMargin, "Marža", topPos
     topPos = topPos + 42
@@ -315,6 +398,7 @@ Private Sub SetupButtons()
     navButtons.Add btnReports
     navButtons.Add btnInvoicing
     navButtons.Add btnBanka
+    navButtons.Add btnSyncPWA
     navButtons.Add btnMargin
     navButtons.Add btnTrace
     navButtons.Add btnOpenExcel
@@ -332,7 +416,7 @@ Private Sub StyleNavButton(btn As MSForms.CommandButton, txt As String, topPos A
         .Width = 200
         .Height = 34
         .BackColor = BTN_BG
-        .foreColor = TXT_LIGHT
+        .ForeColor = TXT_LIGHT
         .Font.name = "Segoe UI"
         .Font.Size = 10
         .Font.Bold = False
@@ -362,7 +446,7 @@ Private Sub SetupCards()
         .Width = 490
         .Height = 370
         .BackStyle = fmBackStyleTransparent
-        .foreColor = RGB(255, 120, 120)
+        .ForeColor = RGB(255, 120, 120)
         .Font.name = "Segoe UI"
         .Font.Size = 10
         .Font.Bold = True
@@ -382,31 +466,36 @@ End Sub
 
 Private Sub HighlightActive(activeBtn As MSForms.CommandButton)
     Dim btn As MSForms.CommandButton
-
     If navButtons Is Nothing Then Exit Sub
 
     For Each btn In navButtons
         btn.BackColor = BTN_BG
-        btn.foreColor = TXT_LIGHT
+        btn.ForeColor = TXT_LIGHT
     Next btn
 
     activeBtn.BackColor = BTN_ACTIVE
-    activeBtn.foreColor = vbWhite
+    activeBtn.ForeColor = vbWhite
 
-    lblNavAccent.Visible = True
-    lblNavAccent.Top = activeBtn.Top
-    lblNavAccent.Left = activeBtn.Left - 6
-    lblNavAccent.Height = activeBtn.Height
+    ' Accent bar — koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
+    StyleAccentBar lblNavAccent
+    With lblNavAccent
+        .Visible = True
+        .Width = 4
+        .Height = activeBtn.Height
+        .Left = activeBtn.Left - 8
+        .Top = activeBtn.Top
+        .ZOrder 0
+    End With
 End Sub
 
 Private Sub SetHover(btn As MSForms.CommandButton, ByVal hovered As Boolean)
     If btn.BackColor <> BTN_ACTIVE Then
         If hovered Then
             btn.BackColor = BTN_HOVER
-            btn.foreColor = vbWhite
+            btn.ForeColor = vbWhite
         Else
             btn.BackColor = BTN_BG
-            btn.foreColor = TXT_LIGHT
+            btn.ForeColor = TXT_LIGHT
         End If
     End If
 End Sub
@@ -427,15 +516,15 @@ EH:
 End Sub
 
 Private Sub lblClose_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    lblClose.foreColor = RGB(255, 255, 255)
+    lblClose.ForeColor = RGB(255, 255, 255)
 End Sub
 
 Private Sub lblTitleBar_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    lblClose.foreColor = TXT_MUTED
+    lblClose.ForeColor = TXT_MUTED
 End Sub
 
 Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
-    lblClose.foreColor = TXT_MUTED
+    lblClose.ForeColor = TXT_MUTED
     btnMaticni.BackColor = BTN_ACTIVE
     ResetHover
 End Sub
@@ -464,20 +553,14 @@ End Sub
 ' =========================
 
 Private Sub btnBlocks_Click()
-    HighlightActive btnBlocks
-    lblStatus.caption = "Sekcija: Otkupni blokovi"
     OpenContentForm frmOtkup, btnBlocks, "Otkupni blokovi"
 End Sub
 
 Private Sub btnPurchase_Click()
-    HighlightActive btnPurchase
-    lblStatus.caption = "Sekcija: Otkup i prodaja"
     OpenContentForm frmDokumenta, btnPurchase, "Otkup i prodaja"
 End Sub
 
 Private Sub btnAgro_Click()
-    HighlightActive btnAgro
-    lblStatus.caption = "Sekcija: Agrohemija"
     OpenContentForm frmAgrohemija, btnAgro, "Agrohemija"
 End Sub
 
@@ -490,10 +573,7 @@ Private Sub btnReports_Click()
 End Sub
 
 Private Sub btnInvoicing_Click()
-    HighlightActive btnInvoicing
-    lblStatus.caption = "Sekcija: Fakturisanje"
-    Me.Hide
-    frmFakturisanje.Show
+    OpenContentForm frmFakturisanje, btnInvoicing, "Fakturisanje"
 End Sub
 
 Private Sub btnBanka_Click()
@@ -509,7 +589,7 @@ Private Sub btnBanka_Click()
 
     lblStatus.Visible = True
     lblStatus.caption = "Uvozim nove bankovne izvode..."
-    lblStatus.foreColor = RGB(220, 220, 220)
+    lblStatus.ForeColor = RGB(220, 220, 220)
     lblStatus.Font.Bold = False
 
     ImportBankaInbox_TX
@@ -534,7 +614,7 @@ EH:
     On Error Resume Next
     lblStatus.Visible = True
     lblStatus.caption = "Greška pri uvozu banke. Otvaram mapiranje za postojece stavke."
-    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
     MsgBox "Greška pri uvozu bankovnih izvoda:" & vbCrLf & errDesc & vbCrLf & vbCrLf & _
@@ -547,18 +627,52 @@ EH:
     Resume CleanExit
 End Sub
 
+Private Sub btnSyncPWA_Click()
+    On Error GoTo EH
+
+    Dim oldPointer As Integer
+    Dim ok As Boolean
+
+    oldPointer = Me.MousePointer
+
+    HighlightActive btnSyncPWA
+
+    Me.MousePointer = fmMousePointerHourGlass
+    SetSidebarEnabled False
+
+    BeginPWASyncLog
+    DoEvents
+
+    ok = SyncPWAFullCycle_ForButton()
+
+    FinishPWASyncLog ok
+
+    On Error Resume Next
+    RefreshSidebarKpi
+    RefreshBankaBadge
+    On Error GoTo 0
+
+CleanExit:
+    SetSidebarEnabled True
+    Me.MousePointer = oldPointer
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.btnSyncPWA_Click"
+
+    On Error Resume Next
+    FinishPWASyncLog False
+    Resume CleanExit
+End Sub
+
 Private Sub btnMargin_Click()
-    HighlightActive btnMargin
-    lblStatus.caption = "Sekcija: Marža"
-    Me.Hide
-    frmMarza.Show
+    OpenContentForm frmMarza, btnMargin, "Marža"
 End Sub
 
 Private Sub btnTrace_Click()
     HighlightActive btnTrace
     lblStatus.caption = "Sekcija: Izveštaj o sledljivosti"
-    Me.Hide
-    frmSledljivost.Show
+    OpenContentForm frmSledljivost, btnTrace, "Izveštaj o sledljivosti"
 End Sub
 
 Private Sub btnOpenExcel_Click()
@@ -577,13 +691,13 @@ Private Sub btnSnapshot_Click()
 
     lblStatus.Visible = True
     lblStatus.caption = "Snimam podatke..."
-    lblStatus.foreColor = RGB(220, 220, 220)
+    lblStatus.ForeColor = RGB(220, 220, 220)
     lblStatus.Font.Bold = False
 
     SaveApp
 
     lblStatus.caption = "Sacuvano."
-    lblStatus.foreColor = RGB(120, 220, 140)
+    lblStatus.ForeColor = RGB(120, 220, 140)
     lblStatus.Font.Bold = True
 
     MsgBox "Sacuvano!", vbInformation, APP_NAME
@@ -594,7 +708,7 @@ EH:
 
     lblStatus.Visible = True
     lblStatus.caption = "Greška pri snimanju. Pogledajte log."
-    lblStatus.foreColor = RGB(255, 80, 80)
+    lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
     MsgBox "Greška pri snimanju: " & Err.description, vbCritical, APP_NAME
@@ -692,6 +806,14 @@ Private Sub btnBanka_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
     SetHover btnBanka, True
 End Sub
 
+Private Sub btnSyncPWA_MouseMove(ByVal Button As Integer, _
+                                 ByVal Shift As Integer, _
+                                 ByVal X As Single, _
+                                 ByVal Y As Single)
+    ResetHover
+    SetHover btnSyncPWA, True
+End Sub
+
 Private Sub btnMargin_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetHover
     SetHover btnMargin, True
@@ -762,39 +884,83 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal sectionTitle As String)
     On Error GoTo EH
 
-    CloseActiveContent
+    Dim oldContent As Object
+    Dim oldPointer As Integer
 
+    oldPointer = Me.MousePointer
+    Me.MousePointer = fmMousePointerHourGlass
+
+    mIsSwitchingContent = True
+
+    Set oldContent = mActiveContent
+
+    HideDashboardArea
     HighlightActive activeBtn
 
-    lblStatus.Visible = False
-    lblCardAlerts.Visible = False
-    lblCardSummary.Visible = False
+    If Not oldContent Is Nothing Then
+        If oldContent Is contentForm Then
+            FitActiveContent
+            GoTo CleanExit
+        End If
+    End If
 
     Set mActiveContent = contentForm
 
     FitActiveContent
-
     mActiveContent.Show vbModeless
-
     FitActiveContent
 
+    If Not oldContent Is Nothing Then
+        Unload oldContent
+    End If
+
+    HideDashboardArea
+    FitActiveContent
+
+CleanExit:
+    mIsSwitchingContent = False
+    Me.MousePointer = oldPointer
     Exit Sub
 
 EH:
+    mIsSwitchingContent = False
+    Me.MousePointer = oldPointer
+
     LogErr "frmOtkupAPP.OpenContentForm"
 
-    lblStatus.Visible = True
-    lblStatus.caption = "Greška pri otvaranju sekcije: " & sectionTitle
-    lblStatus.foreColor = RGB(255, 80, 80)
+    ShowDashboardArea "Greška pri otvaranju sekcije: " & sectionTitle
+
+    lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
     MsgBox "Greška pri otvaranju sekcije '" & sectionTitle & "': " & Err.description, vbCritical, APP_NAME
 End Sub
 
+
 Public Sub ReturnToDashboard(Optional ByVal statusText As String = "")
     On Error Resume Next
 
+    If mIsSwitchingContent Then Exit Sub
+
     Set mActiveContent = Nothing
+
+    ShowDashboardArea statusText
+
+    On Error GoTo 0
+End Sub
+
+Private Sub HideDashboardArea()
+    On Error Resume Next
+
+    lblStatus.Visible = False
+    lblCardAlerts.Visible = False
+    lblCardSummary.Visible = False
+
+    On Error GoTo 0
+End Sub
+
+Private Sub ShowDashboardArea(Optional ByVal statusText As String = "")
+    On Error Resume Next
 
     lblCardAlerts.Visible = True
     lblCardSummary.Visible = True
@@ -806,8 +972,417 @@ Public Sub ReturnToDashboard(Optional ByVal statusText As String = "")
         lblStatus.caption = ""
     End If
 
-    lblStatus.foreColor = RGB(220, 220, 220)
+    lblStatus.ForeColor = RGB(220, 220, 220)
     lblStatus.Font.Bold = False
 
     On Error GoTo 0
+End Sub
+
+' ============================================================
+' v6.11 UI: ACCENT BAR (gold strip on active nav button)
+' ============================================================
+
+Private Sub PositionAccentBar()
+    On Error GoTo EH
+
+    ' Trazi aktivno dugme (BackColor = BTN_ACTIVE)
+    Dim btn As MSForms.CommandButton
+    Dim activeBtn As MSForms.CommandButton
+
+    If navButtons Is Nothing Then Exit Sub
+
+    For Each btn In navButtons
+        If btn.BackColor = BTN_ACTIVE() Then
+            Set activeBtn = btn
+            Exit For
+        End If
+    Next btn
+
+    If activeBtn Is Nothing Then
+        On Error Resume Next
+        lblNavAccent.Visible = False
+        On Error GoTo 0
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    With lblNavAccent
+        .Visible = True
+        StyleAccentBar lblNavAccent
+        .Width = 4
+        .Height = activeBtn.Height
+        .Left = fraSidebar.Left + activeBtn.Left - 8
+        .Top = fraSidebar.Top + activeBtn.Top
+        .ZOrder 0
+    End With
+    On Error GoTo 0
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.PositionAccentBar"
+End Sub
+
+' ============================================================
+' v6.11 UI: KPI CARD u dnu sidebara (Današnji otkup kg)
+' ============================================================
+
+Private Sub LayoutSidebarKpiCard()
+    On Error GoTo EH
+
+    ' fraSidebarKpi je novi Frame (vidi Designer instrukcije)
+    Dim leftPos As Single
+    Dim btnW As Single
+
+    leftPos = 16
+    btnW = fraSidebar.Width - 32
+
+    With fraSidebarKPI
+        .Move leftPos, fraSidebar.Height - SIDEBAR_KPI_H - 12, btnW, SIDEBAR_KPI_H
+        StyleKpiCardFrame fraSidebarKPI
+    End With
+
+    ' Layout label-a unutar kartice
+    With lblKPITitle
+        .Move 10, 8, fraSidebarKPI.Width - 20, 14
+        StyleKpiLabel lblKPITitle, "title"
+        .caption = "Današnji otkup"
+    End With
+
+    With lblKPIValue
+        .Move 10, 24, fraSidebarKPI.Width - 20, 28
+        StyleKpiLabel lblKPIValue, "value"
+    End With
+
+    With lblKPIDelta
+        .Move 10, 54, fraSidebarKPI.Width - 20, 14
+        StyleKpiLabel lblKPIDelta, "delta_up"
+    End With
+
+    With lblKPISub
+        .Move 10, 70, fraSidebarKPI.Width - 20, 14
+        StyleKpiLabel lblKPISub, "muted"
+    End With
+
+    RefreshSidebarKpi
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.LayoutSidebarKpiCard"
+End Sub
+
+Public Sub RefreshSidebarKpi()
+    On Error GoTo EH
+
+    Dim today As Date
+    today = Date
+
+    Dim totalKgToday As Double
+    Dim totalKgYesterday As Double
+    Dim cntOtp As Long
+    Dim cntPrij As Long
+
+    totalKgToday = SumOtkupKgForDate(today)
+    totalKgYesterday = SumOtkupKgForDate(today - 1)
+
+    cntOtp = CountDocsForDate(TBL_OTPREMNICA, COL_OTP_DATUM, today)
+    cntPrij = CountDocsForDate(TBL_PRIJEMNICA, COL_PRJ_DATUM, today)
+
+    lblKPIValue.caption = Format$(totalKgToday, "#,##0") & " kg"
+
+    If totalKgYesterday > 0 Then
+        Dim deltaPct As Double
+        deltaPct = ((totalKgToday - totalKgYesterday) / totalKgYesterday) * 100
+
+        If deltaPct >= 0 Then
+            lblKPIDelta.caption = ChrW(&H25B2) & " " & Format$(deltaPct, "0.0") & "%  vs juce"
+            StyleKpiLabel lblKPIDelta, "delta_up"
+        Else
+            lblKPIDelta.caption = ChrW(&H25BC) & " " & Format$(Abs(deltaPct), "0.0") & "%  vs juce"
+            StyleKpiLabel lblKPIDelta, "delta_down"
+        End If
+    Else
+        lblKPIDelta.caption = ""
+    End If
+
+    lblKPISub.caption = cntOtp & " otpremnica  •  " & cntPrij & " prijemnica"
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.RefreshSidebarKpi"
+    lblKPIValue.caption = "—"
+    lblKPIDelta.caption = ""
+    lblKPISub.caption = ""
+End Sub
+
+' --- helperi za KPI ---
+
+Private Function SumOtkupKgForDate(ByVal d As Date) As Double
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colDatum As Long, colKg As Long, colStorno As Long
+    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "SumOtkupKgForDate")
+    colKg = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "SumOtkupKgForDate")
+
+    On Error Resume Next
+    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "SumOtkupKgForDate")
+    On Error GoTo EH
+
+    Dim i As Long
+    Dim total As Double
+    Dim rowDate As Date
+    Dim rowKg As Double
+
+    For i = 1 To UBound(data, 1)
+        If colStorno > 0 Then
+            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+        End If
+
+        If IsDate(data(i, colDatum)) Then
+            rowDate = CDate(data(i, colDatum))
+            If DateValue(rowDate) = DateValue(d) Then
+                If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
+                    total = total + rowKg
+                End If
+            End If
+        End If
+NextRow:
+    Next i
+
+    SumOtkupKgForDate = total
+    Exit Function
+
+EH:
+    LogErr "SumOtkupKgForDate"
+    SumOtkupKgForDate = 0
+End Function
+
+Private Function CountDocsForDate(ByVal tableName As String, _
+                                   ByVal dateColName As String, _
+                                   ByVal d As Date) As Long
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(tableName)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colDatum As Long, colStorno As Long
+    colDatum = RequireColumnIndex(tableName, dateColName, "CountDocsForDate")
+
+    On Error Resume Next
+    colStorno = RequireColumnIndex(tableName, "Stornirano", "CountDocsForDate")
+    On Error GoTo EH
+
+    Dim i As Long, cnt As Long
+
+    For i = 1 To UBound(data, 1)
+        If colStorno > 0 Then
+            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+        End If
+
+        If IsDate(data(i, colDatum)) Then
+            If DateValue(CDate(data(i, colDatum))) = DateValue(d) Then
+                cnt = cnt + 1
+            End If
+        End If
+NextRow:
+    Next i
+
+    CountDocsForDate = cnt
+    Exit Function
+
+EH:
+    LogErr "CountDocsForDate"
+    CountDocsForDate = 0
+End Function
+
+' ============================================================
+' v6.11 UI: BADGE brojac za neobradene Banka redove
+' ============================================================
+
+Public Sub RefreshBankaBadge()
+    On Error GoTo EH
+
+    Dim openCount As Long
+    openCount = CountOpenBankaImport()
+
+    StyleBadge lblBankaBadge, openCount
+
+    If openCount > 0 Then
+        ' Pozicija — desno gornji ugao btnBanka
+        With lblBankaBadge
+            .Width = 22
+            .Height = 14
+            .Left = fraSidebar.Left + btnBanka.Left + btnBanka.Width - 28
+            .Top = fraSidebar.Top + btnBanka.Top + 4
+            .ZOrder 0
+        End With
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.RefreshBankaBadge"
+End Sub
+
+Private Function CountOpenBankaImport() As Long
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colObr As Long
+    On Error Resume Next
+    colObr = RequireColumnIndex(TBL_BANKA_IMPORT, "Obradjeno", "CountOpenBankaImport")
+    On Error GoTo EH
+
+    If colObr <= 0 Then Exit Function
+
+    Dim i As Long, cnt As Long
+
+    For i = 1 To UBound(data, 1)
+        If LCase$(NzToText(data(i, colObr))) <> "da" Then
+            cnt = cnt + 1
+        End If
+    Next i
+
+    CountOpenBankaImport = cnt
+    Exit Function
+
+EH:
+    LogErr "CountOpenBankaImport"
+    CountOpenBankaImport = 0
+End Function
+
+' ============================================================
+' v6.11 UI: TOP BAR STATUS (Online dot + Operator + Sezona)
+' ============================================================
+
+Private Sub SetupTopBarStatus()
+    On Error GoTo EH
+
+    ' Status dot
+    StyleStatusDot lblStatusDot, True
+    With lblStatusDot
+        .Width = 14
+        .Height = 18
+        .Left = imgLogo.Left + imgLogo.Width + 12
+        .Top = 12
+    End With
+
+    ' "Online" text
+    With lblOnlineText
+        .caption = "Online"
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = CLR_SUCCESS()
+        .Font.name = APP_FONT
+        .Font.Size = FONT_SIZE_SMALL
+        .Left = lblStatusDot.Left + lblStatusDot.Width + 2
+        .Top = 14
+        .Width = 50
+        .Height = 16
+    End With
+
+    ' Operator
+    With lblOperator
+        .caption = "Operator: " & GetCurrentOperatorName()
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = TXT_MUTED()
+        .Font.name = APP_FONT
+        .Font.Size = FONT_SIZE_SMALL
+        .Left = lblOnlineText.Left + lblOnlineText.Width + 14
+        .Top = 14
+        .Width = 200
+        .Height = 16
+    End With
+
+    ' Sezona
+    With lblSezona
+        .caption = "Sezona " & Year(Date)
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = TXT_MUTED()
+        .Font.name = APP_FONT
+        .Font.Size = FONT_SIZE_SMALL
+        .Left = lblOperator.Left + lblOperator.Width + 14
+        .Top = 14
+        .Width = 100
+        .Height = 16
+    End With
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.SetupTopBarStatus"
+End Sub
+
+Private Function GetCurrentOperatorName() As String
+    On Error Resume Next
+    GetCurrentOperatorName = Environ$("USERNAME")
+    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "—"
+    On Error GoTo 0
+End Function
+
+
+Public Sub BeginPWASyncLog()
+    Set mPWASyncLog = New Collection
+    mPWASyncLogActive = True
+
+    lblStatus.Visible = True
+    lblStatus.caption = ""
+    lblStatus.ForeColor = RGB(220, 220, 220)
+    lblStatus.Font.Bold = False
+
+    On Error Resume Next
+    lblStatus.WordWrap = True
+    lblStatus.AutoSize = False
+    On Error GoTo 0
+
+    AppendPWASyncLog "Pokrecem PWA / Google sync..."
+End Sub
+
+Public Sub AppendPWASyncLog(ByVal message As String)
+    If Not mPWASyncLogActive Then Exit Sub
+
+    Dim lineText As String
+    Dim txt As String
+    Dim i As Long
+
+    If mPWASyncLog Is Nothing Then Set mPWASyncLog = New Collection
+
+    lineText = Format$(Now, "hh:nn:ss") & "  " & CStr(message)
+    mPWASyncLog.Add lineText
+
+    Do While mPWASyncLog.count > 8
+        mPWASyncLog.Remove 1
+    Loop
+
+    For i = 1 To mPWASyncLog.count
+        If Len(txt) > 0 Then txt = txt & vbCrLf
+        txt = txt & CStr(mPWASyncLog(i))
+    Next i
+
+    lblStatus.caption = txt
+    DoEvents
+End Sub
+
+Public Sub FinishPWASyncLog(ByVal ok As Boolean)
+    If ok Then
+        AppendPWASyncLog "Sync zavrsen uspesno."
+        lblStatus.ForeColor = RGB(120, 220, 140)
+        lblStatus.Font.Bold = True
+    Else
+        AppendPWASyncLog "Sync zavrsen sa greskom. Proveri log."
+        lblStatus.ForeColor = RGB(255, 90, 90)
+        lblStatus.Font.Bold = True
+    End If
+
+    DoEvents
+    mPWASyncLogActive = False
 End Sub
