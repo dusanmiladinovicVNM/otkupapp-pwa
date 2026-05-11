@@ -199,6 +199,15 @@
         const key = String(lockKey || 'submit');
         const opts = options || {};
 
+        if (!opts.skipMasterSyncGuard && typeof window.ensureMasterSyncNotActive === 'function') {
+            const allowed = await window.ensureMasterSyncNotActive(
+                opts.reason || opts.action || key,
+                { showToast: true }
+            );
+
+            if (!allowed) return null;
+        }
+
         const runtime = typeof getAppRuntime === 'function'
             ? getAppRuntime()
             : (window.appRuntime || (window.appRuntime = {}));
