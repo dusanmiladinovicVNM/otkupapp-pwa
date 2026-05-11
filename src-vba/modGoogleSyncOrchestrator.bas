@@ -18,25 +18,33 @@ Option Explicit
 '
 ' UI dugme poziva:
 '   SyncPWAFullCycle
+'
+' Auto-sync:
+'   SYNC_AUTO_INTERVAL_MIN = 0 ili prazno => OFF
+'   Minimum dozvoljeno: 15 minuta
 ' ============================================================
 
 Private Const ORCH_MODULE As String = "modGoogleSyncOrchestrator"
 Private Const REQUIRE_GEO_PULL_BEFORE_OUTBOUND As Boolean = True
 
+Private Const SYNC_AUTO_INTERVAL_MIN_KEY As String = "SYNC_AUTO_INTERVAL_MIN"
+Private Const SYNC_AUTO_MIN_ALLOWED_MIN As Long = 15
+
+Private mNextScheduledRun As Date
+Private mIsScheduled As Boolean
+Private mSyncInProgress As Boolean
+
+' ============================================================
+' PUBLIC ENTRY POINT
+' ============================================================
+
 Public Sub SyncPWAFullCycle()
-    Dim ok As Boolean
-
-    ok = SyncPWAFullCycle_Core(True)
-
-    If ok Then
-        MsgBox "PWA / Google sync ciklus je uspešno završen.", _
-               vbInformation, APP_NAME
-    Else
-        MsgBox "PWA / Google sync ciklus je završen sa greškom." & vbCrLf & _
-               "Proveri log pre sledeceg Stammdaten exporta.", _
-               vbExclamation, APP_NAME
-    End If
+    Call SyncPWAFullCycle_Core(True)
 End Sub
+
+' ============================================================
+' CORE
+' ============================================================
 
 Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim summary As String
@@ -57,28 +65,55 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
     SyncPWAFullCycle_Core = False
 
+    If mSyncInProgress Then
+        LogWarn ORCH_MODULE, "SyncPWAFullCycle_Core re-entered. Aborting."
+
+        If showMessages Then
+            MsgBox "Sync je vec u toku. Sacekaj da se završi pa pokušaj ponovo.", _
+                   vbExclamation, APP_NAME
+        End If
+
+        Exit Function
+    End If
+
+    mSyncInProgress = True
+
     LogInfo ORCH_MODULE, "Full PWA / Google sync cycle started."
+
+    summary = "PWA / Google sync ciklus:" & vbCrLf & vbCrLf
 
     If Not IsGoogleAuthConfigured() Then
         LogError ORCH_MODULE, "Google OAuth2 nije konfigurisan."
+
+        summary = summary & "GREŠKA - Google OAuth2 nije konfigurisan." & vbCrLf
+
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, False
+
         If showMessages Then
-            MsgBox "Google OAuth2 nije konfigurisan!" & vbCrLf & _
+            MsgBox summary & vbCrLf & _
                    "Pokreni RunGoogleAuthSetup iz modGoogleAuth.", _
                    vbCritical, APP_NAME
         End If
-        Exit Function
+
+        GoTo CleanExit
     End If
 
     If Len(Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))) = 0 Then
         LogError ORCH_MODULE, "GOOGLE_PWA_FOLDER_ID nije postavljen."
+
+        summary = summary & "GREŠKA - GOOGLE_PWA_FOLDER_ID nije postavljen." & vbCrLf
+
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, False
+
         If showMessages Then
-            MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen u tblConfig.", _
-                   vbCritical, APP_NAME
+            MsgBox summary, vbCritical, APP_NAME
         End If
-        Exit Function
+
+        GoTo CleanExit
     End If
 
-    summary = "PWA / Google sync ciklus:" & vbCrLf & vbCrLf
     summary = summary & "[MASTER / INBOUND]" & vbCrLf
 
     ' 1. Geo pull je hard gate da Stammdaten ne pregazi poligone.
@@ -96,7 +131,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
                              okStammdaten, okKartice, okMgmt, False
 
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
-        Exit Function
+        GoTo CleanExit
     End If
 
     ' 2. OTK import
@@ -110,7 +145,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
                              okStammdaten, okKartice, okMgmt, False
 
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
-        Exit Function
+        GoTo CleanExit
     End If
 
     ' 3. Auto-create Otpremnice
@@ -124,16 +159,19 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     okOtpremnice = (errNum = 0)
 
     If okOtpremnice Then
-        AppendStep summary, True, "Auto-create Otpremnice from PWA Otkup (" & CStr(createdOtp) & " kreirano)"
+        AppendStep summary, True, _
+            "Auto-create Otpremnice from PWA Otkup (" & CStr(createdOtp) & " kreirano)"
     Else
-        AppendStep summary, False, "Auto-create Otpremnice from PWA Otkup | Error=" & errDesc
-        LogError ORCH_MODULE, "AutoCreateOtpremniceFromPWA failed: " & errDesc
+        AppendStep summary, False, _
+            "Auto-create Otpremnice from PWA Otkup | Error=" & errDesc
+
+        LogError ORCH_MODULE, "AutoCreateOtpremniceFromPWA_TX failed: " & errDesc
 
         Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                              okStammdaten, okKartice, okMgmt, False
 
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
-        Exit Function
+        GoTo CleanExit
     End If
 
     ' 4. VOZ/Zbirne import
@@ -147,7 +185,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
                              okStammdaten, okKartice, okMgmt, False
 
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
-        Exit Function
+        GoTo CleanExit
     End If
 
     summary = summary & vbCrLf & "[STAMMDATEN / OUTBOUND]" & vbCrLf
@@ -189,10 +227,12 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         If SyncPWAFullCycle_Core Then
             MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
         Else
-            MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
+            MsgBox summary & vbCrLf & "Status: GREŠKA / PARTIAL", vbExclamation, APP_NAME
         End If
     End If
 
+CleanExit:
+    mSyncInProgress = False
     Exit Function
 
 EH:
@@ -207,6 +247,7 @@ EH:
     End If
 
     SyncPWAFullCycle_Core = False
+    Resume CleanExit
 End Function
 
 Private Sub AppendStep(ByRef summary As String, _
@@ -216,7 +257,7 @@ Private Sub AppendStep(ByRef summary As String, _
         summary = summary & "OK - " & stepName & vbCrLf
         LogInfo ORCH_MODULE, "OK - " & stepName
     Else
-        summary = summary & "GRESKA - " & stepName & vbCrLf
+        summary = summary & "GREŠKA - " & stepName & vbCrLf
         LogError ORCH_MODULE, "FAIL - " & stepName
     End If
 End Sub
@@ -267,7 +308,159 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
             errorSource:=ORCH_MODULE
     End If
 End Sub
+
+' ============================================================
+' SCHEDULED AUTO-SYNC
+' ============================================================
+
+Public Sub StartScheduledSync()
+    Dim intervalMin As Long
+
+    intervalMin = GetScheduledSyncIntervalMin()
+
+    If intervalMin <= 0 Then
+        LogInfo ORCH_MODULE, _
+            "Scheduled auto-sync disabled (" & SYNC_AUTO_INTERVAL_MIN_KEY & " <= 0)."
+        Exit Sub
+    End If
+
+    If intervalMin < SYNC_AUTO_MIN_ALLOWED_MIN Then
+        LogWarn ORCH_MODULE, _
+            SYNC_AUTO_INTERVAL_MIN_KEY & "=" & CStr(intervalMin) & _
+            " is below min allowed " & CStr(SYNC_AUTO_MIN_ALLOWED_MIN) & _
+            ". Auto-sync disabled."
+        Exit Sub
+    End If
+
+    ScheduleNextSyncTick intervalMin
+
+    LogInfo ORCH_MODULE, _
+        "Scheduled auto-sync started. Interval=" & CStr(intervalMin) & " min. " & _
+        "Next run at " & Format$(mNextScheduledRun, "yyyy-mm-dd hh:nn:ss")
+End Sub
+
+Public Sub StopScheduledSync()
+    If Not mIsScheduled Then Exit Sub
+
+    On Error Resume Next
+    Application.OnTime EarliestTime:=mNextScheduledRun, _
+                       Procedure:="ScheduledSyncTick", _
+                       Schedule:=False
+    On Error GoTo 0
+
+    mIsScheduled = False
+    LogInfo ORCH_MODULE, "Scheduled auto-sync stopped."
+End Sub
+
+Public Sub ScheduledSyncTick()
+    On Error GoTo EH
+
+    If mSyncInProgress Then
+        LogWarn ORCH_MODULE, _
+            "ScheduledSyncTick fired but sync already in progress. Skipping."
+        GoTo Reschedule
+    End If
+
+    LogInfo ORCH_MODULE, "ScheduledSyncTick firing automatic SyncPWAFullCycle_Core."
+
+    Call SyncPWAFullCycle_Core(False)
+
+Reschedule:
+    Dim intervalMin As Long
+    intervalMin = GetScheduledSyncIntervalMin()
+
+    If intervalMin >= SYNC_AUTO_MIN_ALLOWED_MIN Then
+        ScheduleNextSyncTick intervalMin
+        LogInfo ORCH_MODULE, _
+            "Next scheduled tick at " & Format$(mNextScheduledRun, "yyyy-mm-dd hh:nn:ss")
+    Else
+        mIsScheduled = False
+        LogInfo ORCH_MODULE, _
+            "Scheduled auto-sync stopping because interval is disabled or below threshold."
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr ORCH_MODULE & ".ScheduledSyncTick"
+
+    On Error Resume Next
+    Dim fallbackInterval As Long
+    fallbackInterval = GetScheduledSyncIntervalMin()
+
+    If fallbackInterval >= SYNC_AUTO_MIN_ALLOWED_MIN Then
+        ScheduleNextSyncTick fallbackInterval
+    Else
+        mIsScheduled = False
+    End If
+End Sub
+
+Private Sub ScheduleNextSyncTick(ByVal intervalMin As Long)
+    On Error Resume Next
+
+    If mIsScheduled Then
+        Application.OnTime EarliestTime:=mNextScheduledRun, _
+                           Procedure:="ScheduledSyncTick", _
+                           Schedule:=False
+    End If
+
+    On Error GoTo 0
+
+    mNextScheduledRun = Now + (CDbl(intervalMin) / 1440#)
+
+    On Error Resume Next
+    Application.OnTime EarliestTime:=mNextScheduledRun, _
+                       Procedure:="ScheduledSyncTick"
+    If Err.Number <> 0 Then
+        LogErr ORCH_MODULE & ".ScheduleNextSyncTick"
+        mIsScheduled = False
+        Err.Clear
+    Else
+        mIsScheduled = True
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Function GetScheduledSyncIntervalMin() As Long
+    Dim raw As String
+    Dim n As Long
+
+    On Error Resume Next
+    raw = Trim$(CStr(GetConfigValue(SYNC_AUTO_INTERVAL_MIN_KEY)))
+    On Error GoTo 0
+
+    If Len(raw) = 0 Then
+        GetScheduledSyncIntervalMin = 0
+        Exit Function
+    End If
+
+    On Error Resume Next
+    n = CLng(raw)
+
+    If Err.Number <> 0 Then
+        GetScheduledSyncIntervalMin = 0
+        Err.Clear
+        Exit Function
+    End If
+
+    On Error GoTo 0
+
+    GetScheduledSyncIntervalMin = n
+End Function
+
+' ============================================================
+' TEST
+' ============================================================
+
 Public Sub Test_SyncPWAFullCycle()
     Call SyncPWAFullCycle
+End Sub
+
+Public Sub Test_StartScheduledSync()
+    Call StartScheduledSync
+End Sub
+
+Public Sub Test_StopScheduledSync()
+    Call StopScheduledSync
 End Sub
 
