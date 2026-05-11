@@ -21,7 +21,7 @@ const SESSION_AUTH_EXPIRES_AT = getLs('authExpiresAt', '');
 // CONFIG
 // ============================================================
 window.CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbz1yu0VT1CifLlWXI-QF4_CPrEv8Gr04qAJTHv74wRYEoVGKtuA0n-HBlvgwc8x9KSi/exec',              
+    API_URL: 'https://script.google.com/macros/s/AKfycbyus4FqtQ9iZjHpqGiwTAgq_dkx5wqQ1x3-WriqlXIVgZ_-dNzoAvGYHejvlr6InXkrUg/exec',              
     AUTH_EXPIRES_AT: SESSION_AUTH_EXPIRES_AT,
     OTKUPAC_ID: SESSION_ROLE === 'Otkupac' ? SESSION_ENTITY_ID : '',
     USER_ROLE: SESSION_ROLE,
