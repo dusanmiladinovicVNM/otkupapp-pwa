@@ -238,6 +238,19 @@
         if (!db) return buildSyncResult({ reason: 'db-not-ready' });
         if (!navigator.onLine) return buildSyncResult({ reason: 'offline' });
 
+        if (typeof window.ensureMasterSyncNotActive === 'function') {
+            const allowed = await window.ensureMasterSyncNotActive('sync:' + action, {
+                showToast: showToasts
+            });
+
+            if (!allowed) {
+                return buildSyncResult({
+                    reason: 'master-sync-active',
+                    code: 'MASTER_SYNC_ACTIVE'
+                });
+            }
+        }
+
         const runtimeSync = getRuntimeSync();
         if (runtimeSync[inFlightKey]) {
             return buildSyncResult({ reason: 'already-running' });
@@ -316,6 +329,23 @@
                     failed: pending.length,
                     reason: 'auth-error',
                     code: json.code || 401
+                });
+            }
+
+            if (json && json.code === 'MASTER_SYNC_ACTIVE') {
+                await rollbackPendingFromError(
+                    storeName,
+                    pending,
+                    json.error || json.message || 'Master sync je u toku',
+                    'master-sync-active'
+                );
+
+                toast(json.error || json.message || 'Master sync je u toku. Sačekajte završetak.', 'warning');
+
+                return buildSyncResult({
+                    failed: pending.length,
+                    reason: 'master-sync-active',
+                    code: 'MASTER_SYNC_ACTIVE'
                 });
             }
 
