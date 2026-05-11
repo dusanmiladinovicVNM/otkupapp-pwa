@@ -278,6 +278,14 @@ function cancelZbirna() {
 
 async function confirmZbirna() {
     if (typeof withSubmitLock !== 'function') {
+        if (typeof window.ensureMasterSyncNotActive === 'function') {
+            const allowed = await window.ensureMasterSyncNotActive('confirmZbirna', {
+                showToast: true
+            });
+
+            if (!allowed) return;
+        }
+
         return confirmZbirnaUnlocked();
     }
 
