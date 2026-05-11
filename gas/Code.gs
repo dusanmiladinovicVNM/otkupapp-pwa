@@ -160,6 +160,9 @@ const FISKALNI_MAP_COLUMNS = [
 const GEO_SPREADSHEET_ID = '1hOkvtcHhnGXc5FKv9gG6lRMvxxGK1rOEYo8EjZPJG24';
 const GEO_SHEET_PARCELE = 'Parcele';
 
+const MASTER_SYNC_CONTROL_SHEET = 'SyncControl';
+const MASTER_SYNC_LOCK_MAX_AGE_MIN = 10;
+
 // ============================================================
 // ERROR LOGGER
 // ============================================================
@@ -496,6 +499,10 @@ function handleAuthorizedRead(data, tokenData) {
 function handlePublicRead(data) {
   const action = data.action || '';
 
+  if (action === 'getMasterSyncState') {
+    return jsonResponse(getMasterSyncState());
+  }
+
   if (action === 'getParcelGeo') {
     return jsonResponse(getParcelGeo(data.parcelaId));
   }
@@ -515,6 +522,134 @@ function handlePublicRead(data) {
   return null;
 }
 
+function getMasterSyncState() {
+  try {
+    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    var files = folder.getFilesByName('Stammdaten');
+
+    if (!files.hasNext()) {
+      return {
+        success: true,
+        locked: false,
+        missing: true,
+        message: ''
+      };
+    }
+
+    var ss = SpreadsheetApp.open(files.next());
+    var sh = ss.getSheetByName(MASTER_SYNC_CONTROL_SHEET);
+
+    if (!sh) {
+      return {
+        success: true,
+        locked: false,
+        missing: true,
+        message: ''
+      };
+    }
+
+    var values = sh.getDataRange().getValues();
+    var kv = {};
+
+    for (var i = 1; i < values.length; i++) {
+      var k = String(values[i][0] || '').trim();
+      var v = String(values[i][1] || '').trim();
+      if (k) kv[k] = v;
+    }
+
+    var rawLock = String(kv.MASTER_SYNC_LOCK || '').toUpperCase();
+    var updatedAt = String(kv.MASTER_SYNC_UPDATED_AT || '').trim();
+    var message = String(kv.MASTER_SYNC_MESSAGE || '').trim();
+
+    var locked = rawLock === 'YES';
+    var stale = false;
+    var ageMin = null;
+
+    if (locked && updatedAt) {
+      var ts = new Date(updatedAt).getTime();
+
+      if (!isNaN(ts)) {
+        ageMin = (Date.now() - ts) / 60000;
+
+        if (ageMin > MASTER_SYNC_LOCK_MAX_AGE_MIN) {
+          locked = false;
+          stale = true;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      locked: locked,
+      stale: stale,
+      updatedAt: updatedAt,
+      ageMin: ageMin,
+      message: locked
+        ? (message || 'Master sync je u toku. Sačekajte završetak.')
+        : ''
+    };
+
+  } catch (err) {
+    logError('GAS', 'getMasterSyncState', err.message, err.stack || '', '');
+
+    return {
+      success: false,
+      locked: true,
+      code: 'SYNC_STATE_UNKNOWN',
+      error: 'Nije moguće proveriti master sync status.',
+      message: 'Nije moguće proveriti master sync status. Sačekajte i pokušajte ponovo.'
+    };
+  }
+}
+
+function isMasterSyncWriteAction(action) {
+  action = String(action || '');
+
+  return [
+    'saveParcelPolygon',
+
+    'sync',
+    'syncAgromere',
+    'syncZbirna',
+    'syncTretman',
+    'syncOprema',
+    'syncTrosak',
+
+    'uploadPdf',
+    'saveWarRoomDemand',
+    'removeWarRoomDemand',
+    'updateDemandPrimljeno',
+    'updateKamionStatus',
+    'saveDispecer',
+    'updateDispecer',
+    'removeDispecer',
+    'saveIzdavanje',
+
+    'saveFiskalni',
+    'saveFiskalniMapiranje',
+    'createArtikal'
+  ].indexOf(action) >= 0;
+}
+
+function blockWriteIfMasterSyncActive(action) {
+  if (!isMasterSyncWriteAction(action)) return null;
+
+  var state = getMasterSyncState();
+
+  if (state && state.locked) {
+    return jsonResponse({
+      success: false,
+      locked: true,
+      code: 'MASTER_SYNC_ACTIVE',
+      error: state.message || 'Master sync je u toku. Sačekajte završetak.',
+      message: state.message || 'Master sync je u toku. Sačekajte završetak.',
+      updatedAt: state.updatedAt || ''
+    });
+  }
+
+  return null;
+}
+
 function doPost(e) {
   const requestId = newRequestId();
   let action = '';
@@ -529,6 +664,9 @@ function doPost(e) {
     if (data.action === 'login') {
       return jsonResponse(authenticateUser(data.username, data.pin));
     }
+
+    var masterSyncWriteBlock = blockWriteIfMasterSyncActive(data.action);
+    if (masterSyncWriteBlock) return masterSyncWriteBlock;
 
     // ostaje javno samo ako to namerno želiš;
     // u suprotnom prebaci ispod auth check-a
