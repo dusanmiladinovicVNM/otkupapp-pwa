@@ -1,11 +1,41 @@
 Private Sub Workbook_Open()
+    On Error Resume Next
+    Monitor_AppOpen "Operator"
     On Error GoTo EH
+    
     StartApp
+
+    On Error Resume Next
+    Monitor_Event _
+        eventType:="VBA_STARTUP_SUCCESS", _
+        severity:="INFO", _
+        message:="Workbook startup completed", _
+        userId:="Operator", _
+        moduleName:="ThisWorkbook", _
+        procedureName:="Workbook_Open", _
+        entityType:="App", _
+        entityId:="Startup", _
+        correlationId:="VBA-STARTUP"
+    On Error GoTo 0
+    
     Exit Sub
+
 EH:
-    Application.Visible = True
+    On Error Resume Next
+
+    Monitor_Error _
+        moduleName:="ThisWorkbook", _
+        procedureName:="Workbook_Open", _
+        entityType:="App", _
+        entityId:="Startup", _
+        correlationId:="VBA-STARTUP", _
+        errorNumber:=Err.Number, _
+        errorDescription:=Err.description, _
+        errorSource:=Err.SOURCE
+
     LogErr "ThisWorkbook.Workbook_Open"
 
+    Application.Visible = True
     MsgBox "Greška pri pokretanju aplikacije. Pogledajte log.", vbCritical
 End Sub
 
