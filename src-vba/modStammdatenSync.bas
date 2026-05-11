@@ -1772,6 +1772,7 @@ Private Function IsPwaConfigKey(ByVal keyStr As String, ByVal pwaKeys As Variant
     ' Credentials ausschließen
     If Left$(keyStr, 7) = "GOOGLE_" Then Exit Function
     If Left$(keyStr, 4) = "SEF_" Then Exit Function
+    If Left$(keyStr, 5) = "SYNC_" Then Exit Function
     ' SELLER_* je DOZVOLJEN (za otkupni list)
     
     ' Cena-Keys
@@ -2242,7 +2243,7 @@ Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
 
     Monitor_Error _
         moduleName:="modStammdatenSync", _
-        procedureName:="SyncStammdatenToGoogle", _
+        procedureName:="SyncStammdatenToGoogle_Core", _
         entityType:="MasterData", _
         entityId:="Stammdaten", _
         correlationId:="STAMMDATEN-SYNC", _
