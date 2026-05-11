@@ -82,120 +82,16 @@ Private Sub EnsureMgmtReportTabsBestEffort(ByVal sheetID As String)
     Next i
 End Sub
 
-' ============================================================
-' PUBLIC — MASTER GOOGLE DIRECT SYNC
-' ============================================================
-
-Public Sub SyncAllGoogleDirect()
-    Dim okStammdaten As Boolean
-    Dim okKartice As Boolean
-    Dim okMgmt As Boolean
-    Dim msg As String
-    
-    On Error GoTo EH
-    
-    LogInfo "SyncAllGoogleDirect", "Full Google direct sync started."
-    
-    If Not IsGoogleAuthConfigured() Then
-        LogError "SyncAllGoogleDirect", "Google OAuth2 nije konfigurisan."
-        MsgBox "Google OAuth2 nije konfigurisan!" & vbCrLf & _
-               "Pokrenite RunGoogleAuthSetup iz modGoogleAuth.", _
-               vbCritical, APP_NAME
-        Exit Sub
-    End If
-    
-    If Len(Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))) = 0 Then
-        LogError "SyncAllGoogleDirect", "GOOGLE_PWA_FOLDER_ID nije postavljen."
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen u tblConfig!", _
-               vbCritical, APP_NAME
-        Exit Sub
-    End If
-    
-    okStammdaten = RunSyncStammdatenToGoogle()
-    okKartice = RunExportKarticeToGoogle()
-    okMgmt = RunExportMgmtReports()
-    
-    msg = "Google direct sync završen:" & vbCrLf & vbCrLf & _
-          "Stammdaten: " & SyncStatusText(okStammdaten) & vbCrLf & _
-          "Kartice: " & SyncStatusText(okKartice) & vbCrLf & _
-          "MgmtReports: " & SyncStatusText(okMgmt)
-    
-    LogInfo "SyncAllGoogleDirect", _
-        "Full Google direct sync completed. " & _
-        "Stammdaten=" & CStr(okStammdaten) & _
-        "; Kartice=" & CStr(okKartice) & _
-        "; MgmtReports=" & CStr(okMgmt)
-    
-    If okStammdaten And okKartice And okMgmt Then
-        MsgBox msg, vbInformation, APP_NAME
-    Else
-        MsgBox msg & vbCrLf & vbCrLf & _
-               "Neki sync/export nije uspeo. Proveri log.", _
-               vbExclamation, APP_NAME
-    End If
-    
-    Exit Sub
-
-EH:
-    LogErr "SyncAllGoogleDirect"
-    MsgBox "Greška u master Google sync-u: " & Err.description, _
-           vbCritical, APP_NAME
-End Sub
-
-Private Function SyncStatusText(ByVal ok As Boolean) As String
-    If ok Then
-        SyncStatusText = "OK"
-    Else
-        SyncStatusText = "GREŠKA"
-    End If
-End Function
-
-Private Function RunSyncStammdatenToGoogle() As Boolean
-    On Error GoTo EH
-    
-    Call SyncStammdatenToGoogle
-    
-    RunSyncStammdatenToGoogle = True
-    Exit Function
-
-EH:
-    LogErr "RunSyncStammdatenToGoogle"
-    RunSyncStammdatenToGoogle = False
-End Function
-
-Private Function RunExportKarticeToGoogle() As Boolean
-    On Error GoTo EH
-    
-    Call ExportKarticeToGoogle
-    
-    RunExportKarticeToGoogle = True
-    Exit Function
-
-EH:
-    LogErr "RunExportKarticeToGoogle"
-    RunExportKarticeToGoogle = False
-End Function
-
-Private Function RunExportMgmtReports() As Boolean
-    On Error GoTo EH
-    
-    Call ExportMgmtReports
-    
-    RunExportMgmtReports = True
-    Exit Function
-
-EH:
-    LogErr "RunExportMgmtReports"
-    RunExportMgmtReports = False
-End Function
+ 
 
 ' ============================================================
 ' PUBLIC — Hauptfunktion
 ' ============================================================
 Public Sub SyncStammdatenToGoogle()
-    ' Exportiert Stammdaten zu Google Sheet
-    ' Erstellt das Sheet automatisch wenn es nicht existiert
-    
+    Call SyncStammdatenToGoogle_Core(True)
+End Sub
+
+Public Function SyncStammdatenToGoogle_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetID As String
     Dim successCount As Long
@@ -204,19 +100,23 @@ Public Sub SyncStammdatenToGoogle()
     
     On Error GoTo EH
     
-    ' Auth prüfen
+    SyncStammdatenToGoogle_Core = False
+    
     If Not IsGoogleAuthConfigured() Then
         Monitor_StammdatenSyncFail _
             errNum:=0, _
             errDesc:="Google OAuth2 nije konfigurisan.", _
-            errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+            errSrc:="modStammdatenSync.SyncStammdatenToGoogle_Core", _
             successCount:=0, _
             totalTabs:=TOTAL_STAMMDATEN_TABS
         
-        MsgBox "Google OAuth2 nije konfigurisan!" & vbCrLf & _
-               "Pokrenite RunGoogleAuthSetup iz modGoogleAuth.", _
-               vbCritical, APP_NAME
-        Exit Sub
+        If showMessages Then
+            MsgBox "Google OAuth2 nije konfigurisan!" & vbCrLf & _
+                   "Pokrenite RunGoogleAuthSetup iz modGoogleAuth.", _
+                   vbCritical, APP_NAME
+        End If
+        
+        Exit Function
     End If
     
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
@@ -224,47 +124,47 @@ Public Sub SyncStammdatenToGoogle()
         Monitor_StammdatenSyncFail _
             errNum:=0, _
             errDesc:="GOOGLE_PWA_FOLDER_ID nije postavljen.", _
-            errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+            errSrc:="modStammdatenSync.SyncStammdatenToGoogle_Core", _
             successCount:=0, _
             totalTabs:=TOTAL_STAMMDATEN_TABS
         
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen u tblConfig!" & vbCrLf & _
-               "Unesite ID Google Drive foldera za PWA.", _
-               vbCritical, APP_NAME
-        Exit Sub
+        If showMessages Then
+            MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen u tblConfig!" & vbCrLf & _
+                   "Unesite ID Google Drive foldera za PWA.", _
+                   vbCritical, APP_NAME
+        End If
+        
+        Exit Function
     End If
     
-    ' Sheet finden oder erstellen
     sheetID = GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID")
     
     If Len(Trim$(sheetID)) = 0 Then
-        ' Suche existierendes
         sheetID = GetSpreadsheetID("Stammdaten", folderID)
     End If
     
     If Len(Trim$(sheetID)) = 0 Then
-        ' Erstelle neues
         sheetID = CreateSpreadsheet("Stammdaten", folderID)
+        
         If Len(sheetID) = 0 Then
             Monitor_StammdatenSyncFail _
                 errNum:=0, _
                 errDesc:="Google Stammdaten sheet could not be created.", _
-                errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+                errSrc:="modStammdatenSync.SyncStammdatenToGoogle_Core", _
                 successCount:=0, _
                 totalTabs:=TOTAL_STAMMDATEN_TABS
             
-            MsgBox "Google Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
-            Exit Sub
+            If showMessages Then
+                MsgBox "Google Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
+            End If
+            
+            Exit Function
         End If
-        
-        ' Tabs erstellen (Sheet1 umbenennen geht nicht einfach, also neue Tabs)
     End If
     
-    ' Sheet-ID speichern
     Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
     Call EnsureStammdatenTabsBestEffort(sheetID)
     
-    ' Daten exportieren
     If ExportKooperanti(sheetID) Then successCount = successCount + 1
     If ExportKulture(sheetID) Then successCount = successCount + 1
     If ExportParcele(sheetID) Then successCount = successCount + 1
@@ -279,9 +179,12 @@ Public Sub SyncStammdatenToGoogle()
     If ExportArtikli(sheetID) Then successCount = successCount + 1
     If ExportMagacinKoop(sheetID) Then successCount = successCount + 1
     
-    LogInfo "SyncStammdatenToGoogle", "Export abgeschlossen: " & successCount & "/13 Tabs"
+    LogInfo "SyncStammdatenToGoogle_Core", _
+            "Export abgeschlossen: " & successCount & "/" & TOTAL_STAMMDATEN_TABS & " Tabs"
     
-    If successCount = TOTAL_STAMMDATEN_TABS Then
+    SyncStammdatenToGoogle_Core = (successCount = TOTAL_STAMMDATEN_TABS)
+    
+    If SyncStammdatenToGoogle_Core Then
         Monitor_StammdatenSyncSuccess _
             successCount:=successCount, _
             totalTabs:=TOTAL_STAMMDATEN_TABS, _
@@ -290,14 +193,19 @@ Public Sub SyncStammdatenToGoogle()
         Monitor_StammdatenSyncFail _
             errNum:=0, _
             errDesc:="Stammdaten partial export. SuccessTabs=" & CStr(successCount) & "/" & CStr(TOTAL_STAMMDATEN_TABS), _
-            errSrc:="modStammdatenSync.SyncStammdatenToGoogle", _
+            errSrc:="modStammdatenSync.SyncStammdatenToGoogle_Core", _
             successCount:=successCount, _
             totalTabs:=TOTAL_STAMMDATEN_TABS
     End If
     
-    MsgBox "Stammdaten exportiert: " & successCount & " od 13 tabova.", _
-           vbInformation, APP_NAME
-    Exit Sub
+    If showMessages Then
+        MsgBox "Stammdaten exportiert: " & successCount & " od " & _
+               TOTAL_STAMMDATEN_TABS & " tabova.", _
+               IIf(SyncStammdatenToGoogle_Core, vbInformation, vbExclamation), _
+               APP_NAME
+    End If
+    
+    Exit Function
 
 EH:
     Dim errNum As Long
@@ -310,7 +218,7 @@ EH:
     
     On Error Resume Next
     
-    LogErr "SyncStammdatenToGoogle"
+    LogErr "SyncStammdatenToGoogle_Core"
     
     Monitor_StammdatenSyncFail _
         errNum:=errNum, _
@@ -319,31 +227,46 @@ EH:
         successCount:=successCount, _
         totalTabs:=TOTAL_STAMMDATEN_TABS
     
-    MsgBox "Greska pri eksportu stammdaten: " & errDesc, vbCritical, APP_NAME
-End Sub
+    If showMessages Then
+        MsgBox "Greska pri eksportu stammdaten: " & errDesc, vbCritical, APP_NAME
+    End If
+    
+    SyncStammdatenToGoogle_Core = False
+End Function
 
 Public Sub ExportKarticeToGoogle()
+    Call ExportKarticeToGoogle_Core(True)
+End Sub
+
+Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetID As String
     Dim koopData As Variant
-    Dim colKoopID As Long, colAktivan As Long
-    Dim i As Long, j As Long
+    Dim colKoopID As Long
+    Dim colAktivan As Long
+    Dim i As Long
+    Dim j As Long
     Dim allRows() As Variant
     Dim outRow As Long
     Dim totalRows As Long
-    Dim datumOd As Date, datumDo As Date
+    Dim datumOd As Date
+    Dim datumDo As Date
     
     On Error GoTo EH
     
+    ExportKarticeToGoogle_Core = False
+    
     If Not IsGoogleAuthConfigured() Then
-        MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
-        Exit Sub
+        LogError "ExportKarticeToGoogle_Core", "Google OAuth2 nije konfigurisan."
+        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        Exit Function
     End If
     
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(Trim$(folderID)) = 0 Then
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
-        Exit Sub
+        LogError "ExportKarticeToGoogle_Core", "GOOGLE_PWA_FOLDER_ID nije postavljen."
+        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        Exit Function
     End If
     
     sheetID = GetConfigValue("GOOGLE_KARTICE_SHEET_ID")
@@ -352,29 +275,34 @@ Public Sub ExportKarticeToGoogle()
     If Len(Trim$(sheetID)) = 0 Then
         sheetID = CreateSpreadsheet("Kartice", folderID)
         If Len(sheetID) = 0 Then
-            MsgBox "Kartice Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
-            Exit Sub
+            LogError "ExportKarticeToGoogle_Core", "Kartice Sheet could not be created."
+            If showMessages Then MsgBox "Kartice Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
+            Exit Function
         End If
     End If
     
     Call SetConfigValue("GOOGLE_KARTICE_SHEET_ID", sheetID)
     
     koopData = GetTableData(TBL_KOOPERANTI)
+    
     If IsEmpty(koopData) Then
-        Call WriteHeaderOnly(sheetID, "Sheet1", _
+        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, "Sheet1", _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
             "Opis", "Zaduzenje", "Razduzenje", "Saldo")
-        MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
-        Exit Sub
+        
+        If showMessages Then MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
+        Exit Function
     End If
     
     koopData = ExcludeStornirano(koopData, TBL_KOOPERANTI)
+    
     If IsEmpty(koopData) Then
-        Call WriteHeaderOnly(sheetID, "Sheet1", _
+        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, "Sheet1", _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
             "Opis", "Zaduzenje", "Razduzenje", "Saldo")
-        MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
-        Exit Sub
+        
+        If showMessages Then MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
+        Exit Function
     End If
     
     colKoopID = GetColumnIndex(TBL_KOOPERANTI, "KooperantID")
@@ -385,6 +313,7 @@ Public Sub ExportKarticeToGoogle()
     
     Dim koopList() As String
     Dim koopCount As Long
+    
     ReDim koopList(1 To UBound(koopData, 1))
     
     For i = 1 To UBound(koopData, 1)
@@ -395,15 +324,21 @@ Public Sub ExportKarticeToGoogle()
     Next i
     
     If koopCount = 0 Then
-        Call WriteHeaderOnly(sheetID, "Sheet1", _
+        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, "Sheet1", _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
             "Opis", "Zaduzenje", "Razduzenje", "Saldo")
-        MsgBox "Kartice exportiert: 0 stavki za 0 aktivnih kooperanata.", vbInformation, APP_NAME
-        Exit Sub
+        
+        If showMessages Then
+            MsgBox "Kartice exportiert: 0 stavki za 0 aktivnih kooperanata.", _
+                   vbInformation, APP_NAME
+        End If
+        
+        Exit Function
     End If
 
     Dim karticaResults() As Variant
     ReDim karticaResults(1 To koopCount)
+    
     totalRows = 1
 
     For i = 1 To koopCount
@@ -414,6 +349,7 @@ Public Sub ExportKarticeToGoogle()
     Next i
 
     ReDim allRows(1 To totalRows, 1 To 8)
+    
     allRows(1, 1) = "KooperantID"
     allRows(1, 2) = "Datum"
     allRows(1, 3) = "BrojDok"
@@ -446,7 +382,8 @@ Public Sub ExportKarticeToGoogle()
     
     If outRow < totalRows Then
         Dim finalRows() As Variant
-        Dim r As Long, c As Long
+        Dim r As Long
+        Dim c As Long
         
         ReDim finalRows(1 To outRow, 1 To 8)
         
@@ -456,36 +393,65 @@ Public Sub ExportKarticeToGoogle()
             Next c
         Next r
         
-        Call WriteSheetData(sheetID, "Sheet1", finalRows)
+        ExportKarticeToGoogle_Core = WriteSheetData(sheetID, "Sheet1", finalRows)
     Else
-        Call WriteSheetData(sheetID, "Sheet1", allRows)
+        ExportKarticeToGoogle_Core = WriteSheetData(sheetID, "Sheet1", allRows)
     End If
     
-    LogInfo "ExportKarticeToGoogle", outRow - 1 & " Zeilen fuer " & koopCount & " Kooperanten"
-    MsgBox "Kartice exportiert: " & (outRow - 1) & " stavki za " & koopCount & " kooperanata.", vbInformation, APP_NAME
-    Exit Sub
+    If ExportKarticeToGoogle_Core Then
+        LogInfo "ExportKarticeToGoogle_Core", _
+                CStr(outRow - 1) & " Zeilen fuer " & CStr(koopCount) & " Kooperanten"
+    Else
+        LogError "ExportKarticeToGoogle_Core", "WriteSheetData failed."
+    End If
+    
+    If showMessages Then
+        If ExportKarticeToGoogle_Core Then
+            MsgBox "Kartice exportiert: " & (outRow - 1) & _
+                   " stavki za " & koopCount & " kooperanata.", _
+                   vbInformation, APP_NAME
+        Else
+            MsgBox "Kartice export nije uspeo. Proveri log.", vbExclamation, APP_NAME
+        End If
+    End If
+    
+    Exit Function
 
 EH:
-    LogErr "ExportKarticeToGoogle"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
-End Sub
+    LogErr "ExportKarticeToGoogle_Core"
+    
+    If showMessages Then
+        MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    End If
+    
+    ExportKarticeToGoogle_Core = False
+End Function
 
 Public Sub ExportMgmtReports()
+    Call ExportMgmtReports_Core(True)
+End Sub
+
+Public Function ExportMgmtReports_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetID As String
     Dim ok As Long
     
     On Error GoTo EH
     
+    ExportMgmtReports_Core = False
+    
     If Not IsGoogleAuthConfigured() Then
-        MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
-        Exit Sub
+        LogError "ExportMgmtReports_Core", "Google OAuth2 nije konfigurisan."
+        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        Exit Function
     End If
     
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+    
     If Len(Trim$(folderID)) = 0 Then
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
-        Exit Sub
+        LogError "ExportMgmtReports_Core", "GOOGLE_PWA_FOLDER_ID nije postavljen."
+        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        Exit Function
     End If
     
     sheetID = GetConfigValue("GOOGLE_MGMT_SHEET_ID")
@@ -493,9 +459,11 @@ Public Sub ExportMgmtReports()
     
     If Len(Trim$(sheetID)) = 0 Then
         sheetID = CreateSpreadsheet("MgmtReports", folderID)
+        
         If Len(sheetID) = 0 Then
-            MsgBox "MgmtReports Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
-            Exit Sub
+            LogError "ExportMgmtReports_Core", "MgmtReports Sheet could not be created."
+            If showMessages Then MsgBox "MgmtReports Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
+            Exit Function
         End If
     End If
     
@@ -507,21 +475,34 @@ Public Sub ExportMgmtReports()
     If ExportOtkupPoOM(sheetID) Then ok = ok + 1
     If ExportPredatoPoKupcu(sheetID) Then ok = ok + 1
     
-    If ok = 4 Then
-        LogInfo "ExportMgmtReports", "MgmtReports export completed: 4/4"
-        MsgBox "MgmtReports exportiert: 4/4", vbInformation, APP_NAME
+    ExportMgmtReports_Core = (ok = 4)
+    
+    If ExportMgmtReports_Core Then
+        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 4/4"
     Else
-        LogWarn "ExportMgmtReports", "MgmtReports partial export: " & CStr(ok) & "/4"
-        MsgBox "MgmtReports exportiert: " & ok & "/4. Proveri log.", vbExclamation, APP_NAME
+        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/4"
     End If
     
-    Exit Sub
+    If showMessages Then
+        If ExportMgmtReports_Core Then
+            MsgBox "MgmtReports exportiert: 4/4", vbInformation, APP_NAME
+        Else
+            MsgBox "MgmtReports exportiert: " & CStr(ok) & "/4. Proveri log.", _
+                   vbExclamation, APP_NAME
+        End If
+    End If
+    
+    Exit Function
 
 EH:
-    LogErr "ExportMgmtReports"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
-End Sub
-
+    LogErr "ExportMgmtReports_Core"
+    
+    If showMessages Then
+        MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    End If
+    
+    ExportMgmtReports_Core = False
+End Function
 Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
     Dim data As Variant
     Dim colStanica As Long, colVrsta As Long, colKlasa As Long
