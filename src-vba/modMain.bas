@@ -77,6 +77,17 @@ Public Sub StartApp()
         correlationId:="VBA-STARTUP"
     On Error GoTo 0
 
+    ' NEW: Auto-sync scheduler.
+    ' Ako SYNC_AUTO_INTERVAL_MIN nije postavljen ili je 0,
+    ' StartScheduledSync samo loguje OFF i izlazi.
+    On Error Resume Next
+    StartScheduledSync
+    If Err.Number <> 0 Then
+        LogErr "modMain.StartApp.StartScheduledSync"
+        Err.Clear
+    End If
+    On Error GoTo 0
+
     ' frmSplash sam sebe Unloaduje i pokrece frmOtkupAPP
     Exit Sub
 
@@ -106,12 +117,14 @@ EH:
     On Error GoTo 0
     Err.Raise errNo, errSrc, errDesc
 End Sub
+
 Public Sub InitApp()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.EnableEvents = False
     
     On Error GoTo ErrHandler
+    
     ValidateAllTables
     m_Initialized = True
     
@@ -131,6 +144,15 @@ Public Sub ShutdownApp()
 
     If mIsShuttingDown Then Exit Sub
     mIsShuttingDown = True
+
+    ' NEW: Otkazi pending OnTime pre gasenja aplikacije.
+    On Error Resume Next
+    StopScheduledSync
+    If Err.Number <> 0 Then
+        LogErr "modMain.ShutdownApp.StopScheduledSync"
+        Err.Clear
+    End If
+    On Error GoTo EH
 
     Application.Visible = True
 
@@ -154,6 +176,7 @@ Private Sub UnloadAllUserForms()
 
     On Error GoTo 0
 End Sub
+
 Public Sub OpenExcel()
     Application.Visible = True
 End Sub
@@ -170,6 +193,7 @@ End Sub
 
 Private Sub ValidateAllTables()
     Dim tblNames As Variant
+    
     tblNames = Array(TBL_KOOPERANTI, TBL_STANICE, TBL_VOZACI, _
                      TBL_KUPCI, TBL_KULTURE, TBL_OTKUP, _
                      TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
@@ -178,6 +202,7 @@ Private Sub ValidateAllTables()
     
     Dim i As Long
     Dim missing As String
+    
     For i = LBound(tblNames) To UBound(tblNames)
         If GetTable(CStr(tblNames(i))) Is Nothing Then
             missing = missing & CStr(tblNames(i)) & vbCrLf
@@ -189,5 +214,4 @@ Private Sub ValidateAllTables()
                vbCrLf & "Pokrenite Setup.", vbExclamation, APP_NAME
     End If
 End Sub
-
 
