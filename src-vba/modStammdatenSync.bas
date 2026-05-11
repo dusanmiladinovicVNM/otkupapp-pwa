@@ -2227,7 +2227,7 @@ Private Sub Monitor_StammdatenSyncSuccess(ByVal successCount As Long, _
         message:="Stammdaten sync completed. SuccessTabs=" & CStr(successCount) & "/" & CStr(totalTabs), _
         userId:="Operator", _
         moduleName:="modStammdatenSync", _
-        procedureName:="SyncStammdatenToGoogle", _
+        procedureName:="SyncStammdatenToGoogle_Core", _
         entityType:="MasterData", _
         entityId:="Stammdaten", _
         correlationId:="STAMMDATEN-SYNC"
@@ -2257,7 +2257,7 @@ Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
                  "; Error=" & errDesc, _
         userId:="Operator", _
         moduleName:="modStammdatenSync", _
-        procedureName:="SyncStammdatenToGoogle", _
+        procedureName:="SyncStammdatenToGoogle_Core", _
         entityType:="MasterData", _
         entityId:="Stammdaten", _
         correlationId:="STAMMDATEN-SYNC"
