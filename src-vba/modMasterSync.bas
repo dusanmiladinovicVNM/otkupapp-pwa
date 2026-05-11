@@ -411,6 +411,47 @@ EH:
     MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
+Public Function AutoCreateOtpremniceFromPWA_TX() As Long
+    Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
+
+    Dim tx As clsTransaction
+    Dim createdCount As Long
+
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    createdCount = AutoCreateOtpremniceFromPWA()
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    AutoCreateOtpremniceFromPWA_TX = createdCount
+
+    LogInfo SRC, "Auto-create Otpremnice completed. Created=" & CStr(createdCount)
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
 Public Function AutoCreateOtpremniceFromPWA() As Long
     ' Nach ImportOtkupFromPWA: erstellt Otpremnice für PWA-Otkupi mit VozacID
     ' Gruppierung: StanicaID + Datum + VozacID + Klasa (= AutoLink Key)
@@ -1384,6 +1425,15 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
         MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", _
             "Google OAuth2 nije konfigurisan."
 
+        Monitor_MasterSyncFail _
+            procedureName:="ImportZbirneFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="Google OAuth2 nije konfigurisan.", _
+            errSrc:="modMasterSync.ImportZbirneFromPWA_Core", _
+            importedCount:=0, _
+            skippedCount:=0, _
+            errorCount:=0
+
         If showMessages Then
             MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
         End If
@@ -1396,6 +1446,15 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
     If Len(Trim$(folderID)) = 0 Then
         MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", _
             "GOOGLE_PWA_FOLDER_ID nije postavljen."
+
+        Monitor_MasterSyncFail _
+            procedureName:="ImportZbirneFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="GOOGLE_PWA_FOLDER_ID nije postavljen.", _
+            errSrc:="modMasterSync.ImportZbirneFromPWA_Core", _
+            importedCount:=0, _
+            skippedCount:=0, _
+            errorCount:=0
 
         If showMessages Then
             MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
@@ -1410,9 +1469,17 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
     Set sheetNames = New Collection
 
     If Not FindVOZSheets(folderID, sheetIDs, sheetNames) Then
-        ' Ovo tretiramo kao neuspešan run, ali ne nužno fatal schema/corrupt error.
         LogWarn "ImportZbirneFromPWA_Core", _
             "FindVOZSheets failed. Drive list could not be loaded. Retry later."
+
+        Monitor_MasterSyncFail _
+            procedureName:="ImportZbirneFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="FindVOZSheets failed. Drive list could not be loaded.", _
+            errSrc:="modMasterSync.ImportZbirneFromPWA_Core", _
+            importedCount:=0, _
+            skippedCount:=0, _
+            errorCount:=1
 
         If showMessages Then
             MsgBox "Google Drive lista VOZ fajlova nije ucitana." & vbCrLf & _
@@ -1425,6 +1492,13 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
     End If
 
     If sheetIDs.count = 0 Then
+        Monitor_MasterSyncSuccess _
+            procedureName:="ImportZbirneFromPWA_Core", _
+            importedCount:=0, _
+            skippedCount:=0, _
+            errorCount:=0, _
+            filesCount:=0
+
         If showMessages Then
             MsgBox "Nema VOZ-* fajlova u PWA folderu.", vbInformation, APP_NAME
         End If
@@ -1465,11 +1539,14 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
         "; Errors=" & CStr(totalErrors)
 
     If mLastPWAFatalSyncError Then
-        LogError "ImportZbirneFromPWA_Core", _
-            "Fatal PWA sync error occurred during VOZ/Zbirne import. " & _
-            "Imported=" & CStr(totalImported) & _
-            "; Skipped=" & CStr(totalSkipped) & _
-            "; Errors=" & CStr(totalErrors)
+        Monitor_MasterSyncFail _
+            procedureName:="ImportZbirneFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="Fatal PWA sync error occurred during VOZ/Zbirne import.", _
+            errSrc:="modMasterSync.ImportZbirneFromPWA_Core", _
+            importedCount:=totalImported, _
+            skippedCount:=totalSkipped, _
+            errorCount:=totalErrors
 
         If showMessages Then
             MsgBox "Uvoz zbirnih nije potvrden zbog fatal sync greške." & vbCrLf & _
@@ -1485,11 +1562,14 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
     End If
 
     If totalErrors > 0 Then
-        LogWarn "ImportZbirneFromPWA_Core", _
-            "VOZ/Zbirne import completed with row-level errors. " & _
-            "Imported=" & CStr(totalImported) & _
-            "; Skipped=" & CStr(totalSkipped) & _
-            "; Errors=" & CStr(totalErrors)
+        Monitor_MasterSyncFail _
+            procedureName:="ImportZbirneFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="VOZ/Zbirne import completed with row-level errors.", _
+            errSrc:="modMasterSync.ImportZbirneFromPWA_Core", _
+            importedCount:=totalImported, _
+            skippedCount:=totalSkipped, _
+            errorCount:=totalErrors
 
         If showMessages Then
             MsgBox "Uvoz zbirnih završen sa greškama." & vbCrLf & vbCrLf & _
@@ -1504,6 +1584,13 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
         ImportZbirneFromPWA_Core = False
         Exit Function
     End If
+
+    Monitor_MasterSyncSuccess _
+        procedureName:="ImportZbirneFromPWA_Core", _
+        importedCount:=totalImported, _
+        skippedCount:=totalSkipped, _
+        errorCount:=totalErrors, _
+        filesCount:=filesCount
 
     If showMessages Then
         MsgBox "Uvoz zbirnih završen!" & vbCrLf & vbCrLf & _
@@ -1531,12 +1618,54 @@ EH:
     MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", errDesc
     LogErr "ImportZbirneFromPWA_Core"
 
+    Monitor_MasterSyncFail _
+        procedureName:="ImportZbirneFromPWA_Core", _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        importedCount:=totalImported, _
+        skippedCount:=totalSkipped, _
+        errorCount:=totalErrors
+
     If showMessages Then
         MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
     End If
 
     ImportZbirneFromPWA_Core = False
 End Function
+
+Public Sub ImportZbirneFromPWA_TX()
+    Dim tx As clsTransaction
+    Dim ok As Boolean
+    
+    On Error GoTo EH
+    
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+    
+    ok = ImportZbirneFromPWA_Core(False)
+    
+    If Not ok Then
+        tx.RollbackTx
+        MsgBox "Uvoz zbirnih nije potvrden. Promene su vracene zbog greške u sync/import toku.", _
+               vbCritical, APP_NAME
+        Exit Sub
+    End If
+    
+    tx.CommitTx
+    
+    MsgBox "Uvoz zbirnih završen i potvrden.", vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogErr "ImportZbirneFromPWA_TX"
+    If Not tx Is Nothing Then tx.RollbackTx
+    MsgBox "Greska pri uvozu zbirnih, promene vracene: " & Err.description, vbCritical, APP_NAME
+End Sub
+
 ' ============================================================
 ' PRIVATE — Find VOZ-* Sheets in Folder
 ' ============================================================
