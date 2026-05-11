@@ -16,12 +16,9 @@ Option Explicit
 '      - Export Kartice
 '      - Export MgmtReports
 '
-' UI dugme poziva:
-'   SyncPWAFullCycle
-'
-' Auto-sync:
-'   SYNC_AUTO_INTERVAL_MIN = 0 ili prazno => OFF
-'   Minimum dozvoljeno: 15 minuta
+'   3. PWA LOCK:
+'      - SyncControl tab u Stammdaten
+'      - MASTER_SYNC_LOCK = YES/NO
 ' ============================================================
 
 Private Const ORCH_MODULE As String = "modGoogleSyncOrchestrator"
@@ -30,17 +27,24 @@ Private Const REQUIRE_GEO_PULL_BEFORE_OUTBOUND As Boolean = True
 Private Const SYNC_AUTO_INTERVAL_MIN_KEY As String = "SYNC_AUTO_INTERVAL_MIN"
 Private Const SYNC_AUTO_MIN_ALLOWED_MIN As Long = 15
 
+Private Const SYNC_CONTROL_TAB As String = "SyncControl"
+Private Const MASTER_SYNC_LOCK_KEY As String = "MASTER_SYNC_LOCK"
+
 Private mNextScheduledRun As Date
 Private mIsScheduled As Boolean
 Private mSyncInProgress As Boolean
 
 ' ============================================================
-' PUBLIC ENTRY POINT
+' PUBLIC ENTRY POINTS
 ' ============================================================
 
 Public Sub SyncPWAFullCycle()
     Call SyncPWAFullCycle_Core(True)
 End Sub
+
+Public Function SyncPWAFullCycle_ForButton() As Boolean
+    SyncPWAFullCycle_ForButton = SyncPWAFullCycle_Core(False)
+End Function
 
 ' ============================================================
 ' CORE
@@ -60,6 +64,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim createdOtp As Long
     Dim errNum As Long
     Dim errDesc As String
+    Dim pwaLockAcquired As Boolean
 
     On Error GoTo EH
 
@@ -69,7 +74,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         LogWarn ORCH_MODULE, "SyncPWAFullCycle_Core re-entered. Aborting."
 
         If showMessages Then
-            MsgBox "Sync je vec u toku. Sacekaj da se završi pa pokušaj ponovo.", _
+            MsgBox "Sync je vec u toku. Sacekaj da se zavrsi pa pokusaj ponovo.", _
                    vbExclamation, APP_NAME
         End If
 
@@ -82,10 +87,12 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
     summary = "PWA / Google sync ciklus:" & vbCrLf & vbCrLf
 
+    SyncProgress "Proveravam Google konfiguraciju..."
+
     If Not IsGoogleAuthConfigured() Then
         LogError ORCH_MODULE, "Google OAuth2 nije konfigurisan."
 
-        summary = summary & "GREŠKA - Google OAuth2 nije konfigurisan." & vbCrLf
+        summary = summary & "GRESKA - Google OAuth2 nije konfigurisan." & vbCrLf
 
         Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                              okStammdaten, okKartice, okMgmt, False
@@ -102,7 +109,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     If Len(Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))) = 0 Then
         LogError ORCH_MODULE, "GOOGLE_PWA_FOLDER_ID nije postavljen."
 
-        summary = summary & "GREŠKA - GOOGLE_PWA_FOLDER_ID nije postavljen." & vbCrLf
+        summary = summary & "GRESKA - GOOGLE_PWA_FOLDER_ID nije postavljen." & vbCrLf
 
         Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                              okStammdaten, okKartice, okMgmt, False
@@ -114,9 +121,30 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         GoTo CleanExit
     End If
 
+    SyncProgress "Zakljucavam PWA upis dok traje master sync..."
+
+    If Not SetPWAMasterSyncLock(True, "Master sync je u toku. Sacekajte zavrsetak.") Then
+        LogError ORCH_MODULE, "PWA lock could not be acquired. Cycle aborted."
+
+        summary = summary & "GRESKA - PWA lock nije postavljen. Sync prekinut." & vbCrLf
+
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, False
+
+        If showMessages Then
+            MsgBox summary, vbCritical, APP_NAME
+        End If
+
+        GoTo CleanExit
+    End If
+
+    pwaLockAcquired = True
+    SyncProgress "PWA upis je privremeno zakljucan."
+
     summary = summary & "[MASTER / INBOUND]" & vbCrLf
 
     ' 1. Geo pull je hard gate da Stammdaten ne pregazi poligone.
+    SyncProgress "Povlacim geo/poligone iz Google Sheets..."
     okGeo = ImportParcelGeoFromGoogleToMaster()
     AppendStep summary, okGeo, "Geo/Polygon pull Google -> tblParcele"
 
@@ -135,6 +163,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     End If
 
     ' 2. OTK import
+    SyncProgress "Uvozim OTK zapise iz PWA..."
     okOtkup = ImportOtkupFromPWA_Core(False)
     AppendStep summary, okOtkup, "Import OTK/PWA -> tblOtkup"
 
@@ -149,6 +178,8 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     End If
 
     ' 3. Auto-create Otpremnice
+    SyncProgress "Kreiram / povezujem otpremnice..."
+
     On Error Resume Next
     Err.Clear
     createdOtp = AutoCreateOtpremniceFromPWA_TX()
@@ -175,6 +206,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     End If
 
     ' 4. VOZ/Zbirne import
+    SyncProgress "Uvozim zbirne vozaca..."
     okZbirne = ImportZbirneFromPWA_Core(False)
     AppendStep summary, okZbirne, "Import VOZ/Zbirne -> tblZbirna"
 
@@ -191,12 +223,15 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     summary = summary & vbCrLf & "[STAMMDATEN / OUTBOUND]" & vbCrLf
 
     ' 5. Outbound exports
+    SyncProgress "Eksportujem Stammdaten..."
     okStammdaten = SyncStammdatenToGoogle_Core(False)
     AppendStep summary, okStammdaten, "Export Stammdaten tbl* -> Google"
 
+    SyncProgress "Eksportujem kartice..."
     okKartice = ExportKarticeToGoogle_Core(False)
     AppendStep summary, okKartice, "Export Kartice -> Google"
 
+    SyncProgress "Eksportujem MgmtReports..."
     okMgmt = ExportMgmtReports_Core(False)
     AppendStep summary, okMgmt, "Export MgmtReports -> Google"
 
@@ -223,26 +258,45 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         "; Kartice=" & CStr(okKartice) & _
         "; MgmtReports=" & CStr(okMgmt)
 
+    If SyncPWAFullCycle_Core Then
+        SyncProgress "Full sync uspesno zavrsen."
+    Else
+        SyncProgress "Full sync zavrsen sa greskom / partial statusom."
+    End If
+
     If showMessages Then
         If SyncPWAFullCycle_Core Then
             MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
         Else
-            MsgBox summary & vbCrLf & "Status: GREŠKA / PARTIAL", vbExclamation, APP_NAME
+            MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
         End If
     End If
 
 CleanExit:
+    If pwaLockAcquired Then
+        SyncProgress "Otkljucavam PWA upis..."
+
+        If Not SetPWAMasterSyncLock(False, "Master sync zavrsen.") Then
+            LogError ORCH_MODULE, "PWA lock release failed. Manual check required."
+        Else
+            SyncProgress "PWA upis je ponovo dozvoljen."
+        End If
+    End If
+
     mSyncInProgress = False
     Exit Function
 
 EH:
+    Dim fatalDesc As String
+    fatalDesc = Err.description
+
     LogErr ORCH_MODULE & ".SyncPWAFullCycle_Core"
 
     Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                          okStammdaten, okKartice, okMgmt, False
 
     If showMessages Then
-        MsgBox "Greška u PWA / Google sync ciklusu: " & Err.description, _
+        MsgBox "Greska u PWA / Google sync ciklusu: " & fatalDesc, _
                vbCritical, APP_NAME
     End If
 
@@ -257,9 +311,26 @@ Private Sub AppendStep(ByRef summary As String, _
         summary = summary & "OK - " & stepName & vbCrLf
         LogInfo ORCH_MODULE, "OK - " & stepName
     Else
-        summary = summary & "GREŠKA - " & stepName & vbCrLf
+        summary = summary & "GRESKA - " & stepName & vbCrLf
         LogError ORCH_MODULE, "FAIL - " & stepName
     End If
+End Sub
+
+Private Sub SyncProgress(ByVal message As String)
+    On Error Resume Next
+
+    Dim uf As Object
+
+    LogInfo ORCH_MODULE, "PROGRESS - " & CStr(message)
+
+    For Each uf In VBA.UserForms
+        If TypeName(uf) = "frmOtkupAPP" Then
+            uf.AppendPWASyncLog CStr(message)
+            Exit For
+        End If
+    Next uf
+
+    DoEvents
 End Sub
 
 Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
@@ -308,6 +379,94 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
             errorSource:=ORCH_MODULE
     End If
 End Sub
+
+' ============================================================
+' PWA MASTER SYNC LOCK
+' ============================================================
+
+Private Function GetOrCreateStammdatenSheetIDForSyncLock() As String
+    Const SRC As String = "GetOrCreateStammdatenSheetIDForSyncLock"
+
+    Dim folderID As String
+    Dim sheetID As String
+
+    On Error GoTo EH
+
+    folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+    If Len(Trim$(folderID)) = 0 Then Exit Function
+
+    sheetID = GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID")
+
+    If Len(Trim$(sheetID)) = 0 Then
+        sheetID = GetSpreadsheetID("Stammdaten", folderID)
+    End If
+
+    If Len(Trim$(sheetID)) = 0 Then
+        sheetID = CreateSpreadsheet("Stammdaten", folderID)
+    End If
+
+    If Len(Trim$(sheetID)) > 0 Then
+        Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
+
+        On Error Resume Next
+        Call AddSheetTab(sheetID, SYNC_CONTROL_TAB)
+        On Error GoTo EH
+    End If
+
+    GetOrCreateStammdatenSheetIDForSyncLock = sheetID
+    Exit Function
+
+EH:
+    LogErr SRC
+    GetOrCreateStammdatenSheetIDForSyncLock = ""
+End Function
+
+Private Function SetPWAMasterSyncLock(ByVal locked As Boolean, _
+                                      Optional ByVal message As String = "") As Boolean
+    Const SRC As String = "SetPWAMasterSyncLock"
+
+    Dim sheetID As String
+    Dim rows(1 To 5, 1 To 2) As Variant
+
+    On Error GoTo EH
+
+    sheetID = GetOrCreateStammdatenSheetIDForSyncLock()
+
+    If Len(Trim$(sheetID)) = 0 Then
+        LogError SRC, "Stammdaten sheetID nije dostupan."
+        SetPWAMasterSyncLock = False
+        Exit Function
+    End If
+
+    rows(1, 1) = "Parameter"
+    rows(1, 2) = "Vrednost"
+
+    rows(2, 1) = MASTER_SYNC_LOCK_KEY
+    rows(2, 2) = IIf(locked, "YES", "NO")
+
+    rows(3, 1) = "MASTER_SYNC_UPDATED_AT"
+    rows(3, 2) = Format$(Now, "yyyy-mm-dd\Thh:nn:ss")
+
+    rows(4, 1) = "MASTER_SYNC_MESSAGE"
+    rows(4, 2) = CStr(message)
+
+    rows(5, 1) = "MASTER_SYNC_OWNER"
+    rows(5, 2) = "VBA"
+
+    SetPWAMasterSyncLock = WriteSheetData(sheetID, SYNC_CONTROL_TAB, rows)
+
+    If SetPWAMasterSyncLock Then
+        LogInfo SRC, "PWA master sync lock=" & IIf(locked, "YES", "NO")
+    Else
+        LogError SRC, "WriteSheetData failed for SyncControl."
+    End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    SetPWAMasterSyncLock = False
+End Function
 
 ' ============================================================
 ' SCHEDULED AUTO-SYNC
@@ -383,8 +542,10 @@ Reschedule:
 
 EH:
     LogErr ORCH_MODULE & ".ScheduledSyncTick"
+    Err.Clear
 
     On Error Resume Next
+
     Dim fallbackInterval As Long
     fallbackInterval = GetScheduledSyncIntervalMin()
 
