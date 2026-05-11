@@ -39,7 +39,6 @@ EH:
     MsgBox "Greška pri pokretanju aplikacije. Pogledajte log.", vbCritical
 End Sub
 
-
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     On Error GoTo EH
 
@@ -50,3 +49,4 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
 EH:
     LogErr "ThisWorkbook.Workbook_BeforeClose"
 End Sub
+
