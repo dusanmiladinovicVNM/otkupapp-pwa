@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'AgriX-v1-C001';
+const CACHE_NAME = 'AgriX-v2-C001';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -23,6 +23,7 @@ const ASSETS = [
     './src/js/utils/async.js',
     './src/js/utils/merge.js',
     './src/js/utils/sync-engine.js',
+    './src/js/utils/master-sync-guard.js',
 
     // Config + State
     './src/js/config.js',
