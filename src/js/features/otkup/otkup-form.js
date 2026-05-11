@@ -351,6 +351,14 @@ function onVrstaChange() {
 
 async function saveOtkup() {
     if (typeof withSubmitLock !== 'function') {
+        if (typeof window.ensureMasterSyncNotActive === 'function') {
+            const allowed = await window.ensureMasterSyncNotActive('saveOtkup', {
+                showToast: true
+            });
+
+            if (!allowed) return;
+        }
+
         return saveOtkupUnlocked();
     }
 
