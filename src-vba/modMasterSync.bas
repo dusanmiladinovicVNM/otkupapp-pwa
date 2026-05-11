@@ -75,11 +75,12 @@ Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
 ' ============================================================
 ' PUBLIC — Hauptfunktion
 ' ============================================================
+
 Public Sub ImportOtkupFromPWA()
     Call ImportOtkupFromPWA_Core(True)
 End Sub
 
-Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolean
+Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection
@@ -91,24 +92,34 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
 
     On Error GoTo EH
 
+    ImportOtkupFromPWA_Core = False
     mLastPWAFatalSyncError = False
 
     If Not IsGoogleAuthConfigured() Then
-        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", "Google OAuth2 nije konfigurisan."
-        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
-        ImportOtkupFromPWA_Core = False
+        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", _
+            "Google OAuth2 nije konfigurisan."
+
+        If showMessages Then
+            MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        End If
+
         Exit Function
     End If
 
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+
     If Len(Trim$(folderID)) = 0 Then
-        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", "GOOGLE_PWA_FOLDER_ID nije postavljen."
-        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
-        ImportOtkupFromPWA_Core = False
+        MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", _
+            "GOOGLE_PWA_FOLDER_ID nije postavljen."
+
+        If showMessages Then
+            MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        End If
+
         Exit Function
     End If
 
-    LogInfo "ImportOtkupFromPWA", "Import gestartet"
+    LogInfo "ImportOtkupFromPWA_Core", "Import started."
 
     Set sheetIDs = New Collection
     Set sheetNames = New Collection
@@ -116,8 +127,12 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
     If Not FindOTKSheets(folderID, sheetIDs, sheetNames) Then
         MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", _
             "FindOTKSheets failed. Drive list could not be loaded."
-        If showMessages Then MsgBox "Google Drive lista OTK fajlova nije ucitana. Proveri log.", vbCritical, APP_NAME
-        ImportOtkupFromPWA_Core = False
+
+        If showMessages Then
+            MsgBox "Google Drive lista OTK fajlova nije ucitana. Proveri konekciju i log.", _
+                   vbCritical, APP_NAME
+        End If
+
         Exit Function
     End If
 
@@ -129,7 +144,10 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=0, _
             filesCount:=0
 
-        If showMessages Then MsgBox "Nema OTK-* fajlova u PWA folderu.", vbInformation, APP_NAME
+        If showMessages Then
+            MsgBox "Nema OTK-* fajlova u PWA folderu.", vbInformation, APP_NAME
+        End If
+
         ImportOtkupFromPWA_Core = True
         Exit Function
     End If
@@ -141,59 +159,121 @@ Private Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boole
         Dim skipped As Long
         Dim errors As Long
 
-        Call ImportOneOTKSheet(CStr(sheetIDs(i)), CStr(sheetNames(i)), imported, skipped, errors)
+        imported = 0
+        skipped = 0
+        errors = 0
+
+        Call ImportOneOTKSheet( _
+            CStr(sheetIDs(i)), _
+            CStr(sheetNames(i)), _
+            imported, _
+            skipped, _
+            errors)
 
         totalImported = totalImported + imported
         totalSkipped = totalSkipped + skipped
         totalErrors = totalErrors + errors
     Next i
 
-    LogInfo "ImportOtkupFromPWA", _
-            "Import abgeschlossen: " & totalImported & " importiert, " & _
-            totalSkipped & " preskoceno, " & totalErrors & " greske aus " & sheetIDs.count & " fajlova"
-
-    If showMessages Then
-        MsgBox "Uvoz zavrsen!" & vbCrLf & vbCrLf & _
-               "Fajlova: " & sheetIDs.count & vbCrLf & _
-               "Uvezeno: " & totalImported & vbCrLf & _
-               "Preskoceno: " & totalSkipped & vbCrLf & _
-               "Greske: " & totalErrors, _
-               vbInformation, APP_NAME
-    End If
+    LogInfo "ImportOtkupFromPWA_Core", _
+        "Import completed. Files=" & CStr(filesCount) & _
+        "; Imported=" & CStr(totalImported) & _
+        "; Skipped=" & CStr(totalSkipped) & _
+        "; Errors=" & CStr(totalErrors)
 
     If mLastPWAFatalSyncError Then
         Monitor_MasterSyncFail _
             procedureName:="ImportOtkupFromPWA_Core", _
             errNum:=0, _
-            errDesc:="Fatal PWA sync error occurred during import", _
+            errDesc:="Fatal PWA sync error occurred during OTK import.", _
             errSrc:="modMasterSync.ImportOtkupFromPWA_Core", _
             importedCount:=totalImported, _
             skippedCount:=totalSkipped, _
             errorCount:=totalErrors
-    Else
-        Monitor_MasterSyncSuccess _
+
+        If showMessages Then
+            MsgBox "Uvoz OTK nije potvrden zbog fatal sync greške." & vbCrLf & _
+                   "Uvezeno: " & CStr(totalImported) & vbCrLf & _
+                   "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
+                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Proveri log.", _
+                   vbCritical, APP_NAME
+        End If
+
+        ImportOtkupFromPWA_Core = False
+        Exit Function
+    End If
+
+    If totalErrors > 0 Then
+        Monitor_MasterSyncFail _
             procedureName:="ImportOtkupFromPWA_Core", _
+            errNum:=0, _
+            errDesc:="OTK import completed with row-level errors.", _
+            errSrc:="modMasterSync.ImportOtkupFromPWA_Core", _
             importedCount:=totalImported, _
             skippedCount:=totalSkipped, _
-            errorCount:=totalErrors, _
-            filesCount:=filesCount
+            errorCount:=totalErrors
+
+        If showMessages Then
+            MsgBox "Uvoz OTK završen sa greškama." & vbCrLf & vbCrLf & _
+                   "Fajlova: " & CStr(filesCount) & vbCrLf & _
+                   "Uvezeno: " & CStr(totalImported) & vbCrLf & _
+                   "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
+                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Proveri log.", _
+                   vbExclamation, APP_NAME
+        End If
+
+        ImportOtkupFromPWA_Core = False
+        Exit Function
     End If
-    
-    ImportOtkupFromPWA_Core = Not mLastPWAFatalSyncError
+
+    Monitor_MasterSyncSuccess _
+        procedureName:="ImportOtkupFromPWA_Core", _
+        importedCount:=totalImported, _
+        skippedCount:=totalSkipped, _
+        errorCount:=totalErrors, _
+        filesCount:=filesCount
+
+    If showMessages Then
+        MsgBox "Uvoz OTK završen!" & vbCrLf & vbCrLf & _
+               "Fajlova: " & CStr(filesCount) & vbCrLf & _
+               "Uvezeno: " & CStr(totalImported) & vbCrLf & _
+               "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
+               "Greške: " & CStr(totalErrors), _
+               vbInformation, APP_NAME
+    End If
+
+    ImportOtkupFromPWA_Core = True
     Exit Function
 
 EH:
-    MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", Err.description
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
+    MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", errDesc
     LogErr "ImportOtkupFromPWA_Core"
+
     Monitor_MasterSyncFail _
-    procedureName:="ImportOtkupFromPWA_Core", _
-    errNum:=Err.Number, _
-    errDesc:=Err.description, _
-    errSrc:=Err.SOURCE, _
-    importedCount:=totalImported, _
-    skippedCount:=totalSkipped, _
-    errorCount:=totalErrors
-    If showMessages Then MsgBox "Greska pri uvozu: " & Err.description, vbCritical, APP_NAME
+        procedureName:="ImportOtkupFromPWA_Core", _
+        errNum:=errNum, _
+        errDesc:=errDesc, _
+        errSrc:=errSrc, _
+        importedCount:=totalImported, _
+        skippedCount:=totalSkipped, _
+        errorCount:=totalErrors
+
+    If showMessages Then
+        MsgBox "Greška pri uvozu OTK: " & errDesc, vbCritical, APP_NAME
+    End If
+
     ImportOtkupFromPWA_Core = False
 End Function
 
@@ -1281,8 +1361,11 @@ End Function
 ' ============================================================
 ' PUBLIC — Hauptfunktion Zbirna Import
 ' ============================================================
+Public Sub ImportZbirneFromPWA()
+    Call ImportZbirneFromPWA_Core(True)
+End Sub
 
-Private Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean
+Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boolean
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection
@@ -1290,115 +1373,170 @@ Private Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Bool
     Dim totalImported As Long
     Dim totalSkipped As Long
     Dim totalErrors As Long
-    
+    Dim filesCount As Long
+
     On Error GoTo EH
-    
+
     ImportZbirneFromPWA_Core = False
-    
+    mLastPWAFatalSyncError = False
+
     If Not IsGoogleAuthConfigured() Then
-        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", _
+            "Google OAuth2 nije konfigurisan."
+
+        If showMessages Then
+            MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        End If
+
         Exit Function
     End If
-    
+
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+
     If Len(Trim$(folderID)) = 0 Then
-        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", _
+            "GOOGLE_PWA_FOLDER_ID nije postavljen."
+
+        If showMessages Then
+            MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        End If
+
         Exit Function
     End If
-    
-    LogInfo "ImportZbirneFromPWA", "Import gestartet"
-    
+
+    LogInfo "ImportZbirneFromPWA_Core", "Import started."
+
     Set sheetIDs = New Collection
     Set sheetNames = New Collection
-    
+
     If Not FindVOZSheets(folderID, sheetIDs, sheetNames) Then
+        ' Ovo tretiramo kao neuspešan run, ali ne nužno fatal schema/corrupt error.
         LogWarn "ImportZbirneFromPWA_Core", _
             "FindVOZSheets failed. Drive list could not be loaded. Retry later."
 
         If showMessages Then
-            MsgBox "Google Drive lista VOZ fajlova nije ucitana. Proveri konekciju i probaj ponovo.", _
-               vbExclamation, APP_NAME
+            MsgBox "Google Drive lista VOZ fajlova nije ucitana." & vbCrLf & _
+                   "Proveri konekciju i probaj ponovo.", _
+                   vbExclamation, APP_NAME
         End If
 
         ImportZbirneFromPWA_Core = False
         Exit Function
     End If
-    
+
     If sheetIDs.count = 0 Then
-        If showMessages Then MsgBox "Nema VOZ-* fajlova u PWA folderu.", vbInformation, APP_NAME
+        If showMessages Then
+            MsgBox "Nema VOZ-* fajlova u PWA folderu.", vbInformation, APP_NAME
+        End If
+
+        LogInfo "ImportZbirneFromPWA_Core", "No VOZ files found."
+
         ImportZbirneFromPWA_Core = True
         Exit Function
     End If
-    
+
+    filesCount = sheetIDs.count
+
     For i = 1 To sheetIDs.count
         Dim imported As Long
         Dim skipped As Long
         Dim errors As Long
-        
+
         imported = 0
         skipped = 0
         errors = 0
-        
-        Call ImportOneVOZSheet(CStr(sheetIDs(i)), CStr(sheetNames(i)), imported, skipped, errors)
-        
+
+        Call ImportOneVOZSheet( _
+            CStr(sheetIDs(i)), _
+            CStr(sheetNames(i)), _
+            imported, _
+            skipped, _
+            errors)
+
         totalImported = totalImported + imported
         totalSkipped = totalSkipped + skipped
         totalErrors = totalErrors + errors
     Next i
-    
-    LogInfo "ImportZbirneFromPWA", "Import abgeschlossen: " & totalImported & " importiert, " & _
-            totalSkipped & " preskoceno, " & totalErrors & " greske aus " & sheetIDs.count & " fajlova"
-    
-    If showMessages Then
-        MsgBox "Uvoz zbirnih zavrsen!" & vbCrLf & vbCrLf & _
-               "Fajlova: " & sheetIDs.count & vbCrLf & _
-               "Uvezeno: " & totalImported & vbCrLf & _
-               "Preskoceno: " & totalSkipped & vbCrLf & _
-               "Greske: " & totalErrors, _
-               IIf(totalErrors > 0, vbExclamation, vbInformation), APP_NAME
+
+    LogInfo "ImportZbirneFromPWA_Core", _
+        "Import completed. Files=" & CStr(filesCount) & _
+        "; Imported=" & CStr(totalImported) & _
+        "; Skipped=" & CStr(totalSkipped) & _
+        "; Errors=" & CStr(totalErrors)
+
+    If mLastPWAFatalSyncError Then
+        LogError "ImportZbirneFromPWA_Core", _
+            "Fatal PWA sync error occurred during VOZ/Zbirne import. " & _
+            "Imported=" & CStr(totalImported) & _
+            "; Skipped=" & CStr(totalSkipped) & _
+            "; Errors=" & CStr(totalErrors)
+
+        If showMessages Then
+            MsgBox "Uvoz zbirnih nije potvrden zbog fatal sync greške." & vbCrLf & _
+                   "Uvezeno: " & CStr(totalImported) & vbCrLf & _
+                   "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
+                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Proveri log.", _
+                   vbCritical, APP_NAME
+        End If
+
+        ImportZbirneFromPWA_Core = False
+        Exit Function
     End If
-    
-    ImportZbirneFromPWA_Core = (totalErrors = 0)
+
+    If totalErrors > 0 Then
+        LogWarn "ImportZbirneFromPWA_Core", _
+            "VOZ/Zbirne import completed with row-level errors. " & _
+            "Imported=" & CStr(totalImported) & _
+            "; Skipped=" & CStr(totalSkipped) & _
+            "; Errors=" & CStr(totalErrors)
+
+        If showMessages Then
+            MsgBox "Uvoz zbirnih završen sa greškama." & vbCrLf & vbCrLf & _
+                   "Fajlova: " & CStr(filesCount) & vbCrLf & _
+                   "Uvezeno: " & CStr(totalImported) & vbCrLf & _
+                   "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
+                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Proveri log.", _
+                   vbExclamation, APP_NAME
+        End If
+
+        ImportZbirneFromPWA_Core = False
+        Exit Function
+    End If
+
+    If showMessages Then
+        MsgBox "Uvoz zbirnih završen!" & vbCrLf & vbCrLf & _
+               "Fajlova: " & CStr(filesCount) & vbCrLf & _
+               "Uvezeno: " & CStr(totalImported) & vbCrLf & _
+               "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
+               "Greške: " & CStr(totalErrors), _
+               vbInformation, APP_NAME
+    End If
+
+    ImportZbirneFromPWA_Core = True
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
+    MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", errDesc
     LogErr "ImportZbirneFromPWA_Core"
-    If showMessages Then MsgBox "Greska pri uvozu zbirnih: " & Err.description, vbCritical, APP_NAME
+
+    If showMessages Then
+        MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+    End If
+
     ImportZbirneFromPWA_Core = False
 End Function
-
-Public Sub ImportZbirneFromPWA_TX()
-    Dim tx As clsTransaction
-    Dim ok As Boolean
-    
-    On Error GoTo EH
-    
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-    
-    ok = ImportZbirneFromPWA_Core(False)
-    
-    If Not ok Then
-        tx.RollbackTx
-        MsgBox "Uvoz zbirnih nije potvrden. Promene su vracene zbog greške u sync/import toku.", _
-               vbCritical, APP_NAME
-        Exit Sub
-    End If
-    
-    tx.CommitTx
-    
-    MsgBox "Uvoz zbirnih završen i potvrden.", vbInformation, APP_NAME
-    Exit Sub
-
-EH:
-    LogErr "ImportZbirneFromPWA_TX"
-    If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri uvozu zbirnih, promene vracene: " & Err.description, vbCritical, APP_NAME
-End Sub
-
 ' ============================================================
 ' PRIVATE — Find VOZ-* Sheets in Folder
 ' ============================================================
@@ -2261,6 +2399,361 @@ Private Sub Monitor_MasterSyncFail(ByVal procedureName As String, _
         entityType:="MasterData", _
         entityId:="PWA-OTKUP", _
         correlationId:="MASTERDATA-SYNC-PWA"
+End Sub
+
+' ============================================================
+' PARCEL GEO PULL — Google/Stammdaten -> tblParcele
+' ============================================================
+
+Public Function ImportParcelGeoFromGoogleToMaster() As Boolean
+    Const SRC As String = "ImportParcelGeoFromGoogleToMaster"
+
+    Dim sheetID As String
+    Dim folderID As String
+    Dim data As Variant
+    Dim parcelData As Variant
+    Dim tx As clsTransaction
+
+    Dim cParID As Long
+    Dim cPolygon As Long
+    Dim cLat As Long
+    Dim cLongitude As Long
+    Dim cGeoStatus As Long
+    Dim cGeoSource As Long
+    Dim cN As Long
+    Dim cEasting As Long
+    Dim cMeteo As Long
+    Dim cRizik As Long
+    Dim cDatumGeo As Long
+    Dim cDatumAzur As Long
+    Dim cNapomena As Long
+
+    Dim mParID As Long
+    Dim mPolygon As Long
+    Dim mLat As Long
+    Dim mLongitude As Long
+    Dim mGeoStatus As Long
+    Dim mGeoSource As Long
+    Dim mN As Long
+    Dim mEasting As Long
+    Dim mMeteo As Long
+    Dim mRizik As Long
+    Dim mDatumGeo As Long
+    Dim mDatumAzur As Long
+    Dim mNapomena As Long
+
+    Dim i As Long
+    Dim parcelaID As String
+    Dim rows As Collection
+    Dim masterRow As Long
+    Dim changedFields As Long
+    Dim updatedParcels As Long
+    Dim skippedRows As Long
+    Dim missingParcels As Long
+    Dim seen As Object
+
+    On Error GoTo EH
+
+    ImportParcelGeoFromGoogleToMaster = False
+
+    If Not IsGoogleAuthConfigured() Then
+        LogError SRC, "Google OAuth2 nije konfigurisan."
+        Exit Function
+    End If
+
+    sheetID = Trim$(GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID"))
+
+    If Len(sheetID) = 0 Then
+        folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+
+        If Len(folderID) = 0 Then
+            LogError SRC, "GOOGLE_STAMMDATEN_SHEET_ID i GOOGLE_PWA_FOLDER_ID nisu postavljeni."
+            Exit Function
+        End If
+
+        sheetID = GetSpreadsheetID("Stammdaten", folderID)
+
+        If Len(sheetID) > 0 Then
+            Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
+        End If
+    End If
+
+    If Len(sheetID) = 0 Then
+        LogError SRC, "Stammdaten Google Sheet nije pronaden."
+        Exit Function
+    End If
+
+    data = ReadSheetData(sheetID, "Parcele")
+
+    If IsEmpty(data) Then
+        LogError SRC, "Google Stammdaten/Parcele tab je prazan ili nije ucitan."
+        Exit Function
+    End If
+
+    If UBound(data, 1) < 1 Then
+        LogError SRC, "Google Stammdaten/Parcele nema header row."
+        Exit Function
+    End If
+
+    cParID = GeoHeaderIndex(data, COL_PAR_ID)
+    cPolygon = GeoHeaderIndex(data, COL_PAR_POLYGON)
+    cLat = GeoHeaderIndex(data, COL_PAR_LAT)
+    cLongitude = GeoHeaderIndex(data, COL_PAR_LNG)
+    cGeoStatus = GeoHeaderIndex(data, COL_PAR_GEO_STATUS)
+    cGeoSource = GeoHeaderIndex(data, COL_PAR_GEO_SOURCE)
+    cN = GeoHeaderIndex(data, COL_PAR_N)
+    cEasting = GeoHeaderIndex(data, COL_PAR_E)
+    cMeteo = GeoHeaderIndex(data, COL_PAR_METEO)
+    cRizik = GeoHeaderIndex(data, COL_PAR_RIZIK)
+    cDatumGeo = GeoHeaderIndex(data, COL_PAR_DATUM_GEO)
+    cDatumAzur = GeoHeaderIndex(data, COL_PAR_DATUM_AZUR)
+    cNapomena = GeoHeaderIndex(data, COL_PAR_NAPOMENA)
+
+    If cParID = 0 Then
+        LogError SRC, "Google Parcele sheet nema header: " & COL_PAR_ID
+        Exit Function
+    End If
+
+    If cPolygon = 0 And cLat = 0 And cLongitude = 0 Then
+        LogError SRC, "Google Parcele sheet nema geo kolone: " & _
+                      COL_PAR_POLYGON & "/" & COL_PAR_LAT & "/" & COL_PAR_LNG
+        Exit Function
+    End If
+
+    parcelData = GetTableData(TBL_PARCELE)
+    If IsEmpty(parcelData) Then
+        LogError SRC, "tblParcele je prazan. Geo pull nema gde da upise podatke."
+        Exit Function
+    End If
+
+    mParID = RequireColumnIndex(TBL_PARCELE, COL_PAR_ID, SRC)
+    mPolygon = RequireColumnIndex(TBL_PARCELE, COL_PAR_POLYGON, SRC)
+    mLat = RequireColumnIndex(TBL_PARCELE, COL_PAR_LAT, SRC)
+    mLongitude = RequireColumnIndex(TBL_PARCELE, COL_PAR_LNG, SRC)
+    mGeoStatus = RequireColumnIndex(TBL_PARCELE, COL_PAR_GEO_STATUS, SRC)
+    mGeoSource = RequireColumnIndex(TBL_PARCELE, COL_PAR_GEO_SOURCE, SRC)
+    mN = RequireColumnIndex(TBL_PARCELE, COL_PAR_N, SRC)
+    mEasting = RequireColumnIndex(TBL_PARCELE, COL_PAR_E, SRC)
+    mMeteo = RequireColumnIndex(TBL_PARCELE, COL_PAR_METEO, SRC)
+    mRizik = RequireColumnIndex(TBL_PARCELE, COL_PAR_RIZIK, SRC)
+    mDatumGeo = RequireColumnIndex(TBL_PARCELE, COL_PAR_DATUM_GEO, SRC)
+    mDatumAzur = RequireColumnIndex(TBL_PARCELE, COL_PAR_DATUM_AZUR, SRC)
+    mNapomena = RequireColumnIndex(TBL_PARCELE, COL_PAR_NAPOMENA, SRC)
+
+    Set seen = CreateObject("Scripting.Dictionary")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PARCELE
+
+    If UBound(data, 1) < 2 Then
+        tx.CommitTx
+        LogInfo SRC, "Google Parcele sheet ima samo header. Nema geo redova za import."
+        ImportParcelGeoFromGoogleToMaster = True
+        Exit Function
+    End If
+
+    For i = 2 To UBound(data, 1)
+        parcelaID = Trim$(GeoText(data(i, cParID)))
+
+        If Len(parcelaID) = 0 Then
+            skippedRows = skippedRows + 1
+            GoTo NextGeoRow
+        End If
+
+        If seen.Exists(parcelaID) Then
+            Err.Raise vbObjectError + 8601, SRC, _
+                      "Dupli ParcelaID u Google Parcele sheet-u: " & parcelaID
+        End If
+        seen.Add parcelaID, True
+
+        If Not GeoRowHasAnyValue(data, i, cPolygon, cLat, cLongitude, cGeoStatus, cGeoSource, _
+                                 cN, cEasting, cMeteo, cRizik, cDatumGeo, cDatumAzur, cNapomena) Then
+            skippedRows = skippedRows + 1
+            GoTo NextGeoRow
+        End If
+
+        Set rows = FindRows(TBL_PARCELE, COL_PAR_ID, parcelaID)
+
+        If rows Is Nothing Then
+            missingParcels = missingParcels + 1
+            LogWarn SRC, "ParcelaID iz Google sheet-a nije pronaden u tblParcele: " & parcelaID
+            GoTo NextGeoRow
+        End If
+
+        If rows.count = 0 Then
+            missingParcels = missingParcels + 1
+            LogWarn SRC, "ParcelaID iz Google sheet-a nije pronaden u tblParcele: " & parcelaID
+            GoTo NextGeoRow
+        End If
+
+        If rows.count <> 1 Then
+            Err.Raise vbObjectError + 8602, SRC, _
+                      "ParcelaID nije jedinstven u tblParcele: " & parcelaID & _
+                      "; Count=" & CStr(rows.count)
+        End If
+
+        masterRow = CLng(rows(1))
+
+        changedFields = 0
+
+        If cPolygon > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mPolygon, COL_PAR_POLYGON, data(i, cPolygon), changedFields
+        If cLat > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mLat, COL_PAR_LAT, data(i, cLat), changedFields
+        If cLongitude > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mLongitude, COL_PAR_LNG, data(i, cLongitude), changedFields
+        If cGeoStatus > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mGeoStatus, COL_PAR_GEO_STATUS, data(i, cGeoStatus), changedFields
+        If cGeoSource > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mGeoSource, COL_PAR_GEO_SOURCE, data(i, cGeoSource), changedFields
+        If cN > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mN, COL_PAR_N, data(i, cN), changedFields
+        If cEasting > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mEasting, COL_PAR_E, data(i, cEasting), changedFields
+        If cMeteo > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mMeteo, COL_PAR_METEO, data(i, cMeteo), changedFields
+        If cRizik > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mRizik, COL_PAR_RIZIK, data(i, cRizik), changedFields
+        If cDatumGeo > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mDatumGeo, COL_PAR_DATUM_GEO, data(i, cDatumGeo), changedFields
+        If cDatumAzur > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mDatumAzur, COL_PAR_DATUM_AZUR, data(i, cDatumAzur), changedFields
+        If cNapomena > 0 Then GeoUpdateFieldIfNeeded parcelData, masterRow, mNapomena, COL_PAR_NAPOMENA, data(i, cNapomena), changedFields
+
+        If changedFields > 0 Then
+            updatedParcels = updatedParcels + 1
+            LogInfo SRC, "Geo updated ParcelaID=" & parcelaID & _
+                         "; ChangedFields=" & CStr(changedFields)
+        Else
+            skippedRows = skippedRows + 1
+        End If
+
+NextGeoRow:
+    Next i
+
+    tx.CommitTx
+
+    LogInfo SRC, "Geo pull completed. UpdatedParcels=" & CStr(updatedParcels) & _
+                 "; SkippedRows=" & CStr(skippedRows) & _
+                 "; MissingParcels=" & CStr(missingParcels)
+
+    ImportParcelGeoFromGoogleToMaster = True
+    Exit Function
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    LogErr SRC
+    ImportParcelGeoFromGoogleToMaster = False
+End Function
+
+Private Function GeoHeaderIndex(ByVal data As Variant, ByVal headerName As String) As Long
+    Dim j As Long
+    Dim actual As String
+
+    On Error GoTo EH
+
+    If IsEmpty(data) Then Exit Function
+    If UBound(data, 1) < 1 Then Exit Function
+
+    For j = LBound(data, 2) To UBound(data, 2)
+        actual = Trim$(GeoText(data(1, j)))
+
+        If StrComp(actual, headerName, vbTextCompare) = 0 Then
+            GeoHeaderIndex = j
+            Exit Function
+        End If
+    Next j
+
+    GeoHeaderIndex = 0
+    Exit Function
+
+EH:
+    GeoHeaderIndex = 0
+End Function
+
+Private Function GeoText(ByVal value As Variant) As String
+    On Error GoTo EH
+
+    If IsError(value) Then
+        GeoText = ""
+    ElseIf IsNull(value) Then
+        GeoText = ""
+    ElseIf IsEmpty(value) Then
+        GeoText = ""
+    Else
+        GeoText = CStr(value)
+    End If
+
+    Exit Function
+
+EH:
+    GeoText = ""
+End Function
+
+Private Function GeoHasValue(ByVal data As Variant, _
+                             ByVal rowIndex As Long, _
+                             ByVal colIndex As Long) As Boolean
+    On Error GoTo EH
+
+    If colIndex <= 0 Then
+        GeoHasValue = False
+        Exit Function
+    End If
+
+    GeoHasValue = (Len(Trim$(GeoText(data(rowIndex, colIndex)))) > 0)
+    Exit Function
+
+EH:
+    GeoHasValue = False
+End Function
+
+Private Function GeoRowHasAnyValue(ByVal data As Variant, _
+                                   ByVal rowIndex As Long, _
+                                   ParamArray cols() As Variant) As Boolean
+    Dim i As Long
+    Dim colIndex As Long
+
+    On Error GoTo EH
+
+    For i = LBound(cols) To UBound(cols)
+        colIndex = CLng(cols(i))
+
+        If GeoHasValue(data, rowIndex, colIndex) Then
+            GeoRowHasAnyValue = True
+            Exit Function
+        End If
+    Next i
+
+    GeoRowHasAnyValue = False
+    Exit Function
+
+EH:
+    GeoRowHasAnyValue = False
+End Function
+
+Private Sub GeoUpdateFieldIfNeeded(ByVal parcelData As Variant, _
+                                   ByVal masterRow As Long, _
+                                   ByVal masterCol As Long, _
+                                   ByVal colName As String, _
+                                   ByVal newValue As Variant, _
+                                   ByRef changedFields As Long)
+    Const SRC As String = "GeoUpdateFieldIfNeeded"
+
+    Dim oldText As String
+    Dim newText As String
+
+    On Error GoTo EH
+
+    newText = Trim$(GeoText(newValue))
+
+    ' VAŽNO:
+    ' Prazan Google value NE sme da obriše postojeci lokalni geo podatak.
+    If Len(newText) = 0 Then Exit Sub
+
+    oldText = Trim$(GeoText(parcelData(masterRow, masterCol)))
+
+    If StrComp(oldText, newText, vbBinaryCompare) <> 0 Then
+        RequireUpdateCell TBL_PARCELE, masterRow, colName, newValue, SRC
+        changedFields = changedFields + 1
+    End If
+
+    Exit Sub
+
+EH:
+    Err.Raise Err.Number, SRC, Err.description
 End Sub
 ' ============================================================
 ' TEST
