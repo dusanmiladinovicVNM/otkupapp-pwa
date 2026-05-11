@@ -333,17 +333,30 @@
             }
 
             if (json && json.code === 'MASTER_SYNC_ACTIVE') {
-                await rollbackPendingFromError(
-                    storeName,
-                    pending,
-                    json.error || json.message || 'Master sync je u toku',
-                    'master-sync-active'
+                for (const record of pending) {
+                    try {
+                        if (!record || !record.clientRecordID) continue;
+
+                        record.syncStatus = 'pending';
+                        record.lastServerStatus = 'master-sync-active';
+                        record.lastSyncError = '';
+                        record.syncAttemptAt = '';
+
+                        await dbPut(db, storeName, record);
+                    } catch (rbErr) {
+                        console.error('[sync-engine] master-sync rollback failed:', rbErr);
+                    }
+                }
+
+                toast(
+                    json.message || json.error || 'Master sync je u toku. Unos je sačuvan lokalno i biće poslat kasnije.',
+                    'warning'
                 );
 
-                toast(json.error || json.message || 'Master sync je u toku. Sačekajte završetak.', 'warning');
-
                 return buildSyncResult({
-                    failed: pending.length,
+                    ok: true,
+                    synced: 0,
+                    failed: 0,
                     reason: 'master-sync-active',
                     code: 'MASTER_SYNC_ACTIVE'
                 });
