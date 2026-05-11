@@ -13,10 +13,48 @@ Option Explicit
 ' Aufruf: Button in frmMain oder manuell via SyncStammdatenToGoogle
 ' ============================================================
 
+Private Function StammdatenTabs() As Variant
+    StammdatenTabs = Array( _
+        "Kooperanti", _
+        "Kulture", _
+        "Parcele", _
+        "Config", _
+        "Users", _
+        "Fakture", _
+        "FakturaStavke", _
+        "SaldoOMDetail", _
+        "Stanice", _
+        "Kupci", _
+        "Vozaci", _
+        "Artikli", _
+        "MagacinKoop" _
+    )
+End Function
+
+Private Sub EnsureStammdatenTabsBestEffort(ByVal sheetID As String)
+    Dim tabs As Variant
+    Dim i As Long
+
+    If Len(Trim$(sheetID)) = 0 Then Exit Sub
+
+    tabs = StammdatenTabs()
+
+    For i = LBound(tabs) To UBound(tabs)
+        On Error Resume Next
+        Call AddSheetTab(sheetID, CStr(tabs(i)))
+        If Err.Number <> 0 Then
+            LogWarn "EnsureStammdatenTabsBestEffort", _
+                    "AddSheetTab failed for tab=" & CStr(tabs(i)) & _
+                    "; Error=" & Err.description
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Next i
+End Sub
+
 ' ============================================================
 ' PUBLIC — Hauptfunktion
 ' ============================================================
-
 Public Sub SyncStammdatenToGoogle()
     ' Exportiert Stammdaten zu Google Sheet
     ' Erstellt das Sheet automatisch wenn es nicht existiert
@@ -83,23 +121,11 @@ Public Sub SyncStammdatenToGoogle()
         End If
         
         ' Tabs erstellen (Sheet1 umbenennen geht nicht einfach, also neue Tabs)
-        Call AddSheetTab(sheetID, "Kooperanti")
-        Call AddSheetTab(sheetID, "Kulture")
-        Call AddSheetTab(sheetID, "Parcele")
-        Call AddSheetTab(sheetID, "Config")
-        Call AddSheetTab(sheetID, "Users")
-        Call AddSheetTab(sheetID, "Fakture")
-        Call AddSheetTab(sheetID, "FakturaStavke")
-        Call AddSheetTab(sheetID, "SaldoOMDetail")
-        Call AddSheetTab(sheetID, "Stanice")
-        Call AddSheetTab(sheetID, "Kupci")
-        Call AddSheetTab(sheetID, "Vozaci")
-        Call AddSheetTab(sheetID, "Artikli")
-        Call AddSheetTab(sheetID, "MagacinKoop")
     End If
     
     ' Sheet-ID speichern
     Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
+    Call EnsureStammdatenTabsBestEffort(sheetID)
     
     ' Daten exportieren
     If ExportKooperanti(sheetID) Then successCount = successCount + 1
@@ -337,7 +363,9 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
     data = GetTableData(TBL_OTKUP)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTKUP)
     If IsEmpty(data) Then
-        ExportOtkupPoOM = False
+        ExportOtkupPoOM = WriteHeaderOnly(sheetID, "OtkupPoOM", _
+            "StanicaID", "VrstaVoca", "Klasa", "Kolicina", _
+            "Ambalaza", "Vrednost", "BrojOtkupa")
         Exit Function
     End If
     
@@ -367,7 +395,9 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
     Next i
     
     If dict.count = 0 Then
-        ExportOtkupPoOM = False
+        ExportOtkupPoOM = WriteHeaderOnly(sheetID, "OtkupPoOM", _
+            "StanicaID", "VrstaVoca", "Klasa", "Kolicina", _
+            "Ambalaza", "Vrednost", "BrojOtkupa")
         Exit Function
     End If
     
@@ -415,7 +445,9 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
     data = GetTableData(TBL_PRIJEMNICA)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_PRIJEMNICA)
     If IsEmpty(data) Then
-        ExportPredatoPoKupcu = False
+        ExportPredatoPoKupcu = WriteHeaderOnly(sheetID, "PredatoPoKupcu", _
+            "KupacID", "VrstaVoca", "Klasa", "Kolicina", _
+            "Ambalaza", "Vrednost", "BrojPrijemnica")
         Exit Function
     End If
     
@@ -445,7 +477,9 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
     Next i
     
     If dict.count = 0 Then
-        ExportPredatoPoKupcu = False
+        ExportPredatoPoKupcu = WriteHeaderOnly(sheetID, "PredatoPoKupcu", _
+            "KupacID", "VrstaVoca", "Klasa", "Kolicina", _
+            "Ambalaza", "Vrednost", "BrojPrijemnica")
         Exit Function
     End If
     
@@ -500,7 +534,8 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
     data = GetTableData(TBL_NOVAC)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_NOVAC)
     If IsEmpty(data) Then
-        ExportSaldoOM = False
+        ExportSaldoOM = WriteHeaderOnly(sheetID, "SaldoOM", _
+            "StanicaID", "Avans", "Isplaceno", "Saldo")
         Exit Function
     End If
     
@@ -535,7 +570,8 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
     Next i
     
     If dict.count = 0 Then
-        ExportSaldoOM = False
+        ExportSaldoOM = WriteHeaderOnly(sheetID, "SaldoOM", _
+            "StanicaID", "Avans", "Isplaceno", "Saldo")
         Exit Function
     End If
     
@@ -654,7 +690,12 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
         Next i
     End If
     
-    If dict.count = 0 Then ExportSaldoOMDetail = False: Exit Function
+    If dict.count = 0 Then
+        ExportSaldoOMDetail = WriteHeaderOnly(sheetID, "SaldoOMDetail", _
+            "KooperantID", "Kooperant", "StanicaID", "Kolicina", _
+            "Vrednost", "Isplaceno", "AgroZaduzenje", "Saldo", "Ambalaza")
+        Exit Function
+    End If
     
     ' --- Build result ---
     Dim result() As Variant
@@ -713,7 +754,8 @@ Private Function ExportSaldoKupci(ByVal sheetID As String) As Boolean
     data = GetTableData(TBL_FAKTURE)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_FAKTURE)
     If IsEmpty(data) Then
-        ExportSaldoKupci = False
+        ExportSaldoKupci = WriteHeaderOnly(sheetID, "SaldoKupci", _
+            "KupacID", "Kupac", "Fakturisano", "Placeno", "Saldo")
         Exit Function
     End If
     
@@ -760,7 +802,8 @@ Private Function ExportSaldoKupci(ByVal sheetID As String) As Boolean
     End If
     
     If dict.count = 0 Then
-        ExportSaldoKupci = False
+        ExportSaldoKupci = WriteHeaderOnly(sheetID, "SaldoKupci", _
+            "KupacID", "Kupac", "Fakturisano", "Placeno", "Saldo")
         Exit Function
     End If
     
@@ -812,13 +855,17 @@ Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_KOOPERANTI)
     If IsEmpty(data) Then
-        ExportKooperanti = False
+        ExportKooperanti = WriteHeaderOnly(sheetID, "Kooperanti", _
+            "KooperantID", "Ime", "Prezime", "StanicaID", "Mesto", _
+            "Telefon", "BPGBroj", "Adresa", "JMBG")
         Exit Function
     End If
     
     data = ExcludeStornirano(data, TBL_KOOPERANTI)
     If IsEmpty(data) Then
-        ExportKooperanti = False
+        ExportKooperanti = WriteHeaderOnly(sheetID, "Kooperanti", _
+            "KooperantID", "Ime", "Prezime", "StanicaID", "Mesto", _
+            "Telefon", "BPGBroj", "Adresa", "JMBG")
         Exit Function
     End If
     
@@ -836,7 +883,7 @@ Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
     ' Nur aktive Kooperanten
     Dim activeCount As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colAktivan)) <> "Ne" Then activeCount = activeCount + 1
+        If IsPWAActive(data(i, colAktivan)) Then activeCount = activeCount + 1
     Next i
     
     ReDim result(1 To activeCount + 1, 1 To 9)
@@ -854,7 +901,7 @@ Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
     
     outRow = 1
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colAktivan)) <> "Ne" Then
+        If IsPWAActive(data(i, colAktivan)) Then
             outRow = outRow + 1
             result(outRow, 1) = CStr(data(i, colID))
             result(outRow, 2) = CStr(data(i, colIme))
@@ -886,7 +933,8 @@ Private Function ExportKulture(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_KULTURE)
     If IsEmpty(data) Then
-        ExportKulture = False
+        ExportKulture = WriteHeaderOnly(sheetID, "Kulture", _
+            "KulturaID", "VrstaVoca", "SortaVoca")
         Exit Function
     End If
     
@@ -937,6 +985,17 @@ Private Function ExportParcele(ByVal sheetID As String) As Boolean
         Exit Function
     End If
     
+    data = ExcludeStornirano(data, TBL_PARCELE)
+    If IsEmpty(data) Then
+        ExportParcele = WriteHeaderOnly(sheetID, "Parcele", _
+            COL_PAR_ID, COL_PAR_KOOP, COL_PAR_KAT_BROJ, COL_PAR_KAT_OPSTINA, _
+            COL_PAR_KULTURA, COL_PAR_POVRSINA, COL_PAR_GGAP, COL_PAR_AKTIVNA, _
+            COL_PAR_GEO_STATUS, COL_PAR_GEO_SOURCE, COL_PAR_N, COL_PAR_E, _
+            COL_PAR_LAT, COL_PAR_LNG, COL_PAR_POLYGON, COL_PAR_METEO, _
+            COL_PAR_RIZIK, COL_PAR_DATUM_GEO, COL_PAR_DATUM_AZUR, COL_PAR_NAPOMENA)
+        Exit Function
+    End If
+    
     colID = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
     colKoop = GetColumnIndex(TBL_PARCELE, COL_PAR_KOOP)
     colKatBroj = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ)
@@ -958,7 +1017,22 @@ Private Function ExportParcele(ByVal sheetID As String) As Boolean
     colDatumAzur = GetColumnIndex(TBL_PARCELE, COL_PAR_DATUM_AZUR)
     colNapomena = GetColumnIndex(TBL_PARCELE, COL_PAR_NAPOMENA)
     
-    ReDim result(1 To UBound(data, 1) + 1, 1 To 20)
+    Dim activeCount As Long
+    For i = 1 To UBound(data, 1)
+        If IsPWAActive(data(i, colAktivna)) Then activeCount = activeCount + 1
+    Next i
+
+    If activeCount = 0 Then
+        ExportParcele = WriteHeaderOnly(sheetID, "Parcele", _
+            COL_PAR_ID, COL_PAR_KOOP, COL_PAR_KAT_BROJ, COL_PAR_KAT_OPSTINA, _
+            COL_PAR_KULTURA, COL_PAR_POVRSINA, COL_PAR_GGAP, COL_PAR_AKTIVNA, _
+            COL_PAR_GEO_STATUS, COL_PAR_GEO_SOURCE, COL_PAR_N, COL_PAR_E, _
+            COL_PAR_LAT, COL_PAR_LNG, COL_PAR_POLYGON, COL_PAR_METEO, _
+            COL_PAR_RIZIK, COL_PAR_DATUM_GEO, COL_PAR_DATUM_AZUR, COL_PAR_NAPOMENA)
+        Exit Function
+    End If
+
+    ReDim result(1 To activeCount + 1, 1 To 20)
     
     ' Header
     result(1, 1) = COL_PAR_ID
@@ -982,27 +1056,34 @@ Private Function ExportParcele(ByVal sheetID As String) As Boolean
     result(1, 19) = COL_PAR_DATUM_AZUR
     result(1, 20) = COL_PAR_NAPOMENA
     
+    Dim outRow As Long
+    outRow = 1
+
     For i = 1 To UBound(data, 1)
-        result(i + 1, 1) = CStr(Nz(data(i, colID), ""))
-        result(i + 1, 2) = CStr(Nz(data(i, colKoop), ""))
-        result(i + 1, 3) = CStr(Nz(data(i, colKatBroj), ""))
-        result(i + 1, 4) = CStr(Nz(data(i, colKatOpstina), ""))
-        result(i + 1, 5) = CStr(Nz(data(i, colKultura), ""))
-        result(i + 1, 6) = CStr(Nz(data(i, colPovrsina), ""))
-        result(i + 1, 7) = CStr(Nz(data(i, colGGAP), ""))
-        result(i + 1, 8) = CStr(Nz(data(i, colAktivna), ""))
-        result(i + 1, 9) = CStr(Nz(data(i, colGeoStatus), ""))
-        result(i + 1, 10) = CStr(Nz(data(i, colGeoSource), ""))
-        result(i + 1, 11) = CStr(Nz(data(i, colN), ""))
-        result(i + 1, 12) = CStr(Nz(data(i, colE), ""))
-        result(i + 1, 13) = CStr(Nz(data(i, colLat), ""))
-        result(i + 1, 14) = CStr(Nz(data(i, colLng), ""))
-        result(i + 1, 15) = CStr(Nz(data(i, colPolygon), ""))
-        result(i + 1, 16) = CStr(Nz(data(i, colMeteo), ""))
-        result(i + 1, 17) = CStr(Nz(data(i, colRizik), ""))
-        result(i + 1, 18) = CStr(Nz(data(i, colDatumGeo), ""))
-        result(i + 1, 19) = CStr(Nz(data(i, colDatumAzur), ""))
-        result(i + 1, 20) = CStr(Nz(data(i, colNapomena), ""))
+        If IsPWAActive(data(i, colAktivna)) Then
+            outRow = outRow + 1
+
+            result(outRow, 1) = CStr(Nz(data(i, colID), ""))
+            result(outRow, 2) = CStr(Nz(data(i, colKoop), ""))
+            result(outRow, 3) = CStr(Nz(data(i, colKatBroj), ""))
+            result(outRow, 4) = CStr(Nz(data(i, colKatOpstina), ""))
+            result(outRow, 5) = CStr(Nz(data(i, colKultura), ""))
+            result(outRow, 6) = CStr(Nz(data(i, colPovrsina), ""))
+            result(outRow, 7) = CStr(Nz(data(i, colGGAP), ""))
+            result(outRow, 8) = CStr(Nz(data(i, colAktivna), ""))
+            result(outRow, 9) = CStr(Nz(data(i, colGeoStatus), ""))
+            result(outRow, 10) = CStr(Nz(data(i, colGeoSource), ""))
+            result(outRow, 11) = CStr(Nz(data(i, colN), ""))
+            result(outRow, 12) = CStr(Nz(data(i, colE), ""))
+            result(outRow, 13) = CStr(Nz(data(i, colLat), ""))
+            result(outRow, 14) = CStr(Nz(data(i, colLng), ""))
+            result(outRow, 15) = CStr(Nz(data(i, colPolygon), ""))
+            result(outRow, 16) = CStr(Nz(data(i, colMeteo), ""))
+            result(outRow, 17) = CStr(Nz(data(i, colRizik), ""))
+            result(outRow, 18) = CStr(Nz(data(i, colDatumGeo), ""))
+            result(outRow, 19) = CStr(Nz(data(i, colDatumAzur), ""))
+            result(outRow, 20) = CStr(Nz(data(i, colNapomena), ""))
+        End If
     Next i
     
     ExportParcele = WriteSheetData(sheetID, "Parcele", result)
@@ -1022,7 +1103,8 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_STANICE)
     If IsEmpty(data) Then
-        ExportStanice = False
+        ExportStanice = WriteHeaderOnly(sheetID, "Stanice", _
+            "StanicaID", "Naziv", "Mesto")
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_STANICE)
@@ -1035,11 +1117,12 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     ' Erst zählen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
+        If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
     Next i
     
     If cnt = 0 Then
-        ExportStanice = False
+        ExportStanice = WriteHeaderOnly(sheetID, "Stanice", _
+            "StanicaID", "Naziv", "Mesto")
         Exit Function
     End If
     
@@ -1052,7 +1135,7 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     
     outRow = 2
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then
+        If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colID))
             result(outRow, 2) = CStr(Nz(data(i, colNaziv), ""))
             result(outRow, 3) = CStr(Nz(data(i, colMesto), ""))
@@ -1077,7 +1160,8 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_KUPCI)
     If IsEmpty(data) Then
-        ExportKupci = False
+        ExportKupci = WriteHeaderOnly(sheetID, "Kupci", _
+            "KupacID", "Naziv", "Mesto")
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_KUPCI)
@@ -1090,11 +1174,12 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     ' Erst zählen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
+        If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
     Next i
     
     If cnt = 0 Then
-        ExportKupci = False
+        ExportKupci = WriteHeaderOnly(sheetID, "Kupci", _
+            "KupacID", "Naziv", "Mesto")
         Exit Function
     End If
     
@@ -1107,7 +1192,7 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     
     outRow = 2
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then
+        If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colID))
             result(outRow, 2) = CStr(Nz(data(i, colNaziv), ""))
             result(outRow, 3) = CStr(Nz(data(i, colMesto), ""))
@@ -1132,7 +1217,8 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_VOZACI)
     If IsEmpty(data) Then
-        ExportVozaci = False
+        ExportVozaci = WriteHeaderOnly(sheetID, "Vozaci", _
+            "VozacID", "Ime", "Prezime", "Telefon", "KapacitetKG")
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_VOZACI)
@@ -1147,11 +1233,12 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     ' Erst zählen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
+        If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
     Next i
     
     If cnt = 0 Then
-        ExportVozaci = False
+        ExportVozaci = WriteHeaderOnly(sheetID, "Vozaci", _
+            "VozacID", "Ime", "Prezime", "Telefon", "KapacitetKG")
         Exit Function
     End If
     
@@ -1166,7 +1253,7 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     
     outRow = 2
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then
+        If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colID))
             result(outRow, 2) = CStr(Nz(data(i, colIme), ""))
             result(outRow, 3) = CStr(Nz(data(i, colPrezime), ""))
@@ -1192,7 +1279,9 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_ARTIKLI)
     If IsEmpty(data) Then
-        ExportArtikli = False
+        ExportArtikli = WriteHeaderOnly(sheetID, "Artikli", _
+            "ArtikalID", "Naziv", "Tip", "JedinicaMere", "CenaPoJedinici", _
+            "DozaPoHa", "Kultura", "Pakovanje", "BarKod", "Karenca", "Aktivan")
         Exit Function
     End If
     data = ExcludeStornirano(data, TBL_ARTIKLI)
@@ -1212,11 +1301,13 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     ' Erst zählen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then cnt = cnt + 1
+        If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
     Next i
     
     If cnt = 0 Then
-        ExportArtikli = False
+        ExportArtikli = WriteHeaderOnly(sheetID, "Artikli", _
+            "ArtikalID", "Naziv", "Tip", "JedinicaMere", "CenaPoJedinici", _
+            "DozaPoHa", "Kultura", "Pakovanje", "BarKod", "Karenca", "Aktivan")
         Exit Function
     End If
     
@@ -1237,7 +1328,7 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     
     outRow = 2
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colAktivan), "")) = "Aktivan" Then
+        If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colArtID))
             result(outRow, 2) = CStr(Nz(data(i, colNaziv), ""))
             result(outRow, 3) = CStr(Nz(data(i, colTip), ""))
@@ -1279,10 +1370,21 @@ Private Function ExportMagacinKoop(ByVal sheetID As String) As Boolean
     
     magData = GetTableData(TBL_MAGACIN)
     If IsEmpty(magData) Then
-        ExportMagacinKoop = False
+        ExportMagacinKoop = WriteHeaderOnly(sheetID, "MagacinKoop", _
+                "KooperantID", "ArtikalID", "ArtikalNaziv", "Tip", "JedinicaMere", _
+                "CenaPoJedinici", "DozaPoHa", "Pakovanje", "Karenca", _
+                "Primljeno", "Utroseno", "Stanje")
         Exit Function
     End If
     magData = ExcludeStornirano(magData, TBL_MAGACIN)
+    
+    If IsEmpty(magData) Then
+        ExportMagacinKoop = WriteHeaderOnly(sheetID, "MagacinKoop", _
+            "KooperantID", "ArtikalID", "ArtikalNaziv", "Tip", "JedinicaMere", _
+            "CenaPoJedinici", "DozaPoHa", "Pakovanje", "Karenca", _
+            "Primljeno", "Utroseno", "Stanje")
+        Exit Function
+    End If
     
     Dim colMKoop As Long: colMKoop = GetColumnIndex(TBL_MAGACIN, "KooperantID")
     Dim colMArt As Long: colMArt = GetColumnIndex(TBL_MAGACIN, "ArtikalID")
@@ -1310,7 +1412,10 @@ Private Function ExportMagacinKoop(ByVal sheetID As String) As Boolean
     Next i
     
     If dict.count = 0 Then
-        ExportMagacinKoop = False
+        ExportMagacinKoop = WriteHeaderOnly(sheetID, "MagacinKoop", _
+            "KooperantID", "ArtikalID", "ArtikalNaziv", "Tip", "JedinicaMere", _
+            "CenaPoJedinici", "DozaPoHa", "Pakovanje", "Karenca", _
+            "Primljeno", "Utroseno", "Stanje")
         Exit Function
     End If
     
@@ -1346,7 +1451,10 @@ Private Function ExportMagacinKoop(ByVal sheetID As String) As Boolean
     
     cnt = dict.count
     If cnt = 0 Then
-        ExportMagacinKoop = False
+        ExportMagacinKoop = WriteHeaderOnly(sheetID, "MagacinKoop", _
+            "KooperantID", "ArtikalID", "ArtikalNaziv", "Tip", "JedinicaMere", _
+            "CenaPoJedinici", "DozaPoHa", "Pakovanje", "Karenca", _
+            "Primljeno", "Utroseno", "Stanje")
         Exit Function
     End If
     
@@ -1676,7 +1784,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
     End If
     
     ' Auf tatsächliche Größe kürzen
-    If outRow < totalRows Then
+    If outRow < UBound(result, 1) Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
         ReDim finalRows(1 To outRow, 1 To 5)
@@ -1708,7 +1816,13 @@ Private Function ExportFakture(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_FAKTURE)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_FAKTURE)
-    If IsEmpty(data) Then ExportFakture = False: Exit Function
+    
+    If IsEmpty(data) Then
+        ExportFakture = WriteHeaderOnly(sheetID, "Fakture", _
+            "FakturaID", "BrojFakture", "Datum", "KupacID", "Kupac", _
+            "Iznos", "Placeno", "Saldo", "Status", "SEFStatus")
+        Exit Function
+    End If
     
     colID = GetColumnIndex(TBL_FAKTURE, "FakturaID")
     colBroj = GetColumnIndex(TBL_FAKTURE, "BrojFakture")
@@ -1800,7 +1914,13 @@ Private Function ExportFakturaStavke(ByVal sheetID As String) As Boolean
     On Error GoTo EH
     
     data = GetTableData(TBL_FAKTURA_STAVKE)
-    If IsEmpty(data) Then ExportFakturaStavke = False: Exit Function
+    
+    If IsEmpty(data) Then
+        ExportFakturaStavke = WriteHeaderOnly(sheetID, "FakturaStavke", _
+            "FakturaID", "PrijemnicaID", "BrojPrijemnice", "BrojZbirne", _
+            "VrstaVoca", "Klasa", "Kolicina", "Cena", "Iznos")
+        Exit Function
+    End If
     
     colFakID = GetColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID")
     colPrijID = GetColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID")
@@ -1877,6 +1997,46 @@ EH:
     ExportFakturaStavke = False
 End Function
 
+Private Function WriteHeaderOnly(ByVal sheetID As String, _
+                                 ByVal tabName As String, _
+                                 ParamArray headers() As Variant) As Boolean
+    On Error GoTo EH
+
+    Dim result() As Variant
+    Dim i As Long
+    Dim n As Long
+
+    n = UBound(headers) - LBound(headers) + 1
+    If n <= 0 Then
+        WriteHeaderOnly = False
+        Exit Function
+    End If
+
+    ReDim result(1 To 1, 1 To n)
+
+    For i = LBound(headers) To UBound(headers)
+        result(1, i - LBound(headers) + 1) = CStr(headers(i))
+    Next i
+
+    WriteHeaderOnly = WriteSheetData(sheetID, tabName, result)
+    Exit Function
+
+EH:
+    LogErr "WriteHeaderOnly", "Tab=" & tabName
+    WriteHeaderOnly = False
+End Function
+
+Private Function IsPWAActive(ByVal value As Variant) As Boolean
+    Dim s As String
+    s = UCase$(Trim$(CStr(Nz(value, ""))))
+
+    Select Case s
+        Case "NE", "NO", "FALSE", "0", "NEAKTIVAN", "INACTIVE"
+            IsPWAActive = False
+        Case Else
+            IsPWAActive = True
+    End Select
+End Function
 Private Sub Monitor_StammdatenSyncSuccess(ByVal successCount As Long, _
                                           ByVal totalTabs As Long, _
                                           ByVal sheetID As String)
