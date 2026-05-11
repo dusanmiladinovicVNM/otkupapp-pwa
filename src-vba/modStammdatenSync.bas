@@ -52,6 +52,143 @@ Private Sub EnsureStammdatenTabsBestEffort(ByVal sheetID As String)
     Next i
 End Sub
 
+Private Function MgmtReportTabs() As Variant
+    MgmtReportTabs = Array( _
+        "SaldoOM", _
+        "SaldoKupci", _
+        "OtkupPoOM", _
+        "PredatoPoKupcu" _
+    )
+End Function
+
+Private Sub EnsureMgmtReportTabsBestEffort(ByVal sheetID As String)
+    Dim tabs As Variant
+    Dim i As Long
+
+    If Len(Trim$(sheetID)) = 0 Then Exit Sub
+
+    tabs = MgmtReportTabs()
+
+    For i = LBound(tabs) To UBound(tabs)
+        On Error Resume Next
+        Call AddSheetTab(sheetID, CStr(tabs(i)))
+        If Err.Number <> 0 Then
+            LogWarn "EnsureMgmtReportTabsBestEffort", _
+                    "AddSheetTab failed for tab=" & CStr(tabs(i)) & _
+                    "; Error=" & Err.description
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Next i
+End Sub
+
+' ============================================================
+' PUBLIC — MASTER GOOGLE DIRECT SYNC
+' ============================================================
+
+Public Sub SyncAllGoogleDirect()
+    Dim okStammdaten As Boolean
+    Dim okKartice As Boolean
+    Dim okMgmt As Boolean
+    Dim msg As String
+    
+    On Error GoTo EH
+    
+    LogInfo "SyncAllGoogleDirect", "Full Google direct sync started."
+    
+    If Not IsGoogleAuthConfigured() Then
+        LogError "SyncAllGoogleDirect", "Google OAuth2 nije konfigurisan."
+        MsgBox "Google OAuth2 nije konfigurisan!" & vbCrLf & _
+               "Pokrenite RunGoogleAuthSetup iz modGoogleAuth.", _
+               vbCritical, APP_NAME
+        Exit Sub
+    End If
+    
+    If Len(Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))) = 0 Then
+        LogError "SyncAllGoogleDirect", "GOOGLE_PWA_FOLDER_ID nije postavljen."
+        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen u tblConfig!", _
+               vbCritical, APP_NAME
+        Exit Sub
+    End If
+    
+    okStammdaten = RunSyncStammdatenToGoogle()
+    okKartice = RunExportKarticeToGoogle()
+    okMgmt = RunExportMgmtReports()
+    
+    msg = "Google direct sync završen:" & vbCrLf & vbCrLf & _
+          "Stammdaten: " & SyncStatusText(okStammdaten) & vbCrLf & _
+          "Kartice: " & SyncStatusText(okKartice) & vbCrLf & _
+          "MgmtReports: " & SyncStatusText(okMgmt)
+    
+    LogInfo "SyncAllGoogleDirect", _
+        "Full Google direct sync completed. " & _
+        "Stammdaten=" & CStr(okStammdaten) & _
+        "; Kartice=" & CStr(okKartice) & _
+        "; MgmtReports=" & CStr(okMgmt)
+    
+    If okStammdaten And okKartice And okMgmt Then
+        MsgBox msg, vbInformation, APP_NAME
+    Else
+        MsgBox msg & vbCrLf & vbCrLf & _
+               "Neki sync/export nije uspeo. Proveri log.", _
+               vbExclamation, APP_NAME
+    End If
+    
+    Exit Sub
+
+EH:
+    LogErr "SyncAllGoogleDirect"
+    MsgBox "Greška u master Google sync-u: " & Err.description, _
+           vbCritical, APP_NAME
+End Sub
+
+Private Function SyncStatusText(ByVal ok As Boolean) As String
+    If ok Then
+        SyncStatusText = "OK"
+    Else
+        SyncStatusText = "GREŠKA"
+    End If
+End Function
+
+Private Function RunSyncStammdatenToGoogle() As Boolean
+    On Error GoTo EH
+    
+    Call SyncStammdatenToGoogle
+    
+    RunSyncStammdatenToGoogle = True
+    Exit Function
+
+EH:
+    LogErr "RunSyncStammdatenToGoogle"
+    RunSyncStammdatenToGoogle = False
+End Function
+
+Private Function RunExportKarticeToGoogle() As Boolean
+    On Error GoTo EH
+    
+    Call ExportKarticeToGoogle
+    
+    RunExportKarticeToGoogle = True
+    Exit Function
+
+EH:
+    LogErr "RunExportKarticeToGoogle"
+    RunExportKarticeToGoogle = False
+End Function
+
+Private Function RunExportMgmtReports() As Boolean
+    On Error GoTo EH
+    
+    Call ExportMgmtReports
+    
+    RunExportMgmtReports = True
+    Exit Function
+
+EH:
+    LogErr "RunExportMgmtReports"
+    RunExportMgmtReports = False
+End Function
+
 ' ============================================================
 ' PUBLIC — Hauptfunktion
 ' ============================================================
@@ -209,9 +346,9 @@ Public Sub ExportKarticeToGoogle()
         Exit Sub
     End If
     
-    ' Sheet finden oder erstellen
     sheetID = GetConfigValue("GOOGLE_KARTICE_SHEET_ID")
     If Len(Trim$(sheetID)) = 0 Then sheetID = GetSpreadsheetID("Kartice", folderID)
+    
     If Len(Trim$(sheetID)) = 0 Then
         sheetID = CreateSpreadsheet("Kartice", folderID)
         If Len(sheetID) = 0 Then
@@ -219,13 +356,26 @@ Public Sub ExportKarticeToGoogle()
             Exit Sub
         End If
     End If
+    
     Call SetConfigValue("GOOGLE_KARTICE_SHEET_ID", sheetID)
     
-    ' Kooperanten laden
     koopData = GetTableData(TBL_KOOPERANTI)
-    If IsEmpty(koopData) Then Exit Sub
+    If IsEmpty(koopData) Then
+        Call WriteHeaderOnly(sheetID, "Sheet1", _
+            "KooperantID", "Datum", "BrojDok", "BrojParcele", _
+            "Opis", "Zaduzenje", "Razduzenje", "Saldo")
+        MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    
     koopData = ExcludeStornirano(koopData, TBL_KOOPERANTI)
-    If IsEmpty(koopData) Then Exit Sub
+    If IsEmpty(koopData) Then
+        Call WriteHeaderOnly(sheetID, "Sheet1", _
+            "KooperantID", "Datum", "BrojDok", "BrojParcele", _
+            "Opis", "Zaduzenje", "Razduzenje", "Saldo")
+        MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
+        Exit Sub
+    End If
     
     colKoopID = GetColumnIndex(TBL_KOOPERANTI, "KooperantID")
     colAktivan = GetColumnIndex(TBL_KOOPERANTI, "Aktivan")
@@ -233,7 +383,6 @@ Public Sub ExportKarticeToGoogle()
     datumOd = DateSerial(Year(Date), 1, 1)
     datumDo = Date
     
-    ' Aktive Kooperanten sammeln + Kartice generieren
     Dim koopList() As String
     Dim koopCount As Long
     ReDim koopList(1 To UBound(koopData, 1))
@@ -245,12 +394,17 @@ Public Sub ExportKarticeToGoogle()
         End If
     Next i
     
-    If koopCount = 0 Then Exit Sub
+    If koopCount = 0 Then
+        Call WriteHeaderOnly(sheetID, "Sheet1", _
+            "KooperantID", "Datum", "BrojDok", "BrojParcele", _
+            "Opis", "Zaduzenje", "Razduzenje", "Saldo")
+        MsgBox "Kartice exportiert: 0 stavki za 0 aktivnih kooperanata.", vbInformation, APP_NAME
+        Exit Sub
+    End If
 
-    ' Kartice generieren und Zeilen zählen
     Dim karticaResults() As Variant
     ReDim karticaResults(1 To koopCount)
-    totalRows = 1 ' Header
+    totalRows = 1
 
     For i = 1 To koopCount
         karticaResults(i) = ReportKarticaKooperanta(koopList(i), datumOd, datumDo)
@@ -259,7 +413,6 @@ Public Sub ExportKarticeToGoogle()
         End If
     Next i
 
-    ' Ergebnis bauen
     ReDim allRows(1 To totalRows, 1 To 8)
     allRows(1, 1) = "KooperantID"
     allRows(1, 2) = "Datum"
@@ -271,10 +424,12 @@ Public Sub ExportKarticeToGoogle()
     allRows(1, 8) = "Saldo"
     
     outRow = 1
+    
     For i = 1 To koopCount
         If Not IsEmpty(karticaResults(i)) Then
             Dim kData As Variant
             kData = karticaResults(i)
+            
             For j = 1 To UBound(kData, 1)
                 outRow = outRow + 1
                 allRows(outRow, 1) = koopList(i)
@@ -289,19 +444,21 @@ Public Sub ExportKarticeToGoogle()
         End If
     Next i
     
-    ' Kürzen und schreiben
     If outRow < totalRows Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
+        
         ReDim finalRows(1 To outRow, 1 To 8)
+        
         For r = 1 To outRow
             For c = 1 To 8
                 finalRows(r, c) = allRows(r, c)
             Next c
         Next r
-        WriteSheetData sheetID, "Sheet1", finalRows
+        
+        Call WriteSheetData(sheetID, "Sheet1", finalRows)
     Else
-        WriteSheetData sheetID, "Sheet1", allRows
+        Call WriteSheetData(sheetID, "Sheet1", allRows)
     End If
     
     LogInfo "ExportKarticeToGoogle", outRow - 1 & " Zeilen fuer " & koopCount & " Kooperanten"
@@ -316,6 +473,7 @@ End Sub
 Public Sub ExportMgmtReports()
     Dim folderID As String
     Dim sheetID As String
+    Dim ok As Long
     
     On Error GoTo EH
     
@@ -325,28 +483,40 @@ Public Sub ExportMgmtReports()
     End If
     
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
-    If Len(Trim$(folderID)) = 0 Then Exit Sub
+    If Len(Trim$(folderID)) = 0 Then
+        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        Exit Sub
+    End If
     
     sheetID = GetConfigValue("GOOGLE_MGMT_SHEET_ID")
     If Len(Trim$(sheetID)) = 0 Then sheetID = GetSpreadsheetID("MgmtReports", folderID)
+    
     If Len(Trim$(sheetID)) = 0 Then
         sheetID = CreateSpreadsheet("MgmtReports", folderID)
-        If Len(sheetID) = 0 Then Exit Sub
-        Call AddSheetTab(sheetID, "SaldoOM")
-        Call AddSheetTab(sheetID, "SaldoKupci")
-        Call AddSheetTab(sheetID, "OtkupPoOM")
-        Call AddSheetTab(sheetID, "PredatoPoKupcu")
+        If Len(sheetID) = 0 Then
+            MsgBox "MgmtReports Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
+            Exit Sub
+        End If
     End If
-    Call SetConfigValue("GOOGLE_MGMT_SHEET_ID", sheetID)
     
-    Dim ok As Long
+    Call SetConfigValue("GOOGLE_MGMT_SHEET_ID", sheetID)
+    Call EnsureMgmtReportTabsBestEffort(sheetID)
+    
     If ExportSaldoOM(sheetID) Then ok = ok + 1
     If ExportSaldoKupci(sheetID) Then ok = ok + 1
     If ExportOtkupPoOM(sheetID) Then ok = ok + 1
     If ExportPredatoPoKupcu(sheetID) Then ok = ok + 1
     
-    MsgBox "MgmtReports exportiert: " & ok & "/4", vbInformation, APP_NAME
+    If ok = 4 Then
+        LogInfo "ExportMgmtReports", "MgmtReports export completed: 4/4"
+        MsgBox "MgmtReports exportiert: 4/4", vbInformation, APP_NAME
+    Else
+        LogWarn "ExportMgmtReports", "MgmtReports partial export: " & CStr(ok) & "/4"
+        MsgBox "MgmtReports exportiert: " & ok & "/4. Proveri log.", vbExclamation, APP_NAME
+    End If
+    
     Exit Sub
+
 EH:
     LogErr "ExportMgmtReports"
     MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
@@ -981,7 +1151,12 @@ Private Function ExportParcele(ByVal sheetID As String) As Boolean
     
     data = GetTableData(TBL_PARCELE)
     If IsEmpty(data) Then
-        ExportParcele = False
+        ExportParcele = WriteHeaderOnly(sheetID, "Parcele", _
+            COL_PAR_ID, COL_PAR_KOOP, COL_PAR_KAT_BROJ, COL_PAR_KAT_OPSTINA, _
+            COL_PAR_KULTURA, COL_PAR_POVRSINA, COL_PAR_GGAP, COL_PAR_AKTIVNA, _
+            COL_PAR_GEO_STATUS, COL_PAR_GEO_SOURCE, COL_PAR_N, COL_PAR_E, _
+            COL_PAR_LAT, COL_PAR_LNG, COL_PAR_POLYGON, COL_PAR_METEO, _
+            COL_PAR_RIZIK, COL_PAR_DATUM_GEO, COL_PAR_DATUM_AZUR, COL_PAR_NAPOMENA)
         Exit Function
     End If
     
