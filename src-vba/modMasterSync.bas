@@ -1118,7 +1118,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
                                      ByVal row As Long, _
                                      ByVal clientRecordID As String) As String
     Dim newID As String
-    Dim datum As Date
+    Dim Datum As Date
     Dim kooperantID As String
     Dim stanicaID As String
     Dim vrstaVoca As String
@@ -1149,8 +1149,8 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     
     ' Datum parsen
     On Error Resume Next
-    datum = CDate(data(row, GS_DATUM))
-    If Err.Number <> 0 Then datum = Date
+    Datum = CDate(data(row, GS_DATUM))
+    If Err.Number <> 0 Then Datum = Date
     On Error GoTo EH
     
     ' Numerische Werte
@@ -1195,7 +1195,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     ' Novac = 0, PrimalacNovca = ""
     
     Dim rowData As Variant
-    rowData = Array(newID, datum, kooperantID, stanicaID, kulturaID, _
+    rowData = Array(newID, Datum, kooperantID, stanicaID, kulturaID, _
                     vrstaVoca, sortaVoca, kolicina, cena, tipAmb, _
                     kolAmb, vozacID, "", 0, "", klasa, _
                     "", "", "", "", "", parcelaID, _
@@ -1207,7 +1207,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     If result > 0 Then
         ' Ambalaza tracken
         If kolAmb > 0 Then
-            TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kooperantID, "Kooperant", , newID, DOK_TIP_OTKUP
+            TrackAmbalaza Datum, tipAmb, kolAmb, "Izlaz", kooperantID, "Kooperant", , newID, DOK_TIP_OTKUP
         End If
         
         LogInfo "ImportRowToTblOtkup", "Importiert: " & newID & " ? PWA:" & clientRecordID & _
@@ -1382,7 +1382,7 @@ End Function
 ' ============================================================
 
 Private Function Nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
-    If IsError(v) Then
+    If isError(v) Then
         Nz = Fallback
     ElseIf IsNull(v) Then
         Nz = Fallback
@@ -1993,7 +1993,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
                                       ByVal row As Long, _
                                       ByVal clientRecordID As String) As String
     Dim newID As String
-    Dim datum As Date
+    Dim Datum As Date
     Dim vozacID As String
     Dim brojZbirne As String
     Dim kupacID As String
@@ -2015,8 +2015,8 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     
     ' Datum
     On Error Resume Next
-    datum = CDate(data(row, VS_DATUM))
-    If Err.Number <> 0 Then datum = Date
+    Datum = CDate(data(row, VS_DATUM))
+    If Err.Number <> 0 Then Datum = Date
     On Error GoTo EH
     
     ' Kolicine po klasi
@@ -2046,7 +2046,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
 
     ' Fallback: prazno znaci legacy zapis ili PWA pre-rollout-a
     If Len(brojZbirne) = 0 Then
-        brojZbirne = GenerateBrojZbirne(vozacID, datum)
+        brojZbirne = GenerateBrojZbirne(vozacID, Datum)
         If Len(brojZbirne) = 0 Then
             LogError "ImportRowToTblZbirna", "Nije moguce generisati BrojZbirne za VozacID=" & vozacID
             ImportRowToTblZbirna = ""
@@ -2090,7 +2090,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     End If
     
     Dim rowData As Variant
-    rowData = Array(newID, datum, vozacID, brojZbirne, kupacID, _
+    rowData = Array(newID, Datum, vozacID, brojZbirne, kupacID, _
                     hladnjaca, "", vrstaVoca, sortaVoca, _
                     ukupnoKol, tipAmb, kolAmb, klasa, _
                     "", clientRecordID, "PWA")
@@ -2335,7 +2335,7 @@ EH:
     WriteBackVOZSyncStatus = False
 End Function
 
-Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date) As String
+Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal Datum As Date) As String
     Dim vozacBroj As String
     vozacBroj = ExtractNumericVozacBroj(vozacID)
     
@@ -2345,7 +2345,7 @@ Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date
     End If
     
     Dim baza As String
-    baza = vozacBroj & "/" & Format$(datum, "ddmmyy")
+    baza = vozacBroj & "/" & Format$(Datum, "ddmmyy")
     
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -2361,7 +2361,7 @@ Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date
         Dim i As Long
         For i = 1 To UBound(data, 1)
             If CStr(data(i, colVoz)) = vozacID Then
-                If Format$(CDate(data(i, colDat)), "ddmmyy") = Format$(datum, "ddmmyy") Then
+                If Format$(CDate(data(i, colDat)), "ddmmyy") = Format$(Datum, "ddmmyy") Then
                     seq = seq + 1
                 End If
             End If
@@ -2796,7 +2796,7 @@ End Function
 Private Function GeoText(ByVal value As Variant) As String
     On Error GoTo EH
 
-    If IsError(value) Then
+    If isError(value) Then
         GeoText = ""
     ElseIf IsNull(value) Then
         GeoText = ""
