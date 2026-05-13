@@ -1365,16 +1365,41 @@ Public Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
                   "Tabela je prazna: " & TBL_BANKA_IMPORT
     End If
 
-    Dim colCount As Long
-    Dim c As Long
+    Dim colBrojDok As Long
+    Dim colDatumTx As Long
+    Dim colPartner As Long
+    Dim colPartnerKonto As Long
+    Dim colUplata As Long
+    Dim colIsplata As Long
+    Dim colOpis As Long
+    Dim colSvrha As Long
+    Dim colRef As Long
+    Dim colPozivNaBroj As Long
+
+    colBrojDok = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
+    colDatumTx = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE, SRC)
+    colPartner = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)
+    colPartnerKonto = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO, SRC)
+    colUplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+    colOpis = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OPIS, SRC)
+    colSvrha = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_SVRHA_PLACANJA, SRC)
+    colRef = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ, SRC)
+    colPozivNaBroj = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ, SRC)
+    
     Dim result() As Variant
+    ReDim result(1 To 1, 1 To 10)
 
-    colCount = UBound(data, 2)
-    ReDim result(1 To 1, 1 To colCount)
-
-    For c = 1 To colCount
-        result(1, c) = data(rowBim, c)
-    Next c
+    result(1, 1) = data(rowBim, colBrojDok)
+    result(1, 2) = data(rowBim, colDatumTx)
+    result(1, 3) = data(rowBim, colPartner)
+    result(1, 4) = data(rowBim, colPartnerKonto)
+    result(1, 5) = data(rowBim, colUplata)
+    result(1, 6) = data(rowBim, colIsplata)
+    result(1, 7) = data(rowBim, colOpis)
+    result(1, 8) = data(rowBim, colSvrha)
+    result(1, 9) = data(rowBim, colRef)
+    result(1, 10) = data(rowBim, colPozivNaBroj)
 
     GetBankaImportRowByID = result
     Exit Function
@@ -1409,14 +1434,27 @@ Private Function ValidateBankaImportNotProcessed(ByVal bankaImportID As String) 
     End If
 
     Dim colObr As Long
-    colObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+    Dim colStorno As Long
+    Dim obrValue As String
+    Dim stornoValue As String
 
-    If UCase$(Trim$(CStr(NzBIM(data(rowBim, colObr), "")))) = "DA" Then
+    colObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+    colStorno = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO, SRC)
+
+    obrValue = UCase$(Trim$(CStr(NzBIM(data(rowBim, colObr), ""))))
+    stornoValue = UCase$(Trim$(CStr(NzBIM(data(rowBim, colStorno), ""))))
+
+    If stornoValue = "DA" Then
         ValidateBankaImportNotProcessed = False
         Exit Function
     End If
 
-    If UCase$(Trim$(CStr(NzBIM(data(rowBim, colObr), "")))) = "SKIP" Then
+    If obrValue = "DA" Then
+        ValidateBankaImportNotProcessed = False
+        Exit Function
+    End If
+    
+    If obrValue = "SKIP" Then
         ValidateBankaImportNotProcessed = False
         Exit Function
     End If
