@@ -28,25 +28,195 @@ Public Type BankIzvodSaldo
 End Type
 
 Public Function ExtractTextFromPdf(ByVal pdfPath As String) As String
+    Const SRC As String = "ExtractTextFromPdf"
 
     Dim exePath As String
     Dim tempTxt As String
     Dim cmd As String
     Dim sh As Object
-    
-    exePath = "C:\Users\Dusan\Desktop\OtkupAPP\poppler-25.12.0\Library\bin\pdftotext.exe"
-    
-    tempTxt = Environ$("TEMP") & "\pdf_extract.txt"
-    
-    cmd = """" & exePath & """ -raw -nopgbrk -enc UTF-8 """ & pdfPath & """ """ & tempTxt & """"
-    
+    Dim exitCode As Long
+
+    On Error GoTo EH
+
+    If Len(Trim$(pdfPath)) = 0 Then
+        Err.Raise vbObjectError + 2600, SRC, "PDF path je obavezan."
+    End If
+
+    If Dir$(pdfPath) = "" Then
+        Err.Raise vbObjectError + 2601, SRC, "PDF fajl ne postoji: " & pdfPath
+    End If
+
+    exePath = ResolvePdfToTextExePath()
+    tempTxt = BuildUniquePdfTextTempPath(pdfPath)
+
+    ' Defensive: never allow stale temp content from a previous failed run.
+    DeleteFileIfExists tempTxt
+
+    cmd = QuoteArg(exePath) & " -raw -nopgbrk -enc UTF-8 " & _
+          QuoteArg(pdfPath) & " " & QuoteArg(tempTxt)
+
     Set sh = CreateObject("WScript.Shell")
-    
-    ' True = warten bis fertig
-    sh.Run cmd, 0, True
-    
+
+    ' True = wait until finished. Return value is process exit code.
+    exitCode = CLng(sh.Run(cmd, 0, True))
+
+    If exitCode <> 0 Then
+        Err.Raise vbObjectError + 2602, SRC, _
+                  "pdftotext nije uspeo. ExitCode=" & CStr(exitCode) & _
+                  " Pdf=" & pdfPath & _
+                  " Cmd=" & cmd
+    End If
+
+    If Dir$(tempTxt) = "" Then
+        Err.Raise vbObjectError + 2603, SRC, _
+                  "pdftotext nije napravio temp txt fajl: " & tempTxt
+    End If
+
     ExtractTextFromPdf = ReadAllText(tempTxt)
 
+CleanUp:
+    On Error Resume Next
+    DeleteFileIfExists tempTxt
+    Set sh = Nothing
+    On Error GoTo 0
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    DeleteFileIfExists tempTxt
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+Private Function ResolvePdfToTextExePath() As String
+    Const SRC As String = "ResolvePdfToTextExePath"
+
+    Dim rootPath As String
+    Dim defaultExePath As String
+    Dim configuredPath As String
+
+    rootPath = GetLocalConfigValue("APP_ROOT_PATH", ThisWorkbook.Path)
+
+    If Len(Trim$(rootPath)) = 0 Then
+        rootPath = "C:\OtkupApp"
+    End If
+
+    defaultExePath = rootPath & "\Tools\poppler\Library\bin\pdftotext.exe"
+
+    configuredPath = GetLocalConfigValue("PDFTOTEXT_EXE_PATH", defaultExePath)
+    configuredPath = Trim$(configuredPath)
+
+    If Len(configuredPath) = 0 Then
+        Err.Raise vbObjectError + 2610, SRC, _
+                  "PDFTOTEXT_EXE_PATH nije podesen."
+    End If
+
+    If InStr(1, configuredPath, "\", vbTextCompare) > 0 Or _
+       InStr(1, configuredPath, ":", vbTextCompare) > 0 Then
+
+        If Dir$(configuredPath) = "" Then
+            Err.Raise vbObjectError + 2611, SRC, _
+                      "pdftotext.exe nije pronadjen: " & configuredPath
+        End If
+    End If
+
+    ResolvePdfToTextExePath = configuredPath
+End Function
+
+Private Function BuildUniquePdfTextTempPath(ByVal pdfPath As String) As String
+    Dim tempFolder As String
+    Dim baseName As String
+    Dim n As Long
+    Dim candidate As String
+
+    tempFolder = GetPdfExtractTempFolder()
+
+    If Len(Trim$(tempFolder)) = 0 Then
+        Err.Raise vbObjectError + 2612, "BuildUniquePdfTextTempPath", _
+                  "TEMP/TMP folder nije dostupan."
+    End If
+
+    baseName = GetBaseFileNameNoExt(pdfPath)
+    If Len(baseName) = 0 Then baseName = "pdf"
+
+    Randomize
+
+    Do
+        n = n + 1
+        candidate = tempFolder & "\pdf_extract_" & _
+                    Format$(Now, "yyyymmdd_hhnnss") & "_" & _
+                    Replace(CStr(Timer), ".", "") & "_" & _
+                    CStr(Int(Rnd() * 1000000)) & "_" & _
+                    CStr(n) & "_" & baseName & ".txt"
+
+        If Dir$(candidate) = "" Then
+            BuildUniquePdfTextTempPath = candidate
+            Exit Function
+        End If
+    Loop While n < 20
+
+    Err.Raise vbObjectError + 2613, "BuildUniquePdfTextTempPath", _
+              "Nije moguce napraviti unique temp txt path."
+End Function
+
+Private Function GetBaseFileNameNoExt(ByVal filePath As String) As String
+    Dim p As Long
+    Dim fileName As String
+
+    p = InStrRev(filePath, "\")
+    If p > 0 Then
+        fileName = Mid$(filePath, p + 1)
+    Else
+        fileName = filePath
+    End If
+
+    p = InStrRev(fileName, ".")
+End Function
+
+Private Function QuoteArg(ByVal value As String) As String
+    QuoteArg = """" & Replace(value, """", """""") & """"
+End Function
+
+Private Sub DeleteFileIfExists(ByVal filePath As String)
+    If Len(Trim$(filePath)) = 0 Then Exit Sub
+    If Dir$(filePath) <> "" Then Kill filePath
+End Sub
+
+Private Function GetPdfExtractTempFolder() As String
+    Const SRC As String = "GetPdfExtractTempFolder"
+
+    Dim tempFolder As String
+
+    tempFolder = GetLocalConfigValue("APP_TEMP_PATH", "")
+
+    If Len(Trim$(tempFolder)) = 0 Then
+        tempFolder = Environ$("TEMP")
+    End If
+
+    If Len(Trim$(tempFolder)) = 0 Then
+        tempFolder = Environ$("TMP")
+    End If
+
+    If Len(Trim$(tempFolder)) = 0 Then
+        Err.Raise vbObjectError + 2612, SRC, _
+                  "TEMP folder nije dostupan."
+    End If
+
+    If Dir$(tempFolder, vbDirectory) = "" Then
+        MkDir tempFolder
+    End If
+
+    GetPdfExtractTempFolder = tempFolder
 End Function
 
 Private Function ReadAllText(ByVal filePath As String) As String
