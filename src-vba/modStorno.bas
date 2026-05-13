@@ -1,55 +1,84 @@
-Attribute VB_Name = "modStorno"
+'Attribute VB_Name = "modStorno"
 Option Explicit
 
 ' ============================================================
-' modStorno v3.0 – Einfaches Soft-Delete
+' modStorno v4.0 – Hardened Soft-Delete
 '
-' Jedes Dokument wird einzeln storniert.
-' Keine Kaskade zwischen Dokumenten.
-' Ambalaza-Gegenbuchung wo relevant.
-' Faktura: Prijemnice freigeben + Novac lösen.
+' Stil uskladjen sa modNovac/modFaktura:
+' - fail-fast schema guards
+' - RequireColumnIndex / RequireUpdateCell
+' - stroga provera single-row dokumenata
+' - transakcioni rollback u *_TX wrapperima
+' - monitoring success/fail eventa
+' - bez MsgBox u business sloju
+'
+' Business pravila:
+' - Svaki dokument se stornira pojedinacno.
+' - Nema automatske kaskade izmedju dokumenata.
+' - Ambalaza se stornira za dokument gde postoji.
+' - Faktura: stavke se storniraju, prijemnice se oslobadjaju,
+'   novac se odvezuje od fakture.
+' - Prijemnica: ako je bila fakturisana, oslobadja se i faktura/stavke
+'   se oznacavaju kao osirocene.
 ' ============================================================
 
+Private Const MOD_NAME As String = "modStorno"
 Private Const STORNO_DA As String = "Da"
+Private Const STATUS_STORNIRANO As String = "Stornirano"
+Private Const ERR_STORNO_BASE As Long = vbObjectError + 2400
 
 ' ============================================================
 ' OTKUP
 ' ============================================================
 
 Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Const SRC As String = "StornoOtkup_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
-    
-    StornoOtkup_TX = StornoOtkup(otkupID)
-    
+
+    If Not StornoOtkup(otkupID) Then
+        Err.Raise ERR_STORNO_BASE + 1, SRC, _
+                  "StornoOtkup nije uspeo. OtkupID=" & otkupID
+    End If
+
     tx.CommitTx
 
+    StornoOtkup_TX = True
+    MonitorStornoSuccess SRC, "Otkup", otkupID
+
+    Set tx = Nothing
     Exit Function
+
 EH:
-    LogErr "StornoOtkup_TX"
-    tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
+    HandleStornoTxError SRC, "Otkup", otkupID, tx
     StornoOtkup_TX = False
 End Function
 
 Public Function StornoOtkup(ByVal otkupID As String) As Boolean
-    If Not CanStorno(TBL_OTKUP, otkupID, COL_OTK_ID) Then
-        StornoOtkup = False
-        Exit Function
-    End If
-    
-    Dim rows As Collection
-    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-    UpdateCell TBL_OTKUP, rows(1), COL_STORNIRANO, STORNO_DA
+    Const SRC As String = "StornoOtkup"
+
+    On Error GoTo EH
+
+    Dim rowOtkup As Long
+    rowOtkup = RequireStornoAllowed(TBL_OTKUP, otkupID, COL_OTK_ID, SRC)
+
+    MarkRowStornirano TBL_OTKUP, rowOtkup, SRC
     StornoAmbalazaByDokument otkupID, DOK_TIP_OTKUP
     ResetNovacOtkupLink otkupID
-    
+
     StornoOtkup = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
 End Function
 
 ' ============================================================
@@ -57,37 +86,51 @@ End Function
 ' ============================================================
 
 Public Function StornoOtpremnica_TX(ByVal otpremnicaID As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Const SRC As String = "StornoOtpremnica_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
-    
-    StornoOtpremnica_TX = StornoOtpremnica(otpremnicaID)
-    
+
+    If Not StornoOtpremnica(otpremnicaID) Then
+        Err.Raise ERR_STORNO_BASE + 2, SRC, _
+                  "StornoOtpremnica nije uspeo. OtpremnicaID=" & otpremnicaID
+    End If
+
     tx.CommitTx
 
+    StornoOtpremnica_TX = True
+    MonitorStornoSuccess SRC, "Otpremnica", otpremnicaID
+
+    Set tx = Nothing
     Exit Function
+
 EH:
-    LogErr "StornoOtpremnica_TX"
-    tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
+    HandleStornoTxError SRC, "Otpremnica", otpremnicaID, tx
     StornoOtpremnica_TX = False
 End Function
 
 Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
-    If Not CanStorno(TBL_OTPREMNICA, otpremnicaID, COL_OTP_ID) Then
-        StornoOtpremnica = False
-        Exit Function
-    End If
-    
-    Dim rows As Collection
-    Set rows = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID)
-    UpdateCell TBL_OTPREMNICA, rows(1), COL_STORNIRANO, STORNO_DA
+    Const SRC As String = "StornoOtpremnica"
+
+    On Error GoTo EH
+
+    Dim rowOtp As Long
+    rowOtp = RequireStornoAllowed(TBL_OTPREMNICA, otpremnicaID, COL_OTP_ID, SRC)
+
+    MarkRowStornirano TBL_OTPREMNICA, rowOtp, SRC
     StornoAmbalazaByDokument otpremnicaID, DOK_TIP_OTPREMNICA
-    
+
     StornoOtpremnica = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
 End Function
 
 ' ============================================================
@@ -95,52 +138,85 @@ End Function
 ' ============================================================
 
 Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Const SRC As String = "StornoZbirna_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
-    
-    StornoZbirna_TX = StornoZbirna(brojZbirne)
-    
+
+    If Not StornoZbirna(brojZbirne) Then
+        Err.Raise ERR_STORNO_BASE + 3, SRC, _
+                  "StornoZbirna nije uspeo. BrojZbirne=" & brojZbirne
+    End If
+
     tx.CommitTx
 
+    StornoZbirna_TX = True
+    MonitorStornoSuccess SRC, "Zbirna", brojZbirne
+
+    Set tx = Nothing
     Exit Function
+
 EH:
-    LogErr "StornoZbirna_TX"
-    tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
+    HandleStornoTxError SRC, "Zbirna", brojZbirne, tx
     StornoZbirna_TX = False
 End Function
 
 Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
-    Dim zbrData As Variant
-    zbrData = GetTableData(TBL_ZBIRNA)
-    If IsEmpty(zbrData) Then
-        StornoZbirna = False
-        Exit Function
+    Const SRC As String = "StornoZbirna"
+
+    On Error GoTo EH
+
+    RequireNonBlank brojZbirne, "BrojZbirne", SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 20, SRC, _
+                  "Tabela je prazna: " & TBL_ZBIRNA
     End If
-    
-    Dim colBroj As Long, colStorno As Long
-    colBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    colStorno = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
-    
-    Dim found As Boolean
+
+    Dim colBroj As Long
+    Dim colStorno As Long
+
+    colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, SRC)
+
+    Dim foundAny As Boolean
+    Dim changedCount As Long
     Dim i As Long
-    For i = 1 To UBound(zbrData, 1)
-        If CStr(zbrData(i, colBroj)) = brojZbirne Then
-            If CStr(zbrData(i, colStorno)) = STORNO_DA Then GoTo NextZbr
-            UpdateCell TBL_ZBIRNA, i, COL_STORNIRANO, STORNO_DA
-            found = True
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then
+            foundAny = True
+
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                MarkRowStornirano TBL_ZBIRNA, i, SRC
+                changedCount = changedCount + 1
+            End If
         End If
-NextZbr:
     Next i
-    
-    If Not found Then
-        MsgBox "Zbirna nije pronadena: " & brojZbirne, vbExclamation, APP_NAME
+
+    If Not foundAny Then
+        Err.Raise ERR_STORNO_BASE + 21, SRC, _
+                  "Zbirna nije pronadjena. BrojZbirne=" & brojZbirne
     End If
-    
-    StornoZbirna = found
+
+    If changedCount = 0 Then
+        Err.Raise ERR_STORNO_BASE + 22, SRC, _
+                  "Zbirna je vec stornirana. BrojZbirne=" & brojZbirne
+    End If
+
+    StornoZbirna = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
 End Function
 
 ' ============================================================
@@ -148,79 +224,89 @@ End Function
 ' ============================================================
 
 Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Const SRC As String = "StornoPrijemnica_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    
-    StornoPrijemnica_TX = StornoPrijemnica(prijemnicaID)
-    
+
+    If Not StornoPrijemnica(prijemnicaID) Then
+        Err.Raise ERR_STORNO_BASE + 4, SRC, _
+                  "StornoPrijemnica nije uspeo. PrijemnicaID=" & prijemnicaID
+    End If
+
     tx.CommitTx
 
+    StornoPrijemnica_TX = True
+    MonitorStornoSuccess SRC, "Prijemnica", prijemnicaID
+
+    Set tx = Nothing
     Exit Function
+
 EH:
-    LogErr "StornoPrijemnica_TX"
-    tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
+    HandleStornoTxError SRC, "Prijemnica", prijemnicaID, tx
     StornoPrijemnica_TX = False
 End Function
 
 Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
-    If Not CanStorno(TBL_PRIJEMNICA, prijemnicaID, COL_PRJ_ID) Then
-        StornoPrijemnica = False
-        Exit Function
-    End If
-    
-    Dim rows As Collection
-    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
-    Dim r As Long: r = rows(1)
-    
-    UpdateCell TBL_PRIJEMNICA, r, COL_STORNIRANO, STORNO_DA
-    
-    ' Fakturisano-Flag lösen (Faktura bleibt!)
+    Const SRC As String = "StornoPrijemnica"
+
+    On Error GoTo EH
+
+    Dim rowPrij As Long
+    rowPrij = RequireStornoAllowed(TBL_PRIJEMNICA, prijemnicaID, COL_PRJ_ID, SRC)
+
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC
+    RequireColumnIndex TBL_FAKTURE, COL_FAK_ID, SRC
+    RequireColumnIndex TBL_FAKTURE, COL_OSIROCENO_OD, SRC
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC
+
     Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
-    If CStr(prijData(r, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO))) = "Da" Then
-        UpdateCell TBL_PRIJEMNICA, r, COL_PRJ_FAKTURISANO, ""
-        
-        Dim fakturaID As String
-        fakturaID = CStr(prijData(r, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)))
-        UpdateCell TBL_PRIJEMNICA, r, COL_PRJ_FAKTURA_ID, ""
-        
-        If fakturaID <> "" Then
-            ' Faktura als verwaist markieren
-            Dim fakRows As Collection
-            Set fakRows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-            If fakRows.count > 0 Then
-                UpdateCell TBL_FAKTURE, fakRows(1), COL_OSIROCENO_OD, prijemnicaID
-            End If
-            
-            ' FakturaStavke als verwaist markieren  ? NEU
-            Dim stavkeData As Variant
-            stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-            If Not IsEmpty(stavkeData) Then
-                Dim colSPrijID As Long, colSFakID As Long
-                colSPrijID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID)
-                colSFakID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
-                
-                Dim j As Long
-                For j = 1 To UBound(stavkeData, 1)
-                    If CStr(stavkeData(j, colSPrijID)) = prijemnicaID And _
-                       CStr(stavkeData(j, colSFakID)) = fakturaID Then
-                        UpdateCell TBL_FAKTURA_STAVKE, j, COL_OSIROCENO_OD, prijemnicaID
-                    End If
-                Next j
-            End If
+
+    If IsEmpty(prijData) Then
+        Err.Raise ERR_STORNO_BASE + 30, SRC, _
+                  "Tabela prijemnica je prazna."
+    End If
+
+    Dim colFakturisano As Long
+    Dim colFakturaID As Long
+    Dim fakturaID As String
+
+    colFakturisano = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
+    colFakturaID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
+
+    fakturaID = Trim$(CStr(prijData(rowPrij, colFakturaID)))
+
+    MarkRowStornirano TBL_PRIJEMNICA, rowPrij, SRC
+
+    If UCase$(Trim$(CStr(prijData(rowPrij, colFakturisano)))) = "DA" Then
+        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
+        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
+
+        If Len(fakturaID) > 0 Then
+            MarkFakturaOrphaned fakturaID, prijemnicaID
+            MarkFakturaStavkeOrphaned fakturaID, prijemnicaID
         End If
     End If
-    
+
     StornoAmbalazaByDokument prijemnicaID, DOK_TIP_PRIJEMNICA
-    
+
     StornoPrijemnica = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
 End Function
 
 ' ============================================================
@@ -228,67 +314,64 @@ End Function
 ' ============================================================
 
 Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Const SRC As String = "StornoFaktura_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_NOVAC
-    
-    StornoFaktura_TX = StornoFaktura(fakturaID)
-    
+
+    If Not StornoFaktura(fakturaID) Then
+        Err.Raise ERR_STORNO_BASE + 5, SRC, _
+                  "StornoFaktura nije uspeo. FakturaID=" & fakturaID
+    End If
+
     tx.CommitTx
 
+    StornoFaktura_TX = True
+    MonitorStornoSuccess SRC, "Faktura", fakturaID
+
+    Set tx = Nothing
     Exit Function
+
 EH:
-    LogErr "StornoFaktura_TX"
-    tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
+    HandleStornoTxError SRC, "Faktura", fakturaID, tx
     StornoFaktura_TX = False
 End Function
 
 Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
-    If Not CanStorno(TBL_FAKTURE, fakturaID, COL_FAK_ID) Then
-        StornoFaktura = False
-        Exit Function
-    End If
-    
-    Dim fakRows As Collection
-    Set fakRows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-    UpdateCell TBL_FAKTURE, fakRows(1), COL_STORNIRANO, STORNO_DA
-    UpdateCell TBL_FAKTURE, fakRows(1), COL_FAK_STATUS, "Stornirano"
-    
-    ' Stavke stornieren + Prijemnice freigeben
-    Dim stavkeData As Variant
-    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-    If Not IsEmpty(stavkeData) Then
-        Dim colFakID As Long, colPrijID As Long
-        colFakID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
-        colPrijID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID)
-        
-        Dim i As Long
-        For i = 1 To UBound(stavkeData, 1)
-            If CStr(stavkeData(i, colFakID)) = fakturaID Then
-                UpdateCell TBL_FAKTURA_STAVKE, i, COL_STORNIRANO, STORNO_DA
-                
-                Dim prijID As String
-                prijID = CStr(stavkeData(i, colPrijID))
-                Dim prijRows As Collection
-                Set prijRows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijID)
-                If prijRows.count > 0 Then
-                    UpdateCell TBL_PRIJEMNICA, prijRows(1), COL_PRJ_FAKTURISANO, ""
-                    UpdateCell TBL_PRIJEMNICA, prijRows(1), COL_PRJ_FAKTURA_ID, ""
-                End If
-            End If
-        Next i
-    End If
-    
-    ' Novac: FakturaID lösen
+    Const SRC As String = "StornoFaktura"
+
+    On Error GoTo EH
+
+    Dim rowFak As Long
+    rowFak = RequireStornoAllowed(TBL_FAKTURE, fakturaID, COL_FAK_ID, SRC)
+
+    RequireColumnIndex TBL_FAKTURE, COL_FAK_STATUS, SRC
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_ID, SRC
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC
+
+    MarkRowStornirano TBL_FAKTURE, rowFak, SRC
+    RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
+
+    StornoFakturaStavkeAndReleasePrijemnice fakturaID
     ResetNovacFakturaLink fakturaID
-    
+
     StornoFaktura = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
 End Function
 
 ' ============================================================
@@ -296,186 +379,478 @@ End Function
 ' ============================================================
 
 Public Function StornoNovac_TX(ByVal novacID As String) As Boolean
-    Dim tx As New clsTransaction
-    
+    Const SRC As String = "StornoNovac_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
     On Error GoTo EH
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
-    
-    StornoNovac_TX = StornoNovac(novacID)
-    
+
+    If Not StornoNovac(novacID) Then
+        Err.Raise ERR_STORNO_BASE + 6, SRC, _
+                  "StornoNovac nije uspeo. NovacID=" & novacID
+    End If
+
     tx.CommitTx
 
+    StornoNovac_TX = True
+    MonitorStornoSuccess SRC, "Novac", novacID
+
+    Set tx = Nothing
     Exit Function
+
 EH:
-    LogErr "StornoNovac_TX"
-    tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
+    HandleStornoTxError SRC, "Novac", novacID, tx
     StornoNovac_TX = False
 End Function
 
 Public Function StornoNovac(ByVal novacID As String) As Boolean
-    If Not CanStorno(TBL_NOVAC, novacID, COL_NOV_ID) Then
-        StornoNovac = False
-        Exit Function
-    End If
-    
-    Dim rows As Collection
-    Set rows = FindRows(TBL_NOVAC, COL_NOV_ID, novacID)
-    Dim r As Long: r = rows(1)
-    
-    UpdateCell TBL_NOVAC, r, COL_STORNIRANO, STORNO_DA
-    
-    ' Faktura-Status neu berechnen
+    Const SRC As String = "StornoNovac"
+
+    On Error GoTo EH
+
+    Dim rowNov As Long
+    rowNov = RequireStornoAllowed(TBL_NOVAC, novacID, COL_NOV_ID, SRC)
+
+    RequireColumnIndex TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC
+
     Dim novData As Variant
     novData = GetTableData(TBL_NOVAC)
-    Dim fakturaID As String
-    fakturaID = CStr(novData(r, GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)))
-    If fakturaID <> "" Then
-        ResetFakturaStatus fakturaID
+
+    If IsEmpty(novData) Then
+        Err.Raise ERR_STORNO_BASE + 40, SRC, _
+                  "Tabela novac je prazna."
     End If
-    
+
+    Dim fakturaID As String
+    fakturaID = Trim$(CStr(novData(rowNov, _
+                    RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC))))
+
+    MarkRowStornirano TBL_NOVAC, rowNov, SRC
+
+    If Len(fakturaID) > 0 Then
+        UpdateFakturaStatus fakturaID
+    End If
+
     StornoNovac = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
 End Function
 
 ' ============================================================
-' PRIVATE HELPERS
+' PUBLIC HELPERS / COMPATIBILITY
 ' ============================================================
 
-Private Sub ResetNovacFakturaLink(ByVal fakturaID As String)
-    Dim novData As Variant
-    novData = GetTableData(TBL_NOVAC)
-    If IsEmpty(novData) Then Exit Sub
-    
-    Dim colFakID As Long
-    colFakID = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
-    
-    Dim i As Long
-    For i = 1 To UBound(novData, 1)
-        If CStr(novData(i, colFakID)) = fakturaID Then
-            UpdateCell TBL_NOVAC, i, COL_NOV_FAKTURA_ID, ""
-        End If
-    Next i
-End Sub
-
-Private Sub ResetFakturaStatus(ByVal fakturaID As String)
-    Dim novData As Variant
-    novData = GetTableData(TBL_NOVAC)
-    If IsEmpty(novData) Then Exit Sub
-    
-    Dim colFakID As Long, colUplata As Long, colStorno As Long
-    colFakID = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
-    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-    colStorno = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
-    
-    Dim uplaceno As Double
-    Dim i As Long
-    For i = 1 To UBound(novData, 1)
-        If CStr(novData(i, colFakID)) = fakturaID Then
-            If CStr(novData(i, colStorno)) = STORNO_DA Then GoTo NextNov
-            If IsNumeric(novData(i, colUplata)) Then
-                uplaceno = uplaceno + CDbl(novData(i, colUplata))
-            End If
-        End If
-NextNov:
-    Next i
-    
-    Dim fakIznos As Double
-    fakIznos = CDbl(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS))
-    
-    Dim fakRows As Collection
-    Set fakRows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-    If fakRows.count > 0 Then
-        If uplaceno >= fakIznos Then
-            UpdateCell TBL_FAKTURE, fakRows(1), COL_FAK_STATUS, STATUS_PLACENO
-        Else
-            UpdateCell TBL_FAKTURE, fakRows(1), COL_FAK_STATUS, STATUS_NEPLACENO
-            UpdateCell TBL_FAKTURE, fakRows(1), COL_FAK_DATUM_PLACANJA, ""
-        End If
-    End If
-End Sub
-
-Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
-                                      ByVal dokumentTip As String)
-    Dim ambData As Variant
-    ambData = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(ambData) Then Exit Sub
-    
-    Dim colDokID As Long, colDokTip As Long, colStorno As Long
-    colDokID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    colDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
-    colStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If colStorno = 0 Then Exit Sub
-    
-    Dim i As Long
-    For i = 1 To UBound(ambData, 1)
-        If CStr(ambData(i, colDokID)) = dokumentID And _
-           CStr(ambData(i, colDokTip)) = dokumentTip Then
-            If CStr(ambData(i, colStorno)) <> STORNO_DA Then
-                UpdateCell TBL_AMBALAZA, i, COL_STORNIRANO, STORNO_DA
-            End If
-        End If
-    Next i
-End Sub
 Public Function CanStorno(ByVal tblName As String, _
                           ByVal recordID As String, _
                           ByVal idColumn As String) As Boolean
-    Dim rows As Collection
-    Set rows = FindRows(tblName, idColumn, recordID)
-    If rows.count = 0 Then
-        MsgBox "Stavka nije pronadjena!", vbExclamation, APP_NAME
-        CanStorno = False
-        Exit Function
-    End If
-    
-    Dim data As Variant
-    data = GetTableData(tblName)
-    Dim colStorno As Long
-    colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
-    
-    If colStorno > 0 Then
-        If CStr(data(rows(1), colStorno)) = STORNO_DA Then
-            MsgBox "Vec stornirano!", vbExclamation, APP_NAME
-            CanStorno = False
-            Exit Function
-        End If
-    End If
-    
-    CanStorno = True
+    Const SRC As String = "CanStorno"
+
+    On Error GoTo EH
+
+    CanStorno = (RequireStornoAllowed(tblName, recordID, idColumn, SRC) > 0)
+    Exit Function
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    Debug.Print SRC & " failed. Table=" & tblName & _
+                " ID=" & recordID & _
+                " Err=" & CStr(Err.Number) & _
+                " Desc=" & Err.description
+    On Error GoTo 0
+
+    CanStorno = False
 End Function
 
 Public Function LookupActiveID(ByVal tblName As String, _
-                                ByVal brojColName As String, _
-                                ByVal brojValue As String, _
-                                ByVal idColName As String) As String
-    ' Wie LookupValue, aber überspringt Stornirano="Da"
-    ' Findet den LETZTEN nicht-stornierten Treffer
-    
+                               ByVal brojColName As String, _
+                               ByVal brojValue As String, _
+                               ByVal idColName As String) As String
+    Const SRC As String = "LookupActiveID"
+
+    On Error GoTo EH
+
+    RequireNonBlank tblName, "TableName", SRC
+    RequireNonBlank brojColName, "BrojColumn", SRC
+    RequireNonBlank idColName, "IdColumn", SRC
+
     Dim data As Variant
     data = GetTableData(tblName)
+
     If IsEmpty(data) Then
         LookupActiveID = ""
         Exit Function
     End If
-    
-    Dim colBroj As Long, colID As Long, colStorno As Long
-    colBroj = GetColumnIndex(tblName, brojColName)
-    colID = GetColumnIndex(tblName, idColName)
-    colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
-    
+
+    Dim colBroj As Long
+    Dim colID As Long
+    Dim colStorno As Long
+
+    colBroj = RequireColumnIndex(tblName, brojColName, SRC)
+    colID = RequireColumnIndex(tblName, idColName, SRC)
+    colStorno = RequireColumnIndex(tblName, COL_STORNIRANO, SRC)
+
     Dim resultId As String
     Dim i As Long
+
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colBroj)) = brojValue Then
-            If colStorno > 0 Then
-                If CStr(data(i, colStorno)) = "Da" Then GoTo NextRow
+        If Trim$(CStr(data(i, colBroj))) = Trim$(brojValue) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                resultId = CStr(data(i, colID))
             End If
-            resultId = CStr(data(i, colID))
         End If
-NextRow:
     Next i
-    
+
     LookupActiveID = resultId
+    Exit Function
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+    LookupActiveID = ""
 End Function
+
+' ============================================================
+' PRIVATE BUSINESS HELPERS
+' ============================================================
+
+Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
+    Const SRC As String = "StornoFakturaStavkeAndReleasePrijemnice"
+
+    Dim stavkeData As Variant
+    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(stavkeData) Then Exit Sub
+
+    Dim colFakID As Long
+    Dim colPrijID As Long
+
+    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+
+    Dim i As Long
+
+    For i = 1 To UBound(stavkeData, 1)
+        If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
+            MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
+
+            Dim prijID As String
+            prijID = Trim$(CStr(stavkeData(i, colPrijID)))
+
+            If Len(prijID) > 0 Then
+                ReleasePrijemnicaFromFaktura prijID, fakturaID
+            End If
+        End If
+    Next i
+End Sub
+
+Private Sub ReleasePrijemnicaFromFaktura(ByVal prijemnicaID As String, _
+                                         ByVal fakturaID As String)
+    Const SRC As String = "ReleasePrijemnicaFromFaktura"
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
+
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 50, SRC, _
+                  "Dupla PrijemnicaID vrednost: " & prijemnicaID
+    End If
+
+    Dim rowPrij As Long
+    rowPrij = CLng(rows(1))
+
+    RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
+    RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
+End Sub
+
+Private Sub MarkFakturaOrphaned(ByVal fakturaID As String, _
+                                ByVal prijemnicaID As String)
+    Const SRC As String = "MarkFakturaOrphaned"
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
+
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 51, SRC, _
+                  "Dupla FakturaID vrednost: " & fakturaID
+    End If
+
+    RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_OSIROCENO_OD, _
+                      prijemnicaID, SRC
+End Sub
+
+Private Sub MarkFakturaStavkeOrphaned(ByVal fakturaID As String, _
+                                      ByVal prijemnicaID As String)
+    Const SRC As String = "MarkFakturaStavkeOrphaned"
+
+    Dim stavkeData As Variant
+    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(stavkeData) Then Exit Sub
+
+    Dim colFakID As Long
+    Dim colPrijID As Long
+
+    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+
+    Dim i As Long
+
+    For i = 1 To UBound(stavkeData, 1)
+        If Trim$(CStr(stavkeData(i, colPrijID))) = Trim$(prijemnicaID) And _
+           Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
+            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
+                              prijemnicaID, SRC
+        End If
+    Next i
+End Sub
+
+Private Sub ResetNovacFakturaLink(ByVal fakturaID As String)
+    Const SRC As String = "ResetNovacFakturaLink"
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colFakID As Long
+    colFakID = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC)
+
+    Dim i As Long
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colFakID))) = Trim$(fakturaID) Then
+            RequireUpdateCell TBL_NOVAC, i, COL_NOV_FAKTURA_ID, "", SRC
+        End If
+    Next i
+End Sub
+
+Private Sub ResetNovacOtkupLink(ByVal otkupID As String)
+    Const SRC As String = "ResetNovacOtkupLink"
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colOtkupID As Long
+    colOtkupID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+
+    Dim i As Long
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colOtkupID))) = Trim$(otkupID) Then
+            RequireUpdateCell TBL_NOVAC, i, COL_NOV_OTKUP_ID, "", SRC
+        End If
+    Next i
+End Sub
+
+Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
+                                     ByVal dokumentTip As String)
+    Const SRC As String = "StornoAmbalazaByDokument"
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colDokID As Long
+    Dim colDokTip As Long
+    Dim colStorno As Long
+
+    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+
+    Dim i As Long
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colDokID))) = Trim$(dokumentID) And _
+           Trim$(CStr(data(i, colDokTip))) = Trim$(dokumentTip) Then
+
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                MarkRowStornirano TBL_AMBALAZA, i, SRC
+            End If
+        End If
+    Next i
+End Sub
+
+' ============================================================
+' PRIVATE GUARDS / LOW-LEVEL HELPERS
+' ============================================================
+
+Private Function RequireStornoAllowed(ByVal tblName As String, _
+                                      ByVal recordID As String, _
+                                      ByVal idColumn As String, _
+                                      ByVal sourceName As String) As Long
+    RequireNonBlank tblName, "TableName", sourceName
+    RequireNonBlank recordID, "RecordID", sourceName
+    RequireNonBlank idColumn, "IdColumn", sourceName
+
+    RequireColumnIndex tblName, idColumn, sourceName
+    RequireColumnIndex tblName, COL_STORNIRANO, sourceName
+
+    Dim rows As Collection
+    Set rows = FindRows(tblName, idColumn, recordID)
+
+    If rows Is Nothing Then
+        Err.Raise ERR_STORNO_BASE + 60, sourceName, _
+                  "FindRows je vratio Nothing. Table=" & tblName & _
+                  " ID=" & recordID
+    End If
+
+    If rows.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 61, sourceName, _
+                  "Stavka nije pronadjena. Table=" & tblName & _
+                  " ID=" & recordID
+    End If
+
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 62, sourceName, _
+                  "ID nije jedinstven. Table=" & tblName & _
+                  " ID=" & recordID & _
+                  " Count=" & CStr(rows.count)
+    End If
+
+    Dim rowIndex As Long
+    rowIndex = CLng(rows(1))
+
+    Dim data As Variant
+    data = GetTableData(tblName)
+
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 63, sourceName, _
+                  "Tabela je prazna posle pronalaska reda. Table=" & tblName
+    End If
+
+    Dim colStorno As Long
+    colStorno = RequireColumnIndex(tblName, COL_STORNIRANO, sourceName)
+
+    If IsStorniranoValue(data(rowIndex, colStorno)) Then
+        Err.Raise ERR_STORNO_BASE + 64, sourceName, _
+                  "Vec stornirano. Table=" & tblName & _
+                  " ID=" & recordID
+    End If
+
+    RequireStornoAllowed = rowIndex
+End Function
+
+Private Sub MarkRowStornirano(ByVal tblName As String, _
+                              ByVal rowIndex As Long, _
+                              ByVal sourceName As String)
+    RequireUpdateCell tblName, rowIndex, COL_STORNIRANO, STORNO_DA, sourceName
+End Sub
+
+Private Sub RequireNonBlank(ByVal value As String, _
+                            ByVal fieldName As String, _
+                            ByVal sourceName As String)
+    If Len(Trim$(value)) = 0 Then
+        Err.Raise ERR_STORNO_BASE + 70, sourceName, _
+                  fieldName & " je obavezan."
+    End If
+End Sub
+
+Private Function IsStorniranoValue(ByVal value As Variant) As Boolean
+    IsStorniranoValue = (UCase$(Trim$(CStr(value))) = UCase$(STORNO_DA))
+End Function
+
+Private Sub LogAndReraise(ByVal sourceName As String)
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr sourceName
+    On Error GoTo 0
+
+    Err.Raise errNum, sourceName, "Source=" & errSrc & " | " & errDesc
+End Sub
+
+' ============================================================
+' MONITORING / TX ERROR HANDLING
+' ============================================================
+
+Private Sub HandleStornoTxError(ByVal procedureName As String, _
+                                ByVal entityType As String, _
+                                ByVal entityId As String, _
+                                ByRef tx As clsTransaction)
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+
+    LogErr procedureName
+
+    If Not tx Is Nothing Then tx.RollbackTx
+
+    Monitor_Error _
+        moduleName:=MOD_NAME, _
+        procedureName:=procedureName, _
+        entityType:=entityType, _
+        entityId:=entityId, _
+        correlationId:=entityId, _
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
+
+    Monitor_Event _
+        eventType:="STORNO_" & UCase$(entityType) & "_FAIL", _
+        severity:="ERROR", _
+        message:=entityType & " storno failed. ID=" & entityId & _
+                 "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:=MOD_NAME, _
+        procedureName:=procedureName, _
+        entityType:=entityType, _
+        entityId:=entityId, _
+        correlationId:=entityId
+
+    Debug.Print procedureName & " failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+
+    On Error GoTo 0
+End Sub
+
+Private Sub MonitorStornoSuccess(ByVal procedureName As String, _
+                                 ByVal entityType As String, _
+                                 ByVal entityId As String)
+    On Error Resume Next
+
+    Monitor_Event _
+        eventType:="STORNO_" & UCase$(entityType) & "_SUCCESS", _
+        severity:="INFO", _
+        message:=entityType & " stornirano. ID=" & entityId, _
+        userId:="Operator", _
+        moduleName:=MOD_NAME, _
+        procedureName:=procedureName, _
+        entityType:=entityType, _
+        entityId:=entityId, _
+        correlationId:=entityId
+
+    On Error GoTo 0
+End Sub
 
