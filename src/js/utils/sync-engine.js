@@ -245,6 +245,9 @@
 
             if (!allowed) {
                 return buildSyncResult({
+                    ok: true,
+                    synced: 0,
+                    failed: 0,
                     reason: 'master-sync-active',
                     code: 'MASTER_SYNC_ACTIVE'
                 });
