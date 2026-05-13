@@ -31,6 +31,8 @@ Private m_RowMapCount As Long
 
 Private mChromeRemoved As Boolean
 
+Private mGeoClearConfirmPending As Boolean
+
 Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
@@ -81,7 +83,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmStammdaten.UserForm_Activate"
-    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -295,6 +297,9 @@ Private Sub SetupParcele()
     cmbField3.AddItem "Da"
     cmbField3.AddItem "Ne"
     cmbField3.AddItem "U postupku"
+    
+    SetGeoControlsVisible False
+    
 End Sub
 Private Sub SetupArtikli()
     ResetFieldVisibility
@@ -577,7 +582,7 @@ Private Sub LoadList()
 
 EH:
     LogErr "frmStammdaten.LoadList"
-    MsgBox "Greška pri ucitavanju liste: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri ucitavanju liste: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -586,6 +591,9 @@ End Sub
 
 Private Sub lstData_Click()
     If lstData.ListIndex < 0 Then Exit Sub
+    
+    ResetGeoClearConfirm
+    ClearGeoStatus
     
     m_SelectedRow = GetMappedSelectedRow()
     If m_SelectedRow = 0 Then Exit Sub
@@ -670,6 +678,9 @@ Private Sub lstData_Click()
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 6)   ' Kultura
             txtField7.value = lstData.List(lstData.ListIndex, 7)   ' Pakovanje
     End Select
+    
+    UpdateGeoControlsVisibility
+    
 End Sub
 
 ' ============================================================
@@ -945,7 +956,7 @@ Private Sub btnDodaj_Click()
 
 EH:
     LogErr "frmStammdaten.btnDodaj_Click"
-    MsgBox "Greška pri dodavanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri dodavanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1017,6 +1028,7 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "JMBG", Trim$(txtField10.value), SRC
 
             tx.CommitTx
+            
 
         Case "Stanice"
             If Trim$(txtField1.value) = "" Then
@@ -1208,7 +1220,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "Greška pri izmeni: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri izmeni: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1248,6 +1260,11 @@ Private Sub ClearFields()
     cmbField6.value = ""
 
     m_SelectedRow = 0
+    
+    UpdateGeoControlsVisibility
+    ResetGeoClearConfirm
+    ClearGeoStatus
+    
 End Sub
 
 Private Sub ResetFieldVisibility()
@@ -1276,7 +1293,9 @@ Private Sub ResetFieldVisibility()
             .ColumnWidths = ""
         End With
     Next i
-
+    
+    SetGeoControlsVisible False
+    
     On Error GoTo 0
 End Sub
 
@@ -1316,135 +1335,176 @@ End Function
 '========================
 'GEO MODULE
 '========================
-Private Sub btnGeoOpen_Click()
 
+Private Sub SetGeoControlsVisible(ByVal isVisible As Boolean)
+    On Error Resume Next
+
+    btnGeoOpen.Visible = isVisible
+    btnPasteCoords.Visible = isVisible
+    btnGeoClear.Visible = isVisible
+    btnGeoSave.Visible = isVisible
+    btnOpenMap.Visible = isVisible
+    btnOpenPolygonEditor.Visible = isVisible
+
+    txtNCoord.Visible = isVisible
+    txtECoord.Visible = isVisible
+
+    lblNCoord.Visible = isVisible
+    lblECoord.Visible = isVisible
+
+    Dim geoStatus As Object
+    Set geoStatus = Me.Controls("lblGeoStatus")
+    geoStatus.Visible = isVisible And Len(Trim$(geoStatus.caption)) > 0
+
+    On Error GoTo 0
+End Sub
+
+Private Sub UpdateGeoControlsVisibility()
+    SetGeoControlsVisible (Me.Tag = "Parcele" And _
+                           m_SelectedRow > 0 And _
+                           lstData.ListIndex >= 0)
+End Sub
+Private Sub btnGeoOpen_Click()
     On Error GoTo EH
 
     If Me.Tag <> "Parcele" Then Exit Sub
 
-    If m_SelectedRow = 0 Then
-        MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-    
-    If lstData.ListIndex < 0 Then
-        MsgBox "Izaberite parcelu iz liste!", vbExclamation, APP_NAME
-        Exit Sub
-    End If
+    ResetGeoClearConfirm
+    ClearGeoStatus
+
+    If Not HasSelectedParcelaForGeo() Then Exit Sub
 
     Dim katBroj As String
     Dim katOpstina As String
     Dim searchText As String
 
-    katBroj = lstData.List(lstData.ListIndex, 2)
-    katOpstina = lstData.List(lstData.ListIndex, 3)
+    katBroj = Trim$(NzToText(lstData.List(lstData.ListIndex, 2)))
+    katOpstina = Trim$(NzToText(lstData.List(lstData.ListIndex, 3)))
 
     If Len(katBroj) = 0 Or Len(katOpstina) = 0 Then
-        MsgBox "Parcela nema katastarski broj ili katastarsku opštinu.", vbExclamation, APP_NAME
+        SetGeoStatus "Parcela nema katastarski broj ili katastarsku opštinu.", True
         Exit Sub
     End If
-    
+
     searchText = katBroj & " " & Replace(katOpstina, "KO ", "")
 
-    ' ?? Kopiraj u clipboard
     CopyToClipboard searchText
-
-    ' ?? Otvori GeoSrbiju
     ThisWorkbook.FollowHyperlink "https://a3.geosrbija.rs/"
 
-    'MsgBox "GeoSrbija otvorena." & vbCrLf & vbCrLf & _
-           "Pretraga je kopirana:" & vbCrLf & _
-           searchText & vbCrLf & vbCrLf & _
-           "Samo CTRL + V i Enter", _
-           vbInformation, APP_NAME
-
+    SetGeoStatus "GeoSrbija otvorena. Pretraga je kopirana: " & searchText, False
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.btnGeoOpen_Click"
-    MsgBox "Greška pri otvaranju GeoSrbije: " & Err.Description, vbCritical, APP_NAME
+    SetGeoStatus "Greška pri otvaranju GeoSrbije. Pogledaj log.", True
 End Sub
 
 Private Sub btnGeoSave_Click()
     On Error GoTo EH
-    
+
     If Me.Tag <> "Parcele" Then Exit Sub
-    
-    If m_SelectedRow = 0 Then
-        MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-    
+
+    ResetGeoClearConfirm
+    ClearGeoStatus
+
+    If Not HasSelectedParcelaForGeo() Then Exit Sub
+
     Dim nVal As Double
     Dim eVal As Double
-    
+
     If Not TryParseDouble(txtNCoord.value, nVal) Then
-        MsgBox "Unesite validnu N koordinatu.", vbExclamation, APP_NAME
+        SetGeoStatus "Unesi validnu N koordinatu.", True
         txtNCoord.SetFocus
         Exit Sub
     End If
 
     If Not TryParseDouble(txtECoord.value, eVal) Then
-        MsgBox "Unesite validnu E koordinatu.", vbExclamation, APP_NAME
+        SetGeoStatus "Unesi validnu E koordinatu.", True
         txtECoord.SetFocus
         Exit Sub
     End If
 
     If nVal <= 0 Or eVal <= 0 Then
-        MsgBox "Koordinate moraju biti pozitivne vrednosti.", vbExclamation, APP_NAME
+        SetGeoStatus "Koordinate moraju biti pozitivne vrednosti.", True
         Exit Sub
     End If
-    
+
+    Dim parcelaID As String
+    parcelaID = GetSelectedParcelaID()
+
+    If Len(parcelaID) = 0 Then
+        SetGeoStatus "Izabrana parcela nema ParcelaID.", True
+        Exit Sub
+    End If
+
     SaveParcelGeoPoint m_SelectedRow, nVal, eVal
-    
-    MsgBox "Geo podaci su sacuvani.", vbInformation, APP_NAME
-    
+
     LoadList
+    ReselectParcelaInList parcelaID
     ClearGeoFields
+
+    SetGeoStatus "Geo podaci su sacuvani lokalno.", False
     Exit Sub
-    
+
 EH:
     LogErr "frmStammdaten.btnGeoSave_Click"
-    MsgBox "Greška pri cuvanju geo podataka: " & Err.Description, vbCritical, APP_NAME
+    SetGeoStatus "Greška pri cuvanju geo podataka. Pogledaj log.", True
 End Sub
 
 Private Sub btnGeoClear_Click()
     On Error GoTo EH
-    
+
     If Me.Tag <> "Parcele" Then Exit Sub
-    
-    If m_SelectedRow = 0 Then
-        MsgBox "Izaberite parcelu iz liste!", vbExclamation, APP_NAME
+
+    ClearGeoStatus
+
+    If Not HasSelectedParcelaForGeo() Then Exit Sub
+
+    If Not mGeoClearConfirmPending Then
+        mGeoClearConfirmPending = True
+        btnGeoClear.caption = "Potvrdi brisanje"
+        SetGeoStatus "Klikni još jednom za brisanje geo podataka.", True
         Exit Sub
     End If
 
-    If MsgBox("Da li sigurno želite da obrišete geo podatke za izabranu parcelu?", _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
+    Dim parcelaID As String
+    parcelaID = GetSelectedParcelaID()
+
+    If Len(parcelaID) = 0 Then
+        SetGeoStatus "Izabrana parcela nema ParcelaID.", True
         Exit Sub
     End If
-    
+
     ClearParcelGeo m_SelectedRow
-    
-    MsgBox "Geo podaci su obrisani.", vbInformation, APP_NAME
 
+    ResetGeoClearConfirm
     LoadList
+    ReselectParcelaInList parcelaID
     ClearGeoFields
 
+    SetGeoStatus "Geo podaci su obrisani.", False
     Exit Sub
 
 EH:
+    ResetGeoClearConfirm
     LogErr "frmStammdaten.btnGeoClear_Click"
-    MsgBox "Greška pri brisanju geo podataka: " & Err.Description, vbCritical, APP_NAME
+    SetGeoStatus "Greška pri brisanju geo podataka. Pogledaj log.", True
 End Sub
 
 Private Sub btnPasteCoords_Click()
     On Error GoTo EH
 
+    ResetGeoClearConfirm
+    ClearGeoStatus
+
+    If Me.Tag <> "Parcele" Then Exit Sub
+    If Not HasSelectedParcelaForGeo() Then Exit Sub
+
     Dim txt As String
     txt = Trim$(GetClipboardText())
 
     If txt = "" Then
-        MsgBox "Clipboard je prazan.", vbExclamation, APP_NAME
+        SetGeoStatus "Clipboard je prazan.", True
         Exit Sub
     End If
 
@@ -1452,20 +1512,19 @@ Private Sub btnPasteCoords_Click()
     Dim eVal As Double
 
     If Not TryExtractTwoCoordinates(txt, nVal, eVal) Then
-        MsgBox "Nisu pronadene validne koordinate u clipboard-u.", vbExclamation, APP_NAME
+        SetGeoStatus "Nisu pronadene validne koordinate u clipboard-u.", True
         Exit Sub
     End If
 
     txtNCoord.value = FormatCoordForTextBox(nVal)
     txtECoord.value = FormatCoordForTextBox(eVal)
 
-    MsgBox "Koordinate su ucitane.", vbInformation, APP_NAME
-
+    SetGeoStatus "Koordinate su ucitane iz clipboard-a.", False
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.btnPasteCoords_Click"
-    MsgBox "Greška pri ucitavanju koordinata: " & Err.Description, vbCritical, APP_NAME
+    SetGeoStatus "Greška pri ucitavanju koordinata. Pogledaj log.", True
 End Sub
 
 Private Sub btnOpenMap_Click()
@@ -1473,16 +1532,16 @@ Private Sub btnOpenMap_Click()
 
     If Me.Tag <> "Parcele" Then Exit Sub
 
-    If m_SelectedRow = 0 Then
-        MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
-        Exit Sub
-    End If
+    ResetGeoClearConfirm
+    ClearGeoStatus
+
+    If Not HasSelectedParcelaForGeo() Then Exit Sub
 
     Dim data As Variant
     data = GetTableData(TBL_PARCELE)
 
     If IsEmpty(data) Then
-        MsgBox "Tabela parcela je prazna.", vbExclamation, APP_NAME
+        SetGeoStatus "Tabela parcela je prazna.", True
         Exit Sub
     End If
 
@@ -1493,7 +1552,7 @@ Private Sub btnOpenMap_Click()
     lngIdx = GetColumnIndex(TBL_PARCELE, COL_PAR_LNG)
 
     If latIdx = 0 Or lngIdx = 0 Then
-        MsgBox "Lat/Lng kolone nisu pronadene.", vbCritical, APP_NAME
+        SetGeoStatus "Lat/Lng kolone nisu pronadene.", True
         Exit Sub
     End If
 
@@ -1502,17 +1561,21 @@ Private Sub btnOpenMap_Click()
 
     If Not TryParseDouble(NzToText(data(m_SelectedRow, latIdx)), lat) Or _
        Not TryParseDouble(NzToText(data(m_SelectedRow, lngIdx)), lng) Then
-        MsgBox "Parcela nema validne Lat/Lng geo podatke.", vbExclamation, APP_NAME
+        SetGeoStatus "Parcela nema validne Lat/Lng geo podatke.", True
         Exit Sub
     End If
 
-    OpenGoogleMaps lat, lng
+    If OpenGoogleMaps(lat, lng) Then
+        SetGeoStatus "Google Maps otvoren.", False
+    Else
+        SetGeoStatus "Google Maps nije mogao biti otvoren. Pogledaj log.", True
+    End If
 
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.btnOpenMap_Click"
-    MsgBox "Greška pri otvaranju Google Maps: " & Err.Description, vbCritical, APP_NAME
+    SetGeoStatus "Greška pri otvaranju Google Maps. Pogledaj log.", True
 End Sub
 
 Private Sub btnOpenPolygonEditor_Click()
@@ -1520,16 +1583,16 @@ Private Sub btnOpenPolygonEditor_Click()
 
     If Me.Tag <> "Parcele" Then Exit Sub
 
-    If m_SelectedRow = 0 Then
-        MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
-        Exit Sub
-    End If
+    ResetGeoClearConfirm
+    ClearGeoStatus
+
+    If Not HasSelectedParcelaForGeo() Then Exit Sub
 
     Dim data As Variant
     data = GetTableData(TBL_PARCELE)
 
     If IsEmpty(data) Then
-        MsgBox "Tabela parcela je prazna.", vbExclamation, APP_NAME
+        SetGeoStatus "Tabela parcela je prazna.", True
         Exit Sub
     End If
 
@@ -1537,26 +1600,90 @@ Private Sub btnOpenPolygonEditor_Click()
     idIdx = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
 
     If idIdx = 0 Then
-        MsgBox "ParcelaID kolona nije pronadena.", vbCritical, APP_NAME
+        SetGeoStatus "ParcelaID kolona nije pronadena.", True
         Exit Sub
     End If
 
     Dim parcelaID As String
-    parcelaID = NzToText(data(m_SelectedRow, idIdx))
+    parcelaID = Trim$(NzToText(data(m_SelectedRow, idIdx)))
 
     If parcelaID = "" Then
-        MsgBox "Izabrana parcela nema ParcelaID.", vbExclamation, APP_NAME
+        SetGeoStatus "Izabrana parcela nema ParcelaID.", True
         Exit Sub
     End If
 
-    OpenParcelPolygonEditor parcelaID
+    Me.MousePointer = fmMousePointerHourGlass
+    SetGeoStatus "Sinhronizujem parcelu u Google...", False
+    DoEvents
 
+    If Not SyncSelectedParcelaToGoogle(parcelaID) Then
+        Me.MousePointer = fmMousePointerDefault
+        SetGeoStatus "Parcela nije sinhronizovana. Editor nije otvoren.", True
+        Exit Sub
+    End If
+
+    If OpenParcelPolygonEditor(parcelaID) Then
+        SetGeoStatus "Polygon editor otvoren.", False
+    Else
+        SetGeoStatus "Polygon editor nije mogao biti otvoren. Pogledaj log.", True
+    End If
+
+    Me.MousePointer = fmMousePointerDefault
     Exit Sub
 
 EH:
+    On Error Resume Next
+    Me.MousePointer = fmMousePointerDefault
+    On Error GoTo 0
+
     LogErr "frmStammdaten.btnOpenPolygonEditor_Click"
-    MsgBox "Greška pri otvaranju polygon editora: " & Err.Description, vbCritical, APP_NAME
+    SetGeoStatus "Greška pri otvaranju polygon editora. Pogledaj log.", True
 End Sub
+Private Sub SetGeoStatus(ByVal message As String, Optional ByVal isError As Boolean = False)
+    On Error Resume Next
+
+    Dim ctl As Object
+    Set ctl = Me.Controls("lblGeoStatus")
+
+    If Not ctl Is Nothing Then
+        ctl.caption = message
+        ctl.Visible = (Len(Trim$(message)) > 0)
+
+        If isError Then
+            ctl.ForeColor = RGB(255, 80, 80)
+            ctl.Font.Bold = True
+        Else
+            ctl.ForeColor = RGB(120, 220, 140)
+            ctl.Font.Bold = False
+        End If
+    End If
+
+    On Error GoTo 0
+End Sub
+
+Private Sub ClearGeoStatus()
+    SetGeoStatus vbNullString, False
+End Sub
+
+Private Sub ResetGeoClearConfirm()
+    On Error Resume Next
+
+    mGeoClearConfirmPending = False
+    btnGeoClear.caption = "Obriši geo"
+
+    On Error GoTo 0
+End Sub
+
+Private Function HasSelectedParcelaForGeo() As Boolean
+    If Me.Tag <> "Parcele" Then Exit Function
+
+    If m_SelectedRow = 0 Or lstData.ListIndex < 0 Then
+        SetGeoStatus "Izaberi parcelu iz liste.", True
+        Exit Function
+    End If
+
+    HasSelectedParcelaForGeo = True
+End Function
 
 '========================
 'HELPERS
@@ -1676,7 +1803,7 @@ Private Sub LoadStaniceIntoCombo()
 
 EH:
     LogErr "frmStammdaten.LoadStaniceIntoCombo"
-    MsgBox "Greška pri ucitavanju stanica: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri ucitavanju stanica: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function FormatCoordForTextBox(ByVal v As Double) As String
@@ -1768,7 +1895,67 @@ Private Function CleanCoordToken(ByVal token As String) As String
     CleanCoordToken = s
 End Function
 
-Public Sub OpenGoogleMaps(ByVal lat As Double, ByVal lng As Double)
+Private Function GetSelectedParcelaID() As String
+    Const SRC As String = "frmStammdaten.GetSelectedParcelaID"
+
+    On Error GoTo EH
+
+    If Me.Tag <> "Parcele" Then Exit Function
+    If m_SelectedRow = 0 Then Exit Function
+
+    Dim data As Variant
+    Dim idIdx As Long
+
+    data = GetTableData(TBL_PARCELE)
+    If IsEmpty(data) Then Exit Function
+
+    idIdx = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
+    If idIdx = 0 Then Exit Function
+
+    GetSelectedParcelaID = Trim$(NzToText(data(m_SelectedRow, idIdx)))
+    Exit Function
+
+EH:
+    LogErr SRC
+    GetSelectedParcelaID = ""
+End Function
+
+Private Sub ReselectParcelaInList(ByVal parcelaID As String)
+    Const SRC As String = "frmStammdaten.ReselectParcelaInList"
+
+    On Error GoTo EH
+
+    Dim i As Long
+    Dim cleanID As String
+
+    cleanID = Trim$(parcelaID)
+
+    If Me.Tag <> "Parcele" Or Len(cleanID) = 0 Then
+        m_SelectedRow = 0
+        UpdateGeoControlsVisibility
+        Exit Sub
+    End If
+
+    For i = 0 To lstData.ListCount - 1
+        If Trim$(NzToText(lstData.List(i, 0))) = cleanID Then
+            lstData.ListIndex = i
+            m_SelectedRow = GetMappedSelectedRow()
+            UpdateGeoControlsVisibility
+            Exit Sub
+        End If
+    Next i
+
+    m_SelectedRow = 0
+    UpdateGeoControlsVisibility
+    Exit Sub
+
+EH:
+    LogErr SRC
+    m_SelectedRow = 0
+    UpdateGeoControlsVisibility
+End Sub
+
+Public Function OpenGoogleMaps(ByVal lat As Double, ByVal lng As Double) As Boolean
     On Error GoTo EH
 
     Dim url As String
@@ -1778,31 +1965,34 @@ Public Sub OpenGoogleMaps(ByVal lat As Double, ByVal lng As Double)
           Replace(CStr(lng), ",", ".")
 
     ThisWorkbook.FollowHyperlink url
-    Exit Sub
+
+    OpenGoogleMaps = True
+    Exit Function
 
 EH:
     LogErr "frmStammdaten.OpenGoogleMaps"
-    MsgBox "Greška pri otvaranju Google Maps: " & Err.Description, vbCritical, APP_NAME
-End Sub
+    OpenGoogleMaps = False
+End Function
 
-Public Sub OpenParcelPolygonEditor(ByVal parcelaID As String)
+Public Function OpenParcelPolygonEditor(ByVal parcelaID As String) As Boolean
     On Error GoTo EH
 
     Dim url As String
 
     If Trim$(parcelaID) = "" Then
-        MsgBox "ParcelaID nije prosleden.", vbExclamation, APP_NAME
-        Exit Sub
+        LogError "frmStammdaten.OpenParcelPolygonEditor", "ParcelaID nije prosleden."
+        Exit Function
     End If
 
     url = "https://dusanmiladinovicvnm.github.io/otkupapp-pwa/parcel-draw.html?parcelaId=" & _
           WorksheetFunction.EncodeURL(parcelaID)
 
     ThisWorkbook.FollowHyperlink url
-    Exit Sub
+
+    OpenParcelPolygonEditor = True
+    Exit Function
 
 EH:
     LogErr "frmStammdaten.OpenParcelPolygonEditor"
-    MsgBox "Greška pri otvaranju polygon editora: " & Err.Description, vbCritical, APP_NAME
-End Sub
-
+    OpenParcelPolygonEditor = False
+End Function
