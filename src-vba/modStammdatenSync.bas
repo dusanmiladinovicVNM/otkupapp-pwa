@@ -61,6 +61,18 @@ Private Function MgmtReportTabs() As Variant
     )
 End Function
 
+Private Function GetReportsFolderID() As String
+    Dim folderID As String
+
+    folderID = GetConfigValue("GOOGLE_REPORTS_FOLDER_ID")
+
+    If Len(Trim$(folderID)) = 0 Then
+        folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+    End If
+
+    GetReportsFolderID = folderID
+End Function
+
 Private Sub EnsureMgmtReportTabsBestEffort(ByVal sheetID As String)
     Dim tabs As Variant
     Dim i As Long
@@ -262,10 +274,10 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
         Exit Function
     End If
     
-    folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+    folderID = GetReportsFolderID()
     If Len(Trim$(folderID)) = 0 Then
-        LogError "ExportKarticeToGoogle_Core", "GOOGLE_PWA_FOLDER_ID nije postavljen."
-        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        LogError "ExportKarticeToGoogle_Core", "GOOGLE_REPORTS_FOLDER_ID / GOOGLE_PWA_FOLDER_ID nije postavljen."
+        If showMessages Then MsgBox "GOOGLE_REPORTS_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
         Exit Function
     End If
     
@@ -1249,6 +1261,82 @@ EH:
     LogErr "ExportParcele"
     ExportParcele = False
 End Function
+
+Public Function SyncParceleToGoogle_Core(ByVal showMessages As Boolean) As Boolean
+    Const SRC As String = "modStammdatenSync.SyncParceleToGoogle_Core"
+
+    On Error GoTo EH
+
+    Dim folderID As String
+    Dim sheetID As String
+
+    SyncParceleToGoogle_Core = False
+
+    If Not IsGoogleAuthConfigured() Then
+        LogError SRC, "Google OAuth2 nije konfigurisan."
+        If showMessages Then MsgBox "Google OAuth2 nije konfigurisan.", vbCritical, APP_NAME
+        Exit Function
+    End If
+
+    folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+    If Len(Trim$(folderID)) = 0 Then
+        LogError SRC, "GOOGLE_PWA_FOLDER_ID nije postavljen."
+        If showMessages Then MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen.", vbCritical, APP_NAME
+        Exit Function
+    End If
+
+    sheetID = GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID")
+
+    If Len(Trim$(sheetID)) = 0 Then
+        sheetID = GetSpreadsheetID("Stammdaten", folderID)
+    End If
+
+    If Len(Trim$(sheetID)) = 0 Then
+        sheetID = CreateSpreadsheet("Stammdaten", folderID)
+    End If
+
+    If Len(Trim$(sheetID)) = 0 Then
+        LogError SRC, "Stammdaten sheet nije mogao biti pronadjen ili kreiran."
+        If showMessages Then MsgBox "Stammdaten Google Sheet nije mogao biti pronadjen ili kreiran.", vbCritical, APP_NAME
+        Exit Function
+    End If
+
+    Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
+
+    If Not AddSheetTab(sheetID, "Parcele") Then
+        LogError SRC, "Parcele tab nije dostupan u Stammdaten sheet-u."
+        If showMessages Then MsgBox "Parcele tab nije dostupan u Google Stammdaten sheet-u.", vbCritical, APP_NAME
+        Exit Function
+    End If
+
+    SyncParceleToGoogle_Core = ExportParcele(sheetID)
+
+    If SyncParceleToGoogle_Core Then
+        LogInfo SRC, "Parcele tab exportovan u Google."
+    Else
+        LogError SRC, "ExportParcele nije uspeo."
+    End If
+
+    If showMessages Then
+        If SyncParceleToGoogle_Core Then
+            MsgBox "Parcele su sinhronizovane u Google.", vbInformation, APP_NAME
+        Else
+            MsgBox "Export parcela nije uspeo. Proveri log.", vbExclamation, APP_NAME
+        End If
+    End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+
+    If showMessages Then
+        MsgBox "Greška pri exportu parcela: " & Err.description, vbCritical, APP_NAME
+    End If
+
+    SyncParceleToGoogle_Core = False
+End Function
+
 Private Function ExportStanice(ByVal sheetID As String) As Boolean
     Dim data As Variant
     Dim result() As Variant
