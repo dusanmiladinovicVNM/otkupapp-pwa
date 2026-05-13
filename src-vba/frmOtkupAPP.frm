@@ -1118,90 +1118,110 @@ EH:
 End Sub
 
 ' --- helperi za KPI ---
+Private Function SafeDateKey(ByVal v As Variant) As String
+    On Error GoTo BadValue
 
-Private Function SumOtkupKgForDate(ByVal d As Date) As Double
+    If isError(v) Then GoTo BadValue
+    If IsEmpty(v) Then GoTo BadValue
+    If Len(Trim$(CStr(v))) = 0 Then GoTo BadValue
+
+    If IsDate(v) Then
+        SafeDateKey = Format$(CDate(v), "yyyy-mm-dd")
+    Else
+        SafeDateKey = vbNullString
+    End If
+
+    Exit Function
+
+BadValue:
+    SafeDateKey = vbNullString
+End Function
+
+Private Function SafeKpiDouble(ByVal v As Variant) As Double
+    On Error GoTo BadValue
+
+    If isError(v) Then GoTo BadValue
+    If IsEmpty(v) Then GoTo BadValue
+    If Len(Trim$(CStr(v))) = 0 Then GoTo BadValue
+
+    If IsNumeric(v) Then
+        SafeKpiDouble = CDbl(v)
+    Else
+        SafeKpiDouble = 0
+    End If
+
+    Exit Function
+
+BadValue:
+    SafeKpiDouble = 0
+End Function
+Private Function SumOtkupKgForDate(ByVal targetDate As Date) As Double
     On Error GoTo EH
 
     Dim data As Variant
+    Dim colDate As Long
+    Dim colKg As Long
+    Dim i As Long
+    Dim targetKey As String
+    Dim rowKey As String
+
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
 
-    Dim colDatum As Long, colKg As Long, colStorno As Long
-    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "SumOtkupKgForDate")
-    colKg = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "SumOtkupKgForDate")
+    colDate = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    colKg = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
 
-    On Error Resume Next
-    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "SumOtkupKgForDate")
-    On Error GoTo EH
+    If colDate <= 0 Or colKg <= 0 Then Exit Function
 
-    Dim i As Long
-    Dim total As Double
-    Dim rowDate As Date
-    Dim rowKg As Double
+    targetKey = Format$(targetDate, "yyyy-mm-dd")
 
-    For i = 1 To UBound(data, 1)
-        If colStorno > 0 Then
-            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+    For i = LBound(data, 1) To UBound(data, 1)
+        rowKey = SafeDateKey(data(i, colDate))
+
+        If rowKey = targetKey Then
+            SumOtkupKgForDate = SumOtkupKgForDate + SafeKpiDouble(data(i, colKg))
         End If
-
-        If IsDate(data(i, colDatum)) Then
-            rowDate = CDate(data(i, colDatum))
-            If DateValue(rowDate) = DateValue(d) Then
-                If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
-                    total = total + rowKg
-                End If
-            End If
-        End If
-NextRow:
     Next i
 
-    SumOtkupKgForDate = total
     Exit Function
 
 EH:
-    LogErr "SumOtkupKgForDate"
+    LogErr "frmOtkupAPP.SumOtkupKgForDate"
     SumOtkupKgForDate = 0
 End Function
 
 Private Function CountDocsForDate(ByVal tableName As String, _
-                                   ByVal dateColName As String, _
-                                   ByVal d As Date) As Long
+                                  ByVal dateColName As String, _
+                                  ByVal targetDate As Date) As Long
     On Error GoTo EH
 
     Dim data As Variant
+    Dim colDate As Long
+    Dim i As Long
+    Dim targetKey As String
+    Dim rowKey As String
+
     data = GetTableData(tableName)
     If IsEmpty(data) Then Exit Function
 
-    Dim colDatum As Long, colStorno As Long
-    colDatum = RequireColumnIndex(tableName, dateColName, "CountDocsForDate")
+    colDate = GetColumnIndex(tableName, dateColName)
+    If colDate <= 0 Then Exit Function
 
-    On Error Resume Next
-    colStorno = RequireColumnIndex(tableName, "Stornirano", "CountDocsForDate")
-    On Error GoTo EH
+    targetKey = Format$(targetDate, "yyyy-mm-dd")
 
-    Dim i As Long, cnt As Long
-
-    For i = 1 To UBound(data, 1)
-        If colStorno > 0 Then
-            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+    For i = LBound(data, 1) To UBound(data, 1)
+        rowKey = SafeDateKey(data(i, colDate))
+        If rowKey = targetKey Then
+            CountDocsForDate = CountDocsForDate + 1
         End If
-
-        If IsDate(data(i, colDatum)) Then
-            If DateValue(CDate(data(i, colDatum))) = DateValue(d) Then
-                cnt = cnt + 1
-            End If
-        End If
-NextRow:
     Next i
 
-    CountDocsForDate = cnt
     Exit Function
 
 EH:
-    LogErr "CountDocsForDate"
+    LogErr "frmOtkupAPP.CountDocsForDate"
     CountDocsForDate = 0
 End Function
-
 ' ============================================================
 ' v6.11 UI: BADGE brojac za neobradene Banka redove
 ' ============================================================
