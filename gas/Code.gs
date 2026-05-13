@@ -574,6 +574,134 @@ function getMasterSyncState() {
   }
 }
 
+const MASTER_SYNC_STATE_CACHE_KEY = 'MASTER_SYNC_STATE_V1';
+const MASTER_SYNC_STATE_CACHE_SEC = 5;
+
+function getMasterSyncState() {
+  return getMasterSyncStatePublic();
+}
+
+function getMasterSyncStatePublic() {
+  return getMasterSyncStateInternal_({
+    allowCache: true,
+    failClosed: false
+  });
+}
+
+function getMasterSyncStateForWriteBlock_() {
+  return getMasterSyncStateInternal_({
+    allowCache: false,
+    failClosed: true
+  });
+}
+
+function getMasterSyncStateInternal_(opts) {
+  opts = opts || {};
+  var allowCache = opts.allowCache === true;
+  var failClosed = opts.failClosed === true;
+
+  try {
+    if (allowCache) {
+      var cache = CacheService.getScriptCache();
+      var cached = cache.get(MASTER_SYNC_STATE_CACHE_KEY);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    }
+
+    var ss = getStammdatenSpreadsheet_();
+    var sh = ss.getSheetByName(MASTER_SYNC_CONTROL_SHEET);
+
+    if (!sh) {
+      var missingState = {
+        success: true,
+        locked: false,
+        stale: false,
+        missing: true,
+        updatedAt: '',
+        ageMin: null,
+        message: ''
+      };
+
+      if (allowCache) {
+        CacheService.getScriptCache().put(
+          MASTER_SYNC_STATE_CACHE_KEY,
+          JSON.stringify(missingState),
+          MASTER_SYNC_STATE_CACHE_SEC
+        );
+      }
+
+      return missingState;
+    }
+
+    var lastRow = Math.max(sh.getLastRow(), 1);
+    var values = sh.getRange(1, 1, lastRow, 2).getValues();
+    var kv = {};
+
+    for (var i = 1; i < values.length; i++) {
+      var k = String(values[i][0] || '').trim();
+      var v = String(values[i][1] || '').trim();
+      if (k) kv[k] = v;
+    }
+
+    var rawLock = String(kv.MASTER_SYNC_LOCK || '').toUpperCase();
+    var updatedAt = String(kv.MASTER_SYNC_UPDATED_AT || '').trim();
+    var message = String(kv.MASTER_SYNC_MESSAGE || '').trim();
+
+    var locked = rawLock === 'YES';
+    var stale = false;
+    var ageMin = null;
+
+    if (locked && updatedAt) {
+      var ts = new Date(updatedAt).getTime();
+
+      if (!isNaN(ts)) {
+        ageMin = (Date.now() - ts) / 60000;
+
+        if (ageMin > MASTER_SYNC_LOCK_MAX_AGE_MIN) {
+          locked = false;
+          stale = true;
+        }
+      }
+    }
+
+    var state = {
+      success: true,
+      locked: locked,
+      stale: stale,
+      updatedAt: updatedAt,
+      ageMin: ageMin,
+      message: locked
+        ? (message || 'Master sync je u toku. Sačekajte završetak.')
+        : ''
+    };
+
+    if (allowCache) {
+      CacheService.getScriptCache().put(
+        MASTER_SYNC_STATE_CACHE_KEY,
+        JSON.stringify(state),
+        MASTER_SYNC_STATE_CACHE_SEC
+      );
+    }
+
+    return state;
+
+  } catch (err) {
+    logError('GAS', 'getMasterSyncState', err.message, err.stack || '', '');
+
+    return {
+      success: false,
+      locked: failClosed,
+      unknown: true,
+      code: 'SYNC_STATE_UNKNOWN',
+      error: 'Nije moguće proveriti master sync status.',
+      message: failClosed
+        ? 'Nije moguće proveriti master sync status. Upis je privremeno blokiran.'
+        : 'Nije moguće proveriti master sync status.'
+    };
+  }
+}
+
 function isMasterSyncWriteAction(action) {
   action = String(action || '');
 
@@ -606,7 +734,7 @@ function isMasterSyncWriteAction(action) {
 function blockWriteIfMasterSyncActive(action) {
   if (!isMasterSyncWriteAction(action)) return null;
 
-  var state = getMasterSyncState();
+  var state = getMasterSyncStateForWriteBlock_();
 
   if (state && state.locked) {
     return jsonResponse({
