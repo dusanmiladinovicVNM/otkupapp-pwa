@@ -1,6 +1,22 @@
 Option Explicit
 
 ' ============================================================
+' PATCH: Option B — deferred file moves after batch commit
+' File: src-vba/modBankaImport.bas
+'
+' Intent:
+' - DB staging and file-system moves are separated.
+' - ImportOnePdfIntoBankaImport does NOT move PDF files immediately.
+' - Successful files are added to a pending move list.
+' - ImportBankaInbox_TX commits the transaction first.
+' - Only after successful CommitTx are successful PDFs moved to Processed.
+' - On rollback/error, no successful PDFs are moved to Processed.
+'
+' This patch is designed to sit on top of P1-3 fail-fast SaveBankaImportRows.
+' ============================================================
+
+
+' ============================================================
 ' PATCH: P1-3 BankaImport fail-fast staging
 ' File: src-vba/modBankaImport.bas
 '
@@ -30,7 +46,10 @@ Private Const ERR_BIM_IMPORT_BASE As Long = vbObjectError + 2700
 Private Const ERR_BIM_SAVE_BASE As Long = vbObjectError + 2800
 
 Public Sub ImportBankaInbox_TX()
+    Const SRC As String = "ImportBankaInbox_TX"
+
     Dim tx As clsTransaction
+    Dim pendingMoves As Collection
 
     On Error GoTo EH
 
@@ -38,13 +57,19 @@ Public Sub ImportBankaInbox_TX()
     EnsureFolderExists GetBankaProcessedPath()
     EnsureFolderExists GetBankaErrorPath()
 
+    Set pendingMoves = New Collection
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_BANKA_IMPORT
 
-    ImportBankaInbox
+    ImportBankaInboxToPendingMoves pendingMoves
 
+    ' DB is now reliable. Only after this point are file-system moves allowed.
     tx.CommitTx
+    Set tx = Nothing
+
+    ExecutePendingBankaFileMoves pendingMoves
 
     Exit Sub
 
@@ -52,26 +77,72 @@ EH:
     Dim errNum As Long
     Dim errDesc As String
     Dim errSrc As String
+
     errNum = Err.Number
     errDesc = Err.description
     errSrc = Err.SOURCE
-    
-    LogErr "ImportBankaInbox_TX"
-    
-    If Not tx Is Nothing Then
-        On Error Resume Next
-        tx.RollbackTx
-        On Error GoTo 0
-    End If
-    
-    Err.Raise errNum, "ImportBankaInbox_TX", errDesc
+
+    On Error Resume Next
+
+    LogErr SRC
+
+    If Not tx Is Nothing Then tx.RollbackTx
+
+    Debug.Print SRC & " failed. DB rolled back. Pending successful file moves were NOT executed. " & _
+                "Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Sub ImportBankaInbox()
+    Const SRC As String = "ImportBankaInbox"
+
+    Dim pendingMoves As Collection
+    Set pendingMoves = New Collection
+
+    On Error GoTo EH
+
+    ImportBankaInboxToPendingMoves pendingMoves
+    ExecutePendingBankaFileMoves pendingMoves
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    Debug.Print SRC & " failed. Pending file moves were NOT executed. " & _
+                "Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, errDesc
+End Sub
+
+Private Sub ImportBankaInboxToPendingMoves(ByRef pendingMoves As Collection)
+    Const SRC As String = "ImportBankaInboxToPendingMoves"
+
     Dim files As Collection
     Dim fileName As Variant
     Dim fullPath As String
     Dim inboxPath As String
+    Dim statusText As String
+
+    On Error GoTo EH
+
+    If pendingMoves Is Nothing Then Set pendingMoves = New Collection
 
     inboxPath = GetBankaInboxPath()
 
@@ -85,20 +156,43 @@ Public Sub ImportBankaInbox()
 
     For Each fileName In files
         fullPath = inboxPath & "\" & CStr(fileName)
-        ImportOnePdfIntoBankaImport fullPath
+        statusText = ImportOnePdfIntoBankaImport(fullPath, pendingMoves)
+
+        Debug.Print SRC & " staged. File=" & CStr(fileName) & _
+                    " Status=" & statusText
     Next fileName
+
+    Exit Sub
+    
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
-Public Sub ImportOnePdfIntoBankaImport(ByVal pdfPath As String)
+Public Function ImportOnePdfIntoBankaImport(ByVal pdfPath As String, _
+                                            ByRef pendingMoves As Collection) As String
     Const SRC As String = "ImportOnePdfIntoBankaImport"
 
     Dim txt As String
     Dim Parsed As Variant
     Dim savedCount As Long
     Dim fileName As String
-    Dim importStatus As String
+    Dim targetPath As String
 
     On Error GoTo EH
+
+    If pendingMoves Is Nothing Then Set pendingMoves = New Collection
 
     fileName = GetFileNameFromPath(pdfPath)
 
@@ -118,30 +212,27 @@ Public Sub ImportOnePdfIntoBankaImport(ByVal pdfPath As String)
     End If
 
     Parsed = ParseBankaIzvodForImport(txt, fileName)
-
+    
     If IsEmpty(Parsed) Then
         Err.Raise ERR_BIM_IMPORT_BASE + 4, SRC, _
                   "Parser nije vratio nijednu transakciju. File=" & fileName
     End If
 
     savedCount = SaveBankaImportRows(Parsed)
+
     If savedCount > 0 Then
-        importStatus = BIM_STATUS_IMPORTED
-        Debug.Print "Banka import " & importStatus & ". File=" & fileName & _
-                    " SavedRows=" & CStr(savedCount)
+        ImportOnePdfIntoBankaImport = BIM_STATUS_IMPORTED
     Else
-        ' Ako SaveBankaImportRows ne baci gresku, a vrati 0,
-        ' to znaci da je parser uspeo i da su svi redovi vec duplikati.
-        importStatus = BIM_STATUS_DUPLICATE_ONLY
-        Debug.Print "Banka import " & importStatus & ". File=" & fileName
+        ' Parse + integrity passed, but all rows already existed.
+        ImportOnePdfIntoBankaImport = BIM_STATUS_DUPLICATE_ONLY
     End If
 
-    ' Only reliable outcomes reach Processed:
-    ' - imported
-    ' - duplicate-only
-    MoveFileSafe pdfPath, GetBankaProcessedPath() & "\" & fileName
-    Exit Sub
+    ' Important: do NOT move now.
+    ' Add only successful outcomes to pending moves.
+    targetPath = GetBankaProcessedPath() & "\" & fileName
+    AddPendingBankaFileMove pendingMoves, pdfPath, targetPath, ImportOnePdfIntoBankaImport
 
+    Exit Function
 EH:
     Dim errNum As Long
     Dim errDesc As String
@@ -154,29 +245,21 @@ EH:
     errCategory = ClassifyBankaImportError(errNum, errSrc, errDesc)
 
     On Error Resume Next
-
     LogErr SRC
-
-    If Len(Trim$(fileName)) = 0 Then fileName = GetFileNameFromPath(pdfPath)
-
-    If Len(Trim$(fileName)) > 0 And Len(Trim$(pdfPath)) > 0 Then
-        If Dir$(pdfPath) <> "" Then
-            MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
-        End If
-    End If
 
     Debug.Print SRC & " failed. Status=" & errCategory & _
                 " Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc & _
-                " File=" & fileName
+                " File=" & fileName & _
+                " | No file move scheduled."
 
     On Error GoTo 0
 
-    ' Re-raise so ImportBankaInbox_TX can rollback tblBankaImport snapshot.
+    ' Re-raise so ImportBankaInbox_TX rolls back DB and no pending moves execute.
     Err.Raise errNum, SRC, _
               "[" & errCategory & "] Source=" & errSrc & " | " & errDesc
-End Sub
+End Function
 
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
     Dim lines() As String
@@ -683,6 +766,79 @@ Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
 
     ClassifyBankaImportError = BIM_STATUS_UNKNOWN_ERROR
 End Function
+
+Private Sub AddPendingBankaFileMove(ByRef pendingMoves As Collection, _
+                                    ByVal sourcePath As String, _
+                                    ByVal targetPath As String, _
+                                    ByVal statusText As String)
+    If pendingMoves Is Nothing Then Set pendingMoves = New Collection
+
+    ' Array indexes:
+    '   0 = source path
+    '   1 = target path
+    '   2 = status
+    pendingMoves.Add Array(sourcePath, targetPath, statusText)
+End Sub
+
+Private Sub ExecutePendingBankaFileMoves(ByVal pendingMoves As Collection)
+    Const SRC As String = "ExecutePendingBankaFileMoves"
+
+    On Error GoTo EH
+
+    If pendingMoves Is Nothing Then Exit Sub
+
+    Dim i As Long
+    Dim moveData As Variant
+    Dim sourcePath As String
+    Dim targetPath As String
+    Dim statusText As String
+
+    For i = 1 To pendingMoves.count
+        moveData = pendingMoves(i)
+
+        sourcePath = CStr(moveData(0))
+        targetPath = CStr(moveData(1))
+        statusText = CStr(moveData(2))
+
+        If Len(Trim$(sourcePath)) = 0 Then GoTo NextMove
+        If Len(Trim$(targetPath)) = 0 Then GoTo NextMove
+
+        If Dir$(sourcePath) = "" Then
+            Debug.Print SRC & ": source already missing, skip. Source=" & sourcePath
+            GoTo NextMove
+        End If
+
+        MoveFileSafe sourcePath, targetPath
+
+        Debug.Print SRC & ": moved. Status=" & statusText & _
+                    " Source=" & sourcePath & _
+                    " Target=" & targetPath
+
+NextMove:
+    Next i
+
+    Exit Sub
+
+EH:
+    ' File move happens after DB commit, so rollback is no longer possible here.
+    ' Surface the error clearly for operator/manual recovery.
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, _
+              "DB commit je vec zavrsen, ali pomeranje fajla nije uspelo. " & _
+              "Potrebna je rucna provera Inbox/Processed foldera. " & _
+              "Source=" & errSrc & " | " & errDesc
+End Sub
 
 Private Function GetFileNameFromPath(ByVal filePath As String) As String
     Dim p As Long
