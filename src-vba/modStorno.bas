@@ -2,12 +2,12 @@ Attribute VB_Name = "modStorno"
 Option Explicit
 
 ' ============================================================
-' modStorno v3.0 – Einfaches Soft-Delete
+' modStorno v3.0 â€“ Einfaches Soft-Delete
 '
 ' Jedes Dokument wird einzeln storniert.
 ' Keine Kaskade zwischen Dokumenten.
 ' Ambalaza-Gegenbuchung wo relevant.
-' Faktura: Prijemnice freigeben + Novac lösen.
+' Faktura: Prijemnice freigeben + Novac lÃ¶sen.
 ' ============================================================
 
 Private Const STORNO_DA As String = "Da"
@@ -28,11 +28,12 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
     StornoOtkup_TX = StornoOtkup(otkupID)
     
     tx.CommitTx
+
     Exit Function
 EH:
     LogErr "StornoOtkup_TX"
     tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
     StornoOtkup_TX = False
 End Function
 
@@ -66,11 +67,12 @@ Public Function StornoOtpremnica_TX(ByVal otpremnicaID As String) As Boolean
     StornoOtpremnica_TX = StornoOtpremnica(otpremnicaID)
     
     tx.CommitTx
+
     Exit Function
 EH:
     LogErr "StornoOtpremnica_TX"
     tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
     StornoOtpremnica_TX = False
 End Function
 
@@ -102,11 +104,12 @@ Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
     StornoZbirna_TX = StornoZbirna(brojZbirne)
     
     tx.CommitTx
+
     Exit Function
 EH:
     LogErr "StornoZbirna_TX"
     tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
     StornoZbirna_TX = False
 End Function
 
@@ -157,11 +160,12 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
     StornoPrijemnica_TX = StornoPrijemnica(prijemnicaID)
     
     tx.CommitTx
+
     Exit Function
 EH:
     LogErr "StornoPrijemnica_TX"
     tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
     StornoPrijemnica_TX = False
 End Function
 
@@ -177,7 +181,7 @@ Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
     
     UpdateCell TBL_PRIJEMNICA, r, COL_STORNIRANO, STORNO_DA
     
-    ' Fakturisano-Flag lösen (Faktura bleibt!)
+    ' Fakturisano-Flag lÃ¶sen (Faktura bleibt!)
     Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
     If CStr(prijData(r, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO))) = "Da" Then
@@ -236,11 +240,12 @@ Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
     StornoFaktura_TX = StornoFaktura(fakturaID)
     
     tx.CommitTx
+
     Exit Function
 EH:
     LogErr "StornoFaktura_TX"
     tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
     StornoFaktura_TX = False
 End Function
 
@@ -280,7 +285,7 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
         Next i
     End If
     
-    ' Novac: FakturaID lösen
+    ' Novac: FakturaID lÃ¶sen
     ResetNovacFakturaLink fakturaID
     
     StornoFaktura = True
@@ -301,11 +306,12 @@ Public Function StornoNovac_TX(ByVal novacID As String) As Boolean
     StornoNovac_TX = StornoNovac(novacID)
     
     tx.CommitTx
+
     Exit Function
 EH:
     LogErr "StornoNovac_TX"
     tx.RollbackTx
-    MsgBox "Greska, promene vracene: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska, promene vracene: " & Err.description, vbCritical, APP_NAME
     StornoNovac_TX = False
 End Function
 
@@ -443,7 +449,7 @@ Public Function LookupActiveID(ByVal tblName As String, _
                                 ByVal brojColName As String, _
                                 ByVal brojValue As String, _
                                 ByVal idColName As String) As String
-    ' Wie LookupValue, aber überspringt Stornirano="Da"
+    ' Wie LookupValue, aber Ã¼berspringt Stornirano="Da"
     ' Findet den LETZTEN nicht-stornierten Treffer
     
     Dim data As Variant
@@ -458,18 +464,18 @@ Public Function LookupActiveID(ByVal tblName As String, _
     colID = GetColumnIndex(tblName, idColName)
     colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
     
-    Dim resultID As String
+    Dim resultId As String
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colBroj)) = brojValue Then
             If colStorno > 0 Then
                 If CStr(data(i, colStorno)) = "Da" Then GoTo NextRow
             End If
-            resultID = CStr(data(i, colID))
+            resultId = CStr(data(i, colID))
         End If
 NextRow:
     Next i
     
-    LookupActiveID = resultID
+    LookupActiveID = resultId
 End Function
 
