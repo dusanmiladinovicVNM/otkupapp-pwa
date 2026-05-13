@@ -38,6 +38,20 @@ Option Explicit
 '   BIM:<id>; Ref:<...>; Konto:<...>; Opis:<...>; Svrha:<...>
 ' ============================================================
 
+' ============================================================
+' PATCH: P1-4 BankaMapiranje exact-row guards
+' File: src-vba/modBankaMapiranje.bas
+'
+' Goals:
+' - NovacID, BankaImportID, OtkupID, FakturaID use Count = 1.
+' - Count = 0 => missing link error.
+' - Count > 1 => duplicate key error.
+' - Link/status updates use RequireUpdateCell.
+' - Manual and auto-map share same integrity standard.
+' - Any link error bubbles to *_TX wrapper and rollback runs.
+' ============================================================
+
+Private Const ERR_BMAP_BASE As Long = vbObjectError + 2900
 
 ' ============================================================
 ' PUBLIC
@@ -62,7 +76,8 @@ Public Function GetBankaImportOpen() As Variant
         Exit Function
     End If
     
-    colObr = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO)
+    colObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, _
+                               "GetBankaImportOpen")
     
     ReDim result(1 To UBound(data, 1), 1 To UBound(data, 2))
     
@@ -224,6 +239,11 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
         tip = NOV_KUPCI_AVANS
     End If
     
+    If fakturaID <> "" Then
+        RequireSingleRow TBL_FAKTURE, COL_FAK_ID, fakturaID, _
+                         "MapBankaImportAsKupac"
+    End If
+    
     MapBankaImportAsKupac = SaveNovac( _
         CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
         CDate(bim(1, 2)), _
@@ -251,7 +271,11 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
         Call savePartnerMap(CStr(bim(1, 3)), kupacID, "Kupac", "")
     End If
     
-    If fakturaID <> "" Then UpdateFakturaStatus fakturaID
+    If fakturaID <> "" Then
+        RequireSingleRow TBL_FAKTURE, COL_FAK_ID, fakturaID, _
+                         "MapBankaImportAsKupac"
+        UpdateFakturaStatus fakturaID
+    End If
 End Function
 
 Public Function MapBankaImportAsKupac_TX(ByVal bankaImportID As String, _
@@ -359,6 +383,11 @@ Public Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
         tip = NOV_VIRMAN_AVANS_KOOP
     End If
     
+    If otkupID <> "" Then
+        RequireSingleRow TBL_OTKUP, COL_OTK_ID, otkupID, _
+                         "MapBankaImportAsKooperant"
+    End If
+    
     MapBankaImportAsKooperant = SaveNovac( _
         CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
         CDate(bim(1, 2)), _
@@ -387,12 +416,8 @@ Public Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
     End If
     
     If otkupID <> "" Then
-        Dim novRows As Collection
-        Set novRows = FindRows(TBL_NOVAC, COL_NOV_ID, MapBankaImportAsKooperant)
-        If novRows.count > 0 Then
-            UpdateCell TBL_NOVAC, novRows(1), COL_NOV_OTKUP_ID, otkupID
-            UpdateOtkupStatus otkupID
-        End If
+        LinkNovacToOtkupStrict MapBankaImportAsKooperant, otkupID, _
+                                "MapBankaImportAsKooperant"
     End If
 End Function
 
@@ -788,6 +813,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         Dim novID As String
         
         otkupID = CStr(kandidati(i, 1))
+        RequireSingleRow TBL_OTKUP, COL_OTK_ID, otkupID, _
+                 "MapBankaImportAsKooperantBlockCore"
         otvoreno = CDbl(NzBIM(kandidati(i, 2), 0#))
         vrstaVoca = CStr(kandidati(i, 3))
         
@@ -816,13 +843,16 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         )
         
         If novID <> "" Then
-            Dim novRows As Collection
-            Set novRows = FindRows(TBL_NOVAC, COL_NOV_ID, novID)
-            If novRows.count > 0 Then
-                UpdateCell TBL_NOVAC, novRows(1), COL_NOV_OTKUP_ID, otkupID
-            End If
-            
-            UpdateOtkupStatus otkupID
+            If novID <> "" Then
+                LinkNovacToOtkupStrict novID, otkupID, _
+                            "MapBankaImportAsKooperantBlockCore"
+
+                MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
+                preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
+            Else
+                Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
+                    "SaveNovac nije vratio NovacID za OtkupID=" & otkupID
+        End If
             MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
             preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
         End If
@@ -961,7 +991,8 @@ Public Function AutoMapAllBankaImport_TX() As Long
         correlationId:="BANKA-AUTOMAP-ALL"
     On Error GoTo EH
     
-    colID = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID)
+    colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, _
+                           "AutoMapAllBankaImport_TX")
     
     Set tx = New clsTransaction
     tx.BeginTx
@@ -1323,131 +1354,100 @@ End Function
 ' ============================================================
 
 Public Function GetBankaImportRowByID(ByVal bankaImportID As String) As Variant
+    Const SRC As String = "GetBankaImportRowByID"
+
+    On Error GoTo EH
+
+    Dim rowBim As Long
+    rowBim = RequireSingleRow(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, SRC)
+
     Dim data As Variant
-    Dim result(1 To 1, 1 To 10) As Variant
-    Dim colID As Long
-    Dim colBrojDok As Long
-    Dim colDatumTx As Long
-    Dim colPartner As Long
-    Dim colPartnerKonto As Long
-    Dim colUplata As Long
-    Dim colIsplata As Long
-    Dim colOpis As Long
-    Dim colSvrha As Long
-    Dim colRef As Long
-    Dim colPoziv As Long
-    Dim i As Long
-    
     data = GetTableData(TBL_BANKA_IMPORT)
+
     If IsEmpty(data) Then
-        GetBankaImportRowByID = Empty
-        Exit Function
+        Err.Raise ERR_BMAP_BASE + 30, SRC, _
+                  "Tabela je prazna: " & TBL_BANKA_IMPORT
     End If
-    
-    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
-    If IsEmpty(data) Then
-        GetBankaImportRowByID = Empty
-        Exit Function
-    End If
-    
-    colID = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID)
-    colBrojDok = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA)
-    colDatumTx = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE)
-    colPartner = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER)
-    colPartnerKonto = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO)
-    colUplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA)
-    colIsplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA)
-    colOpis = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OPIS)
-    colSvrha = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_SVRHA_PLACANJA)
-    colRef = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ)
-    colPoziv = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ)
-    
-    For i = 1 To UBound(data, 1)
-        If CStr(data(i, colID)) = bankaImportID Then
-            result(1, 1) = CStr(data(i, colBrojDok))
-            result(1, 2) = data(i, colDatumTx)
-            result(1, 3) = CStr(data(i, colPartner))
-            result(1, 4) = CStr(data(i, colPartnerKonto))
-            result(1, 5) = CDbl(NzBIM(data(i, colUplata), 0#))
-            result(1, 6) = CDbl(NzBIM(data(i, colIsplata), 0#))
-            result(1, 7) = CStr(data(i, colOpis))
-            result(1, 8) = CStr(data(i, colSvrha))
-            result(1, 9) = CStr(data(i, colRef))
-            result(1, 10) = CStr(data(i, colPoziv))
-            GetBankaImportRowByID = result
-            Exit Function
-        End If
-    Next i
-    
-    GetBankaImportRowByID = Empty
+
+    Dim colCount As Long
+    Dim c As Long
+    Dim result() As Variant
+
+    colCount = UBound(data, 2)
+    ReDim result(1 To 1, 1 To colCount)
+
+    For c = 1 To colCount
+        result(1, c) = data(rowBim, c)
+    Next c
+
+    GetBankaImportRowByID = result
+    Exit Function
+
+EH:
+    LogAndReraiseBankaMap SRC
 End Function
 
 Private Function FindBankaImportRowIndex(ByVal bankaImportID As String) As Long
-    Dim rows As Collection
-    
-    Set rows = FindRows(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID)
-    If rows Is Nothing Then Exit Function
-    If rows.count = 0 Then Exit Function
-    
-    FindBankaImportRowIndex = CLng(rows(1))
+    FindBankaImportRowIndex = RequireSingleRow( _
+        TBL_BANKA_IMPORT, _
+        COL_BIM_ID, _
+        bankaImportID, _
+        "FindBankaImportRowIndex" _
+    )
 End Function
 
 Private Function ValidateBankaImportNotProcessed(ByVal bankaImportID As String) As Boolean
-    Dim rows As Collection
+    Const SRC As String = "ValidateBankaImportNotProcessed"
+
+    On Error GoTo EH
+
+    Dim rowBim As Long
+    rowBim = RequireSingleRow(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, SRC)
+
     Dim data As Variant
-    Dim colObr As Long
-    Dim colStorno As Long
-    Dim r As Long
-    
-    Set rows = FindRows(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID)
-    If rows Is Nothing Or rows.count = 0 Then
-        MsgBox "BankaImport red nije pronadjen: " & bankaImportID, vbExclamation, APP_NAME
-        ValidateBankaImportNotProcessed = False
-        Exit Function
-    End If
-    
-    r = CLng(rows(1))
-    
     data = GetTableData(TBL_BANKA_IMPORT)
+
     If IsEmpty(data) Then
-        MsgBox "tblBankaImport je prazan!", vbExclamation, APP_NAME
+        Err.Raise ERR_BMAP_BASE + 20, SRC, _
+                  "Tabela je prazna: " & TBL_BANKA_IMPORT
+    End If
+
+    Dim colObr As Long
+    colObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+
+    If UCase$(Trim$(CStr(NzBIM(data(rowBim, colObr), "")))) = "DA" Then
         ValidateBankaImportNotProcessed = False
         Exit Function
     End If
-    
-    colObr = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO)
-    colStorno = GetColumnIndex(TBL_BANKA_IMPORT, COL_STORNIRANO)
-    
-    If colStorno > 0 Then
-        If CStr(data(r, colStorno)) = "Da" Then
-            MsgBox "BankaImport red je storniran!", vbExclamation, APP_NAME
-            ValidateBankaImportNotProcessed = False
-            Exit Function
-        End If
-    End If
-    
-    If Trim$(CStr(NzBIM(data(r, colObr), ""))) = "Da" Then
-        MsgBox "BankaImport red je vec obradjen!", vbExclamation, APP_NAME
+
+    If UCase$(Trim$(CStr(NzBIM(data(rowBim, colObr), "")))) = "SKIP" Then
         ValidateBankaImportNotProcessed = False
         Exit Function
     End If
-    
-    If Trim$(CStr(NzBIM(data(r, colObr), ""))) = "Skip" Then
-        MsgBox "BankaImport red je vec preskocen!", vbExclamation, APP_NAME
-        ValidateBankaImportNotProcessed = False
-        Exit Function
-    End If
-    
+
     ValidateBankaImportNotProcessed = True
+    Exit Function
+
+EH:
+    LogAndReraiseBankaMap SRC
 End Function
 
-Private Sub UpdateBankaImportStatus(ByVal bankaImportID As String, ByVal newStatus As String)
-    Dim rowIdx As Long
-    
-    rowIdx = FindBankaImportRowIndex(bankaImportID)
-    If rowIdx <= 0 Then Exit Sub
-    
-    UpdateCell TBL_BANKA_IMPORT, rowIdx, COL_BIM_OBRADJENO, newStatus
+Private Sub UpdateBankaImportStatus(ByVal bankaImportID As String, _
+                                    ByVal statusValue As String)
+    Const SRC As String = "UpdateBankaImportStatus"
+
+    On Error GoTo EH
+
+    Dim rowBim As Long
+    rowBim = RequireSingleRow(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, SRC)
+
+    RequireUpdateCell TBL_BANKA_IMPORT, rowBim, COL_BIM_OBRADJENO, _
+                      statusValue, SRC
+
+    Exit Sub
+
+EH:
+    LogAndReraiseBankaMap SRC
 End Sub
 
 
@@ -1593,7 +1593,7 @@ Public Function NormalizeLooseBIM(ByVal s As String) As String
 End Function
 
 Public Function NzBIM(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
-    If IsError(v) Then
+    If isError(v) Then
         NzBIM = Fallback
     ElseIf IsNull(v) Then
         NzBIM = Fallback
@@ -1670,6 +1670,95 @@ Private Sub Monitor_BankaMapFail(ByVal procedureName As String, _
         entityType:="BankaImport", _
         entityId:=bankaImportID, _
         correlationId:=bankaImportID
+End Sub
+
+Private Sub LinkNovacToOtkupStrict(ByVal novacID As String, _
+                                   ByVal otkupID As String, _
+                                   ByVal sourceName As String)
+    Const SRC As String = "LinkNovacToOtkupStrict"
+
+    On Error GoTo EH
+
+    If Len(Trim$(sourceName)) = 0 Then sourceName = SRC
+
+    Dim rowNov As Long
+    Dim rowOtk As Long
+
+    rowNov = RequireSingleRow(TBL_NOVAC, COL_NOV_ID, novacID, sourceName)
+    rowOtk = RequireSingleRow(TBL_OTKUP, COL_OTK_ID, otkupID, sourceName)
+
+    RequireUpdateCell TBL_NOVAC, rowNov, COL_NOV_OTKUP_ID, otkupID, sourceName
+
+    UpdateOtkupStatus otkupID
+
+    Exit Sub
+
+EH:
+    LogAndReraiseBankaMap SRC
+End Sub
+
+Private Function RequireSingleRow(ByVal tblName As String, _
+                                  ByVal idColumn As String, _
+                                  ByVal idValue As String, _
+                                  ByVal sourceName As String) As Long
+    If Len(Trim$(tblName)) = 0 Then
+        Err.Raise ERR_BMAP_BASE + 1, sourceName, "TableName je obavezan."
+    End If
+
+    If Len(Trim$(idColumn)) = 0 Then
+        Err.Raise ERR_BMAP_BASE + 2, sourceName, "IdColumn je obavezan."
+    End If
+
+    If Len(Trim$(idValue)) = 0 Then
+        Err.Raise ERR_BMAP_BASE + 3, sourceName, _
+                  "ID vrednost je obavezna. Table=" & tblName & _
+                  " Column=" & idColumn
+    End If
+
+    RequireColumnIndex tblName, idColumn, sourceName
+
+    Dim rows As Collection
+    Set rows = FindRows(tblName, idColumn, idValue)
+
+    If rows Is Nothing Then
+        Err.Raise ERR_BMAP_BASE + 4, sourceName, _
+                  "FindRows je vratio Nothing. Table=" & tblName & _
+                  " Column=" & idColumn & _
+                  " ID=" & idValue
+    End If
+    
+    If rows.count = 0 Then
+        Err.Raise ERR_BMAP_BASE + 5, sourceName, _
+                  "Missing link. Table=" & tblName & _
+                  " Column=" & idColumn & _
+                  " ID=" & idValue
+    End If
+
+    If rows.count > 1 Then
+        Err.Raise ERR_BMAP_BASE + 6, sourceName, _
+                  "Duplicate key. Table=" & tblName & _
+                  " Column=" & idColumn & _
+                  " ID=" & idValue & _
+                  " Count=" & CStr(rows.count)
+    End If
+
+    RequireSingleRow = CLng(rows(1))
+End Function
+
+Private Sub LogAndReraiseBankaMap(ByVal sourceName As String)
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr sourceName
+    On Error GoTo 0
+
+    Err.Raise errNum, sourceName, "Source=" & errSrc & " | " & errDesc
 End Sub
 
 ' ============================================================
