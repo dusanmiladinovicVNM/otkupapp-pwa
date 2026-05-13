@@ -842,20 +842,16 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
             BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
         )
         
-        If novID <> "" Then
-            If novID <> "" Then
-                LinkNovacToOtkupStrict novID, otkupID, _
-                            "MapBankaImportAsKooperantBlockCore"
+        If Len(Trim$(novID)) = 0 Then
+            Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
+              "SaveNovac nije vratio NovacID za OtkupID=" & otkupID
+        End If
 
-                MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
-                preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
-            Else
-                Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
-                    "SaveNovac nije vratio NovacID za OtkupID=" & otkupID
-        End If
-            MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
-            preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
-        End If
+        LinkNovacToOtkupStrict novID, otkupID, _
+                        "MapBankaImportAsKooperantBlockCore"
+
+        MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
+        preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
         
 NextCandidate:
     Next i
