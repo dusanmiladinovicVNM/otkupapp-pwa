@@ -115,7 +115,10 @@ async function apiRequestSafe(actionOrParams, payload = {}, options = {}) {
         });
     } catch (e) {
         if (e && e.name === 'AbortError') {
-            console.error('API request timeout:', actionOrParams);
+            if (!options.silent) {
+                console.error('API request timeout:', actionOrParams);
+            }
+
             return apiBuildResult({
                 ok: false,
                 status: 0,
