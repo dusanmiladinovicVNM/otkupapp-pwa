@@ -1,13 +1,12 @@
-Attribute VB_Name = "modBankaImportParserPdfToText"
 Option Explicit
 
 ' ============================================================
 ' modBankaImport_PdfText
-' Parser f¸r pdftotext-Ausgabe von Komercijalna Banka Izvod
+' Parser f√ºr pdftotext-Ausgabe von Komercijalna Banka Izvod
 '
 ' Output-Spalten:
 ' 1  Datum Izvoda
-' 2  Datum Izvrö
+' 2  Datum Izvr≈°
 ' 3  Partner
 ' 4  Racun
 ' 5  Zaduzenje
@@ -17,6 +16,16 @@ Option Explicit
 ' 9  Poziv na broj
 ' 10 Referenca
 ' ============================================================
+
+Public Type BankIzvodSaldo
+    PocetnoStanje As Double           ' "Prethodno stanje" iz STANJE bloka
+    UkupanDuguje As Double            ' "Duguje" (suma isplata reported)
+    UkupanPotrazuje As Double         ' "Potra≈æivuje" (suma uplata reported)
+    ZavrsnoStanje As Double           ' "Novo stanje"
+    BrojNalogaZaduzenje As Long       ' Broj naloga - Zadu≈æenje
+    BrojNalogaOdobrenje As Long       ' Broj naloga - Odobrenje
+    Parsed As Boolean                  ' True iff sva polja uspesno parsed
+End Type
 
 Public Function ExtractTextFromPdf(ByVal pdfPath As String) As String
 
@@ -60,7 +69,7 @@ Function PickPdf() As String
 
     With Application.FileDialog(msoFileDialogFilePicker)
     
-        .title = "PDF ausw‰hlen"
+        .title = "PDF ausw√§hlen"
         .filters.Clear
         .filters.Add "PDF", "*.pdf"
         
@@ -73,7 +82,7 @@ Function PickPdf() As String
 End Function
 
 Public Function ParseBankaIzvodPdfText(ByVal txt As String) As Variant
-    Dim Lines() As String
+    Dim lines() As String
     Dim blocks As Collection
     Dim result() As Variant
     Dim izvodDatum As String
@@ -81,10 +90,10 @@ Public Function ParseBankaIzvodPdfText(ByVal txt As String) As Variant
     
     txt = Replace(txt, Chr$(12), vbLf)
     txt = Replace(txt, vbCr, "")
-    Lines = Split(txt, vbLf)
+    lines = Split(txt, vbLf)
     
-    izvodDatum = ExtractIzvodDatumPdfText(Lines)
-    Set blocks = CollectPdfTextTxnBlocks(Lines)
+    izvodDatum = ExtractIzvodDatumPdfText(lines)
+    Set blocks = CollectPdfTextTxnBlocks(lines)
     
     If blocks Is Nothing Then
         ParseBankaIzvodPdfText = Empty
@@ -117,14 +126,14 @@ Public Function ParseBankaIzvodPdfText(ByVal txt As String) As Variant
     ParseBankaIzvodPdfText = result
 End Function
 
-Public Function ExtractIzvodDatumPdfText(ByRef Lines() As String) As String
+Public Function ExtractIzvodDatumPdfText(ByRef lines() As String) As String
     Dim i As Long
     Dim s As String
     Dim tmp As String
     Dim p As Long
     
-    For i = LBound(Lines) To UBound(Lines)
-        s = Trim$(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        s = Trim$(lines(i))
         If InStr(1, s, "Izvod za datum:", vbTextCompare) > 0 Then
             tmp = ExtractAfterPdf(s, "Izvod za datum:")
             tmp = Trim$(tmp)
@@ -136,15 +145,15 @@ Public Function ExtractIzvodDatumPdfText(ByRef Lines() As String) As String
     Next i
 End Function
 
-Private Function CollectPdfTextTxnBlocks(ByRef Lines() As String) As Collection
+Private Function CollectPdfTextTxnBlocks(ByRef lines() As String) As Collection
     Dim blocks As New Collection
     Dim i As Long
     Dim s As String
     Dim currBlock As String
     Dim inTxn As Boolean
     
-    For i = LBound(Lines) To UBound(Lines)
-        s = NormalizeSpacesPdf(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        s = NormalizeSpacesPdf(lines(i))
         If s = "" Then GoTo NextLine
         
         If IsPdfTextTxnStart(s) Then
@@ -194,7 +203,7 @@ Private Function NormalizePdfTextTxnStart(ByVal s As String) As String
 End Function
 
 Private Function ParsePdfTextTxnBlock(ByVal blockText As String, ByVal izvodDatum As String) As Variant
-    Dim Lines() As String
+    Dim lines() As String
     Dim i As Long
     Dim ln As String
     
@@ -214,10 +223,10 @@ Private Function ParsePdfTextTxnBlock(ByVal blockText As String, ByVal izvodDatu
     Dim idxNak As Long
     Dim idxOdoSif As Long
     
-    Lines = Split(blockText, vbLf)
+    lines = Split(blockText, vbLf)
     
-    For i = 1 To UBound(Lines)
-        ln = NormalizeSpacesPdf(Lines(i))
+    For i = 1 To UBound(lines)
+        ln = NormalizeSpacesPdf(lines(i))
         If IsDateLinePdf(ln) Then
             If firstDateIdx = 0 Then
                 firstDateIdx = i
@@ -230,7 +239,7 @@ Private Function ParsePdfTextTxnBlock(ByVal blockText As String, ByVal izvodDatu
     Next i
     
     For i = 1 To firstDateIdx - 1
-        ln = NormalizeSpacesPdf(Lines(i))
+        ln = NormalizeSpacesPdf(lines(i))
         If ln = "" Then GoTo NextPartner
         
         If IsAccountLinePdf(ln) Then
@@ -253,18 +262,18 @@ NextPartner:
     idxNak = secondDateIdx + 2
     idxOdoSif = secondDateIdx + 3
     
-    If idxZad <= UBound(Lines) Then
-        If IsAmountPdf(Lines(idxZad)) Then
-            zaduzenje = ToNumberPdf(Lines(idxZad))
+    If idxZad <= UBound(lines) Then
+        If IsAmountPdf(lines(idxZad)) Then
+            zaduzenje = ToNumberPdf(lines(idxZad))
         End If
     End If
     
-    If idxOdoSif <= UBound(Lines) Then
-        ParsePdfOdobrenjeSifraLineStrict NormalizeSpacesPdf(Lines(idxOdoSif)), odobrenje, sifra, svrha, referenca
+    If idxOdoSif <= UBound(lines) Then
+        ParsePdfOdobrenjeSifraLineStrict NormalizeSpacesPdf(lines(idxOdoSif)), odobrenje, sifra, svrha, referenca
     End If
     
-    For i = idxOdoSif + 1 To UBound(Lines)
-        ln = NormalizeSpacesPdf(Lines(i))
+    For i = idxOdoSif + 1 To UBound(lines)
+        ln = NormalizeSpacesPdf(lines(i))
         If ln = "" Then GoTo NextSvrha
         
         If IsReferencePdf(ln) Then
@@ -314,49 +323,49 @@ NextSvrha:
                                  zaduzenje, odobrenje, sifra, svrha, pozivNaBroj, referenca)
 End Function
   
-Private Function FindAmountSifraLineIndexPdf(ByRef Lines() As String) As Long
+Private Function FindAmountSifraLineIndexPdf(ByRef lines() As String) As Long
     Dim i As Long
-    For i = LBound(Lines) To UBound(Lines)
-        If IsPdfAmountSifraLine(Trim$(Lines(i))) Then
+    For i = LBound(lines) To UBound(lines)
+        If IsPdfAmountSifraLine(Trim$(lines(i))) Then
             FindAmountSifraLineIndexPdf = i
             Exit Function
         End If
     Next i
 End Function
 
-Private Function FindStandaloneAmountNearAmountLinePdf(ByRef Lines() As String, ByVal amountLineIdx As Long) As Long
+Private Function FindStandaloneAmountNearAmountLinePdf(ByRef lines() As String, ByVal amountLineIdx As Long) As Long
     Dim i As Long
     
     If amountLineIdx <= 0 Then Exit Function
     
-    ' zuerst r¸ckw‰rts suchen
-    For i = amountLineIdx - 1 To LBound(Lines) Step -1
-        If IsAmountPdf(Trim$(Lines(i))) Then
+    ' zuerst r√ºckw√§rts suchen
+    For i = amountLineIdx - 1 To LBound(lines) Step -1
+        If IsAmountPdf(Trim$(lines(i))) Then
             FindStandaloneAmountNearAmountLinePdf = i
             Exit Function
         End If
         
-        If IsDateLinePdf(Trim$(Lines(i))) Then Exit For
+        If IsDateLinePdf(Trim$(lines(i))) Then Exit For
     Next i
     
-    ' dann vorw‰rts suchen
-    For i = amountLineIdx + 1 To UBound(Lines)
-        If IsAmountPdf(Trim$(Lines(i))) Then
+    ' dann vorw√§rts suchen
+    For i = amountLineIdx + 1 To UBound(lines)
+        If IsAmountPdf(Trim$(lines(i))) Then
             FindStandaloneAmountNearAmountLinePdf = i
             Exit Function
         End If
         
-        If IsReferencePdf(Trim$(Lines(i))) Then Exit For
+        If IsReferencePdf(Trim$(lines(i))) Then Exit For
     Next i
 End Function
 
-Private Function FindSecondStandaloneAmountIndexPdf(ByRef Lines() As String, ByVal amountLineIdx As Long) As Long
+Private Function FindSecondStandaloneAmountIndexPdf(ByRef lines() As String, ByVal amountLineIdx As Long) As Long
     Dim i As Long
     Dim foundCount As Long
     
-    For i = LBound(Lines) To UBound(Lines)
+    For i = LBound(lines) To UBound(lines)
         If i <> amountLineIdx Then
-            If IsAmountPdf(Trim$(Lines(i))) Then
+            If IsAmountPdf(Trim$(lines(i))) Then
                 foundCount = foundCount + 1
                 ' erste reine Betragzeile im Block
                 FindSecondStandaloneAmountIndexPdf = i
@@ -429,7 +438,7 @@ Private Sub ParsePdfOdobrenjeSifraLineStrict(ByVal s As String, _
         sifra = m.SubMatches(2)
         svrha = NormalizeSpacesPdf(m.SubMatches(3))
         
-        ' Alles ab "Ukupno za ..." abschneiden, falls es in derselben Zeile h‰ngt
+        ' Alles ab "Ukupno za ..." abschneiden, falls es in derselben Zeile h√§ngt
         pUk = InStr(1, svrha, "Ukupno za racun", vbTextCompare)
         If pUk = 0 Then pUk = InStr(1, svrha, "Ukupno za racun", vbTextCompare)
         If pUk > 0 Then
@@ -461,12 +470,12 @@ Private Function IsAccountLinePdf(ByVal s As String) As Boolean
     IsAccountLinePdf = re.Test(Trim$(s))
 End Function
 
-Private Function FindAccountInLinesPdf(ByRef Lines() As String) As String
+Private Function FindAccountInLinesPdf(ByRef lines() As String) As String
     Dim i As Long
     Dim s As String
     
-    For i = LBound(Lines) To UBound(Lines)
-        s = NormalizeSpacesPdf(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        s = NormalizeSpacesPdf(lines(i))
         
         If InStr(1, s, "Ukupno za racun", vbTextCompare) > 0 Or _
            InStr(1, s, "Ukupno za racun", vbTextCompare) > 0 Then
@@ -493,11 +502,11 @@ Private Function ExtractAccountFromTextPdf(ByVal s As String) As String
     End If
 End Function
 
-Private Function FindFirstDateInLinesPdf(ByRef Lines() As String) As String
+Private Function FindFirstDateInLinesPdf(ByRef lines() As String) As String
     Dim i As Long
-    For i = LBound(Lines) To UBound(Lines)
-        If IsDateLinePdf(Lines(i)) Then
-            FindFirstDateInLinesPdf = Trim$(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        If IsDateLinePdf(lines(i)) Then
+            FindFirstDateInLinesPdf = Trim$(lines(i))
             Exit Function
         End If
     Next i
@@ -508,11 +517,11 @@ Private Function IsReferencePdf(ByVal s As String) As Boolean
     If Len(s) >= 12 And IsNumeric(s) Then IsReferencePdf = True
 End Function
 
-Private Function FindReferenceInLinesPdf(ByRef Lines() As String) As String
+Private Function FindReferenceInLinesPdf(ByRef lines() As String) As String
     Dim i As Long
-    For i = LBound(Lines) To UBound(Lines)
-        If IsReferencePdf(Lines(i)) Then
-            FindReferenceInLinesPdf = Trim$(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        If IsReferencePdf(lines(i)) Then
+            FindReferenceInLinesPdf = Trim$(lines(i))
             Exit Function
         End If
     Next i
@@ -615,7 +624,7 @@ Private Function CleanSvrhaPdf(ByVal s As String) As String
     
     s = NormalizeSpacesPdf(s)
     
-    ' H‰ngendes [97] entfernen
+    ' H√§ngendes [97] entfernen
     If Right$(s, 4) = "[97]" Then
         s = Trim$(Left$(s, Len(s) - 4))
     End If
@@ -659,7 +668,7 @@ Private Function ExtractAfterPdf(ByVal s As String, ByVal marker As String) As S
 End Function
 
 
-Public Function ExtractIzvodBrojPdfText(ByRef Lines() As String) As String
+Public Function ExtractIzvodBrojPdfText(ByRef lines() As String) As String
     Dim i As Long
     Dim s As String
     Dim re As Object
@@ -670,8 +679,8 @@ Public Function ExtractIzvodBrojPdfText(ByRef Lines() As String) As String
     re.IgnoreCase = True
     re.pattern = "Izvod broj\s+([0-9]+)"
     
-    For i = LBound(Lines) To UBound(Lines)
-        s = Trim$(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        s = Trim$(lines(i))
         If re.Test(s) Then
             Set m = re.Execute(s)(0)
             ExtractIzvodBrojPdfText = Trim$(m.SubMatches(0))
@@ -680,13 +689,13 @@ Public Function ExtractIzvodBrojPdfText(ByRef Lines() As String) As String
     Next i
 End Function
 
-Public Function ExtractIzvodRacunPdfText(ByRef Lines() As String) As String
+Public Function ExtractIzvodRacunPdfText(ByRef lines() As String) As String
     Dim i As Long
     Dim s As String
     Dim acc As String
     
-    For i = LBound(Lines) To UBound(Lines)
-        s = NormalizeSpacesPdf(Lines(i))
+    For i = LBound(lines) To UBound(lines)
+        s = NormalizeSpacesPdf(lines(i))
         
         ' nur Kopfbereich durchsuchen, bevor Transaktionen starten
         If IsPdfTextTxnStart(s) Then Exit For
@@ -700,10 +709,188 @@ Public Function ExtractIzvodRacunPdfText(ByRef Lines() As String) As String
 End Function
 
 
+'======================================================================
+' v6.18+: Statement-level saldo extraction for integrity verification
+'======================================================================
 
+'----------------------------------------------------------------------
+' ExtractIzvodSaldoPdfText
+'
+' Vadi statement-level saldo polja iz STANJE bloka Komercijalna Banka
+' PDF izvoda (pdftotext -raw -nopgbrk -enc UTF-8 output).
+'
+' Format koji parser ocekuje (svi labeli na zasebnim linijama,
+' zatim 6 tokenova na jednoj data liniji):
+'   "Prethodno stanje"
+'   "Duguje Potra≈æivuje"      (ili "Duguje   Potra≈æivuje")
+'   "Novo stanje"
+'   "Zadu≈æenje Odobrenje"
+'   "1,775.16 5,230.00 6,000.00 2,545.16 3 1"
+'
+' Lokator: "Prethodno stanje" label-a se nalazi unutar STANJE sekcije
+' i pojavljuje se tacno jednom po izvodu.
+'
+' Pristup: lociraj "Prethodno stanje" line, pa skeniraj sledecih 6 linija
+' za prvu koja matchuje "double double double double long long" pattern.
+' Tolerantan na red-redosled labela jer pdftotext moze blago varirati.
+'----------------------------------------------------------------------
+Public Function ExtractIzvodSaldoPdfText(ByRef lines() As String) As BankIzvodSaldo
+    Dim result As BankIzvodSaldo
+    result.Parsed = False
+    
+    On Error GoTo EH
+    
+    Dim i As Long, j As Long
+    Dim lineNorm As String
+    Dim anchorIdx As Long
+    anchorIdx = -1
+    
+    ' Faza 1: nadji "Prethodno stanje" anchor
+    For i = LBound(lines) To UBound(lines)
+        lineNorm = NormalizeSpacesPdf(lines(i))
+        If InStr(1, lineNorm, "Prethodno stanje", vbTextCompare) > 0 Then
+            anchorIdx = i
+            Exit For
+        End If
+    Next i
+    
+    If anchorIdx < 0 Then
+        ExtractIzvodSaldoPdfText = result
+        Exit Function
+    End If
+    
+    ' Faza 2: u sledecih 8 linija od anchora trazi data liniju
+    '         (4 double + 2 long)
+    Dim scanEnd As Long
+    scanEnd = anchorIdx + 8
+    If scanEnd > UBound(lines) Then scanEnd = UBound(lines)
+    
+    For j = anchorIdx + 1 To scanEnd
+        If TryParseSaldoDataLine(lines(j), result) Then
+            result.Parsed = True
+            Exit For
+        End If
+    Next j
+    
+    ExtractIzvodSaldoPdfText = result
+    Exit Function
 
+EH:
+    ' Defensive: parser nikad ne sme da raise-uje, samo da kaze nije parsed
+    result.Parsed = False
+    ExtractIzvodSaldoPdfText = result
+End Function
 
-
+'----------------------------------------------------------------------
+' TryParseSaldoDataLine
+'
+' Komercijalna Banka pdftotext output collapse-uje nulte vrednosti iz
+' Duguje / Potrazuje kolona. Stoga data linija ima 4-6 tokena zavisno
+' od broja naloga zaduzenja/odobrenja:
+'
+'   Z>0, O>0: [Pocetno, Duguje, Potrazuje, Novo, Z, O]   (6 tokena)
+'   Z=0, O>0: [Pocetno,         Potrazuje, Novo, Z, O]   (5 tokena, Duguje=0)
+'   Z>0, O=0: [Pocetno, Duguje,            Novo, Z, O]   (5 tokena, Potrazuje=0)
+'   Z=0, O=0: [Pocetno,                    Novo, Z, O]   (4 tokena, oba=0)
+'
+' Algoritam: poslednja dva tokena su uvek integeri Z/O. Pretposlednja
+' grupa double-ova ima 2-4 elementa, koji se mapiraju koristeci Z/O
+' brojeve kao indikator da li je Duguje/Potrazuje collapse-ovan.
+'----------------------------------------------------------------------
+Private Function TryParseSaldoDataLine(ByVal raw As String, _
+                                        ByRef result As BankIzvodSaldo) As Boolean
+    TryParseSaldoDataLine = False
+    
+    Dim norm As String
+    norm = NormalizeSpacesPdf(raw)
+    If LenB(norm) = 0 Then Exit Function
+    
+    Dim parts() As String
+    parts = Split(norm, " ")
+    
+    Dim n As Long
+    n = UBound(parts) - LBound(parts) + 1
+    If n < 4 Or n > 6 Then Exit Function
+    
+    Dim base As Long
+    base = LBound(parts)
+    
+    ' Poslednja dva tokena: Z_count, O_count (uvek integeri)
+    Dim zCount As Long, oCount As Long
+    If Not modParse.TryParseLong(parts(base + n - 2), zCount) Then Exit Function
+    If Not modParse.TryParseLong(parts(base + n - 1), oCount) Then Exit Function
+    
+    If zCount < 0 Or zCount > 9999 Then Exit Function
+    If oCount < 0 Or oCount > 9999 Then Exit Function
+    
+    ' Broj double-ova u toj liniji = n - 2
+    Dim doubleCount As Long
+    doubleCount = n - 2
+    
+    ' Validacija konzistentnosti: broj double-ova mora odgovarati Z/O pattern-u
+    Dim expectedDoubles As Long
+    expectedDoubles = 2  ' uvek imamo Pocetno + Novo
+    If zCount > 0 Then expectedDoubles = expectedDoubles + 1   ' Duguje
+    If oCount > 0 Then expectedDoubles = expectedDoubles + 1   ' Potrazuje
+    
+    If doubleCount <> expectedDoubles Then Exit Function
+    
+    ' Parse double-ove u redosledu
+    Dim d() As Double
+    ReDim d(0 To doubleCount - 1)
+    Dim k As Long
+    For k = 0 To doubleCount - 1
+        If Not modParse.TryParseDouble(parts(base + k), d(k)) Then Exit Function
+    Next k
+    
+    ' Mapiranje zavisno od kombinacije
+    ' Index u d() ide redom: pocetno je uvek d(0), novo je uvek d(doubleCount-1)
+    Dim pocetno As Double, novo As Double
+    Dim duguje As Double, potraz As Double
+    
+    pocetno = d(0)
+    novo = d(doubleCount - 1)
+    duguje = 0
+    potraz = 0
+    
+    Select Case doubleCount
+        Case 2
+            ' [Pocetno, Novo] - oba count = 0
+            ' duguje = 0, potraz = 0 vec
+            
+        Case 3
+            ' [Pocetno, X, Novo] gde X je Duguje ako Z>0, inace Potrazuje
+            If zCount > 0 And oCount = 0 Then
+                duguje = d(1)
+            ElseIf zCount = 0 And oCount > 0 Then
+                potraz = d(1)
+            Else
+                ' inkonzistentno: 3 double-a ali Z i O oba > 0 ili oba = 0
+                Exit Function
+            End If
+            
+        Case 4
+            ' [Pocetno, Duguje, Potrazuje, Novo] - oba count > 0
+            If zCount > 0 And oCount > 0 Then
+                duguje = d(1)
+                potraz = d(2)
+            Else
+                Exit Function
+            End If
+            
+        Case Else
+            Exit Function
+    End Select
+    
+    result.PocetnoStanje = pocetno
+    result.UkupanDuguje = duguje
+    result.UkupanPotrazuje = potraz
+    result.ZavrsnoStanje = novo
+    result.BrojNalogaZaduzenje = zCount
+    result.BrojNalogaOdobrenje = oCount
+    
+    TryParseSaldoDataLine = True
+End Function
 
 
 Sub TestPdfTextParser()
@@ -731,7 +918,7 @@ Sub TestPdfTextParser()
     For i = 1 To UBound(result, 1)
         Debug.Print "--- Txn " & i & " ---"
         Debug.Print "Datum Izvoda: " & result(i, 1)
-        Debug.Print "Datum Izvrö: " & result(i, 2)
+        Debug.Print "Datum Izvr≈°: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
         Debug.Print "Racun: " & result(i, 4)
         Debug.Print "Zaduzenje: " & result(i, 5)
@@ -747,7 +934,7 @@ Sub TestPdfTextParser123()
     Dim pdfPath As String
     Dim txt As String
     Dim result As Variant
-    Dim Lines() As String
+    Dim lines() As String
     Dim brojIzvoda As String
     Dim datumIzvoda As String
     Dim brojRacuna As String
@@ -764,11 +951,11 @@ Sub TestPdfTextParser123()
     
     txt = Replace(txt, Chr$(12), vbLf)
     txt = Replace(txt, vbCr, "")
-    Lines = Split(txt, vbLf)
+    lines = Split(txt, vbLf)
     
-    brojIzvoda = ExtractIzvodBrojPdfText(Lines)
-    datumIzvoda = ExtractIzvodDatumPdfText(Lines)
-    brojRacuna = ExtractIzvodRacunPdfText(Lines)
+    brojIzvoda = ExtractIzvodBrojPdfText(lines)
+    datumIzvoda = ExtractIzvodDatumPdfText(lines)
+    brojRacuna = ExtractIzvodRacunPdfText(lines)
     
     Debug.Print "========================================"
     Debug.Print "PDF: " & pdfPath
@@ -789,7 +976,7 @@ Sub TestPdfTextParser123()
         Debug.Print "Broj Izvoda: " & brojIzvoda
         Debug.Print "Datum Izvoda: " & datumIzvoda
         Debug.Print "Broj Racuna: " & brojRacuna
-        Debug.Print "Datum Izvrö: " & result(i, 2)
+        Debug.Print "Datum Izvr≈°: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
         Debug.Print "Racun: " & result(i, 4)
         Debug.Print "Zaduzenje: " & result(i, 5)
