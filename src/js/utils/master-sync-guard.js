@@ -1,11 +1,15 @@
 (function () {
-    const CACHE_TTL_MS = 5000;
+    const CACHE_TTL_MS = 10000;
     const POLL_MS = 30000;
     const OFFLINE_LOCK_CACHE_MS = 10 * 60 * 1000;
+    const FAIL_BACKOFF_MS = 45000;
+    const REQUEST_TIMEOUT_MS = 12000;
 
     let cachedState = null;
     let cachedAt = 0;
-    let pollStarted = false;
+    let lastFailAt = 0;
+    let inFlight = null;
+    let pollTimer = null;
 
     function buildState(overrides) {
         return Object.assign({
@@ -14,13 +18,14 @@
             stale: false,
             unknown: false,
             offline: false,
-            message: ''
+            timeout: false,
+            message: '',
+            code: ''
         }, overrides || {});
     }
 
     function ensureMasterSyncOverlay() {
         let el = document.getElementById('masterSyncBlocker');
-
         if (el) return el;
 
         el = document.createElement('div');
@@ -79,7 +84,7 @@
 
                 try {
                     const state = await window.getMasterSyncStateSafe(true);
-                    if (state && state.locked) showMasterSyncOverlay(state);
+                    if (state && state.locked === true) showMasterSyncOverlay(state);
                     else hideMasterSyncOverlay();
                 } finally {
                     btn.disabled = false;
@@ -108,7 +113,26 @@
         if (el) el.style.display = 'none';
     }
 
-    async function fetchMasterSyncState() {
+    async function fetchMasterSyncState(force) {
+        const now = Date.now();
+
+        if (!force && cachedState && now - cachedAt < CACHE_TTL_MS) {
+            return cachedState;
+        }
+
+        if (!force && inFlight) {
+            return inFlight;
+        }
+
+        if (!force && lastFailAt && now - lastFailAt < FAIL_BACKOFF_MS) {
+            return cachedState || buildState({
+                success: false,
+                locked: false,
+                unknown: true,
+                code: 'MASTER_SYNC_STATE_BACKOFF'
+            });
+        }
+
         if (!navigator.onLine) {
             if (
                 cachedState &&
@@ -125,78 +149,100 @@
 
             return buildState({
                 locked: false,
-                offline: true,
-                message: ''
+                offline: true
             });
         }
 
         if (typeof window.apiFetchSafe !== 'function') {
             return buildState({
-                locked: true,
+                success: false,
+                locked: false,
                 unknown: true,
-                message: 'Nije moguće proveriti sync status. Pokušajte ponovo za par sekundi.'
+                code: 'API_HELPER_MISSING'
             });
         }
 
-        const result = await window.apiFetchSafe('action=getMasterSyncState', {
-            timeoutMs: 5000,
-            includeToken: false
-        });
+        inFlight = (async function () {
+            try {
+                const result = await window.apiFetchSafe('action=getMasterSyncState', {
+                    timeoutMs: REQUEST_TIMEOUT_MS,
+                    includeToken: false,
+                    silent: true
+                });
 
-        if (!result || !result.ok || !result.data) {
-            return buildState({
-                locked: true,
-                unknown: true,
-                message: 'Nije moguće proveriti master sync status. Pokušajte ponovo za par sekundi.'
-            });
-        }
+                if (!result || !result.ok || !result.data) {
+                    lastFailAt = Date.now();
 
-        const data = result.data;
+                    return buildState({
+                        success: false,
+                        locked: false,
+                        unknown: true,
+                        timeout: !!(result && result.isTimeout),
+                        code: result && result.isTimeout
+                            ? 'MASTER_SYNC_STATE_TIMEOUT'
+                            : 'MASTER_SYNC_STATE_UNAVAILABLE'
+                    });
+                }
 
-        return buildState({
-            success: data.success !== false,
-            locked: !!data.locked,
-            stale: !!data.stale,
-            unknown: data.success === false,
-            message: data.message || data.error || ''
-        });
+                const data = result.data;
+
+                const state = buildState({
+                    success: data.success !== false,
+                    locked: data.success !== false && data.locked === true,
+                    stale: data.stale === true,
+                    unknown: data.success === false,
+                    message: data.message || data.error || '',
+                    code: data.code || ''
+                });
+
+                cachedState = state;
+                cachedAt = Date.now();
+                lastFailAt = 0;
+
+                return state;
+            } catch (err) {
+                lastFailAt = Date.now();
+
+                return buildState({
+                    success: false,
+                    locked: false,
+                    unknown: true,
+                    code: 'MASTER_SYNC_STATE_EXCEPTION'
+                });
+            } finally {
+                inFlight = null;
+            }
+        })();
+
+        return inFlight;
     }
 
     window.getMasterSyncStateSafe = async function getMasterSyncStateSafe(force) {
-        const now = Date.now();
-
-        if (!force && cachedState && now - cachedAt < CACHE_TTL_MS) {
-            return cachedState;
-        }
-
         try {
-            cachedState = await fetchMasterSyncState();
-            cachedAt = now;
-            return cachedState;
-        } catch (err) {
-            console.error('[master-sync-guard] check failed:', err);
-
-            cachedState = buildState({
-                locked: navigator.onLine,
+            return await fetchMasterSyncState(force === true);
+        } catch (_) {
+            return buildState({
+                success: false,
+                locked: false,
                 unknown: true,
-                message: 'Nije moguće proveriti master sync status.'
+                code: 'MASTER_SYNC_STATE_ERROR'
             });
-            cachedAt = now;
-
-            return cachedState;
         }
     };
 
     window.ensureMasterSyncNotActive = async function ensureMasterSyncNotActive(context, options) {
         const opts = options || {};
-        const state = await window.getMasterSyncStateSafe(true);
 
-        if (state && state.locked) {
+        // Ne forsiraj network svaki put. Ako cache kaže unlocked, pusti.
+        // Server-side GAS blocker je finalna zaštita za realan write.
+        const state = await window.getMasterSyncStateSafe(false);
+
+        if (state && state.locked === true) {
             showMasterSyncOverlay(state);
 
             if (opts.showToast !== false && typeof window.showToast === 'function') {
                 window.showToast(
-                    state.message || 'Master sync je u toku. Sačekajte završetak.',
+                    state.message || 'Master sync je u toku. Unos je sačuvan lokalno i biće poslat kasnije.',
                     'warning'
                 );
             }
@@ -204,39 +250,49 @@
             return false;
         }
 
+        // Unknown/timeout nije potvrđen lock.
+        // Soft-lock model: lokalni rad i pokušaj sync-a smeju dalje,
+        // GAS će vratiti MASTER_SYNC_ACTIVE ako je lock stvarno aktivan.
         hideMasterSyncOverlay();
         return true;
     };
 
     window.startMasterSyncGuardPolling = function startMasterSyncGuardPolling() {
-        if (pollStarted) return;
-        pollStarted = true;
+        if (pollTimer) return;
 
-        setInterval(async () => {
+        const tick = async function () {
             try {
-                const state = await window.getMasterSyncStateSafe(true);
-                if (state && state.locked) showMasterSyncOverlay(state);
-                else hideMasterSyncOverlay();
-            } catch (_) {}
-        }, POLL_MS);
+                const state = await window.getMasterSyncStateSafe(false);
+
+                if (state && state.locked === true) {
+                    showMasterSyncOverlay(state);
+                } else {
+                    hideMasterSyncOverlay();
+                }
+            } catch (_) {
+                // fail-open za status-check
+            } finally {
+                pollTimer = setTimeout(tick, POLL_MS);
+            }
+        };
+
+        pollTimer = setTimeout(tick, 3000);
     };
 
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && typeof window.getMasterSyncStateSafe === 'function') {
-            window.getMasterSyncStateSafe(true).then(state => {
-                if (state && state.locked) showMasterSyncOverlay(state);
-                else hideMasterSyncOverlay();
-            }).catch(() => {});
-        }
+        if (document.hidden) return;
+
+        window.getMasterSyncStateSafe(false).then(state => {
+            if (state && state.locked === true) showMasterSyncOverlay(state);
+            else hideMasterSyncOverlay();
+        }).catch(() => {});
     });
 
     window.addEventListener('online', () => {
-        if (typeof window.getMasterSyncStateSafe === 'function') {
-            window.getMasterSyncStateSafe(true).then(state => {
-                if (state && state.locked) showMasterSyncOverlay(state);
-                else hideMasterSyncOverlay();
-            }).catch(() => {});
-        }
+        window.getMasterSyncStateSafe(false).then(state => {
+            if (state && state.locked === true) showMasterSyncOverlay(state);
+            else hideMasterSyncOverlay();
+        }).catch(() => {});
     });
 
     if (document.readyState === 'loading') {
