@@ -1,4 +1,3 @@
-Attribute VB_Name = "modConfig"
 Option Explicit
 
 ' ============================================================
@@ -273,6 +272,10 @@ Public Const COL_BIM_IZVOR_FAJL As String = "IzvorFajl"
 Public Const COL_BIM_IMPORT_VREME As String = "ImportVreme"
 Public Const COL_BIM_OBRADJENO As String = "Obradjeno"
 Public Const COL_BIM_STORNIRANO As String = "Stornirano"
+Public Const COL_BIM_POCETNO_STANJE As String = "PocetnoStanje"
+Public Const COL_BIM_ZAVRSNO_STANJE As String = "ZavrsnoStanje"
+Public Const COL_BIM_UKUPAN_DUGUJE As String = "UkupanDuguje"
+Public Const COL_BIM_UKUPAN_POTRAZUJE As String = "UkupanPotrazuje"
 
 Public Const APP_BANKA_INBOX As String = "G:\My Drive\Bank_Izvodi"
 Public Const APP_BANKA_PROCESSED As String = "G:\My Drive\Bank_Izvodi\Verarbeitet"
@@ -397,7 +400,7 @@ Public Function GetConfigValue(ByVal configKey As String) As String
 
 End Function
 
-Public Sub SetConfigValue(ByVal configKey As String, ByVal configValue As String)
+Public Sub SetConfigValue(ByVal configKey As String, ByVal ConfigValue As String)
     Const SOURCE As String = "SetConfigValue"
 
     Dim data As Variant
@@ -428,7 +431,7 @@ Public Sub SetConfigValue(ByVal configKey As String, ByVal configValue As String
     If Not IsEmpty(data) Then
         For i = 1 To UBound(data, 1)
             If Trim$(CStr(data(i, colKey))) = Trim$(configKey) Then
-                RequireUpdateCell TBL_SEF_CONFIG, i, "ConfigValue", configValue, SOURCE
+                RequireUpdateCell TBL_SEF_CONFIG, i, "ConfigValue", ConfigValue, SOURCE
                 found = True
                 Exit For
             End If
@@ -439,7 +442,7 @@ Public Sub SetConfigValue(ByVal configKey As String, ByVal configValue As String
         ReDim rowData(1 To lo.ListColumns.count)
 
         rowData(colKey) = Trim$(configKey)
-        rowData(colValue) = configValue
+        rowData(colValue) = ConfigValue
 
         newRowIndex = AppendRow(TBL_SEF_CONFIG, rowData)
         If newRowIndex = 0 Then
