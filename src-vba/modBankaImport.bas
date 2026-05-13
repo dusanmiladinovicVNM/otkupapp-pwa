@@ -1,5 +1,34 @@
 Option Explicit
 
+' ============================================================
+' PATCH: P1-3 BankaImport fail-fast staging
+' File: src-vba/modBankaImport.bas
+'
+' Goals:
+' - SaveBankaImportRows uses RequireColumnIndex for all tblBankaImport columns.
+' - AppendRow <= 0 is a hard failure.
+' - ImportOnePdfIntoBankaImport distinguishes:
+'     imported, duplicate-only, parse error, integrity error, append error.
+' - PDF goes to Processed only after staging is reliable.
+' - Append/schema failures bubble to ImportBankaInbox_TX rollback.
+' ============================================================
+
+' ============================================================
+' 1) Add these constants near top of modBankaImport.bas
+' ============================================================
+
+Private Const BIM_STATUS_IMPORTED As String = "imported"
+Private Const BIM_STATUS_DUPLICATE_ONLY As String = "duplicate-only"
+Private Const BIM_STATUS_PARSE_ERROR As String = "parse error"
+Private Const BIM_STATUS_INTEGRITY_ERROR As String = "integrity error"
+Private Const BIM_STATUS_APPEND_ERROR As String = "append error"
+Private Const BIM_STATUS_SCHEMA_ERROR As String = "schema error"
+Private Const BIM_STATUS_EXTRACT_ERROR As String = "extract error"
+Private Const BIM_STATUS_UNKNOWN_ERROR As String = "unknown error"
+
+Private Const ERR_BIM_IMPORT_BASE As Long = vbObjectError + 2700
+Private Const ERR_BIM_SAVE_BASE As Long = vbObjectError + 2800
+
 Public Sub ImportBankaInbox_TX()
     Dim tx As clsTransaction
 
@@ -61,49 +90,92 @@ Public Sub ImportBankaInbox()
 End Sub
 
 Public Sub ImportOnePdfIntoBankaImport(ByVal pdfPath As String)
+    Const SRC As String = "ImportOnePdfIntoBankaImport"
+
     Dim txt As String
     Dim Parsed As Variant
     Dim savedCount As Long
     Dim fileName As String
-    
+    Dim importStatus As String
+
     On Error GoTo EH
 
     fileName = GetFileNameFromPath(pdfPath)
+
+    If Len(Trim$(pdfPath)) = 0 Then
+        Err.Raise ERR_BIM_IMPORT_BASE + 1, SRC, "PDF path je obavezan."
+    End If
+
+    If Dir$(pdfPath) = "" Then
+        Err.Raise ERR_BIM_IMPORT_BASE + 2, SRC, "PDF fajl ne postoji: " & pdfPath
+    End If
+
     txt = ExtractTextFromPdf(pdfPath)
-    
-    If Trim$(txt) = "" Then
-        MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
-        Exit Sub
+
+    If Len(Trim$(txt)) = 0 Then
+        Err.Raise ERR_BIM_IMPORT_BASE + 3, SRC, _
+                  "PDF extract je vratio prazan tekst. File=" & fileName
     End If
-    
+
     Parsed = ParseBankaIzvodForImport(txt, fileName)
-    
+
     If IsEmpty(Parsed) Then
-        MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
-        Exit Sub
+        Err.Raise ERR_BIM_IMPORT_BASE + 4, SRC, _
+                  "Parser nije vratio nijednu transakciju. File=" & fileName
     End If
-    
+
     savedCount = SaveBankaImportRows(Parsed)
-    
+    If savedCount > 0 Then
+        importStatus = BIM_STATUS_IMPORTED
+        Debug.Print "Banka import " & importStatus & ". File=" & fileName & _
+                    " SavedRows=" & CStr(savedCount)
+    Else
+        ' Ako SaveBankaImportRows ne baci gresku, a vrati 0,
+        ' to znaci da je parser uspeo i da su svi redovi vec duplikati.
+        importStatus = BIM_STATUS_DUPLICATE_ONLY
+        Debug.Print "Banka import " & importStatus & ". File=" & fileName
+    End If
+
+    ' Only reliable outcomes reach Processed:
+    ' - imported
+    ' - duplicate-only
     MoveFileSafe pdfPath, GetBankaProcessedPath() & "\" & fileName
     Exit Sub
-    
+
 EH:
     Dim errNum As Long
     Dim errDesc As String
+    Dim errSrc As String
+    Dim errCategory As String
 
     errNum = Err.Number
     errDesc = Err.description
-
-    LogErr "ImportOnePdfIntoBankaImport"
+    errSrc = Err.SOURCE
+    errCategory = ClassifyBankaImportError(errNum, errSrc, errDesc)
 
     On Error Resume Next
-    If Len(Trim$(fileName)) > 0 Then
-        MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
+
+    LogErr SRC
+
+    If Len(Trim$(fileName)) = 0 Then fileName = GetFileNameFromPath(pdfPath)
+
+    If Len(Trim$(fileName)) > 0 And Len(Trim$(pdfPath)) > 0 Then
+        If Dir$(pdfPath) <> "" Then
+            MoveFileSafe pdfPath, GetBankaErrorPath() & "\" & fileName
+        End If
     End If
+
+    Debug.Print SRC & " failed. Status=" & errCategory & _
+                " Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc & _
+                " File=" & fileName
+
     On Error GoTo 0
 
-    Err.Raise errNum, "ImportOnePdfIntoBankaImport", errDesc
+    ' Re-raise so ImportBankaInbox_TX can rollback tblBankaImport snapshot.
+    Err.Raise errNum, SRC, _
+              "[" & errCategory & "] Source=" & errSrc & " | " & errDesc
 End Sub
 
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
@@ -246,6 +318,11 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
 End Function
 
 Public Function SaveBankaImportRows(ByRef data As Variant) As Long
+    Const SRC As String = "SaveBankaImportRows"
+
+    On Error GoTo EH
+
+    Dim lo As ListObject
     Dim colID As Long
     Dim colBrojDok As Long
     Dim colDatumIzvoda As Long
@@ -264,51 +341,68 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
     Dim colImportVreme As Long
     Dim colObradjeno As Long
     Dim colStornirano As Long
+
     ' v6.18+ saldo kolone
     Dim colPocetnoStanje As Long
     Dim colZavrsnoStanje As Long
     Dim colUkupanDuguje As Long
     Dim colUkupanPotrazuje As Long
-    
+
     Dim rowData() As Variant
     Dim colCount As Long
     Dim i As Long
     Dim rowIdx As Long
     Dim savedCount As Long
     Dim newID As String
-    
-    If IsEmpty(data) Then Exit Function
-    If Not IsArray(data) Then Exit Function
-    If UBound(data, 1) < 1 Then Exit Function
-    
-    colID = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID)
-    colBrojDok = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA)
-    colDatumIzvoda = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_IZVODA)
-    colBrojRacuna = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA)
-    colDatumTx = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE)
-    colPartner = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER)
-    colPartnerKonto = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO)
-    colOpis = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OPIS)
-    colUplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA)
-    colIsplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA)
-    colValuta = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_VALUTA)
-    colPozivNaBroj = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ)
-    colSvrha = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_SVRHA_PLACANJA)
-    colRef = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ)
-    colIzvorFajl = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_IZVOR_FAJL)
-    colImportVreme = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_IMPORT_VREME)
-    colObradjeno = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO)
-    colStornirano = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO)
-    ' v6.18+ saldo lookups
-    colPocetnoStanje = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POCETNO_STANJE)
-    colZavrsnoStanje = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ZAVRSNO_STANJE)
-    colUkupanDuguje = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_DUGUJE)
-    colUkupanPotrazuje = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_POTRAZUJE)
-    
-    colCount = GetTable(TBL_BANKA_IMPORT).ListColumns.count
+    Dim duplicateCount As Long
+
+    If IsEmpty(data) Then
+        Err.Raise ERR_BIM_SAVE_BASE + 1, SRC, "Nema data array za staging."
+    End If
+
+    If Not IsArray(data) Then
+        Err.Raise ERR_BIM_SAVE_BASE + 2, SRC, "Staging data nije array."
+    End If
+
+    If UBound(data, 1) < 1 Then
+        Err.Raise ERR_BIM_SAVE_BASE + 3, SRC, "Staging data nema redove."
+    End If
+
+    Set lo = GetTable(TBL_BANKA_IMPORT)
+    If lo Is Nothing Then
+        Err.Raise ERR_BIM_SAVE_BASE + 4, SRC, _
+                  "Ne postoji tabela: " & TBL_BANKA_IMPORT
+    End If
+
+    ' Fail-fast schema validation. Missing column must stop import immediately.
+    colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
+    colBrojDok = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
+    colDatumIzvoda = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_IZVODA, SRC)
+    colBrojRacuna = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)
+    colDatumTx = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE, SRC)
+    colPartner = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)
+    colPartnerKonto = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO, SRC)
+    colOpis = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OPIS, SRC)
+    colUplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+    colValuta = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_VALUTA, SRC)
+    colPozivNaBroj = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ, SRC)
+    colSvrha = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_SVRHA_PLACANJA, SRC)
+    colRef = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ, SRC)
+    colIzvorFajl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_IZVOR_FAJL, SRC)
+    colImportVreme = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_IMPORT_VREME, SRC)
+    colObradjeno = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+    colStornirano = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO, SRC)
+
+    colPocetnoStanje = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POCETNO_STANJE, SRC)
+    colZavrsnoStanje = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ZAVRSNO_STANJE, SRC)
+    colUkupanDuguje = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_DUGUJE, SRC)
+    colUkupanPotrazuje = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_POTRAZUJE, SRC)
+
+    colCount = lo.ListColumns.count
     
     For i = 1 To UBound(data, 1)
-        If Not IsDuplicateBankaImport( _
+        If IsDuplicateBankaImport( _
             CStr(data(i, 1)), _
             data(i, 4), _
             CDbl(NzBIM(data(i, 7), 0#)), _
@@ -316,11 +410,17 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
             CStr(data(i, 5)), _
             CStr(data(i, 12)) _
         ) Then
-            
+            duplicateCount = duplicateCount + 1
+        Else
             newID = GetNextID(TBL_BANKA_IMPORT, COL_BIM_ID, PREFIX_BANKA_IMPORT)
-            
+
+            If Len(Trim$(newID)) = 0 Then
+                Err.Raise ERR_BIM_SAVE_BASE + 5, SRC, _
+                          "GetNextID nije vratio BankaImportID. Row=" & CStr(i)
+            End If
+
             ReDim rowData(1 To colCount)
-            
+
             rowData(colID) = newID
             rowData(colBrojDok) = CStr(data(i, 1))
             rowData(colDatumIzvoda) = CStr(data(i, 2))
@@ -339,19 +439,50 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
             rowData(colImportVreme) = Now
             rowData(colObradjeno) = vbNullString
             rowData(colStornirano) = vbNullString
-            ' v6.18+ saldo metadata (copied to every row from same izvod)
+
+            ' v6.18+ saldo metadata copied to every row from same izvod.
             rowData(colPocetnoStanje) = CDbl(NzBIM(data(i, 14), 0#))
             rowData(colZavrsnoStanje) = CDbl(NzBIM(data(i, 15), 0#))
             rowData(colUkupanDuguje) = CDbl(NzBIM(data(i, 16), 0#))
             rowData(colUkupanPotrazuje) = CDbl(NzBIM(data(i, 17), 0#))
-            
+
             rowIdx = AppendRow(TBL_BANKA_IMPORT, rowData)
-            If rowIdx > 0 Then savedCount = savedCount + 1
+
+            If rowIdx <= 0 Then
+                Err.Raise ERR_BIM_SAVE_BASE + 6, SRC, _
+                          "AppendRow failed for " & TBL_BANKA_IMPORT & _
+                          ". Row=" & CStr(i) & _
+                          " BrojDokumenta=" & CStr(data(i, 1)) & _
+                          " Partner=" & CStr(data(i, 5)) & _
+                          " Referenz=" & CStr(data(i, 12))
+            End If
+
+            savedCount = savedCount + 1
         End If
     Next i
     
+    Debug.Print SRC & " completed. Saved=" & CStr(savedCount) & _
+                " Duplicates=" & CStr(duplicateCount)
+
     SaveBankaImportRows = savedCount
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
+
 
 Public Function IsDuplicateBankaImport(ByVal BrojDokumenta As String, _
                                        ByVal datumTransakcije As Variant, _
@@ -359,32 +490,45 @@ Public Function IsDuplicateBankaImport(ByVal BrojDokumenta As String, _
                                        ByVal isplata As Double, _
                                        ByVal partner As String, _
                                        ByVal bankaReferenz As String) As Boolean
+    Const SRC As String = "IsDuplicateBankaImport"
+
+    On Error GoTo EH
+
     Dim data As Variant
     Dim i As Long
-    
+
     Dim colBrojDok As Long
     Dim colDatumTx As Long
     Dim colUplata As Long
     Dim colIsplata As Long
     Dim colPartner As Long
     Dim colRef As Long
-    
+
     data = GetTableData(TBL_BANKA_IMPORT)
+
+    If IsEmpty(data) Then
+        IsDuplicateBankaImport = False
+        Exit Function
+    End If
+
     data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+
+    If IsEmpty(data) Then
+        IsDuplicateBankaImport = False
+        Exit Function
+    End If
     
-    If IsEmpty(data) Then Exit Function
-    
-    colBrojDok = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA)
-    colDatumTx = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE)
-    colUplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA)
-    colIsplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA)
-    colPartner = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER)
-    colRef = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ)
-    
+    colBrojDok = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
+    colDatumTx = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE, SRC)
+    colUplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+    colPartner = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)
+    colRef = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ, SRC)
+
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colBrojDok))) = Trim$(BrojDokumenta) Then
-            
-            If Trim$(bankaReferenz) <> "" Then
+
+            If Len(Trim$(bankaReferenz)) > 0 Then
                 If Trim$(CStr(data(i, colRef))) = Trim$(bankaReferenz) Then
                     IsDuplicateBankaImport = True
                     Exit Function
@@ -398,9 +542,27 @@ Public Function IsDuplicateBankaImport(ByVal BrojDokumenta As String, _
                     Exit Function
                 End If
             End If
-            
+
         End If
     Next i
+
+    IsDuplicateBankaImport = False
+    Exit Function
+    
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 Public Sub Test_SaldoIntegrityOnSamplePDF()
@@ -474,6 +636,53 @@ Private Function GetFileNameFromPath2(ByVal filePath As String) As String
 End Function
 
 'HELPERS
+
+Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
+                                          ByVal errSource As String, _
+                                          ByVal errDescription As String) As String
+    Dim s As String
+    s = UCase$(Trim$(errSource & " " & errDescription))
+
+    If InStr(1, s, "PDFTOTEXT", vbTextCompare) > 0 Or _
+       InStr(1, s, "PDF EXTRACT", vbTextCompare) > 0 Or _
+       InStr(1, s, "EXTRACTTEXTFROMPDF", vbTextCompare) > 0 Then
+        ClassifyBankaImportError = BIM_STATUS_EXTRACT_ERROR
+        Exit Function
+    End If
+
+    If InStr(1, s, "INTEGRITY FAIL", vbTextCompare) > 0 Or _
+       InStr(1, s, "PARSER MISMATCH", vbTextCompare) > 0 Or _
+       InStr(1, s, "PARSER COUNT MISMATCH", vbTextCompare) > 0 Or _
+       InStr(1, s, "STANJE BLOK", vbTextCompare) > 0 Then
+        ClassifyBankaImportError = BIM_STATUS_INTEGRITY_ERROR
+        Exit Function
+    End If
+
+    If InStr(1, s, "APPENDROW", vbTextCompare) > 0 Or _
+       InStr(1, s, "SAVEBANKAIMPORTROWS", vbTextCompare) > 0 Then
+        ClassifyBankaImportError = BIM_STATUS_APPEND_ERROR
+        Exit Function
+    End If
+
+    If InStr(1, s, "REQUIRECOLUMNINDEX", vbTextCompare) > 0 Or _
+       InStr(1, s, "KOLONA", vbTextCompare) > 0 Or _
+       InStr(1, s, "COLUMN", vbTextCompare) > 0 Or _
+       InStr(1, s, "SCHEMA", vbTextCompare) > 0 Then
+        ClassifyBankaImportError = BIM_STATUS_SCHEMA_ERROR
+        Exit Function
+    End If
+
+    If InStr(1, s, "PARSE", vbTextCompare) > 0 Or _
+       InStr(1, s, "PARSER", vbTextCompare) > 0 Or _
+       InStr(1, s, "BROJ IZVODA", vbTextCompare) > 0 Or _
+       InStr(1, s, "DATUM IZVODA", vbTextCompare) > 0 Or _
+       InStr(1, s, "BROJ RACUNA", vbTextCompare) > 0 Then
+        ClassifyBankaImportError = BIM_STATUS_PARSE_ERROR
+        Exit Function
+    End If
+
+    ClassifyBankaImportError = BIM_STATUS_UNKNOWN_ERROR
+End Function
 
 Private Function GetFileNameFromPath(ByVal filePath As String) As String
     Dim p As Long
