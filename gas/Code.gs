@@ -6,13 +6,16 @@
 // Setup:
 // 1. Erstelle neues Google Apps Script Projekt (script.google.com)
 // 2. Füge diesen Code als Code.gs ein
-// 3. Setze MASTER_FOLDER_ID auf die Google Drive Folder ID
+// 3. Setze Script Properties AGRIX_*_FOLDER_ID
 // 4. Deploy → Web App → Execute as: Me, Access: Anyone
 // 5. Kopiere die Web App URL in die PWA Config
 // ============================================================
 
 // --- CONFIG ---
-const MASTER_FOLDER_ID = '1EUNbItjRoqSPaW-ZDSn-JD1x1CuYSe26'; // Google Drive Ordner für alle OTK-Sheets
+// LEGACY ONLY.
+// Ne koristiti više za folder lookup-e.
+// Novi model koristi Script Properties kroz getAgriXFolder_(...).
+const MASTER_FOLDER_ID = '';
 
 const COLUMNS = [
   'ClientRecordID',
@@ -157,7 +160,6 @@ const FISKALNI_MAP_COLUMNS = [
   'FiskalniNaziv','ArtikalID','ArtikalNaziv','KooperantID','CreatedAt'
 ];
 
-const GEO_SPREADSHEET_ID = '1hOkvtcHhnGXc5FKv9gG6lRMvxxGK1rOEYo8EjZPJG24';
 const GEO_SHEET_PARCELE = 'Parcele';
 
 const MASTER_SYNC_CONTROL_SHEET = 'SyncControl';
@@ -168,23 +170,7 @@ const MASTER_SYNC_LOCK_MAX_AGE_MIN = 10;
 // ============================================================
 function logError(source, action, message, details, entityID) {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var files = folder.getFilesByName('ErrorLog');
-    var ss;
-    if (files.hasNext()) {
-      ss = SpreadsheetApp.open(files.next());
-    } else {
-      ss = SpreadsheetApp.create('ErrorLog');
-      var file = DriveApp.getFileById(ss.getId());
-      folder.addFile(file);
-      DriveApp.getRootFolder().removeFile(file);
-      var sheet = ss.getSheets()[0];
-      sheet.getRange(1, 1, 1, 7).setValues([[
-        'Timestamp', 'Source', 'Action', 'Message', 'Details', 'EntityID', 'Severity'
-      ]]);
-      sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
-      sheet.setFrozenRows(1);
-    }
+    var ss = getMonitoringErrorLogSpreadsheet_();
 
     var severity = 'error';
     if (String(message || '').indexOf('timeout') >= 0 || String(message || '').indexOf('Timeout') >= 0) {
@@ -208,10 +194,8 @@ function logError(source, action, message, details, entityID) {
 
 function purgeOldErrorLogs() {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var files = folder.getFilesByName('ErrorLog');
-    if (!files.hasNext()) return;
-    var sheet = SpreadsheetApp.open(files.next()).getSheets()[0];
+    var ss = getMonitoringErrorLogSpreadsheet_();
+    var sheet = ss.getSheets()[0];
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return;
 
@@ -524,19 +508,7 @@ function handlePublicRead(data) {
 
 function getMasterSyncState() {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var files = folder.getFilesByName('Stammdaten');
-
-    if (!files.hasNext()) {
-      return {
-        success: true,
-        locked: false,
-        missing: true,
-        message: ''
-      };
-    }
-
-    var ss = SpreadsheetApp.open(files.next());
+    var ss = getStammdatenSpreadsheet_();
     var sh = ss.getSheetByName(MASTER_SYNC_CONTROL_SHEET);
 
     if (!sh) {
@@ -969,8 +941,10 @@ const AUTH_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
 const AUTH_TOKEN_CACHE_TTL_SECONDS = 21600; // CacheService safe window; ScriptProperties ostaje canonical fallback
 
 function authenticateUser(username, pin) {
+  let normalizedUsername = '';
+
   try {
-    const normalizedUsername = normalizeUsername(username);
+    normalizedUsername = normalizeUsername(username);
     const pinValue = String(pin || '');
 
     if (!normalizedUsername || !pinValue) {
@@ -986,11 +960,7 @@ function authenticateUser(username, pin) {
       return { success: false, error: 'Previše pokušaja. Sačekajte 15 minuta.' };
     }
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('Stammdaten');
-    if (!files.hasNext()) return { success: false, error: 'System error' };
-    
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getStammdatenSpreadsheet_();
     const sheet = ss.getSheetByName('Users');
     if (!sheet) return { success: false, error: 'System error' };
     
@@ -1279,25 +1249,7 @@ function isTokenPayloadValid(payload) {
 
 function logLoginAttempt(username, entityID, success, message) {
   try {
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    let files = folder.getFilesByName('LoginLog');
-    let ss;
-
-    if (files.hasNext()) {
-      ss = SpreadsheetApp.open(files.next());
-    } else {
-      ss = SpreadsheetApp.create('LoginLog');
-      const file = DriveApp.getFileById(ss.getId());
-      folder.addFile(file);
-      DriveApp.getRootFolder().removeFile(file);
-
-      const sheet = ss.getSheets()[0];
-      sheet.getRange(1, 1, 1, 5).setValues([[
-        'Timestamp', 'Username', 'EntityID', 'Success', 'Message'
-      ]]);
-      sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
-      sheet.setFrozenRows(1);
-    }
+    const ss = getLoginLogSpreadsheet_();
 
     ss.getSheets()[0].appendRow([
       new Date().toISOString(),
@@ -1545,11 +1497,7 @@ function processRecord(record, otkupacID) {
 
 function uploadPdfToDrive(data) {
   try {
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    let subFolder;
-    const subFolders = folder.getFoldersByName('OtkupniListovi');
-    if (subFolders.hasNext()) { subFolder = subFolders.next(); }
-    else { subFolder = folder.createFolder('OtkupniListovi'); }
+    const subFolder = getAgriXFolder_('DOC_OTKUPNI_LISTOVI');
 
     const bytes = Utilities.base64Decode(data.pdfBase64);
     const blob = Utilities.newBlob(bytes, 'application/pdf', (data.fileName || 'OtkupniList') + '.pdf');
@@ -1764,8 +1712,8 @@ function getOtkupiForVozac(vozacID) {
       return { success: true, records: allRecords };
     }
 
-    // fallback
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    // fallback: scan operational sheets folder ako SheetRegistry nema OTK-* zapise
+    var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     var files = folder.getFiles();
     while (files.hasNext()) {
       var file = files.next();
@@ -1790,7 +1738,7 @@ function getOtkupiForVozac(vozacID) {
 function getZbirneForVozac(vozacID) {
   try {
     if (!vozacID) return { success: false, error: 'vozacID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName('VOZ-' + vozacID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
@@ -1858,7 +1806,7 @@ function getAgromereForKooperant(kooperantID) {
   try {
     if (!kooperantID) return { success: false, error: 'kooperantID required' };
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName('AGRO-' + kooperantID);
     if (!files.hasNext()) return { success: true, records: [] };
     
@@ -2240,7 +2188,7 @@ function processOpremaRecord(record, kooperantID) {
 function getTretmaniForKooperant(kooperantID) {
   try {
     if (!kooperantID) return { success: false, error: 'kooperantID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName('TRETMAN-' + kooperantID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
@@ -2253,7 +2201,7 @@ function getTretmaniForKooperant(kooperantID) {
 function getOpremaForKooperant(kooperantID) {
   try {
     if (!kooperantID) return { success: false, error: 'kooperantID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName('OPREMA-' + kooperantID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
@@ -2276,7 +2224,7 @@ function getTroskoviForKooperant(kooperantID) {
     }
 
     const sheetName = getTroskoviSheetName(normalizedKooperantID);
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName(sheetName);
 
     if (!files.hasNext()) {
@@ -2467,20 +2415,7 @@ function getTroskoviSheetName(kooperantID) {
 
 function getOrCreateTroskoviSheet(kooperantID) {
   const sheetName = getTroskoviSheetName(kooperantID);
-  const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-  const files = folder.getFilesByName(sheetName);
-
-  let ss;
-
-  if (files.hasNext()) {
-    ss = SpreadsheetApp.open(files.next());
-  } else {
-    ss = SpreadsheetApp.create(sheetName);
-
-    const file = DriveApp.getFileById(ss.getId());
-    folder.addFile(file);
-    DriveApp.getRootFolder().removeFile(file);
-  }
+  const ss = getOperationalSpreadsheet_(sheetName, TROSKOVI_COLUMNS);
 
   const sheet = ss.getSheets()[0];
 
@@ -2546,7 +2481,7 @@ function getOtkupiForOtkupac(otkupacID) {
   try {
     if (!otkupacID) return { success: false, error: 'otkupacID required' };
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName('OTK-' + otkupacID);
     if (!files.hasNext()) return { success: true, records: [] };
     
@@ -2562,11 +2497,9 @@ function getKarticaForKooperant(kooperantID) {
   try {
     if (!kooperantID) return { success: false, error: 'kooperantID required' };
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('Kartice');
-    if (!files.hasNext()) return { success: true, records: [] };
-    
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getKarticeSpreadsheet_();
+    if (!ss) return { success: true, records: [] };
+
     const sheet = ss.getSheets()[0];
     const data = sheet.getDataRange().getValues();
     if (data.length < 2) return { success: true, records: [] };
@@ -2596,11 +2529,7 @@ function getKarticaForKooperant(kooperantID) {
 
 function getStammdaten() {
     try {
-        var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        var files = folder.getFilesByName('Stammdaten');
-        if (!files.hasNext()) return { success: true, data: {}, message: 'Stammdaten not found' };
-
-        var ss = SpreadsheetApp.open(files.next());
+        var ss = getStammdatenSpreadsheet_();
         var result = {};
 
         var tabs = ['Kooperanti', 'Kulture', 'Config', 'Parcele', 'Stanice', 'Kupci', 'Vozaci', 'Artikli', 'Oprema', 'MagacinKoop'];
@@ -2637,31 +2566,23 @@ function getStammdaten() {
 // ============================================================
 
 function getOrCreateSheet(sheetName, columns) {
-  const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-  const files = folder.getFilesByName(sheetName);
-  
-  if (files.hasNext()) return SpreadsheetApp.open(files.next());
-  
-  const ss = SpreadsheetApp.create(sheetName);
+  const ss = getOperationalSpreadsheet_(sheetName, columns);
   const sheet = ss.getSheets()[0];
   sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
   sheet.getRange(1, 1, 1, columns.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  
-  const file = DriveApp.getFileById(ss.getId());
-  folder.addFile(file);
-  DriveApp.getRootFolder().removeFile(file);
 
   // registruj novi sheet u registry
   try {
-    var stamFiles = folder.getFilesByName('Stammdaten');
-    if (stamFiles.hasNext()) {
-      var stamSs = SpreadsheetApp.open(stamFiles.next());
-      var regSheet = stamSs.getSheetByName('SheetRegistry');
-      if (regSheet) {
-        regSheet.appendRow([sheetName, ss.getId(), new Date().toISOString()]);
-      }
+    var stamSs = getStammdatenSpreadsheet_();
+    var regSheet = stamSs.getSheetByName('SheetRegistry');
+    if (!regSheet) {
+      regSheet = stamSs.insertSheet('SheetRegistry');
+      regSheet.getRange(1, 1, 1, 3).setValues([['SheetName', 'FileID', 'UpdatedAt']]);
+      regSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+      regSheet.setFrozenRows(1);
     }
+    regSheet.appendRow([sheetName, ss.getId(), new Date().toISOString()]);
   } catch (regErr) {}
 
   return ss;
@@ -2758,7 +2679,7 @@ function isPlainTextDateLikeColumn(columnName) {
 function getOtkupiByStanica(stanicaID) {
   try {
     if (!stanicaID) return { success: false, error: 'stanicaID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     const files = folder.getFilesByName('OTK-' + stanicaID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
@@ -2770,18 +2691,13 @@ function getOtkupiByStanica(stanicaID) {
 
 function getMgmtReport(tabName) {
   try {
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    
     let sheet = null;
-    let files = folder.getFilesByName('MgmtReports');
-    if (files.hasNext()) {
-      sheet = SpreadsheetApp.open(files.next()).getSheetByName(tabName);
-    }
+
+    let mgmtSs = getMgmtReportsSpreadsheet_();
+    if (mgmtSs) sheet = mgmtSs.getSheetByName(tabName);
+
     if (!sheet) {
-      files = folder.getFilesByName('Stammdaten');
-      if (files.hasNext()) {
-        sheet = SpreadsheetApp.open(files.next()).getSheetByName(tabName);
-      }
+      sheet = getStammdatenSpreadsheet_().getSheetByName(tabName);
     }
     if (!sheet) return { success: true, records: [] };
     return { success: true, records: sheetToArray(sheet) };
@@ -2795,28 +2711,21 @@ function getSaldoKupci() { return getMgmtReport('SaldoKupci'); }
 
 function getKarticaAll() {
   try {
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('Kartice');
-    if (!files.hasNext()) return { records: [] };
-    return { records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
+    const ss = getKarticeSpreadsheet_();
+    if (!ss) return { records: [] };
+    return { records: sheetToArray(ss.getSheets()[0]) };
   } catch (err) { return { records: [] }; }
 }
 
 function getFaktureByKupac(kupacID) {
   try {
     if (!kupacID) return { success: false, error: 'kupacID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
     
     let sheet = null;
-    let files = folder.getFilesByName('MgmtReports');
-    if (files.hasNext()) {
-      sheet = SpreadsheetApp.open(files.next()).getSheetByName('Fakture');
-    }
+    let mgmtSs = getMgmtReportsSpreadsheet_();
+    if (mgmtSs) sheet = mgmtSs.getSheetByName('Fakture');
     if (!sheet) {
-      files = folder.getFilesByName('Stammdaten');
-      if (files.hasNext()) {
-        sheet = SpreadsheetApp.open(files.next()).getSheetByName('Fakture');
-      }
+      sheet = getStammdatenSpreadsheet_().getSheetByName('Fakture');
     }
     if (!sheet) return { success: true, records: [] };
     
@@ -2834,18 +2743,12 @@ function getFaktureByKupac(kupacID) {
 function getFakturaStavke(fakturaID) {
   try {
     if (!fakturaID) return { success: false, error: 'fakturaID required' };
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
     
     let sheet = null;
-    let files = folder.getFilesByName('MgmtReports');
-    if (files.hasNext()) {
-      sheet = SpreadsheetApp.open(files.next()).getSheetByName('FakturaStavke');
-    }
+    let mgmtSs = getMgmtReportsSpreadsheet_();
+    if (mgmtSs) sheet = mgmtSs.getSheetByName('FakturaStavke');
     if (!sheet) {
-      files = folder.getFilesByName('Stammdaten');
-      if (files.hasNext()) {
-        sheet = SpreadsheetApp.open(files.next()).getSheetByName('FakturaStavke');
-      }
+      sheet = getStammdatenSpreadsheet_().getSheetByName('FakturaStavke');
     }
     if (!sheet) return { success: true, records: [] };
     
@@ -2880,7 +2783,7 @@ function getAllOtkupiSheets() {
     }
 
     // fallback: stari folder scan ako registry prazan
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+    var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
     var files = folder.getFiles();
     while (files.hasNext()) {
       var file = files.next();
@@ -2897,10 +2800,8 @@ function getAllOtkupiSheets() {
 
 function saveIzdavanje(data) {
   try {
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    let files = folder.getFilesByName('MgmtReports');
-    if (!files.hasNext()) return { success: false, error: 'MgmtReports not found' };
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: false, error: 'MgmtReports not found' };
 
     let sheet = ss.getSheetByName('Izdavanje');
     if (!sheet) {
@@ -2944,7 +2845,7 @@ function getParcelGeo(parcelaId) {
     parcelaId = String(parcelaId || '').trim();
     if (!parcelaId) return { success: false, error: 'Missing parcelaId' };
 
-    const ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+    const ss = getStammdatenSpreadsheet_();
     const sh = ss.getSheetByName(GEO_SHEET_PARCELE);
     if (!sh) return { success: false, error: 'Sheet not found' };
 
@@ -2994,7 +2895,7 @@ function saveParcelPolygon(body) {
     if (!parcelaId) return { success: false, error: 'Missing parcelaId' };
     if (!polygonGeoJSON) return { success: false, error: 'Missing polygonGeoJSON' };
 
-    const ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+    const ss = getStammdatenSpreadsheet_();
     const sh = ss.getSheetByName(GEO_SHEET_PARCELE);
     if (!sh) return { success: false, error: 'Sheet not found' };
 
@@ -3128,7 +3029,7 @@ function getParcelMeteo(parcelaId) {
     }
 
     // 2) fallback na live API
-    const ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+    const ss = getStammdatenSpreadsheet_();
     const sh = ss.getSheetByName(GEO_SHEET_PARCELE);
     if (!sh) return { success: false, error: 'Geo sheet not found' };
 
@@ -3423,7 +3324,7 @@ function getParcelMeteoLatest(parcelaId) {
     parcelaId = String(parcelaId || '').trim();
     if (!parcelaId) return { success: false, error: 'Missing parcelaId' };
 
-    const ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+    const ss = getStammdatenSpreadsheet_();
     const sheet = ss.getSheetByName('MeteoLatest');
     if (!sheet) return { success: false, error: 'No MeteoLatest sheet' };
 
@@ -3476,7 +3377,7 @@ function getParcelMeteoLatest(parcelaId) {
 
 function getAllMeteoLatest() {
   try {
-    const ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+    const ss = getStammdatenSpreadsheet_();
     const sheet = ss.getSheetByName('MeteoLatest');
     if (!sheet) return { success: true, records: [] };
 
@@ -3532,7 +3433,7 @@ function getAllMeteoLatest() {
 
 function scheduledMeteoFetch() {
     try {
-        var ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+        var ss = getStammdatenSpreadsheet_();
         var parcelSheet = ss.getSheetByName(GEO_SHEET_PARCELE);
         if (!parcelSheet) { Logger.log('No Parcele sheet'); return; }
 
@@ -3969,11 +3870,9 @@ function getKooperantProizvodnja(kooperantID) {
     try {
         if (!kooperantID) return { success: false, error: 'kooperantID required' };
 
-        var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        var files = folder.getFilesByName('Kartice');
-        if (!files.hasNext()) return { success: true, records: [] };
+        var ss = getKarticeSpreadsheet_();
+        if (!ss) return { success: true, records: [] };
 
-        var ss = SpreadsheetApp.open(files.next());
         var sheet = ss.getSheets()[0];
         if (!sheet) return { success: true, records: [] };
 
@@ -4037,11 +3936,8 @@ function parseOpisOtkupa(opis) {
 function getWarRoomDemand() {
   try {
     const today = Utilities.formatDate(new Date(), 'Europe/Belgrade', 'yyyy-MM-dd');
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('MgmtReports');
-    if (!files.hasNext()) return { success: true, records: [] };
-    
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: true, records: [] };
     const sheet = ss.getSheetByName('WarRoomDemand');
     if (!sheet) return { success: true, records: [] };
     
@@ -4072,14 +3968,8 @@ function getWarRoomDemand() {
 
 function saveWarRoomDemand(data) {
   try {
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    let files = folder.getFilesByName('MgmtReports');
-    let ss;
-    if (files.hasNext()) {
-      ss = SpreadsheetApp.open(files.next());
-    } else {
-      return { success: false, error: 'MgmtReports not found' };
-    }
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: false, error: 'MgmtReports not found' };
     
     let sheet = ss.getSheetByName('WarRoomDemand');
     if (!sheet) {
@@ -4115,11 +4005,8 @@ function removeWarRoomDemand(data) {
     const demandID = String(data.demandID || '').trim();
     if (!demandID) return { success: false, error: 'Missing demandID' };
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('MgmtReports');
-    if (!files.hasNext()) return { success: false, error: 'Not found' };
-    
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: false, error: 'Not found' };
     const sheet = ss.getSheetByName('WarRoomDemand');
     if (!sheet) return { success: false, error: 'Sheet not found' };
     
@@ -4143,11 +4030,8 @@ function updateDemandPrimljeno(data) {
     const primljeno = parseInt(data.primljeno) || 0;
     if (!demandID) return { success: false, error: 'Missing demandID' };
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('MgmtReports');
-    if (!files.hasNext()) return { success: false, error: 'Not found' };
-    
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: false, error: 'Not found' };
     const sheet = ss.getSheetByName('WarRoomDemand');
     if (!sheet) return { success: false, error: 'Sheet not found' };
     
@@ -4175,11 +4059,7 @@ function updateKamionStatus(data) {
     const ruta = String(data.ruta || '');
     if (!vozacID) return { success: false, error: 'Missing vozacID' };
     
-    const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    const files = folder.getFilesByName('Stammdaten');
-    if (!files.hasNext()) return { success: false, error: 'Not found' };
-    
-    const ss = SpreadsheetApp.open(files.next());
+    const ss = getStammdatenSpreadsheet_();
     let sheet = ss.getSheetByName('KamionStatus');
     if (!sheet) {
       sheet = ss.insertSheet('KamionStatus');
@@ -4218,11 +4098,8 @@ function fmtDateGS(val) {
 function getDispecer() {
     try {
         const today = Utilities.formatDate(new Date(), 'Europe/Belgrade', 'yyyy-MM-dd');
-        const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        const files = folder.getFilesByName('MgmtReports');
-        if (!files.hasNext()) return { success: true, demand: [], plans: [] };
- 
-        const ss = SpreadsheetApp.open(files.next());
+        const ss = getMgmtReportsSpreadsheet_();
+        if (!ss) return { success: true, demand: [], plans: [] };
  
         // Demand (isti kao getWarRoomDemand)
         const demand = [];
@@ -4267,10 +4144,8 @@ function getDispecer() {
  
 function saveDispecer(data) {
     try {
-        const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        const files = folder.getFilesByName('MgmtReports');
-        if (!files.hasNext()) return { success: false, error: 'MgmtReports not found' };
-        const ss = SpreadsheetApp.open(files.next());
+        const ss = getMgmtReportsSpreadsheet_();
+        if (!ss) return { success: false, error: 'MgmtReports not found' };
  
         let sheet = ss.getSheetByName('DispecerPlan');
         if (!sheet) {
@@ -4307,11 +4182,10 @@ function updateDispecer(data) {
         const newStatus = String(data.status || '');
         if (!planID) return { success: false, error: 'Missing planID' };
  
-        const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        const files = folder.getFilesByName('MgmtReports');
-        if (!files.hasNext()) return { success: false, error: 'Not found' };
- 
-        const sheet = SpreadsheetApp.open(files.next()).getSheetByName('DispecerPlan');
+        const ss = getMgmtReportsSpreadsheet_();
+        if (!ss) return { success: false, error: 'Not found' };
+
+        const sheet = ss.getSheetByName('DispecerPlan');
         if (!sheet) return { success: false, error: 'Sheet not found' };
  
         const vals = sheet.getDataRange().getValues();
@@ -4338,11 +4212,10 @@ function removeDispecer(data) {
         const planID = String(data.planID || '').trim();
         if (!planID) return { success: false, error: 'Missing planID' };
  
-        const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        const files = folder.getFilesByName('MgmtReports');
-        if (!files.hasNext()) return { success: false, error: 'Not found' };
- 
-        const sheet = SpreadsheetApp.open(files.next()).getSheetByName('DispecerPlan');
+        const ss = getMgmtReportsSpreadsheet_();
+        if (!ss) return { success: false, error: 'Not found' };
+
+        const sheet = ss.getSheetByName('DispecerPlan');
         if (!sheet) return { success: false, error: 'Sheet not found' };
  
         const vals = sheet.getDataRange().getValues();
@@ -4361,10 +4234,7 @@ function removeDispecer(data) {
 
 function getKamionStatus() {
     try {
-        const folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        const files = folder.getFilesByName('Stammdaten');
-        if (!files.hasNext()) return { success: true, records: [] };
-        const ss = SpreadsheetApp.open(files.next());
+        const ss = getStammdatenSpreadsheet_();
         const sheet = ss.getSheetByName('KamionStatus');
         if (!sheet) return { success: true, records: [] };
         const data = sheet.getDataRange().getValues();
@@ -4441,7 +4311,7 @@ function parseFiskalni(data) {
         if (!verificationUrl) return { success: false, error: 'Missing URL' };
 
         // Duplikat check
-        var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+        var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
         var fisFiles = folder.getFilesByName('FISKALNI-' + kooperantID);
         if (fisFiles.hasNext()) {
             var fisSheet = SpreadsheetApp.open(fisFiles.next()).getSheets()[0];
@@ -4627,10 +4497,7 @@ function parseSerbNumberOtkup(s) {
 
 function loadFiskalniMapiranje() {
     try {
-        var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        var files = folder.getFilesByName('Stammdaten');
-        if (!files.hasNext()) return [];
-        var ss = SpreadsheetApp.open(files.next());
+        var ss = getStammdatenSpreadsheet_();
         var sheet = ss.getSheetByName('FiskalniMapiranje');
         if (!sheet) return [];
         return sheetToArray(sheet);
@@ -4639,10 +4506,7 @@ function loadFiskalniMapiranje() {
 
 function loadArtikliForMatch() {
     try {
-        var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-        var files = folder.getFilesByName('Stammdaten');
-        if (!files.hasNext()) return [];
-        var ss = SpreadsheetApp.open(files.next());
+        var ss = getStammdatenSpreadsheet_();
         var sheet = ss.getSheetByName('Artikli');
         if (!sheet) return [];
         return sheetToArray(sheet);
@@ -4739,10 +4603,7 @@ function saveFiskalni(data) {
 
 function saveFiskalniMapiranje(data) {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var files = folder.getFilesByName('Stammdaten');
-    if (!files.hasNext()) return { success: false, error: 'Stammdaten not found' };
-    var ss = SpreadsheetApp.open(files.next());
+    var ss = getStammdatenSpreadsheet_();
     var sheet = ss.getSheetByName('FiskalniMapiranje');
     if (!sheet) {
       sheet = ss.insertSheet('FiskalniMapiranje');
@@ -4776,10 +4637,7 @@ function saveFiskalniMapiranje(data) {
 
 function createArtikal(data) {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var files = folder.getFilesByName('Stammdaten');
-    if (!files.hasNext()) return { success: false, error: 'Stammdaten not found' };
-    var ss = SpreadsheetApp.open(files.next());
+    var ss = getStammdatenSpreadsheet_();
     var sheet = ss.getSheetByName('Artikli');
     if (!sheet) return { success: false, error: 'Artikli sheet not found' };
 
@@ -5011,10 +4869,7 @@ function buildBatchSyncResponse(results) {
 
 function getSheetRegistry() {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var files = folder.getFilesByName('Stammdaten');
-    if (!files.hasNext()) return {};
-    var ss = SpreadsheetApp.open(files.next());
+    var ss = getStammdatenSpreadsheet_();
     var sheet = ss.getSheetByName('SheetRegistry');
     if (!sheet) return {};
     var data = sheet.getDataRange().getValues();
@@ -5031,10 +4886,7 @@ function getSheetRegistry() {
 
 function rebuildSheetRegistry() {
   try {
-    var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
-    var stamFiles = folder.getFilesByName('Stammdaten');
-    if (!stamFiles.hasNext()) return { success: false, error: 'Stammdaten not found' };
-    var ss = SpreadsheetApp.open(stamFiles.next());
+    var ss = getStammdatenSpreadsheet_();
 
     var sheet = ss.getSheetByName('SheetRegistry');
     if (!sheet) {
@@ -5049,20 +4901,27 @@ function rebuildSheetRegistry() {
       sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
     }
 
-    var files = folder.getFiles();
+    var foldersToScan = [
+      getAgriXFolder_('SHEETS_OPERATIONAL'),
+      getAgriXFolder_('SHEETS_REPORTS')
+    ];
+
     var rows = [];
     var now = new Date().toISOString();
-    while (files.hasNext()) {
-      var file = files.next();
-      var name = file.getName();
-      if (name.startsWith('OTK-') || name.startsWith('VOZ-') ||
-          name.startsWith('TRETMAN-') || name.startsWith('OPREMA-') ||
-          name.startsWith('TROSKOVI-') || name.startsWith('AGRO-') ||
-          name.startsWith('FISKALNI-') ||
-          name === 'Kartice' || name === 'MgmtReports' || name === 'LoginLog') {
-        rows.push([name, file.getId(), now]);
+    foldersToScan.forEach(function(folder) {
+      var files = folder.getFiles();
+      while (files.hasNext()) {
+        var file = files.next();
+        var name = file.getName();
+        if (name.startsWith('OTK-') || name.startsWith('VOZ-') ||
+            name.startsWith('TRETMAN-') || name.startsWith('OPREMA-') ||
+            name.startsWith('TROSKOVI-') || name.startsWith('AGRO-') ||
+            name.startsWith('FISKALNI-') ||
+            name === 'Kartice' || name === 'MgmtReports') {
+          rows.push([name, file.getId(), now]);
+        }
       }
-    }
+    });
 
     if (rows.length > 0) {
       sheet.getRange(2, 1, rows.length, 3).setValues(rows);
@@ -5084,7 +4943,7 @@ function openSheetByRegistry(sheetName, registry) {
     }
   }
   // fallback: klasičan folder lookup
-  var folder = DriveApp.getFolderById(MASTER_FOLDER_ID);
+  var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
   var files = folder.getFilesByName(sheetName);
   if (!files.hasNext()) return null;
   return SpreadsheetApp.open(files.next());
@@ -5280,7 +5139,7 @@ function runGasRouteHealthCheck() {
 }
 
 function quickMeteoDebug() {
-    const ss = SpreadsheetApp.openById(GEO_SPREADSHEET_ID);
+    const ss = getStammdatenSpreadsheet_();
     const sh = ss.getSheetByName(GEO_SHEET_PARCELE);
     const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
     const idx = geoIndexMap(headers);
@@ -5481,4 +5340,15 @@ function runGasSmokeSuite() {
     failed: failed,
     results: results
   };
+}
+
+
+function debugDoGetPing() {
+  const res = doGet({
+    parameter: {
+      action: 'ping'
+    }
+  });
+
+  Logger.log(res.getContent());
 }
