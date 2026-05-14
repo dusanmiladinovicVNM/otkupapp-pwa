@@ -250,6 +250,9 @@ Private Sub LayoutSidebarButtons()
     btnBanka.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
     
+    btnBankaIsplate.Move leftPos, btnTop, btnW, btnH
+    btnTop = btnTop + btnH + gap
+    
     btnSyncPWA.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
 
@@ -371,7 +374,10 @@ Private Sub SetupButtons()
     StyleNavButton btnInvoicing, "Fakturisanje", topPos
     topPos = topPos + 42
     
-    StyleNavButton btnBanka, "Banka import i mapiranje", topPos
+    StyleNavButton btnBanka, "Banka uvoz izvoda", topPos
+    topPos = topPos + 42
+    
+    StyleNavButton btnBankaIsplate, "Banka platni nalozi", topPos
     topPos = topPos + 42
     
     StyleNavButton btnSyncPWA, "Sinhronizuj PWA", topPos
@@ -398,6 +404,7 @@ Private Sub SetupButtons()
     navButtons.Add btnReports
     navButtons.Add btnInvoicing
     navButtons.Add btnBanka
+    navButtons.Add btnBankaIsplate
     navButtons.Add btnSyncPWA
     navButtons.Add btnMargin
     navButtons.Add btnTrace
@@ -627,6 +634,10 @@ EH:
     Resume CleanExit
 End Sub
 
+Private Sub btnbankaisplate_Click()
+    OpenContentForm frmBankaExportPregled, btnBankaIsplate, "Banke platni nalozi"
+End Sub
+
 Private Sub btnSyncPWA_Click()
     On Error GoTo EH
 
@@ -804,6 +815,11 @@ End Sub
 Private Sub btnBanka_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetHover
     SetHover btnBanka, True
+End Sub
+
+Private Sub btnBankaIsplate_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetHover
+    SetHover btnBankaIsplate, True
 End Sub
 
 Private Sub btnSyncPWA_MouseMove(ByVal Button As Integer, _
@@ -1222,6 +1238,7 @@ EH:
     LogErr "frmOtkupAPP.CountDocsForDate"
     CountDocsForDate = 0
 End Function
+
 ' ============================================================
 ' v6.11 UI: BADGE brojac za neobradene Banka redove
 ' ============================================================
