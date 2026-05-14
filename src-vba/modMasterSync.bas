@@ -25,6 +25,9 @@ Private Const SYNC_STATUS_MASTER As String = "Synced>Master"
 Private Const SYNC_STATUS_ERROR As String = "SyncError"
 Private Const SYNC_STATUS_DUPLICATE As String = "Duplicate"
 
+Private Const ERR_MASTER_SYNC_GUARD_BASE As Long = vbObjectError + 3900
+Private Const MASTER_SYNC_CLIENT_RECORD_ID_COL As String = "ClientRecordID"
+
 
 ' Google Sheet Spaltenindizes (0-based, Header in Row 1)
 Private Const GS_CLIENT_RECORD_ID As Long = 1    ' A
@@ -467,18 +470,18 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     Dim colOtpID As Long, colKlasa As Long, colVrsta As Long, colSorta As Long
     Dim colKol As Long, colCena As Long, colTipAmb As Long, colKolAmb As Long
     
-    colID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    colSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    colDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    colVoz = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
-    colOtpID = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    colKlasa = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    colSorta = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
-    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    colTipAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
-    colKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "AutoCreateOtpremniceFromPWA")
+    colSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, "AutoCreateOtpremniceFromPWA")
+    colDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "AutoCreateOtpremniceFromPWA")
+    colVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, "AutoCreateOtpremniceFromPWA")
+    colOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, "AutoCreateOtpremniceFromPWA")
+    colKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, "AutoCreateOtpremniceFromPWA")
+    colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "AutoCreateOtpremniceFromPWA")
+    colSorta = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, "AutoCreateOtpremniceFromPWA")
+    colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "AutoCreateOtpremniceFromPWA")
+    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "AutoCreateOtpremniceFromPWA")
+    colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, "AutoCreateOtpremniceFromPWA")
+    colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "AutoCreateOtpremniceFromPWA")
     
     ' Sammle unverknüpfte Otkupi MIT VozacID ? gruppiere nach Key
     ' Key = StanicaID|Datum|VozacID|Klasa
@@ -520,8 +523,8 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     otpAll = GetTableData(TBL_OTPREMNICA)
     If Not IsEmpty(otpAll) Then otpAll = ExcludeStornirano(otpAll, TBL_OTPREMNICA)
     
-    Dim colOtpSt As Long: colOtpSt = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
-    Dim colOtpDat As Long: colOtpDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    Dim colOtpSt As Long: colOtpSt = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, "AutoCreateOtpremniceFromPWA")
+    Dim colOtpDat As Long: colOtpDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, "AutoCreateOtpremniceFromPWA")
     
     ' Dict: "StanicaID|Datum" ? count
     Dim seqDict As Object
@@ -555,6 +558,10 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         Dim r As Long
         For r = 1 To grpRows.count
             Dim ri As Long: ri = grpRows(r)
+
+            RequireSingleMasterSyncRow TBL_OTKUP, COL_OTK_ID, CStr(data(ri, colID)), _
+                               "AutoCreateOtpremniceFromPWA"
+
             totalKol = totalKol + CDbl(Nz(data(ri, colKol), 0))
             totalAmb = totalAmb + CLng(Nz(data(ri, colKolAmb), 0))
         Next r
@@ -599,19 +606,25 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
             parts(3) _
         )
         
-        If newOtpID <> "" Then
-            ' Alle Otkupi dieser Gruppe verknüpfen
-            For r = 1 To grpRows.count
-                ri = grpRows(r)
-                Dim otkupID As String: otkupID = CStr(data(ri, colID))
-                Dim otkRows As Collection
-                Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-                If otkRows.count > 0 Then
-                    UpdateCell TBL_OTKUP, otkRows(1), COL_OTK_OTPREMNICA_ID, newOtpID
-                End If
-            Next r
-            created = created + 1
+        If Len(Trim$(newOtpID)) = 0 Then
+            Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 20, "AutoCreateOtpremniceFromPWA", _
+                    "SaveOtpremnica_TX nije vratio OtpremnicaID. BrojOtpremnice=" & brojOtp
         End If
+
+        RequireSingleMasterSyncRow TBL_OTPREMNICA, COL_OTP_ID, newOtpID, _
+                           "AutoCreateOtpremniceFromPWA"
+
+        For r = 1 To grpRows.count
+            ri = grpRows(r)
+
+            Dim otkupID As String
+            otkupID = CStr(data(ri, colID))
+
+            LinkOtkupToOtpremnicaStrict otkupID, newOtpID, _
+                                        "AutoCreateOtpremniceFromPWA"
+        Next r
+
+        created = created + 1
     Next k
     
     AutoCreateOtpremniceFromPWA = created
@@ -1395,6 +1408,107 @@ Private Function Nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "")
     End If
 End Function
 
+Private Function RequireSingleMasterSyncRow(ByVal tblName As String, _
+                                            ByVal idColumn As String, _
+                                            ByVal idValue As String, _
+                                            ByVal sourceName As String) As Long
+    If Len(Trim$(tblName)) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 1, sourceName, _
+                  "TableName je obavezan."
+    End If
+
+    If Len(Trim$(idColumn)) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 2, sourceName, _
+                  "IdColumn je obavezan."
+    End If
+
+    If Len(Trim$(idValue)) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 3, sourceName, _
+                  "ID vrednost je obavezna. Table=" & tblName & _
+                  " Column=" & idColumn
+    End If
+
+    RequireColumnIndex tblName, idColumn, sourceName
+
+    Dim rows As Collection
+    Set rows = FindRows(tblName, idColumn, idValue)
+
+    If rows Is Nothing Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 4, sourceName, _
+                  "FindRows je vratio Nothing. Table=" & tblName & _
+                  " Column=" & idColumn & _
+                  " ID=" & idValue
+    End If
+
+    If rows.count = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 5, sourceName, _
+                  "Missing document link. Table=" & tblName & _
+                  " Column=" & idColumn & _
+                  " ID=" & idValue
+    End If
+
+    If rows.count > 1 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 6, sourceName, _
+                  "Duplicate document key. Table=" & tblName & _
+                  " Column=" & idColumn & _
+                  " ID=" & idValue & _
+                  " Count=" & CStr(rows.count)
+    End If
+
+    RequireSingleMasterSyncRow = CLng(rows(1))
+End Function
+
+Private Sub LinkOtkupToOtpremnicaStrict(ByVal otkupID As String, _
+                                        ByVal otpremnicaID As String, _
+                                        ByVal sourceName As String)
+    Dim rowOtkup As Long
+    Dim rowOtpremnica As Long
+
+    rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, COL_OTK_ID, otkupID, sourceName)
+    rowOtpremnica = RequireSingleMasterSyncRow(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, sourceName)
+
+    RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_OTPREMNICA_ID, _
+                      otpremnicaID, sourceName
+End Sub
+
+Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
+                                             ByVal brojZbirne As String, _
+                                             ByVal sourceName As String)
+    If Len(Trim$(brojZbirne)) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 50, sourceName, _
+                  "BrojZbirne je obavezan za link Otpremnica -> Zbirna. OtpremnicaID=" & otpremnicaID
+    End If
+
+    Dim rowOtpremnica As Long
+    rowOtpremnica = RequireSingleMasterSyncRow(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, sourceName)
+
+    RequireUpdateCell TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
+                      brojZbirne, sourceName
+End Sub
+
+Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
+                                          ByVal sourceName As String) As String
+    Dim rowZbirna As Long
+    rowZbirna = RequireSingleMasterSyncRow(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, sourceName)
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+
+    If IsEmpty(data) Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 40, sourceName, _
+                  "Tabela je prazna: " & TBL_ZBIRNA
+    End If
+
+    Dim colBroj As Long
+    colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, sourceName)
+
+    GetBrojZbirneForIDStrict = Trim$(CStr(Nz(data(rowZbirna, colBroj), "")))
+
+    If Len(GetBrojZbirneForIDStrict) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 41, sourceName, _
+                  "BrojZbirne je prazan za ZbirnaID=" & zbirnaID
+    End If
+End Function
 ' ============================================================
 ' modMasterSync — ZBIRNA IMPORT (dodati u postojeci modMasterSync)
 ' ============================================================
@@ -1635,35 +1749,53 @@ EH:
 End Function
 
 Public Sub ImportZbirneFromPWA_TX()
-    Dim tx As clsTransaction
+    Const SRC As String = "ImportZbirneFromPWA_TX"
+
     Dim ok As Boolean
-    
+
     On Error GoTo EH
-    
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-    
+
+    ' IMPORTANT:
+    ' Do NOT wrap the whole VOZ batch in one outer clsTransaction.
+    '
+    ' Reason:
+    ' - ImportOneVOZSheet writes Google status updates after local row processing.
+    ' - Google writeback cannot be rolled back by clsTransaction.
+    ' - Row-level atomicity is already handled by ImportVOZRow_RowTX.
+    '
+    ' Safe model:
+    ' - each VOZ row commits/rolls back through ImportVOZRow_RowTX
+    ' - successful rows may be written back as Synced>Master
+    ' - failed rows are written back as SyncError
+    ' - the full import can still return False / partial if any errors occurred
     ok = ImportZbirneFromPWA_Core(False)
-    
+
     If Not ok Then
-        tx.RollbackTx
-        MsgBox "Uvoz zbirnih nije potvrden. Promene su vracene zbog greške u sync/import toku.", _
-               vbCritical, APP_NAME
+        MsgBox "Uvoz zbirnih završen sa greškama ili fatal sync problemom." & vbCrLf & _
+               "Uspešni redovi koji su potvrdeni kroz row-level TX ostaju upisani." & vbCrLf & _
+               "Neuspešni redovi su oznaceni kao greška gde je writeback uspeo." & vbCrLf & _
+               "Proveri log.", _
+               vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    tx.CommitTx
-    
+
     MsgBox "Uvoz zbirnih završen i potvrden.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
-    LogErr "ImportZbirneFromPWA_TX"
-    If Not tx Is Nothing Then tx.RollbackTx
-    MsgBox "Greska pri uvozu zbirnih, promene vracene: " & Err.description, vbCritical, APP_NAME
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1831,11 +1963,25 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
                     Dim brojZbirne As String
 
                     If ImportVOZRow_RowTX(data, i, clientRecordID, newZbirnaID, brojZbirne) Then
-                        statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newZbirnaID, brojZbirne)
-                        outImported = outImported + 1
+                        If Len(Trim$(newZbirnaID)) = 0 Or Len(Trim$(brojZbirne)) = 0 Then
+                            statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":Invalid row TX result", "")
+                            outErrors = outErrors + 1
+
+                            MarkPWAFatalSyncError "ImportOneVOZSheet", _
+                                "ImportVOZRow_RowTX returned success but output is invalid. Sheet=" & _
+                                sheetName & "; Row=" & CStr(i)
+                        Else
+                            statusUpdates.Add Array(i, SYNC_STATUS_MASTER, newZbirnaID, brojZbirne)
+                            outImported = outImported + 1
+                        End If
                     Else
                         statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":Import/link failed", "")
                         outErrors = outErrors + 1
+
+                        MarkPWAFatalSyncError "ImportOneVOZSheet", _
+                            "Import/link failed for VOZ row. Sheet=" & sheetName & _
+                            "; Row=" & CStr(i) & _
+                             "; ClientRecordID=" & clientRecordID
                     End If
                 End If
             End If
@@ -1862,55 +2008,81 @@ EH:
     outErrors = outErrors + 1
 End Sub
 
-Private Function ImportVOZRow_RowTX(ByVal data As Variant, _
-                                    ByVal row As Long, _
+Private Function ImportVOZRow_RowTX(ByRef data As Variant, _
+                                    ByVal rowIndex As Long, _
                                     ByVal clientRecordID As String, _
                                     ByRef outZbirnaID As String, _
                                     ByRef outBrojZbirne As String) As Boolean
+    Const SRC As String = "ImportVOZRow_RowTX"
+
     Dim tx As clsTransaction
     Dim otkupRecordIDs As String
 
     On Error GoTo EH
 
+    ImportVOZRow_RowTX = False
+    outZbirnaID = vbNullString
+    outBrojZbirne = vbNullString
+
+    If Len(Trim$(clientRecordID)) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 60, SRC, _
+                  "ClientRecordID je obavezan."
+    End If
+
     Set tx = New clsTransaction
     tx.BeginTx
+
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
 
-    outZbirnaID = ImportRowToTblZbirna(data, row, clientRecordID)
+    outZbirnaID = ImportRowToTblZbirna(data, rowIndex, clientRecordID)
 
     If Len(Trim$(outZbirnaID)) = 0 Then
-        Err.Raise vbObjectError + 8401, "ImportVOZRow_RowTX", _
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 61, SRC, _
                   "ImportRowToTblZbirna nije vratio ZbirnaID. ClientRecordID=" & clientRecordID
     End If
 
-    outBrojZbirne = GetBrojZbirneForID(outZbirnaID)
+    RequireSingleMasterSyncRow TBL_ZBIRNA, COL_ZBR_ID, outZbirnaID, SRC
 
-    If Len(Trim$(outBrojZbirne)) = 0 Then
-        Err.Raise vbObjectError + 8402, "ImportVOZRow_RowTX", _
-                  "BrojZbirne nije pronaden za ZbirnaID=" & outZbirnaID
-    End If
+    outBrojZbirne = GetBrojZbirneForIDStrict(outZbirnaID, SRC)
 
-    otkupRecordIDs = Trim$(CStr(Nz(data(row, VS_OTKUP_RECORD_IDS), "")))
+    otkupRecordIDs = Trim$(CStr(Nz(data(rowIndex, VS_OTKUP_RECORD_IDS), "")))
 
-    If Not LinkZbirnaToOtkupAndOtpremnica(outBrojZbirne, otkupRecordIDs) Then
-        Err.Raise vbObjectError + 8403, "ImportVOZRow_RowTX", _
-                  "LinkZbirnaToOtkupAndOtpremnica failed. BrojZbirne=" & outBrojZbirne
-    End If
+    LinkZbirnaToOtkupAndOtpremnica outBrojZbirne, otkupRecordIDs
 
     tx.CommitTx
+    Set tx = Nothing
+
     ImportVOZRow_RowTX = True
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     On Error Resume Next
+
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr "ImportVOZRow_RowTX", "ClientRecordID=" & clientRecordID
+
+    LogErr SRC
+
+    outZbirnaID = vbNullString
+    outBrojZbirne = vbNullString
+
+    Debug.Print SRC & " failed. Source=" & errSrc & _
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc & _
+                " ClientRecordID=" & clientRecordID & _
+                " Row=" & CStr(rowIndex)
+
     On Error GoTo 0
 
-    outZbirnaID = ""
-    outBrojZbirne = ""
     ImportVOZRow_RowTX = False
 End Function
 ' ============================================================
@@ -2117,41 +2289,36 @@ End Function
 ' PRIVATE — Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
 ' ============================================================
 
-Private Function LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
-                                                ByVal otkupRecordIDs As String) As Boolean
+Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
+                                           ByVal otkupRecordIDs As String)
     Const SRC As String = "LinkZbirnaToOtkupAndOtpremnica"
 
     On Error GoTo EH
 
     If Len(Trim$(brojZbirne)) = 0 Then
-        LogError SRC, "BrojZbirne je prazan."
-        LinkZbirnaToOtkupAndOtpremnica = False
-        Exit Function
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 30, SRC, _
+                  "BrojZbirne je obavezan za kaskadno povezivanje."
     End If
 
     If Len(Trim$(otkupRecordIDs)) = 0 Then
-        LinkZbirnaToOtkupAndOtpremnica = True
-        Exit Function
-    End If
-
-    Dim crIDs() As String
-    crIDs = Split(otkupRecordIDs, ",")
-
-    Dim otkData As Variant
-    otkData = GetTableData(TBL_OTKUP)
-    If IsEmpty(otkData) Then
-        LogError SRC, "tblOtkup je prazan, a VOZ ima OtkupRecordIDs."
-        LinkZbirnaToOtkupAndOtpremnica = False
-        Exit Function
+        LogInfo SRC, "Nema Otkup ClientRecordID vrednosti za BrojZbirne=" & brojZbirne
+        Exit Sub
     End If
 
     Dim colCRID As Long
     Dim colOtkID As Long
     Dim colOtkOtpID As Long
 
-    colCRID = RequireColumnIndex(TBL_OTKUP, "ClientRecordID", SRC)
+    colCRID = RequireColumnIndex(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, SRC)
     colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colOtkOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
+
+    RequireColumnIndex TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
+    RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC
+
+    Dim crIDs() As String
+    crIDs = Split(otkupRecordIDs, ",")
 
     Dim updatedOtp As Object
     Set updatedOtp = CreateObject("Scripting.Dictionary")
@@ -2159,78 +2326,51 @@ Private Function LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
     Dim c As Long
     For c = 0 To UBound(crIDs)
         Dim searchCRID As String
-        searchCRID = Trim$(crIDs(c))
+        searchCRID = Trim$(CStr(crIDs(c)))
 
-        If Len(searchCRID) = 0 Then GoTo NextCRID
+        If Len(searchCRID) > 0 Then
+            Dim rowOtkup As Long
+            rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, searchCRID, SRC)
 
-        Dim foundCount As Long
-        Dim foundRow As Long
-        Dim i As Long
+            Dim otkData As Variant
+            otkData = GetTableData(TBL_OTKUP)
 
-        For i = 1 To UBound(otkData, 1)
-            If CStr(Nz(otkData(i, colCRID), "")) = searchCRID Then
-                foundCount = foundCount + 1
-                foundRow = i
+            If IsEmpty(otkData) Then
+                Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 31, SRC, _
+                          "Tabela je prazna: " & TBL_OTKUP
             End If
-        Next i
 
-        If foundCount <> 1 Then
-            LogError SRC, _
-                     "ClientRecordID nije jedinstven ili nije pronaden u tblOtkup. CRID=" & _
-                     searchCRID & "; Count=" & CStr(foundCount)
-            LinkZbirnaToOtkupAndOtpremnica = False
-            Exit Function
-        End If
+            Dim otkupID As String
+            otkupID = Trim$(CStr(otkData(rowOtkup, colOtkID)))
 
-        Dim otkupID As String
-        otkupID = CStr(otkData(foundRow, colOtkID))
+            rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, COL_OTK_ID, otkupID, SRC)
 
-        Dim otkRows As Collection
-        Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+            otkData = GetTableData(TBL_OTKUP)
 
-        If otkRows Is Nothing Or otkRows.count <> 1 Then
-            LogError SRC, _
-                     "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & otkupID
-            LinkZbirnaToOtkupAndOtpremnica = False
-            Exit Function
-        End If
+            RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, brojZbirne, SRC
 
-        RequireUpdateCell TBL_OTKUP, otkRows(1), COL_OTK_BROJ_ZBIRNE, brojZbirne, SRC
+            Dim otpID As String
+            otpID = Trim$(CStr(Nz(otkData(rowOtkup, colOtkOtpID), "")))
 
-        Dim otpID As String
-        otpID = Trim$(CStr(Nz(otkData(foundRow, colOtkOtpID), "")))
-
-        If Len(otpID) > 0 Then
-            If Not updatedOtp.Exists(otpID) Then
-                Dim otpRows As Collection
-                Set otpRows = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
-
-                If otpRows Is Nothing Or otpRows.count <> 1 Then
-                    LogError SRC, _
-                             "OtpremnicaID nije jedinstven ili nije pronaden. OtpremnicaID=" & otpID
-                    LinkZbirnaToOtkupAndOtpremnica = False
-                    Exit Function
+            If Len(otpID) > 0 Then
+                If Not updatedOtp.Exists(otpID) Then
+                    LinkOtpremnicaToBrojZbirneStrict otpID, brojZbirne, SRC
+                    updatedOtp.Add otpID, True
                 End If
-
-                RequireUpdateCell TBL_OTPREMNICA, otpRows(1), COL_OTP_BROJ_ZBIRNE, brojZbirne, SRC
-                updatedOtp.Add otpID, True
             End If
         End If
-
-NextCRID:
     Next c
 
-    LinkZbirnaToOtkupAndOtpremnica = True
     LogInfo SRC, "BrojZbirne=" & brojZbirne & _
                  " linked " & CStr(UBound(crIDs) + 1) & _
                  " otkupa, " & CStr(updatedOtp.count) & " otpremnica"
-    Exit Function
+
+    Exit Sub
 
 EH:
     LogErr SRC
-    LinkZbirnaToOtkupAndOtpremnica = False
-End Function
-
+    Err.Raise Err.Number, SRC, Err.description
+End Sub
 ' ============================================================
 ' PRIVATE — Helper: BrojZbirne aus ZbirnaID
 ' ============================================================
@@ -2537,7 +2677,7 @@ End Sub
 Public Function ImportParcelGeoFromGoogleToMaster() As Boolean
     Const SRC As String = "ImportParcelGeoFromGoogleToMaster"
 
-    Dim sheetID As String
+    Dim sheetId As String
     Dim folderID As String
     Dim data As Variant
     Dim parcelData As Variant
@@ -2590,9 +2730,9 @@ Public Function ImportParcelGeoFromGoogleToMaster() As Boolean
         Exit Function
     End If
 
-    sheetID = Trim$(GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID"))
+    sheetId = Trim$(GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID"))
 
-    If Len(sheetID) = 0 Then
+    If Len(sheetId) = 0 Then
         folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
 
         If Len(folderID) = 0 Then
@@ -2600,19 +2740,19 @@ Public Function ImportParcelGeoFromGoogleToMaster() As Boolean
             Exit Function
         End If
 
-        sheetID = GetSpreadsheetID("Stammdaten", folderID)
+        sheetId = GetSpreadsheetID("Stammdaten", folderID)
 
-        If Len(sheetID) > 0 Then
-            Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)
+        If Len(sheetId) > 0 Then
+            Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetId)
         End If
     End If
 
-    If Len(sheetID) = 0 Then
+    If Len(sheetId) = 0 Then
         LogError SRC, "Stammdaten Google Sheet nije pronaden."
         Exit Function
     End If
 
-    data = ReadSheetData(sheetID, "Parcele")
+    data = ReadSheetData(sheetId, "Parcele")
 
     If IsEmpty(data) Then
         LogError SRC, "Google Stammdaten/Parcele tab je prazan ili nije ucitan."
