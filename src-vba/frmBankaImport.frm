@@ -17,10 +17,46 @@ Option Explicit
 
 Private m_Data As Variant
 Private m_BimIDs() As String
+Private mChromeRemoved As Boolean
 
 Private Sub UserForm_Activate()
-    Me.caption = "Banka import"
+    On Error GoTo EH
     
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
+    
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
+    
+    ' Headers
+    StyleFrameTitleLabel lblKopf, "Bank Import"
+    StyleSubtitle lblSubtitle, "Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere"
+    
+    ' Section headers (ako koristis frames)
+    ' StyleSectionHeader fraDetail, "Detalji selektovane stavke"
+    ' StyleSectionHeader fraPreview, "Pregled automatskog mapiranja"
+    
+    ' Action buttons
+    StylePrimaryButton btnAutoJedan, "Automatski mapiraj red"
+    StylePrimaryButton btnAutoSve, "Automatski mapiraj sve"
+    StylePrimaryButton btnSacuvajRucno, "Rucno mapiraj red"
+    StylePrimaryButton btnSkip, "Preskoci red"
+    StylePrimaryButton btnOsvezi, "Osvezi"
+    StyleExitButton btnPovratak, "Zatvori"     ' ili "Povratak"
+    
+    ' Status labels
+    StyleLabel lblStatus, TXT_MUTED(), True
+    StyleLabel lblIzvodSummary, TXT_MUTED(), True
+    
+    ' Detail labels (suptilno)
+    StyleLabel lblBimID, TXT_MUTED(), False
+    StyleLabel lblPartner, TXT_MUTED(), False
+    StyleLabel lblPozivNaBroj, TXT_MUTED(), False
+    StyleLabel lblOpis, TXT_MUTED(), False
+    StyleLabel lblSvrha, TXT_MUTED(), False
+    StyleLabel lblIznos, TXT_MUTED(), True       ' bold jer je money
+    StyleLabel lblPreview, TXT_MUTED(), False
+    
+    ' Initialize cmbMapTip
     If cmbMapTip.ListCount = 0 Then
         cmbMapTip.AddItem "Kupac"
         cmbMapTip.AddItem "Kooperant"
@@ -29,7 +65,18 @@ Private Sub UserForm_Activate()
     
     SetupList
     LoadBankaRows
+    
+    ' KPI strip (opciono — vidi Izmena 2)
+     LayoutTopKpis
+     RefreshTopKpis
+    
     lstBanka.SetFocus
+    
+    Exit Sub
+    
+EH:
+    LogErr "frmBankaImport.UserForm_Activate"
+    MsgBox "Greska pri otvaranju forme: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
@@ -50,6 +97,7 @@ Private Sub LoadBankaRows()
     m_Data = GetBankaImportOpen()
     If IsEmpty(m_Data) Then
         lblStatus.caption = "Nema otvorenih stavki."
+        UpdateIzvodSummaryLabel
         Exit Sub
     End If
     
@@ -76,6 +124,10 @@ Private Sub LoadBankaRows()
     Next i
     
     lblStatus.caption = lstBanka.ListCount & " otvorenih stavki"
+    
+    UpdateIzvodSummaryLabel
+    RefreshTopKpis
+    
 End Sub
 
 Private Sub lstBanka_Click()
@@ -278,8 +330,26 @@ Private Sub btnOsvezi_Click()
     LoadBankaRows
 End Sub
 
-Private Sub btnZatvori_Click()
+Private Sub btnPovratak_Click()
+    On Error GoTo EH
+
+    frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
     Unload Me
+
+    Exit Sub
+
+EH:
+    LogErr "frmBankaImport.btnPovratak_Click"
+    Unload Me
+End Sub
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
+    If CloseMode = vbFormControlMenu Then
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    End If
+
+    On Error GoTo 0
 End Sub
 
 'PREVIEW
@@ -496,3 +566,252 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
     BuildOutgoingPreview = "Smer: Isplata" & vbCrLf & "Auto match: Nije pronadjen"
 End Function
 
+'======================================================================
+' v6.18+: Statement Summary Display
+'
+' Prikazuje saldo info iz najnovijeg aktivnog (non-stornirano) izvoda
+' u tblBankaImport. Citaje BrojIzvoda + DatumIzvoda i 4 saldo polja,
+' pa prikazuje math integrity status (Level 1) read-side kao vizualnu
+' potvrdu operateru.
+'
+' Pozvana iz LoadBankaRows() na kraju, sto pokriva sve refresh tacke
+' (Activate, btnOsvezi_Click, i posle svake Auto*/Sacuvaj/Skip akcije).
+'======================================================================
+Private Sub UpdateIzvodSummaryLabel()
+    On Error GoTo EH
+    
+    Dim data As Variant
+    Dim colBrojIzvoda As Long
+    Dim colDatumIzvoda As Long
+    Dim colPocetno As Long
+    Dim colZavrsno As Long
+    Dim colDuguje As Long
+    Dim colPotrazuje As Long
+    
+    Dim i As Long
+    Dim maxRow As Long
+    Dim maxDatum As Date
+    
+    data = GetTableData(TBL_BANKA_IMPORT)
+    
+    If IsEmpty(data) Then
+        Me.lblIzvodSummary.caption = "Nema importovanih izvoda."
+        Exit Sub
+    End If
+    
+    If UBound(data, 1) < 1 Then
+        Me.lblIzvodSummary.caption = "Nema importovanih izvoda."
+        Exit Sub
+    End If
+    
+    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+    
+    If IsEmpty(data) Then
+        Me.lblIzvodSummary.caption = "Nema aktivnih izvoda."
+        Exit Sub
+    End If
+    
+    colBrojIzvoda = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA)
+    colDatumIzvoda = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_IZVODA)
+    colPocetno = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POCETNO_STANJE)
+    colZavrsno = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ZAVRSNO_STANJE)
+    colDuguje = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_DUGUJE)
+    colPotrazuje = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_POTRAZUJE)
+    
+    maxRow = -1
+    maxDatum = #1/1/1900#
+    
+    For i = 1 To UBound(data, 1)
+        Dim rowDatumStr As String
+        rowDatumStr = Trim$(CStr(data(i, colDatumIzvoda)))
+        
+        If LenB(rowDatumStr) > 0 Then
+            Dim rowDatum As Date
+            On Error Resume Next
+            rowDatum = CDate(rowDatumStr)
+            If Err.Number = 0 Then
+                On Error GoTo EH
+                If rowDatum >= maxDatum Then
+                    maxDatum = rowDatum
+                    maxRow = i
+                End If
+            Else
+                Err.Clear
+                On Error GoTo EH
+            End If
+        End If
+    Next i
+    
+    If maxRow < 0 Then
+        Me.lblIzvodSummary.caption = "Nema aktivnih izvoda sa validnim datumom."
+        Exit Sub
+    End If
+    
+    Dim brIzv As String
+    Dim datumIzv As String
+    Dim pocetno As Double
+    Dim zavrsno As Double
+    Dim duguje As Double
+    Dim potraz As Double
+    
+    brIzv = CStr(data(maxRow, colBrojIzvoda))
+    datumIzv = CStr(data(maxRow, colDatumIzvoda))
+    pocetno = CDbl(Nz(data(maxRow, colPocetno), "0"))
+    zavrsno = CDbl(Nz(data(maxRow, colZavrsno), "0"))
+    duguje = CDbl(Nz(data(maxRow, colDuguje), "0"))
+    potraz = CDbl(Nz(data(maxRow, colPotrazuje), "0"))
+    
+    ' Level 1 read-side math check
+    Dim expected As Double
+    Dim diff As Double
+    expected = pocetno + potraz - duguje
+    diff = Abs(expected - zavrsno)
+    
+    Dim statusTxt As String
+    Dim statusColor As Long
+    
+    If pocetno = 0 And zavrsno = 0 And duguje = 0 And potraz = 0 Then
+        ' Legacy row (pre-v6.18 import, bez saldo metapodataka)
+        statusTxt = "(legacy - bez saldo metapodataka)"
+        statusColor = RGB(128, 128, 128)
+    ElseIf diff <= 0.01 Then
+        statusTxt = "OK"
+        statusColor = RGB(0, 128, 0)
+    Else
+        statusTxt = "DIFF " & Format$(diff, "#,##0.00")
+        statusColor = RGB(192, 0, 0)
+    End If
+    
+    Me.lblIzvodSummary.caption = _
+        "Izvod " & brIzv & " (" & datumIzv & ")  |  " & _
+        "Pocetno: " & Format$(pocetno, "#,##0.00") & "  |  " & _
+        "Uplate: " & Format$(potraz, "#,##0.00") & "  |  " & _
+        "Isplate: " & Format$(duguje, "#,##0.00") & "  |  " & _
+        "Zavrsno: " & Format$(zavrsno, "#,##0.00") & "  |  " & _
+        statusTxt
+    Me.lblIzvodSummary.ForeColor = statusColor
+    
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    Me.lblIzvodSummary.caption = "(greska pri citanju saldo info-a)"
+    Me.lblIzvodSummary.ForeColor = RGB(128, 128, 128)
+    
+    LogErr "frmBankaImport.UpdateIzvodSummaryLabel"
+End Sub
+
+Private Sub LayoutTopKpis()
+    On Error GoTo EH
+    
+    LayoutTopKpiInternals fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent
+    LayoutTopKpiInternals fraKpiAutoMatch, lblKpiAutoTitle, lblKpiAutoValue, lblKpiAutoAccent
+    LayoutTopKpiInternals fraKpiUplate, lblKpiUplTitle, lblKpiUplValue, lblKpiUplAccent
+    LayoutTopKpiInternals fraKpiIsplate, lblKpiIspTitle, lblKpiIspValue, lblKpiIspAccent
+    
+    Exit Sub
+EH:
+    LogErr "frmBankaImport.LayoutTopKpis"
+End Sub
+
+Private Sub RefreshTopKpis()
+    On Error GoTo EH
+    
+    Dim totalCount As Long
+    Dim totalUplata As Double
+    Dim totalIsplata As Double
+    Dim autoMatchCount As Long
+    
+    If IsArray(m_Data) Then
+        totalCount = UBound(m_Data, 1)
+        
+        Dim colUplata As Long, colIsplata As Long, colPartner As Long
+        colUplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA)
+        colIsplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA)
+        colPartner = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER)
+        
+        Dim i As Long
+        For i = 1 To UBound(m_Data, 1)
+            totalUplata = totalUplata + CDbl(Nz(m_Data(i, colUplata), "0"))
+            totalIsplata = totalIsplata + CDbl(Nz(m_Data(i, colIsplata), "0"))
+            
+            ' Check if auto-match exists
+            Dim partnerName As String
+            partnerName = CStr(m_Data(i, colPartner))
+            Dim mapped As Variant
+            mapped = LookupPartnerMap(partnerName)
+            If Not IsEmpty(mapped) Then
+                autoMatchCount = autoMatchCount + 1
+            End If
+        Next i
+    End If
+    
+    ' Card 1: Otvoreno
+    StyleTopKpi fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent, "neutral"
+    lblKpiOtvTitle.caption = "Otvoreno"
+    lblKpiOtvValue.caption = totalCount & " stavki"
+    
+    ' Card 2: Auto match (ok ako >0)
+    Dim autoKind As String
+    If autoMatchCount > 0 Then autoKind = "ok" Else autoKind = "neutral"
+    StyleTopKpi fraKpiAutoMatch, lblKpiAutoTitle, lblKpiAutoValue, lblKpiAutoAccent, autoKind
+    lblKpiAutoTitle.caption = "Auto match"
+    lblKpiAutoValue.caption = autoMatchCount & " / " & totalCount
+    
+    ' Card 3: Uplate ukupno
+    StyleTopKpi fraKpiUplate, lblKpiUplTitle, lblKpiUplValue, lblKpiUplAccent, "neutral"
+    lblKpiUplTitle.caption = "Uplate"
+    lblKpiUplValue.caption = Format$(totalUplata, "#,##0") & " RSD"
+    
+    ' Card 4: Isplate ukupno
+    StyleTopKpi fraKpiIsplate, lblKpiIspTitle, lblKpiIspValue, lblKpiIspAccent, "neutral"
+    lblKpiIspTitle.caption = "Isplate"
+    lblKpiIspValue.caption = Format$(totalIsplata, "#,##0") & " RSD"
+    
+    Exit Sub
+EH:
+    LogErr "frmBankaImport.RefreshTopKpis"
+End Sub
+
+Private Sub ResetActionButtons()
+    StylePrimaryButton btnAutoJedan, "Automatski mapiraj red"
+    StylePrimaryButton btnAutoSve, "Automatski mapiraj sve"
+    StylePrimaryButton btnSacuvajRucno, "Rucno mapiraj red"
+    StylePrimaryButton btnSkip, "Preskoci red"
+    StylePrimaryButton btnOsvezi, "Osvezi"
+    StyleExitButton btnPovratak, "Zatvori"
+End Sub
+
+Private Sub btnAutoJedan_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnAutoJedan
+End Sub
+
+Private Sub btnAutoSve_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnAutoSve
+End Sub
+
+Private Sub btnSacuvajRucno_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnSacuvajRucno
+End Sub
+
+Private Sub btnSkip_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnSkip
+End Sub
+
+Private Sub btnOsvezi_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnOsvezi
+End Sub
+
+Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnPovratak
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+End Sub
