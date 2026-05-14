@@ -49,7 +49,11 @@ Public Sub ImportBankaInbox_TX()
     Const SRC As String = "ImportBankaInbox_TX"
 
     Dim tx As clsTransaction
-    Dim pendingMoves As Collection
+    Dim successMoves As Collection
+    Dim errorMoves As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
 
     On Error GoTo EH
 
@@ -57,27 +61,22 @@ Public Sub ImportBankaInbox_TX()
     EnsureFolderExists GetBankaProcessedPath()
     EnsureFolderExists GetBankaErrorPath()
 
-    Set pendingMoves = New Collection
+    Set successMoves = New Collection
+    Set errorMoves = New Collection
 
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_BANKA_IMPORT
 
-    ImportBankaInboxToPendingMoves pendingMoves
+    ImportBankaInboxToPendingMoves successMoves, errorMoves
 
-    ' DB is now reliable. Only after this point are file-system moves allowed.
     tx.CommitTx
     Set tx = Nothing
 
-    ExecutePendingBankaFileMoves pendingMoves
-
+    ExecutePendingBankaFileMoves successMoves
     Exit Sub
 
 EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
     errNum = Err.Number
     errDesc = Err.description
     errSrc = Err.SOURCE
@@ -88,7 +87,12 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    Debug.Print SRC & " failed. DB rolled back. Pending successful file moves were NOT executed. " & _
+    ' Only PDF-level failures are moved to Error after rollback.
+    ' Success moves are intentionally NOT executed on rollback.
+    ExecutePendingBankaFileMoves errorMoves
+
+    Debug.Print SRC & " failed. DB rolled back. Success moves NOT executed. " & _
+                "Error moves executed only for PDF-level errors. " & _
                 "Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
@@ -99,39 +103,11 @@ EH:
 End Sub
 
 Public Sub ImportBankaInbox()
-    Const SRC As String = "ImportBankaInbox"
-
-    Dim pendingMoves As Collection
-    Set pendingMoves = New Collection
-
-    On Error GoTo EH
-
-    ImportBankaInboxToPendingMoves pendingMoves
-    ExecutePendingBankaFileMoves pendingMoves
-
-    Exit Sub
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogErr SRC
-    Debug.Print SRC & " failed. Pending file moves were NOT executed. " & _
-                "Source=" & errSrc & _
-                " Err=" & CStr(errNum) & _
-                " Desc=" & errDesc
-    On Error GoTo 0
-
-    Err.Raise errNum, SRC, errDesc
+    ImportBankaInbox_TX
 End Sub
 
-Private Sub ImportBankaInboxToPendingMoves(ByRef pendingMoves As Collection)
+Private Sub ImportBankaInboxToPendingMoves(ByRef successMoves As Collection, _
+                                           ByRef errorMoves As Collection)
     Const SRC As String = "ImportBankaInboxToPendingMoves"
 
     Dim files As Collection
@@ -142,7 +118,8 @@ Private Sub ImportBankaInboxToPendingMoves(ByRef pendingMoves As Collection)
 
     On Error GoTo EH
 
-    If pendingMoves Is Nothing Then Set pendingMoves = New Collection
+    If successMoves Is Nothing Then Set successMoves = New Collection
+    If errorMoves Is Nothing Then Set errorMoves = New Collection
 
     inboxPath = GetBankaInboxPath()
 
@@ -156,7 +133,7 @@ Private Sub ImportBankaInboxToPendingMoves(ByRef pendingMoves As Collection)
 
     For Each fileName In files
         fullPath = inboxPath & "\" & CStr(fileName)
-        statusText = ImportOnePdfIntoBankaImport(fullPath, pendingMoves)
+        statusText = ImportOnePdfIntoBankaImport_Core(fullPath, successMoves, errorMoves)
 
         Debug.Print SRC & " staged. File=" & CStr(fileName) & _
                     " Status=" & statusText
@@ -180,19 +157,21 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
-Public Function ImportOnePdfIntoBankaImport(ByVal pdfPath As String, _
-                                            ByRef pendingMoves As Collection) As String
-    Const SRC As String = "ImportOnePdfIntoBankaImport"
+Private Function ImportOnePdfIntoBankaImport_Core(ByVal pdfPath As String, _
+                                                  ByRef successMoves As Collection, _
+                                                  ByRef errorMoves As Collection) As String
+    Const SRC As String = "ImportOnePdfIntoBankaImport_Core"
 
     Dim txt As String
-    Dim Parsed As Variant
+    Dim parsed As Variant
     Dim savedCount As Long
     Dim fileName As String
     Dim targetPath As String
 
     On Error GoTo EH
 
-    If pendingMoves Is Nothing Then Set pendingMoves = New Collection
+    If successMoves Is Nothing Then Set successMoves = New Collection
+    If errorMoves Is Nothing Then Set errorMoves = New Collection
 
     fileName = GetFileNameFromPath(pdfPath)
 
@@ -211,28 +190,26 @@ Public Function ImportOnePdfIntoBankaImport(ByVal pdfPath As String, _
                   "PDF extract je vratio prazan tekst. File=" & fileName
     End If
 
-    Parsed = ParseBankaIzvodForImport(txt, fileName)
+    parsed = ParseBankaIzvodForImport(txt, fileName)
     
-    If IsEmpty(Parsed) Then
+    If IsEmpty(parsed) Then
         Err.Raise ERR_BIM_IMPORT_BASE + 4, SRC, _
                   "Parser nije vratio nijednu transakciju. File=" & fileName
     End If
 
-    savedCount = SaveBankaImportRows(Parsed)
+    savedCount = SaveBankaImportRows(parsed)
 
     If savedCount > 0 Then
-        ImportOnePdfIntoBankaImport = BIM_STATUS_IMPORTED
+        ImportOnePdfIntoBankaImport_Core = BIM_STATUS_IMPORTED
     Else
-        ' Parse + integrity passed, but all rows already existed.
-        ImportOnePdfIntoBankaImport = BIM_STATUS_DUPLICATE_ONLY
+        ImportOnePdfIntoBankaImport_Core = BIM_STATUS_DUPLICATE_ONLY
     End If
 
-    ' Important: do NOT move now.
-    ' Add only successful outcomes to pending moves.
     targetPath = GetBankaProcessedPath() & "\" & fileName
-    AddPendingBankaFileMove pendingMoves, pdfPath, targetPath, ImportOnePdfIntoBankaImport
+    AddPendingBankaFileMove successMoves, pdfPath, targetPath, ImportOnePdfIntoBankaImport_Core
 
     Exit Function
+    
 EH:
     Dim errNum As Long
     Dim errDesc As String
@@ -247,19 +224,83 @@ EH:
     On Error Resume Next
     LogErr SRC
 
+    fileName = GetFileNameFromPath(pdfPath)
+
+    If ShouldMoveBankaImportFailureToError(errCategory) Then
+        If Len(Trim$(pdfPath)) > 0 And Dir$(pdfPath) <> "" Then
+            AddPendingBankaFileMove errorMoves, pdfPath, _
+                                    GetBankaErrorPath() & "\" & fileName, _
+                                    errCategory
+        End If
+    End If
+
     Debug.Print SRC & " failed. Status=" & errCategory & _
                 " Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc & _
-                " File=" & fileName & _
-                " | No file move scheduled."
+                " File=" & fileName
 
     On Error GoTo 0
 
-    ' Re-raise so ImportBankaInbox_TX rolls back DB and no pending moves execute.
     Err.Raise errNum, SRC, _
               "[" & errCategory & "] Source=" & errSrc & " | " & errDesc
 End Function
+
+Private Function ShouldMoveBankaImportFailureToError(ByVal errorCategory As String) As Boolean
+    Select Case LCase$(Trim$(errorCategory))
+        Case BIM_STATUS_PARSE_ERROR, _
+             BIM_STATUS_INTEGRITY_ERROR, _
+             BIM_STATUS_EXTRACT_ERROR
+            ShouldMoveBankaImportFailureToError = True
+
+        Case Else
+            ' Schema/append/unknown failures are not necessarily bad PDFs.
+            ' Keep file in Inbox for operator/dev investigation.
+            ShouldMoveBankaImportFailureToError = False
+    End Select
+End Function
+
+
+Public Sub ImportOnePdfIntoBankaImport(ByVal pdfPath As String)
+    Const SRC As String = "ImportOnePdfIntoBankaImport"
+
+    Dim tx As clsTransaction
+    Dim successMoves As Collection
+    Dim errorMoves As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    On Error GoTo EH
+
+    Set successMoves = New Collection
+    Set errorMoves = New Collection
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+
+    ImportOnePdfIntoBankaImport_Core pdfPath, successMoves, errorMoves
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    ExecutePendingBankaFileMoves successMoves
+    Exit Sub
+    
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    If Not tx Is Nothing Then tx.RollbackTx
+    ExecutePendingBankaFileMoves errorMoves
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Sub
 
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
     Dim lines() As String
@@ -299,7 +340,7 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     
     ' v6.18+: extract saldo block
     saldo = ExtractIzvodSaldoPdfText(lines)
-    If Not saldo.Parsed Then
+    If Not saldo.parsed Then
         Err.Raise vbObjectError + 1003, "ParseBankaIzvodForImport", _
             "STANJE blok izvoda " & brojIzvoda & " nije pronadjen ili ne sadrzi " & _
             "ocekivana saldo polja (Prethodno stanje, Duguje, Potrazuje, Novo stanje, Zaduzenje, Odobrenje)."
@@ -648,65 +689,6 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-Public Sub Test_SaldoIntegrityOnSamplePDF()
-    ' Pokreni rucno na sample PDF-u (21.09.2021 Komercijalna Banka).
-    ' Ocekivano: saldo polja parsiraju (1775.16, 5230.00, 6000.00, 2545.16, 3, 1),
-    ' integrity check prolazi.
-    
-    Dim pdfPath As String
-    Dim txt As String
-    Dim lines() As String
-    Dim saldo As BankIzvodSaldo
-    Dim Parsed As Variant
-    Dim ok As Boolean
-    
-    pdfPath = PickPdf()
-    If pdfPath = "" Then Exit Sub
-    
-    txt = ExtractTextFromPdf(pdfPath)
-    txt = Replace(txt, Chr$(12), vbLf)
-    txt = Replace(txt, vbCr, "")
-    lines = Split(txt, vbLf)
-    
-    ' Test 1: saldo extraction direktno
-    saldo = ExtractIzvodSaldoPdfText(lines)
-    Debug.Print "--- Saldo Extraction Test ---"
-    Debug.Print "Parsed: " & saldo.Parsed
-    Debug.Print "PocetnoStanje: " & saldo.PocetnoStanje
-    Debug.Print "UkupanDuguje: " & saldo.UkupanDuguje
-    Debug.Print "UkupanPotrazuje: " & saldo.UkupanPotrazuje
-    Debug.Print "ZavrsnoStanje: " & saldo.ZavrsnoStanje
-    Debug.Print "BrojNalogaZaduzenje: " & saldo.BrojNalogaZaduzenje
-    Debug.Print "BrojNalogaOdobrenje: " & saldo.BrojNalogaOdobrenje
-    Debug.Print "Math check: " & saldo.PocetnoStanje & " + " & saldo.UkupanPotrazuje & _
-                " - " & saldo.UkupanDuguje & " = " & _
-                (saldo.PocetnoStanje + saldo.UkupanPotrazuje - saldo.UkupanDuguje) & _
-                " (expected " & saldo.ZavrsnoStanje & ")"
-    
-    ' Test 2: full parse + integrity check
-    Debug.Print ""
-    Debug.Print "--- Full Parse Test ---"
-    On Error Resume Next
-    Parsed = ParseBankaIzvodForImport(txt, GetFileNameFromPath2(pdfPath))
-    If Err.Number <> 0 Then
-        Debug.Print "FAIL: " & Err.Number & " - " & Err.description
-        On Error GoTo 0
-        Exit Sub
-    End If
-    On Error GoTo 0
-    
-    If IsEmpty(Parsed) Then
-        Debug.Print "FAIL: parse returned Empty"
-        Exit Sub
-    End If
-    
-    Debug.Print "OK: parsed " & UBound(Parsed, 1) & " transakcija sa saldo metadata"
-    Debug.Print "First row saldo: Pocetno=" & Parsed(1, 14) & _
-                " Zavrsno=" & Parsed(1, 15) & _
-                " Duguje=" & Parsed(1, 16) & _
-                " Potrazuje=" & Parsed(1, 17)
-End Sub
-
 ' helper jer je GetFileNameFromPath u modBankaImport private — kopija
 Private Function GetFileNameFromPath2(ByVal filePath As String) As String
     Dim p As Long
@@ -804,7 +786,7 @@ Private Sub ExecutePendingBankaFileMoves(ByVal pendingMoves As Collection)
         If Len(Trim$(targetPath)) = 0 Then GoTo NextMove
 
         If Dir$(sourcePath) = "" Then
-            Debug.Print SRC & ": source already missing, skip. Source=" & sourcePath
+            Debug.Print SRC & ": source missing, skip. Source=" & sourcePath
             GoTo NextMove
         End If
 
@@ -820,8 +802,6 @@ NextMove:
     Exit Sub
 
 EH:
-    ' File move happens after DB commit, so rollback is no longer possible here.
-    ' Surface the error clearly for operator/manual recovery.
     Dim errNum As Long
     Dim errDesc As String
     Dim errSrc As String
@@ -835,8 +815,7 @@ EH:
     On Error GoTo 0
 
     Err.Raise errNum, SRC, _
-              "DB commit je vec zavrsen, ali pomeranje fajla nije uspelo. " & _
-              "Potrebna je rucna provera Inbox/Processed foldera. " & _
+              "Pomeranje PDF fajla nije uspelo. Potrebna je rucna provera foldera. " & _
               "Source=" & errSrc & " | " & errDesc
 End Sub
 
@@ -1004,4 +983,64 @@ End Function
 Private Function Min2(ByVal a As Long, ByVal b As Long) As Long
     If a < b Then Min2 = a Else Min2 = b
 End Function
+
+
+Public Sub Test_SaldoIntegrityOnSamplePDF()
+    ' Pokreni rucno na sample PDF-u (21.09.2021 Komercijalna Banka).
+    ' Ocekivano: saldo polja parsiraju (1775.16, 5230.00, 6000.00, 2545.16, 3, 1),
+    ' integrity check prolazi.
+    
+    Dim pdfPath As String
+    Dim txt As String
+    Dim lines() As String
+    Dim saldo As BankIzvodSaldo
+    Dim parsed As Variant
+    Dim ok As Boolean
+    
+    pdfPath = PickPdf()
+    If pdfPath = "" Then Exit Sub
+    
+    txt = ExtractTextFromPdf(pdfPath)
+    txt = Replace(txt, Chr$(12), vbLf)
+    txt = Replace(txt, vbCr, "")
+    lines = Split(txt, vbLf)
+    
+    ' Test 1: saldo extraction direktno
+    saldo = ExtractIzvodSaldoPdfText(lines)
+    Debug.Print "--- Saldo Extraction Test ---"
+    Debug.Print "Parsed: " & saldo.parsed
+    Debug.Print "PocetnoStanje: " & saldo.PocetnoStanje
+    Debug.Print "UkupanDuguje: " & saldo.UkupanDuguje
+    Debug.Print "UkupanPotrazuje: " & saldo.UkupanPotrazuje
+    Debug.Print "ZavrsnoStanje: " & saldo.ZavrsnoStanje
+    Debug.Print "BrojNalogaZaduzenje: " & saldo.BrojNalogaZaduzenje
+    Debug.Print "BrojNalogaOdobrenje: " & saldo.BrojNalogaOdobrenje
+    Debug.Print "Math check: " & saldo.PocetnoStanje & " + " & saldo.UkupanPotrazuje & _
+                " - " & saldo.UkupanDuguje & " = " & _
+                (saldo.PocetnoStanje + saldo.UkupanPotrazuje - saldo.UkupanDuguje) & _
+                " (expected " & saldo.ZavrsnoStanje & ")"
+    
+    ' Test 2: full parse + integrity check
+    Debug.Print ""
+    Debug.Print "--- Full Parse Test ---"
+    On Error Resume Next
+    parsed = ParseBankaIzvodForImport(txt, GetFileNameFromPath2(pdfPath))
+    If Err.Number <> 0 Then
+        Debug.Print "FAIL: " & Err.Number & " - " & Err.description
+        On Error GoTo 0
+        Exit Sub
+    End If
+    On Error GoTo 0
+    
+    If IsEmpty(parsed) Then
+        Debug.Print "FAIL: parse returned Empty"
+        Exit Sub
+    End If
+    
+    Debug.Print "OK: parsed " & UBound(parsed, 1) & " transakcija sa saldo metadata"
+    Debug.Print "First row saldo: Pocetno=" & parsed(1, 14) & _
+                " Zavrsno=" & parsed(1, 15) & _
+                " Duguje=" & parsed(1, 16) & _
+                " Potrazuje=" & parsed(1, 17)
+End Sub
 
