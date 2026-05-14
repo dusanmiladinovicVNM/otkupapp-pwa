@@ -24,7 +24,7 @@ Public Type BankIzvodSaldo
     ZavrsnoStanje As Double           ' "Novo stanje"
     BrojNalogaZaduzenje As Long       ' Broj naloga - Zaduženje
     BrojNalogaOdobrenje As Long       ' Broj naloga - Odobrenje
-    Parsed As Boolean                  ' True iff sva polja uspesno parsed
+    parsed As Boolean                  ' True iff sva polja uspesno parsed
 End Type
 
 Public Function ExtractTextFromPdf(ByVal pdfPath As String) As String
@@ -105,22 +105,29 @@ Private Function ResolvePdfToTextExePath() As String
     Dim defaultExePath As String
     Dim configuredPath As String
 
-    rootPath = GetLocalConfigValue("APP_ROOT_PATH", ThisWorkbook.Path)
+    rootPath = GetLocalConfigValue("APP_ROOT_PATH", "")
 
     If Len(Trim$(rootPath)) = 0 Then
-        rootPath = "C:\OtkupApp"
+        If Len(Trim$(ThisWorkbook.Path)) > 0 Then
+            rootPath = ThisWorkbook.Path
+        Else
+            rootPath = "C:\OtkupApp"
+        End If
     End If
 
-    defaultExePath = rootPath & "\Tools\poppler\Library\bin\pdftotext.exe"
+    defaultExePath = rootPath & "\" & APP_PDFTOTEXT_RELATIVE_EXE_PATH
 
-    configuredPath = GetLocalConfigValue("PDFTOTEXT_EXE_PATH", defaultExePath)
+    configuredPath = GetLocalConfigValue(CONFIG_KEY_PDFTOTEXT_EXE_PATH, defaultExePath)
     configuredPath = Trim$(configuredPath)
 
     If Len(configuredPath) = 0 Then
         Err.Raise vbObjectError + 2610, SRC, _
-                  "PDFTOTEXT_EXE_PATH nije podesen."
+                  CONFIG_KEY_PDFTOTEXT_EXE_PATH & " nije podesen. " & _
+                  "Podesi putanju do pdftotext.exe u tblLocalConfig."
     End If
 
+    ' Plain executable name, e.g. pdftotext.exe, is allowed for PATH deployments.
+    ' Any path-like value must exist.
     If InStr(1, configuredPath, "\", vbTextCompare) > 0 Or _
        InStr(1, configuredPath, ":", vbTextCompare) > 0 Then
 
@@ -134,6 +141,8 @@ Private Function ResolvePdfToTextExePath() As String
 End Function
 
 Private Function BuildUniquePdfTextTempPath(ByVal pdfPath As String) As String
+    Const SRC As String = "BuildUniquePdfTextTempPath"
+
     Dim tempFolder As String
     Dim baseName As String
     Dim n As Long
@@ -141,13 +150,8 @@ Private Function BuildUniquePdfTextTempPath(ByVal pdfPath As String) As String
 
     tempFolder = GetPdfExtractTempFolder()
 
-    If Len(Trim$(tempFolder)) = 0 Then
-        Err.Raise vbObjectError + 2612, "BuildUniquePdfTextTempPath", _
-                  "TEMP/TMP folder nije dostupan."
-    End If
-
     baseName = GetBaseFileNameNoExt(pdfPath)
-    If Len(baseName) = 0 Then baseName = "pdf"
+    If Len(Trim$(baseName)) = 0 Then baseName = "pdf"
 
     Randomize
 
@@ -165,7 +169,7 @@ Private Function BuildUniquePdfTextTempPath(ByVal pdfPath As String) As String
         End If
     Loop While n < 20
 
-    Err.Raise vbObjectError + 2613, "BuildUniquePdfTextTempPath", _
+    Err.Raise vbObjectError + 2613, SRC, _
               "Nije moguce napraviti unique temp txt path."
 End Function
 
@@ -173,14 +177,29 @@ Private Function GetBaseFileNameNoExt(ByVal filePath As String) As String
     Dim p As Long
     Dim fileName As String
 
-    p = InStrRev(filePath, "\")
-    If p > 0 Then
-        fileName = Mid$(filePath, p + 1)
-    Else
-        fileName = filePath
-    End If
+    fileName = Trim$(filePath)
+
+    p = InStrRev(fileName, "\")
+    If p > 0 Then fileName = Mid$(fileName, p + 1)
+
+    p = InStrRev(fileName, "/")
+    If p > 0 Then fileName = Mid$(fileName, p + 1)
 
     p = InStrRev(fileName, ".")
+    If p > 0 Then fileName = Left$(fileName, p - 1)
+
+    fileName = Replace(fileName, " ", "_")
+    fileName = Replace(fileName, ":", "_")
+    fileName = Replace(fileName, "/", "_")
+    fileName = Replace(fileName, "\", "_")
+    fileName = Replace(fileName, "*", "_")
+    fileName = Replace(fileName, "?", "_")
+    fileName = Replace(fileName, """", "_")
+    fileName = Replace(fileName, "<", "_")
+    fileName = Replace(fileName, ">", "_")
+    fileName = Replace(fileName, "|", "_")
+
+    GetBaseFileNameNoExt = fileName
 End Function
 
 Private Function QuoteArg(ByVal value As String) As String
@@ -188,8 +207,13 @@ Private Function QuoteArg(ByVal value As String) As String
 End Function
 
 Private Sub DeleteFileIfExists(ByVal filePath As String)
-    If Len(Trim$(filePath)) = 0 Then Exit Sub
-    If Dir$(filePath) <> "" Then Kill filePath
+    On Error Resume Next
+
+    If Len(Trim$(filePath)) > 0 Then
+        If Dir$(filePath) <> "" Then Kill filePath
+    End If
+
+    On Error GoTo 0
 End Sub
 
 Private Function GetPdfExtractTempFolder() As String
@@ -209,7 +233,7 @@ Private Function GetPdfExtractTempFolder() As String
 
     If Len(Trim$(tempFolder)) = 0 Then
         Err.Raise vbObjectError + 2612, SRC, _
-                  "TEMP folder nije dostupan."
+                  "APP_TEMP_PATH/TEMP/TMP folder nije dostupan."
     End If
 
     If Dir$(tempFolder, vbDirectory) = "" Then
@@ -906,7 +930,7 @@ End Function
 '----------------------------------------------------------------------
 Public Function ExtractIzvodSaldoPdfText(ByRef lines() As String) As BankIzvodSaldo
     Dim result As BankIzvodSaldo
-    result.Parsed = False
+    result.parsed = False
     
     On Error GoTo EH
     
@@ -937,7 +961,7 @@ Public Function ExtractIzvodSaldoPdfText(ByRef lines() As String) As BankIzvodSa
     
     For j = anchorIdx + 1 To scanEnd
         If TryParseSaldoDataLine(lines(j), result) Then
-            result.Parsed = True
+            result.parsed = True
             Exit For
         End If
     Next j
@@ -947,7 +971,7 @@ Public Function ExtractIzvodSaldoPdfText(ByRef lines() As String) As BankIzvodSa
 
 EH:
     ' Defensive: parser nikad ne sme da raise-uje, samo da kaze nije parsed
-    result.Parsed = False
+    result.parsed = False
     ExtractIzvodSaldoPdfText = result
 End Function
 
