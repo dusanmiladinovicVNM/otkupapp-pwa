@@ -756,46 +756,92 @@ Private Function ReplaceSheetTabWithStaging(ByVal spreadsheetID As String, _
     Const SRC As String = "ReplaceSheetTabWithStaging"
 
     Dim backupTabName As String
-    Dim body As String
 
     On Error GoTo EH
 
     ReplaceSheetTabWithStaging = False
 
+    If Len(Trim$(spreadsheetID)) = 0 Then
+        LogError SRC, "spreadsheetID je prazan."
+        Exit Function
+    End If
+
+    If Len(Trim$(targetTabName)) = 0 Then
+        LogError SRC, "targetTabName je prazan."
+        Exit Function
+    End If
+
+    If Len(Trim$(stagingTabName)) = 0 Then
+        LogError SRC, "stagingTabName je prazan."
+        Exit Function
+    End If
+
     If stagingSheetId <= 0 Then
         LogError SRC, "Invalid stagingSheetId. Staging=" & stagingTabName
         Exit Function
     End If
+       If targetSheetId = stagingSheetId Then
+        LogError SRC, "Invalid replace: targetSheetId equals stagingSheetId. Target=" & _
+                      targetTabName & "; Staging=" & stagingTabName & _
+                      "; SheetId=" & CStr(stagingSheetId)
+        Exit Function
+    End If
 
-    If targetSheetId > 0 Then
-        backupTabName = BuildBackupTabName(targetTabName)
-
-        ' Rename old target -> backup, rename staging -> target, delete backup.
-        ' This avoids duplicate title during request sequence.
-        body = "{""requests"":[" & _
-               "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(targetSheetId) & ",""title"":""" & JsonEscape(backupTabName) & """},""fields"":""title""}}," & _
-               "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(stagingSheetId) & ",""title"":""" & JsonEscape(targetTabName) & """},""fields"":""title""}}," & _
-               "{""deleteSheet"":{""sheetId"":" & CStr(targetSheetId) & "}}" & _
-               "]}"
-    Else
+    If targetSheetId <= 0 Then
         ' Target does not exist: just rename staging to target.
-        body = "{""requests"":[" & _
-               "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(stagingSheetId) & ",""title"":""" & JsonEscape(targetTabName) & """},""fields"":""title""}}" & _
-               "]}"
+        If RenameSheetById(spreadsheetID, stagingSheetId, targetTabName, SRC & ".renameNewTarget") Then
+            CacheSheetId spreadsheetID, targetTabName, stagingSheetId
+            RemoveSheetIdFromCache spreadsheetID, stagingTabName
+            ReplaceSheetTabWithStaging = True
+        End If
+        Exit Function
     End If
 
-    If ExecuteSheetsBatchUpdate(spreadsheetID, body, SRC) Then
-        ' After replace, target tab title points to staging sheetId.
-        CacheSheetId spreadsheetID, targetTabName, stagingSheetId
-        RemoveSheetIdFromCache spreadsheetID, stagingTabName
-        If Len(Trim$(backupTabName)) > 0 Then RemoveSheetIdFromCache spreadsheetID, backupTabName
+    backupTabName = BuildBackupTabName(targetTabName)
 
+    ' Phase 1: old target keeps data, but gets temporary backup title.
+    If Not RenameSheetById(spreadsheetID, targetSheetId, backupTabName, SRC & ".renameTargetToBackup") Then
+        LogError SRC, "Could not rename target to backup. Target=" & targetTabName & _
+                      "; Backup=" & backupTabName
+        Exit Function
+    End If
+
+    RemoveSheetIdFromCache spreadsheetID, targetTabName
+    CacheSheetId spreadsheetID, backupTabName, targetSheetId
+    
+    ' Phase 2: staging becomes real target.
+    If Not RenameSheetById(spreadsheetID, stagingSheetId, targetTabName, SRC & ".renameStagingToTarget") Then
+        LogError SRC, "Could not rename staging to target. Attempting recovery. Target=" & _
+                      targetTabName & "; Staging=" & stagingTabName & "; Backup=" & backupTabName
+
+        ' Best-effort recovery: restore old target title.
+        If RenameSheetById(spreadsheetID, targetSheetId, targetTabName, SRC & ".recoverBackupToTarget") Then
+            CacheSheetId spreadsheetID, targetTabName, targetSheetId
+            RemoveSheetIdFromCache spreadsheetID, backupTabName
+        Else
+            LogError SRC, "Recovery failed. Old target still exists as backup name: " & backupTabName
+        End If
+
+        Exit Function
+    End If
+
+    CacheSheetId spreadsheetID, targetTabName, stagingSheetId
+    RemoveSheetIdFromCache spreadsheetID, stagingTabName
+
+    ' Phase 3: delete old target backup. If this fails, data is safe:
+    ' new target is already live, old backup tab may remain and can be cleaned later.
+    If Not DeleteSheetById(spreadsheetID, targetSheetId) Then
+        LogWarn SRC, "Target replaced, but backup delete failed. Manual cleanup may be needed. Backup=" & backupTabName
+        ' Success is still true because the target tab now contains the verified staging data.
         ReplaceSheetTabWithStaging = True
-    Else
-        ReplaceSheetTabWithStaging = False
+        Exit Function
     End If
 
+    RemoveSheetIdFromCache spreadsheetID, backupTabName
+
+    ReplaceSheetTabWithStaging = True
     Exit Function
+
 EH:
     LogErr SRC
     ReplaceSheetTabWithStaging = False
@@ -858,6 +904,32 @@ Private Sub SafeDeleteSheetByTitle(ByVal spreadsheetID As String, _
     On Error GoTo 0
 End Sub
 
+Private Function RenameSheetById(ByVal spreadsheetID As String, _
+                                 ByVal sheetId As Long, _
+                                 ByVal newTitle As String, _
+                                 ByVal sourceName As String) As Boolean
+    Dim body As String
+
+    RenameSheetById = False
+
+    If sheetId <= 0 Then
+        LogError sourceName, "Invalid sheetId for rename. NewTitle=" & newTitle
+        Exit Function
+    End If
+
+    If Len(Trim$(newTitle)) = 0 Then
+        LogError sourceName, "newTitle je prazan. SheetId=" & CStr(sheetId)
+        Exit Function
+    End If
+
+    body = "{""requests"":[" & _
+           "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(sheetId) & _
+           ",""title"":""" & JsonEscape(newTitle) & """},""fields"":""title""}}" & _
+           "]}"
+
+    RenameSheetById = ExecuteSheetsBatchUpdate(spreadsheetID, body, sourceName)
+End Function
+
 Private Function DeleteSheetById(ByVal spreadsheetID As String, _
                                  ByVal sheetId As Long) As Boolean
     Dim body As String
@@ -867,6 +939,19 @@ Private Function DeleteSheetById(ByVal spreadsheetID As String, _
     body = "{""requests"":[{""deleteSheet"":{""sheetId"":" & CStr(sheetId) & "}}]}"
     DeleteSheetById = ExecuteSheetsBatchUpdate(spreadsheetID, body, "DeleteSheetById")
 End Function
+
+Public Sub CleanupGoogleSheetBackupTabs(ByVal spreadsheetID As String)
+    Const SRC As String = "CleanupGoogleSheetBackupTabs"
+
+    On Error GoTo EH
+
+    LogWarn SRC, "Manual cleanup helper is intentionally not implemented as automatic delete. " & _
+                 "Use Google UI or add explicit allowlist before deleting __old_* tabs. SpreadsheetID=" & spreadsheetID
+    Exit Sub
+
+EH:
+    LogErr SRC
+End Sub
 
 ' ============================================================
 ' 8) Full-sync gate note
