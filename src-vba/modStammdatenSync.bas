@@ -13,6 +13,8 @@ Option Explicit
 ' Aufruf: Button in frmMain oder manuell via SyncStammdatenToGoogle
 ' ============================================================
 
+Private Const KARTICE_TAB_NAME As String = "Kartice"
+
 Private Function StammdatenTabs() As Variant
     StammdatenTabs = Array( _
         "Kooperanti", _
@@ -60,6 +62,22 @@ Private Function MgmtReportTabs() As Variant
         "PredatoPoKupcu" _
     )
 End Function
+
+Private Sub EnsureKarticeTabsBestEffort(ByVal sheetID As String)
+    If Len(Trim$(sheetID)) = 0 Then Exit Sub
+
+    On Error Resume Next
+    Call AddSheetTab(sheetID, KARTICE_TAB_NAME)
+
+    If Err.Number <> 0 Then
+        LogWarn "EnsureKarticeTabsBestEffort", _
+                "AddSheetTab failed for tab=" & KARTICE_TAB_NAME & _
+                "; Error=" & Err.description
+        Err.Clear
+    End If
+
+    On Error GoTo 0
+End Sub
 
 Private Function GetReportsFolderID() As String
     Dim folderID As String
@@ -294,11 +312,12 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     End If
     
     Call SetConfigValue("GOOGLE_KARTICE_SHEET_ID", sheetID)
+    Call EnsureKarticeTabsBestEffort(sheetID)
     
     koopData = GetTableData(TBL_KOOPERANTI)
     
     If IsEmpty(koopData) Then
-        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, "Sheet1", _
+        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, KARTICE_TAB_NAME, _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
             "Opis", "Zaduzenje", "Razduzenje", "Saldo")
         
@@ -309,7 +328,7 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     koopData = ExcludeStornirano(koopData, TBL_KOOPERANTI)
     
     If IsEmpty(koopData) Then
-        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, "Sheet1", _
+        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, KARTICE_TAB_NAME, _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
             "Opis", "Zaduzenje", "Razduzenje", "Saldo")
         
@@ -336,7 +355,7 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     Next i
     
     If koopCount = 0 Then
-        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, "Sheet1", _
+        ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, KARTICE_TAB_NAME, _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
             "Opis", "Zaduzenje", "Razduzenje", "Saldo")
         
@@ -405,9 +424,9 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
             Next c
         Next r
         
-        ExportKarticeToGoogle_Core = WriteSheetData(sheetID, "Sheet1", finalRows)
+        ExportKarticeToGoogle_Core = WriteSheetData(sheetID, KARTICE_TAB_NAME, finalRows)
     Else
-        ExportKarticeToGoogle_Core = WriteSheetData(sheetID, "Sheet1", allRows)
+        ExportKarticeToGoogle_Core = WriteSheetData(sheetID, KARTICE_TAB_NAME, allRows)
     End If
     
     If ExportKarticeToGoogle_Core Then
