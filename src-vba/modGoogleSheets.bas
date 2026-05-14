@@ -48,6 +48,11 @@ Private Const GOOGLE_HTTP_MAX_RETRIES As Long = 3
 Private Const GOOGLE_HTTP_RETRY_BASE_MS As Long = 1500
 Private Const GOOGLE_HTTP_RETRY_MAX_MS As Long = 8000
 
+Private Const GOOGLE_WRITE_MIN_INTERVAL_MS As Long = 1250
+Private Const GOOGLE_HTTP_429_WAIT_MS As Long = 65000
+
+Private mLastGoogleWriteTimer As Double
+
 Private mSheetIdCacheBySpreadsheet As Object
 
 Private Function CreateGoogleHttpRequest(ByVal sourceName As String) As Object
@@ -69,13 +74,16 @@ End Function
 Private Function SendGoogleHttpWithRetry(ByVal http As Object, _
                                          ByVal sourceName As String, _
                                          Optional ByVal body As String = vbNullString, _
-                                         Optional ByVal hasBody As Boolean = False) As Boolean
+                                         Optional ByVal hasBody As Boolean = False, _
+                                         Optional ByVal isWriteRequest As Boolean = False) As Boolean
     Dim attempt As Long
     Dim waitMs As Long
 
     On Error GoTo EH
 
     For attempt = 0 To GOOGLE_HTTP_MAX_RETRIES
+        If isWriteRequest Then ThrottleGoogleWriteRequest sourceName
+
         If hasBody Then
             http.Send body
         Else
@@ -92,7 +100,7 @@ Private Function SendGoogleHttpWithRetry(ByVal http As Object, _
             Exit Function
         End If
 
-        waitMs = GoogleRetryDelayMs(CLng(http.status), attempt)
+        waitMs = GoogleRetryAfterMs(http, CLng(http.status), attempt)
 
         LogWarn sourceName, _
                 "Google HTTP " & CStr(http.status) & _
@@ -104,6 +112,7 @@ Private Function SendGoogleHttpWithRetry(ByVal http As Object, _
 
     SendGoogleHttpWithRetry = True
     Exit Function
+
 EH:
     LogErr sourceName & ".SendGoogleHttpWithRetry"
     SendGoogleHttpWithRetry = False
@@ -143,6 +152,60 @@ Private Sub SleepMilliseconds(ByVal milliseconds As Long)
         DoEvents
     Loop
 End Sub
+
+Private Sub ThrottleGoogleWriteRequest(ByVal sourceName As String)
+    Dim nowTimer As Double
+    Dim elapsedMs As Long
+    Dim waitMs As Long
+
+    nowTimer = Timer
+
+    If mLastGoogleWriteTimer > 0 Then
+        If nowTimer >= mLastGoogleWriteTimer Then
+            elapsedMs = CLng((nowTimer - mLastGoogleWriteTimer) * 1000#)
+        Else
+            ' Timer wrapped at midnight.
+            elapsedMs = CLng(((86400# - mLastGoogleWriteTimer) + nowTimer) * 1000#)
+        End If
+
+        If elapsedMs < GOOGLE_WRITE_MIN_INTERVAL_MS Then
+            waitMs = GOOGLE_WRITE_MIN_INTERVAL_MS - elapsedMs
+            SleepMilliseconds waitMs
+        End If
+    End If
+
+    mLastGoogleWriteTimer = Timer
+End Sub
+
+Private Function GoogleRetryAfterMs(ByVal http As Object, _
+                                    ByVal statusCode As Long, _
+                                    ByVal attempt As Long) As Long
+    Dim retryAfter As String
+    Dim delayMs As Long
+
+    On Error Resume Next
+    retryAfter = CStr(http.GetResponseHeader("Retry-After"))
+    On Error GoTo 0
+
+    If Len(Trim$(retryAfter)) > 0 Then
+        If IsNumeric(retryAfter) Then
+            GoogleRetryAfterMs = CLng(CDbl(retryAfter) * 1000#)
+            If GoogleRetryAfterMs < 1000 Then GoogleRetryAfterMs = 1000
+            Exit Function
+        End If
+    End If
+
+    If statusCode = 429 Then
+        GoogleRetryAfterMs = GOOGLE_HTTP_429_WAIT_MS
+        Exit Function
+    End If
+
+    delayMs = GOOGLE_HTTP_RETRY_BASE_MS * (2 ^ attempt)
+    If delayMs > GOOGLE_HTTP_RETRY_MAX_MS Then delayMs = GOOGLE_HTTP_RETRY_MAX_MS
+
+    Randomize
+    GoogleRetryAfterMs = delayMs + CLng(Int(Rnd() * 500))
+End Function
 
 Private Function RequireGoogleTextArg(ByVal value As String, _
                                       ByVal argName As String, _
@@ -236,7 +299,7 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
 
     stagingTab = BuildStagingTabName(tabName)
     
-    If Not AddSheetTab(spreadsheetID, stagingTab) Then
+    If Not AddSheetTab(spreadsheetID, stagingTab, False) Then
         LogError SRC, "Could not create staging tab. Target=" & tabName & _
                       "; Staging=" & stagingTab
         Exit Function
@@ -263,7 +326,7 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
         Exit Function
     End If
 
-    targetSheetId = GetSheetIdByTitle(spreadsheetID, tabName)
+    targetSheetId = GetSheetIdByTitle(spreadsheetID, tabName, True)
     
     If Not ReplaceSheetTabWithStaging(spreadsheetID, tabName, targetSheetId, stagingTab, stagingSheetId) Then
         LogError SRC, "Replacing target with staging failed. Target=" & tabName & _
@@ -323,7 +386,7 @@ Private Function WriteSheetValuesNoClear(ByVal spreadsheetID As String, _
     http.Open "PUT", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.SetRequestHeader "Content-Type", "application/json"
-    If Not SendGoogleHttpWithRetry(http, sourceName, body, True) Then
+    If Not SendGoogleHttpWithRetry(http, sourceName, body, True, True) Then
         WriteSheetValuesNoClear = False
         Exit Function
     End If
@@ -502,9 +565,9 @@ EH:
     Set GetSheetIdCache = Nothing
 End Function
 
-
 Private Function GetSheetIdByTitle(ByVal spreadsheetID As String, _
-                                   ByVal tabName As String) As Long
+                                   ByVal tabName As String, _
+                                   Optional ByVal forceRefresh As Boolean = False) As Long
     Const SRC As String = "GetSheetIdByTitle"
 
     Dim dict As Object
@@ -515,7 +578,7 @@ Private Function GetSheetIdByTitle(ByVal spreadsheetID As String, _
 
     If Len(Trim$(spreadsheetID)) = 0 Or Len(Trim$(tabName)) = 0 Then Exit Function
 
-    Set dict = GetSheetIdCache(spreadsheetID, False)
+    Set dict = GetSheetIdCache(spreadsheetID, forceRefresh)
 
     If Not dict Is Nothing Then
         If dict.Exists(tabName) Then
@@ -524,14 +587,14 @@ Private Function GetSheetIdByTitle(ByVal spreadsheetID As String, _
         End If
     End If
 
-    ' One forced refresh only. This covers external changes and tabs created
-    ' before cache was populated.
-    Set dict = GetSheetIdCache(spreadsheetID, True)
+    If Not forceRefresh Then
+        Set dict = GetSheetIdCache(spreadsheetID, True)
 
-    If Not dict Is Nothing Then
-        If dict.Exists(tabName) Then
-            GetSheetIdByTitle = CLng(dict(tabName))
-            Exit Function
+        If Not dict Is Nothing Then
+            If dict.Exists(tabName) Then
+                GetSheetIdByTitle = CLng(dict(tabName))
+                Exit Function
+            End If
         End If
     End If
 
@@ -696,11 +759,11 @@ End Function
 
 Private Sub CacheSheetId(ByVal spreadsheetID As String, _
                          ByVal tabName As String, _
-                         ByVal sheetId As Long)
+                         ByVal sheetID As Long)
     Dim cacheKey As String
     Dim dict As Object
 
-    If sheetId <= 0 Then Exit Sub
+    If sheetID <= 0 Then Exit Sub
     If Len(Trim$(spreadsheetID)) = 0 Then Exit Sub
     If Len(Trim$(tabName)) = 0 Then Exit Sub
 
@@ -718,9 +781,9 @@ Private Sub CacheSheetId(ByVal spreadsheetID As String, _
     End If
 
     If dict.Exists(tabName) Then
-        dict(tabName) = sheetId
+        dict(tabName) = sheetID
     Else
-        dict.Add tabName, sheetId
+        dict.Add tabName, sheetID
     End If
 End Sub
 
@@ -788,12 +851,13 @@ Private Function ReplaceSheetTabWithStaging(ByVal spreadsheetID As String, _
     End If
 
     If targetSheetId <= 0 Then
-        ' Target does not exist: just rename staging to target.
-        If RenameSheetById(spreadsheetID, stagingSheetId, targetTabName, SRC & ".renameNewTarget") Then
-            CacheSheetId spreadsheetID, targetTabName, stagingSheetId
-            RemoveSheetIdFromCache spreadsheetID, stagingTabName
-            ReplaceSheetTabWithStaging = True
-        End If
+        targetSheetId = GetSheetIdByTitle(spreadsheetID, targetTabName, True)
+    End If
+
+    If targetSheetId <= 0 Then
+        LogError SRC, "Target sheetId could not be resolved after forced refresh. " & _
+                      "Refusing direct rename to avoid title collision. Target=" & targetTabName & _
+                      "; Staging=" & stagingTabName
         Exit Function
     End If
 
@@ -872,7 +936,7 @@ Private Function ExecuteSheetsBatchUpdate(ByVal spreadsheetID As String, _
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.SetRequestHeader "Content-Type", "application/json"
 
-    If Not SendGoogleHttpWithRetry(http, sourceName, body, True) Then Exit Function
+    If Not SendGoogleHttpWithRetry(http, sourceName, body, True, True) Then Exit Function
 
     If http.status >= 200 And http.status < 300 Then
         ExecuteSheetsBatchUpdate = True
@@ -892,11 +956,11 @@ Private Sub SafeDeleteSheetByTitle(ByVal spreadsheetID As String, _
                                    ByVal tabName As String)
     On Error Resume Next
 
-    Dim sheetId As Long
-    sheetId = GetSheetIdByTitle(spreadsheetID, tabName)
+    Dim sheetID As Long
+    sheetID = GetSheetIdByTitle(spreadsheetID, tabName)
 
-    If sheetId > 0 Then
-        If DeleteSheetById(spreadsheetID, sheetId) Then
+    If sheetID > 0 Then
+        If DeleteSheetById(spreadsheetID, sheetID) Then
             RemoveSheetIdFromCache spreadsheetID, tabName
         End If
     End If
@@ -905,25 +969,25 @@ Private Sub SafeDeleteSheetByTitle(ByVal spreadsheetID As String, _
 End Sub
 
 Private Function RenameSheetById(ByVal spreadsheetID As String, _
-                                 ByVal sheetId As Long, _
+                                 ByVal sheetID As Long, _
                                  ByVal newTitle As String, _
                                  ByVal sourceName As String) As Boolean
     Dim body As String
 
     RenameSheetById = False
 
-    If sheetId <= 0 Then
+    If sheetID <= 0 Then
         LogError sourceName, "Invalid sheetId for rename. NewTitle=" & newTitle
         Exit Function
     End If
 
     If Len(Trim$(newTitle)) = 0 Then
-        LogError sourceName, "newTitle je prazan. SheetId=" & CStr(sheetId)
+        LogError sourceName, "newTitle je prazan. SheetId=" & CStr(sheetID)
         Exit Function
     End If
 
     body = "{""requests"":[" & _
-           "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(sheetId) & _
+           "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(sheetID) & _
            ",""title"":""" & JsonEscape(newTitle) & """},""fields"":""title""}}" & _
            "]}"
 
@@ -931,12 +995,12 @@ Private Function RenameSheetById(ByVal spreadsheetID As String, _
 End Function
 
 Private Function DeleteSheetById(ByVal spreadsheetID As String, _
-                                 ByVal sheetId As Long) As Boolean
+                                 ByVal sheetID As Long) As Boolean
     Dim body As String
 
-    If sheetId <= 0 Then Exit Function
+    If sheetID <= 0 Then Exit Function
 
-    body = "{""requests"":[{""deleteSheet"":{""sheetId"":" & CStr(sheetId) & "}}]}"
+    body = "{""requests"":[{""deleteSheet"":{""sheetId"":" & CStr(sheetID) & "}}]}"
     DeleteSheetById = ExecuteSheetsBatchUpdate(spreadsheetID, body, "DeleteSheetById")
 End Function
 
@@ -1072,7 +1136,7 @@ Public Function ClearSheet(ByVal spreadsheetID As String, _
     http.Open "POST", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.SetRequestHeader "Content-Type", "application/json"
-    If Not SendGoogleHttpWithRetry(http, "ClearSheet", "{}", True) Then
+    If Not SendGoogleHttpWithRetry(http, "ClearSheet", "{}", True, True) Then
         ClearSheet = False
         Exit Function
     End If
@@ -1304,13 +1368,15 @@ End Function
 ' ============================================================
 
 Public Function AddSheetTab(ByVal spreadsheetID As String, _
-                            ByVal tabName As String) As Boolean
+                            ByVal tabName As String, _
+                            Optional ByVal checkExisting As Boolean = True) As Boolean
     Const SRC As String = "AddSheetTab"
 
     Dim accessToken As String
     Dim url As String
     Dim body As String
     Dim http As Object
+    Dim existingSheetId As Long
     Dim newSheetId As Long
 
     On Error GoTo EH
@@ -1325,7 +1391,16 @@ Public Function AddSheetTab(ByVal spreadsheetID As String, _
         Exit Function
     End If
 
-    accessToken = GetAccessToken()
+    If checkExisting Then
+        existingSheetId = GetSheetIdByTitle(spreadsheetID, tabName)
+        If existingSheetId > 0 Then
+            LogInfo SRC, "Tab already exists, treated as OK: " & tabName
+            AddSheetTab = True
+            Exit Function
+        End If
+    End If
+
+   accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
         LogError SRC, "Kein Access Token"
         AddSheetTab = False
@@ -1337,11 +1412,12 @@ Public Function AddSheetTab(ByVal spreadsheetID As String, _
            JsonEscape(tabName) & """}}}]}"
 
     Set http = CreateGoogleHttpRequest(SRC)
-        http.Open "POST", url, False
+
+    http.Open "POST", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.SetRequestHeader "Content-Type", "application/json"
 
-    If Not SendGoogleHttpWithRetry(http, SRC, body, True) Then
+    If Not SendGoogleHttpWithRetry(http, SRC, body, True, True) Then
         AddSheetTab = False
         Exit Function
     End If
@@ -1356,6 +1432,8 @@ Public Function AddSheetTab(ByVal spreadsheetID As String, _
 
     If IsGoogleSheetAlreadyExistsError(CLng(http.status), CStr(http.responseText)) Then
         LogInfo SRC, "Tab already exists, treated as OK: " & tabName
+        ' Force refresh because this tab exists but cache did not know it.
+        existingSheetId = GetSheetIdByTitle(spreadsheetID, tabName, True)
         AddSheetTab = True
         Exit Function
     End If
