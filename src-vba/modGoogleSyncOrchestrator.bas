@@ -30,6 +30,10 @@ Private Const SYNC_AUTO_MIN_ALLOWED_MIN As Long = 15
 Private Const SYNC_CONTROL_TAB As String = "SyncControl"
 Private Const MASTER_SYNC_LOCK_KEY As String = "MASTER_SYNC_LOCK"
 
+Private Const MASTER_SYNC_LOCK_TTL_MIN As Long = 10
+Private Const EVENT_PWA_UNLOCK_FAIL As String = "PWA_MASTER_SYNC_UNLOCK_FAIL"
+Private Const EVENT_PWA_UNLOCK_FAIL_SEVERITY As String = "ERROR"
+
 Private mNextScheduledRun As Date
 Private mIsScheduled As Boolean
 Private mSyncInProgress As Boolean
@@ -65,10 +69,17 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim errNum As Long
     Dim errDesc As String
     Dim pwaLockAcquired As Boolean
+    
+    Dim pwaUnlockOk As Boolean
+    Dim unlockErrDesc As String
+    Dim finalMessageAlreadyShown As Boolean
 
     On Error GoTo EH
 
     SyncPWAFullCycle_Core = False
+    
+    pwaUnlockOk = True
+    finalMessageAlreadyShown = False
 
     If mSyncInProgress Then
         LogWarn ORCH_MODULE, "SyncPWAFullCycle_Core re-entered. Aborting."
@@ -265,10 +276,13 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     End If
 
     If showMessages Then
-        If SyncPWAFullCycle_Core Then
-            MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
-        Else
-            MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
+        If Not pwaLockAcquired Then
+            If SyncPWAFullCycle_Core Then
+                MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
+            Else
+                MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
+            End If
+            finalMessageAlreadyShown = True
         End If
     End If
 
@@ -277,9 +291,47 @@ CleanExit:
         SyncProgress "Otkljucavam PWA upis..."
 
         If Not SetPWAMasterSyncLock(False, "Master sync zavrsen.") Then
-            LogError ORCH_MODULE, "PWA lock release failed. Manual check required."
+            pwaUnlockOk = False
+            unlockErrDesc = _
+                "PWA master sync lock nije skinut iz VBA ciklusa. " & _
+                "PWA moze ostati privremeno zakljucan do isteka GAS/PWA lock TTL-a " & _
+                "(~" & CStr(MASTER_SYNC_LOCK_TTL_MIN) & " min). " & _
+                "Ako se stanje ne oporavi automatski, proveri Stammdaten/SyncControl i MASTER_SYNC_LOCK."
+
+            LogError ORCH_MODULE, unlockErrDesc
+            SyncProgress "GRESKA: PWA lock nije skinut iz VBA ciklusa; ocekuje se automatski TTL oporavak."
+
+            ' Not permanent lockout, but the operator must not see a green cycle.
+            SyncPWAFullCycle_Core = False
+
+            Monitor_PWAMasterUnlockFail unlockErrDesc
+
+            Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                                 okStammdaten, okKartice, okMgmt, False, _
+                                 EVENT_PWA_UNLOCK_FAIL_SEVERITY, _
+                                 "unlock-failed-ttl-" & CStr(MASTER_SYNC_LOCK_TTL_MIN) & "min"
+
+            If showMessages Then
+                MsgBox summary & vbCrLf & _
+                       "Status: GRESKA / PARTIAL" & vbCrLf & vbCrLf & _
+                       "Sync koraci su mozda zavrseni, ali VBA nije uspeo da skine PWA lock." & vbCrLf & _
+                       "PWA se po GAS/PWA pravilu automatski oporavlja posle ~" & _
+                       CStr(MASTER_SYNC_LOCK_TTL_MIN) & " minuta." & vbCrLf & _
+                       "Ako se ne oporavi, proveri Stammdaten / SyncControl.", _
+                       vbExclamation, APP_NAME
+                finalMessageAlreadyShown = True
+            End If
         Else
             SyncProgress "PWA upis je ponovo dozvoljen."
+
+            If showMessages And Not finalMessageAlreadyShown Then
+                If SyncPWAFullCycle_Core Then
+                    MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
+                Else
+                    MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
+                End If
+                finalMessageAlreadyShown = True
+            End If
         End If
     End If
 
@@ -340,11 +392,14 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
                                  ByVal okStammdaten As Boolean, _
                                  ByVal okKartice As Boolean, _
                                  ByVal okMgmt As Boolean, _
-                                 ByVal cycleOk As Boolean)
+                                 ByVal cycleOk As Boolean, _
+                                 Optional ByVal severityOverride As String = "", _
+                                 Optional ByVal reason As String = "")
     On Error Resume Next
 
     Dim corrId As String
     Dim msg As String
+    Dim sev As String
 
     corrId = "PWA-FULL-CYCLE-" & Format$(Now, "yyyymmddhhnnss")
 
@@ -356,9 +411,19 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
           "; Kartice=" & CStr(okKartice) & _
           "; MgmtReports=" & CStr(okMgmt)
 
+    If Len(Trim$(reason)) > 0 Then
+        msg = msg & "; Reason=" & reason
+    End If
+
+    If Len(Trim$(severityOverride)) > 0 Then
+        sev = UCase$(Trim$(severityOverride))
+    Else
+        sev = IIf(cycleOk, "INFO", "CRITICAL")
+    End If
+
     Monitor_Event _
         eventType:=IIf(cycleOk, "PWA_FULL_CYCLE_SUCCESS", "PWA_FULL_CYCLE_FAIL"), _
-        severity:=IIf(cycleOk, "INFO", "CRITICAL"), _
+        severity:=sev, _
         message:=msg, _
         userId:="Operator", _
         moduleName:=ORCH_MODULE, _
@@ -375,9 +440,41 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
             entityId:="PWA-FULL-CYCLE", _
             correlationId:=corrId, _
             errorNumber:=0, _
-            errorDescription:="PWA full sync cycle failed or partially failed. " & msg, _
+            errorDescription:="PWA full sync cycle failed or completed degraded. " & msg, _
             errorSource:=ORCH_MODULE
     End If
+
+    On Error GoTo 0
+End Sub
+
+Private Sub Monitor_PWAMasterUnlockFail(ByVal errorDescription As String)
+    On Error Resume Next
+
+    Dim corrId As String
+    corrId = "PWA-UNLOCK-FAIL-" & Format$(Now, "yyyymmddhhnnss")
+
+    Monitor_Error _
+        moduleName:=ORCH_MODULE, _
+        procedureName:="SyncPWAFullCycle_Core", _
+        entityType:="MasterData", _
+        entityId:="PWA-MASTER-SYNC-LOCK", _
+        correlationId:=corrId, _
+        errorNumber:=0, _
+        errorDescription:=errorDescription, _
+        errorSource:=ORCH_MODULE
+
+    Monitor_Event _
+        eventType:=EVENT_PWA_UNLOCK_FAIL, _
+        severity:=EVENT_PWA_UNLOCK_FAIL_SEVERITY, _
+        message:=errorDescription, _
+        userId:="Operator", _
+        moduleName:=ORCH_MODULE, _
+        procedureName:="SyncPWAFullCycle_Core", _
+        entityType:="MasterData", _
+        entityId:="PWA-MASTER-SYNC-LOCK", _
+        correlationId:=corrId
+
+    On Error GoTo 0
 End Sub
 
 ' ============================================================
