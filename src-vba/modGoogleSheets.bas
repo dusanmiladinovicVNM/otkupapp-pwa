@@ -1,4 +1,3 @@
-Attribute VB_Name = "modGoogleSheets"
 Option Explicit
 
 ' ============================================================
@@ -13,6 +12,33 @@ Option Explicit
 '   ClearSheet       — löscht alle Daten in einem Tab
 '   CreateSpreadsheet — erstellt neues Google Sheet
 '   GetSpreadsheetID — sucht Sheet-ID nach Name in einem Folder
+' ============================================================
+
+' ============================================================
+' PATCH: P1 — modGoogleSheets.WriteSheetData staging/verify/replace
+' File: src-vba/modGoogleSheets.bas
+'
+' Problem:
+'   Current WriteSheetData does:
+'     1) ClearSheet(target)
+'     2) PUT values(target)
+'
+'   If ClearSheet succeeds and PUT values fails, the target tab can remain empty.
+'
+' Required minimum:
+'   Every WriteSheetData=False must make the full sync fail.
+'   Existing callers already propagate False through SyncStammdatenToGoogle_Core,
+'   ExportKarticeToGoogle_Core, ExportMgmtReports_Core and orchestrator booleans.
+'
+' Better implementation in this patch:
+'   Write to staging tab -> verify staging -> replace target tab by batchUpdate.
+'
+' Notes:
+'   - Does not delete any project file or unrelated code.
+'   - Replaces only WriteSheetData behavior and adds private helpers.
+'   - Target tab sheetId changes after replace. This is acceptable for exported
+'     data tabs that are consumed by tab name. If a future tab must preserve
+'     sheetId due to charts/protected ranges, use a separate preserve-sheetId path.
 ' ============================================================
 
 Private Const SHEETS_API_BASE As String = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -89,86 +115,498 @@ End Function
 Public Function WriteSheetData(ByVal spreadsheetID As String, _
                                ByVal tabName As String, _
                                ByVal data As Variant) As Boolean
-    ' Schreibt ein 2D-Array (1-based) in ein Google Sheet Tab
-    ' Überschreibt vorhandene Daten ab A1
-    
-    Dim accessToken As String
-    Dim url As String
-    Dim body As String
-    Dim http As Object
-    
+    Const SRC As String = "WriteSheetData"
+
+    Dim stagingTab As String
+    Dim stagingSheetId As Long
+    Dim targetSheetId As Long
+
     On Error GoTo EH
-    
+
+    WriteSheetData = False
+
     If Len(Trim$(spreadsheetID)) = 0 Then
-        LogError "WriteSheetData", "spreadsheetID je prazan."
-        WriteSheetData = False
+        LogError SRC, "spreadsheetID je prazan."
         Exit Function
     End If
 
     If Len(Trim$(tabName)) = 0 Then
-        LogError "WriteSheetData", "tabName je prazan."
-        WriteSheetData = False
+        LogError SRC, "tabName je prazan."
         Exit Function
     End If
 
     If IsEmpty(data) Then
-        LogError "WriteSheetData", "data je Empty."
-        WriteSheetData = False
+        LogError SRC, "data je Empty."
         Exit Function
     End If
 
     If Not IsTwoDimArray(data) Then
-        LogError "WriteSheetData", "data mora biti 2D array."
+        LogError SRC, "data mora biti 2D array."
+        Exit Function
+    End If
+
+    If Len(GetAccessToken()) = 0 Then
+        LogError SRC, "Kein Access Token"
+        Exit Function
+    End If
+
+    stagingTab = BuildStagingTabName(tabName)
+    
+    If Not AddSheetTab(spreadsheetID, stagingTab) Then
+        LogError SRC, "Could not create staging tab. Target=" & tabName & _
+                      "; Staging=" & stagingTab
+        Exit Function
+    End If
+
+    If Not WriteSheetValuesNoClear(spreadsheetID, stagingTab, data, SRC & ".staging") Then
+        LogError SRC, "Write to staging tab failed. Target=" & tabName & _
+                      "; Staging=" & stagingTab
+        SafeDeleteSheetByTitle spreadsheetID, stagingTab
+        Exit Function
+    End If
+
+    If Not VerifyWrittenSheetData(spreadsheetID, stagingTab, data) Then
+        LogError SRC, "Verify staging tab failed. Target=" & tabName & _
+                      "; Staging=" & stagingTab
+        SafeDeleteSheetByTitle spreadsheetID, stagingTab
+        Exit Function
+    End If
+
+    stagingSheetId = GetSheetIdByTitle(spreadsheetID, stagingTab)
+    If stagingSheetId <= 0 Then
+        LogError SRC, "Could not resolve staging sheetId. Staging=" & stagingTab
+        SafeDeleteSheetByTitle spreadsheetID, stagingTab
+        Exit Function
+    End If
+
+    targetSheetId = GetSheetIdByTitle(spreadsheetID, tabName)
+    
+    If Not ReplaceSheetTabWithStaging(spreadsheetID, tabName, targetSheetId, stagingTab, stagingSheetId) Then
+        LogError SRC, "Replacing target with staging failed. Target=" & tabName & _
+                      "; Staging=" & stagingTab
+        SafeDeleteSheetByTitle spreadsheetID, stagingTab
+        Exit Function
+    End If
+
+    If Not VerifyWrittenSheetData(spreadsheetID, tabName, data) Then
+        LogError SRC, "Post-replace verify failed. Target=" & tabName
         WriteSheetData = False
         Exit Function
     End If
+
+    LogInfo SRC, tabName & ": " & CStr(UBound(data, 1)) & _
+                 " rows written through staging replace"
+
+    WriteSheetData = True
+    Exit Function
+
+EH:
+    LogErr SRC
+    On Error Resume Next
+    If Len(Trim$(stagingTab)) > 0 Then SafeDeleteSheetByTitle spreadsheetID, stagingTab
+    On Error GoTo 0
+    WriteSheetData = False
+End Function
+
+
+Private Function WriteSheetValuesNoClear(ByVal spreadsheetID As String, _
+                                         ByVal tabName As String, _
+                                         ByVal data As Variant, _
+                                         ByVal sourceName As String) As Boolean
+    Dim accessToken As String
+    Dim url As String
+    Dim body As String
+    Dim http As Object
+
+    On Error GoTo EH
+
+    WriteSheetValuesNoClear = False
 
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
-        LogError "WriteSheetData", "Kein Access Token"
-        WriteSheetData = False
-        Exit Function
-    End If
-    
-    ' Erst Sheet leeren
-    If Not ClearSheet(spreadsheetID, tabName) Then
-        LogError "WriteSheetData", _
-             "ClearSheet failed before write. SpreadsheetID=" & spreadsheetID & _
-             ", Tab=" & tabName
-        WriteSheetData = False
+        LogError sourceName, "Kein Access Token"
         Exit Function
     End If
 
-    ' Daten als JSON-Body bauen
     body = BuildValuesJson(data)
-    
+
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
           "/values/" & UrlEncode(tabName) & "!A1" & _
           "?valueInputOption=RAW"
-    
-    Set http = CreateGoogleHttpRequest("WriteSheetData")
-    
+
+    Set http = CreateGoogleHttpRequest(sourceName)
+
     http.Open "PUT", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
     http.SetRequestHeader "Content-Type", "application/json"
     http.Send body
-    
+
     If http.status >= 200 And http.status < 300 Then
-        LogInfo "WriteSheetData", tabName & ": " & UBound(data, 1) & " rows written"
-        WriteSheetData = True
+        WriteSheetValuesNoClear = True
     Else
-        LogError "WriteSheetData", _
-         "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
-         http.status
-        WriteSheetData = False
+        LogError sourceName, _
+                 "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
+                 http.status
     End If
-    
+
+
     Exit Function
 
 EH:
-    LogErr "WriteSheetData"
-    WriteSheetData = False
+    LogErr sourceName
+    WriteSheetValuesNoClear = False
 End Function
+
+Private Function BuildStagingTabName(ByVal targetTabName As String) As String
+    Dim baseName As String
+
+    baseName = SanitizeSheetTabName("__stage_" & targetTabName)
+
+    If Len(baseName) > 70 Then baseName = Left$(baseName, 70)
+
+    BuildStagingTabName = baseName & "_" & Format$(Now, "hhnnss")
+End Function
+
+Private Function BuildBackupTabName(ByVal targetTabName As String) As String
+    Dim baseName As String
+
+    baseName = SanitizeSheetTabName("__old_" & targetTabName)
+
+    If Len(baseName) > 70 Then baseName = Left$(baseName, 70)
+
+    BuildBackupTabName = baseName & "_" & Format$(Now, "hhnnss")
+End Function
+
+Private Function SanitizeSheetTabName(ByVal s As String) As String
+    s = Trim$(CStr(s))
+    s = Replace(s, "'", "_")
+    s = Replace(s, "[", "_")
+    s = Replace(s, "]", "_")
+    s = Replace(s, ":", "_")
+    s = Replace(s, "*", "_")
+    s = Replace(s, "?", "_")
+    s = Replace(s, "/", "_")
+    s = Replace(s, "\", "_")
+
+    If Len(s) = 0 Then s = "__stage"
+    If Len(s) > 90 Then s = Left$(s, 90)
+
+    SanitizeSheetTabName = s
+End Function
+
+Private Function VerifyWrittenSheetData(ByVal spreadsheetID As String, _
+                                        ByVal tabName As String, _
+                                        ByVal expectedData As Variant) As Boolean
+    Const SRC As String = "VerifyWrittenSheetData"
+
+    Dim actual As Variant
+    Dim r As Long
+    Dim c As Long
+    Dim expectedRows As Long
+    Dim expectedCols As Long
+
+    On Error GoTo EH
+
+    VerifyWrittenSheetData = False
+
+    actual = ReadSheetData(spreadsheetID, tabName)
+    If IsEmpty(actual) Then
+        LogError SRC, "Readback is Empty. Tab=" & tabName
+        Exit Function
+    End If
+
+    expectedRows = UBound(expectedData, 1)
+    expectedCols = UBound(expectedData, 2)
+
+    If UBound(actual, 1) < expectedRows Then
+        LogError SRC, "Row count mismatch. Tab=" & tabName & _
+                      "; Actual=" & CStr(UBound(actual, 1)) & _
+                      "; Expected=" & CStr(expectedRows)
+        Exit Function
+    End If
+
+    If UBound(actual, 2) < expectedCols Then
+        LogError SRC, "Column count mismatch. Tab=" & tabName & _
+                      "; Actual=" & CStr(UBound(actual, 2)) & _
+                      "; Expected=" & CStr(expectedCols)
+        Exit Function
+    End If
+    For r = 1 To expectedRows
+        For c = 1 To expectedCols
+            If GoogleSheetComparableValue(actual(r, c)) <> _
+               GoogleSheetComparableValue(expectedData(r, c)) Then
+
+                LogError SRC, "Value mismatch. Tab=" & tabName & _
+                              "; Row=" & CStr(r) & _
+                              "; Col=" & CStr(c) & _
+                              "; Actual=" & GoogleSheetComparableValue(actual(r, c)) & _
+                              "; Expected=" & GoogleSheetComparableValue(expectedData(r, c))
+                Exit Function
+            End If
+        Next c
+    Next r
+
+    VerifyWrittenSheetData = True
+    Exit Function
+
+EH:
+    LogErr SRC
+    VerifyWrittenSheetData = False
+End Function
+
+Private Function GoogleSheetComparableValue(ByVal value As Variant) As String
+    If IsEmpty(value) Or IsNull(value) Then
+        GoogleSheetComparableValue = ""
+    ElseIf VarType(value) = vbDate Then
+        GoogleSheetComparableValue = Format$(CDate(value), "yyyy-mm-dd")
+    Else
+        GoogleSheetComparableValue = CStr(value)
+    End If
+End Function
+
+Private Function GetSheetIdByTitle(ByVal spreadsheetID As String, _
+                                   ByVal tabName As String) As Long
+    Const SRC As String = "GetSheetIdByTitle"
+
+    Dim accessToken As String
+    Dim url As String
+    Dim http As Object
+    Dim responseText As String
+
+    On Error GoTo EH
+
+    GetSheetIdByTitle = 0
+
+    accessToken = GetAccessToken()
+    If Len(accessToken) = 0 Then
+        LogError SRC, "Kein Access Token"
+        Exit Function
+    End If
+
+    url = SHEETS_API_BASE & "/" & spreadsheetID & _
+          "?fields=sheets.properties(sheetId,title)"
+
+    Set http = CreateGoogleHttpRequest(SRC)
+
+    http.Open "GET", url, False
+    http.SetRequestHeader "Authorization", "Bearer " & accessToken
+    http.Send
+
+    responseText = CStr(http.responseText)
+
+    If http.status <> 200 Then
+        LogError SRC, "HTTP " & http.status & ": " & GoogleHttpBodyForLog(responseText), _
+                 http.status
+        Exit Function
+    End If
+
+    GetSheetIdByTitle = ExtractSheetIdByTitle(responseText, tabName)
+    Exit Function
+    
+
+EH:
+    LogErr SRC
+    GetSheetIdByTitle = 0
+End Function
+
+Private Function ExtractSheetIdByTitle(ByVal json As String, _
+                                       ByVal expectedTitle As String) As Long
+    Dim pos As Long
+    Dim idPos As Long
+    Dim titlePos As Long
+    Dim nextBlock As Long
+    Dim sheetIdText As String
+    Dim sheetTitle As String
+
+    pos = 1
+
+    Do
+        titlePos = InStr(pos, json, """title""", vbTextCompare)
+        If titlePos = 0 Then Exit Do
+
+        idPos = InStrRev(Left$(json, titlePos), """sheetId""", -1, vbTextCompare)
+        If idPos = 0 Then Exit Do
+
+        nextBlock = InStr(titlePos + 1, json, """title""", vbTextCompare)
+
+        sheetTitle = ExtractJsonSimpleValueAt(json, titlePos)
+        sheetIdText = ExtractJsonNumberAt(json, idPos)
+
+        If StrComp(sheetTitle, expectedTitle, vbBinaryCompare) = 0 Then
+            If IsNumeric(sheetIdText) Then
+                ExtractSheetIdByTitle = CLng(sheetIdText)
+                Exit Function
+            End If
+        End If
+
+        If nextBlock > 0 Then
+            pos = nextBlock
+        Else
+            Exit Do
+        End If
+      Loop
+
+    ExtractSheetIdByTitle = 0
+End Function
+
+Private Function ExtractJsonNumberAt(ByVal json As String, _
+                                     ByVal keyPos As Long) As String
+    Dim p As Long
+    Dim q As Long
+    Dim ch As String
+
+    p = InStr(keyPos, json, ":")
+    If p = 0 Then Exit Function
+
+    p = p + 1
+
+    Do While p <= Len(json)
+        ch = Mid$(json, p, 1)
+        If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then Exit Do
+        p = p + 1
+    Loop
+
+    q = p
+    Do While q <= Len(json)
+        ch = Mid$(json, q, 1)
+        If InStr(1, "0123456789-", ch, vbBinaryCompare) = 0 Then Exit Do
+        q = q + 1
+    Loop
+
+    If q > p Then ExtractJsonNumberAt = Mid$(json, p, q - p)
+End Function
+
+Private Function ReplaceSheetTabWithStaging(ByVal spreadsheetID As String, _
+                                            ByVal targetTabName As String, _
+                                            ByVal targetSheetId As Long, _
+                                            ByVal stagingTabName As String, _
+                                            ByVal stagingSheetId As Long) As Boolean
+    Const SRC As String = "ReplaceSheetTabWithStaging"
+
+    Dim backupTabName As String
+    Dim body As String
+
+    On Error GoTo EH
+
+    ReplaceSheetTabWithStaging = False
+
+    If stagingSheetId <= 0 Then
+        LogError SRC, "Invalid stagingSheetId. Staging=" & stagingTabName
+        Exit Function
+    End If
+
+    If targetSheetId > 0 Then
+        backupTabName = BuildBackupTabName(targetTabName)
+
+        ' Rename old target -> backup, rename staging -> target, delete backup.
+        ' This avoids duplicate title during request sequence.
+        body = "{""requests"":[" & _
+               "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(targetSheetId) & ",""title"":""" & JsonEscape(backupTabName) & """},""fields"":""title""}}," & _
+               "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(stagingSheetId) & ",""title"":""" & JsonEscape(targetTabName) & """},""fields"":""title""}}," & _
+               "{""deleteSheet"":{""sheetId"":" & CStr(targetSheetId) & "}}" & _
+               "]}"
+    Else
+        ' Target does not exist: just rename staging to target.
+        body = "{""requests"":[" & _
+               "{""updateSheetProperties"":{""properties"":{""sheetId"":" & CStr(stagingSheetId) & ",""title"":""" & JsonEscape(targetTabName) & """},""fields"":""title""}}" & _
+               "]}"
+    End If
+
+    ReplaceSheetTabWithStaging = ExecuteSheetsBatchUpdate(spreadsheetID, body, SRC)
+    Exit Function
+EH:
+    LogErr SRC
+    ReplaceSheetTabWithStaging = False
+End Function
+
+Private Function ExecuteSheetsBatchUpdate(ByVal spreadsheetID As String, _
+                                          ByVal body As String, _
+                                          ByVal sourceName As String) As Boolean
+    Dim accessToken As String
+    Dim url As String
+    Dim http As Object
+
+    On Error GoTo EH
+
+    ExecuteSheetsBatchUpdate = False
+
+    accessToken = GetAccessToken()
+    If Len(accessToken) = 0 Then
+        LogError sourceName, "Kein Access Token"
+        Exit Function
+    End If
+
+    url = SHEETS_API_BASE & "/" & spreadsheetID & ":batchUpdate"
+
+    Set http = CreateGoogleHttpRequest(sourceName)
+
+    http.Open "POST", url, False
+    http.SetRequestHeader "Authorization", "Bearer " & accessToken
+    http.SetRequestHeader "Content-Type", "application/json"
+    http.Send body
+
+    If http.status >= 200 And http.status < 300 Then
+        ExecuteSheetsBatchUpdate = True
+    Else
+        LogError sourceName, _
+                 "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
+                 http.status
+    End If
+
+    Exit Function
+EH:
+    LogErr sourceName
+    ExecuteSheetsBatchUpdate = False
+End Function
+
+Private Sub SafeDeleteSheetByTitle(ByVal spreadsheetID As String, _
+                                   ByVal tabName As String)
+    On Error Resume Next
+
+    Dim sheetId As Long
+    sheetId = GetSheetIdByTitle(spreadsheetID, tabName)
+
+    If sheetId > 0 Then
+        Call DeleteSheetById(spreadsheetID, sheetId)
+    End If
+
+    On Error GoTo 0
+End Sub
+
+Private Function DeleteSheetById(ByVal spreadsheetID As String, _
+                                 ByVal sheetId As Long) As Boolean
+    Dim body As String
+
+    If sheetId <= 0 Then Exit Function
+
+    body = "{""requests"":[{""deleteSheet"":{""sheetId"":" & CStr(sheetId) & "}}]}"
+    DeleteSheetById = ExecuteSheetsBatchUpdate(spreadsheetID, body, "DeleteSheetById")
+End Function
+
+' ============================================================
+' 8) Full-sync gate note
+' ============================================================
+'
+' No broad orchestrator rewrite is needed for the minimum acceptance because:
+' - SyncStammdatenToGoogle_Core counts a tab only if ExportX returns True.
+' - ExportKarticeToGoogle_Core returns WriteSheetData result.
+' - ExportMgmtReports_Core counts a report tab only if ExportX returns True.
+' - SyncPWAFullCycle_Core computes final result from okStammdaten, okKartice,
+'   okMgmt and other gates.
+'
+' Therefore any WriteSheetData=False must propagate as partial/fail full sync,
+' assuming callers do not swallow the return value.
+'
+' Recommended smoke:
+' - Force WriteSheetValuesNoClear to return False after staging tab creation.
+'   Expected: target tab remains unchanged; staging tab is deleted; full sync False.
+' - Force ReplaceSheetTabWithStaging to return False.
+'   Expected: target tab remains unchanged; staging tab cleanup attempted; full sync False.
+' - Normal export.
+'   Expected: staging tab disappears, target tab contains verified new data.
+' ============================================================
+
+    
 
 ' ============================================================
 ' PUBLIC — Read
