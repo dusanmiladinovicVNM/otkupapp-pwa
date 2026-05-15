@@ -16,8 +16,8 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmIzvestaj v2.1 – Reporting
-' GEÄNDERT: tblIsporuka ? tblPrijemnica
+' frmIzvestaj v2.1 â€“ Reporting
+' GEÃ„NDERT: tblIsporuka ? tblPrijemnica
 ' NEU: Manjak-Tab (Page 6)
 ' Tabs: Saldo | Otkupljena roba | Primljena ambalaza |
 '       Isplata | Zbirni po OM | Prosecna cena | Manjak
@@ -35,7 +35,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -47,7 +47,7 @@ End Sub
 
 Private Sub UserForm_Activate()
     If Not mChromeRemoved Then
-        Me.Caption = ""
+        Me.caption = ""
         RemoveTitleBar
         mChromeRemoved = True
     End If
@@ -59,7 +59,7 @@ Private Sub UserForm_Activate()
     m_IsInitializing = True
 
     'ApplyTheme Me
-    Me.Caption = "Izvestaji"
+    Me.caption = "Izvestaji"
 
     ' defaults (won't run events because we're initializing)
     SetTipToggle "tglPojedinacni"
@@ -78,8 +78,8 @@ Private Sub UserForm_Activate()
         Next i
     End If
 
-    txtDatumOd.Value = "1.1." & Year(Date)
-    txtDatumDo.Value = Format$(Date, "d.m.yyyy")
+    txtDatumOd.value = "1.1." & Year(Date)
+    txtDatumDo.value = Format$(Date, "d.m.yyyy")
 
     SetupListBoxes
     UpdateReportMode
@@ -87,7 +87,7 @@ Private Sub UserForm_Activate()
     ' ? unlock only now
     m_IsInitializing = False
 
-    ' now it’s safe to auto-run once
+    ' now itâ€™s safe to auto-run once
     AutoRefresh
 
 End Sub
@@ -96,8 +96,8 @@ Private Sub AutoRefresh()
     If m_IsInitializing Then Exit Sub
     If m_IsRefreshing Then Exit Sub
 
-    If tglPojedinacni.Value Then
-        If cmbEntitet.ListIndex < 0 Or cmbEntitet.Value = "" Then Exit Sub
+    If tglPojedinacni.value Then
+        If cmbEntitet.ListIndex < 0 Or cmbEntitet.value = "" Then Exit Sub
     End If
 
     m_IsRefreshing = True
@@ -120,13 +120,13 @@ End Sub
 ' ============================================================
 
 Private Function GetActiveEntitetTip() As String
-    If tglOM.Value Then
+    If tglOM.value Then
         GetActiveEntitetTip = "Otkupna mesta"
-    ElseIf tglKupci.Value Then
+    ElseIf tglKupci.value Then
         GetActiveEntitetTip = "Kupci"
-    ElseIf tglVozaci.Value Then
+    ElseIf tglVozaci.value Then
         GetActiveEntitetTip = "Vozaci"
-    ElseIf tglKooperanti.Value Then
+    ElseIf tglKooperanti.value Then
         GetActiveEntitetTip = "Kooperanti"
     Else
         GetActiveEntitetTip = "Otkupna mesta" ' fallback
@@ -139,10 +139,10 @@ Private Sub SetEntitetToggle(ByVal activeName As String)
 
     m_IsChangingToggle = True
 
-    tglOM.Value = (activeName = "tglOM")
-    tglKupci.Value = (activeName = "tglKupci")
-    tglVozaci.Value = (activeName = "tglVozaci")
-    tglKooperanti.Value = (activeName = "tglKooperanti")
+    tglOM.value = (activeName = "tglOM")
+    tglKupci.value = (activeName = "tglKupci")
+    tglVozaci.value = (activeName = "tglVozaci")
+    tglKooperanti.value = (activeName = "tglKooperanti")
 
     m_IsChangingToggle = False
 
@@ -152,10 +152,10 @@ End Sub
 
 Private Sub UpdateEntitetToggleUI()
     ' najjednostavnije: bold na aktivnom
-    tglOM.Font.Bold = tglOM.Value
-    tglKupci.Font.Bold = tglKupci.Value
-    tglVozaci.Font.Bold = tglVozaci.Value
-    tglKooperanti.Font.Bold = tglKooperanti.Value
+    tglOM.Font.Bold = tglOM.value
+    tglKupci.Font.Bold = tglKupci.value
+    tglVozaci.Font.Bold = tglVozaci.value
+    tglKooperanti.Font.Bold = tglKooperanti.value
 End Sub
 
 Private Sub tglOM_Click()
@@ -190,7 +190,7 @@ Private Sub tglKooperanti_Click()
 End Sub
 
 Private Function IsZbirniMode() As Boolean
-    IsZbirniMode = tglZbirni.Value
+    IsZbirniMode = tglZbirni.value
 End Function
 
 Private Sub SetTipToggle(ByVal activeName As String)
@@ -198,8 +198,8 @@ Private Sub SetTipToggle(ByVal activeName As String)
     If m_IsChangingTipToggle Then Exit Sub
     m_IsChangingTipToggle = True
 
-    tglPojedinacni.Value = (activeName = "tglPojedinacni")
-    tglZbirni.Value = (activeName = "tglZbirni")
+    tglPojedinacni.value = (activeName = "tglPojedinacni")
+    tglZbirni.value = (activeName = "tglZbirni")
 
     m_IsChangingTipToggle = False
 
@@ -207,8 +207,8 @@ Private Sub SetTipToggle(ByVal activeName As String)
 End Sub
 
 Private Sub UpdateTipToggleUI()
-    tglPojedinacni.Font.Bold = tglPojedinacni.Value
-    tglZbirni.Font.Bold = tglZbirni.Value
+    tglPojedinacni.Font.Bold = tglPojedinacni.value
+    tglZbirni.Font.Bold = tglZbirni.value
 End Sub
 
 Private Sub tglPojedinacni_Click()
@@ -267,8 +267,8 @@ End Sub
 
 Private Sub UpdateReportMode()
     Dim isPojed As Boolean
-    isPojed = tglPojedinacni.Value
-    cmbEntitet.Enabled = isPojed
+    isPojed = tglPojedinacni.value
+    cmbEntitet.enabled = isPojed
     
     ' Alle erstmal ausblenden
     Dim pg As Long
@@ -311,7 +311,7 @@ Private Sub UpdateReportMode()
             Exit For
         End If
     Next pg
-    If firstVisible >= 0 Then mpReports.Value = firstVisible
+    If firstVisible >= 0 Then mpReports.value = firstVisible
 
 End Sub
 
@@ -376,8 +376,8 @@ Private Sub btnUnos_Click()
     On Error GoTo EH
 
     Dim datumOd As Date, datumDo As Date
-    datumOd = CDate(txtDatumOd.Value)
-    datumDo = CDate(txtDatumDo.Value)
+    datumOd = CDate(txtDatumOd.value)
+    datumDo = CDate(txtDatumDo.value)
 
     Dim zbirni As Boolean
     zbirni = IsZbirniMode()
@@ -396,20 +396,20 @@ Private Sub btnUnos_Click()
     End Select
 
     If Not zbirni Then
-        If cmbEntitet.Value = "" Then
+        If cmbEntitet.value = "" Then
             MsgBox "Izaberite entitet!", vbExclamation, APP_NAME
             Exit Sub
         End If
 
         Select Case entitetTip
             Case "OM"
-                entitetID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbEntitet.Value, "StanicaID"))
+                entitetID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbEntitet.value, "StanicaID"))
             Case "Kupac"
-                entitetID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbEntitet.Value, "KupacID"))
+                entitetID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbEntitet.value, "KupacID"))
             Case "Vozac"
-                entitetID = ExtractIDFromDisplay(cmbEntitet.Value)
+                entitetID = ExtractIDFromDisplay(cmbEntitet.value)
            Case "Kooperant"
-                entitetID = ExtractIDFromDisplay(cmbEntitet.Value)
+                entitetID = ExtractIDFromDisplay(cmbEntitet.value)
         End Select
     Else
         entitetID = ""
@@ -441,19 +441,19 @@ Private Sub btnUnos_Click()
 EH:
     LogErr "frmIzvestaj.btnUnos"
     Application.ScreenUpdating = True
-    MsgBox "Greska pri ucitavanju izvestaja: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri ucitavanju izvestaja: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UpdateUnosButtonState()
 
     ' If Zbirni ? no entitet required
-    If tglZbirni.Value Then
-        btnUnos.Enabled = True
+    If tglZbirni.value Then
+        btnUnos.enabled = True
         Exit Sub
     End If
 
     ' If Pojedinacni ? entitet must be selected
-    btnUnos.Enabled = (cmbEntitet.ListIndex >= 0 And cmbEntitet.Value <> "")
+    btnUnos.enabled = (cmbEntitet.ListIndex >= 0 And cmbEntitet.value <> "")
 
 End Sub
 
@@ -557,7 +557,7 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
 End Sub
 
 ' ============================================================
-' AMBALAZA (unverändert)
+' AMBALAZA (unverÃ¤ndert)
 ' ============================================================
 
 Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID As String, _
@@ -591,7 +591,7 @@ Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID A
 End Sub
 
 ' ============================================================
-' ISPLATA (unverändert)
+' ISPLATA (unverÃ¤ndert)
 ' ============================================================
 
 Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As String, _
@@ -616,7 +616,7 @@ Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As
 End Sub
 
 ' ============================================================
-' ZBIRNI PO OM (unverändert)
+' ZBIRNI PO OM (unverÃ¤ndert)
 ' ============================================================
 
 Private Sub GenerateZbirniReport(ByVal datumOd As Date, ByVal datumDo As Date, _
@@ -716,8 +716,8 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
     Dim ime As String, prezime As String
     ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Ime"))
     prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Prezime"))
-    lblKarticaKoop.Caption = "KARTICA: " & ime & " " & prezime & " (" & entitetID & ")"
-    lblKarticaPeriod.Caption = "Period: " & txtDatumOd.Value & " - " & txtDatumDo.Value
+    lblKarticaKoop.caption = "KARTICA: " & ime & " " & prezime & " (" & entitetID & ")"
+    lblKarticaPeriod.caption = "Period: " & txtDatumOd.value & " - " & txtDatumDo.value
     
     Dim data As Variant
     data = ReportKarticaKooperanta(entitetID, datumOd, datumDo)
@@ -736,25 +736,52 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
         lstKartica.List(lstKartica.ListCount - 1, 1) = _
             CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
         
-        ' Spalte 3: Opis
-        lstKartica.List(lstKartica.ListCount - 1, 2) = _
-            CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        ' Spalte 3: Opis (+ parcela ako postoji)
+        Dim opisKartice As String
+        Dim parcelaKartice As String
+        
+        opisKartice = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
+        parcelaKartice = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        
+        If Trim$(parcelaKartice) <> "" Then
+            opisKartice = opisKartice & " / Parcela: " & parcelaKartice
+        End If
+        
+        lstKartica.List(lstKartica.ListCount - 1, 2) = opisKartice
         
         ' Spalten 4-6: Zaduzenje, Razduzenje, Saldo
         Dim j As Long
-        For j = 4 To 6
+        For j = 5 To 7
             If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                lstKartica.List(lstKartica.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+                lstKartica.List(lstKartica.ListCount - 1, j - 2) = Format$(CDbl(data(i, j)), "#,##0.00")
             End If
         Next j
     Next i
 End Sub
 
 Private Sub btnStampajKarticu_Click()
-    If cmbEntitet.ListIndex < 0 Then Exit Sub
+    On Error GoTo EH
+    
+    If cmbEntitet.ListIndex < 0 Then
+        MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    
     Dim koopID As String
-    koopID = ExtractIDFromDisplay(cmbEntitet.Value)
-    PrintKarticaPDF koopID, CDate(txtDatumOd.Value), CDate(txtDatumDo.Value)
+    koopID = ExtractIDFromDisplay(cmbEntitet.value)
+    
+    PrintKarticaPDF koopID, CDate(txtDatumOd.value), CDate(txtDatumDo.value)
+    Exit Sub
+    
+EH:
+    LogErr "frmIzvestaj.btnStampajKarticu_Click"
+    
+    Select Case Err.Number
+        Case vbObjectError + 7501, vbObjectError + 7502
+            MsgBox Err.description, vbExclamation, APP_NAME
+        Case Else
+            MsgBox "Greska pri stampanju kartice: " & Err.description, vbCritical, APP_NAME
+    End Select
 End Sub
 
 ' ============================================================
@@ -775,9 +802,13 @@ Private Sub WriteReportTables(ByVal entitetTip As String, ByVal entitetID As Str
                 For i = 0 To lstSaldoOM.ListCount - 1
                     AppendRow TBL_RPT_SALDO_OM, Array( _
                         Format$(Date, "yyyy-mm-dd"), entitetID, _
-                        lstSaldoOM.List(i, 0), lstSaldoOM.List(i, 1), _
-                        lstSaldoOM.List(i, 2), lstSaldoOM.List(i, 3), _
-                        lstSaldoOM.List(i, 4), "", lstSaldoOM.List(i, 5))
+                        lstSaldoOM.List(i, 0), _
+                        lstSaldoOM.List(i, 1), _
+                        lstSaldoOM.List(i, 2), _
+                        lstSaldoOM.List(i, 3), _
+                        lstSaldoOM.List(i, 4), _
+                        lstSaldoOM.List(i, 5), _
+                        lstSaldoOM.List(i, 6))
                 Next i
             End If
             
@@ -788,9 +819,13 @@ Private Sub WriteReportTables(ByVal entitetTip As String, ByVal entitetID As Str
                 For i = 0 To lstSaldoKupci.ListCount - 1
                     AppendRow TBL_RPT_SALDO_KUPCI, Array( _
                         Format$(Date, "yyyy-mm-dd"), entitetID, _
-                        lstSaldoKupci.List(i, 0), lstSaldoKupci.List(i, 1), _
-                        lstSaldoKupci.List(i, 2), lstSaldoKupci.List(i, 3), _
-                        lstSaldoKupci.List(i, 4), lstSaldoKupci.List(i, 5))
+                        lstSaldoKupci.List(i, 0), _
+                        lstSaldoKupci.List(i, 1), _
+                        lstSaldoKupci.List(i, 2), _
+                        lstSaldoKupci.List(i, 3), _
+                        lstSaldoKupci.List(i, 4), _
+                        lstSaldoKupci.List(i, 5), _
+                        lstSaldoKupci.List(i, 6))
                 Next i
             End If
         End If
@@ -830,29 +865,138 @@ End Sub
 Private Sub btnStampaj_Click()
     On Error GoTo EH
     Dim activeTab As Long
-    activeTab = mpReports.Value
+    activeTab = mpReports.value
     
     Dim lst As MSForms.ListBox
     Dim title As String
     Dim headers As Variant
     
     Select Case activeTab
-        Case 0: Set lst = lstSaldoOM: title = "Saldo OM"
-            headers = Array("Kooperant", "Kolicina", "Vrednost", "Novac", "Ambalaza", "Saldo")
-        Case 1: Set lst = lstSaldoKupci: title = "Saldo Kupci"
-            headers = Array("Vrsta", "Kolicina", "Cena", "Vrednost", "Ambalaza", "Saldo")
-        Case 2: Set lst = lstOtkupRoba: title = "Otkupljena roba"
-            headers = Array("Datum", "Dokument", "Kolicina", "Vrednost")
-        Case 3: Set lst = lstAmbalaza: title = "Primljena ambalaza"
-            headers = Array("Datum", "Mesto", "Tip", "Dokument", "Ulaz", "Izlaz")
-        Case 4: Set lst = lstIsplata: title = "Isplata"
-            headers = Array("Datum", "Kooperant", "Primalac", "Iznos")
-        Case 5: Set lst = lstZbirni: title = "Zbirni izvestaj"
-            headers = Array("Entitet", "Vrsta/Info", "Kolicina", "Vrednost", "Prosek")
-        Case 6: Set lst = lstProsecnaCena: title = "Prosecna cena"
-            headers = Array("Vrsta", "Kolicina", "Vrednost", "Prosecna cena")
-        Case 7: Set lst = lstManjak: title = "Manjak"
-            headers = Array("Br.Zbirne", "Zbirna kg", "Prijemnica kg", "Manjak kg", "Manjak %", "Prosek gajbe")
+        Case 0
+            Set lst = lstSaldoOM
+            title = "Saldo OM"
+            headers = Array( _
+                "Kooperant", _
+                "Kolicina", _
+                "Vrednost", _
+                "Isplaceno", _
+                "Agro zaduzenje", _
+                "Saldo", _
+                "Ambalaza")
+                
+        Case 1
+            Set lst = lstSaldoKupci
+            title = "Saldo Kupci"
+            headers = Array( _
+                "Vrsta", _
+                "Kolicina", _
+                "Cena", _
+                "Vrednost", _
+                "Novac", _
+                "Saldo", _
+                "Ambalaza")
+                
+        Case 2
+            Set lst = lstOtkupRoba
+            title = "Otkupljena roba"
+            
+            If GetActiveEntitetTip() = "Otkupna mesta" Then
+                headers = Array( _
+                    "Datum", _
+                    "Otpremnica", _
+                    "Vrsta", _
+                    "Klasa", _
+                    "Vozac", _
+                    "Otp kg", _
+                    "Blokovi kg", _
+                    "Razlika kg", _
+                    "Manjak kg", _
+                    "Manjak %")
+            Else
+                headers = Array( _
+                    "Nr", _
+                    "Vrsta", _
+                    "Kolicina kg", _
+                    "Vrednost", _
+                    "", _
+                    "", _
+                    "", _
+                    "", _
+                    "", _
+                    "")
+            End If
+                
+        Case 3
+            Set lst = lstAmbalaza
+            title = "Primljena ambalaza"
+            headers = Array( _
+                "Datum", _
+                "Mesto", _
+                "Tip", _
+                "Dokument", _
+                "Ulaz", _
+                "Izlaz")
+                
+        Case 4
+            Set lst = lstIsplata
+            title = "Isplata"
+            headers = Array( _
+                "Kooperant", _
+                "Kes otkupac", _
+                "Virman firma", _
+                "Virman avans", _
+                "Ukupno")
+                
+        Case 5
+            Set lst = lstZbirni
+            title = "Zbirni izvestaj"
+            
+            If GetActiveEntitetTip() = "Vozaci" Then
+                headers = Array( _
+                    "Vozac", _
+                    "Amb izlaz", _
+                    "Amb vracena", _
+                    "Manjak kg", _
+                    "Manjak %")
+            Else
+                headers = Array( _
+                    "Entitet", _
+                    "Vrsta", _
+                    "Kolicina", _
+                    "Vrednost", _
+                    "Prosek")
+            End If
+                
+        Case 6
+            Set lst = lstProsecnaCena
+            title = "Prosecna cena"
+            headers = Array( _
+                "Vrsta", _
+                "Kolicina", _
+                "Vrednost", _
+                "Prosecna cena")
+                
+        Case 7
+            Set lst = lstManjak
+            title = "Manjak"
+            headers = Array( _
+                "Br. zbirne", _
+                "Zbirna kg", _
+                "Prijemnica kg", _
+                "Manjak kg", _
+                "Manjak %", _
+                "Prosek gajbe")
+                
+        Case 8
+            Set lst = lstKartica
+            title = "Kartica kooperanta"
+            headers = Array( _
+                "Datum", _
+                "Broj dok.", _
+                "Opis", _
+                "Zaduzenje", _
+                "Razduzenje", _
+                "Saldo")
     End Select
     
     If lst Is Nothing Then Exit Sub
@@ -877,17 +1021,17 @@ Private Sub btnStampaj_Click()
     If IsZbirniMode() Then
         entName = "Svi"
     Else
-        entName = cmbEntitet.Value
+        entName = cmbEntitet.value
     End If
     Dim fullTitle As String
     fullTitle = title & " - " & entLabel & ": " & entName & _
-            " (" & txtDatumOd.Value & " - " & txtDatumDo.Value & ")"
+            " (" & txtDatumOd.value & " - " & txtDatumDo.value & ")"
     
     PrintIzvestaj data, fullTitle, headers
     Exit Sub
 EH:
     LogErr "frmIzvestaj.btnStampaj"
-    MsgBox "Greska pri stampanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri stampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
