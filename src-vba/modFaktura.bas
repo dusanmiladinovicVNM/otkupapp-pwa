@@ -403,18 +403,8 @@ End Function
 Public Sub PrintFaktura(ByVal fakturaID As String)
     On Error GoTo EH
 
-    If Trim$(fakturaID) = "" Then
-        Err.Raise vbObjectError + 1730, "PrintFaktura", _
-                  "FakturaID je obavezan."
-    End If
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-
-    If rows.count = 0 Then
-        Err.Raise vbObjectError + 1731, "PrintFaktura", _
-                  "Faktura nije pronadena: " & fakturaID
-    End If
+    Dim fRow As Long
+    fRow = RequireSingleFakturaRow(fakturaID, "PrintFaktura")
 
     Dim data As Variant
     data = GetTableData(TBL_FAKTURE)
@@ -440,9 +430,6 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
                                      "PrintFaktura")
     colFakStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, _
                                      "PrintFaktura")
-
-    Dim fRow As Long
-    fRow = CLng(rows(1))
 
     If UCase$(Trim$(CStr(data(fRow, colFakStornirano)))) = "DA" Then
         Err.Raise vbObjectError + 1736, "PrintFaktura", _
@@ -579,7 +566,10 @@ Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
 
     Const SRC As String = "UpdateFakturaStatus"
 
-    If Trim$(fakturaID) = "" Then Exit Sub
+    If Trim$(fakturaID) = "" Then
+        Err.Raise vbObjectError + 1723, SRC, _
+                "FakturaID je obavezan."
+    End If
 
     Dim colID As Long
     Dim colIznos As Long
@@ -593,16 +583,8 @@ Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
     colDatumPlacanja = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM_PLACANJA, SRC)
     colStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
 
-    Dim rows As Collection
-    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-
-    If rows Is Nothing Or rows.count = 0 Then
-        Err.Raise vbObjectError + 1721, SRC, _
-                  "Faktura nije pronadena: " & fakturaID
-    End If
-
     Dim r As Long
-    r = CLng(rows(1))
+    r = RequireSingleFakturaRow(fakturaID, SRC)
 
     Dim data As Variant
     data = GetTableData(TBL_FAKTURE)
@@ -676,6 +658,37 @@ EH:
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
+
+Private Function RequireSingleFakturaRow(ByVal fakturaID As String, _
+                                         ByVal sourceName As String) As Long
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise vbObjectError + 1740, sourceName, _
+                  "FakturaID je obavezan."
+    End If
+
+    RequireColumnIndex TBL_FAKTURE, COL_FAK_ID, sourceName
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
+
+    If rows Is Nothing Then
+        Err.Raise vbObjectError + 1741, sourceName, _
+                  "FindRows je vratio Nothing za FakturaID=" & fakturaID
+    End If
+
+    If rows.count = 0 Then
+        Err.Raise vbObjectError + 1742, sourceName, _
+                  "Faktura nije pronadena: " & fakturaID
+    End If
+
+    If rows.count > 1 Then
+        Err.Raise vbObjectError + 1743, sourceName, _
+                  "Duplicate FakturaID. FakturaID=" & fakturaID & _
+                  "; Count=" & CStr(rows.count)
+    End If
+
+    RequireSingleFakturaRow = CLng(rows(1))
+End Function
 
 Private Function IsPrijemnicaAvailableForFaktura(ByVal rowIndex As Long, _
                                                  ByVal prijemnicaID As String) As Boolean
