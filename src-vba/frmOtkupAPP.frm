@@ -603,9 +603,7 @@ Private Sub btnBanka_Click()
 
     lblStatus.caption = "Banka uvezena. Otvaram mapiranje..."
 
-    Me.Hide
-    frmBankaImport.Show
-    Me.Show
+    OpenContentForm frmBankaImport, btnBanka, "Banka uvoz izvoda"
 
 CleanExit:
     btnBanka.enabled = True
@@ -627,9 +625,7 @@ EH:
     MsgBox "Greška pri uvozu bankovnih izvoda:" & vbCrLf & errDesc & vbCrLf & vbCrLf & _
            "Mapiranje ce biti otvoreno za postojece neuparene stavke.", vbExclamation
 
-    Me.Hide
-    frmBankaImport.Show
-    Me.Show
+    OpenContentForm frmBankaImport, btnBanka, "Banka uvoz izvoda"
 
     Resume CleanExit
 End Sub
