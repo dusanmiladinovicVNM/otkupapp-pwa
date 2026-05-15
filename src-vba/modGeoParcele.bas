@@ -2,9 +2,20 @@ Attribute VB_Name = "modGeoParcele"
 Option Explicit
 
 Public Sub SaveParcelGeoPoint(ByVal rowIndex As Long, ByVal nCoord As Double, ByVal eCoord As Double)
-    If Not SaveParcelGeoPoint_TX(rowIndex, nCoord, eCoord) Then
-        Err.Raise vbObjectError + 7601, "modGeoParcele.SaveParcelGeoPoint", _
-                  "SaveParcelGeoPoint_TX nije uspeo."
+    Const SRC As String = "modGeoParcele.SaveParcelGeoPoint"
+
+    Dim parcelaID As String
+    parcelaID = GetParcelaIDByRowIndexStrict(rowIndex, SRC)
+
+    SaveParcelGeoPointByID parcelaID, nCoord, eCoord
+End Sub
+
+Public Sub SaveParcelGeoPointByID(ByVal parcelaID As String, _
+                                  ByVal nCoord As Double, _
+                                  ByVal eCoord As Double)
+    If Not SaveParcelGeoPointByID_TX(parcelaID, nCoord, eCoord) Then
+        Err.Raise vbObjectError + 7601, "modGeoParcele.SaveParcelGeoPointByID", _
+                  "SaveParcelGeoPointByID_TX nije uspeo. ParcelaID=" & parcelaID
     End If
 End Sub
 
@@ -15,24 +26,49 @@ Public Function SaveParcelGeoPoint_TX(ByVal rowIndex As Long, _
 
     On Error GoTo EH
 
-    If rowIndex <= 0 Then
-        Err.Raise vbObjectError + 7602, SRC, "rowIndex nije validan."
+    Dim parcelaID As String
+    parcelaID = GetParcelaIDByRowIndexStrict(rowIndex, SRC)
+
+    SaveParcelGeoPoint_TX = SaveParcelGeoPointByID_TX(parcelaID, nCoord, eCoord)
+    Exit Function
+
+EH:
+    LogErr SRC
+    SaveParcelGeoPoint_TX = False
+End Function
+
+Public Function SaveParcelGeoPointByID_TX(ByVal parcelaID As String, _
+                                          ByVal nCoord As Double, _
+                                          ByVal eCoord As Double) As Boolean
+    Const SRC As String = "modGeoParcele.SaveParcelGeoPointByID_TX"
+
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    SaveParcelGeoPointByID_TX = False
+
+    parcelaID = Trim$(parcelaID)
+
+    If Len(parcelaID) = 0 Then
+        Err.Raise vbObjectError + 7602, SRC, "ParcelaID je obavezan."
     End If
 
     If nCoord <= 0 Or eCoord <= 0 Then
         Err.Raise vbObjectError + 7603, SRC, "Koordinate moraju biti pozitivne."
     End If
 
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
     Dim lat As Double
     Dim lng As Double
 
     ConvertUTM34ToLatLng eCoord, nCoord, lat, lng
 
+    Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PARCELE
+
+    Dim rowIndex As Long
+    rowIndex = RequireSingleParcelaRow(parcelaID, SRC)
 
     RequireUpdateCell TBL_PARCELE, rowIndex, COL_PAR_N, CDbl(nCoord), SRC
     RequireUpdateCell TBL_PARCELE, rowIndex, COL_PAR_E, CDbl(eCoord), SRC
@@ -45,8 +81,9 @@ Public Function SaveParcelGeoPoint_TX(ByVal rowIndex As Long, _
     RequireUpdateCell TBL_PARCELE, rowIndex, COL_PAR_DATUM_AZUR, Now, SRC
 
     tx.CommitTx
+    Set tx = Nothing
 
-    SaveParcelGeoPoint_TX = True
+    SaveParcelGeoPointByID_TX = True
     Exit Function
 
 EH:
@@ -56,13 +93,22 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    SaveParcelGeoPoint_TX = False
+    SaveParcelGeoPointByID_TX = False
 End Function
 
 Public Sub ClearParcelGeo(ByVal rowIndex As Long)
-    If Not ClearParcelGeo_TX(rowIndex) Then
-        Err.Raise vbObjectError + 7611, "modGeoParcele.ClearParcelGeo", _
-                  "ClearParcelGeo_TX nije uspeo."
+    Const SRC As String = "modGeoParcele.ClearParcelGeo"
+
+    Dim parcelaID As String
+    parcelaID = GetParcelaIDByRowIndexStrict(rowIndex, SRC)
+
+    ClearParcelGeoByID parcelaID
+End Sub
+
+Public Sub ClearParcelGeoByID(ByVal parcelaID As String)
+    If Not ClearParcelGeoByID_TX(parcelaID) Then
+        Err.Raise vbObjectError + 7611, "modGeoParcele.ClearParcelGeoByID", _
+                  "ClearParcelGeoByID_TX nije uspeo. ParcelaID=" & parcelaID
     End If
 End Sub
 
@@ -71,15 +117,39 @@ Public Function ClearParcelGeo_TX(ByVal rowIndex As Long) As Boolean
 
     On Error GoTo EH
 
-    If rowIndex <= 0 Then
-        Err.Raise vbObjectError + 7612, SRC, "rowIndex nije validan."
-    End If
+    Dim parcelaID As String
+    parcelaID = GetParcelaIDByRowIndexStrict(rowIndex, SRC)
+
+    ClearParcelGeo_TX = ClearParcelGeoByID_TX(parcelaID)
+    Exit Function
+
+EH:
+    LogErr SRC
+    ClearParcelGeo_TX = False
+End Function
+
+Public Function ClearParcelGeoByID_TX(ByVal parcelaID As String) As Boolean
+    Const SRC As String = "modGeoParcele.ClearParcelGeoByID_TX"
 
     Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    ClearParcelGeoByID_TX = False
+
+    parcelaID = Trim$(parcelaID)
+
+    If Len(parcelaID) = 0 Then
+        Err.Raise vbObjectError + 7612, SRC, "ParcelaID je obavezan."
+    End If
+
     Set tx = New clsTransaction
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_PARCELE
+
+    Dim rowIndex As Long
+    rowIndex = RequireSingleParcelaRow(parcelaID, SRC)
 
     RequireUpdateCell TBL_PARCELE, rowIndex, COL_PAR_N, "", SRC
     RequireUpdateCell TBL_PARCELE, rowIndex, COL_PAR_E, "", SRC
@@ -91,8 +161,9 @@ Public Function ClearParcelGeo_TX(ByVal rowIndex As Long) As Boolean
     RequireUpdateCell TBL_PARCELE, rowIndex, COL_PAR_DATUM_AZUR, Now, SRC
 
     tx.CommitTx
+    Set tx = Nothing
 
-    ClearParcelGeo_TX = True
+    ClearParcelGeoByID_TX = True
     Exit Function
 
 EH:
@@ -102,7 +173,71 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    ClearParcelGeo_TX = False
+    ClearParcelGeoByID_TX = False
+End Function
+
+Private Function RequireSingleParcelaRow(ByVal parcelaID As String, _
+                                         ByVal sourceName As String) As Long
+    parcelaID = Trim$(parcelaID)
+
+    If Len(parcelaID) = 0 Then
+        Err.Raise vbObjectError + 7620, sourceName, _
+                  "ParcelaID je obavezan."
+    End If
+
+    RequireColumnIndex TBL_PARCELE, COL_PAR_ID, sourceName
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_PARCELE, COL_PAR_ID, parcelaID)
+
+    If rows Is Nothing Then
+        Err.Raise vbObjectError + 7621, sourceName, _
+                  "FindRows je vratio Nothing za ParcelaID=" & parcelaID
+    End If
+
+    If rows.count = 0 Then
+        Err.Raise vbObjectError + 7622, sourceName, _
+                  "Parcela nije pronadena: " & parcelaID
+    End If
+
+    If rows.count > 1 Then
+        Err.Raise vbObjectError + 7623, sourceName, _
+                  "Duplicate ParcelaID. ParcelaID=" & parcelaID & _
+                  "; Count=" & CStr(rows.count)
+    End If
+
+    RequireSingleParcelaRow = CLng(rows(1))
+End Function
+
+Private Function GetParcelaIDByRowIndexStrict(ByVal rowIndex As Long, _
+                                              ByVal sourceName As String) As String
+    If rowIndex <= 0 Then
+        Err.Raise vbObjectError + 7624, sourceName, _
+                  "rowIndex nije validan."
+    End If
+
+    Dim data As Variant
+    data = GetTableData(TBL_PARCELE)
+
+    If IsEmpty(data) Then
+        Err.Raise vbObjectError + 7625, sourceName, _
+                  "Tabela parcela je prazna."
+    End If
+
+    If rowIndex > UBound(data, 1) Then
+        Err.Raise vbObjectError + 7626, sourceName, _
+                  "rowIndex je van opsega tblParcele. rowIndex=" & CStr(rowIndex)
+    End If
+
+    Dim colID As Long
+    colID = RequireColumnIndex(TBL_PARCELE, COL_PAR_ID, sourceName)
+
+    GetParcelaIDByRowIndexStrict = Trim$(NzToText(data(rowIndex, colID)))
+
+    If Len(GetParcelaIDByRowIndexStrict) = 0 Then
+        Err.Raise vbObjectError + 7627, sourceName, _
+                  "ParcelaID je prazan za rowIndex=" & CStr(rowIndex)
+    End If
 End Function
 
 Public Sub ConvertUTM34ToLatLng(ByVal eCoord As Double, ByVal nCoord As Double, _
