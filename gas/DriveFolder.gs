@@ -132,3 +132,11 @@ function getMonitoringErrorLogSpreadsheet_() {
     ['Timestamp', 'Source', 'Action', 'Message', 'Details', 'EntityID', 'Severity']
   );
 }
+
+function getMgmtReportsSpreadsheet_() {
+  return getSpreadsheetByNameInFolder_('SHEETS_REPORTS', 'MgmtReports');
+}
+
+function getKarticeSpreadsheet_() {
+  return getSpreadsheetByNameInFolder_('SHEETS_REPORTS', 'Kartice');
+}
