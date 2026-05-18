@@ -1,0 +1,668 @@
+Option Explicit
+
+' ============================================================
+' modFakturaTests
+' Dev/test-only smoke/regression suite for modFaktura.
+' ============================================================
+
+Private m_Total As Long
+Private m_Passed As Long
+Private m_Failed As Long
+Private m_Skipped As Long
+
+Private Const FAKTURA_TEST_LOG_SHEET As String = "FAKTURA_TEST_LOG"
+
+Public Sub RunFakturaSmokeSuite()
+    On Error GoTo EH
+
+    ResetFakturaTestCounters
+    InitFakturaTestLog
+
+    StartFakturaSuite "FAKTURA SMOKE SUITE"
+
+    Test_CreateFakturaUsesCanonicalPrijemnicaValues
+    Test_CreateFakturaBlocksDuplicatePrijemnica
+    Test_CreateFakturaBlocksStorniranaPrijemnica
+    Test_CreateFakturaBlocksAlreadyFakturisanaPrijemnica
+
+    Test_UpdateFakturaStatusPreservesExistingDatumPlacanja
+    Test_UpdateFakturaStatusReopensWhenPaymentMissing
+    Test_UpdateFakturaStatusSkipsStorniranaFaktura
+
+    Test_PrintFakturaBlocksStorniranaFaktura
+
+    FinishFakturaSuite
+    Exit Sub
+
+EH:
+    LogFakturaFatal "RunFakturaSmokeSuite", Err.Number, Err.description
+    FinishFakturaSuite
+End Sub
+
+Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("CANON")
+
+    Dim kupacID As String
+    Dim prijemnicaID As String
+    Dim realBrojPrij As String
+
+    kupacID = "KUP-TST-" & code
+    prijemnicaID = "PRJ-TST-" & code
+    realBrojPrij = "TST-PRJ-" & code
+
+    AppendTestPrijemnicaRow _
+        prijemnicaID:=prijemnicaID, _
+        brojPrijemnice:=realBrojPrij, _
+        kolicina:=100#, _
+        cena:=10#, _
+        klasa:="I", _
+        stornirano:="", _
+        fakturisano:="", _
+        fakturaID:=""
+
+    Dim stavke As New Collection
+
+    ' Namerno pogrešni caller payload.
+    ' CreateFaktura sme da koristi samo stavka(0) = PrijemnicaID.
+    stavke.Add Array(prijemnicaID, 9999#, 9999#, "BAD-KLASA", "BAD-BROJ")
+
+    Dim fakturaID As String
+    fakturaID = CreateFaktura_TX(kupacID, stavke)
+
+    AssertFakturaTrue Len(Trim$(fakturaID)) > 0, _
+                      "CreateFaktura returns FakturaID"
+
+    If Len(Trim$(fakturaID)) = 0 Then Exit Sub
+
+    Dim fakturaIznos As Double
+    fakturaIznos = CDbl(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS))
+
+    AssertFakturaDoubleEquals 1000#, fakturaIznos, _
+                              "CreateFaktura uses canonical Prijemnica total"
+
+    AssertFakturaDoubleEquals 100#, _
+        CDbl(GetFirstFakturaStavkaValue(fakturaID, COL_FS_KOLICINA)), _
+        "FakturaStavka Kolicina comes from Prijemnica"
+
+    AssertFakturaDoubleEquals 10#, _
+        CDbl(GetFirstFakturaStavkaValue(fakturaID, COL_FS_CENA)), _
+        "FakturaStavka Cena comes from Prijemnica"
+
+    AssertFakturaTextEquals "I", _
+        CStr(GetFirstFakturaStavkaValue(fakturaID, COL_FS_KLASA)), _
+        "FakturaStavka Klasa comes from Prijemnica"
+
+    AssertFakturaTextEquals realBrojPrij, _
+        CStr(GetFirstFakturaStavkaValue(fakturaID, COL_FS_BROJ_PRIJEMNICE)), _
+        "FakturaStavka BrojPrijemnice comes from Prijemnica"
+
+    AssertFakturaTextEquals "Da", _
+        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
+        "CreateFaktura marks Prijemnica as fakturisano"
+
+    AssertFakturaTextEquals fakturaID, _
+        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURA_ID)), _
+        "CreateFaktura writes FakturaID back to Prijemnica"
+
+    Exit Sub
+
+EH:
+    LogFakturaFail "CreateFaktura uses canonical Prijemnica values", _
+                   FormatErrDetails()
+End Sub
+
+Private Sub Test_CreateFakturaBlocksDuplicatePrijemnica()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("DUPPRJ")
+
+    Dim kupacID As String
+    Dim prijemnicaID As String
+
+    kupacID = "KUP-TST-" & code
+    prijemnicaID = "PRJ-TST-" & code
+
+    AppendTestPrijemnicaRow prijemnicaID, "TST-PRJ-" & code, 50#, 20#, "I", "", "", ""
+
+    Dim stavke As New Collection
+    stavke.Add Array(prijemnicaID)
+    stavke.Add Array(prijemnicaID)
+
+    Dim fakturaID As String
+    fakturaID = CreateFaktura_TX(kupacID, stavke)
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        LogFakturaPass "CreateFaktura blocks duplicate Prijemnica"
+    Else
+        LogFakturaFail "CreateFaktura blocks duplicate Prijemnica", _
+                       "Expected empty result, got FakturaID=" & fakturaID
+    End If
+
+    AssertFakturaTextEquals "", _
+        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
+        "Duplicate block leaves Prijemnica not fakturisano"
+
+    Exit Sub
+
+EH:
+    LogFakturaFail "CreateFaktura blocks duplicate Prijemnica", _
+                   FormatErrDetails()
+End Sub
+
+Private Sub Test_CreateFakturaBlocksStorniranaPrijemnica()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("STOPRJ")
+
+    Dim kupacID As String
+    Dim prijemnicaID As String
+
+    kupacID = "KUP-TST-" & code
+    prijemnicaID = "PRJ-TST-" & code
+
+    AppendTestPrijemnicaRow prijemnicaID, "TST-PRJ-" & code, 50#, 20#, "I", "Da", "", ""
+
+    Dim stavke As New Collection
+    stavke.Add Array(prijemnicaID)
+
+    Dim fakturaID As String
+    fakturaID = CreateFaktura_TX(kupacID, stavke)
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        LogFakturaPass "CreateFaktura blocks stornirana Prijemnica"
+    Else
+        LogFakturaFail "CreateFaktura blocks stornirana Prijemnica", _
+                       "Expected empty result, got FakturaID=" & fakturaID
+    End If
+
+    Exit Sub
+
+EH:
+    LogFakturaFail "CreateFaktura blocks stornirana Prijemnica", _
+                   FormatErrDetails()
+End Sub
+
+Private Sub Test_CreateFakturaBlocksAlreadyFakturisanaPrijemnica()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("ALRPRJ")
+
+    Dim kupacID As String
+    Dim prijemnicaID As String
+
+    kupacID = "KUP-TST-" & code
+    prijemnicaID = "PRJ-TST-" & code
+
+    AppendTestPrijemnicaRow prijemnicaID, "TST-PRJ-" & code, 50#, 20#, "I", "", "Da", ""
+
+    Dim stavke As New Collection
+    stavke.Add Array(prijemnicaID)
+
+    Dim fakturaID As String
+    fakturaID = CreateFaktura_TX(kupacID, stavke)
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        LogFakturaPass "CreateFaktura blocks already fakturisana Prijemnica"
+    Else
+        LogFakturaFail "CreateFaktura blocks already fakturisana Prijemnica", _
+                       "Expected empty result, got FakturaID=" & fakturaID
+    End If
+
+CleanExit:
+    On Error Resume Next
+    MarkTestPrijemnicaStornirano prijemnicaID
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogFakturaFail "CreateFaktura blocks already fakturisana Prijemnica", _
+                   FormatErrDetails()
+    Resume CleanExit
+End Sub
+
+Private Sub MarkTestPrijemnicaStornirano(ByVal prijemnicaID As String)
+    Dim rows As Collection
+    Dim rowIndex As Long
+
+    If Len(Trim$(prijemnicaID)) = 0 Then Exit Sub
+
+    Set rows = FindRows(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID)
+
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+
+    rowIndex = CLng(rows(1))
+
+    Call UpdateCell(TBL_PRIJEMNICA, rowIndex, "Stornirano", "Da")
+End Sub
+
+Private Sub Test_UpdateFakturaStatusPreservesExistingDatumPlacanja()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("PAYDATE")
+
+    Dim fakturaID As String
+    Dim kupacID As String
+    Dim oldDate As Date
+
+    fakturaID = "FAK-TST-" & code
+    kupacID = "KUP-TST-" & code
+    oldDate = DateSerial(2020, 1, 15)
+
+    AppendTestFakturaRow fakturaID, "TST-FAK-" & code, kupacID, 100#, STATUS_PLACENO, oldDate, ""
+
+    Dim novacID As String
+    novacID = SaveNovac( _
+        "TST-UPL-" & code, Date, _
+        "TEST KUPAC " & code, kupacID, "Kupac", _
+        "", "", fakturaID, "", _
+        NOV_KUPCI_UPLATA, _
+        100#, 0#, _
+        "Test payment for faktura status")
+
+    If Len(Trim$(novacID)) = 0 Then
+        LogFakturaFail "UpdateFakturaStatus preserves existing DatumPlacanja", _
+                       "Failed to create payment row."
+        Exit Sub
+    End If
+
+    UpdateFakturaStatus fakturaID
+
+    Dim actualDate As Variant
+    actualDate = LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_DATUM_PLACANJA)
+
+    If IsDate(actualDate) And CDate(actualDate) = oldDate Then
+        LogFakturaPass "UpdateFakturaStatus preserves existing DatumPlacanja"
+    Else
+        LogFakturaFail "UpdateFakturaStatus preserves existing DatumPlacanja", _
+                       "Expected=" & Format$(oldDate, "yyyy-mm-dd") & _
+                       " Actual=" & CStr(actualDate)
+    End If
+
+    Exit Sub
+
+EH:
+    LogFakturaFail "UpdateFakturaStatus preserves existing DatumPlacanja", _
+                   FormatErrDetails()
+End Sub
+
+Private Sub Test_UpdateFakturaStatusReopensWhenPaymentMissing()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("REOPEN")
+
+    Dim fakturaID As String
+    Dim kupacID As String
+
+    fakturaID = "FAK-TST-" & code
+    kupacID = "KUP-TST-" & code
+
+    AppendTestFakturaRow fakturaID, "TST-FAK-" & code, kupacID, 100#, STATUS_PLACENO, Date, ""
+
+    ' Nema aktivne uplate za ovu fakturu.
+    UpdateFakturaStatus fakturaID
+
+    AssertFakturaTextEquals STATUS_NEPLACENO, _
+        CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_STATUS)), _
+        "UpdateFakturaStatus reopens unpaid faktura"
+
+    AssertFakturaTextEquals "", _
+        CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_DATUM_PLACANJA)), _
+        "UpdateFakturaStatus clears DatumPlacanja when unpaid"
+
+    Exit Sub
+
+EH:
+    LogFakturaFail "UpdateFakturaStatus reopens when payment missing", _
+                   FormatErrDetails()
+End Sub
+
+Private Sub Test_UpdateFakturaStatusSkipsStorniranaFaktura()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("SKIPSTO")
+
+    Dim fakturaID As String
+    Dim kupacID As String
+    Dim oldDate As Date
+
+    fakturaID = "FAK-TST-" & code
+    kupacID = "KUP-TST-" & code
+    oldDate = DateSerial(2020, 2, 20)
+
+    AppendTestFakturaRow fakturaID, "TST-FAK-" & code, kupacID, 100#, STATUS_PLACENO, oldDate, "Da"
+
+    UpdateFakturaStatus fakturaID
+
+    AssertFakturaTextEquals STATUS_PLACENO, _
+        CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_STATUS)), _
+        "UpdateFakturaStatus skips stornirana faktura status"
+
+    Dim actualDate As Variant
+    actualDate = LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_DATUM_PLACANJA)
+
+    If IsDate(actualDate) And CDate(actualDate) = oldDate Then
+        LogFakturaPass "UpdateFakturaStatus skips stornirana faktura date"
+    Else
+        LogFakturaFail "UpdateFakturaStatus skips stornirana faktura date", _
+                       "Expected=" & Format$(oldDate, "yyyy-mm-dd") & _
+                       " Actual=" & CStr(actualDate)
+    End If
+
+    Exit Sub
+
+EH:
+    LogFakturaFail "UpdateFakturaStatus skips stornirana faktura", _
+                   FormatErrDetails()
+End Sub
+
+Private Sub Test_PrintFakturaBlocksStorniranaFaktura()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("PRNSTO")
+
+    Dim fakturaID As String
+    Dim kupacID As String
+
+    fakturaID = "FAK-TST-" & code
+    kupacID = "KUP-TST-" & code
+
+    AppendTestFakturaRow fakturaID, "TST-FAK-" & code, kupacID, 100#, STATUS_NEPLACENO, Empty, "Da"
+
+    On Error GoTo ExpectedError
+    PrintFaktura fakturaID
+
+    LogFakturaFail "PrintFaktura blocks stornirana faktura", _
+                   "Expected error, but PrintFaktura completed."
+    Exit Sub
+
+ExpectedError:
+    LogFakturaPass "PrintFaktura blocks stornirana faktura"
+    Exit Sub
+
+EH:
+    LogFakturaFail "PrintFaktura blocks stornirana faktura", _
+                   FormatErrDetails()
+End Sub
+
+Private Function NewFakturaTestCode(ByVal prefixText As String) As String
+    Randomize
+    NewFakturaTestCode = prefixText & "-" & _
+                         Format$(Now, "yyyymmddhhnnss") & "-" & _
+                         CStr(Int((9000 * Rnd) + 1000))
+End Function
+
+Private Sub AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
+                                    ByVal brojPrijemnice As String, _
+                                    ByVal kolicina As Double, _
+                                    ByVal cena As Double, _
+                                    ByVal klasa As String, _
+                                    ByVal stornirano As String, _
+                                    ByVal fakturisano As String, _
+                                    ByVal fakturaID As String)
+    Const SRC As String = "AppendTestPrijemnicaRow"
+
+    Dim values As Object
+    Set values = CreateObject("Scripting.Dictionary")
+
+    values.Add COL_PRJ_ID, prijemnicaID
+    values.Add COL_PRJ_BROJ, brojPrijemnice
+    values.Add COL_PRJ_BROJ_ZBIRNE, "TST-ZBR-" & prijemnicaID
+    values.Add COL_PRJ_DATUM, Date
+    values.Add COL_PRJ_KOLICINA, kolicina
+    values.Add COL_PRJ_CENA, cena
+    values.Add COL_PRJ_KLASA, klasa
+    values.Add COL_PRJ_FAKTURISANO, fakturisano
+    values.Add COL_PRJ_FAKTURA_ID, fakturaID
+    values.Add COL_STORNIRANO, stornirano
+
+    AppendFakturaTestRowByColumnMap TBL_PRIJEMNICA, values, SRC
+End Sub
+
+Private Sub AppendTestFakturaRow(ByVal fakturaID As String, _
+                                 ByVal brojFakture As String, _
+                                 ByVal kupacID As String, _
+                                 ByVal iznos As Double, _
+                                 ByVal statusText As String, _
+                                 ByVal datumPlacanja As Variant, _
+                                 ByVal stornirano As String)
+    Const SRC As String = "AppendTestFakturaRow"
+
+    Dim values As Object
+    Set values = CreateObject("Scripting.Dictionary")
+
+    values.Add COL_FAK_ID, fakturaID
+    values.Add COL_FAK_BROJ, brojFakture
+    values.Add COL_FAK_DATUM, Date
+    values.Add COL_FAK_KUPAC, kupacID
+    values.Add COL_FAK_IZNOS, iznos
+    values.Add COL_FAK_STATUS, statusText
+    values.Add COL_FAK_DATUM_PLACANJA, datumPlacanja
+    values.Add COL_STORNIRANO, stornirano
+
+    AppendFakturaTestRowByColumnMap TBL_FAKTURE, values, SRC
+End Sub
+
+Private Sub AppendFakturaTestRowByColumnMap(ByVal tableName As String, _
+                                            ByVal values As Object, _
+                                            ByVal sourceName As String)
+    Dim colCount As Long
+    colCount = GetFakturaTestTableColumnCount(tableName)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 9201, sourceName, _
+                  "Could not resolve table column count. Table=" & tableName
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    Dim key As Variant
+    Dim colIndex As Long
+
+    For Each key In values.keys
+        colIndex = GetColumnIndex(tableName, CStr(key))
+
+        If colIndex > 0 Then
+            rowData(colIndex - 1) = values(key)
+        End If
+    Next key
+
+    If AppendRow(tableName, rowData) <= 0 Then
+        Err.Raise vbObjectError + 9202, sourceName, _
+                  "Failed to append test row. Table=" & tableName
+    End If
+End Sub
+
+Private Function GetFakturaTestTableColumnCount(ByVal tableName As String) As Long
+    Dim ws As Worksheet
+    Dim lo As ListObject
+
+    For Each ws In ThisWorkbook.Worksheets
+        For Each lo In ws.ListObjects
+            If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
+                GetFakturaTestTableColumnCount = lo.ListColumns.count
+                Exit Function
+            End If
+        Next lo
+    Next ws
+End Function
+
+Private Function GetFirstFakturaStavkaValue(ByVal fakturaID As String, _
+                                            ByVal columnName As String) As Variant
+    Const SRC As String = "GetFirstFakturaStavkaValue"
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURA_STAVKE)
+
+    If IsEmpty(data) Then
+        Err.Raise vbObjectError + 9203, SRC, _
+                  "tblFakturaStavke is empty."
+    End If
+
+    Dim colFakID As Long
+    Dim colWanted As Long
+
+    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colWanted = RequireColumnIndex(TBL_FAKTURA_STAVKE, columnName, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colFakID))) = Trim$(fakturaID) Then
+            GetFirstFakturaStavkaValue = data(i, colWanted)
+            Exit Function
+        End If
+    Next i
+
+    Err.Raise vbObjectError + 9204, SRC, _
+              "No faktura stavka found for FakturaID=" & fakturaID
+End Function
+
+Private Sub AssertFakturaTrue(ByVal condition As Boolean, _
+                              ByVal testName As String)
+    If condition Then
+        LogFakturaPass testName
+    Else
+        LogFakturaFail testName, "Assertion failed."
+    End If
+End Sub
+
+Private Sub AssertFakturaDoubleEquals(ByVal expectedValue As Double, _
+                                      ByVal actualValue As Double, _
+                                      ByVal testName As String)
+    If Abs(expectedValue - actualValue) <= 0.0001 Then
+        LogFakturaPass testName
+    Else
+        LogFakturaFail testName, _
+                       "Expected=" & CStr(expectedValue) & _
+                       " Actual=" & CStr(actualValue)
+    End If
+End Sub
+
+Private Sub AssertFakturaTextEquals(ByVal expectedValue As String, _
+                                    ByVal actualValue As String, _
+                                    ByVal testName As String)
+    If Trim$(CStr(expectedValue)) = Trim$(CStr(actualValue)) Then
+        LogFakturaPass testName
+    Else
+        LogFakturaFail testName, _
+                       "Expected=[" & expectedValue & "] Actual=[" & actualValue & "]"
+    End If
+End Sub
+
+Private Function FormatErrDetails() As String
+    FormatErrDetails = "Err.Number=" & CStr(Err.Number) & _
+                       " Source=" & Err.SOURCE & _
+                       " Description=" & Err.description
+End Function
+
+Private Sub ResetFakturaTestCounters()
+    m_Total = 0
+    m_Passed = 0
+    m_Failed = 0
+    m_Skipped = 0
+End Sub
+
+Private Sub StartFakturaSuite(ByVal suiteName As String)
+    Debug.Print String$(70, "=")
+    Debug.Print suiteName & " started at " & Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    Debug.Print String$(70, "=")
+
+    AppendFakturaTestLog "SUITE", suiteName, "START", ""
+End Sub
+
+Private Sub FinishFakturaSuite()
+    Dim summary As String
+
+    summary = "Total=" & m_Total & _
+              " | Passed=" & m_Passed & _
+              " | Failed=" & m_Failed & _
+              " | Skipped=" & m_Skipped
+
+    Debug.Print String$(70, "-")
+    Debug.Print "FAKTURA TEST SUMMARY: " & summary
+    Debug.Print String$(70, "-")
+
+    AppendFakturaTestLog "SUITE", "SUMMARY", "INFO", summary
+
+    If m_Failed > 0 Then
+        MsgBox "Faktura tests finished with failures." & vbCrLf & summary, _
+               vbExclamation, APP_NAME
+    Else
+        MsgBox "Faktura tests finished." & vbCrLf & summary, _
+               vbInformation, APP_NAME
+    End If
+End Sub
+
+Private Sub LogFakturaPass(ByVal testName As String)
+    m_Total = m_Total + 1
+    m_Passed = m_Passed + 1
+
+    Debug.Print "[PASS] " & testName
+    AppendFakturaTestLog "TEST", testName, "PASS", ""
+End Sub
+
+Private Sub LogFakturaFail(ByVal testName As String, _
+                           ByVal details As String)
+    m_Total = m_Total + 1
+    m_Failed = m_Failed + 1
+
+    Debug.Print "[FAIL] " & testName & " :: " & details
+    AppendFakturaTestLog "TEST", testName, "FAIL", details
+End Sub
+
+Private Sub LogFakturaFatal(ByVal sourceName As String, _
+                            ByVal errNum As Long, _
+                            ByVal errDesc As String)
+    m_Total = m_Total + 1
+    m_Failed = m_Failed + 1
+
+    Debug.Print "[FATAL] " & sourceName & " :: " & CStr(errNum) & " - " & errDesc
+    AppendFakturaTestLog "FATAL", sourceName, "FAIL", CStr(errNum) & " - " & errDesc
+End Sub
+
+Private Sub InitFakturaTestLog()
+    On Error Resume Next
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(FAKTURA_TEST_LOG_SHEET)
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        ws.name = FAKTURA_TEST_LOG_SHEET
+        ws.Range("A1:F1").value = Array("Timestamp", "Kind", "Name", "Status", "Details", "Operator")
+        ws.rows(1).Font.Bold = True
+    End If
+End Sub
+
+Private Sub AppendFakturaTestLog(ByVal kindText As String, _
+                                 ByVal nameText As String, _
+                                 ByVal statusText As String, _
+                                 ByVal detailsText As String)
+    On Error Resume Next
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(FAKTURA_TEST_LOG_SHEET)
+
+    If ws Is Nothing Then Exit Sub
+
+    Dim r As Long
+    r = ws.cells(ws.rows.count, 1).End(xlUp).row + 1
+
+    ws.cells(r, 1).value = Now
+    ws.cells(r, 2).value = kindText
+    ws.cells(r, 3).value = nameText
+    ws.cells(r, 4).value = statusText
+    ws.cells(r, 5).value = Left$(detailsText, 2000)
+    ws.cells(r, 6).value = Environ$("Username")
+End Sub
