@@ -83,7 +83,7 @@ Public Sub RunBusinessFlowProSuite()
     Exit Sub
 
 EH:
-    LogFatal "RunBusinessFlowProSuite", Err.Number, Err.Description
+    LogFatal "RunBusinessFlowProSuite", Err.Number, Err.description
     EndRun
 End Sub
 
@@ -100,7 +100,7 @@ Public Sub RunBusinessFlowProSeedOnly()
     Exit Sub
 
 EH:
-    LogFatal "RunBusinessFlowProSeedOnly", Err.Number, Err.Description
+    LogFatal "RunBusinessFlowProSeedOnly", Err.Number, Err.description
     EndRun
 End Sub
 
@@ -119,7 +119,7 @@ Public Sub RunBusinessFlowProTraceabilityOnly()
     Exit Sub
 
 EH:
-    LogFatal "RunBusinessFlowProTraceabilityOnly", Err.Number, Err.Description
+    LogFatal "RunBusinessFlowProTraceabilityOnly", Err.Number, Err.description
     EndRun
 End Sub
 
@@ -135,7 +135,7 @@ Public Sub RunBusinessFlowProAuditOnly()
     Exit Sub
 
 EH:
-    LogFatal "RunBusinessFlowProAuditOnly", Err.Number, Err.Description
+    LogFatal "RunBusinessFlowProAuditOnly", Err.Number, Err.description
     EndRun
 End Sub
 
@@ -193,7 +193,7 @@ Private Sub Test_CoreTablesAndColumnsExist()
     Exit Sub
 
 EH:
-    LogFail "Core tables and required columns exist", Err.Description
+    LogFail "Core tables and required columns exist", Err.description
 End Sub
 
 Private Sub Test_SeedMasterDataAvailable()
@@ -214,7 +214,7 @@ Private Sub Test_SeedMasterDataAvailable()
     Exit Sub
 
 EH:
-    LogFail "Seed master data available", Err.Description
+    LogFail "Seed master data available", Err.description
 End Sub
 
 Private Sub Test_OtkupAtomicMultiClassSave()
@@ -271,7 +271,7 @@ Private Sub Test_OtkupAtomicMultiClassSave()
     Exit Sub
 
 EH:
-    LogFail "Otkup atomic multi-class save", Err.Description
+    LogFail "Otkup atomic multi-class save", Err.description
 End Sub
 
 Private Sub Test_FullDocumentChainHappyPath()
@@ -452,7 +452,7 @@ Private Sub Test_FullDocumentChainHappyPath()
     Exit Sub
 
 EH:
-    LogFail "Full document chain happy path", Err.Description
+    LogFail "Full document chain happy path", Err.description
 End Sub
 
 Private Sub Test_DuplicateFakturaIsBlocked()
@@ -509,7 +509,7 @@ Private Sub Test_DuplicateFakturaIsBlocked()
     Exit Sub
 
 EH:
-    LogFail "Duplicate faktura is blocked", Err.Description
+    LogFail "Duplicate faktura is blocked", Err.description
 End Sub
 
 Private Sub Test_InvalidSavesDoNotAppend()
@@ -522,7 +522,7 @@ Private Sub Test_InvalidSavesDoNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid saves do not append", Err.Description
+    LogFail "Invalid saves do not append", Err.description
 End Sub
 
 Private Sub Test_InvalidOtkupDoesNotAppend()
@@ -612,7 +612,7 @@ Private Sub Test_OtkupInputValidationHardening()
     Exit Sub
 
 EH:
-    LogFail "Otkup input validation hardening", Err.Description
+    LogFail "Otkup input validation hardening", Err.description
 End Sub
 
 Private Sub Test_InvalidOtkupNegativeCenaDoesNotAppend()
@@ -637,7 +637,7 @@ Private Sub Test_InvalidOtkupNegativeCenaDoesNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid otkup negative cena", Err.Description
+    LogFail "Invalid otkup negative cena", Err.description
 End Sub
 
 Private Sub Test_InvalidOtkupInvalidClassDoesNotAppend()
@@ -662,7 +662,7 @@ Private Sub Test_InvalidOtkupInvalidClassDoesNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid otkup invalid class", Err.Description
+    LogFail "Invalid otkup invalid class", Err.description
 End Sub
 
 Private Sub Test_DokumentaInputValidationHardening()
@@ -676,7 +676,7 @@ Private Sub Test_DokumentaInputValidationHardening()
     Exit Sub
 
 EH:
-    LogFail "Dokumenta input validation hardening", Err.Description
+    LogFail "Dokumenta input validation hardening", Err.description
 End Sub
 
 Private Sub Test_InvalidOtpremnicaNegativeCenaDoesNotAppend()
@@ -700,7 +700,7 @@ Private Sub Test_InvalidOtpremnicaNegativeCenaDoesNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid otpremnica negative cena", Err.Description
+    LogFail "Invalid otpremnica negative cena", Err.description
 End Sub
 
 Private Sub Test_InvalidOtpremnicaMissingAmbTypeDoesNotAppend()
@@ -729,7 +729,7 @@ Private Sub Test_InvalidOtpremnicaMissingAmbTypeDoesNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid otpremnica missing amb type", Err.Description
+    LogFail "Invalid otpremnica missing amb type", Err.description
 End Sub
 
 Private Sub Test_InvalidZbirnaInvalidClassDoesNotAppend()
@@ -753,7 +753,7 @@ Private Sub Test_InvalidZbirnaInvalidClassDoesNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid zbirna invalid class", Err.Description
+    LogFail "Invalid zbirna invalid class", Err.description
 End Sub
 
 Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
@@ -782,7 +782,7 @@ Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
     Exit Sub
 
 EH:
-    LogFail "Invalid prijemnica negative ambalaza", Err.Description
+    LogFail "Invalid prijemnica negative ambalaza", Err.description
 End Sub
 
 Private Sub Test_DokumentaReadHelpersExcludeStornirano()
@@ -860,7 +860,7 @@ Private Sub Test_DokumentaReadHelpersExcludeStornirano()
     Exit Sub
 
 EH:
-    LogFail "Dokumenta read helpers exclude stornirano", Err.Description
+    LogFail "Dokumenta read helpers exclude stornirano", Err.description
 End Sub
 
 Private Sub Test_OtkupReadHelpersExcludeStornirano()
@@ -913,7 +913,7 @@ Private Sub Test_OtkupReadHelpersExcludeStornirano()
     Exit Sub
 
 EH:
-    LogFail "Otkup read helpers exclude stornirano", Err.Description
+    LogFail "Otkup read helpers exclude stornirano", Err.description
 End Sub
 
 Private Sub Test_DualClassDocumentWrappers()
@@ -1019,7 +1019,7 @@ Private Sub Test_DualClassDocumentWrappers()
     Exit Sub
 
 EH:
-    LogFail "Dual-class document wrappers", Err.Description
+    LogFail "Dual-class document wrappers", Err.description
 End Sub
 
 
@@ -1070,7 +1070,7 @@ Private Sub Test_AutoLinkPositiveUniqueMatch()
     Exit Sub
 
 EH:
-    LogFail "Auto-link positive unique match", Err.Description
+    LogFail "Auto-link positive unique match", Err.description
 End Sub
 
 Private Sub Test_AutoLinkMustNotCrossBrojZbirne()
@@ -1144,7 +1144,7 @@ Private Sub Test_AutoLinkMustNotCrossBrojZbirne()
     Exit Sub
 
 EH:
-    LogFail "Auto-link must not cross BrojZbirne", Err.Description
+    LogFail "Auto-link must not cross BrojZbirne", Err.description
 End Sub
 
 Private Sub Test_NoCrossZbirnaLinksAudit()
@@ -1203,7 +1203,7 @@ Private Sub Test_NoCrossZbirnaLinksAudit()
     Exit Sub
 
 EH:
-    LogFail "Cross-zbirna link audit", Err.Description
+    LogFail "Cross-zbirna link audit", Err.description
 End Sub
 
 ' ============================================================
@@ -1226,7 +1226,7 @@ Public Sub SoftStornoBusinessFlowTestRows()
     Exit Sub
 
 EH:
-    LogFatal "SoftStornoBusinessFlowTestRows", Err.Number, Err.Description
+    LogFatal "SoftStornoBusinessFlowTestRows", Err.Number, Err.description
     EndRun
 End Sub
 
@@ -1265,7 +1265,7 @@ Private Sub SoftStornoByTestMarkers(ByVal tableName As String, ByVal markerColum
     Exit Sub
 
 EH:
-    LogFail "Soft-storno " & tableName, Err.Description
+    LogFail "Soft-storno " & tableName, Err.description
 End Sub
 
 Private Function RowHasTestMarker(ByVal data As Variant, ByVal rowIndex As Long, _
@@ -1303,7 +1303,7 @@ Private Sub SeedBusinessFlowProMasterData()
     Exit Sub
 
 EH:
-    LogFail "Seed master data", Err.Description
+    LogFail "Seed master data", Err.description
 End Sub
 
 Private Sub SeedStanica()
@@ -1808,8 +1808,8 @@ Private Sub InitTestLog()
     Set ws = ThisWorkbook.Worksheets(TEST_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
-        ws.Name = TEST_LOG_SHEET
+        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        ws.name = TEST_LOG_SHEET
         ws.Range("A1:G1").value = Array("Timestamp", "RunID", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
     End If
@@ -1919,7 +1919,7 @@ Public Function CreateSEFLiveTestFaktura() As String
     Exit Function
 
 EH:
-    LogFatal "CreateSEFLiveTestFaktura", Err.Number, Err.Description
+    LogFatal "CreateSEFLiveTestFaktura", Err.Number, Err.description
     CreateSEFLiveTestFaktura = ""
     EndRun
 End Function
@@ -2039,7 +2039,7 @@ Public Function CreateSEFLiveDummyFaktura() As String
     Exit Function
 
 EH:
-    LogFatal "CreateSEFLiveDummyFaktura", Err.Number, Err.Description
+    LogFatal "CreateSEFLiveDummyFaktura", Err.Number, Err.description
     CreateSEFLiveDummyFaktura = ""
     EndRun
 End Function
@@ -2108,7 +2108,7 @@ Public Sub HardDeleteBusinessFlowTestRows()
     Exit Sub
 
 EH:
-    MsgBox "Greska pri brisanju: " & Err.Description, vbCritical
+    MsgBox "Greska pri brisanju: " & Err.description, vbCritical
 End Sub
 
 Private Function DeleteTestRowsFromTable(ByVal tableName As String, _
@@ -2151,14 +2151,14 @@ Private Function DeleteTestRowsFromTable(ByVal tableName As String, _
     Exit Function
 
 EH:
-    Debug.Print "DeleteTestRowsFromTable greska (" & tableName & "): " & Err.Description
+    Debug.Print "DeleteTestRowsFromTable greska (" & tableName & "): " & Err.description
     DeleteTestRowsFromTable = 0
 End Function
 
 Private Function RowHasTestPrefix(ByVal data As Variant, ByVal rowIndex As Long, _
                                    ByVal tableName As String, _
                                    ByVal markerColumns As Variant) As Boolean
-    Const PREFIX As String = "TST-PRO"
+    Const prefix As String = "TST-PRO"
 
     Dim c As Variant
     For Each c In markerColumns
@@ -2166,7 +2166,7 @@ Private Function RowHasTestPrefix(ByVal data As Variant, ByVal rowIndex As Long,
         colIdx = GetColumnIndex(tableName, CStr(c))
 
         If colIdx > 0 Then
-            If InStr(1, CStr(data(rowIndex, colIdx)), PREFIX, vbTextCompare) > 0 Then
+            If InStr(1, CStr(data(rowIndex, colIdx)), prefix, vbTextCompare) > 0 Then
                 RowHasTestPrefix = True
                 Exit Function
             End If
