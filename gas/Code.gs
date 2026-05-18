@@ -378,6 +378,25 @@ function handleAuthorizedRead(data, tokenData) {
     if (tokenData.role !== 'Management') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
     }
+
+    var otkupiAllReport = [];
+
+    try {
+      var otkupiAllResult = getMgmtReport('OtkupiAll');
+
+      if (otkupiAllResult && Array.isArray(otkupiAllResult.records)) {
+        otkupiAllReport = otkupiAllResult.records;
+      }
+    } catch (e) {
+      logError(
+        'GAS',
+        'getMgmtAll:OtkupiAll',
+        e && e.message ? e.message : String(e || ''),
+        e && e.stack ? e.stack : '',
+        ''
+      );
+    }
+
     return jsonResponse({
       success: true,
       saldoOM: getMgmtReport('SaldoOM').records || [],
@@ -388,7 +407,9 @@ function handleAuthorizedRead(data, tokenData) {
       saldoOMDetail: getMgmtReport('SaldoOMDetail').records || [],
       fakture: getMgmtReport('Fakture').records || [],
       fakturaStavke: getMgmtReport('FakturaStavke').records || [],
-      otkupiAll: getAllOtkupiSheets()
+
+      // Master read-model prvo, OTK operational samo fallback
+      otkupiAll: otkupiAllReport.length ? otkupiAllReport : getAllOtkupiSheets()
     });
   }
 
@@ -2607,18 +2628,101 @@ function normalizeTrosakDateOnly(value) {
 
 function getOtkupiForOtkupac(otkupacID) {
   try {
-    if (!otkupacID) return { success: false, error: 'otkupacID required' };
-    
-    const folder = getAgriXFolder_('SHEETS_OPERATIONAL');
-    const files = folder.getFilesByName('OTK-' + otkupacID);
-    if (!files.hasNext()) return { success: true, records: [] };
-    
-    const ss = SpreadsheetApp.open(files.next());
-    return { success: true, records: sheetToArray(ss.getSheets()[0]) };
+    var canonicalOtkupacID = String(otkupacID || '').trim();
+    if (!canonicalOtkupacID) {
+      return { success: false, error: 'otkupacID required' };
+    }
+
+    var merged = [];
+    var seen = {};
+
+    // 1) Master/read-model: VBA/tblOtkup exportovan u MgmtReports/OtkupiAll
+    var masterRows = [];
+    try {
+      var masterReport = getMgmtReport('OtkupiAll');
+      if (masterReport && Array.isArray(masterReport.records)) {
+        masterRows = masterReport.records.filter(function(r) {
+          return String(r.OtkupacID || r.StanicaID || '').trim() === canonicalOtkupacID;
+        });
+      }
+    } catch (masterErr) {
+      logError(
+        'GAS',
+        'getOtkupiForOtkupac.master',
+        masterErr && masterErr.message ? masterErr.message : String(masterErr || ''),
+        masterErr && masterErr.stack ? masterErr.stack : '',
+        canonicalOtkupacID
+      );
+    }
+
+    // 2) Operational/live: PWA unosi koji su još u OTK-* sheetu
+    var liveRows = [];
+    try {
+      var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
+      var files = folder.getFilesByName('OTK-' + canonicalOtkupacID);
+
+      if (files.hasNext()) {
+        liveRows = sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]);
+      }
+    } catch (liveErr) {
+      logError(
+        'GAS',
+        'getOtkupiForOtkupac.live',
+        liveErr && liveErr.message ? liveErr.message : String(liveErr || ''),
+        liveErr && liveErr.stack ? liveErr.stack : '',
+        canonicalOtkupacID
+      );
+    }
+
+    // Master prvo, live posle. Ako isti ClientRecordID postoji u oba, zadrži master.
+    masterRows.concat(liveRows).forEach(function(r) {
+      var key = buildOtkupMergeKey_(r);
+      if (!key) return;
+
+      if (seen[key]) return;
+      seen[key] = true;
+
+      merged.push(r);
+    });
+
+    return { success: true, records: merged };
+
   } catch (err) {
-    logError('GAS', 'getOtkupiForOtkupac', err.message, err.stack || '', otkupacID || '');
+    logError(
+      'GAS',
+      'getOtkupiForOtkupac',
+      err && err.message ? err.message : String(err || ''),
+      err && err.stack ? err.stack : '',
+      otkupacID || ''
+    );
+
     return { success: false, error: err.message };
   }
+}
+
+function buildOtkupMergeKey_(r) {
+  if (!r) return '';
+
+  var direct = String(
+    r.ClientRecordID ||
+    r.ServerRecordID ||
+    r.OtkupID ||
+    ''
+  ).trim();
+
+  if (direct) return direct;
+
+  return [
+    r.OtkupacID || r.StanicaID || '',
+    r.Datum || '',
+    r.KooperantID || '',
+    r.VrstaVoca || '',
+    r.Klasa || '',
+    r.Kolicina || '',
+    r.Cena || ''
+  ].map(function(x) {
+    return String(x || '').trim();
+  }).join('|');
 }
 
 function getKarticaForKooperant(kooperantID) {
