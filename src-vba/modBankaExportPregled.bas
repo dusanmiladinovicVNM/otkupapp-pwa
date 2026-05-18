@@ -47,8 +47,10 @@ Public Function BuildBlokIsplataList( _
     
     Dim trCache As Object
     Dim nazivCache As Object
+    Dim avansCache As Object
     Set trCache = BuildKooperantTekuciRacunCache()
     Set nazivCache = CreateObject("Scripting.Dictionary")
+    Set avansCache = BuildKooperantUnallocatedAvansDict()
     
     Dim i As Long
     For i = 1 To UBound(openOtkupi, 1)
@@ -108,7 +110,7 @@ Public Function BuildBlokIsplataList( _
         Dim blk As clsBlokIsplata
         Set blk = New clsBlokIsplata
         blk.otkupID = otkupID
-        blk.Datum = datumVal
+        blk.datum = datumVal
         blk.kooperantID = kooperantID
         blk.kooperantNaziv = kooperantNaziv
         blk.stanicaID = stanicaID
@@ -118,6 +120,11 @@ Public Function BuildBlokIsplataList( _
         blk.VecIsplaceno = isplaceno
         blk.OtvorenIznos = otvoren
         blk.HasTekuciRacun = (LenB(Trim$(tr)) > 0)
+        If avansCache.Exists(kooperantID) Then
+            blk.KooperantAvansSaldo = CDbl(avansCache(kooperantID))
+        Else
+            blk.KooperantAvansSaldo = 0
+        End If
         
         result.Add blk
         
@@ -219,7 +226,7 @@ Public Function ExportBlokListAsTSV(ByVal blokovi As Collection) As String
     Dim v As Variant
     For Each v In blokovi
         Set blk = v
-        s = s & Format$(blk.Datum, "yyyy-mm-dd") & vbTab & _
+        s = s & Format$(blk.datum, "yyyy-mm-dd") & vbTab & _
                 blk.kooperantNaziv & vbTab & _
                 blk.stanicaID & vbTab & _
                 blk.BrojDokumenta & vbTab & _
