@@ -1195,6 +1195,11 @@ Private Function ReportOtkupRobaKupac(ByVal kupacID As String, _
     On Error GoTo EH
     ' Aggregiert pro VrstaVoca
     Dim prijData As Variant
+    prijData = GetPrijemniceByKupac(kupacID, datumOd, datumDo)
+    If IsEmpty(prijData) Or Not IsArray(prijData) Then
+        ReportOtkupRobaKupac = Empty
+        Exit Function
+    End If
     prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
     If IsEmpty(prijData) Or Not IsArray(prijData) Then
         ReportOtkupRobaKupac = Empty
@@ -1234,17 +1239,24 @@ End Function
 Private Function ReportOtkupRobaVozac(ByVal vozacID As String, _
                                       ByVal datumOd As Date, _
                                       ByVal datumDo As Date) As Variant
-    
     Const SRC As String = "modIzvestaj.ReportOtkupRobaVozac"
     On Error GoTo EH
-    ' Aggregiert pro VrstaVoca aus Otpremnice
+    
     Dim otpData As Variant
-    otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
+    otpData = GetVozacDokumenta(vozacID, datumOd, datumDo)
+    
     If IsEmpty(otpData) Or Not IsArray(otpData) Then
         ReportOtkupRobaVozac = Empty
         Exit Function
     End If
+    
     otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
+    
+    If IsEmpty(otpData) Or Not IsArray(otpData) Then
+        ReportOtkupRobaVozac = Empty
+        Exit Function
+    End If
+    
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
