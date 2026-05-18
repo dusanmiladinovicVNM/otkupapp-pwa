@@ -79,21 +79,37 @@ function dpCalcRuta(vid) {
     return [...stanice, ...kupci].join(' → ');
 }
 
-
-
 function dpGetSup() {
     const today = dpToday();
+
     return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
         !(r.VozacID || r.VozaciID || '') &&
-        fmtDate(r.Datum) === today
+        fmtDate(r.Datum) === today &&
+        !dpIsTransportClosed(r)
+    );
+}
+
+function dpIsTransportClosed(r) {
+    const status = String(r.TransportStatus || r.Status || '').trim().toLowerCase();
+    const primljeno = String(r.Primljeno || '').trim().toLowerCase();
+
+    return (
+        status === 'received' ||
+        status === 'closed' ||
+        primljeno === 'da' ||
+        primljeno === 'yes' ||
+        primljeno === 'true' ||
+        !!(r.PrijemnicaID || r.BrojPrijemnice)
     );
 }
 
 function dpGetAsg() {
     const today = dpToday();
+
     return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
         !!(r.VozacID || r.VozaciID || '') &&
-        fmtDate(r.Datum) === today
+        fmtDate(r.Datum) === today &&
+        !dpIsTransportClosed(r)
     );
 }
 
