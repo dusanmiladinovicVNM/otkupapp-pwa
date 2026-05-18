@@ -506,13 +506,32 @@ EH:
 End Function
 
 Private Function GoogleSheetComparableValue(ByVal value As Variant) As String
+    Dim s As String
+
     If IsEmpty(value) Or IsNull(value) Then
         GoogleSheetComparableValue = ""
-    ElseIf VarType(value) = vbDate Then
-        GoogleSheetComparableValue = Format$(CDate(value), "yyyy-mm-dd")
-    Else
-        GoogleSheetComparableValue = CStr(value)
+        Exit Function
     End If
+
+    If VarType(value) = vbDate Then
+        GoogleSheetComparableValue = Format$(CDate(value), "yyyy-mm-dd")
+        Exit Function
+    End If
+
+    s = CStr(value)
+
+    ' Google / JSON readback ponekad vrati HTML-sensitive karaktere kao unicode escape.
+    ' Ovo ne menja podatak u sheet-u, samo normalizuje verify poredenje.
+    s = Replace(s, "\u003e", ">")
+    s = Replace(s, "\u003E", ">")
+    s = Replace(s, "\u003c", "<")
+    s = Replace(s, "\u003C", "<")
+    s = Replace(s, "\u0026", "&")
+    s = Replace(s, "\u0027", "'")
+    s = Replace(s, "\u003d", "=")
+    s = Replace(s, "\u003D", "=")
+
+    GoogleSheetComparableValue = s
 End Function
 
 Private Function SheetCacheKey(ByVal spreadsheetID As String) As String
