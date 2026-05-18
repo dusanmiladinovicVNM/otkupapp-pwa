@@ -31,43 +31,86 @@ Private m_IsRefreshing As Boolean
 
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
-
 Private Sub UserForm_Activate()
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    On Error GoTo EH
     
-    ApplyTheme Me, BG_MAIN
-    If m_SetupDone Then Exit Sub
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
+    
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
+    
+    SetupAllColumnHeaders
+    
+    If m_SetupDone Then GoTo Continue_Setup
     m_SetupDone = True
-
+    
     m_IsInitializing = True
+    
+    ' Header zone (dodati u Designer ako nemaš)
+    On Error Resume Next
+    StyleFrameTitleLabel lblKopf, "Izveštaji"
+    StyleSubtitle lblSubtitle, "Pregled saldo, otkupljene robe, ambalaže i prosecne cene"
+    On Error GoTo EH
+    
+    ' Style action buttons
+    StylePrimaryButton btnUnos, "Prikaži"
+    StylePrimaryButton btnStampaj, "Štampaj"
+    StyleExitButton btnPovratak, "Povratak"
+    
+    ' Style entity toggle buttons (default: inactive look)
+    StyleToggleInactive tglOM, "Otkupna mesta"
+    StyleToggleInactive tglKupci, "Kupci"
+    StyleToggleInactive tglVozaci, "Vozaci"
+    StyleToggleInactive tglKooperanti, "Kooperanti"
+    
+    ' Tip toggle (pojedinacni/zbirni)
+    StyleToggleInactive tglPojedinacni, "Pojedinacni"
+    StyleToggleInactive tglZbirni, "Zbirni"
+    
+    ' Status label
+    On Error Resume Next
+    StyleLabel lblStatus, TXT_MUTED(), False
+    On Error GoTo EH
+    
+    ' Kartica print button (specijalan za kooperante)
+    On Error Resume Next
+    StylePrimaryButton btnStampajKarticu, "Štampaj karticu"
+    On Error GoTo EH
+    
+    StyleListHeaderLabel lblSidebarEntitet
+    lblSidebarEntitet.caption = "ENTITET"
 
-    'ApplyTheme Me
-    Me.caption = "Izvestaji"
+    StyleListHeaderLabel lblSidebarTip
+    lblSidebarTip.caption = "TIP IZVEŠTAJA"
 
-    ' defaults (won't run events because we're initializing)
+    StyleListHeaderLabel lblSidebarFilter
+    lblSidebarFilter.caption = "FILTER"
+
+    ' Akcent linije (gold tanka linija ispod section header-a)
+    lblAccentEntitet.BackColor = BTN_ACTIVE()
+    lblAccentEntitet.BackStyle = fmBackStyleOpaque
+    lblAccentEntitet.BorderStyle = fmBorderStyleNone
+
+    lblAccentTip.BackColor = BTN_ACTIVE()
+    lblAccentTip.BackStyle = fmBackStyleOpaque
+    lblAccentTip.BorderStyle = fmBorderStyleNone
+
+    lblAccentFilter.BackColor = BTN_ACTIVE()
+    lblAccentFilter.BackStyle = fmBackStyleOpaque
+    lblAccentFilter.BorderStyle = fmBorderStyleNone
+    
+    StyleLabel lblFilterStanica, TXT_MUTED(), False
+    lblFilterStanica.Font.Size = FONT_SIZE_SMALL    ' 9pt
+
+    StyleLabel lblFilterOd, TXT_MUTED(), False
+    lblFilterOd.Font.Size = FONT_SIZE_SMALL
+    
+    ' defaults
     SetTipToggle "tglPojedinacni"
     SetEntitetToggle "tglOM"
-
-    ' fill controls
+    
     LoadEntiteti
-
+    
     cmbVrstaRobe.Clear
     cmbVrstaRobe.AddItem ""
     Dim kulture As Variant, i As Long
@@ -77,19 +120,22 @@ Private Sub UserForm_Activate()
             cmbVrstaRobe.AddItem CStr(kulture(i))
         Next i
     End If
-
+    
     txtDatumOd.value = "1.1." & Year(Date)
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
-
+    
     SetupListBoxes
     UpdateReportMode
-
-    ' ? unlock only now
+    ForceDarkAllPages
+    
     m_IsInitializing = False
-
-    ' now it’s safe to auto-run once
     AutoRefresh
 
+Continue_Setup:
+    Exit Sub
+
+EH:
+    LogErr "frmIzvestaj.UserForm_Activate"
 End Sub
 Private Sub AutoRefresh()
 
@@ -114,6 +160,36 @@ CleanExit:
 CleanFail:
     ' optional: Debug.Print Err.Number, Err.Description
     Resume CleanExit
+End Sub
+
+' === Toggle styling — inline u frmIzvestaj ===
+
+Private Sub StyleToggleActive(ByVal tgl As MSForms.ToggleButton, ByVal lbl As String)
+    On Error Resume Next
+    With tgl
+        .caption = lbl
+        .BackColor = BTN_ACTIVE()             ' gold
+        .ForeColor = RGB(20, 20, 20)            ' dark text on gold
+        .Font.name = "Segoe UI"
+        .Font.Size = 9
+        .Font.Bold = True
+        .BorderStyle = fmBorderStyleNone
+    End With
+    On Error GoTo 0
+End Sub
+
+Private Sub StyleToggleInactive(ByVal tgl As MSForms.ToggleButton, ByVal lbl As String)
+    On Error Resume Next
+    With tgl
+        .caption = lbl
+        .BackColor = BG_PANEL()                ' or fallback BG_MAIN()
+        .ForeColor = TXT_MUTED()
+        .Font.name = "Segoe UI"
+        .Font.Size = 9
+        .Font.Bold = False
+        .BorderStyle = fmBorderStyleSingle
+    End With
+    On Error GoTo 0
 End Sub
 ' ============================================================
 ' KASKADIERUNG
@@ -151,11 +227,10 @@ Private Sub SetEntitetToggle(ByVal activeName As String)
 End Sub
 
 Private Sub UpdateEntitetToggleUI()
-    ' najjednostavnije: bold na aktivnom
-    tglOM.Font.Bold = tglOM.value
-    tglKupci.Font.Bold = tglKupci.value
-    tglVozaci.Font.Bold = tglVozaci.value
-    tglKooperanti.Font.Bold = tglKooperanti.value
+    If tglOM.value Then StyleToggleActive tglOM, "Otkupna mesta" Else StyleToggleInactive tglOM, "Otkupna mesta"
+    If tglKupci.value Then StyleToggleActive tglKupci, "Kupci" Else StyleToggleInactive tglKupci, "Kupci"
+    If tglVozaci.value Then StyleToggleActive tglVozaci, "Vozaci" Else StyleToggleInactive tglVozaci, "Vozaci"
+    If tglKooperanti.value Then StyleToggleActive tglKooperanti, "Kooperanti" Else StyleToggleInactive tglKooperanti, "Kooperanti"
 End Sub
 
 Private Sub tglOM_Click()
@@ -207,8 +282,8 @@ Private Sub SetTipToggle(ByVal activeName As String)
 End Sub
 
 Private Sub UpdateTipToggleUI()
-    tglPojedinacni.Font.Bold = tglPojedinacni.value
-    tglZbirni.Font.Bold = tglZbirni.value
+    If tglPojedinacni.value Then StyleToggleActive tglPojedinacni, "Pojedinacni" Else StyleToggleInactive tglPojedinacni, "Pojedinacni"
+    If tglZbirni.value Then StyleToggleActive tglZbirni, "Zbirni" Else StyleToggleInactive tglZbirni, "Zbirni"
 End Sub
 
 Private Sub tglPojedinacni_Click()
@@ -259,6 +334,43 @@ Private Sub LoadEntiteti()
 End Sub
 Private Sub cmbEntitet_Change()
     AutoRefresh
+End Sub
+
+
+Private Sub ResetActionButtons()
+    StylePrimaryButton btnUnos, "Prikaži"
+    StylePrimaryButton btnStampaj, "Štampaj"
+    StyleExitButton btnPovratak, "Povratak"
+    
+    On Error Resume Next
+    StylePrimaryButton btnStampajKarticu, "Štampaj karticu"
+    On Error GoTo 0
+End Sub
+
+Private Sub btnUnos_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnUnos
+End Sub
+
+Private Sub btnStampaj_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnStampaj
+End Sub
+
+Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnPovratak
+End Sub
+
+Private Sub btnStampajKarticu_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    On Error Resume Next
+    ButtonHover btnStampajKarticu
+    On Error GoTo 0
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
 End Sub
 
 ' ============================================================
@@ -368,6 +480,42 @@ Private Sub SetupListBoxes()
     End With
 End Sub
 
+Private Sub UpdateStatusLabel()
+    On Error Resume Next
+    
+    Dim msg As String
+    Dim activeTab As Long
+    activeTab = mpReports.value
+    
+    Dim activeList As MSForms.ListBox
+    
+    Select Case activeTab
+        Case 0:    Set activeList = lstSaldoOM
+        Case 1:    Set activeList = lstSaldoKupci
+        Case 2:    Set activeList = lstOtkupRoba
+        Case 3:    Set activeList = lstAmbalaza
+        Case 4:    Set activeList = lstIsplata
+        Case 5:    Set activeList = lstZbirni
+        Case 6:    Set activeList = lstProsecnaCena
+        Case 7:    Set activeList = lstManjak
+        Case 8:    Set activeList = lstKartica
+    End Select
+    
+    If activeList Is Nothing Then
+        lblStatus.caption = "Spreman za izvestaj"
+        lblStatus.ForeColor = TXT_MUTED()
+    ElseIf activeList.ListCount = 0 Then
+        lblStatus.caption = "Nema podataka za izabran filter"
+        lblStatus.ForeColor = TXT_MUTED()
+    Else
+        lblStatus.caption = activeList.ListCount & " redova ucitano | Period: " & _
+                            txtDatumOd.value & " - " & txtDatumDo.value
+        lblStatus.ForeColor = CLR_SUCCESS()
+    End If
+    
+    On Error GoTo 0
+End Sub
+
 ' ============================================================
 ' HAUPTAKTION
 ' ============================================================
@@ -435,6 +583,8 @@ Private Sub btnUnos_Click()
 
     WriteReportTables entitetTip, entitetID, datumOd, datumDo, zbirni
 
+    UpdateStatusLabel
+    
     Application.ScreenUpdating = True
     Exit Sub
 
@@ -444,6 +594,9 @@ EH:
     MsgBox "Greska pri ucitavanju izvestaja: " & Err.description, vbCritical, APP_NAME
 End Sub
 
+Private Sub mpReports_Change()
+    UpdateStatusLabel
+End Sub
 Private Sub UpdateUnosButtonState()
 
     ' If Zbirni ? no entitet required
@@ -1054,3 +1207,102 @@ End Sub
 
 
 
+Private Sub SetupAllColumnHeaders()
+    On Error Resume Next
+    
+    ' === SaldoOM Page ===
+    SetColumnHeader lbl_H_SOM1, "Kooperant"
+    SetColumnHeader lbl_H_SOM2, "Kolicina"
+    SetColumnHeader lbl_H_SOM3, "Vrednost"
+    SetColumnHeader lbl_H_SOM4, "Isplaceno"
+    SetColumnHeader lbl_H_SOM5, "Agro zaduženje"
+    SetColumnHeader lbl_H_SOM6, "Saldo"
+    SetColumnHeader lbl_H_SOM7, "Ambalaža"
+    
+    ' === SaldoKupci Page ===
+    SetColumnHeader lbl_H_SK1, "Vrsta"
+    SetColumnHeader lbl_H_SK2, "Kolicina"
+    SetColumnHeader lbl_H_SK3, "Cena"
+    SetColumnHeader lbl_H_SK4, "Vrednost"
+    SetColumnHeader lbl_H_SK5, "Novac"
+    SetColumnHeader lbl_H_SK6, "Saldo"
+    SetColumnHeader lbl_H_SK7, "Ambalaža"
+    
+    ' === OtkupRoba Page ===
+    SetColumnHeader lbl_H_OR1, "Datum"
+    SetColumnHeader lbl_H_OR2, "Br. Otp."
+    SetColumnHeader lbl_H_OR3, "Vrsta"
+    SetColumnHeader lbl_H_OR4, "Klasa"
+    SetColumnHeader lbl_H_OR5, "Vozac"
+    SetColumnHeader lbl_H_OR6, "Otp kg"
+    SetColumnHeader lbl_H_OR7, "Blokovi kg"
+    SetColumnHeader lbl_H_OR8, "Razlika kg"
+    SetColumnHeader lbl_H_OR9, "Manjak kg"
+    SetColumnHeader lbl_H_OR10, "Manjak %"
+    
+    ' === Ambalaza Page ===
+    SetColumnHeader lbl_H_AMB1, "Datum"
+    SetColumnHeader lbl_H_AMB2, "Mesto"
+    SetColumnHeader lbl_H_AMB3, "Tip"
+    SetColumnHeader lbl_H_AMB4, "Dokument"
+    SetColumnHeader lbl_H_AMB5, "Ulaz"
+    SetColumnHeader lbl_H_AMB6, "Izlaz"
+    
+    ' === Isplata Page ===
+    SetColumnHeader lbl_H_ISP1, "Kooperant"
+    SetColumnHeader lbl_H_ISP2, "Keš otkupac"
+    SetColumnHeader lbl_H_ISP3, "Virman firma"
+    SetColumnHeader lbl_H_ISP4, "Virman avans"
+    SetColumnHeader lbl_H_ISP5, "Ukupno"
+    
+    ' === Zbirni Page ===
+    SetColumnHeader lbl_H_ZB1, "Entitet"
+    SetColumnHeader lbl_H_ZB2, "Vrsta"
+    SetColumnHeader lbl_H_ZB3, "Kolicina"
+    SetColumnHeader lbl_H_ZB4, "Vrednost"
+    SetColumnHeader lbl_H_ZB5, "Prosek"
+    
+    ' === ProsecnaCena Page ===
+    SetColumnHeader lbl_H_PC1, "Vrsta"
+    SetColumnHeader lbl_H_PC2, "Kolicina"
+    SetColumnHeader lbl_H_PC3, "Vrednost"
+    SetColumnHeader lbl_H_PC4, "Prosecna cena"
+    
+    ' === Manjak Page ===
+    SetColumnHeader lbl_H_MAN1, "Br. zbirne"
+    SetColumnHeader lbl_H_MAN2, "Zbirna kg"
+    SetColumnHeader lbl_H_MAN3, "Prijemnica kg"
+    SetColumnHeader lbl_H_MAN4, "Manjak kg"
+    SetColumnHeader lbl_H_MAN5, "Manjak %"
+    SetColumnHeader lbl_H_MAN6, "Prosek gajbe"
+    
+    ' === KarticaKooperanta Page ===
+    SetColumnHeader lbl_H_KK1, "Datum"
+    SetColumnHeader lbl_H_KK2, "Broj dok."
+    SetColumnHeader lbl_H_KK3, "Opis"
+    SetColumnHeader lbl_H_KK4, "Zaduženje"
+    SetColumnHeader lbl_H_KK5, "Razduženje"
+    SetColumnHeader lbl_H_KK6, "Saldo"
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
+    On Error Resume Next
+    StyleListHeaderLabel lbl
+    lbl.caption = txt
+    On Error GoTo 0
+End Sub
+
+Private Sub ForceDarkAllPages()
+    On Error Resume Next
+    
+    Dim i As Long
+    For i = 0 To mpReports.Pages.count - 1
+        mpReports.Pages(i).BackColor = BG_MAIN()
+    Next i
+    
+    mpReports.BackColor = BG_MAIN()
+    
+    On Error GoTo 0
+End Sub
