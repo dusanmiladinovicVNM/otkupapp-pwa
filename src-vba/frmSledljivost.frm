@@ -22,38 +22,204 @@ Private m_UnlinkedData As Variant
 Private m_CandidateOtpIDs() As String
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
-
 Private Sub UserForm_Activate()
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    On Error GoTo EH
+    
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
+    
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
+    
+    ' Header zone
+    On Error Resume Next
+    StyleFrameTitleLabel lblKopf, "Izvestaj o sledljivosti"
+    StyleSubtitle lblSubtitle, "Auto/manuelno povezivanje + sledljivost po zbirnoj"
+    On Error GoTo EH
+    
+    ' Section headers
+    On Error Resume Next
+    StyleListHeaderLabel lblSidebarNepovezani
+    lblSidebarNepovezani.caption = "NEPOVEZANI OTKUPI"
+    
+    StyleListHeaderLabel lblSidebarOtpremnice
+    lblSidebarOtpremnice.caption = "MOGUCE OTPREMNICE"
+    
+    StyleListHeaderLabel lblSidebarTrace
+    lblSidebarTrace.caption = "SLEDLJIVOST PO ZBIRNOJ"
+    
+    ' Accent linije
+    lblAccentNepovezani.BackColor = BTN_ACTIVE()
+    lblAccentNepovezani.BackStyle = fmBackStyleOpaque
+    lblAccentNepovezani.BorderStyle = fmBorderStyleNone
+    
+    lblAccentOtpremnice.BackColor = BTN_ACTIVE()
+    lblAccentOtpremnice.BackStyle = fmBackStyleOpaque
+    lblAccentOtpremnice.BorderStyle = fmBorderStyleNone
+    
+    lblAccentTrace.BackColor = BTN_ACTIVE()
+    lblAccentTrace.BackStyle = fmBackStyleOpaque
+    lblAccentTrace.BorderStyle = fmBorderStyleNone
+    On Error GoTo EH
+    
+    ' Action buttons
+    StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
+    StylePrimaryButton btnPovezi, "Poveži"
+    StylePrimaryButton btnStampaj, "Štampaj"
+    StyleExitButton btnPovratak, "Povratak"
+    
+    ' Filter label
+    On Error Resume Next
+    StyleLabel lblZbirnaLabel, TXT_MUTED(), False
+    lblZbirnaLabel.Font.Size = FONT_SIZE_SMALL
+    On Error GoTo EH
+    
+    ' Status label
+    On Error Resume Next
+    StyleLabel lblStatus, TXT_LIGHT(), True
+    On Error GoTo EH
+    
+    ' Column headers
+    SetupAllColumnHeaders
+    
+    Exit Sub
+
+EH:
+    LogErr "frmSledljivost.UserForm_Activate"
 End Sub
 
 Private Sub UserForm_Initialize()
-    ApplyTheme Me, BG_MAIN
     SetupListBoxes
     LoadZbirne
+    LoadNepovezani         ' DODATO - operator vidi nepovezane odmah
     UpdateStatus
 End Sub
 
 ' ============================================================
 ' SETUP
 ' ============================================================
+
+Private Sub SetupAllColumnHeaders()
+    On Error Resume Next
+    
+    ' Nepovezani Otkupi (kolone 1-6 vidljive, OtkupID hidden)
+    SetColumnHeader lbl_H_NEP1, "Datum"
+    SetColumnHeader lbl_H_NEP2, "Stanica"
+    SetColumnHeader lbl_H_NEP3, "Vozac"
+    SetColumnHeader lbl_H_NEP4, "Kooperant"
+    SetColumnHeader lbl_H_NEP5, "Kolicina"
+    SetColumnHeader lbl_H_NEP6, "Klasa"
+    
+    ' Otpremnice (kolone 1-4 vidljive, OtpremnicaID hidden)
+    SetColumnHeader lbl_H_OTP1, "Broj otp."
+    SetColumnHeader lbl_H_OTP2, "Broj zbirne"
+    SetColumnHeader lbl_H_OTP3, "Kolicina"
+    SetColumnHeader lbl_H_OTP4, "Klasa"
+    
+    ' Trace (kolone 1-5 vidljive, OtkupID/OtpremnicaID hidden)
+    SetColumnHeader lbl_H_TRC1, "Kooperant"
+    SetColumnHeader lbl_H_TRC2, "Kolicina"
+    SetColumnHeader lbl_H_TRC3, "Vrsta voca"
+    SetColumnHeader lbl_H_TRC4, "Stanica"
+    SetColumnHeader lbl_H_TRC5, "Datum"
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub ResetActionButtons()
+    StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
+    StylePrimaryButton btnPovezi, "Poveži"
+    StylePrimaryButton btnStampaj, "Štampaj"
+    StyleExitButton btnPovratak, "Povratak"
+End Sub
+
+Private Sub btnAutoLink_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnAutoLink
+End Sub
+
+Private Sub btnPovezi_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnPovezi
+End Sub
+
+Private Sub btnStampaj_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnStampaj
+End Sub
+
+Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnPovratak
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+End Sub
+
+Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
+    On Error Resume Next
+    StyleListHeaderLabel lbl
+    lbl.caption = txt
+    On Error GoTo 0
+End Sub
+
+Private Sub RelayoutSledljivost()
+    On Error Resume Next
+    
+    ' === POVEZIVANJE ZONE - eksplicitno uskladjenje ===
+    lstNepovezani.Top = 134
+    lstNepovezani.Height = 280
+    
+    LstOtpremnice.Top = 134
+    LstOtpremnice.Height = 280
+    
+    btnPovezi.Top = 254
+    
+    ' === SLEDLJIVOST ZONE - pomereno gore ===
+    ' Listbox-i Povezivanje zone se zavrsavaju na 134 + 280 = 414
+    ' Sledljivost section pocinje 30 pt nize = 444
+    
+    lblSidebarTrace.Top = 444
+    lblSidebarTrace.Left = 16
+    lblSidebarTrace.width = 250
+    lblSidebarTrace.Height = 14
+    
+    lblAccentTrace.Top = 462
+    lblAccentTrace.Left = 16
+    lblAccentTrace.width = 990
+    lblAccentTrace.Height = 2
+    
+    lblZbirnaLabel.Top = 474
+    lblZbirnaLabel.Left = 16
+    lblZbirnaLabel.width = 60
+    lblZbirnaLabel.Height = 14
+    
+    cmbZbirna.Top = 494
+    cmbZbirna.Left = 16
+    cmbZbirna.width = 300
+    cmbZbirna.Height = 22
+    
+    btnStampaj.Top = 492
+    btnStampaj.Left = 330
+    btnStampaj.width = 100
+    btnStampaj.Height = 26
+    
+    ' Column headers iznad lstTrace
+    lbl_H_TRC1.Top = 532
+    lbl_H_TRC2.Top = 532
+    lbl_H_TRC3.Top = 532
+    lbl_H_TRC4.Top = 532
+    lbl_H_TRC5.Top = 532
+    
+    lstTrace.Top = 552
+    lstTrace.Left = 16
+    lstTrace.width = 990
+    lstTrace.Height = 380
+    
+    ' btnPovratak - dno desno, dynamic od InsideHeight
+    btnPovratak.Top = Me.InsideHeight - 50
+    btnPovratak.Left = Me.InsideWidth - btnPovratak.width - 16
+    btnPovratak.width = 100
+    btnPovratak.Height = 30
+    
+    On Error GoTo 0
+End Sub
 
 Private Sub SetupListBoxes()
     ' lstNepovezani: Datum, Stanica, Vozac, Kooperant, Kolicina, Klasa
@@ -138,7 +304,7 @@ Private Sub btnAutoLink_Click()
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnAutoLink"
-    MsgBox "Greska pri povezivanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri povezivanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -278,7 +444,7 @@ RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnPovezi"
-    MsgBox "Greska pri povezivanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri povezivanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -321,7 +487,7 @@ Private Sub btnStampaj_Click()
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnStampaj"
-    MsgBox "Greska pri stampanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri stampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)
@@ -511,8 +677,27 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
 End Sub
 
 Private Sub btnPovratak_Click()
-    Me.Hide
-    frmOtkupAPP.Show
+    On Error GoTo EH
+
+    ButtonActive btnPovratak
+
+    frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    Unload Me
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkup.btnPovratak_Click"
+    Unload Me
 End Sub
 
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
+    If CloseMode = vbFormControlMenu Then
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    End If
+
+    On Error GoTo 0
+End Sub
 
