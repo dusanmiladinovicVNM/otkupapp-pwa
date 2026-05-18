@@ -18,47 +18,226 @@ Option Explicit
 Private m_SetupDone As Boolean
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
-
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
 
-    ApplyTheme Me, BG_MAIN
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
 
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
 
-    Me.caption = "SEF upravljanje"
+    ' Header zone
+    On Error Resume Next
+    StyleFrameTitleLabel lblKopf, "SEF upravljanje"
+    StyleSubtitle lblSubtitle, "Slanje, status i recovery elektronskih faktura"
+    On Error GoTo EH
+
+    ' Section headers za Frame-ove
+    StyleSectionHeader fraInfo, "Info o fakturi"
+    StyleSectionHeader fraAkcije, "Akcije nad fakturom"
+    StyleSectionHeader fraBatch, "Batch operacije"
+    StyleSectionHeader fraEvents, "Event log"
+
+    ' Static naslovne labele (muted, small)
+    On Error Resume Next
+    StyleLabel lblFakturaIDLabel, TXT_MUTED(), False
+    lblFakturaIDLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblBrojFaktureLabel, TXT_MUTED(), False
+    lblBrojFaktureLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblKupacLabel, TXT_MUTED(), False
+    lblKupacLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblWorkflowLabel, TXT_MUTED(), False
+    lblWorkflowLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblSEFStatusLabel, TXT_MUTED(), False
+    lblSEFStatusLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblSEFDocumentIDLabel, TXT_MUTED(), False
+    lblSEFDocumentIDLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblVersionLabel, TXT_MUTED(), False
+    lblVersionLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblLastErrorLabel, TXT_MUTED(), False
+    lblLastErrorLabel.Font.Size = FONT_SIZE_SMALL
+
+    StyleLabel lblFakturaSelectorLabel, TXT_MUTED(), False
+    lblFakturaSelectorLabel.Font.Size = FONT_SIZE_SMALL
+    On Error GoTo EH
+
+    ' Dinamicke value labele (light, bold za ID-jeve)
+    On Error Resume Next
+    StyleLabel lblFakturaID, TXT_LIGHT(), True
+    StyleLabel lblBrojFakture, TXT_LIGHT(), True
+    StyleLabel lblKupacNaziv, TXT_LIGHT(), False
+    StyleLabel lblWorkflow, TXT_LIGHT(), True
+    StyleLabel lblSEFStatus, TXT_LIGHT(), True
+    StyleLabel lblSEFDocumentID, TXT_LIGHT(), False
+    StyleLabel lblVersion, TXT_LIGHT(), False
+    StyleLabel lblLastError, CLR_ERROR(), False
+    On Error GoTo EH
+
+    ' Action buttons (single faktura)
+    StylePrimaryButton btnUcitaj, "Ucitaj fakturu"
+    StylePrimaryButton btnPosalji, "Pošalji na SEF"
+    StylePrimaryButton btnOsvezi, "Osveži status"
+    StylePrimaryButton btnPrepareResubmit, "Pripremi za ponovno slanje"
+    StylePrimaryButton btnCancel, "Otkaži slanje na SEF"
+    StylePrimaryButton btnStorno, "Storniraj u SEFu"
+    StylePrimaryButton btnRecoverSending, "Recover sending"
+
+    ' Batch buttons
+    StylePrimaryButton btnRefreshPending, "Osveži sve Pending"
+    StylePrimaryButton btnRecoverAllSending, "Recover sve sending"
+
+    ' Exit
+    StyleExitButton btnPovratak, "Zatvori"
+
+    ' Help textbox styling
+    On Error Resume Next
+    txtHelpBox.BackColor = BG_PANEL()
+    txtHelpBox.ForeColor = TXT_LIGHT()
+    txtHelpBox.Font.name = "Segoe UI"
+    txtHelpBox.Font.Size = 9
+    On Error GoTo EH
+
+    ' Column headers iznad Events listbox-a
+    SetupAllColumnHeaders
 
     Call SetupSEFEventList
     Call LoadFaktureIntoCombo
     Call ClearSEFInfo
-    
     Call SetupHelpPage
+
+    ' Force dark Pages u MultiPage1
+    ForceDarkAllPages
+
+    ' === Force Z-order ===
+    On Error Resume Next
+
+    ' Background sasvim dole
+    fraBackground.ZOrder 1
+
+    ' Sve ostale glavne kontrole na vrh
+    cmbFaktura.ZOrder 0
+    btnUcitaj.ZOrder 0
+    fraInfo.ZOrder 0
+    fraAkcije.ZOrder 0
+    fraBatch.ZOrder 0
+    fraEvents.ZOrder 0
+    btnPovratak.ZOrder 0
+
+    ' Action buttons unutar frame-ova
+    btnPosalji.ZOrder 0
+    btnOsvezi.ZOrder 0
+    btnPrepareResubmit.ZOrder 0
+    btnCancel.ZOrder 0
+    btnStorno.ZOrder 0
+    btnRecoverSending.ZOrder 0
+    btnRefreshPending.ZOrder 0
+    btnRecoverAllSending.ZOrder 0
+
+    ' Header
+    lblKopf.ZOrder 0
+    lblSubtitle.ZOrder 0
+
+    fraBackground.BackColor = BG_MAIN()
+
+On Error GoTo 0
 
     Exit Sub
 
 EH:
     LogErr "frmSEF.UserForm_Activate"
-    MsgBox "Greška pri otvaranju SEF forme: " & Err.Description, vbExclamation, APP_NAME
+    MsgBox "Greška pri otvaranju SEF forme: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' === Column headers setup ===
+Private Sub SetupAllColumnHeaders()
+    On Error Resume Next
+    
+    SetColumnHeader lbl_H_SEF1, "Vreme"
+    SetColumnHeader lbl_H_SEF2, "Tip"
+    SetColumnHeader lbl_H_SEF3, "Poruka"
+    SetColumnHeader lbl_H_SEF4, "Detalji"
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
+    On Error Resume Next
+    StyleListHeaderLabel lbl
+    lbl.caption = txt
+    On Error GoTo 0
+End Sub
+
+' === MultiPage1 dark background fix ===
+Private Sub ForceDarkAllPages()
+    On Error Resume Next
+    
+    Dim i As Long
+    For i = 0 To MultiPage1.Pages.count - 1
+        MultiPage1.Pages(i).BackColor = BG_MAIN()
+    Next i
+    
+    MultiPage1.BackColor = BG_MAIN()
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub ResetActionButtons()
+    StylePrimaryButton btnUcitaj, "Ucitaj fakturu"
+    ' btnPosalji caption se menja dinamicki, pa ne forsiramo
+    StylePrimaryButton btnPosalji, btnPosalji.caption
+    StylePrimaryButton btnOsvezi, "Osveži status"
+    StylePrimaryButton btnPrepareResubmit, "Pripremi za ponovno slanje"
+    StylePrimaryButton btnCancel, "Otkaži slanje na SEF"
+    StylePrimaryButton btnStorno, "Storniraj u SEFu"
+    StylePrimaryButton btnRecoverSending, "Recover sending"
+    StylePrimaryButton btnRefreshPending, "Osveži sve Pending"
+    StylePrimaryButton btnRecoverAllSending, "Recover sve sending"
+    StyleExitButton btnPovratak, "Zatvori"
+End Sub
+
+Private Sub btnUcitaj_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnUcitaj
+End Sub
+Private Sub btnPosalji_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnPosalji
+End Sub
+Private Sub btnOsvezi_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnOsvezi
+End Sub
+Private Sub btnPrepareResubmit_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnPrepareResubmit
+End Sub
+Private Sub btnCancel_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnCancel
+End Sub
+Private Sub btnStorno_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnStorno
+End Sub
+Private Sub btnRecoverSending_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnRecoverSending
+End Sub
+Private Sub btnRefreshPending_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnRefreshPending
+End Sub
+Private Sub btnRecoverAllSending_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnRecoverAllSending
+End Sub
+Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnPovratak
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
 End Sub
 
 Private Sub SetupSEFEventList()
@@ -142,17 +321,18 @@ Private Sub LoadSelectedFakturaInfo()
     Call LoadSEFEventsForSelectedFaktura
     Call UpdateSEFButtonStates
     
+    ' NOVO - koristi theme constants
     Select Case UCase$(Me.lblSEFStatus.caption)
     Case "SENT"
-        Me.lblSEFStatus.foreColor = vbBlue
+        Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
     Case "ACCEPTED"
-        Me.lblSEFStatus.foreColor = vbGreen
+        Me.lblSEFStatus.ForeColor = CLR_SUCCESS()
     Case "REJECTED"
-        Me.lblSEFStatus.foreColor = vbRed
+        Me.lblSEFStatus.ForeColor = CLR_ERROR()
     Case "CANCELLED", "STORNO"
-        Me.lblSEFStatus.foreColor = RGB(128, 0, 128)
+        Me.lblSEFStatus.ForeColor = CLR_WARNING()
     Case Else
-        Me.lblSEFStatus.foreColor = vbBlack
+        Me.lblSEFStatus.ForeColor = TXT_LIGHT()
     End Select
     
 End Sub
@@ -245,7 +425,7 @@ Private Sub btnUcitaj_Click()
 
 EH:
     LogErr "frmSEF.btnUcitaj"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnPosalji_Click()
@@ -282,7 +462,7 @@ CleanExit:
 
 EH:
     LogErr "frmSEF.btnPosalji"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
     Resume CleanExit
 End Sub
 
@@ -305,7 +485,7 @@ Private Sub btnOsvezi_Click()
 
 EH:
     LogErr "frmSEF.btnOsvezi"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnPrepareResubmit_Click()
@@ -329,7 +509,7 @@ Private Sub btnPrepareResubmit_Click()
 
 EH:
     LogErr "frmSEF.btnPrepareResubmit"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnCancel_Click()
@@ -364,7 +544,7 @@ Private Sub btnCancel_Click()
 
 EH:
     LogErr "frmSEF.btnCancel"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnStorno_Click()
@@ -402,7 +582,7 @@ Private Sub btnStorno_Click()
 
 EH:
     LogErr "frmSEF.btnStorno"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnRecoverSending_Click()
@@ -424,7 +604,7 @@ Private Sub btnRecoverSending_Click()
 
 EH:
     LogErr "frmSEF.btnRecoverSending"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnRefreshPending_Click()
@@ -438,7 +618,7 @@ Private Sub btnRefreshPending_Click()
 
 EH:
     LogErr "frmSEF.btnRefreshPending"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnRecoverAllSending_Click()
@@ -452,12 +632,35 @@ Private Sub btnRecoverAllSending_Click()
 
 EH:
     LogErr "frmSEF.btnRecoverAllSending"
-    MsgBox Err.Description, vbCritical, APP_NAME
+    MsgBox Err.description, vbCritical, APP_NAME
 End Sub
 
-Private Sub btnZatvori_Click()
+Private Sub btnPovratak_Click()
+    On Error GoTo EH
+
+    ButtonActive btnPovratak
+    
+    frmOtkupAPP.ReturnToDashboard "SEF zatvoren."
+    Unload Me
+    
+    Exit Sub
+
+EH:
+    LogErr "frmSEF.btnPovratak_Click"
+    On Error Resume Next
     Unload Me
 End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
+    If CloseMode = vbFormControlMenu Then
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    End If
+
+    On Error GoTo 0
+End Sub
+
 
 
 Private Sub SetupHelpPage()
