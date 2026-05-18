@@ -55,16 +55,26 @@ End Sub
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
-    If Not mChromeRemoved Then
-        RemoveTitleBar
-        Me.caption = ""
-        mChromeRemoved = True
-    End If
-
-    ApplyTheme Me, BG_MAIN
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
 
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
+
+    ' Style staticnih elemenata koji ne menjaju za Setup
+    On Error Resume Next
+    StylePrimaryButton btnDodaj, "Dodaj"
+    StylePrimaryButton btnIzmeni, "Izmeni"
+    StyleExitButton btnPovratak, "Povratak"
+    
+    ' GEO buttons (samo Parcele tab, ali style ih unapred)
+    StylePrimaryButton btnGeoOpen, "Otvori GeoSrbija"
+    StylePrimaryButton btnPasteCoords, "Paste koordinata"
+    StylePrimaryButton btnGeoSave, "Sacuvaj geo"
+    StyleExitButton btnGeoClear, "Obriši geo"
+    StylePrimaryButton btnOpenMap, "Google Maps"
+    StylePrimaryButton btnOpenPolygonEditor, "Polygon editor"
+    On Error GoTo EH
 
     Select Case Me.Tag
         Case "Kooperanti": SetupKooperanti
@@ -78,12 +88,162 @@ Private Sub UserForm_Activate()
 
     LoadList
     ClearFields
+    SetupColumnHeaders            ' DODATO
+    StyleAllFields                 ' DODATO
+    
     m_SelectedRow = 0
+    
+    ' RemoveTitleBar SAMO POSLE Setup-a (caption je vec postavljen)
+    If Not mChromeRemoved Then
+        Me.caption = ""             ' brisi caption
+        RemoveTitleBar               ' onda ga sakri
+        mChromeRemoved = True
+    End If
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.UserForm_Activate"
     MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub StyleAllFields()
+    On Error Resume Next
+    
+    Dim i As Long
+    
+    ' lblField1..10 — naslovne labele, muted small
+    For i = 1 To 10
+        Dim lbl As MSForms.label
+        Set lbl = Me.Controls("lblField" & i)
+        StyleLabel lbl, TXT_MUTED(), False
+        lbl.Font.Size = FONT_SIZE_SMALL
+    Next i
+    
+    ' GEO koordinate labele
+    StyleLabel lblNCoord, TXT_MUTED(), False
+    lblNCoord.Font.Size = FONT_SIZE_SMALL
+    StyleLabel lblECoord, TXT_MUTED(), False
+    lblECoord.Font.Size = FONT_SIZE_SMALL
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub SetupColumnHeaders()
+    On Error Resume Next
+    
+    ' Default: sakriti sve
+    Dim i As Long
+    For i = 1 To 10
+        Dim lblH As MSForms.label
+        Set lblH = Me.Controls("lbl_H_STM" & i)
+        If Not lblH Is Nothing Then
+            StyleListHeaderLabel lblH
+            lblH.caption = ""
+            lblH.Visible = False
+        End If
+    Next i
+    
+    ' Entity-specific column headers
+    Select Case Me.Tag
+        Case "Kooperanti"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Ime i Prezime", True
+            ShowHeader 3, "Telefon", True
+            ShowHeader 4, "Stanica", True
+            ShowHeader 5, "BPG", True
+            ShowHeader 6, "Racun", True
+            ShowHeader 7, "Pin", True
+            ShowHeader 8, "Adresa", True
+            ShowHeader 9, "JMBG", True
+            ShowHeader 10, "Aktivan", True
+            
+        Case "Stanice"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Naziv", True
+            ShowHeader 3, "Mesto", True
+            ShowHeader 4, "Telefon", True
+            ShowHeader 5, "Aktivan", True
+            ShowHeader 6, "Kontakt Ime", True
+            ShowHeader 7, "Kontakt Prezime", True
+            ShowHeader 8, "Pin", True
+            
+        Case "Kupci"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Naziv", True
+            ShowHeader 3, "Adresa", True
+            ShowHeader 4, "Drzava", True
+            ShowHeader 5, "PIB", True
+            ShowHeader 6, "MB", True
+            ShowHeader 7, "Email", True
+            ShowHeader 8, "Hladnjaca", True
+            ShowHeader 9, "Aktivan", True
+            ShowHeader 10, "Racun", True
+            
+        Case "Vozaci"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Ime", True
+            ShowHeader 3, "Prezime", True
+            ShowHeader 4, "Telefon", True
+            ShowHeader 5, "Aktivan", True
+            ShowHeader 6, "PIN", True
+            
+        Case "Parcele"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Kooperant", True
+            ShowHeader 3, "Kat. broj", True
+            ShowHeader 4, "Kat. opstina", True
+            ShowHeader 5, "Kultura", True
+            ShowHeader 6, "Povrsina (ha)", True
+            ShowHeader 7, "GGAP", True
+            ShowHeader 8, "Geo", True
+            ShowHeader 9, "Rizik", True
+            ShowHeader 10, "Napomena", True
+            
+        Case "Artikli"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Naziv", True
+            ShowHeader 3, "Tip", True
+            ShowHeader 4, "Jed. mere", True
+            ShowHeader 5, "Cena", True
+            ShowHeader 6, "Doza/ha", True
+            ShowHeader 7, "Kultura", True
+            ShowHeader 8, "Pakovanje", True
+    End Select
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub ShowHeader(ByVal index As Long, ByVal txt As String, ByVal isVisible As Boolean)
+    On Error Resume Next
+    Dim lbl As MSForms.label
+    Set lbl = Me.Controls("lbl_H_STM" & index)
+    If Not lbl Is Nothing Then
+        lbl.caption = txt
+        lbl.Visible = isVisible
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Sub ResetActionButtons()
+    StylePrimaryButton btnDodaj, "Dodaj"
+    StylePrimaryButton btnIzmeni, "Izmeni"
+    StyleExitButton btnPovratak, "Povratak"
+End Sub
+
+Private Sub btnDodaj_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnDodaj
+End Sub
+
+Private Sub btnIzmeni_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnIzmeni
+End Sub
+
+Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+ResetActionButtons:     ButtonHover btnPovratak
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
 End Sub
 
 ' ============================================================
@@ -94,7 +254,12 @@ Private Sub SetupKooperanti()
     ResetFieldVisibility
 
     Me.caption = "Kooperanti"
-    lblTitle.caption = "Kooperanti"
+    
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KOOPERANTI"
+    StyleSubtitle lblSubtitle, "Maticni podaci o kooperantima i njihovim stanicama"
+    On Error GoTo 0
+    
     m_TableName = TBL_KOOPERANTI
 
     m_Headers = Array( _
@@ -131,7 +296,12 @@ Private Sub SetupStanice()
     ResetFieldVisibility
 
     Me.caption = "Otkupna Mesta"
-    lblTitle.caption = "Otkupna Mesta"
+    
+        On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "OTKUPNE STANICE"
+    StyleSubtitle lblSubtitle, "Maticni podaci o otkupnim stanicama"
+    On Error GoTo 0
+    
     m_TableName = TBL_STANICE
 
     m_Headers = Array( _
@@ -163,7 +333,12 @@ Private Sub SetupKupci()
     ResetFieldVisibility
 
     Me.caption = "Kupci"
-    lblTitle.caption = "Kupci"
+    
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KUPCI"
+    StyleSubtitle lblSubtitle, "Maticni podaci o kupcima"
+    On Error GoTo 0
+    
     m_TableName = TBL_KUPCI
 
     m_Headers = Array( _
@@ -197,7 +372,10 @@ Private Sub SetupVozaci()
     ResetFieldVisibility
 
     Me.caption = "Vozaci"
-    lblTitle.caption = "Vozaci"
+        On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "VOZACI"
+    StyleSubtitle lblSubtitle, "Maticni podaci o vozacima"
+    On Error GoTo 0
     m_TableName = TBL_VOZACI
 
     m_Headers = Array( _
@@ -227,7 +405,12 @@ Private Sub SetupParcele()
     ResetFieldVisibility
     
     Me.caption = "Parcele"
-    lblTitle.caption = "Katastarske Parcele"
+    
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KATASTARSKE PARCELE"
+    StyleSubtitle lblSubtitle, "Maticni podaci o parcelama kooperanata"
+    On Error GoTo 0
+    
     m_TableName = TBL_PARCELE
 
     ' Display headers for ListBox only
@@ -304,7 +487,12 @@ End Sub
 Private Sub SetupArtikli()
     ResetFieldVisibility
     Me.caption = "Artikli"
-    lblTitle.caption = "Artikli Agrohemija"
+    
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "ARTIKLI"
+    StyleSubtitle lblSubtitle, "Maticni podaci o artiklima"
+    On Error GoTo 0
+    
     m_TableName = TBL_ARTIKLI
 
     m_Headers = Array( _
@@ -1228,16 +1416,30 @@ End Sub
 ' ============================================================
 
 Private Sub btnPovratak_Click()
+    On Error GoTo EH
+
+    ButtonActive btnPovratak
+    
+    frmOtkupAPP.ReturnToDashboard "Maticni podaci zatvoreni."
     Unload Me
-    frmOtkupAPP.Show
+
+    Exit Sub
+
+EH:
+    LogErr "frmStammdaten.btnPovratak_Click"
+    On Error Resume Next
+    Unload Me
+    On Error GoTo 0
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
     If CloseMode = vbFormControlMenu Then
-        Cancel = True
-        Unload Me
-        frmOtkupAPP.Show
+        frmOtkupAPP.ReturnToDashboard "Maticni podaci zatvoreni."
     End If
+
+    On Error GoTo 0
 End Sub
 
 Private Sub ClearFields()
@@ -1650,10 +1852,10 @@ Private Sub SetGeoStatus(ByVal message As String, Optional ByVal isError As Bool
         ctl.Visible = (Len(Trim$(message)) > 0)
 
         If isError Then
-            ctl.ForeColor = RGB(255, 80, 80)
+            ctl.ForeColor = CLR_ERROR()       ' bilo RGB(255, 80, 80)
             ctl.Font.Bold = True
         Else
-            ctl.ForeColor = RGB(120, 220, 140)
+            ctl.ForeColor = CLR_SUCCESS()     ' bilo RGB(120, 220, 140)
             ctl.Font.Bold = False
         End If
     End If
