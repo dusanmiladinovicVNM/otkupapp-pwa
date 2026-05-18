@@ -12,7 +12,6 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
-
 Option Explicit
 
 ' ============================================================
@@ -63,7 +62,7 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmStammdatenMenu.UserForm_Initialize"
-    MsgBox "Greška pri otvaranju menija šifarnika: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju menija šifarnika: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -144,36 +143,38 @@ Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
     On Error GoTo EH
 
     If Trim$(nazivSekcije) = "" Then
-        Err.Raise vbObjectError + 7601, "frmStammdatenMenu.OpenStammdatenForm", _
+        Err.Raise vbObjectError + 7601, "frmMaticniPodaci.OpenStammdatenForm", _
                   "Naziv sekcije je obavezan."
     End If
 
-    Dim frm As frmStammdaten
-    Set frm = New frmStammdaten
+    ' Force unload prethodnog frmStammdaten ako jos uvek postoji
+    On Error Resume Next
+    Unload frmStammdaten
+    On Error GoTo EH
 
+    ' Postavi Tag PRE OpenContentFormPublic poziva
+    frmStammdaten.Tag = nazivSekcije
+
+    ' Sakri menu pre prebacivanja na frmOtkupAPP shell
     m_IsOpeningChild = True
-
     Me.Hide
-    frmOtkupAPP.Hide
 
-    frm.Tag = nazivSekcije
-    frm.StartUpPosition = 2
-    frm.Show
+    ' frmOtkupAPP otvara frmStammdaten kao mActiveContent (modeless child)
+    On Error Resume Next
+    frmOtkupAPP.Show
+    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Maticni podaci: " & nazivSekcije
+    On Error GoTo EH
 
     Unload Me
     Exit Sub
 
 EH:
-    LogErr "frmStammdatenMenu.OpenStammdatenForm"
-
+    LogErr "frmMaticniPodaci.OpenStammdatenForm"
     m_IsOpeningChild = False
-
     On Error Resume Next
     Me.Show
-    frmOtkupAPP.Show
     On Error GoTo 0
-
-    MsgBox "Greška pri otvaranju šifarnika: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju šifarnika: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
