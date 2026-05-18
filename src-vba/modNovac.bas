@@ -164,8 +164,10 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
                           ByVal uplata As Double, ByVal isplata As Double, _
                           Optional ByVal napomena As String = "", _
                           Optional ByVal otkupID As String = "") As String
-                          
+
     Const SRC As String = "SaveNovac"
+
+    On Error GoTo EH
 
     Call ValidateNovacInput( _
         brojDok:=brojDok, _
@@ -177,21 +179,60 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
         uplata:=uplata, _
         isplata:=isplata, _
         sourceName:=SRC)
-    
+
     Dim newID As String
     newID = GetNextID(TBL_NOVAC, COL_NOV_ID, "NOV-")
-    
+
+    If Len(Trim$(newID)) = 0 Then
+        Err.Raise vbObjectError + 1050, SRC, _
+                  "GetNextID nije vratio NovacID. " & _
+                  "BrojDok=" & brojDok & _
+                  "; PartnerID=" & partnerId & _
+                  "; Tip=" & tip & _
+                  "; FakturaID=" & fakturaID & _
+                  "; OtkupID=" & otkupID
+    End If
+
     Dim rowData As Variant
     rowData = Array(newID, brojDok, datum, partner, partnerId, _
                     entitetTip, omID, kooperantID, fakturaID, _
                     vrstaVoca, tip, uplata, isplata, napomena, _
                     "", otkupID, "") ' Stornirano, OtkupID, OsirocenoOD
-    
-    If AppendRow(TBL_NOVAC, rowData) > 0 Then
-        SaveNovac = newID
-    Else
-        SaveNovac = ""
+
+    Dim rowIdx As Long
+    rowIdx = AppendRow(TBL_NOVAC, rowData)
+
+    If rowIdx <= 0 Then
+        Err.Raise vbObjectError + 1051, SRC, _
+                  "AppendRow failed for " & TBL_NOVAC & ". " & _
+                  "NovacID=" & newID & _
+                  "; BrojDok=" & brojDok & _
+                  "; PartnerID=" & partnerId & _
+                  "; EntitetTip=" & entitetTip & _
+                  "; Tip=" & tip & _
+                  "; Uplata=" & CStr(uplata) & _
+                  "; Isplata=" & CStr(isplata) & _
+                  "; FakturaID=" & fakturaID & _
+                  "; OtkupID=" & otkupID
     End If
+
+    SaveNovac = newID
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 Public Function LookupPartnerMap(ByVal bankaName As String) As Variant
@@ -890,7 +931,7 @@ Public Function BuildIsplataDictByOtkup() As Object
     Set BuildIsplataDictByOtkup = dict
 End Function
 
-Public Function GetOpenOtkupi(ByVal kooperantID As String) As Variant
+Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Variant
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then
@@ -907,29 +948,38 @@ Public Function GetOpenOtkupi(ByVal kooperantID As String) As Variant
 
     Dim colID As Long, colBrDok As Long, colKoop As Long
     Dim colKol As Long, colCena As Long, colIspl As Long
+    Dim colDatum As Long, colStanica As Long
     colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
     colKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
     colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
     colIspl = RequireColumnIndex(TBL_OTKUP, COL_OTK_ISPLACENO, SRC)
+    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)        ' v6.18+
+    colStanica = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)    ' v6.18+
     
     Dim isplataDict As Object
     Set isplataDict = BuildIsplataDictByOtkup()
     
+    Dim filterByKoop As Boolean
+    filterByKoop = (LenB(Trim$(kooperantID)) > 0)
+    
     ' Zählen
     Dim count As Long, i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colKoop)) = kooperantID And _
-           CStr(data(i, colIspl)) <> STATUS_ISPLACENO Then
-            Dim vrednost As Double: vrednost = 0
-            If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
-                vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
-            End If
-            Dim isplaceno As Double: isplaceno = 0
-            If isplataDict.Exists(CStr(data(i, colID))) Then isplaceno = isplataDict(CStr(data(i, colID)))
-            If vrednost - isplaceno > 0 Then count = count + 1
+        If filterByKoop Then
+            If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextCount
         End If
+        If CStr(data(i, colIspl)) = STATUS_ISPLACENO Then GoTo NextCount
+        
+        Dim vrednost As Double: vrednost = 0
+        If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
+            vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
+        End If
+        Dim isplaceno As Double: isplaceno = 0
+        If isplataDict.Exists(CStr(data(i, colID))) Then isplaceno = isplataDict(CStr(data(i, colID)))
+        If vrednost - isplaceno > 0 Then count = count + 1
+NextCount:
     Next i
     
     If count = 0 Then
@@ -937,33 +987,39 @@ Public Function GetOpenOtkupi(ByVal kooperantID As String) As Variant
         Exit Function
     End If
     
+    ' v6.18+: shape extended from 5 to 7 cols (backward-compatible)
+    ' Col 1-5 stays as before; Col 6 = Datum, Col 7 = StanicaID.
     Dim result() As Variant
-    ReDim result(1 To count, 1 To 5)
+    ReDim result(1 To count, 1 To 7)
     Dim idx As Long
     
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colKoop)) = kooperantID And _
-           CStr(data(i, colIspl)) <> STATUS_ISPLACENO Then
-            vrednost = 0
-            If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
-                vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
-            End If
-            isplaceno = 0
-            If isplataDict.Exists(CStr(data(i, colID))) Then isplaceno = isplataDict(CStr(data(i, colID)))
-            If vrednost - isplaceno > 0 Then
-                idx = idx + 1
-                result(idx, 1) = CStr(data(i, colBrDok))
-                result(idx, 2) = CStr(data(i, colID))
-                result(idx, 3) = vrednost
-                result(idx, 4) = isplaceno
-                result(idx, 5) = vrednost - isplaceno
-            End If
+        If filterByKoop Then
+            If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextRow
         End If
+        If CStr(data(i, colIspl)) = STATUS_ISPLACENO Then GoTo NextRow
+        
+        vrednost = 0
+        If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
+            vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
+        End If
+        isplaceno = 0
+        If isplataDict.Exists(CStr(data(i, colID))) Then isplaceno = isplataDict(CStr(data(i, colID)))
+        If vrednost - isplaceno > 0 Then
+            idx = idx + 1
+            result(idx, 1) = CStr(data(i, colBrDok))
+            result(idx, 2) = CStr(data(i, colID))
+            result(idx, 3) = vrednost
+            result(idx, 4) = isplaceno
+            result(idx, 5) = vrednost - isplaceno
+            result(idx, 6) = data(i, colDatum)              ' v6.18+
+            result(idx, 7) = CStr(data(i, colStanica))      ' v6.18+
+        End If
+NextRow:
     Next i
     
     GetOpenOtkupi = result
 End Function
-
 Public Function GetOMAvansSaldo(ByVal omID As String) As Double
     Const SRC As String = "GetOMAvansSaldo"
 
@@ -1328,3 +1384,110 @@ Private Sub ValidateNovacInput(ByVal brojDok As String, _
                   "EntitetTip je obavezan."
     End If
 End Sub
+
+
+'======================================================================
+' GetKooperantUnallocatedAvans
+'
+' Vraca sumu nedodeljenog NOV_VIRMAN_AVANS_KOOP-a za datog kooperanta.
+' Nedodeljen = OtkupID je prazan (nije linkovan na konkretan blok).
+'
+' Read-only helper, stornirano-safe. Koristi se za info display u
+' frmIsplatePregled-u (operator vidi koliko avansa kooperant ima
+' pre nego sto izabere blok za isplatu).
+'
+' Apply Avans logika je u ApplyAvansToOtkup_TX (ide kroz frmDokumenta).
+'======================================================================
+Public Function GetKooperantUnallocatedAvans(ByVal kooperantID As String) As Double
+    Const SRC As String = "GetKooperantUnallocatedAvans"
+    
+    If Len(Trim$(kooperantID)) = 0 Then Exit Function
+    
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    
+    Dim colKoop As Long
+    Dim colTip As Long
+    Dim colIsplata As Long
+    Dim colOtkID As Long
+    
+    colKoop = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    
+    Dim total As Double
+    Dim i As Long
+    
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colKoop))) <> Trim$(kooperantID) Then GoTo NextRow
+        If CStr(data(i, colTip)) <> NOV_VIRMAN_AVANS_KOOP Then GoTo NextRow
+        If Trim$(CStr(data(i, colOtkID))) <> "" Then GoTo NextRow
+        
+        If IsNumeric(data(i, colIsplata)) Then
+            total = total + CDbl(data(i, colIsplata))
+        End If
+NextRow:
+    Next i
+    
+    GetKooperantUnallocatedAvans = total
+End Function
+
+'======================================================================
+' BuildKooperantUnallocatedAvansDict
+'
+' Single-pass dict KooperantID -> nedodeljeni avans saldo.
+' Koristi se kao cache u frmIsplatePregled da izbegnemo N×M pozive.
+'======================================================================
+Public Function BuildKooperantUnallocatedAvansDict() As Object
+    Const SRC As String = "BuildKooperantUnallocatedAvansDict"
+    
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If Not IsArray(data) Then
+        Set BuildKooperantUnallocatedAvansDict = dict
+        Exit Function
+    End If
+    
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If Not IsArray(data) Then
+        Set BuildKooperantUnallocatedAvansDict = dict
+        Exit Function
+    End If
+    
+    Dim colKoop As Long
+    Dim colTip As Long
+    Dim colIsplata As Long
+    Dim colOtkID As Long
+    
+    colKoop = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If CStr(data(i, colTip)) <> NOV_VIRMAN_AVANS_KOOP Then GoTo NextRow
+        If Trim$(CStr(data(i, colOtkID))) <> "" Then GoTo NextRow
+        
+        Dim kID As String
+        kID = Trim$(CStr(data(i, colKoop)))
+        If LenB(kID) = 0 Then GoTo NextRow
+        
+        If Not dict.Exists(kID) Then dict.Add kID, 0#
+        
+        If IsNumeric(data(i, colIsplata)) Then
+            dict(kID) = dict(kID) + CDbl(data(i, colIsplata))
+        End If
+NextRow:
+    Next i
+    
+    Set BuildKooperantUnallocatedAvansDict = dict
+End Function
