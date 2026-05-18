@@ -14,7 +14,6 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 
-
 Option Explicit
 
 ' ============================================================
@@ -42,33 +41,75 @@ Private m_DataIndices() As Long
 
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
-
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
-    If Not mChromeRemoved Then
-        RemoveTitleBar
-        Me.caption = ""
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
 
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
 
-    ApplyTheme Me, BG_MAIN
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
+
+    ' Header zone (dodati u Designer ako nemaš)
+    On Error Resume Next
+    StyleFrameTitleLabel lblKopf, "Fakturisanje"
+    StyleSubtitle lblSubtitle, "Kreiranje faktura na osnovu prijemnica kupca"
+    On Error GoTo EH
+
+    ' Filter zone section header (opciono)
+    On Error Resume Next
+    StyleListHeaderLabel lblSidebarFilter
+    lblSidebarFilter.caption = "FILTER"
+    lblAccentFilter.BackColor = BTN_ACTIVE()
+    lblAccentFilter.BackStyle = fmBackStyleOpaque
+    lblAccentFilter.BorderStyle = fmBorderStyleNone
+    On Error GoTo EH
+
+    ' Action zone section header
+    On Error Resume Next
+    StyleListHeaderLabel lblSidebarAkcije
+    lblSidebarAkcije.caption = "AKCIJE"
+    lblAccentAkcije.BackColor = BTN_ACTIVE()
+    lblAccentAkcije.BackStyle = fmBackStyleOpaque
+    lblAccentAkcije.BorderStyle = fmBorderStyleNone
+    On Error GoTo EH
+
+    ' Action buttons
+    StylePrimaryButton btnUnesi, "Unesi"
+    StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
+    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnSEF, "SEF"
+    StyleExitButton btnPovratak, "Povratak"
+
+    ' Filter label (Kupac)
+    On Error Resume Next
+    StyleLabel lblKupacLabel, TXT_MUTED(), False
+    lblKupacLabel.Font.Size = FONT_SIZE_SMALL
+    On Error GoTo EH
+
+    ' Faktura selection label
+    On Error Resume Next
+    StyleLabel lblFakturaLabel, TXT_MUTED(), False
+    lblFakturaLabel.Font.Size = FONT_SIZE_SMALL
+    On Error GoTo EH
+
+    ' Checkbox styling
+    On Error Resume Next
+    chkPrikaziFakturisane.BackStyle = fmBackStyleTransparent
+    chkPrikaziFakturisane.ForeColor = TXT_LIGHT()
+    chkPrikaziFakturisane.Font.name = "Segoe UI"
+    chkPrikaziFakturisane.Font.Size = 9
+    On Error GoTo EH
+
+    ' Column headers iznad listbox-a (gold styled)
+    SetupAllColumnHeaders
+
+    ' Status label
+    On Error Resume Next
+    StyleLabel lblStatus, TXT_MUTED(), False
+    On Error GoTo EH
 
     ' Kupac combo: display = Naziv, hidden ID = KupacID
     FillComboDisplayID cmbKupac, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
@@ -79,7 +120,7 @@ Private Sub UserForm_Activate()
         .ColumnWidths = "70;70;65;35;65;55;80;140"
         .MultiSelect = fmMultiSelectMulti
     End With
-    
+
     With cmbFaktura
         .Clear
         .ColumnCount = 2
@@ -88,11 +129,85 @@ Private Sub UserForm_Activate()
         .TextColumn = 1
     End With
 
+    ' Initial status
+    UpdateStatusLabel
+
     Exit Sub
 
 EH:
     LogErr "frmFakturisanje.UserForm_Activate"
-    MsgBox "Greška pri otvaranju fakturisanja: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju fakturisanja: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub SetupAllColumnHeaders()
+    On Error Resume Next
+    
+    SetColumnHeader lbl_H_FAK1, "Broj prijemnice"
+    SetColumnHeader lbl_H_FAK2, "Broj zbirne"
+    SetColumnHeader lbl_H_FAK3, "Datum"
+    SetColumnHeader lbl_H_FAK4, "Klasa"
+    SetColumnHeader lbl_H_FAK5, "Kolicina"
+    SetColumnHeader lbl_H_FAK6, "Cena"
+    SetColumnHeader lbl_H_FAK7, "Vrednost"
+    SetColumnHeader lbl_H_FAK8, "Fakturisano (det. placanja)"
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub UpdateStatusLabel()
+    On Error Resume Next
+    
+    Dim msg As String
+    Dim selectedCount As Long
+    Dim selectedSum As Double
+    Dim i As Long
+    
+    For i = 0 To lstPrijemnice.ListCount - 1
+        If lstPrijemnice.Selected(i) Then
+            selectedCount = selectedCount + 1
+            ' Parse "Vrednost" column 6 ako je formatiran broj
+            Dim valStr As String
+            valStr = Replace(lstPrijemnice.List(i, 6), ".", "")    ' remove thousand separator
+            valStr = Replace(valStr, ",", ".")                       ' decimal separator
+            If IsNumeric(valStr) Then
+                selectedSum = selectedSum + CDbl(valStr)
+            End If
+        End If
+    Next i
+    
+    If cmbKupac.value = "" Then
+        msg = "Izaberi kupca za pocetak"
+        lblStatus.ForeColor = TXT_MUTED()
+    ElseIf lstPrijemnice.ListCount = 0 Then
+        msg = "Nema prijemnica za izabranog kupca"
+        lblStatus.ForeColor = TXT_MUTED()
+    ElseIf selectedCount = 0 Then
+        msg = lstPrijemnice.ListCount & " prijemnica ucitano | Izaberi za fakturisanje"
+        lblStatus.ForeColor = TXT_MUTED()
+    Else
+        msg = "Izabrano: " & selectedCount & " stavki | Suma: " & _
+              Format$(selectedSum, "#,##0.00") & " RSD"
+        lblStatus.ForeColor = CLR_SUCCESS()
+    End If
+    
+    lblStatus.caption = msg
+    
+    On Error GoTo 0
+End Sub
+
+Private Sub lstPrijemnice_Click()
+    UpdateStatusLabel
+End Sub
+
+Private Sub lstPrijemnice_Change()
+    UpdateStatusLabel
+End Sub
+
+Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
+    On Error Resume Next
+    StyleListHeaderLabel lbl
+    lbl.caption = txt
+    On Error GoTo 0
 End Sub
 
 Private Sub chkPrikaziFakturisane_Click()
@@ -119,6 +234,42 @@ EH:
     LogErr "frmFakturisanje.cmbKupac_Change"
 End Sub
 
+Private Sub ResetActionButtons()
+    StylePrimaryButton btnUnesi, "Unesi"
+    StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
+    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnSEF, "SEF"
+    StyleExitButton btnPovratak, "Povratak"
+End Sub
+
+Private Sub btnUnesi_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnUnesi
+End Sub
+
+Private Sub btnIzradiFakturu_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnIzradiFakturu
+End Sub
+
+Private Sub btnStampaj_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnStampaj
+End Sub
+
+Private Sub btnSEF_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnSEF
+End Sub
+
+Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover btnPovratak
+End Sub
+
+Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+End Sub
 ' ============================================================
 ' PRIJEMNICE LADEN
 ' ============================================================
@@ -272,7 +423,7 @@ NextPrij:
 
 EH:
     LogErr "frmFakturisanje.btnUnesi"
-    MsgBox "Greška pri ucitavanju prijemnica: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri ucitavanju prijemnica: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillFaktureZaKupca()
@@ -564,7 +715,7 @@ Private Sub btnIzradiFakturu_Click()
 
 EH:
     LogErr "frmFakturisanje.btnIzradiFakturu"
-    MsgBox "Greška pri izradi fakture: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri izradi fakture: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function CalculateTotal(ByVal stavke As Collection) As Double
@@ -623,30 +774,50 @@ Private Sub btnStampaj_Click()
 
 EH:
     LogErr "frmFakturisanje.btnStampaj"
-    MsgBox "Greška pri štampanju: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri štampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
 ' NAVIGATION
 ' ============================================================
 
-
 Private Sub btnSEF_Click()
-    frmSEF.Show
+    On Error GoTo EH
+    
+    ' Prebaci kontrolu na frmOtkupAPP da on otvori frmSEF kao mActiveContent
+    frmOtkupAPP.OpenContentFormPublic frmSEF, "SEF upravljanje"
+    
+    Exit Sub
+
+EH:
+    LogErr "frmFakturisanje.btnSEF_Click"
 End Sub
 
 Private Sub btnPovratak_Click()
-    Me.Hide
-    frmOtkupAPP.Show
+    On Error GoTo EH
+
+    ButtonActive btnPovratak
+
+    frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    Unload Me
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkup.btnPovratak_Click"
+    Unload Me
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
     If CloseMode = vbFormControlMenu Then
-        Cancel = True
-        Unload Me
-        frmOtkupAPP.Show
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
     End If
+
+    On Error GoTo 0
 End Sub
+
 
 
 
