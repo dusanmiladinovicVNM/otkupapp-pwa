@@ -59,7 +59,8 @@ Private Function MgmtReportTabs() As Variant
         "SaldoOM", _
         "SaldoKupci", _
         "OtkupPoOM", _
-        "PredatoPoKupcu" _
+        "PredatoPoKupcu", _
+        "OtkupiAll" _
     )
 End Function
 
@@ -477,7 +478,7 @@ Public Function ExportMgmtReports_Core(ByVal showMessages As Boolean) As Boolean
         Exit Function
     End If
     
-    folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
+    folderID = GetReportsFolderID()
     
     If Len(Trim$(folderID)) = 0 Then
         LogError "ExportMgmtReports_Core", "GOOGLE_PWA_FOLDER_ID nije postavljen."
@@ -505,20 +506,21 @@ Public Function ExportMgmtReports_Core(ByVal showMessages As Boolean) As Boolean
     If ExportSaldoKupci(sheetID) Then ok = ok + 1
     If ExportOtkupPoOM(sheetID) Then ok = ok + 1
     If ExportPredatoPoKupcu(sheetID) Then ok = ok + 1
-    
-    ExportMgmtReports_Core = (ok = 4)
+    If ExportOtkupiAll(sheetID) Then ok = ok + 1
+
+    ExportMgmtReports_Core = (ok = 5)
     
     If ExportMgmtReports_Core Then
-        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 4/4"
+        LogInfo "ExportMgmtReports_Core", "MgmtReports export completed: 5/5"
     Else
-        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/4"
+        LogWarn "ExportMgmtReports_Core", "MgmtReports partial export: " & CStr(ok) & "/5"
     End If
     
     If showMessages Then
         If ExportMgmtReports_Core Then
-            MsgBox "MgmtReports exportiert: 4/4", vbInformation, APP_NAME
+            MsgBox "MgmtReports exportiert: 5/5", vbInformation, APP_NAME
         Else
-            MsgBox "MgmtReports exportiert: " & CStr(ok) & "/4. Proveri log.", _
+            MsgBox "MgmtReports exportiert: " & CStr(ok) & "/5. Proveri log.", _
                    vbExclamation, APP_NAME
         End If
     End If
@@ -614,6 +616,154 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
 EH:
     LogErr "ExportOtkupPoOM"
     ExportOtkupPoOM = False
+End Function
+
+Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
+    Const TAB_NAME As String = "OtkupiAll"
+
+    Dim data As Variant
+    Dim result() As Variant
+    Dim i As Long
+    Dim outRow As Long
+
+    Dim colID As Long
+    Dim colDatum As Long
+    Dim colKoop As Long
+    Dim colStanica As Long
+    Dim colVrsta As Long
+    Dim colSorta As Long
+    Dim colKlasa As Long
+    Dim colKolicina As Long
+    Dim colCena As Long
+    Dim colTipAmb As Long
+    Dim colKolAmb As Long
+    Dim colVozac As Long
+    Dim colBrDok As Long
+    Dim colParcela As Long
+
+    On Error GoTo EH
+
+    data = GetTableData(TBL_OTKUP)
+
+    If Not IsEmpty(data) Then
+        data = ExcludeStornirano(data, TBL_OTKUP)
+    End If
+
+    If IsEmpty(data) Then
+        ExportOtkupiAll = WriteHeaderOnly(sheetID, TAB_NAME, _
+            "ClientRecordID", "ServerRecordID", "CreatedAtClient", _
+            "UpdatedAtClient", "UpdatedAtServer", "SyncStatus", _
+            "DeviceID", "OtkupacID", "Datum", "KooperantID", _
+            "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
+            "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", _
+            "ParcelaID", "VozacID", "Napomena", "ReceivedAt")
+        Exit Function
+    End If
+
+    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "ExportOtkupiAll")
+    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "ExportOtkupiAll")
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, "ExportOtkupiAll")
+    colStanica = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, "ExportOtkupiAll")
+    colVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, "ExportOtkupiAll")
+    colSorta = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, "ExportOtkupiAll")
+    colKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, "ExportOtkupiAll")
+    colKolicina = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "ExportOtkupiAll")
+    colCena = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, "ExportOtkupiAll")
+    colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, "ExportOtkupiAll")
+    colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "ExportOtkupiAll")
+    colVozac = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, "ExportOtkupiAll")
+    colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, "ExportOtkupiAll")
+    colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, "ExportOtkupiAll")
+
+    ReDim result(1 To UBound(data, 1) + 1, 1 To 22)
+
+    result(1, 1) = "ClientRecordID"
+    result(1, 2) = "ServerRecordID"
+    result(1, 3) = "CreatedAtClient"
+    result(1, 4) = "UpdatedAtClient"
+    result(1, 5) = "UpdatedAtServer"
+    result(1, 6) = "SyncStatus"
+    result(1, 7) = "DeviceID"
+    result(1, 8) = "OtkupacID"
+    result(1, 9) = "Datum"
+    result(1, 10) = "KooperantID"
+    result(1, 11) = "KooperantName"
+    result(1, 12) = "VrstaVoca"
+    result(1, 13) = "SortaVoca"
+    result(1, 14) = "Klasa"
+    result(1, 15) = "Kolicina"
+    result(1, 16) = "Cena"
+    result(1, 17) = "TipAmbalaze"
+    result(1, 18) = "KolAmbalaze"
+    result(1, 19) = "ParcelaID"
+    result(1, 20) = "VozacID"
+    result(1, 21) = "Napomena"
+    result(1, 22) = "ReceivedAt"
+
+    outRow = 1
+
+    For i = 1 To UBound(data, 1)
+        Dim otkupID As String
+        Dim koopID As String
+        Dim koopName As String
+
+        otkupID = CStr(Nz(data(i, colID), ""))
+        koopID = CStr(Nz(data(i, colKoop), ""))
+        koopName = GetKooperantDisplayNameForExport(koopID)
+
+        outRow = outRow + 1
+
+        result(outRow, 1) = "VBA-" & otkupID
+        result(outRow, 2) = otkupID
+        result(outRow, 3) = ""
+        result(outRow, 4) = ""
+        result(outRow, 5) = Now
+        result(outRow, 6) = "Synced>Master"
+        result(outRow, 7) = "VBA"
+        result(outRow, 8) = CStr(Nz(data(i, colStanica), ""))
+        result(outRow, 9) = data(i, colDatum)
+        result(outRow, 10) = koopID
+        result(outRow, 11) = koopName
+        result(outRow, 12) = CStr(Nz(data(i, colVrsta), ""))
+        result(outRow, 13) = CStr(Nz(data(i, colSorta), ""))
+        result(outRow, 14) = CStr(Nz(data(i, colKlasa), "I"))
+        result(outRow, 15) = CDbl(Nz(data(i, colKolicina), 0))
+        result(outRow, 16) = CDbl(Nz(data(i, colCena), 0))
+        result(outRow, 17) = CStr(Nz(data(i, colTipAmb), ""))
+        result(outRow, 18) = CLng(Nz(data(i, colKolAmb), 0))
+        result(outRow, 19) = CStr(Nz(data(i, colParcela), ""))
+        result(outRow, 20) = CStr(Nz(data(i, colVozac), ""))
+        result(outRow, 21) = CStr(Nz(data(i, colBrDok), ""))
+        result(outRow, 22) = Now
+    Next i
+
+    ExportOtkupiAll = WriteSheetData(sheetID, TAB_NAME, result)
+    Exit Function
+
+EH:
+    LogErr "ExportOtkupiAll"
+    ExportOtkupiAll = False
+End Function
+
+Private Function GetKooperantDisplayNameForExport(ByVal kooperantID As String) As String
+    On Error GoTo EH
+
+    Dim ime As Variant
+    Dim prezime As Variant
+
+    ime = LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime")
+    prezime = LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime")
+
+    GetKooperantDisplayNameForExport = Trim$(CStr(Nz(ime, "")) & " " & CStr(Nz(prezime, "")))
+
+    If Len(GetKooperantDisplayNameForExport) = 0 Then
+        GetKooperantDisplayNameForExport = kooperantID
+    End If
+
+    Exit Function
+
+EH:
+    GetKooperantDisplayNameForExport = kooperantID
 End Function
 
 Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
