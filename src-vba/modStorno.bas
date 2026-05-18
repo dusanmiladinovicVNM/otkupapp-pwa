@@ -1,4 +1,5 @@
 'Attribute VB_Name = "modStorno"
+'Attribute VB_Name = "modStorno"
 Option Explicit
 
 ' ============================================================
