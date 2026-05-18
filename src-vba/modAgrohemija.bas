@@ -68,7 +68,7 @@ Public Function CalculatePreporuka(ByVal artikalID As String, _
     Dim raw As Variant
     raw = LookupValue(TBL_ARTIKLI, COL_ART_ID, Trim$(artikalID), COL_ART_DOZA)
 
-    If IsError(raw) Or IsEmpty(raw) Or IsNull(raw) Or Not IsNumeric(raw) Then
+    If isError(raw) Or IsEmpty(raw) Or IsNull(raw) Or Not IsNumeric(raw) Then
         CalculatePreporuka = 0
         Exit Function
     End If
