@@ -131,7 +131,7 @@ Private Sub ResizeMainForm()
     If targetW < 900 Then targetW = 900
     If targetH < 600 Then targetH = 600
 
-    Me.Width = targetW
+    Me.width = targetW
     Me.Height = targetH
 
     Exit Sub
@@ -143,7 +143,7 @@ EH:
     Me.StartUpPosition = 0
     Me.Left = 0
     Me.Top = 0
-    Me.Width = 1200
+    Me.width = 1200
     Me.Height = 750
 End Sub
 
@@ -167,15 +167,15 @@ Private Sub SetupShellResponsive()
     ' header
     lblTitleBar.Left = 0
     lblTitleBar.Top = 0
-    lblTitleBar.Width = Me.InsideWidth
+    lblTitleBar.width = Me.InsideWidth
     lblTitleBar.Height = headerH
 
     imgLogo.Left = 12
     imgLogo.Top = 6
-    imgLogo.Width = 220
+    imgLogo.width = 220
     imgLogo.Height = 34
 
-    btnMaticni.Left = Me.InsideWidth - btnMaticni.Width - 54
+    btnMaticni.Left = Me.InsideWidth - btnMaticni.width - 54
     btnMaticni.Top = 7
 
     lblClose.Left = Me.InsideWidth - 26
@@ -186,11 +186,11 @@ Private Sub SetupShellResponsive()
 
     fraSidebar.Left = padOuter
     fraSidebar.Top = contentTop
-    fraSidebar.Width = sidebarW
+    fraSidebar.width = sidebarW
     fraSidebar.Height = Me.InsideHeight - contentTop - padOuter
 
     ' right side layout
-    rightLeft = fraSidebar.Left + fraSidebar.Width + padInner
+    rightLeft = fraSidebar.Left + fraSidebar.width + padInner
     rightW = Me.InsideWidth - rightLeft - padOuter
     rightH = Me.InsideHeight - contentTop - padOuter
     If rightW < 100 Then rightW = 100
@@ -199,20 +199,20 @@ Private Sub SetupShellResponsive()
     ' big card
     lblCardAlerts.Left = rightLeft
     lblCardAlerts.Top = contentTop + 4
-    lblCardAlerts.Width = rightW
+    lblCardAlerts.width = rightW
     lblCardAlerts.Height = rightH - summaryH - 14
     If lblCardAlerts.Height < 50 Then lblCardAlerts.Height = 50
 
     ' red status text inside big card
     lblStatus.Left = lblCardAlerts.Left + 15
     lblStatus.Top = lblCardAlerts.Top + 15
-    lblStatus.Width = lblCardAlerts.Width - 30
+    lblStatus.width = lblCardAlerts.width - 30
     lblStatus.Height = lblCardAlerts.Height - 20
 
     ' bottom summary card
     lblCardSummary.Left = rightLeft
     lblCardSummary.Top = lblCardAlerts.Top + lblCardAlerts.Height + 10
-    lblCardSummary.Width = rightW
+    lblCardSummary.width = rightW
     lblCardSummary.Height = summaryH
 
     LayoutSidebarButtons
@@ -227,7 +227,7 @@ Private Sub LayoutSidebarButtons()
     Dim btnW As Single
 
     leftPos = 16
-    btnW = fraSidebar.Width - 32
+    btnW = fraSidebar.width - 32
     btnH = 34
     gap = 10
     btnTop = 18
@@ -299,7 +299,7 @@ Private Sub SetupHeader()
         .caption = vbNullString
         .Left = 0
         .Top = 0
-        .Width = Me.InsideWidth
+        .width = Me.InsideWidth
         .Height = 42
     End With
 
@@ -312,7 +312,7 @@ Private Sub SetupHeader()
         .Font.Size = 14
         .Left = 18
         .Top = 10
-        .Width = 220
+        .width = 220
         .Height = 22
     End With
     
@@ -320,7 +320,7 @@ Private Sub SetupHeader()
         .caption = "Maticni podaci"
         .Left = Me.InsideWidth - 170
         .Top = 7
-        .Width = 125
+        .width = 125
         .Height = 28
         .BackColor = BTN_ACTIVE
         .ForeColor = vbWhite
@@ -338,7 +338,7 @@ Private Sub SetupHeader()
         .Font.Size = 13
         .Left = Me.InsideWidth - 34
         .Top = 12
-        .Width = 20
+        .width = 20
         .Height = 20
     End With
 End Sub
@@ -350,7 +350,7 @@ Private Sub SetupSidebar()
         .BorderStyle = fmBorderStyleSingle
         .Left = 18
         .Top = 58
-        .Width = 235
+        .width = 235
         .Height = Me.InsideHeight - 76
     End With
 End Sub
@@ -420,7 +420,7 @@ Private Sub StyleNavButton(btn As MSForms.CommandButton, txt As String, topPos A
         .caption = "   " & txt
         .Left = 16
         .Top = topPos
-        .Width = 200
+        .width = 200
         .Height = 34
         .BackColor = BTN_BG
         .ForeColor = TXT_LIGHT
@@ -440,7 +440,7 @@ Private Sub SetupCards()
     With lblCardAlerts
         .Left = 280
         .Top = 70
-        .Width = 520
+        .width = 520
         .Height = 380
         .BackColor = RGB(36, 42, 54)
         .BorderStyle = fmBorderStyleSingle
@@ -450,7 +450,7 @@ Private Sub SetupCards()
     With lblStatus
         .Left = 295
         .Top = 85
-        .Width = 490
+        .width = 490
         .Height = 370
         .BackStyle = fmBackStyleTransparent
         .ForeColor = RGB(255, 120, 120)
@@ -463,7 +463,7 @@ Private Sub SetupCards()
     With lblCardSummary
         .Left = 280
         .Top = 456
-        .Width = 520
+        .width = 520
         .Height = 30
         .BackColor = RGB(36, 42, 54)
         .BorderStyle = fmBorderStyleSingle
@@ -487,7 +487,7 @@ Private Sub HighlightActive(activeBtn As MSForms.CommandButton)
     StyleAccentBar lblNavAccent
     With lblNavAccent
         .Visible = True
-        .Width = 4
+        .width = 4
         .Height = activeBtn.Height
         .Left = activeBtn.Left - 8
         .Top = activeBtn.Top
@@ -572,11 +572,7 @@ Private Sub btnAgro_Click()
 End Sub
 
 Private Sub btnReports_Click()
-    HighlightActive btnReports
-    lblStatus.caption = "Sekcija: Izvestaj"
-    Me.Hide
-    frmIzvestaj.Show
-    Me.Show
+    OpenContentForm frmIzvestaj, btnReports, "Izvestaji"
 End Sub
 
 Private Sub btnInvoicing_Click()
@@ -881,7 +877,7 @@ Private Sub FitActiveContent()
 
         ' Pokriva i lblCardAlerts i lblCardSummary,
         ' i ravna se gore/dole sa sidebarom
-        .Width = lblCardAlerts.Width
+        .width = lblCardAlerts.width
         .Height = fraSidebar.Height
     End With
 
@@ -889,6 +885,20 @@ Private Sub FitActiveContent()
 
 EH:
     LogErr "frmOtkupAPP.FitActiveContent"
+End Sub
+
+Public Sub OpenContentFormPublic(ByVal contentForm As Object, _
+                                  ByVal sectionTitle As String)
+    On Error GoTo EH
+    
+    ' Highlight nije moguc bez parent nav button-a (jer SEF nema sidebar dugme)
+    ' Zato koristimo trenutni nav highlight koji je vec aktivan (btnInvoicing)
+    OpenContentForm contentForm, btnInvoicing, sectionTitle
+    
+    Exit Sub
+    
+EH:
+    LogErr "frmOtkupAPP.OpenContentFormPublic"
 End Sub
 
 Private Sub OpenContentForm(ByVal contentForm As Object, _
@@ -1021,7 +1031,7 @@ Private Sub PositionAccentBar()
     With lblNavAccent
         .Visible = True
         StyleAccentBar lblNavAccent
-        .Width = 4
+        .width = 4
         .Height = activeBtn.Height
         .Left = fraSidebar.Left + activeBtn.Left - 8
         .Top = fraSidebar.Top + activeBtn.Top
@@ -1047,7 +1057,7 @@ Private Sub LayoutSidebarKpiCard()
     Dim btnW As Single
 
     leftPos = 16
-    btnW = fraSidebar.Width - 32
+    btnW = fraSidebar.width - 32
 
     With fraSidebarKPI
         .Move leftPos, fraSidebar.Height - SIDEBAR_KPI_H - 12, btnW, SIDEBAR_KPI_H
@@ -1056,23 +1066,23 @@ Private Sub LayoutSidebarKpiCard()
 
     ' Layout label-a unutar kartice
     With lblKPITitle
-        .Move 10, 8, fraSidebarKPI.Width - 20, 14
+        .Move 10, 8, fraSidebarKPI.width - 20, 14
         StyleKpiLabel lblKPITitle, "title"
         .caption = "Današnji otkup"
     End With
 
     With lblKPIValue
-        .Move 10, 24, fraSidebarKPI.Width - 20, 28
+        .Move 10, 24, fraSidebarKPI.width - 20, 28
         StyleKpiLabel lblKPIValue, "value"
     End With
 
     With lblKPIDelta
-        .Move 10, 54, fraSidebarKPI.Width - 20, 14
+        .Move 10, 54, fraSidebarKPI.width - 20, 14
         StyleKpiLabel lblKPIDelta, "delta_up"
     End With
 
     With lblKPISub
-        .Move 10, 70, fraSidebarKPI.Width - 20, 14
+        .Move 10, 70, fraSidebarKPI.width - 20, 14
         StyleKpiLabel lblKPISub, "muted"
     End With
 
@@ -1250,10 +1260,10 @@ Public Sub RefreshBankaBadge()
     If openCount > 0 Then
         ' Pozicija — desno gornji ugao btnBanka
         With lblBankaBadge
-            .Width = 22
+            .width = 22
             .Height = 14
-            .Left = fraSidebar.Left + btnBanka.Left + btnBanka.Width - 28
-            .Top = fraSidebar.Top + btnBanka.Top + 4
+            .Left = fraSidebar.Left + btnBanka.Left + btnBanka.width - 36
+            .Top = fraSidebar.Top + btnBanka.Top - 46
             .ZOrder 0
         End With
     End If
@@ -1304,9 +1314,9 @@ Private Sub SetupTopBarStatus()
     ' Status dot
     StyleStatusDot lblStatusDot, True
     With lblStatusDot
-        .Width = 14
+        .width = 14
         .Height = 18
-        .Left = imgLogo.Left + imgLogo.Width + 12
+        .Left = imgLogo.Left + imgLogo.width + 12
         .Top = 12
     End With
 
@@ -1317,9 +1327,9 @@ Private Sub SetupTopBarStatus()
         .ForeColor = CLR_SUCCESS()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
-        .Left = lblStatusDot.Left + lblStatusDot.Width + 2
+        .Left = lblStatusDot.Left + lblStatusDot.width + 2
         .Top = 14
-        .Width = 50
+        .width = 50
         .Height = 16
     End With
 
@@ -1330,9 +1340,9 @@ Private Sub SetupTopBarStatus()
         .ForeColor = TXT_MUTED()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
-        .Left = lblOnlineText.Left + lblOnlineText.Width + 14
+        .Left = lblOnlineText.Left + lblOnlineText.width + 14
         .Top = 14
-        .Width = 200
+        .width = 200
         .Height = 16
     End With
 
@@ -1343,9 +1353,9 @@ Private Sub SetupTopBarStatus()
         .ForeColor = TXT_MUTED()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
-        .Left = lblOperator.Left + lblOperator.Width + 14
+        .Left = lblOperator.Left + lblOperator.width + 14
         .Top = 14
-        .Width = 100
+        .width = 100
         .Height = 16
     End With
 
