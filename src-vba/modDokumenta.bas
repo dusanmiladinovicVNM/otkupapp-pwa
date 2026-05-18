@@ -1801,6 +1801,12 @@ Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
 
         If oldBroj = brojPrijemnice Then
             fakID = Trim$(NzToText(stavkeData(i, colFakID)))
+            
+            If Len(Trim$(fakID)) = 0 Then
+            Err.Raise vbObjectError + 7413, "modDokumenta.RelinkFakturaStavke", _
+                    "FakturaStavka nema FakturaID za relink. BrojPrijemnice=" & _
+                    brojPrijemnice & "; Klasa=" & stavkaKlasa
+            End If
 
             RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_FS_PRIJEMNICA_ID, _
                               newPrijemnicaID, "modDokumenta.RelinkFakturaStavke"
