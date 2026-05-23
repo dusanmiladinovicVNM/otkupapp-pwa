@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'AgriX-v3-C001';
+const CACHE_NAME = 'AgriX-v4-C001';
 const ASSETS = [
     './index.html',
     './manifest.json',
