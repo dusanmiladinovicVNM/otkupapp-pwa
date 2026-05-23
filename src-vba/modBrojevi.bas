@@ -1,4 +1,5 @@
 Attribute VB_Name = "modBrojevi"
+'Attribute VB_Name = "modBrojevi"
 Option Explicit
 
 ' ============================================================
@@ -6,7 +7,7 @@ Option Explicit
 '
 ' Format (kanon v6.15):
 '   x/ddmmyy[-rb]
-'   - "x"      = numerički deo entityID-a bez vodećih nula
+'   - "x"      = numericki deo entityID-a bez vodecih nula
 '   - "ddmmyy" = lokalni poslovni datum
 '   - "-rb"    = -2, -3, ... za drugi i dalje istog dana
 '   - prvi u danu: bez "-"
@@ -98,7 +99,7 @@ Public Function GenerateBrojDokumenta(ByVal stanicaID As String, _
     On Error GoTo EH
 
     If ExtractNumericFromEntityID(stanicaID) = 0 Then
-        LogError SRC, "Nevažeći stanicaID (bez cifara): " & stanicaID
+        LogError SRC, "Nevažeci stanicaID (bez cifara): " & stanicaID
         GenerateBrojDokumenta = ""
         Exit Function
     End If
@@ -127,7 +128,7 @@ Public Function GenerateBrojOtpremnice(ByVal stanicaID As String, _
     On Error GoTo EH
 
     If ExtractNumericFromEntityID(stanicaID) = 0 Then
-        LogError SRC, "Nevažeći stanicaID (bez cifara): " & stanicaID
+        LogError SRC, "Nevažeci stanicaID (bez cifara): " & stanicaID
         GenerateBrojOtpremnice = ""
         Exit Function
     End If
@@ -194,7 +195,7 @@ Public Function ExtractSeqFromBroj(ByVal broj As String) As Long
     End If
 End Function
 
-' Regex check kanonskog formata. Reuse ako se vraćaš na modMasterSync
+' Regex check kanonskog formata. Reuse ako se vracaš na modMasterSync
 ' IsValidBrojZbirneFormat — ista regex pattern.
 Public Function IsValidBrojFormat(ByVal s As String) As Boolean
     Dim re As Object
@@ -223,7 +224,7 @@ Public Function FormatBroj(ByVal entityID As String, _
     End If
 End Function
 
-' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet ručno preimenuje
+' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obriše tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()
     Set gSheetIDCache = Nothing
@@ -285,6 +286,12 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
                                         ByVal brojColHeader As String, _
                                         ByVal datum As Date) As Long
     On Error GoTo EH
+    
+    ' DODATO: desktop-only — ne idemo na Google. Lokal scan je dovoljan.
+    If Not IsCloudSyncEnabled() Then
+        MaxSeqFromGoogleSheet = 0
+        Exit Function
+    End If
     
     Dim spreadsheetID As String
     spreadsheetID = ResolveSpreadsheetIDByName(sheetName)
@@ -379,7 +386,7 @@ Private Function FindHeaderIndexInData(ByVal data As Variant, _
     FindHeaderIndexInData = 0
 End Function
 
-' Lokalna Nz (postojeća je Private u modMasterSync)
+' Lokalna Nz (postojeca je Private u modMasterSync)
 Private Function Nz(ByVal v As Variant, _
                      Optional ByVal Fallback As Variant = "") As Variant
     If IsNull(v) Then
@@ -392,3 +399,4 @@ Private Function Nz(ByVal v As Variant, _
         Nz = v
     End If
 End Function
+
