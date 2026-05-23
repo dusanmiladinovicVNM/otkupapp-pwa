@@ -4,6 +4,13 @@ Private Sub Workbook_Open()
     On Error GoTo EH
     
     StartApp
+    
+    ' Stale lock cleanup (prethodna sesija crash-ovala ? lock ostao u SyncControl).
+    ' Brisanje VBA-owned stanica lockova starijih od TTL (10 min).
+    ' Fail-soft: ako Google nije dostupan, samo se loguje i ide dalje.
+    On Error Resume Next
+    modStanicaLock.CleanupOrphanedLocks
+    On Error GoTo EH
 
     On Error Resume Next
     Monitor_Event _
@@ -14,7 +21,7 @@ Private Sub Workbook_Open()
         moduleName:="ThisWorkbook", _
         procedureName:="Workbook_Open", _
         entityType:="App", _
-        entityId:="Startup", _
+        entityID:="Startup", _
         correlationId:="VBA-STARTUP"
     On Error GoTo 0
     
@@ -27,7 +34,7 @@ EH:
         moduleName:="ThisWorkbook", _
         procedureName:="Workbook_Open", _
         entityType:="App", _
-        entityId:="Startup", _
+        entityID:="Startup", _
         correlationId:="VBA-STARTUP", _
         errorNumber:=Err.Number, _
         errorDescription:=Err.description, _
@@ -40,6 +47,23 @@ EH:
 End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    On Error GoTo EH
+    
+    ' Final release aktivne stanica lock-a sa bulk push.
+    ' Ako forma nije zatvorena pre Excel close-a, ovde se hvata.
+    ' Fail-soft: ako bulk push padne (offline), lock ce postati stale
+    ' i sledeca sesija ce ga ocistiti kroz CleanupOrphanedLocks.
+    On Error Resume Next
+    If Len(modStanicaLock.GetActiveStanica()) > 0 Then
+        Application.StatusBar = "Sinhronizujem unos pre zatvaranja..."
+        Application.Cursor = xlWait
+        DoEvents
+
+        modStanicaLock.ReleaseStanicaLock modStanicaLock.GetActiveStanica()
+
+        Application.StatusBar = False
+        Application.Cursor = xlDefault
+    End If
     On Error GoTo EH
 
     modMain.ShutdownApp
