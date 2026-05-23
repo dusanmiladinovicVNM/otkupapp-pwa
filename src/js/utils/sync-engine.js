@@ -238,10 +238,21 @@
         if (!db) return buildSyncResult({ reason: 'db-not-ready' });
         if (!navigator.onLine) return buildSyncResult({ reason: 'offline' });
 
+        // Izračunaj entityID PRE master sync check-a (umesto posle pending fetch-a)
+        const entityID = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID || '';
+        
+        // Izračunaj entityID PRE master sync check-a (umesto posle pending fetch-a)
+        const entityID = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID || '';
+
         if (typeof window.ensureMasterSyncNotActive === 'function') {
-            const allowed = await window.ensureMasterSyncNotActive('sync:' + action, {
-                showToast: showToasts
-            });
+            // Za otkup sync (action='sync'), entityID je otkupacID-stanica.
+            // Za druge sync action-e (action='syncZbirna', itd.), stanicaID se ne prosleđuje.
+            const lockOpts = { showToast: showToasts };
+            if (action === 'sync' && entityID) {
+                lockOpts.stanicaID = entityID;
+            }
+        
+            const allowed = await window.ensureMasterSyncNotActive('sync:' + action, lockOpts);
 
             if (!allowed) {
                 return buildSyncResult({
