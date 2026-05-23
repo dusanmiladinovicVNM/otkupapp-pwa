@@ -24,30 +24,14 @@ Option Explicit
 Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
+Private m_FocusableInputs As Collection
+
 Private mChromeRemoved As Boolean
-
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
-    If Not mChromeRemoved Then
-        RemoveTitleBar
-        Me.caption = ""
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
     
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
@@ -73,13 +57,13 @@ Private Sub UserForm_Activate()
     StyleLabel lblOMAvansSaldo, TXT_MUTED(), True
     StyleLabel lblStornoWarning, CLR_WARNING(), True
 
-    ' important frames
-    StyleFrame fraOtpremnica
-    StyleFrame fraZbirna
-    StyleFrame fraPrijemnica
-    StyleFrame fraOMUlaz
-    StyleFrame fraIzlazKupci
-    StyleFrame fraStorno
+    ' important frames — section headers (UPPERCASE + gold)
+    StyleSectionHeader fraOtpremnica, "Izlaz OM  (Otpremnica)"
+    StyleSectionHeader fraZbirna, "Zbirna otpremnica"
+    StyleSectionHeader fraPrijemnica, "Ulaz Kupci  (Prijemnica)"
+    StyleSectionHeader fraOMUlaz, "Ulaz OM  (Novac kooperantu)"
+    StyleSectionHeader fraIzlazKupci, "Izlaz Kupci  (Novac od kupca)"
+    StyleSectionHeader fraStorno, "Storno"
         
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
@@ -126,11 +110,87 @@ Private Sub UserForm_Activate()
     
     CheckVerwaisteDokumente
 
+    ' v6.11 UI: register F-key shortcut targets
+    SetupFkeyAccelerators
+    SetupFkeyHints
+
+    ' v6.11 UI: enable form-level KeyDown for F-keys
+    'Me.KeyPreview = True
+    
+    ' v6.11 UI: subtitle, KPI traka, akcent linije
+    StyleSubtitle lblSubtitle, "Operativni unos dokumenata, ambalaže i novca"
+    StyleFrameTitleLabel lblKopf, "Osnovni podaci"
+    LayoutTopKpis
+    RefreshTopKpis
+
+    StyleSectionAccent lblAccentOtp, fraOtpremnica, "primary"
+    StyleSectionAccent lblAccentZbr, fraZbirna, "info"
+    StyleSectionAccent lblAccentPrij, fraPrijemnica, "primary"
+    StyleSectionAccent lblAccentOMUlaz, fraOMUlaz, "primary"
+    StyleSectionAccent lblAccentIzlaz, fraIzlazKupci, "primary"
+    StyleSectionAccent lblAccentStorno, fraStorno, "warn"
+    
+    ' Frame captions empty — naslovi idu kao zasebni Label-i ispod akcent linije
+    fraOtpremnica.caption = ""
+    fraZbirna.caption = ""
+    fraPrijemnica.caption = ""
+    fraOMUlaz.caption = ""
+    fraIzlazKupci.caption = ""
+    fraStorno.caption = ""
+
+    StyleFrameTitleLabel lblTitleOtp, "Izlaz OM  (Otpremnica)"
+    StyleFrameTitleLabel lblTitleZbr, "Zbirna otpremnica"
+    StyleFrameTitleLabel lblTitlePrij, "Ulaz Kupci  (Prijemnica)"
+    StyleFrameTitleLabel lblTitleOMUlaz, "Ulaz OM  (Novac kooperantu)"
+    StyleFrameTitleLabel lblTitleIzlaz, "Izlaz Kupci  (Novac od kupca)"
+    StyleFrameTitleLabel lblTitleStorno, "Storno"
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.UserForm_Activate"
-    MsgBox "Greška pri otvaranju dokumenata: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju dokumenata: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub txtCenaOtp_Change():       UpdateUkupnoKgOtp: End Sub
+Private Sub txtCenaKlIIOtp_Change():   UpdateUkupnoKgOtp: End Sub
+
+Private Sub cmbFakturaIzlaz_Change()
+    On Error GoTo EH
+
+    If cmbFakturaIzlaz.value = "" Then
+        lblManjak.caption = ""        ' kupacSaldo dummy — ako imaš zaseban label, zameni
+        Exit Sub
+    End If
+
+    Dim fakturaID As String
+    fakturaID = GetComboID(cmbFakturaIzlaz)
+
+    If fakturaID = "" Then Exit Sub
+
+    Dim iznos As Double
+    Dim uplaceno As Double
+    Dim preostalo As Double
+
+    If TryParseDouble(NzToText(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS)), iznos) Then
+        uplaceno = GetUplataForFaktura(fakturaID)
+        preostalo = iznos - uplaceno
+
+        ' Koristi lblOMAvansSaldo kao multipurpose status bar — ili dodaj novi lblSaldoKupca
+        lblOMAvansSaldo.caption = "SALDO KUPCA   Uplaceno: " & Format$(uplaceno, "#,##0") & _
+                                  "   Ostatak: " & Format$(preostalo, "#,##0") & " RSD"
+        If preostalo <= 0 Then
+            lblOMAvansSaldo.ForeColor = CLR_SUCCESS()
+        ElseIf uplaceno > 0 Then
+            lblOMAvansSaldo.ForeColor = CLR_WARNING()
+        Else
+            lblOMAvansSaldo.ForeColor = TXT_MUTED()
+        End If
+    End If
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.cmbFakturaIzlaz_Change"
 End Sub
 
 Private Sub chkDveKlaseOtp_Click()
@@ -176,29 +236,58 @@ Private Sub txtKolicinaKlIIOtp_Change()
 End Sub
 
 Private Sub UpdateUkupnoKgOtp()
-    If Not chkDveKlaseOtp.value Then
+    Dim kl1 As Double, kl2 As Double, cena1 As Double, cena2 As Double
+    Dim ukupnoKg As Double, ukupnoRsd As Double
+
+    If IsNumeric(txtKolicinaOtp.value) Then kl1 = CDbl(txtKolicinaOtp.value)
+    If IsNumeric(txtCenaOtp.value) Then cena1 = CDbl(txtCenaOtp.value)
+
+    If chkDveKlaseOtp.value Then
+        If IsNumeric(txtKolicinaKlIIOtp.value) Then kl2 = CDbl(txtKolicinaKlIIOtp.value)
+        If IsNumeric(txtCenaKlIIOtp.value) Then cena2 = CDbl(txtCenaKlIIOtp.value)
+    End If
+
+    ukupnoKg = kl1 + kl2
+    ukupnoRsd = (kl1 * cena1) + (kl2 * cena2)
+
+    If ukupnoKg <= 0 And ukupnoRsd <= 0 Then
         lblUkupnoKgOtp.caption = ""
         Exit Sub
     End If
-    Dim kl1 As Double, kl2 As Double
-    If IsNumeric(txtKolicinaOtp.value) Then kl1 = CDbl(txtKolicinaOtp.value)
-    If IsNumeric(txtKolicinaKlIIOtp.value) Then kl2 = CDbl(txtKolicinaKlIIOtp.value)
-    lblUkupnoKgOtp.caption = "Ukupno: " & Format$(kl1 + kl2, "#,##0.00") & " kg"
+
+    If chkDveKlaseOtp.value Then
+        lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
+        If ukupnoRsd > 0 Then
+            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  •  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+        End If
+    Else
+        If ukupnoRsd > 0 Then
+            lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+        Else
+            lblUkupnoKgOtp.caption = ""
+        End If
+    End If
+
+    StylePreviewBox lblUkupnoKgOtp, "ok"
 End Sub
 
 Private Sub txtKolicinaPrij_Change()
     If txtBrojZbirnePrij.value <> "" Then
         UpdateManjak txtBrojZbirnePrij.value
     End If
-    ' Prosek Gajbe auch updaten
     txtKolAmbPrij_Change
+    UpdateUkupnoKgPrij        ' <-- DODATO
 End Sub
 
 Private Sub txtKolicinaKlIIPrij_Change()
     If txtBrojZbirnePrij.value <> "" Then
         UpdateManjak txtBrojZbirnePrij.value
     End If
+    UpdateUkupnoKgPrij        ' <-- DODATO
 End Sub
+
+Private Sub txtCenaPrij_Change():       UpdateUkupnoKgPrij: End Sub
+Private Sub txtCenaKlIIPrij_Change():   UpdateUkupnoKgPrij: End Sub
 
 Private Sub txtKolAmbPrij_Change()
     If IsNumeric(txtKolicinaPrij.value) And IsNumeric(txtKolAmbPrij.value) Then
@@ -219,6 +308,7 @@ Private Sub cmbOtkupnoMesto_Change()
     If cmbOtkupnoMesto.value = "" Then
         cmbPrimalacOMUlaz.Clear
         lblOMAvansSaldo.caption = ""
+        txtBrojOtp.value = ""   ' ? DODATO: ocisti predlog otpremnice
         Exit Sub
     End If
 
@@ -232,13 +322,35 @@ Private Sub cmbOtkupnoMesto_Change()
 
     FillComboKooperantiByStanica cmbPrimalacOMUlaz, stanicaID
     UpdateOMAvansSaldo
-
+    RefreshBrojOtpSuggestion
+    
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.cmbOtkupnoMesto_Change"
 End Sub
 
+Private Sub cmbVozac_Change()
+    On Error GoTo EH
+
+    If cmbVozac.value = "" Then
+        txtBrojZbirne.value = ""
+        txtBrojZbirneOtp.value = ""   ' postojeca sinhronizacija (linija 870)
+        Exit Sub
+    End If
+
+    RefreshBrojZbirneSuggestion
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.cmbVozac_Change"
+End Sub
+
+Private Sub txtDatum_AfterUpdate()
+    ' AfterUpdate puca samo na commit (Tab/Enter/focus exit), ne na svaki keystroke
+    RefreshBrojOtpSuggestion
+    RefreshBrojZbirneSuggestion
+End Sub
 ' ============================================================
 ' KASKADIERUNG
 ' ============================================================
@@ -428,7 +540,7 @@ Private Sub btnUnosOtp_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosOtp"
-    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
 End Sub
 Private Sub ClearOtpremnicaFields()
     txtBrojOtp.value = ""
@@ -439,6 +551,60 @@ Private Sub ClearOtpremnicaFields()
     DisableField txtKolicinaKlIIOtp
     DisableField txtCenaKlIIOtp
     lblUkupnoKgOtp.caption = ""
+    
+    RefreshBrojOtpSuggestion   ' ? DODATO: predloži sledeci za istu stanicu/datum
+End Sub
+
+Private Sub RefreshBrojOtpSuggestion()
+    ' Predlaže BrojOtpremnice. OTP je VBA-only — scan samo tblOtpremnica.
+    On Error GoTo EH
+
+    Dim stanicaID As String
+    stanicaID = GetComboID(cmbOtkupnoMesto)
+    If Len(stanicaID) = 0 Then Exit Sub
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
+
+    Dim suggested As String
+    suggested = SuggestNextBroj(KIND_OTP, stanicaID, datumDok)
+
+    If Len(suggested) > 0 Then
+        txtBrojOtp.value = suggested
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.RefreshBrojOtpSuggestion"
+End Sub
+
+Private Sub RefreshBrojZbirneSuggestion()
+    ' Predlaže BrojZbirne. ZBR scan = tblZbirna + VOZ-{vozacID} sheet.
+    On Error GoTo EH
+
+    If cmbVozac.value = "" Then Exit Sub
+
+    Dim vozacID As String
+    vozacID = ExtractIDFromDisplay(cmbVozac.value)
+    If Len(vozacID) = 0 Then Exit Sub
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
+
+    Dim suggested As String
+    suggested = SuggestNextBroj(KIND_ZBR, vozacID, datumDok)
+
+    If Len(suggested) > 0 Then
+        txtBrojZbirne.value = suggested
+        ' Sinhronizuj u OTP sekciji (postojeca txtBrojZbirne_AfterUpdate logika
+        ' na liniji 868 puca samo na manual edit; ovde radimo programatsko
+        ' setovanje, _AfterUpdate ne puca, pa eksplicitno sinhronizujemo).
+        txtBrojZbirneOtp.value = suggested
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.RefreshBrojZbirneSuggestion"
 End Sub
 
 Public Function SaveOMUlaz_TX(ByVal datum As Date, _
@@ -482,7 +648,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             brojDok:=brojDok, _
             datum:=datum, _
             partner:=stanicaNaziv, _
-            partnerID:=stanicaID, _
+            partnerId:=stanicaID, _
             entitetTip:="OM", _
             omID:=stanicaID, _
             kooperantID:=kooperantID, _
@@ -505,6 +671,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
     End If
 
     tx.CommitTx
+
     Set tx = Nothing
 
     SaveOMUlaz_TX = True
@@ -686,12 +853,12 @@ Private Sub btnUnosOMUlaz_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosOMUlaz"
-    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub cmbPrimalacOMUlaz_Change()
     cmbOtkupBlok.Clear
-    tglIzOMAvansa.Enabled = (cmbPrimalacOMUlaz.value <> "")
+    tglIzOMAvansa.enabled = (cmbPrimalacOMUlaz.value <> "")
     
     If cmbPrimalacOMUlaz.value = "" Then
         tglIzOMAvansa.value = False
@@ -853,12 +1020,14 @@ Private Sub btnUnosZbr_Click()
     MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
 
     UpdateValidacija
-
+    
+    ' Predloži sledeci broj za istog vozaca/datum
+    RefreshBrojZbirneSuggestion
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.btnUnosZbr"
-    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -886,7 +1055,7 @@ Private Function UpdateValidacija() As Boolean
     If Trim$(txtUkupnoKGZbr.value) <> "" Then
         If Not TryParseDouble(txtUkupnoKGZbr.value, inputKgKlI) Then
             lblValidacijaKG.caption = "Neispravna kolicina Kl.I"
-            lblValidacijaKG.foreColor = CLR_ERROR()
+            lblValidacijaKG.ForeColor = CLR_ERROR()
             Exit Function
         End If
     End If
@@ -895,7 +1064,7 @@ Private Function UpdateValidacija() As Boolean
         If Trim$(txtUkupnoKgKlIIZbr.value) <> "" Then
             If Not TryParseDouble(txtUkupnoKgKlIIZbr.value, inputKgKlII) Then
                 lblValidacijaKG.caption = "Neispravna kolicina Kl.II"
-                lblValidacijaKG.foreColor = CLR_ERROR()
+                lblValidacijaKG.ForeColor = CLR_ERROR()
                 Exit Function
             End If
         End If
@@ -904,7 +1073,7 @@ Private Function UpdateValidacija() As Boolean
     If Trim$(txtUkupnoAmbZbr.value) <> "" Then
         If Not TryParseLong(txtUkupnoAmbZbr.value, inputAmb) Then
             lblValidacijaAmb.caption = "Neispravna kolicina ambalaže"
-            lblValidacijaAmb.foreColor = CLR_ERROR()
+            lblValidacijaAmb.ForeColor = CLR_ERROR()
             Exit Function
         End If
     End If
@@ -947,11 +1116,11 @@ Private Function UpdateValidacija() As Boolean
     End If
     
     If kgValid Then
-        lblValidacijaKG.foreColor = CLR_SUCCESS()
+        lblValidacijaKG.ForeColor = CLR_SUCCESS()
     ElseIf zbrKgI = 0 Then
-        lblValidacijaKG.foreColor = TXT_MUTED()
+        lblValidacijaKG.ForeColor = TXT_MUTED()
     Else
-        lblValidacijaKG.foreColor = CLR_ERROR()
+        lblValidacijaKG.ForeColor = CLR_ERROR()
     End If
     
     ' Ambalaza
@@ -964,11 +1133,11 @@ Private Function UpdateValidacija() As Boolean
                                 "Raz: " & razAmb
     
     If razAmb = 0 And zbrAmb > 0 Then
-        lblValidacijaAmb.foreColor = CLR_SUCCESS()
+        lblValidacijaAmb.ForeColor = CLR_SUCCESS()
     ElseIf zbrAmb = 0 Then
-        lblValidacijaAmb.foreColor = TXT_MUTED()
+        lblValidacijaAmb.ForeColor = TXT_MUTED()
     Else
-        lblValidacijaAmb.foreColor = CLR_ERROR()
+        lblValidacijaAmb.ForeColor = CLR_ERROR()
     End If
     
     UpdateValidacija = (kgValid And (razAmb = 0) And (zbrAmb > 0))
@@ -1143,8 +1312,9 @@ Private Sub btnUnosPrij_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosPrij"
-    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
 End Sub
+
 Private Sub ClearPrijemnicaFields()
     txtBrojPrij.value = ""
     txtKolicinaPrij.value = ""
@@ -1187,11 +1357,11 @@ Private Sub UpdateManjak(ByVal brojZbirne As String)
                          Format$(manjakPct, "#,##0.00") & "%)"
     
     If Abs(manjakPct) < 0.5 Then
-        lblManjak.foreColor = CLR_SUCCESS()
+        lblManjak.ForeColor = CLR_SUCCESS()
     ElseIf Abs(manjakPct) < 2 Then
-        lblManjak.foreColor = CLR_WARNING()
+        lblManjak.ForeColor = CLR_WARNING()
     Else
-        lblManjak.foreColor = CLR_ERROR()
+        lblManjak.ForeColor = CLR_ERROR()
     End If
     
     ' Prosek Gajbe
@@ -1202,6 +1372,42 @@ Private Sub UpdateManjak(ByVal brojZbirne As String)
     Else
         lblProsekGajbe.caption = ""
     End If
+End Sub
+
+Private Sub UpdateUkupnoKgPrij()
+    Dim kl1 As Double, kl2 As Double, cena1 As Double, cena2 As Double
+    Dim ukupnoKg As Double, ukupnoRsd As Double
+
+    If IsNumeric(txtKolicinaPrij.value) Then kl1 = CDbl(txtKolicinaPrij.value)
+    If IsNumeric(txtCenaPrij.value) Then cena1 = CDbl(txtCenaPrij.value)
+
+    If chkDveKlasePrij.value Then
+        If IsNumeric(txtKolicinaKlIIPrij.value) Then kl2 = CDbl(txtKolicinaKlIIPrij.value)
+        If IsNumeric(txtCenaKlIIPrij.value) Then cena2 = CDbl(txtCenaKlIIPrij.value)
+    End If
+
+    ukupnoKg = kl1 + kl2
+    ukupnoRsd = (kl1 * cena1) + (kl2 * cena2)
+
+    If ukupnoKg <= 0 And ukupnoRsd <= 0 Then
+        lblUkupnoKgPrij.caption = ""
+        Exit Sub
+    End If
+
+    If chkDveKlasePrij.value Then
+        lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
+        If ukupnoRsd > 0 Then
+            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  •  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+        End If
+    Else
+        If ukupnoRsd > 0 Then
+            lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+        Else
+            lblUkupnoKgPrij.caption = ""
+        End If
+    End If
+
+    StylePreviewBox lblUkupnoKgPrij, "ok"
 End Sub
 
 ' ============================================================
@@ -1353,7 +1559,7 @@ Private Sub btnUnosIzlaz_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosIzlaz"
-    MsgBox "Greška: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillOpenFakture()
@@ -1523,7 +1729,7 @@ Private Sub btnStorno_Click()
     Exit Sub
 EH:
     LogErr "frmDokumenta.btnStorno"
-    MsgBox "Greska: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function ConfirmStorno(ByVal tipText As String, ByVal broj As String) As Boolean
@@ -1564,7 +1770,7 @@ Private Sub CheckVerwaisteDokumente()
     End If
     
     lblStornoWarning.caption = msg
-    lblStornoWarning.foreColor = CLR_WARNING()
+    lblStornoWarning.ForeColor = CLR_WARNING()
     lblStornoWarning.Visible = True
 End Sub
 
@@ -1573,8 +1779,16 @@ End Sub
 ' ============================================================
 
 Private Sub btnPovratak_Click()
-    Me.Hide
-    frmOtkupAPP.Show
+    On Error GoTo EH
+
+    frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    Unload Me
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.btnPovratak_Click"
+    Unload Me
 End Sub
 
 Private Sub ResetActionButtons()
@@ -1627,11 +1841,13 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+
     If CloseMode = vbFormControlMenu Then
-        Cancel = True
-        Unload Me
-        frmOtkupAPP.Show
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
     End If
+
+    On Error GoTo 0
 End Sub
 
 
@@ -1658,3 +1874,325 @@ Private Sub FillOpenOtkupi()
             Format$(CDbl(otkupi(i, 3)), "#,##0.00") & " RSD"
     Next i
 End Sub
+
+' ============================================================
+' v6.11 UI: FOCUS BORDER (gold accent on active input)
+' ============================================================
+
+Private Sub txtKolicinaOtp_Enter():     ApplyFocusBorder txtKolicinaOtp:     End Sub
+Private Sub txtKolicinaOtp_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolicinaOtp: End Sub
+
+Private Sub txtCenaOtp_Enter():         ApplyFocusBorder txtCenaOtp:         End Sub
+Private Sub txtCenaOtp_Exit(ByVal Cancel As MSForms.ReturnBoolean):     RemoveFocusBorder txtCenaOtp: End Sub
+
+Private Sub txtKolAmbOtp_Enter():       ApplyFocusBorder txtKolAmbOtp:       End Sub
+Private Sub txtKolAmbOtp_Exit(ByVal Cancel As MSForms.ReturnBoolean):   RemoveFocusBorder txtKolAmbOtp: End Sub
+
+Private Sub txtKolicinaKlIIOtp_Enter(): ApplyFocusBorder txtKolicinaKlIIOtp: End Sub
+Private Sub txtKolicinaKlIIOtp_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolicinaKlIIOtp: End Sub
+
+Private Sub txtCenaKlIIOtp_Enter():     ApplyFocusBorder txtCenaKlIIOtp:     End Sub
+Private Sub txtCenaKlIIOtp_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtCenaKlIIOtp: End Sub
+
+Private Sub txtBrojOtp_Enter():         ApplyFocusBorder txtBrojOtp:         End Sub
+Private Sub txtBrojOtp_Exit(ByVal Cancel As MSForms.ReturnBoolean):     RemoveFocusBorder txtBrojOtp: End Sub
+
+' Zbirna
+Private Sub txtBrojZbirne_Enter():      ApplyFocusBorder txtBrojZbirne:      End Sub
+Private Sub txtBrojZbirne_Exit(ByVal Cancel As MSForms.ReturnBoolean):  RemoveFocusBorder txtBrojZbirne: End Sub
+
+Private Sub txtUkupnoKGZbr_Enter():     ApplyFocusBorder txtUkupnoKGZbr:     End Sub
+Private Sub txtUkupnoKGZbr_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtUkupnoKGZbr: End Sub
+
+Private Sub txtUkupnoAmbZbr_Enter():    ApplyFocusBorder txtUkupnoAmbZbr:    End Sub
+Private Sub txtUkupnoAmbZbr_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtUkupnoAmbZbr: End Sub
+
+Private Sub txtUkupnoKgKlIIZbr_Enter(): ApplyFocusBorder txtUkupnoKgKlIIZbr: End Sub
+Private Sub txtUkupnoKgKlIIZbr_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtUkupnoKgKlIIZbr: End Sub
+
+' Prijemnica
+Private Sub txtBrojPrij_Enter():        ApplyFocusBorder txtBrojPrij:        End Sub
+Private Sub txtBrojPrij_Exit(ByVal Cancel As MSForms.ReturnBoolean):    RemoveFocusBorder txtBrojPrij: End Sub
+
+Private Sub txtBrojZbirnePrij_Enter():  ApplyFocusBorder txtBrojZbirnePrij:  End Sub
+Private Sub txtBrojZbirnePrij_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtBrojZbirnePrij: End Sub
+
+Private Sub txtKolicinaPrij_Enter():    ApplyFocusBorder txtKolicinaPrij:    End Sub
+Private Sub txtKolicinaPrij_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolicinaPrij: End Sub
+
+Private Sub txtCenaPrij_Enter():        ApplyFocusBorder txtCenaPrij:        End Sub
+Private Sub txtCenaPrij_Exit(ByVal Cancel As MSForms.ReturnBoolean):    RemoveFocusBorder txtCenaPrij: End Sub
+
+Private Sub txtKolAmbPrij_Enter():      ApplyFocusBorder txtKolAmbPrij:      End Sub
+Private Sub txtKolAmbPrij_Exit(ByVal Cancel As MSForms.ReturnBoolean):  RemoveFocusBorder txtKolAmbPrij: End Sub
+
+Private Sub txtKolAmbVracena_Enter():   ApplyFocusBorder txtKolAmbVracena:   End Sub
+Private Sub txtKolAmbVracena_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolAmbVracena: End Sub
+
+Private Sub txtKolicinaKlIIPrij_Enter(): ApplyFocusBorder txtKolicinaKlIIPrij: End Sub
+Private Sub txtKolicinaKlIIPrij_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolicinaKlIIPrij: End Sub
+
+Private Sub txtCenaKlIIPrij_Enter():    ApplyFocusBorder txtCenaKlIIPrij:    End Sub
+Private Sub txtCenaKlIIPrij_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtCenaKlIIPrij: End Sub
+
+' OM Ulaz
+Private Sub txtBrojDokOMUlaz_Enter():   ApplyFocusBorder txtBrojDokOMUlaz:   End Sub
+Private Sub txtBrojDokOMUlaz_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtBrojDokOMUlaz: End Sub
+
+Private Sub txtKolAmbOMUlaz_Enter():    ApplyFocusBorder txtKolAmbOMUlaz:    End Sub
+Private Sub txtKolAmbOMUlaz_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolAmbOMUlaz: End Sub
+
+Private Sub txtNovacOMUlaz_Enter():     ApplyFocusBorder txtNovacOMUlaz:     End Sub
+Private Sub txtNovacOMUlaz_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtNovacOMUlaz: End Sub
+
+' Izlaz Kupci
+Private Sub txtBrojDokIzlaz_Enter():    ApplyFocusBorder txtBrojDokIzlaz:    End Sub
+Private Sub txtBrojDokIzlaz_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtBrojDokIzlaz: End Sub
+
+Private Sub txtKolAmbIzlaz_Enter():     ApplyFocusBorder txtKolAmbIzlaz:     End Sub
+Private Sub txtKolAmbIzlaz_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtKolAmbIzlaz: End Sub
+
+Private Sub txtNovacIzlaz_Enter():      ApplyFocusBorder txtNovacIzlaz:      End Sub
+Private Sub txtNovacIzlaz_Exit(ByVal Cancel As MSForms.ReturnBoolean): RemoveFocusBorder txtNovacIzlaz: End Sub
+
+' Datum
+Private Sub txtDatum_Enter():           ApplyFocusBorder txtDatum:           End Sub
+Private Sub txtDatum_Exit(ByVal Cancel As MSForms.ReturnBoolean):       RemoveFocusBorder txtDatum: End Sub
+
+' Storno
+Private Sub txtStornoBroj_Enter():      ApplyFocusBorder txtStornoBroj:      End Sub
+Private Sub txtStornoBroj_Exit(ByVal Cancel As MSForms.ReturnBoolean):  RemoveFocusBorder txtStornoBroj: End Sub
+
+' ============================================================
+' v6.11 UI: F-KEY ACCELERATORS
+' F2 = fokus na Otpremnica (Izlaz OM)
+' F3 = fokus na Zbirna
+' F4 = fokus na Prijemnica (Ulaz Kupci)
+' F5 = fokus na OM Ulaz
+' F6 = fokus na Izlaz Kupci
+' F8 = fokus na Storno
+' ============================================================
+
+Private Sub SetupFkeyAccelerators()
+    ' Prazno — KeyDown radi rutiranje. Zovem proceduru da ostane explicit hook tacka
+    ' za buducu konfiguraciju (npr. role-based shortcuts).
+End Sub
+
+Private Sub SetupFkeyHints()
+    On Error Resume Next
+    ' Pokušaj da nade i stilizuje F-key hint label-e ako ih dodaš u Designer:
+    ' lblFkeyOtp, lblFkeyZbr, lblFkeyPrij, lblFkeyOMUlaz, lblFkeyIzlaz, lblFkeyStorno
+    StyleFkeyHint Me.Controls("lblFkeyOtp"), "F2"
+    StyleFkeyHint Me.Controls("lblFkeyZbr"), "F3"
+    StyleFkeyHint Me.Controls("lblFkeyPrij"), "F4"
+    StyleFkeyHint Me.Controls("lblFkeyOMUlaz"), "F5"
+    StyleFkeyHint Me.Controls("lblFkeyIzlaz"), "F6"
+    StyleFkeyHint Me.Controls("lblFkeyStorno"), "F8"
+    On Error GoTo 0
+End Sub
+' ============================================================
+' v6.11 UI: F-KEY ACCELERATORS
+' VBA UserForm nema KeyPreview, pa rutiramo KeyDown sa svake kontrole
+' kroz centralni HandleFkey helper.
+' ============================================================
+
+Private Sub HandleFkey(ByVal KeyCode As MSForms.ReturnInteger)
+    On Error Resume Next
+
+    Select Case KeyCode
+        Case vbKeyF2
+            txtBrojOtp.SetFocus
+            KeyCode = 0
+        Case vbKeyF3
+            txtBrojZbirne.SetFocus
+            KeyCode = 0
+        Case vbKeyF4
+            txtBrojPrij.SetFocus
+            KeyCode = 0
+        Case vbKeyF5
+            txtBrojDokOMUlaz.SetFocus
+            KeyCode = 0
+        Case vbKeyF6
+            txtBrojDokIzlaz.SetFocus
+            KeyCode = 0
+        Case vbKeyF8
+            cmbStornoDokument.SetFocus
+            KeyCode = 0
+    End Select
+
+    On Error GoTo 0
+End Sub
+
+' --- KeyDown handleri po kontroli ---
+' Cilj: F-tasteri rade bez obzira gde je fokus.
+' Svaka input kontrola koja ce primati fokus mora imati svoj _KeyDown.
+
+Private Sub txtBrojOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):       HandleFkey KeyCode: End Sub
+Private Sub txtKolicinaOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):    HandleFkey KeyCode: End Sub
+Private Sub txtCenaOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):        HandleFkey KeyCode: End Sub
+Private Sub txtKolAmbOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub txtKolicinaKlIIOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer): HandleFkey KeyCode: End Sub
+Private Sub txtCenaKlIIOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):    HandleFkey KeyCode: End Sub
+Private Sub txtBrojZbirneOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):  HandleFkey KeyCode: End Sub
+
+Private Sub txtBrojZbirne_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):     HandleFkey KeyCode: End Sub
+Private Sub txtUkupnoKGZbr_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):    HandleFkey KeyCode: End Sub
+Private Sub txtUkupnoAmbZbr_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub txtUkupnoKgKlIIZbr_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer): HandleFkey KeyCode: End Sub
+
+Private Sub txtBrojPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):       HandleFkey KeyCode: End Sub
+Private Sub txtBrojZbirnePrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer): HandleFkey KeyCode: End Sub
+Private Sub txtKolicinaPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub txtCenaPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):       HandleFkey KeyCode: End Sub
+Private Sub txtKolAmbPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):     HandleFkey KeyCode: End Sub
+Private Sub txtKolAmbVracena_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):  HandleFkey KeyCode: End Sub
+Private Sub txtKolicinaKlIIPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer): HandleFkey KeyCode: End Sub
+Private Sub txtCenaKlIIPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+
+Private Sub txtBrojDokOMUlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):  HandleFkey KeyCode: End Sub
+Private Sub txtKolAmbOMUlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub txtNovacOMUlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):    HandleFkey KeyCode: End Sub
+
+Private Sub txtBrojDokIzlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub txtKolAmbIzlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):    HandleFkey KeyCode: End Sub
+Private Sub txtNovacIzlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):     HandleFkey KeyCode: End Sub
+
+Private Sub txtDatum_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):          HandleFkey KeyCode: End Sub
+Private Sub txtStornoBroj_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):     HandleFkey KeyCode: End Sub
+
+' ComboBox-ovi takodje moraju
+Private Sub cmbVrstaVoca_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub cmbSortaVoca_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub cmbOtkupnoMesto_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub cmbKupac_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):          HandleFkey KeyCode: End Sub
+Private Sub cmbHladnjaca_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub cmbPogon_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):          HandleFkey KeyCode: End Sub
+Private Sub cmbVozac_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):          HandleFkey KeyCode: End Sub
+Private Sub cmbTipAmbOtp_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub cmbTipAmbZbr_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub cmbTipAmbPrij_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):     HandleFkey KeyCode: End Sub
+Private Sub cmbTipAmbOMUlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub cmbTipAmbIzlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):    HandleFkey KeyCode: End Sub
+Private Sub cmbPrimalacOMUlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer): HandleFkey KeyCode: End Sub
+Private Sub cmbOtkupBlok_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):      HandleFkey KeyCode: End Sub
+Private Sub cmbFakturaIzlaz_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer):   HandleFkey KeyCode: End Sub
+Private Sub cmbStornoDokument_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer): HandleFkey KeyCode: End Sub
+
+' ============================================================
+' v6.11 UI: TOP KPI CARDS
+' Danas | OM saldo | Otvoreno kg | Validacija
+' ============================================================
+
+Private Sub LayoutTopKpis()
+    On Error GoTo EH
+
+    LayoutTopKpiInternals fraKPIDanas, lblKpiDanasTitle, lblKpiDanasValue, lblKpiDanasAccent
+    LayoutTopKpiInternals fraKpiOM, lblKpiOMTitle, lblKpiOMValue, lblKpiOMAccent
+    LayoutTopKpiInternals fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent
+    LayoutTopKpiInternals fraKpiValidacija, lblKpiValTitle, lblKpiValValue, lblKpiValAccent
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.LayoutTopKpis"
+End Sub
+
+Public Sub RefreshTopKpis()
+    On Error GoTo EH
+
+    ' --- 1) Danas (datum) ---
+    StyleTopKpi fraKPIDanas, lblKpiDanasTitle, lblKpiDanasValue, lblKpiDanasAccent, "neutral"
+    lblKpiDanasTitle.caption = "Danas"
+    lblKpiDanasValue.caption = Format$(Date, "d.m.yyyy")
+
+    ' --- 2) OM saldo (avans po izabranom OM, ili 0) ---
+    Dim omSaldo As Double
+    omSaldo = 0
+    If cmbOtkupnoMesto.value <> "" Then
+        Dim sid As String
+        sid = GetComboID(cmbOtkupnoMesto)
+        If sid <> "" Then omSaldo = GetOMAvansSaldo(sid)
+    End If
+
+    StyleTopKpi fraKpiOM, lblKpiOMTitle, lblKpiOMValue, lblKpiOMAccent, _
+                IIf(omSaldo > 0, "ok", "neutral")
+    lblKpiOMTitle.caption = "OM saldo"
+    lblKpiOMValue.caption = Format$(omSaldo, "#,##0")
+
+    ' --- 3) Otvoreno kg (zbir kg za danas iz tblOtkup) ---
+    Dim kgToday As Double
+    kgToday = SumOtkupKgToday()
+
+    StyleTopKpi fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent, _
+                IIf(kgToday > 0, "ok", "neutral")
+    lblKpiOtvTitle.caption = "Otvoreno kg"
+    lblKpiOtvValue.caption = Format$(kgToday, "#,##0")
+
+    ' --- 4) Validacija (status zbirne ako je popunjeno, inace neutral) ---
+    Dim valKind As String
+    Dim valText As String
+
+    If txtBrojZbirne.value = "" Then
+        valKind = "neutral"
+        valText = "—"
+    Else
+        ' Zovem postojecu UpdateValidacija (vraca True ako je 0/0)
+        If UpdateValidacija() Then
+            valKind = "ok"
+            valText = "OK"
+        Else
+            valKind = "warn"
+            valText = "Razlika"
+        End If
+    End If
+
+    StyleTopKpi fraKpiValidacija, lblKpiValTitle, lblKpiValValue, lblKpiValAccent, valKind
+    lblKpiValTitle.caption = "Validacija"
+    lblKpiValValue.caption = valText
+
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.RefreshTopKpis"
+End Sub
+
+Private Function SumOtkupKgToday() As Double
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colDatum As Long, colKg As Long, colStorno As Long
+    colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "SumOtkupKgToday")
+    colKg = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "SumOtkupKgToday")
+
+    On Error Resume Next
+    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "SumOtkupKgToday")
+    On Error GoTo EH
+
+    Dim i As Long, total As Double, rowKg As Double
+
+    For i = 1 To UBound(data, 1)
+        If colStorno > 0 Then
+            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+        End If
+
+        If IsDate(data(i, colDatum)) Then
+            If DateValue(CDate(data(i, colDatum))) = DateValue(Date) Then
+                If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
+                    total = total + rowKg
+                End If
+            End If
+        End If
+NextRow:
+    Next i
+
+    SumOtkupKgToday = total
+    Exit Function
+
+EH:
+    LogErr "SumOtkupKgToday"
+    SumOtkupKgToday = 0
+End Function
+
