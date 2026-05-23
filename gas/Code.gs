@@ -39,7 +39,8 @@ const COLUMNS = [
   'ParcelaID',
   'VozacID',
   'Napomena',
-  'ReceivedAt'
+  'ReceivedAt',
+  'BrojDokumenta'   // ← DODATO
 ];
 
 const ZBIRNA_COLUMNS = [
@@ -409,7 +410,7 @@ function handleAuthorizedRead(data, tokenData) {
       fakturaStavke: getMgmtReport('FakturaStavke').records || [],
 
       // Master read-model prvo, OTK operational samo fallback
-      otkupiAll: otkupiAllReport.length ? otkupiAllReport : getAllOtkupiSheets()
+      otkupiAll: mergeOtkupRows_(otkupiAllReport, getAllOtkupiSheets())
     });
   }
 
@@ -505,7 +506,8 @@ function handlePublicRead(data) {
   const action = data.action || '';
 
   if (action === 'getMasterSyncState') {
-    return jsonResponse(getMasterSyncState());
+    var stanicaIDParam = data && data.stanicaID ? String(data.stanicaID).trim() : '';
+    return jsonResponse(getMasterSyncStatePublic(stanicaIDParam));
   }
 
   if (action === 'getParcelGeo') {
@@ -527,74 +529,6 @@ function handlePublicRead(data) {
   return null;
 }
 
-function getMasterSyncState() {
-  try {
-    var ss = getStammdatenSpreadsheet_();
-    var sh = ss.getSheetByName(MASTER_SYNC_CONTROL_SHEET);
-
-    if (!sh) {
-      return {
-        success: true,
-        locked: false,
-        missing: true,
-        message: ''
-      };
-    }
-
-    var values = sh.getDataRange().getValues();
-    var kv = {};
-
-    for (var i = 1; i < values.length; i++) {
-      var k = String(values[i][0] || '').trim();
-      var v = String(values[i][1] || '').trim();
-      if (k) kv[k] = v;
-    }
-
-    var rawLock = String(kv.MASTER_SYNC_LOCK || '').toUpperCase();
-    var updatedAt = String(kv.MASTER_SYNC_UPDATED_AT || '').trim();
-    var message = String(kv.MASTER_SYNC_MESSAGE || '').trim();
-
-    var locked = rawLock === 'YES';
-    var stale = false;
-    var ageMin = null;
-
-    if (locked && updatedAt) {
-      var ts = new Date(updatedAt).getTime();
-
-      if (!isNaN(ts)) {
-        ageMin = (Date.now() - ts) / 60000;
-
-        if (ageMin > MASTER_SYNC_LOCK_MAX_AGE_MIN) {
-          locked = false;
-          stale = true;
-        }
-      }
-    }
-
-    return {
-      success: true,
-      locked: locked,
-      stale: stale,
-      updatedAt: updatedAt,
-      ageMin: ageMin,
-      message: locked
-        ? (message || 'Master sync je u toku. Sačekajte završetak.')
-        : ''
-    };
-
-  } catch (err) {
-    logError('GAS', 'getMasterSyncState', err.message, err.stack || '', '');
-
-    return {
-      success: false,
-      locked: true,
-      code: 'SYNC_STATE_UNKNOWN',
-      error: 'Nije moguće proveriti master sync status.',
-      message: 'Nije moguće proveriti master sync status. Sačekajte i pokušajte ponovo.'
-    };
-  }
-}
-
 const MASTER_SYNC_STATE_CACHE_KEY = 'MASTER_SYNC_STATE_V1';
 const MASTER_SYNC_STATE_CACHE_SEC = 5;
 
@@ -602,10 +536,11 @@ function getMasterSyncState() {
   return getMasterSyncStatePublic();
 }
 
-function getMasterSyncStatePublic() {
+function getMasterSyncStatePublic(stanicaID) {
   return getMasterSyncStateInternal_({
     allowCache: true,
-    failClosed: false
+    failClosed: false,
+    stanicaID: stanicaID || ''
   });
 }
 
@@ -620,11 +555,17 @@ function getMasterSyncStateInternal_(opts) {
   opts = opts || {};
   var allowCache = opts.allowCache === true;
   var failClosed = opts.failClosed === true;
+  var stanicaID = opts.stanicaID ? String(opts.stanicaID).trim() : '';
 
   try {
+    // Cache key uključuje stanicaID za odvojene cache slot-ove
+    var cacheKey = stanicaID
+      ? MASTER_SYNC_STATE_CACHE_KEY + ':' + stanicaID
+      : MASTER_SYNC_STATE_CACHE_KEY;
+
     if (allowCache) {
       var cache = CacheService.getScriptCache();
-      var cached = cache.get(MASTER_SYNC_STATE_CACHE_KEY);
+      var cached = cache.get(cacheKey);
       if (cached) {
         return JSON.parse(cached);
       }
@@ -635,23 +576,14 @@ function getMasterSyncStateInternal_(opts) {
 
     if (!sh) {
       var missingState = {
-        success: true,
-        locked: false,
-        stale: false,
-        missing: true,
-        updatedAt: '',
-        ageMin: null,
-        message: ''
+        success: true, locked: false, stale: false, missing: true,
+        updatedAt: '', ageMin: null, message: '', lockKind: ''
       };
 
       if (allowCache) {
-        CacheService.getScriptCache().put(
-          MASTER_SYNC_STATE_CACHE_KEY,
-          JSON.stringify(missingState),
-          MASTER_SYNC_STATE_CACHE_SEC
-        );
+        CacheService.getScriptCache().put(cacheKey,
+          JSON.stringify(missingState), MASTER_SYNC_STATE_CACHE_SEC);
       }
-
       return missingState;
     }
 
@@ -665,51 +597,56 @@ function getMasterSyncStateInternal_(opts) {
       if (k) kv[k] = v;
     }
 
-    var rawLock = String(kv.MASTER_SYNC_LOCK || '').toUpperCase();
-    var updatedAt = String(kv.MASTER_SYNC_UPDATED_AT || '').trim();
-    var message = String(kv.MASTER_SYNC_MESSAGE || '').trim();
+    // 1) Globalni master sync lock (postojeća logika)
+    var masterRaw = String(kv.MASTER_SYNC_LOCK || '').toUpperCase();
+    var masterUpdated = String(kv.MASTER_SYNC_UPDATED_AT || '').trim();
+    var masterMessage = String(kv.MASTER_SYNC_MESSAGE || '').trim();
+    var masterLocked = checkLockWithTTL_(masterRaw, masterUpdated);
 
-    var locked = rawLock === 'YES';
-    var stale = false;
-    var ageMin = null;
+    // 2) Stanica-specifični lock (samo ako je stanicaID prosleđen)
+    var stanicaLocked = { locked: false, stale: false, updatedAt: '', ageMin: null, message: '' };
+    if (stanicaID) {
+      var prefix = 'STANICA_LOCK_' + stanicaID + '_';
+      var stanicaRaw = String(kv[prefix + 'LOCK'] || '').toUpperCase();
+      var stanicaUpdated = String(kv[prefix + 'UPDATED_AT'] || '').trim();
+      var stanicaMessage = String(kv[prefix + 'MESSAGE'] || '').trim();
+      stanicaLocked = checkLockWithTTL_(stanicaRaw, stanicaUpdated);
+      stanicaLocked.message = stanicaMessage;
+    }
 
-    if (locked && updatedAt) {
-      var ts = new Date(updatedAt).getTime();
+    // Combined state — locked ako je BILO koji aktivan
+    var combinedLocked = masterLocked.locked || stanicaLocked.locked;
+    var combinedMessage = '';
+    var lockKind = '';
 
-      if (!isNaN(ts)) {
-        ageMin = (Date.now() - ts) / 60000;
-
-        if (ageMin > MASTER_SYNC_LOCK_MAX_AGE_MIN) {
-          locked = false;
-          stale = true;
-        }
-      }
+    if (stanicaLocked.locked) {
+      combinedMessage = stanicaLocked.message ||
+        'Stanica je trenutno u kancelarijskoj obradi. Sačekajte završetak.';
+      lockKind = 'stanica';
+    } else if (masterLocked.locked) {
+      combinedMessage = masterMessage || 'Master sync je u toku. Sačekajte završetak.';
+      lockKind = 'master';
     }
 
     var state = {
       success: true,
-      locked: locked,
-      stale: stale,
-      updatedAt: updatedAt,
-      ageMin: ageMin,
-      message: locked
-        ? (message || 'Master sync je u toku. Sačekajte završetak.')
-        : ''
+      locked: combinedLocked,
+      stale: masterLocked.stale || stanicaLocked.stale,
+      updatedAt: stanicaLocked.locked ? stanicaLocked.updatedAt : masterUpdated,
+      ageMin: stanicaLocked.locked ? stanicaLocked.ageMin : masterLocked.ageMin,
+      message: combinedMessage,
+      lockKind: lockKind
     };
 
     if (allowCache) {
-      CacheService.getScriptCache().put(
-        MASTER_SYNC_STATE_CACHE_KEY,
-        JSON.stringify(state),
-        MASTER_SYNC_STATE_CACHE_SEC
-      );
+      CacheService.getScriptCache().put(cacheKey,
+        JSON.stringify(state), MASTER_SYNC_STATE_CACHE_SEC);
     }
 
     return state;
 
   } catch (err) {
-    logError('GAS', 'getMasterSyncState', err.message, err.stack || '', '');
-
+    logError('GAS', 'getMasterSyncStateInternal_', err.message, err.stack || '', stanicaID);
     return {
       success: false,
       locked: failClosed,
@@ -721,6 +658,31 @@ function getMasterSyncStateInternal_(opts) {
         : 'Nije moguće proveriti master sync status.'
     };
   }
+}
+
+// Helper koji izvlači TTL check logiku iz oba lock tipa.
+function checkLockWithTTL_(rawLock, updatedAt) {
+  var locked = rawLock === 'YES';
+  var stale = false;
+  var ageMin = null;
+
+  if (locked && updatedAt) {
+    var ts = new Date(updatedAt).getTime();
+    if (!isNaN(ts)) {
+      ageMin = (Date.now() - ts) / 60000;
+      if (ageMin > MASTER_SYNC_LOCK_MAX_AGE_MIN) {
+        locked = false;
+        stale = true;
+      }
+    }
+  }
+
+  return {
+    locked: locked,
+    stale: stale,
+    updatedAt: updatedAt,
+    ageMin: ageMin
+  };
 }
 
 function isMasterSyncWriteAction(action) {
@@ -752,19 +714,32 @@ function isMasterSyncWriteAction(action) {
   ].indexOf(action) >= 0;
 }
 
-function blockWriteIfMasterSyncActive(action) {
+function blockWriteIfMasterSyncActive(action, requestData) {
   if (!isMasterSyncWriteAction(action)) return null;
 
-  var state = getMasterSyncStateForWriteBlock_();
+  // Za otkup sync, izvuci otkupacID iz request-a da proverimo i stanica lock
+  var stanicaID = '';
+  if (action === 'sync' && requestData && requestData.otkupacID) {
+    stanicaID = String(requestData.otkupacID).trim();
+  }
+
+  var state = getMasterSyncStateInternal_({
+    allowCache: false,
+    failClosed: true,
+    stanicaID: stanicaID
+  });
 
   if (state && state.locked) {
     return jsonResponse({
       success: false,
       locked: true,
-      code: 'MASTER_SYNC_ACTIVE',
-      error: state.message || 'Master sync je u toku. Sačekajte završetak.',
-      message: state.message || 'Master sync je u toku. Sačekajte završetak.',
-      updatedAt: state.updatedAt || ''
+      code: state.lockKind === 'stanica'
+        ? 'STANICA_LOCK_ACTIVE'
+        : 'MASTER_SYNC_ACTIVE',
+      error: state.message || 'Sinhronizacija je u toku. Sačekajte završetak.',
+      message: state.message || 'Sinhronizacija je u toku. Sačekajte završetak.',
+      updatedAt: state.updatedAt || '',
+      lockKind: state.lockKind || ''
     });
   }
 
@@ -1441,6 +1416,27 @@ function validateLoginUserConfig(role, entityID) {
     entityID: entityValue
   };
 }
+
+
+function mergeOtkupRows_(masterRows, liveRows) {
+  var merged = [];
+  var seen = {};
+
+  masterRows = Array.isArray(masterRows) ? masterRows : [];
+  liveRows = Array.isArray(liveRows) ? liveRows : [];
+
+  masterRows.concat(liveRows).forEach(function(r) {
+    var key = buildOtkupMergeKey_(r);
+    if (!key) return;
+
+    if (seen[key]) return;
+    seen[key] = true;
+
+    merged.push(r);
+  });
+
+  return merged;
+}
 // ============================================================
 // OTKUP PROCESSING
 // ============================================================
@@ -1609,7 +1605,8 @@ function processRecord(record, otkupacID) {
       ParcelaID: record.parcelaID || '',
       VozacID: record.vozacID || '',
       Napomena: record.napomena || '',
-      ReceivedAt: nowIso
+      ReceivedAt: nowIso,
+      BrojDokumenta: record.brojDokumenta || ''   // ← DODATO
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
@@ -2675,17 +2672,10 @@ function getOtkupiForOtkupac(otkupacID) {
     }
 
     // Master prvo, live posle. Ako isti ClientRecordID postoji u oba, zadrži master.
-    masterRows.concat(liveRows).forEach(function(r) {
-      var key = buildOtkupMergeKey_(r);
-      if (!key) return;
-
-      if (seen[key]) return;
-      seen[key] = true;
-
-      merged.push(r);
-    });
-
-    return { success: true, records: merged };
+    return {
+      success: true,
+      records: mergeOtkupRows_(masterRows, liveRows)
+    };
 
   } catch (err) {
     logError(
@@ -2703,23 +2693,37 @@ function getOtkupiForOtkupac(otkupacID) {
 function buildOtkupMergeKey_(r) {
   if (!r) return '';
 
-  var direct = String(
-    r.ClientRecordID ||
+  // 1) Syncovani PWA -> VBA zapis:
+  //    isti otkup u OTK-* i OtkupiAll ima isti ServerRecordID.
+  //    Ovo mora imati prioritet nad ClientRecordID.
+  var serverId = String(
     r.ServerRecordID ||
     r.OtkupID ||
     ''
   ).trim();
 
-  if (direct) return direct;
+  if (serverId) return 'SID:' + serverId;
 
+  // 2) Nesyncovani live PWA red:
+  //    još nema ServerRecordID, pa koristimo ClientRecordID.
+  var clientId = String(r.ClientRecordID || '').trim();
+
+  if (clientId) return 'CRID:' + clientId;
+
+  // 3) Fallback za stare/ručne zapise bez ID-jeva.
   return [
     r.OtkupacID || r.StanicaID || '',
     r.Datum || '',
     r.KooperantID || '',
     r.VrstaVoca || '',
+    r.SortaVoca || '',
     r.Klasa || '',
     r.Kolicina || '',
-    r.Cena || ''
+    r.Cena || '',
+    r.TipAmbalaze || '',
+    r.KolAmbalaze || '',
+    r.ParcelaID || '',
+    r.VozacID || ''
   ].map(function(x) {
     return String(x || '').trim();
   }).join('|');
