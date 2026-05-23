@@ -1,19 +1,20 @@
 Attribute VB_Name = "modStanicaLock"
+'Attribute VB_Name = "modStanicaLock"
 Option Explicit
 
 ' ============================================================
 ' modStanicaLock — per-stanica lock za PWA + bulk push pri unlock-u.
 '
-' Lock store: SyncControl tab u Stammdaten spreadsheet-u (postojeća
-' infrastruktura, dosad korišćena samo za MASTER_SYNC_*). Per-stanica
-' ključevi:
+' Lock store: SyncControl tab u Stammdaten spreadsheet-u (postojeca
+' infrastruktura, dosad korišcena samo za MASTER_SYNC_*). Per-stanica
+' kljucevi:
 '   STANICA_LOCK_{stanicaID}_LOCK       = YES/NO
 '   STANICA_LOCK_{stanicaID}_UPDATED_AT = ISO timestamp (TTL 10 min)
 '   STANICA_LOCK_{stanicaID}_MESSAGE    = poruka za PWA overlay
 '   STANICA_LOCK_{stanicaID}_OWNER      = "VBA"
 '
 ' Heartbeat: Application.OnTime tick svakih 90s dok je forma aktivna.
-' TTL stale-after: 10 min (postojeći MASTER_SYNC_LOCK_MAX_AGE_MIN u GAS-u).
+' TTL stale-after: 10 min (postojeci MASTER_SYNC_LOCK_MAX_AGE_MIN u GAS-u).
 '
 ' Bulk push: pri release-u (stanica change ili form close), iteriraj
 ' tblOtkup za (StanicaID = X, Datum = Y, ClientRecordID is empty),
@@ -46,8 +47,8 @@ Private gNextHeartbeatTime As Date
 ' PUBLIC — Acquire
 ' ============================================================
 
-' Acquire lock za novu stanicu. Vraća True ako je acquire uspeo.
-' Ako je već neka stanica aktivna, prvo je release-uje + bulk push.
+' Acquire lock za novu stanicu. Vraca True ako je acquire uspeo.
+' Ako je vec neka stanica aktivna, prvo je release-uje + bulk push.
 Public Function AcquireStanicaLock(ByVal stanicaID As String, _
                                     ByVal datum As Date) As Boolean
     Const SRC As String = "AcquireStanicaLock"
@@ -60,7 +61,17 @@ Public Function AcquireStanicaLock(ByVal stanicaID As String, _
         Exit Function
     End If
     
-    ' Ako je već aktivna ova stanica, refresh-uj UPDATED_AT (heartbeat efekt)
+    ' DODATO: desktop-only deploy nema cloud — lock nije relevantan.
+    ' Vracamo True da pozivalac (frmOtkup) misli da je lock acquired
+    ' i nastavi normalno; nikakav SyncControl write se ne dešava.
+    If Not IsCloudSyncEnabled() Then
+        gActiveStanica = stanicaID
+        gActiveDatum = datum
+        AcquireStanicaLock = True
+        Exit Function
+    End If
+    
+    ' Ako je vec aktivna ova stanica, refresh-uj UPDATED_AT (heartbeat efekt)
     If gActiveStanica = stanicaID And gActiveDatum = datum Then
         AcquireStanicaLock = UpdateStanicaLockTimestamp(stanicaID)
         Exit Function
@@ -78,7 +89,7 @@ Public Function AcquireStanicaLock(ByVal stanicaID As String, _
     Dim prefix As String: prefix = "STANICA_LOCK_" & stanicaID & "_"
     updates(prefix & "LOCK") = "YES"
     updates(prefix & "UPDATED_AT") = Format$(Now, "yyyy-mm-dd\Thh:nn:ss")
-    updates(prefix & "MESSAGE") = "Stanica je trenutno u kancelarijskoj obradi. Sačekajte završetak unosa."
+    updates(prefix & "MESSAGE") = "Stanica je trenutno u kancelarijskoj obradi. Sacekajte završetak unosa."
     updates(prefix & "OWNER") = DEVICE_ID_VBA
     
     If Not ApplySyncControlUpdates(updates) Then
@@ -138,7 +149,17 @@ Private Sub ReleaseStanicaLockInternal(ByVal stanicaID As String, _
     
     If Len(Trim$(stanicaID)) = 0 Then Exit Sub
     
-    ' Bulk push pre release-a — još uvek je locked, druge strane čekaju.
+    ' DODATO: desktop-only — preskacemo i bulk push i sheet write.
+    ' Resetujemo samo module state.
+    If Not IsCloudSyncEnabled() Then
+        If gActiveStanica = stanicaID Then
+            gActiveStanica = ""
+            gActiveDatum = 0
+        End If
+        Exit Sub
+    End If
+    
+    ' Bulk push pre release-a — još uvek je locked, druge strane cekaju.
     If doBulkPush Then
         Call BulkPushPendingForStanica(stanicaID, datum)
     End If
@@ -182,6 +203,11 @@ Public Sub HeartbeatStanicaLock()
     
     gHeartbeatScheduled = False
     
+    ' DODATO: desktop-only — heartbeat nema smisla.
+    If Not IsCloudSyncEnabled() Then Exit Sub
+    
+    If Len(gActiveStanica) = 0 Then Exit Sub
+    
     If Len(gActiveStanica) = 0 Then
         ' Nema aktivnog lock-a, ne treba dalje
         Exit Sub
@@ -195,13 +221,16 @@ Public Sub HeartbeatStanicaLock()
 
 EH:
     LogErr SRC
-    ' Pokušaj sledeći heartbeat ipak — recoverable error
+    ' Pokušaj sledeci heartbeat ipak — recoverable error
     StartHeartbeatTimer
 End Sub
 
 Public Sub StartHeartbeatTimer()
     If gHeartbeatScheduled Then Exit Sub
     If Len(gActiveStanica) = 0 Then Exit Sub
+    
+    ' DODATO: desktop-only — ne sched-uj timer (heartbeat nema smisla)
+    If Not IsCloudSyncEnabled() Then Exit Sub
     
     gNextHeartbeatTime = Now + TimeSerial(0, 0, HEARTBEAT_INTERVAL_SEC)
     
@@ -251,11 +280,14 @@ End Function
 
 ' Brisanje VBA-owned stanica lockova starijih od TTL. Pozvati u Workbook_Open
 ' jer ako je prethodna sesija crash-ovala, lock je ostao i blokira PWA.
-' GAS TTL takođe smatra lock stale-om, ali eksplicitno čišćenje je sigurnije.
+' GAS TTL takode smatra lock stale-om, ali eksplicitno cišcenje je sigurnije.
 Public Sub CleanupOrphanedLocks()
     Const SRC As String = "CleanupOrphanedLocks"
     
     On Error GoTo EH
+    
+    ' DODATO: desktop-only — nema lockova za cišcenje
+    If Not IsCloudSyncEnabled() Then Exit Sub
     
     Dim sheetID As String
     sheetID = GetSyncControlSpreadsheetID()
@@ -271,7 +303,7 @@ Public Sub CleanupOrphanedLocks()
     staleThreshold = Now - TimeSerial(0, 10, 0)   ' 10 minuta = TTL
     
     Dim k As Variant
-    For Each k In kv.Keys
+    For Each k In kv.keys
         Dim keyStr As String: keyStr = CStr(k)
         ' Nas zanima samo STANICA_LOCK_*_LOCK = YES
         If Left$(keyStr, 13) = "STANICA_LOCK_" And Right$(keyStr, 5) = "_LOCK" Then
@@ -290,7 +322,7 @@ Public Sub CleanupOrphanedLocks()
                     On Error GoTo EH
                     
                     If ts < staleThreshold Then
-                        ' Stale → release
+                        ' Stale ? release
                         Dim ownerKey As String: ownerKey = Left$(keyStr, Len(keyStr) - 5) & "_OWNER"
                         Dim msgKey As String: msgKey = Left$(keyStr, Len(keyStr) - 5) & "_MESSAGE"
                         
@@ -321,18 +353,24 @@ End Sub
 
 ' Iterira tblOtkup za (StanicaID = X, Datum = Y, ClientRecordID is empty).
 ' Za svaki red:
-'   1. Sastavi 23-col GAS row (preuzimajući podatke iz tblOtkup + lookup-ovi)
-'   2. AppendRowToSheet → OTK-{stanicaID}
+'   1. Sastavi 23-col GAS row (preuzimajuci podatke iz tblOtkup + lookup-ovi)
+'   2. AppendRowToSheet ? OTK-{stanicaID}
 '   3. Na uspeh: upisi ClientRecordID = "VBA:" & OtkupID + SyncSource = "VBA"
-'      (sledeći bulk push neće ga ponovo pokušati)
-'   4. Na fail: ostavi ClientRecordID empty → retry pri sledećem unlock-u
+'      (sledeci bulk push nece ga ponovo pokušati)
+'   4. Na fail: ostavi ClientRecordID empty ? retry pri sledecem unlock-u
 '
-' Vraća broj uspešno push-ovanih redova.
+' Vraca broj uspešno push-ovanih redova.
 Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
                                            ByVal datum As Date) As Long
     Const SRC As String = "BulkPushPendingForStanica"
     
     On Error GoTo EH
+    
+    ' DODATO: desktop-only — bulk push nije potreban
+    If Not IsCloudSyncEnabled() Then
+        BulkPushPendingForStanica = 0
+        Exit Function
+    End If
     
     Dim spreadsheetID As String
     spreadsheetID = ResolveOTKSheetID(stanicaID)
@@ -369,25 +407,25 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
     Dim pushed As Long: pushed = 0
     
     Dim r As Long
-    For r = 1 To lo.DataBodyRange.Rows.count
+    For r = 1 To lo.DataBodyRange.rows.count
         Dim rowStanica As String
-        rowStanica = CStr(lo.DataBodyRange.Cells(r, iStanica).value)
+        rowStanica = CStr(lo.DataBodyRange.cells(r, iStanica).value)
         If rowStanica <> stanicaID Then GoTo NextRow
         
         Dim rowDatumStr As String
         rowDatumStr = ""
         On Error Resume Next
-        rowDatumStr = Format$(CDate(lo.DataBodyRange.Cells(r, iDatum).value), "yyyy-mm-dd")
+        rowDatumStr = Format$(CDate(lo.DataBodyRange.cells(r, iDatum).value), "yyyy-mm-dd")
         On Error GoTo EH
         If rowDatumStr <> datumStr Then GoTo NextRow
         
         Dim crid As String
-        crid = CStr(Nz(lo.DataBodyRange.Cells(r, iCRID).value, ""))
-        If Len(crid) > 0 Then GoTo NextRow   ' Već push-ovan
+        crid = CStr(Nz(lo.DataBodyRange.cells(r, iCRID).value, ""))
+        If Len(crid) > 0 Then GoTo NextRow   ' Vec push-ovan
         
         ' Push ovaj red
         Dim otkupID As String
-        otkupID = CStr(lo.DataBodyRange.Cells(r, iID).value)
+        otkupID = CStr(lo.DataBodyRange.cells(r, iID).value)
         
         Dim rowData As Variant
         rowData = BuildOTKSheetRowForOtkup(otkupID, stanicaID, lo, r, iID)
@@ -395,9 +433,9 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
         
         If AppendRowToSheet(spreadsheetID, "Sheet1", rowData) Then
             ' Mark as pushed
-            lo.DataBodyRange.Cells(r, iCRID).value = "VBA:" & otkupID
+            lo.DataBodyRange.cells(r, iCRID).value = "VBA:" & otkupID
             If iSource > 0 Then
-                lo.DataBodyRange.Cells(r, iSource).value = "VBA"
+                lo.DataBodyRange.cells(r, iSource).value = "VBA"
             End If
             pushed = pushed + 1
         Else
@@ -440,7 +478,7 @@ Private Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
     Dim iParcela As Long: iParcela = GetColumnIndex(TBL_OTKUP, COL_OTK_PARCELA)
     
     Dim kooperantID As String
-    kooperantID = CStr(lo.DataBodyRange.Cells(rowIdx, iKoop).value)
+    kooperantID = CStr(lo.DataBodyRange.cells(rowIdx, iKoop).value)
     
     Dim kooperantName As String
     kooperantName = CStr(Nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime"), ""))
@@ -451,7 +489,7 @@ Private Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
     End If
     
     Dim nowIso As String: nowIso = Format$(Now, "yyyy-mm-dd\Thh:nn:ss")
-    Dim datumIso As String: datumIso = Format$(CDate(lo.DataBodyRange.Cells(rowIdx, iDatum).value), "yyyy-mm-dd")
+    Dim datumIso As String: datumIso = Format$(CDate(lo.DataBodyRange.cells(rowIdx, iDatum).value), "yyyy-mm-dd")
     
     Dim rowOut(0 To 22) As Variant
     rowOut(0) = "VBA:" & otkupID                                              ' 1  ClientRecordID
@@ -465,18 +503,18 @@ Private Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
     rowOut(8) = datumIso                                                      ' 9  Datum
     rowOut(9) = kooperantID                                                   ' 10 KooperantID
     rowOut(10) = kooperantName                                                ' 11 KooperantName
-    rowOut(11) = CStr(lo.DataBodyRange.Cells(rowIdx, iVrsta).value)           ' 12 VrstaVoca
-    rowOut(12) = CStr(Nz(lo.DataBodyRange.Cells(rowIdx, iSorta).value, ""))   ' 13 SortaVoca
-    rowOut(13) = CStr(lo.DataBodyRange.Cells(rowIdx, iKlasa).value)           ' 14 Klasa
-    rowOut(14) = CDbl(lo.DataBodyRange.Cells(rowIdx, iKol).value)             ' 15 Kolicina
-    rowOut(15) = CDbl(lo.DataBodyRange.Cells(rowIdx, iCena).value)            ' 16 Cena
-    rowOut(16) = CStr(Nz(lo.DataBodyRange.Cells(rowIdx, iTipAmb).value, ""))  ' 17 TipAmbalaze
-    rowOut(17) = CLng(Nz(lo.DataBodyRange.Cells(rowIdx, iKolAmb).value, 0))   ' 18 KolAmbalaze
-    rowOut(18) = CStr(Nz(lo.DataBodyRange.Cells(rowIdx, iParcela).value, "")) ' 19 ParcelaID
-    rowOut(19) = CStr(Nz(lo.DataBodyRange.Cells(rowIdx, iVozac).value, ""))   ' 20 VozacID
+    rowOut(11) = CStr(lo.DataBodyRange.cells(rowIdx, iVrsta).value)           ' 12 VrstaVoca
+    rowOut(12) = CStr(Nz(lo.DataBodyRange.cells(rowIdx, iSorta).value, ""))   ' 13 SortaVoca
+    rowOut(13) = CStr(lo.DataBodyRange.cells(rowIdx, iKlasa).value)           ' 14 Klasa
+    rowOut(14) = CDbl(lo.DataBodyRange.cells(rowIdx, iKol).value)             ' 15 Kolicina
+    rowOut(15) = CDbl(lo.DataBodyRange.cells(rowIdx, iCena).value)            ' 16 Cena
+    rowOut(16) = CStr(Nz(lo.DataBodyRange.cells(rowIdx, iTipAmb).value, ""))  ' 17 TipAmbalaze
+    rowOut(17) = CLng(Nz(lo.DataBodyRange.cells(rowIdx, iKolAmb).value, 0))   ' 18 KolAmbalaze
+    rowOut(18) = CStr(Nz(lo.DataBodyRange.cells(rowIdx, iParcela).value, "")) ' 19 ParcelaID
+    rowOut(19) = CStr(Nz(lo.DataBodyRange.cells(rowIdx, iVozac).value, ""))   ' 20 VozacID
     rowOut(20) = ""                                                            ' 21 Napomena
     rowOut(21) = nowIso                                                        ' 22 ReceivedAt
-    rowOut(22) = CStr(Nz(lo.DataBodyRange.Cells(rowIdx, iBrDok).value, ""))   ' 23 BrojDokumenta
+    rowOut(22) = CStr(Nz(lo.DataBodyRange.cells(rowIdx, iBrDok).value, ""))   ' 23 BrojDokumenta
     
     BuildOTKSheetRowForOtkup = rowOut
     Exit Function
@@ -535,7 +573,7 @@ Private Function ApplySyncControlUpdates(ByVal updates As Object) As Boolean
     
     ' Merge updates
     Dim k As Variant
-    For Each k In updates.Keys
+    For Each k In updates.keys
         existing(CStr(k)) = updates(k)
     Next k
     
@@ -547,7 +585,7 @@ Private Function ApplySyncControlUpdates(ByVal updates As Object) As Boolean
     arr(1, 2) = "Vrednost"
     
     Dim r As Long: r = 2
-    For Each k In existing.Keys
+    For Each k In existing.keys
         arr(r, 1) = CStr(k)
         arr(r, 2) = CStr(existing(k))
         r = r + 1
@@ -611,3 +649,4 @@ Private Function Nz(ByVal v As Variant, _
         Nz = v
     End If
 End Function
+
