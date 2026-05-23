@@ -1037,6 +1037,113 @@ EH:
 End Sub
 
 ' ============================================================
+' Public — Append single row to existing tab.
+' Koristi Sheets API values:append endpoint sa INSERT_ROWS.
+'
+' Razlika u odnosu na WriteSheetData (full-tab replace via staging+swap):
+'   - ne pravi staging, ne briše postojece redove
+'   - append-only, atomska operacija ~300-500ms
+'   - rowData je 1D Array (jedna vrsta), interno se wrap-uje u 2D
+'
+' Caller (modStanicaLock.BulkPushPendingForStanica) zove ovo u petlji
+' kad se stanica unlock-uje — svaki red se append-uje pojedinacno.
+' Pojedinacni fail ostavlja red sa praznim ClientRecordID u tblOtkup-u,
+' pa retry pri sledecem unlock event-u pokupi.
+'
+' Vraca True samo na HTTP 2xx; ostale slucajeve loguje i vraca False.
+' ============================================================
+Public Function AppendRowToSheet(ByVal spreadsheetID As String, _
+                                 ByVal tabName As String, _
+                                 ByVal rowData As Variant) As Boolean
+    Const SRC As String = "AppendRowToSheet"
+
+    Dim accessToken As String
+    Dim url As String
+    Dim body As String
+    Dim http As Object
+    Dim wrappedData As Variant
+    Dim n As Long
+    Dim i As Long
+
+    On Error GoTo EH
+
+    AppendRowToSheet = False
+
+    If Len(Trim$(spreadsheetID)) = 0 Then
+        LogError SRC, "spreadsheetID je prazan."
+        Exit Function
+    End If
+
+    If Len(Trim$(tabName)) = 0 Then
+        LogError SRC, "tabName je prazan."
+        Exit Function
+    End If
+
+    If IsEmpty(rowData) Then
+        LogError SRC, "rowData je Empty."
+        Exit Function
+    End If
+
+    If Not IsArray(rowData) Then
+        LogError SRC, "rowData mora biti Array (1D)."
+        Exit Function
+    End If
+
+    accessToken = GetAccessToken()
+    If Len(accessToken) = 0 Then
+        LogError SRC, "Kein Access Token"
+        Exit Function
+    End If
+
+    ' Wrap 1D rowData u 2D (1 x N) jer BuildValuesJson ocekuje 2D shape.
+    n = UBound(rowData) - LBound(rowData) + 1
+    If n <= 0 Then
+        LogError SRC, "rowData je prazan."
+        Exit Function
+    End If
+
+    ReDim wrappedData(1 To 1, 1 To n)
+    For i = 0 To n - 1
+        wrappedData(1, i + 1) = rowData(LBound(rowData) + i)
+    Next i
+
+    body = BuildValuesJson(wrappedData)
+
+    ' Sheets API values:append — INSERT_ROWS pravi NOV red (ne overwrite
+    ' praznih redova ispod date). RAW cuva format brojeva sa "/" znakovima
+    ' (12/1 ambalaža, 1/220526-2 broj dokumenta).
+    url = SHEETS_API_BASE & "/" & spreadsheetID & _
+          "/values/" & UrlEncode(tabName) & "!A1:append" & _
+          "?valueInputOption=RAW" & _
+          "&insertDataOption=INSERT_ROWS"
+
+    Set http = CreateGoogleHttpRequest(SRC)
+    http.Open "POST", url, False
+    http.SetRequestHeader "Authorization", "Bearer " & accessToken
+    http.SetRequestHeader "Content-Type", "application/json"
+
+    If Not SendGoogleHttpWithRetry(http, SRC, body, True, True) Then
+        AppendRowToSheet = False
+        Exit Function
+    End If
+
+    If http.status >= 200 And http.status < 300 Then
+        AppendRowToSheet = True
+    Else
+        LogError SRC, _
+                 "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
+                 http.status
+        AppendRowToSheet = False
+    End If
+
+    Exit Function
+
+EH:
+    LogErr SRC
+    AppendRowToSheet = False
+End Function
+
+' ============================================================
 ' 8) Full-sync gate note
 ' ============================================================
 '
