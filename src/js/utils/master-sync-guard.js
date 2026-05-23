@@ -5,10 +5,9 @@
     const FAIL_BACKOFF_MS = 45000;
     const REQUEST_TIMEOUT_MS = 12000;
 
-    let cachedState = null;
-    let cachedAt = 0;
+    const cachedStates = new Map();   // key: stanicaID ('' za global), value: { state, at }
     let lastFailAt = 0;
-    let inFlight = null;
+    let inFlight = new Map();          // key: stanicaID, value: Promise
     let pollTimer = null;
 
     function buildState(overrides) {
@@ -20,7 +19,8 @@
             offline: false,
             timeout: false,
             message: '',
-            code: ''
+            code: '',
+            lockKind: ''   // ← DODATO: '' | 'master' | 'stanica'
         }, overrides || {});
     }
 
@@ -113,19 +113,21 @@
         if (el) el.style.display = 'none';
     }
 
-    async function fetchMasterSyncState(force) {
+    async function fetchMasterSyncState(force, stanicaID) {
+        stanicaID = stanicaID || '';
         const now = Date.now();
+        const cached = cachedStates.get(stanicaID);
 
-        if (!force && cachedState && now - cachedAt < CACHE_TTL_MS) {
-            return cachedState;
+        if (!force && cached && now - cached.at < CACHE_TTL_MS) {
+            return cached.state;
         }
 
-        if (!force && inFlight) {
-            return inFlight;
+        if (!force && inFlight.has(stanicaID)) {
+            return inFlight.get(stanicaID);
         }
 
         if (!force && lastFailAt && now - lastFailAt < FAIL_BACKOFF_MS) {
-            return cachedState || buildState({
+            return (cached && cached.state) || buildState({
                 success: false,
                 locked: false,
                 unknown: true,
@@ -134,37 +136,32 @@
         }
 
         if (!navigator.onLine) {
-            if (
-                cachedState &&
-                cachedState.locked &&
-                Date.now() - cachedAt < OFFLINE_LOCK_CACHE_MS
-            ) {
+            if (cached && cached.state.locked && now - cached.at < OFFLINE_LOCK_CACHE_MS) {
                 return buildState({
                     locked: true,
                     offline: true,
-                    message: cachedState.message ||
-                        'Master sync je bio aktivan. Sačekajte konekciju za proveru.'
+                    message: cached.state.message ||
+                        'Sinhronizacija je bila aktivna. Sačekajte konekciju za proveru.',
+                    lockKind: cached.state.lockKind || ''
                 });
             }
-
-            return buildState({
-                locked: false,
-                offline: true
-            });
+            return buildState({ locked: false, offline: true });
         }
 
         if (typeof window.apiFetchSafe !== 'function') {
             return buildState({
-                success: false,
-                locked: false,
-                unknown: true,
+                success: false, locked: false, unknown: true,
                 code: 'API_HELPER_MISSING'
             });
         }
 
-        inFlight = (async function () {
+        const request = (async function () {
             try {
-                const result = await window.apiFetchSafe('action=getMasterSyncState', {
+                const params = stanicaID
+                    ? 'action=getMasterSyncState&stanicaID=' + encodeURIComponent(stanicaID)
+                    : 'action=getMasterSyncState';
+
+                const result = await window.apiFetchSafe(params, {
                     timeoutMs: REQUEST_TIMEOUT_MS,
                     includeToken: false,
                     silent: true
@@ -172,11 +169,8 @@
 
                 if (!result || !result.ok || !result.data) {
                     lastFailAt = Date.now();
-
                     return buildState({
-                        success: false,
-                        locked: false,
-                        unknown: true,
+                        success: false, locked: false, unknown: true,
                         timeout: !!(result && result.isTimeout),
                         code: result && result.isTimeout
                             ? 'MASTER_SYNC_STATE_TIMEOUT'
@@ -185,41 +179,38 @@
                 }
 
                 const data = result.data;
-
                 const state = buildState({
                     success: data.success !== false,
                     locked: data.success !== false && data.locked === true,
                     stale: data.stale === true,
                     unknown: data.success === false,
                     message: data.message || data.error || '',
-                    code: data.code || ''
+                    code: data.code || '',
+                    lockKind: data.lockKind || ''
                 });
 
-                cachedState = state;
-                cachedAt = Date.now();
+                cachedStates.set(stanicaID, { state: state, at: Date.now() });
                 lastFailAt = 0;
-
                 return state;
+
             } catch (err) {
                 lastFailAt = Date.now();
-
                 return buildState({
-                    success: false,
-                    locked: false,
-                    unknown: true,
+                    success: false, locked: false, unknown: true,
                     code: 'MASTER_SYNC_STATE_EXCEPTION'
                 });
             } finally {
-                inFlight = null;
+                inFlight.delete(stanicaID);
             }
         })();
 
-        return inFlight;
+        inFlight.set(stanicaID, request);
+        return request;
     }
 
-    window.getMasterSyncStateSafe = async function getMasterSyncStateSafe(force) {
+    window.getMasterSyncStateSafe = async function getMasterSyncStateSafe(force, stanicaID) {
         try {
-            return await fetchMasterSyncState(force === true);
+            return await fetchMasterSyncState(force === true, stanicaID || '');
         } catch (_) {
             return buildState({
                 success: false,
@@ -232,19 +223,21 @@
 
     window.ensureMasterSyncNotActive = async function ensureMasterSyncNotActive(context, options) {
         const opts = options || {};
-
+        const stanicaID = opts.stanicaID || '';
+        
         // Ne forsiraj network svaki put. Ako cache kaže unlocked, pusti.
         // Server-side GAS blocker je finalna zaštita za realan write.
-        const state = await window.getMasterSyncStateSafe(false);
+        const state = await window.getMasterSyncStateSafe(false, stanicaID);
 
         if (state && state.locked === true) {
             showMasterSyncOverlay(state);
 
             if (opts.showToast !== false && typeof window.showToast === 'function') {
-                window.showToast(
-                    state.message || 'Master sync je u toku. Unos je sačuvan lokalno i biće poslat kasnije.',
-                    'warning'
-                );
+                const msg = state.message ||
+                    (state.lockKind === 'stanica'
+                        ? 'Stanica je trenutno u kancelarijskoj obradi. Sačekajte završetak.'
+                        : 'Master sync je u toku. Unos je sačuvan lokalno i biće poslat kasnije.');
+                window.showToast(msg, 'warning');
             }
 
             return false;
