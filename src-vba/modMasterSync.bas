@@ -540,7 +540,7 @@ End Function
 ' ImportOtkupFromPWA_Core cita.
 '======================================================================
 Private Function BuildOTKOperationalHeaders_() As Variant
-    Dim headers(1 To 1, 1 To 22) As Variant
+    Dim headers(1 To 1, 1 To 23) As Variant
 
     headers(1, 1) = "ClientRecordID"
     headers(1, 2) = "ServerRecordID"
@@ -564,6 +564,7 @@ Private Function BuildOTKOperationalHeaders_() As Variant
     headers(1, 20) = "VozacID"
     headers(1, 21) = "Napomena"
     headers(1, 22) = "ReceivedAt"
+    headers(1, 23) = "BrojDokumenta"
 
     BuildOTKOperationalHeaders_ = headers
 End Function
