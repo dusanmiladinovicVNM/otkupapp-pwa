@@ -341,24 +341,36 @@
                 });
             }
 
-            if (json && json.code === 'MASTER_SYNC_ACTIVE') {
+            const isTemporarySyncLock = json && (
+                json.code === 'MASTER_SYNC_ACTIVE' ||
+                json.code === 'STANICA_LOCK_ACTIVE'
+            );
+            if (isTemporarySyncLock) {
+                const lockReason = json.lockKind === 'stanica'
+                    ? 'stanica-lock-active'
+                    : 'master-sync-active';
+                
                 for (const record of pending) {
                     try {
                         if (!record || !record.clientRecordID) continue;
 
                         record.syncStatus = 'pending';
                         record.lastServerStatus = 'master-sync-active';
-                        record.lastSyncError = '';
+                        record.lastSyncError = '';      // OBAVEZNO clear — soft lock nije greška
                         record.syncAttemptAt = '';
+                        // syncAttempts SE NE INKREMENTIRA — to bi pojelo backoff threshold za prave greske
 
                         await dbPut(db, storeName, record);
                     } catch (rbErr) {
-                        console.error('[sync-engine] master-sync rollback failed:', rbErr);
+                        console.error('[sync-engine] soft-lock rollback failed:', rbErr);
                     }
                 }
 
                 toast(
-                    json.message || json.error || 'Master sync je u toku. Unos je sačuvan lokalno i biće poslat kasnije.',
+                    json.message || json.error ||
+                        (json.lockKind === 'stanica'
+                            ? 'Stanica je u kancelarijskoj obradi. Unos je sačuvan i biće poslat kasnije.'
+                            : 'Master sync je u toku. Unos je sačuvan lokalno i biće poslat kasnije.'),
                     'warning'
                 );
 
@@ -366,8 +378,8 @@
                     ok: true,
                     synced: 0,
                     failed: 0,
-                    reason: 'master-sync-active',
-                    code: 'MASTER_SYNC_ACTIVE'
+                    reason: lockReason,
+                    code: json.code || 'MASTER_SYNC_ACTIVE'
                 });
             }
 
