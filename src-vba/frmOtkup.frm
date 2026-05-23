@@ -21,26 +21,8 @@ Option Explicit
 ' ============================================================
 Private mChromeRemoved As Boolean
 
-Private Sub RemoveTitleBar()
-    Dim hwnd As LongPtr
-    Dim style As Long
-
-    hwnd = FindWindow("ThunderDFrame", Me.caption)
-
-    If hwnd <> 0 Then
-        style = GetWindowLong(hwnd, GWL_STYLE)
-        style = style And Not WS_CAPTION
-        SetWindowLong hwnd, GWL_STYLE, style
-        DrawMenuBar hwnd
-    End If
-End Sub
-
 Private Sub UserForm_Activate()
-    If Not mChromeRemoved Then
-        Me.caption = ""
-        RemoveTitleBar
-        mChromeRemoved = True
-    End If
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
 End Sub
 
 Private Sub UserForm_Initialize()
@@ -187,18 +169,56 @@ Private Sub cmbOtkupnoMesto_Change()
     cmbKooperant.Clear
     cmbParcela.Clear
 
-    If cmbOtkupnoMesto.value = "" Then Exit Sub
+    If cmbOtkupnoMesto.value = "" Then
+        ' Operater je obrisao izbor — pusti aktivnu stanicu (sa bulk push)
+        If Len(GetActiveStanica()) > 0 Then
+            ShowLockStatus "Sinhronizujem prethodnu stanicu..."
+            ReleaseStanicaLock GetActiveStanica()
+            HideLockStatus
+        End If
+        txtBrojDokumenta.value = ""
+        Exit Sub
+    End If
 
     Dim stanicaID As String
     stanicaID = GetComboID(cmbOtkupnoMesto)
-
     If stanicaID = "" Then Exit Sub
 
+    ' Parse datum (vec treba da je popunjen u txtDatum)
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then
+        datumDok = Date   ' fallback na danas; korisnik može promeniti
+    End If
+
+    ' Lock acquire (interno: bulk push + release prethodne ako postoji + acquire nove)
+    Dim isChanging As Boolean
+    isChanging = (Len(GetActiveStanica()) > 0 And GetActiveStanica() <> stanicaID)
+
+    If isChanging Then
+        ShowLockStatus "Sinhronizujem prethodnu stanicu i preuzimam novu..."
+    Else
+        ShowLockStatus "Preuzimam stanicu..."
+    End If
+
+    Dim acquired As Boolean
+    acquired = AcquireStanicaLock(stanicaID, datumDok)
+
+    HideLockStatus
+
+    If Not acquired Then
+        MsgBox "Nije moguce preuzeti stanicu " & stanicaID & ". Pokušaj ponovo.", _
+               vbExclamation, APP_NAME
+        cmbOtkupnoMesto.value = ""
+        Exit Sub
+    End If
+
     FillComboKooperantiByStanica cmbKooperant, stanicaID
+    RefreshBrojDokumentaSuggestion
     Exit Sub
 
 EH:
     LogErr "frmOtkup.cmbOtkupnoMesto_Change"
+    HideLockStatus
     cmbKooperant.Clear
     cmbParcela.Clear
 End Sub
@@ -303,6 +323,65 @@ Private Function ExtractParcelaID(ByVal display As String) As String
     End If
 End Function
 
+Private Sub txtDatum_AfterUpdate()
+    On Error GoTo EH
+
+    ' Ako nema aktivne stanice, samo refresh predlog (suggestion zavisi od datuma)
+    If Len(GetActiveStanica()) = 0 Then
+        RefreshBrojDokumentaSuggestion
+        Exit Sub
+    End If
+
+    ' Parse novi datum
+    Dim newDatum As Date
+    If Not TryParseDateValue(txtDatum.value, newDatum) Then
+        ' Loš format — operator vidi u polju, ne menjamo lock state
+        Exit Sub
+    End If
+
+    ' Ako je isti datum, ništa
+    If GetActiveDatum() = newDatum Then
+        RefreshBrojDokumentaSuggestion
+        Exit Sub
+    End If
+
+    ' Drugaciji datum — re-acquire (bulk push staro + acquire novo)
+    ShowLockStatus "Sinhronizujem prethodni datum..."
+    Dim acquired As Boolean
+    acquired = AcquireStanicaLock(GetActiveStanica(), newDatum)
+    HideLockStatus
+
+    If acquired Then
+        RefreshBrojDokumentaSuggestion
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmOtkup.txtDatum_AfterUpdate"
+    HideLockStatus
+End Sub
+
+Private Sub RefreshBrojDokumentaSuggestion()
+    On Error GoTo EH
+
+    Dim stanicaID As String
+    stanicaID = GetComboID(cmbOtkupnoMesto)
+    If Len(stanicaID) = 0 Then Exit Sub
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
+
+    Dim suggested As String
+    suggested = SuggestNextBroj(KIND_OTK, stanicaID, datumDok)
+
+    If Len(suggested) > 0 Then
+        txtBrojDokumenta.value = suggested
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmOtkup.RefreshBrojDokumentaSuggestion"
+End Sub
 ' ============================================================
 ' OTKUP
 ' ============================================================
@@ -437,18 +516,16 @@ Private Sub btnUnos_Click()
 
             If parKultura <> "" Then
                 Dim selectedKultura As String
-                selectedKultura = Trim$(cmbSortaVoca.value)
+                selectedKultura = Trim$(cmbVrstaVoca.value)
 
                 If selectedKultura <> "" Then
                     If StrComp(parKultura, selectedKultura, vbTextCompare) <> 0 Then
                         Dim ans As VbMsgBoxResult
-
                         ans = MsgBox("Kultura parcele (" & parKultura & _
                                      ") ne odgovara izabranoj sorti/kulturi (" & _
                                      selectedKultura & ")!" & vbCrLf & vbCrLf & _
                                      "Želite li ipak da nastavite?", _
                                      vbExclamation + vbYesNo, APP_NAME)
-
                         If ans = vbNo Then Exit Sub
                     End If
                 End If
@@ -490,7 +567,7 @@ Private Sub btnUnos_Click()
 
 EH:
     LogErr "frmOtkup.btnUnos"
-    MsgBox "Greška pri unosu otkupa: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greška pri unosu otkupa: " & Err.description, vbCritical, APP_NAME
 End Sub
 Private Sub ClearOtkupFields()
     txtBrojDokumenta.value = ""
@@ -508,26 +585,68 @@ Private Sub ClearOtkupFields()
     lblUkupnoKG.caption = ""
     
     txtKolicina.SetFocus
+    
+    ' Predloži sledeci broj za istu stanicu/datum (just-saved red je u tblOtkup-u,
+    ' SuggestNextBroj scan vidi njegov broj ? suggestion = max + 1)
+    RefreshBrojDokumentaSuggestion
 End Sub
 
 Private Sub btnStornoOtkup_Click()
     ButtonActive btnStornoOtkup
 End Sub
+
 ' ============================================================
 ' NAVIGATION
 ' ============================================================
 
 Private Sub btnPovratak_Click()
+    On Error GoTo EH
+    
+    If Len(GetActiveStanica()) > 0 Then
+        ShowLockStatus "Sinhronizujem unos pre zatvaranja..."
+        ReleaseStanicaLock GetActiveStanica()
+        HideLockStatus
+    End If
+
     ButtonActive btnPovratak
-    Me.Hide
-    frmOtkupAPP.Show
+
+    frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    Unload Me
+
+    Exit Sub
+
+EH:
+    LogErr "frmOtkup.btnPovratak_Click"
+    HideLockStatus
+    Unload Me
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
-    If CloseMode = vbFormControlMenu Then
-        Cancel = True
-        Unload Me
-        frmOtkupAPP.Show
+    On Error Resume Next
+    
+    ' Release lock pre zatvaranja (vbFormControlMenu = X klik, ostalo = Code/Excel close)
+    If Len(GetActiveStanica()) > 0 Then
+        ShowLockStatus "Sinhronizujem unos pre zatvaranja..."
+        ReleaseStanicaLock GetActiveStanica()
+        HideLockStatus
     End If
+
+    If CloseMode = vbFormControlMenu Then
+        frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
+    End If
+
+    On Error GoTo 0
 End Sub
 
+Private Sub ShowLockStatus(ByVal msg As String)
+    On Error Resume Next
+    Application.StatusBar = msg
+    Application.Cursor = xlWait
+    DoEvents
+End Sub
+
+Private Sub HideLockStatus()
+    On Error Resume Next
+    Application.StatusBar = False
+    Application.Cursor = xlDefault
+End Sub
