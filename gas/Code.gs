@@ -761,7 +761,7 @@ function doPost(e) {
       return jsonResponse(authenticateUser(data.username, data.pin));
     }
 
-    var masterSyncWriteBlock = blockWriteIfMasterSyncActive(data.action);
+    var masterSyncWriteBlock = blockWriteIfMasterSyncActive(data.action, data);
     if (masterSyncWriteBlock) return masterSyncWriteBlock;
 
     // ostaje javno samo ako to namerno želiš;
@@ -1464,6 +1464,7 @@ function processRecord(record, otkupacID) {
     .map(h => String(h || '').trim());
 
   ensurePlainTextColumn(sheet, headers, 'TipAmbalaze');
+  ensurePlainTextColumn(sheet, headers, 'BrojDokumenta');
 
     const idx = headerIndexMap(headers);
     const nowIso = new Date().toISOString();
