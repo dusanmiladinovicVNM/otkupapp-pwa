@@ -355,7 +355,7 @@
                         if (!record || !record.clientRecordID) continue;
 
                         record.syncStatus = 'pending';
-                        record.lastServerStatus = 'master-sync-active';
+                        record.lastServerStatus = lockReason;
                         record.lastSyncError = '';      // OBAVEZNO clear — soft lock nije greška
                         record.syncAttemptAt = '';
                         // syncAttempts SE NE INKREMENTIRA — to bi pojelo backoff threshold za prave greske
