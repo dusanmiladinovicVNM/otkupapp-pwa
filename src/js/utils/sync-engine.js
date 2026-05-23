@@ -237,9 +237,6 @@
 
         if (!db) return buildSyncResult({ reason: 'db-not-ready' });
         if (!navigator.onLine) return buildSyncResult({ reason: 'offline' });
-
-        // Izračunaj entityID PRE master sync check-a (umesto posle pending fetch-a)
-        const entityID = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID || '';
         
         // Izračunaj entityID PRE master sync check-a (umesto posle pending fetch-a)
         const entityID = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID || '';
@@ -283,8 +280,6 @@
             }
 
             await markPendingAsSyncing(storeName, pending);
-
-            const entityID = CONFIG.ENTITY_ID || CONFIG.OTKUPAC_ID || '';
 
             if (!entityID) {
                 await rollbackPendingFromError(
