@@ -315,6 +315,12 @@ Public Const STATUS_PLACENO As String = "Placeno"
 Public Const STATUS_NEPLACENO As String = "Neplaceno"
 Public Const STATUS_ISPLACENO As String = "Da"
 
+' Cloud/PWA sync toggle. Default: TRUE (cloud enabled).
+' Desktop-only deploy postavlja CLOUD_SYNC_ENABLED = "NO" u Config sheet-u.
+' Vrednost u Config sheet-u: "YES" | "NO" | "TRUE" | "FALSE" | "1" | "0".
+' Empty / missing key tretira se kao "YES" (backward compatible).
+Public Const CFG_KEY_CLOUD_SYNC_ENABLED As String = "CLOUD_SYNC_ENABLED"
+
 ' =========================
 ' Workflow states
 ' =========================
@@ -461,3 +467,26 @@ EH:
 End Sub
 
 
+' ============================================================
+' Cloud sync toggle.
+'
+' Pozivaju ga svi moduli koji žele da pišu/citaju Google sheet-ove
+' (modStanicaLock, modBrojevi.MaxSeqFromGoogleSheet). Kada vraca False,
+' VBA radi 100% lokalno — nikakav HTTP saobracaj prema Google.
+'
+' Backward-compatible default: ako Config nema ovaj kljuc ili je prazno,
+' tretira se kao True (postojeci klijenti rade kao i do sada).
+' ============================================================
+Public Function IsCloudSyncEnabled() As Boolean
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(CFG_KEY_CLOUD_SYNC_ENABLED)))
+    
+    Select Case v
+        Case ""           ' nema kljuca — default TRUE
+            IsCloudSyncEnabled = True
+        Case "NO", "FALSE", "0", "OFF", "DISABLED"
+            IsCloudSyncEnabled = False
+        Case Else         ' "YES", "TRUE", "1", "ON", "ENABLED" ili bilo šta drugo
+            IsCloudSyncEnabled = True
+    End Select
+End Function
