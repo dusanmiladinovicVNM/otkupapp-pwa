@@ -52,6 +52,8 @@ Private Const GS_PARCELA_ID As Long = 19         ' S
 Private Const GS_VOZAC_ID As Long = 20           ' T
 Private Const GS_NAPOMENA As Long = 21           ' U
 Private Const GS_RECEIVED_AT As Long = 22        ' V
+Private Const GS_BROJ_DOKUMENTA As Long = 23     ' W
+
 
 ' VOZ Sheet Spaltenindizes (1-based, Header in Row 1)
 Private Const VS_CLIENT_RECORD_ID As Long = 1   ' A
@@ -336,83 +338,249 @@ EH:
 
     MsgBox "Greska pri uvozu, promene vracene: " & errDesc, vbCritical, APP_NAME
 End Sub
-'TODO definieren wo dies stehen soll. Logisch bei Stammdaten sync und syncen immer wenn stammdaten gesynct sind.
+
+'======================================================================
+' CreateOTKSheetsForAllStanice
+'
+' Manual wrapper za proveru/kreiranje OTK-* operational sheetova.
+' Za full sync koristiti CreateOTKSheetsForAllStanice_Core(False, ...),
+' da ne iskacu MsgBox-ovi tokom orchestrated sync ciklusa.
+'======================================================================
 Public Sub CreateOTKSheetsForAllStanice()
+    Dim createdCount As Long
+    Dim existingCount As Long
+    Dim inactiveCount As Long
+    Dim failedCount As Long
+    Dim ok As Boolean
+
+    ok = CreateOTKSheetsForAllStanice_Core( _
+        True, _
+        createdCount, _
+        existingCount, _
+        inactiveCount, _
+        failedCount)
+
+    If ok Then
+        MsgBox "OTK sheetovi provereni." & vbCrLf & vbCrLf & _
+               "Postojece: " & CStr(existingCount) & vbCrLf & _
+               "Kreirano: " & CStr(createdCount) & vbCrLf & _
+               "Neaktivne stanice preskocene: " & CStr(inactiveCount), _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "Provera/kreiranje OTK sheetova nije potpuno uspelo." & vbCrLf & vbCrLf & _
+               "Postojece: " & CStr(existingCount) & vbCrLf & _
+               "Kreirano: " & CStr(createdCount) & vbCrLf & _
+               "Neaktivne stanice preskocene: " & CStr(inactiveCount) & vbCrLf & _
+               "Greske: " & CStr(failedCount) & vbCrLf & vbCrLf & _
+               "Proveri log.", _
+               vbExclamation, APP_NAME
+    End If
+End Sub
+
+'======================================================================
+' CreateOTKSheetsForAllStanice_Core
+'
+' Idempotentno osigurava da svaka aktivna stanica ima svoj OTK-* Google
+' spreadsheet u GOOGLE_PWA_FOLDER_ID folderu.
+'
+' Full sync koristi ovu core funkciju sa showMessages=False.
+'
+' Returns:
+'   True  - sve aktivne stanice imaju OTK sheet ili su uspešno kreirane
+'   False - fatal config/auth/schema greska ili bar jedan create/write fail
+'======================================================================
+Public Function CreateOTKSheetsForAllStanice_Core( _
+    Optional ByVal showMessages As Boolean = False, _
+    Optional ByRef createdCount As Long = 0, _
+    Optional ByRef existingCount As Long = 0, _
+    Optional ByRef inactiveCount As Long = 0, _
+    Optional ByRef failedCount As Long = 0 _
+) As Boolean
+
+    Const SRC As String = "CreateOTKSheetsForAllStanice_Core"
+
     Dim data As Variant
-    Dim colID As Long, colNaziv As Long, colAktivan As Long
+    Dim colID As Long
+    Dim colNaziv As Long
+    Dim colAktivan As Long
     Dim folderID As String
     Dim i As Long
+    Dim stanicaID As String
+    Dim stanicaNaziv As String
     Dim sheetName As String
     Dim existingID As String
-    Dim created As Long
-    
+    Dim newID As String
+    Dim headers As Variant
+
     On Error GoTo EH
-    
+
+    CreateOTKSheetsForAllStanice_Core = False
+
+    createdCount = 0
+    existingCount = 0
+    inactiveCount = 0
+    failedCount = 0
+
+    If Not IsGoogleAuthConfigured() Then
+        LogError SRC, "Google OAuth2 nije konfigurisan."
+        If showMessages Then _
+            MsgBox "Google OAuth2 nije konfigurisan!", vbCritical, APP_NAME
+        Exit Function
+    End If
+
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(Trim$(folderID)) = 0 Then
-        MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
-        Exit Sub
+        LogError SRC, "GOOGLE_PWA_FOLDER_ID nije postavljen."
+        If showMessages Then _
+            MsgBox "GOOGLE_PWA_FOLDER_ID nije postavljen!", vbCritical, APP_NAME
+        Exit Function
     End If
-    
+
     data = GetTableData(TBL_STANICE)
-    If IsEmpty(data) Then Exit Sub
-    
-    colID = GetColumnIndex(TBL_STANICE, "StanicaID")
-    colNaziv = GetColumnIndex(TBL_STANICE, "Naziv")
-    colAktivan = GetColumnIndex(TBL_STANICE, "Aktivan")
-    
+    If IsEmpty(data) Then
+        LogWarn SRC, "tblStanice je prazan. Nema OTK sheetova za proveru/kreiranje."
+        CreateOTKSheetsForAllStanice_Core = True
+        Exit Function
+    End If
+
+    colID = RequireColumnIndex(TBL_STANICE, "StanicaID", SRC)
+    colNaziv = RequireColumnIndex(TBL_STANICE, "Naziv", SRC)
+    colAktivan = RequireColumnIndex(TBL_STANICE, "Aktivan", SRC)
+
+    headers = BuildOTKOperationalHeaders_()
+
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colAktivan)) <> "Ne" Then
-            sheetName = "OTK-" & CStr(data(i, colID))
-            
-            existingID = GetSpreadsheetID(sheetName, folderID)
-            
-            If Len(existingID) = 0 Then
-                Dim newID As String
-                newID = CreateSpreadsheet(sheetName, folderID)
-                
-                If Len(newID) > 0 Then
-                    ' Header setzen
-                    Dim headers(1 To 1, 1 To 22) As Variant
-                    headers(1, 1) = "ClientRecordID"
-                    headers(1, 2) = "ServerRecordID"
-                    headers(1, 3) = "CreatedAtClient"
-                    headers(1, 4) = "UpdatedAtClient"
-                    headers(1, 5) = "UpdatedAtServer"
-                    headers(1, 6) = "SyncStatus"
-                    headers(1, 7) = "DeviceID"
-                    headers(1, 8) = "OtkupacID"
-                    headers(1, 9) = "Datum"
-                    headers(1, 10) = "KooperantID"
-                    headers(1, 11) = "KooperantName"
-                    headers(1, 12) = "VrstaVoca"
-                    headers(1, 13) = "SortaVoca"
-                    headers(1, 14) = "Klasa"
-                    headers(1, 15) = "Kolicina"
-                    headers(1, 16) = "Cena"
-                    headers(1, 17) = "TipAmbalaze"
-                    headers(1, 18) = "KolAmbalaze"
-                    headers(1, 19) = "ParcelaID"
-                    headers(1, 20) = "VozacID"
-                    headers(1, 21) = "Napomena"
-                    headers(1, 22) = "ReceivedAt"
-                    
-                    WriteSheetData newID, "Sheet1", headers
-                    
-                    created = created + 1
-                    LogInfo "CreateOTKSheets", "Erstellt: " & sheetName
-                End If
-            End If
+        stanicaID = Trim$(CStr(Nz(data(i, colID), "")))
+        stanicaNaziv = Trim$(CStr(Nz(data(i, colNaziv), "")))
+
+        If Len(stanicaID) = 0 Then
+            failedCount = failedCount + 1
+            LogError SRC, "Stanica bez StanicaID. Row=" & CStr(i)
+            GoTo NextStanica
         End If
+
+        If Not IsStanicaActiveForOTK_(data(i, colAktivan)) Then
+            inactiveCount = inactiveCount + 1
+            GoTo NextStanica
+        End If
+
+        sheetName = "OTK-" & stanicaID
+        existingID = GetSpreadsheetID(sheetName, folderID)
+
+        If Len(Trim$(existingID)) > 0 Then
+            existingCount = existingCount + 1
+            GoTo NextStanica
+        End If
+
+        newID = CreateSpreadsheet(sheetName, folderID)
+
+        If Len(Trim$(newID)) = 0 Then
+            failedCount = failedCount + 1
+            LogError SRC, _
+                "CreateSpreadsheet failed. Sheet=" & sheetName & _
+                "; StanicaID=" & stanicaID & _
+                "; Naziv=" & stanicaNaziv
+            GoTo NextStanica
+        End If
+
+        If Not WriteSheetData(newID, "Sheet1", headers) Then
+            failedCount = failedCount + 1
+            LogError SRC, _
+                "WriteSheetData header failed. Sheet=" & sheetName & _
+                "; SpreadsheetID=" & newID & _
+                "; StanicaID=" & stanicaID
+            GoTo NextStanica
+        End If
+
+        createdCount = createdCount + 1
+
+        LogInfo SRC, _
+            "OTK sheet created. Sheet=" & sheetName & _
+            "; SpreadsheetID=" & newID & _
+            "; StanicaID=" & stanicaID & _
+            "; Naziv=" & stanicaNaziv
+
+NextStanica:
     Next i
-    
-    MsgBox "Kreirano " & created & " novih OTK fajlova.", vbInformation, APP_NAME
-    Exit Sub
+
+    CreateOTKSheetsForAllStanice_Core = (failedCount = 0)
+
+    If CreateOTKSheetsForAllStanice_Core Then
+        LogInfo SRC, _
+            "OTK sheet ensure completed. Existing=" & CStr(existingCount) & _
+            "; Created=" & CStr(createdCount) & _
+            "; InactiveSkipped=" & CStr(inactiveCount) & _
+            "; Failed=" & CStr(failedCount)
+    Else
+        LogWarn SRC, _
+            "OTK sheet ensure completed with errors. Existing=" & CStr(existingCount) & _
+            "; Created=" & CStr(createdCount) & _
+            "; InactiveSkipped=" & CStr(inactiveCount) & _
+            "; Failed=" & CStr(failedCount)
+    End If
+
+    Exit Function
 
 EH:
-    LogErr "CreateOTKSheetsForAllStanice"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
-End Sub
+    failedCount = failedCount + 1
+    LogErr SRC
+
+    If showMessages Then
+        MsgBox "Greska pri proveri/kreiranju OTK sheetova: " & Err.description, _
+               vbCritical, APP_NAME
+    End If
+
+    CreateOTKSheetsForAllStanice_Core = False
+End Function
+
+'======================================================================
+' BuildOTKOperationalHeaders_
+'
+' Header schema za operational OTK-* sheetove koje PWA puni, a VBA
+' ImportOtkupFromPWA_Core cita.
+'======================================================================
+Private Function BuildOTKOperationalHeaders_() As Variant
+    Dim headers(1 To 1, 1 To 22) As Variant
+
+    headers(1, 1) = "ClientRecordID"
+    headers(1, 2) = "ServerRecordID"
+    headers(1, 3) = "CreatedAtClient"
+    headers(1, 4) = "UpdatedAtClient"
+    headers(1, 5) = "UpdatedAtServer"
+    headers(1, 6) = "SyncStatus"
+    headers(1, 7) = "DeviceID"
+    headers(1, 8) = "OtkupacID"
+    headers(1, 9) = "Datum"
+    headers(1, 10) = "KooperantID"
+    headers(1, 11) = "KooperantName"
+    headers(1, 12) = "VrstaVoca"
+    headers(1, 13) = "SortaVoca"
+    headers(1, 14) = "Klasa"
+    headers(1, 15) = "Kolicina"
+    headers(1, 16) = "Cena"
+    headers(1, 17) = "TipAmbalaze"
+    headers(1, 18) = "KolAmbalaze"
+    headers(1, 19) = "ParcelaID"
+    headers(1, 20) = "VozacID"
+    headers(1, 21) = "Napomena"
+    headers(1, 22) = "ReceivedAt"
+
+    BuildOTKOperationalHeaders_ = headers
+End Function
+
+'======================================================================
+' IsStanicaActiveForOTK_
+'
+' Postojeca logika je tretirala sve osim "Ne" kao aktivno.
+' Ovaj helper zadrzava isti business rule, ali ga izoluje.
+'======================================================================
+Private Function IsStanicaActiveForOTK_(ByVal activeValue As Variant) As Boolean
+    Dim s As String
+
+    s = UCase$(Trim$(CStr(Nz(activeValue, ""))))
+
+    IsStanicaActiveForOTK_ = Not (s = "NE")
+End Function
 
 Public Function AutoCreateOtpremniceFromPWA_TX() As Long
     Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
@@ -526,24 +694,6 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     Dim colOtpSt As Long: colOtpSt = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, "AutoCreateOtpremniceFromPWA")
     Dim colOtpDat As Long: colOtpDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, "AutoCreateOtpremniceFromPWA")
     
-    ' Dict: "StanicaID|Datum" ? count
-    Dim seqDict As Object
-    Set seqDict = CreateObject("Scripting.Dictionary")
-    
-    If Not IsEmpty(otpAll) Then
-        Dim oi As Long
-        For oi = 1 To UBound(otpAll, 1)
-            Dim seqKey As String
-            seqKey = CStr(otpAll(oi, colOtpSt)) & "|" & _
-                     Format$(CDate(otpAll(oi, colOtpDat)), "YYYY-MM-DD")
-            If seqDict.Exists(seqKey) Then
-                seqDict(seqKey) = seqDict(seqKey) + 1
-            Else
-                seqDict.Add seqKey, 1
-            End If
-        Next oi
-    End If
-    
     For k = 0 To UBound(keys)
         Dim parts() As String: parts = Split(keys(k), "|")
         ' parts(0)=StanicaID, parts(1)=Datum, parts(2)=VozacID, parts(3)=Klasa
@@ -566,28 +716,15 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
             totalAmb = totalAmb + CLng(Nz(data(ri, colKolAmb), 0))
         Next r
         
-        ' BrojOtpremnice: {StanicaNum}/{DDMM}-{seq}
-        Dim staNum As String
-        staNum = CStr(CLng(Mid$(parts(0), 4)))  ' ST-00001 ? 1
-        
-        Dim datParts() As String
-        datParts = Split(parts(1), "-")  ' 2026-06-15 ? (2026, 06, 15)
-        Dim ddmm As String
-        ddmm = datParts(2) & datParts(1)  ' 1506
-        
-        Dim sKey As String
-        sKey = parts(0) & "|" & parts(1)
-        Dim seq As Long
-        If seqDict.Exists(sKey) Then
-            seq = seqDict(sKey) + 1
-            seqDict(sKey) = seq
-        Else
-            seq = 1
-            seqDict.Add sKey, 1
-        End If
-        
+        ' BrojOtpremnice: kanon "x/ddmmyy[-rb]" preko modBrojevi.GenerateBrojOtpremnice.
+        ' Helper interno radi MaxSeqFromTable scan; ne treba lokalni seqDict.
         Dim brojOtp As String
-        brojOtp = staNum & "/" & ddmm & "-" & seq
+        brojOtp = GenerateBrojOtpremnice(parts(0), CDate(parts(1)))
+        
+        If Len(brojOtp) = 0 Then
+            Err.Raise vbObjectError + 8200, "AutoCreateOtpremniceFromPWA", _
+                "GenerateBrojOtpremnice nije vratio broj za stanica=" & parts(0)
+        End If
         
         ' Otpremnica erstellen (BrojZbirne leer — Vozac/Operator setzt später)
         Dim newOtpID As String
@@ -822,6 +959,7 @@ Private Function ValidateOTKSheetHeader(ByVal data As Variant, _
     If Not RequireOTKHeaderValue(data, sheetName, GS_VOZAC_ID, "VozacID") Then Exit Function
     If Not RequireOTKHeaderValue(data, sheetName, GS_NAPOMENA, "Napomena") Then Exit Function
     If Not RequireOTKHeaderValue(data, sheetName, GS_RECEIVED_AT, "ReceivedAt") Then Exit Function
+    If Not RequireOTKHeaderValue(data, sheetName, GS_BROJ_DOKUMENTA, "BrojDokumenta") Then Exit Function
 
     ValidateOTKSheetHeader = True
     Exit Function
@@ -1184,6 +1322,10 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
               "TipAmbalaze je obavezan kada je KolAmbalaze > 0. ClientRecordID=" & clientRecordID
     End If
     
+    ' Procitaj BrojDokumenta iz OTK sheet-a (PWA-generated, kolona 23)
+    Dim brojDokumenta As String
+    brojDokumenta = Trim$(CStr(Nz(data(row, GS_BROJ_DOKUMENTA), "")))
+    
     ' StanicaID aus Kooperant holen
     stanicaID = CStr(Nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     
@@ -1195,6 +1337,24 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     ' KulturaID Lookup
     kulturaID = CStr(Nz(LookupValue(TBL_KULTURE, "VrstaVoca", vrstaVoca, "KulturaID"), ""))
     If Len(kulturaID) = 0 Then kulturaID = vrstaVoca & "-" & sortaVoca
+    
+    ' Fallback: prazno = legacy / PWA pre-rollout.
+    ' Validacija formata za PWA-generated brojeve (regex kanonski).
+    If Len(brojDokumenta) = 0 Then
+        brojDokumenta = GenerateBrojDokumenta(stanicaID, datum)
+        If Len(brojDokumenta) = 0 Then
+            Err.Raise vbObjectError + 8103, "ImportRowToTblOtkup", _
+                "Nije moguce generisati BrojDokumenta. ClientRecordID=" & clientRecordID
+        End If
+        LogWarn "ImportRowToTblOtkup", _
+                "BrojDokumenta fallback-generated lokalno za " & clientRecordID
+    Else
+        If Not IsValidBrojFormat(brojDokumenta) Then
+            Err.Raise vbObjectError + 8104, "ImportRowToTblOtkup", _
+                "Invalid BrojDokumenta format: " & brojDokumenta & _
+                " (CRID=" & clientRecordID & ")"
+        End If
+    End If
     
     ' Neue ID
     newID = GetNextID(TBL_OTKUP, COL_OTK_ID, "OTK-")
@@ -1210,7 +1370,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     Dim rowData As Variant
     rowData = Array(newID, datum, kooperantID, stanicaID, kulturaID, _
                     vrstaVoca, sortaVoca, kolicina, cena, tipAmb, _
-                    kolAmb, vozacID, "", 0, "", klasa, _
+                    kolAmb, vozacID, brojDokumenta, 0, "", klasa, _
                     "", "", "", "", "", parcelaID, _
                     clientRecordID, "PWA")
     
@@ -2632,7 +2792,7 @@ Private Sub Monitor_MasterSyncSuccess(ByVal procedureName As String, _
         moduleName:="modMasterSync", _
         procedureName:=procedureName, _
         entityType:="MasterData", _
-        entityId:="PWA-OTKUP", _
+        entityID:="PWA-OTKUP", _
         correlationId:="MASTERDATA-SYNC-PWA"
 End Sub
 
@@ -2649,7 +2809,7 @@ Private Sub Monitor_MasterSyncFail(ByVal procedureName As String, _
         moduleName:="modMasterSync", _
         procedureName:=procedureName, _
         entityType:="MasterData", _
-        entityId:="PWA-OTKUP", _
+        entityID:="PWA-OTKUP", _
         correlationId:="MASTERDATA-SYNC-PWA", _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -2666,7 +2826,7 @@ Private Sub Monitor_MasterSyncFail(ByVal procedureName As String, _
         moduleName:="modMasterSync", _
         procedureName:=procedureName, _
         entityType:="MasterData", _
-        entityId:="PWA-OTKUP", _
+        entityID:="PWA-OTKUP", _
         correlationId:="MASTERDATA-SYNC-PWA"
 End Sub
 
