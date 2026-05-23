@@ -379,7 +379,14 @@ async function saveOtkupUnlocked() {
             return;
         }
 
-        const record = buildOtkupRecord(input);
+        // PWA-first BrojDokumenta — kanon "x/ddmmyy[-rb]"
+        const brojDokumenta = await generateBrojDokumenta();
+        if (!brojDokumenta) {
+            showToast('Greška: nije moguće generisati broj dokumenta', 'error');
+            return;
+        }
+
+        const record = buildOtkupRecord(input, brojDokumenta);
 
         await dbPut(db, CONFIG.STORE_NAME, record);
 
@@ -403,6 +410,102 @@ async function saveOtkupUnlocked() {
         console.error('saveOtkup failed:', err);
         showToast('Greška pri čuvanju otkupa', 'error');
     }
+}
+
+// ============================================================
+// PWA-first BrojDokumenta — kanon "x/ddmmyy[-rb]"
+//
+// Sequence source: max iz merged local IDB + server (OTK-{otkupacID} sheet,
+// koji uključuje i VBA-bulk-pushed brojeve posle VBA stanica unlock-a).
+//
+// Ako je stanica locked iz VBA, server fetch može da vrati lock signal —
+// u tom slučaju koristimo samo local count. To je prihvatljiv kompromis:
+// VBA bulk-push-uje na unlock i posle toga PWA vidi sve brojeve. Tokom lock-a
+// PWA save u svakom slučaju neće preći sync (sync-engine ga blokira), pa
+// privremeni "možda zastareli" broj se reconcile-uje pri sync-u.
+// ============================================================
+async function generateBrojDokumenta() {
+    const today = getTodayIsoDate();
+    const otkupacID = CONFIG.OTKUPAC_ID || '';
+
+    const stanicaBrojX = parseInt(String(otkupacID).replace(/\D/g, ''), 10);
+    if (!stanicaBrojX || isNaN(stanicaBrojX)) {
+        console.error('generateBrojDokumenta: OtkupacID nije validan numerički', otkupacID);
+        return '';
+    }
+
+    // Lokalni IDB scan
+    let localToday = [];
+    try {
+        const all = await dbGetAll(db, CONFIG.STORE_NAME);
+        localToday = (all || []).filter(r =>
+            r.datum === today &&
+            (r.otkupacID || '') === otkupacID &&
+            !r.deleted
+        );
+    } catch (err) {
+        console.error('generateBrojDokumenta local read failed:', err);
+    }
+
+    // Server merged scan — getOtkupiForOtkupac uključuje OtkupiAll master +
+    // OTK-{otkupacID} live. VBA bulk-push redovi su u live posle unlock-a.
+    let serverToday = [];
+    if (navigator.onLine) {
+        const json = await safeAsync(async () => {
+            return await apiFetch(
+                'action=getOtkupi&otkupacID=' + encodeURIComponent(otkupacID)
+            );
+        }, '');  // empty toast — već dovoljno hendlovano
+
+        if (json && json.success && Array.isArray(json.records)) {
+            serverToday = json.records.filter(r => {
+                const d = toIsoDateOnly(r.Datum);
+                return d === today;
+            });
+        }
+        // Ako je GAS vratio lock error, json nije .success → serverToday ostaje [].
+        // To je OK: pad-back na local count + dalje sa local-only sequence.
+    }
+
+    // Dedupe + max seq
+    const seenCrid = new Set();
+    let maxSeq = 0;
+
+    function extractSeq(broj) {
+        const s = String(broj || '').trim();
+        if (!s) return 0;
+        const slashPos = s.indexOf('/');
+        if (slashPos === -1) return 0;
+        const dashPos = s.lastIndexOf('-');
+        if (dashPos === -1 || dashPos < slashPos) return 1;
+        const tail = s.substring(dashPos + 1);
+        const n = parseInt(tail, 10);
+        return isNaN(n) ? 0 : n;
+    }
+
+    serverToday.forEach(r => {
+        const crid = String(r.ClientRecordID || '').trim();
+        if (crid) seenCrid.add(crid);
+        const s = extractSeq(r.BrojDokumenta);
+        if (s > maxSeq) maxSeq = s;
+    });
+
+    localToday.forEach(r => {
+        const crid = String(r.clientRecordID || '').trim();
+        if (crid && seenCrid.has(crid)) return;
+        const s = extractSeq(r.brojDokumenta);
+        if (s > maxSeq) maxSeq = s;
+    });
+
+    const seq = maxSeq + 1;
+
+    const parts = today.split('-');
+    if (parts.length !== 3) return '';
+    const ddmmyy = parts[2] + parts[1] + parts[0].slice(2);
+
+    return (seq === 1)
+        ? `${stanicaBrojX}/${ddmmyy}`
+        : `${stanicaBrojX}/${ddmmyy}-${seq}`;
 }
 
 function readOtkupForm() {
@@ -471,13 +574,14 @@ function validateOtkupInput(input) {
     return '';
 }
 
-function buildOtkupRecord(input) {
+function buildOtkupRecord(input, brojDokumenta) {
     const nowIso = new Date().toISOString();
     const today = getTodayIsoDate();
 
     return {
         clientRecordID: generateClientRecordID(),
         serverRecordID: '',
+        brojDokumenta: brojDokumenta || '',   // ← NOVO polje
         createdAtClient: nowIso,
         updatedAtClient: nowIso,
         updatedAtServer: '',
