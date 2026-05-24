@@ -1,10 +1,10 @@
 //sw.js
-const CACHE_NAME = 'AgriX-v6-C001';
+const CACHE_NAME = 'AgriX-v7-C001';
 const ASSETS = [
     './index.html',
     './manifest.json',
 
-        // Styles
+    // Styles
     './src/styles/auth.css',
     './src/styles/base.css',
     './src/styles/components.css',
@@ -94,7 +94,7 @@ const ASSETS = [
     './vendor/firebase-database-compat.js',
     './vendor/images/marker-icon.png',
     './vendor/images/marker-icon-2x.png',
-    './vendor/images/marker-shadow.png'
+    './vendor/images/marker-shadow.png',
 
     './src/styles/fonts.css',
     './vendor/fonts/dm-sans-400.woff2',
@@ -105,7 +105,7 @@ const ASSETS = [
     './vendor/fonts/cormorant-400-italic.woff2',
     './vendor/fonts/cormorant-600.woff2',
     './vendor/fonts/cormorant-600-italic.woff2',
-    './vendor/fonts/cormorant-700.woff2',
+    './vendor/fonts/cormorant-700.woff2'
     ];
 
 // Install: cache app shell
