@@ -1,24 +1,157 @@
-        :root {
-            --primary: #1a5e2a;
-            --primary-light: #2d8a42;
-            --primary-dark: #0f3d1a;
-            --accent: #e8a838;
-            --bg: #f5f5f0;
-            --card: #ffffff;
-            --text: #1a1a1a;
-            --text-muted: #666666;
-            --border: #d4d4d4;
-            --danger: #c0392b;
-            --success: #27ae60;
-            --warning: #f39c12;
-            --radius: 10px;
-            }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
+:root {
+    /* ============================================================
+       BRAND TOKENS — usklađeno sa agrix.rs sajtom
+       Source of truth: src_original/site/style.css iz Designer pack-a
+       ============================================================ */
 
-        /* FORM */
-        .form-group { margin-bottom: 14px; }
-        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .form-group input, .form-group select { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 16px; background: white; transition: border-color 0.2s; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* Brand boje */
+    --forest: #1E2D14;
+    --forest-90: #2a3d1e;
+    --forest-80: #354a28;
+    --accent: #5EA135;
+    --accent-light: #7dbf55;
+    --accent-pale: #c4e4a8;
+    --accent-soft: rgba(94,161,53,0.10);
+    --gold: #C8A84B;
+    --gold-light: #d4b962;
+    --gold-pale: #f0e2b8;
+    --gold-soft: rgba(200,168,75,0.14);
+    --cream: #F7F4EE;
+    --cream-warm: #F2EDE4;
+    --cream-deep: #EBE5D8;
+    --sand: #E8E0D0;
+    --white: #FFFFFF;
+
+    /* Surfaces */
+    --surface: #FFFFFF;
+    --surface-2: #FAF8F2;
+
+    /* Text */
+    --text-primary: #1E2D14;
+    --text-secondary: #4A5A3C;
+    --text-muted: #7A856E;
+    --text-light: #9FA894;
+
+    /* Borders */
+    --border: rgba(30,45,20,0.08);
+    --border-strong: rgba(30,45,20,0.15);
+
+    /* Status — semantičke boje sa soft pozadinskim varijantama */
+    --color-error: #b34747;
+    --color-error-soft: rgba(179,71,71,0.10);
+    --color-success: #2e7d32;
+    --color-success-soft: rgba(46,125,50,0.10);
+    --color-warning: #c8893a;
+    --color-warning-soft: rgba(200,137,58,0.12);
+
+    /* Shadows — 4-level hierarchy */
+    --shadow-sm: 0 1px 3px rgba(30,45,20,0.06);
+    --shadow-md: 0 4px 16px rgba(30,45,20,0.08);
+    --shadow-lg: 0 8px 32px rgba(30,45,20,0.10);
+    --shadow-xl: 0 16px 48px rgba(30,45,20,0.12);
+    --shadow-card: 0 1px 3px rgba(30,45,20,0.06), 0 8px 24px rgba(30,45,20,0.05);
+    --shadow-sticky: 0 -8px 24px rgba(30,45,20,0.10);
+
+    /* Typography */
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'DM Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+    /* Radii — 4-level hierarchy */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
+
+    /* Layout */
+    --section-pad: clamp(5rem, 8vw, 9rem);
+    --content-max: 1140px;
+    --content-narrow: 720px;
+
+    /* ============================================================
+       LEGACY ALIASI — postojeci kod nastavlja da radi
+       Migracija: tokom Faza 3-7 (per-feature), zameni svaku alias
+       upotrebu sa pravim tokenom u tom feature CSS-u. Kad svi tabovi
+       budu migrirani, Faza 8 brise ovaj LEGACY blok.
+
+       PAZNJA: stari --accent (#e8a838 amber) ovde se mapira na --gold,
+       JER novi --accent je SADA zelena (#5EA135). Postojeca polja
+       koja koriste var(--accent) za zute akcente nastavljaju da rade.
+       Nove komponente koje pisem u Fazi 2+ koriste --gold direktno
+       za zuto, --accent direktno za zeleno.
+       ============================================================ */
+    --primary: var(--forest);
+    --primary-light: var(--accent);
+    --primary-dark: var(--forest-90);
+    --bg: var(--cream);
+    --card: var(--white);
+    --text: var(--text-primary);
+    --danger: var(--color-error);
+    --success: var(--color-success);
+    --warning: var(--color-warning);
+    --radius: var(--radius-sm);
+
+    /* Save-old --accent semantic: amber → gold */
+    --accent-legacy-amber: var(--gold);
+}
+
+/* ============================================================
+   LEGACY override: --accent token name conflict
+   Old code uses var(--accent) expecting amber. We keep it amber
+   for backward compat via this rule. New code uses --accent-fresh
+   or references --accent directly knowing it's now green.
+
+   TODO Faza 8: replace --accent in all old CSS with --gold,
+   then remove this :root override and use the new --accent (green)
+   from the brand block above.
+   ============================================================ */
+:root {
+    --accent: var(--gold);   /* legacy backward compat */
+}
+
+/* Re-expose new green accent under different name during migration */
+:root {
+    --brand-green: #5EA135;
+    --brand-green-light: #7dbf55;
+    --brand-green-pale: #c4e4a8;
+    --brand-green-soft: rgba(94,161,53,0.10);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: var(--font-body);
+    background: var(--cream);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding-bottom: 80px;
+}
+
+/* FORM */
+.form-group { margin-bottom: 14px; }
+.form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 16px;
+    background: var(--white);
+    font-family: inherit;
+    color: var(--text-primary);
+    transition: border-color 0.2s;
+}
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--brand-green);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
