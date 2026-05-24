@@ -123,6 +123,70 @@ function bindOtkupFormUIEvents() {
         });
     }
 
+        // ============================================================
+    // Picker handlers (Faza 3.1)
+    // Sync visual class-picker / pkg-picker → hidden inputs.
+    // ============================================================
+
+    const klasaPicker = document.getElementById('klasaPicker');
+    if (klasaPicker) {
+        klasaPicker.addEventListener('click', function(e) {
+            const btn = e.target.closest('.class-pick');
+            if (!btn) return;
+            klasaPicker.querySelectorAll('.class-pick').forEach(function(b) {
+                b.classList.remove('is-sel');
+            });
+            btn.classList.add('is-sel');
+            const hidden = document.getElementById('fldKlasa');
+            if (hidden) {
+                hidden.value = btn.dataset.klasa || 'I';
+                hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    }
+
+    const tipAmbalazePicker = document.getElementById('tipAmbalazePicker');
+    if (tipAmbalazePicker) {
+        const hiddenSelect = document.getElementById('fldTipAmbalaze');
+
+        function syncTipAmbalazePickerFromHidden() {
+            if (!hiddenSelect) return;
+            const val = hiddenSelect.value || '12/1';
+            tipAmbalazePicker.querySelectorAll('.pkg-pick').forEach(function(b) {
+                b.classList.toggle('is-sel', b.dataset.tip === val);
+            });
+        }
+
+        tipAmbalazePicker.addEventListener('click', function(e) {
+            const btn = e.target.closest('.pkg-pick');
+            if (!btn) return;
+            tipAmbalazePicker.querySelectorAll('.pkg-pick').forEach(function(b) {
+                b.classList.remove('is-sel');
+            });
+            btn.classList.add('is-sel');
+            const val = btn.dataset.tip || '12/1';
+            if (hiddenSelect) {
+                let opt = hiddenSelect.querySelector('option[value="' + val + '"]');
+                if (!opt) {
+                    opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = val;
+                    hiddenSelect.appendChild(opt);
+                }
+                hiddenSelect.value = val;
+                hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
+        // Sync pills kad populateTipAmbalazeDropdown promeni select.value
+        if (hiddenSelect) {
+            hiddenSelect.addEventListener('change', syncTipAmbalazePickerFromHidden);
+        }
+
+        // Inicijalni sync
+        syncTipAmbalazePickerFromHidden();
+    }
+
     root.dataset.otkupUiBound = '1';
 }
 
