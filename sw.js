@@ -8,7 +8,7 @@ const ASSETS = [
     './src/styles/auth.css',
     './src/styles/base.css',
     './src/styles/components.css',
-    './src/styles/components-v2.css',
+    './src/styles/components_v2.css',
     './src/styles/features-kooperant.css',
     './src/styles/features-management.css',
     './src/styles/features-otkup.css',
