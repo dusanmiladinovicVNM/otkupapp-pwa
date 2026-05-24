@@ -1,0 +1,636 @@
+/* ============================================================
+   COMPONENTS V2 — design system iz agrix.rs / Designer pack
+   ============================================================
+   Source: pwa-otkup-redesign.html iz Designer bundle-a
+   Pattern: additive — postojece komponente u components.css
+   nastavljaju da rade. Migracija po featureu (Faza 3-7).
+   ============================================================ */
+
+/* ============================================================
+   APP HEADER
+   ============================================================ */
+.app-hd {
+    padding: 14px 18px 16px;
+    background: var(--forest);
+    color: var(--cream);
+    position: relative;
+    overflow: hidden;
+}
+.app-hd::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 80% 20%, rgba(200,168,75,0.18), transparent 60%);
+    pointer-events: none;
+}
+.app-hd__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+}
+.app-hd__role {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+.app-hd__avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--forest);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+}
+.app-hd__title {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+    position: relative;
+}
+.app-hd__title em { color: var(--gold); font-style: italic; }
+.app-hd__sub {
+    font-size: 12px;
+    opacity: 0.65;
+    margin-top: 4px;
+    position: relative;
+}
+
+.app-body {
+    background: var(--cream);
+    padding: 16px 14px 100px;
+}
+
+/* ============================================================
+   STEP INDICATOR
+   ============================================================ */
+.step { margin-bottom: 16px; }
+.step__head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px; padding: 0 4px;
+}
+.step__num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+    font-family: var(--font-display);
+}
+.step__num.is-done { background: var(--forest); }
+.step__num.is-done::before { content: '✓'; }
+.step__num.is-done > * { display: none; }
+.step__title {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+.step__hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ============================================================
+   CARD VARIANTS
+   ============================================================ */
+.card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    box-shadow: var(--shadow-card);
+    margin-bottom: 12px;
+}
+.card--soft { background: var(--surface-2); }
+.card--success {
+    background: var(--color-success-soft);
+    border-color: rgba(46,125,50,0.20);
+}
+.card--accent {
+    background: var(--accent-soft);
+    border-color: rgba(94,161,53,0.20);
+}
+.card--gold {
+    background: var(--gold-soft);
+    border-color: rgba(200,168,75,0.25);
+}
+
+/* ============================================================
+   SCAN CTA (forest gradient + gold icon)
+   ============================================================ */
+.scan-cta {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, var(--forest) 0%, #2a3d1e 100%);
+    color: var(--cream);
+    border-radius: var(--radius-md);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    border: none;
+    width: 100%;
+    font-family: inherit;
+    text-align: left;
+}
+.scan-cta::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at right, rgba(200,168,75,0.18), transparent 60%);
+    pointer-events: none;
+}
+.scan-cta__icon {
+    width: 44px; height: 44px;
+    background: var(--gold);
+    color: var(--forest);
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+}
+.scan-cta__icon svg { width: 24px; height: 24px; }
+.scan-cta__text { line-height: 1.25; position: relative; }
+.scan-cta__title { font-weight: 700; font-size: 14px; }
+.scan-cta__sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+.scan-cta__chev { color: var(--gold); position: relative; }
+
+/* ============================================================
+   KOOPERANT CHIP (after scan)
+   ============================================================ */
+.koop-chip {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(94,161,53,0.25);
+    border-radius: var(--radius-md);
+}
+.koop-chip__avatar {
+    width: 40px; height: 40px;
+    background: var(--accent); color: var(--cream);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700; font-size: 15px;
+}
+.koop-chip__name {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--forest);
+    line-height: 1.2;
+}
+.koop-chip__id {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.koop-chip__check {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    color: var(--cream);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+}
+
+/* ============================================================
+   FORM FIELD v2
+   ============================================================ */
+.field { margin-bottom: 12px; }
+.field__label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+.field__input,
+.field__select {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--white);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    color: var(--forest);
+    font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field__input:focus,
+.field__select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(94,161,53,0.12);
+}
+.field__input--big {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: -0.01em;
+    padding: 14px;
+}
+.field__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.field__hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    line-height: 1.4;
+}
+.field__hint strong { color: var(--accent); }
+
+/* ============================================================
+   CLASS / PACKAGE PICKER
+   ============================================================ */
+.class-picker,
+.pkg-picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+}
+.class-pick,
+.pkg-pick {
+    padding: 10px 8px;
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    cursor: pointer;
+    font-family: inherit;
+}
+.class-pick.is-sel {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--cream);
+}
+.pkg-pick.is-sel {
+    background: var(--gold-soft);
+    border-color: var(--gold);
+}
+.class-pick__c {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+}
+.class-pick__l,
+.pkg-pick__d {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 4px;
+    opacity: 0.7;
+}
+.pkg-pick__v {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--forest);
+}
+
+/* ============================================================
+   BUTTONS v2
+   ============================================================ */
+.btn-v2 {
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s, transform 0.1s;
+}
+.btn-v2:active { transform: scale(0.97); }
+
+.btn-v2--primary {
+    background: var(--forest);
+    color: var(--cream);
+    box-shadow: 0 6px 16px rgba(30,45,20,0.20);
+}
+.btn-v2--primary:hover { background: var(--forest-80); }
+
+.btn-v2--secondary {
+    background: var(--white);
+    color: var(--forest);
+    border: 1.5px solid var(--border-strong);
+}
+
+.btn-v2--accent {
+    background: var(--accent);
+    color: var(--cream);
+}
+.btn-v2--accent:hover { background: var(--accent-light); }
+
+.btn-v2--gold {
+    background: var(--gold);
+    color: var(--forest);
+}
+
+.btn-v2__hint {
+    font-size: 11px;
+    opacity: 0.7;
+    font-weight: 400;
+}
+
+/* Naming napomena: .btn-v2 namerno DRUGO ime od starog .btn-primary
+   da postojece .btn-primary u components.css ostane non-conflicted
+   tokom faza 3-7 migracije. */
+
+/* ============================================================
+   STICKY SAVE BAR
+   ============================================================ */
+.sticky-bar {
+    position: fixed;
+    left: 12px; right: 12px; bottom: 16px;
+    background: rgba(247,244,238,0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-radius: var(--radius-lg);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 8px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border);
+    z-index: 100;
+}
+
+/* ============================================================
+   PREGLED HERO (dark stats header)
+   ============================================================ */
+.pregled-hero {
+    padding: 16px 16px 20px;
+    background: linear-gradient(180deg, var(--forest) 0%, #2a3d1e 100%);
+    color: var(--cream);
+    position: relative;
+    overflow: hidden;
+}
+.pregled-hero::after {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+        radial-gradient(ellipse 60% 40% at 80% 0%, rgba(200,168,75,0.18), transparent 50%),
+        radial-gradient(ellipse 50% 40% at 0% 100%, rgba(94,161,53,0.14), transparent 50%);
+    pointer-events: none;
+}
+.pregled-hero__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+}
+.pregled-hero__title {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+    position: relative;
+}
+.pregled-hero__sub {
+    font-size: 12px;
+    opacity: 0.7;
+    margin-bottom: 14px;
+    position: relative;
+}
+
+/* Stats row na hero pozadini */
+.stats-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 8px;
+    position: relative;
+}
+.stat {
+    background: rgba(247,244,238,0.10);
+    border: 1px solid rgba(247,244,238,0.18);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    backdrop-filter: blur(8px);
+}
+.stat--big {
+    background: var(--gold);
+    border: none;
+    color: var(--forest);
+}
+.stat__val {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+}
+.stat__val--big { font-size: 28px; }
+.stat__val .u {
+    font-size: 12px;
+    opacity: 0.65;
+    font-weight: 500;
+    margin-left: 2px;
+}
+.stat--big .stat__val .u { opacity: 0.55; }
+.stat__lbl {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 4px;
+    opacity: 0.7;
+}
+.stat--big .stat__lbl { opacity: 0.65; font-weight: 600; }
+
+/* ============================================================
+   FILTER PILLS
+   ============================================================ */
+.pills {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 14px 14px 0;
+    background: var(--cream);
+}
+.pill {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: inherit;
+}
+.pill.is-active {
+    background: var(--forest);
+    color: var(--cream);
+    border-color: var(--forest);
+}
+
+/* ============================================================
+   LIST HEAD (title + count badge)
+   ============================================================ */
+.list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 4px 10px;
+}
+.list-head__title {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+.list-head__count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--white);
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+}
+
+/* ============================================================
+   RECORD CARD (otkup item u pregled listi)
+   ============================================================ */
+.rec {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+    cursor: pointer;
+    position: relative;
+}
+.rec__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+.rec__koop {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+    line-height: 1.15;
+}
+.rec__time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.rec__main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px dashed var(--border);
+    border-bottom: 1px dashed var(--border);
+}
+.rec__kg {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+    line-height: 1;
+}
+.rec__kg .u {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 2px;
+}
+.rec__det {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+    flex: 1;
+}
+.rec__det strong {
+    color: var(--forest);
+    font-weight: 700;
+}
+.rec__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+}
+.rec__val {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+
+/* ============================================================
+   STATUS BADGES (soft pozadinske varijante)
+   ============================================================ */
+.rec__badge,
+.badge-v2 {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.rec__badge::before,
+.badge-v2::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.rec__badge--ok,
+.badge-v2--ok {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+}
+.rec__badge--warn,
+.badge-v2--warn {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+}
+.rec__badge--err,
+.badge-v2--err {
+    background: var(--color-error-soft);
+    color: var(--color-error);
+}
+.rec__badge--info,
+.badge-v2--info {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
