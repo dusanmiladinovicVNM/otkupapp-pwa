@@ -123,7 +123,7 @@ function bindOtkupFormUIEvents() {
         });
     }
 
-        // ============================================================
+    // ============================================================
     // Picker handlers (Faza 3.1)
     // Sync visual class-picker / pkg-picker → hidden inputs.
     // ============================================================
@@ -187,6 +187,8 @@ function bindOtkupFormUIEvents() {
         syncTipAmbalazePickerFromHidden();
     }
 
+    bindOtkupFormStateListeners(); 
+    
     root.dataset.otkupUiBound = '1';
 }
 
@@ -852,3 +854,118 @@ function scrollToOtkupStep(stepId) {
         requestAnimationFrame(run);
     });
 }
+
+// ============================================================
+// OTKUP FORM STATE MACHINE (Faza 3.2)
+//
+// Evaluira trenutno stanje forme i primenjuje:
+//   - .is-disabled na step elementima koji čekaju prerequisite
+//   - .is-done na step__num kada je step popunjen
+//   - btn save disabled state + label / hint toggle
+//   - live total kalkulacija u sticky bar-u
+//
+// Pozove se na svaki promenu polja koja utiče na state.
+// ============================================================
+
+function evaluateOtkupFormState() {
+    const koopID = (document.getElementById('fldKooperantID') || {}).value || '';
+    const vrsta = (document.getElementById('fldVrsta') || {}).value || '';
+    const kolicina = parseFloat((document.getElementById('fldKolicina') || {}).value) || 0;
+    const cena = parseFloat((document.getElementById('fldCena') || {}).value) || 0;
+    const klasa = (document.getElementById('fldKlasa') || {}).value || '';
+    const tipAmb = (document.getElementById('fldTipAmbalaze') || {}).value || '';
+
+    return {
+        step1Done: !!koopID,
+        step3Done: !!vrsta && !!klasa,
+        step4Done: kolicina > 0 && cena > 0 && !!tipAmb,
+        canSave: !!koopID && !!vrsta && !!klasa && kolicina > 0 && cena > 0 && !!tipAmb,
+        liveTotal: kolicina * cena
+    };
+}
+
+function applyOtkupFormState() {
+    const state = evaluateOtkupFormState();
+
+    // Step disabled state
+    const step2 = document.getElementById('otkupStep2ParcelaVozac');
+    const step3 = document.getElementById('otkupStep3Roba');
+    const step4 = document.getElementById('otkupStep4CenaAmbalaza');
+    const step5 = document.getElementById('otkupStep5Napredno');
+
+    [step2, step3, step4, step5].forEach(function(el) {
+        if (!el) return;
+        el.classList.toggle('is-disabled', !state.step1Done);
+    });
+
+    // Step completion check marks
+    const setStepDone = function(stepId, done) {
+        const step = document.getElementById(stepId);
+        if (!step) return;
+        const num = step.querySelector('.step__num');
+        if (!num) return;
+        num.classList.toggle('is-done', !!done);
+    };
+
+    setStepDone('otkupStep1Kooperant', state.step1Done);
+    setStepDone('otkupStep3Roba', state.step3Done);
+    setStepDone('otkupStep4CenaAmbalaza', state.step4Done);
+
+    // Save button state + label
+    const btnSave = document.getElementById('btnSaveOtkup');
+    const btnLabel = document.getElementById('btnSaveOtkupLabel');
+    const btnHint = document.getElementById('btnSaveOtkupHint');
+
+    if (btnSave) {
+        btnSave.classList.toggle('is-disabled', !state.canSave);
+        btnSave.disabled = !state.canSave;
+    }
+
+    if (btnHint) {
+        if (state.step1Done) {
+            btnHint.style.display = 'none';
+        } else {
+            btnHint.style.display = '';
+            btnHint.textContent = '(skenirajte prvo)';
+        }
+    }
+
+    if (btnLabel) {
+        if (state.canSave && state.liveTotal > 0) {
+            const totalFormatted = Math.round(state.liveTotal).toLocaleString('sr-RS');
+            btnLabel.textContent = 'Sačuvaj · ' + totalFormatted + ' RSD';
+        } else {
+            btnLabel.textContent = 'Sačuvaj otkup';
+        }
+    }
+}
+
+function bindOtkupFormStateListeners() {
+    const ids = [
+        'fldKooperantID',
+        'fldKooperantManual',
+        'fldVrsta',
+        'fldKolicina',
+        'fldCena',
+        'fldAmbalaza',
+        'fldKlasa',
+        'fldTipAmbalaze'
+    ];
+
+    ids.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', applyOtkupFormState);
+        el.addEventListener('change', applyOtkupFormState);
+    });
+
+    // Inicijalna primena state-a (sve disabled posle reset-a)
+    applyOtkupFormState();
+
+    // Polling fallback za hidden inputs koji se setuju programatski
+    setInterval(applyOtkupFormState, 500);
+}
+
+// Eksportuj na window da ostali moduli mogu da pozovu nakon QR scan-a
+// ili reset-a forme
+window.applyOtkupFormState = applyOtkupFormState;
