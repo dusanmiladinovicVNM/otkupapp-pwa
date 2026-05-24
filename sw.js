@@ -96,16 +96,26 @@ const ASSETS = [
     './vendor/images/marker-icon-2x.png',
     './vendor/images/marker-shadow.png',
 
+    // Fonts (Faza 1 — self-hosted Cormorant + DM Sans)
     './src/styles/fonts.css',
     './vendor/fonts/dm-sans-400.woff2',
+    './vendor/fonts/dm-sans-400-ext.woff2',
     './vendor/fonts/dm-sans-500.woff2',
+    './vendor/fonts/dm-sans-500-ext.woff2',
     './vendor/fonts/dm-sans-600.woff2',
+    './vendor/fonts/dm-sans-600-ext.woff2',
     './vendor/fonts/dm-sans-700.woff2',
+    './vendor/fonts/dm-sans-700-ext.woff2',
     './vendor/fonts/cormorant-400.woff2',
+    './vendor/fonts/cormorant-400-ext.woff2',
     './vendor/fonts/cormorant-400-italic.woff2',
+    './vendor/fonts/cormorant-400-italic-ext.woff2',
     './vendor/fonts/cormorant-600.woff2',
+    './vendor/fonts/cormorant-600-ext.woff2',
     './vendor/fonts/cormorant-600-italic.woff2',
-    './vendor/fonts/cormorant-700.woff2'
+    './vendor/fonts/cormorant-600-italic-ext.woff2',
+    './vendor/fonts/cormorant-700.woff2',
+    './vendor/fonts/cormorant-700-ext.woff2'
     ];
 
 // Install: cache app shell
