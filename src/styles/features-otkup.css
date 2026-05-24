@@ -90,6 +90,218 @@
     margin-top: 14px;
 }
 
+
+/* ============================================================
+   PREGLED / DANAS — DYNAMIC CONTENT (otkup-pregled.js renders)
+   Klase koje renderPregledCard i buildPregledSections koriste.
+   Vrati nakon Faze 5 cleanup-a, sa novim forest/gold tokenima.
+   ============================================================ */
+
+.danas-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.danas-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 4px 0;
+}
+
+.danas-section-title {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+
+.danas-section-count {
+    min-width: 28px;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.danas-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.danas-card {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--border);
+    background: var(--white);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    box-shadow: var(--shadow-card);
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text-primary);
+    transition: border-color 0.15s, transform 0.1s;
+}
+
+.danas-card:hover {
+    border-color: var(--accent);
+}
+
+.danas-card:active {
+    transform: scale(0.99);
+}
+
+.danas-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.danas-card-koop {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+    line-height: 1.15;
+}
+
+.danas-card-date {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.danas-card-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+    border-top: 1px dashed var(--border);
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 10px;
+}
+
+.danas-card-line {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.danas-card-line--muted {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.danas-card-class {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.danas-card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.danas-card-value {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+
+/* Status badges */
+.danas-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 999px;
+}
+
+.danas-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.danas-badge--ok,
+.danas-badge--success {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.danas-badge--warning,
+.danas-badge--warn {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+}
+
+.danas-badge--error,
+.danas-badge--err {
+    background: var(--color-error-soft);
+    color: var(--color-error);
+}
+
+.danas-badge--pending,
+.danas-badge--info {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.danas-badge--neutral {
+    background: var(--gold-soft);
+    color: var(--gold);
+}
+
+/* Empty state */
+.danas-empty {
+    background: var(--white);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 24px 16px;
+    text-align: center;
+}
+
+.danas-empty-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--forest);
+    margin-bottom: 4px;
+}
+
+.danas-empty-text {
+    font-size: 12px;
+    color: var(--text-muted);
+}
 /* Pregled list se direktno renderuje od strane otkupni-list.js — 
    stilovi za pojedinacne cards (npr. .pregled-card) su tu, ne menjamo ih. */
 
