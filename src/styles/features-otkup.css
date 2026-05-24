@@ -1084,6 +1084,399 @@
   justify-content: flex-end;
 }
 
+/* ============================================================
+   OTKUPNI LIST MODAL — Faza 3.3 redesign
+   Designer-aligned success screen sa forest header,
+   accent summary card, info grid, expandable details, signature.
+   ============================================================ */
+
+.ol-modal {
+    position: fixed;
+    inset: 0;
+    background: var(--cream);
+    z-index: 9999;
+    overflow-y: auto;
+    display: none;
+}
+
+.ol-shell {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================================================
+   Header (forest sa success indicator-om)
+   ============================================================ */
+
+.ol-hd {
+    background: var(--forest);
+    color: var(--cream);
+    padding: 14px 18px 18px;
+    position: relative;
+    overflow: hidden;
+}
+
+.ol-hd::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 80% 20%, rgba(200,168,75,0.18), transparent 60%);
+    pointer-events: none;
+}
+
+.ol-hd__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.ol-hd__role {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+
+.ol-hd__close {
+    background: rgba(247,244,238,0.15);
+    border: 1px solid rgba(247,244,238,0.25);
+    color: var(--cream);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.ol-hd__success {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    position: relative;
+}
+
+.ol-hd__check {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--cream);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.ol-hd__title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+}
+
+.ol-hd__sub {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+
+.ol-hd__date {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-top: 12px;
+    position: relative;
+}
+
+/* ============================================================
+   Body
+   ============================================================ */
+
+.ol-body {
+    flex: 1;
+    padding: 16px 14px 24px;
+}
+
+/* Summary accent card */
+.ol-summary {
+    margin-bottom: 16px;
+}
+
+.ol-summary__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.ol-summary__eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.ol-summary__kg {
+    font-family: var(--font-display);
+    line-height: 1;
+    color: var(--accent);
+}
+
+.ol-summary__kg-val {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.ol-summary__kg-unit {
+    font-size: 14px;
+    margin-left: 4px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.ol-summary__broj {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+
+/* Info grid 2x2 */
+.ol-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.ol-info {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-card);
+}
+
+.ol-info__label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.ol-info__value {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+}
+
+/* Receipt details (collapsible) */
+.ol-receipt {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.ol-receipt__summary {
+    padding: 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    list-style: none;
+    user-select: none;
+}
+
+.ol-receipt__summary::-webkit-details-marker {
+    display: none;
+}
+
+.ol-receipt__summary::after {
+    content: ' ▾';
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.ol-receipt[open] .ol-receipt__summary::after {
+    content: ' ▴';
+}
+
+.ol-receipt__body {
+    padding: 0 14px 14px;
+    border-top: 1px solid var(--border);
+}
+
+.ol-receipt__seller,
+.ol-receipt__koop {
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.ol-receipt__seller strong,
+.ol-receipt__koop strong {
+    color: var(--forest);
+    font-size: 14px;
+}
+
+.ol-receipt__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 12px;
+}
+
+.ol-receipt__table td {
+    padding: 6px 0;
+}
+
+.ol-receipt__table td:first-child {
+    color: var(--text-muted);
+    width: 50%;
+}
+
+.ol-receipt__table td:last-child {
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.ol-receipt__total td {
+    border-top: 2px solid var(--forest);
+    padding-top: 10px !important;
+    font-size: 15px;
+}
+
+.ol-receipt__total td:last-child {
+    color: var(--forest);
+}
+
+/* Signature pad */
+.ol-signature {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    box-shadow: var(--shadow-card);
+    margin-bottom: 12px;
+}
+
+.ol-signature__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.ol-signature__label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.ol-signature__clear {
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    font-family: inherit;
+}
+
+.ol-signature__canvas {
+    width: 100%;
+    height: 120px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--cream);
+    touch-action: none;
+    display: block;
+}
+
+.ol-signature--saved .ol-signature__saved-wrap {
+    width: 100%;
+    height: 96px;
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+}
+
+.ol-signature__saved-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.ol-signature--missing {
+    background: var(--color-warning-soft);
+    border-color: rgba(200,137,58,0.30);
+}
+
+.ol-signature__warn {
+    font-size: 12px;
+    color: var(--color-warning);
+    font-weight: 600;
+    text-align: center;
+}
+
+/* ============================================================
+   Sticky action bar
+   ============================================================ */
+
+.ol-actions {
+    position: sticky;
+    bottom: 0;
+    background: rgba(247,244,238,0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: var(--shadow-sticky);
+}
+
+.ol-actions .btn-v2--primary {
+    padding: 16px;
+    font-size: 15px;
+}
+
+.ol-actions__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
 /* ── Intercom ────────────────────────────────────────────── */
 .intercom-header-dot {
   font-size: 0.7rem;
