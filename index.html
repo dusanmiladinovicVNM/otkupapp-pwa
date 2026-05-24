@@ -130,26 +130,25 @@
             <div class="app-hd__role">Otkupac · Terenski unos</div>
         </div>
         <div class="app-hd__title">Novi <em>otkup</em></div>
-        <div class="app-hd__sub">Unos otkupa za kooperanta i obavezni otkupni list</div>
+        <div class="app-hd__sub" id="otkupHeaderDate">Pripremi unos otkupa</div>
     </div>
 
     <div class="app-body">
 
-        <!-- STEP 1: Kooperant -->
+        <!-- STEP 1: Kooperant (uvek aktivan) -->
         <div class="step" id="otkupStep1Kooperant">
             <div class="step__head">
                 <div class="step__num">1</div>
-                <div class="step__title">Kooperant</div>
-                <div class="step__hint">QR ili izaberi</div>
+                <div class="step__title">Skenirajte kooperanta</div>
             </div>
             <div class="card">
                 <button class="scan-cta" type="button" data-action="start-qr-scan">
                     <div class="scan-cta__icon">
-                        <span data-ag-icon="camera"></span>
+                        <span data-ag-icon="qr"></span>
                     </div>
                     <div class="scan-cta__text">
-                        <div class="scan-cta__title">Skeniraj QR kooperanta</div>
-                        <div class="scan-cta__sub">Brzo · iz QR koda</div>
+                        <div class="scan-cta__title">QR kod kooperanta</div>
+                        <div class="scan-cta__sub">ili izaberite ručno iz liste</div>
                     </div>
                     <div class="scan-cta__chev">→</div>
                 </button>
@@ -157,9 +156,9 @@
                 <div id="qr-reader" class="otk-qr-reader" style="display:none;"></div>
 
                 <div class="field" style="margin-top:12px;">
-                    <label for="fldKooperantManual" class="field__label">Ili izaberi ručno</label>
+                    <label for="fldKooperantManual" class="field__label">Ručni izbor</label>
                     <select id="fldKooperantManual" class="field__select">
-                        <option value="">-- Izaberi --</option>
+                        <option value="">-- Izaberi kooperanta --</option>
                     </select>
                     <div class="otk-field-error" id="errKooperant" hidden></div>
                 </div>
@@ -174,134 +173,121 @@
                 </div>
 
                 <input type="hidden" id="fldKooperantID">
+                <input type="hidden" id="fldVozacID">
             </div>
         </div>
 
-        <!-- STEP 2: Parcela + Vozač -->
-        <div class="step" id="otkupStep2ParcelaVozac">
+        <!-- STEP 2: Parcela (disabled dok kooperant nije izabran) -->
+        <div class="step is-disabled" id="otkupStep2ParcelaVozac">
             <div class="step__head">
                 <div class="step__num">2</div>
-                <div class="step__title">Parcela i vozač</div>
-                <div class="step__hint">Opciono</div>
+                <div class="step__title">Parcela</div>
+                <div class="step__hint">opciono</div>
             </div>
             <div class="card">
-                <div class="field" id="parcelaGroup" style="display:none;">
+                <div class="field" id="parcelaGroup" style="margin-bottom: 0;">
                     <label for="fldParcela" class="field__label">Parcela</label>
                     <select id="fldParcela" class="field__select">
                         <option value="">-- Bez parcele --</option>
                     </select>
                 </div>
-
-                <div class="field">
-                    <label class="field__label">Vozač</label>
-                    <button
-                        class="scan-cta"
-                        id="btnVozacScan"
-                        type="button"
-                        data-action="start-vozac-qr-scan"
-                    >
-                        <div class="scan-cta__icon">
-                            <span data-ag-icon="camera"></span>
-                        </div>
-                        <div class="scan-cta__text">
-                            <div class="scan-cta__title">Skeniraj QR vozača</div>
-                            <div class="scan-cta__sub">Ili kasnije kroz Otpremu</div>
-                        </div>
-                        <div class="scan-cta__chev">→</div>
-                    </button>
-                </div>
-
-                <div id="qr-reader-vozac" class="otk-qr-reader" style="display:none;"></div>
-
-                <div class="koop-chip" id="vozacDisplay" style="margin-top:12px;">
-                    <div class="koop-chip__avatar" id="vozacAvatar">V</div>
-                    <div>
-                        <div class="koop-chip__name" id="vozacName"></div>
-                        <div class="koop-chip__id" id="vozacId"></div>
-                    </div>
-                    <button type="button" class="otk-inline-link" data-action="clear-vozac">Ukloni</button>
-                </div>
-
-                <input type="hidden" id="fldVozacID">
             </div>
         </div>
 
-        <!-- STEP 3: Roba -->
-        <div class="step" id="otkupStep3Roba">
+        <!-- STEP 3: Roba i klasa (disabled) -->
+        <div class="step is-disabled" id="otkupStep3Roba">
             <div class="step__head">
                 <div class="step__num">3</div>
-                <div class="step__title">Roba</div>
-                <div class="step__hint">Vrsta obavezna</div>
+                <div class="step__title">Roba i klasa</div>
             </div>
             <div class="card">
-                <div class="field__row">
-                    <div class="field">
-                        <label for="fldVrsta" class="field__label">Vrsta voća</label>
-                        <select id="fldVrsta" class="field__select">
-                            <option value="">-- Izaberi --</option>
-                        </select>
-                        <div class="otk-field-error" id="errVrsta" hidden></div>
-                    </div>
-                    <div class="field">
-                        <label for="fldSorta" class="field__label">Sorta</label>
-                        <select id="fldSorta" class="field__select">
-                            <option value="">-- Izaberi --</option>
-                        </select>
-                    </div>
+                <div class="field">
+                    <label for="fldVrsta" class="field__label">Vrsta voća</label>
+                    <select id="fldVrsta" class="field__select">
+                        <option value="">-- Izaberi --</option>
+                    </select>
+                    <div class="otk-field-error" id="errVrsta" hidden></div>
                 </div>
 
-                <div class="field__row">
-                    <div class="field">
-                        <label for="fldKlasa" class="field__label">Klasa</label>
-                        <select id="fldKlasa" class="field__select">
-                            <option value="I">I</option>
-                            <option value="II">II</option>
-                        </select>
+                <div class="field" id="sortaGroup">
+                    <label for="fldSorta" class="field__label">Sorta</label>
+                    <select id="fldSorta" class="field__select">
+                        <option value="">-- Izaberi --</option>
+                    </select>
+                </div>
+
+                <div class="field" style="margin-bottom: 0;">
+                    <div class="field__label">Klasa</div>
+                    <div class="class-picker" id="klasaPicker">
+                        <button type="button" class="class-pick is-sel" data-klasa="I">
+                            <div class="class-pick__c">I</div>
+                            <div class="class-pick__l">Ekstra</div>
+                        </button>
+                        <button type="button" class="class-pick" data-klasa="II">
+                            <div class="class-pick__c">II</div>
+                            <div class="class-pick__l">Standard</div>
+                        </button>
                     </div>
-                    <div class="field">
-                        <label for="fldKolicina" class="field__label">Količina (kg)</label>
-                        <input type="number" id="fldKolicina" class="field__input field__input--big" inputmode="numeric" placeholder="0">
-                        <div class="otk-field-error" id="errKolicina" hidden></div>
-                    </div>
+                    <input type="hidden" id="fldKlasa" value="I">
                 </div>
             </div>
         </div>
 
-        <!-- STEP 4: Cena + Ambalaža -->
-        <div class="step" id="otkupStep4CenaAmbalaza">
+        <!-- STEP 4: Količina i ambalaža (disabled) -->
+        <div class="step is-disabled" id="otkupStep4CenaAmbalaza">
             <div class="step__head">
                 <div class="step__num">4</div>
-                <div class="step__title">Cena i ambalaža</div>
+                <div class="step__title">Količina i ambalaža</div>
             </div>
             <div class="card">
+                <div class="field">
+                    <label for="fldKolicina" class="field__label">Količina (kg)</label>
+                    <input type="number" id="fldKolicina" class="field__input field__input--big" inputmode="numeric" placeholder="0">
+                    <div class="otk-field-error" id="errKolicina" hidden></div>
+                </div>
+
                 <div class="field__row">
                     <div class="field">
-                        <label for="fldCena" class="field__label">Cena (RSD/kg)</label>
-                        <input type="number" id="fldCena" class="field__input field__input--big" inputmode="decimal" placeholder="0.00">
+                        <label for="fldCena" class="field__label">Cena RSD/kg</label>
+                        <input type="number" id="fldCena" class="field__input" inputmode="decimal" placeholder="0,00">
                         <div class="otk-field-error" id="errCena" hidden></div>
                     </div>
                     <div class="field">
-                        <label for="fldTipAmbalaze" class="field__label">Tip ambalaže</label>
-                        <select id="fldTipAmbalaze" class="field__select"></select>
-                        <div class="otk-field-error" id="errTipAmbalaze" hidden></div>
-                        <div class="field__hint" id="tipAmbalazeHint"></div>
+                        <label for="fldAmbalaza" class="field__label">Komada</label>
+                        <input type="number" id="fldAmbalaza" class="field__input" inputmode="numeric" placeholder="0">
+                        <div class="otk-field-error" id="errAmbalaza" hidden></div>
                     </div>
                 </div>
 
-                <div class="field">
-                    <label for="fldAmbalaza" class="field__label">Ambalaža (kom)</label>
-                    <input type="number" id="fldAmbalaza" class="field__input" inputmode="numeric" placeholder="0">
-                    <div class="otk-field-error" id="errAmbalaza" hidden></div>
+                <div class="field" style="margin-bottom: 0;">
+                    <div class="field__label">Tip ambalaže</div>
+                    <div class="pkg-picker" id="tipAmbalazePicker">
+                        <button type="button" class="pkg-pick is-sel" data-tip="12/1">
+                            <div class="pkg-pick__v">12/1</div>
+                            <div class="pkg-pick__d">12 kg</div>
+                        </button>
+                        <button type="button" class="pkg-pick" data-tip="6/1">
+                            <div class="pkg-pick__v">6/1</div>
+                            <div class="pkg-pick__d">6 kg</div>
+                        </button>
+                        <button type="button" class="pkg-pick" data-tip="2/1">
+                            <div class="pkg-pick__v">2/1</div>
+                            <div class="pkg-pick__d">2 kg</div>
+                        </button>
+                    </div>
+                    <select id="fldTipAmbalaze" style="display:none;"></select>
+                    <div class="otk-field-error" id="errTipAmbalaze" hidden></div>
+                    <div class="field__hint" id="tipAmbalazeHint"></div>
                 </div>
             </div>
         </div>
 
-        <!-- STEP 5: Napomena -->
-        <div class="step" id="otkupStep5Napredno">
+        <!-- STEP 5: Napomena (opciona) -->
+        <div class="step is-disabled" id="otkupStep5Napredno">
             <div class="step__head">
                 <div class="step__num">5</div>
                 <div class="step__title">Napomena</div>
-                <div class="step__hint">Opciono</div>
+                <div class="step__hint">opciono</div>
             </div>
             <div class="card">
                 <div class="field" style="margin-bottom:0;">
@@ -309,17 +295,15 @@
                 </div>
             </div>
         </div>
-
-        <!-- Info card -->
-        <div class="card card--accent" style="font-size:12px; color:var(--accent); margin-top:8px;">
-            Posle čuvanja automatski se otvara otkupni list za potpis i PDF.
-        </div>
     </div>
 
     <!-- Sticky save bar -->
-    <div class="sticky-bar">
-        <button class="btn-v2 btn-v2--secondary" type="button" data-action="reset-otkup-form">Poništi</button>
-        <button class="btn-v2 btn-v2--primary" type="button" data-action="save-otkup">Sačuvaj otkup</button>
+    <div class="sticky-bar" id="otkupStickyBar">
+        <button class="btn-v2 btn-v2--secondary" type="button" data-action="reset-otkup-form">Otkaži</button>
+        <button class="btn-v2 btn-v2--primary" type="button" data-action="save-otkup" id="btnSaveOtkup">
+            <span id="btnSaveOtkupLabel">Sačuvaj otkup</span>
+            <span class="btn-v2__hint" id="btnSaveOtkupHint" style="display:none;">(skenirajte prvo)</span>
+        </button>
     </div>
 </div>
     
