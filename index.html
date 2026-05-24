@@ -325,62 +325,65 @@
     
 <!-- ==================== Pregled TAB ==================== -->
 <div class="tab-content" id="tab-pregled">
-    <section class="danas-screen">
-        <div class="danas-shell">
 
-            <div class="danas-hero">
-                <div>
-                    <div class="danas-eyebrow">Operativni pregled</div>
-                    <h1 class="danas-title">Danas</h1>
-                    <div class="danas-subline">Pregled unosa, vozača i sync statusa</div>
-                </div>
-            </div>
-
-            <div class="danas-filters-card">
-                <div class="danas-pills" id="pregledQuickFilters">
-                    <button class="danas-pill active" type="button" data-action="pregled-filter" data-filter="danas">Danas</button>
-                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="juce">Juče</button>
-                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="sve">Sve</button>
-                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="bez_vozaca">Bez vozača</button>
-                    <button class="danas-pill" type="button" data-action="pregled-filter" data-filter="problemi">Problemi</button>
-                </div>
-
-                <div class="form-row" style="margin-bottom:0;">
-                    <div class="form-group">
-                        <label>Od datuma</label>
-                        <input type="date" id="fldPregledOd">
-                    </div>
-                    <div class="form-group">
-                        <label>Do datuma</label>
-                        <input type="date" id="fldPregledDo"> 
-                    </div>
-                </div>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="statPregledCount">0</div>
-                    <div class="stat-label">Otkupa</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statPregledKg">0</div>
-                    <div class="stat-label">Ukupno kg</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statPregledVrednost">0</div>
-                    <div class="stat-label">Vrednost RSD</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statPregledKoop">0</div>
-                    <div class="stat-label">Kooperanata</div>
-                </div>
-            </div>
-
-            <div id="pregledList" class="danas-sections"></div>
-
+    <div class="app-hd">
+        <div class="app-hd__row">
+            <div class="app-hd__role">Operativni pregled</div>
         </div>
-    </section>
+        <div class="app-hd__title"><em>Danas</em></div>
+        <div class="app-hd__sub">Pregled unosa, vozača i sync statusa</div>
+    </div>
 
+    <div class="app-body">
+
+        <!-- 4 stat kartice 2x2 -->
+        <div class="pregled-stats-grid">
+            <div class="otprema-summary-card">
+                <div class="otprema-summary-value" id="statPregledCount">0</div>
+                <div class="otprema-summary-label">Otkupa</div>
+            </div>
+            <div class="otprema-summary-card">
+                <div class="otprema-summary-value" id="statPregledKg">0</div>
+                <div class="otprema-summary-label">Ukupno kg</div>
+            </div>
+            <div class="otprema-summary-card">
+                <div class="otprema-summary-value" id="statPregledVrednost">0</div>
+                <div class="otprema-summary-label">Vrednost RSD</div>
+            </div>
+            <div class="otprema-summary-card">
+                <div class="otprema-summary-value" id="statPregledKoop">0</div>
+                <div class="otprema-summary-label">Kooperanata</div>
+            </div>
+        </div>
+
+        <!-- Pills filter -->
+        <div class="pills" id="pregledQuickFilters">
+            <button class="pill is-active" type="button" data-action="pregled-filter" data-filter="danas">Danas</button>
+            <button class="pill" type="button" data-action="pregled-filter" data-filter="juce">Juče</button>
+            <button class="pill" type="button" data-action="pregled-filter" data-filter="sve">Sve</button>
+            <button class="pill" type="button" data-action="pregled-filter" data-filter="bez_vozaca">Bez vozača</button>
+            <button class="pill" type="button" data-action="pregled-filter" data-filter="problemi">Problemi</button>
+        </div>
+
+        <!-- Date range card -->
+        <div class="card" style="margin-top: 12px;">
+            <div class="field__row">
+                <div class="field">
+                    <label class="field__label">Od datuma</label>
+                    <input type="date" id="fldPregledOd" class="field__input">
+                </div>
+                <div class="field" style="margin-bottom: 0;">
+                    <label class="field__label">Do datuma</label>
+                    <input type="date" id="fldPregledDo" class="field__input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic list (otkupni-list.js renders) -->
+        <div id="pregledList" class="danas-sections"></div>
+    </div>
+
+    <!-- Detail modal -->
     <div class="danas-detail-modal" id="pregledDetailModal">
         <div class="danas-detail-card">
             <div class="danas-detail-head">
@@ -396,8 +399,8 @@
             <div class="danas-detail-grid" id="pregledDetailGrid"></div>
 
             <div class="danas-detail-actions">
-                <button class="btn-secondary" type="button" data-action="close-pregled-detail">Zatvori</button>
-                <button class="btn-primary" type="button" data-action="open-pregled-otkupni-list">Otvori otkupni list</button>
+                <button class="btn-v2 btn-v2--secondary" type="button" data-action="close-pregled-detail">Zatvori</button>
+                <button class="btn-v2 btn-v2--primary" type="button" data-action="open-pregled-otkupni-list">Otvori otkupni list</button>
             </div>
         </div>
     </div>
