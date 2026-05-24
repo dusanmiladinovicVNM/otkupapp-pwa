@@ -13,86 +13,161 @@ function showOtkupniList(record) {
     };
 
     const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === record.kooperantID) || {};
+    const koopFullName = ((koop.Ime || '') + ' ' + (koop.Prezime || '')).trim()
+        || record.kooperantName || 'Kooperant';
+    const koopInitials = ((koop.Ime || 'K').charAt(0) + (koop.Prezime || '').charAt(0)).toUpperCase();
+
     const vrednostNum = record.kolicina * record.cena;
     const pdvStopa = parseFloat(gv('OtkupPDVStopa')) || 8;
     const pdvIznos = Math.round(vrednostNum * pdvStopa / 100);
     const ukupno = vrednostNum + pdvIznos;
+    const ukupnoFormatted = ukupno.toLocaleString('sr-RS');
 
-    const savedOtkupacSignature =
-        (typeof getSavedOtkupacSignature === 'function')
-            ? getSavedOtkupacSignature()
-            : '';
+    const otkupBroj = record.brojDokumenta
+        || record.serverRecordID
+        || (record.clientRecordID ? 'OL-' + String(record.clientRecordID).slice(0, 8) : 'OL');
 
-    const otkupacSignatureHtml = savedOtkupacSignature
-        ? `
-            <div style="display:flex;align-items:center;justify-content:center;width:100%;height:96px;border:1px solid #ccc;border-radius:6px;background:#fff;padding:8px;overflow:hidden;">
-                <img
-                    src="${savedOtkupacSignature}"
-                    alt="Potpis Otkupca"
-                    style="display:block;max-width:100%;max-height:100%;object-fit:contain;"
-                >
-            </div>
-          `
-        : `
-            <div style="display:flex;align-items:center;justify-content:center;width:100%;height:96px;border:1px dashed #ccc;border-radius:6px;background:#fafaf7;color:#777;font-size:12px;text-align:center;padding:8px;">
-                Potpis Otkupca nije unet u tabu Više
-            </div>
-          `;
+    const datumFormatted = (function() {
+        if (!record.datum) return '';
+        try {
+            const d = new Date(record.datum);
+            if (isNaN(d.getTime())) return record.datum;
+            return d.toLocaleDateString('sr-RS', { day: 'numeric', month: 'long', year: 'numeric' });
+        } catch (_) { return record.datum; }
+    })();
+
+    const savedOtkupacSignature = (typeof getSavedOtkupacSignature === 'function')
+        ? getSavedOtkupacSignature()
+        : '';
 
     let modal = document.getElementById('otkupniListModal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'otkupniListModal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999;overflow-y:auto;';
+        modal.className = 'ol-modal';
         document.body.appendChild(modal);
+    } else {
+        modal.className = 'ol-modal';
     }
 
     modal.innerHTML = `
-        <div style="padding:16px;max-width:420px;margin:0 auto;font-family:sans-serif;">
-            <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px;">
-                <div style="font-size:18px;font-weight:700;">${gv('SELLER_NAME')}</div>
-                <div style="font-size:12px;color:#666;">${escapeHtml(gv('SELLER_STREET'))}, ${escapeHtml(gv('SELLER_CITY'))} ${escapeHtml(gv('SELLER_POSTAL_CODE'))}</div>
-                <div style="font-size:12px;color:#666;">PIB: ${escapeHtml(gv('SELLER_PIB'))} | MB: ${escapeHtml(gv('SELLER_MATICNI_BROJ'))}</div>
-                <div style="font-size:12px;color:#666;">TR: ${escapeHtml(gv('SELLER_ACCOUNT'))}</div>
+        <div class="ol-shell">
+
+            <!-- Forest success header -->
+            <div class="ol-hd">
+                <div class="ol-hd__row">
+                    <div class="ol-hd__role">Otkupac · ${escapeHtml(gv('STATION_NAME') || CONFIG.ENTITY_NAME || '')}</div>
+                    <button type="button" class="ol-hd__close" data-action="close-otkupni-list-modal" aria-label="Zatvori">×</button>
+                </div>
+                <div class="ol-hd__success">
+                    <div class="ol-hd__check">✓</div>
+                    <div class="ol-hd__success-text">
+                        <div class="ol-hd__title">Otkup sačuvan</div>
+                        <div class="ol-hd__sub">${escapeHtml(koopFullName)} · ${record.kolicina} kg · Klasa ${escapeHtml(record.klasa || '')}</div>
+                    </div>
+                </div>
+                <div class="ol-hd__date">${escapeHtml(datumFormatted)}</div>
             </div>
 
-            <h2 style="text-align:center;margin-bottom:14px;font-size:20px;">OTKUPNI LIST</h2>
+            <div class="ol-body">
 
-            <div style="background:#f5f5f0;padding:10px;border-radius:8px;margin-bottom:12px;font-size:13px;">
-                <div><strong>${koop.Ime || ''} ${koop.Prezime || ''}</strong></div>
-                <div>${escapeHtml(koop.Adresa || '')}, ${escapeHtml(koop.Mesto || '')}</div>
-                <div>JMBG: ${escapeHtml(koop.JMBG || '________')} | BPG: ${escapeHtml(koop.BPGBroj || '________')}</div>
+                <!-- Summary accent card -->
+                <div class="card card--accent ol-summary">
+                    <div class="ol-summary__head">
+                        <div class="ol-summary__eyebrow">Otkupni list spreman</div>
+                        <div class="ol-summary__kg">
+                            <span class="ol-summary__kg-val">${record.kolicina}</span><span class="ol-summary__kg-unit">kg</span>
+                        </div>
+                    </div>
+                    <div class="ol-summary__broj">${escapeHtml(otkupBroj)}</div>
+                </div>
+
+                <!-- Info grid 2x2 -->
+                <div class="ol-info-grid">
+                    <div class="ol-info">
+                        <div class="ol-info__label">Kooperant</div>
+                        <div class="ol-info__value">${escapeHtml(koopFullName)}</div>
+                    </div>
+                    <div class="ol-info">
+                        <div class="ol-info__label">Vrednost</div>
+                        <div class="ol-info__value">${ukupnoFormatted} RSD</div>
+                    </div>
+                    <div class="ol-info">
+                        <div class="ol-info__label">Klasa</div>
+                        <div class="ol-info__value">${escapeHtml(record.klasa || '')}</div>
+                    </div>
+                    <div class="ol-info">
+                        <div class="ol-info__label">Ambalaža</div>
+                        <div class="ol-info__value">${record.kolAmbalaze || 0} × ${escapeHtml(record.tipAmbalaze || '')}</div>
+                    </div>
+                </div>
+
+                <!-- Receipt details (expandable) -->
+                <details class="ol-receipt">
+                    <summary class="ol-receipt__summary">Detalji otkupnog lista</summary>
+                    <div class="ol-receipt__body">
+                        <div class="ol-receipt__seller">
+                            <strong>${escapeHtml(gv('SELLER_NAME'))}</strong>
+                            <div>${escapeHtml(gv('SELLER_STREET'))}, ${escapeHtml(gv('SELLER_CITY'))} ${escapeHtml(gv('SELLER_POSTAL_CODE'))}</div>
+                            <div>PIB: ${escapeHtml(gv('SELLER_PIB'))} · MB: ${escapeHtml(gv('SELLER_MATICNI_BROJ'))}</div>
+                            <div>TR: ${escapeHtml(gv('SELLER_ACCOUNT'))}</div>
+                        </div>
+                        <div class="ol-receipt__koop">
+                            <strong>${escapeHtml(koopFullName)}</strong>
+                            <div>${escapeHtml(koop.Adresa || '')}, ${escapeHtml(koop.Mesto || '')}</div>
+                            <div>JMBG: ${escapeHtml(koop.JMBG || '________')} · BPG: ${escapeHtml(koop.BPGBroj || '________')}</div>
+                        </div>
+                        <table class="ol-receipt__table">
+                            <tr><td>Datum</td><td>${escapeHtml(datumFormatted)}</td></tr>
+                            <tr><td>Proizvod</td><td>${escapeHtml(record.vrstaVoca)} ${escapeHtml(record.sortaVoca || '')}</td></tr>
+                            <tr><td>Cena</td><td>${record.cena} RSD/kg</td></tr>
+                            <tr><td>Vrednost</td><td>${vrednostNum.toLocaleString('sr-RS')} RSD</td></tr>
+                            ${pdvStopa > 0 ? `<tr><td>PDV naknada (${pdvStopa}%)</td><td>${pdvIznos.toLocaleString('sr-RS')} RSD</td></tr>` : ''}
+                            <tr class="ol-receipt__total"><td>Za isplatu</td><td><strong>${ukupnoFormatted} RSD</strong></td></tr>
+                            ${record.parcelaID ? `<tr><td>Parcela</td><td>${escapeHtml(record.parcelaID)}</td></tr>` : ''}
+                            <tr><td>Rok isplate</td><td>${escapeHtml(gv('OtkupRokIsplate') || 'Po dogovoru')}</td></tr>
+                        </table>
+                    </div>
+                </details>
+
+                <!-- Kooperant signature pad -->
+                <div class="ol-signature">
+                    <div class="ol-signature__head">
+                        <div class="ol-signature__label">Potpis kooperanta</div>
+                        <button type="button" class="ol-signature__clear" data-action="otkupni-clear-signature">Obriši</button>
+                    </div>
+                    <canvas id="sigKooperant" width="720" height="200" class="ol-signature__canvas"></canvas>
+                </div>
+
+                <!-- Saved otkupac signature -->
+                ${savedOtkupacSignature
+                    ? `<div class="ol-signature ol-signature--saved">
+                           <div class="ol-signature__label">Potpis otkupca</div>
+                           <div class="ol-signature__saved-wrap">
+                               <img src="${savedOtkupacSignature}" alt="Potpis otkupca" class="ol-signature__saved-img">
+                           </div>
+                       </div>`
+                    : `<div class="ol-signature ol-signature--missing">
+                           <div class="ol-signature__warn">⚠ Potpis otkupca nije unet u tabu Više</div>
+                       </div>`}
             </div>
 
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
-                <tr><td style="padding:6px;color:#666;width:40%;">Datum:</td><td style="padding:6px;font-weight:600;">${escapeHtml(record.datum)}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Proizvod:</td><td style="padding:6px;">${escapeHtml(record.vrstaVoca)} ${escapeHtml(record.sortaVoca || '')}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Klasa:</td><td style="padding:6px;">${escapeHtml(record.klasa)}</td></tr>
-                <tr><td style="padding:6px;color:#666;">Količina:</td><td style="padding:6px;font-weight:600;">${record.kolicina} kg</td></tr>
-                <tr><td style="padding:6px;color:#666;">Cena:</td><td style="padding:6px;">${record.cena} RSD/kg</td></tr>
-                <tr style="border-top:1px solid #ccc;"><td style="padding:6px;color:#666;">Vrednost:</td><td style="padding:6px;font-weight:600;">${vrednostNum.toLocaleString('sr')} RSD</td></tr>
-                ${pdvStopa > 0 ? '<tr><td style="padding:6px;color:#666;">PDV naknada (' + pdvStopa + '%):</td><td style="padding:6px;">' + pdvIznos.toLocaleString('sr') + ' RSD</td></tr>' : ''}
-                <tr style="border-top:2px solid #333;"><td style="padding:8px;color:#666;">ZA ISPLATU:</td><td style="padding:8px;font-weight:700;font-size:18px;">${ukupno.toLocaleString('sr')} RSD</td></tr>
-                <tr><td style="padding:6px;color:#666;">Ambalaža:</td><td style="padding:6px;">${record.kolAmbalaze} kom</td></tr>
-                ${record.parcelaID ? '<tr><td style="padding:6px;color:#666;">Parcela:</td><td style="padding:6px;">' + escapeHtml(record.parcelaID) + '</td></tr>' : ''}
-                <tr><td style="padding:6px;color:#666;">Rok isplate:</td><td style="padding:6px;">${escapeHtml(gv('OtkupRokIsplate') || 'Po dogovoru')}</td></tr>
-            </table>
-
-            <div style="margin-top:20px;">
-                <div style="margin-bottom:16px;">
-                    <div style="font-size:12px;color:#666;margin-bottom:4px;">Potpis kooperanta:</div>
-                    <canvas id="sigKooperant" width="720" height="200" style="border:1px solid #ccc;border-radius:6px;width:100%;height:80px;touch-action:none;"></canvas>
+            <!-- Sticky action bar -->
+            <div class="ol-actions">
+                <button type="button" class="btn-v2 btn-v2--primary" data-action="otkupni-confirm"
+                        data-client-record-id="${escapeHtml(String(record.clientRecordID || ''))}">
+                    Potvrdi i sačuvaj
+                </button>
+                <div class="ol-actions__row">
+                    <button type="button" class="btn-v2 btn-v2--secondary" data-action="otkupni-print">
+                        Štampaj
+                    </button>
+                    <button type="button" class="btn-v2 btn-v2--secondary" data-action="otkupni-save-pdf"
+                            data-client-record-id="${escapeHtml(String(record.clientRecordID || ''))}">
+                        Sačuvaj PDF
+                    </button>
                 </div>
             </div>
-
-            <div style="text-align:center;margin-top:16px;display:flex;gap:8px;">
-                <button type="button" data-action="otkupni-clear-signature">Obriši</button>
-                <button type="button" data-action="otkupni-confirm" data-client-record-id="${escapeHtml(String(record.clientRecordID || ''))}">Potvrdi</button>
-                <button type="button" data-action="otkupni-print">Štampaj</button>
-            </div>
-
-            <button type="button" data-action="otkupni-save-pdf" data-client-record-id="${escapeHtml(String(record.clientRecordID || ''))}">📄 Sačuvaj PDF na Drive</button>
-            <button type="button" data-action="close-otkupni-list-modal">Zatvori</button>
         </div>
     `;
 
@@ -107,7 +182,7 @@ function showOtkupniList(record) {
                 clearSignature('sigKooperant');
                 return;
             }
-    
+
             if (action === 'otkupni-confirm') {
                 saveOtkupniListWithSignatures(actionEl.dataset.clientRecordId || '');
                 return;
@@ -122,7 +197,7 @@ function showOtkupniList(record) {
                 savePdfToDrive(actionEl.dataset.clientRecordId || '');
                 return;
             }
-    
+
             if (action === 'close-otkupni-list-modal') {
                 closeOtkupniListModal();
             }
