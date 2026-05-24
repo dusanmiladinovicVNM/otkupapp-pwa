@@ -365,7 +365,9 @@
    ============================================================ */
 .sticky-bar {
     position: fixed;
-    left: 12px; right: 12px; bottom: 16px;
+    left: 12px;
+    right: 12px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     background: rgba(247,244,238,0.96);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
