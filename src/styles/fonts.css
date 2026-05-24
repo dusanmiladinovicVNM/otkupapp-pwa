@@ -1,0 +1,76 @@
+/* ============================================================
+   AgriX self-hosted fonts
+   Source: Google Fonts (Cormorant Garamond + DM Sans)
+   Format: woff2 (modern, ~30KB each weight)
+   Path: /vendor/fonts/
+
+   CSP kompatibilno (font-src 'self').
+   PWA offline-friendly (cached by service worker).
+   ============================================================ */
+
+/* DM Sans — body font */
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/vendor/fonts/dm-sans-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/vendor/fonts/dm-sans-500.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/vendor/fonts/dm-sans-600.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/vendor/fonts/dm-sans-700.woff2') format('woff2');
+}
+
+/* Cormorant Garamond — display font */
+@font-face {
+    font-family: 'Cormorant Garamond';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/vendor/fonts/cormorant-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Cormorant Garamond';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/vendor/fonts/cormorant-400-italic.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Cormorant Garamond';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/vendor/fonts/cormorant-600.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Cormorant Garamond';
+    font-style: italic;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/vendor/fonts/cormorant-600-italic.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Cormorant Garamond';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/vendor/fonts/cormorant-700.woff2') format('woff2');
+}
