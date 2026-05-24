@@ -392,62 +392,134 @@
   }
 }
 
-/* =========================================================
-   OTPREMA
-   ========================================================= */
+/* ============================================================
+   OTPREMA — FAZA 4 (post-app-hd migration)
+   ============================================================
+   Sva hero / page-level wrap struktura je sada u .app-hd /
+   .app-body. Ostalo su otprema-specifične komponente koje JS
+   render funkcije (otpremnice.js) generišu dinamički.
+   ============================================================ */
 
-.otprema-screen {
-  padding-bottom: 110px;
+.otprema-link-btn {
+    margin-top: 8px;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    font-size: 13px;
 }
 
-.otprema-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.otprema-link-btn:hover { color: var(--forest); }
+
+.otprema-icon-btn {
+    background: rgba(247,244,238,0.15);
+    border: 1px solid rgba(247,244,238,0.25);
+    color: var(--cream);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.otprema-icon-btn:hover { background: rgba(247,244,238,0.25); }
+
+.otprema-fallback-panel {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
 }
 
-.otprema-hero {
-  padding: 4px 2px 2px;
+.otprema-qr-reader {
+    margin-top: 12px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
 }
 
-.otprema-eyebrow {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--primary);
-  opacity: 0.85;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+/* Stats grid — Cormorant brojevi za premium feel */
+.otprema-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
 }
 
-.otprema-title,
-.otprema-assign-title {
-  margin: 4px 0 2px;
-  font-size: 26px;
-  line-height: 1.15;
-  color: var(--text);
-}
-
-.otprema-subline {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.otprema-cta-card,
-.otprema-driver-card,
-.otprema-success-card,
-.otprema-section,
 .otprema-summary-card {
-  background: #fff;
-  border: 1px solid rgba(0,0,0,0.06);
-  border-radius: 18px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: 16px 14px;
+    text-align: center;
 }
 
-.otprema-cta-card,
-.otprema-driver-card,
-.otprema-success-card,
-.otprema-section {
-  padding: 14px;
+.otprema-summary-value {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--forest);
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+
+.otprema-summary-label {
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.otprema-summary-sub {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.otprema-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.otprema-toolbar .btn-v2 {
+    flex: 1;
+    min-width: 0;
+}
+
+.otprema-sticky-meta {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.otprema-sticky-meta strong {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--forest);
+    margin-right: 2px;
+}
+
+.otprema-success-icon {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--color-success);
+    color: var(--white);
+    align-items: center; justify-content: center;
+}
+
+.otprema-success-actions {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 10px;
+    margin-top: 16px;
 }
 
 .otprema-scan-btn {
