@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'AgriX-v4-C001';
+const CACHE_NAME = 'AgriX-v5-C001';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -94,6 +94,17 @@ const ASSETS = [
     './vendor/images/marker-icon.png',
     './vendor/images/marker-icon-2x.png',
     './vendor/images/marker-shadow.png'
+
+    './src/styles/fonts.css',
+    './vendor/fonts/dm-sans-400.woff2',
+    './vendor/fonts/dm-sans-500.woff2',
+    './vendor/fonts/dm-sans-600.woff2',
+    './vendor/fonts/dm-sans-700.woff2',
+    './vendor/fonts/cormorant-400.woff2',
+    './vendor/fonts/cormorant-400-italic.woff2',
+    './vendor/fonts/cormorant-600.woff2',
+    './vendor/fonts/cormorant-600-italic.woff2',
+    './vendor/fonts/cormorant-700.woff2',
     ];
 
 // Install: cache app shell
