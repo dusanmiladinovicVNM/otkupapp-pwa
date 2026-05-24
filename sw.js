@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'AgriX-v5-C001';
+const CACHE_NAME = 'AgriX-v6-C001';
 const ASSETS = [
     './index.html',
     './manifest.json',
@@ -8,6 +8,7 @@ const ASSETS = [
     './src/styles/auth.css',
     './src/styles/base.css',
     './src/styles/components.css',
+    './src/styles/components-v2.css',
     './src/styles/features-kooperant.css',
     './src/styles/features-management.css',
     './src/styles/features-otkup.css',
