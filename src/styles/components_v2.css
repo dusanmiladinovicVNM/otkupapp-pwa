@@ -634,3 +634,76 @@
     background: var(--accent-soft);
     color: var(--accent);
 }
+
+/* ============================================================
+   STEP DISABLED STATE (Faza 3.1)
+   Step koji čeka prerequisite (kooperant nije unesen) je vizuelno muted.
+   JS u Fazi 3.2 dodaje/uklanja .is-disabled klasu.
+   ============================================================ */
+
+.step.is-disabled {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.step.is-disabled .step__num {
+    background: var(--border-strong);
+    color: var(--text-muted);
+}
+
+.step.is-disabled .step__title {
+    color: var(--text-muted);
+}
+
+.step.is-disabled .card {
+    background: var(--surface-2);
+}
+
+.step.is-disabled .field__input,
+.step.is-disabled .field__select {
+    background: var(--cream-warm);
+    color: var(--text-light);
+}
+
+.step.is-disabled .class-pick,
+.step.is-disabled .pkg-pick {
+    background: var(--cream-warm);
+    color: var(--text-light);
+}
+
+/* ============================================================
+   BUTTON DISABLED STATE (Faza 3.1)
+   ============================================================ */
+
+.btn-v2.is-disabled,
+.btn-v2[disabled] {
+    background: var(--cream-deep) !important;
+    color: var(--text-muted) !important;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+.btn-v2.is-disabled .btn-v2__hint {
+    color: var(--text-muted);
+}
+
+/* ============================================================
+   STEP COMPLETED STATE (priprema za Faza 3.2)
+   JS dodaje .is-done na step__num kada je step popunjen.
+   ============================================================ */
+
+.step__num.is-done {
+    background: var(--forest);
+    color: var(--cream);
+}
+
+.step__num.is-done::before {
+    content: '✓';
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.step__num.is-done > * {
+    display: none;
+}
