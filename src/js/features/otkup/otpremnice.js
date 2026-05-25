@@ -226,15 +226,14 @@ function renderOtpremaRoot() {
 }
 
 function renderOtpremaSummary(sections) {
-    setText(byId('otpremaTodayUnassignedCount'), String(sections.todayUnassigned.length));
-    setText(byId('otpremaTodayUnassignedKg'), formatOtpremaKg(sumOtpremaKg(sections.todayUnassigned)));
+    const pendingRows = sections.todayUnassigned.concat(sections.olderUnassigned);
+    const pendingKooperants = new Set(pendingRows.map(r => r.kooperantID || r.kooperantName || '?')).size;
+    const pendingKg = sumOtpremaKg(pendingRows);
 
-    setText(byId('otpremaOlderUnassignedCount'), String(sections.olderUnassigned.length));
-    setText(byId('otpremaOlderUnassignedKg'), formatOtpremaKg(sumOtpremaKg(sections.olderUnassigned)));
-
-    const todayAssignedRows = sections.todayAssignedGroups.flatMap(g => g.items);
-    setText(byId('otpremaTodayAssignedCount'), String(todayAssignedRows.length));
-    setText(byId('otpremaTodayAssignedKg'), formatOtpremaKg(sumOtpremaKg(todayAssignedRows)));
+    setText(byId('otpPendingCount'), String(pendingRows.length));
+    setText(byId('otpPendingKooperants'), String(pendingKooperants));
+    setText(byId('otpPendingBlocks'), String(pendingRows.length));
+    setText(byId('otpPendingKg'), formatOtpremaKg(pendingKg));
 }
 
 function buildOtpremaRootSections() {
@@ -358,11 +357,9 @@ function renderOtpremaCard(row, showWarning, isAssigned) {
 
     if (isAssigned) {
         statusBadges.push(`<span class="otprema-badge otprema-badge--success">Dodeljen</span>`);
-
         if (row.syncStatus && row.syncStatus !== 'synced') {
             statusBadges.push(`<span class="otprema-badge otprema-badge--pending">Čeka sync</span>`);
         }
-
         if (row.lastSyncError) {
             statusBadges.push(`<span class="otprema-badge otprema-badge--error">Sync greška</span>`);
         }
@@ -381,13 +378,16 @@ function renderOtpremaCard(row, showWarning, isAssigned) {
 
             <div class="otprema-card-main">
                 <div class="otprema-card-line">
-                    ${escapeHtml(row.vrstaVoca || '-')}
-                    ${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
-                    <span class="otprema-card-class">Kl. ${escapeHtml(row.klasa || 'I')}</span>
+                    ${escapeHtml(row.vrstaVoca || '-')}${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
+                    <span class="otprema-card-class">Klasa ${escapeHtml(row.klasa || 'I')}</span>
+                </div>
+
+                <div class="otprema-card-line otprema-card-line--kg">
+                    ${escapeHtml(formatOtpremaKg(row.kolicina))}
                 </div>
 
                 <div class="otprema-card-line otprema-card-line--muted">
-                    ${escapeHtml(formatOtpremaKg(row.kolicina))} • ${escapeHtml(formatOtpremaAmbalaza(row))}
+                    ${escapeHtml(formatOtpremaAmbalaza(row))}
                 </div>
 
                 ${note}
@@ -407,13 +407,26 @@ function renderOtpremaAssignView() {
     const sectionsEl = byId('otpremaAssignSections');
     if (!driverCard || !sectionsEl || !otpremaState.selectedVozac) return;
 
+    const drv = otpremaState.selectedVozac;
+    const initials = String(drv.name || '?')
+        .split(/\s+/).map(s => s[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+    const kapacitet = drv.kapacitet ? `${drv.kapacitet} kg kapacitet` : 'Kapacitet —';
+    const kamion = drv.kamion || drv.id || '';
+
     setHtml(driverCard, `
-        <div class="otprema-driver-card-label">Vozač</div>
-        <div class="otprema-driver-card-name">${escapeHtml(otpremaState.selectedVozac.name)}</div>
-        <div class="otprema-driver-card-sub">${escapeHtml(otpremaState.selectedVozac.id)}</div>
+        <div class="otp-driver-avatar">${escapeHtml(initials)}</div>
+        <div class="otp-driver-info">
+            <div class="otp-driver-name">${escapeHtml(drv.name || '-')}</div>
+            <div class="otp-driver-sub">
+                ${kamion ? 'Kamion ' + escapeHtml(kamion) + ' · ' : ''}${escapeHtml(kapacitet)}
+            </div>
+        </div>
     `);
 
     const sections = buildOtpremaAssignSections();
+    const totalAvail = sections.todayUnassigned.length + sections.olderUnassigned.length;
+    const selected = otpremaState.selectedKeys.size;
+    setText(byId('otpremaAssignCounter'), `${selected}/${totalAvail}`);
 
     setHtml(sectionsEl, `
         ${renderOtpremaAssignSection('Današnji bez vozača', sections.todayUnassigned)}
@@ -516,6 +529,11 @@ function updateOtpremaAssignSummary() {
     const selectedRows = getSelectedOtpremaRows();
     setText(byId('otpremaSelectedCount'), String(selectedRows.length));
     setText(byId('otpremaSelectedKg'), formatOtpremaKg(sumOtpremaKg(selectedRows)));
+
+    // counter u section head
+    const sections = buildOtpremaAssignSections();
+    const totalAvail = sections.todayUnassigned.length + sections.olderUnassigned.length;
+    setText(byId('otpremaAssignCounter'), `${otpremaState.selectedKeys.size}/${totalAvail}`);
 }
 
 async function confirmOtpremaAssign() {
