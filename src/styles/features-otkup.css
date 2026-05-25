@@ -62,9 +62,16 @@
     color: var(--forest);
 }
 
-/* App body donji padding da sticky-bar ne pokriva info card */
+/* Default — bez bottom nav-a (desktop / kad nav nije aktivan) */
 #tab-otkup .app-body {
-    padding-bottom: 110px;
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Mobile sa bottom nav-om — više padding-a da ne zalete u nav + sticky-bar */
+@media (max-width: 900px) {
+    body.has-otkup-bottom-nav #tab-otkup .app-body {
+        padding-bottom: calc(74px + 140px + env(safe-area-inset-bottom, 0px));
+    }
 }
 
 /* ============================================================
