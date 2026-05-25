@@ -381,6 +381,16 @@
     z-index: 100;
 }
 
+/* Mobile sa bottom nav-om — sticky-bar mora iznad nav-a */
+@media (max-width: 900px) {
+    body.has-otkup-bottom-nav .sticky-bar,
+    body.has-koop-bottom-nav .sticky-bar,
+    body.has-mgmt-bottom-nav .sticky-bar,
+    body.has-vozac-bottom-nav .sticky-bar {
+        bottom: calc(74px + 12px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
 /* ============================================================
    PREGLED HERO (dark stats header)
    ============================================================ */
