@@ -210,6 +210,7 @@ function showOtpremaSuccessView() {
 }
 
 function renderOtpremaRoot() {
+    applyOtpremaHeaderStanica();
     const sectionsEl = byId('otpremaRootSections');
     if (!sectionsEl) return;
 
@@ -403,6 +404,7 @@ function renderOtpremaCard(row, showWarning, isAssigned) {
 }
 
 function renderOtpremaAssignView() {
+    applyOtpremaHeaderStanica();
     const driverCard = byId('otpremaAssignDriverCard');
     const sectionsEl = byId('otpremaAssignSections');
     if (!driverCard || !sectionsEl || !otpremaState.selectedVozac) return;
@@ -631,6 +633,7 @@ function buildUpdatedOtpremaRecord(row, vozac, nowIso) {
 }
 
 function renderOtpremaSuccessView(rows, vozac) {
+    applyOtpremaHeaderStanica();
     setText(byId('otpremaSuccessDriver'), vozac.name + ' (' + vozac.id + ')');
     setText(byId('otpremaSuccessCount'), String(rows.length));
     setText(byId('otpremaSuccessKg'), formatOtpremaKg(sumOtpremaKg(rows)));
@@ -864,4 +867,18 @@ function formatOtpremaTime(row) {
         if (Number.isNaN(d.getTime())) return '';
         return d.toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' });
     } catch (_) { return ''; }
+}
+
+function applyOtpremaHeaderStanica() {
+    const station = ((window.CONFIG && CONFIG.ENTITY_NAME) || '').toUpperCase();
+    const suffix = station ? ' · ' + station : '';
+
+    const root = byId('otpremaRootRoleEyebrow');
+    if (root) root.textContent = 'OTPREMA' + suffix;
+
+    const assign = byId('otpremaAssignRoleEyebrow');
+    if (assign) assign.textContent = 'OTPREMA' + suffix;
+
+    const success = byId('otpremaSuccessRoleEyebrow');
+    if (success) success.textContent = 'OTPREMA · POTVRĐENO' + suffix;
 }
