@@ -477,43 +477,47 @@ function renderOtpremaAssignCard(row, showWarning) {
     const checked = otpremaState.selectedKeys.has(key) ? 'checked' : '';
     const note = row.napomena ? `<div class="otprema-card-note">${escapeHtml(row.napomena)}</div>` : '';
     const warning = showWarning
-        ? `<span class="otprema-badge otprema-badge--warning">Raniji otkup</span>`
+        ? `<span class="otprema-badge otprema-badge--warning">Raniji</span>`
         : '';
 
+    const timeOrDate = formatOtpremaTime(row) || row.datum || '';
+    const prod = (row.vrstaVoca || '-') + (row.sortaVoca ? ' ' + row.sortaVoca : '');
+
     return `
-        <label class="otprema-check-card">
-            <div class="otprema-check-col">
-                <input class="otprema-check" type="checkbox" data-record-key="${escapeHtml(key)}" ${checked}>
-            </div>
+        <label class="otprema-check-card" data-record-key="${escapeHtml(key)}">
+            <span class="otprema-check-col">
+                <input class="otprema-check" type="checkbox"
+                       data-record-key="${escapeHtml(key)}" ${checked}>
+            </span>
 
             <div class="otprema-check-body">
                 <div class="otprema-card-top">
                     <div class="otprema-card-koop">${escapeHtml(row.kooperantName || '-')}</div>
-                    <div class="otprema-card-date">${escapeHtml(row.datum || '-')}</div>
+                    <div class="otprema-card-date">${escapeHtml(timeOrDate)}</div>
                 </div>
 
                 <div class="otprema-card-main">
                     <div class="otprema-card-line">
-                        ${escapeHtml(row.vrstaVoca || '-')}
-                        ${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
-                        <span class="otprema-card-class">Kl. ${escapeHtml(row.klasa || 'I')}</span>
+                        ${escapeHtml(prod)}
+                        <span class="otprema-card-class">Klasa ${escapeHtml(row.klasa || 'I')}</span>
+                    </div>
+
+                    <div class="otprema-card-line otprema-card-line--kg">
+                        ${escapeHtml(formatOtpremaKg(row.kolicina))}
                     </div>
 
                     <div class="otprema-card-line otprema-card-line--muted">
-                        ${escapeHtml(formatOtpremaKg(row.kolicina))} • ${escapeHtml(formatOtpremaAmbalaza(row))}
+                        ${escapeHtml(formatOtpremaAmbalaza(row))}
                     </div>
 
                     ${note}
                 </div>
 
-                <div class="otprema-card-bottom">
-                    <div class="otprema-card-badges">${warning}</div>
-                </div>
+                ${warning ? `<div class="otprema-card-bottom"><div class="otprema-card-badges">${warning}</div></div>` : ''}
             </div>
         </label>
     `;
 }
-
 function selectAllOtpremaToday() {
     const todayRows = otpremaState.rows.filter(r => !r.vozacID && r.datum === getTodayIsoDate());
     otpremaState.selectedKeys = new Set(todayRows.map(getOtpremaRecordKey));
@@ -850,4 +854,14 @@ function getSelectedOtpremaRows() {
         otpremaState.selectedKeys.has(getOtpremaRecordKey(r)) &&
         !r.vozacID
     );
+}
+
+function formatOtpremaTime(row) {
+    const iso = row.timestampLokalno || row.createdAt || row.timestamp;
+    if (!iso) return '';
+    try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return ''; }
 }
