@@ -27,6 +27,7 @@ window.CONFIG = {
     USER_ROLE: SESSION_ROLE,
     ENTITY_ID: SESSION_ENTITY_ID,
     ENTITY_NAME: getLs('entityName', ''),
+    USERNAME: getLs('username', ''),
     TOKEN: getLs('authToken', ''),
     DB_NAME: 'OtkupAppDB',
     DB_VERSION: 6,
