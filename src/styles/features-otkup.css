@@ -1442,6 +1442,144 @@
   cursor: crosshair;
 }
 
+/* Gold accent reč u app-hd naslovu — bez italic, čisti Cormorant */
+.app-hd__title-accent {
+    color: var(--gold, #C8A84B);
+    font-weight: 600;
+}
+
+/* === HARD-RESET layout starih klasa, da se ne razvuče na single-word stack === */
+
+.otprema-check-card {
+    display: block !important;
+    position: relative;
+    background: var(--card, #fff);
+    border: 2px solid transparent;
+    border-radius: var(--r-md, 12px);
+    padding: 14px 14px 14px 50px;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.otprema-check-card:has(.otprema-check:checked) {
+    background: var(--accent-soft, #E8F0DC);
+    border-color: var(--accent, #5EA135);
+}
+
+.otprema-check-col {
+    position: absolute;
+    top: 18px;
+    left: 16px;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    display: block;
+}
+
+.otprema-check {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent, #5EA135);
+    margin: 0;
+    cursor: pointer;
+}
+
+.otprema-check-body {
+    display: block !important;
+    width: 100%;
+}
+
+/* TOP red: kooperant levo, datum desno, u JEDNOM redu */
+.otprema-card,
+.otprema-check-body {
+    /* enforce */
+}
+
+.otprema-card-top {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: nowrap;
+}
+
+.otprema-card-koop {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+    color: var(--forest, #1E2D14);
+    font-size: 15px;
+}
+
+.otprema-card-date {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-muted, #666);
+}
+
+/* MAIN: linije moraju biti pravi blokovi */
+.otprema-card-main {
+    display: block !important;
+}
+
+.otprema-card-line {
+    display: block !important;
+    white-space: normal;
+    word-break: normal;
+    margin: 2px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--forest, #1E2D14);
+}
+
+.otprema-card-line--kg {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--accent, #5EA135);
+    line-height: 1.1;
+    margin: 4px 0 2px;
+}
+
+.otprema-card-line--muted {
+    color: var(--text-muted, #666);
+    font-size: 13px;
+}
+
+/* Klasa badge: inline pill, ne block */
+.otprema-card-class {
+    display: inline-block !important;
+    vertical-align: middle;
+    background: var(--cream, #F7F4EE);
+    color: var(--forest, #1E2D14);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.otprema-card-bottom {
+    display: block;
+    margin-top: 8px;
+}
+
+.otprema-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 .otprema-detail-modal {
   position: fixed;
   inset: 0;
