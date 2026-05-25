@@ -1,4 +1,16 @@
 /* ============================================================
+   EDGE-TO-EDGE app-hd za tabove sa novim layout-om
+   .app-body već ima vlastiti padding pa nije potreban tab-content padding.
+   ============================================================ */
+
+.tab-content#tab-otkup,
+.tab-content#tab-pregled,
+.tab-content#tab-otpremnice,
+.tab-content#tab-queue {
+    padding: 0;
+}
+
+/* ============================================================
    OTKUP TAB — FAZA 3 OVERRIDES + UTILITY
    Sve form structure klase su sada u components-v2.css.
    Ovde samo otkup-specifične override / utility koje JS koristi.
