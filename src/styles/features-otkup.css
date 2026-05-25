@@ -414,6 +414,25 @@
   }
 }
 
+/* Date inputs u Pregled tabu — koristi minmax za grid overflow */
+#tab-pregled .field__row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+#tab-pregled .field__input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 10px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+/* Sakrij default browser styling kalendar ikone na iOS / Chrome ako pravi probleme */
+#tab-pregled .field__input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.5;
+    cursor: pointer;
+}
+
 /* ============================================================
    OTPREMA — FAZA 4 (post-app-hd migration)
    ============================================================
