@@ -390,146 +390,165 @@
     </div>
 </div>
 
-<!-- ==================== Otprema TAB ==================== -->
+<!-- ==================== Otpremnica TAB ==================== -->
 <div class="tab-content" id="tab-otpremnice">
 
     <!-- ROOT VIEW -->
-    <div id="otpremaRootView">
-        <div class="app-hd">
-            <div class="app-hd__row">
-                <div class="app-hd__role">Operativna dodela</div>
+    <div class="otp-shell" id="otpremaRootView">
+        <header class="app-hd">
+            <div class="app-hd__eyebrow">OTPREMA · OBLAČINA</div>
+            <h1 class="app-hd__title">Otprema</h1>
+            <div class="app-hd__sub">Skenirajte vozača da pokrenete utovar</div>
+        </header>
+
+        <section class="otp-body">
+            <div class="otp-hero-card">
+                <div class="otp-hero-icon">
+                    <span data-ag-icon="truck" data-ag-icon-size="28px"></span>
+                </div>
+                <div class="otp-hero-title">Vozač pokazuje QR</div>
+                <div class="otp-hero-desc">
+                    Skenirajte QR kod sa vozačevog telefona. Sistem prepoznaje
+                    kamion, kapacitet i preuzima sve blokove koji čekaju.
+                </div>
             </div>
-            <div class="app-hd__title"><em>Otprema</em></div>
-            <div class="app-hd__sub">Dodela otkupa vozaču i pregled današnjih isporuka</div>
-        </div>
 
-        <div class="app-body">
-            <!-- CTA card -->
-            <div class="card" style="margin-bottom: 14px;">
-                <button class="scan-cta" type="button" data-action="start-otprema-vozac-qr-scan">
-                    <div class="scan-cta__icon">
-                        <span data-ag-icon="qr"></span>
-                    </div>
-                    <div class="scan-cta__text">
-                        <div class="scan-cta__title">Skeniraj QR vozača</div>
-                        <div class="scan-cta__sub">Dodeli otkupe direktno</div>
-                    </div>
-                    <div class="scan-cta__chev">→</div>
+            <div class="otp-cta-stack">
+                <button class="btn-v2 btn-v2--primary otp-cta-primary"
+                        type="button"
+                        data-action="start-otprema-vozac-qr-scan">
+                    <span data-ag-icon="qr-code"></span>
+                    Skeniraj QR vozača
                 </button>
 
-                <button class="otprema-link-btn" type="button" data-action="toggle-otprema-fallback" style="margin-top: 12px;">
-                    Ne mogu da skeniram
+                <button class="btn-v2 btn-v2--ghost"
+                        type="button"
+                        data-action="toggle-otprema-fallback">
+                    Izaberi vozača ručno
                 </button>
 
-                <div class="otprema-fallback-panel" id="otpremaFallbackPanel" style="display:none;">
-                    <div class="field" style="margin-top: 8px;">
-                        <label for="fldOtpremaFallbackVozac" class="field__label">Vozač</label>
-                        <select id="fldOtpremaFallbackVozac" class="field__select">
+                <div class="otp-fallback-panel" id="otpremaFallbackPanel" style="display:none;">
+                    <div class="form-group">
+                        <label for="fldOtpremaFallbackVozac">Vozač</label>
+                        <select id="fldOtpremaFallbackVozac">
                             <option value="">-- Izaberi vozača --</option>
                         </select>
                     </div>
-                    <button class="btn-v2 btn-v2--secondary" type="button" data-action="apply-otprema-fallback-driver" style="width: 100%; margin-top: 8px;">Potvrdi vozača</button>
+                    <button class="btn-v2 btn-v2--primary"
+                            type="button"
+                            data-action="apply-otprema-fallback-driver">
+                        Potvrdi vozača
+                    </button>
                 </div>
 
-                <div id="qr-reader-otprema-vozac" class="otprema-qr-reader" style="display:none;"></div>
+                <div id="qr-reader-otprema-vozac" class="otp-qr-reader" style="display:none;"></div>
             </div>
 
-            <!-- Summary stats (3 cards) -->
-            <div class="otprema-summary-grid" id="otpremaSummaryGrid">
-                <div class="otprema-summary-card">
-                    <div class="otprema-summary-value" id="otpremaTodayUnassignedCount">0</div>
-                    <div class="otprema-summary-label">Današnji bez vozača</div>
-                    <div class="otprema-summary-sub" id="otpremaTodayUnassignedKg">0 kg</div>
+            <div class="otp-section-head">
+                <h2 class="otp-section-title">Blokovi koji čekaju</h2>
+                <span class="otp-section-count" id="otpPendingCount">0</span>
+            </div>
+
+            <div class="otp-pending-card">
+                <div class="otp-pending-row">
+                    <span class="otp-pending-label">Ukupno čeka utovar</span>
                 </div>
-                <div class="otprema-summary-card">
-                    <div class="otprema-summary-value" id="otpremaOlderUnassignedCount">0</div>
-                    <div class="otprema-summary-label">Raniji bez vozača</div>
-                    <div class="otprema-summary-sub" id="otpremaOlderUnassignedKg">0 kg</div>
-                </div>
-                <div class="otprema-summary-card">
-                    <div class="otprema-summary-value" id="otpremaTodayAssignedCount">0</div>
-                    <div class="otprema-summary-label">Danas otpremljeno</div>
-                    <div class="otprema-summary-sub" id="otpremaTodayAssignedKg">0 kg</div>
+                <div class="otp-pending-stats">
+                    <div class="otp-pending-stat">
+                        <div class="otp-pending-stat-value" id="otpPendingKooperants">0</div>
+                        <div class="otp-pending-stat-label">kooperanata</div>
+                    </div>
+                    <div class="otp-pending-stat">
+                        <div class="otp-pending-stat-value" id="otpPendingBlocks">0</div>
+                        <div class="otp-pending-stat-label">otkupnih blokova</div>
+                    </div>
+                    <div class="otp-pending-stat">
+                        <div class="otp-pending-stat-value otp-pending-stat-value--kg" id="otpPendingKg">0</div>
+                        <div class="otp-pending-stat-label">kg ukupno</div>
+                    </div>
                 </div>
             </div>
 
             <div class="otprema-sections" id="otpremaRootSections"></div>
-        </div>
+        </section>
     </div>
 
     <!-- ASSIGN VIEW -->
-    <div id="otpremaAssignView" style="display:none;">
-        <div class="app-hd">
-            <div class="app-hd__row">
-                <div class="app-hd__role">Dodela vozaču</div>
-                <button class="otprema-icon-btn" type="button" data-action="cancel-otprema-assign" aria-label="Zatvori">
-                    <span data-ag-icon="x"></span>
-                </button>
+    <div class="otp-shell" id="otpremaAssignView" style="display:none;">
+        <header class="app-hd">
+            <div class="app-hd__eyebrow">OTPREMA · OBLAČINA</div>
+            <h1 class="app-hd__title">Vozač <em>prepoznat</em></h1>
+            <div class="app-hd__sub">Izaberite blokove za utovar</div>
+            <button class="app-hd__close" type="button"
+                    data-action="cancel-otprema-assign" aria-label="Zatvori">
+                <span data-ag-icon="x"></span>
+            </button>
+        </header>
+
+        <section class="otp-body">
+            <div class="otp-driver-chip" id="otpremaAssignDriverCard"></div>
+
+            <div class="otp-section-head">
+                <h2 class="otp-section-title">Izaberi blokove</h2>
+                <span class="otp-section-count" id="otpremaAssignCounter">0/0</span>
             </div>
-            <div class="app-hd__title">Izaberi <em>otkupe</em></div>
-        </div>
 
-        <div class="app-body" style="padding-bottom: 110px;">
-            <div class="otprema-driver-card" id="otpremaAssignDriverCard"></div>
-
-            <div class="otprema-toolbar">
-                <button class="btn-v2 btn-v2--secondary" type="button" data-action="select-all-otprema-today">Izaberi sve današnje</button>
-                <button class="btn-v2 btn-v2--secondary" type="button" data-action="clear-otprema-selection">Poništi izbor</button>
-                <button class="otprema-link-btn" type="button" data-action="start-otprema-vozac-qr-scan">Promeni vozača</button>
+            <div class="otp-toolbar">
+                <button class="btn-v2 btn-v2--ghost btn-v2--sm" type="button"
+                        data-action="select-all-otprema-today">Sve današnje</button>
+                <button class="btn-v2 btn-v2--ghost btn-v2--sm" type="button"
+                        data-action="clear-otprema-selection">Poništi</button>
+                <button class="btn-v2 btn-v2--ghost btn-v2--sm" type="button"
+                        data-action="start-otprema-vozac-qr-scan">Promeni vozača</button>
             </div>
 
             <div class="otprema-sections" id="otpremaAssignSections"></div>
-        </div>
+        </section>
 
         <div class="sticky-bar">
-            <div class="otprema-sticky-meta">
-                <div><strong id="otpremaSelectedCount">0</strong> stavki</div>
-                <div><strong id="otpremaSelectedKg">0 kg</strong></div>
-            </div>
-            <button class="btn-v2 btn-v2--primary" type="button" data-action="confirm-otprema-assign">Potvrdi otpremu</button>
+            <button class="btn-v2 btn-v2--ghost" type="button"
+                    data-action="cancel-otprema-assign">Otkaži</button>
+            <button class="btn-v2 btn-v2--primary" type="button"
+                    data-action="confirm-otprema-assign">
+                Utovari · <strong id="otpremaSelectedKg">0 kg</strong>
+            </button>
         </div>
+        <span id="otpremaSelectedCount" hidden>0</span>
     </div>
 
     <!-- SUCCESS VIEW -->
-    <div id="otpremaSuccessView" style="display:none;">
-        <div class="app-hd">
-            <div class="app-hd__row">
-                <div class="app-hd__role">Uspešno</div>
-            </div>
-            <div class="app-hd__title"><em>Otprema potvrđena</em></div>
+    <div class="otp-shell" id="otpremaSuccessView" style="display:none;">
+        <header class="app-hd">
+            <div class="app-hd__eyebrow">OTPREMA · POTVRĐENO</div>
+            <h1 class="app-hd__title">Utovar <em>spreman</em></h1>
             <div class="app-hd__sub" id="otpremaSuccessDriver">-</div>
-        </div>
+        </header>
 
-        <div class="app-body">
-            <div class="card card--success" style="text-align: center; padding: 24px 14px;">
-                <div class="otprema-success-icon" style="margin: 0 auto 12px; display: inline-flex;">
-                    <span data-ag-icon="check" data-ag-icon-size="32px"></span>
+        <section class="otp-body">
+            <div class="otp-success-stats">
+                <div class="otp-success-stat">
+                    <div class="otp-success-stat-value" id="otpremaSuccessCount">0</div>
+                    <div class="otp-success-stat-label">Blokova</div>
                 </div>
-                <div style="font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--forest);">
-                    Otprema je dodeljena vozaču
-                </div>
-            </div>
-
-            <div class="otprema-summary-grid" style="grid-template-columns: 1fr 1fr;">
-                <div class="otprema-summary-card">
-                    <div class="otprema-summary-value" id="otpremaSuccessCount">0</div>
-                    <div class="otprema-summary-label">Dodeljenih stavki</div>
-                </div>
-                <div class="otprema-summary-card">
-                    <div class="otprema-summary-value" id="otpremaSuccessKg">0</div>
-                    <div class="otprema-summary-label">Ukupno kg</div>
+                <div class="otp-success-stat">
+                    <div class="otp-success-stat-value" id="otpremaSuccessKg">0</div>
+                    <div class="otp-success-stat-label">Ukupno kg</div>
                 </div>
             </div>
 
             <div class="otprema-sections" id="otpremaSuccessList"></div>
 
-            <div class="otprema-success-actions">
-                <button class="btn-v2 btn-v2--secondary" type="button" data-action="back-to-otprema-root">Nazad na Otpremu</button>
-                <button class="btn-v2 btn-v2--primary" type="button" data-action="start-otprema-vozac-qr-scan">Nova dodela</button>
+            <div class="otp-success-actions">
+                <button class="btn-v2 btn-v2--ghost" type="button"
+                        data-action="back-to-otprema-root">Nazad</button>
+                <button class="btn-v2 btn-v2--primary" type="button"
+                        data-action="start-otprema-vozac-qr-scan">Nova dodela</button>
             </div>
-        </div>
+        </section>
     </div>
+
 </div>
+    
 <!-- ==================== Vise TAB ==================== -->
 <div class="tab-content" id="tab-queue">
 
