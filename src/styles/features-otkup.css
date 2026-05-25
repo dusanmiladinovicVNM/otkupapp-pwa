@@ -453,126 +453,494 @@
    render funkcije (otpremnice.js) generišu dinamički.
    ============================================================ */
 
-.otprema-link-btn {
-    margin-top: 8px;
-    border: 0;
-    background: none;
-    color: var(--accent);
-    font-weight: 700;
-    cursor: pointer;
-    padding: 0;
-    font-family: inherit;
-    font-size: 13px;
+/* ========== OTPREMA v4.1 — Designer alignment ========== */
+
+.otp-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
 }
 
-.otprema-link-btn:hover { color: var(--forest); }
+.otp-body {
+    padding: 16px;
+    padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+}
 
-.otprema-icon-btn {
-    background: rgba(247,244,238,0.15);
-    border: 1px solid rgba(247,244,238,0.25);
-    color: var(--cream);
-    width: 36px; height: 36px;
+/* HERO CARD — accent-soft blok sa truck ikonom */
+.otp-hero-card {
+    background: var(--accent-soft, #E8F0DC);
+    border-radius: var(--r-lg, 16px);
+    padding: 22px 18px;
+    margin-bottom: 14px;
+    text-align: center;
+    color: var(--forest, #1E2D14);
+}
+
+.otp-hero-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
     border-radius: 50%;
-    display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-.otprema-icon-btn:hover { background: rgba(247,244,238,0.25); }
-
-.otprema-fallback-panel {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border);
+    background: var(--card, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent, #5EA135);
+    box-shadow: 0 2px 6px rgba(30, 45, 20, 0.08);
 }
 
-.otprema-qr-reader {
-    margin-top: 12px;
-    border-radius: var(--radius-md);
+.otp-hero-title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1.15;
+    margin-bottom: 6px;
+}
+
+.otp-hero-desc {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--forest, #1E2D14);
+    opacity: 0.82;
+    max-width: 320px;
+    margin: 0 auto;
+}
+
+/* CTA stack */
+.otp-cta-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.otp-cta-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.otp-fallback-panel {
+    background: var(--card, #fff);
+    border-radius: var(--r-md, 12px);
+    padding: 14px;
+    border: 1px solid var(--border, #d4d4d4);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.otp-qr-reader {
+    border-radius: var(--r-md, 12px);
     overflow: hidden;
 }
 
-/* Stats grid — Cormorant brojevi za premium feel */
-.otprema-summary-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 14px;
+/* Section head + counter */
+.otp-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 4px 0 10px;
 }
 
-.otprema-summary-card {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-card);
-    padding: 16px 14px;
+.otp-section-title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 600;
+    font-size: 22px;
+    color: var(--forest, #1E2D14);
+    margin: 0;
+}
+
+.otp-section-count {
+    background: var(--accent, #5EA135);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    min-width: 32px;
     text-align: center;
 }
 
-.otprema-summary-value {
-    font-family: var(--font-display);
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--forest);
-    line-height: 1;
-    letter-spacing: -0.01em;
+/* Pending summary card */
+.otp-pending-card {
+    background: var(--card, #fff);
+    border-radius: var(--r-lg, 16px);
+    padding: 16px;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    margin-bottom: 18px;
 }
 
-.otprema-summary-label {
-    margin-top: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-secondary);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+.otp-pending-row {
+    margin-bottom: 12px;
 }
 
-.otprema-summary-sub {
-    margin-top: 4px;
+.otp-pending-label {
     font-size: 12px;
-    color: var(--text-muted);
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted, #666);
 }
 
-.otprema-toolbar {
+.otp-pending-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    text-align: center;
+}
+
+.otp-pending-stat-value {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+    font-size: 26px;
+    color: var(--forest, #1E2D14);
+    line-height: 1;
+}
+
+.otp-pending-stat-value--kg {
+    color: var(--accent, #5EA135);
+}
+
+.otp-pending-stat-label {
+    font-size: 11px;
+    color: var(--text-muted, #666);
+    margin-top: 4px;
+}
+
+/* Driver chip (assign view) */
+.otp-driver-chip {
+    background: var(--card, #fff);
+    border-radius: var(--r-lg, 16px);
+    padding: 14px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 14px 0;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
 }
 
-.otprema-toolbar .btn-v2 {
+.otp-driver-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--gold, #C8A84B);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.otp-driver-info {
     flex: 1;
     min-width: 0;
 }
 
-.otprema-sticky-meta {
+.otp-driver-name {
+    font-weight: 700;
+    color: var(--forest, #1E2D14);
+    font-size: 15px;
+    margin-bottom: 2px;
+}
+
+.otp-driver-sub {
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    line-height: 1.4;
+}
+
+/* Toolbar */
+.otp-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+/* Sections wrapper (kept from prior) */
+.otprema-sections {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 0 4px;
-    font-size: 12px;
-    color: var(--text-secondary);
+    gap: 18px;
 }
-.otprema-sticky-meta strong {
-    font-family: var(--font-display);
+
+.otprema-section {
+    background: transparent;
+}
+
+.otprema-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.otprema-section-title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 600;
     font-size: 18px;
-    color: var(--forest);
-    margin-right: 2px;
+    color: var(--forest, #1E2D14);
 }
 
-.otprema-success-icon {
-    width: 60px; height: 60px;
-    border-radius: 50%;
-    background: var(--color-success);
-    color: var(--white);
-    align-items: center; justify-content: center;
+.otprema-section-count {
+    background: var(--accent, #5EA135);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
 }
 
-.otprema-success-actions {
-    display: grid;
-    grid-template-columns: 1fr 1.4fr;
+.otprema-empty {
+    background: var(--card, #fff);
+    border-radius: var(--r-md, 12px);
+    padding: 18px;
+    text-align: center;
+    color: var(--text-muted, #666);
+    font-size: 13px;
+}
+
+.otprema-cards,
+.otprema-check-cards,
+.otprema-groups {
+    display: flex;
+    flex-direction: column;
     gap: 10px;
-    margin-top: 16px;
+}
+
+/* Block card (read-only, root view) */
+.otprema-card {
+    background: var(--card, #fff);
+    border-radius: var(--r-md, 12px);
+    padding: 14px;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    border-left: 4px solid var(--accent, #5EA135);
+}
+
+.otprema-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.otprema-card-koop {
+    font-weight: 700;
+    color: var(--forest, #1E2D14);
+    font-size: 15px;
+}
+
+.otprema-card-date {
+    font-size: 12px;
+    color: var(--text-muted, #666);
+}
+
+.otprema-card-line {
+    font-size: 14px;
+    color: var(--forest, #1E2D14);
+    line-height: 1.5;
+}
+
+.otprema-card-line--muted {
+    color: var(--text-muted, #666);
+    font-size: 13px;
+}
+
+.otprema-card-line--kg {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--accent, #5EA135);
+}
+
+.otprema-card-class {
+    display: inline-block;
+    background: var(--cream, #F7F4EE);
+    color: var(--forest, #1E2D14);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+}
+
+.otprema-card-note {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    font-style: italic;
+}
+
+.otprema-card-bottom {
+    margin-top: 8px;
+}
+
+.otprema-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.otprema-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+}
+
+.otprema-badge--pending {
+    background: rgba(200, 168, 75, 0.18);
+    color: #8a6f1c;
+}
+
+.otprema-badge--success {
+    background: rgba(94, 161, 53, 0.16);
+    color: var(--accent, #5EA135);
+}
+
+.otprema-badge--warning {
+    background: rgba(243, 156, 18, 0.18);
+    color: #8a5a0e;
+}
+
+.otprema-badge--error {
+    background: rgba(192, 57, 43, 0.16);
+    color: #962a1e;
+}
+
+/* Assignable card with checkbox — selected state per Designer */
+.otprema-check-card {
+    position: relative;
+    display: block;
+    background: var(--card, #fff);
+    border-radius: var(--r-md, 12px);
+    padding: 14px 14px 14px 46px;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.otprema-check-card:has(.otprema-check:checked) {
+    background: var(--accent-soft, #E8F0DC);
+    border-color: var(--accent, #5EA135);
+}
+
+.otprema-check-col {
+    position: absolute;
+    top: 16px;
+    left: 14px;
+}
+
+.otprema-check {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent, #5EA135);
+    cursor: pointer;
+}
+
+.otprema-check-body {
+    /* uses .otprema-card-* inside */
+}
+
+/* Driver groups (Danas otpremljeno) */
+.otprema-driver-group {
+    background: var(--card, #fff);
+    border-radius: var(--r-md, 12px);
+    padding: 12px;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+}
+
+.otprema-driver-group-head {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border, #d4d4d4);
+}
+
+.otprema-driver-group-name {
+    font-weight: 700;
+    color: var(--forest, #1E2D14);
+}
+
+.otprema-driver-group-sub {
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    margin-top: 2px;
+}
+
+/* App header close button (X) */
+.app-hd__close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 0;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.app-hd__close:active {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Success view */
+.otp-success-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.otp-success-stat {
+    background: var(--card, #fff);
+    border-radius: var(--r-lg, 16px);
+    padding: 18px;
+    text-align: center;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+}
+
+.otp-success-stat-value {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+    font-size: 32px;
+    color: var(--accent, #5EA135);
+    line-height: 1;
+}
+
+.otp-success-stat-label {
+    font-size: 12px;
+    color: var(--text-muted, #666);
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.otp-success-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+@media (max-width: 480px) {
+    .otp-pending-stats {
+        gap: 6px;
+    }
+    .otp-pending-stat-value {
+        font-size: 22px;
+    }
 }
 
 .otprema-sections {
