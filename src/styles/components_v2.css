@@ -63,6 +63,18 @@
     position: relative;
 }
 
+/* eyebrow varijanta — koristi se kada eyebrow stoji bez .app-hd__row */
+.app-hd__eyebrow {
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 8px;
+    position: relative;
+}
+
 .app-body {
     background: var(--cream);
     padding: 16px 14px 100px;
