@@ -1044,3 +1044,395 @@ Public Sub Test_SaldoIntegrityOnSamplePDF()
                 " Potrazuje=" & parsed(1, 17)
 End Sub
 
+' ============================================================
+' BANKA DRIVE -> LOCAL INBOX PRODUCTION PULL
+'
+' Purpose:
+' - Pull bank statement PDFs from Google Drive for Desktop folder
+'   into local C:\AgriX\Bank\Inbox.
+' - Move Drive original to Drive\Downloaded only after local copy
+'   is verified.
+' - Then existing ImportBankaInbox_TX can parse/stage/move local PDFs.
+'
+' Required config:
+'   BANKA_DRIVE_SOURCE_PATH
+'   BANKA_DRIVE_DOWNLOADED_PATH          optional
+'   BANKA_DRIVE_MAX_FILES                optional, default 50
+'   BANKA_DRIVE_MIN_FILE_AGE_SECONDS     optional, default 15
+'
+' Existing config reused:
+'   BANKA_INBOX_PATH
+'   BANKA_PROCESSED_PATH
+'   BANKA_ERROR_PATH
+' ============================================================
+
+Public Sub PullBankPdfsFromDriveProductionThenImport_TX()
+    Const SRC As String = "PullBankPdfsFromDriveProductionThenImport_TX"
+
+    On Error GoTo EH
+
+    Dim pulledCount As Long
+
+    pulledCount = PullBankPdfsFromDriveProduction()
+
+    Debug.Print SRC & ": pulled from Drive=" & CStr(pulledCount)
+
+    ImportBankaInbox_TX
+
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+    Err.Raise Err.Number, SRC, Err.Description
+End Sub
+
+Public Function PullBankPdfsFromDriveProduction() As Long
+    Const SRC As String = "PullBankPdfsFromDriveProduction"
+
+    On Error GoTo EH
+
+    Dim driveSourcePath As String
+    Dim driveDownloadedPath As String
+    Dim localInboxPath As String
+    Dim maxFiles As Long
+    Dim minAgeSeconds As Long
+
+    Dim files As Collection
+    Dim item As Variant
+    Dim pulledCount As Long
+    Dim skippedCount As Long
+
+    driveSourcePath = BankaCfg("BANKA_DRIVE_SOURCE_PATH", "")
+    driveDownloadedPath = BankaCfg("BANKA_DRIVE_DOWNLOADED_PATH", "")
+    localInboxPath = GetBankaInboxPath()
+
+    maxFiles = CLng(Val(BankaCfg("BANKA_DRIVE_MAX_FILES", "50")))
+    If maxFiles <= 0 Then maxFiles = 50
+
+    minAgeSeconds = CLng(Val(BankaCfg("BANKA_DRIVE_MIN_FILE_AGE_SECONDS", "15")))
+    If minAgeSeconds < 0 Then minAgeSeconds = 15
+
+    driveSourcePath = BankaNormalizeFolderPath(driveSourcePath)
+    localInboxPath = BankaNormalizeFolderPath(localInboxPath)
+
+    If Len(driveSourcePath) = 0 Then
+        Err.Raise vbObjectError + 9501, SRC, "BANKA_DRIVE_SOURCE_PATH nije podešen."
+    End If
+
+    If Len(localInboxPath) = 0 Then
+        Err.Raise vbObjectError + 9502, SRC, "BANKA_INBOX_PATH nije podešen."
+    End If
+
+    If Len(Trim$(driveDownloadedPath)) = 0 Then
+        driveDownloadedPath = BankaParentFolderPath(driveSourcePath) & "\Downloaded"
+    End If
+    driveDownloadedPath = BankaNormalizeFolderPath(driveDownloadedPath)
+
+    If StrComp(driveSourcePath, localInboxPath, vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 9503, SRC, _
+            "Drive source i lokalni inbox ne smeju biti isti folder: " & driveSourcePath
+    End If
+
+    If Dir$(driveSourcePath, vbDirectory) = "" Then
+        Err.Raise vbObjectError + 9504, SRC, _
+            "Drive source folder ne postoji ili nije dostupan: " & driveSourcePath
+    End If
+
+    BankaEnsureFolderExistsRecursive localInboxPath
+    BankaEnsureFolderExistsRecursive driveDownloadedPath
+
+    Set files = BankaCollectPdfFiles(driveSourcePath)
+
+    For Each item In files
+        If pulledCount >= maxFiles Then Exit For
+
+        If BankaIsFileReadyForPull(CStr(item), minAgeSeconds) Then
+            BankaPullOnePdfFromDrive _
+                CStr(item), _
+                localInboxPath, _
+                driveDownloadedPath
+
+            pulledCount = pulledCount + 1
+        Else
+            skippedCount = skippedCount + 1
+            Debug.Print SRC & ": skip not-ready file: " & CStr(item)
+        End If
+    Next item
+
+    Debug.Print SRC & ": completed. Pulled=" & CStr(pulledCount) & _
+                " SkippedNotReady=" & CStr(skippedCount) & _
+                " Source=" & driveSourcePath & _
+                " LocalInbox=" & localInboxPath & _
+                " DriveDownloaded=" & driveDownloadedPath
+
+    PullBankPdfsFromDriveProduction = pulledCount
+    Exit Function
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+    Err.Raise Err.Number, SRC, Err.Description
+End Function
+
+Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _
+                                     ByVal localInboxPath As String, _
+                                     ByVal driveDownloadedPath As String)
+    Const SRC As String = "BankaPullOnePdfFromDrive"
+
+    On Error GoTo EH
+
+    Dim fileName As String
+    Dim localFinalPath As String
+    Dim localTempPath As String
+    Dim driveDownloadedTargetPath As String
+    Dim sourceSize As Long
+    Dim copiedSize As Long
+    Dim movedOk As Boolean
+
+    sourcePdfPath = Trim$(sourcePdfPath)
+    localInboxPath = BankaNormalizeFolderPath(localInboxPath)
+    driveDownloadedPath = BankaNormalizeFolderPath(driveDownloadedPath)
+
+    If Len(sourcePdfPath) = 0 Then
+        Err.Raise vbObjectError + 9510, SRC, "sourcePdfPath je prazan."
+    End If
+
+    If Dir$(sourcePdfPath) = "" Then
+        Err.Raise vbObjectError + 9511, SRC, "PDF ne postoji: " & sourcePdfPath
+    End If
+
+    fileName = BankaSafeFileName(BankaFileNameFromPath(sourcePdfPath))
+
+    If LCase$(Right$(fileName, 4)) <> ".pdf" Then
+        Err.Raise vbObjectError + 9512, SRC, "Fajl nije PDF: " & fileName
+    End If
+
+    sourceSize = FileLen(sourcePdfPath)
+    If sourceSize <= 0 Then
+        Err.Raise vbObjectError + 9513, SRC, "PDF je prazan: " & sourcePdfPath
+    End If
+
+    localFinalPath = GetUniqueTargetPath(localInboxPath & "\" & fileName)
+    localTempPath = localFinalPath & ".part"
+    driveDownloadedTargetPath = GetUniqueTargetPath(driveDownloadedPath & "\" & fileName)
+
+    If Dir$(localTempPath) <> "" Then
+        Kill localTempPath
+    End If
+
+    ' 1) Copy to temp first, so BankaImport never sees partial file.
+    FileCopy sourcePdfPath, localTempPath
+
+    If Dir$(localTempPath) = "" Then
+        Err.Raise vbObjectError + 9514, SRC, "Temp lokalni PDF nije kreiran: " & localTempPath
+    End If
+
+    copiedSize = FileLen(localTempPath)
+    If copiedSize <> sourceSize Then
+        Err.Raise vbObjectError + 9515, SRC, _
+            "Kopirani PDF nema istu veličinu. Source=" & CStr(sourceSize) & _
+            " Local=" & CStr(copiedSize) & _
+            " File=" & fileName
+    End If
+
+    ' 2) Rename temp to final local inbox name.
+    Name localTempPath As localFinalPath
+
+    If Dir$(localFinalPath) = "" Then
+        Err.Raise vbObjectError + 9516, SRC, "Final lokalni PDF nije kreiran: " & localFinalPath
+    End If
+
+    ' 3) Only after verified local copy, move Drive original to Downloaded.
+    MoveFileSafe sourcePdfPath, driveDownloadedTargetPath
+    movedOk = True
+
+    Debug.Print SRC & ": pulled. Source=" & sourcePdfPath & _
+                " Local=" & localFinalPath & _
+                " DriveDownloaded=" & driveDownloadedTargetPath
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.Description
+    errSrc = Err.Source
+
+    ' If Drive move failed after local copy was created, remove local copy.
+    ' This prevents same Drive file from being pulled/imported twice on next run.
+    On Error Resume Next
+    If Not movedOk Then
+        If Len(localTempPath) > 0 And Dir$(localTempPath) <> "" Then Kill localTempPath
+        If Len(localFinalPath) > 0 And Dir$(localFinalPath) <> "" Then Kill localFinalPath
+    End If
+
+    LogErr SRC
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Sub
+
+Private Function BankaCollectPdfFiles(ByVal folderPath As String) As Collection
+    Const SRC As String = "BankaCollectPdfFiles"
+
+    On Error GoTo EH
+
+    Dim result As Collection
+    Dim f As String
+
+    Set result = New Collection
+    folderPath = BankaNormalizeFolderPath(folderPath)
+
+    f = Dir$(folderPath & "\*.pdf")
+    Do While Len(f) > 0
+        result.Add folderPath & "\" & f
+        f = Dir$
+    Loop
+
+    Set BankaCollectPdfFiles = result
+    Exit Function
+
+EH:
+    Err.Raise Err.Number, SRC, Err.Description
+End Function
+
+Private Function BankaIsFileReadyForPull(ByVal filePath As String, _
+                                         ByVal minAgeSeconds As Long) As Boolean
+    Const SRC As String = "BankaIsFileReadyForPull"
+
+    On Error GoTo NotReady
+
+    Dim dt As Date
+    Dim ageSeconds As Long
+    Dim s1 As Long
+    Dim s2 As Long
+
+    If Dir$(filePath) = "" Then GoTo NotReady
+
+    dt = FileDateTime(filePath)
+    ageSeconds = DateDiff("s", dt, Now)
+
+    If ageSeconds < minAgeSeconds Then GoTo NotReady
+
+    s1 = FileLen(filePath)
+    If s1 <= 0 Then GoTo NotReady
+
+    ' Lightweight stability check. Avoids grabbing a file while Drive is still writing.
+    DoEvents
+    s2 = FileLen(filePath)
+
+    If s1 <> s2 Then GoTo NotReady
+
+    BankaIsFileReadyForPull = True
+    Exit Function
+
+NotReady:
+    BankaIsFileReadyForPull = False
+End Function
+
+Private Function BankaCfg(ByVal key As String, ByVal defaultValue As String) As String
+    BankaCfg = Trim$(CStr(GetLocalConfigValue(key, defaultValue)))
+End Function
+
+Private Function BankaNormalizeFolderPath(ByVal folderPath As String) As String
+    folderPath = Trim$(folderPath)
+
+    Do While Len(folderPath) > 1 And Right$(folderPath, 1) = "\"
+        folderPath = Left$(folderPath, Len(folderPath) - 1)
+    Loop
+
+    BankaNormalizeFolderPath = folderPath
+End Function
+
+Private Function BankaParentFolderPath(ByVal folderPath As String) As String
+    Dim p As Long
+
+    folderPath = BankaNormalizeFolderPath(folderPath)
+    p = InStrRev(folderPath, "\")
+
+    If p <= 0 Then
+        BankaParentFolderPath = folderPath
+    Else
+        BankaParentFolderPath = Left$(folderPath, p - 1)
+    End If
+End Function
+
+Private Function BankaFileNameFromPath(ByVal filePath As String) As String
+    Dim p As Long
+
+    p = InStrRev(filePath, "\")
+    If p > 0 Then
+        BankaFileNameFromPath = Mid$(filePath, p + 1)
+    Else
+        BankaFileNameFromPath = filePath
+    End If
+End Function
+
+Private Function BankaSafeFileName(ByVal fileName As String) As String
+    Dim badChars As Variant
+    Dim i As Long
+
+    fileName = Trim$(fileName)
+    If Len(fileName) = 0 Then fileName = "bank.pdf"
+
+    badChars = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+
+    For i = LBound(badChars) To UBound(badChars)
+        fileName = Replace(fileName, CStr(badChars(i)), "_")
+    Next i
+
+    If Len(fileName) > 180 Then
+        fileName = Left$(fileName, 180)
+    End If
+
+    BankaSafeFileName = fileName
+End Function
+
+Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
+    Const SRC As String = "BankaEnsureFolderExistsRecursive"
+
+    On Error GoTo EH
+
+    Dim parts() As String
+    Dim currentPath As String
+    Dim i As Long
+
+    folderPath = BankaNormalizeFolderPath(folderPath)
+
+    If Len(folderPath) = 0 Then Exit Sub
+    If Dir$(folderPath, vbDirectory) <> "" Then Exit Sub
+
+    parts = Split(folderPath, "\")
+
+    If UBound(parts) < 0 Then Exit Sub
+
+    currentPath = parts(0)
+
+    ' Handles drive root like C:
+    If Right$(currentPath, 1) = ":" Then
+        currentPath = currentPath & "\"
+    End If
+
+    For i = 1 To UBound(parts)
+        If Len(parts(i)) > 0 Then
+            If Right$(currentPath, 1) <> "\" Then currentPath = currentPath & "\"
+            currentPath = currentPath & parts(i)
+
+            If Dir$(currentPath, vbDirectory) = "" Then
+                MkDir currentPath
+            End If
+        End If
+    Next i
+
+    Exit Sub
+
+EH:
+    Err.Raise Err.Number, SRC, _
+        "Folder ne može da se napravi: " & folderPath & " | " & Err.Description
+End Sub
