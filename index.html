@@ -532,99 +532,105 @@
 </div>
 <!-- ==================== Vise TAB ==================== -->
 <div class="tab-content" id="tab-queue">
-    <section class="otk-more-screen">
-        <div class="otk-more-shell">
 
-            <div class="otk-more-hero">
-                <div class="otk-more-eyebrow">Podešavanja i status</div>
-                <h1 class="otk-more-title">Više</h1>
-                <div class="otk-more-subline">Potpis Otkupca, sync status i pomoćne radnje</div>
-            </div>
-
-            <div class="otk-more-grid">
-                <section class="otk-more-card">
-                    <div class="otk-more-card-head">
-                        <div>
-                            <div class="otk-more-card-title">Moj profil</div>
-                            <div class="otk-more-card-sub">Aktivna stanica i korisnik</div>
-                        </div>
-                    </div>
-
-                    <div class="otk-more-profile">
-                        <div class="otk-more-profile-name" id="otkMoreProfileName">-</div>
-                        <div class="otk-more-profile-meta" id="otkMoreProfileRole">-</div>
-                        <div class="otk-more-profile-meta" id="otkMoreProfileEntity">-</div>
-                    </div>
-
-                    <div class="otk-more-actions">
-                        <button type="button" class="btn-secondary" data-action="show-qr-profile">Prikaži moj QR</button>
-                        <button type="button" class="btn-primary" data-action="sync-otkupac-now">Sinhronizuj sada</button>
-                    </div>
-                </section>
-
-                <section class="otk-more-card">
-                    <div class="otk-more-card-head">
-                        <div>
-                            <div class="otk-more-card-title">Potpis Otkupca</div>
-                            <div class="otk-more-card-sub">Ovaj potpis se koristi u PDF otkupnog lista</div>
-                        </div>
-                        <span class="otk-more-badge" id="otkMoreSignatureBadge">Nije unet</span>
-                    </div>
-
-                    <div class="otk-more-signature-wrap">
-                        <canvas id="otkupacSignatureCanvas" class="otk-more-signature-canvas"></canvas>
-                    </div>
-
-                    <div class="otk-more-signature-help">
-                        U otkupnom listu ostaje samo polje za potpis kooperanta. Potpis Otkupca se povlači odavde.
-                    </div>
-
-                    <div class="otk-more-actions">
-                        <button type="button" class="btn-secondary" data-action="clear-otkupac-signature">Obriši</button>
-                        <button type="button" class="btn-primary" data-action="save-otkupac-signature">Sačuvaj potpis</button>
-                    </div>
-                    <div class="queue-device-row">
-                          <span>🎙️ Interkom</span>
-                          <span id="intercom-permission-status"></span>
-                          <button id="btn-intercom-permission"
-                              class="btn-sm"
-                              data-action="intercom-request-permission"
-                              style="display:none">
-                                Dozvoli mikrofon
-                          </button>
-                    </div>
-                </section>
-            </div>
-
-            <section class="otk-more-card">
-                <div class="otk-more-card-head">
-                    <div>
-                        <div class="otk-more-card-title">Sync status</div>
-                        <div class="otk-more-card-sub">Pregled lokalnih stavki koje čekaju sinhronizaciju</div>
-                    </div>
-                </div>
-
-                <div class="otk-more-stats">
-                    <div class="otk-more-stat">
-                        <div class="otk-more-stat-value" id="otkMorePendingCount">0</div>
-                        <div class="otk-more-stat-label">Na čekanju</div>
-                    </div>
-                    <div class="otk-more-stat">
-                        <div class="otk-more-stat-value" id="otkMoreErrorCount">0</div>
-                        <div class="otk-more-stat-label">Greške</div>
-                    </div>
-                    <div class="otk-more-stat">
-                        <div class="otk-more-stat-value" id="otkMoreSyncedCount">0</div>
-                        <div class="otk-more-stat-label">Sinhronizovano</div>
-                    </div>
-                </div>
-
-                <div class="otk-more-last-sync" id="otkMoreLastSync">Poslednja sinhronizacija: —</div>
-                <div class="otk-more-queue-list" id="otkMoreQueueList"></div>
-            </section>
-
+    <!-- Forest app header -->
+    <div class="app-hd">
+        <div class="app-hd__row">
+            <div class="app-hd__role">Otkupac · Podešavanja</div>
         </div>
-    </section>
+        <div class="app-hd__title">Vi<em>š</em>e</div>
+        <div class="app-hd__sub">Potpis, sync status i pomoćne radnje</div>
+    </div>
+
+    <div class="app-body">
+
+        <!-- Moj profil card -->
+        <div class="card" style="margin-bottom: 14px;">
+            <div class="step__head" style="margin-bottom: 12px;">
+                <div class="step__num is-done">✓</div>
+                <div class="step__title">Moj profil</div>
+            </div>
+
+            <div class="otk-more-profile">
+                <div class="otk-more-profile-name" id="otkMoreProfileName">-</div>
+                <div class="otk-more-profile-meta" id="otkMoreProfileRole">-</div>
+                <div class="otk-more-profile-meta" id="otkMoreProfileEntity">-</div>
+            </div>
+
+            <div class="otk-more-actions" style="margin-top: 14px;">
+                <button type="button" class="btn-v2 btn-v2--secondary" data-action="show-qr-profile">Prikaži moj QR</button>
+                <button type="button" class="btn-v2 btn-v2--primary" data-action="sync-otkupac-now">Sinhronizuj sada</button>
+            </div>
+        </div>
+
+        <!-- Potpis Otkupca card -->
+        <div class="card" style="margin-bottom: 14px;">
+            <div class="step__head" style="margin-bottom: 4px;">
+                <div class="step__num">2</div>
+                <div class="step__title">Potpis Otkupca</div>
+                <div class="step__hint" id="otkMoreSignatureBadge">Nije unet</div>
+            </div>
+            <div class="field__hint" style="margin-bottom: 12px;">
+                Ovaj potpis se koristi u PDF otkupnog lista.
+            </div>
+
+            <div class="ol-signature__canvas-wrap">
+                <canvas id="otkupacSignatureCanvas" class="ol-signature__canvas"></canvas>
+            </div>
+
+            <div class="field__hint" style="margin-top: 8px;">
+                U otkupnom listu ostaje samo polje za potpis kooperanta. Potpis Otkupca se povlači odavde.
+            </div>
+
+            <div class="otk-more-actions" style="margin-top: 14px;">
+                <button type="button" class="btn-v2 btn-v2--secondary" data-action="clear-otkupac-signature">Obriši</button>
+                <button type="button" class="btn-v2 btn-v2--primary" data-action="save-otkupac-signature">Sačuvaj potpis</button>
+            </div>
+
+            <!-- Intercom dozvola -->
+            <div class="queue-device-row" style="margin-top: 14px;">
+                <span style="font-size: 13px; color: var(--text-secondary);">🎙️ Interkom</span>
+                <span id="intercom-permission-status" style="margin-left: auto; font-size: 12px; color: var(--text-muted);"></span>
+                <button id="btn-intercom-permission" class="btn-v2 btn-v2--secondary"
+                        data-action="intercom-request-permission" style="display:none; padding: 8px 14px; font-size: 12px;">
+                    Dozvoli mikrofon
+                </button>
+            </div>
+        </div>
+
+        <!-- Sync status card -->
+        <div class="card">
+            <div class="step__head" style="margin-bottom: 12px;">
+                <div class="step__num">3</div>
+                <div class="step__title">Sync status</div>
+            </div>
+
+            <!-- Stat grid 3-kolone -->
+            <div class="otprema-summary-grid">
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otkMorePendingCount">0</div>
+                    <div class="otprema-summary-label">Na čekanju</div>
+                </div>
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otkMoreErrorCount">0</div>
+                    <div class="otprema-summary-label">Greške</div>
+                </div>
+                <div class="otprema-summary-card">
+                    <div class="otprema-summary-value" id="otkMoreSyncedCount">0</div>
+                    <div class="otprema-summary-label">Sinhron.</div>
+                </div>
+            </div>
+
+            <div class="field__hint" id="otkMoreLastSync" style="margin-top: 12px;">
+                Poslednja sinhronizacija: —
+            </div>
+
+            <div class="otk-more-queue-list" id="otkMoreQueueList" style="margin-top: 14px;"></div>
+        </div>
+
+    </div>
+
+    <!-- Otprema detail modal (ostaje netaknut) -->
     <div class="otprema-detail-modal" id="otpremaDetailModal">
         <div class="otprema-detail-card">
             <div class="otprema-detail-head">
@@ -633,11 +639,9 @@
                     <span data-ag-icon="x"></span>
                 </button>
             </div>
-
             <div class="otprema-detail-body" id="otpremaDetailBody"></div>
-
             <div class="otprema-detail-actions">
-                <button type="button" class="btn-secondary" data-action="close-otprema-detail">Zatvori</button>
+                <button type="button" class="btn-v2 btn-v2--secondary" data-action="close-otprema-detail">Zatvori</button>
             </div>
         </div>
     </div>
