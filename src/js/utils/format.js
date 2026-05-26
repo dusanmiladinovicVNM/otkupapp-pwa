@@ -101,3 +101,20 @@ window.formatMoney = function formatMoney(value) {
         maximumFractionDigits: 2
     }) + ' RSD';
 };
+
+/**
+ * Parse decimal user input safely. Handles Serbian locale where users may
+ * type comma "," as decimal separator (mobile keyboards, regional habit).
+ *
+ *   parseDecimalInput("120,50")  => 120.5
+ *   parseDecimalInput("120.50")  => 120.5
+ *   parseDecimalInput("  120 ")  => 120
+ *   parseDecimalInput("")        => 0
+ *   parseDecimalInput(null)      => 0
+ *   parseDecimalInput("abc")     => 0
+ */
+window.parseDecimalInput = function parseDecimalInput(value) {
+    const s = String(value == null ? '' : value).trim().replace(',', '.');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+};
