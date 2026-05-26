@@ -410,18 +410,15 @@ function renderOtpremaAssignView() {
     if (!driverCard || !sectionsEl || !otpremaState.selectedVozac) return;
 
     const drv = otpremaState.selectedVozac;
-    const initials = String(drv.name || '?')
-        .split(/\s+/).map(s => s[0] || '').join('').slice(0, 2).toUpperCase() || '?';
-    const kapacitet = drv.kapacitet ? `${drv.kapacitet} kg kapacitet` : 'Kapacitet —';
-    const kamion = drv.kamion || drv.id || '';
+    const initials = String(drv.name || drv.id || '?')
+        .split(/\s+/).map(s => s.charAt(0) || '').filter(Boolean)
+        .slice(0, 2).join('').toUpperCase() || '?';
 
     setHtml(driverCard, `
         <div class="otp-driver-avatar">${escapeHtml(initials)}</div>
         <div class="otp-driver-info">
             <div class="otp-driver-name">${escapeHtml(drv.name || '-')}</div>
-            <div class="otp-driver-sub">
-                ${kamion ? 'Kamion ' + escapeHtml(kamion) + ' · ' : ''}${escapeHtml(kapacitet)}
-            </div>
+            <div class="otp-driver-sub">${escapeHtml(drv.id || '')}</div>
         </div>
     `);
 
