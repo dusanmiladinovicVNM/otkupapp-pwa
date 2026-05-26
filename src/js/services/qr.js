@@ -1,32 +1,56 @@
-function startQRScan() {
+async function ensureHtml5QrcodeLoaded() {
+    if (window.Html5Qrcode) return true;
+
+    if (typeof window.lazyLoadScript !== 'function') {
+        showToast('QR loader nije dostupan', 'error');
+        return false;
+    }
+
+    try {
+        await window.lazyLoadScript('/vendor/html5-qrcode.min.js');
+        return !!window.Html5Qrcode;
+    } catch (err) {
+        console.error('html5-qrcode lazy load failed:', err);
+        showToast('Ne mogu da učitam QR skener', 'error');
+        return false;
+    }
+}
+
+async function startQRScan() {
     const readerDiv = document.getElementById('qr-reader');
     if (!readerDiv) return;
 
+    const ok = await ensureHtml5QrcodeLoaded();
+    if (!ok) return;
+
     readerDiv.style.display = 'block';
 
-    // Čisti prethodni scanner ako postoji
     if (qrScanner) {
         try {
-            qrScanner.stop().catch(() => {});
+            await qrScanner.stop();
         } catch (e) {}
+
         try {
             qrScanner.clear();
         } catch (e) {}
+
         qrScanner = null;
     }
 
     qrScanner = new Html5Qrcode('qr-reader');
+
     qrScanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
             qrScanner.stop().then(() => {
                 readerDiv.style.display = 'none';
-                qrScanner = null; // Oslobodi referencu
+                qrScanner = null;
             }).catch(() => {
                 readerDiv.style.display = 'none';
                 qrScanner = null;
             });
+
             onQRScanned(decodedText);
         },
         () => {}
