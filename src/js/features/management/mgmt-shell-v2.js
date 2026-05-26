@@ -20,9 +20,11 @@ window.mgmtShellState = {
 
 async function prefetchMgmtData() {
     try {
-        const json = await apiFetch('action=getMgmtAll');
+        const json = await apiFetch('action=getMgmtOverview');
+
         if (json && json.success) {
-            mgmtData = json;
+            window.mgmtData = Object.assign({}, window.mgmtData || {}, json);
+            mgmtData = window.mgmtData;
         }
     } catch (e) {
         console.error('prefetchMgmtData failed:', e);
