@@ -332,14 +332,14 @@ function syncTipAmbalazeWithVrsta(force) {
 
     const vrsta = fldVrsta.value || '';
     if (!vrsta) {
-        if (force) fldTip.value = '';
+        if (force) setFieldValue('fldTipAmbalaze', '');
         updateTipAmbalazeHint();
         return;
     }
 
     const defaultTip = getDefaultTipAmbalazeForVrsta(vrsta);
     if (force || !fldTip.value) {
-        fldTip.value = defaultTip;
+        setFieldValue('fldTipAmbalaze', defaultTip);
     }
 
     updateTipAmbalazeHint();
@@ -353,14 +353,14 @@ function applyDefaults() {
     const dv = config.find(c => c.Parameter === 'DefaultVrsta');
     if (dv && dv.Vrednost) {
         const fldVrsta = document.getElementById('fldVrsta');
-        if (fldVrsta) fldVrsta.value = dv.Vrednost;
+        setFieldValue('fldVrsta', dv.Vrednost);
 
         onVrstaChange();
 
         const ds = config.find(c => c.Parameter === 'DefaultSorta');
         if (ds && ds.Vrednost) {
             const fldSorta = document.getElementById('fldSorta');
-            if (fldSorta) fldSorta.value = ds.Vrednost;
+            setFieldValue('fldSorta', ds.Vrednost);
         }
     } else {
         syncTipAmbalazeWithVrsta(true);
@@ -379,7 +379,7 @@ function applyDefaultCena() {
 
     const cc = (stammdaten.config || []).find(c => c.Parameter === 'Cena' + vrsta);
     if (cc && cc.Vrednost && (!fldCena.value || fldCena.value === '0')) {
-        fldCena.value = cc.Vrednost;
+        setFieldValue('fldCena', cc.Vrednost);
     }
 }
 
@@ -805,7 +805,9 @@ function getFieldValue(id) {
 
 function setFieldValue(id, value) {
     const el = document.getElementById(id);
-    if (el) el.value = value;
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function getTextValue(id) {
@@ -961,9 +963,6 @@ function bindOtkupFormStateListeners() {
 
     // Inicijalna primena state-a (sve disabled posle reset-a)
     applyOtkupFormState();
-
-    // Polling fallback za hidden inputs koji se setuju programatski
-    setInterval(applyOtkupFormState, 500);
 }
 
 // Eksportuj na window da ostali moduli mogu da pozovu nakon QR scan-a
