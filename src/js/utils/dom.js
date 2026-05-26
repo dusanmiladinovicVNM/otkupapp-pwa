@@ -12,12 +12,15 @@ window.byId = function (id) {
 
 window.showEl = function (el, displayValue = '') {
     if (!el) return;
-    el.style.display = displayValue;
+    el.classList.remove('is-hidden');
+    if (displayValue) el.style.display = displayValue;
+    else el.style.display = '';   // reset to CSS default
 };
 
 window.hideEl = function (el) {
     if (!el) return;
-    el.style.display = 'none';
+    el.classList.add('is-hidden');
+    el.style.display = '';        // clear any inline override
 };
 
 window.setText = function (el, text) {
