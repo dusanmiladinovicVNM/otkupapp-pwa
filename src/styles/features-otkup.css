@@ -519,7 +519,7 @@
 /* HERO CARD — accent-soft blok sa truck ikonom */
 .otp-hero-card {
     background: var(--accent-soft, #E8F0DC);
-    border-radius: var(--r-lg, 16px);
+    border-radius: var(--radius-lg);
     padding: 22px 18px;
     margin-bottom: 14px;
     text-align: center;
@@ -531,16 +531,16 @@
     height: 56px;
     margin: 0 auto 12px;
     border-radius: 50%;
-    background: var(--card, #fff);
+    background: var(--card);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--accent, #5EA135);
-    box-shadow: 0 2px 6px rgba(30, 45, 20, 0.08);
+    box-shadow: var(--shadow-sm);
 }
 
 .otp-hero-title {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 600;
     font-size: 22px;
     line-height: 1.15;
@@ -572,17 +572,17 @@
 }
 
 .otp-fallback-panel {
-    background: var(--card, #fff);
-    border-radius: var(--r-md, 12px);
+    background: var(--card);
+    border-radius: var(--radius-md);
     padding: 14px;
-    border: 1px solid var(--border, #d4d4d4);
+    border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
 .otp-qr-reader {
-    border-radius: var(--r-md, 12px);
+    border-radius: var(--radius-md);
     overflow: hidden;
 }
 
@@ -595,7 +595,7 @@
 }
 
 .otp-section-title {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 600;
     font-size: 22px;
     color: var(--forest, #1E2D14);
@@ -604,7 +604,7 @@
 
 .otp-section-count {
     background: var(--accent, #5EA135);
-    color: #fff;
+    color: var(--cream);
     font-size: 12px;
     font-weight: 700;
     padding: 4px 10px;
@@ -615,10 +615,10 @@
 
 /* Pending summary card */
 .otp-pending-card {
-    background: var(--card, #fff);
-    border-radius: var(--r-lg, 16px);
+    background: var(--card);
+    border-radius: var(--radius-lg);
     padding: 16px;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
     margin-bottom: 18px;
 }
 
@@ -631,7 +631,7 @@
     font-weight: 700;
     letter-spacing: 0.6px;
     text-transform: uppercase;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
 }
 
 .otp-pending-stats {
@@ -642,7 +642,7 @@
 }
 
 .otp-pending-stat-value {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 700;
     font-size: 26px;
     color: var(--forest, #1E2D14);
@@ -655,20 +655,20 @@
 
 .otp-pending-stat-label {
     font-size: 11px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     margin-top: 4px;
 }
 
 /* Driver chip (assign view) */
 .otp-driver-chip {
-    background: var(--card, #fff);
-    border-radius: var(--r-lg, 16px);
+    background: var(--card);
+    border-radius: var(--radius-lg);
     padding: 14px;
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 16px;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
 }
 
 .otp-driver-avatar {
@@ -676,7 +676,7 @@
     height: 44px;
     border-radius: 50%;
     background: var(--gold, #C8A84B);
-    color: #fff;
+    color: var(--cream);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -699,7 +699,7 @@
 
 .otp-driver-sub {
     font-size: 12px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     line-height: 1.4;
 }
 
@@ -730,7 +730,7 @@
 }
 
 .otprema-section-title {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 600;
     font-size: 18px;
     color: var(--forest, #1E2D14);
@@ -738,7 +738,7 @@
 
 .otprema-section-count {
     background: var(--accent, #5EA135);
-    color: #fff;
+    color: var(--cream);
     font-size: 11px;
     font-weight: 700;
     padding: 3px 9px;
@@ -746,11 +746,11 @@
 }
 
 .otprema-empty {
-    background: var(--card, #fff);
+    background: var(--card);
     border-radius: var(--r-md, 12px);
     padding: 18px;
     text-align: center;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     font-size: 13px;
 }
 
@@ -764,10 +764,10 @@
 
 /* Block card (read-only, root view) */
 .otprema-card {
-    background: var(--card, #fff);
+    background: var(--card);
     border-radius: var(--r-md, 12px);
     padding: 14px;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
     border-left: 4px solid var(--accent, #5EA135);
 }
 
@@ -786,7 +786,7 @@
 
 .otprema-card-date {
     font-size: 12px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
 }
 
 .otprema-card-line {
@@ -796,12 +796,12 @@
 }
 
 .otprema-card-line--muted {
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     font-size: 13px;
 }
 
 .otprema-card-line--kg {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 700;
     font-size: 20px;
     color: var(--accent, #5EA135);
@@ -821,7 +821,7 @@
 .otprema-card-note {
     margin-top: 6px;
     font-size: 12px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     font-style: italic;
 }
 
@@ -868,10 +868,10 @@
 .otprema-check-card {
     position: relative;
     display: block;
-    background: var(--card, #fff);
+    background: var(--card);
     border-radius: var(--r-md, 12px);
     padding: 14px 14px 14px 46px;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
     border: 2px solid transparent;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
@@ -901,10 +901,10 @@
 
 /* Driver groups (Danas otpremljeno) */
 .otprema-driver-group {
-    background: var(--card, #fff);
+    background: var(--card);
     border-radius: var(--r-md, 12px);
     padding: 12px;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
 }
 
 .otprema-driver-group-head {
@@ -920,7 +920,7 @@
 
 .otprema-driver-group-sub {
     font-size: 12px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     margin-top: 2px;
 }
 
@@ -934,7 +934,7 @@
     border-radius: 50%;
     border: 0;
     background: rgba(255, 255, 255, 0.15);
-    color: #fff;
+    color: var(--cream);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -954,15 +954,15 @@
 }
 
 .otp-success-stat {
-    background: var(--card, #fff);
+    background: var(--card);
     border-radius: var(--r-lg, 16px);
     padding: 18px;
     text-align: center;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
 }
 
 .otp-success-stat-value {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 700;
     font-size: 32px;
     color: var(--accent, #5EA135);
@@ -971,7 +971,7 @@
 
 .otp-success-stat-label {
     font-size: 12px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     margin-top: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1503,11 +1503,11 @@
 .otprema-check-card {
     display: block !important;
     position: relative;
-    background: var(--card, #fff);
+    background: var(--card);
     border: 2px solid transparent;
     border-radius: var(--r-md, 12px);
     padding: 14px 14px 14px 50px;
-    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
+    box-shadow: var(--shadow-sm);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
 }
@@ -1572,7 +1572,7 @@
     flex: 0 0 auto;
     white-space: nowrap;
     font-size: 12px;
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
 }
 
 /* MAIN: linije moraju biti pravi blokovi */
@@ -1591,7 +1591,7 @@
 }
 
 .otprema-card-line--kg {
-    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 700;
     font-size: 22px;
     color: var(--accent, #5EA135);
@@ -1600,7 +1600,7 @@
 }
 
 .otprema-card-line--muted {
-    color: var(--text-muted, #666);
+    color: var(--text-muted);
     font-size: 13px;
 }
 
