@@ -248,8 +248,8 @@
     background: var(--accent-soft);
     border-radius: 999px;
     padding: 4px 14px;
+    box-sizing: content-box;
 }
-
 .bottom-nav-icon {
   font-size: 18px;
   line-height: 1;
