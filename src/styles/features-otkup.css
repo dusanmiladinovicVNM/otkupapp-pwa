@@ -747,7 +747,7 @@
 
 .otprema-empty {
     background: var(--card);
-    border-radius: var(--r-md, 12px);
+    border-radius: var(--radius-md);
     padding: 18px;
     text-align: center;
     color: var(--text-muted);
@@ -765,7 +765,7 @@
 /* Block card (read-only, root view) */
 .otprema-card {
     background: var(--card);
-    border-radius: var(--r-md, 12px);
+    border-radius: var(--radius-md);
     padding: 14px;
     box-shadow: var(--shadow-sm);
     border-left: 4px solid var(--accent, #5EA135);
@@ -869,7 +869,7 @@
     position: relative;
     display: block;
     background: var(--card);
-    border-radius: var(--r-md, 12px);
+    border-radius: var(--radius-md);
     padding: 14px 14px 14px 46px;
     box-shadow: var(--shadow-sm);
     border: 2px solid transparent;
@@ -902,7 +902,7 @@
 /* Driver groups (Danas otpremljeno) */
 .otprema-driver-group {
     background: var(--card);
-    border-radius: var(--r-md, 12px);
+    border-radius: var(--radius-md);
     padding: 12px;
     box-shadow: var(--shadow-sm);
 }
@@ -1505,7 +1505,7 @@
     position: relative;
     background: var(--card);
     border: 2px solid transparent;
-    border-radius: var(--r-md, 12px);
+    border-radius: var(--radius-md);
     padding: 14px 14px 14px 50px;
     box-shadow: var(--shadow-sm);
     cursor: pointer;
