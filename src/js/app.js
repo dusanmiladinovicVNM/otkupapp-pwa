@@ -28,6 +28,8 @@ async function bootstrapApp() {
 
         applyRoleVisibility();
         applyHeaderInfo();
+        applyAllTabEyebrows();
+        applyOtkupHeaderDate();
         bindAppShellEvents();
         setDefaultDates();
 
