@@ -84,6 +84,20 @@ function applyHeaderInfo() {
     document.body.dataset.version = CONFIG.APP_VERSION;
 }
 
+function applyAllTabEyebrows() {
+    const station = ((window.CONFIG && CONFIG.ENTITY_NAME) || '').toUpperCase();
+    const setEyebrow = (id, baseLabel) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = station ? baseLabel + ' · ' + station : baseLabel;
+    };
+
+    setEyebrow('otkupRoleEyebrow', 'OTKUP');
+    setEyebrow('pregledRoleEyebrow', 'PREGLED');
+    setEyebrow('viseRoleEyebrow', 'PODEŠAVANJA');
+    // Otprema već ima svoj per-render helper u otpremnice.js
+}
+
 function setDefaultDates() {
     const today = getTodayIsoDate();
 
