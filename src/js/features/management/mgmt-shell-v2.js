@@ -332,18 +332,25 @@ function showMgmtPartnerSegment(segment, btn) {
 
 function mgmtRenderOverview() {
     const today = mgmtDashTodayISO();
+    const data = window.mgmtData || mgmtData || {};
     const { otkupiAll, saldoKupci, saldoOM, kartice } = mgmtGetDataSlices();
 
     const danas = otkupiAll.filter(r => mgmtDashFmtDate(mgmtGetOtkupDate(r)) === today);
-    const danasCount = danas.length;
-    const danasKg = danas.reduce((s, r) => s + mgmtGetOtkupKg(r), 0);
+
+    const danasCount = otkupiAll.length
+        ? danas.length
+        : (parseInt(data.otkupDanasCount || 0, 10) || 0);
+
+    const danasKg = otkupiAll.length
+        ? danas.reduce((s, r) => s + mgmtGetOtkupKg(r), 0)
+        : (parseFloat(data.otkupDanasKg || 0) || 0);
 
     let kgCeka = 0;
     if (typeof dpGetSup === 'function') {
         try {
             kgCeka = dpGetSup().reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
         } catch (e) {
-                mgmtLogError('mgmtRenderOverview u dpGetSup', e);
+            mgmtLogError('mgmtRenderOverview u dpGetSup', e);
         }
     }
 
@@ -379,7 +386,11 @@ function mgmtRenderOverview() {
     if (saldoOM.some(r => (parseFloat(r.Saldo) || 0) > 0)) alerts.push('Postoje mesta sa otvorenim saldom');
 
     const koopTotals = kartice.filter(r => r.Opis === 'UKUPNO');
-    const koopSaldo = koopTotals.reduce((s, r) => s + (parseFloat(r.Saldo) || 0), 0);
+
+    const koopSaldo = kartice.length
+        ? koopTotals.reduce((s, r) => s + (parseFloat(r.Saldo) || 0), 0)
+        : (parseFloat(data.koopSaldoTotal || 0) || 0);
+
     const kupSaldo = saldoKupci.reduce((s, r) => s + (parseFloat(r.Saldo) || 0), 0);
     const omSaldo = saldoOM.reduce((s, r) => s + (parseFloat(r.Saldo) || 0), 0);
 
