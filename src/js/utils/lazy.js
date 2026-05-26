@@ -1,11 +1,19 @@
 // utils/lazy.js
 window.lazyLoadScript = function (src) {
-    if (window.__lazyLoaded && window.__lazyLoaded[src]) return Promise.resolve();
+    window.__lazyLoaded = window.__lazyLoaded || {};
+
+    if (window.__lazyLoaded[src]) return Promise.resolve();
+
+    const existing = document.querySelector('script[src="' + src + '"]');
+    if (existing) {
+        window.__lazyLoaded[src] = true;
+        return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = src;
         s.onload = () => {
-            window.__lazyLoaded = window.__lazyLoaded || {};
             window.__lazyLoaded[src] = true;
             resolve();
         };
