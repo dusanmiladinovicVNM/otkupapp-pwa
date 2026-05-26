@@ -607,11 +607,16 @@
             </div>
 
             <!-- Intercom dozvola -->
-            <div class="queue-device-row" style="margin-top: 14px;">
-                <span style="font-size: 13px; color: var(--text-secondary);">🎙️ Interkom</span>
-                <span id="intercom-permission-status" style="margin-left: auto; font-size: 12px; color: var(--text-muted);"></span>
-                <button id="btn-intercom-permission" class="btn-v2 btn-v2--secondary"
-                        data-action="intercom-request-permission" style="display:none; padding: 8px 14px; font-size: 12px;">
+            <div class="queue-device-row">
+                <span class="queue-device-row__label">
+                    <span data-ag-icon="mic"></span>
+                    Interkom
+                </span>
+                <span class="queue-device-row__status" id="intercom-permission-status"></span>
+                <button id="btn-intercom-permission"
+                        class="btn-v2 btn-v2--secondary btn-v2--sm"
+                        data-action="intercom-request-permission"
+                        style="display:none;">
                     Dozvoli mikrofon
                 </button>
             </div>
