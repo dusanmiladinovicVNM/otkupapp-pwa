@@ -92,11 +92,16 @@ async function _ensureAuth() {
 
 async function initIntercomField() {
   try {
+    // Lazy load Firebase compat scripts — sekvencijalno jer app-compat mora pre database/auth
+    await lazyLoadScript('/vendor/firebase-app-compat.js');
+    await lazyLoadScript('/vendor/firebase-auth-compat.js');
+    await lazyLoadScript('/vendor/firebase-database-compat.js');
+
     _initFirebase();
     await _ensureAuth();
     _startRequestListener();
     _renderHeaderIndicator();
-    _renderPermissionStatus();   // refresh setup row if visible
+    _renderPermissionStatus();
   } catch (err) {
     console.error('[intercom-field] init failed:', err);
     // Non-fatal — otkup flow continues without intercom
