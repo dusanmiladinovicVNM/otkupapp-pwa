@@ -98,8 +98,58 @@
     margin-bottom: 14px;
 }
 
-/* Reuse .otprema-summary-card style — already definisan u Fazi 4.
-   Vrednosti su sad Cormorant Garamond preko otprema-summary-value rule. */
+/* ============================================================
+   STAT CARDS — Pregled (Danas) KPI grid i Otprema summary
+   ============================================================
+   Koristi se na 3 mesta u HTML-u:
+   • #tab-pregled .pregled-stats-grid (4 KPI, 2x2)
+   • #otpremaRootView .otprema-summary-grid (3 kartice, 3-col)
+   • #otpremaSuccessView .otprema-summary-grid (2 kartice, 2-col)
+   ============================================================ */
+
+.otprema-summary-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px 14px;
+    box-shadow: var(--shadow-card);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 88px;
+}
+
+.otprema-summary-value {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--forest);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.otprema-summary-label {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.otprema-summary-sub {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Pregled 2x2 — brojevi ostaju 36px (dovoljno vazduha u 2-col) */
+/* Otprema 3-col root summary — manji broj da stane bez prelivanja */
+#otpremaRootView .otprema-summary-grid .otprema-summary-value {
+    font-size: 28px;
+}
 
 /* Sections container za dynamic list (otkupni-list.js renders) */
 .danas-sections {
