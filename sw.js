@@ -85,10 +85,8 @@ const ASSETS = [
     './icons/icon-512x512.png',
 
     // Vendor libs (self-hosted)
-    './vendor/html5-qrcode.min.js',
     './vendor/jspdf.umd.min.js',
     './vendor/leaflet.css',
-    './vendor/leaflet.js',
     './vendor/chart.umd.min.js',
     './vendor/firebase-app-compat.js',
     './vendor/firebase-auth-compat.js',
