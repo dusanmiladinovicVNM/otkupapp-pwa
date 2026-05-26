@@ -665,6 +665,13 @@ function mgmtDashRenderQuickLinks() {
 let mgmtDashChartInstance = null;
 
 function mgmtDashRenderChart(series) {
+    try {
+        await lazyLoadScript('/vendor/chart.umd.min.js');
+    } catch (err) {
+        console.error('Chart lazy load failed:', err);
+        return;
+    }
+    
     const canvas = document.getElementById('mgmtDashChart');
     if (!canvas || typeof Chart === 'undefined') return;
 
