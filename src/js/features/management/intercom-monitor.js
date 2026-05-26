@@ -97,6 +97,10 @@ async function _ensureAuth() {
 
 async function initIntercomMonitor(stations) {
   try {
+    await lazyLoadScript('/vendor/firebase-app-compat.js');
+    await lazyLoadScript('/vendor/firebase-auth-compat.js');
+    await lazyLoadScript('/vendor/firebase-database-compat.js');
+
     _initFirebase();
     await _ensureAuth();
     _m.stations = stations || [];
