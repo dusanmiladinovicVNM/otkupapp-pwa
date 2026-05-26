@@ -117,17 +117,17 @@ function setPregledQuickFilter(filterName, btn) {
 }
 
 function updatePregledQuickFiltersUI(btn) {
-    qsa('#pregledQuickFilters .danas-pill').forEach(el => {
-        removeClass(el, 'active');
+    qsa('#pregledQuickFilters .pill').forEach(el => {
+        removeClass(el, 'is-active');
     });
 
     if (btn && btn.classList) {
-        addClass(btn, 'active');
+        addClass(btn, 'is-active');
         return;
     }
 
-    const activeBtn = qs('#pregledQuickFilters .danas-pill[data-filter="' + otkupPregledState.quickFilter + '"]');
-    if (activeBtn) addClass(activeBtn, 'active');
+    const activeBtn = qs('#pregledQuickFilters .pill[data-filter="' + otkupPregledState.quickFilter + '"]');
+    if (activeBtn) addClass(activeBtn, 'is-active');
 }
 
 function rerenderPregled() {
