@@ -83,7 +83,15 @@ async function onMgmtKooperantChange() {
     document.getElementById('mgmtKarticaSaldo').textContent = (zad - raz).toLocaleString('sr');
 }
 
-function loadMgmtKoopSaldo() {
+async function loadMgmtKoopSaldo() {
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('kartice', 'getMgmtKartice');
+    }
+
+    const kartice = (mgmtData && Array.isArray(mgmtData.kartice))
+        ? mgmtData.kartice
+        : [];
+    
     const kartice = (mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
     const list = document.getElementById('mgmtKoopSaldoList');
     const totals = kartice.filter(r => r.Opis === 'UKUPNO');
@@ -100,7 +108,11 @@ function loadMgmtKoopSaldo() {
     }).join('');
 }
 
-function loadMgmtKoopPregled() {
+async function loadMgmtKoopPregled() {
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('saldoOMDetail', 'getMgmtSaldoOMDetail');
+    }
+    
     // Popuni dropdown stanica
     const sel = document.getElementById('mgmtPregledStanica');
     if (sel.options.length <= 1) {
