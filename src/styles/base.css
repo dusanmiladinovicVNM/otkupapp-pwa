@@ -155,3 +155,5 @@ body {
     border-color: var(--brand-green);
 }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.is-hidden { display: none !important; }
