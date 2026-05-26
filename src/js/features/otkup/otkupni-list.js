@@ -266,8 +266,16 @@ async function savePdfToDrive(clientRecordID) {
     showToast('Generisanje PDF-a...', 'info');
 
     try {
+            await lazyLoadScript('/vendor/jspdf.umd.min.js');
+    } catch (err) {
+            console.error('jsPDF lazy load failed:', err);
+            showToast('Ne mogu da učitam PDF biblioteku', 'error');
+            return;
+    }
+
+    try {
         const jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-        if (!jsPDF) { showToast('PDF biblioteka nije učitana', 'error'); return; }
+        if (!jsPDF) { showToast('PDF biblioteka nije dostupna', 'error'); return; }
         const doc = new jsPDF({ format: 'a5', unit: 'mm' });
         const w = doc.internal.pageSize.getWidth();
         let y = 10;
