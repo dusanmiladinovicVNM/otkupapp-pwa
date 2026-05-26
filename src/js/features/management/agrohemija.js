@@ -590,6 +590,7 @@ async function izdSavePdf() {
 
     showToast('Generisanje PDF-a...', 'info');
 
+    try {
         try {
             await lazyLoadScript('/vendor/jspdf.umd.min.js');
         } catch (err) {
