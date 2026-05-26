@@ -2330,13 +2330,13 @@
 </div>
     
 <!-- QR PROFILE MODAL -->
-<div id="qrProfileModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;justify-content:center;align-items:center;flex-direction:column;">   
-    <div style="background:white;padding:30px;border-radius:16px;text-align:center;max-width:320px;">
-        <div style="font-size:18px;font-weight:700;color:var(--primary);margin-bottom:4px;" id="qrProfileName"></div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;" id="qrProfileRole"></div>
-        <canvas id="qrProfileCanvas" style="width:250px;height:250px;"></canvas>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:12px;" id="qrProfileID"></div>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">Tap za zatvaranje</p>
+<div class="qr-profile-modal" id="qrProfileModal">
+    <div class="qr-profile-card">
+        <div class="qr-profile-name" id="qrProfileName"></div>
+        <div class="qr-profile-role" id="qrProfileRole"></div>
+        <canvas id="qrProfileCanvas" class="qr-profile-canvas"></canvas>
+        <div class="qr-profile-id" id="qrProfileID"></div>
+        <p class="qr-profile-hint">Tap za zatvaranje</p>
     </div>
 </div>
 
