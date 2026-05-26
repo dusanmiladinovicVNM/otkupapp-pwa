@@ -176,16 +176,28 @@ async function bootstrapRole() {
     if (CONFIG.USER_ROLE === 'Management') {
         if (typeof populateMgmtStanice === 'function') populateMgmtStanice();
 
-        try {
-            if (typeof prefetchMgmtData === 'function') {
-                await prefetchMgmtData();
-            }
-        } catch (err) {
-            console.error('prefetchMgmtData failed:', err);
-        }
+        if (typeof prefetchMgmtData === 'function') {
+            prefetchMgmtData()
+                .then(() => {
+                    if (typeof populateMgmtKupciDropdown === 'function') {
+                        populateMgmtKupciDropdown();
+                    }
 
-        if (typeof populateMgmtKupciDropdown === 'function') {
-            populateMgmtKupciDropdown();
+                    if (typeof mgmtRenderOverview === 'function') {
+                        mgmtRenderOverview();
+                    }
+
+                    if (
+                        window.mgmtShellState &&
+                        window.mgmtShellState.activeRoot === 'dashboard' &&
+                        typeof mgmtRenderDashboard === 'function'
+                    ) {
+                        mgmtRenderDashboard();
+                    }
+                })
+                .catch(err => {
+                    console.error('prefetchMgmtData background failed:', err);
+                });
         }
 
         if (typeof mgmtShellInit === 'function') {
@@ -193,12 +205,14 @@ async function bootstrapRole() {
         } else {
             safeCall(() => showTab('dispecer'));
         }
+
         if (window.intercomMonitor && stammdaten && Array.isArray(stammdaten.stanice)) {
             const activeStations = _intercomActiveStations(stammdaten.stanice);
             window.intercomMonitor.init(activeStations).catch(err =>
                 console.warn('[app] intercom monitor init skipped:', err)
             );
         }
+
         return;
     }
 }
