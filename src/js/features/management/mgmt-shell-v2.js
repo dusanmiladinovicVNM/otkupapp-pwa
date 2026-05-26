@@ -664,7 +664,7 @@ function mgmtDashRenderQuickLinks() {
 
 let mgmtDashChartInstance = null;
 
-function mgmtDashRenderChart(series) {
+async function mgmtDashRenderChart(series) {
     try {
         await lazyLoadScript('/vendor/chart.umd.min.js');
     } catch (err) {
