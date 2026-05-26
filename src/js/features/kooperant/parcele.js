@@ -154,8 +154,16 @@ async function loadParcele() {
             parcelMapInstance = null;
         }
 
+        try {
+            await lazyLoadScript('/vendor/leaflet.js');
+        } catch (err) {
+            console.error('Leaflet lazy load failed:', err);
+            showToast('Ne mogu da učitam mapu', 'error');
+            return;
+        }
+
         parcelMapInstance = L.map(mapDiv).setView([43.28, 21.72], 13);
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        L.tileLayer('https://...').addTo(parcelMapInstance);
             maxZoom: 22,
             attribution: 'Esri, Maxar, Earthstar Geographics'
         }).addTo(parcelMapInstance);
