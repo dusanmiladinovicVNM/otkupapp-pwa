@@ -361,7 +361,7 @@ function renderPregledCard(r) {
 
 function buildPregledStatusMeta(r) {
     if (isPregledProblem(r)) {
-        return { kind: 'problem', label: 'Sync problem' };
+        return { kind: 'error', label: 'Sync problem' };
     }
 
     if (!r.vozacID) {
