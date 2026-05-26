@@ -375,6 +375,67 @@ function handleAuthorizedRead(data, tokenData) {
     return jsonResponse(getMgmtReport('PredatoPoKupcu'));
   }
 
+  if (action === 'getMgmtOverview') {
+    if (tokenData.role !== 'Management') {
+      return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+    }
+
+    return jsonResponse(getMgmtOverviewCached_());
+  }
+
+  if (action === 'getMgmtOtkupiAll') {
+    if (tokenData.role !== 'Management') {
+      return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+    }
+
+    var includeLive = String(data.includeLive || '') === '1';
+
+    var masterRows = [];
+    try {
+      var masterReport = getMgmtReport('OtkupiAll');
+      if (masterReport && Array.isArray(masterReport.records)) {
+        masterRows = masterReport.records;
+      }
+    } catch (e) {
+      logError(
+        'GAS',
+        'getMgmtOtkupiAll:OtkupiAll',
+        e && e.message ? e.message : String(e || ''),
+        e && e.stack ? e.stack : '',
+        ''
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      otkupiAll: includeLive
+        ? mergeOtkupRows_(masterRows, getAllOtkupiSheets())
+        : masterRows
+    });
+  }
+
+  if (action === 'getMgmtKartice') {
+    if (tokenData.role !== 'Management') {
+      return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+    }
+
+    return jsonResponse({
+      success: true,
+      kartice: getKarticaAll().records || []
+    });
+  }
+
+  if (action === 'getMgmtSaldoOMDetail') {
+    if (tokenData.role !== 'Management') {
+    return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+    }
+
+    return jsonResponse({
+      success: true,
+      saldoOMDetail: getMgmtReport('SaldoOMDetail').records || []
+    });
+  }
+
   if (action === 'getMgmtAll') {
     if (tokenData.role !== 'Management') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
@@ -398,6 +459,14 @@ function handleAuthorizedRead(data, tokenData) {
       );
     }
 
+    var includeLive = String(data.includeLive || '') === '1';
+
+    var otkupiAllPayload = otkupiAllReport;
+
+    if (!otkupiAllReport.length || includeLive) {
+      otkupiAllPayload = mergeOtkupRows_(otkupiAllReport, getAllOtkupiSheets());
+    }
+
     return jsonResponse({
       success: true,
       saldoOM: getMgmtReport('SaldoOM').records || [],
@@ -409,8 +478,8 @@ function handleAuthorizedRead(data, tokenData) {
       fakture: getMgmtReport('Fakture').records || [],
       fakturaStavke: getMgmtReport('FakturaStavke').records || [],
 
-      // Master read-model prvo, OTK operational samo fallback
-      otkupiAll: mergeOtkupRows_(otkupiAllReport, getAllOtkupiSheets())
+      // Master read-model prvo, OTK operational samo fallback / explicit live refresh
+      otkupiAll: otkupiAllPayload
     });
   }
 
@@ -2943,6 +3012,72 @@ function getMgmtReport(tabName) {
       return { success: false, error: err.message }; 
     }
 }
+
+function getMgmtReportFromSs_(mgmtSs, stamSs, tabName) {
+  try {
+    var sheet = null;
+
+    if (mgmtSs) sheet = mgmtSs.getSheetByName(tabName);
+    if (!sheet && stamSs) sheet = stamSs.getSheetByName(tabName);
+
+    if (!sheet) return [];
+
+    return sheetToArray(sheet);
+  } catch (err) {
+    logError(
+      'GAS',
+      'getMgmtReportFromSs_:' + tabName,
+      err && err.message ? err.message : String(err || ''),
+      err && err.stack ? err.stack : '',
+      ''
+    );
+    return [];
+  }
+}
+
+function getMgmtOverviewCached_() {
+  var cache = CacheService.getScriptCache();
+  var key = 'mgmtOverview:v1';
+
+  try {
+    var hit = cache.get(key);
+    if (hit) {
+      var cached = JSON.parse(hit);
+      cached._cache = 'hit';
+      return cached;
+    }
+  } catch (e) {
+    // cache read best-effort
+  }
+
+  var mgmtSs = getMgmtReportsSpreadsheet_();
+  var stamSs = getStammdatenSpreadsheet_();
+
+  var payload = {
+    success: true,
+    _cache: 'miss',
+    saldoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoOM'),
+    saldoKupci: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoKupci'),
+    otkupPoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'OtkupPoOM'),
+    predatoPoKupcu: getMgmtReportFromSs_(mgmtSs, stamSs, 'PredatoPoKupcu')
+  };
+
+  try {
+    cache.put(key, JSON.stringify(payload), 60);
+  } catch (e) {
+    // Ako ikad pređe limit, samo preskoči cache.
+    logError(
+      'GAS',
+      'getMgmtOverviewCached_:cachePut',
+      e && e.message ? e.message : String(e || ''),
+      e && e.stack ? e.stack : '',
+      ''
+    );
+  }
+
+  return payload;
+}
+
 function getSaldoOM() { return getMgmtReport('SaldoOM'); }
 function getSaldoKupci() { return getMgmtReport('SaldoKupci'); }
 
@@ -5588,4 +5723,72 @@ function debugDoGetPing() {
   });
 
   Logger.log(res.getContent());
+}
+
+function invalidateMgmtOverviewCache_() {
+  try {
+    CacheService.getScriptCache().remove('mgmtOverview:v1');
+  } catch (e) {}
+}
+
+function getMgmtReportFromSs_(mgmtSs, stamSs, tabName) {
+  try {
+    var sheet = null;
+
+    if (mgmtSs) sheet = mgmtSs.getSheetByName(tabName);
+    if (!sheet && stamSs) sheet = stamSs.getSheetByName(tabName);
+
+    if (!sheet) return [];
+
+    return sheetToArray(sheet);
+  } catch (err) {
+    logError(
+      'GAS',
+      'getMgmtReportFromSs_:' + tabName,
+      err && err.message ? err.message : String(err || ''),
+      err && err.stack ? err.stack : '',
+      ''
+    );
+    return [];
+  }
+}
+
+function getMgmtOverviewCached_() {
+  var cache = CacheService.getScriptCache();
+  var key = 'mgmtOverview:v1';
+
+  try {
+    var hit = cache.get(key);
+    if (hit) {
+      var cached = JSON.parse(hit);
+      cached._cache = 'hit';
+      return cached;
+    }
+  } catch (e) {}
+
+  var mgmtSs = getMgmtReportsSpreadsheet_();
+  var stamSs = getStammdatenSpreadsheet_();
+
+  var payload = {
+    success: true,
+    _cache: 'miss',
+    saldoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoOM'),
+    saldoKupci: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoKupci'),
+    otkupPoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'OtkupPoOM'),
+    predatoPoKupcu: getMgmtReportFromSs_(mgmtSs, stamSs, 'PredatoPoKupcu')
+  };
+
+  try {
+    cache.put(key, JSON.stringify(payload), 20);
+  } catch (e) {
+    logError(
+      'GAS',
+      'getMgmtOverviewCached_:cachePut',
+      e && e.message ? e.message : String(e || ''),
+      e && e.stack ? e.stack : '',
+      ''
+    );
+  }
+
+  return payload;
 }
