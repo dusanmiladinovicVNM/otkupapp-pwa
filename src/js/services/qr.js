@@ -87,3 +87,7 @@ function generateQRCode(canvasId, text) {
     };
     img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(text);
 }
+
+window.ensureHtml5QrcodeLoaded = ensureHtml5QrcodeLoaded;
+window.startQRScan = startQRScan;
+window.generateQRCode = generateQRCode;
