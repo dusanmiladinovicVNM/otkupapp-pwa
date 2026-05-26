@@ -132,18 +132,33 @@ function applyOtpremaFallbackDriver() {
     setOtpremaVozac(id, name);
 }
 
-function startOtpremaVozacQRScan() {
+async function startOtpremaVozacQRScan() {
     const readerDiv = byId('qr-reader-otprema-vozac');
     if (!readerDiv) return;
+
+    if (typeof ensureHtml5QrcodeLoaded === 'function') {
+        const ok = await ensureHtml5QrcodeLoaded();
+        if (!ok) return;
+    } else if (!window.Html5Qrcode) {
+        try {
+            await window.lazyLoadScript('/vendor/html5-qrcode.min.js');
+        } catch (err) {
+            console.error('html5-qrcode lazy load failed:', err);
+            showToast('Ne mogu da učitam QR skener', 'error');
+            return;
+        }
+    }
 
     readerDiv.style.display = 'block';
 
     const scanner = new Html5Qrcode('qr-reader-otprema-vozac');
+
     scanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 260, height: 260 } },
         (decodedText) => {
             onOtpremaVozacQRScanned(decodedText);
+
             scanner.stop().then(() => {
                 readerDiv.style.display = 'none';
             }).catch(() => {
