@@ -2,6 +2,11 @@
 // MANAGEMENT: STANICE
 // ============================================================
 async function loadMgmtOtkupi() {
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll');
+    }
+
+    
     const stanicaID = document.getElementById('mgmtOtkupiStanica').value;
     if (!stanicaID) { document.getElementById('mgmtOtkupiList').innerHTML = ''; return; }
     const od = document.getElementById('mgmtOtkupiOd').value, doo = document.getElementById('mgmtOtkupiDo').value;
@@ -80,4 +85,18 @@ function loadMgmtOtkupPoOM() {
             <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Amb: ${g.totalAmb.toLocaleString('sr')} | Vrednost: ${g.totalVr.toLocaleString('sr')} RSD</div>
             ${g.items.map(r => { const kg=parseFloat(r.Kolicina)||0,amb=parseFloat(r.Ambalaza)||0,vr=parseFloat(r.Vrednost)||0; return `<div style="padding:4px 0;font-size:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;"><span>${escapeHtml(r.VrstaVoca)} ${escapeHtml(r.Klasa)}</span><span>${kg.toLocaleString('sr')} kg | ${amb.toLocaleString('sr')} amb | ${vr.toLocaleString('sr')} RSD | ${escapeHtml(r.BrojOtkupa||0)} otk.</span></div>`; }).join('')}
         </div>`).join('');
+}
+
+async function refreshMgmtOtkupiLive() {
+    window.mgmtData = window.mgmtData || {};
+    delete window.mgmtData.otkupiAll;
+    mgmtData = window.mgmtData;
+
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll', 'includeLive=1');
+    }
+
+    if (typeof loadMgmtOtkupi === 'function') {
+        await loadMgmtOtkupi();
+    }
 }
