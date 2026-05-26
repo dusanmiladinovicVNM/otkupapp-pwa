@@ -163,10 +163,14 @@ async function loadParcele() {
         }
 
         parcelMapInstance = L.map(mapDiv).setView([43.28, 21.72], 13);
-        L.tileLayer('https://...').addTo(parcelMapInstance);
-            maxZoom: 22,
-            attribution: 'Esri, Maxar, Earthstar Geographics'
-        }).addTo(parcelMapInstance);
+
+        L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            {
+                maxZoom: 22,
+                attribution: 'Esri, Maxar, Earthstar Geographics'
+            }
+        ).addTo(parcelMapInstance);
 
         const allBounds = [];
         parcelLayers = {};
