@@ -92,7 +92,6 @@ async function loadMgmtKoopSaldo() {
         ? mgmtData.kartice
         : [];
     
-    const kartice = (mgmtData && mgmtData.kartice) ? mgmtData.kartice : [];
     const list = document.getElementById('mgmtKoopSaldoList');
     const totals = kartice.filter(r => r.Opis === 'UKUPNO');
     if (totals.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
