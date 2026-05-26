@@ -31,6 +31,46 @@ async function prefetchMgmtData() {
     }
 }
 
+const mgmtSectionPromises = {};
+
+async function ensureMgmtSection(section, action, params) {
+    window.mgmtData = window.mgmtData || {};
+    mgmtData = window.mgmtData;
+
+    if (Object.prototype.hasOwnProperty.call(window.mgmtData, section)) {
+        return Array.isArray(window.mgmtData[section])
+            ? window.mgmtData[section]
+            : [];
+    }
+
+    if (!mgmtSectionPromises[section]) {
+        const query = 'action=' + encodeURIComponent(action) + (params ? '&' + params : '');
+
+        mgmtSectionPromises[section] = apiFetch(query)
+            .then(json => {
+                if (json && json.success) {
+                    window.mgmtData = Object.assign({}, window.mgmtData || {}, json);
+                    mgmtData = window.mgmtData;
+                }
+
+                return Array.isArray(window.mgmtData[section])
+                    ? window.mgmtData[section]
+                    : [];
+            })
+            .catch(err => {
+                console.error('ensureMgmtSection failed:', section, err);
+                return [];
+            })
+            .finally(() => {
+                delete mgmtSectionPromises[section];
+            });
+    }
+
+    return mgmtSectionPromises[section];
+}
+
+window.ensureMgmtSection = ensureMgmtSection;
+
 function populateMgmtKupciDropdown() {
     const sel = document.getElementById('mgmtFaktureKupac');
     if (!sel) return;
@@ -888,12 +928,19 @@ function mgmtDashRenderDispatcher() {
 }
 
 async function mgmtRenderDashboard() {
-    if (!window.mgmtData && typeof prefetchMgmtData === 'function') {
-        try {
-            await prefetchMgmtData();
-        } catch (e) {
-            mgmtLogError('mgmtRenderDashboard u prefetchMgmtData', e);
+    if (!window.mgmtData || !window.mgmtData.saldoOM) {
+        if (typeof prefetchMgmtData === 'function') {
+            try {
+                await prefetchMgmtData();
+            } catch (e) {
+                mgmtLogError('mgmtRenderDashboard u prefetchMgmtData', e);
+            }
         }
+    }
+
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll');
+        await ensureMgmtSection('kartice', 'getMgmtKartice');
     }
 
     if (typeof loadDispecer === 'function') {
