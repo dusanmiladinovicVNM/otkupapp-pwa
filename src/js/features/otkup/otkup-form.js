@@ -580,8 +580,8 @@ function readOtkupForm() {
     const vrstaVoca = getFieldValue('fldVrsta');
     const sortaVoca = getFieldValue('fldSorta');
     const klasa = getFieldValue('fldKlasa') || 'I';
-    const kolicina = parseFloat(getFieldValue('fldKolicina')) || 0;
-    const cena = parseFloat(getFieldValue('fldCena')) || 0;
+    const kolicina = parseDecimalInput(getFieldValue('fldKolicina'));
+    const cena = parseDecimalInput(getFieldValue('fldCena'));
     const tipAmbalaze = getFieldValue('fldTipAmbalaze') || getDefaultTipAmbalazeForVrsta(vrstaVoca);
     const kolAmbalaze = parseInt(getFieldValue('fldAmbalaza'), 10) || 0;
     const parcelaID = getFieldValue('fldParcela') || '';
@@ -870,8 +870,8 @@ function scrollToOtkupStep(stepId) {
 function evaluateOtkupFormState() {
     const koopID = (document.getElementById('fldKooperantID') || {}).value || '';
     const vrsta = (document.getElementById('fldVrsta') || {}).value || '';
-    const kolicina = parseFloat((document.getElementById('fldKolicina') || {}).value) || 0;
-    const cena = parseFloat((document.getElementById('fldCena') || {}).value) || 0;
+    const kolicina = parseDecimalInput((document.getElementById('fldKolicina') || {}).value);
+    const cena = parseDecimalInput((document.getElementById('fldCena') || {}).value);
     const klasa = (document.getElementById('fldKlasa') || {}).value || '';
     const tipAmb = (document.getElementById('fldTipAmbalaze') || {}).value || '';
 
