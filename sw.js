@@ -19,6 +19,7 @@ const ASSETS = [
     // Utils
     './src/js/utils/dom.js',
     './src/js/utils/storage.js',
+    './src/js/utils/lazy.js',
     './src/js/utils/sanitize.js',
     './src/js/utils/format.js',
     './src/js/utils/async.js',
