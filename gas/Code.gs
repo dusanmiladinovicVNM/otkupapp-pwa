@@ -3046,26 +3046,29 @@ function getMgmtOverviewCached_() {
       cached._cache = 'hit';
       return cached;
     }
-  } catch (e) {
-    // cache read best-effort
-  }
+  } catch (e) {}
 
   var mgmtSs = getMgmtReportsSpreadsheet_();
   var stamSs = getStammdatenSpreadsheet_();
+  var summary = buildMgmtOverviewSummary_(mgmtSs, stamSs);
 
   var payload = {
     success: true,
     _cache: 'miss',
+
     saldoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoOM'),
     saldoKupci: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoKupci'),
     otkupPoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'OtkupPoOM'),
-    predatoPoKupcu: getMgmtReportFromSs_(mgmtSs, stamSs, 'PredatoPoKupcu')
+    predatoPoKupcu: getMgmtReportFromSs_(mgmtSs, stamSs, 'PredatoPoKupcu'),
+
+    otkupDanasCount: summary.otkupDanasCount,
+    otkupDanasKg: summary.otkupDanasKg,
+    koopSaldoTotal: summary.koopSaldoTotal
   };
 
   try {
-    cache.put(key, JSON.stringify(payload), 60);
+    cache.put(key, JSON.stringify(payload), 20);
   } catch (e) {
-    // Ako ikad pređe limit, samo preskoči cache.
     logError(
       'GAS',
       'getMgmtOverviewCached_:cachePut',
@@ -3076,6 +3079,90 @@ function getMgmtOverviewCached_() {
   }
 
   return payload;
+}
+
+function mgmtOverviewNum_(v) {
+  var n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function mgmtOverviewIsoDate_(value) {
+  if (value === null || value === undefined || value === '') return '';
+
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+
+  if (typeof value === 'number') {
+    var base = new Date(Date.UTC(1899, 11, 30));
+    var d = new Date(base.getTime() + Math.round(value * 86400000));
+    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+
+  var s = String(value || '').trim();
+  if (!s) return '';
+
+  var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+
+  var local = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\.)?/);
+  if (local) {
+    return local[3] + '-' + String(local[2]).padStart(2, '0') + '-' + String(local[1]).padStart(2, '0');
+  }
+
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    return mgmtOverviewIsoDate_(Number(s));
+  }
+
+  return '';
+}
+
+function buildMgmtOverviewSummary_(mgmtSs, stamSs) {
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+  var otkupiAll = getMgmtReportFromSs_(mgmtSs, stamSs, 'OtkupiAll');
+  var otkupDanasCount = 0;
+  var otkupDanasKg = 0;
+
+  otkupiAll.forEach(function (r) {
+    var datum = mgmtOverviewIsoDate_(r.Datum || r.datum);
+    if (datum !== today) return;
+
+    otkupDanasCount++;
+    otkupDanasKg += mgmtOverviewNum_(r.Kolicina || r.kolicina);
+  });
+
+  var saldoOMDetail = getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoOMDetail');
+  var koopSaldoTotal = 0;
+
+  if (saldoOMDetail && saldoOMDetail.length) {
+    saldoOMDetail.forEach(function (r) {
+      koopSaldoTotal += mgmtOverviewNum_(r.Saldo);
+    });
+  } else {
+    try {
+      var kartice = getKarticaAll().records || [];
+      kartice.forEach(function (r) {
+        if (r.Opis === 'UKUPNO') {
+          koopSaldoTotal += mgmtOverviewNum_(r.Saldo);
+        }
+      });
+    } catch (e) {
+      logError(
+        'GAS',
+        'buildMgmtOverviewSummary_:karticeFallback',
+        e && e.message ? e.message : String(e || ''),
+        e && e.stack ? e.stack : '',
+        ''
+      );
+    }
+  }
+
+  return {
+    otkupDanasCount: otkupDanasCount,
+    otkupDanasKg: otkupDanasKg,
+    koopSaldoTotal: koopSaldoTotal
+  };
 }
 
 function getSaldoOM() { return getMgmtReport('SaldoOM'); }
@@ -5753,42 +5840,8 @@ function getMgmtReportFromSs_(mgmtSs, stamSs, tabName) {
   }
 }
 
-function getMgmtOverviewCached_() {
-  var cache = CacheService.getScriptCache();
-  var key = 'mgmtOverview:v1';
-
+function invalidateMgmtOverviewCache_() {
   try {
-    var hit = cache.get(key);
-    if (hit) {
-      var cached = JSON.parse(hit);
-      cached._cache = 'hit';
-      return cached;
-    }
+    CacheService.getScriptCache().remove('mgmtOverview:v1');
   } catch (e) {}
-
-  var mgmtSs = getMgmtReportsSpreadsheet_();
-  var stamSs = getStammdatenSpreadsheet_();
-
-  var payload = {
-    success: true,
-    _cache: 'miss',
-    saldoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoOM'),
-    saldoKupci: getMgmtReportFromSs_(mgmtSs, stamSs, 'SaldoKupci'),
-    otkupPoOM: getMgmtReportFromSs_(mgmtSs, stamSs, 'OtkupPoOM'),
-    predatoPoKupcu: getMgmtReportFromSs_(mgmtSs, stamSs, 'PredatoPoKupcu')
-  };
-
-  try {
-    cache.put(key, JSON.stringify(payload), 20);
-  } catch (e) {
-    logError(
-      'GAS',
-      'getMgmtOverviewCached_:cachePut',
-      e && e.message ? e.message : String(e || ''),
-      e && e.stack ? e.stack : '',
-      ''
-    );
-  }
-
-  return payload;
 }
