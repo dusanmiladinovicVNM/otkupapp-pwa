@@ -362,6 +362,18 @@
     color: var(--forest);
 }
 
+.btn-v2--ghost {
+    background: transparent;
+    color: var(--forest);
+    border: 1.5px solid var(--border-strong);
+}
+.btn-v2--ghost:hover { background: var(--surface-2); }
+
+.btn-v2--sm {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
 .btn-v2__hint {
     font-size: 11px;
     opacity: 0.7;
