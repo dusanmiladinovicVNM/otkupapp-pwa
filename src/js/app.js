@@ -98,6 +98,29 @@ function applyAllTabEyebrows() {
     // Otprema već ima svoj per-render helper u otpremnice.js
 }
 
+function applyOtkupHeaderDate() {
+    const el = document.getElementById('otkupHeaderDate');
+    if (!el) return;
+
+    try {
+        const fmt = new Intl.DateTimeFormat('sr-Latn-RS', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+        // npr. "petak, 25. maj 2026."
+        el.textContent = fmt.format(new Date());
+    } catch (_) {
+        // Fallback ako sr-Latn-RS nije podržan u browser-u
+        const d = new Date();
+        el.textContent =
+            String(d.getDate()).padStart(2, '0') + '.' +
+            String(d.getMonth() + 1).padStart(2, '0') + '.' +
+            d.getFullYear() + '.';
+    }
+}
+
 function setDefaultDates() {
     const today = getTodayIsoDate();
 
