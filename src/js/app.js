@@ -609,6 +609,38 @@ function handleAppShellClick(event) {
             return;
         }
 
+        if (action === 'agro-novo-izdavanje') {
+            if (typeof showMgmtAgroView === 'function') showMgmtAgroView('izdavanje');
+            return;
+        }
+
+        if (action === 'agro-back-main') {
+            if (typeof showMgmtAgroView === 'function') showMgmtAgroView('main');
+            return;
+        }
+
+        if (action === 'agro-back-izdavanje') {
+            if (typeof showMgmtAgroView === 'function') showMgmtAgroView('izdavanje');
+            return;
+        }
+
+        if (action === 'sig-clear') {
+            const target = actionEl.dataset.target;
+            if (target && typeof clearSignature === 'function') clearSignature(target);
+            return;
+        }
+
+        if (action === 'otp-zatvori-i-sacuvaj') {
+            if (typeof otpZatvoriISacuvaj === 'function') otpZatvoriISacuvaj();
+            return;
+        }
+
+        if (action === 'otp-stampa') {
+            // stub — štampa u pripremi
+            if (typeof showToast === 'function') showToast('Štampa je u pripremi.');
+            return;
+        }
+
         if (action === 'start-izd-koop-scan') {
             startIzdKoopScan();
             return;

@@ -139,8 +139,12 @@ async function refreshMgmtOtkupiLive() {
 }
 
 async function loadMgmtOtkupUzivo() {
+    // Otkup uživo ide DIREKTNO iz OTK-* operational sheets (includeLive=1),
+    // ne iz cache-a. Cache je punjen iz MgmtReports/OtkupiAll (master) — nije live.
+    window.mgmtData = window.mgmtData || {};
+    delete window.mgmtData.otkupiAll;
     if (typeof ensureMgmtSection === 'function') {
-        await ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll');
+        await ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll', 'includeLive=1');
     }
 
     const today = (typeof mgmtDashTodayISO === 'function') ? mgmtDashTodayISO() : new Date().toISOString().slice(0, 10);
@@ -216,14 +220,16 @@ async function loadMgmtOtkupUzivo() {
 
     // Render as tbl component
     list.innerHTML = `
-        <div class="tbl">
+        <div class="tbl tbl--uzivo">
             <div class="tbl__head">
                 <div>Kooperant</div>
                 <div>Vrsta i klasa</div>
                 <div>Stanica</div>
+                <div>Vozač</div>
                 <div style="text-align:right;">Količina</div>
                 <div style="text-align:right;">Cena</div>
                 <div>Datum</div>
+                <div style="text-align:center;">Sync</div>
             </div>
             ${records.map(r => {
                 const kg = parseFloat(r.Kolicina) || 0;
@@ -231,6 +237,7 @@ async function loadMgmtOtkupUzivo() {
                 const sid = r.OtkupacID || r.StanicaID || (r._sheetName ? r._sheetName.replace('OTK-', '') : '');
                 const stanicaName = typeof fmtStanica === 'function' ? fmtStanica(sid) : sid;
                 const d = fmtD(r.Datum);
+                const vozac = r.VozacName || r.VozacID || '';
                 return `
                     <div class="tbl__row">
                         <div><div class="tbl__cell-main">${escapeHtml(r.KooperantName || r.KooperantID || '')}</div></div>
@@ -239,10 +246,23 @@ async function loadMgmtOtkupUzivo() {
                             <div class="tbl__cell-sub">Klasa ${escapeHtml(r.Klasa || 'I')}</div>
                         </div>
                         <div><div class="tbl__cell-sub">${escapeHtml(stanicaName)}</div></div>
+                        <div><div class="tbl__cell-sub">${vozac ? escapeHtml(vozac) : '—'}</div></div>
                         <div style="text-align:right;"><div class="tbl__num">${kg.toLocaleString('sr')}<span class="u">kg</span></div></div>
                         <div style="text-align:right;"><div class="tbl__num">${cena.toLocaleString('sr')}<span class="u">RSD</span></div></div>
                         <div><div class="tbl__cell-sub">${escapeHtml(d ? (typeof fmtDate === 'function' ? fmtDate(d) : d) : '')}</div></div>
+                        <div style="text-align:center;">${renderUzivoSyncBadge(r.SyncStatus)}</div>
                     </div>`;
             }).join('')}
         </div>`;
+}
+
+function renderUzivoSyncBadge(syncStatus) {
+    const s = String(syncStatus || '').toLowerCase();
+    if (s === 'pending' || s === 'queued') {
+        return '<span class="sync-badge sync-badge--pending" title="Čeka sync">⏳</span>';
+    }
+    if (s === 'error' || s === 'failed') {
+        return '<span class="sync-badge sync-badge--error" title="Greška sync-a">!</span>';
+    }
+    return '<span class="sync-badge sync-badge--ok" title="Sinhronizovano">✓</span>';
 }
