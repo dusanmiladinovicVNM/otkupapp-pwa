@@ -48,6 +48,7 @@ function getRoleNavConfig() {
                 dashboard: 'dashboard',
                 pregled: 'pregled',
                 dispecer: 'dispecer',
+                uzivo: 'uzivo',
                 otkup: 'otkup',
                 partneri: 'partneri',
                 agro: 'agro'

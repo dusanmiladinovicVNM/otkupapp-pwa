@@ -113,6 +113,84 @@
     <button class="tab-btn role-vozac" data-route="tab" data-tab="transport">Transport</button>
 </div>
 
+<!-- MGMT MOBILE TOP BAR — visible only on mobile ≤ 900px, management role -->
+<div class="mgmt-tbar" id="mgmtMobileTbar">
+    <button class="mgmt-tbar__menu" id="mgmtDrawerBtn" type="button" aria-label="Meni">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="mgmt-tbar__title">
+        <div class="mgmt-tbar__sub" id="mgmtTbarSub">Uprava</div>
+        <div class="mgmt-tbar__h" id="mgmtTbarH">Pregled</div>
+    </div>
+    <div class="mgmt-tbar__right" id="mgmtTbarRight">
+        <div class="mgmt-tbar__avatar" id="mgmtTbarAvatar">DM</div>
+    </div>
+</div>
+
+<!-- MGMT MOBILE DRAWER — slide-in nav overlay -->
+<div class="mgmt-drawer" id="mgmtDrawer">
+    <div class="mgmt-drawer__panel">
+        <div class="mgmt-drawer__top">
+            <div>
+                <div class="mgmt-drawer__brand">Agri<em>X</em></div>
+                <div class="mgmt-drawer__role">Uprava</div>
+            </div>
+            <button class="mgmt-drawer__close" id="mgmtDrawerClose" type="button">✕</button>
+        </div>
+
+        <div class="mgmt-drawer__group">Operativa</div>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="pregled" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 17v-6M11 17V7M16 17v-4M20 17v-9"/></svg>
+            Pregled
+        </button>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="dashboard" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Dashboard
+        </button>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="dispecer" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v10H3zM13 10h5l3 3v3h-8"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+            Dispečer
+        </button>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="uzivo" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/></svg>
+            Otkupi uživo
+        </button>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="otkup" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M3 21h18M8 7h2M14 7h2"/></svg>
+            Otkup
+        </button>
+
+        <div class="mgmt-drawer__group">Partneri</div>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="partneri" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
+            Kooperanti
+        </button>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="partneri" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="7" r="2.5"/></svg>
+            Kupci
+        </button>
+
+        <div class="mgmt-drawer__group">Finansije</div>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="izvodi" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5a5 5 0 1 0 0 7"/></svg>
+            Izvodi i isplate
+        </button>
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="agro" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12c0-4 3-6 7-6-1 5-3 7-7 6Z"/><path d="M12 12c0-4-3-6-7-6 1 5 3 7 7 6Z"/></svg>
+            Agrohemija
+        </button>
+
+        <div class="mgmt-drawer__user">
+            <div class="mgmt-drawer__av" id="mgmtDrawerAvatar">DM</div>
+            <div>
+                <div class="mgmt-drawer__nm" id="mgmtDrawerName">Korisnik</div>
+                <div class="mgmt-drawer__rl">Management</div>
+            </div>
+        </div>
+    </div>
+    <div class="mgmt-drawer__dim" id="mgmtDrawerDim"></div>
+</div>
+
 <!-- ==================== OTKUP TAB ==================== -->
 
 <div class="tab-content" id="tab-otkup">
@@ -2201,10 +2279,28 @@
                     </div>
                 </div>
 
+                <!-- Mobile wizard progress (3 steps; hidden on desktop) -->
+                <div class="iz-wz-progress" id="izWzProgress">
+                    <div class="iz-wz-progress__step" id="izWpStep1">
+                        <div class="iz-wz-progress__dot is-active">1</div>
+                        <div class="iz-wz-progress__lbl is-active">Kooperant</div>
+                    </div>
+                    <div class="iz-wz-progress__bar" id="izWpBar1"></div>
+                    <div class="iz-wz-progress__step" id="izWpStep2">
+                        <div class="iz-wz-progress__dot">2</div>
+                        <div class="iz-wz-progress__lbl">Artikli</div>
+                    </div>
+                    <div class="iz-wz-progress__bar" id="izWpBar2"></div>
+                    <div class="iz-wz-progress__step" id="izWpStep3">
+                        <div class="iz-wz-progress__dot">3</div>
+                        <div class="iz-wz-progress__lbl">Korpa</div>
+                    </div>
+                </div>
+
                 <div class="iz-grid">
 
                     <!-- COL 1: Kooperant + Parcele -->
-                    <div class="iz-col">
+                    <div class="iz-col" id="izdWzCol1">
                         <div class="iz-col__head"><div class="iz-col__num">1</div>Kooperant</div>
                         <div class="iz-col__body">
                             <div class="form-group" style="margin-bottom:10px;">
@@ -2226,7 +2322,7 @@
                     </div>
 
                     <!-- COL 2: Artikal + Dosage + Add -->
-                    <div class="iz-col">
+                    <div class="iz-col" id="izdWzCol2">
                         <div class="iz-col__head"><div class="iz-col__num">2</div>Artikal</div>
                         <div class="iz-col__body">
                             <div class="iz-doza" id="izdPreporuka">
@@ -2252,7 +2348,7 @@
                     </div>
 
                     <!-- COL 3: Korpa + Actions -->
-                    <div class="iz-col">
+                    <div class="iz-col" id="izdWzCol3">
                         <div class="iz-col__head"><div class="iz-col__num">3</div>Korpa <span id="izdKorpaCount" style="margin-left:auto;font-size:11px;opacity:0.7;">0 stavki</span></div>
                         <div class="iz-col__body" id="izdKorpaBd">
                             <p style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">Skenirajte barkod ili izaberite artikal</p>
@@ -2274,6 +2370,12 @@
                     </div>
 
                 </div><!-- /.iz-grid -->
+
+                <!-- Mobile wizard bottom actions (hidden on desktop via CSS) -->
+                <div class="iz-wz-actions" id="izWzActions">
+                    <button class="iz-wz-btn iz-wz-btn--sec" id="izWzBackBtn" type="button">Otkaži</button>
+                    <button class="iz-wz-btn iz-wz-btn--pri" id="izWzNextBtn" type="button">Dalje · Artikli →</button>
+                </div>
             </div><!-- /#mgmt-agro-izdavanje -->
 
             <!-- ── OTPREMNICA PREVIEW + SIGNATURES ──────────── -->
@@ -2551,38 +2653,25 @@
     </button>
 </div>
 
-<!-- MGMT BOTTOM NAV -->
-<div class="bottom-nav role-management" id="mgmtBottomNav">
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="dashboard">
-        <span class="bottom-nav-icon" data-ag-icon="chart"></span>
-        <span class="bottom-nav-label">Dashboard</span>
+<!-- MGMT BOTTOM NAV — 4 tabs (mobile); drawer handles the rest -->
+<nav class="bottom-nav role-management" id="mgmtBottomNav">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 17v-6M11 17V7M16 17v-4M20 17v-9"/></svg>
+        <span>Pregled</span>
     </button>
-    
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled">
-        <span class="bottom-nav-icon" data-ag-icon="home"></span>
-        <span class="bottom-nav-label">Pregled</span>
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="uzivo" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/></svg>
+        <span>Otkupi</span>
     </button>
-
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="dispecer">
-        <span class="bottom-nav-icon" data-ag-icon="clipboard"></span>
-        <span class="bottom-nav-label">Dispečer</span>
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="partneri" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="7" r="2.5"/></svg>
+        <span>Partneri</span>
     </button>
-
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otkup">
-        <span class="bottom-nav-icon" data-ag-icon="coin"></span>
-        <span class="bottom-nav-label">Otkup</span>
+    <button class="bottom-nav-btn" data-action="mgmt-drawer-toggle" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+        <span>Više</span>
     </button>
-
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="partneri">
-        <span class="bottom-nav-icon" data-ag-icon="user"></span>
-        <span class="bottom-nav-label">Partneri</span>
-    </button>
-
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="agro">
-        <span class="bottom-nav-icon" data-ag-icon="sprout"></span>
-        <span class="bottom-nav-label">Agro</span>
-    </button>
-</div>
+</nav>
 
 <div class="bottom-nav role-vozac" id="vozacBottomNav">
     <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="zbirna">
