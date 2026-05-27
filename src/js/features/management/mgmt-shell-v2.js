@@ -175,6 +175,9 @@ async function mgmtShellInit() {
 async function showMgmtRoot(root, btn) {
     window.mgmtShellState.activeRoot = root;
 
+    // Sync mobile top bar title + drawer active state
+    if (typeof mgmtMobileUpdateTbar === 'function') mgmtMobileUpdateTbar(root);
+
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
 
     const rootMap = {
@@ -1347,6 +1350,172 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// ============================================================
+// MANAGEMENT MOBILE — tbar, drawer, wizard
+// ============================================================
+
+const MGMT_TBAR_LABELS = {
+    dashboard:  { sub: 'Upravljanje', h: 'Dashboard' },
+    pregled:    { sub: 'Upravljanje', h: 'Pregled' },
+    dispecer:   { sub: 'Operativa',   h: 'Dispečer' },
+    uzivo:      { sub: 'Otkup',       h: 'Uživo' },
+    otkup:      { sub: 'Otkup',       h: 'Stanice' },
+    partneri:   { sub: 'Partneri',    h: 'Kooperanti i kupci' },
+    kooperanti: { sub: 'Partneri',    h: 'Kooperanti' },
+    kupci:      { sub: 'Partneri',    h: 'Kupci' },
+    fakture:    { sub: 'Partneri',    h: 'Fakture' },
+    izvodi:     { sub: 'Finansije',   h: 'Izvodi' },
+    agro:       { sub: 'Agrohemija',  h: 'Izdavanje' }
+};
+
+function mgmtMobileUpdateTbar(root) {
+    const lbl = MGMT_TBAR_LABELS[root] || { sub: 'Uprava', h: root || 'Pregled' };
+    const subEl = document.getElementById('mgmtTbarSub');
+    const hEl   = document.getElementById('mgmtTbarH');
+    if (subEl) subEl.textContent = lbl.sub;
+    if (hEl)   hEl.textContent   = lbl.h;
+
+    document.querySelectorAll('.mgmt-drawer__item[data-root]').forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.root === root);
+    });
+}
+
+function mgmtMobileTbarSync() {
+    const isMgmt   = window.CONFIG && String(CONFIG.USER_ROLE || '').toLowerCase() === 'management';
+    const isMobile = window.innerWidth <= 900;
+    const tbar     = document.getElementById('mgmtMobileTbar');
+    const header   = document.querySelector('.header');
+
+    if (!tbar) return;
+
+    if (isMgmt && isMobile) {
+        tbar.style.display = 'flex';
+        if (header) header.style.display = 'none';
+    } else {
+        tbar.style.display = 'none';
+        if (header) header.style.display = '';
+    }
+}
+
+function mgmtDrawerOpen() {
+    const drawer = document.getElementById('mgmtDrawer');
+    if (drawer) drawer.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+}
+
+function mgmtDrawerClose() {
+    const drawer = document.getElementById('mgmtDrawer');
+    if (drawer) drawer.classList.remove('is-open');
+    document.body.style.overflow = '';
+}
+
+function mgmtDrawerPopulateUser() {
+    const initials      = mgmtGetUserInitials();
+    const name          = mgmtGetUserName();
+    const avatarEl      = document.getElementById('mgmtTbarAvatar');
+    const drawerAvEl    = document.getElementById('mgmtDrawerAvatar');
+    const drawerNameEl  = document.getElementById('mgmtDrawerName');
+    if (avatarEl)     avatarEl.textContent     = initials;
+    if (drawerAvEl)   drawerAvEl.textContent   = initials;
+    if (drawerNameEl) drawerNameEl.textContent = name;
+}
+
+// ── Agrohemija wizard mobile step navigation ──────────────────
+
+let _izWzStep = 1;
+
+function mgmtWizardStep(n) {
+    _izWzStep = n;
+
+    ['izdWzCol1', 'izdWzCol2', 'izdWzCol3'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('iz-wz-hidden', i + 1 !== n);
+    });
+
+    for (let i = 1; i <= 3; i++) {
+        const stepEl = document.getElementById('izWpStep' + i);
+        if (!stepEl) continue;
+        const dot = stepEl.querySelector('.iz-wz-progress__dot');
+        const lbl = stepEl.querySelector('.iz-wz-progress__lbl');
+        if (dot) {
+            dot.classList.remove('is-active', 'is-done');
+            if (i < n)      dot.classList.add('is-done');
+            else if (i === n) dot.classList.add('is-active');
+        }
+        if (lbl) lbl.classList.toggle('is-active', i === n);
+    }
+
+    for (let i = 1; i <= 2; i++) {
+        const bar = document.getElementById('izWpBar' + i);
+        if (bar) bar.classList.toggle('is-done', i < n);
+    }
+
+    const backBtn = document.getElementById('izWzBackBtn');
+    const nextBtn = document.getElementById('izWzNextBtn');
+    if (backBtn) backBtn.textContent = n === 1 ? 'Otkaži' : '← Nazad';
+    const nextLabels = ['Dalje · Artikli →', 'Dalje · Korpa →', 'Izvrši izdavanje'];
+    if (nextBtn) nextBtn.textContent = nextLabels[n - 1] || 'Dalje';
+}
+
+function mgmtWizardInitMobile() {
+    if (window.innerWidth > 900) {
+        ['izdWzCol1', 'izdWzCol2', 'izdWzCol3'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('iz-wz-hidden');
+        });
+        return;
+    }
+    mgmtWizardStep(1);
+}
+
+// ── Event delegation for mobile interactions ──────────────────
+
+document.addEventListener('click', function(e) {
+    // Hamburger button or "Više" bottom nav tab → open drawer
+    if (e.target.closest('#mgmtDrawerBtn') || e.target.closest('[data-action="mgmt-drawer-toggle"]')) {
+        mgmtDrawerOpen();
+        return;
+    }
+
+    // Close button or dim overlay → close drawer
+    if (e.target.closest('#mgmtDrawerClose') || e.target.closest('#mgmtDrawerDim')) {
+        mgmtDrawerClose();
+        return;
+    }
+
+    // Drawer nav item → navigate + close
+    const drawerItem = e.target.closest('[data-action="mgmt-drawer-nav"]');
+    if (drawerItem) {
+        const root = drawerItem.dataset.root;
+        mgmtDrawerClose();
+        if (root && typeof showMgmtRoot === 'function') showMgmtRoot(root);
+        return;
+    }
+
+    // Wizard next / submit
+    if (e.target.closest('#izWzNextBtn')) {
+        if (_izWzStep < 3) {
+            mgmtWizardStep(_izWzStep + 1);
+        } else {
+            const saveBtn = document.getElementById('izdSaveBtn');
+            if (saveBtn) saveBtn.click();
+        }
+        return;
+    }
+
+    // Wizard back / cancel
+    if (e.target.closest('#izWzBackBtn')) {
+        if (_izWzStep > 1) {
+            mgmtWizardStep(_izWzStep - 1);
+        } else {
+            if (typeof showMgmtAgroView === 'function') showMgmtAgroView('main');
+        }
+        return;
+    }
+});
+
+window.addEventListener('resize', mgmtMobileTbarSync);
+
 // Patch showMgmtRoot to also update sidebar active state
 const _origShowMgmtRoot = window.showMgmtRoot || showMgmtRoot;
 window.showMgmtRoot = async function(root, btn) {
@@ -1354,9 +1523,33 @@ window.showMgmtRoot = async function(root, btn) {
     return _origShowMgmtRoot.call(this, root, btn);
 };
 
-// Patch mgmtShellInit to mount sidebar
+// Patch mgmtShellInit: mount sidebar then run mobile setup
 const _origMgmtShellInit = window.mgmtShellInit || mgmtShellInit;
 window.mgmtShellInit = async function() {
     mgmtSidebarMount();
-    return _origMgmtShellInit.call(this);
+    const result = await _origMgmtShellInit.call(this);
+    mgmtMobileTbarSync();
+    mgmtMobileUpdateTbar((window.mgmtShellState && window.mgmtShellState.activeRoot) || 'pregled');
+    mgmtDrawerPopulateUser();
+    return result;
 };
+
+// Patch showMgmtAgroView to init wizard on mobile when entering izdavanje
+(function() {
+    const _origAgroView = window.showMgmtAgroView;
+    if (typeof _origAgroView !== 'function') return;
+    window.showMgmtAgroView = function(view) {
+        _origAgroView.call(this, view);
+        if (view === 'izdavanje') {
+            mgmtWizardInitMobile();
+            if (window.innerWidth <= 900) {
+                const subEl = document.getElementById('mgmtTbarSub');
+                const hEl   = document.getElementById('mgmtTbarH');
+                if (subEl) subEl.textContent = 'Agrohemija';
+                if (hEl)   hEl.textContent   = 'Novo izdavanje';
+            }
+        } else if (view === 'main') {
+            mgmtMobileUpdateTbar('agro');
+        }
+    };
+})();
