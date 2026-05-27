@@ -85,6 +85,13 @@ async function syncNow() {
     return result;
 }
 
+function mirrorSyncToMgmtTbar(text, klass) {
+    const mirror = document.getElementById('mgmtTbarSync');
+    if (!mirror) return;
+    mirror.textContent = text;
+    mirror.className = klass + ' mgmt-tbar__sync';
+}
+
 async function updateSyncBadge(status) {
     const badge = byId('syncBadge');
     if (!badge || !db) return;
@@ -92,6 +99,7 @@ async function updateSyncBadge(status) {
     if (status === 'syncing') {
         setText(badge, 'SYNC...');
         badge.className = 'sync-badge sync-pending';
+        mirrorSyncToMgmtTbar('●', 'sync-badge sync-pending');
         return;
     }
 
@@ -115,15 +123,19 @@ async function updateSyncBadge(status) {
     if (!navigator.onLine) {
         setText(badge, 'OFFLINE' + (waitCount > 0 ? ' (' + waitCount + ')' : ''));
         badge.className = 'sync-badge sync-offline';
+        mirrorSyncToMgmtTbar('●', 'sync-badge sync-offline');
     } else if ((syncing?.length || 0) > 0 || isAnySyncInFlight()) {
         setText(badge, 'SYNC...');
         badge.className = 'sync-badge sync-pending';
+        mirrorSyncToMgmtTbar('●', 'sync-badge sync-pending');
     } else if (waitCount > 0) {
         setText(badge, 'ČEKA: ' + waitCount);
         badge.className = 'sync-badge sync-pending';
+        mirrorSyncToMgmtTbar('●', 'sync-badge sync-pending');
     } else {
         setText(badge, 'ONLINE');
         badge.className = 'sync-badge sync-online';
+        mirrorSyncToMgmtTbar('●', 'sync-badge sync-online');
     }
 }
 
