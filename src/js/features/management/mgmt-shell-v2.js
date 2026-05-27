@@ -187,6 +187,7 @@ async function showMgmtRoot(root, btn) {
         kooperanti: 'tab-mgmt-partneri',
         kupci:      'tab-mgmt-partneri',
         fakture:    'tab-mgmt-partneri',
+        izvodi:     'tab-mgmt-izvodi',
         agro:       'tab-mgmt-agro'
     };
 
@@ -227,10 +228,14 @@ async function showMgmtRoot(root, btn) {
         showMgmtPartnerSegment('kupci');
         showMgmtKupSub('fakture');
         if (typeof loadMgmtFakture === 'function') loadMgmtFakture();
+    } else if (root === 'izvodi') {
+        // placeholder — izvodi i isplate
     } else if (root === 'partneri') {
         showMgmtPartnerSegment(window.mgmtShellState.partnerSegment || 'kooperanti');
     } else if (root === 'agro') {
-        showMgmtAgroSub(window.mgmtShellState.agroSub || 'izdavanje');
+        if (typeof showMgmtAgroView === 'function') {
+            showMgmtAgroView('main');
+        }
     }
 
     setTimeout(() => {
@@ -305,26 +310,12 @@ function showMgmtKupSub(sub, btn) {
     if (sub === 'roba' && typeof loadMgmtPredato === 'function') loadMgmtPredato();
 }
 
-function showMgmtAgroSub(sub, btn) {
-    window.mgmtShellState.agroSub = sub;
-
-    const map = {
-        izdavanje:  'mgmt-agro-izdavanje',
-        stanje:     'mgmt-agro-stanje',
-        otpremnice: 'mgmt-agro-otpremnice'
-    };
-
-    mgmtHidePanels(['mgmt-agro-izdavanje', 'mgmt-agro-stanje', 'mgmt-agro-otpremnice']);
-
-    const target = document.getElementById(map[sub]);
-    if (target) target.classList.add('active');
-
-    mgmtClearActive('#mgmtAgroSubBar .sub-tab-btn');
-    mgmtActivateButton(btn, `#mgmtAgroSubBar .sub-tab-btn[data-sub="${sub}"]`);
-
-    if (sub === 'izdavanje' && typeof populateIzdDropdowns === 'function') populateIzdDropdowns();
-    if (sub === 'stanje' && typeof loadMgmtAgroStanje === 'function') loadMgmtAgroStanje();
-    if (sub === 'otpremnice' && typeof loadMgmtAgroOtpremnice === 'function') loadMgmtAgroOtpremnice();
+// Kept as a shim — actual logic lives in showMgmtAgroView() in agrohemija.js
+function showMgmtAgroSub(sub) {
+    const viewMap = { izdavanje: 'izdavanje', stanje: 'main', otpremnice: 'main' };
+    if (typeof showMgmtAgroView === 'function') {
+        showMgmtAgroView(viewMap[sub] || 'main');
+    }
 }
 
 function showMgmtPartnerSegment(segment, btn) {
@@ -1269,9 +1260,10 @@ const MGMT_NAV_ITEMS = [
     { group: 'Partneri' },
     { root: 'kooperanti', label: 'Kooperanti',    icon: 'person'   },
     { root: 'kupci',      label: 'Kupci',         icon: 'people'   },
-    { root: 'fakture',    label: 'Fakture i SEF', icon: 'invoice'  },
+    { root: 'fakture',    label: 'Fakture i SEF',    icon: 'invoice' },
+    { root: 'izvodi',     label: 'Izvodi i isplate', icon: 'money'   },
     { group: 'Finansije' },
-    { root: 'agro',       label: 'Agrohemija',    icon: 'leaf'     },
+    { root: 'agro',       label: 'Agrohemija',       icon: 'leaf'    },
 ];
 
 function mgmtGetUserInitials() {

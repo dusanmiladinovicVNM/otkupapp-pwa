@@ -348,8 +348,7 @@ async function izdZavrsi() {
     const parcelaID = parcelaIDs.join(';');
     const napomena = document.getElementById('izdNapomena').value || '';
 
-    // Prikaži otpremnicu za potpise
-    izdShowOtpremnica({
+    const data = {
         clientRecordID: izdGenerateClientRecordID(),
         kooperantID: izdSelectedKoopID,
         kooperantName: izdSelectedKoopName,
@@ -365,7 +364,14 @@ async function izdZavrsi() {
         ukupnaVrednost: ukupno,
         napomena: napomena,
         datum: getTodayIsoDate()
-    });
+    };
+
+    // Use integrated view-stack otpremnica panel if available; fallback to modal
+    if (document.getElementById('mgmt-agro-otpremnica')) {
+        showMgmtAgroOtpremnicaPanel(data);
+    } else {
+        izdShowOtpremnica(data);
+    }
 }
 
 // --- Otpremnica Modal (isti pattern kao Otkupni List) ---
@@ -812,4 +818,269 @@ function loadMgmtAgroStanje() {
     }
 }
 
+// ============================================================
+// AGRO VIEW-STACK  (main | izdavanje | otpremnica)
+// ============================================================
 
+// Pending otpremnica data, shared between panel init + save
+let _otpCurrentData = null;
+
+/**
+ * Switch between the 3 agro views.
+ * @param {'main'|'izdavanje'|'otpremnica'} view
+ */
+function showMgmtAgroView(view) {
+    const VIEWS = ['main', 'izdavanje', 'otpremnica'];
+    VIEWS.forEach(v => {
+        const el = document.getElementById('mgmt-agro-' + v);
+        if (el) el.style.display = (v === view) ? '' : 'none';
+    });
+
+    if (view === 'main') {
+        loadMgmtAgroDashboard();
+    } else if (view === 'izdavanje') {
+        if (typeof populateIzdDropdowns === 'function') populateIzdDropdowns();
+    } else if (view === 'otpremnica') {
+        // Signature pads need the canvas to be visible/sized first
+        setTimeout(() => {
+            if (typeof initSignaturePad === 'function') {
+                initSignaturePad('sigKooperant');
+                initSignaturePad('sigOperater');
+            }
+        }, 80);
+    }
+}
+window.showMgmtAgroView = showMgmtAgroView;
+
+// ── Dashboard ──────────────────────────────────────────────────
+
+/**
+ * Populate the main agro dashboard:
+ * - stanje magacina (left panel, reuses loadMgmtAgroStanje)
+ * - poslednja izdavanja feed (right panel)
+ * - 4 KPI cards (from stammdaten.artikli stanje totals; izdavanja TBD from API)
+ */
+function loadMgmtAgroDashboard() {
+    // ── Stanje magacina (left) ──────────────────────────────────
+    if (typeof loadMgmtAgroStanje === 'function') {
+        loadMgmtAgroStanje();
+    }
+
+    // ── KPI cards ──────────────────────────────────────────────
+    const artikli = (window.stammdaten && window.stammdaten.artikli) || [];
+    let totalStanje = 0;
+    artikli.forEach(a => { totalStanje += parseFloat(a.Stanje || a.TrenutnoStanje || 0) || 0; });
+
+    const setKpi = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+    // Stanje magacina sum is informational; real financial KPIs need a future API
+    // For now show artikal count and total stanje, leave others as "—"
+    setKpi('mgmtAgroKpiIzdato', '—');
+    setKpi('mgmtAgroKpiBroj', '—');
+    setKpi('mgmtAgroKpiKolicina',
+        artikli.length
+            ? totalStanje.toLocaleString('sr') + '<span class="u">kg</span>'
+            : '—<span class="u">kg</span>'
+    );
+    setKpi('mgmtAgroKpiKooperanata', '—');
+
+    // ── Poslednja izdavanja feed (right) ───────────────────────
+    const feed = document.getElementById('mgmtAgroFeedList');
+    const feedSub = document.getElementById('mgmtAgroFeedSub');
+    if (!feed) return;
+
+    // Try to load from Firebase if available, otherwise show placeholder
+    _loadAgroFeedFromFirebase(feed, feedSub);
+}
+
+async function _loadAgroFeedFromFirebase(feed, feedSub) {
+    try {
+        const json = await apiFetch('action=getMgmtAgroFeed');
+        if (!json || !json.izdavanja || !json.izdavanja.length) {
+            feed.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Nema podataka za prikaz.</div>';
+            return;
+        }
+        const items = json.izdavanja.slice(0, 20);
+        if (feedSub) feedSub.textContent = items.length + ' posled. izdavanja';
+
+        feed.innerHTML = items.map(iz => {
+            const ukupno = parseFloat(iz.UkupnaVrednost || 0);
+            return `<div class="artikal" style="cursor:default;">
+                <div class="artikal__cat artikal__cat--gold">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9h12l-1 10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Z"/><path d="M8 9V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/></svg>
+                </div>
+                <div>
+                    <div class="artikal__name">${escapeHtml(iz.KooperantName || iz.KooperantID || '—')}</div>
+                    <div class="artikal__meta">${escapeHtml(iz.Datum || '')} · ${(iz.Stavke || []).length} stavki</div>
+                </div>
+                <div class="artikal__stock">${ukupno.toLocaleString('sr')}<span class="u">RSD</span></div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        feed.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Nema podataka za prikaz.</div>';
+    }
+}
+
+// ── Otpremnica panel ───────────────────────────────────────────
+
+/**
+ * Populate the static otpremnica preview panel and switch to it.
+ * @param {Object} data  — same shape as izdShowOtpremnica expects
+ */
+function showMgmtAgroOtpremnicaPanel(data) {
+    _otpCurrentData = data;
+
+    const config = (window.stammdaten && stammdaten.config) || [];
+    const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
+    const koop = ((window.stammdaten && stammdaten.kooperanti) || []).find(k => k.KooperantID === data.kooperantID) || {};
+
+    // Firma header
+    const firmaNaziv = document.getElementById('otpFirmaNaziv');
+    if (firmaNaziv) {
+        firmaNaziv.textContent = gv('SELLER_NAME') || '—';
+    }
+    const firmaHeader = document.getElementById('otpFirmaHeader');
+    if (firmaHeader) {
+        firmaHeader.innerHTML = `
+            <strong>${escapeHtml(gv('SELLER_NAME') || 'Zadruga')}</strong><br>
+            <span style="font-size:12px;color:var(--text-muted);">${escapeHtml(gv('SELLER_STREET') || '')}${gv('SELLER_CITY') ? ', ' + gv('SELLER_CITY') : ''}</span>
+        `;
+    }
+
+    // Meta
+    const otpBroj = document.getElementById('otpBroj');
+    const otpDatum = document.getElementById('otpDatum');
+    if (otpBroj) otpBroj.textContent = data.clientRecordID || '—';
+    if (otpDatum) otpDatum.textContent = data.datum || '—';
+
+    // Kooperant block
+    const koopBlock = document.getElementById('otpKooperantBlock');
+    if (koopBlock) {
+        koopBlock.innerHTML = `
+            <strong>${escapeHtml(koop.Ime || '')} ${escapeHtml(koop.Prezime || '')}</strong><br>
+            ${koop.Adresa ? escapeHtml(koop.Adresa) + ', ' : ''}${escapeHtml(koop.Mesto || '')}<br>
+            ${koop.JMBG ? 'JMBG: ' + escapeHtml(koop.JMBG) : 'JMBG: ________'}
+            ${koop.BPGBroj ? ' · BPG: ' + escapeHtml(koop.BPGBroj) : ''}
+            ${data.parcelaID ? '<br>Parcele: ' + escapeHtml(data.parcelaID) : ''}
+        `;
+    }
+
+    // Stavke table
+    const stavkeTable = document.getElementById('otpStavkeTable');
+    if (stavkeTable) {
+        stavkeTable.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Artikal</th>
+                        <th style="text-align:center;">Količina</th>
+                        <th style="text-align:right;">Cena/jm</th>
+                        <th style="text-align:right;">Vrednost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.stavke.map((s, i) => `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td>${escapeHtml(s.naziv)}</td>
+                            <td style="text-align:center;">${s.kolicina} ${escapeHtml(s.jm)}</td>
+                            <td style="text-align:right;">${Number(s.cena).toLocaleString('sr')}</td>
+                            <td style="text-align:right;font-weight:600;">${Number(s.vrednost).toLocaleString('sr')} RSD</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    // Ukupno bar
+    const otpUkupno = document.getElementById('otpUkupno');
+    if (otpUkupno) otpUkupno.textContent = data.ukupnaVrednost.toLocaleString('sr') + ' RSD';
+
+    // Napomena
+    const napRow = document.getElementById('otpNapomenaRow');
+    const napEl = document.getElementById('otpNapomena');
+    if (napRow && napEl) {
+        if (data.napomena) {
+            napEl.textContent = data.napomena;
+            napRow.style.display = '';
+        } else {
+            napRow.style.display = 'none';
+        }
+    }
+
+    // Clear signatures before showing
+    if (typeof clearSignature === 'function') {
+        clearSignature('sigKooperant');
+        clearSignature('sigOperater');
+    }
+
+    showMgmtAgroView('otpremnica');
+}
+
+// ── Save from otpremnica panel ────────────────────────────────
+
+async function otpZatvoriISacuvaj() {
+    if (typeof withSubmitLock === 'function') {
+        return withSubmitLock('management-otp-save', _otpDoSave, {
+            action: 'otp-zatvori-i-sacuvaj',
+            alreadyMessage: 'Čuvanje je već u toku...'
+        });
+    }
+    return _otpDoSave();
+}
+window.otpZatvoriISacuvaj = otpZatvoriISacuvaj;
+
+async function _otpDoSave() {
+    const data = _otpCurrentData;
+    if (!data) { showToast('Nema podataka za otpremnicu', 'error'); return; }
+
+    const sigK = typeof getSignatureData === 'function' ? getSignatureData('sigKooperant') : '';
+    const sigO = typeof getSignatureData === 'function' ? getSignatureData('sigOperater') : '';
+
+    if (!sigK) { showToast('Potreban je potpis kooperanta!', 'error'); return; }
+    if (!sigO) { showToast('Potreban je potpis operatera!', 'error'); return; }
+
+    showToast('Čuvanje...', 'info');
+
+    try {
+        const json = await apiPost('saveIzdavanje', {
+            clientRecordID: data.clientRecordID,
+            izdavanjeID: data.clientRecordID,
+            kooperantID: data.kooperantID,
+            kooperantName: data.kooperantName,
+            parcelaID: data.parcelaID,
+            stavke: data.stavke,
+            ukupnaVrednost: data.ukupnaVrednost,
+            izdaoUser: (window.CONFIG && CONFIG.ENTITY_NAME) || '',
+            napomena: data.napomena,
+            sigIzdavalac: sigO,
+            sigPrimalac: sigK
+        });
+
+        if (!json) { showToast('Nema konekcije', 'error'); return; }
+
+        if (json.success) {
+            const statusText = json.status === 'already-exists'
+                ? 'Izdavanje je već sačuvano'
+                : 'Izdavanje sačuvano';
+            showToast(statusText + ': ' + (json.izdavanjeID || data.clientRecordID), 'success');
+            _otpCurrentData = null;
+            izdReset();
+            showMgmtAgroView('main');
+            return;
+        }
+
+        showToast(json.error || 'Greška pri čuvanju', 'error');
+    } catch (e) {
+        console.error('_otpDoSave failed:', e);
+        if (typeof reportClientError === 'function') {
+            reportClientError(e, {
+                source: 'management/agrohemija',
+                errorAction: 'saveIzdavanje',
+                entityID: (data && data.kooperantID) || ''
+            });
+        }
+        showToast('Nema konekcije', 'error');
+    }
+}

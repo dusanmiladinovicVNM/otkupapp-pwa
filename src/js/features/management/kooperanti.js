@@ -43,45 +43,15 @@ function onMgmtStanicaChange() {
 
 async function onMgmtKooperantChange() {
     const koopID = document.getElementById('mgmtKooperant').value;
-    if (!koopID) { document.getElementById('mgmtKarticaHeader').style.display = 'none'; document.getElementById('mgmtKarticaList').innerHTML = ''; return; }
-    const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
-    document.getElementById('mgmtKarticaName').textContent = koop ? koop.Ime + ' ' + koop.Prezime : koopID;
-    document.getElementById('mgmtKarticaID').textContent = koopID;
-    document.getElementById('mgmtKarticaHeader').style.display = 'block';
-
-    let records = [];
-    if (mgmtData && mgmtData.kartice) {
-        records = mgmtData.kartice.filter(r => r.KooperantID === koopID && r.Opis !== 'UKUPNO');
-    } else {
-        const json = await safeAsync(async () => {
-            return await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
-        }, 'Greška pri učitavanju kartice kooperanta');
-
-        if (json && json.success && json.records) {
-            records = json.records.filter(r => r.Opis !== 'UKUPNO');
-        }
-    }
-    if (records.length === 0) {
-        document.getElementById('mgmtKarticaList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
-        ['mgmtKarticaZad','mgmtKarticaRaz','mgmtKarticaSaldo'].forEach(id => document.getElementById(id).textContent = '0');
+    if (!koopID) {
+        const panel = document.getElementById('mgmtKoopDetailPanel');
+        if (panel) panel.innerHTML = '<div class="partner-detail-empty">Izaberi kooperanta iz liste sa leve strane</div>';
         return;
     }
-    let zad = 0, raz = 0;
-    document.getElementById('mgmtKarticaList').innerHTML = records.map(r => {
-        const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
-        zad += z; raz += ra;
-        return `<div class="queue-item" style="border-left-color:${z>0?'var(--danger)':'var(--success)'};">
-            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojDok||'')}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
-            <div class="qi-detail">${escapeHtml(r.Opis||'')}</div>
-            <div class="qi-detail" style="font-size:12px;margin-top:2px;">
-                ${z>0?'<span style="color:var(--danger);">Zaduž: '+z.toLocaleString('sr')+'</span> ':''}
-                ${ra>0?'<span style="color:var(--success);">Razduž: '+ra.toLocaleString('sr')+'</span> ':''}
-                | Saldo: <strong>${s.toLocaleString('sr')}</strong></div></div>`;
-    }).join('');
-    document.getElementById('mgmtKarticaZad').textContent = zad.toLocaleString('sr');
-    document.getElementById('mgmtKarticaRaz').textContent = raz.toLocaleString('sr');
-    document.getElementById('mgmtKarticaSaldo').textContent = (zad - raz).toLocaleString('sr');
+    await onMgmtKooperantChangeDirect(koopID);
 }
+
+let _mgmtKoopSaldoCache = [];
 
 async function loadMgmtKoopSaldo() {
     if (typeof ensureMgmtSection === 'function') {
@@ -91,43 +61,74 @@ async function loadMgmtKoopSaldo() {
     const kartice = (mgmtData && Array.isArray(mgmtData.kartice))
         ? mgmtData.kartice
         : [];
-    
-    const list = document.getElementById('mgmtKoopSaldoList');
-    const totals = kartice.filter(r => r.Opis === 'UKUPNO');
-    if (totals.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
-        return;
-    }
-    // Sort by saldo descending (largest positive first)
-    const sorted = [...totals].sort((a, b) => (parseFloat(b.Saldo)||0) - (parseFloat(a.Saldo)||0));
 
-    // Render as partner-list component from redesign
+    const totals = kartice.filter(r => r.Opis === 'UKUPNO');
+    _mgmtKoopSaldoCache = [...totals].sort((a, b) => (parseFloat(b.Saldo)||0) - (parseFloat(a.Saldo)||0));
+
+    // Update segment counter
+    const countEl = document.getElementById('mgmtKoopCount');
+    if (countEl) countEl.textContent = _mgmtKoopSaldoCache.length;
+
+    renderMgmtKoopSaldoList('');
+}
+
+function renderMgmtKoopSaldoList(query) {
+    const list = document.getElementById('mgmtKoopSaldoList');
+    if (!list) return;
+
+    const q = String(query || '').trim().toLowerCase();
+    const filtered = _mgmtKoopSaldoCache.filter(r => {
+        if (!q) return true;
+        const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === r.KooperantID);
+        const name = koop ? (koop.Ime + ' ' + koop.Prezime) : (r.KooperantID || '');
+        return name.toLowerCase().includes(q) || String(r.KooperantID || '').toLowerCase().includes(q);
+    });
+
     list.innerHTML = `
         <div class="partner-list">
             <div class="partner-list__head">
                 <span class="partner-list__title">Po saldu — opadajuće</span>
+                <div class="partner-list__search">
+                    <input type="search" id="mgmtKoopSearch" placeholder="Pretraži kooperanta…" value="${escapeHtml(query || '')}">
+                </div>
             </div>
-            ${sorted.map(r => {
-                const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === r.KooperantID);
-                const name = koop ? koop.Ime + ' ' + koop.Prezime : r.KooperantID;
-                const saldo = parseFloat(r.Saldo) || 0;
-                const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
-                const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
-                return `
-                    <div class="partner" data-koop-id="${escapeHtml(r.KooperantID || '')}" data-action="mgmt-koop-select">
-                        <div class="partner__avatar">${escapeHtml(initials)}</div>
-                        <div>
-                            <div class="partner__name">${escapeHtml(name)}</div>
-                            <div class="partner__meta">${escapeHtml(r.KooperantID || '')}</div>
+            ${filtered.length === 0
+                ? '<div class="partner-list__empty">Nema rezultata</div>'
+                : filtered.map(r => {
+                    const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === r.KooperantID);
+                    const name = koop ? koop.Ime + ' ' + koop.Prezime : r.KooperantID;
+                    const saldo = parseFloat(r.Saldo) || 0;
+                    const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
+                    const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
+                    const meta = koop && (koop.Mesto || koop.StanicaID)
+                        ? `${escapeHtml(r.KooperantID || '')} · ${escapeHtml(koop.Mesto || koop.StanicaID || '')}`
+                        : escapeHtml(r.KooperantID || '');
+                    return `
+                        <div class="partner" data-koop-id="${escapeHtml(r.KooperantID || '')}" data-action="mgmt-koop-select">
+                            <div class="partner__avatar">${escapeHtml(initials)}</div>
+                            <div>
+                                <div class="partner__name">${escapeHtml(name)}</div>
+                                <div class="partner__meta">${meta}</div>
+                            </div>
+                            <div class="partner__saldo partner__saldo--${saldoMod}">
+                                ${saldo > 0 ? '+' : ''}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
+                            </div>
                         </div>
-                        <div class="partner__saldo partner__saldo--${saldoMod}">
-                            ${saldo > 0 ? '+' : ''}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
-                        </div>
-                    </div>
-                `;
-            }).join('')}
+                    `;
+                }).join('')}
         </div>
     `;
+
+    const searchEl = document.getElementById('mgmtKoopSearch');
+    if (searchEl) {
+        searchEl.addEventListener('input', (e) => renderMgmtKoopSaldoList(e.target.value));
+        // Restore focus + caret if user was typing
+        if (q) {
+            searchEl.focus();
+            const len = searchEl.value.length;
+            try { searchEl.setSelectionRange(len, len); } catch (_) {}
+        }
+    }
 }
 
 async function loadMgmtKoopPregled() {
@@ -213,18 +214,21 @@ function renderMgmtKoopPregled() {
 })();
 
 async function onMgmtKooperantChangeDirect(koopID) {
+    const panel = document.getElementById('mgmtKoopDetailPanel');
+    if (!panel) return;
+
+    panel.innerHTML = '<div class="partner-detail-empty" style="padding:40px;text-align:center;color:var(--text-muted);">Učitavanje…</div>';
+
+    // --- basic kooperant info ---
     const koop = (stammdaten && stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
-    const nameEl = document.getElementById('mgmtKarticaName');
-    const idEl = document.getElementById('mgmtKarticaID');
-    const headerEl = document.getElementById('mgmtKarticaHeader');
-    if (nameEl) nameEl.textContent = koop ? koop.Ime + ' ' + koop.Prezime : koopID;
-    if (idEl) idEl.textContent = koopID;
-    if (headerEl) headerEl.style.display = 'block';
+    const name = koop ? koop.Ime + ' ' + koop.Prezime : koopID;
 
-    const listEl = document.getElementById('mgmtKarticaList');
-    if (!listEl) return;
-    listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
-
+    // --- kartice ---
+    if (window.mgmtData && !window.mgmtData.kartice) {
+        if (typeof ensureMgmtSection === 'function') {
+            await ensureMgmtSection('kartice', 'getMgmtKartice');
+        }
+    }
     let records = [];
     if (window.mgmtData && window.mgmtData.kartice) {
         records = window.mgmtData.kartice.filter(r => r.KooperantID === koopID && r.Opis !== 'UKUPNO');
@@ -237,31 +241,108 @@ async function onMgmtKooperantChangeDirect(koopID) {
         }
     }
 
-    if (records.length === 0) {
-        listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
-        ['mgmtKarticaZad','mgmtKarticaRaz','mgmtKarticaSaldo'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.textContent = '0';
-        });
-        return;
-    }
+    // --- saldo from UKUPNO row ---
+    const ukupno = (window.mgmtData && window.mgmtData.kartice || []).find(r => r.KooperantID === koopID && r.Opis === 'UKUPNO');
+    const saldo = parseFloat(ukupno && ukupno.Saldo || 0);
 
-    let zad = 0, raz = 0;
-    listEl.innerHTML = records.map(r => {
-        const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
-        zad += z; raz += ra;
-        return `<div class="queue-item" style="border-left-color:${z>0?'var(--danger)':'var(--success)'};">
-            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojDok||'')}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
-            <div class="qi-detail">${escapeHtml(r.Opis||'')}</div>
-            <div class="qi-detail" style="font-size:12px;margin-top:2px;">
-                ${z>0?'<span style="color:var(--danger);">Zaduž: '+z.toLocaleString('sr')+'</span> ':''}
-                ${ra>0?'<span style="color:var(--success);">Razduž: '+ra.toLocaleString('sr')+'</span> ':''}
-                | Saldo: <strong>${s.toLocaleString('sr')}</strong></div></div>`;
-    }).join('');
+    // --- predato / agro from saldoOMDetail ---
+    const omDetail = (window.mgmtData && window.mgmtData.saldoOMDetail) || [];
+    const koopOM = omDetail.filter(r => r.KooperantID === koopID);
+    const predatoKg  = koopOM.reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+    const agroRSD    = koopOM.reduce((s, r) => s + (parseFloat(r.AgroZaduzenje) || 0), 0);
 
-    const zadEl = document.getElementById('mgmtKarticaZad');
-    const razEl = document.getElementById('mgmtKarticaRaz');
-    const saldoEl = document.getElementById('mgmtKarticaSaldo');
-    if (zadEl) zadEl.textContent = zad.toLocaleString('sr');
-    if (razEl) razEl.textContent = raz.toLocaleString('sr');
-    if (saldoEl) saldoEl.textContent = (zad - raz).toLocaleString('sr');
+    // --- parcele info from stammdaten ---
+    const parcele = (stammdaten && stammdaten.parcele || []).filter(p => p.KooperantID === koopID);
+    const totalHa  = parcele.reduce((s, p) => s + (parseFloat(p.Povrsina || p.Ha || 0)), 0);
+
+    // --- meta line ---
+    const location = koop && (koop.Mesto || koop.Selo) ? `${koop.Mesto || koop.Selo}` : '';
+    const phone    = koop && koop.Telefon ? koop.Telefon : '';
+    const saldoSign = saldo >= 0 ? '+' : '';
+    const saldoColor = saldo > 0 ? 'var(--color-warning)' : saldo < 0 ? 'var(--color-success)' : 'var(--text-muted)';
+
+    // --- transaction rows (latest 10 shown, link to full) ---
+    const PREVIEW = 10;
+    const txnHtml = records.length === 0
+        ? '<div class="partner-detail-empty">Nema transakcija</div>'
+        : records.slice(0, PREVIEW).map(r => {
+            const z  = parseFloat(r.Zaduzenje)  || 0;
+            const ra = parseFloat(r.Razduzenje) || 0;
+            const amt = ra > 0 ? ra : -z;
+            const amtFmt = (ra > 0 ? '+' : '') + amt.toLocaleString('sr');
+            const amtColor = ra > 0 ? 'var(--color-success)' : 'var(--color-warning)';
+            const dateParts = fmtDate(r.Datum).split('.');      // "12.08.2026"
+            const shortDate = dateParts.length >= 2
+                ? dateParts[0] + '. ' + mgmtMonthShort(dateParts[1])
+                : fmtDate(r.Datum);
+            return `
+                <div class="trans">
+                    <div class="trans__date">
+                        <strong>${escapeHtml(shortDate)}</strong>
+                        ${escapeHtml(r.Vreme || '')}
+                    </div>
+                    <div>
+                        <div class="trans__lbl">${escapeHtml(r.Opis || r.BrojDok || '')}</div>
+                        <div class="trans__sub">${escapeHtml(r.BrojDok || '')}</div>
+                    </div>
+                    <div style="font-family:var(--font-display);font-size:15px;font-weight:700;color:${amtColor};white-space:nowrap;">
+                        ${escapeHtml(amtFmt)}<span style="font-size:10px;color:var(--text-muted);font-weight:500;"> RSD</span>
+                    </div>
+                </div>`;
+        }).join('');
+
+    const moreCount = records.length > PREVIEW ? records.length - PREVIEW : 0;
+
+    panel.innerHTML = `
+        <div class="partner-detail">
+            <div class="partner-detail__head">
+                <div class="partner-detail__title">${escapeHtml(name)}</div>
+                <div class="partner-detail__sub">${escapeHtml(koopID)}${location ? ' · ' + escapeHtml(location) : ''}</div>
+                ${(phone || parcele.length) ? `
+                <div class="partner-detail__meta">
+                    ${phone ? '<span>📞 ' + escapeHtml(phone) + '</span>' : ''}
+                    ${parcele.length ? '<span>🌿 ' + parcele.length + ' parcele' + (totalHa > 0 ? ' · ' + totalHa.toLocaleString('sr', {maximumFractionDigits:1}) + ' ha' : '') + '</span>' : ''}
+                </div>` : ''}
+            </div>
+            <div class="partner-detail__stats">
+                <div class="partner-detail__stat">
+                    <div class="partner-detail__stat-lbl">Saldo</div>
+                    <div class="partner-detail__stat-val" style="color:${saldoColor};">
+                        ${saldoSign}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
+                    </div>
+                </div>
+                <div class="partner-detail__stat">
+                    <div class="partner-detail__stat-lbl">Predato sezona</div>
+                    <div class="partner-detail__stat-val">
+                        ${predatoKg.toLocaleString('sr')}<span class="u">kg</span>
+                    </div>
+                </div>
+                <div class="partner-detail__stat">
+                    <div class="partner-detail__stat-lbl">Agrohemija</div>
+                    <div class="partner-detail__stat-val">
+                        ${agroRSD.toLocaleString('sr')}<span class="u">RSD</span>
+                    </div>
+                </div>
+            </div>
+            <div class="partner-detail__body">
+                <div class="partner-detail__txn-head">
+                    <span>Poslednje transakcije</span>
+                    <div class="partner-detail__txn-actions">
+                        <button class="partner-detail__action" type="button" disabled title="Uskoro">Pošalji izvod</button>
+                        <button class="partner-detail__action partner-detail__action--primary" type="button" disabled title="Uskoro">Pripremi isplatu →</button>
+                    </div>
+                </div>
+                ${txnHtml}
+                ${moreCount > 0 ? `
+                <div class="partner-detail__more">
+                    Cela kartica (${records.length} transakcija) →
+                </div>` : ''}
+            </div>
+        </div>`;
+}
+
+// Helper: month number (1-based string) → short Serbian name
+function mgmtMonthShort(mm) {
+    const m = ['', 'jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
+    return m[parseInt(mm, 10)] || mm;
 }

@@ -2032,15 +2032,18 @@
         <div class="mgmt-shell">
             <div class="mgmt-hero">
                 <div>
-                    <div class="mgmt-eyebrow" id="mgmtPartneriEyebrow">Kooperanti</div>
-                    <h1 class="mgmt-title" id="mgmtPartneriTitle">Kooperanti</h1>
-                    <div class="mgmt-subline" id="mgmtPartneriSubline">Kartica kooperanta, pregled i saldo</div>
+                    <div class="mgmt-eyebrow" id="mgmtPartneriEyebrow">Partneri</div>
+                    <h1 class="mgmt-title" id="mgmtPartneriTitle">Partneri</h1>
+                    <div class="mgmt-subline" id="mgmtPartneriSubline">Kooperanti i kupci · saldo i istorija</div>
+                </div>
+                <div class="mgmt-hero__actions">
+                    <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="mgmt-novi-partner" type="button" disabled title="Entiteti se trenutno unose iz VBA">+ Novi partner</button>
                 </div>
             </div>
 
             <div class="sub-tab-bar" id="mgmtPartnerSegmentBar">
-                <button class="sub-tab-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti</button>
-                <button class="sub-tab-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci</button>
+                <button class="sub-tab-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="sub-tab-count" id="mgmtKoopCount">0</span></button>
+                <button class="sub-tab-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="sub-tab-count" id="mgmtKupCount">0</span></button>
             </div>
 
             <div id="mgmtPartneriMount">
@@ -2068,20 +2071,15 @@
                             <div id="mgmtKoopSaldoList"></div>
                         </div>
                         <div class="mgmt-sub sub-content" id="mgmt-koop-kartica">
-                            <div class="form-group"><label>Otkupna stanica</label><select id="mgmtStanica"><option value="">-- Izaberi stanicu --</option></select></div>
-                            <div class="form-group"><label>Kooperant</label><select id="mgmtKooperant"><option value="">-- Izaberi kooperanta --</option></select></div>
-                            <div id="mgmtKarticaHeader" style="display:none;">
-                                <div style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;">
-                                    <div style="font-size:18px;font-weight:700;" id="mgmtKarticaName"></div>
-                                    <div style="font-size:12px;opacity:0.8;" id="mgmtKarticaID"></div>
-                                </div>
-                                <div class="stats-grid">
-                                    <div class="stat-card"><div class="stat-value" id="mgmtKarticaZad">0</div><div class="stat-label">Zaduženje</div></div>
-                                    <div class="stat-card"><div class="stat-value" id="mgmtKarticaRaz">0</div><div class="stat-label">Razduženje</div></div>
-                                    <div class="stat-card" style="grid-column:span 2;"><div class="stat-value" id="mgmtKarticaSaldo" style="font-size:32px;">0</div><div class="stat-label">Saldo RSD</div></div>
-                                </div>
+                            <!-- Mobile-only dropdowns (hidden on desktop split view) -->
+                            <div class="mgmt-koop-pick">
+                                <div class="form-group"><label>Otkupna stanica</label><select id="mgmtStanica"><option value="">-- Izaberi stanicu --</option></select></div>
+                                <div class="form-group"><label>Kooperant</label><select id="mgmtKooperant"><option value="">-- Izaberi kooperanta --</option></select></div>
                             </div>
-                            <div id="mgmtKarticaList"></div>
+                            <!-- Detail panel — populated by onMgmtKooperantChangeDirect -->
+                            <div id="mgmtKoopDetailPanel">
+                                <div class="partner-detail-empty">Izaberi kooperanta iz liste sa leve strane</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2119,105 +2117,267 @@
 <div class="tab-content" id="tab-mgmt-agro">
     <section class="mgmt-screen">
         <div class="mgmt-shell">
+
+            <!-- ═══════════════════════════════════════════════════
+                 VIEW-STACK: main | izdavanje | otpremnica
+                 Only one panel is active (display:block) at a time.
+                 Managed by showMgmtAgroView() in agrohemija.js
+                 ═══════════════════════════════════════════════════ -->
+
+            <!-- ── MAIN DASHBOARD ────────────────────────────── -->
+            <div class="agro-view" id="mgmt-agro-main">
+                <div class="mgmt-hero">
+                    <div>
+                        <div class="mgmt-eyebrow">Agrohemija</div>
+                        <h1 class="mgmt-title">Agrohemija</h1>
+                        <div class="mgmt-subline">Stanje magacina i istorija izdavanja</div>
+                    </div>
+                    <div class="mgmt-hero__actions">
+                        <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="agro-prijem-robe" type="button" disabled title="U pripremi">Prijem robe</button>
+                        <button class="mgmt-hero__btn" data-action="agro-novo-izdavanje" type="button">+ Novo izdavanje</button>
+                    </div>
+                </div>
+
+                <!-- 4 KPI cards -->
+                <div class="kpi-row" id="mgmtAgroKpiRow">
+                    <div class="kpi">
+                        <div class="kpi__lbl">Izdato ukupno</div>
+                        <div class="kpi__val" id="mgmtAgroKpiIzdato">—<span class="u">RSD</span></div>
+                    </div>
+                    <div class="kpi">
+                        <div class="kpi__lbl">Otpremnica</div>
+                        <div class="kpi__val" id="mgmtAgroKpiBroj">—</div>
+                    </div>
+                    <div class="kpi">
+                        <div class="kpi__lbl">Količina</div>
+                        <div class="kpi__val" id="mgmtAgroKpiKolicina">—<span class="u">kg</span></div>
+                    </div>
+                    <div class="kpi">
+                        <div class="kpi__lbl">Kooperanata</div>
+                        <div class="kpi__val" id="mgmtAgroKpiKooperanata">—</div>
+                    </div>
+                </div>
+
+                <!-- Split: lager | poslednja izdavanja -->
+                <div class="split agro-dash-split">
+                    <!-- Left: stanje magacina -->
+                    <div>
+                        <div id="mgmtAgroStanjeList">
+                            <div class="lager">
+                                <div class="lager__head">
+                                    <div>
+                                        <div class="lager__title">Stanje magacina</div>
+                                        <div class="lager__sub">Učitavanje…</div>
+                                    </div>
+                                </div>
+                                <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">
+                                    Pokrenite <strong>ExportMgmtReports</strong> iz Excela.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: poslednja izdavanja -->
+                    <div>
+                        <div class="lager">
+                            <div class="lager__head">
+                                <div>
+                                    <div class="lager__title">Poslednja izdavanja</div>
+                                    <div class="lager__sub" id="mgmtAgroFeedSub">Ova sezona</div>
+                                </div>
+                            </div>
+                            <div class="lager__list" id="mgmtAgroFeedList">
+                                <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">
+                                    Nema podataka za prikaz.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /#mgmt-agro-main -->
+
+            <!-- ── IZDAVANJE WIZARD ──────────────────────────── -->
+            <div class="agro-view" id="mgmt-agro-izdavanje" style="display:none;">
+                <div class="mgmt-hero">
+                    <div>
+                        <button class="agro-back-btn" data-action="agro-back-main" type="button">← Nazad</button>
+                        <div class="mgmt-eyebrow" style="margin-top:6px;">Agrohemija · Novo izdavanje</div>
+                        <h1 class="mgmt-title">Izdavanje</h1>
+                    </div>
+                </div>
+
+                <div class="iz-grid">
+
+                    <!-- COL 1: Kooperant + Parcele -->
+                    <div class="iz-col">
+                        <div class="iz-col__head"><div class="iz-col__num">1</div>Kooperant</div>
+                        <div class="iz-col__body">
+                            <div class="form-group" style="margin-bottom:10px;">
+                                <div style="display:flex;gap:8px;">
+                                    <select id="izdKooperant" style="flex:1;"><option value="">-- Izaberi kooperanta --</option></select>
+                                    <button class="iz-scan" style="width:auto;padding:10px 14px;margin:0;font-size:14px;border-radius:var(--radius);" data-action="start-izd-koop-scan">📷</button>
+                                </div>
+                            </div>
+                            <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+                            <div id="izdParcelaGroup" style="display:none;">
+                                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.10em;color:var(--text-muted);margin-bottom:8px;">Parcele <span style="font-weight:400;text-transform:none;letter-spacing:0;">(za pametnu dozu)</span></div>
+                                <div class="izd-parcele-multi" id="izdParceleList"></div>
+                                <div class="iz-total-ha">
+                                    <span>Ukupna površina</span>
+                                    <strong><span id="izdUkupnaHa">0</span> ha</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COL 2: Artikal + Dosage + Add -->
+                    <div class="iz-col">
+                        <div class="iz-col__head"><div class="iz-col__num">2</div>Artikal</div>
+                        <div class="iz-col__body">
+                            <div class="iz-doza" id="izdPreporuka" style="display:none;">
+                                <div class="iz-doza__title">📋 Preporučena doza</div>
+                                <div class="iz-doza__calc" id="izdPreporukaCalc">—</div>
+                                <div class="iz-doza__detail" id="izdPreporukaDetail">—</div>
+                                <button class="iz-doza__apply" data-action="izd-primeni-preporuku">✅ Primeni količinu</button>
+                            </div>
+                            <button class="iz-scan" data-action="start-izd-barcode-scan">
+                                <span data-ag-icon="camera"></span> Skeniraj barkod
+                            </button>
+                            <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
+                            <div class="form-group" style="margin-bottom:8px;">
+                                <select id="izdArtikal">
+                                    <option value="">-- Ili izaberi ručno --</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:10px;">
+                                <input type="number" id="izdKolicina" placeholder="Količina" inputmode="decimal" value="1">
+                            </div>
+                            <button class="iz-btn--primary" data-action="izd-dodaj-stavku">+ Dodaj u korpu</button>
+                        </div>
+                    </div>
+
+                    <!-- COL 3: Korpa + Actions -->
+                    <div class="iz-col">
+                        <div class="iz-col__head"><div class="iz-col__num">3</div>Korpa <span id="izdKorpaCount" style="margin-left:auto;font-size:11px;opacity:0.7;">0 stavki</span></div>
+                        <div class="iz-col__body" id="izdKorpaBd">
+                            <p style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">Skenirajte barkod ili izaberite artikal</p>
+                        </div>
+                        <div class="iz-summary">
+                            <div class="iz-summary__row"><span>Napomena</span></div>
+                            <div style="padding:0 0 10px;">
+                                <input type="text" id="izdNapomena" placeholder="Opciona napomena..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;">
+                            </div>
+                            <div class="iz-summary__row iz-summary__row--total">
+                                <span>UKUPNO</span>
+                                <span class="iz-summary__val" id="izdUkupno">0 RSD</span>
+                            </div>
+                        </div>
+                        <div class="iz-actions">
+                            <button class="iz-btn--primary" data-action="izd-zavrsi">Potpis i otpremnica →</button>
+                            <button class="iz-btn--secondary" data-action="izd-reset">Poništi</button>
+                        </div>
+                    </div>
+
+                </div><!-- /.iz-grid -->
+            </div><!-- /#mgmt-agro-izdavanje -->
+
+            <!-- ── OTPREMNICA PREVIEW + SIGNATURES ──────────── -->
+            <div class="agro-view" id="mgmt-agro-otpremnica" style="display:none;">
+                <div class="mgmt-hero">
+                    <div>
+                        <button class="agro-back-btn" data-action="agro-back-izdavanje" type="button">← Nazad na korpu</button>
+                        <div class="mgmt-eyebrow" style="margin-top:6px;">Agrohemija · Otpremnica</div>
+                        <h1 class="mgmt-title">Otpremnica</h1>
+                    </div>
+                </div>
+
+                <div class="otp-doc">
+
+                    <!-- Firma header (static) -->
+                    <div class="otp-doc__header">
+                        <div class="otp-doc__firma" id="otpFirmaHeader">
+                            <strong>Poljoprivredna zadruga</strong><br>
+                            <span id="otpFirmaNaziv">—</span>
+                        </div>
+                        <div class="otp-doc__meta">
+                            <div class="otp-doc__meta-row">
+                                <span>Broj otpremnice</span>
+                                <strong id="otpBroj">—</strong>
+                            </div>
+                            <div class="otp-doc__meta-row">
+                                <span>Datum</span>
+                                <strong id="otpDatum">—</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kooperant block -->
+                    <div class="otp-doc__section">
+                        <div class="otp-doc__section-title">Primalac</div>
+                        <div id="otpKooperantBlock" class="otp-doc__kooperant">—</div>
+                    </div>
+
+                    <!-- Artikli table -->
+                    <div class="otp-doc__section">
+                        <div class="otp-doc__section-title">Stavke</div>
+                        <div id="otpStavkeTable" class="otp-doc__table-wrap">—</div>
+                    </div>
+
+                    <!-- Ukupno bar -->
+                    <div class="otp-doc__total-bar">
+                        <span>UKUPNO ZA NAPLATU</span>
+                        <strong id="otpUkupno">0 RSD</strong>
+                    </div>
+
+                    <!-- Napomena -->
+                    <div class="otp-doc__napomena" id="otpNapomenaRow" style="display:none;">
+                        <span>Napomena:</span> <span id="otpNapomena"></span>
+                    </div>
+
+                    <!-- Signatures -->
+                    <div class="sig-row">
+                        <div class="sig-block">
+                            <div class="sig-block__label">Potpis kooperanta</div>
+                            <canvas id="sigKooperant" class="sig-canvas"></canvas>
+                            <button class="sig-clear-btn" data-action="sig-clear" data-target="sigKooperant" type="button">Obriši</button>
+                        </div>
+                        <div class="sig-block">
+                            <div class="sig-block__label">Potpis operatera / vozača</div>
+                            <canvas id="sigOperater" class="sig-canvas"></canvas>
+                            <button class="sig-clear-btn" data-action="sig-clear" data-target="sigOperater" type="button">Obriši</button>
+                        </div>
+                    </div>
+
+                </div><!-- /.otp-doc -->
+
+                <!-- Action bar -->
+                <div class="otp-action-bar">
+                    <button class="iz-btn--primary" data-action="otp-zatvori-i-sacuvaj" type="button">✅ Zatvori i sačuvaj</button>
+                    <button class="iz-btn--secondary" data-action="otp-stampa" type="button" disabled title="U pripremi">🖨️ Štampaj</button>
+                    <button class="iz-btn--secondary" data-action="agro-back-izdavanje" type="button">← Nazad</button>
+                </div>
+
+            </div><!-- /#mgmt-agro-otpremnica -->
+
+        </div>
+    </section>
+</div>
+
+<!-- ==================== IZVODI I ISPLATE TAB ==================== -->
+<div class="tab-content" id="tab-mgmt-izvodi">
+    <section class="mgmt-screen">
+        <div class="mgmt-shell">
             <div class="mgmt-hero">
                 <div>
-                    <div class="mgmt-eyebrow">Agrohemija</div>
-                    <h1 class="mgmt-title">Agrohemija</h1>
-                    <div class="mgmt-subline">Izdavanje artikala i pregled stanja magacina</div>
+                    <div class="mgmt-eyebrow">Finansije</div>
+                    <h1 class="mgmt-title">Izvodi i isplate</h1>
+                    <div class="mgmt-subline">Bankarski izvodi · isplate kooperantima</div>
                 </div>
             </div>
-
-            <div class="sub-tab-bar" id="mgmtAgroSubBar">
-                <button class="sub-tab-btn active" data-action="mgmt-agro-sub" data-sub="izdavanje">Izdavanje</button>
-                <button class="sub-tab-btn" data-action="mgmt-agro-sub" data-sub="stanje">Stanje magacina</button>
-                <button class="sub-tab-btn" data-action="mgmt-agro-sub" data-sub="otpremnice">Otpremnice</button>
-            </div>
-
-            <div id="mgmtAgroMount">
-                <div class="mgmt-sub sub-content" id="mgmt-agro-izdavanje">
-                    <div class="iz-grid">
-
-                        <!-- COL 1: Kooperant + Parcele -->
-                        <div class="iz-col">
-                            <div class="iz-col__head"><div class="iz-col__num">1</div>Kooperant</div>
-                            <div class="iz-col__body">
-                                <div class="form-group" style="margin-bottom:10px;">
-                                    <div style="display:flex;gap:8px;">
-                                        <select id="izdKooperant" style="flex:1;"><option value="">-- Izaberi kooperanta --</option></select>
-                                        <button class="iz-scan" style="width:auto;padding:10px 14px;margin:0;font-size:14px;border-radius:var(--radius);" data-action="start-izd-koop-scan">📷</button>
-                                    </div>
-                                </div>
-                                <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
-                                <div id="izdParcelaGroup" style="display:none;">
-                                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.10em;color:var(--text-muted);margin-bottom:8px;">Parcele <span style="font-weight:400;text-transform:none;letter-spacing:0;">(za pametnu dozu)</span></div>
-                                    <div class="izd-parcele-multi" id="izdParceleList"></div>
-                                    <div class="iz-total-ha">
-                                        <span>Ukupna površina</span>
-                                        <strong><span id="izdUkupnaHa">0</span> ha</strong>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- COL 2: Artikal + Dosage + Add -->
-                        <div class="iz-col">
-                            <div class="iz-col__head"><div class="iz-col__num">2</div>Artikal</div>
-                            <div class="iz-col__body">
-                                <div class="iz-doza" id="izdPreporuka" style="display:none;">
-                                    <div class="iz-doza__title">📋 Preporučena doza</div>
-                                    <div class="iz-doza__calc" id="izdPreporukaCalc">—</div>
-                                    <div class="iz-doza__detail" id="izdPreporukaDetail">—</div>
-                                    <button class="iz-doza__apply" data-action="izd-primeni-preporuku">✅ Primeni količinu</button>
-                                </div>
-                                <button class="iz-scan" data-action="start-izd-barcode-scan">
-                                    <span data-ag-icon="camera"></span> Skeniraj barkod
-                                </button>
-                                <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
-                                <div class="form-group" style="margin-bottom:8px;">
-                                    <select id="izdArtikal">
-                                        <option value="">-- Izaberi artikal --</option>
-                                    </select>
-                                </div>
-                                <div class="form-group" style="margin-bottom:10px;">
-                                    <input type="number" id="izdKolicina" placeholder="Količina" inputmode="decimal" value="1">
-                                </div>
-                                <button class="iz-btn--primary" data-action="izd-dodaj-stavku">+ Dodaj u korpu</button>
-                            </div>
-                        </div>
-
-                        <!-- COL 3: Korpa + Actions -->
-                        <div class="iz-col">
-                            <div class="iz-col__head"><div class="iz-col__num">3</div>Korpa <span id="izdKorpaCount" style="margin-left:auto;font-size:11px;opacity:0.7;">0 stavki</span></div>
-                            <div class="iz-col__body" id="izdKorpaBd">
-                                <p style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">Skenirajte barkod ili izaberite artikal</p>
-                            </div>
-                            <div class="iz-summary">
-                                <div class="iz-summary__row"><span>Napomena</span></div>
-                                <div style="padding:0 0 10px;">
-                                    <input type="text" id="izdNapomena" placeholder="Opciona napomena..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;">
-                                </div>
-                                <div class="iz-summary__row iz-summary__row--total">
-                                    <span>UKUPNO</span>
-                                    <span class="iz-summary__val" id="izdUkupno">0 RSD</span>
-                                </div>
-                            </div>
-                            <div class="iz-actions">
-                                <button class="iz-btn--primary" data-action="izd-zavrsi">✅ ZAVRŠI IZDAVANJE</button>
-                                <button class="iz-btn--secondary" data-action="izd-reset">Poništi</button>
-                            </div>
-                        </div>
-
-                    </div><!-- /.iz-grid -->
-                </div>
-
-                <div class="mgmt-sub sub-content" id="mgmt-agro-stanje">
-                    <h3 style="color:var(--primary);margin-bottom:12px;">Stanje magacina</h3>
-                    <div id="mgmtAgroStanjeList"><p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p></div>
-                </div>
-                <div class="mgmt-sub sub-content" id="mgmt-agro-otpremnice">
-                    <h3 style="color:var(--primary);margin-bottom:12px;">Otpremnice</h3>
-                    <div id="mgmtAgroOtpremniceList"><p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otpremnica za prikaz</p></div>
-                </div>
+            <div style="padding:48px 0;text-align:center;color:var(--text-muted);">
+                <div style="font-size:32px;margin-bottom:12px;">💳</div>
+                <div style="font-size:15px;font-weight:600;margin-bottom:6px;">U pripremi</div>
+                <div style="font-size:13px;">Pregled bankarskih izvoda i isplata kooperantima biće dostupan uskoro.</div>
             </div>
         </div>
     </section>
