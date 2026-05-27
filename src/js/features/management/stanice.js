@@ -137,3 +137,112 @@ async function refreshMgmtOtkupiLive() {
         await loadMgmtOtkupi();
     }
 }
+
+async function loadMgmtOtkupUzivo() {
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll');
+    }
+
+    const today = (typeof mgmtDashTodayISO === 'function') ? mgmtDashTodayISO() : new Date().toISOString().slice(0, 10);
+    const od = document.getElementById('mgmtUzivoOd');
+    const doo = document.getElementById('mgmtUzivoDo');
+    const stanicaSel = document.getElementById('mgmtUzivoStanica');
+
+    // Populate station filter
+    if (stanicaSel && stanicaSel.options.length <= 1) {
+        const stanice = stammdaten ? (stammdaten.stanice || []) : [];
+        stanice.forEach(s => {
+            const o = document.createElement('option');
+            o.value = s.StanicaID;
+            o.textContent = (s.Naziv || s.Mesto || s.StanicaID) + ' (' + s.StanicaID + ')';
+            stanicaSel.appendChild(o);
+        });
+    }
+
+    let records = (window.mgmtData && Array.isArray(window.mgmtData.otkupiAll))
+        ? window.mgmtData.otkupiAll
+        : [];
+
+    // Date normalizer
+    const fmtD = (v) => {
+        if (!v) return '';
+        if (typeof mgmtDashFmtDate === 'function') return mgmtDashFmtDate(v);
+        const s = String(v).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+    };
+
+    // Apply filters
+    const odVal = od ? od.value : today;
+    const dooVal = doo ? doo.value : today;
+    const stanicaFilter = stanicaSel ? stanicaSel.value : '';
+
+    records = records.filter(r => {
+        const d = fmtD(r.Datum);
+        if (odVal && d < odVal) return false;
+        if (dooVal && d > dooVal) return false;
+        if (stanicaFilter) {
+            const sid = r.OtkupacID || r.StanicaID || (r._sheetName ? r._sheetName.replace('OTK-', '') : '');
+            if (sid !== stanicaFilter) return false;
+        }
+        return true;
+    });
+
+    // Sort by date desc, then by time if available
+    records.sort((a, b) => {
+        const da = fmtD(a.Datum) || '';
+        const db = fmtD(b.Datum) || '';
+        return db.localeCompare(da);
+    });
+
+    // Compute summaries
+    const kg = records.reduce((s, r) => s + (parseFloat(r.Kolicina) || 0), 0);
+    const vr = records.reduce((s, r) => s + ((parseFloat(r.Kolicina) || 0) * (parseFloat(r.Cena) || 0)), 0);
+    const koops = new Set(records.map(r => r.KooperantID || r.KooperantName || '').filter(Boolean));
+
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setTxt('mgmtUzivoCount', records.length.toLocaleString('sr'));
+    setTxt('mgmtUzivoKg', kg.toLocaleString('sr'));
+    setTxt('mgmtUzivoVrednost', vr.toLocaleString('sr'));
+    setTxt('mgmtUzivoKoop', koops.size.toLocaleString('sr'));
+
+    const list = document.getElementById('mgmtUzivoList');
+    if (!list) return;
+
+    if (records.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otkupa za izabrani period</p>';
+        return;
+    }
+
+    // Render as tbl component
+    list.innerHTML = `
+        <div class="tbl">
+            <div class="tbl__head">
+                <div>Kooperant</div>
+                <div>Vrsta i klasa</div>
+                <div>Stanica</div>
+                <div style="text-align:right;">Količina</div>
+                <div style="text-align:right;">Cena</div>
+                <div>Datum</div>
+            </div>
+            ${records.map(r => {
+                const kg = parseFloat(r.Kolicina) || 0;
+                const cena = parseFloat(r.Cena) || 0;
+                const sid = r.OtkupacID || r.StanicaID || (r._sheetName ? r._sheetName.replace('OTK-', '') : '');
+                const stanicaName = typeof fmtStanica === 'function' ? fmtStanica(sid) : sid;
+                const d = fmtD(r.Datum);
+                return `
+                    <div class="tbl__row">
+                        <div><div class="tbl__cell-main">${escapeHtml(r.KooperantName || r.KooperantID || '')}</div></div>
+                        <div>
+                            <div class="tbl__cell-main">${escapeHtml(r.VrstaVoca || '')}</div>
+                            <div class="tbl__cell-sub">Klasa ${escapeHtml(r.Klasa || 'I')}</div>
+                        </div>
+                        <div><div class="tbl__cell-sub">${escapeHtml(stanicaName)}</div></div>
+                        <div style="text-align:right;"><div class="tbl__num">${kg.toLocaleString('sr')}<span class="u">kg</span></div></div>
+                        <div style="text-align:right;"><div class="tbl__num">${cena.toLocaleString('sr')}<span class="u">RSD</span></div></div>
+                        <div><div class="tbl__cell-sub">${escapeHtml(d ? (typeof fmtDate === 'function' ? fmtDate(d) : d) : '')}</div></div>
+                    </div>`;
+            }).join('')}
+        </div>`;
+}

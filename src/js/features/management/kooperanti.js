@@ -114,7 +114,7 @@ async function loadMgmtKoopSaldo() {
                 const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
                 const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
                 return `
-                    <div class="partner">
+                    <div class="partner" data-koop-id="${escapeHtml(r.KooperantID || '')}" data-action="mgmt-koop-select">
                         <div class="partner__avatar">${escapeHtml(initials)}</div>
                         <div>
                             <div class="partner__name">${escapeHtml(name)}</div>
@@ -193,4 +193,75 @@ function renderMgmtKoopPregled() {
                 </div>
             </div>`;
         }).join('')}`;
+}
+
+// Click delegate: selecting kooperant from saldo list loads their kartica
+(function bindKoopSaldoDelegate() {
+    document.addEventListener('click', function(e) {
+        const item = e.target.closest('[data-action="mgmt-koop-select"]');
+        if (!item) return;
+        const koopID = item.dataset.koopId;
+        if (!koopID) return;
+
+        // Mark active
+        document.querySelectorAll('[data-action="mgmt-koop-select"]').forEach(el => el.classList.remove('is-active'));
+        item.classList.add('is-active');
+
+        // Load kartica directly (bypass dropdown on desktop split view)
+        onMgmtKooperantChangeDirect(koopID);
+    });
+})();
+
+async function onMgmtKooperantChangeDirect(koopID) {
+    const koop = (stammdaten && stammdaten.kooperanti || []).find(k => k.KooperantID === koopID);
+    const nameEl = document.getElementById('mgmtKarticaName');
+    const idEl = document.getElementById('mgmtKarticaID');
+    const headerEl = document.getElementById('mgmtKarticaHeader');
+    if (nameEl) nameEl.textContent = koop ? koop.Ime + ' ' + koop.Prezime : koopID;
+    if (idEl) idEl.textContent = koopID;
+    if (headerEl) headerEl.style.display = 'block';
+
+    const listEl = document.getElementById('mgmtKarticaList');
+    if (!listEl) return;
+    listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Učitavanje...</p>';
+
+    let records = [];
+    if (window.mgmtData && window.mgmtData.kartice) {
+        records = window.mgmtData.kartice.filter(r => r.KooperantID === koopID && r.Opis !== 'UKUPNO');
+    } else {
+        const json = await safeAsync(async () => {
+            return await apiFetch('action=getMgmtKartica&kooperantID=' + encodeURIComponent(koopID));
+        }, 'Greška pri učitavanju kartice kooperanta');
+        if (json && json.success && json.records) {
+            records = json.records.filter(r => r.Opis !== 'UKUPNO');
+        }
+    }
+
+    if (records.length === 0) {
+        listEl.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
+        ['mgmtKarticaZad','mgmtKarticaRaz','mgmtKarticaSaldo'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.textContent = '0';
+        });
+        return;
+    }
+
+    let zad = 0, raz = 0;
+    listEl.innerHTML = records.map(r => {
+        const z = parseFloat(r.Zaduzenje)||0, ra = parseFloat(r.Razduzenje)||0, s = parseFloat(r.Saldo)||0;
+        zad += z; raz += ra;
+        return `<div class="queue-item" style="border-left-color:${z>0?'var(--danger)':'var(--success)'};">
+            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.BrojDok||'')}</span><span class="qi-time">${escapeHtml(fmtDate(r.Datum))}</span></div>
+            <div class="qi-detail">${escapeHtml(r.Opis||'')}</div>
+            <div class="qi-detail" style="font-size:12px;margin-top:2px;">
+                ${z>0?'<span style="color:var(--danger);">Zaduž: '+z.toLocaleString('sr')+'</span> ':''}
+                ${ra>0?'<span style="color:var(--success);">Razduž: '+ra.toLocaleString('sr')+'</span> ':''}
+                | Saldo: <strong>${s.toLocaleString('sr')}</strong></div></div>`;
+    }).join('');
+
+    const zadEl = document.getElementById('mgmtKarticaZad');
+    const razEl = document.getElementById('mgmtKarticaRaz');
+    const saldoEl = document.getElementById('mgmtKarticaSaldo');
+    if (zadEl) zadEl.textContent = zad.toLocaleString('sr');
+    if (razEl) razEl.textContent = raz.toLocaleString('sr');
+    if (saldoEl) saldoEl.textContent = (zad - raz).toLocaleString('sr');
 }
