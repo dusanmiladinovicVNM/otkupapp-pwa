@@ -91,16 +91,31 @@
     padding: 18px 16px;
 }
 
-/* ── Slim page header — replaces the big hero on all sub-pages ─ */
+/* ── Page header (title + subline left, actions right; flat / no box) ── */
 .mgmt-page-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
-    padding: 0 0 14px;
-    border-bottom: 1px solid var(--border);
+    gap: 16px;
+    padding: 4px 0 18px;
     margin-bottom: 16px;
-    min-height: 36px;
+}
+.mgmt-page-head__main {
+    min-width: 0;
+}
+.mgmt-page-head__title {
+    font-family: var(--font-display, inherit);
+    font-size: 32px;
+    line-height: 1.1;
+    font-weight: 700;
+    color: var(--forest, var(--primary));
+    letter-spacing: -0.015em;
+    margin: 0 0 6px 0;
+}
+.mgmt-page-head__sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.4;
 }
 .mgmt-page-head__crumb {
     font-size: 11px;
@@ -117,7 +132,8 @@
 .mgmt-page-head__breadcrumb {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    margin-bottom: 4px;
 }
 .mgmt-page-head__actions {
     display: flex;
@@ -126,6 +142,66 @@
     flex-shrink: 0;
     flex-wrap: wrap;
     justify-content: flex-end;
+    padding-top: 6px;
+}
+
+@media (max-width: 767px) {
+    .mgmt-page-head__title { font-size: 24px; }
+    .mgmt-page-head { flex-wrap: wrap; }
+    .mgmt-page-head__actions { padding-top: 0; }
+}
+
+/* ── Segment pill toggle (Kooperanti/Kupci style from designer) ── */
+.mgmt-seg-bar {
+    display: inline-flex;
+    gap: 4px;
+    background: rgba(0,0,0,0.04);
+    padding: 4px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+.mgmt-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 0;
+    background: transparent;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+.mgmt-seg-btn:hover:not(.active) {
+    background: rgba(0,0,0,0.03);
+    color: var(--forest, var(--primary));
+}
+.mgmt-seg-btn.active {
+    background: var(--forest, var(--primary));
+    color: var(--cream, #fff);
+}
+.mgmt-seg-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 18px;
+    padding: 0 6px;
+    background: rgba(0,0,0,0.08);
+    color: inherit;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.mgmt-seg-btn.active .mgmt-seg-count {
+    background: var(--gold-soft, rgba(255,255,255,0.18));
+    color: var(--gold, var(--cream, #fff));
 }
 
 .mgmt-eyebrow {
@@ -1260,17 +1336,17 @@ body.has-mgmt-bottom-nav .tab-content {
   grid-template-columns: 1.3fr 1.1fr 0.8fr 0.9fr 0.9fr 0.9fr 0.8fr 0.5fr;
 }
 
-/* Sync badge for otkup uživo */
-.sync-badge {
+/* Row sync indicator for otkup uživo table (NOT the header ONLINE pill) */
+.row-sync-badge {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px;
   border-radius: 50%;
   font-size: 12px; font-weight: 700;
   line-height: 1;
 }
-.sync-badge--ok      { background: var(--color-success-soft); color: var(--color-success); }
-.sync-badge--pending { background: var(--color-warning-soft); color: var(--color-warning); }
-.sync-badge--error   { background: var(--color-error-soft);   color: var(--color-error); }
+.row-sync-badge--ok      { background: var(--color-success-soft); color: var(--color-success); }
+.row-sync-badge--pending { background: var(--color-warning-soft); color: var(--color-warning); }
+.row-sync-badge--error   { background: var(--color-error-soft);   color: var(--color-error); }
 .tbl__badge {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 10px; font-weight: 700;
@@ -1413,11 +1489,12 @@ body.has-mgmt-bottom-nav .tab-content {
   letter-spacing: -0.01em; line-height: 1.1;
   position: relative;
 }
-.partner-detail__sub {
+.partner-detail__sub,
+.partner-detail__eyebrow {
   font-size: 11px;
   letter-spacing: 0.10em; text-transform: uppercase;
-  color: var(--gold); font-weight: 600;
-  margin-top: 4px; position: relative;
+  color: var(--gold); font-weight: 700;
+  margin-bottom: 6px; position: relative;
 }
 .partner-detail__stats {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;

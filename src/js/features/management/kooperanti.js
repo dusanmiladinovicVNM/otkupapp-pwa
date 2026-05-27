@@ -271,10 +271,7 @@ async function onMgmtKooperantChangeDirect(koopID) {
             const amt = ra > 0 ? ra : -z;
             const amtFmt = (ra > 0 ? '+' : '') + amt.toLocaleString('sr');
             const amtColor = ra > 0 ? 'var(--color-success)' : 'var(--color-warning)';
-            const dateParts = fmtDate(r.Datum).split('.');      // "12.08.2026"
-            const shortDate = dateParts.length >= 2
-                ? dateParts[0] + '. ' + mgmtMonthShort(dateParts[1])
-                : fmtDate(r.Datum);
+            const shortDate = mgmtShortDate(r.Datum);
             return `
                 <div class="trans">
                     <div class="trans__date">
@@ -296,10 +293,11 @@ async function onMgmtKooperantChangeDirect(koopID) {
     panel.innerHTML = `
         <div class="partner-detail">
             <div class="partner-detail__head">
+                <div class="partner-detail__eyebrow">Kooperant · ${escapeHtml(koopID)}</div>
                 <div class="partner-detail__title">${escapeHtml(name)}</div>
-                <div class="partner-detail__sub">${escapeHtml(koopID)}${location ? ' · ' + escapeHtml(location) : ''}</div>
-                ${(phone || parcele.length) ? `
+                ${(location || phone || parcele.length) ? `
                 <div class="partner-detail__meta">
+                    ${location ? '<span>📍 ' + escapeHtml(location) + '</span>' : ''}
                     ${phone ? '<span>📞 ' + escapeHtml(phone) + '</span>' : ''}
                     ${parcele.length ? '<span>🌿 ' + parcele.length + ' parcele' + (totalHa > 0 ? ' · ' + totalHa.toLocaleString('sr', {maximumFractionDigits:1}) + ' ha' : '') + '</span>' : ''}
                 </div>` : ''}
@@ -345,4 +343,17 @@ async function onMgmtKooperantChangeDirect(koopID) {
 function mgmtMonthShort(mm) {
     const m = ['', 'jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
     return m[parseInt(mm, 10)] || mm;
+}
+
+// Helper: any date input → "12. avg" (handles ISO, dotted, Date)
+function mgmtShortDate(val) {
+    if (!val) return '';
+    const s = String(val);
+    // ISO "YYYY-MM-DD..."
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return parseInt(iso[3], 10) + '. ' + mgmtMonthShort(iso[2]);
+    // Dotted "DD.MM.YYYY" or "D.M.YYYY"
+    const dot = s.match(/^(\d{1,2})\.(\d{1,2})\./);
+    if (dot) return parseInt(dot[1], 10) + '. ' + mgmtMonthShort(dot[2].padStart(2, '0'));
+    return s;
 }

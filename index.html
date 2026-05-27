@@ -1656,7 +1656,10 @@
     <section class="mgmt-screen">
         <div class="mgmt-shell">
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb">Management overview · Pregled</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title">Pregled</h1>
+                    <div class="mgmt-page-head__sub">Pregled sistema, operative i ključnih odstupanja</div>
+                </div>
             </div>
 
             <div class="stats-grid">
@@ -1736,7 +1739,10 @@
         <div class="mgmt-shell">
 
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb">Executive dashboard</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title">Dashboard</h1>
+                    <div class="mgmt-page-head__sub">KPI, trend otkupa i aktuelni dispečer</div>
+                </div>
                 <div class="mgmt-page-head__actions">
                     <div class="mgmt-dash-period-switch" id="mgmtDashPeriodSwitch">
                         <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="today">Danas</button>
@@ -1843,7 +1849,10 @@
     <section class="mgmt-screen">
         <div class="mgmt-shell">
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb">Operativni centar · Dispečer</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title">Dispečer</h1>
+                    <div class="mgmt-page-head__sub">Planiranje transporta i usklađivanje ponude i tražnje</div>
+                </div>
             </div>
 
             <div id="mgmtDispecerMount">
@@ -1946,7 +1955,10 @@
     <section class="mgmt-screen">
         <div class="mgmt-shell">
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb">Operativa otkupa</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title">Otkup</h1>
+                    <div class="mgmt-page-head__sub">Pregled otkupa, robe i salda po otkupnim mestima</div>
+                </div>
             </div>
 
             <div class="sub-tab-bar" id="mgmtOtkupSubBar">
@@ -2013,15 +2025,18 @@
     <section class="mgmt-screen">
         <div class="mgmt-shell">
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb" id="mgmtPartneriEyebrow">Kooperanti</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title" id="mgmtPartneriTitle">Partneri</h1>
+                    <div class="mgmt-page-head__sub" id="mgmtPartneriSubline">Kooperanti i kupci · saldo i istorija</div>
+                </div>
                 <div class="mgmt-page-head__actions">
-                    <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="mgmt-novi-partner" type="button" disabled title="Entiteti se trenutno unose iz VBA">+ Novi partner</button>
+                    <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="mgmt-novi-partner" type="button" disabled title="Entiteti se trenutno unose iz VBA">+ Novi kooperant</button>
                 </div>
             </div>
 
-            <div class="sub-tab-bar" id="mgmtPartnerSegmentBar">
-                <button class="sub-tab-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="sub-tab-count" id="mgmtKoopCount">0</span></button>
-                <button class="sub-tab-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="sub-tab-count" id="mgmtKupCount">0</span></button>
+            <div class="mgmt-seg-bar" id="mgmtPartnerSegmentBar">
+                <button class="mgmt-seg-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="mgmt-seg-count" id="mgmtKoopCount">0</span></button>
+                <button class="mgmt-seg-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="mgmt-seg-count" id="mgmtKupCount">0</span></button>
             </div>
 
             <div id="mgmtPartneriMount">
@@ -2105,7 +2120,10 @@
             <!-- ── MAIN DASHBOARD ────────────────────────────── -->
             <div class="agro-view" id="mgmt-agro-main">
                 <div class="mgmt-page-head">
-                    <span class="mgmt-page-head__crumb">Agrohemija</span>
+                    <div class="mgmt-page-head__main">
+                        <h1 class="mgmt-page-head__title">Agrohemija</h1>
+                        <div class="mgmt-page-head__sub">Stanje magacina i istorija izdavanja</div>
+                    </div>
                     <div class="mgmt-page-head__actions">
                         <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="agro-prijem-robe" type="button" disabled title="U pripremi">Prijem robe</button>
                         <button class="mgmt-hero__btn" data-action="agro-novo-izdavanje" type="button">+ Novo izdavanje</button>
@@ -2173,10 +2191,13 @@
             <!-- ── IZDAVANJE WIZARD ──────────────────────────── -->
             <div class="agro-view" id="mgmt-agro-izdavanje" style="display:none;">
                 <div class="mgmt-page-head">
-                    <div class="mgmt-page-head__breadcrumb">
-                        <button class="agro-back-btn" data-action="agro-back-main" type="button">← Agrohemija</button>
-                        <span class="mgmt-page-head__sep">/</span>
-                        <span class="mgmt-page-head__crumb">Novo izdavanje</span>
+                    <div class="mgmt-page-head__main">
+                        <div class="mgmt-page-head__breadcrumb">
+                            <button class="agro-back-btn" data-action="agro-back-main" type="button">← Agrohemija</button>
+                            <span class="mgmt-page-head__sep">/</span>
+                            <span class="mgmt-page-head__crumb">Novo izdavanje</span>
+                        </div>
+                        <h1 class="mgmt-page-head__title">Izdavanje</h1>
                     </div>
                 </div>
 
@@ -2258,10 +2279,13 @@
             <!-- ── OTPREMNICA PREVIEW + SIGNATURES ──────────── -->
             <div class="agro-view" id="mgmt-agro-otpremnica" style="display:none;">
                 <div class="mgmt-page-head">
-                    <div class="mgmt-page-head__breadcrumb">
-                        <button class="agro-back-btn" data-action="agro-back-izdavanje" type="button">← Izdavanje</button>
-                        <span class="mgmt-page-head__sep">/</span>
-                        <span class="mgmt-page-head__crumb">Otpremnica</span>
+                    <div class="mgmt-page-head__main">
+                        <div class="mgmt-page-head__breadcrumb">
+                            <button class="agro-back-btn" data-action="agro-back-izdavanje" type="button">← Izdavanje</button>
+                            <span class="mgmt-page-head__sep">/</span>
+                            <span class="mgmt-page-head__crumb">Otpremnica</span>
+                        </div>
+                        <h1 class="mgmt-page-head__title">Otpremnica</h1>
                     </div>
                 </div>
 
@@ -2342,7 +2366,10 @@
     <section class="mgmt-screen">
         <div class="mgmt-shell">
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb">Finansije · Izvodi i isplate</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title">Izvodi i isplate</h1>
+                    <div class="mgmt-page-head__sub">Bankarski izvodi · isplate kooperantima</div>
+                </div>
             </div>
             <div style="padding:48px 0;text-align:center;color:var(--text-muted);">
                 <div style="font-size:32px;margin-bottom:12px;">💳</div>
@@ -2356,7 +2383,10 @@
     <section class="mgmt-screen">
         <div class="mgmt-shell">
             <div class="mgmt-page-head">
-                <span class="mgmt-page-head__crumb">Otkup · uživo</span>
+                <div class="mgmt-page-head__main">
+                    <h1 class="mgmt-page-head__title">Otkup uživo</h1>
+                    <div class="mgmt-page-head__sub">Svi otkupi na svim stanicama — u realnom vremenu</div>
+                </div>
             </div>
 
             <div class="summary" id="mgmtUzivoSummary">
