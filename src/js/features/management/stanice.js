@@ -259,10 +259,10 @@ async function loadMgmtOtkupUzivo() {
 function renderUzivoSyncBadge(syncStatus) {
     const s = String(syncStatus || '').toLowerCase();
     if (s === 'pending' || s === 'queued') {
-        return '<span class="sync-badge sync-badge--pending" title="Čeka sync">⏳</span>';
+        return '<span class="row-sync-badge row-sync-badge--pending" title="Čeka sync">⏳</span>';
     }
     if (s === 'error' || s === 'failed') {
-        return '<span class="sync-badge sync-badge--error" title="Greška sync-a">!</span>';
+        return '<span class="row-sync-badge row-sync-badge--error" title="Greška sync-a">!</span>';
     }
-    return '<span class="sync-badge sync-badge--ok" title="Sinhronizovano">✓</span>';
+    return '<span class="row-sync-badge row-sync-badge--ok" title="Sinhronizovano">✓</span>';
 }

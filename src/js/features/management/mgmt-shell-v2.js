@@ -321,8 +321,8 @@ function showMgmtAgroSub(sub) {
 function showMgmtPartnerSegment(segment, btn) {
     window.mgmtShellState.partnerSegment = segment;
 
-    mgmtClearActive('#mgmtPartnerSegmentBar .sub-tab-btn');
-    mgmtActivateButton(btn, `#mgmtPartnerSegmentBar .sub-tab-btn[data-segment="${segment}"]`);
+    mgmtClearActive('#mgmtPartnerSegmentBar .mgmt-seg-btn');
+    mgmtActivateButton(btn, `#mgmtPartnerSegmentBar .mgmt-seg-btn[data-segment="${segment}"]`);
 
     const koopBar = document.getElementById('mgmtPartnerKoopSubBar');
     const kupBar = document.getElementById('mgmtPartnerKupSubBar');
@@ -334,9 +334,11 @@ function showMgmtPartnerSegment(segment, btn) {
     if (koopSection) koopSection.style.display = segment === 'kooperanti' ? '' : 'none';
     if (kupSection) kupSection.style.display = segment === 'kupci' ? '' : 'none';
 
-    // Update slim page-head crumb text to reflect active segment
-    const eyebrow = document.getElementById('mgmtPartneriEyebrow');
-    if (eyebrow) eyebrow.textContent = segment === 'kooperanti' ? 'Kooperanti' : 'Kupci';
+    // Update "+ Novi …" action text per active segment
+    const newPartnerBtn = document.querySelector('[data-action="mgmt-novi-partner"]');
+    if (newPartnerBtn) {
+        newPartnerBtn.textContent = segment === 'kooperanti' ? '+ Novi kooperant' : '+ Novi kupac';
+    }
 
     if (segment === 'kooperanti') {
         showMgmtKoopSub(window.mgmtShellState.koopSub || 'saldo');
