@@ -362,17 +362,15 @@ function dpRS() {
     b.innerHTML = ids.map(sid => {
         const x = g[sid];
         const isSel = dpSel && dpSel.step >= 2 && dpSel.sid === sid;
+        const kg = x.kg || 0;
+        // Classify urgency
+        const stMod = kg > 5000 ? ' station--full' : (kg < 200 ? ' station--idle' : '');
+        const selMod = isSel ? ' sel' : '';
         return `
-            <div class="dp-card sup${isSel ? ' sel' : ''}" data-action="dp-select-supply" data-sid="${escapeHtml(String(sid || ''))}">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span class="dp-icon-line" style="font-weight:700;">
-                        ${agIcon('package', '16px')} ${escapeHtml(dpSN(sid))}
-                    </span>
-                    <span style="font-weight:700;">${x.kg.toLocaleString('sr')} kg</span>
-                </div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                    ${x.n} otkupa
-                </div>
+            <div class="station${stMod}${selMod}" data-action="dp-select-supply" data-sid="${escapeHtml(String(sid || ''))}">
+                <div class="station__name">${escapeHtml(dpSN(sid))}</div>
+                <div class="station__kg">${kg.toLocaleString('sr')}<span class="u">kg</span></div>
+                <div class="station__meta">${x.n} otkupa</div>
             </div>
         `;
     }).join('');
@@ -550,55 +548,36 @@ function dpRTr() {
             `;
         }).join('');
 
+        const capInputHtml = cap > 0 ? '' : `
+            <input type="number" inputmode="numeric" placeholder="Kapacitet kg"
+                   class="dp-cap-input"
+                   data-vid="${escapeHtml(String(vid || ''))}"
+                   style="width:100%;padding:6px 8px;font-size:12px;border:1.5px solid var(--border-strong);border-radius:6px;margin-top:6px;font-family:inherit;">`;
+
+        const selMod = isSel ? ' sel' : '';
+
         return `
-            <div class="dp-card trn${isSel ? ' sel' : ''}" data-action="dp-select-truck" data-vid="${escapeHtml(String(vid || ''))}">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-                    <span class="dp-icon-line" style="font-weight:700;font-size:14px;">
-                        ${agIcon('truck', '16px')} ${escapeHtml(x.name || vid)}
-                    </span>
-                    <span style="font-size:14px;font-weight:700;">${loadKg.toLocaleString('sr')} kg</span>
+            <div class="truck${selMod}" data-action="dp-select-truck" data-vid="${escapeHtml(String(vid || ''))}">
+                <div class="truck__icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v10H3zM13 10h5l3 3v3h-8"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>
                 </div>
-
-                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
-                    Kap: ${
-                        cap > 0
-                            ? cap.toLocaleString('sr') + ' kg'
-                            : `<input type="number"
-                                      inputmode="numeric"
-                                      placeholder="kg"
-                                      class="dp-cap-input"
-                                      data-vid="${escapeHtml(String(vid || ''))}"
-                                      style="width:70px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;">`
-                    }
-                    · Popunjeno: <strong>${pct}%</strong>
-                    ${cap > 0 ? ` · Slobodno: ${freeKg.toLocaleString('sr')} kg` : ''}
+                <div>
+                    <div class="truck__name">${escapeHtml(x.name || vid)}</div>
+                    <div class="truck__meta">
+                        ${rutaText ? escapeHtml(rutaText) : (sl[st] || st)}
+                        ${x.n > 0 ? ` · ${x.n} otk.` : ''}
+                    </div>
                 </div>
-
+                <div class="truck__cap">
+                    ${loadKg > 0 ? `${loadKg.toLocaleString('sr')}<span class="u">kg</span>` : '—'}
+                </div>
                 ${cap > 0 ? `
-                    <div class="dp-bar" style="margin-top:6px;">
-                        <div class="dp-bf" style="width:${pct}%;background:${bc};"></div>
+                    <div class="truck__bar" style="grid-column:1/-1;">
+                        <div class="truck__bar-fill" style="width:${pct}%;background:${bc};"></div>
                     </div>
-                ` : ''}
-
-                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-                    ${realKg > 0 ? `Realno: ${realKg.toLocaleString('sr')} kg` : 'Realno: 0 kg'}
-                    ${plannedKg > 0 ? ` · Planirano: ${plannedKg.toLocaleString('sr')} kg` : ''}
-                    · ${x.n} otk.
-                </div>
-
-                ${rutaText ? `
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-                        Ruta: ${escapeHtml(rutaText)}
-                    </div>
-                ` : ''}
-
-                ${planHtml}
-
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-                    <span class="dp-badge ${st}">${escapeHtml(sl[st] || st)}</span>
-                </div>
-
-                <div class="dp-stb">
+                ` : capInputHtml}
+                ${planHtml ? `<div style="grid-column:1/-1;">${planHtml}</div>` : ''}
+                <div class="dp-stb" style="grid-column:1/-1;margin-top:4px;">
                     ${['slobodan', 'utovar', 'naputu', 'istovar']
                         .map(s => `<button type="button" class="${st === s ? 'on' : ''}" data-action="dp-set-status" data-vid="${escapeHtml(String(vid || ''))}" data-status="${s}">${sl[s]}</button>`)
                         .join('')}
@@ -655,27 +634,24 @@ function dpRD() {
             pct >= 70 ? 'var(--accent)' :
             '#1565c0';
 
+        const isHot = pct < 70 && preostalo > 0;
+        const selMod = isSel ? ' sel' : '';
+        const hotMod = isHot ? ' needs--hot' : '';
+
         return `
-            <div class="dp-card dem${isSel ? ' sel' : ''}" data-action="dp-select-demand" data-did="${escapeHtml(String(did || ''))}">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <strong class="dp-icon-line">
-                        ${agIcon('factory', '16px')} ${escapeHtml(kup)}
-                    </strong>
-                    <strong>${trazeno.toLocaleString('sr')} kg</strong>
+            <div class="needs${hotMod}${selMod}" data-action="dp-select-demand" data-did="${escapeHtml(String(did || ''))}">
+                <div class="needs__name">${escapeHtml(kup)}</div>
+                <div class="needs__bar">
+                    <span style="width:${pct}%;background:${barColor};"></span>
                 </div>
-
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-                    ${escapeHtml(d.Vrsta || '')} ${escapeHtml(d.Klasa || '')}
+                <div class="needs__meta">
+                    <span>${escapeHtml(d.Vrsta || '')} ${escapeHtml(d.Klasa || '')}</span>
+                    <span>traži <strong>${trazeno.toLocaleString('sr')} kg</strong></span>
                 </div>
-
-                <div class="dp-bar" style="margin-top:8px;">
-                    <div class="dp-bf" style="width:${pct}%;background:${barColor};"></div>
-                </div>
-
-                <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
-                    <div>Planirano: <strong style="color:#1565c0;">${planirano.toLocaleString('sr')} kg</strong></div>
-                    <div>Primljeno: <strong style="color:var(--success);">${primljeno.toLocaleString('sr')} kg</strong></div>
-                    <div>Preostalo: <strong style="color:${preostalo > 0 ? 'var(--danger)' : 'var(--success)'};">${preostalo.toLocaleString('sr')} kg</strong></div>
+                <div style="font-size:10.5px;color:var(--text-muted);margin-top:4px;line-height:1.5;">
+                    Plan: <strong>${planirano.toLocaleString('sr')}</strong> ·
+                    Prim: <strong>${primljeno.toLocaleString('sr')}</strong> ·
+                    Ostalo: <strong style="color:${preostalo > 0 ? 'var(--color-warning)' : 'var(--color-success)'};">${preostalo.toLocaleString('sr')} kg</strong>
                 </div>
             </div>
         `;
