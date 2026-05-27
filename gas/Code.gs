@@ -1039,6 +1039,20 @@ function doPost(e) {
       }));
     }
 
+    // TODO(agro-feed): implement when IzdavanjeSummary VBA report is ready.
+    // Called by loadMgmtAgroDashboard() in management/agrohemija.js.
+    // Should return last N izdavanja with KooperantName, Datum, Stavke[], UkupnaVrednost.
+    if (data.action === 'getMgmtAgroFeed') {
+      if (!isManagement(tokenData)) return forbiddenResponse();
+      // Stub — returns empty until VBA ExportMgmtReports adds IzdavanjeSummary sheet
+      return jsonResponse({
+        success: true,
+        izdavanja: [],
+        _stub: true,
+        _message: 'Implementirati: ExportMgmtReports mora eksportovati IzdavanjeSummary sheet'
+      });
+    }
+
     if (data.action === 'parseFiskalniImage') {
       if (!requireRole(tokenData, ['Kooperant', 'Management'])) return forbiddenResponse();
       if (tokenData.role === 'Kooperant' && data.kooperantID && !requireEntity(tokenData, data.kooperantID)) {

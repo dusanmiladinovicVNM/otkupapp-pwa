@@ -334,15 +334,9 @@ function showMgmtPartnerSegment(segment, btn) {
     if (koopSection) koopSection.style.display = segment === 'kooperanti' ? '' : 'none';
     if (kupSection) kupSection.style.display = segment === 'kupci' ? '' : 'none';
 
-    // Update hero text to reflect which section is active
+    // Update slim page-head crumb text to reflect active segment
     const eyebrow = document.getElementById('mgmtPartneriEyebrow');
-    const title = document.getElementById('mgmtPartneriTitle');
-    const subline = document.getElementById('mgmtPartneriSubline');
     if (eyebrow) eyebrow.textContent = segment === 'kooperanti' ? 'Kooperanti' : 'Kupci';
-    if (title) title.textContent = segment === 'kooperanti' ? 'Kooperanti' : 'Kupci';
-    if (subline) subline.textContent = segment === 'kooperanti'
-        ? 'Kartica kooperanta, pregled i saldo'
-        : 'Fakture, saldo i predate količine';
 
     if (segment === 'kooperanti') {
         showMgmtKoopSub(window.mgmtShellState.koopSub || 'saldo');
