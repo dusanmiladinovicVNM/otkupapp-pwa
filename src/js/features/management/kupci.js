@@ -119,7 +119,7 @@ function loadMgmtKupci() {
                 // Positive saldo = kupac duguje (warn), negative = kompanija duguje (ok)
                 const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
                 return `
-                    <div class="partner">
+                    <div class="partner" data-kupac-id="${escapeHtml(String(r.KupacID || r.Kupac || ''))}" data-action="mgmt-kup-select">
                         <div class="partner__avatar" style="background:var(--gold-soft);color:var(--gold);">${escapeHtml(initials)}</div>
                         <div>
                             <div class="partner__name">${escapeHtml(name)}</div>
@@ -134,6 +134,25 @@ function loadMgmtKupci() {
         </div>
     `;
 }
+
+// Click delegate: selecting kupac from list loads their fakture
+(function bindKupciListDelegate() {
+    document.addEventListener('click', function(e) {
+        const item = e.target.closest('[data-action="mgmt-kup-select"]');
+        if (!item) return;
+        const kupacID = item.dataset.kupacId;
+        if (!kupacID) return;
+
+        // Mark active
+        document.querySelectorAll('[data-action="mgmt-kup-select"]').forEach(el => el.classList.remove('is-active'));
+        item.classList.add('is-active');
+
+        // Set dropdown value and load fakture
+        const sel = document.getElementById('mgmtFaktureKupac');
+        if (sel) sel.value = kupacID;
+        if (typeof loadMgmtFakture === 'function') loadMgmtFakture();
+    });
+})();
 
 function loadMgmtPredato() {
     const records = (mgmtData && mgmtData.predatoPoKupcu) ? mgmtData.predatoPoKupcu : [];

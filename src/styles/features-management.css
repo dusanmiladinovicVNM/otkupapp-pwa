@@ -1582,8 +1582,159 @@ body.has-mgmt-bottom-nav .tab-content {
     padding-left: 220px;
   }
 
-  /* On desktop, the mgmt bottom nav is already hidden — remove extra padding */
+  /* On desktop: give content breathing room on all sides */
   .has-mgmt-bottom-nav .tab-content[id^="tab-mgmt-"] .mgmt-shell {
-    padding-bottom: 32px;
+    padding: 24px 28px 32px 28px;
   }
 }
+
+/* ── Kooperanti / Kupci split layout (desktop) ─────────────── */
+/* Mobile: inner panels hidden/shown via sub-tabs */
+#mgmt-koop-split > .mgmt-sub,
+#mgmt-kup-split > .mgmt-sub {
+  display: none;
+}
+#mgmt-koop-split > .mgmt-sub.active,
+#mgmt-kup-split > .mgmt-sub.active {
+  display: block;
+}
+
+@media (min-width: 900px) {
+  /* Split grid on desktop */
+  #mgmt-koop-split,
+  #mgmt-kup-split {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  /* Always show both panels on desktop */
+  #mgmt-koop-split > .mgmt-sub,
+  #mgmt-kup-split > .mgmt-sub {
+    display: block !important;
+  }
+  /* Hide sub-tab bars replaced by sidebar + split layout */
+  #mgmtPartnerKoopSubBar,
+  #mgmtPartnerKupSubBar {
+    display: none;
+  }
+  /* Pregled tab not needed in split desktop view */
+  #mgmt-koop-pregled {
+    display: none !important;
+  }
+  /* Roba tab always accessible via its sub-tab (keep for kupci) */
+}
+
+/* ── Agrohemija Izdavanje — 3-column wizard ────────────────── */
+.iz-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 0.95fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 899px) {
+  .iz-grid { grid-template-columns: 1fr; }
+}
+
+.iz-col {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.iz-col__head {
+  padding: 10px 14px;
+  background: var(--forest);
+  color: var(--cream);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.iz-col__num {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(200,168,75,0.25); color: var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; flex-shrink: 0;
+}
+.iz-col__body { padding: 14px; }
+
+.iz-total-ha {
+  background: var(--forest); color: var(--cream);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 12px; margin-top: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.iz-total-ha strong { font-family: var(--font-display); font-size: 18px; color: var(--gold); }
+
+.iz-scan {
+  width: 100%;
+  background: linear-gradient(135deg, var(--forest) 0%, var(--accent) 100%);
+  color: var(--cream);
+  border: none; border-radius: var(--radius);
+  padding: 11px 14px; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 12px; letter-spacing: 0.03em;
+}
+.iz-scan:hover { opacity: 0.9; }
+
+.iz-doza {
+  background: var(--gold-soft);
+  border: 1px solid var(--gold);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+}
+.iz-doza__title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--gold); margin-bottom: 6px;
+}
+.iz-doza__calc {
+  font-family: var(--font-display);
+  font-size: 20px; font-weight: 700; color: var(--forest); line-height: 1;
+}
+.iz-doza__detail { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.iz-doza__apply {
+  width: 100%; margin-top: 8px;
+  background: var(--gold); color: var(--forest);
+  border: none; border-radius: 6px;
+  padding: 7px 10px; font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+
+.iz-summary {
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.iz-summary__row {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--text-muted); padding: 2px 0;
+}
+.iz-summary__row--total {
+  font-size: 16px; font-weight: 700; color: var(--forest);
+  border-top: 1px solid var(--border);
+  margin-top: 6px; padding-top: 8px;
+}
+.iz-summary__row--total .iz-summary__val { font-family: var(--font-display); }
+
+.iz-actions {
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.iz-btn--primary {
+  background: var(--accent); color: var(--cream);
+  border: none; border-radius: var(--radius);
+  padding: 12px 16px; font-size: 14px; font-weight: 700;
+  cursor: pointer; width: 100%; letter-spacing: 0.03em;
+}
+.iz-btn--primary:hover { background: var(--forest); }
+.iz-btn--secondary {
+  background: var(--surface); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; width: 100%;
+}
+
+/* Parcele list (inside iz-col__body) */
+.izd-parcele-multi { display: flex; flex-direction: column; gap: 4px; }

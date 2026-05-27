@@ -178,12 +178,16 @@ async function showMgmtRoot(root, btn) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
 
     const rootMap = {
-        dashboard: 'tab-mgmt-dashboard',
-        pregled: 'tab-mgmt-pregled',
-        dispecer: 'tab-mgmt-dispecer',
-        otkup: 'tab-mgmt-otkup',
-        partneri: 'tab-mgmt-partneri',
-        agro: 'tab-mgmt-agro'
+        dashboard:  'tab-mgmt-dashboard',
+        pregled:    'tab-mgmt-pregled',
+        dispecer:   'tab-mgmt-dispecer',
+        uzivo:      'tab-mgmt-uzivo',
+        otkup:      'tab-mgmt-otkup',
+        partneri:   'tab-mgmt-partneri',
+        kooperanti: 'tab-mgmt-partneri',
+        kupci:      'tab-mgmt-partneri',
+        fakture:    'tab-mgmt-partneri',
+        agro:       'tab-mgmt-agro'
     };
 
     const targetId = rootMap[root];
@@ -207,12 +211,22 @@ async function showMgmtRoot(root, btn) {
             try {
                 await loadDispecer();
             } catch (e) {
-                    mgmtLogError('showMgmtRoot', e);
+                mgmtLogError('showMgmtRoot', e);
             }
         }
         mgmtRenderOverview();
+    } else if (root === 'uzivo') {
+        if (typeof loadMgmtOtkupUzivo === 'function') loadMgmtOtkupUzivo();
     } else if (root === 'otkup') {
         showMgmtOtkupSub(window.mgmtShellState.otkupSub || 'otkupi');
+    } else if (root === 'kooperanti') {
+        showMgmtPartnerSegment('kooperanti');
+    } else if (root === 'kupci') {
+        showMgmtPartnerSegment('kupci');
+    } else if (root === 'fakture') {
+        showMgmtPartnerSegment('kupci');
+        showMgmtKupSub('fakture');
+        if (typeof loadMgmtFakture === 'function') loadMgmtFakture();
     } else if (root === 'partneri') {
         showMgmtPartnerSegment(window.mgmtShellState.partnerSegment || 'kooperanti');
     } else if (root === 'agro') {
@@ -253,8 +267,8 @@ function showMgmtKoopSub(sub, btn) {
 
     const map = {
         pregled: 'mgmt-koop-pregled',
-        kartica: 'mgmt-koop-kartica',
-        saldo: 'mgmt-koop-saldo'
+        saldo:   'mgmt-koop-saldo',
+        kartica: 'mgmt-koop-kartica'
     };
 
     mgmtHidePanels(MGMT_PARTNER_PANEL_IDS);
@@ -273,9 +287,9 @@ function showMgmtKupSub(sub, btn) {
     window.mgmtShellState.kupSub = sub;
 
     const map = {
+        saldo:   'mgmt-kup-saldo',
         fakture: 'mgmt-kup-fakture',
-        saldo: 'mgmt-kup-saldo',
-        roba: 'mgmt-kup-roba'
+        roba:    'mgmt-kup-roba'
     };
 
     mgmtHidePanels(MGMT_PARTNER_PANEL_IDS);
@@ -295,11 +309,12 @@ function showMgmtAgroSub(sub, btn) {
     window.mgmtShellState.agroSub = sub;
 
     const map = {
-        izdavanje: 'mgmt-agro-izdavanje',
-        stanje: 'mgmt-agro-stanje'
+        izdavanje:  'mgmt-agro-izdavanje',
+        stanje:     'mgmt-agro-stanje',
+        otpremnice: 'mgmt-agro-otpremnice'
     };
 
-    mgmtHidePanels(['mgmt-agro-izdavanje', 'mgmt-agro-stanje']);
+    mgmtHidePanels(['mgmt-agro-izdavanje', 'mgmt-agro-stanje', 'mgmt-agro-otpremnice']);
 
     const target = document.getElementById(map[sub]);
     if (target) target.classList.add('active');
@@ -309,6 +324,7 @@ function showMgmtAgroSub(sub, btn) {
 
     if (sub === 'izdavanje' && typeof populateIzdDropdowns === 'function') populateIzdDropdowns();
     if (sub === 'stanje' && typeof loadMgmtAgroStanje === 'function') loadMgmtAgroStanje();
+    if (sub === 'otpremnice' && typeof loadMgmtAgroOtpremnice === 'function') loadMgmtAgroOtpremnice();
 }
 
 function showMgmtPartnerSegment(segment, btn) {
@@ -319,14 +335,30 @@ function showMgmtPartnerSegment(segment, btn) {
 
     const koopBar = document.getElementById('mgmtPartnerKoopSubBar');
     const kupBar = document.getElementById('mgmtPartnerKupSubBar');
+    const koopSection = document.getElementById('mgmt-koop-section');
+    const kupSection = document.getElementById('mgmt-kup-section');
 
     if (koopBar) koopBar.style.display = segment === 'kooperanti' ? '' : 'none';
     if (kupBar) kupBar.style.display = segment === 'kupci' ? '' : 'none';
+    if (koopSection) koopSection.style.display = segment === 'kooperanti' ? '' : 'none';
+    if (kupSection) kupSection.style.display = segment === 'kupci' ? '' : 'none';
+
+    // Update hero text to reflect which section is active
+    const eyebrow = document.getElementById('mgmtPartneriEyebrow');
+    const title = document.getElementById('mgmtPartneriTitle');
+    const subline = document.getElementById('mgmtPartneriSubline');
+    if (eyebrow) eyebrow.textContent = segment === 'kooperanti' ? 'Kooperanti' : 'Kupci';
+    if (title) title.textContent = segment === 'kooperanti' ? 'Kooperanti' : 'Kupci';
+    if (subline) subline.textContent = segment === 'kooperanti'
+        ? 'Kartica kooperanta, pregled i saldo'
+        : 'Fakture, saldo i predate količine';
 
     if (segment === 'kooperanti') {
-        showMgmtKoopSub(window.mgmtShellState.koopSub || 'pregled');
+        showMgmtKoopSub(window.mgmtShellState.koopSub || 'saldo');
+        if (typeof loadMgmtKoopSaldo === 'function') loadMgmtKoopSaldo();
     } else {
-        showMgmtKupSub(window.mgmtShellState.kupSub || 'fakture');
+        showMgmtKupSub(window.mgmtShellState.kupSub || 'saldo');
+        if (typeof loadMgmtKupci === 'function') loadMgmtKupci();
     }
 }
 
@@ -1230,13 +1262,16 @@ const MGMT_SIDEBAR_SVG = {
 
 const MGMT_NAV_ITEMS = [
     { group: 'Operativa' },
-    { root: 'pregled',  label: 'Glavni pregled', icon: 'chart' },
-    { root: 'dispecer', label: 'Dispečer',       icon: 'truck' },
-    { root: 'otkup',    label: 'Otkup uživo',    icon: 'grid' },
+    { root: 'pregled',    label: 'Pregled',       icon: 'chart'    },
+    { root: 'dispecer',   label: 'Dispečer',      icon: 'truck'    },
+    { root: 'uzivo',      label: 'Otkup uživo',   icon: 'grid'     },
+    { root: 'otkup',      label: 'Stanice',       icon: 'building' },
     { group: 'Partneri' },
-    { root: 'partneri', label: 'Kooperanti & Kupci', icon: 'people' },
+    { root: 'kooperanti', label: 'Kooperanti',    icon: 'person'   },
+    { root: 'kupci',      label: 'Kupci',         icon: 'people'   },
+    { root: 'fakture',    label: 'Fakture i SEF', icon: 'invoice'  },
     { group: 'Finansije' },
-    { root: 'agro',     label: 'Agrohemija',     icon: 'leaf' },
+    { root: 'agro',       label: 'Agrohemija',    icon: 'leaf'     },
 ];
 
 function mgmtGetUserInitials() {
