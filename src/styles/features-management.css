@@ -91,6 +91,43 @@
     padding: 18px 16px;
 }
 
+/* ── Slim page header — replaces the big hero on all sub-pages ─ */
+.mgmt-page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    min-height: 36px;
+}
+.mgmt-page-head__crumb {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.mgmt-page-head__sep {
+    font-size: 11px;
+    color: var(--border);
+    padding: 0 2px;
+}
+.mgmt-page-head__breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.mgmt-page-head__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .mgmt-eyebrow {
     font-size: 12px;
     font-weight: 700;
@@ -566,11 +603,11 @@ body.has-mgmt-bottom-nav .tab-content {
 }
 
 @media (max-width: 767px) {
-    .mgmt-dash-hero {
-        flex-direction: column;
+    .mgmt-page-head {
+        flex-wrap: wrap;
     }
 
-    .mgmt-dash-hero-meta {
+    .mgmt-page-head__actions {
         justify-content: flex-start;
     }
 
@@ -1773,7 +1810,10 @@ body.has-mgmt-bottom-nav .tab-content {
 }
 .iz-scan:hover { opacity: 0.9; }
 
-.iz-doza {
+/* Hidden by default; shown when pametna-doza is calculated */
+.iz-doza { display: none; }
+.iz-doza.visible {
+  display: block;
   background: var(--gold-soft);
   border: 1px solid var(--gold);
   border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
