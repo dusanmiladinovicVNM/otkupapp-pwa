@@ -1208,3 +1208,132 @@ function mgmtDashGetPeriodStats(otkupiAll, period) {
         avgPrice: totalKg > 0 ? (weightedSum / totalKg) : 0
     };
 }
+
+// ============================================================
+// MGMT DESKTOP SIDEBAR — AgriX Design System v2
+// Injects a fixed sidebar for desktop (>= 900px) when the
+// management role is active. Falls back gracefully on mobile.
+// ============================================================
+
+const MGMT_SIDEBAR_SVG = {
+    chart:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 17v-6M11 17V7M16 17v-4M20 17v-9"/></svg>',
+    truck:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v10H3zM13 10h5l3 3v3h-8"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
+    grid:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/></svg>',
+    building: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M3 21h18M8 7h2M14 7h2M8 11h2M14 11h2"/></svg>',
+    person:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>',
+    people:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="7" r="2.5"/></svg>',
+    invoice:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18v6H3zM3 14h18v6H3z"/></svg>',
+    money:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5a5 5 0 1 0 0 7"/><path d="M8 11h6M8 13.5h6"/></svg>',
+    leaf:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12c0-4 3-6 7-6-1 5-3 7-7 6Z"/><path d="M12 14c0-3-2-5-6-5 1 4 3 6 6 5Z"/></svg>',
+    overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+};
+
+const MGMT_NAV_ITEMS = [
+    { group: 'Operativa' },
+    { root: 'pregled',  label: 'Glavni pregled', icon: 'chart' },
+    { root: 'dispecer', label: 'Dispečer',       icon: 'truck' },
+    { root: 'otkup',    label: 'Otkup uživo',    icon: 'grid' },
+    { group: 'Partneri' },
+    { root: 'partneri', label: 'Kooperanti & Kupci', icon: 'people' },
+    { group: 'Finansije' },
+    { root: 'agro',     label: 'Agrohemija',     icon: 'leaf' },
+];
+
+function mgmtGetUserInitials() {
+    try {
+        const u = firebase.auth().currentUser;
+        if (!u) return '—';
+        const d = u.displayName || u.email || '';
+        const parts = d.trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+        return d.slice(0, 2).toUpperCase();
+    } catch (_) { return '—'; }
+}
+
+function mgmtGetUserName() {
+    try {
+        const u = firebase.auth().currentUser;
+        if (!u) return 'Korisnik';
+        return u.displayName || u.email || 'Korisnik';
+    } catch (_) { return 'Korisnik'; }
+}
+
+function mgmtSidebarHTML(activeRoot) {
+    const items = MGMT_NAV_ITEMS.map(item => {
+        if (item.group) {
+            return `<div class="mgmt-side__group">${item.group}</div>`;
+        }
+        const active = item.root === activeRoot ? ' is-active' : '';
+        return `
+            <button class="mgmt-side__item${active}"
+                    data-action="mgmt-sidebar-nav"
+                    data-root="${item.root}">
+                ${MGMT_SIDEBAR_SVG[item.icon] || ''}
+                ${item.label}
+            </button>`;
+    }).join('');
+
+    const initials = mgmtGetUserInitials();
+    const name = mgmtGetUserName();
+
+    return `
+        <div class="mgmt-side__brand">Agri<em>X</em></div>
+        <div class="mgmt-side__role">Uprava</div>
+        ${items}
+        <div class="mgmt-side__user">
+            <div class="av">${initials}</div>
+            <div>
+                <div class="nm">${escapeHtml(name)}</div>
+                <div class="rl">Management</div>
+            </div>
+        </div>
+    `;
+}
+
+function mgmtSidebarMount() {
+    let sidebar = document.getElementById('mgmt-desktop-sidebar');
+    if (!sidebar) {
+        sidebar = document.createElement('div');
+        sidebar.id = 'mgmt-desktop-sidebar';
+        sidebar.className = 'mgmt-side';
+        sidebar.setAttribute('role', 'navigation');
+        sidebar.setAttribute('aria-label', 'Management navigacija');
+        // Inject into body so it can be positioned via CSS
+        document.body.appendChild(sidebar);
+    }
+    sidebar.innerHTML = mgmtSidebarHTML(
+        (window.mgmtShellState && window.mgmtShellState.activeRoot) || 'pregled'
+    );
+}
+
+function mgmtSidebarUpdateActive(root) {
+    const sidebar = document.getElementById('mgmt-desktop-sidebar');
+    if (!sidebar) return;
+    sidebar.querySelectorAll('.mgmt-side__item').forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.root === root);
+    });
+}
+
+// Handle sidebar nav clicks
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action="mgmt-sidebar-nav"]');
+    if (!btn) return;
+    const root = btn.dataset.root;
+    if (root && typeof showMgmtRoot === 'function') {
+        showMgmtRoot(root);
+    }
+});
+
+// Patch showMgmtRoot to also update sidebar active state
+const _origShowMgmtRoot = window.showMgmtRoot || showMgmtRoot;
+window.showMgmtRoot = async function(root, btn) {
+    mgmtSidebarUpdateActive(root);
+    return _origShowMgmtRoot.call(this, root, btn);
+};
+
+// Patch mgmtShellInit to mount sidebar
+const _origMgmtShellInit = window.mgmtShellInit || mgmtShellInit;
+window.mgmtShellInit = async function() {
+    mgmtSidebarMount();
+    return _origMgmtShellInit.call(this);
+};

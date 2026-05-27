@@ -99,14 +99,40 @@ async function toggleFakturaStavke(fakturaID, parentEl) {
 function loadMgmtKupci() {
     const records = (mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
     const list = document.getElementById('mgmtKupciList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
-    list.innerHTML = records.map(r => {
-        const saldo = parseFloat(r.Saldo)||0;
-        const bc = saldo > 0 ? 'var(--danger)' : 'var(--success)';
-        return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">${escapeHtml(r.Kupac||r.KupacID||'')}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
-            <div class="qi-detail">Fakturisano: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} | Placeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div></div>`;
-    }).join('');
+    if (records.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
+        return;
+    }
+
+    // Sort by saldo descending
+    const sorted = [...records].sort((a, b) => (parseFloat(b.Saldo)||0) - (parseFloat(a.Saldo)||0));
+
+    list.innerHTML = `
+        <div class="partner-list">
+            <div class="partner-list__head">
+                <span class="partner-list__title">Kupci — po saldu</span>
+            </div>
+            ${sorted.map(r => {
+                const saldo = parseFloat(r.Saldo) || 0;
+                const name = r.Kupac || r.KupacID || '?';
+                const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
+                // Positive saldo = kupac duguje (warn), negative = kompanija duguje (ok)
+                const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
+                return `
+                    <div class="partner">
+                        <div class="partner__avatar" style="background:var(--gold-soft);color:var(--gold);">${escapeHtml(initials)}</div>
+                        <div>
+                            <div class="partner__name">${escapeHtml(name)}</div>
+                            <div class="partner__meta">Fakt: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} · Plaćeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div>
+                        </div>
+                        <div class="partner__saldo partner__saldo--${saldoMod}">
+                            ${saldo > 0 ? '+' : ''}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 }
 
 function loadMgmtPredato() {

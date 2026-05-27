@@ -736,7 +736,80 @@ function izdReset() {
 }  
 
 function loadMgmtAgroStanje() {
-    document.getElementById('mgmtAgroStanjeList').innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Pokrenite ExportMgmtReports iz Excela</p>';
+    const el = document.getElementById('mgmtAgroStanjeList');
+    if (!el) return;
+
+    // Try to render from stammdaten.artikli with lager stanje if available
+    const artikli = (stammdaten && stammdaten.artikli) || [];
+    if (!artikli.length) {
+        el.innerHTML = `
+            <div class="lager">
+                <div class="lager__head">
+                    <div>
+                        <div class="lager__title">Stanje magacina</div>
+                        <div class="lager__sub">Podaci se učitavaju iz VBA ExportMgmtReports</div>
+                    </div>
+                </div>
+                <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">
+                    Pokrenite <strong>ExportMgmtReports</strong> iz Excela da biste videli stanje magacina.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Render as lager component
+    el.innerHTML = `
+        <div class="lager">
+            <div class="lager__head">
+                <div>
+                    <div class="lager__title">Stanje magacina</div>
+                    <div class="lager__sub">${artikli.length} artikala</div>
+                </div>
+                <div class="lager__search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                    <input id="mgmtAgroStanjeSearch" placeholder="Pretraži preparate…">
+                </div>
+            </div>
+            <div class="lager__list" id="mgmtAgroStanjeLista">
+                ${artikli.map(a => {
+                    const stanje = parseFloat(a.Stanje || a.TrenutnoStanje || 0) || 0;
+                    const min = parseFloat(a.MinStanje || 0) || 0;
+                    const jm = a.JM || a.JedinicaMere || 'kom';
+                    const isOut = stanje <= 0;
+                    const isLow = !isOut && min > 0 && stanje <= min;
+                    const stockMod = isOut ? ' artikal__stock--out' : (isLow ? ' artikal__stock--low' : '');
+                    const badgeMod = isOut ? 'out' : (isLow ? 'low' : 'ok');
+                    const badgeTxt = isOut ? 'Rasprodato' : (isLow ? 'Nisko' : 'OK');
+                    return `
+                        <div class="artikal">
+                            <div class="artikal__cat artikal__cat--gold">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9h12l-1 10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Z"/><path d="M8 9V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/></svg>
+                            </div>
+                            <div>
+                                <div class="artikal__name">${escapeHtml(a.Naziv || a.ArtikalID)}</div>
+                                <div class="artikal__meta">${escapeHtml(a.Kategorija || a.Vrsta || '')}${a.Cena ? ' · ' + parseFloat(a.Cena).toLocaleString('sr') + ' RSD/' + jm : ''}</div>
+                            </div>
+                            <div class="artikal__stock${stockMod}">${stanje.toLocaleString('sr')}<span class="u">${jm}</span></div>
+                            <span class="artikal__badge artikal__badge--${badgeMod}">${badgeTxt}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+
+    // Live search
+    const searchInput = document.getElementById('mgmtAgroStanjeSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            document.querySelectorAll('#mgmtAgroStanjeLista .artikal').forEach(row => {
+                const txt = row.textContent.toLowerCase();
+                row.style.display = txt.includes(q) ? '' : 'none';
+            });
+        });
+    }
 }
 
 

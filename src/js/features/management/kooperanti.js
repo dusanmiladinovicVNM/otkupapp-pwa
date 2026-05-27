@@ -94,17 +94,40 @@ async function loadMgmtKoopSaldo() {
     
     const list = document.getElementById('mgmtKoopSaldoList');
     const totals = kartice.filter(r => r.Opis === 'UKUPNO');
-    if (totals.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
-    list.innerHTML = totals.map(r => {
-        const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === r.KooperantID);
-        const name = koop ? koop.Ime + ' ' + koop.Prezime : r.KooperantID;
-        const saldo = parseFloat(r.Saldo)||0;
-        const zad = parseFloat(r.Zaduzenje)||0, raz = parseFloat(r.Razduzenje)||0;
-        const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
-        return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header"><span class="qi-koop">${escapeHtml(name)}</span><span class="qi-time">Saldo: ${saldo.toLocaleString('sr')} RSD</span></div>
-            <div class="qi-detail">Zaduž: ${zad.toLocaleString('sr')} | Razduž: ${raz.toLocaleString('sr')}</div></div>`;
-    }).join('');
+    if (totals.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
+        return;
+    }
+    // Sort by saldo descending (largest positive first)
+    const sorted = [...totals].sort((a, b) => (parseFloat(b.Saldo)||0) - (parseFloat(a.Saldo)||0));
+
+    // Render as partner-list component from redesign
+    list.innerHTML = `
+        <div class="partner-list">
+            <div class="partner-list__head">
+                <span class="partner-list__title">Po saldu — opadajuće</span>
+            </div>
+            ${sorted.map(r => {
+                const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === r.KooperantID);
+                const name = koop ? koop.Ime + ' ' + koop.Prezime : r.KooperantID;
+                const saldo = parseFloat(r.Saldo) || 0;
+                const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
+                const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
+                return `
+                    <div class="partner">
+                        <div class="partner__avatar">${escapeHtml(initials)}</div>
+                        <div>
+                            <div class="partner__name">${escapeHtml(name)}</div>
+                            <div class="partner__meta">${escapeHtml(r.KooperantID || '')}</div>
+                        </div>
+                        <div class="partner__saldo partner__saldo--${saldoMod}">
+                            ${saldo > 0 ? '+' : ''}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 }
 
 async function loadMgmtKoopPregled() {

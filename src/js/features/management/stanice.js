@@ -47,12 +47,49 @@ async function loadMgmtOtkupi() {
     document.getElementById('mgmtOtkupiVrednost').textContent = vr.toLocaleString('sr');
     document.getElementById('mgmtOtkupiKoop').textContent = new Set(records.map(r => r.kooperantName)).size;
     const list = document.getElementById('mgmtOtkupiList');
-    if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otkupa</p>'; return; }
-    list.innerHTML = records.map(r => {
-        const v = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        return `<div class="queue-item"><div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(r.datum)}</span></div>
-                <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} = <strong>${v} RSD</strong></div></div>`;
-    }).join('');
+    if (records.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otkupa</p>';
+        return;
+    }
+    // Render as redesigned table component
+    list.innerHTML = `
+        <div class="tbl">
+            <div class="tbl__head">
+                <div>Kooperant</div>
+                <div>Vrsta i klasa</div>
+                <div style="text-align:right;">Količina</div>
+                <div style="text-align:right;">Cena</div>
+                <div style="text-align:right;">Vrednost</div>
+                <div>Datum</div>
+            </div>
+            ${records.map(r => {
+                const v = ((r.kolicina || 0) * (r.cena || 0));
+                return `
+                    <div class="tbl__row">
+                        <div>
+                            <div class="tbl__cell-main">${escapeHtml(r.kooperantName)}</div>
+                        </div>
+                        <div>
+                            <div class="tbl__cell-main">${escapeHtml(r.vrstaVoca)}</div>
+                            <div class="tbl__cell-sub">Klasa ${escapeHtml(r.klasa)}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="tbl__num">${r.kolicina.toLocaleString('sr')}<span class="u">kg</span></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="tbl__num">${r.cena.toLocaleString('sr')}<span class="u">RSD</span></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="tbl__num">${v.toLocaleString('sr')}<span class="u">RSD</span></div>
+                        </div>
+                        <div>
+                            <div class="tbl__cell-sub">${escapeHtml(r.datum)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 }
 
 function loadMgmtSaldoOM() {
