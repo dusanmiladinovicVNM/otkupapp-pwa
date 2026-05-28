@@ -1838,6 +1838,13 @@
                 </div>
             </div>
 
+            <!-- Mobile-only period switch (page-head hidden on mobile) -->
+            <div class="mgmt-mob-actions mgmt-mob-actions--period">
+                <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="today">Danas</button>
+                <button type="button" class="mgmt-dash-period-btn active" data-action="mgmt-dash-period" data-period="7d">7 dana</button>
+                <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="season">Sezona</button>
+            </div>
+
             <div class="mgmt-dash-kpi-grid">
                 <div class="mgmt-dash-kpi-card">
                     <div class="mgmt-dash-kpi-label" id="mgmtDashKgLabel">Otkup · 7 dana</div>
@@ -2118,6 +2125,11 @@
                 </div>
             </div>
 
+            <!-- Mobile-only action row (page-head hidden on mobile) -->
+            <div class="mgmt-mob-actions">
+                <button class="mgmt-mob-actions__btn mgmt-mob-actions__btn--sec" data-action="mgmt-novi-partner" type="button" disabled title="Entiteti se trenutno unose iz VBA">+ Novi kooperant</button>
+            </div>
+
             <div class="mgmt-seg-bar" id="mgmtPartnerSegmentBar">
                 <button class="mgmt-seg-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="mgmt-seg-count" id="mgmtKoopCount">0</span></button>
                 <button class="mgmt-seg-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="mgmt-seg-count" id="mgmtKupCount">0</span></button>
@@ -2212,6 +2224,12 @@
                         <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="agro-prijem-robe" type="button" disabled title="U pripremi">Prijem robe</button>
                         <button class="mgmt-hero__btn" data-action="agro-novo-izdavanje" type="button">+ Novo izdavanje</button>
                     </div>
+                </div>
+
+                <!-- Mobile-only action row (page-head is hidden on mobile) -->
+                <div class="mgmt-mob-actions">
+                    <button class="mgmt-mob-actions__btn mgmt-mob-actions__btn--sec" data-action="agro-prijem-robe" type="button" disabled title="U pripremi">Prijem robe</button>
+                    <button class="mgmt-mob-actions__btn mgmt-mob-actions__btn--pri" data-action="agro-novo-izdavanje" type="button">+ Novo izdavanje</button>
                 </div>
 
                 <!-- 4 KPI cards -->
