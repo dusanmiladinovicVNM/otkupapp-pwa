@@ -2180,6 +2180,32 @@ body.has-mgmt-bottom-nav .tab-content {
   font-family: var(--font-display, inherit);
   font-weight: 700; font-size: 13px;
 }
+.mgmt-tbar__icon {
+  width: 34px; height: 34px;
+  background: rgba(255,255,255,.08);
+  border: 0; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cream); cursor: pointer; flex-shrink: 0;
+  position: relative;
+}
+.mgmt-tbar__icon:hover { background: rgba(255,255,255,.14); }
+.mgmt-tbar__sync {
+  /* Override the .sync-badge pill from layout.css inside the dark tbar */
+  font-size: 9px !important;
+  padding: 3px 7px !important;
+  background: rgba(94,161,53,.22) !important;
+  color: var(--accent-pale, #c4e4a8) !important;
+  border: 1px solid rgba(94,161,53,.4) !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  letter-spacing: .04em !important;
+  line-height: 1 !important;
+}
+.mgmt-tbar__sync.sync-offline {
+  background: rgba(200,80,80,.22) !important;
+  color: #f5b4b4 !important;
+  border-color: rgba(200,80,80,.4) !important;
+}
 .mgmt-tbar__live {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 4px 9px;
