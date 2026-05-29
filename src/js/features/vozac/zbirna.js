@@ -59,18 +59,20 @@ function extractStanicaIdFromSource(source) {
 function renderVozacOtpremnice() {
     const today = getTodayIsoDate();
     const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
-    
+
     const list = document.getElementById('vozacOtpremniceList');
     if (!list) return;
+
     if (todayOtkupi.length === 0) {
         list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema otpremnica za danas</p>';
         const btn = document.getElementById('btnNovaZbirna');
         if (btn) btn.style.display = 'none';
         return;
     }
+
     const btn = document.getElementById('btnNovaZbirna');
     if (btn) btn.style.display = '';
-    
+
     // Group by stanica
     const grouped = {};
     todayOtkupi.forEach(r => {
@@ -80,18 +82,20 @@ function renderVozacOtpremnice() {
         grouped[s].kg += r.kolicina || 0;
         grouped[s].amb += r.kolAmbalaze || 0;
     });
-    
+
     list.innerHTML = Object.entries(grouped).map(([sta, g]) =>
-        `<div style="background:white;border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid var(--primary);">
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                <strong style="color:var(--primary);">${escapeHtml(fmtStanica(sta))}</strong>
-                <span style="font-weight:600;">${g.kg.toLocaleString('sr')} kg</span>
-            </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">${g.items.length} otkupa | Amb: ${g.amb}</div>
-            ${g.items.map(r => `<div style="padding:3px 0;font-size:12px;border-top:1px solid #eee;">
-               ${escapeHtml(r.kooperantName)} | ${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg | ${r.kolAmbalaze} amb
-            </div>`).join('')}
-        </div>`).join('');
+        `<div class="vblk-sta">${escapeHtml(fmtStanica(sta))} · ${g.kg.toLocaleString('sr')} kg · ${g.amb} amb</div>` +
+        g.items.map(r =>
+            `<div class="vblk sel">
+                <div class="vblk__c">✓</div>
+                <div>
+                    <div class="vblk__nm">${escapeHtml(r.kooperantName)}</div>
+                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} · ${r.kolAmbalaze} amb</div>
+                </div>
+                <div class="vblk__kg">${(r.kolicina || 0).toLocaleString('sr')}<span class="u"> kg</span></div>
+            </div>`
+        ).join('')
+    ).join('');
 }
 
 async function startZbirnaCreation() {
@@ -131,27 +135,48 @@ async function startZbirnaCreation() {
 function renderZbirnaSummary() {
     const today = getTodayIsoDate();
     const todayOtkupi = vozacOtkupi.filter(r => r.datum === today);
-    
+
     let totalKgI = 0, totalKgII = 0, totalAmb = 0;
     todayOtkupi.forEach(r => {
         if (r.klasa === 'II') totalKgII += r.kolicina || 0;
         else totalKgI += r.kolicina || 0;
         totalAmb += r.kolAmbalaze || 0;
     });
-    
-    document.getElementById('zbirnaOtkupiSummary').innerHTML = 
-        `<div style="font-size:16px;font-weight:700;">Ukupno: ${(totalKgI + totalKgII).toLocaleString('sr')} kg</div>
-         <div style="font-size:13px;opacity:0.9;">Kl. I: ${totalKgI.toLocaleString('sr')} kg | Kl. II: ${totalKgII.toLocaleString('sr')} kg | Amb: ${totalAmb}</div>
-         <div style="font-size:12px;opacity:0.7;">${todayOtkupi.length} otkupa sa ${new Set(todayOtkupi.map(r => r.stanicaID)).size} stanica</div>`;
-    
-    // List individual otkupi
-    document.getElementById('zbirnaOtkupiList').innerHTML = todayOtkupi.map(r => {
-        const vr = ((r.kolicina || 0) * (r.cena || 0)).toLocaleString('sr');
-        return `<div class="queue-item">
-             <div class="qi-header"><span class="qi-koop">${escapeHtml(r.kooperantName)}</span><span class="qi-time">${escapeHtml(fmtStanica(r.stanicaID))}</span></div>
-             <div class="qi-detail">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} | ${r.kolicina} kg × ${r.cena} = ${vr} RSD | Amb: ${r.kolAmbalaze}</div>
+
+    const totalKg = totalKgI + totalKgII;
+    const stanicaCount = new Set(todayOtkupi.map(r => r.stanicaID)).size;
+
+    const summaryEl = document.getElementById('zbirnaOtkupiSummary');
+    if (summaryEl) {
+        summaryEl.innerHTML = `<div class="vsum">
+            <div class="vsum__total">${totalKg.toLocaleString('sr')}<span class="u"> kg</span></div>
+            <div class="vsum__detail">
+                ${totalKgII > 0
+                    ? 'Kl. I: ' + totalKgI.toLocaleString('sr') + ' kg · Kl. II: ' + totalKgII.toLocaleString('sr') + ' kg'
+                    : 'Klasa I'}
+                · Amb: ${totalAmb}
+            </div>
+            <div class="vsum__sub">${todayOtkupi.length} otkupa · ${stanicaCount} ${stanicaCount === 1 ? 'stanica' : 'stanice'}</div>
         </div>`;
-    }).join('');
+    }
+
+    const countEl = document.getElementById('zbirnaOtkupiCount');
+    if (countEl) countEl.textContent = String(todayOtkupi.length);
+
+    // List individual otkupi as vblk cards (read-only, all selected)
+    const listEl = document.getElementById('zbirnaOtkupiList');
+    if (listEl) {
+        listEl.innerHTML = todayOtkupi.map(r =>
+            `<div class="vblk sel">
+                <div class="vblk__c">✓</div>
+                <div>
+                    <div class="vblk__nm">${escapeHtml(r.kooperantName)}</div>
+                    <div class="vblk__s">${escapeHtml(r.vrstaVoca)} ${escapeHtml(r.klasa)} · ${escapeHtml(fmtStanica(r.stanicaID))}</div>
+                </div>
+                <div class="vblk__kg">${(r.kolicina || 0).toLocaleString('sr')}<span class="u"> kg</span></div>
+            </div>`
+        ).join('');
+    }
 }
 
 function mapServerZbirnaRecord(r) {
@@ -240,32 +265,42 @@ function renderVozacZbirneFromData(allZbirne) {
 
     list.innerHTML = all.map(r => {
         const totalKg = (r.kolicinaKlI || 0) + (r.kolicinaKlII || 0);
-        const bc = (r.syncStatus === 'pending' || r.syncStatus === 'syncing')
-            ? 'var(--warning)'
-            : 'var(--success)';
+        const isPending = r.syncStatus === 'pending' || r.syncStatus === 'syncing';
+        const trMod = isPending ? 'tr--load' : '';
+        const bdgClass = r.syncStatus === 'syncing' ? 'tr__bdg--road' :
+                         r.syncStatus === 'pending'  ? 'tr__bdg--pending' :
+                                                       'tr__bdg--done';
+        const bdgLabel = r.syncStatus === 'syncing' ? 'Sync...' :
+                         r.syncStatus === 'pending'  ? 'Na čekanju' :
+                                                       'Sinhronizovano';
+        const syncIcon = r.syncStatus === 'syncing' ? '🔄' :
+                         r.syncStatus === 'pending'  ? '⏳' : '✅';
 
-        const syncText =
-            r.brojZbirne 
-                ? ' | ' + r.brojZbirne + (r.syncStatus === 'pending' ? ' (čeka sync)' : 
-                                    r.syncStatus === 'syncing' ? ' (sync...)' : '')
-                : (r.syncStatus === 'syncing' ? ' | sync...' :
-                   r.syncStatus === 'pending' ? ' | pending' :
-                   r.serverRecordID ? ' | ' + r.serverRecordID : '');
+        const klaseLine = r.kolicinaKlII > 0
+            ? 'Kl.I: ' + (r.kolicinaKlI || 0).toLocaleString('sr') + ' · Kl.II: ' + (r.kolicinaKlII || 0).toLocaleString('sr') + ' kg'
+            : '';
 
-        return `<div class="queue-item" style="border-left-color:${bc};">
-            <div class="qi-header">
-                <span class="qi-koop">🏭 ${escapeHtml(r.kupacName)}</span>
-                <span class="qi-time">${escapeHtml(r.datum)}</span>
+        return `<div class="tr ${trMod}">
+            <div class="tr__top">
+                <div>
+                    <div class="tr__dest">${escapeHtml(r.kupacName)}</div>
+                    ${r.vrstaVoca ? `<div class="tr__from">${escapeHtml(r.vrstaVoca)}</div>` : ''}
+                </div>
+                <div class="tr__time">${escapeHtml(r.datum)}</div>
             </div>
-            <div class="qi-detail">
-                ${escapeHtml(r.vrstaVoca)} | ${totalKg.toLocaleString('sr')} kg | Amb: ${r.kolAmbalaze || 0}${escapeHtml(syncText)}
+            <div class="tr__main">
+                <div class="tr__kg">${totalKg.toLocaleString('sr')}<span class="u"> kg</span></div>
+                <div class="tr__det">
+                    Amb: <strong>${r.kolAmbalaze || 0}</strong>
+                    ${r.brojZbirne ? ' · ' + escapeHtml(r.brojZbirne) : ''}
+                    ${klaseLine ? '<br>' + klaseLine : ''}
+                </div>
             </div>
-            ${r.kolicinaKlII > 0
-                ? '<div class="qi-detail" style="font-size:11px;">Kl.I: ' + (r.kolicinaKlI || 0).toLocaleString('sr') + ' kg | Kl.II: ' + (r.kolicinaKlII || 0).toLocaleString('sr') + ' kg</div>'
-                : ''}
-            ${r.lastSyncError
-                ? '<div class="qi-detail" style="font-size:11px;color:#b42318;">' + escapeHtml(r.lastSyncError) + '</div>'
-                : ''}
+            <div class="tr__bot">
+                <span class="tr__bdg ${bdgClass}">${bdgLabel}</span>
+                <span class="tr__sync">${syncIcon}</span>
+            </div>
+            ${r.lastSyncError ? `<div class="tr__err">${escapeHtml(r.lastSyncError)}</div>` : ''}
         </div>`;
     }).join('');
 }

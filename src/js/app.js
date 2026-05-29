@@ -169,7 +169,8 @@ async function bootstrapRole() {
     }
 
     if (CONFIG.USER_ROLE === 'Vozac') {
-        safeCall(() => showTab('zbirna'));
+        if (typeof initVozacStatus === 'function') safeCall(() => initVozacStatus());
+        safeCall(() => showTab('transport'));
         return;
     }
 
@@ -683,6 +684,23 @@ function handleAppShellClick(event) {
 
         if (action === 'start-zbirna-creation') {
             startZbirnaCreation();
+            return;
+        }
+
+        if (action === 'vozac-fab-nova-zbirna') {
+            showTab('zbirna');
+            // loadVozacData is async — wait for it to populate vozacOtkupi before opening create view
+            setTimeout(() => startZbirnaCreation(), 400);
+            return;
+        }
+
+        if (action === 'vozac-set-status') {
+            if (typeof setVozacStatus === 'function') setVozacStatus(btn.dataset.status);
+            return;
+        }
+
+        if (action === 'vozac-scan-kupac') {
+            showToast('QR skener nije još dostupan — izaberite kupca iz liste', 'info');
             return;
         }
 
