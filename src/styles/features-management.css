@@ -2315,6 +2315,49 @@ body.has-mgmt-bottom-nav .tab-content {
 .mgmt-drawer__nm { font-size: 12px; font-weight: 700; color: var(--cream); line-height: 1.2; }
 .mgmt-drawer__rl { font-size: 10px; color: rgba(247,244,238,.5); margin-top: 1px; }
 
+/* ── Mobile-only action row (replaces page-head actions on mobile) ── */
+.mgmt-mob-actions {
+  display: none; /* shown only on mobile */
+}
+@media (max-width: 900px) {
+  .mgmt-mob-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .mgmt-mob-actions--period {
+    background: rgba(0,0,0,.04);
+    padding: 4px;
+    border-radius: 999px;
+    display: inline-flex;
+    margin-bottom: 14px;
+    align-self: flex-start;
+  }
+  .mgmt-mob-actions__btn {
+    flex: 1;
+    padding: 11px 14px;
+    border-radius: 9px;
+    border: 0;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    text-align: center;
+  }
+  .mgmt-mob-actions__btn--pri {
+    background: var(--forest); color: var(--cream);
+  }
+  .mgmt-mob-actions__btn--pri:disabled {
+    opacity: .45; cursor: default;
+  }
+  .mgmt-mob-actions__btn--sec {
+    background: var(--white, #fff);
+    color: var(--forest);
+    border: 1.5px solid var(--border-strong, #c8c4b8);
+  }
+  .mgmt-mob-actions__btn--sec:disabled {
+    opacity: .45; cursor: default;
+  }
+}
+
 /* ── Mobile bottom nav (4-tab, SVG icons) ───────────────────── */
 @media (max-width: 900px) {
   .bottom-nav.role-management {

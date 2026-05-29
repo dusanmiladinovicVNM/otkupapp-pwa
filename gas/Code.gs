@@ -515,6 +515,13 @@ function handleAuthorizedRead(data, tokenData) {
     return jsonResponse(getZbirneForVozac(vozacID));
   }
 
+  if (action === 'getVozacPlans') {
+    if (tokenData.role !== 'Vozac') {
+      return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
+    }
+    return jsonResponse(getPlansForVozac(tokenData.entityID));
+  }
+
   if (action === 'getWarRoomDemand') {
     if (tokenData.role !== 'Management') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
@@ -1972,10 +1979,41 @@ function getZbirneForVozac(vozacID) {
     const files = folder.getFilesByName('VOZ-' + vozacID);
     if (!files.hasNext()) return { success: true, records: [] };
     return { success: true, records: sheetToArray(SpreadsheetApp.open(files.next()).getSheets()[0]) };
-  } catch (err) { 
+  } catch (err) {
       logError('GAS', 'getZbirneForVozac', err.message, err.stack || '', vozacID || '');
-      return { success: false, error: err.message }; 
+      return { success: false, error: err.message };
     }
+}
+
+function getPlansForVozac(vozacID) {
+  try {
+    if (!vozacID) return { success: false, error: 'vozacID required' };
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: true, records: [] };
+    const sheet = ss.getSheetByName('DispecerPlan');
+    if (!sheet) return { success: true, records: [] };
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { success: true, records: [] };
+    const headers = data[0];
+    const colVozac = headers.indexOf('VozacID');
+    const colStatus = headers.indexOf('Status');
+    const colDatum = headers.indexOf('Datum');
+    const today = Utilities.formatDate(new Date(), 'Europe/Belgrade', 'yyyy-MM-dd');
+    const records = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (String(row[colVozac] || '').trim() !== String(vozacID).trim()) continue;
+      if (fmtDateGS(row[colDatum]) !== today) continue;
+      if (String(row[colStatus] || '') === 'zavrseno') continue;
+      const obj = {};
+      for (let j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
+      records.push(obj);
+    }
+    return { success: true, records };
+  } catch (err) {
+    logError('GAS', 'getPlansForVozac', err.message, err.stack || '', vozacID || '');
+    return { success: false, error: err.message };
+  }
 }
 
 // ============================================================

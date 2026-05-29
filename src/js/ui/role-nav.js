@@ -61,10 +61,11 @@ function getRoleNavConfig() {
             navId: 'vozacBottomNav',
             bodyClass: 'has-vozac-bottom-nav',
             type: 'showTab',
-            defaultTab: 'zbirna',
+            defaultTab: 'transport',
             tabMap: {
+                transport: 'transport',
                 zbirna: 'zbirna',
-                transport: 'transport'
+                profil: 'profil'
             }
         };
     }
