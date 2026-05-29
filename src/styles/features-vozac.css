@@ -667,20 +667,7 @@ body.vfab-visible .vfab {
 
 /* === RESPONSIVE — desktop overrides === */
 @media (min-width: 901px) {
-  body.has-vozac-bottom-nav #tab-zbirna,
-  body.has-vozac-bottom-nav #tab-transport,
-  body.has-vozac-bottom-nav #tab-profil {
-    padding-top: 72px;
-    padding-bottom: 16px;
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  body.has-vozac-bottom-nav {
-    padding-bottom: 0;
-  }
-
+  /* desktop padding is handled by layout.css calc rule */
   .vfab { display: none !important; }
-
   .wz-actions { bottom: 16px; }
 }
