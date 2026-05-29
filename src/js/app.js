@@ -695,7 +695,7 @@ function handleAppShellClick(event) {
         }
 
         if (action === 'vozac-set-status') {
-            if (typeof setVozacStatus === 'function') setVozacStatus(btn.dataset.status);
+            if (typeof setVozacStatus === 'function') setVozacStatus(actionEl.dataset.status);
             return;
         }
 
