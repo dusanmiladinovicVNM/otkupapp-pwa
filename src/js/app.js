@@ -980,9 +980,9 @@ function normalizeStammdaten(data) {
         meteoLatest: [],
         kartice: []
     };
-    var result = Object.assign({}, src);
+    var result = (typeof structuredClone === 'function') ? structuredClone(src) : JSON.parse(JSON.stringify(src));
     Object.keys(known).forEach(function(k) {
-        result[k] = Array.isArray(src[k]) ? src[k] : known[k];
+        result[k] = Array.isArray(result[k]) ? result[k] : known[k];
     });
 
     if (!result.meteoLatest || !result.meteoLatest.length) {
@@ -1477,8 +1477,11 @@ if ('serviceWorker' in navigator) {
             if (!nw) return;
 
             nw.addEventListener('statechange', () => {
-                if (nw.state === 'activated') {
-                    showToast('Nova verzija učitana', 'info');
+                if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                    // Nova verzija čeka — pitaj korisnika za reload
+                    if (confirm('Nova verzija aplikacije je dostupna. Osvežiti stranicu?')) {
+                        window.location.reload();
+                    }
                 }
             });
         });

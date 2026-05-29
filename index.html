@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="./src/styles/base.css">
     <link rel="stylesheet" href="./src/styles/layout.css">
     <link rel="stylesheet" href="./src/styles/components.css">
-    <link rel="stylesheet" href="src/styles/components_v2.css">
+    <link rel="stylesheet" href="./src/styles/components_v2.css">
     <link rel="stylesheet" href="./src/styles/auth.css">
 
     <link rel="stylesheet" href="./src/styles/features-otkup.css">
@@ -171,7 +171,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>
             Kooperanti
         </button>
-        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="partneri" type="button">
+        <button class="mgmt-drawer__item" data-action="mgmt-drawer-nav" data-root="partneri" data-segment="kupci" type="button">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="7" r="2.5"/></svg>
             Kupci
         </button>
@@ -2706,67 +2706,67 @@
 <div class="toast" id="toast"></div>
 
 <!-- 1. Utils (nema zavisnosti) -->
-<script src="/src/js/utils/storage.js"></script>
-<script src="/src/js/utils/lazy.js"></script>   
-<script src="/src/js/utils/format.js"></script>
-<script src="/src/js/utils/dom.js"></script>
-<script src="/src/js/utils/sanitize.js"></script>
-<script src="./src/js/ui/agrix-icons.js"></script>
-<script src="/src/js/utils/async.js"></script>
-<script src="/src/js/utils/merge.js"></script> 
-    
+<script src="./src/js/utils/storage.js" defer></script>
+<script src="./src/js/utils/lazy.js" defer></script>
+<script src="./src/js/utils/format.js" defer></script>
+<script src="./src/js/utils/dom.js" defer></script>
+<script src="./src/js/utils/sanitize.js" defer></script>
+<script src="./src/js/ui/agrix-icons.js" defer></script>
+<script src="./src/js/utils/async.js" defer></script>
+<script src="./src/js/utils/merge.js" defer></script>
+
 <!-- 2. Config + State -->
-<script src="/src/js/config.js"></script>
-<script src="/src/js/state.js"></script>
+<script src="./src/js/config.js" defer></script>
+<script src="./src/js/state.js" defer></script>
 
 <!-- 3. Services (zavise od config/utils) -->
-<script src="/src/js/services/db.js"></script>
-<script src="/src/js/services/api.js"></script>
-<script src="/src/js/services/auth.js"></script>
-<script src="/src/js/services/qr.js"></script>
-<script src="src/js/utils/master-sync-guard.js"></script>
-<script src="src/js/utils/sync-engine.js"></script>
+<script src="./src/js/services/db.js" defer></script>
+<script src="./src/js/services/api.js" defer></script>
+<script src="./src/js/services/auth.js" defer></script>
+<script src="./src/js/services/qr.js" defer></script>
+<script src="./src/js/utils/master-sync-guard.js" defer></script>
+<script src="./src/js/utils/sync-engine.js" defer></script>
 
 <!-- 4. UI (zavise od utils) -->
-<script src="/src/js/ui/toast.js"></script>
-<script src="/src/js/ui/signatures.js"></script>
-<script src="/src/js/ui/tabs.js"></script>
-<script src="/src/js/ui/role-nav.js"></script>
+<script src="./src/js/ui/toast.js" defer></script>
+<script src="./src/js/ui/signatures.js" defer></script>
+<script src="./src/js/ui/tabs.js" defer></script>
+<script src="./src/js/ui/role-nav.js" defer></script>
 
 <!-- 5. Features — kooperant (zavise od services) -->
-<script src="/src/js/features/kooperant/pregled.js"></script>
-<script src="/src/js/features/kooperant/kartica.js"></script>
-<script src="/src/js/features/kooperant/koopinfo.js"></script>
-<script src="/src/js/features/kooperant/parcele.js"></script>
-<script src="/src/js/features/kooperant/agromere.js"></script>
-<script src="/src/js/features/kooperant/knjiga-polja.js"></script>
-<script src="/src/js/features/kooperant/fiskalni.js"></script>
-<script src="/src/js/features/kooperant/sync.js"></script>
-<script src="/src/js/features/kooperant/bottom-nav.js"></script>
+<script src="./src/js/features/kooperant/pregled.js" defer></script>
+<script src="./src/js/features/kooperant/kartica.js" defer></script>
+<script src="./src/js/features/kooperant/koopinfo.js" defer></script>
+<script src="./src/js/features/kooperant/parcele.js" defer></script>
+<script src="./src/js/features/kooperant/agromere.js" defer></script>
+<script src="./src/js/features/kooperant/knjiga-polja.js" defer></script>
+<script src="./src/js/features/kooperant/fiskalni.js" defer></script>
+<script src="./src/js/features/kooperant/sync.js" defer></script>
+<script src="./src/js/features/kooperant/bottom-nav.js" defer></script>
 
 <!-- 6. Features — otkup -->
-<script src="/src/js/features/otkup/otkup-form.js"></script>
-<script src="/src/js/features/otkup/otkup-pregled.js"></script>
-<script src="/src/js/features/otkup/otkupni-list.js"></script>
-<script src="/src/js/features/otkup/otpremnice.js"></script>
-<script src="/src/js/features/otkup/otkup-more.js"></script>
-<script src="/src/js/features/otkup/sync.js"></script>
-<script src="/src/js/features/otkup/intercom-field.js"></script>
-    
+<script src="./src/js/features/otkup/otkup-form.js" defer></script>
+<script src="./src/js/features/otkup/otkup-pregled.js" defer></script>
+<script src="./src/js/features/otkup/otkupni-list.js" defer></script>
+<script src="./src/js/features/otkup/otpremnice.js" defer></script>
+<script src="./src/js/features/otkup/otkup-more.js" defer></script>
+<script src="./src/js/features/otkup/sync.js" defer></script>
+<script src="./src/js/features/otkup/intercom-field.js" defer></script>
+
 <!-- 7. Features — vozac -->
-<script src="/src/js/features/vozac/zbirna.js"></script>
-<script src="/src/js/features/vozac/transport.js"></script>
+<script src="./src/js/features/vozac/zbirna.js" defer></script>
+<script src="./src/js/features/vozac/transport.js" defer></script>
 
 <!-- 8. Features — management (SVE feature fajlove PRE mgmt-shell!) -->
-<script src="/src/js/features/management/kooperanti.js"></script>
-<script src="/src/js/features/management/stanice.js"></script>
-<script src="/src/js/features/management/kupci.js"></script>
-<script src="/src/js/features/management/agrohemija.js"></script>
-<script src="/src/js/features/management/dispecer.js"></script>
-<script src="/src/js/features/management/mgmt-shell-v2.js"></script>
-<script src="/src/js/features/management/intercom-monitor.js"></script>
+<script src="./src/js/features/management/kooperanti.js" defer></script>
+<script src="./src/js/features/management/stanice.js" defer></script>
+<script src="./src/js/features/management/kupci.js" defer></script>
+<script src="./src/js/features/management/agrohemija.js" defer></script>
+<script src="./src/js/features/management/dispecer.js" defer></script>
+<script src="./src/js/features/management/mgmt-shell-v2.js" defer></script>
+<script src="./src/js/features/management/intercom-monitor.js" defer></script>
 
 <!-- 9. App bootstrap (poslednji) -->
-<script src="/src/js/app.js"></script>
+<script src="./src/js/app.js" defer></script>
 </body>
 </html>
