@@ -136,7 +136,7 @@ function showOtkupniList(record) {
                         <div class="ol-signature__label">Potpis kooperanta</div>
                         <button type="button" class="ol-signature__clear" data-action="otkupni-clear-signature">Obriši</button>
                     </div>
-                    <canvas id="sigKooperant" width="720" height="200" class="ol-signature__canvas"></canvas>
+                    <canvas id="sigKooperantOL" width="720" height="200" class="ol-signature__canvas"></canvas>
                 </div>
 
                 <!-- Saved otkupac signature -->
@@ -179,7 +179,7 @@ function showOtkupniList(record) {
             const action = actionEl.dataset.action;
 
             if (action === 'otkupni-clear-signature') {
-                clearSignature('sigKooperant');
+                clearSignature('sigKooperantOL');
                 return;
             }
 
@@ -209,12 +209,12 @@ function showOtkupniList(record) {
     modal.style.display = 'block';
 
     setTimeout(() => {
-        initSignaturePad('sigKooperant');
+        initSignaturePad('sigKooperantOL');
     }, 100);
 }
 
 async function saveOtkupniListWithSignatures(clientRecordID) {
-    const sigK = getSignatureData('sigKooperant');
+    const sigK = getSignatureData('sigKooperantOL');
 
     if (!sigK) {
         showToast('Kooperant mora da se potpiše!', 'error');
@@ -261,7 +261,7 @@ async function savePdfToDrive(clientRecordID) {
             ? getSavedOtkupacSignature()
             : (record.sigOtkupac || '');
 
-    const sigKooperant = getSignatureData('sigKooperant') || (record.sigKooperant || '');
+    const sigKooperant = getSignatureData('sigKooperantOL') || (record.sigKooperant || '');
 
     showToast('Generisanje PDF-a...', 'info');
 
@@ -426,7 +426,7 @@ async function savePdfToDrive(clientRecordID) {
 }
 
 function closeOtkupniListModal() {
-    destroySignaturePad('sigKooperant');
+    destroySignaturePad('sigKooperantOL');
     const modal = document.getElementById('otkupniListModal');
     if (modal) modal.style.display = 'none';
 }
