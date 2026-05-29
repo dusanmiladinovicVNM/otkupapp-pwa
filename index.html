@@ -2591,7 +2591,12 @@
     </div>
     <div class="vbody" style="padding-bottom:100px;">
         <div class="sec-lbl">
-            <span class="sec-lbl__t">Moji transporti</span>
+            <span class="sec-lbl__t">Moji planovi</span>
+            <span class="sec-lbl__c" id="vozacPlaniCount">—</span>
+        </div>
+        <div id="vozacPlaniList"></div>
+        <div class="sec-lbl" style="margin-top:6px;">
+            <span class="sec-lbl__t">Izvršeni transporti</span>
             <span class="sec-lbl__c" id="transportCount">—</span>
         </div>
         <div id="transportList"></div>
@@ -2611,16 +2616,6 @@
             </div>
         </div>
         <div class="vbody" style="padding-bottom:80px;">
-            <button class="vscan" data-action="vozac-scan-kupac" type="button">
-                <div class="vscan__ic">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
-                </div>
-                <div class="vscan__t">
-                    <div class="vscan__h">Skeniraj hladnjaču</div>
-                    <div class="vscan__s">QR odredišta — popunjava destinaciju</div>
-                </div>
-                <div class="vscan__chev">→</div>
-            </button>
             <div class="form-group" style="margin-bottom:14px;">
                 <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:6px;">Kupac / Hladnjača</label>
                 <select id="fldZbirnaKupac" class="form-control"><option value="">— Izaberi kupca —</option></select>
