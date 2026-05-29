@@ -1166,7 +1166,8 @@ function mgmtDashUpdateChartMeta(period, series) {
 function setMgmtDashboardPeriod(period, btn) {
     window.mgmtShellState.dashboardPeriod = period;
 
-    document.querySelectorAll('#mgmtDashPeriodSwitch .mgmt-dash-period-btn')
+    // Sync both the desktop period switch and the mobile action row copy
+    document.querySelectorAll('.mgmt-dash-period-btn[data-period]')
         .forEach(el => el.classList.toggle('active', el.dataset.period === period));
 
     mgmtRenderDashboard();

@@ -41,7 +41,11 @@ function showTab(tabName, btn) {
     if (tabName === 'koopinfo') loadKoopInfo();
     if (tabName === 'zbirna') loadVozacData();
     if (tabName === 'transport') loadVozacTransport();
+    if (tabName === 'profil') { if (typeof loadVozacProfil === 'function') loadVozacProfil(); }
     if (tabName === 'knjigapolja') loadKnjigaPolja();
+
+    // Show FAB only on transport tab
+    document.body.classList.toggle('vfab-visible', tabName === 'transport');
 
     setTimeout(() => {
         if (typeof updateRoleNavActive === 'function') {

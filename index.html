@@ -109,8 +109,9 @@
     <button class="tab-btn role-management" data-route="mgmt-root" data-root="agro" data-mgmt-root="agro">Agrohemija</button>
 
     <!-- Vozac -->
-    <button class="tab-btn role-vozac" data-route="tab" data-tab="zbirna">Zbirna</button>
-    <button class="tab-btn role-vozac" data-route="tab" data-tab="transport">Transport</button>
+    <button class="tab-btn role-vozac" data-route="tab" data-tab="transport">Transporti</button>
+    <button class="tab-btn role-vozac" data-route="tab" data-tab="zbirna">Zbirne</button>
+    <button class="tab-btn role-vozac" data-route="tab" data-tab="profil">Profil</button>
 </div>
 
 <!-- MGMT MOBILE TOP BAR — visible only on mobile ≤ 900px, management role -->
@@ -1838,6 +1839,13 @@
                 </div>
             </div>
 
+            <!-- Mobile-only period switch (page-head hidden on mobile) -->
+            <div class="mgmt-mob-actions mgmt-mob-actions--period">
+                <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="today">Danas</button>
+                <button type="button" class="mgmt-dash-period-btn active" data-action="mgmt-dash-period" data-period="7d">7 dana</button>
+                <button type="button" class="mgmt-dash-period-btn" data-action="mgmt-dash-period" data-period="season">Sezona</button>
+            </div>
+
             <div class="mgmt-dash-kpi-grid">
                 <div class="mgmt-dash-kpi-card">
                     <div class="mgmt-dash-kpi-label" id="mgmtDashKgLabel">Otkup · 7 dana</div>
@@ -2118,6 +2126,11 @@
                 </div>
             </div>
 
+            <!-- Mobile-only action row (page-head hidden on mobile) -->
+            <div class="mgmt-mob-actions">
+                <button class="mgmt-mob-actions__btn mgmt-mob-actions__btn--sec" data-action="mgmt-novi-partner" type="button" disabled title="Entiteti se trenutno unose iz VBA">+ Novi kooperant</button>
+            </div>
+
             <div class="mgmt-seg-bar" id="mgmtPartnerSegmentBar">
                 <button class="mgmt-seg-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="mgmt-seg-count" id="mgmtKoopCount">0</span></button>
                 <button class="mgmt-seg-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="mgmt-seg-count" id="mgmtKupCount">0</span></button>
@@ -2212,6 +2225,12 @@
                         <button class="mgmt-hero__btn mgmt-hero__btn--ghost" data-action="agro-prijem-robe" type="button" disabled title="U pripremi">Prijem robe</button>
                         <button class="mgmt-hero__btn" data-action="agro-novo-izdavanje" type="button">+ Novo izdavanje</button>
                     </div>
+                </div>
+
+                <!-- Mobile-only action row (page-head is hidden on mobile) -->
+                <div class="mgmt-mob-actions">
+                    <button class="mgmt-mob-actions__btn mgmt-mob-actions__btn--sec" data-action="agro-prijem-robe" type="button" disabled title="U pripremi">Prijem robe</button>
+                    <button class="mgmt-mob-actions__btn mgmt-mob-actions__btn--pri" data-action="agro-novo-izdavanje" type="button">+ Novo izdavanje</button>
                 </div>
 
                 <!-- 4 KPI cards -->
@@ -2537,27 +2556,113 @@
 </div>
 <!-- ==================== VOZAC TABS ==================== -->
 
-<div class="tab-content" id="tab-zbirna">
-    <div id="zbirnaCreateView" style="display:none;">
-        <h3 style="color:var(--primary);margin-bottom:12px;">Nova zbirna</h3>
-        <div class="form-group"><label>Kupac / Hladnjača</label><select id="fldZbirnaKupac"><option value="">-- Izaberi kupca --</option></select></div>
-        <div id="zbirnaOtkupiSummary" style="background:var(--primary);color:white;padding:14px;border-radius:var(--radius);margin-bottom:12px;"></div>
-        <div id="zbirnaOtkupiList"></div>
-        <button class="btn-primary" data-action="confirm-zbirna">KREIRAJ ZBIRNU</button>
-        <button class="btn-secondary" data-action="cancel-zbirna">Otkaži</button>
+<!-- VOZAC: Transporti (Screen 1) -->
+<div class="tab-content" id="tab-transport">
+    <div class="vhero">
+        <div class="vhero__row">
+            <div>
+                <div class="vhero__sub">Vozač</div>
+                <div class="vhero__name" id="vozacHeroName">—</div>
+                <div class="vhero__id" id="vozacHeroId"></div>
+            </div>
+            <div class="vhero__logo">X</div>
+        </div>
+        <div class="vstatus">
+            <div class="vstatus__lbl">Moj status — vidi dispečer i hladnjača</div>
+            <div class="vstatus__seg" id="vozacStatusSeg">
+                <button class="vseg" data-action="vozac-set-status" data-status="slobodan" type="button">
+                    <div class="vseg__dot"></div>
+                    <div class="vseg__n">Slobodan</div>
+                </button>
+                <button class="vseg" data-action="vozac-set-status" data-status="utovar" type="button">
+                    <div class="vseg__dot"></div>
+                    <div class="vseg__n">Na utovaru</div>
+                </button>
+                <button class="vseg" data-action="vozac-set-status" data-status="put" type="button">
+                    <div class="vseg__dot"></div>
+                    <div class="vseg__n">U putu</div>
+                </button>
+                <button class="vseg" data-action="vozac-set-status" data-status="istovar" type="button">
+                    <div class="vseg__dot"></div>
+                    <div class="vseg__n">Istovar</div>
+                </button>
+            </div>
+        </div>
     </div>
-    <div id="zbirnaMainView">
-        <h3 style="color:var(--primary);margin-bottom:8px;">Moje otpremnice (danas)</h3>
-        <div id="vozacOtpremniceList"></div>
-        <button class="btn-primary" data-action="start-zbirna-creation" id="btnNovaZbirna" style="margin-top:12px;">NOVA ZBIRNA</button>
-        <h3 style="color:var(--primary);margin:16px 0 8px;">Kreirane zbirne</h3>
-        <div id="vozacZbirneList"></div>
+    <div class="vbody" style="padding-bottom:100px;">
+        <div class="sec-lbl">
+            <span class="sec-lbl__t">Moji transporti</span>
+            <span class="sec-lbl__c" id="transportCount">—</span>
+        </div>
+        <div id="transportList"></div>
     </div>
 </div>
 
-<div class="tab-content" id="tab-transport">
-    <h3 style="color:var(--primary);margin-bottom:12px;">Pregled transporta</h3>
-    <div id="transportList"></div>
+<!-- VOZAC: Zbirne (Screen 2) -->
+<div class="tab-content" id="tab-zbirna">
+    <div id="zbirnaCreateView" style="display:none;">
+        <div class="vtbar">
+            <button class="vtbar__b" data-action="cancel-zbirna" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="vtbar__t">
+                <div class="vtbar__s">Zbirna otpremnica</div>
+                <div class="vtbar__h">Nova zbirna</div>
+            </div>
+        </div>
+        <div class="vbody" style="padding-bottom:80px;">
+            <button class="vscan" data-action="vozac-scan-kupac" type="button">
+                <div class="vscan__ic">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+                </div>
+                <div class="vscan__t">
+                    <div class="vscan__h">Skeniraj hladnjaču</div>
+                    <div class="vscan__s">QR odredišta — popunjava destinaciju</div>
+                </div>
+                <div class="vscan__chev">→</div>
+            </button>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:6px;">Kupac / Hladnjača</label>
+                <select id="fldZbirnaKupac" class="form-control"><option value="">— Izaberi kupca —</option></select>
+            </div>
+            <div id="zbirnaOtkupiSummary"></div>
+            <div class="sec-lbl">
+                <span class="sec-lbl__t">Otkupi na kamionu</span>
+                <span class="sec-lbl__c" id="zbirnaOtkupiCount">—</span>
+            </div>
+            <div id="zbirnaOtkupiList"></div>
+        </div>
+        <div class="wz-actions">
+            <button class="wz-btn wz-btn--sec" data-action="cancel-zbirna" type="button">Otkaži</button>
+            <button class="wz-btn wz-btn--acc" data-action="confirm-zbirna" type="button">Kreiraj →</button>
+        </div>
+    </div>
+    <div id="zbirnaMainView">
+        <div class="vbody" style="padding-bottom:100px;">
+            <div class="sec-lbl">
+                <span class="sec-lbl__t">Otpremnice danas</span>
+                <button class="wz-btn wz-btn--pri" data-action="start-zbirna-creation" id="btnNovaZbirna" style="display:none;padding:8px 14px;font-size:12px;">Nova zbirna</button>
+            </div>
+            <div id="vozacOtpremniceList"></div>
+            <div class="sec-lbl" style="margin-top:16px;">
+                <span class="sec-lbl__t">Kreirane zbirne</span>
+            </div>
+            <div id="vozacZbirneList"></div>
+        </div>
+    </div>
+</div>
+
+<!-- VOZAC: Profil (Screen 3) -->
+<div class="tab-content" id="tab-profil">
+    <div class="vprofil">
+        <div class="vprofil__name" id="vozacProfilName">—</div>
+        <div class="vprofil__role">Vozač</div>
+        <div class="vprofil__qr">
+            <canvas id="vozacQrCanvas" width="200" height="200"></canvas>
+        </div>
+        <div class="vprofil__id" id="vozacProfilId">—</div>
+        <button class="vprofil__btn-logout" data-action="logout" type="button">Odjavi se</button>
+    </div>
 </div>
 
 <!-- VISE -->
@@ -2679,18 +2784,26 @@
     </button>
 </nav>
 
-<div class="bottom-nav role-vozac" id="vozacBottomNav">
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="zbirna">
-        <span class="bottom-nav-icon" data-ag-icon="package"></span>
-        <span class="bottom-nav-label">Zbirna</span>
-    </button>
+<!-- VOZAC FAB — nova zbirna shortcut (fixed, above bottom nav) -->
+<button class="vfab role-vozac" id="vozacFab" data-action="vozac-fab-nova-zbirna" type="button" aria-label="Nova zbirna">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v7M14 20h3"/></svg>
+</button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="transport">
-        <span class="bottom-nav-icon" data-ag-icon="truck"></span>
-        <span class="bottom-nav-label">Transport</span>
+<div class="bottom-nav role-vozac" id="vozacBottomNav">
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="transport" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v10H3zM13 10h5l3 3v3h-8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+        <span class="bottom-nav-label">Transporti</span>
+    </button>
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="zbirna" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6V3Z"/><path d="M9 8h3M9 12h6M9 16h6"/></svg>
+        <span class="bottom-nav-label">Zbirne</span>
+    </button>
+    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="profil" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+        <span class="bottom-nav-label">Profil</span>
     </button>
 </div>
-    
+
 <!-- QR PROFILE MODAL -->
 <div class="qr-profile-modal" id="qrProfileModal">
     <div class="qr-profile-card">
@@ -2754,6 +2867,7 @@
 <script src="/src/js/features/otkup/intercom-field.js"></script>
     
 <!-- 7. Features — vozac -->
+<script src="/src/js/features/vozac/status.js"></script>
 <script src="/src/js/features/vozac/zbirna.js"></script>
 <script src="/src/js/features/vozac/transport.js"></script>
 
