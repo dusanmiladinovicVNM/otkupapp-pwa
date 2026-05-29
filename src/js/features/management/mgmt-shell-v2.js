@@ -1488,8 +1488,15 @@ document.addEventListener('click', function(e) {
     const drawerItem = e.target.closest('[data-action="mgmt-drawer-nav"]');
     if (drawerItem) {
         const root = drawerItem.dataset.root;
+        const segment = drawerItem.dataset.segment;
         mgmtDrawerClose();
-        if (root && typeof showMgmtRoot === 'function') showMgmtRoot(root);
+        if (root && typeof showMgmtRoot === 'function') {
+            showMgmtRoot(root).then(() => {
+                if (segment && typeof showMgmtPartnerSegment === 'function') {
+                    showMgmtPartnerSegment(segment);
+                }
+            });
+        }
         return;
     }
 

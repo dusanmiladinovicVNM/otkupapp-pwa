@@ -47,7 +47,9 @@ window.mergeOfflineRecords = function (local, server, normalizeLocal, primaryKey
         const localUpdated = localNorm.updatedAtClient || localNorm.createdAtClient || '';
         const serverUpdated = existing.updatedAtServer || existing.updatedAtClient || existing.createdAtClient || '';
 
-        if (localUpdated && serverUpdated && localUpdated > serverUpdated) {
+        const localMs = localUpdated ? new Date(localUpdated).getTime() : 0;
+        const serverMs = serverUpdated ? new Date(serverUpdated).getTime() : 0;
+        if (localMs > 0 && serverMs > 0 && localMs > serverMs) {
             merged.set(localNorm[pk], localNorm);
         }
     });
@@ -110,7 +112,9 @@ window.pickPreferredRecordForRender = function pickPreferredRecordForRender(exis
     const candidateTs = window.getRecordFreshnessTs(candidate);
 
     if (candidateTs && existingTs) {
-        return candidateTs >= existingTs ? candidate : existing;
+        const candidateMs = new Date(candidateTs).getTime();
+        const existingMs = new Date(existingTs).getTime();
+        return candidateMs >= existingMs ? candidate : existing;
     }
 
     if (candidateTs && !existingTs) return candidate;
