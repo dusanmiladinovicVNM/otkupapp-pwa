@@ -10,7 +10,6 @@ async function loadVozacTransport() {
         safeAsync(() => apiFetch('action=getVozacZbirne'), 'Greška pri učitavanju transporta')
     ]);
 
-    console.log('[VOZAC PLANS]', { entityID: CONFIG.ENTITY_ID, planJson });
     renderVozacPlans(planJson);
 
     let local = [];
