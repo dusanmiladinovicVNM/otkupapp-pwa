@@ -1,8 +1,8 @@
 # AgriX / OtkupApp Architecture Reference
 
-**Version:** v6.23 canonical snapshot  
-**Last Updated:** 2026-05-15  
-**Status:** Canonical / Active Reference — v6.23 PWA otkup read-model convergence integrated
+**Version:** v6.24 canonical snapshot  
+**Last Updated:** 2026-05-30  
+**Status:** Canonical / Active Reference — v6.24 Vozač/Dispečer bugfix pass integrated
 **Owner:** Architecture documentation compiled from supplied reference set  
 **Audience:** Engineering, Product, Operations, Onboarding, Review  
 
@@ -149,6 +149,8 @@ Canonical PWA ownership includes:
 - local render dedupe, submit locks, stale-syncing recovery and client error reporting.
 
 IndexedDB is a local-first queue/cache, not shared canonical truth. `localStorage` is allowed only for device-local preferences and lightweight helper state; shared operational state belongs in IndexedDB + GAS/Sheets or in canonical desktop tables.
+
+DOM ID uniqueness rule: dynamically created modal elements must use IDs that are unique relative to any static elements in `index.html`. In particular, signature pad canvases (`initSignaturePad`, `clearSignature`, `getSignatureData`, `destroySignaturePad`) rely on `getElementById`; a modal canvas ID that collides with a static hidden canvas causes the pad to bind to the wrong element. Modal-specific canvas IDs must be distinct from any static canvas IDs (e.g. `sigKooperantOL` for the otkupni-list modal, not the shared `sigKooperant` used in the otpremnica view).
 
 ### 2.6 Technical IDs vs Business Document Numbers
 
@@ -1920,10 +1922,11 @@ The table below is the maintained architecture view for active and known transit
 | `saveWarRoomDemand` | No | Yes | Management | n/a | Yes | Demand create. |
 | `removeWarRoomDemand` | No | Yes | Management | n/a | Yes | Demand remove. |
 | `updateDemandPrimljeno` | No | Yes | Management | n/a | Yes | Demand received update. |
-| `getDispecer` | No | Yes | Management | n/a | No | Dispatch board read. |
-| `saveDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan create. |
-| `updateDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan/status update. |
+| `getDispecer` | No | Yes | Management | n/a | No | Dispatch board read: today-only demand + active (non-`zavrseno`) plans. |
+| `saveDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan create; writes to `DispecerPlan` sheet only; must not assign `VozacID` to `OTK-*` rows. |
+| `updateDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan status update (`planned` → `u_toku` → `zavrseno`). |
 | `removeDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan remove. |
+| `getVozacPlans` | No | Yes | Vozac | Vozac scoped to own `entityID` | No | Driver's active plans for today; reads `DispecerPlan` filtered by `VozacID` and date, excludes `zavrseno`. |
 | `getKamionStatus` | No | Yes | Management, Vozac | Vozac reads own where applicable | No | Truck status read. |
 | `updateKamionStatus` | No | Yes | Vozac, Management | Vozac forced to `tokenData.entityID`; Management any | Yes | Driver status upsert. |
 | `saveIzdavanje` | No | Yes | Management | n/a | Yes | Agrohemija issuing write; retry idempotency remains roadmap. |
@@ -2067,6 +2070,9 @@ Canonical contracts:
 - `saveWarRoomDemand`, `removeWarRoomDemand` and `updateDemandPrimljeno` manage day-scoped demand rows in `WarRoomDemand`.
 - `saveDispecer`, `updateDispecer` and `removeDispecer` manage `DispecerPlan` rows with explicit planned/status lifecycle and timestamp updates.
 - `getDispecer` returns today-only demand plus active/non-`zavrseno` plans.
+- `getVozacPlans` reads `DispecerPlan` scoped to the authenticated Vozac's `entityID` and today's date, excluding `zavrseno` rows; the action block must be present in `handleAuthorizedRead` and is restricted to the Vozac role.
+- `DispecerPlan` schema: `PlanID`, `Datum`, `DemandID`, `VozacID`, `VozacName`, `StanicaID`, `StanicaName`, `KupacID`, `KupacName`, `PlannedKg`, `Status`, `CreatedAt`, `UpdatedAt`.
+- Dispatcher write invariant: Management dispatch operations write exclusively to `DispecerPlan` and `KamionStatus`. `OTK-*` otkup records must never be mutated from the dispatcher flow; `VozacID` assignment in `OTK-*` rows is prohibited from the dispatcher path.
 - `updateKamionStatus` upserts one row per `VozacID` in `KamionStatus`; Vozac may update only own status, Management may update any driver.
 - `saveIzdavanje` persists one row per agro issuing document into `Izdavanje`, serializes `stavke` as JSON and returns an `IZD-*` identifier.
 - `saveIzdavanje` server-side idempotency by stable client issuance ID remains roadmap, not current contract.
@@ -4712,10 +4718,11 @@ Derived views may be rebuilt, refreshed, exported or cached. A derived view must
 | `BankaImport` open queue | bank reconciliation work queue | `tblBankaImport`, `tblPartnerMap`, linked `tblNovac`/document IDs | VBA | import/map/skip/storno actions | staged facts + derived queue state | raw bank facts are staged facts; UI status is workflow state |
 | `MgmtReports` | management reporting bundle | desktop reports and exports | VBA export + GAS/PWA read | export run / PWA refresh | derived | not a transaction write source |
 | Management KPI dashboard | management quick overview | `getMgmtAll`, `MgmtReports`, `SaldoOMDetail`, dispatch runtime | GAS/PWA Management | bootstrap, refresh, sync/export | derived | cache freshness and dispatch state matter |
-| Dispatch board | planning board | demand, kamion status, dispatch plan runtime | PWA Management + GAS | management write/refresh | operational derived/planning state | Management may plan, but may not directly assign `VozacID` to OTK rows in dispatcher flow |
+| Dispatch board | planning board | demand, kamion status, `DispecerPlan` runtime | PWA Management + GAS | management write/refresh | operational derived/planning state | Management may plan via `DispecerPlan` only; assigning `VozacID` to `OTK-*` rows directly from dispatcher is prohibited; displayed unallocated supply is raw otkupi minus planned kg per station (display-only subtraction, no record mutation) |
 | Kooperant home / knjiga polja | kooperant operational and agronomy summary | treatments, expenses, agrohemija stock, production data | PWA Kooperant + GAS reads | role bootstrap/refresh/sync | derived | local pending records must remain visible until synced |
 | Otkupac today overview | field-day overview | local IndexedDB + server `getOtkupi` data | PWA Otkupac | save/sync/refresh | derived | render must pass through canonical dedupe helper |
 | Vozač pregled zbirne | driver transport overview | local/server `zbirne`, `getVozacZbirne` | PWA Vozač | save/sync/refresh | derived | `BrojZbirne` is business number; `ServerRecordID` is technical sync ID |
+| Vozač planovi | driver plan view | `DispecerPlan` via `getVozacPlans` | PWA Vozač + GAS | transport tab load | derived | plans scoped to authenticated Vozac's `entityID`; today only; `zavrseno` excluded |
 | `MeteoLatest` | current parcel meteo state | scheduled fetch + parcel config | GAS | scheduled fetch + stale fallback | canonical current meteo read model | rate limits/offline map caveats remain |
 | Monitoring `Health` | current component health | monitoring events and watchdog checks | GAS Monitoring | event ingest + watchdog | derived current status | not a replacement for business tables |
 | Monitoring `Events` / `Errors` / `AuditCritical` | operational event history | VBA/PWA/GAS monitoring payloads | GAS Monitoring | event ingest | append-only monitoring facts | redacted; does not store full sensitive payloads |
@@ -5195,10 +5202,10 @@ This section lists patterns that still exist for compatibility or historical rea
 ## 23. Revision Metadata
 
 ### 23.1 Current Version
-v6.23 canonical snapshot.
+v6.24 canonical snapshot.
 
 ### 23.2 Superseded Versions
-Supersedes OtkupApp / AgriX reference versions v2.2.1–v6.22.
+Supersedes OtkupApp / AgriX reference versions v2.2.1–v6.23.
 
 ### 23.3 Companion Documents
 - `ARCHITECTURE_CHANGELOG.md`
@@ -5211,7 +5218,19 @@ Supersedes OtkupApp / AgriX reference versions v2.2.1–v6.22.
 - `archive/ARCHITECTURE_REFERENCE_v6_19.md`
 - `archive/CHANGELOG_legacy_v2_to_v6_17.md`
 
-### 23.5 v6.23 Closeout Scope
+### 23.5 v6.24 Closeout Scope
+v6.24 documents the Vozač/Dispečer operational bugfix pass:
+
+- `getVozacPlans` GAS action added to endpoint authorization matrix; Vozac-scoped, today-only, `zavrseno`-excluded.
+- `DispecerPlan` schema contract made explicit in section 9.13.
+- Dispatcher write invariant formalized: `OTK-*` records must not be mutated from the dispatcher path; `VozacID` assignment via dispatcher is prohibited.
+- `dpGetSup()` display-only supply subtraction rule documented: unallocated supply = raw otkupi minus planned kg per station; no otkup records are mutated.
+- PWA DOM ID uniqueness rule added to section 2.5: modal signature canvas IDs must not collide with static canvas IDs in `index.html`.
+- Management dispatcher must load live operational otkupi (`includeLive=1`) on init to see today's quantities without requiring manual "Otkup uživo" navigation.
+- Dispatch board report row updated to reflect `DispecerPlan` source and supply subtraction semantics.
+- Vozač planovi report row added to section 17 report inventory.
+
+### 23.6 v6.23 Closeout Scope
 v6.23 documents the PWA otkup read-model convergence: `tblOtkup` remains canonical master, `MgmtReports/OtkupiAll` is the PWA master read projection, and `OTK-ST-*` / `OTK-*` remains the operational queue. Management and Otkupac views merge master projection plus operational queue rows with `ServerRecordID` / `OtkupID` before `ClientRecordID` dedupe. Browser smoke was reported as tested for the affected role views.
 
 ### 23.6 v6.22 Closeout Scope
