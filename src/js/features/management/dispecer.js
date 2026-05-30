@@ -79,7 +79,13 @@ function dpCalcRuta(vid) {
     return [...stanice, ...kupci].join(' → ');
 }
 
-function dpGetSup() {
+// Helper: stanica iz otkup reda
+function dpStationOf(r) {
+    return String(r.OtkupacID || (r._sheetName || '').replace('OTK-', '') || '').trim();
+}
+
+// Sirovi supply: otkupi bez vozača, danas, ne zatvoreni — BEZ oduzimanja planova.
+function dpRawSup() {
     const today = dpToday();
 
     return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
@@ -87,6 +93,51 @@ function dpGetSup() {
         fmtDate(r.Datum) === today &&
         !dpIsTransportClosed(r)
     );
+}
+
+// Planirana količina (kg) po stanici, iz aktivnih planova (planned / u_toku).
+function dpPlannedKgByStation() {
+    const m = {};
+    (dpPlans || [])
+        .filter(p => p.Status === 'planned' || p.Status === 'u_toku')
+        .forEach(p => {
+            const sid = String(p.StanicaID || '').trim();
+            if (!sid) return;
+            m[sid] = (m[sid] || 0) + (parseFloat(p.PlannedKg) || 0);
+        });
+    return m;
+}
+
+// Neraspoređeni supply = sirovi otkupi MINUS planirana količina po stanici.
+// Granularno po kg: oduzima se tačno onoliko koliko je planirano; višak
+// (npr. nov otkup koji stigne posle plana) ostaje vidljiv. Otkupi se NE
+// menjaju — granični red se samo klonira sa umanjenom Kolicinom za prikaz.
+function dpGetSup() {
+    const skip = dpPlannedKgByStation();   // mutabilna kopija preostalog za oduzeti
+    const out = [];
+
+    dpRawSup().forEach(r => {
+        const sid = dpStationOf(r);
+        const toSkip = skip[sid] || 0;
+        const kol = parseFloat(r.Kolicina) || 0;
+
+        if (toSkip <= 0) {
+            out.push(r);
+            return;
+        }
+
+        if (kol <= toSkip) {
+            // ceo otkup pokriven planom — sakrij ga
+            skip[sid] = toSkip - kol;
+            return;
+        }
+
+        // delimično pokriven — prikaži samo ostatak preko planiranog
+        skip[sid] = 0;
+        out.push(Object.assign({}, r, { Kolicina: kol - toSkip }));
+    });
+
+    return out;
 }
 
 function dpIsTransportClosed(r) {
@@ -119,6 +170,18 @@ function dpGetAsg() {
 async function dpInit() {
     dpKamioni = [];
     dpKS = {};
+
+    // Učitaj SVEŽE današnje otkupe (OTK-* operational, includeLive=1), isto kao
+    // "Otkup uživo". Bez ovoga dispečer vidi samo master report (VBA export) bez
+    // današnjih količina — pa se roba ne prikazuje dok se ručno ne otvori "Otkup uživo".
+    if (typeof ensureMgmtSection === 'function') {
+        window.mgmtData = window.mgmtData || {};
+        delete window.mgmtData.otkupiAll;
+        await safeAsync(
+            () => ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll', 'includeLive=1'),
+            'Greška pri učitavanju živih otkupa'
+        );
+    }
 
     (stammdaten.vozaci || []).forEach(v => {
         const vid = v.VozacID || v.vozacID || v.ID || '';
