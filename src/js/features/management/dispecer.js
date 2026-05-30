@@ -79,14 +79,33 @@ function dpCalcRuta(vid) {
     return [...stanice, ...kupci].join(' → ');
 }
 
+// Stanice koje već imaju aktivan plan (planned / u_toku) — njihova roba se
+// više ne prikazuje kao neraspoređena. Otkupi se NE menjaju; veza je preko
+// DispecerPlan sheet-a (dpPlans), po StanicaID.
+function dpPlannedStationIDs() {
+    return new Set(
+        (dpPlans || [])
+            .filter(p => p.Status === 'planned' || p.Status === 'u_toku')
+            .map(p => String(p.StanicaID || '').trim())
+            .filter(Boolean)
+    );
+}
+
 function dpGetSup() {
     const today = dpToday();
+    const planned = dpPlannedStationIDs();
 
-    return ((mgmtData && mgmtData.otkupiAll) || []).filter(r =>
-        !(r.VozacID || r.VozaciID || '') &&
-        fmtDate(r.Datum) === today &&
-        !dpIsTransportClosed(r)
-    );
+    return ((mgmtData && mgmtData.otkupiAll) || []).filter(r => {
+        if (r.VozacID || r.VozaciID || '') return false;
+        if (fmtDate(r.Datum) !== today) return false;
+        if (dpIsTransportClosed(r)) return false;
+
+        // Stanica koja već ima plan se ne broji u neraspoređeno
+        const sid = String(r.OtkupacID || (r._sheetName || '').replace('OTK-', '') || '').trim();
+        if (planned.has(sid)) return false;
+
+        return true;
+    });
 }
 
 function dpIsTransportClosed(r) {
@@ -119,6 +138,18 @@ function dpGetAsg() {
 async function dpInit() {
     dpKamioni = [];
     dpKS = {};
+
+    // Učitaj SVEŽE današnje otkupe (OTK-* operational, includeLive=1), isto kao
+    // "Otkup uživo". Bez ovoga dispečer vidi samo master report (VBA export) bez
+    // današnjih količina — pa se roba ne prikazuje dok se ručno ne otvori "Otkup uživo".
+    if (typeof ensureMgmtSection === 'function') {
+        window.mgmtData = window.mgmtData || {};
+        delete window.mgmtData.otkupiAll;
+        await safeAsync(
+            () => ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll', 'includeLive=1'),
+            'Greška pri učitavanju živih otkupa'
+        );
+    }
 
     (stammdaten.vozaci || []).forEach(v => {
         const vid = v.VozacID || v.vozacID || v.ID || '';
