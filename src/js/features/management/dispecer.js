@@ -270,18 +270,6 @@ async function dpInit() {
     dpBindDelegates();
 
     dpPD();
-
-    // DEBUG: log supply/plan state to diagnose double-allocation
-    {
-        const _dbgPlanned = dpPlannedKgByStation();
-        const _dbgRaw = dpRawSup();
-        const _dbgSup = dpGetSup();
-        console.log('[DP-DEBUG] dpPlans:', (dpPlans || []).map(p => ({sid: p.StanicaID, kg: p.PlannedKg, st: p.Status})));
-        console.log('[DP-DEBUG] plannedByStation:', _dbgPlanned);
-        console.log('[DP-DEBUG] rawSup sids:', _dbgRaw.map(r => ({ sid: dpStationOf(r), kol: r.Kolicina, oid: r.OtkupacID, sn: r._sheetName })));
-        console.log('[DP-DEBUG] getSupCount:', _dbgSup.length, 'vs rawSup:', _dbgRaw.length);
-    }
-
     dpRS();
     dpRTr();
     dpRD();
