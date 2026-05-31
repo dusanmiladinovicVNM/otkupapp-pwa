@@ -609,19 +609,45 @@ Status: integrated into package based on user-reported browser testing.
 
 ---
 
-## Pass v6.24 — PWA Design/Runtime and Numbering Supplement
+## v6.24 Change Summary
 
-### Created / updated
+Four runtime bugs fixed across the Vozač and Management Dispečer flows. All changes are PWA-side and GAS-side only; no VBA/Excel changes.
 
-- Updated `ARCHITECTURE_REFERENCE.md` to v6.24.
-- Updated `ARCHITECTURE_CHANGELOG.md` with v6.24 entry.
-- Added v6.24 gates to `RELEASE_GATES.md`.
-- Added v6.24 follow-ups to `ROADMAP.md`.
-- Added v6.24 active issues to `KNOWN_ISSUES.md`.
-- Added v6.24 validation addendum.
-- Added `V6_24_DELTA_EXTRACTION.md`.
-- Added `GIT_VERIFICATION_REPORT.md`.
+### Fix 1 — Signature pad dead in otkupni-list modal (sigKooperant DOM ID collision)
 
-### Important limitation
+**Root cause:** The otkupni-list modal dynamically created `<canvas id="sigKooperant">`. The static `index.html` already contained a hidden `<canvas id="sigKooperant">` in the otpremnica view. `initSignaturePad` / `clearSignature` / `getSignatureData` all use `getElementById`, which always returns the first matching element — the static, hidden one. Events were bound to the wrong canvas, so the pad appeared dead.
 
-The available GitHub connector repository is `dusanmiladinovicVNM/handoverApp`, which is not the AgriX/OtkupApp repo described by the v6.24 source summary. Therefore the package is a systematic documentation update based on the provided source summary, with Git verification limited to confirming repository mismatch.
+**Fix:** Renamed the modal canvas ID to `sigKooperantOL` in all 6 signature API call sites in `otkupni-list.js`. Data field names (`r.sigKooperant`) were not changed.
+
+**AR impact:** DOM ID uniqueness rule added to section 2.5.
+
+### Fix 2 — Vozač did not see dispatcher plans (`getVozacPlans` missing from `handleAuthorizedRead`)
+
+**Root cause:** The `getVozacPlans` action block had been inadvertently removed from `handleAuthorizedRead` in `Code.gs`. The function `getPlansForVozac(vozacID)` existed but was never reached; all calls returned `{"success": false, "error": "Unknown action"}`.
+
+**Fix:** The action block was restored to `handleAuthorizedRead` (between `getVozacZbirne` and `getWarRoomDemand`) and GAS was redeployed with a new version.
+
+**AR impact:** `getVozacPlans` added to the GAS endpoint authorization matrix (section 9 / table). Vozač planovi report row added to section 17. `getVozacPlans` contract added to section 9.13.
+
+### Fix 3 — Dispatcher did not show quantities until "Otkup uživo" was opened manually
+
+**Root cause:** `dpInit()` relied on a cached `mgmtData.otkupiAll` that contained only the VBA master report, which does not include today's live operational otkupi from `OTK-*` sheets. Quantities appeared only after the user navigated to "Otkup uživo", which independently triggered `includeLive=1`.
+
+**Fix:** Added at the start of `dpInit()`: `delete window.mgmtData.otkupiAll` followed by `ensureMgmtSection('otkupiAll', 'getMgmtOtkupiAll', 'includeLive=1')`. This mirrors the "Otkup uživo" fetch pattern and ensures dispatcher always loads fresh operational data on every init.
+
+**AR impact:** No new AR rule; the `includeLive=1` fetch pattern was already documented for the Management otkup view. Dispatcher init behavior now consistent with the stated ownership contract.
+
+### Fix 4 — Planned quantity reappeared as unallocated after refresh (double allocation)
+
+**Root cause:** The dispatcher supply display (`dpGetSup()`) showed raw otkupi without subtracting quantities already covered by active `DispecerPlan` entries. A dispatcher could create a second plan for the same station/quantity immediately after the first.
+
+**Constraint:** Otkup records (`OTK-*`) must never be mutated from the dispatcher. `VozacID` assignment via dispatcher is explicitly prohibited.
+
+**Fix:** `dpGetSup()` now computes unallocated supply as a display-side subtraction:
+1. `dpRawSup()` — otkupi without `VozacID`, today, not transport-closed.
+2. `dpPlannedKgByStation()` — sums `PlannedKg` per `StanicaID` across active plans (`planned` / `u_toku`).
+3. `dpGetSup()` walks raw supply records, subtracts planned kg per station: fully covered records are hidden; a boundary record is cloned with reduced `Kolicina` for display only (original record unchanged); surplus records added after an existing plan remain fully visible.
+
+No otkup records are mutated. The subtraction is purely for display.
+
+**AR impact:** Dispatcher write invariant and `dpGetSup()` display-only subtraction rule added to sections 9.13 and 17 (Dispatch board row).
