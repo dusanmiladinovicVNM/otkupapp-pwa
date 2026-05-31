@@ -296,27 +296,3 @@ Add an automated fixture covering:
 - expected merged display count and ordering.
 
 This is post-documentation test hardening. The v6.23 behavior was reported as browser-tested.
-
-
-## 8. v6.24 Follow-Up Items
-
-### 8.1 Target Repo Git Verification
-
-Connect the actual AgriX/OtkupApp repository or provide a source export so the v6.24 UI/runtime work can be verified against real files instead of source summary only.
-
-### 8.2 Final Design-System Sweep
-
-Complete deferred cleanup:
-
-- split green/gold accent semantics cleanly;
-- remove remaining old radius aliases if present;
-- replace inline display styles where safe;
-- audit role CSS for duplicate primitives after `components_v2.css`.
-
-### 8.3 Google Sheets Sentinel Audit
-
-Confirm whether `modGoogleSheets` still uses `sheetId = 0` as a sentinel and replace with a non-colliding sentinel if needed.
-
-### 8.4 Lazy-Load Regression Suite
-
-Add smoke/regression checks for lazy-loaded jsPDF, Leaflet, Chart.js, Firebase intercom paths and service-worker runtime cache behavior.

@@ -1,7 +1,7 @@
 # AgriX Documentation Refactor — Final Validation Report
 
-**Package:** `agrix_doc_refactor_v6_24`  
-**Scope:** v6.24 PWA design/runtime and numbering supplement  
+**Package:** `agrix_doc_refactor_v6_23`  
+**Scope:** v6.23 PWA otkup read-model convergence update  
 **Status:** Ready for human review, not automatically production-approved  
 
 ---
@@ -221,41 +221,3 @@ Validated by reported browser smoke:
 - Merged display uses `ServerRecordID` / `OtkupID` before `ClientRecordID` to avoid duplicate synced rows.
 
 This report does not independently execute browser, GAS or VBA tests; it records the supplied browser-tested status and the documentation package update.
-
-
----
-
-## 7. v6.24 Validation Addendum
-
-### 7.1 What was added
-
-The v6.24 package adds a systematic supplement covering:
-
-- VBA document numbering model;
-- PWA design tokens and self-hosted fonts;
-- `components_v2.css` reusable design system;
-- Otkup form, Otkupni list modal, Otprema and Pregled redesigns;
-- service-worker/cache/font discipline;
-- runtime hygiene and migration bug fixes;
-- lazy-loading performance model;
-- VBA / Google Sync diagnostic follow-ups.
-
-### 7.2 Git verification result
-
-The sandbox cannot run `git clone` against GitHub. GitHub connector inspection was used instead.
-
-The only accessible repository through the current connector is `dusanmiladinovicVNM/handoverApp`, whose README identifies it as an Apartment Handover app. Its root `index.html`, service worker and token file structure do not match the AgriX/OtkupApp PWA paths described in the v6.24 source summary.
-
-Result:
-
-```text
-v6.24 package created from user source summary.
-Target AgriX repository verification remains required.
-No v6.23 documentation content was removed.
-```
-
-### 7.3 Required human review
-
-- Confirm the actual AgriX/OtkupApp repo or source export.
-- Run v6.24 gates from `RELEASE_GATES.md`.
-- Confirm deferred/known issues in `KNOWN_ISSUES.md`.
