@@ -1202,7 +1202,7 @@
                             </div>
 
                             <div class="form-group mb-8">
-                                <select id="agroPreparatSel" style="padding:10px;font-size:13px;">
+                                <select id="agroPreparatSel" class="agro-ctrl">
                                     <option value="">-- Izaberi preparat --</option>
                                 </select>
                             </div>
@@ -1210,11 +1210,11 @@
                             <div class="form-row mb-8">
                                 <div class="form-group mb-0">
                                     <label>Količina</label>
-                                    <input type="number" id="agroKolicina" inputmode="decimal" placeholder="0" style="padding:10px;font-size:13px;">
+                                    <input type="number" id="agroKolicina" class="agro-ctrl" inputmode="decimal" placeholder="0">
                                 </div>
                                 <div class="form-group mb-0">
                                     <label>JM</label>
-                                    <input type="text" id="agroJM" readonly style="padding:10px;font-size:13px;background:#f0f0f0;">
+                                    <input type="text" id="agroJM" class="agro-ctrl agro-ctrl--readonly" readonly>
                                 </div>
                             </div>
 
@@ -1317,13 +1317,13 @@
                                 <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
                                 <div class="form-group" style="margin-bottom:10px;">
                                     <label>Izaberi traktor</label>
-                                    <select id="agroTraktor" style="padding:10px;font-size:13px;">
+                                    <select id="agroTraktor" class="agro-ctrl">
                                         <option value="">-- Bez traktora --</option>
                                     </select>
                                 </div>
                                 <div class="form-group mb-0">
                                     <label>Unesi novi traktor</label>
-                                    <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;">
+                                    <input type="text" id="agroTraktorNovi" class="agro-ctrl" placeholder="Npr. IMT 539">
                                 </div>
                             </div>
 
@@ -1331,13 +1331,13 @@
                                 <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
                                 <div class="form-group" style="margin-bottom:10px;">
                                     <label>Izaberi prskalicu / atomizer</label>
-                                    <select id="agroPrskalica" style="padding:10px;font-size:13px;">
+                                    <select id="agroPrskalica" class="agro-ctrl">
                                         <option value="">-- Bez prskalice --</option>
                                     </select>
                                 </div>
                                 <div class="form-group mb-0">
                                     <label>Unesi novu prskalicu</label>
-                                  <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;">
+                                  <input type="text" id="agroPrskalicaNovi" class="agro-ctrl" placeholder="Npr. Agromehanika 400l">
                                 </div>
                             </div>
                         </div>
@@ -1353,7 +1353,7 @@
 
                         <div class="form-group mb-0">
                             <label>Ostala oprema</label>
-                            <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
+                            <input type="text" id="agroOpremaOstalo" class="agro-ctrl" placeholder="Npr. motorna kosa, šmrk...">
                         </div>
                     </div>
 
