@@ -83,9 +83,17 @@ const ASSETS = [
     // Icons
     './icons/icon-192x192.png',
     './icons/icon-512x512.png',
+    './img/AgriX-Otkup-Logo-Final.png',
 
     // Vendor libs (self-hosted)
     './vendor/leaflet.css',
+    './vendor/leaflet.js',
+    './vendor/html5-qrcode.min.js',
+    './vendor/chart.umd.min.js',
+    './vendor/jspdf.umd.min.js',
+    './vendor/firebase-app-compat.js',
+    './vendor/firebase-auth-compat.js',
+    './vendor/firebase-database-compat.js',
     './vendor/images/marker-icon.png',
     './vendor/images/marker-icon-2x.png',
     './vendor/images/marker-shadow.png',

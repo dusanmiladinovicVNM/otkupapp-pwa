@@ -202,7 +202,7 @@ async function showMgmtRoot(root, btn) {
     if (btn && btn.classList) {
         btn.classList.add('active');
     } else {
-        const autoBtn = document.querySelector('.tab-btn.role-management[data-mgmt-root="' + root + '"]');
+        const autoBtn = document.querySelector('.tab-btn.role-management[data-root="' + root + '"]');
         if (autoBtn) autoBtn.classList.add('active');
     }
 

@@ -15,7 +15,7 @@
         connect-src 'self' https://script.google.com https://script.googleusercontent.com https://api.open-meteo.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app;
         font-src 'self';
     ">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <meta name="theme-color" content="#1E2D14">
     <title>OtkupApp - Terenski otkup</title>
     <link rel="manifest" href="manifest.json">
@@ -55,7 +55,7 @@
         <div class="header-brand">
             <img
                 id="headerBrandLogo"
-                src="img/AgriX-Otkup-Logo-Final.png"
+                src="./img/AgriX-Otkup-Logo-Final.png"
                 alt="AgriX Otkup"
                 class="header-brand-logo"
             >
@@ -77,41 +77,41 @@
 <!-- TAB BAR -->
 <div class="tab-bar" id="tabBar">
     <!-- Otkupac -->
-    <button class="tab-btn role-otkupac" data-route="tab" data-tab="otkup">Novi</button>
-    <button class="tab-btn role-otkupac" data-route="tab" data-tab="pregled">Otkupi</button>
-    <button class="tab-btn role-otkupac" data-route="tab" data-tab="otpremnice">Otprem.</button>
-    <button class="tab-btn role-otkupac" data-route="tab" data-tab="queue">Sync</button>
+    <button type="button" class="tab-btn role-otkupac" data-route="tab" data-tab="otkup">Novi</button>
+    <button type="button" class="tab-btn role-otkupac" data-route="tab" data-tab="pregled">Otkupi</button>
+    <button type="button" class="tab-btn role-otkupac" data-route="tab" data-tab="otpremnice">Otprem.</button>
+    <button type="button" class="tab-btn role-otkupac" data-route="tab" data-tab="queue">Sync</button>
 
     <!-- Kooperant -->
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="home">
+    <button type="button" class="tab-btn role-kooperant" data-route="tab" data-tab="home">
         <span data-ag-icon="home"></span>Pregled
     </button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="parcele">
+    <button type="button" class="tab-btn role-kooperant" data-route="tab" data-tab="parcele">
         <span data-ag-icon="map"></span>Parcele
     </button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="agromere">
+    <button type="button" class="tab-btn role-kooperant" data-route="tab" data-tab="agromere">
         <span data-ag-icon="tractor"></span>Radovi
     </button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="knjigapolja">
+    <button type="button" class="tab-btn role-kooperant" data-route="tab" data-tab="knjigapolja">
         <span data-ag-icon="clipboard"></span>Knjiga polja
     </button>
-    <button class="tab-btn role-kooperant" data-route="tab" data-tab="more">
+    <button type="button" class="tab-btn role-kooperant" data-route="tab" data-tab="more">
         <span data-ag-icon="info"></span>Više
     </button>
 
     <!-- Management -->
-    <button class="tab-btn role-management" data-route="mgmt-root" data-root="pregled" data-mgmt-root="pregled">Pregled</button>
-    <button class="tab-btn role-management" data-route="mgmt-root" data-root="dispecer" data-mgmt-root="dispecer">
+    <button type="button" class="tab-btn role-management" data-route="mgmt-root" data-root="pregled">Pregled</button>
+    <button type="button" class="tab-btn role-management" data-route="mgmt-root" data-root="dispecer">
         <span data-ag-icon="clipboard"></span>Dispečer
     </button>
-    <button class="tab-btn role-management" data-route="mgmt-root" data-root="otkup" data-mgmt-root="otkup">Otkup</button>
-    <button class="tab-btn role-management" data-route="mgmt-root" data-root="partneri" data-mgmt-root="partneri">Partneri</button>
-    <button class="tab-btn role-management" data-route="mgmt-root" data-root="agro" data-mgmt-root="agro">Agrohemija</button>
+    <button type="button" class="tab-btn role-management" data-route="mgmt-root" data-root="otkup">Otkup</button>
+    <button type="button" class="tab-btn role-management" data-route="mgmt-root" data-root="partneri">Partneri</button>
+    <button type="button" class="tab-btn role-management" data-route="mgmt-root" data-root="agro">Agrohemija</button>
 
     <!-- Vozac -->
-    <button class="tab-btn role-vozac" data-route="tab" data-tab="transport">Transporti</button>
-    <button class="tab-btn role-vozac" data-route="tab" data-tab="zbirna">Zbirne</button>
-    <button class="tab-btn role-vozac" data-route="tab" data-tab="profil">Profil</button>
+    <button type="button" class="tab-btn role-vozac" data-route="tab" data-tab="transport">Transporti</button>
+    <button type="button" class="tab-btn role-vozac" data-route="tab" data-tab="zbirna">Zbirne</button>
+    <button type="button" class="tab-btn role-vozac" data-route="tab" data-tab="profil">Profil</button>
 </div>
 
 <!-- MGMT MOBILE TOP BAR — visible only on mobile ≤ 900px, management role -->
@@ -445,27 +445,6 @@
         <div id="pregledList" class="danas-sections"></div>
     </div>
 
-    <!-- Detail modal -->
-    <div class="danas-detail-modal" id="pregledDetailModal">
-        <div class="danas-detail-card">
-            <div class="danas-detail-head">
-                <div>
-                    <div class="danas-detail-title">Detalj otkupa</div>
-                    <div class="danas-detail-subtitle" id="pregledDetailDate">-</div>
-                </div>
-                <button class="danas-detail-close" type="button" data-action="close-pregled-detail" aria-label="Zatvori">
-                    <span data-ag-icon="x"></span>
-                </button>
-            </div>
-
-            <div class="danas-detail-grid" id="pregledDetailGrid"></div>
-
-            <div class="danas-detail-actions">
-                <button class="btn-v2 btn-v2--secondary" type="button" data-action="close-pregled-detail">Zatvori</button>
-                <button class="btn-v2 btn-v2--primary" type="button" data-action="open-pregled-otkupni-list">Otvori otkupni list</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- ==================== Otpremnica TAB ==================== -->
@@ -691,7 +670,7 @@
                     Interkom
                 </span>
                 <span class="queue-device-row__status" id="intercom-permission-status"></span>
-                <button id="btn-intercom-permission"
+                <button type="button" id="btn-intercom-permission"
                         class="btn-v2 btn-v2--secondary btn-v2--sm"
                         data-action="intercom-request-permission"
                         style="display:none;">
@@ -732,21 +711,6 @@
 
     </div>
 
-    <!-- Otprema detail modal (ostaje netaknut) -->
-    <div class="otprema-detail-modal" id="otpremaDetailModal">
-        <div class="otprema-detail-card">
-            <div class="otprema-detail-head">
-                <div class="otprema-detail-title" id="otpremaDetailTitle">Detalj otpreme</div>
-                <button type="button" class="otprema-detail-close" data-action="close-otprema-detail" aria-label="Zatvori">
-                    <span data-ag-icon="x"></span>
-                </button>
-            </div>
-            <div class="otprema-detail-body" id="otpremaDetailBody"></div>
-            <div class="otprema-detail-actions">
-                <button type="button" class="btn-v2 btn-v2--secondary" data-action="close-otprema-detail">Zatvori</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- ==================== KOOPERANT TABS ==================== -->
@@ -766,7 +730,7 @@
                         </div>
                     </div>
 
-                    <button class="home-add-btn" data-action="open-home-quick-actions">Akcije</button>
+                    <button type="button" class="home-add-btn" data-action="open-home-quick-actions">Akcije</button>
                 </div>
             </div>
 
@@ -794,7 +758,7 @@
                             <div class="home-card-title">Upozorenja</div>
                             <div class="home-card-subtitle">Meteo, sync i otvorene stavke</div>
                         </div>
-                        <button class="home-card-link" data-action="home-show-alerts">Sve</button>
+                        <button type="button" class="home-card-link" data-action="home-show-alerts">Sve</button>
                     </div>
                     <div id="homeAlertsList" class="home-list"></div>
                 </div>
@@ -807,10 +771,10 @@
                         </div>
                     </div>
                     <div class="home-actions-grid">
-                        <button class="home-action-btn" data-action="home-go-new-rad">Novi rad</button>
-                        <button class="home-action-btn" data-action="home-go-new-trosak">Novi trošak</button>
-                        <button class="home-action-btn" data-action="home-go-scan-racun">Slikaj račun</button>
-                        <button class="home-action-btn" data-route="tab" data-tab="knjigapolja">Knjiga polja</button>
+                        <button type="button" class="home-action-btn" data-action="home-go-new-rad">Novi rad</button>
+                        <button type="button" class="home-action-btn" data-action="home-go-new-trosak">Novi trošak</button>
+                        <button type="button" class="home-action-btn" data-action="home-go-scan-racun">Slikaj račun</button>
+                        <button type="button" class="home-action-btn" data-route="tab" data-tab="knjigapolja">Knjiga polja</button>
                     </div>
                 </div>
 
@@ -820,7 +784,7 @@
                             <div class="home-card-title">Mini bilans</div>
                             <div class="home-card-subtitle">Sažetak tekuće sezone</div>
                         </div>
-                        <button class="home-card-link" data-route="tab" data-tab="knjigapolja">Otvori</button>
+                        <button type="button" class="home-card-link" data-route="tab" data-tab="knjigapolja">Otvori</button>
                     </div>
                     <div class="home-bilans-grid">
                         <div class="home-bilans-item">
@@ -848,7 +812,7 @@
                             <div class="home-card-title">Sažetak kartice</div>
                             <div class="home-card-subtitle">Poslednje stanje sa otkupljivačem</div>
                         </div>
-                        <button class="home-card-link" data-route="tab" data-tab="kartica">Kartica</button>
+                        <button type="button" class="home-card-link" data-route="tab" data-tab="kartica">Kartica</button>
                     </div>
 
                     <div class="home-kartica-summary">
@@ -868,41 +832,6 @@
                 </div>
             </div>
             
-    <div class="home-quick-modal" id="homeQuickActionsModal">
-    <div class="home-quick-sheet">
-        <div class="home-quick-handle"></div>
-        <div class="home-quick-title">Brze akcije</div>
-
-        <button class="home-quick-item" data-action="home-quick-new-rad">
-            <span>🛠️</span>
-            <span>Novi rad</span>
-        </button>
-
-        <button class="home-quick-item" data-action="home-quick-new-trosak">
-            <span>💰</span>
-            <span>Novi trošak</span>
-        </button>
-
-        <button class="home-quick-item" data-action="home-quick-scan-racun">
-            <span>🧾</span>
-            <span>Slikaj račun</span>
-        </button>
-
-        <button class="home-quick-item" data-action="home-quick-kartica">
-            <span>📒</span>
-            <span>Kartica</span>
-        </button>
-
-        <button class="home-quick-item" data-action="home-quick-knjiga-polja">
-            <span>📘</span>
-            <span>Knjiga polja</span>
-        </button>
-
-        <button class="home-quick-cancel" data-action="close-home-quick-actions">
-            Otkaži
-        </button>
-    </div>
-</div>
         </div>
     </section>
 </div>
@@ -963,541 +892,541 @@
     </section>
 </div>
     
-            <div class="tab-content" id="tab-parcele">
-                <section class="parcele-screen">
-                    <div class="parcele-shell">
+<div class="tab-content" id="tab-parcele">
+    <section class="parcele-screen">
+        <div class="parcele-shell">
 
-                        <div class="parcele-hero">
-                            <div class="parcele-hero-top">
-                                <div>
-                                    <div class="parcele-eyebrow">GIS i mikro meteo</div>
-                                    <h1 class="parcele-title">Parcele</h1>
-                                    <div class="parcele-subline">Pregled mapa, liste, kulture i meteo rizika</div>
-                                </div>
+            <div class="parcele-hero">
+                <div class="parcele-hero-top">
+                    <div>
+                        <div class="parcele-eyebrow">GIS i mikro meteo</div>
+                        <h1 class="parcele-title">Parcele</h1>
+                        <div class="parcele-subline">Pregled mapa, liste, kulture i meteo rizika</div>
+                    </div>
 
-                                <button class="parcele-primary-btn" type="button" data-action="toggle-parcele-view">
-                                    Prikaži listu
+                    <button class="parcele-primary-btn" type="button" data-action="toggle-parcele-view">
+                        Prikaži listu
+                    </button>
+                </div>
+            </div>
+
+            <div class="parcele-filters-card">
+                <div class="parcele-filters-grid">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Pretraga</label>
+                        <input type="text" id="parceleSearch" placeholder="Šifra, kultura, KO...">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Kultura</label>
+                        <select id="parceleKulturaFilter">
+                            <option value="">-- Sve kulture --</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="parcele-subnav">
+                <button class="parcele-subnav-btn active" type="button" data-action="show-parcele-section" data-section="mapa">
+                    Mapa
+                </button>
+                <button class="parcele-subnav-btn" type="button" data-action="show-parcele-section" data-section="lista">
+                    Lista
+                </button>
+            </div>
+
+            <!-- MAPA -->
+            <div class="parcele-section active" id="parcele-section-mapa">
+                <div class="parcele-card">
+                    <div class="parcele-card-head">
+                        <div>
+                            <div class="parcele-card-title">Mapa parcela</div>
+                            <div class="parcele-card-subtitle">Klik na parcelu otvara popup i highlight</div>
+                        </div>
+                    </div>
+
+                    <div id="parceleMap" class="parcele-map-frame"></div>
+                </div>
+
+                <div class="parcele-card" id="parceleMeteoWrap">
+                    <div class="parcele-card-head">
+                        <div>
+                            <div class="parcele-card-title">Meteo i rizik</div>
+                            <div class="parcele-card-subtitle">Podaci za izabranu parcelu</div>
+                        </div>
+                    </div>
+
+                    <div id="parceleMeteo" style="display:none;"></div>
+                    <div id="parceleMeteoEmpty" class="koop-empty">
+                        <div class="koop-empty-title">Izaberi parcelu na mapi</div>
+                        <div class="koop-empty-text">Ovde će biti prikazani meteo, rizik i prozor za prskanje.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LISTA -->
+            <div class="parcele-section" id="parcele-section-lista">
+                <div class="parcele-card">
+                    <div class="parcele-card-head">
+                        <div>
+                            <div class="parcele-card-title">Lista parcela</div>
+                            <div class="parcele-card-subtitle">Šifra, kultura, površina, GGAP i meteo status</div>
+                        </div>
+                    </div>
+
+                    <div id="parceleList"></div>
+                </div>
+            </div>
+
+            <div class="parcele-section" id="parcele-section-detail">
+                <div class="parcela-detail-shell">
+
+                    <div class="parcela-detail-hero">
+                        <div class="parcela-detail-top">
+                            <button class="parcela-back-btn" type="button" data-action="close-parcela-detail">
+                                ← Nazad
+                            </button>
+
+                            <div class="parcela-detail-actions">
+                                <button class="parcela-detail-cta" type="button" data-action="go-new-rad-from-parcela">
+                                    + Dodaj rad
+                                </button>
+                                <button class="parcela-detail-cta parcela-detail-cta--secondary" type="button" data-action="go-new-trosak-from-parcela">
+                                    Dodaj trošak
                                 </button>
                             </div>
                         </div>
 
-                        <div class="parcele-filters-card">
-                            <div class="parcele-filters-grid">
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label>Pretraga</label>
-                                    <input type="text" id="parceleSearch" placeholder="Šifra, kultura, KO...">
-                                </div>
+                        <div class="parcela-detail-headline">
+                            <div class="parcele-eyebrow">Detalj parcele</div>
+                            <h2 class="parcela-detail-title" id="parcelaDetailTitle">Parcela</h2>
+                            <div class="parcela-detail-subline">
+                                <span id="parcelaDetailKultura">—</span>
+                                <span>•</span>
+                                <span id="parcelaDetailPovrsina">—</span>
+                            </div>
+                        </div>
+                    </div>
 
+                    <div class="parcela-detail-subnav">
+                        <button class="parcela-detail-subnav-btn active" type="button" data-action="show-parcela-detail-section" data-section="osnovno">Osnovno</button>
+                        <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="meteo">Meteo</button>
+                        <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="radovi">Radovi</button>
+                        <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="troskovi">Troškovi</button>                                   
+                        <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="proizvodnja">Proizvodnja</button>    
+                    </div>
+
+                    <div class="parcela-detail-section active" id="parcela-detail-section-osnovno">
+                        <div class="parcele-card">
+                            <div class="parcele-card-head">
+                                <div>
+                                    <div class="parcele-card-title">Osnovno</div>
+                                    <div class="parcele-card-subtitle">Osnovni podaci o parceli</div>
+                                </div>
+                            </div>
+
+                            <div class="parcela-osnovno-grid" id="parcelaOsnovnoGrid"></div>
+                        </div>
+                    </div>
+
+                    <div class="parcela-detail-section" id="parcela-detail-section-meteo">
+                        <div class="parcele-card">
+                            <div class="parcele-card-head">
+                                <div>
+                                    <div class="parcele-card-title">Meteo</div>
+                                    <div class="parcele-card-subtitle">Mikro meteo, rizik i prozor za prskanje</div>
+                                </div>
+                            </div>
+
+                            <div id="parcelaDetailMeteo"></div>
+                        </div>
+                    </div>
+
+                    <div class="parcela-detail-section" id="parcela-detail-section-radovi">
+                        <div class="parcele-card">
+                            <div class="parcele-card-head">
+                                <div>
+                                    <div class="parcele-card-title">Radovi</div>
+                                    <div class="parcele-card-subtitle">Evidentirani radovi za ovu parcelu</div>
+                                </div>
+                            </div>
+
+                            <div id="parcelaDetailRadovi"></div>
+                        </div>
+                    </div>
+
+                    <div class="parcela-detail-section" id="parcela-detail-section-troskovi">
+                        <div class="parcele-card">
+                            <div class="parcele-card-head">
+                                <div>
+                                    <div class="parcele-card-title">Troškovi</div>
+                                    <div class="parcele-card-subtitle">Troškovi vezani za ovu parcelu</div>
+                                </div>
+                            </div>
+
+                            <div id="parcelaDetailTroskovi"></div>
+                        </div>
+                    </div>
+
+                    <div class="parcela-detail-section" id="parcela-detail-section-proizvodnja">
+                        <div class="parcele-card">
+                            <div class="parcele-card-head">
+                                <div>
+                                    <div class="parcele-card-title">Proizvodnja</div>
+                                    <div class="parcele-card-subtitle">Otkupi i realizacija za ovu parcelu</div>
+                                </div>
+                            </div>
+
+                            <div id="parcelaDetailProizvodnja"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+</div>
+<!-- ==================== Agromere ==================== -->
+<div class="tab-content" id="tab-agromere">
+    <section class="radovi-screen">
+        <div class="radovi-shell">
+
+            <div class="radovi-hero">
+                <div class="radovi-hero-top">
+                    <div>
+                        <div class="radovi-eyebrow">Operativa gazdinstva</div>
+                        <h1 class="radovi-title">Radovi</h1>
+                        <div class="radovi-subline">Tretmani, evidencija rada, oprema i kalendar</div>
+                    </div>
+                    <button class="radovi-primary-btn" type="button" data-action="radovi-open-new">
+                        + Novi rad
+                    </button>
+                </div>
+            </div>
+
+            <div class="radovi-subnav">
+                <button class="radovi-subnav-btn active" type="button" data-action="show-radovi-section" data-section="tretmani">            
+                    Tretmani
+                </button>
+                <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="istorija">
+                    Evidencija
+                </button>
+                <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="oprema">
+                    Oprema
+                </button>
+                <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="kalendar">
+                    Kalendar
+                </button>
+            </div>
+
+            <!-- TRETMANI -->
+            <div class="radovi-section active" id="radovi-section-tretmani">
+                <div class="radovi-section-card">
+                    <div class="radovi-section-head">
+                        <div>
+                            <div class="radovi-section-title">Novi tretman / rad</div>
+                            <div class="radovi-section-subtitle">Postojeći tok unosa rada ostaje isti</div>
+                        </div>
+                    </div>
+                    <div class="radovi-default-oprema" id="radoviDefaultOpremaBar">
+                        <div class="radovi-default-oprema-title">Podrazumevana oprema</div>
+                        <div class="radovi-default-oprema-list">
+                            <span class="radovi-default-oprema-chip" id="radoviDefaultTraktorChip">🚜 Traktor nije izabran</span>
+                            <span class="radovi-default-oprema-chip" id="radoviDefaultPrskalicaChip">💨 Prskalica nije izabrana</span>
+                            <span class="radovi-default-oprema-chip" id="radoviDefaultOstaloChip">🧰 Bez dodatne opreme</span>
+                        </div>
+                    </div>
+
+                    <div id="radoviFormAnchor"></div>
+
+                    <!-- Sticky timer bar -->
+                    <div class="agro-timer-sticky" id="agroTimerSticky">
+                        <span id="agroTimerStickyText">⏱️ 00:00:00</span>
+                    </div>
+
+                    <!-- Step 1: Parcela (geo auto-detect + fallback) -->
+                    <div id="agroStep1">
+                        <div class="agro-geo-banner manual" id="agroGeoBanner">
+                            📍 Izaberite parcelu ili dozvolite GPS pristup
+                        </div>
+
+                        <div class="form-group">
+                            <label>Parcela</label>
+                            <select id="agroParcelaSel">
+                                <option value="">-- Izaberi parcelu --</option>
+                            </select>
+                        </div>
+
+                        <!-- Meteo strip za izabranu parcelu -->
+                        <div class="agro-meteo-strip" id="agroMeteoStrip" style="display:none;">
+                            <span id="agroMeteoTemp">—</span>
+                            <span id="agroMeteoWind">—</span>
+                            <span id="agroMeteoHumidity">—</span>
+                            <span id="agroMeteoPrecip">—</span>
+                        </div>
+
+                        <!-- Karenca upozorenje za parcelu -->
+                        <div class="agro-karenca-warn" id="agroKarencaWarn">
+                            <div style="font-weight:700;margin-bottom:4px;">🚫 KARENCA AKTIVNA</div>
+                            <div id="agroKarencaText">—</div>
+                        </div>
+
+                        <!-- Mera selection -->
+                        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">
+                            Izaberite meru
+                        </div>
+
+                        <div class="agro-mera-grid">
+                            <button type="button" class="agro-mera-btn" data-action="select-agro-mera" data-mera="Zastita">🛡️ Zaštita</button>
+                            <button type="button" class="agro-mera-btn" data-action="select-agro-mera" data-mera="Prihrana">🌱 Prihrana</button>
+                            <button type="button" class="agro-mera-btn" data-action="select-agro-mera" data-mera="Rezidba">✂️ Rezidba</button>
+                            <button type="button" class="agro-mera-btn" data-action="select-agro-mera" data-mera="Zalivanje">💧 Zalivanje</button>
+                            <button type="button" class="agro-mera-btn" id="agroBerbaBtn" data-action="select-agro-mera" data-mera="Berba">🍎 Berba</button>
+                            <div></div>
+                        </div>
+
+                        <!-- Meteo warning -->
+                        <div class="agro-meteo-warn" id="agroMeteoWarn">
+                            <div style="font-weight:700;margin-bottom:4px;" id="agroMeteoWarnTitle">⚠️ Upozorenje</div>
+                            <div id="agroMeteoWarnText">—</div>
+                            <button type="button" data-action="agro-meteo-override"
+                                style="margin-top:8px;padding:8px 16px;background:var(--warning);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+                                Nastavi ipak
+                            </button>
+                        </div>
+
+                        <!-- Preparat section -->
+                        <div class="agro-preparat-section" id="agroPreparatSection">
+                            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">
+                                Preparat sa lagera
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:8px;">
+                                <select id="agroPreparatSel" style="padding:10px;font-size:13px;">
+                                    <option value="">-- Izaberi preparat --</option>
+                                </select>
+                            </div>
+
+                            <div class="form-row" style="margin-bottom:8px;">
                                 <div class="form-group" style="margin-bottom:0;">
-                                    <label>Kultura</label>
-                                    <select id="parceleKulturaFilter">
-                                        <option value="">-- Sve kulture --</option>
+                                    <label>Količina</label>
+                                    <input type="number" id="agroKolicina" inputmode="decimal" placeholder="0" style="padding:10px;font-size:13px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>JM</label>
+                                    <input type="text" id="agroJM" readonly style="padding:10px;font-size:13px;background:#f0f0f0;">
+                                </div>
+                            </div>
+
+                            <div class="agro-preporuka" id="agroPreporuka">
+                                <div style="font-size:11px;font-weight:700;color:var(--success);text-transform:uppercase;margin-bottom:6px;">
+                                    📋 Preporučena doza
+                                </div>
+                                <div id="agroPreporukaCalc" style="font-size:14px;font-weight:600;color:var(--primary);margin-bottom:4px;">—</div>
+                                <div id="agroPreporukaDetail" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">—</div>
+                                <button type="button" data-action="agro-primeni-preporuku"
+                                    style="padding:8px 16px;background:var(--success);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                                    ✅ Primeni količinu
+                                </button>
+                            </div>
+
+                            <div id="agroKarencaInfo" style="display:none;background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:12px;margin-top:8px;">
+                                <span id="agroKarencaInfoText">—</span>
+                            </div>
+                        </div>
+
+                        <!-- Napomena -->
+                        <div class="form-group">
+                            <label>Napomena (opciono)</label>
+                            <input type="text" id="agroNapomena" placeholder="Detalji...">
+                        </div>
+
+                        <!-- Timer + Start -->
+                        <div class="agro-timer" id="agroTimerPanel" style="display:none;">
+                            <div class="agro-timer-display" id="agroTimerDisplay">00:00:00</div>
+                            <div class="agro-timer-label" id="agroTimerLabel">—</div>
+                        </div>
+
+                        <button type="button" class="btn-primary" id="agroBtnStart" data-action="agro-start-rad" style="display:none;">▶ POČNI RAD</button>
+                        <button type="button" class="btn-primary" id="agroBtnStop" data-action="agro-stop-rad" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div id="agroStep2" style="display:none;">
+                        <h3 style="color:var(--primary);margin-bottom:12px;">Potvrda tretmana</h3>
+                        <div class="agro-confirm" id="agroConfirmPanel"></div>
+                        <button type="button" class="btn-primary" data-action="agro-save-tretman">💾 SAČUVAJ</button>
+                        <button type="button" class="btn-secondary" data-action="agro-back-to-step1">← Nazad</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EVIDENCIJA -->
+            <div class="radovi-section" id="radovi-section-istorija">
+                <div class="radovi-evidencija-shell">
+
+                    <div class="radovi-evidencija-hero">
+                        <div>
+                            <div class="radovi-section-title">Evidencija rada</div>
+                            <div class="radovi-section-subtitle">Pregled ranije evidentiranih tretmana i aktivnosti</div>
+                        </div>
+                    </div>
+
+                    <div class="radovi-evidencija-toolbar">
+                        <div class="radovi-evidencija-chip">
+                            <span>📋</span>
+                            <span>Istorija tretmana</span>
+                        </div>
+                        <div class="radovi-evidencija-chip radovi-evidencija-chip--muted">
+                            <span>↓</span>
+                            <span>Najnovije prvo</span>
+                            </div>
+                    </div>
+
+                    <div class="radovi-evidencija-card">
+                        <div class="radovi-evidencija-card-head">
+                            <div class="radovi-evidencija-card-title">Sve evidentirane aktivnosti</div>
+                            <div class="radovi-evidencija-card-subtitle">Najnovije stavke su prikazane prve</div>
+                        </div>
+
+                        <div id="agroTretmaniList" class="radovi-evidencija-list"></div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- OPREMA -->
+            <!-- Oprema section -->
+            <div class="radovi-section" id="radovi-section-oprema">
+                <div class="radovi-oprema-shell">
+
+                    <div class="radovi-section-card">
+                        <div class="radovi-section-head">
+                            <div>
+                                <div class="radovi-section-title">Oprema</div>
+                                <div class="radovi-section-subtitle">Unos opreme i podešavanje podrazumevanih vrednosti</div>
+                            </div>
+                        </div>
+
+                        <div class="radovi-info-box">
+                            Oprema se unosi ovde, a podrazumevane vrednosti se zatim automatski prikazuju u sekciji Tretmani.
+                        </div>
+
+                        <div class="radovi-oprema-grid">
+                            <div class="radovi-oprema-card">
+                                <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
+                                <div class="form-group" style="margin-bottom:10px;">
+                                    <label>Izaberi traktor</label>
+                                    <select id="agroTraktor" style="padding:10px;font-size:13px;">
+                                        <option value="">-- Bez traktora --</option>
                                     </select>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="parcele-subnav">
-                            <button class="parcele-subnav-btn active" type="button" data-action="show-parcele-section" data-section="mapa">
-                                Mapa
-                            </button>
-                            <button class="parcele-subnav-btn" type="button" data-action="show-parcele-section" data-section="lista">
-                                Lista
-                            </button>
-                        </div>
-
-                        <!-- MAPA -->
-                        <div class="parcele-section active" id="parcele-section-mapa">
-                            <div class="parcele-card">
-                                <div class="parcele-card-head">
-                                    <div>
-                                        <div class="parcele-card-title">Mapa parcela</div>
-                                        <div class="parcele-card-subtitle">Klik na parcelu otvara popup i highlight</div>
-                                    </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Unesi novi traktor</label>
+                                    <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;">
                                 </div>
-
-                                <div id="parceleMap" class="parcele-map-frame"></div>
                             </div>
 
-                            <div class="parcele-card" id="parceleMeteoWrap">
-                                <div class="parcele-card-head">
-                                    <div>
-                                        <div class="parcele-card-title">Meteo i rizik</div>
-                                        <div class="parcele-card-subtitle">Podaci za izabranu parcelu</div>
-                                    </div>
+                            <div class="radovi-oprema-card">
+                                <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
+                                <div class="form-group" style="margin-bottom:10px;">
+                                    <label>Izaberi prskalicu / atomizer</label>
+                                    <select id="agroPrskalica" style="padding:10px;font-size:13px;">
+                                        <option value="">-- Bez prskalice --</option>
+                                    </select>
                                 </div>
-
-                                <div id="parceleMeteo" style="display:none;"></div>
-                                <div id="parceleMeteoEmpty" class="koop-empty">
-                                    <div class="koop-empty-title">Izaberi parcelu na mapi</div>
-                                    <div class="koop-empty-text">Ovde će biti prikazani meteo, rizik i prozor za prskanje.</div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Unesi novu prskalicu</label>
+                                  <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;">
                                 </div>
                             </div>
                         </div>
-
-                        <!-- LISTA -->
-                        <div class="parcele-section" id="parcele-section-lista">
-                            <div class="parcele-card">
-                                <div class="parcele-card-head">
-                                    <div>
-                                        <div class="parcele-card-title">Lista parcela</div>
-                                        <div class="parcele-card-subtitle">Šifra, kultura, površina, GGAP i meteo status</div>
-                                    </div>
-                                </div>
-
-                                <div id="parceleList"></div>
-                            </div>
-                        </div>
-
-                        <div class="parcele-section" id="parcele-section-detail">
-                            <div class="parcela-detail-shell">
-
-                                <div class="parcela-detail-hero">
-                                    <div class="parcela-detail-top">
-                                        <button class="parcela-back-btn" type="button" data-action="close-parcela-detail">
-                                            ← Nazad
-                                        </button>
-
-                                        <div class="parcela-detail-actions">
-                                            <button class="parcela-detail-cta" type="button" data-action="go-new-rad-from-parcela">
-                                                + Dodaj rad
-                                            </button>
-                                            <button class="parcela-detail-cta parcela-detail-cta--secondary" type="button" data-action="go-new-trosak-from-parcela">
-                                                Dodaj trošak
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div class="parcela-detail-headline">
-                                        <div class="parcele-eyebrow">Detalj parcele</div>
-                                        <h2 class="parcela-detail-title" id="parcelaDetailTitle">Parcela</h2>
-                                        <div class="parcela-detail-subline">
-                                            <span id="parcelaDetailKultura">—</span>
-                                            <span>•</span>
-                                            <span id="parcelaDetailPovrsina">—</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="parcela-detail-subnav">
-                                    <button class="parcela-detail-subnav-btn active" type="button" data-action="show-parcela-detail-section" data-section="osnovno">Osnovno</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="meteo">Meteo</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="radovi">Radovi</button>
-                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="troskovi">Troškovi</button>                                   
-                                    <button class="parcela-detail-subnav-btn" type="button" data-action="show-parcela-detail-section" data-section="proizvodnja">Proizvodnja</button>    
-                                </div>
-
-                                <div class="parcela-detail-section active" id="parcela-detail-section-osnovno">
-                                    <div class="parcele-card">
-                                        <div class="parcele-card-head">
-                                            <div>
-                                                <div class="parcele-card-title">Osnovno</div>
-                                                <div class="parcele-card-subtitle">Osnovni podaci o parceli</div>
-                                            </div>
-                                        </div>
-
-                                        <div class="parcela-osnovno-grid" id="parcelaOsnovnoGrid"></div>
-                                    </div>
-                                </div>
-
-                                <div class="parcela-detail-section" id="parcela-detail-section-meteo">
-                                    <div class="parcele-card">
-                                        <div class="parcele-card-head">
-                                            <div>
-                                                <div class="parcele-card-title">Meteo</div>
-                                                <div class="parcele-card-subtitle">Mikro meteo, rizik i prozor za prskanje</div>
-                                            </div>
-                                        </div>
-
-                                        <div id="parcelaDetailMeteo"></div>
-                                    </div>
-                                </div>
-
-                                <div class="parcela-detail-section" id="parcela-detail-section-radovi">
-                                    <div class="parcele-card">
-                                        <div class="parcele-card-head">
-                                            <div>
-                                                <div class="parcele-card-title">Radovi</div>
-                                                <div class="parcele-card-subtitle">Evidentirani radovi za ovu parcelu</div>
-                                            </div>
-                                        </div>
-
-                                        <div id="parcelaDetailRadovi"></div>
-                                    </div>
-                                </div>
-
-                                <div class="parcela-detail-section" id="parcela-detail-section-troskovi">
-                                    <div class="parcele-card">
-                                        <div class="parcele-card-head">
-                                            <div>
-                                                <div class="parcele-card-title">Troškovi</div>
-                                                <div class="parcele-card-subtitle">Troškovi vezani za ovu parcelu</div>
-                                            </div>
-                                        </div>
-
-                                        <div id="parcelaDetailTroskovi"></div>
-                                    </div>
-                                </div>
-
-                                <div class="parcela-detail-section" id="parcela-detail-section-proizvodnja">
-                                    <div class="parcele-card">
-                                        <div class="parcele-card-head">
-                                            <div>
-                                                <div class="parcele-card-title">Proizvodnja</div>
-                                                <div class="parcele-card-subtitle">Otkupi i realizacija za ovu parcelu</div>
-                                            </div>
-                                        </div>
-
-                                        <div id="parcelaDetailProizvodnja"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
-                </section>
-            </div>
-            <!-- ==================== Agromere ==================== -->
-            <div class="tab-content" id="tab-agromere">
-                <section class="radovi-screen">
-                    <div class="radovi-shell">
 
-                        <div class="radovi-hero">
-                            <div class="radovi-hero-top">
-                                <div>
-                                    <div class="radovi-eyebrow">Operativa gazdinstva</div>
-                                    <h1 class="radovi-title">Radovi</h1>
-                                    <div class="radovi-subline">Tretmani, evidencija rada, oprema i kalendar</div>
-                                </div>
-                                <button class="radovi-primary-btn" type="button" data-action="radovi-open-new">
-                                    + Novi rad
-                                </button>
+                    <div class="radovi-section-card">
+                        <div class="radovi-section-head">
+                            <div>
+                                <div class="radovi-section-title">Dodatna oprema</div>
+                                <div class="radovi-section-subtitle">Ova vrednost može biti prikazana kao podrazumevana u Tretmanima</div>
                             </div>
                         </div>
 
-                        <div class="radovi-subnav">
-                            <button class="radovi-subnav-btn active" type="button" data-action="show-radovi-section" data-section="tretmani">            
-                                Tretmani
-                            </button>
-                            <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="istorija">
-                                Evidencija
-                            </button>
-                            <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="oprema">
-                                Oprema
-                            </button>
-                            <button class="radovi-subnav-btn" type="button" data-action="show-radovi-section" data-section="kalendar">
-                                Kalendar
-                            </button>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Ostala oprema</label>
+                            <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
                         </div>
-
-                        <!-- TRETMANI -->
-                        <div class="radovi-section active" id="radovi-section-tretmani">
-                            <div class="radovi-section-card">
-                                <div class="radovi-section-head">
-                                    <div>
-                                        <div class="radovi-section-title">Novi tretman / rad</div>
-                                        <div class="radovi-section-subtitle">Postojeći tok unosa rada ostaje isti</div>
-                                    </div>
-                                </div>
-                                <div class="radovi-default-oprema" id="radoviDefaultOpremaBar">
-                                    <div class="radovi-default-oprema-title">Podrazumevana oprema</div>
-                                    <div class="radovi-default-oprema-list">
-                                        <span class="radovi-default-oprema-chip" id="radoviDefaultTraktorChip">🚜 Traktor nije izabran</span>
-                                        <span class="radovi-default-oprema-chip" id="radoviDefaultPrskalicaChip">💨 Prskalica nije izabrana</span>
-                                        <span class="radovi-default-oprema-chip" id="radoviDefaultOstaloChip">🧰 Bez dodatne opreme</span>
-                                    </div>
-                                </div>
-
-                                <div id="radoviFormAnchor"></div>
-
-                                <!-- Sticky timer bar -->
-                                <div class="agro-timer-sticky" id="agroTimerSticky">
-                                    <span id="agroTimerStickyText">⏱️ 00:00:00</span>
-                                </div>
-
-                                <!-- Step 1: Parcela (geo auto-detect + fallback) -->
-                                <div id="agroStep1">
-                                    <div class="agro-geo-banner manual" id="agroGeoBanner">
-                                        📍 Izaberite parcelu ili dozvolite GPS pristup
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label>Parcela</label>
-                                        <select id="agroParcelaSel">
-                                            <option value="">-- Izaberi parcelu --</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Meteo strip za izabranu parcelu -->
-                                    <div class="agro-meteo-strip" id="agroMeteoStrip" style="display:none;">
-                                        <span id="agroMeteoTemp">—</span>
-                                        <span id="agroMeteoWind">—</span>
-                                        <span id="agroMeteoHumidity">—</span>
-                                        <span id="agroMeteoPrecip">—</span>
-                                    </div>
-
-                                    <!-- Karenca upozorenje za parcelu -->
-                                    <div class="agro-karenca-warn" id="agroKarencaWarn">
-                                        <div style="font-weight:700;margin-bottom:4px;">🚫 KARENCA AKTIVNA</div>
-                                        <div id="agroKarencaText">—</div>
-                                    </div>
-        
-                                    <!-- Mera selection -->
-                                    <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">
-                                        Izaberite meru
-                                    </div>
-
-                                    <div class="agro-mera-grid">
-                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Zastita">🛡️ Zaštita</button>
-                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Prihrana">🌱 Prihrana</button>
-                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Rezidba">✂️ Rezidba</button>
-                                        <button class="agro-mera-btn" data-action="select-agro-mera" data-mera="Zalivanje">💧 Zalivanje</button>
-                                        <button class="agro-mera-btn" id="agroBerbaBtn" data-action="select-agro-mera" data-mera="Berba">🍎 Berba</button>
-                                        <div></div>
-                                    </div>
-
-                                    <!-- Meteo warning -->
-                                    <div class="agro-meteo-warn" id="agroMeteoWarn">
-                                        <div style="font-weight:700;margin-bottom:4px;" id="agroMeteoWarnTitle">⚠️ Upozorenje</div>
-                                        <div id="agroMeteoWarnText">—</div>
-                                        <button data-action="agro-meteo-override"
-                                            style="margin-top:8px;padding:8px 16px;background:var(--warning);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
-                                            Nastavi ipak
-                                        </button>
-                                    </div>
-
-                                    <!-- Preparat section -->
-                                    <div class="agro-preparat-section" id="agroPreparatSection">
-                                        <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">
-                                            Preparat sa lagera
-                                        </div>
-
-                                        <div class="form-group" style="margin-bottom:8px;">
-                                            <select id="agroPreparatSel" style="padding:10px;font-size:13px;">
-                                                <option value="">-- Izaberi preparat --</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="form-row" style="margin-bottom:8px;">
-                                            <div class="form-group" style="margin-bottom:0;">
-                                                <label>Količina</label>
-                                                <input type="number" id="agroKolicina" inputmode="decimal" placeholder="0" style="padding:10px;font-size:13px;">
-                                            </div>
-                                            <div class="form-group" style="margin-bottom:0;">
-                                                <label>JM</label>
-                                                <input type="text" id="agroJM" readonly style="padding:10px;font-size:13px;background:#f0f0f0;">
-                                            </div>
-                                        </div>
-
-                                        <div class="agro-preporuka" id="agroPreporuka">
-                                            <div style="font-size:11px;font-weight:700;color:var(--success);text-transform:uppercase;margin-bottom:6px;">
-                                                📋 Preporučena doza
-                                            </div>
-                                            <div id="agroPreporukaCalc" style="font-size:14px;font-weight:600;color:var(--primary);margin-bottom:4px;">—</div>
-                                            <div id="agroPreporukaDetail" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">—</div>
-                                            <button data-action="agro-primeni-preporuku"
-                                                style="padding:8px 16px;background:var(--success);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-                                                ✅ Primeni količinu
-                                            </button>
-                                        </div>
-
-                                        <div id="agroKarencaInfo" style="display:none;background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:12px;margin-top:8px;">
-                                            <span id="agroKarencaInfoText">—</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Napomena -->
-                                    <div class="form-group">
-                                        <label>Napomena (opciono)</label>
-                                        <input type="text" id="agroNapomena" placeholder="Detalji...">
-                                    </div>
-
-                                    <!-- Timer + Start -->
-                                    <div class="agro-timer" id="agroTimerPanel" style="display:none;">
-                                        <div class="agro-timer-display" id="agroTimerDisplay">00:00:00</div>
-                                        <div class="agro-timer-label" id="agroTimerLabel">—</div>
-                                    </div>
-
-                                    <button class="btn-primary" id="agroBtnStart" data-action="agro-start-rad" style="display:none;">▶ POČNI RAD</button>
-                                    <button class="btn-primary" id="agroBtnStop" data-action="agro-stop-rad" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
-                                </div>
-
-                                <!-- Step 2 -->
-                                <div id="agroStep2" style="display:none;">
-                                    <h3 style="color:var(--primary);margin-bottom:12px;">Potvrda tretmana</h3>
-                                    <div class="agro-confirm" id="agroConfirmPanel"></div>
-                                    <button class="btn-primary" data-action="agro-save-tretman">💾 SAČUVAJ</button>
-                                    <button class="btn-secondary" data-action="agro-back-to-step1">← Nazad</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- EVIDENCIJA -->
-                        <div class="radovi-section" id="radovi-section-istorija">
-                            <div class="radovi-evidencija-shell">
-
-                                <div class="radovi-evidencija-hero">
-                                    <div>
-                                        <div class="radovi-section-title">Evidencija rada</div>
-                                        <div class="radovi-section-subtitle">Pregled ranije evidentiranih tretmana i aktivnosti</div>
-                                    </div>
-                                </div>
-
-                                <div class="radovi-evidencija-toolbar">
-                                    <div class="radovi-evidencija-chip">
-                                        <span>📋</span>
-                                        <span>Istorija tretmana</span>
-                                    </div>
-                                    <div class="radovi-evidencija-chip radovi-evidencija-chip--muted">
-                                        <span>↓</span>
-                                        <span>Najnovije prvo</span>
-                                        </div>
-                                </div>
-
-                                <div class="radovi-evidencija-card">
-                                    <div class="radovi-evidencija-card-head">
-                                        <div class="radovi-evidencija-card-title">Sve evidentirane aktivnosti</div>
-                                        <div class="radovi-evidencija-card-subtitle">Najnovije stavke su prikazane prve</div>
-                                    </div>
-
-                                    <div id="agroTretmaniList" class="radovi-evidencija-list"></div>
-                                </div>
-
-                            </div>
-                        </div>
-
-                        <!-- OPREMA -->
-                        <!-- Oprema section -->
-                        <div class="radovi-section" id="radovi-section-oprema">
-                            <div class="radovi-oprema-shell">
-
-                                <div class="radovi-section-card">
-                                    <div class="radovi-section-head">
-                                        <div>
-                                            <div class="radovi-section-title">Oprema</div>
-                                            <div class="radovi-section-subtitle">Unos opreme i podešavanje podrazumevanih vrednosti</div>
-                                        </div>
-                                    </div>
-
-                                    <div class="radovi-info-box">
-                                        Oprema se unosi ovde, a podrazumevane vrednosti se zatim automatski prikazuju u sekciji Tretmani.
-                                    </div>
-
-                                    <div class="radovi-oprema-grid">
-                                        <div class="radovi-oprema-card">
-                                            <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
-                                            <div class="form-group" style="margin-bottom:10px;">
-                                                <label>Izaberi traktor</label>
-                                                <select id="agroTraktor" style="padding:10px;font-size:13px;">
-                                                    <option value="">-- Bez traktora --</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group" style="margin-bottom:0;">
-                                                <label>Unesi novi traktor</label>
-                                                <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;">
-                                            </div>
-                                        </div>
-
-                                        <div class="radovi-oprema-card">
-                                            <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
-                                            <div class="form-group" style="margin-bottom:10px;">
-                                                <label>Izaberi prskalicu / atomizer</label>
-                                                <select id="agroPrskalica" style="padding:10px;font-size:13px;">
-                                                    <option value="">-- Bez prskalice --</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group" style="margin-bottom:0;">
-                                                <label>Unesi novu prskalicu</label>
-                                              <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="radovi-section-card">
-                                    <div class="radovi-section-head">
-                                        <div>
-                                            <div class="radovi-section-title">Dodatna oprema</div>
-                                            <div class="radovi-section-subtitle">Ova vrednost može biti prikazana kao podrazumevana u Tretmanima</div>
-                                        </div>
-                                    </div>
-
-                                    <div class="form-group" style="margin-bottom:0;">
-                                        <label>Ostala oprema</label>
-                                        <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
-                                    </div>
-                                </div>
-
-                                <div class="radovi-section-card">
-                                    <div class="radovi-section-head">
-                                        <div>
-                                            <div class="radovi-section-title">Upotreba u Tretmanima</div>
-                                            <div class="radovi-section-subtitle">Podrazumevane vrednosti će se nuditi pri unosu rada</div>
-                                        </div>
-                                    </div>
-
-                                    <div class="radovi-oprema-summary">
-                                        <div class="radovi-oprema-summary-row">
-                                            <span>Traktor</span>
-                                            <strong id="radoviDefaultTraktorPreview">Biće prikazan iz izabrane vrednosti</strong>
-                                        </div>
-                                        <div class="radovi-oprema-summary-row">
-                                            <span>Prskalica</span>
-                                            <strong id="radoviDefaultPrskalicaPreview">Biće prikazana iz izabrane vrednosti</strong>
-                                        </div>
-                                        <div class="radovi-oprema-summary-row">
-                                            <span>Ostala oprema</span>
-                                            <strong id="radoviDefaultOstaloPreview">Može se menjati po radu</strong>
-                                        </div>
-                                    </div>
-
-                                    <div class="radovi-inline-actions">
-                                        <button class="radovi-secondary-btn" type="button" data-action="radovi-open-tretmani">
-                                            Otvori Tretmane
-                                        </button>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
-
-                        <!-- KALENDAR -->
-                        <div class="radovi-section" id="radovi-section-kalendar">
-                            <div class="radovi-kalendar-shell">
-
-                                <div class="radovi-kalendar-hero">
-                                    <div>
-                                        <div class="radovi-section-title">Kalendar radova</div>
-                                        <div class="radovi-section-subtitle">Pregled aktivnosti po datumima</div>
-                                    </div>
-                                </div>
-
-                                <div class="radovi-kalendar-toolbar">
-                                    <div class="radovi-kalendar-chip">
-                                        <span>🗓️</span>
-                                        <span>Hronološki pregled</span>
-                                    </div>
-                                    <div class="radovi-kalendar-chip radovi-kalendar-chip--muted">
-                                        <span>↓</span>
-                                        <span>Najnovije prvo</span>
-                                    </div>
-                                </div>
-
-                                <div class="radovi-kalendar-card">
-                                    <div class="radovi-kalendar-card-head">
-                                        <div class="radovi-kalendar-card-title">Plan i istorija aktivnosti</div>
-                                        <div class="radovi-kalendar-card-subtitle">Za v1 se prikazuju evidentirani radovi grupisani po datumu</div>
-                                    </div>
-
-                                    <div id="radoviKalendarList" class="radovi-kalendar-list"></div>
-                                </div>
-
-                            </div>
-                        </div>
-            
                     </div>
-                </section>
+
+                    <div class="radovi-section-card">
+                        <div class="radovi-section-head">
+                            <div>
+                                <div class="radovi-section-title">Upotreba u Tretmanima</div>
+                                <div class="radovi-section-subtitle">Podrazumevane vrednosti će se nuditi pri unosu rada</div>
+                            </div>
+                        </div>
+
+                        <div class="radovi-oprema-summary">
+                            <div class="radovi-oprema-summary-row">
+                                <span>Traktor</span>
+                                <strong id="radoviDefaultTraktorPreview">Biće prikazan iz izabrane vrednosti</strong>
+                            </div>
+                            <div class="radovi-oprema-summary-row">
+                                <span>Prskalica</span>
+                                <strong id="radoviDefaultPrskalicaPreview">Biće prikazana iz izabrane vrednosti</strong>
+                            </div>
+                            <div class="radovi-oprema-summary-row">
+                                <span>Ostala oprema</span>
+                                <strong id="radoviDefaultOstaloPreview">Može se menjati po radu</strong>
+                            </div>
+                        </div>
+
+                        <div class="radovi-inline-actions">
+                            <button class="radovi-secondary-btn" type="button" data-action="radovi-open-tretmani">
+                                Otvori Tretmane
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
             </div>
+
+            <!-- KALENDAR -->
+            <div class="radovi-section" id="radovi-section-kalendar">
+                <div class="radovi-kalendar-shell">
+
+                    <div class="radovi-kalendar-hero">
+                        <div>
+                            <div class="radovi-section-title">Kalendar radova</div>
+                            <div class="radovi-section-subtitle">Pregled aktivnosti po datumima</div>
+                        </div>
+                    </div>
+
+                    <div class="radovi-kalendar-toolbar">
+                        <div class="radovi-kalendar-chip">
+                            <span>🗓️</span>
+                            <span>Hronološki pregled</span>
+                        </div>
+                        <div class="radovi-kalendar-chip radovi-kalendar-chip--muted">
+                            <span>↓</span>
+                            <span>Najnovije prvo</span>
+                        </div>
+                    </div>
+
+                    <div class="radovi-kalendar-card">
+                        <div class="radovi-kalendar-card-head">
+                            <div class="radovi-kalendar-card-title">Plan i istorija aktivnosti</div>
+                            <div class="radovi-kalendar-card-subtitle">Za v1 se prikazuju evidentirani radovi grupisani po datumu</div>
+                        </div>
+
+                        <div id="radoviKalendarList" class="radovi-kalendar-list"></div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </section>
+</div>
 
 <div class="tab-content" id="tab-knjigapolja">
     <section class="knjiga-screen">
@@ -1670,7 +1599,7 @@
                             </div>
                         </div>
 
-                        <button class="btn-primary" data-action="kp-save-trosak" style="margin-top:4px;">💾 Sačuvaj trošak</button>
+                        <button type="button" class="btn-primary" data-action="kp-save-trosak" style="margin-top:4px;">💾 Sačuvaj trošak</button>
                     </div>
                 </div>
             </div>
@@ -1686,7 +1615,7 @@
                         </div>
                     </div>
 
-                    <button class="qr-scan-btn" data-action="start-fiskalni-scan" style="background:var(--accent);">
+                    <button type="button" class="qr-scan-btn" data-action="start-fiskalni-scan" style="background:var(--accent);">
                         📷 Slikaj račun
                     </button>
 
@@ -1696,8 +1625,8 @@
                         <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
                         <div id="fiskalniStavke"></div>
                         <div style="display:flex;gap:8px;margin-top:8px;">
-                            <button class="btn-primary" data-action="fiskalni-save-to-lager" style="flex:1;">✅ Prenesi u lager</button>
-                            <button class="btn-secondary" data-action="fiskalni-cancel" style="flex:1;margin-top:0;">Otkaži</button>
+                            <button type="button" class="btn-primary" data-action="fiskalni-save-to-lager" style="flex:1;">✅ Prenesi u lager</button>
+                            <button type="button" class="btn-secondary" data-action="fiskalni-cancel" style="flex:1;margin-top:0;">Otkaži</button>
                         </div>
                     </div>
                 </div>
@@ -1726,7 +1655,7 @@
                     <div id="kpPotrosnjaList"></div>
                 </div>
             </div>
-                        <!-- stari tretmani ostaju skriveni / sekundarni -->
+                        <!-- stari tretmani: kpTretmaniTitle i kpTretmaniList koristi knjiga-polja.js (~linija 319) pa se ne može ukloniti -->
                         <div style="display:none;">
                             <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
                             <div id="kpTretmaniList"></div>
@@ -1867,8 +1796,8 @@
 
                 <div class="mgmt-dash-kpi-card">
                     <div class="mgmt-dash-kpi-label">GGAP spremnost</div>
-                    <div class="mgmt-dash-kpi-value" id="mgmtDashGGAP">86%</div>
-                    <div class="mgmt-dash-kpi-sub">mock za sada</div>
+                    <div class="mgmt-dash-kpi-value" id="mgmtDashGGAP">—</div>
+                    <div class="mgmt-dash-kpi-sub">U pripremi</div>
                 </div>
             </div>
 
@@ -1972,8 +1901,8 @@
                 <div class="dp-banner" id="dpBnr">
                     <div class="dp-bt" id="dpBt">—</div>
                     <div class="dp-bs" id="dpBs">—</div>
-                    <button data-action="dp-ok" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
-                    <button data-action="dp-x" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
+                    <button type="button" data-action="dp-ok" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
+                    <button type="button" data-action="dp-x" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
                 </div>
  
                 <!-- Active plans -->
@@ -2013,7 +1942,7 @@
                                 <div style="display:flex;gap:6px;">
                                     <select id="dpDV" style="flex:1;padding:8px;font-size:12px;border:1.5px solid var(--border-strong);border-radius:8px;"><option value="">Vrsta...</option></select>
                                     <select id="dpDL" style="width:70px;padding:8px;font-size:12px;border:1.5px solid var(--border-strong);border-radius:8px;"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
-                                    <button data-action="dp-ad" style="padding:8px 14px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">+</button>
+                                    <button type="button" data-action="dp-ad" style="padding:8px 14px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">+</button>
                                 </div>
                             </div>
                             <div class="disp-col__list" id="dpDL2"></div>
@@ -2023,7 +1952,7 @@
  
                 <div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted);">
                     <span id="dpRT">—</span>
-                    <button data-action="load-dispecer" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
+                    <button type="button" data-action="load-dispecer" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
                 </div>
             </div>
         </div>
@@ -2033,7 +1962,7 @@
                 class="intercom-listen-banner"
                 style="display:none">
                 🎧 Slušate: <strong><span id="intercom-listen-name"></span></strong>
-                <button class="btn-sm btn-danger"
+                <button type="button" class="btn-sm btn-danger"
                         data-action="intercom-stop">■ Stop</button>
             </div>
             <div id="intercom-session-list">
@@ -2054,9 +1983,9 @@
             </div>
 
             <div class="sub-tab-bar" id="mgmtOtkupSubBar">
-                <button class="sub-tab-btn active" data-action="mgmt-otkup-sub" data-sub="otkupi">Otkupi</button>
-                <button class="sub-tab-btn" data-action="mgmt-otkup-sub" data-sub="roba">Roba</button>
-                <button class="sub-tab-btn" data-action="mgmt-otkup-sub" data-sub="saldo">Saldo mesta</button>
+                <button type="button" class="sub-tab-btn active" data-action="mgmt-otkup-sub" data-sub="otkupi">Otkupi</button>
+                <button type="button" class="sub-tab-btn" data-action="mgmt-otkup-sub" data-sub="roba">Roba</button>
+                <button type="button" class="sub-tab-btn" data-action="mgmt-otkup-sub" data-sub="saldo">Saldo mesta</button>
             </div>
 
             <div id="mgmtOtkupMount">
@@ -2132,8 +2061,8 @@
             </div>
 
             <div class="mgmt-seg-bar" id="mgmtPartnerSegmentBar">
-                <button class="mgmt-seg-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="mgmt-seg-count" id="mgmtKoopCount">0</span></button>
-                <button class="mgmt-seg-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="mgmt-seg-count" id="mgmtKupCount">0</span></button>
+                <button type="button" class="mgmt-seg-btn active" data-action="mgmt-partner-segment" data-segment="kooperanti">Kooperanti <span class="mgmt-seg-count" id="mgmtKoopCount">0</span></button>
+                <button type="button" class="mgmt-seg-btn" data-action="mgmt-partner-segment" data-segment="kupci">Kupci <span class="mgmt-seg-count" id="mgmtKupCount">0</span></button>
             </div>
 
             <div id="mgmtPartneriMount">
@@ -2141,9 +2070,9 @@
                 <!-- ===== KOOPERANTI SECTION ===== -->
                 <div id="mgmt-koop-section">
                     <div class="sub-tab-bar" id="mgmtPartnerKoopSubBar">
-                        <button class="sub-tab-btn active" data-action="mgmt-koop-sub" data-sub="pregled">Pregled</button>
-                        <button class="sub-tab-btn" data-action="mgmt-koop-sub" data-sub="saldo">Saldo</button>
-                        <button class="sub-tab-btn" data-action="mgmt-koop-sub" data-sub="kartica">Kartica</button>
+                        <button type="button" class="sub-tab-btn active" data-action="mgmt-koop-sub" data-sub="pregled">Pregled</button>
+                        <button type="button" class="sub-tab-btn" data-action="mgmt-koop-sub" data-sub="saldo">Saldo</button>
+                        <button type="button" class="sub-tab-btn" data-action="mgmt-koop-sub" data-sub="kartica">Kartica</button>
                     </div>
 
                     <!-- Pregled panel (mobile only; hidden on desktop) -->
@@ -2177,9 +2106,9 @@
                 <!-- ===== KUPCI SECTION ===== -->
                 <div id="mgmt-kup-section" style="display:none;">
                     <div class="sub-tab-bar" id="mgmtPartnerKupSubBar">
-                        <button class="sub-tab-btn active" data-action="mgmt-kup-sub" data-sub="saldo">Saldo</button>
-                        <button class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="fakture">Fakture</button>
-                        <button class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="roba">Roba</button>
+                        <button type="button" class="sub-tab-btn active" data-action="mgmt-kup-sub" data-sub="saldo">Saldo</button>
+                        <button type="button" class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="fakture">Fakture</button>
+                        <button type="button" class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="roba">Roba</button>
                     </div>
 
                     <!-- Split: kupci saldo list (left) + fakture detail (right) -->
@@ -2331,7 +2260,7 @@
                             <div class="form-group" style="margin-bottom:10px;">
                                 <div style="display:flex;gap:8px;">
                                     <select id="izdKooperant" style="flex:1;"><option value="">-- Izaberi kooperanta --</option></select>
-                                    <button class="iz-scan" style="width:auto;padding:10px 14px;margin:0;font-size:14px;border-radius:var(--radius);" data-action="start-izd-koop-scan">📷</button>
+                                    <button type="button" class="iz-scan" style="width:auto;padding:10px 14px;margin:0;font-size:14px;border-radius:var(--radius);" data-action="start-izd-koop-scan">📷</button>
                                 </div>
                             </div>
                             <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
@@ -2354,9 +2283,9 @@
                                 <div class="iz-doza__title">📋 Preporučena doza</div>
                                 <div class="iz-doza__calc" id="izdPreporukaCalc">—</div>
                                 <div class="iz-doza__detail" id="izdPreporukaDetail">—</div>
-                                <button class="iz-doza__apply" data-action="izd-primeni-preporuku">✅ Primeni količinu</button>
+                                <button type="button" class="iz-doza__apply" data-action="izd-primeni-preporuku">✅ Primeni količinu</button>
                             </div>
-                            <button class="iz-scan" data-action="start-izd-barcode-scan">
+                            <button type="button" class="iz-scan" data-action="start-izd-barcode-scan">
                                 <span data-ag-icon="camera"></span> Skeniraj barkod
                             </button>
                             <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
@@ -2368,7 +2297,7 @@
                             <div class="form-group" style="margin-bottom:10px;">
                                 <input type="number" id="izdKolicina" placeholder="Količina" inputmode="decimal" value="1">
                             </div>
-                            <button class="iz-btn--primary" data-action="izd-dodaj-stavku">+ Dodaj u korpu</button>
+                            <button type="button" class="iz-btn--primary" data-action="izd-dodaj-stavku">+ Dodaj u korpu</button>
                         </div>
                     </div>
 
@@ -2389,8 +2318,8 @@
                             </div>
                         </div>
                         <div class="iz-actions">
-                            <button class="iz-btn--primary" data-action="izd-zavrsi">Potpis i otpremnica →</button>
-                            <button class="iz-btn--secondary" data-action="izd-reset">Poništi</button>
+                            <button type="button" class="iz-btn--primary" data-action="izd-zavrsi">Potpis i otpremnica →</button>
+                            <button type="button" class="iz-btn--secondary" data-action="izd-reset">Poništi</button>
                         </div>
                     </div>
 
@@ -2636,7 +2565,7 @@
         <div class="vbody" style="padding-bottom:100px;">
             <div class="sec-lbl">
                 <span class="sec-lbl__t">Otpremnice danas</span>
-                <button class="wz-btn wz-btn--pri" data-action="start-zbirna-creation" id="btnNovaZbirna" style="display:none;padding:8px 14px;font-size:12px;">Nova zbirna</button>
+                <button type="button" class="wz-btn wz-btn--pri" data-action="start-zbirna-creation" id="btnNovaZbirna" style="display:none;padding:8px 14px;font-size:12px;">Nova zbirna</button>
             </div>
             <div id="vozacOtpremniceList"></div>
             <div class="sec-lbl" style="margin-top:16px;">
@@ -2675,7 +2604,7 @@
                 <div class="more-subtitle">Dodatne opcije gazdinstva</div>
 
                 <div class="more-menu">
-                    <button class="more-menu-item" data-route="tab" data-tab="kartica">
+                    <button type="button" class="more-menu-item" data-route="tab" data-tab="kartica">
                         <span class="more-menu-icon">📒</span>
                         <span class="more-menu-text">
                             <strong>Kartica sa otkupljivačem</strong>
@@ -2683,7 +2612,7 @@
                         </span>
                     </button>
 
-                    <button class="more-menu-item" data-route="tab" data-tab="koopinfo">
+                    <button type="button" class="more-menu-item" data-route="tab" data-tab="koopinfo">
                         <span class="more-menu-icon">ℹ</span>
                         <span class="more-menu-text">
                             <strong>Otkup informacije</strong>
@@ -2691,7 +2620,7 @@
                         </span>
                     </button>
 
-                    <button class="more-menu-item" data-action="more-fiskalni-racuni">
+                    <button type="button" class="more-menu-item" data-action="more-fiskalni-racuni">
                         <span class="more-menu-icon">🧾</span>
                         <span class="more-menu-text">
                             <strong>Fiskalni računi</strong>
@@ -2699,7 +2628,7 @@
                         </span>
                     </button>
 
-                    <button class="more-menu-item" data-action="sync-kooperant-from-more">
+                    <button type="button" class="more-menu-item" data-action="sync-kooperant-from-more">
                         <span class="more-menu-icon">↻</span>
                         <span class="more-menu-text">
                             <strong>Offline i sinhronizacija</strong>
@@ -2715,27 +2644,27 @@
 
 <!-- BOTTOM NAV -->
 <div class="bottom-nav role-kooperant" id="koopBottomNav">
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="home">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="home">
         <span class="bottom-nav-icon" data-ag-icon="home"></span>
         <span class="bottom-nav-label">Pregled</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="parcele">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="parcele">
         <span class="bottom-nav-icon" data-ag-icon="map"></span>
         <span class="bottom-nav-label">Parcele</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="agromere">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="agromere">
         <span class="bottom-nav-icon" data-ag-icon="tractor"></span>
         <span class="bottom-nav-label">Radovi</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="knjigapolja">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="knjigapolja">
         <span class="bottom-nav-icon" data-ag-icon="clipboard"></span>
         <span class="bottom-nav-label">Knjiga</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="more">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="more">
         <span class="bottom-nav-icon" data-ag-icon="more"></span>
         <span class="bottom-nav-label">Više</span>
     </button>
@@ -2743,22 +2672,22 @@
 
 <!-- OTKUPAC BOTTOM NAV -->
 <div class="bottom-nav role-otkupac" id="otkupBottomNav">
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otkup">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otkup">
         <span class="bottom-nav-icon" data-ag-icon="plus"></span>
         <span class="bottom-nav-label">Otkup</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="pregled">
         <span class="bottom-nav-icon" data-ag-icon="home"></span>
         <span class="bottom-nav-label">Danas</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otpremnice">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="otpremnice">
         <span class="bottom-nav-icon" data-ag-icon="truck"></span>
         <span class="bottom-nav-label">Otprema</span>
     </button>
 
-    <button class="bottom-nav-btn" data-action="role-nav-tab" data-tab="queue">
+    <button type="button" class="bottom-nav-btn" data-action="role-nav-tab" data-tab="queue">
         <span class="bottom-nav-icon" data-ag-icon="more"></span>
         <span class="bottom-nav-label">Više</span>
     </button>
@@ -2815,8 +2744,74 @@
     </div>
 </div>
 
+<!-- MODALS (root level — position:fixed works correctly outside tab-content) -->
+
+<div class="danas-detail-modal" id="pregledDetailModal">
+    <div class="danas-detail-card">
+        <div class="danas-detail-head">
+            <div>
+                <div class="danas-detail-title">Detalj otkupa</div>
+                <div class="danas-detail-subtitle" id="pregledDetailDate">-</div>
+            </div>
+            <button class="danas-detail-close" type="button" data-action="close-pregled-detail" aria-label="Zatvori">
+                <span data-ag-icon="x"></span>
+            </button>
+        </div>
+        <div class="danas-detail-grid" id="pregledDetailGrid"></div>
+        <div class="danas-detail-actions">
+            <button class="btn-v2 btn-v2--secondary" type="button" data-action="close-pregled-detail">Zatvori</button>
+            <button class="btn-v2 btn-v2--primary" type="button" data-action="open-pregled-otkupni-list">Otvori otkupni list</button>
+        </div>
+    </div>
+</div>
+
+<div class="otprema-detail-modal" id="otpremaDetailModal">
+    <div class="otprema-detail-card">
+        <div class="otprema-detail-head">
+            <div class="otprema-detail-title" id="otpremaDetailTitle">Detalj otpreme</div>
+            <button type="button" class="otprema-detail-close" data-action="close-otprema-detail" aria-label="Zatvori">
+                <span data-ag-icon="x"></span>
+            </button>
+        </div>
+        <div class="otprema-detail-body" id="otpremaDetailBody"></div>
+        <div class="otprema-detail-actions">
+            <button type="button" class="btn-v2 btn-v2--secondary" data-action="close-otprema-detail">Zatvori</button>
+        </div>
+    </div>
+</div>
+
+<div class="home-quick-modal" id="homeQuickActionsModal">
+    <div class="home-quick-sheet">
+        <div class="home-quick-handle"></div>
+        <div class="home-quick-title">Brze akcije</div>
+        <button type="button" class="home-quick-item" data-action="home-quick-new-rad">
+            <span>🛠️</span>
+            <span>Novi rad</span>
+        </button>
+        <button type="button" class="home-quick-item" data-action="home-quick-new-trosak">
+            <span>💰</span>
+            <span>Novi trošak</span>
+        </button>
+        <button type="button" class="home-quick-item" data-action="home-quick-scan-racun">
+            <span>🧾</span>
+            <span>Slikaj račun</span>
+        </button>
+        <button type="button" class="home-quick-item" data-action="home-quick-kartica">
+            <span>📒</span>
+            <span>Kartica</span>
+        </button>
+        <button type="button" class="home-quick-item" data-action="home-quick-knjiga-polja">
+            <span>📘</span>
+            <span>Knjiga polja</span>
+        </button>
+        <button type="button" class="home-quick-cancel" data-action="close-home-quick-actions">
+            Otkaži
+        </button>
+    </div>
+</div>
+
 <!-- TOAST -->
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="alert" aria-live="polite" aria-atomic="true"></div>
 
 <!-- 1. Utils (nema zavisnosti) -->
 <script src="./src/js/utils/storage.js" defer></script>
