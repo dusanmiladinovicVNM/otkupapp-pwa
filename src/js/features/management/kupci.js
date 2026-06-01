@@ -119,32 +119,36 @@ async function loadMgmtKupci() {
     // Sort by saldo descending
     const sorted = [...records].sort((a, b) => (parseFloat(b.Saldo)||0) - (parseFloat(a.Saldo)||0));
 
-    list.innerHTML = `
-        <div class="partner-list">
-            <div class="partner-list__head">
-                <span class="partner-list__title">Kupci — po saldu</span>
+    try {
+        list.innerHTML = `
+            <div class="partner-list">
+                <div class="partner-list__head">
+                    <span class="partner-list__title">Kupci — po saldu</span>
+                </div>
+                ${sorted.map(r => {
+                    const saldo = parseFloat(r.Saldo) || 0;
+                    const name = r.Kupac || r.KupacID || '?';
+                    const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
+                    const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
+                    return `
+                        <div class="partner" data-kupac-id="${escapeHtml(String(r.KupacID || r.Kupac || ''))}" data-action="mgmt-kup-select">
+                            <div class="partner__avatar" style="background:var(--gold-soft);color:var(--gold);">${escapeHtml(initials)}</div>
+                            <div>
+                                <div class="partner__name">${escapeHtml(name)}</div>
+                                <div class="partner__meta">Fakt: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} · Plaćeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div>
+                            </div>
+                            <div class="partner__saldo partner__saldo--${saldoMod}">
+                                ${saldo > 0 ? '+' : ''}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
             </div>
-            ${sorted.map(r => {
-                const saldo = parseFloat(r.Saldo) || 0;
-                const name = r.Kupac || r.KupacID || '?';
-                const initials = name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0,2).toUpperCase();
-                // Positive saldo = kupac duguje (warn), negative = kompanija duguje (ok)
-                const saldoMod = saldo > 0 ? 'warn' : saldo < 0 ? 'ok' : 'neutral';
-                return `
-                    <div class="partner" data-kupac-id="${escapeHtml(String(r.KupacID || r.Kupac || ''))}" data-action="mgmt-kup-select">
-                        <div class="partner__avatar" style="background:var(--gold-soft);color:var(--gold);">${escapeHtml(initials)}</div>
-                        <div>
-                            <div class="partner__name">${escapeHtml(name)}</div>
-                            <div class="partner__meta">Fakt: ${(parseFloat(r.Fakturisano)||0).toLocaleString('sr')} · Plaćeno: ${(parseFloat(r.Placeno)||0).toLocaleString('sr')}</div>
-                        </div>
-                        <div class="partner__saldo partner__saldo--${saldoMod}">
-                            ${saldo > 0 ? '+' : ''}${saldo.toLocaleString('sr')}<span class="u">RSD</span>
-                        </div>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
+        `;
+    } catch (e) {
+        console.error('loadMgmtKupci render error:', e);
+        list.innerHTML = '<p style="color:red;padding:16px;">Greška pri prikazu liste kupaca. Proverite konzolu.</p>';
+    }
 }
 
 // Click delegate: selecting kupac from list loads their fakture
