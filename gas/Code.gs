@@ -3324,8 +3324,9 @@ function saveIzdavanje(data) {
 
     const izdavanjeID = 'IZD-' + Date.now();
     const today = Utilities.formatDate(new Date(), 'Europe/Belgrade', 'yyyy-MM-dd');
+    const nowIso = new Date().toISOString();
 
-    sheet.appendRow([
+    const rowValues = [
       izdavanjeID,
       today,
       data.kooperantID || '',
@@ -3335,15 +3336,41 @@ function saveIzdavanje(data) {
       parseFloat(data.ukupnaVrednost) || 0,
       data.izdaoUser || '',
       data.napomena || '',
-      '', // SigIzdavalac — popuniće se iz PDF flow-a ako treba
+      '', // SigIzdavalac
       '', // SigPrimalac
-      new Date().toISOString()
-    ]);
+      nowIso
+    ];
+
+    sheet.appendRow(rowValues);
+
+    if (data.kooperantID) {
+      _appendToKoopIzdavanjeSheet(data.kooperantID, rowValues);
+    }
 
     return { success: true, izdavanjeID: izdavanjeID };
   } catch (err) {
-      logError('GAS', 'saveIzdavanje', err.message, err.stack || '', data.kooperantID || '');
-      return { success: false, error: err.message };
+    logError('GAS', 'saveIzdavanje', err.message, err.stack || '', data.kooperantID || '');
+    return { success: false, error: err.message };
+  }
+}
+
+function _appendToKoopIzdavanjeSheet(kooperantID, rowValues) {
+  try {
+    const sheetName = 'IZD-' + kooperantID;
+    const koopSs = getOrCreateSheet(sheetName, IZDAVANJE_COLUMNS);
+    const koopSheet = koopSs.getSheets()[0];
+    ensureSheetColumns(koopSheet, IZDAVANJE_COLUMNS);
+
+    const headers = koopSheet.getRange(1, 1, 1, koopSheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    const idx = headerIndexMap(headers);
+
+    // avoid duplicates — IzdavanjeID is column 0 in rowValues
+    const existingRow = findByColumn(koopSheet, idx.IzdavanjeID, rowValues[0]);
+    if (existingRow > 0) return;
+
+    koopSheet.appendRow(rowValues);
+  } catch (err) {
+    logError('GAS', '_appendToKoopIzdavanjeSheet', err.message, err.stack || '', kooperantID);
   }
 }
 
