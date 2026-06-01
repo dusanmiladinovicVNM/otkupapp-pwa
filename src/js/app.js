@@ -5,6 +5,48 @@ function getAppRuntime() {
     return window.appRuntime;
 }
 
+// ── Bootstrap error boundary ──────────────────────────────
+// Inline stilovi su namerni — radi i ako CSS fajlovi ne učitaju.
+function showBootError(err) {
+    const loader = document.getElementById('appLoader');
+    if (loader) loader.style.display = 'none';
+
+    const existing = document.getElementById('bootErrorScreen');
+    if (existing) return;
+
+    const msg = (err && err.message) ? err.message : String(err || 'Nepoznata greška');
+
+    const screen = document.createElement('div');
+    screen.id = 'bootErrorScreen';
+    screen.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;background:#F7F4EE;font-family:system-ui,sans-serif;z-index:9999;text-align:center;';
+    screen.innerHTML =
+        '<div style="font-size:32px;margin-bottom:16px;">⚠️</div>' +
+        '<div style="font-size:17px;font-weight:700;color:#1E2D14;margin-bottom:8px;">Aplikacija nije mogla da se pokrene</div>' +
+        '<div style="font-size:13px;color:#7A856E;margin-bottom:24px;max-width:320px;">' + msg + '</div>' +
+        '<button id="bootErrReload" style="padding:12px 28px;background:#5EA135;color:white;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:12px;width:100%;max-width:280px;">Pokušaj ponovo</button>' +
+        '<button id="bootErrLogout" style="padding:12px 28px;background:none;color:#7A856E;border:1px solid #d0ccc4;border-radius:10px;font-size:14px;cursor:pointer;width:100%;max-width:280px;">Odjavi se i resetuj</button>';
+
+    document.body.appendChild(screen);
+
+    document.getElementById('bootErrReload').onclick = function () { window.location.reload(); };
+    document.getElementById('bootErrLogout').onclick = function () {
+        try { if (typeof doLogout === 'function') doLogout(); } catch (_) {}
+        localStorage.clear();
+        window.location.reload();
+    };
+}
+
+// Global net — hvata neočekivane greške tokom boot-a (pre appReady)
+window.addEventListener('error', function (e) {
+    if (getAppRuntime().appReady) return;
+    showBootError(e.error || e.message);
+});
+window.addEventListener('unhandledrejection', function (e) {
+    if (getAppRuntime().appReady) return;
+    showBootError(e.reason);
+});
+// ─────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', bootstrapApp);
 
 async function bootstrapApp() {
@@ -55,9 +97,9 @@ async function bootstrapApp() {
                 source: 'app',
                 errorAction: 'bootstrapApp'
             });
-        }        
+        }
 
-        showToast('Greška pri pokretanju aplikacije', 'error');
+        showBootError(err);
     } finally {
         // UVEK sakrij loader — čak i ako boot pukne
         hideLoader();
