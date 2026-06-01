@@ -1248,12 +1248,12 @@
                         </div>
 
                         <button type="button" class="btn-primary" id="agroBtnStart" data-action="agro-start-rad" hidden>▶ POČNI RAD</button>
-                        <button type="button" class="btn-primary" id="agroBtnStop" data-action="agro-stop-rad" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
+                        <button type="button" class="btn-primary agro-btn-stop" id="agroBtnStop" data-action="agro-stop-rad" hidden>⏹ ZAVRŠI RAD</button>
                     </div>
 
                     <!-- Step 2 -->
                     <div id="agroStep2" hidden>
-                        <h3 style="color:var(--primary);margin-bottom:12px;">Potvrda tretmana</h3>
+                        <h3 class="text-primary mb-12">Potvrda tretmana</h3>
                         <div class="agro-confirm" id="agroConfirmPanel"></div>
                         <button type="button" class="btn-primary" data-action="agro-save-tretman">💾 SAČUVAJ</button>
                         <button type="button" class="btn-secondary" data-action="agro-back-to-step1">← Nazad</button>
@@ -2028,12 +2028,12 @@
                 </div>
 
                 <div class="mgmt-sub sub-content" id="mgmt-sta-roba">
-                    <h3 style="color:var(--primary);margin-bottom:12px;">Otkupljene količine po stanicama</h3>
+                    <h3 class="text-primary mb-12">Otkupljene količine po stanicama</h3>
                     <div id="mgmtOtkupPoOMList"></div>
                 </div>
 
                 <div class="mgmt-sub sub-content" id="mgmt-sta-saldo">
-                    <h3 style="color:var(--primary);margin-bottom:12px;">Saldo otkupnih mesta</h3>
+                    <h3 class="text-primary mb-12">Saldo otkupnih mesta</h3>
                     <div id="mgmtSaldoOMList"></div>
                 </div>
                 
@@ -2123,7 +2123,7 @@
                     </div>
 
                     <div class="mgmt-sub sub-content" id="mgmt-kup-roba">
-                        <h3 style="color:var(--primary);margin-bottom:12px;">Predate količine po kupcima</h3>
+                        <h3 class="text-primary mb-12">Predate količine po kupcima</h3>
                         <div id="mgmtPredatoList"></div>
                     </div>
                 </div>
@@ -2310,7 +2310,7 @@
                         <div class="iz-summary">
                             <div class="iz-summary__row"><span>Napomena</span></div>
                             <div style="padding:0 0 10px;">
-                                <input type="text" id="izdNapomena" placeholder="Opciona napomena..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;">
+                                <input type="text" id="izdNapomena" class="iz-napomena-input" placeholder="Opciona napomena...">
                             </div>
                             <div class="iz-summary__row iz-summary__row--total">
                                 <span>UKUPNO</span>

@@ -2846,3 +2846,11 @@
     cursor: default;
     color: var(--text-muted);
 }
+
+/* ─────────────────────────────────────────
+   Agromere button variants
+   ───────────────────────────────────────── */
+
+.agro-btn-stop {
+    background: var(--color-error) !important;
+}

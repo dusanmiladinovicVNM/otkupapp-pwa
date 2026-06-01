@@ -2539,3 +2539,32 @@ body.has-mgmt-bottom-nav .tab-content {
     cursor: pointer;
     margin-left: 6px;
 }
+
+/* ─────────────────────────────────────────
+   Agrohemija izdavanje wizard — form specifics
+   ───────────────────────────────────────── */
+
+.iz-napomena-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.iz-parcele-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.iz-parcele-note {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
