@@ -3,7 +3,7 @@
 // ============================================================
 
 window.mgmtShellState = {
-    activeRoot: 'pregled',
+    activeRoot: 'dashboard',
     partnerSegment: 'kooperanti',
     koopSub: 'pregled',
     kupSub: 'fakture',
@@ -166,7 +166,7 @@ async function mgmtShellInit() {
         }
     }
 
-    await showMgmtRoot('pregled');
+    await showMgmtRoot('dashboard');
 
     if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
     if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
