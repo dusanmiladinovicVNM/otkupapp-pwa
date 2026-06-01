@@ -176,3 +176,21 @@ body {
 .pb-body { padding-bottom: calc(var(--app-role-nav-h, 50px) + 44px); }
 
 .text-primary { color: var(--text-primary); }
+
+/* ─────────────────────────────────────────
+   Eyebrow — section label above content
+   ───────────────────────────────────────── */
+
+.eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.eyebrow--success { color: var(--color-success); }
+.eyebrow--primary { color: var(--text-primary); }
+.eyebrow--sm { letter-spacing: 0.08em; margin-bottom: 6px; }
