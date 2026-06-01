@@ -3385,6 +3385,8 @@ function getMgmtAgroFeed(limit) {
         UkupnaVrednost: parseFloat(r.UkupnaVrednost) || 0,
         IzdaoUser: r.IzdaoUser || '',
         Napomena: r.Napomena || '',
+        SigIzdavalac: r.SigIzdavalac || '',
+        SigPrimalac: r.SigPrimalac || '',
         CreatedAt: r.CreatedAt || ''
       };
     });
