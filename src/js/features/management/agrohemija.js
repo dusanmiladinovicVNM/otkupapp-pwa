@@ -835,7 +835,7 @@ let _otpCurrentData = null;
  * @param {'main'|'izdavanje'|'otpremnica'} view
  */
 function showMgmtAgroView(view) {
-    const VIEWS = ['main', 'izdavanje', 'otpremnica'];
+    const VIEWS = ['main', 'izdavanje', 'otpremnica', 'pregled'];
     VIEWS.forEach(v => {
         const el = document.getElementById('mgmt-agro-' + v);
         if (el) el.style.display = (v === view) ? '' : 'none';
@@ -910,9 +910,9 @@ async function _loadAgroFeedFromFirebase(feed, feedSub) {
             .slice(0, 20);
         if (feedSub) feedSub.textContent = items.length + ' posled. izdavanja';
 
-        feed.innerHTML = items.map(iz => {
+        feed.innerHTML = items.map((iz, idx) => {
             const ukupno = parseFloat(iz.UkupnaVrednost || 0);
-            return `<div class="artikal" style="cursor:default;">
+            return `<div class="artikal artikal--clickable" data-feed-idx="${idx}" style="cursor:pointer;" role="button" tabindex="0">
                 <div class="artikal__cat artikal__cat--gold">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9h12l-1 10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 9Z"/><path d="M8 9V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3"/></svg>
                 </div>
@@ -923,10 +923,97 @@ async function _loadAgroFeedFromFirebase(feed, feedSub) {
                 <div class="artikal__stock">${ukupno.toLocaleString('sr')}<span class="u">RSD</span></div>
             </div>`;
         }).join('');
+
+        // Klik na feed item → detalj panel
+        feed.querySelectorAll('.artikal--clickable').forEach(el => {
+            el.addEventListener('click', () => {
+                const iz = items[parseInt(el.dataset.feedIdx, 10)];
+                if (iz) showAgroIzdavanjeDetalj(iz);
+            });
+            el.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    el.click();
+                }
+            });
+        });
     } catch (e) {
         feed.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Nema podataka za prikaz.</div>';
     }
 }
+
+// ── Izdavanje detalj (iz feed-a) ──────────────────────────────
+
+function showAgroIzdavanjeDetalj(iz) {
+    const koop = ((window.stammdaten && stammdaten.kooperanti) || [])
+        .find(k => k.KooperantID === iz.KooperantID) || {};
+
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+
+    setEl('agroPreglIme', koop.Ime ? koop.Ime + ' ' + (koop.Prezime || '') : (iz.KooperantName || iz.KooperantID || '—'));
+    setEl('agroPreglBroj', iz.IzdavanjeID || '—');
+    setEl('agroPreglDatum', iz.Datum || '—');
+    setEl('agroPreglIzdao', iz.IzdaoUser || '—');
+
+    setHtml('agroPreglKoopBlock', `
+        <strong>${escapeHtml(koop.Ime || '')} ${escapeHtml(koop.Prezime || '')}</strong>
+        ${koop.Adresa ? '<br>' + escapeHtml(koop.Adresa) + (koop.Mesto ? ', ' + escapeHtml(koop.Mesto) : '') : ''}
+        ${koop.JMBG ? '<br>JMBG: ' + escapeHtml(koop.JMBG) : ''}
+        ${koop.BPGBroj ? ' · BPG: ' + escapeHtml(koop.BPGBroj) : ''}
+        ${iz.ParcelaID ? '<br><span style="font-size:12px;color:var(--text-muted);">Parcele: ' + escapeHtml(iz.ParcelaID) + '</span>' : ''}
+    `);
+
+    const stavke = Array.isArray(iz.Stavke) ? iz.Stavke : [];
+    if (stavke.length) {
+        setHtml('agroPreglStavkeTable', `
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--border,#e0e0d8);text-align:left;">
+                        <th style="padding:6px 8px;">#</th>
+                        <th style="padding:6px 8px;">Artikal</th>
+                        <th style="padding:6px 8px;text-align:center;">Količina</th>
+                        <th style="padding:6px 8px;text-align:right;">Cena/jm</th>
+                        <th style="padding:6px 8px;text-align:right;">Vrednost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${stavke.map((s, i) => `
+                        <tr style="border-bottom:1px solid var(--border,#e0e0d8);">
+                            <td style="padding:6px 8px;color:var(--text-muted);">${i + 1}</td>
+                            <td style="padding:6px 8px;font-weight:500;">${escapeHtml(s.naziv || s.Naziv || '—')}</td>
+                            <td style="padding:6px 8px;text-align:center;">${s.kolicina || s.Kolicina || 0} ${escapeHtml(s.jm || s.JM || '')}</td>
+                            <td style="padding:6px 8px;text-align:right;">${Number(s.cena || s.Cena || 0).toLocaleString('sr')}</td>
+                            <td style="padding:6px 8px;text-align:right;font-weight:600;">${Number(s.vrednost || s.Vrednost || 0).toLocaleString('sr')} RSD</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `);
+    } else {
+        setHtml('agroPreglStavkeTable', '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px;">Nema stavki</div>');
+    }
+
+    setEl('agroPreglUkupno', Number(iz.UkupnaVrednost || 0).toLocaleString('sr') + ' RSD');
+
+    const nap = document.getElementById('agroPreglNapomenaRow');
+    if (nap) nap.style.display = iz.Napomena ? '' : 'none';
+    setEl('agroPreglNapomena', iz.Napomena || '');
+
+    const mkBadge = (id, flag, labelDA, labelNE) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const signed = flag && flag !== '' && flag !== 'NE';
+        el.textContent = signed ? '✓ ' + labelDA : '○ ' + labelNE;
+        el.style.cssText = `display:inline-block;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;` +
+            (signed ? 'background:#d4edda;color:#155724;' : 'background:#f8f9fa;color:#6c757d;border:1px solid #dee2e6;');
+    };
+    mkBadge('agroPreglSigIzdao', iz.SigIzdavalac, 'Potpisan (izdavalac)', 'Bez potpisa (izdavalac)');
+    mkBadge('agroPreglSigPrimalac', iz.SigPrimalac, 'Potpisan (primalac)', 'Bez potpisa (primalac)');
+
+    showMgmtAgroView('pregled');
+}
+window.showAgroIzdavanjeDetalj = showAgroIzdavanjeDetalj;
 
 // ── Otpremnica panel ───────────────────────────────────────────
 

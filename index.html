@@ -2413,9 +2413,54 @@
 
             </div><!-- /#mgmt-agro-otpremnica -->
 
-        </div>
-    </section>
-</div>
+            <!-- ── IZDAVANJE DETALJ (pregled iz feed-a) ─────────── -->
+            <div class="agro-view" id="mgmt-agro-pregled" style="display:none;">
+                <div class="mgmt-page-head">
+                    <div class="mgmt-page-head__main">
+                        <div class="mgmt-page-head__breadcrumb">
+                            <button class="agro-back-btn" data-action="agro-back-main" type="button">← Agrohemija</button>
+                            <span class="mgmt-page-head__sep">/</span>
+                            <span class="mgmt-page-head__crumb">Pregled izdavanja</span>
+                        </div>
+                        <h1 class="mgmt-page-head__title" id="agroPreglIme">—</h1>
+                    </div>
+                </div>
+
+                <div class="otp-sheet" style="max-width:680px;margin:0 auto;">
+                    <!-- Meta red -->
+                    <div class="otp-meta-row" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;">
+                        <div><span class="otp-meta__lbl">Broj:</span> <span class="otp-meta__val" id="agroPreglBroj">—</span></div>
+                        <div><span class="otp-meta__lbl">Datum:</span> <span class="otp-meta__val" id="agroPreglDatum">—</span></div>
+                        <div><span class="otp-meta__lbl">Izdao:</span> <span class="otp-meta__val" id="agroPreglIzdao">—</span></div>
+                    </div>
+
+                    <!-- Kooperant blok -->
+                    <div class="otp-koop-block" id="agroPreglKoopBlock" style="margin-bottom:16px;"></div>
+
+                    <!-- Stavke tabela -->
+                    <div id="agroPreglStavkeTable" style="margin-bottom:16px;overflow-x:auto;"></div>
+
+                    <!-- Ukupno -->
+                    <div class="otp-total-bar" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--surface-2,#f5f5f0);border-radius:var(--radius);font-weight:600;margin-bottom:12px;">
+                        <span>UKUPNO</span>
+                        <span id="agroPreglUkupno">—</span>
+                    </div>
+
+                    <!-- Napomena -->
+                    <div id="agroPreglNapomenaRow" style="display:none;margin-bottom:12px;">
+                        <span class="otp-meta__lbl">Napomena:</span>
+                        <span id="agroPreglNapomena" style="font-size:13px;color:var(--text-muted);"></span>
+                    </div>
+
+                    <!-- Statusi potpisa -->
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;" id="agroPreglSigRow">
+                        <div class="agro-sig-badge" id="agroPreglSigIzdao"></div>
+                        <div class="agro-sig-badge" id="agroPreglSigPrimalac"></div>
+                    </div>
+                </div>
+            </div><!-- /#mgmt-agro-pregled -->
+
+
 
 <!-- ==================== IZVODI I ISPLATE TAB ==================== -->
 <div class="tab-content" id="tab-mgmt-izvodi">
