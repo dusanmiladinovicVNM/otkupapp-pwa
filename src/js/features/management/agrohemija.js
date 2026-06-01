@@ -553,6 +553,7 @@ async function izdConfirmSaveUnlocked() {
 
             modal.style.display = 'none';
             izdReset();
+            showMgmtAgroView('main');
             return;
         }
 
@@ -890,7 +891,10 @@ async function _loadAgroFeedFromFirebase(feed, feedSub) {
             feed.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Nema podataka za prikaz.</div>';
             return;
         }
-        const items = json.izdavanja.slice(0, 20);
+        const items = json.izdavanja
+            .slice()
+            .sort((a, b) => new Date(b.Datum || 0) - new Date(a.Datum || 0))
+            .slice(0, 20);
         if (feedSub) feedSub.textContent = items.length + ' posled. izdavanja';
 
         feed.innerHTML = items.map(iz => {
