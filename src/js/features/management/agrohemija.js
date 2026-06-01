@@ -115,33 +115,21 @@ function izdCalcPreporuka() {
 
     const rawQty = dozaPoHa * totalHa;
     const jm = art.JedinicaMere || 'kg';
-    const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.')) || 0;
-
-    let finalQty;
-    let pakInfo = '';
-
-    if (pakovanje > 0) {
-        const pakCount = Math.ceil(rawQty / pakovanje);
-        finalQty = pakCount;
-        pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + '/pak = ' +
-                  escapeHtml((rawQty).toLocaleString('sr', { maximumFractionDigits: 3 })) + ' ' + jm + ' potrebno';
-    } else {
-        finalQty = Math.round(rawQty * 1000) / 1000;
-    }
+    const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.'));
+    const pakCount = Math.ceil(rawQty / pakovanje);
 
     panel.classList.add('visible');
     document.getElementById('izdPreporukaCalc').innerHTML =
-        '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
+        '<strong>' + escapeHtml(pakCount.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
         ' — ' + escapeHtml(art.Naziv);
 
     document.getElementById('izdPreporukaDetail').innerHTML =
         escapeHtml(String(dozaPoHa)) + ' ' + escapeHtml(jm) + '/ha × ' + escapeHtml(totalHa.toFixed(2)) + ' ha = ' +
         escapeHtml((Math.round(rawQty * 1000) / 1000).toLocaleString('sr', { maximumFractionDigits: 3 })) + ' ' + escapeHtml(jm) +
-        (pakInfo ? '<br>' + pakInfo : '') +
+        '<br>' + pakCount + ' × ' + pakovanje + ' ' + jm + '/pak' +
         '<br>Parcele: ' + escapeHtml(parcelaNames.join(', '));
 
-    // Module scope umesto DOM property
-    izdPreporukaQty = finalQty;
+    izdPreporukaQty = pakCount;
 }
 
 function izdHidePreporuka() {
