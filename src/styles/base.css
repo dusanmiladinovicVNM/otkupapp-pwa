@@ -157,3 +157,42 @@ body {
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .is-hidden { display: none !important; }
+
+/* ─────────────────────────────────────────
+   Spacing utilities
+   (samo vrednosti sa 3+ upotreba u HTML-u)
+   ───────────────────────────────────────── */
+
+.mb-0  { margin-bottom: 0 !important; }
+.mb-8  { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-14 { margin-bottom: 14px; }
+
+.mt-6  { margin-top: 6px; }
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-14 { margin-top: 14px; }
+.mt-16 { margin-top: 16px; }
+
+/* Bottom padding za clearance ispod bottom nav-a */
+.pb-body { padding-bottom: calc(var(--app-role-nav-h, 50px) + 44px); }
+
+.text-primary { color: var(--text-primary); }
+
+/* ─────────────────────────────────────────
+   Eyebrow — section label above content
+   ───────────────────────────────────────── */
+
+.eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.eyebrow--success { color: var(--color-success); }
+.eyebrow--primary { color: var(--text-primary); }
+.eyebrow--sm { letter-spacing: 0.08em; margin-bottom: 6px; }

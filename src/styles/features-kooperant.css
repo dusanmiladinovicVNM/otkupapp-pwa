@@ -2818,3 +2818,39 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─────────────────────────────────────────
+   Agromere legacy form controls
+   (selects i inputs u agromere sekciji koji
+   nisu migrirali na .field pattern)
+   ───────────────────────────────────────── */
+
+.agro-ctrl {
+    padding: 10px;
+    font-size: 13px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius);
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.agro-ctrl--sm {
+    padding: 8px;
+    font-size: 12px;
+}
+
+.agro-ctrl--readonly {
+    background: #f0f0f0;
+    cursor: default;
+    color: var(--text-muted);
+}
+
+/* ─────────────────────────────────────────
+   Agromere button variants
+   ───────────────────────────────────────── */
+
+.agro-btn-stop {
+    background: var(--color-error) !important;
+}
