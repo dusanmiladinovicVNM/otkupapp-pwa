@@ -231,7 +231,7 @@
                     <div class="scan-cta__chev">→</div>
                 </button>
 
-                <div id="qr-reader" class="otk-qr-reader" style="display:none;"></div>
+                <div id="qr-reader" class="otk-qr-reader" hidden></div>
 
                 <div class="field" style="margin-top:12px;">
                     <label for="fldKooperantManual" class="field__label">Ručni izbor</label>
@@ -353,7 +353,7 @@
                             <div class="pkg-pick__d">2 kg</div>
                         </button>
                     </div>
-                    <select id="fldTipAmbalaze" style="display:none;"></select>
+                    <select id="fldTipAmbalaze" hidden></select>
                     <div class="otk-field-error" id="errTipAmbalaze" hidden></div>
                     <div class="field__hint" id="tipAmbalazeHint"></div>
                 </div>
@@ -380,7 +380,7 @@
         <button class="btn-v2 btn-v2--secondary" type="button" data-action="reset-otkup-form">Otkaži</button>
         <button class="btn-v2 btn-v2--primary" type="button" data-action="save-otkup" id="btnSaveOtkup">
             <span id="btnSaveOtkupLabel">Sačuvaj otkup</span>
-            <span class="btn-v2__hint" id="btnSaveOtkupHint" style="display:none;">(skenirajte prvo)</span>
+            <span class="btn-v2__hint" id="btnSaveOtkupHint" hidden>(skenirajte prvo)</span>
         </button>
     </div>
 </div>
@@ -484,7 +484,7 @@
                     Izaberi vozača ručno
                 </button>
 
-                <div class="otp-fallback-panel" id="otpremaFallbackPanel" style="display:none;">
+                <div class="otp-fallback-panel" id="otpremaFallbackPanel" hidden>
                     <div class="field">
                         <label for="fldOtpremaFallbackVozac" class="field__label">Vozač</label>
                         <select id="fldOtpremaFallbackVozac" class="field__select">
@@ -498,7 +498,7 @@
                     </button>
                 </div>
 
-                <div id="qr-reader-otprema-vozac" class="otp-qr-reader" style="display:none;"></div>
+                <div id="qr-reader-otprema-vozac" class="otp-qr-reader" hidden></div>
             </div>
 
             <div class="otp-section-head">
@@ -531,7 +531,7 @@
     </div>
 
     <!-- ASSIGN VIEW -->
-    <div class="otp-shell" id="otpremaAssignView" style="display:none;">
+    <div class="otp-shell" id="otpremaAssignView" hidden>
         <header class="app-hd">
             <div class="app-hd__eyebrow" id="otpremaAssignRoleEyebrow">OTPREMA</div>
             <h1 class="app-hd__title">Vozač <em>prepoznat</em></h1>
@@ -574,7 +574,7 @@
     </div>
 
     <!-- SUCCESS VIEW -->
-    <div class="otp-shell" id="otpremaSuccessView" style="display:none;">
+    <div class="otp-shell" id="otpremaSuccessView" hidden>
         <header class="app-hd">
             <div class="app-hd__eyebrow" id="otpremaSuccessRoleEyebrow">OTPREMA</div>
             <h1 class="app-hd__title">Utovar <em>spreman</em></h1>
@@ -673,7 +673,7 @@
                 <button type="button" id="btn-intercom-permission"
                         class="btn-v2 btn-v2--secondary btn-v2--sm"
                         data-action="intercom-request-permission"
-                        style="display:none;">
+                        hidden>
                     Dozvoli mikrofon
                 </button>
             </div>
@@ -956,7 +956,7 @@
                         </div>
                     </div>
 
-                    <div id="parceleMeteo" style="display:none;"></div>
+                    <div id="parceleMeteo" hidden></div>
                     <div id="parceleMeteoEmpty" class="koop-empty">
                         <div class="koop-empty-title">Izaberi parcelu na mapi</div>
                         <div class="koop-empty-text">Ovde će biti prikazani meteo, rizik i prozor za prskanje.</div>
@@ -1158,7 +1158,7 @@
                         </div>
 
                         <!-- Meteo strip za izabranu parcelu -->
-                        <div class="agro-meteo-strip" id="agroMeteoStrip" style="display:none;">
+                        <div class="agro-meteo-strip" id="agroMeteoStrip" hidden>
                             <span id="agroMeteoTemp">—</span>
                             <span id="agroMeteoWind">—</span>
                             <span id="agroMeteoHumidity">—</span>
@@ -1242,17 +1242,17 @@
                         </div>
 
                         <!-- Timer + Start -->
-                        <div class="agro-timer" id="agroTimerPanel" style="display:none;">
+                        <div class="agro-timer" id="agroTimerPanel" hidden>
                             <div class="agro-timer-display" id="agroTimerDisplay">00:00:00</div>
                             <div class="agro-timer-label" id="agroTimerLabel">—</div>
                         </div>
 
-                        <button type="button" class="btn-primary" id="agroBtnStart" data-action="agro-start-rad" style="display:none;">▶ POČNI RAD</button>
+                        <button type="button" class="btn-primary" id="agroBtnStart" data-action="agro-start-rad" hidden>▶ POČNI RAD</button>
                         <button type="button" class="btn-primary" id="agroBtnStop" data-action="agro-stop-rad" style="display:none;background:var(--danger);">⏹ ZAVRŠI RAD</button>
                     </div>
 
                     <!-- Step 2 -->
-                    <div id="agroStep2" style="display:none;">
+                    <div id="agroStep2" hidden>
                         <h3 style="color:var(--primary);margin-bottom:12px;">Potvrda tretmana</h3>
                         <div class="agro-confirm" id="agroConfirmPanel"></div>
                         <button type="button" class="btn-primary" data-action="agro-save-tretman">💾 SAČUVAJ</button>
@@ -1494,7 +1494,7 @@
             </div>
 
             <!-- stari bilans ostaje skriven kao data/render source -->
-            <div class="kp-bilans" id="kpBilans" style="display:none;">
+            <div class="kp-bilans" id="kpBilans" hidden>
                 <div id="kpBilansRows"></div>
             </div>
 
@@ -1538,7 +1538,7 @@
                         </div>
                     </div>
 
-                    <div class="kp-section-title" id="kpOtkupiTitle" style="display:none;">Proizvodnja (otkupi)</div>
+                    <div class="kp-section-title" id="kpOtkupiTitle" hidden>Proizvodnja (otkupi)</div>
                     <div id="kpOtkupiList"></div>
                 </div>
             </div>
@@ -1553,7 +1553,7 @@
                         </div>
                     </div>
 
-                    <div class="kp-section-title" id="kpTroskoviTitle" style="display:none;">Troškovi</div>
+                    <div class="kp-section-title" id="kpTroskoviTitle" hidden>Troškovi</div>
                     <div id="kpTroskoviList"></div>
                 </div>
 
@@ -1621,7 +1621,7 @@
 
                     <div id="qr-reader-fiskalni" style="display:none;margin:10px 0 14px;border-radius:var(--radius);overflow:hidden;"></div>
 
-                    <div id="fiskalniResult" style="display:none;">
+                    <div id="fiskalniResult" hidden>
                         <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
                         <div id="fiskalniStavke"></div>
                         <div style="display:flex;gap:8px;margin-top:8px;">
@@ -1656,8 +1656,8 @@
                 </div>
             </div>
                         <!-- stari tretmani: kpTretmaniTitle i kpTretmaniList koristi knjiga-polja.js (~linija 319) pa se ne može ukloniti -->
-                        <div style="display:none;">
-                            <div class="kp-section-title" id="kpTretmaniTitle" style="display:none;">Tretmani</div>
+                        <div hidden>
+                            <div class="kp-section-title" id="kpTretmaniTitle" hidden>Tretmani</div>
                             <div id="kpTretmaniList"></div>
                         </div>
 
@@ -2104,7 +2104,7 @@
                 </div>
 
                 <!-- ===== KUPCI SECTION ===== -->
-                <div id="mgmt-kup-section" style="display:none;">
+                <div id="mgmt-kup-section" hidden>
                     <div class="sub-tab-bar" id="mgmtPartnerKupSubBar">
                         <button type="button" class="sub-tab-btn active" data-action="mgmt-kup-sub" data-sub="saldo">Saldo</button>
                         <button type="button" class="sub-tab-btn" data-action="mgmt-kup-sub" data-sub="fakture">Fakture</button>
@@ -2221,7 +2221,7 @@
             </div><!-- /#mgmt-agro-main -->
 
             <!-- ── IZDAVANJE WIZARD ──────────────────────────── -->
-            <div class="agro-view" id="mgmt-agro-izdavanje" style="display:none;">
+            <div class="agro-view" id="mgmt-agro-izdavanje" hidden>
                 <div class="mgmt-page-head">
                     <div class="mgmt-page-head__main">
                         <div class="mgmt-page-head__breadcrumb">
@@ -2264,7 +2264,7 @@
                                 </div>
                             </div>
                             <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
-                            <div id="izdParcelaGroup" style="display:none;">
+                            <div id="izdParcelaGroup" hidden>
                                 <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.10em;color:var(--text-muted);margin-bottom:8px;">Parcele <span style="font-weight:400;text-transform:none;letter-spacing:0;">(za pametnu dozu)</span></div>
                                 <div class="izd-parcele-multi" id="izdParceleList"></div>
                                 <div class="iz-total-ha">
@@ -2333,7 +2333,7 @@
             </div><!-- /#mgmt-agro-izdavanje -->
 
             <!-- ── OTPREMNICA PREVIEW + SIGNATURES ──────────── -->
-            <div class="agro-view" id="mgmt-agro-otpremnica" style="display:none;">
+            <div class="agro-view" id="mgmt-agro-otpremnica" hidden>
                 <div class="mgmt-page-head">
                     <div class="mgmt-page-head__main">
                         <div class="mgmt-page-head__breadcrumb">
@@ -2384,7 +2384,7 @@
                     </div>
 
                     <!-- Napomena -->
-                    <div class="otp-doc__napomena" id="otpNapomenaRow" style="display:none;">
+                    <div class="otp-doc__napomena" id="otpNapomenaRow" hidden>
                         <span>Napomena:</span> <span id="otpNapomena"></span>
                     </div>
 
@@ -2534,7 +2534,7 @@
 
 <!-- VOZAC: Zbirne (Screen 2) -->
 <div class="tab-content" id="tab-zbirna">
-    <div id="zbirnaCreateView" style="display:none;">
+    <div id="zbirnaCreateView" hidden>
         <div class="vtbar">
             <button class="vtbar__b" data-action="cancel-zbirna" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
