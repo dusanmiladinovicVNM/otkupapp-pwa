@@ -252,18 +252,28 @@
     display: block;
 }
 
+/* Base positioning — always fixed at bottom, hidden until .visible added per breakpoint */
 .bottom-nav.role-management {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1200;
+    background: #fff;
+    border-top: 1px solid var(--border);
     display: none;
-}
-
-.bottom-nav.role-management.visible {
-    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    padding: 0;
+    min-height: 78px;
 }
 
 body.has-mgmt-bottom-nav .tab-content {
     padding-bottom: 88px;
 }
 
+/* Desktop (≥901px): sidebar handles navigation — hide bottom nav completely */
 @media (min-width: 901px) {
     .mgmt-grid-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -275,7 +285,12 @@ body.has-mgmt-bottom-nav .tab-content {
     }
 }
 
+/* Mobile (≤900px): show bottom nav; hide legacy tab-bar buttons */
 @media (max-width: 900px) {
+    .bottom-nav.role-management.visible {
+        display: flex !important;
+    }
+
     .tab-btn.role-management {
         display: none !important;
     }
@@ -287,30 +302,6 @@ body.has-mgmt-bottom-nav .tab-content {
     .mgmt-hero {
         padding: 16px 14px;
     }
-}
-
-/* ============================================================
-   MGMT BOTTOM NAV FIX
-============================================================ */
-
-.bottom-nav.role-management {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1200;
-    background: #fff;
-    border-top: 1px solid var(--border);
-    display: none;
-    flex-direction: row !important;
-    align-items: stretch;
-    justify-content: space-between;
-    padding: 0;
-    min-height: 78px;
-}
-
-.bottom-nav.role-management.visible {
-    display: flex !important;
 }
 
 .bottom-nav.role-management .bottom-nav-btn {
