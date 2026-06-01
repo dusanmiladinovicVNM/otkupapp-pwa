@@ -233,7 +233,7 @@
 
                 <div id="qr-reader" class="otk-qr-reader" hidden></div>
 
-                <div class="field" style="margin-top:12px;">
+                <div class="field mt-12">
                     <label for="fldKooperantManual" class="field__label">Ručni izbor</label>
                     <select id="fldKooperantManual" class="field__select">
                         <option value="">-- Izaberi kooperanta --</option>
@@ -241,7 +241,7 @@
                     <div class="otk-field-error" id="errKooperant" hidden></div>
                 </div>
 
-                <div class="koop-chip" id="koopDisplay" style="margin-top:12px;">
+                <div class="koop-chip mt-12" id="koopDisplay">
                     <div class="koop-chip__avatar" id="koopAvatar">K</div>
                     <div>
                         <div class="koop-chip__name" id="koopName"></div>
@@ -263,7 +263,7 @@
                 <div class="step__hint">opciono</div>
             </div>
             <div class="card">
-                <div class="field" id="parcelaGroup" style="margin-bottom: 0;">
+                <div class="field mb-0" id="parcelaGroup">
                     <label for="fldParcela" class="field__label">Parcela</label>
                     <select id="fldParcela" class="field__select">
                         <option value="">-- Bez parcele --</option>
@@ -294,7 +294,7 @@
                     </select>
                 </div>
 
-                <div class="field" style="margin-bottom: 0;">
+                <div class="field mb-0">
                     <div class="field__label">Klasa</div>
                     <div class="class-picker" id="klasaPicker">
                         <button type="button" class="class-pick is-sel" data-klasa="I">
@@ -337,7 +337,7 @@
                     </div>
                 </div>
 
-                <div class="field" style="margin-bottom: 0;">
+                <div class="field mb-0">
                     <div class="field__label">Tip ambalaže</div>
                     <div class="pkg-picker" id="tipAmbalazePicker">
                         <button type="button" class="pkg-pick is-sel" data-tip="12/1">
@@ -368,7 +368,7 @@
                 <div class="step__hint">opciono</div>
             </div>
             <div class="card">
-                <div class="field" style="margin-bottom:0;">
+                <div class="field mb-0">
                     <input type="text" id="fldNapomena" class="field__input" placeholder="Opciono...">
                 </div>
             </div>
@@ -428,13 +428,13 @@
         </div>
 
         <!-- Date range card -->
-        <div class="card" style="margin-top: 12px;">
+        <div class="card mt-12">
             <div class="field__row">
                 <div class="field">
                     <label class="field__label">Od datuma</label>
                     <input type="date" id="fldPregledOd" class="field__input">
                 </div>
-                <div class="field" style="margin-bottom: 0;">
+                <div class="field mb-0">
                     <label class="field__label">Do datuma</label>
                     <input type="date" id="fldPregledDo" class="field__input">
                 </div>
@@ -621,8 +621,8 @@
     <div class="app-body">
 
         <!-- Moj profil card -->
-        <div class="card" style="margin-bottom: 14px;">
-            <div class="step__head" style="margin-bottom: 12px;">
+        <div class="card mb-14">
+            <div class="step__head mb-12">
                 <div class="step__num is-done">✓</div>
                 <div class="step__title">Moj profil</div>
             </div>
@@ -633,20 +633,20 @@
                 <div class="otk-more-profile-meta" id="otkMoreProfileEntity">-</div>
             </div>
 
-            <div class="otk-more-actions" style="margin-top: 14px;">
+            <div class="otk-more-actions mt-14">
                 <button type="button" class="btn-v2 btn-v2--secondary" data-action="show-qr-profile">Prikaži moj QR</button>
                 <button type="button" class="btn-v2 btn-v2--primary" data-action="sync-otkupac-now">Sinhronizuj sada</button>
             </div>
         </div>
 
         <!-- Potpis Otkupca card -->
-        <div class="card" style="margin-bottom: 14px;">
+        <div class="card mb-14">
             <div class="step__head" style="margin-bottom: 4px;">
                 <div class="step__num">2</div>
                 <div class="step__title">Potpis Otkupca</div>
                 <div class="step__hint" id="otkMoreSignatureBadge">Nije unet</div>
             </div>
-            <div class="field__hint" style="margin-bottom: 12px;">
+            <div class="field__hint mb-12">
                 Ovaj potpis se koristi u PDF otkupnog lista.
             </div>
 
@@ -654,11 +654,11 @@
                 <canvas id="otkupacSignatureCanvas" class="ol-signature__canvas"></canvas>
             </div>
 
-            <div class="field__hint" style="margin-top: 8px;">
+            <div class="field__hint mt-8">
                 U otkupnom listu ostaje samo polje za potpis kooperanta. Potpis Otkupca se povlači odavde.
             </div>
 
-            <div class="otk-more-actions" style="margin-top: 14px;">
+            <div class="otk-more-actions mt-14">
                 <button type="button" class="btn-v2 btn-v2--secondary" data-action="clear-otkupac-signature">Obriši</button>
                 <button type="button" class="btn-v2 btn-v2--primary" data-action="save-otkupac-signature">Sačuvaj potpis</button>
             </div>
@@ -681,7 +681,7 @@
 
         <!-- Sync status card -->
         <div class="card">
-            <div class="step__head" style="margin-bottom: 12px;">
+            <div class="step__head mb-12">
                 <div class="step__num">3</div>
                 <div class="step__title">Sync status</div>
             </div>
@@ -702,11 +702,11 @@
                 </div>
             </div>
 
-            <div class="field__hint" id="otkMoreLastSync" style="margin-top: 12px;">
+            <div class="field__hint mt-12" id="otkMoreLastSync">
                 Poslednja sinhronizacija: —
             </div>
 
-            <div class="otk-more-queue-list" id="otkMoreQueueList" style="margin-top: 14px;"></div>
+            <div class="otk-more-queue-list mt-14" id="otkMoreQueueList"></div>
         </div>
 
     </div>
@@ -912,12 +912,12 @@
 
             <div class="parcele-filters-card">
                 <div class="parcele-filters-grid">
-                    <div class="form-group" style="margin-bottom:0;">
+                    <div class="form-group mb-0">
                         <label>Pretraga</label>
                         <input type="text" id="parceleSearch" placeholder="Šifra, kultura, KO...">
                     </div>
 
-                    <div class="form-group" style="margin-bottom:0;">
+                    <div class="form-group mb-0">
                         <label>Kultura</label>
                         <select id="parceleKulturaFilter">
                             <option value="">-- Sve kulture --</option>
@@ -1201,18 +1201,18 @@
                                 Preparat sa lagera
                             </div>
 
-                            <div class="form-group" style="margin-bottom:8px;">
+                            <div class="form-group mb-8">
                                 <select id="agroPreparatSel" style="padding:10px;font-size:13px;">
                                     <option value="">-- Izaberi preparat --</option>
                                 </select>
                             </div>
 
-                            <div class="form-row" style="margin-bottom:8px;">
-                                <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-row mb-8">
+                                <div class="form-group mb-0">
                                     <label>Količina</label>
                                     <input type="number" id="agroKolicina" inputmode="decimal" placeholder="0" style="padding:10px;font-size:13px;">
                                 </div>
-                                <div class="form-group" style="margin-bottom:0;">
+                                <div class="form-group mb-0">
                                     <label>JM</label>
                                     <input type="text" id="agroJM" readonly style="padding:10px;font-size:13px;background:#f0f0f0;">
                                 </div>
@@ -1321,7 +1321,7 @@
                                         <option value="">-- Bez traktora --</option>
                                     </select>
                                 </div>
-                                <div class="form-group" style="margin-bottom:0;">
+                                <div class="form-group mb-0">
                                     <label>Unesi novi traktor</label>
                                     <input type="text" id="agroTraktorNovi" placeholder="Npr. IMT 539" style="padding:10px;font-size:13px;">
                                 </div>
@@ -1335,7 +1335,7 @@
                                         <option value="">-- Bez prskalice --</option>
                                     </select>
                                 </div>
-                                <div class="form-group" style="margin-bottom:0;">
+                                <div class="form-group mb-0">
                                     <label>Unesi novu prskalicu</label>
                                   <input type="text" id="agroPrskalicaNovi" placeholder="Npr. Agromehanika 400l" style="padding:10px;font-size:13px;">
                                 </div>
@@ -1351,7 +1351,7 @@
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-bottom:0;">
+                        <div class="form-group mb-0">
                             <label>Ostala oprema</label>
                             <input type="text" id="agroOpremaOstalo" placeholder="Npr. motorna kosa, šmrk..." style="padding:10px;font-size:13px;">
                         </div>
@@ -1449,14 +1449,14 @@
             <!-- FILTERI -->
             <div class="knjiga-filters-card">
                 <div class="form-row knjiga-filters-row">
-                    <div class="form-group" style="margin-bottom:0;">
+                    <div class="form-group mb-0">
                         <label>Parcela</label>
                         <select id="kpParcelaSel">
                             <option value="">-- Sve parcele --</option>
                         </select>
                     </div>
 
-                    <div class="form-group" style="margin-bottom:0;">
+                    <div class="form-group mb-0">
                         <label>Sezona</label>
                         <select id="kpSezona">
                             <option value="">Tekuća</option>
@@ -1906,7 +1906,7 @@
                 </div>
  
                 <!-- Active plans -->
-                <div id="dpPlanList" style="margin-bottom:12px;"></div>
+                <div id="dpPlanList" class="mb-12"></div>
      
                 <!-- Three columns — redesign v2 -->
                 <div class="disp-grid">
@@ -1936,8 +1936,8 @@
                             <div style="background:var(--surface-2);border-radius:8px;padding:10px;margin-bottom:10px;border:1px solid var(--border);">
                                 <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;">Dodaj zahtev</div>
                                 <div class="form-row" style="margin-bottom:6px;">
-                                    <div class="form-group" style="margin-bottom:0;"><select id="dpDK" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
-                                    <div class="form-group" style="margin-bottom:0;"><input type="number" id="dpDG" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
+                                    <div class="form-group mb-0"><select id="dpDK" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
+                                    <div class="form-group mb-0"><input type="number" id="dpDG" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
                                 </div>
                                 <div style="display:flex;gap:6px;">
                                     <select id="dpDV" style="flex:1;padding:8px;font-size:12px;border:1.5px solid var(--border-strong);border-radius:8px;"><option value="">Vrsta...</option></select>
@@ -2289,7 +2289,7 @@
                                 <span data-ag-icon="camera"></span> Skeniraj barkod
                             </button>
                             <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
-                            <div class="form-group" style="margin-bottom:8px;">
+                            <div class="form-group mb-8">
                                 <select id="izdArtikal">
                                     <option value="">-- Ili izaberi ručno --</option>
                                 </select>
@@ -2518,7 +2518,7 @@
             </div>
         </div>
     </div>
-    <div class="vbody" style="padding-bottom:100px;">
+    <div class="vbody pb-body">
         <div class="sec-lbl">
             <span class="sec-lbl__t">Moji planovi</span>
             <span class="sec-lbl__c" id="vozacPlaniCount">—</span>
@@ -2544,8 +2544,8 @@
                 <div class="vtbar__h">Nova zbirna</div>
             </div>
         </div>
-        <div class="vbody" style="padding-bottom:80px;">
-            <div class="form-group" style="margin-bottom:14px;">
+        <div class="vbody pb-body">
+            <div class="form-group mb-14">
                 <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:6px;">Kupac / Hladnjača</label>
                 <select id="fldZbirnaKupac" class="form-control"><option value="">— Izaberi kupca —</option></select>
             </div>
@@ -2562,7 +2562,7 @@
         </div>
     </div>
     <div id="zbirnaMainView">
-        <div class="vbody" style="padding-bottom:100px;">
+        <div class="vbody pb-body">
             <div class="sec-lbl">
                 <span class="sec-lbl__t">Otpremnice danas</span>
                 <button type="button" class="wz-btn wz-btn--pri" data-action="start-zbirna-creation" id="btnNovaZbirna" style="display:none;padding:8px 14px;font-size:12px;">Nova zbirna</button>
