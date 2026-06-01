@@ -574,14 +574,107 @@ async function izdConfirmSaveUnlocked() {
 }
 
 // --- PDF Save (isti pattern kao Otkupni List) ---
+/**
+ * Build the agrohemija otpremnica PDF and return it as base64 (no data: prefix).
+ * Reused by both the legacy modal flow (izdSavePdf) and the panel flow (_otpDoSave).
+ * @param {Object} data           — { kooperantID, stavke[], ukupnaVrednost, clientRecordID, datum, napomena }
+ * @param {string} sigI           — izdavalac signature dataURL (PNG) or ''
+ * @param {string} sigP           — primalac signature dataURL (PNG) or ''
+ * @returns {Promise<string|null>} base64 string or null on failure
+ */
+async function _buildOtpremnicaPdfBase64(data, sigI, sigP) {
+    const config = (window.stammdaten && stammdaten.config) || [];
+    const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
+    const koop = ((window.stammdaten && stammdaten.kooperanti) || []).find(k => k.KooperantID === data.kooperantID) || {};
+
+    try {
+        await lazyLoadScript('/vendor/jspdf.umd.min.js');
+    } catch (err) {
+        console.error('jsPDF lazy load failed:', err);
+        showToast('Ne mogu da učitam PDF biblioteku', 'error');
+        return null;
+    }
+
+    const jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!jsPDF) { showToast('PDF biblioteka nije dostupna', 'error'); return null; }
+
+    const doc = new jsPDF({ format: 'a5', unit: 'mm' });
+    const w = doc.internal.pageSize.getWidth();
+    let y = 10;
+
+    // Header
+    doc.setFontSize(13); doc.setFont(undefined, 'bold');
+    doc.text(gv('SELLER_NAME'), w/2, y, { align: 'center' }); y += 5;
+    doc.setFontSize(8); doc.setFont(undefined, 'normal');
+    doc.text(gv('SELLER_STREET') + ', ' + gv('SELLER_CITY'), w/2, y, { align: 'center' }); y += 4;
+    doc.text('PIB: ' + gv('SELLER_PIB') + ' | MB: ' + gv('SELLER_MATICNI_BROJ'), w/2, y, { align: 'center' }); y += 3;
+    doc.setLineWidth(0.5); doc.line(10, y, w-10, y); y += 6;
+
+    // Title
+    doc.setFontSize(14); doc.setFont(undefined, 'bold');
+    doc.text('OTPREMNICA AGROHEMIJE', w/2, y, { align: 'center' }); y += 7;
+
+    // Kooperant
+    doc.setFillColor(240, 240, 234); doc.rect(10, y, w-20, 12, 'F');
+    doc.setFontSize(10); doc.setFont(undefined, 'bold');
+    doc.text((koop.Ime||'') + ' ' + (koop.Prezime||''), 12, y+4); y += 5;
+    doc.setFontSize(8); doc.setFont(undefined, 'normal');
+    doc.text((koop.Adresa||'') + ', ' + (koop.Mesto||''), 12, y+4); y += 5;
+    doc.text('JMBG: ' + (koop.JMBG||'________') + '  BPG: ' + (koop.BPGBroj||'________'), 12, y+4); y += 8;
+
+    // Table header
+    doc.setFontSize(8); doc.setFont(undefined, 'bold');
+    doc.setTextColor(100);
+    doc.text('#', 12, y+3); doc.text('Artikal', 18, y+3);
+    doc.text('Kol.', 75, y+3); doc.text('Cena', 95, y+3);
+    doc.text('Vrednost', w-12, y+3, { align: 'right' });
+    doc.setLineWidth(0.3); doc.line(10, y+5, w-10, y+5); y += 7;
+
+    // Table rows
+    doc.setFont(undefined, 'normal'); doc.setTextColor(0);
+    data.stavke.forEach((s, i) => {
+        doc.setFontSize(8);
+        doc.text(String(i+1), 12, y+3);
+        doc.text(String(s.naziv).substring(0, 30), 18, y+3);
+        doc.text(s.kolicina + ' ' + s.jm, 75, y+3);
+        doc.text(Number(s.cena).toLocaleString('sr'), 95, y+3);
+        doc.text(Number(s.vrednost).toLocaleString('sr'), w-12, y+3, { align: 'right' });
+        y += 5;
+        if (y > 180) { doc.addPage(); y = 15; }
+    });
+
+    // Total
+    doc.setLineWidth(0.5); doc.line(10, y, w-10, y); y += 2;
+    doc.setFontSize(11); doc.setFont(undefined, 'bold');
+    doc.text('UKUPNO:', 12, y+5);
+    doc.text(Number(data.ukupnaVrednost).toLocaleString('sr') + ' RSD', w-12, y+5, { align: 'right' });
+    y += 10;
+
+    // Info
+    doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
+    doc.text('Broj: ' + (data.clientRecordID || ''), 12, y); y += 4;
+    doc.text('Datum: ' + data.datum + (data.napomena ? '  |  ' + data.napomena : ''), 12, y); y += 6;
+
+    // Signatures
+    const sigW = (w - 30) / 2, sigH = 20;
+    doc.setFontSize(7); doc.setTextColor(100);
+    doc.text('Potpis izdavaoca:', 12, y); doc.text('Potpis primaoca:', 17+sigW, y); y += 2;
+    doc.setDrawColor(200);
+    doc.rect(12, y, sigW, sigH); doc.rect(17+sigW, y, sigW, sigH);
+    if (sigI) try { doc.addImage(sigI, 'PNG', 13, y+1, sigW-2, sigH-2); } catch(e) {}
+    if (sigP) try { doc.addImage(sigP, 'PNG', 18+sigW, y+1, sigW-2, sigH-2); } catch(e) {}
+    y += sigH + 5;
+
+    doc.setFontSize(6); doc.setTextColor(150);
+    doc.text('Generisano: ' + new Date().toISOString().substring(0, 19).replace('T', ' '), w/2, y, { align: 'center' });
+
+    return doc.output('datauristring').split(',')[1];
+}
+
 async function izdSavePdf() {
     const modal = document.getElementById('izdOtpremnicaModal');
     const data = modal._data;
     if (!data) { showToast('Nema podataka', 'error'); return; }
-
-    const config = stammdaten.config || [];
-    const gv = k => { const c = config.find(c => c.Parameter === k); return c ? c.Vrednost : ''; };
-    const koop = (stammdaten.kooperanti || []).find(k => k.KooperantID === data.kooperantID) || {};
 
     const sigI = getSignatureData('sigIzdavalac') || '';
     const sigP = getSignatureData('sigPrimalac') || '';
@@ -589,94 +682,14 @@ async function izdSavePdf() {
     showToast('Generisanje PDF-a...', 'info');
 
     try {
-        try {
-            await lazyLoadScript('/vendor/jspdf.umd.min.js');
-        } catch (err) {
-            console.error('jsPDF lazy load failed:', err);
-            showToast('Ne mogu da učitam PDF biblioteku', 'error');
-            return;
-        }
+        const pdfBase64 = await _buildOtpremnicaPdfBase64(data, sigI, sigP);
+        if (!pdfBase64) return;
 
-        const jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-        if (!jsPDF) { showToast('PDF biblioteka nije dostupna', 'error'); return; }
-        const doc = new jsPDF({ format: 'a5', unit: 'mm' });
-        const w = doc.internal.pageSize.getWidth();
-        let y = 10;
-
-        // Header
-        doc.setFontSize(13); doc.setFont(undefined, 'bold');
-        doc.text(gv('SELLER_NAME'), w/2, y, { align: 'center' }); y += 5;
-        doc.setFontSize(8); doc.setFont(undefined, 'normal');
-        doc.text(gv('SELLER_STREET') + ', ' + gv('SELLER_CITY'), w/2, y, { align: 'center' }); y += 4;
-        doc.text('PIB: ' + gv('SELLER_PIB') + ' | MB: ' + gv('SELLER_MATICNI_BROJ'), w/2, y, { align: 'center' }); y += 3;
-        doc.setLineWidth(0.5); doc.line(10, y, w-10, y); y += 6;
-
-        // Title
-        doc.setFontSize(14); doc.setFont(undefined, 'bold');
-        doc.text('OTPREMNICA AGROHEMIJE', w/2, y, { align: 'center' }); y += 7;
-
-        // Kooperant
-        doc.setFillColor(240, 240, 234); doc.rect(10, y, w-20, 12, 'F');
-        doc.setFontSize(10); doc.setFont(undefined, 'bold');
-        doc.text((koop.Ime||'') + ' ' + (koop.Prezime||''), 12, y+4); y += 5;
-        doc.setFontSize(8); doc.setFont(undefined, 'normal');
-        doc.text((koop.Adresa||'') + ', ' + (koop.Mesto||''), 12, y+4); y += 5;
-        doc.text('JMBG: ' + (koop.JMBG||'________') + '  BPG: ' + (koop.BPGBroj||'________'), 12, y+4); y += 8;
-
-        // Table header
-        doc.setFontSize(8); doc.setFont(undefined, 'bold');
-        doc.setTextColor(100);
-        doc.text('#', 12, y+3); doc.text('Artikal', 18, y+3);
-        doc.text('Kol.', 75, y+3); doc.text('Cena', 95, y+3);
-        doc.text('Vrednost', w-12, y+3, { align: 'right' });
-        doc.setLineWidth(0.3); doc.line(10, y+5, w-10, y+5); y += 7;
-
-        // Table rows
-        doc.setFont(undefined, 'normal'); doc.setTextColor(0);
-        data.stavke.forEach((s, i) => {
-            doc.setFontSize(8);
-            doc.text(String(i+1), 12, y+3);
-            doc.text(s.naziv.substring(0, 30), 18, y+3);
-            doc.text(s.kolicina + ' ' + s.jm, 75, y+3);
-            doc.text(s.cena.toLocaleString('sr'), 95, y+3);
-            doc.text(s.vrednost.toLocaleString('sr'), w-12, y+3, { align: 'right' });
-            y += 5;
-            if (y > 180) { doc.addPage(); y = 15; }
-        });
-
-        // Total
-        doc.setLineWidth(0.5); doc.line(10, y, w-10, y); y += 2;
-        doc.setFontSize(11); doc.setFont(undefined, 'bold');
-        doc.text('UKUPNO:', 12, y+5);
-        doc.text(data.ukupnaVrednost.toLocaleString('sr') + ' RSD', w-12, y+5, { align: 'right' });
-        y += 10;
-
-        // Info
-        doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.setTextColor(100);
-        doc.text('Broj: ' + (data.clientRecordID || ''), 12, y); y += 4;
-        doc.text('Datum: ' + data.datum + (data.napomena ? '  |  ' + data.napomena : ''), 12, y); y += 6;
-
-        // Signatures
-        const sigW = (w - 30) / 2, sigH = 20;
-        doc.setFontSize(7); doc.setTextColor(100);
-        doc.text('Potpis izdavaoca:', 12, y); doc.text('Potpis primaoca:', 17+sigW, y); y += 2;
-        doc.setDrawColor(200);
-        doc.rect(12, y, sigW, sigH); doc.rect(17+sigW, y, sigW, sigH);
-        if (sigI) try { doc.addImage(sigI, 'PNG', 13, y+1, sigW-2, sigH-2); } catch(e) {}
-        if (sigP) try { doc.addImage(sigP, 'PNG', 18+sigW, y+1, sigW-2, sigH-2); } catch(e) {}
-        y += sigH + 5;
-
-        doc.setFontSize(6); doc.setTextColor(150);
-        doc.text('Generisano: ' + new Date().toISOString().substring(0, 19).replace('T', ' '), w/2, y, { align: 'center' });
-
-        // Upload
-        const pdfBase64 = doc.output('datauristring').split(',')[1];
         const fileName = 'Otpremnica_Agro_' + data.kooperantID + '_' + data.datum;
-        
-
         const json = await apiPost('uploadPdf', {
             fileName: fileName,
-            pdfBase64: pdfBase64
+            pdfBase64: pdfBase64,
+            docType: 'otpremnica'
         });
         if (!json) { showToast('Nema konekcije', 'error'); return; }
         if (json.success) { showToast('PDF sačuvan na Drive!', 'success'); }
@@ -1060,6 +1073,29 @@ async function _otpDoSave() {
                 ? 'Izdavanje je već sačuvano'
                 : 'Izdavanje sačuvano';
             showToast(statusText + ': ' + (json.izdavanjeID || data.clientRecordID), 'success');
+
+            // Generiši i upload-uj otpremnicu (PDF sa potpisima) na Drive
+            try {
+                const pdfBase64 = await _buildOtpremnicaPdfBase64(data, sigO, sigK);
+                if (pdfBase64) {
+                    const fileName = 'Otpremnica_Agro_' + data.kooperantID + '_' +
+                        (data.datum || '') + '_' + (json.izdavanjeID || data.clientRecordID || '');
+                    const pdfRes = await apiPost('uploadPdf', {
+                        fileName: fileName,
+                        pdfBase64: pdfBase64,
+                        docType: 'otpremnica'
+                    });
+                    if (pdfRes && pdfRes.success) {
+                        showToast('Otpremnica (PDF) sačuvana na Drive', 'success');
+                    } else {
+                        showToast('Izdavanje sačuvano, ali PDF nije upload-ovan', 'error');
+                    }
+                }
+            } catch (pdfErr) {
+                console.error('Otpremnica PDF generation/upload failed:', pdfErr);
+                showToast('Izdavanje sačuvano, ali PDF nije generisan', 'error');
+            }
+
             _otpCurrentData = null;
             izdReset();
             showMgmtAgroView('main');

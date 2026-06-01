@@ -1046,18 +1046,11 @@ function doPost(e) {
       }));
     }
 
-    // TODO(agro-feed): implement when IzdavanjeSummary VBA report is ready.
-    // Called by loadMgmtAgroDashboard() in management/agrohemija.js.
-    // Should return last N izdavanja with KooperantName, Datum, Stavke[], UkupnaVrednost.
+    // Vraća poslednjih N izdavanja agrohemije iz MgmtReports/Izdavanje taba.
+    // Koristi ga loadMgmtAgroDashboard() u management/agrohemija.js.
     if (data.action === 'getMgmtAgroFeed') {
       if (!isManagement(tokenData)) return forbiddenResponse();
-      // Stub — returns empty until VBA ExportMgmtReports adds IzdavanjeSummary sheet
-      return jsonResponse({
-        success: true,
-        izdavanja: [],
-        _stub: true,
-        _message: 'Implementirati: ExportMgmtReports mora eksportovati IzdavanjeSummary sheet'
-      });
+      return jsonResponse(getMgmtAgroFeed(data.limit));
     }
 
     if (data.action === 'parseFiskalniImage') {
@@ -1734,13 +1727,23 @@ function processRecord(record, otkupacID) {
 
 function uploadPdfToDrive(data) {
   try {
-    const subFolder = getAgriXFolder_('DOC_OTKUPNI_LISTOVI');
+    // docType routes the PDF to the correct AgriX folder.
+    // Default ostaje DOC_OTKUPNI_LISTOVI radi kompatibilnosti sa otkupnim blokovima.
+    const folderKey = data.docType === 'otpremnica'
+      ? 'DOC_OTPREMNICE'
+      : 'DOC_OTKUPNI_LISTOVI';
+    const subFolder = getAgriXFolder_(folderKey);
 
     const bytes = Utilities.base64Decode(data.pdfBase64);
-    const blob = Utilities.newBlob(bytes, 'application/pdf', (data.fileName || 'OtkupniList') + '.pdf');
+    const blob = Utilities.newBlob(bytes, 'application/pdf', (data.fileName || 'Dokument') + '.pdf');
     const file = subFolder.createFile(blob);
 
-    return { success: true, fileId: file.getId(), fileName: file.getName() };
+    return {
+      success: true,
+      fileId: file.getId(),
+      fileName: file.getName(),
+      fileUrl: file.getUrl()
+    };
   } catch (err) {
       logError('GAS', 'uploadPdfToDrive', err.message, err.stack || '', '');
       return { success: false, error: err.message };
@@ -3336,8 +3339,8 @@ function saveIzdavanje(data) {
       parseFloat(data.ukupnaVrednost) || 0,
       data.izdaoUser || '',
       data.napomena || '',
-      '', // SigIzdavalac
-      '', // SigPrimalac
+      data.sigIzdavalac ? 'DA' : '', // SigIzdavalac — potpis se čuva u PDF-u, ovde samo flag
+      data.sigPrimalac ? 'DA' : '',  // SigPrimalac
       nowIso
     ];
 
@@ -3351,6 +3354,49 @@ function saveIzdavanje(data) {
   } catch (err) {
     logError('GAS', 'saveIzdavanje', err.message, err.stack || '', data.kooperantID || '');
     return { success: false, error: err.message };
+  }
+}
+
+function getMgmtAgroFeed(limit) {
+  try {
+    const n = Math.max(1, Math.min(parseInt(limit, 10) || 50, 200));
+    const ss = getMgmtReportsSpreadsheet_();
+    if (!ss) return { success: true, izdavanja: [] };
+
+    const sheet = ss.getSheetByName('Izdavanje');
+    if (!sheet) return { success: true, izdavanja: [] };
+
+    const rows = sheetToArray(sheet);
+
+    const izdavanja = rows.map(function(r) {
+      let stavke = [];
+      try {
+        stavke = r.Stavke ? JSON.parse(r.Stavke) : [];
+      } catch (e) {
+        stavke = [];
+      }
+      return {
+        IzdavanjeID: r.IzdavanjeID || '',
+        Datum: r.Datum || '',
+        KooperantID: r.KooperantID || '',
+        KooperantName: r.KooperantName || '',
+        ParcelaID: r.ParcelaID || '',
+        Stavke: stavke,
+        UkupnaVrednost: parseFloat(r.UkupnaVrednost) || 0,
+        IzdaoUser: r.IzdaoUser || '',
+        Napomena: r.Napomena || '',
+        CreatedAt: r.CreatedAt || ''
+      };
+    });
+
+    izdavanja.sort(function(a, b) {
+      return new Date(b.CreatedAt || b.Datum || 0) - new Date(a.CreatedAt || a.Datum || 0);
+    });
+
+    return { success: true, izdavanja: izdavanja.slice(0, n) };
+  } catch (err) {
+    logError('GAS', 'getMgmtAgroFeed', err.message, err.stack || '', '');
+    return { success: false, error: err.message, izdavanja: [] };
   }
 }
 
