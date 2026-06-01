@@ -117,12 +117,16 @@ function izdCalcPreporuka() {
     const jm = art.JedinicaMere || 'kg';
     const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.')) || 0;
 
-    const finalQty = Math.round(rawQty * 1000) / 1000;
-
+    let finalQty;
     let pakInfo = '';
+
     if (pakovanje > 0) {
         const pakCount = Math.ceil(rawQty / pakovanje);
-        pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanja)';
+        finalQty = pakCount;
+        pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + '/pak = ' +
+                  escapeHtml((rawQty).toLocaleString('sr', { maximumFractionDigits: 3 })) + ' ' + jm + ' potrebno';
+    } else {
+        finalQty = Math.round(rawQty * 1000) / 1000;
     }
 
     panel.classList.add('visible');
@@ -132,8 +136,8 @@ function izdCalcPreporuka() {
 
     document.getElementById('izdPreporukaDetail').innerHTML =
         escapeHtml(String(dozaPoHa)) + ' ' + escapeHtml(jm) + '/ha × ' + escapeHtml(totalHa.toFixed(2)) + ' ha = ' +
-        escapeHtml(finalQty.toLocaleString('sr', { maximumFractionDigits: 3 })) + ' ' + escapeHtml(jm) +
-        (pakInfo ? '<br>Pakovanja: ' + escapeHtml(pakInfo) : '') +
+        escapeHtml((Math.round(rawQty * 1000) / 1000).toLocaleString('sr', { maximumFractionDigits: 3 })) + ' ' + escapeHtml(jm) +
+        (pakInfo ? '<br>' + pakInfo : '') +
         '<br>Parcele: ' + escapeHtml(parcelaNames.join(', '));
 
     // Module scope umesto DOM property
