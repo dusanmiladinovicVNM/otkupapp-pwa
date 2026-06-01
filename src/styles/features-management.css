@@ -269,7 +269,8 @@ body.has-mgmt-bottom-nav .tab-content {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .bottom-nav.role-management {
+    .bottom-nav.role-management,
+    .bottom-nav.role-management.visible {
         display: none !important;
     }
 }
