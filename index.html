@@ -1230,7 +1230,7 @@
                                 </button>
                             </div>
 
-                            <div id="agroKarencaInfo" style="display:none;background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:12px;margin-top:8px;">
+                            <div id="agroKarencaInfo" style="background:#fff3cd;padding:8px 12px;border-radius:6px;font-size:12px;margin-top:8px;" hidden>
                                 <span id="agroKarencaInfoText">—</span>
                             </div>
                         </div>
@@ -1619,11 +1619,12 @@
                         📷 Slikaj račun
                     </button>
 
-                    <div id="qr-reader-fiskalni" style="display:none;margin:10px 0 14px;border-radius:var(--radius);overflow:hidden;"></div>
+                    <div id="qr-reader-fiskalni" style="margin:10px 0 14px;border-radius:var(--radius);overflow:hidden;" hidden></div>
 
                     <div id="fiskalniResult" hidden>
                         <div id="fiskalniHeader" style="background:var(--accent);color:white;padding:10px 14px;border-radius:var(--radius) var(--radius) 0 0;font-size:13px;"></div>
                         <div id="fiskalniStavke"></div>
+                        <!-- inline: ad-hoc flex layout -->
                         <div style="display:flex;gap:8px;margin-top:8px;">
                             <button type="button" class="btn-primary" data-action="fiskalni-save-to-lager" style="flex:1;">✅ Prenesi u lager</button>
                             <button type="button" class="btn-secondary" data-action="fiskalni-cancel" style="flex:1;margin-top:0;">Otkaži</button>
@@ -1703,6 +1704,7 @@
                 </div>
             </div>
 
+            <!-- inline: ad-hoc flex layout -->
             <div class="mgmt-grid-2" style="display:grid;gap:12px;">
                 <section class="otk-more-card">
                     <div class="otk-more-card-head">
@@ -2258,12 +2260,13 @@
                         <div class="iz-col__head"><div class="iz-col__num">1</div>Kooperant</div>
                         <div class="iz-col__body">
                             <div class="form-group" style="margin-bottom:10px;">
+                                <!-- inline: ad-hoc flex layout -->
                                 <div style="display:flex;gap:8px;">
                                     <select id="izdKooperant" style="flex:1;"><option value="">-- Izaberi kooperanta --</option></select>
                                     <button type="button" class="iz-scan" style="width:auto;padding:10px 14px;margin:0;font-size:14px;border-radius:var(--radius);" data-action="start-izd-koop-scan">📷</button>
                                 </div>
                             </div>
-                            <div id="qr-reader-izd-koop" style="display:none;margin-bottom:14px;border-radius:var(--radius);overflow:hidden;"></div>
+                            <div id="qr-reader-izd-koop" style="margin-bottom:14px;border-radius:var(--radius);overflow:hidden;" hidden></div>
                             <div id="izdParcelaGroup" hidden>
                                 <div class="eyebrow">Parcele <span class="iz-parcele-note">(za pametnu dozu)</span></div>
                                 <div class="izd-parcele-multi" id="izdParceleList"></div>
@@ -2288,7 +2291,7 @@
                             <button type="button" class="iz-scan" data-action="start-izd-barcode-scan">
                                 <span data-ag-icon="camera"></span> Skeniraj barkod
                             </button>
-                            <div id="qr-reader-izd-barcode" style="display:none;margin-bottom:10px;border-radius:var(--radius);overflow:hidden;"></div>
+                            <div id="qr-reader-izd-barcode" style="margin-bottom:10px;border-radius:var(--radius);overflow:hidden;" hidden></div>
                             <div class="form-group mb-8">
                                 <select id="izdArtikal">
                                     <option value="">-- Ili izaberi ručno --</option>
@@ -2524,7 +2527,7 @@
             <span class="sec-lbl__c" id="vozacPlaniCount">—</span>
         </div>
         <div id="vozacPlaniList"></div>
-        <div class="sec-lbl" style="margin-top:6px;">
+        <div class="sec-lbl mt-6">
             <span class="sec-lbl__t">Izvršeni transporti</span>
             <span class="sec-lbl__c" id="transportCount">—</span>
         </div>
@@ -2565,10 +2568,10 @@
         <div class="vbody pb-body">
             <div class="sec-lbl">
                 <span class="sec-lbl__t">Otpremnice danas</span>
-                <button type="button" class="wz-btn wz-btn--pri" data-action="start-zbirna-creation" id="btnNovaZbirna" style="display:none;padding:8px 14px;font-size:12px;">Nova zbirna</button>
+                <button type="button" class="wz-btn wz-btn--pri" data-action="start-zbirna-creation" id="btnNovaZbirna" style="padding:8px 14px;font-size:12px;" hidden>Nova zbirna</button>
             </div>
             <div id="vozacOtpremniceList"></div>
-            <div class="sec-lbl" style="margin-top:16px;">
+            <div class="sec-lbl mt-16">
                 <span class="sec-lbl__t">Kreirane zbirne</span>
             </div>
             <div id="vozacZbirneList"></div>
