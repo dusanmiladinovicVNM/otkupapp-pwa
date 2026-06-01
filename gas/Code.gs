@@ -358,7 +358,10 @@ function handleAuthorizedRead(data, tokenData) {
     if (tokenData.role !== 'Management') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
     }
-    return jsonResponse(getSaldoKupci());
+    return jsonResponse({
+      success: true,
+      saldoKupci: getSaldoKupci().records || []
+    });
   }
 
   if (action === 'getMgmtOtkupPoOM') {
@@ -372,7 +375,10 @@ function handleAuthorizedRead(data, tokenData) {
     if (tokenData.role !== 'Management') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
     }
-    return jsonResponse(getMgmtReport('PredatoPoKupcu'));
+    return jsonResponse({
+      success: true,
+      predatoPoKupcu: getMgmtReport('PredatoPoKupcu').records || []
+    });
   }
 
   if (action === 'getMgmtOverview') {
