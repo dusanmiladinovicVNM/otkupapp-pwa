@@ -1,6 +1,6 @@
 # AgriX / OtkupApp Known Issues
 
-**Version:** v6.24 documentation refactor / design-runtime supplement  
+**Version:** v6.23 documentation refactor / read-model convergence  
 **Status:** Active known-issues register for documentation handoff  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`, `ARCHITECTURE_CHANGELOG.md`, `RELEASE_GATES.md`, `ROADMAP.md`  
 
@@ -124,44 +124,3 @@ Resolved by documenting and adopting `MgmtReports/OtkupiAll` as the master otkup
 ### Duplicate display risk for synced PWA otkup across operational and master projection sources
 
 Resolved by making `ServerRecordID` / `OtkupID` the first dedup key for otkup overview merge, before `ClientRecordID`.
-
-
-## 7. v6.24 Active / Deferred Issues
-
-### KI-v6.24-01 — Target Git repository not available through current connector
-
-**Status:** Active documentation limitation  
-**Impact:** Git verification of AgriX/OtkupApp-specific files could not be completed from the currently connected GitHub repo.
-
-Observed through GitHub connector:
-
-- available repository: `dusanmiladinovicVNM/handoverApp`;
-- repository README describes an Apartment Handover app, not AgriX/OtkupApp;
-- root app loads `css/tokens.css`, `css/layout.css`, `css/components.css`, `css/forms.css`, not the AgriX `base.css` / `components_v2.css` structure;
-- service worker uses `handover-v1` and Handover app shell paths.
-
-**Required resolution:** connect or provide the actual AgriX/OtkupApp repo/files before marking v6.24 as Git-verified.
-
-### KI-v6.24-02 — `modGoogleSheets` `sheetId = 0` sentinel diagnosis status unknown
-
-**Status:** Active follow-up  
-**Impact:** The source summary reports a diagnosis and patch proposal for replacing sentinel `0` with `-1` in nine places, but implementation status is unknown.
-
-**Required resolution:** inspect `modGoogleSheets.bas` and confirm whether the sentinel collision is patched.
-
-### KI-v6.24-03 — Deferred design-system cleanup
-
-**Status:** Accepted deferred cleanup  
-**Items:**
-
-- `--accent` green/gold split cleanup deferred to final design-system sweep;
-- inline `style="display:none"` to `.is-hidden` migration remains P3/cosmetic and requires JS audit;
-- remaining `var(--r-md)` / `var(--r-lg)` occurrences were reported as locally resolved but not pushed/verified;
-- Otpremi hero description text remains as-is by user decision.
-
-### KI-v6.24-04 — Source-summary verification vs runtime proof
-
-**Status:** Documentation limitation  
-**Impact:** The v6.24 package records the user-provided summary and performs connector-level repo sanity checking, but it does not independently run browser, VBA, GAS or service-worker tests.
-
-**Required resolution:** run the v6.24 gates in the real target environment.

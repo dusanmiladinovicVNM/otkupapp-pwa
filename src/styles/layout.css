@@ -368,7 +368,8 @@ body.has-otkup-bottom-nav #tab-queue {
   body.has-mgmt-bottom-nav #tab-mgmt-partneri,
   body.has-mgmt-bottom-nav #tab-mgmt-agro,
   body.has-vozac-bottom-nav #tab-zbirna,
-  body.has-vozac-bottom-nav #tab-transport {
+  body.has-vozac-bottom-nav #tab-transport,
+  body.has-vozac-bottom-nav #tab-profil {
     padding-top: calc(var(--app-header-h) + var(--app-role-nav-h) + 2px);
     padding-bottom: 16px;
   }

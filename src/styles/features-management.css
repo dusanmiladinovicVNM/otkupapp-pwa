@@ -1779,9 +1779,9 @@ body.has-mgmt-bottom-nav .tab-content {
     padding: 20px 12px 72px;
   }
 
-  /* Tab bar offset so management tabs don't overlap sidebar */
+  /* Tab bar je redundantan na desktopu — sidebar preuzima navigaciju */
   .has-mgmt-bottom-nav .tab-bar {
-    padding-left: 220px;
+    display: none;
   }
 
   /* Management content area gets left padding to clear sidebar */

@@ -115,30 +115,21 @@ function izdCalcPreporuka() {
 
     const rawQty = dozaPoHa * totalHa;
     const jm = art.JedinicaMere || 'kg';
-    const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.')) || 0;
-
-    let finalQty = rawQty;
-    let pakInfo = '';
-
-    if (pakovanje > 0) {
-        const pakCount = Math.ceil(rawQty / pakovanje);
-        finalQty = pakCount * pakovanje;
-        pakInfo = pakCount + ' × ' + pakovanje + ' ' + jm + ' (pakovanje)';
-    }
+    const pakovanje = parseFloat(String(art.Pakovanje || '0').replace(',', '.'));
+    const pakCount = Math.ceil(rawQty / pakovanje);
 
     panel.classList.add('visible');
     document.getElementById('izdPreporukaCalc').innerHTML =
-        '<strong>' + escapeHtml(finalQty.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
+        '<strong>' + escapeHtml(pakCount.toLocaleString('sr')) + ' ' + escapeHtml(jm) + '</strong>' +
         ' — ' + escapeHtml(art.Naziv);
 
     document.getElementById('izdPreporukaDetail').innerHTML =
         escapeHtml(String(dozaPoHa)) + ' ' + escapeHtml(jm) + '/ha × ' + escapeHtml(totalHa.toFixed(2)) + ' ha = ' +
-        escapeHtml(rawQty.toLocaleString('sr', { maximumFractionDigits: 2 })) + ' ' + escapeHtml(jm) +
-        (pakInfo ? '<br>' + escapeHtml(pakInfo) : '') +
+        escapeHtml((Math.round(rawQty * 1000) / 1000).toLocaleString('sr', { maximumFractionDigits: 3 })) + ' ' + escapeHtml(jm) +
+        '<br>' + pakCount + ' × ' + pakovanje + ' ' + jm + '/pak' +
         '<br>Parcele: ' + escapeHtml(parcelaNames.join(', '));
 
-    // Module scope umesto DOM property
-    izdPreporukaQty = finalQty;
+    izdPreporukaQty = pakCount;
 }
 
 function izdHidePreporuka() {
@@ -562,6 +553,7 @@ async function izdConfirmSaveUnlocked() {
 
             modal.style.display = 'none';
             izdReset();
+            showMgmtAgroView('main');
             return;
         }
 
@@ -899,7 +891,10 @@ async function _loadAgroFeedFromFirebase(feed, feedSub) {
             feed.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Nema podataka za prikaz.</div>';
             return;
         }
-        const items = json.izdavanja.slice(0, 20);
+        const items = json.izdavanja
+            .slice()
+            .sort((a, b) => new Date(b.Datum || 0) - new Date(a.Datum || 0))
+            .slice(0, 20);
         if (feedSub) feedSub.textContent = items.length + ' posled. izdavanja';
 
         feed.innerHTML = items.map(iz => {

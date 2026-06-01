@@ -1,8 +1,8 @@
 # AgriX / OtkupApp Architecture Reference
 
-**Version:** v6.24 canonical snapshot  
-**Last Updated:** 2026-05-30  
-**Status:** Canonical / Active Reference — v6.24 Vozač/Dispečer bugfix pass integrated
+**Version:** v6.23 canonical snapshot  
+**Last Updated:** 2026-05-15  
+**Status:** Canonical / Active Reference — v6.23 PWA otkup read-model convergence integrated
 **Owner:** Architecture documentation compiled from supplied reference set  
 **Audience:** Engineering, Product, Operations, Onboarding, Review  
 
@@ -149,8 +149,6 @@ Canonical PWA ownership includes:
 - local render dedupe, submit locks, stale-syncing recovery and client error reporting.
 
 IndexedDB is a local-first queue/cache, not shared canonical truth. `localStorage` is allowed only for device-local preferences and lightweight helper state; shared operational state belongs in IndexedDB + GAS/Sheets or in canonical desktop tables.
-
-DOM ID uniqueness rule: dynamically created modal elements must use IDs that are unique relative to any static elements in `index.html`. In particular, signature pad canvases (`initSignaturePad`, `clearSignature`, `getSignatureData`, `destroySignaturePad`) rely on `getElementById`; a modal canvas ID that collides with a static hidden canvas causes the pad to bind to the wrong element. Modal-specific canvas IDs must be distinct from any static canvas IDs (e.g. `sigKooperantOL` for the otkupni-list modal, not the shared `sigKooperant` used in the otpremnica view).
 
 ### 2.6 Technical IDs vs Business Document Numbers
 
@@ -439,28 +437,6 @@ Canonical boundary:
 - `frmSplash` performs no business reads/writes beyond UI presentation and handoff;
 - Banka inbox import is triggered from the Banka navigation/review workflow, not from app startup;
 - form-level close and workbook-level close must delegate to the centralized shutdown path.
-
-
-### 4.11 v6.24 VBA Document Numbering Model
-
-v6.24 documents the current document-numbering closeout from the frontend/VBA integration workstream.
-
-Canonical VBA document numbering is no longer treated as manual/inconsistent UI state. The current model uses business document numbers aligned with the v6.15 `x/ddmmyy[-rb]` convention:
-
-- `BrojDokumenta`;
-- `BrojOtpremnice`;
-- `BrojZbirne`.
-
-The numbering model is lock-based per station/stanica where the number is generated or reserved during guarded sync/document flow. The purpose is to avoid duplicate business numbers during mixed VBA/PWA operation.
-
-Current invariant:
-
-```text
-Business document numbers must be generated through canonical numbering helpers / guarded flows.
-Manual or ad-hoc numbering in UI code is not canonical.
-```
-
-The v6.24 source summary reports that this was implemented across nine files. The final code-level file list must be confirmed from the actual AgriX repository before treating this as independent Git-verified implementation evidence.
 
 ## 5. Data Architecture
 
@@ -1944,11 +1920,10 @@ The table below is the maintained architecture view for active and known transit
 | `saveWarRoomDemand` | No | Yes | Management | n/a | Yes | Demand create. |
 | `removeWarRoomDemand` | No | Yes | Management | n/a | Yes | Demand remove. |
 | `updateDemandPrimljeno` | No | Yes | Management | n/a | Yes | Demand received update. |
-| `getDispecer` | No | Yes | Management | n/a | No | Dispatch board read: today-only demand + active (non-`zavrseno`) plans. |
-| `saveDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan create; writes to `DispecerPlan` sheet only; must not assign `VozacID` to `OTK-*` rows. |
-| `updateDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan status update (`planned` → `u_toku` → `zavrseno`). |
+| `getDispecer` | No | Yes | Management | n/a | No | Dispatch board read. |
+| `saveDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan create. |
+| `updateDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan/status update. |
 | `removeDispecer` | No | Yes | Management | n/a | Yes | Dispatch plan remove. |
-| `getVozacPlans` | No | Yes | Vozac | Vozac scoped to own `entityID` | No | Driver's active plans for today; reads `DispecerPlan` filtered by `VozacID` and date, excludes `zavrseno`. |
 | `getKamionStatus` | No | Yes | Management, Vozac | Vozac reads own where applicable | No | Truck status read. |
 | `updateKamionStatus` | No | Yes | Vozac, Management | Vozac forced to `tokenData.entityID`; Management any | Yes | Driver status upsert. |
 | `saveIzdavanje` | No | Yes | Management | n/a | Yes | Agrohemija issuing write; retry idempotency remains roadmap. |
@@ -2092,9 +2067,6 @@ Canonical contracts:
 - `saveWarRoomDemand`, `removeWarRoomDemand` and `updateDemandPrimljeno` manage day-scoped demand rows in `WarRoomDemand`.
 - `saveDispecer`, `updateDispecer` and `removeDispecer` manage `DispecerPlan` rows with explicit planned/status lifecycle and timestamp updates.
 - `getDispecer` returns today-only demand plus active/non-`zavrseno` plans.
-- `getVozacPlans` reads `DispecerPlan` scoped to the authenticated Vozac's `entityID` and today's date, excluding `zavrseno` rows; the action block must be present in `handleAuthorizedRead` and is restricted to the Vozac role.
-- `DispecerPlan` schema: `PlanID`, `Datum`, `DemandID`, `VozacID`, `VozacName`, `StanicaID`, `StanicaName`, `KupacID`, `KupacName`, `PlannedKg`, `Status`, `CreatedAt`, `UpdatedAt`.
-- Dispatcher write invariant: Management dispatch operations write exclusively to `DispecerPlan` and `KamionStatus`. `OTK-*` otkup records must never be mutated from the dispatcher flow; `VozacID` assignment in `OTK-*` rows is prohibited from the dispatcher path.
 - `updateKamionStatus` upserts one row per `VozacID` in `KamionStatus`; Vozac may update only own status, Management may update any driver.
 - `saveIzdavanje` persists one row per agro issuing document into `Izdavanje`, serializes `stavke` as JSON and returns an `IZD-*` identifier.
 - `saveIzdavanje` server-side idempotency by stable client issuance ID remains roadmap, not current contract.
@@ -2646,24 +2618,6 @@ Private Const KARTICE_TAB_NAME As String = "Kartice"
 This removes the need for `Sheet1` special-case fallback logic in `modGoogleSheets`.
 
 
-
-### 10.7 v6.24 Frontend Read/Asset Folder Boundary
-
-The v6.24 UI/runtime work reinforces a separation already present in the sync architecture:
-
-- PWA app-shell assets live in the frontend app tree and are controlled by service-worker cache versioning;
-- Google Sheets operational/read-model data remains owned by the Google Sheets data layer;
-- PWA display code must not treat asset deploy concerns as data freshness guarantees.
-
-When UI assets are redesigned or lazy-loaded, the deployment contract is still:
-
-```text
-code asset change -> cache version bump
-data export/change -> Google read-model / operational-sheet validation
-```
-
-The two must not be conflated.
-
 ## 11. PWA Architecture
 
 This section states the current PWA offline, sync and runtime architecture.
@@ -3123,180 +3077,6 @@ ONLINE
 Queue views should render pending/syncing rows and include inline server-error diagnostics when present. Stats based only on local IndexedDB rows are local operational signals, not server truth.
 
 ---
-
-
-### 11.19 v6.24 PWA Design System and Role UI Model
-
-v6.24 documents the PWA visual-system and role-flow redesign work performed after the v6.23 read-model convergence.
-
-The current PWA UI model is based on a reusable design-system layer rather than role-local one-off CSS. The canonical design-system concepts are:
-
-- brand tokens in `base.css`;
-- self-hosted font system in `fonts.css`;
-- reusable component classes in `components_v2.css`;
-- shared header/body/card/field/button/pill/list/record patterns;
-- role feature files that compose these primitives instead of inventing local variants.
-
-The canonical brand-token family includes:
-
-```text
---forest
---accent
---gold
---cream
---text-primary
---text-secondary
---text-muted
---border
---border-strong
---shadow-sm
---shadow-md
---shadow-lg
---shadow-xl
---radius-sm
---radius-md
---radius-lg
---radius-xl
-```
-
-Legacy aliases remain for compatibility where existing code still expects them:
-
-```text
---primary
---primary-light
---primary-dark
---bg
---card
---text
-```
-
-The current font architecture is:
-
-- Cormorant Garamond for display headings / selected large numeric inputs;
-- DM Sans for body text;
-- self-hosted `woff2` assets;
-- Latin and Latin-ext coverage, including Serbian characters such as `Č`, `ć`, `Š`, `š`, `Đ`, `đ`.
-
-The reusable UI component layer includes:
-
-- `.app-hd` header system;
-- `.app-body` content container;
-- `.step` wizard primitives;
-- `.card` variants;
-- `.scan-cta`;
-- `.koop-chip`;
-- `.field` / `.field__input` / `.field__select`;
-- `.class-picker` / `.pkg-picker`;
-- `.btn-v2` variants;
-- `.sticky-bar`;
-- `.pregled-hero`;
-- `.pills` / `.pill`;
-- `.list-head`;
-- `.rec` record card family.
-
-Role UI flows must reuse this layer before adding new CSS primitives.
-
-### 11.20 v6.24 PWA Otkup Form, Otkupni List, Otprema and Pregled UI Contracts
-
-The Otkupac PWA UI now uses a staged, mobile-first flow.
-
-Otkup form current contract:
-
-- form is a 5-step state machine;
-- Step 1 selects Kooperant through scan CTA / chip / select flow;
-- quantity and price use large field inputs;
-- class picker is limited to `I` and `II`;
-- package picker exposes canonical package options such as `12/1`, `6/1`, `2/1`;
-- the save bar is sticky and shows live total;
-- driver selection is not part of the otkup form and belongs to the Otprema flow;
-- note/napomena field is not part of the current form contract;
-- picker logic must use event delegation, not inline script, to preserve CSP compatibility.
-
-Canonical Otkup form runtime helpers include:
-
-```text
-bindKlasaPicker
-bindTipAmbalazePicker
-evaluateOtkupFormState
-applyOtkupFormState
-bindOtkupFormStateListeners
-bindOtkupFormUIEvents
-```
-
-Otkupni list modal current contract:
-
-- uses `.ol-*` classes;
-- has forest header;
-- displays kg in accent/Cormorant presentation;
-- uses a 2x2 information grid;
-- supports expandable details;
-- supports signature pad;
-- uses a sticky action bar;
-- preserves existing data-action hooks:
-  - `otkupni-confirm`;
-  - `otkupni-clear-signature`;
-  - `otkupni-print`;
-  - `otkupni-save-pdf`;
-  - `close-otkupni-list-modal`;
-  - `sigKooperant`.
-
-Otprema current contract:
-
-- uses the shared `.app-hd` / `.app-body` shell;
-- supports summary, detail and success views;
-- uses scan CTA and truck/hero card patterns;
-- uses `btn-v2` button variants;
-- shows pending summary by kooperants / blocks / kg;
-- shows driver chip with real available driver fields only;
-- uses sticky `Utovari` bar with live kg;
-- selected block cards have visible selected state.
-
-Pregled / Danas current contract:
-
-- uses the shared app header with operational overview wording;
-- uses 2x2 stats grid / summary-card primitives;
-- uses filter pills for `Danas`, `Juče`, `Sve`, `Bez vozača`, `Problemi`;
-- uses styled date range fields;
-- renders dynamic `.danas-*` cards and detail modal;
-- problem badges must map to existing semantic badge classes, not missing CSS variants.
-
-### 11.21 v6.24 PWA Runtime Hygiene, Cache and Lazy Loading
-
-v6.24 also documents runtime cleanup and performance rules discovered during the redesign.
-
-Service-worker and cache rules:
-
-- `CACHE_NAME` / equivalent cache version must be bumped when critical app-shell assets change;
-- font CSS and self-hosted font assets must be part of the offline app-shell when they are required for stable role UI;
-- heavy vendor scripts should not be forced into initial service-worker precache when they are loaded lazily at runtime;
-- `lazy.js` is the canonical helper for idempotent Promise-based script loading.
-
-Lazy-loading current contract:
-
-- `jsPDF` is loaded lazily by document/PDF features;
-- Leaflet is loaded lazily by parcel/map features;
-- Chart.js is loaded lazily by management chart rendering;
-- Firebase compat libraries are loaded lazily only by intercom features that need them;
-- Kooperant and Vozač roles must not load Firebase compat libraries unless their active feature path requires it.
-
-Runtime hygiene rules:
-
-- `viewport-fit=cover` is required for iOS safe-area behavior;
-- sticky save bars must account for bottom navigation and safe-area inset;
-- date-range grid columns must use `minmax(0, 1fr)` to avoid overflow;
-- form code must not use periodic polling for field state when event-driven state updates are available;
-- `setFieldValue()`-style helpers should dispatch change events when code updates form values programmatically;
-- Serbian decimal input must be parsed through a decimal helper that accepts comma input, rather than raw `parseFloat`.
-
-Current helper additions / changes include:
-
-```text
-parseDecimalInput
-setFieldValue
-lazyLoadScript
-```
-
-The current PWA UI cleanup also removes hardcoded role/station text where runtime config can provide it. Role eyebrows and station labels must be derived from `CONFIG.ENTITY_NAME` / configured user context rather than hardcoded station names.
 
 ## 12. Role Workflows
 
@@ -4932,11 +4712,10 @@ Derived views may be rebuilt, refreshed, exported or cached. A derived view must
 | `BankaImport` open queue | bank reconciliation work queue | `tblBankaImport`, `tblPartnerMap`, linked `tblNovac`/document IDs | VBA | import/map/skip/storno actions | staged facts + derived queue state | raw bank facts are staged facts; UI status is workflow state |
 | `MgmtReports` | management reporting bundle | desktop reports and exports | VBA export + GAS/PWA read | export run / PWA refresh | derived | not a transaction write source |
 | Management KPI dashboard | management quick overview | `getMgmtAll`, `MgmtReports`, `SaldoOMDetail`, dispatch runtime | GAS/PWA Management | bootstrap, refresh, sync/export | derived | cache freshness and dispatch state matter |
-| Dispatch board | planning board | demand, kamion status, `DispecerPlan` runtime | PWA Management + GAS | management write/refresh | operational derived/planning state | Management may plan via `DispecerPlan` only; assigning `VozacID` to `OTK-*` rows directly from dispatcher is prohibited; displayed unallocated supply is raw otkupi minus planned kg per station (display-only subtraction, no record mutation) |
+| Dispatch board | planning board | demand, kamion status, dispatch plan runtime | PWA Management + GAS | management write/refresh | operational derived/planning state | Management may plan, but may not directly assign `VozacID` to OTK rows in dispatcher flow |
 | Kooperant home / knjiga polja | kooperant operational and agronomy summary | treatments, expenses, agrohemija stock, production data | PWA Kooperant + GAS reads | role bootstrap/refresh/sync | derived | local pending records must remain visible until synced |
 | Otkupac today overview | field-day overview | local IndexedDB + server `getOtkupi` data | PWA Otkupac | save/sync/refresh | derived | render must pass through canonical dedupe helper |
 | Vozač pregled zbirne | driver transport overview | local/server `zbirne`, `getVozacZbirne` | PWA Vozač | save/sync/refresh | derived | `BrojZbirne` is business number; `ServerRecordID` is technical sync ID |
-| Vozač planovi | driver plan view | `DispecerPlan` via `getVozacPlans` | PWA Vozač + GAS | transport tab load | derived | plans scoped to authenticated Vozac's `entityID`; today only; `zavrseno` excluded |
 | `MeteoLatest` | current parcel meteo state | scheduled fetch + parcel config | GAS | scheduled fetch + stale fallback | canonical current meteo read model | rate limits/offline map caveats remain |
 | Monitoring `Health` | current component health | monitoring events and watchdog checks | GAS Monitoring | event ingest + watchdog | derived current status | not a replacement for business tables |
 | Monitoring `Events` / `Errors` / `AuditCritical` | operational event history | VBA/PWA/GAS monitoring payloads | GAS Monitoring | event ingest | append-only monitoring facts | redacted; does not store full sensitive payloads |
@@ -5231,23 +5010,6 @@ Required for the v6.23 PWA otkup read-model convergence:
 - operational rows do not disappear merely because `OtkupiAll` is present;
 - browser smoke for Management and Otkupac read paths is recorded.
 
-
-### 18.15 v6.24 PWA Design/Runtime and Numbering Gates
-
-Required v6.24 documentation/implementation verification gates:
-
-- confirm the target AgriX repo contains the current `base.css`, `fonts.css`, `components_v2.css`, role UI feature files, `sw.js`, `format.js` and `lazy.js`;
-- confirm `CACHE_NAME` / service-worker cache version was bumped with the redesigned app shell;
-- confirm self-hosted Cormorant/DM Sans font assets and Latin-ext coverage are deployed;
-- confirm Otkup form uses event-delegated picker handlers and no inline script path;
-- confirm Otkup save, Otkupni list modal, Otprema and Pregled flows work in browser after cache refresh;
-- confirm `parseDecimalInput` handles Serbian comma decimal input in all money/quantity fields where used;
-- confirm lazy-loaded `jsPDF`, Leaflet, Chart.js and Firebase paths load only when their feature needs them;
-- confirm VBA document numbering helpers and lock-based per-station behavior are present in the real codebase;
-- confirm `modGoogleSheets` `sheetId = 0` sentinel collision diagnosis was either patched or explicitly left as open issue.
-
-Because the accessible GitHub connector repository does not match the AgriX/OtkupApp frontend, this gate remains source-summary verified and requires target-repo confirmation before production signoff.
-
 ## 19. Current Known Risks
 
 This section summarizes current risks that are still relevant to the active architecture. The maintained issue register lives in `KNOWN_ISSUES.md`; historical fixed issues stay in `ARCHITECTURE_CHANGELOG.md` or archived snapshots.
@@ -5433,10 +5195,10 @@ This section lists patterns that still exist for compatibility or historical rea
 ## 23. Revision Metadata
 
 ### 23.1 Current Version
-v6.24 canonical snapshot.
+v6.23 canonical snapshot.
 
 ### 23.2 Superseded Versions
-Supersedes OtkupApp / AgriX reference versions v2.2.1–v6.23.
+Supersedes OtkupApp / AgriX reference versions v2.2.1–v6.22.
 
 ### 23.3 Companion Documents
 - `ARCHITECTURE_CHANGELOG.md`
@@ -5449,19 +5211,7 @@ Supersedes OtkupApp / AgriX reference versions v2.2.1–v6.23.
 - `archive/ARCHITECTURE_REFERENCE_v6_19.md`
 - `archive/CHANGELOG_legacy_v2_to_v6_17.md`
 
-### 23.5 v6.24 Closeout Scope
-v6.24 documents the Vozač/Dispečer operational bugfix pass:
-
-- `getVozacPlans` GAS action added to endpoint authorization matrix; Vozac-scoped, today-only, `zavrseno`-excluded.
-- `DispecerPlan` schema contract made explicit in section 9.13.
-- Dispatcher write invariant formalized: `OTK-*` records must not be mutated from the dispatcher path; `VozacID` assignment via dispatcher is prohibited.
-- `dpGetSup()` display-only supply subtraction rule documented: unallocated supply = raw otkupi minus planned kg per station; no otkup records are mutated.
-- PWA DOM ID uniqueness rule added to section 2.5: modal signature canvas IDs must not collide with static canvas IDs in `index.html`.
-- Management dispatcher must load live operational otkupi (`includeLive=1`) on init to see today's quantities without requiring manual "Otkup uživo" navigation.
-- Dispatch board report row updated to reflect `DispecerPlan` source and supply subtraction semantics.
-- Vozač planovi report row added to section 17 report inventory.
-
-### 23.6 v6.23 Closeout Scope
+### 23.5 v6.23 Closeout Scope
 v6.23 documents the PWA otkup read-model convergence: `tblOtkup` remains canonical master, `MgmtReports/OtkupiAll` is the PWA master read projection, and `OTK-ST-*` / `OTK-*` remains the operational queue. Management and Otkupac views merge master projection plus operational queue rows with `ServerRecordID` / `OtkupID` before `ClientRecordID` dedupe. Browser smoke was reported as tested for the affected role views.
 
 ### 23.6 v6.22 Closeout Scope

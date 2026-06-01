@@ -3,7 +3,7 @@
 // ============================================================
 
 window.mgmtShellState = {
-    activeRoot: 'pregled',
+    activeRoot: 'dashboard',
     partnerSegment: 'kooperanti',
     koopSub: 'pregled',
     kupSub: 'fakture',
@@ -166,7 +166,7 @@ async function mgmtShellInit() {
         }
     }
 
-    await showMgmtRoot('pregled');
+    await showMgmtRoot('dashboard');
 
     if (typeof updateRoleNavVisibility === 'function') updateRoleNavVisibility();
     if (typeof updateRoleNavActive === 'function') updateRoleNavActive();
@@ -1239,6 +1239,7 @@ function mgmtDashGetPeriodStats(otkupiAll, period) {
 // ============================================================
 
 const MGMT_SIDEBAR_SVG = {
+    dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
     chart:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 17v-6M11 17V7M16 17v-4M20 17v-9"/></svg>',
     truck:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h10v10H3zM13 10h5l3 3v3h-8"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
     grid:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/></svg>',
@@ -1253,6 +1254,7 @@ const MGMT_SIDEBAR_SVG = {
 
 const MGMT_NAV_ITEMS = [
     { group: 'Operativa' },
+    { root: 'dashboard',  label: 'Dashboard',     icon: 'dashboard' },
     { root: 'pregled',    label: 'Pregled',       icon: 'chart'    },
     { root: 'dispecer',   label: 'Dispečer',      icon: 'truck'    },
     { root: 'uzivo',      label: 'Otkup uživo',   icon: 'grid'     },

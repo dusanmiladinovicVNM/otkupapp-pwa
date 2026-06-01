@@ -43,7 +43,7 @@ function getRoleNavConfig() {
             navId: 'mgmtBottomNav',
             bodyClass: 'has-mgmt-bottom-nav',
             type: 'showMgmtRoot',
-            defaultTab: 'pregled',
+            defaultTab: 'dashboard',
             tabMap: {
                 dashboard: 'dashboard',
                 pregled: 'pregled',
