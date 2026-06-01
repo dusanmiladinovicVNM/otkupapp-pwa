@@ -96,11 +96,23 @@ async function toggleFakturaStavke(fakturaID, parentEl) {
     </table>`;
 }
 
-function loadMgmtKupci() {
-    const records = (mgmtData && mgmtData.saldoKupci) ? mgmtData.saldoKupci : [];
+async function loadMgmtKupci() {
+    // Force-fetch saldoKupci (kao što kooperanti force-fetchuje kartice),
+    // da prikaz ne zavisi od toga da li je dashboard prefetch već prošao.
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('saldoKupci', 'getMgmtSaldoKupci');
+    }
+
+    const records = (mgmtData && Array.isArray(mgmtData.saldoKupci)) ? mgmtData.saldoKupci : [];
     const list = document.getElementById('mgmtKupciList');
+    if (!list) return;
+
+    // Update segment counter
+    const countEl = document.getElementById('mgmtKupCount');
+    if (countEl) countEl.textContent = records.length;
+
     if (records.length === 0) {
-        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>';
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka o kupcima.<br><span style="font-size:12px;">Pokrenite ExportMgmtReports (SaldoKupci) iz Excela.</span></p>';
         return;
     }
 
@@ -154,9 +166,13 @@ function loadMgmtKupci() {
     });
 })();
 
-function loadMgmtPredato() {
-    const records = (mgmtData && mgmtData.predatoPoKupcu) ? mgmtData.predatoPoKupcu : [];
+async function loadMgmtPredato() {
+    if (typeof ensureMgmtSection === 'function') {
+        await ensureMgmtSection('predatoPoKupcu', 'getMgmtPredatoPoKupcu');
+    }
+    const records = (mgmtData && Array.isArray(mgmtData.predatoPoKupcu)) ? mgmtData.predatoPoKupcu : [];
     const list = document.getElementById('mgmtPredatoList');
+    if (!list) return;
     if (records.length === 0) { list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nema podataka</p>'; return; }
     const grouped = {};
     records.forEach(r => {
