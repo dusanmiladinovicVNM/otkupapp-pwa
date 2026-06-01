@@ -332,10 +332,10 @@ function showMgmtPartnerSegment(segment, btn) {
     const koopSection = document.getElementById('mgmt-koop-section');
     const kupSection = document.getElementById('mgmt-kup-section');
 
-    if (koopBar) koopBar.style.display = segment === 'kooperanti' ? '' : 'none';
-    if (kupBar) kupBar.style.display = segment === 'kupci' ? '' : 'none';
-    if (koopSection) koopSection.style.display = segment === 'kooperanti' ? '' : 'none';
-    if (kupSection) kupSection.style.display = segment === 'kupci' ? '' : 'none';
+    if (koopBar) koopBar.hidden = segment !== 'kooperanti';
+    if (kupBar) kupBar.hidden = segment !== 'kupci';
+    if (koopSection) koopSection.hidden = segment !== 'kooperanti';
+    if (kupSection) kupSection.hidden = segment !== 'kupci';
 
     // Update "+ Novi …" action text per active segment
     const newPartnerBtn = document.querySelector('[data-action="mgmt-novi-partner"]');
