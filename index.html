@@ -431,11 +431,11 @@
         <div class="card mt-12">
             <div class="field__row">
                 <div class="field">
-                    <label class="field__label">Od datuma</label>
+                    <label for="fldPregledOd" class="field__label">Od datuma</label>
                     <input type="date" id="fldPregledOd" class="field__input">
                 </div>
                 <div class="field mb-0">
-                    <label class="field__label">Do datuma</label>
+                    <label for="fldPregledDo" class="field__label">Do datuma</label>
                     <input type="date" id="fldPregledDo" class="field__input">
                 </div>
             </div>
@@ -651,7 +651,7 @@
             </div>
 
             <div class="ol-signature__canvas-wrap">
-                <canvas id="otkupacSignatureCanvas" class="ol-signature__canvas"></canvas>
+                <canvas id="otkupacSignatureCanvas" class="ol-signature__canvas" role="img" aria-label="Polje za potpis kooperanta"></canvas>
             </div>
 
             <div class="field__hint mt-8">
@@ -913,12 +913,12 @@
             <div class="parcele-filters-card">
                 <div class="parcele-filters-grid">
                     <div class="form-group mb-0">
-                        <label>Pretraga</label>
+                        <label for="parceleSearch">Pretraga</label>
                         <input type="text" id="parceleSearch" placeholder="Šifra, kultura, KO...">
                     </div>
 
                     <div class="form-group mb-0">
-                        <label>Kultura</label>
+                        <label for="parceleKulturaFilter">Kultura</label>
                         <select id="parceleKulturaFilter">
                             <option value="">-- Sve kulture --</option>
                         </select>
@@ -1151,7 +1151,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Parcela</label>
+                            <label for="agroParcelaSel">Parcela</label>
                             <select id="agroParcelaSel">
                                 <option value="">-- Izaberi parcelu --</option>
                             </select>
@@ -1202,6 +1202,7 @@
                             </div>
 
                             <div class="form-group mb-8">
+                                <label for="agroPreparatSel" class="visually-hidden">Preparat sa lagera</label>
                                 <select id="agroPreparatSel" class="agro-ctrl">
                                     <option value="">-- Izaberi preparat --</option>
                                 </select>
@@ -1209,11 +1210,11 @@
 
                             <div class="form-row mb-8">
                                 <div class="form-group mb-0">
-                                    <label>Količina</label>
+                                    <label for="agroKolicina">Količina</label>
                                     <input type="number" id="agroKolicina" class="agro-ctrl" inputmode="decimal" placeholder="0">
                                 </div>
                                 <div class="form-group mb-0">
-                                    <label>JM</label>
+                                    <label for="agroJM">JM</label>
                                     <input type="text" id="agroJM" class="agro-ctrl agro-ctrl--readonly" readonly>
                                 </div>
                             </div>
@@ -1237,7 +1238,7 @@
 
                         <!-- Napomena -->
                         <div class="form-group">
-                            <label>Napomena (opciono)</label>
+                            <label for="agroNapomena">Napomena (opciono)</label>
                             <input type="text" id="agroNapomena" placeholder="Detalji...">
                         </div>
 
@@ -1316,13 +1317,13 @@
                             <div class="radovi-oprema-card">
                                 <div class="radovi-oprema-card-title">Podrazumevani traktor</div>
                                 <div class="form-group" style="margin-bottom:10px;">
-                                    <label>Izaberi traktor</label>
+                                    <label for="agroTraktor">Izaberi traktor</label>
                                     <select id="agroTraktor" class="agro-ctrl">
                                         <option value="">-- Bez traktora --</option>
                                     </select>
                                 </div>
                                 <div class="form-group mb-0">
-                                    <label>Unesi novi traktor</label>
+                                    <label for="agroTraktorNovi">Unesi novi traktor</label>
                                     <input type="text" id="agroTraktorNovi" class="agro-ctrl" placeholder="Npr. IMT 539">
                                 </div>
                             </div>
@@ -1330,13 +1331,13 @@
                             <div class="radovi-oprema-card">
                                 <div class="radovi-oprema-card-title">Podrazumevana prskalica</div>
                                 <div class="form-group" style="margin-bottom:10px;">
-                                    <label>Izaberi prskalicu / atomizer</label>
+                                    <label for="agroPrskalica">Izaberi prskalicu / atomizer</label>
                                     <select id="agroPrskalica" class="agro-ctrl">
                                         <option value="">-- Bez prskalice --</option>
                                     </select>
                                 </div>
                                 <div class="form-group mb-0">
-                                    <label>Unesi novu prskalicu</label>
+                                    <label for="agroPrskalicaNovi">Unesi novu prskalicu</label>
                                   <input type="text" id="agroPrskalicaNovi" class="agro-ctrl" placeholder="Npr. Agromehanika 400l">
                                 </div>
                             </div>
@@ -1352,7 +1353,7 @@
                         </div>
 
                         <div class="form-group mb-0">
-                            <label>Ostala oprema</label>
+                            <label for="agroOpremaOstalo">Ostala oprema</label>
                             <input type="text" id="agroOpremaOstalo" class="agro-ctrl" placeholder="Npr. motorna kosa, šmrk...">
                         </div>
                     </div>
@@ -1450,14 +1451,14 @@
             <div class="knjiga-filters-card">
                 <div class="form-row knjiga-filters-row">
                     <div class="form-group mb-0">
-                        <label>Parcela</label>
+                        <label for="kpParcelaSel">Parcela</label>
                         <select id="kpParcelaSel">
                             <option value="">-- Sve parcele --</option>
                         </select>
                     </div>
 
                     <div class="form-group mb-0">
-                        <label>Sezona</label>
+                        <label for="kpSezona">Sezona</label>
                         <select id="kpSezona">
                             <option value="">Tekuća</option>
                         </select>
@@ -1569,18 +1570,18 @@
                         <div class="trosak-kat-grid" id="trosakKatGrid"></div>
 
                         <div class="form-group">
-                            <label>Opis</label>
+                            <label for="trosakOpis">Opis</label>
                             <input type="text" id="trosakOpis" placeholder="Npr. Dizel za oranje">
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Iznos (RSD)</label>
+                                <label for="trosakIznos">Iznos (RSD)</label>
                                 <input type="number" id="trosakIznos" inputmode="numeric" placeholder="0">
                             </div>
 
                             <div class="form-group">
-                                <label>Parcela (opciono)</label>
+                                <label for="trosakParcela">Parcela (opciono)</label>
                                 <select id="trosakParcela">
                                     <option value="">-- Opšti trošak --</option>
                                 </select>
@@ -1589,12 +1590,12 @@
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Datum</label>
+                                <label for="trosakDatum">Datum</label>
                                 <input type="date" id="trosakDatum">
                             </div>
 
                             <div class="form-group">
-                                <label>Br. dokumenta</label>
+                                <label for="trosakDokBroj">Br. dokumenta</label>
                                 <input type="text" id="trosakDokBroj" placeholder="Opciono">
                             </div>
                         </div>
@@ -1814,7 +1815,7 @@
                     </div>
 
                     <div class="mgmt-dash-chart-wrap">
-                        <canvas id="mgmtDashChart" class="mgmt-dash-chart"></canvas>
+                        <canvas id="mgmtDashChart" class="mgmt-dash-chart" role="img" aria-label="Grafikon otkupa po stanicama"></canvas>
                     </div>
                     <div class="mgmt-dash-chart-legend" id="mgmtDashChartLegend"></div>
                 </section>
@@ -2395,12 +2396,12 @@
                     <div class="sig-row">
                         <div class="sig-block">
                             <div class="sig-block__label">Potpis kooperanta</div>
-                            <canvas id="sigKooperant" class="sig-canvas"></canvas>
+                            <canvas id="sigKooperant" class="sig-canvas" role="img" aria-label="Polje za potpis kooperanta"></canvas>
                             <button class="sig-clear-btn" data-action="sig-clear" data-target="sigKooperant" type="button">Obriši</button>
                         </div>
                         <div class="sig-block">
                             <div class="sig-block__label">Potpis operatera / vozača</div>
-                            <canvas id="sigOperater" class="sig-canvas"></canvas>
+                            <canvas id="sigOperater" class="sig-canvas" role="img" aria-label="Polje za potpis operatera ili vozača"></canvas>
                             <button class="sig-clear-btn" data-action="sig-clear" data-target="sigOperater" type="button">Obriši</button>
                         </div>
                     </div>
@@ -2585,7 +2586,7 @@
         <div class="vprofil__name" id="vozacProfilName">—</div>
         <div class="vprofil__role">Vozač</div>
         <div class="vprofil__qr">
-            <canvas id="vozacQrCanvas" width="200" height="200"></canvas>
+            <canvas id="vozacQrCanvas" width="200" height="200" role="img" aria-label="QR kod za vozača"></canvas>
         </div>
         <div class="vprofil__id" id="vozacProfilId">—</div>
         <button class="vprofil__btn-logout" data-action="logout" type="button">Odjavi se</button>
@@ -2741,7 +2742,7 @@
     <div class="qr-profile-card">
         <div class="qr-profile-name" id="qrProfileName"></div>
         <div class="qr-profile-role" id="qrProfileRole"></div>
-        <canvas id="qrProfileCanvas" class="qr-profile-canvas"></canvas>
+        <canvas id="qrProfileCanvas" class="qr-profile-canvas" role="img" aria-label="QR kod profila"></canvas>
         <div class="qr-profile-id" id="qrProfileID"></div>
         <p class="qr-profile-hint">Tap za zatvaranje</p>
     </div>
