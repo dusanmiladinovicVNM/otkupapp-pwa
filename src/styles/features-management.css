@@ -2452,3 +2452,90 @@ body.has-mgmt-bottom-nav .tab-content {
   .iz-wz-actions { display: none; }
   .iz-wz-progress { display: none !important; }
 }
+
+/* ─────────────────────────────────────────
+   Dispatcher inline form controls
+   ───────────────────────────────────────── */
+
+.disp-add-row {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+}
+
+.disp-add-row__label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.disp-add-row__fields {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.disp-ctrl {
+    padding: 8px;
+    font-size: 13px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 8px;
+    box-sizing: border-box;
+    background: var(--surface);
+}
+
+.disp-ctrl--flex { flex: 1; }
+.disp-ctrl--sm   { width: 70px; font-size: 12px; }
+
+.disp-add-btn {
+    padding: 8px 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.dp-banner__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.dp-banner__btn-confirm {
+    background: white;
+    color: var(--primary);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.dp-banner__btn-cancel {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.dp-refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 6px;
+}

@@ -1901,8 +1901,8 @@
                 <div class="dp-banner" id="dpBnr">
                     <div class="dp-bt" id="dpBt">—</div>
                     <div class="dp-bs" id="dpBs">—</div>
-                    <button type="button" data-action="dp-ok" style="background:white;color:var(--primary);">✓ Sačuvaj plan</button>
-                    <button type="button" data-action="dp-x" style="background:rgba(255,255,255,0.2);color:white;">✕ Otkaži</button>
+                    <button type="button" class="dp-banner__btn-confirm" data-action="dp-ok">✓ Sačuvaj plan</button>
+                    <button type="button" class="dp-banner__btn-cancel" data-action="dp-x">✕ Otkaži</button>
                 </div>
  
                 <!-- Active plans -->
@@ -1933,16 +1933,16 @@
                             <span class="disp-col__count" id="dpDT">0 kg</span>
                         </div>
                         <div id="dpDB">
-                            <div style="background:var(--surface-2);border-radius:8px;padding:10px;margin-bottom:10px;border:1px solid var(--border);">
-                                <div class="eyebrow eyebrow--sm">Dodaj zahtev</div>
-                                <div class="form-row" style="margin-bottom:6px;">
-                                    <div class="form-group mb-0"><select id="dpDK" style="padding:8px;font-size:13px;"><option value="">Kupac...</option></select></div>
-                                    <div class="form-group mb-0"><input type="number" id="dpDG" placeholder="kg" inputmode="numeric" style="padding:8px;font-size:13px;"></div>
+                            <div class="disp-add-row">
+                                <div class="disp-add-row__label">Dodaj zahtev</div>
+                                <div class="disp-add-row__fields">
+                                    <select id="dpDK" class="disp-ctrl disp-ctrl--flex"><option value="">Kupac...</option></select>
+                                    <input type="number" id="dpDG" class="disp-ctrl disp-ctrl--flex" placeholder="kg" inputmode="numeric">
                                 </div>
-                                <div style="display:flex;gap:6px;">
-                                    <select id="dpDV" style="flex:1;padding:8px;font-size:12px;border:1.5px solid var(--border-strong);border-radius:8px;"><option value="">Vrsta...</option></select>
-                                    <select id="dpDL" style="width:70px;padding:8px;font-size:12px;border:1.5px solid var(--border-strong);border-radius:8px;"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
-                                    <button type="button" data-action="dp-ad" style="padding:8px 14px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">+</button>
+                                <div class="disp-add-row__fields">
+                                    <select id="dpDV" class="disp-ctrl disp-ctrl--flex"><option value="">Vrsta...</option></select>
+                                    <select id="dpDL" class="disp-ctrl disp-ctrl--sm"><option value="">Kl.</option><option>I</option><option>II</option><option>I+II</option></select>
+                                    <button type="button" class="disp-add-btn" data-action="dp-ad">+</button>
                                 </div>
                             </div>
                             <div class="disp-col__list" id="dpDL2"></div>
@@ -1952,7 +1952,7 @@
  
                 <div style="text-align:center;padding:10px;font-size:11px;color:var(--text-muted);">
                     <span id="dpRT">—</span>
-                    <button type="button" data-action="load-dispecer" style="background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px;">↻ Osveži</button>
+                    <button type="button" class="dp-refresh-btn" data-action="load-dispecer">↻ Osveži</button>
                 </div>
             </div>
         </div>
