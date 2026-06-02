@@ -1537,11 +1537,14 @@ window.showMgmtRoot = async function(root, btn) {
 const _origMgmtShellInit = window.mgmtShellInit || mgmtShellInit;
 window.mgmtShellInit = async function() {
     mgmtSidebarMount();
-    const result = await _origMgmtShellInit.call(this);
-    mgmtMobileTbarSync();
-    mgmtMobileUpdateTbar((window.mgmtShellState && window.mgmtShellState.activeRoot) || 'pregled');
-    mgmtDrawerPopulateUser();
-    return result;
+    try {
+        const result = await _origMgmtShellInit.call(this);
+        mgmtMobileUpdateTbar((window.mgmtShellState && window.mgmtShellState.activeRoot) || 'dashboard');
+        mgmtDrawerPopulateUser();
+        return result;
+    } finally {
+        mgmtMobileTbarSync();
+    }
 };
 
 // Patch showMgmtAgroView to init wizard on mobile when entering izdavanje

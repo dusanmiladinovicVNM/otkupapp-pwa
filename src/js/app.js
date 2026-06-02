@@ -81,6 +81,10 @@ async function bootstrapApp() {
             initRoleNavEngine();
         }
 
+        if (typeof mgmtMobileTbarSync === 'function') {
+            mgmtMobileTbarSync();
+        }
+
         updateSyncBadge();
         bindConnectivityEvents();
         startBackgroundSync();
