@@ -426,6 +426,13 @@ body.has-otkup-bottom-nav #tab-queue {
   .bottom-nav.visible {
     display: grid !important;
   }
+
+  /* Bulletproof per-nav rules — ID specificity guarantees show over any inline or class override */
+  #koopBottomNav.visible,
+  #otkupBottomNav.visible,
+  #vozacBottomNav.visible {
+    display: grid !important;
+  }
 }
 
 /* =========================================================

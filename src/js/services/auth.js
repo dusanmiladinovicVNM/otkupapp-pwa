@@ -8,11 +8,11 @@ function showLoginScreen() {
     if (header) header.style.display = 'none';
     if (tabBar) tabBar.style.display = 'none';
 
-    ['koopBottomNav', 'otkupBottomNav'].forEach(id => {
+    ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav', 'vozacBottomNav'].forEach(id => {
         const nav = document.getElementById(id);
         if (nav) nav.classList.remove('visible');
     });
-    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav');
+    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav', 'has-mgmt-bottom-nav', 'has-vozac-bottom-nav');
 
 
     document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
@@ -160,12 +160,12 @@ async function doLogin() {
 function doLogout() {
     removeLs(['userRole', 'otkupacID', 'entityID', 'entityName', 'authToken', 'authExpiresAt', 'username']);
 
-    ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav'].forEach(id => {
+    ['koopBottomNav', 'otkupBottomNav', 'mgmtBottomNav', 'vozacBottomNav'].forEach(id => {
         const nav = document.getElementById(id);
         if (nav) nav.classList.remove('visible');
     });
 
-    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav', 'has-mgmt-bottom-nav');
+    document.body.classList.remove('has-koop-bottom-nav', 'has-otkup-bottom-nav', 'has-mgmt-bottom-nav', 'has-vozac-bottom-nav');
 
     location.reload();
 }

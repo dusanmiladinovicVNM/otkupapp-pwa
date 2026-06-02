@@ -94,6 +94,7 @@ function updateRoleNavVisibility() {
     if (!nav) return;
 
     nav.classList.add('visible');
+    nav.style.removeProperty('display');
 
     // body klasa mora da postoji i na desktopu i na mobile-u,
     // jer spacing/layout koristi istu klasu u oba režima
