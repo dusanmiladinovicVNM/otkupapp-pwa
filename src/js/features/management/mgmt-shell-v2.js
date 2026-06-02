@@ -5,7 +5,7 @@
 window.mgmtShellState = {
     activeRoot: 'dashboard',
     partnerSegment: 'kooperanti',
-    koopSub: 'pregled',
+    koopSub: 'saldo',
     kupSub: 'fakture',
     otkupSub: 'otkupi',
     agroSub: 'izdavanje',

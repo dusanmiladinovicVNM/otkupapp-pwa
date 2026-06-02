@@ -1798,6 +1798,14 @@ body.has-mgmt-bottom-nav .tab-content {
   display: block;
 }
 
+/* Pregled panel lives outside the split container — needs its own hide/show rule */
+#mgmt-koop-pregled {
+  display: none;
+}
+#mgmt-koop-pregled.active {
+  display: block;
+}
+
 @media (min-width: 900px) {
   /* Split grid on desktop */
   #mgmt-koop-split,
