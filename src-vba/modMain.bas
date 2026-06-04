@@ -19,7 +19,7 @@ Public Sub StartApp()
         moduleName:="modMain", _
         procedureName:="StartApp", _
         entityType:="App", _
-        entityId:="Startup", _
+        entityID:="Startup", _
         correlationId:="VBA-STARTUP"
     On Error GoTo EH
 
@@ -54,7 +54,7 @@ Public Sub StartApp()
             moduleName:="modMain", _
             procedureName:="StartApp", _
             entityType:="Journal", _
-            entityId:="Recovery", _
+            entityID:="Recovery", _
             correlationId:="JOURNAL-STARTUP-RECOVERY"
         On Error GoTo EH
 
@@ -73,7 +73,7 @@ Public Sub StartApp()
         moduleName:="modMain", _
         procedureName:="StartApp", _
         entityType:="App", _
-        entityId:="Startup", _
+        entityID:="Startup", _
         correlationId:="VBA-STARTUP"
     On Error GoTo 0
 
@@ -106,7 +106,7 @@ EH:
         moduleName:="modMain", _
         procedureName:="StartApp", _
         entityType:="App", _
-        entityId:="Startup", _
+        entityID:="Startup", _
         correlationId:="VBA-STARTUP", _
         errorNumber:=errNo, _
         errorDescription:=errDesc, _
@@ -128,7 +128,7 @@ Public Sub InitApp()
     ValidateAllTables
     m_Initialized = True
     
-Cleanup:
+CleanUp:
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
     Application.EnableEvents = True
@@ -136,7 +136,7 @@ Cleanup:
     
 ErrHandler:
     MsgBox "Greska pri inicijalizaciji: " & Err.description, vbCritical, APP_NAME
-    Resume Cleanup
+    Resume CleanUp
 End Sub
 
 Public Sub ShutdownApp()
@@ -145,11 +145,21 @@ Public Sub ShutdownApp()
     If mIsShuttingDown Then Exit Sub
     mIsShuttingDown = True
 
-    ' NEW: Otkazi pending OnTime pre gasenja aplikacije.
+    ' Otkazi pending scheduled-sync OnTime pre gasenja.
     On Error Resume Next
     StopScheduledSync
     If Err.Number <> 0 Then
         LogErr "modMain.ShutdownApp.StopScheduledSync"
+        Err.Clear
+    End If
+    On Error GoTo EH
+
+    ' AR-002a: flush odlozenog auto-save-a i otkazi njegov OnTime tajmer.
+    On Error Resume Next
+    modJournaling.FlushNow "shutdown"
+    modJournaling.StopAutoSaveTimer
+    If Err.Number <> 0 Then
+        LogErr "modMain.ShutdownApp.AutoSaveFlush"
         Err.Clear
     End If
     On Error GoTo EH
