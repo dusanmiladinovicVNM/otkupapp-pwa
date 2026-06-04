@@ -12,6 +12,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
@@ -361,7 +362,7 @@ EH:
     HideLockStatus
 End Sub
 
-Private Sub RefreshBrojDokumentaSuggestion()
+Private Sub RefreshBrojDokumentaSuggestion(Optional ByVal checkRemote As Boolean = True)
     On Error GoTo EH
 
     Dim stanicaID As String
@@ -372,7 +373,7 @@ Private Sub RefreshBrojDokumentaSuggestion()
     If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
 
     Dim suggested As String
-    suggested = SuggestNextBroj(KIND_OTK, stanicaID, datumDok)
+    suggested = SuggestNextBroj(KIND_OTK, stanicaID, datumDok, checkRemote)
 
     If Len(suggested) > 0 Then
         txtBrojDokumenta.value = suggested
@@ -382,6 +383,7 @@ Private Sub RefreshBrojDokumentaSuggestion()
 EH:
     LogErr "frmOtkup.RefreshBrojDokumentaSuggestion"
 End Sub
+
 ' ============================================================
 ' OTKUP
 ' ============================================================
@@ -569,6 +571,7 @@ EH:
     LogErr "frmOtkup.btnUnos"
     MsgBox "Greška pri unosu otkupa: " & Err.description, vbCritical, APP_NAME
 End Sub
+
 Private Sub ClearOtkupFields()
     txtBrojDokumenta.value = ""
     txtKolicina.value = ""
@@ -577,18 +580,16 @@ Private Sub ClearOtkupFields()
     txtNovac.value = "0"
     txtPrimalac.value = ""
     cmbParcela.Clear
-    
-    ' Klasa II zurücksetzen
+
     chkDveKlase.value = False
     DisableField txtKolicinaKLII
     DisableField txtCenaKLII
     lblUkupnoKG.caption = ""
-    
+
     txtKolicina.SetFocus
-    
-    ' Predloži sledeci broj za istu stanicu/datum (just-saved red je u tblOtkup-u,
-    ' SuggestNextBroj scan vidi njegov broj ? suggestion = max + 1)
-    RefreshBrojDokumentaSuggestion
+
+    ' Lokalni predlog (bez Google) — just-saved red je vec u tblOtkup-u
+    RefreshBrojDokumentaSuggestion False
 End Sub
 
 Private Sub btnStornoOtkup_Click()
