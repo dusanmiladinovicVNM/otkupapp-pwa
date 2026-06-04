@@ -93,7 +93,7 @@ Public Function SaveNovac_TX(ByVal brojDok As String, ByVal datum As Date, _
         moduleName:="modNovac", _
         procedureName:="SaveNovac_TX", _
         entityType:="Novac", _
-        entityId:=SaveNovac_TX, _
+        entityID:=SaveNovac_TX, _
         correlationId:=SaveNovac_TX
     On Error GoTo 0
 
@@ -125,7 +125,7 @@ EH:
         moduleName:="modNovac", _
         procedureName:="SaveNovac_TX", _
         entityType:="Novac", _
-        entityId:=SaveNovac_TX, _
+        entityID:=SaveNovac_TX, _
         correlationId:=corrId, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -143,7 +143,7 @@ EH:
         moduleName:="modNovac", _
         procedureName:="SaveNovac_TX", _
         entityType:="Novac", _
-        entityId:=SaveNovac_TX, _
+        entityID:=SaveNovac_TX, _
         correlationId:=IIf(Len(Trim$(fakturaID)) > 0, fakturaID, otkupID)
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -551,7 +551,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     fakUplaceno = GetUplataForFaktura(fakturaID)
     Dim preostalo As Double
     preostalo = fakIznos - fakUplaceno
-    
+
     If preostalo <= 0 Then Exit Sub
     
     ' Alle Avans-Zeilen für diesen Kupac sammeln (chronologisch)
@@ -1089,25 +1089,40 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     colPartnerID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
     colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
     
-    ' Otkup-Vrednost
+    ' --- Otkup vrednost: nadji red u vec ucitanom otkData (bez FindRows re-read) ---
     Dim otkData As Variant
     otkData = GetTableData(TBL_OTKUP)
-    Dim otkRows As Collection
-    Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-    If otkRows.count = 0 Then Exit Sub
-    
-    Dim r As Long: r = otkRows(1)
+
+    Dim colOtkRowID As Long
+    colOtkRowID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+
+    Dim r As Long: r = 0
+    Dim rr As Long
+    For rr = 1 To UBound(otkData, 1)
+        If CStr(otkData(rr, colOtkRowID)) = otkupID Then r = rr: Exit For
+    Next rr
+    If r = 0 Then Exit Sub
+
     Dim colKol As Long, colCena As Long
     colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    
+
     Dim otkVrednost As Double
     If IsNumeric(otkData(r, colKol)) And IsNumeric(otkData(r, colCena)) Then
         otkVrednost = CDbl(otkData(r, colKol)) * CDbl(otkData(r, colCena))
     End If
-    
+
+    ' --- Uplata: sumiraj iz vec ucitanog `data` (bez GetUplataForOtkup re-read) ---
+    Dim uplata As Double: uplata = 0#
+    Dim ii As Long
+    For ii = 1 To UBound(data, 1)
+        If Trim$(CStr(data(ii, colOtkID))) = Trim$(otkupID) Then       ' colOtkID = NOVAC OtkupID (vec deklarisan)
+            If IsNumeric(data(ii, colIsplata)) Then uplata = uplata + CDbl(data(ii, colIsplata))
+        End If
+    Next ii
+
     Dim preostalo As Double
-    preostalo = otkVrednost - GetUplataForOtkup(otkupID)
+    preostalo = otkVrednost - uplata
     If preostalo <= 0 Then Exit Sub
     
     Dim i As Long
