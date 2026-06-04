@@ -1069,7 +1069,7 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     If IsEmpty(data) Then Exit Sub
     data = ExcludeStornirano(data, TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
-    
+
     Const SRC As String = "ApplyAvansToOtkup"
 
     Dim colID As Long, colKoopID As Long, colTip As Long
@@ -1088,21 +1088,15 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
     colPartnerID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
     colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
-    
-    ' --- Otkup vrednost: nadji red u vec ucitanom otkData (bez FindRows re-read) ---
+
+    ' Otkup-Vrednost
     Dim otkData As Variant
     otkData = GetTableData(TBL_OTKUP)
+    Dim otkRows As Collection
+    Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If otkRows.count = 0 Then Exit Sub
 
-    Dim colOtkRowID As Long
-    colOtkRowID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
-
-    Dim r As Long: r = 0
-    Dim rr As Long
-    For rr = 1 To UBound(otkData, 1)
-        If CStr(otkData(rr, colOtkRowID)) = otkupID Then r = rr: Exit For
-    Next rr
-    If r = 0 Then Exit Sub
-
+    Dim r As Long: r = otkRows(1)
     Dim colKol As Long, colCena As Long
     colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
@@ -1112,19 +1106,10 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
         otkVrednost = CDbl(otkData(r, colKol)) * CDbl(otkData(r, colCena))
     End If
 
-    ' --- Uplata: sumiraj iz vec ucitanog `data` (bez GetUplataForOtkup re-read) ---
-    Dim uplata As Double: uplata = 0#
-    Dim ii As Long
-    For ii = 1 To UBound(data, 1)
-        If Trim$(CStr(data(ii, colOtkID))) = Trim$(otkupID) Then       ' colOtkID = NOVAC OtkupID (vec deklarisan)
-            If IsNumeric(data(ii, colIsplata)) Then uplata = uplata + CDbl(data(ii, colIsplata))
-        End If
-    Next ii
-
     Dim preostalo As Double
-    preostalo = otkVrednost - uplata
+    preostalo = otkVrednost - GetUplataForOtkup(otkupID)
     If preostalo <= 0 Then Exit Sub
-    
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
@@ -1132,14 +1117,14 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
         If CStr(data(i, colTip)) <> NOV_VIRMAN_AVANS_KOOP Then GoTo NextAvans
         If CStr(data(i, colOtkID)) <> "" Then GoTo NextAvans
         If Not IsNumeric(data(i, colIsplata)) Then GoTo NextAvans
-        
+
         Dim avansIznos As Double
         avansIznos = CDbl(data(i, colIsplata))
         If avansIznos <= 0 Then GoTo NextAvans
-        
+
         Dim applyAmt As Double
         Dim avansRows As Collection
-        
+
         If avansIznos <= preostalo Then
             applyAmt = avansIznos
 
@@ -1186,14 +1171,13 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
                         "Failed to create split avans row for OtkupID=" & otkupID
             End If
         End If
-        
+
         preostalo = preostalo - applyAmt
 NextAvans:
     Next i
-    
+
     If preostalo <= 0 Then UpdateOtkupStatus otkupID
 End Sub
-
 Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
                                       ByVal otkupID As String) As Boolean
     Dim tx As clsTransaction
