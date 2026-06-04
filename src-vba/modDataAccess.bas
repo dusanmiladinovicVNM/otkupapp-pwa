@@ -1,8 +1,7 @@
-Attribute VB_Name = "modDataAccess"
 Option Explicit
 
 ' ============================================================
-' modDataAccess – EINZIGER Ort für Sheet/Table-Zugriffe
+' modDataAccess â€“ EINZIGER Ort fÃ¼r Sheet/Table-Zugriffe
 ' Alles andere ruft NUR diese Funktionen auf.
 ' Daten rein als Arrays, Daten raus als Arrays.
 ' ============================================================
@@ -10,12 +9,12 @@ Option Explicit
 ' --- Table Access ---
 
 Public Function GetTable(ByVal tblName As String) As ListObject
-    ' Findet ein ListObject über alle Sheets hinweg
+    ' Findet ein ListObject Ã¼ber alle Sheets hinweg
     Dim ws As Worksheet
     Dim lo As ListObject
     For Each ws In ThisWorkbook.Worksheets
         For Each lo In ws.ListObjects
-            If lo.Name = tblName Then
+            If lo.name = tblName Then
                 Set GetTable = lo
                 Exit Function
             End If
@@ -25,7 +24,7 @@ Public Function GetTable(ByVal tblName As String) As ListObject
 End Function
 
 Public Function GetTableData(ByVal tblName As String) As Variant
-    ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurück
+    ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurÃ¼ck
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -36,11 +35,11 @@ Public Function GetTableData(ByVal tblName As String) As Variant
         GetTableData = Empty
         Exit Function
     End If
-    GetTableData = lo.DataBodyRange.Value
+    GetTableData = lo.DataBodyRange.value
 End Function
 
 Public Function GetTableHeaders(ByVal tblName As String) As Variant
-    ' Gibt die Spaltennamen als 1D-Array zurück
+    ' Gibt die Spaltennamen als 1D-Array zurÃ¼ck
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -51,13 +50,13 @@ Public Function GetTableHeaders(ByVal tblName As String) As Variant
     Dim i As Long
     ReDim headers(1 To lo.ListColumns.count)
     For i = 1 To lo.ListColumns.count
-        headers(i) = lo.ListColumns(i).Name
+        headers(i) = lo.ListColumns(i).name
     Next i
     GetTableHeaders = headers
 End Function
 
 Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String) As Long
-    ' Gibt den Spaltenindex innerhalb der Tabelle zurück (1-basiert)
+    ' Gibt den Spaltenindex innerhalb der Tabelle zurÃ¼ck (1-basiert)
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -65,12 +64,12 @@ Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String)
         Exit Function
     End If
     On Error Resume Next
-    GetColumnIndex = lo.ListColumns(colName).Index
+    GetColumnIndex = lo.ListColumns(colName).index
     On Error GoTo 0
 End Function
 
 Public Function GetColumnData(ByVal tblName As String, ByVal colName As String) As Variant
-    ' Gibt eine einzelne Spalte als 1D-Array zurück
+    ' Gibt eine einzelne Spalte als 1D-Array zurÃ¼ck
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -93,17 +92,17 @@ Public Function GetColumnData(ByVal tblName As String, ByVal colName As String) 
     Set rng = lo.ListColumns(colIdx).DataBodyRange
     If rng.rows.count = 1 Then
         Dim arr(1 To 1) As Variant
-        arr(1) = rng.Value
+        arr(1) = rng.value
         GetColumnData = arr
     Else
-        GetColumnData = Application.Transpose(rng.Value)
+        GetColumnData = Application.Transpose(rng.value)
     End If
 End Function
 
 ' --- WRITE Operations ---
 
 Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As Long
-    ' Fügt eine neue Zeile an die Tabelle an
+    ' FÃ¼gt eine neue Zeile an die Tabelle an
     ' rowData = 1D Array mit Werten in Spaltenreihenfolge
     ' Returns: Zeilennummer der neuen Zeile (0 bei Fehler)
     Dim lo As ListObject
@@ -123,15 +122,15 @@ Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As 
     colCount = lo.ListColumns.count
     
     For i = LBound(rowData) To Application.Min(UBound(rowData), LBound(rowData) + colCount - 1)
-        newRow.Range.cells(1, i - LBound(rowData) + 1).Value = rowData(i)
+        newRow.Range.cells(1, i - LBound(rowData) + 1).value = rowData(i)
     Next i
     
-    AppendRow = newRow.Index
+    AppendRow = newRow.index
     WriteJournalRow tblName, rowData
     Exit Function
     
 ErrHandler:
-    Debug.Print "AppendRow ERROR: "; Err.Number; Err.Description
+    Debug.Print "AppendRow ERROR: "; Err.Number; Err.description
     AppendRow = 0
 End Function
 
@@ -153,7 +152,7 @@ Public Function UpdateCell(ByVal tblName As String, ByVal rowIndex As Long, _
     End If
     
     On Error GoTo ErrHandler
-    lo.DataBodyRange.cells(rowIndex, colIdx).Value = newValue
+    lo.DataBodyRange.cells(rowIndex, colIdx).value = newValue
     UpdateCell = True
     Exit Function
     
@@ -192,15 +191,15 @@ End Function
 
 Public Function GetNextID(ByVal tblName As String, ByVal idColName As String, _
                           Optional ByVal prefix As String = "") As String
-    ' Generiert die nächste ID (z.B. "OTK-00001")
+    ' Generiert die nÃ¤chste ID (z.B. "OTK-00001")
     Dim data As Variant
     Dim colIdx As Long
     colIdx = GetColumnIndex(tblName, idColName)
     data = GetTableData(tblName)
-    
+
     Dim maxNum As Long
     maxNum = 0
-    
+
     If Not IsEmpty(data) Then
         Dim i As Long
         Dim numPart As Long
@@ -222,7 +221,7 @@ Public Function GetNextID(ByVal tblName As String, ByVal idColName As String, _
             End If
         Next i
     End If
-    
+
     If prefix <> "" Then
         GetNextID = prefix & Format$(maxNum + 1, "00000")
     Else
@@ -233,7 +232,7 @@ End Function
 Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String, _
                                ByVal searchValue As String, _
                                ByVal datumColName As String) As String
-    ' Prüft ob searchValue in colName bereits existiert
+    ' PrÃ¼ft ob searchValue in colName bereits existiert
     ' Returns: "" wenn kein Duplikat, sonst Fehlermeldung mit Datum
     
     If searchValue = "" Then
@@ -260,7 +259,7 @@ Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String,
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        ' Stornierte überspringen
+        ' Stornierte Ã¼berspringen
         If colStorno > 0 Then
             If CStr(data(i, colStorno)) = "Da" Then GoTo NextRow
         End If
@@ -287,7 +286,7 @@ End Function
 
 Public Function LookupValue(ByVal tblName As String, ByVal searchCol As String, _
                             ByVal searchVal As Variant, ByVal returnCol As String) As Variant
-    ' Einfacher VLOOKUP-Ersatz über ListObjects
+    ' Einfacher VLOOKUP-Ersatz Ã¼ber ListObjects
     Dim data As Variant
     data = GetTableData(tblName)
     If IsEmpty(data) Then
@@ -318,7 +317,7 @@ End Function
 Public Function GetLookupList(ByVal tblName As String, ByVal colName As String, _
                               Optional ByVal filterCol As String = "", _
                               Optional ByVal filterVal As Variant) As Variant
-    ' Gibt eindeutige Werte einer Spalte als Array zurück (für ComboBox-Füllung)
+    ' Gibt eindeutige Werte einer Spalte als Array zurÃ¼ck (fÃ¼r ComboBox-FÃ¼llung)
     Dim data As Variant
     data = GetTableData(tblName)
     If IsEmpty(data) Then
