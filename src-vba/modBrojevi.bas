@@ -1,4 +1,3 @@
-Attribute VB_Name = "modBrojevi"
 'Attribute VB_Name = "modBrojevi"
 Option Explicit
 
@@ -34,50 +33,55 @@ Public Const KIND_ZBR As String = "ZBR"
 ' ============================================================
 Public Function SuggestNextBroj(ByVal kind As String, _
                                 ByVal entityID As String, _
-                                ByVal datum As Date) As String
+                                ByVal datum As Date, _
+                                Optional ByVal checkRemote As Boolean = True) As String
     Const SRC As String = "SuggestNextBroj"
-    
+
     On Error GoTo EH
 
     If Len(Trim$(entityID)) = 0 Then
         SuggestNextBroj = ""
         Exit Function
     End If
-    
+
     Dim maxLocal As Long
     Dim maxRemote As Long
     Dim nextSeq As Long
-    
+
     Select Case UCase$(kind)
         Case KIND_OTK
             maxLocal = MaxSeqFromTable(TBL_OTKUP, COL_OTK_BR_DOK, _
                                        COL_OTK_DATUM, COL_OTK_STANICA, _
                                        entityID, datum)
-            maxRemote = MaxSeqFromGoogleSheet("OTK-" & entityID, _
-                                              "BrojDokumenta", datum)
+            If checkRemote Then
+                maxRemote = MaxSeqFromGoogleSheet("OTK-" & entityID, _
+                                                  "BrojDokumenta", datum)
+            End If
         Case KIND_OTP
             maxLocal = MaxSeqFromTable(TBL_OTPREMNICA, COL_OTP_BROJ, _
                                        COL_OTP_DATUM, COL_OTP_STANICA, _
                                        entityID, datum)
-            maxRemote = 0   ' OTP je VBA-only, nema GAS sheet
+            maxRemote = 0
         Case KIND_ZBR
             maxLocal = MaxSeqFromTable(TBL_ZBIRNA, COL_ZBR_BROJ, _
                                        COL_ZBR_DATUM, COL_ZBR_VOZAC, _
                                        entityID, datum)
-            maxRemote = MaxSeqFromGoogleSheet("VOZ-" & entityID, _
-                                              "BrojZbirne", datum)
+            If checkRemote Then
+                maxRemote = MaxSeqFromGoogleSheet("VOZ-" & entityID, _
+                                                  "BrojZbirne", datum)
+            End If
         Case Else
             LogError SRC, "Nepoznata kind vrednost: " & kind
             SuggestNextBroj = ""
             Exit Function
     End Select
-    
+
     If maxLocal > maxRemote Then
         nextSeq = maxLocal + 1
     Else
         nextSeq = maxRemote + 1
     End If
-    
+
     SuggestNextBroj = FormatBroj(entityID, datum, nextSeq)
     Exit Function
 
