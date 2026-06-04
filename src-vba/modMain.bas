@@ -154,16 +154,6 @@ Public Sub ShutdownApp()
     End If
     On Error GoTo EH
 
-    ' AR-002a: flush odlozenog auto-save-a i otkazi njegov OnTime tajmer.
-    On Error Resume Next
-    modJournaling.FlushNow "shutdown"
-    modJournaling.StopAutoSaveTimer
-    If Err.Number <> 0 Then
-        LogErr "modMain.ShutdownApp.AutoSaveFlush"
-        Err.Clear
-    End If
-    On Error GoTo EH
-
     Application.Visible = True
 
     UnloadAllUserForms
