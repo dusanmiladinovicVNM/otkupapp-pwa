@@ -29,6 +29,9 @@ Private Const DEFAULT_APP_VERSION As String = APP_VERSION
 Private Const HTTP_TIMEOUT_MS As Long = 1200
 Private Const HTTP_DEBUG_TIMEOUT_MS As Long = 10000
 
+' Modulska referenca: drži in-flight async zahteve da WinHttp ne otkaže slanje pre vremena
+Private m_inFlight As Collection
+
 ' ============================================================
 ' PUBLIC API
 ' ============================================================
@@ -55,7 +58,7 @@ Public Sub Monitor_Event( _
     Optional ByVal moduleName As String = "", _
     Optional ByVal procedureName As String = "", _
     Optional ByVal entityType As String = "", _
-    Optional ByVal entityId As String = "", _
+    Optional ByVal entityID As String = "", _
     Optional ByVal correlationId As String = "", _
     Optional ByVal payloadJson As String = "{}" _
 )
@@ -73,7 +76,7 @@ Public Sub Monitor_Event( _
         moduleName:=moduleName, _
         procedureName:=procedureName, _
         entityType:=entityType, _
-        entityId:=entityId, _
+        entityID:=entityID, _
         correlationId:=correlationId, _
         payloadJson:=payloadJson _
     )
@@ -85,7 +88,7 @@ Public Sub Monitor_Error( _
     ByVal moduleName As String, _
     ByVal procedureName As String, _
     Optional ByVal entityType As String = "", _
-    Optional ByVal entityId As String = "", _
+    Optional ByVal entityID As String = "", _
     Optional ByVal correlationId As String = "", _
     Optional ByVal userId As String = "Operator", _
     Optional ByVal role As String = "Admin", _
@@ -124,7 +127,7 @@ Public Sub Monitor_Error( _
         moduleName:=moduleName, _
         procedureName:=procedureName, _
         entityType:=entityType, _
-        entityId:=entityId, _
+        entityID:=entityID, _
         correlationId:=correlationId, _
         payloadJson:=payload
 End Sub
@@ -134,7 +137,7 @@ Public Sub Monitor_Critical( _
     ByVal procedureName As String, _
     ByVal message As String, _
     Optional ByVal entityType As String = "", _
-    Optional ByVal entityId As String = "", _
+    Optional ByVal entityID As String = "", _
     Optional ByVal correlationId As String = "", _
     Optional ByVal payloadJson As String = "{}" _
 )
@@ -147,7 +150,7 @@ Public Sub Monitor_Critical( _
         moduleName:=moduleName, _
         procedureName:=procedureName, _
         entityType:=entityType, _
-        entityId:=entityId, _
+        entityID:=entityID, _
         correlationId:=correlationId, _
         payloadJson:=payloadJson
 End Sub
@@ -196,7 +199,7 @@ Public Sub Monitor_SEF( _
         moduleName:="modSEF", _
         procedureName:=eventType, _
         entityType:="Faktura", _
-        entityId:=invoiceLocalId, _
+        entityID:=invoiceLocalId, _
         correlationId:=corr, _
         payloadJson:=payload
 End Sub
@@ -244,7 +247,7 @@ Public Sub Monitor_Backup( _
         moduleName:="Backup", _
         procedureName:="Monitor_Backup", _
         entityType:="Backup", _
-        entityId:=backupType, _
+        entityID:=backupType, _
         correlationId:="BACKUP", _
         payloadJson:=payload
 End Sub
@@ -262,7 +265,7 @@ Public Function Monitor_Test() As Boolean
         moduleName:="modMonitoring", _
         procedureName:="Monitor_Test", _
         entityType:="", _
-        entityId:="", _
+        entityID:="", _
         correlationId:="VBA-MONITORING-TEST", _
         payloadJson:="{""test"":true}" _
     )
@@ -340,13 +343,21 @@ Private Function Monitoring_PostJson(ByVal url As String, ByVal jsonBody As Stri
     Dim http As Object
     Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
 
-    http.Open "POST", url, False
+    http.Open "POST", url, True                 ' True = ASINHRONO (ne blokira)
     http.SetTimeouts HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS
     http.SetRequestHeader "Content-Type", "application/json; charset=utf-8"
     http.SetRequestHeader "Accept", "application/json"
     http.Send jsonBody
+    ' NE pozivamo WaitForResponse -> vraca se odmah; round-trip ide u pozadini
 
-    Monitoring_PostJson = (http.status >= 200 And http.status < 300)
+    ' Zadrži referencu da se zahtev ne otkaže kad lokalni objekat izade iz opsega.
+    If m_inFlight Is Nothing Then Set m_inFlight = New Collection
+    m_inFlight.Add http
+    Do While m_inFlight.count > 12              ' ogranici; stariji su odavno poslati
+        m_inFlight.Remove 1
+    Loop
+
+    Monitoring_PostJson = True
     Exit Function
 
 EH:
@@ -362,7 +373,7 @@ Private Function BuildBaseJson( _
     ByVal moduleName As String, _
     ByVal procedureName As String, _
     ByVal entityType As String, _
-    ByVal entityId As String, _
+    ByVal entityID As String, _
     ByVal correlationId As String, _
     ByVal payloadJson As String _
 ) As String
@@ -386,7 +397,7 @@ Private Function BuildBaseJson( _
         """module"":" & JsonString(moduleName) & "," & _
         """functionName"":" & JsonString(procedureName) & "," & _
         """entityType"":" & JsonString(entityType) & "," & _
-        """entityId"":" & JsonString(entityId) & "," & _
+        """entityId"":" & JsonString(entityID) & "," & _
         """correlationId"":" & JsonString(correlationId) & "," & _
         """message"":" & JsonString(Monitoring_SanitizeText(message)) & "," & _
         """payload"":" & payloadJson & _
