@@ -423,7 +423,7 @@ Private Sub StyleNavButton(btn As MSForms.CommandButton, txt As String, topPos A
         .width = 200
         .Height = 34
         .BackColor = BTN_BG
-        .ForeColor = TXT_LIGHT
+        .ForeColor = TXT_ON_DARK
         .Font.name = "Segoe UI"
         .Font.Size = 10
         .Font.Bold = False
@@ -477,7 +477,7 @@ Private Sub HighlightActive(activeBtn As MSForms.CommandButton)
 
     For Each btn In navButtons
         btn.BackColor = BTN_BG
-        btn.ForeColor = TXT_LIGHT
+        btn.ForeColor = TXT_ON_DARK
     Next btn
 
     activeBtn.BackColor = BTN_ACTIVE
@@ -502,7 +502,7 @@ Private Sub SetHover(btn As MSForms.CommandButton, ByVal hovered As Boolean)
             btn.ForeColor = vbWhite
         Else
             btn.BackColor = BTN_BG
-            btn.ForeColor = TXT_LIGHT
+            btn.ForeColor = TXT_ON_DARK
         End If
     End If
 End Sub
@@ -933,6 +933,7 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
     FitActiveContent
 
     If Not oldContent Is Nothing Then
+        modJournaling.FlushNow "section-switch"   ' <-- DODATO: persistuj staru sekciju
         Unload oldContent
     End If
 
@@ -963,6 +964,8 @@ Public Sub ReturnToDashboard(Optional ByVal statusText As String = "")
     On Error Resume Next
 
     If mIsSwitchingContent Then Exit Sub
+    
+    modJournaling.FlushNow "return-to-dashboard"   ' <-- DODATO
 
     Set mActiveContent = Nothing
 
