@@ -1,9 +1,9 @@
-Attribute VB_Name = "modTheme"
 Option Explicit
 
 ' ============================================================
 ' modTheme – OtkupAPP shared theme
-' Dark UI theme + shared styling helpers for all UserForms
+' SVETLA KREM TEMA — uskladena sa agrix.rs
+' (krem #F7F4EE, forest #1E2D14, brand zelena #5EA135, zlatna #C8A84B)
 ' ============================================================
 
 ' =========================
@@ -17,29 +17,35 @@ Public Const FONT_SIZE_HEADER As Single = 11
 Public Const FONT_SIZE_TITLE As Single = 13
 
 ' =========================
-' PALETA
+' PALETA — svetla krem tema
 ' =========================
 
-Public Function BG_MAIN() As Long: BG_MAIN = RGB(18, 20, 18): End Function
-Public Function BG_TOP() As Long: BG_TOP = RGB(24, 30, 24): End Function
-Public Function BG_PANEL() As Long: BG_PANEL = RGB(28, 36, 30): End Function
+' — POZADINE —
+Public Function BG_MAIN() As Long: BG_MAIN = RGB(247, 244, 238): End Function    ' #F7F4EE krem — glavna forma
+Public Function BG_TOP() As Long: BG_TOP = RGB(242, 237, 228): End Function      ' #F2EDE4 topla krem — top traka / nav
+Public Function BG_PANEL() As Long: BG_PANEL = RGB(255, 255, 255): End Function  ' belo — paneli / kartice
 
-Public Function BTN_BG() As Long: BTN_BG = RGB(46, 74, 48): End Function
-Public Function BTN_HOVER() As Long: BTN_HOVER = RGB(66, 104, 68): End Function
-Public Function BTN_ACTIVE() As Long: BTN_ACTIVE = RGB(212, 180, 76): End Function
+' — DUGMAD —
+Public Function BTN_BG() As Long: BTN_BG = RGB(46, 71, 38): End Function         ' forest zelena — meni / sekundarna
+Public Function BTN_HOVER() As Long: BTN_HOVER = RGB(74, 104, 56): End Function  ' svetlija zelena — hover
+Public Function BTN_ACTIVE() As Long: BTN_ACTIVE = RGB(200, 168, 75): End Function ' #C8A84B zlatna — aktivno / primarno
 
-Public Function TXT_LIGHT() As Long: TXT_LIGHT = RGB(244, 242, 232): End Function
-Public Function TXT_MUTED() As Long: TXT_MUTED = RGB(182, 188, 172): End Function
-Public Function TXT_ALERT() As Long: TXT_ALERT = RGB(230, 95, 95): End Function
-Public Function BORDER_SOFT() As Long: BORDER_SOFT = RGB(88, 108, 86): End Function
+' — TEKST —
+Public Function TXT_LIGHT() As Long: TXT_LIGHT = RGB(30, 45, 20): End Function       ' #1E2D14 forest — GLAVNI TAMNI tekst (polja, labele)
+Public Function TXT_ON_DARK() As Long: TXT_ON_DARK = RGB(247, 244, 238): End Function ' krem — tekst NA zelenim/crvenim dugmadima
+Public Function TXT_MUTED() As Long: TXT_MUTED = RGB(122, 133, 110): End Function    ' #7A856E prigušeni
+Public Function TXT_ALERT() As Long: TXT_ALERT = RGB(192, 57, 57): End Function      ' crvena
+Public Function BORDER_SOFT() As Long: BORDER_SOFT = RGB(208, 210, 196): End Function ' meka sage ivica
 
-Public Function INPUT_BG() As Long: INPUT_BG = RGB(36, 52, 38): End Function
-Public Function INPUT_DISABLED_BG() As Long: INPUT_DISABLED_BG = RGB(28, 34, 29): End Function
-Public Function INPUT_BORDER() As Long: INPUT_BORDER = RGB(96, 122, 92): End Function
+' — POLJA (INPUT) —
+Public Function INPUT_BG() As Long: INPUT_BG = RGB(255, 255, 255): End Function          ' belo polje
+Public Function INPUT_DISABLED_BG() As Long: INPUT_DISABLED_BG = RGB(235, 229, 216): End Function ' #EBE5D8 zakljucano
+Public Function INPUT_BORDER() As Long: INPUT_BORDER = RGB(168, 176, 150): End Function   ' sage ivica (vidljiva na belom)
 
-Public Function CLR_SUCCESS() As Long: CLR_SUCCESS = RGB(126, 204, 96): End Function
-Public Function CLR_WARNING() As Long: CLR_WARNING = RGB(240, 204, 92): End Function
-Public Function CLR_ERROR() As Long: CLR_ERROR = RGB(230, 95, 95): End Function
+' — STATUS —
+Public Function CLR_SUCCESS() As Long: CLR_SUCCESS = RGB(74, 140, 52): End Function   ' zelena (citljiva na krem)
+Public Function CLR_WARNING() As Long: CLR_WARNING = RGB(180, 134, 26): End Function  ' amber
+Public Function CLR_ERROR() As Long: CLR_ERROR = RGB(192, 57, 57): End Function       ' crvena
 
 
 ' ============================================================
@@ -139,6 +145,7 @@ End Sub
 Public Sub StyleComboBox(ByVal c As MSForms.ComboBox)
     With c
         .BackColor = INPUT_BG
+        .BorderStyle = fmBorderStyleSingle    ' bez ovoga combo nema vidljivu ivicu
         .BorderColor = INPUT_BORDER
         .SpecialEffect = fmSpecialEffectFlat
         .ForeColor = TXT_LIGHT
@@ -150,6 +157,7 @@ End Sub
 Public Sub StyleListBox(ByVal c As MSForms.ListBox)
     With c
         .BackColor = BG_PANEL
+        .BorderStyle = fmBorderStyleSingle    ' vidljiva ivica liste
         .BorderColor = INPUT_BORDER
         .SpecialEffect = fmSpecialEffectFlat
         .ForeColor = TXT_LIGHT
@@ -267,13 +275,14 @@ Public Sub StyleMenuButton(ByVal btn As MSForms.CommandButton, Optional ByVal ca
     With btn
         If Len(captionText) > 0 Then .caption = captionText
         .BackColor = BTN_BG
-        .ForeColor = TXT_LIGHT
+        .ForeColor = TXT_ON_DARK          ' krem tekst na zelenom dugmetu
         .Font.name = APP_FONT_BOLD
         .Font.Size = FONT_SIZE_NORMAL
         .TakeFocusOnClick = False
         On Error Resume Next
         .SpecialEffect = fmSpecialEffectFlat
         .BorderStyle = fmBorderStyleSingle
+        .BorderColor = BORDER_SOFT
         On Error GoTo 0
     End With
 End Sub
@@ -282,7 +291,7 @@ Public Sub StylePrimaryButton(ByVal btn As MSForms.CommandButton, Optional ByVal
     With btn
         If Len(captionText) > 0 Then .caption = captionText
         .BackColor = BTN_ACTIVE
-        .ForeColor = TXT_LIGHT
+        .ForeColor = TXT_LIGHT            ' taman tekst na zlatnom — visok kontrast
         .Font.name = APP_FONT_BOLD
         .Font.Size = FONT_SIZE_NORMAL
         .TakeFocusOnClick = False
@@ -297,7 +306,7 @@ Public Sub StyleExitButton(ByVal btn As MSForms.CommandButton, Optional ByVal ca
     With btn
         If Len(captionText) > 0 Then .caption = captionText
         .BackColor = BG_TOP
-        .ForeColor = TXT_LIGHT
+        .ForeColor = TXT_LIGHT            ' taman tekst na krem dugmetu
         .Font.name = APP_FONT_BOLD
         .Font.Size = FONT_SIZE_NORMAL
         .TakeFocusOnClick = False
@@ -312,7 +321,7 @@ Public Sub StyleStornoButton(ByVal btn As MSForms.CommandButton, Optional ByVal 
     With btn
         If Len(captionText) > 0 Then .caption = captionText
         .BackColor = BG_TOP
-        .ForeColor = TXT_LIGHT
+        .ForeColor = TXT_LIGHT            ' taman tekst na krem dugmetu
         .Font.name = APP_FONT_BOLD
         .Font.Size = FONT_SIZE_NORMAL
         .TakeFocusOnClick = False
@@ -325,35 +334,35 @@ End Sub
 
 Public Sub ButtonHover(ByVal btn As MSForms.CommandButton)
     btn.BackColor = BTN_HOVER
-    btn.ForeColor = TXT_LIGHT
+    btn.ForeColor = TXT_ON_DARK           ' krem tekst na zelenom hover-u
 End Sub
 
 Public Sub ButtonActive(ByVal btn As MSForms.CommandButton)
     btn.BackColor = BTN_ACTIVE
-    btn.ForeColor = TXT_LIGHT
+    btn.ForeColor = TXT_LIGHT             ' taman tekst na zlatnom
 End Sub
 
 Public Sub SetButtonPrimary(ByVal btn As Object)
     btn.BackColor = BTN_ACTIVE
-    btn.ForeColor = TXT_LIGHT
+    btn.ForeColor = TXT_LIGHT             ' taman tekst na zlatnom
     btn.Font.Bold = True
 End Sub
 
 Public Sub SetButtonSecondary(ByVal btn As Object)
     btn.BackColor = BTN_BG
-    btn.ForeColor = TXT_LIGHT
+    btn.ForeColor = TXT_ON_DARK           ' krem tekst na zelenom
     btn.Font.Bold = False
 End Sub
 
 Public Sub SetButtonDanger(ByVal btn As Object)
     btn.BackColor = TXT_ALERT
-    btn.ForeColor = TXT_LIGHT
+    btn.ForeColor = TXT_ON_DARK           ' beli/krem tekst na crvenom
     btn.Font.Bold = True
 End Sub
 
 Public Sub SetButtonNav(ByVal btn As Object)
     btn.BackColor = BG_TOP
-    btn.ForeColor = TXT_MUTED
+    btn.ForeColor = TXT_MUTED             ' prigušen tekst na krem
     btn.Font.Bold = False
 End Sub
 
@@ -551,7 +560,7 @@ Public Sub StyleBadge(ByVal lbl As MSForms.label, ByVal countValue As Long)
         .caption = CStr(countValue)
         .BackStyle = fmBackStyleOpaque
         .BackColor = TXT_ALERT()
-        .ForeColor = TXT_LIGHT()
+        .ForeColor = TXT_ON_DARK()       ' beli broj na crvenom pill-u
         .TextAlign = fmTextAlignCenter
         .Font.name = APP_FONT_BOLD
         .Font.Size = 8
@@ -609,7 +618,7 @@ Public Sub StylePreviewBox(ByVal lbl As MSForms.label, _
     ' kind: "info" | "warn" | "danger" | "ok"
     With lbl
         .BackStyle = fmBackStyleOpaque
-        .BackColor = BG_MAIN()
+        .BackColor = BG_TOP()            ' topla krem podloga (umesto skoro-crne)
         .BorderStyle = fmBorderStyleSingle
         .BorderColor = BORDER_SOFT()
         .Font.name = APP_FONT_BOLD
@@ -655,7 +664,7 @@ Public Sub StyleTopKpi(ByVal frm As MSForms.Frame, _
 
     With frm
         .caption = ""
-        .BackColor = BG_TOP()
+        .BackColor = BG_PANEL()          ' bela kartica na krem traci
         .BorderStyle = fmBorderStyleSingle
         .BorderColor = BORDER_SOFT()
         .SpecialEffect = fmSpecialEffectFlat
@@ -807,23 +816,25 @@ End Sub
 ' StyleListHeaderLabel
 '
 ' Header label iznad ListBox kolone. Vizuelno suptilan ali jasan —
-' bold + muted boja, manji font od subtitle-a.
+' bold + gold boja na krem podlozi.
 '
 ' Koristi se za "fake header row" iznad VBA ListBox-a (MSForms ListBox
 ' nema native column header).
 '======================================================================
 Public Sub StyleListHeaderLabel(ByVal lbl As MSForms.label)
     On Error Resume Next
-    
+
     With lbl
         .Font.name = "Segoe UI"
         .Font.Size = 9
         .Font.Bold = True
         .ForeColor = BTN_ACTIVE()
-        .BackStyle = fmBackStyleOpaque        ' bilo Transparent
-        .BackColor = BG_PANEL()                ' dodaj ovo
+        .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_TOP()              ' topla krem traka iznad liste
         .TextAlign = fmTextAlignLeft
     End With
-    
+
     On Error GoTo 0
 End Sub
+
+
