@@ -609,6 +609,100 @@ EH:
     Err.Raise Err.Number, "EnsureLocalConfigTable", Err.description
 End Sub
 
+' ============================================================
+' Paletni list (Phase 2) — jednokratni schema setup.
+' Idempotentno: kreira nedostajuce tabele i kolonu na tblKulture.
+' Pokrenuti JEDNOM na master workbook-u (Alt+F8 -> EnsurePaletniListSchema).
+' Reuse: FindListObject / GetOrCreateWorksheet / LogSetup (gore).
+' ============================================================
+Public Sub EnsurePaletniListSchema()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_TIP_PALETE, "TipPalete", _
+        Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
+
+    EnsureDataTable TBL_TIP_AMBALAZE, "TipAmbalaze", _
+        Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
+
+    EnsureDataTable TBL_PALETA, "Palete", _
+        Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
+              COL_PAL_VRSTA, COL_PAL_TIP_PALETE, COL_PAL_BR_GAJBICA, _
+              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, _
+              COL_PAL_BRUTO, COL_PAL_STATUS, COL_STORNIRANO)
+
+    EnsureDataTable TBL_PALETA_STAVKA, "PaleteStavke", _
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_BROJ_PRIJ, _
+              COL_PALS_BROJ_ZBIRNE, COL_PALS_BR_GAJBICA, COL_PALS_NETO)
+
+    EnsureDataTable TBL_PRERADA, "Prerada", _
+        Array(COL_PRE_ID, COL_PRE_DATUM, COL_PRE_NETO, COL_PRE_KUTIJE, COL_PRE_KESE)
+
+    EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
+        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_BROJ_PALETE)
+
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
+
+    LogSetup "OK", "EnsurePaletniListSchema done"
+    MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
+           "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
+           "i kolonu GajbicaPoPaleti u tblKulture (malina = 240).", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
+    MsgBox "Greska u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
+Private Sub EnsureDataTable(ByVal tblName As String, _
+                            ByVal sheetName As String, _
+                            ByVal headers As Variant)
+    Dim lo As ListObject
+    Set lo = FindListObject(tblName)
+    If Not lo Is Nothing Then Exit Sub
+
+    Dim ws As Worksheet
+    Set ws = GetOrCreateWorksheet(sheetName)
+    If ws Is Nothing Then
+        Err.Raise vbObjectError + 9310, "EnsureDataTable", _
+                  "Ne mogu da kreiram sheet: " & sheetName
+    End If
+
+    Dim c As Long
+    For c = LBound(headers) To UBound(headers)
+        ws.cells(1, c - LBound(headers) + 1).value = headers(c)
+    Next c
+
+    Dim lastCol As Long
+    lastCol = UBound(headers) - LBound(headers) + 1
+
+    Set lo = ws.ListObjects.Add(xlSrcRange, _
+        ws.Range(ws.cells(1, 1), ws.cells(1, lastCol)), , xlYes)
+    lo.name = tblName
+
+    ws.columns.AutoFit
+    LogSetup "OK", "Created " & tblName
+End Sub
+
+' Dodaje kolonu na postojecu tabelu ako je nema. No-op ako tabela ne postoji.
+Private Sub EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String)
+    Dim lo As ListObject
+    Set lo = FindListObject(tblName)
+    If lo Is Nothing Then Exit Sub
+
+    Dim col As ListColumn
+    On Error Resume Next
+    Set col = lo.ListColumns(colName)
+    On Error GoTo 0
+
+    If col Is Nothing Then
+        lo.ListColumns.Add
+        lo.ListColumns(lo.ListColumns.count).name = colName
+        LogSetup "OK", "Added column " & colName & " to " & tblName
+    End If
+End Sub
+
 Private Function GetOrCreateWorksheet(ByVal sheetName As String) As Worksheet
     On Error Resume Next
     Set GetOrCreateWorksheet = ThisWorkbook.Worksheets(sheetName)
