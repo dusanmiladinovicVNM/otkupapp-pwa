@@ -100,7 +100,7 @@ Public Sub OnPrijemnicaSaved(ByVal brojPrij As String, _
         If freeSlots <= 0 Then
             ' bezbednosni slucaj: puna ali jos "Otvorena" -> zatvori i nastavi
             ClosePaleta palRow
-            PrintPaletniList palID
+            OutputPaletniListByMode palID
             GoTo NextIter
         End If
 
@@ -126,7 +126,7 @@ Public Sub OnPrijemnicaSaved(ByVal brojPrij As String, _
 
         If newGajb >= capacity Then
             ClosePaleta palRow
-            PrintPaletniList palID            ' auto-stampa pune palete
+            OutputPaletniListByMode palID     ' auto-izlaz pune palete (PDF/Print po modu)
         End If
 NextIter:
     Loop
@@ -160,7 +160,7 @@ Public Sub PrintNepotpunePalete()
     For r = 1 To UBound(data, 1)
         If CStr(data(r, iStatus)) = PAL_STATUS_OTVORENA _
            And UCase$(CStr(data(r, iStorno))) <> "DA" Then
-            PrintPaletniList CStr(data(r, iID))
+            OutputPaletniListByMode CStr(data(r, iID))
             cnt = cnt + 1
         End If
     Next r
@@ -173,80 +173,150 @@ EH:
 End Sub
 
 ' ============================================================
-' PUBLIC — stampa jednog paletnog lista (reuse _Print konvencija
-' iz modPrint.PrintIzvestaj: _Print sheet -> PrintOut -> sakrij).
+' PUBLIC — paletni list dokument preko PaletaSablon (isti pristup kao
+' frmSledljivost.PrintTracePDF: Sablon + named-range fill + Export/Print).
+' PaletaSablon se auto-kreira (EnsurePaletaSablon) i sme da se stilizuje —
+' popunjavanje ide po imenima opsega, ne po poziciji.
 ' ============================================================
+
+' Fizicka stampa jednog paletnog lista.
 Public Sub PrintPaletniList(ByVal palID As String)
     On Error GoTo EH
+    Dim broj As String, god As String
+    Dim ws As Worksheet
+    Set ws = FillPaletaSablon(palID, broj, god)
+    If ws Is Nothing Then Exit Sub
+    ws.PrintOut Copies:=1
+    Exit Sub
+EH:
+    LogErr "modPaletniList.PrintPaletniList"
+End Sub
+
+' PDF jednog paletnog lista -> <workbook>\Paleta_<broj>-<god>.pdf. Vraca putanju.
+Public Function ExportPaletniListPDF(ByVal palID As String, _
+                                     Optional ByVal openAfter As Boolean = True) As String
+    On Error GoTo EH
+    Dim broj As String, god As String
+    Dim ws As Worksheet
+    Set ws = FillPaletaSablon(palID, broj, god)
+    If ws Is Nothing Then Exit Function
+
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.Path & "\Paleta_" & broj & "-" & god & ".pdf"
+
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, _
+                           OpenAfterPublish:=openAfter
+
+    ExportPaletniListPDF = pdfPath
+    Exit Function
+EH:
+    LogErr "modPaletniList.ExportPaletniListPDF"
+End Function
+
+' "U bilo kom trenutku": Alt+F8 -> upises broj palete (tekuca godina) -> PDF.
+Public Sub ExportPaletniListPDF_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj palete (godina " & Year(Date) & "):", "Paletni list -> PDF")
+    If Trim$(ans) = "" Then Exit Sub
+    If Not IsNumeric(ans) Then Exit Sub
+
+    Dim broj As Long
+    broj = CLng(Val(ans))
+    If broj <= 0 Then Exit Sub
+
+    Dim palID As String
+    palID = FindPaletaIDByBroj(broj, Year(Date))
+    If palID = "" Then
+        MsgBox "Nije nadjena paleta br. " & broj & "/" & Year(Date) & ".", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    ExportPaletniListPDF palID, True
+    Exit Sub
+EH:
+    LogErr "modPaletniList.ExportPaletniListPDF_Prompt"
+End Sub
+
+' Auto-izlaz pri zatvaranju palete, po config-u PALETA_PRINT_MODE:
+'   (prazno/PDF) -> tihi PDF | PRINT -> stampac | PREVIEW -> pregled | OFF -> nista
+Private Sub OutputPaletniListByMode(ByVal palID As String)
+    Dim mode As String
+    mode = UCase$(Trim$(GetConfigValue(CFG_PALETA_PRINT_MODE)))
+
+    Select Case mode
+        Case "PRINT"
+            PrintPaletniList palID
+        Case "PREVIEW"
+            Dim broj As String, god As String
+            Dim ws As Worksheet
+            Set ws = FillPaletaSablon(palID, broj, god)
+            If Not ws Is Nothing Then ws.PrintPreview
+        Case "OFF"
+            ' bez izlaza
+        Case Else
+            ExportPaletniListPDF palID, False   ' default: tihi PDF, bez papira
+    End Select
+End Sub
+
+' Popuni PaletaSablon (header + tezine + stavke). Vraca sheet + broj/god (ByRef).
+Private Function FillPaletaSablon(ByVal palID As String, _
+                                  ByRef brojOut As String, _
+                                  ByRef godOut As String) As Worksheet
+    EnsurePaletaSablon
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
 
     Dim d As Variant
     d = GetTableData(TBL_PALETA)
-    If IsEmpty(d) Then Exit Sub
+    If IsEmpty(d) Then Exit Function
 
     Dim iID As Long
     iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
 
     Dim hRow As Long, r As Long
-    hRow = 0
     For r = 1 To UBound(d, 1)
         If CStr(d(r, iID)) = palID Then hRow = r: Exit For
     Next r
-    If hRow = 0 Then Exit Sub
+    If hRow = 0 Then Exit Function
 
-    Dim broj As Variant, god As Variant, dat As Variant, vrsta As Variant, tip As Variant
-    broj = d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BROJ))
-    god = d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_GODINA))
-    dat = d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_DATUM))
-    vrsta = d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA))
-    tip = d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_TIP_PALETE))
+    brojOut = CStr(NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BROJ))))
+    godOut = CStr(NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_GODINA))))
 
-    Dim gajb As Long, neto As Double, amb As Double, palk As Double, bruto As Double
-    gajb = NzL(d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)))
-    neto = NzD(d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_NETO)))
-    amb = NzD(d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)))
-    palk = NzD(d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_PALETA_KG)))
-    bruto = NzD(d(hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BRUTO)))
+    Application.ScreenUpdating = False
 
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("_Print")
-    On Error GoTo EH
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Sheets.Add
-        ws.name = "_Print"
+    ws.Range("PalBroj").value = brojOut & "/" & godOut
+    ws.Range("PalDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_DATUM)), "dd.mm.yyyy")
+    ws.Range("PalVrsta").value = SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA))
+    ws.Range("PalTip").value = SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_TIP_PALETE))
+    ws.Range("PalStatus").value = SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS))
+    ws.Range("PalGajbica").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)))
+    ws.Range("PalNeto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_NETO)))
+    ws.Range("PalAmbalaza").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)))
+    ws.Range("PalPaleta").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_PALETA_KG)))
+    ws.Range("PalBruto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BRUTO)))
+
+    Dim startRow As Long
+    startRow = ws.Range("PalStavkaStart").row
+
+    Dim lastRow As Long
+    lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
+    If lastRow >= startRow Then
+        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 6)).ClearContents
     End If
-
-    ws.Visible = xlSheetVisible
-    ws.cells.Clear
-
-    ws.Range("A1").value = "PALETNI LIST   br. " & CStr(broj) & "/" & CStr(god)
-    ws.Range("A1").Font.Size = 16
-    ws.Range("A1").Font.Bold = True
-
-    ws.Range("A3").value = "Datum:":        ws.Range("B3").value = Format$(dat, "d.m.yyyy")
-    ws.Range("A4").value = "Vrsta voca:":   ws.Range("B4").value = vrsta
-    ws.Range("A5").value = "Tip palete:":   ws.Range("B5").value = tip
-    ws.Range("A6").value = "Broj gajbica:": ws.Range("B6").value = gajb
-
-    ws.Range("A8").value = "Neto (kg):":     ws.Range("B8").value = Format$(neto, "#,##0.00")
-    ws.Range("A9").value = "Ambalaza (kg):": ws.Range("B9").value = Format$(amb, "#,##0.00")
-    ws.Range("A10").value = "Paleta (kg):":  ws.Range("B10").value = Format$(palk, "#,##0.00")
-    ws.Range("A11").value = "BRUTO (kg):":   ws.Range("B11").value = Format$(bruto, "#,##0.00")
-    ws.Range("A11:B11").Font.Bold = True
-
-    ws.Range("A13").value = "Proizvodjaci / stavke:"
-    ws.Range("A13").Font.Bold = True
-    ws.Range("A14").value = "Kooperant"
-    ws.Range("B14").value = "Br. prijemnice"
-    ws.Range("C14").value = "Br. zbirne"
-    ws.Range("D14").value = "Gajbica"
-    ws.Range("E14").value = "Neto kg"
-    ws.Range("A14:E14").Font.Bold = True
 
     Dim s As Variant
     s = GetTableData(TBL_PALETA_STAVKA)
-    Dim outR As Long
-    outR = 15
+    Dim outR As Long, rb As Long
+    outR = startRow
+    rb = 0
     If Not IsEmpty(s) Then
         Dim sPal As Long, sPrij As Long, sZbr As Long, sGajb As Long, sNeto As Long
         sPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
@@ -257,25 +327,102 @@ Public Sub PrintPaletniList(ByVal palID As String)
 
         Dim sr As Long
         For sr = 1 To UBound(s, 1)
-            If CStr(s(sr, sPal)) = palID Then
-                ws.cells(outR, 1).value = GetKooperantiZaZbirnu(CStr(s(sr, sZbr)))
-                ws.cells(outR, 2).value = s(sr, sPrij)
-                ws.cells(outR, 3).value = s(sr, sZbr)
-                ws.cells(outR, 4).value = s(sr, sGajb)
-                ws.cells(outR, 5).value = Format$(NzD(s(sr, sNeto)), "#,##0.00")
+            If CStr(SafeCell(s, sr, sPal)) = palID Then
+                rb = rb + 1
+                ws.cells(outR, 1).value = rb
+                ws.cells(outR, 2).value = GetKooperantiZaZbirnu(CStr(SafeCell(s, sr, sZbr)))
+                ws.cells(outR, 3).value = SafeCell(s, sr, sPrij)
+                ws.cells(outR, 4).value = SafeCell(s, sr, sZbr)
+                ws.cells(outR, 5).value = NzL(SafeCell(s, sr, sGajb))
+                ws.cells(outR, 6).value = NzD(SafeCell(s, sr, sNeto))
                 outR = outR + 1
             End If
         Next sr
     End If
 
-    ws.columns("A:E").AutoFit
-    ws.PrintOut Copies:=1
-    ws.Visible = xlSheetVeryHidden
+    Application.ScreenUpdating = True
+    Set FillPaletaSablon = ws
+End Function
+
+' Kreira PaletaSablon (labela + named-range + osnovni format) ako ne postoji.
+' Postojeci se NE dira -> mozes ga slobodno stilizovati.
+Public Sub EnsurePaletaSablon()
+    On Error GoTo EH
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = "PaletaSablon"
+
+    ws.Range("A1:F1").Merge
+    ws.Range("A1").value = "PALETNI LIST"
+    ws.Range("A1").Font.Size = 18
+    ws.Range("A1").Font.Bold = True
+    ws.Range("A1").HorizontalAlignment = xlCenter
+
+    ws.Range("A3").value = "Broj:"
+    ws.Range("A4").value = "Datum:"
+    ws.Range("A5").value = "Vrsta voca:"
+    ws.Range("A6").value = "Tip palete:"
+    ws.Range("A7").value = "Status:"
+    ws.Range("D3").value = "Broj gajbica:"
+    ws.Range("D4").value = "Neto (kg):"
+    ws.Range("D5").value = "Ambalaza (kg):"
+    ws.Range("D6").value = "Paleta (kg):"
+    ws.Range("D7").value = "BRUTO (kg):"
+
+    ws.Range("B3").name = "PalBroj"
+    ws.Range("B4").name = "PalDatum"
+    ws.Range("B5").name = "PalVrsta"
+    ws.Range("B6").name = "PalTip"
+    ws.Range("B7").name = "PalStatus"
+    ws.Range("E3").name = "PalGajbica"
+    ws.Range("E4").name = "PalNeto"
+    ws.Range("E5").name = "PalAmbalaza"
+    ws.Range("E6").name = "PalPaleta"
+    ws.Range("E7").name = "PalBruto"
+
+    ws.Range("A9").value = "Rb"
+    ws.Range("B9").value = "Kooperant"
+    ws.Range("C9").value = "Br. prijemnice"
+    ws.Range("D9").value = "Br. zbirne"
+    ws.Range("E9").value = "Gajbica"
+    ws.Range("F9").value = "Neto kg"
+    ws.Range("A9:F9").Font.Bold = True
+
+    ws.Range("A10").name = "PalStavkaStart"
+
+    ws.columns("A:F").ColumnWidth = 16
+    ws.Range("D7,E7").Font.Bold = True
     Exit Sub
 
 EH:
-    LogErr "modPaletniList.PrintPaletniList"
+    LogErr "modPaletniList.EnsurePaletaSablon"
 End Sub
+
+' Nadji PaletaID po broju palete + godini (za Prompt).
+Private Function FindPaletaIDByBroj(ByVal broj As Long, ByVal god As Long) As String
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iBroj As Long, iGod As Long
+    iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+    iBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+    iGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If NzL(SafeCell(d, r, iBroj)) = broj And NzL(SafeCell(d, r, iGod)) = god Then
+            FindPaletaIDByBroj = CStr(SafeCell(d, r, iID))
+            Exit Function
+        End If
+    Next r
+End Function
 
 ' ============================================================
 ' PRIVATE — paleta lifecycle + lookup + util

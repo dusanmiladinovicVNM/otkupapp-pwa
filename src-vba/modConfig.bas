@@ -254,6 +254,7 @@ Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
 ' Paleta — config kljuc (default tip palete) + fallback kapacitet
 Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
 Public Const PALETA_DEFAULT_KAPACITET As Long = 240
+Public Const CFG_PALETA_PRINT_MODE As String = "PALETA_PRINT_MODE"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

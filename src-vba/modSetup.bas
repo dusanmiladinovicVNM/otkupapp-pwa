@@ -643,6 +643,8 @@ Public Sub EnsurePaletniListSchema()
     EnsureColumnOnTable TBL_PALETA_STAVKA, COL_PALS_AMBALAZA
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
 
+    EnsurePaletaSablon
+
     LogSetup "OK", "EnsurePaletniListSchema done"
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
            "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
