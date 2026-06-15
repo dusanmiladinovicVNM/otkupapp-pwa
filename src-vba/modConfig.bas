@@ -229,6 +229,7 @@ Public Const COL_PALS_BROJ_PRIJ As String = "BrojPrijemnice"
 Public Const COL_PALS_BROJ_ZBIRNE As String = "BrojZbirne"
 Public Const COL_PALS_BR_GAJBICA As String = "BrojGajbica"
 Public Const COL_PALS_NETO As String = "NetoKg"
+Public Const COL_PALS_AMBALAZA As String = "AmbalazaKg"
 
 ' tblTipAmbalaze / tblTipPalete (sifarnici tezina)
 Public Const COL_TAMB_TIP As String = "TipAmbalaze"
@@ -249,6 +250,10 @@ Public Const COL_PRES_BROJ_PALETE As String = "BrojPalete"
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
 Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
+
+' Paleta — config kljuc (default tip palete) + fallback kapacitet
+Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
+Public Const PALETA_DEFAULT_KAPACITET As Long = 240
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

@@ -640,6 +640,7 @@ Public Sub EnsurePaletniListSchema()
     EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
         Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_BROJ_PALETE)
 
+    EnsureColumnOnTable TBL_PALETA_STAVKA, COL_PALS_AMBALAZA
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
 
     LogSetup "OK", "EnsurePaletniListSchema done"

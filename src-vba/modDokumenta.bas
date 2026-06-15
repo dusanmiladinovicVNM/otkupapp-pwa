@@ -827,6 +827,11 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
 
     tx.CommitTx
 
+    ' Paletni list (best-effort, posle commita; gajbice su na Klasi I)
+    On Error Resume Next
+    OnPrijemnicaSaved brojPrij, brojZbirne, vrstaVoca, kolicinaI, kolAmb, tipAmb
+    On Error GoTo EH
+
     Set tx = Nothing
     Exit Function
 
@@ -903,6 +908,11 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
     End If
 
     tx.CommitTx
+
+    ' Paletni list (best-effort, posle commita -> bez rollback rizika)
+    On Error Resume Next
+    OnPrijemnicaSaved brojPrij, brojZbirne, vrstaVoca, kolicina, kolAmb, tipAmb
+    On Error GoTo EH
 
     Exit Function
 
