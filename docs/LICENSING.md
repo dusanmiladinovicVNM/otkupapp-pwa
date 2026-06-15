@@ -79,6 +79,8 @@ Opozivanje ukradene mašine = dodaš njen otisak u `REVOKED_LIST`.
 - [ ] Pokvari jedan karakter u `sig=` → app blokira ("potpis nije validan").
 - [ ] `license.lic` sa tuđim fingerprint-om → blokira ("druga mašina").
 - [ ] `expiresAt` u prošlosti → blokira ("istekla").
+- [ ] Customer sa srpskim slovima (š, č, ć, đ, ž) → licenca i dalje validna (customer nije u potpisu, samo info).
+- [ ] Sveska u folderu sa ne-ASCII putanjom (npr. `C:\Korisnici\Žarko\`) → verifikacija prolazi (`.ps1` se piše kao UTF-8 + BOM).
 - [ ] Online: dodaj otisak u `REVOKED_LIST` → app blokira ("opozvana").
 - [ ] Online podešen, internet isključen → app radi unutar grace prozora.
 - [ ] Proveri da PowerShell prozor ne "bljesne" pri startu (Run sa hidden=0 + wait).

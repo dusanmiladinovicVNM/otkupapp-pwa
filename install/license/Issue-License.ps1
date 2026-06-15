@@ -9,8 +9,10 @@
         -ExpiresAt "2027-06-15" -PrivPem .\license_priv.pem -Out .\license.lic
 
   Potpisuje se TACNO ovaj payload (UTF-8, bez novog reda):
-      fingerprint|customer|issuedAt|expiresAt
+      fingerprint|issuedAt|expiresAt
   sto modLicense.VerifyRsaSignature na klijentu i verifikuje (SHA256, PKCS1).
+  Customer se NE potpisuje (cuva se u license.lic samo kao info) -> payload je
+  cisto ASCII pa nema encoding neslaganja zbog srpskih slova u nazivu kupca.
 
   Zahteva OpenSSL na PATH-u.
 #>
@@ -28,7 +30,7 @@ $ErrorActionPreference = "Stop"
 if (-not (Test-Path $PrivPem)) { throw "Privatni kljuc nije nadjen: $PrivPem" }
 if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) { throw "OpenSSL nije na PATH-u." }
 
-$payload = "$Fingerprint|$Customer|$IssuedAt|$ExpiresAt"
+$payload = "$Fingerprint|$IssuedAt|$ExpiresAt"
 
 # Payload kao UTF-8 BEZ BOM i BEZ zavrsnog newline-a (mora da odgovara klijentu).
 $tmp = [System.IO.Path]::GetTempFileName()

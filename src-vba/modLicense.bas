@@ -208,11 +208,10 @@ Private Function ValidateOfflineLicense(ByVal fp As String) As String
         Exit Function
     End If
 
-    ' b) istekla?
-    Dim expDate As Date
+    ' b) istekla? (ISO yyyy-mm-dd, locale-nezavisno parsiranje)
     If Len(licExp) > 0 Then
-        If IsDate(licExp) Then
-            expDate = CDate(licExp)
+        Dim expDate As Date
+        If ParseIsoDate(licExp, expDate) Then
             If expDate < Date Then
                 ValidateOfflineLicense = "Licenca je istekla (" & licExp & ")."
                 Exit Function
@@ -221,8 +220,11 @@ Private Function ValidateOfflineLicense(ByVal fp As String) As String
     End If
 
     ' c) digitalni potpis validan?
+    ' Customer NIJE u potpisu: potpisani payload je cisto ASCII
+    ' (fingerprint|issuedAt|expiresAt) -> nema encoding neslaganja izmedju
+    ' potpisivanja (UTF-8) i citanja kad naziv kupca ima srpska slova.
     Dim payload As String
-    payload = licFp & "|" & licCust & "|" & licIss & "|" & licExp
+    payload = licFp & "|" & licIss & "|" & licExp
 
     If Not VerifyRsaSignature(payload, licSig, certPath) Then
         ValidateOfflineLicense = "Digitalni potpis licence nije validan."
@@ -366,10 +368,10 @@ Private Function VerifyRsaSignature(ByVal payload As String, _
 
     Dim ps As String
     ps = "try {" & vbCrLf & _
-         "  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2('" & certPath & "')" & vbCrLf & _
+         "  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2('" & PsLit(certPath) & "')" & vbCrLf & _
          "  $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPublicKey($cert)" & vbCrLf & _
-         "  $data = [IO.File]::ReadAllBytes('" & payloadFile & "')" & vbCrLf & _
-         "  $sig = [Convert]::FromBase64String((Get-Content '" & sigFile & "' -Raw).Trim())" & vbCrLf & _
+         "  $data = [IO.File]::ReadAllBytes('" & PsLit(payloadFile) & "')" & vbCrLf & _
+         "  $sig = [Convert]::FromBase64String((Get-Content '" & PsLit(sigFile) & "' -Raw).Trim())" & vbCrLf & _
          "  if ($rsa.VerifyData($data,$sig,[System.Security.Cryptography.HashAlgorithmName]::SHA256,[System.Security.Cryptography.RSASignaturePadding]::Pkcs1)) {$__r='VALID'} else {$__r='INVALID'}" & vbCrLf & _
          "} catch { $__r = 'ERROR' }"
 
@@ -399,7 +401,7 @@ Private Function Sha256HexOfString(ByVal s As String) As String
 
     Dim ps As String
     ps = "try {" & vbCrLf & _
-         "  $b = [IO.File]::ReadAllBytes('" & rawFile & "')" & vbCrLf & _
+         "  $b = [IO.File]::ReadAllBytes('" & PsLit(rawFile) & "')" & vbCrLf & _
          "  $h = [System.Security.Cryptography.SHA256]::Create().ComputeHash($b)" & vbCrLf & _
          "  $__r = ($h | ForEach-Object { $_.ToString('x2') }) -join ''" & vbCrLf & _
          "} catch { $__r = '' }"
@@ -427,8 +429,10 @@ Private Function RunPowerShellScript(ByVal psBody As String) As String
     ps1 = base & ".ps1"
     outFile = base & ".out"
 
-    WriteTextFile ps1, psBody & vbCrLf & _
-        "$__r | Out-File -Encoding ascii -FilePath '" & outFile & "'"
+    ' .ps1 kao UTF-8 sa BOM -> Windows PowerShell 5.1 ga cita kao UTF-8, pa
+    ' ne-ASCII putanje (npr. C:\Korisnici\Zarko\...) ostaju ispravne.
+    WriteUtf8WithBom ps1, psBody & vbCrLf & _
+        "$__r | Out-File -Encoding ascii -FilePath '" & PsLit(outFile) & "'"
 
     Dim sh As Object
     Set sh = CreateObject("WScript.Shell")
@@ -521,6 +525,24 @@ Private Sub WriteUtf8NoBom(ByVal path As String, ByVal s As String)
     out.Close
 End Sub
 
+' UTF-8 SA BOM (za .ps1 koji Windows PowerShell 5.1 treba da procita kao UTF-8).
+Private Sub WriteUtf8WithBom(ByVal path As String, ByVal s As String)
+    On Error Resume Next
+    Dim stm As Object
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2                  ' text
+    stm.Charset = "utf-8"
+    stm.Open
+    stm.WriteText s
+    stm.SaveToFile path, 2        ' 2 = overwrite (ADODB upisuje BOM za utf-8 text)
+    stm.Close
+End Sub
+
+' Sadrzaj za PowerShell single-quoted string: duplira ' (bezbedne putanje).
+Private Function PsLit(ByVal s As String) As String
+    PsLit = Replace(s, "'", "''")
+End Function
+
 Private Function ParseLicValue(ByVal content As String, ByVal key As String) As String
     On Error Resume Next
     Dim lines() As String, i As Long, ln As String, p As Long
@@ -569,6 +591,22 @@ Private Function SimpleHash(ByVal s As String) As Long
     SimpleHash = h
 End Function
 
+' ISO datum (yyyy-mm-dd) -> Date, locale-nezavisno (eksplicitni DateSerial).
+' Vraca False ako format nije ispravan (tada se istek ne proverava ovde, ali
+' expiresAt je u potpisanom payload-u pa ga falsifikovanje ionako obara).
+Private Function ParseIsoDate(ByVal s As String, ByRef outDate As Date) As Boolean
+    On Error GoTo EH
+    Dim p() As String
+    p = Split(Trim$(s), "-")
+    If UBound(p) <> 2 Then Exit Function
+    If Not (IsNumeric(p(0)) And IsNumeric(p(1)) And IsNumeric(p(2))) Then Exit Function
+    outDate = DateSerial(CLng(p(0)), CLng(p(1)), CLng(p(2)))
+    ParseIsoDate = True
+    Exit Function
+EH:
+    ParseIsoDate = False
+End Function
+
 ' ============================================================
 ' DENY
 ' ============================================================
@@ -577,8 +615,9 @@ Private Sub DenyAndClose(ByVal msg As String)
     Application.Visible = True
     MsgBox msg, vbCritical, APP_NAME
 
-    ThisWorkbook.Saved = True            ' ne nudi "Sacuvaj?"
+    ' Zatvori SAMO ovu svesku (bez Application.Quit) da ne pozatvaramo tudje
+    ' nesnimljene sveske. Saved=True spreci "Sacuvaj?" prompt.
+    ThisWorkbook.Saved = True
     Application.DisplayAlerts = False
     ThisWorkbook.Close SaveChanges:=False
-    Application.Quit
 End Sub
