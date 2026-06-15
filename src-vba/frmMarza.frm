@@ -16,9 +16,9 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmMarza v2.1 – Margenberechnung
-' GEÄNDERT: tblIsporuka ? tblPrijemnica
-' Verkaufsseite = Prijemnica.Kolicina × Prijemnica.Cena
+' frmMarza v2.1 ï¿½ Margenberechnung
+' GEï¿½NDERT: tblIsporuka ? tblPrijemnica
+' Verkaufsseite = Prijemnica.Kolicina ï¿½ Prijemnica.Cena
 ' VrstaVoca-Lookup: Prijemnica.BrojZbirne ? Otpremnica.VrstaVoca
 ' ============================================================
 
@@ -186,7 +186,7 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = vbFormControlMenu Then
         Cancel = True
         Unload Me
-        frmMain.Show
+        frmOtkupAPP.Show
     End If
 End Sub
 
