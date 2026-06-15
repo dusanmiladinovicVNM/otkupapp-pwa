@@ -37,11 +37,16 @@ Private Const LIC_KEY_ONLINE_URL     As String = "LICENSE_CHECK_URL"
 Private Const LIC_KEY_GRACE_DAYS     As String = "LICENSE_OFFLINE_GRACE_DAYS"
 
 ' --- Imena fajlova ---
-Private Const LIC_FILE     As String = "license.lic"
-Private Const LIC_PUBCERT  As String = "license_pub.cer"
+Private Const LIC_FILE        As String = "license.lic"
+Private Const LIC_PUBCERT     As String = "license_pub.cer"   ' verifikuje license.lic (offline)
+Private Const LIC_VERDICTCERT As String = "verdict_pub.cer"  ' verifikuje online verdikt (kill-switch)
 
-Private Const LIC_DEFAULT_GRACE_DAYS As Long = 30
-Private Const LIC_ONLINE_TIMEOUT_MS  As Long = 3000
+' Fail-mode kad provera NEOCEKIVANO pukne (bug): OPEN (default) ili CLOSED.
+Private Const LIC_KEY_FAIL_MODE As String = "LICENSE_FAIL_MODE"
+
+Private Const LIC_DEFAULT_GRACE_DAYS  As Long = 30
+Private Const LIC_ONLINE_TIMEOUT_MS   As Long = 3000
+Private Const LIC_ONLINE_MAX_AGE_DAYS As Long = 2   ' anti-replay: max starost potpisanog verdikta
 
 ' ============================================================
 ' PUBLIC ENTRY — pozvati na vrhu modMain.StartApp
@@ -56,6 +61,17 @@ Public Function LicenseGateOrQuit() As Boolean
 
     Dim fp As String
     fp = GetMachineFingerprint()
+
+    ' #10: bez PowerShell-a otisak je degradiran (RAW-) i ne moze se pouzdano
+    ' uporediti sa licencom -> jasna poruka umesto zbunjujuceg "druga masina".
+    If Left$(fp, 4) = "RAW-" Then
+        DenyAndClose "Verifikacija licence zahteva Windows PowerShell, koji nije " & _
+                     "dostupan/dozvoljen na ovoj masini." & vbCrLf & _
+                     "Kontaktirajte dobavljaca." & vbCrLf & vbCrLf & _
+                     "Otisak (degradiran):" & vbCrLf & fp
+        LicenseGateOrQuit = False
+        Exit Function
+    End If
 
     ' 1) OFFLINE provera potpisane licence
     Dim offReason As String
@@ -97,11 +113,17 @@ Public Function LicenseGateOrQuit() As Boolean
     Exit Function
 
 EH:
-    ' Svesni izbor: fail-OPEN na neocekivanu gresku u SAMOJ proveri, da
-    ' bag u licenciranju ne zakljuca legitimne korisnike. Loguj glasno.
-    ' (Posle verifikacije na realnoj masini mozes da prebacis na fail-closed.)
+    ' Neocekivana greska u SAMOJ proveri (bug). Podrazumevano fail-OPEN da bag
+    ' u licenciranju ne zakljuca legitimne korisnike. Posle Windows verifikacije
+    ' mozes da postavis LICENSE_FAIL_MODE=CLOSED za stroziji rezim.
     LogErr "modLicense.LicenseGateOrQuit"
-    LicenseGateOrQuit = True
+    If FailClosedConfigured() Then
+        DenyAndClose "Provera licence nije uspela (interna greska)." & vbCrLf & _
+                     "Kontaktirajte dobavljaca."
+        LicenseGateOrQuit = False
+    Else
+        LicenseGateOrQuit = True
+    End If
 End Function
 
 ' ============================================================
@@ -126,6 +148,14 @@ Private Function LicenseEnforced() As Boolean
         Case Else
             LicenseEnforced = False
     End Select
+End Function
+
+' Fail-closed samo ako je eksplicitno trazeno; inace fail-open (default).
+Private Function FailClosedConfigured() As Boolean
+    On Error Resume Next
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(LIC_KEY_FAIL_MODE)))
+    FailClosedConfigured = (v = "CLOSED" Or v = "ZATVORENO" Or v = "DENY")
 End Function
 
 ' ============================================================
@@ -278,9 +308,11 @@ Private Function CheckOnlineKillSwitch(ByVal fp As String) As String
     payload = JsonValueLic(resp, "payload")
     sig = JsonValueLic(resp, "sig")
 
-    ' Verdikt mora biti potpisan tvojim kljucem da se ne moze falsifikovati.
+    ' #5: verdikt potpisuje ODVOJEN verdict kljuc (ne license kljuc), da
+    ' kompromitacija GAS-a (koji drzi verdict priv. kljuc) ne omoguci
+    ' falsifikovanje offline licenci.
     Dim certPath As String
-    certPath = ResolveSecretFile(LIC_PUBCERT)
+    certPath = ResolveSecretFile(LIC_VERDICTCERT)
     If Len(certPath) = 0 Or Len(sig) = 0 Or Len(payload) = 0 Then
         CheckOnlineKillSwitch = "UNREACHABLE"
         Exit Function
@@ -296,6 +328,13 @@ Private Function CheckOnlineKillSwitch(ByVal fp As String) As String
         Exit Function
     End If
 
+    ' #7 freshness: odbij stare/buduce potpisane verdikte (neko kesira validan
+    ' "ok" i replay-uje ga da izbegne revokaciju).
+    If Not VerdictDateFresh(payload) Then
+        CheckOnlineKillSwitch = "UNREACHABLE"
+        Exit Function
+    End If
+
     If LCase$(status) = "revoked" Then
         CheckOnlineKillSwitch = "REVOKED"
     Else
@@ -305,6 +344,23 @@ Private Function CheckOnlineKillSwitch(ByVal fp As String) As String
 
 EH:
     CheckOnlineKillSwitch = "UNREACHABLE"
+End Function
+
+' payload = "fingerprint|status|YYYY-MM-DD". Svez ako datum nije stariji od
+' LIC_ONLINE_MAX_AGE_DAYS i nije iz buducnosti (> 1 dan, dozvola za clock-skew).
+Private Function VerdictDateFresh(ByVal payload As String) As Boolean
+    On Error GoTo EH
+    Dim parts() As String
+    parts = Split(payload, "|")
+    If UBound(parts) < 2 Then Exit Function
+    Dim d As Date
+    If Not ParseIsoDate(parts(2), d) Then Exit Function
+    If DateDiff("d", d, Date) > LIC_ONLINE_MAX_AGE_DAYS Then Exit Function
+    If DateDiff("d", Date, d) > 1 Then Exit Function
+    VerdictDateFresh = True
+    Exit Function
+EH:
+    VerdictDateFresh = False
 End Function
 
 Private Function WithinOfflineGrace() As Boolean

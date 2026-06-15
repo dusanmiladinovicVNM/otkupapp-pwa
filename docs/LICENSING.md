@@ -19,13 +19,15 @@ Na `Workbook_Open → StartApp` zove se `modLicense.LicenseGateOrQuit`:
 | `LICENSE_ENFORCE` | `YES` da uključiš proveru | (prazno = isključeno) |
 | `LICENSE_CHECK_URL` | GAS web app `/exec` URL (opciono, samo HTTPS) | (prazno = čisto offline) |
 | `LICENSE_OFFLINE_GRACE_DAYS` | broj dana grace-a kad je online podešen ali nedostupan | `30` |
+| `LICENSE_FAIL_MODE` | `CLOSED` = blokiraj i na neočekivanu grešku u proveri; inače fail-open | (prazno = `OPEN`) |
 | `LICENSE_LAST_ONLINE_OK_AT` | (postavlja app sama) | — |
 
 ## 3. Fajlovi po mašini
 
 Traže se u `...\Secrets\` pored radne sveske, pa pored same sveske:
 
-- `license_pub.cer` — tvoj javni sertifikat (isti za sve stanice).
+- `license_pub.cer` — javni sertifikat za verifikaciju `license.lic` (isti za sve stanice).
+- `verdict_pub.cer` — javni sertifikat za verifikaciju online verdikta (samo ako koristiš kill-switch).
 - `license.lic` — po mašini, vezan za otisak.
 
 ## 4. Postupak puštanja
@@ -33,9 +35,10 @@ Traže se u `...\Secrets\` pored radne sveske, pa pored same sveske:
 **Jednom (kod tebe):**
 ```powershell
 .\install\license\New-LicenseKeypair.ps1
-# -> license_priv.pem (TAJNO), license_pub.cer (javno)
+# -> license_priv.pem + verdict_priv.pem (TAJNO)
+# -> license_pub.cer + verdict_pub.cer (javno)
 ```
-Kopiraj `license_pub.cer` u `...\Secrets` na svakoj stanici.
+Kopiraj `license_pub.cer` (i `verdict_pub.cer` ako koristiš kill-switch) u `...\Secrets` na svakoj stanici.
 
 **Po stanici:**
 1. Operater u Excelu pokrene makro `ShowMyFingerprint` i pošalje ti otisak.
@@ -49,15 +52,18 @@ Kopiraj `license_pub.cer` u `...\Secrets` na svakoj stanici.
 
 **Opciono — online kill-switch:**
 1. Deploy `install/license/gas-checkLicense.gs` kao Web App.
-2. U Script properties stavi `LICENSE_PRIV_PEM` (isti keypair) i `REVOKED_LIST`.
-3. U `tblSEFConfig` postavi `LICENSE_CHECK_URL`.
-Opozivanje ukradene mašine = dodaš njen otisak u `REVOKED_LIST`.
+2. U Script properties stavi `VERDICT_PRIV_PEM` (sadržaj `verdict_priv.pem`) i `REVOKED_LIST`.
+3. Postavi `verdict_pub.cer` u `...\Secrets` na stanicama.
+4. U `tblSEFConfig` postavi `LICENSE_CHECK_URL`.
+Opozivanje ukradene mašine = dodaš njen otisak u `REVOKED_LIST`. Verdikt potpisuje **odvojen** verdict ključ, pa kompromitacija GAS-a ne dira offline licence.
 
 ## 5. Failure-mode dizajn (svesne odluke)
 
 - **Neispravna/nedostajuća licenca → fail-closed** (poruka + zatvaranje sveske), prikazuje otisak mašine.
-- **Greška u samoj proveri (bag) → fail-open + glasan log** (`LicenseGateOrQuit` EH). Namerno, da bag u licenciranju ne zaključa legitimne korisnike dok se ne verifikuje na realnoj mašini. Posle verifikacije možeš da prebaciš na fail-closed.
+- **Greška u samoj proveri (bag) → fail-open + glasan log** (`LicenseGateOrQuit` EH). Namerno, da bag u licenciranju ne zaključa legitimne korisnike dok se ne verifikuje na realnoj mašini. Posle verifikacije postavi `LICENSE_FAIL_MODE=CLOSED` za stroži režim.
+- **PowerShell nedostupan → blokira** sa jasnom porukom (otisak je tada degradiran `RAW-…` pa se ne može pouzdano verifikovati).
 - **Mreža nedostupna, online podešen → grace** (`LICENSE_OFFLINE_GRACE_DAYS`).
+- **Replay zaštita:** online verdikt sadrži datum; klijent odbija verdikte starije od 2 dana (ne može se keširati stari „ok").
 
 ## 6. Zavisnosti
 
@@ -83,4 +89,7 @@ Opozivanje ukradene mašine = dodaš njen otisak u `REVOKED_LIST`.
 - [ ] Sveska u folderu sa ne-ASCII putanjom (npr. `C:\Korisnici\Žarko\`) → verifikacija prolazi (`.ps1` se piše kao UTF-8 + BOM).
 - [ ] Online: dodaj otisak u `REVOKED_LIST` → app blokira ("opozvana").
 - [ ] Online podešen, internet isključen → app radi unutar grace prozora.
+- [ ] Online: vrati klijentu star (>2 dana) potpisan „ok" → tretira se kao nedostupno (freshness odbija replay).
+- [ ] PowerShell blokiran/nedostupan + `LICENSE_ENFORCE=YES` → blokira sa porukom o PowerShell-u (ne „druga mašina").
+- [ ] `LICENSE_FAIL_MODE=CLOSED` + namerno ubačena greška u proveri → blokira (a u `OPEN` propušta uz log).
 - [ ] Proveri da PowerShell prozor ne "bljesne" pri startu (Run sa hidden=0 + wait).
