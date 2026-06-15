@@ -393,10 +393,10 @@ Private Sub GetPaletaAggregates(ByVal palRow As Long, ByRef used As Long, _
     If IsEmpty(d) Then Exit Sub
     If palRow < 1 Or palRow > UBound(d, 1) Then Exit Sub
 
-    used = NzL(d(palRow, GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)))
-    neto = NzD(d(palRow, GetColumnIndex(TBL_PALETA, COL_PAL_NETO)))
-    amb = NzD(d(palRow, GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)))
-    palk = NzD(d(palRow, GetColumnIndex(TBL_PALETA, COL_PAL_PALETA_KG)))
+    used = NzL(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)))
+    neto = NzD(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_NETO)))
+    amb = NzD(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)))
+    palk = NzD(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_PALETA_KG)))
 End Sub
 
 Private Function FindRowIndexByID(ByVal tblName As String, _
@@ -455,4 +455,11 @@ End Function
 Private Function NzL(ByVal v As Variant) As Long
     On Error Resume Next
     If IsNumeric(v) Then NzL = CLng(v)
+End Function
+
+' Bezbedno citanje celije iz GetTableData niza: ako kolona ne postoji
+' (idx < 1, npr. schema drift), vrati Empty umesto subscript-error.
+Private Function SafeCell(ByVal d As Variant, ByVal r As Long, _
+                          ByVal idx As Long) As Variant
+    If idx >= 1 Then SafeCell = d(r, idx) Else SafeCell = Empty
 End Function

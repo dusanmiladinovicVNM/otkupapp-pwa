@@ -661,7 +661,14 @@ Private Sub EnsureDataTable(ByVal tblName As String, _
                             ByVal headers As Variant)
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
-    If Not lo Is Nothing Then Exit Sub
+    If Not lo Is Nothing Then
+        ' tabela postoji -> dopuni nedostajuce kolone (repair schema drift)
+        Dim k As Long
+        For k = LBound(headers) To UBound(headers)
+            EnsureColumnOnTable tblName, CStr(headers(k))
+        Next k
+        Exit Sub
+    End If
 
     Dim ws As Worksheet
     Set ws = GetOrCreateWorksheet(sheetName)
