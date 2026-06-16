@@ -77,6 +77,18 @@ Public Sub OnPrijemnicaSaved(ByVal brojPrij As String, _
 
     If brGajbica <= 0 Then Exit Sub          ' nema gajbica (npr. Klasa II) -> nije na paleti
 
+    ' --- Save hot-path guard ---
+    ' Bez ovoga se automatski recalc velikog workbook-a okida po SVAKOM upisu u
+    ' tblPaleta (UpdateCell/append) -> snimanje prijemnice traje minutima.
+    ' Hvatamo i vracamo Application stanje oko cele raspodele.
+    Dim savedCalc As XlCalculation, savedEvents As Boolean, savedScreen As Boolean
+    savedCalc = Application.Calculation
+    savedEvents = Application.EnableEvents
+    savedScreen = Application.ScreenUpdating
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
     Dim capacity As Long
     capacity = GetKapacitetPalete(vrstaVoca)
 
@@ -90,7 +102,7 @@ Public Sub OnPrijemnicaSaved(ByVal brojPrij As String, _
         Dim palRow As Long
         Dim palID As String
         palID = GetOrCreateOpenPaleta(vrstaVoca, palRow)
-        If palID = "" Or palRow = 0 Then Exit Sub
+        If palID = "" Or palRow = 0 Then Exit Do
 
         Dim used As Long, curNeto As Double, curAmb As Double, palKg As Double
         GetPaletaAggregates palRow, used, curNeto, curAmb, palKg
@@ -131,10 +143,21 @@ Public Sub OnPrijemnicaSaved(ByVal brojPrij As String, _
 NextIter:
     Loop
 
+    RestoreAppState savedCalc, savedEvents, savedScreen
     Exit Sub
 
 EH:
     LogErr "modPaletniList.OnPrijemnicaSaved"
+    RestoreAppState savedCalc, savedEvents, savedScreen
+End Sub
+
+' Vrati Application stanje (calc/events/screen) nakon save hot-path-a.
+Private Sub RestoreAppState(ByVal calcMode As XlCalculation, _
+                            ByVal ev As Boolean, ByVal scr As Boolean)
+    On Error Resume Next
+    Application.Calculation = calcMode
+    Application.EnableEvents = ev
+    Application.ScreenUpdating = scr
 End Sub
 
 ' ============================================================
@@ -255,10 +278,12 @@ Private Sub OutputPaletniListByMode(ByVal palID As String)
             Dim ws As Worksheet
             Set ws = FillPaletaSablon(palID, broj, god)
             If Not ws Is Nothing Then ws.PrintPreview
-        Case "OFF"
-            ' bez izlaza
+        Case "PDF"
+            ExportPaletniListPDF palID, False   ' tihi PDF, bez papira
         Case Else
-            ExportPaletniListPDF palID, False   ' default: tihi PDF, bez papira
+            ' OFF ili prazno (DEFAULT) -> bez izlaza; snimanje ostaje trenutno.
+            ' Auto-izlaz pune palete se ukljucuje rucno:
+            '   SetConfigValue "PALETA_PRINT_MODE", "PDF" | "PRINT" | "PREVIEW"
     End Select
 End Sub
 
@@ -370,6 +395,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
 
     ' --- portrait + sve kolone na JEDNU stranu po sirini (Neto kg se ne gubi) ---
     On Error Resume Next
+    Application.PrintCommunication = False   ' batch PageSetup: bez sporog round-trip-a do (mreznog) stampaca
     With ws.PageSetup
         .Orientation = xlPortrait
         .Zoom = False
@@ -382,6 +408,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
         .CenterHorizontally = True
         .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 6)).Address
     End With
+    Application.PrintCommunication = True
     On Error GoTo 0
 
     Application.ScreenUpdating = True
@@ -938,6 +965,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     ws.cells(footRow + 2, 3).value = "Pecat: ____________________"
 
     On Error Resume Next
+    Application.PrintCommunication = False   ' batch PageSetup: bez sporog round-trip-a do (mreznog) stampaca
     With ws.PageSetup
         .Orientation = xlPortrait
         .Zoom = False
@@ -950,6 +978,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
         .CenterHorizontally = True
         .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 3)).Address
     End With
+    Application.PrintCommunication = True
     On Error GoTo 0
 
     Application.ScreenUpdating = True
