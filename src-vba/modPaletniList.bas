@@ -976,13 +976,13 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     Exit Function
 
 EH:
-    Dim eNum As Long
-    Dim eDesc As String
-    eNum = Err.Number
-    eDesc = Err.description
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
-    Err.Raise eNum, SRC, eDesc
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' PDF preradnog lista -> <workbook>\Prerada_<broj>-<god>.pdf.
