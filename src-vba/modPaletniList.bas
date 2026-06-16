@@ -317,6 +317,9 @@ End Sub
 Private Function FillPaletaSablon(ByVal palID As String, _
                                   ByRef brojOut As String, _
                                   ByRef godOut As String) As Worksheet
+    Const SRC As String = "modPaletniList.FillPaletaSablon"
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+
     EnsurePaletaSablon
 
     Dim ws As Worksheet
@@ -341,6 +344,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     brojOut = CStr(NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_BROJ))))
     godOut = CStr(NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_GODINA))))
 
+    On Error GoTo EH
     Application.ScreenUpdating = False
 
     ws.Range("PalBroj").value = brojOut & "/" & godOut
@@ -437,8 +441,14 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     Application.PrintCommunication = True
     On Error GoTo 0
 
-    Application.ScreenUpdating = True
+    Application.ScreenUpdating = oldScreen
     Set FillPaletaSablon = ws
+    Exit Function
+
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.description
 End Function
 
 ' Kreira PaletaSablon (labela + named-range + osnovni format) ako ne postoji.
