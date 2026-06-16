@@ -699,6 +699,56 @@ Private Function SafeCell(ByVal d As Variant, ByVal r As Long, _
 End Function
 
 ' ============================================================
+' Schema guards (fail-fast) + exact-row lookup za paletni/prerada domen.
+' Kriticne kolone idu preko RequireColumns (modSchemaGuard); ID lookup puca
+' na 0 i na >1 -- nikad "prvi od duplikata".
+' ============================================================
+Private Sub RequirePaletaSchema(ByVal src As String)
+    RequireColumns TBL_PALETA, src, _
+        COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_VRSTA, _
+        COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, COL_PAL_NETO, COL_PAL_AMBALAZA, _
+        COL_PAL_PALETA_KG, COL_PAL_BRUTO, COL_PAL_STATUS, _
+        COL_PAL_PRERADJENO, COL_STORNIRANO
+End Sub
+
+Private Sub RequirePaletaStavkaSchema(ByVal src As String)
+    RequireColumns TBL_PALETA_STAVKA, src, _
+        COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
+        COL_PALS_BROJ_PRIJ, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_STORNIRANO
+End Sub
+
+Private Sub RequirePreradaSchema(ByVal src As String)
+    RequireColumns TBL_PRERADA, src, _
+        COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_NETO_IZLAZ, _
+        COL_PRE_KUTIJE, COL_PRE_KESE, COL_STORNIRANO
+End Sub
+
+Private Sub RequirePreradaStavkaSchema(ByVal src As String)
+    RequireColumns TBL_PRERADA_STAVKA, src, _
+        COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
+        COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_STORNIRANO
+End Sub
+
+' Exact-row lookup po kljucu. Puca ako nema reda (0) ili ima vise (>1).
+' Za IDENTITET (PaletaID, PrijemnicaID), NE za pretragu otvorenih paleta.
+Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
+                                            ByVal keyCol As String, _
+                                            ByVal keyValue As String, _
+                                            ByVal src As String) As Long
+    Dim hits As Collection
+    Set hits = FindRows(tblName, keyCol, keyValue)
+    If hits.count = 0 Then
+        Err.Raise vbObjectError + 7320, src, _
+                  "Nema reda u " & tblName & " za " & keyCol & "=" & keyValue & "."
+    ElseIf hits.count > 1 Then
+        Err.Raise vbObjectError + 7321, src, _
+                  "Vise redova (" & hits.count & ") u " & tblName & " za " & _
+                  keyCol & "=" & keyValue & "."
+    End If
+    RequireSingleRowIndexByKey = CLng(hits(1))
+End Function
+
+' ============================================================
 ' PRERADA (preradni list) — palete -> kutije/kese.
 ' Palete se markiraju Preradjeno=Da i izlaze iz lagera. Sopstveni broj
 ' 1..n po godini; PDF preko PreradaSablon (isti stil). Bez kalo racunice.
