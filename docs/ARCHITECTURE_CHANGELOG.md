@@ -101,6 +101,44 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
 
+## v6.25 — 2026-06-16
+
+### Summary
+
+Paletni List (pallet) domain added as a canonical local Excel/VBA workflow, plus a desktop-only setup mode.
+
+### Added
+
+- `tblPaleta`, `tblPaletaStavka`, `tblPrerada`, `tblPreradaStavka`, `tblTipPalete`, `tblTipAmbalaze` schema via `EnsurePaletniListSchema` (idempotent column repair).
+- Transactional palletization from receipt save: `PaletizePrijemnica` runs inside `SavePrijemnica_TX` / `SavePrijemnicaMulti_TX` before `CommitTx`; both wrappers now snapshot `tblPaleta` and `tblPaletaStavka`.
+- `SavePrerada_TX` processing flow (snapshots `tblPrerada`, `tblPreradaStavka`, `tblPaleta`).
+- Pallet/prerada print/PDF (`PaletaSablon`, `PreradaSablon`) as post-commit side effects.
+- Minimal pallet status (`lblPaletaStatus`) and a manual "print incomplete pallets" button in `frmDokumenta`.
+- Desktop-only setup mode: `CheckGoogleOAuthConfig` is gated on `IsCloudSyncEnabled()`; `EnableDesktopOnlyMode` / `EnableCloudSyncMode` toggles.
+
+### Changed
+
+- `tblPaletaStavka` keys palletization by `PrijemnicaID` (row identity), not `BrojPrijemnice`.
+- Pallet/prerada critical reads use `RequireColumnIndex`; critical writes use `RequireUpdateCell`; ID lookups fail on `0` and `>1`.
+- `modPaletniList` business functions contain no `MsgBox`.
+
+### Fixed
+
+- Receipt save no longer runs the pallet projection post-commit under a swallowed `On Error Resume Next`; palletization is atomic with the receipt.
+- Receipt save performance regression (recalc storm + printer-bound `PageSetup`): palletization runs under the TX manual-calc guard, and `PageSetup` is wrapped with `Application.PrintCommunication`.
+
+### Migration / data notes
+
+- `EnsurePaletniListSchema` adds missing columns to existing pallet tables in place; no receipt/finance data migration required.
+- `tblPrerada` adopts `NetoUlazKg` + `NetoIzlazKg`; a legacy `NetoKolicina` column (from the pre-release prerada increment) is left orphaned and unused.
+
+### Verification / acceptance gates
+
+- `EnsurePaletniListSchema` runs clean on a fresh workbook.
+- Both receipt TX wrappers snapshot `tblPaleta` and `tblPaletaStavka`; palletization before `CommitTx`; print/PDF after.
+- `PrijemnicaID` present in `tblPaletaStavka`; duplicate active palletization rejected.
+
+
 ## v6.24 — 2026-05-26
 
 ### Summary
