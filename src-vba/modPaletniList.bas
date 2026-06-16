@@ -186,6 +186,60 @@ Public Sub PaletniListOutputClosed(ByVal closedPalIDs As Collection)
     Next v
 End Sub
 
+' UI getter (post-commit): kratak status palete(a) za datu prijemnicu, za
+' prikaz u frmDokumenta posle snimanja. Cita iskomitovane tabele, bez izmena.
+' Vraca "" ako prijemnica nije paletizovana (npr. Klasa II / bez gajbica).
+Public Function GetPaletaStatusForPrijemnica(ByVal prijemnicaID As String) As String
+    On Error GoTo EH
+    If Trim$(prijemnicaID) = "" Then Exit Function
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iPrij As Long, iPalID As Long, iGajb As Long, iStorno As Long
+    iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    iPalID = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+
+    ' PaletaID -> dodato gajbica za ovu prijemnicu (redosled pojavljivanja)
+    Dim order As Collection: Set order = New Collection
+    Dim added As Object: Set added = CreateObject("Scripting.Dictionary")
+    Dim r As Long, pid As String
+    For r = 1 To UBound(s, 1)
+        If CStr(SafeCell(s, r, iPrij)) = prijemnicaID _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
+            pid = CStr(SafeCell(s, r, iPalID))
+            If Not added.Exists(pid) Then added.Add pid, 0&: order.Add pid
+            added(pid) = added(pid) + NzL(SafeCell(s, r, iGajb))
+        End If
+    Next r
+    If order.count = 0 Then Exit Function
+
+    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
+    Dim out As String, v As Variant
+    For Each v In order
+        Dim ri As Long: ri = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, CStr(v))
+        If ri > 0 Then
+            Dim brj As String, god As String, used As Long, cap As Long, st As String
+            brj = CStr(NzL(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_BROJ))))
+            god = CStr(NzL(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_GODINA))))
+            used = NzL(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)))
+            cap = NzL(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)))
+            st = LCase$(CStr(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS))))
+            If out <> "" Then out = out & vbCrLf
+            out = out & "Paleta " & brj & "/" & god & ": +" & added(CStr(v)) & _
+                  " gajb., stanje " & used & "/" & cap & ", " & st
+        End If
+    Next v
+
+    GetPaletaStatusForPrijemnica = out
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaletaStatusForPrijemnica"
+    GetPaletaStatusForPrijemnica = ""
+End Function
+
 ' ============================================================
 ' PUBLIC — rucna stampa nepotpunih (otvorenih) paleta.
 ' Kraj smene: Alt+F8 -> PrintNepotpunePalete (kasnije dugme u UI).
