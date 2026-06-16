@@ -55,6 +55,7 @@ Public Sub SetupNewPC()
     LogSetup "INFO", "Machine: " & Environ$("COMPUTERNAME")
     LogSetup "INFO", "Windows user: " & Environ$("USERNAME")
     LogSetup "INFO", "Excel version: " & Application.Version
+    LogSetup "INFO", "Cloud/PWA sync: " & IIf(IsCloudSyncEnabled(), "ON", "OFF (desktop-only)")
 
     report = report & CheckRuntimeEnvironment()
     report = report & EnsureAppFolders()
@@ -154,6 +155,53 @@ Public Function IsSetupHealthy() As Boolean
 EH:
     IsSetupHealthy = False
 End Function
+
+' ------------------------------------------------------------
+' Desktop-only prekidac.
+'
+' UKLJUCEN (CLOUD_SYNC_ENABLED=NO): aplikacija radi 100% lokalno — nema
+' Google/PWA saobracaja, a SetupNewPC ne trazi Google kredencijale.
+' Flag se cuva u tblSEFConfig i cita ga IsCloudSyncEnabled() (modConfig) —
+' isti koji vec gasi runtime sync (modBrojevi, modStanicaLock).
+'
+' Alt+F8 -> EnableDesktopOnlyMode  (pa ponovo SetupNewPC).
+' ------------------------------------------------------------
+Public Sub EnableDesktopOnlyMode()
+    On Error GoTo EH
+
+    SetConfigValue CFG_KEY_CLOUD_SYNC_ENABLED, "NO"
+
+    InitSetupLog
+    LogSetup "OK", "Desktop-only mod UKLJUCEN (CLOUD_SYNC_ENABLED=NO)"
+
+    MsgBox "Desktop-only mod je ukljucen." & vbCrLf & vbCrLf & _
+           "Aplikacija radi lokalno — Google/PWA se ne koristi niti proverava." & vbCrLf & _
+           "Pokrenite SetupNewPC ponovo.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Ne mogu da ukljucim desktop-only mod: " & Err.description & vbCrLf & _
+           "(Proverite da postoji tabela " & TBL_SEF_CONFIG & ".)", _
+           vbCritical, APP_NAME
+End Sub
+
+Public Sub EnableCloudSyncMode()
+    On Error GoTo EH
+
+    SetConfigValue CFG_KEY_CLOUD_SYNC_ENABLED, "YES"
+
+    InitSetupLog
+    LogSetup "OK", "Cloud/PWA sync UKLJUCEN (CLOUD_SYNC_ENABLED=YES)"
+
+    MsgBox "Cloud/PWA sync je ukljucen." & vbCrLf & vbCrLf & _
+           "SetupNewPC ce ponovo traziti Google kredencijale u tblConfig.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Ne mogu da promenim mod: " & Err.description, vbCritical, APP_NAME
+End Sub
 
 Public Sub SetupBankFoldersInteractive()
     On Error GoTo EH
@@ -412,6 +460,15 @@ End Function
 
 Private Function CheckGoogleOAuthConfig() As String
     Dim msg As String
+
+    ' Desktop-only deploy (CLOUD_SYNC_ENABLED=NO): aplikacija ne dira Google/PWA,
+    ' pa setup ne trazi Google kredencijale. Isti flag gasi runtime saobracaj
+    ' (modBrojevi.MaxSeqFromGoogleSheet, modStanicaLock).
+    If Not IsCloudSyncEnabled() Then
+        LogSetup "INFO", "Desktop-only mod: preskacem Google/PWA proveru (CLOUD_SYNC_ENABLED=NO)"
+        CheckGoogleOAuthConfig = vbNullString
+        Exit Function
+    End If
 
     Dim googleClientID As String
     Dim googleClientSecret As String
