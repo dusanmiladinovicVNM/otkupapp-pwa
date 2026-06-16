@@ -892,11 +892,18 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     On Error GoTo EH
 
     ' --- validacija ulaza ---
-    If paletaIDs Is Nothing Then Err.Raise vbObjectError + 7340, SRC, "Nije izabrana nijedna paleta."
-    If paletaIDs.count = 0 Then Err.Raise vbObjectError + 7340, SRC, "Nije izabrana nijedna paleta."
-    If netoIzlazKg <= 0 Then Err.Raise vbObjectError + 7341, SRC, "Neto izlaz mora biti > 0."
-    If brojKutija <= 0 And brojKesa <= 0 Then _
+    If paletaIDs Is Nothing Then
+        Err.Raise vbObjectError + 7340, SRC, "Nije izabrana nijedna paleta."
+    End If
+    If paletaIDs.count = 0 Then
+        Err.Raise vbObjectError + 7340, SRC, "Nije izabrana nijedna paleta."
+    End If
+    If netoIzlazKg <= 0 Then
+        Err.Raise vbObjectError + 7341, SRC, "Neto izlaz mora biti > 0."
+    End If
+    If brojKutija <= 0 And brojKesa <= 0 Then
         Err.Raise vbObjectError + 7342, SRC, "Broj kutija ili kesa mora biti > 0."
+    End If
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -925,17 +932,20 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
         If pid <> "" And Not palRows.Exists(pid) Then
             Dim rIdx As Long
             rIdx = RequireSingleRowIndexByKey(TBL_PALETA, COL_PAL_ID, pid, SRC)
-            If UCase$(Trim$(CStr(SafeCell(dPal, rIdx, iStorno)))) = "DA" Then _
+            If UCase$(Trim$(CStr(SafeCell(dPal, rIdx, iStorno)))) = "DA" Then
                 Err.Raise vbObjectError + 7343, SRC, "Paleta " & pid & " je stornirana."
-            If UCase$(Trim$(CStr(SafeCell(dPal, rIdx, iPre)))) = "DA" Then _
+            End If
+            If UCase$(Trim$(CStr(SafeCell(dPal, rIdx, iPre)))) = "DA" Then
                 Err.Raise vbObjectError + 7344, SRC, "Paleta " & pid & " je vec preradjena."
+            End If
             palRows.Add pid, rIdx
             netoUlaz = netoUlaz + NzD(SafeCell(dPal, rIdx, iNeto))
         End If
     Next v
 
-    If palRows.count = 0 Then _
+    If palRows.count = 0 Then
         Err.Raise vbObjectError + 7340, SRC, "Nije izabrana nijedna validna paleta."
+    End If
 
     ' --- upis prerade + stavki + markiranje paleta ---
     Dim preID As String: preID = GetNextID(TBL_PRERADA, COL_PRE_ID, "PRE-")
@@ -966,8 +976,10 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     Exit Function
 
 EH:
-    Dim eNum As Long: eNum = Err.Number
-    Dim eDesc As String: eDesc = Err.description
+    Dim eNum As Long
+    Dim eDesc As String
+    eNum = Err.Number
+    eDesc = Err.description
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     Err.Raise eNum, SRC, eDesc
