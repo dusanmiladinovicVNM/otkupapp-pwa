@@ -368,6 +368,22 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
     ws.cells(footRow + 2, 4).value = "Pecat: ____________________"
 
+    ' --- portrait + sve kolone na JEDNU stranu po sirini (Neto kg se ne gubi) ---
+    On Error Resume Next
+    With ws.PageSetup
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 6)).Address
+    End With
+    On Error GoTo 0
+
     Application.ScreenUpdating = True
     Set FillPaletaSablon = ws
 End Function
