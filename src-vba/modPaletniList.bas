@@ -309,7 +309,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     Dim lastRow As Long
     lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
     If lastRow >= startRow Then
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 6)).ClearContents
+        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 6)).Clear
     End If
 
     Dim s As Variant
@@ -339,6 +339,34 @@ Private Function FillPaletaSablon(ByVal palID As String, _
             End If
         Next sr
     End If
+
+    ' --- stilizacija stavki (kao SledljivostSablon: okviri + naizmenicne boje) ---
+    Dim dataEnd As Long
+    dataEnd = outR - 1
+    If dataEnd >= startRow Then
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 6)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+        End With
+        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "#,##0"
+        ws.Range(ws.cells(startRow, 6), ws.cells(dataEnd, 6)).NumberFormat = "#,##0.00"
+
+        Dim zr As Long
+        For zr = 0 To dataEnd - startRow
+            If zr Mod 2 = 1 Then
+                ws.Range(ws.cells(startRow + zr, 1), _
+                         ws.cells(startRow + zr, 6)).Interior.Color = RGB(217, 225, 242)
+            End If
+        Next zr
+    End If
+
+    ' --- footer (kao sledljivost): datum stampe + potpis/pecat ---
+    Dim footRow As Long
+    footRow = dataEnd + 2
+    If footRow <= startRow Then footRow = startRow + 1
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
+    ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
+    ws.cells(footRow + 2, 4).value = "Pecat: ____________________"
 
     Application.ScreenUpdating = True
     Set FillPaletaSablon = ws
@@ -392,12 +420,26 @@ Public Sub EnsurePaletaSablon()
     ws.Range("D9").value = "Br. zbirne"
     ws.Range("E9").value = "Gajbica"
     ws.Range("F9").value = "Neto kg"
-    ws.Range("A9:F9").Font.Bold = True
+    With ws.Range("A9:F9")
+        .Font.Bold = True
+        .Interior.Color = RGB(217, 225, 242)
+        .HorizontalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
 
     ws.Range("A10").name = "PalStavkaStart"
 
-    ws.columns("A:F").ColumnWidth = 16
+    ws.columns("A").ColumnWidth = 6
+    ws.columns("B").ColumnWidth = 28
+    ws.columns("C").ColumnWidth = 16
+    ws.columns("D").ColumnWidth = 16
+    ws.columns("E").ColumnWidth = 12
+    ws.columns("F").ColumnWidth = 12
+
     ws.Range("D7,E7").Font.Bold = True
+    ws.Range("A3:B7").Borders.LineStyle = xlContinuous
+    ws.Range("D3:E7").Borders.LineStyle = xlContinuous
     Exit Sub
 
 EH:
