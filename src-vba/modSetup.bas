@@ -635,15 +635,19 @@ Public Sub EnsurePaletniListSchema()
               COL_PALS_BROJ_ZBIRNE, COL_PALS_BR_GAJBICA, COL_PALS_NETO)
 
     EnsureDataTable TBL_PRERADA, "Prerada", _
-        Array(COL_PRE_ID, COL_PRE_DATUM, COL_PRE_NETO, COL_PRE_KUTIJE, COL_PRE_KESE)
+        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
+              COL_PRE_NETO, COL_PRE_KUTIJE, COL_PRE_KESE, COL_STORNIRANO)
 
     EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
-        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_BROJ_PALETE)
+        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
+              COL_PRES_BROJ_PALETE, COL_PRES_NETO)
 
     EnsureColumnOnTable TBL_PALETA_STAVKA, COL_PALS_AMBALAZA
+    EnsureColumnOnTable TBL_PALETA, COL_PAL_PRERADJENO
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
 
     EnsurePaletaSablon
+    EnsurePreradaSablon
 
     LogSetup "OK", "EnsurePaletniListSchema done"
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _

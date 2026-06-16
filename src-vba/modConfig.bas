@@ -221,6 +221,7 @@ Public Const COL_PAL_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PAL_PALETA_KG As String = "PaletaKg"
 Public Const COL_PAL_BRUTO As String = "BrutoKg"
 Public Const COL_PAL_STATUS As String = "Status"
+Public Const COL_PAL_PRERADJENO As String = "Preradjeno"
 
 ' tblPaletaStavka (veza paleta -> prijemnica/zbirna)
 Public Const COL_PALS_ID As String = "StavkaID"
@@ -246,6 +247,10 @@ Public Const COL_PRE_KESE As String = "BrojKesa"
 Public Const COL_PRES_ID As String = "StavkaID"
 Public Const COL_PRES_PRERADA_ID As String = "PreradaID"
 Public Const COL_PRES_BROJ_PALETE As String = "BrojPalete"
+Public Const COL_PRE_BROJ As String = "BrojPrerade"
+Public Const COL_PRE_GODINA As String = "Godina"
+Public Const COL_PRES_PALETA_ID As String = "PaletaID"
+Public Const COL_PRES_NETO As String = "NetoKg"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"

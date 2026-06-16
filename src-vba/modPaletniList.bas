@@ -496,17 +496,19 @@ Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
     data = GetTableData(TBL_PALETA)
 
     If Not IsEmpty(data) Then
-        Dim iVrsta As Long, iStatus As Long, iStorno As Long, iID As Long
+        Dim iVrsta As Long, iStatus As Long, iStorno As Long, iID As Long, iPre As Long
         iVrsta = GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA)
         iStatus = GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)
         iStorno = GetColumnIndex(TBL_PALETA, COL_STORNIRANO)
         iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+        iPre = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
 
         Dim r As Long
         For r = 1 To UBound(data, 1)
             If CStr(data(r, iVrsta)) = vrstaVoca _
                And CStr(data(r, iStatus)) = PAL_STATUS_OTVORENA _
-               And UCase$(CStr(data(r, iStorno))) <> "DA" Then
+               And UCase$(CStr(data(r, iStorno))) <> "DA" _
+               And UCase$(Trim$(CStr(SafeCell(data, r, iPre)))) <> "DA" Then
                 outRow = r
                 GetOrCreateOpenPaleta = CStr(data(r, iID))
                 Exit Function
@@ -668,3 +670,377 @@ Private Function SafeCell(ByVal d As Variant, ByVal r As Long, _
                           ByVal idx As Long) As Variant
     If idx >= 1 Then SafeCell = d(r, idx) Else SafeCell = Empty
 End Function
+
+' ============================================================
+' PRERADA (preradni list) — palete -> kutije/kese.
+' Palete se markiraju Preradjeno=Da i izlaze iz lagera. Sopstveni broj
+' 1..n po godini; PDF preko PreradaSablon (isti stil). Bez kalo racunice.
+' ============================================================
+
+' Broj prerade za tekucu godinu (1..n), mirror GenerateBrojPalete.
+Public Function GenerateBrojPrerade() As Long
+    On Error GoTo EH
+    Dim data As Variant
+    data = GetTableData(TBL_PRERADA)
+    Dim yr As Long: yr = Year(Date)
+    Dim maxN As Long: maxN = 0
+    If Not IsEmpty(data) Then
+        Dim iBroj As Long, iGod As Long
+        iBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, "GenerateBrojPrerade")
+        iGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, "GenerateBrojPrerade")
+        Dim r As Long, n As Long
+        For r = 1 To UBound(data, 1)
+            If CLng(Val(CStr(data(r, iGod)))) = yr Then
+                n = CLng(Val(CStr(data(r, iBroj))))
+                If n > maxN Then maxN = n
+            End If
+        Next r
+    End If
+    GenerateBrojPrerade = maxN + 1
+    Exit Function
+EH:
+    LogErr "modPaletniList.GenerateBrojPrerade"
+    GenerateBrojPrerade = 0
+End Function
+
+' Snimi preradu: brojeviPaleta = niz brojeva paleta (tekuca godina).
+' Markira palete Preradjeno=Da. Vraca PreradaID ("" na gresci/otkazu).
+Public Function SavePrerada(ByVal datum As Date, ByVal brojeviPaleta As Variant, _
+                            ByVal brojKutija As Long, ByVal brojKesa As Long, _
+                            ByVal netoKolicina As Double) As String
+    On Error GoTo EH
+
+    If Not IsArray(brojeviPaleta) Then Exit Function
+
+    Dim yr As Long: yr = Year(Date)
+    Dim pal As Object
+    Set pal = CreateObject("Scripting.Dictionary")   ' PaletaID -> NetoKg
+
+    Dim i As Long, pbr As Long, pid As String
+    For i = LBound(brojeviPaleta) To UBound(brojeviPaleta)
+        pbr = CLng(Val(CStr(brojeviPaleta(i))))
+        If pbr > 0 Then
+            pid = FindPaletaIDByBroj(pbr, yr)
+            If pid = "" Then
+                MsgBox "Paleta " & pbr & "/" & yr & " ne postoji.", vbExclamation, APP_NAME
+                Exit Function
+            End If
+            If IsPaletaPreradjena(pid) Then
+                MsgBox "Paleta " & pbr & "/" & yr & " je vec preradjena.", vbExclamation, APP_NAME
+                Exit Function
+            End If
+            If Not pal.Exists(pid) Then pal.Add pid, GetPaletaNum(pid, COL_PAL_NETO)
+        End If
+    Next i
+
+    If pal.count = 0 Then
+        MsgBox "Nije izabrana nijedna validna paleta.", vbExclamation, APP_NAME
+        Exit Function
+    End If
+
+    Dim preID As String: preID = GetNextID(TBL_PRERADA, COL_PRE_ID, "PRE-")
+    Dim brPre As Long: brPre = GenerateBrojPrerade()
+
+    PalAppendRow TBL_PRERADA, _
+        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
+              COL_PRE_NETO, COL_PRE_KUTIJE, COL_PRE_KESE, COL_STORNIRANO), _
+        Array(preID, brPre, yr, datum, netoKolicina, brojKutija, brojKesa, "")
+
+    Dim k As Variant
+    For Each k In pal.keys
+        Dim sid As String: sid = GetNextID(TBL_PRERADA_STAVKA, COL_PRES_ID, "PRS-")
+        PalAppendRow TBL_PRERADA_STAVKA, _
+            Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
+                  COL_PRES_BROJ_PALETE, COL_PRES_NETO), _
+            Array(sid, preID, CStr(k), CLng(GetPaletaNum(CStr(k), COL_PAL_BROJ)), pal(k))
+        MarkPaletaPreradjena CStr(k)
+    Next k
+
+    SavePrerada = preID
+    Exit Function
+EH:
+    LogErr "modPaletniList.SavePrerada"
+    SavePrerada = ""
+End Function
+
+' Alt+F8 ulaz: unos paleta + kutije/kese/neto -> snimi + PDF.
+Public Sub SavePrerada_Prompt()
+    On Error GoTo EH
+
+    Dim sp As String
+    sp = InputBox("Brojevi paleta za preradu (zarezom, npr. 1,2,5):", "Prerada")
+    If Trim$(sp) = "" Then Exit Sub
+
+    Dim parts() As String
+    parts = Split(sp, ",")
+    Dim brojevi() As Long
+    ReDim brojevi(LBound(parts) To UBound(parts))
+    Dim i As Long
+    For i = LBound(parts) To UBound(parts)
+        brojevi(i) = CLng(Val(Trim$(parts(i))))
+    Next i
+
+    Dim sk As String: sk = InputBox("Broj kutija:", "Prerada", "0")
+    If StrPtr(sk) = 0 Then Exit Sub
+    Dim se As String: se = InputBox("Broj kesa:", "Prerada", "0")
+    If StrPtr(se) = 0 Then Exit Sub
+    Dim sn As String: sn = InputBox("Neto izlaz (kg):", "Prerada", "0")
+    If StrPtr(sn) = 0 Then Exit Sub
+
+    Dim preID As String
+    preID = SavePrerada(Date, brojevi, CLng(Val(sk)), CLng(Val(se)), _
+                        CDbl(Val(Replace(sn, ",", "."))))
+    If preID <> "" Then ExportPreradaPDF preID, True
+    Exit Sub
+EH:
+    LogErr "modPaletniList.SavePrerada_Prompt"
+End Sub
+
+' PDF preradnog lista -> <workbook>\Prerada_<broj>-<god>.pdf.
+Public Function ExportPreradaPDF(ByVal preID As String, _
+                                 Optional ByVal openAfter As Boolean = True) As String
+    On Error GoTo EH
+    Dim broj As String, god As String
+    Dim ws As Worksheet
+    Set ws = FillPreradaSablon(preID, broj, god)
+    If ws Is Nothing Then Exit Function
+
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.Path & "\Prerada_" & broj & "-" & god & ".pdf"
+
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, _
+                           OpenAfterPublish:=openAfter
+
+    ExportPreradaPDF = pdfPath
+    Exit Function
+EH:
+    LogErr "modPaletniList.ExportPreradaPDF"
+End Function
+
+' Alt+F8: upisi broj prerade (tekuca godina) -> PDF.
+Public Sub ExportPreradaPDF_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj prerade (godina " & Year(Date) & "):", "Preradni list -> PDF")
+    If Trim$(ans) = "" Then Exit Sub
+    If Not IsNumeric(ans) Then Exit Sub
+    Dim broj As Long: broj = CLng(Val(ans))
+    If broj <= 0 Then Exit Sub
+    Dim preID As String: preID = FindPreradaIDByBroj(broj, Year(Date))
+    If preID = "" Then
+        MsgBox "Nije nadjena prerada br. " & broj & "/" & Year(Date) & ".", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    ExportPreradaPDF preID, True
+    Exit Sub
+EH:
+    LogErr "modPaletniList.ExportPreradaPDF_Prompt"
+End Sub
+
+Private Function FindPreradaIDByBroj(ByVal broj As Long, ByVal god As Long) As String
+    Dim d As Variant
+    d = GetTableData(TBL_PRERADA)
+    If IsEmpty(d) Then Exit Function
+    Dim iID As Long, iBroj As Long, iGod As Long
+    iID = GetColumnIndex(TBL_PRERADA, COL_PRE_ID)
+    iBroj = GetColumnIndex(TBL_PRERADA, COL_PRE_BROJ)
+    iGod = GetColumnIndex(TBL_PRERADA, COL_PRE_GODINA)
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If NzL(SafeCell(d, r, iBroj)) = broj And NzL(SafeCell(d, r, iGod)) = god Then
+            FindPreradaIDByBroj = CStr(SafeCell(d, r, iID))
+            Exit Function
+        End If
+    Next r
+End Function
+
+' Popuni PreradaSablon (header + izlaz + lista paleta) -> sheet + broj/god.
+Private Function FillPreradaSablon(ByVal preID As String, _
+                                   ByRef brojOut As String, _
+                                   ByRef godOut As String) As Worksheet
+    EnsurePreradaSablon
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_PRERADA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long: iID = GetColumnIndex(TBL_PRERADA, COL_PRE_ID)
+    Dim hRow As Long, r As Long
+    For r = 1 To UBound(d, 1)
+        If CStr(d(r, iID)) = preID Then hRow = r: Exit For
+    Next r
+    If hRow = 0 Then Exit Function
+
+    brojOut = CStr(NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_BROJ))))
+    godOut = CStr(NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_GODINA))))
+
+    Application.ScreenUpdating = False
+
+    ws.Range("PreBroj").value = brojOut & "/" & godOut
+    ws.Range("PreDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_DATUM)), "dd.mm.yyyy")
+    ws.Range("PreKutije").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)))
+    ws.Range("PreKese").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)))
+    ws.Range("PreNeto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_NETO)))
+
+    Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
+    Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
+    If lastRow >= startRow Then ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 3)).Clear
+
+    Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
+    Dim outR As Long, rb As Long
+    outR = startRow: rb = 0
+    If Not IsEmpty(s) Then
+        Dim sPre As Long, sBroj As Long, sNeto As Long
+        sPre = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID)
+        sBroj = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_BROJ_PALETE)
+        sNeto = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_NETO)
+        Dim sr As Long
+        For sr = 1 To UBound(s, 1)
+            If CStr(SafeCell(s, sr, sPre)) = preID Then
+                rb = rb + 1
+                ws.cells(outR, 1).value = rb
+                ws.cells(outR, 2).value = NzL(SafeCell(s, sr, sBroj)) & "/" & godOut
+                ws.cells(outR, 3).value = NzD(SafeCell(s, sr, sNeto))
+                outR = outR + 1
+            End If
+        Next sr
+    End If
+
+    Dim dataEnd As Long: dataEnd = outR - 1
+    If dataEnd >= startRow Then
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 3)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+        End With
+        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        Dim zr As Long
+        For zr = 0 To dataEnd - startRow
+            If zr Mod 2 = 1 Then
+                ws.Range(ws.cells(startRow + zr, 1), _
+                         ws.cells(startRow + zr, 3)).Interior.Color = RGB(217, 225, 242)
+            End If
+        Next zr
+    End If
+
+    Dim footRow As Long: footRow = dataEnd + 2
+    If footRow <= startRow Then footRow = startRow + 1
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
+    ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
+    ws.cells(footRow + 2, 3).value = "Pecat: ____________________"
+
+    On Error Resume Next
+    With ws.PageSetup
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.5)
+        .RightMargin = Application.InchesToPoints(0.5)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 3)).Address
+    End With
+    On Error GoTo 0
+
+    Application.ScreenUpdating = True
+    Set FillPreradaSablon = ws
+End Function
+
+' Kreira PreradaSablon ako ne postoji (NE dira postojeci -> stilizuj slobodno).
+Public Sub EnsurePreradaSablon()
+    On Error GoTo EH
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = "PreradaSablon"
+
+    ws.Range("A1:C1").Merge
+    ws.Range("A1").value = "PRERADNI LIST"
+    ws.Range("A1").Font.Size = 18
+    ws.Range("A1").Font.Bold = True
+    ws.Range("A1").HorizontalAlignment = xlCenter
+
+    ws.Range("A3").value = "Broj:"
+    ws.Range("A4").value = "Datum:"
+    ws.Range("A6").value = "Broj kutija:"
+    ws.Range("A7").value = "Broj kesa:"
+    ws.Range("A8").value = "Neto (kg):"
+    ws.Range("A3,A4,A6,A7,A8").Font.Bold = True
+
+    ws.Range("B3").name = "PreBroj"
+    ws.Range("B4").name = "PreDatum"
+    ws.Range("B6").name = "PreKutije"
+    ws.Range("B7").name = "PreKese"
+    ws.Range("B8").name = "PreNeto"
+    ws.Range("A8,B8").Font.Bold = True
+
+    ws.Range("A10").value = "Rb"
+    ws.Range("B10").value = "Broj palete"
+    ws.Range("C10").value = "Neto kg"
+    With ws.Range("A10:C10")
+        .Font.Bold = True
+        .Interior.Color = RGB(217, 225, 242)
+        .HorizontalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+
+    ws.Range("A11").name = "PreStavkaStart"
+
+    ws.columns("A").ColumnWidth = 8
+    ws.columns("B").ColumnWidth = 18
+    ws.columns("C").ColumnWidth = 14
+    ws.Range("A3:B8").Borders.LineStyle = xlContinuous
+    Exit Sub
+EH:
+    LogErr "modPaletniList.EnsurePreradaSablon"
+End Sub
+
+' --- tblPaleta helper-i za preradu ---
+Private Function GetPaletaNum(ByVal palID As String, ByVal colName As String) As Double
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If IsEmpty(d) Then Exit Function
+    Dim iID As Long: iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+    Dim iCol As Long: iCol = GetColumnIndex(TBL_PALETA, colName)
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If CStr(SafeCell(d, r, iID)) = palID Then
+            GetPaletaNum = NzD(SafeCell(d, r, iCol))
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Function IsPaletaPreradjena(ByVal palID As String) As Boolean
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If IsEmpty(d) Then Exit Function
+    Dim iID As Long: iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+    Dim iP As Long: iP = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If CStr(SafeCell(d, r, iID)) = palID Then
+            IsPaletaPreradjena = (UCase$(Trim$(CStr(SafeCell(d, r, iP)))) = "DA")
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Sub MarkPaletaPreradjena(ByVal palID As String)
+    Dim rowIdx As Long
+    rowIdx = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+    If rowIdx > 0 Then UpdateCell TBL_PALETA, rowIdx, COL_PAL_PRERADJENO, "Da"
+End Sub
