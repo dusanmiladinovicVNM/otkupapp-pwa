@@ -8,14 +8,15 @@ Option Explicit
 '   Pattern preuzet iz modFaktura.GenerateBrojFakture (per-year max+1),
 '   NE iz modBrojevi (cija je kanon x/ddmmyy po stanici/danu).
 '
-' Inkrement 2 (ovde): OnPrijemnicaSaved (kapacitet-gajbica raspodela + rubna
-'   paleta preko vise prijemnica/zbirnih), PrintPaletniList (reuse _Print
-'   konvencija iz modPrint), PrintNepotpunePalete, kooperanti preko
-'   modSledljivost.TraceByZbirna. Hook: modDokumenta.SavePrijemnica_TX /
-'   SavePrijemnicaMulti_TX (posle CommitTx -> best-effort).
+' Paletizacija (ovde): PaletizePrijemnica (kapacitet-gajbica raspodela + rubna
+'   paleta preko vise prijemnica), PrintPaletniList (reuse _Print konvencija iz
+'   modPrint), PrintNepotpunePalete, kooperanti preko modSledljivost.TraceByZbirna.
+'   Poziva se UNUTAR modDokumenta.SavePrijemnica_TX / SavePrijemnicaMulti_TX,
+'   PRE CommitTx -> atomicno sa prijemnicom; print/PDF je post-commit side effect.
+'   Stavka se kljuca po PrijemnicaID; ista prijemnica se ne paletizuje dvaput.
 '
-' Inkrement 3 (sledece): prerada (tblPrerada/tblPreradaStavka) + UI dugmad
-'   (evidencija paleta, stampa nepotpune, prerada).
+' Prerada: tblPrerada/tblPreradaStavka preko SavePrerada_TX; operater bira
+'   palete (otvorene/zatvorene), funkcija markira Preradjeno=Da.
 '
 ' Reuse: GetTableData / RequireColumnIndex / LogErr (postojeci helperi).
 ' Sema tabela: modSetup.EnsurePaletniListSchema (pokrenuti jednom).
@@ -58,106 +59,131 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — hook iz modDokumenta.SavePrijemnica_TX / Multi_TX
-' (poziva se POSLE CommitTx -> bez rollback rizika; best-effort).
+' PUBLIC — paletizacija iz modDokumenta.SavePrijemnica_TX / Multi_TX.
+' Poziva se UNUTAR transakcije, PRE CommitTx -> atomicno sa prijemnicom.
+' (TX vec drzi Calculation=manual, pa nema poseban calc-guard ovde.)
 '
-' Puni otvorenu paletu te vrste voca gajbicama prijemnice. Kad
-' paleta dostigne kapacitet (tblKulture.GajbicaPoPaleti, default 240)
-' -> zatvara je i stampa. Jedna prijemnica moze da pregazi granicu
-' (ostatak ide na novu paletu); jedna paleta moze da skupi stavke iz
-' vise prijemnica/zbirnih (rubna paleta) -> tblPaletaStavka.
+' Puni otvorenu paletu iste vrste/sorte/klase/tipa ambalaze gajbicama
+' prijemnice. Kad paleta dostigne kapacitet -> zatvara je (ID ide u
+' closedPalIDs za POST-commit izlaz). Jedna prijemnica moze da pregazi
+' granicu (ostatak na novu paletu); jedna paleta skuplja stavke iz vise
+' prijemnica (rubna paleta). Stavka se kljuca po PrijemnicaID.
+'
+' Greske se NE gutaju -> propagiraju u TX wrapper koji radi RollbackTx.
 ' ============================================================
-Public Sub OnPrijemnicaSaved(ByVal brojPrij As String, _
-                             ByVal brojZbirne As String, _
-                             ByVal vrstaVoca As String, _
-                             ByVal netoKg As Double, _
-                             ByVal brGajbica As Long, _
-                             ByVal tipAmb As String)
-    On Error GoTo EH
+Public Function PaletizePrijemnica( _
+        ByVal prijemnicaID As String, ByVal brojPrij As String, _
+        ByVal brojZbirne As String, ByVal vrstaVoca As String, _
+        ByVal sortaVoca As String, ByVal klasa As String, _
+        ByVal netoKg As Double, ByVal brGajbica As Long, _
+        ByVal tipAmb As String, _
+        Optional ByRef closedPalIDs As Collection = Nothing) As String
 
-    If brGajbica <= 0 Then Exit Sub          ' nema gajbica (npr. Klasa II) -> nije na paleti
+    Const SRC As String = "modPaletniList.PaletizePrijemnica"
 
-    ' --- Save hot-path guard ---
-    ' Bez ovoga se automatski recalc velikog workbook-a okida po SVAKOM upisu u
-    ' tblPaleta (UpdateCell/append) -> snimanje prijemnice traje minutima.
-    ' Hvatamo i vracamo Application stanje oko cele raspodele.
-    Dim savedCalc As XlCalculation, savedEvents As Boolean, savedScreen As Boolean
-    savedCalc = Application.Calculation
-    savedEvents = Application.EnableEvents
-    savedScreen = Application.ScreenUpdating
-    Application.Calculation = xlCalculationManual
-    Application.EnableEvents = False
-    Application.ScreenUpdating = False
+    If brGajbica <= 0 Then Exit Function       ' nema gajbica (Klasa II / bez ambalaze)
 
-    Dim capacity As Long
-    capacity = GetKapacitetPalete(vrstaVoca)
+    RequirePaletaSchema SRC
+    RequirePaletaStavkaSchema SRC
+    EnsurePrijemnicaNotAlreadyPaletized prijemnicaID, SRC
 
-    Dim crateW As Double
-    crateW = GetTezinaGajbice(tipAmb)        ' kg po gajbici (0 ako sifarnik prazan)
+    Dim crateW As Double: crateW = GetTezinaGajbice(tipAmb)
+    Dim defCap As Long: defCap = GetKapacitetPalete(vrstaVoca)
 
-    Dim remaining As Long
-    remaining = brGajbica
+    Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
+    Dim nClosed As Long
+    Dim remaining As Long: remaining = brGajbica
 
     Do While remaining > 0
-        Dim palRow As Long
-        Dim palID As String
-        palID = GetOrCreateOpenPaleta(vrstaVoca, palRow)
-        If palID = "" Or palRow = 0 Then Exit Do
+        Dim palRow As Long, palID As String
+        palID = GetOrCreateOpenPaleta(vrstaVoca, sortaVoca, klasa, tipAmb, defCap, palRow)
+        If palID = "" Or palRow = 0 Then
+            Err.Raise vbObjectError + 7331, SRC, _
+                      "Ne mogu da otvorim/nadjem paletu za: " & vrstaVoca
+        End If
 
-        Dim used As Long, curNeto As Double, curAmb As Double, palKg As Double
-        GetPaletaAggregates palRow, used, curNeto, curAmb, palKg
+        Dim used As Long, curNeto As Double, curAmb As Double
+        Dim palKg As Double, cap As Long
+        GetPaletaAggregates palRow, used, curNeto, curAmb, palKg, cap
+        If cap <= 0 Then cap = defCap
 
-        Dim freeSlots As Long
-        freeSlots = capacity - used
+        Dim freeSlots As Long: freeSlots = cap - used
         If freeSlots <= 0 Then
-            ' bezbednosni slucaj: puna ali jos "Otvorena" -> zatvori i nastavi
-            ClosePaleta palRow
-            OutputPaletniListByMode palID
+            ' puna a jos otvorena -> zatvori i otvori novu u sledecoj iteraciji
+            ClosePaleta palRow, SRC
+            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
+            nClosed = nClosed + 1
             GoTo NextIter
         End If
 
-        Dim take As Long
-        take = remaining
+        Dim take As Long: take = remaining
         If take > freeSlots Then take = freeSlots
 
         Dim takeNeto As Double, takeAmb As Double
         takeNeto = netoKg * (take / brGajbica)
         takeAmb = take * crateW
 
-        AddStavka palID, brojPrij, brojZbirne, take, takeNeto, takeAmb
+        AddStavka palID, prijemnicaID, brojPrij, brojZbirne, klasa, _
+                  vrstaVoca, sortaVoca, take, takeNeto, takeAmb
 
-        Dim newGajb As Long
-        newGajb = used + take
-        UpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, newGajb
-        UpdateCell TBL_PALETA, palRow, COL_PAL_NETO, curNeto + takeNeto
-        UpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, curAmb + takeAmb
-        UpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
-                   (curNeto + takeNeto) + (curAmb + takeAmb) + palKg
+        Dim newGajb As Long: newGajb = used + take
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, newGajb, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, curNeto + takeNeto, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, curAmb + takeAmb, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
+                          (curNeto + takeNeto) + (curAmb + takeAmb) + palKg, SRC
 
+        touched(palID) = True
         remaining = remaining - take
 
-        If newGajb >= capacity Then
-            ClosePaleta palRow
-            OutputPaletniListByMode palID     ' auto-izlaz pune palete (PDF/Print po modu)
+        If newGajb >= cap Then
+            ClosePaleta palRow, SRC
+            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
+            nClosed = nClosed + 1
         End If
 NextIter:
     Loop
 
-    RestoreAppState savedCalc, savedEvents, savedScreen
-    Exit Sub
+    PaletizePrijemnica = "palete=" & touched.count & "; zatvoreno=" & nClosed & _
+                         "; gajbica=" & brGajbica
+End Function
 
-EH:
-    LogErr "modPaletniList.OnPrijemnicaSaved"
-    RestoreAppState savedCalc, savedEvents, savedScreen
+' Idempotency guard: ista PrijemnicaID ne sme imati aktivnu (ne-storniranu)
+' paletnu stavku -> sprecava dvostruku paletizaciju (retry/re-save).
+Private Sub EnsurePrijemnicaNotAlreadyPaletized(ByVal prijemnicaID As String, _
+                                                ByVal src As String)
+    Dim d As Variant: d = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(d) Then Exit Sub
+
+    Dim iPrij As Long, iStorno As Long
+    iPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, src)
+    iStorno = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, src)
+
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If CStr(d(r, iPrij)) = prijemnicaID _
+           And UCase$(Trim$(CStr(d(r, iStorno)))) <> "DA" Then
+            Err.Raise vbObjectError + 7330, src, _
+                      "Prijemnica " & prijemnicaID & " je vec paletizovana."
+        End If
+    Next r
 End Sub
 
-' Vrati Application stanje (calc/events/screen) nakon save hot-path-a.
-Private Sub RestoreAppState(ByVal calcMode As XlCalculation, _
-                            ByVal ev As Boolean, ByVal scr As Boolean)
-    On Error Resume Next
-    Application.Calculation = calcMode
-    Application.EnableEvents = ev
-    Application.ScreenUpdating = scr
+' POST-commit izlaz (print/PDF po modu) za palete zatvorene u paletizaciji.
+' Best-effort: greska se loguje, ali NE rollback-uje iskomitovane podatke.
+Public Sub PaletniListOutputClosed(ByVal closedPalIDs As Collection)
+    If closedPalIDs Is Nothing Then Exit Sub
+
+    Dim v As Variant
+    For Each v In closedPalIDs
+        On Error Resume Next
+        OutputPaletniListByMode CStr(v)
+        If Err.Number <> 0 Then
+            LogErr "modPaletniList.PaletniListOutputClosed[" & CStr(v) & "]"
+            Err.Clear
+        End If
+        On Error GoTo 0
+    Next v
 End Sub
 
 ' ============================================================
@@ -515,7 +541,14 @@ End Function
 
 ' Vraca PaletaID otvorene palete za vrstu voca (i njen rowIndex preko
 ' outRow); ako je nema, kreira novu i vraca nju.
+' Vraca PaletaID otvorene palete iste vrste/sorte/klase/tipa ambalaze (i njen
+' rowIndex preko outRow); ako je nema, kreira novu. Pretraga (ne identitet):
+' bira prvu (najstariju) podudarnu otvorenu paletu deterministicki.
 Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
+                                       ByVal sortaVoca As String, _
+                                       ByVal klasa As String, _
+                                       ByVal tipAmb As String, _
+                                       ByVal capacity As Long, _
                                        ByRef outRow As Long) As String
     outRow = 0
 
@@ -523,8 +556,12 @@ Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
     data = GetTableData(TBL_PALETA)
 
     If Not IsEmpty(data) Then
-        Dim iVrsta As Long, iStatus As Long, iStorno As Long, iID As Long, iPre As Long
+        Dim iVrsta As Long, iSorta As Long, iKlasa As Long, iTipAmb As Long
+        Dim iStatus As Long, iStorno As Long, iID As Long, iPre As Long
         iVrsta = GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA)
+        iSorta = GetColumnIndex(TBL_PALETA, COL_PAL_SORTA)
+        iKlasa = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
+        iTipAmb = GetColumnIndex(TBL_PALETA, COL_PAL_TIP_AMBALAZE)
         iStatus = GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)
         iStorno = GetColumnIndex(TBL_PALETA, COL_STORNIRANO)
         iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
@@ -533,6 +570,9 @@ Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
         Dim r As Long
         For r = 1 To UBound(data, 1)
             If CStr(data(r, iVrsta)) = vrstaVoca _
+               And CStr(SafeCell(data, r, iSorta)) = sortaVoca _
+               And CStr(SafeCell(data, r, iKlasa)) = klasa _
+               And CStr(SafeCell(data, r, iTipAmb)) = tipAmb _
                And CStr(data(r, iStatus)) = PAL_STATUS_OTVORENA _
                And UCase$(CStr(data(r, iStorno))) <> "DA" _
                And UCase$(Trim$(CStr(SafeCell(data, r, iPre)))) <> "DA" Then
@@ -543,10 +583,15 @@ Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
         Next r
     End If
 
-    GetOrCreateOpenPaleta = CreateNewPaleta(vrstaVoca, outRow)
+    GetOrCreateOpenPaleta = CreateNewPaleta(vrstaVoca, sortaVoca, klasa, _
+                                            tipAmb, capacity, outRow)
 End Function
 
 Private Function CreateNewPaleta(ByVal vrstaVoca As String, _
+                                 ByVal sortaVoca As String, _
+                                 ByVal klasa As String, _
+                                 ByVal tipAmb As String, _
+                                 ByVal capacity As Long, _
                                  ByRef outRow As Long) As String
     Dim newID As String
     newID = GetNextID(TBL_PALETA, COL_PAL_ID, "PAL-")
@@ -555,42 +600,47 @@ Private Function CreateNewPaleta(ByVal vrstaVoca As String, _
         Exit Function
     End If
 
-    Dim broj As Long
-    broj = GenerateBrojPalete()
-
-    Dim tip As String
-    tip = GetConfigValue(CFG_DEFAULT_TIP_PALETE)
-
-    Dim palKg As Double
-    palKg = GetTezinaPalete(tip)
+    Dim broj As Long: broj = GenerateBrojPalete()
+    Dim tip As String: tip = GetConfigValue(CFG_DEFAULT_TIP_PALETE)
+    Dim palKg As Double: palKg = GetTezinaPalete(tip)
 
     PalAppendRow TBL_PALETA, _
         Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
-              COL_PAL_VRSTA, COL_PAL_TIP_PALETE, COL_PAL_BR_GAJBICA, _
-              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, _
-              COL_PAL_BRUTO, COL_PAL_STATUS, COL_STORNIRANO), _
-        Array(newID, broj, Year(Date), Date, vrstaVoca, tip, 0, _
-              0, 0, palKg, palKg, PAL_STATUS_OTVORENA, "")
+              COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
+              COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
+              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
+              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO), _
+        Array(newID, broj, Year(Date), Date, _
+              vrstaVoca, sortaVoca, klasa, tipAmb, _
+              tip, capacity, 0, _
+              0, 0, palKg, palKg, _
+              PAL_STATUS_OTVORENA, "", Now, "")
 
     outRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, newID)
     CreateNewPaleta = newID
 End Function
 
-Private Sub AddStavka(ByVal palID As String, ByVal brojPrij As String, _
-                      ByVal brojZbirne As String, ByVal gajbice As Long, _
+Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
+                      ByVal brojPrij As String, ByVal brojZbirne As String, _
+                      ByVal klasa As String, ByVal vrstaVoca As String, _
+                      ByVal sortaVoca As String, ByVal gajbice As Long, _
                       ByVal neto As Double, ByVal amb As Double)
     Dim sid As String
     sid = GetNextID(TBL_PALETA_STAVKA, COL_PALS_ID, "PLS-")
 
     PalAppendRow TBL_PALETA_STAVKA, _
-        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_BROJ_PRIJ, _
-              COL_PALS_BROJ_ZBIRNE, COL_PALS_BR_GAJBICA, COL_PALS_NETO, _
-              COL_PALS_AMBALAZA), _
-        Array(sid, palID, brojPrij, brojZbirne, gajbice, neto, amb)
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
+              COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
+              COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
+              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO), _
+        Array(sid, palID, prijemnicaID, _
+              brojPrij, brojZbirne, klasa, _
+              vrstaVoca, sortaVoca, gajbice, _
+              neto, amb, Now, "")
 End Sub
 
-Private Sub ClosePaleta(ByVal palRow As Long)
-    UpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_ZATVORENA
+Private Sub ClosePaleta(ByVal palRow As Long, ByVal src As String)
+    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, src
 End Sub
 
 ' Generican append po imenu kolone (rowData velicine sa brojem kolona tabele).
@@ -614,13 +664,18 @@ Private Sub PalAppendRow(ByVal tblName As String, _
         If idx >= 1 And idx <= n Then rowData(idx - 1) = vals(i)
     Next i
 
-    AppendRow tblName, rowData
+    Dim newRow As Long
+    newRow = AppendRow(tblName, rowData)
+    If newRow = 0 Then
+        Err.Raise vbObjectError + 9321, "PalAppendRow", _
+                  "AppendRow nije uspeo za tabelu: " & tblName
+    End If
 End Sub
 
 Private Sub GetPaletaAggregates(ByVal palRow As Long, ByRef used As Long, _
                                 ByRef neto As Double, ByRef amb As Double, _
-                                ByRef palk As Double)
-    used = 0: neto = 0: amb = 0: palk = 0
+                                ByRef palk As Double, ByRef cap As Long)
+    used = 0: neto = 0: amb = 0: palk = 0: cap = 0
 
     Dim d As Variant
     d = GetTableData(TBL_PALETA)
@@ -631,6 +686,7 @@ Private Sub GetPaletaAggregates(ByVal palRow As Long, ByRef used As Long, _
     neto = NzD(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_NETO)))
     amb = NzD(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)))
     palk = NzD(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_PALETA_KG)))
+    cap = NzL(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)))
 End Sub
 
 Private Function FindRowIndexByID(ByVal tblName As String, _
@@ -705,16 +761,19 @@ End Function
 ' ============================================================
 Private Sub RequirePaletaSchema(ByVal src As String)
     RequireColumns TBL_PALETA, src, _
-        COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_VRSTA, _
+        COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, COL_PAL_VRSTA, _
+        COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, COL_PAL_TIP_PALETE, _
         COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, COL_PAL_NETO, COL_PAL_AMBALAZA, _
-        COL_PAL_PALETA_KG, COL_PAL_BRUTO, COL_PAL_STATUS, _
-        COL_PAL_PRERADJENO, COL_STORNIRANO
+        COL_PAL_PALETA_KG, COL_PAL_BRUTO, COL_PAL_STATUS, COL_PAL_PRERADJENO, _
+        COL_PAL_CREATED, COL_STORNIRANO
 End Sub
 
 Private Sub RequirePaletaStavkaSchema(ByVal src As String)
     RequireColumns TBL_PALETA_STAVKA, src, _
         COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
-        COL_PALS_BROJ_PRIJ, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_STORNIRANO
+        COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
+        COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
+        COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO
 End Sub
 
 Private Sub RequirePreradaSchema(ByVal src As String)

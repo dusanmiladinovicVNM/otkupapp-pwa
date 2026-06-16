@@ -775,6 +775,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     Dim resultI As String
     resultI = SavePrijemnica( _
@@ -825,12 +827,20 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
         SavePrijemnicaMulti_TX = resultI
     End If
 
+    ' Paletizacija Klase I UNUTAR transakcije -> atomicno sa prijemnicom.
+    Dim closedPal As Collection
+    Set closedPal = New Collection
+    If kolAmb > 0 Then
+        PaletizePrijemnica prijemnicaID:=resultI, brojPrij:=brojPrij, _
+            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
+            klasa:=KLASA_I, netoKg:=kolicinaI, brGajbica:=kolAmb, tipAmb:=tipAmb, _
+            closedPalIDs:=closedPal
+    End If
+
     tx.CommitTx
 
-    ' Paletni list (best-effort, posle commita; gajbice su na Klasi I)
-    On Error Resume Next
-    OnPrijemnicaSaved brojPrij, brojZbirne, vrstaVoca, kolicinaI, kolAmb, tipAmb
-    On Error GoTo EH
+    ' Print/PDF zatvorenih paleta = post-commit side effect (bez rollback rizika).
+    PaletniListOutputClosed closedPal
 
     Set tx = Nothing
     Exit Function
@@ -896,6 +906,8 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     SavePrijemnica_TX = SavePrijemnica(datum, kupacID, vozacID, brojPrij, _
                                         brojZbirne, vrstaVoca, sortaVoca, _
@@ -907,12 +919,20 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
                   "SavePrijemnica fehlgeschlagen"
     End If
 
+    ' Paletizacija UNUTAR transakcije -> atomicno sa prijemnicom (Klasa I + gajbice).
+    Dim closedPal As Collection
+    Set closedPal = New Collection
+    If klasa = KLASA_I And kolAmb > 0 Then
+        PaletizePrijemnica prijemnicaID:=SavePrijemnica_TX, brojPrij:=brojPrij, _
+            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
+            klasa:=klasa, netoKg:=kolicina, brGajbica:=kolAmb, tipAmb:=tipAmb, _
+            closedPalIDs:=closedPal
+    End If
+
     tx.CommitTx
 
-    ' Paletni list (best-effort, posle commita -> bez rollback rizika)
-    On Error Resume Next
-    OnPrijemnicaSaved brojPrij, brojZbirne, vrstaVoca, kolicina, kolAmb, tipAmb
-    On Error GoTo EH
+    ' Print/PDF zatvorenih paleta = post-commit side effect (bez rollback rizika).
+    PaletniListOutputClosed closedPal
 
     Exit Function
 
