@@ -330,18 +330,7 @@ je urednija i tačnija.
 
    (Sidebar dobija 1 dugme više; ako zafali visine, smanji korak ili povećaj `fraSidebar`.)
 
-**Otvaranje — izaberi jedno:**
-
-*Popup (preporuka — čuva tačan raspored frmPalete):*
-
-```vba
-Private Sub btnPalete_Click()
-    frmPalete.Show          ' modal; "Povratak" (Unload Me) vraca na meni
-End Sub
-```
-
-*Ugrađena sekcija (nativnije, ali frmPalete je fiksnih pozicija pa shell razvuče
-formu i dugmad „lebde" dole):*
+**Otvaranje (ugrađena sekcija — kao ostale).** Handler u `frmOtkupAPP`:
 
 ```vba
 Private Sub btnPalete_Click()
@@ -349,8 +338,71 @@ Private Sub btnPalete_Click()
 End Sub
 ```
 
-Za uredan embedded izgled treba `UserForm_Resize` u frmPalete (pin dugmad dole +
-razvuci liste) i sakriven `btnPovratak`. Javi ako biraš ovo pa dam Resize handler.
+Shell razvuče formu (`FitActiveContent` postavlja Width/Height na content-area),
+pa frmPalete mora da se „prelije". Dodaj u frmPalete tri stvari:
+
+**(a)** na vrh modula (ispod `Option Explicit`):
+
+```vba
+Private mChromeRemoved As Boolean
+```
+
+**(b)** u `UserForm_Activate` (kao ostale sekcije — ukloni naslovnu traku, sakrij Povratak):
+
+```vba
+    EnsureUserFormChromeRemoved Me, mChromeRemoved
+    Me.btnPovratak.Visible = False
+```
+
+**(c)** `UserForm_Resize` — pin dugmad dole, desni panel desno, liste popune ostatak:
+
+```vba
+Private Sub UserForm_Resize()
+    On Error Resume Next
+    Const PAD As Double = 8
+    Const GAP As Double = 10
+    Const PANELW As Double = 250      ' desni panel (stavke + prerada)
+    Const TOPGRID As Double = 62
+    Const BTNH As Double = 24
+
+    Dim w As Double: w = Me.InsideWidth
+    Dim h As Double: h = Me.InsideHeight
+    If w < 420 Or h < 220 Then Exit Sub
+
+    Dim panelX As Double: panelX = w - PAD - PANELW
+    Dim btnTop As Double:  btnTop = h - PAD - BTNH
+    Dim gridW As Double:   gridW = panelX - GAP - PAD
+
+    ' leva strana: naslov / zaglavlje / lista paleta
+    Me.lblPalete.Top = 36:      Me.lblPalete.Left = PAD
+    Me.lstPaleteHdr.Top = 48:   Me.lstPaleteHdr.Left = PAD:  Me.lstPaleteHdr.width = gridW
+    Me.lstPalete.Top = TOPGRID: Me.lstPalete.Left = PAD:     Me.lstPalete.width = gridW
+    Me.lstPalete.Height = btnTop - GAP - TOPGRID
+
+    ' desni panel: stavke
+    Me.lblStavke.Top = 36:      Me.lblStavke.Left = panelX
+    Me.lstStavkeHdr.Top = 48:   Me.lstStavkeHdr.Left = panelX: Me.lstStavkeHdr.width = PANELW
+    Me.lstStavke.Top = TOPGRID: Me.lstStavke.Left = panelX:    Me.lstStavke.width = PANELW
+
+    ' desni panel: polja prerade ispod stavki
+    Dim fy As Double: fy = TOPGRID + Me.lstStavke.Height + GAP + 6
+    Me.lblKutije.Top = fy + 2:    Me.lblKutije.Left = panelX
+    Me.txtKutije.Top = fy:        Me.txtKutije.Left = panelX + 70
+    Me.lblKese.Top = fy + 26:     Me.lblKese.Left = panelX
+    Me.txtKese.Top = fy + 24:     Me.txtKese.Left = panelX + 70
+    Me.lblNeto.Top = fy + 50:     Me.lblNeto.Left = panelX
+    Me.txtNeto.Top = fy + 48:     Me.txtNeto.Left = panelX + 70
+    Me.lblNapomena.Top = fy + 74: Me.lblNapomena.Left = panelX
+    Me.txtNapomena.Top = fy + 72: Me.txtNapomena.Left = panelX + 70: Me.txtNapomena.width = PANELW - 70
+
+    ' dugmad dole (btnPovratak je sakriven)
+    Me.btnStampaj.Top = btnTop
+    Me.btnPDF.Top = btnTop
+    Me.btnStampajNepotpune.Top = btnTop
+    Me.btnZatvori.Top = btnTop
+    Me.btnPreradi.Top = btnTop
+End Sub
+```
 
 ## Napomene
 - Širine kolona (`ColumnWidths`, u tačkama) su okvirne — doteraj po ekranu. Prva je
