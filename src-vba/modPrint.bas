@@ -198,6 +198,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ws.columns("D").ColumnWidth = 15
     ws.columns("E").ColumnWidth = 14
     ws.columns("F").ColumnWidth = 16
+    ws.rows("1:120").AutoFit
 
     Dim r0 As Long, lastRow As Long
     r0 = WriteOtkupCopy(ws, 2, "Primerak za poljoprivrednika", h, stavke, cnt)
@@ -214,7 +215,6 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     lastRow = WriteOtkupCopy(ws, cutRow + 2, "Primerak za otkupljivaca", h, stavke, cnt)
 
     On Error Resume Next
-    ws.Range(ws.cells(1, 1), ws.cells(lastRow, 6)).EntireRow.AutoFit
     Application.PrintCommunication = False
     With ws.PageSetup
         .PaperSize = xlPaperA4
