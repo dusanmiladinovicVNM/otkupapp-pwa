@@ -233,6 +233,26 @@ EH:
     MsgBox "Prerada nije sacuvana: " & Err.Description, vbExclamation, APP_NAME
 End Sub
 
+Private Sub btnStorniraj_Click()
+    On Error GoTo EH
+    Dim pid As String: pid = CurrentPaletaID()
+    If pid = "" Then
+        MsgBox "Izaberite paletu.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    If MsgBox("Stornirati izabranu paletu?", vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    If StornoPaleta_TX(pid) Then
+        RefreshGrid
+        MsgBox "Paleta je stornirana.", vbInformation, APP_NAME
+    Else
+        MsgBox "Storno nije uspeo (vidi log).", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    MsgBox "Greska pri stornu: " & Err.Description, vbExclamation, APP_NAME
+End Sub
+
 Private Sub btnPovratak_Click()
     Unload Me
 End Sub
@@ -366,6 +386,7 @@ Private Sub UserForm_Activate()
     Me.lstStavkeHdr.BackColor = BG_TOP()
 
     StylePrimaryButton btnPreradi, "Preradi izabrane"
+    StyleStornoButton btnStorniraj, "Storniraj"
 End Sub
 ```
 
