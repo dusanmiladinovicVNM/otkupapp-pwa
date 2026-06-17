@@ -275,7 +275,7 @@ naslovi ostaju na Top 36; zaglavlja na Top 48; liste se spuštaju na Top 62.
 ```vba
     ' --- zaglavlje paleta ---
     Me.lstPaleteHdr.ColumnCount = 13
-    Me.lstPaleteHdr.ColumnWidths = Me.lstPalete.ColumnWidths
+    Me.lstPaleteHdr.ColumnWidths = "0;30;32;50;50;30;40;40;48;48;50;50;50"
     Dim hdr(0 To 0, 0 To 12) As Variant
     hdr(0, 1) = "Broj":   hdr(0, 2) = "God":     hdr(0, 3) = "Vrsta"
     hdr(0, 4) = "Sorta":  hdr(0, 5) = "Klasa":   hdr(0, 6) = "TipAmb"
@@ -286,13 +286,17 @@ naslovi ostaju na Top 36; zaglavlja na Top 48; liste se spuštaju na Top 62.
 
     ' --- zaglavlje stavki ---
     Me.lstStavkeHdr.ColumnCount = 5
-    Me.lstStavkeHdr.ColumnWidths = Me.lstStavke.ColumnWidths
+    Me.lstStavkeHdr.ColumnWidths = "52;28;38;24;26"
     Dim hdrS(0 To 0, 0 To 4) As Variant
     hdrS(0, 0) = "PrijemID": hdrS(0, 1) = "BrPrij": hdrS(0, 2) = "Zbirna"
     hdrS(0, 3) = "Gajb":     hdrS(0, 4) = "Neto"
     Me.lstStavkeHdr.List = hdrS
     Me.lstStavkeHdr.Locked = True
 ```
+
+> Header `ColumnWidths` su LITERALI (isti string kao glavne liste), namerno — da
+> ne zavise od redosleda postavljanja. Ako menjaš širine, promeni na OBA mesta
+> (glavna lista + njeno zaglavlje).
 
 **U `UserForm_Activate`** (posle `ApplyThemeToControls`, da tema ne pregazi izgled):
 
