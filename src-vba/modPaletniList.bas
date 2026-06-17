@@ -644,10 +644,11 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     Dim lastRow As Long
     lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
     If lastRow >= startRow Then
+        ws.Range(ws.cells(startRow, 4), ws.cells(lastRow, 5)).UnMerge
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
     End If
 
-    ' --- stavke: jedan red po OTKUPU (sifra kooperanta, vrsta, neto, ambalaza) ---
+    ' --- stavke: jedan red po OTKUPU (sifra kooperanta, neto, ambalaza) ---
     Dim ids As Collection: Set ids = New Collection
     ids.Add palID
     Dim o As Variant: o = GetOtkupiZaPalete(ids)
@@ -660,9 +661,9 @@ Private Function FillPaletaSablon(ByVal palID As String, _
             rb = rb + 1
             ws.cells(outR, 1).value = rb
             ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
-            ws.cells(outR, 3).value = CStr(o(k, 2))                   ' Vrsta
-            ws.cells(outR, 4).value = o(k, 3)                         ' Neto kg
-            ws.cells(outR, 5).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip
+            ws.cells(outR, 3).value = o(k, 3)                         ' Neto kg
+            ws.Range(ws.cells(outR, 4), ws.cells(outR, 5)).Merge
+            ws.cells(outR, 4).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip (D:E)
             outR = outR + 1
         Next k
     End If
@@ -675,8 +676,8 @@ Private Function FillPaletaSablon(ByVal palID As String, _
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
-        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "#,##0.00"
-        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "@"
+        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
 
         Dim zr As Long
         For zr = 0 To dataEnd - startRow
@@ -730,7 +731,7 @@ End Function
 ' Verzija layouta je u H1; na promenu verzije sheet se ponovo izgradi.
 Public Sub EnsurePaletaSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "2"
+    Const LAYOUT_VER As String = "3"
 
     Dim ws As Worksheet
     On Error Resume Next
@@ -761,9 +762,8 @@ Public Sub EnsurePaletaSablon()
     Dim fr As Long: fr = r + 1
     ws.cells(fr, 1).value = "Broj:"
     ws.cells(fr + 1, 1).value = "Datum:"
-    ws.cells(fr + 2, 1).value = "Vrsta voca:"
-    ws.cells(fr + 3, 1).value = "Tip palete:"
-    ws.cells(fr + 4, 1).value = "Status:"
+    ws.cells(fr + 2, 1).value = "Tip palete:"
+    ws.cells(fr + 3, 1).value = "Status:"
     ws.cells(fr, 4).value = "Broj gajbica:"
     ws.cells(fr + 1, 4).value = "Neto (kg):"
     ws.cells(fr + 2, 4).value = "Ambalaza (kg):"
@@ -772,16 +772,15 @@ Public Sub EnsurePaletaSablon()
 
     ws.cells(fr, 2).name = "PalBroj"
     ws.cells(fr + 1, 2).name = "PalDatum"
-    ws.cells(fr + 2, 2).name = "PalVrsta"
-    ws.cells(fr + 3, 2).name = "PalTip"
-    ws.cells(fr + 4, 2).name = "PalStatus"
+    ws.cells(fr + 2, 2).name = "PalTip"
+    ws.cells(fr + 3, 2).name = "PalStatus"
     ws.cells(fr, 5).name = "PalGajbica"
     ws.cells(fr + 1, 5).name = "PalNeto"
     ws.cells(fr + 2, 5).name = "PalAmbalaza"
     ws.cells(fr + 3, 5).name = "PalPaleta"
     ws.cells(fr + 4, 5).name = "PalBruto"
 
-    ws.Range(ws.cells(fr, 2), ws.cells(fr + 4, 2)).Font.Bold = True
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 3, 2)).Font.Bold = True
     ws.Range(ws.cells(fr, 5), ws.cells(fr + 4, 5)).Font.Bold = True
     ws.cells(fr, 5).NumberFormat = "0"
     ws.Range(ws.cells(fr + 1, 5), ws.cells(fr + 4, 5)).NumberFormat = "#,##0.00"
@@ -797,13 +796,26 @@ Public Sub EnsurePaletaSablon()
         .Weight = xlThin
     End With
 
-    ' tabela stavki
-    Dim hdr As Long: hdr = fr + 6
+    ' vrsta voca kao podnaslov iznad tabele (na paleti je uvek ista vrsta)
+    Dim subRow As Long: subRow = fr + 6
+    ws.cells(subRow, 1).value = "Vrsta voca:"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
+    ws.cells(subRow, 2).name = "PalVrsta"
+    With ws.cells(subRow, 2)
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlLeft
+    End With
+    ws.rows(subRow).RowHeight = 20
+
+    ' tabela stavki (bez kolone Vrsta; Ambalaza preko D:E)
+    Dim hdr As Long: hdr = subRow + 1
     ws.cells(hdr, 1).value = "Rb"
     ws.cells(hdr, 2).value = "Kooperant"
-    ws.cells(hdr, 3).value = "Vrsta"
-    ws.cells(hdr, 4).value = "Neto kg"
-    ws.cells(hdr, 5).value = "Ambalaza"
+    ws.cells(hdr, 3).value = "Neto kg"
+    ws.Range(ws.cells(hdr, 4), ws.cells(hdr, 5)).Merge
+    ws.cells(hdr, 4).value = "Ambalaza"
     With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
