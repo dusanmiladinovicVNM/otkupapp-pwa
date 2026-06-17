@@ -368,6 +368,60 @@ EH:
     LogErr "modPaletniList.GetPaletaStavkeForGrid"
 End Function
 
+' Stavke za VISE izabranih paleta (agregat). Iste kolone kao
+' GetPaletaStavkeForGrid: 0 PrijemnicaID, 1 BrojPrijemnice, 2 BrojZbirne,
+' 3 Gajbice, 4 NetoKg. Empty ako nema.
+Public Function GetPaletaStavkeForGridMulti(ByVal paletaIDs As Collection) As Variant
+    On Error GoTo EH
+    If paletaIDs Is Nothing Then Exit Function
+    If paletaIDs.count = 0 Then Exit Function
+
+    Dim want As Object: Set want = CreateObject("Scripting.Dictionary")
+    Dim v As Variant
+    For Each v In paletaIDs
+        want(CStr(v)) = True
+    Next v
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iPal As Long, iPrij As Long, iBrPrij As Long, iZbir As Long
+    Dim iGajb As Long, iNeto As Long, iStorno As Long
+    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    iBrPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    iZbir = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+    iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If want.Exists(CStr(SafeCell(s, r, iPal))) _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 4)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(s, r, iPrij))
+        res(k, 1) = CStr(SafeCell(s, r, iBrPrij))
+        res(k, 2) = CStr(SafeCell(s, r, iZbir))
+        res(k, 3) = NzL(SafeCell(s, r, iGajb))
+        res(k, 4) = NzD(SafeCell(s, r, iNeto))
+    Next k
+
+    GetPaletaStavkeForGridMulti = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaletaStavkeForGridMulti"
+End Function
+
 ' Rucno zatvaranje otvorene palete (TX). Validira: postoji tacno jednom, nije
 ' stornirana/preradjena, jeste otvorena. Bez MsgBox -> baca gresku (UI hvata).
 ' Posle commita pokrece izlaz (po PALETA_PRINT_MODE). Vraca PaletaID.

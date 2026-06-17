@@ -131,15 +131,15 @@ Private Sub btnOsvezi_Click()
     RefreshGrid
 End Sub
 
-' MultiSelect ListBox NE okida Click pouzdano -> Change + ListIndex (red sa
-' fokusom = poslednji kliknut) za prikaz stavki desno.
+' Change okida na promenu izbora. Desno prikazuje stavke SVIH izabranih paleta
+' (agregat); ako nista nije cekirano, uzima red sa fokusom (ListIndex).
 Private Sub lstPalete_Change()
-    Dim i As Long: i = Me.lstPalete.ListIndex
-    If i < 0 Then
-        Me.lstStavke.Clear
-        Exit Sub
+    Dim ids As Collection: Set ids = SelectedPaletaIDs()
+    If ids.count = 0 Then
+        Dim i As Long: i = Me.lstPalete.ListIndex
+        If i >= 0 Then ids.Add CStr(Me.lstPalete.List(i, 0))
     End If
-    Dim s As Variant: s = GetPaletaStavkeForGrid(CStr(Me.lstPalete.List(i, 0)))
+    Dim s As Variant: s = GetPaletaStavkeForGridMulti(ids)
     If IsEmpty(s) Then
         Me.lstStavke.Clear
     Else
