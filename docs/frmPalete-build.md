@@ -256,14 +256,24 @@ Immediate prozoru.
 
 ListBox punjen preko `.List` ne prikazuje zaglavlja (ColumnHeads radi samo uz
 RowSource). Najčistije: zaključana 1-red „header" lista sa ISTIM `ColumnWidths`
-— savršeno poravnanje (isti mehanizam; 518 < 520 pa nema horizontalnog skrola).
+— savršeno poravnanje, bez skrol-rasinhronizacije (518 < 520).
 
-**Kontrola:** dodaj `lstPaleteHdr` (ListBox) Left 8, Top 36, Width 520, Height 15
-(popuni razmak iznad `lstPalete`; obriši/zameni `lblPalete`). Properties: `Locked = True`.
+**Pomeranje (da naslov ostane vidljiv).** Zaglavlje ide IZMEĐU naslova i liste:
+naslovi ostaju na Top 36; zaglavlja na Top 48; liste se spuštaju na Top 62.
 
-**U `UserForm_Initialize`** (posle `lstPalete` kolona) — podaci zaglavlja:
+| Kontrola | Left | Top | Width | Height | Napomena |
+|---|---|---|---|---|---|
+| `lblPalete` | 8 | 36 | 300 | 12 | (ostaje) |
+| `lstPaleteHdr` | 8 | 48 | 520 | 14 | novo; `Locked = True` |
+| `lstPalete` | 8 | 62 | 520 | 308 | bilo Top 50 / H 320 |
+| `lblStavke` | 536 | 36 | 186 | 12 | (ostaje) |
+| `lstStavkeHdr` | 536 | 48 | 186 | 14 | novo; `Locked = True` |
+| `lstStavke` | 536 | 62 | 186 | 138 | bilo Top 50 / H 150 |
+
+**U `UserForm_Initialize`** (posle `lstPalete`/`lstStavke` kolona):
 
 ```vba
+    ' --- zaglavlje paleta ---
     Me.lstPaleteHdr.ColumnCount = 13
     Me.lstPaleteHdr.ColumnWidths = Me.lstPalete.ColumnWidths
     Dim hdr(0 To 0, 0 To 12) As Variant
@@ -273,6 +283,15 @@ RowSource). Najčistije: zaključana 1-red „header" lista sa ISTIM `ColumnWidt
     hdr(0, 10) = "Bruto": hdr(0, 11) = "Status": hdr(0, 12) = "Prer."
     Me.lstPaleteHdr.List = hdr
     Me.lstPaleteHdr.Locked = True
+
+    ' --- zaglavlje stavki ---
+    Me.lstStavkeHdr.ColumnCount = 5
+    Me.lstStavkeHdr.ColumnWidths = Me.lstStavke.ColumnWidths
+    Dim hdrS(0 To 0, 0 To 4) As Variant
+    hdrS(0, 0) = "PrijemID": hdrS(0, 1) = "BrPrij": hdrS(0, 2) = "Zbirna"
+    hdrS(0, 3) = "Gajb":     hdrS(0, 4) = "Neto"
+    Me.lstStavkeHdr.List = hdrS
+    Me.lstStavkeHdr.Locked = True
 ```
 
 **U `UserForm_Activate`** (posle `ApplyThemeToControls`, da tema ne pregazi izgled):
@@ -280,10 +299,9 @@ RowSource). Najčistije: zaključana 1-red „header" lista sa ISTIM `ColumnWidt
 ```vba
     Me.lstPaleteHdr.Font.Bold = True
     Me.lstPaleteHdr.BackColor = BG_TOP()
+    Me.lstStavkeHdr.Font.Bold = True
+    Me.lstStavkeHdr.BackColor = BG_TOP()
 ```
-
-Isto i za `lstStavke` (`lstStavkeHdr`, Width 186, `ColumnWidths "60;34;34;28;30"`,
-header: PrijemID, BrPrij, Zbirna, Gajb, Neto).
 
 **Alternativa — Label-i** iznad liste (približno poravnanje; `lstPalete` Left-base
 ≈10, Top 38): Broj 10 · God 40 · Vrsta 72 · Sorta 122 · Klasa 172 · TipAmb 202 ·
