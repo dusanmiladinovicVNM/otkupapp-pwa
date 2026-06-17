@@ -312,6 +312,46 @@ naslovi ostaju na Top 36; zaglavlja na Top 48; liste se spuštaju na Top 62.
 Gajb 242 · Kap 282 · Neto 330 · Bruto 378 · Status 428 · Prer 478. Header-lista
 je urednija i tačnija.
 
+## 6. Uvezivanje u glavni meni (frmOtkupAPP)
+
+`frmOtkupAPP` je shell: sidebar nav dugmad (raspoređena u `SetupButtons`, korak
+`topPos = topPos + 42`) + content-area; sekcije se otvaraju preko
+`OpenContentForm frmX, btnX, "Naslov"` (embeduje i RAZVlači formu).
+
+**Koraci (zajednički):**
+1. U designeru `frmOtkupAPP` dodaj `CommandButton` u sidebar, **(Name) = `btnPalete`**
+   (pozicija/stil nebitni — `SetupButtons` ih postavlja; možeš kopirati `btnTrace`).
+2. U `SetupButtons`, na željeno mesto (npr. odmah posle „Otkup i prodaja"):
+
+```vba
+    StyleNavButton btnPalete, "Palete", topPos
+    topPos = topPos + 42
+```
+
+   (Sidebar dobija 1 dugme više; ako zafali visine, smanji korak ili povećaj `fraSidebar`.)
+
+**Otvaranje — izaberi jedno:**
+
+*Popup (preporuka — čuva tačan raspored frmPalete):*
+
+```vba
+Private Sub btnPalete_Click()
+    frmPalete.Show          ' modal; "Povratak" (Unload Me) vraca na meni
+End Sub
+```
+
+*Ugrađena sekcija (nativnije, ali frmPalete je fiksnih pozicija pa shell razvuče
+formu i dugmad „lebde" dole):*
+
+```vba
+Private Sub btnPalete_Click()
+    OpenContentForm frmPalete, btnPalete, "Palete"
+End Sub
+```
+
+Za uredan embedded izgled treba `UserForm_Resize` u frmPalete (pin dugmad dole +
+razvuci liste) i sakriven `btnPovratak`. Javi ako biraš ovo pa dam Resize handler.
+
 ## Napomene
 - Širine kolona (`ColumnWidths`, u tačkama) su okvirne — doteraj po ekranu. Prva je
   `0` da sakrije `PaletaID` (forma ga čita interno za akcije).
