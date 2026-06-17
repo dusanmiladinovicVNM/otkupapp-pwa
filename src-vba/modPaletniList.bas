@@ -1064,21 +1064,6 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
         Next r
     End If
 
-    ' otkupi po zbirni + klasi, dedup po OtkupID
-    Dim o As Variant: o = GetTableData(TBL_OTKUP)
-    If IsEmpty(o) Then Exit Function
-    Dim oID As Long, oKoop As Long, oVr As Long, oKol As Long
-    Dim oAmb As Long, oTip As Long, oKl As Long, oZb As Long, oStorno As Long
-    oID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    oVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    oKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
-    oAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
-    oTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
-    oKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    oZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-    oStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
-
     ' klasa filter samo ako paleta ima definisanu klasu (legacy palete bez klase
     ' -> ne filtriraj po klasi, da lista ne bude prazna)
     Dim filterKlasa As Boolean
@@ -1087,14 +1072,44 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
         If Trim$(CStr(kk)) <> "" Then filterKlasa = True
     Next kk
 
+    ' OtkupID-jevi preko zbirne: zbirna -> otpremnice -> otkupi (reuse TraceByZbirna).
+    ' Otkup nije direktno vezan za BrojZbirne, nego preko OtpremnicaID.
+    Dim wantOtk As Object: Set wantOtk = CreateObject("Scripting.Dictionary")
+    Dim z As Variant
+    For Each z In zbSet.keys
+        Dim t As Variant: t = TraceByZbirna(CStr(z))
+        If Not IsEmpty(t) Then
+            Dim tr As Long
+            For tr = LBound(t, 1) To UBound(t, 1)
+                Dim tid As String: tid = Trim$(CStr(t(tr, 6)))   ' OtkupID = kolona 6
+                If tid <> "" Then wantOtk(tid) = True
+            Next tr
+        End If
+    Next z
+    If wantOtk.count = 0 Then Exit Function
+
+    ' detalji otkupa iz tblOtkup po OtkupID (+ klasa filter), dedup
+    Dim o As Variant: o = GetTableData(TBL_OTKUP)
+    If IsEmpty(o) Then Exit Function
+    Dim oID As Long, oKoop As Long, oVr As Long, oKol As Long
+    Dim oAmb As Long, oTip As Long, oKl As Long, oStorno As Long
+    oID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    oVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    oKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    oAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+    oTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
+    oKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
+    oStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
+
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim rows As Collection: Set rows = New Collection
     For r = 1 To UBound(o, 1)
-        If zbSet.Exists(Trim$(CStr(SafeCell(o, r, oZb)))) _
+        Dim otkID As String: otkID = CStr(SafeCell(o, r, oID))
+        If wantOtk.Exists(otkID) _
            And (Not filterKlasa Or klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl)))))) _
            And UCase$(Trim$(CStr(SafeCell(o, r, oStorno)))) <> "DA" Then
-            Dim otkID As String: otkID = CStr(SafeCell(o, r, oID))
-            If otkID <> "" And Not seen.Exists(otkID) Then
+            If Not seen.Exists(otkID) Then
                 seen(otkID) = True
                 rows.Add r
             End If
@@ -1141,21 +1156,16 @@ Public Sub DebugPaletaTrace(ByVal broj As Long)
     Next r
     Debug.Print "  Zbirne stavki = [" & Join(zb.keys, " | ") & "]"
 
-    Dim o As Variant: o = GetTableData(TBL_OTKUP)
-    Dim oZb As Long, oKl As Long, oKoop As Long
-    oZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-    oKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
-    Dim cnt As Long
-    For r = 1 To UBound(o, 1)
-        If zb.Exists(Trim$(CStr(SafeCell(o, r, oZb)))) Then
-            cnt = cnt + 1
-            Debug.Print "    otkup: zbirna=[" & CStr(SafeCell(o, r, oZb)) & _
-                        "] klasa=[" & CStr(SafeCell(o, r, oKl)) & _
-                        "] koop=[" & CStr(SafeCell(o, r, oKoop)) & "]"
-        End If
-    Next r
-    Debug.Print "  Otkupa sa tim zbirnama = " & cnt
+    Dim total As Long
+    Dim z As Variant
+    For Each z In zb.keys
+        Dim t As Variant: t = TraceByZbirna(CStr(z))
+        Dim c As Long: c = 0
+        If Not IsEmpty(t) Then c = UBound(t, 1) - LBound(t, 1) + 1
+        Debug.Print "    zbirna [" & CStr(z) & "] -> otkupa (TraceByZbirna) = " & c
+        total = total + c
+    Next z
+    Debug.Print "  Ukupno otkupa (zbirna->otpremnica->otkup) = " & total
 End Sub
 
 Private Function NzD(ByVal v As Variant) As Double
