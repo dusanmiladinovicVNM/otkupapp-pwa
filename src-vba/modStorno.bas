@@ -444,6 +444,157 @@ EH:
 End Function
 
 ' ============================================================
+' PALETA
+' ============================================================
+
+Public Function StornoPaleta_TX(ByVal palID As String) As Boolean
+    Const SRC As String = "StornoPaleta_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    If Not StornoPaleta(palID) Then
+        Err.Raise ERR_STORNO_BASE + 40, SRC, _
+                  "StornoPaleta nije uspeo. PaletaID=" & palID
+    End If
+
+    tx.CommitTx
+
+    StornoPaleta_TX = True
+    MonitorStornoSuccess SRC, "Paleta", palID
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Paleta", palID, tx
+    StornoPaleta_TX = False
+End Function
+
+Public Function StornoPaleta(ByVal palID As String) As Boolean
+    Const SRC As String = "StornoPaleta"
+
+    On Error GoTo EH
+
+    Dim rowPal As Long
+    rowPal = RequireStornoAllowed(TBL_PALETA, palID, COL_PAL_ID, SRC)
+
+    ' preradjenu paletu ne stornira se direktno -> prvo storno prerade
+    Dim colPre As Long
+    colPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, SRC)
+    Dim palData As Variant: palData = GetTableData(TBL_PALETA)
+    If UCase$(Trim$(CStr(palData(rowPal, colPre)))) = "DA" Then
+        Err.Raise ERR_STORNO_BASE + 42, SRC, _
+                  "Paleta je preradjena - prvo stornirajte preradu."
+    End If
+
+    MarkRowStornirano TBL_PALETA, rowPal, SRC
+
+    ' storniraj stavke palete (prijemnice se time oslobadjaju)
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsEmpty(s) Then
+        Dim sPal As Long, sStorno As Long
+        sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+        sStorno = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+        Dim r As Long
+        For r = 1 To UBound(s, 1)
+            If Trim$(CStr(s(r, sPal))) = Trim$(palID) _
+               And Not IsStorniranoValue(s(r, sStorno)) Then
+                MarkRowStornirano TBL_PALETA_STAVKA, r, SRC
+            End If
+        Next r
+    End If
+
+    StornoPaleta = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
+End Function
+
+' ============================================================
+' PRERADA
+' ============================================================
+
+Public Function StornoPrerada_TX(ByVal preradaID As String) As Boolean
+    Const SRC As String = "StornoPrerada_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRERADA
+    tx.AddTableSnapshot TBL_PRERADA_STAVKA
+    tx.AddTableSnapshot TBL_PALETA
+
+    If Not StornoPrerada(preradaID) Then
+        Err.Raise ERR_STORNO_BASE + 45, SRC, _
+                  "StornoPrerada nije uspeo. PreradaID=" & preradaID
+    End If
+
+    tx.CommitTx
+
+    StornoPrerada_TX = True
+    MonitorStornoSuccess SRC, "Prerada", preradaID
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Prerada", preradaID, tx
+    StornoPrerada_TX = False
+End Function
+
+Public Function StornoPrerada(ByVal preradaID As String) As Boolean
+    Const SRC As String = "StornoPrerada"
+
+    On Error GoTo EH
+
+    Dim rowPre As Long
+    rowPre = RequireStornoAllowed(TBL_PRERADA, preradaID, COL_PRE_ID, SRC)
+
+    MarkRowStornirano TBL_PRERADA, rowPre, SRC
+
+    ' storniraj stavke + vrati prerađene palete u lager (Preradjeno = "")
+    Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
+    If Not IsEmpty(s) Then
+        Dim sPre As Long, sPalID As Long, sStorno As Long
+        sPre = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID, SRC)
+        sPalID = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID, SRC)
+        sStorno = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_STORNIRANO, SRC)
+        Dim r As Long
+        For r = 1 To UBound(s, 1)
+            If Trim$(CStr(s(r, sPre))) = Trim$(preradaID) _
+               And Not IsStorniranoValue(s(r, sStorno)) Then
+                MarkRowStornirano TBL_PRERADA_STAVKA, r, SRC
+
+                Dim palID As String: palID = Trim$(CStr(s(r, sPalID)))
+                Dim c As Collection: Set c = FindRows(TBL_PALETA, COL_PAL_ID, palID)
+                If Not c Is Nothing Then
+                    If c.count > 0 Then
+                        RequireUpdateCell TBL_PALETA, CLng(c(1)), COL_PAL_PRERADJENO, "", SRC
+                    End If
+                End If
+            End If
+        Next r
+    End If
+
+    StornoPrerada = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
+End Function
+
+' ============================================================
 ' PUBLIC HELPERS / COMPATIBILITY
 ' ============================================================
 

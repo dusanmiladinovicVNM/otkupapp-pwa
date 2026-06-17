@@ -117,3 +117,89 @@ EH:
     LogErr "modPaletniListUI.PrintNepotpunePalete_Prompt"
     MsgBox "Greska pri stampi nepotpunih paleta: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' Alt+F8 / dugme: rucno zatvori otvorenu paletu po broju (tekuca godina).
+Public Sub ClosePaleta_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj palete za rucno zatvaranje (godina " & Year(Date) & "):", _
+                   "Zatvori paletu")
+    If Trim$(ans) = "" Then Exit Sub
+    If Not IsNumeric(ans) Then Exit Sub
+    Dim broj As Long: broj = CLng(Val(ans))
+    If broj <= 0 Then Exit Sub
+
+    Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
+    If palID = "" Then
+        MsgBox "Nije nadjena paleta br. " & broj & "/" & Year(Date) & ".", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    ClosePaletaManual_TX palID
+    MsgBox "Paleta " & broj & "/" & Year(Date) & " je zatvorena.", vbInformation, APP_NAME
+    Exit Sub
+EH:
+    LogErr "modPaletniListUI.ClosePaleta_Prompt"
+    MsgBox "Paleta nije zatvorena: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' Alt+F8: storno palete po broju (tekuca godina), uz potvrdu.
+Public Sub StornoPaleta_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj palete za STORNO (godina " & Year(Date) & "):", "Storno palete")
+    If Trim$(ans) = "" Then Exit Sub
+    If Not IsNumeric(ans) Then Exit Sub
+    Dim broj As Long: broj = CLng(Val(ans))
+    If broj <= 0 Then Exit Sub
+
+    Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
+    If palID = "" Then
+        MsgBox "Nije nadjena paleta br. " & broj & "/" & Year(Date) & ".", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If MsgBox("Stornirati paletu " & broj & "/" & Year(Date) & "?", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    If StornoPaleta_TX(palID) Then
+        MsgBox "Paleta " & broj & "/" & Year(Date) & " je stornirana.", vbInformation, APP_NAME
+    Else
+        MsgBox "Storno nije uspeo (vidi log).", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modPaletniListUI.StornoPaleta_Prompt"
+    MsgBox "Greska pri stornu: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Alt+F8: storno prerade po broju (tekuca godina), uz potvrdu.
+Public Sub StornoPrerada_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj prerade za STORNO (godina " & Year(Date) & "):", "Storno prerade")
+    If Trim$(ans) = "" Then Exit Sub
+    If Not IsNumeric(ans) Then Exit Sub
+    Dim broj As Long: broj = CLng(Val(ans))
+    If broj <= 0 Then Exit Sub
+
+    Dim preID As String: preID = FindPreradaIDByBroj(broj, Year(Date))
+    If preID = "" Then
+        MsgBox "Nije nadjena prerada br. " & broj & "/" & Year(Date) & ".", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If MsgBox("Stornirati preradu " & broj & "/" & Year(Date) & "? Palete se vracaju u lager.", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    If StornoPrerada_TX(preID) Then
+        MsgBox "Prerada " & broj & "/" & Year(Date) & " je stornirana.", vbInformation, APP_NAME
+    Else
+        MsgBox "Storno nije uspeo (vidi log).", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modPaletniListUI.StornoPrerada_Prompt"
+    MsgBox "Greska pri stornu: " & Err.description, vbCritical, APP_NAME
+End Sub

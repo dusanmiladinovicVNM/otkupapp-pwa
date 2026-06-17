@@ -241,6 +241,258 @@ EH:
 End Function
 
 ' ============================================================
+' frmPalete (#44) read-modeli + rucno zatvaranje. Read-modeli su SAMO za
+' citanje (bez TX); vracaju 0-based 2D Variant (spreman za ListBox.List) ili
+' Empty. Stornirane palete se ne prikazuju. Sva izmena ide preko TX wrappera.
+' ============================================================
+
+' Palete za grid. Filteri: god=0 -> sve; vrsta/status/preradjeno "" -> sve.
+' status: "Otvorena"|"Zatvorena"|""; preradjeno: "Da"|"Ne"|"".
+' Kolone (0-based): 0 PaletaID(skriveno),1 Broj,2 Godina,3 Vrsta,4 Sorta,
+' 5 Klasa,6 TipAmb,7 Gajbice,8 Kapacitet,9 Neto,10 Bruto,11 Status,12 Preradjeno.
+Public Function GetPaleteForGrid(Optional ByVal god As Long = 0, _
+                                 Optional ByVal vrsta As String = "", _
+                                 Optional ByVal status As String = "", _
+                                 Optional ByVal preradjeno As String = "") As Variant
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iBroj As Long, iGod As Long, iVrsta As Long, iSorta As Long
+    Dim iKlasa As Long, iTipA As Long, iGajb As Long, iKap As Long, iNeto As Long
+    Dim iBruto As Long, iStat As Long, iPre As Long, iStorno As Long
+    iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+    iBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+    iGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+    iVrsta = GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA)
+    iSorta = GetColumnIndex(TBL_PALETA, COL_PAL_SORTA)
+    iKlasa = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
+    iTipA = GetColumnIndex(TBL_PALETA, COL_PAL_TIP_AMBALAZE)
+    iGajb = GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)
+    iKap = GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)
+    iNeto = GetColumnIndex(TBL_PALETA, COL_PAL_NETO)
+    iBruto = GetColumnIndex(TBL_PALETA, COL_PAL_BRUTO)
+    iStat = GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)
+    iPre = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+    iStorno = GetColumnIndex(TBL_PALETA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If UCase$(Trim$(CStr(SafeCell(d, r, iStorno)))) <> "DA" _
+           And (god = 0 Or NzL(SafeCell(d, r, iGod)) = god) _
+           And (vrsta = "" Or CStr(SafeCell(d, r, iVrsta)) = vrsta) _
+           And (status = "" Or CStr(SafeCell(d, r, iStat)) = status) _
+           And PreradMatch(CStr(SafeCell(d, r, iPre)), preradjeno) Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 12)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(d, r, iID))
+        res(k, 1) = NzL(SafeCell(d, r, iBroj))
+        res(k, 2) = NzL(SafeCell(d, r, iGod))
+        res(k, 3) = CStr(SafeCell(d, r, iVrsta))
+        res(k, 4) = CStr(SafeCell(d, r, iSorta))
+        res(k, 5) = CStr(SafeCell(d, r, iKlasa))
+        res(k, 6) = CStr(SafeCell(d, r, iTipA))
+        res(k, 7) = NzL(SafeCell(d, r, iGajb))
+        res(k, 8) = NzL(SafeCell(d, r, iKap))
+        res(k, 9) = NzD(SafeCell(d, r, iNeto))
+        res(k, 10) = NzD(SafeCell(d, r, iBruto))
+        res(k, 11) = CStr(SafeCell(d, r, iStat))
+        res(k, 12) = CStr(SafeCell(d, r, iPre))
+    Next k
+
+    GetPaleteForGrid = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaleteForGrid"
+End Function
+
+Private Function PreradMatch(ByVal cellVal As String, ByVal filter As String) As Boolean
+    Select Case UCase$(Trim$(filter))
+        Case "": PreradMatch = True
+        Case "DA": PreradMatch = (UCase$(Trim$(cellVal)) = "DA")
+        Case "NE": PreradMatch = (UCase$(Trim$(cellVal)) <> "DA")
+        Case Else: PreradMatch = True
+    End Select
+End Function
+
+' Stavke izabrane palete za grid. Kolone (0-based): 0 PrijemnicaID,
+' 1 BrojPrijemnice, 2 BrojZbirne, 3 Gajbice, 4 NetoKg. Empty ako nema.
+Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
+    On Error GoTo EH
+    If Trim$(palID) = "" Then Exit Function
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iPal As Long, iPrij As Long, iBrPrij As Long, iZbir As Long
+    Dim iGajb As Long, iNeto As Long, iStorno As Long
+    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    iBrPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    iZbir = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+    iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If CStr(SafeCell(s, r, iPal)) = palID _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 4)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(s, r, iPrij))
+        res(k, 1) = CStr(SafeCell(s, r, iBrPrij))
+        res(k, 2) = CStr(SafeCell(s, r, iZbir))
+        res(k, 3) = NzL(SafeCell(s, r, iGajb))
+        res(k, 4) = NzD(SafeCell(s, r, iNeto))
+    Next k
+
+    GetPaletaStavkeForGrid = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaletaStavkeForGrid"
+End Function
+
+' Stavke za VISE izabranih paleta (agregat). Iste kolone kao
+' GetPaletaStavkeForGrid: 0 PrijemnicaID, 1 BrojPrijemnice, 2 BrojZbirne,
+' 3 Gajbice, 4 NetoKg. Empty ako nema.
+Public Function GetPaletaStavkeForGridMulti(ByVal paletaIDs As Collection) As Variant
+    On Error GoTo EH
+    If paletaIDs Is Nothing Then Exit Function
+    If paletaIDs.count = 0 Then Exit Function
+
+    Dim want As Object: Set want = CreateObject("Scripting.Dictionary")
+    Dim v As Variant
+    For Each v In paletaIDs
+        want(CStr(v)) = True
+    Next v
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iPal As Long, iPrij As Long, iBrPrij As Long, iZbir As Long
+    Dim iGajb As Long, iNeto As Long, iStorno As Long
+    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    iBrPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    iZbir = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+    iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+
+    ' grupisi po PrijemnicaID: ista prijemnica na vise izabranih paleta = 1 red,
+    ' Gajbice/Neto = zbir porcija preko izabranih paleta.
+    Dim order As Collection: Set order = New Collection
+    Dim dBr As Object: Set dBr = CreateObject("Scripting.Dictionary")
+    Dim dZb As Object: Set dZb = CreateObject("Scripting.Dictionary")
+    Dim dGa As Object: Set dGa = CreateObject("Scripting.Dictionary")
+    Dim dNe As Object: Set dNe = CreateObject("Scripting.Dictionary")
+
+    Dim r As Long, prij As String
+    For r = 1 To UBound(s, 1)
+        If want.Exists(CStr(SafeCell(s, r, iPal))) _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
+            prij = CStr(SafeCell(s, r, iPrij))
+            If Not dGa.Exists(prij) Then
+                order.Add prij
+                dBr(prij) = CStr(SafeCell(s, r, iBrPrij))
+                dZb(prij) = CStr(SafeCell(s, r, iZbir))
+                dGa(prij) = 0&
+                dNe(prij) = 0#
+            End If
+            dGa(prij) = dGa(prij) + NzL(SafeCell(s, r, iGajb))
+            dNe(prij) = dNe(prij) + NzD(SafeCell(s, r, iNeto))
+        End If
+    Next r
+    If order.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To order.count - 1, 0 To 4)
+    Dim k As Long, p As String
+    For k = 0 To order.count - 1
+        p = order(k + 1)
+        res(k, 0) = p
+        res(k, 1) = dBr(p)
+        res(k, 2) = dZb(p)
+        res(k, 3) = dGa(p)
+        res(k, 4) = dNe(p)
+    Next k
+
+    GetPaletaStavkeForGridMulti = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaletaStavkeForGridMulti"
+End Function
+
+' Rucno zatvaranje otvorene palete (TX). Validira: postoji tacno jednom, nije
+' stornirana/preradjena, jeste otvorena. Bez MsgBox -> baca gresku (UI hvata).
+' Posle commita pokrece izlaz (po PALETA_PRINT_MODE). Vraca PaletaID.
+Public Function ClosePaletaManual_TX(ByVal palID As String) As String
+    Const SRC As String = "modPaletniList.ClosePaletaManual_TX"
+
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    If Trim$(palID) = "" Then
+        Err.Raise vbObjectError + 7350, SRC, "PaletaID je prazan."
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+
+    RequirePaletaSchema SRC
+    Dim rIdx As Long
+    rIdx = RequireSingleRowIndexByKey(TBL_PALETA, COL_PAL_ID, palID, SRC)
+
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_STORNIRANO))))) = "DA" Then
+        Err.Raise vbObjectError + 7351, SRC, "Paleta je stornirana."
+    End If
+    If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA" Then
+        Err.Raise vbObjectError + 7352, SRC, "Paleta je vec preradjena."
+    End If
+    If CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS))) <> PAL_STATUS_OTVORENA Then
+        Err.Raise vbObjectError + 7353, SRC, "Paleta nije otvorena."
+    End If
+
+    RequireUpdateCell TBL_PALETA, rIdx, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, SRC
+
+    tx.CommitTx
+
+    ' POST-commit izlaz (po modu) -> bez rollback rizika.
+    Dim closed As Collection: Set closed = New Collection
+    closed.Add palID
+    PaletniListOutputClosed closed
+
+    ClosePaletaManual_TX = palID
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' ============================================================
 ' PUBLIC — rucna stampa nepotpunih (otvorenih) paleta.
 ' Kraj smene: Alt+F8 -> PrintNepotpunePalete (kasnije dugme u UI).
 ' ============================================================
@@ -374,6 +626,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     On Error GoTo EH
     Application.ScreenUpdating = False
 
+    ws.Range("PalBroj").NumberFormat = "@"
     ws.Range("PalBroj").value = brojOut & "/" & godOut
     ws.Range("PalDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_DATUM)), "dd.mm.yyyy")
     ws.Range("PalVrsta").value = SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA))
@@ -391,53 +644,45 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     Dim lastRow As Long
     lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
     If lastRow >= startRow Then
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 6)).Clear
+        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
     End If
 
-    Dim s As Variant
-    s = GetTableData(TBL_PALETA_STAVKA)
+    ' --- stavke: jedan red po OTKUPU (sifra kooperanta, vrsta, neto, ambalaza) ---
+    Dim ids As Collection: Set ids = New Collection
+    ids.Add palID
+    Dim o As Variant: o = GetOtkupiZaPalete(ids)
+
     Dim outR As Long, rb As Long
-    outR = startRow
-    rb = 0
-    If Not IsEmpty(s) Then
-        Dim sPal As Long, sPrij As Long, sZbr As Long, sGajb As Long, sNeto As Long
-        sPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-        sPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-        sZbr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-        sGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-        sNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
-
-        Dim sr As Long
-        For sr = 1 To UBound(s, 1)
-            If CStr(SafeCell(s, sr, sPal)) = palID Then
-                rb = rb + 1
-                ws.cells(outR, 1).value = rb
-                ws.cells(outR, 2).value = GetKooperantiZaZbirnu(CStr(SafeCell(s, sr, sZbr)))
-                ws.cells(outR, 3).value = SafeCell(s, sr, sPrij)
-                ws.cells(outR, 4).value = SafeCell(s, sr, sZbr)
-                ws.cells(outR, 5).value = NzL(SafeCell(s, sr, sGajb))
-                ws.cells(outR, 6).value = NzD(SafeCell(s, sr, sNeto))
-                outR = outR + 1
-            End If
-        Next sr
+    outR = startRow: rb = 0
+    If Not IsEmpty(o) Then
+        Dim k As Long
+        For k = 1 To UBound(o, 1)
+            rb = rb + 1
+            ws.cells(outR, 1).value = rb
+            ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
+            ws.cells(outR, 3).value = CStr(o(k, 2))                   ' Vrsta
+            ws.cells(outR, 4).value = o(k, 3)                         ' Neto kg
+            ws.cells(outR, 5).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip
+            outR = outR + 1
+        Next k
     End If
 
-    ' --- stilizacija stavki (kao SledljivostSablon: okviri + naizmenicne boje) ---
+    ' --- stilizacija stavki (okviri + naizmenicne boje) ---
     Dim dataEnd As Long
     dataEnd = outR - 1
     If dataEnd >= startRow Then
-        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 6)).Borders
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).Borders
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
-        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "#,##0"
-        ws.Range(ws.cells(startRow, 6), ws.cells(dataEnd, 6)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "@"
 
         Dim zr As Long
         For zr = 0 To dataEnd - startRow
             If zr Mod 2 = 1 Then
                 ws.Range(ws.cells(startRow + zr, 1), _
-                         ws.cells(startRow + zr, 6)).Interior.Color = RGB(217, 225, 242)
+                         ws.cells(startRow + zr, 5)).Interior.Color = RGB(217, 225, 242)
             End If
         Next zr
     End If
@@ -463,7 +708,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
         .TopMargin = Application.InchesToPoints(0.5)
         .BottomMargin = Application.InchesToPoints(0.5)
         .CenterHorizontally = True
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 6)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 5)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
@@ -522,11 +767,10 @@ Public Sub EnsurePaletaSablon()
 
     ws.Range("A9").value = "Rb"
     ws.Range("B9").value = "Kooperant"
-    ws.Range("C9").value = "Br. prijemnice"
-    ws.Range("D9").value = "Br. zbirne"
-    ws.Range("E9").value = "Gajbica"
-    ws.Range("F9").value = "Neto kg"
-    With ws.Range("A9:F9")
+    ws.Range("C9").value = "Vrsta"
+    ws.Range("D9").value = "Neto kg"
+    ws.Range("E9").value = "Ambalaza"
+    With ws.Range("A9:E9")
         .Font.Bold = True
         .Interior.Color = RGB(217, 225, 242)
         .HorizontalAlignment = xlCenter
@@ -536,12 +780,11 @@ Public Sub EnsurePaletaSablon()
 
     ws.Range("A10").name = "PalStavkaStart"
 
-    ws.columns("A").ColumnWidth = 6
-    ws.columns("B").ColumnWidth = 28
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
     ws.columns("C").ColumnWidth = 16
-    ws.columns("D").ColumnWidth = 16
-    ws.columns("E").ColumnWidth = 12
-    ws.columns("F").ColumnWidth = 12
+    ws.columns("D").ColumnWidth = 14
+    ws.columns("E").ColumnWidth = 18
 
     ws.Range("D7,E7").Font.Bold = True
     ws.Range("A3:B7").Borders.LineStyle = xlContinuous
@@ -772,6 +1015,123 @@ Private Function GetKooperantiZaZbirnu(ByVal brojZbirne As String) As String
     Next r
 
     If dic.count > 0 Then GetKooperantiZaZbirnu = Join(dic.keys, ", ")
+End Function
+
+' Otkupi za skup paleta: preko njihovih zbirni (tblPaletaStavka.BrojZbirne) ->
+' tblOtkup, filtrirano po klasi tih paleta, dedup po OtkupID. Vraca 1-based 2D:
+' 1 KooperantID(sifra), 2 VrstaVoca, 3 Kolicina(neto), 4 KolAmbalaze, 5 TipAmbalaze.
+Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
+    On Error GoTo EH
+    If paletaIDs Is Nothing Then Exit Function
+    If paletaIDs.count = 0 Then Exit Function
+
+    Dim palSet As Object: Set palSet = CreateObject("Scripting.Dictionary")
+    Dim v As Variant
+    For Each v In paletaIDs
+        palSet(CStr(v)) = True
+    Next v
+
+    ' zbirne tih paleta (iz stavki)
+    Dim zbSet As Object: Set zbSet = CreateObject("Scripting.Dictionary")
+    Dim sp As Variant: sp = GetTableData(TBL_PALETA_STAVKA)
+    Dim r As Long
+    If Not IsEmpty(sp) Then
+        Dim spPal As Long, spZb As Long, spStorno As Long
+        spPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+        spZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+        spStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        For r = 1 To UBound(sp, 1)
+            If palSet.Exists(CStr(SafeCell(sp, r, spPal))) _
+               And UCase$(Trim$(CStr(SafeCell(sp, r, spStorno)))) <> "DA" Then
+                Dim zb As String: zb = Trim$(CStr(SafeCell(sp, r, spZb)))
+                If zb <> "" Then zbSet(zb) = True
+            End If
+        Next r
+    End If
+    If zbSet.count = 0 Then Exit Function
+
+    ' klase tih paleta
+    Dim klSet As Object: Set klSet = CreateObject("Scripting.Dictionary")
+    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
+    If Not IsEmpty(dp) Then
+        Dim pID As Long, pKl As Long
+        pID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+        pKl = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
+        For r = 1 To UBound(dp, 1)
+            If palSet.Exists(CStr(SafeCell(dp, r, pID))) Then
+                klSet(UCase$(Trim$(CStr(SafeCell(dp, r, pKl))))) = True
+            End If
+        Next r
+    End If
+
+    ' klasa filter samo ako paleta ima definisanu klasu (legacy palete bez klase
+    ' -> ne filtriraj po klasi, da lista ne bude prazna)
+    Dim filterKlasa As Boolean
+    Dim kk As Variant
+    For Each kk In klSet.keys
+        If Trim$(CStr(kk)) <> "" Then filterKlasa = True
+    Next kk
+
+    ' OtkupID-jevi preko zbirne: zbirna -> otpremnice -> otkupi (reuse TraceByZbirna).
+    ' Otkup nije direktno vezan za BrojZbirne, nego preko OtpremnicaID.
+    Dim wantOtk As Object: Set wantOtk = CreateObject("Scripting.Dictionary")
+    Dim z As Variant
+    For Each z In zbSet.keys
+        Dim t As Variant: t = TraceByZbirna(CStr(z))
+        If Not IsEmpty(t) Then
+            Dim tr As Long
+            For tr = LBound(t, 1) To UBound(t, 1)
+                Dim tid As String: tid = Trim$(CStr(t(tr, 6)))   ' OtkupID = kolona 6
+                If tid <> "" Then wantOtk(tid) = True
+            Next tr
+        End If
+    Next z
+    If wantOtk.count = 0 Then Exit Function
+
+    ' detalji otkupa iz tblOtkup po OtkupID (+ klasa filter), dedup
+    Dim o As Variant: o = GetTableData(TBL_OTKUP)
+    If IsEmpty(o) Then Exit Function
+    Dim oID As Long, oKoop As Long, oVr As Long, oKol As Long
+    Dim oAmb As Long, oTip As Long, oKl As Long, oStorno As Long
+    oID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    oVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    oKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    oAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+    oTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
+    oKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
+    oStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
+
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim rows As Collection: Set rows = New Collection
+    For r = 1 To UBound(o, 1)
+        Dim otkID As String: otkID = CStr(SafeCell(o, r, oID))
+        If wantOtk.Exists(otkID) _
+           And (Not filterKlasa Or klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl)))))) _
+           And UCase$(Trim$(CStr(SafeCell(o, r, oStorno)))) <> "DA" Then
+            If Not seen.Exists(otkID) Then
+                seen(otkID) = True
+                rows.Add r
+            End If
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(1 To rows.count, 1 To 5)
+    Dim k As Long
+    For k = 1 To rows.count
+        r = rows(k)
+        res(k, 1) = CStr(SafeCell(o, r, oKoop))
+        res(k, 2) = CStr(SafeCell(o, r, oVr))
+        res(k, 3) = NzD(SafeCell(o, r, oKol))
+        res(k, 4) = NzL(SafeCell(o, r, oAmb))
+        res(k, 5) = CStr(SafeCell(o, r, oTip))
+    Next k
+
+    GetOtkupiZaPalete = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetOtkupiZaPalete"
 End Function
 
 Private Function NzD(ByVal v As Variant) As Double
@@ -1057,6 +1417,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     On Error GoTo EH
     Application.ScreenUpdating = False
 
+    ws.Range("PreBroj").NumberFormat = "@"
     ws.Range("PreBroj").value = brojOut & "/" & godOut
     ws.Range("PreDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_DATUM)), "dd.mm.yyyy")
     ws.Range("PreKutije").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)))
@@ -1065,40 +1426,52 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
     Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
-    If lastRow >= startRow Then ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 3)).Clear
+    If lastRow >= startRow Then ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
 
+    ' prerada -> prerađene palete -> otkupi: jedan red po OTKUPU
+    Dim palIDs As Collection: Set palIDs = New Collection
     Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
-    Dim outR As Long, rb As Long
-    outR = startRow: rb = 0
     If Not IsEmpty(s) Then
-        Dim sPre As Long, sBroj As Long, sNeto As Long
+        Dim sPre As Long, sPalID As Long
         sPre = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID)
-        sBroj = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_BROJ_PALETE)
-        sNeto = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_NETO)
+        sPalID = GetColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID)
         Dim sr As Long
         For sr = 1 To UBound(s, 1)
             If CStr(SafeCell(s, sr, sPre)) = preID Then
-                rb = rb + 1
-                ws.cells(outR, 1).value = rb
-                ws.cells(outR, 2).value = NzL(SafeCell(s, sr, sBroj)) & "/" & godOut
-                ws.cells(outR, 3).value = NzD(SafeCell(s, sr, sNeto))
-                outR = outR + 1
+                palIDs.Add CStr(SafeCell(s, sr, sPalID))
             End If
         Next sr
     End If
 
+    Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
+    Dim outR As Long, rb As Long
+    outR = startRow: rb = 0
+    If Not IsEmpty(o) Then
+        Dim k As Long
+        For k = 1 To UBound(o, 1)
+            rb = rb + 1
+            ws.cells(outR, 1).value = rb
+            ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
+            ws.cells(outR, 3).value = CStr(o(k, 2))                   ' Vrsta
+            ws.cells(outR, 4).value = o(k, 3)                         ' Neto kg
+            ws.cells(outR, 5).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip
+            outR = outR + 1
+        Next k
+    End If
+
     Dim dataEnd As Long: dataEnd = outR - 1
     If dataEnd >= startRow Then
-        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 3)).Borders
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).Borders
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
-        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "@"
         Dim zr As Long
         For zr = 0 To dataEnd - startRow
             If zr Mod 2 = 1 Then
                 ws.Range(ws.cells(startRow + zr, 1), _
-                         ws.cells(startRow + zr, 3)).Interior.Color = RGB(217, 225, 242)
+                         ws.cells(startRow + zr, 5)).Interior.Color = RGB(217, 225, 242)
             End If
         Next zr
     End If
@@ -1107,7 +1480,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     If footRow <= startRow Then footRow = startRow + 1
     ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
     ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
-    ws.cells(footRow + 2, 3).value = "Pecat: ____________________"
+    ws.cells(footRow + 2, 4).value = "Pecat: ____________________"
 
     On Error Resume Next
     Application.PrintCommunication = False   ' batch PageSetup: bez sporog round-trip-a do (mreznog) stampaca
@@ -1121,7 +1494,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
         .TopMargin = Application.InchesToPoints(0.5)
         .BottomMargin = Application.InchesToPoints(0.5)
         .CenterHorizontally = True
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 3)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 2, 5)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
@@ -1169,9 +1542,11 @@ Public Sub EnsurePreradaSablon()
     ws.Range("A8,B8").Font.Bold = True
 
     ws.Range("A10").value = "Rb"
-    ws.Range("B10").value = "Broj palete"
-    ws.Range("C10").value = "Neto kg"
-    With ws.Range("A10:C10")
+    ws.Range("B10").value = "Kooperant"
+    ws.Range("C10").value = "Vrsta"
+    ws.Range("D10").value = "Neto kg"
+    ws.Range("E10").value = "Ambalaza"
+    With ws.Range("A10:E10")
         .Font.Bold = True
         .Interior.Color = RGB(217, 225, 242)
         .HorizontalAlignment = xlCenter
@@ -1181,9 +1556,11 @@ Public Sub EnsurePreradaSablon()
 
     ws.Range("A11").name = "PreStavkaStart"
 
-    ws.columns("A").ColumnWidth = 8
-    ws.columns("B").ColumnWidth = 18
-    ws.columns("C").ColumnWidth = 14
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 16
+    ws.columns("D").ColumnWidth = 14
+    ws.columns("E").ColumnWidth = 18
     ws.Range("A3:B8").Borders.LineStyle = xlContinuous
     Exit Sub
 EH:
