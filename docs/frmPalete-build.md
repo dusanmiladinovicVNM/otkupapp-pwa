@@ -83,6 +83,10 @@ Private Sub UserForm_Initialize()
 
     Me.txtFilterGod.value = Year(Date)
 
+    ' Vrsta voca iz sifarnika (isti izvor kao na prijemnici); "" na vrhu = Sve
+    FillCmb Me.cmbFilterVrsta, GetLookupList(TBL_KULTURE, "VrstaVoca")
+    Me.cmbFilterVrsta.AddItem "", 0
+
     Me.lstPalete.ColumnCount = 13
     Me.lstPalete.ColumnWidths = "0;30;32;50;50;30;40;40;48;48;50;50;50"
     Me.lstStavke.ColumnCount = 5
