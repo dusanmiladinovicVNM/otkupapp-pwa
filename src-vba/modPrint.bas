@@ -180,7 +180,22 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("ukupno") = osnovica + osnovica * stopa / 100
 
     Application.ScreenUpdating = False
+    On Error Resume Next
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+    ws.cells.UnMerge
+    On Error GoTo EH
     ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 22
+    ws.columns("C").ColumnWidth = 8
+    ws.columns("D").ColumnWidth = 15
+    ws.columns("E").ColumnWidth = 14
+    ws.columns("F").ColumnWidth = 16
 
     Dim r0 As Long, lastRow As Long
     r0 = WriteOtkupCopy(ws, 2, "Primerak za poljoprivrednika", h, stavke, cnt)
@@ -222,41 +237,77 @@ EH:
     LogErr "modPrint.FillOtkupSablon"
 End Function
 
-' Ispisuje jedan primerak od reda r0; vraca prvi slobodan red posle primerka.
+' Ispisuje jedan stilizovani primerak od reda r0; vraca prvi slobodan red.
 Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
                                 ByVal copyLbl As String, ByVal h As Object, _
                                 ByVal stavke As Variant, ByVal nStavke As Long) As Long
     Dim rr As Long: rr = r0
+    Dim grayClr As Long: grayClr = RGB(90, 90, 90)
+    Dim ruleClr As Long: ruleClr = RGB(110, 110, 110)
+    Dim fillClr As Long: fillClr = RGB(217, 225, 242)
 
-    ' --- zaglavlje firme (otkupljivac) ---
-    ws.cells(rr, 1).value = h("name")
-    ws.cells(rr, 1).Font.Bold = True
-    ws.cells(rr, 4).value = "PIB: " & h("pib") & "   MB: " & h("mb")
+    ' --- zaglavlje firme (+ logo gore desno ako postoji) ---
+    With ws.cells(rr, 1)
+        .value = h("name")
+        .Font.Bold = True
+        .Font.Size = 12
+    End With
     rr = rr + 1
     ws.cells(rr, 1).value = h("addr")
-    ws.cells(rr, 4).value = "Ziro: " & h("acct")
+    rr = rr + 1
+    With ws.cells(rr, 1)
+        .value = "PIB: " & h("pib") & "    MB: " & h("mb") & "    Ziro: " & h("acct")
+        .Font.Size = 9
+        .Font.Color = grayClr
+    End With
+    DrawOtkupLogo ws, r0
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = ruleClr
+    End With
     rr = rr + 1
 
-    ' --- naslov ---
+    ' --- naslov (opis + veliki naslov, centrirano) ---
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Merge
-    ws.cells(rr, 1).value = "OTKUPNI LIST br. " & h("brDok")
-    ws.cells(rr, 1).Font.Bold = True
-    ws.cells(rr, 1).Font.Size = 13
-    ws.cells(rr, 1).HorizontalAlignment = xlCenter
+    With ws.cells(rr, 1)
+        .value = "Otkup poljoprivrednih proizvoda"
+        .Font.Italic = True
+        .Font.Size = 9
+        .Font.Color = grayClr
+        .HorizontalAlignment = xlCenter
+    End With
     rr = rr + 1
-    ws.cells(rr, 1).value = "Datum: " & h("datum")
-    ws.cells(rr, 4).value = "Otkupno mesto: " & h("stanica")
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Merge
+    With ws.cells(rr, 1)
+        .value = "OTKUPNI LIST  br. " & h("brDok")
+        .Font.Bold = True
+        .Font.Size = 16
+        .HorizontalAlignment = xlCenter
+    End With
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = ruleClr
+    End With
     rr = rr + 1
-    ws.cells(rr, 1).value = copyLbl
-    ws.cells(rr, 1).Font.Italic = True
+
+    ' --- datum / otkupno mesto / oznaka primerka ---
+    WriteLabelVal ws, rr, 1, "Datum:", CStr(h("datum"))
+    WriteLabelVal ws, rr, 4, "Otkupno mesto:", CStr(h("stanica"))
+    rr = rr + 1
+    With ws.cells(rr, 1)
+        .value = copyLbl
+        .Font.Italic = True
+        .Font.Color = grayClr
+    End With
     rr = rr + 1
 
     ' --- poljoprivrednik ---
-    ws.cells(rr, 1).value = "Poljoprivrednik: " & h("koop")
-    ws.cells(rr, 1).Font.Bold = True
+    WriteLabelVal ws, rr, 1, "Poljoprivrednik:", CStr(h("koop"))
     rr = rr + 1
-    ws.cells(rr, 1).value = "BPG: " & h("bpg")
-    ws.cells(rr, 4).value = "Tekuci racun: " & h("racun")
+    WriteLabelVal ws, rr, 1, "BPG:", CStr(h("bpg"))
+    WriteLabelVal ws, rr, 4, "Tekuci racun:", CStr(h("racun"))
     rr = rr + 1
 
     ' --- stavke ---
@@ -269,8 +320,10 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 6).value = "Vrednost bez PDV"
     With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
         .Font.Bold = True
-        .Interior.Color = RGB(217, 225, 242)
+        .Interior.Color = fillClr
         .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
     End With
     rr = rr + 1
     Dim k As Long
@@ -281,6 +334,8 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         ws.cells(rr, 4).value = stavke(k, 2)
         ws.cells(rr, 5).value = stavke(k, 3)
         ws.cells(rr, 6).value = stavke(k, 4)
+        ws.cells(rr, 1).HorizontalAlignment = xlCenter
+        ws.cells(rr, 3).HorizontalAlignment = xlCenter
         rr = rr + 1
     Next k
     With ws.Range(ws.cells(hdr, 1), ws.cells(rr - 1, 6)).Borders
@@ -289,28 +344,97 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     End With
     ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 6)).NumberFormat = "#,##0.00"
 
-    ws.cells(rr, 1).value = "Ambalaza: " & h("amb")
-    rr = rr + 1
+    ' --- ambalaza (levo) + obracun PDV nadoknade (desno, uokvireno) ---
+    Dim ob As Long: ob = rr
+    WriteLabelVal ws, ob, 1, "Ambalaza:", CStr(h("amb"))
 
-    ' --- obracun PDV nadoknade ---
-    ws.cells(rr, 4).value = "Osnovica (vrednost otkupa):"
-    ws.cells(rr, 6).value = h("osnovica")
-    rr = rr + 1
-    ws.cells(rr, 4).value = "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):"
-    ws.cells(rr, 6).value = h("nadoknada")
-    rr = rr + 1
-    ws.cells(rr, 4).value = "UKUPNO ZA ISPLATU:"
-    ws.cells(rr, 6).value = h("ukupno")
-    ws.Range(ws.cells(rr, 4), ws.cells(rr, 6)).Font.Bold = True
-    ws.Range(ws.cells(rr - 2, 6), ws.cells(rr, 6)).NumberFormat = "#,##0.00"
-    rr = rr + 2
+    WriteLabelVal ws, ob, 4, "Osnovica (bez PDV):", ""
+    ws.cells(ob, 6).value = h("osnovica")
+    WriteLabelVal ws, ob + 1, 4, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
+    ws.cells(ob + 1, 6).value = h("nadoknada")
+    WriteLabelVal ws, ob + 2, 4, "UKUPNO ZA ISPLATU:", ""
+    ws.cells(ob + 2, 6).value = h("ukupno")
+    With ws.Range(ws.cells(ob + 2, 4), ws.cells(ob + 2, 6))
+        .Font.Bold = True
+        .Interior.Color = fillClr
+    End With
+    ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 6)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(ob + 2, 4), ws.cells(ob + 2, 6)).Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    With ws.Range(ws.cells(ob, 6), ws.cells(ob + 2, 6))
+        .NumberFormat = "#,##0.00"
+        .HorizontalAlignment = xlRight
+    End With
+    rr = ob + 4
 
-    ' --- potpisi ---
-    ws.cells(rr, 1).value = "Potpis poljoprivrednika (primio nadoknadu): ______________"
-    ws.cells(rr, 5).value = "Potpis/pecat otkupljivaca: ______________"
+    ' --- napomena + potpisi ---
+    With ws.cells(rr, 1)
+        .value = "Poljoprivrednik svojim potpisom potvrdjuje prijem nadoknade."
+        .Font.Size = 8
+        .Font.Italic = True
+        .Font.Color = grayClr
+    End With
+    rr = rr + 1
+    ws.cells(rr, 1).value = "Potpis poljoprivrednika:  ________"
+    ws.cells(rr, 1).Font.Color = grayClr
+    ws.cells(rr, 4).value = "Potpis / pecat otkupljivaca:  ____________"
+    ws.cells(rr, 4).Font.Color = grayClr
     rr = rr + 1
 
     WriteOtkupCopy = rr
+End Function
+
+' Upisuje "labela vrednost" u jednu celiju, sa podebljanim delom vrednosti.
+Private Sub WriteLabelVal(ByVal ws As Worksheet, ByVal rowIx As Long, ByVal colIx As Long, _
+                          ByVal lbl As String, ByVal val As String)
+    Dim s As String
+    If val = "" Then s = lbl Else s = lbl & " " & val
+    With ws.cells(rowIx, colIx)
+        .value = s
+        .Font.Bold = False
+        If Len(val) > 0 Then
+            On Error Resume Next
+            .Characters(Start:=Len(lbl) + 2, Length:=Len(val)).Font.Bold = True
+            On Error GoTo 0
+        End If
+    End With
+End Sub
+
+' Ubacuje logo gore desno (preko zaglavlja) ako je dostupan. Tiho preskace ako ga nema.
+Private Sub DrawOtkupLogo(ByVal ws As Worksheet, ByVal topRow As Long)
+    On Error GoTo done
+    Dim p As String: p = GetOtkupLogoPath()
+    If p = "" Then Exit Sub
+
+    Dim w As Double, hgt As Double
+    w = 52: hgt = 40
+    Dim rcell As Range: Set rcell = ws.cells(topRow, 6)
+    Dim L As Double, T As Double
+    L = rcell.Left + rcell.Width - w
+    If L < ws.cells(topRow, 5).Left Then L = ws.cells(topRow, 5).Left
+    T = rcell.Top
+
+    ws.Shapes.AddPicture fileName:=p, LinkToFile:=msoFalse, _
+                         SaveWithDocument:=msoTrue, _
+                         Left:=L, Top:=T, Width:=w, Height:=hgt
+done:
+End Sub
+
+' Putanja loga: config SELLER_LOGO_PATH, pa <workbook>\logo.png / logo.jpg. "" ako nema.
+Private Function GetOtkupLogoPath() As String
+    On Error Resume Next
+    Dim p As String
+    p = Trim$(CStr(GetConfigValue("SELLER_LOGO_PATH")))
+    If p <> "" Then
+        If Dir$(p) <> "" Then GetOtkupLogoPath = p: Exit Function
+    End If
+    Dim cand As String
+    cand = ThisWorkbook.Path & "\logo.png"
+    If Dir$(cand) <> "" Then GetOtkupLogoPath = cand: Exit Function
+    cand = ThisWorkbook.Path & "\logo.jpg"
+    If Dir$(cand) <> "" Then GetOtkupLogoPath = cand
 End Function
 
 Public Sub EnsureOtkupSablon()
