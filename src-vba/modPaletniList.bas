@@ -395,25 +395,41 @@ Public Function GetPaletaStavkeForGridMulti(ByVal paletaIDs As Collection) As Va
     iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
     iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
 
-    Dim rows As Collection: Set rows = New Collection
-    Dim r As Long
+    ' grupisi po PrijemnicaID: ista prijemnica na vise izabranih paleta = 1 red,
+    ' Gajbice/Neto = zbir porcija preko izabranih paleta.
+    Dim order As Collection: Set order = New Collection
+    Dim dBr As Object: Set dBr = CreateObject("Scripting.Dictionary")
+    Dim dZb As Object: Set dZb = CreateObject("Scripting.Dictionary")
+    Dim dGa As Object: Set dGa = CreateObject("Scripting.Dictionary")
+    Dim dNe As Object: Set dNe = CreateObject("Scripting.Dictionary")
+
+    Dim r As Long, prij As String
     For r = 1 To UBound(s, 1)
         If want.Exists(CStr(SafeCell(s, r, iPal))) _
            And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
-            rows.Add r
+            prij = CStr(SafeCell(s, r, iPrij))
+            If Not dGa.Exists(prij) Then
+                order.Add prij
+                dBr(prij) = CStr(SafeCell(s, r, iBrPrij))
+                dZb(prij) = CStr(SafeCell(s, r, iZbir))
+                dGa(prij) = 0&
+                dNe(prij) = 0#
+            End If
+            dGa(prij) = dGa(prij) + NzL(SafeCell(s, r, iGajb))
+            dNe(prij) = dNe(prij) + NzD(SafeCell(s, r, iNeto))
         End If
     Next r
-    If rows.count = 0 Then Exit Function
+    If order.count = 0 Then Exit Function
 
-    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 4)
-    Dim k As Long
-    For k = 0 To rows.count - 1
-        r = rows(k + 1)
-        res(k, 0) = CStr(SafeCell(s, r, iPrij))
-        res(k, 1) = CStr(SafeCell(s, r, iBrPrij))
-        res(k, 2) = CStr(SafeCell(s, r, iZbir))
-        res(k, 3) = NzL(SafeCell(s, r, iGajb))
-        res(k, 4) = NzD(SafeCell(s, r, iNeto))
+    Dim res As Variant: ReDim res(0 To order.count - 1, 0 To 4)
+    Dim k As Long, p As String
+    For k = 0 To order.count - 1
+        p = order(k + 1)
+        res(k, 0) = p
+        res(k, 1) = dBr(p)
+        res(k, 2) = dZb(p)
+        res(k, 3) = dGa(p)
+        res(k, 4) = dNe(p)
     Next k
 
     GetPaletaStavkeForGridMulti = res
