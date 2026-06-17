@@ -90,7 +90,7 @@ Private Sub UserForm_Initialize()
     Me.lstPalete.ColumnCount = 13
     Me.lstPalete.ColumnWidths = "0;30;32;50;50;30;40;40;48;48;50;50;50"
     Me.lstStavke.ColumnCount = 5
-    Me.lstStavke.ColumnWidths = "60;34;34;28;30"
+    Me.lstStavke.ColumnWidths = "52;28;38;24;26"
 
     RefreshGrid
     Exit Sub
