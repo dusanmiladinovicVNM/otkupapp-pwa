@@ -1079,11 +1079,19 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
     oZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
     oStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
 
+    ' klasa filter samo ako paleta ima definisanu klasu (legacy palete bez klase
+    ' -> ne filtriraj po klasi, da lista ne bude prazna)
+    Dim filterKlasa As Boolean
+    Dim kk As Variant
+    For Each kk In klSet.keys
+        If Trim$(CStr(kk)) <> "" Then filterKlasa = True
+    Next kk
+
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim rows As Collection: Set rows = New Collection
     For r = 1 To UBound(o, 1)
         If zbSet.Exists(Trim$(CStr(SafeCell(o, r, oZb)))) _
-           And klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl))))) _
+           And (Not filterKlasa Or klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl)))))) _
            And UCase$(Trim$(CStr(SafeCell(o, r, oStorno)))) <> "DA" Then
             Dim oid As String: oid = CStr(SafeCell(o, r, oID))
             If oid <> "" And Not seen.Exists(oid) Then
@@ -1110,6 +1118,45 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
 EH:
     LogErr "modPaletniList.GetOtkupiZaPalete"
 End Function
+
+' DIJAGNOSTIKA (privremeno): Alt+F8 -> DebugPaletaTrace, ili u Immediate:
+'   DebugPaletaTrace 7   ' broj palete (tekuca godina). Stampa u Immediate (Ctrl+G).
+Public Sub DebugPaletaTrace(ByVal broj As Long)
+    Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
+    Debug.Print "PaletaID = [" & palID & "]"
+    If palID = "" Then Exit Sub
+
+    Dim ri As Long: ri = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
+    Debug.Print "  Klasa palete = [" & CStr(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_KLASA))) & "]"
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    Dim sPal As Long, sZb As Long
+    sPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    sZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+    Dim zb As Object: Set zb = CreateObject("Scripting.Dictionary")
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If CStr(SafeCell(s, r, sPal)) = palID Then zb(Trim$(CStr(SafeCell(s, r, sZb)))) = True
+    Next r
+    Debug.Print "  Zbirne stavki = [" & Join(zb.keys, " | ") & "]"
+
+    Dim o As Variant: o = GetTableData(TBL_OTKUP)
+    Dim oZb As Long, oKl As Long, oKoop As Long
+    oZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
+    oKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
+    oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    Dim cnt As Long
+    For r = 1 To UBound(o, 1)
+        If zb.Exists(Trim$(CStr(SafeCell(o, r, oZb)))) Then
+            cnt = cnt + 1
+            Debug.Print "    otkup: zbirna=[" & CStr(SafeCell(o, r, oZb)) & _
+                        "] klasa=[" & CStr(SafeCell(o, r, oKl)) & _
+                        "] koop=[" & CStr(SafeCell(o, r, oKoop)) & "]"
+        End If
+    Next r
+    Debug.Print "  Otkupa sa tim zbirnama = " & cnt
+End Sub
 
 Private Function NzD(ByVal v As Variant) As Double
     On Error Resume Next
