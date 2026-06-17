@@ -241,6 +241,188 @@ EH:
 End Function
 
 ' ============================================================
+' frmPalete (#44) read-modeli + rucno zatvaranje. Read-modeli su SAMO za
+' citanje (bez TX); vracaju 0-based 2D Variant (spreman za ListBox.List) ili
+' Empty. Stornirane palete se ne prikazuju. Sva izmena ide preko TX wrappera.
+' ============================================================
+
+' Palete za grid. Filteri: god=0 -> sve; vrsta/status/preradjeno "" -> sve.
+' status: "Otvorena"|"Zatvorena"|""; preradjeno: "Da"|"Ne"|"".
+' Kolone (0-based): 0 PaletaID(skriveno),1 Broj,2 Godina,3 Vrsta,4 Sorta,
+' 5 Klasa,6 TipAmb,7 Gajbice,8 Kapacitet,9 Neto,10 Bruto,11 Status,12 Preradjeno.
+Public Function GetPaleteForGrid(Optional ByVal god As Long = 0, _
+                                 Optional ByVal vrsta As String = "", _
+                                 Optional ByVal status As String = "", _
+                                 Optional ByVal preradjeno As String = "") As Variant
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iBroj As Long, iGod As Long, iVrsta As Long, iSorta As Long
+    Dim iKlasa As Long, iTipA As Long, iGajb As Long, iKap As Long, iNeto As Long
+    Dim iBruto As Long, iStat As Long, iPre As Long, iStorno As Long
+    iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+    iBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+    iGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+    iVrsta = GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA)
+    iSorta = GetColumnIndex(TBL_PALETA, COL_PAL_SORTA)
+    iKlasa = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
+    iTipA = GetColumnIndex(TBL_PALETA, COL_PAL_TIP_AMBALAZE)
+    iGajb = GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)
+    iKap = GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)
+    iNeto = GetColumnIndex(TBL_PALETA, COL_PAL_NETO)
+    iBruto = GetColumnIndex(TBL_PALETA, COL_PAL_BRUTO)
+    iStat = GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)
+    iPre = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+    iStorno = GetColumnIndex(TBL_PALETA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If UCase$(Trim$(CStr(SafeCell(d, r, iStorno)))) <> "DA" _
+           And (god = 0 Or NzL(SafeCell(d, r, iGod)) = god) _
+           And (vrsta = "" Or CStr(SafeCell(d, r, iVrsta)) = vrsta) _
+           And (status = "" Or CStr(SafeCell(d, r, iStat)) = status) _
+           And PreradMatch(CStr(SafeCell(d, r, iPre)), preradjeno) Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 12)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(d, r, iID))
+        res(k, 1) = NzL(SafeCell(d, r, iBroj))
+        res(k, 2) = NzL(SafeCell(d, r, iGod))
+        res(k, 3) = CStr(SafeCell(d, r, iVrsta))
+        res(k, 4) = CStr(SafeCell(d, r, iSorta))
+        res(k, 5) = CStr(SafeCell(d, r, iKlasa))
+        res(k, 6) = CStr(SafeCell(d, r, iTipA))
+        res(k, 7) = NzL(SafeCell(d, r, iGajb))
+        res(k, 8) = NzL(SafeCell(d, r, iKap))
+        res(k, 9) = NzD(SafeCell(d, r, iNeto))
+        res(k, 10) = NzD(SafeCell(d, r, iBruto))
+        res(k, 11) = CStr(SafeCell(d, r, iStat))
+        res(k, 12) = CStr(SafeCell(d, r, iPre))
+    Next k
+
+    GetPaleteForGrid = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaleteForGrid"
+End Function
+
+Private Function PreradMatch(ByVal cellVal As String, ByVal filter As String) As Boolean
+    Select Case UCase$(Trim$(filter))
+        Case "": PreradMatch = True
+        Case "DA": PreradMatch = (UCase$(Trim$(cellVal)) = "DA")
+        Case "NE": PreradMatch = (UCase$(Trim$(cellVal)) <> "DA")
+        Case Else: PreradMatch = True
+    End Select
+End Function
+
+' Stavke izabrane palete za grid. Kolone (0-based): 0 PrijemnicaID,
+' 1 BrojPrijemnice, 2 BrojZbirne, 3 Gajbice, 4 NetoKg. Empty ako nema.
+Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
+    On Error GoTo EH
+    If Trim$(palID) = "" Then Exit Function
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iPal As Long, iPrij As Long, iBrPrij As Long, iZbir As Long
+    Dim iGajb As Long, iNeto As Long, iStorno As Long
+    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    iBrPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    iZbir = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+    iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If CStr(SafeCell(s, r, iPal)) = palID _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 4)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(s, r, iPrij))
+        res(k, 1) = CStr(SafeCell(s, r, iBrPrij))
+        res(k, 2) = CStr(SafeCell(s, r, iZbir))
+        res(k, 3) = NzL(SafeCell(s, r, iGajb))
+        res(k, 4) = NzD(SafeCell(s, r, iNeto))
+    Next k
+
+    GetPaletaStavkeForGrid = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaletaStavkeForGrid"
+End Function
+
+' Rucno zatvaranje otvorene palete (TX). Validira: postoji tacno jednom, nije
+' stornirana/preradjena, jeste otvorena. Bez MsgBox -> baca gresku (UI hvata).
+' Posle commita pokrece izlaz (po PALETA_PRINT_MODE). Vraca PaletaID.
+Public Function ClosePaletaManual_TX(ByVal palID As String) As String
+    Const SRC As String = "modPaletniList.ClosePaletaManual_TX"
+
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    If Trim$(palID) = "" Then
+        Err.Raise vbObjectError + 7350, SRC, "PaletaID je prazan."
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+
+    RequirePaletaSchema SRC
+    Dim rIdx As Long
+    rIdx = RequireSingleRowIndexByKey(TBL_PALETA, COL_PAL_ID, palID, SRC)
+
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_STORNIRANO))))) = "DA" Then
+        Err.Raise vbObjectError + 7351, SRC, "Paleta je stornirana."
+    End If
+    If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA" Then
+        Err.Raise vbObjectError + 7352, SRC, "Paleta je vec preradjena."
+    End If
+    If CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS))) <> PAL_STATUS_OTVORENA Then
+        Err.Raise vbObjectError + 7353, SRC, "Paleta nije otvorena."
+    End If
+
+    RequireUpdateCell TBL_PALETA, rIdx, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, SRC
+
+    tx.CommitTx
+
+    ' POST-commit izlaz (po modu) -> bez rollback rizika.
+    Dim closed As Collection: Set closed = New Collection
+    closed.Add palID
+    PaletniListOutputClosed closed
+
+    ClosePaletaManual_TX = palID
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' ============================================================
 ' PUBLIC — rucna stampa nepotpunih (otvorenih) paleta.
 ' Kraj smene: Alt+F8 -> PrintNepotpunePalete (kasnije dugme u UI).
 ' ============================================================

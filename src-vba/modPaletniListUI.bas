@@ -117,3 +117,29 @@ EH:
     LogErr "modPaletniListUI.PrintNepotpunePalete_Prompt"
     MsgBox "Greska pri stampi nepotpunih paleta: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' Alt+F8 / dugme: rucno zatvori otvorenu paletu po broju (tekuca godina).
+Public Sub ClosePaleta_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj palete za rucno zatvaranje (godina " & Year(Date) & "):", _
+                   "Zatvori paletu")
+    If Trim$(ans) = "" Then Exit Sub
+    If Not IsNumeric(ans) Then Exit Sub
+    Dim broj As Long: broj = CLng(Val(ans))
+    If broj <= 0 Then Exit Sub
+
+    Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
+    If palID = "" Then
+        MsgBox "Nije nadjena paleta br. " & broj & "/" & Year(Date) & ".", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    ClosePaletaManual_TX palID
+    MsgBox "Paleta " & broj & "/" & Year(Date) & " je zatvorena.", vbInformation, APP_NAME
+    Exit Sub
+EH:
+    LogErr "modPaletniListUI.ClosePaleta_Prompt"
+    MsgBox "Paleta nije zatvorena: " & Err.description, vbExclamation, APP_NAME
+End Sub
