@@ -252,6 +252,44 @@ End Sub
 Pa `Alt+F8 → ShowPalete` (ili dugme na traci). Za probu odmah: `frmPalete.Show` u
 Immediate prozoru.
 
+## 5. (opciono) Zaglavlja kolona
+
+ListBox punjen preko `.List` ne prikazuje zaglavlja (ColumnHeads radi samo uz
+RowSource). Najčistije: zaključana 1-red „header" lista sa ISTIM `ColumnWidths`
+— savršeno poravnanje (isti mehanizam; 518 < 520 pa nema horizontalnog skrola).
+
+**Kontrola:** dodaj `lstPaleteHdr` (ListBox) Left 8, Top 36, Width 520, Height 15
+(popuni razmak iznad `lstPalete`; obriši/zameni `lblPalete`). Properties: `Locked = True`.
+
+**U `UserForm_Initialize`** (posle `lstPalete` kolona) — podaci zaglavlja:
+
+```vba
+    Me.lstPaleteHdr.ColumnCount = 13
+    Me.lstPaleteHdr.ColumnWidths = Me.lstPalete.ColumnWidths
+    Dim hdr(0 To 0, 0 To 12) As Variant
+    hdr(0, 1) = "Broj":   hdr(0, 2) = "God":     hdr(0, 3) = "Vrsta"
+    hdr(0, 4) = "Sorta":  hdr(0, 5) = "Klasa":   hdr(0, 6) = "TipAmb"
+    hdr(0, 7) = "Gajb":   hdr(0, 8) = "Kap":     hdr(0, 9) = "Neto"
+    hdr(0, 10) = "Bruto": hdr(0, 11) = "Status": hdr(0, 12) = "Prer."
+    Me.lstPaleteHdr.List = hdr
+    Me.lstPaleteHdr.Locked = True
+```
+
+**U `UserForm_Activate`** (posle `ApplyThemeToControls`, da tema ne pregazi izgled):
+
+```vba
+    Me.lstPaleteHdr.Font.Bold = True
+    Me.lstPaleteHdr.BackColor = BG_TOP()
+```
+
+Isto i za `lstStavke` (`lstStavkeHdr`, Width 186, `ColumnWidths "60;34;34;28;30"`,
+header: PrijemID, BrPrij, Zbirna, Gajb, Neto).
+
+**Alternativa — Label-i** iznad liste (približno poravnanje; `lstPalete` Left-base
+≈10, Top 38): Broj 10 · God 40 · Vrsta 72 · Sorta 122 · Klasa 172 · TipAmb 202 ·
+Gajb 242 · Kap 282 · Neto 330 · Bruto 378 · Status 428 · Prer 478. Header-lista
+je urednija i tačnija.
+
 ## Napomene
 - Širine kolona (`ColumnWidths`, u tačkama) su okvirne — doteraj po ekranu. Prva je
   `0` da sakrije `PaletaID` (forma ga čita interno za akcije).
