@@ -61,6 +61,22 @@ Kill-switch (`SUSPENDED`/`EXPIRED`) se na mašini primeni najkasnije po isteku
 offline grace prozora (`LICENSE_DEFAULT_GRACE_DAYS`, podrazumevano 7 dana).
 Za bržu primenu smanji konstantu.
 
+## Desktop-only / cloud-sync
+
+Provera licence je **namerno nezavisna** od `CLOUD_SYNC_ENABLED`. Da zavisi,
+korisnik bi je isključio prostim `CLOUD_SYNC_ENABLED=NO`. Zato kad je
+`LICENSE_ENABLED=YES`, jedan `checkLicense` HTTP poziv ide i u inače
+desktop-only deploy-u (to je jedini izlazni saobraćaj koji licenca uvodi).
+
+## Testovi
+
+- **VBA (čista logika fuzzy-matcha):** Alt+F8 → `TestLicense_All`
+  (`src-vba/modLicenseTests.bas`); rezultati u Immediate prozoru (Ctrl+G).
+- **GAS (end-to-end bind/transfer):** iz Apps Script editora `runLicenseSelfTest`
+  — kreira privremenu `__SELFTEST__` licencu, proveri prvu aktivaciju, istu
+  mašinu, fuzzy 2/3, `BOUND_OTHER`, `SUSPENDED`, reset+rebind, pa obriše red.
+  Rezultat u Logger logu (View → Logs).
+
 ## Granica zaštite (pošteno)
 
 Server-side node-locking zaustavlja **casual deljenje** („pošalji mi fajl") —

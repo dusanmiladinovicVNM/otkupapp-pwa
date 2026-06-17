@@ -56,6 +56,11 @@ Private Const LIC_DEFAULT_GRACE_DAYS As Long = 7
 Private Const HTTP_TIMEOUT_MS As Long = 8000
 Private Const HTTP_RECV_TIMEOUT_MS As Long = 15000
 
+' Module-level state: postavljeno na True kad gate odbije licencu, da
+' Workbook_Open rano prekine startup (cleanup/monitoring se ne izvrsavaju
+' za odbijenu masinu). Vidi LicenseWasDenied / ForceCloseDeniedWorkbook.
+Private gLicenseDenied As Boolean
+
 ' ============================================================
 ' PUBLIC — Gate (poziva se iz modMain.StartApp)
 ' ============================================================
@@ -71,6 +76,12 @@ Public Function LicenseGateOrQuit() As Boolean
         Exit Function
     End If
 
+    ' SVESNA ODLUKA: NE konsultujemo IsCloudSyncEnabled() ovde.
+    ' Licenca je AUTH provera, ne data-sync. Kada bi gate zavisio od
+    ' CLOUD_SYNC_ENABLED, korisnik bi licencu iskljucio prostim gasenjem te
+    ' opcije (CLOUD_SYNC_ENABLED=NO) -> bypass. Zato je licencni HTTP poziv
+    ' NAMERNI izuzetak od desktop-only "100% lokalno" pravila i ukljucuje se
+    ' iskljucivo preko LICENSE_ENABLED. (Vidi modConfig.IsCloudSyncEnabled.)
     Dim endpoint As String: endpoint = LicenseEndpoint()
     If Len(endpoint) = 0 Then
         ' Ukljuceno ali nema endpoint-a = misconfig. Fail-OPEN da ne brick-ujemo
@@ -89,7 +100,7 @@ Public Function LicenseGateOrQuit() As Boolean
     End If
 
     Dim parts As String: parts = GetDeviceParts()
-    If NonEmptyParts(parts) < LIC_MIN_MATCH Then
+    If LicNonEmptyParts(parts) < LIC_MIN_MATCH Then
         ' Otisak preslab (npr. WMI nedostupan). Ne kaznjavamo korisnika.
         LogWarn SRC, "Nedovoljno komponenti otiska uredjaja. Preskacem proveru (fail-open)."
         LicenseGateOrQuit = True
@@ -101,7 +112,7 @@ Public Function LicenseGateOrQuit() As Boolean
 
     ' --- BRZI OFFLINE PUT: unutar grace prozora + ovo je vezana masina ---
     If Len(bound) > 0 Then
-        If PartsMatch(parts, bound) >= LIC_MIN_MATCH Then
+        If LicPartsMatch(parts, bound) >= LIC_MIN_MATCH Then
             If Len(nextChk) > 0 Then
                 If IsDate(nextChk) Then
                     If Now < CDate(nextChk) Then
@@ -119,7 +130,7 @@ Public Function LicenseGateOrQuit() As Boolean
         ' Server nedostupan. Ako je OVO vec vezana masina -> offline grace,
         ' da privremeni nestanak interneta ne zakljuca platisu. Ako masina
         ' NIJE vezana (nema validnog kesa) -> blokiraj (aktivacija mora online).
-        If Len(bound) > 0 And PartsMatch(parts, bound) >= LIC_MIN_MATCH Then
+        If Len(bound) > 0 And LicPartsMatch(parts, bound) >= LIC_MIN_MATCH Then
             LogWarn SRC, "Server nedostupan — offline grace (masina je vezana)."
             LicenseGateOrQuit = True
             Exit Function
@@ -156,7 +167,7 @@ Public Function LicenseGateOrQuit() As Boolean
 
         Case Else
             ' Neocekivan odgovor: ne brick-uj vec vezanu (placenu) masinu.
-            If Len(bound) > 0 And PartsMatch(parts, bound) >= LIC_MIN_MATCH Then
+            If Len(bound) > 0 And LicPartsMatch(parts, bound) >= LIC_MIN_MATCH Then
                 LogWarn SRC, "Neocekivan status='" & status & "' — propustam vezanu masinu."
                 LicenseGateOrQuit = True
             Else
@@ -199,7 +210,7 @@ Public Sub ActivateLicensePrompt()
     End If
 
     Dim parts As String: parts = GetDeviceParts()
-    If NonEmptyParts(parts) < LIC_MIN_MATCH Then
+    If LicNonEmptyParts(parts) < LIC_MIN_MATCH Then
         MsgBox "Ne mogu da ocitam dovoljno podataka o uredjaju (WMI nedostupan?).", _
                vbExclamation, APP_NAME
         Exit Sub
@@ -231,7 +242,7 @@ End Sub
 ' Dijagnostika: prikazi otisak ovog racunara (za support / rucni bind).
 Public Sub LicenseShowDevice()
     Dim parts As String: parts = GetDeviceParts()
-    Dim p() As String: p = SplitParts(parts)
+    Dim p() As String: p = LicSplitParts(parts)
     MsgBox "Otisak ovog racunara:" & vbCrLf & vbCrLf & _
            "MachineGuid : " & p(0) & vbCrLf & _
            "SMBIOS UUID : " & p(1) & vbCrLf & _
@@ -265,7 +276,7 @@ Private Function LicenseHttpCheck(ByVal endpoint As String, _
     Const SRC As String = "modLicense.LicenseHttpCheck"
     On Error GoTo EH
 
-    Dim p() As String: p = SplitParts(parts)
+    Dim p() As String: p = LicSplitParts(parts)
 
     Dim body As String
     body = "{""action"":""checkLicense""" & _
@@ -341,36 +352,37 @@ Private Function ReadVolumeSerial() As String
 End Function
 
 ' ============================================================
-' PRIVATE — helperi za poredjenje komponenti
+' PUBLIC — helperi za poredjenje komponenti
+' (cista logika, Public radi testabilnosti — vidi modLicenseTests)
 ' ============================================================
 
 ' Uvek vrati niz od bar 3 elementa (pad praznima).
-Private Function SplitParts(ByVal s As String) As String()
-    SplitParts = Split(s & "||", "|")
+Public Function LicSplitParts(ByVal s As String) As String()
+    LicSplitParts = Split(s & "||", "|")
 End Function
 
 ' Broj poklapanja (po poziciji) ne-praznih komponenti, max 3.
-Private Function PartsMatch(ByVal a As String, ByVal b As String) As Long
+Public Function LicPartsMatch(ByVal a As String, ByVal b As String) As Long
     Dim pa() As String, pb() As String
-    pa = SplitParts(a)
-    pb = SplitParts(b)
+    pa = LicSplitParts(a)
+    pb = LicSplitParts(b)
     Dim i As Long, m As Long
     For i = 0 To 2
         If Len(Trim$(pa(i))) > 0 Then
             If StrComp(Trim$(pa(i)), Trim$(pb(i)), vbTextCompare) = 0 Then m = m + 1
         End If
     Next i
-    PartsMatch = m
+    LicPartsMatch = m
 End Function
 
 ' Broj ne-praznih komponenti (max 3).
-Private Function NonEmptyParts(ByVal a As String) As Long
-    Dim pa() As String: pa = SplitParts(a)
+Public Function LicNonEmptyParts(ByVal a As String) As Long
+    Dim pa() As String: pa = LicSplitParts(a)
     Dim i As Long, n As Long
     For i = 0 To 2
         If Len(Trim$(pa(i))) > 0 Then n = n + 1
     Next i
-    NonEmptyParts = n
+    LicNonEmptyParts = n
 End Function
 
 ' ============================================================
@@ -402,12 +414,35 @@ End Function
 
 Private Sub LicenseBlock(ByVal reason As String, ByVal hint As String)
     On Error Resume Next
+    gLicenseDenied = True
+
     Application.Visible = True
     MsgBox reason & vbCrLf & vbCrLf & hint & vbCrLf & vbCrLf & _
            "Kontaktirajte dobavljaca za nastavak rada.", vbCritical, APP_NAME
 
-    ' Zatvori SAMO ovu svesku (bez Application.Quit). Saved=True spreci prompt.
-    ThisWorkbook.Saved = True
+    ' NE zatvaramo svesku sinhrono: ovo se izvrsava iz Workbook_Open toka,
+    ' gde Excel odlaze ili IGNORISE ThisWorkbook.Close (sveska ostane otvorena).
+    ' Zato zatvaranje zakazujemo na sledeci idle tick (posle zavrsetka
+    ' Workbook_Open) preko Application.OnTime -> pouzdano se zatvara.
+    Application.OnTime Now + TimeSerial(0, 0, 1), "modLicense.ForceCloseDeniedWorkbook"
+End Sub
+
+' ============================================================
+' PUBLIC — Workbook_Open integracija
+' ============================================================
+
+' Da li je poslednji gate odbio licencu. Workbook_Open ovo koristi za rani
+' prekid (da ne pokrece dalji startup za odbijenu masinu).
+Public Function LicenseWasDenied() As Boolean
+    LicenseWasDenied = gLicenseDenied
+End Function
+
+' OnTime cilj: stvarno zatvaranje sveske posle blokade licence. Izvrsava se
+' tek kad se Workbook_Open zavrsi, pa Excel ovog puta postuje Close.
+' Mora biti Public (Application.OnTime ne moze da pozove Private proceduru).
+Public Sub ForceCloseDeniedWorkbook()
+    On Error Resume Next
     Application.DisplayAlerts = False
+    ThisWorkbook.Saved = True
     ThisWorkbook.Close SaveChanges:=False
 End Sub

@@ -6001,6 +6001,78 @@ function generateLicenseKey_() {
   return raw.replace(/(.{5})(.{5})(.{5})(.{5})/, '$1-$2-$3-$4');
 }
 
+function deleteLicenseRowByKey_(licenseKey) {
+  return withLock(function () {
+    var sheet = ensureLicensesSheet_();
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0].map(function (h) { return String(h || '').trim(); });
+    var kCol = headers.indexOf('LicenseKey');
+    var want = normalizeLicenseKey_(licenseKey);
+    for (var i = values.length - 1; i >= 1; i--) {
+      if (normalizeLicenseKey_(values[i][kCol]) === want) sheet.deleteRow(i + 1);
+    }
+    return true;
+  });
+}
+
+// ------------------------------------------------------------
+// SELF-TEST — pokreni rucno iz GAS editora (runLicenseSelfTest).
+// Kreira privremenu __SELFTEST__ licencu, prodje kroz sve ishode i obrise je.
+// (BOUND_OTHER se po dizajnu loguje u error sheet — to je ocekivani sum testa.)
+// ------------------------------------------------------------
+function runLicenseSelfTest() {
+  var key = '__SELFTEST__' + Utilities.getUuid().replace(/-/g, '').substring(0, 12);
+  var results = [];
+
+  function expect(label, got, want) {
+    var ok = (got === want);
+    results.push((ok ? 'PASS ' : 'FAIL ') + label + ' -> ' + got + (ok ? '' : ' (ocekivano ' + want + ')'));
+  }
+  function call(components) {
+    return checkLicense({ licenseKey: key, components: components, computerName: 'selftest' });
+  }
+
+  var A = ['AAA111', 'BBB222', 'CCC333'];
+  var A2 = ['AAA111', 'BBB222', 'ZZZ999']; // 2/3 vs A -> fuzzy OK
+  var B = ['XXX000', 'YYY000', 'WWW000'];  // 0/3 vs A/A2 -> BOUND_OTHER
+
+  // Slucajevi koji ne diraju red u sheetu (rano vracanje):
+  expect('nedovoljno komponenti', call(['ONLYONE', '', '']).status, 'BAD_DEVICE');
+  expect('nepoznat kljuc',
+    checkLicense({ licenseKey: '__NOSUCH__' + Utilities.getUuid(), components: A }).status, 'UNKNOWN_KEY');
+
+  var sheet = ensureLicensesSheet_();
+  sheet.appendRow(LICENSE_HEADERS.map(function (h) {
+    if (h === 'LicenseKey') return key;
+    if (h === 'Customer') return 'SELFTEST';
+    if (h === 'Status') return 'ACTIVE';
+    return '';
+  }));
+  SpreadsheetApp.flush();
+
+  try {
+    expect('prva aktivacija (bind)', call(A).status, 'OK');
+    expect('ista masina', call(A).status, 'OK');
+    expect('fuzzy 2/3', call(A2).status, 'OK');
+    expect('drugi racunar', call(B).status, 'BOUND_OTHER');
+
+    adminSuspendLicense(key);
+    expect('suspendovana', call(A2).status, 'SUSPENDED');
+
+    adminActivateLicense(key);
+    adminResetLicenseBinding(key);
+    expect('posle reset+aktivacija: nova masina se vezuje', call(B).status, 'OK');
+  } finally {
+    deleteLicenseRowByKey_(key);
+  }
+
+  var passed = 0;
+  for (var i = 0; i < results.length; i++) if (results[i].indexOf('PASS') === 0) passed++;
+  var summary = 'LICENSE SELF-TEST: ' + passed + '/' + results.length + ' PASS\n' + results.join('\n');
+  Logger.log(summary);
+  return { passed: passed, total: results.length, results: results };
+}
+
 function ensurePlainTextColumn(sheet, headers, columnName) {
   const idx = headers.indexOf(columnName);
   if (idx < 0) return;

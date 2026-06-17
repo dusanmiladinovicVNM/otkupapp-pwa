@@ -4262,6 +4262,12 @@ Canonical keys:
 | `MONITORING_ENDPOINT` | GAS Web App `/exec` URL. |
 | `MONITORING_SECRET` | Shared ingest secret matching GAS `MONITORING_INGEST_SECRET`. |
 | `MONITORING_ENV` | Environment label, for example `DEV` or `PROD`. |
+| `LICENSE_ENABLED` | Per-device license gate toggle (`YES`/`NO`, default `NO` = off). Owned by `modLicense`. |
+| `LICENSE_ENDPOINT` | GAS Web App `/exec` URL for `checkLicense` (falls back to `MONITORING_ENDPOINT` if empty). |
+| `LICENSE_KEY` | Per-device license key assigned to this workstation. |
+| `LICENSE_TOKEN` / `LICENSE_BOUND_PARTS` / `LICENSE_NEXT_CHECK` / `LICENSE_STATUS` | Internal client cache written by `modLicense` (do not edit manually). |
+
+> **Licensing vs. desktop-only:** the license check is an auth call and is **intentionally independent of `CLOUD_SYNC_ENABLED`**. Binding it to the cloud-sync toggle would let a user disable licensing by turning cloud sync off, so when `LICENSE_ENABLED=YES` the single `checkLicense` HTTP call runs even in an otherwise desktop-only deploy. See `modLicense.LicenseGateOrQuit`. Server-side validation/tests: `gas/Code.gs` (`checkLicense`, `runLicenseSelfTest`); client logic tests: `src-vba/modLicenseTests.bas`.
 
 The client sends `APP_VERSION` from `modConfig.APP_VERSION` as `appVersion`. `deviceId` is generated from local workstation/user identity. Endpoint, secret and environment must remain workbook/runtime configuration and must not be hardcoded into the module.
 
