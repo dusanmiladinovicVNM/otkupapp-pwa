@@ -1467,7 +1467,10 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
     Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
-    If lastRow >= startRow Then ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
+    If lastRow >= startRow Then
+        ws.Range(ws.cells(startRow, 4), ws.cells(lastRow, 5)).UnMerge
+        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
+    End If
 
     ' prerada -> prerađene palete -> otkupi: jedan red po OTKUPU
     Dim palIDs As Collection: Set palIDs = New Collection
@@ -1485,6 +1488,11 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     End If
 
     Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
+    If IsEmpty(o) Then
+        ws.Range("PreVrsta").value = ""
+    Else
+        ws.Range("PreVrsta").value = CStr(o(1, 2))
+    End If
     Dim outR As Long, rb As Long
     outR = startRow: rb = 0
     If Not IsEmpty(o) Then
@@ -1493,9 +1501,9 @@ Private Function FillPreradaSablon(ByVal preID As String, _
             rb = rb + 1
             ws.cells(outR, 1).value = rb
             ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
-            ws.cells(outR, 3).value = CStr(o(k, 2))                   ' Vrsta
-            ws.cells(outR, 4).value = o(k, 3)                         ' Neto kg
-            ws.cells(outR, 5).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip
+            ws.cells(outR, 3).value = o(k, 3)                         ' Neto kg
+            ws.Range(ws.cells(outR, 4), ws.cells(outR, 5)).Merge
+            ws.cells(outR, 4).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip (D:E)
             outR = outR + 1
         Next k
     End If
@@ -1506,8 +1514,8 @@ Private Function FillPreradaSablon(ByVal preID As String, _
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
-        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "#,##0.00"
-        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "@"
+        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
         Dim zr As Long
         For zr = 0 To dataEnd - startRow
             If zr Mod 2 = 1 Then
@@ -1556,7 +1564,7 @@ End Function
 ' Kreira/obnavlja PreradaSablon u zajednickom stilu. Verzija layouta je u H1.
 Public Sub EnsurePreradaSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "2"
+    Const LAYOUT_VER As String = "3"
 
     Dim ws As Worksheet
     On Error Resume Next
@@ -1613,13 +1621,26 @@ Public Sub EnsurePreradaSablon()
         .Weight = xlThin
     End With
 
-    ' tabela stavki
-    Dim hdr As Long: hdr = fr + 4
+    ' vrsta voca kao podnaslov iznad tabele (na preradi je uvek ista vrsta)
+    Dim subRow As Long: subRow = fr + 4
+    ws.cells(subRow, 1).value = "Vrsta voca:"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
+    ws.cells(subRow, 2).name = "PreVrsta"
+    With ws.cells(subRow, 2)
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlLeft
+    End With
+    ws.rows(subRow).RowHeight = 20
+
+    ' tabela stavki (bez kolone Vrsta; Ambalaza preko D:E)
+    Dim hdr As Long: hdr = subRow + 1
     ws.cells(hdr, 1).value = "Rb"
     ws.cells(hdr, 2).value = "Kooperant"
-    ws.cells(hdr, 3).value = "Vrsta"
-    ws.cells(hdr, 4).value = "Neto kg"
-    ws.cells(hdr, 5).value = "Ambalaza"
+    ws.cells(hdr, 3).value = "Neto kg"
+    ws.Range(ws.cells(hdr, 4), ws.cells(hdr, 5)).Merge
+    ws.cells(hdr, 4).value = "Ambalaza"
     With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
