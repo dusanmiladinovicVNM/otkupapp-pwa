@@ -125,6 +125,10 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 4)
     Dim cnt As Long: cnt = 0
     Dim osnovica As Double: osnovica = 0
+    ' Cena uneta u formi je BRUTO (vec sadrzi PDV nadoknadu). U otkupnom listu
+    ' prikazujemo NETO cenu/vrednost, a PDV nadoknadu dodajemo kao posebnu stavku.
+    Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
     Dim koopID As String, stID As String, brDok As String, datum As String
     Dim tipAmb As String, kolAmb As Double
     Dim j As Long, r As Long
@@ -134,13 +138,14 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
             For r = 1 To UBound(d, 1)
                 If CStr(d(r, iID)) = wantID Then
                     Dim kol As Double: kol = PrNz(d(r, iKol))
-                    Dim cen As Double: cen = PrNz(d(r, iCe))
+                    Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
+                    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
                     stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
                     stavke(cnt, 1) = CStr(d(r, iKl))
                     stavke(cnt, 2) = kol
-                    stavke(cnt, 3) = cen
-                    stavke(cnt, 4) = kol * cen
-                    osnovica = osnovica + kol * cen
+                    stavke(cnt, 3) = cenNeto
+                    stavke(cnt, 4) = kol * cenNeto
+                    osnovica = osnovica + kol * cenNeto
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
                         brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
@@ -153,9 +158,6 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
         End If
     Next j
     If cnt = 0 Then Exit Function
-
-    Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
-    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
 
     Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
     h("name") = GetConfigValue("SELLER_NAME")
@@ -253,8 +255,8 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 2).value = "Proizvod"
     ws.cells(rr, 3).value = "Klasa"
     ws.cells(rr, 4).value = "Kolicina kg"
-    ws.cells(rr, 5).value = "Cena"
-    ws.cells(rr, 6).value = "Vrednost"
+    ws.cells(rr, 5).value = "Cena bez PDV"
+    ws.cells(rr, 6).value = "Vrednost bez PDV"
     With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
         .Font.Bold = True
         .Interior.Color = RGB(217, 225, 242)
