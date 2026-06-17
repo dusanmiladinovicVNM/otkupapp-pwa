@@ -115,6 +115,9 @@ Paletni List (pallet) domain added as a canonical local Excel/VBA workflow, plus
 - Pallet/prerada print/PDF (`PaletaSablon`, `PreradaSablon`) as post-commit side effects.
 - Minimal pallet status (`lblPaletaStatus`) and a manual "print incomplete pallets" button in `frmDokumenta`.
 - Desktop-only setup mode: `CheckGoogleOAuthConfig` is gated on `IsCloudSyncEnabled()`; `EnableDesktopOnlyMode` / `EnableCloudSyncMode` toggles.
+- Pallet management UI (PR #44): `frmPalete` (read-models `GetPaleteForGrid` / `GetPaletaStavkeForGrid` / `GetPaletaStavkeForGridMulti`, `ClosePaletaManual_TX`); `modPaletniListUI` Alt+F8 entries. Build guide in `docs/frmPalete-build.md` (controls live in a binary `.frx`).
+- Paletni/prerada list itemized per otkup: `GetOtkupiZaPalete` traces pallet -> zbirne -> `tblOtkup` (via `TraceByZbirna`/OtpremnicaID), filtered to the pallet's klasa, deduped by `OtkupID`; columns Rb | Kooperant (sifra) | Vrsta | Neto | Ambalaza (KolAmbalaze x TipAmbalaze).
+- Storno: `modStorno.StornoPaleta_TX` (marks pallet + its stavke, refuses processed pallets) and `StornoPrerada_TX` (marks prerada + stavke, returns pallets to stock).
 
 ### Changed
 

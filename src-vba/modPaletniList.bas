@@ -1134,40 +1134,6 @@ EH:
     LogErr "modPaletniList.GetOtkupiZaPalete"
 End Function
 
-' DIJAGNOSTIKA (privremeno): Alt+F8 -> DebugPaletaTrace, ili u Immediate:
-'   DebugPaletaTrace 7   ' broj palete (tekuca godina). Stampa u Immediate (Ctrl+G).
-Public Sub DebugPaletaTrace(ByVal broj As Long)
-    Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
-    Debug.Print "PaletaID = [" & palID & "]"
-    If palID = "" Then Exit Sub
-
-    Dim ri As Long: ri = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
-    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
-    Debug.Print "  Klasa palete = [" & CStr(SafeCell(dp, ri, GetColumnIndex(TBL_PALETA, COL_PAL_KLASA))) & "]"
-
-    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
-    Dim sPal As Long, sZb As Long
-    sPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-    sZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-    Dim zb As Object: Set zb = CreateObject("Scripting.Dictionary")
-    Dim r As Long
-    For r = 1 To UBound(s, 1)
-        If CStr(SafeCell(s, r, sPal)) = palID Then zb(Trim$(CStr(SafeCell(s, r, sZb)))) = True
-    Next r
-    Debug.Print "  Zbirne stavki = [" & Join(zb.keys, " | ") & "]"
-
-    Dim total As Long
-    Dim z As Variant
-    For Each z In zb.keys
-        Dim t As Variant: t = TraceByZbirna(CStr(z))
-        Dim c As Long: c = 0
-        If Not IsEmpty(t) Then c = UBound(t, 1) - LBound(t, 1) + 1
-        Debug.Print "    zbirna [" & CStr(z) & "] -> otkupa (TraceByZbirna) = " & c
-        total = total + c
-    Next z
-    Debug.Print "  Ukupno otkupa (zbirna->otpremnica->otkup) = " & total
-End Sub
-
 Private Function NzD(ByVal v As Variant) As Double
     On Error Resume Next
     If IsNumeric(v) Then NzD = CDbl(v)
