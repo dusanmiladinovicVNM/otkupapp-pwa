@@ -25,6 +25,12 @@ Public Sub StartApp()
 
     If Not m_Initialized Then InitApp
 
+    ' --- Licenca (per-uredjaj / node-locked) ---
+    ' Blokira pokretanje ako licenca nije vazeca za OVAJ racunar.
+    ' Opt-in: radi samo ako je LICENSE_ENABLED = YES u tblSEFConfig
+    ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
+    If Not LicenseGateOrQuit() Then Exit Sub
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme

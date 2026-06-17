@@ -843,6 +843,11 @@ function doPost(e) {
       return jsonResponse(authenticateUser(data.username, data.pin));
     }
 
+    // Per-uredjaj licenciranje (VBA desktop). Javno: klijent jos nema token.
+    if (data.action === 'checkLicense') {
+      return jsonResponse(checkLicense(data));
+    }
+
     var masterSyncWriteBlock = blockWriteIfMasterSyncActive(data.action, data);
     if (masterSyncWriteBlock) return masterSyncWriteBlock;
 
@@ -5671,6 +5676,331 @@ function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// ============================================================
+// LICENSING — per-uredjaj (node-locked) licencni kljucevi
+// ============================================================
+//
+// Model: jedna licenca = jedan racunar. "Prva aktivacija veze": prvi racunar
+// koji posalje validan kljuc se veze za njega (BoundParts), svaki sledeci
+// racunar sa istim kljucem dobija BOUND_OTHER. Transfer kontrolises SAMO ti:
+// adminResetLicenseBinding(kljuc) ocisti vezivanje pa se nova masina moze vezati.
+//
+// Otisak uredjaja: klijent salje 3 sirove komponente (MachineGuid, SMBIOS UUID,
+// volume serial) preko HTTPS-a; server ih SOLI i HESIRA (SHA-256) pa cuva samo
+// hes — centralni sheet NE drzi sirove hardverske ID-jeve. Fuzzy match (2 od 3)
+// tolerise manju promenu hardvera bez laznog lockout-a.
+//
+// Setup:
+//   1. (jednokratno) adminCreateLicense('Naziv kupca', '')  -> vrati kljuc
+//   2. Kljuc unesi na kupcevom racunaru (VBA: ActivateLicensePrompt)
+//   3. U Excel tblSEFConfig: LICENSE_ENABLED = YES  (+ MONITORING_ENDPOINT/LICENSE_ENDPOINT)
+//
+// Sheet "Licenses" (u Stammdaten): LicenseKey | Customer | Status | BoundParts |
+//   BoundDeviceHash | BoundAt | LastSeen | LastDeviceInfo | ExpiresAt | Notes
+// ============================================================
+
+var LICENSE_SHEET_NAME = 'Licenses';
+var LICENSE_HEADERS = ['LicenseKey', 'Customer', 'Status', 'BoundParts',
+  'BoundDeviceHash', 'BoundAt', 'LastSeen', 'LastDeviceInfo', 'ExpiresAt', 'Notes'];
+var LICENSE_MIN_PART_MATCH = 2;                         // fuzzy: koliko od 3 mora da se poklopi
+var LICENSE_DEFAULT_GRACE_DAYS = 7;                     // offline grace pre prisilne re-provere
+var LICENSE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // 30 dana
+
+function checkLicense(data) {
+  try {
+    var key = normalizeLicenseKey_(data && data.licenseKey);
+    if (!key) {
+      return { success: true, status: 'UNKNOWN_KEY', error: 'Licencni kljuc je obavezan' };
+    }
+
+    var parts = normalizeComponents_(data && data.components);
+    if (countNonEmpty_(parts) < LICENSE_MIN_PART_MATCH) {
+      return { success: true, status: 'BAD_DEVICE', error: 'Nedovoljno podataka o uredjaju' };
+    }
+
+    return withLock(function () {
+      var sheet = ensureLicensesSheet_();
+      var values = sheet.getDataRange().getValues();
+      var headers = values[0].map(function (h) { return String(h || '').trim(); });
+
+      var col = {
+        key: requireHeaderIndexFromArray(headers, 'LicenseKey', LICENSE_SHEET_NAME),
+        customer: headers.indexOf('Customer'),
+        status: requireHeaderIndexFromArray(headers, 'Status', LICENSE_SHEET_NAME),
+        parts: requireHeaderIndexFromArray(headers, 'BoundParts', LICENSE_SHEET_NAME),
+        deviceHash: headers.indexOf('BoundDeviceHash'),
+        boundAt: headers.indexOf('BoundAt'),
+        lastSeen: headers.indexOf('LastSeen'),
+        lastInfo: headers.indexOf('LastDeviceInfo'),
+        expiresAt: headers.indexOf('ExpiresAt')
+      };
+
+      var rowIndex = -1;
+      for (var i = 1; i < values.length; i++) {
+        if (normalizeLicenseKey_(values[i][col.key]) === key) { rowIndex = i; break; }
+      }
+      if (rowIndex < 0) {
+        logLicenseEvent_(key, '', false, 'UNKNOWN_KEY');
+        return { success: true, status: 'UNKNOWN_KEY', error: 'Nepoznat licencni kljuc' };
+      }
+
+      var row = values[rowIndex];
+      var sheetRow = rowIndex + 1;
+
+      var status = String(row[col.status] || '').trim().toUpperCase();
+      if (status && status !== 'ACTIVE') {
+        logLicenseEvent_(key, '', false, status);
+        return { success: true, status: 'SUSPENDED', error: 'Licenca je suspendovana. Kontaktirajte dobavljaca.' };
+      }
+
+      if (col.expiresAt >= 0 && isLicenseExpired_(row[col.expiresAt])) {
+        logLicenseEvent_(key, '', false, 'EXPIRED');
+        return { success: true, status: 'EXPIRED', error: 'Licenca je istekla.' };
+      }
+
+      var incoming = parts.map(hashLicensePart_);          // soljeni per-part hashevi
+      var combined = hashLicensePart_(parts.join('|'));
+      var info = sanitizeClientLogField(String((data && data.computerName) || ''), 80);
+      var storedParts = parseStoredParts_(row[col.parts]);
+
+      if (!storedParts.length) {
+        // PRVA AKTIVACIJA — vezi za ovaj uredjaj
+        sheet.getRange(sheetRow, col.parts + 1).setValue(JSON.stringify(incoming));
+        if (col.deviceHash >= 0) sheet.getRange(sheetRow, col.deviceHash + 1).setValue(combined);
+        if (col.boundAt >= 0) sheet.getRange(sheetRow, col.boundAt + 1).setValue(new Date().toISOString());
+        if (col.lastSeen >= 0) sheet.getRange(sheetRow, col.lastSeen + 1).setValue(new Date().toISOString());
+        if (col.lastInfo >= 0) sheet.getRange(sheetRow, col.lastInfo + 1).setValue(info);
+        logLicenseEvent_(key, combined, true, 'ACTIVATED');
+        return licenseOkResponse_(key, combined, row[col.customer]);
+      }
+
+      // POSTOJECE VEZIVANJE — fuzzy poredjenje
+      var matches = countMatches_(incoming, storedParts);
+      if (matches < LICENSE_MIN_PART_MATCH) {
+        logLicenseEvent_(key, combined, false, 'BOUND_OTHER');
+        return {
+          success: true, status: 'BOUND_OTHER',
+          error: 'Licenca je vec aktivirana na drugom racunaru. Kontaktirajte dobavljaca za prenos.'
+        };
+      }
+
+      // Poklapanje (uz manji drift osvezi sacuvane komponente)
+      if (matches < 3) sheet.getRange(sheetRow, col.parts + 1).setValue(JSON.stringify(incoming));
+      if (col.lastSeen >= 0) sheet.getRange(sheetRow, col.lastSeen + 1).setValue(new Date().toISOString());
+      if (col.lastInfo >= 0 && info) sheet.getRange(sheetRow, col.lastInfo + 1).setValue(info);
+      logLicenseEvent_(key, combined, true, 'OK');
+      return licenseOkResponse_(key, combined, row[col.customer]);
+    });
+  } catch (err) {
+    logError('GAS', 'checkLicense', err.message, err.stack || '', '');
+    return { success: false, status: 'ERROR', error: 'Sistemska greska' };
+  }
+}
+
+function licenseOkResponse_(key, deviceHash, customer) {
+  var tok = mintLicenseToken_(key, deviceHash);
+  return {
+    success: true,
+    status: 'OK',
+    token: tok.token,
+    expiresAt: tok.expiresAt,
+    graceDays: LICENSE_DEFAULT_GRACE_DAYS,
+    customer: String(customer || '').trim()
+  };
+}
+
+function normalizeLicenseKey_(k) {
+  // Tolerantno na crtice/razmake: kupac moze ukucati sa ili bez "-".
+  return String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeComponents_(c) {
+  var a = Array.isArray(c) ? c : [];
+  var out = [];
+  for (var i = 0; i < 3; i++) out.push(String(a[i] || '').trim().toUpperCase());
+  return out;
+}
+
+function countNonEmpty_(a) {
+  var n = 0;
+  for (var i = 0; i < a.length; i++) if (a[i] && a[i].length > 0) n++;
+  return n;
+}
+
+function countMatches_(incoming, stored) {
+  var m = 0;
+  for (var i = 0; i < incoming.length; i++) {
+    if (incoming[i] && stored[i] && incoming[i] === stored[i]) m++;
+  }
+  return m;
+}
+
+function parseStoredParts_(v) {
+  try {
+    var a = JSON.parse(v);
+    return Array.isArray(a) ? a : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function isLicenseExpired_(v) {
+  var s = String(v || '').trim();
+  if (!s) return false;
+  var t = new Date(s).getTime();
+  if (isNaN(t)) return false;
+  return Date.now() > t;
+}
+
+function hashLicensePart_(s) {
+  var raw = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    licenseSecret_('LICENSE_HASH_SALT') + '|' + String(s || ''),
+    Utilities.Charset.UTF_8
+  );
+  return licenseBytesToHex_(raw);
+}
+
+function licenseBytesToHex_(bytes) {
+  var h = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var b = (bytes[i] + 256) % 256;
+    h += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return h;
+}
+
+// HMAC-potpisan token: base64url(payload).base64url(hmac). Klijent ga kesira
+// za offline grace; sluzi i za buducu server-stranu validaciju VBA poziva.
+function mintLicenseToken_(key, deviceHash) {
+  var expMs = Date.now() + LICENSE_TOKEN_TTL_MS;
+  var body = Utilities.base64EncodeWebSafe(
+    JSON.stringify({ k: key, d: deviceHash, exp: expMs })
+  );
+  var sig = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(body, licenseSecret_('LICENSE_TOKEN_SECRET'), Utilities.Charset.UTF_8)
+  );
+  return { token: body + '.' + sig, expiresAt: new Date(expMs).toISOString() };
+}
+
+function validateLicenseToken(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 2) return null;
+    var expSig = Utilities.base64EncodeWebSafe(
+      Utilities.computeHmacSha256Signature(parts[0], licenseSecret_('LICENSE_TOKEN_SECRET'), Utilities.Charset.UTF_8)
+    );
+    if (expSig !== parts[1]) return null;
+    var payload = JSON.parse(
+      Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString()
+    );
+    if (!payload.exp || Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Server-side tajne (salt + token secret) — auto-generisane, cuvaju se u
+// Script Properties (nikad se ne salju klijentu).
+function licenseSecret_(name) {
+  var props = PropertiesService.getScriptProperties();
+  var v = props.getProperty(name);
+  if (!v) {
+    v = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty(name, v);
+  }
+  return v;
+}
+
+function ensureLicensesSheet_() {
+  var ss = getStammdatenSpreadsheet_();
+  var sheet = ss.getSheetByName(LICENSE_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(LICENSE_SHEET_NAME);
+    sheet.getRange(1, 1, 1, LICENSE_HEADERS.length).setValues([LICENSE_HEADERS]);
+    sheet.setFrozenRows(1);
+    sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), LICENSE_HEADERS.length).setNumberFormat('@');
+  }
+  return sheet;
+}
+
+function logLicenseEvent_(key, deviceHash, success, message) {
+  try {
+    if (success) {
+      Logger.log('License OK ' + maskLicenseKey_(key) + ' ' + message);
+    } else {
+      // Neuspesi (narocito BOUND_OTHER = pokusaj transfera) idu u error log.
+      logError('LICENSE', String(message || ''), maskLicenseKey_(key), String(deviceHash || ''), '');
+    }
+  } catch (e) {
+    // audit ne sme da obori proveru
+  }
+}
+
+function maskLicenseKey_(key) {
+  var k = String(key || '');
+  return k.length <= 8 ? k : k.substring(0, 4) + '…' + k.substring(k.length - 4);
+}
+
+// ------------------------------------------------------------
+// ADMIN — pokreni rucno iz GAS editora (ne preko web zahteva)
+// ------------------------------------------------------------
+
+// Kreiraj novu licencu. Vrati generisan kljuc. expiresAtIso prazno = trajna.
+function adminCreateLicense(customer, expiresAtIso) {
+  var sheet = ensureLicensesSheet_();
+  var key = generateLicenseKey_();
+  sheet.appendRow([key, customer || '', 'ACTIVE', '', '', '', '', '', expiresAtIso || '', '']);
+  Logger.log('Kreirana licenca ' + key + ' za: ' + (customer || ''));
+  return key;
+}
+
+// Oslobodi vezivanje da kupac moze da predje na NOV racunar (kontrolisan transfer).
+function adminResetLicenseBinding(licenseKey) {
+  return setLicenseFields_(licenseKey, {
+    BoundParts: '', BoundDeviceHash: '', BoundAt: '', LastDeviceInfo: ''
+  });
+}
+
+function adminSuspendLicense(licenseKey) { return setLicenseFields_(licenseKey, { Status: 'SUSPENDED' }); }
+function adminActivateLicense(licenseKey) { return setLicenseFields_(licenseKey, { Status: 'ACTIVE' }); }
+
+function setLicenseFields_(licenseKey, fields) {
+  var key = normalizeLicenseKey_(licenseKey);
+  return withLock(function () {
+    var sheet = ensureLicensesSheet_();
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0].map(function (h) { return String(h || '').trim(); });
+    var kCol = headers.indexOf('LicenseKey');
+    for (var i = 1; i < values.length; i++) {
+      if (normalizeLicenseKey_(values[i][kCol]) === key) {
+        Object.keys(fields).forEach(function (name) {
+          var c = headers.indexOf(name);
+          if (c >= 0) sheet.getRange(i + 1, c + 1).setValue(fields[name]);
+        });
+        Logger.log('Licenca ' + maskLicenseKey_(key) + ' azurirana: ' + JSON.stringify(Object.keys(fields)));
+        return true;
+      }
+    }
+    Logger.log('Licenca nije nadjena: ' + maskLicenseKey_(key));
+    return false;
+  });
+}
+
+// 20 znakova, grupe po 5, bez dvosmislenih (0/O/1/I). Izvedeno iz SHA-256(2x UUID).
+function generateLicenseKey_() {
+  var alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 31 znak
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Utilities.getUuid()
+  );
+  var raw = '';
+  for (var i = 0; i < 20; i++) {
+    raw += alphabet[((digest[i] + 256) % 256) % alphabet.length];
+  }
+  return raw.replace(/(.{5})(.{5})(.{5})(.{5})/, '$1-$2-$3-$4');
+}
+
 function ensurePlainTextColumn(sheet, headers, columnName) {
   const idx = headers.indexOf(columnName);
   if (idx < 0) return;
@@ -5687,6 +6017,8 @@ function runGasRouteHealthCheck() {
     ['authenticateUser', typeof authenticateUser],
     ['validateToken', typeof validateToken],
     ['getTokenData', typeof getTokenData],
+    ['checkLicense', typeof checkLicense],
+    ['validateLicenseToken', typeof validateLicenseToken],
     ['withLock', typeof withLock],
     ['processRecord', typeof processRecord],
     ['processAgromereRecord', typeof processAgromereRecord],
