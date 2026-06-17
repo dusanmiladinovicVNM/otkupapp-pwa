@@ -279,6 +279,11 @@ Public Const CFG_OTKUP_PRINT_MODE As String = "OTKUP_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
+' Otkupni list - obavezni elementi otkupnog bloka (klauzula + rok isplate)
+Public Const CFG_OTKUP_KLAUZULA As String = "OTKUP_KLAUZULA"
+Public Const CFG_OTKUP_ROK As String = "OTKUP_ROK_ISPLATE"
+Public Const OTKUP_ROK_DEFAULT As String = "Po dogovoru"
+
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"
 Public Const COL_OSIROCENO_OD As String = "OsirocenoOd"
