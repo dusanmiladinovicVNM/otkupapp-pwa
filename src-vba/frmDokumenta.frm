@@ -1285,7 +1285,16 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
-    MsgBox "Prijemnica sacuvana: " & result, vbInformation, APP_NAME
+    ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
+    ' iskomitovanih tabela; prikaz uz potvrdu snimanja.
+    Dim palStatus As String
+    palStatus = GetPaletaStatusForPrijemnica(Split(result, " + ")(0))
+    If palStatus <> "" Then
+        MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & palStatus, _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "Prijemnica sacuvana: " & result, vbInformation, APP_NAME
+    End If
 
     txtBrojPrij.value = ""
     txtKolicinaPrij.value = ""

@@ -789,6 +789,32 @@ Current documented data-migration posture:
 
 ---
 
+### 5.11 Palete / Paletni List Tables
+
+`tblPaleta` and `tblPaletaStavka` are local canonical business tables for the pallet (paletni list) domain. `tblPrerada` and `tblPreradaStavka` record processing (prerada) of pallets into boxes/bags.
+
+| Table | Type | Writer | Reader | Current rule |
+|---|---|---|---|---|
+| `tblPaleta` | business (pallet head) | VBA prijemnica TX (`PaletizePrijemnica`) | paletni list print/PDF, prerada, `frmPalete` | one head per `PaletaID`; per-year `BrojPalete`; `KapacitetGajbica` snapshotted at creation |
+| `tblPaletaStavka` | business (pallet line) | VBA prijemnica TX | paletni list, prerada | keyed by `PrijemnicaID` (row identity), grouped by `BrojPrijemnice` |
+| `tblPrerada` | business (processing head) | `SavePrerada_TX` | prerada print/PDF | per-year `BrojPrerade`; records `NetoUlazKg` / `NetoIzlazKg`, boxes/bags |
+| `tblPreradaStavka` | business (processing line) | `SavePrerada_TX` | prerada print/PDF | one line per consumed pallet |
+
+Domain rules:
+
+- `tblPaletaStavka` keys by `PrijemnicaID`, not `BrojPrijemnice` (`BrojPrijemnice` may group Klasa I/II rows; `PrijemnicaID` is the row identity).
+- Palletization runs inside `SavePrijemnica_TX` / `SavePrijemnicaMulti_TX` before `CommitTx`; both wrappers snapshot `tblPaleta` and `tblPaletaStavka`, so a palletization failure rolls back the receipt with it.
+- Only Klasa I receipts with crates (`kolAmb > 0`) are palletized.
+- Duplicate active palletization for the same `PrijemnicaID` is forbidden (idempotency guard).
+- Pallet print/PDF is a post-commit external side effect and never participates in transaction rollback; a print/PDF failure leaves committed receipt and pallet data intact and is logged for operator diagnosis.
+- Critical reads use `RequireColumnIndex`; critical writes use `RequireUpdateCell`; ID lookups use an exact-row helper that fails on `0` and on `>1`.
+- Prerada is operator-driven: the operator selects which pallets to process (open or closed, not stornirana, not already processed); processing marks each selected pallet `Preradjeno = "Da"` through the TX wrapper.
+- Business modules (`modPaletniList`) contain no `MsgBox`; operator prompts live in the form layer.
+
+Anything not stated here is not canonical for this domain until explicitly added (per the Canonical Snapshot Rule).
+
+---
+
 ## 6. Document Flow Architecture
 
 The canonical desktop document chain is:

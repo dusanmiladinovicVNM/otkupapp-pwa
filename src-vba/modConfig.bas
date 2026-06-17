@@ -39,6 +39,13 @@ Public Const TBL_PROIZVODJACI As String = "tblProizvodjaci"
 Public Const TBL_HLADNJACA As String = "tblHladnjaca"
 Public Const TBL_LAGER As String = "tblLager"
 Public Const TBL_PRERADA As String = "tblPrerada"
+
+' --- Paletni list (Phase 2 / hladnjaca) ---
+Public Const TBL_PALETA As String = "tblPaleta"
+Public Const TBL_PALETA_STAVKA As String = "tblPaletaStavka"
+Public Const TBL_PRERADA_STAVKA As String = "tblPreradaStavka"
+Public Const TBL_TIP_AMBALAZE As String = "tblTipAmbalaze"
+Public Const TBL_TIP_PALETE As String = "tblTipPalete"
 Public Const TBL_KVALITET As String = "tblKvalitet"
 Public Const TBL_SEF As String = "tblSEF"
 Public Const TBL_SLEDLJIVOST As String = "tblSledljivost"
@@ -194,6 +201,80 @@ Public Const COL_PRJ_SORTA As String = "SortaVoca"
 Public Const COL_PRJ_KLASA As String = "Klasa"
 Public Const COL_PRJ_FAKTURISANO As String = "Fakturisano"
 Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
+
+' ============================================================
+' Paletni list (Phase 2) — kolone novih tabela
+' ============================================================
+' tblKulture extension
+Public Const COL_KUL_GAJBICA_PALETA As String = "GajbicaPoPaleti"
+
+' tblPaleta (header)
+Public Const COL_PAL_ID As String = "PaletaID"
+Public Const COL_PAL_BROJ As String = "BrojPalete"
+Public Const COL_PAL_GODINA As String = "Godina"
+Public Const COL_PAL_DATUM As String = "Datum"
+Public Const COL_PAL_VRSTA As String = "VrstaVoca"
+Public Const COL_PAL_TIP_PALETE As String = "TipPalete"
+Public Const COL_PAL_BR_GAJBICA As String = "BrojGajbica"
+Public Const COL_PAL_NETO As String = "NetoKg"
+Public Const COL_PAL_AMBALAZA As String = "AmbalazaKg"
+Public Const COL_PAL_PALETA_KG As String = "PaletaKg"
+Public Const COL_PAL_BRUTO As String = "BrutoKg"
+Public Const COL_PAL_STATUS As String = "Status"
+Public Const COL_PAL_PRERADJENO As String = "Preradjeno"
+Public Const COL_PAL_SORTA As String = "SortaVoca"
+Public Const COL_PAL_KLASA As String = "Klasa"
+Public Const COL_PAL_TIP_AMBALAZE As String = "TipAmbalaze"
+Public Const COL_PAL_KAPACITET As String = "KapacitetGajbica"
+Public Const COL_PAL_CREATED As String = "CreatedAt"
+
+' tblPaletaStavka (veza paleta -> prijemnica/zbirna)
+Public Const COL_PALS_ID As String = "StavkaID"
+Public Const COL_PALS_PALETA_ID As String = "PaletaID"
+Public Const COL_PALS_BROJ_PRIJ As String = "BrojPrijemnice"
+Public Const COL_PALS_BROJ_ZBIRNE As String = "BrojZbirne"
+Public Const COL_PALS_BR_GAJBICA As String = "BrojGajbica"
+Public Const COL_PALS_NETO As String = "NetoKg"
+Public Const COL_PALS_AMBALAZA As String = "AmbalazaKg"
+Public Const COL_PALS_PRIJEMNICA_ID As String = "PrijemnicaID"
+Public Const COL_PALS_KLASA As String = "Klasa"
+Public Const COL_PALS_VRSTA As String = "VrstaVoca"
+Public Const COL_PALS_SORTA As String = "SortaVoca"
+Public Const COL_PALS_CREATED As String = "CreatedAt"
+
+' tblTipAmbalaze / tblTipPalete (sifarnici tezina)
+Public Const COL_TAMB_TIP As String = "TipAmbalaze"
+Public Const COL_TAMB_TEZINA As String = "TezinaGajbiceKg"
+Public Const COL_TPAL_TIP As String = "TipPalete"
+Public Const COL_TPAL_TEZINA As String = "TezinaKg"
+
+' tblPrerada / tblPreradaStavka
+Public Const COL_PRE_ID As String = "PreradaID"
+Public Const COL_PRE_DATUM As String = "Datum"
+Public Const COL_PRE_NETO As String = "NetoKolicina"
+Public Const COL_PRE_KUTIJE As String = "BrojKutija"
+Public Const COL_PRE_KESE As String = "BrojKesa"
+Public Const COL_PRES_ID As String = "StavkaID"
+Public Const COL_PRES_PRERADA_ID As String = "PreradaID"
+Public Const COL_PRES_BROJ_PALETE As String = "BrojPalete"
+Public Const COL_PRE_BROJ As String = "BrojPrerade"
+Public Const COL_PRE_GODINA As String = "Godina"
+Public Const COL_PRES_PALETA_ID As String = "PaletaID"
+Public Const COL_PRES_NETO As String = "NetoKg"
+Public Const COL_PRE_NETO_ULAZ As String = "NetoUlazKg"
+Public Const COL_PRE_NETO_IZLAZ As String = "NetoIzlazKg"
+Public Const COL_PRE_NAPOMENA As String = "Napomena"
+Public Const COL_PRE_CREATED As String = "CreatedAt"
+Public Const COL_PRES_CREATED As String = "CreatedAt"
+
+' Paleta status
+Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
+Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
+
+' Paleta — config kljuc (default tip palete) + fallback kapacitet
+Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
+Public Const PALETA_DEFAULT_KAPACITET As Long = 240
+Public Const CFG_PALETA_PRINT_MODE As String = "PALETA_PRINT_MODE"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

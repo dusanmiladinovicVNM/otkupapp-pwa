@@ -55,6 +55,7 @@ Public Sub SetupNewPC()
     LogSetup "INFO", "Machine: " & Environ$("COMPUTERNAME")
     LogSetup "INFO", "Windows user: " & Environ$("USERNAME")
     LogSetup "INFO", "Excel version: " & Application.Version
+    LogSetup "INFO", "Cloud/PWA sync: " & IIf(IsCloudSyncEnabled(), "ON", "OFF (desktop-only)")
 
     report = report & CheckRuntimeEnvironment()
     report = report & EnsureAppFolders()
@@ -154,6 +155,53 @@ Public Function IsSetupHealthy() As Boolean
 EH:
     IsSetupHealthy = False
 End Function
+
+' ------------------------------------------------------------
+' Desktop-only prekidac.
+'
+' UKLJUCEN (CLOUD_SYNC_ENABLED=NO): aplikacija radi 100% lokalno — nema
+' Google/PWA saobracaja, a SetupNewPC ne trazi Google kredencijale.
+' Flag se cuva u tblSEFConfig i cita ga IsCloudSyncEnabled() (modConfig) —
+' isti koji vec gasi runtime sync (modBrojevi, modStanicaLock).
+'
+' Alt+F8 -> EnableDesktopOnlyMode  (pa ponovo SetupNewPC).
+' ------------------------------------------------------------
+Public Sub EnableDesktopOnlyMode()
+    On Error GoTo EH
+
+    SetConfigValue CFG_KEY_CLOUD_SYNC_ENABLED, "NO"
+
+    InitSetupLog
+    LogSetup "OK", "Desktop-only mod UKLJUCEN (CLOUD_SYNC_ENABLED=NO)"
+
+    MsgBox "Desktop-only mod je ukljucen." & vbCrLf & vbCrLf & _
+           "Aplikacija radi lokalno — Google/PWA se ne koristi niti proverava." & vbCrLf & _
+           "Pokrenite SetupNewPC ponovo.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Ne mogu da ukljucim desktop-only mod: " & Err.description & vbCrLf & _
+           "(Proverite da postoji tabela " & TBL_SEF_CONFIG & ".)", _
+           vbCritical, APP_NAME
+End Sub
+
+Public Sub EnableCloudSyncMode()
+    On Error GoTo EH
+
+    SetConfigValue CFG_KEY_CLOUD_SYNC_ENABLED, "YES"
+
+    InitSetupLog
+    LogSetup "OK", "Cloud/PWA sync UKLJUCEN (CLOUD_SYNC_ENABLED=YES)"
+
+    MsgBox "Cloud/PWA sync je ukljucen." & vbCrLf & vbCrLf & _
+           "SetupNewPC ce ponovo traziti Google kredencijale u tblConfig.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Ne mogu da promenim mod: " & Err.description, vbCritical, APP_NAME
+End Sub
 
 Public Sub SetupBankFoldersInteractive()
     On Error GoTo EH
@@ -413,6 +461,15 @@ End Function
 Private Function CheckGoogleOAuthConfig() As String
     Dim msg As String
 
+    ' Desktop-only deploy (CLOUD_SYNC_ENABLED=NO): aplikacija ne dira Google/PWA,
+    ' pa setup ne trazi Google kredencijale. Isti flag gasi runtime saobracaj
+    ' (modBrojevi.MaxSeqFromGoogleSheet, modStanicaLock).
+    If Not IsCloudSyncEnabled() Then
+        LogSetup "INFO", "Desktop-only mod: preskacem Google/PWA proveru (CLOUD_SYNC_ENABLED=NO)"
+        CheckGoogleOAuthConfig = vbNullString
+        Exit Function
+    End If
+
     Dim googleClientID As String
     Dim googleClientSecret As String
     Dim googlePwaFolderID As String
@@ -607,6 +664,116 @@ Private Sub EnsureLocalConfigTable()
 EH:
     LogSetup "ERROR", "EnsureLocalConfigTable failed: " & Err.description
     Err.Raise Err.Number, "EnsureLocalConfigTable", Err.description
+End Sub
+
+' ============================================================
+' Paletni list (Phase 2) — jednokratni schema setup.
+' Idempotentno: kreira nedostajuce tabele i kolonu na tblKulture.
+' Pokrenuti JEDNOM na master workbook-u (Alt+F8 -> EnsurePaletniListSchema).
+' Reuse: FindListObject / GetOrCreateWorksheet / LogSetup (gore).
+' ============================================================
+Public Sub EnsurePaletniListSchema()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_TIP_PALETE, "TipPalete", _
+        Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
+
+    EnsureDataTable TBL_TIP_AMBALAZE, "TipAmbalaze", _
+        Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
+
+    EnsureDataTable TBL_PALETA, "Palete", _
+        Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
+              COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
+              COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
+              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
+              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO)
+
+    EnsureDataTable TBL_PALETA_STAVKA, "PaleteStavke", _
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
+              COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
+              COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
+              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO)
+
+    EnsureDataTable TBL_PRERADA, "Prerada", _
+        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
+              COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
+              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO)
+
+    EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
+        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
+              COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_PRES_CREATED, COL_STORNIRANO)
+
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
+
+    EnsurePaletaSablon
+    EnsurePreradaSablon
+
+    LogSetup "OK", "EnsurePaletniListSchema done"
+    MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
+           "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
+           "i kolonu GajbicaPoPaleti u tblKulture (malina = 240).", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
+    MsgBox "Greska u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
+Private Sub EnsureDataTable(ByVal tblName As String, _
+                            ByVal sheetName As String, _
+                            ByVal headers As Variant)
+    Dim lo As ListObject
+    Set lo = FindListObject(tblName)
+    If Not lo Is Nothing Then
+        ' tabela postoji -> dopuni nedostajuce kolone (repair schema drift)
+        Dim k As Long
+        For k = LBound(headers) To UBound(headers)
+            EnsureColumnOnTable tblName, CStr(headers(k))
+        Next k
+        Exit Sub
+    End If
+
+    Dim ws As Worksheet
+    Set ws = GetOrCreateWorksheet(sheetName)
+    If ws Is Nothing Then
+        Err.Raise vbObjectError + 9310, "EnsureDataTable", _
+                  "Ne mogu da kreiram sheet: " & sheetName
+    End If
+
+    Dim c As Long
+    For c = LBound(headers) To UBound(headers)
+        ws.cells(1, c - LBound(headers) + 1).value = headers(c)
+    Next c
+
+    Dim lastCol As Long
+    lastCol = UBound(headers) - LBound(headers) + 1
+
+    Set lo = ws.ListObjects.Add(xlSrcRange, _
+        ws.Range(ws.cells(1, 1), ws.cells(1, lastCol)), , xlYes)
+    lo.name = tblName
+
+    ws.columns.AutoFit
+    LogSetup "OK", "Created " & tblName
+End Sub
+
+' Dodaje kolonu na postojecu tabelu ako je nema. No-op ako tabela ne postoji.
+Private Sub EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String)
+    Dim lo As ListObject
+    Set lo = FindListObject(tblName)
+    If lo Is Nothing Then Exit Sub
+
+    Dim col As ListColumn
+    On Error Resume Next
+    Set col = lo.ListColumns(colName)
+    On Error GoTo 0
+
+    If col Is Nothing Then
+        lo.ListColumns.Add
+        lo.ListColumns(lo.ListColumns.count).name = colName
+        LogSetup "OK", "Added column " & colName & " to " & tblName
+    End If
 End Sub
 
 Private Function GetOrCreateWorksheet(ByVal sheetName As String) As Worksheet
