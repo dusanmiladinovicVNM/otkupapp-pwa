@@ -1093,9 +1093,9 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
         If zbSet.Exists(Trim$(CStr(SafeCell(o, r, oZb)))) _
            And (Not filterKlasa Or klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl)))))) _
            And UCase$(Trim$(CStr(SafeCell(o, r, oStorno)))) <> "DA" Then
-            Dim oid As String: oid = CStr(SafeCell(o, r, oID))
-            If oid <> "" And Not seen.Exists(oid) Then
-                seen(oid) = True
+            Dim otkID As String: otkID = CStr(SafeCell(o, r, oID))
+            If otkID <> "" And Not seen.Exists(otkID) Then
+                seen(otkID) = True
                 rows.Add r
             End If
         End If
