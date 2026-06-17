@@ -94,6 +94,15 @@ EH:
     MsgBox "Greska pri otvaranju: " & Err.Description, vbCritical, APP_NAME
 End Sub
 
+' Tema (kao ostale forme): krem pozadina + stilizovane kontrole/dugmad.
+Private Sub UserForm_Activate()
+    On Error Resume Next
+    ApplyTheme Me, BG_MAIN()
+    ApplyThemeToControls Me
+    StylePrimaryButton btnPreradi, "Preradi izabrane"
+    StyleExitButton btnPovratak, "Povratak"
+End Sub
+
 Private Sub RefreshGrid()
     On Error GoTo EH
     Dim god As Long
@@ -118,14 +127,15 @@ Private Sub btnOsvezi_Click()
     RefreshGrid
 End Sub
 
-Private Sub lstPalete_Click()
-    On Error Resume Next
-    Dim pid As String: pid = FirstSelectedPaletaID()
-    If pid = "" Then
+' MultiSelect ListBox NE okida Click pouzdano -> Change + ListIndex (red sa
+' fokusom = poslednji kliknut) za prikaz stavki desno.
+Private Sub lstPalete_Change()
+    Dim i As Long: i = Me.lstPalete.ListIndex
+    If i < 0 Then
         Me.lstStavke.Clear
         Exit Sub
     End If
-    Dim s As Variant: s = GetPaletaStavkeForGrid(pid)
+    Dim s As Variant: s = GetPaletaStavkeForGrid(CStr(Me.lstPalete.List(i, 0)))
     If IsEmpty(s) Then
         Me.lstStavke.Clear
     Else
@@ -133,14 +143,10 @@ Private Sub lstPalete_Click()
     End If
 End Sub
 
-Private Function FirstSelectedPaletaID() As String
-    Dim i As Long
-    For i = 0 To Me.lstPalete.ListCount - 1
-        If Me.lstPalete.Selected(i) Then
-            FirstSelectedPaletaID = CStr(Me.lstPalete.List(i, 0))
-            Exit Function
-        End If
-    Next i
+' Red sa fokusom (akcije nad jednom paletom).
+Private Function CurrentPaletaID() As String
+    Dim i As Long: i = Me.lstPalete.ListIndex
+    If i >= 0 Then CurrentPaletaID = CStr(Me.lstPalete.List(i, 0))
 End Function
 
 Private Function SelectedPaletaIDs() As Collection
@@ -153,7 +159,7 @@ Private Function SelectedPaletaIDs() As Collection
 End Function
 
 Private Sub btnStampaj_Click()
-    Dim pid As String: pid = FirstSelectedPaletaID()
+    Dim pid As String: pid = CurrentPaletaID()
     If pid = "" Then
         MsgBox "Izaberite paletu.", vbInformation, APP_NAME
         Exit Sub
@@ -162,7 +168,7 @@ Private Sub btnStampaj_Click()
 End Sub
 
 Private Sub btnPDF_Click()
-    Dim pid As String: pid = FirstSelectedPaletaID()
+    Dim pid As String: pid = CurrentPaletaID()
     If pid = "" Then
         MsgBox "Izaberite paletu.", vbInformation, APP_NAME
         Exit Sub
@@ -182,7 +188,7 @@ End Sub
 
 Private Sub btnZatvori_Click()
     On Error GoTo EH
-    Dim pid As String: pid = FirstSelectedPaletaID()
+    Dim pid As String: pid = CurrentPaletaID()
     If pid = "" Then
         MsgBox "Izaberite paletu.", vbInformation, APP_NAME
         Exit Sub
