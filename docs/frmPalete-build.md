@@ -11,53 +11,55 @@ code-behind se vezuje po imenu), pa nalepiš kod ispod. Sva poslovna logika je u
 - **(Name)** = `frmPalete`
 - **Caption** = `Palete — pregled i obrada`
 
-## 2. Dodaj kontrole (prevuci iz Toolbox-a, postavi (Name) tačno)
+## 2. Kontrole — tačne pozicije
 
-Pozicije rasporedi po želji; bitni su **(Name)** i tip. Posebne osobine su u koloni „Napomena".
+Vrednosti su u **tačkama (pt)** — iste jedinice koje Properties prozor pokazuje
+(`Left`, `Top`, `Width`, `Height`). Za svaku kontrolu postavi **(Name)** + te
+četiri vrednosti (+ Caption gde stoji). Postupak: prevuci kontrolu iz Toolbox-a,
+pa u Properties upiši vrednosti iz reda.
 
-### Filteri (gore)
-| (Name) | Tip | Napomena |
-|---|---|---|
-| `txtFilterGod` | TextBox | godina; prazno = sve |
-| `cmbFilterVrsta` | ComboBox | vrsta voća; prazno = sve (slobodan unos) |
-| `cmbFilterStatus` | ComboBox | puni se u kodu (Sve/Otvorena/Zatvorena) |
-| `cmbFilterPre` | ComboBox | puni se u kodu (Sve/Ne/Da) |
-| `btnOsvezi` | CommandButton | Caption `Osveži` |
+Forma `frmPalete`: **Width = 730, Height = 452**.
 
-(Po želji dodaj Label-e „Godina/Vrsta/Status/Prerađeno" — nisu vezani u kodu.)
+| (Name) | Tip | Left | Top | Width | Height | Caption / osobina |
+|---|---|---|---|---|---|---|
+| `lblFilterGod` | Label | 8 | 11 | 42 | 14 | `Godina:` |
+| `txtFilterGod` | TextBox | 52 | 8 | 46 | 18 | |
+| `lblFilterVrsta` | Label | 108 | 11 | 36 | 14 | `Vrsta:` |
+| `cmbFilterVrsta` | ComboBox | 146 | 8 | 96 | 18 | |
+| `lblFilterStatus` | Label | 250 | 11 | 40 | 14 | `Status:` |
+| `cmbFilterStatus` | ComboBox | 292 | 8 | 88 | 18 | |
+| `lblFilterPre` | Label | 388 | 11 | 58 | 14 | `Prerađeno:` |
+| `cmbFilterPre` | ComboBox | 448 | 8 | 68 | 18 | |
+| `btnOsvezi` | CommandButton | 526 | 7 | 70 | 20 | `Osveži` |
+| `lblPalete` | Label | 8 | 36 | 300 | 12 | `Palete (Ctrl/Shift za više)` |
+| `lstPalete` | ListBox | 8 | 50 | 520 | 320 | **MultiSelect = `1 - fmMultiSelectMulti`** |
+| `lblStavke` | Label | 536 | 36 | 186 | 12 | `Stavke izabrane palete` |
+| `lstStavke` | ListBox | 536 | 50 | 186 | 150 | |
+| `lblKutije` | Label | 536 | 214 | 56 | 14 | `Kutije:` |
+| `txtKutije` | TextBox | 596 | 212 | 50 | 18 | |
+| `lblKese` | Label | 536 | 238 | 56 | 14 | `Kese:` |
+| `txtKese` | TextBox | 596 | 236 | 50 | 18 | |
+| `lblNeto` | Label | 536 | 262 | 56 | 14 | `Neto izlaz:` |
+| `txtNeto` | TextBox | 596 | 260 | 50 | 18 | |
+| `lblNapomena` | Label | 536 | 286 | 56 | 14 | `Napomena:` |
+| `txtNapomena` | TextBox | 596 | 284 | 126 | 18 | |
+| `btnStampaj` | CommandButton | 8 | 384 | 92 | 24 | `Štampaj paletu` |
+| `btnPDF` | CommandButton | 106 | 384 | 92 | 24 | `PDF palete` |
+| `btnStampajNepotpune` | CommandButton | 204 | 384 | 110 | 24 | `Štampaj nepotpune` |
+| `btnZatvori` | CommandButton | 320 | 384 | 92 | 24 | `Zatvori ručno` |
+| `btnPreradi` | CommandButton | 418 | 384 | 110 | 24 | `Preradi izabrane` |
+| `btnPovratak` | CommandButton | 630 | 384 | 92 | 24 | `Povratak` |
 
-### Leva lista — palete
-| (Name) | Tip | Napomena |
-|---|---|---|
-| `lstPalete` | ListBox | **MultiSelect = 1 - fmMultiSelectMulti** (za „Preradi izabrane"). ColumnCount/širine se postavljaju u kodu |
+Raspored: filteri u vrhu (red ~8pt); ispod levo veliki `lstPalete` (520×320);
+desno `lstStavke` pa polja za preradu (Kutije/Kese/Neto/Napomena); dole red
+dugmadi.
 
-Kolone (redom): PaletaID(skriveno), Broj, Godina, Vrsta, Sorta, Klasa, TipAmb,
-Gajbice, Kapacitet, Neto, Bruto, Status, Prerađeno.
+Kolone (redom) u `lstPalete`: PaletaID(skriveno), Broj, Godina, Vrsta, Sorta,
+Klasa, TipAmb, Gajbice, Kapacitet, Neto, Bruto, Status, Prerađeno.
+Kolone u `lstStavke`: PrijemnicaID, BrojPrijemnice, BrojZbirne, Gajbice, NetoKg.
 
-### Desna lista — stavke izabrane palete
-| (Name) | Tip | Napomena |
-|---|---|---|
-| `lstStavke` | ListBox | ColumnCount se postavlja u kodu |
-
-Kolone: PrijemnicaID, BrojPrijemnice, BrojZbirne, Gajbice, NetoKg.
-
-### Polja za preradu (izlaz)
-| (Name) | Tip |
-|---|---|
-| `txtKutije` | TextBox |
-| `txtKese` | TextBox |
-| `txtNeto` | TextBox |
-| `txtNapomena` | TextBox |
-
-### Dugmad (akcije)
-| (Name) | Tip | Caption |
-|---|---|---|
-| `btnStampaj` | CommandButton | Štampaj paletu |
-| `btnPDF` | CommandButton | PDF palete |
-| `btnStampajNepotpune` | CommandButton | Štampaj nepotpune |
-| `btnZatvori` | CommandButton | Zatvori ručno |
-| `btnPreradi` | CommandButton | Preradi izabrane |
-| `btnPovratak` | CommandButton | Povratak |
+> `ColumnCount` i `ColumnWidths` za obe liste postavlja kod (`UserForm_Initialize`)
+> — ne diraš ručno. Jedino `lstPalete.MultiSelect` postavi u Properties.
 
 ## 3. Nalepi code-behind
 
@@ -82,9 +84,9 @@ Private Sub UserForm_Initialize()
     Me.txtFilterGod.value = Year(Date)
 
     Me.lstPalete.ColumnCount = 13
-    Me.lstPalete.ColumnWidths = "0;35;30;55;55;30;45;45;55;55;60;55;55"
+    Me.lstPalete.ColumnWidths = "0;30;32;50;50;30;40;40;48;48;50;50;50"
     Me.lstStavke.ColumnCount = 5
-    Me.lstStavke.ColumnWidths = "75;60;60;45;55"
+    Me.lstStavke.ColumnWidths = "60;34;34;28;30"
 
     RefreshGrid
     Exit Sub
