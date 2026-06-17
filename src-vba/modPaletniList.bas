@@ -626,6 +626,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     On Error GoTo EH
     Application.ScreenUpdating = False
 
+    ws.Range("PalBroj").NumberFormat = "@"
     ws.Range("PalBroj").value = brojOut & "/" & godOut
     ws.Range("PalDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_DATUM)), "dd.mm.yyyy")
     ws.Range("PalVrsta").value = SafeCell(d, hRow, GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA))
@@ -1309,6 +1310,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     On Error GoTo EH
     Application.ScreenUpdating = False
 
+    ws.Range("PreBroj").NumberFormat = "@"
     ws.Range("PreBroj").value = brojOut & "/" & godOut
     ws.Range("PreDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_DATUM)), "dd.mm.yyyy")
     ws.Range("PreKutije").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)))
@@ -1332,6 +1334,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
             If CStr(SafeCell(s, sr, sPre)) = preID Then
                 rb = rb + 1
                 ws.cells(outR, 1).value = rb
+                ws.cells(outR, 2).NumberFormat = "@"
                 ws.cells(outR, 2).value = NzL(SafeCell(s, sr, sBroj)) & "/" & godOut
                 ws.cells(outR, 3).value = NzD(SafeCell(s, sr, sNeto))
                 outR = outR + 1
