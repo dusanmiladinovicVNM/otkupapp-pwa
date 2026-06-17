@@ -130,7 +130,11 @@ Public Function LicenseGateOrQuit() As Boolean
 
     ' --- ONLINE PROVERA (istekao grace ili nema kesa) ---
     Dim resp As String
-    If Not LicenseHttpCheck(endpoint, key, parts, resp) Then
+    Dim httpOk As Boolean
+    LicenseStatusBar "Proveravam licencu..."
+    httpOk = LicenseHttpCheck(endpoint, key, parts, resp)
+    LicenseStatusBar ""                      ' reset pre eventualne MsgBox blokade
+    If Not httpOk Then
         ' Server nedostupan. Ako je OVO vec vezana masina -> offline grace,
         ' da privremeni nestanak interneta ne zakljuca platisu. Ako masina
         ' NIJE vezana (nema validnog kesa) -> blokiraj (aktivacija mora online).
@@ -221,7 +225,11 @@ Public Sub ActivateLicensePrompt()
     End If
 
     Dim resp As String
-    If Not LicenseHttpCheck(endpoint, key, parts, resp) Then
+    Dim httpOk As Boolean
+    LicenseStatusBar "Proveravam licencu..."
+    httpOk = LicenseHttpCheck(endpoint, key, parts, resp)
+    LicenseStatusBar ""
+    If Not httpOk Then
         MsgBox "Server nije dostupan. Proverite internet konekciju.", vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -416,6 +424,20 @@ Private Function LicenseErr(ByVal resp As String) As String
     If Len(Trim$(e)) = 0 Then e = "Kontaktirajte dobavljaca."
     LicenseErr = e
 End Function
+
+' Status-bar hint tokom online provere. Prazan msg = reset (oslobodi status
+' bar + kursor). Best-effort: ako je DisplayStatusBar iskljucen, nista se ne
+' vidi, ali ne smeta. Isti obrazac kao ThisWorkbook.Workbook_BeforeClose.
+Private Sub LicenseStatusBar(ByVal msg As String)
+    On Error Resume Next
+    If Len(msg) > 0 Then
+        Application.Cursor = xlWait
+        Application.StatusBar = msg
+    Else
+        Application.StatusBar = False
+        Application.Cursor = xlDefault
+    End If
+End Sub
 
 Private Sub LicenseBlock(ByVal reason As String, ByVal hint As String)
     On Error Resume Next
