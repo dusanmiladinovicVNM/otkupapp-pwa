@@ -184,7 +184,17 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
 
     Dim r0 As Long, lastRow As Long
     r0 = WriteOtkupCopy(ws, 2, "Primerak za poljoprivrednika", h, stavke, cnt)
-    lastRow = WriteOtkupCopy(ws, r0 + 2, "Primerak za otkupljivaca", h, stavke, cnt)
+
+    ' Razmak + isprekidana linija za secenje izmedju dva primerka.
+    Dim cutRow As Long: cutRow = r0 + 1
+    ws.Range(ws.cells(cutRow, 1), ws.cells(cutRow, 6)).Merge
+    With ws.cells(cutRow, 1)
+        .value = ChrW(9986) & " " & String$(80, "-")
+        .Font.Color = RGB(150, 150, 150)
+        .HorizontalAlignment = xlCenter
+    End With
+
+    lastRow = WriteOtkupCopy(ws, cutRow + 2, "Primerak za otkupljivaca", h, stavke, cnt)
 
     On Error Resume Next
     Application.PrintCommunication = False
