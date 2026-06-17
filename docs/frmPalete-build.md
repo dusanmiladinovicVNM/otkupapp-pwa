@@ -90,7 +90,7 @@ Private Sub UserForm_Initialize()
     Me.lstPalete.ColumnCount = 13
     Me.lstPalete.ColumnWidths = "0;30;32;50;50;30;40;40;48;48;50;50;50"
     Me.lstStavke.ColumnCount = 5
-    Me.lstStavke.ColumnWidths = "52;28;38;24;26"
+    Me.lstStavke.ColumnWidths = "72;38;54;32;36"   ' za lstStavke Width 250
 
     RefreshGrid
     Exit Sub
@@ -286,7 +286,7 @@ naslovi ostaju na Top 36; zaglavlja na Top 48; liste se spuštaju na Top 62.
 
     ' --- zaglavlje stavki ---
     Me.lstStavkeHdr.ColumnCount = 5
-    Me.lstStavkeHdr.ColumnWidths = "52;28;38;24;26"
+    Me.lstStavkeHdr.ColumnWidths = "72;38;54;32;36"
     Dim hdrS(0 To 0, 0 To 4) As Variant
     hdrS(0, 0) = "PrijemID": hdrS(0, 1) = "BrPrij": hdrS(0, 2) = "Zbirna"
     hdrS(0, 3) = "Gajb":     hdrS(0, 4) = "Neto"
