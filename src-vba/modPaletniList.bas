@@ -780,7 +780,7 @@ Public Sub EnsurePaletaSablon()
 
     ws.Range("A10").name = "PalStavkaStart"
 
-    ws.columns("A").ColumnWidth = 6
+    ws.columns("A").ColumnWidth = 12
     ws.columns("B").ColumnWidth = 14
     ws.columns("C").ColumnWidth = 16
     ws.columns("D").ColumnWidth = 14
@@ -1590,7 +1590,7 @@ Public Sub EnsurePreradaSablon()
 
     ws.Range("A11").name = "PreStavkaStart"
 
-    ws.columns("A").ColumnWidth = 6
+    ws.columns("A").ColumnWidth = 12
     ws.columns("B").ColumnWidth = 14
     ws.columns("C").ColumnWidth = 16
     ws.columns("D").ColumnWidth = 14
