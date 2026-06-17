@@ -347,14 +347,39 @@ pa frmPalete mora da se „prelije". Dodaj u frmPalete tri stvari:
 Private mChromeRemoved As Boolean
 ```
 
-**(b)** u `UserForm_Activate` (kao ostale sekcije — ukloni naslovnu traku, sakrij Povratak):
+**(b)** ceo `UserForm_Activate` — chrome **MORA ovde** (ne u Initialize; window
+handle postoji tek po Show-u), pa tema, header (kao ostale sekcije) i zaglavlja:
 
 ```vba
+Private Sub UserForm_Activate()
+    On Error Resume Next
+
     EnsureUserFormChromeRemoved Me, mChromeRemoved
-    Me.btnPovratak.Visible = False
+    ApplyThemeToControls Me
+
+    StyleFrameTitleLabel lblKopf, "Palete"
+    StyleSubtitle lblSubtitle, "Pregled paleta, štampa i prerada"
+
+    Me.lstPaleteHdr.Font.Bold = True
+    Me.lstPaleteHdr.BackColor = BG_TOP()
+    Me.lstStavkeHdr.Font.Bold = True
+    Me.lstStavkeHdr.BackColor = BG_TOP()
+
+    StylePrimaryButton btnPreradi, "Preradi izabrane"
+End Sub
 ```
 
-**(c)** `UserForm_Resize` — pin dugmad dole, desni panel desno, liste popune ostatak:
+(U `UserForm_Initialize` ostaje `ApplyTheme Me, BG_MAIN()` i
+`Me.btnPovratak.Visible = False`; `EnsureUserFormChromeRemoved` NE ide tamo.)
+
+**(c)** Header kontrole + pomeranje filtera (da izgleda kao ostale sekcije):
+- dodaj `lblKopf` (Label) Left 8, Top 6, Width 300, Height 22 — naslov „Palete";
+- dodaj `lblSubtitle` (Label) Left 8, Top 30, Width 450, Height 14 — podnaslov;
+- pomeri ceo red filtera (Godina/Vrsta/Status/Prerađeno + Osveži, sa labelama)
+  naniže na ~Top 52 (multi-select + drag). Grid se sam smešta ispod (Resize).
+
+**(d)** `UserForm_Resize` — pin dugmad dole, desni panel desno, liste popune ostatak
+(grid je ispod header+filter zone):
 
 ```vba
 Private Sub UserForm_Resize()
@@ -362,27 +387,29 @@ Private Sub UserForm_Resize()
     Const PAD As Double = 8
     Const GAP As Double = 10
     Const PANELW As Double = 250      ' desni panel (stavke + prerada)
-    Const TOPGRID As Double = 62
+    Const TOPTITLE As Double = 80     ' naslovi listi (ispod header+filter zone)
+    Const TOPHDR As Double = 92       ' zaglavlja kolona
+    Const TOPGRID As Double = 106     ' liste
     Const BTNH As Double = 24
 
     Dim w As Double: w = Me.InsideWidth
     Dim h As Double: h = Me.InsideHeight
-    If w < 420 Or h < 220 Then Exit Sub
+    If w < 420 Or h < 240 Then Exit Sub
 
     Dim panelX As Double: panelX = w - PAD - PANELW
     Dim btnTop As Double:  btnTop = h - PAD - BTNH
     Dim gridW As Double:   gridW = panelX - GAP - PAD
 
     ' leva strana: naslov / zaglavlje / lista paleta
-    Me.lblPalete.Top = 36:      Me.lblPalete.Left = PAD
-    Me.lstPaleteHdr.Top = 48:   Me.lstPaleteHdr.Left = PAD:  Me.lstPaleteHdr.width = gridW
-    Me.lstPalete.Top = TOPGRID: Me.lstPalete.Left = PAD:     Me.lstPalete.width = gridW
+    Me.lblPalete.Top = TOPTITLE:  Me.lblPalete.Left = PAD
+    Me.lstPaleteHdr.Top = TOPHDR: Me.lstPaleteHdr.Left = PAD:  Me.lstPaleteHdr.width = gridW
+    Me.lstPalete.Top = TOPGRID:   Me.lstPalete.Left = PAD:     Me.lstPalete.width = gridW
     Me.lstPalete.Height = btnTop - GAP - TOPGRID
 
     ' desni panel: stavke
-    Me.lblStavke.Top = 36:      Me.lblStavke.Left = panelX
-    Me.lstStavkeHdr.Top = 48:   Me.lstStavkeHdr.Left = panelX: Me.lstStavkeHdr.width = PANELW
-    Me.lstStavke.Top = TOPGRID: Me.lstStavke.Left = panelX:    Me.lstStavke.width = PANELW
+    Me.lblStavke.Top = TOPTITLE:  Me.lblStavke.Left = panelX
+    Me.lstStavkeHdr.Top = TOPHDR: Me.lstStavkeHdr.Left = panelX: Me.lstStavkeHdr.width = PANELW
+    Me.lstStavke.Top = TOPGRID:   Me.lstStavke.Left = panelX:    Me.lstStavke.width = PANELW
 
     ' desni panel: polja prerade ispod stavki
     Dim fy As Double: fy = TOPGRID + Me.lstStavke.Height + GAP + 6
