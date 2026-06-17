@@ -108,7 +108,11 @@ Public Function LicenseGateOrQuit() As Boolean
     End If
 
     Dim bound As String: bound = Trim$(GetConfigValue(CFG_LIC_BOUND_PARTS))
-    Dim nextChk As String: nextChk = Trim$(GetConfigValue(CFG_LIC_NEXT_CHECK))
+    ' NEXT_CHECK je upisan kao ISO sa 'T' (Format "...\Thh:nn:ss"). VBA CDate/
+    ' IsDate NE razumeju 'T' separator (IsDate vrati False), pa ga zamenjujemo
+    ' razmakom pre parse-a — isti obrazac kao modGoogleAuth.IsTokenExpired i
+    ' modStanicaLock. Bez ovoga brzi offline put se nikad ne bi izvrsio.
+    Dim nextChk As String: nextChk = Replace(Trim$(GetConfigValue(CFG_LIC_NEXT_CHECK)), "T", " ")
 
     ' --- BRZI OFFLINE PUT: unutar grace prozora + ovo je vezana masina ---
     If Len(bound) > 0 Then
@@ -309,11 +313,12 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — otisak uredjaja
+' Otisak uredjaja (GetDeviceParts Public za integ-test; Read* ostaju Private)
 ' ============================================================
 
-' Vraca "MACHINEGUID|UUID|VOLSERIAL" (uppercased, trimovano).
-Private Function GetDeviceParts() As String
+' Vraca "MACHINEGUID|UUID|VOLSERIAL" (uppercased, trimovano). Cista funkcija
+' bez side-efekata; Public radi modLicenseTests.TestLicense_DeviceFingerprint.
+Public Function GetDeviceParts() As String
     Dim c1 As String, c2 As String, c3 As String
     c1 = UCase$(Trim$(ReadMachineGuid()))
     c2 = UCase$(Trim$(ReadSmbiosUuid()))

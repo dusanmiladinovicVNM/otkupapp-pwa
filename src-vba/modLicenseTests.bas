@@ -84,30 +84,10 @@ End Sub
 Public Sub TestLicense_DeviceFingerprint()
     Debug.Print vbCrLf & "[4] Otisak ovog racunara (integracija)"
     Dim parts As String
-    parts = GetDevicePartsForTest()
+    parts = modLicense.GetDeviceParts()
     Debug.Print "  Otisak: " & parts
     AssertTrue "ovaj racunar daje >=2 komponente", (LicNonEmptyParts(parts) >= 2)
 End Sub
-
-' GetDeviceParts je Private u modLicense; ovde rekonstruisemo isti oblik
-' samo za integracioni sanity-check (ne diramo public API modLicense-a).
-Private Function GetDevicePartsForTest() As String
-    Dim c1 As String, c2 As String, c3 As String
-    On Error Resume Next
-    c1 = UCase$(Trim$(CreateObject("WScript.Shell").RegRead( _
-            "HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid")))
-    Dim wmi As Object, item As Object
-    Set wmi = GetObject("winmgmts:\\.\root\cimv2")
-    For Each item In wmi.ExecQuery("SELECT UUID FROM Win32_ComputerSystemProduct")
-        c2 = UCase$(Trim$(CStr(item.UUID)))
-        Exit For
-    Next item
-    Dim sysDrive As String: sysDrive = Environ$("SystemDrive")
-    If Len(sysDrive) = 0 Then sysDrive = "C:"
-    c3 = UCase$(Trim$(Hex$(CreateObject("Scripting.FileSystemObject").GetDrive(sysDrive).SerialNumber)))
-    On Error GoTo 0
-    GetDevicePartsForTest = c1 & "|" & c2 & "|" & c3
-End Function
 
 ' ============================================================
 ' Mini assert helperi (Debug.Print bazirani, kao ostali *Tests moduli)
