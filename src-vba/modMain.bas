@@ -25,11 +25,11 @@ Public Sub StartApp()
 
     If Not m_Initialized Then InitApp
 
-    ' --- Licenca (per-uredjaj / node-locked) ---
-    ' Blokira pokretanje ako licenca nije vazeca za OVAJ racunar.
-    ' Opt-in: radi samo ako je LICENSE_ENABLED = YES u tblSEFConfig
-    ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
-    If Not LicenseGateOrQuit() Then Exit Sub
+    ' --- Pristup: licenca + trial ("trial samo ako NIJE licenciran") ---
+    ' Licencirana masina propusta; nelicencirana dobija trial (ako je ukljucen)
+    ' ili pada na license gate. Opt-in: LICENSE_ENABLED / TRIAL_ENABLED.
+    ' Detalji: modLicense.AccessGateOrQuit.
+    If Not AccessGateOrQuit() Then Exit Sub
 
     Application.Visible = False
 

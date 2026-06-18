@@ -56,13 +56,49 @@ Private Const LIC_DEFAULT_GRACE_DAYS As Long = 7
 Private Const HTTP_TIMEOUT_MS As Long = 8000
 Private Const HTTP_RECV_TIMEOUT_MS As Long = 15000
 
-' Module-level state: postavljeno na True kad gate odbije licencu, da
-' Workbook_Open rano prekine startup (cleanup/monitoring se ne izvrsavaju
-' za odbijenu masinu). Vidi LicenseWasDenied / ForceCloseDeniedWorkbook.
-Private gLicenseDenied As Boolean
+' Module-level state: postavljeno na True kad gate (licenca ILI trial) odbije
+' pristup, da Workbook_Open rano prekine startup (cleanup/monitoring se ne
+' izvrsavaju za odbijenu masinu). Vidi AccessWasDenied / ForceCloseDeniedWorkbook.
+Private gAccessDenied As Boolean
 
 ' ============================================================
-' PUBLIC — Gate (poziva se iz modMain.StartApp)
+' PUBLIC — Glavni gate (poziva se iz modMain.StartApp)
+' ============================================================
+'
+' Kombinuje licencu i trial po pravilu "TRIAL SAMO AKO NIJE LICENCIRAN":
+'   - masina IMA licencni kljuc        -> licenca odlucuje (OK propusta, svako
+'                                          odbijanje BOUND_OTHER/SUSPENDED/... blokira);
+'   - nema kljuca, trial UKLJUCEN       -> trial gate (istek blokira);
+'   - nema kljuca, trial off, licenca on-> trazi licencu (blokira "unesite kljuc");
+'   - nista nije ukljuceno              -> propusta.
+'
+' Licencirana masina NIKAD ne vidi trial.
+Public Function AccessGateOrQuit() As Boolean
+    Const SRC As String = "modLicense.AccessGateOrQuit"
+    On Error GoTo EH
+
+    Dim licOn As Boolean: licOn = LicenseEnabled()
+    Dim hasKey As Boolean: hasKey = (Len(Trim$(GetConfigValue(CFG_LIC_KEY))) > 0)
+
+    If licOn And hasKey Then
+        AccessGateOrQuit = LicenseGateOrQuit()          ' licenca je autoritet
+    ElseIf modTrial.TrialEnabled() Then
+        AccessGateOrQuit = modTrial.TrialGateOrQuit()   ' nema kljuca -> trial vlada
+    ElseIf licOn Then
+        AccessGateOrQuit = LicenseGateOrQuit()          ' nema kljuca, trial off -> trazi licencu
+    Else
+        AccessGateOrQuit = True                         ' ni licenca ni trial nisu ukljuceni
+    End If
+    Exit Function
+
+EH:
+    ' Bug u orkestraciji ne sme da zakljuca korisnika -> fail-OPEN + log.
+    LogErr SRC
+    AccessGateOrQuit = True
+End Function
+
+' ============================================================
+' PUBLIC — Licencni gate (interni; zove ga AccessGateOrQuit)
 ' ============================================================
 
 ' Vraca True ako sme da nastavi; inace blokira, prikaze poruku i zatvori svesku.
@@ -441,31 +477,34 @@ End Sub
 
 Private Sub LicenseBlock(ByVal reason As String, ByVal hint As String)
     On Error Resume Next
-    gLicenseDenied = True
-
     Application.Visible = True
     MsgBox reason & vbCrLf & vbCrLf & hint & vbCrLf & vbCrLf & _
            "Kontaktirajte dobavljaca za nastavak rada.", vbCritical, APP_NAME
-
-    ' NE zatvaramo svesku sinhrono: ovo se izvrsava iz Workbook_Open toka,
-    ' gde Excel odlaze ili IGNORISE ThisWorkbook.Close (sveska ostane otvorena).
-    ' Zato zatvaranje zakazujemo na sledeci idle tick (posle zavrsetka
-    ' Workbook_Open) preko Application.OnTime -> pouzdano se zatvara.
-    Application.OnTime Now + TimeSerial(0, 0, 1), "modLicense.ForceCloseDeniedWorkbook"
+    DenyAccessAndScheduleClose
 End Sub
 
 ' ============================================================
-' PUBLIC — Workbook_Open integracija
+' PUBLIC — Deljeni "access denied" + Workbook_Open integracija
+' (koriste ga i license i trial gate)
 ' ============================================================
 
-' Da li je poslednji gate odbio licencu. Workbook_Open ovo koristi za rani
-' prekid (da ne pokrece dalji startup za odbijenu masinu).
-Public Function LicenseWasDenied() As Boolean
-    LicenseWasDenied = gLicenseDenied
+' Da li je poslednji gate (licenca ILI trial) odbio pristup. Workbook_Open
+' ovo koristi za rani prekid (da ne pokrece dalji startup za odbijenu masinu).
+Public Function AccessWasDenied() As Boolean
+    AccessWasDenied = gAccessDenied
 End Function
 
-' OnTime cilj: stvarno zatvaranje sveske posle blokade licence. Izvrsava se
-' tek kad se Workbook_Open zavrsi, pa Excel ovog puta postuje Close.
+' Deljena blokada: oznaci pristup odbijenim i zakazi POUZDANO zatvaranje na
+' sledeci idle tick. Pozivaju je i LicenseBlock i modTrial.TrialBlock — nikada
+' ne zatvarati svesku sinhrono iz Workbook_Open toka (Excel Close odlaze/ignorise).
+Public Sub DenyAccessAndScheduleClose()
+    On Error Resume Next
+    gAccessDenied = True
+    Application.OnTime Now + TimeSerial(0, 0, 1), "modLicense.ForceCloseDeniedWorkbook"
+End Sub
+
+' OnTime cilj: stvarno zatvaranje sveske posle blokade. Izvrsava se tek kad se
+' Workbook_Open zavrsi, pa Excel ovog puta postuje Close.
 ' Mora biti Public (Application.OnTime ne moze da pozove Private proceduru).
 Public Sub ForceCloseDeniedWorkbook()
     On Error Resume Next

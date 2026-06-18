@@ -10,20 +10,24 @@ Option Explicit
 ' >>> PODESI DOLE: TRIAL_START_* (pocetni "zadati datum") i TRIAL_DAYS. <<<
 ' Iskljucivanje cele provere: TRIAL_ENABLED = False.
 '
-' Poziva se na vrhu modMain.StartApp:  If Not TrialGateOrQuit() Then Exit Sub
+' Orkestrira ga modLicense.AccessGateOrQuit (pravilo "trial samo ako NIJE
+' licenciran"); ne poziva se direktno iz StartApp.
 '
 ' NAPOMENA: deterrent. Ko otvori VBE moze da promeni datum ili iskljuci kod.
-' Za jaci nivo videti modLicense (potpisana licenca). Takodje: legitimno
+' Za jaci nivo videti modLicense (per-uredjaj licenca). Takodje: legitimno
 ' POGRESNO podesen sistemski sat (npr. prazna baterija -> 2000) moze da
-' okine anti-rollback; za 10-dnevni trial to je prihvatljiv kompromis.
+' okine anti-rollback; za kratak trial to je prihvatljiv kompromis.
 ' ============================================================
 
-Private Const TRIAL_ENABLED As Boolean = True
+' Default False: trial je DORMANT dok ga ne upalis. Dok je False, nelicencirana
+' masina ne dobija trial reprieve nego pada na license gate (ne propusta se).
+' >>> Za aktivaciju: postavi True + podesi TRIAL_START_* i TRIAL_DAYS. <<<
+Private Const TRIAL_ENABLED As Boolean = False
 
 ' >>> POCETNI ("zadati") DATUM — godina, mesec, dan <<<
 Private Const TRIAL_START_Y As Integer = 2026
 Private Const TRIAL_START_M As Integer = 6
-Private Const TRIAL_START_D As Integer = 15
+Private Const TRIAL_START_D As Integer = 18
 
 ' Broj dana vazenja od pocetnog datuma.
 Private Const TRIAL_DAYS As Long = 10
@@ -88,6 +92,12 @@ EH:
     TrialGateOrQuit = True
 End Function
 
+' Da li je trial ukljucen. Koristi modLicense.AccessGateOrQuit da odluci da li
+' nelicencirana masina dobija trial ili pada na license gate.
+Public Function TrialEnabled() As Boolean
+    TrialEnabled = TRIAL_ENABLED
+End Function
+
 ' ============================================================
 Private Sub TrialBlock(ByVal reason As String, ByVal deadline As Date)
     On Error Resume Next
@@ -96,8 +106,7 @@ Private Sub TrialBlock(ByVal reason As String, ByVal deadline As Date)
            "Vazenje do: " & Format$(deadline, "dd.mm.yyyy") & "." & vbCrLf & vbCrLf & _
            "Kontaktirajte dobavljaca za nastavak rada.", vbCritical, APP_NAME
 
-    ' Zatvori SAMO ovu svesku (bez Application.Quit). Saved=True spreci prompt.
-    ThisWorkbook.Saved = True
-    Application.DisplayAlerts = False
-    ThisWorkbook.Close SaveChanges:=False
+    ' Pouzdano zatvaranje preko deljenog mehanizma (modLicense). NE zatvarati
+    ' sinhrono iz Workbook_Open toka — Excel Close tu odlaze/ignorise.
+    DenyAccessAndScheduleClose
 End Sub
