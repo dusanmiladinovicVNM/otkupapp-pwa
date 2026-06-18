@@ -4,41 +4,42 @@ Option Explicit
 ' ============================================================
 ' modOtkupBlok – Panel "Otkupni blokovi" u frmOtkup.
 '
-' Panel NE unosi sam u tblOtkup. Umesto toga vodi POSTOJECU levu
-' frmOtkup formu:
+' Panel NE unosi sam u tblOtkup – vodi POSTOJECU levu frmOtkup formu:
 '   - Klik na otpremnicu (sredina) popuni levu formu: otkupno mesto,
-'     vrsta, sorta, vozac, datum, broj zbirne i cenu.
-'   - Gore se unosi samo CENA po otpremnici (vazi za sve blokove te
-'     otpremnice) + sazetak Preostalo za unos.
+'     vrsta, sorta, vozac, datum, broj zbirne i cenu; broj otkupnog
+'     lista racuna kanonski SuggestNextBroj (OM iz polja + datum otpr.).
+'   - Gore: "Cena po otpremnici" (override, vazi za sve blokove) + sazetak
+'     Preostalo za unos.
 '   - Korisnik unese kooperanta + kolicinu i klikne postojeci "Unos".
-'   - Posle "Unos" (frmOtkup poziva OtkupBlok_AfterUnos) upravo
-'     sacuvani red(ovi) se VEZU za izabranu otpremnicu (OtpremnicaID),
-'     pa se Preostalo i desna lista odmah azuriraju – bez rucnog
-'     "automatski povezi" iz Sledljivosti.
-'   - Skroz desno: lista uradjenih blokova izabrane otpremnice.
+'   - frmOtkup.btnUnos_Click pre snimanja zove OtkupBlok_ConfirmUnos
+'     (upozorenje na prekoracenje), a posle uspeha OtkupBlok_AfterUnos
+'     (vezivanje OtkupID->OtpremnicaID + osvezavanje + auto-deselekcija
+'     kad Preostalo padne na 0).
+'   - Desno: blokovi izabrane otpremnice (+ zbirni red), sa dugmadima
+'     "Storniraj blok" (StornoOtkup_TX) i "Stampaj list" (PrintOtkupniList).
+'   - Lista otpremnica: kolona "Preostalo", filter "samo nezavrsene",
+'     sort po datumu (najnovije gore).
 '
-' Sve kontrole panela su dinamicke (Controls.Add) – frmOtkup.frx se
-' ne menja. Cena se cuva kao BRUTO (sa PDV nadoknadom); neto/PDV se
-' racunaju iz nje.
+' Sve kontrole panela su dinamicke (Controls.Add) – frmOtkup.frx se ne
+' menja. Cena se cuva kao BRUTO (sa PDV nadoknadom); neto/PDV iz nje.
 '
 ' Integracija u frmOtkup:
-'   UserForm_Initialize:  AttachOtkupBlokPanel Me
-'   btnUnos_Click (po uspehu, posle ClearOtkupFields):
-'                         OtkupBlok_AfterUnos result
-' + importovati modOtkupBlok.bas i clsBlokUI.cls
+'   UserForm_Initialize:                 AttachOtkupBlokPanel Me
+'   btnUnos_Click (pre snimanja):        If Not OtkupBlok_ConfirmUnos() Then Exit Sub
+'   btnUnos_Click (po uspehu, posle ClearOtkupFields): OtkupBlok_AfterUnos result
 ' ============================================================
 
-' --- Layout (tacke; doteraj po ekranu) ---
+' --- Layout (tacke) ---
 Private Const PANEL_LEFT  As Double = 312
 Private Const OTP_W       As Double = 360
 Private Const BLOK_LEFT   As Double = 680       ' PANEL_LEFT + OTP_W + 8
 Private Const BLOK_W      As Double = 460
-Private Const GRID_TOP    As Double = 70
+Private Const GRID_TOP    As Double = 72
 Private Const EXP_WIDTH   As Double = 1155
 Private Const TOGGLE_W    As Double = 130
 
-Private Const OTP_COLW  As String = "0;0;72;40;48;100;48;52"
-Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Hladnjaca;Prodajna;Cena za blok"
+Private Const OTP_COLW  As String = "0;0;58;38;42;82;44;42;46"
+Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Hladnjaca;Prodajna;Cena za;Preostalo"
 Private Const BLOK_COLW As String = "0;42;98;48;44;52;56;50;58"
 Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Kolicina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
 
@@ -51,8 +52,12 @@ Private mBuilt As Boolean
 Private mVisible As Boolean
 Private mOrigWidth As Double
 Private mActiveOtpID As String
+Private mFilterNezavrsene As Boolean
 
 Private mBtnToggle As MSForms.CommandButton
+Private mBtnStorno As MSForms.CommandButton
+Private mBtnPrint As MSForms.CommandButton
+Private mBtnFilter As MSForms.CommandButton
 Private mLstOtp As MSForms.ListBox
 Private mLstBlok As MSForms.ListBox
 Private mTxtCenaOtp As MSForms.TextBox
@@ -61,7 +66,7 @@ Private mLblNapisano As MSForms.label
 Private mLblPreostalo As MSForms.label
 
 ' ============================================================
-' PUBLIC – ulazna tacka + event ruteri (zove ih clsBlokUI) + AfterUnos
+' PUBLIC – ulazna tacka + event ruteri + frmOtkup hooks
 ' ============================================================
 
 Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
@@ -73,6 +78,7 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     mBuilt = False
     mVisible = False
     mActiveOtpID = ""
+    mFilterNezavrsene = False
     mOrigWidth = mForm.width
 
     If UCase$(Trim$(GetConfigValue("OTKUP_BLOK_PANEL"))) = "NO" Then Exit Sub
@@ -95,7 +101,12 @@ End Sub
 
 Public Sub OtkupBlok_OnButton(ByVal action As String)
     On Error GoTo EH
-    If action = "TOGGLE" Then TogglePanel
+    Select Case action
+        Case "TOGGLE": TogglePanel
+        Case "STORNO": StornoSelectedBlok
+        Case "PRINT": PrintSelectedBlok
+        Case "FILTER": ToggleFilter
+    End Select
     Exit Sub
 EH:
     LogErr "modOtkupBlok.OtkupBlok_OnButton"
@@ -125,8 +136,46 @@ EH:
     LogErr "modOtkupBlok.OtkupBlok_OnListClick"
 End Sub
 
-' Poziva frmOtkup.btnUnos_Click po uspesnom cuvanju (result = OtkupID-jevi
-' spojeni sa " + "). Vezuje ih za izabranu otpremnicu i osvezava panel.
+' Pre snimanja (frmOtkup.btnUnos_Click): upozorenje na prekoracenje preostale
+' kolicine otpremnice. Vraca False samo ako operater odustane. Panel neaktivan
+' / greska -> True (nikad ne blokira normalan unos).
+Public Function OtkupBlok_ConfirmUnos() As Boolean
+    OtkupBlok_ConfirmUnos = True
+    On Error GoTo EH
+
+    If Not mVisible Then Exit Function
+    If Len(mActiveOtpID) = 0 Then Exit Function
+
+    Dim kol As Double, k2 As Double
+    If Not TryParseDouble(CStr(mForm.Controls("txtKolicina").value), kol) Then kol = 0
+    On Error Resume Next
+    If mForm.Controls("chkDveKlase").value = True Then
+        TryParseDouble CStr(mForm.Controls("txtKolicinaKLII").value), k2
+    End If
+    On Error GoTo EH
+
+    Dim total As Double: total = kol + k2
+    If total <= 0 Then Exit Function
+
+    Dim ukupno As Double
+    ukupno = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOLICINA))
+    Dim preost As Double: preost = ukupno - SumKolByOtp(mActiveOtpID)
+
+    If total > preost + 0.0001 Then
+        If MsgBox("Unos (" & FmtKg(total) & " kg) premasuje preostalih " & _
+                  FmtKg(preost) & " kg za ovu otpremnicu." & vbCrLf & _
+                  "Nastaviti?", vbExclamation + vbYesNo, APP_NAME) = vbNo Then
+            OtkupBlok_ConfirmUnos = False
+        End If
+    End If
+    Exit Function
+EH:
+    LogErr "modOtkupBlok.OtkupBlok_ConfirmUnos"
+    OtkupBlok_ConfirmUnos = True
+End Function
+
+' Posle uspesnog "Unos": vezi sacuvane redove za otpremnicu, ujednaci cenu,
+' osvezi i auto-deselektuj kad je otpremnica popunjena.
 Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
     On Error GoTo EH
     If Not mVisible Then Exit Sub
@@ -134,12 +183,8 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     LinkOtkupIDsToOtpremnica otkupIDs, mActiveOtpID
 
-    ' ClearOtkupFields je obrisao txtCena – cena je po otpremnici, vrati je.
-    ' (Broj otkupnog lista je ClearOtkupFields vec osvezio preko
-    '  RefreshBrojDokumentaSuggestion: OM iz polja + datum iz txtDatum, koji
-    '  jos drze vrednosti izabrane otpremnice.)
+    ' cena po otpremnici vazi za SVE blokove; txtCena je obrisao ClearOtkupFields
     If mCenaBlok.Exists(mActiveOtpID) Then
-        ' cena po otpremnici vazi za SVE blokove (i ako je menjana u toku)
         ApplyCenaToOtpremnica mActiveOtpID, CDbl(mCenaBlok(mActiveOtpID))
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
@@ -147,6 +192,17 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
     LoadBlokovi
     LoadOtpremnice
     RefreshSummary
+
+    ' auto-deselekcija kad je otpremnica popunjena (zastita od pogresnog vezivanja)
+    Dim ukupno As Double
+    ukupno = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOLICINA))
+    If ukupno - SumKolByOtp(mActiveOtpID) <= 0.0001 Then
+        MsgBox "Otpremnica je popunjena (Preostalo = 0). Izaberite drugu otpremnicu za sledeci blok.", _
+               vbInformation, APP_NAME
+        mActiveOtpID = ""
+        LoadBlokovi
+        RefreshSummary
+    End If
     Exit Sub
 EH:
     LogErr "modOtkupBlok.OtkupBlok_AfterUnos"
@@ -206,20 +262,32 @@ Private Sub BuildPanel()
     mLblNapisano.caption = "U blokovima: —"
     mLblPreostalo.caption = "Preostalo: —"
 
-    ' Naslovi
-    Dim t1 As Object, t2 As Object
-    Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 26, OTP_W, 14)
-    t1.caption = "OTPREMNICE  (klik = izbor; puni levu formu)": StyleHdr t1
-    Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 26, BLOK_W, 14)
-    t2.caption = "OTKUPNI BLOKOVI  (izabrane otpremnice)": StyleHdr t2
+    ' Naslovi + dugmad
+    Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 26, 230, 14)
+    t1.caption = "OTPREMNICE  (klik = izbor)": StyleHdr t1
+    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 118, 24, 118, 17)
+    mBtnFilter.caption = "Prikaz: Sve"
+
+    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 26, 200, 14)
+    t2.caption = "OTKUPNI BLOKOVI": StyleHdr t2
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + BLOK_W - 198, 24, 96, 17)
+    mBtnStorno.caption = "Storniraj blok"
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + BLOK_W - 98, 24, 96, 17)
+    mBtnPrint.caption = "Stampaj list"
+
+    On Error Resume Next
+    StyleExitButton mBtnFilter, "Prikaz: Sve"
+    StyleExitButton mBtnStorno, "Storniraj blok"
+    StylePrimaryButton mBtnPrint, "Stampaj list"
+    On Error GoTo 0
 
     ' Zaglavlja kolona
-    AddHeaders "hOtp", PANEL_LEFT, 42, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 42, BLOK_COLW, BLOK_CAPS
+    AddHeaders "hOtp", PANEL_LEFT, 44, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 44, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
-    mLstOtp.ColumnCount = 8
+    mLstOtp.ColumnCount = 9
     mLstOtp.ColumnWidths = OTP_COLW
 
     Set mLstBlok = AddCtl("ListBox", "lstOtkBlokBlok", BLOK_LEFT, GRID_TOP, BLOK_W, gridH)
@@ -229,6 +297,9 @@ Private Sub BuildPanel()
     ' Eventi
     WireTxt mTxtCenaOtp, "CENA"
     WireLst mLstOtp, "OTP"
+    WireBtn mBtnStorno, "STORNO"
+    WireBtn mBtnPrint, "PRINT"
+    WireBtn mBtnFilter, "FILTER"
 End Sub
 
 Private Sub SetPanelVisible(ByVal b As Boolean)
@@ -267,9 +338,39 @@ Private Sub LoadOtpremnice()
     Dim dSt As Object: Set dSt = BuildLookup(TBL_STANICE, "StanicaID", "Naziv")
     Dim dHl As Object: Set dHl = BuildLookup(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_HLADNJACA)
     Dim dCe As Object: Set dCe = BuildFirstBlokCena()
+    Dim dNap As Object: Set dNap = BuildNapisanoByOtp()
 
-    Dim i As Long, r As Long
-    For i = 1 To UBound(data, 1)
+    ' Indeksi za prikaz (uz filter "samo nezavrsene") + sort po datumu DESC
+    Dim n As Long: n = UBound(data, 1)
+    Dim idx() As Long: ReDim idx(1 To n)
+    Dim keyd() As Double: ReDim keyd(1 To n)
+    Dim m As Long: m = 0
+    Dim i As Long
+    For i = 1 To n
+        Dim id0 As String: id0 = CStr(data(i, cId))
+        Dim nap0 As Double: nap0 = 0
+        If dNap.Exists(id0) Then nap0 = dNap(id0)
+        Dim pre0 As Double: pre0 = NumVal(data(i, cKol)) - nap0
+        If (Not mFilterNezavrsene) Or (pre0 > 0.0001) Then
+            m = m + 1
+            idx(m) = i
+            If IsDate(data(i, cDat)) Then keyd(m) = CDbl(CDate(data(i, cDat))) Else keyd(m) = 0
+        End If
+    Next i
+
+    Dim a As Long, b As Long, ti As Long, tk As Double
+    For a = 2 To m
+        ti = idx(a): tk = keyd(a): b = a - 1
+        Do While b >= 1
+            If keyd(b) >= tk Then Exit Do
+            idx(b + 1) = idx(b): keyd(b + 1) = keyd(b): b = b - 1
+        Loop
+        idx(b + 1) = ti: keyd(b + 1) = tk
+    Next a
+
+    Dim r As Long, j As Long
+    For j = 1 To m
+        i = idx(j)
         Dim otpID As String: otpID = CStr(data(i, cId))
         Dim prodajna As Double: prodajna = NumVal(data(i, cCena))
         Dim cenaBlok As Double
@@ -280,17 +381,21 @@ Private Sub LoadOtpremnice()
         Else
             cenaBlok = prodajna
         End If
+        Dim ukupno As Double: ukupno = NumVal(data(i, cKol))
+        Dim nap As Double: nap = 0
+        If dNap.Exists(otpID) Then nap = dNap(otpID)
 
         mLstOtp.AddItem otpID
         r = mLstOtp.ListCount - 1
         mLstOtp.List(r, 1) = CStr(data(i, cBroj))
         mLstOtp.List(r, 2) = DictVal(dSt, CStr(data(i, cSt)))
-        mLstOtp.List(r, 3) = FmtKg(NumVal(data(i, cKol)))
+        mLstOtp.List(r, 3) = FmtKg(ukupno)
         mLstOtp.List(r, 4) = FmtDate(data(i, cDat))
         mLstOtp.List(r, 5) = DictVal(dHl, CStr(data(i, cZbr)))
         mLstOtp.List(r, 6) = FmtKg(prodajna)
         mLstOtp.List(r, 7) = FmtKg(cenaBlok)
-    Next i
+        mLstOtp.List(r, 8) = FmtKg(ukupno - nap)
+    Next j
     Exit Sub
 EH:
     LogErr "modOtkupBlok.LoadOtpremnice"
@@ -320,6 +425,7 @@ Private Sub LoadBlokovi()
     Dim dKo As Object: Set dKo = BuildKoopNames()
     Dim stopa As Double: stopa = PdvStopa()
 
+    Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double
     Dim i As Long, r As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cOtp))) <> mActiveOtpID Then GoTo NextRow
@@ -341,8 +447,22 @@ Private Sub LoadBlokovi()
         mLstBlok.List(r, 6) = FmtRsd(vred)
         mLstBlok.List(r, 7) = FmtRsd(pdv)
         mLstBlok.List(r, 8) = FmtRsd(uk)
+
+        sumKol = sumKol + kol: sumVred = sumVred + vred
+        sumPdv = sumPdv + pdv: sumUk = sumUk + uk
 NextRow:
     Next i
+
+    ' Zbirni red
+    If mLstBlok.ListCount > 0 Then
+        mLstBlok.AddItem ""                       ' col0 prazan -> storno/print ga preskace
+        r = mLstBlok.ListCount - 1
+        mLstBlok.List(r, 1) = "UKUPNO"
+        mLstBlok.List(r, 4) = FmtKg(sumKol)
+        mLstBlok.List(r, 6) = FmtRsd(sumVred)
+        mLstBlok.List(r, 7) = FmtRsd(sumPdv)
+        mLstBlok.List(r, 8) = FmtRsd(sumUk)
+    End If
     Exit Sub
 EH:
     LogErr "modOtkupBlok.LoadBlokovi"
@@ -352,12 +472,12 @@ End Sub
 ' INTERAKCIJA
 ' ============================================================
 
-' Klik na otpremnicu -> popuni levu frmOtkup formu + cenu i sazetak.
 Private Sub SelectOtpFromList()
     On Error GoTo EH
     If mLstOtp.ListIndex < 0 Then Exit Sub
 
     mActiveOtpID = CStr(mLstOtp.List(mLstOtp.ListIndex, 0))
+    If Len(mActiveOtpID) = 0 Then Exit Sub
 
     Dim cena As Double
     If mCenaBlok.Exists(mActiveOtpID) Then
@@ -377,20 +497,14 @@ EH:
     LogErr "modOtkupBlok.SelectOtpFromList"
 End Sub
 
-' Popunjava POSTOJECU levu formu podacima otpremnice. cmbOtkupnoMesto i
-' cmbVrstaVoca preko svojih _Change dogadjaja pune kooperante / sorte.
 Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     On Error Resume Next
 
-    ' Datum (i broj zbirne) PRE otkupnog mesta: broj otkupnog lista racuna
-    ' frmOtkup.cmbOtkupnoMesto_Change preko RefreshBrojDokumentaSuggestion iz
-    ' (izabrani OM + txtDatum), pa datum mora vec da stoji kad se OM postavi.
+    ' Datum (i broj zbirne) PRE otkupnog mesta.
     Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
     If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
     SetLeftCtl "txtBrojZbirne", CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
 
-    ' Otkupno mesto: njegov _Change u frmOtkup osvezi broj otkupnog lista
-    ' (OM iz polja + datum iz txtDatum) i listu kooperanata te stanice.
     SetComboByIdAny mForm.Controls("cmbOtkupnoMesto"), _
                     CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
     mForm.Controls("cmbVrstaVoca").value = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA))
@@ -400,10 +514,8 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
 
     SetLeftCtl "txtCena", Format$(cena, "0.00")
 
-    ' Broj otkupnog lista: izricito, kanonskim SuggestNextBroj (isti koji forma
-    ' koristi). Ne oslanjamo se na cmbOtkupnoMesto_Change jer se on NE okida kada
-    ' sledeca otpremnica ima isti OM, pa broj inace ne bi pratio novi datum.
-    ' OM iz polja (uskladjen sa onim sto se snima) + datum otpremnice.
+    ' Broj otkupnog lista: izricito (cmbOtkupnoMesto_Change ne okida ako je OM isti
+    ' kao kod prethodne otpremnice). OM iz polja + datum otpremnice, kanonski generator.
     Dim stanicaID As String: stanicaID = GetComboID(mForm.Controls("cmbOtkupnoMesto"))
     If Len(stanicaID) > 0 And IsDate(vDat) Then
         Dim brDok As String: brDok = SuggestNextBroj(KIND_OTK, stanicaID, CDate(vDat), False)
@@ -411,9 +523,7 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     End If
 End Sub
 
-' Kucanje u "Cena po otpremnici" (Change) -> uzivo prebaci u levu txtCena i
-' zapamti cenu za otpremnicu. Lagano (bez upisa u sve blokove dok se kuca);
-' override cene iz otpremnice radi i ako AfterUpdate ne okine (dinamicki txtbox).
+' Kucanje u "Cena po otpremnici" (Change) -> uzivo u levu txtCena + kolona "Cena za".
 Private Sub OnCenaTyping()
     On Error GoTo EH
     If Len(mActiveOtpID) = 0 Then Exit Sub
@@ -422,7 +532,6 @@ Private Sub OnCenaTyping()
     mCenaBlok(mActiveOtpID) = cena
     SetLeftCtl "txtCena", Format$(cena, "0.00")
 
-    ' uzivo prikazi novu cenu u koloni "Cena za" za izabranu otpremnicu
     Dim li As Long: li = mLstOtp.ListIndex
     If li >= 0 Then
         If CStr(mLstOtp.List(li, 0)) = mActiveOtpID Then mLstOtp.List(li, 7) = FmtKg(cena)
@@ -432,7 +541,7 @@ EH:
     LogErr "modOtkupBlok.OnCenaTyping"
 End Sub
 
-' Promena cene gore -> vazi za celu otpremnicu (sve blokove) + leva forma.
+' Promena cene gore (AfterUpdate) -> propagacija na sve blokove + osvezavanje.
 Private Sub OnCenaChanged()
     On Error GoTo EH
     If Len(mActiveOtpID) = 0 Then Exit Sub
@@ -449,6 +558,64 @@ Private Sub OnCenaChanged()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.OnCenaChanged"
+End Sub
+
+Private Sub ToggleFilter()
+    On Error GoTo EH
+    mFilterNezavrsene = Not mFilterNezavrsene
+    If mFilterNezavrsene Then
+        mBtnFilter.caption = "Prikaz: Nezavrsene"
+    Else
+        mBtnFilter.caption = "Prikaz: Sve"
+    End If
+    LoadOtpremnice
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.ToggleFilter"
+End Sub
+
+Private Sub StornoSelectedBlok()
+    On Error GoTo EH
+    Dim li As Long: li = mLstBlok.ListIndex
+    If li < 0 Then
+        MsgBox "Izaberite blok za storno.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
+    If Len(otkupID) = 0 Then Exit Sub      ' zbirni red
+
+    If MsgBox("Stornirati blok " & otkupID & " (" & CStr(mLstBlok.List(li, 2)) & ", " & _
+              CStr(mLstBlok.List(li, 4)) & " kg)?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+
+    If StornoOtkup_TX(otkupID) Then
+        LoadBlokovi
+        LoadOtpremnice
+        RefreshSummary
+        MsgBox "Blok storniran: " & otkupID, vbInformation, APP_NAME
+    Else
+        MsgBox "Storno nije uspeo za " & otkupID & ".", vbCritical, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.StornoSelectedBlok"
+    MsgBox "Greska pri storno bloka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub PrintSelectedBlok()
+    On Error GoTo EH
+    Dim li As Long: li = mLstBlok.ListIndex
+    If li < 0 Then
+        MsgBox "Izaberite blok za stampu.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
+    If Len(otkupID) = 0 Then Exit Sub      ' zbirni red
+
+    PrintOtkupniList otkupID
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.PrintSelectedBlok"
+    MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub RefreshSummary()
@@ -485,7 +652,6 @@ End Sub
 ' VEZIVANJE + CENA
 ' ============================================================
 
-' Vezi tacno date OtkupID-jeve (iz btnUnos result-a) za otpremnicu.
 Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -555,17 +721,16 @@ Private Sub SetLeftCtl(ByVal nm As String, ByVal val As String)
     On Error GoTo 0
 End Sub
 
-' Postavi combo na vrednost po ID-u, radi i za 2-kolonske (bound ID) i za
-' 1-kolonske combo-e oblika "Ime Prezime (ID)" / "ID - Ime" (npr. cmbVozac).
+' Postavi combo po ID-u; radi i za 2-kolonske (bound) i 1-kolonske "... (ID)".
 Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
     On Error Resume Next
     idValue = Trim$(idValue)
     If Len(idValue) = 0 Then Exit Sub
 
-    If SetComboByID(cmb, idValue) Then Exit Sub      ' 2-kolonski combo
+    If SetComboByID(cmb, idValue) Then Exit Sub
     If cmb.ListIndex >= 0 Then Exit Sub
 
-    Dim i As Long                                     ' 1-kolonski "... (ID)"
+    Dim i As Long
     For i = 0 To cmb.ListCount - 1
         If ExtractIDFromDisplay(CStr(cmb.List(i))) = idValue Then
             cmb.ListIndex = i
@@ -591,7 +756,6 @@ Private Function SumKolByOtp(ByVal otpID As String) As Double
     SumKolByOtp = s
 End Function
 
-' Cena vec upotrebljena za otpremnicu (iz prvog povezanog bloka), inace 0.
 Private Function ExistingBlokCena(ByVal otpID As String) As Double
     If Len(otpID) = 0 Then Exit Function
     Dim rows As Collection
@@ -604,7 +768,7 @@ Private Function ExistingBlokCena(ByVal otpID As String) As Double
     ExistingBlokCena = NumVal(data(rows(1), cCena))
 End Function
 
-' Jedan prolaz: OtpremnicaID -> cena prvog povezanog bloka.
+' OtpremnicaID -> cena prvog povezanog bloka.
 Private Function BuildFirstBlokCena() As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     Set BuildFirstBlokCena = d
@@ -619,6 +783,32 @@ Private Function BuildFirstBlokCena() As Object
     For i = 1 To UBound(data, 1)
         Dim k As String: k = Trim$(CStr(data(i, cOtp)))
         If Len(k) > 0 And Not d.Exists(k) Then d.Add k, NumVal(data(i, cCena))
+    Next i
+End Function
+
+' OtpremnicaID -> ukupna kolicina svih (ne-storniranih) blokova.
+Private Function BuildNapisanoByOtp() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Set BuildNapisanoByOtp = d
+
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cOtp As Long, cKol As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        Dim k As String: k = Trim$(CStr(data(i, cOtp)))
+        If Len(k) > 0 Then
+            If d.Exists(k) Then
+                d(k) = d(k) + NumVal(data(i, cKol))
+            Else
+                d.Add k, NumVal(data(i, cKol))
+            End If
+        End If
     Next i
 End Function
 

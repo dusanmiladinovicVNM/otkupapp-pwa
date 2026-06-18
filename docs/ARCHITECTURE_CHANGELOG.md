@@ -119,10 +119,11 @@ Optional **Otkupni blokovi** entry panel for the desktop `frmOtkup`. It is not a
 - `OtkupBlok_AfterUnos(result)` hook called from `frmOtkup.btnUnos_Click` after a successful `SaveOtkupMulti_TX`: links the returned `OtkupID`(s) (split on `" + "`) to the selected otpremnica via `COL_OTK_OTPREMNICA_ID` (transaction-backed `RequireUpdateCell`) and refreshes the panel — remaining-quantity tracking updates without a manual `modSledljivost` auto-link.
 - Per-otpremnica price: one price applies to all of an otpremnica's blokovi (`ApplyCenaToOtpremnica` propagates `tblOtkup.Cena` across all linked rows); price is stored/displayed as BRUTO (PDV-nadoknada included), consistent with the otkupni-list print, and the blok list shows neto cena / vrednost / iznos PDV / ukupno.
 - Opt-out config key `OTKUP_BLOK_PANEL` (`NO` hides the toggle button entirely).
+- Panel actions/columns: the otpremnice list gets a **Preostalo** column (otpremnica `Kolicina` − Σ linked blokovi), a **Prikaz: Sve/Nezavrsene** filter (hide fully-covered otpremnice) and datum-descending sort; the blok list gets a **UKUPNO** totals row and per-row **Storniraj blok** (`StornoOtkup_TX`) and **Stampaj list** (`PrintOtkupniList`) buttons. `OtkupBlok_ConfirmUnos` (called from `btnUnos_Click` before the save) warns when the entered quantity exceeds Preostalo; after a blok that fills the otpremnica the panel auto-deselects it (Preostalo = 0) to prevent accidental mislinking of the next Unos.
 
 ### Changed
 
-- `frmOtkup`: two guarded hook lines only — `AttachOtkupBlokPanel Me` (`UserForm_Initialize`) and `OtkupBlok_AfterUnos result` (after `ClearOtkupFields` in `btnUnos_Click`). No `.frx`/layout change; the existing single-row otkup entry is unchanged when the panel is closed.
+- `frmOtkup`: three guarded hook lines only — `AttachOtkupBlokPanel Me` (`UserForm_Initialize`), `If Not OtkupBlok_ConfirmUnos() Then Exit Sub` (in `btnUnos_Click`, before the save) and `OtkupBlok_AfterUnos result` (after `ClearOtkupFields`). No `.frx`/layout change; the existing single-row otkup entry is unchanged when the panel is closed.
 
 ### Notes / Migration
 

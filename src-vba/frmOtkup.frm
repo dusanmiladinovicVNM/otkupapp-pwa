@@ -540,6 +540,9 @@ Private Sub btnUnos_Click()
         End If
     End If
 
+    ' Panel "Otkupni blokovi": upozorenje na prekoracenje preostale kolicine otpremnice
+    If Not OtkupBlok_ConfirmUnos() Then Exit Sub
+
     Dim result As String
 
     result = SaveOtkupMulti_TX( _
