@@ -9,12 +9,19 @@
 > migraciju opisanu u dnu dokumenta.
 > Generisano: 2026-06-18.
 >
-> ⚠️ **OGRANIČENJE ANALIZE:** Repo drži samo *eksportovan* VBA izvor (`.bas`/`.cls`/
-> `.frm`), NE i `.xlsm`. Nema export-manifesta koji garantuje potpunost. Zato svaka
-> oznaka „DEAD" / lista potrošača / bezbednost preimenovanja važi **samo za ono što je
-> u git-u** — modul koji postoji u radnoj svesci a nije eksportovan (npr. `modLicensing`)
-> je nevidljiv ovoj analizi. **Pre bilo kakve migracije: uporediti listu modula u VBE
-> (Alt+F11) sa `src-vba/` i dovući sve što nedostaje.**
+> ⚠️ **OGRANIČENJE ANALIZE (2 ose nepotpunosti):**
+> 1. **Repo vs `.xlsm`:** repo drži samo *eksportovan* VBA izvor (`.bas`/`.cls`/`.frm`),
+>    NE i `.xlsm`. Modul u svesci koji nije eksportovan je nevidljiv analizi.
+> 2. **Grane:** config se aktivno forkuje po ≥5 nemerdžovanih grana. Npr. `LICENSE_*`
+>    NE postoji na ovoj grani ni na `main`, ali postoji u `modLicense.bas` na
+>    `claude/modest-cerf-8d8nh9` — i u DRUGOJ, nekompatibilnoj varijanti na
+>    `claude/youthful-bohr-atp1bi` (vidi 3k). Druge grane dodaju `modOtkupBlok`,
+>    `modRadniNalog`, `modTrial`, `modReportModernUI` — svaki potencijalno novi config.
+>
+> Zato svaka oznaka „DEAD" / lista potrošača / bezbednost preimenovanja važi **samo za
+> ovu granu**. **Pre migracije:** (a) uporediti VBE module (Alt+F11) sa `src-vba/`;
+> (b) napraviti uniju config ključeva preko SVIH aktivnih grana; (c) odlučiti koje
+> feature-grane su kanonske.
 
 ---
 
@@ -175,21 +182,41 @@
 | `ENV` | DEAD? | nije referencirano u repou (koristi se `MONITORING_ENV`/`SEF_ENV`) |
 
 
-### 3k. Licenciranje — `LICENSE_*` → ⚠️ NE klasifikovati dok se ne potvrdi `modLicensing`
-Nisu referencirani u repou, ALI maintainer navodi da ih koristi `modLicensing` —
-modul koji nije eksportovan u `src-vba/`. **NE brisati. Dovući `modLicensing` u repo,
-pa reklasifikovati.** Verovatna ciljna klasa: `LICENSE_KEY`/`LICENSE_TOKEN` → SECRET;
-ostalo → CONFIG/STATE.
+### 3k. Licenciranje — `LICENSE_*` → REALAN feature (NE DEAD), ali na nemerdžovanim granama
+**Ispravka prethodne tvrdnje:** `LICENSE_*` NISU mrtvi. Implementacija postoji u
+`src-vba/modLicense.bas` (+ `modLicenseTests.bas`, GAS `checkLicense`, runbook-ovi) na
+grani **`claude/modest-cerf-8d8nh9`** — koja NIJE merdžovana ni u `main` ni u ovu granu.
+Svih 7 ključeva čita/piše `modLicense` preko `GetConfigValue`/`SetConfigValue`
+(→ `tblSEFConfig`). 7 ključeva iz žive sveske se poklapa sa ovom (modest-cerf) varijantom.
 
-| Ključ | Tip | Napomena |
-|---|---|---|
-| `LICENSE_ENABLED` | ? | feature flag (pretpostavka) |
-| `LICENSE_ENDPOINT` | ? | URL servera za proveru |
-| `LICENSE_KEY` | ? → SECRET | |
-| `LICENSE_NEXT_CHECK` | ? → STATE | timestamp sledeće provere |
-| `LICENSE_BOUND_PARTS` | ? | hardware binding |
-| `LICENSE_TOKEN` | ? → SECRET | |
-| `LICENSE_STATUS` | ? → STATE | rezultat poslednje provere |
+> ⚠️ **KONFLIKT:** Postoji DRUGA, nekompatibilna licensing implementacija na grani
+> `claude/youthful-bohr-atp1bi` (`modLicense.bas` + `modTrial.bas`) sa potpuno
+> drugim ključevima: `LICENSE_ENFORCE`, `LICENSE_CHECK_URL`, `LICENSE_FAIL_MODE`,
+> `LICENSE_LAST_ONLINE_OK_AT`, `LICENSE_OFFLINE_GRACE_DAYS`, `TRIAL_HWM`. Dve grane
+> definišu `LICENSE_*` različito — koja se prva merdžuje, ta određuje šemu. **Rešiti
+> koja je kanonska PRE config migracije.**
+
+Klasifikacija (modest-cerf varijanta, potvrđeno iz koda):
+
+| Ključ | Tip | Cilj | Čita / Piše | Napomena |
+|---|---|---|---|---|
+| `LICENSE_ENABLED` | CONFIG | tblConfig | `modLicense:407` (R) | flotni toggle YES/NO (opt-in) |
+| `LICENSE_ENDPOINT` | CONFIG | tblConfig | `modLicense:416` (R), fallback `MONITORING_ENDPOINT:417` | URL GAS provere |
+| `LICENSE_KEY` | **LOCAL** | tblLocalConfig | `modLicense:94,205` (R), `:208` (W) | **po mašini** — ne sme u master kopiju |
+| `LICENSE_TOKEN` | **LOCAL/SECRET** | tblLocalConfig | `modLicense:274` (W) | HMAC keš po mašini |
+| `LICENSE_BOUND_PARTS` | **LOCAL** | tblLocalConfig | `modLicense:110` (R), `:211,275` (W) | hw binding po mašini |
+| `LICENSE_NEXT_CHECK` | **LOCAL/STATE** | tblLocalConfig | `modLicense:115` (R), `:210,276` (W) | offline grace timestamp |
+| `LICENSE_STATUS` | **LOCAL/STATE** | tblLocalConfig | `modLicense:277` (W) | rezultat poslednje provere |
+
+> **Nalaz za config plan:** 5 per-device ključeva (`LICENSE_KEY/TOKEN/BOUND_PARTS/`
+> `NEXT_CHECK/STATUS`) sede u `tblSEFConfig` iako su vezani za mašinu — isti tip
+> greške kao `APP_SETUP_*`. Runbook (`production-runbook-licenca.md`) zato ima ručno
+> upozorenje „ostavi ih prazne pre distribucije master-a, inače vezuješ sve kopije".
+> Prebacivanjem u `tblLocalConfig` (svaka mašina dobija svežu praznu tabelu) taj
+> footgun nestaje.
+>
+> Server-side tajne `LICENSE_HASH_SALT`, `LICENSE_TOKEN_SECRET` su u GAS Script
+> Properties (ne u Excel tabeli) — ispravno smešteno.
 
 ---
 
@@ -256,6 +283,11 @@ Jedinstven pristup: **jedan config servis + namespace-ovani ključevi + kolona `
 Time ručna `IsPwaConfigKey` allow-lista nestaje (eksportuje se cela `tblConfig`).
 
 ### Faze
+- **Faza −1 (PREDUSLOV) — konsolidacija grana:** uskladiti VBE↔`src-vba/`; napraviti
+  uniju config ključeva preko svih aktivnih grana (`modest-cerf`, `youthful-bohr`,
+  `blissful-thompson`, `brave-ramanujan`, `launch-readiness-vba-guards`…); odlučiti
+  koja je licensing varijanta kanonska (`modest-cerf` se poklapa sa živom svedskom).
+  **Bez ovoga svaka migracija je nepotpuna i lomi se na merge-u.**
 - **Faza 0 (ovaj dokument):** popis + klasifikacija. ✅
 - **Faza 1 — popravka 2 bug-a (bez restrukturiranja):**
   - P2/3c: ujednači Google kredencijale na jedno mesto. Preporuka: runtime je
@@ -276,6 +308,9 @@ Time ručna `IsPwaConfigKey` allow-lista nestaje (eksportuje se cela `tblConfig`
 | SECRET | 5 (`SEF_API_KEY`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ACCESS_TOKEN`, `GOOGLE_REFRESH_TOKEN`, `MONITORING_SECRET`) |
 | STATE | ~7 (Google sheet/folder ID-jevi, token expiry, sync lock) |
 | AUTH | 3 (`MGMT_USER_*`) |
-| LOCAL | ~22 (tblLocalConfig + `PDFTOTEXT_EXE_PATH`) |
-| `LICENSE_*` | 7 — **NEKLASIFIKOVANO**, čeka `modLicensing` iz VBE |
+| LOCAL | ~22 (tblLocalConfig + `PDFTOTEXT_EXE_PATH`) + 5 `LICENSE_*` per-device (sa modest-cerf) |
+| `LICENSE_*` (modest-cerf) | 2 CONFIG (`ENABLED`, `ENDPOINT`) + 5 LOCAL — **na nemerdžovanoj grani** |
 | DEAD? (verifikovati) | 4 (`CLIENT_ID`, `CLIENT_NAME`, `ENV`, `APP_VERSION`) |
+
+> Napomena: brojevi važe za uniju **ove grane + `modest-cerf`**. Konkurentska
+> `youthful-bohr` varijanta donosi još ~6 `LICENSE_*`/`TRIAL_*` ključeva ako se izabere.
