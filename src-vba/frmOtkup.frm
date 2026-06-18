@@ -76,6 +76,11 @@ Private Sub UserForm_Initialize()
     DisableField txtCenaKLII
     chkDveKlase.value = False
     lblUkupnoKG.caption = ""
+
+    ' Opcioni panel "Otkupni blokovi" (na dugme; ne dira postojeci unos)
+    On Error Resume Next
+    AttachOtkupBlokPanel Me
+    On Error GoTo 0
 End Sub
 
 Private Sub ResetActionButtons()
@@ -535,6 +540,9 @@ Private Sub btnUnos_Click()
         End If
     End If
 
+    ' Panel "Otkupni blokovi": upozorenje na prekoracenje preostale kolicine otpremnice
+    If Not OtkupBlok_ConfirmUnos() Then Exit Sub
+
     Dim result As String
 
     result = SaveOtkupMulti_TX( _
@@ -565,6 +573,12 @@ Private Sub btnUnos_Click()
     MsgBox "Otkup sacuvan: " & result, vbInformation, APP_NAME
 
     ClearOtkupFields
+
+    ' Panel "Otkupni blokovi": vezi upravo sacuvani red za izabranu otpremnicu
+    On Error Resume Next
+    OtkupBlok_AfterUnos result
+    On Error GoTo 0
+
     Exit Sub
 
 EH:
