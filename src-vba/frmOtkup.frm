@@ -76,6 +76,11 @@ Private Sub UserForm_Initialize()
     DisableField txtCenaKLII
     chkDveKlase.value = False
     lblUkupnoKG.caption = ""
+
+    ' Opcioni panel "Otkupni blokovi" (na dugme; ne dira postojeci unos)
+    On Error Resume Next
+    AttachOtkupBlokPanel Me
+    On Error GoTo 0
 End Sub
 
 Private Sub ResetActionButtons()
