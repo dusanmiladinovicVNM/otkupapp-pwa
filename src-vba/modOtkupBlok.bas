@@ -17,7 +17,7 @@ Option Explicit
 '     kad Preostalo padne na 0).
 '   - Desno: blokovi izabrane otpremnice (+ zbirni red), sa dugmadima
 '     "Storniraj blok" (StornoOtkup_TX) i "Stampaj list" (PrintOtkupniList).
-'   - Lista otpremnica: kolona "Preostalo", filter "samo nezavrsene",
+'   - Lista otpremnica: kolona "Ostatak", filter "samo nezavrsene",
 '     sort po datumu (najnovije gore).
 '
 ' Sve kontrole panela su dinamicke (Controls.Add) – frmOtkup.frx se ne
