@@ -33,6 +33,10 @@ Private Sub txt_Change()
     OtkupBlok_OnText action
 End Sub
 
+Private Sub txt_AfterUpdate()
+    OtkupBlok_OnTextAfter action
+End Sub
+
 Private Sub lst_Click()
     OtkupBlok_OnListClick action
 End Sub
