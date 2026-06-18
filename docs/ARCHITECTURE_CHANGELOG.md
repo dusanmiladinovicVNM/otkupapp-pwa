@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.24  
-**Last Updated:** 2026-05-26  
-**Status:** Active changelog — v6.24 PWA design/runtime and numbering supplement integrated
+**Current Version:** v6.26  
+**Last Updated:** 2026-06-18  
+**Status:** Active changelog — v6.26 document print/presentation layer (otkupni klauzula + rok, shared `modDocStyle`, paletni/preradni redesign)
 
 ---
 
@@ -53,6 +53,8 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.26 | 2026-06-18 | Document print/presentation layer: shared `modDocStyle` house style for otkupni/paletni/preradni lists, otkupni-list legal block (PDV-nadoknada klauzula + rok isplate via `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE`), and paletni/preradni redesign (vrsta voca as subtitle, dropped redundant Vrsta column, layout-version auto-rebuild). | Yes | presentation-only; no business-data migration; re-import `modDocStyle`/`modConfig`/`modPrint`/`modPaletniList`; templates regenerate; run otkupni/paletni/preradni print gates |
+| v6.25 | 2026-06-16 | Paletni List (pallet) domain added as a canonical local Excel/VBA workflow plus a desktop-only setup mode. | Yes | no business-data migration; `EnsurePaletniListSchema` idempotent; run palletization/prerada/storno gates |
 | v6.24 | 2026-05-26 | Systematic documentation supplement: VBA document numbering model, PWA design tokens/fonts/components_v2, Otkup/Otprema/Pregled UI redesign, service-worker/font cache discipline, runtime bugfixes, lazy-loading performance model and Google Sync diagnostic follow-ups. | Yes | no business-data migration; source summary reviewed; target AgriX Git repo still needs direct confirmation because connected GitHub repo resolves to handoverApp |
 | v6.23 | 2026-05-18 | PWA otkup read-model convergence: `MgmtReports/OtkupiAll` becomes the master otkup projection for PWA Management/Otkupac display, merged with `OTK-ST-*` operational queue rows and deduped by `ServerRecordID` / `OtkupID` before `ClientRecordID`. | Yes | no historical business-data migration; browser smoke reported as tested; run Management/Otkupac merged-read/dedup gates |
 | v6.22 | 2026-05-15 | Residual GO hardening closeout: Faktura duplicate-ID print/status guards, ParcelaID-based geo save/clear APIs, explicit Storno eligibility helper naming and v6.21 Google/MasterSync/Novac/HealthCheck hardening carried forward. | Yes | no historical business-data migration; run Faktura duplicate guard, Geo ByID, Storno eligibility and existing GO closeout gates |
@@ -99,6 +101,45 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.26 — 2026-06-18
+
+### Summary
+
+Document print/presentation layer for the otkup, paletni and preradni lists: a shared `modDocStyle` house style, the legally required otkup-block elements (PDV-nadoknada klauzula + rok isplate) on the otkupni list, and a paletni/preradni list redesign. Presentation-only; no business-data or document-chain change.
+
+### Added
+
+- `modDocStyle` shared print-styling module (all Public): `DocSellerHeader` (company name/address/PIB-MB-ziro from `SELLER_*` + optional logo + rule line), `DocTitleBlock` (descriptor + large title with rules), `DocLabelVal` (label + rich-text-bold value in one cell), `DocLogoPath` / `DocDrawLogo` (logo from `SELLER_LOGO_PATH` or `<workbook>\logo.png`/`.jpg`, silently skipped if absent), `DocConfigOr` and color helpers.
+- Otkupni-list legal block: PDV-nadoknada **klauzula** (`OtkupKlauzulaDefault`, čl. 34 ZPDV) and **rok isplate**, both configurable; new constants `CFG_OTKUP_KLAUZULA` (`OTKUP_KLAUZULA`), `CFG_OTKUP_ROK` (`OTKUP_ROK_ISPLATE`), `OTKUP_ROK_DEFAULT` (`Po dogovoru`).
+- `OtkupSablon`: styled two-up A4 otkupni list (two primerka — poljoprivrednik + otkupljivac — separated by a cut line), neto cena/vrednost with PDV nadoknada as a separate obračun line, framed obračun box, signatures.
+- Layout-version marker (cell `H1`) in `PaletaSablon` / `PreradaSablon`: `Ensure*Sablon` rebuilds the sheet once when the marker is stale, so existing templates auto-upgrade; named ranges preserved.
+
+### Changed
+
+- `PaletaSablon` / `PreradaSablon` restyled to the shared house style (logo, two-line title, framed right-side summary with highlighted BRUTO/Neto, gray footer); sheet font Calibri.
+- Paletni and preradni stavke tables drop the redundant `Vrsta` column (a pallet/prerada is one fruit type) → `Rb | Kooperant | Neto kg | Ambalaza` (Ambalaza merged across two columns). `Vrsta voca` becomes a large subtitle above the table via named ranges `PalVrsta` (pallet head) and `PreVrsta` (first traced otkup row).
+- `modPrint` otkupni rendering uses the shared `modDocStyle` helpers; rows auto-fit, with fixed heights for the merged title and klauzula rows.
+
+### Fixed
+
+- Otkupni-list klauzula clipping: a trailing `EntireRow.AutoFit` collapsed the merged klauzula row to a single line; AutoFit moved to before content render so the fixed klauzula height survives.
+
+### Migration / data notes
+
+- `OtkupSablon` / `PaletaSablon` / `PreradaSablon` are generated render targets (no business data) and regenerate from tables. `PaletaSablon` / `PreradaSablon` auto-rebuild once on layout-version change (`H1`), replacing any manual sheet styling.
+- Config is optional and uses strict exact-key match via `GetConfigValue`: `OTKUP_KLAUZULA`, `OTKUP_ROK_ISPLATE`, `SELLER_LOGO_PATH`; absent/empty falls back to built-in defaults.
+
+### Verification / acceptance gates
+
+- Re-import `modDocStyle`, `modConfig`, `modPrint`, `modPaletniList`; generate otkupni + paletni + preradni PDFs.
+- Otkupni list renders the full PDV-nadoknada klauzula (not clipped) and the rok from `OTKUP_ROK_ISPLATE`.
+- Paletni/preradni show `Vrsta voca` as a subtitle with no `Vrsta` table column; cell `H1` equals the current layout version after first regeneration.
+
+### Documentation actions
+
+- `ARCHITECTURE_REFERENCE.md` section 5.12 (Document Print / Presentation Layer) added: shared `modDocStyle`, template table, layout-version rule, and the `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE` / `SELLER_LOGO_PATH` config keys.
 
 
 ## v6.25 — 2026-06-16

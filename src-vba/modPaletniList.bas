@@ -644,10 +644,11 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     Dim lastRow As Long
     lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
     If lastRow >= startRow Then
+        ws.Range(ws.cells(startRow, 4), ws.cells(lastRow, 5)).UnMerge
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
     End If
 
-    ' --- stavke: jedan red po OTKUPU (sifra kooperanta, vrsta, neto, ambalaza) ---
+    ' --- stavke: jedan red po OTKUPU (sifra kooperanta, neto, ambalaza) ---
     Dim ids As Collection: Set ids = New Collection
     ids.Add palID
     Dim o As Variant: o = GetOtkupiZaPalete(ids)
@@ -660,9 +661,9 @@ Private Function FillPaletaSablon(ByVal palID As String, _
             rb = rb + 1
             ws.cells(outR, 1).value = rb
             ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
-            ws.cells(outR, 3).value = CStr(o(k, 2))                   ' Vrsta
-            ws.cells(outR, 4).value = o(k, 3)                         ' Neto kg
-            ws.cells(outR, 5).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip
+            ws.cells(outR, 3).value = o(k, 3)                         ' Neto kg
+            ws.Range(ws.cells(outR, 4), ws.cells(outR, 5)).Merge
+            ws.cells(outR, 4).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip (D:E)
             outR = outR + 1
         Next k
     End If
@@ -675,8 +676,8 @@ Private Function FillPaletaSablon(ByVal palID As String, _
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
-        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "#,##0.00"
-        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "@"
+        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
 
         Dim zr As Long
         For zr = 0 To dataEnd - startRow
@@ -692,8 +693,11 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     footRow = dataEnd + 2
     If footRow <= startRow Then footRow = startRow + 1
     ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
+    ws.cells(footRow, 1).Font.Color = DocColGray()
     ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
+    ws.cells(footRow + 2, 1).Font.Color = DocColGray()
     ws.cells(footRow + 2, 4).value = "Pecat: ____________________"
+    ws.cells(footRow + 2, 4).Font.Color = DocColGray()
 
     ' --- portrait + sve kolone na JEDNU stranu po sirini (Neto kg se ne gubi) ---
     On Error Resume Next
@@ -723,75 +727,112 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Function
 
-' Kreira PaletaSablon (labela + named-range + osnovni format) ako ne postoji.
-' Postojeci se NE dira -> mozes ga slobodno stilizovati.
+' Kreira/obnavlja PaletaSablon u zajednickom stilu (logo, naslov, polja, sazetak).
+' Verzija layouta je u H1; na promenu verzije sheet se ponovo izgradi.
 Public Sub EnsurePaletaSablon()
     On Error GoTo EH
+    Const LAYOUT_VER As String = "3"
 
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("PaletaSablon")
     On Error GoTo EH
-    If Not ws Is Nothing Then Exit Sub
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
 
     Set ws = ThisWorkbook.Sheets.Add
     ws.name = "PaletaSablon"
-
-    ws.Range("A1:F1").Merge
-    ws.Range("A1").value = "PALETNI LIST"
-    ws.Range("A1").Font.Size = 18
-    ws.Range("A1").Font.Bold = True
-    ws.Range("A1").HorizontalAlignment = xlCenter
-
-    ws.Range("A3").value = "Broj:"
-    ws.Range("A4").value = "Datum:"
-    ws.Range("A5").value = "Vrsta voca:"
-    ws.Range("A6").value = "Tip palete:"
-    ws.Range("A7").value = "Status:"
-    ws.Range("D3").value = "Broj gajbica:"
-    ws.Range("D4").value = "Neto (kg):"
-    ws.Range("D5").value = "Ambalaza (kg):"
-    ws.Range("D6").value = "Paleta (kg):"
-    ws.Range("D7").value = "BRUTO (kg):"
-
-    ws.Range("B3").name = "PalBroj"
-    ws.Range("B4").name = "PalDatum"
-    ws.Range("B5").name = "PalVrsta"
-    ws.Range("B6").name = "PalTip"
-    ws.Range("B7").name = "PalStatus"
-    ws.Range("E3").name = "PalGajbica"
-    ws.Range("E4").name = "PalNeto"
-    ws.Range("E5").name = "PalAmbalaza"
-    ws.Range("E6").name = "PalPaleta"
-    ws.Range("E7").name = "PalBruto"
-
-    ws.Range("A9").value = "Rb"
-    ws.Range("B9").value = "Kooperant"
-    ws.Range("C9").value = "Vrsta"
-    ws.Range("D9").value = "Neto kg"
-    ws.Range("E9").value = "Ambalaza"
-    With ws.Range("A9:E9")
-        .Font.Bold = True
-        .Interior.Color = RGB(217, 225, 242)
-        .HorizontalAlignment = xlCenter
-        .Borders.LineStyle = xlContinuous
-        .Borders.Weight = xlThin
-    End With
-
-    ws.Range("A10").name = "PalStavkaStart"
-
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
     ws.columns("A").ColumnWidth = 12
     ws.columns("B").ColumnWidth = 14
-    ws.columns("C").ColumnWidth = 16
+    ws.columns("C").ColumnWidth = 14
     ws.columns("D").ColumnWidth = 14
     ws.columns("E").ColumnWidth = 18
 
-    ws.Range("D7,E7").Font.Bold = True
-    ws.Range("A3:B7").Borders.LineStyle = xlContinuous
-    ws.Range("D3:E7").Borders.LineStyle = xlContinuous
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 5, 5)
+    r = DocTitleBlock(ws, r, 5, "Skladisno poslovanje - formiranje palete", "PALETNI LIST")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Broj:"
+    ws.cells(fr + 1, 1).value = "Datum:"
+    ws.cells(fr + 2, 1).value = "Tip palete:"
+    ws.cells(fr + 3, 1).value = "Status:"
+    ws.cells(fr, 4).value = "Broj gajbica:"
+    ws.cells(fr + 1, 4).value = "Neto (kg):"
+    ws.cells(fr + 2, 4).value = "Ambalaza (kg):"
+    ws.cells(fr + 3, 4).value = "Paleta (kg):"
+    ws.cells(fr + 4, 4).value = "BRUTO (kg):"
+
+    ws.cells(fr, 2).name = "PalBroj"
+    ws.cells(fr + 1, 2).name = "PalDatum"
+    ws.cells(fr + 2, 2).name = "PalTip"
+    ws.cells(fr + 3, 2).name = "PalStatus"
+    ws.cells(fr, 5).name = "PalGajbica"
+    ws.cells(fr + 1, 5).name = "PalNeto"
+    ws.cells(fr + 2, 5).name = "PalAmbalaza"
+    ws.cells(fr + 3, 5).name = "PalPaleta"
+    ws.cells(fr + 4, 5).name = "PalBruto"
+
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 3, 2)).Font.Bold = True
+    ws.Range(ws.cells(fr, 5), ws.cells(fr + 4, 5)).Font.Bold = True
+    ws.cells(fr, 5).NumberFormat = "0"
+    ws.Range(ws.cells(fr + 1, 5), ws.cells(fr + 4, 5)).NumberFormat = "#,##0.00"
+
+    ' desni sazetak: uokviri + istakni BRUTO
+    ws.Range(ws.cells(fr, 4), ws.cells(fr + 4, 5)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(fr + 4, 4), ws.cells(fr + 4, 5))
+        .Interior.Color = DocColHeaderFill()
+        .Font.Bold = True
+    End With
+    With ws.Range(ws.cells(fr + 4, 4), ws.cells(fr + 4, 5)).Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    ' vrsta voca kao podnaslov iznad tabele (na paleti je uvek ista vrsta)
+    Dim subRow As Long: subRow = fr + 6
+    ws.cells(subRow, 1).value = "Vrsta voca:"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
+    ws.cells(subRow, 2).name = "PalVrsta"
+    With ws.cells(subRow, 2)
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlLeft
+    End With
+    ws.rows(subRow).RowHeight = 20
+
+    ' tabela stavki (bez kolone Vrsta; Ambalaza preko D:E)
+    Dim hdr As Long: hdr = subRow + 1
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Kooperant"
+    ws.cells(hdr, 3).value = "Neto kg"
+    ws.Range(ws.cells(hdr, 4), ws.cells(hdr, 5)).Merge
+    ws.cells(hdr, 4).value = "Ambalaza"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "PalStavkaStart"
+
+    ws.Range(ws.cells(1, 1), ws.cells(hdr, 5)).EntireRow.AutoFit
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
     Exit Sub
 
 EH:
+    Application.DisplayAlerts = True
     LogErr "modPaletniList.EnsurePaletaSablon"
 End Sub
 
@@ -1426,7 +1467,10 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
     Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
-    If lastRow >= startRow Then ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
+    If lastRow >= startRow Then
+        ws.Range(ws.cells(startRow, 4), ws.cells(lastRow, 5)).UnMerge
+        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
+    End If
 
     ' prerada -> prerađene palete -> otkupi: jedan red po OTKUPU
     Dim palIDs As Collection: Set palIDs = New Collection
@@ -1444,6 +1488,11 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     End If
 
     Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
+    If IsEmpty(o) Then
+        ws.Range("PreVrsta").value = ""
+    Else
+        ws.Range("PreVrsta").value = CStr(o(1, 2))
+    End If
     Dim outR As Long, rb As Long
     outR = startRow: rb = 0
     If Not IsEmpty(o) Then
@@ -1452,9 +1501,9 @@ Private Function FillPreradaSablon(ByVal preID As String, _
             rb = rb + 1
             ws.cells(outR, 1).value = rb
             ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
-            ws.cells(outR, 3).value = CStr(o(k, 2))                   ' Vrsta
-            ws.cells(outR, 4).value = o(k, 3)                         ' Neto kg
-            ws.cells(outR, 5).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip
+            ws.cells(outR, 3).value = o(k, 3)                         ' Neto kg
+            ws.Range(ws.cells(outR, 4), ws.cells(outR, 5)).Merge
+            ws.cells(outR, 4).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip (D:E)
             outR = outR + 1
         Next k
     End If
@@ -1465,8 +1514,8 @@ Private Function FillPreradaSablon(ByVal preID As String, _
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
-        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "#,##0.00"
-        ws.Range(ws.cells(startRow, 5), ws.cells(dataEnd, 5)).NumberFormat = "@"
+        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
         Dim zr As Long
         For zr = 0 To dataEnd - startRow
             If zr Mod 2 = 1 Then
@@ -1479,8 +1528,11 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     Dim footRow As Long: footRow = dataEnd + 2
     If footRow <= startRow Then footRow = startRow + 1
     ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
+    ws.cells(footRow, 1).Font.Color = DocColGray()
     ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
+    ws.cells(footRow + 2, 1).Font.Color = DocColGray()
     ws.cells(footRow + 2, 4).value = "Pecat: ____________________"
+    ws.cells(footRow + 2, 4).Font.Color = DocColGray()
 
     On Error Resume Next
     Application.PrintCommunication = False   ' batch PageSetup: bez sporog round-trip-a do (mreznog) stampaca
@@ -1509,61 +1561,102 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Function
 
-' Kreira PreradaSablon ako ne postoji (NE dira postojeci -> stilizuj slobodno).
+' Kreira/obnavlja PreradaSablon u zajednickom stilu. Verzija layouta je u H1.
 Public Sub EnsurePreradaSablon()
     On Error GoTo EH
+    Const LAYOUT_VER As String = "3"
+
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("PreradaSablon")
     On Error GoTo EH
-    If Not ws Is Nothing Then Exit Sub
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
 
     Set ws = ThisWorkbook.Sheets.Add
     ws.name = "PreradaSablon"
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 14
+    ws.columns("D").ColumnWidth = 14
+    ws.columns("E").ColumnWidth = 18
 
-    ws.Range("A1:C1").Merge
-    ws.Range("A1").value = "PRERADNI LIST"
-    ws.Range("A1").Font.Size = 18
-    ws.Range("A1").Font.Bold = True
-    ws.Range("A1").HorizontalAlignment = xlCenter
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 5, 5)
+    r = DocTitleBlock(ws, r, 5, "Prerada i pakovanje", "PRERADNI LIST")
 
-    ws.Range("A3").value = "Broj:"
-    ws.Range("A4").value = "Datum:"
-    ws.Range("A6").value = "Broj kutija:"
-    ws.Range("A7").value = "Broj kesa:"
-    ws.Range("A8").value = "Neto (kg):"
-    ws.Range("A3,A4,A6,A7,A8").Font.Bold = True
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Broj:"
+    ws.cells(fr + 1, 1).value = "Datum:"
+    ws.cells(fr, 4).value = "Broj kutija:"
+    ws.cells(fr + 1, 4).value = "Broj kesa:"
+    ws.cells(fr + 2, 4).value = "Neto (kg):"
 
-    ws.Range("B3").name = "PreBroj"
-    ws.Range("B4").name = "PreDatum"
-    ws.Range("B6").name = "PreKutije"
-    ws.Range("B7").name = "PreKese"
-    ws.Range("B8").name = "PreNeto"
-    ws.Range("A8,B8").Font.Bold = True
+    ws.cells(fr, 2).name = "PreBroj"
+    ws.cells(fr + 1, 2).name = "PreDatum"
+    ws.cells(fr, 5).name = "PreKutije"
+    ws.cells(fr + 1, 5).name = "PreKese"
+    ws.cells(fr + 2, 5).name = "PreNeto"
 
-    ws.Range("A10").value = "Rb"
-    ws.Range("B10").value = "Kooperant"
-    ws.Range("C10").value = "Vrsta"
-    ws.Range("D10").value = "Neto kg"
-    ws.Range("E10").value = "Ambalaza"
-    With ws.Range("A10:E10")
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 1, 2)).Font.Bold = True
+    ws.Range(ws.cells(fr, 5), ws.cells(fr + 2, 5)).Font.Bold = True
+    ws.Range(ws.cells(fr, 5), ws.cells(fr + 1, 5)).NumberFormat = "0"
+    ws.cells(fr + 2, 5).NumberFormat = "#,##0.00"
+
+    ' desni sazetak: uokviri + istakni Neto
+    ws.Range(ws.cells(fr, 4), ws.cells(fr + 2, 5)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(fr + 2, 4), ws.cells(fr + 2, 5))
+        .Interior.Color = DocColHeaderFill()
         .Font.Bold = True
-        .Interior.Color = RGB(217, 225, 242)
+    End With
+    With ws.Range(ws.cells(fr + 2, 4), ws.cells(fr + 2, 5)).Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    ' vrsta voca kao podnaslov iznad tabele (na preradi je uvek ista vrsta)
+    Dim subRow As Long: subRow = fr + 4
+    ws.cells(subRow, 1).value = "Vrsta voca:"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
+    ws.cells(subRow, 2).name = "PreVrsta"
+    With ws.cells(subRow, 2)
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlLeft
+    End With
+    ws.rows(subRow).RowHeight = 20
+
+    ' tabela stavki (bez kolone Vrsta; Ambalaza preko D:E)
+    Dim hdr As Long: hdr = subRow + 1
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Kooperant"
+    ws.cells(hdr, 3).value = "Neto kg"
+    ws.Range(ws.cells(hdr, 4), ws.cells(hdr, 5)).Merge
+    ws.cells(hdr, 4).value = "Ambalaza"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
         .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
         .Borders.LineStyle = xlContinuous
         .Borders.Weight = xlThin
     End With
+    ws.cells(hdr + 1, 1).name = "PreStavkaStart"
 
-    ws.Range("A11").name = "PreStavkaStart"
-
-    ws.columns("A").ColumnWidth = 12
-    ws.columns("B").ColumnWidth = 14
-    ws.columns("C").ColumnWidth = 16
-    ws.columns("D").ColumnWidth = 14
-    ws.columns("E").ColumnWidth = 18
-    ws.Range("A3:B8").Borders.LineStyle = xlContinuous
+    ws.Range(ws.cells(1, 1), ws.cells(hdr, 5)).EntireRow.AutoFit
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
     Exit Sub
 EH:
+    Application.DisplayAlerts = True
     LogErr "modPaletniList.EnsurePreradaSablon"
 End Sub
 

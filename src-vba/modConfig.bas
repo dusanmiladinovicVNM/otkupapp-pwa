@@ -275,6 +275,14 @@ Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
 Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
 Public Const PALETA_DEFAULT_KAPACITET As Long = 240
 Public Const CFG_PALETA_PRINT_MODE As String = "PALETA_PRINT_MODE"
+Public Const CFG_OTKUP_PRINT_MODE As String = "OTKUP_PRINT_MODE"
+Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
+Public Const PDV_NADOKNADA_DEFAULT As Double = 8
+
+' Otkupni list - obavezni elementi otkupnog bloka (klauzula + rok isplate)
+Public Const CFG_OTKUP_KLAUZULA As String = "OTKUP_KLAUZULA"
+Public Const CFG_OTKUP_ROK As String = "OTKUP_ROK_ISPLATE"
+Public Const OTKUP_ROK_DEFAULT As String = "Po dogovoru"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"
@@ -476,11 +484,11 @@ Public Const HTTP_TIMEOUT_SEND_MS As Long = 30000
 Public Const HTTP_TIMEOUT_RECEIVE_MS As Long = 30000
 
 Public Function GetConfigValue(ByVal configKey As String) As String
-    
+
     Dim v As Variant
-    
+
     v = LookupValue("tblSEFConfig", "ConfigKey", configKey, "ConfigValue")
-    
+
     If IsEmpty(v) Then
         GetConfigValue = ""
     Else

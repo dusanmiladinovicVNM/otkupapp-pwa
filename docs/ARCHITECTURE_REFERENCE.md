@@ -813,6 +813,39 @@ Domain rules:
 
 Anything not stated here is not canonical for this domain until explicitly added (per the Canonical Snapshot Rule).
 
+### 5.12 Document Print / Presentation Layer
+
+The printed/PDF documents (otkupni list, paletni list, preradni list) share one presentation style via `modDocStyle` and render onto generated worksheet templates. Templates hold no business data; they are filled from canonical tables on each print and are safe to delete/regenerate.
+
+| Template | Filled by | Module | Shape |
+|---|---|---|---|
+| `OtkupSablon` | `FillOtkupSablon` | `modPrint` | Otkupni list, two primerka per A4 (poljoprivrednik + otkupljivac), redrawn each print |
+| `PaletaSablon` | `FillPaletaSablon` | `modPaletniList` | Paletni list, named-range template (`EnsurePaletaSablon`) |
+| `PreradaSablon` | `FillPreradaSablon` | `modPaletniList` | Preradni list, named-range template (`EnsurePreradaSablon`) |
+
+`modDocStyle` shared helpers (all Public):
+
+- `DocSellerHeader` — company name/address/PIB-MB-ziro from `SELLER_*` config + optional logo top-right + rule line.
+- `DocTitleBlock` — small descriptor + large title with rule lines.
+- `DocLabelVal` — "label + bold value" in one cell (rich-text bolding of the value part).
+- `DocLogoPath` / `DocDrawLogo` — optional logo from config `SELLER_LOGO_PATH`, else `<workbook>\logo.png` / `logo.jpg`; silently skipped if absent.
+- `DocConfigOr` and color helpers (`DocColHeaderFill` / `DocColGray` / `DocColRule`).
+
+Domain rules:
+
+- `OtkupSablon` is cleared and fully redrawn each print. `PaletaSablon` / `PreradaSablon` carry a layout-version marker in cell `H1`; `Ensure*Sablon` rebuilds the sheet once when the marker is stale, so an existing template auto-upgrades to a new layout while all named ranges (`Pal*` / `Pre*`) are preserved.
+- Paletni and preradni stavke tables are `Rb | Kooperant | Neto kg | Ambalaza` (no `Vrsta` column; a pallet/prerada is one fruit type). `Vrsta voca` is a large subtitle above the table — named ranges `PalVrsta` (from the pallet head) and `PreVrsta` (from the first traced otkup row).
+- Otkupni-list mandatory otkup-block elements: PDV-nadoknada **klauzula** (config `OTKUP_KLAUZULA`, default `OtkupKlauzulaDefault` — čl. 34 ZPDV) and **rok isplate** (config `OTKUP_ROK_ISPLATE`, default `Po dogovoru`). Config keys use strict exact-match lookup via `GetConfigValue`.
+- Otkupni list shows neto cena and neto vrednost; PDV nadoknada is added as a separate obračun line (stopa from `PDV_NADOKNADA_STOPA`, default 8).
+
+Config keys (in `tblSEFConfig`, exact key match):
+
+| Key | Purpose | Default |
+|---|---|---|
+| `OTKUP_KLAUZULA` | Otkupni-list legal clause text | built-in čl. 34 ZPDV text |
+| `OTKUP_ROK_ISPLATE` | Otkupni-list rok isplate text | `Po dogovoru` |
+| `SELLER_LOGO_PATH` | Logo image path for all three documents | `<workbook>\logo.png` / `logo.jpg` |
+
 ---
 
 ## 6. Document Flow Architecture
