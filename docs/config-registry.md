@@ -8,6 +8,13 @@
 > Status: **Faza 0** (popis i klasifikacija). Bez promena koda — ovo je osnova za
 > migraciju opisanu u dnu dokumenta.
 > Generisano: 2026-06-18.
+>
+> ⚠️ **OGRANIČENJE ANALIZE:** Repo drži samo *eksportovan* VBA izvor (`.bas`/`.cls`/
+> `.frm`), NE i `.xlsm`. Nema export-manifesta koji garantuje potpunost. Zato svaka
+> oznaka „DEAD" / lista potrošača / bezbednost preimenovanja važi **samo za ono što je
+> u git-u** — modul koji postoji u radnoj svesci a nije eksportovan (npr. `modLicensing`)
+> je nevidljiv ovoj analizi. **Pre bilo kakve migracije: uporediti listu modula u VBE
+> (Alt+F11) sa `src-vba/` i dovući sve što nedostaje.**
 
 ---
 
@@ -55,8 +62,10 @@
 4. **🟠 Tajne i javni PWA-config u istoj tabeli** → `ExportConfig` mora ručnu
    allow-listu (`IsPwaConfigKey`, `modStammdatenSync.bas:2028`) da tajne ne procure.
    Trenutno radi, ali krhko.
-5. **🟡 Mrtvi ključevi:** `LICENSE_*` (7), `CLIENT_ID`, `CLIENT_NAME`, `ENV`,
-   `APP_VERSION` (kao tabelarni ključ — koristi se konstanta).
+5. **🟡 Nereferencirani ključevi (u repou):** `CLIENT_ID`, `CLIENT_NAME`, `ENV`,
+   `APP_VERSION` (kao tabelarni ključ — koristi se konstanta). `LICENSE_*` (7) —
+   **NE brisati**: verovatno ih koristi `modLicensing` koji NIJE eksportovan u repo
+   (vidi ograničenje gore). Proveriti u VBE.
 6. **🟡 Pogrešno smešten:** `PDFTOTEXT_EXE_PATH` je u SEF listi, ali se čita iz
    `tblLocalConfig` (`modBankaImportParserPdfToText.bas:120`) — SEF kopija je mrtva.
 7. **🟡 Redundantni ključevi:** `OtkupRokIsplate` vs `OTKUP_ROK_ISPLATE` (oba postoje).
@@ -157,20 +166,30 @@
 |---|---|---|---|---|
 | `PDFTOTEXT_EXE_PATH` | LOCAL | tblLocalConfig | čita se iz `tblLocalConfig` (`modBankaImportParserPdfToText:120`) | SEF kopija je mrtva |
 
-### 3j. MRTVI ključevi → obrisati
+### 3j. Nereferencirani u repou → obrisati TEK nakon verifikacije u VBE
 | Ključ | Tip | Napomena |
 |---|---|---|
-| `APP_VERSION` | DEAD | kao tabelarni ključ mrtav — koristi se konstanta `modConfig.bas:11`/`modMonitoring:431` |
-| `CLIENT_ID` | DEAD | nigde se ne čita |
-| `CLIENT_NAME` | DEAD | nigde se ne čita |
-| `ENV` | DEAD | nigde se ne čita (koristi se `MONITORING_ENV`/`SEF_ENV`) |
-| `LICENSE_ENABLED` | DEAD | feature nikad implementiran |
-| `LICENSE_ENDPOINT` | DEAD | |
-| `LICENSE_KEY` | DEAD | |
-| `LICENSE_NEXT_CHECK` | DEAD | |
-| `LICENSE_BOUND_PARTS` | DEAD | |
-| `LICENSE_TOKEN` | DEAD | (ako se uvede licenciranje → SECRET) |
-| `LICENSE_STATUS` | DEAD | |
+| `APP_VERSION` | DEAD? | kao tabelarni ključ mrtav — koristi se konstanta `modConfig.bas:11`/`modMonitoring:431` |
+| `CLIENT_ID` | DEAD? | nije referencirano u repou |
+| `CLIENT_NAME` | DEAD? | nije referencirano u repou |
+| `ENV` | DEAD? | nije referencirano u repou (koristi se `MONITORING_ENV`/`SEF_ENV`) |
+
+
+### 3k. Licenciranje — `LICENSE_*` → ⚠️ NE klasifikovati dok se ne potvrdi `modLicensing`
+Nisu referencirani u repou, ALI maintainer navodi da ih koristi `modLicensing` —
+modul koji nije eksportovan u `src-vba/`. **NE brisati. Dovući `modLicensing` u repo,
+pa reklasifikovati.** Verovatna ciljna klasa: `LICENSE_KEY`/`LICENSE_TOKEN` → SECRET;
+ostalo → CONFIG/STATE.
+
+| Ključ | Tip | Napomena |
+|---|---|---|
+| `LICENSE_ENABLED` | ? | feature flag (pretpostavka) |
+| `LICENSE_ENDPOINT` | ? | URL servera za proveru |
+| `LICENSE_KEY` | ? → SECRET | |
+| `LICENSE_NEXT_CHECK` | ? → STATE | timestamp sledeće provere |
+| `LICENSE_BOUND_PARTS` | ? | hardware binding |
+| `LICENSE_TOKEN` | ? → SECRET | |
+| `LICENSE_STATUS` | ? → STATE | rezultat poslednje provere |
 
 ---
 
@@ -258,4 +277,5 @@ Time ručna `IsPwaConfigKey` allow-lista nestaje (eksportuje se cela `tblConfig`
 | STATE | ~7 (Google sheet/folder ID-jevi, token expiry, sync lock) |
 | AUTH | 3 (`MGMT_USER_*`) |
 | LOCAL | ~22 (tblLocalConfig + `PDFTOTEXT_EXE_PATH`) |
-| DEAD | 11 (`LICENSE_*` ×7, `CLIENT_ID`, `CLIENT_NAME`, `ENV`, `APP_VERSION`) |
+| `LICENSE_*` | 7 — **NEKLASIFIKOVANO**, čeka `modLicensing` iz VBE |
+| DEAD? (verifikovati) | 4 (`CLIENT_ID`, `CLIENT_NAME`, `ENV`, `APP_VERSION`) |
