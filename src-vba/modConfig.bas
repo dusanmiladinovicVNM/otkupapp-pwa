@@ -484,24 +484,17 @@ Public Const HTTP_TIMEOUT_SEND_MS As Long = 30000
 Public Const HTTP_TIMEOUT_RECEIVE_MS As Long = 30000
 
 Public Function GetConfigValue(ByVal configKey As String) As String
-    ' Tolerantno citanje: trim na kljuc (visak razmaka) + neosetljivo na
-    ' velika/mala slova, da rucni unos sa razmakom/drugim slovima i dalje radi.
-    On Error GoTo done
-    Dim d As Variant: d = GetTableData("tblSEFConfig")
-    If IsEmpty(d) Then Exit Function
-    Dim ki As Long, vi As Long
-    ki = GetColumnIndex("tblSEFConfig", "ConfigKey")
-    vi = GetColumnIndex("tblSEFConfig", "ConfigValue")
-    If ki = 0 Or vi = 0 Then Exit Function
-    Dim want As String: want = Trim$(configKey)
-    Dim i As Long
-    For i = 1 To UBound(d, 1)
-        If StrComp(Trim$(CStr(d(i, ki))), want, vbTextCompare) = 0 Then
-            GetConfigValue = Trim$(CStr(d(i, vi)))
-            Exit Function
-        End If
-    Next i
-done:
+
+    Dim v As Variant
+
+    v = LookupValue("tblSEFConfig", "ConfigKey", configKey, "ConfigValue")
+
+    If IsEmpty(v) Then
+        GetConfigValue = ""
+    Else
+        GetConfigValue = Trim$(CStr(v))
+    End If
+
 End Function
 
 Public Sub SetConfigValue(ByVal configKey As String, ByVal ConfigValue As String)

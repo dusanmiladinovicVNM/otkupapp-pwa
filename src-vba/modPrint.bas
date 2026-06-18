@@ -178,8 +178,8 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("osnovica") = osnovica
     h("nadoknada") = osnovica * stopa / 100
     h("ukupno") = osnovica + osnovica * stopa / 100
-    h("rok") = DocConfigOrKeys(OTKUP_ROK_DEFAULT, CFG_OTKUP_ROK, "OtkupRokIsplate")
-    h("klauzula") = DocConfigOrKeys(OtkupKlauzulaDefault(), CFG_OTKUP_KLAUZULA, "OtkupKlauzula")
+    h("rok") = DocConfigOr(CFG_OTKUP_ROK, OTKUP_ROK_DEFAULT)
+    h("klauzula") = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
 
     Application.ScreenUpdating = False
     On Error Resume Next

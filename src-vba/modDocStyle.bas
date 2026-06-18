@@ -29,17 +29,6 @@ Public Function DocConfigOr(ByVal key As String, ByVal dflt As String) As String
     If v = "" Then DocConfigOr = dflt Else DocConfigOr = v
 End Function
 
-' Cita config probajuci vise mogucih kljuceva (GetConfigValue je vec tolerantan
-' na visak razmaka i velika/mala slova). Vraca prvu nepraznu vrednost; inace dflt.
-Public Function DocConfigOrKeys(ByVal dflt As String, ParamArray keys() As Variant) As String
-    Dim i As Long, v As String
-    For i = LBound(keys) To UBound(keys)
-        v = GetConfigValue(CStr(keys(i)))
-        If v <> "" Then DocConfigOrKeys = v: Exit Function
-    Next i
-    DocConfigOrKeys = dflt
-End Function
-
 ' Podrazumevana klauzula o PDV nadoknadi (cl. 34 ZPDV). Override preko
 ' config kljuca OTKUP_KLAUZULA (vidi modConfig.CFG_OTKUP_KLAUZULA).
 Public Function OtkupKlauzulaDefault() As String
