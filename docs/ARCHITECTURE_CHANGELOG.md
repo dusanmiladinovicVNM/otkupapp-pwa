@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.26  
+**Current Version:** v6.27  
 **Last Updated:** 2026-06-18  
-**Status:** Active changelog — v6.26 document print/presentation layer (otkupni klauzula + rok, shared `modDocStyle`, paletni/preradni redesign)
+**Status:** Active changelog — v6.27 Otkupni blokovi entry panel (per-otpremnica blok entry driving `frmOtkup`, direct `OtpremnicaID` linking)
 
 ---
 
@@ -53,6 +53,7 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.27 | 2026-06-18 | Otkupni blokovi: optional `frmOtkup` panel for per-otpremnica blok entry — clicking an otpremnica pre-fills the existing otkup form (mesto/vrsta/sorta/vozač/broj zbirne/datum/cena), a single per-otpremnica price applies to all its blokovi, and the normal "Unos" auto-links the saved row(s) to the otpremnica via `OtkupBlok_AfterUnos` so remaining-quantity tracking updates without a manual Sledljivost auto-link. | Yes | no business-data migration; UI-only desktop add-on; re-import `modOtkupBlok`+`clsBlokUI`, add 2 guarded hook lines to `frmOtkup` (`AttachOtkupBlokPanel`, `OtkupBlok_AfterUnos`); opt-out via `OTKUP_BLOK_PANEL=NO` |
 | v6.26 | 2026-06-18 | Document print/presentation layer: shared `modDocStyle` house style for otkupni/paletni/preradni lists, otkupni-list legal block (PDV-nadoknada klauzula + rok isplate via `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE`), and paletni/preradni redesign (vrsta voca as subtitle, dropped redundant Vrsta column, layout-version auto-rebuild). | Yes | presentation-only; no business-data migration; re-import `modDocStyle`/`modConfig`/`modPrint`/`modPaletniList`; templates regenerate; run otkupni/paletni/preradni print gates |
 | v6.25 | 2026-06-16 | Paletni List (pallet) domain added as a canonical local Excel/VBA workflow plus a desktop-only setup mode. | Yes | no business-data migration; `EnsurePaletniListSchema` idempotent; run palletization/prerada/storno gates |
 | v6.24 | 2026-05-26 | Systematic documentation supplement: VBA document numbering model, PWA design tokens/fonts/components_v2, Otkup/Otprema/Pregled UI redesign, service-worker/font cache discipline, runtime bugfixes, lazy-loading performance model and Google Sync diagnostic follow-ups. | Yes | no business-data migration; source summary reviewed; target AgriX Git repo still needs direct confirmation because connected GitHub repo resolves to handoverApp |
@@ -102,6 +103,33 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
+
+## v6.27 — 2026-06-18
+
+### Summary
+
+Optional **Otkupni blokovi** entry panel for the desktop `frmOtkup`. It is not a new save path: it is a per-otpremnica entry aid that drives the existing otkup form and links each saved otkup row ("blok") to its otpremnica. UI-only desktop add-on; no new tables, no schema or business-data migration.
+
+### Added
+
+- `modOtkupBlok` (feature module, dynamic UI) + `clsBlokUI` (WithEvents wrapper for the dynamically created controls). Attached to `frmOtkup` via `AttachOtkupBlokPanel Me` in `UserForm_Initialize`; toggled on a button and hidden by default. Controls are built with `Controls.Add`, so `frmOtkup.frx` is unchanged.
+- Otpremnice preview (middle) + otkupni-blokovi list (right, for the selected otpremnica), a per-otpremnica price field, and a live "Ukupno / U blokovima / Preostalo" summary computed as otpremnica `Kolicina` − Σ linked `tblOtkup.Kolicina`.
+- Clicking an otpremnica pre-fills the existing `frmOtkup` controls — `cmbOtkupnoMesto`, `cmbVrstaVoca`, `cmbSortaVoca`, `cmbVozac` (via `SetComboByID` with a display-`(ID)` fallback for single-column combos), `txtBrojZbirne`, `txtDatum`, `txtCena` — so each blok needs only kooperant + količina. Hladnjača shown in the preview is resolved from `tblZbirna` via `BrojZbirne`.
+- `OtkupBlok_AfterUnos(result)` hook called from `frmOtkup.btnUnos_Click` after a successful `SaveOtkupMulti_TX`: links the returned `OtkupID`(s) (split on `" + "`) to the selected otpremnica via `COL_OTK_OTPREMNICA_ID` (transaction-backed `RequireUpdateCell`) and refreshes the panel — remaining-quantity tracking updates without a manual `modSledljivost` auto-link.
+- Per-otpremnica price: one price applies to all of an otpremnica's blokovi (`ApplyCenaToOtpremnica` propagates `tblOtkup.Cena` across all linked rows); price is stored/displayed as BRUTO (PDV-nadoknada included), consistent with the otkupni-list print, and the blok list shows neto cena / vrednost / iznos PDV / ukupno.
+- Opt-out config key `OTKUP_BLOK_PANEL` (`NO` hides the toggle button entirely).
+
+### Changed
+
+- `frmOtkup`: two guarded hook lines only — `AttachOtkupBlokPanel Me` (`UserForm_Initialize`) and `OtkupBlok_AfterUnos result` (after `ClearOtkupFields` in `btnUnos_Click`). No `.frx`/layout change; the existing single-row otkup entry is unchanged when the panel is closed.
+
+### Notes / Migration
+
+- No business-data or schema migration. Re-import `modOtkupBlok.bas` and `clsBlokUI.cls`; add the two hook lines to `frmOtkup` (or re-import `frmOtkup.frm` together with its unchanged `frmOtkup.frx`).
+- Reuses canonical invariants: exact-row `OtpremnicaID` linking (no fuzzy key), checked writes via `RequireUpdateCell`, transaction rollback on failure.
+- While the panel is open with an otpremnica selected, every "Unos" links to that otpremnica ("blok mode"); hide the panel for an unrelated direct otkup.
+
+---
 
 ## v6.26 — 2026-06-18
 
