@@ -40,7 +40,7 @@ Private Const TOGGLE_W    As Double = 130
 
 Private Const OTP_COLW  As String = "0;0;58;38;56;68;44;42;46"
 Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Hladnjaca;Prodajna;Cena za;Preostalo"
-Private Const BLOK_COLW As String = "0;42;88;58;44;52;56;50;58"
+Private Const BLOK_COLW As String = "0;42;70;58;44;46;66;58;66"
 Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Kolicina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
 
 ' --- Stanje (modul-level; jedna frmOtkup instanca po sekciji) ---
@@ -492,6 +492,11 @@ Private Sub SelectOtpFromList()
     PrefillLeftForm mActiveOtpID, cena
     LoadBlokovi
     RefreshSummary
+
+    ' brzi unos: fokus odmah na Kooperanta
+    On Error Resume Next
+    mForm.Controls("cmbKooperant").SetFocus
+    On Error GoTo 0
     Exit Sub
 EH:
     LogErr "modOtkupBlok.SelectOtpFromList"
