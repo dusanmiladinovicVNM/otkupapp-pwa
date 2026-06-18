@@ -30,17 +30,17 @@ Option Explicit
 ' ============================================================
 
 ' --- Layout (tacke) ---
-Private Const PANEL_LEFT  As Double = 312
+Private Const PANEL_LEFT  As Double = 302
 Private Const OTP_W       As Double = 346
-Private Const BLOK_LEFT   As Double = 662       ' PANEL_LEFT + OTP_W + 4 (manji razmak)
-Private Const BLOK_W      As Double = 480
+Private Const BLOK_LEFT   As Double = 652       ' PANEL_LEFT + OTP_W + 4 (manji razmak)
+Private Const BLOK_W      As Double = 494
 Private Const GRID_TOP    As Double = 88
-Private Const EXP_WIDTH   As Double = 1155
+Private Const EXP_WIDTH   As Double = 1158
 Private Const TOGGLE_W    As Double = 130
 
 Private Const OTP_COLW  As String = "0;0;58;38;56;68;44;42;36"
-Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Hladnjaca;Prodajna;Cena za;Preostalo"
-Private Const BLOK_COLW As String = "0;42;90;58;44;46;66;58;66"
+Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Hladnjaca;Prodajna;Cena za;Ostatak"
+Private Const BLOK_COLW As String = "0;42;104;58;44;46;66;58;66"
 Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Kolicina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
 
 ' --- Stanje (modul-level; jedna frmOtkup instanca po sekciji) ---
@@ -260,7 +260,7 @@ Private Sub BuildPanel()
     Set mLblPreostalo = AddCtl("Label", "lblOtkBlokPre", PANEL_LEFT + 502, 7, 150, 14)
     mLblUkupno.caption = "Ukupno kg: —"
     mLblNapisano.caption = "U blokovima: —"
-    mLblPreostalo.caption = "Preostalo: —"
+    mLblPreostalo.caption = "Ostatak: —"
 
     ' Naslovi + dugmad (dugmad levo od toggle-a da se ne preklapaju)
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 28, 226, 14)
@@ -629,7 +629,7 @@ Private Sub RefreshSummary()
     If Len(mActiveOtpID) = 0 Then
         mLblUkupno.caption = "Ukupno kg: —"
         mLblNapisano.caption = "U blokovima: —"
-        mLblPreostalo.caption = "Preostalo: —"
+        mLblPreostalo.caption = "Ostatak: —"
         Exit Sub
     End If
 
@@ -640,7 +640,7 @@ Private Sub RefreshSummary()
 
     mLblUkupno.caption = "Ukupno kg: " & FmtKg(ukupno)
     mLblNapisano.caption = "U blokovima: " & FmtKg(napisano)
-    mLblPreostalo.caption = "Preostalo: " & FmtKg(preostalo)
+    mLblPreostalo.caption = "Ostatak: " & FmtKg(preostalo)
 
     On Error Resume Next
     If preostalo < -0.0001 Then
