@@ -265,14 +265,14 @@ Private Sub BuildPanel()
     ' Naslovi + dugmad (dugmad levo od toggle-a da se ne preklapaju)
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 28, 226, 14)
     t1.caption = "OTPREMNICE  (klik = izbor)": StyleHdr t1
-    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 27, 120, 18)
+    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 26, 120, 22)
     mBtnFilter.caption = "Prikaz: Sve"
 
     Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 28, 118, 14)
     t2.caption = "OTKUPNI BLOKOVI": StyleHdr t2
-    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 124, 27, 92, 18)
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 124, 26, 92, 22)
     mBtnStorno.caption = "Storniraj blok"
-    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 220, 27, 92, 18)
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 220, 26, 92, 22)
     mBtnPrint.caption = "Stampaj list"
 
     On Error Resume Next
