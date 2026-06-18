@@ -25,6 +25,12 @@ Public Sub StartApp()
 
     If Not m_Initialized Then InitApp
 
+    ' --- Pristup: licenca + trial ("trial samo ako NIJE licenciran") ---
+    ' Licencirana masina propusta; nelicencirana dobija trial (ako je ukljucen)
+    ' ili pada na license gate. Opt-in: LICENSE_ENABLED / TRIAL_ENABLED.
+    ' Detalji: modLicense.AccessGateOrQuit.
+    If Not AccessGateOrQuit() Then Exit Sub
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme

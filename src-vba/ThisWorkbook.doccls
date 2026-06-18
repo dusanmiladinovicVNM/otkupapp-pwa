@@ -4,7 +4,11 @@ Private Sub Workbook_Open()
     On Error GoTo EH
     
     StartApp
-    
+
+    ' Pristup odbijen (licenca ILI trial) -> ne pokrecemo dalji startup
+    ' (cleanup/monitoring). modLicense je zakazao zatvaranje na sledeci tick.
+    If AccessWasDenied() Then Exit Sub
+
     ' Stale lock cleanup (prethodna sesija crash-ovala ? lock ostao u SyncControl).
     ' Brisanje VBA-owned stanica lockova starijih od TTL (10 min).
     ' Fail-soft: ako Google nije dostupan, samo se loguje i ide dalje.
