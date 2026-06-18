@@ -34,7 +34,7 @@ Private Const PANEL_LEFT  As Double = 312
 Private Const OTP_W       As Double = 360
 Private Const BLOK_LEFT   As Double = 680       ' PANEL_LEFT + OTP_W + 8
 Private Const BLOK_W      As Double = 460
-Private Const GRID_TOP    As Double = 94
+Private Const GRID_TOP    As Double = 88
 Private Const EXP_WIDTH   As Double = 1155
 Private Const TOGGLE_W    As Double = 130
 
@@ -281,9 +281,9 @@ Private Sub BuildPanel()
     StylePrimaryButton mBtnPrint, "Stampaj list"
     On Error GoTo 0
 
-    ' Zaglavlja kolona
-    AddHeaders "hOtp", PANEL_LEFT, 54, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 54, BLOK_COLW, BLOK_CAPS
+    ' Zaglavlja kolona (spustena dalje od dugmadi; listbox tik ispod)
+    AddHeaders "hOtp", PANEL_LEFT, 58, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 58, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
@@ -907,7 +907,7 @@ Private Sub AddHeaders(ByVal prefix As String, ByVal baseLeft As Double, _
             Dim cap As String: cap = ""
             If k <= UBound(cArr) Then cap = cArr(k)
             Dim c As Object
-            Set c = AddCtl("Label", prefix & "_" & k, x, top, wv, 28)
+            Set c = AddCtl("Label", prefix & "_" & k, x, top, wv, 26)
             c.caption = cap
             On Error Resume Next
             StyleListHeaderLabel c
