@@ -132,7 +132,7 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     ' ClearOtkupFields je obrisao txtCena – cena je po otpremnici, vrati je
     If mCenaBlok.Exists(mActiveOtpID) Then
-        SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.####")
+        SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
 
     LoadBlokovi
@@ -358,7 +358,7 @@ Private Sub SelectOtpFromList()
         If cena <= 0 Then cena = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_CENA))
         mCenaBlok(mActiveOtpID) = cena
     End If
-    mTxtCenaOtp.value = Format$(cena, "0.####")
+    mTxtCenaOtp.value = Format$(cena, "0.00")
 
     PrefillLeftForm mActiveOtpID, cena
     LoadBlokovi
@@ -373,17 +373,17 @@ End Sub
 Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     On Error Resume Next
 
-    SetComboByID mForm.Controls("cmbOtkupnoMesto"), _
-                 CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
+    SetComboByIdAny mForm.Controls("cmbOtkupnoMesto"), _
+                    CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
     mForm.Controls("cmbVrstaVoca").value = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA))
     mForm.Controls("cmbSortaVoca").value = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_SORTA))
-    SetComboByID mForm.Controls("cmbVozac"), _
-                 CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC))
+    SetComboByIdAny mForm.Controls("cmbVozac"), _
+                    CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC))
 
     SetLeftCtl "txtBrojZbirne", CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
     Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
     If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
-    SetLeftCtl "txtCena", Format$(cena, "0.####")
+    SetLeftCtl "txtCena", Format$(cena, "0.00")
 End Sub
 
 ' Promena cene gore -> vazi za celu otpremnicu (sve blokove) + leva forma.
@@ -394,7 +394,8 @@ Private Sub OnCenaChanged()
     If Not TryParseDouble(mTxtCenaOtp.value, cena) Or cena <= 0 Then Exit Sub
 
     mCenaBlok(mActiveOtpID) = cena
-    SetLeftCtl "txtCena", Format$(cena, "0.####")
+    mTxtCenaOtp.value = Format$(cena, "0.00")
+    SetLeftCtl "txtCena", Format$(cena, "0.00")
     ApplyCenaToOtpremnica mActiveOtpID, cena
     LoadBlokovi
     LoadOtpremnice
@@ -506,6 +507,25 @@ Private Sub SetLeftCtl(ByVal nm As String, ByVal val As String)
     On Error Resume Next
     mForm.Controls(nm).value = val
     On Error GoTo 0
+End Sub
+
+' Postavi combo na vrednost po ID-u, radi i za 2-kolonske (bound ID) i za
+' 1-kolonske combo-e oblika "Ime Prezime (ID)" / "ID - Ime" (npr. cmbVozac).
+Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
+    On Error Resume Next
+    idValue = Trim$(idValue)
+    If Len(idValue) = 0 Then Exit Sub
+
+    If SetComboByID(cmb, idValue) Then Exit Sub      ' 2-kolonski combo
+    If cmb.ListIndex >= 0 Then Exit Sub
+
+    Dim i As Long                                     ' 1-kolonski "... (ID)"
+    For i = 0 To cmb.ListCount - 1
+        If ExtractIDFromDisplay(CStr(cmb.List(i))) = idValue Then
+            cmb.ListIndex = i
+            Exit Sub
+        End If
+    Next i
 End Sub
 
 Private Function SumKolByOtp(ByVal otpID As String) As Double
