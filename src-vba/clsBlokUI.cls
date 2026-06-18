@@ -24,9 +24,14 @@ Public action As String
 Public WithEvents btn As MSForms.CommandButton
 Public WithEvents txt As MSForms.TextBox
 Public WithEvents lst As MSForms.ListBox
+Public WithEvents cmb As MSForms.ComboBox
 
 Private Sub btn_Click()
     OtkupBlok_OnButton action
+End Sub
+
+Private Sub cmb_Change()
+    OtkupBlok_OnComboChange action
 End Sub
 
 Private Sub txt_Change()
