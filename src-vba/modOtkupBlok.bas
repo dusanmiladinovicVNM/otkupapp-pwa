@@ -393,6 +393,16 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
                     CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC))
 
     SetLeftCtl "txtCena", Format$(cena, "0.00")
+
+    ' Broj otkupnog lista: izricito, kanonskim SuggestNextBroj (isti koji forma
+    ' koristi). Ne oslanjamo se na cmbOtkupnoMesto_Change jer se on NE okida kada
+    ' sledeca otpremnica ima isti OM, pa broj inace ne bi pratio novi datum.
+    ' OM iz polja (uskladjen sa onim sto se snima) + datum otpremnice.
+    Dim stanicaID As String: stanicaID = GetComboID(mForm.Controls("cmbOtkupnoMesto"))
+    If Len(stanicaID) > 0 And IsDate(vDat) Then
+        Dim brDok As String: brDok = SuggestNextBroj(KIND_OTK, stanicaID, CDate(vDat), False)
+        If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
+    End If
 End Sub
 
 ' Promena cene gore -> vazi za celu otpremnicu (sve blokove) + leva forma.
