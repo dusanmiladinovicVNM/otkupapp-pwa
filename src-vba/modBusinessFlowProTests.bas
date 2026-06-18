@@ -1805,10 +1805,10 @@ Private Sub InitTestLog()
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(TEST_LOG_SHEET)
+    Set ws = DataBook.Worksheets(TEST_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = DataBook.Worksheets.Add(after:=DataBook.Worksheets(DataBook.Worksheets.count))
         ws.name = TEST_LOG_SHEET
         ws.Range("A1:G1").value = Array("Timestamp", "RunID", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
@@ -1820,7 +1820,7 @@ Private Sub AppendTestLog(ByVal kindText As String, ByVal nameText As String, _
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(TEST_LOG_SHEET)
+    Set ws = DataBook.Worksheets(TEST_LOG_SHEET)
     If ws Is Nothing Then Exit Sub
 
     Dim r As Long

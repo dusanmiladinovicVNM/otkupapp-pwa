@@ -556,7 +556,7 @@ Public Function ExportPaletniListPDF(ByVal palID As String, _
     If ws Is Nothing Then Exit Function
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Paleta_" & broj & "-" & god & ".pdf"
+    pdfPath = DataBook.Path & "\Paleta_" & broj & "-" & god & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -603,7 +603,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    Set ws = DataBook.Sheets("PaletaSablon")
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
 
@@ -735,7 +735,7 @@ Public Sub EnsurePaletaSablon()
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    Set ws = DataBook.Sheets("PaletaSablon")
     On Error GoTo EH
     If Not ws Is Nothing Then
         If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
@@ -745,7 +745,7 @@ Public Sub EnsurePaletaSablon()
         Set ws = Nothing
     End If
 
-    Set ws = ThisWorkbook.Sheets.Add
+    Set ws = DataBook.Sheets.Add
     ws.name = "PaletaSablon"
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
@@ -1396,7 +1396,7 @@ Public Function ExportPreradaPDF(ByVal preID As String, _
     If ws Is Nothing Then Exit Function
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Prerada_" & broj & "-" & god & ".pdf"
+    pdfPath = DataBook.Path & "\Prerada_" & broj & "-" & god & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -1437,7 +1437,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    Set ws = DataBook.Sheets("PreradaSablon")
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
 
@@ -1568,7 +1568,7 @@ Public Sub EnsurePreradaSablon()
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    Set ws = DataBook.Sheets("PreradaSablon")
     On Error GoTo EH
     If Not ws Is Nothing Then
         If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
@@ -1578,7 +1578,7 @@ Public Sub EnsurePreradaSablon()
         Set ws = Nothing
     End If
 
-    Set ws = ThisWorkbook.Sheets.Add
+    Set ws = DataBook.Sheets.Add
     ws.name = "PreradaSablon"
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10

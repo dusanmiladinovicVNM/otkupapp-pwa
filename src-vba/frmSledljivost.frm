@@ -495,7 +495,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("SledljivostSablon")
+    Set ws = DataBook.Sheets("SledljivostSablon")
     On Error GoTo 0
     If ws Is Nothing Then
         MsgBox "SledljivostSablon sheet ne postoji!", vbExclamation, APP_NAME
@@ -666,7 +666,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     
     ' PDF Export
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
+    pdfPath = DataBook.Path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
     
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _

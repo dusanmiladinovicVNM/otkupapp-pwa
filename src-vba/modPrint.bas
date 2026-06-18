@@ -12,11 +12,11 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     
     Dim wsPrint As Worksheet
     On Error Resume Next
-    Set wsPrint = ThisWorkbook.Sheets("_Print")
+    Set wsPrint = DataBook.Sheets("_Print")
     On Error GoTo 0
     
     If wsPrint Is Nothing Then
-        Set wsPrint = ThisWorkbook.Sheets.Add
+        Set wsPrint = DataBook.Sheets.Add
         wsPrint.name = "_Print"
     End If
     
@@ -80,7 +80,7 @@ Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
     If ws Is Nothing Then Exit Function
 
     Dim suff As String: suff = Replace(Replace(otkupIDs, " + ", "_"), "/", "-")
-    Dim pdfPath As String: pdfPath = ThisWorkbook.Path & "\OtkupniList_" & suff & ".pdf"
+    Dim pdfPath As String: pdfPath = DataBook.Path & "\OtkupniList_" & suff & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -99,7 +99,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     EnsureOtkupSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtkupSablon")
+    Set ws = DataBook.Sheets("OtkupSablon")
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -364,11 +364,11 @@ Public Sub EnsureOtkupSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtkupSablon")
+    Set ws = DataBook.Sheets("OtkupSablon")
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
-    Set ws = ThisWorkbook.Sheets.Add
+    Set ws = DataBook.Sheets.Add
     ws.name = "OtkupSablon"
     ws.columns("A").ColumnWidth = 6
     ws.columns("B").ColumnWidth = 24

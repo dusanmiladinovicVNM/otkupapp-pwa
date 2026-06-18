@@ -720,7 +720,7 @@ End Sub
 Private Sub btnExit_Click()
     On Error GoTo EH
 
-    ThisWorkbook.Save
+    DataBook.Save
     ShutdownApp
 
     Application.DisplayAlerts = False

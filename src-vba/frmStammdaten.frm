@@ -1591,7 +1591,7 @@ Private Sub btnGeoOpen_Click()
     searchText = katBroj & " " & Replace(katOpstina, "KO ", "")
 
     CopyToClipboard searchText
-    ThisWorkbook.FollowHyperlink "https://a3.geosrbija.rs/"
+    DataBook.FollowHyperlink "https://a3.geosrbija.rs/"
 
     SetGeoStatus "GeoSrbija otvorena. Pretraga je kopirana: " & searchText, False
     Exit Sub
@@ -2166,7 +2166,7 @@ Public Function OpenGoogleMaps(ByVal lat As Double, ByVal lng As Double) As Bool
           Replace(CStr(lat), ",", ".") & "," & _
           Replace(CStr(lng), ",", ".")
 
-    ThisWorkbook.FollowHyperlink url
+    DataBook.FollowHyperlink url
 
     OpenGoogleMaps = True
     Exit Function
@@ -2189,7 +2189,7 @@ Public Function OpenParcelPolygonEditor(ByVal parcelaID As String) As Boolean
     url = "https://dusanmiladinovicvnm.github.io/otkupapp-pwa/parcel-draw.html?parcelaId=" & _
           WorksheetFunction.EncodeURL(parcelaID)
 
-    ThisWorkbook.FollowHyperlink url
+    DataBook.FollowHyperlink url
 
     OpenParcelPolygonEditor = True
     Exit Function

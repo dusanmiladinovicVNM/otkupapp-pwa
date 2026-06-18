@@ -108,8 +108,8 @@ Private Function ResolvePdfToTextExePath() As String
     rootPath = GetLocalConfigValue("APP_ROOT_PATH", "")
 
     If Len(Trim$(rootPath)) = 0 Then
-        If Len(Trim$(ThisWorkbook.Path)) > 0 Then
-            rootPath = ThisWorkbook.Path
+        If Len(Trim$(DataBook.Path)) > 0 Then
+            rootPath = DataBook.Path
         Else
             rootPath = "C:\OtkupApp"
         End If

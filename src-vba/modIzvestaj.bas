@@ -527,7 +527,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("KarticaSablon")
+    Set ws = DataBook.Sheets("KarticaSablon")
     On Error GoTo 0
     If ws Is Nothing Then
         Err.Raise vbObjectError + 7501, SRC, _
@@ -652,7 +652,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     
     ' PDF Export
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
+    pdfPath = DataBook.Path & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
     
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _

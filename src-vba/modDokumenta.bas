@@ -2166,7 +2166,7 @@ Private Function GetDokumentaTableColumnCount(ByVal tableName As String) As Long
     Dim ws As Worksheet
     Dim lo As ListObject
 
-    For Each ws In ThisWorkbook.Worksheets
+    For Each ws In DataBook.Worksheets
         For Each lo In ws.ListObjects
             If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
                 GetDokumentaTableColumnCount = lo.ListColumns.count

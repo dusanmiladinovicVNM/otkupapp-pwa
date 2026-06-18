@@ -959,10 +959,10 @@ Private Sub InitHealthLog()
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(HEALTH_LOG_SHEET)
+    Set ws = DataBook.Worksheets(HEALTH_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = DataBook.Worksheets.Add(After:=DataBook.Worksheets(DataBook.Worksheets.count))
         ws.name = HEALTH_LOG_SHEET
         ws.Range("A1:G1").value = Array("Timestamp", "RunID", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
@@ -976,7 +976,7 @@ Private Sub AppendHealthLog(ByVal kindText As String, _
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(HEALTH_LOG_SHEET)
+    Set ws = DataBook.Worksheets(HEALTH_LOG_SHEET)
 
     If ws Is Nothing Then Exit Sub
 
@@ -1050,7 +1050,7 @@ Private Function HealthTableExists(ByVal tableName As String) As Boolean
     Dim ws As Worksheet
     Dim lo As ListObject
 
-    For Each ws In ThisWorkbook.Worksheets
+    For Each ws In DataBook.Worksheets
         For Each lo In ws.ListObjects
             If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
                 HealthTableExists = True

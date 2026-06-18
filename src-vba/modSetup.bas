@@ -51,7 +51,7 @@ Public Sub SetupNewPC()
     EnsureLocalConfigTable
 
     LogSetup "INFO", "SetupNewPC started"
-    LogSetup "INFO", "Workbook: " & ThisWorkbook.fullName
+    LogSetup "INFO", "Workbook: " & DataBook.fullName
     LogSetup "INFO", "Machine: " & Environ$("COMPUTERNAME")
     LogSetup "INFO", "Windows user: " & Environ$("USERNAME")
     LogSetup "INFO", "Excel version: " & Application.Version
@@ -778,11 +778,11 @@ End Sub
 
 Private Function GetOrCreateWorksheet(ByVal sheetName As String) As Worksheet
     On Error Resume Next
-    Set GetOrCreateWorksheet = ThisWorkbook.Worksheets(sheetName)
+    Set GetOrCreateWorksheet = DataBook.Worksheets(sheetName)
     On Error GoTo 0
 
     If GetOrCreateWorksheet Is Nothing Then
-        Set GetOrCreateWorksheet = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set GetOrCreateWorksheet = DataBook.Worksheets.Add(after:=DataBook.Worksheets(DataBook.Worksheets.count))
         GetOrCreateWorksheet.name = sheetName
     End If
 End Function
@@ -793,7 +793,7 @@ Private Function FindListObject(ByVal tableName As String) As ListObject
     Dim ws As Worksheet
     Dim lo As ListObject
 
-    For Each ws In ThisWorkbook.Worksheets
+    For Each ws In DataBook.Worksheets
         For Each lo In ws.ListObjects
             If UCase$(lo.name) = UCase$(tableName) Then
                 Set FindListObject = lo
@@ -848,8 +848,8 @@ Private Function GetLocalConfigWithDefault(ByVal keyName As String, _
 End Function
 
 Private Function GetDefaultRootPath() As String
-    If Len(Trim$(ThisWorkbook.Path)) > 0 Then
-        GetDefaultRootPath = ThisWorkbook.Path
+    If Len(Trim$(DataBook.Path)) > 0 Then
+        GetDefaultRootPath = DataBook.Path
     Else
         GetDefaultRootPath = Environ$("USERPROFILE") & "\Documents\OtkupApp"
     End If
@@ -919,10 +919,10 @@ Private Sub InitSetupLog()
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(SETUP_LOG_SHEET)
+    Set ws = DataBook.Worksheets(SETUP_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = DataBook.Worksheets.Add(after:=DataBook.Worksheets(DataBook.Worksheets.count))
         ws.name = SETUP_LOG_SHEET
         ws.Range("A1:D1").value = Array("Timestamp", "Level", "Message", "User")
         ws.rows(1).Font.Bold = True
@@ -933,7 +933,7 @@ Private Sub LogSetup(ByVal levelText As String, ByVal messageText As String)
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(SETUP_LOG_SHEET)
+    Set ws = DataBook.Worksheets(SETUP_LOG_SHEET)
 
     If ws Is Nothing Then Exit Sub
 

@@ -1,76 +1,40 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Option Explicit
+
+' ============================================================
+' ThisWorkbook (KOD workbook).
+'
+' ENGINE rezim (.xlam): kad se Excel pokrene i add-in ucita, NE radimo
+'   startup ovde (klijentski podaci jos nisu otvoreni). Umesto toga kacimo
+'   Application-event oslukivac (clsAppEvents) koji ceka da se otvori
+'   klijentski .xlsx i tek tada poziva modBoot.BootFromData.
+'
+' COMBINED rezim (.xlsm): kod i podaci su u istom fajlu, pa startujemo odmah.
+'
+' Sva startup/shutdown logika je u modBoot (centralno, deo koda/.xlam-a).
+' ============================================================
+
 Private Sub Workbook_Open()
     On Error Resume Next
-    Monitor_AppOpen "Operator"
-    On Error GoTo EH
-    
-    StartApp
-    
-    ' Stale lock cleanup (prethodna sesija crash-ovala ? lock ostao u SyncControl).
-    ' Brisanje VBA-owned stanica lockova starijih od TTL (10 min).
-    ' Fail-soft: ako Google nije dostupan, samo se loguje i ide dalje.
-    On Error Resume Next
-    modStanicaLock.CleanupOrphanedLocks
-    On Error GoTo EH
-
-    On Error Resume Next
-    Monitor_Event _
-        eventType:="VBA_STARTUP_SUCCESS", _
-        severity:="INFO", _
-        message:="Workbook startup completed", _
-        userId:="Operator", _
-        moduleName:="ThisWorkbook", _
-        procedureName:="Workbook_Open", _
-        entityType:="App", _
-        entityID:="Startup", _
-        correlationId:="VBA-STARTUP"
-    On Error GoTo 0
-    
-    Exit Sub
-
-EH:
-    On Error Resume Next
-
-    Monitor_Error _
-        moduleName:="ThisWorkbook", _
-        procedureName:="Workbook_Open", _
-        entityType:="App", _
-        entityID:="Startup", _
-        correlationId:="VBA-STARTUP", _
-        errorNumber:=Err.Number, _
-        errorDescription:=Err.description, _
-        errorSource:=Err.SOURCE
-
-    LogErr "ThisWorkbook.Workbook_Open"
-
-    Application.Visible = True
-    MsgBox "Greška pri pokretanju aplikacije. Pogledajte log.", vbCritical
+    If ThisWorkbook.IsAddin Then
+        modBoot.InstallAppEvents          ' ENGINE: oslukuj otvaranje klijentskog .xlsx
+    Else
+        modBoot.BootFromData ThisWorkbook ' COMBINED: kod + podaci zajedno
+    End If
 End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
-    On Error GoTo EH
-    
-    ' Final release aktivne stanica lock-a sa bulk push.
-    ' Ako forma nije zatvorena pre Excel close-a, ovde se hvata.
-    ' Fail-soft: ako bulk push padne (offline), lock ce postati stale
-    ' i sledeca sesija ce ga ocistiti kroz CleanupOrphanedLocks.
     On Error Resume Next
-    If Len(modStanicaLock.GetActiveStanica()) > 0 Then
-        Application.StatusBar = "Sinhronizujem unos pre zatvaranja..."
-        Application.Cursor = xlWait
-        DoEvents
-
-        modStanicaLock.ReleaseStanicaLock modStanicaLock.GetActiveStanica()
-
-        Application.StatusBar = False
-        Application.Cursor = xlDefault
-    End If
-    On Error GoTo EH
-
-    modMain.ShutdownApp
-
-    Exit Sub
-
-EH:
-    LogErr "ThisWorkbook.Workbook_BeforeClose"
+    ' U ENGINE rezimu zatvaranje klijentskog .xlsx hvata clsAppEvents;
+    ' zatvaranje samog add-in-a ne pokrece shutdown podataka.
+    If ThisWorkbook.IsAddin Then Exit Sub
+    modBoot.ShutdownFromData
 End Sub
-

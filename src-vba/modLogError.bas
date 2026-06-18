@@ -7,7 +7,7 @@ Option Explicit
 ' Schreibt Fehler in eine Textdatei für Remote-Support.
 ' Wenn der Kunde anruft, kann er die Log-Datei schicken.
 '
-' Log-Pfad: ThisWorkbook.Path & "\Log\"
+' Log-Pfad: DataBook.Path & "\Log\"
 ' Dateiname: OtkupApp_2026-03-18.log (eine pro Tag)
 ' Rotation:  Dateien älter als 30 Tage werden bei App-Start gelöscht
 '
@@ -49,7 +49,7 @@ Public Sub LogError(ByVal Source As String, ByVal message As String, _
     
     On Error Resume Next
     
-    logPath = ThisWorkbook.Path & "\" & LOG_FOLDER
+    logPath = DataBook.Path & "\" & LOG_FOLDER
     
     ' Ordner erstellen
     If Dir(logPath, vbDirectory) = "" Then
@@ -120,7 +120,7 @@ End Sub
 
 Public Sub LogAppStart()
     LogInfo "APP", "=== OtkupApp " & APP_VERSION & " gestartet ==="
-    LogInfo "APP", "File: " & ThisWorkbook.Name
+    LogInfo "APP", "File: " & DataBook.Name
     LogInfo "APP", "User: " & Environ$("Username")
 End Sub
 
@@ -143,7 +143,7 @@ Public Sub PurgeOldLogs()
     
     On Error Resume Next
     
-    logPath = ThisWorkbook.Path & "\" & LOG_FOLDER
+    logPath = DataBook.Path & "\" & LOG_FOLDER
     
     If Dir(logPath, vbDirectory) = "" Then Exit Sub
     

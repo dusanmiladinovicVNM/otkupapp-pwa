@@ -488,7 +488,7 @@ Private Function GetFakturaTestTableColumnCount(ByVal tableName As String) As Lo
     Dim ws As Worksheet
     Dim lo As ListObject
 
-    For Each ws In ThisWorkbook.Worksheets
+    For Each ws In DataBook.Worksheets
         For Each lo In ws.ListObjects
             If StrComp(lo.name, tableName, vbTextCompare) = 0 Then
                 GetFakturaTestTableColumnCount = lo.ListColumns.count
@@ -635,10 +635,10 @@ Private Sub InitFakturaTestLog()
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(FAKTURA_TEST_LOG_SHEET)
+    Set ws = DataBook.Worksheets(FAKTURA_TEST_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = DataBook.Worksheets.Add(after:=DataBook.Worksheets(DataBook.Worksheets.count))
         ws.name = FAKTURA_TEST_LOG_SHEET
         ws.Range("A1:F1").value = Array("Timestamp", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
@@ -652,7 +652,7 @@ Private Sub AppendFakturaTestLog(ByVal kindText As String, _
     On Error Resume Next
 
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(FAKTURA_TEST_LOG_SHEET)
+    Set ws = DataBook.Worksheets(FAKTURA_TEST_LOG_SHEET)
 
     If ws Is Nothing Then Exit Sub
 

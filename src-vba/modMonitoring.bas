@@ -46,7 +46,7 @@ Public Sub Monitor_AppOpen(Optional ByVal userId As String = "Operator")
         userId:=userId, _
         moduleName:="ThisWorkbook", _
         procedureName:="Workbook_Open", _
-        payloadJson:="{""workbook"":" & JsonString(ThisWorkbook.name) & "}"
+        payloadJson:="{""workbook"":" & JsonString(DataBook.name) & "}"
 End Sub
 
 Public Sub Monitor_Event( _
@@ -115,7 +115,7 @@ Public Sub Monitor_Error( _
         """errorNumber"":" & CStr(errNo) & "," & _
         """errorDescription"":" & JsonString(Monitoring_SanitizeText(errDesc)) & "," & _
         """errorSource"":" & JsonString(Monitoring_SanitizeText(errSrc)) & "," & _
-        """workbook"":" & JsonString(ThisWorkbook.name) & _
+        """workbook"":" & JsonString(DataBook.name) & _
     "}"
 
     Monitor_Event _
@@ -230,7 +230,7 @@ Public Sub Monitor_Backup( _
     Dim payload As String
     payload = "{" & _
         """backupType"":" & JsonString(backupType) & "," & _
-        """sourceSpreadsheetId"":" & JsonString(ThisWorkbook.name) & "," & _
+        """sourceSpreadsheetId"":" & JsonString(DataBook.name) & "," & _
         """backupFileId"":" & JsonString(Monitoring_SanitizeText(backupFileId)) & "," & _
         """backupLocation"":" & JsonString(Monitoring_SanitizeText(backupLocation)) & "," & _
         """rowsCount"":" & CStr(rowsCount) & "," & _
@@ -444,15 +444,8 @@ End Function
 
 Private Function ConfigValue(ByVal key As String) As String
     On Error Resume Next
-
-    ConfigValue = ConfigValueFromWorkbook(ThisWorkbook, key)
-    If Len(ConfigValue) > 0 Then Exit Function
-
-    If Not ActiveWorkbook Is Nothing Then
-        If Not ActiveWorkbook Is ThisWorkbook Then
-            ConfigValue = ConfigValueFromWorkbook(ActiveWorkbook, key)
-        End If
-    End If
+    ' Config se uvek cita iz klijentskog DataBook-a (u COMBINED rezimu = ThisWorkbook).
+    ConfigValue = ConfigValueFromWorkbook(DataBook, key)
 End Function
 
 Private Function ConfigValueFromWorkbook(ByVal wb As Workbook, ByVal key As String) As String

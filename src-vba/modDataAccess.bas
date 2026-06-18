@@ -12,7 +12,7 @@ Public Function GetTable(ByVal tblName As String) As ListObject
     ' Findet ein ListObject über alle Sheets hinweg
     Dim ws As Worksheet
     Dim lo As ListObject
-    For Each ws In ThisWorkbook.Worksheets
+    For Each ws In DataBook.Worksheets
         For Each lo In ws.ListObjects
             If lo.name = tblName Then
                 Set GetTable = lo

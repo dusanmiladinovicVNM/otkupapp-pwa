@@ -8,7 +8,7 @@ Option Explicit
 ' wird, können alle Transaktionen aus dem Journal reimportiert
 ' werden.
 '
-' Journal-Pfad: ThisWorkbook.Path & "\Journal\"
+' Journal-Pfad: DataBook.Path & "\Journal\"
 ' Dateiname:    tblName_YYYY-MM-DD.csv (eine pro Tabelle pro Tag)
 ' Rotation:     Dateien älter als 30 Tage werden bei App-Start gelöscht
 '
@@ -48,7 +48,7 @@ Public Sub WriteJournalRow(ByVal tblName As String, ByVal rowData As Variant)
     On Error Resume Next
     
     ' Pfad bauen
-    journalPath = ThisWorkbook.Path & "\" & JOURNAL_FOLDER
+    journalPath = DataBook.Path & "\" & JOURNAL_FOLDER
     
     ' Ordner erstellen falls nicht vorhanden
     If Dir(journalPath, vbDirectory) = "" Then
@@ -111,7 +111,7 @@ Public Sub PurgeOldJournals()
     
     On Error Resume Next
     
-    journalPath = ThisWorkbook.Path & "\" & JOURNAL_FOLDER
+    journalPath = DataBook.Path & "\" & JOURNAL_FOLDER
     
     If Dir(journalPath, vbDirectory) = "" Then Exit Sub
     
@@ -163,7 +163,7 @@ Public Function CheckJournalForRecovery() As String
     
     On Error Resume Next
     
-    journalPath = ThisWorkbook.Path & "\" & JOURNAL_FOLDER
+    journalPath = DataBook.Path & "\" & JOURNAL_FOLDER
     
     If Dir(journalPath, vbDirectory) = "" Then
         CheckJournalForRecovery = ""
@@ -243,8 +243,8 @@ Public Sub BackupFileOnStart()
     
     On Error GoTo EH
     
-    srcPath = ThisWorkbook.fullName
-    backupPath = ThisWorkbook.Path & "\" & BACKUP_FOLDER
+    srcPath = DataBook.fullName
+    backupPath = DataBook.Path & "\" & BACKUP_FOLDER
     
     ' Ordner erstellen falls nicht vorhanden
     If Dir(backupPath, vbDirectory) = "" Then
@@ -252,7 +252,7 @@ Public Sub BackupFileOnStart()
     End If
     
     ' Basisname + Extension trennen
-    baseName = ThisWorkbook.name
+    baseName = DataBook.name
     dotPos = InStrRev(baseName, ".")
     If dotPos > 0 Then
         ext = Mid$(baseName, dotPos)
@@ -276,7 +276,7 @@ Public Sub BackupFileOnStart()
     End If
     
     ' Kopieren
-    ThisWorkbook.SaveCopyAs destPath
+    DataBook.SaveCopyAs destPath
     
     LogInfo "BackupFileOnStart", "Backup erstellt: " & destName
     On Error Resume Next
@@ -337,7 +337,7 @@ Public Sub PurgeOldBackups()
     
     On Error Resume Next
     
-    backupPath = ThisWorkbook.Path & "\" & BACKUP_FOLDER
+    backupPath = DataBook.Path & "\" & BACKUP_FOLDER
     
     If Dir(backupPath, vbDirectory) = "" Then Exit Sub
     
@@ -425,13 +425,13 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String)
         GoTo CleanExit
     End If
     
-    If ThisWorkbook.ReadOnly Then
+    If DataBook.ReadOnly Then
         LogWarn "AutoSaveAfterCommit", _
                 "Workbook read-only. AutoSave skipped. Source=" & sourceName
         GoTo CleanExit
     End If
     
-    If Len(Trim$(ThisWorkbook.Path)) = 0 Then
+    If Len(Trim$(DataBook.Path)) = 0 Then
         LogWarn "AutoSaveAfterCommit", _
                 "Workbook has no path. AutoSave skipped. Source=" & sourceName
         GoTo CleanExit
@@ -443,7 +443,7 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String)
     Application.DisplayAlerts = False
     alertsTouched = True
     
-    ThisWorkbook.Save
+    DataBook.Save
     
     Application.DisplayAlerts = prevAlerts
     alertsTouched = False

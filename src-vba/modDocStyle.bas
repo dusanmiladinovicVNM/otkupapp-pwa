@@ -50,9 +50,9 @@ Public Function DocLogoPath() As String
         If Dir$(p) <> "" Then DocLogoPath = p: Exit Function
     End If
     Dim cand As String
-    cand = ThisWorkbook.Path & "\logo.png"
+    cand = DataBook.Path & "\logo.png"
     If Dir$(cand) <> "" Then DocLogoPath = cand: Exit Function
-    cand = ThisWorkbook.Path & "\logo.jpg"
+    cand = DataBook.Path & "\logo.jpg"
     If Dir$(cand) <> "" Then DocLogoPath = cand
 End Function
 
