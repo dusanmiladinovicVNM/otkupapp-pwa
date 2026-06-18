@@ -720,6 +720,35 @@ EH:
     MsgBox "Greska u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
+' ============================================================
+' Sema za radne naloge (modRadniNalog). Pokrenuti JEDNOM (Alt+F8 ->
+' EnsureRadniNalogSchema). EnsureDataTable = create-or-repair-drift.
+' ============================================================
+Public Sub EnsureRadniNalogSchema()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_RADNI_NALOG, "RadniNalog", _
+        Array(COL_RN_ID, COL_RN_BROJ, COL_RN_GODINA, COL_RN_DATUM, COL_RN_TIP, _
+              COL_RN_VRSTA, COL_RN_NETO_ULAZ, COL_RN_NETO_IZLAZ, COL_RN_KALO, _
+              COL_RN_KALO_PROC, COL_RN_IZVRSILAC, COL_RN_SMENA, COL_RN_VREME_POCETAK, _
+              COL_RN_VREME_KRAJ, COL_RN_STATUS, COL_RN_NAPOMENA, COL_RN_CREATED, _
+              COL_STORNIRANO)
+
+    EnsureDataTable TBL_RN_STAVKA, "RadniNalogStavke", _
+        Array(COL_RNS_ID, COL_RNS_NALOG_ID, COL_RNS_SMER, COL_RNS_TIP_IZLAZ, _
+              COL_RNS_PALETA_ID, COL_RNS_FRAKCIJA, COL_RNS_VRSTA, COL_RNS_SORTA, _
+              COL_RNS_GAJBICE, COL_RNS_KUTIJE, COL_RNS_KESE, COL_RNS_NETO, _
+              COL_RNS_CREATED, COL_STORNIRANO)
+
+    LogSetup "OK", "EnsureRadniNalogSchema done"
+    MsgBox "Radni nalozi: seme su kreirane/proverene.", vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureRadniNalogSchema failed: " & Err.description
+    MsgBox "Greska u EnsureRadniNalogSchema: " & Err.description, vbCritical, APP_NAME
+End Sub
+
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
 Private Sub EnsureDataTable(ByVal tblName As String, _
                             ByVal sheetName As String, _

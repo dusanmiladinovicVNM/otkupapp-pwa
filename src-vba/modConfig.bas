@@ -271,6 +271,59 @@ Public Const COL_PRES_CREATED As String = "CreatedAt"
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
 Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
 
+' ============================================================
+' tblRadniNalog / tblRadniNalogStavka — radni nalozi u hladnjaci
+' (prepakivanje / sortiranje-frakcionisanje / finalna prerada).
+' ============================================================
+Public Const TBL_RADNI_NALOG As String = "tblRadniNalog"
+Public Const TBL_RN_STAVKA As String = "tblRadniNalogStavka"
+
+' tblRadniNalog (zaglavlje)
+Public Const COL_RN_ID As String = "NalogID"
+Public Const COL_RN_BROJ As String = "BrojNaloga"
+Public Const COL_RN_GODINA As String = "Godina"
+Public Const COL_RN_DATUM As String = "Datum"
+Public Const COL_RN_TIP As String = "TipNaloga"
+Public Const COL_RN_VRSTA As String = "VrstaVoca"
+Public Const COL_RN_NETO_ULAZ As String = "NetoUlazKg"
+Public Const COL_RN_NETO_IZLAZ As String = "NetoIzlazKg"
+Public Const COL_RN_KALO As String = "KaloKg"
+Public Const COL_RN_KALO_PROC As String = "KaloProcenat"
+Public Const COL_RN_IZVRSILAC As String = "Izvrsilac"
+Public Const COL_RN_SMENA As String = "Smena"
+Public Const COL_RN_VREME_POCETAK As String = "VremePocetak"
+Public Const COL_RN_VREME_KRAJ As String = "VremeKraj"
+Public Const COL_RN_STATUS As String = "Status"
+Public Const COL_RN_NAPOMENA As String = "Napomena"
+Public Const COL_RN_CREATED As String = "CreatedAt"
+
+' tblRadniNalogStavka (ulazne i izlazne linije, diskriminisane Smerom)
+Public Const COL_RNS_ID As String = "StavkaID"
+Public Const COL_RNS_NALOG_ID As String = "NalogID"
+Public Const COL_RNS_SMER As String = "Smer"
+Public Const COL_RNS_TIP_IZLAZ As String = "TipIzlaza"
+Public Const COL_RNS_PALETA_ID As String = "PaletaID"
+Public Const COL_RNS_FRAKCIJA As String = "Frakcija"
+Public Const COL_RNS_VRSTA As String = "VrstaVoca"
+Public Const COL_RNS_SORTA As String = "SortaVoca"
+Public Const COL_RNS_GAJBICE As String = "BrojGajbica"
+Public Const COL_RNS_KUTIJE As String = "Kutije"
+Public Const COL_RNS_KESE As String = "Kese"
+Public Const COL_RNS_NETO As String = "NetoKg"
+Public Const COL_RNS_CREATED As String = "CreatedAt"
+
+' Tipovi naloga / smer / tip izlaza / status
+Public Const RN_TIP_PREPAKIVANJE As String = "Prepakivanje"
+Public Const RN_TIP_SORTIRANJE As String = "Sortiranje"
+Public Const RN_TIP_PRERADA As String = "Prerada"
+Public Const RN_SMER_ULAZ As String = "Ulaz"
+Public Const RN_SMER_IZLAZ As String = "Izlaz"
+Public Const RN_IZLAZ_PALETA As String = "Paleta"
+Public Const RN_IZLAZ_PAKOVANJE As String = "Pakovanje"
+Public Const RN_IZLAZ_OTPAD As String = "Otpad"
+Public Const RN_STATUS_OTVOREN As String = "Otvoren"
+Public Const RN_STATUS_ZAVRSEN As String = "Zavrsen"
+
 ' Paleta — config kljuc (default tip palete) + fallback kapacitet
 Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
 Public Const PALETA_DEFAULT_KAPACITET As Long = 240

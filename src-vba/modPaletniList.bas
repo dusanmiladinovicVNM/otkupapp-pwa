@@ -900,6 +900,17 @@ Private Function CreateNewPaleta(ByVal vrstaVoca As String, _
     CreateNewPaleta = newID
 End Function
 
+' PUBLIC reuse-tacka: kreira novu (praznu, otvorenu) paletu zadate vrste/sorte/
+' klase/tipa ambalaze i vraca PaletaID. Koriste je radni nalozi (modRadniNalog)
+' za izlazne palete -> logika kreiranja palete se NE duplira. Poziva se UNUTAR
+' TX-a pozivaoca (koji je vec snapshot-ovao TBL_PALETA).
+Public Function CreatePaleta(ByVal vrstaVoca As String, ByVal sortaVoca As String, _
+                             ByVal klasa As String, ByVal tipAmb As String, _
+                             ByVal capacity As Long) As String
+    Dim dummyRow As Long
+    CreatePaleta = CreateNewPaleta(vrstaVoca, sortaVoca, klasa, tipAmb, capacity, dummyRow)
+End Function
+
 Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
                       ByVal brojPrij As String, ByVal brojZbirne As String, _
                       ByVal klasa As String, ByVal vrstaVoca As String, _

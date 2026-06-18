@@ -595,6 +595,92 @@ EH:
 End Function
 
 ' ============================================================
+' RADNI NALOG (prepakivanje / sortiranje / prerada)
+' ============================================================
+
+Public Function StornoRadniNalog_TX(ByVal nalogID As String) As Boolean
+    Const SRC As String = "StornoRadniNalog_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_RADNI_NALOG
+    tx.AddTableSnapshot TBL_RN_STAVKA
+    tx.AddTableSnapshot TBL_PALETA
+
+    If Not StornoRadniNalog(nalogID) Then
+        Err.Raise ERR_STORNO_BASE + 50, SRC, _
+                  "StornoRadniNalog nije uspeo. NalogID=" & nalogID
+    End If
+
+    tx.CommitTx
+
+    StornoRadniNalog_TX = True
+    MonitorStornoSuccess SRC, "RadniNalog", nalogID
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "RadniNalog", nalogID, tx
+    StornoRadniNalog_TX = False
+End Function
+
+Public Function StornoRadniNalog(ByVal nalogID As String) As Boolean
+    Const SRC As String = "StornoRadniNalog"
+
+    On Error GoTo EH
+
+    Dim rowN As Long
+    rowN = RequireStornoAllowed(TBL_RADNI_NALOG, nalogID, COL_RN_ID, SRC)
+
+    MarkRowStornirano TBL_RADNI_NALOG, rowN, SRC
+
+    ' stavke: ulaz -> vrati paletu u lager (Preradjeno=""); izlaz-paleta ->
+    ' storniraj novonastalu paletu (izlazi iz lagera). Pakovanje/otpad: samo stavka.
+    Dim s As Variant: s = GetTableData(TBL_RN_STAVKA)
+    If Not IsEmpty(s) Then
+        Dim sNal As Long, sSmer As Long, sTip As Long, sPal As Long, sStorno As Long
+        sNal = RequireColumnIndex(TBL_RN_STAVKA, COL_RNS_NALOG_ID, SRC)
+        sSmer = RequireColumnIndex(TBL_RN_STAVKA, COL_RNS_SMER, SRC)
+        sTip = RequireColumnIndex(TBL_RN_STAVKA, COL_RNS_TIP_IZLAZ, SRC)
+        sPal = RequireColumnIndex(TBL_RN_STAVKA, COL_RNS_PALETA_ID, SRC)
+        sStorno = RequireColumnIndex(TBL_RN_STAVKA, COL_STORNIRANO, SRC)
+
+        Dim r As Long
+        For r = 1 To UBound(s, 1)
+            If Trim$(CStr(s(r, sNal))) = Trim$(nalogID) _
+               And Not IsStorniranoValue(s(r, sStorno)) Then
+                MarkRowStornirano TBL_RN_STAVKA, r, SRC
+
+                Dim palID As String: palID = Trim$(CStr(s(r, sPal)))
+                If palID <> "" Then
+                    Dim c As Collection: Set c = FindRows(TBL_PALETA, COL_PAL_ID, palID)
+                    If Not c Is Nothing Then
+                        If c.count > 0 Then
+                            If Trim$(CStr(s(r, sSmer))) = RN_SMER_ULAZ Then
+                                RequireUpdateCell TBL_PALETA, CLng(c(1)), COL_PAL_PRERADJENO, "", SRC
+                            ElseIf Trim$(CStr(s(r, sTip))) = RN_IZLAZ_PALETA Then
+                                MarkRowStornirano TBL_PALETA, CLng(c(1)), SRC
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        Next r
+    End If
+
+    StornoRadniNalog = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
+End Function
+
+' ============================================================
 ' PUBLIC HELPERS / COMPATIBILITY
 ' ============================================================
 
