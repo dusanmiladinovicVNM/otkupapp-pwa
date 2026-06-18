@@ -121,14 +121,6 @@ EH:
     LogErr "modOtkupBlok.OtkupBlok_OnListClick"
 End Sub
 
-Public Sub OtkupBlok_OnComboChange(ByVal action As String)
-    On Error GoTo EH
-    If action = "OMCHANGE" Then OnOmChanged
-    Exit Sub
-EH:
-    LogErr "modOtkupBlok.OtkupBlok_OnComboChange"
-End Sub
-
 ' Poziva frmOtkup.btnUnos_Click po uspesnom cuvanju (result = OtkupID-jevi
 ' spojeni sa " + "). Vezuje ih za izabranu otpremnicu i osvezava panel.
 Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
@@ -138,14 +130,13 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     LinkOtkupIDsToOtpremnica otkupIDs, mActiveOtpID
 
-    ' ClearOtkupFields je obrisao txtCena – cena je po otpremnici, vrati je
+    ' ClearOtkupFields je obrisao txtCena – cena je po otpremnici, vrati je.
+    ' (Broj otkupnog lista je ClearOtkupFields vec osvezio preko
+    '  RefreshBrojDokumentaSuggestion: OM iz polja + datum iz txtDatum, koji
+    '  jos drze vrednosti izabrane otpremnice.)
     If mCenaBlok.Exists(mActiveOtpID) Then
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
-
-    ' Broj otkupnog lista: sledeci redni broj za OM (iz polja) + datum otpremnice
-    Dim brDok As String: brDok = OtpBrojDok(mActiveOtpID)
-    If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
 
     LoadBlokovi
     LoadOtpremnice
@@ -232,11 +223,6 @@ Private Sub BuildPanel()
     ' Eventi
     WireTxt mTxtCenaOtp, "CENA"
     WireLst mLstOtp, "OTP"
-
-    ' osvezi broj otkupnog lista kad se promeni "Otkupno mesto" u levoj formi
-    On Error Resume Next
-    WireCmb mForm.Controls("cmbOtkupnoMesto"), "OMCHANGE"
-    On Error GoTo 0
 End Sub
 
 Private Sub SetPanelVisible(ByVal b As Boolean)
@@ -390,6 +376,15 @@ End Sub
 Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     On Error Resume Next
 
+    ' Datum (i broj zbirne) PRE otkupnog mesta: broj otkupnog lista racuna
+    ' frmOtkup.cmbOtkupnoMesto_Change preko RefreshBrojDokumentaSuggestion iz
+    ' (izabrani OM + txtDatum), pa datum mora vec da stoji kad se OM postavi.
+    Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
+    If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
+    SetLeftCtl "txtBrojZbirne", CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
+
+    ' Otkupno mesto: njegov _Change u frmOtkup osvezi broj otkupnog lista
+    ' (OM iz polja + datum iz txtDatum) i listu kooperanata te stanice.
     SetComboByIdAny mForm.Controls("cmbOtkupnoMesto"), _
                     CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
     mForm.Controls("cmbVrstaVoca").value = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA))
@@ -397,14 +392,7 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     SetComboByIdAny mForm.Controls("cmbVozac"), _
                     CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC))
 
-    SetLeftCtl "txtBrojZbirne", CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
-    Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
-    If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
     SetLeftCtl "txtCena", Format$(cena, "0.00")
-
-    ' Broj otkupnog lista po OM + datumu OTPREMNICE (ne danasnji datum)
-    Dim brDok As String: brDok = OtpBrojDok(otpID)
-    If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
 End Sub
 
 ' Promena cene gore -> vazi za celu otpremnicu (sve blokove) + leva forma.
@@ -424,19 +412,6 @@ Private Sub OnCenaChanged()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.OnCenaChanged"
-End Sub
-
-' Promena "Otkupno mesto" u levoj formi -> osvezi broj otkupnog lista
-' (OM prati polje; datum ostaje iz otpremnice).
-Private Sub OnOmChanged()
-    On Error GoTo EH
-    If Not mVisible Then Exit Sub
-    If Len(mActiveOtpID) = 0 Then Exit Sub
-    Dim brDok As String: brDok = OtpBrojDok(mActiveOtpID)
-    If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
-    Exit Sub
-EH:
-    LogErr "modOtkupBlok.OnOmChanged"
 End Sub
 
 Private Sub RefreshSummary()
@@ -561,23 +536,6 @@ Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
         End If
     Next i
 End Sub
-
-' Broj otkupnog lista za izabranu otpremnicu: OM iz polja "Otkupno mesto"
-' (uskladjen sa onim sto ce se sacuvati), DATUM iz otpremnice. Redni broj
-' (prvi bez sufiksa, ostali -N) racuna GenerateBrojDokumenta iz tblOtkup.
-Private Function OtpBrojDok(ByVal otpID As String) As String
-    On Error Resume Next
-
-    Dim stanicaID As String
-    stanicaID = GetComboID(mForm.Controls("cmbOtkupnoMesto"))
-    If Len(Trim$(stanicaID)) = 0 Then _
-        stanicaID = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
-
-    Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
-    If Len(Trim$(stanicaID)) = 0 Or Not IsDate(vDat) Then Exit Function
-
-    OtpBrojDok = GenerateBrojDokumenta(stanicaID, CDate(vDat))
-End Function
 
 Private Function SumKolByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
@@ -758,12 +716,5 @@ Private Sub WireLst(ByVal l As Object, ByVal act As String)
     Dim w As clsBlokUI: Set w = New clsBlokUI
     w.action = act
     Set w.lst = l
-    mWrappers.Add w
-End Sub
-
-Private Sub WireCmb(ByVal c As Object, ByVal act As String)
-    Dim w As clsBlokUI: Set w = New clsBlokUI
-    w.action = act
-    Set w.cmb = c
     mWrappers.Add w
 End Sub
