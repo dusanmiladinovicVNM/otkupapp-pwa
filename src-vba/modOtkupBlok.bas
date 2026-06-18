@@ -33,14 +33,14 @@ Option Explicit
 Private Const PANEL_LEFT  As Double = 302
 Private Const OTP_W       As Double = 346
 Private Const BLOK_LEFT   As Double = 652       ' PANEL_LEFT + OTP_W + 4 (manji razmak)
-Private Const BLOK_W      As Double = 494
+Private Const BLOK_W      As Double = 512
 Private Const GRID_TOP    As Double = 88
-Private Const EXP_WIDTH   As Double = 1158
+Private Const EXP_WIDTH   As Double = 1168
 Private Const TOGGLE_W    As Double = 130
 
 Private Const OTP_COLW  As String = "0;0;58;38;56;68;44;42;36"
 Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Hladnjaca;Prodajna;Cena za;Ostatak"
-Private Const BLOK_COLW As String = "0;42;104;58;44;46;66;58;66"
+Private Const BLOK_COLW As String = "0;60;104;58;44;46;66;58;66"
 Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Kolicina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
 
 ' --- Stanje (modul-level; jedna frmOtkup instanca po sekciji) ---
