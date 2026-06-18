@@ -135,6 +135,10 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
 
+    ' Broj otkupnog lista: sledeci redni broj za OM (iz polja) + datum otpremnice
+    Dim brDok As String: brDok = OtpBrojDok(mActiveOtpID)
+    If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
+
     LoadBlokovi
     LoadOtpremnice
     RefreshSummary
@@ -384,6 +388,10 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
     If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
     SetLeftCtl "txtCena", Format$(cena, "0.00")
+
+    ' Broj otkupnog lista po OM + datumu OTPREMNICE (ne danasnji datum)
+    Dim brDok As String: brDok = OtpBrojDok(otpID)
+    If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
 End Sub
 
 ' Promena cene gore -> vazi za celu otpremnicu (sve blokove) + leva forma.
@@ -527,6 +535,23 @@ Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
         End If
     Next i
 End Sub
+
+' Broj otkupnog lista za izabranu otpremnicu: OM iz polja "Otkupno mesto"
+' (uskladjen sa onim sto ce se sacuvati), DATUM iz otpremnice. Redni broj
+' (prvi bez sufiksa, ostali -N) racuna GenerateBrojDokumenta iz tblOtkup.
+Private Function OtpBrojDok(ByVal otpID As String) As String
+    On Error Resume Next
+
+    Dim stanicaID As String
+    stanicaID = GetComboID(mForm.Controls("cmbOtkupnoMesto"))
+    If Len(Trim$(stanicaID)) = 0 Then _
+        stanicaID = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
+
+    Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
+    If Len(Trim$(stanicaID)) = 0 Or Not IsDate(vDat) Then Exit Function
+
+    OtpBrojDok = GenerateBrojDokumenta(stanicaID, CDate(vDat))
+End Function
 
 Private Function SumKolByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
