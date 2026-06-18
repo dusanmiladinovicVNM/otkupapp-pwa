@@ -572,6 +572,12 @@ Private Sub btnUnos_Click()
 
     MsgBox "Otkup sacuvan: " & result, vbInformation, APP_NAME
 
+    ' Otkupni list: PDF (po CFG_OTKUP_PRINT_MODE; podrazumevano PDF + otvori) za
+    ' upravo sacuvani blok. Best-effort: greska ne sme da obori potvrdu snimanja.
+    On Error Resume Next
+    OutputOtkupniList result
+    On Error GoTo 0
+
     ClearOtkupFields
 
     ' Panel "Otkupni blokovi": vezi upravo sacuvani red za izabranu otpremnicu
