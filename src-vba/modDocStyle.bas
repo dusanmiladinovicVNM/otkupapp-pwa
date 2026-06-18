@@ -29,34 +29,15 @@ Public Function DocConfigOr(ByVal key As String, ByVal dflt As String) As String
     If v = "" Then DocConfigOr = dflt Else DocConfigOr = v
 End Function
 
-' Cita config probajuci vise mogucih kljuceva, neosetljivo na velika/mala slova
-' i na visak razmaka. Vraca prvu nepraznu vrednost; inace dflt.
+' Cita config probajuci vise mogucih kljuceva (GetConfigValue je vec tolerantan
+' na visak razmaka i velika/mala slova). Vraca prvu nepraznu vrednost; inace dflt.
 Public Function DocConfigOrKeys(ByVal dflt As String, ParamArray keys() As Variant) As String
     Dim i As Long, v As String
     For i = LBound(keys) To UBound(keys)
-        v = DocConfigCI(CStr(keys(i)))
+        v = GetConfigValue(CStr(keys(i)))
         If v <> "" Then DocConfigOrKeys = v: Exit Function
     Next i
     DocConfigOrKeys = dflt
-End Function
-
-' Case-insensitive citanje iz tblSEFConfig (ConfigKey -> ConfigValue).
-Public Function DocConfigCI(ByVal key As String) As String
-    On Error GoTo done
-    Dim d As Variant: d = GetTableData("tblSEFConfig")
-    If IsEmpty(d) Then Exit Function
-    Dim ki As Long, vi As Long
-    ki = GetColumnIndex("tblSEFConfig", "ConfigKey")
-    vi = GetColumnIndex("tblSEFConfig", "ConfigValue")
-    If ki = 0 Or vi = 0 Then Exit Function
-    Dim i As Long
-    For i = 1 To UBound(d, 1)
-        If StrComp(Trim$(CStr(d(i, ki))), Trim$(key), vbTextCompare) = 0 Then
-            DocConfigCI = Trim$(CStr(d(i, vi)))
-            Exit Function
-        End If
-    Next i
-done:
 End Function
 
 ' Podrazumevana klauzula o PDV nadoknadi (cl. 34 ZPDV). Override preko
