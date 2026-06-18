@@ -4265,7 +4265,7 @@ Canonical keys:
 | `LICENSE_ENABLED` | Per-device license gate toggle (`YES`/`NO`, default `NO` = off). Owned by `modLicense`. |
 | `LICENSE_ENDPOINT` | GAS Web App `/exec` URL for `checkLicense` (falls back to `MONITORING_ENDPOINT` if empty). |
 | `LICENSE_KEY` | Per-device license key assigned to this workstation. |
-| `LICENSE_TOKEN` / `LICENSE_BOUND_PARTS` / `LICENSE_NEXT_CHECK` / `LICENSE_STATUS` | Internal client cache written by `modLicense` (do not edit manually). |
+| `LICENSE_TOKEN` / `LICENSE_BOUND_PARTS` / `LICENSE_NEXT_CHECK` / `LICENSE_STATUS` / `LICENSE_HWM` | Internal client cache written by `modLicense` (do not edit manually). `LICENSE_HWM` is the anti-rollback high-water-mark (mirrors `TRIAL_HWM`). |
 | `TRIAL_ENABLED` | Time-limited trial toggle for **unlicensed** machines (`YES`/`NO`, default `NO`). Owned by `modTrial`. |
 | `TRIAL_START` / `TRIAL_DAYS` | Trial window start (`yyyy-mm-dd`) and length in days. Empty → `modTrial` Const defaults. |
 | `TRIAL_HWM` | Internal anti-rollback high-water-mark written by `modTrial` (do not edit manually). |

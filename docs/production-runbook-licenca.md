@@ -42,7 +42,8 @@ Da li masina ima internet:
 * **Vezivanje živi na serveru** (GAS `Licenses` tab u Stammdaten), ne u `.xlsm`. Kopiranje fajla ne daje pristup.
 * Klijent (`modLicense`) izračuna otisak (`MachineGuid|SMBIOS UUID|VolumeSerial`), pošalje sirove komponente GAS-u; server ih **soli + hešira** (SHA-256) i čuva samo heš. Fuzzy match **2 od 3** toleriše manju promenu hardvera.
 * „Prva aktivacija veže": prvi računar koji aktivira ključ se veže; svaki drugi → `BOUND_OTHER`.
-* Token (HMAC) + `LICENSE_NEXT_CHECK` daju **offline grace** (default 7 dana); prva aktivacija mora online.
+* Token (HMAC) + `LICENSE_NEXT_CHECK` daju **offline grace** (default **3 dana**); prva aktivacija mora online.
+* **Anti-rollback** (`LICENSE_HWM`, ista tehnika kao trial): ako je sistemski sat vraćen ispod ranije viđenog datuma, offline grace se ne priznaje → forsira se online provera. Deterrent sloj (HWM je editabilan); **server je autoritet**.
 * **Opt-in:** gate radi samo ako je `LICENSE_ENABLED = YES`.
 * **Trial (fallback):** mašina **bez ključa** dobija vremenski trial (ako je uključen); **licencirana mašina nikad ne vidi trial**. Orkestrira `modLicense.AccessGateOrQuit` (par `modLicense` + `modTrial`).
 
@@ -126,8 +127,9 @@ Da li masina ima internet:
 | `EXPIRED` | `ExpiresAt` prošao | Produži datum u `Licenses` ili nov ključ |
 | `UNKNOWN_KEY` | ključ ne postoji / pogrešno ukucan | Proveri evidenciju; ključ je case/crtica-tolerantan ali mora postojati |
 | „Aktivacija zahteva internet" | prva aktivacija bez mreže | Poveži na internet i pokreni ponovo |
-| „Probni period je istekao" | trial istekao (mašina **nema ključ**) | Unesi licencu (`ActivateLicensePrompt`) ili produži `TRIAL_DAYS`/`TRIAL_START` u `tblSEFConfig` |
-| „Sistemski datum je vraćen unazad" | anti-rollback (sat unazad ispod ranije viđenog) ili prazna CMOS baterija | Ispravi sistemski sat; ako je lažna detekcija, obriši `TRIAL_HWM` u `tblSEFConfig` |
+| „Licencni server trenutno nije dostupan / pokušajte ponovo" | prolazna serverska greška (ERROR / lock-timeout) pri **prvoj** aktivaciji | Retry za koji minut; već vezana mašina i dalje radi (offline grace) |
+| „Probni period je istekao" | trial istekao (mašina **nema ključ**) | Ako je licenca uključena, mašina **odmah nudi unos ključa** (InputBox) → unesi i aktiviraj. Inače produži `TRIAL_DAYS`/`TRIAL_START`. Fallback: otvori `.xlsm` sa **onemogućenim makroima**, upiši `LICENSE_KEY` u `tblSEFConfig`, pa otvori normalno |
+| „Sistemski datum je vraćen unazad" | anti-rollback (sat unazad ispod ranije viđenog) ili prazna CMOS baterija | Ispravi sistemski sat; lažna detekcija: obriši `TRIAL_HWM`/`LICENSE_HWM` u `tblSEFConfig` |
 
 Dijagnostika otiska: **Alt+F8 → `LicenseShowDevice`** (prikaže MachineGuid/UUID/VolSerial).
 Server log: GAS error sheet (`source=LICENSE`) beleži `BOUND_OTHER`/odbijanja; uspesi idu u Logger.
@@ -144,7 +146,7 @@ adminSuspendLicense('KLJUC');              // uskrati pristup
 adminActivateLicense('KLJUC');             // vrati pristup
 ```
 
-> Kill-switch (`SUSPENDED`) se na mašini primeni najkasnije po isteku offline grace (`LICENSE_DEFAULT_GRACE_DAYS`, sad 7 dana). Za bržu primenu smanji konstantu (`modLicense` + `Code.gs`), redeploy + re-sign.
+> Kill-switch (`SUSPENDED`) se na mašini primeni najkasnije po isteku offline grace (`LICENSE_DEFAULT_GRACE_DAYS`, sad **3 dana**), a ranije čim mašina ode online. Za drugačiji prozor menjaj `LICENSE_DEFAULT_GRACE_DAYS` u `gas/Code.gs` (server šalje `graceDays`). Anti-rollback (`LICENSE_HWM`) sprečava da se grace produži vraćanjem sata.
 
 ---
 

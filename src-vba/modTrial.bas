@@ -111,6 +111,27 @@ Public Function TrialEnabled() As Boolean
     End Select
 End Function
 
+' Da li je trial TRENUTNO aktivan (ukljucen, u roku, sat nije vracen unazad).
+' CISTA provera bez side-efekata (ne blokira, ne pise HWM) — ogledalo allow-uslova
+' iz TrialGateOrQuit. Koristi je modLicense.AccessGateOrQuit da bira izmedju
+' trial-a i inline unosa licence.
+Public Function TrialActive() As Boolean
+    On Error Resume Next
+    If Not TrialEnabled() Then Exit Function
+
+    Dim today As Date: today = Date
+    If today > TrialStartDate() + TrialDays() Then Exit Function     ' istekao
+
+    Dim hwm As String: hwm = Trim$(GetConfigValue(TRIAL_KEY_HWM))
+    If Len(hwm) > 0 Then
+        If IsDate(hwm) Then
+            If today < CDate(hwm) Then Exit Function                  ' sat vracen unazad
+        End If
+    End If
+
+    TrialActive = True
+End Function
+
 ' Efektivni pocetni datum: Config TRIAL_START (ISO), fallback na Const datum.
 Private Function TrialStartDate() As Date
     Dim s As String

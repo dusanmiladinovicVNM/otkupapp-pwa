@@ -44,6 +44,7 @@ Private Const CFG_LIC_TOKEN       As String = "LICENSE_TOKEN"
 Private Const CFG_LIC_BOUND_PARTS As String = "LICENSE_BOUND_PARTS"
 Private Const CFG_LIC_NEXT_CHECK  As String = "LICENSE_NEXT_CHECK"
 Private Const CFG_LIC_STATUS      As String = "LICENSE_STATUS"
+Private Const CFG_LIC_HWM          As String = "LICENSE_HWM"   ' anti-rollback high-water-mark
 Private Const CFG_MON_ENDPOINT    As String = "MONITORING_ENDPOINT"
 
 ' Koliko od 3 komponente otiska mora da se poklopi (fuzzy match) da bi se
@@ -51,7 +52,8 @@ Private Const CFG_MON_ENDPOINT    As String = "MONITORING_ENDPOINT"
 Private Const LIC_MIN_MATCH As Long = 2
 
 ' Fallback offline grace (dana) ako server ne posalje graceDays.
-Private Const LIC_DEFAULT_GRACE_DAYS As Long = 7
+' Kraci grace = manja vrednost odlaganja re-provere (suspend se primeni brze).
+Private Const LIC_DEFAULT_GRACE_DAYS As Long = 3
 
 Private Const HTTP_TIMEOUT_MS As Long = 8000
 Private Const HTTP_RECV_TIMEOUT_MS As Long = 15000
@@ -81,11 +83,27 @@ Public Function AccessGateOrQuit() As Boolean
     Dim hasKey As Boolean: hasKey = (Len(Trim$(GetConfigValue(CFG_LIC_KEY))) > 0)
 
     If licOn And hasKey Then
-        AccessGateOrQuit = LicenseGateOrQuit()          ' licenca je autoritet
+        ' Masina ima licencu -> licenca je autoritet.
+        AccessGateOrQuit = LicenseGateOrQuit()
+
     ElseIf modTrial.TrialEnabled() Then
-        AccessGateOrQuit = modTrial.TrialGateOrQuit()   ' nema kljuca -> trial vlada
+        If modTrial.TrialActive() Then
+            ' Nema kljuca, trial jos traje -> trial gate (propusta + HWM update).
+            AccessGateOrQuit = modTrial.TrialGateOrQuit()
+        ElseIf licOn Then
+            ' Trial istekao, ali licenca je put napred -> ponudi kljuc INLINE
+            ' (resava N9: inace se masina zatvori pre nego sto stignes
+            ' Alt+F8 -> ActivateLicensePrompt).
+            AccessGateOrQuit = PromptLicenseOnTrialExpiry()
+        Else
+            ' Trial-only (licenca off) i istekao -> standardni trial blok.
+            AccessGateOrQuit = modTrial.TrialGateOrQuit()
+        End If
+
     ElseIf licOn Then
-        AccessGateOrQuit = LicenseGateOrQuit()          ' nema kljuca, trial off -> trazi licencu
+        ' Nema kljuca, trial off -> trazi licencu (blokira "unesite kljuc").
+        AccessGateOrQuit = LicenseGateOrQuit()
+
     Else
         AccessGateOrQuit = True                         ' ni licenca ni trial nisu ukljuceni
     End If
@@ -150,15 +168,20 @@ Public Function LicenseGateOrQuit() As Boolean
     ' modStanicaLock. Bez ovoga brzi offline put se nikad ne bi izvrsio.
     Dim nextChk As String: nextChk = Replace(Trim$(GetConfigValue(CFG_LIC_NEXT_CHECK)), "T", " ")
 
-    ' --- BRZI OFFLINE PUT: unutar grace prozora + ovo je vezana masina ---
-    If Len(bound) > 0 Then
-        If LicPartsMatch(parts, bound) >= LIC_MIN_MATCH Then
-            If Len(nextChk) > 0 Then
-                If IsDate(nextChk) Then
-                    If Now < CDate(nextChk) Then
-                        LicenseGateOrQuit = True
-                        Exit Function
-                    End If
+    ' Anti-rollback (N1): ako je sistemski sat vracen ISPOD ranije vidjenog
+    ' datuma, NE veruj offline grace-u (forsiraj online). HWM tehnika kao u
+    ' modTrial. Deterrent sloj (HWM je editabilan); pravi autoritet je server.
+    Dim today As Date: today = Date
+    Dim rolledBack As Boolean: rolledBack = LicenseClockRolledBack(today)
+    Call LicenseAdvanceHwm(today)
+
+    ' --- BRZI OFFLINE PUT: vezana masina + unutar grace + sat NIJE vracen ---
+    If Not rolledBack And LicenseIsBoundMachine(bound, parts) Then
+        If Len(nextChk) > 0 Then
+            If IsDate(nextChk) Then
+                If Now < CDate(nextChk) Then
+                    LicenseGateOrQuit = True
+                    Exit Function
                 End If
             End If
         End If
@@ -174,7 +197,7 @@ Public Function LicenseGateOrQuit() As Boolean
         ' Server nedostupan. Ako je OVO vec vezana masina -> offline grace,
         ' da privremeni nestanak interneta ne zakljuca platisu. Ako masina
         ' NIJE vezana (nema validnog kesa) -> blokiraj (aktivacija mora online).
-        If Len(bound) > 0 And LicPartsMatch(parts, bound) >= LIC_MIN_MATCH Then
+        If LicenseIsBoundMachine(bound, parts) Then
             LogWarn SRC, "Server nedostupan — offline grace (masina je vezana)."
             LicenseGateOrQuit = True
             Exit Function
@@ -209,13 +232,28 @@ Public Function LicenseGateOrQuit() As Boolean
                          "Proverite kljuc ili kontaktirajte dobavljaca."
             LicenseGateOrQuit = False
 
-        Case Else
-            ' Neocekivan odgovor: ne brick-uj vec vezanu (placenu) masinu.
-            If Len(bound) > 0 And LicPartsMatch(parts, bound) >= LIC_MIN_MATCH Then
-                LogWarn SRC, "Neocekivan status='" & status & "' — propustam vezanu masinu."
+        Case "BAD_DEVICE"
+            ' N2: otisak preslab (prakticno nedostizno — klijent pre-proverava).
+            ' Vezanu masinu propusti; inace jasna poruka o uredjaju.
+            If LicenseIsBoundMachine(bound, parts) Then
                 LicenseGateOrQuit = True
             Else
-                LicenseBlock "Neocekivan odgovor servera za licencu.", Left$(resp, 200)
+                LicenseBlock "Ne mogu pouzdano da ocitam ovaj uredjaj.", _
+                             "WMI/registry nedostupan. Kontaktirajte dobavljaca."
+                LicenseGateOrQuit = False
+            End If
+
+        Case Else
+            ' N3: prolazna/neocekivana greska servera (success:false -> ERROR,
+            ' LOCK_TIMEOUT bez status polja, prazan status...). Tretiraj kao
+            ' privremeno: vezana masina -> offline grace; inace pozovi na ponovni
+            ' pokusaj (NE alarmantno "kontaktirajte dobavljaca").
+            If LicenseIsBoundMachine(bound, parts) Then
+                LogWarn SRC, "Prolazna greska/status='" & status & "' — propustam vezanu masinu."
+                LicenseGateOrQuit = True
+            Else
+                LicenseBlock "Licencni server trenutno nije dostupan.", _
+                             "Pokusajte ponovo za koji minut."
                 LicenseGateOrQuit = False
             End If
     End Select
@@ -226,6 +264,59 @@ EH:
     ' (isti princip kao modTrial; prava zastita je ionako server-side).
     LogErr SRC
     LicenseGateOrQuit = True
+End Function
+
+' ============================================================
+' PRIVATE — gate helperi (bound check, anti-rollback, inline aktivacija)
+' ============================================================
+
+' Da li je ovo VEZANA masina: ima sacuvane BOUND_PARTS i fuzzy match >= prag.
+Private Function LicenseIsBoundMachine(ByVal bound As String, ByVal parts As String) As Boolean
+    LicenseIsBoundMachine = (Len(bound) > 0 And LicPartsMatch(parts, bound) >= LIC_MIN_MATCH)
+End Function
+
+' Anti-rollback: da li je danasnji datum ISPOD ranije vidjenog (LICENSE_HWM).
+Private Function LicenseClockRolledBack(ByVal today As Date) As Boolean
+    On Error Resume Next
+    Dim hwm As String: hwm = Replace(Trim$(GetConfigValue(CFG_LIC_HWM)), "T", " ")
+    If Len(hwm) > 0 Then
+        If IsDate(hwm) Then LicenseClockRolledBack = (today < CDate(hwm))
+    End If
+End Function
+
+' Pomeri LICENSE_HWM na najkasniji vidjeni datum (nikad unazad).
+Private Sub LicenseAdvanceHwm(ByVal today As Date)
+    On Error Resume Next
+    Dim hwm As String: hwm = Replace(Trim$(GetConfigValue(CFG_LIC_HWM)), "T", " ")
+    If Len(hwm) = 0 Or (IsDate(hwm) And today > CDate(hwm)) Then
+        SetConfigValue CFG_LIC_HWM, Format$(today, "yyyy-mm-dd")
+    End If
+End Sub
+
+' N9: probni period istekao a licenca je ukljucena -> ponudi unos kljuca odmah
+' (jedan InputBox, bez prethodnog trial-blok dijaloga). Ako korisnik odustane,
+' blokira kao i inace.
+Private Function PromptLicenseOnTrialExpiry() As Boolean
+    On Error GoTo EH
+    Application.Visible = True
+    Dim key As String
+    key = Trim$(InputBox( _
+        "Probni period je istekao." & vbCrLf & vbCrLf & _
+        "Unesite licencni kljuc za nastavak (Cancel = izlaz):", APP_NAME))
+    If Len(key) = 0 Then
+        LicenseBlock "Probni period je istekao.", _
+                     "Unesite licencu (Alt+F8 -> ActivateLicensePrompt) ili kontaktirajte dobavljaca."
+        PromptLicenseOnTrialExpiry = False
+        Exit Function
+    End If
+    SetConfigValue CFG_LIC_KEY, key
+    SetConfigValue CFG_LIC_NEXT_CHECK, ""
+    SetConfigValue CFG_LIC_BOUND_PARTS, ""
+    PromptLicenseOnTrialExpiry = LicenseGateOrQuit()    ' standardna online aktivacija
+    Exit Function
+EH:
+    LogErr "modLicense.PromptLicenseOnTrialExpiry"
+    PromptLicenseOnTrialExpiry = True                   ' fail-open
 End Function
 
 ' ============================================================

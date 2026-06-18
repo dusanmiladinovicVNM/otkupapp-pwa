@@ -58,8 +58,9 @@ Zatim na svakom računaru jednokratno: **Alt+F8 → `ActivateLicensePrompt`** i 
 | Pročitaj otisak mašine (support) | VBA: **Alt+F8 → `LicenseShowDevice`**       |
 
 Kill-switch (`SUSPENDED`/`EXPIRED`) se na mašini primeni najkasnije po isteku
-offline grace prozora (`LICENSE_DEFAULT_GRACE_DAYS`, podrazumevano 7 dana).
-Za bržu primenu smanji konstantu.
+offline grace prozora (`LICENSE_DEFAULT_GRACE_DAYS`, podrazumevano 3 dana), a
+ranije čim mašina ode online. Anti-rollback (`LICENSE_HWM`) sprečava produženje
+grace-a vraćanjem sistemskog sata.
 
 ## Desktop-only / cloud-sync
 

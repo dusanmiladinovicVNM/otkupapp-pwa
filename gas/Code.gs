@@ -5703,7 +5703,7 @@ var LICENSE_SHEET_NAME = 'Licenses';
 var LICENSE_HEADERS = ['LicenseKey', 'Customer', 'Status', 'BoundParts',
   'BoundDeviceHash', 'BoundAt', 'LastSeen', 'LastDeviceInfo', 'ExpiresAt', 'Notes'];
 var LICENSE_MIN_PART_MATCH = 2;                         // fuzzy: koliko od 3 mora da se poklopi
-var LICENSE_DEFAULT_GRACE_DAYS = 7;                     // offline grace pre prisilne re-provere
+var LICENSE_DEFAULT_GRACE_DAYS = 3;                     // offline grace pre prisilne re-provere (kraci = brzi kill-switch)
 var LICENSE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // 30 dana
 
 function checkLicense(data) {
