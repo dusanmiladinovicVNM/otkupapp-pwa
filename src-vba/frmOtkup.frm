@@ -570,6 +570,12 @@ Private Sub btnUnos_Click()
     MsgBox "Otkup sacuvan: " & result, vbInformation, APP_NAME
 
     ClearOtkupFields
+
+    ' Panel "Otkupni blokovi": vezi upravo sacuvani red za izabranu otpremnicu
+    On Error Resume Next
+    OtkupBlok_AfterUnos result
+    On Error GoTo 0
+
     Exit Sub
 
 EH:
