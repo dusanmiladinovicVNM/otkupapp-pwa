@@ -33,7 +33,7 @@ Private Const PANEL_LEFT  As Double = 312
 Private Const OTP_W       As Double = 360
 Private Const BLOK_LEFT   As Double = 680       ' PANEL_LEFT + OTP_W + 8
 Private Const BLOK_W      As Double = 460
-Private Const GRID_TOP    As Double = 62
+Private Const GRID_TOP    As Double = 70
 Private Const EXP_WIDTH   As Double = 1155
 Private Const TOGGLE_W    As Double = 130
 
@@ -208,14 +208,14 @@ Private Sub BuildPanel()
 
     ' Naslovi
     Dim t1 As Object, t2 As Object
-    Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 30, OTP_W, 14)
+    Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 26, OTP_W, 14)
     t1.caption = "OTPREMNICE  (klik = izbor; puni levu formu)": StyleHdr t1
-    Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 30, BLOK_W, 14)
+    Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 26, BLOK_W, 14)
     t2.caption = "OTKUPNI BLOKOVI  (izabrane otpremnice)": StyleHdr t2
 
     ' Zaglavlja kolona
-    AddHeaders "hOtp", PANEL_LEFT, 46, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 46, BLOK_COLW, BLOK_CAPS
+    AddHeaders "hOtp", PANEL_LEFT, 42, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 42, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
@@ -421,6 +421,12 @@ Private Sub OnCenaTyping()
     If Not TryParseDouble(mTxtCenaOtp.value, cena) Or cena <= 0 Then Exit Sub
     mCenaBlok(mActiveOtpID) = cena
     SetLeftCtl "txtCena", Format$(cena, "0.00")
+
+    ' uzivo prikazi novu cenu u koloni "Cena za" za izabranu otpremnicu
+    Dim li As Long: li = mLstOtp.ListIndex
+    If li >= 0 Then
+        If CStr(mLstOtp.List(li, 0)) = mActiveOtpID Then mLstOtp.List(li, 7) = FmtKg(cena)
+    End If
     Exit Sub
 EH:
     LogErr "modOtkupBlok.OnCenaTyping"
@@ -711,10 +717,11 @@ Private Sub AddHeaders(ByVal prefix As String, ByVal baseLeft As Double, _
             Dim cap As String: cap = ""
             If k <= UBound(cArr) Then cap = cArr(k)
             Dim c As Object
-            Set c = AddCtl("Label", prefix & "_" & k, x, top, wv, 14)
+            Set c = AddCtl("Label", prefix & "_" & k, x, top, wv, 26)
             c.caption = cap
             On Error Resume Next
             StyleListHeaderLabel c
+            c.WordWrap = True
             On Error GoTo 0
         End If
         x = x + wv
