@@ -34,7 +34,7 @@ Private Const PANEL_LEFT  As Double = 312
 Private Const OTP_W       As Double = 360
 Private Const BLOK_LEFT   As Double = 680       ' PANEL_LEFT + OTP_W + 8
 Private Const BLOK_W      As Double = 460
-Private Const GRID_TOP    As Double = 72
+Private Const GRID_TOP    As Double = 80
 Private Const EXP_WIDTH   As Double = 1155
 Private Const TOGGLE_W    As Double = 130
 
@@ -262,17 +262,17 @@ Private Sub BuildPanel()
     mLblNapisano.caption = "U blokovima: —"
     mLblPreostalo.caption = "Preostalo: —"
 
-    ' Naslovi + dugmad
-    Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 26, 230, 14)
+    ' Naslovi + dugmad (dugmad levo od toggle-a da se ne preklapaju)
+    Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 28, 226, 14)
     t1.caption = "OTPREMNICE  (klik = izbor)": StyleHdr t1
-    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 118, 24, 118, 17)
+    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 27, 120, 18)
     mBtnFilter.caption = "Prikaz: Sve"
 
-    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 26, 200, 14)
+    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 28, 118, 14)
     t2.caption = "OTKUPNI BLOKOVI": StyleHdr t2
-    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + BLOK_W - 198, 24, 96, 17)
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 124, 27, 92, 18)
     mBtnStorno.caption = "Storniraj blok"
-    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + BLOK_W - 98, 24, 96, 17)
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 220, 27, 92, 18)
     mBtnPrint.caption = "Stampaj list"
 
     On Error Resume Next
@@ -282,8 +282,8 @@ Private Sub BuildPanel()
     On Error GoTo 0
 
     ' Zaglavlja kolona
-    AddHeaders "hOtp", PANEL_LEFT, 44, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 44, BLOK_COLW, BLOK_CAPS
+    AddHeaders "hOtp", PANEL_LEFT, 50, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 50, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
