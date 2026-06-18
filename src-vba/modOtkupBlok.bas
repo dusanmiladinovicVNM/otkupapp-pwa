@@ -102,7 +102,11 @@ EH:
 End Sub
 
 Public Sub OtkupBlok_OnText(ByVal action As String)
-    ' rezervisano (trenutno nema Change-vezanih polja)
+    On Error GoTo EH
+    If action = "CENA" Then OnCenaTyping
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.OtkupBlok_OnText"
 End Sub
 
 Public Sub OtkupBlok_OnTextAfter(ByVal action As String)
@@ -135,6 +139,8 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
     '  RefreshBrojDokumentaSuggestion: OM iz polja + datum iz txtDatum, koji
     '  jos drze vrednosti izabrane otpremnice.)
     If mCenaBlok.Exists(mActiveOtpID) Then
+        ' cena po otpremnici vazi za SVE blokove (i ako je menjana u toku)
+        ApplyCenaToOtpremnica mActiveOtpID, CDbl(mCenaBlok(mActiveOtpID))
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
 
@@ -403,6 +409,21 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
         Dim brDok As String: brDok = SuggestNextBroj(KIND_OTK, stanicaID, CDate(vDat), False)
         If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
     End If
+End Sub
+
+' Kucanje u "Cena po otpremnici" (Change) -> uzivo prebaci u levu txtCena i
+' zapamti cenu za otpremnicu. Lagano (bez upisa u sve blokove dok se kuca);
+' override cene iz otpremnice radi i ako AfterUpdate ne okine (dinamicki txtbox).
+Private Sub OnCenaTyping()
+    On Error GoTo EH
+    If Len(mActiveOtpID) = 0 Then Exit Sub
+    Dim cena As Double
+    If Not TryParseDouble(mTxtCenaOtp.value, cena) Or cena <= 0 Then Exit Sub
+    mCenaBlok(mActiveOtpID) = cena
+    SetLeftCtl "txtCena", Format$(cena, "0.00")
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.OnCenaTyping"
 End Sub
 
 ' Promena cene gore -> vazi za celu otpremnicu (sve blokove) + leva forma.
