@@ -29,6 +29,7 @@ Poruka koju vidi (tacne reci):
 Da li je menjao/reinstalirao racunar:
 Otisak masine (Alt+F8 -> LicenseShowDevice):
 LICENSE_ENABLED u tblSEFConfig (YES/NO):
+TRIAL_ENABLED u tblSEFConfig (YES/NO):
 Da li masina ima internet:
 ```
 
@@ -43,6 +44,17 @@ Da li masina ima internet:
 * „Prva aktivacija veže": prvi računar koji aktivira ključ se veže; svaki drugi → `BOUND_OTHER`.
 * Token (HMAC) + `LICENSE_NEXT_CHECK` daju **offline grace** (default 7 dana); prva aktivacija mora online.
 * **Opt-in:** gate radi samo ako je `LICENSE_ENABLED = YES`.
+* **Trial (fallback):** mašina **bez ključa** dobija vremenski trial (ako je uključen); **licencirana mašina nikad ne vidi trial**. Orkestrira `modLicense.AccessGateOrQuit` (par `modLicense` + `modTrial`).
+
+### Odluka pri pokretanju (`AccessGateOrQuit`)
+
+| `LICENSE_ENABLED` | `LICENSE_KEY` | `TRIAL_ENABLED` | Rezultat |
+|---|---|---|---|
+| NO | — | NO | **Propušta** (ništa se ne primenjuje) |
+| NO | — | YES | **Trial** (trial-only režim) |
+| YES | **ima ključ** | svejedno | **Licenca odlučuje** — OK propušta; `BOUND_OTHER`/`SUSPENDED`/`EXPIRED` blokira. **Trial se preskače.** |
+| YES | nema ključ | NO | **License gate** → „unesite ključ" blok |
+| YES | nema ključ | YES | **Trial** — u roku propušta, istek blokira |
 
 ---
 
@@ -65,10 +77,11 @@ Da li masina ima internet:
 > ⚠️ Gubitak/promena salta → svi sačuvani heševi nevažeći → **sve mašine `BOUND_OTHER`** dok ih ručno ne resetuješ.
 
 ### 3.3 VBA (master `.xlsm`)
-1. Uvezi `modLicense.bas` i `modLicenseTests.bas` u VBE.
+1. Uvezi `modLicense.bas`, `modLicenseTests.bas` **i `modTrial.bas`** u VBE.
+   > `modLicense` i `modTrial` su **par** (uzajamne reference) — oba moraju biti uvezena da projekat kompajlira, čak i ako trial ne koristiš.
 2. Dva mala dodatka (ako ne re-importuješ cele module):
-   * `modMain.StartApp`, posle `If Not m_Initialized Then InitApp`: `If Not LicenseGateOrQuit() Then Exit Sub`
-   * `ThisWorkbook.Workbook_Open`, posle `StartApp`: `If LicenseWasDenied() Then Exit Sub`
+   * `modMain.StartApp`, posle `If Not m_Initialized Then InitApp`: `If Not AccessGateOrQuit() Then Exit Sub`
+   * `ThisWorkbook.Workbook_Open`, posle `StartApp`: `If AccessWasDenied() Then Exit Sub`
 3. Debug → Compile VBAProject (bez greške).
 4. Alt+F8 → `TestLicense_All` → `FAIL=0`.
 5. **Re-sign** VBA projekat publisher sertifikatom; **bump** `APP_VERSION` u `modConfig`.
@@ -79,14 +92,27 @@ Da li masina ima internet:
 | `LICENSE_ENABLED` | `NO` (pilot prvo) |
 | `LICENSE_ENDPOINT` | prazno (koristi `MONITORING_ENDPOINT`) ili `/exec` URL |
 | `LICENSE_KEY` | **prazno** (po mašini) |
+| `TRIAL_ENABLED` | `NO` (uključi kad hoćeš trial-za-nelicencirane) |
+| `TRIAL_START` | `yyyy-mm-dd` početak trial prozora (prazno = Const default) |
+| `TRIAL_DAYS` | broj dana (prazno = Const default 10) |
 
 > ⚠️ Ostavi **prazne**: `LICENSE_KEY`, `LICENSE_TOKEN`, `LICENSE_BOUND_PARTS`, `LICENSE_NEXT_CHECK`, `LICENSE_STATUS`. Inače master nosi tvoje test-vezivanje na sve kopije.
+
+> Trial je **config-driven**: `TRIAL_ENABLED`/`TRIAL_START`/`TRIAL_DAYS` se menjaju u `tblSEFConfig` **bez recompile/re-sign**. Ako ključevi ne postoje → Const default-i u `modTrial` (trial OFF).
 
 ### 3.5 Pilot pa rollout
 * Provizija ključeva: `adminCreateLicense('Kupac C001', '')`.
 * Na test mašini `LICENSE_ENABLED=YES` → `ActivateLicensePrompt` → restart → mora normalno.
 * Dokaz: kopiraj `.xlsm` na drugu mašinu → `BOUND_OTHER`.
 * Tek onda rollout sa `LICENSE_ENABLED=YES`.
+
+### 3.6 Trial (opciono — fallback za mašine bez ključa)
+* **Aktivacija:** u `tblSEFConfig` postavi `TRIAL_ENABLED=YES`, `TRIAL_START=yyyy-mm-dd`, `TRIAL_DAYS=N`.
+* **Tipičan scenario rolloura:** uključi npr. 30-dnevni trial pa mašine **bez ključa rade 30 dana** dok provizioniraš licence; posle roka traže licencu.
+* **Licencirana mašina nikad ne vidi trial** — čim ima validan ključ, trial je nebitan.
+* **Gašenje:** `TRIAL_ENABLED=NO` → nelicencirane mašine ponovo padaju na license gate.
+
+> Trial je **deterrent** (offline, hardkodiran rok se može menjati u VBE); prava zaštita je licenca. Anti-rollback hvata vraćanje sata unazad preko `TRIAL_HWM`.
 
 ---
 
@@ -100,6 +126,8 @@ Da li masina ima internet:
 | `EXPIRED` | `ExpiresAt` prošao | Produži datum u `Licenses` ili nov ključ |
 | `UNKNOWN_KEY` | ključ ne postoji / pogrešno ukucan | Proveri evidenciju; ključ je case/crtica-tolerantan ali mora postojati |
 | „Aktivacija zahteva internet" | prva aktivacija bez mreže | Poveži na internet i pokreni ponovo |
+| „Probni period je istekao" | trial istekao (mašina **nema ključ**) | Unesi licencu (`ActivateLicensePrompt`) ili produži `TRIAL_DAYS`/`TRIAL_START` u `tblSEFConfig` |
+| „Sistemski datum je vraćen unazad" | anti-rollback (sat unazad ispod ranije viđenog) ili prazna CMOS baterija | Ispravi sistemski sat; ako je lažna detekcija, obriši `TRIAL_HWM` u `tblSEFConfig` |
 
 Dijagnostika otiska: **Alt+F8 → `LicenseShowDevice`** (prikaže MachineGuid/UUID/VolSerial).
 Server log: GAS error sheet (`source=LICENSE`) beleži `BOUND_OTHER`/odbijanja; uspesi idu u Logger.
@@ -125,6 +153,7 @@ adminActivateLicense('KLJUC');             // vrati pristup
 Ako uvođenje pravi problem u produkciji:
 
 * **Po mašini:** `LICENSE_ENABLED = NO` u `tblSEFConfig` → gate se preskače (fail-open).
+* **Trial:** `TRIAL_ENABLED = NO` → trial se gasi (nelicencirane mašine padaju na license gate).
 * **Flotno:** vrati prethodni `.xlsm` build (sa `LICENSE_ENABLED=NO`).
 * Server-side ne treba ništa gasiti — bez `LICENSE_ENABLED=YES` klijent ne zove `checkLicense`.
 

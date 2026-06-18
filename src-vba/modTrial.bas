@@ -7,8 +7,11 @@ Option Explicit
 ' zadatog pocetnog datuma (TRIAL_START_*). Dodatno detektuje vracanje
 ' sistemskog sata unazad (anti-rollback), inace se lock trivijalno zaobidje.
 '
-' >>> PODESI DOLE: TRIAL_START_* (pocetni "zadati datum") i TRIAL_DAYS. <<<
-' Iskljucivanje cele provere: TRIAL_ENABLED = False.
+' Podesavanje je CONFIG-DRIVEN preko tblSEFConfig (bez recompile/re-sign):
+'   TRIAL_ENABLED = YES/NO
+'   TRIAL_START   = "yyyy-mm-dd"   (pocetni "zadati" datum)
+'   TRIAL_DAYS    = broj dana
+' Ako kljuc nije u Config-u, koristi se Const default ispod.
 '
 ' Orkestrira ga modLicense.AccessGateOrQuit (pravilo "trial samo ako NIJE
 ' licenciran"); ne poziva se direktno iz StartApp.
@@ -19,18 +22,19 @@ Option Explicit
 ' okine anti-rollback; za kratak trial to je prihvatljiv kompromis.
 ' ============================================================
 
-' Default False: trial je DORMANT dok ga ne upalis. Dok je False, nelicencirana
-' masina ne dobija trial reprieve nego pada na license gate (ne propusta se).
-' >>> Za aktivaciju: postavi True + podesi TRIAL_START_* i TRIAL_DAYS. <<<
-Private Const TRIAL_ENABLED As Boolean = False
+' --- Config kljucevi (tblSEFConfig) ---
+Private Const CFG_TRIAL_ENABLED As String = "TRIAL_ENABLED"
+Private Const CFG_TRIAL_START   As String = "TRIAL_START"   ' ISO "yyyy-mm-dd"
+Private Const CFG_TRIAL_DAYS    As String = "TRIAL_DAYS"
 
-' >>> POCETNI ("zadati") DATUM — godina, mesec, dan <<<
+' --- Const DEFAULT-i (fallback kad Config kljuc ne postoji) ---
+' Default OFF: trial je dormant dok ga ne upalis (Config TRIAL_ENABLED=YES).
+' Dok je OFF, nelicencirana masina pada na license gate (ne propusta se).
+Private Const TRIAL_ENABLED_DEFAULT As Boolean = False
 Private Const TRIAL_START_Y As Integer = 2026
 Private Const TRIAL_START_M As Integer = 6
 Private Const TRIAL_START_D As Integer = 18
-
-' Broj dana vazenja od pocetnog datuma.
-Private Const TRIAL_DAYS As Long = 10
+Private Const TRIAL_DAYS_DEFAULT As Long = 10
 
 ' Config kljuc (tblSEFConfig) za high-water-mark = najkasniji vidjeni datum.
 Private Const TRIAL_KEY_HWM As String = "TRIAL_HWM"
@@ -41,13 +45,13 @@ Private Const TRIAL_KEY_HWM As String = "TRIAL_HWM"
 Public Function TrialGateOrQuit() As Boolean
     On Error GoTo EH
 
-    If Not TRIAL_ENABLED Then
+    If Not TrialEnabled() Then
         TrialGateOrQuit = True
         Exit Function
     End If
 
     Dim deadline As Date, today As Date
-    deadline = DateSerial(TRIAL_START_Y, TRIAL_START_M, TRIAL_START_D) + TRIAL_DAYS
+    deadline = TrialStartDate() + TrialDays()
     today = Date
 
     ' 1) PRIMARNO: istekao rok? Cista matematika datuma, bez zavisnosti ->
@@ -92,10 +96,44 @@ EH:
     TrialGateOrQuit = True
 End Function
 
-' Da li je trial ukljucen. Koristi modLicense.AccessGateOrQuit da odluci da li
-' nelicencirana masina dobija trial ili pada na license gate.
+' Da li je trial ukljucen (Config TRIAL_ENABLED, fallback Const). Koristi ga
+' modLicense.AccessGateOrQuit da odluci da li nelicencirana masina dobija trial
+' ili pada na license gate.
 Public Function TrialEnabled() As Boolean
-    TrialEnabled = TRIAL_ENABLED
+    Dim v As String
+    On Error Resume Next
+    v = UCase$(Trim$(GetConfigValue(CFG_TRIAL_ENABLED)))
+    On Error GoTo 0
+    Select Case v
+        Case "YES", "TRUE", "1", "ON", "ENABLED": TrialEnabled = True
+        Case "NO", "FALSE", "0", "OFF", "DISABLED": TrialEnabled = False
+        Case Else: TrialEnabled = TRIAL_ENABLED_DEFAULT   ' nema kljuca -> Const default
+    End Select
+End Function
+
+' Efektivni pocetni datum: Config TRIAL_START (ISO), fallback na Const datum.
+Private Function TrialStartDate() As Date
+    Dim s As String
+    On Error Resume Next
+    s = Trim$(GetConfigValue(CFG_TRIAL_START))
+    On Error GoTo 0
+    If Len(s) > 0 Then
+        s = Replace(s, "T", " ")          ' tolerisi ISO 'T' (VBA CDate ne razume)
+        If IsDate(s) Then
+            TrialStartDate = CDate(s)
+            Exit Function
+        End If
+    End If
+    TrialStartDate = DateSerial(TRIAL_START_Y, TRIAL_START_M, TRIAL_START_D)
+End Function
+
+' Efektivni broj dana: Config TRIAL_DAYS (>0), fallback na Const.
+Private Function TrialDays() As Long
+    Dim n As Long
+    On Error Resume Next
+    n = CLng(val(Trim$(GetConfigValue(CFG_TRIAL_DAYS))))
+    On Error GoTo 0
+    If n > 0 Then TrialDays = n Else TrialDays = TRIAL_DAYS_DEFAULT
 End Function
 
 ' ============================================================
