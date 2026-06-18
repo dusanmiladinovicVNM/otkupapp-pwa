@@ -23,6 +23,15 @@ Public Sub StartApp()
         correlationId:="VBA-STARTUP"
     On Error GoTo EH
 
+    ' --- License gate ---
+    ' No-op dok LICENSE_ENFORCE nije ukljucen u tblSEFConfig.
+    ' Kada je ukljucen i licenca nije validna, LicenseGateOrQuit zatvara svesku.
+    If Not LicenseGateOrQuit() Then Exit Sub
+
+    ' --- Trial / vremensko ogranicenje ---
+    ' Blokira pokretanje posle isteka roka (modTrial.TRIAL_START_* + TRIAL_DAYS).
+    If Not TrialGateOrQuit() Then Exit Sub
+
     If Not m_Initialized Then InitApp
 
     Application.Visible = False

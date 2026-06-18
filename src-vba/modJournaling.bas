@@ -472,6 +472,24 @@ End Sub
 
 
 ' ============================================================
+' PUBLIC - FlushNow
+'
+' Forsira snimanje radne sveske ODMAH, zaobilazeci debounce prozor.
+' Koristi se pre Unload-a sekcije / povratka na dashboard (frmOtkupAPP),
+' da se aktivna sekcija sigurno persistuje i pre nego sto se forma zatvori.
+'
+' Reuse hardened save putanje (AutoSaveAfterCommit): resetovanjem
+' m_HasAutoSaved guramo "first-save-always-saves" granu, cime se debounce
+' preskace za ovaj jedan poziv. Fail-soft: nikad ne sme da prekine UI tok.
+' ============================================================
+Public Sub FlushNow(ByVal reason As String)
+    On Error Resume Next
+    m_HasAutoSaved = False
+    AutoSaveAfterCommit "FlushNow:" & reason
+End Sub
+
+
+' ============================================================
 ' PRIVATE - Debounce check
 ' ============================================================
 
