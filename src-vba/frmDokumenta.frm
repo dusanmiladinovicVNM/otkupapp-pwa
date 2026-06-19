@@ -32,7 +32,10 @@ Private Sub UserForm_Activate()
     On Error GoTo EH
 
     EnsureUserFormChromeRemoved Me, mChromeRemoved
-    
+
+    ' Najnovijih 20 zbirnih u listbox (na svaki ulazak u formu -> pomaze "izadju pa udju").
+    LoadZbirneListbox
+
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
     
@@ -64,6 +67,7 @@ Private Sub UserForm_Activate()
     StyleSectionHeader fraOMUlaz, "Ulaz OM  (Novac kooperantu)"
     StyleSectionHeader fraIzlazKupci, "Izlaz Kupci  (Novac od kupca)"
     StyleSectionHeader fraStorno, "Storno"
+    StyleSectionHeader fraListaZbirnih, "Lista zbirnih"
         
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
@@ -323,6 +327,19 @@ Private Sub cmbOtkupnoMesto_Change()
     FillComboKooperantiByStanica cmbPrimalacOMUlaz, stanicaID
     UpdateOMAvansSaldo
     RefreshBrojOtpSuggestion
+
+    ' MALINA: vozac == par-vozac otkupnog mesta (VozacID == StanicaID).
+    ' Auto-izbor da otkupac ne mora rucno da bira vozaca (radi i za Zbirnu/Prijemnicu
+    ' jer dele isti cmbVozac). Ako par-vozac ne postoji, cmbVozac ostaje nepromenjen.
+    If IsMalinaMode() Then
+        Dim viMal As Long
+        For viMal = 0 To cmbVozac.ListCount - 1
+            If ExtractIDFromDisplay(CStr(cmbVozac.List(viMal))) = stanicaID Then
+                cmbVozac.ListIndex = viMal
+                Exit For
+            End If
+        Next viMal
+    End If
     
     Exit Sub
 
@@ -560,6 +577,17 @@ Private Sub btnUnosOtp_Click()
 
     MsgBox "Otpremnica sacuvana: " & result, vbInformation, APP_NAME
 
+    ' MALINA: otpremnica == zbirna -> auto-zbirna iz upravo snimljene otpremnice.
+    ' "Toggle" je config (IsMalinaMode); idempotentno (prazan-BrojZbirne filter).
+    If IsMalinaMode() Then
+        On Error Resume Next
+        Call AutoCreateZbirnaFromOtpremnice_TX
+        If Err.Number <> 0 Then LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
+        On Error GoTo EH
+    End If
+
+    LoadZbirneListbox   ' osvezi listu zbirnih (nova malina zbirna se odmah vidi)
+
     ClearOtpremnicaFields
 
     If txtBrojZbirne.value <> "" Then
@@ -629,12 +657,118 @@ Private Sub RefreshBrojZbirneSuggestion()
         ' Sinhronizuj u OTP sekciji (postojeca txtBrojZbirne_AfterUpdate logika
         ' na liniji 868 puca samo na manual edit; ovde radimo programatsko
         ' setovanje, _AfterUpdate ne puca, pa eksplicitno sinhronizujemo).
-        txtBrojZbirneOtp.value = suggested
+        ' MALINA: NE puni BrojZbirne u otpremnicu — mora ostati prazno da auto-zbirna
+        ' dodeli BrojZbirne = BrojOtpremnice (inace bi preskocila otpremnicu).
+        If Not IsMalinaMode() Then txtBrojZbirneOtp.value = suggested
     End If
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.RefreshBrojZbirneSuggestion"
+End Sub
+
+' ============================================================
+' Najnovijih 20 zbirnih -> listbox (desno od "Ulaz Kupci").
+' Pomaze operateru da izabere tacan BrojZbirne pri unosu prijemnice,
+' i kad izadje pa ponovo udje u formu. Distinct po BrojZbirne, najnovije prvo.
+' Kontrola na formi mora da se zove: lstZbirne (MSForms.ListBox).
+' ============================================================
+Private Sub LoadZbirneListbox()
+    On Error GoTo EH
+
+    StyleListBox lstZbirne                       ' tema (krem/forest, Segoe UI) kao lstData
+
+    ' --- Kolone: jedan izvor istine za sirine (listbox + header labele) ---
+    Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single
+    wBroj = 70: wDat = 55: wVrsta = 50: wSorta = 75
+    lstZbirne.Clear
+    lstZbirne.ColumnCount = 4
+    lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta
+
+    ' Header = 4 odvojene labele iznad kolona, stil kao lstData header (StyleListHeaderLabel).
+    StyleListHeaderLabel lblZbirneBrojZbirne
+    StyleListHeaderLabel lblZbirneDatum
+    StyleListHeaderLabel lblZbirneVrsta
+    StyleListHeaderLabel lblZbirneSorta
+    lblZbirneBrojZbirne.Caption = "Broj zbirne"
+    lblZbirneDatum.Caption = "Datum"
+    lblZbirneVrsta.Caption = "Vrsta"
+    lblZbirneSorta.Caption = "Sorta"
+
+    ' Poravnaj labele tacno po kolonama listbox-a: krece od pozicije prve labele
+    ' (koju je operater vec poravnao sa 1. kolonom), pa snap 2-4 po sirinama kolona.
+    ' Sve na istu liniju (Top prve) => neprekidna krem traka = izgled zaglavlja tabele.
+    Dim hx As Single, hTop As Single
+    hx = lblZbirneBrojZbirne.Left
+    hTop = lblZbirneBrojZbirne.Top
+    PlaceZbirneHeader lblZbirneBrojZbirne, hx, wBroj, hTop
+    hx = hx + wBroj
+    PlaceZbirneHeader lblZbirneDatum, hx, wDat, hTop
+    hx = hx + wDat
+    PlaceZbirneHeader lblZbirneVrsta, hx, wVrsta, hTop
+    hx = hx + wVrsta
+    PlaceZbirneHeader lblZbirneSorta, hx, wSorta, hTop
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim cBroj As Long, cDat As Long, cVrsta As Long, cSorta As Long
+    cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
+    cVrsta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
+    cSorta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
+    If cBroj = 0 Then Exit Sub
+
+    ' Reverse (najnovije dodate prvo), distinct po BrojZbirne, max 20.
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim r As Long, n As Long
+    For r = UBound(data, 1) To 1 Step -1
+        Dim broj As String: broj = Trim$(CStr(Nz(data(r, cBroj), "")))
+        If broj <> "" Then
+            If Not seen.Exists(broj) Then
+                seen.Add broj, True
+
+                Dim dStr As String: dStr = ""
+                If cDat > 0 Then
+                    If IsDate(data(r, cDat)) Then dStr = Format$(CDate(data(r, cDat)), "d.m.yyyy")
+                End If
+
+                lstZbirne.AddItem broj
+                lstZbirne.List(lstZbirne.ListCount - 1, 1) = dStr
+                lstZbirne.List(lstZbirne.ListCount - 1, 2) = CStr(Nz(data(r, cVrsta), ""))
+                lstZbirne.List(lstZbirne.ListCount - 1, 3) = CStr(Nz(data(r, cSorta), ""))
+
+                n = n + 1
+                If n >= 20 Then Exit For
+            End If
+        End If
+    Next r
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.LoadZbirneListbox"
+End Sub
+
+' Postavi jednu header labelu na tacan Left/Width/Top (poravnanje sa kolonom listbox-a).
+Private Sub PlaceZbirneHeader(ByVal lbl As MSForms.label, _
+                              ByVal leftPt As Single, _
+                              ByVal widthPt As Single, _
+                              ByVal topPt As Single)
+    On Error Resume Next
+    lbl.Left = leftPt
+    lbl.Width = widthPt
+    lbl.Top = topPt
+End Sub
+
+' Klik na red -> popuni BrojZbirne u sekciji "Unos prijemnice" + osvezi manjak.
+Private Sub lstZbirne_Click()
+    On Error Resume Next
+    If lstZbirne.ListIndex < 0 Then Exit Sub
+    txtBrojZbirnePrij.value = CStr(lstZbirne.List(lstZbirne.ListIndex, 0))
+    If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
 End Sub
 
 Public Function SaveOMUlaz_TX(ByVal datum As Date, _
@@ -1065,8 +1199,9 @@ End Sub
 ' ============================================================
 
 Private Sub txtBrojZbirne_AfterUpdate()
-    ' BrojZbirne auch in Otpremnica-Feld setzen
-    txtBrojZbirneOtp.value = txtBrojZbirne.value
+    ' BrojZbirne auch in Otpremnica-Feld setzen (NE u malina modu — otpremnica
+    ' mora ostati bez BrojZbirne da je auto-zbirna pokupi).
+    If Not IsMalinaMode() Then txtBrojZbirneOtp.value = txtBrojZbirne.value
     UpdateValidacija
 End Sub
 
