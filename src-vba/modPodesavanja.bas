@@ -86,7 +86,8 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", "Štampa paletnog lista", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
 
-    CfgAdd c, "Režim rada", "MALINA_MODE", "Režim otkupa maline", "bool"
+    CfgAdd c, "Malina režim", "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
+    CfgAdd c, "Malina režim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac (KupacID, auto-zbirna)", "text"
 
     Dim a() As Variant, i As Long
     ReDim a(0 To c.count - 1)
