@@ -584,7 +584,7 @@ Private Sub OutputPaletniListByMode(ByVal palID As String)
             Set ws = FillPaletaSablon(palID, broj, god)
             If Not ws Is Nothing Then ws.PrintPreview
         Case "PDF"
-            ExportPaletniListPDF palID, False   ' tihi PDF, bez papira
+            ExportPaletniListPDF palID, True    ' PDF + otvori (kao otkupni list)
         Case Else
             ' OFF ili prazno (DEFAULT) -> bez izlaza; snimanje ostaje trenutno.
             ' Auto-izlaz pune palete se ukljucuje rucno:
