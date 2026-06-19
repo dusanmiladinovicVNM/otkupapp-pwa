@@ -248,6 +248,18 @@ Public Const COL_TAMB_TEZINA As String = "TezinaGajbiceKg"
 Public Const COL_TPAL_TIP As String = "TipPalete"
 Public Const COL_TPAL_TEZINA As String = "TezinaKg"
 
+' tblCenovnik (cene po proizvodu — append-only istorija)
+' Kljuc: VrstaVoca + SortaVoca + Klasa. Poslednji red (najnoviji Datum)
+' je vazeci za otkup i dokumenta. Stari redovi ostaju radi kretanja cena.
+Public Const TBL_CENOVNIK As String = "tblCenovnik"
+Public Const COL_CEN_ID As String = "CenaID"
+Public Const COL_CEN_DATUM As String = "Datum"
+Public Const COL_CEN_VRSTA As String = "VrstaVoca"
+Public Const COL_CEN_SORTA As String = "SortaVoca"
+Public Const COL_CEN_KLASA As String = "Klasa"
+Public Const COL_CEN_CENA As String = "Cena"
+Public Const COL_CEN_CREATED As String = "CreatedAt"
+
 ' tblPrerada / tblPreradaStavka
 Public Const COL_PRE_ID As String = "PreradaID"
 Public Const COL_PRE_DATUM As String = "Datum"

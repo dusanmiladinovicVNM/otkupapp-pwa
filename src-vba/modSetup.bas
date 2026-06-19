@@ -705,19 +705,43 @@ Public Sub EnsurePaletniListSchema()
 
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
 
+    EnsureCenovnikSchema
+
     EnsurePaletaSablon
     EnsurePreradaSablon
 
     LogSetup "OK", "EnsurePaletniListSchema done"
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
            "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
-           "i kolonu GajbicaPoPaleti u tblKulture (malina = 240).", _
+           "i kolonu GajbicaPoPaleti u tblKulture (malina = 240)." & vbCrLf & _
+           "Cenovnik (tblCenovnik) se popunjava preko Maticnih podataka.", _
            vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
     MsgBox "Greska u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' ============================================================
+' Cenovnik (cene po proizvodu) — jednokratni schema setup.
+' Idempotentno: kreira tblCenovnik ako ne postoji, inace dopuni kolone.
+' Pokrenuti na master workbook-u (deo je EnsurePaletniListSchema, a moze
+' i samostalno: Alt+F8 -> EnsureCenovnikSchema).
+' ============================================================
+Public Sub EnsureCenovnikSchema()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_CENOVNIK, "Cenovnik", _
+        Array(COL_CEN_ID, COL_CEN_DATUM, COL_CEN_VRSTA, COL_CEN_SORTA, _
+              COL_CEN_KLASA, COL_CEN_CENA, COL_CEN_CREATED, COL_STORNIRANO)
+
+    LogSetup "OK", "EnsureCenovnikSchema done"
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureCenovnikSchema failed: " & Err.description
+    Err.Raise Err.Number, "EnsureCenovnikSchema", Err.description
 End Sub
 
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.

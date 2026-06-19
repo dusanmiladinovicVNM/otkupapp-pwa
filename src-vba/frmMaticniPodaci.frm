@@ -50,6 +50,10 @@ Private Sub UserForm_Initialize()
 
     ApplyFormTheme Me, BG_PANEL
 
+    ' Staticna dugmad ostaju stilizovana kao fallback; ceo meni se
+    ' (sve sekcije, postojece + nove) gradi dinamicki preko modMaticniLookups,
+    ' pa se .frx ne dira. Ako dinamicka izgradnja ne uspe, staticna dugmad
+    ' ostaju vidljiva i rade po starom.
     StyleMenuButton btnKooperanti, "Kooperanti"
     StyleMenuButton btnStanice, "Stanice"
     StyleMenuButton btnKupci, "Kupci"
@@ -57,6 +61,8 @@ Private Sub UserForm_Initialize()
     StyleMenuButton btnArtikli, "Artikli"
     StyleMenuButton btnParcele, "Parcele"
     StyleExitButton btnExit, "Izadji"
+
+    AttachMaticniMenu Me
 
     Exit Sub
 
@@ -139,13 +145,20 @@ EH:
     LogErr "frmStammdatenMenu.HoverMenuButton"
 End Sub
 
-Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
+' Javna ulazna tacka — otvara frmStammdaten za datu sekciju.
+' sekTag      = Tag za frmStammdaten (npr. "TipAmbalaze")
+' sekCaption  = naziv u naslovu (npr. "Ambalaza"); fallback na sekTag.
+' Poziva je i staticni handler (OpenStammdatenForm) i dinamicki meni
+' (modMaticniLookups). Drzi m_IsOpeningChild da Deactivate ne zatvori meni.
+Public Sub OpenSekcija(ByVal sekTag As String, Optional ByVal sekCaption As String = "")
     On Error GoTo EH
 
-    If Trim$(nazivSekcije) = "" Then
-        Err.Raise vbObjectError + 7601, "frmMaticniPodaci.OpenStammdatenForm", _
+    If Trim$(sekTag) = "" Then
+        Err.Raise vbObjectError + 7601, "frmMaticniPodaci.OpenSekcija", _
                   "Naziv sekcije je obavezan."
     End If
+
+    If Trim$(sekCaption) = "" Then sekCaption = sekTag
 
     ' Force unload prethodnog frmStammdaten ako jos uvek postoji
     On Error Resume Next
@@ -153,7 +166,7 @@ Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
     On Error GoTo EH
 
     ' Postavi Tag PRE OpenContentFormPublic poziva
-    frmStammdaten.Tag = nazivSekcije
+    frmStammdaten.Tag = sekTag
 
     ' Sakri menu pre prebacivanja na frmOtkupAPP shell
     m_IsOpeningChild = True
@@ -162,19 +175,24 @@ Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
     ' frmOtkupAPP otvara frmStammdaten kao mActiveContent (modeless child)
     On Error Resume Next
     frmOtkupAPP.Show
-    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Maticni podaci: " & nazivSekcije
+    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Maticni podaci: " & sekCaption
     On Error GoTo EH
 
     Unload Me
     Exit Sub
 
 EH:
-    LogErr "frmMaticniPodaci.OpenStammdatenForm"
+    LogErr "frmMaticniPodaci.OpenSekcija"
     m_IsOpeningChild = False
     On Error Resume Next
     Me.Show
     On Error GoTo 0
     MsgBox "Greška pri otvaranju šifarnika: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Staticni handleri (fallback dugmad) idu kroz isti put.
+Private Sub OpenStammdatenForm(ByVal nazivSekcije As String)
+    OpenSekcija nazivSekcije, nazivSekcije
 End Sub
 
 ' ============================================================

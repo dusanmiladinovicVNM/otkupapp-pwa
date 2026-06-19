@@ -63,7 +63,7 @@ Private Sub UserForm_Initialize()
     FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca")
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillCmb cmbVozac, GetVozacDisplayList()
-    FillCmb cmbTipAmbalaze, Array(AMB_12_1, AMB_6_1)
+    FillCmb cmbTipAmbalaze, GetTipAmbalazeOptions()
     
     ' Numerische Felder auf 0 setzen
     txtKolicina.value = ""
@@ -114,6 +114,7 @@ Private Sub chkDveKlase_Click()
         EnableField txtCenaKLII
         StyleTextBox txtKolicinaKLII
         StyleTextBox txtCenaKLII
+        AutoFillCenaOtkup
     Else
         DisableField txtKolicinaKLII
         DisableField txtCenaKLII
@@ -166,6 +167,32 @@ Private Sub cmbVrstaVoca_Change()
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
             GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
+    End If
+    AutoFillCenaOtkup
+End Sub
+
+Private Sub cmbSortaVoca_Change()
+    AutoFillCenaOtkup
+End Sub
+
+' Auto-popunjavanje cene iz cenovnika (vazeca/poslednja cena po proizvodu).
+' Postavlja samo ako cenovnik ima cenu; rucni unos ostaje moguc.
+Private Sub AutoFillCenaOtkup()
+    On Error Resume Next
+
+    Dim vrsta As String, sorta As String
+    vrsta = Trim$(cmbVrstaVoca.value)
+    sorta = Trim$(cmbSortaVoca.value)
+    If vrsta = "" Then Exit Sub
+
+    Dim cI As Double
+    cI = GetVazecaCena(vrsta, sorta, KLASA_I)
+    If cI > 0 Then txtCena.value = Format$(cI, "0.######")
+
+    If chkDveKlase.value Then
+        Dim cII As Double
+        cII = GetVazecaCena(vrsta, sorta, KLASA_II)
+        If cII > 0 Then txtCenaKLII.value = Format$(cII, "0.######")
     End If
 End Sub
 

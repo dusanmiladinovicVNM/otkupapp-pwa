@@ -71,11 +71,11 @@ Private Sub UserForm_Activate()
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillComboDisplayID cmbKupac, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
     FillCmb cmbVozac, GetVozacDisplayList()
-    FillCmb cmbTipAmbOtp, Array(AMB_12_1, AMB_6_1)
-    FillCmb cmbTipAmbZbr, Array(AMB_12_1, AMB_6_1)
-    FillCmb cmbTipAmbPrij, Array(AMB_12_1, AMB_6_1)
-    FillCmb cmbTipAmbOMUlaz, Array(AMB_12_1, AMB_6_1)
-    FillCmb cmbTipAmbIzlaz, Array(AMB_12_1, AMB_6_1)
+    FillCmb cmbTipAmbOtp, GetTipAmbalazeOptions()
+    FillCmb cmbTipAmbZbr, GetTipAmbalazeOptions()
+    FillCmb cmbTipAmbPrij, GetTipAmbalazeOptions()
+    FillCmb cmbTipAmbOMUlaz, GetTipAmbalazeOptions()
+    FillCmb cmbTipAmbIzlaz, GetTipAmbalazeOptions()
     
     lblValidacijaKG.caption = ""
     lblValidacijaAmb.caption = ""
@@ -360,6 +360,36 @@ Private Sub cmbVrstaVoca_Change()
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
             GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
+    End If
+    AutoFillCenaDok
+End Sub
+
+Private Sub cmbSortaVoca_Change()
+    AutoFillCenaDok
+End Sub
+
+' Auto-popunjavanje cene iz cenovnika za otpremnicu i prijemnicu.
+' Klasa II se popunjava samo ako je ukljucena. Rucni unos ostaje moguc.
+Private Sub AutoFillCenaDok()
+    On Error Resume Next
+
+    Dim vrsta As String, sorta As String
+    vrsta = Trim$(cmbVrstaVoca.value)
+    sorta = Trim$(cmbSortaVoca.value)
+    If vrsta = "" Then Exit Sub
+
+    Dim cI As Double, cII As Double
+    cI = GetVazecaCena(vrsta, sorta, KLASA_I)
+    cII = GetVazecaCena(vrsta, sorta, KLASA_II)
+
+    If cI > 0 Then
+        txtCenaOtp.value = Format$(cI, "0.######")
+        txtCenaPrij.value = Format$(cI, "0.######")
+    End If
+
+    If cII > 0 Then
+        If chkDveKlaseOtp.value Then txtCenaKlIIOtp.value = Format$(cII, "0.######")
+        If chkDveKlasePrij.value Then txtCenaKlIIPrij.value = Format$(cII, "0.######")
     End If
 End Sub
 
