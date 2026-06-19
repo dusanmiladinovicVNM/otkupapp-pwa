@@ -1632,8 +1632,8 @@ Private Sub btnIzmeni_Click()
             ' koja STVARNO postoji (alias-probe). Reuse: GetColumnIndex.
             UpdateFirstExistingCol SRC, Trim$(txtField1.value), "Naziv"
             UpdateFirstExistingCol SRC, Trim$(txtField2.value), "Mesto"
-            UpdateFirstExistingCol SRC, Trim$(txtField3.value), "Telefon"
-            UpdateFirstExistingCol SRC, Trim$(txtField4.value), "Ime", "KontaktIme", "Kontakt"
+            UpdateFirstExistingCol SRC, Trim$(txtField3.value), "Kontakt", "Telefon"
+            UpdateFirstExistingCol SRC, Trim$(txtField4.value), "Ime", "KontaktIme"
             UpdateFirstExistingCol SRC, Trim$(txtField5.value), "Prezime", "KontaktPrezime"
             UpdateFirstExistingCol SRC, Trim$(txtField6.value), "PIN", "Pin"
 
