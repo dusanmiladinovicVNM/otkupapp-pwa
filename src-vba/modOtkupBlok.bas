@@ -796,13 +796,10 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     ws.columns("I").ColumnWidth = 12   ' Iznos PDV
     ws.columns("J").ColumnWidth = 14   ' Ukupna vrednost
 
-    ' PageSetup Orientation/PaperSize trazi drajver stampaca; na nekim klijentskim
-    ' racunarima (default stampac odsutan/offline) bacaju 1004 i ostanu neprimenjeni
-    ' (rezultat: sitan PORTRAIT umesto A4 landscape). PrintCommunication=False salje
-    ' sva podesavanja odjednom i cesto zaobilazi per-property 1004; On Error Resume Next
-    ' je mreza za slucaj da stampaca stvarno nema (PDF tada izadje u default formatu).
+    ' PageSetup (Orientation/PaperSize/FitToPages) trazi drajver stampaca.
+    ' Na racunaru bez podrazumevanog stampaca ti property-ji bacaju gresku 1004,
+    ' pa ih stitimo: PDF mora da izadje i kad stampaca nema (best-effort izgled).
     On Error Resume Next
-    Application.PrintCommunication = False
     With ws.PageSetup
         .Orientation = xlLandscape
         .PaperSize = xlPaperA4
@@ -816,7 +813,6 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
         .BottomMargin = Application.InchesToPoints(0.4)
         .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, 10)).Address
     End With
-    Application.PrintCommunication = True
     On Error GoTo EH
 
     ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
@@ -834,9 +830,6 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     Application.ScreenUpdating = True
     Exit Sub
 EH:
-    On Error Resume Next
-    Application.PrintCommunication = True
-    On Error GoTo 0
     Application.ScreenUpdating = True
     LogErr "modOtkupBlok.PrintSpecifikacija"
     MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
