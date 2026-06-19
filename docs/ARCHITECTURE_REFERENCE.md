@@ -819,7 +819,7 @@ The printed/PDF documents (otkupni list, paletni list, preradni list) share one 
 
 | Template | Filled by | Module | Shape |
 |---|---|---|---|
-| `OtkupSablon` | `FillOtkupSablon` | `modPrint` | Otkupni list, two primerka per A4 (poljoprivrednik + otkupljivac), redrawn each print |
+| `OtkupSablon` | `FillOtkupSablon` | `modPrint` | Otkupni list, two primerka (poljoprivrednik + otkupljivac), each exactly 1/3 A4 (99 mm) in the top two thirds with the bottom third blank for pre-perforated paper; printed 1:1 (Zoom 100, no fit-to-page), redrawn each print |
 | `PaletaSablon` | `FillPaletaSablon` | `modPaletniList` | Paletni list, named-range template (`EnsurePaletaSablon`) |
 | `PreradaSablon` | `FillPreradaSablon` | `modPaletniList` | Preradni list, named-range template (`EnsurePreradaSablon`) |
 
@@ -837,6 +837,7 @@ Domain rules:
 - Paletni and preradni stavke tables are `Rb | Kooperant | Neto kg | Ambalaza` (no `Vrsta` column; a pallet/prerada is one fruit type). `Vrsta voca` is a large subtitle above the table — named ranges `PalVrsta` (from the pallet head) and `PreVrsta` (from the first traced otkup row).
 - Otkupni-list mandatory otkup-block elements: PDV-nadoknada **klauzula** (config `OTKUP_KLAUZULA`, default `OtkupKlauzulaDefault` — čl. 34 ZPDV) and **rok isplate** (config `OTKUP_ROK_ISPLATE`, default `Po dogovoru`). Config keys use strict exact-match lookup via `GetConfigValue`.
 - Otkupni list shows neto cena and neto vrednost; PDV nadoknada is added as a separate obračun line (stopa from `PDV_NADOKNADA_STOPA`, default 8).
+- `OtkupSablon` geometry: each primerak occupies exactly 1/3 of A4 (99 mm); the two copies fill the top two thirds and the bottom third stays blank, matching the client's pre-perforated paper (two perforations → three equal parts). `WriteOtkupCopy` uses explicit row heights (no AutoFit) and a trailing filler row that pads each copy to exactly 99 mm (`OL_THIRD_PT = 280.63 pt`); the page prints 1:1 (`Zoom = 100`, `TopMargin = 0`, no fit-to-page) so the copy boundaries land on the 99 mm / 198 mm perforations. If a printer ignores `TopMargin = 0`, the `OL_TOP_MARGIN_TRIM_PT` constant shrinks copy 1 to re-align. Sized for 1–2 stavke per copy.
 
 Config keys (in `tblSEFConfig`, exact key match):
 

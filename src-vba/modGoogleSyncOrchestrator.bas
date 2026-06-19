@@ -66,6 +66,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     Dim okMgmt As Boolean
 
     Dim createdOtp As Long
+    Dim createdZbr As Long
     Dim errNum As Long
     Dim errDesc As String
     Dim pwaLockAcquired As Boolean
@@ -188,6 +189,31 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         GoTo CleanExit
     End If
 
+    ' 2b. MALINA: VozacID := StanicaID (pre auto-otpremnice; pali okidac)
+    If IsMalinaMode() Then
+        SyncProgress "Malina: popunjavam VozacID iz StanicaID..."
+
+        On Error Resume Next
+        Err.Clear
+        Call StampVozacFromStanicaForMalina_TX
+        errNum = Err.Number
+        errDesc = Err.description
+        On Error GoTo EH
+
+        If errNum <> 0 Then
+            AppendStep summary, False, "Malina VozacID:=StanicaID | Error=" & errDesc
+            LogError ORCH_MODULE, "StampVozacFromStanicaForMalina_TX failed: " & errDesc
+
+            Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                                 okStammdaten, okKartice, okMgmt, False
+
+            If showMessages Then MsgBox summary, vbExclamation, APP_NAME
+            GoTo CleanExit
+        End If
+
+        AppendStep summary, True, "Malina: VozacID:=StanicaID"
+    End If
+
     ' 3. Auto-create Otpremnice
     SyncProgress "Kreiram / povezujem otpremnice..."
 
@@ -214,6 +240,31 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
         If showMessages Then MsgBox summary, vbExclamation, APP_NAME
         GoTo CleanExit
+    End If
+
+    ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)
+    If IsMalinaMode() Then
+        SyncProgress "Malina: kreiram zbirne iz otpremnica..."
+
+        On Error Resume Next
+        Err.Clear
+        createdZbr = AutoCreateZbirnaFromOtpremnice_TX()
+        errNum = Err.Number
+        errDesc = Err.description
+        On Error GoTo EH
+
+        If errNum <> 0 Then
+            AppendStep summary, False, "Malina auto-zbirna | Error=" & errDesc
+            LogError ORCH_MODULE, "AutoCreateZbirnaFromOtpremnice_TX failed: " & errDesc
+
+            Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                                 okStammdaten, okKartice, okMgmt, False
+
+            If showMessages Then MsgBox summary, vbExclamation, APP_NAME
+            GoTo CleanExit
+        End If
+
+        AppendStep summary, True, "Malina auto-zbirna (" & CStr(createdZbr) & " kreirano)"
     End If
 
     ' 4. VOZ/Zbirne import

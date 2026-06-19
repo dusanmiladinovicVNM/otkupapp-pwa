@@ -74,6 +74,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_DokumentaInputValidationHardening
     Test_DokumentaReadHelpersExcludeStornirano
     Test_DualClassDocumentWrappers
+    Test_MalinaAutoZbirnaFromOtpremnice
+    Test_MalinaVozacMirror
 
     Test_AutoLinkPositiveUniqueMatch
     Test_AutoLinkMustNotCrossBrojZbirne
@@ -1340,6 +1342,109 @@ Private Sub SeedVozac()
     SetOptionalField rowData, TBL_VOZACI, "KapacitetKG", 10000
 
     RequireAppend TBL_VOZACI, rowData, "SeedVozac"
+End Sub
+
+' ============================================================
+' MALINA MOD — D: auto-zbirna iz otpremnice (1:1; BrojZbirne==BrojOtpremnice)
+' ============================================================
+Private Sub Test_MalinaAutoZbirnaFromOtpremnice()
+    Dim prevMode As String, prevKupac As String
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("MALINA")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    ' Testovi inace ne diraju config -> sacuvaj pa vrati.
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    ' Otpremnica (Klasa I + II) sa PRAZNIM BrojZbirne (malina konvencija).
+    Dim brojOtp As String
+    brojOtp = TEST_PREFIX & "-MAL-" & scenario
+
+    Dim otpResult As String
+    otpResult = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, "", _
+                                       TEST_VRSTA, TEST_SORTA, 1000#, 100#, TEST_TIP_AMB, 50, _
+                                       True, 200#, 90#)
+    AssertTrue Len(otpResult) > 0, "Malina: otpremnica I+II sa praznim BrojZbirne snimljena"
+
+    ' Act
+    Dim created As Long
+    created = AutoCreateZbirnaFromOtpremnice()
+    AssertTrue created >= 1, "Malina: AutoCreateZbirnaFromOtpremnice kreirao zbirnu"
+
+    ' BrojZbirne == BrojOtpremnice; zbirna I i II postoje
+    Dim zbrI As String, zbrII As String
+    zbrI = FindZbirnaIDByBrojAndKlasa(brojOtp, KLASA_I)
+    zbrII = FindZbirnaIDByBrojAndKlasa(brojOtp, KLASA_II)
+    AssertTrue Len(zbrI) > 0, "Malina: zbirna Klasa I (BrojZbirne==BrojOtpremnice) postoji"
+    AssertTrue Len(zbrII) > 0, "Malina: zbirna Klasa II postoji (hasKlasaII)"
+
+    ' kg zbirne == kg otpremnice (1:1)
+    AssertEquals "1000", _
+        CStr(GetValueByKey(TBL_ZBIRNA, "ZbirnaID", zbrI, "UkupnoKolicina")), _
+        "Malina: kg Klasa I zbirne == otpremnica"
+
+    ' Backfill BrojZbirne na otpremnicu (GetOtpremniceByZbirna mora vratiti redove)
+    AssertTrue Not IsEmpty(GetOtpremniceByZbirna(brojOtp)), _
+        "Malina: BrojZbirne backfilovan na otpremnicu"
+
+    ' Idempotencija: ponovni poziv ne pravi novu zbirnu
+    Dim zbrBefore As Long
+    zbrBefore = CountRows(TBL_ZBIRNA)
+    Call AutoCreateZbirnaFromOtpremnice
+    AssertEquals CStr(zbrBefore), CStr(CountRows(TBL_ZBIRNA)), _
+        "Malina: ponovni poziv ne duplira zbirnu (idempotentno)"
+
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_MalinaAutoZbirnaFromOtpremnice", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' MALINA MOD — vozac mirror: nova stanica -> par-vozac sa istim ID-em
+' ============================================================
+Private Sub Test_MalinaVozacMirror()
+    Dim prevMode As String
+
+    On Error GoTo EH
+
+    ' Fiksni test ID -> idempotentno; ne gomila redove kroz vise run-ova suite-a.
+    Const MIR_ST As String = "ST-MIRTEST-90001"
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    ' Posle Ensure vozac mora postojati (kreiran sad ili od ranijeg run-a).
+    Call EnsureVozacMirrorForStanica(MIR_ST, "Test Naziv", "Test Mesto", "")
+    AssertTrue RowExists(TBL_VOZACI, "VozacID", MIR_ST), _
+        "Malina mirror: vozac VozacID==StanicaID postoji posle Ensure"
+
+    ' Idempotencija: ponovni poziv NE sme da kreira nov red.
+    AssertFalse EnsureVozacMirrorForStanica(MIR_ST, "Test Naziv", "Test Mesto", ""), _
+        "Malina mirror: ponovni poziv ne kreira duplikat (idempotentno)"
+
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_MalinaVozacMirror", Err.Number, Err.description
 End Sub
 
 Private Sub SeedKupac()

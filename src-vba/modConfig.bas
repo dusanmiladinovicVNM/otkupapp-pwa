@@ -422,6 +422,13 @@ Public Const STATUS_ISPLACENO As String = "Da"
 ' Empty / missing key tretira se kao "YES" (backward compatible).
 Public Const CFG_KEY_CLOUD_SYNC_ENABLED As String = "CLOUD_SYNC_ENABLED"
 
+' Malina mod (1 stanica = 1 vozilo): otpremnica == zbirna, auto-zbirna iz otpremnice.
+' Default: FALSE (visnja klijenti rade nepromenjeno).
+' Vrednost u Config sheet-u: "YES" | "TRUE" | "1" | "ON" | "ENABLED" za ukljuceno.
+Public Const CFG_KEY_MALINA_MODE As String = "MALINA_MODE"
+' Default kupac (Hladnjaca) za auto-zbirnu u malina modu. KupacID iz tblKupci.
+Public Const CFG_MALINA_DEFAULT_KUPAC As String = "MALINA_DEFAULT_KUPAC"
+
 ' =========================
 ' Workflow states
 ' =========================
@@ -589,5 +596,27 @@ Public Function IsCloudSyncEnabled() As Boolean
             IsCloudSyncEnabled = False
         Case Else         ' "YES", "TRUE", "1", "ON", "ENABLED" ili bilo šta drugo
             IsCloudSyncEnabled = True
+    End Select
+End Function
+
+
+' ============================================================
+' Malina mod toggle.
+'
+' Kada vraca True: 1 stanica = 1 vozilo; sistem auto-pravi zbirnu iz
+' otpremnice (otpremnica == zbirna). Cita config kljuc MALINA_MODE.
+'
+' Default FALSE (suprotno od IsCloudSyncEnabled): bez kljuca ili prazno
+' tretira se kao visnja ponasanje (nepromenjeno za postojece klijente).
+' ============================================================
+Public Function IsMalinaMode() As Boolean
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(CFG_KEY_MALINA_MODE)))
+
+    Select Case v
+        Case "YES", "TRUE", "1", "ON", "ENABLED"
+            IsMalinaMode = True
+        Case Else         ' "", "NO", "FALSE", "0" ili bilo sta drugo -> FALSE
+            IsMalinaMode = False
     End Select
 End Function

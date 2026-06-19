@@ -217,6 +217,23 @@ Ostaje dodati checks za:
 - Geo lat/lng bounds
 - PWA stale lock
 - Banka open/error folder status
+P1-15 — PWA otkupni list: uskladiti obračun sa kanonskim BRUTO modelom (VBA)
+
+Status: 🔴 otvoreno (odloženo — trenutno se radi samo VBA)
+
+Kanon (VBA `modPrint.FillOtkupSablon` + ARCHITECTURE_CHANGELOG/REFERENCE §5.12): `tblOtkup.Cena` je BRUTO (sadrži PDV nadoknadu). Otkupni list prikazuje NETO = `cena/(1+stopa)`, PDV nadoknadu kao posebnu stavku, a „za isplatu" = bruto = `kolicina*cena`.
+
+PWA (`src/js/features/otkup/otkupni-list.js`): i modal (`showOtkupniList`) i `savePdfToDrive` računaju `vrednost = kolicina*cena` pa DODAJU PDV povrh (`ukupno = kolicina*cena*(1+stopa)`), tretirajući cenu kao osnovicu. Ako je PWA `record.cena` ista BRUTO vrednost kao `tblOtkup.Cena`, PWA prikazuje „za isplatu" ~stopa% (default 8%) VEĆI od zakonskog otkupnog lista.
+
+Ostaje:
+
+- PRVO proveriti da li je PWA `record.cena` identična BRUTO `tblOtkup.Cena` (sync put: `otkup-form fldCena` → GAS → `tblOtkup.Cena`; default unosa je config `Cena{vrsta}`).
+- ako jeste BRUTO: uskladiti `otkupni-list.js` (`showOtkupniList` + `savePdfToDrive`) da prikazuju neto cenu/vrednost + PDV nadoknadu kao posebnu liniju, ukupno = bruto; ista formula kao VBA (`cenNeto = cena/(1+stopa/100)`).
+- dodati klauzulu čl. 34 ZPDV u PWA (trenutno je nema; default tekst u `modDocStyle.OtkupKlauzulaDefault`).
+- proveriti da PWA `liveTotal` (`kolicina*cena` u `otkup-form.js`) i Pregled/izveštaji koriste isti model, da ne nastane nova neusklađenost.
+
+Nađeno tokom v6.28 (VBA OtkupSablon 1/3 A4). Čisto PWA izmena; VBA strana je ispravna.
+
 P2 — hardening / održavanje
 ID	Stavka	Status	Komentar
 P2-1	modStammdatenSync: ukloniti hardcoded TOTAL_STAMMDATEN_TABS = 13	🔴	Broj tabova izračunati iz StammdatenTabs().

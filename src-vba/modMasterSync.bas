@@ -769,6 +769,245 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
 End Function
 
 ' ============================================================
+' MALINA MOD — C: VozacID := StanicaID na tblOtkup.
+'
+' AutoCreateOtpremniceFromPWA pravi otpremnice samo za otkupe koji IMAJU
+' VozacID (grupisanje StanicaID|Datum|VozacID|Klasa, vidi filter gore).
+' U malina modu nema vozaca, pa se PRE auto-otpremnice VozacID popunjava
+' StanicaID-em — time se okidac pali, a brojevi ostaju konzistentni
+' (otkupac == stanica). Idempotentno: dira samo prazan VozacID.
+' Self-gated: u visnji ne radi nista.
+' ============================================================
+Public Function StampVozacFromStanicaForMalina_TX() As Long
+    Const SRC As String = "StampVozacFromStanicaForMalina_TX"
+
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    If Not IsMalinaMode() Then
+        StampVozacFromStanicaForMalina_TX = 0
+        Exit Function
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+
+    StampVozacFromStanicaForMalina_TX = StampVozacFromStanicaForMalina()
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    LogInfo SRC, "Malina VozacID:=StanicaID stamped=" & CStr(StampVozacFromStanicaForMalina_TX)
+    Exit Function
+
+EH:
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    On Error GoTo 0
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+Public Function StampVozacFromStanicaForMalina() As Long
+    Const SRC As String = "StampVozacFromStanicaForMalina"
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colVoz As Long, colSt As Long, colStorno As Long
+    colVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
+    colSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    colStorno = GetColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO)
+
+    Dim r As Long, cnt As Long
+    For r = 1 To UBound(data, 1)
+        Dim skip As Boolean
+        skip = (colStorno > 0) And _
+               (UCase$(Trim$(CStr(Nz(data(r, colStorno), "")))) = "DA")
+        If Not skip Then
+            Dim voz As String: voz = Trim$(CStr(Nz(data(r, colVoz), "")))
+            Dim st As String: st = Trim$(CStr(Nz(data(r, colSt), "")))
+            If voz = "" And st <> "" Then
+                RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, st, SRC
+                cnt = cnt + 1
+            End If
+        End If
+    Next r
+
+    StampVozacFromStanicaForMalina = cnt
+End Function
+
+' ============================================================
+' MALINA MOD — D: auto-zbirna iz otpremnice (1:1).
+'
+' Za svaku aktivnu otpremnicu sa praznim BrojZbirne (grupisano po
+' BrojOtpremnice, Klasa I+II istog dokumenta zajedno) pravi zbirnu preko
+' postojeceg SaveZbirnaMulti_TX:
+'   - BrojZbirne := BrojOtpremnice (broj garantovano identican otpremnici)
+'   - kupac := MALINA_DEFAULT_KUPAC (Hladnjaca); Hladnjaca naziv iz tblKupci
+'   - backfill BrojZbirne na otpremnicu i na tblOtkup (preko OtpremnicaID),
+'     jer ValidateZbirna/prijemnica/faktura vezu drze preko BrojZbirne.
+' Idempotentno: prazan-BrojZbirne filter sprecava duplo kreiranje.
+' Self-gated: u visnji ne radi nista.
+' ============================================================
+Public Function AutoCreateZbirnaFromOtpremnice_TX() As Long
+    Const SRC As String = "AutoCreateZbirnaFromOtpremnice_TX"
+
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    If Not IsMalinaMode() Then
+        AutoCreateZbirnaFromOtpremnice_TX = 0
+        Exit Function
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+
+    AutoCreateZbirnaFromOtpremnice_TX = AutoCreateZbirnaFromOtpremnice()
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    LogInfo SRC, "Malina auto-zbirna created=" & CStr(AutoCreateZbirnaFromOtpremnice_TX)
+    Exit Function
+
+EH:
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    On Error GoTo 0
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+Public Function AutoCreateZbirnaFromOtpremnice() As Long
+    Const SRC As String = "AutoCreateZbirnaFromOtpremnice"
+
+    If Not IsMalinaMode() Then Exit Function
+
+    Dim kupacID As String
+    kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    If kupacID = "" Then
+        Err.Raise vbObjectError + 8300, SRC, _
+            "MALINA_DEFAULT_KUPAC nije postavljen (kljuc u tblSEFConfig)."
+    End If
+
+    Dim hladnjaca As String
+    hladnjaca = CStr(Nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cId As Long, cBrZ As Long, cBrO As Long, cDat As Long, cVoz As Long
+    Dim cVrsta As Long, cSorta As Long, cKol As Long, cTipAmb As Long
+    Dim cKolAmb As Long, cKlasa As Long, cStorno As Long
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    cBrZ = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
+    cBrO = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+    cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    cVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
+    cSorta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
+    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
+    cTipAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB, SRC)
+    cKolAmb = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB, SRC)
+    cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
+    cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+
+    ' Obrada PO REDU otpremnice (NE grupisano po BrojOtpremnice):
+    '   AutoCreateOtpremniceFromPWA pravi otpremnice PO-KLASI (Klasa I i Klasa II
+    '   imaju razlicit BrojOtpremnice), dok rucni SaveOtpremnicaMulti stavlja obe
+    '   klase pod isti BrojOtpremnice. Per-red sa SaveZbirna_TX (jedna klasa)
+    '   korektno pokriva oba slucaja: BrojZbirne := BrojOtpremnice tog reda.
+    '   (Grupisanje+SaveZbirnaMulti je padalo na Klasa-II-only grupi: kolI=0.)
+    Dim otpMap As Object
+    Set otpMap = CreateObject("Scripting.Dictionary")
+
+    Dim created As Long: created = 0
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        Dim brZ As String: brZ = Trim$(CStr(Nz(data(r, cBrZ), "")))
+        Dim brO As String: brO = Trim$(CStr(Nz(data(r, cBrO), "")))
+        Dim isStorno As Boolean
+        isStorno = (cStorno > 0) And _
+                   (UCase$(Trim$(CStr(Nz(data(r, cStorno), "")))) = "DA")
+
+        If brZ = "" And brO <> "" And Not isStorno Then
+            Dim datum As Date: datum = CDate(data(r, cDat))
+            Dim vozacID As String: vozacID = Trim$(CStr(Nz(data(r, cVoz), "")))
+            Dim vrsta As String: vrsta = CStr(Nz(data(r, cVrsta), ""))
+            Dim sorta As String: sorta = CStr(Nz(data(r, cSorta), ""))
+            Dim tipAmb As String: tipAmb = CStr(Nz(data(r, cTipAmb), ""))
+            Dim klasa As String: klasa = CStr(Nz(data(r, cKlasa), ""))
+            Dim kol As Double: kol = CDbl(Nz(data(r, cKol), 0))
+            Dim amb As Long: amb = CLng(Nz(data(r, cKolAmb), 0))
+
+            Dim zbrRes As String
+            zbrRes = SaveZbirna_TX(datum, vozacID, brO, kupacID, _
+                        hladnjaca, "", vrsta, sorta, kol, tipAmb, amb, klasa)
+
+            If Len(Trim$(zbrRes)) = 0 Then
+                Err.Raise vbObjectError + 8301, SRC, _
+                    "SaveZbirna_TX nije vratio ZbirnaID za BrojOtpremnice=" & brO & _
+                    " Klasa=" & klasa
+            End If
+
+            RequireUpdateCell TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, brO, SRC
+            Dim otpID As String: otpID = Trim$(CStr(Nz(data(r, cId), "")))
+            If otpID <> "" Then otpMap(otpID) = brO
+
+            created = created + 1
+        End If
+    Next r
+
+    If created = 0 Then Exit Function
+
+    ' backfill BrojZbirne na tblOtkup (preko OtpremnicaID), jedan prolaz
+    BackfillOtkupBrojZbirneByOtpremnica otpMap, SRC
+
+    AutoCreateZbirnaFromOtpremnice = created
+End Function
+
+Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal callerSrc As String)
+    If otpMap Is Nothing Then Exit Sub
+    If otpMap.count = 0 Then Exit Sub
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim cOtpID As Long, cBrZ As Long
+    cOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, callerSrc)
+    cBrZ = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, callerSrc)
+
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        Dim otpID As String: otpID = Trim$(CStr(Nz(data(r, cOtpID), "")))
+        If otpID <> "" Then
+            If otpMap.Exists(otpID) Then
+                Dim cur As String: cur = Trim$(CStr(Nz(data(r, cBrZ), "")))
+                If cur = "" Then
+                    RequireUpdateCell TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
+                        CStr(otpMap(otpID)), callerSrc
+                End If
+            End If
+        End If
+    Next r
+End Sub
+
+' ============================================================
 ' PRIVATE — Find OTK-* Sheets in Folder
 ' ============================================================
 

@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.27  
-**Last Updated:** 2026-06-18  
-**Status:** Active changelog — v6.27 Otkupni blokovi entry panel (per-otpremnica blok entry driving `frmOtkup`, direct `OtpremnicaID` linking)
+**Current Version:** v6.28  
+**Last Updated:** 2026-06-19  
+**Status:** Active changelog — v6.28 OtkupSablon one-third-A4 two-up print geometry (each primerak = 1/3 A4 for pre-perforated paper, 1:1 print)
 
 ---
 
@@ -53,6 +53,7 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.28 | 2026-06-19 | `OtkupSablon` otkupni-list print switched to a one-third-A4 two-up layout: each primerak (poljoprivrednik + otkupljivac) is exactly 1/3 A4 (99 mm) in the top two thirds, bottom third blank, for the client's pre-perforated paper; prints 1:1 (Zoom 100, margins 0, no fit-to-page) with explicit row heights + a filler row so the copy boundaries land on the 99/198 mm perforations. Content/obračun/klauzula unchanged. | Yes | presentation-only; no migration; re-import `modPrint`; run otkupni-list print gate; calibrate `OL_TOP_MARGIN_TRIM_PT` if the printer ignores a 0 top margin |
 | v6.27 | 2026-06-18 | Otkupni blokovi: optional `frmOtkup` panel for per-otpremnica blok entry — clicking an otpremnica pre-fills the existing otkup form (mesto/vrsta/sorta/vozač/broj zbirne/datum/cena), a single per-otpremnica price applies to all its blokovi, and the normal "Unos" auto-links the saved row(s) to the otpremnica via `OtkupBlok_AfterUnos` so remaining-quantity tracking updates without a manual Sledljivost auto-link. | Yes | no business-data migration; UI-only desktop add-on; re-import `modOtkupBlok`+`clsBlokUI`, add 2 guarded hook lines to `frmOtkup` (`AttachOtkupBlokPanel`, `OtkupBlok_AfterUnos`); opt-out via `OTKUP_BLOK_PANEL=NO` |
 | v6.26 | 2026-06-18 | Document print/presentation layer: shared `modDocStyle` house style for otkupni/paletni/preradni lists, otkupni-list legal block (PDV-nadoknada klauzula + rok isplate via `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE`), and paletni/preradni redesign (vrsta voca as subtitle, dropped redundant Vrsta column, layout-version auto-rebuild). | Yes | presentation-only; no business-data migration; re-import `modDocStyle`/`modConfig`/`modPrint`/`modPaletniList`; templates regenerate; run otkupni/paletni/preradni print gates |
 | v6.25 | 2026-06-16 | Paletni List (pallet) domain added as a canonical local Excel/VBA workflow plus a desktop-only setup mode. | Yes | no business-data migration; `EnsurePaletniListSchema` idempotent; run palletization/prerada/storno gates |
@@ -102,6 +103,34 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.28 — 2026-06-19
+
+### Summary
+
+`OtkupSablon` otkupni-list print geometry switched to a one-third-A4 two-up layout. Each primerak (poljoprivrednik + otkupljivac) now occupies exactly 1/3 of A4 (99 mm) in the top two thirds; the bottom third stays blank, matching the client's pre-perforated paper (two perforations → three equal parts, two copies printed, third left empty). Document content, BRUTO→neto obračun and the legal PDV-nadoknada klauzula are unchanged — only layout geometry and print scaling changed.
+
+### Changed
+
+- `modPrint.FillOtkupSablon`: page setup now prints 1:1 (`Zoom = 100`, `TopMargin/BottomMargin/HeaderMargin/FooterMargin = 0`, `LeftMargin/RightMargin = 0.31"`, `CenterHorizontally`) instead of `FitToPagesWide/Tall = 1`, so explicit row heights map directly to millimetres and the two copies span exactly 198 mm. The printed scissor/cut line between the two copies was removed (the paper is pre-perforated; the copy boundary falls on the perforation).
+- `modPrint.WriteOtkupCopy`: gained a `targetPt` parameter; sets explicit row heights (no AutoFit), compacts the copy to ~90 mm of content, and appends a filler row that pads each copy to exactly 99 mm. Seller-name/title/klauzula fonts and the stavke header labels were tightened to fit one third.
+- New `modPrint` constants: `OL_THIRD_PT` (= 280.63 pt = 99 mm), `OL_TOP_SPACER_PT`, `OL_MIN_FILLER_PT`, `OL_TOP_MARGIN_TRIM_PT`.
+
+### Known Issues / Known Limitations
+
+- Layout is sized for 1–2 stavke per primerak; 3+ items reduce the bottom safety gap and can push a copy past 99 mm.
+- Physical perforation alignment requires printing at 100% / Actual Size with the printer honouring a ~0 top margin. Printers that force a top margin shift content down — compensate by setting `OL_TOP_MARGIN_TRIM_PT` to that margin in points (T mm / 25.4 × 72).
+
+### Verification / Acceptance Gates
+
+- VBA is not compiled in this environment; verified statically (Sub/Function balance, no duplicate Public definitions, `WriteOtkupCopy` call arity = 7). Final smoke test (user, in Excel): run an otkupni-list print/preview and confirm each copy fits inside its third and the copy boundaries align to the 99 mm / 198 mm perforations.
+
+### Migration / Data Notes
+
+- Presentation-only; no business-data or schema migration. Re-import `modPrint`. `OtkupSablon` is cleared and fully redrawn each print, so it auto-updates.
+
+Reference updated: Yes (§5.12).
 
 
 ## v6.27 — 2026-06-18
