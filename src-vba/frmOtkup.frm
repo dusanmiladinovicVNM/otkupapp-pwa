@@ -264,7 +264,7 @@ Private Sub cmbKooperant_Change()
     If cmbKooperant.ListIndex < 0 Then Exit Sub
 
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbKooperant.value)
+    kooperantID = GetComboID(cmbKooperant)
 
     If kooperantID = "" Then Exit Sub
 
@@ -431,8 +431,8 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
-    If cmbKooperant.ListIndex < 0 Then
-        MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
+    If Trim$(cmbKooperant.value) = "" Then
+        MsgBox "Izaberite ili unesite kooperanta!", vbExclamation, APP_NAME
         cmbKooperant.SetFocus
         Exit Sub
     End If
@@ -515,7 +515,7 @@ Private Sub btnUnos_Click()
     End If
 
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbKooperant.value)
+    kooperantID = ResolveKooperantByName(cmbKooperant, stanicaID)
 
     If kooperantID = "" Then
         MsgBox "Nije pronaden ID kooperanta!", vbExclamation, APP_NAME
@@ -598,6 +598,12 @@ Private Sub btnUnos_Click()
     End If
 
     MsgBox "Otkup sacuvan: " & result, vbInformation, APP_NAME
+
+    ' Otkupni list: PDF (po CFG_OTKUP_PRINT_MODE; podrazumevano PDF + otvori) za
+    ' upravo sacuvani blok. Best-effort: greska ne sme da obori potvrdu snimanja.
+    On Error Resume Next
+    OutputOtkupniList result
+    On Error GoTo 0
 
     ClearOtkupFields
 
