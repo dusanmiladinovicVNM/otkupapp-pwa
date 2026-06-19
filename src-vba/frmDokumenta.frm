@@ -151,6 +151,13 @@ Private Sub UserForm_Activate()
     StyleFrameTitleLabel lblTitleIzlaz, "Izlaz Kupci  (Novac od kupca)"
     StyleFrameTitleLabel lblTitleStorno, "Storno"
     StyleFrameTitleLabel lblTitleZbirne, "Lista zbirnih"
+
+    ' Podrazumevana vrsta/sorta (Podesavanja) — samo ako nije vec izabrano,
+    ' da re-aktivacija ne pregazi tekuci izbor. Okida auto-cenu/auto-tip.
+    On Error Resume Next
+    If Trim$(cmbVrstaVoca.value) = "" Then ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
+    On Error GoTo 0
+
     Exit Sub
 
 EH:
@@ -410,6 +417,14 @@ Private Sub AutoFillCenaDok()
     If cII > 0 Then
         If chkDveKlaseOtp.value Then txtCenaKlIIOtp.value = Format$(cII, "0.######")
         If chkDveKlasePrij.value Then txtCenaKlIIPrij.value = Format$(cII, "0.######")
+    End If
+
+    ' #6 podrazumevani tip ambalaze iz kulture (otpremnica + prijemnica)
+    Dim ta As String
+    ta = GetKulturaTipAmbalaze(vrsta, sorta)
+    If Len(ta) > 0 Then
+        cmbTipAmbOtp.value = ta
+        cmbTipAmbPrij.value = ta
     End If
 End Sub
 

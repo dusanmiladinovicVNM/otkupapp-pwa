@@ -634,3 +634,27 @@ Public Function IsMalinaMode() As Boolean
             IsMalinaMode = False
     End Select
 End Function
+
+' Genericki bool config citac. Prazno/nepoznato -> defaultOn.
+Public Function ConfigFlag(ByVal key As String, ByVal defaultOn As Boolean) As Boolean
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(key)))
+    Select Case v
+        Case "YES", "TRUE", "1", "ON", "ENABLED", "DA"
+            ConfigFlag = True
+        Case "NO", "FALSE", "0", "OFF", "DISABLED", "NE"
+            ConfigFlag = False
+        Case Else
+            ConfigFlag = defaultOn
+    End Select
+End Function
+
+' Filter kooperanata po otkupnom mestu u frmOtkup (default ON).
+Public Function KoopFilterByOM() As Boolean
+    KoopFilterByOM = ConfigFlag(CFG_KOOP_FILTER_BY_OM, True)
+End Function
+
+' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
+Public Function IsAutoPrijemnicaHladnjaca() As Boolean
+    IsAutoPrijemnicaHladnjaca = ConfigFlag(CFG_AUTO_PRIJEMNICA_HLADNJACA, False)
+End Function

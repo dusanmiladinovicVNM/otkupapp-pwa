@@ -81,6 +81,11 @@ Private Sub UserForm_Initialize()
     On Error Resume Next
     AttachOtkupBlokPanel Me
     On Error GoTo 0
+
+    ' Podrazumevana vrsta/sorta (Podesavanja) -> okida auto-cenu i auto-tip ambalaze.
+    On Error Resume Next
+    ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
+    On Error GoTo 0
 End Sub
 
 Private Sub ResetActionButtons()
@@ -175,8 +180,8 @@ Private Sub cmbSortaVoca_Change()
     AutoFillCenaOtkup
 End Sub
 
-' Auto-popunjavanje cene iz cenovnika (vazeca/poslednja cena po proizvodu).
-' Postavlja samo ako cenovnik ima cenu; rucni unos ostaje moguc.
+' Auto-popunjavanje cene (cenovnik) i tipa ambalaze (kultura) po proizvodu.
+' Postavlja samo ako postoji vrednost; rucni unos ostaje moguc.
 Private Sub AutoFillCenaOtkup()
     On Error Resume Next
 
@@ -194,6 +199,11 @@ Private Sub AutoFillCenaOtkup()
         cII = GetVazecaCena(vrsta, sorta, KLASA_II)
         If cII > 0 Then txtCenaKLII.value = Format$(cII, "0.######")
     End If
+
+    ' #6 podrazumevani tip ambalaze iz kulture
+    Dim ta As String
+    ta = GetKulturaTipAmbalaze(vrsta, sorta)
+    If Len(ta) > 0 Then cmbTipAmbalaze.value = ta
 End Sub
 
 Private Sub cmbOtkupnoMesto_Change()
@@ -245,7 +255,12 @@ Private Sub cmbOtkupnoMesto_Change()
         Exit Sub
     End If
 
-    FillComboKooperantiByStanica cmbKooperant, stanicaID
+    ' #4 toggle: ON -> kooperanti po OM; OFF -> svi kooperanti ("" = svi)
+    If KoopFilterByOM() Then
+        FillComboKooperantiByStanica cmbKooperant, stanicaID
+    Else
+        FillComboKooperantiByStanica cmbKooperant, ""
+    End If
     RefreshBrojDokumentaSuggestion
     Exit Sub
 

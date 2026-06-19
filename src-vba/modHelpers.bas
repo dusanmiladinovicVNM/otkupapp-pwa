@@ -99,7 +99,8 @@ Public Sub FillComboKooperantiByStanica(ByRef cmb As MSForms.ComboBox, ByVal sta
 
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colStanica)) = stanicaID Then
+        ' stanicaID = "" -> svi kooperanti (toggle KOOP_FILTER_BY_OM = OFF)
+        If stanicaID = "" Or CStr(data(i, colStanica)) = stanicaID Then
             n = n + 1
             names(n) = Trim$(CStr(data(i, colIme)) & " " & CStr(data(i, colPrezime)))
             ids(n) = CStr(data(i, colID))

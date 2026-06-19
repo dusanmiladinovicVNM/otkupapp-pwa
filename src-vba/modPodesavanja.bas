@@ -437,3 +437,15 @@ Private Sub RemoveCtl(ByVal nm As String)
     mFrm.Controls.Remove nm
     On Error GoTo 0
 End Sub
+
+' Postavi podrazumevanu vrstu/sortu (iz config-a) na prosledjene combo-e.
+' Postavljanje cmbVrsta.Value okida _Change u formi (puni sortu + auto-cena/tip).
+Public Sub ApplyDefaultProizvod(ByVal cmbVrsta As Object, ByVal cmbSorta As Object)
+    On Error Resume Next
+    Dim v As String, s As String
+    v = Trim$(GetConfigValue(CFG_DEFAULT_VRSTA))
+    s = Trim$(GetConfigValue(CFG_DEFAULT_SORTA))
+    If Len(v) = 0 Then Exit Sub
+    cmbVrsta.value = v
+    If Len(s) > 0 Then cmbSorta.value = s
+End Sub
