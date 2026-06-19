@@ -530,6 +530,15 @@ Private Sub btnUnosOtp_Click()
 
     MsgBox "Otpremnica sacuvana: " & result, vbInformation, APP_NAME
 
+    ' MALINA: otpremnica == zbirna -> auto-zbirna iz upravo snimljene otpremnice.
+    ' "Toggle" je config (IsMalinaMode); idempotentno (prazan-BrojZbirne filter).
+    If IsMalinaMode() Then
+        On Error Resume Next
+        Call AutoCreateZbirnaFromOtpremnice_TX
+        If Err.Number <> 0 Then LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
+        On Error GoTo EH
+    End If
+
     ClearOtpremnicaFields
 
     If txtBrojZbirne.value <> "" Then
