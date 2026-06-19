@@ -726,6 +726,11 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
         ws.cells(R0, cc + 1).value = hdr(cc)
         ws.cells(R0, cc + 1).Font.Bold = True
     Next cc
+    ' Uske kolone (portrait) -> zaglavlja se prelamaju u 2 reda, centrirana, visi red.
+    ws.Range(ws.cells(R0, 1), ws.cells(R0, 10)).WrapText = True
+    ws.Range(ws.cells(R0, 1), ws.cells(R0, 10)).HorizontalAlignment = xlCenter
+    ws.Range(ws.cells(R0, 1), ws.cells(R0, 10)).VerticalAlignment = xlCenter
+    ws.rows(R0).RowHeight = 26
 
     Dim r As Long: r = R0 + 1
     Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, cnt As Long
@@ -784,27 +789,26 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     tbl.Borders.Weight = xlThin
     tbl.rows.RowHeight = 13
 
-    ' sirine kolona
-    ws.columns("A").ColumnWidth = 12   ' Broj zbirne
-    ws.columns("B").ColumnWidth = 14   ' Broj otpremnice
-    ws.columns("C").ColumnWidth = 12   ' br. bloka
-    ws.columns("D").ColumnWidth = 24   ' Ime i Prezime
-    ws.columns("E").ColumnWidth = 11   ' Datum
-    ws.columns("F").ColumnWidth = 9    ' Kolicina
-    ws.columns("G").ColumnWidth = 11   ' Cena bez PDV
-    ws.columns("H").ColumnWidth = 13   ' Vrednost
-    ws.columns("I").ColumnWidth = 12   ' Iznos PDV
-    ws.columns("J").ColumnWidth = 14   ' Ukupna vrednost
+    ' sirine kolona — uze da cela tabela stane na PORTRAIT sirinu (~101 ~= 100% skala)
+    ws.columns("A").ColumnWidth = 9    ' Broj zbirne
+    ws.columns("B").ColumnWidth = 9    ' Broj otpremnice
+    ws.columns("C").ColumnWidth = 10   ' br. bloka
+    ws.columns("D").ColumnWidth = 16   ' Ime i Prezime
+    ws.columns("E").ColumnWidth = 9    ' Datum
+    ws.columns("F").ColumnWidth = 7    ' Kolicina
+    ws.columns("G").ColumnWidth = 8    ' Cena bez PDV
+    ws.columns("H").ColumnWidth = 11   ' Vrednost
+    ws.columns("I").ColumnWidth = 10   ' Iznos PDV
+    ws.columns("J").ColumnWidth = 12   ' Ukupna vrednost
 
-    ' PageSetup Orientation/PaperSize trazi drajver stampaca; na nekim klijentskim
-    ' racunarima (default stampac odsutan/offline) bacaju 1004 i ostanu neprimenjeni
-    ' (rezultat: sitan PORTRAIT umesto A4 landscape). PrintCommunication=False salje
-    ' sva podesavanja odjednom i cesto zaobilazi per-property 1004; On Error Resume Next
-    ' je mreza za slucaj da stampaca stvarno nema (PDF tada izadje u default formatu).
+    ' Otkupni i paletni list (koji ispravno izlaze i kod klijenta) su PORTRAIT;
+    ' klijentov drajver ne prihvata prelazak u landscape (ostane portrait -> sitno).
+    ' Zato i specifikaciju radimo PORTRAIT + fit-na-sirinu, kao modPaletniList.
+    ' PrintCommunication=False salje podesavanja odjednom; On Error Resume Next je mreza.
     On Error Resume Next
     Application.PrintCommunication = False
     With ws.PageSetup
-        .Orientation = xlLandscape
+        .Orientation = xlPortrait
         .PaperSize = xlPaperA4
         .Zoom = False
         .FitToPagesWide = 1
