@@ -675,7 +675,7 @@ EH:
 End Sub
 
 ' Specifikacija svih blokova izabranih otpremnica: tabela kao listbox
-' (sa okvirima), jedan red po bloku, kompaktno, A4 landscape, print preview.
+' (sa okvirima), jedan red po bloku, kompaktno, A4 landscape, direktno u PDF.
 Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     On Error GoTo EH
 
@@ -802,14 +802,22 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
         .RightMargin = Application.InchesToPoints(0.3)
         .TopMargin = Application.InchesToPoints(0.4)
         .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, 9)).Address
     End With
 
-    Application.ScreenUpdating = True
+    ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
+    ' Vremenski pecat u imenu -> nema "file in use" ako je prethodni PDF otvoren.
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.Path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
     Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
     ws.Visible = xlSheetVisible
-    ws.PrintPreview
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=True
     If wasHidden Then ws.Visible = xlSheetHidden
+
+    Application.ScreenUpdating = True
     Exit Sub
 EH:
     Application.ScreenUpdating = True
