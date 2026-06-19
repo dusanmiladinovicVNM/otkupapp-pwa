@@ -763,48 +763,6 @@ Public Sub DebugKoloneTabele()
            Join(h, " | "), vbInformation, APP_NAME
 End Sub
 
-' Postavi Aktivan = "Aktivan" za SVE kulture (po imenu kolone, otporno na
-' redosled). Tagira postojece kulture koje nemaju tag.
-' Pokreni: Alt+F8 -> AktivirajSveKulture.
-' Reuse: GetTableData / GetColumnIndex / UpdateCell / Nz.
-Public Sub AktivirajSveKulture()
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_KULTURE)
-    If IsEmpty(data) Then
-        MsgBox "tblKulture je prazna ili ne postoji.", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-
-    Dim colAkt As Long, colID As Long
-    colAkt = GetColumnIndex(TBL_KULTURE, "Aktivan")
-    colID = GetColumnIndex(TBL_KULTURE, "KulturaID")
-
-    If colAkt = 0 Then
-        MsgBox "tblKulture nema kolonu 'Aktivan'." & vbCrLf & _
-               "Proveri naziv preko DebugKoloneTabele (tblKulture).", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-
-    Dim i As Long, n As Long
-    For i = 1 To UBound(data, 1)
-        ' Samo redovi koji su stvarno kulture (imaju ID) i jos nisu "Aktivan".
-        If colID = 0 Or Trim$(Nz(data(i, colID))) <> "" Then
-            If StrComp(Trim$(Nz(data(i, colAkt))), STATUS_AKTIVAN, vbTextCompare) <> 0 Then
-                If UpdateCell(TBL_KULTURE, i, "Aktivan", STATUS_AKTIVAN) Then n = n + 1
-            End If
-        End If
-    Next i
-
-    MsgBox "Tag 'Aktivan' postavljen na " & n & " kultura.", vbInformation, APP_NAME
-    Exit Sub
-
-EH:
-    LogErr "modSetup.AktivirajSveKulture"
-    MsgBox "Greska u AktivirajSveKulture: " & Err.description, vbCritical, APP_NAME
-End Sub
-
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
 Private Sub EnsureDataTable(ByVal tblName As String, _
                             ByVal sheetName As String, _

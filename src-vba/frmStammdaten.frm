@@ -1436,25 +1436,21 @@ Private Sub btnDodaj_Click()
 
             newID = GetNextID(m_TableName, "KulturaID", "KUL-")
 
-            ' Jezgro (ID/Vrsta/Sorta = uvek kolone 1-3) po poziciji, a
-            ' Aktivan/Gajbica PO IMENU (otporno na redosled kolona).
-            ' Tako nova kultura uvek dobije tag "Aktivan".
-            Dim newRowKul As Long
-            newRowKul = AppendRow(m_TableName, _
-                Array(newID, Trim$(txtField1.value), Trim$(txtField2.value)))
-
-            If newRowKul > 0 Then
-                UpdateCell m_TableName, newRowKul, "Aktivan", STATUS_AKTIVAN
-                If GetColumnIndex(m_TableName, COL_KUL_GAJBICA_PALETA) > 0 Then
-                    UpdateCell m_TableName, newRowKul, COL_KUL_GAJBICA_PALETA, gajbicaKul
-                End If
-                MsgBox "Dodato: " & newID, vbInformation, APP_NAME
-                LoadList
-                ClearFields
+            ' tblKulture: KulturaID | VrstaVoca | SortaVoca | GajbicaPoPaleti
+            ' (nema kolonu Aktivan). Gajbica ostaje prazna ako nije uneta.
+            Dim gajbicaVal As Variant
+            If Trim$(txtField3.value) = "" Then
+                gajbicaVal = ""
             Else
-                MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
+                gajbicaVal = gajbicaKul
             End If
-            Exit Sub
+
+            rowData = Array( _
+                newID, _
+                Trim$(txtField1.value), _
+                Trim$(txtField2.value), _
+                gajbicaVal _
+            )
 
         Case "TipAmbalaze"
             If Trim$(txtField1.value) = "" Then
