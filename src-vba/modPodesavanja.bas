@@ -49,6 +49,7 @@ Public Function ConfigEditorFields() As Variant
 
     CfgAdd c, "Sinhronizacija", "CLOUD_SYNC_ENABLED", "Cloud sync ukljucen", "bool"
     CfgAdd c, "Sinhronizacija", "SHEETS_SYNC_ENABLED", "Google Sheets sync ukljucen", "bool"
+    CfgAdd c, "Sinhronizacija", "SYNC_AUTO_INTERVAL_MIN", "Auto-sync interval (min, >=15)", "int"
 
     CfgAdd c, "Monitoring", "MONITORING_ENDPOINT", "Monitoring endpoint (URL)", "text"
     CfgAdd c, "Monitoring", "MONITORING_SECRET", "Monitoring secret", "secret"
@@ -84,10 +85,25 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", "Štampa otkupnog lista", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", "Štampa paletnog lista", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
 
     CfgAdd c, "Malina režim", "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
     CfgAdd c, "Malina režim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac (KupacID, auto-zbirna)", "text"
+
+    CfgAdd c, "Alati / putanje", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text"
+
+    CfgAdd c, "Management / Klijent", "MGMT_USER_1", "Management korisnik 1", "text"
+    CfgAdd c, "Management / Klijent", "MGMT_USER_2", "Management korisnik 2", "text"
+    CfgAdd c, "Management / Klijent", "MGMT_USER_3", "Management korisnik 3", "text"
+    CfgAdd c, "Management / Klijent", "CLIENT_ID", "Client ID", "text"
+    CfgAdd c, "Management / Klijent", "CLIENT_NAME", "Client naziv", "text"
+    CfgAdd c, "Management / Klijent", "ENV", "Okruzenje (klijent, DEV/PROD)", "text"
+
+    CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_LIVE", "SEF test: dozvoli LIVE slanje", "bool"
+    CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_CANCEL_STORNO", "SEF test: dozvoli cancel/storno", "bool"
+    CfgAdd c, "Napredno / Test", "SEF_DEBUG_LOG", "SEF debug log", "bool"
 
     Dim a() As Variant, i As Long
     ReDim a(0 To c.count - 1)
