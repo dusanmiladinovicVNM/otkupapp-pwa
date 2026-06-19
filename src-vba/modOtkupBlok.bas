@@ -681,12 +681,15 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
 
     Dim selSet As Object: Set selSet = CreateObject("Scripting.Dictionary")
     Dim dZbr As Object: Set dZbr = CreateObject("Scripting.Dictionary")
+    Dim dOtp As Object: Set dOtp = CreateObject("Scripting.Dictionary")
     Dim v As Variant
     For Each v In otpIDs
         Dim oid0 As String: oid0 = CStr(v)
         If Not selSet.Exists(oid0) Then selSet.Add oid0, True
         If Not dZbr.Exists(oid0) Then _
             dZbr.Add oid0, CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oid0, COL_OTP_BROJ_ZBIRNE))
+        If Not dOtp.Exists(oid0) Then _
+            dOtp.Add oid0, CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oid0, COL_OTP_BROJ))
     Next v
 
     Dim dKo As Object: Set dKo = BuildKoopNames()
@@ -715,7 +718,7 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     ws.cells(1, 1).Font.Bold = True
 
     Dim hdr As Variant
-    hdr = Array("Broj zbirne", "br. bloka", "Ime i Prezime", "Datum", "Kolicina", _
+    hdr = Array("Broj zbirne", "Broj otpremnice", "br. bloka", "Ime i Prezime", "Datum", "Kolicina", _
                 "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
     Const R0 As Long = 4
     Dim cc As Long
@@ -738,14 +741,15 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
             Dim uk As Double: uk = kol * bruto
 
             ws.cells(r, 1).value = DictVal(dZbr, oid)
-            ws.cells(r, 2).value = CStr(data(i, cBr))
-            ws.cells(r, 3).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
-            ws.cells(r, 4).value = FmtDate(data(i, cDat))
-            ws.cells(r, 5).value = kol
-            ws.cells(r, 6).value = neto
-            ws.cells(r, 7).value = vred
-            ws.cells(r, 8).value = pdv
-            ws.cells(r, 9).value = uk
+            ws.cells(r, 2).value = DictVal(dOtp, oid)
+            ws.cells(r, 3).value = CStr(data(i, cBr))
+            ws.cells(r, 4).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
+            ws.cells(r, 5).value = FmtDate(data(i, cDat))
+            ws.cells(r, 6).value = kol
+            ws.cells(r, 7).value = neto
+            ws.cells(r, 8).value = vred
+            ws.cells(r, 9).value = pdv
+            ws.cells(r, 10).value = uk
             sumKol = sumKol + kol: sumVred = sumVred + vred
             sumPdv = sumPdv + pdv: sumUk = sumUk + uk
             cnt = cnt + 1
@@ -760,36 +764,37 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     End If
 
     ' UKUPNO red
-    ws.cells(r, 3).value = "UKUPNO"
-    ws.cells(r, 5).value = sumKol
-    ws.cells(r, 7).value = sumVred
-    ws.cells(r, 8).value = sumPdv
-    ws.cells(r, 9).value = sumUk
-    ws.Range(ws.cells(r, 1), ws.cells(r, 9)).Font.Bold = True
+    ws.cells(r, 4).value = "UKUPNO"
+    ws.cells(r, 6).value = sumKol
+    ws.cells(r, 8).value = sumVred
+    ws.cells(r, 9).value = sumPdv
+    ws.cells(r, 10).value = sumUk
+    ws.Range(ws.cells(r, 1), ws.cells(r, 10)).Font.Bold = True
 
     ws.cells(2, 1).value = "Datum: " & Format$(Date, "d.m.yyyy") & "     Otpremnica: " & _
                            otpIDs.count & "     Blokova: " & cnt
 
     ' formati: kolicina bez decimala, novac 2 decimale
-    ws.Range(ws.cells(R0 + 1, 5), ws.cells(r, 5)).NumberFormat = "#,##0"
-    ws.Range(ws.cells(R0 + 1, 6), ws.cells(r, 9)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(R0 + 1, 6), ws.cells(r, 6)).NumberFormat = "#,##0"
+    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 10)).NumberFormat = "#,##0.00"
 
     ' iscrtana polja
-    Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, 9))
+    Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, 10))
     tbl.Borders.LineStyle = xlContinuous
     tbl.Borders.Weight = xlThin
     tbl.rows.RowHeight = 13
 
     ' sirine kolona
-    ws.columns("A").ColumnWidth = 12
-    ws.columns("B").ColumnWidth = 12
-    ws.columns("C").ColumnWidth = 24
-    ws.columns("D").ColumnWidth = 11
-    ws.columns("E").ColumnWidth = 9
-    ws.columns("F").ColumnWidth = 11
-    ws.columns("G").ColumnWidth = 13
-    ws.columns("H").ColumnWidth = 12
-    ws.columns("I").ColumnWidth = 14
+    ws.columns("A").ColumnWidth = 12   ' Broj zbirne
+    ws.columns("B").ColumnWidth = 14   ' Broj otpremnice
+    ws.columns("C").ColumnWidth = 12   ' br. bloka
+    ws.columns("D").ColumnWidth = 24   ' Ime i Prezime
+    ws.columns("E").ColumnWidth = 11   ' Datum
+    ws.columns("F").ColumnWidth = 9    ' Kolicina
+    ws.columns("G").ColumnWidth = 11   ' Cena bez PDV
+    ws.columns("H").ColumnWidth = 13   ' Vrednost
+    ws.columns("I").ColumnWidth = 12   ' Iznos PDV
+    ws.columns("J").ColumnWidth = 14   ' Ukupna vrednost
 
     With ws.PageSetup
         .Orientation = xlLandscape
@@ -802,7 +807,7 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
         .RightMargin = Application.InchesToPoints(0.3)
         .TopMargin = Application.InchesToPoints(0.4)
         .BottomMargin = Application.InchesToPoints(0.4)
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, 9)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, 10)).Address
     End With
 
     ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
