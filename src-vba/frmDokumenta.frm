@@ -32,7 +32,10 @@ Private Sub UserForm_Activate()
     On Error GoTo EH
 
     EnsureUserFormChromeRemoved Me, mChromeRemoved
-    
+
+    ' Najnovijih 20 zbirnih u listbox (na svaki ulazak u formu -> pomaze "izadju pa udju").
+    LoadZbirneListbox
+
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
     
@@ -582,6 +585,8 @@ Private Sub btnUnosOtp_Click()
         On Error GoTo EH
     End If
 
+    LoadZbirneListbox   ' osvezi listu zbirnih (nova malina zbirna se odmah vidi)
+
     ClearOtpremnicaFields
 
     If txtBrojZbirne.value <> "" Then
@@ -659,6 +664,72 @@ Private Sub RefreshBrojZbirneSuggestion()
 
 EH:
     LogErr "frmDokumenta.RefreshBrojZbirneSuggestion"
+End Sub
+
+' ============================================================
+' Najnovijih 20 zbirnih -> listbox (desno od "Ulaz Kupci").
+' Pomaze operateru da izabere tacan BrojZbirne pri unosu prijemnice,
+' i kad izadje pa ponovo udje u formu. Distinct po BrojZbirne, najnovije prvo.
+' Kontrola na formi mora da se zove: lstZbirne (MSForms.ListBox).
+' ============================================================
+Private Sub LoadZbirneListbox()
+    On Error GoTo EH
+
+    lstZbirne.Clear
+    lstZbirne.ColumnCount = 3
+    lstZbirne.ColumnWidths = "85;55;120"
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim cBroj As Long, cDat As Long, cVrsta As Long, cSorta As Long
+    cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
+    cVrsta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
+    cSorta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
+    If cBroj = 0 Then Exit Sub
+
+    ' Reverse (najnovije dodate prvo), distinct po BrojZbirne, max 20.
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim r As Long, n As Long
+    For r = UBound(data, 1) To 1 Step -1
+        Dim broj As String: broj = Trim$(CStr(Nz(data(r, cBroj), "")))
+        If broj <> "" Then
+            If Not seen.Exists(broj) Then
+                seen.Add broj, True
+
+                Dim dStr As String: dStr = ""
+                If cDat > 0 Then
+                    If IsDate(data(r, cDat)) Then dStr = Format$(CDate(data(r, cDat)), "d.m.yyyy")
+                End If
+
+                Dim vs As String
+                vs = Trim$(Nz(data(r, cVrsta), "") & " " & Nz(data(r, cSorta), ""))
+
+                lstZbirne.AddItem broj
+                lstZbirne.List(lstZbirne.ListCount - 1, 1) = dStr
+                lstZbirne.List(lstZbirne.ListCount - 1, 2) = vs
+
+                n = n + 1
+                If n >= 20 Then Exit For
+            End If
+        End If
+    Next r
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.LoadZbirneListbox"
+End Sub
+
+' Klik na red -> popuni BrojZbirne u sekciji "Unos prijemnice" + osvezi manjak.
+Private Sub lstZbirne_Click()
+    On Error Resume Next
+    If lstZbirne.ListIndex < 0 Then Exit Sub
+    txtBrojZbirnePrij.value = CStr(lstZbirne.List(lstZbirne.ListIndex, 0))
+    If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
 End Sub
 
 Public Function SaveOMUlaz_TX(ByVal datum As Date, _
