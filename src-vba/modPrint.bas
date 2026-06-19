@@ -1,6 +1,19 @@
 Attribute VB_Name = "modPrint"
 Option Explicit
 
+' --- Geometrija otkupnog lista (svaki primerak = tacno 1/3 A4) -------------
+' Klijent koristi papir sa dve perforacije -> tri jednaka dela po 99mm
+' (A4 visina 297mm / 3). Dva primerka idu u gornje dve trecine, donja trecina
+' ostaje prazna. Stampa MORA biti 1:1 (Zoom=100, bez "Fit to page" / "Prilagodi").
+Private Const OL_THIRD_PT As Double = 280.63      ' 99 mm u tackama (99/25.4*72)
+Private Const OL_TOP_SPACER_PT As Double = 18#    ' ~6.3mm prazno iznad sadrzaja primerka
+Private Const OL_MIN_FILLER_PT As Double = 4#     ' min. donji razmak do perforacije
+' Kalibracija: ako stampac NE postuje TopMargin=0 nego sadrzaj pomeri nadole za
+' T mm, prva perforacija nece pasti na granicu primeraka. Tada ovde unesi
+' T u tackama (T_mm / 25.4 * 72) - prvi primerak se za toliko skrati i granica
+' se vraca na 99mm. Podrazumevano 0 (stampac postuje 0 marginu / borderless).
+Private Const OL_TOP_MARGIN_TRIM_PT As Double = 0#
+
 ' ============================================================
 ' modPrint – Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
 ' ============================================================
@@ -198,35 +211,33 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ws.columns("D").ColumnWidth = 15
     ws.columns("E").ColumnWidth = 14
     ws.columns("F").ColumnWidth = 16
-    ws.rows("1:120").AutoFit
+    ' NAPOMENA: bez AutoFit - visine redova se postavljaju eksplicitno tako da
+    ' svaki primerak zauzme tacno 1/3 A4 (99mm). AutoFit bi to ponistio.
 
+    ' Dva primerka, svaki dopunjen filler-redom do tacno 1/3 A4 (99mm). Bez
+    ' stampane linije za secenje - papir je vec perforiran; granice izmedju
+    ' primeraka padaju tacno na perforacije (99mm i 198mm od vrha lista), a
+    ' donja trecina (198-297mm) ostaje prazna.
     Dim r0 As Long, lastRow As Long
-    r0 = WriteOtkupCopy(ws, 2, "Primerak za poljoprivrednika", h, stavke, cnt)
-
-    ' Razmak + isprekidana linija za secenje izmedju dva primerka.
-    Dim cutRow As Long: cutRow = r0 + 1
-    ws.Range(ws.cells(cutRow, 1), ws.cells(cutRow, 6)).Merge
-    With ws.cells(cutRow, 1)
-        .value = ChrW(9986) & " " & String$(80, "-")
-        .Font.Color = RGB(150, 150, 150)
-        .HorizontalAlignment = xlCenter
-    End With
-
-    lastRow = WriteOtkupCopy(ws, cutRow + 2, "Primerak za otkupljivaca", h, stavke, cnt)
+    r0 = WriteOtkupCopy(ws, 1, "Primerak za poljoprivrednika", h, stavke, cnt, _
+                        OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
+    lastRow = WriteOtkupCopy(ws, r0, "Primerak za otkupljivaca", h, stavke, cnt, _
+                             OL_THIRD_PT) - 1
 
     On Error Resume Next
     Application.PrintCommunication = False
     With ws.PageSetup
         .PaperSize = xlPaperA4
         .Orientation = xlPortrait
-        .Zoom = False
-        .FitToPagesWide = 1
-        .FitToPagesTall = 1
-        .LeftMargin = Application.InchesToPoints(0.4)
-        .RightMargin = Application.InchesToPoints(0.4)
-        .TopMargin = Application.InchesToPoints(0.4)
-        .BottomMargin = Application.InchesToPoints(0.4)
+        .Zoom = 100                       ' fiksna skala 1:1 -> visine redova u mm su tacne
+        .LeftMargin = Application.InchesToPoints(0.31)
+        .RightMargin = Application.InchesToPoints(0.31)
+        .TopMargin = 0                    ' primerak 1 pocinje na vrhu lista (gornji red je prazan spacer)
+        .BottomMargin = 0
+        .HeaderMargin = 0
+        .FooterMargin = 0
         .CenterHorizontally = True
+        .CenterVertically = False
         .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 6)).Address
     End With
     Application.PrintCommunication = True
@@ -240,51 +251,88 @@ EH:
     LogErr "modPrint.FillOtkupSablon"
 End Function
 
-' Ispisuje jedan stilizovani primerak od reda r0; vraca prvi slobodan red.
+' Ispisuje jedan kompaktan primerak od reda r0 i dopunjava ga filler-redom do
+' tacno 1/3 A4 (targetPt tacaka). Vraca prvi slobodan red (pocetak sledeceg
+' primerka). Sve visine redova su eksplicitne (bez AutoFit) da bi zbir bio tacan.
+' Optimalno 1-2 stavke po primerku; vise stavki smanjuje donji razmak.
 Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
                                 ByVal copyLbl As String, ByVal h As Object, _
-                                ByVal stavke As Variant, ByVal nStavke As Long) As Long
+                                ByVal stavke As Variant, ByVal nStavke As Long, _
+                                ByVal targetPt As Double) As Long
     Dim rr As Long
     Dim grayClr As Long: grayClr = DocColGray()
     Dim fillClr As Long: fillClr = DocColHeaderFill()
+    Dim usedPt As Double: usedPt = 0
 
-    rr = DocSellerHeader(ws, r0, 6, 6)
+    ' --- gornji prazan razmak (apsorbuje nestampajucu ivicu stampaca) ---
+    ws.rows(r0).RowHeight = OL_TOP_SPACER_PT
+    usedPt = usedPt + OL_TOP_SPACER_PT
+    rr = r0 + 1
+
+    ' --- zaglavlje prodavca (3 reda) ---
+    Dim shTop As Long: shTop = rr
+    rr = DocSellerHeader(ws, rr, 6, 6)
+    ws.cells(shTop, 1).Font.Size = 11
+    ws.rows(shTop).RowHeight = 15#
+    ws.rows(shTop + 1).RowHeight = 12#
+    ws.rows(shTop + 2).RowHeight = 12#
+    usedPt = usedPt + 39#
+
+    ' --- naslov (2 reda) ---
+    Dim tbTop As Long: tbTop = rr
     rr = DocTitleBlock(ws, rr, 6, "Otkup poljoprivrednih proizvoda", _
                        "OTKUPNI LIST  br. " & h("brDok"))
+    ws.rows(tbTop).RowHeight = 12#
+    ws.cells(tbTop + 1, 1).Font.Size = 14
+    ws.rows(tbTop + 1).RowHeight = 18#
+    usedPt = usedPt + 30#
 
-    ' --- datum / otkupno mesto / oznaka primerka ---
+    ' --- datum / otkupno mesto ---
     DocLabelVal ws, rr, 1, "Datum:", CStr(h("datum"))
     DocLabelVal ws, rr, 4, "Otkupno mesto:", CStr(h("stanica"))
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
     rr = rr + 1
+
+    ' --- oznaka primerka ---
     With ws.cells(rr, 1)
         .value = copyLbl
         .Font.Italic = True
+        .Font.Size = 9
         .Font.Color = grayClr
     End With
+    ws.rows(rr).RowHeight = 11#
+    usedPt = usedPt + 11#
     rr = rr + 1
 
-    ' --- poljoprivrednik ---
+    ' --- poljoprivrednik + BPG + tekuci racun ---
     DocLabelVal ws, rr, 1, "Poljoprivrednik:", CStr(h("koop"))
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
     rr = rr + 1
     DocLabelVal ws, rr, 1, "BPG:", CStr(h("bpg"))
     DocLabelVal ws, rr, 4, "Tekuci racun:", CStr(h("racun"))
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
     rr = rr + 1
 
-    ' --- stavke ---
+    ' --- stavke (kratke oznake kolona, jedan red) ---
     Dim hdr As Long: hdr = rr
     ws.cells(rr, 1).value = "Rb"
     ws.cells(rr, 2).value = "Proizvod"
     ws.cells(rr, 3).value = "Klasa"
-    ws.cells(rr, 4).value = "Kolicina kg"
-    ws.cells(rr, 5).value = "Cena bez PDV"
-    ws.cells(rr, 6).value = "Vrednost bez PDV"
+    ws.cells(rr, 4).value = "Kol. (kg)"
+    ws.cells(rr, 5).value = "Cena neto"
+    ws.cells(rr, 6).value = "Vrednost neto"
     With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
         .Font.Bold = True
+        .Font.Size = 9
         .Interior.Color = fillClr
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
-        .WrapText = True
     End With
+    ws.rows(rr).RowHeight = 14#
+    usedPt = usedPt + 14#
     rr = rr + 1
     Dim k As Long
     For k = 0 To nStavke - 1
@@ -296,6 +344,8 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         ws.cells(rr, 6).value = stavke(k, 4)
         ws.cells(rr, 1).HorizontalAlignment = xlCenter
         ws.cells(rr, 3).HorizontalAlignment = xlCenter
+        ws.rows(rr).RowHeight = 13#
+        usedPt = usedPt + 13#
         rr = rr + 1
     Next k
     With ws.Range(ws.cells(hdr, 1), ws.cells(rr - 1, 6)).Borders
@@ -328,33 +378,50 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         .NumberFormat = "#,##0.00"
         .HorizontalAlignment = xlRight
     End With
+    ws.rows(ob).RowHeight = 13#
+    ws.rows(ob + 1).RowHeight = 13#
+    ws.rows(ob + 2).RowHeight = 14#
+    usedPt = usedPt + 40#
     rr = ob + 3
 
-    ' --- klauzula (obavezni element otkupnog bloka) ---
+    ' --- klauzula (obavezni element otkupnog bloka), sitan font ---
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Merge
     With ws.cells(rr, 1)
         .value = CStr(h("klauzula"))
-        .Font.Size = 8
+        .Font.Size = 7
         .Font.Color = RGB(60, 60, 60)
         .WrapText = True
         .VerticalAlignment = xlTop
         .HorizontalAlignment = xlLeft
     End With
-    ws.rows(rr).RowHeight = 48
+    ws.rows(rr).RowHeight = 30#
+    usedPt = usedPt + 30#
     rr = rr + 1
 
     ' --- napomena + potpisi ---
     With ws.cells(rr, 1)
         .value = "Poljoprivrednik svojim potpisom potvrdjuje prijem nadoknade."
-        .Font.Size = 8
+        .Font.Size = 7
         .Font.Italic = True
         .Font.Color = grayClr
     End With
+    ws.rows(rr).RowHeight = 10#
+    usedPt = usedPt + 10#
     rr = rr + 1
-    ws.cells(rr, 1).value = "Potpis poljoprivrednika:  ________"
+    ws.cells(rr, 1).value = "Potpis poljoprivrednika:  ____________"
+    ws.cells(rr, 1).Font.Size = 9
     ws.cells(rr, 1).Font.Color = grayClr
     ws.cells(rr, 4).value = "Potpis / pecat otkupljivaca:  ____________"
+    ws.cells(rr, 4).Font.Size = 9
     ws.cells(rr, 4).Font.Color = grayClr
+    ws.rows(rr).RowHeight = 16#
+    usedPt = usedPt + 16#
+    rr = rr + 1
+
+    ' --- filler red: dopuni primerak do tacno 1/3 A4 (targetPt) ---
+    Dim fillPt As Double: fillPt = targetPt - usedPt
+    If fillPt < OL_MIN_FILLER_PT Then fillPt = OL_MIN_FILLER_PT
+    ws.rows(rr).RowHeight = fillPt
     rr = rr + 1
 
     WriteOtkupCopy = rr
