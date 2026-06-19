@@ -752,6 +752,81 @@ EH:
     Err.Raise Err.Number, "EnsureCenovnikSchema", Err.description
 End Sub
 
+' ============================================================
+' Dorade (soft-delete + tip ambalaze po kulturi + hladnjaca + decimalna
+' kolicina) — jednokratni schema setup. Idempotentno.
+' Alt+F8 -> EnsureDoradeSchema.
+' ============================================================
+Public Sub EnsureDoradeSchema()
+    On Error GoTo EH
+
+    ' #1 soft-delete: kolona Aktivan na sifarnicima koji je nemaju (+ backfill).
+    EnsureAktivanColumn TBL_KULTURE
+    EnsureAktivanColumn TBL_TIP_AMBALAZE
+    EnsureAktivanColumn TBL_TIP_PALETE
+
+    ' #6: podrazumevani tip ambalaze po kulturi.
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE
+
+    ' #3: flag hladnjaca na stanici (+ backfill "Ne").
+    EnsureColumnOnTable TBL_STANICE, COL_STA_JE_HLADNJACA
+    BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
+
+    ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
+    SetColumnNumberFormat TBL_OTKUP, COL_OTK_KOLICINA, "0.00"
+    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
+    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
+    SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
+
+    LogSetup "OK", "EnsureDoradeSchema done"
+    MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
+           "- Aktivan: Kulture/Ambalaza/Palete (postojeci -> Aktivan)" & vbCrLf & _
+           "- TipAmbalaze: tblKulture (podrazumevani po kulturi)" & vbCrLf & _
+           "- JeHladnjaca: tblStanice (Da/Ne)" & vbCrLf & _
+           "- Decimalni format kolicine (0.00)", vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureDoradeSchema failed: " & Err.description
+    MsgBox "Greska u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Dodaj kolonu Aktivan ako fali i postavi "Aktivan" na sve prazne (backfill).
+Private Sub EnsureAktivanColumn(ByVal tblName As String)
+    EnsureColumnOnTable tblName, "Aktivan"
+    BackfillColumn tblName, "Aktivan", STATUS_AKTIVAN
+End Sub
+
+' Postavi vrednost u koloni za sve redove gde je prazno (ne gazi postojece).
+Private Sub BackfillColumn(ByVal tblName As String, ByVal colName As String, ByVal val As String)
+    On Error Resume Next
+    Dim lo As ListObject
+    Set lo = FindListObject(tblName)
+    If lo Is Nothing Then Exit Sub
+    If lo.DataBodyRange Is Nothing Then Exit Sub
+    Dim col As ListColumn
+    Set col = lo.ListColumns(colName)
+    If col Is Nothing Then Exit Sub
+
+    Dim cell As Range
+    For Each cell In col.DataBodyRange.Cells
+        If Trim$(CStr(cell.value)) = "" Then cell.value = val
+    Next cell
+End Sub
+
+' Postavi NumberFormat kolone (no-op ako tabela/kolona ne postoji).
+Private Sub SetColumnNumberFormat(ByVal tblName As String, ByVal colName As String, ByVal fmt As String)
+    On Error Resume Next
+    Dim lo As ListObject
+    Set lo = FindListObject(tblName)
+    If lo Is Nothing Then Exit Sub
+    If lo.DataBodyRange Is Nothing Then Exit Sub
+    Dim col As ListColumn
+    Set col = lo.ListColumns(colName)
+    If col Is Nothing Then Exit Sub
+    col.DataBodyRange.NumberFormat = fmt
+End Sub
+
 ' Dijagnostika: prikazi STVARNE nazive kolona neke tabele.
 ' Pokreni: Alt+F8 -> DebugKoloneTabele -> unesi npr. tblStanice.
 ' Reuse: GetTableHeaders (modDataAccess).
