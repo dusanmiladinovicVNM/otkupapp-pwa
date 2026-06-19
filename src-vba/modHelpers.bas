@@ -165,6 +165,18 @@ Public Function Nz(ByVal val As Variant, Optional ByVal default As String = "") 
     End If
 End Function
 
+' Null-safe pretvaranje vrednosti iz tabele/celije u tekst.
+' Vraca "" za Null/Empty/Error; inace CStr(v). Pozivaoci sami rade Trim$ gde treba.
+Public Function NzToText(ByVal v As Variant) As String
+    If IsNull(v) Or IsEmpty(v) Then
+        NzToText = ""
+    ElseIf IsError(v) Then
+        NzToText = ""
+    Else
+        NzToText = CStr(v)
+    End If
+End Function
+
 Public Function BuildManjakDict(Optional ByVal filterZbirneKeys As Object = Nothing) As Object
     ' Returns: Dictionary BrojZbirne ? Array(ZbirnaKg, PrijemnicaKg)
     
