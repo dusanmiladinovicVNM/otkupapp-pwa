@@ -133,6 +133,7 @@ Private Sub UserForm_Activate()
     StyleSectionAccent lblAccentOMUlaz, fraOMUlaz, "primary"
     StyleSectionAccent lblAccentIzlaz, fraIzlazKupci, "primary"
     StyleSectionAccent lblAccentStorno, fraStorno, "warn"
+    StyleSectionAccent lblAccentZbirne, fraListaZbirnih, "info"
     
     ' Frame captions empty — naslovi idu kao zasebni Label-i ispod akcent linije
     fraOtpremnica.caption = ""
@@ -141,6 +142,7 @@ Private Sub UserForm_Activate()
     fraOMUlaz.caption = ""
     fraIzlazKupci.caption = ""
     fraStorno.caption = ""
+    fraListaZbirnih.caption = ""
 
     StyleFrameTitleLabel lblTitleOtp, "Izlaz OM  (Otpremnica)"
     StyleFrameTitleLabel lblTitleZbr, "Zbirna otpremnica"
@@ -148,6 +150,7 @@ Private Sub UserForm_Activate()
     StyleFrameTitleLabel lblTitleOMUlaz, "Ulaz OM  (Novac kooperantu)"
     StyleFrameTitleLabel lblTitleIzlaz, "Izlaz Kupci  (Novac od kupca)"
     StyleFrameTitleLabel lblTitleStorno, "Storno"
+    StyleFrameTitleLabel lblTitleZbirne, "Lista zbirnih"
     Exit Sub
 
 EH:
@@ -677,6 +680,8 @@ Private Sub LoadZbirneListbox()
     On Error GoTo EH
 
     StyleListBox lstZbirne                       ' tema (krem/forest, Segoe UI) kao lstData
+    lstZbirne.SpecialEffect = fmSpecialEffectFlat   ' <-- bez sunken 3D okvira
+    lstZbirne.BorderStyle = fmBorderStyleNone        ' <-- bez linije
 
     ' --- Kolone: jedan izvor istine za sirine (listbox + header labele) ---
     Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single
@@ -685,22 +690,36 @@ Private Sub LoadZbirneListbox()
     lstZbirne.ColumnCount = 4
     lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta
 
-    ' Header = 4 odvojene labele iznad kolona, stil kao lstData header (StyleListHeaderLabel).
+    ' Header: stil + caption (bold off da ne odudara od labela polja)
     StyleListHeaderLabel lblZbirneBrojZbirne
     StyleListHeaderLabel lblZbirneDatum
     StyleListHeaderLabel lblZbirneVrsta
     StyleListHeaderLabel lblZbirneSorta
-    lblZbirneBrojZbirne.Caption = "Broj zbirne"
-    lblZbirneDatum.Caption = "Datum"
-    lblZbirneVrsta.Caption = "Vrsta"
-    lblZbirneSorta.Caption = "Sorta"
 
-    ' Poravnaj labele tacno po kolonama listbox-a: krece od pozicije prve labele
-    ' (koju je operater vec poravnao sa 1. kolonom), pa snap 2-4 po sirinama kolona.
-    ' Sve na istu liniju (Top prve) => neprekidna krem traka = izgled zaglavlja tabele.
-    Dim hx As Single, hTop As Single
-    hx = lblZbirneBrojZbirne.Left
-    hTop = lblZbirneBrojZbirne.Top
+    lblZbirneBrojZbirne.Font.Bold = False
+    lblZbirneDatum.Font.Bold = False
+    lblZbirneVrsta.Font.Bold = False
+    lblZbirneSorta.Font.Bold = False
+
+    lblZbirneBrojZbirne.caption = "Broj zbirne"
+    lblZbirneDatum.caption = "Datum"
+    lblZbirneVrsta.caption = "Vrsta"
+    lblZbirneSorta.caption = "Sorta"
+
+    ' --- Vertikalni raspored: naslov -> header -> lista, racunato iz naslova ---
+    Const GAP_TITLE As Single = 8      ' naslov -> header
+    Const GAP_HEADER As Single = 2     ' header -> lista
+    Const PAD_BOTTOM As Single = 8     ' lista -> dno frame-a
+
+    Dim hTop As Single
+    hTop = lblTitleZbirne.top + lblTitleZbirne.Height + GAP_TITLE
+
+    lstZbirne.top = hTop + lblZbirneBrojZbirne.Height + GAP_HEADER
+    lstZbirne.Height = fraListaZbirnih.InsideHeight - lstZbirne.top - PAD_BOTTOM
+
+    ' --- Horizontalno: header poravnat po kolonama listboxa ---
+    Dim hx As Single
+    hx = lstZbirne.Left + 3
     PlaceZbirneHeader lblZbirneBrojZbirne, hx, wBroj, hTop
     hx = hx + wBroj
     PlaceZbirneHeader lblZbirneDatum, hx, wDat, hTop
@@ -759,8 +778,8 @@ Private Sub PlaceZbirneHeader(ByVal lbl As MSForms.label, _
                               ByVal topPt As Single)
     On Error Resume Next
     lbl.Left = leftPt
-    lbl.Width = widthPt
-    lbl.Top = topPt
+    lbl.width = widthPt
+    lbl.top = topPt
 End Sub
 
 ' Klik na red -> popuni BrojZbirne u sekciji "Unos prijemnice" + osvezi manjak.
