@@ -1436,13 +1436,25 @@ Private Sub btnDodaj_Click()
 
             newID = GetNextID(m_TableName, "KulturaID", "KUL-")
 
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(txtField2.value), _
-                STATUS_AKTIVAN, _
-                gajbicaKul _
-            )
+            ' Jezgro (ID/Vrsta/Sorta = uvek kolone 1-3) po poziciji, a
+            ' Aktivan/Gajbica PO IMENU (otporno na redosled kolona).
+            ' Tako nova kultura uvek dobije tag "Aktivan".
+            Dim newRowKul As Long
+            newRowKul = AppendRow(m_TableName, _
+                Array(newID, Trim$(txtField1.value), Trim$(txtField2.value)))
+
+            If newRowKul > 0 Then
+                UpdateCell m_TableName, newRowKul, "Aktivan", STATUS_AKTIVAN
+                If GetColumnIndex(m_TableName, COL_KUL_GAJBICA_PALETA) > 0 Then
+                    UpdateCell m_TableName, newRowKul, COL_KUL_GAJBICA_PALETA, gajbicaKul
+                End If
+                MsgBox "Dodato: " & newID, vbInformation, APP_NAME
+                LoadList
+                ClearFields
+            Else
+                MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
+            End If
+            Exit Sub
 
         Case "TipAmbalaze"
             If Trim$(txtField1.value) = "" Then
