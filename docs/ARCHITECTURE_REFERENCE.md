@@ -4296,7 +4296,7 @@ Canonical keys:
 | `MONITORING_ENDPOINT` | GAS Web App `/exec` URL. |
 | `MONITORING_SECRET` | Shared ingest secret matching GAS `MONITORING_INGEST_SECRET`. |
 | `MONITORING_ENV` | Environment label, for example `DEV` or `PROD`. |
-| `LICENSE_ENABLED` | Per-device license gate toggle (`YES`/`NO`, default `NO` = off). Owned by `modLicense`. |
+| `LICENSE_ENABLED` | Per-device license gate toggle (`YES`/`NO`, default `NO` = off). **Latch:** once a machine has activated (both `LICENSE_KEY` and `LICENSE_BOUND_PARTS` present) the gate is enforced even if this is later set back to `NO` (anti-bypass) — see `modLicense.LicenseRequired`. Owned by `modLicense`. |
 | `LICENSE_ENDPOINT` | GAS Web App `/exec` URL for `checkLicense` (falls back to `MONITORING_ENDPOINT` if empty). |
 | `LICENSE_KEY` | Per-device license key assigned to this workstation. |
 | `LICENSE_TOKEN` / `LICENSE_BOUND_PARTS` / `LICENSE_NEXT_CHECK` / `LICENSE_STATUS` / `LICENSE_HWM` | Internal client cache written by `modLicense` (do not edit manually). `LICENSE_HWM` is the anti-rollback high-water-mark (mirrors `TRIAL_HWM`). |
@@ -4304,7 +4304,7 @@ Canonical keys:
 | `TRIAL_START` / `TRIAL_DAYS` | Trial window start (`yyyy-mm-dd`) and length in days. Empty → `modTrial` Const defaults. |
 | `TRIAL_HWM` | Internal anti-rollback high-water-mark written by `modTrial` (do not edit manually). |
 
-> **Access gate (`modLicense.AccessGateOrQuit`):** licensed machine is allowed and **never sees the trial**; an unlicensed machine (no `LICENSE_KEY`) gets the trial when `TRIAL_ENABLED=YES`, otherwise falls to the license gate. `modLicense` and `modTrial` are a pair (mutual references) and must both be imported.
+> **Access gate (`modLicense.AccessGateOrQuit`):** licensed machine is allowed and **never sees the trial**; an unlicensed machine (no `LICENSE_KEY`) gets the trial when `TRIAL_ENABLED=YES`, otherwise falls to the license gate. An **already-activated** machine forces the gate regardless of `LICENSE_ENABLED` (latch via `modLicense.LicenseRequired`), so setting the flag back to `NO` cannot bypass licensing post-activation. `modLicense` and `modTrial` are a pair (mutual references) and must both be imported.
 
 > **Licensing vs. desktop-only:** the license check is an auth call and is **intentionally independent of `CLOUD_SYNC_ENABLED`**. Binding it to the cloud-sync toggle would let a user disable licensing by turning cloud sync off, so when `LICENSE_ENABLED=YES` the single `checkLicense` HTTP call runs even in an otherwise desktop-only deploy. See `modLicense.LicenseGateOrQuit`. Server-side validation/tests: `gas/Code.gs` (`checkLicense`, `runLicenseSelfTest`); client logic tests: `src-vba/modLicenseTests.bas`.
 

@@ -44,8 +44,15 @@ U `tblSEFConfig`:
 
 Zatim na svakom računaru jednokratno: **Alt+F8 → `ActivateLicensePrompt`** i unesi ključ.
 
-> `LICENSE_ENABLED` je **opt-in**: dok nije `YES`, provera je isključena
-> (fail-open), pa uvođenje koda ne blokira postojeće instalacije.
+> `LICENSE_ENABLED` je **opt-in**: dok mašina nije aktivirana i flag nije `YES`,
+> provera je isključena (fail-open), pa uvođenje koda ne blokira postojeće
+> instalacije.
+>
+> **Latch (anti-bypass):** posle prve uspešne aktivacije (postoje `LICENSE_KEY` +
+> `LICENSE_BOUND_PARTS`) provera je **obavezna i kad je `LICENSE_ENABLED=NO`** —
+> spuštanje flag-a na `NO` više ne gasi licencu na toj mašini. Pravi ON/OFF je
+> server (`adminSuspendLicense`/`adminActivateLicense`). Granica: ko lokalno
+> obriše oba ključa gubi aktivaciju; tvrdi autoritet ostaje server.
 
 ## Svakodnevne operacije
 

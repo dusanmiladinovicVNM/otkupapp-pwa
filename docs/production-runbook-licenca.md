@@ -44,7 +44,7 @@ Da li masina ima internet:
 * „Prva aktivacija veže": prvi računar koji aktivira ključ se veže; svaki drugi → `BOUND_OTHER`.
 * Token (HMAC) + `LICENSE_NEXT_CHECK` daju **offline grace** (default **3 dana**); prva aktivacija mora online.
 * **Anti-rollback** (`LICENSE_HWM`, ista tehnika kao trial): ako je sistemski sat vraćen ispod ranije viđenog datuma, offline grace se ne priznaje → forsira se online provera. Deterrent sloj (HWM je editabilan); **server je autoritet**.
-* **Opt-in:** gate radi samo ako je `LICENSE_ENABLED = YES`.
+* **Opt-in + latch:** gate radi ako je `LICENSE_ENABLED = YES` **ili** ako je mašina već jednom aktivirana (postoje `LICENSE_KEY` + `LICENSE_BOUND_PARTS`). Posle prve aktivacije vraćanje `LICENSE_ENABLED=NO` **ne gasi** proveru na toj mašini (anti-bypass); pravi ON/OFF je server (`adminSuspendLicense`/`adminActivateLicense`).
 * **Trial (fallback):** mašina **bez ključa** dobija vremenski trial (ako je uključen); **licencirana mašina nikad ne vidi trial**. Orkestrira `modLicense.AccessGateOrQuit` (par `modLicense` + `modTrial`).
 
 ### Odluka pri pokretanju (`AccessGateOrQuit`)
@@ -56,6 +56,7 @@ Da li masina ima internet:
 | YES | **ima ključ** | svejedno | **Licenca odlučuje** — OK propušta; `BOUND_OTHER`/`SUSPENDED`/`EXPIRED` blokira. **Trial se preskače.** |
 | YES | nema ključ | NO | **License gate** → „unesite ključ" blok |
 | YES | nema ključ | YES | **Trial** — u roku propušta, istek blokira |
+| **NO** | **ima ključ (već aktiviran)** | svejedno | **Licenca odlučuje** — latch: aktivirana mašina prolazi kroz proveru i kad je flag `NO` (vidi „Opt-in + latch" gore) |
 
 ---
 
@@ -154,10 +155,11 @@ adminActivateLicense('KLJUC');             // vrati pristup
 
 Ako uvođenje pravi problem u produkciji:
 
-* **Po mašini:** `LICENSE_ENABLED = NO` u `tblSEFConfig` → gate se preskače (fail-open).
+* **Po mašini koja JOŠ NIJE aktivirana:** `LICENSE_ENABLED = NO` u `tblSEFConfig` → gate se preskače (fail-open).
+* **Po mašini koja JE već aktivirana (latch):** `LICENSE_ENABLED = NO` **više ne pomaže** — provera ostaje obavezna. Opcije: drži licencu `ACTIVE` na serveru (mašina prolazi); blokiraj sa `adminSuspendLicense('KLJUC')`; ili potpuno „odlicenciraj" lokalno tako što na toj mašini obrišeš `LICENSE_KEY` **i** `LICENSE_BOUND_PARTS` u `tblSEFConfig` (gubi se latch).
 * **Trial:** `TRIAL_ENABLED = NO` → trial se gasi (nelicencirane mašine padaju na license gate).
-* **Flotno:** vrati prethodni `.xlsm` build (sa `LICENSE_ENABLED=NO`).
-* Server-side ne treba ništa gasiti — bez `LICENSE_ENABLED=YES` klijent ne zove `checkLicense`.
+* **Flotno (pre prve aktivacije):** vrati prethodni `.xlsm` build (sa `LICENSE_ENABLED=NO`).
+* Server je autoritet: za **aktivirane** mašine kontrolu radiš sa servera (`adminSuspendLicense`/`adminActivateLicense`/`adminResetLicenseBinding`), jer latch tera klijent da zove `checkLicense` i kad je flag `NO`.
 
 ---
 

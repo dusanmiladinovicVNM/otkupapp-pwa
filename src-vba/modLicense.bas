@@ -17,12 +17,18 @@ Option Explicit
 ' i radi offline — to je univerzalni plafon svakog VBA-locka. Prava tvrda
 ' zastita = kriticni podaci/obracun zive samo na serveru.
 '
-' OPT-IN: gate radi SAMO ako je u tblSEFConfig LICENSE_ENABLED = YES.
-' Tako merge ovog koda NE blokira postojece instalacije dok ne provizionises
-' kljuceve i ne ukljucis proveru.
+' OPT-IN + LATCH: gate radi ako je u tblSEFConfig LICENSE_ENABLED = YES, ILI
+' ako je masina vec jednom USPESNO aktivirana (postoje LICENSE_KEY i
+' LICENSE_BOUND_PARTS). Tako merge ovog koda NE blokira postojece instalacije
+' dok ne provizionises kljuceve, a posle prve aktivacije vracanje
+' LICENSE_ENABLED=NO vise NE gasi proveru na toj masini (anti-bypass).
+' Pravi ON/OFF ostaje na serveru (Licenses sheet u Stammdaten:
+' adminSuspendLicense / adminActivateLicense / adminResetLicenseBinding).
 '
 ' Config kljucevi (tblSEFConfig):
-'   LICENSE_ENABLED      YES/NO  (default NO — provera iskljucena)
+'   LICENSE_ENABLED      YES/NO  (default NO — provera iskljucena DOK masina
+'                        nije aktivirana; posle prve aktivacije latch tera
+'                        proveru i bez YES — vidi LicenseRequired)
 '   LICENSE_ENDPOINT     GAS Web App /exec URL (ako prazno -> MONITORING_ENDPOINT)
 '   LICENSE_KEY          licencni kljuc dodeljen ovom racunaru
 '   LICENSE_TOKEN        (interno) potpisan token sa servera
@@ -79,7 +85,7 @@ Public Function AccessGateOrQuit() As Boolean
     Const SRC As String = "modLicense.AccessGateOrQuit"
     On Error GoTo EH
 
-    Dim licOn As Boolean: licOn = LicenseEnabled()
+    Dim licOn As Boolean: licOn = LicenseRequired()
     Dim hasKey As Boolean: hasKey = (Len(Trim$(GetConfigValue(CFG_LIC_KEY))) > 0)
 
     If licOn And hasKey Then
@@ -124,8 +130,9 @@ Public Function LicenseGateOrQuit() As Boolean
     Const SRC As String = "modLicense.LicenseGateOrQuit"
     On Error GoTo EH
 
-    ' Opt-in: ako provera nije ukljucena, ne diramo nista.
-    If Not LicenseEnabled() Then
+    ' Opt-in + latch: ako provera nije obavezna (flag NO i masina nije vec
+    ' aktivirana), ne diramo nista.
+    If Not LicenseRequired() Then
         LicenseGateOrQuit = True
         Exit Function
     End If
@@ -528,6 +535,25 @@ End Function
 ' ============================================================
 ' PRIVATE — config / poruke
 ' ============================================================
+
+' Latch: da li je na OVOM racunaru licenca vec jednom USPESNO aktivirana.
+' Signal je par koji upisuje PersistLicenseOk: licencni kljuc (LICENSE_KEY) +
+' sacuvane komponente otiska (LICENSE_BOUND_PARTS). Kada oba postoje, gate je
+' OBAVEZAN cak i ako neko naknadno vrati LICENSE_ENABLED na NO -> zatvara
+' "spusti flag na NO" bypass. Granica (posteno): ko lokalno obrise oba kljuca
+' gubi aktivaciju i latch; pravi autoritet ostaje server.
+Private Function LicenseActivatedOnThisMachine() As Boolean
+    LicenseActivatedOnThisMachine = _
+        (Len(Trim$(GetConfigValue(CFG_LIC_KEY))) > 0) And _
+        (Len(Trim$(GetConfigValue(CFG_LIC_BOUND_PARTS))) > 0)
+End Function
+
+' Da li gate UOPSTE treba da radi: opt-in flag YES ILI latch (vec aktivirana
+' masina). Sve "da li uopste proveravati" tacke gledaju ovo umesto golog
+' LicenseEnabled() — tako se anti-bypass primenjuje na jednom mestu.
+Private Function LicenseRequired() As Boolean
+    LicenseRequired = LicenseEnabled() Or LicenseActivatedOnThisMachine()
+End Function
 
 Private Function LicenseEnabled() As Boolean
     Dim v As String
