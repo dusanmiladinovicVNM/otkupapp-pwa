@@ -75,6 +75,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_DokumentaReadHelpersExcludeStornirano
     Test_DualClassDocumentWrappers
     Test_MalinaAutoZbirnaFromOtpremnice
+    Test_MalinaVozacMirror
 
     Test_AutoLinkPositiveUniqueMatch
     Test_AutoLinkMustNotCrossBrojZbirne
@@ -1411,6 +1412,43 @@ EH:
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     On Error GoTo 0
     LogFatal "Test_MalinaAutoZbirnaFromOtpremnice", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' MALINA MOD — vozac mirror: nova stanica -> par-vozac sa istim ID-em
+' ============================================================
+Private Sub Test_MalinaVozacMirror()
+    Dim prevMode As String
+
+    On Error GoTo EH
+
+    Dim sid As String
+    sid = "ST-MALMIR-" & NewScenarioCode("VOZMIR")
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    AssertFalse RowExists(TBL_VOZACI, "VozacID", sid), _
+        "Malina mirror: vozac pre kreiranja ne postoji"
+
+    Dim createdFirst As Boolean
+    createdFirst = EnsureVozacMirrorForStanica(sid, "Test Naziv", "Test Mesto", "")
+    AssertTrue createdFirst, "Malina mirror: prvi poziv kreira vozaca"
+    AssertTrue RowExists(TBL_VOZACI, "VozacID", sid), _
+        "Malina mirror: vozac sa VozacID==StanicaID postoji"
+
+    Dim createdSecond As Boolean
+    createdSecond = EnsureVozacMirrorForStanica(sid, "Test Naziv", "Test Mesto", "")
+    AssertFalse createdSecond, "Malina mirror: drugi poziv ne duplira (idempotentno)"
+
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_MalinaVozacMirror", Err.Number, Err.description
 End Sub
 
 Private Sub SeedKupac()

@@ -1134,6 +1134,16 @@ Private Sub btnDodaj_Click()
 
     If AppendRow(m_TableName, rowData) > 0 Then
         MsgBox "Dodato: " & newID, vbInformation, APP_NAME
+
+        ' MALINA: nova stanica -> par-vozac sa istim ID-em (izvestaji/ambalaza).
+        ' Idempotentno + self-gated u modMalina; ne sme da obori unos stanice.
+        If Me.Tag = "Stanice" And IsMalinaMode() Then
+            On Error Resume Next
+            EnsureVozacMirrorForStanica newID, Trim$(txtField1.value), _
+                Trim$(txtField2.value), ""
+            On Error GoTo EH
+        End If
+
         LoadList
         ClearFields
     Else
