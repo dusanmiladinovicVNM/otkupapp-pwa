@@ -279,7 +279,13 @@ Public Const TBL_KORISNICI As String = "tblKorisnici"
   („Korisnici" sekcija, admin-gated) · `frmStammdaten` (`Case "Korisnici"` CRUD —
   prava po oblasti preko „Oblasti (DA, zarezom)" polja, upis po imenu kolone) ·
   `frmOtkupAPP` (guard oblasti `MaticniPodaci` u `OpenMaticniForm`). Bez diranja `.frx`.
-- **Faza 3** (opciono): PIN hash, per-oblast read/write (matrica), zaključavanje Alt+F8 setup makroa.
+- **Faza 3:** `modAuth` (SHA-256: `Sha256Hex`/`PreparePin`/`VerifyPin`/`TestPinHash` +
+  transparentna migracija plaintext→hash) · `modSetup` (`EnablePinHash`/`DisablePinHash`;
+  admin-gating `EnableAuth`/`DisableAuth`/`KreirajPrvogAdmina` → zatvara „Alt+F8 DisableAuth"
+  zaobilaženje) · `frmStammdaten` (PIN se hešira, ne prikazuje se; prazno pri izmeni = isti).
+  PIN hash je **opt-in** (`PIN_HASH_ENABLED`, default `NE`) + self-test → bez rizika lockout-a.
+  Salt se čuva inline (`sha256$salt$hash` u `PIN` koloni) → bez izmene šeme.
+  Per-oblast read/write (matrica) namerno **preskočena** (kontra Model A).
 
 ---
 
@@ -301,6 +307,10 @@ Public Const TBL_KORISNICI As String = "tblKorisnici"
 6. Restartuj workbook → traži se prijava; guard u `OpenContentForm` (sekcije) i
    `OpenMaticniForm` (Maticni podaci) blokira oblasti bez `DA`.
 7. Isključenje: **Alt+F8 → `DisableAuth`** (app radi bez prijave).
+8. (Opciono — bezbednost) **PIN hash:** prvo **Alt+F8 → `TestPinHash`** (mora PASS u tvom
+   Excelu), pa **Alt+F8 → `EnablePinHash`**. Postojeći plaintext PIN-ovi se migriraju na
+   hash pri prvoj prijavi; admin više ne vidi PIN (prazno polje = bez promene).
+   Isključenje: **Alt+F8 → `DisablePinHash`** (već heširani PIN-ovi i dalje rade).
 
 > Napomena: dok je `AUTH_ENABLED` ≠ `YES`, ponašanje aplikacije je **identično** kao pre.
 

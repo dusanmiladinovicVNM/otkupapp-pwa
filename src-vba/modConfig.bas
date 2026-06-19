@@ -551,6 +551,8 @@ Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
 ' =========================
 ' Opt-in flag (mirror CLOUD_SYNC_ENABLED / LICENSE_ENABLED). Dok nije YES -> bez prijave.
 Public Const CFG_KEY_AUTH_ENABLED As String = "AUTH_ENABLED"
+' Faza 3 — PIN hashing (opt-in). Default NO -> plaintext PIN (kompatibilno sa Faza 1/2).
+Public Const CFG_KEY_PIN_HASH_ENABLED As String = "PIN_HASH_ENABLED"
 
 ' Uloge
 Public Const ULOGA_ADMIN As String = "Admin"

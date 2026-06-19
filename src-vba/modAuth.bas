@@ -86,10 +86,17 @@ Public Function ValidateLogin(ByVal username As String, ByVal pin As String) As 
         Exit Function
     End If
 
-    If StrComp(SafeStr(storedPin), Trim$(pin), vbBinaryCompare) <> 0 Then
+    If Not VerifyPin(SafeStr(storedPin), pin) Then
         AuditAuth "AUTH_LOGIN_FAIL", "WARN", u & " (pogresan PIN)"
         ValidateLogin = False
         Exit Function
+    End If
+
+    ' Faza 3: transparentna migracija legacy plaintext -> hash (kad je hash ukljucen).
+    If PinHashEnabled() Then
+        If LCase$(Left$(SafeStr(storedPin), 7)) <> "sha256$" Then
+            MigratePinToHash u, pin
+        End If
     End If
 
     gCurrentUser = u
@@ -195,6 +202,120 @@ Public Sub QuitAfterFailedLogin()
     On Error Resume Next
     MsgBox "Prijava neuspešna. Aplikacija se zatvara.", vbCritical, APP_NAME
     ThisWorkbook.Close SaveChanges:=False
+End Sub
+
+' ============================================================
+' Faza 3 — PIN hashing (opt-in: PIN_HASH_ENABLED, default NO).
+' Format sacuvanog PIN-a: "sha256$<salt>$<hexHash>" (hash) ili plaintext (legacy).
+' SHA-256 preko .NET (System.Security.Cryptography). PRE ukljucenja: Alt+F8 ->
+' TestPinHash (mora PASS). Migracija plaintext->hash je transparentna pri prijavi.
+' Ako SHA nije dostupan -> sve pada nazad na plaintext (bez lockout-a).
+' ============================================================
+Public Function PinHashEnabled() As Boolean
+    On Error GoTo EH
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(CFG_KEY_PIN_HASH_ENABLED)))
+    PinHashEnabled = (v = "YES" Or v = "DA" Or v = "TRUE" Or v = "1")
+    Exit Function
+EH:
+    PinHashEnabled = False
+End Function
+
+Public Function Sha256Hex(ByVal text As String) As String
+    On Error GoTo EH
+    Dim enc As Object, sha As Object
+    Dim bytes() As Byte, hash() As Byte
+    Set enc = CreateObject("System.Text.UTF8Encoding")
+    Set sha = CreateObject("System.Security.Cryptography.SHA256Managed")
+    bytes = enc.GetBytes_4(text)
+    hash = sha.ComputeHash_2((bytes))
+
+    Dim i As Long, s As String
+    For i = LBound(hash) To UBound(hash)
+        s = s & Right$("0" & Hex$(hash(i) And &HFF), 2)
+    Next i
+    Sha256Hex = LCase$(s)
+    Exit Function
+EH:
+    Sha256Hex = vbNullString      ' prazno = SHA nedostupan -> pozivalac fallback-uje na plaintext
+End Function
+
+Public Function NewSalt() As String
+    Static seeded As Boolean
+    If Not seeded Then Randomize: seeded = True
+    Dim s As String, i As Long
+    For i = 1 To 16
+        s = s & Mid$("0123456789abcdef", Int(Rnd() * 16) + 1, 1)
+    Next i
+    NewSalt = s
+End Function
+
+Public Function HashPin(ByVal pin As String, ByVal salt As String) As String
+    HashPin = Sha256Hex(salt & "|" & Trim$(pin))
+End Function
+
+' Vrednost za upis u PIN kolonu: hash ako je ukljucen (i SHA radi), inace plaintext.
+Public Function PreparePin(ByVal pin As String) As String
+    If PinHashEnabled() Then
+        Dim salt As String, h As String
+        salt = NewSalt()
+        h = HashPin(pin, salt)
+        If Len(h) > 0 Then
+            PreparePin = "sha256$" & salt & "$" & h
+            Exit Function
+        End If
+    End If
+    PreparePin = Trim$(pin)
+End Function
+
+' Provera unetog PIN-a protiv sacuvanog (auto-detekcija: hash vs plaintext).
+Public Function VerifyPin(ByVal stored As String, ByVal inputPin As String) As Boolean
+    Dim s As String
+    s = Trim$(stored)
+
+    If LCase$(Left$(s, 7)) = "sha256$" Then
+        Dim parts() As String
+        parts = Split(s, "$")
+        If UBound(parts) < 2 Then Exit Function
+        Dim h As String
+        h = HashPin(inputPin, parts(1))
+        VerifyPin = (Len(h) > 0 And StrComp(h, parts(2), vbTextCompare) = 0)
+    Else
+        VerifyPin = (StrComp(s, Trim$(inputPin), vbBinaryCompare) = 0)
+    End If
+End Function
+
+' Alt+F8 self-test: SHA-256("abc") mora biti poznati vektor.
+Public Sub TestPinHash()
+    Dim got As String
+    got = Sha256Hex("abc")
+    If StrComp(got, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", vbTextCompare) = 0 Then
+        MsgBox "PIN hash (SHA-256) RADI ispravno u ovom okruženju." & vbCrLf & _
+               "Možeš uključiti: Alt+F8 -> EnablePinHash.", vbInformation, APP_NAME
+    Else
+        MsgBox "PIN hash NE radi u ovom okruženju (SHA-256 nedostupan)." & vbCrLf & _
+               "NE uključuj PIN hash — ostani na plaintext PIN-u." & vbCrLf & _
+               "Dobijeno: '" & got & "'", vbExclamation, APP_NAME
+    End If
+End Sub
+
+Private Function FindUserRow(ByVal username As String) As Long
+    On Error GoTo EH
+    Dim rws As Collection
+    Set rws = FindRows(TBL_KORISNICI, COL_KOR_USERNAME, Trim$(username))
+    If Not rws Is Nothing Then
+        If rws.count > 0 Then FindUserRow = rws(1)
+    End If
+    Exit Function
+EH:
+    FindUserRow = 0
+End Function
+
+Private Sub MigratePinToHash(ByVal username As String, ByVal pin As String)
+    On Error Resume Next
+    Dim r As Long
+    r = FindUserRow(username)
+    If r > 0 Then UpdateCell TBL_KORISNICI, r, COL_KOR_PIN, PreparePin(pin)
 End Sub
 
 ' ============================================================

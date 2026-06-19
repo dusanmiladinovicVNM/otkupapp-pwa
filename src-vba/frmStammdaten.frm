@@ -460,7 +460,7 @@ Private Sub SetupKorisnici()
 
     lblField1.caption = "Korisničko ime": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Ime i prezime": lblField2.Visible = True: txtField2.Visible = True
-    lblField3.caption = "PIN": lblField3.Visible = True: txtField3.Visible = True
+    lblField3.caption = "PIN (izmena: prazno=isti)": lblField3.Visible = True: txtField3.Visible = True
     lblField4.caption = "Uloga (Admin/Korisnik)": lblField4.Visible = True: txtField4.Visible = True
     lblField5.caption = "Aktivan (DA/NE)": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "StanicaID (opciono)": lblField6.Visible = True: txtField6.Visible = True
@@ -1424,7 +1424,7 @@ Private Sub lstData_Click()
 
             txtField1.value = NzToText(data(m_SelectedRow, ciU))
             txtField2.value = NzToText(data(m_SelectedRow, ciIme))
-            txtField3.value = NzToText(data(m_SelectedRow, ciPin))
+            txtField3.value = ""   ' PIN se ne prikazuje; prazno pri izmeni = bez promene
             txtField4.value = NzToText(data(m_SelectedRow, ciUl))
             txtField5.value = NzToText(data(m_SelectedRow, ciAk))
             txtField6.value = NzToText(data(m_SelectedRow, ciSt))
@@ -1657,7 +1657,7 @@ Private Sub btnDodaj_Click()
                 newID, _
                 Trim$(txtField1.value), _
                 Trim$(txtField2.value), _
-                Trim$(txtField3.value), _
+                modAuth.PreparePin(Trim$(txtField3.value)), _
                 ulogaDodaj, _
                 aktivDodaj, _
                 Trim$(txtField6.value), _
@@ -2171,7 +2171,9 @@ Private Sub btnIzmeni_Click()
 
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_IME, Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_PIN, Trim$(txtField3.value), SRC
+            If Len(Trim$(txtField3.value)) > 0 Then
+                RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
+            End If
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_ULOGA, ulogaIzm, SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_AKTIVAN, aktivIzm, SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_STANICA, Trim$(txtField6.value), SRC
