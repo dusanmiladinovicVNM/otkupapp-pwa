@@ -39,7 +39,8 @@ Public Function MaticniSekcije() As Variant
         Array("Kulture", "Kulture"), _
         Array("Ambalaza", "TipAmbalaze"), _
         Array("Palete", "TipPalete"), _
-        Array("Cenovnik", "Cenovnik"))
+        Array("Cenovnik", "Cenovnik"), _
+        Array("Podešavanja", "Podesavanja"))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).

@@ -72,10 +72,18 @@ Public Sub SetupNewPC()
         SetLocalConfigValue "APP_SETUP_WINDOWS_USER", Environ$("USERNAME"), "Windows korisnik"
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
+        ' Anti-tamper: sakrij tblSEFConfig (VeryHidden) cim je setup zelen
+        ' (config je popunjen). Operativna podesavanja se od sada uredjuju kroz
+        ' UI (Maticni podaci -> Podesavanja). Izlaz u nuzdi: Alt+F8 -> ShowConfigSheet.
+        On Error Resume Next
+        modPodesavanja.HideConfigSheet
+        On Error GoTo EH
+
         LogSetup "OK", "Setup completed successfully"
 
         MsgBox "Setup je uspešno završen." & vbCrLf & vbCrLf & _
-               "Aplikacija je spremna za ovaj racunar.", _
+               "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
+               "Podešavanja: Matični podaci -> Podešavanja (tblSEFConfig je skriven).", _
                vbInformation, APP_NAME
     Else
         SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", "Da li je ovaj racunar prošao SetupNewPC"

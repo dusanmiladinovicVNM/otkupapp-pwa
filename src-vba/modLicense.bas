@@ -53,6 +53,13 @@ Private Const CFG_LIC_STATUS      As String = "LICENSE_STATUS"
 Private Const CFG_LIC_HWM          As String = "LICENSE_HWM"   ' anti-rollback high-water-mark
 Private Const CFG_MON_ENDPOINT    As String = "MONITORING_ENDPOINT"
 
+' Pinovan license endpoint (build-time). Ako je postavljen, on je AUTORITET i
+' IGNORISE config override (LICENSE_ENDPOINT/MONITORING_ENDPOINT) za licencni
+' poziv -> zatvara "repoint na lazni server koji vraca OK" bypass. Prazno =
+' nije pinovan (zadrzi config ponasanje, ne lomi postojece instalacije).
+' Da aktiviras tvrdo vezivanje: upisi svoj GAS /exec URL i re-sign-uj projekat.
+Private Const LIC_ENDPOINT_PINNED As String = ""
+
 ' Koliko od 3 komponente otiska mora da se poklopi (fuzzy match) da bi se
 ' tolerisala manja promena hardvera (nov disk, reinstall) bez lockout-a.
 Private Const LIC_MIN_MATCH As Long = 2
@@ -565,6 +572,11 @@ Private Function LicenseEnabled() As Boolean
 End Function
 
 Private Function LicenseEndpoint() As String
+    ' Pin (ako postoji) je autoritet — config NE moze da ga prebaci na lazni server.
+    If Len(Trim$(LIC_ENDPOINT_PINNED)) > 0 Then
+        LicenseEndpoint = Trim$(LIC_ENDPOINT_PINNED)
+        Exit Function
+    End If
     Dim e As String
     e = Trim$(GetConfigValue(CFG_LIC_ENDPOINT))
     If Len(e) = 0 Then e = Trim$(GetConfigValue(CFG_MON_ENDPOINT))

@@ -61,6 +61,19 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
 
+    ' Podesavanja: ne ucitavamo maticni-podaci listu — gradimo config editor
+    ' u runtime-u (modPodesavanja; isti runtime-controls pristup kao
+    ' modOtkupBlok/clsBlokUI). frmStammdaten.frx se NE dira.
+    If Me.Tag = "Podesavanja" Then
+        modPodesavanja.BuildConfigEditor Me
+        If Not mChromeRemoved Then
+            Me.caption = ""             ' brisi caption
+            RemoveTitleBar               ' onda ga sakri
+            mChromeRemoved = True
+        End If
+        Exit Sub
+    End If
+
     ' Style staticnih elemenata koji ne menjaju za Setup
     On Error Resume Next
     StylePrimaryButton btnDodaj, "Dodaj"
