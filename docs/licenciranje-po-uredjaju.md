@@ -1,5 +1,8 @@
 # Licenciranje po uređaju (node-locked)
 
+> **Operativni vodič (kako se izdaje/prenosi/blokira licenca + šta reći kupcu):**
+> `docs/licenciranje-vodic-agrix.md`. Ovaj dokument je tehnički (kako radi iznutra).
+
 Licenca se prodaje **po računaru**. Jedan licencni ključ = jedna mašina.
 Vezivanje (bind) živi **na serveru** (GAS), ne u `.xlsm` fajlu, pa kopiranje
 fajla na drugi računar ne daje pristup.
