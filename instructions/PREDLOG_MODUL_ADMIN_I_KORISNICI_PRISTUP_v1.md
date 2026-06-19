@@ -1,245 +1,278 @@
-# PREDLOG — Modul „Admin i korisnici sa ograničenjima pristupa" (v1, DRAFT)
+# PREDLOG — Modul „Admin + korisnici sa pravima po oblastima" (VBA/Excel) — v1 DRAFT
 
-> Status: **predlog / nije implementirano**. Pisano po Codebase Guardian doktrini
-> (`reuse > new`, `extend > duplicate`, `minimal change`). Cilj: NE praviti
-> paralelni auth sistem, već **proširiti postojeći** GAS + PWA sloj koji već nosi
-> korisnike, role i tokene.
+> Status: **predlog / nije implementirano**. Po Codebase Guardian doktrini
+> (`reuse > new`, `extend > duplicate`, `minimal change`, `inspect before propose`).
+> **Cilj:** dodati u VBA/Excel aplikaciju login + admina sa svim pravima + korisnike
+> kojima admin odobrava pristup **po oblastima** (Otkup, Dokumenta, Agrohemija, …),
+> tako što se **kači na postojeće tačke** (startup gate, jedan launcher chokepoint,
+> Maticni podaci CRUD), bez novog data sloja i bez diranja `.frx`-a.
+>
+> PWA je van opsega — tamo je pristup već rešen kroz `UserRole` (GAS + `role-nav.js`).
 
 ---
 
 ## 0) TL;DR + preporuke
 
-- **Auth već postoji** i živi u `gas/Code.gs` (autoritet) + PWA (`src/js/services/auth.js`,
-  `ui/role-nav.js`). Role su: `Management`, `Otkupac`, `Kooperant`, `Vozac`. Token
-  model (48h), rate-limit (5 pokušaja / 15 min), `requireRole/requireEntity/forbiddenResponse`
-  — sve postoji. **Ne diramo to, gradimo NA tome.**
-- **Šta zaista fali:** (1) nema UI za upravljanje korisnicima — `Users` sheet se danas
-  edituje **ručno** u Google Sheets; (2) nema „admin" odvojenog od `Management`;
-  (3) nema *deaktivacije* korisnika (jedini način da se neko zaključa je brisanje reda);
-  (4) restrikcije su grube (role + jedan `EntityID`) — nema per-feature ni multi-stanica
-  opsega.
-- **Preporučeni minimalni put (Faza 1):** Admin kao **flag** (kolona `Admin=YES` u `Users`),
-  NE novi login-role → ne dira ~20 postojećih `role === 'Management'` provera. Dodati
-  `Aktivan` kolonu (blok logina), `requireAdmin()` helper, 3 nove GAS akcije
-  (`adminListUsers`/`adminUpsertUser`/`adminSetUserActive`) i **jedan** novi PWA ekran
-  `features/management/korisnici.js` po uzoru na postojeće management ekrane.
-- **VBA (Excel) je van opsega** — vidi §7. Tamo ne postoji pojam „korisnik/role";
-  dodavanje bi napravilo paralelni sistem (anti-duplication).
-- **Otvorene odluke** (§9) tražim da potvrdiš pre kodiranja: model admina (flag vs role),
-  dubina restrikcija (samo on/off vs per-feature), i hash PIN-a (da/ne u v1).
+- VBA app **nema pojam korisnika/role** — postoji samo licenca/trial **po uređaju**
+  (`modLicense`/`modTrial`) i PIN **po stanici** (`tblStanice`, `modStanicaLock`). Dakle
+  ovo gradimo iznad postojećeg, ne diramo licencu ni stanica-lock.
+- **Dve idealne tačke kačenja (potvrđene u kodu):**
+  1. **Login gate** ide u `modMain.StartApp`, **između** `AccessGateOrQuit()`
+     (`modMain.bas:32`) i `frmSplash.Show` (`modMain.bas:36`).
+  2. **Jedna provera prava za SVE oblasti** ide na početak `OpenContentForm(...)`
+     (`frmOtkupAPP.frm:904`) — kroz njega prolaze sva dugmad sekcija
+     (`frmOtkupAPP.frm:562–679`).
+- **Admin UI bez novog CRUD ekrana i bez `.frx`:** „Korisnici" se dodaje kao nova
+  sekcija u **postojeći** Maticni podaci meni — `jedan red` u
+  `modMaticniLookups.MaticniSekcije()` + `Case "Korisnici"` u `frmStammdaten`
+  (isti mehanizam kojim su dodate Kulture/Cenovnik).
+- **Bez novog data sloja:** sve čitanje/pisanje preko postojećih
+  `FindRows/GetTableData/GetColumnIndex/AppendRow/UpdateCell/GetNextID/LookupValue`
+  (`modDataAccess`). Šema preko `EnsureKorisniciSchema` (mirror `EnsureCenovnikSchema`).
+- **Opt-in rollout (preporuka):** `AUTH_ENABLED` flag (default `NE`), mirror
+  `LICENSE_ENABLED`/`TRIAL_ENABLED` → dok admin ne uključi i ne kreira prvog admina,
+  ništa se ne menja → **niko se ne može slučajno zaključati**.
+- **Otvorene odluke** u §9 (model prava, login UI, opt-in, PIN hash) — tražim potvrdu pre koda.
 
 ---
 
-## 1) Šta VEĆ postoji (inventar za reuse) — izvor istine
+## 1) Šta VEĆ postoji (inventar za reuse) — potvrđeno u kodu
 
-### 1.1 Backend — `gas/Code.gs` (autoritet za auth/role)
+### 1.1 Startup sekvenca (gde ide login)
+- `ThisWorkbook.Workbook_Open` → `StartApp` (`ThisWorkbook.doccls:6`), pa
+  `If AccessWasDenied() Then Exit Sub` (`:10`), pa `CleanupOrphanedLocks` (`:16`).
+- `modMain.StartApp`: `InitApp` (`modMain.bas:26`) → **`AccessGateOrQuit()`**
+  (`modMain.bas:32`, licenca+trial) → `Application.Visible = False` (`:34`) →
+  **`frmSplash.Show`** (`:36`) → splash → `frmOtkupAPP.Show` (`frmSplash.frm`).
+- **Hook za login:** odmah posle `:32` (gate prošao), pre `:36` (splash).
 
-- **`Users` sheet** (u Stammdaten spreadsheet-u) = jedini izvor korisnika.
-  Kolone se čitaju **po imenu** (schema-drift tolerantno): `Username | PIN | Role |
-  EntityID | DisplayName` — `authenticateUser()` @ `Code.gs:1161`, header lookup
-  preko `requireHeaderIndexFromArray(...)` @ `Code.gs:1190–1194`.
-- **Login:** `authenticateUser(username, pin)` — normalizacija username-a, **plain-text**
-  poređenje PIN-a (`Code.gs:1198`), rate-limit **5 pokušaja → 15 min blok** preko
-  `CacheService` (`Code.gs:1176–1186`), logovanje preko `logLoginAttempt(...)`.
-- **Whitelist rola:** `validateLoginUserConfig(role, entityID)` @ `Code.gs:1492` —
-  dozvoljene role `['Management','Otkupac','Kooperant','Vozac']`; `EntityID` obavezan
-  za sve osim `Management`.
-- **Token:** `generateToken()` (UUID chain) @ `Code.gs:1235`; `saveToken(token, entityID, role)`
-  @ `Code.gs:1244` (Cache + ScriptProperties, payload `{entityID, role, created, expiresAt}`);
-  TTL `AUTH_TOKEN_TTL_MS = 48h` @ `Code.gs:1158`; `validateToken()` @ `Code.gs:1289`;
-  `getTokenData()` @ `Code.gs:1332`; dnevni `purgeExpiredTokens()`.
-- **AuthZ helperi** @ `Code.gs:283–300`:
-  - `isManagement(tokenData)` — `role === 'Management'`
-  - `requireRole(tokenData, allowedRoles)` — role ∈ niz
-  - `requireEntity(tokenData, entityID)` — `tokenData.entityID === entityID`
-  - `forbiddenResponse()` — `{success:false, error:'Nemate pristup', code:403}`
-- **Dispatch:** `doPost(e)` @ `Code.gs:831`; `action === 'login'` je javno @ `Code.gs:842`;
-  sve ostalo: `validateToken(data.token)` @ `:888` → `getTokenData()` @ `:892` →
-  `handleAuthorizedRead(...)` @ `:898` (def @ `:303`). Pojedinačne akcije gejtovane
-  `requireRole(...)` ili inline `tokenData.role !== 'Management'` (≈20 mesta).
+### 1.2 Launcher (jedan chokepoint za sve oblasti)
+- `frmOtkupAPP` je glavni shell; dugmad sekcija zovu `OpenContentForm frmX, btn, "Naslov"`
+  (`frmOtkupAPP.frm:562–679`): `btnBlocks→frmOtkup`, `btnPurchase→frmDokumenta`,
+  `btnAgro→frmAgrohemija`, `btnReports→frmIzvestaj`, `btnInvoicing→frmFakturisanje`,
+  `btnBanka→frmBankaImport`, `btnMargin→frmMarza`, `btnTrace→frmSledljivost`.
+- **`OpenContentForm(contentForm, activeBtn, sectionTitle)`** @ `frmOtkupAPP.frm:904`,
+  prikaz preko `mActiveContent.Show vbModeless` @ `:932`. → **jedna guard tačka na `:907`.**
+- `btnMaticni → OpenMaticniForm()` (`frmOtkupAPP.frm:~745`) je zaseban put → `frmMaticniPodaci`.
 
-### 1.2 Frontend — PWA (`src/`)
+### 1.3 Šema/tabele (idempotentni obrazac)
+- `EnsureDataTable(tblName, sheetName, headers())` @ `modSetup.bas:767` — kreira ListObject;
+  ako postoji, dopuni kolone preko `EnsureColumnOnTable` (schema-drift safe).
+- Javni mirror primer: `EnsureCenovnikSchema` @ `modSetup.bas:732`.
+- Dijagnostika `DebugKoloneTabele` @ `modSetup.bas:750` (Alt+F8).
 
-- **`services/auth.js`:** `showLoginScreen()` (username + 4-cifreni PIN), `doLogin()`
-  (POST `login`, čuva u localStorage: `authToken, authExpiresAt, userRole, entityID,
-  entityName, username`), `doLogout()`, `applyRoleVisibility()` (toggluje CSS klase
-  `.role-otkupac / .role-kooperant / .role-vozac / .role-management`), `applyHeaderBranding()`.
-- **`ui/role-nav.js`:** `getRoleNavConfig()` — per-role bottom-nav mapa (kooperant/otkupac/
-  management/vozac); role se porede **lowercase**.
-- **`config.js`:** `CONFIG.USER_ROLE / ENTITY_ID / ENTITY_NAME / USERNAME / TOKEN`, plus
-  `isStoredAuthExpired()` (čisti sesiju kad token istekne).
-- **Management shell:** `features/management/mgmt-shell-v2.js` — `window.mgmtShellState`
-  (activeRoot, segmenti), `ensureMgmtSection(section, action, params)` (lazy fetch sekcije
-  preko `apiFetch('action=...')`), `showMgmtRoot(tabKey)`.
-- **Postojeći management ekrani** (`stanice.js`, `kooperanti.js`, `kupci.js`) su
-  **read-only nadzor** — npr. `stanice.js` samo `getMgmtOtkupiByStanica` (`stanice.js:25`),
-  nema write. Matični podaci se kreiraju u VBA Excel-u i sinkuju.
-- **Reusable UI:** `ui/modal.js`, `ui/toast.js`, `styles/features-management.css`,
-  `styles/auth.css`.
+### 1.4 Pristup podacima (reuse, bez novog sloja)
+- `modDataAccess`: `GetTable/GetTableData/GetTableHeaders/GetColumnIndex/GetColumnData/`
+  `AppendRow/UpdateCell/FindRows/LookupValue/GetLookupList/GetNextID`.
 
-### 1.3 VBA — `src-vba/` (drugi kolosek, NE korisnički auth)
+### 1.5 Konstante (modConfig obrazac)
+- `TBL_*` blok `modConfig.bas:13–59`; `COL_*` blokovi `:70–401`; `SHT_*` `:61–68`.
 
-- `modLicense.bas` / `modTrial.bas` — licenca/trial **po uređaju** (machine fingerprint),
-  ne po korisniku.
-- `modGoogleAuth.bas` — OAuth ka Google-u, **app-level** (zajednički kredencijali), ne per-user.
-- `modStanicaLock.bas` + `tblStanice` (`StanicaID, Naziv, Mesto, Telefon, Aktivan, Ime,
-  Prezime, PIN`) — PIN je **po stanici** (ne po korisniku), za zaključavanje stanice.
-- **Ne postoji** `tblKorisnici / tblRole / tblPrava` ni „admin" pojam.
+### 1.6 „Ko koristi app" — danas NE postoji
+- Nema per-user login-a. `gActiveStanica` (Private) + `GetActiveStanica()`
+  (`modStanicaLock.bas:269`) prate aktivnu **stanicu**, ne korisnika. PIN u `tblStanice`
+  je **stanica-level**. Identitet korisnika je danas konstantno `"Operator"` u monitoringu.
+
+### 1.7 Admin/Setup danas
+- Sve preko Alt+F8 (`SetupNewPC`, `EnsureCenovnikSchema`, `ActivateLicensePrompt`,
+  `DebugKoloneTabele`, `EnableDesktopOnlyMode`…). Nema menija ni role.
+- `Monitor_Event` (audit) već se koristi u startup-u → reuse za login/deny događaje.
 
 ---
 
-## 2) Gap — šta tačno nedostaje za zahtev
+## 2) Oblasti (jedinice prava) — iz launcher-a
 
-| # | Nedostatak | Posledica danas |
-|---|---|---|
-| G1 | Nema UI za korisnike | `Users` sheet se edituje **ručno** u Google Sheets |
-| G2 | Nema „Admin" odvojenog od `Management` | Svako Management može sve; nema ko „administrira korisnike" kao zasebno pravo |
-| G3 | Nema deaktivacije | Da bi se neko zaključao, briše se red iz `Users` |
-| G4 | Restrikcije su grube | Samo `role` + jedan `EntityID`; nema per-feature ni multi-stanica |
-| G5 | PIN plain-text, nema admin-audita | Postoji samo login log; nema „ko je menjao korisnika" |
-
-> Bitno: grube restrikcije **rade** (Otkupac vidi samo svoju stanicu, Kooperant svoju
-> karticu, Vozac svoj transport, Management sve). Predlog ih **ne ruši** — dodaje finije
-> opcije iznad njih.
-
----
-
-## 3) Predlog — minimalni delta (extend, ne replace)
-
-**Princip:** `Users` sheet ostaje jedini izvor istine; sve nove kolone su **append-only**
-i čitaju se **po imenu** (kao postojeći kod). Nove GAS akcije idu kroz **postojeći**
-`doPost → validateToken → getTokenData → requireRole/requireAdmin` lanac.
-
-### 3.1 Model podataka — proširenje `Users` sheet-a (append-only)
-
-Dodati kolone (redosled nebitan jer se čita po imenu):
-
-| Kolona | Tip / vrednosti | Faza | Svrha |
+| Oblast (vrednost prava) | Forma | Dugme | Modul |
 |---|---|---|---|
-| `Aktivan` | `YES` / `NO` (prazno = `YES`) | 1 | Blok logina bez brisanja reda (G3) |
-| `Admin` | `YES` / `NO` | 1 | Pravo administracije korisnika (G2) |
-| `Permisije` | CSV flagova npr. `FIN,DISPECER` | 2 | Per-feature restrikcije (G4) |
-| `StaniceScope` | CSV `StanicaID`-jeva | 2 | Multi-stanica opseg za Otkupac/Management-lite (G4) |
-| `PinHash` + `PinSalt` | string | 3 | Zamena plain PIN-a (G5), uz migraciju |
-| `PromenioKorisnik` / `PromenjenoKad` | string / ISO | 1 | Trag izmene (lagani audit) |
+| `Otkup` | frmOtkup | btnBlocks | modOtkup |
+| `Dokumenta` | frmDokumenta | btnPurchase | modDokumenta |
+| `Agrohemija` | frmAgrohemija | btnAgro | modAgrohemija |
+| `Izvestaji` | frmIzvestaj | btnReports | modIzvestaj |
+| `Fakturisanje` | frmFakturisanje | btnInvoicing | modFaktura |
+| `Banka` | frmBankaImport / frmBankaExportPregled | btnBanka | modBankaImport |
+| `Marza` | frmMarza | btnMargin | modMarza |
+| `Sledljivost` | frmSledljivost | btnTrace | — |
+| `MaticniPodaci` | frmMaticniPodaci | btnMaticni | modMaticniLookups |
 
-*Opciono (samo ako zatreba „rule of three"):* zaseban `Prava` sheet (role → default
-`Permisije`) kao šablon. U v1 **ne** uvodimo — držimo flagove na korisniku.
-
-### 3.2 Backend (GAS) — sve aditivno
-
-1. **Token payload + login** (`saveToken`, `authenticateUser`):
-   - blok logina ako `Aktivan === 'NO'` → `{success:false, error:'Nalog je deaktiviran'}`;
-   - u payload dodati `admin` (bool) i `permisije` (niz) i `staniceScope` (niz),
-     da `getTokenData()` vraća prava bez novog čitanja sheet-a.
-2. **Novi authz helperi** (uz postojeće, isti stil):
-   ```js
-   function isAdmin(td)            { return !!td && td.admin === true; }
-   function requireAdmin(td)       { return isAdmin(td); }
-   function requirePermission(td, flag) {
-     return isManagement(td) || (td && Array.isArray(td.permisije) && td.permisije.indexOf(flag) >= 0);
-   }
-   ```
-3. **Nove akcije** (u `handleAuthorizedRead` / write dispatch), sve iza `requireAdmin`:
-   - `adminListUsers` → lista korisnika (bez PIN-a u odgovoru!);
-   - `adminUpsertUser` → dodaj/izmeni (Username, Role, EntityID, DisplayName, Aktivan,
-     Admin, Permisije, StaniceScope); validacija preko **postojećeg** `validateLoginUserConfig`;
-   - `adminSetUserActive` → brza (de)aktivacija;
-   - `adminResetPin` → set/replace PIN (Faza 3: hash).
-   - Pristup do sheet-a preko **postojećeg** `requireHeaderIndexFromArray` obrasca (po imenu).
-4. **Audit:** `logAdminAction(actor, action, target)` — mirror postojećeg login-log obrasca
-   (novi `AdminLog` sheet). Faza 1 minimalno, Faza 3 puno.
-
-> Napomena o `Management` proverama: pošto Admin ostaje **flag a ne role**, ~20 postojećih
-> `tokenData.role !== 'Management'` provera se **ne dira**. Admin korisnik je i dalje
-> `Management` (vidi sve) + ima `admin=true` (vidi ekran „Korisnici").
-
-### 3.3 Frontend (PWA) — reuse management shell
-
-- **Novi ekran:** `src/js/features/management/korisnici.js` — CRUD lista korisnika.
-  Registruje se kao i ostale sekcije: `ensureMgmtSection('users', 'adminListUsers')`,
-  render + `apiPost('adminUpsertUser', ...)`, `ui/modal.js` za formu, `ui/toast.js` za poruke.
-- **Ulaz u meni:** dodati stavku „Korisnici" pod `partneri` segment (ili novi root) u
-  `mgmt-shell-v2.js` + `role-nav.js`, vidljivo samo ako `CONFIG.IS_ADMIN`.
-- **Vidljivost po pravu:** proširiti `applyRoleVisibility()` u `services/auth.js` sestrinskim
-  obrascem — `.perm-fin`, `.perm-dispecer`… se gase/pale po `CONFIG.PERMISIJE`
-  (isti princip kao postojeće `.role-*`).
-- **`config.js`:** dodati `IS_ADMIN`, `PERMISIJE`, `STANICE_SCOPE` iz localStorage
-  (login ih već može vratiti u `json`).
+> `Novac`/`Ambalaza` su sheet-based (bez dugmeta) → u v1 nisu zasebne oblasti; mogu
+> kasnije kao kolone. „Korisnici" (administracija) = podsekcija Maticnih, vidljiva samo Adminu.
 
 ---
 
-## 4) Mapa delte (koji fajlovi se diraju)
+## 3) Predlog — minimalni delta
 
-| Fajl | Tip izmene | Šta |
+### 3.1 Model podataka — `tblKorisnici` (jedan red = jedan korisnik)
+
+Kolone (kreira `EnsureKorisniciSchema`, idempotentno):
+
+| Kolona | Vrednosti | Svrha |
 |---|---|---|
-| `Users` sheet | data (append-only) | nove kolone iz §3.1 |
-| `gas/Code.gs` | **aditivno** | `isAdmin/requireAdmin/requirePermission`, 3–4 `admin*` akcije, blok inactive u loginu, prošireni `saveToken` payload, `logAdminAction` |
-| `src/js/features/management/korisnici.js` | **nov fajl** | jedini novi PWA ekran (CRUD) |
-| `src/js/features/management/mgmt-shell-v2.js` | mala izmena | registracija sekcije/menija |
-| `src/js/ui/role-nav.js` | mala izmena | stavka menija „Korisnici" za admina |
-| `src/js/services/auth.js` | mala izmena | `.perm-*` vidljivost; čuvanje IS_ADMIN/PERMISIJE iz login odgovora |
-| `src/js/config.js` | mala izmena | `IS_ADMIN, PERMISIJE, STANICE_SCOPE` |
-| `index.html` | mala izmena | nav dugme + kontejner ekrana |
-| `src/styles/features-management.css` | opciono | stil liste korisnika |
+| `KorisnikID` | KOR-00001 (`GetNextID`) | PK |
+| `Username` | tekst | login |
+| `ImePrezime` | tekst | prikaz |
+| `PIN` | tekst | login (parity sa `tblStanice.PIN`) |
+| `Uloga` | `Admin` / `Korisnik` | Admin = sva prava (bypass) |
+| `Aktivan` | `DA` / `NE` | blok logina bez brisanja reda |
+| `StanicaID` | (opciono) | veza ka `tblStanice` |
+| `Otkup, Dokumenta, Agrohemija, Izvestaji, Fakturisanje, Banka, Marza, Sledljivost, MaticniPodaci` | `DA`/`NE` | **prava po oblasti** |
+| `CreatedAt` | datum | trag |
 
-**Bez novih:** servisa, auth sloja, token mehanizma, tabele rola — sve se reuse-uje.
+**Zašto kolone-po-oblasti (a ne matrica):** Excel-native, admin vidi/edituje prava
+očima u gridu, nova oblast = `EnsureColumnOnTable` (jedan red u array-u). Admin red ima
+sve `DA` i `Uloga=Admin` → uvek prolazi. *(Alternativa = matrica `tblKorisniciPrava`,
+§9 odluka 1, ako zatreba read/write granularnost.)*
+
+> Ovo **ne duplira** `tblStanice.PIN` — to je identitet/lock stanice; `tblKorisnici` je
+> app-login + prava po oblasti. Različita svrha → opravdano nova tabela.
+
+### 3.2 Novi modul `modAuth.bas` (stanje + guard) — mirror `modStanicaLock` globala
+```vba
+Private gCurrentUser As String
+Private gCurrentUserUloga As String
+
+Public Function AuthEnabled() As Boolean          ' cita AUTH_ENABLED (opt-in)
+Public Function Login() As Boolean                ' frmLogin/InputBox -> validacija nad tblKorisnici -> set global + Monitor_Event
+Public Function GetCurrentUser() As String
+Public Function CurrentUserIsAdmin() As Boolean   ' gCurrentUserUloga = "Admin"
+Public Function KorisnikImaPravo(ByVal oblast As String) As Boolean
+    ' Admin -> True; inace LookupValue(TBL_KORISNICI, Username->oblast) = "DA"
+Public Sub Logout()
+```
+
+### 3.3 Login gate — `modMain.StartApp` (između `:32` i `:36`)
+```vba
+If Not AccessGateOrQuit() Then Exit Sub           ' postojece :32
+If modAuth.AuthEnabled() Then
+    If Not modAuth.Login() Then Exit Sub          ' fail/cancel -> quit (mirror license gate)
+End If
+Application.Visible = False                        ' postojece :34
+frmSplash.Show                                     ' postojece :36
+```
+
+### 3.4 Per-oblast guard — JEDNA tačka u `OpenContentForm` (`frmOtkupAPP.frm:907`)
+```vba
+Private Sub OpenContentForm(ByVal contentForm As Object, _
+                            ByVal activeBtn As MSForms.CommandButton, _
+                            ByVal sectionTitle As String)
+    On Error GoTo EH
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OblastZaFormu(contentForm.name)) Then
+            MsgBox "Nemate dozvolu za oblast: " & sectionTitle, vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+    ' ... postojeci kod ...
+```
+`OblastZaFormu("frmOtkup")="Otkup"` itd. Isti uslov i u `OpenMaticniForm` za `MaticniPodaci`.
+
+### 3.5 Admin UI — bez novog ekrana, bez `.frx`
+- `modMaticniLookups.MaticniSekcije()`: dodati **jedan red** `Array("Korisnici","Korisnici")`,
+  prikazan samo ako `CurrentUserIsAdmin()` (filter u `AttachMaticniMenu`).
+- `frmStammdaten`: dodati `Case "Korisnici"` (veže `tblKorisnici`, headeri, CRUD) — reuse
+  cele Stammdaten grid/save mašinerije. Admin tu dodaje/menja korisnike i čeklira oblasti.
+
+### 3.6 Login UI
+- **Preporuka:** mali **novi** `frmLogin` (TextBox `PasswordChar="●"` za maskiran PIN).
+  To je NOVA forma (svoj `.frx`), dodaje se u VBA IDE — **ne** edituje se postojeći `.frx`.
+- **Fallback bez `.frx`:** `InputBox` za Username + PIN u `modAuth.Login()` (PIN vidljiv).
+
+### 3.7 Šema + bootstrap (modSetup, mirror postojećih `Ensure*`/`Enable*`)
+```vba
+Public Sub EnsureKorisniciSchema()                 ' mirror EnsureCenovnikSchema
+    EnsureDataTable TBL_KORISNICI, "Korisnici", _
+        Array(COL_KOR_ID, COL_KOR_USERNAME, COL_KOR_IME, COL_KOR_PIN, _
+              COL_KOR_ULOGA, COL_KOR_AKTIVAN, COL_KOR_STANICA, COL_KOR_CREATED, _
+              "Otkup","Dokumenta","Agrohemija","Izvestaji","Fakturisanje", _
+              "Banka","Marza","Sledljivost","MaticniPodaci")
+End Sub
+Public Sub KreirajPrvogAdmina()  ' Alt+F8: EnsureKorisniciSchema + AppendRow Admin (sve DA)
+Public Sub EnableAuth()          ' Alt+F8: AUTH_ENABLED=DA (mirror EnableDesktopOnlyMode)
+Public Sub DisableAuth()         ' Alt+F8: AUTH_ENABLED=NE
+```
+`AUTH_ENABLED` u `tblLocalConfig` (`GetLocalConfigValue/SetLocalConfigValue`) ili
+`tblSEFConfig` (`GetConfigValue`) — kao postojeći flagovi.
+
+### 3.8 Konstante (modConfig — aditivno)
+```vba
+' uz TBL_* blok (~:59)
+Public Const TBL_KORISNICI As String = "tblKorisnici"
+' uz COL_* blokove (~:401) — KorisnikID/Username/ImePrezime/PIN/Uloga/Aktivan/StanicaID/CreatedAt
+```
 
 ---
 
-## 5) Tok (login → admin → restrikcija)
+## 4) Mapa delte (fajlovi + tačne tačke)
 
-1. Admin se loguje (postojeći `doLogin`) → GAS vraća `role:Management, admin:true, permisije:[...]`.
-2. PWA: `applyRoleVisibility()` pali `.role-management` + (novo) prikazuje „Korisnici" jer `IS_ADMIN`.
-3. Admin u ekranu „Korisnici" radi `adminUpsertUser` → red u `Users` sheet-u (preko `requireAdmin`).
-4. Obični korisnik se loguje → ako `Aktivan=NO` login blokiran; inače dobija `permisije` i
-   `staniceScope`; GAS i PWA primenjuju restrikcije (server = autoritet, klijent = UX).
+| Fajl | Tip | Šta | Hook |
+|---|---|---|---|
+| `modConfig.bas` | aditivno | `TBL_KORISNICI`, `COL_KOR_*` | `:59`, `:401` |
+| `modAuth.bas` | **nov modul** | login state + `Login/KorisnikImaPravo/...` | mirror `modStanicaLock` globala |
+| `modSetup.bas` | aditivno | `EnsureKorisniciSchema`, `KreirajPrvogAdmina`, `EnableAuth/DisableAuth` | mirror `EnsureCenovnikSchema`/`EnableDesktopOnlyMode` |
+| `modMain.bas` | mala izmena (code) | login poziv (opt-in) | između `:32` i `:36` |
+| `frmOtkupAPP.frm` | mala izmena (code, bez `.frx`) | guard + `OblastZaFormu` + Maticni guard | `OpenContentForm` `:907`, `OpenMaticniForm` |
+| `modMaticniLookups.bas` | +1 red | „Korisnici" sekcija (Admin-gated) | `MaticniSekcije()` |
+| `frmStammdaten.frm` | code, bez `.frx` | `Case "Korisnici"` (CRUD reuse) | `Select Case Me.Tag` |
+| `frmLogin` | **nova forma** (opciono) | maskiran PIN | ili InputBox fallback |
+| `instructions/…md` | doc | ovaj predlog | — |
 
----
-
-## 6) Bezbednost / hardening (fazirano)
-
-- **F1:** blok logina za `Aktivan=NO`; admin akcije iza `requireAdmin`; `adminListUsers`
-  **nikad** ne vraća PIN.
-- **F2:** `requirePermission` na osetljivim akcijama (npr. finansije/`getMgmtSaldo*`,
-  `saveDispecer`); `.perm-*` UI gašenje.
-- **F3:** PIN hash (`Utilities.computeDigest` SHA-256 + per-user salt), migracija „na prvi
-  login / admin reset" uz back-compat za postojeće plain PIN-ove; pun `AdminLog` audit;
-  opcioni PIN expiry.
+**Bez novih:** data-access funkcija, parsing/schema mašinerije, role-tabela, diranja `.frx`.
 
 ---
 
-## 7) VBA (Excel) — van opsega (obrazloženje)
-
-- VBA nema pojam „korisnik/role"; ima licencu/trial **po uređaju** i PIN **po stanici**.
-- Per-user admin u VBA = **paralelni sistem** (krši anti-duplication §2 CLAUDE.md).
-- Ako kasnije zatreba desktop per-user kontrola, izvor istine treba da ostane **isti GAS
-  `Users`/token model**, a VBA da ga konzumira (ne nova `tblKorisnici`).
-
----
-
-## 8) Faze isporuke (predlog redosleda)
-
-- **Faza 1 (MVP, najmanji delta):** kolone `Aktivan`+`Admin`, blok inactive logina,
-  `isAdmin/requireAdmin`, `adminListUsers/adminUpsertUser/adminSetUserActive`, PWA ekran
-  „Korisnici". → **Zamena ručnog editovanja Google Sheet-a.**
-- **Faza 2 (restrikcije):** `Permisije` + `requirePermission` + `.perm-*`; `StaniceScope`
-  za multi-stanica.
-- **Faza 3 (hardening):** PIN hash + migracija, `AdminLog` audit, PIN reset/expiry.
+## 5) Tok (startup → login → oblast)
+1. `Workbook_Open → StartApp → AccessGateOrQuit()` (licenca/trial, nepromenjeno).
+2. Ako `AUTH_ENABLED=DA`: `modAuth.Login()` (Username+PIN nad `tblKorisnici`, `Aktivan=DA`);
+   3 pokušaja pa quit (mirror license). Postavlja `gCurrentUser`/`Uloga` + `Monitor_Event AUTH_LOGIN`.
+3. `frmSplash → frmOtkupAPP`. Klik na sekciju → `OpenContentForm` guard: Admin uvek prolazi;
+   korisnik prolazi ako je oblast `DA`; inače MsgBox + `Monitor_Event AUTH_DENIED`.
+4. „Korisnici" u Maticnim podacima vidljiv samo Adminu → CRUD + čekiranje oblasti.
 
 ---
 
-## 9) Otvorene odluke (molim potvrdu pre kodiranja)
-
-1. **Model admina:** *flag* `Admin=YES` (preporuka — ne dira ~20 `Management` provera)
-   **vs** nova login-role `'Admin'` (čistija separacija, ali širi delta).
-2. **Dubina restrikcija u v1:** samo `Aktivan` (on/off) **vs** odmah i per-feature
-   `Permisije` (preporuka: v1 = samo on/off, per-feature u Fazi 2).
-3. **PIN hash u v1:** zadržati plain (kao sad) i hash u Fazi 3 (preporuka) **vs** odmah hash.
-4. **Površina:** PWA+GAS (preporuka — tu su korisnici/role) — potvrdi da NE misliš na
-   VBA Excel admin.
+## 6) Bezbednost / verifikacija
+- **PIN:** plaintext u v1 = parity sa postojećim `tblStanice.PIN` (desktop, lokalni workbook).
+  Opcioni hash kasnije (§9 odluka 4).
+- **Lockout-safety:** `AUTH_ENABLED` default `NE` + `KreirajPrvogAdmina` → ne može se
+  niko slučajno zaključati; postupno uvođenje.
+- **Audit:** reuse `Monitor_Event` (AUTH_LOGIN / AUTH_DENIED / AUTH_USER_CHANGED).
+- **VBA verifikacija (CLAUDE.md §4–5):** posle dodavanja `modAuth` uraditi
+  `Debug → Compile VBAProject` (nema duplih `Public` imena → „Ambiguous name"); statički
+  balans `Sub/Function/Select Case`; finalni smoke-test u Excelu radi korisnik.
 
 ---
 
-_Spreman sam da po potvrdi odluka iz §9 krenem od Faze 1 (najmanji delta), striktno
-proširujući postojeći auth umesto novog sloja._
+## 7) Faze isporuke
+- **Faza 1 (MVP):** `tblKorisnici` + `modAuth` + login gate (opt-in) + guard u
+  `OpenContentForm` + `KreirajPrvogAdmina`/`EnableAuth`. Login InputBox ili `frmLogin`.
+- **Faza 2:** „Korisnici" sekcija u Maticnim (CRUD + čekiranje oblasti) + guard za
+  `OpenMaticniForm`.
+- **Faza 3 (opciono):** PIN hash + migracija; per-oblast read/write (matrica) ako zatreba;
+  Alt+F8 setup/admin makroi ograničeni na Admin.
+
+---
+
+## 8) Rizici / napomene
+- `frmOtkupAPP`/`frmStammdaten` izmene su **samo u kodu** (`.frm`), `.frx` se ne dira
+  (CLAUDE.md §4). `frmLogin` je nova forma sa sopstvenim `.frx` (ako se izabere taj UI).
+- `OblastZaFormu` mapiranje mora pokriti sve forme iz §2 (default: ako oblast nije
+  mapirana → tretiraj kao dozvoljeno ili kao MaticniPodaci? → §9 nije nužno, default
+  „dozvoljeno" da se ne blokira nepoznata/buduća sekcija; Admin svejedno prolazi).
+
+---
+
+## 9) Otvorene odluke (molim potvrdu pre koda)
+1. **Model prava:** kolone-po-oblasti `DA/NE` na `tblKorisnici` *(preporuka — Excel-native,
+   minimalno)* **vs** matrica `tblKorisniciPrava` (za buduće read/write po oblasti).
+2. **Login UI:** novi `frmLogin` sa maskiranim PIN-om *(preporuka)* **vs** `InputBox`
+   (bez `.frx`, ali PIN vidljiv).
+3. **Rollout:** `AUTH_ENABLED` opt-in flag, default `NE` *(preporuka — bez rizika lockout-a)*
+   **vs** odmah obavezan login.
+4. **PIN:** plaintext kao sad *(preporuka v1)* **vs** hash odmah.
+5. **Alt+F8 setup/admin makroi** (SetupNewPC, Ensure*, License): ostaviti kao IT/power-user
+   van auth-a *(preporuka)* **vs** i njih zaključati na Admina.
+
+---
+
+_Po potvrdi §9 krećem od Faze 1 (login + guard u jednoj chokepoint tački), strogo
+proširujući postojeće obrasce (modSetup `Ensure*`, modDataAccess, Maticni meni) bez novog
+data sloja i bez diranja `.frx`._
