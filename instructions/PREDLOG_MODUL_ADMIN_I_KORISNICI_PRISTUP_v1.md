@@ -271,27 +271,35 @@ Public Const TBL_KORISNICI As String = "tblKorisnici"
 | 4 | PIN | **plaintext u v1** (parity sa `tblStanice.PIN`); hash = Faza 3 |
 | 5 | Alt+F8 setup/admin makroi | ostaju IT/power-user van auth-a (Faza 3 opciono) |
 
-**Status: Faza 1 — IMPLEMENTIRANO** (čeka uvoz/kompajl u Excelu):
-`modConfig` (konstante) · `modAuth.bas` (nov) · `modSetup` (`EnsureKorisniciSchema`,
-`KreirajPrvogAdmina`, `EnableAuth`/`DisableAuth`) · `modMain` (login gate) ·
-`frmOtkupAPP` (guard u `OpenContentForm`) · `frmLogin.frm` (nov).
-**Faza 2** (Korisnici sekcija u Maticnim + `OpenMaticniForm` guard) — sledeća.
+**Status: Faza 1 + Faza 2 — IMPLEMENTIRANO** (čeka uvoz/kompajl u Excelu):
+- **Faza 1:** `modConfig` (konstante) · `modAuth.bas` (nov) · `modSetup`
+  (`EnsureKorisniciSchema`, `KreirajPrvogAdmina`, `EnableAuth`/`DisableAuth`) ·
+  `modMain` (login gate) · `frmOtkupAPP` (guard u `OpenContentForm`) · `frmLogin.frm` (nov).
+- **Faza 2:** `modAuth` (`MozeAdministraciju`, `OblastiList`) · `modMaticniLookups`
+  („Korisnici" sekcija, admin-gated) · `frmStammdaten` (`Case "Korisnici"` CRUD —
+  prava po oblasti preko „Oblasti (DA, zarezom)" polja, upis po imenu kolone) ·
+  `frmOtkupAPP` (guard oblasti `MaticniPodaci` u `OpenMaticniForm`). Bez diranja `.frx`.
+- **Faza 3** (opciono): PIN hash, per-oblast read/write (matrica), zaključavanje Alt+F8 setup makroa.
 
 ---
 
-## 10) Kako uključiti (Faza 1) — koraci u Excelu
+## 10) Kako uključiti (Faza 1 + 2) — koraci u Excelu
 1. **Uvezi** u VBA projekat: `modAuth.bas`, izmenjene `modConfig.bas`, `modSetup.bas`,
-   `modMain.bas`, `frmOtkupAPP.frm`, i **`frmLogin.frm`**.
+   `modMain.bas`, `modMaticniLookups.bas`, `frmOtkupAPP.frm`, `frmStammdaten.frm`, i **`frmLogin.frm`**.
    - `frmLogin`: kontrole se grade u runtime-u (nema `.frx`). Ako uvoz `.frm` ne prođe,
      napravi praznu `UserForm` imena `frmLogin` (Insert → UserForm) i nalepi kod iz
      `src-vba/frmLogin.frm`.
 2. `Debug → Compile VBAProject` (mora bez greške; nema duplih `Public` imena).
 3. **Alt+F8 → `KreirajPrvogAdmina`** → unesi username, PIN, ime → kreira `tblKorisnici`
    + admina sa svim pravima.
-4. (Opc.) Dodaj još korisnika: u sheet **`Korisnici`** dodaj red i u kolonama oblasti
-   upiši `DA`/`NE` (Model A je čitljiv grid). `Uloga=Korisnik`, `Aktivan=DA`.
+4. Dodaj/uredi korisnike **u aplikaciji**: `Maticni podaci → Korisnici` (vidljivo samo
+   adminu) → `Dodaj`/`Izmeni`. U polju **„Oblasti (DA, zarezom)"** upiši dozvoljene oblasti
+   (npr. `Otkup, Banka, Izvestaji`); `Uloga=Korisnik`, `Aktivan=DA`. (Admin = sve, bypass.)
+   - Alternativa: direktno u sheet-u **`Korisnici`** upiši `DA`/`NE` po kolonama oblasti
+     (Model A je čitljiv grid).
 5. **Alt+F8 → `EnableAuth`** (proverava da postoji aktivan admin) → uključuje prijavu.
-6. Restartuj workbook → traži se prijava; guard u `OpenContentForm` blokira oblasti bez `DA`.
+6. Restartuj workbook → traži se prijava; guard u `OpenContentForm` (sekcije) i
+   `OpenMaticniForm` (Maticni podaci) blokira oblasti bez `DA`.
 7. Isključenje: **Alt+F8 → `DisableAuth`** (app radi bez prijave).
 
 > Napomena: dok je `AUTH_ENABLED` ≠ `YES`, ponašanje aplikacije je **identično** kao pre.

@@ -771,6 +771,14 @@ End Sub
 Public Sub OpenMaticniForm()
     On Error GoTo EH
 
+    ' --- Kontrola pristupa: oblast MaticniPodaci (opt-in AUTH_ENABLED) ---
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_MATICNI) Then
+            MsgBox "Nemate dozvolu za Maticne podatke.", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     Load frmMaticniPodaci
 
     With frmMaticniPodaci

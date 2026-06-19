@@ -148,6 +148,19 @@ EH:
     KorisnikImaPravo = False
 End Function
 
+' Da li trenutni kontekst sme administraciju korisnika:
+'  - AUTH iskljucen -> da (priprema korisnika pre ukljucenja prijave)
+'  - AUTH ukljucen   -> samo Admin
+Public Function MozeAdministraciju() As Boolean
+    MozeAdministraciju = (Not AuthEnabled()) Or CurrentUserIsAdmin()
+End Function
+
+' Jedinstven izvor liste oblasti (= nazivi kolona prava u tblKorisnici).
+Public Function OblastiList() As Variant
+    OblastiList = Array(OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
+                        OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI)
+End Function
+
 Public Sub Logout()
     gLoggedIn = False
     gCurrentUser = vbNullString

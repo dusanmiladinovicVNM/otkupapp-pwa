@@ -82,7 +82,8 @@ Public Function MaticniSekcijeGrupisano() As Variant
             Array("Kese", "Kese"))), _
         Array("Sistem", Array( _
             Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Pode" & ChrW(353) & "avanja"), _
-            Array("Admin", "Admin"))))
+            Array("Admin", "Admin"), _
+            Array("Korisnici", "Korisnici"))))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).

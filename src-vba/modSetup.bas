@@ -969,8 +969,7 @@ Public Sub KreirajPrvogAdmina()
 
     ' Admin svejedno bypass-uje; setujemo DA radi preglednosti u gridu.
     Dim obl As Variant
-    For Each obl In Array(OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
-                          OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI)
+    For Each obl In modAuth.OblastiList()
         UpdateCell TBL_KORISNICI, idx, CStr(obl), "DA"
     Next obl
 
