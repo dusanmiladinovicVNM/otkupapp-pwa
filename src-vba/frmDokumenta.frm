@@ -677,7 +677,15 @@ Private Sub LoadZbirneListbox()
     On Error GoTo EH
 
     StyleListBox lstZbirne                       ' tema (krem/forest, Segoe UI) kao lstData
-    ' Header = 4 odvojena labela iznad kolona, stil kao lstData header (StyleListHeaderLabel).
+
+    ' --- Kolone: jedan izvor istine za sirine (listbox + header labele) ---
+    Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single
+    wBroj = 70: wDat = 55: wVrsta = 50: wSorta = 75
+    lstZbirne.Clear
+    lstZbirne.ColumnCount = 4
+    lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta
+
+    ' Header = 4 odvojene labele iznad kolona, stil kao lstData header (StyleListHeaderLabel).
     StyleListHeaderLabel lblZbirneBrojZbirne
     StyleListHeaderLabel lblZbirneDatum
     StyleListHeaderLabel lblZbirneVrsta
@@ -686,9 +694,20 @@ Private Sub LoadZbirneListbox()
     lblZbirneDatum.Caption = "Datum"
     lblZbirneVrsta.Caption = "Vrsta"
     lblZbirneSorta.Caption = "Sorta"
-    lstZbirne.Clear
-    lstZbirne.ColumnCount = 4
-    lstZbirne.ColumnWidths = "70;55;50;75"       ' BrojZbirne | Datum | Vrsta | Sorta (uze, po naslovima)
+
+    ' Poravnaj labele tacno po kolonama listbox-a: krece od pozicije prve labele
+    ' (koju je operater vec poravnao sa 1. kolonom), pa snap 2-4 po sirinama kolona.
+    ' Sve na istu liniju (Top prve) => neprekidna krem traka = izgled zaglavlja tabele.
+    Dim hx As Single, hTop As Single
+    hx = lblZbirneBrojZbirne.Left
+    hTop = lblZbirneBrojZbirne.Top
+    PlaceZbirneHeader lblZbirneBrojZbirne, hx, wBroj, hTop
+    hx = hx + wBroj
+    PlaceZbirneHeader lblZbirneDatum, hx, wDat, hTop
+    hx = hx + wDat
+    PlaceZbirneHeader lblZbirneVrsta, hx, wVrsta, hTop
+    hx = hx + wVrsta
+    PlaceZbirneHeader lblZbirneSorta, hx, wSorta, hTop
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -731,6 +750,17 @@ Private Sub LoadZbirneListbox()
 
 EH:
     LogErr "frmDokumenta.LoadZbirneListbox"
+End Sub
+
+' Postavi jednu header labelu na tacan Left/Width/Top (poravnanje sa kolonom listbox-a).
+Private Sub PlaceZbirneHeader(ByVal lbl As MSForms.label, _
+                              ByVal leftPt As Single, _
+                              ByVal widthPt As Single, _
+                              ByVal topPt As Single)
+    On Error Resume Next
+    lbl.Left = leftPt
+    lbl.Width = widthPt
+    lbl.Top = topPt
 End Sub
 
 ' Klik na red -> popuni BrojZbirne u sekciji "Unos prijemnice" + osvezi manjak.
