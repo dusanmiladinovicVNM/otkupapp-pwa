@@ -676,9 +676,11 @@ Private Sub LoadZbirneListbox()
     On Error GoTo EH
 
     StyleListBox lstZbirne                       ' tema (krem/forest, Segoe UI) kao lstData
+    StyleListHeaderLabel lblZbirneHead           ' header traka (topla krem + zlatna bold)
+    lblZbirneHead.Caption = "Broj zbirne   Datum      Vrsta       Sorta"
     lstZbirne.Clear
     lstZbirne.ColumnCount = 4
-    lstZbirne.ColumnWidths = "95;60;120;120"     ' BrojZbirne | Datum | Vrsta | Sorta
+    lstZbirne.ColumnWidths = "70;55;50;75"       ' BrojZbirne | Datum | Vrsta | Sorta (uze, po naslovima)
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
