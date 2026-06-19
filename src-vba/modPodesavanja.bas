@@ -29,40 +29,78 @@ Private mWrappers As Collection     ' clsConfigBtn (drzi WithEvents zivim)
 Private mBtnToggle As MSForms.CommandButton
 
 ' --- Registar polja: Array(Grupa, ConfigKey, Labela, Tip) ---
-' Tip: "bool" (YES/NO), "int", "secret", "memo", "text".
+' Tip: "bool" (YES/NO), "list:A;B;C" (combo sa zadatim opcijama), "int",
+'      "secret", "memo", "text".
 ' Dodavanje novog operativnog kljuca = jedan red ovde (data-driven, kao
 ' MaticniSekcije). NE dodavati interne kes kljuceve (vidi BEZBEDNOST gore).
 Public Function ConfigEditorFields() As Variant
-    ConfigEditorFields = Array( _
-        Array("Licenca", "LICENSE_ENABLED", "Licenciranje ukljuceno", "bool"), _
-        Array("Licenca", "LICENSE_KEY", "Licencni kljuc", "text"), _
-        Array("Licenca", "LICENSE_ENDPOINT", "Licencni endpoint (URL)", "text"), _
-        Array("Probni period", "TRIAL_ENABLED", "Probni period ukljucen", "bool"), _
-        Array("Probni period", "TRIAL_START", "Pocetak (yyyy-mm-dd)", "text"), _
-        Array("Probni period", "TRIAL_DAYS", "Trajanje (dana)", "int"), _
-        Array("Sinhronizacija", "CLOUD_SYNC_ENABLED", "Cloud sync ukljucen", "bool"), _
-        Array("Monitoring", "MONITORING_ENDPOINT", "Monitoring endpoint (URL)", "text"), _
-        Array("Monitoring", "MONITORING_SECRET", "Monitoring secret", "secret"), _
-        Array("Monitoring", "MONITORING_ENV", "Okruzenje (DEV/PROD)", "text"), _
-        Array("Google", "GOOGLE_CLIENT_ID", "Google Client ID", "text"), _
-        Array("Google", "GOOGLE_CLIENT_SECRET", "Google Client Secret", "secret"), _
-        Array("Google", "GOOGLE_PWA_FOLDER_ID", "PWA Folder ID", "text"), _
-        Array("Google", "GOOGLE_STAMMDATEN_SHEET_ID", "Stammdaten Sheet ID", "text"), _
-        Array("Google", "GOOGLE_KARTICE_SHEET_ID", "Kartice Sheet ID", "text"), _
-        Array("Google", "GOOGLE_MGMT_SHEET_ID", "Management Sheet ID", "text"), _
-        Array("Google", "GOOGLE_REPORTS_FOLDER_ID", "Reports Folder ID", "text"), _
-        Array("SEF", "SEF_BASE_URL", "SEF Base URL", "text"), _
-        Array("SEF", "SEF_API_KEY", "SEF API kljuc", "secret"), _
-        Array("SEF", "SEF_ENV", "SEF okruzenje", "text"), _
-        Array("SEF", "SEF_PAYMENT_DUE_DAYS", "Rok placanja (dana)", "int"), _
-        Array("SEF", "SEF_PAYMENT_MEANS_CODE", "Sifra nacina placanja", "text"), _
-        Array("SEF", "SEF_NOTE_DEFAULT", "Podrazumevana napomena", "text"), _
-        Array("SEF", "SEF_FORCE_TODAY_ISSUE_DATE", "Forsiraj danasnji datum izdavanja", "bool"), _
-        Array("Otkup / dokumenta", "OTKUP_KLAUZULA", "Klauzula (otkupni list)", "memo"), _
-        Array("Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"), _
-        Array("Otkup / dokumenta", "OTKUP_PRINT_MODE", "Rezim stampe", "text"), _
-        Array("Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"))
+    ' Gradi se preko CfgAdd (Collection) da se izbegne VBA limit "Too many line
+    ' continuations". Vraca 0-based Variant niz redova Array(Grupa,Key,Labela,Tip),
+    ' pa potrosaci (BuildConfigEditor/SaveConfigEditor) ostaju nepromenjeni.
+    Dim c As Collection: Set c = New Collection
+
+    CfgAdd c, "Licenca", "LICENSE_ENABLED", "Licenciranje ukljuceno", "bool"
+    CfgAdd c, "Licenca", "LICENSE_KEY", "Licencni kljuc", "text"
+    CfgAdd c, "Licenca", "LICENSE_ENDPOINT", "Licencni endpoint (URL)", "text"
+
+    CfgAdd c, "Probni period", "TRIAL_ENABLED", "Probni period ukljucen", "bool"
+    CfgAdd c, "Probni period", "TRIAL_START", "Pocetak (yyyy-mm-dd)", "text"
+    CfgAdd c, "Probni period", "TRIAL_DAYS", "Trajanje (dana)", "int"
+
+    CfgAdd c, "Sinhronizacija", "CLOUD_SYNC_ENABLED", "Cloud sync ukljucen", "bool"
+    CfgAdd c, "Sinhronizacija", "SHEETS_SYNC_ENABLED", "Google Sheets sync ukljucen", "bool"
+
+    CfgAdd c, "Monitoring", "MONITORING_ENDPOINT", "Monitoring endpoint (URL)", "text"
+    CfgAdd c, "Monitoring", "MONITORING_SECRET", "Monitoring secret", "secret"
+    CfgAdd c, "Monitoring", "MONITORING_ENV", "Okruzenje (DEV/PROD)", "text"
+
+    CfgAdd c, "Google", "GOOGLE_CLIENT_ID", "Google Client ID", "text"
+    CfgAdd c, "Google", "GOOGLE_CLIENT_SECRET", "Google Client Secret", "secret"
+    CfgAdd c, "Google", "GOOGLE_PWA_FOLDER_ID", "PWA Folder ID", "text"
+    CfgAdd c, "Google", "GOOGLE_STAMMDATEN_SHEET_ID", "Stammdaten Sheet ID", "text"
+    CfgAdd c, "Google", "GOOGLE_KARTICE_SHEET_ID", "Kartice Sheet ID", "text"
+    CfgAdd c, "Google", "GOOGLE_MGMT_SHEET_ID", "Management Sheet ID", "text"
+    CfgAdd c, "Google", "GOOGLE_REPORTS_FOLDER_ID", "Reports Folder ID", "text"
+
+    CfgAdd c, "SEF", "SEF_BASE_URL", "SEF Base URL", "text"
+    CfgAdd c, "SEF", "SEF_API_KEY", "SEF API kljuc", "secret"
+    CfgAdd c, "SEF", "SEF_ENV", "SEF okruzenje", "text"
+    CfgAdd c, "SEF", "SEF_PAYMENT_DUE_DAYS", "Rok placanja (dana)", "int"
+    CfgAdd c, "SEF", "SEF_PAYMENT_MEANS_CODE", "Sifra nacina placanja", "text"
+    CfgAdd c, "SEF", "SEF_NOTE_DEFAULT", "Podrazumevana napomena", "text"
+    CfgAdd c, "SEF", "SEF_FORCE_TODAY_ISSUE_DATE", "Forsiraj danasnji datum izdavanja", "bool"
+
+    CfgAdd c, "Prodavac (firma)", "SELLER_NAME", "Naziv firme", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_PIB", "PIB", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_MATICNI_BROJ", "Maticni broj", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_STREET", "Ulica i broj", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_CITY", "Grad", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_POSTAL_CODE", "Postanski broj", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_COUNTRY_CODE", "Drzava (kod, npr. RS)", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_ACCOUNT", "Tekuci racun", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_EMAIL", "Email", "text"
+
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_KLAUZULA", "Klauzula (otkupni list)", "memo"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", "Štampa otkupnog lista", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", "Štampa paletnog lista", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
+
+    CfgAdd c, "Režim rada", "MALINA_MODE", "Režim otkupa maline", "bool"
+
+    Dim a() As Variant, i As Long
+    ReDim a(0 To c.count - 1)
+    For i = 1 To c.count
+        a(i - 1) = c(i)
+    Next i
+    ConfigEditorFields = a
 End Function
+
+' Helper: dodaj jedan red u registar (izbegava line-continuation limit).
+Private Sub CfgAdd(ByRef c As Collection, ByVal grp As String, ByVal key As String, _
+                   ByVal lbl As String, ByVal typ As String)
+    c.Add Array(grp, key, lbl, typ)
+End Sub
 
 ' ============================================================
 ' PUBLIC — izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
@@ -126,10 +164,11 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Dim flds As Variant: flds = ConfigEditorFields()
     Dim y As Single: y = 86
     Dim curGroup As String: curGroup = ""
-    Dim f As Variant, grp As String, key As String, cap As String, typ As String
+    Dim f As Variant, grp As String, key As String, cap As String, typ As String, typRaw As String
     Dim rowH As Single, cur As String
     Dim hdr As MSForms.label, lbl As MSForms.label
     Dim cmb As MSForms.ComboBox, tb As MSForms.TextBox
+    Dim opts As Variant, oi As Long
     Dim i As Long
 
     For i = LBound(flds) To UBound(flds)
@@ -137,7 +176,8 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         grp = CStr(f(0))
         key = CStr(f(1))
         cap = CStr(f(2))
-        typ = LCase$(CStr(f(3)))
+        typRaw = CStr(f(3))
+        typ = LCase$(typRaw)
 
         If grp <> curGroup Then
             curGroup = grp
@@ -157,11 +197,17 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
 
         cur = GetConfigValue(key)
 
-        If typ = "bool" Then
-            Set cmb = AddCombo("cfg_" & key, inLeft, y, 120, 18)
+        If typ = "bool" Or Left$(typ, 5) = "list:" Then
+            Set cmb = AddCombo("cfg_" & key, inLeft, y, 160, 18)
             cmb.Style = fmStyleDropDownCombo
-            cmb.AddItem "YES"
-            cmb.AddItem "NO"
+            If typ = "bool" Then
+                opts = Array("YES", "NO")
+            Else
+                opts = Split(Mid$(typRaw, 6), ";")
+            End If
+            For oi = LBound(opts) To UBound(opts)
+                cmb.AddItem Trim$(CStr(opts(oi)))
+            Next oi
             cmb.value = cur
             StyleComboBox cmb
             mInputs.Add cmb, key
