@@ -67,6 +67,7 @@ Private Sub UserForm_Activate()
     StyleSectionHeader fraOMUlaz, "Ulaz OM  (Novac kooperantu)"
     StyleSectionHeader fraIzlazKupci, "Izlaz Kupci  (Novac od kupca)"
     StyleSectionHeader fraStorno, "Storno"
+    StyleSectionHeader fraListaZbirnih, "Lista zbirnih"
         
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
