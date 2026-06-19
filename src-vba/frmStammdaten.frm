@@ -223,8 +223,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 1, "ID", True
             ShowHeader 2, "Vrsta voca", True
             ShowHeader 3, "Sorta voca", True
-            ShowHeader 4, "Aktivan", True
-            ShowHeader 5, "Gajbica/paleti", True
+            ShowHeader 4, "Gajbica/paleti", True
 
         Case "TipAmbalaze"
             ShowHeader 1, "Tip ambalaze", True
@@ -600,7 +599,6 @@ Private Sub SetupKulture()
         "KulturaID", _
         "VrstaVoca", _
         "SortaVoca", _
-        "Aktivan", _
         "GajbicaPoPaleti" _
     )
 
@@ -1117,7 +1115,7 @@ Private Sub lstData_Click()
         Case "Kulture"
             txtField1.value = lstData.List(lstData.ListIndex, 1)   ' VrstaVoca
             txtField2.value = lstData.List(lstData.ListIndex, 2)   ' SortaVoca
-            txtField3.value = lstData.List(lstData.ListIndex, 4)   ' GajbicaPoPaleti
+            txtField3.value = lstData.List(lstData.ListIndex, 3)   ' GajbicaPoPaleti
 
         Case "TipAmbalaze", "TipPalete"
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
