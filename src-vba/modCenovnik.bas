@@ -12,6 +12,14 @@ Option Explicit
 '
 ' Koristi se u frmOtkup / frmDokumenta za auto-popunjavanje cene.
 '
+' Odnos prema postojecem modelu cene (NE duplirati):
+'   - tblArtikli.CenaPoJedinici = JEDNA tekuca cena po artiklu (pesticidi/
+'     djubrivo). Prefill je inline LookupValue u frmAgrohemija/modAgrohemija
+'     (single-current model). Za to NE koristiti modCenovnik.
+'   - tblCenovnik = append-only ISTORIJA cena za otkup voca (vrsta+sorta+
+'     klasa), gde inline LookupValue ne moze (vraca prvi, ne poslednji red).
+'   Zato postoje dva modela; ovaj modul pokriva samo otkup voca.
+'
 ' VAZNO (PWA): kada krene rad na PWA / mobilnom otkupu, tblCenovnik
 ' MORA da se sinhronizuje na Google Sheets (modStammdatenSync), da bi
 ' otkupci na stanicama dobijali istu vazecu cenu. Vidi instructions/.

@@ -915,76 +915,53 @@ Private Sub LoadList()
             lstData.ColumnCount = UBound(m_Headers) - LBound(m_Headers) + 1
 
             Dim cCenId As Long, cCenDat As Long, cCenVr As Long
-            Dim cCenSo As Long, cCenKl As Long, cCenCe As Long, cCenStorno As Long
+            Dim cCenSo As Long, cCenKl As Long, cCenCe As Long
             cCenId = GetColumnIndex(TBL_CENOVNIK, COL_CEN_ID)
             cCenDat = GetColumnIndex(TBL_CENOVNIK, COL_CEN_DATUM)
             cCenVr = GetColumnIndex(TBL_CENOVNIK, COL_CEN_VRSTA)
             cCenSo = GetColumnIndex(TBL_CENOVNIK, COL_CEN_SORTA)
             cCenKl = GetColumnIndex(TBL_CENOVNIK, COL_CEN_KLASA)
             cCenCe = GetColumnIndex(TBL_CENOVNIK, COL_CEN_CENA)
-            cCenStorno = GetColumnIndex(TBL_CENOVNIK, COL_STORNIRANO)
 
             If cCenId = 0 Or cCenVr = 0 Or cCenKl = 0 Or cCenCe = 0 Then
                 Err.Raise vbObjectError + 7210, "frmStammdaten.LoadList", _
                           "Nedostaju kolone u tblCenovnik."
             End If
 
-            ' Sortiraj po datumu (najnovije gore); preskoci stornirano.
-            Dim ordIdx() As Long
-            Dim ordKey() As Double
-            Dim cnt As Long: cnt = 0
-            ReDim ordIdx(1 To UBound(data, 1))
-            ReDim ordKey(1 To UBound(data, 1))
+            ' Reuse postojecih helpera (modArrayUtils / modHelpers): nema rucnog sorta.
+            ' ExcludeStornirano -> SortArray (datum opadajuce, tie-break CenaID -> kasniji unos gore).
+            Dim cenData As Variant
+            cenData = ExcludeStornirano(data, TBL_CENOVNIK)
+            If IsEmpty(cenData) Then Exit Sub
 
-            For i = 1 To UBound(data, 1)
-                If Trim$(NzToText(data(i, cCenId))) <> "" Then
-                    If cCenStorno = 0 Or StrComp(Trim$(NzToText(data(i, cCenStorno))), "Da", vbTextCompare) <> 0 Then
-                        cnt = cnt + 1
-                        ordIdx(cnt) = i
-                        If cCenDat > 0 Then
-                            If IsDate(data(i, cCenDat)) Then ordKey(cnt) = CDbl(CDate(data(i, cCenDat)))
+            Dim cenSortCol As Long
+            cenSortCol = cCenDat
+            If cenSortCol = 0 Then cenSortCol = cCenId
+            cenData = SortArray(cenData, cenSortCol, False, cCenId)
+            If IsEmpty(cenData) Then Exit Sub
+
+            Dim dStr As String
+            For i = 1 To UBound(cenData, 1)
+                If Trim$(NzToText(cenData(i, cCenId))) <> "" Then
+                    AddRowMap i      ' Cenovnik je append-only (bez izmene) -> map samo za klik
+
+                    dStr = ""
+                    If cCenDat > 0 Then
+                        If IsDate(cenData(i, cCenDat)) Then
+                            dStr = Format$(CDate(cenData(i, cCenDat)), "d.m.yyyy")
+                        Else
+                            dStr = NzToText(cenData(i, cCenDat))
                         End If
                     End If
+
+                    lstData.AddItem NzToText(cenData(i, cCenId))
+                    lstData.List(lstData.ListCount - 1, 1) = dStr
+                    lstData.List(lstData.ListCount - 1, 2) = NzToText(cenData(i, cCenVr))
+                    lstData.List(lstData.ListCount - 1, 3) = NzToText(cenData(i, cCenSo))
+                    lstData.List(lstData.ListCount - 1, 4) = NzToText(cenData(i, cCenKl))
+                    lstData.List(lstData.ListCount - 1, 5) = NzToText(cenData(i, cCenCe))
                 End If
             Next i
-
-            Dim a As Long, b As Long, kIdx As Long
-            Dim kKey As Double
-            For a = 2 To cnt
-                kIdx = ordIdx(a): kKey = ordKey(a)
-                b = a - 1
-                Do While b >= 1
-                    If (ordKey(b) < kKey) Or (ordKey(b) = kKey And ordIdx(b) < kIdx) Then
-                        ordIdx(b + 1) = ordIdx(b): ordKey(b + 1) = ordKey(b)
-                        b = b - 1
-                    Else
-                        Exit Do
-                    End If
-                Loop
-                ordIdx(b + 1) = kIdx: ordKey(b + 1) = kKey
-            Next a
-
-            Dim r As Long, dStr As String
-            For a = 1 To cnt
-                r = ordIdx(a)
-                AddRowMap r
-
-                dStr = ""
-                If cCenDat > 0 Then
-                    If IsDate(data(r, cCenDat)) Then
-                        dStr = Format$(CDate(data(r, cCenDat)), "d.m.yyyy")
-                    Else
-                        dStr = NzToText(data(r, cCenDat))
-                    End If
-                End If
-
-                lstData.AddItem NzToText(data(r, cCenId))
-                lstData.List(lstData.ListCount - 1, 1) = dStr
-                lstData.List(lstData.ListCount - 1, 2) = NzToText(data(r, cCenVr))
-                lstData.List(lstData.ListCount - 1, 3) = NzToText(data(r, cCenSo))
-                lstData.List(lstData.ListCount - 1, 4) = NzToText(data(r, cCenKl))
-                lstData.List(lstData.ListCount - 1, 5) = NzToText(data(r, cCenCe))
-            Next a
 
         Case Else
             lstData.ColumnCount = UBound(m_Headers) - LBound(m_Headers) + 1
