@@ -53,11 +53,13 @@ Private mVisible As Boolean
 Private mOrigWidth As Double
 Private mActiveOtpID As String
 Private mFilterNezavrsene As Boolean
+Private mMultiMode As Boolean
 
 Private mBtnToggle As MSForms.CommandButton
 Private mBtnStorno As MSForms.CommandButton
 Private mBtnPrint As MSForms.CommandButton
 Private mBtnFilter As MSForms.CommandButton
+Private mBtnBiraj As MSForms.CommandButton
 Private mLstOtp As MSForms.ListBox
 Private mLstBlok As MSForms.ListBox
 Private mTxtCenaOtp As MSForms.TextBox
@@ -79,6 +81,7 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     mVisible = False
     mActiveOtpID = ""
     mFilterNezavrsene = False
+    mMultiMode = False
     mOrigWidth = mForm.width
 
     If UCase$(Trim$(GetConfigValue("OTKUP_BLOK_PANEL"))) = "NO" Then Exit Sub
@@ -106,6 +109,7 @@ Public Sub OtkupBlok_OnButton(ByVal action As String)
         Case "STORNO": StornoSelectedBlok
         Case "PRINT": PrintSelectedBlok
         Case "FILTER": ToggleFilter
+        Case "BIRAJ": BirajOrPrint
     End Select
     Exit Sub
 EH:
@@ -268,17 +272,20 @@ Private Sub BuildPanel()
     Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 26, 120, 22)
     mBtnFilter.caption = "Prikaz: Sve"
 
-    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 28, 118, 14)
-    t2.caption = "OTKUPNI BLOKOVI": StyleHdr t2
-    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 124, 26, 92, 22)
-    mBtnStorno.caption = "Storniraj blok"
-    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 220, 26, 92, 22)
+    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 28, 56, 14)
+    t2.caption = "BLOKOVI": StyleHdr t2
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 58, 26, 78, 22)
+    mBtnStorno.caption = "Storniraj"
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 140, 26, 84, 22)
     mBtnPrint.caption = "Stampaj list"
+    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 228, 26, 124, 22)
+    mBtnBiraj.caption = "Biraj otpremnice"
 
     On Error Resume Next
     StyleExitButton mBtnFilter, "Prikaz: Sve"
-    StyleExitButton mBtnStorno, "Storniraj blok"
+    StyleExitButton mBtnStorno, "Storniraj"
     StylePrimaryButton mBtnPrint, "Stampaj list"
+    StyleExitButton mBtnBiraj, "Biraj otpremnice"
     On Error GoTo 0
 
     ' Zaglavlja kolona (spustena dalje od dugmadi; listbox tik ispod)
@@ -300,6 +307,7 @@ Private Sub BuildPanel()
     WireBtn mBtnStorno, "STORNO"
     WireBtn mBtnPrint, "PRINT"
     WireBtn mBtnFilter, "FILTER"
+    WireBtn mBtnBiraj, "BIRAJ"
 End Sub
 
 Private Sub SetPanelVisible(ByVal b As Boolean)
@@ -474,6 +482,7 @@ End Sub
 
 Private Sub SelectOtpFromList()
     On Error GoTo EH
+    If mMultiMode Then Exit Sub          ' multiselect za stampu - ne vodi levu formu
     If mLstOtp.ListIndex < 0 Then Exit Sub
 
     mActiveOtpID = CStr(mLstOtp.List(mLstOtp.ListIndex, 0))
@@ -622,6 +631,218 @@ EH:
     LogErr "modOtkupBlok.PrintSelectedBlok"
     MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' ============================================================
+' MULTISELECT + SPECIFIKACIJA (batch stampa otpremnica)
+' ============================================================
+
+' Dugme "Biraj otpremnice" <-> "Stampaj specifikaciju".
+Private Sub BirajOrPrint()
+    On Error GoTo EH
+    If Not mMultiMode Then
+        ' udji u multiselect rezim za stampu
+        mMultiMode = True
+        mActiveOtpID = ""
+        On Error Resume Next
+        mLstOtp.MultiSelect = fmMultiSelectMulti
+        On Error GoTo EH
+        mBtnBiraj.caption = "Stampaj specifikaciju"
+        LoadBlokovi
+        RefreshSummary
+    Else
+        ' skupi izabrane otpremnice -> stampa -> vrati u normalan rezim
+        Dim sel As Collection: Set sel = New Collection
+        Dim i As Long
+        For i = 0 To mLstOtp.ListCount - 1
+            If mLstOtp.Selected(i) Then sel.Add CStr(mLstOtp.List(i, 0))
+        Next i
+        If sel.count = 0 Then
+            MsgBox "Izaberite bar jednu otpremnicu (klik na redove).", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+
+        PrintSpecifikacija sel
+
+        mMultiMode = False
+        On Error Resume Next
+        mLstOtp.MultiSelect = fmMultiSelectSingle
+        On Error GoTo EH
+        mBtnBiraj.caption = "Biraj otpremnice"
+    End If
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.BirajOrPrint"
+End Sub
+
+' Specifikacija svih blokova izabranih otpremnica: tabela kao listbox
+' (sa okvirima), jedan red po bloku, kompaktno, A4 landscape, direktno u PDF.
+Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
+    On Error GoTo EH
+
+    Dim selSet As Object: Set selSet = CreateObject("Scripting.Dictionary")
+    Dim dZbr As Object: Set dZbr = CreateObject("Scripting.Dictionary")
+    Dim dOtp As Object: Set dOtp = CreateObject("Scripting.Dictionary")
+    Dim v As Variant
+    For Each v In otpIDs
+        Dim oid0 As String: oid0 = CStr(v)
+        If Not selSet.Exists(oid0) Then selSet.Add oid0, True
+        If Not dZbr.Exists(oid0) Then _
+            dZbr.Add oid0, CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oid0, COL_OTP_BROJ_ZBIRNE))
+        If Not dOtp.Exists(oid0) Then _
+            dOtp.Add oid0, CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oid0, COL_OTP_BROJ))
+    Next v
+
+    Dim dKo As Object: Set dKo = BuildKoopNames()
+    Dim stopa As Double: stopa = PdvStopa()
+
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then MsgBox "Nema podataka u otkupu.", vbInformation, APP_NAME: Exit Sub
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then MsgBox "Nema blokova.", vbInformation, APP_NAME: Exit Sub
+
+    Dim cOtp As Long, cKoop As Long, cKol As Long, cCena As Long, cBr As Long, cDat As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+
+    Dim ws As Worksheet: Set ws = EnsureSpecSheet()
+    Application.ScreenUpdating = False
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+
+    ws.cells(1, 1).value = "SPECIFIKACIJA OTKUPNIH BLOKOVA"
+    ws.cells(1, 1).Font.Size = 12
+    ws.cells(1, 1).Font.Bold = True
+
+    Dim hdr As Variant
+    hdr = Array("Broj zbirne", "Broj otpremnice", "br. bloka", "Ime i Prezime", "Datum", "Kolicina", _
+                "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
+    Const R0 As Long = 4
+    Dim cc As Long
+    For cc = 0 To UBound(hdr)
+        ws.cells(R0, cc + 1).value = hdr(cc)
+        ws.cells(R0, cc + 1).Font.Bold = True
+    Next cc
+
+    Dim r As Long: r = R0 + 1
+    Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, cnt As Long
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        Dim oid As String: oid = Trim$(CStr(data(i, cOtp)))
+        If selSet.Exists(oid) Then
+            Dim kol As Double: kol = NumVal(data(i, cKol))
+            Dim bruto As Double: bruto = NumVal(data(i, cCena))
+            Dim neto As Double: neto = bruto / (1 + stopa / 100)
+            Dim vred As Double: vred = kol * neto
+            Dim pdv As Double: pdv = vred * stopa / 100
+            Dim uk As Double: uk = kol * bruto
+
+            ws.cells(r, 1).value = DictVal(dZbr, oid)
+            ws.cells(r, 2).value = DictVal(dOtp, oid)
+            ws.cells(r, 3).value = CStr(data(i, cBr))
+            ws.cells(r, 4).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
+            ws.cells(r, 5).value = FmtDate(data(i, cDat))
+            ws.cells(r, 6).value = kol
+            ws.cells(r, 7).value = neto
+            ws.cells(r, 8).value = vred
+            ws.cells(r, 9).value = pdv
+            ws.cells(r, 10).value = uk
+            sumKol = sumKol + kol: sumVred = sumVred + vred
+            sumPdv = sumPdv + pdv: sumUk = sumUk + uk
+            cnt = cnt + 1
+            r = r + 1
+        End If
+    Next i
+
+    If cnt = 0 Then
+        Application.ScreenUpdating = True
+        MsgBox "Izabrane otpremnice nemaju blokova.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    ' UKUPNO red
+    ws.cells(r, 4).value = "UKUPNO"
+    ws.cells(r, 6).value = sumKol
+    ws.cells(r, 8).value = sumVred
+    ws.cells(r, 9).value = sumPdv
+    ws.cells(r, 10).value = sumUk
+    ws.Range(ws.cells(r, 1), ws.cells(r, 10)).Font.Bold = True
+
+    ws.cells(2, 1).value = "Datum: " & Format$(Date, "d.m.yyyy") & "     Otpremnica: " & _
+                           otpIDs.count & "     Blokova: " & cnt
+
+    ' formati: kolicina bez decimala, novac 2 decimale
+    ws.Range(ws.cells(R0 + 1, 6), ws.cells(r, 6)).NumberFormat = "#,##0"
+    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 10)).NumberFormat = "#,##0.00"
+
+    ' iscrtana polja
+    Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, 10))
+    tbl.Borders.LineStyle = xlContinuous
+    tbl.Borders.Weight = xlThin
+    tbl.rows.RowHeight = 13
+
+    ' sirine kolona
+    ws.columns("A").ColumnWidth = 12   ' Broj zbirne
+    ws.columns("B").ColumnWidth = 14   ' Broj otpremnice
+    ws.columns("C").ColumnWidth = 12   ' br. bloka
+    ws.columns("D").ColumnWidth = 24   ' Ime i Prezime
+    ws.columns("E").ColumnWidth = 11   ' Datum
+    ws.columns("F").ColumnWidth = 9    ' Kolicina
+    ws.columns("G").ColumnWidth = 11   ' Cena bez PDV
+    ws.columns("H").ColumnWidth = 13   ' Vrednost
+    ws.columns("I").ColumnWidth = 12   ' Iznos PDV
+    ws.columns("J").ColumnWidth = 14   ' Ukupna vrednost
+
+    With ws.PageSetup
+        .Orientation = xlLandscape
+        .PaperSize = xlPaperA4
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & R0 & ":$" & R0
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, 10)).Address
+    End With
+
+    ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
+    ' Vremenski pecat u imenu -> nema "file in use" ako je prethodni PDF otvoren.
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.Path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+
+    Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
+    ws.Visible = xlSheetVisible
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=True
+    If wasHidden Then ws.Visible = xlSheetHidden
+
+    Application.ScreenUpdating = True
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modOtkupBlok.PrintSpecifikacija"
+    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Function EnsureSpecSheet() As Worksheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("SpecifikacijaSablon")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.name = "SpecifikacijaSablon"
+        ws.Visible = xlSheetHidden
+    End If
+    ws.cells.Clear
+    Set EnsureSpecSheet = ws
+End Function
 
 Private Sub RefreshSummary()
     On Error GoTo EH

@@ -83,6 +83,10 @@ Private Sub UserForm_Activate()
         Case "Vozaci": SetupVozaci
         Case "Parcele": SetupParcele
         Case "Artikli": SetupArtikli
+        Case "Kulture": SetupKulture
+        Case "TipAmbalaze": SetupTipAmbalaze
+        Case "TipPalete": SetupTipPalete
+        Case "Cenovnik": SetupCenovnik
         Case Else: SetupKooperanti
     End Select
 
@@ -90,9 +94,15 @@ Private Sub UserForm_Activate()
     ClearFields
     SetupColumnHeaders            ' DODATO
     StyleAllFields                 ' DODATO
-    
+
+    ' Cenovnik je append-only: izmena ne menja istoriju, vec se dodaje
+    ' novi (vazeci) red. Zato se dugme "Izmeni" sakriva za Cenovnik.
+    On Error Resume Next
+    btnIzmeni.Visible = (Me.Tag <> "Cenovnik")
+    On Error GoTo EH
+
     m_SelectedRow = 0
-    
+
     ' RemoveTitleBar SAMO POSLE Setup-a (caption je vec postavljen)
     If Not mChromeRemoved Then
         Me.caption = ""             ' brisi caption
@@ -208,6 +218,29 @@ Private Sub SetupColumnHeaders()
             ShowHeader 6, "Doza/ha", True
             ShowHeader 7, "Kultura", True
             ShowHeader 8, "Pakovanje", True
+
+        Case "Kulture"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Vrsta voca", True
+            ShowHeader 3, "Sorta voca", True
+            ShowHeader 4, "Aktivan", True
+            ShowHeader 5, "Gajbica/paleti", True
+
+        Case "TipAmbalaze"
+            ShowHeader 1, "Tip ambalaze", True
+            ShowHeader 2, "Tezina gajbice (kg)", True
+
+        Case "TipPalete"
+            ShowHeader 1, "Tip palete", True
+            ShowHeader 2, "Tezina (kg)", True
+
+        Case "Cenovnik"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Datum", True
+            ShowHeader 3, "Vrsta", True
+            ShowHeader 4, "Sorta", True
+            ShowHeader 5, "Klasa", True
+            ShowHeader 6, "Cena", True
     End Select
     
     On Error GoTo 0
@@ -304,15 +337,16 @@ Private Sub SetupStanice()
     
     m_TableName = TBL_STANICE
 
+    ' Redosled mora pratiti tblStanice (pozicijski prikaz u listi):
     m_Headers = Array( _
         "StanicaID", _
         "Naziv", _
         "Mesto", _
         "Telefon", _
         "Aktivan", _
-        "KontaktIme", _
-        "KontaktPrezime", _
-        "Pin" _
+        "Ime", _
+        "Prezime", _
+        "PIN" _
     )
 
     m_FieldCount = 7
@@ -549,6 +583,168 @@ Private Sub SetupArtikli()
         Next i
     End If
 End Sub
+
+Private Sub SetupKulture()
+    ResetFieldVisibility
+    Me.caption = "Kulture"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KULTURE"
+    StyleSubtitle lblSubtitle, "Maticni podaci o vrstama i sortama voca"
+    On Error GoTo 0
+
+    m_TableName = TBL_KULTURE
+
+    ' Redosled mora pratiti tblKulture (pozicijski prikaz u listi):
+    m_Headers = Array( _
+        "KulturaID", _
+        "VrstaVoca", _
+        "SortaVoca", _
+        "Aktivan", _
+        "GajbicaPoPaleti" _
+    )
+
+    m_FieldCount = 3
+
+    lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = True
+    lblField3.caption = "Gajbica po paleti": lblField3.Visible = True: txtField3.Visible = True
+    lblField4.caption = "": lblField4.Visible = False: txtField4.Visible = False
+    lblField5.caption = "": lblField5.Visible = False: txtField5.Visible = False
+    lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
+    lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
+    lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
+    lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
+    lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
+End Sub
+
+Private Sub SetupTipAmbalaze()
+    ResetFieldVisibility
+    Me.caption = "Tip ambalaze"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "TIP AMBALAZE"
+    StyleSubtitle lblSubtitle, "Sifarnik ambalaze (tip i tezina prazne gajbice)"
+    On Error GoTo 0
+
+    m_TableName = TBL_TIP_AMBALAZE
+
+    m_Headers = Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
+    m_FieldCount = 2
+
+    lblField1.caption = "Tip ambalaze": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Tezina gajbice (kg)": lblField2.Visible = True: txtField2.Visible = True
+End Sub
+
+Private Sub SetupTipPalete()
+    ResetFieldVisibility
+    Me.caption = "Tip palete"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "TIP PALETE"
+    StyleSubtitle lblSubtitle, "Sifarnik paleta (tip i tezina prazne palete)"
+    On Error GoTo 0
+
+    m_TableName = TBL_TIP_PALETE
+
+    m_Headers = Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
+    m_FieldCount = 2
+
+    lblField1.caption = "Tip palete": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+End Sub
+
+Private Sub SetupCenovnik()
+    ResetFieldVisibility
+    Me.caption = "Cenovnik"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "CENOVNIK"
+    StyleSubtitle lblSubtitle, "Cene po proizvodu — svaka promena je novi red (vazi poslednji)"
+    On Error GoTo 0
+
+    m_TableName = TBL_CENOVNIK
+
+    ' Prikaz (lista) — samo kljucne kolone:
+    m_Headers = Array( _
+        COL_CEN_ID, _
+        COL_CEN_DATUM, _
+        COL_CEN_VRSTA, _
+        COL_CEN_SORTA, _
+        COL_CEN_KLASA, _
+        COL_CEN_CENA _
+    )
+
+    m_FieldCount = 5
+
+    lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = False
+    lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = False
+    lblField3.caption = "Klasa": lblField3.Visible = True: txtField3.Visible = False
+    lblField4.caption = "Datum": lblField4.Visible = True: txtField4.Visible = True
+    lblField5.caption = "Cena": lblField5.Visible = True: txtField5.Visible = True
+    lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
+    lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
+    lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
+    lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
+    lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
+
+    ' Vrsta voca
+    cmbField1.Visible = True
+    cmbField1.Clear
+    Dim kulture As Variant
+    Dim i As Long
+    kulture = GetLookupList(TBL_KULTURE, "VrstaVoca")
+    If IsArray(kulture) Then
+        For i = LBound(kulture) To UBound(kulture)
+            cmbField1.AddItem CStr(kulture(i))
+        Next i
+    End If
+
+    ' Sorta voca (kaskada se puni u cmbField1_Change)
+    cmbField2.Visible = True
+    cmbField2.Clear
+
+    ' Klasa
+    cmbField3.Visible = True
+    cmbField3.Clear
+    cmbField3.AddItem KLASA_I
+    cmbField3.AddItem KLASA_II
+
+    ' Poravnaj combo-e (Vrsta/Sorta/Klasa) sa redovima 1/2/3 (lblField1..3).
+    ' U .frx su cmbField1..3 u zasebnom klasteru nize pa bi prekrivali
+    ' txtField4/5 (Datum/Cena). Forma se otvara sveza po sekciji (OpenSekcija
+    ' radi Unload), pa repozicioniranje ne utice na druge tabove.
+    AlignControlToRow cmbField1, txtField1
+    AlignControlToRow cmbField2, txtField2
+    AlignControlToRow cmbField3, txtField3
+
+    txtField4.value = Format$(Date, "d.m.yyyy")
+End Sub
+
+' Kopira geometriju reda (lblFieldN <-> txtFieldN su pouzdano poravnati u .frx)
+' na drugu kontrolu istog reda. Koristi se da combo sedne na red svoje labele.
+Private Sub AlignControlToRow(ByVal ctl As MSForms.Control, ByVal refCtl As MSForms.Control)
+    On Error Resume Next
+    ctl.Left = refCtl.Left
+    ctl.Top = refCtl.Top
+    ctl.width = refCtl.width
+    ctl.Height = refCtl.Height
+End Sub
+
+' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.
+' Tolerantno na schema drift: ako nijedan alias ne postoji, tiho preskace
+' (ne rusi transakciju). Vraca True ako je nesto azurirano.
+Private Function UpdateFirstExistingCol(ByVal SRC As String, ByVal newValue As String, _
+                                        ParamArray colAliases() As Variant) As Boolean
+    Dim k As Long
+    For k = LBound(colAliases) To UBound(colAliases)
+        If GetColumnIndex(m_TableName, CStr(colAliases(k))) > 0 Then
+            RequireUpdateCell m_TableName, m_SelectedRow, CStr(colAliases(k)), newValue, SRC
+            UpdateFirstExistingCol = True
+            Exit Function
+        End If
+    Next k
+End Function
 ' ============================================================
 ' LISTE LADEN
 ' ============================================================
@@ -748,6 +944,58 @@ Private Sub LoadList()
                 End If
             Next i
 
+        Case "Cenovnik"
+            lstData.ColumnCount = UBound(m_Headers) - LBound(m_Headers) + 1
+
+            Dim cCenId As Long, cCenDat As Long, cCenVr As Long
+            Dim cCenSo As Long, cCenKl As Long, cCenCe As Long
+            cCenId = GetColumnIndex(TBL_CENOVNIK, COL_CEN_ID)
+            cCenDat = GetColumnIndex(TBL_CENOVNIK, COL_CEN_DATUM)
+            cCenVr = GetColumnIndex(TBL_CENOVNIK, COL_CEN_VRSTA)
+            cCenSo = GetColumnIndex(TBL_CENOVNIK, COL_CEN_SORTA)
+            cCenKl = GetColumnIndex(TBL_CENOVNIK, COL_CEN_KLASA)
+            cCenCe = GetColumnIndex(TBL_CENOVNIK, COL_CEN_CENA)
+
+            If cCenId = 0 Or cCenVr = 0 Or cCenKl = 0 Or cCenCe = 0 Then
+                Err.Raise vbObjectError + 7210, "frmStammdaten.LoadList", _
+                          "Nedostaju kolone u tblCenovnik."
+            End If
+
+            ' Reuse postojecih helpera (modArrayUtils / modHelpers): nema rucnog sorta.
+            ' ExcludeStornirano -> SortArray (datum opadajuce, tie-break CenaID -> kasniji unos gore).
+            Dim cenData As Variant
+            cenData = ExcludeStornirano(data, TBL_CENOVNIK)
+            If IsEmpty(cenData) Then Exit Sub
+
+            Dim cenSortCol As Long
+            cenSortCol = cCenDat
+            If cenSortCol = 0 Then cenSortCol = cCenId
+            cenData = SortArray(cenData, cenSortCol, False, cCenId)
+            If IsEmpty(cenData) Then Exit Sub
+
+            Dim dStr As String
+            For i = 1 To UBound(cenData, 1)
+                If Trim$(NzToText(cenData(i, cCenId))) <> "" Then
+                    AddRowMap i      ' Cenovnik je append-only (bez izmene) -> map samo za klik
+
+                    dStr = ""
+                    If cCenDat > 0 Then
+                        If IsDate(cenData(i, cCenDat)) Then
+                            dStr = Format$(CDate(cenData(i, cCenDat)), "d.m.yyyy")
+                        Else
+                            dStr = NzToText(cenData(i, cCenDat))
+                        End If
+                    End If
+
+                    lstData.AddItem NzToText(cenData(i, cCenId))
+                    lstData.List(lstData.ListCount - 1, 1) = dStr
+                    lstData.List(lstData.ListCount - 1, 2) = NzToText(cenData(i, cCenVr))
+                    lstData.List(lstData.ListCount - 1, 3) = NzToText(cenData(i, cCenSo))
+                    lstData.List(lstData.ListCount - 1, 4) = NzToText(cenData(i, cCenKl))
+                    lstData.List(lstData.ListCount - 1, 5) = NzToText(cenData(i, cCenCe))
+                End If
+            Next i
+
         Case Else
             lstData.ColumnCount = UBound(m_Headers) - LBound(m_Headers) + 1
             maxCols = lstData.ColumnCount
@@ -865,10 +1113,48 @@ Private Sub lstData_Click()
             txtField6.value = lstData.List(lstData.ListIndex, 5)   ' DozaPoHa
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 6)   ' Kultura
             txtField7.value = lstData.List(lstData.ListIndex, 7)   ' Pakovanje
+
+        Case "Kulture"
+            txtField1.value = lstData.List(lstData.ListIndex, 1)   ' VrstaVoca
+            txtField2.value = lstData.List(lstData.ListIndex, 2)   ' SortaVoca
+            txtField3.value = lstData.List(lstData.ListIndex, 4)   ' GajbicaPoPaleti
+
+        Case "TipAmbalaze", "TipPalete"
+            txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
+            txtField2.value = lstData.List(lstData.ListIndex, 1)   ' Tezina
+
+        Case "Cenovnik"
+            ' Append-only istorija — klik samo prikazuje (bez izmene).
+            SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 2)   ' Vrsta
+            cmbField2.Clear
+            If Trim$(cmbField1.value) <> "" Then
+                FillCmb cmbField2, GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbField1.value)
+            End If
+            SafeSetCombo cmbField2, lstData.List(lstData.ListIndex, 3)   ' Sorta
+            SafeSetCombo cmbField3, lstData.List(lstData.ListIndex, 4)   ' Klasa
+            txtField5.value = lstData.List(lstData.ListIndex, 5)         ' Cena
     End Select
     
     UpdateGeoControlsVisibility
-    
+
+End Sub
+
+' Kaskada Vrsta -> Sorta (samo Cenovnik). Za ostale tabove cmbField1
+' ima drugu ulogu, pa tu ne radimo nista.
+Private Sub cmbField1_Change()
+    On Error Resume Next
+    If Me.Tag <> "Cenovnik" Then Exit Sub
+
+    Dim trenutnaSorta As String
+    trenutnaSorta = Trim$(cmbField2.value)
+
+    cmbField2.Clear
+    If Trim$(cmbField1.value) <> "" Then
+        FillCmb cmbField2, GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbField1.value)
+    End If
+
+    ' Zadrzi izbor ako sorta i dalje postoji u novoj listi.
+    If Len(trenutnaSorta) > 0 Then SafeSetCombo cmbField2, trenutnaSorta
 End Sub
 
 ' ============================================================
@@ -1126,6 +1412,126 @@ Private Sub btnDodaj_Click()
                 pakovanjeArt _
             )
 
+        Case "Kulture"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite vrstu voca!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            If Trim$(txtField2.value) = "" Then
+                MsgBox "Unesite sortu voca!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            Dim gajbicaKul As Double
+            If Trim$(txtField3.value) <> "" Then
+                If Not TryParseDouble(txtField3.value, gajbicaKul) Or gajbicaKul < 0 Then
+                    MsgBox "Unesite validan broj gajbica po paleti!", vbExclamation, APP_NAME
+                    txtField3.SetFocus
+                    Exit Sub
+                End If
+            End If
+
+            newID = GetNextID(m_TableName, "KulturaID", "KUL-")
+
+            ' tblKulture: KulturaID | VrstaVoca | SortaVoca | GajbicaPoPaleti
+            ' (nema kolonu Aktivan). Gajbica ostaje prazna ako nije uneta.
+            Dim gajbicaVal As Variant
+            If Trim$(txtField3.value) = "" Then
+                gajbicaVal = ""
+            Else
+                gajbicaVal = gajbicaKul
+            End If
+
+            rowData = Array( _
+                newID, _
+                Trim$(txtField1.value), _
+                Trim$(txtField2.value), _
+                gajbicaVal _
+            )
+
+        Case "TipAmbalaze"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip ambalaze!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaAmb As Double
+            If Not TryParseDouble(txtField2.value, tezinaAmb) Or tezinaAmb < 0 Then
+                MsgBox "Unesite validnu tezinu gajbice (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_TAMB_TIP, Trim$(txtField1.value), COL_TAMB_TIP)))) > 0 Then
+                MsgBox "Tip ambalaze '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            newID = Trim$(txtField1.value)   ' PK je sam naziv tipa
+            rowData = Array(Trim$(txtField1.value), tezinaAmb)
+
+        Case "TipPalete"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip palete!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaPal As Double
+            If Not TryParseDouble(txtField2.value, tezinaPal) Or tezinaPal < 0 Then
+                MsgBox "Unesite validnu tezinu palete (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_TPAL_TIP, Trim$(txtField1.value), COL_TPAL_TIP)))) > 0 Then
+                MsgBox "Tip palete '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            newID = Trim$(txtField1.value)
+            rowData = Array(Trim$(txtField1.value), tezinaPal)
+
+        Case "Cenovnik"
+            ' Append-only: dodaje novi (vazeci) red preko modCenovnik.
+            If Trim$(cmbField1.value) = "" Then
+                MsgBox "Izaberite vrstu voca!", vbExclamation, APP_NAME
+                cmbField1.SetFocus
+                Exit Sub
+            End If
+
+            If Trim$(cmbField3.value) = "" Then
+                MsgBox "Izaberite klasu!", vbExclamation, APP_NAME
+                cmbField3.SetFocus
+                Exit Sub
+            End If
+
+            Dim cenaCen As Double
+            If Not TryParseDouble(txtField5.value, cenaCen) Or cenaCen <= 0 Then
+                MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
+                txtField5.SetFocus
+                Exit Sub
+            End If
+
+            Dim datCen As Date
+            If Not TryParseDateValue(txtField4.value, datCen) Then datCen = Date
+
+            Dim resCen As String
+            resCen = AddCena(datCen, cmbField1.value, cmbField2.value, cmbField3.value, cenaCen)
+
+            If resCen <> "" Then
+                MsgBox "Dodata cena: " & resCen, vbInformation, APP_NAME
+                LoadList
+                txtField5.value = ""        ' spremno za sledecu cenu; proizvod ostaje
+            Else
+                MsgBox "Greška pri dodavanju cene!", vbCritical, APP_NAME
+            End If
+            Exit Sub
+
         Case Else
             MsgBox "Nepoznat tip maticnih podataka: " & Me.Tag, vbCritical, APP_NAME
             Exit Sub
@@ -1238,12 +1644,16 @@ Private Sub btnIzmeni_Click()
             tx.BeginTx
             tx.AddTableSnapshot m_TableName
 
-            RequireUpdateCell m_TableName, m_SelectedRow, "Naziv", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Telefon", Trim$(txtField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "KontaktIme", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "KontaktPrezime", Trim$(txtField5.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Pin", Trim$(txtField6.value), SRC
+            ' tblStanice kod razlicitih instalacija ima drift u nazivima kolona
+            ' (npr. Ime vs KontaktIme, PIN vs Pin). Da izmena NE pukne na
+            ' nepostojecoj koloni (rollback cele izmene), azuriramo prvu kolonu
+            ' koja STVARNO postoji (alias-probe). Reuse: GetColumnIndex.
+            UpdateFirstExistingCol SRC, Trim$(txtField1.value), "Naziv"
+            UpdateFirstExistingCol SRC, Trim$(txtField2.value), "Mesto"
+            UpdateFirstExistingCol SRC, Trim$(txtField3.value), "Kontakt", "Telefon"
+            UpdateFirstExistingCol SRC, Trim$(txtField4.value), "Ime", "KontaktIme"
+            UpdateFirstExistingCol SRC, Trim$(txtField5.value), "Prezime", "KontaktPrezime"
+            UpdateFirstExistingCol SRC, Trim$(txtField6.value), "PIN", "Pin"
 
             tx.CommitTx
 
@@ -1395,6 +1805,88 @@ Private Sub btnIzmeni_Click()
 
             tx.CommitTx
 
+        Case "Kulture"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite vrstu voca!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            If Trim$(txtField2.value) = "" Then
+                MsgBox "Unesite sortu voca!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            Dim gajbicaEdit As Double
+            If Trim$(txtField3.value) <> "" Then
+                If Not TryParseDouble(txtField3.value, gajbicaEdit) Or gajbicaEdit < 0 Then
+                    MsgBox "Unesite validan broj gajbica po paleti!", vbExclamation, APP_NAME
+                    txtField3.SetFocus
+                    Exit Sub
+                End If
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            RequireUpdateCell m_TableName, m_SelectedRow, "VrstaVoca", Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, "SortaVoca", Trim$(txtField2.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_GAJBICA_PALETA, gajbicaEdit, SRC
+
+            tx.CommitTx
+
+        Case "TipAmbalaze"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip ambalaze!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaAmbEdit As Double
+            If Not TryParseDouble(txtField2.value, tezinaAmbEdit) Or tezinaAmbEdit < 0 Then
+                MsgBox "Unesite validnu tezinu gajbice (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_TAMB_TIP, Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_TAMB_TEZINA, tezinaAmbEdit, SRC
+
+            tx.CommitTx
+
+        Case "TipPalete"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip palete!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaPalEdit As Double
+            If Not TryParseDouble(txtField2.value, tezinaPalEdit) Or tezinaPalEdit < 0 Then
+                MsgBox "Unesite validnu tezinu palete (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_TPAL_TIP, Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_TPAL_TEZINA, tezinaPalEdit, SRC
+
+            tx.CommitTx
+
+        Case "Cenovnik"
+            ' Append-only: istorija cena se ne menja. Nova cena = Dodaj.
+            MsgBox "Cenovnik je append-only." & vbCrLf & _
+                   "Za novu cenu koristite 'Dodaj' — stari redovi ostaju radi istorije.", _
+                   vbInformation, APP_NAME
+            Exit Sub
+
         Case Else
             MsgBox "Nepoznat tip maticnih podataka: " & Me.Tag, vbCritical, APP_NAME
             Exit Sub
@@ -1472,11 +1964,16 @@ Private Sub ClearFields()
     cmbField6.value = ""
 
     m_SelectedRow = 0
-    
+
+    ' Cenovnik: zadrzi podrazumevani datum (danas) i posle ciscenja.
+    On Error Resume Next
+    If Me.Tag = "Cenovnik" Then txtField4.value = Format$(Date, "d.m.yyyy")
+    On Error GoTo 0
+
     UpdateGeoControlsVisibility
     ResetGeoClearConfirm
     ClearGeoStatus
-    
+
 End Sub
 
 Private Sub ResetFieldVisibility()

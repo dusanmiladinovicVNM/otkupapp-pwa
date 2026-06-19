@@ -403,3 +403,27 @@ EH:
     GetVozacAmbSaldo = Empty
 End Function
 
+' ============================================================
+' READ: opcije za "Tip ambalaze" combo (frmOtkup / frmDokumenta)
+'
+' Vraca tipove koje je kupac uneo u tblTipAmbalaze (maticni podaci).
+' Fallback na ugradjene konstante (12/1, 6/1) ako je sifarnik prazan
+' ili tabela ne postoji — da postojece instalacije ne ostanu bez opcija.
+' ============================================================
+Public Function GetTipAmbalazeOptions() As Variant
+    On Error GoTo Fallback
+
+    Dim arr As Variant
+    arr = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP)
+
+    If IsArray(arr) Then
+        If (UBound(arr) - LBound(arr) + 1) > 0 Then
+            GetTipAmbalazeOptions = arr
+            Exit Function
+        End If
+    End If
+
+Fallback:
+    GetTipAmbalazeOptions = Array(AMB_12_1, AMB_6_1)
+End Function
+
