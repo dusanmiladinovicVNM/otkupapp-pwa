@@ -710,8 +710,41 @@ Private Sub SetupCenovnik()
     cmbField3.AddItem KLASA_I
     cmbField3.AddItem KLASA_II
 
+    ' Poravnaj combo-e (Vrsta/Sorta/Klasa) sa redovima 1/2/3 (lblField1..3).
+    ' U .frx su cmbField1..3 u zasebnom klasteru nize pa bi prekrivali
+    ' txtField4/5 (Datum/Cena). Forma se otvara sveza po sekciji (OpenSekcija
+    ' radi Unload), pa repozicioniranje ne utice na druge tabove.
+    AlignControlToRow cmbField1, txtField1
+    AlignControlToRow cmbField2, txtField2
+    AlignControlToRow cmbField3, txtField3
+
     txtField4.value = Format$(Date, "d.m.yyyy")
 End Sub
+
+' Kopira geometriju reda (lblFieldN <-> txtFieldN su pouzdano poravnati u .frx)
+' na drugu kontrolu istog reda. Koristi se da combo sedne na red svoje labele.
+Private Sub AlignControlToRow(ByVal ctl As MSForms.Control, ByVal refCtl As MSForms.Control)
+    On Error Resume Next
+    ctl.Left = refCtl.Left
+    ctl.Top = refCtl.Top
+    ctl.width = refCtl.width
+    ctl.Height = refCtl.Height
+End Sub
+
+' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.
+' Tolerantno na schema drift: ako nijedan alias ne postoji, tiho preskace
+' (ne rusi transakciju). Vraca True ako je nesto azurirano.
+Private Function UpdateFirstExistingCol(ByVal SRC As String, ByVal newValue As String, _
+                                        ParamArray colAliases() As Variant) As Boolean
+    Dim k As Long
+    For k = LBound(colAliases) To UBound(colAliases)
+        If GetColumnIndex(m_TableName, CStr(colAliases(k))) > 0 Then
+            RequireUpdateCell m_TableName, m_SelectedRow, CStr(colAliases(k)), newValue, SRC
+            UpdateFirstExistingCol = True
+            Exit Function
+        End If
+    Next k
+End Function
 ' ============================================================
 ' LISTE LADEN
 ' ============================================================
@@ -1593,15 +1626,16 @@ Private Sub btnIzmeni_Click()
             tx.BeginTx
             tx.AddTableSnapshot m_TableName
 
-            ' FIX: tblStanice ima kolone Ime/Prezime/PIN (ne KontaktIme/KontaktPrezime).
-            ' Ranije je izmena padala (UpdateCell -> nepostojeca kolona -> rollback),
-            ' pa "izmena za Stanice nije radila" dok je dodavanje (pozicijsko) radilo.
-            RequireUpdateCell m_TableName, m_SelectedRow, "Naziv", Trim$(txtField1.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField2.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Telefon", Trim$(txtField3.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Ime", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Prezime", Trim$(txtField5.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "PIN", Trim$(txtField6.value), SRC
+            ' tblStanice kod razlicitih instalacija ima drift u nazivima kolona
+            ' (npr. Ime vs KontaktIme, PIN vs Pin). Da izmena NE pukne na
+            ' nepostojecoj koloni (rollback cele izmene), azuriramo prvu kolonu
+            ' koja STVARNO postoji (alias-probe). Reuse: GetColumnIndex.
+            UpdateFirstExistingCol SRC, Trim$(txtField1.value), "Naziv"
+            UpdateFirstExistingCol SRC, Trim$(txtField2.value), "Mesto"
+            UpdateFirstExistingCol SRC, Trim$(txtField3.value), "Telefon"
+            UpdateFirstExistingCol SRC, Trim$(txtField4.value), "Ime", "KontaktIme", "Kontakt"
+            UpdateFirstExistingCol SRC, Trim$(txtField5.value), "Prezime", "KontaktPrezime"
+            UpdateFirstExistingCol SRC, Trim$(txtField6.value), "PIN", "Pin"
 
             tx.CommitTx
 

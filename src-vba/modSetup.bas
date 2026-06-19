@@ -744,6 +744,25 @@ EH:
     Err.Raise Err.Number, "EnsureCenovnikSchema", Err.description
 End Sub
 
+' Dijagnostika: prikazi STVARNE nazive kolona neke tabele.
+' Pokreni: Alt+F8 -> DebugKoloneTabele -> unesi npr. tblStanice.
+' Reuse: GetTableHeaders (modDataAccess).
+Public Sub DebugKoloneTabele()
+    Dim t As String
+    t = InputBox("Naziv tabele (npr. tblStanice):", APP_NAME, "tblStanice")
+    If Trim$(t) = "" Then Exit Sub
+
+    Dim h As Variant
+    h = GetTableHeaders(t)
+    If IsEmpty(h) Then
+        MsgBox "Tabela '" & t & "' nije pronadjena.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    MsgBox t & " kolone (" & (UBound(h) - LBound(h) + 1) & "):" & vbCrLf & _
+           Join(h, " | "), vbInformation, APP_NAME
+End Sub
+
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
 Private Sub EnsureDataTable(ByVal tblName As String, _
                             ByVal sheetName As String, _
