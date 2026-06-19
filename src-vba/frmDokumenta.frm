@@ -676,8 +676,15 @@ Private Sub LoadZbirneListbox()
     On Error GoTo EH
 
     StyleListBox lstZbirne                       ' tema (krem/forest, Segoe UI) kao lstData
-    StyleListHeaderLabel lblZbirneHead           ' header traka (topla krem + zlatna bold)
-    lblZbirneHead.Caption = "Broj zbirne   Datum      Vrsta       Sorta"
+    ' Header = 4 odvojena labela iznad kolona, stil kao lstData header (StyleListHeaderLabel).
+    StyleListHeaderLabel lblZbirneBrojZbirne
+    StyleListHeaderLabel lblZbirneDatum
+    StyleListHeaderLabel lblZbirneVrsta
+    StyleListHeaderLabel lblZbirneSorta
+    lblZbirneBrojZbirne.Caption = "Broj zbirne"
+    lblZbirneDatum.Caption = "Datum"
+    lblZbirneVrsta.Caption = "Vrsta"
+    lblZbirneSorta.Caption = "Sorta"
     lstZbirne.Clear
     lstZbirne.ColumnCount = 4
     lstZbirne.ColumnWidths = "70;55;50;75"       ' BrojZbirne | Datum | Vrsta | Sorta (uze, po naslovima)
