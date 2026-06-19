@@ -253,26 +253,51 @@ Public Const TBL_KORISNICI As String = "tblKorisnici"
 
 ## 8) Rizici / napomene
 - `frmOtkupAPP`/`frmStammdaten` izmene su **samo u kodu** (`.frm`), `.frx` se ne dira
-  (CLAUDE.md §4). `frmLogin` je nova forma sa sopstvenim `.frx` (ako se izabere taj UI).
+  (CLAUDE.md §4). `frmLogin` je nova forma, ali se kontrole grade u **runtime-u**
+  (`Controls.Add` + form-level `WithEvents`) pa `.frx` **nije** potreban.
 - `OblastZaFormu` mapiranje mora pokriti sve forme iz §2 (default: ako oblast nije
   mapirana → tretiraj kao dozvoljeno ili kao MaticniPodaci? → §9 nije nužno, default
   „dozvoljeno" da se ne blokira nepoznata/buduća sekcija; Admin svejedno prolazi).
 
 ---
 
-## 9) Otvorene odluke (molim potvrdu pre koda)
-1. **Model prava:** kolone-po-oblasti `DA/NE` na `tblKorisnici` *(preporuka — Excel-native,
-   minimalno)* **vs** matrica `tblKorisniciPrava` (za buduće read/write po oblasti).
-2. **Login UI:** novi `frmLogin` sa maskiranim PIN-om *(preporuka)* **vs** `InputBox`
-   (bez `.frx`, ali PIN vidljiv).
-3. **Rollout:** `AUTH_ENABLED` opt-in flag, default `NE` *(preporuka — bez rizika lockout-a)*
-   **vs** odmah obavezan login.
-4. **PIN:** plaintext kao sad *(preporuka v1)* **vs** hash odmah.
-5. **Alt+F8 setup/admin makroi** (SetupNewPC, Ensure*, License): ostaviti kao IT/power-user
-   van auth-a *(preporuka)* **vs** i njih zaključati na Admina.
+## 9) Odluke (zaključano) + status
+
+| # | Odluka | Izabrano |
+|---|---|---|
+| 1 | Model prava | **A — kolone po oblasti `DA/NE`** (Excel-native, minimalno) |
+| 2 | Login UI | **`frmLogin` sa maskiranim PIN-om** (kontrole u runtime-u, bez `.frx`) |
+| 3 | Rollout | **`AUTH_ENABLED` opt-in, default `NE`** (bez rizika lockout-a) |
+| 4 | PIN | **plaintext u v1** (parity sa `tblStanice.PIN`); hash = Faza 3 |
+| 5 | Alt+F8 setup/admin makroi | ostaju IT/power-user van auth-a (Faza 3 opciono) |
+
+**Status: Faza 1 — IMPLEMENTIRANO** (čeka uvoz/kompajl u Excelu):
+`modConfig` (konstante) · `modAuth.bas` (nov) · `modSetup` (`EnsureKorisniciSchema`,
+`KreirajPrvogAdmina`, `EnableAuth`/`DisableAuth`) · `modMain` (login gate) ·
+`frmOtkupAPP` (guard u `OpenContentForm`) · `frmLogin.frm` (nov).
+**Faza 2** (Korisnici sekcija u Maticnim + `OpenMaticniForm` guard) — sledeća.
 
 ---
 
-_Po potvrdi §9 krećem od Faze 1 (login + guard u jednoj chokepoint tački), strogo
-proširujući postojeće obrasce (modSetup `Ensure*`, modDataAccess, Maticni meni) bez novog
-data sloja i bez diranja `.frx`._
+## 10) Kako uključiti (Faza 1) — koraci u Excelu
+1. **Uvezi** u VBA projekat: `modAuth.bas`, izmenjene `modConfig.bas`, `modSetup.bas`,
+   `modMain.bas`, `frmOtkupAPP.frm`, i **`frmLogin.frm`**.
+   - `frmLogin`: kontrole se grade u runtime-u (nema `.frx`). Ako uvoz `.frm` ne prođe,
+     napravi praznu `UserForm` imena `frmLogin` (Insert → UserForm) i nalepi kod iz
+     `src-vba/frmLogin.frm`.
+2. `Debug → Compile VBAProject` (mora bez greške; nema duplih `Public` imena).
+3. **Alt+F8 → `KreirajPrvogAdmina`** → unesi username, PIN, ime → kreira `tblKorisnici`
+   + admina sa svim pravima.
+4. (Opc.) Dodaj još korisnika: u sheet **`Korisnici`** dodaj red i u kolonama oblasti
+   upiši `DA`/`NE` (Model A je čitljiv grid). `Uloga=Korisnik`, `Aktivan=DA`.
+5. **Alt+F8 → `EnableAuth`** (proverava da postoji aktivan admin) → uključuje prijavu.
+6. Restartuj workbook → traži se prijava; guard u `OpenContentForm` blokira oblasti bez `DA`.
+7. Isključenje: **Alt+F8 → `DisableAuth`** (app radi bez prijave).
+
+> Napomena: dok je `AUTH_ENABLED` ≠ `YES`, ponašanje aplikacije je **identično** kao pre.
+
+---
+
+_Faza 1 striktno proširuje postojeće obrasce (modSetup `Ensure*`, modDataAccess, license
+opt-in flag) bez novog data sloja i bez diranja `.frx`. Smoke-test u Excelu radi korisnik
+(VBA se ne kompajlira u ovom okruženju)._

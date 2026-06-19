@@ -897,6 +897,162 @@ Private Sub SetColumnNumberFormat(ByVal tblName As String, ByVal colName As Stri
     col.DataBodyRange.NumberFormat = fmt
 End Sub
 
+' ============================================================
+' Korisnici (Faza 1) — admin + prava po oblasti. Idempotentni schema setup.
+' Model A: jedan red = korisnik; kolona po oblasti = "DA"/"NE". Admin = bypass.
+' Reuse: EnsureDataTable / EnsureColumnOnTable (schema-drift safe).
+' Pokreni JEDNOM: Alt+F8 -> EnsureKorisniciSchema (ili KreirajPrvogAdmina).
+' ============================================================
+Public Sub EnsureKorisniciSchema()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_KORISNICI, "Korisnici", _
+        Array(COL_KOR_ID, COL_KOR_USERNAME, COL_KOR_IME, COL_KOR_PIN, _
+              COL_KOR_ULOGA, COL_KOR_AKTIVAN, COL_KOR_STANICA, COL_KOR_CREATED, _
+              OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
+              OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI)
+
+    LogSetup "OK", "EnsureKorisniciSchema done"
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureKorisniciSchema failed: " & Err.description
+    Err.Raise Err.Number, "EnsureKorisniciSchema", Err.description
+End Sub
+
+' Kreira prvog ADMINA (sa svim pravima). Bezbedan bootstrap protiv lockout-a:
+' prijava se ukljucuje tek posle ovoga (EnableAuth proverava da admin postoji).
+' Alt+F8 -> KreirajPrvogAdmina.
+Public Sub KreirajPrvogAdmina()
+    On Error GoTo EH
+
+    EnsureKorisniciSchema
+
+    Dim u As String, pin As String, ime As String
+    u = Trim$(InputBox("Korisničko ime za ADMINA:", APP_NAME, "admin"))
+    If Len(u) = 0 Then Exit Sub
+    pin = Trim$(InputBox("PIN za '" & u & "':", APP_NAME))
+    If Len(pin) = 0 Then Exit Sub
+    ime = Trim$(InputBox("Ime i prezime (opciono):", APP_NAME))
+
+    ' Spreci duplikat username-a
+    Dim postoji As Variant
+    postoji = LookupValue(TBL_KORISNICI, COL_KOR_USERNAME, u, COL_KOR_ID)
+    If Not IsEmpty(postoji) Then
+        If Len(Trim$(CStr(postoji))) > 0 Then
+            MsgBox "Korisnik '" & u & "' već postoji.", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
+    Dim newId As String
+    newId = GetNextID(TBL_KORISNICI, COL_KOR_ID, "KOR-")
+
+    Dim colCount As Long
+    colCount = GetTable(TBL_KORISNICI).ListColumns.count
+
+    Dim rowData() As Variant
+    ReDim rowData(1 To colCount)
+
+    Dim idx As Long
+    idx = AppendRow(TBL_KORISNICI, rowData)
+    If idx = 0 Then Err.Raise vbObjectError + 9400, "KreirajPrvogAdmina", "AppendRow nije uspeo."
+
+    ' Upis po imenu (drift-safe, CLAUDE.md)
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_ID, newId
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_USERNAME, u
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_IME, ime
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_PIN, pin
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_ULOGA, ULOGA_ADMIN
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_AKTIVAN, "DA"
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_CREATED, Format$(Now, "yyyy-mm-dd hh:nn:ss")
+
+    ' Admin svejedno bypass-uje; setujemo DA radi preglednosti u gridu.
+    Dim obl As Variant
+    For Each obl In Array(OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
+                          OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI)
+        UpdateCell TBL_KORISNICI, idx, CStr(obl), "DA"
+    Next obl
+
+    MsgBox "Admin '" & u & "' je kreiran." & vbCrLf & vbCrLf & _
+           "Sledeće: uključi prijavu sa Alt+F8 -> EnableAuth.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "KreirajPrvogAdmina failed: " & Err.description
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Ukljuci prijavu korisnika (AUTH_ENABLED=YES). Mirror EnableDesktopOnlyMode.
+' Bezbednost: ne dozvoljava ukljucivanje bez bar jednog AKTIVNOG admina.
+' Alt+F8 -> EnableAuth.
+Public Sub EnableAuth()
+    On Error GoTo EH
+
+    If Not PostojiAktivanAdmin() Then
+        MsgBox "Ne mogu da uključim prijavu: ne postoji nijedan aktivan Admin." & vbCrLf & _
+               "Prvo pokreni: Alt+F8 -> KreirajPrvogAdmina.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    SetConfigValue CFG_KEY_AUTH_ENABLED, "YES"
+    InitSetupLog
+    LogSetup "OK", "AUTH_ENABLED = YES"
+    MsgBox "Prijava korisnika je UKLJUČENA." & vbCrLf & _
+           "Pri sledećem otvaranju aplikacije traži se prijava.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Ne mogu da uključim prijavu: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Iskljuci prijavu (AUTH_ENABLED=NO). Alt+F8 -> DisableAuth.
+Public Sub DisableAuth()
+    On Error GoTo EH
+
+    SetConfigValue CFG_KEY_AUTH_ENABLED, "NO"
+    InitSetupLog
+    LogSetup "OK", "AUTH_ENABLED = NO"
+    MsgBox "Prijava korisnika je ISKLJUČENA (app radi bez prijave).", vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Function PostojiAktivanAdmin() As Boolean
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_KORISNICI)
+    If lo Is Nothing Then Exit Function
+    If lo.DataBodyRange Is Nothing Then Exit Function
+
+    Dim colUloga As Long, colAkt As Long, r As Long
+    colUloga = GetColumnIndex(TBL_KORISNICI, COL_KOR_ULOGA)
+    colAkt = GetColumnIndex(TBL_KORISNICI, COL_KOR_AKTIVAN)
+    If colUloga = 0 Then Exit Function
+
+    For r = 1 To lo.DataBodyRange.rows.count
+        If StrComp(Trim$(CStr(lo.DataBodyRange.cells(r, colUloga).value)), ULOGA_ADMIN, vbTextCompare) = 0 Then
+            If colAkt = 0 Then
+                PostojiAktivanAdmin = True
+                Exit Function
+            ElseIf UCase$(Trim$(CStr(lo.DataBodyRange.cells(r, colAkt).value))) <> "NE" Then
+                PostojiAktivanAdmin = True
+                Exit Function
+            End If
+        End If
+    Next r
+
+    Exit Function
+
+EH:
+    PostojiAktivanAdmin = False
+End Function
+
 ' Dijagnostika: prikazi STVARNE nazive kolona neke tabele.
 ' Pokreni: Alt+F8 -> DebugKoloneTabele -> unesi npr. tblStanice.
 ' Reuse: GetTableHeaders (modDataAccess).

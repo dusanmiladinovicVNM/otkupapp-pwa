@@ -923,6 +923,15 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal sectionTitle As String)
     On Error GoTo EH
 
+    ' --- Kontrola pristupa (opt-in AUTH_ENABLED): prava po oblasti ---
+    ' Jedna tacka za sve sekcije. Admin = bypass; AUTH iskljucen = sve dozvoljeno.
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(modAuth.OblastZaFormu(contentForm.name)) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: " & sectionTitle, vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     Dim oldContent As Object
     Dim oldPointer As Integer
 

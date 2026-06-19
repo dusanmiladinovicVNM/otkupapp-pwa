@@ -47,6 +47,18 @@ Public Sub StartApp()
         Exit Sub
     End If
 
+    ' --- Per-user prijava (opt-in: AUTH_ENABLED u tblSEFConfig) ---
+    ' Dok AUTH_ENABLED != YES -> sve radi kao pre (bez prijave).
+    ' Neuspela prijava -> Excel vidljiv + zakazano gasenje (mirror license gate;
+    ' zatvaranje se ne radi unutar Workbook_Open lanca, vec na sledeci tick).
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.Login() Then
+            Application.Visible = True
+            Application.OnTime Now + TimeSerial(0, 0, 1), "QuitAfterFailedLogin"
+            Exit Sub
+        End If
+    End If
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme

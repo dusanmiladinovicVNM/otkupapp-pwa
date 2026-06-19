@@ -51,6 +51,7 @@ Public Const TBL_BANKA_IMPORT As String = "tblBankaImport"
 Public Const TBL_SEF_SUBMISSION As String = "tblSEFSubmission"
 Public Const TBL_SEF_EVENT_LOG As String = "tblSEFEventLog"
 Public Const TBL_SEF_CONFIG As String = "tblSEFConfig"
+Public Const TBL_KORISNICI As String = "tblKorisnici"
 
 ' --- Phase 2 Tabellen ---
 Public Const TBL_PROIZVODJACI As String = "tblProizvodjaci"
@@ -544,6 +545,38 @@ Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
 ' --- tblStanice: flag hladnjaca (auto-lanac; kupac = MALINA_DEFAULT_KUPAC) ---
 Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
+
+' =========================
+' Auth / korisnici (Faza 1) — opt-in prijava + prava po oblasti
+' =========================
+' Opt-in flag (mirror CLOUD_SYNC_ENABLED / LICENSE_ENABLED). Dok nije YES -> bez prijave.
+Public Const CFG_KEY_AUTH_ENABLED As String = "AUTH_ENABLED"
+
+' Uloge
+Public Const ULOGA_ADMIN As String = "Admin"
+Public Const ULOGA_KORISNIK As String = "Korisnik"
+
+' Kolone tblKorisnici (upis po imenu — drift-safe)
+Public Const COL_KOR_ID As String = "KorisnikID"
+Public Const COL_KOR_USERNAME As String = "Username"
+Public Const COL_KOR_IME As String = "ImePrezime"
+Public Const COL_KOR_PIN As String = "PIN"
+Public Const COL_KOR_ULOGA As String = "Uloga"
+Public Const COL_KOR_AKTIVAN As String = "Aktivan"
+Public Const COL_KOR_STANICA As String = "StanicaID"
+Public Const COL_KOR_CREATED As String = "CreatedAt"
+
+' Oblasti = nazivi kolona prava u tblKorisnici (i vrednosti koje vraca OblastZaFormu).
+' Vrednost u celiji: "DA" = dozvoljeno, sve ostalo = zabranjeno. Admin uvek bypass.
+Public Const OBL_OTKUP As String = "Otkup"
+Public Const OBL_DOKUMENTA As String = "Dokumenta"
+Public Const OBL_AGROHEMIJA As String = "Agrohemija"
+Public Const OBL_IZVESTAJI As String = "Izvestaji"
+Public Const OBL_FAKTURISANJE As String = "Fakturisanje"
+Public Const OBL_BANKA As String = "Banka"
+Public Const OBL_MARZA As String = "Marza"
+Public Const OBL_SLEDLJIVOST As String = "Sledljivost"
+Public Const OBL_MATICNI As String = "MaticniPodaci"
 
 ' =========================
 ' Workflow states
