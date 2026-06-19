@@ -91,7 +91,7 @@ Private Function CreateKooperantByName(ByVal nm As String, ByVal stanicaID As St
                   "tblKooperanti nije pronadjena."
     End If
 
-    ' Red u redosledu kolona (sve prazno osim ID/Ime/Prezime/Stanica).
+    ' Red u redosledu kolona (sve prazno osim ID/Ime/Prezime/Stanica/Aktivan).
     Dim nCols As Long: nCols = lo.ListColumns.count
     Dim row() As Variant: ReDim row(1 To nCols)
     Dim c As Long
@@ -100,6 +100,7 @@ Private Function CreateKooperantByName(ByVal nm As String, ByVal stanicaID As St
     row(GetColumnIndex(TBL_KOOPERANTI, "Ime")) = ime
     row(GetColumnIndex(TBL_KOOPERANTI, "Prezime")) = prezime
     row(GetColumnIndex(TBL_KOOPERANTI, COL_KOOP_STANICA)) = stanicaID
+    row(GetColumnIndex(TBL_KOOPERANTI, "Aktivan")) = STATUS_AKTIVAN
 
     Set tx = New clsTransaction
     tx.BeginTx
