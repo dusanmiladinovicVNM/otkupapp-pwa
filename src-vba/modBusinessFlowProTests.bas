@@ -1422,24 +1422,20 @@ Private Sub Test_MalinaVozacMirror()
 
     On Error GoTo EH
 
-    Dim sid As String
-    sid = "ST-MALMIR-" & NewScenarioCode("VOZMIR")
+    ' Fiksni test ID -> idempotentno; ne gomila redove kroz vise run-ova suite-a.
+    Const MIR_ST As String = "ST-MIRTEST-90001"
 
     prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
     SetConfigValue CFG_KEY_MALINA_MODE, "YES"
 
-    AssertFalse RowExists(TBL_VOZACI, "VozacID", sid), _
-        "Malina mirror: vozac pre kreiranja ne postoji"
+    ' Posle Ensure vozac mora postojati (kreiran sad ili od ranijeg run-a).
+    Call EnsureVozacMirrorForStanica(MIR_ST, "Test Naziv", "Test Mesto", "")
+    AssertTrue RowExists(TBL_VOZACI, "VozacID", MIR_ST), _
+        "Malina mirror: vozac VozacID==StanicaID postoji posle Ensure"
 
-    Dim createdFirst As Boolean
-    createdFirst = EnsureVozacMirrorForStanica(sid, "Test Naziv", "Test Mesto", "")
-    AssertTrue createdFirst, "Malina mirror: prvi poziv kreira vozaca"
-    AssertTrue RowExists(TBL_VOZACI, "VozacID", sid), _
-        "Malina mirror: vozac sa VozacID==StanicaID postoji"
-
-    Dim createdSecond As Boolean
-    createdSecond = EnsureVozacMirrorForStanica(sid, "Test Naziv", "Test Mesto", "")
-    AssertFalse createdSecond, "Malina mirror: drugi poziv ne duplira (idempotentno)"
+    ' Idempotencija: ponovni poziv NE sme da kreira nov red.
+    AssertFalse EnsureVozacMirrorForStanica(MIR_ST, "Test Naziv", "Test Mesto", ""), _
+        "Malina mirror: ponovni poziv ne kreira duplikat (idempotentno)"
 
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     Exit Sub

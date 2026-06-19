@@ -926,10 +926,16 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
     cKlasa = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA, SRC)
     cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
 
-    ' Grupisanje po BrojOtpremnice; samo prazna BrojZbirne i ne-stornirano.
-    Dim groups As Object
-    Set groups = CreateObject("Scripting.Dictionary")
+    ' Obrada PO REDU otpremnice (NE grupisano po BrojOtpremnice):
+    '   AutoCreateOtpremniceFromPWA pravi otpremnice PO-KLASI (Klasa I i Klasa II
+    '   imaju razlicit BrojOtpremnice), dok rucni SaveOtpremnicaMulti stavlja obe
+    '   klase pod isti BrojOtpremnice. Per-red sa SaveZbirna_TX (jedna klasa)
+    '   korektno pokriva oba slucaja: BrojZbirne := BrojOtpremnice tog reda.
+    '   (Grupisanje+SaveZbirnaMulti je padalo na Klasa-II-only grupi: kolI=0.)
+    Dim otpMap As Object
+    Set otpMap = CreateObject("Scripting.Dictionary")
 
+    Dim created As Long: created = 0
     Dim r As Long
     For r = 1 To UBound(data, 1)
         Dim brZ As String: brZ = Trim$(CStr(Nz(data(r, cBrZ), "")))
@@ -937,70 +943,36 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
         Dim isStorno As Boolean
         isStorno = (cStorno > 0) And _
                    (UCase$(Trim$(CStr(Nz(data(r, cStorno), "")))) = "DA")
+
         If brZ = "" And brO <> "" And Not isStorno Then
-            If Not groups.Exists(brO) Then groups.Add brO, New Collection
-            groups(brO).Add r
+            Dim datum As Date: datum = CDate(data(r, cDat))
+            Dim vozacID As String: vozacID = Trim$(CStr(Nz(data(r, cVoz), "")))
+            Dim vrsta As String: vrsta = CStr(Nz(data(r, cVrsta), ""))
+            Dim sorta As String: sorta = CStr(Nz(data(r, cSorta), ""))
+            Dim tipAmb As String: tipAmb = CStr(Nz(data(r, cTipAmb), ""))
+            Dim klasa As String: klasa = CStr(Nz(data(r, cKlasa), ""))
+            Dim kol As Double: kol = CDbl(Nz(data(r, cKol), 0))
+            Dim amb As Long: amb = CLng(Nz(data(r, cKolAmb), 0))
+
+            Dim zbrRes As String
+            zbrRes = SaveZbirna_TX(datum, vozacID, brO, kupacID, _
+                        hladnjaca, "", vrsta, sorta, kol, tipAmb, amb, klasa)
+
+            If Len(Trim$(zbrRes)) = 0 Then
+                Err.Raise vbObjectError + 8301, SRC, _
+                    "SaveZbirna_TX nije vratio ZbirnaID za BrojOtpremnice=" & brO & _
+                    " Klasa=" & klasa
+            End If
+
+            RequireUpdateCell TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, brO, SRC
+            Dim otpID As String: otpID = Trim$(CStr(Nz(data(r, cId), "")))
+            If otpID <> "" Then otpMap(otpID) = brO
+
+            created = created + 1
         End If
     Next r
 
-    If groups.count = 0 Then Exit Function
-
-    ' otpID -> brojZbirne (za backfill tblOtkup u jednom prolazu)
-    Dim otpMap As Object
-    Set otpMap = CreateObject("Scripting.Dictionary")
-
-    Dim created As Long: created = 0
-    Dim keys As Variant: keys = groups.keys
-    Dim k As Long
-    For k = 0 To UBound(keys)
-        Dim brojOtp As String: brojOtp = CStr(keys(k))
-        Dim grpRows As Collection: Set grpRows = groups(brojOtp)
-
-        Dim firstR As Long: firstR = grpRows(1)
-        Dim datum As Date: datum = CDate(data(firstR, cDat))
-        Dim vozacID As String: vozacID = Trim$(CStr(Nz(data(firstR, cVoz), "")))
-        Dim vrsta As String: vrsta = CStr(Nz(data(firstR, cVrsta), ""))
-        Dim sorta As String: sorta = CStr(Nz(data(firstR, cSorta), ""))
-        Dim tipAmb As String: tipAmb = CStr(Nz(data(firstR, cTipAmb), ""))
-
-        Dim kolI As Double: kolI = 0
-        Dim kolII As Double: kolII = 0
-        Dim ambI As Long: ambI = 0
-        Dim hasII As Boolean: hasII = False
-
-        Dim i As Long
-        For i = 1 To grpRows.count
-            Dim ri As Long: ri = grpRows(i)
-            Dim klasa As String
-            klasa = UCase$(Trim$(CStr(Nz(data(ri, cKlasa), ""))))
-            If klasa = UCase$(KLASA_II) Then
-                kolII = kolII + CDbl(Nz(data(ri, cKol), 0))
-                hasII = True
-            Else
-                kolI = kolI + CDbl(Nz(data(ri, cKol), 0))
-                ambI = ambI + CLng(Nz(data(ri, cKolAmb), 0))
-            End If
-        Next i
-
-        Dim zbrRes As String
-        zbrRes = SaveZbirnaMulti_TX(datum, vozacID, brojOtp, kupacID, _
-                    hladnjaca, "", vrsta, sorta, kolI, tipAmb, ambI, _
-                    hasII, kolII)
-
-        If Len(Trim$(zbrRes)) = 0 Then
-            Err.Raise vbObjectError + 8301, SRC, _
-                "SaveZbirnaMulti_TX nije vratio ZbirnaID za BrojOtpremnice=" & brojOtp
-        End If
-
-        ' backfill BrojZbirne na otpremnicu (oba klasna reda)
-        For i = 1 To grpRows.count
-            RequireUpdateCell TBL_OTPREMNICA, grpRows(i), COL_OTP_BROJ_ZBIRNE, brojOtp, SRC
-            Dim otpID As String: otpID = Trim$(CStr(Nz(data(grpRows(i), cId), "")))
-            If otpID <> "" Then otpMap(otpID) = brojOtp
-        Next i
-
-        created = created + 1
-    Next k
+    If created = 0 Then Exit Function
 
     ' backfill BrojZbirne na tblOtkup (preko OtpremnicaID), jedan prolaz
     BackfillOtkupBrojZbirneByOtpremnica otpMap, SRC
