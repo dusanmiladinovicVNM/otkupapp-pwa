@@ -651,7 +651,9 @@ Private Sub RefreshBrojZbirneSuggestion()
         ' Sinhronizuj u OTP sekciji (postojeca txtBrojZbirne_AfterUpdate logika
         ' na liniji 868 puca samo na manual edit; ovde radimo programatsko
         ' setovanje, _AfterUpdate ne puca, pa eksplicitno sinhronizujemo).
-        txtBrojZbirneOtp.value = suggested
+        ' MALINA: NE puni BrojZbirne u otpremnicu — mora ostati prazno da auto-zbirna
+        ' dodeli BrojZbirne = BrojOtpremnice (inace bi preskocila otpremnicu).
+        If Not IsMalinaMode() Then txtBrojZbirneOtp.value = suggested
     End If
     Exit Sub
 
@@ -1087,8 +1089,9 @@ End Sub
 ' ============================================================
 
 Private Sub txtBrojZbirne_AfterUpdate()
-    ' BrojZbirne auch in Otpremnica-Feld setzen
-    txtBrojZbirneOtp.value = txtBrojZbirne.value
+    ' BrojZbirne auch in Otpremnica-Feld setzen (NE u malina modu — otpremnica
+    ' mora ostati bez BrojZbirne da je auto-zbirna pokupi).
+    If Not IsMalinaMode() Then txtBrojZbirneOtp.value = txtBrojZbirne.value
     UpdateValidacija
 End Sub
 
