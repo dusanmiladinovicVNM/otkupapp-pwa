@@ -675,9 +675,10 @@ End Sub
 Private Sub LoadZbirneListbox()
     On Error GoTo EH
 
+    StyleListBox lstZbirne                       ' tema (krem/forest, Segoe UI) kao lstData
     lstZbirne.Clear
-    lstZbirne.ColumnCount = 3
-    lstZbirne.ColumnWidths = "85;55;120"
+    lstZbirne.ColumnCount = 4
+    lstZbirne.ColumnWidths = "95;60;120;120"     ' BrojZbirne | Datum | Vrsta | Sorta
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -706,12 +707,10 @@ Private Sub LoadZbirneListbox()
                     If IsDate(data(r, cDat)) Then dStr = Format$(CDate(data(r, cDat)), "d.m.yyyy")
                 End If
 
-                Dim vs As String
-                vs = Trim$(Nz(data(r, cVrsta), "") & " " & Nz(data(r, cSorta), ""))
-
                 lstZbirne.AddItem broj
                 lstZbirne.List(lstZbirne.ListCount - 1, 1) = dStr
-                lstZbirne.List(lstZbirne.ListCount - 1, 2) = vs
+                lstZbirne.List(lstZbirne.ListCount - 1, 2) = CStr(Nz(data(r, cVrsta), ""))
+                lstZbirne.List(lstZbirne.ListCount - 1, 3) = CStr(Nz(data(r, cSorta), ""))
 
                 n = n + 1
                 If n >= 20 Then Exit For
