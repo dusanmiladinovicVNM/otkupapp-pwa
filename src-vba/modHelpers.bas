@@ -2,7 +2,7 @@ Attribute VB_Name = "modHelpers"
 Option Explicit
 
 Public Function ExtractIDFromDisplay(ByVal displayText As String) As String
-    ' Unterstützt: "ID - Name" und "(ID) Name"
+    ' Unterstï¿½tzt: "ID - Name" und "(ID) Name"
     Dim dashPos As Long
     dashPos = InStr(displayText, " - ")
     If dashPos > 0 Then
@@ -69,28 +69,66 @@ End Sub
 
 Public Sub FillComboKooperantiByStanica(ByRef cmb As MSForms.ComboBox, ByVal stanicaID As String)
     cmb.Clear
+
+    ' 2-kolonski: kol0 = "Ime Prezime" (vidljivo, filter po imenu),
+    ' kol1 = KooperantID (skriveno). BoundColumn=1 -> .Value je ime
+    ' (omogucava i slobodan unos novog imena). GetComboID cita kol1.
+    On Error Resume Next
+    cmb.ColumnCount = 2
+    cmb.ColumnWidths = ";0"
+    cmb.TextColumn = 1
+    cmb.BoundColumn = 1
+    cmb.MatchEntry = fmMatchEntryComplete
+    cmb.MatchRequired = False
+    On Error GoTo 0
+
     Dim data As Variant
     data = GetTableData(TBL_KOOPERANTI)
     If IsEmpty(data) Then Exit Sub
-    
+
     Dim colID As Long, colIme As Long, colPrezime As Long, colStanica As Long
     colID = GetColumnIndex(TBL_KOOPERANTI, "KooperantID")
     colIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
     colPrezime = GetColumnIndex(TBL_KOOPERANTI, "Prezime")
     colStanica = GetColumnIndex(TBL_KOOPERANTI, "StanicaID")
-    
+
+    Dim names() As String, ids() As String
+    ReDim names(1 To UBound(data, 1))
+    ReDim ids(1 To UBound(data, 1))
+    Dim n As Long: n = 0
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colStanica)) = stanicaID Then
-            cmb.AddItem CStr(data(i, colID)) & " - " & _
-                CStr(data(i, colIme)) & " " & CStr(data(i, colPrezime))
+            n = n + 1
+            names(n) = Trim$(CStr(data(i, colIme)) & " " & CStr(data(i, colPrezime)))
+            ids(n) = CStr(data(i, colID))
         End If
     Next i
+    If n = 0 Then Exit Sub
+
+    ' insertion sort po imenu (case-insensitive)
+    Dim a As Long, b As Long
+    For a = 2 To n
+        Dim kn As String: kn = names(a)
+        Dim ki As String: ki = ids(a)
+        b = a - 1
+        Do While b >= 1
+            If LCase$(names(b)) <= LCase$(kn) Then Exit Do
+            names(b + 1) = names(b): ids(b + 1) = ids(b): b = b - 1
+        Loop
+        names(b + 1) = kn: ids(b + 1) = ki
+    Next a
+
+    For a = 1 To n
+        cmb.AddItem names(a)
+        cmb.List(cmb.ListCount - 1, 1) = ids(a)
+    Next a
 End Sub
 
 Public Function ExcludeStornirano(ByVal data As Variant, _
                                   ByVal tblName As String) As Variant
-    ' Filtert Stornirano="Da" Zeilen raus, gibt bereinigtes Array zurück
+    ' Filtert Stornirano="Da" Zeilen raus, gibt bereinigtes Array zurï¿½ck
     If IsEmpty(data) Then
         ExcludeStornirano = data
         Exit Function
