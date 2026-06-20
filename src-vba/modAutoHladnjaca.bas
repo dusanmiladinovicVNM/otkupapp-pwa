@@ -89,6 +89,18 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
     Dim hladnjaca As String
     hladnjaca = Trim$(Nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
 
+    ' Vozac je obavezan na otpremnici/zbirnoj/prijemnici. U malina/hladnjaca
+    ' konvenciji par-vozac ima VozacID == StanicaID. Ako otkup nema vozaca,
+    ' koristimo stanicu kao vozaca (i napravimo par-vozaca ako je malina mod).
+    If Len(Trim$(vozacID)) = 0 Then
+        On Error Resume Next
+        EnsureVozacMirrorForStanica stanicaID, _
+            Trim$(Nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), _
+            "(hladnjaca)", ""
+        On Error GoTo EH
+        vozacID = stanicaID
+    End If
+
     ' Broj otpremnice = broj zbirne = broj otkupa (ili generisan).
     Dim brOtp As String
     brOtp = Trim$(brDok)
