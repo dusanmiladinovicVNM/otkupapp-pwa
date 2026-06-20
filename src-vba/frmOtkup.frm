@@ -22,6 +22,10 @@ Option Explicit
 ' ============================================================
 Private mChromeRemoved As Boolean
 
+' Runtime polje "Izdata ambalaza" (OM izdaje prazne kooperantu uz otkup).
+' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
+Private m_txtAmbIzdata As MSForms.TextBox
+
 Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 End Sub
@@ -86,6 +90,104 @@ Private Sub UserForm_Initialize()
     On Error Resume Next
     ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
     On Error GoTo 0
+
+    ' Runtime polje "Izdata ambalaza" (ne dira .frx).
+    SetupAmbIzdataField
+End Sub
+
+' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
+' otvara prazan red tako sto Novac/Primalac (+ njihove labele) i dugmad spusti za
+' jednu visinu reda, pa popuni vakantno mesto (textbox levo + labela desno, kao
+' ostala polja). Sva geometrija se MERI u runtime-u (.frx se ne cita iz koda).
+Private Sub SetupAmbIzdataField()
+    Const ROW_GAP As Single = 6
+    On Error GoTo done
+
+    If Not m_txtAmbIzdata Is Nothing Then Exit Sub
+
+    ' Referentna labela ("Kolicina ambalaze") za poravnanje nove labele.
+    Dim refLbl As MSForms.Control: Set refLbl = RowLabelRightOf(txtKolAmbalaze)
+
+    ' Vakantni red = trenutna pozicija "Novac"; pomak = razmak izmedju dva reda.
+    Dim yIzdata As Single: yIzdata = txtNovac.Top
+    Dim dy As Single: dy = txtNovac.Top - txtKolAmbalaze.Top
+    If dy < txtKolAmbalaze.Height + ROW_GAP Then dy = txtKolAmbalaze.Height + ROW_GAP
+
+    ' Labele susednih polja nadji PRE pomeranja (anchor.Top se menja pomakom).
+    Dim lblNovac As MSForms.Control: Set lblNovac = RowLabelRightOf(txtNovac)
+    Dim lblPrimalac As MSForms.Control: Set lblPrimalac = RowLabelRightOf(txtPrimalac)
+
+    ' Spusti donji blok za jedan red da se oslobodi mesto za "Izdata ambalaza".
+    ShiftCtlDown txtNovac, dy
+    ShiftCtlDown lblNovac, dy
+    ShiftCtlDown txtPrimalac, dy
+    ShiftCtlDown lblPrimalac, dy
+    ShiftCtlDown btnUnos, dy
+    ShiftCtlDown btnStornoOtkup, dy
+    ShiftCtlDown btnPovratak, dy
+
+    ' TextBox u levoj koloni (kao ostala polja).
+    Set m_txtAmbIzdata = Me.Controls.Add("Forms.TextBox.1", "txtAmbIzdataRT", True)
+    With m_txtAmbIzdata
+        .Left = txtKolAmbalaze.Left
+        .Top = yIzdata
+        .width = txtKolAmbalaze.width
+        .Height = txtKolAmbalaze.Height
+        .ControlTipText = "Ambalaza koju OM izdaje kooperantu (preuzima od OM)"
+    End With
+    StyleTextBox m_txtAmbIzdata
+
+    ' TabOrder: odmah posle "Kolicina ambalaze" (prati vizuelnu poziciju u formi).
+    On Error Resume Next
+    m_txtAmbIzdata.TabIndex = txtKolAmbalaze.TabIndex + 1
+    On Error GoTo done
+
+    ' Labela desno od textbox-a, poravnata sa ostalim labelama.
+    Dim lbl As MSForms.Label
+    Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)
+    With lbl
+        .caption = "Izdata ambalaza"
+        .Top = yIzdata + 2
+        .Height = 14
+        If Not refLbl Is Nothing Then
+            .Left = refLbl.Left
+            .width = refLbl.width
+            .Font.Size = refLbl.Font.Size
+        Else
+            .Left = txtKolAmbalaze.Left + txtKolAmbalaze.width + 6
+            .width = 120
+        End If
+    End With
+    Exit Sub
+done:
+    LogErr "frmOtkup.SetupAmbIzdataField"
+    Set m_txtAmbIzdata = Nothing
+End Sub
+
+' Vraca Label u istom redu, najblizi DESNO od date kontrole (labela polja).
+' Nothing ako nema razumnog kandidata (cuva od hvatanja udaljene desne tabele).
+Private Function RowLabelRightOf(ByVal anchor As MSForms.Control) As MSForms.Control
+    On Error Resume Next
+    Dim c As MSForms.Control, best As MSForms.Control
+    Dim bestDx As Single: bestDx = 1000000
+    For Each c In Me.Controls
+        If TypeOf c Is MSForms.Label Then
+            If Abs(c.Top - anchor.Top) <= 6 And c.Left >= anchor.Left Then
+                If (c.Left - anchor.Left) < bestDx Then
+                    bestDx = c.Left - anchor.Left
+                    Set best = c
+                End If
+            End If
+        End If
+    Next c
+    If bestDx <= anchor.width + 220 Then Set RowLabelRightOf = best
+End Function
+
+' Spusti kontrolu za dy (bezbedno i kad je kontrola Nothing).
+Private Sub ShiftCtlDown(ByVal ctl As MSForms.Control, ByVal dy As Single)
+    If ctl Is Nothing Then Exit Sub
+    On Error Resume Next
+    ctl.Top = ctl.Top + dy
 End Sub
 
 Private Sub ResetActionButtons()
@@ -510,8 +612,25 @@ Private Sub btnUnos_Click()
         End If
     End If
 
+    Dim kolAmbIzdata As Long
+    If Not m_txtAmbIzdata Is Nothing Then
+        If Trim$(m_txtAmbIzdata.value) <> "" Then
+            If Not TryParseLong(m_txtAmbIzdata.value, kolAmbIzdata) Then
+                MsgBox "Unesite ispravnu kolicinu izdate ambalaže!", vbExclamation, APP_NAME
+                m_txtAmbIzdata.SetFocus
+                Exit Sub
+            End If
+        End If
+    End If
+
     If kolAmb > 0 And cmbTipAmbalaze.value = "" Then
         MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        cmbTipAmbalaze.SetFocus
+        Exit Sub
+    End If
+
+    If kolAmbIzdata > 0 And cmbTipAmbalaze.value = "" Then
+        MsgBox "Izaberite tip ambalaže (za izdatu ambalažu)!", vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
@@ -610,7 +729,8 @@ Private Sub btnUnos_Click()
         brojZbirne:=Trim$(txtBrojZbirne.value), _
         hasKlasaII:=chkDveKlase.value, _
         kolicinaII:=kolicinaII, _
-        cenaII:=cenaII)
+        cenaII:=cenaII, _
+        kolAmbIzdata:=kolAmbIzdata)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otkupa. Promene su vracene.", vbCritical, APP_NAME
@@ -654,6 +774,7 @@ Private Sub ClearOtkupFields()
     txtKolicina.value = ""
     txtCena.value = ""
     txtKolAmbalaze.value = ""
+    If Not m_txtAmbIzdata Is Nothing Then m_txtAmbIzdata.value = ""
     txtNovac.value = "0"
     txtPrimalac.value = ""
     cmbParcela.Clear

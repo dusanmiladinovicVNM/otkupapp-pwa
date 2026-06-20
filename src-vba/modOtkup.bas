@@ -116,7 +116,8 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                                    ByVal brojZbirne As String, _
                                    Optional ByVal hasKlasaII As Boolean = False, _
                                    Optional ByVal kolicinaII As Double = 0, _
-                                   Optional ByVal cenaII As Double = 0) As String
+                                   Optional ByVal cenaII As Double = 0, _
+                                   Optional ByVal kolAmbIzdata As Long = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -147,6 +148,11 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
     If kolAmb < 0 Then
         Err.Raise vbObjectError + 1814, "SaveOtkupMulti_TX", _
                   "Kolicina ambalaze ne sme biti negativna."
+    End If
+
+    If kolAmbIzdata < 0 Then
+        Err.Raise vbObjectError + 1841, "SaveOtkupMulti_TX", _
+                  "Kolicina izdate ambalaze ne sme biti negativna."
     End If
 
     If novac < 0 Then
@@ -181,7 +187,8 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
         primalac:=primalac, _
         klasa:=KLASA_I, _
         parcelaID:=parcelaID, _
-        brojZbirne:=brojZbirne)
+        brojZbirne:=brojZbirne, _
+        kolAmbIzdata:=kolAmbIzdata)
 
     If resultI = "" Then
         Err.Raise vbObjectError + 1817, "SaveOtkupMulti_TX", _
@@ -329,7 +336,8 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                           ByVal primalac As String, _
                           Optional ByVal klasa As String = "I", _
                           Optional ByVal parcelaID As String = "", _
-                          Optional ByVal brojZbirne As String = "") As String
+                          Optional ByVal brojZbirne As String = "", _
+                          Optional ByVal kolAmbIzdata As Long = 0) As String
     On Error GoTo EH
 
     If Trim$(kooperantID) = "" Then
@@ -370,6 +378,16 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     If kolAmb > 0 And Trim$(tipAmb) = "" Then
         Err.Raise vbObjectError + 1827, "SaveOtkup", _
                   "Tip ambalaze je obavezan kada postoji ambalaza."
+    End If
+
+    If kolAmbIzdata < 0 Then
+        Err.Raise vbObjectError + 1831, "SaveOtkup", _
+                  "Kolicina izdate ambalaze ne sme biti negativna."
+    End If
+
+    If kolAmbIzdata > 0 And Trim$(tipAmb) = "" Then
+        Err.Raise vbObjectError + 1832, "SaveOtkup", _
+                  "Tip ambalaze je obavezan kada postoji izdata ambalaza."
     End If
     
     Call RequireValidOtkupClass(klasa, "SaveOtkup")
@@ -439,10 +457,21 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
         parcelaID _
     )
 
-    If AppendRow(TBL_OTKUP, rowData) <= 0 Then
+    Dim newRow As Long
+    newRow = AppendRow(TBL_OTKUP, rowData)
+    If newRow <= 0 Then
         Err.Raise vbObjectError + 1829, "SaveOtkup", _
                   "AppendRow fehlgeschlagen für tblOtkup."
     End If
+
+    ' Izdata ambalaza (OM->kooperant) -> upis u kolonu PO IMENU (kolona je na kraju
+    ' tblOtkup; pozicijski rowData se ne dira). Kolona postoji posle EnsureDoradeSchema.
+    If kolAmbIzdata > 0 Then
+        UpdateCell TBL_OTKUP, newRow, COL_OTK_KOL_AMB_IZDATA, kolAmbIzdata
+    End If
+
+    ' Vreme snimanja otkupa (Now()) -> upis po imenu (kolona na kraju tblOtkup).
+    UpdateCell TBL_OTKUP, newRow, COL_OTK_VREME_UNOSA, Now
 
     If kolAmb > 0 Then
         ' Kooperant predaje pune gajbe na OM -> DVOJNI upis (otkup nema vozaca na OM-strani):
@@ -454,6 +483,19 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
         TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", _
                       stanicaID, "Stanica", "", _
                       newID, DOK_TIP_OTKUP
+    End If
+
+    If kolAmbIzdata > 0 Then
+        ' OM izdaje prazne gajbe kooperantu (uz otkup) -> DVOJNI upis (bez vozaca):
+        '   1) Kooperant ULAZ (dobija prazne),
+        '   2) OM/Stanica IZLAZ (OM se razduzuje).
+        ' Isti DokumentID (otkupID) -> storno otkupa hvata i ovu nogu (modStorno).
+        TrackAmbalaza datum, tipAmb, kolAmbIzdata, "Ulaz", _
+                      kooperantID, "Kooperant", "", _
+                      newID, DOK_TIP_OM_IZLAZ_KOOP
+        TrackAmbalaza datum, tipAmb, kolAmbIzdata, "Izlaz", _
+                      stanicaID, "Stanica", "", _
+                      newID, DOK_TIP_OM_IZLAZ_KOOP
     End If
 
     SaveOtkup = newID

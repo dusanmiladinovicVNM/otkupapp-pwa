@@ -80,6 +80,8 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Prodavac (firma)", "SELLER_COUNTRY_CODE", "Drzava (kod, npr. RS)", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_ACCOUNT", "Tekuci racun", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_EMAIL", "Email", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_OBJEKAT_MESTO", "Objekat - lokacija/mesto", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_OBJEKAT_BR_REGISTRA", "Objekat - broj registra", "text"
 
     CfgAdd c, "Otkup / dokumenta", "OTKUP_KLAUZULA", "Klauzula (otkupni list)", "memo"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"

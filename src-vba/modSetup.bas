@@ -778,12 +778,22 @@ Public Sub EnsureDoradeSchema()
     SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
     SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
 
+    ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
+    EnsureColumnOnTable TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA
+    BackfillColumn      TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, "0"
+
+    ' Vreme snimanja otkupa (Now() pri upisu) -> za otkupni list.
+    EnsureColumnOnTable   TBL_OTKUP, COL_OTK_VREME_UNOSA
+    SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
+
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
            "- Aktivan: Kulture/Ambalaza/Palete (postojeci -> Aktivan)" & vbCrLf & _
            "- TipAmbalaze: tblKulture (podrazumevani po kulturi)" & vbCrLf & _
            "- JeHladnjaca: tblStanice (Da/Ne)" & vbCrLf & _
-           "- Decimalni format kolicine (0.00)", vbInformation, APP_NAME
+           "- Decimalni format kolicine (0.00)" & vbCrLf & _
+           "- KolAmbIzdata: tblOtkup (izdata ambalaza OM->kooperant)" & vbCrLf & _
+           "- VremeUnosa: tblOtkup (vreme snimanja otkupa)", vbInformation, APP_NAME
     Exit Sub
 
 EH:

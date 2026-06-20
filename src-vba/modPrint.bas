@@ -121,6 +121,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
 
     Dim iID As Long, iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long
     Dim iKoop As Long, iSt As Long, iBr As Long, iDat As Long, iTip As Long, iKolAmb As Long
+    Dim iKolAmbIzd As Long, iVreme As Long
     iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     iVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     iSo = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
@@ -133,9 +134,11 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     iDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     iTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
     iKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+    iKolAmbIzd = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA)
+    iVreme = GetColumnIndex(TBL_OTKUP, COL_OTK_VREME_UNOSA)
 
     Dim ids() As String: ids = Split(otkupIDs, " + ")
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 4)
+    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 6)
     Dim cnt As Long: cnt = 0
     Dim osnovica As Double: osnovica = 0
     ' Cena uneta u formi je BRUTO (vec sadrzi PDV nadoknadu). U otkupnom listu
@@ -143,7 +146,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
     Dim koopID As String, stID As String, brDok As String, datum As String
-    Dim tipAmb As String, kolAmb As Double
+    Dim tipAmb As String, kolAmb As Double, kolAmbIzd As Double
     Dim j As Long, r As Long
     For j = 0 To UBound(ids)
         Dim wantID As String: wantID = Trim$(ids(j))
@@ -153,16 +156,22 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     Dim kol As Double: kol = PrNz(d(r, iKol))
                     Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
                     Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
+                    Dim crateW As Double: crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
+                    Dim kolBruto As Double: kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
                     stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
                     stavke(cnt, 1) = CStr(d(r, iKl))
-                    stavke(cnt, 2) = kol
-                    stavke(cnt, 3) = cenNeto
-                    stavke(cnt, 4) = kol * cenNeto
+                    stavke(cnt, 2) = cenNeto        ' Cena bez PDV
+                    stavke(cnt, 3) = cenBruto       ' Cena s PDV
+                    stavke(cnt, 4) = kol            ' Kolicina neto
+                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto (neto + gajbice * tara)
+                    stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
                     osnovica = osnovica + kol * cenNeto
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
                         brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
+                        If iVreme > 0 Then If IsDate(d(r, iVreme)) Then datum = datum & "  Vreme: " & Format$(d(r, iVreme), "hh:nn")
                         tipAmb = CStr(d(r, iTip)): kolAmb = PrNz(d(r, iKolAmb))
+                        If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
                     End If
                     cnt = cnt + 1
                     Exit For
@@ -179,6 +188,18 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("addr") = Trim$(GetConfigValue("SELLER_STREET") & ", " & _
                 GetConfigValue("SELLER_POSTAL_CODE") & " " & GetConfigValue("SELLER_CITY"))
     h("acct") = GetConfigValue("SELLER_ACCOUNT")
+    Dim objMesto As String: objMesto = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_MESTO")))
+    Dim objReg As String: objReg = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_BR_REGISTRA")))
+    Dim objLine As String: objLine = ""
+    If Len(objMesto) > 0 Then objLine = "Objekat: " & objMesto
+    If Len(objReg) > 0 Then
+        If Len(objLine) > 0 Then
+            objLine = objLine & "    Reg. br: " & objReg
+        Else
+            objLine = "Objekat reg. br: " & objReg
+        End If
+    End If
+    h("objekat") = objLine
     h("brDok") = brDok
     h("datum") = datum
     h("stanica") = CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv"))
@@ -187,6 +208,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("bpg") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
     h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
     h("amb") = tipAmb & " x " & CStr(CLng(kolAmb))
+    h("ambIzdata") = tipAmb & " x " & CStr(CLng(kolAmbIzd))
     h("stopa") = stopa
     h("osnovica") = osnovica
     h("nadoknada") = osnovica * stopa / 100
@@ -205,12 +227,14 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ws.cells.Clear
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
-    ws.columns("A").ColumnWidth = 5
-    ws.columns("B").ColumnWidth = 22
-    ws.columns("C").ColumnWidth = 8
-    ws.columns("D").ColumnWidth = 15
-    ws.columns("E").ColumnWidth = 14
-    ws.columns("F").ColumnWidth = 16
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 6
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
     ' NAPOMENA: bez AutoFit - visine redova se postavljaju eksplicitno tako da
     ' svaki primerak zauzme tacno 1/3 A4 (99mm). AutoFit bi to ponistio.
 
@@ -238,7 +262,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
         .FooterMargin = 0
         .CenterHorizontally = True
         .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 6)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
@@ -271,16 +295,27 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
 
     ' --- zaglavlje prodavca (3 reda) ---
     Dim shTop As Long: shTop = rr
-    rr = DocSellerHeader(ws, rr, 6, 6)
+    rr = DocSellerHeader(ws, rr, 8, 8)
     ws.cells(shTop, 1).Font.Size = 11
     ws.rows(shTop).RowHeight = 15#
     ws.rows(shTop + 1).RowHeight = 12#
     ws.rows(shTop + 2).RowHeight = 12#
     usedPt = usedPt + 39#
 
+    ' --- objekat (lokacija + br registra), ispod reda sa PIB (samo ako je u configu) ---
+    If Len(CStr(h("objekat"))) > 0 Then
+        With ws.cells(rr, 1)
+            .value = CStr(h("objekat"))
+            .Font.Size = 9
+        End With
+        ws.rows(rr).RowHeight = 12#
+        usedPt = usedPt + 12#
+        rr = rr + 1
+    End If
+
     ' --- naslov (2 reda) ---
     Dim tbTop As Long: tbTop = rr
-    rr = DocTitleBlock(ws, rr, 6, "Otkup poljoprivrednih proizvoda", _
+    rr = DocTitleBlock(ws, rr, 8, "Otkup poljoprivrednih proizvoda", _
                        "OTKUPNI LIST  br. " & h("brDok"))
     ws.rows(tbTop).RowHeight = 12#
     ws.cells(tbTop + 1, 1).Font.Size = 14
@@ -321,18 +356,21 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 1).value = "Rb"
     ws.cells(rr, 2).value = "Proizvod"
     ws.cells(rr, 3).value = "Klasa"
-    ws.cells(rr, 4).value = "Kol. (kg)"
-    ws.cells(rr, 5).value = "Cena neto"
-    ws.cells(rr, 6).value = "Vrednost neto"
-    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
+    ws.cells(rr, 4).value = "Cena bez PDV"
+    ws.cells(rr, 5).value = "Cena s PDV"
+    ws.cells(rr, 6).value = "Kol. neto"
+    ws.cells(rr, 7).value = "Kol. bruto"
+    ws.cells(rr, 8).value = "Vrednost"
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
         .Font.Bold = True
-        .Font.Size = 9
+        .Font.Size = 8
         .Interior.Color = fillClr
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
+        .WrapText = True
     End With
-    ws.rows(rr).RowHeight = 14#
-    usedPt = usedPt + 14#
+    ws.rows(rr).RowHeight = 20#
+    usedPt = usedPt + 20#
     rr = rr + 1
     Dim k As Long
     For k = 0 To nStavke - 1
@@ -342,39 +380,42 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         ws.cells(rr, 4).value = stavke(k, 2)
         ws.cells(rr, 5).value = stavke(k, 3)
         ws.cells(rr, 6).value = stavke(k, 4)
+        ws.cells(rr, 7).value = stavke(k, 5)
+        ws.cells(rr, 8).value = stavke(k, 6)
         ws.cells(rr, 1).HorizontalAlignment = xlCenter
         ws.cells(rr, 3).HorizontalAlignment = xlCenter
         ws.rows(rr).RowHeight = 13#
         usedPt = usedPt + 13#
         rr = rr + 1
     Next k
-    With ws.Range(ws.cells(hdr, 1), ws.cells(rr - 1, 6)).Borders
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr - 1, 8)).Borders
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 6)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 8)).NumberFormat = "#,##0.00"
 
     ' --- ambalaza + rok isplate (levo) + obracun PDV nadoknade (desno, uokvireno) ---
     Dim ob As Long: ob = rr
-    DocLabelVal ws, ob, 1, "Ambalaza:", CStr(h("amb"))
-    DocLabelVal ws, ob + 1, 1, "Rok isplate:", CStr(h("rok"))
+    DocLabelVal ws, ob, 1, "Primljena ambalaza:", CStr(h("amb"))
+    DocLabelVal ws, ob + 1, 1, "Izdata ambalaza:", CStr(h("ambIzdata"))
+    DocLabelVal ws, ob + 2, 1, "Rok isplate:", CStr(h("rok"))
 
-    DocLabelVal ws, ob, 4, "Osnovica (bez PDV):", ""
-    ws.cells(ob, 6).value = h("osnovica")
-    DocLabelVal ws, ob + 1, 4, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
-    ws.cells(ob + 1, 6).value = h("nadoknada")
-    DocLabelVal ws, ob + 2, 4, "UKUPNO ZA ISPLATU:", ""
-    ws.cells(ob + 2, 6).value = h("ukupno")
-    With ws.Range(ws.cells(ob + 2, 4), ws.cells(ob + 2, 6))
+    DocLabelVal ws, ob, 5, "Osnovica (bez PDV):", ""
+    ws.cells(ob, 8).value = h("osnovica")
+    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
+    ws.cells(ob + 1, 8).value = h("nadoknada")
+    DocLabelVal ws, ob + 2, 5, "UKUPNO ZA ISPLATU:", ""
+    ws.cells(ob + 2, 8).value = h("ukupno")
+    With ws.Range(ws.cells(ob + 2, 5), ws.cells(ob + 2, 8))
         .Font.Bold = True
         .Interior.Color = fillClr
     End With
-    ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 6)).BorderAround Weight:=xlThin
-    With ws.Range(ws.cells(ob + 2, 4), ws.cells(ob + 2, 6)).Borders(xlEdgeTop)
+    ws.Range(ws.cells(ob, 5), ws.cells(ob + 2, 8)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(ob + 2, 5), ws.cells(ob + 2, 8)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    With ws.Range(ws.cells(ob, 6), ws.cells(ob + 2, 6))
+    With ws.Range(ws.cells(ob, 8), ws.cells(ob + 2, 8))
         .NumberFormat = "#,##0.00"
         .HorizontalAlignment = xlRight
     End With
@@ -385,7 +426,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     rr = ob + 3
 
     ' --- klauzula (obavezni element otkupnog bloka), sitan font ---
-    ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Merge
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
         .value = CStr(h("klauzula"))
         .Font.Size = 7
@@ -411,9 +452,9 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 1).value = "Potpis poljoprivrednika:  ____________"
     ws.cells(rr, 1).Font.Size = 9
     ws.cells(rr, 1).Font.Color = grayClr
-    ws.cells(rr, 4).value = "Potpis / pecat otkupljivaca:  ____________"
-    ws.cells(rr, 4).Font.Size = 9
-    ws.cells(rr, 4).Font.Color = grayClr
+    ws.cells(rr, 5).value = "Potpis / pecat otkupljivaca:  ____________"
+    ws.cells(rr, 5).Font.Size = 9
+    ws.cells(rr, 5).Font.Color = grayClr
     ws.rows(rr).RowHeight = 16#
     usedPt = usedPt + 16#
     rr = rr + 1
