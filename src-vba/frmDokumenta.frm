@@ -25,7 +25,7 @@ Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
 ' Runtime toggle (fraOMUlaz): smer ambalaze — Prijem na OM / Izdavanje kooperantu.
-Private m_tglIzdKoop As MSForms.ToggleButton
+Private m_tglIzdKoop As Object
 
 Private m_FocusableInputs As Collection
 
@@ -948,21 +948,49 @@ End Function
 ' Forma-koordinate (frame.Left/Top + pozicija kooperant-dd-a; frame caption je "").
 ' Ako pozicija smeta layout-u, podesi OMIZD_DY (razmak ispod kooperant-dd-a).
 Private Sub SetupOMIzdavanjeToggle()
-    Const OMIZD_DY As Single = 4
+    ' Podesi po potrebi ako pozicija ne odgovara layout-u:
+    Const OMIZD_DX As Single = 0     ' x-pomeraj u odnosu na kooperant-dd
+    Const OMIZD_DY As Single = 4     ' razmak ISPOD kooperant-dd-a
     On Error GoTo done
 
     If Not m_tglIzdKoop Is Nothing Then Exit Sub
 
-    Set m_tglIzdKoop = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
+    ' 1) Pokusaj kao CHILD OM-Ulaz frame-a (renderuje se UNUTAR frame-a).
+    Dim asChild As Boolean
+    On Error Resume Next
+    Set m_tglIzdKoop = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
+    On Error GoTo done
+    asChild = Not (m_tglIzdKoop Is Nothing)
+
+    ' 2) Fallback: dodaj na formu (uvek radi) i digni ZOrder na vrh (preko frame-a).
+    If Not asChild Then
+        Set m_tglIzdKoop = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
+    End If
+    If m_tglIzdKoop Is Nothing Then GoTo done
+
     With m_tglIzdKoop
         .caption = "Izdavanje kooperantu"
         .width = 150
         .Height = 20
-        .Left = fraOMUlaz.Left + cmbPrimalacOMUlaz.Left
-        .Top = fraOMUlaz.Top + cmbPrimalacOMUlaz.Top + cmbPrimalacOMUlaz.Height + OMIZD_DY
+        If asChild Then
+            ' frame-relativne koordinate (kontrola je dete frame-a)
+            .Left = cmbPrimalacOMUlaz.Left + OMIZD_DX
+            .Top = cmbPrimalacOMUlaz.Top + cmbPrimalacOMUlaz.Height + OMIZD_DY
+        Else
+            ' forma-koordinate (frame.Left/Top + pozicija kooperant-dd-a)
+            .Left = fraOMUlaz.Left + cmbPrimalacOMUlaz.Left + OMIZD_DX
+            .Top = fraOMUlaz.Top + cmbPrimalacOMUlaz.Top + cmbPrimalacOMUlaz.Height + OMIZD_DY
+        End If
         .WordWrap = False
+        .Visible = True
         .value = False
     End With
+
+    If Not asChild Then
+        On Error Resume Next
+        m_tglIzdKoop.ZOrder 0          ' na vrh, da se vidi preko frame-a
+        On Error GoTo done
+    End If
     Exit Sub
 done:
     LogErr "frmDokumenta.SetupOMIzdavanjeToggle"
