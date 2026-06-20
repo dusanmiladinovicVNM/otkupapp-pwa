@@ -184,6 +184,18 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("addr") = Trim$(GetConfigValue("SELLER_STREET") & ", " & _
                 GetConfigValue("SELLER_POSTAL_CODE") & " " & GetConfigValue("SELLER_CITY"))
     h("acct") = GetConfigValue("SELLER_ACCOUNT")
+    Dim objMesto As String: objMesto = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_MESTO")))
+    Dim objReg As String: objReg = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_BR_REGISTRA")))
+    Dim objLine As String: objLine = ""
+    If Len(objMesto) > 0 Then objLine = "Objekat: " & objMesto
+    If Len(objReg) > 0 Then
+        If Len(objLine) > 0 Then
+            objLine = objLine & "    Reg. br: " & objReg
+        Else
+            objLine = "Objekat reg. br: " & objReg
+        End If
+    End If
+    h("objekat") = objLine
     h("brDok") = brDok
     h("datum") = datum
     h("stanica") = CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv"))
@@ -283,6 +295,17 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.rows(shTop + 1).RowHeight = 12#
     ws.rows(shTop + 2).RowHeight = 12#
     usedPt = usedPt + 39#
+
+    ' --- objekat (lokacija + br registra), ispod reda sa PIB (samo ako je u configu) ---
+    If Len(CStr(h("objekat"))) > 0 Then
+        With ws.cells(rr, 1)
+            .value = CStr(h("objekat"))
+            .Font.Size = 9
+        End With
+        ws.rows(rr).RowHeight = 12#
+        usedPt = usedPt + 12#
+        rr = rr + 1
+    End If
 
     ' --- naslov (2 reda) ---
     Dim tbTop As Long: tbTop = rr
