@@ -91,6 +91,7 @@ Public Sub FillComboKooperantiByStanica(ByRef cmb As MSForms.ComboBox, ByVal sta
     colIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
     colPrezime = GetColumnIndex(TBL_KOOPERANTI, "Prezime")
     colStanica = GetColumnIndex(TBL_KOOPERANTI, "StanicaID")
+    Dim colAkt As Long: colAkt = GetColumnIndex(TBL_KOOPERANTI, "Aktivan")
 
     Dim names() As String, ids() As String
     ReDim names(1 To UBound(data, 1))
@@ -99,7 +100,12 @@ Public Sub FillComboKooperantiByStanica(ByRef cmb As MSForms.ComboBox, ByVal sta
 
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, colStanica)) = stanicaID Then
+        ' stanicaID = "" -> svi kooperanti (toggle KOOP_FILTER_BY_OM = OFF)
+        Dim aktOk As Boolean: aktOk = True
+        If colAkt > 0 Then
+            If StrComp(Trim$(CStr(data(i, colAkt))), STATUS_NEAKTIVAN, vbTextCompare) = 0 Then aktOk = False
+        End If
+        If (stanicaID = "" Or CStr(data(i, colStanica)) = stanicaID) And aktOk Then
             n = n + 1
             names(n) = Trim$(CStr(data(i, colIme)) & " " & CStr(data(i, colPrezime)))
             ids(n) = CStr(data(i, colID))

@@ -71,7 +71,7 @@ Private Sub UserForm_Activate()
         
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
-    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca")
+    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillComboDisplayID cmbKupac, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
     FillCmb cmbVozac, GetVozacDisplayList()
@@ -151,6 +151,13 @@ Private Sub UserForm_Activate()
     StyleFrameTitleLabel lblTitleIzlaz, "Izlaz Kupci  (Novac od kupca)"
     StyleFrameTitleLabel lblTitleStorno, "Storno"
     StyleFrameTitleLabel lblTitleZbirne, "Lista zbirnih"
+
+    ' Podrazumevana vrsta/sorta (Podesavanja) — samo ako nije vec izabrano,
+    ' da re-aktivacija ne pregazi tekuci izbor. Okida auto-cenu/auto-tip.
+    On Error Resume Next
+    If Trim$(cmbVrstaVoca.value) = "" Then ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
+    On Error GoTo 0
+
     Exit Sub
 
 EH:
@@ -331,18 +338,9 @@ Private Sub cmbOtkupnoMesto_Change()
     UpdateOMAvansSaldo
     RefreshBrojOtpSuggestion
 
-    ' MALINA: vozac == par-vozac otkupnog mesta (VozacID == StanicaID).
-    ' Auto-izbor da otkupac ne mora rucno da bira vozaca (radi i za Zbirnu/Prijemnicu
-    ' jer dele isti cmbVozac). Ako par-vozac ne postoji, cmbVozac ostaje nepromenjen.
-    If IsMalinaMode() Then
-        Dim viMal As Long
-        For viMal = 0 To cmbVozac.ListCount - 1
-            If ExtractIDFromDisplay(CStr(cmbVozac.List(viMal))) = stanicaID Then
-                cmbVozac.ListIndex = viMal
-                Exit For
-            End If
-        Next viMal
-    End If
+    ' MALINA: vozac == par-vozac OM (VozacID == StanicaID) -> auto-izbor (radi i za
+    ' Zbirnu/Prijemnicu jer dele isti cmbVozac). Ako par-vozac ne postoji, ostaje.
+    If IsMalinaMode() Then SelectComboByDisplayID cmbVozac, stanicaID
     
     Exit Sub
 
@@ -379,7 +377,7 @@ Private Sub cmbVrstaVoca_Change()
     cmbSortaVoca.Clear
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
-            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
+            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value, True)
     End If
     AutoFillCenaDok
 End Sub
@@ -410,6 +408,15 @@ Private Sub AutoFillCenaDok()
     If cII > 0 Then
         If chkDveKlaseOtp.value Then txtCenaKlIIOtp.value = Format$(cII, "0.######")
         If chkDveKlasePrij.value Then txtCenaKlIIPrij.value = Format$(cII, "0.######")
+    End If
+
+    ' #6 podrazumevani tip ambalaze iz kulture (otpremnica + zbirna + prijemnica)
+    Dim ta As String
+    ta = GetKulturaTipAmbalaze(vrsta, sorta)
+    If Len(ta) > 0 Then
+        cmbTipAmbOtp.value = ta
+        cmbTipAmbZbr.value = ta
+        cmbTipAmbPrij.value = ta
     End If
 End Sub
 
@@ -554,6 +561,12 @@ Private Sub btnUnosOtp_Click()
         End If
     End If
 
+    ' MALINA: otpremnica se snima sa PRAZNIM BrojZbirne da je AutoCreateZbirnaFrom-
+    ' Otpremnice pokupi (prikaz u formi je samo predlog; auto-zbirna dodeli
+    ' "S"+BrojOtpremnice). Van malina moda salje se vrednost iz polja.
+    Dim brZbrSave As String
+    If IsMalinaMode() Then brZbrSave = "" Else brZbrSave = txtBrojZbirneOtp.value
+
     ' Atomicni save kroz modDokumenta wrapper
     Dim result As String
 
@@ -562,7 +575,7 @@ Private Sub btnUnosOtp_Click()
         stanicaID:=stanicaID, _
         vozacID:=vozacID, _
         brojOtp:=txtBrojOtp.value, _
-        brojZbirne:=txtBrojZbirneOtp.value, _
+        brojZbirne:=brZbrSave, _
         vrsta:=cmbVrstaVoca.value, _
         sorta:=cmbSortaVoca.value, _
         kolicinaI:=kolicinaI, _
@@ -649,6 +662,18 @@ Private Sub RefreshBrojZbirneSuggestion()
     vozacID = ExtractIDFromDisplay(cmbVozac.value)
     If Len(vozacID) = 0 Then Exit Sub
 
+    ' MALINA: broj zbirne = "S" + broj otpremnice (deterministicki; identicno
+    ' onome sto AutoCreateZbirnaFromOtpremnice dodeli iz BrojOtpremnice). Prikazi
+    ' u OBE sekcije (Zbirna + Otpremnica) radi vidljivosti. Na snimanju otpremnice
+    ' se BrojZbirne i dalje salje PRAZNO (btnUnosOtp), da je auto-zbirna pokupi.
+    If IsMalinaMode() Then
+        Dim sMal As String
+        sMal = ApplyMirrorPrefix(vozacID, Trim$(txtBrojOtp.value))
+        txtBrojZbirne.value = sMal
+        txtBrojZbirneOtp.value = sMal
+        Exit Sub
+    End If
+
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
 
@@ -657,12 +682,7 @@ Private Sub RefreshBrojZbirneSuggestion()
 
     If Len(suggested) > 0 Then
         txtBrojZbirne.value = suggested
-        ' Sinhronizuj u OTP sekciji (postojeca txtBrojZbirne_AfterUpdate logika
-        ' na liniji 868 puca samo na manual edit; ovde radimo programatsko
-        ' setovanje, _AfterUpdate ne puca, pa eksplicitno sinhronizujemo).
-        ' MALINA: NE puni BrojZbirne u otpremnicu — mora ostati prazno da auto-zbirna
-        ' dodeli BrojZbirne = BrojOtpremnice (inace bi preskocila otpremnicu).
-        If Not IsMalinaMode() Then txtBrojZbirneOtp.value = suggested
+        txtBrojZbirneOtp.value = suggested
     End If
     Exit Sub
 
@@ -684,11 +704,12 @@ Private Sub LoadZbirneListbox()
     lstZbirne.BorderStyle = fmBorderStyleNone        ' <-- bez linije
 
     ' --- Kolone: jedan izvor istine za sirine (listbox + header labele) ---
-    Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single
-    wBroj = 70: wDat = 55: wVrsta = 50: wSorta = 75
+    ' Prva kolona suzena; dodata 5. kolona "Kg" (ukupna kolicina zbirne).
+    Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single, wKg As Single
+    wBroj = 55: wDat = 50: wVrsta = 45: wSorta = 58: wKg = 42
     lstZbirne.Clear
-    lstZbirne.ColumnCount = 4
-    lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta
+    lstZbirne.ColumnCount = 5
+    lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta & ";" & wKg
 
     ' Header: stil + caption (bold off da ne odudara od labela polja)
     StyleListHeaderLabel lblZbirneBrojZbirne
@@ -705,6 +726,19 @@ Private Sub LoadZbirneListbox()
     lblZbirneDatum.caption = "Datum"
     lblZbirneVrsta.caption = "Vrsta"
     lblZbirneSorta.caption = "Sorta"
+
+    ' "Kg" header: runtime labela (forma je nema u .frx), jednom, isti parent/stil.
+    Dim lblKg As MSForms.label
+    On Error Resume Next
+    Set lblKg = lblZbirneSorta.Parent.Controls("lblZbirneKg")
+    If lblKg Is Nothing Then _
+        Set lblKg = lblZbirneSorta.Parent.Controls.Add("Forms.Label.1", "lblZbirneKg", True)
+    On Error GoTo EH
+    If Not lblKg Is Nothing Then
+        StyleListHeaderLabel lblKg
+        lblKg.Font.Bold = False
+        lblKg.caption = "Kg"
+    End If
 
     ' --- Vertikalni raspored: naslov -> header -> lista, racunato iz naslova ---
     Const GAP_TITLE As Single = 8      ' naslov -> header
@@ -727,6 +761,8 @@ Private Sub LoadZbirneListbox()
     PlaceZbirneHeader lblZbirneVrsta, hx, wVrsta, hTop
     hx = hx + wVrsta
     PlaceZbirneHeader lblZbirneSorta, hx, wSorta, hTop
+    hx = hx + wSorta
+    If Not lblKg Is Nothing Then PlaceZbirneHeader lblKg, hx, wKg, hTop
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -734,12 +770,29 @@ Private Sub LoadZbirneListbox()
     data = ExcludeStornirano(data, TBL_ZBIRNA)
     If IsEmpty(data) Then Exit Sub
 
-    Dim cBroj As Long, cDat As Long, cVrsta As Long, cSorta As Long
+    Dim cBroj As Long, cDat As Long, cVrsta As Long, cSorta As Long, cKol As Long
     cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
     cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
     cVrsta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
     cSorta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
+    cKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
     If cBroj = 0 Then Exit Sub
+
+    ' Suma kg po BrojZbirne (jedna zbirna moze imati vise redova: Klasa I + II).
+    Dim kgByBroj As Object: Set kgByBroj = CreateObject("Scripting.Dictionary")
+    If cKol > 0 Then
+        Dim rr As Long
+        For rr = 1 To UBound(data, 1)
+            Dim bb As String: bb = Trim$(CStr(Nz(data(rr, cBroj), "")))
+            If bb <> "" Then
+                If kgByBroj.Exists(bb) Then
+                    kgByBroj(bb) = kgByBroj(bb) + CDbl(Nz(data(rr, cKol), 0))
+                Else
+                    kgByBroj.Add bb, CDbl(Nz(data(rr, cKol), 0))
+                End If
+            End If
+        Next rr
+    End If
 
     ' Reverse (najnovije dodate prvo), distinct po BrojZbirne, max 20.
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
@@ -759,6 +812,8 @@ Private Sub LoadZbirneListbox()
                 lstZbirne.List(lstZbirne.ListCount - 1, 1) = dStr
                 lstZbirne.List(lstZbirne.ListCount - 1, 2) = CStr(Nz(data(r, cVrsta), ""))
                 lstZbirne.List(lstZbirne.ListCount - 1, 3) = CStr(Nz(data(r, cSorta), ""))
+                If kgByBroj.Exists(broj) Then _
+                    lstZbirne.List(lstZbirne.ListCount - 1, 4) = Format$(kgByBroj(broj), "#,##0.##")
 
                 n = n + 1
                 If n >= 20 Then Exit For
@@ -1203,7 +1258,15 @@ Private Sub btnUnosZbr_Click()
     MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
 
     UpdateValidacija
-    
+
+    LoadZbirneListbox   ' osvezi listu zbirnih (nova zbirna se odmah vidi)
+
+    ' Ubrzanje: prebaci upravo snimljeni broj zbirne u Ulaz Kupci (Prijemnica),
+    ' da operater odmah moze da unese prijemnicu bez ponovnog kucanja/izbora.
+    ' (Isti obrazac kao lstZbirne_Click; pre RefreshBrojZbirneSuggestion koji menja txtBrojZbirne.)
+    txtBrojZbirnePrij.value = txtBrojZbirne.value
+    If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
+
     ' Predloži sledeci broj za istog vozaca/datum
     RefreshBrojZbirneSuggestion
     Exit Sub

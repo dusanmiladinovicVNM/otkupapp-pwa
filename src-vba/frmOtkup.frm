@@ -60,7 +60,7 @@ Private Sub UserForm_Initialize()
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
     ' ComboBoxen füllen
-    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca")
+    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillCmb cmbVozac, GetVozacDisplayList()
     FillCmb cmbTipAmbalaze, GetTipAmbalazeOptions()
@@ -80,6 +80,11 @@ Private Sub UserForm_Initialize()
     ' Opcioni panel "Otkupni blokovi" (na dugme; ne dira postojeci unos)
     On Error Resume Next
     AttachOtkupBlokPanel Me
+    On Error GoTo 0
+
+    ' Podrazumevana vrsta/sorta (Podesavanja) -> okida auto-cenu i auto-tip ambalaze.
+    On Error Resume Next
+    ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
     On Error GoTo 0
 End Sub
 
@@ -166,7 +171,7 @@ Private Sub cmbVrstaVoca_Change()
     cmbSortaVoca.Clear
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
-            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
+            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value, True)
     End If
     AutoFillCenaOtkup
 End Sub
@@ -175,8 +180,8 @@ Private Sub cmbSortaVoca_Change()
     AutoFillCenaOtkup
 End Sub
 
-' Auto-popunjavanje cene iz cenovnika (vazeca/poslednja cena po proizvodu).
-' Postavlja samo ako cenovnik ima cenu; rucni unos ostaje moguc.
+' Auto-popunjavanje cene (cenovnik) i tipa ambalaze (kultura) po proizvodu.
+' Postavlja samo ako postoji vrednost; rucni unos ostaje moguc.
 Private Sub AutoFillCenaOtkup()
     On Error Resume Next
 
@@ -194,6 +199,11 @@ Private Sub AutoFillCenaOtkup()
         cII = GetVazecaCena(vrsta, sorta, KLASA_II)
         If cII > 0 Then txtCenaKLII.value = Format$(cII, "0.######")
     End If
+
+    ' #6 podrazumevani tip ambalaze iz kulture
+    Dim ta As String
+    ta = GetKulturaTipAmbalaze(vrsta, sorta)
+    If Len(ta) > 0 Then cmbTipAmbalaze.value = ta
 End Sub
 
 Private Sub cmbOtkupnoMesto_Change()
@@ -245,8 +255,18 @@ Private Sub cmbOtkupnoMesto_Change()
         Exit Sub
     End If
 
-    FillComboKooperantiByStanica cmbKooperant, stanicaID
+    ' #4 toggle: ON -> kooperanti po OM; OFF -> svi kooperanti ("" = svi)
+    If KoopFilterByOM() Then
+        FillComboKooperantiByStanica cmbKooperant, stanicaID
+    Else
+        FillComboKooperantiByStanica cmbKooperant, ""
+    End If
     RefreshBrojDokumentaSuggestion
+
+    ' MALINA: vozac == par-vozac OM (VozacID == StanicaID) -> auto-izbor, da
+    ' otkupac ne mora rucno da bira vozaca. Popunjen vozac na otkupu omogucava i
+    ' auto-povezivanje u sledljivosti. Ako par-vozac ne postoji, ostaje prazno.
+    If IsMalinaMode() Then SelectComboByDisplayID cmbVozac, stanicaID
     Exit Sub
 
 EH:
@@ -603,6 +623,16 @@ Private Sub btnUnos_Click()
     ' upravo sacuvani blok. Best-effort: greska ne sme da obori potvrdu snimanja.
     On Error Resume Next
     OutputOtkupniList result
+    On Error GoTo 0
+
+    ' #3 Hladnjaca auto-lanac: ako je OM hladnjaca i toggle ON ->
+    ' auto otpremnica+zbirna+prijemnica iz otkupa. Best-effort (pre ClearOtkupFields,
+    ' dok combo-i jos drze vrednosti).
+    On Error Resume Next
+    AutoChainHladnjaca datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
+                       vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
+                       chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value), _
+                       result
     On Error GoTo 0
 
     ClearOtkupFields

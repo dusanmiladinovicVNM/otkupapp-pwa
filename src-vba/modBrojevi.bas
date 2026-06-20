@@ -83,6 +83,17 @@ Public Function SuggestNextBroj(ByVal kind As String, _
     End If
 
     SuggestNextBroj = FormatBroj(entityID, datum, nextSeq)
+
+    ' ZBR: mirror-stanica (VozacID==StanicaID) dobija "S" prefiks (S1/ddmmyy) da se
+    ' ne sudara sa realnim vozacem istog numerickog dela. Plus bump sekvence dok
+    ' predlozeni broj (string) ne bude slobodan u tblZbirna (mreza za legacy).
+    If UCase$(kind) = KIND_ZBR Then
+        SuggestNextBroj = ApplyMirrorPrefix(entityID, FormatBroj(entityID, datum, nextSeq))
+        Do While BrojZbirneExists(SuggestNextBroj)
+            nextSeq = nextSeq + 1
+            SuggestNextBroj = ApplyMirrorPrefix(entityID, FormatBroj(entityID, datum, nextSeq))
+        Loop
+    End If
     Exit Function
 
 EH:
@@ -228,6 +239,25 @@ Public Function FormatBroj(ByVal entityID As String, _
     End If
 End Function
 
+' Da li je ovaj "vozac" zapravo mirror stanice (VozacID == StanicaID)?
+' U malina modu par-vozac ima isti ID kao stanica (npr. "ST-00001").
+Public Function IsStanicaMirrorVozac(ByVal vozacID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(vozacID)) = 0 Then Exit Function
+    IsStanicaMirrorVozac = _
+        (Len(Trim$(Nz(LookupValue(TBL_STANICE, "StanicaID", vozacID, "StanicaID"), ""))) > 0)
+End Function
+
+' BrojZbirne za mirror-stanicu dobija "S" prefiks (S1/ddmmyy) da se NE sudara sa
+' realnim vozacem istog numerickog dela (ST-00001 i VOZ-00001 oba daju "1").
+' Realni vozaci ostaju bez prefiksa. Idempotentno (ne dodaje "S" dvaput).
+Public Function ApplyMirrorPrefix(ByVal vozacID As String, ByVal broj As String) As String
+    ApplyMirrorPrefix = broj
+    If Len(broj) = 0 Then Exit Function
+    If Left$(broj, 1) = "S" Then Exit Function
+    If IsStanicaMirrorVozac(vozacID) Then ApplyMirrorPrefix = "S" & broj
+End Function
+
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obriše tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()
@@ -284,6 +314,35 @@ Private Function MaxSeqFromTable(ByVal tblName As String, _
 EH:
     LogErr "MaxSeqFromTable", "tbl=" & tblName & " entity=" & entityID
     MaxSeqFromTable = 0
+End Function
+
+' True ako BrojZbirne (tacan string) vec postoji u tblZbirna (bilo koji vozac).
+' Koristi se da predlog (KIND_ZBR) ne ponudi vec zauzet broj kada se malina
+' zbirne (po StanicaID) i normalne zbirne (po VozacID) preklope u numerickom delu.
+Private Function BrojZbirneExists(ByVal broj As String) As Boolean
+    On Error GoTo EH
+
+    Dim b As String: b = Trim$(broj)
+    If Len(b) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim iBroj As Long
+    iBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "BrojZbirneExists")
+
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        If StrComp(Trim$(CStr(data(r, iBroj))), b, vbTextCompare) = 0 Then
+            BrojZbirneExists = True
+            Exit Function
+        End If
+    Next r
+    Exit Function
+
+EH:
+    LogErr "BrojZbirneExists", "broj=" & broj
 End Function
 
 Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _

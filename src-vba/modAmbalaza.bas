@@ -414,7 +414,7 @@ Public Function GetTipAmbalazeOptions() As Variant
     On Error GoTo Fallback
 
     Dim arr As Variant
-    arr = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP)
+    arr = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP, , , True)
 
     If IsArray(arr) Then
         If (UBound(arr) - LBound(arr) + 1) > 0 Then
@@ -425,5 +425,40 @@ Public Function GetTipAmbalazeOptions() As Variant
 
 Fallback:
     GetTipAmbalazeOptions = Array(AMB_12_1, AMB_6_1)
+End Function
+
+' Podrazumevani tip ambalaze za kulturu (tblKulture.TipAmbalaze).
+' Match po VrstaVoca (+ SortaVoca ako je data). Vraca "" ako nema.
+' Koristi se za auto-popunjavanje tipa ambalaze u frmOtkup/frmDokumenta.
+Public Function GetKulturaTipAmbalaze(ByVal vrsta As String, ByVal sorta As String) As String
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_KULTURE)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cV As Long, cS As Long, cT As Long
+    cV = GetColumnIndex(TBL_KULTURE, "VrstaVoca")
+    cS = GetColumnIndex(TBL_KULTURE, "SortaVoca")
+    cT = GetColumnIndex(TBL_KULTURE, COL_KUL_TIP_AMBALAZE)
+    If cV = 0 Or cT = 0 Then Exit Function
+
+    Dim i As Long, hit As String
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(Nz(data(i, cV))), Trim$(vrsta), vbTextCompare) = 0 Then
+            If Len(Trim$(sorta)) = 0 Or cS = 0 _
+               Or StrComp(Trim$(Nz(data(i, cS))), Trim$(sorta), vbTextCompare) = 0 Then
+                hit = Trim$(Nz(data(i, cT)))
+                If Len(hit) > 0 Then
+                    GetKulturaTipAmbalaze = hit
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+    Exit Function
+
+EH:
+    GetKulturaTipAmbalaze = ""
 End Function
 

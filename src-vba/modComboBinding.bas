@@ -39,6 +39,9 @@ Public Sub FillComboDisplayID(ByVal cmb As MSForms.ComboBox, _
     colDisplay = RequireColumnIndex(tableName, displayCol, "modComboBinding.FillComboDisplayID")
     colID = RequireColumnIndex(tableName, idCol, "modComboBinding.FillComboDisplayID")
 
+    Dim colAkt As Long
+    colAkt = GetColumnIndex(tableName, "Aktivan")   ' soft-delete filter (ako kolona postoji)
+
     Dim i As Long
     Dim displayText As String
     Dim idValue As String
@@ -47,7 +50,13 @@ Public Sub FillComboDisplayID(ByVal cmb As MSForms.ComboBox, _
         idValue = Trim$(NzToText(data(i, colID)))
         displayText = Trim$(NzToText(data(i, colDisplay)))
 
-        If idValue <> "" Then
+        Dim isInactive As Boolean
+        isInactive = False
+        If colAkt > 0 Then
+            If StrComp(Trim$(NzToText(data(i, colAkt))), STATUS_NEAKTIVAN, vbTextCompare) = 0 Then isInactive = True
+        End If
+
+        If idValue <> "" And Not isInactive Then
             cmb.AddItem displayText
             cmb.List(cmb.ListCount - 1, 1) = idValue
         End If
@@ -117,6 +126,31 @@ Public Function SetComboByID(ByVal cmb As MSForms.ComboBox, ByVal idValue As Str
 EH:
     LogErr "modComboBinding.SetComboByID"
     SetComboByID = False
+End Function
+
+' Selektuje stavku JEDNOKOLONSKOG "Naziv (ID)" combo-a ciji je izvuceni ID ==
+' idValue. Vraca True ako je nasao i selektovao; ako nije, combo ostaje
+' nepromenjen. Za 2-kolonske (bound) combo-e koristi SetComboByID.
+Public Function SelectComboByDisplayID(ByVal cmb As MSForms.ComboBox, _
+                                       ByVal idValue As String) As Boolean
+    On Error GoTo EH
+
+    Dim wanted As String
+    wanted = Trim$(idValue)
+    If wanted = "" Then Exit Function
+
+    Dim i As Long
+    For i = 0 To cmb.ListCount - 1
+        If ExtractIDFromDisplay(CStr(cmb.List(i))) = wanted Then
+            cmb.ListIndex = i
+            SelectComboByDisplayID = True
+            Exit Function
+        End If
+    Next i
+    Exit Function
+
+EH:
+    LogErr "modComboBinding.SelectComboByDisplayID"
 End Function
 
 Public Function ExtractIDFromDisplaySafe(ByVal displayText As String) As String
