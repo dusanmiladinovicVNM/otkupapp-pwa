@@ -45,26 +45,30 @@ End Function
 ' ============================================================
 ' Vozac-perspektiva smera ambalaze.
 '
-' Smer u ledgeru je relativan na ENTITET (Kooperant / Stanica / Kupac).
-' Za vozaca (transportera) Kupac je ODREDISTE: ono sto je "Izlaz" iz
-' Kupca (predaja kupcu) za vozaca je RAZDUZENJE, a "Ulaz" (vracena
-' ambalaza) je ZADUZENJE. Stanica / Kooperant su IZVOR i ostaju
-' nepromenjeni. Tako kompletna ruta otpremnica -> prijemnica istog
-' vozaca daje saldo 0 (uzeo pa predao), umesto duplog "Izlaz".
+' Vozac je "pokretni magacin": OTPREMNICA ga PUNI (gajbice ulaze u
+' kamion) pa je za vozaca ULAZ, a PRIJEMNICA ga PRAZNI (gajbice izlaze
+' kupcu) pa je za vozaca IZLAZ. U ledgeru je Smer relativan na ENTITET:
+'   - IZVOR (Stanica): "Izlaz" iz stanice = ULAZ u vozaca  -> invertuj.
+'   - ODREDISTE (Kupac): "Izlaz" kupcu   = IZLAZ iz vozaca -> ostavi.
+' Tako kompletna ruta otpremnica -> prijemnica daje saldo 0, a samo
+' otpremnica (jos nije predato) pozitivan saldo = gajbice kod vozaca.
 '
-' Koristi se SAMO za vozacki saldo/izvestaj; entitetski saldo
-' (Kooperant / Stanica / Kupac) i dalje koristi sirovi Smer.
+' (Otkup / Kooperant se ionako izuzima iz vozackog salda.)
+' Koristi se SAMO za vozacki saldo/izvestaj; entitetski saldo koristi
+' sirovi Smer.
 ' ============================================================
 Public Function VozacAmbEffectiveSmer(ByVal smer As String, _
                                       ByVal entitetTip As String) As String
     If Trim$(entitetTip) = "Kupac" Then
+        ' Odrediste: kupcev Smer = vozacev Smer (Izlaz kupcu prazni vozaca).
+        VozacAmbEffectiveSmer = smer
+    Else
+        ' Izvor (Stanica): invertuj (Izlaz iz stanice puni vozaca -> Ulaz).
         Select Case Trim$(smer)
             Case AMB_SMER_IZLAZ: VozacAmbEffectiveSmer = AMB_SMER_ULAZ
             Case AMB_SMER_ULAZ:  VozacAmbEffectiveSmer = AMB_SMER_IZLAZ
             Case Else:           VozacAmbEffectiveSmer = smer
         End Select
-    Else
-        VozacAmbEffectiveSmer = smer
     End If
 End Function
 
@@ -392,8 +396,8 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
             Dim vals As Variant
             vals = dict(key)
 
-            ' Vozac je transporter: Kupac-strana (prijemnica) se invertuje
-            ' da se kompletna ruta otpremnica -> prijemnica netira na 0.
+            ' Vozac-perspektiva: otpremnica puni vozaca (Ulaz), prijemnica
+            ' prazni (Izlaz); izvor (Stanica) se invertuje. Ruta se netira na 0.
             Dim effSmer As String
             effSmer = VozacAmbEffectiveSmer(AmbText(data(i, colSmer)), AmbText(data(i, colEntTip)))
 

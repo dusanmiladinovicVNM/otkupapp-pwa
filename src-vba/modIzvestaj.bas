@@ -1371,8 +1371,8 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
     colEntitet = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza")
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza")
     
-    ' Vozac je transporter: za njegov saldo Kupac-strana (prijemnica) se
-    ' invertuje da kompletna ruta otpremnica -> prijemnica da saldo 0.
+    ' Vozac-perspektiva: otpremnica puni vozaca (Ulaz), prijemnica prazni
+    ' (Izlaz) -> izvor (Stanica) se invertuje; kompletna ruta daje saldo 0.
     ' Entitetski izvestaji (OM / Kupac) koriste sirovi Smer (isVozac = False).
     Dim isVozac As Boolean
     isVozac = (entitetTip = "Vozac")
