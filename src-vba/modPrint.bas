@@ -160,7 +160,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     stavke(cnt, 1) = CStr(d(r, iKl))
                     stavke(cnt, 2) = kol
                     stavke(cnt, 3) = cenNeto
-                    stavke(cnt, 4) = kol * cenNeto
+                    stavke(cnt, 4) = cenBruto   ' Cena s PDV (bruto cena uneta u formi)
                     osnovica = osnovica + kol * cenNeto
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
@@ -329,7 +329,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 3).value = "Klasa"
     ws.cells(rr, 4).value = "Kol. (kg)"
     ws.cells(rr, 5).value = "Cena neto"
-    ws.cells(rr, 6).value = "Vrednost neto"
+    ws.cells(rr, 6).value = "Cena s PDV"
     With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
         .Font.Bold = True
         .Font.Size = 9
