@@ -69,6 +69,7 @@ Svako od ovih kretanja je **entitetski-relativno** (vidi §1).
 | **Otkup** (desktop) | `modOtkup.SaveOtkup` | `Kooperant` **Izlaz** + `Stanica` **Ulaz** | — | `Otkup` |
 | **Otkup** (PWA sync) | `modMasterSync.ImportRowToTblOtkup` | `Kooperant` **Izlaz** + `Stanica` **Ulaz** | — | `Otkup` |
 | **OM izdaje kooperantu** | `frmDokumenta.SaveOMUlaz_TX` (toggle „Izdavanje") | `Kooperant` **Ulaz** + `Stanica` **Izlaz** | — | `OM-Izlaz-Koop` |
+| **OM izdaje kooperantu (uz otkup)** | `modOtkup.SaveOtkup` (polje „Izdata ambalaza" u `frmOtkup`) | `Kooperant` **Ulaz** + `Stanica` **Izlaz** | — | `OM-Izlaz-Koop` |
 | **OM-Ulaz** (prijem na OM) | `frmDokumenta.SaveOMUlaz_TX` (default) | `Stanica` **Ulaz** | da | `OMUlaz` |
 
 **Zbirna** ne dira ambalažu (nema upisa).
@@ -188,6 +189,10 @@ OM-izdavanje), jer obe noge dele isti `DokumentID` + `DokumentTip`.
 
 > Poznata praznina (nasleđena): `OMUlaz` i `OM-Izlaz-Koop` nisu u storno comboboxu forme,
 > pa za njih trenutno nema storno-UI putanje (kao ni ranije za `OMUlaz`).
+>
+> Izuzetak: `OM-Izlaz-Koop` knjižen **uz otkup** (polje „Izdata ambalaza" u `frmOtkup`)
+> deli `DokumentID = otkupID`, pa ga `StornoOtkup` automatski stornira (dodatni
+> `StornoAmbalazaByDokument otkupID, DOK_TIP_OM_IZLAZ_KOOP`).
 
 ---
 

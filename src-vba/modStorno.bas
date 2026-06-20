@@ -72,6 +72,7 @@ Public Function StornoOtkup(ByVal otkupID As String) As Boolean
 
     MarkRowStornirano TBL_OTKUP, rowOtkup, SRC
     StornoAmbalazaByDokument otkupID, DOK_TIP_OTKUP
+    StornoAmbalazaByDokument otkupID, DOK_TIP_OM_IZLAZ_KOOP   ' izdata ambalaza (OM->kooperant) uz otkup
     ResetNovacOtkupLink otkupID
 
     StornoOtkup = True

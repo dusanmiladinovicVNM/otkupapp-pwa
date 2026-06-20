@@ -121,6 +121,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
 
     Dim iID As Long, iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long
     Dim iKoop As Long, iSt As Long, iBr As Long, iDat As Long, iTip As Long, iKolAmb As Long
+    Dim iKolAmbIzd As Long, iVreme As Long
     iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     iVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     iSo = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
@@ -133,6 +134,8 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     iDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     iTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
     iKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+    iKolAmbIzd = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA)
+    iVreme = GetColumnIndex(TBL_OTKUP, COL_OTK_VREME_UNOSA)
 
     Dim ids() As String: ids = Split(otkupIDs, " + ")
     Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 4)
@@ -143,7 +146,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
     Dim koopID As String, stID As String, brDok As String, datum As String
-    Dim tipAmb As String, kolAmb As Double
+    Dim tipAmb As String, kolAmb As Double, kolAmbIzd As Double
     Dim j As Long, r As Long
     For j = 0 To UBound(ids)
         Dim wantID As String: wantID = Trim$(ids(j))
@@ -162,7 +165,9 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
                         brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
+                        If iVreme > 0 Then If IsDate(d(r, iVreme)) Then datum = datum & "  (sn. " & Format$(d(r, iVreme), "hh:nn") & ")"
                         tipAmb = CStr(d(r, iTip)): kolAmb = PrNz(d(r, iKolAmb))
+                        If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
                     End If
                     cnt = cnt + 1
                     Exit For
@@ -187,6 +192,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("bpg") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
     h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
     h("amb") = tipAmb & " x " & CStr(CLng(kolAmb))
+    h("ambIzdata") = tipAmb & " x " & CStr(CLng(kolAmbIzd))
     h("stopa") = stopa
     h("osnovica") = osnovica
     h("nadoknada") = osnovica * stopa / 100
@@ -356,8 +362,9 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
 
     ' --- ambalaza + rok isplate (levo) + obracun PDV nadoknade (desno, uokvireno) ---
     Dim ob As Long: ob = rr
-    DocLabelVal ws, ob, 1, "Ambalaza:", CStr(h("amb"))
-    DocLabelVal ws, ob + 1, 1, "Rok isplate:", CStr(h("rok"))
+    DocLabelVal ws, ob, 1, "Primljena ambalaza:", CStr(h("amb"))
+    DocLabelVal ws, ob + 1, 1, "Izdata ambalaza:", CStr(h("ambIzdata"))
+    DocLabelVal ws, ob + 2, 1, "Rok isplate:", CStr(h("rok"))
 
     DocLabelVal ws, ob, 4, "Osnovica (bez PDV):", ""
     ws.cells(ob, 6).value = h("osnovica")

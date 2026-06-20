@@ -22,6 +22,10 @@ Option Explicit
 ' ============================================================
 Private mChromeRemoved As Boolean
 
+' Runtime polje "Izdata ambalaza" (OM izdaje prazne kooperantu uz otkup).
+' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
+Private m_txtAmbIzdata As MSForms.TextBox
+
 Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 End Sub
@@ -86,6 +90,43 @@ Private Sub UserForm_Initialize()
     On Error Resume Next
     ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
     On Error GoTo 0
+
+    ' Runtime polje "Izdata ambalaza" (ne dira .frx).
+    SetupAmbIzdataField
+End Sub
+
+' Kreira runtime Label+TextBox "Izdata ambalaza" ispod txtKolAmbalaze (presedan:
+' frmDokumenta.SetupOMIzdavanjeToggle). Ako pozicija smeta layout-u, podesi IZD_DY.
+Private Sub SetupAmbIzdataField()
+    Const IZD_DY As Single = 4
+    On Error GoTo done
+
+    If Not m_txtAmbIzdata Is Nothing Then Exit Sub
+
+    Dim lbl As MSForms.Label
+    Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)
+    With lbl
+        .caption = "Izdata ambalaza"
+        .Left = txtKolAmbalaze.Left
+        .Top = txtKolAmbalaze.Top + txtKolAmbalaze.Height + IZD_DY
+        .width = txtKolAmbalaze.width
+        .Height = 11
+        .Font.Size = 8
+    End With
+
+    Set m_txtAmbIzdata = Me.Controls.Add("Forms.TextBox.1", "txtAmbIzdataRT", True)
+    With m_txtAmbIzdata
+        .Left = txtKolAmbalaze.Left
+        .Top = lbl.Top + lbl.Height
+        .width = txtKolAmbalaze.width
+        .Height = txtKolAmbalaze.Height
+        .ControlTipText = "Ambalaza koju OM izdaje kooperantu (preuzima od OM)"
+    End With
+    StyleTextBox m_txtAmbIzdata
+    Exit Sub
+done:
+    LogErr "frmOtkup.SetupAmbIzdataField"
+    Set m_txtAmbIzdata = Nothing
 End Sub
 
 Private Sub ResetActionButtons()
@@ -510,8 +551,25 @@ Private Sub btnUnos_Click()
         End If
     End If
 
+    Dim kolAmbIzdata As Long
+    If Not m_txtAmbIzdata Is Nothing Then
+        If Trim$(m_txtAmbIzdata.value) <> "" Then
+            If Not TryParseLong(m_txtAmbIzdata.value, kolAmbIzdata) Then
+                MsgBox "Unesite ispravnu kolicinu izdate ambalaže!", vbExclamation, APP_NAME
+                m_txtAmbIzdata.SetFocus
+                Exit Sub
+            End If
+        End If
+    End If
+
     If kolAmb > 0 And cmbTipAmbalaze.value = "" Then
         MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        cmbTipAmbalaze.SetFocus
+        Exit Sub
+    End If
+
+    If kolAmbIzdata > 0 And cmbTipAmbalaze.value = "" Then
+        MsgBox "Izaberite tip ambalaže (za izdatu ambalažu)!", vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
@@ -610,7 +668,8 @@ Private Sub btnUnos_Click()
         brojZbirne:=Trim$(txtBrojZbirne.value), _
         hasKlasaII:=chkDveKlase.value, _
         kolicinaII:=kolicinaII, _
-        cenaII:=cenaII)
+        cenaII:=cenaII, _
+        kolAmbIzdata:=kolAmbIzdata)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otkupa. Promene su vracene.", vbCritical, APP_NAME
@@ -654,6 +713,7 @@ Private Sub ClearOtkupFields()
     txtKolicina.value = ""
     txtCena.value = ""
     txtKolAmbalaze.value = ""
+    If Not m_txtAmbIzdata Is Nothing Then m_txtAmbIzdata.value = ""
     txtNovac.value = "0"
     txtPrimalac.value = ""
     cmbParcela.Clear
