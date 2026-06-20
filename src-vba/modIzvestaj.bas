@@ -1363,11 +1363,17 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
     colEntitet = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza")
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza")
     
+    ' Vozac je transporter: za njegov saldo Kupac-strana (prijemnica) se
+    ' invertuje da kompletna ruta otpremnica -> prijemnica da saldo 0.
+    ' Entitetski izvestaji (OM / Kupac) koriste sirovi Smer (isVozac = False).
+    Dim isVozac As Boolean
+    isVozac = (entitetTip = "Vozac")
+
     If zbirni Then
-        ReportAmbalaza = ReportAmbalazeZbirni(filtered, colTip, colKol, colSmer)
+        ReportAmbalaza = ReportAmbalazeZbirni(filtered, colTip, colKol, colSmer, colEntTip, isVozac)
     Else
         ReportAmbalaza = ReportAmbalazePojedinacni(filtered, colDatum, colEntitet, colEntTip, _
-                                                    colTip, colDokID, colKol, colSmer)
+                                                    colTip, colDokID, colKol, colSmer, isVozac)
     End If
     Exit Function
 
@@ -1377,7 +1383,9 @@ End Function
 
 Private Function ReportAmbalazeZbirni(ByVal filtered As Variant, _
                                       ByVal colTip As Long, ByVal colKol As Long, _
-                                      ByVal colSmer As Long) As Variant
+                                      ByVal colSmer As Long, _
+                                      ByVal colEntTip As Long, _
+                                      ByVal isVozac As Boolean) As Variant
     
     Const SRC As String = "modIzvestaj.ReportAmbalazeZbirni"
     On Error GoTo EH
@@ -1394,7 +1402,10 @@ Private Function ReportAmbalazeZbirni(ByVal filtered As Variant, _
         vals = dict(key)
         Dim kol As Long: kol = 0
         If IsNumeric(filtered(i, colKol)) Then kol = CLng(filtered(i, colKol))
-        If CStr(filtered(i, colSmer)) = "Ulaz" Then
+        Dim effSmer As String
+        effSmer = CStr(filtered(i, colSmer))
+        If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, CStr(filtered(i, colEntTip)))
+        If effSmer = "Ulaz" Then
             vals(0) = vals(0) + kol
         Else
             vals(1) = vals(1) + kol
@@ -1433,7 +1444,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
                                             ByVal colDatum As Long, ByVal colEntitet As Long, _
                                             ByVal colEntTip As Long, ByVal colTip As Long, _
                                             ByVal colDokID As Long, ByVal colKol As Long, _
-                                            ByVal colSmer As Long) As Variant
+                                            ByVal colSmer As Long, ByVal isVozac As Boolean) As Variant
     
     Const SRC As String = "modIzvestaj.ReportAmbalazePojedinacni"
     On Error GoTo EH
@@ -1460,7 +1471,10 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         result(i, 3) = CStr(filtered(i, colTip))
         result(i, 4) = CStr(filtered(i, colDokID))
         
-        If CStr(filtered(i, colSmer)) = "Ulaz" Then
+        Dim effSmer As String
+        effSmer = CStr(filtered(i, colSmer))
+        If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, entTipVal)
+        If effSmer = "Ulaz" Then
             result(i, 5) = kol
             result(i, 6) = ""
             totalUlaz = totalUlaz + kol

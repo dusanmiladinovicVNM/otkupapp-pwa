@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.28  
-**Last Updated:** 2026-06-19  
-**Status:** Active changelog — v6.28 OtkupSablon one-third-A4 two-up print geometry (each primerak = 1/3 A4 for pre-perforated paper, 1:1 print)
+**Current Version:** v6.29  
+**Last Updated:** 2026-06-20  
+**Status:** Active changelog — v6.29 driver (`Vozac`) packaging saldo nets a complete otpremnica→prijemnica route to 0 (entity-relative `Smer` inverted on the `Kupac` side for the vozac perspective)
 
 ---
 
@@ -53,6 +53,7 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.29 | 2026-06-20 | Driver (`Vozac`) packaging balance fix: the ledger `Smer` is entity-relative, so the vozač saldo/report double-counted a complete otpremnica→prijemnica route (loaded N at the station + delivered N to the buyer → Saldo −2N, e.g. −200 for 100 gajbica). New `VozacAmbEffectiveSmer` inverts `Kupac`-side (destination) rows for the driver's perspective so a full route nets to 0; `Stanica`/`Kooperant` (source) rows and all entity reports are unchanged. Read-only `modAmbalaza`/`modIzvestaj` change. | Yes | read-only; no schema/data migration; re-import `modAmbalaza.bas` + `modIzvestaj.bas` |
 | v6.28 | 2026-06-19 | `OtkupSablon` otkupni-list print switched to a one-third-A4 two-up layout: each primerak (poljoprivrednik + otkupljivac) is exactly 1/3 A4 (99 mm) in the top two thirds, bottom third blank, for the client's pre-perforated paper; prints 1:1 (Zoom 100, margins 0, no fit-to-page) with explicit row heights + a filler row so the copy boundaries land on the 99/198 mm perforations. Content/obračun/klauzula unchanged. | Yes | presentation-only; no migration; re-import `modPrint`; run otkupni-list print gate; calibrate `OL_TOP_MARGIN_TRIM_PT` if the printer ignores a 0 top margin |
 | v6.27 | 2026-06-18 | Otkupni blokovi: optional `frmOtkup` panel for per-otpremnica blok entry — clicking an otpremnica pre-fills the existing otkup form (mesto/vrsta/sorta/vozač/broj zbirne/datum/cena), a single per-otpremnica price applies to all its blokovi, and the normal "Unos" auto-links the saved row(s) to the otpremnica via `OtkupBlok_AfterUnos` so remaining-quantity tracking updates without a manual Sledljivost auto-link. | Yes | no business-data migration; UI-only desktop add-on; re-import `modOtkupBlok`+`clsBlokUI`, add 2 guarded hook lines to `frmOtkup` (`AttachOtkupBlokPanel`, `OtkupBlok_AfterUnos`); opt-out via `OTKUP_BLOK_PANEL=NO` |
 | v6.26 | 2026-06-18 | Document print/presentation layer: shared `modDocStyle` house style for otkupni/paletni/preradni lists, otkupni-list legal block (PDV-nadoknada klauzula + rok isplate via `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE`), and paletni/preradni redesign (vrsta voca as subtitle, dropped redundant Vrsta column, layout-version auto-rebuild). | Yes | presentation-only; no business-data migration; re-import `modDocStyle`/`modConfig`/`modPrint`/`modPaletniList`; templates regenerate; run otkupni/paletni/preradni print gates |
@@ -103,6 +104,35 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.29 — 2026-06-20
+
+### Summary
+
+Fixed the driver (`Vozac`) packaging balance so a complete otpremnica→prijemnica route for the same vozač nets to **0** instead of showing a phantom double `Izlaz`. The ledger `Smer` is stored relative to the **entitet** (Kooperant / Stanica / Kupac); the vozač saldo/report previously summed that raw `Smer`, so a driver who loaded N crates at the station (otpremnica = `Izlaz` rel. Stanica) and delivered the same N to the buyer (prijemnica = `Izlaz` rel. Kupac) was debited 2×N (100 + 100 → Saldo −200). Surfaced via a real otkup-in-own-hladnjača case where the buyer is the firm itself and the "vozač" is the station. Read-only fix — no ledger writes, schema or data change.
+
+### Fixed
+
+- New canonical helper `modAmbalaza.VozacAmbEffectiveSmer(smer, entitetTip)`: for the driver's perspective it inverts `Kupac`-side rows (`Izlaz`↔`Ulaz`) — Kupac is the destination where the driver discharges (delivery) or re-loads (vraćena ambalaža) — while `Stanica`/`Kooperant` (source) rows keep the raw `Smer`. Invalid `Smer` still fails fast (helper returns it unchanged → caller raises).
+- `modAmbalaza.GetVozacAmbSaldo`: now reads `EntitetTip` and routes each row through `VozacAmbEffectiveSmer` before bucketing `Izlaz`/`Ulaz` (Saldo = `Izlaz − Ulaz`).
+- `modIzvestaj.ReportAmbalaza` (`Vozac` pojedinačni + zbirni): passes an `isVozac` flag into `ReportAmbalazePojedinacni`/`ReportAmbalazeZbirni`, which apply the same inversion. Entity reports (`OM`/`Kupac`) are unchanged — `isVozac = False` keeps the raw `Smer`.
+
+### Known Issues / Known Limitations
+
+- The inversion keys on `EntitetTip = "Kupac"` as "destination", which matches every current booking (prijemnica and kupci-otpremnica are the only `Kupac` rows). A future flow that books a `Kupac` row as a source would need the rule revisited.
+- Orthogonal modeling gap (not addressed here): an otkup that stays in the firm's own hladnjača still has no first-class internal-transfer flow, so it is recorded through a fictitious otpremnica+prijemnica leg.
+
+### Verification / Acceptance Gates
+
+- VBA is not compiled in this environment; verified statically (Sub/Function balance, single `Public VozacAmbEffectiveSmer`, call arity: `ReportAmbalazeZbirni` = 6, `ReportAmbalazePojedinacni` = 9, helper = 2). Existing smoke tests keep passing — `modIzvestajTests` (ReportAmbalaza Vozac) and `modBusinessFlowProTests` (`GetVozacAmbSaldo` → `Not IsEmpty`) assert presence, not the saldo value.
+- Final smoke test (user, in Excel): Izveštaj → Vozači → a vozač with one otpremnica + matching prijemnica for the same crates should show **Saldo 0** (an open/partial route still shows the real manjak).
+
+### Migration / Data Notes
+
+- Read-only computation change; no business-data or schema migration. Re-import `modAmbalaza.bas` and `modIzvestaj.bas`. Historical ledger rows are unaffected.
+
+Reference updated: Yes (Ambalaza ledger read/saldo rules).
 
 
 ## v6.28 — 2026-06-19

@@ -42,6 +42,32 @@ Private Function IsValidAmbSmer(ByVal smer As String) As Boolean
     End Select
 End Function
 
+' ============================================================
+' Vozac-perspektiva smera ambalaze.
+'
+' Smer u ledgeru je relativan na ENTITET (Kooperant / Stanica / Kupac).
+' Za vozaca (transportera) Kupac je ODREDISTE: ono sto je "Izlaz" iz
+' Kupca (predaja kupcu) za vozaca je RAZDUZENJE, a "Ulaz" (vracena
+' ambalaza) je ZADUZENJE. Stanica / Kooperant su IZVOR i ostaju
+' nepromenjeni. Tako kompletna ruta otpremnica -> prijemnica istog
+' vozaca daje saldo 0 (uzeo pa predao), umesto duplog "Izlaz".
+'
+' Koristi se SAMO za vozacki saldo/izvestaj; entitetski saldo
+' (Kooperant / Stanica / Kupac) i dalje koristi sirovi Smer.
+' ============================================================
+Public Function VozacAmbEffectiveSmer(ByVal smer As String, _
+                                      ByVal entitetTip As String) As String
+    If Trim$(entitetTip) = "Kupac" Then
+        Select Case Trim$(smer)
+            Case AMB_SMER_IZLAZ: VozacAmbEffectiveSmer = AMB_SMER_ULAZ
+            Case AMB_SMER_ULAZ:  VozacAmbEffectiveSmer = AMB_SMER_IZLAZ
+            Case Else:           VozacAmbEffectiveSmer = smer
+        End Select
+    Else
+        VozacAmbEffectiveSmer = smer
+    End If
+End Function
+
 Private Sub ValidateAmbalazaInput(ByVal tipAmb As String, _
                                   ByVal kolicina As Long, _
                                   ByVal smer As String, _
@@ -315,12 +341,14 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
     Dim colSmer As Long
     Dim colVozac As Long
     Dim colDatum As Long
+    Dim colEntTip As Long
 
     colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
     colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
     colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
     colVozac = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
     colDatum = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
 
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
@@ -357,7 +385,12 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
             Dim vals As Variant
             vals = dict(key)
 
-            Select Case AmbText(data(i, colSmer))
+            ' Vozac je transporter: Kupac-strana (prijemnica) se invertuje
+            ' da se kompletna ruta otpremnica -> prijemnica netira na 0.
+            Dim effSmer As String
+            effSmer = VozacAmbEffectiveSmer(AmbText(data(i, colSmer)), AmbText(data(i, colEntTip)))
+
+            Select Case effSmer
                 Case AMB_SMER_IZLAZ
                     vals(0) = CLng(vals(0)) + CLng(data(i, colKol))
 

@@ -1183,7 +1183,7 @@ Current write rules:
 Current read/saldo rules:
 
 - `GetAmbalazeStanje` treats `Ulaz` as `+Kolicina` and `Izlaz` as `-Kolicina`.
-- `GetVozacAmbSaldo` treats driver balance as all active movements with matching `VozacID`; there is no canonical `DokumentTip` filter.
+- `GetVozacAmbSaldo` treats driver balance as all active movements with matching `VozacID` (no `DokumentTip` filter). Direction is read from the **driver's** perspective: `Kupac`-side rows (prijemnica / kupci-otpremnica) are sign-inverted via `VozacAmbEffectiveSmer` so a complete otpremnica→prijemnica route nets to 0, while `Stanica`/`Kooperant` (source) rows keep the raw `Smer`. The same rule drives the `Vozac` packaging report (`ReportAmbalaza`); entity saldos (`Kooperant`/`Stanica`/`Kupac`) still use the raw `Smer`.
 - Open-ended date filters evaluate `datumOd` and `datumDo` independently.
 - Only non-stornirano rows participate in active saldo helpers.
 
