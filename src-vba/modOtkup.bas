@@ -118,7 +118,9 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                                    Optional ByVal kolicinaII As Double = 0, _
                                    Optional ByVal cenaII As Double = 0, _
                                    Optional ByVal kolAmbIzdata As Long = 0, _
-                                   Optional ByVal brutoKgI As Double = 0) As String
+                                   Optional ByVal brutoKgI As Double = 0, _
+                                   Optional ByVal kolAmbII As Long = 0, _
+                                   Optional ByVal brutoKgII As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -156,12 +158,17 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                   "Kolicina izdate ambalaze ne sme biti negativna."
     End If
 
+    If kolAmbII < 0 Then
+        Err.Raise vbObjectError + 1842, "SaveOtkupMulti_TX", _
+                  "Kolicina ambalaze (Klasa II) ne sme biti negativna."
+    End If
+
     If novac < 0 Then
         Err.Raise vbObjectError + 1815, "SaveOtkupMulti_TX", _
                   "Iznos novca ne sme biti negativan."
     End If
 
-    If kolAmb > 0 And Trim$(tipAmb) = "" Then
+    If (kolAmb > 0 Or kolAmbII > 0) And Trim$(tipAmb) = "" Then
         Err.Raise vbObjectError + 1816, "SaveOtkupMulti_TX", _
                   "Tip ambalaze je obavezan kada postoji ambalaza."
     End If
@@ -209,14 +216,15 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
             kolicina:=kolicinaII, _
             cena:=cenaII, _
             tipAmb:=tipAmb, _
-            kolAmb:=0, _
+            kolAmb:=kolAmbII, _
             vozacID:=vozacID, _
             brDok:=brDok, _
             novac:=0, _
             primalac:=primalac, _
             klasa:=KLASA_II, _
             parcelaID:=parcelaID, _
-            brojZbirne:=brojZbirne)
+            brojZbirne:=brojZbirne, _
+            brutoKg:=brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1818, "SaveOtkupMulti_TX", _

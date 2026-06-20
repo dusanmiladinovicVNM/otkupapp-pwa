@@ -77,7 +77,9 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
                               ByVal kolicinaII As Double, ByVal cenaII As Double, _
                               ByVal brDok As String, _
                               ByVal otkupIDs As String, _
-                              Optional ByVal brutoKgI As Double = 0)
+                              Optional ByVal brutoKgI As Double = 0, _
+                              Optional ByVal kolAmbII As Long = 0, _
+                              Optional ByVal brutoKgII As Double = 0)
     On Error GoTo EH
 
     If Not IsAutoPrijemnicaHladnjaca() Then Exit Sub
@@ -126,7 +128,7 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
         If UBound(parts) > LBound(parts) Then idII = Trim$(parts(LBound(parts) + 1))
     End If
 
-    ' Klasa I (ambalaza se broji samo ovde, da se ne duplira).
+    ' Klasa I (svoja kolicina ambalaze = kolAmb).
     Dim brPrij As String
     brPrij = NextBrojPrijemnice(datum)
     Dim otpID As String
@@ -139,17 +141,19 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
     ' Veza nazad u otkup red: OtpremnicaID + BrojZbirne + VozacID.
     LinkOtkupRedNaDokument idI, otpID, brZbr, vozacID
 
-    ' Klasa II (bez ambalaze; vec izlazna na Klasa I).
+    ' Klasa II: zasebne gajbe (kolAmbII) -> ide kroz ceo lanac kao Klasa I
+    ' (otpremnica/zbirna/prijemnica + paletizacija). Ranije se ambalaza vodila samo
+    ' na Klasi I; sada Klasa II ima svoju kolicinu ambalaze.
     If hasKlasaII And kolicinaII > 0 Then
         Dim brPrij2 As String
         brPrij2 = NextBrojPrijemnice(datum)
         Dim otpID2 As String
         otpID2 = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                                   kolicinaII, cenaII, tipAmb, 0, KLASA_II)
+                                   kolicinaII, cenaII, tipAmb, kolAmbII, KLASA_II)
         SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
-                      kolicinaII, tipAmb, 0, KLASA_II
+                      kolicinaII, tipAmb, kolAmbII, KLASA_II
         SavePrijemnica_TX datum, kupacID, vozacID, brPrij2, brZbr, vrsta, sorta, _
-                          kolicinaII, cenaII, tipAmb, 0, 0, KLASA_II
+                          kolicinaII, cenaII, tipAmb, kolAmbII, 0, KLASA_II, brutoKgII
         LinkOtkupRedNaDokument idII, otpID2, brZbr, vozacID
     End If
     Exit Sub

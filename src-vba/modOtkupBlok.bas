@@ -162,14 +162,24 @@ Public Function OtkupBlok_ConfirmUnos() As Boolean
     On Error GoTo EH
 
     ' Bruto unos: preostalo otpremnice je u NETO -> oduzmi taru ambalaze sa Klase I
-    ' da poredjenje bude nedvosmisleno (neto vs neto).
+    ' (i Klase II, ako postoji) da poredjenje bude nedvosmisleno (neto vs neto).
     If OtkupBrutoUnos() Then
         Dim ka As Long, tw As Double
+        Dim tip As String
         On Error Resume Next
+        tip = CStr(mForm.Controls("cmbTipAmbalaze").value)
         If TryParseLong(CStr(mForm.Controls("txtKolAmbalaze").value), ka) Then
-            If ka > 0 And Len(Trim$(CStr(mForm.Controls("cmbTipAmbalaze").value))) > 0 Then
-                tw = ka * GetTezinaGajbice(CStr(mForm.Controls("cmbTipAmbalaze").value))
+            If ka > 0 And Len(Trim$(tip)) > 0 Then
+                tw = ka * GetTezinaGajbice(tip)
                 If tw > 0 And tw < kol Then kol = kol - tw
+            End If
+        End If
+        ' Klasa II: zasebne gajbe (runtime polje txtKolAmbalazeIIRT).
+        Dim ka2 As Long, tw2 As Double
+        If k2 > 0 And TryParseLong(CStr(mForm.Controls("txtKolAmbalazeIIRT").value), ka2) Then
+            If ka2 > 0 And Len(Trim$(tip)) > 0 Then
+                tw2 = ka2 * GetTezinaGajbice(tip)
+                If tw2 > 0 And tw2 < k2 Then k2 = k2 - tw2
             End If
         End If
         On Error GoTo EH

@@ -176,11 +176,13 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     stavke(cnt, 5) = kolBruto       ' Kolicina bruto (neto + gajbice * tara)
                     stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
                     osnovica = osnovica + kol * cenNeto
+                    ' Primljena ambalaza = zbir gajbi po SVIM stavkama (Klasa I + II).
+                    kolAmb = kolAmb + PrNz(d(r, iKolAmb))
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
                         brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
                         If iVreme > 0 Then If IsDate(d(r, iVreme)) Then datum = datum & "  Vreme: " & Format$(d(r, iVreme), "hh:nn")
-                        tipAmb = CStr(d(r, iTip)): kolAmb = PrNz(d(r, iKolAmb))
+                        tipAmb = CStr(d(r, iTip))
                         If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
                     End If
                     cnt = cnt + 1

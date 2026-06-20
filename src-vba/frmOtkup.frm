@@ -26,6 +26,11 @@ Private mChromeRemoved As Boolean
 ' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
 Private m_txtAmbIzdata As MSForms.TextBox
 
+' Runtime polje "Kol. ambalaze (II)" — Klasa II je zaseban tblOtkup red sa svojom
+' KolAmbalaze; vidljivo samo kad je chkDveKlase ukljucen (CLAUDE.md: ne dira .frx).
+Private m_txtKolAmbalazeII As MSForms.TextBox
+Private m_lblKolAmbalazeII As MSForms.Label
+
 Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 End Sub
@@ -93,6 +98,10 @@ Private Sub UserForm_Initialize()
 
     ' Runtime polje "Izdata ambalaza" (ne dira .frx).
     SetupAmbIzdataField
+
+    ' Runtime polje "Kol. ambalaze (II)" za Klasu II (ne dira .frx; skriveno dok
+    ' chkDveKlase nije ukljucen).
+    SetupKolAmbalazeIIField
 End Sub
 
 ' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
@@ -164,6 +173,68 @@ done:
     Set m_txtAmbIzdata = Nothing
 End Sub
 
+' Kreira runtime polje "Kol. ambalaze (II)" za Klasu II (zaseban tblOtkup red sa
+' svojom KolAmbalaze). .frx se ne dira -> Controls.Add u runtime-u. Geometrija se
+' MERI iz postojecih Klasa II polja; tacan raspored proveriti u Excelu (forme se
+' renderuju samo tamo). Skriveno dok chkDveKlase nije ukljucen.
+Private Sub SetupKolAmbalazeIIField()
+    Const ROW_GAP As Single = 6
+    On Error GoTo done
+
+    If Not m_txtKolAmbalazeII Is Nothing Then Exit Sub
+
+    Dim dy As Single: dy = txtCenaKLII.Height + ROW_GAP
+
+    ' TextBox poravnat sa "Cena II", u redu ispod njega.
+    Set m_txtKolAmbalazeII = Me.Controls.Add("Forms.TextBox.1", "txtKolAmbalazeIIRT", True)
+    With m_txtKolAmbalazeII
+        .Left = txtCenaKLII.Left
+        .Top = txtCenaKLII.Top + dy
+        .width = txtCenaKLII.width
+        .Height = txtCenaKLII.Height
+        .ControlTipText = "Broj gajbi za Klasu II (zasebno od Klase I)"
+        .visible = False
+    End With
+    StyleTextBox m_txtKolAmbalazeII
+
+    On Error Resume Next
+    m_txtKolAmbalazeII.TabIndex = txtCenaKLII.TabIndex + 1
+    On Error GoTo done
+
+    ' Labela desno od polja, poravnata sa labelom Klase II ako postoji.
+    Dim refLbl As MSForms.Control: Set refLbl = RowLabelRightOf(txtCenaKLII)
+    Set m_lblKolAmbalazeII = Me.Controls.Add("Forms.Label.1", "lblKolAmbalazeIIRT", True)
+    With m_lblKolAmbalazeII
+        .caption = "Kol. ambalaze (II)"
+        .Top = m_txtKolAmbalazeII.Top + 2
+        .Height = 14
+        If Not refLbl Is Nothing Then
+            .Left = refLbl.Left
+            .width = refLbl.width
+            .Font.Size = refLbl.Font.Size
+        Else
+            .Left = txtCenaKLII.Left + txtCenaKLII.width + 6
+            .width = 120
+        End If
+        .visible = False
+    End With
+    Exit Sub
+done:
+    LogErr "frmOtkup.SetupKolAmbalazeIIField"
+    Set m_txtKolAmbalazeII = Nothing
+    Set m_lblKolAmbalazeII = Nothing
+End Sub
+
+' Prikazi/sakrij runtime polje + labelu za Klasu II ambalazu; pri skrivanju cisti.
+Private Sub ShowKolAmbalazeII(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_txtKolAmbalazeII Is Nothing Then
+        m_txtKolAmbalazeII.visible = bShow
+        If Not bShow Then m_txtKolAmbalazeII.value = ""
+    End If
+    If Not m_lblKolAmbalazeII Is Nothing Then m_lblKolAmbalazeII.visible = bShow
+End Sub
+
 ' Vraca Label u istom redu, najblizi DESNO od date kontrole (labela polja).
 ' Nothing ako nema razumnog kandidata (cuva od hvatanja udaljene desne tabele).
 Private Function RowLabelRightOf(ByVal anchor As MSForms.Control) As MSForms.Control
@@ -221,10 +292,12 @@ Private Sub chkDveKlase_Click()
         EnableField txtCenaKLII
         StyleTextBox txtKolicinaKLII
         StyleTextBox txtCenaKLII
+        ShowKolAmbalazeII True
         AutoFillCenaOtkup
     Else
         DisableField txtKolicinaKLII
         DisableField txtCenaKLII
+        ShowKolAmbalazeII False
         lblUkupnoKG.caption = ""
     End If
 End Sub
@@ -637,6 +710,17 @@ Private Sub btnUnos_Click()
         End If
     End If
 
+    Dim kolAmbII As Long
+    If Not m_txtKolAmbalazeII Is Nothing Then
+        If chkDveKlase.value And Trim$(m_txtKolAmbalazeII.value) <> "" Then
+            If Not TryParseLong(m_txtKolAmbalazeII.value, kolAmbII) Then
+                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                m_txtKolAmbalazeII.SetFocus
+                Exit Sub
+            End If
+        End If
+    End If
+
     Dim kolAmbIzdata As Long
     If Not m_txtAmbIzdata Is Nothing Then
         If Trim$(m_txtAmbIzdata.value) <> "" Then
@@ -654,9 +738,30 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
+    If kolAmbII > 0 And cmbTipAmbalaze.value = "" Then
+        MsgBox "Izaberite tip ambalaže (za II klasu)!", vbExclamation, APP_NAME
+        cmbTipAmbalaze.SetFocus
+        Exit Sub
+    End If
+
     If kolAmbIzdata > 0 And cmbTipAmbalaze.value = "" Then
         MsgBox "Izaberite tip ambalaže (za izdatu ambalažu)!", vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
+        Exit Sub
+    End If
+
+    ' #1 Bruto rezim: broj gajbi je OBAVEZAN (inace se bruto ne pretvara u neto, tj.
+    ' tezina gajbi bi se platila kao voce). Vazi za I i (ako je ukljucena) II klasu.
+    If OtkupBrutoUnos() And kolicinaI > 0 And kolAmb <= 0 Then
+        MsgBox "Bruto režim: unesite broj gajbi za I klasu " & _
+               "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
+        txtKolAmbalaze.SetFocus
+        Exit Sub
+    End If
+    If chkDveKlase.value And OtkupBrutoUnos() And kolicinaII > 0 And kolAmbII <= 0 Then
+        MsgBox "Bruto režim: unesite broj gajbi za II klasu " & _
+               "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
+        If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
         Exit Sub
     End If
 
@@ -683,6 +788,29 @@ Private Sub btnUnos_Click()
         End If
         brutoKgI = kolicinaI             ' zamrzni uneti bruto
         kolicinaI = kolicinaI - taraKg   ' u Kolicina ide neto
+    End If
+
+    ' BRUTO unos za Klasu II (zasebne gajbe -> zasebna tara). Isto kao Klasa I.
+    Dim brutoKgII As Double
+    If chkDveKlase.value And OtkupBrutoUnos() And kolAmbII > 0 Then
+        Dim taraKgII As Double
+        taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbalaze.value)
+        If taraKgII <= 0 Then
+            MsgBox "Tip ambalaže '" & cmbTipAmbalaze.value & "' nema unetu težinu gajbice " & _
+                   "(Matični podaci → Tip ambalaže)." & vbCrLf & _
+                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            cmbTipAmbalaze.SetFocus
+            Exit Sub
+        End If
+        If taraKgII >= kolicinaII Then
+            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veća ili " & _
+                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
+                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
+            Exit Sub
+        End If
+        brutoKgII = kolicinaII             ' zamrzni uneti bruto (II)
+        kolicinaII = kolicinaII - taraKgII ' u Kolicina (II) ide neto
     End If
 
     Dim novac As Double
@@ -781,7 +909,9 @@ Private Sub btnUnos_Click()
         kolicinaII:=kolicinaII, _
         cenaII:=cenaII, _
         kolAmbIzdata:=kolAmbIzdata, _
-        brutoKgI:=brutoKgI)
+        brutoKgI:=brutoKgI, _
+        kolAmbII:=kolAmbII, _
+        brutoKgII:=brutoKgII)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otkupa. Promene su vracene.", vbCritical, APP_NAME
@@ -803,7 +933,7 @@ Private Sub btnUnos_Click()
     AutoChainHladnjaca datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
                        vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
                        chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value), _
-                       result, brutoKgI
+                       result, brutoKgI, kolAmbII, brutoKgII
     On Error GoTo 0
 
     ClearOtkupFields
@@ -833,6 +963,7 @@ Private Sub ClearOtkupFields()
     chkDveKlase.value = False
     DisableField txtKolicinaKLII
     DisableField txtCenaKLII
+    ShowKolAmbalazeII False
     lblUkupnoKG.caption = ""
 
     txtKolicina.SetFocus
