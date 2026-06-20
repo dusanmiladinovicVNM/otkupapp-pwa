@@ -169,7 +169,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
                         brDok = CStr(d(r, iBr)): datum = Format$(d(r, iDat), "dd.mm.yyyy")
-                        If iVreme > 0 Then If IsDate(d(r, iVreme)) Then datum = datum & "  (sn. " & Format$(d(r, iVreme), "hh:nn") & ")"
+                        If iVreme > 0 Then If IsDate(d(r, iVreme)) Then datum = datum & "  Vreme: " & Format$(d(r, iVreme), "hh:nn")
                         tipAmb = CStr(d(r, iTip)): kolAmb = PrNz(d(r, iKolAmb))
                         If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
                     End If
