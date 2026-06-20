@@ -882,13 +882,22 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
 
     If kolAmb > 0 Then
         If izdavanjeKoop Then
-            ' OM IZDAJE prazne kooperantu -> Kooperant ULAZ (dobija prazne), BEZ vozaca.
+            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
+            '   1) Kooperant ULAZ (dobija prazne),
+            '   2) OM/Stanica IZLAZ (razduzenje OM za isti iznos).
             If Trim$(kooperantID) = "" Then
                 Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
                           "Izdavanje kooperantu: kooperant je obavezan."
             End If
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
+                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razduzenje."
+            End If
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", kooperantID, "Kooperant", _
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Izlaz", stanicaID, "Stanica", _
                           "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
         Else
             ' OM PRIMA ambalazu -> Stanica ULAZ (postojece ponasanje).
@@ -1096,7 +1105,7 @@ Private Sub btnUnosOMUlaz_Click()
             cmbPrimalacOMUlaz.SetFocus
             Exit Sub
         End If
-        kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+        kooperantID = GetComboID(cmbPrimalacOMUlaz)
         If kooperantID = "" Then
             MsgBox "Nije pronaden ID kooperanta.", vbExclamation, APP_NAME
             Exit Sub
@@ -1105,7 +1114,7 @@ Private Sub btnUnosOMUlaz_Click()
 
     If novac > 0 Then
         If cmbPrimalacOMUlaz.value <> "" Then
-            kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+            kooperantID = GetComboID(cmbPrimalacOMUlaz)
 
             If kooperantID = "" Then
                 MsgBox "Nije pronaden ID primaoca.", vbExclamation, APP_NAME
@@ -1205,7 +1214,7 @@ Private Sub cmbPrimalacOMUlaz_Change()
     End If
     
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+    kooperantID = GetComboID(cmbPrimalacOMUlaz)
     FillOpenOtkupi
 End Sub
 
@@ -2215,7 +2224,7 @@ Private Sub FillOpenOtkupi()
     If cmbPrimalacOMUlaz.value = "" Then Exit Sub
     
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+    kooperantID = GetComboID(cmbPrimalacOMUlaz)
     
     Dim otkupi As Variant
     otkupi = GetOpenOtkupi(kooperantID)
