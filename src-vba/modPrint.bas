@@ -522,7 +522,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     If IsEmpty(d) Then Exit Function
 
     Dim iID As Long, iDat As Long, iKup As Long, iVoz As Long, iBr As Long, iBrZbr As Long
-    Dim iVr As Long, iSo As Long, iKl As Long, iKol As Long, iTip As Long
+    Dim iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long, iTip As Long
     Dim iKolAmb As Long, iKolAmbV As Long
     iID = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     iDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
@@ -534,28 +534,33 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     iSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
     iKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
     iKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    iCe = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
     iTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
     iKolAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     iKolAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
 
     Dim ids() As String: ids = Split(prijemnicaIDs, " + ")
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 4)
+    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 5)
     Dim cnt As Long: cnt = 0
     Dim kupID As String, vozID As String, brPrij As String, brZbr As String
     Dim datum As String
-    Dim ukKg As Double, ukAmb As Double, ambV As Double
+    Dim ukKg As Double, ukVred As Double, ukAmb As Double, ambV As Double
     Dim j As Long, r As Long
     For j = 0 To UBound(ids)
         Dim wantID As String: wantID = Trim$(ids(j))
         If wantID <> "" Then
             For r = 1 To UBound(d, 1)
                 If CStr(d(r, iID)) = wantID Then
+                    Dim pkol As Double: pkol = PrNz(d(r, iKol))
+                    Dim pcen As Double: pcen = PrNz(d(r, iCe))
                     stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
                     stavke(cnt, 1) = CStr(d(r, iKl))
-                    stavke(cnt, 2) = PrNz(d(r, iKol))
-                    stavke(cnt, 3) = CStr(d(r, iTip))
-                    stavke(cnt, 4) = PrNz(d(r, iKolAmb))
-                    ukKg = ukKg + PrNz(d(r, iKol))
+                    stavke(cnt, 2) = pkol
+                    stavke(cnt, 3) = pcen
+                    stavke(cnt, 4) = CStr(d(r, iTip))
+                    stavke(cnt, 5) = PrNz(d(r, iKolAmb))
+                    ukKg = ukKg + pkol
+                    ukVred = ukVred + pkol * pcen
                     ukAmb = ukAmb + PrNz(d(r, iKolAmb))
                     If cnt = 0 Then
                         kupID = CStr(d(r, iKup)): vozID = CStr(d(r, iVoz))
@@ -590,14 +595,14 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
 
     ' --- zaglavlje firme + naslov ---
     Dim rr As Long: rr = 1
-    rr = DocSellerHeader(ws, rr, 6, 6)
+    rr = DocSellerHeader(ws, rr, 8, 8)
     rr = rr + 1
-    rr = DocTitleBlock(ws, rr, 6, "Prijem robe na hladnjacu", "PRIJEMNICA  br. " & brPrij)
+    rr = DocTitleBlock(ws, rr, 8, "Prijem robe na hladnjacu", "PRIJEMNICA  br. " & brPrij)
     rr = rr + 1
 
     ' --- podaci o prijemu ---
     DocLabelVal ws, rr, 1, "Datum:", datum
-    DocLabelVal ws, rr, 4, "Broj zbirne:", brZbr
+    DocLabelVal ws, rr, 5, "Broj zbirne:", brZbr
     rr = rr + 1
     DocLabelVal ws, rr, 1, "Kupac / hladnjaca:", kupNaziv
     rr = rr + 1
@@ -610,9 +615,11 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     ws.cells(rr, 2).value = "Proizvod"
     ws.cells(rr, 3).value = "Klasa"
     ws.cells(rr, 4).value = "Kol. (kg)"
-    ws.cells(rr, 5).value = "Tip amb."
-    ws.cells(rr, 6).value = "Br. gajbica"
-    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
+    ws.cells(rr, 5).value = "Cena"
+    ws.cells(rr, 6).value = "Vrednost"
+    ws.cells(rr, 7).value = "Tip amb."
+    ws.cells(rr, 8).value = "Br. gajbica"
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
         .Font.Bold = True
         .Font.Size = 9
         .Interior.Color = DocColHeaderFill()
@@ -627,7 +634,9 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
         ws.cells(rr, 3).value = stavke(k, 1)
         ws.cells(rr, 4).value = stavke(k, 2)
         ws.cells(rr, 5).value = stavke(k, 3)
-        ws.cells(rr, 6).value = stavke(k, 4)
+        ws.cells(rr, 6).value = CDbl(stavke(k, 2)) * CDbl(stavke(k, 3))
+        ws.cells(rr, 7).value = stavke(k, 4)
+        ws.cells(rr, 8).value = stavke(k, 5)
         ws.cells(rr, 1).HorizontalAlignment = xlCenter
         ws.cells(rr, 3).HorizontalAlignment = xlCenter
         rr = rr + 1
@@ -635,16 +644,17 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     ' --- ukupno red ---
     ws.cells(rr, 2).value = "UKUPNO"
     ws.cells(rr, 4).value = ukKg
-    ws.cells(rr, 6).value = ukAmb
-    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
+    ws.cells(rr, 6).value = ukVred
+    ws.cells(rr, 8).value = ukAmb
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
     End With
-    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, 6)).Borders
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, 8)).Borders
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr, 4)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr, 6)).NumberFormat = "#,##0.00"
     rr = rr + 2
 
     ' --- vracena ambalaza (ako je uneta) ---
@@ -659,8 +669,8 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     rr = rr + 2
     ws.cells(rr, 1).value = "Robu predao (vozac): ____________________"
     ws.cells(rr, 1).Font.Color = DocColGray()
-    ws.cells(rr, 4).value = "Robu primio: ____________________"
-    ws.cells(rr, 4).Font.Color = DocColGray()
+    ws.cells(rr, 5).value = "Robu primio: ____________________"
+    ws.cells(rr, 5).Font.Color = DocColGray()
     Dim lastRow As Long: lastRow = rr
 
     ' --- A4 portrait, sve kolone na jednu stranu po sirini ---
@@ -677,7 +687,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
         .TopMargin = Application.InchesToPoints(0.5)
         .BottomMargin = Application.InchesToPoints(0.5)
         .CenterHorizontally = True
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 6)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
@@ -700,12 +710,14 @@ Public Sub EnsurePrijemnicaSablon()
 
     Set ws = ThisWorkbook.Sheets.Add
     ws.name = "PrijemnicaSablon"
-    ws.columns("A").ColumnWidth = 6
-    ws.columns("B").ColumnWidth = 24
-    ws.columns("C").ColumnWidth = 8
-    ws.columns("D").ColumnWidth = 16
-    ws.columns("E").ColumnWidth = 14
-    ws.columns("F").ColumnWidth = 14
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 20
+    ws.columns("C").ColumnWidth = 7
+    ws.columns("D").ColumnWidth = 11
+    ws.columns("E").ColumnWidth = 11
+    ws.columns("F").ColumnWidth = 13
+    ws.columns("G").ColumnWidth = 12
+    ws.columns("H").ColumnWidth = 11
     Exit Sub
 EH:
     LogErr "modPrint.EnsurePrijemnicaSablon"
