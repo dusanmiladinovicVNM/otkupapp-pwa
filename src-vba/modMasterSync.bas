@@ -954,8 +954,12 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
             Dim kol As Double: kol = CDbl(Nz(data(r, cKol), 0))
             Dim amb As Long: amb = CLng(Nz(data(r, cKolAmb), 0))
 
+            ' Mirror-stanica (VozacID==StanicaID) -> zbirna nosi "S" prefiks
+            ' (S1/ddmmyy); otpremnica zadrzava svoj broj (BrojOtpremnice = 1/ddmmyy).
+            Dim brZbirne As String: brZbirne = ApplyMirrorPrefix(vozacID, brO)
+
             Dim zbrRes As String
-            zbrRes = SaveZbirna_TX(datum, vozacID, brO, kupacID, _
+            zbrRes = SaveZbirna_TX(datum, vozacID, brZbirne, kupacID, _
                         hladnjaca, "", vrsta, sorta, kol, tipAmb, amb, klasa)
 
             If Len(Trim$(zbrRes)) = 0 Then
@@ -964,9 +968,9 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
                     " Klasa=" & klasa
             End If
 
-            RequireUpdateCell TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, brO, SRC
+            RequireUpdateCell TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, brZbirne, SRC
             Dim otpID As String: otpID = Trim$(CStr(Nz(data(r, cId), "")))
-            If otpID <> "" Then otpMap(otpID) = brO
+            If otpID <> "" Then otpMap(otpID) = brZbirne
 
             created = created + 1
         End If
@@ -2786,10 +2790,10 @@ Private Function GetBrojZbirneForID(ByVal zbirnaID As String) As String
 End Function
 
 Private Function IsValidBrojZbirneFormat(ByVal s As String) As Boolean
-    ' Format: x/ddmmyy ili x/ddmmyy-N
+    ' Format: [S]x/ddmmyy ili [S]x/ddmmyy-N ("S" = mirror-stanica kao vozac).
     Dim re As Object
     Set re = CreateObject("VBScript.RegExp")
-    re.pattern = "^\d+/\d{6}(-\d+)?$"
+    re.pattern = "^S?\d+/\d{6}(-\d+)?$"
     re.Global = False
     IsValidBrojZbirneFormat = re.Test(s)
 End Function
@@ -2913,6 +2917,9 @@ Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date
     Else
         GenerateBrojZbirne = baza & "-" & seq
     End If
+
+    ' Mirror-stanica (VozacID==StanicaID) -> "S" prefiks (razdvaja od realnih vozaca).
+    GenerateBrojZbirne = ApplyMirrorPrefix(vozacID, GenerateBrojZbirne)
 End Function
 
 Private Function ValidateVOZSheetHeader(ByVal data As Variant, _

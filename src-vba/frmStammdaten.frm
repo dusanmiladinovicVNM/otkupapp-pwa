@@ -33,6 +33,9 @@ Private mChromeRemoved As Boolean
 
 Private mGeoClearConfirmPending As Boolean
 
+' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) — WithEvents omotac.
+Private m_softWrap As clsStmBtn
+
 Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
@@ -112,6 +115,7 @@ Private Sub UserForm_Activate()
     ' novi (vazeci) red. Zato se dugme "Izmeni" sakriva za Cenovnik.
     On Error Resume Next
     btnIzmeni.Visible = (Me.Tag <> "Cenovnik")
+    EnsureSoftDeleteButton
     On Error GoTo EH
 
     m_SelectedRow = 0
@@ -189,7 +193,8 @@ Private Sub SetupColumnHeaders()
             ShowHeader 6, "Kontakt Ime", True
             ShowHeader 7, "Kontakt Prezime", True
             ShowHeader 8, "Pin", True
-            
+            ShowHeader 9, "Hladnjača", True
+
         Case "Kupci"
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
@@ -237,14 +242,18 @@ Private Sub SetupColumnHeaders()
             ShowHeader 2, "Vrsta voca", True
             ShowHeader 3, "Sorta voca", True
             ShowHeader 4, "Gajbica/paleti", True
+            ShowHeader 5, "Aktivan", True
+            ShowHeader 6, "Tip amb.", True
 
         Case "TipAmbalaze"
             ShowHeader 1, "Tip ambalaze", True
             ShowHeader 2, "Tezina gajbice (kg)", True
+            ShowHeader 3, "Aktivan", True
 
         Case "TipPalete"
             ShowHeader 1, "Tip palete", True
             ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 3, "Aktivan", True
 
         Case "Cenovnik"
             ShowHeader 1, "ID", True
@@ -349,7 +358,8 @@ Private Sub SetupStanice()
     
     m_TableName = TBL_STANICE
 
-    ' Redosled mora pratiti tblStanice (pozicijski prikaz u listi):
+    ' Redosled mora pratiti tblStanice (pozicijski prikaz u listi).
+    ' Napomena: realna kol. 4 je "Kontakt" (telefon); JeHladnjaca je dodata kolona.
     m_Headers = Array( _
         "StanicaID", _
         "Naziv", _
@@ -358,7 +368,8 @@ Private Sub SetupStanice()
         "Aktivan", _
         "Ime", _
         "Prezime", _
-        "PIN" _
+        "PIN", _
+        "JeHladnjaca" _
     )
 
     m_FieldCount = 7
@@ -369,10 +380,17 @@ Private Sub SetupStanice()
     lblField4.caption = "Kontakt Ime": lblField4.Visible = True: txtField4.Visible = True
     lblField5.caption = "Kontakt Prezime": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "Pin": lblField6.Visible = True: txtField6.Visible = True
-    lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
+    lblField7.caption = "Hladnjača?": lblField7.Visible = True: txtField7.Visible = False
     lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
+
+    ' Hladnjaca flag (Da/Ne) — auto-lanac otpremnica+zbirna+prijemnica.
+    cmbField1.Visible = True
+    cmbField1.Clear
+    cmbField1.AddItem "Ne"
+    cmbField1.AddItem "Da"
+    AlignControlToRow cmbField1, txtField7
 End Sub
 
 Private Sub SetupKupci()
@@ -608,25 +626,41 @@ Private Sub SetupKulture()
     m_TableName = TBL_KULTURE
 
     ' Redosled mora pratiti tblKulture (pozicijski prikaz u listi):
+    ' KulturaID | VrstaVoca | SortaVoca | GajbicaPoPaleti | Aktivan | TipAmbalaze
     m_Headers = Array( _
         "KulturaID", _
         "VrstaVoca", _
         "SortaVoca", _
-        "GajbicaPoPaleti" _
+        "GajbicaPoPaleti", _
+        "Aktivan", _
+        "TipAmbalaze" _
     )
 
-    m_FieldCount = 3
+    m_FieldCount = 4
 
     lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Gajbica po paleti": lblField3.Visible = True: txtField3.Visible = True
-    lblField4.caption = "": lblField4.Visible = False: txtField4.Visible = False
+    lblField4.caption = "Tip ambalaze (podraz.)": lblField4.Visible = True: txtField4.Visible = False
     lblField5.caption = "": lblField5.Visible = False: txtField5.Visible = False
     lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
     lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
     lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
+
+    ' Tip ambalaze (podrazumevani za kulturu) — combo iz tblTipAmbalaze.
+    cmbField1.Visible = True
+    cmbField1.Clear
+    cmbField1.AddItem ""
+    Dim taOpt As Variant, ti As Long
+    taOpt = GetTipAmbalazeOptions()
+    If IsArray(taOpt) Then
+        For ti = LBound(taOpt) To UBound(taOpt)
+            cmbField1.AddItem CStr(taOpt(ti))
+        Next ti
+    End If
+    AlignControlToRow cmbField1, txtField4
 End Sub
 
 Private Sub SetupTipAmbalaze()
@@ -740,6 +774,93 @@ Private Sub AlignControlToRow(ByVal ctl As MSForms.Control, ByVal refCtl As MSFo
     ctl.Top = refCtl.Top
     ctl.width = refCtl.width
     ctl.Height = refCtl.Height
+End Sub
+
+' ============================================================
+' SOFT-DELETE (#1): runtime dugme "Deaktiviraj/Aktiviraj"
+' Vidljivo samo za tabele koje imaju kolonu Aktivan/Aktivna.
+' Klik flipuje status izabranog reda (ne brise ga).
+' ============================================================
+Private Function AktivanColName() As String
+    ' Vraca naziv kolone statusa ("Aktivan" ili "Aktivna") ili "" ako ne postoji.
+    On Error Resume Next
+    If GetColumnIndex(m_TableName, "Aktivan") > 0 Then
+        AktivanColName = "Aktivan"
+    ElseIf GetColumnIndex(m_TableName, "Aktivna") > 0 Then
+        AktivanColName = "Aktivna"
+    End If
+End Function
+
+Private Sub EnsureSoftDeleteButton()
+    On Error Resume Next
+
+    ' Napravi dugme jednom (runtime), desno od btnIzmeni.
+    If m_softWrap Is Nothing Then
+        Dim c As MSForms.CommandButton
+        Set c = Me.Controls.Add("Forms.CommandButton.1", "btnSoftDelete", True)
+        c.Left = btnIzmeni.Left + btnIzmeni.width + 8
+        c.Top = btnIzmeni.Top
+        c.width = btnIzmeni.width
+        c.Height = btnIzmeni.Height
+        StyleStornoButton c, "Deaktiviraj/Aktiviraj"
+
+        Set m_softWrap = New clsStmBtn
+        Set m_softWrap.btn = c
+    End If
+
+    ' Vidljivo samo gde ima status kolona (i nije Cenovnik/Podesavanja).
+    m_softWrap.btn.Visible = (Len(AktivanColName()) > 0)
+End Sub
+
+' Public — poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
+Public Sub OnSoftDeleteClick()
+    On Error GoTo EH
+
+    Dim colName As String
+    colName = AktivanColName()
+    If Len(colName) = 0 Then Exit Sub
+
+    If lstData.ListIndex >= 0 Then m_SelectedRow = GetMappedSelectedRow()
+    If m_SelectedRow = 0 Then
+        MsgBox "Izaberite stavku iz liste!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim data As Variant
+    data = GetTableData(m_TableName)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colIdx As Long
+    colIdx = GetColumnIndex(m_TableName, colName)
+
+    Dim cur As String, newVal As String
+    cur = Trim$(NzToText(data(m_SelectedRow, colIdx)))
+    If StrComp(cur, STATUS_NEAKTIVAN, vbTextCompare) = 0 Then
+        newVal = STATUS_AKTIVAN
+    Else
+        newVal = STATUS_NEAKTIVAN
+    End If
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot m_TableName
+    RequireUpdateCell m_TableName, m_SelectedRow, colName, newVal, "frmStammdaten.OnSoftDeleteClick"
+    tx.CommitTx
+    Set tx = Nothing
+
+    LoadList
+    ClearFields
+    m_SelectedRow = 0
+    MsgBox "Status promenjen u: " & newVal, vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogErr "frmStammdaten.OnSoftDeleteClick"
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    MsgBox "Greška pri promeni statusa: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.
@@ -1070,11 +1191,12 @@ Private Sub lstData_Click()
 
         Case "Stanice"
             txtField1.value = lstData.List(lstData.ListIndex, 1) ' Naziv
-            txtField2.value = lstData.List(lstData.ListIndex, 2) ' Mesto
-            txtField3.value = lstData.List(lstData.ListIndex, 3) ' Telefon
-            txtField4.value = lstData.List(lstData.ListIndex, 5) ' KontaktIme
-            txtField5.value = lstData.List(lstData.ListIndex, 6) ' KontaktPrezime
+            txtField2.value = lstData.List(lstData.ListIndex, 2) ' Mesto/Telefon (Kontakt)
+            txtField3.value = lstData.List(lstData.ListIndex, 3) ' Telefon (Kontakt)
+            txtField4.value = lstData.List(lstData.ListIndex, 5) ' Ime
+            txtField5.value = lstData.List(lstData.ListIndex, 6) ' Prezime
             txtField6.value = lstData.List(lstData.ListIndex, 7) ' Pin
+            SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 8) ' JeHladnjaca
 
         Case "Kupci"
             data = GetTableData(m_TableName)
@@ -1129,6 +1251,7 @@ Private Sub lstData_Click()
             txtField1.value = lstData.List(lstData.ListIndex, 1)   ' VrstaVoca
             txtField2.value = lstData.List(lstData.ListIndex, 2)   ' SortaVoca
             txtField3.value = lstData.List(lstData.ListIndex, 3)   ' GajbicaPoPaleti
+            SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 5)   ' TipAmbalaze (podraz.)
 
         Case "TipAmbalaze", "TipPalete"
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
@@ -1251,7 +1374,8 @@ Private Sub btnDodaj_Click()
                 STATUS_AKTIVAN, _
                 Trim$(txtField4.value), _
                 Trim$(txtField5.value), _
-                Trim$(txtField6.value) _
+                Trim$(txtField6.value), _
+                IIf(Trim$(cmbField1.value) = "", "Ne", Trim$(cmbField1.value)) _
             )
 
         Case "Kupci"
@@ -1447,21 +1571,24 @@ Private Sub btnDodaj_Click()
 
             newID = GetNextID(m_TableName, "KulturaID", "KUL-")
 
-            ' tblKulture: KulturaID | VrstaVoca | SortaVoca | GajbicaPoPaleti
-            ' (nema kolonu Aktivan). Gajbica ostaje prazna ako nije uneta.
-            Dim gajbicaVal As Variant
-            If Trim$(txtField3.value) = "" Then
-                gajbicaVal = ""
-            Else
-                gajbicaVal = gajbicaKul
-            End If
+            ' tblKulture: jezgro (ID/Vrsta/Sorta) pozicijski; Gajbica/Aktivan/
+            ' TipAmbalaze PO IMENU (dodate kolone na kraju, redosled nesiguran).
+            Dim newRowKul As Long
+            newRowKul = AppendRow(m_TableName, _
+                Array(newID, Trim$(txtField1.value), Trim$(txtField2.value)))
 
-            rowData = Array( _
-                newID, _
-                Trim$(txtField1.value), _
-                Trim$(txtField2.value), _
-                gajbicaVal _
-            )
+            If newRowKul > 0 Then
+                If Trim$(txtField3.value) <> "" Then _
+                    UpdateCell m_TableName, newRowKul, COL_KUL_GAJBICA_PALETA, gajbicaKul
+                UpdateCell m_TableName, newRowKul, "Aktivan", STATUS_AKTIVAN
+                UpdateCell m_TableName, newRowKul, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value)
+                MsgBox "Dodato: " & newID, vbInformation, APP_NAME
+                LoadList
+                ClearFields
+            Else
+                MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
+            End If
+            Exit Sub
 
         Case "TipAmbalaze"
             If Trim$(txtField1.value) = "" Then
@@ -1483,7 +1610,7 @@ Private Sub btnDodaj_Click()
             End If
 
             newID = Trim$(txtField1.value)   ' PK je sam naziv tipa
-            rowData = Array(Trim$(txtField1.value), tezinaAmb)
+            rowData = Array(Trim$(txtField1.value), tezinaAmb, STATUS_AKTIVAN)
 
         Case "TipPalete"
             If Trim$(txtField1.value) = "" Then
@@ -1505,7 +1632,7 @@ Private Sub btnDodaj_Click()
             End If
 
             newID = Trim$(txtField1.value)
-            rowData = Array(Trim$(txtField1.value), tezinaPal)
+            rowData = Array(Trim$(txtField1.value), tezinaPal, STATUS_AKTIVAN)
 
         Case "Cenovnik"
             ' Append-only: dodaje novi (vazeci) red preko modCenovnik.
@@ -1665,6 +1792,7 @@ Private Sub btnIzmeni_Click()
             UpdateFirstExistingCol SRC, Trim$(txtField4.value), "Ime", "KontaktIme"
             UpdateFirstExistingCol SRC, Trim$(txtField5.value), "Prezime", "KontaktPrezime"
             UpdateFirstExistingCol SRC, Trim$(txtField6.value), "PIN", "Pin"
+            UpdateFirstExistingCol SRC, Trim$(cmbField1.value), COL_STA_JE_HLADNJACA
 
             tx.CommitTx
 
@@ -1844,6 +1972,7 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "VrstaVoca", Trim$(txtField1.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "SortaVoca", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_GAJBICA_PALETA, gajbicaEdit, SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value), SRC
 
             tx.CommitTx
 

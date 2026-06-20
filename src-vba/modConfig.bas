@@ -429,6 +429,20 @@ Public Const CFG_KEY_MALINA_MODE As String = "MALINA_MODE"
 ' Default kupac (Hladnjaca) za auto-zbirnu u malina modu. KupacID iz tblKupci.
 Public Const CFG_MALINA_DEFAULT_KUPAC As String = "MALINA_DEFAULT_KUPAC"
 
+' --- Dorade: podesavanja (UI: Maticni podaci -> Podesavanja) ---
+' Default proizvod koji se auto-postavi pri otvaranju frmOtkup/frmDokumenta.
+Public Const CFG_DEFAULT_VRSTA As String = "DEFAULT_VRSTA_VOCA"
+Public Const CFG_DEFAULT_SORTA As String = "DEFAULT_SORTA_VOCA"
+' Filter kooperanata po otkupnom mestu u frmOtkup (default ON / prazno = ON).
+Public Const CFG_KOOP_FILTER_BY_OM As String = "KOOP_FILTER_BY_OM"
+' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
+Public Const CFG_AUTO_PRIJEMNICA_HLADNJACA As String = "AUTO_PRIJEMNICA_HLADNJACA"
+
+' --- tblKulture: podrazumevani tip ambalaze (auto-puni u otkupu/dokumentima) ---
+Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
+' --- tblStanice: flag hladnjaca (auto-lanac; kupac = MALINA_DEFAULT_KUPAC) ---
+Public Const COL_STA_JE_HLADNJACA As String = "JeHladnjaca"
+
 ' =========================
 ' Workflow states
 ' =========================
@@ -619,4 +633,28 @@ Public Function IsMalinaMode() As Boolean
         Case Else         ' "", "NO", "FALSE", "0" ili bilo sta drugo -> FALSE
             IsMalinaMode = False
     End Select
+End Function
+
+' Genericki bool config citac. Prazno/nepoznato -> defaultOn.
+Public Function ConfigFlag(ByVal key As String, ByVal defaultOn As Boolean) As Boolean
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(key)))
+    Select Case v
+        Case "YES", "TRUE", "1", "ON", "ENABLED", "DA"
+            ConfigFlag = True
+        Case "NO", "FALSE", "0", "OFF", "DISABLED", "NE"
+            ConfigFlag = False
+        Case Else
+            ConfigFlag = defaultOn
+    End Select
+End Function
+
+' Filter kooperanata po otkupnom mestu u frmOtkup (default ON).
+Public Function KoopFilterByOM() As Boolean
+    KoopFilterByOM = ConfigFlag(CFG_KOOP_FILTER_BY_OM, True)
+End Function
+
+' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
+Public Function IsAutoPrijemnicaHladnjaca() As Boolean
+    IsAutoPrijemnicaHladnjaca = ConfigFlag(CFG_AUTO_PRIJEMNICA_HLADNJACA, False)
 End Function

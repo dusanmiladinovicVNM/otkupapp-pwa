@@ -316,37 +316,48 @@ End Function
 
 Public Function GetLookupList(ByVal tblName As String, ByVal colName As String, _
                               Optional ByVal filterCol As String = "", _
-                              Optional ByVal filterVal As Variant) As Variant
-    ' Gibt eindeutige Werte einer Spalte als Array zurück (für ComboBox-Füllung)
+                              Optional ByVal filterVal As Variant, _
+                              Optional ByVal onlyActive As Boolean = False) As Variant
+    ' Gibt eindeutige Werte einer Spalte als Array zurück (für ComboBox-Füllung).
+    ' onlyActive: preskoci redove gde je Aktivan = "Neaktivan" (soft-delete).
     Dim data As Variant
     data = GetTableData(tblName)
     If IsEmpty(data) Then
         GetLookupList = Array()
         Exit Function
     End If
-    
-    Dim colIdx As Long, filterIdx As Long
+
+    Dim colIdx As Long, filterIdx As Long, aktIdx As Long
     colIdx = GetColumnIndex(tblName, colName)
     If filterCol <> "" Then filterIdx = GetColumnIndex(tblName, filterCol)
-    
+    If onlyActive Then aktIdx = GetColumnIndex(tblName, "Aktivan")
+
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
+
     Dim i As Long
     Dim val As Variant
     For i = 1 To UBound(data, 1)
-        val = data(i, colIdx)
-        If Not IsEmpty(val) And CStr(val) <> "" Then
-            If filterCol = "" Then
-                If Not dict.Exists(CStr(val)) Then dict.Add CStr(val), val
-            Else
-                If data(i, filterIdx) = filterVal Then
+        Dim skipRow As Boolean
+        skipRow = False
+        If aktIdx > 0 Then
+            If StrComp(Trim$(CStr(data(i, aktIdx))), STATUS_NEAKTIVAN, vbTextCompare) = 0 Then skipRow = True
+        End If
+
+        If Not skipRow Then
+            val = data(i, colIdx)
+            If Not IsEmpty(val) And CStr(val) <> "" Then
+                If filterCol = "" Then
                     If Not dict.Exists(CStr(val)) Then dict.Add CStr(val), val
+                Else
+                    If data(i, filterIdx) = filterVal Then
+                        If Not dict.Exists(CStr(val)) Then dict.Add CStr(val), val
+                    End If
                 End If
             End If
         End If
     Next i
-    
+
     GetLookupList = dict.keys
 End Function
 

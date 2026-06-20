@@ -88,9 +88,13 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta voća", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta voća", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "KOOP_FILTER_BY_OM", "Filtriraj kooperante po otkupnom mestu", "bool"
+    CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjača)", "bool"
 
     CfgAdd c, "Malina režim", "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
-    CfgAdd c, "Malina režim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac (KupacID, auto-zbirna)", "text"
+    CfgAdd c, "Malina režim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjača (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Alati / putanje", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text"
 
@@ -118,6 +122,18 @@ Private Sub CfgAdd(ByRef c As Collection, ByVal grp As String, ByVal key As Stri
                    ByVal lbl As String, ByVal typ As String)
     c.Add Array(grp, key, lbl, typ)
 End Sub
+
+' Helper: distinct vrednosti kolone kao "A;B;C" za dinamicki "list:" tip.
+' Reuse GetLookupList; prazno ako nema podataka.
+Private Function LookupCSV(ByVal tbl As String, ByVal col As String, _
+                           ByVal onlyActive As Boolean) As String
+    On Error Resume Next
+    Dim arr As Variant
+    arr = GetLookupList(tbl, col, "", , onlyActive)
+    If IsArray(arr) Then
+        If (UBound(arr) - LBound(arr) + 1) > 0 Then LookupCSV = Join(arr, ";")
+    End If
+End Function
 
 ' ============================================================
 ' PUBLIC — izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
@@ -432,4 +448,16 @@ Private Sub RemoveCtl(ByVal nm As String)
     On Error Resume Next
     mFrm.Controls.Remove nm
     On Error GoTo 0
+End Sub
+
+' Postavi podrazumevanu vrstu/sortu (iz config-a) na prosledjene combo-e.
+' Postavljanje cmbVrsta.Value okida _Change u formi (puni sortu + auto-cena/tip).
+Public Sub ApplyDefaultProizvod(ByVal cmbVrsta As Object, ByVal cmbSorta As Object)
+    On Error Resume Next
+    Dim v As String, s As String
+    v = Trim$(GetConfigValue(CFG_DEFAULT_VRSTA))
+    s = Trim$(GetConfigValue(CFG_DEFAULT_SORTA))
+    If Len(v) = 0 Then Exit Sub
+    cmbVrsta.value = v
+    If Len(s) > 0 Then cmbSorta.value = s
 End Sub
