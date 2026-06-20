@@ -138,7 +138,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     iVreme = GetColumnIndex(TBL_OTKUP, COL_OTK_VREME_UNOSA)
 
     Dim ids() As String: ids = Split(otkupIDs, " + ")
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 4)
+    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 6)
     Dim cnt As Long: cnt = 0
     Dim osnovica As Double: osnovica = 0
     ' Cena uneta u formi je BRUTO (vec sadrzi PDV nadoknadu). U otkupnom listu
@@ -156,11 +156,15 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     Dim kol As Double: kol = PrNz(d(r, iKol))
                     Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
                     Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
+                    Dim crateW As Double: crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
+                    Dim kolBruto As Double: kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
                     stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
                     stavke(cnt, 1) = CStr(d(r, iKl))
-                    stavke(cnt, 2) = kol
-                    stavke(cnt, 3) = cenNeto
-                    stavke(cnt, 4) = cenBruto   ' Cena s PDV (bruto cena uneta u formi)
+                    stavke(cnt, 2) = cenNeto        ' Cena bez PDV
+                    stavke(cnt, 3) = cenBruto       ' Cena s PDV
+                    stavke(cnt, 4) = kol            ' Kolicina neto
+                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto (neto + gajbice * tara)
+                    stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
                     osnovica = osnovica + kol * cenNeto
                     If koopID = "" Then
                         koopID = CStr(d(r, iKoop)): stID = CStr(d(r, iSt))
@@ -223,12 +227,14 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ws.cells.Clear
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
-    ws.columns("A").ColumnWidth = 5
-    ws.columns("B").ColumnWidth = 22
-    ws.columns("C").ColumnWidth = 8
-    ws.columns("D").ColumnWidth = 15
-    ws.columns("E").ColumnWidth = 14
-    ws.columns("F").ColumnWidth = 16
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 6
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
     ' NAPOMENA: bez AutoFit - visine redova se postavljaju eksplicitno tako da
     ' svaki primerak zauzme tacno 1/3 A4 (99mm). AutoFit bi to ponistio.
 
@@ -256,7 +262,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
         .FooterMargin = 0
         .CenterHorizontally = True
         .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 6)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
@@ -350,18 +356,21 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 1).value = "Rb"
     ws.cells(rr, 2).value = "Proizvod"
     ws.cells(rr, 3).value = "Klasa"
-    ws.cells(rr, 4).value = "Kol. (kg)"
-    ws.cells(rr, 5).value = "Cena neto"
-    ws.cells(rr, 6).value = "Cena s PDV"
-    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 6))
+    ws.cells(rr, 4).value = "Cena bez PDV"
+    ws.cells(rr, 5).value = "Cena s PDV"
+    ws.cells(rr, 6).value = "Kol. neto"
+    ws.cells(rr, 7).value = "Kol. bruto"
+    ws.cells(rr, 8).value = "Vrednost"
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
         .Font.Bold = True
-        .Font.Size = 9
+        .Font.Size = 8
         .Interior.Color = fillClr
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
+        .WrapText = True
     End With
-    ws.rows(rr).RowHeight = 14#
-    usedPt = usedPt + 14#
+    ws.rows(rr).RowHeight = 20#
+    usedPt = usedPt + 20#
     rr = rr + 1
     Dim k As Long
     For k = 0 To nStavke - 1
@@ -371,17 +380,19 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         ws.cells(rr, 4).value = stavke(k, 2)
         ws.cells(rr, 5).value = stavke(k, 3)
         ws.cells(rr, 6).value = stavke(k, 4)
+        ws.cells(rr, 7).value = stavke(k, 5)
+        ws.cells(rr, 8).value = stavke(k, 6)
         ws.cells(rr, 1).HorizontalAlignment = xlCenter
         ws.cells(rr, 3).HorizontalAlignment = xlCenter
         ws.rows(rr).RowHeight = 13#
         usedPt = usedPt + 13#
         rr = rr + 1
     Next k
-    With ws.Range(ws.cells(hdr, 1), ws.cells(rr - 1, 6)).Borders
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr - 1, 8)).Borders
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 6)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 8)).NumberFormat = "#,##0.00"
 
     ' --- ambalaza + rok isplate (levo) + obracun PDV nadoknade (desno, uokvireno) ---
     Dim ob As Long: ob = rr
