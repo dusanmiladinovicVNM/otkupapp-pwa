@@ -1532,6 +1532,10 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
+    ' Auto-stampa prijemnice po CFG_PRIJEMNICA_PRINT_MODE (default OFF = bez izlaza).
+    ' Best-effort: greska u izlazu se loguje, ne prekida tok (prijemnica je snimljena).
+    OutputPrijemnica result
+
     ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
     ' iskomitovanih tabela; prikaz uz potvrdu snimanja.
     Dim palStatus As String

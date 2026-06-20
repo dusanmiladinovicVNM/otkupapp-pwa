@@ -39,6 +39,13 @@ Public Function SuggestNextBroj(ByVal kind As String, _
 
     On Error GoTo EH
 
+    ' Toggle: kad je auto-generisanje brojeva iskljuceno (Podesavanja), forma ne
+    ' dobija predlog -> operater unosi svoj broj. Default ON (modConfig).
+    If Not IsAutoBrojDokumenta() Then
+        SuggestNextBroj = ""
+        Exit Function
+    End If
+
     If Len(Trim$(entityID)) = 0 Then
         SuggestNextBroj = ""
         Exit Function
