@@ -121,7 +121,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
 
     Dim iID As Long, iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long
     Dim iKoop As Long, iSt As Long, iBr As Long, iDat As Long, iTip As Long, iKolAmb As Long
-    Dim iKolAmbIzd As Long, iVreme As Long
+    Dim iKolAmbIzd As Long, iVreme As Long, iBruto As Long
     iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     iVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     iSo = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
@@ -136,6 +136,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     iKolAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
     iKolAmbIzd = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA)
     iVreme = GetColumnIndex(TBL_OTKUP, COL_OTK_VREME_UNOSA)
+    iBruto = GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO)
 
     Dim ids() As String: ids = Split(otkupIDs, " + ")
     Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 6)
@@ -156,8 +157,17 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                     Dim kol As Double: kol = PrNz(d(r, iKol))
                     Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
                     Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
-                    Dim crateW As Double: crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
-                    Dim kolBruto As Double: kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
+                    ' Bruto: zamrznut iz unosa (BrutoKg) ako postoji, inace izvedeno iz
+                    ' trenutne tare gajbice (fallback za stare/neto redove). Zamrznut bruto
+                    ' ostaje tacan i ako se tezina gajbice kasnije promeni u sifarniku.
+                    Dim storedBruto As Double: If iBruto > 0 Then storedBruto = PrNz(d(r, iBruto))
+                    Dim kolBruto As Double
+                    If storedBruto > 0 Then
+                        kolBruto = storedBruto
+                    Else
+                        Dim crateW As Double: crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
+                        kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
+                    End If
                     stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
                     stavke(cnt, 1) = CStr(d(r, iKl))
                     stavke(cnt, 2) = cenNeto        ' Cena bez PDV

@@ -896,7 +896,8 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
                                    ByVal sortaVoca As String, ByVal kolicina As Double, _
                                    ByVal cena As Double, ByVal tipAmb As String, _
                                    ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
-                                   Optional ByVal klasa As String = "I") As String
+                                   Optional ByVal klasa As String = "I", _
+                                   Optional ByVal brutoKg As Double = 0) As String
     Dim tx As New clsTransaction
 
     On Error GoTo EH
@@ -912,7 +913,7 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
     SavePrijemnica_TX = SavePrijemnica(datum, kupacID, vozacID, brojPrij, _
                                         brojZbirne, vrstaVoca, sortaVoca, _
                                         kolicina, cena, tipAmb, kolAmb, _
-                                        kolAmbVracena, klasa)
+                                        kolAmbVracena, klasa, brutoKg)
 
     If SavePrijemnica_TX = "" Then
         Err.Raise vbObjectError + 1011, "SavePrijemnica_TX", _
@@ -986,7 +987,8 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                                ByVal sortaVoca As String, ByVal kolicina As Double, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
-                               Optional ByVal klasa As String = "I") As String
+                               Optional ByVal klasa As String = "I", _
+                               Optional ByVal brutoKg As Double = 0) As String
     On Error GoTo EH
 
     Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
@@ -1015,6 +1017,10 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
         Err.Raise vbObjectError + 1014, "SavePrijemnica", _
                 "AppendRow fehlgeschlagen für tblPrijemnica."
     End If
+
+    ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
+    ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).
+    If brutoKg > 0 Then UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_BRUTO, brutoKg
 
     ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):
     ' 1. txt = pune gajbe koje hladnjaca PRIMA od zbirne -> Kupac ULAZ.

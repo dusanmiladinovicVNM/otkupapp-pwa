@@ -1028,7 +1028,9 @@ Private Function GetKapacitetPalete(ByVal vrstaVoca As String) As Long
     GetKapacitetPalete = n
 End Function
 
-Private Function GetTezinaGajbice(ByVal tipAmb As String) As Double
+' Tezina jedne gajbice (kg) iz sifarnika tblTipAmbalaze. Public: jedinstveni izvor
+' tare za paletni list, otkupni list i bruto->neto konverziju u frmOtkup/modOtkupBlok.
+Public Function GetTezinaGajbice(ByVal tipAmb As String) As Double
     GetTezinaGajbice = NzD(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
 End Function
 

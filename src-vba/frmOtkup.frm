@@ -237,8 +237,33 @@ Private Sub txtKolicina_Change()
     UpdateUkupnoKg
 End Sub
 
+' Zivi prikaz neto pri bruto-unosu reaguje i na promenu broja/tipa ambalaze.
+Private Sub txtKolAmbalaze_Change()
+    UpdateUkupnoKg
+End Sub
+
+Private Sub cmbTipAmbalaze_Change()
+    UpdateUkupnoKg
+End Sub
+
 Private Sub UpdateUkupnoKg()
     On Error GoTo EH
+
+    ' Bruto unos: prikazi NETO posle oduzimanja tare (informativno, pre snimanja).
+    If OtkupBrutoUnos() Then
+        Dim kb As Double, ka As Long
+        If Trim$(txtKolicina.value) <> "" Then TryParseDouble txtKolicina.value, kb
+        If Trim$(txtKolAmbalaze.value) <> "" Then TryParseLong txtKolAmbalaze.value, ka
+        If kb > 0 And ka > 0 And Trim$(cmbTipAmbalaze.value) <> "" Then
+            Dim tw As Double: tw = ka * GetTezinaGajbice(cmbTipAmbalaze.value)
+            If tw > 0 And tw < kb Then
+                lblUkupnoKG.caption = "Neto: " & Format$(kb - tw, "#,##0.00") & _
+                    " kg  (bruto " & Format$(kb, "#,##0.00") & " − amb " & _
+                    Format$(tw, "#,##0.00") & ")"
+                Exit Sub
+            End If
+        End If
+    End If
 
     If Not chkDveKlase.value Then
         lblUkupnoKG.caption = ""
@@ -635,6 +660,31 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
+    ' --- BRUTO unos (toggle OTKUP_BRUTO_UNOS): kupac unosi bruto (voce + ambalaza).
+    ' Oduzmi taru (kolAmb * tezina gajbice) -> u Kolicina ide NETO, bruto se zamrzava
+    ' u BrutoKg. Tara se vezuje za Klasu I (kolAmb se i inace odnosi na Klasu I). ---
+    Dim brutoKgI As Double
+    If OtkupBrutoUnos() And kolAmb > 0 Then
+        Dim taraKg As Double
+        taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbalaze.value)
+        If taraKg <= 0 Then
+            MsgBox "Tip ambalaže '" & cmbTipAmbalaze.value & "' nema unetu težinu gajbice " & _
+                   "(Matični podaci → Tip ambalaže)." & vbCrLf & _
+                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            cmbTipAmbalaze.SetFocus
+            Exit Sub
+        End If
+        If taraKg >= kolicinaI Then
+            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veća ili " & _
+                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            txtKolicina.SetFocus
+            Exit Sub
+        End If
+        brutoKgI = kolicinaI             ' zamrzni uneti bruto
+        kolicinaI = kolicinaI - taraKg   ' u Kolicina ide neto
+    End If
+
     Dim novac As Double
     If Trim$(txtNovac.value) <> "" Then
         If Not TryParseDouble(txtNovac.value, novac) Or novac < 0 Then
@@ -730,7 +780,8 @@ Private Sub btnUnos_Click()
         hasKlasaII:=chkDveKlase.value, _
         kolicinaII:=kolicinaII, _
         cenaII:=cenaII, _
-        kolAmbIzdata:=kolAmbIzdata)
+        kolAmbIzdata:=kolAmbIzdata, _
+        brutoKgI:=brutoKgI)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otkupa. Promene su vracene.", vbCritical, APP_NAME
@@ -752,7 +803,7 @@ Private Sub btnUnos_Click()
     AutoChainHladnjaca datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
                        vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
                        chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value), _
-                       result
+                       result, brutoKgI
     On Error GoTo 0
 
     ClearOtkupFields

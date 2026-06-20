@@ -76,7 +76,8 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
                               ByVal hasKlasaII As Boolean, _
                               ByVal kolicinaII As Double, ByVal cenaII As Double, _
                               ByVal brDok As String, _
-                              ByVal otkupIDs As String)
+                              ByVal otkupIDs As String, _
+                              Optional ByVal brutoKgI As Double = 0)
     On Error GoTo EH
 
     If Not IsAutoPrijemnicaHladnjaca() Then Exit Sub
@@ -134,7 +135,7 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
     SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
                   kolicinaI, tipAmb, kolAmb, KLASA_I
     SavePrijemnica_TX datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
-                      kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I
+                      kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I, brutoKgI
     ' Veza nazad u otkup red: OtpremnicaID + BrojZbirne + VozacID.
     LinkOtkupRedNaDokument idI, otpID, brZbr, vozacID
 

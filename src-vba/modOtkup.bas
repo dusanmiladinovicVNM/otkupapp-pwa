@@ -117,7 +117,8 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                                    Optional ByVal hasKlasaII As Boolean = False, _
                                    Optional ByVal kolicinaII As Double = 0, _
                                    Optional ByVal cenaII As Double = 0, _
-                                   Optional ByVal kolAmbIzdata As Long = 0) As String
+                                   Optional ByVal kolAmbIzdata As Long = 0, _
+                                   Optional ByVal brutoKgI As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -188,7 +189,8 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
         klasa:=KLASA_I, _
         parcelaID:=parcelaID, _
         brojZbirne:=brojZbirne, _
-        kolAmbIzdata:=kolAmbIzdata)
+        kolAmbIzdata:=kolAmbIzdata, _
+        brutoKg:=brutoKgI)
 
     If resultI = "" Then
         Err.Raise vbObjectError + 1817, "SaveOtkupMulti_TX", _
@@ -337,7 +339,8 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                           Optional ByVal klasa As String = "I", _
                           Optional ByVal parcelaID As String = "", _
                           Optional ByVal brojZbirne As String = "", _
-                          Optional ByVal kolAmbIzdata As Long = 0) As String
+                          Optional ByVal kolAmbIzdata As Long = 0, _
+                          Optional ByVal brutoKg As Double = 0) As String
     On Error GoTo EH
 
     If Trim$(kooperantID) = "" Then
@@ -472,6 +475,9 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
 
     ' Vreme snimanja otkupa (Now()) -> upis po imenu (kolona na kraju tblOtkup).
     UpdateCell TBL_OTKUP, newRow, COL_OTK_VREME_UNOSA, Now
+
+    ' Bruto tezina (kad je unet bruto pa oduzeta ambalaza) -> upis po imenu; prazno = neto.
+    If brutoKg > 0 Then UpdateCell TBL_OTKUP, newRow, COL_OTK_BRUTO, brutoKg
 
     If kolAmb > 0 Then
         ' Kooperant predaje pune gajbe na OM -> DVOJNI upis (otkup nema vozaca na OM-strani):
