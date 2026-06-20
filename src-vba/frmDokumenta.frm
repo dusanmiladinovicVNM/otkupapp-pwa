@@ -338,18 +338,9 @@ Private Sub cmbOtkupnoMesto_Change()
     UpdateOMAvansSaldo
     RefreshBrojOtpSuggestion
 
-    ' MALINA: vozac == par-vozac otkupnog mesta (VozacID == StanicaID).
-    ' Auto-izbor da otkupac ne mora rucno da bira vozaca (radi i za Zbirnu/Prijemnicu
-    ' jer dele isti cmbVozac). Ako par-vozac ne postoji, cmbVozac ostaje nepromenjen.
-    If IsMalinaMode() Then
-        Dim viMal As Long
-        For viMal = 0 To cmbVozac.ListCount - 1
-            If ExtractIDFromDisplay(CStr(cmbVozac.List(viMal))) = stanicaID Then
-                cmbVozac.ListIndex = viMal
-                Exit For
-            End If
-        Next viMal
-    End If
+    ' MALINA: vozac == par-vozac OM (VozacID == StanicaID) -> auto-izbor (radi i za
+    ' Zbirnu/Prijemnicu jer dele isti cmbVozac). Ako par-vozac ne postoji, ostaje.
+    If IsMalinaMode() Then SelectComboByDisplayID cmbVozac, stanicaID
     
     Exit Sub
 

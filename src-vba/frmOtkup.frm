@@ -262,6 +262,11 @@ Private Sub cmbOtkupnoMesto_Change()
         FillComboKooperantiByStanica cmbKooperant, ""
     End If
     RefreshBrojDokumentaSuggestion
+
+    ' MALINA: vozac == par-vozac OM (VozacID == StanicaID) -> auto-izbor, da
+    ' otkupac ne mora rucno da bira vozaca. Popunjen vozac na otkupu omogucava i
+    ' auto-povezivanje u sledljivosti. Ako par-vozac ne postoji, ostaje prazno.
+    If IsMalinaMode() Then SelectComboByDisplayID cmbVozac, stanicaID
     Exit Sub
 
 EH:

@@ -128,6 +128,31 @@ EH:
     SetComboByID = False
 End Function
 
+' Selektuje stavku JEDNOKOLONSKOG "Naziv (ID)" combo-a ciji je izvuceni ID ==
+' idValue. Vraca True ako je nasao i selektovao; ako nije, combo ostaje
+' nepromenjen. Za 2-kolonske (bound) combo-e koristi SetComboByID.
+Public Function SelectComboByDisplayID(ByVal cmb As MSForms.ComboBox, _
+                                       ByVal idValue As String) As Boolean
+    On Error GoTo EH
+
+    Dim wanted As String
+    wanted = Trim$(idValue)
+    If wanted = "" Then Exit Function
+
+    Dim i As Long
+    For i = 0 To cmb.ListCount - 1
+        If ExtractIDFromDisplay(CStr(cmb.List(i))) = wanted Then
+            cmb.ListIndex = i
+            SelectComboByDisplayID = True
+            Exit Function
+        End If
+    Next i
+    Exit Function
+
+EH:
+    LogErr "modComboBinding.SelectComboByDisplayID"
+End Function
+
 Public Function ExtractIDFromDisplaySafe(ByVal displayText As String) As String
     On Error GoTo EH
 

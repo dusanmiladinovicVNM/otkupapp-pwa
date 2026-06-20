@@ -64,6 +64,10 @@
 - [ ] frmDokumenta: isto (otpremnica + prijemnica tip ambalaže)
 
 ## Napomene / zavisnosti
+- **Malina mod**: u `frmOtkup`/`frmDokumenta`, izbor OM odmah auto-bira vozača
+  (par-vozač, `VozacID == StanicaID`). Tako otkup red dobija `VozacID` već pri
+  snimanju → radi auto-povezivanje u sledljivosti. (Ako par-vozač nije u listi —
+  ostaje prazno; mirror se pravi `BackfillVozacMirrorsForMalina` / pri unosu stanice.)
 - #3 zavisi od postavljenog `MALINA_DEFAULT_KUPAC` (kupac-hladnjača) — ako je
   prazno, auto-lanac se preskače (zabeleži se u log).
 - #3 koristi broj otkupnog dokumenta kao broj otpremnice/zbirne (ako otkup nema
