@@ -72,5 +72,9 @@
   prazno, auto-lanac se preskače (zabeleži se u log).
 - #3 koristi broj otkupnog dokumenta kao broj otpremnice/zbirne (ako otkup nema
   broj → generiše `HL-DDMMYY-hhnnss`).
+- **Predlog `BrojZbirne`** (`SuggestNextBroj` ZBR): nikad ne nudi već zauzet broj.
+  Test regresije: u malina modu napravi zbirnu (npr. `1/DDMMYY`), ugasi malina mod,
+  unesi otpremnicu sa vozačem istog numeričkog dela (npr. `VOZ-00001`) → predlog
+  mora biti `1/DDMMYY-2`, ne ponovo `1/DDMMYY`.
 - #1: dugme se vidi samo gde tabela ima kolonu `Aktivan`/`Aktivna` (Artikli i
   Cenovnik nemaju → nema dugmeta).

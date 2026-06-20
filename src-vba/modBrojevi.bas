@@ -83,6 +83,17 @@ Public Function SuggestNextBroj(ByVal kind As String, _
     End If
 
     SuggestNextBroj = FormatBroj(entityID, datum, nextSeq)
+
+    ' ZBR: BrojZbirne mora biti jedinstven STRING preko SVIH vozaca u danu.
+    ' U malina modu auto-zbirne se broje po StanicaID (par-vozac mirror), pa se
+    ' numericki deo moze poklopiti sa realnim VozacID u normalnom modu i predlog
+    ' bi pao na vec zauzet broj. Bump sekvence dok ne bude slobodan u tblZbirna.
+    If UCase$(kind) = KIND_ZBR Then
+        Do While BrojZbirneExists(SuggestNextBroj)
+            nextSeq = nextSeq + 1
+            SuggestNextBroj = FormatBroj(entityID, datum, nextSeq)
+        Loop
+    End If
     Exit Function
 
 EH:
@@ -284,6 +295,35 @@ Private Function MaxSeqFromTable(ByVal tblName As String, _
 EH:
     LogErr "MaxSeqFromTable", "tbl=" & tblName & " entity=" & entityID
     MaxSeqFromTable = 0
+End Function
+
+' True ako BrojZbirne (tacan string) vec postoji u tblZbirna (bilo koji vozac).
+' Koristi se da predlog (KIND_ZBR) ne ponudi vec zauzet broj kada se malina
+' zbirne (po StanicaID) i normalne zbirne (po VozacID) preklope u numerickom delu.
+Private Function BrojZbirneExists(ByVal broj As String) As Boolean
+    On Error GoTo EH
+
+    Dim b As String: b = Trim$(broj)
+    If Len(b) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim iBroj As Long
+    iBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "BrojZbirneExists")
+
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        If StrComp(Trim$(CStr(data(r, iBroj))), b, vbTextCompare) = 0 Then
+            BrojZbirneExists = True
+            Exit Function
+        End If
+    Next r
+    Exit Function
+
+EH:
+    LogErr "BrojZbirneExists", "broj=" & broj
 End Function
 
 Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
