@@ -620,6 +620,15 @@ Private Sub btnUnos_Click()
     OutputOtkupniList result
     On Error GoTo 0
 
+    ' #3 Hladnjaca auto-lanac: ako je OM hladnjaca i toggle ON ->
+    ' auto otpremnica+zbirna+prijemnica iz otkupa. Best-effort (pre ClearOtkupFields,
+    ' dok combo-i jos drze vrednosti).
+    On Error Resume Next
+    AutoChainHladnjaca datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
+                       vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
+                       chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value)
+    On Error GoTo 0
+
     ClearOtkupFields
 
     ' Panel "Otkupni blokovi": vezi upravo sacuvani red za izabranu otpremnicu
