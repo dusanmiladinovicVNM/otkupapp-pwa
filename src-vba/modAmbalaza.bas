@@ -43,33 +43,33 @@ Private Function IsValidAmbSmer(ByVal smer As String) As Boolean
 End Function
 
 ' ============================================================
-' Vozac-perspektiva smera ambalaze.
+' Vozac-perspektiva smera ambalaze (jednostran ledger).
 '
-' Vozac je "pokretni magacin": OTPREMNICA ga PUNI (gajbice ulaze u
-' kamion) pa je za vozaca ULAZ, a PRIJEMNICA ga PRAZNI (gajbice izlaze
-' kupcu) pa je za vozaca IZLAZ. U ledgeru je Smer relativan na ENTITET:
-'   - IZVOR (Stanica): "Izlaz" iz stanice = ULAZ u vozaca  -> invertuj.
-'   - ODREDISTE (Kupac): "Izlaz" kupcu   = IZLAZ iz vozaca -> ostavi.
-' Tako kompletna ruta otpremnica -> prijemnica daje saldo 0, a samo
-' otpremnica (jos nije predato) pozitivan saldo = gajbice kod vozaca.
-'
-' (Otkup / Kooperant se ionako izuzima iz vozackog salda.)
-' Koristi se SAMO za vozacki saldo/izvestaj; entitetski saldo koristi
-' sirovi Smer.
+' Ambalaza se upisuje JEDNOM, entitetski-relativno. Vozac je transporter
+' = INVERZNI protivpartner entiteta: sta entitetu UDE (Ulaz), iz vozaca
+' IZLAZI, i obrnuto. Definicija "za koga vazi suprotno":
+'   - Stanica (OM):    otpremnica / OM-ulaz   -> vozac = inverzno.
+'   - Kupac (hladnj.): prijemnica / izlaz-kupci -> vozac = inverzno.
+'   - Kooperant (otkup): NEMA vozaca -> izuzet uzvodno (filter / skip).
+' Primeri: otpremnica (Stanica Izlaz) -> vozac ULAZ (puni se);
+'          prijemnica-pune (Kupac Ulaz) -> vozac IZLAZ (prazni se).
+' Tako kompletna ruta daje saldo 0; otvorena otpremnica = pozitivan
+' saldo (gajbice jos kod vozaca).
 ' ============================================================
 Public Function VozacAmbEffectiveSmer(ByVal smer As String, _
                                       ByVal entitetTip As String) As String
-    If Trim$(entitetTip) = "Kupac" Then
-        ' Odrediste: kupcev Smer = vozacev Smer (Izlaz kupcu prazni vozaca).
-        VozacAmbEffectiveSmer = smer
-    Else
-        ' Izvor (Stanica): invertuj (Izlaz iz stanice puni vozaca -> Ulaz).
-        Select Case Trim$(smer)
-            Case AMB_SMER_IZLAZ: VozacAmbEffectiveSmer = AMB_SMER_ULAZ
-            Case AMB_SMER_ULAZ:  VozacAmbEffectiveSmer = AMB_SMER_IZLAZ
-            Case Else:           VozacAmbEffectiveSmer = smer
-        End Select
-    End If
+    Select Case Trim$(entitetTip)
+        Case "Stanica", "Kupac"
+            ' Transport: vozac je inverzni protivpartner entiteta.
+            Select Case Trim$(smer)
+                Case AMB_SMER_IZLAZ: VozacAmbEffectiveSmer = AMB_SMER_ULAZ
+                Case AMB_SMER_ULAZ:  VozacAmbEffectiveSmer = AMB_SMER_IZLAZ
+                Case Else:           VozacAmbEffectiveSmer = smer
+            End Select
+        Case Else
+            ' Kooperant (otkup) nema vozaca -> izuzet uzvodno; ostavi sirovo.
+            VozacAmbEffectiveSmer = smer
+    End Select
 End Function
 
 Private Sub ValidateAmbalazaInput(ByVal tipAmb As String, _
@@ -396,8 +396,8 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
             Dim vals As Variant
             vals = dict(key)
 
-            ' Vozac-perspektiva: otpremnica puni vozaca (Ulaz), prijemnica
-            ' prazni (Izlaz); izvor (Stanica) se invertuje. Ruta se netira na 0.
+            ' Vozac = inverzni protivpartner entiteta (Stanica / Kupac); ruta
+            ' otpremnica -> prijemnica se netira na 0. Otkup nema vozaca (skip gore).
             Dim effSmer As String
             effSmer = VozacAmbEffectiveSmer(AmbText(data(i, colSmer)), AmbText(data(i, colEntTip)))
 

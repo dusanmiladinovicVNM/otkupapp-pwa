@@ -1016,13 +1016,16 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen für tblPrijemnica."
     End If
 
+    ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):
+    ' 1. txt = pune gajbe koje hladnjaca PRIMA od zbirne -> Kupac ULAZ.
     If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kupacID, "Kupac", _
+        TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", kupacID, "Kupac", _
                       vozacID, newID, DOK_TIP_PRIJEMNICA
     End If
 
+    ' 2. txt = zamena: prazne gajbe koje hladnjaca VRACA (daje vozacu) -> Kupac IZLAZ.
     If kolAmbVracena > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Ulaz", kupacID, "Kupac", _
+        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Izlaz", kupacID, "Kupac", _
                       vozacID, newID, DOK_TIP_PRIJEMNICA
     End If
 
