@@ -1225,6 +1225,12 @@ Private Sub btnUnosZbr_Click()
 
     LoadZbirneListbox   ' osvezi listu zbirnih (nova zbirna se odmah vidi)
 
+    ' Ubrzanje: prebaci upravo snimljeni broj zbirne u Ulaz Kupci (Prijemnica),
+    ' da operater odmah moze da unese prijemnicu bez ponovnog kucanja/izbora.
+    ' (Isti obrazac kao lstZbirne_Click; pre RefreshBrojZbirneSuggestion koji menja txtBrojZbirne.)
+    txtBrojZbirnePrij.value = txtBrojZbirne.value
+    If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
+
     ' Predloži sledeci broj za istog vozaca/datum
     RefreshBrojZbirneSuggestion
     Exit Sub
