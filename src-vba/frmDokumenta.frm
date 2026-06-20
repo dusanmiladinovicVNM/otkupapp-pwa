@@ -1222,7 +1222,9 @@ Private Sub btnUnosZbr_Click()
     MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
 
     UpdateValidacija
-    
+
+    LoadZbirneListbox   ' osvezi listu zbirnih (nova zbirna se odmah vidi)
+
     ' Predloži sledeci broj za istog vozaca/datum
     RefreshBrojZbirneSuggestion
     Exit Sub
