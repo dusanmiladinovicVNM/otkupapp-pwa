@@ -26,10 +26,11 @@ Private mChromeRemoved As Boolean
 ' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
 Private m_txtAmbIzdata As MSForms.TextBox
 
-' Runtime polje "Kol. ambalaze (II)" — Klasa II je zaseban tblOtkup red sa svojom
-' KolAmbalaze; vidljivo samo kad je chkDveKlase ukljucen (CLAUDE.md: ne dira .frx).
+' Runtime polje "Kolicina ambalaze (II)" — Klasa II je zaseban tblOtkup red sa
+' svojom KolAmbalaze; deli "Kolicina ambalaze" red sa Klasom I (kao Kolicina/Cena),
+' vidljivo samo kad je chkDveKlase ukljucen (CLAUDE.md: ne dira .frx).
 Private m_txtKolAmbalazeII As MSForms.TextBox
-Private m_lblKolAmbalazeII As MSForms.Label
+Private m_kolAmbFullWidth As Single
 
 Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
@@ -178,61 +179,49 @@ End Sub
 ' MERI iz postojecih Klasa II polja; tacan raspored proveriti u Excelu (forme se
 ' renderuju samo tamo). Skriveno dok chkDveKlase nije ukljucen.
 Private Sub SetupKolAmbalazeIIField()
-    Const ROW_GAP As Single = 6
     On Error GoTo done
 
     If Not m_txtKolAmbalazeII Is Nothing Then Exit Sub
 
-    Dim dy As Single: dy = txtCenaKLII.Height + ROW_GAP
+    ' Zapamti punu sirinu "Kolicina ambalaze" (Klasa I) da je vratimo kad se II iskljuci.
+    m_kolAmbFullWidth = txtKolAmbalaze.width
 
-    ' TextBox poravnat sa "Cena II", u redu ispod njega.
+    ' Polje Klase II deli "Kolicina ambalaze" red sa Klasom I, isto kao sto
+    ' txtKolicinaKLII deli red sa txtKolicina (desna polovina istog reda).
     Set m_txtKolAmbalazeII = Me.Controls.Add("Forms.TextBox.1", "txtKolAmbalazeIIRT", True)
     With m_txtKolAmbalazeII
-        .Left = txtCenaKLII.Left
-        .Top = txtCenaKLII.Top + dy
-        .width = txtCenaKLII.width
-        .Height = txtCenaKLII.Height
+        .Left = txtKolicinaKLII.Left
+        .Top = txtKolAmbalaze.Top
+        .width = txtKolicinaKLII.width
+        .Height = txtKolAmbalaze.Height
         .ControlTipText = "Broj gajbi za Klasu II (zasebno od Klase I)"
         .visible = False
     End With
     StyleTextBox m_txtKolAmbalazeII
 
     On Error Resume Next
-    m_txtKolAmbalazeII.TabIndex = txtCenaKLII.TabIndex + 1
+    m_txtKolAmbalazeII.TabIndex = txtKolAmbalaze.TabIndex + 1
     On Error GoTo done
-
-    ' Labela desno od polja, poravnata sa labelom Klase II ako postoji.
-    Dim refLbl As MSForms.Control: Set refLbl = RowLabelRightOf(txtCenaKLII)
-    Set m_lblKolAmbalazeII = Me.Controls.Add("Forms.Label.1", "lblKolAmbalazeIIRT", True)
-    With m_lblKolAmbalazeII
-        .caption = "Kol. ambalaze (II)"
-        .Top = m_txtKolAmbalazeII.Top + 2
-        .Height = 14
-        If Not refLbl Is Nothing Then
-            .Left = refLbl.Left
-            .width = refLbl.width
-            .Font.Size = refLbl.Font.Size
-        Else
-            .Left = txtCenaKLII.Left + txtCenaKLII.width + 6
-            .width = 120
-        End If
-        .visible = False
-    End With
     Exit Sub
 done:
     LogErr "frmOtkup.SetupKolAmbalazeIIField"
     Set m_txtKolAmbalazeII = Nothing
-    Set m_lblKolAmbalazeII = Nothing
 End Sub
 
-' Prikazi/sakrij runtime polje + labelu za Klasu II ambalazu; pri skrivanju cisti.
+' Prikazi/sakrij polje Klase II; deli "Kolicina ambalaze" red sa Klasom I:
+' kad je ON -> Klasu I skupi na levu polovinu (kao txtKolicina) i otkrij Klasu II;
+' kad je OFF -> vrati Klasu I na punu sirinu i sakrij/ocisti Klasu II.
 Private Sub ShowKolAmbalazeII(ByVal bShow As Boolean)
     On Error Resume Next
+    If bShow Then
+        txtKolAmbalaze.width = txtKolicina.width
+    Else
+        If m_kolAmbFullWidth > 0 Then txtKolAmbalaze.width = m_kolAmbFullWidth
+    End If
     If Not m_txtKolAmbalazeII Is Nothing Then
         m_txtKolAmbalazeII.visible = bShow
         If Not bShow Then m_txtKolAmbalazeII.value = ""
     End If
-    If Not m_lblKolAmbalazeII Is Nothing Then m_lblKolAmbalazeII.visible = bShow
 End Sub
 
 ' Vraca Label u istom redu, najblizi DESNO od date kontrole (labela polja).

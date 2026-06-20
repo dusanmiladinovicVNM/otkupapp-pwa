@@ -920,10 +920,10 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
                   "SavePrijemnica fehlgeschlagen"
     End If
 
-    ' Paletizacija UNUTAR transakcije -> atomicno sa prijemnicom (Klasa I + gajbice).
+    ' Paletizacija UNUTAR transakcije -> atomicno sa prijemnicom (gajbice bilo koje klase).
     Dim closedPal As Collection
     Set closedPal = New Collection
-    If klasa = KLASA_I And kolAmb > 0 Then
+    If kolAmb > 0 Then
         PaletizePrijemnica prijemnicaID:=SavePrijemnica_TX, brojPrij:=brojPrij, _
             brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
             klasa:=klasa, netoKg:=kolicina, brGajbica:=kolAmb, tipAmb:=tipAmb, _

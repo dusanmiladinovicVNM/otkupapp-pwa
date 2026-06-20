@@ -2044,14 +2044,13 @@ Private Sub btnStorno_Click()
     
     Select Case tipDok
         Case "Otkup"
-            ' Otkup hat OtkupID, nicht BrojOtp
-            Dim otkupID As String
-            otkupID = LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_ID)
-            If otkupID = "" Then
+            ' Otkup: Klasa I i II dele isti BrDok (zaseban red po klasi) -> storniraj
+            ' SVE redove dokumenta, ne samo jedan (StornoOtkupByBrDok_TX).
+            If LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_ID) = "" Then
                 MsgBox "Otkup '" & brDok & "' nije pronadjen!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("otkup", brDok) Then Success = StornoOtkup_TX(otkupID)
+            If ConfirmStorno("otkup", brDok) Then Success = StornoOtkupByBrDok_TX(brDok)
             
         Case "Otpremnica"
             Dim otpID As String

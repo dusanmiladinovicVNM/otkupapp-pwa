@@ -62,6 +62,72 @@ EH:
     StornoOtkup_TX = False
 End Function
 
+' Storno SVIH otkup redova za dati broj dokumenta. Klasa I i Klasa II dele isti
+' BrDok (zaseban OtkupID po klasi) -> storno dokumenta mora obuhvatiti OBE.
+' Atomicno: jedna transakcija, unutra reuse StornoOtkup po svakom OtkupID.
+Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
+    Const SRC As String = "StornoOtkupByBrDok_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    RequireNonBlank brDok, "BrDok", SRC
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTKUP
+    End If
+
+    Dim colBr As Long, colId As Long, colStorno As Long
+    colBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    colId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
+
+    ' Sakupi OtkupID-jeve SVIH aktivnih redova za ovaj broj dokumenta (obe klase).
+    Dim ids As Collection: Set ids = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBr))) = Trim$(brDok) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                ids.Add Trim$(CStr(data(i, colId)))
+            End If
+        End If
+    Next i
+
+    If ids.Count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 9, SRC, _
+                  "Nema aktivnog otkupa za broj dokumenta: " & brDok
+    End If
+
+    Dim k As Long
+    For k = 1 To ids.Count
+        If Not StornoOtkup(CStr(ids(k))) Then
+            Err.Raise ERR_STORNO_BASE + 1, SRC, _
+                      "StornoOtkup nije uspeo. OtkupID=" & CStr(ids(k))
+        End If
+    Next k
+
+    tx.CommitTx
+
+    StornoOtkupByBrDok_TX = True
+    MonitorStornoSuccess SRC, "Otkup", brDok
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Otkup", brDok, tx
+    StornoOtkupByBrDok_TX = False
+End Function
+
 Public Function StornoOtkup(ByVal otkupID As String) As Boolean
     Const SRC As String = "StornoOtkup"
 
