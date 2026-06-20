@@ -137,6 +137,11 @@ Private Sub SetupAmbIzdataField()
     End With
     StyleTextBox m_txtAmbIzdata
 
+    ' TabOrder: odmah posle "Kolicina ambalaze" (prati vizuelnu poziciju u formi).
+    On Error Resume Next
+    m_txtAmbIzdata.TabIndex = txtKolAmbalaze.TabIndex + 1
+    On Error GoTo done
+
     ' Labela desno od textbox-a, poravnata sa ostalim labelama.
     Dim lbl As MSForms.Label
     Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)

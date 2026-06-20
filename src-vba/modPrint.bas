@@ -295,7 +295,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
 
     ' --- zaglavlje prodavca (3 reda) ---
     Dim shTop As Long: shTop = rr
-    rr = DocSellerHeader(ws, rr, 6, 6)
+    rr = DocSellerHeader(ws, rr, 8, 8)
     ws.cells(shTop, 1).Font.Size = 11
     ws.rows(shTop).RowHeight = 15#
     ws.rows(shTop + 1).RowHeight = 12#
@@ -315,7 +315,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
 
     ' --- naslov (2 reda) ---
     Dim tbTop As Long: tbTop = rr
-    rr = DocTitleBlock(ws, rr, 6, "Otkup poljoprivrednih proizvoda", _
+    rr = DocTitleBlock(ws, rr, 8, "Otkup poljoprivrednih proizvoda", _
                        "OTKUPNI LIST  br. " & h("brDok"))
     ws.rows(tbTop).RowHeight = 12#
     ws.cells(tbTop + 1, 1).Font.Size = 14
@@ -426,7 +426,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     rr = ob + 3
 
     ' --- klauzula (obavezni element otkupnog bloka), sitan font ---
-    ws.Range(ws.cells(rr, 1), ws.cells(rr, 6)).Merge
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
         .value = CStr(h("klauzula"))
         .Font.Size = 7
@@ -452,9 +452,9 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ws.cells(rr, 1).value = "Potpis poljoprivrednika:  ____________"
     ws.cells(rr, 1).Font.Size = 9
     ws.cells(rr, 1).Font.Color = grayClr
-    ws.cells(rr, 4).value = "Potpis / pecat otkupljivaca:  ____________"
-    ws.cells(rr, 4).Font.Size = 9
-    ws.cells(rr, 4).Font.Color = grayClr
+    ws.cells(rr, 5).value = "Potpis / pecat otkupljivaca:  ____________"
+    ws.cells(rr, 5).Font.Size = 9
+    ws.cells(rr, 5).Font.Color = grayClr
     ws.rows(rr).RowHeight = 16#
     usedPt = usedPt + 16#
     rr = rr + 1
