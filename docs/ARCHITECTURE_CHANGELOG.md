@@ -118,10 +118,13 @@ Fixed the driver (`Vozac`) packaging balance so a complete otpremnica→prijemni
 - `modAmbalaza.GetVozacAmbSaldo`: now reads `EntitetTip` and routes each row through `VozacAmbEffectiveSmer` before bucketing `Izlaz`/`Ulaz` (Saldo = `Izlaz − Ulaz`).
 - `modIzvestaj.ReportAmbalaza` (`Vozac` pojedinačni + zbirni): passes an `isVozac` flag into `ReportAmbalazePojedinacni`/`ReportAmbalazeZbirni`, which apply the same inversion. Entity reports (`OM`/`Kupac`) are unchanged — `isVozac = False` keeps the raw `Smer`.
 
+### Design Decisions
+
+- **Uniform document flow for kooperant → own hladnjača (intentional, not a gap).** When a kooperant delivers directly into the firm's own cold storage, the otkup is still recorded through the normal otpremnica + prijemnica legs (buyer = the firm, "vozač" = the station) rather than through a special internal-transfer path. This deliberately trades a few redundant documents/rows for a single code path, one document layout to maintain, and no special case to remember — nothing is mis-entered, and with the vozač leg now netting to 0 those redundant rows no longer distort any saldo. A dedicated internal-transfer flow is therefore **not** planned; do not "fix" this by special-casing it.
+
 ### Known Issues / Known Limitations
 
 - The inversion keys on `EntitetTip = "Kupac"` as "destination", which matches every current booking (prijemnica and kupci-otpremnica are the only `Kupac` rows). A future flow that books a `Kupac` row as a source would need the rule revisited.
-- Orthogonal modeling gap (not addressed here): an otkup that stays in the firm's own hladnjača still has no first-class internal-transfer flow, so it is recorded through a fictitious otpremnica+prijemnica leg.
 
 ### Verification / Acceptance Gates
 
