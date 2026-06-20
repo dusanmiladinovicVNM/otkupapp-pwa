@@ -400,22 +400,22 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     DocLabelVal ws, ob + 1, 1, "Izdata ambalaza:", CStr(h("ambIzdata"))
     DocLabelVal ws, ob + 2, 1, "Rok isplate:", CStr(h("rok"))
 
-    DocLabelVal ws, ob, 4, "Osnovica (bez PDV):", ""
-    ws.cells(ob, 6).value = h("osnovica")
-    DocLabelVal ws, ob + 1, 4, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
-    ws.cells(ob + 1, 6).value = h("nadoknada")
-    DocLabelVal ws, ob + 2, 4, "UKUPNO ZA ISPLATU:", ""
-    ws.cells(ob + 2, 6).value = h("ukupno")
-    With ws.Range(ws.cells(ob + 2, 4), ws.cells(ob + 2, 6))
+    DocLabelVal ws, ob, 5, "Osnovica (bez PDV):", ""
+    ws.cells(ob, 8).value = h("osnovica")
+    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
+    ws.cells(ob + 1, 8).value = h("nadoknada")
+    DocLabelVal ws, ob + 2, 5, "UKUPNO ZA ISPLATU:", ""
+    ws.cells(ob + 2, 8).value = h("ukupno")
+    With ws.Range(ws.cells(ob + 2, 5), ws.cells(ob + 2, 8))
         .Font.Bold = True
         .Interior.Color = fillClr
     End With
-    ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 6)).BorderAround Weight:=xlThin
-    With ws.Range(ws.cells(ob + 2, 4), ws.cells(ob + 2, 6)).Borders(xlEdgeTop)
+    ws.Range(ws.cells(ob, 5), ws.cells(ob + 2, 8)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(ob + 2, 5), ws.cells(ob + 2, 8)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    With ws.Range(ws.cells(ob, 6), ws.cells(ob + 2, 6))
+    With ws.Range(ws.cells(ob, 8), ws.cells(ob + 2, 8))
         .NumberFormat = "#,##0.00"
         .HorizontalAlignment = xlRight
     End With

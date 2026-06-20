@@ -95,38 +95,94 @@ Private Sub UserForm_Initialize()
     SetupAmbIzdataField
 End Sub
 
-' Kreira runtime Label+TextBox "Izdata ambalaza" ispod txtKolAmbalaze (presedan:
-' frmDokumenta.SetupOMIzdavanjeToggle). Ako pozicija smeta layout-u, podesi IZD_DY.
+' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
+' otvara prazan red tako sto Novac/Primalac (+ njihove labele) i dugmad spusti za
+' jednu visinu reda, pa popuni vakantno mesto (textbox levo + labela desno, kao
+' ostala polja). Sva geometrija se MERI u runtime-u (.frx se ne cita iz koda).
 Private Sub SetupAmbIzdataField()
-    Const IZD_DY As Single = 4
+    Const ROW_GAP As Single = 6
     On Error GoTo done
 
     If Not m_txtAmbIzdata Is Nothing Then Exit Sub
 
-    Dim lbl As MSForms.Label
-    Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)
-    With lbl
-        .caption = "Izdata ambalaza"
-        .Left = txtKolAmbalaze.Left
-        .Top = txtKolAmbalaze.Top + txtKolAmbalaze.Height + IZD_DY
-        .width = txtKolAmbalaze.width
-        .Height = 11
-        .Font.Size = 8
-    End With
+    ' Referentna labela ("Kolicina ambalaze") za poravnanje nove labele.
+    Dim refLbl As MSForms.Control: Set refLbl = RowLabelRightOf(txtKolAmbalaze)
 
+    ' Vakantni red = trenutna pozicija "Novac"; pomak = razmak izmedju dva reda.
+    Dim yIzdata As Single: yIzdata = txtNovac.Top
+    Dim dy As Single: dy = txtNovac.Top - txtKolAmbalaze.Top
+    If dy < txtKolAmbalaze.Height + ROW_GAP Then dy = txtKolAmbalaze.Height + ROW_GAP
+
+    ' Labele susednih polja nadji PRE pomeranja (anchor.Top se menja pomakom).
+    Dim lblNovac As MSForms.Control: Set lblNovac = RowLabelRightOf(txtNovac)
+    Dim lblPrimalac As MSForms.Control: Set lblPrimalac = RowLabelRightOf(txtPrimalac)
+
+    ' Spusti donji blok za jedan red da se oslobodi mesto za "Izdata ambalaza".
+    ShiftCtlDown txtNovac, dy
+    ShiftCtlDown lblNovac, dy
+    ShiftCtlDown txtPrimalac, dy
+    ShiftCtlDown lblPrimalac, dy
+    ShiftCtlDown btnUnos, dy
+    ShiftCtlDown btnStornoOtkup, dy
+    ShiftCtlDown btnPovratak, dy
+
+    ' TextBox u levoj koloni (kao ostala polja).
     Set m_txtAmbIzdata = Me.Controls.Add("Forms.TextBox.1", "txtAmbIzdataRT", True)
     With m_txtAmbIzdata
         .Left = txtKolAmbalaze.Left
-        .Top = lbl.Top + lbl.Height
+        .Top = yIzdata
         .width = txtKolAmbalaze.width
         .Height = txtKolAmbalaze.Height
         .ControlTipText = "Ambalaza koju OM izdaje kooperantu (preuzima od OM)"
     End With
     StyleTextBox m_txtAmbIzdata
+
+    ' Labela desno od textbox-a, poravnata sa ostalim labelama.
+    Dim lbl As MSForms.Label
+    Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)
+    With lbl
+        .caption = "Izdata ambalaza"
+        .Top = yIzdata + 2
+        .Height = 14
+        If Not refLbl Is Nothing Then
+            .Left = refLbl.Left
+            .width = refLbl.width
+            .Font.Size = refLbl.Font.Size
+        Else
+            .Left = txtKolAmbalaze.Left + txtKolAmbalaze.width + 6
+            .width = 120
+        End If
+    End With
     Exit Sub
 done:
     LogErr "frmOtkup.SetupAmbIzdataField"
     Set m_txtAmbIzdata = Nothing
+End Sub
+
+' Vraca Label u istom redu, najblizi DESNO od date kontrole (labela polja).
+' Nothing ako nema razumnog kandidata (cuva od hvatanja udaljene desne tabele).
+Private Function RowLabelRightOf(ByVal anchor As MSForms.Control) As MSForms.Control
+    On Error Resume Next
+    Dim c As MSForms.Control, best As MSForms.Control
+    Dim bestDx As Single: bestDx = 1000000
+    For Each c In Me.Controls
+        If TypeOf c Is MSForms.Label Then
+            If Abs(c.Top - anchor.Top) <= 6 And c.Left >= anchor.Left Then
+                If (c.Left - anchor.Left) < bestDx Then
+                    bestDx = c.Left - anchor.Left
+                    Set best = c
+                End If
+            End If
+        End If
+    Next c
+    If bestDx <= anchor.width + 220 Then Set RowLabelRightOf = best
+End Function
+
+' Spusti kontrolu za dy (bezbedno i kad je kontrola Nothing).
+Private Sub ShiftCtlDown(ByVal ctl As MSForms.Control, ByVal dy As Single)
+    If ctl Is Nothing Then Exit Sub
+    On Error Resume Next
+    ctl.Top = ctl.Top + dy
 End Sub
 
 Private Sub ResetActionButtons()
