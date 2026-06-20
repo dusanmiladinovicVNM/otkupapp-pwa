@@ -626,7 +626,8 @@ Private Sub btnUnos_Click()
     On Error Resume Next
     AutoChainHladnjaca datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
                        vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
-                       chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value)
+                       chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value), _
+                       result
     On Error GoTo 0
 
     ClearOtkupFields

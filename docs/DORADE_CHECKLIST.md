@@ -41,6 +41,9 @@
       → klik **Unos**
 - [ ] Provera tabela: automatski kreirani redovi u **tblOtpremnica**,
       **tblZbirna**, **tblPrijemnica** (cena = cena iz otkupa)
+- [ ] **Izvorni `tblOtkup` red** dobija nazad `OtpremnicaID`, `BrojZbirne` i
+      `VozacID` (ako je otkup bio bez vozača → upiše se `VozacID = StanicaID`;
+      operaterov vozač se ne gazi)
 - [ ] **BrojPrijemnice**: prva tog dana = `1/DDMMYY` (npr. `1/200626`), sledeća
       `1/200626-2`, pa `-3` …
 - [ ] Ako stanica NIJE hladnjača ILI je toggle OFF → ništa se ne kreira automatski

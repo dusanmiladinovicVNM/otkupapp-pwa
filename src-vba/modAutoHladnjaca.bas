@@ -15,7 +15,11 @@ Option Explicit
 ' Broj otpremnice = broj zbirne = broj otkupnog dokumenta (malina konvencija);
 ' ako otkup nema broj, generise se HL-ddmmyy-hhnnss.
 '
+' Posle kreiranja, izvorni tblOtkup red dobija nazad: OtpremnicaID + BrojZbirne +
+' VozacID (LinkOtkupRedNaDokument), da otkup ostane povezan sa dokumentima.
+'
 ' Reuse: SaveOtpremnica_TX / SaveZbirna_TX / SavePrijemnica_TX (modDokumenta),
+'        FindRows / RequireUpdateCell / clsTransaction (vezivanje nazad u otkup),
 '        LookupValue / GetConfigValue, IsAutoPrijemnicaHladnjaca (modConfig).
 ' ============================================================
 
@@ -71,7 +75,8 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
                               ByVal kolicinaI As Double, ByVal cenaI As Double, _
                               ByVal hasKlasaII As Boolean, _
                               ByVal kolicinaII As Double, ByVal cenaII As Double, _
-                              ByVal brDok As String)
+                              ByVal brDok As String, _
+                              ByVal otkupIDs As String)
     On Error GoTo EH
 
     If Not IsAutoPrijemnicaHladnjaca() Then Exit Sub
@@ -108,29 +113,86 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
     Dim brZbr As String
     brZbr = brOtp
 
+    ' OtkupID-jevi za vezivanje nazad u tblOtkup (Klasa I [+ Klasa II]).
+    ' Format dolazi iz SaveOtkupMulti_TX: "resultI" ili "resultI + resultII".
+    Dim idI As String, idII As String
+    If Len(Trim$(otkupIDs)) > 0 Then
+        Dim parts() As String
+        parts = Split(otkupIDs, " + ")
+        idI = Trim$(parts(LBound(parts)))
+        If UBound(parts) > LBound(parts) Then idII = Trim$(parts(LBound(parts) + 1))
+    End If
+
     ' Klasa I (ambalaza se broji samo ovde, da se ne duplira).
     Dim brPrij As String
     brPrij = NextBrojPrijemnice(datum)
-    SaveOtpremnica_TX datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                      kolicinaI, cenaI, tipAmb, kolAmb, KLASA_I
+    Dim otpID As String
+    otpID = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
+                              kolicinaI, cenaI, tipAmb, kolAmb, KLASA_I)
     SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
                   kolicinaI, tipAmb, kolAmb, KLASA_I
     SavePrijemnica_TX datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
                       kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I
+    ' Veza nazad u otkup red: OtpremnicaID + BrojZbirne + VozacID.
+    LinkOtkupRedNaDokument idI, otpID, brZbr, vozacID
 
     ' Klasa II (bez ambalaze; vec izlazna na Klasa I).
     If hasKlasaII And kolicinaII > 0 Then
         Dim brPrij2 As String
         brPrij2 = NextBrojPrijemnice(datum)
-        SaveOtpremnica_TX datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                          kolicinaII, cenaII, tipAmb, 0, KLASA_II
+        Dim otpID2 As String
+        otpID2 = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
+                                   kolicinaII, cenaII, tipAmb, 0, KLASA_II)
         SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
                       kolicinaII, tipAmb, 0, KLASA_II
         SavePrijemnica_TX datum, kupacID, vozacID, brPrij2, brZbr, vrsta, sorta, _
                           kolicinaII, cenaII, tipAmb, 0, 0, KLASA_II
+        LinkOtkupRedNaDokument idII, otpID2, brZbr, vozacID
     End If
     Exit Sub
 
 EH:
     LogErr "modAutoHladnjaca.AutoChainHladnjaca"
+End Sub
+
+' Upisi vezu nazad u tblOtkup red(ove) za dati OtkupID:
+'   OtpremnicaID + BrojZbirne (tek kreirani -> upisuju se),
+'   VozacID samo ako je prazan (da se ne pregazi operaterov izbor).
+' Reuse postojecih primitiva: FindRows / RequireUpdateCell / clsTransaction.
+Private Sub LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As String, _
+                                   ByVal brZbr As String, ByVal vozacID As String)
+    Const SRC As String = "modAutoHladnjaca.LinkOtkupRedNaDokument"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Sub
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+
+    Dim curVoz As String
+    curVoz = Trim$(Nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC), ""))
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+
+    Dim k As Long, r As Long
+    For k = 1 To rows.count
+        r = rows(k)
+        If Len(otpID) > 0 Then RequireUpdateCell TBL_OTKUP, r, COL_OTK_OTPREMNICA_ID, otpID, SRC
+        If Len(brZbr) > 0 Then RequireUpdateCell TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, brZbr, SRC
+        If Len(vozacID) > 0 And curVoz = "" Then _
+            RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, vozacID, SRC
+    Next k
+
+    tx.CommitTx
+    Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
 End Sub
