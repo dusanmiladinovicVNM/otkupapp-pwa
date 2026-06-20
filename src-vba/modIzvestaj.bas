@@ -1343,6 +1343,14 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, "modIzvestaj.ReportAmbalaza"), "=", entitetID
         filters.Add fp
+
+        ' Otkup (Kooperant-nabavka) NIJE vozaceva transportna noga. Iste gajbice
+        ' se vec broje na otpremnici, pa bi otkup duplo teretio vozacev saldo
+        ' (narocito uz auto-hladnjacu, koja mirror-vozaca vezuje za svaki otkup).
+        ' Vozacev saldo = otpremnica (utovar) - prijemnica (predaja).
+        Set fp = New clsFilterParam
+        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "modIzvestaj.ReportAmbalaza"), "<>", DOK_TIP_OTKUP
+        filters.Add fp
     End If
     
     Dim filtered As Variant

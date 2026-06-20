@@ -1183,7 +1183,7 @@ Current write rules:
 Current read/saldo rules:
 
 - `GetAmbalazeStanje` treats `Ulaz` as `+Kolicina` and `Izlaz` as `-Kolicina`.
-- `GetVozacAmbSaldo` treats driver balance as all active movements with matching `VozacID` (no `DokumentTip` filter). Direction is read from the **driver's** perspective: `Kupac`-side rows (prijemnica / kupci-otpremnica) are sign-inverted via `VozacAmbEffectiveSmer` so a complete otpremnica→prijemnica route nets to 0, while `Stanica`/`Kooperant` (source) rows keep the raw `Smer`. The same rule drives the `Vozac` packaging report (`ReportAmbalaza`); entity saldos (`Kooperant`/`Stanica`/`Kupac`) still use the raw `Smer`.
+- `GetVozacAmbSaldo` and the `Vozac` packaging report (`ReportAmbalaza`) treat driver balance as the driver's **transport custody** = otpremnica (load) − prijemnica (deliver), over movements matching `VozacID`. Two rules apply: (1) `DokumentTip = "Otkup"` (procurement, `Kooperant` `Izlaz`, kooperant→station) is **excluded** — those crates are already counted on the otpremnica, and `modOtkup` / auto-hladnjača tag the otkup with a vozač, so counting it would double-charge the driver; (2) direction is read from the driver's perspective — `Kupac`-side rows (prijemnica / kupci-otpremnica) are sign-inverted via `VozacAmbEffectiveSmer` so a complete otpremnica→prijemnica route nets to 0, while `Stanica` (source) rows keep the raw `Smer`. Entity saldos (`Kooperant`/`Stanica`/`Kupac`) use **all** movements with the raw `Smer` (no `DokumentTip` filter).
 - Open-ended date filters evaluate `datumOd` and `datumDo` independently.
 - Only non-stornirano rows participate in active saldo helpers.
 

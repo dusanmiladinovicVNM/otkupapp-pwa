@@ -342,6 +342,7 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
     Dim colVozac As Long
     Dim colDatum As Long
     Dim colEntTip As Long
+    Dim colDokTip As Long
 
     colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
     colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
@@ -349,6 +350,7 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
     colVozac = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
     colDatum = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
 
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
@@ -356,6 +358,11 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If AmbText(data(i, colVozac)) = Trim$(vozacID) Then
+
+            ' Otkup (Kooperant-nabavka) nije vozaceva transportna noga -> izuzmi
+            ' (inace dupli teret: otkup + otpremnica iste gajbice). Saldo vozaca =
+            ' otpremnica (utovar) - prijemnica (predaja).
+            If AmbText(data(i, colDokTip)) = DOK_TIP_OTKUP Then GoTo NextRow
 
             If datumOd > 0 Or datumDo > 0 Then
                 If Not IsDate(data(i, colDatum)) Then GoTo NextRow
