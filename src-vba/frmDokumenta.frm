@@ -560,6 +560,12 @@ Private Sub btnUnosOtp_Click()
         End If
     End If
 
+    ' MALINA: otpremnica se snima sa PRAZNIM BrojZbirne da je AutoCreateZbirnaFrom-
+    ' Otpremnice pokupi (prikaz u formi je samo predlog; auto-zbirna dodeli
+    ' "S"+BrojOtpremnice). Van malina moda salje se vrednost iz polja.
+    Dim brZbrSave As String
+    If IsMalinaMode() Then brZbrSave = "" Else brZbrSave = txtBrojZbirneOtp.value
+
     ' Atomicni save kroz modDokumenta wrapper
     Dim result As String
 
@@ -568,7 +574,7 @@ Private Sub btnUnosOtp_Click()
         stanicaID:=stanicaID, _
         vozacID:=vozacID, _
         brojOtp:=txtBrojOtp.value, _
-        brojZbirne:=txtBrojZbirneOtp.value, _
+        brojZbirne:=brZbrSave, _
         vrsta:=cmbVrstaVoca.value, _
         sorta:=cmbSortaVoca.value, _
         kolicinaI:=kolicinaI, _
@@ -655,6 +661,18 @@ Private Sub RefreshBrojZbirneSuggestion()
     vozacID = ExtractIDFromDisplay(cmbVozac.value)
     If Len(vozacID) = 0 Then Exit Sub
 
+    ' MALINA: broj zbirne = "S" + broj otpremnice (deterministicki; identicno
+    ' onome sto AutoCreateZbirnaFromOtpremnice dodeli iz BrojOtpremnice). Prikazi
+    ' u OBE sekcije (Zbirna + Otpremnica) radi vidljivosti. Na snimanju otpremnice
+    ' se BrojZbirne i dalje salje PRAZNO (btnUnosOtp), da je auto-zbirna pokupi.
+    If IsMalinaMode() Then
+        Dim sMal As String
+        sMal = ApplyMirrorPrefix(vozacID, Trim$(txtBrojOtp.value))
+        txtBrojZbirne.value = sMal
+        txtBrojZbirneOtp.value = sMal
+        Exit Sub
+    End If
+
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
 
@@ -663,12 +681,7 @@ Private Sub RefreshBrojZbirneSuggestion()
 
     If Len(suggested) > 0 Then
         txtBrojZbirne.value = suggested
-        ' Sinhronizuj u OTP sekciji (postojeca txtBrojZbirne_AfterUpdate logika
-        ' na liniji 868 puca samo na manual edit; ovde radimo programatsko
-        ' setovanje, _AfterUpdate ne puca, pa eksplicitno sinhronizujemo).
-        ' MALINA: NE puni BrojZbirne u otpremnicu — mora ostati prazno da auto-zbirna
-        ' dodeli BrojZbirne = BrojOtpremnice (inace bi preskocila otpremnicu).
-        If Not IsMalinaMode() Then txtBrojZbirneOtp.value = suggested
+        txtBrojZbirneOtp.value = suggested
     End If
     Exit Sub
 
