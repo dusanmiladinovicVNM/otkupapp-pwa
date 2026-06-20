@@ -84,14 +84,14 @@ Public Function SuggestNextBroj(ByVal kind As String, _
 
     SuggestNextBroj = FormatBroj(entityID, datum, nextSeq)
 
-    ' ZBR: BrojZbirne mora biti jedinstven STRING preko SVIH vozaca u danu.
-    ' U malina modu auto-zbirne se broje po StanicaID (par-vozac mirror), pa se
-    ' numericki deo moze poklopiti sa realnim VozacID u normalnom modu i predlog
-    ' bi pao na vec zauzet broj. Bump sekvence dok ne bude slobodan u tblZbirna.
+    ' ZBR: mirror-stanica (VozacID==StanicaID) dobija "S" prefiks (S1/ddmmyy) da se
+    ' ne sudara sa realnim vozacem istog numerickog dela. Plus bump sekvence dok
+    ' predlozeni broj (string) ne bude slobodan u tblZbirna (mreza za legacy).
     If UCase$(kind) = KIND_ZBR Then
+        SuggestNextBroj = ApplyMirrorPrefix(entityID, FormatBroj(entityID, datum, nextSeq))
         Do While BrojZbirneExists(SuggestNextBroj)
             nextSeq = nextSeq + 1
-            SuggestNextBroj = FormatBroj(entityID, datum, nextSeq)
+            SuggestNextBroj = ApplyMirrorPrefix(entityID, FormatBroj(entityID, datum, nextSeq))
         Loop
     End If
     Exit Function
@@ -237,6 +237,25 @@ Public Function FormatBroj(ByVal entityID As String, _
     Else
         FormatBroj = numPart & "/" & ddmmyy & "-" & seq
     End If
+End Function
+
+' Da li je ovaj "vozac" zapravo mirror stanice (VozacID == StanicaID)?
+' U malina modu par-vozac ima isti ID kao stanica (npr. "ST-00001").
+Public Function IsStanicaMirrorVozac(ByVal vozacID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(vozacID)) = 0 Then Exit Function
+    IsStanicaMirrorVozac = _
+        (Len(Trim$(Nz(LookupValue(TBL_STANICE, "StanicaID", vozacID, "StanicaID"), ""))) > 0)
+End Function
+
+' BrojZbirne za mirror-stanicu dobija "S" prefiks (S1/ddmmyy) da se NE sudara sa
+' realnim vozacem istog numerickog dela (ST-00001 i VOZ-00001 oba daju "1").
+' Realni vozaci ostaju bez prefiksa. Idempotentno (ne dodaje "S" dvaput).
+Public Function ApplyMirrorPrefix(ByVal vozacID As String, ByVal broj As String) As String
+    ApplyMirrorPrefix = broj
+    If Len(broj) = 0 Then Exit Function
+    If Left$(broj, 1) = "S" Then Exit Function
+    If IsStanicaMirrorVozac(vozacID) Then ApplyMirrorPrefix = "S" & broj
 End Function
 
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje

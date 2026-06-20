@@ -106,12 +106,14 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
         vozacID = stanicaID
     End If
 
-    ' Broj otpremnice = broj zbirne = broj otkupa (ili generisan).
+    ' Broj otpremnice = broj otkupa (ili generisan). Zbirna se razdvaja: mirror-
+    ' stanica (vozac==stanica) nosi "S" prefiks (S1/ddmmyy), otpremnica/otkup
+    ' zadrzavaju svoj broj (1/ddmmyy) da se ne sudaraju sa realnim vozacem.
     Dim brOtp As String
     brOtp = Trim$(brDok)
     If Len(brOtp) = 0 Then brOtp = "HL-" & Format$(datum, "ddmmyy") & "-" & Format$(Now, "hhnnss")
     Dim brZbr As String
-    brZbr = brOtp
+    brZbr = ApplyMirrorPrefix(vozacID, brOtp)
 
     ' OtkupID-jevi za vezivanje nazad u tblOtkup (Klasa I [+ Klasa II]).
     ' Format dolazi iz SaveOtkupMulti_TX: "resultI" ili "resultI + resultII".

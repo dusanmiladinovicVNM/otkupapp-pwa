@@ -70,11 +70,13 @@
   ostaje prazno; mirror se pravi `BackfillVozacMirrorsForMalina` / pri unosu stanice.)
 - #3 zavisi od postavljenog `MALINA_DEFAULT_KUPAC` (kupac-hladnjača) — ako je
   prazno, auto-lanac se preskače (zabeleži se u log).
-- #3 koristi broj otkupnog dokumenta kao broj otpremnice/zbirne (ako otkup nema
-  broj → generiše `HL-DDMMYY-hhnnss`).
-- **Predlog `BrojZbirne`** (`SuggestNextBroj` ZBR): nikad ne nudi već zauzet broj.
-  Test regresije: u malina modu napravi zbirnu (npr. `1/DDMMYY`), ugasi malina mod,
-  unesi otpremnicu sa vozačem istog numeričkog dela (npr. `VOZ-00001`) → predlog
-  mora biti `1/DDMMYY-2`, ne ponovo `1/DDMMYY`.
+- #3: otpremnica/otkup nose broj stanice (`1/DDMMYY`); **zbirna mirror-stanice
+  nosi `S` prefiks** (`S1/DDMMYY`) — razdvojen namespace od realnih vozača.
+- **`BrojZbirne` namespace** (`ApplyMirrorPrefix`): zbirna čiji je vozač mirror
+  stanice (`VozacID == StanicaID`) dobija `S` prefiks na SVA 4 generatora
+  (`SuggestNextBroj` ZBR, `GenerateBrojZbirne`, `AutoCreateZbirnaFromOtpremnice`,
+  hladnjača lanac). Test regresije: u malina modu napravi zbirnu → `S1/DDMMYY`;
+  ugasi malina mod, otpremnica sa `VOZ-00001` → predlog `1/DDMMYY` (bez kolizije).
+  Stari `1/DDMMYY` malina zapisi se ručno ispravljaju u bazi (bez migracije).
 - #1: dugme se vidi samo gde tabela ima kolonu `Aktivan`/`Aktivna` (Artikli i
   Cenovnik nemaju → nema dugmeta).
