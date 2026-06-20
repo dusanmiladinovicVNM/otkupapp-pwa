@@ -445,8 +445,14 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     End If
 
     If kolAmb > 0 Then
+        ' Kooperant predaje pune gajbe na OM -> DVOJNI upis (otkup nema vozaca na OM-strani):
+        '   1) Kooperant IZLAZ (kooperant se razduzuje),
+        '   2) OM/Stanica ULAZ (OM se zaduzuje za isti iznos).
         TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", _
                       kooperantID, "Kooperant", vozacID, _
+                      newID, DOK_TIP_OTKUP
+        TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", _
+                      stanicaID, "Stanica", "", _
                       newID, DOK_TIP_OTKUP
     End If
 

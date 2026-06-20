@@ -1624,7 +1624,9 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     If result > 0 Then
         ' Ambalaza tracken
         If kolAmb > 0 Then
+            ' Dvojni upis: kooperant IZLAZ (razduzenje) + OM/Stanica ULAZ (zaduzenje OM).
             TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kooperantID, "Kooperant", , newID, DOK_TIP_OTKUP
+            TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", stanicaID, "Stanica", , newID, DOK_TIP_OTKUP
         End If
         
         LogInfo "ImportRowToTblOtkup", "Importiert: " & newID & " ? PWA:" & clientRecordID & _

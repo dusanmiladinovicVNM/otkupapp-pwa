@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.28  
-**Last Updated:** 2026-06-19  
-**Status:** Active changelog — v6.28 OtkupSablon one-third-A4 two-up print geometry (each primerak = 1/3 A4 for pre-perforated paper, 1:1 print)
+**Current Version:** v6.29  
+**Last Updated:** 2026-06-20  
+**Status:** Active changelog — v6.29 driver (`Vozac`) packaging saldo nets a complete otpremnica→prijemnica route to 0 (entity-relative `Smer` inverted on the `Kupac` side for the vozac perspective)
 
 ---
 
@@ -53,6 +53,7 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.29 | 2026-06-20 | Ambalaža direction model made consistently **entity-relative** (`Ulaz` = into the entity, `Izlaz` = out); the `Vozac` balance reads as the inverse transport counterparty. Write-side fix: `SavePrijemnica` booked the buyer backwards — now full received = `Kupac` `Ulaz`, returned empties = `Kupac` `Izlaz` (corrects the `Kupac` saldo too). `VozacAmbEffectiveSmer` inverts the `Stanica`/`Kupac` legs so otpremnica loads the driver (`Ulaz`) and prijemnica unloads him (`Izlaz`); a full route nets to 0. `DokumentTip = "Otkup"` has no vozač and is excluded (auto-hladnjača forced the mirror vozač onto every hladnjača otkup, double-charging). | Yes | re-import `modAmbalaza`/`modIzvestaj`/`modDokumenta`; existing prijemnica rows need `Smer` flip or re-seed |
 | v6.28 | 2026-06-19 | `OtkupSablon` otkupni-list print switched to a one-third-A4 two-up layout: each primerak (poljoprivrednik + otkupljivac) is exactly 1/3 A4 (99 mm) in the top two thirds, bottom third blank, for the client's pre-perforated paper; prints 1:1 (Zoom 100, margins 0, no fit-to-page) with explicit row heights + a filler row so the copy boundaries land on the 99/198 mm perforations. Content/obračun/klauzula unchanged. | Yes | presentation-only; no migration; re-import `modPrint`; run otkupni-list print gate; calibrate `OL_TOP_MARGIN_TRIM_PT` if the printer ignores a 0 top margin |
 | v6.27 | 2026-06-18 | Otkupni blokovi: optional `frmOtkup` panel for per-otpremnica blok entry — clicking an otpremnica pre-fills the existing otkup form (mesto/vrsta/sorta/vozač/broj zbirne/datum/cena), a single per-otpremnica price applies to all its blokovi, and the normal "Unos" auto-links the saved row(s) to the otpremnica via `OtkupBlok_AfterUnos` so remaining-quantity tracking updates without a manual Sledljivost auto-link. | Yes | no business-data migration; UI-only desktop add-on; re-import `modOtkupBlok`+`clsBlokUI`, add 2 guarded hook lines to `frmOtkup` (`AttachOtkupBlokPanel`, `OtkupBlok_AfterUnos`); opt-out via `OTKUP_BLOK_PANEL=NO` |
 | v6.26 | 2026-06-18 | Document print/presentation layer: shared `modDocStyle` house style for otkupni/paletni/preradni lists, otkupni-list legal block (PDV-nadoknada klauzula + rok isplate via `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE`), and paletni/preradni redesign (vrsta voca as subtitle, dropped redundant Vrsta column, layout-version auto-rebuild). | Yes | presentation-only; no business-data migration; re-import `modDocStyle`/`modConfig`/`modPrint`/`modPaletniList`; templates regenerate; run otkupni/paletni/preradni print gates |
@@ -103,6 +104,47 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.29 — 2026-06-20
+
+### Summary
+
+Corrected the ambalaža (packaging) **direction model** so the ledger `Smer` is consistently **entity-relative** (`Ulaz` = crates into that entity, `Izlaz` = out) and the driver (`Vozac`) balance reads as the inverse transport counterparty. Three parts: **(1) Write-side data fix** — `SavePrijemnica` booked the buyer side backwards (full crates received = `Izlaz`, returned empties = `Ulaz`); now full = `Kupac` `Ulaz` and returned = `Kupac` `Izlaz`, matching every other document, which also corrects the `Kupac` saldo/report. **(2) Vozač = inverse counterparty** (single-entry — the driver leg is derived on read): `VozacAmbEffectiveSmer` inverts the `Stanica` and `Kupac` legs so an otpremnica **loads** the driver (`Ulaz`) and a prijemnica **unloads** him (`Izlaz`); a complete otpremnica→prijemnica route nets to 0, an open otpremnica shows a positive saldo = crates still on the driver. **(3) Otkup has no vozač** — `DokumentTip = "Otkup"` (`Kooperant` procurement) is excluded from the driver balance; it was double-charging the same crates already on the otpremnica, made universal by auto-hladnjača forcing the mirror vozač onto every hladnjača otkup. Surfaced via the otkup-in-own-hladnjača case (buyer = the firm, "vozač" = the station).
+
+### Added
+
+- **OM issues empty packaging to a kooperant** (`frmDokumenta`, OM-Ulaz frame). A runtime toggle `tglIzdKoop` (added as a child of `fraOMUlaz` — `.frx` untouched) switches the frame's ambalaža direction: default **Prijem na OM** (`Stanica` `Ulaz`, unchanged) vs **Izdavanje kooperantu**, which books a **double leg** (`DOK_TIP_OM_IZLAZ_KOOP`, no vozač): `Kooperant` `Ulaz` (kooperant receives empties) **+ `Stanica` `Izlaz`** (OM discharged for the same amount) — both rows share `brojDok`/`DokumentTip` in one transaction. Double-entry is required here because two real entities move (OM and kooperant) and neither is derivable from the other's row (unlike the vozač). New constant `DOK_TIP_OM_IZLAZ_KOOP`; `SaveOMUlaz_TX` gained an `izdavanjeKoop` flag. The kooperant is resolved with `GetComboID` (real `KooperantID` from the combo's hidden column, not the display name) — also fixes the same latent bug on the OM-Ulaz money + open-otkupi paths. Storno of this type follows the existing OM-Ulaz gap (not in the storno combo).
+- **Otkup now charges the OM (double-entry).** Otkup previously booked only `Kooperant` `Izlaz` (kooperant returns full) and never credited the OM. `modOtkup.SaveOtkup` and the PWA `modMasterSync` import now also book `Stanica` `Ulaz` (OM charged; same `brojDok`/`DOK_TIP_OTKUP`, no vozač), symmetric to OM-izdavanje — closing the OM↔kooperant loop (izdavanje OM−/koop+, otkup koop−/OM+ net out). Storno reverses both (by document). The vozač report is unaffected (otkup is excluded). Existing otkup rows keep the old single leg → re-seed or migrate to add the missing `Stanica` `Ulaz`.
+
+### Fixed
+
+- **Write-side data fix (`modDokumenta.SavePrijemnica`):** the prijemnica booked the buyer backwards. Now entity-relative — `kolAmb` (full crates the hladnjača receives from the zbirna) = `Kupac` `Ulaz`, `kolAmbVracena` (empties the hladnjača returns) = `Kupac` `Izlaz` (previously `Izlaz`/`Ulaz`). Also corrects the `Kupac` saldo (`GetAmbalazeStanje`) and the `Kupac` packaging report.
+- **`modAmbalaza.VozacAmbEffectiveSmer(smer, entitetTip)` — driver = inverse counterparty** (single-entry; derived on read, not stored): `Stanica` and `Kupac` transport legs are sign-inverted (otpremnica `Izlaz` → driver `Ulaz`/load; prijemnica `Ulaz` → driver `Izlaz`/unload), `Kooperant` is left raw (and excluded anyway). A complete route nets to 0; an open otpremnica shows a positive saldo = crates still on the driver. Invalid `Smer` still fails fast.
+- `modAmbalaza.GetVozacAmbSaldo`: reads `EntitetTip` + `DokumentTip`, skips `Otkup`, and routes each row through `VozacAmbEffectiveSmer` before bucketing `Izlaz`/`Ulaz`.
+- `modIzvestaj.ReportAmbalaza` (`Vozac` pojedinačni + zbirni): passes an `isVozac` flag into `ReportAmbalazePojedinacni`/`ReportAmbalazeZbirni`, which apply the same inversion. Entity reports (`OM`/`Kupac`) are unchanged — `isVozac = False` keeps the raw `Smer`.
+- **Otkup excluded from vozač custody (read-side).** `ReportAmbalaza` (vozač branch) adds a `DokumentTip <> "Otkup"` filter (`clsFilterParam` `<>`), and `GetVozacAmbSaldo` skips `Otkup` rows (`AmbText(colDokTip) = DOK_TIP_OTKUP → NextRow`). Fixes both existing and new data; `tblOtkup.VozacID` (zbirna grouping / traceability) and the auto-hladnjača writeback are untouched — only the driver **saldo** ignores otkup.
+
+### Design Decisions
+
+- **Uniform document flow for kooperant → own hladnjača (intentional, not a gap).** When a kooperant delivers directly into the firm's own cold storage, the otkup is still recorded through the normal otpremnica + prijemnica legs (buyer = the firm, "vozač" = the station) rather than through a special internal-transfer path. This deliberately trades a few redundant documents/rows for a single code path, one document layout to maintain, and no special case to remember — nothing is mis-entered, and with the vozač leg now netting to 0 those redundant rows no longer distort any saldo. A dedicated internal-transfer flow is therefore **not** planned; do not "fix" this by special-casing it.
+
+### Known Issues / Known Limitations
+
+- The driver-inverse rule keys on `EntitetTip`: `Stanica` and `Kupac` (transport legs) are inverted, `Kooperant` (otkup) has no vozač and is excluded. Matches every current booking. A future entity that is not a simple inverse transport counterparty would need the rule revisited.
+- Write-side left as-is: `modOtkup:448` still tags the otkup ambalaza ledger row with the otkup's vozač (the PWA sync path `modMasterSync:1627` already passes an empty vozač). It no longer affects the vozač saldo (excluded on read), but the ledger field stays populated; a future optional cleanup could pass an empty vozač at `modOtkup` for consistency with the sync path.
+- The exclusion assumes every buyer delivery has an otpremnica leg (auto-hladnjača always creates one), so dropping otkup does not lose the driver's "load"; a direct kooperant→buyer delivery with no otpremnica would need the rule revisited.
+
+### Verification / Acceptance Gates
+
+- VBA is not compiled in this environment; verified statically (Sub/Function balance, single `Public VozacAmbEffectiveSmer`, call arity: `ReportAmbalazeZbirni` = 6, `ReportAmbalazePojedinacni` = 9, helper = 2). Existing smoke tests keep passing — `modIzvestajTests` (ReportAmbalaza Vozac) and `modBusinessFlowProTests` (`GetVozacAmbSaldo` → `Not IsEmpty`) assert presence, not the saldo value.
+- Final smoke test (user, in Excel): Izveštaj → Vozači → a vozač with one otpremnica + matching prijemnica for the same crates should show **Saldo 0** (an open/partial route still shows the real manjak). Auto-hladnjača case: a hladnjača otkup chain (otkup + auto otpremnica + prijemnica, all on the mirror vozač = `StanicaID`) should also show **Saldo 0** — the otkup legs no longer appear in / charge the vozač balance.
+
+### Migration / Data Notes
+
+- **Write-side change** (`modDokumenta.SavePrijemnica`) — re-import `modAmbalaza.bas`, `modIzvestaj.bas`, `modDokumenta.bas`. **Existing `tblAmbalaza` prijemnica rows keep the old (reversed) `Smer`**: either re-seed test data, or run a one-time migration flipping `Smer` (`Izlaz`↔`Ulaz`) on rows with `DokumentTip = "Prijemnica"`. Until then, historical prijemnica / `Kupac` / vozač numbers mix conventions. Other document types and schema are unchanged.
+
+Reference updated: Yes (Ambalaza ledger read/saldo rules).
 
 
 ## v6.28 — 2026-06-19

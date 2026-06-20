@@ -24,6 +24,9 @@ Option Explicit
 Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
+' Runtime toggle (fraOMUlaz): smer ambalaze — Prijem na OM / Izdavanje kooperantu.
+Private m_tglIzdKoop As Object
+
 Private m_FocusableInputs As Collection
 
 Private mChromeRemoved As Boolean
@@ -157,6 +160,9 @@ Private Sub UserForm_Activate()
     On Error Resume Next
     If Trim$(cmbVrstaVoca.value) = "" Then ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
     On Error GoTo 0
+
+    ' Runtime toggle smera ambalaze u OM-Ulaz frame-u (ne dira .frx).
+    SetupOMIzdavanjeToggle
 
     Exit Sub
 
@@ -857,7 +863,8 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                               ByVal kooperantID As String, _
                               ByVal primalacDisplay As String, _
                               ByVal otkupID As String, _
-                              ByVal tipNovca As String) As Boolean
+                              ByVal tipNovca As String, _
+                              ByVal izdavanjeKoop As Boolean) As Boolean
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -874,9 +881,30 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_OTKUP
 
     If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, _
-                      "Ulaz", stanicaID, "Stanica", _
-                      vozacID, brojDok, DOK_TIP_OM_ULAZ
+        If izdavanjeKoop Then
+            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
+            '   1) Kooperant ULAZ (dobija prazne),
+            '   2) OM/Stanica IZLAZ (razduzenje OM za isti iznos).
+            If Trim$(kooperantID) = "" Then
+                Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
+                          "Izdavanje kooperantu: kooperant je obavezan."
+            End If
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
+                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razduzenje."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Ulaz", kooperantID, "Kooperant", _
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Izlaz", stanicaID, "Stanica", _
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+        Else
+            ' OM PRIMA ambalazu -> Stanica ULAZ (postojece ponasanje).
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Ulaz", stanicaID, "Stanica", _
+                          vozacID, brojDok, DOK_TIP_OM_ULAZ
+        End If
     End If
 
     If novac > 0 Then
@@ -923,6 +951,65 @@ EH:
     On Error GoTo 0
 
     SaveOMUlaz_TX = False
+End Function
+
+' Runtime toggle u fraOMUlaz (CLAUDE.md: nove kontrole se ne dodaju u .frx).
+' Forma-koordinate (frame.Left/Top + pozicija kooperant-dd-a; frame caption je "").
+' Ako pozicija smeta layout-u, podesi OMIZD_DY (razmak ispod kooperant-dd-a).
+Private Sub SetupOMIzdavanjeToggle()
+    ' Podesi po potrebi ako pozicija ne odgovara layout-u:
+    Const OMIZD_DX As Single = 0     ' x-pomeraj u odnosu na kooperant-dd
+    Const OMIZD_DY As Single = 4     ' razmak ISPOD kooperant-dd-a
+    On Error GoTo done
+
+    If Not m_tglIzdKoop Is Nothing Then Exit Sub
+
+    ' 1) Pokusaj kao CHILD OM-Ulaz frame-a (renderuje se UNUTAR frame-a).
+    Dim asChild As Boolean
+    On Error Resume Next
+    Set m_tglIzdKoop = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
+    On Error GoTo done
+    asChild = Not (m_tglIzdKoop Is Nothing)
+
+    ' 2) Fallback: dodaj na formu (uvek radi) i digni ZOrder na vrh (preko frame-a).
+    If Not asChild Then
+        Set m_tglIzdKoop = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
+    End If
+    If m_tglIzdKoop Is Nothing Then GoTo done
+
+    With m_tglIzdKoop
+        .caption = "Izdavanje kooperantu"
+        .width = 150
+        .Height = 20
+        If asChild Then
+            ' frame-relativne koordinate (kontrola je dete frame-a)
+            .Left = cmbPrimalacOMUlaz.Left + OMIZD_DX
+            .Top = cmbPrimalacOMUlaz.Top + cmbPrimalacOMUlaz.Height + OMIZD_DY
+        Else
+            ' forma-koordinate (frame.Left/Top + pozicija kooperant-dd-a)
+            .Left = fraOMUlaz.Left + cmbPrimalacOMUlaz.Left + OMIZD_DX
+            .Top = fraOMUlaz.Top + cmbPrimalacOMUlaz.Top + cmbPrimalacOMUlaz.Height + OMIZD_DY
+        End If
+        .WordWrap = False
+        .Visible = True
+        .value = False
+    End With
+
+    If Not asChild Then
+        On Error Resume Next
+        m_tglIzdKoop.ZOrder 0          ' na vrh, da se vidi preko frame-a
+        On Error GoTo done
+    End If
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupOMIzdavanjeToggle"
+    Set m_tglIzdKoop = Nothing
+End Sub
+
+' Bezbedno cita stanje toggla (False ako kontrola nije kreirana).
+Private Function OMIzdavanjeAktivno() As Boolean
+    On Error Resume Next
+    If Not m_tglIzdKoop Is Nothing Then OMIzdavanjeAktivno = (m_tglIzdKoop.value = True)
 End Function
 
 Private Sub btnUnosOMUlaz_Click()
@@ -1004,9 +1091,30 @@ Private Sub btnUnosOMUlaz_Click()
     Dim otkupID As String
     Dim tipNovca As String
 
+    ' Izdavanje ambalaze kooperantu (toggle): kooperant obavezan nezavisno od novca.
+    Dim izdavanje As Boolean
+    izdavanje = OMIzdavanjeAktivno()
+    If izdavanje Then
+        If kolAmb <= 0 Then
+            MsgBox "Za izdavanje kooperantu unesite kolicinu ambalaze.", vbExclamation, APP_NAME
+            txtKolAmbOMUlaz.SetFocus
+            Exit Sub
+        End If
+        If Trim$(cmbPrimalacOMUlaz.value) = "" Then
+            MsgBox "Izaberite kooperanta (primaoca) za izdavanje ambalaze.", vbExclamation, APP_NAME
+            cmbPrimalacOMUlaz.SetFocus
+            Exit Sub
+        End If
+        kooperantID = GetComboID(cmbPrimalacOMUlaz)
+        If kooperantID = "" Then
+            MsgBox "Nije pronaden ID kooperanta.", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     If novac > 0 Then
         If cmbPrimalacOMUlaz.value <> "" Then
-            kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+            kooperantID = GetComboID(cmbPrimalacOMUlaz)
 
             If kooperantID = "" Then
                 MsgBox "Nije pronaden ID primaoca.", vbExclamation, APP_NAME
@@ -1070,7 +1178,8 @@ Private Sub btnUnosOMUlaz_Click()
         kooperantID:=kooperantID, _
         primalacDisplay:=cmbPrimalacOMUlaz.value, _
         otkupID:=otkupID, _
-        tipNovca:=tipNovca) Then
+        tipNovca:=tipNovca, _
+        izdavanjeKoop:=izdavanje) Then
 
         MsgBox "Greška pri cuvanju OM ulaza. Promene su vracene.", vbCritical, APP_NAME
         Exit Sub
@@ -1084,6 +1193,7 @@ Private Sub btnUnosOMUlaz_Click()
     txtKolAmbOMUlaz.value = ""
     txtNovacOMUlaz.value = ""
     cmbPrimalacOMUlaz.value = ""
+    If Not m_tglIzdKoop Is Nothing Then m_tglIzdKoop.value = False
     cmbOtkupBlok.Clear
     tglIzOMAvansa.value = False
 
@@ -1104,7 +1214,7 @@ Private Sub cmbPrimalacOMUlaz_Change()
     End If
     
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+    kooperantID = GetComboID(cmbPrimalacOMUlaz)
     FillOpenOtkupi
 End Sub
 
@@ -2114,7 +2224,7 @@ Private Sub FillOpenOtkupi()
     If cmbPrimalacOMUlaz.value = "" Then Exit Sub
     
     Dim kooperantID As String
-    kooperantID = ExtractIDFromDisplay(cmbPrimalacOMUlaz.value)
+    kooperantID = GetComboID(cmbPrimalacOMUlaz)
     
     Dim otkupi As Variant
     otkupi = GetOpenOtkupi(kooperantID)

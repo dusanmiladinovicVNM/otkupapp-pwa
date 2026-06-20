@@ -1182,8 +1182,9 @@ Current write rules:
 
 Current read/saldo rules:
 
+- Bookings are **entity-relative**: `Smer` is from the row entity's view — `Ulaz` = crates into that entity, `Izlaz` = out. So otpremnica = `Stanica` `Izlaz`, otkup = `Kooperant` `Izlaz` **+ `Stanica` `Ulaz`** (kooperant returns full, OM charged; no vozač), prijemnica = `Kupac` `Ulaz` (full received from the zbirna) / `Izlaz` (empties returned), izlaz-kupci = `Kupac` `Izlaz`, OM-ulaz = `Stanica` `Ulaz`, OM-izdavanje-kooperantu = `Kooperant` `Ulaz` **+ `Stanica` `Izlaz`** (`DOK_TIP_OM_IZLAZ_KOOP` — kooperant receives empties, OM is discharged; no vozač). The ledger is single-entry (one row per document on its primary entity) **except otkup and OM-izdavanje-kooperantu, which book both legs** — the only flows between two real entities (kooperant ↔ OM), neither derivable from the other's row. (Otpremnica/prijemnica/izlaz-kupci/OM-ulaz stay single-entry because their counterparty is the vozač, derived on read.)
 - `GetAmbalazeStanje` treats `Ulaz` as `+Kolicina` and `Izlaz` as `-Kolicina`.
-- `GetVozacAmbSaldo` treats driver balance as all active movements with matching `VozacID`; there is no canonical `DokumentTip` filter.
+- `GetVozacAmbSaldo` and the `Vozac` packaging report (`ReportAmbalaza`) read the driver as the **inverse transport counterparty** of the entity (the driver leg is derived on read, not stored): `VozacAmbEffectiveSmer` inverts the `Stanica` and `Kupac` legs (otpremnica `Izlaz` → driver `Ulaz`/load; prijemnica `Ulaz` → driver `Izlaz`/unload), and `DokumentTip = "Otkup"` (`Kooperant` procurement) is **excluded** — the otkup has no driver leg. A complete otpremnica→prijemnica route nets to 0; an open otpremnica shows a **positive** saldo = crates still on the driver. Entity saldos use the raw entity-relative `Smer`.
 - Open-ended date filters evaluate `datumOd` and `datumDo` independently.
 - Only non-stornirano rows participate in active saldo helpers.
 
