@@ -410,11 +410,12 @@ Private Sub AutoFillCenaDok()
         If chkDveKlasePrij.value Then txtCenaKlIIPrij.value = Format$(cII, "0.######")
     End If
 
-    ' #6 podrazumevani tip ambalaze iz kulture (otpremnica + prijemnica)
+    ' #6 podrazumevani tip ambalaze iz kulture (otpremnica + zbirna + prijemnica)
     Dim ta As String
     ta = GetKulturaTipAmbalaze(vrsta, sorta)
     If Len(ta) > 0 Then
         cmbTipAmbOtp.value = ta
+        cmbTipAmbZbr.value = ta
         cmbTipAmbPrij.value = ta
     End If
 End Sub
@@ -703,11 +704,12 @@ Private Sub LoadZbirneListbox()
     lstZbirne.BorderStyle = fmBorderStyleNone        ' <-- bez linije
 
     ' --- Kolone: jedan izvor istine za sirine (listbox + header labele) ---
-    Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single
-    wBroj = 70: wDat = 55: wVrsta = 50: wSorta = 75
+    ' Prva kolona suzena; dodata 5. kolona "Kg" (ukupna kolicina zbirne).
+    Dim wBroj As Single, wDat As Single, wVrsta As Single, wSorta As Single, wKg As Single
+    wBroj = 55: wDat = 50: wVrsta = 45: wSorta = 58: wKg = 42
     lstZbirne.Clear
-    lstZbirne.ColumnCount = 4
-    lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta
+    lstZbirne.ColumnCount = 5
+    lstZbirne.ColumnWidths = wBroj & ";" & wDat & ";" & wVrsta & ";" & wSorta & ";" & wKg
 
     ' Header: stil + caption (bold off da ne odudara od labela polja)
     StyleListHeaderLabel lblZbirneBrojZbirne
@@ -724,6 +726,19 @@ Private Sub LoadZbirneListbox()
     lblZbirneDatum.caption = "Datum"
     lblZbirneVrsta.caption = "Vrsta"
     lblZbirneSorta.caption = "Sorta"
+
+    ' "Kg" header: runtime labela (forma je nema u .frx), jednom, isti parent/stil.
+    Dim lblKg As MSForms.label
+    On Error Resume Next
+    Set lblKg = lblZbirneSorta.Parent.Controls("lblZbirneKg")
+    If lblKg Is Nothing Then _
+        Set lblKg = lblZbirneSorta.Parent.Controls.Add("Forms.Label.1", "lblZbirneKg", True)
+    On Error GoTo EH
+    If Not lblKg Is Nothing Then
+        StyleListHeaderLabel lblKg
+        lblKg.Font.Bold = False
+        lblKg.caption = "Kg"
+    End If
 
     ' --- Vertikalni raspored: naslov -> header -> lista, racunato iz naslova ---
     Const GAP_TITLE As Single = 8      ' naslov -> header
@@ -746,6 +761,8 @@ Private Sub LoadZbirneListbox()
     PlaceZbirneHeader lblZbirneVrsta, hx, wVrsta, hTop
     hx = hx + wVrsta
     PlaceZbirneHeader lblZbirneSorta, hx, wSorta, hTop
+    hx = hx + wSorta
+    If Not lblKg Is Nothing Then PlaceZbirneHeader lblKg, hx, wKg, hTop
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -753,12 +770,29 @@ Private Sub LoadZbirneListbox()
     data = ExcludeStornirano(data, TBL_ZBIRNA)
     If IsEmpty(data) Then Exit Sub
 
-    Dim cBroj As Long, cDat As Long, cVrsta As Long, cSorta As Long
+    Dim cBroj As Long, cDat As Long, cVrsta As Long, cSorta As Long, cKol As Long
     cBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
     cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
     cVrsta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
     cSorta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
+    cKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
     If cBroj = 0 Then Exit Sub
+
+    ' Suma kg po BrojZbirne (jedna zbirna moze imati vise redova: Klasa I + II).
+    Dim kgByBroj As Object: Set kgByBroj = CreateObject("Scripting.Dictionary")
+    If cKol > 0 Then
+        Dim rr As Long
+        For rr = 1 To UBound(data, 1)
+            Dim bb As String: bb = Trim$(CStr(Nz(data(rr, cBroj), "")))
+            If bb <> "" Then
+                If kgByBroj.Exists(bb) Then
+                    kgByBroj(bb) = kgByBroj(bb) + CDbl(Nz(data(rr, cKol), 0))
+                Else
+                    kgByBroj.Add bb, CDbl(Nz(data(rr, cKol), 0))
+                End If
+            End If
+        Next rr
+    End If
 
     ' Reverse (najnovije dodate prvo), distinct po BrojZbirne, max 20.
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
@@ -778,6 +812,8 @@ Private Sub LoadZbirneListbox()
                 lstZbirne.List(lstZbirne.ListCount - 1, 1) = dStr
                 lstZbirne.List(lstZbirne.ListCount - 1, 2) = CStr(Nz(data(r, cVrsta), ""))
                 lstZbirne.List(lstZbirne.ListCount - 1, 3) = CStr(Nz(data(r, cSorta), ""))
+                If kgByBroj.Exists(broj) Then _
+                    lstZbirne.List(lstZbirne.ListCount - 1, 4) = Format$(kgByBroj(broj), "#,##0.##")
 
                 n = n + 1
                 If n >= 20 Then Exit For
