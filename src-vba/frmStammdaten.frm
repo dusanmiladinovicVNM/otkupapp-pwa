@@ -33,6 +33,9 @@ Private mChromeRemoved As Boolean
 
 Private mGeoClearConfirmPending As Boolean
 
+' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) — WithEvents omotac.
+Private m_softWrap As clsStmBtn
+
 Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
@@ -112,6 +115,7 @@ Private Sub UserForm_Activate()
     ' novi (vazeci) red. Zato se dugme "Izmeni" sakriva za Cenovnik.
     On Error Resume Next
     btnIzmeni.Visible = (Me.Tag <> "Cenovnik")
+    EnsureSoftDeleteButton
     On Error GoTo EH
 
     m_SelectedRow = 0
@@ -770,6 +774,93 @@ Private Sub AlignControlToRow(ByVal ctl As MSForms.Control, ByVal refCtl As MSFo
     ctl.Top = refCtl.Top
     ctl.width = refCtl.width
     ctl.Height = refCtl.Height
+End Sub
+
+' ============================================================
+' SOFT-DELETE (#1): runtime dugme "Deaktiviraj/Aktiviraj"
+' Vidljivo samo za tabele koje imaju kolonu Aktivan/Aktivna.
+' Klik flipuje status izabranog reda (ne brise ga).
+' ============================================================
+Private Function AktivanColName() As String
+    ' Vraca naziv kolone statusa ("Aktivan" ili "Aktivna") ili "" ako ne postoji.
+    On Error Resume Next
+    If GetColumnIndex(m_TableName, "Aktivan") > 0 Then
+        AktivanColName = "Aktivan"
+    ElseIf GetColumnIndex(m_TableName, "Aktivna") > 0 Then
+        AktivanColName = "Aktivna"
+    End If
+End Function
+
+Private Sub EnsureSoftDeleteButton()
+    On Error Resume Next
+
+    ' Napravi dugme jednom (runtime), desno od btnIzmeni.
+    If m_softWrap Is Nothing Then
+        Dim c As MSForms.CommandButton
+        Set c = Me.Controls.Add("Forms.CommandButton.1", "btnSoftDelete", True)
+        c.Left = btnIzmeni.Left + btnIzmeni.width + 8
+        c.Top = btnIzmeni.Top
+        c.width = btnIzmeni.width
+        c.Height = btnIzmeni.Height
+        StyleStornoButton c, "Deaktiviraj/Aktiviraj"
+
+        Set m_softWrap = New clsStmBtn
+        Set m_softWrap.btn = c
+    End If
+
+    ' Vidljivo samo gde ima status kolona (i nije Cenovnik/Podesavanja).
+    m_softWrap.btn.Visible = (Len(AktivanColName()) > 0)
+End Sub
+
+' Public — poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
+Public Sub OnSoftDeleteClick()
+    On Error GoTo EH
+
+    Dim colName As String
+    colName = AktivanColName()
+    If Len(colName) = 0 Then Exit Sub
+
+    If lstData.ListIndex >= 0 Then m_SelectedRow = GetMappedSelectedRow()
+    If m_SelectedRow = 0 Then
+        MsgBox "Izaberite stavku iz liste!", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim data As Variant
+    data = GetTableData(m_TableName)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim colIdx As Long
+    colIdx = GetColumnIndex(m_TableName, colName)
+
+    Dim cur As String, newVal As String
+    cur = Trim$(NzToText(data(m_SelectedRow, colIdx)))
+    If StrComp(cur, STATUS_NEAKTIVAN, vbTextCompare) = 0 Then
+        newVal = STATUS_AKTIVAN
+    Else
+        newVal = STATUS_NEAKTIVAN
+    End If
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot m_TableName
+    RequireUpdateCell m_TableName, m_SelectedRow, colName, newVal, "frmStammdaten.OnSoftDeleteClick"
+    tx.CommitTx
+    Set tx = Nothing
+
+    LoadList
+    ClearFields
+    m_SelectedRow = 0
+    MsgBox "Status promenjen u: " & newVal, vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogErr "frmStammdaten.OnSoftDeleteClick"
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    MsgBox "Greška pri promeni statusa: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.

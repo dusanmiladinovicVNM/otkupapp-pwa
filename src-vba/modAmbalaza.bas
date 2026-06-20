@@ -414,7 +414,7 @@ Public Function GetTipAmbalazeOptions() As Variant
     On Error GoTo Fallback
 
     Dim arr As Variant
-    arr = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP)
+    arr = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP, , , True)
 
     If IsArray(arr) Then
         If (UBound(arr) - LBound(arr) + 1) > 0 Then

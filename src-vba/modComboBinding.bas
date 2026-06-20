@@ -39,6 +39,9 @@ Public Sub FillComboDisplayID(ByVal cmb As MSForms.ComboBox, _
     colDisplay = RequireColumnIndex(tableName, displayCol, "modComboBinding.FillComboDisplayID")
     colID = RequireColumnIndex(tableName, idCol, "modComboBinding.FillComboDisplayID")
 
+    Dim colAkt As Long
+    colAkt = GetColumnIndex(tableName, "Aktivan")   ' soft-delete filter (ako kolona postoji)
+
     Dim i As Long
     Dim displayText As String
     Dim idValue As String
@@ -47,7 +50,13 @@ Public Sub FillComboDisplayID(ByVal cmb As MSForms.ComboBox, _
         idValue = Trim$(NzToText(data(i, colID)))
         displayText = Trim$(NzToText(data(i, colDisplay)))
 
-        If idValue <> "" Then
+        Dim isInactive As Boolean
+        isInactive = False
+        If colAkt > 0 Then
+            If StrComp(Trim$(NzToText(data(i, colAkt))), STATUS_NEAKTIVAN, vbTextCompare) = 0 Then isInactive = True
+        End If
+
+        If idValue <> "" And Not isInactive Then
             cmb.AddItem displayText
             cmb.List(cmb.ListCount - 1, 1) = idValue
         End If

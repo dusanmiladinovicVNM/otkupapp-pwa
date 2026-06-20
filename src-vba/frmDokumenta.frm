@@ -71,7 +71,7 @@ Private Sub UserForm_Activate()
         
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
-    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca")
+    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillComboDisplayID cmbKupac, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
     FillCmb cmbVozac, GetVozacDisplayList()
@@ -386,7 +386,7 @@ Private Sub cmbVrstaVoca_Change()
     cmbSortaVoca.Clear
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
-            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
+            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value, True)
     End If
     AutoFillCenaDok
 End Sub

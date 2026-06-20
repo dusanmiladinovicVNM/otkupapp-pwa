@@ -60,7 +60,7 @@ Private Sub UserForm_Initialize()
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
     ' ComboBoxen füllen
-    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca")
+    FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillCmb cmbVozac, GetVozacDisplayList()
     FillCmb cmbTipAmbalaze, GetTipAmbalazeOptions()
@@ -171,7 +171,7 @@ Private Sub cmbVrstaVoca_Change()
     cmbSortaVoca.Clear
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
-            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value)
+            GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", cmbVrstaVoca.value, True)
     End If
     AutoFillCenaOtkup
 End Sub
