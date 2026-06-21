@@ -572,11 +572,28 @@ Private Sub btnUnosOtp_Click()
         Exit Sub
     End If
 
+    ' Klasa I opciona: dve-klase + prazna Klasa I -> samo Klasa II (Kolicina I i
+    ' Ambalaza I tada moraju biti prazne).
     Dim kolicinaI As Double
-    If Not TryParseDouble(txtKolicinaOtp.value, kolicinaI) Or kolicinaI <= 0 Then
-        MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
-        txtKolicinaOtp.SetFocus
-        Exit Sub
+    Dim hasKlasaI As Boolean: hasKlasaI = (Trim$(txtKolicinaOtp.value) <> "")
+    If hasKlasaI Then
+        If Not TryParseDouble(txtKolicinaOtp.value, kolicinaI) Or kolicinaI <= 0 Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtKolicinaOtp.SetFocus
+            Exit Sub
+        End If
+    Else
+        If Not chkDveKlaseOtp.value Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtKolicinaOtp.SetFocus
+            Exit Sub
+        End If
+        If txtKolAmbOtp.value <> "" Then
+            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+                   vbExclamation, APP_NAME
+            txtKolAmbOtp.SetFocus
+            Exit Sub
+        End If
     End If
 
     Dim cenaI As Double
@@ -1401,11 +1418,28 @@ Private Sub btnUnosZbr_Click()
         Exit Sub
     End If
 
+    ' Klasa I opciona: dve-klase + prazna Klasa I -> samo Klasa II (Ukupno I i
+    ' Ambalaza I tada moraju biti prazni).
     Dim ukupnoKolI As Double
-    If Not TryParseDouble(txtUkupnoKGZbr.value, ukupnoKolI) Or ukupnoKolI <= 0 Then
-        MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
-        txtUkupnoKGZbr.SetFocus
-        Exit Sub
+    Dim hasKlasaI As Boolean: hasKlasaI = (Trim$(txtUkupnoKGZbr.value) <> "")
+    If hasKlasaI Then
+        If Not TryParseDouble(txtUkupnoKGZbr.value, ukupnoKolI) Or ukupnoKolI <= 0 Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtUkupnoKGZbr.SetFocus
+            Exit Sub
+        End If
+    Else
+        If Not chkDveKlaseZbr.value Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtUkupnoKGZbr.SetFocus
+            Exit Sub
+        End If
+        If Trim$(txtUkupnoAmbZbr.value) <> "" Then
+            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+                   vbExclamation, APP_NAME
+            txtUkupnoAmbZbr.SetFocus
+            Exit Sub
+        End If
     End If
     
     Dim ukupnoKolII As Double
@@ -1669,11 +1703,28 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
+    ' Klasa I opciona: dve-klase + prazna Klasa I -> samo Klasa II (Kolicina I i
+    ' Ambalaza I tada moraju biti prazne).
     Dim kolicinaI As Double
-    If Not TryParseDouble(txtKolicinaPrij.value, kolicinaI) Or kolicinaI <= 0 Then
-        MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
-        txtKolicinaPrij.SetFocus
-        Exit Sub
+    Dim hasKlasaI As Boolean: hasKlasaI = (Trim$(txtKolicinaPrij.value) <> "")
+    If hasKlasaI Then
+        If Not TryParseDouble(txtKolicinaPrij.value, kolicinaI) Or kolicinaI <= 0 Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtKolicinaPrij.SetFocus
+            Exit Sub
+        End If
+    Else
+        If Not chkDveKlasePrij.value Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtKolicinaPrij.SetFocus
+            Exit Sub
+        End If
+        If Trim$(txtKolAmbPrij.value) <> "" Then
+            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+                   vbExclamation, APP_NAME
+            txtKolAmbPrij.SetFocus
+            Exit Sub
+        End If
     End If
 
     Dim cenaI As Double
