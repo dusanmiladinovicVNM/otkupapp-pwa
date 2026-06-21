@@ -1,3 +1,4 @@
+Attribute VB_Name = "modNovac"
 Option Explicit
 
 ' ============================================================

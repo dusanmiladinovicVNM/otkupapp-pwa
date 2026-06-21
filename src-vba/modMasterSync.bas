@@ -1,3 +1,4 @@
+Attribute VB_Name = "modMasterSync"
  Option Explicit
 
 ' ============================================================

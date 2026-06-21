@@ -1,3 +1,4 @@
+Attribute VB_Name = "modBrojevi"
 'Attribute VB_Name = "modBrojevi"
 Option Explicit
 
