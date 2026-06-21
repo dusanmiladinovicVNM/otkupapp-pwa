@@ -933,6 +933,11 @@ Private Sub lstKartica_Click()
     KarticaDetalji_ShowForRow Me, lstKartica
 End Sub
 
+Private Sub lstKartica_Change()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstKartica
+End Sub
+
 Private Sub btnStampajKarticu_Click()
     On Error GoTo EH
 

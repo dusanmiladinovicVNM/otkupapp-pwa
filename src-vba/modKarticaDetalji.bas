@@ -21,6 +21,11 @@ Public Const KART_REFKEY_COL As Long = 6
 Private mLst As MSForms.ListBox        ' detail lista (2 kolone: Stavka | Vrednost)
 Private mLblTitle As MSForms.label
 Private mBuilt As Boolean
+Private mFormLevel As Boolean          ' True ako su kontrole na formi (fallback), ne na Page-u
+
+' Dijagnostika (samo kad build ne uspe): jednom po sesiji prikazi razlog.
+Private mDiag As String
+Private mDiagShown As Boolean
 
 ' Reset modul-stanja (zovi iz frmIzvestaj setup-a): posle Unload-a forme
 ' dinamicke kontrole vise ne postoje, pa se mBuilt/mLst moraju resetovati.
@@ -36,26 +41,40 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     If mBuilt Then Exit Sub
     If lstKartica Is Nothing Then Exit Sub
 
+    ' Kontrole se dodaju EKSPLICITNO u karticu-stranicu mpReports.Pages(8) (NE preko
+    ' lstKartica.Parent — kod MultiPage-a .Parent ne mora vratiti Page). Tako su deca
+    ' iste stranice (ispravan z-order, auto-vidljivost) i koordinate su page-relativne
+    ' kao lstKartica. Fallback na formu ako stranica nije dostupna.
     Dim cont As Object
     On Error Resume Next
-    Set cont = lstKartica.Parent            ' isti container kao lstKartica (Page 8)
+    Set cont = frm.Controls("mpReports").Pages(8)
     On Error GoTo EH
-    If cont Is Nothing Then Set cont = frm
+    mFormLevel = False
+    If cont Is Nothing Then
+        Set cont = frm
+        mFormLevel = True
+    End If
 
     Const GAP As Double = 8
-    Dim leftX As Double
+    Dim leftX As Double, topY As Double, panelH As Double, availW As Double
+
     leftX = lstKartica.Left + lstKartica.width + GAP
-
-    Dim availW As Double
-    availW = 240
-    On Error Resume Next
-    availW = cont.InsideWidth - leftX - 8
-    On Error GoTo EH
-    If availW < 160 Then availW = 220
-    If availW > 360 Then availW = 360
-
-    Dim topY As Double
     topY = lstKartica.Top
+    panelH = lstKartica.Height
+
+    availW = 220
+    On Error Resume Next
+    availW = cont.InsideWidth - leftX - GAP
+    On Error GoTo EH
+    If availW < 150 Then availW = 200       ' malo mesta desno -> minimalna sirina
+    If availW > 380 Then availW = 380
+    If panelH < 120 Then panelH = 120
+
+    On Error Resume Next
+    mDiag = "cont=" & TypeName(cont) & "; leftX=" & CStr(CLng(leftX)) & _
+            "; topY=" & CStr(CLng(topY)) & "; availW=" & CStr(CLng(availW)) & _
+            "; lstW=" & CStr(CLng(lstKartica.width))
+    On Error GoTo EH
 
     Set mLblTitle = cont.Controls.Add("Forms.Label.1", "lblKarticaDetaljiNaslov", True)
     With mLblTitle
@@ -75,7 +94,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
         .Left = leftX
         .Top = topY
         .width = availW
-        .Height = lstKartica.Height
+        .Height = panelH
         .ColumnCount = 2
         .ColumnWidths = CStr(Int(availW * 0.46)) & ";" & CStr(Int(availW * 0.5))
     End With
@@ -86,6 +105,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     mBuilt = True
     Exit Sub
 EH:
+    mDiag = mDiag & " | ERR " & CStr(Err.Number) & ": " & Err.description
     LogErr "modKarticaDetalji.KarticaDetalji_Ensure"
 End Sub
 
@@ -97,8 +117,14 @@ End Sub
 
 Public Sub KarticaDetalji_SetVisible(ByVal b As Boolean)
     On Error Resume Next
-    If Not mLst Is Nothing Then mLst.visible = b
-    If Not mLblTitle Is Nothing Then mLblTitle.visible = b
+    If b Then
+        If Not mLst Is Nothing Then mLst.visible = True
+        If Not mLblTitle Is Nothing Then mLblTitle.visible = True
+    ElseIf mFormLevel Then
+        ' Sakrij samo forma-level kontrole; page-deca se kriju zajedno sa stranicom.
+        If Not mLst Is Nothing Then mLst.visible = False
+        If Not mLblTitle Is Nothing Then mLblTitle.visible = False
+    End If
 End Sub
 
 ' Prikazi detalje za trenutno izabran red lstKartica.
@@ -107,7 +133,15 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
     If lstKartica Is Nothing Then Exit Sub
 
     KarticaDetalji_Ensure frm, lstKartica
-    If mLst Is Nothing Then Exit Sub
+    If mLst Is Nothing Then
+        ' Panel nije kreiran -> jednom prijavi razlog (da ne ostane "nista se ne desava").
+        If Not mDiagShown Then
+            mDiagShown = True
+            MsgBox "Panel 'Detalji otkupa' nije kreiran." & vbCrLf & mDiag, _
+                   vbExclamation, "OtkupApp"
+        End If
+        Exit Sub
+    End If
 
     Dim idx As Long
     idx = lstKartica.ListIndex
