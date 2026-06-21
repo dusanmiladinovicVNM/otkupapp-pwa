@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.32  
+**Current Version:** v6.33  
 **Last Updated:** 2026-06-21  
-**Status:** Active changelog — v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
+**Status:** Active changelog — v6.33 otkupni list: „Saldo ambalaze" je sada kumulativni entitetski saldo kooperanta (Početno stanje pre bloka + Izdato − Primljeno; novi `modAmbalaza.GetKooperantAmbOpening`). v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
 
 ---
 
@@ -53,6 +53,7 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.33 | 2026-06-21 | Otkupni list (`modPrint`): red **„Saldo ambalaze" → kumulativni entitetski saldo kooperanta** = početno stanje pre bloka (`modAmbalaza.GetKooperantAmbOpening`, čita ledger po redosledu upisa → ispravno i na re-print) + izdato − primljeno; dodat red **„Pocetno stanje"** (leva kutija 4 reda, desni obračun poravnat na dno). Rešava v6.32 known-limit (saldo je bio per-dokument). | Yes — AR §5.12 | presentation/read-only; bez migracije; re-import `modPrint` + `modAmbalaza`; smoke: re-print starijeg bloka — saldo = početno + izdato − primljeno |
 | v6.32 | 2026-06-21 | Otkupni list (`modPrint`): ambalaža prikazana kao mala **uokvirena tabelica** — redovi Primljena / Izdata / **Saldo ambalaze** (saldo = primljena − izdata; novi `h("ambSaldo")`), levo od obračun-boksa; „Rok isplate" premešten na red oznake primerka (ostaje vidljiv kao mandatorni element). Bez dodavanja redova — primerak i dalje tačno 1/3 A4 (99 mm). | Yes — AR §5.12 | presentation-only; bez migracije; re-import `modPrint`; smoke: štampa otkupnog lista (tabelica primljena/izdata/saldo + staje u 1/3) |
 | v6.31 | 2026-06-21 | Dvoklasni otkup — puna podrška za **Klasu II kroz ceo lanac**: Klasa II (drugi `tblOtkup`/dokument red, isti `BrDok`) nosi **svoju** količinu ambalaže `kolAmbII` kroz ledger, otpremnicu/zbirnu/prijemnicu i **paletizaciju** (#3, reverz starog „ambalaža samo na Klasi I"). **Unos samo Klase II** bez Klase I (otkup + dokumenta; `hasKlasaI = kolicinaI > 0`, bar jedna klasa) (#2). **Bruto unos**: ako ima količine bez gajbi → blok snimanja (bez gajbi se bruto ne pretvara u neto, tara se plaća kao voće) (#1). **Otpremnica čuva neto** + `tblOtpremnica.BrutoKg` (panel poredi neto↔neto; labele „bruto (neto X)") (#5). MALINA: posivljena Zbirna sekcija u `frmDokumenta` (`DisableFraZbirnaMalina` — i deca kontrole). Auto-cena Klase II na `chkDveKlase`. Storno celog dokumenta `StornoOtkupByBrDok_TX` (oba reda). PR57: `modBrojevi.GenerateBrojPrijemnice` + auto-predlog. Fix regresije: izdata ambalaža se gubila kod unosa samo Klase II (sad se rutira na red Klase II). | **Yes** — AR §6.1/§6.2/§6.4/§6.8/§6.9 + §5.4/§5.5; companion `AMBALAZA_MODEL.md` §3/§9 | re-import `frmOtkup`/`frmDokumenta`/`modOtkup`/`modDokumenta`/`modAutoHladnjaca`/`modStorno`/`modOtkupBlok`/`modConfig`/`modSetup`/`modPrint`/`modPaletniList`/`modPodesavanja`/`modBrojevi`/`modBusinessFlowProTests`; pokreni `EnsureDoradeSchema` (dodaje `tblOtpremnica.BrutoKg`); stari redovi nemaju `kolAmbII`/`BrutoKg` (prazno = neto, ambalaža samo Klasa I) — bez migracije |
 | v6.30 | 2026-06-20 | Otkup desktop: novo polje „Izdata ambalaza" (OM→kooperant uz otkup) — double-entry `Kooperant Ulaz` + `Stanica Izlaz` pod `DOK_TIP_OM_IZLAZ_KOOP` (DokumentID = otkupID, bez vozača; reuse modela iz v6.29 / `AMBALAZA_MODEL.md`), perzistira u `tblOtkup.KolAmbIzdata`; `StornoOtkup` reversuje obe noge (deli otkupID). Otkupni list (`modPrint`) obogaćen: ambalaža blok prikazuje **Primljenu i Izdatu**, tabela stavki proširena na 8 kolona (Cena bez PDV / Cena s PDV / Kol. neto / Kol. bruto = neto + gajbice×tara iz `tblTipAmbalaze.TezinaGajbiceKg` / Vrednost neto), red „Objekat" (lokacija + br. registra; firmin config `SELLER_OBJEKAT_*`) ispod reda sa PIB, i vreme snimanja (`tblOtkup.VremeUnosa` = `Now()`) uz Datum. | Companion `AMBALAZA_MODEL.md` (§3/§9); main ref TBD | re-import `modConfig`/`modSetup`/`modOtkup`/`frmOtkup`/`modStorno`/`modPrint`/`modPodesavanja`; pokreni `EnsureDoradeSchema` (kreira `KolAmbIzdata` + `VremeUnosa`); popuni `SELLER_OBJEKAT_*` u Podešavanjima; postojeći otkupi nemaju izdatu/vreme (prazno); 2-stavke (Klasa I+II) + „Objekat" red su tesni za 1/3 A4 — proveri štampu |
@@ -107,6 +108,38 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.33 — 2026-06-21
+
+### Summary
+
+Otkupni list (`OtkupSablon` / `modPrint`): red **„Saldo ambalaze"** više nije per-dokument (primljena − izdata ovog otkupa), nego **kumulativni entitetski saldo kooperanta** = **početno stanje pre izrade bloka** + izdato (`Kooperant Ulaz`) − primljeno (`Kooperant Izlaz`). Dodat je i poseban red **„Pocetno stanje"** iznad Primljene/Izdate. Početno stanje se računa iz ledgera **po redosledu upisa** (sve kooperantove `Ulaz/Izlaz` stavke upisane pre prvog reda ovog bloka), pa je ispravno i kod **ponovne štampe starijeg bloka** (kasniji blokovi se ne uračunavaju). Rešava known-limitaciju iz v6.32. Bez promene ledgera — read/presentation-only.
+
+### Added
+
+- `modAmbalaza.GetKooperantAmbOpening(koopID, tipAmb, blockOtkupIDs)` → `Long`: entitetski saldo kooperanta (Ulaz +, Izlaz −) za dati tip ambalaže, sabran nad svim ledger redovima **upisanim pre prvog reda datog bloka**. Blok se identifikuje preko `DokumentID ∈ blockOtkupIDs` (obe noge — `Otkup` i `OM-Izlaz-Koop` — dele `DokumentID = otkupID`). `ExcludeStornirano`; schema guard preko `RequireColumnIndex`. Fallback (blok bez ledger redova, npr. legacy): sve kooperantove stavke kao početno.
+- `modPrint.FillOtkupSablon`: `h("ambPocetno")` (`tipAmb & " x " & početno`).
+
+### Changed
+
+- `modPrint.FillOtkupSablon`: `h("ambSaldo")` = `ambPoc + kolAmbIzd − kolAmb` (entitetski, „koliko gajbica kooperant drži/duguje"); pre toga je bilo `kolAmb − kolAmbIzd` (per-dokument, suprotan znak).
+- `modPrint.WriteOtkupCopy`: leva ambalaža kutija je sada **4 reda** (`ob..ob+3`): Pocetno stanje / Primljena / Izdata / **Saldo**; desni obračun-boks (Osnovica/PDV/UKUPNO) pomeren na `ob+1..ob+3` (gornji desni red prazan) da donje ivice obe kutije ostanu poravnate. Visine 13/13/13/14 pt; `usedPt += 53` (bilo 40); `rr = ob+4`. Klauzula filler se sam doteruje pa primerak ostaje 1/3 A4.
+
+### Known Issues / Known Limitations
+
+- Otkupni list prikazuje **jedan tip ambalaže** (iz prvog reda); ako kooperant istorijski drži više tipova, početno/saldo se odnose samo na taj tip.
+- Nasleđeno iz v6.30: „Objekat" red + 2 stavke + sada 4. red u kutiji — primerak je još bliže granici 99 mm; vizuelno proveriti na štampi.
+
+### Verification / Acceptance Gates
+
+- VBA verifikovan statički (Function/End Function balans, Select Case/End Select balans, helper definisan jednom i pozvan jednom, `amb*` ključevi samo u `modPrint`). Finalni smoke (korisnik, Excel): re-printaj stariji blok — potvrdi da je Saldo = Početno + Izdato − Primljeno i da primerak staje u 1/3 A4.
+
+### Migration / Data Notes
+
+- Read/presentation-only; bez migracije. Re-import `modPrint` + `modAmbalaza`.
+
+Reference updated: Yes (§5.12).
 
 
 ## v6.32 — 2026-06-21

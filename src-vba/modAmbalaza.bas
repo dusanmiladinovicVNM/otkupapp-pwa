@@ -301,6 +301,114 @@ EH:
 End Function
 
 ' ============================================================
+' READ: pocetno stanje ambalaze kooperanta PRE datog bloka.
+'
+' "Pre bloka" = svi redovi tog kooperanta (Ulaz +, Izlaz -) za dati
+' tipAmb upisani PRE prvog reda ovog bloka (po redosledu upisa u
+' append-only tabeli). Blok se identifikuje preko DokumentID-a iz
+' blockOtkupIDs (obe noge - Otkup i OM-Izlaz-Koop - dele DokumentID =
+' otkupID). Tako je ispravno i kod ponovne stampe starijeg bloka:
+' kasniji blokovi se NE uracunavaju u pocetno stanje.
+'
+' Fallback: ako se nijedan red bloka ne nadje (npr. legacy red pre
+' dvojnog upisa), uzima SVE kooperantove redove tog tipa kao pocetno.
+'
+' blockOtkupIDs: niz (npr. Split rezultat) ili string "OTK-1 + OTK-2".
+' Vraca Long (entitetski saldo: Ulaz = +Kolicina, Izlaz = -Kolicina).
+' ============================================================
+Public Function GetKooperantAmbOpening(ByVal koopID As String, _
+                                       ByVal tipAmb As String, _
+                                       ByVal blockOtkupIDs As Variant) As Long
+    Const SRC As String = "modAmbalaza.GetKooperantAmbOpening"
+
+    On Error GoTo EH
+
+    GetKooperantAmbOpening = 0
+
+    If Len(Trim$(koopID)) = 0 Or Len(Trim$(tipAmb)) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colTip As Long, colKol As Long, colSmer As Long
+    Dim colEntID As Long, colEntTip As Long, colDokID As Long
+    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
+    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
+    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
+    colEntID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+
+    ' Skup otkup-ID-jeva ovog bloka (niz ili string "OTK-1 + OTK-2").
+    Dim blk As Object
+    Set blk = CreateObject("Scripting.Dictionary")
+    blk.CompareMode = vbTextCompare
+
+    If IsArray(blockOtkupIDs) Then
+        Dim el As Variant
+        For Each el In blockOtkupIDs
+            If Len(Trim$(CStr(el))) > 0 Then blk(Trim$(CStr(el))) = True
+        Next el
+    Else
+        Dim parts() As String
+        parts = Split(CStr(blockOtkupIDs), " + ")
+        Dim p As Long
+        For p = LBound(parts) To UBound(parts)
+            If Len(Trim$(parts(p))) > 0 Then blk(Trim$(parts(p))) = True
+        Next p
+    End If
+
+    ' 1) Prvi (najraniji) red ovog bloka za ovog kooperanta = granica "pre bloka".
+    Dim i As Long
+    Dim minIdx As Long: minIdx = 0
+    If blk.count > 0 Then
+        For i = 1 To UBound(data, 1)
+            If AmbText(data(i, colEntTip)) = "Kooperant" And _
+               AmbText(data(i, colEntID)) = Trim$(koopID) Then
+                If blk.Exists(AmbText(data(i, colDokID))) Then
+                    minIdx = i
+                    Exit For
+                End If
+            End If
+        Next i
+    End If
+
+    ' 2) Saldo svih redova PRE granice (ili svih, ako blok nije nadjen -> fallback).
+    Dim cutoff As Long
+    If minIdx > 0 Then
+        cutoff = minIdx - 1
+    Else
+        cutoff = UBound(data, 1)
+    End If
+
+    Dim saldo As Long: saldo = 0
+    For i = 1 To cutoff
+        If AmbText(data(i, colEntTip)) = "Kooperant" And _
+           AmbText(data(i, colEntID)) = Trim$(koopID) And _
+           AmbText(data(i, colTip)) = Trim$(tipAmb) Then
+
+            If IsNumeric(data(i, colKol)) Then
+                Select Case AmbText(data(i, colSmer))
+                    Case AMB_SMER_ULAZ:  saldo = saldo + CLng(data(i, colKol))
+                    Case AMB_SMER_IZLAZ: saldo = saldo - CLng(data(i, colKol))
+                End Select
+            End If
+        End If
+    Next i
+
+    GetKooperantAmbOpening = saldo
+    Exit Function
+
+EH:
+    LogErr SRC
+    GetKooperantAmbOpening = 0
+End Function
+
+' ============================================================
 ' READ: saldo ambalaze po vozacu
 '
 ' Returns:
