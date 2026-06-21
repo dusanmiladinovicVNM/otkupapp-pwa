@@ -105,9 +105,11 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     Set loStari = NadjiListObject(stari, loNovi.name)
     If loStari Is Nothing Then KopirajTabelu = -1: Exit Function
 
+    ' stari prazan (nema body) -> nista za prenos
+    If loStari.DataBodyRange Is Nothing Then KopirajTabelu = 0: Exit Function
+    If loStari.ListRows.count = 0 Then KopirajTabelu = 0: Exit Function
     ' ocisti eventualne postojece redove u novom (idempotentno)
     If Not loNovi.DataBodyRange Is Nothing Then loNovi.DataBodyRange.ClearContents
-    If loStari.ListRows.count = 0 Then KopirajTabelu = 0: Exit Function
 
     ' mapiranje: novi col -> stari col, PO IMENU
     Dim nNew As Long: nNew = loNovi.ListColumns.count
@@ -129,11 +131,17 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     End If
     Dim nRows As Long: nRows = UBound(src, 1)
 
-    ' prosiri novu tabelu na header + nRows, pa upisi SAMO mapirane kolone
-    ' (nove/kalkulisane kolone u novom fajlu ostaju netaknute)
-    ' Range.Cells(1,1) je gornji-levi (header) ugao - uvek set (HeaderRowRange
-    ' ume da bude Nothing ako tabela nema prikazan header -> Error 91).
-    loNovi.Resize loNovi.Range.Cells(1, 1).Resize(nRows + 1, nNew)
+    ' osiguraj TACNO nRows redova u novoj tabeli - robustno preko ListRows.Add/Delete
+    ' (radi i kad tabela nema prikazan header ili deli sheet sa drugom tabelom;
+    '  bez Resize-a koji ume da padne na Error 91 / koliziju)
+    Do While loNovi.ListRows.count > nRows
+        loNovi.ListRows(loNovi.ListRows.count).Delete
+    Loop
+    Do While loNovi.ListRows.count < nRows
+        loNovi.ListRows.Add
+    Loop
+
+    ' upisi SAMO mapirane kolone (nove/kalkulisane kolone ostaju netaknute)
     Dim colArr() As Variant, r As Long
     For j = 1 To nNew
         If mapCol(j) > 0 Then
