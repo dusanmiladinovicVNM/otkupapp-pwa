@@ -31,6 +31,15 @@ Private m_FocusableInputs As Collection
 
 Private mChromeRemoved As Boolean
 
+' Runtime polja "Kol. amb (II)" za dokument tipove (Klasa II je zaseban red sa
+' svojom ambalazom); dele red sa Klasa I ambalazom. CLAUDE.md: ne diraju .frx.
+Private m_txtKolAmbIIOtp As MSForms.TextBox
+Private m_txtKolAmbIIZbr As MSForms.TextBox
+Private m_txtKolAmbIIPrij As MSForms.TextBox
+Private m_ambIOtpFullW As Single
+Private m_ambIZbrFullW As Single
+Private m_ambIPrijFullW As Single
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
@@ -103,6 +112,12 @@ Private Sub UserForm_Activate()
     chkDveKlasePrij.value = False
     lblUkupnoKgPrij.caption = ""
     lblProsekGajbe.caption = ""
+
+    ' Runtime polja "Kol. amb (II)" za dokumente (ne diraju .frx; skrivena dok
+    ' chkDveKlase* nije ukljucen).
+    Set m_txtKolAmbIIOtp = SetupKlIIAmb("txtKolAmbIIOtpRT", txtKolAmbOtp, txtKolicinaKlIIOtp)
+    Set m_txtKolAmbIIZbr = SetupKlIIAmb("txtKolAmbIIZbrRT", txtUkupnoAmbZbr, txtUkupnoKgKlIIZbr)
+    Set m_txtKolAmbIIPrij = SetupKlIIAmb("txtKolAmbIIPrijRT", txtKolAmbPrij, txtKolicinaKlIIPrij)
     
     ' Storno ComboBox füllen
     With cmbStornoDokument
@@ -224,6 +239,7 @@ Private Sub chkDveKlaseOtp_Click()
         DisableField txtCenaKlIIOtp
         lblUkupnoKgOtp.caption = ""
     End If
+    ShowKlIIAmb m_txtKolAmbIIOtp, txtKolAmbOtp, txtKolicinaKlIIOtp, m_ambIOtpFullW, chkDveKlaseOtp.value
 End Sub
 
 Private Sub chkDveKlaseZbr_Click()
@@ -233,6 +249,7 @@ Private Sub chkDveKlaseZbr_Click()
     Else
         DisableField txtUkupnoKgKlIIZbr
     End If
+    ShowKlIIAmb m_txtKolAmbIIZbr, txtUkupnoAmbZbr, txtUkupnoKgKlIIZbr, m_ambIZbrFullW, chkDveKlaseZbr.value
 End Sub
 
 Private Sub chkDveKlasePrij_Click()
@@ -244,6 +261,47 @@ Private Sub chkDveKlasePrij_Click()
     Else
         DisableField txtKolicinaKlIIPrij
         DisableField txtCenaKlIIPrij
+    End If
+    ShowKlIIAmb m_txtKolAmbIIPrij, txtKolAmbPrij, txtKolicinaKlIIPrij, m_ambIPrijFullW, chkDveKlasePrij.value
+End Sub
+
+' Genericko runtime polje "Kol. amb (II)" za frmDokumenta: deli red sa Klasa I
+' ambalazom (desna polovina, poravnato sa kolonom Klase II). .frx se ne dira.
+Private Function SetupKlIIAmb(ByVal nm As String, ByVal ambI As MSForms.Control, _
+                             ByVal kolII As MSForms.Control) As MSForms.TextBox
+    On Error GoTo fail
+    Dim t As MSForms.TextBox
+    Set t = Me.Controls.Add("Forms.TextBox.1", nm, True)
+    With t
+        .Left = kolII.Left
+        .Top = ambI.Top
+        .width = kolII.width
+        .Height = ambI.Height
+        .ControlTipText = "Broj gajbi za Klasu II (zasebno od Klase I)"
+        .visible = False
+    End With
+    StyleTextBox t
+    Set SetupKlIIAmb = t
+    Exit Function
+fail:
+    LogErr "frmDokumenta.SetupKlIIAmb"
+    Set SetupKlIIAmb = Nothing
+End Function
+
+' Prikaz/sakrivanje Klasa II amb polja; deli red sa Klasa I amb: skupi je na levu
+' polovinu kad je ON, vrati punu sirinu kad je OFF; pri skrivanju cisti vrednost.
+Private Sub ShowKlIIAmb(ByVal t As MSForms.TextBox, ByVal ambI As MSForms.Control, _
+                        ByVal kolII As MSForms.Control, ByRef fullW As Single, ByVal bShow As Boolean)
+    On Error Resume Next
+    If t Is Nothing Then Exit Sub
+    If bShow Then
+        If fullW <= 0 Then fullW = ambI.width
+        ambI.width = kolII.Left - ambI.Left - 6
+        t.visible = True
+    Else
+        If fullW > 0 Then ambI.width = fullW
+        t.visible = False
+        t.value = ""
     End If
 End Sub
 
@@ -537,6 +595,17 @@ Private Sub btnUnosOtp_Click()
         End If
     End If
 
+    Dim kolAmbII As Long
+    If chkDveKlaseOtp.value And Not m_txtKolAmbIIOtp Is Nothing Then
+        If Trim$(m_txtKolAmbIIOtp.value) <> "" Then
+            If Not TryParseLong(m_txtKolAmbIIOtp.value, kolAmbII) Then
+                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                m_txtKolAmbIIOtp.SetFocus
+                Exit Sub
+            End If
+        End If
+    End If
+
     ' BRUTO unos (toggle OTKUP_BRUTO_UNOS): otpremnica se cuva u NETO (kao otkup),
     ' bruto se zamrzava u BrutoKg -> panel/blokovi porede neto sa neto (ne bruto).
     Dim brutoKgI As Double
@@ -615,7 +684,8 @@ Private Sub btnUnosOtp_Click()
         hasKlasaII:=chkDveKlaseOtp.value, _
         kolicinaII:=kolicinaII, _
         cenaII:=cenaII, _
-        brutoKgI:=brutoKgI)
+        brutoKgI:=brutoKgI, _
+        kolAmbII:=kolAmbII)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otpremnice. Promene su vracene.", vbCritical, APP_NAME
@@ -1330,6 +1400,17 @@ Private Sub btnUnosZbr_Click()
         End If
     End If
 
+    Dim ukupnoAmbII As Long
+    If chkDveKlaseZbr.value And Not m_txtKolAmbIIZbr Is Nothing Then
+        If Trim$(m_txtKolAmbIIZbr.value) <> "" Then
+            If Not TryParseLong(m_txtKolAmbIIZbr.value, ukupnoAmbII) Then
+                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                m_txtKolAmbIIZbr.SetFocus
+                Exit Sub
+            End If
+        End If
+    End If
+
     Dim kupacID As String
     kupacID = GetComboID(cmbKupac)
 
@@ -1383,7 +1464,8 @@ Private Sub btnUnosZbr_Click()
         tipAmb:=cmbTipAmbZbr.value, _
         ukupnoAmb:=ukupnoAmb, _
         hasKlasaII:=chkDveKlaseZbr.value, _
-        ukupnoKolII:=ukupnoKolII)
+        ukupnoKolII:=ukupnoKolII, _
+        ukupnoAmbII:=ukupnoAmbII)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju zbirne. Promene su vracene.", vbCritical, APP_NAME
@@ -1595,6 +1677,17 @@ Private Sub btnUnosPrij_Click()
         End If
     End If
 
+    Dim kolAmbII As Long
+    If chkDveKlasePrij.value And Not m_txtKolAmbIIPrij Is Nothing Then
+        If Trim$(m_txtKolAmbIIPrij.value) <> "" Then
+            If Not TryParseLong(m_txtKolAmbIIPrij.value, kolAmbII) Then
+                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                m_txtKolAmbIIPrij.SetFocus
+                Exit Sub
+            End If
+        End If
+    End If
+
     Dim kolicinaII As Double
     Dim cenaII As Double
 
@@ -1660,7 +1753,8 @@ Private Sub btnUnosPrij_Click()
         kolAmbVracena:=kolAmbVracena, _
         hasKlasaII:=chkDveKlasePrij.value, _
         kolicinaII:=kolicinaII, _
-        cenaII:=cenaII)
+        cenaII:=cenaII, _
+        kolAmbII:=kolAmbII)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju prijemnice. Promene su vracene.", vbCritical, APP_NAME

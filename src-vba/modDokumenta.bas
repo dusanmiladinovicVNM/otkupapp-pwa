@@ -23,7 +23,8 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal hasKlasaII As Boolean = False, _
                                        Optional ByVal kolicinaII As Double = 0, _
                                        Optional ByVal cenaII As Double = 0, _
-                                       Optional ByVal brutoKgI As Double = 0) As String
+                                       Optional ByVal brutoKgI As Double = 0, _
+                                       Optional ByVal kolAmbII As Long = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -68,7 +69,7 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
             kolicinaII, _
             cenaII, _
             tipAmb, _
-            0, _
+            kolAmbII, _
             KLASA_II)
 
         If resultII = "" Then
@@ -355,7 +356,8 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
                                    ByVal tipAmb As String, _
                                    ByVal ukupnoAmb As Long, _
                                    Optional ByVal hasKlasaII As Boolean = False, _
-                                   Optional ByVal ukupnoKolII As Double = 0) As String
+                                   Optional ByVal ukupnoKolII As Double = 0, _
+                                   Optional ByVal ukupnoAmbII As Long = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -398,7 +400,7 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
             sortaVoca, _
             ukupnoKolII, _
             tipAmb, _
-            0, _
+            ukupnoAmbII, _
             KLASA_II)
 
         If resultII = "" Then
@@ -772,7 +774,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        ByVal kolAmbVracena As Long, _
                                        Optional ByVal hasKlasaII As Boolean = False, _
                                        Optional ByVal kolicinaII As Double = 0, _
-                                       Optional ByVal cenaII As Double = 0) As String
+                                       Optional ByVal cenaII As Double = 0, _
+                                       Optional ByVal kolAmbII As Long = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -821,7 +824,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             kolicinaII, _
             cenaII, _
             tipAmb, _
-            0, _
+            kolAmbII, _
             0, _
             KLASA_II)
 
@@ -842,6 +845,14 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
         PaletizePrijemnica prijemnicaID:=resultI, brojPrij:=brojPrij, _
             brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
             klasa:=KLASA_I, netoKg:=kolicinaI, brGajbica:=kolAmb, tipAmb:=tipAmb, _
+            closedPalIDs:=closedPal
+    End If
+
+    ' Paletizacija Klase II (zasebne gajbe) -> u istu kolekciju zatvorenih paleta.
+    If hasKlasaII And kolAmbII > 0 Then
+        PaletizePrijemnica prijemnicaID:=resultII, brojPrij:=brojPrij, _
+            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
+            klasa:=KLASA_II, netoKg:=kolicinaII, brGajbica:=kolAmbII, tipAmb:=tipAmb, _
             closedPalIDs:=closedPal
     End If
 
