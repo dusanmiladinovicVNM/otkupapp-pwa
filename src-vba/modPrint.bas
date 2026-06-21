@@ -219,14 +219,14 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                 CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Prezime")))
     h("bpg") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
     h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
-    h("amb") = tipAmb & " x " & CStr(CLng(kolAmb))
-    h("ambIzdata") = tipAmb & " x " & CStr(CLng(kolAmbIzd))
     ' Saldo ambalaze = entitetski saldo kooperanta (koliko gajbica drzi/duguje):
     ' pocetno stanje pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz)
     ' - primljeno (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu
     ' upisa, pa je ispravno i kod ponovne stampe starijeg bloka.
     Dim ambPoc As Long: ambPoc = GetKooperantAmbOpening(koopID, tipAmb, ids)
     h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
+    h("ambPrijem") = CStr(CLng(kolAmb))         ' primljeno (broj gajbi, tekuci blok)
+    h("ambIzdavanje") = CStr(CLng(kolAmbIzd))   ' izdato (broj gajbi, tekuci blok)
     h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc + kolAmbIzd - kolAmb))
     h("stopa") = stopa
     h("osnovica") = osnovica
@@ -459,55 +459,51 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     End With
     ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 8)).NumberFormat = "#,##0.00"
 
-    ' --- ambalaza tabelica (pocetno / primljena / izdata / saldo) levo,
-    '     uokvireno + obracun PDV nadoknade desno, uokvireno. Leva kutija ima
-    '     4 reda; desni obracun (3 reda) je poravnat na DNO leve kutije, pa je
-    '     gornji desni red (ob) prazan -> donje ivice obe kutije se poklapaju. ---
+    ' --- ambalaza tabelica (3 reda, da primerak ostane tacno 1/3 A4): pocetno
+    '     stanje | primljeno + izdato (jedan red, dva inline para u kol. 1 i 3) |
+    '     saldo. Levo uokvireno; desno obracun PDV nadoknade (isto 3 reda). ---
     Dim ob As Long: ob = rr
     DocLabelVal ws, ob, 1, "Pocetno stanje:", ""
     ws.cells(ob, 4).value = CStr(h("ambPocetno"))
-    DocLabelVal ws, ob + 1, 1, "Primljena ambalaza:", ""
-    ws.cells(ob + 1, 4).value = CStr(h("amb"))
-    DocLabelVal ws, ob + 2, 1, "Izdata ambalaza:", ""
-    ws.cells(ob + 2, 4).value = CStr(h("ambIzdata"))
-    DocLabelVal ws, ob + 3, 1, "Saldo ambalaze:", ""
-    ws.cells(ob + 3, 4).value = CStr(h("ambSaldo"))
-    ws.cells(ob + 3, 1).Font.Bold = True
-    ws.cells(ob + 3, 4).Font.Bold = True
-    With ws.Range(ws.cells(ob, 4), ws.cells(ob + 3, 4))   ' vrednosti desno poravnate
+    DocLabelVal ws, ob + 1, 1, "Primljeno:", CStr(h("ambPrijem"))
+    DocLabelVal ws, ob + 1, 3, "Izdato:", CStr(h("ambIzdavanje"))
+    DocLabelVal ws, ob + 2, 1, "Saldo ambalaze:", ""
+    ws.cells(ob + 2, 4).value = CStr(h("ambSaldo"))
+    ws.cells(ob + 2, 1).Font.Bold = True
+    ws.cells(ob + 2, 4).Font.Bold = True
+    With ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 4))   ' pocetno/saldo desno poravnati
         .HorizontalAlignment = xlRight
     End With
-    ws.Range(ws.cells(ob, 1), ws.cells(ob + 3, 4)).BorderAround Weight:=xlThin
-    With ws.Range(ws.cells(ob + 3, 1), ws.cells(ob + 3, 4)).Borders(xlEdgeTop)
+    ws.Range(ws.cells(ob, 1), ws.cells(ob + 2, 4)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(ob + 2, 1), ws.cells(ob + 2, 4)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
 
-    DocLabelVal ws, ob + 1, 5, "Osnovica (bez PDV):", ""
-    ws.cells(ob + 1, 8).value = h("osnovica")
-    DocLabelVal ws, ob + 2, 5, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
-    ws.cells(ob + 2, 8).value = h("nadoknada")
-    DocLabelVal ws, ob + 3, 5, "UKUPNO ZA ISPLATU:", ""
-    ws.cells(ob + 3, 8).value = h("ukupno")
-    With ws.Range(ws.cells(ob + 3, 5), ws.cells(ob + 3, 8))
+    DocLabelVal ws, ob, 5, "Osnovica (bez PDV):", ""
+    ws.cells(ob, 8).value = h("osnovica")
+    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
+    ws.cells(ob + 1, 8).value = h("nadoknada")
+    DocLabelVal ws, ob + 2, 5, "UKUPNO ZA ISPLATU:", ""
+    ws.cells(ob + 2, 8).value = h("ukupno")
+    With ws.Range(ws.cells(ob + 2, 5), ws.cells(ob + 2, 8))
         .Font.Bold = True
         .Interior.Color = fillClr
     End With
-    ws.Range(ws.cells(ob, 5), ws.cells(ob + 3, 8)).BorderAround Weight:=xlThin
-    With ws.Range(ws.cells(ob + 3, 5), ws.cells(ob + 3, 8)).Borders(xlEdgeTop)
+    ws.Range(ws.cells(ob, 5), ws.cells(ob + 2, 8)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(ob + 2, 5), ws.cells(ob + 2, 8)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    With ws.Range(ws.cells(ob + 1, 8), ws.cells(ob + 3, 8))
+    With ws.Range(ws.cells(ob, 8), ws.cells(ob + 2, 8))
         .NumberFormat = "#,##0.00"
         .HorizontalAlignment = xlRight
     End With
     ws.rows(ob).RowHeight = 13#
     ws.rows(ob + 1).RowHeight = 13#
-    ws.rows(ob + 2).RowHeight = 13#
-    ws.rows(ob + 3).RowHeight = 14#
-    usedPt = usedPt + 53#
-    rr = ob + 4
+    ws.rows(ob + 2).RowHeight = 14#
+    usedPt = usedPt + 40#
+    rr = ob + 3
 
     ' --- klauzula (obavezni element): upija sav preostali prostor (sav "dobitak"
     '     od obrisanih redova) tako da potpisi dodju tacno iznad perforacije, a
