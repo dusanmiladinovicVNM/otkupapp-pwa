@@ -47,7 +47,7 @@ Public Sub MigrirajPodatkeIzStarog()
     Set stari = Workbooks.Open(Filename:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
 
     Dim ws As Worksheet, loNovi As ListObject, n As Long
-    Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, eNum As Long
+    Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, errNum As Long
     For Each ws In novi.Worksheets
         For Each loNovi In ws.ListObjects
             If Not SkipTabela(loNovi.name) Then
@@ -60,10 +60,10 @@ Public Sub MigrirajPodatkeIzStarog()
                 Else
                     n = KopirajTabelu(stari, loNovi)
                 End If
-                eNum = Err.Number: eDesc = Err.description
+                errNum = Err.Number: eDesc = Err.description
                 On Error GoTo CLEAN
 
-                If eNum <> 0 Then
+                If errNum <> 0 Then
                     summary = summary & "  " & loNovi.name & " - GRESKA: " & eDesc & vbCrLf
                 ElseIf n = -1 Then
                     summary = summary & "  " & loNovi.name & " - (nema u starom)" & vbCrLf
