@@ -47,12 +47,24 @@ Public Sub MigrirajPodatkeIzStarog()
     Set stari = Workbooks.Open(Filename:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
 
     Dim ws As Worksheet, loNovi As ListObject, n As Long
+    Dim ckey As String, cval As String, isCfg As Boolean
     For Each ws In novi.Worksheets
         For Each loNovi In ws.ListObjects
             If Not SkipTabela(loNovi.name) Then
-                n = KopirajTabelu(stari, loNovi)
-                If n < 0 Then
+                isCfg = ConfigKolone(loNovi.name, ckey, cval)
+                If isCfg Then
+                    n = MergeConfigTabelu(stari, loNovi, ckey, cval)   ' nova vrednost ostaje, prazno se puni
+                Else
+                    n = KopirajTabelu(stari, loNovi)                   ' pun copy (data tabele)
+                End If
+
+                If n = -1 Then
                     summary = summary & "  " & loNovi.name & " - (nema u starom)" & vbCrLf
+                ElseIf n = -2 Then
+                    summary = summary & "  " & loNovi.name & " - (config kolone nenadjene!)" & vbCrLf
+                ElseIf isCfg Then
+                    tbls = tbls + 1
+                    summary = summary & "  " & loNovi.name & " - merge, " & n & " kljuceva" & vbCrLf
                 Else
                     total = total + n: tbls = tbls + 1
                     summary = summary & "  " & loNovi.name & " - " & n & " red." & vbCrLf
@@ -125,6 +137,89 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     Next j
     KopirajTabelu = nRows
 End Function
+
+' True ako je tabela key/value config; vrati imena key/value kolona.
+Private Function ConfigKolone(ByVal naziv As String, ByRef keyCol As String, _
+                              ByRef valCol As String) As Boolean
+    Select Case LCase$(naziv)
+        Case "tblconfig", "tbllocalconfig"
+            keyCol = "Kljuc": valCol = "Vrednost": ConfigKolone = True
+        Case "tblsefconfig"
+            keyCol = "ConfigKey": valCol = "ConfigValue": ConfigKolone = True
+    End Select
+End Function
+
+' Config merge (key/value): ako novi red VEC ima vrednost -> ostaje (ne prepisuje
+' se iz starog); ako je prazno -> uzima se iz starog. Kljucevi kojih nema u novom
+' se dodaju iz starog (sve kolone po imenu). Vrati broj kljuceva u novom.
+'   -1 = tabele nema u starom;  -2 = key/value kolone nisu nadjene.
+Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As ListObject, _
+                                   ByVal keyCol As String, ByVal valCol As String) As Long
+    Dim loStari As ListObject
+    Set loStari = NadjiListObject(stari, loNovi.name)
+    If loStari Is Nothing Then MergeConfigTabelu = -1: Exit Function
+
+    Dim sKey As Long, sVal As Long, nKey As Long, nVal As Long
+    sKey = ColIndexByName(loStari, keyCol): sVal = ColIndexByName(loStari, valCol)
+    nKey = ColIndexByName(loNovi, keyCol): nVal = ColIndexByName(loNovi, valCol)
+    If sKey = 0 Or sVal = 0 Or nKey = 0 Or nVal = 0 Then MergeConfigTabelu = -2: Exit Function
+
+    ' stari -> dict: kljuc -> vrednost (+ pamti red radi dodavanja ostalih kolona)
+    Dim dVal As Object: Set dVal = CreateObject("Scripting.Dictionary"): dVal.CompareMode = vbTextCompare
+    Dim dRow As Object: Set dRow = CreateObject("Scripting.Dictionary"): dRow.CompareMode = vbTextCompare
+    Dim i As Long, kkey As String
+    For i = 1 To loStari.ListRows.count
+        kkey = Trim$(CStr(loStari.DataBodyRange.Cells(i, sKey).value))
+        If Len(kkey) > 0 And Not dVal.Exists(kkey) Then
+            dVal(kkey) = loStari.DataBodyRange.Cells(i, sVal).value
+            dRow(kkey) = i
+        End If
+    Next i
+
+    ' novi: prazne vrednosti popuni iz starog; oznaci postojece kljuceve
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary"): seen.CompareMode = vbTextCompare
+    For i = 1 To loNovi.ListRows.count
+        kkey = Trim$(CStr(loNovi.DataBodyRange.Cells(i, nKey).value))
+        If Len(kkey) > 0 Then
+            seen(kkey) = True
+            If Len(Trim$(CStr(loNovi.DataBodyRange.Cells(i, nVal).value))) = 0 Then
+                If dVal.Exists(kkey) Then loNovi.DataBodyRange.Cells(i, nVal).value = dVal(kkey)
+            End If
+        End If
+    Next i
+
+    ' kljucevi iz starog kojih nema u novom -> dodaj red
+    Dim k As Variant, lr As ListRow
+    For Each k In dVal.Keys
+        If Not seen.Exists(CStr(k)) Then
+            Set lr = loNovi.ListRows.Add
+            KopirajRedPoImenu loStari, CLng(dRow(CStr(k))), loNovi, lr.Index
+        End If
+    Next k
+
+    MergeConfigTabelu = loNovi.ListRows.count
+End Function
+
+Private Function ColIndexByName(ByVal lo As ListObject, ByVal naziv As String) As Long
+    Dim c As Long
+    For c = 1 To lo.ListColumns.count
+        If StrComp(Trim$(lo.ListColumns(c).name), Trim$(naziv), vbTextCompare) = 0 Then
+            ColIndexByName = c: Exit Function
+        End If
+    Next c
+End Function
+
+' Kopira jedan red iz starog u red novog (vrednosti), mapiranje po imenu kolone.
+Private Sub KopirajRedPoImenu(ByVal loStari As ListObject, ByVal staroRed As Long, _
+                              ByVal loNovi As ListObject, ByVal noviRed As Long)
+    Dim j As Long, sIdx As Long
+    For j = 1 To loNovi.ListColumns.count
+        sIdx = ColIndexByName(loStari, loNovi.ListColumns(j).name)
+        If sIdx > 0 Then
+            loNovi.DataBodyRange.Cells(noviRed, j).value = loStari.DataBodyRange.Cells(staroRed, sIdx).value
+        End If
+    Next j
+End Sub
 
 Private Function NadjiListObject(ByVal wb As Workbook, ByVal naziv As String) As ListObject
     Dim ws As Worksheet, lo As ListObject
