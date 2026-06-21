@@ -7,7 +7,7 @@ Option Explicit
 ' ostaje prazna. Stampa MORA biti 1:1 (Zoom=100, bez "Fit to page" / "Prilagodi").
 Private Const OL_THIRD_PT As Double = 280.63      ' 99 mm u tackama (99/25.4*72)
 Private Const OL_TOP_SPACER_PT As Double = 9#     ' ~3.2mm prazno iznad sadrzaja primerka (smanjena gornja margina)
-Private Const OL_MIN_FILLER_PT As Double = 4#     ' min. donji razmak do perforacije
+Private Const OL_MIN_FILLER_PT As Double = 17#    ' donji razmak do perforacije (vise = potpisi vise iznad reza)
 ' Kalibracija: ako stampac NE postuje TopMargin=0 nego sadrzaj pomeri nadole za
 ' T mm, prva perforacija nece pasti na granicu primeraka. Tada ovde unesi
 ' T u tackama (T_mm / 25.4 * 72) - prvi primerak se za toliko skrati i granica
