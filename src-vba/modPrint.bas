@@ -511,6 +511,294 @@ EH:
     LogErr "modPrint.EnsureOtkupSablon"
 End Sub
 
+' ============================================================
+' PRIJEMNICA — PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
+' hladnjacu). Izlaz po CFG_PRIJEMNICA_PRINT_MODE: OFF/prazno (DEFAULT, bez
+' izlaza — kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
+' frmDokumenta.btnUnosPrij posle snimanja. prijemnicaIDs = rezultat
+' SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2" za dve klase).
+' ============================================================
+
+' Glavni ulaz (zove se posle SavePrijemnicaMulti_TX). Best-effort: greska se loguje.
+Public Sub OutputPrijemnica(ByVal prijemnicaIDs As String)
+    On Error GoTo EH
+    Dim mode As String
+    mode = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_PRINT_MODE)))
+
+    Select Case mode
+        Case "PRINT"
+            Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
+            If Not ws Is Nothing Then ws.PrintOut Copies:=1
+        Case "PREVIEW"
+            Dim wp As Worksheet: Set wp = FillPrijemnicaSablon(prijemnicaIDs)
+            If Not wp Is Nothing Then wp.PrintPreview
+        Case "PDF"
+            ExportPrijemnicaPDF prijemnicaIDs, True
+        Case Else
+            ' OFF ili prazno (DEFAULT) -> bez izlaza; ponasanje kao do sada.
+    End Select
+    Exit Sub
+EH:
+    LogErr "modPrint.OutputPrijemnica"
+End Sub
+
+' Pojedinacni prijemnica -> fizicka stampa (simetricno PrintOtkupniList/PrintPaletniList).
+Public Sub PrintPrijemnica(ByVal prijemnicaID As String)
+    Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaID)
+    If Not ws Is Nothing Then ws.PrintOut Copies:=1
+End Sub
+
+' PDF prijemnice -> <workbook>\Prijemnica_<brPrij>.pdf. Vraca putanju.
+Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
+                                    Optional ByVal openAfter As Boolean = True) As String
+    On Error GoTo EH
+    Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
+    If ws Is Nothing Then
+        MsgBox "PDF prijemnice nije napravljen: priprema lista (PrijemnicaSablon) " & _
+               "nije uspela. Proveri da li su podaci prijemnice kompletni.", _
+               vbExclamation, APP_NAME
+        Exit Function
+    End If
+
+    Dim folder As String: folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then folder = Environ$("TEMP")
+    Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
+    ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni PDF otvoren.
+    Dim pdfPath As String
+    pdfPath = folder & "\Prijemnica_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    ExportPrijemnicaPDF = pdfPath
+    Exit Function
+EH:
+    MsgBox "Greska pri izradi PDF prijemnice:" & vbCrLf & _
+           "  [" & Err.Number & "] " & Err.Description, vbExclamation, APP_NAME
+    LogErr "modPrint.ExportPrijemnicaPDF"
+End Function
+
+' Popuni PrijemnicaSablon (zaglavlje firme + podaci + stavke + potpisi). Vraca sheet
+' (ili Nothing). Klasa I [+ Klasa II] = po jedan red u tabeli stavki; zaglavlje
+' (datum/kupac/vozac/brojevi) se cita iz prvog reda.
+Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Worksheet
+    On Error GoTo EH
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+
+    EnsurePrijemnicaSablon
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("PrijemnicaSablon")
+    On Error GoTo EH
+    If ws Is Nothing Then Exit Function
+
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iDat As Long, iKup As Long, iVoz As Long, iBr As Long, iBrZbr As Long
+    Dim iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long, iTip As Long
+    Dim iKolAmb As Long, iKolAmbV As Long
+    iID = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    iDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    iKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    iVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    iBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    iBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    iVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    iSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    iKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+    iKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    iCe = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
+    iTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    iKolAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
+    iKolAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
+
+    Dim ids() As String: ids = Split(prijemnicaIDs, " + ")
+    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 5)
+    Dim cnt As Long: cnt = 0
+    Dim kupID As String, vozID As String, brPrij As String, brZbr As String
+    Dim datum As String
+    Dim ukKg As Double, ukVred As Double, ukAmb As Double, ambV As Double
+    Dim j As Long, r As Long
+    For j = 0 To UBound(ids)
+        Dim wantID As String: wantID = Trim$(ids(j))
+        If wantID <> "" Then
+            For r = 1 To UBound(d, 1)
+                If CStr(d(r, iID)) = wantID Then
+                    Dim pkol As Double: pkol = PrNz(d(r, iKol))
+                    Dim pcen As Double: pcen = PrNz(d(r, iCe))
+                    stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
+                    stavke(cnt, 1) = CStr(d(r, iKl))
+                    stavke(cnt, 2) = pkol
+                    stavke(cnt, 3) = pcen
+                    stavke(cnt, 4) = CStr(d(r, iTip))
+                    stavke(cnt, 5) = PrNz(d(r, iKolAmb))
+                    ukKg = ukKg + pkol
+                    ukVred = ukVred + pkol * pcen
+                    ukAmb = ukAmb + PrNz(d(r, iKolAmb))
+                    If cnt = 0 Then
+                        kupID = CStr(d(r, iKup)): vozID = CStr(d(r, iVoz))
+                        brPrij = CStr(d(r, iBr)): brZbr = CStr(d(r, iBrZbr))
+                        datum = Format$(d(r, iDat), "dd.mm.yyyy")
+                        ambV = PrNz(d(r, iKolAmbV))
+                    End If
+                    cnt = cnt + 1
+                    Exit For
+                End If
+            Next r
+        End If
+    Next j
+    If cnt = 0 Then Exit Function
+
+    Dim kupNaziv As String, vozNaziv As String
+    kupNaziv = CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, kupID, COL_KUP_NAZIV))
+    vozNaziv = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Ime")) & " " & _
+                     CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Prezime")))
+
+    Application.ScreenUpdating = False
+    On Error Resume Next
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+    ws.cells.UnMerge
+    On Error GoTo EH
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+
+    ' --- zaglavlje firme + naslov ---
+    Dim rr As Long: rr = 1
+    rr = DocSellerHeader(ws, rr, 8, 8)
+    rr = rr + 1
+    rr = DocTitleBlock(ws, rr, 8, "Prijem robe na hladnjacu", "PRIJEMNICA  br. " & brPrij)
+    rr = rr + 1
+
+    ' --- podaci o prijemu ---
+    DocLabelVal ws, rr, 1, "Datum:", datum
+    DocLabelVal ws, rr, 5, "Broj zbirne:", brZbr
+    rr = rr + 1
+    DocLabelVal ws, rr, 1, "Kupac / hladnjaca:", kupNaziv
+    rr = rr + 1
+    DocLabelVal ws, rr, 1, "Vozac:", vozNaziv
+    rr = rr + 2
+
+    ' --- stavke (Klasa I [+ Klasa II]) ---
+    Dim hdr As Long: hdr = rr
+    ws.cells(rr, 1).value = "Rb"
+    ws.cells(rr, 2).value = "Proizvod"
+    ws.cells(rr, 3).value = "Klasa"
+    ws.cells(rr, 4).value = "Kol. (kg)"
+    ws.cells(rr, 5).value = "Cena"
+    ws.cells(rr, 6).value = "Vrednost"
+    ws.cells(rr, 7).value = "Tip amb."
+    ws.cells(rr, 8).value = "Br. gajbica"
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
+        .Font.Bold = True
+        .Font.Size = 9
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    rr = rr + 1
+    Dim k As Long
+    For k = 0 To cnt - 1
+        ws.cells(rr, 1).value = k + 1
+        ws.cells(rr, 2).value = stavke(k, 0)
+        ws.cells(rr, 3).value = stavke(k, 1)
+        ws.cells(rr, 4).value = stavke(k, 2)
+        ws.cells(rr, 5).value = stavke(k, 3)
+        ws.cells(rr, 6).value = CDbl(stavke(k, 2)) * CDbl(stavke(k, 3))
+        ws.cells(rr, 7).value = stavke(k, 4)
+        ws.cells(rr, 8).value = stavke(k, 5)
+        ws.cells(rr, 1).HorizontalAlignment = xlCenter
+        ws.cells(rr, 3).HorizontalAlignment = xlCenter
+        rr = rr + 1
+    Next k
+    ' --- ukupno red ---
+    ws.cells(rr, 2).value = "UKUPNO"
+    ws.cells(rr, 4).value = ukKg
+    ws.cells(rr, 6).value = ukVred
+    ws.cells(rr, 8).value = ukAmb
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+    End With
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, 8)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr, 6)).NumberFormat = "#,##0.00"
+    rr = rr + 2
+
+    ' --- vracena ambalaza (ako je uneta) ---
+    If ambV > 0 Then
+        DocLabelVal ws, rr, 1, "Vracena ambalaza (kom):", CStr(CLng(ambV))
+        rr = rr + 2
+    End If
+
+    ' --- footer: datum stampe + potpisi ---
+    ws.cells(rr, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
+    ws.cells(rr, 1).Font.Color = DocColGray()
+    rr = rr + 2
+    ws.cells(rr, 1).value = "Robu predao (vozac): ____________________"
+    ws.cells(rr, 1).Font.Color = DocColGray()
+    ws.cells(rr, 5).value = "Robu primio: ____________________"
+    ws.cells(rr, 5).Font.Color = DocColGray()
+    Dim lastRow As Long: lastRow = rr
+
+    ' --- A4 portrait, sve kolone na jednu stranu po sirini ---
+    ' PageSetup property-ji (PaperSize/Orientation/FitToPages) traze drajver
+    ' stampaca; na racunaru bez stampaca bacaju 1004. Stitimo ih (On Error Resume
+    ' Next) da PDF izadje i bez stampaca. NE koristimo Application.PrintCommunication
+    ' jer na takvim masinama zna da blokira (isti hardening kao PrintSpecifikacija).
+    On Error Resume Next
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
+    End With
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillPrijemnicaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr "modPrint.FillPrijemnicaSablon"
+End Function
+
+Public Sub EnsurePrijemnicaSablon()
+    On Error GoTo EH
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("PrijemnicaSablon")
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = "PrijemnicaSablon"
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 20
+    ws.columns("C").ColumnWidth = 7
+    ws.columns("D").ColumnWidth = 11
+    ws.columns("E").ColumnWidth = 11
+    ws.columns("F").ColumnWidth = 13
+    ws.columns("G").ColumnWidth = 12
+    ws.columns("H").ColumnWidth = 11
+    Exit Sub
+EH:
+    LogErr "modPrint.EnsurePrijemnicaSablon"
+End Sub
+
 Private Function PrNz(ByVal v As Variant) As Double
     On Error Resume Next
     If IsNumeric(v) Then PrNz = CDbl(v)

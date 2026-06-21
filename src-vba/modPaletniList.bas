@@ -81,6 +81,10 @@ Public Function PaletizePrijemnica( _
 
     Const SRC As String = "modPaletniList.PaletizePrijemnica"
 
+    ' Toggle: paletiranje iskljuceno (Podesavanja) -> bez paleta/paletnih listova.
+    ' Prijemnica se i dalje snima normalno; samo izostaje paletizacija. Default ON.
+    If Not IsPaletiranjeEnabled() Then Exit Function
+
     If brGajbica <= 0 Then Exit Function       ' nema gajbica (Klasa II / bez ambalaze)
 
     RequirePaletaSchema SRC

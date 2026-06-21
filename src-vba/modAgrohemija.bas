@@ -1,3 +1,4 @@
+Attribute VB_Name = "modAgrohemija"
 Option Explicit
 
 Public Function GetParceleByKooperant(ByVal kooperantID As String) As Variant

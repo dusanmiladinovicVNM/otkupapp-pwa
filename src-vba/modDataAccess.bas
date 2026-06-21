@@ -1,3 +1,4 @@
+Attribute VB_Name = "modDataAccess"
 Option Explicit
 
 ' ============================================================

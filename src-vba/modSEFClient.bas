@@ -1,3 +1,4 @@
+Attribute VB_Name = "modSEFClient"
 Option Explicit
 
 Public Function SubmitUBLInvoice(ByVal ublXml As String, ByVal requestId As String) As clsSEFResponse

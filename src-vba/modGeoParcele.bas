@@ -1,3 +1,4 @@
+Attribute VB_Name = "modGeoParcele"
 Option Explicit
 
 Public Sub SaveParcelGeoPoint(ByVal rowIndex As Long, ByVal nCoord As Double, ByVal eCoord As Double)

@@ -1,3 +1,4 @@
+Attribute VB_Name = "modBankaMapiranje"
 Option Explicit
 
 ' ============================================================
