@@ -706,8 +706,13 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
                     lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "0.00") & "%"
                 End If
             ElseIf IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                ' kg/vrednost: prikazi decimale kad postoje (ne zaokruzuj na ceo broj)
-                lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.##")
+                If GetActiveEntitetTip() = "Kupci" And j = UBound(data, 2) Then
+                    ' Kupci: poslednja kolona = Vrednost (novac) -> uvek 2 decimale
+                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+                Else
+                    ' kolicina (kg): decimale samo kad postoje (bez ",0"/",00" za ceo broj)
+                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = FmtKolicina(CDbl(data(i, j)))
+                End If
             Else
                 lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = _
                     CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
@@ -909,7 +914,7 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
         
         lstKartica.List(lstKartica.ListCount - 1, 2) = opisKartice
         
-        ' Spalten 4-6: Zaduzenje, Razduzenje, Saldo
+        ' Spalten 4-6: Zaduzenje, Razduzenje, Saldo (novac -> uvek 2 decimale)
         Dim j As Long
         For j = 5 To 7
             If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
@@ -930,11 +935,13 @@ End Sub
 ' otkupnog lista koje se unose u frmOtkup). Samo pregled (ne za izmenu).
 Private Sub lstKartica_Click()
     On Error Resume Next
+    Debug.Print "KART_CLICK idx="; lstKartica.ListIndex
     KarticaDetalji_ShowForRow Me, lstKartica
 End Sub
 
 Private Sub lstKartica_Change()
     On Error Resume Next
+    Debug.Print "KART_CHANGE idx="; lstKartica.ListIndex
     KarticaDetalji_ShowForRow Me, lstKartica
 End Sub
 

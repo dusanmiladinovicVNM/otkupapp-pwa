@@ -55,25 +55,39 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
         mFormLevel = True
     End If
 
+    ' lstKartica je cesto SIRA od zbira kolona (desni deo liste je prazan), pa panel
+    ' krecemo posle KOLONA (~515pt), preko praznog dela liste, a NE posle cele liste
+    ' (to bi bilo van vidljive stranice ako lista popunjava sirinu). Sirina ide do
+    ' vece od (desna ivica liste, sirina stranice).
     Const GAP As Double = 8
+    Const COLS_W As Double = 515            ' zbir sirina kolona lstKartica (60+70+140+80+80+80=510)+margina
     Dim leftX As Double, topY As Double, panelH As Double, availW As Double
+    Dim listRight As Double, pageW As Double, rightBound As Double
 
-    leftX = lstKartica.Left + lstKartica.width + GAP
+    leftX = lstKartica.Left + COLS_W
     topY = lstKartica.Top
     panelH = lstKartica.Height
 
-    availW = 220
+    listRight = lstKartica.Left + lstKartica.width
+    pageW = 0
     On Error Resume Next
-    availW = cont.InsideWidth - leftX - GAP
+    pageW = cont.InsideWidth
     On Error GoTo EH
-    If availW < 150 Then availW = 200       ' malo mesta desno -> minimalna sirina
-    If availW > 380 Then availW = 380
+    rightBound = listRight
+    If pageW > rightBound Then rightBound = pageW
+
+    availW = rightBound - leftX - GAP
+    If availW < 150 Then availW = 200        ' malo mesta -> minimalna sirina (panel ide preko)
+    If availW > 420 Then availW = 420
     If panelH < 120 Then panelH = 120
 
     On Error Resume Next
     mDiag = "cont=" & TypeName(cont) & "; leftX=" & CStr(CLng(leftX)) & _
             "; topY=" & CStr(CLng(topY)) & "; availW=" & CStr(CLng(availW)) & _
-            "; lstW=" & CStr(CLng(lstKartica.width))
+            "; lstLeft=" & CStr(CLng(lstKartica.Left)) & _
+            "; lstW=" & CStr(CLng(lstKartica.width)) & _
+            "; pageW=" & CStr(CLng(pageW))
+    Debug.Print "KART_ENSURE "; mDiag
     On Error GoTo EH
 
     Set mLblTitle = cont.Controls.Add("Forms.Label.1", "lblKarticaDetaljiNaslov", True)
@@ -133,6 +147,7 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
     If lstKartica Is Nothing Then Exit Sub
 
     KarticaDetalji_Ensure frm, lstKartica
+    Debug.Print "KART_SHOW mLstNothing="; (mLst Is Nothing); " visible="; KartLstVisible()
     If mLst Is Nothing Then
         ' Panel nije kreiran -> jednom prijavi razlog (da ne ostane "nista se ne desava").
         If Not mDiagShown Then
@@ -142,6 +157,14 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
         End If
         Exit Sub
     End If
+
+    ' Panel postoji -> osiguraj da je vidljiv i u prvom planu.
+    mLst.visible = True
+    If Not mLblTitle Is Nothing Then mLblTitle.visible = True
+    On Error Resume Next
+    mLst.ZOrder 0          ' u prvi plan (preko praznog dela liste)
+    mLblTitle.ZOrder 0
+    On Error GoTo EH
 
     Dim idx As Long
     idx = lstKartica.ListIndex
@@ -264,6 +287,16 @@ End Function
 
 Private Function NumOf(ByVal v As Variant) As Double
     If IsNumeric(v) Then NumOf = CDbl(v)
+End Function
+
+' Bezbedan prikaz vidljivosti detalj-liste za dijagnostiku (Immediate).
+Private Function KartLstVisible() As Variant
+    On Error Resume Next
+    If mLst Is Nothing Then
+        KartLstVisible = "n/a"
+    Else
+        KartLstVisible = mLst.visible
+    End If
 End Function
 
 Private Function DisplayStanica(ByVal stanicaID As String) As String
