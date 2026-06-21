@@ -221,6 +221,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
     h("amb") = tipAmb & " x " & CStr(CLng(kolAmb))
     h("ambIzdata") = tipAmb & " x " & CStr(CLng(kolAmbIzd))
+    h("ambSaldo") = tipAmb & " x " & CStr(CLng(kolAmb - kolAmbIzd))   ' primljena - izdata
     h("stopa") = stopa
     h("osnovica") = osnovica
     h("nadoknada") = osnovica * stopa / 100
@@ -341,13 +342,15 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     usedPt = usedPt + 13#
     rr = rr + 1
 
-    ' --- oznaka primerka ---
+    ' --- oznaka primerka (levo) + rok isplate (desno; mandatorni element bloka) ---
     With ws.cells(rr, 1)
         .value = copyLbl
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
     End With
+    DocLabelVal ws, rr, 5, "Rok isplate:", CStr(h("rok"))
+    ws.cells(rr, 5).Font.Size = 8
     ws.rows(rr).RowHeight = 11#
     usedPt = usedPt + 11#
     rr = rr + 1
@@ -406,11 +409,18 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     End With
     ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr - 1, 8)).NumberFormat = "#,##0.00"
 
-    ' --- ambalaza + rok isplate (levo) + obracun PDV nadoknade (desno, uokvireno) ---
+    ' --- ambalaza tabelica (primljena / izdata / saldo) levo, uokvireno +
+    '     obracun PDV nadoknade desno, uokvireno ---
     Dim ob As Long: ob = rr
     DocLabelVal ws, ob, 1, "Primljena ambalaza:", CStr(h("amb"))
     DocLabelVal ws, ob + 1, 1, "Izdata ambalaza:", CStr(h("ambIzdata"))
-    DocLabelVal ws, ob + 2, 1, "Rok isplate:", CStr(h("rok"))
+    DocLabelVal ws, ob + 2, 1, "Saldo ambalaze:", CStr(h("ambSaldo"))
+    ws.cells(ob + 2, 1).Font.Bold = True
+    ws.Range(ws.cells(ob, 1), ws.cells(ob + 2, 4)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(ob + 2, 1), ws.cells(ob + 2, 4)).Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
 
     DocLabelVal ws, ob, 5, "Osnovica (bez PDV):", ""
     ws.cells(ob, 8).value = h("osnovica")
