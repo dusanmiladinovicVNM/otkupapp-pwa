@@ -792,6 +792,8 @@ Public Sub EnsureDoradeSchema()
     SetColumnNumberFormat TBL_OTKUP, COL_OTK_BRUTO, "0.00"
     EnsureColumnOnTable   TBL_PRIJEMNICA, COL_PRJ_BRUTO
     SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
+    EnsureColumnOnTable   TBL_OTPREMNICA, COL_OTP_BRUTO
+    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
 
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _

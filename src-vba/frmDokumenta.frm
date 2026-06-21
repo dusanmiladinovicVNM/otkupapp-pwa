@@ -537,6 +537,30 @@ Private Sub btnUnosOtp_Click()
         End If
     End If
 
+    ' BRUTO unos (toggle OTKUP_BRUTO_UNOS): otpremnica se cuva u NETO (kao otkup),
+    ' bruto se zamrzava u BrutoKg -> panel/blokovi porede neto sa neto (ne bruto).
+    Dim brutoKgI As Double
+    If OtkupBrutoUnos() And kolAmb > 0 Then
+        Dim taraKg As Double
+        taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbOtp.value)
+        If taraKg <= 0 Then
+            MsgBox "Tip ambalaže '" & cmbTipAmbOtp.value & "' nema unetu težinu gajbice " & _
+                   "(Matični podaci → Tip ambalaže)." & vbCrLf & _
+                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            cmbTipAmbOtp.SetFocus
+            Exit Sub
+        End If
+        If taraKg >= kolicinaI Then
+            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veća ili " & _
+                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            txtKolicinaOtp.SetFocus
+            Exit Sub
+        End If
+        brutoKgI = kolicinaI             ' zamrzni uneti bruto
+        kolicinaI = kolicinaI - taraKg   ' u Kolicina ide neto
+    End If
+
     ' Duplikat check
     If txtBrojOtp.value <> "" Then
         Dim dupMsg As String
@@ -590,7 +614,8 @@ Private Sub btnUnosOtp_Click()
         kolAmb:=kolAmb, _
         hasKlasaII:=chkDveKlaseOtp.value, _
         kolicinaII:=kolicinaII, _
-        cenaII:=cenaII)
+        cenaII:=cenaII, _
+        brutoKgI:=brutoKgI)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otpremnice. Promene su vracene.", vbCritical, APP_NAME

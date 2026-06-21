@@ -22,7 +22,8 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        ByVal kolAmb As Long, _
                                        Optional ByVal hasKlasaII As Boolean = False, _
                                        Optional ByVal kolicinaII As Double = 0, _
-                                       Optional ByVal cenaII As Double = 0) As String
+                                       Optional ByVal cenaII As Double = 0, _
+                                       Optional ByVal brutoKgI As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -45,7 +46,8 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
         cenaI, _
         tipAmb, _
         kolAmb, _
-        KLASA_I)
+        KLASA_I, _
+        brutoKgI)
 
     If resultI = "" Then
         Err.Raise vbObjectError + 1101, "SaveOtpremnicaMulti_TX", _
@@ -135,7 +137,8 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
                                    ByVal sorta As String, ByVal kolicina As Double, _
                                    ByVal cena As Double, ByVal tipAmb As String, _
                                    ByVal kolAmb As Long, _
-                                   Optional ByVal klasa As String = "I") As String
+                                   Optional ByVal klasa As String = "I", _
+                                   Optional ByVal brutoKg As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -147,7 +150,7 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
 
     SaveOtpremnica_TX = SaveOtpremnica(datum, stanicaID, vozacID, brojOtp, _
                                         brojZbirne, vrsta, sorta, kolicina, _
-                                        cena, tipAmb, kolAmb, klasa)
+                                        cena, tipAmb, kolAmb, klasa, brutoKg)
 
     If SaveOtpremnica_TX = "" Then
         Err.Raise vbObjectError + 1001, "SaveOtpremnica_TX", _
@@ -209,29 +212,34 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
                                ByVal sorta As String, ByVal kolicina As Double, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, _
-                               Optional ByVal klasa As String = "I") As String
-    
+                               Optional ByVal klasa As String = "I", _
+                               Optional ByVal brutoKg As Double = 0) As String
+
     On Error GoTo EH
 
     Call ValidateOtpremnicaInput(stanicaID, vozacID, brojOtp, brojZbirne, _
                              kolicina, cena, tipAmb, kolAmb, klasa)
-    
+
     Dim newID As String
     newID = GetNextID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-")
-    
+
     If Len(Trim$(newID)) = 0 Then
         Err.Raise vbObjectError + 1002, "SaveOtpremnica", _
                 "GetNextID nije vratio OtpremnicaID."
     End If
-    
+
     Dim rowData As Variant
     rowData = Array(newID, datum, stanicaID, vozacID, brojOtp, _
                     brojZbirne, vrsta, sorta, kolicina, cena, tipAmb, kolAmb, klasa)
-    
-    If AppendRow(TBL_OTPREMNICA, rowData) > 0 Then
+
+    Dim newRow As Long
+    newRow = AppendRow(TBL_OTPREMNICA, rowData)
+    If newRow > 0 Then
         If kolAmb > 0 Then
             TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", stanicaID, "Stanica", vozacID, newID, DOK_TIP_OTPREMNICA
         End If
+        ' Bruto (kad je unet bruto pa oduzeta ambalaza) -> upis po imenu; prazno = neto.
+        If brutoKg > 0 Then UpdateCell TBL_OTPREMNICA, newRow, COL_OTP_BRUTO, brutoKg
         SaveOtpremnica = newID
     Else
         Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
