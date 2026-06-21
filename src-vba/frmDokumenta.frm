@@ -122,7 +122,7 @@ Private Sub UserForm_Activate()
     ' MALINA mod: zbirna se kreira automatski (AutoCreateZbirnaFromOtpremnice) ->
     ' onemoguci/posivi celu Zbirna sekciju da nema bespotrebnog kucanja i zabune.
     ' Van malina moda ostaje aktivna (rucni unos zbirne).
-    If IsMalinaMode() Then fraZbirna.Enabled = False
+    If IsMalinaMode() Then DisableFraZbirnaMalina
     
     ' Storno ComboBox füllen
     With cmbStornoDokument
@@ -312,6 +312,18 @@ Private Sub ShowKlIIAmb(ByVal t As MSForms.TextBox, ByVal ambI As MSForms.Contro
         t.visible = False
         t.value = ""
     End If
+End Sub
+
+' MALINA: posivi/onemoguci celu Zbirna sekciju (zbirna ide automatski). Samo
+' fraZbirna.Enabled=False ne sivi vizuelno decu u svim verzijama -> onemoguci i
+' svaku kontrolu unutar frejma.
+Private Sub DisableFraZbirnaMalina()
+    On Error Resume Next
+    fraZbirna.Enabled = False
+    Dim c As MSForms.Control
+    For Each c In Me.Controls
+        If c.Parent Is fraZbirna Then c.Enabled = False
+    Next c
 End Sub
 
 Private Sub txtKolicinaOtp_Change()
