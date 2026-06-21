@@ -129,6 +129,7 @@ Panel „Otkupni blokovi" (`frmOtkup` / `modOtkupBlok`): pored postojeće specif
 ### Fixed
 
 - **Type mismatch (greška 13)** pri kliku na „Stampaj po datumu": `DateValue(datum)` u `PrintSpecifikacijaPoDatumu` i u filteru `RenderSpec` zamenjeno robusnim poređenjem serijskog broja `Int(CDbl(datum))` (bez parsiranja stringa → bez locale/Type zamke).
+- **Količina (kg) se više ne zaokružuje** u panelu: nova `FmtKgDec` (`#,##0.###` — decimale samo kad su unete) za sve prikaze količine (lista otpremnica Količina/Ostatak, lista blokova Količina + zbir, sažetak kg, poruka o prekoračenju) i za kolonu Količina na PDF specifikaciji. Cene i ambalaža (cele gajbe) ostaju nepromenjene (`FmtKg`).
 
 ### Verification / Acceptance Gates
 

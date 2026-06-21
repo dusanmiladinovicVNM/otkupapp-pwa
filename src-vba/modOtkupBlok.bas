@@ -197,8 +197,8 @@ Public Function OtkupBlok_ConfirmUnos() As Boolean
     Dim preost As Double: preost = ukupno - SumKolByOtp(mActiveOtpID)
 
     If total > preost + 0.0001 Then
-        If MsgBox("Unos (" & FmtKg(total) & " kg) premasuje preostalih " & _
-                  FmtKg(preost) & " kg za ovu otpremnicu." & vbCrLf & _
+        If MsgBox("Unos (" & FmtKgDec(total) & " kg) premasuje preostalih " & _
+                  FmtKgDec(preost) & " kg za ovu otpremnicu." & vbCrLf & _
                   "Nastaviti?", vbExclamation + vbYesNo, APP_NAME) = vbNo Then
             OtkupBlok_ConfirmUnos = False
         End If
@@ -457,12 +457,12 @@ Private Sub LoadOtpremnice()
         r = mLstOtp.ListCount - 1
         mLstOtp.List(r, 1) = CStr(data(i, cBroj))
         mLstOtp.List(r, 2) = DictVal(dSt, CStr(data(i, cSt)))
-        mLstOtp.List(r, 3) = FmtKg(ukupno)
+        mLstOtp.List(r, 3) = FmtKgDec(ukupno)
         mLstOtp.List(r, 4) = FmtDate(data(i, cDat))
         mLstOtp.List(r, 5) = DictVal(dHl, CStr(data(i, cZbr)))
         mLstOtp.List(r, 6) = FmtKg(prodajna)
         mLstOtp.List(r, 7) = FmtKg(cenaBlok)
-        mLstOtp.List(r, 8) = FmtKg(ukupno - nap)
+        mLstOtp.List(r, 8) = FmtKgDec(ukupno - nap)
     Next j
     Exit Sub
 EH:
@@ -512,7 +512,7 @@ Private Sub LoadBlokovi()
         mLstBlok.List(r, 1) = CStr(data(i, cBr))
         mLstBlok.List(r, 2) = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
         mLstBlok.List(r, 3) = FmtDate(data(i, cDat))
-        mLstBlok.List(r, 4) = FmtKg(kol)
+        mLstBlok.List(r, 4) = FmtKgDec(kol)
         mLstBlok.List(r, 5) = FmtRsd(neto)
         mLstBlok.List(r, 6) = FmtRsd(vred)
         mLstBlok.List(r, 7) = FmtRsd(pdv)
@@ -530,7 +530,7 @@ NextRow:
         r = mLstBlok.ListCount - 1
         mLstBlok.List(r, 1) = "UKUPNO"
         mLstBlok.List(r, 2) = "amb: " & FmtKg(sumAmb)
-        mLstBlok.List(r, 4) = FmtKg(sumKol)
+        mLstBlok.List(r, 4) = FmtKgDec(sumKol)
         mLstBlok.List(r, 6) = FmtRsd(sumVred)
         mLstBlok.List(r, 7) = FmtRsd(sumPdv)
         mLstBlok.List(r, 8) = FmtRsd(sumUk)
@@ -950,8 +950,8 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
 
     ws.cells(2, 1).value = subtitle & "     Blokova: " & cnt
 
-    ' formati: kolicina bez decimala, novac 2 decimale
-    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 7)).NumberFormat = "#,##0"
+    ' formati: kolicina sa decimalama samo ako su unete, novac 2 decimale
+    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 7)).NumberFormat = "#,##0.###"
     ws.Range(ws.cells(R0 + 1, 8), ws.cells(r, NC)).NumberFormat = "#,##0.00"
 
     ' iscrtana polja
@@ -1344,14 +1344,19 @@ End Function
 ' Bruto rezim: "bruto (neto X)"; neto rezim ili bruto==neto: samo vrednost.
 Private Function FmtKgBrutoNeto(ByVal brutoVal As Double, ByVal netoVal As Double) As String
     If OtkupBrutoUnos() And Abs(brutoVal - netoVal) > 0.0001 Then
-        FmtKgBrutoNeto = FmtKg(brutoVal) & " (neto " & FmtKg(netoVal) & ")"
+        FmtKgBrutoNeto = FmtKgDec(brutoVal) & " (neto " & FmtKgDec(netoVal) & ")"
     Else
-        FmtKgBrutoNeto = FmtKg(netoVal)
+        FmtKgBrutoNeto = FmtKgDec(netoVal)
     End If
 End Function
 
 Private Function FmtKg(ByVal x As Double) As String
     FmtKg = Format$(x, "#,##0")
+End Function
+
+' Kolicina (kg): prikazi decimale samo ako su unete (npr. 1234.5); ceo broj inace.
+Private Function FmtKgDec(ByVal x As Double) As String
+    FmtKgDec = Format$(x, "#,##0.###")
 End Function
 
 Private Function FmtRsd(ByVal x As Double) As String
