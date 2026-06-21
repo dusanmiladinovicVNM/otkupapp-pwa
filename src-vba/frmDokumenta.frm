@@ -374,6 +374,7 @@ Private Sub txtDatum_AfterUpdate()
     ' AfterUpdate puca samo na commit (Tab/Enter/focus exit), ne na svaki keystroke
     RefreshBrojOtpSuggestion
     RefreshBrojZbirneSuggestion
+    RefreshBrojPrijSuggestion
 End Sub
 ' ============================================================
 ' KASKADIERUNG
@@ -443,6 +444,9 @@ Private Sub cmbKupac_Change()
             If hlad <> "" Then cmbHladnjaca.AddItem hlad
         End If
     End If
+
+    txtBrojPrij.value = ""          ' kupac promenjen -> resetuj broj prijemnice
+    RefreshBrojPrijSuggestion       ' auto-predlog BrojPrijemnice samo za hladnjaca-kupca
 
     FillOpenFakture
     Exit Sub
@@ -694,6 +698,34 @@ Private Sub RefreshBrojZbirneSuggestion()
 
 EH:
     LogErr "frmDokumenta.RefreshBrojZbirneSuggestion"
+End Sub
+
+Private Sub RefreshBrojPrijSuggestion()
+    ' Auto-predlog BrojPrijemnice SAMO za hladnjaca-kupca (CFG_MALINA_DEFAULT_KUPAC).
+    ' Ostali (eksterni) kupci nose svoju nezavisnu numeraciju -> rucni unos; polje
+    ' se NE dira (gate izlazi pre nego sto bilo sta upise).
+    On Error GoTo EH
+
+    Dim kupacID As String
+    kupacID = GetComboID(cmbKupac)
+    If Len(kupacID) = 0 Then Exit Sub
+
+    Dim hladnjacaKupac As String
+    hladnjacaKupac = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    If Len(hladnjacaKupac) = 0 Then Exit Sub
+    If StrComp(kupacID, hladnjacaKupac, vbTextCompare) <> 0 Then Exit Sub
+
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
+
+    Dim suggested As String
+    suggested = GenerateBrojPrijemnice(kupacID, datumDok)
+
+    If Len(suggested) > 0 Then txtBrojPrij.value = suggested
+    Exit Sub
+
+EH:
+    LogErr "frmDokumenta.RefreshBrojPrijSuggestion"
 End Sub
 
 ' ============================================================
@@ -1654,6 +1686,7 @@ Private Sub btnUnosPrij_Click()
     End If
 
     txtBrojPrij.value = ""
+    RefreshBrojPrijSuggestion       ' hladnjaca: predlozi sledeci broj; eksterni: ostaje prazno
     txtKolicinaPrij.value = ""
     txtCenaPrij.value = ""
     txtKolAmbPrij.value = ""
