@@ -637,16 +637,27 @@ Private Sub StornoSelectedBlok()
     Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
     If Len(otkupID) = 0 Then Exit Sub      ' zbirni red
 
-    If MsgBox("Stornirati blok " & otkupID & " (" & CStr(mLstBlok.List(li, 2)) & ", " & _
-              CStr(mLstBlok.List(li, 4)) & " kg)?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+    ' Klasa I i II dele isti broj dokumenta (zaseban OtkupID po klasi) -> storno
+    ' obuhvata CEO otkup (obe klase), ne samo izabrani blok. (col1 = BrDok)
+    Dim brDok As String: brDok = Trim$(CStr(mLstBlok.List(li, 1)))
 
-    If StornoOtkup_TX(otkupID) Then
+    If MsgBox("Stornirati ceo otkup br. " & brDok & " (" & CStr(mLstBlok.List(li, 2)) & _
+              ", sve klase)?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+
+    Dim ok As Boolean
+    If Len(brDok) > 0 Then
+        ok = StornoOtkupByBrDok_TX(brDok)
+    Else
+        ok = StornoOtkup_TX(otkupID)       ' fallback: blok bez broja dokumenta
+    End If
+
+    If ok Then
         LoadBlokovi
         LoadOtpremnice
         RefreshSummary
-        MsgBox "Blok storniran: " & otkupID, vbInformation, APP_NAME
+        MsgBox "Otkup storniran: " & brDok, vbInformation, APP_NAME
     Else
-        MsgBox "Storno nije uspeo za " & otkupID & ".", vbCritical, APP_NAME
+        MsgBox "Storno nije uspeo za " & brDok & ".", vbCritical, APP_NAME
     End If
     Exit Sub
 EH:

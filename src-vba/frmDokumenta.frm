@@ -270,8 +270,10 @@ End Sub
 Private Function SetupKlIIAmb(ByVal nm As String, ByVal ambI As MSForms.Control, _
                              ByVal kolII As MSForms.Control) As MSForms.TextBox
     On Error GoTo fail
+    ' VAZNO: kontrole su unutar Frame-a (fraOtpremnica/...). Dodaj u ISTI container
+    ' (ambI.Parent.Controls) da koordinate budu frame-relativne i da se polje vidi.
     Dim t As MSForms.TextBox
-    Set t = Me.Controls.Add("Forms.TextBox.1", nm, True)
+    Set t = ambI.Parent.Controls.Add("Forms.TextBox.1", nm, True)
     With t
         .Left = kolII.Left
         .Top = ambI.Top
