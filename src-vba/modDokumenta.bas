@@ -24,7 +24,8 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal kolicinaII As Double = 0, _
                                        Optional ByVal cenaII As Double = 0, _
                                        Optional ByVal brutoKgI As Double = 0, _
-                                       Optional ByVal kolAmbII As Long = 0) As String
+                                       Optional ByVal kolAmbII As Long = 0, _
+                                       Optional ByVal brutoKgII As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -70,7 +71,8 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
             cenaII, _
             tipAmb, _
             kolAmbII, _
-            KLASA_II)
+            KLASA_II, _
+            brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1102, "SaveOtpremnicaMulti_TX", _

@@ -914,7 +914,11 @@ Private Sub RefreshSummary()
 
     Dim ukupno As Double
     ukupno = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOLICINA))
+    Dim ukupnoBruto As Double
+    ukupnoBruto = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BRUTO))
+    If ukupnoBruto <= 0 Then ukupnoBruto = ukupno
     Dim napisano As Double: napisano = SumKolByOtp(mActiveOtpID)
+    Dim napisanoBruto As Double: napisanoBruto = SumBrutoByOtp(mActiveOtpID)
     Dim preostalo As Double: preostalo = ukupno - napisano
 
     Dim ukupnoAmb As Double
@@ -922,9 +926,9 @@ Private Sub RefreshSummary()
     Dim napisanoAmb As Double: napisanoAmb = SumAmbByOtp(mActiveOtpID)
     Dim preostaloAmb As Double: preostaloAmb = ukupnoAmb - napisanoAmb
 
-    mLblUkupno.caption = "Ukupno kg: " & FmtKg(ukupno)
-    mLblNapisano.caption = "U blokovima: " & FmtKg(napisano)
-    mLblPreostalo.caption = "Ostatak: " & FmtKg(preostalo)
+    mLblUkupno.caption = "Ukupno kg: " & FmtKgBrutoNeto(ukupnoBruto, ukupno)
+    mLblNapisano.caption = "U blokovima: " & FmtKgBrutoNeto(napisanoBruto, napisano)
+    mLblPreostalo.caption = "Ostatak: " & FmtKgBrutoNeto(ukupnoBruto - napisanoBruto, preostalo)
 
     mLblUkupnoAmb.caption = "Ukupno amb: " & FmtKg(ukupnoAmb)
     mLblNapisanoAmb.caption = "U blokovima amb: " & FmtKg(napisanoAmb)
@@ -1052,6 +1056,30 @@ Private Function SumKolByOtp(ByVal otpID As String) As Double
         If Trim$(CStr(data(i, cOtp))) = otpID Then s = s + NumVal(data(i, cKol))
     Next i
     SumKolByOtp = s
+End Function
+
+' Zbir BRUTO kg otkup blokova za otpremnicu (BrutoKg po redu; ako je prazno -> neto).
+Private Function SumBrutoByOtp(ByVal otpID As String) As Double
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOtp As Long, cKol As Long, cBruto As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cBruto = GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO)
+
+    Dim i As Long, s As Double, b As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cOtp))) = otpID Then
+            b = 0
+            If cBruto > 0 Then b = NumVal(data(i, cBruto))
+            If b <= 0 Then b = NumVal(data(i, cKol))   ' red bez bruto -> bruto = neto
+            s = s + b
+        End If
+    Next i
+    SumBrutoByOtp = s
 End Function
 
 Private Function SumAmbByOtp(ByVal otpID As String) As Double
@@ -1184,6 +1212,15 @@ End Function
 
 Private Function NumVal(ByVal v As Variant) As Double
     If IsNumeric(v) Then NumVal = CDbl(v)
+End Function
+
+' Bruto rezim: "bruto (neto X)"; neto rezim ili bruto==neto: samo vrednost.
+Private Function FmtKgBrutoNeto(ByVal brutoVal As Double, ByVal netoVal As Double) As String
+    If OtkupBrutoUnos() And Abs(brutoVal - netoVal) > 0.0001 Then
+        FmtKgBrutoNeto = FmtKg(brutoVal) & " (neto " & FmtKg(netoVal) & ")"
+    Else
+        FmtKgBrutoNeto = FmtKg(netoVal)
+    End If
 End Function
 
 Private Function FmtKg(ByVal x As Double) As String

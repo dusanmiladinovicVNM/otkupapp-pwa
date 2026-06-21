@@ -662,6 +662,29 @@ Private Sub btnUnosOtp_Click()
         End If
     End If
 
+    ' BRUTO unos za Klasu II (zasebne gajbe -> zasebna tara). Kao Klasa I: Kolicina
+    ' (II) ide NETO, bruto se zamrzava u BrutoKg (zaseban red Klase II).
+    Dim brutoKgII As Double
+    If chkDveKlaseOtp.value And OtkupBrutoUnos() And kolAmbII > 0 Then
+        Dim taraKgII As Double
+        taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbOtp.value)
+        If taraKgII <= 0 Then
+            MsgBox "Tip ambalaže '" & cmbTipAmbOtp.value & "' nema unetu težinu gajbice " & _
+                   "(Matični podaci → Tip ambalaže)." & vbCrLf & _
+                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            cmbTipAmbOtp.SetFocus
+            Exit Sub
+        End If
+        If taraKgII >= kolicinaII Then
+            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veća ili " & _
+                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg).", vbExclamation, APP_NAME
+            If Not m_txtKolAmbIIOtp Is Nothing Then m_txtKolAmbIIOtp.SetFocus
+            Exit Sub
+        End If
+        brutoKgII = kolicinaII             ' zamrzni uneti bruto (II)
+        kolicinaII = kolicinaII - taraKgII ' u Kolicina (II) ide neto
+    End If
+
     ' MALINA: otpremnica se snima sa PRAZNIM BrojZbirne da je AutoCreateZbirnaFrom-
     ' Otpremnice pokupi (prikaz u formi je samo predlog; auto-zbirna dodeli
     ' "S"+BrojOtpremnice). Van malina moda salje se vrednost iz polja.
@@ -687,7 +710,8 @@ Private Sub btnUnosOtp_Click()
         kolicinaII:=kolicinaII, _
         cenaII:=cenaII, _
         brutoKgI:=brutoKgI, _
-        kolAmbII:=kolAmbII)
+        kolAmbII:=kolAmbII, _
+        brutoKgII:=brutoKgII)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju otpremnice. Promene su vracene.", vbCritical, APP_NAME
