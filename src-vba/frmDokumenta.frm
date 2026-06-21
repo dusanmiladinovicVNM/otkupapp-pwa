@@ -239,6 +239,7 @@ Private Sub chkDveKlaseOtp_Click()
         EnableField txtCenaKlIIOtp
         StyleTextBox txtKolicinaKlIIOtp
         StyleTextBox txtCenaKlIIOtp
+        AutoFillCenaDok
     Else
         DisableField txtKolicinaKlIIOtp
         DisableField txtCenaKlIIOtp
@@ -263,6 +264,7 @@ Private Sub chkDveKlasePrij_Click()
         EnableField txtCenaKlIIPrij
         StyleTextBox txtKolicinaKlIIPrij
         StyleTextBox txtCenaKlIIPrij
+        AutoFillCenaDok
     Else
         DisableField txtKolicinaKlIIPrij
         DisableField txtCenaKlIIPrij
