@@ -237,16 +237,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     kl = Replace(kl, "{RACUN}", CStr(h("racun")), , , vbTextCompare)
     kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
-    ' Spoji u jedan pasus: ukloni prelome reda iz podesavanja da bi Excel sam
-    ' prelamao preko CELE sirine (inace tekst staje tamo gde je korisnik
-    ' pritisnuo Enter, pa deluje da ne ide do kraja).
-    kl = Replace(kl, vbCrLf, " ")
-    kl = Replace(kl, vbLf, " ")
-    kl = Replace(kl, vbCr, " ")
-    Do While InStr(kl, "  ") > 0
-        kl = Replace(kl, "  ", " ")
-    Loop
-    h("klauzula") = Trim$(kl)
+    h("klauzula") = kl
 
     Application.ScreenUpdating = False
     On Error Resume Next
