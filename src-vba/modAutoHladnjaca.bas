@@ -158,7 +158,7 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
         brPrij2 = NextBrojPrijemnice(datum)
         Dim otpID2 As String
         otpID2 = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                                   kolicinaII, cenaII, tipAmb, kolAmbII, KLASA_II)
+                                   kolicinaII, cenaII, tipAmb, kolAmbII, KLASA_II, brutoKgII)
         SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
                       kolicinaII, tipAmb, kolAmbII, KLASA_II
         SavePrijemnica_TX datum, kupacID, vozacID, brPrij2, brZbr, vrsta, sorta, _
