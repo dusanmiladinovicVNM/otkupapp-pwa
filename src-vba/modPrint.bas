@@ -412,10 +412,17 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ' --- ambalaza tabelica (primljena / izdata / saldo) levo, uokvireno +
     '     obracun PDV nadoknade desno, uokvireno ---
     Dim ob As Long: ob = rr
-    DocLabelVal ws, ob, 1, "Primljena ambalaza:", CStr(h("amb"))
-    DocLabelVal ws, ob + 1, 1, "Izdata ambalaza:", CStr(h("ambIzdata"))
-    DocLabelVal ws, ob + 2, 1, "Saldo ambalaze:", CStr(h("ambSaldo"))
+    DocLabelVal ws, ob, 1, "Primljena ambalaza:", ""
+    ws.cells(ob, 4).value = CStr(h("amb"))
+    DocLabelVal ws, ob + 1, 1, "Izdata ambalaza:", ""
+    ws.cells(ob + 1, 4).value = CStr(h("ambIzdata"))
+    DocLabelVal ws, ob + 2, 1, "Saldo ambalaze:", ""
+    ws.cells(ob + 2, 4).value = CStr(h("ambSaldo"))
     ws.cells(ob + 2, 1).Font.Bold = True
+    ws.cells(ob + 2, 4).Font.Bold = True
+    With ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 4))   ' vrednosti desno poravnate
+        .HorizontalAlignment = xlRight
+    End With
     ws.Range(ws.cells(ob, 1), ws.cells(ob + 2, 4)).BorderAround Weight:=xlThin
     With ws.Range(ws.cells(ob + 2, 1), ws.cells(ob + 2, 4)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
