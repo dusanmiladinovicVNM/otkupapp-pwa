@@ -47,18 +47,25 @@ Public Sub MigrirajPodatkeIzStarog()
     Set stari = Workbooks.Open(Filename:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
 
     Dim ws As Worksheet, loNovi As ListObject, n As Long
-    Dim ckey As String, cval As String, isCfg As Boolean
+    Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, eNum As Long
     For Each ws In novi.Worksheets
         For Each loNovi In ws.ListObjects
             If Not SkipTabela(loNovi.name) Then
                 isCfg = ConfigKolone(loNovi.name, ckey, cval)
-                If isCfg Then
-                    n = MergeConfigTabelu(stari, loNovi, ckey, cval)   ' nova vrednost ostaje, prazno se puni
-                Else
-                    n = KopirajTabelu(stari, loNovi)                   ' pun copy (data tabele)
-                End If
 
-                If n = -1 Then
+                On Error Resume Next                       ' jedna losa tabela ne prekida ceo prolaz
+                Err.Clear
+                If isCfg Then
+                    n = MergeConfigTabelu(stari, loNovi, ckey, cval)
+                Else
+                    n = KopirajTabelu(stari, loNovi)
+                End If
+                eNum = Err.Number: eDesc = Err.description
+                On Error GoTo CLEAN
+
+                If eNum <> 0 Then
+                    summary = summary & "  " & loNovi.name & " - GRESKA: " & eDesc & vbCrLf
+                ElseIf n = -1 Then
                     summary = summary & "  " & loNovi.name & " - (nema u starom)" & vbCrLf
                 ElseIf n = -2 Then
                     summary = summary & "  " & loNovi.name & " - (config kolone nenadjene!)" & vbCrLf
@@ -124,7 +131,9 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
 
     ' prosiri novu tabelu na header + nRows, pa upisi SAMO mapirane kolone
     ' (nove/kalkulisane kolone u novom fajlu ostaju netaknute)
-    loNovi.Resize loNovi.HeaderRowRange.Resize(nRows + 1, nNew)
+    ' Range.Cells(1,1) je gornji-levi (header) ugao - uvek set (HeaderRowRange
+    ' ume da bude Nothing ako tabela nema prikazan header -> Error 91).
+    loNovi.Resize loNovi.Range.Cells(1, 1).Resize(nRows + 1, nNew)
     Dim colArr() As Variant, r As Long
     For j = 1 To nNew
         If mapCol(j) > 0 Then
