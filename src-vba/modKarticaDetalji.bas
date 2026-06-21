@@ -41,53 +41,39 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     If mBuilt Then Exit Sub
     If lstKartica Is Nothing Then Exit Sub
 
-    ' Kontrole se dodaju EKSPLICITNO u karticu-stranicu mpReports.Pages(8) (NE preko
-    ' lstKartica.Parent — kod MultiPage-a .Parent ne mora vratiti Page). Tako su deca
-    ' iste stranice (ispravan z-order, auto-vidljivost) i koordinate su page-relativne
-    ' kao lstKartica. Fallback na formu ako stranica nije dostupna.
+    ' Kontrole se prave NA FORMI (frm.Controls.Add — proveren obrazac, modOtkupBlok)
+    ' i pozicioniraju forma-relativnim koordinatama (frm.InsideWidth/Height) tako da
+    ' NE mogu da budu van ekrana. ZOrder ih dize u prvi plan (preko MultiPage-a).
+    ' SetVisible ih krije van kartice (mFormLevel=True).
     Dim cont As Object
+    Set cont = frm
+    mFormLevel = True
+
+    Dim leftX As Double, topY As Double, panelH As Double, panelW As Double
+    Dim insW As Double, insH As Double
+    insW = 700: insH = 460
     On Error Resume Next
-    Set cont = frm.Controls("mpReports").Pages(8)
+    insW = frm.InsideWidth
+    insH = frm.InsideHeight
     On Error GoTo EH
-    mFormLevel = False
-    If cont Is Nothing Then
-        Set cont = frm
-        mFormLevel = True
-    End If
 
-    ' lstKartica je cesto SIRA od zbira kolona (desni deo liste je prazan), pa panel
-    ' krecemo posle KOLONA (~515pt), preko praznog dela liste, a NE posle cele liste
-    ' (to bi bilo van vidljive stranice ako lista popunjava sirinu). Sirina ide do
-    ' vece od (desna ivica liste, sirina stranice).
-    Const GAP As Double = 8
-    Const COLS_W As Double = 515            ' zbir sirina kolona lstKartica (60+70+140+80+80+80=510)+margina
-    Dim leftX As Double, topY As Double, panelH As Double, availW As Double
-    Dim listRight As Double, pageW As Double, rightBound As Double
-
-    leftX = lstKartica.Left + COLS_W
-    topY = lstKartica.Top
-    panelH = lstKartica.Height
-
-    listRight = lstKartica.Left + lstKartica.width
-    pageW = 0
-    On Error Resume Next
-    pageW = cont.InsideWidth
-    On Error GoTo EH
-    rightBound = listRight
-    If pageW > rightBound Then rightBound = pageW
-
-    availW = rightBound - leftX - GAP
-    If availW < 150 Then availW = 200        ' malo mesta -> minimalna sirina (panel ide preko)
-    If availW > 420 Then availW = 420
-    If panelH < 120 Then panelH = 120
+    panelW = insW * 0.34
+    If panelW < 170 Then panelW = 200
+    If panelW > 320 Then panelW = 320
+    leftX = insW - panelW - 12
+    If leftX < 8 Then leftX = 8
+    topY = insH * 0.17
+    If topY < 40 Then topY = 60
+    panelH = insH * 0.64
+    If panelH < 140 Then panelH = 300
+    Dim availW As Double: availW = panelW
 
     On Error Resume Next
     mDiag = "cont=" & TypeName(cont) & "; leftX=" & CStr(CLng(leftX)) & _
-            "; topY=" & CStr(CLng(topY)) & "; availW=" & CStr(CLng(availW)) & _
-            "; lstLeft=" & CStr(CLng(lstKartica.Left)) & _
-            "; lstW=" & CStr(CLng(lstKartica.width)) & _
-            "; pageW=" & CStr(CLng(pageW))
-    Debug.Print "KART_ENSURE "; mDiag
+            "; topY=" & CStr(CLng(topY)) & "; panelW=" & CStr(CLng(panelW)) & _
+            "; panelH=" & CStr(CLng(panelH)) & _
+            "; insW=" & CStr(CLng(insW)) & "; insH=" & CStr(CLng(insH))
+    Debug.Print "KART_ENSURE v5 "; mDiag
     On Error GoTo EH
 
     Set mLblTitle = cont.Controls.Add("Forms.Label.1", "lblKarticaDetaljiNaslov", True)
@@ -114,6 +100,8 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     End With
     On Error Resume Next
     StyleListBox mLst
+    mLblTitle.ZOrder 0          ' fmTop -> u prvi plan (preko MultiPage-a)
+    mLst.ZOrder 0
     On Error GoTo EH
 
     mBuilt = True
@@ -143,6 +131,7 @@ End Sub
 
 ' Prikazi detalje za trenutno izabran red lstKartica.
 Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MSForms.ListBox)
+    Debug.Print "KART_ShowForRow ENTER v5"
     On Error GoTo EH
     If lstKartica Is Nothing Then Exit Sub
 

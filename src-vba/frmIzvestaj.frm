@@ -937,12 +937,14 @@ Private Sub lstKartica_Click()
     On Error Resume Next
     Debug.Print "KART_CLICK idx="; lstKartica.ListIndex
     KarticaDetalji_ShowForRow Me, lstKartica
+    If Err.Number <> 0 Then Debug.Print "KART_CLICK_ERR "; Err.Number; Err.description
 End Sub
 
 Private Sub lstKartica_Change()
     On Error Resume Next
     Debug.Print "KART_CHANGE idx="; lstKartica.ListIndex
     KarticaDetalji_ShowForRow Me, lstKartica
+    If Err.Number <> 0 Then Debug.Print "KART_CHANGE_ERR "; Err.Number; Err.description
 End Sub
 
 Private Sub btnStampajKarticu_Click()
