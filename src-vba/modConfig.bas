@@ -293,7 +293,13 @@ Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
 Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
 Public Const PALETA_DEFAULT_KAPACITET As Long = 240
 Public Const CFG_PALETA_PRINT_MODE As String = "PALETA_PRINT_MODE"
+' Paletiranje (izrada paletnih listova iz prijemnice). Default ON (kao do sada).
+' NO -> PaletizePrijemnica se preskace; nema paleta ni paletnih listova.
+Public Const CFG_PALETIRANJE As String = "PALETIRANJE"
 Public Const CFG_OTKUP_PRINT_MODE As String = "OTKUP_PRINT_MODE"
+' Štampa prijemnice — auto izlaz na "Unos prijemnice". Default OFF (kao do sada;
+' prijemnica se ne stampa). PDF | PRINT | PREVIEW | OFF (kao PALETA_PRINT_MODE).
+Public Const CFG_PRIJEMNICA_PRINT_MODE As String = "PRIJEMNICA_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
@@ -444,6 +450,9 @@ Public Const CFG_DEFAULT_SORTA As String = "DEFAULT_SORTA_VOCA"
 Public Const CFG_KOOP_FILTER_BY_OM As String = "KOOP_FILTER_BY_OM"
 ' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
 Public Const CFG_AUTO_PRIJEMNICA_HLADNJACA As String = "AUTO_PRIJEMNICA_HLADNJACA"
+' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default
+' ON (kao do sada). NO -> forma ne predlaze broj; operater unosi svoj.
+Public Const CFG_AUTO_BROJ_DOK As String = "AUTO_BROJ_DOKUMENTA"
 ' Kupac unosi BRUTO tezinu (sa ambalazom); sistem oduzima taru -> cuva neto (default OFF).
 Public Const CFG_OTKUP_BRUTO_UNOS As String = "OTKUP_BRUTO_UNOS"
 
@@ -666,6 +675,18 @@ End Function
 ' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
 Public Function IsAutoPrijemnicaHladnjaca() As Boolean
     IsAutoPrijemnicaHladnjaca = ConfigFlag(CFG_AUTO_PRIJEMNICA_HLADNJACA, False)
+End Function
+
+' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default ON.
+' NO -> SuggestNextBroj vraca "" pa forma ostavlja polje prazno (operater unosi svoj).
+Public Function IsAutoBrojDokumenta() As Boolean
+    IsAutoBrojDokumenta = ConfigFlag(CFG_AUTO_BROJ_DOK, True)
+End Function
+
+' Paletiranje (izrada paletnih listova iz prijemnice). Default ON.
+' NO -> PaletizePrijemnica se preskace (kao kad nema gajbica); prijemnica se i dalje snima.
+Public Function IsPaletiranjeEnabled() As Boolean
+    IsPaletiranjeEnabled = ConfigFlag(CFG_PALETIRANJE, True)
 End Function
 
 ' Kupac unosi BRUTO tezinu (sa ambalazom); sistem oduzima taru ambalaze i cuva
