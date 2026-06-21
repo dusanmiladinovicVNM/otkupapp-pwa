@@ -216,9 +216,14 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
 
     Dim resultII As String
 
-    ' Kes se belezi na red Klase I; ako Klase I nema (samo II), belezi se na Klasu II.
+    ' Kes I izdata ambalaza se belezi na red Klase I; ako Klase I nema (samo II),
+    ' belezi se na Klasu II -- inace bi se izgubili (SaveOtkup Klase I se preskace).
     Dim novacII As Double
-    If Not hasKlasaI Then novacII = novac
+    Dim kolAmbIzdataII As Long
+    If Not hasKlasaI Then
+        novacII = novac
+        kolAmbIzdataII = kolAmbIzdata
+    End If
 
     If hasKlasaII Then
         resultII = SaveOtkup( _
@@ -238,6 +243,7 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
             klasa:=KLASA_II, _
             parcelaID:=parcelaID, _
             brojZbirne:=brojZbirne, _
+            kolAmbIzdata:=kolAmbIzdataII, _
             brutoKg:=brutoKgII)
 
         If resultII = "" Then
