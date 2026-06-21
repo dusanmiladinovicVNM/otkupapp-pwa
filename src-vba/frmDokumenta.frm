@@ -534,10 +534,13 @@ Private Sub btnUnosOtp_Click()
         Exit Sub
     End If
 
-    If Not IsNumeric(txtKolicinaOtp.value) Or val(txtKolicinaOtp.value) <= 0 Then
-        MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
-        txtKolicinaOtp.SetFocus
-        Exit Sub
+    ' Klasa I obavezna OSIM kad je samo Klasa II (dve-klase + prazna Klasa I).
+    If Not (chkDveKlaseOtp.value And Trim$(txtKolicinaOtp.value) = "") Then
+        If Not IsNumeric(txtKolicinaOtp.value) Or val(txtKolicinaOtp.value) <= 0 Then
+            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            txtKolicinaOtp.SetFocus
+            Exit Sub
+        End If
     End If
 
     If chkDveKlaseOtp.value Then
