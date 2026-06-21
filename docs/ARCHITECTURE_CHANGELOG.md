@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.28  
-**Last Updated:** 2026-06-19  
-**Status:** Active changelog — v6.28 OtkupSablon one-third-A4 two-up print geometry (each primerak = 1/3 A4 for pre-perforated paper, 1:1 print)
+**Current Version:** v6.31  
+**Last Updated:** 2026-06-21  
+**Status:** Active changelog — v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
 
 ---
 
@@ -53,6 +53,9 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.31 | 2026-06-21 | Dvoklasni otkup — puna podrška za **Klasu II kroz ceo lanac**: Klasa II (drugi `tblOtkup`/dokument red, isti `BrDok`) nosi **svoju** količinu ambalaže `kolAmbII` kroz ledger, otpremnicu/zbirnu/prijemnicu i **paletizaciju** (#3, reverz starog „ambalaža samo na Klasi I"). **Unos samo Klase II** bez Klase I (otkup + dokumenta; `hasKlasaI = kolicinaI > 0`, bar jedna klasa) (#2). **Bruto unos**: ako ima količine bez gajbi → blok snimanja (bez gajbi se bruto ne pretvara u neto, tara se plaća kao voće) (#1). **Otpremnica čuva neto** + `tblOtpremnica.BrutoKg` (panel poredi neto↔neto; labele „bruto (neto X)") (#5). MALINA: posivljena Zbirna sekcija u `frmDokumenta` (`DisableFraZbirnaMalina` — i deca kontrole). Auto-cena Klase II na `chkDveKlase`. Storno celog dokumenta `StornoOtkupByBrDok_TX` (oba reda). PR57: `modBrojevi.GenerateBrojPrijemnice` + auto-predlog. Fix regresije: izdata ambalaža se gubila kod unosa samo Klase II (sad se rutira na red Klase II). | **Yes** — AR §6.1/§6.2/§6.4/§6.8/§6.9 + §5.4/§5.5; companion `AMBALAZA_MODEL.md` §3/§9 | re-import `frmOtkup`/`frmDokumenta`/`modOtkup`/`modDokumenta`/`modAutoHladnjaca`/`modStorno`/`modOtkupBlok`/`modConfig`/`modSetup`/`modPrint`/`modPaletniList`/`modPodesavanja`/`modBrojevi`/`modBusinessFlowProTests`; pokreni `EnsureDoradeSchema` (dodaje `tblOtpremnica.BrutoKg`); stari redovi nemaju `kolAmbII`/`BrutoKg` (prazno = neto, ambalaža samo Klasa I) — bez migracije |
+| v6.30 | 2026-06-20 | Otkup desktop: novo polje „Izdata ambalaza" (OM→kooperant uz otkup) — double-entry `Kooperant Ulaz` + `Stanica Izlaz` pod `DOK_TIP_OM_IZLAZ_KOOP` (DokumentID = otkupID, bez vozača; reuse modela iz v6.29 / `AMBALAZA_MODEL.md`), perzistira u `tblOtkup.KolAmbIzdata`; `StornoOtkup` reversuje obe noge (deli otkupID). Otkupni list (`modPrint`) obogaćen: ambalaža blok prikazuje **Primljenu i Izdatu**, tabela stavki proširena na 8 kolona (Cena bez PDV / Cena s PDV / Kol. neto / Kol. bruto = neto + gajbice×tara iz `tblTipAmbalaze.TezinaGajbiceKg` / Vrednost neto), red „Objekat" (lokacija + br. registra; firmin config `SELLER_OBJEKAT_*`) ispod reda sa PIB, i vreme snimanja (`tblOtkup.VremeUnosa` = `Now()`) uz Datum. | Companion `AMBALAZA_MODEL.md` (§3/§9); main ref TBD | re-import `modConfig`/`modSetup`/`modOtkup`/`frmOtkup`/`modStorno`/`modPrint`/`modPodesavanja`; pokreni `EnsureDoradeSchema` (kreira `KolAmbIzdata` + `VremeUnosa`); popuni `SELLER_OBJEKAT_*` u Podešavanjima; postojeći otkupi nemaju izdatu/vreme (prazno); 2-stavke (Klasa I+II) + „Objekat" red su tesni za 1/3 A4 — proveri štampu |
+| v6.29 | 2026-06-20 | Ambalaža direction model made consistently **entity-relative** (`Ulaz` = into the entity, `Izlaz` = out); the `Vozac` balance reads as the inverse transport counterparty. Write-side fix: `SavePrijemnica` booked the buyer backwards — now full received = `Kupac` `Ulaz`, returned empties = `Kupac` `Izlaz` (corrects the `Kupac` saldo too). `VozacAmbEffectiveSmer` inverts the `Stanica`/`Kupac` legs so otpremnica loads the driver (`Ulaz`) and prijemnica unloads him (`Izlaz`); a full route nets to 0. `DokumentTip = "Otkup"` has no vozač and is excluded (auto-hladnjača forced the mirror vozač onto every hladnjača otkup, double-charging). | Yes | re-import `modAmbalaza`/`modIzvestaj`/`modDokumenta`; existing prijemnica rows need `Smer` flip or re-seed |
 | v6.28 | 2026-06-19 | `OtkupSablon` otkupni-list print switched to a one-third-A4 two-up layout: each primerak (poljoprivrednik + otkupljivac) is exactly 1/3 A4 (99 mm) in the top two thirds, bottom third blank, for the client's pre-perforated paper; prints 1:1 (Zoom 100, margins 0, no fit-to-page) with explicit row heights + a filler row so the copy boundaries land on the 99/198 mm perforations. Content/obračun/klauzula unchanged. | Yes | presentation-only; no migration; re-import `modPrint`; run otkupni-list print gate; calibrate `OL_TOP_MARGIN_TRIM_PT` if the printer ignores a 0 top margin |
 | v6.27 | 2026-06-18 | Otkupni blokovi: optional `frmOtkup` panel for per-otpremnica blok entry — clicking an otpremnica pre-fills the existing otkup form (mesto/vrsta/sorta/vozač/broj zbirne/datum/cena), a single per-otpremnica price applies to all its blokovi, and the normal "Unos" auto-links the saved row(s) to the otpremnica via `OtkupBlok_AfterUnos` so remaining-quantity tracking updates without a manual Sledljivost auto-link. | Yes | no business-data migration; UI-only desktop add-on; re-import `modOtkupBlok`+`clsBlokUI`, add 2 guarded hook lines to `frmOtkup` (`AttachOtkupBlokPanel`, `OtkupBlok_AfterUnos`); opt-out via `OTKUP_BLOK_PANEL=NO` |
 | v6.26 | 2026-06-18 | Document print/presentation layer: shared `modDocStyle` house style for otkupni/paletni/preradni lists, otkupni-list legal block (PDV-nadoknada klauzula + rok isplate via `OTKUP_KLAUZULA` / `OTKUP_ROK_ISPLATE`), and paletni/preradni redesign (vrsta voca as subtitle, dropped redundant Vrsta column, layout-version auto-rebuild). | Yes | presentation-only; no business-data migration; re-import `modDocStyle`/`modConfig`/`modPrint`/`modPaletniList`; templates regenerate; run otkupni/paletni/preradni print gates |
@@ -103,6 +106,96 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.31 — 2026-06-21
+
+### Summary
+
+Dvoklasni otkup (Klasa I + Klasa II) dobija **punu, simetričnu podršku** za Klasu II kroz ceo lanac. Do sada je Klasa II bila „drugorazredna": delila je ambalažu sa Klasom I i nije ulazila u paletizaciju/dokumente sa svojim gajbama. Sada su Klasa I i Klasa II **dva ravnopravna `tblOtkup`/dokument reda** koji dele isti `BrDok`, a svaki nosi svoju količinu i svoju ambalažu. Uz to: dozvoljen je **unos samo Klase II** (npr. kada nema prve klase), **bruto unos** sa obaveznim gajbama (da se tara ne plati kao voće), i **otpremnica čuva neto** (+`BrutoKg`) da panel poredi neto↔neto. Spojen je PR57 (numeracija prijemnice) i posivljena je Zbirna sekcija u MALINA modu.
+
+### Added
+
+- **#3 — Klasa II nosi zasebnu ambalažu kroz ceo lanac.** Klasa II red sada prosleđuje svoju količinu gajbica (`kolAmbII`) u: ledger (`TrackAmbalaza` dvojni upis, kao Klasa I), otpremnicu/zbirnu/prijemnicu (`modDokumenta.Save*Multi_TX`), auto-hladnjača lanac (`modAutoHladnjaca.AutoChainHladnjaca`) i **paletizaciju** (`modPaletniList`). Reverz starog modela gde je ambalaža bila vezana samo za Klasu I. UI: zasebno polje za gajbe Klase II na **pola širine** (deli red sa „Kolicina ambalaze", ogledalo `txtKolicinaKLII`) u `frmOtkup` (`m_txtKolAmbalazeII`/`ShowKolAmbalazeII`) i `frmDokumenta` (3 runtime polja `m_txtKolAmbIIOtp/Zbr/Prij` preko `ambI.Parent.Controls.Add` — `.frx` netaknut).
+- **#2 — Unos samo Klase II (bez Klase I).** I otkup (`frmOtkup`/`SaveOtkupMulti_TX`) i dokumenta (`SaveOtpremnicaMulti_TX`/`SaveZbirnaMulti_TX`/`SavePrijemnicaMulti_TX`) prihvataju unos samo Klase II; `hasKlasaI = (kolicinaI > 0)`, obavezna je bar jedna klasa (greške 1812/1103/1203/1303). Kad se unosi samo Klasa II, Količina I i Ambalaža I moraju biti prazni. Kes/avans i izdata ambalaža se tada vezuju na primarni red koji postoji (Klasa II).
+- **#5 — Otpremnica čuva neto + `BrutoKg`.** Kad je bruto unos, otpremnica oduzme ambalažu i čuva **neto** (nova kolona `tblOtpremnica.BrutoKg` = `COL_OTP_BRUTO`, uz postojeće `tblOtkup.BrutoKg`/`tblPrijemnica.BrutoKg`), pa panel u bloku poredi **neto↔neto**. Panel labele u bruto modu prikazuju „bruto (neto X)" za sve tri vrednosti.
+- **Storno celog dokumenta.** `modStorno.StornoOtkupByBrDok_TX(brDok)` stornira **sve** redove jednog otkupnog dokumenta (Klasa I + Klasa II) atomično (jedna transakcija). Koristi se iz `frmDokumenta` storno putanje i iz panela (`modOtkupBlok.StornoSelectedBlok`, sa fallback-om na `OtkupID`).
+- **Auto-cena Klase II** u `frmDokumenta` na `chkDveKlase` (otpremnica/prijemnica) — `AutoFillCenaDok` predloži cenu Klase II iz cenovnika.
+- **PR57 — numeracija prijemnice.** `modBrojevi.GenerateBrojPrijemnice(kupacID, datum)` (`MaxSeqFromTable` + `FormatBroj`) + auto-predlog broja u `frmDokumenta` (`RefreshBrojPrijSuggestion`). Dvoklasna prijemnica nosi **isti** broj (jedna prijemnica = jedan broj).
+- Test `modBusinessFlowProTests.Test_OtkupClassIIAmbalaza` (registrovan) — pokriva da Klasa II knjiži svoju ambalažu.
+
+### Changed
+
+- **#1 — Bruto mod: gajbe su obavezne.** U bruto modu (i Klasa I i Klasa II), ako je uneta količina a broj gajbi je prazan → snimanje se **blokira**. Bez gajbi se bruto ne pretvara u neto, pa bi se tara (težina gajbica) platila kao voće.
+- **MALINA — Zbirna sekcija posivljena** u `frmDokumenta` (`DisableFraZbirnaMalina`). Zbirne se u malina modu prave automatski iz otpremnica, pa je ručni unos onemogućen; pošto `Frame.Enabled = False` ne posivi decu kontrole u MSForms, funkcija iterira i **decu** frejma.
+- `modPrint` (otkupni list): „Primljena ambalaža" = zbir `kolAmb` preko **svih** stavki dokumenta (Klasa I + II), ne samo Klase I.
+- `modAutoHladnjaca` / `modDokumenta`: Klasa II prolazi kroz auto-lanac i paletizaciju sa svojim `kolAmbII`/`brutoKgII`; Klasa I je opciona (`If hasKlasaI Then`).
+
+### Fixed
+
+- **Regresija — izdata ambalaža se gubila kod unosa samo Klase II.** Od `d7ea1ee` (#2) je `SaveOtkup` za Klasu I obmotan u `If hasKlasaI Then`, a izdata ambalaža (`OM→kooperant`, `DOK_TIP_OM_IZLAZ_KOOP`) se upisuje **samo** unutar `SaveOtkup` Klase I. Kod unosa samo Klase II (`hasKlasaI = False`) taj poziv se preskakao → `kolAmbIzdata` se nije upisivao ni u `tblOtkup.KolAmbIzdata` ni u ledger. Sada se `kolAmbIzdata` rutira na red Klase II kad nema Klase I (po uzoru na postojeći `novacII` obrazac; `kolAmbIzdataII = 0` kod dvoklasnog → bez dvostrukog upisa). **Normalan/dvoklasni otkup nije bio pogođen** (izdata ostaje na redu Klase I).
+- `frmDokumenta` otpremnica „samo Klasa II": uklonjen rani `Validacija` blok (`IsNumeric`/`val`) koji je blokirao unos pre izmenjene provere.
+- Storno dvoklasnog dokumenta iz `frmDokumenta` više ne stornira samo jedan red (Klasu II) — `StornoOtkupByBrDok_TX` hvata oba reda (dele `BrDok`).
+
+### Known Issues / Known Limitations
+
+- Bruto-mod validacija „gajbe obavezne" je u UI sloju (`frmOtkup`/`frmDokumenta`); direktan poziv `Save*Multi_TX` sa bruto bez gajbi nije zaustavljen na nivou TX-a (UI je jedini ulaz).
+- Postojeći (stari) otkupi/dokumenti nemaju `kolAmbII`/`BrutoKg` — prikazuju se kao Klasa-I-only / neto. Bez migracije (vidi dole).
+
+### Verification / Acceptance Gates
+
+- VBA se ne kompajlira u ovom okruženju — verifikovano **statički**: balans `Sub`/`Function` i `If`/`End If` po izmenjenom modulu, nema duplih `Public` definicija (`modOtkup` 9/9 Sub-Fn, 47/47 If). `modBusinessFlowProTests` zelen sa dodatim `Test_OtkupClassIIAmbalaza`.
+- Finalni smoke (korisnik, Excel): (1) **samo Klasa II + izdata** → upis u `tblOtkup.KolAmbIzdata` + dvojni ledger; (2) **dvoklasni otkup** → obe klase paletizovane, obe gajbe kroz otpremnicu/zbirnu/prijemnicu; (3) **bruto bez gajbi** → blokira snimanje; (4) **storno dvoklasnog dokumenta** → oba reda stornirana; (5) **MALINA** → Zbirna sekcija posivljena; (6) **otpremnica bruto** → čuva neto, panel poredi neto↔neto.
+
+### Migration / Data Notes
+
+- Re-import (forme idu sa `.frx` parom): `frmOtkup.frm`, `frmDokumenta.frm`, `modOtkup.bas`, `modDokumenta.bas`, `modAutoHladnjaca.bas`, `modStorno.bas`, `modOtkupBlok.bas`, `modConfig.bas`, `modSetup.bas`, `modPrint.bas`, `modPaletniList.bas`, `modPodesavanja.bas`, `modBrojevi.bas`, `modBusinessFlowProTests.bas`.
+- Pokreni **`EnsureDoradeSchema`** — dodaje `tblOtpremnica.BrutoKg` (uz ranije `tblOtkup.KolAmbIzdata`/`VremeUnosa`/`BrutoKg` i `tblPrijemnica.BrutoKg`), format `0.00`.
+- `Debug → Compile VBAProject` (mora bez greške — proveri duple `Public` posle merge-a).
+- Bez migracije podataka: stari redovi ostaju Klasa-I-only / neto (prazno `kolAmbII`/`BrutoKg`).
+
+Reference updated: **Yes.** `ARCHITECTURE_REFERENCE.md` §6.1 (dvoklasni otkup — zasebni redovi sa istim `BrDok`, opciona Klasa I, bruto sa obaveznim gajbama, izdata + `VremeUnosa`), §6.2 i §6.4 (Klasa II nosi svoju ambalažu, bruto čuva neto + `BrutoKg`, `GenerateBrojPrijemnice`), §6.8 (ledger knjiži ambalažu po klasi), §6.9 (`StornoOtkupByBrDok_TX` — storno celog dokumenta), §5.4 i §5.5 (`KolAmbIzdata`/`VremeUnosa`/`BrutoKg` kolone). Companion `AMBALAZA_MODEL.md` §3/§9.
+
+
+## v6.29 — 2026-06-20
+
+### Summary
+
+Corrected the ambalaža (packaging) **direction model** so the ledger `Smer` is consistently **entity-relative** (`Ulaz` = crates into that entity, `Izlaz` = out) and the driver (`Vozac`) balance reads as the inverse transport counterparty. Three parts: **(1) Write-side data fix** — `SavePrijemnica` booked the buyer side backwards (full crates received = `Izlaz`, returned empties = `Ulaz`); now full = `Kupac` `Ulaz` and returned = `Kupac` `Izlaz`, matching every other document, which also corrects the `Kupac` saldo/report. **(2) Vozač = inverse counterparty** (single-entry — the driver leg is derived on read): `VozacAmbEffectiveSmer` inverts the `Stanica` and `Kupac` legs so an otpremnica **loads** the driver (`Ulaz`) and a prijemnica **unloads** him (`Izlaz`); a complete otpremnica→prijemnica route nets to 0, an open otpremnica shows a positive saldo = crates still on the driver. **(3) Otkup has no vozač** — `DokumentTip = "Otkup"` (`Kooperant` procurement) is excluded from the driver balance; it was double-charging the same crates already on the otpremnica, made universal by auto-hladnjača forcing the mirror vozač onto every hladnjača otkup. Surfaced via the otkup-in-own-hladnjača case (buyer = the firm, "vozač" = the station).
+
+### Added
+
+- **OM issues empty packaging to a kooperant** (`frmDokumenta`, OM-Ulaz frame). A runtime toggle `tglIzdKoop` (added as a child of `fraOMUlaz` — `.frx` untouched) switches the frame's ambalaža direction: default **Prijem na OM** (`Stanica` `Ulaz`, unchanged) vs **Izdavanje kooperantu**, which books a **double leg** (`DOK_TIP_OM_IZLAZ_KOOP`, no vozač): `Kooperant` `Ulaz` (kooperant receives empties) **+ `Stanica` `Izlaz`** (OM discharged for the same amount) — both rows share `brojDok`/`DokumentTip` in one transaction. Double-entry is required here because two real entities move (OM and kooperant) and neither is derivable from the other's row (unlike the vozač). New constant `DOK_TIP_OM_IZLAZ_KOOP`; `SaveOMUlaz_TX` gained an `izdavanjeKoop` flag. The kooperant is resolved with `GetComboID` (real `KooperantID` from the combo's hidden column, not the display name) — also fixes the same latent bug on the OM-Ulaz money + open-otkupi paths. Storno of this type follows the existing OM-Ulaz gap (not in the storno combo).
+- **Otkup now charges the OM (double-entry).** Otkup previously booked only `Kooperant` `Izlaz` (kooperant returns full) and never credited the OM. `modOtkup.SaveOtkup` and the PWA `modMasterSync` import now also book `Stanica` `Ulaz` (OM charged; same `brojDok`/`DOK_TIP_OTKUP`, no vozač), symmetric to OM-izdavanje — closing the OM↔kooperant loop (izdavanje OM−/koop+, otkup koop−/OM+ net out). Storno reverses both (by document). The vozač report is unaffected (otkup is excluded). Existing otkup rows keep the old single leg → re-seed or migrate to add the missing `Stanica` `Ulaz`.
+
+### Fixed
+
+- **Write-side data fix (`modDokumenta.SavePrijemnica`):** the prijemnica booked the buyer backwards. Now entity-relative — `kolAmb` (full crates the hladnjača receives from the zbirna) = `Kupac` `Ulaz`, `kolAmbVracena` (empties the hladnjača returns) = `Kupac` `Izlaz` (previously `Izlaz`/`Ulaz`). Also corrects the `Kupac` saldo (`GetAmbalazeStanje`) and the `Kupac` packaging report.
+- **`modAmbalaza.VozacAmbEffectiveSmer(smer, entitetTip)` — driver = inverse counterparty** (single-entry; derived on read, not stored): `Stanica` and `Kupac` transport legs are sign-inverted (otpremnica `Izlaz` → driver `Ulaz`/load; prijemnica `Ulaz` → driver `Izlaz`/unload), `Kooperant` is left raw (and excluded anyway). A complete route nets to 0; an open otpremnica shows a positive saldo = crates still on the driver. Invalid `Smer` still fails fast.
+- `modAmbalaza.GetVozacAmbSaldo`: reads `EntitetTip` + `DokumentTip`, skips `Otkup`, and routes each row through `VozacAmbEffectiveSmer` before bucketing `Izlaz`/`Ulaz`.
+- `modIzvestaj.ReportAmbalaza` (`Vozac` pojedinačni + zbirni): passes an `isVozac` flag into `ReportAmbalazePojedinacni`/`ReportAmbalazeZbirni`, which apply the same inversion. Entity reports (`OM`/`Kupac`) are unchanged — `isVozac = False` keeps the raw `Smer`.
+- **Otkup excluded from vozač custody (read-side).** `ReportAmbalaza` (vozač branch) adds a `DokumentTip <> "Otkup"` filter (`clsFilterParam` `<>`), and `GetVozacAmbSaldo` skips `Otkup` rows (`AmbText(colDokTip) = DOK_TIP_OTKUP → NextRow`). Fixes both existing and new data; `tblOtkup.VozacID` (zbirna grouping / traceability) and the auto-hladnjača writeback are untouched — only the driver **saldo** ignores otkup.
+
+### Design Decisions
+
+- **Uniform document flow for kooperant → own hladnjača (intentional, not a gap).** When a kooperant delivers directly into the firm's own cold storage, the otkup is still recorded through the normal otpremnica + prijemnica legs (buyer = the firm, "vozač" = the station) rather than through a special internal-transfer path. This deliberately trades a few redundant documents/rows for a single code path, one document layout to maintain, and no special case to remember — nothing is mis-entered, and with the vozač leg now netting to 0 those redundant rows no longer distort any saldo. A dedicated internal-transfer flow is therefore **not** planned; do not "fix" this by special-casing it.
+
+### Known Issues / Known Limitations
+
+- The driver-inverse rule keys on `EntitetTip`: `Stanica` and `Kupac` (transport legs) are inverted, `Kooperant` (otkup) has no vozač and is excluded. Matches every current booking. A future entity that is not a simple inverse transport counterparty would need the rule revisited.
+- Write-side left as-is: `modOtkup:448` still tags the otkup ambalaza ledger row with the otkup's vozač (the PWA sync path `modMasterSync:1627` already passes an empty vozač). It no longer affects the vozač saldo (excluded on read), but the ledger field stays populated; a future optional cleanup could pass an empty vozač at `modOtkup` for consistency with the sync path.
+- The exclusion assumes every buyer delivery has an otpremnica leg (auto-hladnjača always creates one), so dropping otkup does not lose the driver's "load"; a direct kooperant→buyer delivery with no otpremnica would need the rule revisited.
+
+### Verification / Acceptance Gates
+
+- VBA is not compiled in this environment; verified statically (Sub/Function balance, single `Public VozacAmbEffectiveSmer`, call arity: `ReportAmbalazeZbirni` = 6, `ReportAmbalazePojedinacni` = 9, helper = 2). Existing smoke tests keep passing — `modIzvestajTests` (ReportAmbalaza Vozac) and `modBusinessFlowProTests` (`GetVozacAmbSaldo` → `Not IsEmpty`) assert presence, not the saldo value.
+- Final smoke test (user, in Excel): Izveštaj → Vozači → a vozač with one otpremnica + matching prijemnica for the same crates should show **Saldo 0** (an open/partial route still shows the real manjak). Auto-hladnjača case: a hladnjača otkup chain (otkup + auto otpremnica + prijemnica, all on the mirror vozač = `StanicaID`) should also show **Saldo 0** — the otkup legs no longer appear in / charge the vozač balance.
+
+### Migration / Data Notes
+
+- **Write-side change** (`modDokumenta.SavePrijemnica`) — re-import `modAmbalaza.bas`, `modIzvestaj.bas`, `modDokumenta.bas`. **Existing `tblAmbalaza` prijemnica rows keep the old (reversed) `Smer`**: either re-seed test data, or run a one-time migration flipping `Smer` (`Izlaz`↔`Ulaz`) on rows with `DokumentTip = "Prijemnica"`. Until then, historical prijemnica / `Kupac` / vozač numbers mix conventions. Other document types and schema are unchanged.
+
+Reference updated: Yes (Ambalaza ledger read/saldo rules).
 
 
 ## v6.28 — 2026-06-19

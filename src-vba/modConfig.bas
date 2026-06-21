@@ -140,6 +140,9 @@ Public Const COL_OTK_KOLICINA As String = "Kolicina"
 Public Const COL_OTK_CENA As String = "Cena"
 Public Const COL_OTK_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_OTK_KOL_AMB As String = "KolAmbalaze"
+Public Const COL_OTK_KOL_AMB_IZDATA As String = "KolAmbIzdata"   ' OM izdao prazne kooperantu uz otkup (OM-Izlaz-Koop)
+Public Const COL_OTK_VREME_UNOSA As String = "VremeUnosa"        ' timestamp snimanja otkupa (Now() pri upisu)
+Public Const COL_OTK_BRUTO As String = "BrutoKg"                 ' bruto tezina uneta na otkupu (kad je OTKUP_BRUTO_UNOS); prazno = unet neto
 Public Const COL_OTK_VOZAC As String = "VozacID"
 Public Const COL_OTK_BR_DOK As String = "BrojDokumenta"
 Public Const COL_OTK_NOVAC As String = "Novac"
@@ -166,6 +169,7 @@ Public Const COL_OTP_CENA As String = "Cena"
 Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_OTP_KLASA As String = "Klasa"
+Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
 
 Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
 
@@ -195,6 +199,7 @@ Public Const COL_PRJ_CENA As String = "Cena"
 Public Const COL_PRJ_TIP_AMB As String = "TipAmbalaze"
 Public Const COL_PRJ_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_PRJ_KOL_AMB_VRACENA As String = "KolAmbVracena"
+Public Const COL_PRJ_BRUTO As String = "BrutoKg"                 ' bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS); prazno = neto
 Public Const COL_PRJ_VOZAC As String = "VozacID"
 Public Const COL_PRJ_VRSTA As String = "VrstaVoca"
 Public Const COL_PRJ_SORTA As String = "SortaVoca"
@@ -309,6 +314,7 @@ Public Const DOK_TIP_OTKUP As String = "Otkup"
 Public Const DOK_TIP_OTPREMNICA As String = "Otpremnica"
 Public Const DOK_TIP_PRIJEMNICA As String = "Prijemnica"
 Public Const DOK_TIP_IZLAZ_KUPCI As String = "Kupci-Otpremnica"
+Public Const DOK_TIP_OM_IZLAZ_KOOP As String = "OM-Izlaz-Koop"  ' OM izdaje (praznu) ambalazu kooperantu
 
 ' --- Spaltennamen tblFakture ---
 Public Const COL_FAK_ID As String = "FakturaID"
@@ -446,6 +452,8 @@ Public Const CFG_AUTO_PRIJEMNICA_HLADNJACA As String = "AUTO_PRIJEMNICA_HLADNJAC
 ' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default
 ' ON (kao do sada). NO -> forma ne predlaze broj; operater unosi svoj.
 Public Const CFG_AUTO_BROJ_DOK As String = "AUTO_BROJ_DOKUMENTA"
+' Kupac unosi BRUTO tezinu (sa ambalazom); sistem oduzima taru -> cuva neto (default OFF).
+Public Const CFG_OTKUP_BRUTO_UNOS As String = "OTKUP_BRUTO_UNOS"
 
 ' --- tblKulture: podrazumevani tip ambalaze (auto-puni u otkupu/dokumentima) ---
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
@@ -678,4 +686,10 @@ End Function
 ' NO -> PaletizePrijemnica se preskace (kao kad nema gajbica); prijemnica se i dalje snima.
 Public Function IsPaletiranjeEnabled() As Boolean
     IsPaletiranjeEnabled = ConfigFlag(CFG_PALETIRANJE, True)
+End Function
+
+' Kupac unosi BRUTO tezinu (sa ambalazom); sistem oduzima taru ambalaze i cuva
+' neto u Kolicina, a bruto u BrutoKg (frmOtkup). Default OFF -> postojece ponasanje.
+Public Function OtkupBrutoUnos() As Boolean
+    OtkupBrutoUnos = ConfigFlag(CFG_OTKUP_BRUTO_UNOS, False)
 End Function

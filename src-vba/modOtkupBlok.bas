@@ -34,7 +34,7 @@ Private Const PANEL_LEFT  As Double = 302
 Private Const OTP_W       As Double = 346
 Private Const BLOK_LEFT   As Double = 652       ' PANEL_LEFT + OTP_W + 4 (manji razmak)
 Private Const BLOK_W      As Double = 504
-Private Const GRID_TOP    As Double = 88
+Private Const GRID_TOP    As Double = 104
 Private Const EXP_WIDTH   As Double = 1164
 Private Const TOGGLE_W    As Double = 130
 
@@ -66,6 +66,9 @@ Private mTxtCenaOtp As MSForms.TextBox
 Private mLblUkupno As MSForms.label
 Private mLblNapisano As MSForms.label
 Private mLblPreostalo As MSForms.label
+Private mLblUkupnoAmb As MSForms.label
+Private mLblNapisanoAmb As MSForms.label
+Private mLblPreostaloAmb As MSForms.label
 
 ' ============================================================
 ' PUBLIC – ulazna tacka + event ruteri + frmOtkup hooks
@@ -157,6 +160,30 @@ Public Function OtkupBlok_ConfirmUnos() As Boolean
         TryParseDouble CStr(mForm.Controls("txtKolicinaKLII").value), k2
     End If
     On Error GoTo EH
+
+    ' Bruto unos: preostalo otpremnice je u NETO -> oduzmi taru ambalaze sa Klase I
+    ' (i Klase II, ako postoji) da poredjenje bude nedvosmisleno (neto vs neto).
+    If OtkupBrutoUnos() Then
+        Dim ka As Long, tw As Double
+        Dim tip As String
+        On Error Resume Next
+        tip = CStr(mForm.Controls("cmbTipAmbalaze").value)
+        If TryParseLong(CStr(mForm.Controls("txtKolAmbalaze").value), ka) Then
+            If ka > 0 And Len(Trim$(tip)) > 0 Then
+                tw = ka * GetTezinaGajbice(tip)
+                If tw > 0 And tw < kol Then kol = kol - tw
+            End If
+        End If
+        ' Klasa II: zasebne gajbe (runtime polje txtKolAmbalazeIIRT).
+        Dim ka2 As Long, tw2 As Double
+        If k2 > 0 And TryParseLong(CStr(mForm.Controls("txtKolAmbalazeIIRT").value), ka2) Then
+            If ka2 > 0 And Len(Trim$(tip)) > 0 Then
+                tw2 = ka2 * GetTezinaGajbice(tip)
+                If tw2 > 0 And tw2 < k2 Then k2 = k2 - tw2
+            End If
+        End If
+        On Error GoTo EH
+    End If
 
     Dim total As Double: total = kol + k2
     If total <= 0 Then Exit Function
@@ -266,19 +293,27 @@ Private Sub BuildPanel()
     mLblNapisano.caption = "U blokovima: —"
     mLblPreostalo.caption = "Ostatak: —"
 
+    ' Drugi red sazetka: ambalaza (ispod kg)
+    Set mLblUkupnoAmb = AddCtl("Label", "lblOtkBlokUkAmb", PANEL_LEFT + 190, 22, 150, 14)
+    Set mLblNapisanoAmb = AddCtl("Label", "lblOtkBlokNapAmb", PANEL_LEFT + 346, 22, 150, 14)
+    Set mLblPreostaloAmb = AddCtl("Label", "lblOtkBlokPreAmb", PANEL_LEFT + 502, 22, 150, 14)
+    mLblUkupnoAmb.caption = "Ukupno amb: —"
+    mLblNapisanoAmb.caption = "U blokovima amb: —"
+    mLblPreostaloAmb.caption = "Ostatak amb: —"
+
     ' Naslovi + dugmad (dugmad levo od toggle-a da se ne preklapaju)
-    Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 28, 226, 14)
+    Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
     t1.caption = "OTPREMNICE  (klik = izbor)": StyleHdr t1
-    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 26, 120, 22)
+    Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 42, 120, 22)
     mBtnFilter.caption = "Prikaz: Sve"
 
-    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 28, 56, 14)
+    Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 44, 56, 14)
     t2.caption = "BLOKOVI": StyleHdr t2
-    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 58, 26, 78, 22)
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 58, 42, 78, 22)
     mBtnStorno.caption = "Storniraj"
-    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 140, 26, 84, 22)
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 140, 42, 84, 22)
     mBtnPrint.caption = "Stampaj list"
-    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 228, 26, 124, 22)
+    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 228, 42, 124, 22)
     mBtnBiraj.caption = "Biraj otpremnice"
 
     On Error Resume Next
@@ -289,8 +324,8 @@ Private Sub BuildPanel()
     On Error GoTo 0
 
     ' Zaglavlja kolona (spustena dalje od dugmadi; listbox tik ispod)
-    AddHeaders "hOtp", PANEL_LEFT, 58, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 58, BLOK_COLW, BLOK_CAPS
+    AddHeaders "hOtp", PANEL_LEFT, 74, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 74, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
@@ -421,7 +456,7 @@ Private Sub LoadBlokovi()
     If IsEmpty(data) Then Exit Sub
 
     Dim cId As Long, cOtp As Long, cKoop As Long, cKol As Long
-    Dim cCena As Long, cBr As Long, cDat As Long
+    Dim cCena As Long, cBr As Long, cDat As Long, cAmb As Long
     cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
     cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
@@ -429,16 +464,18 @@ Private Sub LoadBlokovi()
     cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
 
     Dim dKo As Object: Set dKo = BuildKoopNames()
     Dim stopa As Double: stopa = PdvStopa()
 
-    Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double
+    Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, sumAmb As Double
     Dim i As Long, r As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cOtp))) <> mActiveOtpID Then GoTo NextRow
 
         Dim kol As Double: kol = NumVal(data(i, cKol))
+        Dim amb As Double: amb = NumVal(data(i, cAmb))
         Dim bruto As Double: bruto = NumVal(data(i, cCena))
         Dim neto As Double: neto = bruto / (1 + stopa / 100)
         Dim vred As Double: vred = kol * neto
@@ -458,6 +495,7 @@ Private Sub LoadBlokovi()
 
         sumKol = sumKol + kol: sumVred = sumVred + vred
         sumPdv = sumPdv + pdv: sumUk = sumUk + uk
+        sumAmb = sumAmb + amb
 NextRow:
     Next i
 
@@ -466,6 +504,7 @@ NextRow:
         mLstBlok.AddItem ""                       ' col0 prazan -> storno/print ga preskace
         r = mLstBlok.ListCount - 1
         mLstBlok.List(r, 1) = "UKUPNO"
+        mLstBlok.List(r, 2) = "amb: " & FmtKg(sumAmb)
         mLstBlok.List(r, 4) = FmtKg(sumKol)
         mLstBlok.List(r, 6) = FmtRsd(sumVred)
         mLstBlok.List(r, 7) = FmtRsd(sumPdv)
@@ -598,16 +637,27 @@ Private Sub StornoSelectedBlok()
     Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
     If Len(otkupID) = 0 Then Exit Sub      ' zbirni red
 
-    If MsgBox("Stornirati blok " & otkupID & " (" & CStr(mLstBlok.List(li, 2)) & ", " & _
-              CStr(mLstBlok.List(li, 4)) & " kg)?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+    ' Klasa I i II dele isti broj dokumenta (zaseban OtkupID po klasi) -> storno
+    ' obuhvata CEO otkup (obe klase), ne samo izabrani blok. (col1 = BrDok)
+    Dim brDok As String: brDok = Trim$(CStr(mLstBlok.List(li, 1)))
 
-    If StornoOtkup_TX(otkupID) Then
+    If MsgBox("Stornirati ceo otkup br. " & brDok & " (" & CStr(mLstBlok.List(li, 2)) & _
+              ", sve klase)?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+
+    Dim ok As Boolean
+    If Len(brDok) > 0 Then
+        ok = StornoOtkupByBrDok_TX(brDok)
+    Else
+        ok = StornoOtkup_TX(otkupID)       ' fallback: blok bez broja dokumenta
+    End If
+
+    If ok Then
         LoadBlokovi
         LoadOtpremnice
         RefreshSummary
-        MsgBox "Blok storniran: " & otkupID, vbInformation, APP_NAME
+        MsgBox "Otkup storniran: " & brDok, vbInformation, APP_NAME
     Else
-        MsgBox "Storno nije uspeo za " & otkupID & ".", vbCritical, APP_NAME
+        MsgBox "Storno nije uspeo za " & brDok & ".", vbCritical, APP_NAME
     End If
     Exit Sub
 EH:
@@ -856,23 +906,44 @@ Private Sub RefreshSummary()
         mLblUkupno.caption = "Ukupno kg: —"
         mLblNapisano.caption = "U blokovima: —"
         mLblPreostalo.caption = "Ostatak: —"
+        mLblUkupnoAmb.caption = "Ukupno amb: —"
+        mLblNapisanoAmb.caption = "U blokovima amb: —"
+        mLblPreostaloAmb.caption = "Ostatak amb: —"
         Exit Sub
     End If
 
     Dim ukupno As Double
     ukupno = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOLICINA))
+    Dim ukupnoBruto As Double
+    ukupnoBruto = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BRUTO))
+    If ukupnoBruto <= 0 Then ukupnoBruto = ukupno
     Dim napisano As Double: napisano = SumKolByOtp(mActiveOtpID)
+    Dim napisanoBruto As Double: napisanoBruto = SumBrutoByOtp(mActiveOtpID)
     Dim preostalo As Double: preostalo = ukupno - napisano
 
-    mLblUkupno.caption = "Ukupno kg: " & FmtKg(ukupno)
-    mLblNapisano.caption = "U blokovima: " & FmtKg(napisano)
-    mLblPreostalo.caption = "Ostatak: " & FmtKg(preostalo)
+    Dim ukupnoAmb As Double
+    ukupnoAmb = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_KOL_AMB))
+    Dim napisanoAmb As Double: napisanoAmb = SumAmbByOtp(mActiveOtpID)
+    Dim preostaloAmb As Double: preostaloAmb = ukupnoAmb - napisanoAmb
+
+    mLblUkupno.caption = "Ukupno kg: " & FmtKgBrutoNeto(ukupnoBruto, ukupno)
+    mLblNapisano.caption = "U blokovima: " & FmtKgBrutoNeto(napisanoBruto, napisano)
+    mLblPreostalo.caption = "Ostatak: " & FmtKgBrutoNeto(ukupnoBruto - napisanoBruto, preostalo)
+
+    mLblUkupnoAmb.caption = "Ukupno amb: " & FmtKg(ukupnoAmb)
+    mLblNapisanoAmb.caption = "U blokovima amb: " & FmtKg(napisanoAmb)
+    mLblPreostaloAmb.caption = "Ostatak amb: " & FmtKg(preostaloAmb)
 
     On Error Resume Next
     If preostalo < -0.0001 Then
         mLblPreostalo.ForeColor = RGB(200, 0, 0)
     Else
         mLblPreostalo.ForeColor = RGB(0, 120, 0)
+    End If
+    If preostaloAmb < -0.0001 Then
+        mLblPreostaloAmb.ForeColor = RGB(200, 0, 0)
+    Else
+        mLblPreostaloAmb.ForeColor = RGB(0, 120, 0)
     End If
     Exit Sub
 EH:
@@ -985,6 +1056,47 @@ Private Function SumKolByOtp(ByVal otpID As String) As Double
         If Trim$(CStr(data(i, cOtp))) = otpID Then s = s + NumVal(data(i, cKol))
     Next i
     SumKolByOtp = s
+End Function
+
+' Zbir BRUTO kg otkup blokova za otpremnicu (BrutoKg po redu; ako je prazno -> neto).
+Private Function SumBrutoByOtp(ByVal otpID As String) As Double
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOtp As Long, cKol As Long, cBruto As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cBruto = GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO)
+
+    Dim i As Long, s As Double, b As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cOtp))) = otpID Then
+            b = 0
+            If cBruto > 0 Then b = NumVal(data(i, cBruto))
+            If b <= 0 Then b = NumVal(data(i, cKol))   ' red bez bruto -> bruto = neto
+            s = s + b
+        End If
+    Next i
+    SumBrutoByOtp = s
+End Function
+
+Private Function SumAmbByOtp(ByVal otpID As String) As Double
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOtp As Long, cAmb As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+
+    Dim i As Long, s As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cOtp))) = otpID Then s = s + NumVal(data(i, cAmb))
+    Next i
+    SumAmbByOtp = s
 End Function
 
 Private Function ExistingBlokCena(ByVal otpID As String) As Double
@@ -1100,6 +1212,15 @@ End Function
 
 Private Function NumVal(ByVal v As Variant) As Double
     If IsNumeric(v) Then NumVal = CDbl(v)
+End Function
+
+' Bruto rezim: "bruto (neto X)"; neto rezim ili bruto==neto: samo vrednost.
+Private Function FmtKgBrutoNeto(ByVal brutoVal As Double, ByVal netoVal As Double) As String
+    If OtkupBrutoUnos() And Abs(brutoVal - netoVal) > 0.0001 Then
+        FmtKgBrutoNeto = FmtKg(brutoVal) & " (neto " & FmtKg(netoVal) & ")"
+    Else
+        FmtKgBrutoNeto = FmtKg(netoVal)
+    End If
 End Function
 
 Private Function FmtKg(ByVal x As Double) As String

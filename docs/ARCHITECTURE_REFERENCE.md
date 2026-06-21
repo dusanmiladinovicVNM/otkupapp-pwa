@@ -1,8 +1,8 @@
 # AgriX / OtkupApp Architecture Reference
 
-**Version:** v6.24 canonical snapshot  
-**Last Updated:** 2026-05-30  
-**Status:** Canonical / Active Reference — v6.24 Vozač/Dispečer bugfix pass integrated
+**Version:** v6.31 canonical snapshot  
+**Last Updated:** 2026-06-21  
+**Status:** Canonical / Active Reference — integrates the document-chain / ambalaža updates through v6.31 (two-class otkup with per-class packaging, optional Klasa I / only-Klasa-II input, bruto→neto with `BrutoKg`, izdata ambalaža, `GenerateBrojPrijemnice`, `StornoOtkupByBrDok_TX`)
 **Owner:** Architecture documentation compiled from supplied reference set  
 **Audience:** Engineering, Product, Operations, Onboarding, Review  
 
@@ -557,6 +557,8 @@ Transaction tables record source business events or operational movements.
 
 Transaction table writes must be protected by the transaction model defined in the VBA architecture section unless the write is an external transport write owned by GAS/PWA.
 
+`tblOtkup` carries dorade columns added idempotently by `EnsureDoradeSchema`: `KolAmbIzdata` (empties issued OM→kooperant alongside the otkup), `VremeUnosa` (save timestamp), and `BrutoKg` (frozen gross when bruto input; empty = neto was entered). Klasa II is a separate `tblOtkup` row sharing the otkup's `BrDok`, so its quantity/ambalaža live on that row (no per-class columns).
+
 ### 5.5 Document Tables
 
 Document tables are the canonical desktop document-chain backbone.
@@ -577,6 +579,7 @@ Current rules:
 - `BrojPrijemnice + Klasa` is the relink identity for orphaned faktura stavke when class rows are recreated.
 - `BrojZbirne` is a business document number and must not be confused with `ServerRecordID` or `ZbirnaID`.
 - Document-chain status changes must not be done by report/read-model code.
+- `tblOtpremnica` and `tblPrijemnica` each carry a `BrutoKg` column (added by `EnsureDoradeSchema`): in bruto mode the stored quantity is neto and `BrutoKg` freezes the gross (empty = neto), so panel/chain comparisons are neto-against-neto.
 
 ### 5.6 Finance Tables
 
@@ -896,6 +899,10 @@ Current rules:
 - The optional **Otkupni blokovi** panel (`modOtkupBlok` + `clsBlokUI`, attached to `frmOtkup` via `AttachOtkupBlokPanel`, controls built dynamically so `frmOtkup.frx` is unchanged) is a per-otpremnica entry aid, not a separate save path: selecting an otpremnica pre-fills the existing `frmOtkup` fields (otkupno mesto, vrsta, sorta, vozač, broj zbirne, datum, cena) and numbers the otkup list from the otpremnica's OM + date via the canonical `SuggestNextBroj` (called explicitly, since `cmbOtkupnoMesto_Change` does not fire when consecutive otpremnice share the same OM), and exposes one per-otpremnica price applied to all of that otpremnica's blokovi (`ApplyCenaToOtpremnica` over `tblOtkup.Cena`), and tracks remaining quantity (otpremnica `Kolicina` − Σ linked otkup). Entry still goes through `SaveOtkupMulti_TX`; `frmOtkup.btnUnos_Click` then calls `OtkupBlok_AfterUnos`, which links the just-saved `OtkupID`(s) to the selected otpremnica through `OtpremnicaID` (exact-row, checked write) so traceability updates without a manual `modSledljivost` auto-link. Opt-out via `OTKUP_BLOK_PANEL = NO`.
 - `SaveOtkupMulti_TX` is the canonical desktop multi-class/high-level save wrapper for one operator action that may create Klasa I, Klasa II, ambalaža, novac and avans side effects.
 - Forms must not separately call `SaveOtkup_TX`, `SaveNovac_TX` and `ApplyAvansToOtkup_TX` for one logical operator action when the multi-wrapper owns the transaction.
+- **Two-class otkup.** Klasa I and Klasa II are **separate `tblOtkup` rows that share the same `BrDok`** (otkup document number). Each row carries its **own** quantity and its **own** ambalaža (Klasa I = `kolAmb`, Klasa II = `kolAmbII`, each persisted as that row's `KolicinaAmbalaze` — there is no separate column and no Klasa-I-only packaging). `SaveOtkupMulti_TX` writes both rows atomically.
+- **Klasa I is optional.** Only-Klasa-II entry is valid: `hasKlasaI = (kolicinaI > 0)`, and at least one class is required (else fail-fast). When only Klasa II is entered, Klasa I quantity and ambalaža must be empty. `novac`, avans and izdata ambalaža bind to the **primary existing row** (Klasa I if present, otherwise Klasa II).
+- **Bruto input mode** (`OTKUP_BRUTO_UNOS`): the operator enters gross weight; the form subtracts packaging tara and stores **neto** in `Kolicina`, freezing the gross in `tblOtkup.BrutoKg` (empty = neto was entered). Crate count is then **mandatory** for both classes — quantity without crates is blocked, because without crates the gross cannot be converted to neto and the tara would be paid as fruit.
+- **Izdata ambalaža** (OM issues empty crates to the kooperant alongside the otkup) persists in `tblOtkup.KolAmbIzdata` and books the `DOK_TIP_OM_IZLAZ_KOOP` double leg (see 6.8); the save time is stamped in `tblOtkup.VremeUnosa`.
 - PWA sync failures remain retryable; desktop storno resets explicit packaging and money links only through the documented storno side effects.
 
 Monitoring boundary:
@@ -925,7 +932,8 @@ Current rules:
 - `BrojZbirne` on otpremnica may be empty at initial creation because otpremnica can exist before the matching vozač zbirna is created/imported.
 - Empty `BrojZbirne` is valid only as a pending-link state; the VOZ import cascade or manual repair can populate it later.
 - Klasa I and Klasa II rows are saved atomically through `SaveOtpremnicaMulti_TX` when a dual-class operator action is performed.
-- Klasa II transport rows are stored separately, with class-level aggregation rolling up through the shared business context.
+- Klasa II transport rows are stored separately and carry their **own** ambalaža (`kolAmbII`, the Klasa II row's `KolicinaAmbalaze`), not shared with Klasa I; class-level aggregation rolls up through the shared business context. Only-Klasa-II otpremnica is valid (Klasa I optional, mirroring otkup).
+- In bruto mode the otpremnica subtracts packaging and stores **neto**, freezing the gross in `tblOtpremnica.BrutoKg` (empty = neto), so the otkupni-blok panel compares neto-against-neto across the chain.
 - `SaveOtpremnica` preserves error context and fails if `GetNextID` does not return an `OtpremnicaID`.
 - Active reads/report caches, including `GetVozacDokumenta` and `BuildZbirnaVrstaCache`, exclude stornirano otpremnica rows.
 - Otpremnica storno is explicit and does not auto-delete downstream documents.
@@ -1045,6 +1053,8 @@ Current rules:
 - `SavePrijemnica` uses the row returned by `AppendRow` rather than a follow-up `FindRows` lookup.
 - `BuildPrijemnicaRowData` owns writing `COL_PRJ_KOL_AMB_VRACENA`; redundant post-append updates are not canonical.
 - `SavePrijemnicaMulti_TX` saves dual-class rows atomically and includes ambalaža effects/relink work in the rollback scope.
+- `BrojPrijemnice` for a buyer/day is generated by `modBrojevi.GenerateBrojPrijemnice(kupacID, datum)` → `n/ddmmyy[-rb]` (first of the day `n/ddmmyy`, then `-2`, `-3` …, counting existing same-buyer/same-day rows incl. stornirano). A dual-class prijemnica shares **one** `BrojPrijemnice` (Klasa I and Klasa II rows under the same number); `frmDokumenta` offers it as an auto-suggestion.
+- Klasa II prijemnica rows carry their **own** ambalaža (`kolAmbII`); in bruto mode the gross is frozen in `tblPrijemnica.BrutoKg` (stored quantity is neto). Only-Klasa-II prijemnica is valid.
 - `RelinkFakturaStavke(newPrijemnicaID, brojPrijemnice, Optional klasaFilter)` is class-aware and relinks only the class currently being recreated.
 - Relink updates the replacement prijemnica to `Fakturisano = "Da"`, sets `FakturaID`, and recomputes faktura status when a `FakturaID` exists.
 - Shortage/manjak preview and validation functions support operator review before save and analytics after save.
@@ -1179,11 +1189,13 @@ Current write rules:
 - `GetNextID` returning empty is a fail-fast error.
 - `AppendRow <= 0` is a fail-fast error.
 - Schema reads use fail-fast column guards.
+- A two-class otkup books **each class row's ambalaža independently** (Klasa I `kolAmb`, Klasa II `kolAmbII`), each through the same `Kooperant Izlaz` + `Stanica Ulaz` double leg, keyed by that row's `OtkupID`. Izdata ambalaža (`DOK_TIP_OM_IZLAZ_KOOP`) is booked on whichever class row exists (Klasa I if present, otherwise Klasa II).
 
 Current read/saldo rules:
 
+- Bookings are **entity-relative**: `Smer` is from the row entity's view — `Ulaz` = crates into that entity, `Izlaz` = out. So otpremnica = `Stanica` `Izlaz`, otkup = `Kooperant` `Izlaz` **+ `Stanica` `Ulaz`** (kooperant returns full, OM charged; no vozač), prijemnica = `Kupac` `Ulaz` (full received from the zbirna) / `Izlaz` (empties returned), izlaz-kupci = `Kupac` `Izlaz`, OM-ulaz = `Stanica` `Ulaz`, OM-izdavanje-kooperantu = `Kooperant` `Ulaz` **+ `Stanica` `Izlaz`** (`DOK_TIP_OM_IZLAZ_KOOP` — kooperant receives empties, OM is discharged; no vozač). The ledger is single-entry (one row per document on its primary entity) **except otkup and OM-izdavanje-kooperantu, which book both legs** — the only flows between two real entities (kooperant ↔ OM), neither derivable from the other's row. (Otpremnica/prijemnica/izlaz-kupci/OM-ulaz stay single-entry because their counterparty is the vozač, derived on read.)
 - `GetAmbalazeStanje` treats `Ulaz` as `+Kolicina` and `Izlaz` as `-Kolicina`.
-- `GetVozacAmbSaldo` treats driver balance as all active movements with matching `VozacID`; there is no canonical `DokumentTip` filter.
+- `GetVozacAmbSaldo` and the `Vozac` packaging report (`ReportAmbalaza`) read the driver as the **inverse transport counterparty** of the entity (the driver leg is derived on read, not stored): `VozacAmbEffectiveSmer` inverts the `Stanica` and `Kupac` legs (otpremnica `Izlaz` → driver `Ulaz`/load; prijemnica `Ulaz` → driver `Izlaz`/unload), and `DokumentTip = "Otkup"` (`Kooperant` procurement) is **excluded** — the otkup has no driver leg. A complete otpremnica→prijemnica route nets to 0; an open otpremnica shows a **positive** saldo = crates still on the driver. Entity saldos use the raw entity-relative `Smer`.
 - Open-ended date filters evaluate `datumOd` and `datumDo` independently.
 - Only non-stornirano rows participate in active saldo helpers.
 
@@ -1202,6 +1214,7 @@ Canonical public/hardened surface:
 
 ```text
 StornoOtkup_TX / StornoOtkup
+StornoOtkupByBrDok_TX
 StornoOtpremnica_TX / StornoOtpremnica
 StornoZbirna_TX / StornoZbirna
 StornoPrijemnica_TX / StornoPrijemnica
@@ -1253,8 +1266,14 @@ Every storno path owns only the side effects explicitly documented for that enti
 `StornoOtkup`:
 
 - marks the otkup row as stornirano;
-- stornira related ambalaža rows;
+- stornira related ambalaža rows (otkup leg **and** izdata `OM-Izlaz-Koop`, which share `DokumentID = OtkupID`);
 - removes otkup links from `tblNovac`.
+
+`StornoOtkupByBrDok_TX(brDok)` (document-level, keyed by `BrDok` — not by a single ID, so the exactly-one rule does not apply):
+
+- marks **all** `tblOtkup` rows that share the otkup document number `BrDok` (Klasa I + Klasa II) as stornirano in one transaction;
+- runs each row through `StornoOtkup`, so every row's ambalaža legs and `tblNovac` links are reversed;
+- used by `frmDokumenta` and the otkupni-blok panel so storno of a dual-class document no longer leaves the other class active.
 
 `StornoOtpremnica`:
 

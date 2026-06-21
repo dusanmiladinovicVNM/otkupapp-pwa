@@ -168,6 +168,34 @@ EH:
     GenerateBrojOtpremnice = ""
 End Function
 
+' Jedinstveni generator za BrojPrijemnice. Prijemnica je VBA-only entity
+' (PWA je ne pravi), scan samo lokalno. Auto-numeracija vazi SAMO za hladnjaca-
+' kupca (CFG_MALINA_DEFAULT_KUPAC); ostali kupci nose eksterni, nezavisni broj
+' koji se unosi rucno. x-deo je fiksno "1" (konvencija za hladnjacu), NE iz
+' KupacID broja; kupacID se koristi samo da ogranici dnevni brojac na hladnjaca-
+' kupca (da eksterni "1/..." drugih kupaca ne naduvaju niz). Robustno preko
+' MaxSeqFromTable (MAX sekvence), ne brojanjem redova -> dvoklasna prijemnica
+' (Kl I + Kl II, isti broj) ne pomera brojac za 2.
+' Koristi se u: AutoChainHladnjaca (modAutoHladnjaca).
+Public Function GenerateBrojPrijemnice(ByVal kupacID As String, _
+                                        ByVal datum As Date) As String
+    Const SRC As String = "GenerateBrojPrijemnice"
+
+    On Error GoTo EH
+
+    Dim maxSeq As Long
+    maxSeq = MaxSeqFromTable(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+                             COL_PRJ_DATUM, COL_PRJ_KUPAC, _
+                             kupacID, datum)
+
+    GenerateBrojPrijemnice = FormatBroj("1", datum, maxSeq + 1)
+    Exit Function
+
+EH:
+    LogErr SRC, "kupac=" & kupacID
+    GenerateBrojPrijemnice = "1/" & Format$(datum, "ddmmyy")
+End Function
+
 ' ============================================================
 ' PUBLIC — utility (drugi moduli ih koriste)
 ' ============================================================

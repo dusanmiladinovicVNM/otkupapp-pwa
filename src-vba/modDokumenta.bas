@@ -22,7 +22,10 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        ByVal kolAmb As Long, _
                                        Optional ByVal hasKlasaII As Boolean = False, _
                                        Optional ByVal kolicinaII As Double = 0, _
-                                       Optional ByVal cenaII As Double = 0) As String
+                                       Optional ByVal cenaII As Double = 0, _
+                                       Optional ByVal brutoKgI As Double = 0, _
+                                       Optional ByVal kolAmbII As Long = 0, _
+                                       Optional ByVal brutoKgII As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -32,28 +35,37 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    Dim resultI As String
-    resultI = SaveOtpremnica( _
-        datum, _
-        stanicaID, _
-        vozacID, _
-        brojOtp, _
-        brojZbirne, _
-        vrsta, _
-        sorta, _
-        kolicinaI, _
-        cenaI, _
-        tipAmb, _
-        kolAmb, _
-        KLASA_I)
+    ' Klasa I je opciona (kolicinaI = 0 -> snima se samo Klasa II). Bar jedna klasa.
+    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
+    If Not hasKlasaI And Not hasKlasaII Then
+        Err.Raise vbObjectError + 1103, "SaveOtpremnicaMulti_TX", _
+                  "Mora postojati bar jedna klasa (I ili II)."
+    End If
 
-    If resultI = "" Then
-        Err.Raise vbObjectError + 1101, "SaveOtpremnicaMulti_TX", _
-                  "SaveOtpremnica Klasa I fehlgeschlagen"
+    Dim resultI As String
+    If hasKlasaI Then
+        resultI = SaveOtpremnica( _
+            datum, _
+            stanicaID, _
+            vozacID, _
+            brojOtp, _
+            brojZbirne, _
+            vrsta, _
+            sorta, _
+            kolicinaI, _
+            cenaI, _
+            tipAmb, _
+            kolAmb, _
+            KLASA_I, _
+            brutoKgI)
+
+        If resultI = "" Then
+            Err.Raise vbObjectError + 1101, "SaveOtpremnicaMulti_TX", _
+                      "SaveOtpremnica Klasa I fehlgeschlagen"
+        End If
     End If
 
     Dim resultII As String
-
     If hasKlasaII Then
         resultII = SaveOtpremnica( _
             datum, _
@@ -66,17 +78,22 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
             kolicinaII, _
             cenaII, _
             tipAmb, _
-            0, _
-            KLASA_II)
+            kolAmbII, _
+            KLASA_II, _
+            brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1102, "SaveOtpremnicaMulti_TX", _
                       "SaveOtpremnica Klasa II fehlgeschlagen"
         End If
+    End If
 
+    If hasKlasaI And hasKlasaII Then
         SaveOtpremnicaMulti_TX = resultI & " + " & resultII
-    Else
+    ElseIf hasKlasaI Then
         SaveOtpremnicaMulti_TX = resultI
+    Else
+        SaveOtpremnicaMulti_TX = resultII
     End If
 
     tx.CommitTx
@@ -135,7 +152,8 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
                                    ByVal sorta As String, ByVal kolicina As Double, _
                                    ByVal cena As Double, ByVal tipAmb As String, _
                                    ByVal kolAmb As Long, _
-                                   Optional ByVal klasa As String = "I") As String
+                                   Optional ByVal klasa As String = "I", _
+                                   Optional ByVal brutoKg As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -147,7 +165,7 @@ Public Function SaveOtpremnica_TX(ByVal datum As Date, ByVal stanicaID As String
 
     SaveOtpremnica_TX = SaveOtpremnica(datum, stanicaID, vozacID, brojOtp, _
                                         brojZbirne, vrsta, sorta, kolicina, _
-                                        cena, tipAmb, kolAmb, klasa)
+                                        cena, tipAmb, kolAmb, klasa, brutoKg)
 
     If SaveOtpremnica_TX = "" Then
         Err.Raise vbObjectError + 1001, "SaveOtpremnica_TX", _
@@ -209,29 +227,34 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
                                ByVal sorta As String, ByVal kolicina As Double, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, _
-                               Optional ByVal klasa As String = "I") As String
-    
+                               Optional ByVal klasa As String = "I", _
+                               Optional ByVal brutoKg As Double = 0) As String
+
     On Error GoTo EH
 
     Call ValidateOtpremnicaInput(stanicaID, vozacID, brojOtp, brojZbirne, _
                              kolicina, cena, tipAmb, kolAmb, klasa)
-    
+
     Dim newID As String
     newID = GetNextID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-")
-    
+
     If Len(Trim$(newID)) = 0 Then
         Err.Raise vbObjectError + 1002, "SaveOtpremnica", _
                 "GetNextID nije vratio OtpremnicaID."
     End If
-    
+
     Dim rowData As Variant
     rowData = Array(newID, datum, stanicaID, vozacID, brojOtp, _
                     brojZbirne, vrsta, sorta, kolicina, cena, tipAmb, kolAmb, klasa)
-    
-    If AppendRow(TBL_OTPREMNICA, rowData) > 0 Then
+
+    Dim newRow As Long
+    newRow = AppendRow(TBL_OTPREMNICA, rowData)
+    If newRow > 0 Then
         If kolAmb > 0 Then
             TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", stanicaID, "Stanica", vozacID, newID, DOK_TIP_OTPREMNICA
         End If
+        ' Bruto (kad je unet bruto pa oduzeta ambalaza) -> upis po imenu; prazno = neto.
+        If brutoKg > 0 Then UpdateCell TBL_OTPREMNICA, newRow, COL_OTP_BRUTO, brutoKg
         SaveOtpremnica = newID
     Else
         Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
@@ -347,7 +370,8 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
                                    ByVal tipAmb As String, _
                                    ByVal ukupnoAmb As Long, _
                                    Optional ByVal hasKlasaII As Boolean = False, _
-                                   Optional ByVal ukupnoKolII As Double = 0) As String
+                                   Optional ByVal ukupnoKolII As Double = 0, _
+                                   Optional ByVal ukupnoAmbII As Long = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -356,28 +380,36 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
 
-    Dim resultI As String
-    resultI = SaveZbirna( _
-        datum, _
-        vozacID, _
-        brojZbirne, _
-        kupacID, _
-        hladnjaca, _
-        pogon, _
-        vrstaVoca, _
-        sortaVoca, _
-        ukupnoKolI, _
-        tipAmb, _
-        ukupnoAmb, _
-        KLASA_I)
+    ' Klasa I je opciona (ukupnoKolI = 0 -> snima se samo Klasa II). Bar jedna klasa.
+    Dim hasKlasaI As Boolean: hasKlasaI = (ukupnoKolI > 0)
+    If Not hasKlasaI And Not hasKlasaII Then
+        Err.Raise vbObjectError + 1203, "SaveZbirnaMulti_TX", _
+                  "Mora postojati bar jedna klasa (I ili II)."
+    End If
 
-    If resultI = "" Then
-        Err.Raise vbObjectError + 1201, "SaveZbirnaMulti_TX", _
-                  "SaveZbirna Klasa I fehlgeschlagen"
+    Dim resultI As String
+    If hasKlasaI Then
+        resultI = SaveZbirna( _
+            datum, _
+            vozacID, _
+            brojZbirne, _
+            kupacID, _
+            hladnjaca, _
+            pogon, _
+            vrstaVoca, _
+            sortaVoca, _
+            ukupnoKolI, _
+            tipAmb, _
+            ukupnoAmb, _
+            KLASA_I)
+
+        If resultI = "" Then
+            Err.Raise vbObjectError + 1201, "SaveZbirnaMulti_TX", _
+                      "SaveZbirna Klasa I fehlgeschlagen"
+        End If
     End If
 
     Dim resultII As String
-
     If hasKlasaII Then
         resultII = SaveZbirna( _
             datum, _
@@ -390,17 +422,21 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
             sortaVoca, _
             ukupnoKolII, _
             tipAmb, _
-            0, _
+            ukupnoAmbII, _
             KLASA_II)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1202, "SaveZbirnaMulti_TX", _
                       "SaveZbirna Klasa II fehlgeschlagen"
         End If
+    End If
 
+    If hasKlasaI And hasKlasaII Then
         SaveZbirnaMulti_TX = resultI & " + " & resultII
-    Else
+    ElseIf hasKlasaI Then
         SaveZbirnaMulti_TX = resultI
+    Else
+        SaveZbirnaMulti_TX = resultII
     End If
 
     tx.CommitTx
@@ -764,7 +800,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        ByVal kolAmbVracena As Long, _
                                        Optional ByVal hasKlasaII As Boolean = False, _
                                        Optional ByVal kolicinaII As Double = 0, _
-                                       Optional ByVal cenaII As Double = 0) As String
+                                       Optional ByVal cenaII As Double = 0, _
+                                       Optional ByVal kolAmbII As Long = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -778,29 +815,37 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
-    Dim resultI As String
-    resultI = SavePrijemnica( _
-        datum, _
-        kupacID, _
-        vozacID, _
-        brojPrij, _
-        brojZbirne, _
-        vrstaVoca, _
-        sortaVoca, _
-        kolicinaI, _
-        cenaI, _
-        tipAmb, _
-        kolAmb, _
-        kolAmbVracena, _
-        KLASA_I)
+    ' Klasa I je opciona (kolicinaI = 0 -> snima se samo Klasa II). Bar jedna klasa.
+    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
+    If Not hasKlasaI And Not hasKlasaII Then
+        Err.Raise vbObjectError + 1303, "SavePrijemnicaMulti_TX", _
+                  "Mora postojati bar jedna klasa (I ili II)."
+    End If
 
-    If resultI = "" Then
-        Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
-                  "SavePrijemnica Klasa I fehlgeschlagen"
+    Dim resultI As String
+    If hasKlasaI Then
+        resultI = SavePrijemnica( _
+            datum, _
+            kupacID, _
+            vozacID, _
+            brojPrij, _
+            brojZbirne, _
+            vrstaVoca, _
+            sortaVoca, _
+            kolicinaI, _
+            cenaI, _
+            tipAmb, _
+            kolAmb, _
+            kolAmbVracena, _
+            KLASA_I)
+
+        If resultI = "" Then
+            Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
+                      "SavePrijemnica Klasa I fehlgeschlagen"
+        End If
     End If
 
     Dim resultII As String
-
     If hasKlasaII Then
         resultII = SavePrijemnica( _
             datum, _
@@ -813,7 +858,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             kolicinaII, _
             cenaII, _
             tipAmb, _
-            0, _
+            kolAmbII, _
             0, _
             KLASA_II)
 
@@ -821,19 +866,31 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             Err.Raise vbObjectError + 1302, "SavePrijemnicaMulti_TX", _
                       "SavePrijemnica Klasa II fehlgeschlagen"
         End If
+    End If
 
+    If hasKlasaI And hasKlasaII Then
         SavePrijemnicaMulti_TX = resultI & " + " & resultII
-    Else
+    ElseIf hasKlasaI Then
         SavePrijemnicaMulti_TX = resultI
+    Else
+        SavePrijemnicaMulti_TX = resultII
     End If
 
     ' Paletizacija Klase I UNUTAR transakcije -> atomicno sa prijemnicom.
     Dim closedPal As Collection
     Set closedPal = New Collection
-    If kolAmb > 0 Then
+    If hasKlasaI And kolAmb > 0 Then
         PaletizePrijemnica prijemnicaID:=resultI, brojPrij:=brojPrij, _
             brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
             klasa:=KLASA_I, netoKg:=kolicinaI, brGajbica:=kolAmb, tipAmb:=tipAmb, _
+            closedPalIDs:=closedPal
+    End If
+
+    ' Paletizacija Klase II (zasebne gajbe) -> u istu kolekciju zatvorenih paleta.
+    If hasKlasaII And kolAmbII > 0 Then
+        PaletizePrijemnica prijemnicaID:=resultII, brojPrij:=brojPrij, _
+            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
+            klasa:=KLASA_II, netoKg:=kolicinaII, brGajbica:=kolAmbII, tipAmb:=tipAmb, _
             closedPalIDs:=closedPal
     End If
 
@@ -896,7 +953,8 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
                                    ByVal sortaVoca As String, ByVal kolicina As Double, _
                                    ByVal cena As Double, ByVal tipAmb As String, _
                                    ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
-                                   Optional ByVal klasa As String = "I") As String
+                                   Optional ByVal klasa As String = "I", _
+                                   Optional ByVal brutoKg As Double = 0) As String
     Dim tx As New clsTransaction
 
     On Error GoTo EH
@@ -912,17 +970,17 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
     SavePrijemnica_TX = SavePrijemnica(datum, kupacID, vozacID, brojPrij, _
                                         brojZbirne, vrstaVoca, sortaVoca, _
                                         kolicina, cena, tipAmb, kolAmb, _
-                                        kolAmbVracena, klasa)
+                                        kolAmbVracena, klasa, brutoKg)
 
     If SavePrijemnica_TX = "" Then
         Err.Raise vbObjectError + 1011, "SavePrijemnica_TX", _
                   "SavePrijemnica fehlgeschlagen"
     End If
 
-    ' Paletizacija UNUTAR transakcije -> atomicno sa prijemnicom (Klasa I + gajbice).
+    ' Paletizacija UNUTAR transakcije -> atomicno sa prijemnicom (gajbice bilo koje klase).
     Dim closedPal As Collection
     Set closedPal = New Collection
-    If klasa = KLASA_I And kolAmb > 0 Then
+    If kolAmb > 0 Then
         PaletizePrijemnica prijemnicaID:=SavePrijemnica_TX, brojPrij:=brojPrij, _
             brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
             klasa:=klasa, netoKg:=kolicina, brGajbica:=kolAmb, tipAmb:=tipAmb, _
@@ -986,7 +1044,8 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                                ByVal sortaVoca As String, ByVal kolicina As Double, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
-                               Optional ByVal klasa As String = "I") As String
+                               Optional ByVal klasa As String = "I", _
+                               Optional ByVal brutoKg As Double = 0) As String
     On Error GoTo EH
 
     Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
@@ -1016,13 +1075,20 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen für tblPrijemnica."
     End If
 
+    ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
+    ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).
+    If brutoKg > 0 Then UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_BRUTO, brutoKg
+
+    ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):
+    ' 1. txt = pune gajbe koje hladnjaca PRIMA od zbirne -> Kupac ULAZ.
     If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", kupacID, "Kupac", _
+        TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", kupacID, "Kupac", _
                       vozacID, newID, DOK_TIP_PRIJEMNICA
     End If
 
+    ' 2. txt = zamena: prazne gajbe koje hladnjaca VRACA (daje vozacu) -> Kupac IZLAZ.
     If kolAmbVracena > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Ulaz", kupacID, "Kupac", _
+        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Izlaz", kupacID, "Kupac", _
                       vozacID, newID, DOK_TIP_PRIJEMNICA
     End If
 
