@@ -347,18 +347,20 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         rr = rr + 1
     End If
 
-    ' --- naslov (1 red): descriptor levo + OTKUPNI LIST ---
-    ws.Range(ws.cells(rr, 1), ws.cells(rr, 3)).Merge
+    ' --- naslov (centriran preko cele sirine): mali descriptor + veliki OTKUPNI LIST ---
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
         .value = "Otkup poljoprivrednih proizvoda"
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
-        .HorizontalAlignment = xlLeft
-        .VerticalAlignment = xlCenter
+        .HorizontalAlignment = xlCenter
     End With
-    ws.Range(ws.cells(rr, 4), ws.cells(rr, 8)).Merge
-    With ws.cells(rr, 4)
+    ws.rows(rr).RowHeight = 12#
+    usedPt = usedPt + 12#
+    rr = rr + 1
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 1)
         .value = "OTKUPNI LIST  br. " & h("brDok")
         .Font.Bold = True
         .Font.Size = 14
