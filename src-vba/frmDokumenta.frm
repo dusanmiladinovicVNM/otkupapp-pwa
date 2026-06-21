@@ -118,6 +118,11 @@ Private Sub UserForm_Activate()
     Set m_txtKolAmbIIOtp = SetupKlIIAmb("txtKolAmbIIOtpRT", txtKolAmbOtp, txtKolicinaKlIIOtp)
     Set m_txtKolAmbIIZbr = SetupKlIIAmb("txtKolAmbIIZbrRT", txtUkupnoAmbZbr, txtUkupnoKgKlIIZbr)
     Set m_txtKolAmbIIPrij = SetupKlIIAmb("txtKolAmbIIPrijRT", txtKolAmbPrij, txtKolicinaKlIIPrij)
+
+    ' MALINA mod: zbirna se kreira automatski (AutoCreateZbirnaFromOtpremnice) ->
+    ' onemoguci/posivi celu Zbirna sekciju da nema bespotrebnog kucanja i zabune.
+    ' Van malina moda ostaje aktivna (rucni unos zbirne).
+    If IsMalinaMode() Then fraZbirna.Enabled = False
     
     ' Storno ComboBox füllen
     With cmbStornoDokument
