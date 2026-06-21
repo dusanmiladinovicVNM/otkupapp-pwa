@@ -118,28 +118,37 @@ Public Sub AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As String, _
     Dim brZbr As String
     brZbr = ApplyMirrorPrefix(vozacID, brOtp)
 
-    ' OtkupID-jevi za vezivanje nazad u tblOtkup (Klasa I [+ Klasa II]).
-    ' Format dolazi iz SaveOtkupMulti_TX: "resultI" ili "resultI + resultII".
+    ' Klasa I je opciona (kolicinaI = 0 -> kroz lanac ide samo Klasa II).
+    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
+
+    ' OtkupID-jevi za vezivanje nazad u tblOtkup. Format iz SaveOtkupMulti_TX:
+    ' "resultI", "resultI + resultII", ili (samo II klasa) "resultII".
     Dim idI As String, idII As String
     If Len(Trim$(otkupIDs)) > 0 Then
         Dim parts() As String
         parts = Split(otkupIDs, " + ")
-        idI = Trim$(parts(LBound(parts)))
-        If UBound(parts) > LBound(parts) Then idII = Trim$(parts(LBound(parts) + 1))
+        If hasKlasaI Then
+            idI = Trim$(parts(LBound(parts)))
+            If UBound(parts) > LBound(parts) Then idII = Trim$(parts(LBound(parts) + 1))
+        Else
+            idII = Trim$(parts(LBound(parts)))
+        End If
     End If
 
-    ' Klasa I (svoja kolicina ambalaze = kolAmb).
-    Dim brPrij As String
-    brPrij = NextBrojPrijemnice(datum)
-    Dim otpID As String
-    otpID = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                              kolicinaI, cenaI, tipAmb, kolAmb, KLASA_I)
-    SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
-                  kolicinaI, tipAmb, kolAmb, KLASA_I
-    SavePrijemnica_TX datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
-                      kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I, brutoKgI
-    ' Veza nazad u otkup red: OtpremnicaID + BrojZbirne + VozacID.
-    LinkOtkupRedNaDokument idI, otpID, brZbr, vozacID
+    ' Klasa I (svoja kolicina ambalaze = kolAmb). Preskace se ako se unosi samo II.
+    If hasKlasaI Then
+        Dim brPrij As String
+        brPrij = NextBrojPrijemnice(datum)
+        Dim otpID As String
+        otpID = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
+                                  kolicinaI, cenaI, tipAmb, kolAmb, KLASA_I)
+        SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
+                      kolicinaI, tipAmb, kolAmb, KLASA_I
+        SavePrijemnica_TX datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
+                          kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I, brutoKgI
+        ' Veza nazad u otkup red: OtpremnicaID + BrojZbirne + VozacID.
+        LinkOtkupRedNaDokument idI, otpID, brZbr, vozacID
+    End If
 
     ' Klasa II: zasebne gajbe (kolAmbII) -> ide kroz ceo lanac kao Klasa I
     ' (otpremnica/zbirna/prijemnica + paletizacija). Ranije se ambalaza vodila samo
