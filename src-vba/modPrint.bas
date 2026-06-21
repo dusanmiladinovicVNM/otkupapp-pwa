@@ -6,7 +6,7 @@ Option Explicit
 ' (A4 visina 297mm / 3). Dva primerka idu u gornje dve trecine, donja trecina
 ' ostaje prazna. Stampa MORA biti 1:1 (Zoom=100, bez "Fit to page" / "Prilagodi").
 Private Const OL_THIRD_PT As Double = 280.63      ' 99 mm u tackama (99/25.4*72)
-Private Const OL_TOP_SPACER_PT As Double = 18#    ' ~6.3mm prazno iznad sadrzaja primerka
+Private Const OL_TOP_SPACER_PT As Double = 9#     ' ~3.2mm prazno iznad sadrzaja primerka (smanjena gornja margina)
 Private Const OL_MIN_FILLER_PT As Double = 4#     ' min. donji razmak do perforacije
 ' Kalibracija: ako stampac NE postuje TopMargin=0 nego sadrzaj pomeri nadole za
 ' T mm, prva perforacija nece pasti na granicu primeraka. Tada ovde unesi
@@ -306,16 +306,37 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     usedPt = usedPt + OL_TOP_SPACER_PT
     rr = r0 + 1
 
-    ' --- zaglavlje prodavca (3 reda) ---
-    Dim shTop As Long: shTop = rr
-    rr = DocSellerHeader(ws, rr, 8, 8)
-    ws.cells(shTop, 1).Font.Size = 11
-    ws.rows(shTop).RowHeight = 15#
-    ws.rows(shTop + 1).RowHeight = 12#
-    ws.rows(shTop + 2).RowHeight = 12#
-    usedPt = usedPt + 39#
+    ' --- zaglavlje prodavca (2 reda): ime; adresa levo + PIB/MB/Ziro desno ---
+    With ws.cells(rr, 1)
+        .value = CStr(h("name"))
+        .Font.Bold = True
+        .Font.Size = 11
+    End With
+    ws.rows(rr).RowHeight = 15#
+    usedPt = usedPt + 15#
+    rr = rr + 1
+    With ws.cells(rr, 1)
+        .value = CStr(h("addr"))
+        .Font.Size = 9
+        .Font.Color = grayClr
+    End With
+    ws.Range(ws.cells(rr, 5), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 5)
+        .value = "PIB: " & CStr(h("pib")) & "   MB: " & CStr(h("mb")) & "   Ziro: " & CStr(h("acct"))
+        .Font.Size = 9
+        .Font.Color = grayClr
+        .HorizontalAlignment = xlRight
+    End With
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = DocColRule()
+    End With
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
+    rr = rr + 1
 
-    ' --- objekat (lokacija + br registra), ispod reda sa PIB (samo ako je u configu) ---
+    ' --- objekat (lokacija + br registra), ispod zaglavlja (samo ako je u configu) ---
     If Len(CStr(h("objekat"))) > 0 Then
         With ws.cells(rr, 1)
             .value = CStr(h("objekat"))
@@ -326,42 +347,53 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         rr = rr + 1
     End If
 
-    ' --- naslov (2 reda) ---
-    Dim tbTop As Long: tbTop = rr
-    rr = DocTitleBlock(ws, rr, 8, "Otkup poljoprivrednih proizvoda", _
-                       "OTKUPNI LIST  br. " & h("brDok"))
-    ws.rows(tbTop).RowHeight = 12#
-    ws.cells(tbTop + 1, 1).Font.Size = 14
-    ws.rows(tbTop + 1).RowHeight = 18#
-    usedPt = usedPt + 30#
-
-    ' --- datum / otkupno mesto ---
-    DocLabelVal ws, rr, 1, "Datum:", CStr(h("datum"))
-    DocLabelVal ws, rr, 4, "Otkupno mesto:", CStr(h("stanica"))
-    ws.rows(rr).RowHeight = 13#
-    usedPt = usedPt + 13#
-    rr = rr + 1
-
-    ' --- oznaka primerka (levo) + rok isplate (desno; mandatorni element bloka) ---
+    ' --- naslov (1 red): descriptor levo + OTKUPNI LIST ---
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 3)).Merge
     With ws.cells(rr, 1)
-        .value = copyLbl
+        .value = "Otkup poljoprivrednih proizvoda"
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
+        .HorizontalAlignment = xlLeft
+        .VerticalAlignment = xlCenter
     End With
-    DocLabelVal ws, rr, 5, "Rok isplate:", CStr(h("rok"))
-    ws.cells(rr, 5).Font.Size = 8
-    ws.rows(rr).RowHeight = 11#
-    usedPt = usedPt + 11#
+    ws.Range(ws.cells(rr, 4), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 4)
+        .value = "OTKUPNI LIST  br. " & h("brDok")
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = DocColRule()
+    End With
+    ws.rows(rr).RowHeight = 20#
+    usedPt = usedPt + 20#
     rr = rr + 1
 
-    ' --- poljoprivrednik + BPG + tekuci racun ---
-    DocLabelVal ws, rr, 1, "Poljoprivrednik:", CStr(h("koop"))
+    ' --- datum / otkupno mesto / rok isplate (skroz desno) ---
+    DocLabelVal ws, rr, 1, "Datum:", CStr(h("datum"))
+    DocLabelVal ws, rr, 4, "Otkupno mesto:", CStr(h("stanica"))
+    ws.Range(ws.cells(rr, 6), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 6)
+        .value = "Rok isplate: " & CStr(h("rok"))
+        .Font.Size = 9
+        .HorizontalAlignment = xlRight
+    End With
     ws.rows(rr).RowHeight = 13#
     usedPt = usedPt + 13#
     rr = rr + 1
-    DocLabelVal ws, rr, 1, "BPG:", CStr(h("bpg"))
-    DocLabelVal ws, rr, 4, "Tekuci racun:", CStr(h("racun"))
+
+    ' --- poljoprivrednik: ime skroz levo, pa BPG, pa tekuci racun (1 red) ---
+    With ws.cells(rr, 1)
+        .value = CStr(h("koop"))
+        .Font.Bold = True
+    End With
+    DocLabelVal ws, rr, 4, "BPG:", CStr(h("bpg"))
+    DocLabelVal ws, rr, 6, "TR:", CStr(h("racun"))
     ws.rows(rr).RowHeight = 13#
     usedPt = usedPt + 13#
     rr = rr + 1
@@ -454,7 +486,12 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     usedPt = usedPt + 40#
     rr = ob + 3
 
-    ' --- klauzula (obavezni element otkupnog bloka), sitan font ---
+    ' --- klauzula (obavezni element): upija sav preostali prostor (sav "dobitak"
+    '     od obrisanih redova) tako da potpisi dodju tacno iznad perforacije, a
+    '     duga klauzula iz podesavanja ima mesta da se prikaze ---
+    Dim reservePt As Double: reservePt = 10# + 16# + OL_MIN_FILLER_PT  ' napomena + potpisi + donji razmak
+    Dim klauzPt As Double: klauzPt = targetPt - usedPt - reservePt
+    If klauzPt < 24# Then klauzPt = 24#                                ' minimalna visina klauzule
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
         .value = CStr(h("klauzula"))
@@ -464,8 +501,8 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         .VerticalAlignment = xlTop
         .HorizontalAlignment = xlLeft
     End With
-    ws.rows(rr).RowHeight = 30#
-    usedPt = usedPt + 30#
+    ws.rows(rr).RowHeight = klauzPt
+    usedPt = usedPt + klauzPt
     rr = rr + 1
 
     ' --- napomena + potpisi ---
