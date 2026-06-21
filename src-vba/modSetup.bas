@@ -786,6 +786,15 @@ Public Sub EnsureDoradeSchema()
     EnsureColumnOnTable   TBL_OTKUP, COL_OTK_VREME_UNOSA
     SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
 
+    ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
+    ' Prazno = unet neto (bruto == neto); ne backfill-uje se (modPrint tretira >0 kao prisutno).
+    EnsureColumnOnTable   TBL_OTKUP, COL_OTK_BRUTO
+    SetColumnNumberFormat TBL_OTKUP, COL_OTK_BRUTO, "0.00"
+    EnsureColumnOnTable   TBL_PRIJEMNICA, COL_PRJ_BRUTO
+    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
+    EnsureColumnOnTable   TBL_OTPREMNICA, COL_OTP_BRUTO
+    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
+
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
            "- Aktivan: Kulture/Ambalaza/Palete (postojeci -> Aktivan)" & vbCrLf & _
@@ -793,7 +802,8 @@ Public Sub EnsureDoradeSchema()
            "- JeHladnjaca: tblStanice (Da/Ne)" & vbCrLf & _
            "- Decimalni format kolicine (0.00)" & vbCrLf & _
            "- KolAmbIzdata: tblOtkup (izdata ambalaza OM->kooperant)" & vbCrLf & _
-           "- VremeUnosa: tblOtkup (vreme snimanja otkupa)", vbInformation, APP_NAME
+           "- VremeUnosa: tblOtkup (vreme snimanja otkupa)" & vbCrLf & _
+           "- BrutoKg: tblOtkup/tblPrijemnica (bruto unos -> cuva neto)", vbInformation, APP_NAME
     Exit Sub
 
 EH:

@@ -66,6 +66,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_SeedMasterDataAvailable
 
     Test_OtkupAtomicMultiClassSave
+    Test_OtkupClassIIAmbalaza
     Test_FullDocumentChainHappyPath
     Test_DuplicateFakturaIsBlocked
     Test_InvalidSavesDoNotAppend
@@ -274,6 +275,55 @@ Private Sub Test_OtkupAtomicMultiClassSave()
 
 EH:
     LogFail "Otkup atomic multi-class save", Err.description
+End Sub
+
+' #3 Klasa II ima SVOJU kolicinu ambalaze (kolAmbII) -> red Klase II nosi te gajbe
+' i kreira sopstvene pokrete u ambalaznom ledgeru (ranije: uvek 0 na Klasi II).
+Private Sub Test_OtkupClassIIAmbalaza()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTK2A")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojDok As String
+    Dim brojZbirne As String
+    brojDok = TEST_PREFIX & "-OTK2A-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-OTK2A-" & scenario
+
+    Dim beforeAmb As Long
+    beforeAmb = CountRows(TBL_AMBALAZA)
+
+    ' Dve klase, OBE sa svojim gajbama (Klasa I = 100, Klasa II = 30).
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        1000#, 120#, TEST_TIP_AMB, 100, TEST_VOZ_ID, brojDok, _
+        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
+        hasKlasaII:=True, kolicinaII:=200#, cenaII:=80#, kolAmbII:=30)
+
+    AssertTrue Len(Trim$(result)) > 0, "Otkup multi (II amb) returns ID(s)"
+
+    Dim otkI As String
+    Dim otkII As String
+    otkI = FindOtkupIDByBrojAndKlasa(brojDok, "I")
+    otkII = FindOtkupIDByBrojAndKlasa(brojDok, "II")
+
+    AssertEquals "100", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkI, "KolAmbalaze")), _
+                 "Otkup class I carries its ambalaza (100)"
+    AssertEquals "30", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkII, "KolAmbalaze")), _
+                 "Otkup class II carries its own ambalaza (30)"
+
+    ' Obe klase sa gajbama -> kreirani su ambalazni pokreti (Klasa II vise nije 0).
+    AssertTrue CountRows(TBL_AMBALAZA) > beforeAmb, _
+               "Two-class otkup with crates creates ambalaza movements"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup class II ambalaza", Err.description
 End Sub
 
 Private Sub Test_FullDocumentChainHappyPath()

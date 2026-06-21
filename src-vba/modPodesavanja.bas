@@ -90,6 +90,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", "Kupac unosi BRUTO težinu (oduzmi ambalažu)", "bool"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta voća", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta voća", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "KOOP_FILTER_BY_OM", "Filtriraj kooperante po otkupnom mestu", "bool"

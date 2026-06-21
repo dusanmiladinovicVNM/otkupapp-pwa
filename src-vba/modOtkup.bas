@@ -117,7 +117,10 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                                    Optional ByVal hasKlasaII As Boolean = False, _
                                    Optional ByVal kolicinaII As Double = 0, _
                                    Optional ByVal cenaII As Double = 0, _
-                                   Optional ByVal kolAmbIzdata As Long = 0) As String
+                                   Optional ByVal kolAmbIzdata As Long = 0, _
+                                   Optional ByVal brutoKgI As Double = 0, _
+                                   Optional ByVal kolAmbII As Long = 0, _
+                                   Optional ByVal brutoKgII As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -133,9 +136,17 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                   "StanicaID je obavezan."
     End If
 
-    If kolicinaI <= 0 Or cenaI <= 0 Then
+    ' Klasa I je opciona (kolicinaI = 0 -> unosi se samo Klasa II). Bar jedna klasa.
+    Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
+
+    If Not hasKlasaI And Not hasKlasaII Then
         Err.Raise vbObjectError + 1812, "SaveOtkupMulti_TX", _
-                  "Kolicina i cena za Klasu I moraju biti vece od nule."
+                  "Mora postojati bar jedna klasa (I ili II)."
+    End If
+
+    If hasKlasaI And cenaI <= 0 Then
+        Err.Raise vbObjectError + 1812, "SaveOtkupMulti_TX", _
+                  "Cena za Klasu I mora biti veca od nule."
     End If
 
     If hasKlasaII Then
@@ -155,12 +166,17 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
                   "Kolicina izdate ambalaze ne sme biti negativna."
     End If
 
+    If kolAmbII < 0 Then
+        Err.Raise vbObjectError + 1842, "SaveOtkupMulti_TX", _
+                  "Kolicina ambalaze (Klasa II) ne sme biti negativna."
+    End If
+
     If novac < 0 Then
         Err.Raise vbObjectError + 1815, "SaveOtkupMulti_TX", _
                   "Iznos novca ne sme biti negativan."
     End If
 
-    If kolAmb > 0 And Trim$(tipAmb) = "" Then
+    If (kolAmb > 0 Or kolAmbII > 0) And Trim$(tipAmb) = "" Then
         Err.Raise vbObjectError + 1816, "SaveOtkupMulti_TX", _
                   "Tip ambalaze je obavezan kada postoji ambalaza."
     End If
@@ -171,31 +187,43 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_NOVAC
 
     Dim resultI As String
-    resultI = SaveOtkup( _
-        datum:=datum, _
-        kooperantID:=kooperantID, _
-        stanicaID:=stanicaID, _
-        vrstaVoca:=vrstaVoca, _
-        sortaVoca:=sortaVoca, _
-        kolicina:=kolicinaI, _
-        cena:=cenaI, _
-        tipAmb:=tipAmb, _
-        kolAmb:=kolAmb, _
-        vozacID:=vozacID, _
-        brDok:=brDok, _
-        novac:=novac, _
-        primalac:=primalac, _
-        klasa:=KLASA_I, _
-        parcelaID:=parcelaID, _
-        brojZbirne:=brojZbirne, _
-        kolAmbIzdata:=kolAmbIzdata)
+    If hasKlasaI Then
+        resultI = SaveOtkup( _
+            datum:=datum, _
+            kooperantID:=kooperantID, _
+            stanicaID:=stanicaID, _
+            vrstaVoca:=vrstaVoca, _
+            sortaVoca:=sortaVoca, _
+            kolicina:=kolicinaI, _
+            cena:=cenaI, _
+            tipAmb:=tipAmb, _
+            kolAmb:=kolAmb, _
+            vozacID:=vozacID, _
+            brDok:=brDok, _
+            novac:=novac, _
+            primalac:=primalac, _
+            klasa:=KLASA_I, _
+            parcelaID:=parcelaID, _
+            brojZbirne:=brojZbirne, _
+            kolAmbIzdata:=kolAmbIzdata, _
+            brutoKg:=brutoKgI)
 
-    If resultI = "" Then
-        Err.Raise vbObjectError + 1817, "SaveOtkupMulti_TX", _
-                  "SaveOtkup Klasa I fehlgeschlagen"
+        If resultI = "" Then
+            Err.Raise vbObjectError + 1817, "SaveOtkupMulti_TX", _
+                      "SaveOtkup Klasa I fehlgeschlagen"
+        End If
     End If
 
     Dim resultII As String
+
+    ' Kes I izdata ambalaza se belezi na red Klase I; ako Klase I nema (samo II),
+    ' belezi se na Klasu II -- inace bi se izgubili (SaveOtkup Klase I se preskace).
+    Dim novacII As Double
+    Dim kolAmbIzdataII As Long
+    If Not hasKlasaI Then
+        novacII = novac
+        kolAmbIzdataII = kolAmbIzdata
+    End If
 
     If hasKlasaII Then
         resultII = SaveOtkup( _
@@ -207,20 +235,26 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
             kolicina:=kolicinaII, _
             cena:=cenaII, _
             tipAmb:=tipAmb, _
-            kolAmb:=0, _
+            kolAmb:=kolAmbII, _
             vozacID:=vozacID, _
             brDok:=brDok, _
-            novac:=0, _
+            novac:=novacII, _
             primalac:=primalac, _
             klasa:=KLASA_II, _
             parcelaID:=parcelaID, _
-            brojZbirne:=brojZbirne)
+            brojZbirne:=brojZbirne, _
+            kolAmbIzdata:=kolAmbIzdataII, _
+            brutoKg:=brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1818, "SaveOtkupMulti_TX", _
                       "SaveOtkup Klasa II fehlgeschlagen"
         End If
     End If
+
+    ' Primarni OtkupID dokumenta (za kes/avans veze): Klasa I ako postoji, inace II.
+    Dim primaryID As String
+    If hasKlasaI Then primaryID = resultI Else primaryID = resultII
 
     If novac > 0 Then
         Dim koopNaziv As String
@@ -241,7 +275,7 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
             uplata:=0, _
             isplata:=novac, _
             napomena:=primalac, _
-            otkupID:=resultI)
+            otkupID:=primaryID)
 
         If novacID = "" Then
             Err.Raise vbObjectError + 1819, "SaveOtkupMulti_TX", _
@@ -249,19 +283,18 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
         End If
     End If
 
-    ApplyAvansToOtkup kooperantID, resultI
-
-    If hasKlasaII Then
-        ApplyAvansToOtkup kooperantID, resultII
-    End If
+    If hasKlasaI Then ApplyAvansToOtkup kooperantID, resultI
+    If hasKlasaII Then ApplyAvansToOtkup kooperantID, resultII
 
     tx.CommitTx
     Set tx = Nothing
 
-    If hasKlasaII Then
+    If hasKlasaI And hasKlasaII Then
         SaveOtkupMulti_TX = resultI & " + " & resultII
-    Else
+    ElseIf hasKlasaI Then
         SaveOtkupMulti_TX = resultI
+    Else
+        SaveOtkupMulti_TX = resultII
     End If
 
     On Error Resume Next
@@ -337,7 +370,8 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                           Optional ByVal klasa As String = "I", _
                           Optional ByVal parcelaID As String = "", _
                           Optional ByVal brojZbirne As String = "", _
-                          Optional ByVal kolAmbIzdata As Long = 0) As String
+                          Optional ByVal kolAmbIzdata As Long = 0, _
+                          Optional ByVal brutoKg As Double = 0) As String
     On Error GoTo EH
 
     If Trim$(kooperantID) = "" Then
@@ -472,6 +506,9 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
 
     ' Vreme snimanja otkupa (Now()) -> upis po imenu (kolona na kraju tblOtkup).
     UpdateCell TBL_OTKUP, newRow, COL_OTK_VREME_UNOSA, Now
+
+    ' Bruto tezina (kad je unet bruto pa oduzeta ambalaza) -> upis po imenu; prazno = neto.
+    If brutoKg > 0 Then UpdateCell TBL_OTKUP, newRow, COL_OTK_BRUTO, brutoKg
 
     If kolAmb > 0 Then
         ' Kooperant predaje pune gajbe na OM -> DVOJNI upis (otkup nema vozaca na OM-strani):
