@@ -501,7 +501,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     ' --- klauzula (obavezni element): upija sav preostali prostor (sav "dobitak"
     '     od obrisanih redova) tako da potpisi dodju tacno iznad perforacije, a
     '     duga klauzula iz podesavanja ima mesta da se prikaze ---
-    Dim reservePt As Double: reservePt = 10# + 16# + OL_MIN_FILLER_PT  ' napomena + potpisi + donji razmak
+    Dim reservePt As Double: reservePt = 16# + OL_MIN_FILLER_PT        ' potpisi + donji razmak
     Dim klauzPt As Double: klauzPt = targetPt - usedPt - reservePt
     If klauzPt < 24# Then klauzPt = 24#                                ' minimalna visina klauzule
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
@@ -517,16 +517,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     usedPt = usedPt + klauzPt
     rr = rr + 1
 
-    ' --- napomena + potpisi ---
-    With ws.cells(rr, 1)
-        .value = "Poljoprivrednik svojim potpisom potvrdjuje prijem nadoknade."
-        .Font.Size = 7
-        .Font.Italic = True
-        .Font.Color = grayClr
-    End With
-    ws.rows(rr).RowHeight = 10#
-    usedPt = usedPt + 10#
-    rr = rr + 1
+    ' --- potpisi (napomena uklonjena - klauzula vec sadrzi saglasnost potpisom) ---
     ws.cells(rr, 1).value = "Potpis poljoprivrednika:  ____________"
     ws.cells(rr, 1).Font.Size = 9
     ws.cells(rr, 1).Font.Color = grayClr
