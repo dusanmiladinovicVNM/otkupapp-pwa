@@ -16,7 +16,7 @@ Option Explicit
 ' ============================================================
 
 ' Indeks skrivene kolone sa ref-kljucem u lstKartica.
-Public Const KART_REFKEY_COL As Long = 6
+Private Const KART_REFKEY_COL As Long = 6
 
 Private mLst As MSForms.ListBox        ' detail lista (2 kolone: Stavka | Vrednost)
 Private mLblTitle As MSForms.label
