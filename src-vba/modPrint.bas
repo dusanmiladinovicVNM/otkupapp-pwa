@@ -511,9 +511,8 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         .Font.Color = RGB(60, 60, 60)
         .WrapText = True
         .VerticalAlignment = xlTop
-        .HorizontalAlignment = xlLeft
+        .HorizontalAlignment = xlJustify
     End With
-    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).BorderAround Weight:=xlThin   ' okvir = ista sirina kao tabela iznad
     ws.rows(rr).RowHeight = klauzPt
     usedPt = usedPt + klauzPt
     rr = rr + 1
