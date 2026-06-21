@@ -119,7 +119,7 @@ Otkupni list (`OtkupSablon` / `modPrint`): red **„Saldo ambalaze"** više nije
 ### Added
 
 - `modAmbalaza.GetKooperantAmbOpening(koopID, tipAmb, blockOtkupIDs)` → `Long`: entitetski saldo kooperanta (Ulaz +, Izlaz −) za dati tip ambalaže, sabran nad svim ledger redovima **upisanim pre prvog reda datog bloka**. Blok se identifikuje preko `DokumentID ∈ blockOtkupIDs` (obe noge — `Otkup` i `OM-Izlaz-Koop` — dele `DokumentID = otkupID`). `ExcludeStornirano`; schema guard preko `RequireColumnIndex`. Fallback (blok bez ledger redova, npr. legacy): sve kooperantove stavke kao početno.
-- `modPrint.FillOtkupSablon`: `h("ambPocetno")` (`tipAmb & " x " & početno`), `h("ambPrijem")` i `h("ambIzdavanje")` (broj gajbi tekućeg bloka za kombinovani srednji red).
+- `modPrint.FillOtkupSablon`: `h("ambPocetno")` (`tipAmb & " x " & početno`), `h("ambPrijem")` i `h("ambIzdavanje")` (tip + broj gajbi tekućeg bloka, npr. „12/1 x 50", za kombinovani srednji red).
 
 ### Changed
 

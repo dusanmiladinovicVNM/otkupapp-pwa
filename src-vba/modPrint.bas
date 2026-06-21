@@ -225,8 +225,8 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ' upisa, pa je ispravno i kod ponovne stampe starijeg bloka.
     Dim ambPoc As Long: ambPoc = GetKooperantAmbOpening(koopID, tipAmb, ids)
     h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
-    h("ambPrijem") = CStr(CLng(kolAmb))         ' primljeno (broj gajbi, tekuci blok)
-    h("ambIzdavanje") = CStr(CLng(kolAmbIzd))   ' izdato (broj gajbi, tekuci blok)
+    h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))         ' primljeno (tekuci blok)
+    h("ambIzdavanje") = tipAmb & " x " & CStr(CLng(kolAmbIzd))   ' izdato (tekuci blok)
     h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc + kolAmbIzd - kolAmb))
     h("stopa") = stopa
     h("osnovica") = osnovica
