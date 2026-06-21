@@ -936,11 +936,13 @@ Private Sub btnUnos_Click()
     ' auto otpremnica+zbirna+prijemnica iz otkupa. Best-effort (pre ClearOtkupFields,
     ' dok combo-i jos drze vrednosti).
     On Error Resume Next
-    AutoChainHladnjaca datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
+    Dim hlWarn As String
+    hlWarn = AutoChainHladnjaca(datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
                        vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
                        chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value), _
-                       result, brutoKgI, kolAmbII, brutoKgII
+                       result, brutoKgI, kolAmbII, brutoKgII)
     On Error GoTo 0
+    If Len(hlWarn) > 0 Then MsgBox hlWarn, vbExclamation, APP_NAME
 
     ClearOtkupFields
 
