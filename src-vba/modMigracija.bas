@@ -137,18 +137,13 @@ Private Function NadjiListObject(ByVal wb As Workbook, ByVal naziv As String) As
     Next ws
 End Function
 
-' Tabele koje se NE prenose:
-'  - tblRpt*  : izvedeni izvestaji (regenerisu se)
-'  - tblConfig / tblSEFConfig : masinski-specificni (OAuth/SEF/licenca) - OPT-IN
-'  - tblMeteo : kes
-' Ako zelis i config da prenese, izbaci ga iz liste.
+' Preskace se SAMO tblRpt* (izvedeni izvestaji - regenerisu se iz podataka).
+' SVE ostalo se prenosi, ukljucujuci config tabele (tblConfig, tblSEFConfig,
+' tblLocalConfig) jer cuvaju aktuelna podesavanja (OAuth / SEF / bank putanje /
+' licenca). Config tabele su key/value; novi prazan fajl ih ima prazne do
+' SetupNewPC, pa pun copy starih redova donosi sva podesavanja bez gubitka.
 Private Function SkipTabela(ByVal naziv As String) As Boolean
-    If LCase$(Left$(naziv, 6)) = "tblrpt" Then SkipTabela = True: Exit Function
-    Dim skip As Variant, i As Long
-    skip = Array("tblConfig", "tblSEFConfig", "tblMeteo")
-    For i = LBound(skip) To UBound(skip)
-        If StrComp(naziv, CStr(skip(i)), vbTextCompare) = 0 Then SkipTabela = True: Exit Function
-    Next i
+    SkipTabela = (LCase$(Left$(naziv, 6)) = "tblrpt")
 End Function
 
 ' Override za PREIMENOVANE kolone izmedju verzija. Default = isto ime.
