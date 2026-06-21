@@ -74,6 +74,14 @@ Svako od ovih kretanja je **entitetski-relativno** (vidi §1).
 
 **Zbirna** ne dira ambalažu (nema upisa).
 
+> **Dvoklasni otkup (Klasa I + Klasa II).** Otkup sa obe klase su **dva `tblOtkup` reda**
+> (isti `BrDok`); **svaki red knjiži svoju ambalažu** — `kolAmb` (Klasa I) i `kolAmbII`
+> (Klasa II) — kroz isti dvojni upis (`Kooperant Izlaz` + `Stanica Ulaz`). Kod unosa
+> **samo Klase II** (bez Klase I) i otkupna i **izdata** ambalaža se knjiže na red Klase II
+> (jedini koji postoji). Isto važi za dokumenta (otpremnica/zbirna/prijemnica): Klasa II
+> nosi svoje gajbe kroz ceo lanac i paletizaciju. Storno celog dokumenta hvata sve redove
+> preko `BrDok` (vidi §9).
+
 ---
 
 ## 4. Jednostran vs dvojni upis — i zašto
@@ -186,6 +194,13 @@ brojanje otkupa duplo teretilo vozača. Zato se otkup **izuzima** iz vozačkog s
 `modStorno.StornoAmbalazaByDokument(dokumentID, dokumentTip)` markira **sve** redove tog
 dokumenta kao stornirane → **automatski hvata obe noge dvojnog upisa** (otkup i
 OM-izdavanje), jer obe noge dele isti `DokumentID` + `DokumentTip`.
+
+**Storno celog otkupnog dokumenta:** `modStorno.StornoOtkupByBrDok_TX(brDok)` stornira **sve
+`tblOtkup` redove** istog dokumenta (Klasa I + Klasa II, dele `BrDok`) u jednoj transakciji —
+za svaki red poziva `StornoOtkup`, koji reversuje i njegove ambalaža noge (otkupnu **i**
+izdatu `OM-Izlaz-Koop`, jer dele `DokumentID = otkupID`). Koristi se iz `frmDokumenta` i
+panela (`modOtkupBlok.StornoSelectedBlok`, fallback na `OtkupID`), pa storno dvoklasnog
+dokumenta više ne ostavlja drugu klasu nestorniranu.
 
 > Poznata praznina (nasleđena): `OMUlaz` i `OM-Izlaz-Koop` nisu u storno comboboxu forme,
 > pa za njih trenutno nema storno-UI putanje (kao ni ranije za `OMUlaz`).
