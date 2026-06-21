@@ -57,9 +57,9 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     insH = frm.InsideHeight
     On Error GoTo EH
 
-    panelW = insW * 0.34
-    If panelW < 170 Then panelW = 200
-    If panelW > 320 Then panelW = 320
+    panelW = insW * 0.27
+    If panelW < 190 Then panelW = 190
+    If panelW > 270 Then panelW = 270
     leftX = insW - panelW - 12
     If leftX < 8 Then leftX = 8
     topY = insH * 0.17
@@ -70,10 +70,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
 
     On Error Resume Next
     mDiag = "cont=" & TypeName(cont) & "; leftX=" & CStr(CLng(leftX)) & _
-            "; topY=" & CStr(CLng(topY)) & "; panelW=" & CStr(CLng(panelW)) & _
-            "; panelH=" & CStr(CLng(panelH)) & _
-            "; insW=" & CStr(CLng(insW)) & "; insH=" & CStr(CLng(insH))
-    Debug.Print "KART_ENSURE v5 "; mDiag
+            "; panelW=" & CStr(CLng(panelW)) & "; insW=" & CStr(CLng(insW))
     On Error GoTo EH
 
     Set mLblTitle = cont.Controls.Add("Forms.Label.1", "lblKarticaDetaljiNaslov", True)
@@ -96,7 +93,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
         .width = availW
         .Height = panelH
         .ColumnCount = 2
-        .ColumnWidths = CStr(Int(availW * 0.46)) & ";" & CStr(Int(availW * 0.5))
+        .ColumnWidths = CStr(Int(availW * 0.4)) & ";" & CStr(Int(availW * 0.57))
     End With
     On Error Resume Next
     StyleListBox mLst
@@ -131,12 +128,10 @@ End Sub
 
 ' Prikazi detalje za trenutno izabran red lstKartica.
 Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MSForms.ListBox)
-    Debug.Print "KART_ShowForRow ENTER v5"
     On Error GoTo EH
     If lstKartica Is Nothing Then Exit Sub
 
     KarticaDetalji_Ensure frm, lstKartica
-    Debug.Print "KART_SHOW mLstNothing="; (mLst Is Nothing); " visible="; KartLstVisible()
     If mLst Is Nothing Then
         ' Panel nije kreiran -> jednom prijavi razlog (da ne ostane "nista se ne desava").
         If Not mDiagShown Then
@@ -276,16 +271,6 @@ End Function
 
 Private Function NumOf(ByVal v As Variant) As Double
     If IsNumeric(v) Then NumOf = CDbl(v)
-End Function
-
-' Bezbedan prikaz vidljivosti detalj-liste za dijagnostiku (Immediate).
-Private Function KartLstVisible() As Variant
-    On Error Resume Next
-    If mLst Is Nothing Then
-        KartLstVisible = "n/a"
-    Else
-        KartLstVisible = mLst.visible
-    End If
 End Function
 
 Private Function DisplayStanica(ByVal stanicaID As String) As String
