@@ -113,17 +113,22 @@ The following entries are kept in the active changelog because they affect curre
 
 ### Summary
 
-Panel „Otkupni blokovi" (`frmOtkup` / `modOtkupBlok`): pored postojeće specifikacije za **ručno izabrane otpremnice**, dodata je **dnevna / periodična specifikacija** (filter po datumu *od–do*). U dnu liste otpremnica je novi *footer strip* sa poljima **Od** / **Do** (pretpopunjena na današnji datum → klik odmah daje dnevnu specifikaciju) i dugmetom **„Stampaj po datumu"**. Na samoj specifikaciji je dodata kolona **Otkupno mesto** (posle „Broj otpremnice"). Renderer je refaktorisan u jedno jezgro (`RenderSpec`) koje filtrira po skupu `OtpremnicaID` **ILI** po opsegu datuma — bez dupliranja PDF logike.
+Panel „Otkupni blokovi" (`frmOtkup` / `modOtkupBlok`): pored postojeće specifikacije za **ručno izabrane otpremnice**, dodata je **dnevna / periodična specifikacija** (filter po datumu *od–do*). Iznad listboxova je novi **akcioni red**: levo (nad otpremnicama) polja **Od** / **Do** (pretpopunjena na današnji datum → klik odmah daje dnevnu specifikaciju) + dugme **„Stampaj po datumu"**; desno (nad blokovima) preseljena dugmad **Storniraj / Stampaj list / Biraj otpremnice**. Listboxovi su spušteni (`GRID_TOP` 104 → 120, zaglavlja 74 → 90). Na samoj specifikaciji je dodata kolona **Otkupno mesto** (posle „Broj otpremnice"). Renderer je refaktorisan u jedno jezgro (`RenderSpec`) koje filtrira po skupu `OtpremnicaID` **ILI** po opsegu datuma — bez dupliranja PDF logike.
 
 ### Added
 
 - `modOtkupBlok.PrintSpecifikacijaPoDatumu(datumOd, datumDo)` + handler `PrintSpecOdDo` (čita Od/Do preko `TryParseDateValue`, validira opseg): dnevna (od=do) ili periodična specifikacija svih ne-storniranih otkup blokova čija je kolona `Datum` (`COL_OTK_DATUM`) u opsegu.
-- `BuildPanel`: dinamičke kontrole `txtOtkBlokSpecOd` / `txtOtkBlokSpecDo` + dugme `btnOtkBlokSpecDatum` (akcija `"SPECDATUM"` u `OtkupBlok_OnButton`), wired preko `clsBlokUI`. `gridH` skraćen za 30 pt da napravi mesto za strip; `frmOtkup.frx` se ne dira.
+- `BuildPanel`: dinamičke kontrole `txtOtkBlokSpecOd` / `txtOtkBlokSpecDo` + dugme `btnOtkBlokSpecDatum` (akcija `"SPECDATUM"` u `OtkupBlok_OnButton`), wired preko `clsBlokUI`; smeštene u akcioni red iznad listboxova. `frmOtkup.frx` se ne dira.
 - Specifikacija: nova kolona **Otkupno mesto**, vrednost = naziv stanice po redu (`COL_OTK_STANICA` → `TBL_STANICE.Naziv`, reuse `BuildLookup`).
 
 ### Changed
 
 - `modOtkupBlok.PrintSpecifikacija(otpIDs)` je sada tanak omotač oko novog `RenderSpec(selSet, byDate, datumOd, datumDo, subtitle)`; ponašanje ručne selekcije otpremnica je nepromenjeno. Tabela sada ima 11 kolona (A–K); izlaz je sortiran po (Otkupno mesto, Datum) radi grupisanja.
+- Layout panela: dugmad `Storniraj` / `Stampaj list` / `Biraj otpremnice` preseljena iz reda naslova u novi akcioni red (red 66); listboxovi spušteni (`GRID_TOP` 104 → 120).
+
+### Fixed
+
+- **Type mismatch (greška 13)** pri kliku na „Stampaj po datumu": `DateValue(datum)` u `PrintSpecifikacijaPoDatumu` i u filteru `RenderSpec` zamenjeno robusnim poređenjem serijskog broja `Int(CDbl(datum))` (bez parsiranja stringa → bez locale/Type zamke).
 
 ### Verification / Acceptance Gates
 

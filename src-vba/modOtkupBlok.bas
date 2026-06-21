@@ -34,7 +34,7 @@ Private Const PANEL_LEFT  As Double = 302
 Private Const OTP_W       As Double = 346
 Private Const BLOK_LEFT   As Double = 652       ' PANEL_LEFT + OTP_W + 4 (manji razmak)
 Private Const BLOK_W      As Double = 504
-Private Const GRID_TOP    As Double = 104
+Private Const GRID_TOP    As Double = 120       ' spusteno za akcioni red (dugmad + datum spec)
 Private Const EXP_WIDTH   As Double = 1164
 Private Const TOGGLE_W    As Double = 130
 
@@ -278,7 +278,7 @@ Private Sub BuildPanel()
     Set mPanelCtls = New Collection
 
     Dim gridH As Double
-    gridH = mForm.InsideHeight - GRID_TOP - 14 - 30   ' 30pt rezervisano za footer strip (dnevna/period spec)
+    gridH = mForm.InsideHeight - GRID_TOP - 14
     If gridH < 120 Then gridH = 120
 
     ' Gornji red: cena po otpremnici + sazetak
@@ -305,7 +305,7 @@ Private Sub BuildPanel()
     mLblNapisanoAmb.caption = "U blokovima amb: —"
     mLblPreostaloAmb.caption = "Ostatak amb: —"
 
-    ' Naslovi + dugmad (dugmad levo od toggle-a da se ne preklapaju)
+    ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
     t1.caption = "OTPREMNICE  (klik = izbor)": StyleHdr t1
     Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 42, 120, 22)
@@ -313,23 +313,43 @@ Private Sub BuildPanel()
 
     Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 44, 56, 14)
     t2.caption = "BLOKOVI": StyleHdr t2
-    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 58, 42, 78, 22)
+
+    ' --- Akcioni red (red 66), iznad listboxova ---
+    ' Levo (nad otpremnicama): dnevna / periodicna specifikacija (Od/Do + dugme).
+    ' Datum Od/Do pretpopunjeni na danas -> klik daje dnevnu specifikaciju;
+    ' promenom datuma dobija se period (od-do). Reuse istog renderera (RenderSpec).
+    Dim lblOd As Object: Set lblOd = AddCtl("Label", "lblOtkBlokSpecOd", PANEL_LEFT, 69, 22, 14)
+    lblOd.caption = "Od:": StyleHdr lblOd
+    Set mTxtSpecOd = AddCtl("TextBox", "txtOtkBlokSpecOd", PANEL_LEFT + 24, 66, 64, 18)
+    Dim lblDo As Object: Set lblDo = AddCtl("Label", "lblOtkBlokSpecDo", PANEL_LEFT + 94, 69, 22, 14)
+    lblDo.caption = "Do:": StyleHdr lblDo
+    Set mTxtSpecDo = AddCtl("TextBox", "txtOtkBlokSpecDo", PANEL_LEFT + 118, 66, 64, 18)
+    Set mBtnSpecDatum = AddCtl("CommandButton", "btnOtkBlokSpecDatum", PANEL_LEFT + 190, 66, 150, 22)
+    mBtnSpecDatum.caption = "Stampaj po datumu"
+
+    ' Desno (nad blokovima): storno / stampa lista / biranje otpremnica za spec.
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT, 66, 78, 22)
     mBtnStorno.caption = "Storniraj"
-    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 140, 42, 84, 22)
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 82, 66, 84, 22)
     mBtnPrint.caption = "Stampaj list"
-    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 228, 42, 124, 22)
+    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 170, 66, 124, 22)
     mBtnBiraj.caption = "Biraj otpremnice"
 
     On Error Resume Next
     StyleExitButton mBtnFilter, "Prikaz: Sve"
+    StyleTextBox mTxtSpecOd
+    StyleTextBox mTxtSpecDo
+    StylePrimaryButton mBtnSpecDatum, "Stampaj po datumu"
     StyleExitButton mBtnStorno, "Storniraj"
     StylePrimaryButton mBtnPrint, "Stampaj list"
     StyleExitButton mBtnBiraj, "Biraj otpremnice"
     On Error GoTo 0
+    mTxtSpecOd.value = Format$(Date, "d.m.yyyy")
+    mTxtSpecDo.value = Format$(Date, "d.m.yyyy")
 
-    ' Zaglavlja kolona (spustena dalje od dugmadi; listbox tik ispod)
-    AddHeaders "hOtp", PANEL_LEFT, 74, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 74, BLOK_COLW, BLOK_CAPS
+    ' Zaglavlja kolona (red 90; listbox tik ispod)
+    AddHeaders "hOtp", PANEL_LEFT, 90, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 90, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
@@ -339,26 +359,6 @@ Private Sub BuildPanel()
     Set mLstBlok = AddCtl("ListBox", "lstOtkBlokBlok", BLOK_LEFT, GRID_TOP, BLOK_W, gridH)
     mLstBlok.ColumnCount = 9
     mLstBlok.ColumnWidths = BLOK_COLW
-
-    ' Footer strip ispod liste otpremnica: dnevna / periodicna specifikacija.
-    ' Datum Od/Do se pretpopune na danas -> klik daje dnevnu specifikaciju;
-    ' promenom datuma dobija se period (od-do). Reuse istog renderera (RenderSpec).
-    Dim fy As Double: fy = GRID_TOP + gridH + 6
-    Dim lblOd As Object: Set lblOd = AddCtl("Label", "lblOtkBlokSpecOd", PANEL_LEFT, fy + 3, 22, 14)
-    lblOd.caption = "Od:": StyleHdr lblOd
-    Set mTxtSpecOd = AddCtl("TextBox", "txtOtkBlokSpecOd", PANEL_LEFT + 24, fy, 64, 18)
-    Dim lblDo As Object: Set lblDo = AddCtl("Label", "lblOtkBlokSpecDo", PANEL_LEFT + 94, fy + 3, 22, 14)
-    lblDo.caption = "Do:": StyleHdr lblDo
-    Set mTxtSpecDo = AddCtl("TextBox", "txtOtkBlokSpecDo", PANEL_LEFT + 118, fy, 64, 18)
-    Set mBtnSpecDatum = AddCtl("CommandButton", "btnOtkBlokSpecDatum", PANEL_LEFT + 190, fy, 150, 22)
-    mBtnSpecDatum.caption = "Stampaj po datumu"
-    On Error Resume Next
-    StyleTextBox mTxtSpecOd
-    StyleTextBox mTxtSpecDo
-    StylePrimaryButton mBtnSpecDatum, "Stampaj po datumu"
-    On Error GoTo 0
-    mTxtSpecOd.value = Format$(Date, "d.m.yyyy")
-    mTxtSpecDo.value = Format$(Date, "d.m.yyyy")
 
     ' Eventi
     WireTxt mTxtCenaOtp, "CENA"
@@ -800,7 +800,7 @@ End Sub
 Private Sub PrintSpecifikacijaPoDatumu(ByVal datumOd As Date, ByVal datumDo As Date)
     On Error GoTo EH
     Dim subtitle As String
-    If DateValue(datumOd) = DateValue(datumDo) Then
+    If Int(CDbl(datumOd)) = Int(CDbl(datumDo)) Then
         subtitle = "Dnevna specifikacija     Datum: " & Format$(datumOd, "d.m.yyyy")
     Else
         subtitle = "Specifikacija     Period: " & Format$(datumOd, "d.m.yyyy") & _
@@ -854,8 +854,8 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
         Dim pass As Boolean: pass = False
         If byDate Then
             If IsDate(data(i, cDat)) Then
-                Dim dd As Date: dd = DateValue(CDate(data(i, cDat)))
-                pass = (dd >= DateValue(datumOd) And dd <= DateValue(datumDo))
+                Dim dd As Double: dd = Int(CDbl(CDate(data(i, cDat))))
+                pass = (dd >= Int(CDbl(datumOd)) And dd <= Int(CDbl(datumDo)))
             End If
         ElseIf Not selSet Is Nothing Then
             pass = selSet.Exists(oid)
