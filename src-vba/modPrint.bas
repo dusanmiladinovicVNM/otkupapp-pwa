@@ -227,7 +227,17 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("nadoknada") = osnovica * stopa / 100
     h("ukupno") = osnovica + osnovica * stopa / 100
     h("rok") = DocConfigOr(CFG_OTKUP_ROK, OTKUP_ROK_DEFAULT)
-    h("klauzula") = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
+    ' Klauzula iz podesavanja moze da sadrzi tokene koji se pri stampi zamenjuju
+    ' podacima OVOG otkupnog lista (broj gazdinstva se razlikuje po kooperantu):
+    '   {BPG} {POLJOPRIVREDNIK} {RACUN} {DATUM} {BROJ}
+    ' Zamena je case-insensitive (radi i {bpg}).
+    Dim kl As String: kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
+    kl = Replace(kl, "{BPG}", CStr(h("bpg")), , , vbTextCompare)
+    kl = Replace(kl, "{POLJOPRIVREDNIK}", CStr(h("koop")), , , vbTextCompare)
+    kl = Replace(kl, "{RACUN}", CStr(h("racun")), , , vbTextCompare)
+    kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
+    kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
+    h("klauzula") = kl
 
     Application.ScreenUpdating = False
     On Error Resume Next
@@ -503,6 +513,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
         .VerticalAlignment = xlTop
         .HorizontalAlignment = xlLeft
     End With
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).BorderAround Weight:=xlThin   ' okvir = ista sirina kao tabela iznad
     ws.rows(rr).RowHeight = klauzPt
     usedPt = usedPt + klauzPt
     rr = rr + 1
