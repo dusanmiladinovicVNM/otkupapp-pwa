@@ -543,10 +543,19 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
                                     Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
     Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
-    If ws Is Nothing Then Exit Function
+    If ws Is Nothing Then
+        MsgBox "PDF prijemnice nije napravljen: priprema lista (PrijemnicaSablon) " & _
+               "nije uspela. Proveri da li su podaci prijemnice kompletni.", _
+               vbExclamation, APP_NAME
+        Exit Function
+    End If
 
+    Dim folder As String: folder = ThisWorkbook.Path
+    If Len(folder) = 0 Then folder = Environ$("TEMP")
     Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
-    Dim pdfPath As String: pdfPath = ThisWorkbook.Path & "\Prijemnica_" & suff & ".pdf"
+    ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni PDF otvoren.
+    Dim pdfPath As String
+    pdfPath = folder & "\Prijemnica_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -554,6 +563,8 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
     ExportPrijemnicaPDF = pdfPath
     Exit Function
 EH:
+    MsgBox "Greska pri izradi PDF prijemnice:" & vbCrLf & _
+           "  [" & Err.Number & "] " & Err.Description, vbExclamation, APP_NAME
     LogErr "modPrint.ExportPrijemnicaPDF"
 End Function
 
@@ -727,8 +738,11 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     Dim lastRow As Long: lastRow = rr
 
     ' --- A4 portrait, sve kolone na jednu stranu po sirini ---
+    ' PageSetup property-ji (PaperSize/Orientation/FitToPages) traze drajver
+    ' stampaca; na racunaru bez stampaca bacaju 1004. Stitimo ih (On Error Resume
+    ' Next) da PDF izadje i bez stampaca. NE koristimo Application.PrintCommunication
+    ' jer na takvim masinama zna da blokira (isti hardening kao PrintSpecifikacija).
     On Error Resume Next
-    Application.PrintCommunication = False
     With ws.PageSetup
         .PaperSize = xlPaperA4
         .Orientation = xlPortrait
@@ -742,7 +756,6 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
         .CenterHorizontally = True
         .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
     End With
-    Application.PrintCommunication = True
     On Error GoTo 0
 
     Application.ScreenUpdating = oldScreen
