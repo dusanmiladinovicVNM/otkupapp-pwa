@@ -43,7 +43,11 @@ Private Sub UserForm_Activate()
     
     If m_SetupDone Then GoTo Continue_Setup
     m_SetupDone = True
-    
+
+    ' Nova instanca forme -> resetuj modul-stanje panela "Detalji otkupa"
+    ' (dinamicke kontrole prethodne instance vise ne postoje posle Unload-a).
+    KarticaDetalji_Reset
+
     m_IsInitializing = True
     
     ' Header zone (dodati u Designer ako nemaš)
@@ -475,8 +479,8 @@ Private Sub SetupListBoxes()
     End With
     
     With lstKartica
-        .ColumnCount = 6
-        .ColumnWidths = "60;70;140;80;80;80"
+        .ColumnCount = 7
+        .ColumnWidths = "60;70;140;80;80;80;0"   ' kol. 6 (skrivena) = ref-kljuc reda za "Detalji otkupa"
     End With
 End Sub
 
@@ -596,6 +600,8 @@ End Sub
 
 Private Sub mpReports_Change()
     UpdateStatusLabel
+    ' Panel "Detalji otkupa" je vezan za karticu (Page 8) -> sakrij ga drugde.
+    KarticaDetalji_SetVisible (mpReports.value = 8)
 End Sub
 Private Sub UpdateUnosButtonState()
 
@@ -700,7 +706,8 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
                     lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "0.00") & "%"
                 End If
             ElseIf IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0")
+                ' kg/vrednost: prikazi decimale kad postoje (ne zaokruzuj na ceo broj)
+                lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.##")
             Else
                 lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = _
                     CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
@@ -909,12 +916,26 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
                 lstKartica.List(lstKartica.ListCount - 1, j - 2) = Format$(CDbl(data(i, j)), "#,##0.00")
             End If
         Next j
+
+        ' Skrivena kolona 6: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
+        lstKartica.List(lstKartica.ListCount - 1, 6) = _
+            CStr(IIf(IsEmpty(data(i, 8)), "", data(i, 8)))
     Next i
+
+    ' Novi izvestaj kartice -> ocisti panel detalja (prethodni kooperant)
+    KarticaDetalji_Clear
+End Sub
+
+' Klik na red kartice -> read-only panel "Detalji otkupa" desno (sve stavke
+' otkupnog lista koje se unose u frmOtkup). Samo pregled (ne za izmenu).
+Private Sub lstKartica_Click()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstKartica
 End Sub
 
 Private Sub btnStampajKarticu_Click()
     On Error GoTo EH
-    
+
     If cmbEntitet.ListIndex < 0 Then
         MsgBox "Izaberite kooperanta!", vbExclamation, APP_NAME
         Exit Sub
@@ -1158,11 +1179,17 @@ Private Sub btnStampaj_Click()
         Exit Sub
     End If
     
+    ' Stampaj samo kolone koje imaju zaglavlje (kartica ima skrivenu kolonu
+    ' sa ref-kljucem koja se NE stampa); ostali tabovi: headers == ColumnCount.
+    Dim colsToPrint As Long
+    colsToPrint = UBound(headers) - LBound(headers) + 1
+    If colsToPrint > lst.ColumnCount Then colsToPrint = lst.ColumnCount
+
     Dim data() As Variant
-    ReDim data(1 To lst.ListCount, 1 To lst.ColumnCount)
+    ReDim data(1 To lst.ListCount, 1 To colsToPrint)
     Dim i As Long, j As Long
     For i = 0 To lst.ListCount - 1
-        For j = 0 To lst.ColumnCount - 1
+        For j = 0 To colsToPrint - 1
             data(i + 1, j + 1) = lst.List(i, j)
         Next j
     Next i

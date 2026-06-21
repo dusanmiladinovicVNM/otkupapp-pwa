@@ -283,7 +283,8 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     On Error GoTo EH
     ' Returns: 2D Array
     ' (1)=Datum, (2)=BrojDok, (3)=BrojParcele, (4)=Opis,
-    ' (5)=Zaduzenje, (6)=Razduzenje, (7)=Saldo
+    ' (5)=Zaduzenje, (6)=Razduzenje, (7)=Saldo,
+    ' (8)=RefKljuc reda ("OTK|<OtkupID>" / "NOV" / "MAG") za Detalje otkupa
     
     Dim moves As New Collection
     
@@ -299,7 +300,9 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
             Dim colOtkKol As Long, colOtkCena As Long
             Dim colOtkVrsta As Long, colOtkKlasa As Long
             Dim colOtkBrDok As Long, colParcela As Long
-            
+            Dim colOtkID As Long
+
+            colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "modIzvestaj.ReportKarticaKooperanta")
             colOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "modIzvestaj.ReportKarticaKooperanta")
             colOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, "modIzvestaj.ReportKarticaKooperanta")
             colOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, "modIzvestaj.ReportKarticaKooperanta")
@@ -333,15 +336,16 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                             Dim opis As String
                             opis = "Otkup " & CStr(otkData(i, colOtkVrsta)) & " " & _
                                    CStr(otkData(i, colOtkKlasa)) & " " & _
-                                   Format$(otkKol, "#,##0") & "kg"
-                            
+                                   FmtKolicina(otkKol) & "kg"
+
                             moves.Add Array( _
                                 otkDatum, _
                                 CStr(otkData(i, colOtkBrDok)), _
                                 CStr(otkData(i, colParcela)), _
                                 opis, _
                                 vr, _
-                                0#)
+                                0#, _
+                                "OTK|" & CStr(otkData(i, colOtkID)))
                         End If
                     End If
                 End If
@@ -396,7 +400,8 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                     "", _
                                     novOpis, _
                                     0#, _
-                                    iznos)
+                                    iznos, _
+                                    "NOV")
                             End If
                         End If
                     End If
@@ -447,7 +452,8 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                         "", _
                                         "Agrohemija " & artNaziv, _
                                         0#, _
-                                        magVr)
+                                        magVr, _
+                                        "MAG")
                                 End If
                             End If
                         End If
@@ -463,10 +469,10 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     End If
     
     ' Prebaci u niz za sortiranje:
-    ' 1 Datum, 2 BrojDok, 3 BrojParcele, 4 Opis, 5 Zaduzenje, 6 Razduzenje
+    ' 1 Datum, 2 BrojDok, 3 BrojParcele, 4 Opis, 5 Zaduzenje, 6 Razduzenje, 7 RefKljuc
     Dim arr() As Variant
-    ReDim arr(1 To moves.count, 1 To 6)
-    
+    ReDim arr(1 To moves.count, 1 To 7)
+
     For i = 1 To moves.count
         Dim mv As Variant
         mv = moves(i)
@@ -476,19 +482,21 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
         arr(i, 4) = mv(3)
         arr(i, 5) = mv(4)
         arr(i, 6) = mv(5)
+        arr(i, 7) = mv(6)
     Next i
     
     ' Sort po datumu
     ' Sort po datumu, sekundarno po broju dokumenta
     arr = SortArray(arr, 1, True, 2)
     
-    ' Rezultat: + saldo
+    ' Rezultat: + saldo (kol. 8 = ref-kljuc reda za "Detalji otkupa"; PrintKarticaPDF
+    ' i GenerateKarticaReport citaju samo kol. 1-7, kol. 8 je dodatna)
     Dim result() As Variant
-    ReDim result(1 To UBound(arr, 1) + 1, 1 To 7)
-    
+    ReDim result(1 To UBound(arr, 1) + 1, 1 To 8)
+
     Dim runSaldo As Double
     Dim totZad As Double, totRaz As Double
-    
+
     For i = 1 To UBound(arr, 1)
         result(i, 1) = arr(i, 1) ' Datum
         result(i, 2) = arr(i, 2) ' BrojDok
@@ -496,20 +504,23 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
         result(i, 4) = arr(i, 4) ' Opis
         result(i, 5) = arr(i, 5) ' Zaduzenje
         result(i, 6) = arr(i, 6) ' Razduzenje
-        
+
         runSaldo = runSaldo + arr(i, 5) - arr(i, 6)
         result(i, 7) = runSaldo
-        
+
+        result(i, 8) = arr(i, 7) ' RefKljuc (OTK|<id> / NOV / MAG)
+
         totZad = totZad + arr(i, 5)
         totRaz = totRaz + arr(i, 6)
     Next i
-    
+
     Dim ukRow As Long
     ukRow = UBound(arr, 1) + 1
     result(ukRow, 4) = "UKUPNO"
     result(ukRow, 5) = totZad
     result(ukRow, 6) = totRaz
     result(ukRow, 7) = totZad - totRaz
+    result(ukRow, 8) = ""
     
     ReportKarticaKooperanta = result
     Exit Function

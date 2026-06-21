@@ -1,6 +1,13 @@
 Attribute VB_Name = "modHelpers"
 Option Explicit
 
+' Format kolicine (kg) za izvestaje: prikazuje decimale SAMO kad postoje
+' (npr. 1000 -> "1.000", 1234.5 -> "1.234,5"). Nikad ne zaokruzuje uneti
+' broj sa decimalom na ceo broj. Jedinstveni izvor istine za kg prikaz.
+Public Function FmtKolicina(ByVal x As Double) As String
+    FmtKolicina = Format$(x, "#,##0.##")
+End Function
+
 Public Function ExtractIDFromDisplay(ByVal displayText As String) As String
     ' Unterst�tzt: "ID - Name" und "(ID) Name"
     Dim dashPos As Long
