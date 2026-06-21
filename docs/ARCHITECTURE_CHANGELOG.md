@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.32  
+**Current Version:** v6.33  
 **Last Updated:** 2026-06-21  
-**Status:** Active changelog — v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
+**Status:** Active changelog — v6.33 dnevna/periodična specifikacija (datum od–do) + kolona „Otkupno mesto" u panelu „Otkupni blokovi" (`modOtkupBlok`). v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
 
 ---
 
@@ -107,6 +107,33 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.33 — 2026-06-21
+
+### Summary
+
+Panel „Otkupni blokovi" (`frmOtkup` / `modOtkupBlok`): pored postojeće specifikacije za **ručno izabrane otpremnice**, dodata je **dnevna / periodična specifikacija** (filter po datumu *od–do*). U dnu liste otpremnica je novi *footer strip* sa poljima **Od** / **Do** (pretpopunjena na današnji datum → klik odmah daje dnevnu specifikaciju) i dugmetom **„Stampaj po datumu"**. Na samoj specifikaciji je dodata kolona **Otkupno mesto** (posle „Broj otpremnice"). Renderer je refaktorisan u jedno jezgro (`RenderSpec`) koje filtrira po skupu `OtpremnicaID` **ILI** po opsegu datuma — bez dupliranja PDF logike.
+
+### Added
+
+- `modOtkupBlok.PrintSpecifikacijaPoDatumu(datumOd, datumDo)` + handler `PrintSpecOdDo` (čita Od/Do preko `TryParseDateValue`, validira opseg): dnevna (od=do) ili periodična specifikacija svih ne-storniranih otkup blokova čija je kolona `Datum` (`COL_OTK_DATUM`) u opsegu.
+- `BuildPanel`: dinamičke kontrole `txtOtkBlokSpecOd` / `txtOtkBlokSpecDo` + dugme `btnOtkBlokSpecDatum` (akcija `"SPECDATUM"` u `OtkupBlok_OnButton`), wired preko `clsBlokUI`. `gridH` skraćen za 30 pt da napravi mesto za strip; `frmOtkup.frx` se ne dira.
+- Specifikacija: nova kolona **Otkupno mesto**, vrednost = naziv stanice po redu (`COL_OTK_STANICA` → `TBL_STANICE.Naziv`, reuse `BuildLookup`).
+
+### Changed
+
+- `modOtkupBlok.PrintSpecifikacija(otpIDs)` je sada tanak omotač oko novog `RenderSpec(selSet, byDate, datumOd, datumDo, subtitle)`; ponašanje ručne selekcije otpremnica je nepromenjeno. Tabela sada ima 11 kolona (A–K); izlaz je sortiran po (Otkupno mesto, Datum) radi grupisanja.
+
+### Verification / Acceptance Gates
+
+- VBA verifikovan statički (Sub/Function/With/Select balans, nema duplih definicija, indeksi kolona 1–11 dosledni). Finalni smoke (korisnik, Excel): u panelu „Otkupni blokovi" → „Stampaj po datumu" za danas i za period; potvrdi kolonu „Otkupno mesto" i da postojeća specifikacija po izboru otpremnica i dalje radi.
+
+### Migration / Data Notes
+
+- Nema migracije (koristi postojeće `tblOtkup.Datum` / `StanicaID`). Re-import `modOtkupBlok` (`clsBlokUI` nepromenjen).
+
+Reference updated: No (UI/izveštaj u panelu; uneti u `ARCHITECTURE_REFERENCE.md` uz sledeći snapshot).
 
 
 ## v6.32 — 2026-06-21
