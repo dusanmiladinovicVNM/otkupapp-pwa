@@ -1,3 +1,4 @@
+Attribute VB_Name = "modAmbalaza"
 'Attribute VB_Name = "modAmbalaza"
 Option Explicit
 

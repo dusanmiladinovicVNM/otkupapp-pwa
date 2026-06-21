@@ -1,3 +1,4 @@
+Attribute VB_Name = "modSEFService"
 Option Explicit
 'Call UpdateFakturaSEFState_Row("FAK-00006", WF_SEF_READY, WF_SEF_READY)
 

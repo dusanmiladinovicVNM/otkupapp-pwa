@@ -1,3 +1,4 @@
+Attribute VB_Name = "modE2EReleaseGate"
 
 Option Explicit
 

@@ -1,3 +1,4 @@
+Attribute VB_Name = "modSEFMapper"
 Option Explicit
 
 Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSnapshot

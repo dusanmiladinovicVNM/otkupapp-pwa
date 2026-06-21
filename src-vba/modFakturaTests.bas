@@ -1,3 +1,4 @@
+Attribute VB_Name = "modFakturaTests"
 Option Explicit
 
 ' ============================================================
