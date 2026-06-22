@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.35  
+**Current Version:** v6.36  
 **Last Updated:** 2026-06-22  
-**Status:** Active changelog — v6.35 panel „Otkupni blokovi" (`modOtkupBlok`): količina (kg) se u panelu i obe liste (otpremnice + blokovi) prikazuje sa **fiksne 2 decimale** (`FmtKgDec` → `#,##0.00`, ista konvencija kao `frmOtkup.UpdateUkupnoKg`). v6.34 otkupni list: „Saldo ambalaze" je sada kumulativni entitetski saldo kooperanta (Početno stanje pre bloka + Izdato − Primljeno; novi `modAmbalaza.GetKooperantAmbOpening`). v6.33 dnevna/periodična specifikacija (datum od–do) + kolona „Otkupno mesto" u panelu „Otkupni blokovi" (`modOtkupBlok`). v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
+**Status:** Active changelog — v6.36 prijemnica auto-štampa (`CFG_PRIJEMNICA_PRINT_MODE`) gejtovana na **default hladnjaču** (`frmDokumenta.btnUnosPrij`: štampa samo kad je `kupac == MALINA_DEFAULT_KUPAC`); eksterni kupci se ne štampaju automatski. v6.35 panel „Otkupni blokovi" (`modOtkupBlok`): količina (kg) se u panelu i obe liste (otpremnice + blokovi) prikazuje sa **fiksne 2 decimale** (`FmtKgDec` → `#,##0.00`, ista konvencija kao `frmOtkup.UpdateUkupnoKg`). v6.34 otkupni list: „Saldo ambalaze" je sada kumulativni entitetski saldo kooperanta (Početno stanje pre bloka + Izdato − Primljeno; novi `modAmbalaza.GetKooperantAmbOpening`). v6.33 dnevna/periodična specifikacija (datum od–do) + kolona „Otkupno mesto" u panelu „Otkupni blokovi" (`modOtkupBlok`). v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
 
 ---
 
@@ -53,6 +53,7 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
+| v6.36 | 2026-06-22 | Prijemnica auto-štampa gejtovana na **default hladnjaču**: `frmDokumenta.btnUnosPrij` poziva `OutputPrijemnica` (po `CFG_PRIJEMNICA_PRINT_MODE`) **samo** kad je `kupac == MALINA_DEFAULT_KUPAC`; eksterni kupci se ne štampaju automatski (ručna re-štampa preko `PrintPrijemnica` i dalje radi za sve). | Yes — AR §5.12/§6.4 | presentation-only; re-import `frmDokumenta`; bez migracije |
 | v6.35 | 2026-06-22 | Panel „Otkupni blokovi" (`modOtkupBlok`): količina (kg) sada **uvek 2 decimale** u panelu (sažetak Ukupno/U blokovima/Ostatak) i u obe liste — otpremnice (Količina/Ostatak) i blokovi (Količina + zbirni red). Jedna izmena u `FmtKgDec` (`#,##0.###` → `#,##0.00`); ista konvencija kao živi prikaz `frmOtkup.UpdateUkupnoKg`. Cene (`FmtRsd`) i ambalaža/cele gajbe (`FmtKg`) nepromenjeni. | No (uz sledeći snapshot) | presentation-only; bez migracije; re-import `modOtkupBlok` |
 | v6.34 | 2026-06-21 | Otkupni list (`modPrint`): red **„Saldo ambalaze" → kumulativni entitetski saldo kooperanta** = početno stanje pre bloka (`modAmbalaza.GetKooperantAmbOpening`, čita ledger po redosledu upisa → ispravno i na re-print) + izdato − primljeno; dodat red **„Pocetno stanje"**; kutija ostaje **3 reda** (primerak ostaje 1/3 A4). Rešava v6.32 known-limit (saldo je bio per-dokument). | Yes — AR §5.12 | presentation/read-only; bez migracije; re-import `modPrint` + `modAmbalaza`; smoke: re-print starijeg bloka — saldo = početno + izdato − primljeno |
 | v6.33 | 2026-06-21 | Panel „Otkupni blokovi" (`modOtkupBlok`): dnevna/periodična specifikacija (filter datum od–do, dugme „Stampaj po datumu") + kolona „Otkupno mesto"; akcioni red iznad listboxova; renderer refaktorisan u `RenderSpec`. Fix: Type mismatch po datumu; kg bez praznih decimala (`FmtKgDec`). | No (uz sledeći snapshot) | bez migracije; re-import `modOtkupBlok` |
@@ -110,6 +111,28 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 ## 2. Maintained Version Entries
 
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
+
+
+## v6.36 — 2026-06-22
+
+### Summary
+
+Prijemnica je već imala auto-štampu na „Unos" (`OutputPrijemnica` po `CFG_PRIJEMNICA_PRINT_MODE`: PDF/PRINT/PREVIEW/OFF), ali je štampala za **sve** kupce. Sada je gejtovana na **default hladnjaču** (firmin sopstveni magacin), jer se auto-prijemnica/štampa odnosi samo na prijem u tu hladnjaču.
+
+### Changed
+
+- `frmDokumenta.btnUnosPrij_Click`: poziv `OutputPrijemnica result` obmotan proverom `Len(MALINA_DEFAULT_KUPAC) > 0 And kupac == MALINA_DEFAULT_KUPAC`. Za eksterne kupce nema auto-štampe (bez obzira na `CFG_PRIJEMNICA_PRINT_MODE`). Ručna `PrintPrijemnica(prijemnicaID)` ostaje dostupna za sve.
+
+### Verification / Acceptance Gates
+
+- Statički: `frmDokumenta` Sub/Function balansiran; `defHlad` deklarisan jednom; `CFG_MALINA_DEFAULT_KUPAC` postoji.
+- Smoke (Excel): prijemnica za default hladnjaču + `PRIJEMNICA_PRINT_MODE=PDF` → otvara PDF; prijemnica za drugog kupca → bez izlaza.
+
+### Migration / Data Notes
+
+- Re-import `frmDokumenta.frm`. Bez migracije/šeme.
+
+Reference updated: Yes — AR §5.12 (template `PrijemnicaSablon` + gejt) i §6.4.
 
 
 ## v6.34 — 2026-06-21

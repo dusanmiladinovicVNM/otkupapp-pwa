@@ -1892,9 +1892,14 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
-    ' Auto-stampa prijemnice po CFG_PRIJEMNICA_PRINT_MODE (default OFF = bez izlaza).
-    ' Best-effort: greska u izlazu se loguje, ne prekida tok (prijemnica je snimljena).
-    OutputPrijemnica result
+    ' Auto-stampa prijemnice po CFG_PRIJEMNICA_PRINT_MODE (default OFF = bez izlaza),
+    ' ali SAMO za default hladnjacu (kupac == MALINA_DEFAULT_KUPAC) -> eksterni kupci
+    ' se ne stampaju automatski. Best-effort: greska u izlazu ne prekida tok.
+    Dim defHlad As String
+    defHlad = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    If Len(defHlad) > 0 And StrComp(kupacID, defHlad, vbTextCompare) = 0 Then
+        OutputPrijemnica result
+    End If
 
     ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
     ' iskomitovanih tabela; prikaz uz potvrdu snimanja.
