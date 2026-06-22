@@ -1,5 +1,4 @@
 Attribute VB_Name = "modOtkupBlok"
-'Attribute VB_Name = "modOtkupBlok"
 Option Explicit
 
 ' ============================================================
@@ -9,8 +8,8 @@ Option Explicit
 '   - Klik na otpremnicu (sredina) popuni levu formu: otkupno mesto,
 '     vrsta, sorta, vozac, datum, broj zbirne i cenu; broj otkupnog
 '     lista racuna kanonski SuggestNextBroj (OM iz polja + datum otpr.).
-'   - Gore: "Cena po otpremnici" (override, vazi za sve blokove) + sazetak
-'     Preostalo za unos.
+'   - Gore: "Cena po otpremnici" (DEFAULT za nove blokove; rucni override u
+'     txtCena se postuje i ne pregazuje) + sazetak Preostalo za unos.
 '   - Korisnik unese kooperanta + kolicinu i klikne postojeci "Unos".
 '   - frmOtkup.btnUnos_Click pre snimanja zove OtkupBlok_ConfirmUnos
 '     (upozorenje na prekoracenje), a posle uspeha OtkupBlok_AfterUnos
@@ -96,7 +95,7 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     Set mBtnToggle = mForm.Controls.Add("Forms.CommandButton.1", "btnOtkBlokToggle", True)
     mBtnToggle.width = TOGGLE_W
     mBtnToggle.Height = 24
-    mBtnToggle.top = 6
+    mBtnToggle.Top = 6
     mBtnToggle.Left = mForm.InsideWidth - TOGGLE_W - 6
     mBtnToggle.caption = "Otkupni blokovi  »"
     On Error Resume Next
@@ -219,9 +218,11 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     LinkOtkupIDsToOtpremnica otkupIDs, mActiveOtpID
 
-    ' cena po otpremnici vazi za SVE blokove; txtCena je obrisao ClearOtkupFields
+    ' "Cena po otpremnici" je DEFAULT za SLEDECI blok: ClearOtkupFields je obrisao
+    ' txtCena, pa ga vracamo na default radi brzog unosa. Cenu UPRAVO unetog bloka
+    ' (txtCena u trenutku snimanja — moze biti rucni override) NE diramo: vec je
+    ' sacuvana sa blokom i default ne sme da je pregazi.
     If mCenaBlok.Exists(mActiveOtpID) Then
-        ApplyCenaToOtpremnica mActiveOtpID, CDbl(mCenaBlok(mActiveOtpID))
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
 
@@ -620,7 +621,9 @@ EH:
     LogErr "modOtkupBlok.OnCenaTyping"
 End Sub
 
-' Promena cene gore (AfterUpdate) -> propagacija na sve blokove + osvezavanje.
+' Promena cene gore (AfterUpdate) -> azurira DEFAULT cenu otpremnice (za sledeci
+' blok) + osvezava prikaz. Vec uneti blokovi se NE preracunavaju: "Cena po
+' otpremnici" je default, a rucni override po bloku (txtCena) se postuje.
 Private Sub OnCenaChanged()
     On Error GoTo EH
     If Len(mActiveOtpID) = 0 Then Exit Sub
@@ -630,8 +633,6 @@ Private Sub OnCenaChanged()
     mCenaBlok(mActiveOtpID) = cena
     mTxtCenaOtp.value = Format$(cena, "0.00")
     SetLeftCtl "txtCena", Format$(cena, "0.00")
-    ApplyCenaToOtpremnica mActiveOtpID, cena
-    LoadBlokovi
     LoadOtpremnice
     RefreshSummary
     Exit Sub
@@ -847,7 +848,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' --- 1) skupi indekse redova koji prolaze filter + sort-kljuc (OM | datum) ---
     Dim n As Long: n = UBound(data, 1)
     Dim idx() As Long: ReDim idx(1 To n)
-    Dim keys() As String: ReDim keys(1 To n)
+    Dim keyS() As String: ReDim keyS(1 To n)
     Dim m As Long: m = 0
     Dim i As Long
     For i = 1 To n
@@ -866,7 +867,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
             idx(m) = i
             Dim dkey As String: dkey = "00000000"
             If IsDate(data(i, cDat)) Then dkey = Format$(CDate(data(i, cDat)), "yyyymmdd")
-            keys(m) = DictVal(dSt, CStr(data(i, cSt))) & "|" & dkey
+            keyS(m) = DictVal(dSt, CStr(data(i, cSt))) & "|" & dkey
         End If
     Next i
 
@@ -882,12 +883,12 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' --- 2) insertion sort po (Otkupno mesto, Datum) ASC (kao u LoadOtpremnice) ---
     Dim a As Long, b As Long, ti As Long, tk As String
     For a = 2 To m
-        ti = idx(a): tk = keys(a): b = a - 1
+        ti = idx(a): tk = keyS(a): b = a - 1
         Do While b >= 1
-            If keys(b) <= tk Then Exit Do
-            idx(b + 1) = idx(b): keys(b + 1) = keys(b): b = b - 1
+            If keyS(b) <= tk Then Exit Do
+            idx(b + 1) = idx(b): keyS(b + 1) = keyS(b): b = b - 1
         Loop
-        idx(b + 1) = ti: keys(b + 1) = tk
+        idx(b + 1) = ti: keyS(b + 1) = tk
     Next a
 
     ' --- 3) ispis ---
@@ -996,7 +997,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
     ' Vremenski pecat u imenu -> nema "file in use" ako je prethodni PDF otvoren.
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    pdfPath = ThisWorkbook.Path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
     Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
     ws.Visible = xlSheetVisible
@@ -1112,33 +1113,6 @@ Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As St
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr "modOtkupBlok.LinkOtkupIDsToOtpremnica"
-End Sub
-
-' Cena po otpremnici: postavi istu cenu na SVE tblOtkup redove otpremnice.
-Private Sub ApplyCenaToOtpremnica(ByVal otpID As String, ByVal cena As Double)
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    If Len(otpID) = 0 Then Exit Sub
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, otpID)
-    If rows.count = 0 Then Exit Sub
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-
-    Dim k As Long
-    For k = 1 To rows.count
-        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_CENA, cena, "modOtkupBlok.ApplyCenaToOtpremnica"
-    Next k
-
-    tx.CommitTx
-    Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    LogErr "modOtkupBlok.ApplyCenaToOtpremnica"
 End Sub
 
 ' ============================================================
@@ -1351,18 +1325,18 @@ Private Function FmtKgBrutoNeto(ByVal brutoVal As Double, ByVal netoVal As Doubl
     End If
 End Function
 
-Private Function FmtKg(ByVal X As Double) As String
-    FmtKg = Format$(X, "#,##0")
+Private Function FmtKg(ByVal x As Double) As String
+    FmtKg = Format$(x, "#,##0")
 End Function
 
 ' Kolicina (kg): uvek 2 decimale (npr. 1234.00) — panel + liste otpremnica/blokova.
 ' Konvencija ista kao zivi prikaz u frmOtkup.UpdateUkupnoKg ("#,##0.00").
-Private Function FmtKgDec(ByVal X As Double) As String
-    FmtKgDec = Format$(X, "#,##0.00")
+Private Function FmtKgDec(ByVal x As Double) As String
+    FmtKgDec = Format$(x, "#,##0.00")
 End Function
 
-Private Function FmtRsd(ByVal X As Double) As String
-    FmtRsd = Format$(X, "#,##0.00")
+Private Function FmtRsd(ByVal x As Double) As String
+    FmtRsd = Format$(x, "#,##0.00")
 End Function
 
 Private Function FmtDate(ByVal v As Variant) As String
@@ -1376,7 +1350,7 @@ Private Function AddCtl(ByVal kind As String, ByVal nm As String, _
                         ByVal w As Double, ByVal h As Double) As Object
     Dim c As Object
     Set c = mForm.Controls.Add("Forms." & kind & ".1", nm, True)
-    c.Left = l: c.top = t: c.width = w: c.Height = h
+    c.Left = l: c.Top = t: c.width = w: c.Height = h
     mPanelCtls.Add c
     Set AddCtl = c
 End Function
@@ -1385,22 +1359,22 @@ Private Sub AddHeaders(ByVal prefix As String, ByVal baseLeft As Double, _
                        ByVal top As Double, ByVal widths As String, ByVal caps As String)
     Dim wArr() As String: wArr = Split(widths, ";")
     Dim cArr() As String: cArr = Split(caps, ";")
-    Dim X As Double: X = baseLeft
+    Dim x As Double: x = baseLeft
     Dim k As Long
     For k = 0 To UBound(wArr)
-        Dim wv As Double: wv = val(wArr(k))
+        Dim wv As Double: wv = Val(wArr(k))
         If wv > 0 Then
             Dim cap As String: cap = ""
             If k <= UBound(cArr) Then cap = cArr(k)
             Dim c As Object
-            Set c = AddCtl("Label", prefix & "_" & k, X, top, wv, 26)
+            Set c = AddCtl("Label", prefix & "_" & k, x, top, wv, 26)
             c.caption = cap
             On Error Resume Next
             StyleListHeaderLabel c
             c.WordWrap = True
             On Error GoTo 0
         End If
-        X = X + wv
+        x = x + wv
     Next k
 End Sub
 
@@ -1432,4 +1406,3 @@ Private Sub WireLst(ByVal l As Object, ByVal act As String)
     Set w.lst = l
     mWrappers.Add w
 End Sub
-

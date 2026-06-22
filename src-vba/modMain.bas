@@ -30,7 +30,7 @@ Public Sub StartApp()
     ' Blokira pokretanje ako licenca nije vazeca za OVAJ racunar.
     ' Opt-in: radi samo ako je LICENSE_ENABLED = YES u tblSEFConfig
     ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
-    If Not LicenseGateOrQuit() Then Exit Sub
+    If Not AccessGateOrQuit() Then Exit Sub
 
     Application.Visible = False
 
