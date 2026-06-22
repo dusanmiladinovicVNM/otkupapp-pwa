@@ -21,6 +21,10 @@ Private m_Ok As Long
 Private m_Warn As Long
 Private m_Fail As Long
 
+' QuietMode: kada je True (startup kontrola), MsgBox se prikazuje SAMO na FAIL.
+' Kada je False (pun RunProductionHealthCheck), uvek se prikazuje rezime.
+Private m_QuietMode As Boolean
+
 ' ============================================================
 ' PUBLIC ENTRY POINT
 ' ============================================================
@@ -37,6 +41,8 @@ Public Sub RunProductionHealthCheck()
     Check_FakturaPaymentConsistency
     Check_OtkupPaymentConsistency
     Check_OtkupOtpremnicaCrossZbirnaLinks
+    Check_KolicinaChainBalance
+    Check_AmbalazaLedgerSaldo
     Check_SEFOutboundConsistency
     Check_DocumentSoftDeleteReferences
     Check_GoogleSyncHealth
@@ -46,6 +52,36 @@ Public Sub RunProductionHealthCheck()
 
 EH:
     HealthFail "RunProductionHealthCheck fatal error", _
+               "Err.Number=" & CStr(Err.Number) & _
+               " Source=" & Err.SOURCE & _
+               " Description=" & Err.description
+    EndHealthRun
+End Sub
+
+' ============================================================
+' STARTUP KONTROLA
+'
+' Auto na startu sesije (poziva se iz modMain.StartApp), TIHO:
+'   MsgBox se prikazuje SAMO ako ima FAIL.
+' Brz, lokalni podskup (bez mreznih Google provera). Rezultat ide u
+' PRODUCTION_HEALTH_LOG; pun audit i dalje radi RunProductionHealthCheck.
+' Pozivalac (StartApp) ovo zove fail-soft (greska ne sme da blokira start).
+' ============================================================
+
+Public Sub RunStartupKontrola()
+    On Error GoTo EH
+
+    BeginHealthRun "STARTUP KONTROLA", True
+
+    Check_CoreTablesAndColumns
+    Check_KolicinaChainBalance
+    Check_AmbalazaLedgerSaldo
+
+    EndHealthRun
+    Exit Sub
+
+EH:
+    HealthFail "RunStartupKontrola fatal error", _
                "Err.Number=" & CStr(Err.Number) & _
                " Source=" & Err.SOURCE & _
                " Description=" & Err.description
@@ -530,6 +566,303 @@ EH:
 End Sub
 
 ' ============================================================
+' CHECK 7b: KOLICINA CHAIN BALANCE
+'
+' Kontrolni zbirovi po kolicinama kroz lanac dokumenata:
+'   otkup -> otpremnica -> zbirna -> prijemnica
+' Reuse postojecih agregatora (izvor istine za balans):
+'   modDokumenta.ValidateZbirna   -> otpremnica vs zbirna (kg + ambalaza)
+'   modDokumenta.CalculateManjak  -> zbirna vs prijemnica (manjak/kalo)
+' Otkup -> otpremnica zbir se racuna ovde (nema postojece bulk funkcije).
+'
+' FAIL: tvrde nejednakosti kg (otkup<>otpremnica, otpremnica<>zbirna).
+' WARN: ambalaza neslaganje; "visak" na prijemnici (primljeno > otpremljeno).
+' Manjak (kalo) je ocekivan -> NIJE greska.
+' ============================================================
+
+Private Sub Check_KolicinaChainBalance()
+    On Error GoTo EH
+
+    Dim badChain As Long
+    Dim warnChain As Long
+
+    ' --- PASS 1: otkup -> otpremnica (zbir otkup.Kolicina po OtpremnicaID) ---
+    Dim otkData As Variant
+    otkData = GetTableData(TBL_OTKUP)
+
+    Dim otkByOtp As Object
+    Set otkByOtp = CreateObject("Scripting.Dictionary")
+
+    Dim otkUnlinkedKg As Double
+
+    If Not IsEmpty(otkData) Then
+        Dim colOtkOtp As Long
+        Dim colOtkKol As Long
+        Dim colOtkStorno As Long
+
+        colOtkOtp = RequireColumnIndex(TBL_OTKUP, "OtpremnicaID", "Check_KolicinaChainBalance")
+        colOtkKol = RequireColumnIndex(TBL_OTKUP, "Kolicina", "Check_KolicinaChainBalance")
+        colOtkStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "Check_KolicinaChainBalance")
+
+        Dim r As Long
+        Dim otpKey As String
+        Dim otkKol As Double
+
+        For r = 1 To UBound(otkData, 1)
+            If IsStorniranoValue(otkData(r, colOtkStorno)) Then GoTo NextOtk
+
+            otpKey = Trim$(CStr(otkData(r, colOtkOtp)))
+            otkKol = HealthNumeric(otkData(r, colOtkKol))
+
+            If Len(otpKey) = 0 Then
+                otkUnlinkedKg = otkUnlinkedKg + otkKol
+            ElseIf otkByOtp.Exists(otpKey) Then
+                otkByOtp(otpKey) = CDbl(otkByOtp(otpKey)) + otkKol
+            Else
+                otkByOtp(otpKey) = otkKol
+            End If
+NextOtk:
+        Next r
+    End If
+
+    Dim otpData As Variant
+    otpData = GetTableData(TBL_OTPREMNICA)
+
+    If Not IsEmpty(otpData) Then
+        Dim colOtpID As Long
+        Dim colOtpKol As Long
+        Dim colOtpStorno As Long
+
+        colOtpID = RequireColumnIndex(TBL_OTPREMNICA, "OtpremnicaID", "Check_KolicinaChainBalance")
+        colOtpKol = RequireColumnIndex(TBL_OTPREMNICA, "Kolicina", "Check_KolicinaChainBalance")
+        colOtpStorno = RequireColumnIndex(TBL_OTPREMNICA, "Stornirano", "Check_KolicinaChainBalance")
+
+        Dim k As Long
+        Dim otpID As String
+        Dim otpKol As Double
+        Dim sumOtk As Double
+
+        For k = 1 To UBound(otpData, 1)
+            If IsStorniranoValue(otpData(k, colOtpStorno)) Then GoTo NextOtp
+
+            otpID = Trim$(CStr(otpData(k, colOtpID)))
+            otpKol = HealthNumeric(otpData(k, colOtpKol))
+
+            If otkByOtp.Exists(otpID) Then
+                sumOtk = CDbl(otkByOtp(otpID))
+            Else
+                sumOtk = 0#
+            End If
+
+            If Abs(sumOtk - otpKol) >= 0.01 Then
+                badChain = badChain + 1
+                HealthFail "Otkup/Otpremnica kolicina mismatch", _
+                           "OtpremnicaID=" & otpID & _
+                           " SumaOtkupKg=" & CStr(sumOtk) & _
+                           " OtpremnicaKg=" & CStr(otpKol)
+            End If
+NextOtp:
+        Next k
+    End If
+
+    If otkUnlinkedKg > 0.01 Then
+        warnChain = warnChain + 1
+        HealthWarn "Otkup bez OtpremnicaID (jos nije otpremljeno)", _
+                   "SumaKg=" & CStr(otkUnlinkedKg)
+    End If
+
+    ' --- PASS 2: otpremnica -> zbirna -> prijemnica po BrojZbirne ---
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+
+    If Not IsEmpty(zbrData) Then
+        Dim colZbrBroj As Long
+        Dim colZbrStorno As Long
+
+        colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, "BrojZbirne", "Check_KolicinaChainBalance")
+        colZbrStorno = RequireColumnIndex(TBL_ZBIRNA, "Stornirano", "Check_KolicinaChainBalance")
+
+        Dim seen As Object
+        Set seen = CreateObject("Scripting.Dictionary")
+
+        Dim z As Long
+        Dim bz As String
+        Dim vz As Variant
+        Dim mj As Variant
+
+        For z = 1 To UBound(zbrData, 1)
+            If IsStorniranoValue(zbrData(z, colZbrStorno)) Then GoTo NextZbr
+
+            bz = Trim$(CStr(zbrData(z, colZbrBroj)))
+            If Len(bz) = 0 Then GoTo NextZbr
+            If seen.Exists(bz) Then GoTo NextZbr
+            seen(bz) = True
+
+            ' Otpremnica vs Zbirna (reuse ValidateZbirna)
+            ' vz: 0=SumaOtpKg 1=ZbirnaKg 2=RazlikaKg 3=ValidKg 4=SumaOtpAmb 5=ZbirnaAmb 6=RazlikaAmb
+            vz = ValidateZbirna(bz)
+
+            If Not CBool(vz(3)) Then
+                badChain = badChain + 1
+                HealthFail "Otpremnica/Zbirna kolicina mismatch", _
+                           "BrojZbirne=" & bz & _
+                           " SumaOtpKg=" & CStr(vz(0)) & _
+                           " ZbirnaKg=" & CStr(vz(1)) & _
+                           " Razlika=" & CStr(vz(2))
+            End If
+
+            If CDbl(vz(6)) <> 0 Then
+                warnChain = warnChain + 1
+                HealthWarn "Otpremnica/Zbirna ambalaza mismatch", _
+                           "BrojZbirne=" & bz & _
+                           " SumaOtpAmb=" & CStr(vz(4)) & _
+                           " ZbirnaAmb=" & CStr(vz(5)) & _
+                           " Razlika=" & CStr(vz(6))
+            End If
+
+            ' Zbirna vs Prijemnica (reuse CalculateManjak)
+            ' mj: 0=zbirnaKg 1=prijKg 2=manjakKg 3=manjakPct
+            ' Manjak (kalo) je ocekivan; alarmiramo samo "visak" (manjak < 0).
+            mj = CalculateManjak(bz)
+
+            If CDbl(mj(1)) > 0.01 And CDbl(mj(2)) < -0.01 Then
+                warnChain = warnChain + 1
+                HealthWarn "Prijemnica visak (primljeno > otpremljeno)", _
+                           "BrojZbirne=" & bz & _
+                           " ZbirnaKg=" & CStr(mj(0)) & _
+                           " PrijemnicaKg=" & CStr(mj(1)) & _
+                           " Razlika=" & CStr(mj(2))
+            End If
+NextZbr:
+        Next z
+    End If
+
+    If badChain = 0 And warnChain = 0 Then
+        HealthOk "Kolicina chain balance (otkup/otpremnica/zbirna/prijemnica) is valid", ""
+    End If
+
+    Exit Sub
+
+EH:
+    HealthFail "Kolicina chain balance check failed", FormatHealthErr()
+End Sub
+
+' ============================================================
+' CHECK 7c: AMBALAZA LEDGER NETO SALDO
+'
+' tblAmbalaza je entitet-relativni ledger (Smer: Ulaz=+ , Izlaz=-).
+' Globalni saldo NIJE nula (gajbice su fizicka imovina + in-transit izmedju
+' otpremnice i prijemnice), pa se neto saldo po EntitetTip-u prijavljuje kao
+' kontrolni zbir (INFO), a FAIL ide samo na nevalidne redove.
+' ============================================================
+
+Private Sub Check_AmbalazaLedgerSaldo()
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+
+    If IsEmpty(data) Then
+        HealthWarn "Ambalaza ledger", "tblAmbalaza is empty."
+        Exit Sub
+    End If
+
+    Dim colSmer As Long
+    Dim colKol As Long
+    Dim colEntTip As Long
+    Dim colStorno As Long
+
+    colSmer = GetColumnIndex(TBL_AMBALAZA, "Smer")
+    colKol = GetColumnIndex(TBL_AMBALAZA, "Kolicina")
+    colEntTip = GetColumnIndex(TBL_AMBALAZA, "EntitetTip")
+    colStorno = GetColumnIndex(TBL_AMBALAZA, "Stornirano")
+
+    If colSmer = 0 Or colKol = 0 Or colEntTip = 0 Then
+        HealthWarn "Ambalaza ledger skipped", _
+                   "Nedostaju kolone Smer/Kolicina/EntitetTip."
+        Exit Sub
+    End If
+
+    Dim saldoByTip As Object
+    Set saldoByTip = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    Dim badCount As Long
+    Dim smer As String
+    Dim entTip As String
+    Dim kol As Double
+    Dim signed As Double
+
+    For i = 1 To UBound(data, 1)
+        If colStorno > 0 Then
+            If IsStorniranoValue(data(i, colStorno)) Then GoTo NextRow
+        End If
+
+        smer = Trim$(CStr(data(i, colSmer)))
+        entTip = Trim$(CStr(data(i, colEntTip)))
+
+        If Not IsNumeric(data(i, colKol)) Then
+            badCount = badCount + 1
+            If badCount <= 20 Then
+                HealthFail "Ambalaza red: Kolicina nije broj", _
+                           "Red=" & CStr(i) & " EntitetTip=" & entTip
+            End If
+            GoTo NextRow
+        End If
+
+        kol = CDbl(data(i, colKol))
+
+        If smer <> "Ulaz" And smer <> "Izlaz" Then
+            badCount = badCount + 1
+            If badCount <= 20 Then
+                HealthFail "Ambalaza red: nepoznat Smer", _
+                           "Red=" & CStr(i) & " Smer='" & smer & "'"
+            End If
+            GoTo NextRow
+        End If
+
+        If Len(entTip) = 0 Then
+            badCount = badCount + 1
+            If badCount <= 20 Then
+                HealthFail "Ambalaza red: prazan EntitetTip", "Red=" & CStr(i)
+            End If
+            GoTo NextRow
+        End If
+
+        If smer = "Ulaz" Then signed = kol Else signed = -kol
+
+        If saldoByTip.Exists(entTip) Then
+            saldoByTip(entTip) = CDbl(saldoByTip(entTip)) + signed
+        Else
+            saldoByTip(entTip) = signed
+        End If
+NextRow:
+    Next i
+
+    ' Neto saldo po EntitetTip-u = kontrolni zbir (INFO, ne FAIL).
+    Dim tipKeys As Variant
+    tipKeys = saldoByTip.keys
+
+    Dim t As Long
+    For t = LBound(tipKeys) To UBound(tipKeys)
+        HealthOk "Ambalaza neto saldo", _
+                 "EntitetTip=" & CStr(tipKeys(t)) & _
+                 " Saldo(Ulaz-Izlaz)=" & CStr(saldoByTip(tipKeys(t)))
+    Next t
+
+    If badCount = 0 Then
+        HealthOk "Ambalaza ledger rows are valid", ""
+    Else
+        HealthWarn "Ambalaza ledger invalid rows total", "Count=" & CStr(badCount)
+    End If
+
+    Exit Sub
+
+EH:
+    HealthFail "Ambalaza ledger check failed", FormatHealthErr()
+End Sub
+
+' ============================================================
 ' CHECK 8: SEF OUTBOUND CONSISTENCY
 ' ============================================================
 
@@ -883,7 +1216,9 @@ End Function
 ' HEALTH RUN LOGGING
 ' ============================================================
 
-Private Sub BeginHealthRun(ByVal suiteName As String)
+Private Sub BeginHealthRun(ByVal suiteName As String, _
+                           Optional ByVal quiet As Boolean = False)
+    m_QuietMode = quiet
     m_RunID = Format$(Now, "yyyymmddhhnnss") & "-" & CStr(Int((9000 * Rnd) + 1000))
 
     m_Total = 0
@@ -923,12 +1258,15 @@ Private Sub EndHealthRun()
     If m_Fail > 0 Then
         MsgBox "Production health check finished with FAILURES." & vbCrLf & summary, _
                vbCritical, APP_NAME
-    ElseIf m_Warn > 0 Then
-        MsgBox "Production health check finished with warnings." & vbCrLf & summary, _
-               vbExclamation, APP_NAME
-    Else
-        MsgBox "Production health check passed." & vbCrLf & summary, _
-               vbInformation, APP_NAME
+    ElseIf Not m_QuietMode Then
+        ' QuietMode (startup kontrola): bez MsgBox-a kada nema FAIL.
+        If m_Warn > 0 Then
+            MsgBox "Production health check finished with warnings." & vbCrLf & summary, _
+                   vbExclamation, APP_NAME
+        Else
+            MsgBox "Production health check passed." & vbCrLf & summary, _
+                   vbInformation, APP_NAME
+        End If
     End If
 End Sub
 

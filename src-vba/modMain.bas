@@ -84,6 +84,18 @@ Public Sub StartApp()
         correlationId:="VBA-STARTUP"
     On Error GoTo 0
 
+    ' Startup kontrola: brze lokalne provere kolicina (otkup/otpremnica/
+    ' zbirna/prijemnica) + ambalaza neto saldo. Tiho; MsgBox samo na FAIL.
+    ' Rezultat ide u PRODUCTION_HEALTH_LOG. Fail-soft: kontrola NE sme
+    ' da blokira start aplikacije.
+    On Error Resume Next
+    RunStartupKontrola
+    If Err.Number <> 0 Then
+        LogErr "modMain.StartApp.RunStartupKontrola"
+        Err.Clear
+    End If
+    On Error GoTo 0
+
     ' NEW: Auto-sync scheduler.
     ' Ako SYNC_AUTO_INTERVAL_MIN nije postavljen ili je 0,
     ' StartScheduledSync samo loguje OFF i izlazi.
