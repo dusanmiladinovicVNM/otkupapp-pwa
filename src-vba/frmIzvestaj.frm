@@ -479,8 +479,8 @@ Private Sub SetupListBoxes()
     End With
     
     With lstKartica
-        .ColumnCount = 7
-        .ColumnWidths = "60;70;140;80;80;80;0"   ' kol. 6 (skrivena) = ref-kljuc reda za "Detalji otkupa"
+        .ColumnCount = 8
+        .ColumnWidths = "60;70;140;80;80;80;60;0"   ' kol. 6 = Saldo amb.; kol. 7 (skrivena) = ref-kljuc za "Detalji otkupa"
     End With
 End Sub
 
@@ -922,9 +922,14 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
             End If
         Next j
 
-        ' Skrivena kolona 6: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
-        lstKartica.List(lstKartica.ListCount - 1, 6) = _
-            CStr(IIf(IsEmpty(data(i, 8)), "", data(i, 8)))
+        ' Spalte 7: Saldo ambalaze (gajbe -> ceo broj, sa znakom)
+        If IsNumeric(data(i, 8)) And Not IsEmpty(data(i, 8)) Then
+            lstKartica.List(lstKartica.ListCount - 1, 6) = Format$(CDbl(data(i, 8)), "#,##0")
+        End If
+
+        ' Skrivena kolona 7: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
+        lstKartica.List(lstKartica.ListCount - 1, 7) = _
+            CStr(IIf(IsEmpty(data(i, 9)), "", data(i, 9)))
     Next i
 
     ' Novi izvestaj kartice -> ocisti panel detalja (prethodni kooperant)
@@ -1180,7 +1185,8 @@ Private Sub btnStampaj_Click()
                 "Opis", _
                 "Zaduzenje", _
                 "Razduzenje", _
-                "Saldo")
+                "Saldo", _
+                "Saldo amb.")
     End Select
     
     If lst Is Nothing Then Exit Sub
@@ -1320,8 +1326,29 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_KK4, "Zaduženje"
     SetColumnHeader lbl_H_KK5, "Razduženje"
     SetColumnHeader lbl_H_KK6, "Saldo"
-    
+    EnsureKarticaAmbHeader          ' lbl_H_KK7 ("Saldo amb.") - runtime (nije u .frx)
+
     On Error GoTo 0
+End Sub
+
+' Header "Saldo amb." (lbl_H_KK7) ne postoji u binarnom .frx, pa se kreira u
+' runtime-u (Controls.Add na Page-u kartice, kao modKarticaDetalji). Idempotentno
+' (lookup po imenu) i pozicionirano desno od lbl_H_KK6 (Saldo). Ako Add ne uspe,
+' kolona u listi i dalje radi - samo bez zaglavlja.
+Private Sub EnsureKarticaAmbHeader()
+    On Error Resume Next
+    Dim lbl As MSForms.label
+    Set lbl = Nothing
+    Set lbl = lbl_H_KK6.Parent.Controls("lbl_H_KK7")
+    If lbl Is Nothing Then
+        Set lbl = lbl_H_KK6.Parent.Controls.Add("Forms.Label.1", "lbl_H_KK7", True)
+        If lbl Is Nothing Then Exit Sub
+        lbl.Top = lbl_H_KK6.Top
+        lbl.Height = lbl_H_KK6.Height
+        lbl.Left = lbl_H_KK6.Left + lbl_H_KK6.width
+        lbl.width = lbl_H_KK6.width
+    End If
+    SetColumnHeader lbl, "Saldo amb."
 End Sub
 
 Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
