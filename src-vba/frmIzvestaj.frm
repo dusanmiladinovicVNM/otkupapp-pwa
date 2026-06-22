@@ -1638,7 +1638,10 @@ Private Sub EnsureOtkupListePage()
             .width = pw
             .Height = 26
         End With
-        StylePrimaryButton m_btnStampajOtk, "Štampaj otkupni list"
+        ' Caption preko ChrW(352) = S-caron (Sh); ASCII izvor -> nezavisno od
+        ' kodne strane fajla (izbegava mesanje UTF-8/CP1250 pri merge-u).
+        StylePrimaryButton m_btnStampajOtk
+        m_btnStampajOtk.caption = ChrW(352) & "tampaj otkupni list"
         On Error Resume Next
         m_btnStampajOtk.ZOrder 0
         On Error GoTo EH
