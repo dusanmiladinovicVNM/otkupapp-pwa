@@ -8,8 +8,8 @@ Option Explicit
 '   - Klik na otpremnicu (sredina) popuni levu formu: otkupno mesto,
 '     vrsta, sorta, vozac, datum, broj zbirne i cenu; broj otkupnog
 '     lista racuna kanonski SuggestNextBroj (OM iz polja + datum otpr.).
-'   - Gore: "Cena po otpremnici" (override, vazi za sve blokove) + sazetak
-'     Preostalo za unos.
+'   - Gore: "Cena po otpremnici" (DEFAULT za nove blokove; rucni override u
+'     txtCena se postuje i ne pregazuje) + sazetak Preostalo za unos.
 '   - Korisnik unese kooperanta + kolicinu i klikne postojeci "Unos".
 '   - frmOtkup.btnUnos_Click pre snimanja zove OtkupBlok_ConfirmUnos
 '     (upozorenje na prekoracenje), a posle uspeha OtkupBlok_AfterUnos
@@ -218,9 +218,11 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     LinkOtkupIDsToOtpremnica otkupIDs, mActiveOtpID
 
-    ' cena po otpremnici vazi za SVE blokove; txtCena je obrisao ClearOtkupFields
+    ' "Cena po otpremnici" je DEFAULT za SLEDECI blok: ClearOtkupFields je obrisao
+    ' txtCena, pa ga vracamo na default radi brzog unosa. Cenu UPRAVO unetog bloka
+    ' (txtCena u trenutku snimanja — moze biti rucni override) NE diramo: vec je
+    ' sacuvana sa blokom i default ne sme da je pregazi.
     If mCenaBlok.Exists(mActiveOtpID) Then
-        ApplyCenaToOtpremnica mActiveOtpID, CDbl(mCenaBlok(mActiveOtpID))
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
     End If
 
@@ -619,7 +621,9 @@ EH:
     LogErr "modOtkupBlok.OnCenaTyping"
 End Sub
 
-' Promena cene gore (AfterUpdate) -> propagacija na sve blokove + osvezavanje.
+' Promena cene gore (AfterUpdate) -> azurira DEFAULT cenu otpremnice (za sledeci
+' blok) + osvezava prikaz. Vec uneti blokovi se NE preracunavaju: "Cena po
+' otpremnici" je default, a rucni override po bloku (txtCena) se postuje.
 Private Sub OnCenaChanged()
     On Error GoTo EH
     If Len(mActiveOtpID) = 0 Then Exit Sub
@@ -629,8 +633,6 @@ Private Sub OnCenaChanged()
     mCenaBlok(mActiveOtpID) = cena
     mTxtCenaOtp.value = Format$(cena, "0.00")
     SetLeftCtl "txtCena", Format$(cena, "0.00")
-    ApplyCenaToOtpremnica mActiveOtpID, cena
-    LoadBlokovi
     LoadOtpremnice
     RefreshSummary
     Exit Sub
@@ -1111,33 +1113,6 @@ Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As St
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr "modOtkupBlok.LinkOtkupIDsToOtpremnica"
-End Sub
-
-' Cena po otpremnici: postavi istu cenu na SVE tblOtkup redove otpremnice.
-Private Sub ApplyCenaToOtpremnica(ByVal otpID As String, ByVal cena As Double)
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    If Len(otpID) = 0 Then Exit Sub
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, otpID)
-    If rows.count = 0 Then Exit Sub
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-
-    Dim k As Long
-    For k = 1 To rows.count
-        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_CENA, cena, "modOtkupBlok.ApplyCenaToOtpremnica"
-    Next k
-
-    tx.CommitTx
-    Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    LogErr "modOtkupBlok.ApplyCenaToOtpremnica"
 End Sub
 
 ' ============================================================
