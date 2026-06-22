@@ -371,11 +371,8 @@ Private Sub UpdateUkupnoKgOtp()
 End Sub
 
 Private Sub txtKolicinaPrij_Change()
-    If txtBrojZbirnePrij.value <> "" Then
-        UpdateManjak txtBrojZbirnePrij.value
-    End If
+    ' txtKolAmbPrij_Change radi pun osvezaj: manjak + ukupno + prosek (sve neto).
     txtKolAmbPrij_Change
-    UpdateUkupnoKgPrij        ' <-- DODATO
 End Sub
 
 Private Sub txtKolicinaKlIIPrij_Change()
@@ -388,7 +385,17 @@ End Sub
 Private Sub txtCenaPrij_Change():       UpdateUkupnoKgPrij: End Sub
 Private Sub txtCenaKlIIPrij_Change():   UpdateUkupnoKgPrij: End Sub
 
+' Tip ambalaze menja taru -> osvezi neto prikaze (manjak/ukupno/prosek).
+Private Sub cmbTipAmbPrij_Change()
+    txtKolAmbPrij_Change
+End Sub
+
 Private Sub txtKolAmbPrij_Change()
+    ' Gajbe/tara odredjuju NETO u bruto modu -> osvezi manjak i ukupno PRE prosek-a
+    ' (manjak prijemnice mora biti neto vs neto zbirna; prosek ostaje entry-based).
+    If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
+    UpdateUkupnoKgPrij
+
     If IsNumeric(txtKolicinaPrij.value) And IsNumeric(txtKolAmbPrij.value) Then
         If CLng(txtKolAmbPrij.value) > 0 Then
             ' Bruto mod: prosek po gajbi se racuna iz NETO (oduzeta tara).
