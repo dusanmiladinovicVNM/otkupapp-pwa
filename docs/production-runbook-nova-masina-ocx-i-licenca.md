@@ -20,6 +20,12 @@ Vidi i: `docs/production-runbook-licenca.md` (detaljan licencni runbook),
 > Runtime kontrole (`Controls.Add` u `clsBlokUI`/`modOtkupBlok`) su **native MSForms**
 > kontrole (Label/TextBox/ComboBox/CommandButton) — one **ne traže** OCX ni licencu.
 
+> ✅ **POTVRĐENO (2026-06-22):** compile test u live `.xlsm`-u — odčekirana
+> referenca „Microsoft Windows Common Controls" → `Debug → Compile VBAProject`
+> prolazi čisto i **app radi bez `MSCOMCTL.OCX` fajla**. Dakle reč je o **mrtvoj
+> referenci** (scenario 1 dole). Trajno rešenje: skloni referenču (Sekcija 5.2);
+> OCX se **ne nosi** na nove mašine.
+
 Ako ti svejedno `MSCOMCTL.OCX` pravi problem pri instalaciji, uzrok je skoro sigurno
 jedan od ova tri (proveri **pre** nego što kreneš da registruješ OCX):
 
@@ -199,7 +205,7 @@ sinhroni sa produkcionom verzijom. Tri provere:
    (MSCOMCTL) ili `DTPicker, MonthView` (MSCOMCT2). Ako ih nema ni na jednoj formi
    i compile test iz tačke 2 prolazi → potvrđeno mrtva referenca.
 
-### 5.2 Ako je **mrtva referenca** (najverovatnije, po nalazu iz repoa)
+### 5.2 Ako je **mrtva referenca** ✅ POTVRĐENO za OtkupApp (2026-06-22)
 
 `Alt+F11` → `Tools → References` → **odčekiraj** Common Controls → `Debug → Compile
 VBAProject` → snimi → **re-sign** publisher sertifikatom + **bump `APP_VERSION`** u
