@@ -63,16 +63,20 @@ Private Sub UserForm_Activate()
         Exit Sub
     End If
 
-    Dim warnText As String
-    warnText = CheckVerwaisteDokumente()
+    ' Dnevni kontrolni pregled (kontrolni zbirovi + problemi). Uvek vidljiv;
+    ' crveno samo kada ima problema (neuskladjene kolicine / orphani / nevalidno).
+    Dim imaProblema As Boolean
+    Dim cardText As String
+    cardText = GetKontrolaPregled(imaProblema)
 
-    If warnText <> "" Then
-        lblStatus.Visible = True
-        lblStatus.caption = warnText
+    lblStatus.Visible = True
+    lblStatus.caption = cardText
+    If imaProblema Then
         lblStatus.ForeColor = RGB(255, 80, 80)
         lblStatus.Font.Bold = True
     Else
-        lblStatus.Visible = False
+        lblStatus.ForeColor = RGB(220, 220, 220)
+        lblStatus.Font.Bold = False
     End If
     
     ' v6.11 UI refresh

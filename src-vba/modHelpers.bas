@@ -405,3 +405,207 @@ Public Function CheckVerwaisteDokumente() As String
     CheckVerwaisteDokumente = warnings
 End Function
 
+' ============================================================
+' GetKontrolaPregled - vidljivi dnevni kontrolni pregled (dashboard).
+'
+' Vraca formatiran tekst kontrolnih zbirova za lblStatus karticu na
+' frmOtkupAPP (poziva se iz UserForm_Activate). Postavlja imaProblema =
+' True ako postoji greska (neuskladjene kolicine, nevalidni otkup redovi,
+' ili orphani iz CheckVerwaisteDokumente) -> pozivalac boji karticu crveno.
+'
+' Jedan prolaz po tabeli (Activate se okida cesto -> mora biti brzo).
+' Reuse: CheckVerwaisteDokumente (orphani), ExcludeStornirano.
+' ============================================================
+Public Function GetKontrolaPregled(ByRef imaProblema As Boolean) As String
+    On Error GoTo EH
+
+    imaProblema = False
+
+    Dim otk As Variant, otp As Variant, zbr As Variant, prj As Variant, amb As Variant
+    otk = GetTableData(TBL_OTKUP):       If IsArray(otk) Then otk = ExcludeStornirano(otk, TBL_OTKUP)
+    otp = GetTableData(TBL_OTPREMNICA):  If IsArray(otp) Then otp = ExcludeStornirano(otp, TBL_OTPREMNICA)
+    zbr = GetTableData(TBL_ZBIRNA):      If IsArray(zbr) Then zbr = ExcludeStornirano(zbr, TBL_ZBIRNA)
+    prj = GetTableData(TBL_PRIJEMNICA):  If IsArray(prj) Then prj = ExcludeStornirano(prj, TBL_PRIJEMNICA)
+    amb = GetTableData(TBL_AMBALAZA):    If IsArray(amb) Then amb = ExcludeStornirano(amb, TBL_AMBALAZA)
+
+    Dim otkKgByOtp As Object: Set otkKgByOtp = CreateObject("Scripting.Dictionary")
+    Dim otpKgByZbr As Object: Set otpKgByZbr = CreateObject("Scripting.Dictionary")
+    Dim zbrKgByBroj As Object: Set zbrKgByBroj = CreateObject("Scripting.Dictionary")
+    Dim prjKgByBroj As Object: Set prjKgByBroj = CreateObject("Scripting.Dictionary")
+    Dim ambByTip As Object: Set ambByTip = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    Dim cntNeispl As Long, valNeispl As Double, cntInvalid As Long
+
+    ' --- OTKUP: grupisanje po OtpremnicaID, neisplaceno, nevalidni redovi ---
+    If IsArray(otk) Then
+        Dim cOtkOtp As Long, cOtkKol As Long, cOtkCena As Long, cOtkIspl As Long
+        cOtkOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+        cOtkKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+        cOtkCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+        cOtkIspl = GetColumnIndex(TBL_OTKUP, COL_OTK_ISPLACENO)
+
+        Dim kol As Double, cena As Double, otpID As String
+        For i = 1 To UBound(otk, 1)
+            kol = NumOrZero(otk(i, cOtkKol))
+            cena = NumOrZero(otk(i, cOtkCena))
+            otpID = Trim$(CStr(otk(i, cOtkOtp)))
+
+            If Len(otpID) > 0 Then DAdd otkKgByOtp, otpID, kol
+            If kol <= 0 Or cena <= 0 Then cntInvalid = cntInvalid + 1
+
+            If UCase$(Trim$(CStr(otk(i, cOtkIspl)))) <> UCase$(STATUS_ISPLACENO) Then
+                cntNeispl = cntNeispl + 1
+                valNeispl = valNeispl + kol * cena
+            End If
+        Next i
+    End If
+
+    ' --- OTPREMNICA: balans otkup<->otpremnica + kg po BrojZbirne ---
+    Dim cntMisOtk As Long
+    If IsArray(otp) Then
+        Dim cOtpID As Long, cOtpKol As Long, cOtpZbr As Long
+        cOtpID = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+        cOtpKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+        cOtpZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+
+        Dim oID As String, oKol As Double, oZbr As String, sumOtk As Double
+        For i = 1 To UBound(otp, 1)
+            oID = Trim$(CStr(otp(i, cOtpID)))
+            oKol = NumOrZero(otp(i, cOtpKol))
+            oZbr = Trim$(CStr(otp(i, cOtpZbr)))
+
+            If Len(oZbr) > 0 Then DAdd otpKgByZbr, oZbr, oKol
+
+            If otkKgByOtp.Exists(oID) Then sumOtk = CDbl(otkKgByOtp(oID)) Else sumOtk = 0#
+            If Abs(sumOtk - oKol) >= 0.01 Then cntMisOtk = cntMisOtk + 1
+        Next i
+    End If
+
+    ' --- ZBIRNA: kg po broju ---
+    If IsArray(zbr) Then
+        Dim cZbrBroj As Long, cZbrKol As Long
+        cZbrBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+        cZbrKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
+        Dim zBroj As String
+        For i = 1 To UBound(zbr, 1)
+            zBroj = Trim$(CStr(zbr(i, cZbrBroj)))
+            If Len(zBroj) > 0 Then DAdd zbrKgByBroj, zBroj, NumOrZero(zbr(i, cZbrKol))
+        Next i
+    End If
+
+    ' --- PRIJEMNICA: kg po broju zbirne ---
+    If IsArray(prj) Then
+        Dim cPrjZbr As Long, cPrjKol As Long
+        cPrjZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+        cPrjKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+        Dim pBroj As String
+        For i = 1 To UBound(prj, 1)
+            pBroj = Trim$(CStr(prj(i, cPrjZbr)))
+            If Len(pBroj) > 0 Then DAdd prjKgByBroj, pBroj, NumOrZero(prj(i, cPrjKol))
+        Next i
+    End If
+
+    ' --- AMBALAZA: neto saldo po EntitetTip (Smer Ulaz=+, Izlaz=-) ---
+    If IsArray(amb) Then
+        Dim cAmbSmer As Long, cAmbKol As Long, cAmbTip As Long
+        cAmbSmer = GetColumnIndex(TBL_AMBALAZA, COL_AMB_SMER)
+        cAmbKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+        cAmbTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+
+        If cAmbSmer > 0 And cAmbKol > 0 And cAmbTip > 0 Then
+            Dim sm As String, et As String
+            For i = 1 To UBound(amb, 1)
+                If IsNumeric(amb(i, cAmbKol)) Then
+                    sm = Trim$(CStr(amb(i, cAmbSmer)))
+                    et = Trim$(CStr(amb(i, cAmbTip)))
+                    If Len(et) > 0 Then
+                        If sm = "Ulaz" Then
+                            DAdd ambByTip, et, CDbl(amb(i, cAmbKol))
+                        ElseIf sm = "Izlaz" Then
+                            DAdd ambByTip, et, -CDbl(amb(i, cAmbKol))
+                        End If
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    ' --- IZRACUNAJ ZBIROVE (otvorene zbirne, manjak, otpremnica<->zbirna) ---
+    Dim cntOtvorene As Long, kgOtvorene As Double, manjak As Double
+    Dim cntMisOtpZbr As Long
+    Dim kKey As Variant, d As Double
+    For Each kKey In zbrKgByBroj.keys
+        If prjKgByBroj.Exists(kKey) Then
+            d = CDbl(zbrKgByBroj(kKey)) - CDbl(prjKgByBroj(kKey))
+            If d > 0 Then manjak = manjak + d
+        Else
+            cntOtvorene = cntOtvorene + 1
+            kgOtvorene = kgOtvorene + CDbl(zbrKgByBroj(kKey))
+        End If
+
+        If otpKgByZbr.Exists(kKey) Then
+            If Abs(CDbl(otpKgByZbr(kKey)) - CDbl(zbrKgByBroj(kKey))) >= 0.01 Then
+                cntMisOtpZbr = cntMisOtpZbr + 1
+            End If
+        End If
+    Next kKey
+
+    ' --- SASTAVI TEKST: kontrolni zbirovi ---
+    Dim s As String
+    s = "DNEVNI PREGLED (Kontrola)" & vbCrLf
+    s = s & "- Otvorene zbirne (bez prijemnice): " & cntOtvorene & _
+            "  |  " & Format$(kgOtvorene, "#,##0") & " kg" & vbCrLf
+    s = s & "- Ukupan manjak (primljeno): " & Format$(manjak, "#,##0") & " kg" & vbCrLf
+    s = s & "- Ambalaza saldo: " & FormatAmbSaldo(ambByTip) & vbCrLf
+    s = s & "- Neisplaceno: " & cntNeispl & " otkup(a)  |  " & Format$(valNeispl, "#,##0")
+
+    ' --- PROBLEMI: balans + nevalidni redovi + orphani (reuse) ---
+    Dim prob As String
+    If cntMisOtk > 0 Then prob = prob & "- Neuskladjene kolicine otkup<->otpremnica: " & cntMisOtk & vbCrLf
+    If cntMisOtpZbr > 0 Then prob = prob & "- Neuskladjene kolicine otpremnica<->zbirna: " & cntMisOtpZbr & vbCrLf
+    If cntInvalid > 0 Then prob = prob & "- Nevalidni otkup redovi (kolicina/cena <= 0): " & cntInvalid & vbCrLf
+
+    Dim orphani As String
+    orphani = CheckVerwaisteDokumente()
+
+    If Len(prob) > 0 Or Len(orphani) > 0 Then
+        imaProblema = True
+        s = s & vbCrLf & vbCrLf & "PROBLEMI:" & vbCrLf & prob & orphani
+    End If
+
+    GetKontrolaPregled = s
+    Exit Function
+
+EH:
+    LogErr "modHelpers.GetKontrolaPregled"
+    imaProblema = False
+    GetKontrolaPregled = "DNEVNI PREGLED (Kontrola)" & vbCrLf & _
+                         "- nedostupno (greska pri racunanju)"
+End Function
+
+' Akumuliraj v u dict(k) (Scripting.Dictionary).
+Private Sub DAdd(ByVal d As Object, ByVal k As String, ByVal v As Double)
+    If d.Exists(k) Then
+        d(k) = CDbl(d(k)) + v
+    Else
+        d(k) = v
+    End If
+End Sub
+
+' Numericka vrednost celije ili 0.
+Private Function NumOrZero(ByVal v As Variant) As Double
+    If IsNumeric(v) Then NumOrZero = CDbl(v) Else NumOrZero = 0#
+End Function
+
+' Saldo po EntitetTip-u: "Kooperant +540  |  Stanica -200  |  Kupac -340".
+Private Function FormatAmbSaldo(ByVal d As Object) As String
+    Dim s As String, kk As Variant
+    For Each kk In d.keys
+        If Len(s) > 0 Then s = s & "  |  "
+        s = s & CStr(kk) & " " & Format$(CDbl(d(kk)), "+#,##0;-#,##0;0")
+    Next kk
+    If Len(s) = 0 Then s = "-"
+    FormatAmbSaldo = s
+End Function
+
