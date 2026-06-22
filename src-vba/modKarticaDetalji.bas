@@ -1,15 +1,16 @@
 Attribute VB_Name = "modKarticaDetalji"
+'Attribute VB_Name = "modKarticaDetalji"
 Option Explicit
 
 ' ============================================================
-' modKarticaDetalji â€” read-only panel "Detalji otkupa" uz karticu
+' modKarticaDetalji — read-only panel "Detalji otkupa" uz karticu
 ' kooperanta (frmIzvestaj, Page 8 / lstKartica).
 '
 ' Klik na red kartice prikazuje SVE bitne stavke izabranog otkupnog
-' lista (polja koja se unose u frmOtkup) u listi DESNO â€” samo pregled
+' lista (polja koja se unose u frmOtkup) u listi DESNO — samo pregled
 ' ("ne za izmenu, samo za pregled"); ListBox po prirodi nije editabilan.
 '
-' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica â€”
+' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica —
 ' lstKartica.Parent.Controls, kao frmDokumenta), frmIzvestaj.frx se NE
 ' dira (CLAUDE.md). Ref-kljuc reda se nosi u skrivenoj koloni lstKartica
 ' (idx 7, vidi frmIzvestaj.SetupListBoxes): "OTK|<OtkupID>" / "NOV" / "MAG".
@@ -42,7 +43,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     If mBuilt Then Exit Sub
     If lstKartica Is Nothing Then Exit Sub
 
-    ' Kontrole se prave NA FORMI (frm.Controls.Add â€” proveren obrazac, modOtkupBlok)
+    ' Kontrole se prave NA FORMI (frm.Controls.Add — proveren obrazac, modOtkupBlok)
     ' i pozicioniraju forma-relativnim koordinatama (frm.InsideWidth/Height) tako da
     ' NE mogu da budu van ekrana. ZOrder ih dize u prvi plan (preko MultiPage-a).
     ' SetVisible ih krije van kartice (mFormLevel=True).
@@ -77,8 +78,8 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     Set mLblTitle = cont.Controls.Add("Forms.Label.1", "lblKarticaDetaljiNaslov", True)
     With mLblTitle
         .Left = leftX
-        .Top = topY - 16
-        If .Top < 0 Then .Top = topY
+        .top = topY - 16
+        If .top < 0 Then .top = topY
         .width = availW
         .Height = 14
         .caption = "DETALJI OTKUPA (klik na red)"
@@ -90,7 +91,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     Set mLst = cont.Controls.Add("Forms.ListBox.1", "lstKarticaDetalji", True)
     With mLst
         .Left = leftX
-        .Top = topY
+        .top = topY
         .width = availW
         .Height = panelH
         .ColumnCount = 2
@@ -118,12 +119,12 @@ End Sub
 Public Sub KarticaDetalji_SetVisible(ByVal b As Boolean)
     On Error Resume Next
     If b Then
-        If Not mLst Is Nothing Then mLst.visible = True
-        If Not mLblTitle Is Nothing Then mLblTitle.visible = True
+        If Not mLst Is Nothing Then mLst.Visible = True
+        If Not mLblTitle Is Nothing Then mLblTitle.Visible = True
     ElseIf mFormLevel Then
         ' Sakrij samo forma-level kontrole; page-deca se kriju zajedno sa stranicom.
-        If Not mLst Is Nothing Then mLst.visible = False
-        If Not mLblTitle Is Nothing Then mLblTitle.visible = False
+        If Not mLst Is Nothing Then mLst.Visible = False
+        If Not mLblTitle Is Nothing Then mLblTitle.Visible = False
     End If
 End Sub
 
@@ -144,8 +145,8 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
     End If
 
     ' Panel postoji -> osiguraj da je vidljiv i u prvom planu.
-    mLst.visible = True
-    If Not mLblTitle Is Nothing Then mLblTitle.visible = True
+    mLst.Visible = True
+    If Not mLblTitle Is Nothing Then mLblTitle.Visible = True
     On Error Resume Next
     mLst.ZOrder 0          ' u prvi plan (preko praznog dela liste)
     mLblTitle.ZOrder 0
@@ -317,3 +318,4 @@ Private Function DisplayParcela(ByVal parcelaID As String) As String
     If Len(Trim$(kult)) > 0 Then s = Trim$(s & " | " & kult)
     If Len(s) > 0 Then DisplayParcela = s
 End Function
+

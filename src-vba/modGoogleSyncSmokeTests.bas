@@ -553,7 +553,7 @@ Private Function BuildOTKFixtureData(ByVal clientRecordID As String, _
 
     otkupacID = GetFirstOptionalTableValue(TBL_STANICE, "StanicaID", "ST-00001")
 
-    ' Header row â€” must match GAS/VBA OTK schema exactly.
+    ' Header row — must match GAS/VBA OTK schema exactly.
     data(1, 1) = "ClientRecordID"
     data(1, 2) = "ServerRecordID"
     data(1, 3) = "CreatedAtClient"
@@ -617,8 +617,8 @@ Private Function FindOtkupIDByClientRecordID(ByVal clientRecordID As String) As 
     colOtkupID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, "FindOtkupIDByClientRecordID")
 
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(Nz(data(i, colCRID), ""))) = Trim$(clientRecordID) Then
-            FindOtkupIDByClientRecordID = CStr(Nz(data(i, colOtkupID), ""))
+        If Trim$(CStr(nz(data(i, colCRID), ""))) = Trim$(clientRecordID) Then
+            FindOtkupIDByClientRecordID = CStr(nz(data(i, colOtkupID), ""))
             Exit Function
         End If
     Next i
@@ -637,7 +637,7 @@ Private Function GetFirstRequiredTableValue(ByVal tableName As String, _
 
     colIndex = RequireColumnIndex(tableName, columnName, "GetFirstRequiredTableValue")
 
-    GetFirstRequiredTableValue = Trim$(CStr(Nz(data(1, colIndex), "")))
+    GetFirstRequiredTableValue = Trim$(CStr(nz(data(1, colIndex), "")))
 
     If Len(GetFirstRequiredTableValue) = 0 Then
         Err.Raise vbObjectError + 7901, "GetFirstRequiredTableValue", _
@@ -659,7 +659,7 @@ Private Function GetFirstOptionalTableValue(ByVal tableName As String, _
     colIndex = GetColumnIndex(tableName, columnName)
     If colIndex = 0 Then GoTo UseFallback
 
-    GetFirstOptionalTableValue = Trim$(CStr(Nz(data(1, colIndex), "")))
+    GetFirstOptionalTableValue = Trim$(CStr(nz(data(1, colIndex), "")))
     If Len(GetFirstOptionalTableValue) = 0 Then GoTo UseFallback
 
     Exit Function

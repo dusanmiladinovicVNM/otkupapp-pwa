@@ -1,4 +1,5 @@
 Attribute VB_Name = "modComboBinding"
+'Attribute VB_Name = "modComboBinding"
 
 Option Explicit
 
@@ -173,4 +174,5 @@ Public Function ExtractIDFromDisplaySafe(ByVal displayText As String) As String
 EH:
     ExtractIDFromDisplaySafe = ""
 End Function
+
 

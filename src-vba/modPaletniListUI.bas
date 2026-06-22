@@ -1,8 +1,9 @@
 Attribute VB_Name = "modPaletniListUI"
+'Attribute VB_Name = "modPaletniListUI"
 Option Explicit
 
 ' ============================================================
-' modPaletniListUI â€” operater-facing ulazi (InputBox/MsgBox) za paletni
+' modPaletniListUI — operater-facing ulazi (InputBox/MsgBox) za paletni
 ' list i preradu. Drzi UI/business granicu: business sloj (modPaletniList)
 ' ne koristi MsgBox za kontrolu toka; ovde su Alt+F8 stubovi dok ne stigne
 ' frmPalete (PR #44). Resolucija broj->PaletaID i poziv SavePrerada_TX su
@@ -17,7 +18,7 @@ Public Sub ExportPaletniListPDF_Prompt()
     If Trim$(ans) = "" Then Exit Sub
     If Not IsNumeric(ans) Then Exit Sub
 
-    Dim broj As Long: broj = CLng(Val(ans))
+    Dim broj As Long: broj = CLng(val(ans))
     If broj <= 0 Then Exit Sub
 
     Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
@@ -42,7 +43,7 @@ Public Sub ExportPreradaPDF_Prompt()
     If Trim$(ans) = "" Then Exit Sub
     If Not IsNumeric(ans) Then Exit Sub
 
-    Dim broj As Long: broj = CLng(Val(ans))
+    Dim broj As Long: broj = CLng(val(ans))
     If broj <= 0 Then Exit Sub
 
     Dim preID As String: preID = FindPreradaIDByBroj(broj, Year(Date))
@@ -73,7 +74,7 @@ Public Sub SavePrerada_Prompt()
     Dim parts() As String: parts = Split(sp, ",")
     Dim i As Long, pbr As Long, pid As String
     For i = LBound(parts) To UBound(parts)
-        pbr = CLng(Val(Trim$(parts(i))))
+        pbr = CLng(val(Trim$(parts(i))))
         If pbr > 0 Then
             pid = FindPaletaIDByBroj(pbr, yr)
             If pid = "" Then
@@ -93,8 +94,8 @@ Public Sub SavePrerada_Prompt()
     Dim snap As String: snap = InputBox("Napomena (opciono):", "Prerada", "")
 
     Dim preID As String
-    preID = SavePrerada_TX(ids, CLng(Val(sk)), CLng(Val(se)), _
-                           CDbl(Val(Replace(sn, ",", "."))), snap)
+    preID = SavePrerada_TX(ids, CLng(val(sk)), CLng(val(se)), _
+                           CDbl(val(Replace(sn, ",", "."))), snap)
     If preID <> "" Then ExportPreradaPDF preID, True
     Exit Sub
 EH:
@@ -126,7 +127,7 @@ Public Sub ClosePaleta_Prompt()
                    "Zatvori paletu")
     If Trim$(ans) = "" Then Exit Sub
     If Not IsNumeric(ans) Then Exit Sub
-    Dim broj As Long: broj = CLng(Val(ans))
+    Dim broj As Long: broj = CLng(val(ans))
     If broj <= 0 Then Exit Sub
 
     Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
@@ -151,7 +152,7 @@ Public Sub StornoPaleta_Prompt()
     ans = InputBox("Broj palete za STORNO (godina " & Year(Date) & "):", "Storno palete")
     If Trim$(ans) = "" Then Exit Sub
     If Not IsNumeric(ans) Then Exit Sub
-    Dim broj As Long: broj = CLng(Val(ans))
+    Dim broj As Long: broj = CLng(val(ans))
     If broj <= 0 Then Exit Sub
 
     Dim palID As String: palID = FindPaletaIDByBroj(broj, Year(Date))
@@ -181,7 +182,7 @@ Public Sub StornoPrerada_Prompt()
     ans = InputBox("Broj prerade za STORNO (godina " & Year(Date) & "):", "Storno prerade")
     If Trim$(ans) = "" Then Exit Sub
     If Not IsNumeric(ans) Then Exit Sub
-    Dim broj As Long: broj = CLng(Val(ans))
+    Dim broj As Long: broj = CLng(val(ans))
     If broj <= 0 Then Exit Sub
 
     Dim preID As String: preID = FindPreradaIDByBroj(broj, Year(Date))
@@ -203,3 +204,4 @@ EH:
     LogErr "modPaletniListUI.StornoPrerada_Prompt"
     MsgBox "Greska pri stornu: " & Err.description, vbCritical, APP_NAME
 End Sub
+

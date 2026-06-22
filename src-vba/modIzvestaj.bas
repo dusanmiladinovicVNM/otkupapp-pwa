@@ -1,10 +1,11 @@
 Attribute VB_Name = "modIzvestaj"
+'Attribute VB_Name = "modIzvestaj"
 Option Explicit
 
 ' ============================================================
-' modIzvestaj v3.0 â€“ Report Business Logic
-' Alle Funktionen geben 2D-Arrays zurÃ¼ck
-' Form ist nur noch fÃ¼r UI-Darstellung zustÃ¤ndig
+' modIzvestaj v3.0 – Report Business Logic
+' Alle Funktionen geben 2D-Arrays zurück
+' Form ist nur noch für UI-Darstellung zuständig
 ' ============================================================
 
 Public Enum IzvestajTip
@@ -31,7 +32,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     
     ' --- Otkup pro Kooperant aggregieren ---
     ' Nema early-exit ako nema otkupa:
-    ' report mora i dalje da prikaÅ¾e novac / OM avans ako postoje u periodu.
+    ' report mora i dalje da prikaže novac / OM avans ako postoje u periodu.
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
@@ -98,7 +99,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                        CDate(novacData(n, colNovDatum)) <= datumDo Then
                         ' Kooperant ins dict aufnehmen falls noch nicht vorhanden
                         If Not dict.Exists(koopID) Then
-                            ' PrÃ¼fen ob Kooperant zu dieser Station gehÃ¶rt
+                            ' Prüfen ob Kooperant zu dieser Station gehört
                             Dim koopStation As String
                             koopStation = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "StanicaID"))
                             If koopStation = stanicaID Then
@@ -250,7 +251,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         totNov = totNov + omAvans
     End If
     
-    ' Agrohemija (nerasporedjena â€” ohne Kooperant)
+    ' Agrohemija (nerasporedjena — ohne Kooperant)
     If agroBezStanica > 0 Then
         Dim agroRow As Long
         agroRow = rowCount - 1
@@ -772,7 +773,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     
     Const NUM_COLS As Long = 7   ' Datum, BrojDok, Opis, Zaduzenje, Razduzenje, Saldo, Saldo amb.
 
-    ' Alte Daten lÃ¶schen
+    ' Alte Daten löschen
     Dim startRow As Long
     startRow = ws.Range("KartStart").row
     Dim lastRow As Long
@@ -782,7 +783,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
     End If
     
-    ' Daten einfÃ¼gen
+    ' Daten einfügen
     Dim i As Long
     For i = 1 To UBound(data, 1)
         Dim outRow As Long
@@ -874,7 +875,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     
     ' PDF Export
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
+    pdfPath = ThisWorkbook.path & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
     
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
@@ -904,7 +905,7 @@ Public Function ReportSaldoKupci(ByVal kupacID As String, _
     ' Letzte Zeile = UKUPNO
     '
     ' Napomena:
-    ' Ne izlazimo ako nema prijemnica, jer kupac moÅ¾e imati uplatu/avans
+    ' Ne izlazimo ako nema prijemnica, jer kupac može imati uplatu/avans
     ' bez robe u periodu. Takav novac mora biti vidljiv u saldu.
     
     Dim prijData As Variant
@@ -959,7 +960,7 @@ Public Function ReportSaldoKupci(ByVal kupacID As String, _
         Exit Function
     End If
     
-    ' --- Gesamt-Novac (fÃ¼r UKUPNO Saldo) ---
+    ' --- Gesamt-Novac (für UKUPNO Saldo) ---
     Dim novacTotal As Double
     Dim novacData As Variant
     novacData = GetTableData(TBL_NOVAC)
@@ -1144,7 +1145,7 @@ Public Function ReportIsplata(ByVal entitetTip As String, _
         Dim koopID As String
         koopID = CStr(data(i, colKoopID))
         
-        ' OM Avans (Firma ? Otkupac) â€” kein Kooperant
+        ' OM Avans (Firma ? Otkupac) — kein Kooperant
         If tipNovca = NOV_KES_FIRMA_OTKUPAC Then
             totalOMAvans = totalOMAvans + iznos
             GoTo NextRow
@@ -1358,7 +1359,7 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
             Dim prijTotal As Double: prijTotal = mVals(1)
             
             If zbirnaTotal > 0 And prijTotal > 0 Then
-                ' Proportionaler Manjak: (Zbirna - Prijemnica) Ã— (OtpKg / ZbirnaKg)
+                ' Proportionaler Manjak: (Zbirna - Prijemnica) × (OtpKg / ZbirnaKg)
                 Dim ukupnoManjak As Double
                 ukupnoManjak = zbirnaTotal - prijTotal
                 manjak = ukupnoManjak * (kgOtp / zbirnaTotal)
@@ -1692,7 +1693,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         Dim kol As Long: kol = 0
         If IsNumeric(filtered(i, colKol)) Then kol = CLng(filtered(i, colKol))
         
-        ' Mesto-Name auflÃ¶sen
+        ' Mesto-Name auflösen
         Dim entID As String: entID = CStr(filtered(i, colEntitet))
         Dim entTipVal As String: entTipVal = CStr(filtered(i, colEntTip))
         
@@ -1903,7 +1904,7 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         Exit Function
     End If
     
-    ' Prijemnica EINMAL laden fÃ¼r Performance
+    ' Prijemnica EINMAL laden für Performance
     Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
     
@@ -2166,7 +2167,7 @@ Private Function ReportZbirniKupac(ByVal datumOd As Date, _
         Exit Function
     End If
     
-    ' Cache fÃ¼r Vrsta-Lookup
+    ' Cache für Vrsta-Lookup
     Dim vrstaCache As Object
     Set vrstaCache = BuildZbirnaVrstaCache()
     
@@ -2339,7 +2340,7 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
         If IsNumeric(zbrFiltered(i, colAmb)) Then vals(0) = vals(0) + CLng(zbrFiltered(i, colAmb))
         If IsNumeric(zbrFiltered(i, colKol)) Then vals(2) = vals(2) + CDbl(zbrFiltered(i, colKol))
         
-        ' Prijemnica-Daten fÃ¼r diese Zbirna aus vorgeladenem Array
+        ' Prijemnica-Daten für diese Zbirna aus vorgeladenem Array
         Dim brZbr As String
         brZbr = CStr(zbrFiltered(i, colBroj))
         
@@ -2406,7 +2407,7 @@ EH:
 End Function
 
 ' ============================================================
-' AUSGABE (unverÃ¤ndert)
+' AUSGABE (unverändert)
 ' ============================================================
 
 Public Sub OutputToSheet(ByVal data As Variant, ByVal targetRange As Range, _
@@ -2438,7 +2439,7 @@ End Sub
 
 
 ' ============================================================
-' SHARED HELPER â€“ Dict(Key zu Array(Kg, RSD)) zu 2D Result
+' SHARED HELPER – Dict(Key zu Array(Kg, RSD)) zu 2D Result
 ' ============================================================
 
 Private Function DictToResultArray(ByVal dict As Object) As Variant
@@ -2486,7 +2487,7 @@ EH:
 End Function
 
 ' ============================================================
-' SHARED HELPER â€“ Entitet-Name auflÃ¶sen
+' SHARED HELPER – Entitet-Name auflösen
 ' ============================================================
 
 Private Function ResolveEntitetName(ByVal entitetID As String, _

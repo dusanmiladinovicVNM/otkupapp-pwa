@@ -1,15 +1,16 @@
 Attribute VB_Name = "modConfig"
+'Attribute VB_Name = "modConfig"
 Option Explicit
 
 ' ============================================================
-' modConfig â€“ Zentrale Konfiguration
+' modConfig – Zentrale Konfiguration
 ' Alle Konstanten, Tabellennamen, Spaltenindizes
 ' KEINE Hardcoded Zellreferenzen im restlichen Code!
 ' ============================================================
 
 ' --- App Info ---
 Public Const APP_NAME As String = "OtkupApp"
-Public Const APP_VERSION As String = "1.0.4"
+Public Const APP_VERSION As String = "2.2.1"
 
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
@@ -209,7 +210,7 @@ Public Const COL_PRJ_FAKTURISANO As String = "Fakturisano"
 Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
 
 ' ============================================================
-' Paletni list (Phase 2) â€” kolone novih tabela
+' Paletni list (Phase 2) — kolone novih tabela
 ' ============================================================
 ' tblKulture extension
 Public Const COL_KUL_GAJBICA_PALETA As String = "GajbicaPoPaleti"
@@ -254,7 +255,7 @@ Public Const COL_TAMB_TEZINA As String = "TezinaGajbiceKg"
 Public Const COL_TPAL_TIP As String = "TipPalete"
 Public Const COL_TPAL_TEZINA As String = "TezinaKg"
 
-' tblCenovnik (cene po proizvodu â€” append-only istorija)
+' tblCenovnik (cene po proizvodu — append-only istorija)
 ' Kljuc: VrstaVoca + SortaVoca + Klasa. Poslednji red (najnoviji Datum)
 ' je vazeci za otkup i dokumenta. Stari redovi ostaju radi kretanja cena.
 Public Const TBL_CENOVNIK As String = "tblCenovnik"
@@ -289,7 +290,7 @@ Public Const COL_PRES_CREATED As String = "CreatedAt"
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
 Public Const PAL_STATUS_ZATVORENA As String = "Zatvorena"
 
-' Paleta â€” config kljuc (default tip palete) + fallback kapacitet
+' Paleta — config kljuc (default tip palete) + fallback kapacitet
 Public Const CFG_DEFAULT_TIP_PALETE As String = "DEFAULT_TIP_PALETE"
 Public Const PALETA_DEFAULT_KAPACITET As Long = 240
 Public Const CFG_PALETA_PRINT_MODE As String = "PALETA_PRINT_MODE"
@@ -297,7 +298,7 @@ Public Const CFG_PALETA_PRINT_MODE As String = "PALETA_PRINT_MODE"
 ' NO -> PaletizePrijemnica se preskace; nema paleta ni paletnih listova.
 Public Const CFG_PALETIRANJE As String = "PALETIRANJE"
 Public Const CFG_OTKUP_PRINT_MODE As String = "OTKUP_PRINT_MODE"
-' Å tampa prijemnice â€” auto izlaz na "Unos prijemnice". Default OFF (kao do sada;
+' Štampa prijemnice — auto izlaz na "Unos prijemnice". Default OFF (kao do sada;
 ' prijemnica se ne stampa). PDF | PRINT | PREVIEW | OFF (kao PALETA_PRINT_MODE).
 Public Const CFG_PRIJEMNICA_PRINT_MODE As String = "PRIJEMNICA_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
@@ -412,7 +413,7 @@ Public Const COL_FS_CENA As String = "Cena"
 Public Const COL_FS_KLASA As String = "Klasa"
 Public Const COL_FS_BROJ_PRIJEMNICE As String = "BrojPrijemnice"
 
-' --- Typen AmbalaÅ¾e ---
+' --- Typen Ambalaže ---
 Public Const AMB_12_1 As String = "12/1"
 Public Const AMB_6_1 As String = "6/1"
 
@@ -523,7 +524,7 @@ Public Const BIM_MAPTIP_KOOPERANT As String = "KooperantIsplata"
 Public Const BIM_MAPTIP_NEP As String = "Nepoznato"
 Public Const BIM_MAPTIP_PROVIZIJA As String = "Provizija"
 
-' --- IzveÅ¡taj tipovi ---
+' --- Izveštaj tipovi ---
 Public Const IZV_POJEDINACNI As String = "Pojedinacni"
 Public Const IZV_ZBIRNI As String = "Zbirni"
 
@@ -610,9 +611,9 @@ End Sub
 ' ============================================================
 ' Cloud sync toggle.
 '
-' Pozivaju ga svi moduli koji Å¾ele da piÅ¡u/citaju Google sheet-ove
+' Pozivaju ga svi moduli koji žele da pišu/citaju Google sheet-ove
 ' (modStanicaLock, modBrojevi.MaxSeqFromGoogleSheet). Kada vraca False,
-' VBA radi 100% lokalno â€” nikakav HTTP saobracaj prema Google.
+' VBA radi 100% lokalno — nikakav HTTP saobracaj prema Google.
 '
 ' Backward-compatible default: ako Config nema ovaj kljuc ili je prazno,
 ' tretira se kao True (postojeci klijenti rade kao i do sada).
@@ -622,11 +623,11 @@ Public Function IsCloudSyncEnabled() As Boolean
     v = UCase$(Trim$(GetConfigValue(CFG_KEY_CLOUD_SYNC_ENABLED)))
     
     Select Case v
-        Case ""           ' nema kljuca â€” default TRUE
+        Case ""           ' nema kljuca — default TRUE
             IsCloudSyncEnabled = True
         Case "NO", "FALSE", "0", "OFF", "DISABLED"
             IsCloudSyncEnabled = False
-        Case Else         ' "YES", "TRUE", "1", "ON", "ENABLED" ili bilo Å¡ta drugo
+        Case Else         ' "YES", "TRUE", "1", "ON", "ENABLED" ili bilo šta drugo
             IsCloudSyncEnabled = True
     End Select
 End Function
@@ -694,3 +695,4 @@ End Function
 Public Function OtkupBrutoUnos() As Boolean
     OtkupBrutoUnos = ConfigFlag(CFG_OTKUP_BRUTO_UNOS, False)
 End Function
+

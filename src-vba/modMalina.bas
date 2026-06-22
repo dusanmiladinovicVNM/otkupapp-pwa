@@ -1,8 +1,9 @@
 Attribute VB_Name = "modMalina"
+'Attribute VB_Name = "modMalina"
 Option Explicit
 
 ' ============================================================
-' modMalina â€“ malina-mod master-data glue
+' modMalina – malina-mod master-data glue
 '
 ' U malina modu (IsMalinaMode, vidi modConfig) vazi: otkupac == stanica
 ' == vozac. Da izvestaji/ambalaza koji joinuju na tblVozaci imaju naziv,
@@ -13,7 +14,7 @@ Option Explicit
 ' (modStammdatenSync je export-only, frmStammdaten je UI shell).
 '
 ' Append po nazivu kolone (ReDim na ListColumns.Count + RequireColumnIndex)
-' je isti obrazac kao modConfig.SetConfigValue â€” schema-robustno, bez
+' je isti obrazac kao modConfig.SetConfigValue — schema-robustno, bez
 ' pozicijskog Array-a i bez test-only BlankRow/SetField helpera.
 ' ============================================================
 
@@ -35,7 +36,7 @@ Public Function EnsureVozacMirrorForStanica(ByVal stanicaID As String, _
     If sid = "" Then Exit Function
 
     ' Idempotencija: vozac sa VozacID == StanicaID vec postoji?
-    If Len(Trim$(Nz(LookupValue(TBL_VOZACI, "VozacID", sid, "VozacID"), ""))) > 0 Then
+    If Len(Trim$(nz(LookupValue(TBL_VOZACI, "VozacID", sid, "VozacID"), ""))) > 0 Then
         Exit Function
     End If
 
@@ -51,11 +52,11 @@ Public Function EnsureVozacMirrorForStanica(ByVal stanicaID As String, _
     rowData(RequireColumnIndex(TBL_VOZACI, "Ime", SRC)) = ime
     rowData(RequireColumnIndex(TBL_VOZACI, "Prezime", SRC)) = prezime
 
-    Dim ci As Long
-    ci = GetColumnIndex(TBL_VOZACI, "Telefon")
-    If ci > 0 Then rowData(ci) = telefon
-    ci = GetColumnIndex(TBL_VOZACI, "Aktivan")
-    If ci > 0 Then rowData(ci) = STATUS_AKTIVAN
+    Dim cI As Long
+    cI = GetColumnIndex(TBL_VOZACI, "Telefon")
+    If cI > 0 Then rowData(cI) = telefon
+    cI = GetColumnIndex(TBL_VOZACI, "Aktivan")
+    If cI > 0 Then rowData(cI) = STATUS_AKTIVAN
 
     If AppendRow(TBL_VOZACI, rowData) > 0 Then
         EnsureVozacMirrorForStanica = True
@@ -90,13 +91,13 @@ Public Function BackfillVozacMirrorsForMalina() As Long
 
     Dim r As Long, cnt As Long
     For r = 1 To UBound(data, 1)
-        Dim sid As String: sid = Trim$(Nz(data(r, cId), ""))
+        Dim sid As String: sid = Trim$(nz(data(r, cId), ""))
         If sid <> "" Then
-            Dim naziv As String: naziv = Nz(data(r, cNaziv), "")
+            Dim naziv As String: naziv = nz(data(r, cNaziv), "")
             Dim mesto As String: mesto = ""
-            If cMesto > 0 Then mesto = Nz(data(r, cMesto), "")
+            If cMesto > 0 Then mesto = nz(data(r, cMesto), "")
             Dim tel As String: tel = ""
-            If cTel > 0 Then tel = Nz(data(r, cTel), "")
+            If cTel > 0 Then tel = nz(data(r, cTel), "")
             If EnsureVozacMirrorForStanica(sid, naziv, mesto, tel) Then cnt = cnt + 1
         End If
     Next r
@@ -109,3 +110,4 @@ EH:
     LogErr SRC
     Err.Raise Err.Number, SRC, Err.description
 End Function
+

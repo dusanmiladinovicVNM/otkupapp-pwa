@@ -523,7 +523,7 @@ EH:
 End Function
 
 Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As String)
-    ' Suche alle unverbrauchten Avans-Zahlungen fÃ¼r diesen Kupac
+    ' Suche alle unverbrauchten Avans-Zahlungen für diesen Kupac
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
@@ -555,7 +555,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
 
     If preostalo <= 0 Then Exit Sub
     
-    ' Alle Avans-Zeilen fÃ¼r diesen Kupac sammeln (chronologisch)
+    ' Alle Avans-Zeilen für diesen Kupac sammeln (chronologisch)
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
@@ -574,7 +574,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
             ' Ganzer Avans wird verbraucht
             apply = avansIznos
         Else
-            ' Avans ist grÃ¶ÃŸer als Restbetrag ? aufteilen
+            ' Avans ist größer als Restbetrag ? aufteilen
             apply = preostalo
         End If
         
@@ -630,7 +630,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
 NextAvans:
     Next i
     
-    ' Faktura-Status prÃ¼fen
+    ' Faktura-Status prüfen
     If preostalo <= 0 Then
         UpdateFakturaStatus fakturaID
     End If
@@ -666,7 +666,7 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
     colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
     colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, SRC)
     
-    ' Erst zÃ¤hlen
+    ' Erst zählen
     Dim count As Long
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -919,12 +919,12 @@ Public Function BuildIsplataDictByOtkup() As Object
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        Dim oID As String
-        oID = CStr(data(i, colOtkID))
-        If oID <> "" Then
-            If Not dict.Exists(oID) Then dict.Add oID, 0#
+        Dim oid As String
+        oid = CStr(data(i, colOtkID))
+        If oid <> "" Then
+            If Not dict.Exists(oid) Then dict.Add oid, 0#
             If IsNumeric(data(i, colIsplata)) Then
-                dict(oID) = dict(oID) + CDbl(data(i, colIsplata))
+                dict(oid) = dict(oid) + CDbl(data(i, colIsplata))
             End If
         End If
     Next i
@@ -965,7 +965,7 @@ Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Vari
     Dim filterByKoop As Boolean
     filterByKoop = (LenB(Trim$(kooperantID)) > 0)
     
-    ' ZÃ¤hlen
+    ' Zählen
     Dim count As Long, i As Long
     For i = 1 To UBound(data, 1)
         If filterByKoop Then
@@ -1441,7 +1441,7 @@ End Function
 ' BuildKooperantUnallocatedAvansDict
 '
 ' Single-pass dict KooperantID -> nedodeljeni avans saldo.
-' Koristi se kao cache u frmIsplatePregled da izbegnemo NÃ—M pozive.
+' Koristi se kao cache u frmIsplatePregled da izbegnemo N×M pozive.
 '======================================================================
 Public Function BuildKooperantUnallocatedAvansDict() As Object
     Const SRC As String = "BuildKooperantUnallocatedAvansDict"

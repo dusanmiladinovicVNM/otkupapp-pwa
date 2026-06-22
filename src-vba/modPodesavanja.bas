@@ -1,8 +1,9 @@
 Attribute VB_Name = "modPodesavanja"
+'Attribute VB_Name = "modPodesavanja"
 Option Explicit
 
 ' ============================================================
-' modPodesavanja ‚Äî editor podesavanja (tblSEFConfig) u UI-u.
+' modPodesavanja ó editor podesavanja (tblSEFConfig) u UI-u.
 '
 ' Cilj: kad je tblSEFConfig sakriven (VeryHidden), operativna podesavanja se
 ' uredjuju kroz formu umesto rucnog editovanja celija. Otvara se kao nova
@@ -10,14 +11,14 @@ Option Explicit
 '   modMaticniLookups.MaticniSekcije -> frmMaticniPodaci.OpenSekcija ->
 '   frmStammdaten (Tag = "Podesavanja") -> UserForm_Activate -> BuildConfigEditor.
 '
-' Kontrole se grade u RUNTIME-u (Controls.Add) ‚Äî frmStammdaten.frx se NE dira,
+' Kontrole se grade u RUNTIME-u (Controls.Add) ó frmStammdaten.frx se NE dira,
 ' isti obrazac kao modMaticniLookups/clsLookupMenuBtn i modOtkupBlok/clsBlokUI.
 ' Klik Sacuvaj/Sakrij/Povratak hvata clsConfigBtn (WithEvents).
 '
 ' BEZBEDNOST: prikazuju se SAMO operativna (slobodan-unos) polja. Interni kes /
 ' anti-tamper kljucevi (LICENSE_TOKEN, LICENSE_BOUND_PARTS, LICENSE_NEXT_CHECK,
 ' LICENSE_STATUS, LICENSE_HWM, TRIAL_HWM, GOOGLE_*_TOKEN, APP_SETUP_*...) se
-' NAMERNO NE prikazuju ‚Äî njihovo rucno menjanje je upravo bypass koji sakrivanje
+' NAMERNO NE prikazuju ó njihovo rucno menjanje je upravo bypass koji sakrivanje
 ' tabele zatvara.
 '
 ' Izlaz u nuzdi (ako forma nije dostupna): Alt+F8 -> ShowConfigSheet.
@@ -87,20 +88,20 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"
     CfgAdd c, "Otkup / dokumenta", "AUTO_BROJ_DOKUMENTA", "Automatsko generisanje brojeva dokumenata", "bool"
     CfgAdd c, "Otkup / dokumenta", "PALETIRANJE", "Paletiranje (izrada paletnih listova)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", "≈†tampa otkupnog lista", "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", "≈†tampa paletnog lista", "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_PRINT_MODE", "≈†tampa prijemnice (auto na unos)", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", "ätampa otkupnog lista", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", "ätampa paletnog lista", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_PRINT_MODE", "ätampa prijemnice (auto na unos)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", "Kupac unosi BRUTO te≈æinu (oduzmi ambala≈æu)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta voƒáa", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta voƒáa", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", "Kupac unosi BRUTO teûinu (oduzmi ambalaûu)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta voca", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta voca", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "KOOP_FILTER_BY_OM", "Filtriraj kooperante po otkupnom mestu", "bool"
-    CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaƒça)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
 
-    CfgAdd c, "Malina re≈æim", "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
-    CfgAdd c, "Malina re≈æim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaƒça (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
+    CfgAdd c, "Malina reûim", "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
+    CfgAdd c, "Malina reûim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Alati / putanje", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text"
 
@@ -142,7 +143,7 @@ Private Function LookupCSV(ByVal tbl As String, ByVal col As String, _
 End Function
 
 ' ============================================================
-' PUBLIC ‚Äî izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
+' PUBLIC ó izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
 ' ============================================================
 Public Sub BuildConfigEditor(ByVal frm As Object)
     Const SRC As String = "modPodesavanja.BuildConfigEditor"
@@ -153,7 +154,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Set mWrappers = New Collection
     Set mBtnToggle = Nothing
 
-    ' Sakri sve postojece (maticni-podaci) kontrole ‚Äî gradimo svoj panel preko.
+    ' Sakri sve postojece (maticni-podaci) kontrole ó gradimo svoj panel preko.
     Dim ctl As MSForms.Control
     For Each ctl In frm.Controls
         On Error Resume Next
@@ -165,43 +166,43 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     w = frm.InsideWidth
     If w < 400 Then w = 960
 
-    Const M As Single = 12
+    Const m As Single = 12
     Const LBLW As Single = 250
-    Dim inLeft As Single: inLeft = M + LBLW + 10
-    Dim inW As Single: inW = w - inLeft - M - 18      ' rezerva za scrollbar
+    Dim inLeft As Single: inLeft = m + LBLW + 10
+    Dim inW As Single: inW = w - inLeft - m - 18      ' rezerva za scrollbar
     If inW < 120 Then inW = 120
 
     ' Naslov
     Dim lblTitle As MSForms.label
-    Set lblTitle = AddLabel("cfg_title", M, 8, w - 2 * M, 20)
-    lblTitle.caption = "Pode≈°avanja (tblSEFConfig)"
+    Set lblTitle = AddLabel("cfg_title", m, 8, w - 2 * m, 20)
+    lblTitle.caption = "Podeöavanja (tblSEFConfig)"
     StyleLabel lblTitle, TXT_LIGHT(), True
     lblTitle.Font.Size = FONT_SIZE_HEADER
 
-    ' Footer dugmad (na vrhu ‚Äî vidljiva pre skrolovanja)
+    ' Footer dugmad (na vrhu ó vidljiva pre skrolovanja)
     Dim btnSave As MSForms.CommandButton
-    Set btnSave = AddButton("btnCfgSave", M, 32, 120, 24)
-    StylePrimaryButton btnSave, "Saƒçuvaj"
+    Set btnSave = AddButton("btnCfgSave", m, 32, 120, 24)
+    StylePrimaryButton btnSave, "Sacuvaj"
     WireButton btnSave, "save"
 
-    Set mBtnToggle = AddButton("btnCfgToggle", M + 130, 32, 200, 24)
+    Set mBtnToggle = AddButton("btnCfgToggle", m + 130, 32, 200, 24)
     StyleExitButton mBtnToggle, ToggleCaption()
     WireButton mBtnToggle, "toggle"
 
     Dim btnBack As MSForms.CommandButton
-    Set btnBack = AddButton("btnCfgBack", w - M - 120, 32, 120, 24)
+    Set btnBack = AddButton("btnCfgBack", w - m - 120, 32, 120, 24)
     StyleExitButton btnBack, "Povratak"
     WireButton btnBack, "back"
 
     Dim lblHint As MSForms.label
-    Set lblHint = AddLabel("cfg_hint", M, 60, w - 2 * M, 16)
+    Set lblHint = AddLabel("cfg_hint", m, 60, w - 2 * m, 16)
     lblHint.caption = "Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju."
     StyleLabel lblHint, TXT_MUTED(), False
     lblHint.Font.Size = FONT_SIZE_SMALL
 
     ' Polja
     Dim flds As Variant: flds = ConfigEditorFields()
-    Dim y As Single: y = 86
+    Dim Y As Single: Y = 86
     Dim curGroup As String: curGroup = ""
     Dim f As Variant, grp As String, key As String, cap As String, typ As String, typRaw As String
     Dim rowH As Single, cur As String
@@ -220,16 +221,16 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
 
         If grp <> curGroup Then
             curGroup = grp
-            y = y + 8
-            Set hdr = AddLabel("cfghdr_" & i, M, y, w - 2 * M, 18)
-            hdr.caption = "‚Äî " & grp & " ‚Äî"
+            Y = Y + 8
+            Set hdr = AddLabel("cfghdr_" & i, m, Y, w - 2 * m, 18)
+            hdr.caption = "ó " & grp & " ó"
             StyleLabel hdr, TXT_LIGHT(), True
-            y = y + 22
+            Y = Y + 22
         End If
 
         rowH = IIf(typ = "memo", 46, 18)
 
-        Set lbl = AddLabel("cfglbl_" & key, M, y + 1, LBLW, 16)
+        Set lbl = AddLabel("cfglbl_" & key, m, Y + 1, LBLW, 16)
         lbl.caption = cap
         StyleLabel lbl, TXT_MUTED(), False
         lbl.Font.Size = FONT_SIZE_SMALL
@@ -237,8 +238,8 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         cur = GetConfigValue(key)
 
         If typ = "bool" Or Left$(typ, 5) = "list:" Then
-            Set cmb = AddCombo("cfg_" & key, inLeft, y, 160, 18)
-            cmb.Style = fmStyleDropDownCombo
+            Set cmb = AddCombo("cfg_" & key, inLeft, Y, 160, 18)
+            cmb.style = fmStyleDropDownCombo
             If typ = "bool" Then
                 opts = Array("YES", "NO")
             Else
@@ -251,7 +252,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             StyleComboBox cmb
             mInputs.Add cmb, key
         Else
-            Set tb = AddText("cfg_" & key, inLeft, y, inW, rowH)
+            Set tb = AddText("cfg_" & key, inLeft, Y, inW, rowH)
             If typ = "memo" Then
                 tb.MultiLine = True
                 tb.WordWrap = True
@@ -262,24 +263,24 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             mInputs.Add tb, key
         End If
 
-        y = y + rowH + 8
+        Y = Y + rowH + 8
     Next i
 
     ' Skrol forme (footer je na vrhu pa je dostupan na scroll=0)
     On Error Resume Next
     frm.ScrollBars = fmScrollBarsVertical
-    frm.ScrollHeight = y + 16
+    frm.ScrollHeight = Y + 16
     frm.KeepScrollBarsVisible = fmScrollBarsVertical
     On Error GoTo EH
 
     Exit Sub
 EH:
     LogErr SRC
-    MsgBox "Gre≈°ka pri otvaranju pode≈°avanja: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greöka pri otvaranju podeöavanja: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' PUBLIC ‚Äî click ruter (zove clsConfigBtn)
+' PUBLIC ó click ruter (zove clsConfigBtn)
 ' ============================================================
 Public Sub ConfigEditor_OnClick(ByVal action As String)
     On Error GoTo EH
@@ -294,7 +295,7 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIVATE ‚Äî save / back
+' PRIVATE ó save / back
 ' ============================================================
 Private Sub SaveConfigEditor()
     Const SRC As String = "modPodesavanja.SaveConfigEditor"
@@ -325,20 +326,20 @@ Private Sub SaveConfigEditor()
     Next i
 
     If Len(errs) > 0 Then
-        MsgBox "Saƒçuvano: " & n & " polja." & vbCrLf & vbCrLf & _
-               "Preskoƒçeno (gre≈°ka):" & vbCrLf & errs, vbExclamation, APP_NAME
+        MsgBox "Sacuvano: " & n & " polja." & vbCrLf & vbCrLf & _
+               "Preskoceno (greöka):" & vbCrLf & errs, vbExclamation, APP_NAME
     Else
-        MsgBox "Saƒçuvano: " & n & " polja.", vbInformation, APP_NAME
+        MsgBox "Sacuvano: " & n & " polja.", vbInformation, APP_NAME
     End If
     Exit Sub
 EH:
     LogErr SRC
-    MsgBox "Gre≈°ka pri ƒçuvanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greöka pri cuvanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub CloseConfigEditor()
     On Error Resume Next
-    frmOtkupAPP.ReturnToDashboard "Pode≈°avanja zatvorena."
+    frmOtkupAPP.ReturnToDashboard "Podeöavanja zatvorena."
     Unload mFrm
     Set mFrm = Nothing
     Set mInputs = Nothing
@@ -347,7 +348,7 @@ Private Sub CloseConfigEditor()
 End Sub
 
 ' ============================================================
-' PUBLIC ‚Äî vidljivost tblSEFConfig sheet-a (toggle + Alt+F8 makroi)
+' PUBLIC ó vidljivost tblSEFConfig sheet-a (toggle + Alt+F8 makroi)
 ' ============================================================
 Public Sub ToggleConfigSheet()
     On Error GoTo EH
@@ -357,8 +358,8 @@ Public Sub ToggleConfigSheet()
     Else
         HideConfigSheet
         MsgBox "tblSEFConfig je sada SAKRIVEN (VeryHidden)." & vbCrLf & _
-               "Ureƒëuj ga iskljuƒçivo preko ove forme." & vbCrLf & _
-               "(Izlaz u nu≈ædi: Alt+F8 -> ShowConfigSheet.)", vbInformation, APP_NAME
+               "Ureduj ga iskljucivo preko ove forme." & vbCrLf & _
+               "(Izlaz u nuûdi: Alt+F8 -> ShowConfigSheet.)", vbInformation, APP_NAME
     End If
     If Not mBtnToggle Is Nothing Then mBtnToggle.caption = ToggleCaption()
     Exit Sub
@@ -384,7 +385,7 @@ EH:
 End Sub
 
 Private Function ToggleCaption() As String
-    ToggleCaption = IIf(ConfigSheetIsHidden(), "Prika≈æi config tabelu", "Sakrij config tabelu")
+    ToggleCaption = IIf(ConfigSheetIsHidden(), "Prikaûi config tabelu", "Sakrij config tabelu")
 End Function
 
 Private Function ConfigSheetIsHidden() As Boolean
@@ -400,11 +401,11 @@ Private Function ConfigSheet() As Object
         Err.Raise vbObjectError + 7611, "modPodesavanja.ConfigSheet", _
                   "Tabela " & TBL_SEF_CONFIG & " ne postoji."
     End If
-    Set ConfigSheet = lo.Parent
+    Set ConfigSheet = lo.parent
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî runtime control helperi (Controls.Add; .frx se ne dira)
+' PRIVATE ó runtime control helperi (Controls.Add; .frx se ne dira)
 ' ============================================================
 Private Sub WireButton(ByVal b As MSForms.CommandButton, ByVal act As String)
     Dim wrp As clsConfigBtn
@@ -414,39 +415,39 @@ Private Sub WireButton(ByVal b As MSForms.CommandButton, ByVal act As String)
     mWrappers.Add wrp
 End Sub
 
-Private Function AddLabel(ByVal nm As String, ByVal x As Single, ByVal y As Single, _
+Private Function AddLabel(ByVal nm As String, ByVal X As Single, ByVal Y As Single, _
                           ByVal w As Single, ByVal h As Single) As MSForms.label
     RemoveCtl nm
     Dim c As MSForms.label
     Set c = mFrm.Controls.Add("Forms.Label.1", nm, True)
-    c.Left = x: c.top = y: c.width = w: c.Height = h
+    c.Left = X: c.top = Y: c.width = w: c.Height = h
     Set AddLabel = c
 End Function
 
-Private Function AddText(ByVal nm As String, ByVal x As Single, ByVal y As Single, _
+Private Function AddText(ByVal nm As String, ByVal X As Single, ByVal Y As Single, _
                          ByVal w As Single, ByVal h As Single) As MSForms.TextBox
     RemoveCtl nm
     Dim c As MSForms.TextBox
     Set c = mFrm.Controls.Add("Forms.TextBox.1", nm, True)
-    c.Left = x: c.top = y: c.width = w: c.Height = h
+    c.Left = X: c.top = Y: c.width = w: c.Height = h
     Set AddText = c
 End Function
 
-Private Function AddCombo(ByVal nm As String, ByVal x As Single, ByVal y As Single, _
+Private Function AddCombo(ByVal nm As String, ByVal X As Single, ByVal Y As Single, _
                           ByVal w As Single, ByVal h As Single) As MSForms.ComboBox
     RemoveCtl nm
     Dim c As MSForms.ComboBox
     Set c = mFrm.Controls.Add("Forms.ComboBox.1", nm, True)
-    c.Left = x: c.top = y: c.width = w: c.Height = h
+    c.Left = X: c.top = Y: c.width = w: c.Height = h
     Set AddCombo = c
 End Function
 
-Private Function AddButton(ByVal nm As String, ByVal x As Single, ByVal y As Single, _
+Private Function AddButton(ByVal nm As String, ByVal X As Single, ByVal Y As Single, _
                            ByVal w As Single, ByVal h As Single) As MSForms.CommandButton
     RemoveCtl nm
     Dim c As MSForms.CommandButton
     Set c = mFrm.Controls.Add("Forms.CommandButton.1", nm, True)
-    c.Left = x: c.top = y: c.width = w: c.Height = h
+    c.Left = X: c.top = Y: c.width = w: c.Height = h
     Set AddButton = c
 End Function
 
@@ -467,3 +468,4 @@ Public Sub ApplyDefaultProizvod(ByVal cmbVrsta As Object, ByVal cmbSorta As Obje
     cmbVrsta.value = v
     If Len(s) > 0 Then cmbSorta.value = s
 End Sub
+

@@ -1,8 +1,9 @@
 Attribute VB_Name = "modMaticniLookups"
+'Attribute VB_Name = "modMaticniLookups"
 Option Explicit
 
 ' ============================================================
-' modMaticniLookups â€“ jedinstveni (data-driven) meni "Maticni podaci"
+' modMaticniLookups – jedinstveni (data-driven) meni "Maticni podaci"
 '
 ' Ceo meni frmMaticniPodaci se gradi iz JEDNE registracije sekcija
 ' (MaticniSekcije). Za svaku sekciju se dinamicki kreira dugme
@@ -40,7 +41,7 @@ Public Function MaticniSekcije() As Variant
         Array("Ambalaza", "TipAmbalaze"), _
         Array("Palete", "TipPalete"), _
         Array("Cenovnik", "Cenovnik"), _
-        Array("PodeÅ¡avanja", "Podesavanja"))
+        Array("Podešavanja", "Podesavanja"))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).
@@ -58,8 +59,8 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
     Dim exitBtn As MSForms.CommandButton
     Set exitBtn = frm.Controls("btnExit")
 
-    Dim x As Single, w As Single, top0 As Single, bandBottom As Single
-    x = tmpl.Left
+    Dim X As Single, w As Single, top0 As Single, bandBottom As Single
+    X = tmpl.Left
     w = tmpl.width
     top0 = tmpl.top
     bandBottom = exitBtn.top      ' Exit ostaje na svom mestu; dugmad popunjavaju iznad
@@ -72,7 +73,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
     If n <= 0 Then Exit Sub
 
     ' Spakuj n dugmadi u isti vertikalni opseg koji su zauzimala staticna
-    ' dugmad (top0 .. Exit.Top) â€” bez resize-a forme.
+    ' dugmad (top0 .. Exit.Top) — bez resize-a forme.
     Dim pitch As Single
     pitch = (bandBottom - top0) / n
     If pitch <= 0 Then pitch = tmpl.Height + 3
@@ -96,7 +97,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
 
         Dim c As MSForms.CommandButton
         Set c = frm.Controls.Add("Forms.CommandButton.1", nm, True)
-        c.Left = x
+        c.Left = X
         c.width = w
         c.top = top0 + i * pitch
         c.Height = btnH
@@ -112,7 +113,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
         mBtns.Add c
     Next i
 
-    ' Uspeh â€” sakrij staticna dugmad (dinamicka su preko njih).
+    ' Uspeh — sakrij staticna dugmad (dinamicka su preko njih).
     HideStaticButtons frm
     Exit Sub
 
@@ -149,7 +150,7 @@ Public Sub MaticniMenu_OnHover(ByVal b As Object)
     ButtonHover b
 End Sub
 
-' Klik na sekciju â€” otvori frmStammdaten preko forme (ona drzi flag
+' Klik na sekciju — otvori frmStammdaten preko forme (ona drzi flag
 ' m_IsOpeningChild, pa se meni ne zatvori usput).
 Public Sub MaticniMenu_OnClick(ByVal sekTag As String, ByVal sekCaption As String)
     On Error GoTo EH
@@ -175,3 +176,4 @@ Private Sub ButtonActiveByTag(ByVal sekTag As String)
         End If
     Next c
 End Sub
+

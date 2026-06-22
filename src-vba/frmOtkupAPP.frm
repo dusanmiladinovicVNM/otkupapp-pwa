@@ -1,7 +1,7 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmOtkupAPP 
-   ClientHeight    =   10620
-   ClientLeft      =   120
+   ClientHeight    =   11565
+   ClientLeft      =   -285
    ClientTop       =   465
    ClientWidth     =   17760
    OleObjectBlob   =   "frmOtkupAPP.frx":0000
@@ -48,7 +48,7 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmOtkupAPP.UserForm_Initialize"
-    MsgBox "GreÅ¡ka pri pokretanju glavnog ekrana: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri pokretanju glavnog ekrana: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -90,7 +90,7 @@ EH:
 
     On Error Resume Next
     lblStatus.Visible = True
-    lblStatus.caption = "GreÅ¡ka pri proveri dokumenata. Pogledajte log."
+    lblStatus.caption = "Greška pri proveri dokumenata. Pogledajte log."
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 End Sub
@@ -118,7 +118,7 @@ Private Sub ResizeMainForm()
 
     Me.StartUpPosition = 0
     Me.Left = 0
-    Me.Top = 0
+    Me.top = 0
 
     ' Ne oslanjamo se na Application.Width/Height jer je Excel sakriven.
     targetW = ScreenWidthPoints()
@@ -142,7 +142,7 @@ EH:
     ' fallback, ali tek ako WinAPI ne uspe
     Me.StartUpPosition = 0
     Me.Left = 0
-    Me.Top = 0
+    Me.top = 0
     Me.width = 1200
     Me.Height = 750
 End Sub
@@ -166,26 +166,26 @@ Private Sub SetupShellResponsive()
 
     ' header
     lblTitleBar.Left = 0
-    lblTitleBar.Top = 0
+    lblTitleBar.top = 0
     lblTitleBar.width = Me.InsideWidth
     lblTitleBar.Height = headerH
 
     imgLogo.Left = 12
-    imgLogo.Top = 6
+    imgLogo.top = 6
     imgLogo.width = 220
     imgLogo.Height = 34
 
     btnMaticni.Left = Me.InsideWidth - btnMaticni.width - 54
-    btnMaticni.Top = 7
+    btnMaticni.top = 7
 
     lblClose.Left = Me.InsideWidth - 26
-    lblClose.Top = 10
+    lblClose.top = 10
 
     ' sidebar
     contentTop = headerH + padOuter
 
     fraSidebar.Left = padOuter
-    fraSidebar.Top = contentTop
+    fraSidebar.top = contentTop
     fraSidebar.width = sidebarW
     fraSidebar.Height = Me.InsideHeight - contentTop - padOuter
 
@@ -198,20 +198,20 @@ Private Sub SetupShellResponsive()
 
     ' big card
     lblCardAlerts.Left = rightLeft
-    lblCardAlerts.Top = contentTop + 4
+    lblCardAlerts.top = contentTop + 4
     lblCardAlerts.width = rightW
     lblCardAlerts.Height = rightH - summaryH - 14
     If lblCardAlerts.Height < 50 Then lblCardAlerts.Height = 50
 
     ' red status text inside big card
     lblStatus.Left = lblCardAlerts.Left + 15
-    lblStatus.Top = lblCardAlerts.Top + 15
+    lblStatus.top = lblCardAlerts.top + 15
     lblStatus.width = lblCardAlerts.width - 30
     lblStatus.Height = lblCardAlerts.Height - 20
 
     ' bottom summary card
     lblCardSummary.Left = rightLeft
-    lblCardSummary.Top = lblCardAlerts.Top + lblCardAlerts.Height + 10
+    lblCardSummary.top = lblCardAlerts.top + lblCardAlerts.Height + 10
     lblCardSummary.width = rightW
     lblCardSummary.Height = summaryH
 
@@ -229,13 +229,16 @@ Private Sub LayoutSidebarButtons()
     leftPos = 16
     btnW = fraSidebar.width - 32
     btnH = 34
-    gap = 10
+    gap = 5
     btnTop = 18
 
     btnBlocks.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
 
     btnPurchase.Move leftPos, btnTop, btnW, btnH
+    btnTop = btnTop + btnH + gap
+    
+    btnPalete.Move leftPos, btnTop, btnW, btnH
     btnTop = btnTop + btnH + gap
 
     btnAgro.Move leftPos, btnTop, btnW, btnH
@@ -298,7 +301,7 @@ Private Sub SetupHeader()
         .BackColor = BG_TOP
         .caption = vbNullString
         .Left = 0
-        .Top = 0
+        .top = 0
         .width = Me.InsideWidth
         .Height = 42
     End With
@@ -311,7 +314,7 @@ Private Sub SetupHeader()
         .Font.name = "Segoe UI Semibold"
         .Font.Size = 14
         .Left = 18
-        .Top = 10
+        .top = 10
         .width = 220
         .Height = 22
     End With
@@ -319,7 +322,7 @@ Private Sub SetupHeader()
     With btnMaticni
         .caption = "Maticni podaci"
         .Left = Me.InsideWidth - 170
-        .Top = 7
+        .top = 7
         .width = 125
         .Height = 28
         .BackColor = BTN_ACTIVE
@@ -337,7 +340,7 @@ Private Sub SetupHeader()
         .Font.name = "Segoe UI Symbol"
         .Font.Size = 13
         .Left = Me.InsideWidth - 34
-        .Top = 12
+        .top = 12
         .width = 20
         .Height = 20
     End With
@@ -349,7 +352,7 @@ Private Sub SetupSidebar()
         .BackColor = BG_PANEL
         .BorderStyle = fmBorderStyleSingle
         .Left = 18
-        .Top = 58
+        .top = 58
         .width = 235
         .Height = Me.InsideHeight - 76
     End With
@@ -360,46 +363,50 @@ Private Sub SetupButtons()
     topPos = 20
 
     StyleNavButton btnBlocks, "Otkupni blokovi", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
 
     StyleNavButton btnPurchase, "Otkup i prodaja", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
+    
+    StyleNavButton btnPalete, "Palete", topPos
+    topPos = topPos + 38
 
     StyleNavButton btnAgro, "Agrohemija", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
 
-    StyleNavButton btnReports, "IzveÅ¡taj", topPos
-    topPos = topPos + 42
+    StyleNavButton btnReports, "Izveštaj", topPos
+    topPos = topPos + 38
 
     StyleNavButton btnInvoicing, "Fakturisanje", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
     
     StyleNavButton btnBanka, "Banka uvoz izvoda", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
     
     StyleNavButton btnBankaIsplate, "Banka platni nalozi", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
     
     StyleNavButton btnSyncPWA, "Sinhronizuj PWA", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
 
-    StyleNavButton btnMargin, "MarÅ¾a", topPos
-    topPos = topPos + 42
+    StyleNavButton btnMargin, "Marža", topPos
+    topPos = topPos + 38
 
-    StyleNavButton btnTrace, "IzveÅ¡taj o sledljivosti", topPos
-    topPos = topPos + 42
+    StyleNavButton btnTrace, "Izveštaj o sledljivosti", topPos
+    topPos = topPos + 38
 
     StyleNavButton btnOpenExcel, "Otvori Excel", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
 
     StyleNavButton btnSnapshot, "Snimi", topPos
-    topPos = topPos + 42
+    topPos = topPos + 38
 
     StyleNavButton btnExit, "Izlaz", topPos
 
     Set navButtons = New Collection
     navButtons.Add btnBlocks
     navButtons.Add btnPurchase
+    navButtons.Add btnPalete
     navButtons.Add btnAgro
     navButtons.Add btnReports
     navButtons.Add btnInvoicing
@@ -419,7 +426,7 @@ Private Sub StyleNavButton(btn As MSForms.CommandButton, txt As String, topPos A
     With btn
         .caption = "   " & txt
         .Left = 16
-        .Top = topPos
+        .top = topPos
         .width = 200
         .Height = 34
         .BackColor = BTN_BG
@@ -439,7 +446,7 @@ End Sub
 Private Sub SetupCards()
     With lblCardAlerts
         .Left = 280
-        .Top = 70
+        .top = 70
         .width = 520
         .Height = 380
         .BackColor = RGB(36, 42, 54)
@@ -449,7 +456,7 @@ Private Sub SetupCards()
 
     With lblStatus
         .Left = 295
-        .Top = 85
+        .top = 85
         .width = 490
         .Height = 370
         .BackStyle = fmBackStyleTransparent
@@ -462,7 +469,7 @@ Private Sub SetupCards()
 
     With lblCardSummary
         .Left = 280
-        .Top = 456
+        .top = 456
         .width = 520
         .Height = 30
         .BackColor = RGB(36, 42, 54)
@@ -483,14 +490,14 @@ Private Sub HighlightActive(activeBtn As MSForms.CommandButton)
     activeBtn.BackColor = BTN_ACTIVE
     activeBtn.ForeColor = vbWhite
 
-    ' Accent bar â€” koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
+    ' Accent bar — koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
     StyleAccentBar lblNavAccent
     With lblNavAccent
         .Visible = True
         .width = 4
         .Height = activeBtn.Height
         .Left = activeBtn.Left - 8
-        .Top = activeBtn.Top
+        .top = activeBtn.top
         .ZOrder 0
     End With
 End Sub
@@ -567,6 +574,10 @@ Private Sub btnPurchase_Click()
     OpenContentForm frmDokumenta, btnPurchase, "Otkup i prodaja"
 End Sub
 
+Private Sub btnPalete_Click()
+    OpenContentForm frmPalete, btnPalete, "Palete"
+End Sub
+
 Private Sub btnAgro_Click()
     OpenContentForm frmAgrohemija, btnAgro, "Agrohemija"
 End Sub
@@ -614,11 +625,11 @@ EH:
 
     On Error Resume Next
     lblStatus.Visible = True
-    lblStatus.caption = "GreÅ¡ka pri uvozu banke. Otvaram mapiranje za postojece stavke."
+    lblStatus.caption = "Greška pri uvozu banke. Otvaram mapiranje za postojece stavke."
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "GreÅ¡ka pri uvozu bankovnih izvoda:" & vbCrLf & errDesc & vbCrLf & vbCrLf & _
+    MsgBox "Greška pri uvozu bankovnih izvoda:" & vbCrLf & errDesc & vbCrLf & vbCrLf & _
            "Mapiranje ce biti otvoreno za postojece neuparene stavke.", vbExclamation
 
     OpenContentForm frmBankaImport, btnBanka, "Banka uvoz izvoda"
@@ -669,13 +680,13 @@ EH:
 End Sub
 
 Private Sub btnMargin_Click()
-    OpenContentForm frmMarza, btnMargin, "MarÅ¾a"
+    OpenContentForm frmMarza, btnMargin, "Marža"
 End Sub
 
 Private Sub btnTrace_Click()
     HighlightActive btnTrace
-    lblStatus.caption = "Sekcija: IzveÅ¡taj o sledljivosti"
-    OpenContentForm frmSledljivost, btnTrace, "IzveÅ¡taj o sledljivosti"
+    lblStatus.caption = "Sekcija: Izveštaj o sledljivosti"
+    OpenContentForm frmSledljivost, btnTrace, "Izveštaj o sledljivosti"
 End Sub
 
 Private Sub btnOpenExcel_Click()
@@ -710,11 +721,11 @@ EH:
     LogErr "frmOtkupAPP.btnSnapshot_Click"
 
     lblStatus.Visible = True
-    lblStatus.caption = "GreÅ¡ka pri snimanju. Pogledajte log."
+    lblStatus.caption = "Greška pri snimanju. Pogledajte log."
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "GreÅ¡ka pri snimanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri snimanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnExit_Click()
@@ -739,7 +750,7 @@ EH:
     Application.DisplayAlerts = True
     On Error GoTo 0
 
-    MsgBox "Fajl nije uspeÅ¡no sacuvan ili aplikacija nije zatvorena: " & Err.description, vbExclamation, APP_NAME
+    MsgBox "Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub btnMaticni_Click()
@@ -753,7 +764,7 @@ Private Sub btnMaticni_Click()
 
 EH:
     LogErr "frmOtkupAPP.btnMaticni_Click"
-    MsgBox "GreÅ¡ka pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub OpenMaticniForm()
@@ -764,7 +775,7 @@ Public Sub OpenMaticniForm()
     With frmMaticniPodaci
         .StartUpPosition = 0
         .Left = Me.Left + btnMaticni.Left + 2
-        .Top = Me.Top + btnMaticni.Top + btnMaticni.Height
+        .top = Me.top + btnMaticni.top + btnMaticni.Height
         .Show vbModeless
     End With
 
@@ -772,7 +783,7 @@ Public Sub OpenMaticniForm()
 
 EH:
     LogErr "frmOtkupAPP.OpenMaticniForm"
-    MsgBox "GreÅ¡ka pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' =========================
@@ -787,6 +798,11 @@ End Sub
 Private Sub btnPurchase_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetHover
     SetHover btnPurchase, True
+End Sub
+
+Private Sub btnPalete_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetHover
+    SetHover btnPalete, True
 End Sub
 
 Private Sub btnAgro_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
@@ -873,7 +889,7 @@ Private Sub FitActiveContent()
 
         ' Poravnanje sa desnim content delom
         .Left = Me.Left + lblCardAlerts.Left
-        .Top = Me.Top + fraSidebar.Top
+        .top = Me.top + fraSidebar.top
 
         ' Pokriva i lblCardAlerts i lblCardSummary,
         ' i ravna se gore/dole sa sidebarom
@@ -951,12 +967,12 @@ EH:
 
     LogErr "frmOtkupAPP.OpenContentForm"
 
-    ShowDashboardArea "GreÅ¡ka pri otvaranju sekcije: " & sectionTitle
+    ShowDashboardArea "Greška pri otvaranju sekcije: " & sectionTitle
 
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "GreÅ¡ka pri otvaranju sekcije '" & sectionTitle & "': " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju sekcije '" & sectionTitle & "': " & Err.description, vbCritical, APP_NAME
 End Sub
 
 
@@ -1037,7 +1053,7 @@ Private Sub PositionAccentBar()
         .width = 4
         .Height = activeBtn.Height
         .Left = fraSidebar.Left + activeBtn.Left - 8
-        .Top = fraSidebar.Top + activeBtn.Top
+        .top = fraSidebar.top + activeBtn.top
         .ZOrder 0
     End With
     On Error GoTo 0
@@ -1049,7 +1065,7 @@ EH:
 End Sub
 
 ' ============================================================
-' v6.11 UI: KPI CARD u dnu sidebara (DanaÅ¡nji otkup kg)
+' v6.11 UI: KPI CARD u dnu sidebara (Današnji otkup kg)
 ' ============================================================
 
 Private Sub LayoutSidebarKpiCard()
@@ -1071,7 +1087,7 @@ Private Sub LayoutSidebarKpiCard()
     With lblKPITitle
         .Move 10, 8, fraSidebarKPI.width - 20, 14
         StyleKpiLabel lblKPITitle, "title"
-        .caption = "DanaÅ¡nji otkup"
+        .caption = "Današnji otkup"
     End With
 
     With lblKPIValue
@@ -1131,13 +1147,13 @@ Public Sub RefreshSidebarKpi()
         lblKPIDelta.caption = ""
     End If
 
-    lblKPISub.caption = cntOtp & " otpremnica  â€¢  " & cntPrij & " prijemnica"
+    lblKPISub.caption = cntOtp & " otpremnica  •  " & cntPrij & " prijemnica"
 
     Exit Sub
 
 EH:
     LogErr "frmOtkupAPP.RefreshSidebarKpi"
-    lblKPIValue.caption = "â€”"
+    lblKPIValue.caption = "—"
     lblKPIDelta.caption = ""
     lblKPISub.caption = ""
 End Sub
@@ -1261,12 +1277,12 @@ Public Sub RefreshBankaBadge()
     StyleBadge lblBankaBadge, openCount
 
     If openCount > 0 Then
-        ' Pozicija â€” desno gornji ugao btnBanka
+        ' Pozicija — desno gornji ugao btnBanka
         With lblBankaBadge
             .width = 22
             .Height = 14
             .Left = fraSidebar.Left + btnBanka.Left + btnBanka.width - 36
-            .Top = fraSidebar.Top + btnBanka.Top - 46
+            .top = fraSidebar.top + btnBanka.top - 46
             .ZOrder 0
         End With
     End If
@@ -1320,7 +1336,7 @@ Private Sub SetupTopBarStatus()
         .width = 14
         .Height = 18
         .Left = imgLogo.Left + imgLogo.width + 12
-        .Top = 12
+        .top = 12
     End With
 
     ' "Online" text
@@ -1331,7 +1347,7 @@ Private Sub SetupTopBarStatus()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
         .Left = lblStatusDot.Left + lblStatusDot.width + 2
-        .Top = 14
+        .top = 14
         .width = 50
         .Height = 16
     End With
@@ -1344,7 +1360,7 @@ Private Sub SetupTopBarStatus()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
         .Left = lblOnlineText.Left + lblOnlineText.width + 14
-        .Top = 14
+        .top = 14
         .width = 200
         .Height = 16
     End With
@@ -1357,7 +1373,7 @@ Private Sub SetupTopBarStatus()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
         .Left = lblOperator.Left + lblOperator.width + 14
-        .Top = 14
+        .top = 14
         .width = 100
         .Height = 16
     End With
@@ -1371,7 +1387,7 @@ End Sub
 Private Function GetCurrentOperatorName() As String
     On Error Resume Next
     GetCurrentOperatorName = Environ$("USERNAME")
-    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "â€”"
+    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "—"
     On Error GoTo 0
 End Function
 

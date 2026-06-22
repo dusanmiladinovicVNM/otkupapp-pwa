@@ -65,14 +65,13 @@ Public Sub CommitTx()
     Dim sourceName As String
     sourceName = BuildAutoSaveSourceName()
     
-    Cleanup
+    CleanUp
     mActive = False
     
-    ' AR-002: AutoSave after successful TX commit.
-    ' modJournal.AutoSaveAfterCommit handles debounce, ReadOnly check,
-    ' DisplayAlerts suppression and best-effort error handling.
-    ' Failure NEVER propagates here - the TX is already committed.
-    Call AutoSaveAfterCommit(sourceName)
+    ' AR-002a: zakazi background save (OnTime) umesto sinhronog Save-a.
+    ' Stvarni save i dalje izvrsava AutoSaveAfterCommit. Failure NIKAD
+    ' ne propaga jer je TX vec commit-ovan u memoriji.
+    Call MarkDirtyAndSchedule(sourceName)
 End Sub
 
 Public Sub RollbackTx()
@@ -83,11 +82,11 @@ Public Sub RollbackTx()
         RestoreTable CStr(key), mSnapshots(key)
     Next key
 
-    Cleanup
+    CleanUp
     mActive = False
 End Sub
 
-Private Sub Cleanup()
+Private Sub CleanUp()
     On Error Resume Next
     Application.ScreenUpdating = mScreen
     Application.EnableEvents = mEvents

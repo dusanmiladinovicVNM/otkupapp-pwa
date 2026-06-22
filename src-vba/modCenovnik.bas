@@ -1,8 +1,9 @@
 Attribute VB_Name = "modCenovnik"
+'Attribute VB_Name = "modCenovnik"
 Option Explicit
 
 ' ============================================================
-' modCenovnik â€“ cenovnik (cena po proizvodu), append-only istorija
+' modCenovnik – cenovnik (cena po proizvodu), append-only istorija
 '
 ' Model:
 '   - tblCenovnik je append-only: svaka promena cene = NOVI red.
@@ -41,23 +42,23 @@ Public Function GetVazecaCena(ByVal vrstaVoca As String, _
     data = ExcludeStornirano(data, TBL_CENOVNIK)
     If IsEmpty(data) Then Exit Function
 
-    Dim cV As Long, cS As Long, cK As Long, cC As Long, cD As Long
-    cV = GetColumnIndex(TBL_CENOVNIK, COL_CEN_VRSTA)
+    Dim cv As Long, cS As Long, ck As Long, cc As Long, cD As Long
+    cv = GetColumnIndex(TBL_CENOVNIK, COL_CEN_VRSTA)
     cS = GetColumnIndex(TBL_CENOVNIK, COL_CEN_SORTA)
-    cK = GetColumnIndex(TBL_CENOVNIK, COL_CEN_KLASA)
-    cC = GetColumnIndex(TBL_CENOVNIK, COL_CEN_CENA)
+    ck = GetColumnIndex(TBL_CENOVNIK, COL_CEN_KLASA)
+    cc = GetColumnIndex(TBL_CENOVNIK, COL_CEN_CENA)
     cD = GetColumnIndex(TBL_CENOVNIK, COL_CEN_DATUM)
 
-    If cV = 0 Or cS = 0 Or cK = 0 Or cC = 0 Then Exit Function
+    If cv = 0 Or cS = 0 Or ck = 0 Or cc = 0 Then Exit Function
 
     Dim i As Long
     Dim bestRow As Long: bestRow = 0
     Dim bestDate As Double: bestDate = -1#
 
     For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(Nz(data(i, cV))), Trim$(vrstaVoca), vbTextCompare) = 0 _
-           And StrComp(Trim$(Nz(data(i, cS))), Trim$(sortaVoca), vbTextCompare) = 0 _
-           And StrComp(Trim$(Nz(data(i, cK))), Trim$(klasa), vbTextCompare) = 0 Then
+        If StrComp(Trim$(nz(data(i, cv))), Trim$(vrstaVoca), vbTextCompare) = 0 _
+           And StrComp(Trim$(nz(data(i, cS))), Trim$(sortaVoca), vbTextCompare) = 0 _
+           And StrComp(Trim$(nz(data(i, ck))), Trim$(klasa), vbTextCompare) = 0 Then
 
             Dim dv As Double
             dv = 0
@@ -74,7 +75,7 @@ Public Function GetVazecaCena(ByVal vrstaVoca As String, _
     Next i
 
     If bestRow > 0 Then
-        If IsNumeric(data(bestRow, cC)) Then GetVazecaCena = CDbl(data(bestRow, cC))
+        If IsNumeric(data(bestRow, cc)) Then GetVazecaCena = CDbl(data(bestRow, cc))
     End If
 
     Exit Function
@@ -133,3 +134,4 @@ EH:
     LogErr "modCenovnik.AddCena"
     AddCena = ""
 End Function
+

@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmIzvestaj 
    Caption         =   "UserForm1"
-   ClientHeight    =   10065
+   ClientHeight    =   13815
    ClientLeft      =   120
    ClientTop       =   465
-   ClientWidth     =   14535
+   ClientWidth     =   20235
    OleObjectBlob   =   "frmIzvestaj.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,11 +13,12 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
-' frmIzvestaj v2.1 ‚Äì Reporting
-' GE√ÑNDERT: tblIsporuka ? tblPrijemnica
+' frmIzvestaj v2.1 ñ Reporting
+' GEƒNDERT: tblIsporuka ? tblPrijemnica
 ' NEU: Manjak-Tab (Page 6)
 ' Tabs: Saldo | Otkupljena roba | Primljena ambalaza |
 '       Isplata | Zbirni po OM | Prosecna cena | Manjak
@@ -59,15 +60,15 @@ Private Sub UserForm_Activate()
 
     m_IsInitializing = True
     
-    ' Header zone (dodati u Designer ako nema≈°)
+    ' Header zone (dodati u Designer ako nemaö)
     On Error Resume Next
-    StyleFrameTitleLabel lblKopf, "Izve≈°taji"
-    StyleSubtitle lblSubtitle, "Pregled saldo, otkupljene robe, ambala≈æe i prosecne cene"
+    StyleFrameTitleLabel lblKopf, "Izveötaji"
+    StyleSubtitle lblSubtitle, "Pregled saldo, otkupljene robe, ambalaûe i prosecne cene"
     On Error GoTo EH
     
     ' Style action buttons
-    StylePrimaryButton btnUnos, "Prika≈æi"
-    StylePrimaryButton btnStampaj, "≈†tampaj"
+    StylePrimaryButton btnUnos, "Prikaûi"
+    StylePrimaryButton btnStampaj, "ätampaj"
     StyleExitButton btnPovratak, "Povratak"
     
     ' Style entity toggle buttons (default: inactive look)
@@ -87,14 +88,14 @@ Private Sub UserForm_Activate()
     
     ' Kartica print button (specijalan za kooperante)
     On Error Resume Next
-    StylePrimaryButton btnStampajKarticu, "≈†tampaj karticu"
+    StylePrimaryButton btnStampajKarticu, "ätampaj karticu"
     On Error GoTo EH
     
     StyleListHeaderLabel lblSidebarEntitet
     lblSidebarEntitet.caption = "ENTITET"
 
     StyleListHeaderLabel lblSidebarTip
-    lblSidebarTip.caption = "TIP IZVE≈†TAJA"
+    lblSidebarTip.caption = "TIP IZVEäTAJA"
 
     StyleListHeaderLabel lblSidebarFilter
     lblSidebarFilter.caption = "FILTER"
@@ -176,7 +177,7 @@ CleanFail:
     Resume CleanExit
 End Sub
 
-' === Toggle styling ‚Äî inline u frmIzvestaj ===
+' === Toggle styling ó inline u frmIzvestaj ===
 
 Private Sub StyleToggleActive(ByVal tgl As MSForms.ToggleButton, ByVal lbl As String)
     On Error Resume Next
@@ -352,12 +353,12 @@ End Sub
 
 
 Private Sub ResetActionButtons()
-    StylePrimaryButton btnUnos, "Prika≈æi"
-    StylePrimaryButton btnStampaj, "≈†tampaj"
+    StylePrimaryButton btnUnos, "Prikaûi"
+    StylePrimaryButton btnStampaj, "ätampaj"
     StyleExitButton btnPovratak, "Povratak"
     
     On Error Resume Next
-    StylePrimaryButton btnStampajKarticu, "≈†tampaj karticu"
+    StylePrimaryButton btnStampajKarticu, "ätampaj karticu"
     On Error GoTo 0
 End Sub
 
@@ -742,7 +743,7 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
 End Sub
 
 ' ============================================================
-' AMBALAZA (unver√§ndert)
+' AMBALAZA (unver‰ndert)
 ' ============================================================
 
 Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID As String, _
@@ -776,7 +777,7 @@ Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID A
 End Sub
 
 ' ============================================================
-' ISPLATA (unver√§ndert)
+' ISPLATA (unver‰ndert)
 ' ============================================================
 
 Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As String, _
@@ -801,7 +802,7 @@ Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As
 End Sub
 
 ' ============================================================
-' ZBIRNI PO OM (unver√§ndert)
+' ZBIRNI PO OM (unver‰ndert)
 ' ============================================================
 
 Private Sub GenerateZbirniReport(ByVal datumOd As Date, ByVal datumDo As Date, _
@@ -1329,9 +1330,9 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SOM2, "Kolicina"
     SetColumnHeader lbl_H_SOM3, "Vrednost"
     SetColumnHeader lbl_H_SOM4, "Isplaceno"
-    SetColumnHeader lbl_H_SOM5, "Agro zadu≈æenje"
+    SetColumnHeader lbl_H_SOM5, "Agro zaduûenje"
     SetColumnHeader lbl_H_SOM6, "Saldo"
-    SetColumnHeader lbl_H_SOM7, "Ambala≈æa"
+    SetColumnHeader lbl_H_SOM7, "Ambalaûa"
     
     ' === SaldoKupci Page ===
     SetColumnHeader lbl_H_SK1, "Vrsta"
@@ -1340,7 +1341,7 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SK4, "Vrednost"
     SetColumnHeader lbl_H_SK5, "Novac"
     SetColumnHeader lbl_H_SK6, "Saldo"
-    SetColumnHeader lbl_H_SK7, "Ambala≈æa"
+    SetColumnHeader lbl_H_SK7, "Ambalaûa"
     
     ' === OtkupRoba Page ===
     SetColumnHeader lbl_H_OR1, "Datum"
@@ -1364,7 +1365,7 @@ Private Sub SetupAllColumnHeaders()
     
     ' === Isplata Page ===
     SetColumnHeader lbl_H_ISP1, "Kooperant"
-    SetColumnHeader lbl_H_ISP2, "Ke≈° otkupac"
+    SetColumnHeader lbl_H_ISP2, "Keö otkupac"
     SetColumnHeader lbl_H_ISP3, "Virman firma"
     SetColumnHeader lbl_H_ISP4, "Virman avans"
     SetColumnHeader lbl_H_ISP5, "Ukupno"
@@ -1394,8 +1395,8 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_KK1, "Datum"
     SetColumnHeader lbl_H_KK2, "Broj dok."
     SetColumnHeader lbl_H_KK3, "Opis"
-    SetColumnHeader lbl_H_KK4, "Zadu≈æenje"
-    SetColumnHeader lbl_H_KK5, "Razdu≈æenje"
+    SetColumnHeader lbl_H_KK4, "Zaduûenje"
+    SetColumnHeader lbl_H_KK5, "Razduûenje"
     SetColumnHeader lbl_H_KK6, "Saldo"
     LayoutKarticaHeaders            ' kreira lbl_H_KK7 + auto-fit sirine/pozicije (mora poslednje)
 
@@ -1413,11 +1414,11 @@ Private Sub LayoutKarticaHeaders()
 
     ' KK7 ("Saldo amb.") - kreiraj idempotentno (lookup po imenu).
     Dim lblAmb As MSForms.label
-    Set lblAmb = lstKartica.Parent.Controls("lbl_H_KK7")
+    Set lblAmb = lstKartica.parent.Controls("lbl_H_KK7")
     If lblAmb Is Nothing Then
-        Set lblAmb = lstKartica.Parent.Controls.Add("Forms.Label.1", "lbl_H_KK7", True)
+        Set lblAmb = lstKartica.parent.Controls.Add("Forms.Label.1", "lbl_H_KK7", True)
         If Not lblAmb Is Nothing Then
-            lblAmb.Top = lbl_H_KK6.Top
+            lblAmb.top = lbl_H_KK6.top
             lblAmb.Height = lbl_H_KK6.Height
         End If
     End If
@@ -1434,7 +1435,7 @@ Private Sub LayoutKarticaHeaders()
     names = Array("lbl_H_KK1", "lbl_H_KK2", "lbl_H_KK3", "lbl_H_KK4", _
                   "lbl_H_KK5", "lbl_H_KK6", "lbl_H_KK7")
 
-    Dim x As Double: x = lstKartica.Left
+    Dim X As Double: X = lstKartica.Left
     Dim cw As String: cw = ""
     Dim k As Long
     For k = 0 To 6
@@ -1442,13 +1443,13 @@ Private Sub LayoutKarticaHeaders()
         wCol = CLng(Int(availW * CDbl(prop(k))))
         Dim lbl As MSForms.label
         Set lbl = Nothing
-        Set lbl = lstKartica.Parent.Controls(CStr(names(k)))
+        Set lbl = lstKartica.parent.Controls(CStr(names(k)))
         If Not lbl Is Nothing Then
-            lbl.Left = x
+            lbl.Left = X
             lbl.width = wCol
         End If
         cw = cw & CStr(wCol) & ";"
-        x = x + wCol
+        X = X + wCol
     Next k
     cw = cw & "0"                            ' skrivena ref-kljuc kolona (idx 7)
     lstKartica.ColumnCount = 8
@@ -1482,8 +1483,8 @@ Private Sub EnsureKarticaAmbPage()
     Set m_lblAmbTitle = pg.Controls.Add("Forms.Label.1", "lblAmbTitle", True)
     With m_lblAmbTitle
         .Left = lstKartica.Left
-        .Top = lbl_H_KK1.Top - 18
-        If .Top < 2 Then .Top = 2
+        .top = lbl_H_KK1.top - 18
+        If .top < 2 Then .top = 2
         .width = lstKartica.width
         .Height = 14
     End With
@@ -1493,7 +1494,7 @@ Private Sub EnsureKarticaAmbPage()
     Set m_lstAmb = pg.Controls.Add("Forms.ListBox.1", "lstKarticaAmb", True)
     With m_lstAmb
         .Left = lstKartica.Left
-        .Top = lstKartica.Top
+        .top = lstKartica.top
         .width = lstKartica.width
         .Height = lstKartica.Height
         .ColumnCount = 6
@@ -1521,8 +1522,8 @@ Private Sub LayoutAmbHeaders(ByVal pg As MSForms.Page)
     availW = m_lstAmb.width - 16
     If availW < 120 Then availW = m_lstAmb.width
 
-    Dim x As Double: x = m_lstAmb.Left
-    Dim topY As Double: topY = lbl_H_KK1.Top
+    Dim X As Double: X = m_lstAmb.Left
+    Dim topY As Double: topY = lbl_H_KK1.top
     Dim hh As Double: hh = lbl_H_KK1.Height
     Dim cw As String: cw = ""
     Dim k As Long
@@ -1536,15 +1537,15 @@ Private Sub LayoutAmbHeaders(ByVal pg As MSForms.Page)
             Set lbl = pg.Controls.Add("Forms.Label.1", "lblAmbH" & CStr(k + 1), True)
         End If
         If Not lbl Is Nothing Then
-            lbl.Top = topY
+            lbl.top = topY
             lbl.Height = hh
-            lbl.Left = x
+            lbl.Left = X
             lbl.width = wCol
             StyleListHeaderLabel lbl
             lbl.caption = CStr(caps(k))
         End If
         cw = cw & CStr(wCol) & ";"
-        x = x + wCol
+        X = X + wCol
     Next k
     If Len(cw) > 0 Then cw = Left$(cw, Len(cw) - 1)
     m_lstAmb.ColumnWidths = cw
@@ -1562,3 +1563,5 @@ Private Sub ForceDarkAllPages()
     
     On Error GoTo 0
 End Sub
+
+

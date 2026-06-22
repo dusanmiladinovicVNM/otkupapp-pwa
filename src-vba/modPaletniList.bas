@@ -1,8 +1,9 @@
 Attribute VB_Name = "modPaletniList"
+'Attribute VB_Name = "modPaletniList"
 Option Explicit
 
 ' ============================================================
-' modPaletniList â€” paletni list sveze robe + prerada (Phase 2)
+' modPaletniList — paletni list sveze robe + prerada (Phase 2)
 '
 ' Inkrement 1: numeracija po godini (1..n, reset svake godine).
 '   Pattern preuzet iz modFaktura.GenerateBrojFakture (per-year max+1),
@@ -43,8 +44,8 @@ Public Function GenerateBrojPalete() As Long
 
         Dim r As Long, n As Long
         For r = 1 To UBound(data, 1)
-            If CLng(Val(CStr(data(r, iGod)))) = yr Then
-                n = CLng(Val(CStr(data(r, iBroj))))
+            If CLng(val(CStr(data(r, iGod)))) = yr Then
+                n = CLng(val(CStr(data(r, iBroj))))
                 If n > maxN Then maxN = n
             End If
         Next r
@@ -59,7 +60,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC â€” paletizacija iz modDokumenta.SavePrijemnica_TX / Multi_TX.
+' PUBLIC — paletizacija iz modDokumenta.SavePrijemnica_TX / Multi_TX.
 ' Poziva se UNUTAR transakcije, PRE CommitTx -> atomicno sa prijemnicom.
 ' (TX vec drzi Calculation=manual, pa nema poseban calc-guard ovde.)
 '
@@ -155,19 +156,19 @@ End Function
 ' Idempotency guard: ista PrijemnicaID ne sme imati aktivnu (ne-storniranu)
 ' paletnu stavku -> sprecava dvostruku paletizaciju (retry/re-save).
 Private Sub EnsurePrijemnicaNotAlreadyPaletized(ByVal prijemnicaID As String, _
-                                                ByVal src As String)
+                                                ByVal SRC As String)
     Dim d As Variant: d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Sub
 
     Dim iPrij As Long, iStorno As Long
-    iPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, src)
-    iStorno = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, src)
+    iPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    iStorno = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
 
     Dim r As Long
     For r = 1 To UBound(d, 1)
         If CStr(d(r, iPrij)) = prijemnicaID _
            And UCase$(Trim$(CStr(d(r, iStorno)))) <> "DA" Then
-            Err.Raise vbObjectError + 7330, src, _
+            Err.Raise vbObjectError + 7330, SRC, _
                       "Prijemnica " & prijemnicaID & " je vec paletizovana."
         End If
     Next r
@@ -318,11 +319,11 @@ EH:
     LogErr "modPaletniList.GetPaleteForGrid"
 End Function
 
-Private Function PreradMatch(ByVal cellVal As String, ByVal filter As String) As Boolean
+Private Function PreradMatch(ByVal CellVal As String, ByVal filter As String) As Boolean
     Select Case UCase$(Trim$(filter))
         Case "": PreradMatch = True
-        Case "DA": PreradMatch = (UCase$(Trim$(cellVal)) = "DA")
-        Case "NE": PreradMatch = (UCase$(Trim$(cellVal)) <> "DA")
+        Case "DA": PreradMatch = (UCase$(Trim$(CellVal)) = "DA")
+        Case "NE": PreradMatch = (UCase$(Trim$(CellVal)) <> "DA")
         Case Else: PreradMatch = True
     End Select
 End Function
@@ -497,7 +498,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC â€” rucna stampa nepotpunih (otvorenih) paleta.
+' PUBLIC — rucna stampa nepotpunih (otvorenih) paleta.
 ' Kraj smene: Alt+F8 -> PrintNepotpunePalete (kasnije dugme u UI).
 ' ============================================================
 ' Izlaz (po PALETA_PRINT_MODE) za sve otvorene (nepotpune) palete. Vraca broj
@@ -531,9 +532,9 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC â€” paletni list dokument preko PaletaSablon (isti pristup kao
+' PUBLIC — paletni list dokument preko PaletaSablon (isti pristup kao
 ' frmSledljivost.PrintTracePDF: Sablon + named-range fill + Export/Print).
-' PaletaSablon se auto-kreira (EnsurePaletaSablon) i sme da se stilizuje â€”
+' PaletaSablon se auto-kreira (EnsurePaletaSablon) i sme da se stilizuje —
 ' popunjavanje ide po imenima opsega, ne po poziciji.
 ' ============================================================
 
@@ -560,7 +561,7 @@ Public Function ExportPaletniListPDF(ByVal palID As String, _
     If ws Is Nothing Then Exit Function
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Paleta_" & broj & "-" & god & ".pdf"
+    pdfPath = ThisWorkbook.path & "\Paleta_" & broj & "-" & god & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -861,7 +862,7 @@ Public Function FindPaletaIDByBroj(ByVal broj As Long, ByVal god As Long) As Str
 End Function
 
 ' ============================================================
-' PRIVATE â€” paleta lifecycle + lookup + util
+' PRIVATE — paleta lifecycle + lookup + util
 ' ============================================================
 
 ' Vraca PaletaID otvorene palete za vrstu voca (i njen rowIndex preko
@@ -964,8 +965,8 @@ Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
               neto, amb, Now, "")
 End Sub
 
-Private Sub ClosePaleta(ByVal palRow As Long, ByVal src As String)
-    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, src
+Private Sub ClosePaleta(ByVal palRow As Long, ByVal SRC As String)
+    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, SRC
 End Sub
 
 ' Generican append po imenu kolone (rowData velicine sa brojem kolona tabele).
@@ -1101,11 +1102,11 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
     Dim klSet As Object: Set klSet = CreateObject("Scripting.Dictionary")
     Dim dp As Variant: dp = GetTableData(TBL_PALETA)
     If Not IsEmpty(dp) Then
-        Dim pID As Long, pKl As Long
-        pID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+        Dim pid As Long, pKl As Long
+        pid = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
         pKl = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
         For r = 1 To UBound(dp, 1)
-            If palSet.Exists(CStr(SafeCell(dp, r, pID))) Then
+            If palSet.Exists(CStr(SafeCell(dp, r, pid))) Then
                 klSet(UCase$(Trim$(CStr(SafeCell(dp, r, pKl))))) = True
             End If
         Next r
@@ -1138,9 +1139,9 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
     ' detalji otkupa iz tblOtkup po OtkupID (+ klasa filter), dedup
     Dim o As Variant: o = GetTableData(TBL_OTKUP)
     If IsEmpty(o) Then Exit Function
-    Dim oID As Long, oKoop As Long, oVr As Long, oKol As Long
+    Dim oid As Long, oKoop As Long, oVr As Long, oKol As Long
     Dim oAmb As Long, oTip As Long, oKl As Long, oStorno As Long
-    oID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    oid = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     oKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     oVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     oKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
@@ -1152,7 +1153,7 @@ Private Function GetOtkupiZaPalete(ByVal paletaIDs As Collection) As Variant
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim rows As Collection: Set rows = New Collection
     For r = 1 To UBound(o, 1)
-        Dim otkID As String: otkID = CStr(SafeCell(o, r, oID))
+        Dim otkID As String: otkID = CStr(SafeCell(o, r, oid))
         If wantOtk.Exists(otkID) _
            And (Not filterKlasa Or klSet.Exists(UCase$(Trim$(CStr(SafeCell(o, r, oKl)))))) _
            And UCase$(Trim$(CStr(SafeCell(o, r, oStorno)))) <> "DA" Then
@@ -1203,8 +1204,8 @@ End Function
 ' Kriticne kolone idu preko RequireColumns (modSchemaGuard); ID lookup puca
 ' na 0 i na >1 -- nikad "prvi od duplikata".
 ' ============================================================
-Private Sub RequirePaletaSchema(ByVal src As String)
-    RequireColumns TBL_PALETA, src, _
+Private Sub RequirePaletaSchema(ByVal SRC As String)
+    RequireColumns TBL_PALETA, SRC, _
         COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, COL_PAL_VRSTA, _
         COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, COL_PAL_TIP_PALETE, _
         COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, COL_PAL_NETO, COL_PAL_AMBALAZA, _
@@ -1212,22 +1213,22 @@ Private Sub RequirePaletaSchema(ByVal src As String)
         COL_PAL_CREATED, COL_STORNIRANO
 End Sub
 
-Private Sub RequirePaletaStavkaSchema(ByVal src As String)
-    RequireColumns TBL_PALETA_STAVKA, src, _
+Private Sub RequirePaletaStavkaSchema(ByVal SRC As String)
+    RequireColumns TBL_PALETA_STAVKA, SRC, _
         COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
         COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
         COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
         COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO
 End Sub
 
-Private Sub RequirePreradaSchema(ByVal src As String)
-    RequireColumns TBL_PRERADA, src, _
+Private Sub RequirePreradaSchema(ByVal SRC As String)
+    RequireColumns TBL_PRERADA, SRC, _
         COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_NETO_IZLAZ, _
         COL_PRE_KUTIJE, COL_PRE_KESE, COL_STORNIRANO
 End Sub
 
-Private Sub RequirePreradaStavkaSchema(ByVal src As String)
-    RequireColumns TBL_PRERADA_STAVKA, src, _
+Private Sub RequirePreradaStavkaSchema(ByVal SRC As String)
+    RequireColumns TBL_PRERADA_STAVKA, SRC, _
         COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
         COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_STORNIRANO
 End Sub
@@ -1237,14 +1238,14 @@ End Sub
 Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
                                             ByVal keyCol As String, _
                                             ByVal keyValue As String, _
-                                            ByVal src As String) As Long
+                                            ByVal SRC As String) As Long
     Dim hits As Collection
     Set hits = FindRows(tblName, keyCol, keyValue)
     If hits.count = 0 Then
-        Err.Raise vbObjectError + 7320, src, _
+        Err.Raise vbObjectError + 7320, SRC, _
                   "Nema reda u " & tblName & " za " & keyCol & "=" & keyValue & "."
     ElseIf hits.count > 1 Then
-        Err.Raise vbObjectError + 7321, src, _
+        Err.Raise vbObjectError + 7321, SRC, _
                   "Vise redova (" & hits.count & ") u " & tblName & " za " & _
                   keyCol & "=" & keyValue & "."
     End If
@@ -1252,7 +1253,7 @@ Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
 End Function
 
 ' ============================================================
-' PRERADA (preradni list) â€” palete -> kutije/kese.
+' PRERADA (preradni list) — palete -> kutije/kese.
 ' Palete se markiraju Preradjeno=Da i izlaze iz lagera. Sopstveni broj
 ' 1..n po godini; PDF preko PreradaSablon (isti stil). Bez kalo racunice.
 ' ============================================================
@@ -1270,8 +1271,8 @@ Public Function GenerateBrojPrerade() As Long
         iGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, "GenerateBrojPrerade")
         Dim r As Long, n As Long
         For r = 1 To UBound(data, 1)
-            If CLng(Val(CStr(data(r, iGod)))) = yr Then
-                n = CLng(Val(CStr(data(r, iBroj))))
+            If CLng(val(CStr(data(r, iGod)))) = yr Then
+                n = CLng(val(CStr(data(r, iBroj))))
                 If n > maxN Then maxN = n
             End If
         Next r
@@ -1402,7 +1403,7 @@ Public Function ExportPreradaPDF(ByVal preID As String, _
     If ws Is Nothing Then Exit Function
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Prerada_" & broj & "-" & god & ".pdf"
+    pdfPath = ThisWorkbook.path & "\Prerada_" & broj & "-" & god & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -1478,7 +1479,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
     End If
 
-    ' prerada -> preraÄ‘ene palete -> otkupi: jedan red po OTKUPU
+    ' prerada -> preradene palete -> otkupi: jedan red po OTKUPU
     Dim palIDs As Collection: Set palIDs = New Collection
     Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
     If Not IsEmpty(s) Then
@@ -1668,3 +1669,4 @@ End Sub
 
 ' --- tblPaleta helper-i za preradu uklonjeni: SavePrerada_TX cita tblPaleta
 '     inline (snapshot dPal) i pise preko RequireUpdateCell. ---
+

@@ -7,15 +7,17 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
-' clsStmBtn â€“ Event-omotac za runtime dugme "Deaktiviraj/Aktiviraj"
+' clsStmBtn – Event-omotac za runtime dugme "Deaktiviraj/Aktiviraj"
 ' u frmStammdaten (soft-delete). Dugme se pravi u kodu (Controls.Add),
 ' pa se klik hvata preko WithEvents (kao clsLookupMenuBtn/clsBlokUI).
 ' ============================================================
 
 Public WithEvents btn As MSForms.CommandButton
+Attribute btn.VB_VarHelpID = -1
 
 Private Sub btn_Click()
     frmStammdaten.OnSoftDeleteClick

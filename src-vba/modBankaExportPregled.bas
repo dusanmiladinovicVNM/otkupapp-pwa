@@ -116,7 +116,7 @@ Public Function BuildBlokIsplataList( _
         blk.kooperantNaziv = kooperantNaziv
         blk.stanicaID = stanicaID
         blk.TekuciRacun = tr
-        blk.BrojDokumenta = brojDok
+        blk.brojDokumenta = brojDok
         blk.UkupanIznos = ukupan
         blk.VecIsplaceno = isplaceno
         blk.OtvorenIznos = otvoren
@@ -230,7 +230,7 @@ Public Function ExportBlokListAsTSV(ByVal blokovi As Collection) As String
         s = s & Format$(blk.datum, "yyyy-mm-dd") & vbTab & _
                 blk.kooperantNaziv & vbTab & _
                 blk.stanicaID & vbTab & _
-                blk.BrojDokumenta & vbTab & _
+                blk.brojDokumenta & vbTab & _
                 Format$(blk.UkupanIznos, "0.00") & vbTab & _
                 Format$(blk.VecIsplaceno, "0.00") & vbTab & _
                 Format$(blk.OtvorenIznos, "0.00") & vbTab & _

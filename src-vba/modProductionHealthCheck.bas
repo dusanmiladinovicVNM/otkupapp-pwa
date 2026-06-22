@@ -31,6 +31,7 @@ Public Sub RunProductionHealthCheck()
     BeginHealthRun "PRODUCTION HEALTH CHECK"
 
     Check_CoreTablesAndColumns
+    Check_DuplicateDocumentKeys
     Check_NovacRowsAreFinanciallyValid
     Check_FakturaStavkeReferences
     Check_PrijemnicaFakturaFlags
@@ -103,6 +104,31 @@ Private Sub Check_CoreTablesAndColumns()
 
 EH:
     HealthFail "Core tables and required columns exist", FormatHealthErr()
+End Sub
+
+Private Sub Check_DuplicateDocumentKeys()
+    On Error GoTo EH
+
+    Dim badCount As Long
+
+    badCount = badCount + CountDuplicateKeyFailures(TBL_OTKUP, COL_OTK_ID, "OtkupID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_OTPREMNICA, COL_OTP_ID, "OtpremnicaID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_ZBIRNA, COL_ZBR_ID, "ZbirnaID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_PRIJEMNICA, COL_PRJ_ID, "PrijemnicaID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_FAKTURE, COL_FAK_ID, "FakturaID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_NOVAC, COL_NOV_ID, "NovacID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_BANKA_IMPORT, COL_BIM_ID, "BankaImportID")
+    badCount = badCount + CountDuplicateKeyFailures(TBL_PARCELE, COL_PAR_ID, "ParcelaID")
+
+    If badCount = 0 Then
+        HealthOk "No duplicate document keys found", _
+                 "Checked OtkupID, OtpremnicaID, ZbirnaID, PrijemnicaID, FakturaID, NovacID, BankaImportID, ParcelaID"
+    End If
+
+    Exit Sub
+
+EH:
+    HealthFail "Duplicate document key check failed", FormatHealthErr()
 End Sub
 
 ' ============================================================
@@ -963,7 +989,7 @@ Private Sub InitHealthLog()
     Set ws = ThisWorkbook.Worksheets(HEALTH_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
         ws.name = HEALTH_LOG_SHEET
         ws.Range("A1:G1").value = Array("Timestamp", "RunID", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
@@ -1171,6 +1197,105 @@ Private Function FormatHealthErr() As String
     FormatHealthErr = "Err.Number=" & CStr(Err.Number) & _
                       " Source=" & Err.SOURCE & _
                       " Description=" & Err.description
+End Function
+
+Private Function CountDuplicateKeyFailures(ByVal tblName As String, _
+                                           ByVal keyColumn As String, _
+                                           ByVal label As String) As Long
+    Const SRC As String = "CountDuplicateKeyFailures"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    Dim colKey As Long
+    Dim i As Long
+    Dim keyValue As String
+    Dim seen As Object
+    Dim counts As Object
+    Dim firstRows As Object
+    Dim duplicateKeys As Object
+    Dim k As Variant
+    Dim duplicateCount As Long
+    Dim detailCount As Long
+
+    If GetTable(tblName) Is Nothing Then
+        CountDuplicateKeyFailures = CountDuplicateKeyFailures + 1
+        HealthFail "Duplicate key check table missing", _
+                   "Table=" & tblName & " Key=" & keyColumn
+        Exit Function
+    End If
+
+    data = GetTableData(tblName)
+
+    If IsEmpty(data) Then
+        HealthWarn "Duplicate key check skipped for empty table", _
+                   "Table=" & tblName & " Key=" & keyColumn
+        Exit Function
+    End If
+
+    colKey = RequireColumnIndex(tblName, keyColumn, SRC)
+    
+    Set seen = CreateObject("Scripting.Dictionary")
+    Set counts = CreateObject("Scripting.Dictionary")
+    Set firstRows = CreateObject("Scripting.Dictionary")
+    Set duplicateKeys = CreateObject("Scripting.Dictionary")
+
+    For i = 1 To UBound(data, 1)
+        keyValue = Trim$(CStr(data(i, colKey)))
+
+        ' Empty IDs are a separate schema/data quality problem; do not treat
+        ' blank as a duplicate key here, otherwise old empty optional IDs can
+        ' flood this duplicate check. Exact-row flows separately reject blank ID.
+        If Len(keyValue) = 0 Then GoTo NextRow
+
+        If counts.Exists(keyValue) Then
+            counts(keyValue) = CLng(counts(keyValue)) + 1
+            If Not duplicateKeys.Exists(keyValue) Then duplicateKeys.Add keyValue, True
+        Else
+            counts.Add keyValue, 1
+            firstRows.Add keyValue, i
+        End If
+        
+NextRow:
+    Next i
+
+    If duplicateKeys.count = 0 Then
+        HealthOk "No duplicate key: " & label, _
+                 "Table=" & tblName & " Key=" & keyColumn
+        Exit Function
+    End If
+
+    For Each k In duplicateKeys.keys
+        duplicateCount = duplicateCount + 1
+
+        ' Avoid writing thousands of log rows if a table is badly corrupted.
+        If detailCount < 25 Then
+            detailCount = detailCount + 1
+            HealthFail "Duplicate key found: " & label, _
+                       "Table=" & tblName & _
+                       " Key=" & keyColumn & _
+                       " Value=" & CStr(k) & _
+                       " Count=" & CStr(counts(k)) & _
+                       " FirstDataRow=" & CStr(firstRows(k))
+        End If
+    Next k
+
+    If duplicateCount > detailCount Then
+        HealthFail "Duplicate key overflow: " & label, _
+                   "Table=" & tblName & _
+                   " Key=" & keyColumn & _
+                   " AdditionalDuplicateKeys=" & CStr(duplicateCount - detailCount)
+    End If
+
+    CountDuplicateKeyFailures = duplicateCount
+    Exit Function
+    
+EH:
+    CountDuplicateKeyFailures = CountDuplicateKeyFailures + 1
+    HealthFail "Duplicate key check failed: " & label, _
+               "Table=" & tblName & _
+               " Key=" & keyColumn & _
+               " Err=" & FormatHealthErr()
 End Function
 
 ' ============================================================

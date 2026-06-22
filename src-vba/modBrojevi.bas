@@ -3,7 +3,7 @@ Attribute VB_Name = "modBrojevi"
 Option Explicit
 
 ' ============================================================
-' modBrojevi â€” broj-allocation helperi za OTK, OTP, ZBR.
+' modBrojevi — broj-allocation helperi za OTK, OTP, ZBR.
 '
 ' Format (kanon v6.15):
 '   x/ddmmyy[-rb]
@@ -13,14 +13,14 @@ Option Explicit
 '   - prvi u danu: bez "-"
 '
 ' Javni API:
-'   SuggestNextBroj(kind, entityID, datum)   â€” VBA forma prefill
-'   GenerateBrojDokumenta(stanicaID, datum)  â€” VBA fallback za ImportRowToTblOtkup
-'   GenerateBrojOtpremnice(stanicaID, datum) â€” VBA jedinstveni generator za OTP
-'   ExtractNumericFromEntityID(entityID)     â€” "ST-00001" -> 1
-'   ExtractSeqFromBroj(broj)                 â€” "1/220526-3" -> 3
-'   IsValidBrojFormat(broj)                  â€” regex check kanonskog formata
-'   FormatBroj(entityID, datum, seq)         â€” kompozit
-'   ClearSpreadsheetIDCache                  â€” reset session cache (retko)
+'   SuggestNextBroj(kind, entityID, datum)   — VBA forma prefill
+'   GenerateBrojDokumenta(stanicaID, datum)  — VBA fallback za ImportRowToTblOtkup
+'   GenerateBrojOtpremnice(stanicaID, datum) — VBA jedinstveni generator za OTP
+'   ExtractNumericFromEntityID(entityID)     — "ST-00001" -> 1
+'   ExtractSeqFromBroj(broj)                 — "1/220526-3" -> 3
+'   IsValidBrojFormat(broj)                  — regex check kanonskog formata
+'   FormatBroj(entityID, datum, seq)         — kompozit
+'   ClearSpreadsheetIDCache                  — reset session cache (retko)
 ' ============================================================
 
 Private gSheetIDCache As Object
@@ -30,7 +30,7 @@ Public Const KIND_OTP As String = "OTP"
 Public Const KIND_ZBR As String = "ZBR"
 
 ' ============================================================
-' PUBLIC â€” forma prefill
+' PUBLIC — forma prefill
 ' ============================================================
 Public Function SuggestNextBroj(ByVal kind As String, _
                                 ByVal entityID As String, _
@@ -110,7 +110,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC â€” fallback generatori (PWA broj nedostaje ili je VBA-only)
+' PUBLIC — fallback generatori (PWA broj nedostaje ili je VBA-only)
 ' ============================================================
 
 ' Fallback za OTK kad ImportRowToTblOtkup primi prazan brojDokumenta
@@ -122,7 +122,7 @@ Public Function GenerateBrojDokumenta(ByVal stanicaID As String, _
     On Error GoTo EH
 
     If ExtractNumericFromEntityID(stanicaID) = 0 Then
-        LogError SRC, "NevaÅ¾eci stanicaID (bez cifara): " & stanicaID
+        LogError SRC, "Nevažeci stanicaID (bez cifara): " & stanicaID
         GenerateBrojDokumenta = ""
         Exit Function
     End If
@@ -151,7 +151,7 @@ Public Function GenerateBrojOtpremnice(ByVal stanicaID As String, _
     On Error GoTo EH
 
     If ExtractNumericFromEntityID(stanicaID) = 0 Then
-        LogError SRC, "NevaÅ¾eci stanicaID (bez cifara): " & stanicaID
+        LogError SRC, "Nevažeci stanicaID (bez cifara): " & stanicaID
         GenerateBrojOtpremnice = ""
         Exit Function
     End If
@@ -198,7 +198,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC â€” utility (drugi moduli ih koriste)
+' PUBLIC — utility (drugi moduli ih koriste)
 ' ============================================================
 
 ' "VOZ-00004" -> 4 ; "ST-00001" -> 1 ; "ST-103" -> 103 ; "garbage" -> 0
@@ -246,8 +246,8 @@ Public Function ExtractSeqFromBroj(ByVal broj As String) As Long
     End If
 End Function
 
-' Regex check kanonskog formata. Reuse ako se vracaÅ¡ na modMasterSync
-' IsValidBrojZbirneFormat â€” ista regex pattern.
+' Regex check kanonskog formata. Reuse ako se vracaš na modMasterSync
+' IsValidBrojZbirneFormat — ista regex pattern.
 Public Function IsValidBrojFormat(ByVal s As String) As Boolean
     Dim re As Object
     Set re = CreateObject("VBScript.RegExp")
@@ -281,7 +281,7 @@ Public Function IsStanicaMirrorVozac(ByVal vozacID As String) As Boolean
     On Error Resume Next
     If Len(Trim$(vozacID)) = 0 Then Exit Function
     IsStanicaMirrorVozac = _
-        (Len(Trim$(Nz(LookupValue(TBL_STANICE, "StanicaID", vozacID, "StanicaID"), ""))) > 0)
+        (Len(Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", vozacID, "StanicaID"), ""))) > 0)
 End Function
 
 ' BrojZbirne za mirror-stanicu dobija "S" prefiks (S1/ddmmyy) da se NE sudara sa
@@ -295,13 +295,13 @@ Public Function ApplyMirrorPrefix(ByVal vozacID As String, ByVal broj As String)
 End Function
 
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
-' ili obriÅ¡e tokom rada workbook-a (retko).
+' ili obriše tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()
     Set gSheetIDCache = Nothing
 End Sub
 
 ' ============================================================
-' PRIVATE â€” scan helperi
+' PRIVATE — scan helperi
 ' ============================================================
 
 Private Function MaxSeqFromTable(ByVal tblName As String, _
@@ -386,7 +386,7 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
                                         ByVal datum As Date) As Long
     On Error GoTo EH
     
-    ' DODATO: desktop-only â€” ne idemo na Google. Lokal scan je dovoljan.
+    ' DODATO: desktop-only — ne idemo na Google. Lokal scan je dovoljan.
     If Not IsCloudSyncEnabled() Then
         MaxSeqFromGoogleSheet = 0
         Exit Function
@@ -476,7 +476,7 @@ Private Function FindHeaderIndexInData(ByVal data As Variant, _
     
     Dim c As Long
     For c = LBound(data, 2) To UBound(data, 2)
-        If CStr(Nz(data(LBound(data, 1), c), "")) = target Then
+        If CStr(nz(data(LBound(data, 1), c), "")) = target Then
             FindHeaderIndexInData = c
             Exit Function
         End If
@@ -486,16 +486,16 @@ Private Function FindHeaderIndexInData(ByVal data As Variant, _
 End Function
 
 ' Lokalna Nz (postojeca je Private u modMasterSync)
-Private Function Nz(ByVal v As Variant, _
+Private Function nz(ByVal v As Variant, _
                      Optional ByVal Fallback As Variant = "") As Variant
     If IsNull(v) Then
-        Nz = Fallback
+        nz = Fallback
     ElseIf IsEmpty(v) Then
-        Nz = Fallback
+        nz = Fallback
     ElseIf VarType(v) = vbString And Len(v) = 0 Then
-        Nz = Fallback
+        nz = Fallback
     Else
-        Nz = v
+        nz = v
     End If
 End Function
 

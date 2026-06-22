@@ -4,7 +4,7 @@ Attribute VB_Name = "modMonitoring"
 ' ============================================================
 '
 ' Svrha:
-' - VBA 큄alje monitoring evente u GAS endpoint preko action="monitorPublic".
+' - VBA 쉆lje monitoring evente u GAS endpoint preko action="monitorPublic".
 ' - Monitoring je best-effort: nikada ne sme da obori business operaciju.
 ' - Ne logovati tokene, SEF API key, pun XML/PDF, pun JMBG ili bankovne podatke.
 '
@@ -17,7 +17,7 @@ Attribute VB_Name = "modMonitoring"
 '    action = monitorPublic
 '
 ' Preporuka:
-' - Secret dr탑i u hidden/very hidden Config sheet-u ili Named Range-u.
+' - Secret dr엍 u hidden/very hidden Config sheet-u ili Named Range-u.
 ' - Ne stavljaj secret u PWA frontend. Ovo je samo za VBA/desktop.
 '
 ' ============================================================
@@ -30,7 +30,7 @@ Private Const DEFAULT_APP_VERSION As String = APP_VERSION
 Private Const HTTP_TIMEOUT_MS As Long = 1200
 Private Const HTTP_DEBUG_TIMEOUT_MS As Long = 10000
 
-' Modulska referenca: dr탑i in-flight async zahteve da WinHttp ne otka탑e slanje pre vremena
+' Modulska referenca: dr엍 in-flight async zahteve da WinHttp ne otka엁 slanje pre vremena
 Private m_inFlight As Collection
 
 ' ============================================================
@@ -351,7 +351,7 @@ Private Function Monitoring_PostJson(ByVal url As String, ByVal jsonBody As Stri
     http.Send jsonBody
     ' NE pozivamo WaitForResponse -> vraca se odmah; round-trip ide u pozadini
 
-    ' Zadr탑i referencu da se zahtev ne otka탑e kad lokalni objekat izade iz opsega.
+    ' Zadr엍 referencu da se zahtev ne otka엁 kad lokalni objekat izade iz opsega.
     If m_inFlight Is Nothing Then Set m_inFlight = New Collection
     m_inFlight.Add http
     Do While m_inFlight.count > 12              ' ogranici; stariji su odavno poslati
@@ -457,7 +457,7 @@ Private Function ConfigValue(ByVal key As String) As String
 End Function
 
 Private Function ConfigValueFromWorkbook(ByVal wb As Workbook, ByVal key As String) As String
-    On Error GoTo Done
+    On Error GoTo done
 
     Dim ws As Worksheet
     Dim lo As ListObject
@@ -496,11 +496,11 @@ Private Function ConfigValueFromWorkbook(ByVal wb As Workbook, ByVal key As Stri
         Next lo
     Next ws
 
-Done:
+done:
 End Function
 
 Private Function FindListColumnIndex(ByVal lo As ListObject, ByVal headerName As String) As Long
-    On Error GoTo Done
+    On Error GoTo done
 
     Dim c As ListColumn
 
@@ -511,7 +511,7 @@ Private Function FindListColumnIndex(ByVal lo As ListObject, ByVal headerName As
         End If
     Next c
 
-Done:
+done:
 End Function
 
 Private Function DeviceId() As String

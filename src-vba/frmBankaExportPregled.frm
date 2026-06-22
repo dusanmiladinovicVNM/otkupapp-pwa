@@ -1,3 +1,18 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmBankaExportPregled 
+   Caption         =   "UserForm1"
+   ClientHeight    =   12930
+   ClientLeft      =   120
+   ClientTop       =   465
+   ClientWidth     =   20235
+   OleObjectBlob   =   "frmBankaExportPregled.frx":0000
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "frmBankaExportPregled"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
 Option Explicit
 
 Private m_Blokovi As Collection
@@ -60,7 +75,7 @@ End Sub
 
 Private Sub SetupList()
     With lstBlokovi
-        .ColumnCount = 9   ' jedna viÅ¡e za "Isplatiti"
+        .ColumnCount = 9   ' jedna više za "Isplatiti"
         ' Datum | Kooperant | Stanica | BrojDok | Ukupan | Isplaceno | Otvoreno | TR | Isplatiti
         .ColumnWidths = "60;140;50;60;75;75;75;30;75"
         .MultiSelect = fmMultiSelectMulti
@@ -159,11 +174,11 @@ Private Sub RenderListbox()
         
         lstBlokovi.List(row, 1) = blk.kooperantNaziv
         lstBlokovi.List(row, 2) = blk.stanicaID
-        lstBlokovi.List(row, 3) = blk.BrojDokumenta
+        lstBlokovi.List(row, 3) = blk.brojDokumenta
         lstBlokovi.List(row, 4) = Format$(blk.UkupanIznos, "#,##0.00")
         lstBlokovi.List(row, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
         lstBlokovi.List(row, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
-        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "â€”")
+        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "—")
         lstBlokovi.List(row, 8) = Format$(isplatitiAmount, "#,##0.00")
     Next v
 End Sub
@@ -282,7 +297,7 @@ End Function
 ' PopulateDetailPanel - pokazi info izabranog bloka
 '======================================================================
 Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
-    lblDetailBlok.caption = blk.BrojDokumenta & " â€” " & blk.kooperantNaziv
+    lblDetailBlok.caption = blk.brojDokumenta & " — " & blk.kooperantNaziv
     lblDetailOtvoreno.caption = "Otvoreno: " & Format$(blk.OtvorenIznos, "#,##0.00") & " RSD"
     
     Dim currentAmount As Double
@@ -296,7 +311,7 @@ Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
         lblDetailAvans.ForeColor = TXT_MUTED()
     End If
     
-    lblDetailTR.caption = "Tek. racun: " & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "â€”nedostajeâ€”")
+    lblDetailTR.caption = "Tek. racun: " & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "—nedostaje—")
     
     If blk.KooperantAvansSaldo > 0 Then
         lblDetailAvansHint.caption = "Primeni avans kroz Dokumenta pre isplate"
@@ -547,7 +562,7 @@ Private Function ExportSelectionAsTSV() As String
         s = s & Format$(blk.datum, "yyyy-mm-dd") & vbTab & _
                 blk.kooperantNaziv & vbTab & _
                 blk.stanicaID & vbTab & _
-                blk.BrojDokumenta & vbTab & _
+                blk.brojDokumenta & vbTab & _
                 Format$(blk.UkupanIznos, "0.00") & vbTab & _
                 Format$(blk.VecIsplaceno, "0.00") & vbTab & _
                 Format$(blk.OtvorenIznos, "0.00") & vbTab & _
@@ -591,7 +606,7 @@ Private Sub ResetActionButtons()
     StylePrimaryButton btnOsvezi, "Osvezi"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
-    StylePrimaryButton btnGenerisiCSV, "GeneriÅ¡i CSV (Commit 3)"
+    StylePrimaryButton btnGenerisiCSV, "Generiši CSV (Commit 3)"
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 
@@ -612,7 +627,7 @@ End Sub
 
 Private Sub btnGenerisiCSV_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetActionButtons
-    ' ne radi hover na disabled â€” ali bezbedno
+    ' ne radi hover na disabled — ali bezbedno
 End Sub
 
 Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)

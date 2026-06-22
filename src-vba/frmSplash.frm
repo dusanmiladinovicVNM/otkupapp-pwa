@@ -128,4 +128,3 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
         OpenAppShell
     End If
 End Sub
-

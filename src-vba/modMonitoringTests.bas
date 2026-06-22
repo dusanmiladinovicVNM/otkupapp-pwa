@@ -23,7 +23,7 @@ Public Sub TestMonitoring_Config()
     Debug.Print vbCrLf & "[1] CONFIG TEST"
     Debug.Print Monitoring_DiagnoseConfig()
     
-    Debug.Print "PASS ako vidi≈°:"
+    Debug.Print "PASS ako vidiö:"
     Debug.Print "- Endpoint length > 0"
     Debug.Print "- Endpoint ends with /exec = True"
     Debug.Print "- Secret length > 0"
@@ -51,7 +51,7 @@ Public Sub TestMonitoring_ErrorEvent()
 
     On Error GoTo EH
 
-    Err.Raise 9101, "TestMonitoring_ErrorEvent", "Namerno testirana VBA gre≈°ka bez sensitive podataka"
+    Err.Raise 9101, "TestMonitoring_ErrorEvent", "Namerno testirana VBA greöka bez sensitive podataka"
 
     Exit Sub
 
@@ -60,7 +60,7 @@ EH:
         moduleName:="modMonitoringTests", _
         procedureName:="TestMonitoring_ErrorEvent", _
         entityType:="Test", _
-        entityId:="TEST-ERROR-001", _
+        entityID:="TEST-ERROR-001", _
         correlationId:="TEST-ERROR-001", _
         errorNumber:=Err.Number, _
         errorDescription:=Err.description, _

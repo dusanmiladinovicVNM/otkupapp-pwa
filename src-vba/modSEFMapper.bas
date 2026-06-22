@@ -116,7 +116,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     dto.CurrencyCode = "RSD"
     dto.versionNo = GetNextSEFVersionNo(fakturaID)
 
-    Set dto.Lines = New Collection
+    Set dto.lines = New Collection
 
     stavke = GetTableData(TBL_FAKTURA_STAVKE)
 
@@ -199,11 +199,11 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
             line.kolicina = qty
             line.cena = price
             line.klasa = CStr(stavke(i, colKlasa))
-            line.Neto = lineNet
-            line.PDV = lineVat
+            line.neto = lineNet
+            line.pdv = lineVat
             line.iznos = lineGross
 
-            dto.Lines.Add line
+            dto.lines.Add line
 
             calcTotalNet = calcTotalNet + lineNet
             calcTotalVat = calcTotalVat + lineVat
@@ -213,7 +213,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
     Next i
 
-    If dto.Lines.count = 0 Then
+    If dto.lines.count = 0 Then
         Err.Raise ERR_SEF_VALIDATION, SRC, "Invoice has no lines."
     End If
 
@@ -269,8 +269,8 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     
     sb = sb & """Lines"":["
     
-    For i = 1 To dto.Lines.count
-        Set ln = dto.Lines(i)
+    For i = 1 To dto.lines.count
+        Set ln = dto.lines(i)
         
         If i > 1 Then sb = sb & ","
         
@@ -281,8 +281,8 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         sb = sb & """Kolicina"":" & JsonNumber(ln.kolicina) & ","
         sb = sb & """Cena"":" & JsonNumber(ln.cena) & ","
         sb = sb & """Klasa"":" & JsonString(ln.klasa) & ","
-        sb = sb & """Neto"":" & JsonNumber(ln.Neto) & ","
-        sb = sb & """PDV"":" & JsonNumber(ln.PDV) & ","
+        sb = sb & """Neto"":" & JsonNumber(ln.neto) & ","
+        sb = sb & """PDV"":" & JsonNumber(ln.pdv) & ","
         sb = sb & """Iznos"":" & JsonNumber(ln.iznos)
         sb = sb & "}"
     Next i
@@ -552,14 +552,14 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     ' ========================
     ' Invoice lines
     ' ========================
-    For i = 1 To dto.Lines.count
+    For i = 1 To dto.lines.count
         
-        Set ln = dto.Lines(i)
+        Set ln = dto.lines(i)
         
         xml = xml & "  <cac:InvoiceLine>" & vbCrLf
         xml = xml & "    <cbc:ID>" & CStr(i) & "</cbc:ID>" & vbCrLf
         xml = xml & "    <cbc:InvoicedQuantity unitCode=""KGM"">" & XmlAmount(ln.kolicina) & "</cbc:InvoicedQuantity>" & vbCrLf
-        xml = xml & "    <cbc:LineExtensionAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.Neto) & "</cbc:LineExtensionAmount>" & vbCrLf
+        xml = xml & "    <cbc:LineExtensionAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.neto) & "</cbc:LineExtensionAmount>" & vbCrLf
         
         xml = xml & "    <cac:Item>" & vbCrLf
         xml = xml & "      <cbc:Name>" & XmlEscape(ln.naziv) & "</cbc:Name>" & vbCrLf
@@ -759,7 +759,7 @@ Public Function ComputePayloadHash(ByVal payload As String) As String
         ' Rolling hash ohne Bitoperatoren
         h = (h * 33#) + c
         
-        ' manuelles Modulo, damit h nie zu groÃŸ wird
+        ' manuelles Modulo, damit h nie zu groß wird
         h = h - Int(h / 2147483647#) * 2147483647#
         
     Next i
@@ -877,11 +877,11 @@ Private Sub ValidateSEFDtoForUBL(ByVal dto As clsSEFInvoiceSnapshot)
         Err.Raise ERR_SEF_VALIDATION, SRC, "TotalGross must be > 0."
     End If
 
-    If dto.Lines Is Nothing Then
+    If dto.lines Is Nothing Then
         Err.Raise ERR_SEF_VALIDATION, SRC, "DTO lines collection is Nothing."
     End If
 
-    If dto.Lines.count = 0 Then
+    If dto.lines.count = 0 Then
         Err.Raise ERR_SEF_VALIDATION, SRC, "DTO has no lines."
     End If
     
@@ -905,8 +905,8 @@ Private Sub ValidateSEFDtoForUBL(ByVal dto As clsSEFInvoiceSnapshot)
     Dim i As Long
     Dim ln As clsSEFLine
 
-    For i = 1 To dto.Lines.count
-        Set ln = dto.Lines(i)
+    For i = 1 To dto.lines.count
+        Set ln = dto.lines(i)
 
         If Len(Trim$(ln.naziv)) = 0 Then
             Err.Raise ERR_SEF_VALIDATION, SRC, _
@@ -923,12 +923,12 @@ Private Sub ValidateSEFDtoForUBL(ByVal dto As clsSEFInvoiceSnapshot)
                   "Line " & i & " price cannot be negative."
         End If
 
-        If ln.Neto < 0 Then
+        If ln.neto < 0 Then
             Err.Raise ERR_SEF_VALIDATION, SRC, _
                   "Line " & i & " net amount cannot be negative."
         End If
 
-        If ln.PDV < 0 Then
+        If ln.pdv < 0 Then
             Err.Raise ERR_SEF_VALIDATION, SRC, _
                   "Line " & i & " VAT amount cannot be negative."
         End If
@@ -1014,21 +1014,21 @@ Public Sub Test_BuildSEFInvoiceDto()
     Debug.Print "TotalNet: "; dto.TotalNet
     Debug.Print "TotalVat: "; dto.TotalVat
     Debug.Print "TotalGross: "; dto.TotalGross
-    Debug.Print "Lines.Count: "; dto.Lines.count
+    Debug.Print "Lines.Count: "; dto.lines.count
     
-    If dto.Lines.count = 0 Then
+    If dto.lines.count = 0 Then
         Debug.Print "NO LINES"
         Exit Sub
     End If
     
-    Debug.Print "Type of dto.Lines(1): "; TypeName(dto.Lines.Item(1))
+    Debug.Print "Type of dto.Lines(1): "; TypeName(dto.lines.item(1))
     
-    Set ln = dto.Lines.Item(1)
+    Set ln = dto.lines.item(1)
     
     Debug.Print "LINE OK"
     Debug.Print "Naziv: "; ln.naziv
-    Debug.Print "Neto: "; ln.Neto
-    Debug.Print "PDV: "; ln.PDV
+    Debug.Print "Neto: "; ln.neto
+    Debug.Print "PDV: "; ln.pdv
     Debug.Print "Iznos: "; ln.iznos
     
     Exit Sub

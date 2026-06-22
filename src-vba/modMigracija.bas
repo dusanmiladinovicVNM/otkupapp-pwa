@@ -1,4 +1,5 @@
 Attribute VB_Name = "modMigracija"
+'Attribute VB_Name = "modMigracija"
 ' ============================================================
 ' modMigracija - jednokratna migracija CISTIH PODATAKA iz starog
 ' OtkupApp fajla u novi (prazan). Mapiranje PO IMENU kolone,
@@ -44,10 +45,10 @@ Public Sub MigrirajPodatkeIzStarog()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
 
-    Set stari = Workbooks.Open(Filename:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
+    Set stari = Workbooks.Open(fileName:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
 
     Dim ws As Worksheet, loNovi As ListObject, n As Long
-    Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, eNum As Long
+    Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, errNum As Long
     For Each ws In novi.Worksheets
         For Each loNovi In ws.ListObjects
             If Not SkipTabela(loNovi.name) Then
@@ -60,10 +61,10 @@ Public Sub MigrirajPodatkeIzStarog()
                 Else
                     n = KopirajTabelu(stari, loNovi)
                 End If
-                eNum = Err.Number: eDesc = Err.description
+                errNum = Err.Number: eDesc = Err.description
                 On Error GoTo CLEAN
 
-                If eNum <> 0 Then
+                If errNum <> 0 Then
                     summary = summary & "  " & loNovi.name & " - GRESKA: " & eDesc & vbCrLf
                 ElseIf n = -1 Then
                     summary = summary & "  " & loNovi.name & " - (nema u starom)" & vbCrLf
@@ -125,11 +126,11 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     Next j
 
     ' telo starog kao 2D niz (vrednosti, ne formule)
-    Dim src As Variant: src = loStari.DataBodyRange.Value
-    If Not IsArray(src) Then
-        Dim one(1 To 1, 1 To 1) As Variant: one(1, 1) = src: src = one
+    Dim SRC As Variant: SRC = loStari.DataBodyRange.value
+    If Not IsArray(SRC) Then
+        Dim one(1 To 1, 1 To 1) As Variant: one(1, 1) = SRC: SRC = one
     End If
-    Dim nRows As Long: nRows = UBound(src, 1)
+    Dim nRows As Long: nRows = UBound(SRC, 1)
 
     ' osiguraj TACNO nRows redova u novoj tabeli - robustno preko ListRows.Add/Delete
     ' (radi i kad tabela nema prikazan header ili deli sheet sa drugom tabelom;
@@ -147,9 +148,9 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
         If mapCol(j) > 0 Then
             ReDim colArr(1 To nRows, 1 To 1)
             For r = 1 To nRows
-                colArr(r, 1) = src(r, mapCol(j))
+                colArr(r, 1) = SRC(r, mapCol(j))
             Next r
-            loNovi.ListColumns(j).DataBodyRange.Value = colArr
+            loNovi.ListColumns(j).DataBodyRange.value = colArr
         End If
     Next j
     KopirajTabelu = nRows
@@ -186,9 +187,9 @@ Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As List
     Dim dRow As Object: Set dRow = CreateObject("Scripting.Dictionary"): dRow.CompareMode = vbTextCompare
     Dim i As Long, kkey As String
     For i = 1 To loStari.ListRows.count
-        kkey = Trim$(CStr(loStari.DataBodyRange.Cells(i, sKey).value))
+        kkey = Trim$(CStr(loStari.DataBodyRange.cells(i, sKey).value))
         If Len(kkey) > 0 And Not dVal.Exists(kkey) Then
-            dVal(kkey) = loStari.DataBodyRange.Cells(i, sVal).value
+            dVal(kkey) = loStari.DataBodyRange.cells(i, sVal).value
             dRow(kkey) = i
         End If
     Next i
@@ -196,21 +197,21 @@ Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As List
     ' novi: prazne vrednosti popuni iz starog; oznaci postojece kljuceve
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary"): seen.CompareMode = vbTextCompare
     For i = 1 To loNovi.ListRows.count
-        kkey = Trim$(CStr(loNovi.DataBodyRange.Cells(i, nKey).value))
+        kkey = Trim$(CStr(loNovi.DataBodyRange.cells(i, nKey).value))
         If Len(kkey) > 0 Then
             seen(kkey) = True
-            If Len(Trim$(CStr(loNovi.DataBodyRange.Cells(i, nVal).value))) = 0 Then
-                If dVal.Exists(kkey) Then loNovi.DataBodyRange.Cells(i, nVal).value = dVal(kkey)
+            If Len(Trim$(CStr(loNovi.DataBodyRange.cells(i, nVal).value))) = 0 Then
+                If dVal.Exists(kkey) Then loNovi.DataBodyRange.cells(i, nVal).value = dVal(kkey)
             End If
         End If
     Next i
 
     ' kljucevi iz starog kojih nema u novom -> dodaj red
     Dim k As Variant, lr As ListRow
-    For Each k In dVal.Keys
+    For Each k In dVal.keys
         If Not seen.Exists(CStr(k)) Then
             Set lr = loNovi.ListRows.Add
-            KopirajRedPoImenu loStari, CLng(dRow(CStr(k))), loNovi, lr.Index
+            KopirajRedPoImenu loStari, CLng(dRow(CStr(k))), loNovi, lr.index
         End If
     Next k
 
@@ -233,7 +234,7 @@ Private Sub KopirajRedPoImenu(ByVal loStari As ListObject, ByVal staroRed As Lon
     For j = 1 To loNovi.ListColumns.count
         sIdx = ColIndexByName(loStari, loNovi.ListColumns(j).name)
         If sIdx > 0 Then
-            loNovi.DataBodyRange.Cells(noviRed, j).value = loStari.DataBodyRange.Cells(staroRed, sIdx).value
+            loNovi.DataBodyRange.cells(noviRed, j).value = loStari.DataBodyRange.cells(staroRed, sIdx).value
         End If
     Next j
 End Sub
@@ -264,3 +265,4 @@ End Function
 Private Function StaroImeKolone(ByVal tabela As String, ByVal novoIme As String) As String
     StaroImeKolone = novoIme
 End Function
+

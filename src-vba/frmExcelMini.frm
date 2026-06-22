@@ -51,8 +51,8 @@ Private Sub UserForm_Initialize()
     Me.StartUpPosition = 0
 
     If Application.Visible Then
-        Me.Left = Application.Left + Application.Width - Me.Width - 20
-        Me.Top = Application.Top + 40
+        Me.Left = Application.Left + Application.width - Me.width - 20
+        Me.top = Application.top + 40
     End If
 
     Me.BackColor = BG_MAIN()

@@ -1,14 +1,15 @@
 Attribute VB_Name = "modDokumenta"
+'Attribute VB_Name = "modDokumenta"
 
 Option Explicit
 
 ' ============================================================
-' modDokumenta â€“ Otpremnica, Zbirna, Prijemnica
+' modDokumenta – Otpremnica, Zbirna, Prijemnica
 ' Dokumentenfluss: Otkup zu Otpremnica zu Zbirna zu Prijemnica zu Faktura
 ' ============================================================
 
 ' ============================================================
-' OTPREMNICA â€“ Station gibt Ware an Fahrer
+' OTPREMNICA – Station gibt Ware an Fahrer
 ' ============================================================
 Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        ByVal stanicaID As String, _
@@ -118,7 +119,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveOtpremnicaMulti_TX", _
         entityType:="Otpremnica", _
-        entityId:=SaveOtpremnicaMulti_TX, _
+        entityID:=SaveOtpremnicaMulti_TX, _
         correlationId:=brojOtp, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -137,7 +138,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveOtpremnicaMulti_TX", _
         entityType:="Otpremnica", _
-        entityId:=SaveOtpremnicaMulti_TX, _
+        entityID:=SaveOtpremnicaMulti_TX, _
         correlationId:=brojOtp
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -193,7 +194,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveOtpremnica_TX", _
         entityType:="Otpremnica", _
-        entityId:=SaveOtpremnica_TX, _
+        entityID:=SaveOtpremnica_TX, _
         correlationId:=brojOtp, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -211,7 +212,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveOtpremnica_TX", _
         entityType:="Otpremnica", _
-        entityId:=SaveOtpremnica_TX, _
+        entityID:=SaveOtpremnica_TX, _
         correlationId:=brojOtp
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -259,7 +260,7 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
         SaveOtpremnica = newID
     Else
         Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
-                  "AppendRow fehlgeschlagen fÃ¼r tblOtpremnica"
+                  "AppendRow fehlgeschlagen für tblOtpremnica"
     End If
     Exit Function
     
@@ -357,7 +358,7 @@ EH:
 End Function
 
 ' ============================================================
-' ZBIRNA â€“ Gesamtdokument Fahrer
+' ZBIRNA – Gesamtdokument Fahrer
 ' ============================================================
 Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
                                    ByVal vozacID As String, _
@@ -460,7 +461,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirnaMulti_TX", _
         entityType:="Zbirna", _
-        entityId:=SaveZbirnaMulti_TX, _
+        entityID:=SaveZbirnaMulti_TX, _
         correlationId:=brojZbirne, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -478,7 +479,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirnaMulti_TX", _
         entityType:="Zbirna", _
-        entityId:=SaveZbirnaMulti_TX, _
+        entityID:=SaveZbirnaMulti_TX, _
         correlationId:=brojZbirne
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -531,7 +532,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirna_TX", _
         entityType:="Zbirna", _
-        entityId:=SaveZbirna_TX, _
+        entityID:=SaveZbirna_TX, _
         correlationId:=brojZbirne, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -548,7 +549,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirna_TX", _
         entityType:="Zbirna", _
-        entityId:=SaveZbirna_TX, _
+        entityID:=SaveZbirna_TX, _
         correlationId:=brojZbirne
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -588,7 +589,7 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
         SaveZbirna = newID
     Else
         Err.Raise vbObjectError + 1010, "SaveZbirna", _
-                  "AppendRow fehlgeschlagen fÃ¼r tblZbirna."
+                  "AppendRow fehlgeschlagen für tblZbirna."
     End If
 
     Exit Function
@@ -657,7 +658,7 @@ End Function
 ' ZBIRNA VALIDIERUNG
 ' ============================================================
 Public Function ValidateZbirna(ByVal brojZbirne As String) As Variant
-    ' PrÃ¼ft Summe Otpremnice vs Zbirna
+    ' Prüft Summe Otpremnice vs Zbirna
     ' Returns: Array(SumaOtpKg, ZbirnaKg, RazlikaKg, ValidKg,
     '                SumaOtpAmb, ZbirnaAmb, RazlikaAmb)
     On Error GoTo EH
@@ -784,7 +785,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIJEMNICA â€“ Kunde wiegt bei Annahme
+' PRIJEMNICA – Kunde wiegt bei Annahme
 ' ============================================================
 
 Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
@@ -922,7 +923,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnicaMulti_TX", _
         entityType:="Prijemnica", _
-        entityId:=SavePrijemnicaMulti_TX, _
+        entityID:=SavePrijemnicaMulti_TX, _
         correlationId:=brojPrij, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -941,7 +942,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnicaMulti_TX", _
         entityType:="Prijemnica", _
-        entityId:=SavePrijemnicaMulti_TX, _
+        entityID:=SavePrijemnicaMulti_TX, _
         correlationId:=brojPrij
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -1014,7 +1015,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnica_TX", _
         entityType:="Prijemnica", _
-        entityId:=SavePrijemnica_TX, _
+        entityID:=SavePrijemnica_TX, _
         correlationId:=brojPrij, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -1032,7 +1033,7 @@ EH:
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnica_TX", _
         entityType:="Prijemnica", _
-        entityId:=SavePrijemnica_TX, _
+        entityID:=SavePrijemnica_TX, _
         correlationId:=brojPrij
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -1077,7 +1078,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
 
     If appendedRow <= 0 Then
         Err.Raise vbObjectError + 1014, "SavePrijemnica", _
-                "AppendRow fehlgeschlagen fÃ¼r tblPrijemnica."
+                "AppendRow fehlgeschlagen für tblPrijemnica."
     End If
 
     ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
@@ -1245,7 +1246,7 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
 
     If kolAmb <= 0 And novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  "Nema ambalaÅ¾e ni novca za cuvanje."
+                  "Nema ambalaže ni novca za cuvanje."
     End If
 
     tx.BeginTx
@@ -1305,7 +1306,7 @@ EH:
 End Function
 
 ' ============================================================
-' MANJAK â€“ Schwundberechnung
+' MANJAK – Schwundberechnung
 ' ============================================================
 
 Public Function CalculateManjak(ByVal brojZbirne As String) As Variant
@@ -1524,7 +1525,7 @@ EH:
 End Function
 
 ' ============================================================
-' PROSEK GAJBE â€“ Durchschnittsgewicht pro KÃ¤stchen
+' PROSEK GAJBE – Durchschnittsgewicht pro Kästchen
 ' ============================================================
 
 Public Function CalculateProsekGajbe(ByVal brojOtp As String) As Double
@@ -1949,7 +1950,7 @@ EH:
 End Sub
 
 ' ============================================================
-' HELPER â€“ Vozac-Report (ersetzt alten modTransport)
+' HELPER – Vozac-Report (ersetzt alten modTransport)
 ' ============================================================
 
 Public Function GetVozacDokumenta(ByVal vozacID As String, _

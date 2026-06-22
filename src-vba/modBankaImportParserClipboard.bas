@@ -20,24 +20,24 @@ Option Explicit
 ' ============================================================
 
 Public Function ParseBankaIzvod(ByVal txt As String) As Variant
-    Dim Lines() As String
+    Dim lines() As String
     txt = Replace(txt, Chr$(12), vbLf)
-    Lines = Split(Replace(txt, vbCr, ""), vbLf)
+    lines = Split(Replace(txt, vbCr, ""), vbLf)
     
     ' Header parsen
     Dim izvodBroj As String, izvodDatum As String
     Dim i As Long
     
-    For i = LBound(Lines) To UBound(Lines)
-        If Left$(Trim$(Lines(i)), 11) = "Izvod broj" Then
-            izvodBroj = ExtractAfter(Lines(i), "Izvod broj ")
+    For i = LBound(lines) To UBound(lines)
+        If Left$(Trim$(lines(i)), 11) = "Izvod broj" Then
+            izvodBroj = ExtractAfter(lines(i), "Izvod broj ")
             Dim pZa As Long
             pZa = InStr(izvodBroj, " Za")
             If pZa > 0 Then izvodBroj = Left$(izvodBroj, pZa - 1)
         End If
         
-        If InStr(Lines(i), "Izvod za datum:") > 0 Then
-            izvodDatum = Trim$(ExtractAfter(Lines(i), "Izvod za datum: "))
+        If InStr(lines(i), "Izvod za datum:") > 0 Then
+            izvodDatum = Trim$(ExtractAfter(lines(i), "Izvod za datum: "))
             Dim pSt As Long
             pSt = InStr(izvodDatum, " ")
             If pSt > 0 Then izvodDatum = Left$(izvodDatum, pSt - 1)
@@ -49,18 +49,18 @@ Dim blocks As New Collection
 Dim currBlock As String
 Dim inTxn As Boolean
 
-For i = LBound(Lines) To UBound(Lines)
-    If IsTxnStart(Lines(i)) Then
+For i = LBound(lines) To UBound(lines)
+    If IsTxnStart(lines(i)) Then
         If Len(Trim$(currBlock)) > 0 Then
             blocks.Add currBlock
         End If
         
-        currBlock = NormalizeTxnStartLine(Lines(i))
+        currBlock = NormalizeTxnStartLine(lines(i))
         inTxn = True
     
     ElseIf inTxn Then
-        If InStr(1, Lines(i), "Ukupno za racun", vbTextCompare) > 0 Or _
-           InStr(1, Lines(i), "Ukupno za racun", vbTextCompare) > 0 Then
+        If InStr(1, lines(i), "Ukupno za racun", vbTextCompare) > 0 Or _
+           InStr(1, lines(i), "Ukupno za racun", vbTextCompare) > 0 Then
             If Len(Trim$(currBlock)) > 0 Then
                 blocks.Add currBlock
             End If
@@ -68,8 +68,8 @@ For i = LBound(Lines) To UBound(Lines)
             currBlock = ""
             inTxn = False
         
-        ElseIf Trim$(Lines(i)) <> "" Then
-            currBlock = currBlock & vbLf & Trim$(Lines(i))
+        ElseIf Trim$(lines(i)) <> "" Then
+            currBlock = currBlock & vbLf & Trim$(lines(i))
         End If
     End If
 Next i
@@ -127,11 +127,11 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     ' Returns:
     ' Array(DatumIzvrsenja, Partner, Racun, Zaduzenje, Odobrenje, Sifra, Svrha, PozivNaBroj, Referenca)
     
-    Dim Lines() As String
-    Lines = Split(blockText, vbLf)
+    Dim lines() As String
+    lines = Split(blockText, vbLf)
     
     Dim racun As String
-    racun = FindAccountInBlock(Lines)
+    racun = FindAccountInBlock(lines)
     
     ' Phase 1: Datums-Zeilen finden
     Dim datumLines() As Long
@@ -140,8 +140,8 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     Dim datumCount As Long
     Dim i As Long
     
-    For i = 1 To UBound(Lines) ' Zeile 0 = Redni broj
-        If IsDateLine(Trim$(Lines(i))) Then
+    For i = 1 To UBound(lines) ' Zeile 0 = Redni broj
+        If IsDateLine(Trim$(lines(i))) Then
             datumCount = datumCount + 1
             ReDim Preserve datumLines(datumCount)
             datumLines(datumCount) = i
@@ -149,7 +149,7 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     Next i
     
     Dim datumIzvrsenja As String
-    If datumCount >= 1 Then datumIzvrsenja = Trim$(Lines(datumLines(1)))
+    If datumCount >= 1 Then datumIzvrsenja = Trim$(lines(datumLines(1)))
     
     ' Phase 2: Partner = alles zwischen Redni broj und erstem Datum
     Dim partner As String
@@ -157,7 +157,7 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     If datumCount >= 1 Then
         firstDatumLine = datumLines(1)
     Else
-        firstDatumLine = UBound(Lines)
+        firstDatumLine = UBound(lines)
     End If
     
     Dim partnerEnd As Long
@@ -168,7 +168,7 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     
     For i = partnerEnd To 2 Step -1
         Dim testLine As String
-        testLine = Trim$(Lines(i))
+        testLine = Trim$(lines(i))
         
         If InStr(1, testLine, "EKSPOZITURA", vbTextCompare) > 0 Or _
            InStr(1, testLine, "CENTRALA", vbTextCompare) > 0 Or _
@@ -181,7 +181,7 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     
     For i = 1 To porekloStart - 1
         Dim ln As String
-        ln = Trim$(Lines(i))
+        ln = Trim$(lines(i))
         
         If Not IsAccountLine(ln) Then
             If partner <> "" Then partner = partner & " "
@@ -202,20 +202,20 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     ElseIf datumCount >= 1 Then
         amountLineStart = datumLines(1) + 1
     Else
-        amountLineStart = UBound(Lines)
+        amountLineStart = UBound(lines)
     End If
     
-    If amountLineStart <= UBound(Lines) Then
+    If amountLineStart <= UBound(lines) Then
         Dim zaduzenjeStr As String
-        zaduzenjeStr = Trim$(Lines(amountLineStart))
+        zaduzenjeStr = Trim$(lines(amountLineStart))
         If IsAmount(zaduzenjeStr) Then
             zaduzenje = ToNumber(zaduzenjeStr)
         End If
     End If
     
-    If amountLineStart + 1 <= UBound(Lines) Then
+    If amountLineStart + 1 <= UBound(lines) Then
         Dim amtLine As String
-        amtLine = Trim$(Lines(amountLineStart + 1))
+        amtLine = Trim$(lines(amountLineStart + 1))
         ParseAmountLine amtLine, naknada, odobrenje, sifra, amountRest
     End If
     
@@ -230,8 +230,8 @@ End If
 
 svrhaStart = amountLineStart + 2
 
-For i = svrhaStart To UBound(Lines)
-    ln = Trim$(Lines(i))
+For i = svrhaStart To UBound(lines)
+    ln = Trim$(lines(i))
     If ln = "" Then GoTo NextSvrha
     
     If Not IsDateOnlyText(ln) Then
@@ -423,10 +423,10 @@ Private Function NormalizeSpaces(ByVal s As String) As String
 End Function
 
 Private Function IsReference(ByVal s As String) As Boolean
-    Dim clean As String
-    clean = Replace(Trim$(s), " ", "")
+    Dim CLEAN As String
+    CLEAN = Replace(Trim$(s), " ", "")
     
-    If Len(clean) >= 12 And IsNumeric(clean) Then
+    If Len(CLEAN) >= 12 And IsNumeric(CLEAN) Then
         IsReference = True
     End If
 End Function
@@ -484,12 +484,12 @@ Private Function ExtractAccountFromText(ByVal s As String) As String
     End If
 End Function
 
-Private Function FindAccountInBlock(ByRef Lines() As String) As String
+Private Function FindAccountInBlock(ByRef lines() As String) As String
     Dim i As Long
     Dim s As String
     
-    For i = LBound(Lines) To UBound(Lines)
-        s = ExtractAccountFromText(Trim$(Lines(i)))
+    For i = LBound(lines) To UBound(lines)
+        s = ExtractAccountFromText(Trim$(lines(i)))
         If s <> "" Then
             FindAccountInBlock = s
             Exit Function

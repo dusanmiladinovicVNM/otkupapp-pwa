@@ -401,7 +401,7 @@ EH:
         moduleName:="modSEFService", _
         procedureName:="SendInvoiceToSEF_TX", _
         entityType:="Faktura", _
-        entityId:=fakturaID, _
+        entityID:=fakturaID, _
         correlationId:=fakturaID, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -730,7 +730,7 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
         moduleName:="modSEFService", _
         procedureName:="RecoverAllStuckSEFSendingInvoices", _
         entityType:="SEF", _
-        entityId:="StartupRecovery", _
+        entityID:="StartupRecovery", _
         correlationId:="SEF-STARTUP-RECOVERY"
     On Error GoTo EH
 
@@ -807,7 +807,7 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
                     moduleName:="modSEFService", _
                     procedureName:="RecoverAllStuckSEFSendingInvoices.Invoice", _
                     entityType:="Faktura", _
-                    entityId:=fakturaID, _
+                    entityID:=fakturaID, _
                     correlationId:=fakturaID, _
                     errorNumber:=itemErrNo, _
                     errorDescription:=itemErrDesc, _
@@ -850,7 +850,7 @@ SuccessExit:
         moduleName:="modSEFService", _
         procedureName:="RecoverAllStuckSEFSendingInvoices", _
         entityType:="SEF", _
-        entityId:="StartupRecovery", _
+        entityID:="StartupRecovery", _
         correlationId:="SEF-STARTUP-RECOVERY"
     On Error GoTo 0
 
@@ -873,7 +873,7 @@ EH:
         moduleName:="modSEFService", _
         procedureName:="RecoverAllStuckSEFSendingInvoices", _
         entityType:="SEF", _
-        entityId:="StartupRecovery", _
+        entityID:="StartupRecovery", _
         correlationId:="SEF-STARTUP-RECOVERY", _
         errorNumber:=errNo, _
         errorDescription:=errDesc, _
@@ -887,7 +887,7 @@ EH:
         moduleName:="modSEFService", _
         procedureName:="RecoverAllStuckSEFSendingInvoices", _
         entityType:="SEF", _
-        entityId:="StartupRecovery", _
+        entityID:="StartupRecovery", _
         correlationId:="SEF-STARTUP-RECOVERY"
 
     On Error GoTo 0

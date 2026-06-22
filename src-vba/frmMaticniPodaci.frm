@@ -12,6 +12,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
@@ -68,7 +69,7 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmStammdatenMenu.UserForm_Initialize"
-    MsgBox "Gre≈°ka pri otvaranju menija ≈°ifarnika: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greöka pri otvaranju menija öifarnika: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -145,7 +146,7 @@ EH:
     LogErr "frmStammdatenMenu.HoverMenuButton"
 End Sub
 
-' Javna ulazna tacka ‚Äî otvara frmStammdaten za datu sekciju.
+' Javna ulazna tacka ó otvara frmStammdaten za datu sekciju.
 ' sekTag      = Tag za frmStammdaten (npr. "TipAmbalaze")
 ' sekCaption  = naziv u naslovu (npr. "Ambalaza"); fallback na sekTag.
 ' Poziva je i staticni handler (OpenStammdatenForm) i dinamicki meni
@@ -187,7 +188,7 @@ EH:
     On Error Resume Next
     Me.Show
     On Error GoTo 0
-    MsgBox "Gre≈°ka pri otvaranju ≈°ifarnika: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greöka pri otvaranju öifarnika: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Staticni handleri (fallback dugmad) idu kroz isti put.

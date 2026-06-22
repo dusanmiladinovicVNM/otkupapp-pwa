@@ -253,7 +253,7 @@ Public Sub ConvertUTM34ToLatLng(ByVal eCoord As Double, ByVal nCoord As Double, 
     Dim X As Double, Y As Double
     Dim m As Double, mu As Double
     Dim phi1Rad As Double
-    Dim N1 As Double, T1 As Double, C1 As Double, R1 As Double, d As Double
+    Dim N1 As Double, t1 As Double, c1 As Double, R1 As Double, d As Double
     Dim zoneNumber As Long
     Dim lonOrigin As Double
     Dim latRad As Double, lonRad As Double
@@ -277,21 +277,21 @@ Public Sub ConvertUTM34ToLatLng(ByVal eCoord As Double, ByVal nCoord As Double, 
         + (1097# * e1 ^ 4 / 512#) * Sin(8# * mu)
     
     N1 = a / Sqr(1# - eccSquared * Sin(phi1Rad) ^ 2)
-    T1 = Tan(phi1Rad) ^ 2
-    C1 = eccPrimeSquared * Cos(phi1Rad) ^ 2
+    t1 = Tan(phi1Rad) ^ 2
+    c1 = eccPrimeSquared * Cos(phi1Rad) ^ 2
     R1 = a * (1# - eccSquared) / (1# - eccSquared * Sin(phi1Rad) ^ 2) ^ 1.5
     d = X / (N1 * k0)
     
     latRad = phi1Rad - (N1 * Tan(phi1Rad) / R1) * _
         (d ^ 2 / 2# _
-        - (5# + 3# * T1 + 10# * C1 - 4# * C1 ^ 2 - 9# * eccPrimeSquared) * d ^ 4 / 24# _
-        + (61# + 90# * T1 + 298# * C1 + 45# * T1 ^ 2 - 252# * eccPrimeSquared - 3# * C1 ^ 2) * d ^ 6 / 720#)
+        - (5# + 3# * t1 + 10# * c1 - 4# * c1 ^ 2 - 9# * eccPrimeSquared) * d ^ 4 / 24# _
+        + (61# + 90# * t1 + 298# * c1 + 45# * t1 ^ 2 - 252# * eccPrimeSquared - 3# * c1 ^ 2) * d ^ 6 / 720#)
     
     lonOrigin = (zoneNumber - 1#) * 6# - 180# + 3#   ' 21
     
     lonRad = (d _
-        - (1# + 2# * T1 + C1) * d ^ 3 / 6# _
-        + (5# - 2# * C1 + 28# * T1 - 3# * C1 ^ 2 + 8# * eccPrimeSquared + 24# * T1 ^ 2) * d ^ 5 / 120#) / Cos(phi1Rad)
+        - (1# + 2# * t1 + c1) * d ^ 3 / 6# _
+        + (5# - 2# * c1 + 28# * t1 - 3# * c1 ^ 2 + 8# * eccPrimeSquared + 24# * t1 ^ 2) * d ^ 5 / 120#) / Cos(phi1Rad)
     
     lat = latRad * 180# / 3.14159265358979
     lng = lonOrigin + lonRad * 180# / 3.14159265358979

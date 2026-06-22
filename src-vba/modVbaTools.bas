@@ -1,4 +1,5 @@
 Attribute VB_Name = "modVbaTools"
+'Attribute VB_Name = "modVbaTools"
 ' ============================================================
 ' modVbaTools - dev alat za EXPORT/IMPORT celog VBA koda iz/u src-vba folder.
 ' Round-trip: git source (src-vba) <-> Excel VBA projekat. Pokrece se RUCNO (Alt+F8).
@@ -17,10 +18,10 @@ Option Explicit
 Private Const SELF_MODULE As String = "modVbaTools"
 
 Public Sub ExportAllVBA()
-    Const FOLDER As String = "C:\put\do\src-vba\"        ' <-- IZMENI ("\" na kraju)
+    Const folder As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExport\"        ' <-- IZMENI ("\" na kraju)
     If Not VBAProjectAccessible() Then Exit Sub
-    If Dir(FOLDER, vbDirectory) = "" Then
-        MsgBox "Folder ne postoji: " & FOLDER, vbExclamation, "ExportAllVBA": Exit Sub
+    If Dir(folder, vbDirectory) = "" Then
+        MsgBox "Folder ne postoji: " & folder, vbExclamation, "ExportAllVBA": Exit Sub
     End If
 
     Dim vbc As Object, ext As String, n As Long
@@ -33,28 +34,28 @@ Public Sub ExportAllVBA()
             Case Else: ext = ""
         End Select
         If Len(ext) > 0 Then
-            vbc.Export FOLDER & vbc.name & ext
+            vbc.Export folder & vbc.name & ext
             n = n + 1
         End If
     Next vbc
-    MsgBox "Eksportovano komponenti: " & n & vbCrLf & FOLDER, vbInformation, "ExportAllVBA"
+    MsgBox "Eksportovano komponenti: " & n & vbCrLf & folder, vbInformation, "ExportAllVBA"
 End Sub
 
 Public Sub ImportAllVBA()
-    Const FOLDER As String = "C:\put\do\src-vba\"        ' <-- IZMENI
+    Const folder As String = "C:\put\do\src-vba\"        ' <-- IZMENI
     If Not VBAProjectAccessible() Then Exit Sub
 
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
-    If Not fso.FolderExists(FOLDER) Then
-        MsgBox "Folder ne postoji: " & FOLDER, vbExclamation, "ImportAllVBA": Exit Sub
+    If Not fso.FolderExists(folder) Then
+        MsgBox "Folder ne postoji: " & folder, vbExclamation, "ImportAllVBA": Exit Sub
     End If
 
     Dim fil As Object, ext As String, baseName As String
     Dim vbc As Object, t As Long, imported As Long, skipped As String
 
     ' 1) document moduli (.doccls): kod se MERGE-uje u postojecu komponentu
-    For Each fil In fso.GetFolder(FOLDER).Files
+    For Each fil In fso.GetFolder(folder).files
         If LCase$(fso.GetExtensionName(fil.name)) = "doccls" Then
             baseName = fso.GetBaseName(fil.name)
             Set vbc = Nothing
@@ -74,13 +75,13 @@ Public Sub ImportAllVBA()
     Next fil
 
     ' 2) standardni / klasni / forme
-    For Each fil In fso.GetFolder(FOLDER).Files
+    For Each fil In fso.GetFolder(folder).files
         ext = LCase$(fso.GetExtensionName(fil.name))
         baseName = fso.GetBaseName(fil.name)
         If (ext = "bas" Or ext = "cls" Or ext = "frm") _
            And StrComp(baseName, SELF_MODULE, vbTextCompare) <> 0 Then
 
-            If ext = "frm" And Not fso.FileExists(FOLDER & baseName & ".frx") Then
+            If ext = "frm" And Not fso.FileExists(folder & baseName & ".frx") Then
                 skipped = skipped & "  " & fil.name & " (nema .frx para)" & vbCrLf
             Else
                 On Error Resume Next                         ' ukloni istoimenu (izbegni 'modX1')
@@ -162,3 +163,4 @@ Private Function ReadCodeBody(ByVal path As String) As String
     Close #ff
     ReadCodeBody = body
 End Function
+

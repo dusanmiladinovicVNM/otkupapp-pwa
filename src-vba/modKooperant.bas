@@ -1,14 +1,15 @@
 Attribute VB_Name = "modKooperant"
+'Attribute VB_Name = "modKooperant"
 Option Explicit
 
 ' ============================================================
-' modKooperant â€“ razresavanje/kreiranje kooperanta po imenu.
+' modKooperant – razresavanje/kreiranje kooperanta po imenu.
 '
 ' frmOtkup.cmbKooperant je sada 2-kolonski: kol0 = "Ime Prezime"
 ' (vidljivo, filtrira se po imenu), kol1 = KooperantID (skriveno).
 ' Kada operater ukuca ime koje nije u bazi, kreira se novi
 ' tblKooperanti red (samo Ime/Prezime + StanicaID; BPG/racun se
-' dopunjavaju kasnije u Maticnim podacima). Bez odmah sync-a â€“
+' dopunjavaju kasnije u Maticnim podacima). Bez odmah sync-a –
 ' PWA/Google ce povuci pri sledecoj sinhronizaciji.
 ' ============================================================
 
@@ -54,7 +55,7 @@ Private Function FindKooperantIDByName(ByVal nm As String, ByVal stanicaID As St
     cSt = GetColumnIndex(TBL_KOOPERANTI, COL_KOOP_STANICA)
 
     Dim want As String: want = LCase$(Trim$(nm))
-    Dim i As Long, fallback As String
+    Dim i As Long, Fallback As String
     For i = 1 To UBound(data, 1)
         Dim full As String
         full = LCase$(Trim$(Trim$(CStr(data(i, cIme))) & " " & Trim$(CStr(data(i, cPr)))))
@@ -62,12 +63,12 @@ Private Function FindKooperantIDByName(ByVal nm As String, ByVal stanicaID As St
             If CStr(data(i, cSt)) = stanicaID Then
                 FindKooperantIDByName = CStr(data(i, cId))
                 Exit Function
-            ElseIf Len(fallback) = 0 Then
-                fallback = CStr(data(i, cId))
+            ElseIf Len(Fallback) = 0 Then
+                Fallback = CStr(data(i, cId))
             End If
         End If
     Next i
-    FindKooperantIDByName = fallback
+    FindKooperantIDByName = Fallback
 End Function
 
 ' Kreiraj novi tblKooperanti red: samo Ime/Prezime + StanicaID + novi ID.
@@ -136,3 +137,4 @@ Private Sub SplitName(ByVal nm As String, ByRef ime As String, ByRef prezime As 
         prezime = ""
     End If
 End Sub
+
