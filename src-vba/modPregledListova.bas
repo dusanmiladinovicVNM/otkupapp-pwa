@@ -2,9 +2,11 @@ Attribute VB_Name = "modPregledListova"
 ' ============================================================
 ' modPregledListova - pravi / azurira list "Pregled listova":
 '   kolona A = naziv lista, kolona B = klikabilan link ka tom listu.
-' Iznad tabele su dva dugmeta:
+' Iznad tabele su dugmici:
 '   "Pokreni program" -> otvara glavni ekran (frmOtkupAPP.Show)
 '   "Otvori VBA"      -> otvara VBA editor
+'   "Migracije"       -> MigrirajPodatkeIzStarog (uvoz iz starog fajla)
+'   "Ocisti tabele"   -> brise SAMO unose iz definisanih tabela (header+tbl ostaju)
 ' Pokrece se RUCNO (Alt+F8 -> NapraviPregledListova). Bezbedno se moze
 ' pokretati vise puta - sadrzaj i dugmad se svaki put iznova generisu.
 ' ============================================================
@@ -96,6 +98,64 @@ Public Sub OtvoriVBA()
     On Error GoTo 0
 End Sub
 
+' "Migracije" -> jednokratni uvoz cistih podataka iz starog OtkupApp fajla.
+' Reuse modMigracija.MigrirajPodatkeIzStarog (sam bira fajl i ima svoju potvrdu).
+Public Sub PokreniMigraciju()
+    On Error GoTo Fail
+    MigrirajPodatkeIzStarog
+    Exit Sub
+Fail:
+    MsgBox "Greska pri migraciji: " & Err.description, _
+           vbExclamation, "Migracije"
+End Sub
+
+' "Ocisti tabele" -> brise SAMO unose (DataBodyRange) iz dole navedenih tabela;
+' zaglavlja i sami ListObject-i ostaju. Trazi izricitu potvrdu (NE moze undo).
+' Napomena: "otkupna mesta" = tblStanice (nema zasebne tabele).
+Public Sub OcistiTabele()
+    Dim tbls As Variant
+    tbls = Array( _
+        TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
+        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_AMBALAZA, _
+        TBL_PALETA, TBL_PALETA_STAVKA, TBL_PRERADA, TBL_PRERADA_STAVKA, _
+        TBL_ARTIKLI, TBL_MAGACIN, TBL_NOVAC, TBL_KUPCI, TBL_STANICE, _
+        TBL_KULTURE, TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_KOOPERANTI, _
+        TBL_VOZACI, TBL_CENOVNIK)
+
+    Dim n As Long
+    n = UBound(tbls) - LBound(tbls) + 1
+
+    If MsgBox("Obrisati SVE unose iz " & n & " tabela?" & vbCrLf & _
+              "(zaglavlja i tabele ostaju)" & vbCrLf & vbCrLf & _
+              "Ova radnja se NE moze opozvati.", _
+              vbExclamation + vbYesNo + vbDefaultButton2, "Ocisti tabele") <> vbYes Then
+        Exit Sub
+    End If
+
+    Application.ScreenUpdating = False
+    On Error GoTo Fail
+
+    Dim i As Long, ocisceno As Long, nedostaju As String
+    For i = LBound(tbls) To UBound(tbls)
+        If ObrisiUnoseTabele(CStr(tbls(i))) Then
+            ocisceno = ocisceno + 1
+        Else
+            nedostaju = nedostaju & "  - " & CStr(tbls(i)) & vbCrLf
+        End If
+    Next i
+
+    Application.ScreenUpdating = True
+    MsgBox "Ocisceno tabela: " & ocisceno & " / " & n & _
+           IIf(Len(nedostaju) > 0, vbCrLf & vbCrLf & "Nisu pronadjene:" & vbCrLf & nedostaju, ""), _
+           vbInformation, "Ocisti tabele"
+    Exit Sub
+
+Fail:
+    Application.ScreenUpdating = True
+    MsgBox "Greska pri ciscenju tabela: " & Err.description, _
+           vbExclamation, "Ocisti tabele"
+End Sub
+
 ' --- Helperi ----------------------------------------------------------------
 
 ' Vrati postojeci "Pregled listova" ili ga napravi kao prvi list u workbook-u.
@@ -116,6 +176,19 @@ Private Function SubAdresaLista(ByVal sheetName As String) As String
     SubAdresaLista = "'" & Replace(sheetName, "'", "''") & "'!A1"
 End Function
 
+' Obrisi SAMO unose iz jedne tabele (header + ListObject ostaju). Vrati True
+' ako je tabela pronadjena. Reuse: GetTable + ustaljeni DataBodyRange.Delete.
+Private Function ObrisiUnoseTabele(ByVal tblName As String) As Boolean
+    Dim lo As ListObject
+    Set lo = GetTable(tblName)
+    If lo Is Nothing Then Exit Function
+
+    On Error Resume Next
+    If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
+    On Error GoTo 0
+    ObrisiUnoseTabele = True
+End Function
+
 ' Ukloni sva (stara) dugmad sa lista - poziva se pre ponovnog crtanja.
 Private Sub ObrisiDugmad(ByVal ws As Worksheet)
     On Error Resume Next
@@ -125,20 +198,24 @@ Private Sub ObrisiDugmad(ByVal ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' Nacrtaj dva dugmeta u "bandu" iznad tabele (redovi 1-2).
+' Nacrtaj dugmice u "bandu" iznad tabele (redovi 1-2), jedan pored drugog.
 Private Sub DodajDugmad(ByVal ws As Worksheet)
-    Dim topPt As Double, hPt As Double, wPt As Double, leftPt As Double
+    Dim specs As Variant
+    specs = Array( _
+        Array("Pokreni program", "PokreniProgram"), _
+        Array("Otvori VBA", "OtvoriVBA"), _
+        Array("Migracije", "PokreniMigraciju"), _
+        Array("Ocisti tabele", "OcistiTabele"))
+
+    Dim leftPt As Double, topPt As Double, wPt As Double, hPt As Double, gap As Double
     leftPt = ws.Range("A1").Left
     topPt = ws.Range("A1").Top + 2
-    wPt = 120
-    hPt = 26
+    wPt = 120: hPt = 26: gap = 8
 
-    Dim btn As Button
-    Set btn = ws.Buttons.Add(leftPt, topPt, wPt, hPt)
-    btn.Caption = "Pokreni program"
-    btn.OnAction = "PokreniProgram"
-
-    Set btn = ws.Buttons.Add(leftPt + wPt + 8, topPt, wPt, hPt)
-    btn.Caption = "Otvori VBA"
-    btn.OnAction = "OtvoriVBA"
+    Dim i As Long, btn As Button
+    For i = LBound(specs) To UBound(specs)
+        Set btn = ws.Buttons.Add(leftPt + i * (wPt + gap), topPt, wPt, hPt)
+        btn.Caption = specs(i)(0)
+        btn.OnAction = specs(i)(1)
+    Next i
 End Sub
