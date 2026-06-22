@@ -178,40 +178,101 @@ normalno i pusti `ActivateLicensePrompt` da dovrši online proveru.
 
 Cilj: skloni ručno petljanje sa OCX-om na svakom računaru.
 
-1. **Utvrdi da li je OCX uopšte potreban** (Sekcija 0). Ako je samo zaostala
-   referenca:
-   - VBE (`Alt+F11`) → `Tools → References` → nađi „**Microsoft Windows Common
-     Controls**" (ili bilo koju MISSING) → **odčekiraj** → `Debug → Compile
-     VBAProject` → snimi → **re-sign** + **bump `APP_VERSION`** (kao u licencnom
-     runbook-u, deo VBA deploy). Time problem nestaje bez ikakvog OCX-a na klijentu.
-2. **Ako OCX jeste prava zavisnost** (kontrola se realno koristi i Office je 32-bit):
-   - dodaj `MSCOMCTL.OCX` u install package (`tools/ocx/MSCOMCTL.OCX`), i
-   - ugradi registraciju u `install/Setup-OtkupApp.ps1` da svaki install to odradi
-     automatski (predlog snippet-a, dodati pre „setup completed"):
+### 5.1 Korak 1 — utvrdi da li je OCX **stvarno potreban** ili je mrtva referenca
 
-     ```powershell
-     # --- MSCOMCTL.OCX (32-bit) registracija ---
-     $ocxSource = Join-Path $ScriptRoot "tools\ocx\MSCOMCTL.OCX"
-     if (Test-Path $ocxSource) {
-         $ocxTarget = Join-Path $env:WINDIR "SysWOW64\MSCOMCTL.OCX"   # 64-bit Windows
-         if (!(Test-Path $ocxTarget)) {
-             $ocxTarget = Join-Path $env:WINDIR "System32\MSCOMCTL.OCX" # 32-bit Windows
-         }
-         try {
-             Copy-Item $ocxSource $ocxTarget -Force
-             $regsvr = Join-Path $env:WINDIR "SysWOW64\regsvr32.exe"
-             if (!(Test-Path $regsvr)) { $regsvr = Join-Path $env:WINDIR "System32\regsvr32.exe" }
-             Start-Process $regsvr -ArgumentList "/s `"$ocxTarget`"" -Verb RunAs -Wait
-             Write-Host "Registered MSCOMCTL.OCX: $ocxTarget"
-         } catch {
-             Write-Warning "MSCOMCTL.OCX registration failed: $($_.Exception.Message)"
-         }
-     }
-     ```
+Radi se u **live (potpisanom) `.xlsm`-u**, jer repo `.frm/.frx` ne moraju biti
+sinhroni sa produkcionom verzijom. Tri provere:
 
-   > Napomena: registracija traži admin prava (`-Verb RunAs`). Trenutni
-   > `Setup-OtkupApp.ps1` radi sve u CurrentUser kontekstu; OCX registracija je
-   > sistemska (per-machine) i zato traži elevaciju.
+1. **References:** `Alt+F11` (VBE) → `Tools → References`. Nađi
+   „**Microsoft Windows Common Controls 6.0 (SP6)**" (ili sličnu „Common Controls").
+   - Ako piše `MISSING:` ispred → referenca postoji ali OCX nije registrovan ovde.
+   - Ako je čekirana bez „MISSING" → registrovan je na ovoj mašini.
+2. **Compile test (presuđuje da li se koristi):**
+   - `Debug → Compile VBAProject` (treba da prođe).
+   - **Odčekiraj** „Microsoft Windows Common Controls" → `Debug → Compile` ponovo:
+     - **Prođe čisto** → ništa je ne koristi → **mrtva referenca**, bezbedno je
+       skloniti (ostavi odčekirano).
+     - **Pukne** (`User-defined type not defined` / nepoznat tip kontrole) → OCX
+       **jeste** u upotrebi; greška pokazuje gde. Vrati ček i idi na 5.3.
+3. **Forme:** otvori svaki UserForm u design pregledu i traži ne-MSForms kontrole:
+   `TreeView, ListView, ProgressBar, Toolbar, StatusBar, Slider, ImageList`
+   (MSCOMCTL) ili `DTPicker, MonthView` (MSCOMCT2). Ako ih nema ni na jednoj formi
+   i compile test iz tačke 2 prolazi → potvrđeno mrtva referenca.
+
+### 5.2 Ako je **mrtva referenca** (najverovatnije, po nalazu iz repoa)
+
+`Alt+F11` → `Tools → References` → **odčekiraj** Common Controls → `Debug → Compile
+VBAProject` → snimi → **re-sign** publisher sertifikatom + **bump `APP_VERSION`** u
+`modConfig` (isti release ritual kao u `docs/production-runbook-licenca.md`, deo „VBA
+deploy"). Problem nestaje na svim mašinama bez ijednog OCX-a.
+
+### 5.3 Ako OCX **jeste** zavisnost — ugradnja `regsvr32` u `Setup-OtkupApp.ps1`
+
+> Preduslov bitnosti: 32-bit `MSCOMCTL.OCX` radi samo uz **32-bit Office** (Sekcija
+> A.1). Na 64-bit Office-u registracija ne pomaže — tu se mora preći na native
+> MSForms ekvivalent.
+
+**Korak 1 — paket.** Dodaj fajl u install package: `tools/ocx/MSCOMCTL.OCX`
+(pored postojećeg `tools/poppler/...`). U `manifest.json` po želji dodaj
+`"containsOcx": true`.
+
+**Korak 2 — gde tačno u PS1.** U `install/Setup-OtkupApp.ps1` blok ide **posle**
+kreiranja desktop shortcut-a, a **pre** `Write-Host "=== OtkupApp setup completed ==="`
+(trenutno red ~104–106). `$ScriptRoot` je već definisan na vrhu skripte (red ~24),
+pa ga snippet koristi.
+
+**Korak 3 — elevacija.** Pisanje u `SysWOW64`/`System32` i sistemska registracija
+traže **admin**. Najčistije: ceo installer pokreni elevated:
+```powershell
+# desni klik PowerShell → Run as administrator, pa:
+powershell -ExecutionPolicy Bypass -File .\install\Setup-OtkupApp.ps1
+```
+Snippet ispod detektuje da li je proces elevated: ako jeste, zove `regsvr32` direktno
+(bez novog UAC-a); ako nije, koristi `-Verb RunAs` (jedan UAC prompt po registraciji).
+
+**Korak 4 — snippet (zalepi na mesto iz Koraka 2):**
+
+```powershell
+# --- MSCOMCTL.OCX (32-bit) kopiranje + registracija ---
+$ocxSource = Join-Path $ScriptRoot "tools\ocx\MSCOMCTL.OCX"
+if (Test-Path $ocxSource) {
+    # 64-bit Windows -> SysWOW64 (drzi 32-bit binarne); 32-bit Windows -> System32
+    if (Test-Path (Join-Path $env:WINDIR "SysWOW64")) {
+        $sysDir = Join-Path $env:WINDIR "SysWOW64"
+    } else {
+        $sysDir = Join-Path $env:WINDIR "System32"
+    }
+    $ocxTarget = Join-Path $sysDir "MSCOMCTL.OCX"
+    $regsvr    = Join-Path $sysDir "regsvr32.exe"
+
+    $isAdmin = ([Security.Principal.WindowsPrincipal] `
+        [Security.Principal.WindowsIdentity]::GetCurrent() `
+        ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    try {
+        Copy-Item $ocxSource $ocxTarget -Force
+        if ($isAdmin) {
+            & $regsvr "/s" $ocxTarget
+        } else {
+            Start-Process $regsvr -ArgumentList "/s `"$ocxTarget`"" -Verb RunAs -Wait
+        }
+        Write-Host "Registered MSCOMCTL.OCX: $ocxTarget"
+    } catch {
+        Write-Warning "MSCOMCTL.OCX registration failed: $($_.Exception.Message)"
+    }
+} else {
+    Write-Host "MSCOMCTL.OCX not in package — skipping OCX registration."
+}
+```
+
+**Korak 5 — provera posle PS1.** Otvori OtkupApp; forma sa kontrolom se učitava bez
+`Can't find project or library` i bez Run-time 429. (Registracija kroz `regsvr32`
+usput upiše i `Licenses` ključ — vidi Sekciju B.)
+
+> Trenutni `Setup-OtkupApp.ps1` namerno radi u CurrentUser kontekstu (cert, Trusted
+> Location). OCX registracija je jedini **per-machine** korak i zato traži admin —
+> zato je drži opcionim (ceo `if (Test-Path $ocxSource)`): ako OCX nije u paketu,
+> installer normalno preskoči taj deo.
 
 ---
 
