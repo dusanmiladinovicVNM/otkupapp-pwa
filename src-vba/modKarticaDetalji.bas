@@ -12,11 +12,12 @@ Option Explicit
 ' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica —
 ' lstKartica.Parent.Controls, kao frmDokumenta), frmIzvestaj.frx se NE
 ' dira (CLAUDE.md). Ref-kljuc reda se nosi u skrivenoj koloni lstKartica
-' (idx 6, vidi frmIzvestaj.SetupListBoxes): "OTK|<OtkupID>" / "NOV" / "MAG".
+' (idx 7, vidi frmIzvestaj.SetupListBoxes): "OTK|<OtkupID>" / "NOV" / "MAG".
 ' ============================================================
 
 ' Indeks skrivene kolone sa ref-kljucem u lstKartica.
-Private Const KART_REFKEY_COL As Long = 6
+' (kol. 6 = Saldo ambalaze, kol. 7 = skriveni ref-kljuc)
+Private Const KART_REFKEY_COL As Long = 7
 
 Private mLst As MSForms.ListBox        ' detail lista (2 kolone: Stavka | Vrednost)
 Private mLblTitle As MSForms.label
@@ -181,6 +182,7 @@ Private Sub ShowBasicRow(ByVal lstKartica As MSForms.ListBox, ByVal idx As Long)
     If Len(Trim$(CStr(lstKartica.List(idx, 3)))) > 0 Then AddPair "Zaduzenje", CStr(lstKartica.List(idx, 3))
     If Len(Trim$(CStr(lstKartica.List(idx, 4)))) > 0 Then AddPair "Razduzenje", CStr(lstKartica.List(idx, 4))
     AddPair "Saldo", CStr(lstKartica.List(idx, 5))
+    If Len(Trim$(CStr(lstKartica.List(idx, 6)))) > 0 Then AddPair "Saldo amb.", CStr(lstKartica.List(idx, 6))
 End Sub
 
 ' Otkup red: sve bitne stavke otkupnog lista (polja iz frmOtkup), read-only.

@@ -66,6 +66,12 @@ Public Sub SmokeTest_modIzvestaj()
     Else
         Smoke_Skip "ReportKarticaKooperanta", "Nema KooperantID u " & TBL_KOOPERANTI
     End If
+
+    If kooperantID <> "" Then
+        Smoke_RunReport "ReportKarticaAmbalaze", ReportKarticaAmbalaze(kooperantID, datumOd, datumDo)
+    Else
+        Smoke_Skip "ReportKarticaAmbalaze", "Nema KooperantID u " & TBL_KOOPERANTI
+    End If
     
     ' ========================================================
     ' ISPLATA

@@ -31,6 +31,14 @@ Private m_IsRefreshing As Boolean
 
 Private mChromeRemoved As Boolean
 
+' Runtime tab "Pregled ambalaze" (kooperant) - MultiPage page se dodaje u runtime-u
+' (.frx se ne dira). Geometrija kopirana sa lstKartica/lbl_H_KK1 (page-relativne
+' koordinate su iste preko stranica MultiPage-a).
+Private m_ambBuilt As Boolean
+Private m_ambPageIdx As Long
+Private m_lstAmb As MSForms.ListBox
+Private m_lblAmbTitle As MSForms.label
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
@@ -47,6 +55,7 @@ Private Sub UserForm_Activate()
     ' Nova instanca forme -> resetuj modul-stanje panela "Detalji otkupa"
     ' (dinamicke kontrole prethodne instance vise ne postoje posle Unload-a).
     KarticaDetalji_Reset
+    m_ambPageIdx = -1   ' dok se runtime tab "Pregled ambalaze" ne kreira
 
     m_IsInitializing = True
     
@@ -129,6 +138,7 @@ Private Sub UserForm_Activate()
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
     
     SetupListBoxes
+    EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
     UpdateReportMode
     ForceDarkAllPages
     
@@ -411,6 +421,7 @@ Private Sub UpdateReportMode()
                 mpReports.Pages(7).Visible = True  ' Manjak
             Case "Kooperanti"
                 mpReports.Pages(8).Visible = True  ' Kartica
+                If m_ambPageIdx >= 0 Then mpReports.Pages(m_ambPageIdx).Visible = True  ' Pregled ambalaze
         End Select
     Else
         mpReports.Pages(5).Visible = True  ' Zbirni
@@ -479,9 +490,13 @@ Private Sub SetupListBoxes()
     End With
     
     With lstKartica
-        .ColumnCount = 7
-        .ColumnWidths = "60;70;140;80;80;80;0"   ' kol. 6 (skrivena) = ref-kljuc reda za "Detalji otkupa"
+        .ColumnCount = 8
+        .ColumnWidths = "60;70;140;80;80;80;60;0"   ' fallback; LayoutKarticaHeaders prepisuje po stvarnoj sirini
     End With
+
+    ' Sirine + header pozicije kartice se racunaju iz stvarne lstKartica.width
+    ' (auto-fit, da "Saldo amb." kolona i njen header stanu i budu poravnati).
+    LayoutKarticaHeaders
 End Sub
 
 Private Sub UpdateStatusLabel()
@@ -504,7 +519,11 @@ Private Sub UpdateStatusLabel()
         Case 7:    Set activeList = lstManjak
         Case 8:    Set activeList = lstKartica
     End Select
-    
+
+    If activeList Is Nothing And m_ambPageIdx >= 0 And activeTab = m_ambPageIdx Then
+        Set activeList = m_lstAmb
+    End If
+
     If activeList Is Nothing Then
         lblStatus.caption = "Spreman za izvestaj"
         lblStatus.ForeColor = TXT_MUTED()
@@ -582,6 +601,7 @@ Private Sub btnUnos_Click()
         GenerateManjakReport entitetTip, entitetID, datumOd, datumDo
         If entitetTip = "Kooperant" Then
             GenerateKarticaReport entitetID, datumOd, datumDo
+            GenerateKarticaAmbReport entitetID, datumOd, datumDo
         End If
     End If
 
@@ -922,13 +942,62 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
             End If
         Next j
 
-        ' Skrivena kolona 6: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
-        lstKartica.List(lstKartica.ListCount - 1, 6) = _
-            CStr(IIf(IsEmpty(data(i, 8)), "", data(i, 8)))
+        ' Spalte 7: Saldo ambalaze (gajbe -> ceo broj, sa znakom)
+        If IsNumeric(data(i, 8)) And Not IsEmpty(data(i, 8)) Then
+            lstKartica.List(lstKartica.ListCount - 1, 6) = Format$(CDbl(data(i, 8)), "#,##0")
+        End If
+
+        ' Skrivena kolona 7: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
+        lstKartica.List(lstKartica.ListCount - 1, 7) = _
+            CStr(IIf(IsEmpty(data(i, 9)), "", data(i, 9)))
     Next i
 
     ' Novi izvestaj kartice -> ocisti panel detalja (prethodni kooperant)
     KarticaDetalji_Clear
+End Sub
+
+' Tab "Pregled ambalaze": tok gajbi kooperanta (Ulaz/Izlaz/Saldo).
+Private Sub GenerateKarticaAmbReport(ByVal entitetID As String, _
+                                     ByVal datumOd As Date, ByVal datumDo As Date)
+    If m_lstAmb Is Nothing Then Exit Sub
+    m_lstAmb.Clear
+
+    On Error Resume Next
+    Dim ime As String, prezime As String
+    ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Ime"))
+    prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Prezime"))
+    If Not m_lblAmbTitle Is Nothing Then
+        m_lblAmbTitle.caption = "PREGLED AMBALAZE: " & ime & " " & prezime & " (" & entitetID & ")"
+    End If
+    On Error GoTo 0
+
+    Dim data As Variant
+    data = ReportKarticaAmbalaze(entitetID, datumOd, datumDo)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        ' Datum
+        If IsDate(data(i, 1)) Then
+            m_lstAmb.AddItem Format$(CDate(data(i, 1)), "d.m.yyyy")
+        Else
+            m_lstAmb.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+        ' Broj dok + Opis
+        m_lstAmb.List(m_lstAmb.ListCount - 1, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        m_lstAmb.List(m_lstAmb.ListCount - 1, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        ' Ulaz / Izlaz (gajbe -> ceo broj; prazno kad je 0)
+        If IsNumeric(data(i, 4)) And data(i, 4) <> "" Then
+            If CDbl(data(i, 4)) <> 0 Then m_lstAmb.List(m_lstAmb.ListCount - 1, 3) = Format$(CDbl(data(i, 4)), "#,##0")
+        End If
+        If IsNumeric(data(i, 5)) And data(i, 5) <> "" Then
+            If CDbl(data(i, 5)) <> 0 Then m_lstAmb.List(m_lstAmb.ListCount - 1, 4) = Format$(CDbl(data(i, 5)), "#,##0")
+        End If
+        ' Saldo (running)
+        If IsNumeric(data(i, 6)) And data(i, 6) <> "" Then
+            m_lstAmb.List(m_lstAmb.ListCount - 1, 5) = Format$(CDbl(data(i, 6)), "#,##0")
+        End If
+    Next i
 End Sub
 
 ' Klik na red kartice -> read-only panel "Detalji otkupa" desno (sve stavke
@@ -1180,9 +1249,17 @@ Private Sub btnStampaj_Click()
                 "Opis", _
                 "Zaduzenje", _
                 "Razduzenje", _
-                "Saldo")
+                "Saldo", _
+                "Saldo amb.")
     End Select
-    
+
+    ' Runtime tab "Pregled ambalaze" (dinamicki index, nije u Select Case 0-8)
+    If lst Is Nothing And m_ambPageIdx >= 0 And activeTab = m_ambPageIdx Then
+        Set lst = m_lstAmb
+        title = "Pregled ambalaze"
+        headers = Array("Datum", "Broj dok.", "Opis", "Ulaz", "Izlaz", "Saldo")
+    End If
+
     If lst Is Nothing Then Exit Sub
     If lst.ListCount = 0 Then
         MsgBox "Nema podataka za stampu!", vbExclamation, APP_NAME
@@ -1320,8 +1397,62 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_KK4, "Zaduženje"
     SetColumnHeader lbl_H_KK5, "Razduženje"
     SetColumnHeader lbl_H_KK6, "Saldo"
-    
+    LayoutKarticaHeaders            ' kreira lbl_H_KK7 + auto-fit sirine/pozicije (mora poslednje)
+
     On Error GoTo 0
+End Sub
+
+' Kartica headeri + sirine kolona: racunaju se iz STVARNE lstKartica.width (auto-fit),
+' jer header "Saldo amb." (lbl_H_KK7) ne postoji u binarnom .frx i mora se kreirati u
+' runtime-u (Controls.Add, kao modKarticaDetalji; .frx se ne dira). I ColumnWidths i
+' header Left/Width idu iz istog izvora (udeo sirine) -> uvek poravnato i sve kolone
+' staju (ranije je amb-kolona prelivala desnu ivicu pa je header bezao na "S").
+' Mora da se zove POSLE SetColumnHeader poziva (pozicioniranje je poslednje).
+Private Sub LayoutKarticaHeaders()
+    On Error Resume Next
+
+    ' KK7 ("Saldo amb.") - kreiraj idempotentno (lookup po imenu).
+    Dim lblAmb As MSForms.label
+    Set lblAmb = lstKartica.Parent.Controls("lbl_H_KK7")
+    If lblAmb Is Nothing Then
+        Set lblAmb = lstKartica.Parent.Controls.Add("Forms.Label.1", "lbl_H_KK7", True)
+        If Not lblAmb Is Nothing Then
+            lblAmb.Top = lbl_H_KK6.Top
+            lblAmb.Height = lbl_H_KK6.Height
+        End If
+    End If
+    SetColumnHeader lblAmb, "Saldo amb."
+
+    Dim availW As Double
+    availW = lstKartica.width - 16          ' rezerva za scrollbar/border
+    If availW < 140 Then Exit Sub
+
+    ' Udeli 7 vidljivih kolona (zbir = 1.0): Datum, Br.dok, Opis, Zad, Razd, Saldo, Saldo amb.
+    Dim prop As Variant
+    prop = Array(0.1, 0.12, 0.2, 0.145, 0.145, 0.16, 0.13)
+    Dim names As Variant
+    names = Array("lbl_H_KK1", "lbl_H_KK2", "lbl_H_KK3", "lbl_H_KK4", _
+                  "lbl_H_KK5", "lbl_H_KK6", "lbl_H_KK7")
+
+    Dim x As Double: x = lstKartica.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 6
+        Dim wCol As Long
+        wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lstKartica.Parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            lbl.Left = x
+            lbl.width = wCol
+        End If
+        cw = cw & CStr(wCol) & ";"
+        x = x + wCol
+    Next k
+    cw = cw & "0"                            ' skrivena ref-kljuc kolona (idx 7)
+    lstKartica.ColumnCount = 8
+    lstKartica.ColumnWidths = cw
 End Sub
 
 Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
@@ -1329,6 +1460,94 @@ Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
     StyleListHeaderLabel lbl
     lbl.caption = txt
     On Error GoTo 0
+End Sub
+
+' Runtime tab "Pregled ambalaze" (kooperant): MultiPage page + naslov + lista.
+' Geometrija kopirana sa lstKartica/lbl_H_KK1 (page-relativne koord. su iste preko
+' stranica). Idempotentno (m_ambBuilt); nova instanca forme -> vars default-uju i
+' page se ponovo gradi. .frx se ne dira (CLAUDE.md).
+Private Sub EnsureKarticaAmbPage()
+    On Error GoTo EH
+    If m_ambBuilt Then Exit Sub
+    If mpReports Is Nothing Then Exit Sub
+
+    Dim pg As MSForms.Page
+    Set pg = mpReports.Pages.Add("pgKarticaAmb", "Pregled ambalaze")
+    If pg Is Nothing Then Exit Sub
+    m_ambPageIdx = pg.index
+    On Error Resume Next
+    pg.BackColor = BG_MAIN()
+    On Error GoTo EH
+
+    Set m_lblAmbTitle = pg.Controls.Add("Forms.Label.1", "lblAmbTitle", True)
+    With m_lblAmbTitle
+        .Left = lstKartica.Left
+        .Top = lbl_H_KK1.Top - 18
+        If .Top < 2 Then .Top = 2
+        .width = lstKartica.width
+        .Height = 14
+    End With
+    StyleListHeaderLabel m_lblAmbTitle
+    m_lblAmbTitle.caption = "PREGLED AMBALAZE"
+
+    Set m_lstAmb = pg.Controls.Add("Forms.ListBox.1", "lstKarticaAmb", True)
+    With m_lstAmb
+        .Left = lstKartica.Left
+        .Top = lstKartica.Top
+        .width = lstKartica.width
+        .Height = lstKartica.Height
+        .ColumnCount = 6
+    End With
+    StyleListBox m_lstAmb
+
+    LayoutAmbHeaders pg
+
+    m_ambBuilt = True
+    Exit Sub
+EH:
+    m_ambBuilt = True   ' ne pokusavaj ponovo u istoj instanci (izbegni dupli page)
+    LogErr "frmIzvestaj.EnsureKarticaAmbPage"
+End Sub
+
+' Headeri (6) + sirine kolona za "Pregled ambalaze", auto-fit iz m_lstAmb.width.
+Private Sub LayoutAmbHeaders(ByVal pg As MSForms.Page)
+    On Error Resume Next
+    Dim caps As Variant
+    caps = Array("Datum", "Broj dok.", "Opis", "Ulaz", "Izlaz", "Saldo")
+    Dim prop As Variant
+    prop = Array(0.13, 0.18, 0.29, 0.13, 0.13, 0.14)   ' zbir = 1.0
+
+    Dim availW As Double
+    availW = m_lstAmb.width - 16
+    If availW < 120 Then availW = m_lstAmb.width
+
+    Dim x As Double: x = m_lstAmb.Left
+    Dim topY As Double: topY = lbl_H_KK1.Top
+    Dim hh As Double: hh = lbl_H_KK1.Height
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 5
+        Dim wCol As Long
+        wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = pg.Controls("lblAmbH" & CStr(k + 1))
+        If lbl Is Nothing Then
+            Set lbl = pg.Controls.Add("Forms.Label.1", "lblAmbH" & CStr(k + 1), True)
+        End If
+        If Not lbl Is Nothing Then
+            lbl.Top = topY
+            lbl.Height = hh
+            lbl.Left = x
+            lbl.width = wCol
+            StyleListHeaderLabel lbl
+            lbl.caption = CStr(caps(k))
+        End If
+        cw = cw & CStr(wCol) & ";"
+        x = x + wCol
+    Next k
+    If Len(cw) > 0 Then cw = Left$(cw, Len(cw) - 1)
+    m_lstAmb.ColumnWidths = cw
 End Sub
 
 Private Sub ForceDarkAllPages()
