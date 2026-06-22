@@ -1354,9 +1354,10 @@ Private Function FmtKg(ByVal x As Double) As String
     FmtKg = Format$(x, "#,##0")
 End Function
 
-' Kolicina (kg): prikazi decimale samo ako su unete (npr. 1234.5); ceo broj inace.
+' Kolicina (kg): uvek 2 decimale (npr. 1234.00) — panel + liste otpremnica/blokova.
+' Konvencija ista kao zivi prikaz u frmOtkup.UpdateUkupnoKg ("#,##0.00").
 Private Function FmtKgDec(ByVal x As Double) As String
-    FmtKgDec = Format$(x, "#,##0.###")
+    FmtKgDec = Format$(x, "#,##0.00")
 End Function
 
 Private Function FmtRsd(ByVal x As Double) As String
