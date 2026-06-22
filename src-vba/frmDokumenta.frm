@@ -371,11 +371,8 @@ Private Sub UpdateUkupnoKgOtp()
 End Sub
 
 Private Sub txtKolicinaPrij_Change()
-    If txtBrojZbirnePrij.value <> "" Then
-        UpdateManjak txtBrojZbirnePrij.value
-    End If
+    ' txtKolAmbPrij_Change radi pun osvezaj: manjak + ukupno + prosek (sve neto).
     txtKolAmbPrij_Change
-    UpdateUkupnoKgPrij        ' <-- DODATO
 End Sub
 
 Private Sub txtKolicinaKlIIPrij_Change()
@@ -388,11 +385,24 @@ End Sub
 Private Sub txtCenaPrij_Change():       UpdateUkupnoKgPrij: End Sub
 Private Sub txtCenaKlIIPrij_Change():   UpdateUkupnoKgPrij: End Sub
 
+' Tip ambalaze menja taru -> osvezi neto prikaze (manjak/ukupno/prosek).
+Private Sub cmbTipAmbPrij_Change()
+    txtKolAmbPrij_Change
+End Sub
+
 Private Sub txtKolAmbPrij_Change()
+    ' Gajbe/tara odredjuju NETO u bruto modu -> osvezi manjak i ukupno PRE prosek-a
+    ' (manjak prijemnice mora biti neto vs neto zbirna; prosek ostaje entry-based).
+    If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
+    UpdateUkupnoKgPrij
+
     If IsNumeric(txtKolicinaPrij.value) And IsNumeric(txtKolAmbPrij.value) Then
         If CLng(txtKolAmbPrij.value) > 0 Then
+            ' Bruto mod: prosek po gajbi se racuna iz NETO (oduzeta tara).
+            Dim netoPrik As Double
+            netoPrik = PrijNetoZaPrikaz(CDbl(txtKolicinaPrij.value), CDbl(txtKolAmbPrij.value))
             lblProsekGajbe.caption = "Prosek gajbe: " & _
-                Format$(CDbl(txtKolicinaPrij.value) / CLng(txtKolAmbPrij.value), "#,##0.00") & " kg"
+                Format$(netoPrik / CLng(txtKolAmbPrij.value), "#,##0.00") & " kg"
         End If
     Else
         lblProsekGajbe.caption = ""
@@ -2014,6 +2024,15 @@ Private Sub UpdateManjak(ByVal brojZbirne As String)
     If chkDveKlasePrij.value Then
         If IsNumeric(txtKolicinaKlIIPrij.value) Then pendingKlII = CDbl(txtKolicinaKlIIPrij.value)
     End If
+
+    ' Bruto mod: zbirna je u NETO -> oduzmi taru iz unetog bruta (manjak = neto vs neto).
+    Dim kaI As Double, kaII As Double
+    If IsNumeric(txtKolAmbPrij.value) Then kaI = CDbl(txtKolAmbPrij.value)
+    pendingKlI = PrijNetoZaPrikaz(pendingKlI, kaI)
+    If chkDveKlasePrij.value And Not m_txtKolAmbIIPrij Is Nothing Then
+        If IsNumeric(m_txtKolAmbIIPrij.value) Then kaII = CDbl(m_txtKolAmbIIPrij.value)
+    End If
+    pendingKlII = PrijNetoZaPrikaz(pendingKlII, kaII)
     
     Dim manjak As Variant
     manjak = CalculateManjakPreview(brojZbirne, pendingKlI, pendingKlII)
@@ -2056,9 +2075,18 @@ Private Sub UpdateUkupnoKgPrij()
     If IsNumeric(txtKolicinaPrij.value) Then kl1 = CDbl(txtKolicinaPrij.value)
     If IsNumeric(txtCenaPrij.value) Then cena1 = CDbl(txtCenaPrij.value)
 
+    ' Bruto mod: prikazi NETO (oduzeta tara) -> ukupno kg i vrednost po neto.
+    Dim ka1 As Double, ka2 As Double
+    If IsNumeric(txtKolAmbPrij.value) Then ka1 = CDbl(txtKolAmbPrij.value)
+    kl1 = PrijNetoZaPrikaz(kl1, ka1)
+
     If chkDveKlasePrij.value Then
         If IsNumeric(txtKolicinaKlIIPrij.value) Then kl2 = CDbl(txtKolicinaKlIIPrij.value)
         If IsNumeric(txtCenaKlIIPrij.value) Then cena2 = CDbl(txtCenaKlIIPrij.value)
+        If Not m_txtKolAmbIIPrij Is Nothing Then
+            If IsNumeric(m_txtKolAmbIIPrij.value) Then ka2 = CDbl(m_txtKolAmbIIPrij.value)
+        End If
+        kl2 = PrijNetoZaPrikaz(kl2, ka2)
     End If
 
     ukupnoKg = kl1 + kl2
@@ -2084,6 +2112,21 @@ Private Sub UpdateUkupnoKgPrij()
 
     StylePreviewBox lblUkupnoKgPrij, "ok"
 End Sub
+
+' Live prikaz (prijemnica): u BRUTO modu pretvori uneti bruto u NETO (oduzmi taru
+' = gajbe * tezina gajbice). Van bruto moda ili bez gajbi/tipa/validne tare vrati
+' uneto kako jeste. Koristi UpdateUkupnoKgPrij / UpdateManjak / prosek gajbe.
+Private Function PrijNetoZaPrikaz(ByVal unetoVal As Double, ByVal kolAmb As Double) As Double
+    PrijNetoZaPrikaz = unetoVal
+    If unetoVal <= 0 Then Exit Function
+    If Not OtkupBrutoUnos() Then Exit Function
+    If kolAmb <= 0 Then Exit Function
+    Dim tip As String: tip = Trim$(cmbTipAmbPrij.value)
+    If tip = "" Then Exit Function
+    Dim tara As Double: tara = kolAmb * GetTezinaGajbice(tip)
+    If tara <= 0 Or tara >= unetoVal Then Exit Function
+    PrijNetoZaPrikaz = unetoVal - tara
+End Function
 
 ' ============================================================
 ' IZLAZ KUPCI (Banka-Zahlung + Ambalaza)
