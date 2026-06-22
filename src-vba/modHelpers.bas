@@ -1,6 +1,18 @@
 Attribute VB_Name = "modHelpers"
 Option Explicit
 
+' Format kolicine (kg) za izvestaje: ceo broj BEZ decimalnog zareza
+' (1000 -> "1.000"), a sa decimalom prikazi decimale (1234.5 -> "1.234,5").
+' Eksplicitan If jer Format$(n,"#,##0.##") u nekim lokalizacijama (DE) ostavi
+' prazan decimalni zarez ("500,"). Jedinstveni izvor istine za kg prikaz.
+Public Function FmtKolicina(ByVal x As Double) As String
+    If x = Int(x) Then
+        FmtKolicina = Format$(x, "#,##0")
+    Else
+        FmtKolicina = Format$(x, "#,##0.##")
+    End If
+End Function
+
 Public Function ExtractIDFromDisplay(ByVal displayText As String) As String
     ' Unterst�tzt: "ID - Name" und "(ID) Name"
     Dim dashPos As Long

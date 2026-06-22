@@ -34,7 +34,7 @@ Private Const PANEL_LEFT  As Double = 302
 Private Const OTP_W       As Double = 346
 Private Const BLOK_LEFT   As Double = 652       ' PANEL_LEFT + OTP_W + 4 (manji razmak)
 Private Const BLOK_W      As Double = 504
-Private Const GRID_TOP    As Double = 104
+Private Const GRID_TOP    As Double = 120       ' spusteno za akcioni red (dugmad + datum spec)
 Private Const EXP_WIDTH   As Double = 1164
 Private Const TOGGLE_W    As Double = 130
 
@@ -60,6 +60,9 @@ Private mBtnStorno As MSForms.CommandButton
 Private mBtnPrint As MSForms.CommandButton
 Private mBtnFilter As MSForms.CommandButton
 Private mBtnBiraj As MSForms.CommandButton
+Private mBtnSpecDatum As MSForms.CommandButton
+Private mTxtSpecOd As MSForms.TextBox
+Private mTxtSpecDo As MSForms.TextBox
 Private mLstOtp As MSForms.ListBox
 Private mLstBlok As MSForms.ListBox
 Private mTxtCenaOtp As MSForms.TextBox
@@ -113,6 +116,7 @@ Public Sub OtkupBlok_OnButton(ByVal action As String)
         Case "PRINT": PrintSelectedBlok
         Case "FILTER": ToggleFilter
         Case "BIRAJ": BirajOrPrint
+        Case "SPECDATUM": PrintSpecOdDo
     End Select
     Exit Sub
 EH:
@@ -193,8 +197,8 @@ Public Function OtkupBlok_ConfirmUnos() As Boolean
     Dim preost As Double: preost = ukupno - SumKolByOtp(mActiveOtpID)
 
     If total > preost + 0.0001 Then
-        If MsgBox("Unos (" & FmtKg(total) & " kg) premasuje preostalih " & _
-                  FmtKg(preost) & " kg za ovu otpremnicu." & vbCrLf & _
+        If MsgBox("Unos (" & FmtKgDec(total) & " kg) premasuje preostalih " & _
+                  FmtKgDec(preost) & " kg za ovu otpremnicu." & vbCrLf & _
                   "Nastaviti?", vbExclamation + vbYesNo, APP_NAME) = vbNo Then
             OtkupBlok_ConfirmUnos = False
         End If
@@ -301,7 +305,7 @@ Private Sub BuildPanel()
     mLblNapisanoAmb.caption = "U blokovima amb: —"
     mLblPreostaloAmb.caption = "Ostatak amb: —"
 
-    ' Naslovi + dugmad (dugmad levo od toggle-a da se ne preklapaju)
+    ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
     t1.caption = "OTPREMNICE  (klik = izbor)": StyleHdr t1
     Set mBtnFilter = AddCtl("CommandButton", "btnOtkBlokFilter", PANEL_LEFT + OTP_W - 120, 42, 120, 22)
@@ -309,23 +313,43 @@ Private Sub BuildPanel()
 
     Dim t2 As Object: Set t2 = AddCtl("Label", "lblOtkBlokT2", BLOK_LEFT, 44, 56, 14)
     t2.caption = "BLOKOVI": StyleHdr t2
-    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT + 58, 42, 78, 22)
+
+    ' --- Akcioni red (red 66), iznad listboxova ---
+    ' Levo (nad otpremnicama): dnevna / periodicna specifikacija (Od/Do + dugme).
+    ' Datum Od/Do pretpopunjeni na danas -> klik daje dnevnu specifikaciju;
+    ' promenom datuma dobija se period (od-do). Reuse istog renderera (RenderSpec).
+    Dim lblOd As Object: Set lblOd = AddCtl("Label", "lblOtkBlokSpecOd", PANEL_LEFT, 69, 22, 14)
+    lblOd.caption = "Od:": StyleHdr lblOd
+    Set mTxtSpecOd = AddCtl("TextBox", "txtOtkBlokSpecOd", PANEL_LEFT + 24, 66, 64, 18)
+    Dim lblDo As Object: Set lblDo = AddCtl("Label", "lblOtkBlokSpecDo", PANEL_LEFT + 94, 69, 22, 14)
+    lblDo.caption = "Do:": StyleHdr lblDo
+    Set mTxtSpecDo = AddCtl("TextBox", "txtOtkBlokSpecDo", PANEL_LEFT + 118, 66, 64, 18)
+    Set mBtnSpecDatum = AddCtl("CommandButton", "btnOtkBlokSpecDatum", PANEL_LEFT + 190, 66, 150, 22)
+    mBtnSpecDatum.caption = "Stampaj po datumu"
+
+    ' Desno (nad blokovima): storno / stampa lista / biranje otpremnica za spec.
+    Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT, 66, 78, 22)
     mBtnStorno.caption = "Storniraj"
-    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 140, 42, 84, 22)
+    Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 82, 66, 84, 22)
     mBtnPrint.caption = "Stampaj list"
-    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 228, 42, 124, 22)
+    Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 170, 66, 124, 22)
     mBtnBiraj.caption = "Biraj otpremnice"
 
     On Error Resume Next
     StyleExitButton mBtnFilter, "Prikaz: Sve"
+    StyleTextBox mTxtSpecOd
+    StyleTextBox mTxtSpecDo
+    StylePrimaryButton mBtnSpecDatum, "Stampaj po datumu"
     StyleExitButton mBtnStorno, "Storniraj"
     StylePrimaryButton mBtnPrint, "Stampaj list"
     StyleExitButton mBtnBiraj, "Biraj otpremnice"
     On Error GoTo 0
+    mTxtSpecOd.value = Format$(Date, "d.m.yyyy")
+    mTxtSpecDo.value = Format$(Date, "d.m.yyyy")
 
-    ' Zaglavlja kolona (spustena dalje od dugmadi; listbox tik ispod)
-    AddHeaders "hOtp", PANEL_LEFT, 74, OTP_COLW, OTP_CAPS
-    AddHeaders "hBlok", BLOK_LEFT, 74, BLOK_COLW, BLOK_CAPS
+    ' Zaglavlja kolona (red 90; listbox tik ispod)
+    AddHeaders "hOtp", PANEL_LEFT, 90, OTP_COLW, OTP_CAPS
+    AddHeaders "hBlok", BLOK_LEFT, 90, BLOK_COLW, BLOK_CAPS
 
     ' Grid-ovi
     Set mLstOtp = AddCtl("ListBox", "lstOtkBlokOtp", PANEL_LEFT, GRID_TOP, OTP_W, gridH)
@@ -343,6 +367,7 @@ Private Sub BuildPanel()
     WireBtn mBtnPrint, "PRINT"
     WireBtn mBtnFilter, "FILTER"
     WireBtn mBtnBiraj, "BIRAJ"
+    WireBtn mBtnSpecDatum, "SPECDATUM"
 End Sub
 
 Private Sub SetPanelVisible(ByVal b As Boolean)
@@ -432,12 +457,12 @@ Private Sub LoadOtpremnice()
         r = mLstOtp.ListCount - 1
         mLstOtp.List(r, 1) = CStr(data(i, cBroj))
         mLstOtp.List(r, 2) = DictVal(dSt, CStr(data(i, cSt)))
-        mLstOtp.List(r, 3) = FmtKg(ukupno)
+        mLstOtp.List(r, 3) = FmtKgDec(ukupno)
         mLstOtp.List(r, 4) = FmtDate(data(i, cDat))
         mLstOtp.List(r, 5) = DictVal(dHl, CStr(data(i, cZbr)))
         mLstOtp.List(r, 6) = FmtKg(prodajna)
         mLstOtp.List(r, 7) = FmtKg(cenaBlok)
-        mLstOtp.List(r, 8) = FmtKg(ukupno - nap)
+        mLstOtp.List(r, 8) = FmtKgDec(ukupno - nap)
     Next j
     Exit Sub
 EH:
@@ -487,7 +512,7 @@ Private Sub LoadBlokovi()
         mLstBlok.List(r, 1) = CStr(data(i, cBr))
         mLstBlok.List(r, 2) = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
         mLstBlok.List(r, 3) = FmtDate(data(i, cDat))
-        mLstBlok.List(r, 4) = FmtKg(kol)
+        mLstBlok.List(r, 4) = FmtKgDec(kol)
         mLstBlok.List(r, 5) = FmtRsd(neto)
         mLstBlok.List(r, 6) = FmtRsd(vred)
         mLstBlok.List(r, 7) = FmtRsd(pdv)
@@ -505,7 +530,7 @@ NextRow:
         r = mLstBlok.ListCount - 1
         mLstBlok.List(r, 1) = "UKUPNO"
         mLstBlok.List(r, 2) = "amb: " & FmtKg(sumAmb)
-        mLstBlok.List(r, 4) = FmtKg(sumKol)
+        mLstBlok.List(r, 4) = FmtKgDec(sumKol)
         mLstBlok.List(r, 6) = FmtRsd(sumVred)
         mLstBlok.List(r, 7) = FmtRsd(sumPdv)
         mLstBlok.List(r, 8) = FmtRsd(sumUk)
@@ -724,25 +749,84 @@ EH:
     LogErr "modOtkupBlok.BirajOrPrint"
 End Sub
 
-' Specifikacija svih blokova izabranih otpremnica: tabela kao listbox
-' (sa okvirima), jedan red po bloku, kompaktno, A4 landscape, direktno u PDF.
+' Specifikacija RUCNO izabranih otpremnica (postojeci tok: dugme "Biraj
+' otpremnice" -> multiselect -> "Stampaj specifikaciju"). Tanak omotac oko
+' zajednickog renderera RenderSpec (filter po skupu OtpremnicaID).
 Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     On Error GoTo EH
-
     Dim selSet As Object: Set selSet = CreateObject("Scripting.Dictionary")
-    Dim dZbr As Object: Set dZbr = CreateObject("Scripting.Dictionary")
-    Dim dOtp As Object: Set dOtp = CreateObject("Scripting.Dictionary")
     Dim v As Variant
     For Each v In otpIDs
         Dim oid0 As String: oid0 = CStr(v)
         If Not selSet.Exists(oid0) Then selSet.Add oid0, True
-        If Not dZbr.Exists(oid0) Then _
-            dZbr.Add oid0, CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oid0, COL_OTP_BROJ_ZBIRNE))
-        If Not dOtp.Exists(oid0) Then _
-            dOtp.Add oid0, CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oid0, COL_OTP_BROJ))
     Next v
 
+    Dim subtitle As String
+    subtitle = "Datum stampe: " & Format$(Date, "d.m.yyyy") & "     Otpremnica: " & otpIDs.count
+    RenderSpec selSet, False, Date, Date, subtitle
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.PrintSpecifikacija"
+    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Handler dugmeta "Stampaj po datumu" (footer strip). Cita Od/Do polja
+' (TryParseDateValue) i zove renderer u rezimu filtera po datumu.
+Private Sub PrintSpecOdDo()
+    On Error GoTo EH
+    Dim dOd As Date, dDo As Date
+    If Not TryParseDateValue(CStr(mTxtSpecOd.value), dOd) Then
+        MsgBox "Unesite ispravan datum 'Od' (npr. " & Format$(Date, "d.m.yyyy") & ").", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If Not TryParseDateValue(CStr(mTxtSpecDo.value), dDo) Then
+        MsgBox "Unesite ispravan datum 'Do' (npr. " & Format$(Date, "d.m.yyyy") & ").", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If dDo < dOd Then
+        MsgBox "'Do' datum ne sme biti pre 'Od' datuma.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    PrintSpecifikacijaPoDatumu dOd, dDo
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.PrintSpecOdDo"
+End Sub
+
+' Dnevna / periodicna specifikacija: svi (ne-stornirani) otkup blokovi cija je
+' kolona Datum u opsegu [datumOd, datumDo]. Tanak omotac oko RenderSpec.
+Private Sub PrintSpecifikacijaPoDatumu(ByVal datumOd As Date, ByVal datumDo As Date)
+    On Error GoTo EH
+    Dim subtitle As String
+    If Int(CDbl(datumOd)) = Int(CDbl(datumDo)) Then
+        subtitle = "Dnevna specifikacija     Datum: " & Format$(datumOd, "d.m.yyyy")
+    Else
+        subtitle = "Specifikacija     Period: " & Format$(datumOd, "d.m.yyyy") & _
+                   " - " & Format$(datumDo, "d.m.yyyy")
+    End If
+    RenderSpec Nothing, True, datumOd, datumDo, subtitle
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.PrintSpecifikacijaPoDatumu"
+    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Jezgro: ispisuje specifikaciju otkupnih blokova (tabela sa okvirima, A4
+' landscape) i exportuje u PDF. Filter po redu:
+'   byDate=True  -> kolona Datum u [datumOd, datumDo]  (selSet sme biti Nothing)
+'   byDate=False -> OtpremnicaID u selSet              (rucna selekcija)
+' Izlaz je sortiran po (Otkupno mesto, Datum) radi grupisanja.
+Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
+                       ByVal datumOd As Date, ByVal datumDo As Date, _
+                       ByVal subtitle As String)
+    On Error GoTo EH
+
     Dim dKo As Object: Set dKo = BuildKoopNames()
+    Dim dSt As Object: Set dSt = BuildLookup(TBL_STANICE, "StanicaID", "Naziv")
+    Dim dZbr As Object: Set dZbr = BuildLookup(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ_ZBIRNE)
+    Dim dOtp As Object: Set dOtp = BuildLookup(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ)
     Dim stopa As Double: stopa = PdvStopa()
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
@@ -750,14 +834,62 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     data = ExcludeStornirano(data, TBL_OTKUP)
     If IsEmpty(data) Then MsgBox "Nema blokova.", vbInformation, APP_NAME: Exit Sub
 
-    Dim cOtp As Long, cKoop As Long, cKol As Long, cCena As Long, cBr As Long, cDat As Long
+    Dim cOtp As Long, cKoop As Long, cKol As Long, cCena As Long, cBr As Long, cDat As Long, cSt As Long
     cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
     cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
 
+    ' --- 1) skupi indekse redova koji prolaze filter + sort-kljuc (OM | datum) ---
+    Dim n As Long: n = UBound(data, 1)
+    Dim idx() As Long: ReDim idx(1 To n)
+    Dim keyS() As String: ReDim keyS(1 To n)
+    Dim m As Long: m = 0
+    Dim i As Long
+    For i = 1 To n
+        Dim oid As String: oid = Trim$(CStr(data(i, cOtp)))
+        Dim pass As Boolean: pass = False
+        If byDate Then
+            If IsDate(data(i, cDat)) Then
+                Dim dd As Double: dd = Int(CDbl(CDate(data(i, cDat))))
+                pass = (dd >= Int(CDbl(datumOd)) And dd <= Int(CDbl(datumDo)))
+            End If
+        ElseIf Not selSet Is Nothing Then
+            pass = selSet.Exists(oid)
+        End If
+        If pass Then
+            m = m + 1
+            idx(m) = i
+            Dim dkey As String: dkey = "00000000"
+            If IsDate(data(i, cDat)) Then dkey = Format$(CDate(data(i, cDat)), "yyyymmdd")
+            keyS(m) = DictVal(dSt, CStr(data(i, cSt))) & "|" & dkey
+        End If
+    Next i
+
+    If m = 0 Then
+        If byDate Then
+            MsgBox "Nema otkupnih blokova u izabranom periodu.", vbInformation, APP_NAME
+        Else
+            MsgBox "Izabrane otpremnice nemaju blokova.", vbInformation, APP_NAME
+        End If
+        Exit Sub
+    End If
+
+    ' --- 2) insertion sort po (Otkupno mesto, Datum) ASC (kao u LoadOtpremnice) ---
+    Dim a As Long, b As Long, ti As Long, tk As String
+    For a = 2 To m
+        ti = idx(a): tk = keyS(a): b = a - 1
+        Do While b >= 1
+            If keyS(b) <= tk Then Exit Do
+            idx(b + 1) = idx(b): keyS(b + 1) = keyS(b): b = b - 1
+        Loop
+        idx(b + 1) = ti: keyS(b + 1) = tk
+    Next a
+
+    ' --- 3) ispis ---
     Dim ws As Worksheet: Set ws = EnsureSpecSheet()
     Application.ScreenUpdating = False
     ws.cells.Font.name = "Calibri"
@@ -768,9 +900,10 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     ws.cells(1, 1).Font.Bold = True
 
     Dim hdr As Variant
-    hdr = Array("Broj zbirne", "Broj otpremnice", "br. bloka", "Ime i Prezime", "Datum", "Kolicina", _
-                "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
+    hdr = Array("Broj zbirne", "Broj otpremnice", "Otkupno mesto", "br. bloka", "Ime i Prezime", _
+                "Datum", "Kolicina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
     Const R0 As Long = 4
+    Const NC As Long = 11
     Dim cc As Long
     For cc = 0 To UBound(hdr)
         ws.cells(R0, cc + 1).value = hdr(cc)
@@ -779,57 +912,50 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
 
     Dim r As Long: r = R0 + 1
     Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, cnt As Long
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        Dim oid As String: oid = Trim$(CStr(data(i, cOtp)))
-        If selSet.Exists(oid) Then
-            Dim kol As Double: kol = NumVal(data(i, cKol))
-            Dim bruto As Double: bruto = NumVal(data(i, cCena))
-            Dim neto As Double: neto = bruto / (1 + stopa / 100)
-            Dim vred As Double: vred = kol * neto
-            Dim pdv As Double: pdv = vred * stopa / 100
-            Dim uk As Double: uk = kol * bruto
+    Dim j As Long
+    For j = 1 To m
+        i = idx(j)
+        Dim oid2 As String: oid2 = Trim$(CStr(data(i, cOtp)))
+        Dim kol As Double: kol = NumVal(data(i, cKol))
+        Dim bruto As Double: bruto = NumVal(data(i, cCena))
+        Dim neto As Double: neto = bruto / (1 + stopa / 100)
+        Dim vred As Double: vred = kol * neto
+        Dim pdv As Double: pdv = vred * stopa / 100
+        Dim uk As Double: uk = kol * bruto
 
-            ws.cells(r, 1).value = DictVal(dZbr, oid)
-            ws.cells(r, 2).value = DictVal(dOtp, oid)
-            ws.cells(r, 3).value = CStr(data(i, cBr))
-            ws.cells(r, 4).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
-            ws.cells(r, 5).value = FmtDate(data(i, cDat))
-            ws.cells(r, 6).value = kol
-            ws.cells(r, 7).value = neto
-            ws.cells(r, 8).value = vred
-            ws.cells(r, 9).value = pdv
-            ws.cells(r, 10).value = uk
-            sumKol = sumKol + kol: sumVred = sumVred + vred
-            sumPdv = sumPdv + pdv: sumUk = sumUk + uk
-            cnt = cnt + 1
-            r = r + 1
-        End If
-    Next i
-
-    If cnt = 0 Then
-        Application.ScreenUpdating = True
-        MsgBox "Izabrane otpremnice nemaju blokova.", vbInformation, APP_NAME
-        Exit Sub
-    End If
+        ws.cells(r, 1).value = DictVal(dZbr, oid2)
+        ws.cells(r, 2).value = DictVal(dOtp, oid2)
+        ws.cells(r, 3).value = DictVal(dSt, CStr(data(i, cSt)))
+        ws.cells(r, 4).value = CStr(data(i, cBr))
+        ws.cells(r, 5).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
+        ws.cells(r, 6).value = FmtDate(data(i, cDat))
+        ws.cells(r, 7).value = kol
+        ws.cells(r, 8).value = neto
+        ws.cells(r, 9).value = vred
+        ws.cells(r, 10).value = pdv
+        ws.cells(r, 11).value = uk
+        sumKol = sumKol + kol: sumVred = sumVred + vred
+        sumPdv = sumPdv + pdv: sumUk = sumUk + uk
+        cnt = cnt + 1
+        r = r + 1
+    Next j
 
     ' UKUPNO red
-    ws.cells(r, 4).value = "UKUPNO"
-    ws.cells(r, 6).value = sumKol
-    ws.cells(r, 8).value = sumVred
-    ws.cells(r, 9).value = sumPdv
-    ws.cells(r, 10).value = sumUk
-    ws.Range(ws.cells(r, 1), ws.cells(r, 10)).Font.Bold = True
+    ws.cells(r, 5).value = "UKUPNO"
+    ws.cells(r, 7).value = sumKol
+    ws.cells(r, 9).value = sumVred
+    ws.cells(r, 10).value = sumPdv
+    ws.cells(r, 11).value = sumUk
+    ws.Range(ws.cells(r, 1), ws.cells(r, NC)).Font.Bold = True
 
-    ws.cells(2, 1).value = "Datum: " & Format$(Date, "d.m.yyyy") & "     Otpremnica: " & _
-                           otpIDs.count & "     Blokova: " & cnt
+    ws.cells(2, 1).value = subtitle & "     Blokova: " & cnt
 
-    ' formati: kolicina bez decimala, novac 2 decimale
-    ws.Range(ws.cells(R0 + 1, 6), ws.cells(r, 6)).NumberFormat = "#,##0"
-    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 10)).NumberFormat = "#,##0.00"
+    ' formati: kolicina sa decimalama samo ako su unete, novac 2 decimale
+    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 7)).NumberFormat = "#,##0.###"
+    ws.Range(ws.cells(R0 + 1, 8), ws.cells(r, NC)).NumberFormat = "#,##0.00"
 
     ' iscrtana polja
-    Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, 10))
+    Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, NC))
     tbl.Borders.LineStyle = xlContinuous
     tbl.Borders.Weight = xlThin
     tbl.rows.RowHeight = 13
@@ -837,14 +963,15 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     ' sirine kolona
     ws.columns("A").ColumnWidth = 12   ' Broj zbirne
     ws.columns("B").ColumnWidth = 14   ' Broj otpremnice
-    ws.columns("C").ColumnWidth = 12   ' br. bloka
-    ws.columns("D").ColumnWidth = 24   ' Ime i Prezime
-    ws.columns("E").ColumnWidth = 11   ' Datum
-    ws.columns("F").ColumnWidth = 9    ' Kolicina
-    ws.columns("G").ColumnWidth = 11   ' Cena bez PDV
-    ws.columns("H").ColumnWidth = 13   ' Vrednost
-    ws.columns("I").ColumnWidth = 12   ' Iznos PDV
-    ws.columns("J").ColumnWidth = 14   ' Ukupna vrednost
+    ws.columns("C").ColumnWidth = 18   ' Otkupno mesto
+    ws.columns("D").ColumnWidth = 12   ' br. bloka
+    ws.columns("E").ColumnWidth = 24   ' Ime i Prezime
+    ws.columns("F").ColumnWidth = 11   ' Datum
+    ws.columns("G").ColumnWidth = 9    ' Kolicina
+    ws.columns("H").ColumnWidth = 11   ' Cena bez PDV
+    ws.columns("I").ColumnWidth = 13   ' Vrednost
+    ws.columns("J").ColumnWidth = 12   ' Iznos PDV
+    ws.columns("K").ColumnWidth = 14   ' Ukupna vrednost
 
     ' PageSetup (Orientation/PaperSize/FitToPages) trazi drajver stampaca.
     ' Na racunaru bez podrazumevanog stampaca ti property-ji bacaju gresku 1004,
@@ -861,7 +988,7 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
         .RightMargin = Application.InchesToPoints(0.3)
         .TopMargin = Application.InchesToPoints(0.4)
         .BottomMargin = Application.InchesToPoints(0.4)
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, 10)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, NC)).Address
     End With
     On Error GoTo EH
 
@@ -881,7 +1008,7 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     Exit Sub
 EH:
     Application.ScreenUpdating = True
-    LogErr "modOtkupBlok.PrintSpecifikacija"
+    LogErr "modOtkupBlok.RenderSpec"
     MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
@@ -1217,14 +1344,19 @@ End Function
 ' Bruto rezim: "bruto (neto X)"; neto rezim ili bruto==neto: samo vrednost.
 Private Function FmtKgBrutoNeto(ByVal brutoVal As Double, ByVal netoVal As Double) As String
     If OtkupBrutoUnos() And Abs(brutoVal - netoVal) > 0.0001 Then
-        FmtKgBrutoNeto = FmtKg(brutoVal) & " (neto " & FmtKg(netoVal) & ")"
+        FmtKgBrutoNeto = FmtKgDec(brutoVal) & " (neto " & FmtKgDec(netoVal) & ")"
     Else
-        FmtKgBrutoNeto = FmtKg(netoVal)
+        FmtKgBrutoNeto = FmtKgDec(netoVal)
     End If
 End Function
 
 Private Function FmtKg(ByVal x As Double) As String
     FmtKg = Format$(x, "#,##0")
+End Function
+
+' Kolicina (kg): prikazi decimale samo ako su unete (npr. 1234.5); ceo broj inace.
+Private Function FmtKgDec(ByVal x As Double) As String
+    FmtKgDec = Format$(x, "#,##0.###")
 End Function
 
 Private Function FmtRsd(ByVal x As Double) As String

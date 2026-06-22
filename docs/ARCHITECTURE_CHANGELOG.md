@@ -2,9 +2,9 @@
 
 **Document Purpose:** Delta notes between canonical architecture snapshots  
 **Companion to:** `ARCHITECTURE_REFERENCE.md`  
-**Current Version:** v6.33  
+**Current Version:** v6.34  
 **Last Updated:** 2026-06-21  
-**Status:** Active changelog — v6.33 otkupni list: „Saldo ambalaze" je sada kumulativni entitetski saldo kooperanta (Početno stanje pre bloka + Izdato − Primljeno; novi `modAmbalaza.GetKooperantAmbOpening`). v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
+**Status:** Active changelog — v6.34 otkupni list: „Saldo ambalaze" je sada kumulativni entitetski saldo kooperanta (Početno stanje pre bloka + Izdato − Primljeno; novi `modAmbalaza.GetKooperantAmbOpening`). v6.33 dnevna/periodična specifikacija (datum od–do) + kolona „Otkupno mesto" u panelu „Otkupni blokovi" (`modOtkupBlok`). v6.32 otkupni list: ambalaža kao uokvirena tabelica (Primljena/Izdata/Saldo). v6.31 daje punu podršku za **Klasu II kroz ceo lanac** (zasebne gajbe #3 — ledger, otpremnica/zbirna/prijemnica, paletizacija), dozvoljava **unos samo Klase II bez Klase I** (#2), uvodi **bruto unos sa obaveznim gajbama** (#1) i **otpremnicu koja čuva neto + `BrutoKg`** (#5, panel poredi neto↔neto); MALINA posivljava Zbirna sekciju u `frmDokumenta`; auto-cena Klase II; PR57 numeracija prijemnice (`GenerateBrojPrijemnice`); fix regresije izdate ambalaže kod unosa samo Klase II
 
 ---
 
@@ -53,7 +53,8 @@ Older preserved entries may use equivalent headings such as `VERIFIED / TO VERIF
 
 | Version | Date | Summary | Reference updated | Notes |
 |---|---|---|---|---|
-| v6.33 | 2026-06-21 | Otkupni list (`modPrint`): red **„Saldo ambalaze" → kumulativni entitetski saldo kooperanta** = početno stanje pre bloka (`modAmbalaza.GetKooperantAmbOpening`, čita ledger po redosledu upisa → ispravno i na re-print) + izdato − primljeno; dodat red **„Pocetno stanje"**; kutija ostaje **3 reda** (Pocetno stanje · Primljeno+Izdato u jednom redu · Saldo) pa primerak ostaje tačno 1/3 A4. Rešava v6.32 known-limit (saldo je bio per-dokument). | Yes — AR §5.12 | presentation/read-only; bez migracije; re-import `modPrint` + `modAmbalaza`; smoke: re-print starijeg bloka — saldo = početno + izdato − primljeno |
+| v6.34 | 2026-06-21 | Otkupni list (`modPrint`): red **„Saldo ambalaze" → kumulativni entitetski saldo kooperanta** = početno stanje pre bloka (`modAmbalaza.GetKooperantAmbOpening`, čita ledger po redosledu upisa → ispravno i na re-print) + izdato − primljeno; dodat red **„Pocetno stanje"**; kutija ostaje **3 reda** (primerak ostaje 1/3 A4). Rešava v6.32 known-limit (saldo je bio per-dokument). | Yes — AR §5.12 | presentation/read-only; bez migracije; re-import `modPrint` + `modAmbalaza`; smoke: re-print starijeg bloka — saldo = početno + izdato − primljeno |
+| v6.33 | 2026-06-21 | Panel „Otkupni blokovi" (`modOtkupBlok`): dnevna/periodična specifikacija (filter datum od–do, dugme „Stampaj po datumu") + kolona „Otkupno mesto"; akcioni red iznad listboxova; renderer refaktorisan u `RenderSpec`. Fix: Type mismatch po datumu; kg bez praznih decimala (`FmtKgDec`). | No (uz sledeći snapshot) | bez migracije; re-import `modOtkupBlok` |
 | v6.32 | 2026-06-21 | Otkupni list (`modPrint`): ambalaža prikazana kao mala **uokvirena tabelica** — redovi Primljena / Izdata / **Saldo ambalaze** (saldo = primljena − izdata; novi `h("ambSaldo")`), levo od obračun-boksa; „Rok isplate" premešten na red oznake primerka (ostaje vidljiv kao mandatorni element). Bez dodavanja redova — primerak i dalje tačno 1/3 A4 (99 mm). | Yes — AR §5.12 | presentation-only; bez migracije; re-import `modPrint`; smoke: štampa otkupnog lista (tabelica primljena/izdata/saldo + staje u 1/3) |
 | v6.31 | 2026-06-21 | Dvoklasni otkup — puna podrška za **Klasu II kroz ceo lanac**: Klasa II (drugi `tblOtkup`/dokument red, isti `BrDok`) nosi **svoju** količinu ambalaže `kolAmbII` kroz ledger, otpremnicu/zbirnu/prijemnicu i **paletizaciju** (#3, reverz starog „ambalaža samo na Klasi I"). **Unos samo Klase II** bez Klase I (otkup + dokumenta; `hasKlasaI = kolicinaI > 0`, bar jedna klasa) (#2). **Bruto unos**: ako ima količine bez gajbi → blok snimanja (bez gajbi se bruto ne pretvara u neto, tara se plaća kao voće) (#1). **Otpremnica čuva neto** + `tblOtpremnica.BrutoKg` (panel poredi neto↔neto; labele „bruto (neto X)") (#5). MALINA: posivljena Zbirna sekcija u `frmDokumenta` (`DisableFraZbirnaMalina` — i deca kontrole). Auto-cena Klase II na `chkDveKlase`. Storno celog dokumenta `StornoOtkupByBrDok_TX` (oba reda). PR57: `modBrojevi.GenerateBrojPrijemnice` + auto-predlog. Fix regresije: izdata ambalaža se gubila kod unosa samo Klase II (sad se rutira na red Klase II). | **Yes** — AR §6.1/§6.2/§6.4/§6.8/§6.9 + §5.4/§5.5; companion `AMBALAZA_MODEL.md` §3/§9 | re-import `frmOtkup`/`frmDokumenta`/`modOtkup`/`modDokumenta`/`modAutoHladnjaca`/`modStorno`/`modOtkupBlok`/`modConfig`/`modSetup`/`modPrint`/`modPaletniList`/`modPodesavanja`/`modBrojevi`/`modBusinessFlowProTests`; pokreni `EnsureDoradeSchema` (dodaje `tblOtpremnica.BrutoKg`); stari redovi nemaju `kolAmbII`/`BrutoKg` (prazno = neto, ambalaža samo Klasa I) — bez migracije |
 | v6.30 | 2026-06-20 | Otkup desktop: novo polje „Izdata ambalaza" (OM→kooperant uz otkup) — double-entry `Kooperant Ulaz` + `Stanica Izlaz` pod `DOK_TIP_OM_IZLAZ_KOOP` (DokumentID = otkupID, bez vozača; reuse modela iz v6.29 / `AMBALAZA_MODEL.md`), perzistira u `tblOtkup.KolAmbIzdata`; `StornoOtkup` reversuje obe noge (deli otkupID). Otkupni list (`modPrint`) obogaćen: ambalaža blok prikazuje **Primljenu i Izdatu**, tabela stavki proširena na 8 kolona (Cena bez PDV / Cena s PDV / Kol. neto / Kol. bruto = neto + gajbice×tara iz `tblTipAmbalaze.TezinaGajbiceKg` / Vrednost neto), red „Objekat" (lokacija + br. registra; firmin config `SELLER_OBJEKAT_*`) ispod reda sa PIB, i vreme snimanja (`tblOtkup.VremeUnosa` = `Now()`) uz Datum. | Companion `AMBALAZA_MODEL.md` (§3/§9); main ref TBD | re-import `modConfig`/`modSetup`/`modOtkup`/`frmOtkup`/`modStorno`/`modPrint`/`modPodesavanja`; pokreni `EnsureDoradeSchema` (kreira `KolAmbIzdata` + `VremeUnosa`); popuni `SELLER_OBJEKAT_*` u Podešavanjima; postojeći otkupi nemaju izdatu/vreme (prazno); 2-stavke (Klasa I+II) + „Objekat" red su tesni za 1/3 A4 — proveri štampu |
@@ -110,7 +111,7 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
 
-## v6.33 — 2026-06-21
+## v6.34 — 2026-06-21
 
 ### Summary
 
@@ -140,6 +141,39 @@ Otkupni list (`OtkupSablon` / `modPrint`): red **„Saldo ambalaze"** više nije
 - Read/presentation-only; bez migracije. Re-import `modPrint` + `modAmbalaza`.
 
 Reference updated: Yes (§5.12).
+
+
+## v6.33 — 2026-06-21
+
+### Summary
+
+Panel „Otkupni blokovi" (`frmOtkup` / `modOtkupBlok`): pored postojeće specifikacije za **ručno izabrane otpremnice**, dodata je **dnevna / periodična specifikacija** (filter po datumu *od–do*). Iznad listboxova je novi **akcioni red**: levo (nad otpremnicama) polja **Od** / **Do** (pretpopunjena na današnji datum → klik odmah daje dnevnu specifikaciju) + dugme **„Stampaj po datumu"**; desno (nad blokovima) preseljena dugmad **Storniraj / Stampaj list / Biraj otpremnice**. Listboxovi su spušteni (`GRID_TOP` 104 → 120, zaglavlja 74 → 90). Na samoj specifikaciji je dodata kolona **Otkupno mesto** (posle „Broj otpremnice"). Renderer je refaktorisan u jedno jezgro (`RenderSpec`) koje filtrira po skupu `OtpremnicaID` **ILI** po opsegu datuma — bez dupliranja PDF logike.
+
+### Added
+
+- `modOtkupBlok.PrintSpecifikacijaPoDatumu(datumOd, datumDo)` + handler `PrintSpecOdDo` (čita Od/Do preko `TryParseDateValue`, validira opseg): dnevna (od=do) ili periodična specifikacija svih ne-storniranih otkup blokova čija je kolona `Datum` (`COL_OTK_DATUM`) u opsegu.
+- `BuildPanel`: dinamičke kontrole `txtOtkBlokSpecOd` / `txtOtkBlokSpecDo` + dugme `btnOtkBlokSpecDatum` (akcija `"SPECDATUM"` u `OtkupBlok_OnButton`), wired preko `clsBlokUI`; smeštene u akcioni red iznad listboxova. `frmOtkup.frx` se ne dira.
+- Specifikacija: nova kolona **Otkupno mesto**, vrednost = naziv stanice po redu (`COL_OTK_STANICA` → `TBL_STANICE.Naziv`, reuse `BuildLookup`).
+
+### Changed
+
+- `modOtkupBlok.PrintSpecifikacija(otpIDs)` je sada tanak omotač oko novog `RenderSpec(selSet, byDate, datumOd, datumDo, subtitle)`; ponašanje ručne selekcije otpremnica je nepromenjeno. Tabela sada ima 11 kolona (A–K); izlaz je sortiran po (Otkupno mesto, Datum) radi grupisanja.
+- Layout panela: dugmad `Storniraj` / `Stampaj list` / `Biraj otpremnice` preseljena iz reda naslova u novi akcioni red (red 66); listboxovi spušteni (`GRID_TOP` 104 → 120).
+
+### Fixed
+
+- **Type mismatch (greška 13)** pri kliku na „Stampaj po datumu": `DateValue(datum)` u `PrintSpecifikacijaPoDatumu` i u filteru `RenderSpec` zamenjeno robusnim poređenjem serijskog broja `Int(CDbl(datum))` (bez parsiranja stringa → bez locale/Type zamke).
+- **Količina (kg) se više ne zaokružuje** u panelu: nova `FmtKgDec` (`#,##0.###` — decimale samo kad su unete) za sve prikaze količine (lista otpremnica Količina/Ostatak, lista blokova Količina + zbir, sažetak kg, poruka o prekoračenju) i za kolonu Količina na PDF specifikaciji. Cene i ambalaža (cele gajbe) ostaju nepromenjene (`FmtKg`).
+
+### Verification / Acceptance Gates
+
+- VBA verifikovan statički (Sub/Function/With/Select balans, nema duplih definicija, indeksi kolona 1–11 dosledni). Finalni smoke (korisnik, Excel): u panelu „Otkupni blokovi" → „Stampaj po datumu" za danas i za period; potvrdi kolonu „Otkupno mesto" i da postojeća specifikacija po izboru otpremnica i dalje radi.
+
+### Migration / Data Notes
+
+- Nema migracije (koristi postojeće `tblOtkup.Datum` / `StanicaID`). Re-import `modOtkupBlok` (`clsBlokUI` nepromenjen).
+
+Reference updated: No (UI/izveštaj u panelu; uneti u `ARCHITECTURE_REFERENCE.md` uz sledeći snapshot).
 
 
 ## v6.32 — 2026-06-21
