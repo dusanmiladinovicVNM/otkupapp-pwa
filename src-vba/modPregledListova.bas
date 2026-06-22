@@ -3,7 +3,7 @@ Attribute VB_Name = "modPregledListova"
 ' modPregledListova - pravi / azurira list "Pregled listova":
 '   kolona A = naziv lista, kolona B = klikabilan link ka tom listu.
 ' Iznad tabele su dva dugmeta:
-'   "Pokreni program" -> StartApp (pokrece app i otvara frmOtkupAPP)
+'   "Pokreni program" -> otvara glavni ekran (frmOtkupAPP.Show)
 '   "Otvori VBA"      -> otvara VBA editor
 ' Pokrece se RUCNO (Alt+F8 -> NapraviPregledListova). Bezbedno se moze
 ' pokretati vise puta - sadrzaj i dugmad se svaki put iznova generisu.
@@ -72,14 +72,15 @@ End Sub
 
 ' --- Dugmad: akcije (Public, da ih OnAction moze pozvati) -------------------
 
-' "Pokreni program" -> kanonski start aplikacije (init + licenca + splash ->
-' frmOtkupAPP). Reuse modMain.StartApp, ne pozivamo formu direktno.
+' "Pokreni program" -> udji u glavni ekran. Init/licenca/splash su vec
+' odradjeni pri otvaranju fajla (StartApp), pa ovde samo prikazujemo glavnu
+' formu, isto kao i ostali pozivaci (frmMarza, frmIzvestaj, frmMaticniPodaci...).
 Public Sub PokreniProgram()
     On Error GoTo Fail
-    StartApp
+    frmOtkupAPP.Show
     Exit Sub
 Fail:
-    MsgBox "Ne mogu da pokrenem program: " & Err.description, _
+    MsgBox "Ne mogu da otvorim program: " & Err.description, _
            vbExclamation, "Pregled listova"
 End Sub
 
