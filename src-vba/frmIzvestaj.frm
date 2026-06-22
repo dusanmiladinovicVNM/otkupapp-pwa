@@ -480,8 +480,12 @@ Private Sub SetupListBoxes()
     
     With lstKartica
         .ColumnCount = 8
-        .ColumnWidths = "60;70;140;80;80;80;60;0"   ' kol. 6 = Saldo amb.; kol. 7 (skrivena) = ref-kljuc za "Detalji otkupa"
+        .ColumnWidths = "60;70;140;80;80;80;60;0"   ' fallback; LayoutKarticaHeaders prepisuje po stvarnoj sirini
     End With
+
+    ' Sirine + header pozicije kartice se racunaju iz stvarne lstKartica.width
+    ' (auto-fit, da "Saldo amb." kolona i njen header stanu i budu poravnati).
+    LayoutKarticaHeaders
 End Sub
 
 Private Sub UpdateStatusLabel()
@@ -1326,29 +1330,62 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_KK4, "Zaduženje"
     SetColumnHeader lbl_H_KK5, "Razduženje"
     SetColumnHeader lbl_H_KK6, "Saldo"
-    EnsureKarticaAmbHeader          ' lbl_H_KK7 ("Saldo amb.") - runtime (nije u .frx)
+    LayoutKarticaHeaders            ' kreira lbl_H_KK7 + auto-fit sirine/pozicije (mora poslednje)
 
     On Error GoTo 0
 End Sub
 
-' Header "Saldo amb." (lbl_H_KK7) ne postoji u binarnom .frx, pa se kreira u
-' runtime-u (Controls.Add na Page-u kartice, kao modKarticaDetalji). Idempotentno
-' (lookup po imenu) i pozicionirano desno od lbl_H_KK6 (Saldo). Ako Add ne uspe,
-' kolona u listi i dalje radi - samo bez zaglavlja.
-Private Sub EnsureKarticaAmbHeader()
+' Kartica headeri + sirine kolona: racunaju se iz STVARNE lstKartica.width (auto-fit),
+' jer header "Saldo amb." (lbl_H_KK7) ne postoji u binarnom .frx i mora se kreirati u
+' runtime-u (Controls.Add, kao modKarticaDetalji; .frx se ne dira). I ColumnWidths i
+' header Left/Width idu iz istog izvora (udeo sirine) -> uvek poravnato i sve kolone
+' staju (ranije je amb-kolona prelivala desnu ivicu pa je header bezao na "S").
+' Mora da se zove POSLE SetColumnHeader poziva (pozicioniranje je poslednje).
+Private Sub LayoutKarticaHeaders()
     On Error Resume Next
-    Dim lbl As MSForms.label
-    Set lbl = Nothing
-    Set lbl = lbl_H_KK6.Parent.Controls("lbl_H_KK7")
-    If lbl Is Nothing Then
-        Set lbl = lbl_H_KK6.Parent.Controls.Add("Forms.Label.1", "lbl_H_KK7", True)
-        If lbl Is Nothing Then Exit Sub
-        lbl.Top = lbl_H_KK6.Top
-        lbl.Height = lbl_H_KK6.Height
-        lbl.Left = lbl_H_KK6.Left + lbl_H_KK6.width
-        lbl.width = lbl_H_KK6.width
+
+    ' KK7 ("Saldo amb.") - kreiraj idempotentno (lookup po imenu).
+    Dim lblAmb As MSForms.label
+    Set lblAmb = lstKartica.Parent.Controls("lbl_H_KK7")
+    If lblAmb Is Nothing Then
+        Set lblAmb = lstKartica.Parent.Controls.Add("Forms.Label.1", "lbl_H_KK7", True)
+        If Not lblAmb Is Nothing Then
+            lblAmb.Top = lbl_H_KK6.Top
+            lblAmb.Height = lbl_H_KK6.Height
+        End If
     End If
-    SetColumnHeader lbl, "Saldo amb."
+    SetColumnHeader lblAmb, "Saldo amb."
+
+    Dim availW As Double
+    availW = lstKartica.width - 16          ' rezerva za scrollbar/border
+    If availW < 140 Then Exit Sub
+
+    ' Udeli 7 vidljivih kolona (zbir = 1.0): Datum, Br.dok, Opis, Zad, Razd, Saldo, Saldo amb.
+    Dim prop As Variant
+    prop = Array(0.1, 0.12, 0.2, 0.145, 0.145, 0.16, 0.13)
+    Dim names As Variant
+    names = Array("lbl_H_KK1", "lbl_H_KK2", "lbl_H_KK3", "lbl_H_KK4", _
+                  "lbl_H_KK5", "lbl_H_KK6", "lbl_H_KK7")
+
+    Dim x As Double: x = lstKartica.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 6
+        Dim wCol As Long
+        wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lstKartica.Parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            lbl.Left = x
+            lbl.width = wCol
+        End If
+        cw = cw & CStr(wCol) & ";"
+        x = x + wCol
+    Next k
+    cw = cw & "0"                            ' skrivena ref-kljuc kolona (idx 7)
+    lstKartica.ColumnCount = 8
+    lstKartica.ColumnWidths = cw
 End Sub
 
 Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
