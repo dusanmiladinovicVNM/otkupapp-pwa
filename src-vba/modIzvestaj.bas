@@ -556,6 +556,183 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
+                                      ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportKarticaAmbalaze"
+    On Error GoTo EH
+    ' Tok ambalaze kooperanta iz tblAmbalaza (EntitetTip=Kooperant).
+    ' Returns: 2D Array (1)=Datum (2)=BrojDok (3)=Opis (4)=Ulaz (5)=Izlaz (6)=Saldo
+    ' Smer kanonski (kao GetAmbalazeStanje): Ulaz (+ OM izdao prazne),
+    ' Izlaz (- koop predao pune). Saldo (running) = SumaUlaz - SumaIzlaz =
+    ' koliko gajbica kooperant drzi/duguje. Period od 0 (kao novcana kartica).
+
+    Dim ambData As Variant
+    ambData = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(ambData) Then
+        ReportKarticaAmbalaze = Empty
+        Exit Function
+    End If
+    ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
+    If Not IsArray(ambData) Then
+        ReportKarticaAmbalaze = Empty
+        Exit Function
+    End If
+
+    Dim colDat As Long, colEnt As Long, colEntTip As Long, colTip As Long
+    Dim colKol As Long, colSmer As Long, colDokID As Long
+    colDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+    colEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
+    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
+    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
+    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    Dim colDokTip As Long
+    colDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)   ' opciono (friendly opis)
+
+    ' DokumentID (otkupID) -> BrojDok, jednim prolazom (bez per-row LookupValue).
+    Dim brDokDict As Object
+    Set brDokDict = BuildOtkupBrojDokDict()
+
+    Dim moves As New Collection
+    Dim i As Long
+    For i = 1 To UBound(ambData, 1)
+        If NzToText(ambData(i, colEntTip)) = "Kooperant" And _
+           NzToText(ambData(i, colEnt)) = Trim$(kooperantID) Then
+            If IsDate(ambData(i, colDat)) Then
+                Dim d As Date
+                d = CDate(ambData(i, colDat))
+                If d >= datumOd And d <= datumDo Then
+                    Dim kol As Double
+                    kol = 0
+                    If IsNumeric(ambData(i, colKol)) Then kol = CDbl(ambData(i, colKol))
+
+                    Dim ulaz As Double, izlaz As Double
+                    ulaz = 0
+                    izlaz = 0
+                    ' Ledger Smer: "Ulaz" = kooperant dobija (+), inace izlaz (-).
+                    If NzToText(ambData(i, colSmer)) = "Ulaz" Then
+                        ulaz = kol
+                    Else
+                        izlaz = kol
+                    End If
+
+                    Dim dokID As String
+                    dokID = NzToText(ambData(i, colDokID))
+                    Dim brojDok As String
+                    If brDokDict.Exists(dokID) Then
+                        brojDok = CStr(brDokDict(dokID))
+                    Else
+                        brojDok = dokID
+                    End If
+
+                    Dim opis As String
+                    opis = NzToText(ambData(i, colTip))   ' TipAmbalaze
+                    If colDokTip > 0 Then
+                        Dim lbl As String
+                        lbl = KarticaAmbDocLabel(NzToText(ambData(i, colDokTip)))
+                        If lbl <> "" Then opis = Trim$(opis & " (" & lbl & ")")
+                    End If
+
+                    moves.Add Array(d, brojDok, opis, ulaz, izlaz)
+                End If
+            End If
+        End If
+    Next i
+
+    If moves.count = 0 Then
+        ReportKarticaAmbalaze = Empty
+        Exit Function
+    End If
+
+    Dim arr() As Variant
+    ReDim arr(1 To moves.count, 1 To 5)
+    For i = 1 To moves.count
+        Dim mv As Variant
+        mv = moves(i)
+        arr(i, 1) = mv(0)
+        arr(i, 2) = mv(1)
+        arr(i, 3) = mv(2)
+        arr(i, 4) = mv(3)
+        arr(i, 5) = mv(4)
+    Next i
+    arr = SortArray(arr, 1, True, 2)
+
+    Dim result() As Variant
+    ReDim result(1 To UBound(arr, 1) + 1, 1 To 6)
+    Dim runSaldo As Double, totU As Double, totI As Double
+    For i = 1 To UBound(arr, 1)
+        result(i, 1) = arr(i, 1)
+        result(i, 2) = arr(i, 2)
+        result(i, 3) = arr(i, 3)
+        result(i, 4) = arr(i, 4)
+        result(i, 5) = arr(i, 5)
+        runSaldo = runSaldo + arr(i, 4) - arr(i, 5)
+        result(i, 6) = runSaldo
+        totU = totU + arr(i, 4)
+        totI = totI + arr(i, 5)
+    Next i
+
+    Dim ukRow As Long
+    ukRow = UBound(arr, 1) + 1
+    result(ukRow, 3) = "UKUPNO"
+    result(ukRow, 4) = totU
+    result(ukRow, 5) = totI
+    result(ukRow, 6) = totU - totI
+
+    ReportKarticaAmbalaze = result
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Mapa: DokumentID (otkupID) -> BrojDok, jednim prolazom kroz tblOtkup.
+Private Function BuildOtkupBrojDokDict() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    On Error GoTo EH
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then
+        Set BuildOtkupBrojDokDict = dict
+        Exit Function
+    End If
+
+    Dim colID As Long, colBr As Long
+    colID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    colBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    If colID = 0 Or colBr = 0 Then
+        Set BuildOtkupBrojDokDict = dict
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To UBound(otk, 1)
+        Dim k As String
+        k = NzToText(otk(i, colID))
+        If k <> "" Then
+            If Not dict.Exists(k) Then dict.Add k, NzToText(otk(i, colBr))
+        End If
+    Next i
+
+    Set BuildOtkupBrojDokDict = dict
+    Exit Function
+EH:
+    Set BuildOtkupBrojDokDict = dict
+End Function
+
+' Friendly oznaka tipa dokumenta za "Pregled ambalaze".
+Private Function KarticaAmbDocLabel(ByVal dokTip As String) As String
+    Select Case Trim$(dokTip)
+        Case DOK_TIP_OTKUP:         KarticaAmbDocLabel = "otkup"
+        Case DOK_TIP_OM_IZLAZ_KOOP: KarticaAmbDocLabel = "izdate prazne"
+        Case Else:                  KarticaAmbDocLabel = Trim$(dokTip)
+    End Select
+End Function
+
 Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
                            ByVal datumOd As Date, ByVal datumDo As Date)
                            
