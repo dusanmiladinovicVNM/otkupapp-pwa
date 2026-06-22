@@ -1022,10 +1022,16 @@ Private Sub btnStampajKarticu_Click()
     
     Dim koopID As String
     koopID = ExtractIDFromDisplay(cmbEntitet.value)
-    
-    PrintKarticaPDF koopID, CDate(txtDatumOd.value), CDate(txtDatumDo.value)
+
+    ' Tab-aware: na runtime tabu "Pregled ambalaze" -> kartica ambalaze;
+    ' inace (Kartica) -> finansijska kartica kooperanta (kao do sada).
+    If m_ambPageIdx >= 0 And mpReports.value = m_ambPageIdx Then
+        PrintKarticaAmbalazePDF koopID, CDate(txtDatumOd.value), CDate(txtDatumDo.value)
+    Else
+        PrintKarticaPDF koopID, CDate(txtDatumOd.value), CDate(txtDatumDo.value)
+    End If
     Exit Sub
-    
+
 EH:
     LogErr "frmIzvestaj.btnStampajKarticu_Click"
     
