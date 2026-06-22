@@ -734,6 +734,148 @@ Private Function KarticaAmbDocLabel(ByVal dokTip As String) As String
     End Select
 End Function
 
+' ============================================================
+' OTKUPNI LISTOVI (Otkupna mesta) — sve otkup linije jedne stanice.
+' Grain = po OtkupID (linija/klasa), kao kartica; Klasa I/II dele BrDok ali su
+' zasebni redovi. Kol. 8 = ref-kljuc "OTK|<OtkupID>" za panel "Detalji otkupa"
+' (modKarticaDetalji, KART_REFKEY_COL=7) i za stampu celog lista po BrDok-u.
+' Returns: (1)Datum (2)BrDok (3)Kooperant (4)Vrsta (5)Klasa (6)Kolicina (7)Vrednost (8)RefKljuc
+' ============================================================
+Public Function ReportOtkupListe(ByVal stanicaID As String, _
+                                 ByVal datumOd As Date, _
+                                 ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportOtkupListe"
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then
+        ReportOtkupListe = Empty
+        Exit Function
+    End If
+    d = ExcludeStornirano(d, TBL_OTKUP)
+    If Not IsArray(d) Then
+        ReportOtkupListe = Empty
+        Exit Function
+    End If
+
+    Dim cId As Long, cDat As Long, cBr As Long, cSt As Long, cKoop As Long
+    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    cKl = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    cCe = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
+
+    ' KooperantID -> "Ime Prezime (ID)" jednim prolazom (bez per-row LookupValue).
+    Dim koopDict As Object
+    Set koopDict = BuildKooperantNameDict()
+
+    Dim moves As New Collection
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, cSt)) = Trim$(stanicaID) Then
+            If IsDate(d(i, cDat)) Then
+                Dim dt As Date
+                dt = CDate(d(i, cDat))
+                If dt >= datumOd And dt <= datumDo Then
+                    Dim koopID As String
+                    koopID = NzToText(d(i, cKoop))
+                    Dim koopNm As String
+                    If koopDict.Exists(koopID) Then
+                        koopNm = CStr(koopDict(koopID))
+                    Else
+                        koopNm = koopID
+                    End If
+
+                    Dim kol As Double, cena As Double
+                    kol = 0: cena = 0
+                    If IsNumeric(d(i, cKol)) Then kol = CDbl(d(i, cKol))
+                    If IsNumeric(d(i, cCe)) Then cena = CDbl(d(i, cCe))
+
+                    moves.Add Array( _
+                        dt, _
+                        NzToText(d(i, cBr)), _
+                        koopNm, _
+                        NzToText(d(i, cVr)), _
+                        NzToText(d(i, cKl)), _
+                        kol, _
+                        kol * cena, _
+                        "OTK|" & NzToText(d(i, cId)))
+                End If
+            End If
+        End If
+    Next i
+
+    If moves.count = 0 Then
+        ReportOtkupListe = Empty
+        Exit Function
+    End If
+
+    Dim arr() As Variant
+    ReDim arr(1 To moves.count, 1 To 8)
+    For i = 1 To moves.count
+        Dim mv As Variant
+        mv = moves(i)
+        Dim j As Long
+        For j = 0 To 7
+            arr(i, j + 1) = mv(j)
+        Next j
+    Next i
+    arr = SortArray(arr, 1, True, 2)   ' po datumu, pa BrDok
+
+    ReportOtkupListe = arr
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Mapa: KooperantID -> "Ime Prezime (ID)", jednim prolazom kroz tblKooperanti.
+Private Function BuildKooperantNameDict() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    On Error GoTo EH
+
+    Dim k As Variant
+    k = GetTableData(TBL_KOOPERANTI)
+    If Not IsArray(k) Then
+        Set BuildKooperantNameDict = dict
+        Exit Function
+    End If
+
+    Dim cId As Long, cIme As Long, cPr As Long
+    cId = GetColumnIndex(TBL_KOOPERANTI, COL_KOOP_ID)
+    cIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
+    cPr = GetColumnIndex(TBL_KOOPERANTI, "Prezime")
+    If cId = 0 Then
+        Set BuildKooperantNameDict = dict
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To UBound(k, 1)
+        Dim id As String
+        id = NzToText(k(i, cId))
+        If id <> "" Then
+            Dim nm As String
+            nm = ""
+            If cIme > 0 Then nm = NzToText(k(i, cIme))
+            If cPr > 0 Then nm = Trim$(nm & " " & NzToText(k(i, cPr)))
+            If nm = "" Then nm = id Else nm = nm & " (" & id & ")"
+            If Not dict.Exists(id) Then dict.Add id, nm
+        End If
+    Next i
+
+    Set BuildKooperantNameDict = dict
+    Exit Function
+EH:
+    Set BuildKooperantNameDict = dict
+End Function
+
 Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
                            ByVal datumOd As Date, ByVal datumDo As Date)
                            
@@ -884,6 +1026,178 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
                            OpenAfterPublish:=True
     
     Application.ScreenUpdating = True
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Sub
+
+' ============================================================
+' KARTICA AMBALAZE (PDF) — pandan PrintKarticaPDF za tab "Pregled ambalaze".
+' Bez "KarticaSablon" templejta (on je finansijski): layout se gradi u kodu na
+' posvecenom skrivenom sheetu (_KartAmbPrint), pa export u PDF (otvara po zavrsetku).
+' Podaci iz ReportKarticaAmbalaze (6 kol: Datum, BrojDok, Opis, Ulaz, Izlaz, Saldo;
+' poslednji red = UKUPNO). Gajbe = ceo broj.
+' ============================================================
+Public Sub PrintKarticaAmbalazePDF(ByVal kooperantID As String, _
+                                   ByVal datumOd As Date, ByVal datumDo As Date)
+
+    Const SRC As String = "modIzvestaj.PrintKarticaAmbalazePDF"
+    Const NUM_COLS As Long = 6   ' Datum, BrojDok, Opis, Ulaz, Izlaz, Saldo
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = ReportKarticaAmbalaze(kooperantID, datumOd, datumDo)
+    If IsEmpty(data) Then
+        Err.Raise vbObjectError + 7502, SRC, _
+                  "Nema podataka o ambalazi za ovog kooperanta."
+    End If
+
+    Dim ws As Worksheet
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("_KartAmbPrint")
+    On Error GoTo EH
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add
+        ws.name = "_KartAmbPrint"
+    End If
+
+    Dim oldScreen As Boolean
+    oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Visible = xlSheetVisible
+    ws.cells.Clear
+
+    ' --- Zaglavlje ---
+    Dim ime As String, prezime As String
+    ime = NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime"))
+    prezime = NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime"))
+
+    ws.Range("A1").value = "KARTICA AMBALAZE"
+    ws.Range("A1").Font.Size = 14
+    ws.Range("A1").Font.Bold = True
+
+    ws.Range("A2").value = "Kooperant:"
+    ws.Range("B2").value = Trim$(ime & " " & prezime) & " (" & kooperantID & ")"
+    ws.Range("A3").value = "Period:"
+    ws.Range("B3").value = Format$(datumOd, "DD.MM.YYYY") & " - " & Format$(datumDo, "DD.MM.YYYY")
+    ws.Range("A2").Font.Bold = True
+    ws.Range("A3").Font.Bold = True
+
+    ' --- Header tabele ---
+    Dim hdrRow As Long
+    hdrRow = 5
+    Dim headers As Variant
+    headers = Array("Datum", "Broj dok.", "Opis", "Ulaz", "Izlaz", "Saldo")
+    Dim c As Long
+    For c = 1 To NUM_COLS
+        ws.cells(hdrRow, c).value = headers(c - 1)
+    Next c
+    With ws.Range(ws.cells(hdrRow, 1), ws.cells(hdrRow, NUM_COLS))
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    ' --- Podaci ---
+    Dim startRow As Long
+    startRow = hdrRow + 1
+    Dim dataRows As Long
+    dataRows = UBound(data, 1)
+
+    Dim i As Long, outRow As Long
+    For i = 1 To dataRows
+        outRow = startRow + i - 1
+
+        ' Datum
+        If IsDate(data(i, 1)) Then
+            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
+        Else
+            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+
+        ' Broj dok.
+        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        ' Opis
+        ws.cells(outRow, 3).value = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+
+        ' Ulaz / Izlaz (prazno kad je 0)
+        If IsNumeric(data(i, 4)) Then
+            If CDbl(data(i, 4)) <> 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 4))
+        End If
+        If IsNumeric(data(i, 5)) Then
+            If CDbl(data(i, 5)) <> 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 5))
+        End If
+
+        ' Saldo (running)
+        If IsNumeric(data(i, 6)) Then ws.cells(outRow, 6).value = CDbl(data(i, 6))
+    Next i
+
+    ' --- Formatiranje (header + podaci + UKUPNO) ---
+    Dim dataRange As Range
+    Set dataRange = ws.Range(ws.cells(hdrRow, 1), ws.cells(startRow + dataRows - 1, NUM_COLS))
+    With dataRange.Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    ' Gajbe = ceo broj (D:F)
+    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, NUM_COLS)).NumberFormat = "#,##0"
+
+    ' Alternirajuca boja redova
+    Dim r As Long
+    For r = 0 To dataRows - 1
+        If r Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + r, 1), _
+                     ws.cells(startRow + r, NUM_COLS)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next r
+
+    ' UKUPNO red (poslednji) fett + plava pozadina
+    Dim ukRow As Long
+    ukRow = startRow + dataRows - 1
+    With ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, NUM_COLS))
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    ' --- Fusszeile / potpisi ---
+    Dim footRow As Long
+    footRow = ukRow + 2
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
+    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
+
+    ' --- Sirine kolona ---
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 16
+    ws.columns("C").ColumnWidth = 38
+    ws.columns("D:F").ColumnWidth = 10
+
+    ' --- Page setup + PDF ---
+    ws.PageSetup.PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 1, NUM_COLS)).Address
+    With ws.PageSetup
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+    End With
+
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.Path & "\KarticaAmbalaze_" & Replace(kooperantID, "-", "") & "_" & _
+              Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
+
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, _
+                           OpenAfterPublish:=True
+
+    ws.Visible = xlSheetVeryHidden
+    Application.ScreenUpdating = oldScreen
     Exit Sub
 
 EH:
