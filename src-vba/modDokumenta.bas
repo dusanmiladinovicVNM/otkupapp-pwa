@@ -802,7 +802,9 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal hasKlasaII As Boolean = False, _
                                        Optional ByVal kolicinaII As Double = 0, _
                                        Optional ByVal cenaII As Double = 0, _
-                                       Optional ByVal kolAmbII As Long = 0) As String
+                                       Optional ByVal kolAmbII As Long = 0, _
+                                       Optional ByVal brutoKgI As Double = 0, _
+                                       Optional ByVal brutoKgII As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -838,7 +840,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             tipAmb, _
             kolAmb, _
             kolAmbVracena, _
-            KLASA_I)
+            KLASA_I, _
+            brutoKgI)
 
         If resultI = "" Then
             Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
@@ -861,7 +864,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             tipAmb, _
             kolAmbII, _
             0, _
-            KLASA_II)
+            KLASA_II, _
+            brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1302, "SavePrijemnicaMulti_TX", _

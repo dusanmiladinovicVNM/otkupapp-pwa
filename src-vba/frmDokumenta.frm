@@ -1836,6 +1836,53 @@ Private Sub btnUnosPrij_Click()
         End If
     End If
 
+    ' BRUTO unos (toggle OTKUP_BRUTO_UNOS): prijemnica se cuva u NETO (kao otpremnica
+    ' i otkup), bruto se zamrzava u BrutoKg -> manjak/izvestaji porede neto sa neto.
+    Dim brutoKgI As Double
+    If OtkupBrutoUnos() And kolAmb > 0 Then
+        Dim taraKg As Double
+        taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbPrij.value)
+        If taraKg <= 0 Then
+            MsgBox "Tip ambalaže '" & cmbTipAmbPrij.value & "' nema unetu težinu gajbice " & _
+                   "(Matični podaci → Tip ambalaže)." & vbCrLf & _
+                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            cmbTipAmbPrij.SetFocus
+            Exit Sub
+        End If
+        If taraKg >= kolicinaI Then
+            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veća ili " & _
+                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            txtKolicinaPrij.SetFocus
+            Exit Sub
+        End If
+        brutoKgI = kolicinaI             ' zamrzni uneti bruto
+        kolicinaI = kolicinaI - taraKg   ' u Kolicina ide neto
+    End If
+
+    ' BRUTO unos za Klasu II (zasebne gajbe -> zasebna tara). Kao Klasa I: Kolicina
+    ' (II) ide NETO, bruto se zamrzava u BrutoKg (zaseban red Klase II).
+    Dim brutoKgII As Double
+    If chkDveKlasePrij.value And OtkupBrutoUnos() And kolAmbII > 0 Then
+        Dim taraKgII As Double
+        taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbPrij.value)
+        If taraKgII <= 0 Then
+            MsgBox "Tip ambalaže '" & cmbTipAmbPrij.value & "' nema unetu težinu gajbice " & _
+                   "(Matični podaci → Tip ambalaže)." & vbCrLf & _
+                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            cmbTipAmbPrij.SetFocus
+            Exit Sub
+        End If
+        If taraKgII >= kolicinaII Then
+            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veća ili " & _
+                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg).", vbExclamation, APP_NAME
+            If Not m_txtKolAmbIIPrij Is Nothing Then m_txtKolAmbIIPrij.SetFocus
+            Exit Sub
+        End If
+        brutoKgII = kolicinaII             ' zamrzni uneti bruto (II)
+        kolicinaII = kolicinaII - taraKgII ' u Kolicina (II) ide neto
+    End If
+
     Dim kupacID As String
     kupacID = GetComboID(cmbKupac)
 
@@ -1885,7 +1932,9 @@ Private Sub btnUnosPrij_Click()
         hasKlasaII:=chkDveKlasePrij.value, _
         kolicinaII:=kolicinaII, _
         cenaII:=cenaII, _
-        kolAmbII:=kolAmbII)
+        kolAmbII:=kolAmbII, _
+        brutoKgI:=brutoKgI, _
+        brutoKgII:=brutoKgII)
 
     If result = "" Then
         MsgBox "Greška pri cuvanju prijemnice. Promene su vracene.", vbCritical, APP_NAME
