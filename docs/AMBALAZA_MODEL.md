@@ -185,6 +185,11 @@ brojanje otkupa duplo teretilo vozača. Zato se otkup **izuzima** iz vozačkog s
   `VozacAmbEffectiveSmer` (§5). Kompletna ruta → saldo 0.
 - **Entitetski izveštaji** (`OM` / `Kupac` / `Kooperant`) koriste sirov `Smer`
   (`isVozac = False`).
+- **Početno stanje pre bloka** (`modAmbalaza.GetKooperantAmbOpening(koopID, tipAmb, blockOtkupIDs)`):
+  entitetski saldo kooperanta (sirov `Smer`) nad redovima upisanim **pre prvog reda datog
+  bloka** (granica = najmanji red-indeks gde `DokumentID ∈ blockOtkupIDs`, append-only redosled).
+  Koristi ga `modPrint` za red „Saldo ambalaze" na otkupnom listu: `saldo = početno + izdato −
+  primljeno` (ispravno i na ponovnoj štampi starijeg bloka — kasniji blokovi se ne uračunavaju).
 - Samo **ne-stornirani** redovi ulaze u aktivne saldo helpere.
 
 ---
@@ -229,7 +234,7 @@ nedostajućih redova). Pokrenuti **tačno jednom** i tek **posle** re-importa ko
 
 | Oblast | Gde |
 |---|---|
-| Ledger / upis | `modAmbalaza.TrackAmbalaza`, `GetAmbalazeStanje`, `GetVozacAmbSaldo`, `VozacAmbEffectiveSmer` |
+| Ledger / upis | `modAmbalaza.TrackAmbalaza`, `GetAmbalazeStanje`, `GetVozacAmbSaldo`, `VozacAmbEffectiveSmer`, `GetKooperantAmbOpening` |
 | Otpremnica / Prijemnica / Izlaz-Kupci | `modDokumenta` (`SaveOtpremnica`, `SavePrijemnica`, `SaveKupciIzlaz_TX`) |
 | Otkup | `modOtkup.SaveOtkup` (desktop), `modMasterSync.ImportRowToTblOtkup` (PWA) |
 | OM-Ulaz / OM-izdavanje | `frmDokumenta.SaveOMUlaz_TX` + runtime toggle `tglIzdKoop` |
