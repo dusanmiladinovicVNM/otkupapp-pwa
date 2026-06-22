@@ -733,6 +733,148 @@ Private Function KarticaAmbDocLabel(ByVal dokTip As String) As String
     End Select
 End Function
 
+' ============================================================
+' OTKUPNI LISTOVI (Otkupna mesta) — sve otkup linije jedne stanice.
+' Grain = po OtkupID (linija/klasa), kao kartica; Klasa I/II dele BrDok ali su
+' zasebni redovi. Kol. 8 = ref-kljuc "OTK|<OtkupID>" za panel "Detalji otkupa"
+' (modKarticaDetalji, KART_REFKEY_COL=7) i za stampu celog lista po BrDok-u.
+' Returns: (1)Datum (2)BrDok (3)Kooperant (4)Vrsta (5)Klasa (6)Kolicina (7)Vrednost (8)RefKljuc
+' ============================================================
+Public Function ReportOtkupListe(ByVal stanicaID As String, _
+                                 ByVal datumOd As Date, _
+                                 ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportOtkupListe"
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then
+        ReportOtkupListe = Empty
+        Exit Function
+    End If
+    d = ExcludeStornirano(d, TBL_OTKUP)
+    If Not IsArray(d) Then
+        ReportOtkupListe = Empty
+        Exit Function
+    End If
+
+    Dim cId As Long, cDat As Long, cBr As Long, cSt As Long, cKoop As Long
+    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    cKl = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    cCe = RequireColumnIndex(TBL_OTKUP, COL_OTK_CENA, SRC)
+
+    ' KooperantID -> "Ime Prezime (ID)" jednim prolazom (bez per-row LookupValue).
+    Dim koopDict As Object
+    Set koopDict = BuildKooperantNameDict()
+
+    Dim moves As New Collection
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, cSt)) = Trim$(stanicaID) Then
+            If IsDate(d(i, cDat)) Then
+                Dim dt As Date
+                dt = CDate(d(i, cDat))
+                If dt >= datumOd And dt <= datumDo Then
+                    Dim koopID As String
+                    koopID = NzToText(d(i, cKoop))
+                    Dim koopNm As String
+                    If koopDict.Exists(koopID) Then
+                        koopNm = CStr(koopDict(koopID))
+                    Else
+                        koopNm = koopID
+                    End If
+
+                    Dim kol As Double, cena As Double
+                    kol = 0: cena = 0
+                    If IsNumeric(d(i, cKol)) Then kol = CDbl(d(i, cKol))
+                    If IsNumeric(d(i, cCe)) Then cena = CDbl(d(i, cCe))
+
+                    moves.Add Array( _
+                        dt, _
+                        NzToText(d(i, cBr)), _
+                        koopNm, _
+                        NzToText(d(i, cVr)), _
+                        NzToText(d(i, cKl)), _
+                        kol, _
+                        kol * cena, _
+                        "OTK|" & NzToText(d(i, cId)))
+                End If
+            End If
+        End If
+    Next i
+
+    If moves.count = 0 Then
+        ReportOtkupListe = Empty
+        Exit Function
+    End If
+
+    Dim arr() As Variant
+    ReDim arr(1 To moves.count, 1 To 8)
+    For i = 1 To moves.count
+        Dim mv As Variant
+        mv = moves(i)
+        Dim j As Long
+        For j = 0 To 7
+            arr(i, j + 1) = mv(j)
+        Next j
+    Next i
+    arr = SortArray(arr, 1, True, 2)   ' po datumu, pa BrDok
+
+    ReportOtkupListe = arr
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Mapa: KooperantID -> "Ime Prezime (ID)", jednim prolazom kroz tblKooperanti.
+Private Function BuildKooperantNameDict() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    On Error GoTo EH
+
+    Dim k As Variant
+    k = GetTableData(TBL_KOOPERANTI)
+    If Not IsArray(k) Then
+        Set BuildKooperantNameDict = dict
+        Exit Function
+    End If
+
+    Dim cId As Long, cIme As Long, cPr As Long
+    cId = GetColumnIndex(TBL_KOOPERANTI, COL_KOOP_ID)
+    cIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
+    cPr = GetColumnIndex(TBL_KOOPERANTI, "Prezime")
+    If cId = 0 Then
+        Set BuildKooperantNameDict = dict
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To UBound(k, 1)
+        Dim id As String
+        id = NzToText(k(i, cId))
+        If id <> "" Then
+            Dim nm As String
+            nm = ""
+            If cIme > 0 Then nm = NzToText(k(i, cIme))
+            If cPr > 0 Then nm = Trim$(nm & " " & NzToText(k(i, cPr)))
+            If nm = "" Then nm = id Else nm = nm & " (" & id & ")"
+            If Not dict.Exists(id) Then dict.Add id, nm
+        End If
+    Next i
+
+    Set BuildKooperantNameDict = dict
+    Exit Function
+EH:
+    Set BuildKooperantNameDict = dict
+End Function
+
 Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
                            ByVal datumOd As Date, ByVal datumDo As Date)
                            

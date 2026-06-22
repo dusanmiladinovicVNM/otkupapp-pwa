@@ -39,6 +39,13 @@ Private m_ambPageIdx As Long
 Private m_lstAmb As MSForms.ListBox
 Private m_lblAmbTitle As MSForms.label
 
+' Runtime tab "Otkupni listovi" (Otkupna mesta)
+Private m_otkBuilt As Boolean
+Private m_otkPageIdx As Long
+Private WithEvents m_lstOtk As MSForms.ListBox
+Private m_lblOtkTitle As MSForms.label
+Private WithEvents m_btnStampajOtk As MSForms.CommandButton
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
@@ -56,6 +63,7 @@ Private Sub UserForm_Activate()
     ' (dinamicke kontrole prethodne instance vise ne postoje posle Unload-a).
     KarticaDetalji_Reset
     m_ambPageIdx = -1   ' dok se runtime tab "Pregled ambalaze" ne kreira
+    m_otkPageIdx = -1   ' dok se runtime tab "Otkupni listovi" ne kreira
 
     m_IsInitializing = True
     
@@ -139,6 +147,7 @@ Private Sub UserForm_Activate()
     
     SetupListBoxes
     EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
+    EnsureOtkupListePage          ' runtime tab "Otkupni listovi" (pre UpdateReportMode)
     UpdateReportMode
     ForceDarkAllPages
     
@@ -410,6 +419,7 @@ Private Sub UpdateReportMode()
                 mpReports.Pages(3).Visible = True  ' Ambalaza
                 mpReports.Pages(4).Visible = True  ' Isplata
                 mpReports.Pages(6).Visible = True  ' Prosecna cena
+                If m_otkPageIdx >= 0 Then mpReports.Pages(m_otkPageIdx).Visible = True  ' Otkupni listovi
             Case "Kupci"
                 mpReports.Pages(1).Visible = True  ' Saldo Kupci
                 mpReports.Pages(2).Visible = True  ' Otkupljena roba
@@ -461,7 +471,7 @@ Private Sub SetupListBoxes()
     
     With lstOtkupRoba
         .ColumnCount = 10
-        .ColumnWidths = "45;50;45;25;80;50;50;45;45;40"
+        .ColumnWidths = "45;78;45;25;80;50;50;45;45;40"
     End With
     
     With lstAmbalaza
@@ -522,6 +532,10 @@ Private Sub UpdateStatusLabel()
 
     If activeList Is Nothing And m_ambPageIdx >= 0 And activeTab = m_ambPageIdx Then
         Set activeList = m_lstAmb
+    End If
+
+    If activeList Is Nothing And m_otkPageIdx >= 0 And activeTab = m_otkPageIdx Then
+        Set activeList = m_lstOtk
     End If
 
     If activeList Is Nothing Then
@@ -599,6 +613,7 @@ Private Sub btnUnos_Click()
         GenerateIsplataReport entitetTip, entitetID, datumOd, datumDo
         GenerateProsecnaCenaReport entitetTip, entitetID, datumOd, datumDo
         GenerateManjakReport entitetTip, entitetID, datumOd, datumDo
+        If entitetTip = "OM" Then GenerateOtkupListeReport entitetID, datumOd, datumDo
         If entitetTip = "Kooperant" Then
             GenerateKarticaReport entitetID, datumOd, datumDo
             GenerateKarticaAmbReport entitetID, datumOd, datumDo
@@ -620,8 +635,12 @@ End Sub
 
 Private Sub mpReports_Change()
     UpdateStatusLabel
-    ' Panel "Detalji otkupa" je vezan za karticu (Page 8) -> sakrij ga drugde.
-    KarticaDetalji_SetVisible (mpReports.value = 8)
+    ' Panel "Detalji otkupa" se deli izmedju Kartice (Page 8) i "Otkupni listovi".
+    Dim onOtk As Boolean
+    onOtk = (m_otkPageIdx >= 0 And mpReports.value = m_otkPageIdx)
+    KarticaDetalji_SetVisible (mpReports.value = 8 Or onOtk)
+    ' Dugme "Stampaj otkupni list" je samo na tabu "Otkupni listovi".
+    If Not m_btnStampajOtk Is Nothing Then m_btnStampajOtk.visible = onOtk
 End Sub
 Private Sub UpdateUnosButtonState()
 
@@ -1266,6 +1285,14 @@ Private Sub btnStampaj_Click()
         headers = Array("Datum", "Broj dok.", "Opis", "Ulaz", "Izlaz", "Saldo")
     End If
 
+    ' Runtime tab "Otkupni listovi" (dinamicki index; skrivena kol. 7 = ref-kljuc
+    ' se NE stampa jer headers ima 7 stavki).
+    If lst Is Nothing And m_otkPageIdx >= 0 And activeTab = m_otkPageIdx Then
+        Set lst = m_lstOtk
+        title = "Otkupni listovi"
+        headers = Array("Datum", "Broj dok.", "Kooperant", "Vrsta", "Klasa", "Kolicina", "Vrednost")
+    End If
+
     If lst Is Nothing Then Exit Sub
     If lst.ListCount = 0 Then
         MsgBox "Nema podataka za stampu!", vbExclamation, APP_NAME
@@ -1554,6 +1581,186 @@ Private Sub LayoutAmbHeaders(ByVal pg As MSForms.Page)
     Next k
     If Len(cw) > 0 Then cw = Left$(cw, Len(cw) - 1)
     m_lstAmb.ColumnWidths = cw
+End Sub
+
+' ============================================================
+' Runtime tab "Otkupni listovi" (Otkupna mesta): MultiPage page + lista svih
+' otkup linija stanice. Desni panel "Detalji otkupa" (modKarticaDetalji) se deli
+' sa Karticom; ISPOD njega dugme "Stampaj otkupni list" (stampa ceo BrDok).
+' Geometrija kopirana sa lstKartica (page-rel. koord. su iste preko stranica).
+' Idempotentno (m_otkBuilt); .frx se ne dira (CLAUDE.md).
+' ============================================================
+Private Sub EnsureOtkupListePage()
+    On Error GoTo EH
+    If m_otkBuilt Then Exit Sub
+    If mpReports Is Nothing Then Exit Sub
+
+    Dim pg As MSForms.Page
+    Set pg = mpReports.Pages.Add("pgOtkupListe", "Otkupni listovi")
+    If pg Is Nothing Then Exit Sub
+    m_otkPageIdx = pg.index
+    On Error Resume Next
+    pg.BackColor = BG_MAIN()
+    On Error GoTo EH
+
+    Set m_lblOtkTitle = pg.Controls.Add("Forms.Label.1", "lblOtkTitle", True)
+    With m_lblOtkTitle
+        .Left = lstKartica.Left
+        .Top = lbl_H_KK1.Top - 18
+        If .Top < 2 Then .Top = 2
+        .width = lstKartica.width
+        .Height = 14
+    End With
+    StyleListHeaderLabel m_lblOtkTitle
+    m_lblOtkTitle.caption = "OTKUPNI LISTOVI"
+
+    Set m_lstOtk = pg.Controls.Add("Forms.ListBox.1", "lstOtkupListe", True)
+    With m_lstOtk
+        .Left = lstKartica.Left
+        .Top = lstKartica.Top
+        .width = lstKartica.width
+        .Height = lstKartica.Height
+        .ColumnCount = 8          ' 7 vidljivih + skrivena ref-kljuc kolona (idx 7)
+    End With
+    StyleListBox m_lstOtk
+
+    LayoutOtkListeHeaders pg
+
+    ' Desni panel "Detalji otkupa" (deljen sa Karticom) + dugme ispod njega.
+    KarticaDetalji_Ensure Me, lstKartica
+    Dim pl As Double, pt As Double, pw As Double, ph As Double
+    KarticaDetalji_PanelRect pl, pt, pw, ph
+    If pw > 0 Then
+        Set m_btnStampajOtk = Me.Controls.Add("Forms.CommandButton.1", "btnStampajOtkList", True)
+        With m_btnStampajOtk
+            .Left = pl
+            .Top = pt + ph + 6
+            .width = pw
+            .Height = 26
+        End With
+        StylePrimaryButton m_btnStampajOtk, "Štampaj otkupni list"
+        On Error Resume Next
+        m_btnStampajOtk.ZOrder 0
+        On Error GoTo EH
+        m_btnStampajOtk.visible = False
+    End If
+
+    KarticaDetalji_SetVisible False   ' panel sakriven dok se ne udje na tab
+
+    m_otkBuilt = True
+    Exit Sub
+EH:
+    m_otkBuilt = True   ' ne pokusavaj ponovo u istoj instanci (izbegni dupli page)
+    LogErr "frmIzvestaj.EnsureOtkupListePage"
+End Sub
+
+' Headeri (7 vidljivih) + sirine kolona za "Otkupni listovi" (kol. 8 = skriveni
+' ref-kljuc, sirina 0). Auto-fit iz m_lstOtk.width (kao LayoutAmbHeaders).
+Private Sub LayoutOtkListeHeaders(ByVal pg As MSForms.Page)
+    On Error Resume Next
+    Dim caps As Variant
+    caps = Array("Datum", "Broj dok.", "Kooperant", "Vrsta", "Klasa", "Kolicina", "Vrednost")
+    Dim prop As Variant
+    prop = Array(0.11, 0.15, 0.24, 0.13, 0.08, 0.13, 0.16)   ' zbir = 1.0
+
+    Dim availW As Double
+    availW = m_lstOtk.width - 16
+    If availW < 120 Then availW = m_lstOtk.width
+
+    Dim x As Double: x = m_lstOtk.Left
+    Dim topY As Double: topY = lbl_H_KK1.Top
+    Dim hh As Double: hh = lbl_H_KK1.Height
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 6
+        Dim wCol As Long
+        wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = pg.Controls("lblOtkH" & CStr(k + 1))
+        If lbl Is Nothing Then
+            Set lbl = pg.Controls.Add("Forms.Label.1", "lblOtkH" & CStr(k + 1), True)
+        End If
+        If Not lbl Is Nothing Then
+            lbl.Top = topY
+            lbl.Height = hh
+            lbl.Left = x
+            lbl.width = wCol
+            StyleListHeaderLabel lbl
+            lbl.caption = CStr(caps(k))
+        End If
+        cw = cw & CStr(wCol) & ";"
+        x = x + wCol
+    Next k
+    cw = cw & "0"   ' skrivena ref-kljuc kolona (idx 7)
+    m_lstOtk.ColumnWidths = cw
+End Sub
+
+' Puni "Otkupni listovi": sve otkup linije stanice (kol. 7 = ref-kljuc OTK|<id>).
+Private Sub GenerateOtkupListeReport(ByVal stanicaID As String, _
+                                     ByVal datumOd As Date, ByVal datumDo As Date)
+    If m_lstOtk Is Nothing Then Exit Sub
+    m_lstOtk.Clear
+    KarticaDetalji_Clear
+
+    On Error Resume Next
+    Dim naziv As String
+    naziv = CStr(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"))
+    If Not m_lblOtkTitle Is Nothing Then
+        m_lblOtkTitle.caption = "OTKUPNI LISTOVI: " & naziv & " (" & stanicaID & ")"
+    End If
+    On Error GoTo 0
+
+    Dim data As Variant
+    data = ReportOtkupListe(stanicaID, datumOd, datumDo)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        ' Datum
+        If IsDate(data(i, 1)) Then
+            m_lstOtk.AddItem Format$(CDate(data(i, 1)), "d.m.yyyy")
+        Else
+            m_lstOtk.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+        m_lstOtk.List(m_lstOtk.ListCount - 1, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))   ' BrDok
+        m_lstOtk.List(m_lstOtk.ListCount - 1, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))   ' Kooperant
+        m_lstOtk.List(m_lstOtk.ListCount - 1, 3) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))   ' Vrsta
+        m_lstOtk.List(m_lstOtk.ListCount - 1, 4) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))   ' Klasa
+        ' Kolicina (kg)
+        If IsNumeric(data(i, 6)) Then m_lstOtk.List(m_lstOtk.ListCount - 1, 5) = FmtKolicina(CDbl(data(i, 6)))
+        ' Vrednost
+        If IsNumeric(data(i, 7)) Then m_lstOtk.List(m_lstOtk.ListCount - 1, 6) = Format$(CDbl(data(i, 7)), "#,##0.00")
+        ' Skrivena ref-kljuc kolona (idx 7) = OTK|<OtkupID>
+        m_lstOtk.List(m_lstOtk.ListCount - 1, 7) = CStr(IIf(IsEmpty(data(i, 8)), "", data(i, 8)))
+    Next i
+End Sub
+
+' Klik/izbor reda "Otkupni listovi" -> isti panel "Detalji otkupa" desno.
+Private Sub m_lstOtk_Click()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, m_lstOtk
+End Sub
+
+Private Sub m_lstOtk_Change()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, m_lstOtk
+End Sub
+
+' Stampa otkupni list za trenutno izabran red (ceo BrDok: Klasa I + II).
+Private Sub m_btnStampajOtk_Click()
+    On Error GoTo EH
+    Dim otkID As String
+    otkID = KarticaDetalji_CurrentOtkupID()
+    If Len(Trim$(otkID)) = 0 Then
+        MsgBox "Izaberite otkupni list (klik na red u listi).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    ReprintOtkupniListByOtkupID otkID
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.m_btnStampajOtk_Click"
+    MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub ForceDarkAllPages()

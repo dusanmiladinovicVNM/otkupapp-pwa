@@ -104,6 +104,45 @@ EH:
     LogErr "modPrint.ExportOtkupniListPDF"
 End Function
 
+' Reprint celog otkupnog lista na osnovu jednog OtkupID-a. Klasa I i II dele isti
+' BrDok (zasebni OtkupID po klasi) -> skupi SVE aktivne redove tog BrDok-a i
+' odstampaj ih zajedno (kao posle unosa), pa list ne bude nepotpun. Izlaz po
+' CFG_OTKUP_PRINT_MODE (kao OutputOtkupniList).
+Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
+    On Error GoTo EH
+    If Trim$(otkupID) = "" Then Exit Sub
+
+    Dim d As Variant: d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Sub
+    d = ExcludeStornirano(d, TBL_OTKUP)
+    If Not IsArray(d) Then Exit Sub
+
+    Dim iID As Long, iBr As Long
+    iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    iBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    If iID = 0 Or iBr = 0 Then Exit Sub
+
+    Dim brDok As String, r As Long
+    For r = 1 To UBound(d, 1)
+        If CStr(d(r, iID)) = otkupID Then brDok = CStr(d(r, iBr)): Exit For
+    Next r
+
+    Dim ids As String
+    If brDok <> "" Then
+        For r = 1 To UBound(d, 1)
+            If CStr(d(r, iBr)) = brDok Then
+                If ids = "" Then ids = CStr(d(r, iID)) Else ids = ids & " + " & CStr(d(r, iID))
+            End If
+        Next r
+    End If
+    If ids = "" Then ids = otkupID   ' fallback: bar taj red
+
+    OutputOtkupniList ids
+    Exit Sub
+EH:
+    LogErr "modPrint.ReprintOtkupniListByOtkupID"
+End Sub
+
 ' Popuni OtkupSablon sa dva primerka. Vraca sheet (ili Nothing).
 Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     On Error GoTo EH

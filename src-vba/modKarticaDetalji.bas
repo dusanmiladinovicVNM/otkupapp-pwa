@@ -23,6 +23,7 @@ Private mLst As MSForms.ListBox        ' detail lista (2 kolone: Stavka | Vredno
 Private mLblTitle As MSForms.label
 Private mBuilt As Boolean
 Private mFormLevel As Boolean          ' True ako su kontrole na formi (fallback), ne na Page-u
+Private mCurOtkupID As String          ' OtkupID trenutno prikazan u panelu (za "Stampaj otkupni list")
 
 ' Dijagnostika (samo kad build ne uspe): jednom po sesiji prikazi razlog.
 Private mDiag As String
@@ -34,6 +35,7 @@ Public Sub KarticaDetalji_Reset()
     Set mLst = Nothing
     Set mLblTitle = Nothing
     mBuilt = False
+    mCurOtkupID = ""
 End Sub
 
 ' Lazy-build panel desno od lstKartica (idempotentno).
@@ -111,8 +113,28 @@ End Sub
 
 Public Sub KarticaDetalji_Clear()
     On Error Resume Next
+    mCurOtkupID = ""
     If Not mLst Is Nothing Then mLst.Clear
     If Not mLblTitle Is Nothing Then mLblTitle.caption = "DETALJI OTKUPA (klik na red)"
+End Sub
+
+' OtkupID trenutno prikazanog reda ("" ako trenutni red nije otkup).
+Public Function KarticaDetalji_CurrentOtkupID() As String
+    KarticaDetalji_CurrentOtkupID = mCurOtkupID
+End Function
+
+' Geometrija panela detalja (za pozicioniranje dugmeta ispod njega). 0 ako panel
+' jos ne postoji.
+Public Sub KarticaDetalji_PanelRect(ByRef l As Double, ByRef t As Double, _
+                                    ByRef w As Double, ByRef h As Double)
+    l = 0: t = 0: w = 0: h = 0
+    On Error Resume Next
+    If Not mLst Is Nothing Then
+        l = mLst.Left
+        t = mLst.Top
+        w = mLst.width
+        h = mLst.Height
+    End If
 End Sub
 
 Public Sub KarticaDetalji_SetVisible(ByVal b As Boolean)
@@ -175,6 +197,7 @@ End Sub
 ' Ne-otkup red (novac/agrohemija/UKUPNO): prikazi osnovne stavke iz same liste.
 Private Sub ShowBasicRow(ByVal lstKartica As MSForms.ListBox, ByVal idx As Long)
     On Error Resume Next
+    mCurOtkupID = ""
     mLblTitle.caption = "DETALJI STAVKE"
     AddPair "Datum", CStr(lstKartica.List(idx, 0))
     AddPair "Broj dok.", CStr(lstKartica.List(idx, 1))
@@ -188,6 +211,7 @@ End Sub
 ' Otkup red: sve bitne stavke otkupnog lista (polja iz frmOtkup), read-only.
 Private Sub ShowOtkupDetails(ByVal otkupID As String)
     On Error GoTo EH
+    mCurOtkupID = ""
     mLblTitle.caption = "DETALJI OTKUPA"
 
     Dim data As Variant
@@ -210,6 +234,7 @@ Private Sub ShowOtkupDetails(ByVal otkupID As String)
         AddPair "Otkup", "Nije pronadjen (" & otkupID & ")"
         Exit Sub
     End If
+    mCurOtkupID = otkupID   ' validan otkup red -> dostupan za "Stampaj otkupni list"
 
     Dim datum As Variant: datum = CellVal(data, found, COL_OTK_DATUM)
     Dim brDok As String: brDok = CStr(CellVal(data, found, COL_OTK_BR_DOK))
