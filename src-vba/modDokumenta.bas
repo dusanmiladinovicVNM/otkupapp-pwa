@@ -2283,3 +2283,261 @@ Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
     FindPrijemnicaRowByIDAndKlasa = foundRow
 End Function
 
+' ============================================================
+' STORNO PREGLED (read-only) — agregira stornirane dokumente po tipu za
+' prikaz u panelu unutar frmDokumenta (dugme "Pregled storniranih").
+' Soft-delete: red je storniran kad je COL_STORNIRANO = "Da" (modStorno).
+' Jedinstven (unifikovan) skup korisnih kolona za sve tipove:
+'   Broj | Datum | Partner | Vrsta | Sorta | Klasa | Kolicina | Cena | Iznos | Napomena
+' Partner se razresava na naziv/ime (best-effort; fallback = ID).
+' ============================================================
+
+' Tipovi storno dokumenata u redosledu prikaza (isti nazivi kao cmbStornoDokument).
+Public Function StorniraniTipovi() As Variant
+    StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac")
+End Function
+
+' Zaglavlja unifikovanih kolona (0-bazni niz, 10 kolona).
+Public Function StorniraniHeaders() As Variant
+    StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
+                              "Klasa", "Kolicina", "Cena", "Iznos (RSD)", "Napomena")
+End Function
+
+' Vrati 2D niz (1..n, 1..10) storniranih redova za dati tip u unifikovanom
+' rasporedu kolona. Empty ako nema storniranih (ili tabela/storno kolona fali).
+Public Function GetStorniraniByTip(ByVal tip As String) As Variant
+    On Error GoTo EH
+
+    Dim tbl As String
+    Dim iBroj As Long, iDat As Long, iPart As Long, iVrsta As Long, iSorta As Long
+    Dim iKlasa As Long, iKol As Long, iCena As Long, iIzn As Long, iIzn2 As Long, iNap As Long
+    Dim partnerIsName As Boolean
+    Dim pdict As Object
+    Dim napPrefix As String
+
+    Select Case tip
+        Case "Otkup"
+            tbl = TBL_OTKUP
+            Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+            iBroj = GetColumnIndex(tbl, COL_OTK_BR_DOK)
+            iDat = GetColumnIndex(tbl, COL_OTK_DATUM)
+            iPart = GetColumnIndex(tbl, COL_OTK_KOOPERANT)
+            iVrsta = GetColumnIndex(tbl, COL_OTK_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_OTK_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_OTK_KLASA)
+            iKol = GetColumnIndex(tbl, COL_OTK_KOLICINA)
+            iCena = GetColumnIndex(tbl, COL_OTK_CENA)
+            iIzn = GetColumnIndex(tbl, COL_OTK_NOVAC)
+            iNap = GetColumnIndex(tbl, COL_OTK_BROJ_ZBIRNE): napPrefix = "Zbirna: "
+
+        Case "Otpremnica"
+            tbl = TBL_OTPREMNICA
+            Set pdict = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
+            iBroj = GetColumnIndex(tbl, COL_OTP_BROJ)
+            iDat = GetColumnIndex(tbl, COL_OTP_DATUM)
+            iPart = GetColumnIndex(tbl, COL_OTP_STANICA)
+            iVrsta = GetColumnIndex(tbl, COL_OTP_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_OTP_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_OTP_KLASA)
+            iKol = GetColumnIndex(tbl, COL_OTP_KOLICINA)
+            iCena = GetColumnIndex(tbl, COL_OTP_CENA)
+            iNap = GetColumnIndex(tbl, COL_OTP_BROJ_ZBIRNE): napPrefix = "Zbirna: "
+
+        Case "Zbirna"
+            tbl = TBL_ZBIRNA
+            Set pdict = BuildIdNameDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+            iBroj = GetColumnIndex(tbl, COL_ZBR_BROJ)
+            iDat = GetColumnIndex(tbl, COL_ZBR_DATUM)
+            iPart = GetColumnIndex(tbl, COL_ZBR_KUPAC)
+            iVrsta = GetColumnIndex(tbl, COL_ZBR_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_ZBR_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_ZBR_KLASA)
+            iKol = GetColumnIndex(tbl, COL_ZBR_KOLICINA)
+            iNap = GetColumnIndex(tbl, COL_ZBR_HLADNJACA)
+
+        Case "Prijemnica"
+            tbl = TBL_PRIJEMNICA
+            Set pdict = BuildIdNameDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+            iBroj = GetColumnIndex(tbl, COL_PRJ_BROJ)
+            iDat = GetColumnIndex(tbl, COL_PRJ_DATUM)
+            iPart = GetColumnIndex(tbl, COL_PRJ_KUPAC)
+            iVrsta = GetColumnIndex(tbl, COL_PRJ_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_PRJ_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_PRJ_KLASA)
+            iKol = GetColumnIndex(tbl, COL_PRJ_KOLICINA)
+            iCena = GetColumnIndex(tbl, COL_PRJ_CENA)
+            iNap = GetColumnIndex(tbl, COL_PRJ_BROJ_ZBIRNE): napPrefix = "Zbirna: "
+
+        Case "Faktura"
+            tbl = TBL_FAKTURE
+            Set pdict = BuildIdNameDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+            iBroj = GetColumnIndex(tbl, COL_FAK_BROJ)
+            iDat = GetColumnIndex(tbl, COL_FAK_DATUM)
+            iPart = GetColumnIndex(tbl, COL_FAK_KUPAC)
+            iIzn = GetColumnIndex(tbl, COL_FAK_IZNOS)
+            iNap = GetColumnIndex(tbl, COL_FAK_STATUS)
+
+        Case "Novac"
+            tbl = TBL_NOVAC
+            partnerIsName = True       ' Partner je vec naziv (ne ID)
+            iBroj = GetColumnIndex(tbl, COL_NOV_BROJ_DOK)
+            iDat = GetColumnIndex(tbl, COL_NOV_DATUM)
+            iPart = GetColumnIndex(tbl, COL_NOV_PARTNER)
+            iVrsta = GetColumnIndex(tbl, COL_NOV_VRSTA)
+            iIzn = GetColumnIndex(tbl, COL_NOV_UPLATA)
+            iIzn2 = GetColumnIndex(tbl, COL_NOV_ISPLATA)    ' Iznos = Uplata - Isplata
+            iNap = GetColumnIndex(tbl, COL_NOV_TIP)
+
+        Case Else
+            Exit Function
+    End Select
+
+    Dim data As Variant
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colStorno As Long
+    colStorno = GetColumnIndex(tbl, COL_STORNIRANO)
+    If colStorno = 0 Then Exit Function        ' tabela bez storno markera -> nista
+
+    Dim rows As Collection
+    Set rows = New Collection
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If UCase$(Trim$(NzToText(data(i, colStorno)))) = "DA" Then
+            Dim part As String
+            If partnerIsName Then
+                part = StornoCellText(data, i, iPart)
+            Else
+                part = ResolveNameFromDict(pdict, StornoCellRaw(data, i, iPart))
+            End If
+
+            rows.Add Array( _
+                StornoCellText(data, i, iBroj), _
+                StornoDateText(StornoCellRaw(data, i, iDat)), _
+                part, _
+                StornoCellText(data, i, iVrsta), _
+                StornoCellText(data, i, iSorta), _
+                StornoCellText(data, i, iKlasa), _
+                StornoNumText(StornoCellRaw(data, i, iKol), "#,##0.##"), _
+                StornoNumText(StornoCellRaw(data, i, iCena), "#,##0.##"), _
+                StornoIznosText(StornoCellRaw(data, i, iIzn), StornoCellRaw(data, i, iIzn2)), _
+                StornoComposeNap(napPrefix, StornoCellText(data, i, iNap)))
+        End If
+    Next i
+
+    GetStorniraniByTip = StornoRowsTo2D(rows, 10)
+    Exit Function
+
+EH:
+    LogErr "modDokumenta.GetStorniraniByTip(" & tip & ")"
+    GetStorniraniByTip = Empty
+End Function
+
+' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
+Private Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
+                                 ByVal nameCol1 As String, _
+                                 Optional ByVal nameCol2 As String = "") As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set BuildIdNameDict = d
+
+    Dim data As Variant
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+
+    Dim ci As Long, c1 As Long, c2 As Long
+    ci = GetColumnIndex(tbl, idCol)
+    c1 = GetColumnIndex(tbl, nameCol1)
+    If Len(nameCol2) > 0 Then c2 = GetColumnIndex(tbl, nameCol2)
+    If ci = 0 Or c1 = 0 Then Exit Function
+
+    Dim i As Long, idv As String, nm As String
+    For i = 1 To UBound(data, 1)
+        idv = Trim$(NzToText(data(i, ci)))
+        If Len(idv) > 0 Then
+            nm = Trim$(NzToText(data(i, c1)))
+            If c2 > 0 Then nm = Trim$(nm & " " & NzToText(data(i, c2)))
+            If Not d.Exists(idv) Then d.Add idv, nm
+        End If
+    Next i
+End Function
+
+Private Function ResolveNameFromDict(ByVal d As Object, ByVal idRaw As Variant) As String
+    Dim s As String
+    s = Trim$(NzToText(idRaw))
+    If Len(s) = 0 Then Exit Function
+    If Not d Is Nothing Then
+        If d.Exists(s) Then
+            If Len(Trim$(NzToText(d(s)))) > 0 Then
+                ResolveNameFromDict = d(s)
+                Exit Function
+            End If
+        End If
+    End If
+    ResolveNameFromDict = s          ' fallback: prikazi ID ako nema imena
+End Function
+
+' Sirova vrednost celije (Empty ako kolona ne postoji -> idx=0).
+Private Function StornoCellRaw(ByVal data As Variant, ByVal r As Long, ByVal idx As Long) As Variant
+    If idx = 0 Then Exit Function
+    StornoCellRaw = data(r, idx)
+End Function
+
+Private Function StornoCellText(ByVal data As Variant, ByVal r As Long, ByVal idx As Long) As String
+    If idx = 0 Then Exit Function
+    StornoCellText = Trim$(NzToText(data(r, idx)))
+End Function
+
+Private Function StornoDateText(ByVal v As Variant) As String
+    If IsDate(v) Then
+        StornoDateText = Format$(CDate(v), "d.m.yyyy")
+    Else
+        StornoDateText = Trim$(NzToText(v))
+    End If
+End Function
+
+Private Function StornoNumText(ByVal v As Variant, ByVal fmt As String) As String
+    Dim d As Double
+    If TryParseDouble(Trim$(NzToText(v)), d) Then
+        If d <> 0 Then StornoNumText = Format$(d, fmt)
+    End If
+End Function
+
+' Iznos = v1 - v2 (Novac: Uplata - Isplata; ostali: v2 prazno -> samo v1).
+Private Function StornoIznosText(ByVal v1 As Variant, ByVal v2 As Variant) As String
+    Dim u As Double, s As Double
+    If Not TryParseDouble(Trim$(NzToText(v1)), u) Then u = 0
+    If Not TryParseDouble(Trim$(NzToText(v2)), s) Then s = 0
+    Dim net As Double: net = u - s
+    If net <> 0 Then StornoIznosText = Format$(net, "#,##0")
+End Function
+
+Private Function StornoComposeNap(ByVal prefix As String, ByVal val As String) As String
+    If Len(Trim$(val)) = 0 Then Exit Function
+    If Len(prefix) = 0 Then
+        StornoComposeNap = val
+    Else
+        StornoComposeNap = prefix & val
+    End If
+End Function
+
+' Kolekcija 0-baznih 1D nizova -> 2D (1..n, 1..ncol). Empty ako je prazna.
+Private Function StornoRowsTo2D(ByVal rows As Collection, ByVal ncol As Long) As Variant
+    If rows Is Nothing Then Exit Function
+    If rows.count = 0 Then Exit Function
+
+    Dim arr() As Variant
+    ReDim arr(1 To rows.count, 1 To ncol)
+    Dim r As Long, c As Long, one As Variant
+    For r = 1 To rows.count
+        one = rows(r)
+        For c = 1 To ncol
+            arr(r, c) = one(c - 1)
+        Next c
+    Next r
+    StornoRowsTo2D = arr
+End Function
+
