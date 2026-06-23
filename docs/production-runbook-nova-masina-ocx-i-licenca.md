@@ -180,6 +180,58 @@ normalno i pusti `ActivateLicensePrompt` da dovrši online proveru.
 
 ---
 
+## D. Nadogradnja verzije kod već licenciranog klijenta (licenca se zadržava migracijom)
+
+Scenario: postojećem (već aktiviranom) klijentu šalješ **nov `.xlsm` build sa praznim
+LICENSE poljima**; on u novom fajlu uradi **`Alt+F8 → MigrirajPodatkeIzStarog`** i
+povuče svoju bazu iz starog fajla.
+
+**Rezultat: na ISTOJ mašini novi fajl ostaje licenciran automatski — bez ponovnog
+`ActivateLicensePrompt`.**
+
+### D.1 Zašto radi (kod, ne pretpostavka)
+
+- `modMigracija`: `SkipTabela` preskače **samo** `tblRpt*`; `tblSEFConfig` se migrira.
+  `MergeConfigTabelu` puni **prazne** ćelije novog fajla iz starog (i dodaje ključeve
+  kojih nema u novom). Pošto novi master ima prazna LICENSE polja, povlače se realne
+  vrednosti sa mašine: `LICENSE_KEY`, `LICENSE_TOKEN`, `LICENSE_BOUND_PARTS`,
+  `LICENSE_NEXT_CHECK`, `LICENSE_STATUS`, `LICENSE_HWM` (+ `LICENSE_ENABLED`).
+- `modLicense.LicenseGateOrQuit` pri prvom otvaranju: latch je aktivan (ima
+  `LICENSE_KEY` + `LICENSE_BOUND_PARTS`) → gate radi, ali **ne traži ponovni unos**.
+  Brzi offline put (`LicenseIsBoundMachine`) poredi **prebačeni** `LICENSE_BOUND_PARTS`
+  sa **živim** otiskom mašine (`GetDeviceParts`, fuzzy 2/3) → poklapa se → otvara
+  (offline ako je `Now < LICENSE_NEXT_CHECK`). Online re-check na istoj mašini = `OK`.
+
+### D.2 Uslovi i zamke
+
+1. **Samo ista mašina.** Vezivanje živi na serveru, vezano za otisak fizičke mašine
+   (ne za fajl). Migrirani fajl na **drugom** računaru → otisak ne poklapa
+   `BOUND_PARTS` (offline padne) i server vrati `BOUND_OTHER`. Selidba na drugi
+   računar i dalje ide **isključivo** preko `adminResetLicenseBinding('KLJUC')` +
+   reaktivacija (Sekcija C.2).
+2. **LICENSE polja u masteru moraju biti STVARNO prazna.** Merge **ne prepisuje
+   popunjeno** novo — puni samo prazno. Ako u novom masteru ostane zaostala LICENSE
+   vrednost (npr. tvoje test-vezivanje), migracija zadrži **tvoju** vrednost umesto
+   klijentove → razbiješ mu licencu. (Isti razlog zašto runbook traži da master ide
+   sa praznim `LICENSE_KEY` + internim keševima.)
+3. **Prvi online re-check tek na isteku grace-a.** Odmah posle migracije fajl se može
+   otvoriti i offline (nasleđeni `NEXT_CHECK`). Za sigurnu potvrdu vezivanja neka
+   klijent **jednom otvori fajl sa internetom** posle migracije (propusti jedan
+   `checkLicense`). Nije obavezno za rad, ali je čista potvrda.
+
+### D.3 Postupak (operativno)
+
+```text
+[ ] Master: LICENSE_KEY + interni keševi (TOKEN/BOUND_PARTS/NEXT_CHECK/STATUS/HWM) PRAZNI
+[ ] Klijentu poslati nov potpisan .xlsm
+[ ] Klijent: u NOVOM fajlu  Alt+F8 -> MigrirajPodatkeIzStarog  -> izaberi STARI fajl
+[ ] Snimi novi fajl (Ctrl+S)
+[ ] Otvori novi fajl (po mogućstvu sa internetom) -> otvara se licencirano
+[ ] (drugi računar = NE radi automatski -> adminResetLicenseBinding + reaktivacija)
+```
+
+---
+
 ## 5. Trajno rešenje (da ne bude problem „pri svakoj instalaciji")
 
 Cilj: skloni ručno petljanje sa OCX-om na svakom računaru.
