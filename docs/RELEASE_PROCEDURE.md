@@ -25,7 +25,7 @@ verzija / koji commit radi kod koga.
 |---|---|
 | Kod | `src-vba/` u gitu |
 | Verzija | `modConfig.APP_VERSION` |
-| Build otisak | `modBuildInfo.BUILD_SHA` / `BUILD_DATE` (stamp pri buildu) |
+| Build otisak | `modBuildInfo.BUILD_SHA` / `BUILD_VERSION` / `BUILD_DATE` (stamp pri buildu) |
 | Build most (kod ↔ Excel) | `modVbaTools.ImportAllVBA` / `ExportAllVBA` |
 | Migracija podataka | `modMigracija.MigrirajPodatkeIzStarog` |
 | Self-heal šeme / fail-fast | `modSetup.Ensure*Schema` / `modSchemaGuard.RequireColumns` |
@@ -74,6 +74,12 @@ Release koraci (po redu):
 bumpova (lako zaboraviš da bumpuješ). `BUILD_SHA` pokazuje tačan commit uvek.
 U fleet pregledu `0000000` znači **nestamp-ovan / dev build** (neko je build-ovao
 bez `stamp-build`).
+
+**`BUILD_VERSION` = auto verzija iz gita** (`git describe --tags --always`): na
+tagu je čisto (`vba-v2.2.1`), a posle N commita se **sama diže**
+(`vba-v2.2.1-3-gabc1234`). Zato je jedini ručni „bump" upravo `git tag` na
+prekretnici (korak 3); između tagova verzija odražava stvarnost bez ijedne ručne
+izmene. `APP_VERSION` u `modConfig` ostaje gruba baza koju zoveš klijentu.
 
 ## R3 — Podaci: migracija, ne kopiranje koda
 

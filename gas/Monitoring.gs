@@ -51,7 +51,8 @@ const MONITORING_TABS = {
     'Message',
     'PayloadJson',
     'BuildSha',
-    'BuildDate'
+    'BuildDate',
+    'BuildVersion'
   ],
   Errors: [
     'Timestamp',
@@ -162,6 +163,7 @@ const MONITORING_TABS = {
     'UserId',
     'Source',
     'AppVersion',
+    'BuildVersion',
     'BuildSha',
     'BuildDate',
     'LastSeenAt',
@@ -334,6 +336,7 @@ function normalizeMonitoringEvent_(input, tokenData, now) {
     deviceId: String(input.deviceId || input.DeviceId || payload.deviceId || ''),
     appVersion: String(input.appVersion || payload.appVersion || ''),
     buildSha: String(input.buildSha || payload.buildSha || ''),
+    buildVersion: String(input.buildVersion || payload.buildVersion || ''),
     buildDate: String(input.buildDate || payload.buildDate || ''),
     buildNumber: String(input.buildNumber || payload.buildNumber || ''),
     browser: String(input.browser || payload.browser || ''),
@@ -376,7 +379,8 @@ function appendMonitoringEvent_(ss, event) {
     event.message,
     stringifyPayload_(event.payload),
     event.buildSha,
-    event.buildDate
+    event.buildDate,
+    event.buildVersion
   ]);
 }
 
@@ -637,6 +641,7 @@ function buildFleetRows_(ss) {
         userId: String(e.UserId || ''),
         source: String(e.Source || ''),
         appVersion: String(e.AppVersion || ''),
+        buildVersion: String(e.BuildVersion || ''),
         buildSha: String(e.BuildSha || ''),
         buildDate: String(e.BuildDate || ''),
         lastSeenAt: ts,
@@ -651,6 +656,7 @@ function buildFleetRows_(ss) {
       d.userId = String(e.UserId || d.userId);
       d.source = String(e.Source || d.source);
       d.appVersion = String(e.AppVersion || d.appVersion);
+      d.buildVersion = String(e.BuildVersion || d.buildVersion);
       d.buildSha = String(e.BuildSha || d.buildSha);
       d.buildDate = String(e.BuildDate || d.buildDate);
     }
@@ -671,7 +677,7 @@ function writeFleetSheet_(ss, rows) {
   if (!rows.length) return;
 
   const values = rows.map(function(d) {
-    return [d.deviceId, d.userId, d.source, d.appVersion, d.buildSha, d.buildDate, d.lastSeenAt, d.firstSeenAt, d.count];
+    return [d.deviceId, d.userId, d.source, d.appVersion, d.buildVersion, d.buildSha, d.buildDate, d.lastSeenAt, d.firstSeenAt, d.count];
   });
   sh.getRange(2, 1, values.length, MONITORING_TABS.Fleet.length).setValues(values);
 }

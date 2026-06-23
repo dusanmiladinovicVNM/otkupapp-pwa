@@ -396,6 +396,7 @@ Private Function BuildBaseJson( _
         """deviceId"":" & JsonString(DeviceId()) & "," & _
         """appVersion"":" & JsonString(AppVersion()) & "," & _
         """buildSha"":" & JsonString(BUILD_SHA) & "," & _
+        """buildVersion"":" & JsonString(BUILD_VERSION) & "," & _
         """buildDate"":" & JsonString(BUILD_DATE) & "," & _
         """module"":" & JsonString(moduleName) & "," & _
         """functionName"":" & JsonString(procedureName) & "," & _
