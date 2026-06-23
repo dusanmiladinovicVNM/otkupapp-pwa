@@ -885,6 +885,11 @@ function installMonitoringTriggers() {
     .atHour(7)
     .create();
 
+  ScriptApp.newTrigger('rebuildMonitoringFleet')
+    .timeBased()
+    .everyHours(1)
+    .create();
+
   return { success: true };
 }
 
@@ -892,7 +897,7 @@ function removeMonitoringTriggers_() {
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function(t) {
     const fn = t.getHandlerFunction();
-    if (fn === 'runMonitoringWatchdog' || fn === 'sendDailyMonitoringSummary') {
+    if (fn === 'runMonitoringWatchdog' || fn === 'sendDailyMonitoringSummary' || fn === 'rebuildMonitoringFleet') {
       ScriptApp.deleteTrigger(t);
     }
   });

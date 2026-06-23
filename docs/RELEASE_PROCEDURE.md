@@ -81,6 +81,20 @@ tagu je čisto (`vba-v2.2.1`), a posle N commita se **sama diže**
 prekretnici (korak 3); između tagova verzija odražava stvarnost bez ijedne ručne
 izmene. `APP_VERSION` u `modConfig` ostaje gruba baza koju zoveš klijentu.
 
+## Jedna komanda (rutina)
+
+Koraci 1–4 su spojeni u skriptu (pokreni iz repo klona **na build mašini**):
+
+```
+bash tools/release.sh 2.2.2
+# Windows:  powershell -ExecutionPolicy Bypass -File tools\release.ps1 2.2.2
+```
+
+Ona uradi: `checkout main` + `pull` → bump `APP_VERSION` → commit → `git tag
+vba-v2.2.2` + push → `stamp-build`. Zatim ti ostaju **3 Excel klika** (Import →
+Compile → Snimi) i `git checkout -- src-vba/modBuildInfo.bas`, što skripta ispiše
+na kraju. Excel deo se ne automatizuje (cloud/CLI ne pokreću Excel).
+
 ## R3 — Podaci: migracija, ne kopiranje koda
 
 Kad isporučuješ NOVU verziju koda, ne nosiš tuđe podatke u njoj:
@@ -98,14 +112,16 @@ Kad isporučuješ NOVU verziju koda, ne nosiš tuđe podatke u njoj:
 ## „Ko ima šta" — fleet inventory
 
 Svaki klijent na `Workbook_Open` (`Monitor_AppOpen`) i pri proveri licence javi:
-`deviceId` / `computerName`, `appVersion`, `buildSha`, `buildDate`.
+`deviceId` / `computerName`, `appVersion`, `buildVersion`, `buildSha`, `buildDate`.
 
 - **Sirovo:** GAS `OtkupApp_Monitoring_PROD` → tab `Events`
-  (kolone `AppVersion`, `BuildSha`, `BuildDate`, `DeviceId`, `Timestamp`).
-- **Agregat:** u Apps Script editoru pokreni `rebuildMonitoringFleet()` → puni
-  tab `Fleet` (po uređaju: poslednja verzija/sha, kad poslednji put viđen,
-  broj događaja). Programski: action `getMonitoringFleet` (role
-  management/admin/operator).
+  (kolone `AppVersion`, `BuildVersion`, `BuildSha`, `BuildDate`, `DeviceId`, `Timestamp`).
+- **Agregat:** tab `Fleet` (po uređaju: poslednja `BuildVersion`/sha, kad poslednji
+  put viđen, broj događaja). Puni se:
+  - **automatski** — `installMonitoringTriggers()` (pokreni jednom u editoru) sad
+    uključuje i `rebuildMonitoringFleet` na svaki sat;
+  - **ručno** — `rebuildMonitoringFleet()` u editoru, ili action `getMonitoringFleet`
+    (role management/admin/operator).
 - **Klijent koji „ćuti"** u `Events`: proveri da li je monitoring uključen
   (`MONITORING_ENDPOINT` + `MONITORING_SECRET` u `tblConfig`).
 
@@ -124,3 +140,22 @@ master `.xlsm`, ili izvedi `FOLDER` iz konfiguracije.
 2. `git diff` prema `src-vba/` na commitu/tagu koji je klijent javio kao
    `BUILD_SHA` (`git show <sha>`).
 3. Reši razliku **u gitu**, pa ponovi R2. Nikad ne ostavljaj fix samo u klijentu.
+
+## Potpis VBA projekta (opciono)
+
+Potpis makroa **nije** u `release.sh` (ne postoji podržan CLI za potpis VBA
+projekta; uz to potpis mora **posle** `ImportAllVBA`, jer svaka izmena koda lomi
+potpis). Ako ga uvodiš:
+
+- **Kada:** poslednji korak u VBE pre snimanja (Excel korak 3): `Tools → Digital
+  Signature → izaberi sertifikat`.
+- **Sertifikat:** self-signed (besplatno, ali instaliraj kao *Trusted Publisher*
+  na svaku mašinu, idealno preko GPO) ili komercijalni (€€ + token).
+- **Korist:** tamper-detekcija (izmena koda kod klijenta lomi potpis), „samo
+  potpisani makroi" security, zaobilazi Office „blocked macros" (MOTW) i AV/EDR.
+- **Cena:** ručni korak svaki put + re-sign posle svake izmene; ne pokriva podatke
+  ni schema drift; detekcija ≠ prevencija.
+
+Preporuka: uvedi tek ako te Office blokira makroe pri deljenju fajla ili želiš
+hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
+`ExportAllVBA` / `git diff` dovoljni za detekciju izmena.
