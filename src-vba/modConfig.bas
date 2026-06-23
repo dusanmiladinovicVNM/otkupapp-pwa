@@ -10,7 +10,7 @@ Option Explicit
 
 ' --- App Info ---
 Public Const APP_NAME As String = "OtkupApp"
-Public Const APP_VERSION As String = "2.2.1"
+Public Const APP_VERSION As String = "2.2.2"
 
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
