@@ -437,6 +437,9 @@ Private Function LicenseHttpCheck(ByVal endpoint As String, _
            ",""licenseKey"":""" & JsonEscape(key) & """" & _
            ",""components"":[""" & JsonEscape(p(0)) & """,""" & JsonEscape(p(1)) & """,""" & JsonEscape(p(2)) & """]" & _
            ",""appVersion"":""" & JsonEscape(APP_VERSION) & """" & _
+           ",""buildSha"":""" & JsonEscape(BUILD_SHA) & """" & _
+           ",""buildVersion"":""" & JsonEscape(BUILD_VERSION) & """" & _
+           ",""buildDate"":""" & JsonEscape(BUILD_DATE) & """" & _
            ",""computerName"":""" & JsonEscape(Environ$("COMPUTERNAME")) & """}"
 
     Dim http As Object
