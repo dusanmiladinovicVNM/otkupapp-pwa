@@ -284,8 +284,9 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     ' Returns: 2D Array
     ' (1)=Datum, (2)=BrojDok, (3)=BrojParcele, (4)=Opis,
     ' (5)=Zaduzenje, (6)=Razduzenje, (7)=Saldo,
-    ' (8)=SaldoAmbalaze (running; gajbe = Izdata - Primljena; period od 0),
-    ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "NOV" / "MAG") za Detalje otkupa
+    ' (8)=SaldoAmbalaze (running; gajbe = Izdata - Primljena; period od 0;
+    '     ukljucuje i samostalna kretanja ambalaze van otkupa),
+    ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "NOV" / "MAG" / "AMB") za Detalje otkupa
     
     Dim moves As New Collection
     
@@ -482,7 +483,82 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
             Next m
         End If
     End If
-    
+
+    ' 4. Ambalaza (samostalna kretanja, van otkupa) -> menja samo "Saldo amb."
+    '    Otkup-vezane amb stavke (primljene pune /DokTip=Otkup/ I izdate prazne
+    '    /DokTip=OM-Izlaz-Koop/) imaju DokID = otkupID i VEC su uracunate kroz
+    '    otkup redove (ambIzdata - ambPrimljena). Zato uzimamo SAMO one ciji DokID
+    '    NIJE otkupID (prava samostalna kretanja, npr. izdate prazne gajbe bez
+    '    otkupa) -> postaju vidljivi redovi i UKUPNO/saldo postaju tacni.
+    Dim ambData As Variant
+    ambData = GetTableData(TBL_AMBALAZA)
+    If IsArray(ambData) Then
+        ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
+        If IsArray(ambData) Then
+            Dim cAmbDat As Long, cAmbEnt As Long, cAmbEntTip As Long, cAmbTip As Long
+            Dim cAmbKol As Long, cAmbSmer As Long, cAmbDokID As Long, cAmbDokTip As Long
+            cAmbDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
+            cAmbEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+            cAmbEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+            cAmbTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
+            cAmbKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
+            cAmbSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
+            cAmbDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+            cAmbDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)   ' opciono (friendly opis)
+
+            ' Kljucevi = svi otkupID-evi (za iskljucivanje otkup-vezanih amb stavki).
+            Dim otkIdDict As Object
+            Set otkIdDict = BuildOtkupBrojDokDict()
+
+            Dim a As Long
+            For a = 1 To UBound(ambData, 1)
+                If NzToText(ambData(a, cAmbEntTip)) = "Kooperant" And _
+                   NzToText(ambData(a, cAmbEnt)) = kooperantID Then
+                    Dim aDokID As String
+                    aDokID = NzToText(ambData(a, cAmbDokID))
+                    If Not otkIdDict.Exists(aDokID) Then          ' samostalno (ne otkup)
+                        If IsDate(ambData(a, cAmbDat)) Then
+                            Dim aDat As Date
+                            aDat = CDate(ambData(a, cAmbDat))
+                            If aDat >= datumOd And aDat <= datumDo Then
+                                Dim aKol As Double
+                                aKol = 0
+                                If IsNumeric(ambData(a, cAmbKol)) Then aKol = CDbl(ambData(a, cAmbKol))
+
+                                Dim aDelta As Double
+                                If NzToText(ambData(a, cAmbSmer)) = "Ulaz" Then
+                                    aDelta = aKol            ' OM -> koop (drzi vise)
+                                Else
+                                    aDelta = -aKol           ' koop -> OM (vratio)
+                                End If
+
+                                Dim aTip As String
+                                aTip = NzToText(ambData(a, cAmbTip))
+                                Dim aLbl As String
+                                aLbl = ""
+                                If cAmbDokTip > 0 Then aLbl = KarticaAmbDocLabel(NzToText(ambData(a, cAmbDokTip)))
+                                Dim aOpis As String
+                                aOpis = "Ambalaza"
+                                If aLbl <> "" Then aOpis = aOpis & ": " & aLbl
+                                aOpis = aOpis & " (" & aTip & " x " & CStr(CLng(aKol)) & ")"
+
+                                moves.Add Array( _
+                                    aDat, _
+                                    aDokID, _
+                                    "", _
+                                    aOpis, _
+                                    0#, _
+                                    0#, _
+                                    aDelta, _
+                                    "AMB")
+                            End If
+                        End If
+                    End If
+                End If
+            Next a
+        End If
+    End If
+
     If moves.count = 0 Then
         ReportKarticaKooperanta = Empty
         Exit Function
