@@ -86,12 +86,14 @@ Public Sub ImportAllVBA()
             ElseIf ext = "frm" And Not FileHasVBHeader(fil.path) Then
                 skipped = skipped & "  " & fil.name & " (forma bez headera)" & vbCrLf
             Else
-                ' Ukloni istoimenu i SACEKAJ da VBE oslobodi ime. Uklanjanje UserForm-e
-                ' je asinhrono -> bez cekanja re-import iste forme padne sa
-                ' "name already in use; cannot load this form" (ostane <ime>.log).
-                RemoveComponentAndWait proj, baseName
-
+                ' Ukloni istoimenu (izbegni 'modX1'). VAZNO: uklanjanje UserForm-e je
+                ' asinhrono i ne zavrsi dok makro radi -> ako stara forma POSTOJI, njen
+                ' re-import u ISTOM prolazu padne (60001/60061). Takav slucaj se pokupi
+                ' u "failed" i RESAVA SE PONOVNIM POKRETANJEM (forma je u 2. prolazu vec
+                ' uklonjena, pa se uveze cisto). NE koristiti DoEvents da se "saceka"
+                ' uklanjanje - ime se oslobodi pre nego resursi, pa import padne 60061.
                 On Error Resume Next
+                proj.VBComponents.Remove proj.VBComponents(baseName)
                 Err.Clear
                 If FileHasVBHeader(fil.path) Then
                     proj.VBComponents.Import fil.path        ' header nosi ime
@@ -165,30 +167,6 @@ Private Function ReadCodeBody(ByVal path As String) As String
     Loop
     Close #ff
     ReadCodeBody = body
-End Function
-
-' Ukloni komponentu i SACEKAJ da VBE zaista oslobodi ime.
-' UserForm Remove je asinhron -> bez cekanja re-import iste forme padne sa
-' "name already in use; cannot load this form" + ostane <ime>.log. DoEvents
-' pumpa message-loop da VBE stigne da finalizuje uklanjanje; guard kapira petlju.
-Private Sub RemoveComponentAndWait(ByVal proj As Object, ByVal compName As String)
-    Dim guard As Long
-    On Error Resume Next
-    Do While ComponentExists(proj, compName)
-        proj.VBComponents.Remove proj.VBComponents(compName)
-        DoEvents
-        guard = guard + 1
-        If guard > 100 Then Exit Do          ' fail-safe: ne zaglavi se
-    Loop
-    On Error GoTo 0
-End Sub
-
-Private Function ComponentExists(ByVal proj As Object, ByVal compName As String) As Boolean
-    Dim c As Object
-    On Error Resume Next
-    Set c = proj.VBComponents(compName)
-    ComponentExists = Not (c Is Nothing)
-    On Error GoTo 0
 End Function
 
 ' VBE pri padu importa forme ostavi <ime>.log u folderu - pocisti ih.
