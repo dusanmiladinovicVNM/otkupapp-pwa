@@ -1,6 +1,5 @@
 Attribute VB_Name = "modVbaTools"
 
-'Attribute VB_Name = "modVbaTools"
 ' ============================================================
 ' modVbaTools - dev alat za EXPORT/IMPORT celog VBA koda iz/u src-vba folder.
 ' Round-trip: git source (src-vba) <-> Excel VBA projekat. Pokrece se RUCNO (Alt+F8).
@@ -19,7 +18,7 @@ Option Explicit
 Private Const SELF_MODULE As String = "modVbaTools"
 
 Public Sub ExportAllVBA()
-    Const folder As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExport23.06.2026\"        ' <-- IZMENI ("\" na kraju)
+    Const folder As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExport23.06.2026_najnoviji\"        ' <-- IZMENI ("\" na kraju)
     If Not VBAProjectAccessible() Then Exit Sub
     If Dir(folder, vbDirectory) = "" Then
         MsgBox "Folder ne postoji: " & folder, vbExclamation, "ExportAllVBA": Exit Sub
@@ -53,7 +52,7 @@ Public Sub ImportAllVBA()
     End If
 
     Dim fil As Object, ext As String, baseName As String
-    Dim vbc As Object, t As Long, imported As Long, skipped As String, failed As String
+    Dim vbc As Object, t As Long, imported As Long, skipped As String
 
     ' 1) document moduli (.doccls): kod se MERGE-uje u postojecu komponentu
     For Each fil In fso.GetFolder(folder).files
@@ -84,41 +83,36 @@ Public Sub ImportAllVBA()
 
             If ext = "frm" And Not fso.FileExists(folder & baseName & ".frx") Then
                 skipped = skipped & "  " & fil.name & " (nema .frx para)" & vbCrLf
-            ElseIf ext = "frm" And Not FileHasVBHeader(fil.path) Then
-                skipped = skipped & "  " & fil.name & " (forma bez headera)" & vbCrLf
             Else
-                ' Ukloni istoimenu (izbegni 'modX1'). VAZNO: uklanjanje UserForm-e je
-                ' asinhrono i ne zavrsi dok makro radi -> ako stara forma POSTOJI, njen
-                ' re-import u ISTOM prolazu padne (60001/60061). Takav slucaj se pokupi
-                ' u "failed" i RESAVA SE PONOVNIM POKRETANJEM (forma je u 2. prolazu vec
-                ' uklonjena, pa se uveze cisto). NE koristiti DoEvents da se "saceka"
-                ' uklanjanje - ime se oslobodi pre nego resursi, pa import padne 60061.
-                On Error Resume Next
+                On Error Resume Next                         ' ukloni istoimenu (izbegni 'modX1')
                 proj.VBComponents.Remove proj.VBComponents(baseName)
-                Err.Clear
+                On Error GoTo 0
+
                 If FileHasVBHeader(fil.path) Then
                     proj.VBComponents.Import fil.path        ' header nosi ime
-                Else
-                    t = IIf(ext = "bas", 1, 2)               ' bas->1 (std), cls->2 (klasa)
-                    Set vbc = proj.VBComponents.Add(t)
-                    vbc.name = baseName
-                    vbc.CodeModule.AddFromFile fil.path
-                End If
-                If Err.Number <> 0 Then
-                    failed = failed & "  " & fil.name & " (" & Err.Number & ": " & Err.description & ")" & vbCrLf
-                Else
                     imported = imported + 1
+                Else
+                    t = 0
+                    If ext = "bas" Then
+                        t = 1
+                    ElseIf ext = "cls" Then
+                        t = 2
+                    End If
+                    If t > 0 Then
+                        Set vbc = proj.VBComponents.Add(t)
+                        vbc.name = baseName
+                        vbc.CodeModule.AddFromFile fil.path
+                        imported = imported + 1
+                    Else
+                        skipped = skipped & "  " & fil.name & " (forma bez headera)" & vbCrLf
+                    End If
                 End If
-                On Error GoTo 0
             End If
         End If
     Next fil
 
-    DeleteImportLogs fso, folder                 ' pocisti <ime>.log koje VBE ostavi pri padu
-
-    MsgBox "Uvezeno komponenti: " & imported & vbCrLf & _
-           IIf(Len(failed) > 0, vbCrLf & "NEUSPELO (pokreni ImportAllVBA jos jednom):" & vbCrLf & failed, "") & _
-           IIf(Len(skipped) > 0, vbCrLf & "Preskoceno (rucno):" & vbCrLf & skipped, vbCrLf & "Bez preskocenih.") & _
+    MsgBox "Uvezeno komponenti: " & imported & vbCrLf & vbCrLf & _
+           IIf(Len(skipped) > 0, "Preskoceno (rucno):" & vbCrLf & skipped, "Bez preskocenih.") & _
            vbCrLf & SELF_MODULE & " se ne uvozi (izvrsava se).", _
            vbInformation, "ImportAllVBA"
 End Sub
@@ -169,14 +163,3 @@ Private Function ReadCodeBody(ByVal path As String) As String
     Close #ff
     ReadCodeBody = body
 End Function
-
-' VBE pri padu importa forme ostavi <ime>.log u folderu - pocisti ih.
-Private Sub DeleteImportLogs(ByVal fso As Object, ByVal folder As String)
-    Dim fil As Object
-    On Error Resume Next
-    For Each fil In fso.GetFolder(folder).files
-        If LCase$(fso.GetExtensionName(fil.name)) = "log" Then fil.Delete True
-    Next fil
-    On Error GoTo 0
-End Sub
-
