@@ -63,7 +63,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                         If IsNumeric(otkupData(i, colKol)) And IsNumeric(otkupData(i, colCena)) Then
                             vals(1) = vals(1) + CDbl(otkupData(i, colKol)) * CDbl(otkupData(i, colCena))
                         End If
-                        If IsNumeric(otkupData(i, colAmb)) Then vals(2) = vals(2) + CLng(otkupData(i, colAmb))
+                        ' Ambalaza vals(2) se NE puni iz otkupa -> ispod se prepisuje NETO saldo iz ledgera
                         
                         dict(key) = vals
                     End If
@@ -211,7 +211,20 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     keys = dict.keys
     Dim totKol As Double, totVr As Double, totNov As Double
     Dim totAgro As Double, totAmb As Long
-    
+
+    ' Ambalaza (vals(2)) = NETO saldo gajbi po kooperantu iz kanonskog ledgera
+    ' (Ulaz - Izlaz), isto kao "Saldo amb." na Kartici / GetAmbalazeStanje
+    ' (ukljucuje i samostalna kretanja, ne samo primljene pune gajbe iz otkupa).
+    Dim ambNet As Object
+    Set ambNet = BuildAmbNetDict("Kooperant", datumOd, datumDo)
+    Dim ambKey As Variant
+    For Each ambKey In dict.keys
+        Dim ambVals As Variant
+        ambVals = dict(ambKey)
+        If ambNet.Exists(ambKey) Then ambVals(2) = CLng(ambNet(ambKey)) Else ambVals(2) = 0
+        dict(ambKey) = ambVals
+    Next ambKey
+
     For i = 0 To dict.count - 1
         vals = dict(keys(i))
         
@@ -274,6 +287,71 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
 
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Neto saldo ambalaze (gajbe) po entitetu za period, iz kanonskog ledgera
+' (tblAmbalaza): net = Suma(Ulaz) - Suma(Izlaz) -- isti smer kao GetAmbalazeStanje i
+' "Saldo amb." na Kartici (ukljucuje otkup-vezana I samostalna kretanja). Jedan
+' prolaz. Returns: Dictionary(EntitetID -> Double net) za dati EntitetTip.
+Private Function BuildAmbNetDict(ByVal entitetTip As String, _
+                                 ByVal datumOd As Date, ByVal datumDo As Date) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then
+        Set BuildAmbNetDict = dict
+        Exit Function
+    End If
+    d = ExcludeStornirano(d, TBL_AMBALAZA)
+    If Not IsArray(d) Then
+        Set BuildAmbNetDict = dict
+        Exit Function
+    End If
+
+    Dim cEnt As Long, cEntTip As Long, cKol As Long, cSmer As Long, cDat As Long
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cSmer = GetColumnIndex(TBL_AMBALAZA, COL_AMB_SMER)
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    If cEnt = 0 Or cEntTip = 0 Or cKol = 0 Or cSmer = 0 Or cDat = 0 Then
+        Set BuildAmbNetDict = dict
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, cEntTip)) = entitetTip Then
+            If IsDate(d(i, cDat)) Then
+                Dim dt As Date
+                dt = CDate(d(i, cDat))
+                If dt >= datumOd And dt <= datumDo Then
+                    Dim id As String
+                    id = NzToText(d(i, cEnt))
+                    If id <> "" Then
+                        Dim kol As Double
+                        kol = 0
+                        If IsNumeric(d(i, cKol)) Then kol = CDbl(d(i, cKol))
+                        Dim delta As Double
+                        If NzToText(d(i, cSmer)) = "Ulaz" Then delta = kol Else delta = -kol
+                        If dict.Exists(id) Then
+                            dict(id) = CDbl(dict(id)) + delta
+                        Else
+                            dict.Add id, delta
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    Set BuildAmbNetDict = dict
+    Exit Function
+EH:
+    Set BuildAmbNetDict = dict
 End Function
 
 Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
@@ -1464,7 +1542,15 @@ Public Function ReportSaldoKupci(ByVal kupacID As String, _
     result(rowCount, 4) = totVr
     result(rowCount, 5) = novacTotal
     result(rowCount, 6) = totVr - novacTotal
-    result(rowCount, 7) = totAmb
+    ' Ambalaza (UKUPNO) = NETO saldo gajbi kupca iz ledgera (Ulaz - Izlaz) = realno
+    ' stanje (poslate - vracene). Po-vrsta redovi prikazuju POSLATE gajbe (protok);
+    ' kod povrata je UKUPNO (neto) manji od zbira po vrstama.
+    Dim ambNetK As Object
+    Set ambNetK = BuildAmbNetDict("Kupac", datumOd, datumDo)
+    Dim kupacAmbNet As Long
+    kupacAmbNet = 0
+    If ambNetK.Exists(kupacID) Then kupacAmbNet = CLng(ambNetK(kupacID))
+    result(rowCount, 7) = kupacAmbNet
     
     ReportSaldoKupci = result
     Exit Function
