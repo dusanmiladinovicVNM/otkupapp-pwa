@@ -65,5 +65,7 @@ echo "Zatim vrati placeholder i isporuci:"
 echo "  git checkout -- $mbi"
 echo "  -> pošalji .xlsm klijentima"
 echo
+echo "Ne zaboravi: dopuni docs/RELEASE_NOTES.md (par rečenica o ovom izdanju)."
+echo
 echo "Provera: GAS rebuildMonitoringFleet() / Fleet tab (ili auto-trigger na sat)."
 echo "------------------------------------------------------------"

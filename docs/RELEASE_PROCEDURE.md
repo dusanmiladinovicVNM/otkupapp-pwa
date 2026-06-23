@@ -159,3 +159,32 @@ potpis). Ako ga uvodiš:
 Preporuka: uvedi tek ako te Office blokira makroe pri deljenju fajla ili želiš
 hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 `ExportAllVBA` / `git diff` dovoljni za detekciju izmena.
+
+---
+
+## Rad sa skriptom — po koracima
+
+> Kratko, ali sve. Uz svaki korak piše GDE se radi.
+
+### A) Priprema — SAMO JEDNOM
+1. **[Git Bash]** Imaj klon repoa na mašini gde je Excel.
+2. **[Excel]** U `modVbaTools` postavi `FOLDER` na `src-vba` putanju tog klona.
+3. **[Browser/GAS]** Deploy `Monitoring.gs`, pa u editoru pokreni jednom: `installMonitoringTriggers()`.
+4. **[Excel]** Jednom uradi `Alt+F8 → ImportAllVBA` (da uđe sva mašinerija).
+
+### B) Svaki release (zameni `2.2.2` svojim brojem)
+1. **[Git Bash]** Otvori Git Bash u folderu klona (desni klik → *Git Bash Here*), ili `cd /putanja/do/otkupapp-pwa`.
+2. **[Git Bash]** `bash tools/release.sh 2.2.2`  *(pull → bump APP_VERSION → commit → tag `vba-v2.2.2` → push → stamp)*
+3. **[Git Bash]** `cat src-vba/modBuildInfo.bas` → mora `BUILD_VERSION As String = "vba-v2.2.2"` (bez `+dirty`).
+4. **[Excel]** Otvori master `.xlsm`.
+5. **[Excel]** `Alt+F8` → **ImportAllVBA** → Run.
+6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške).
+7. **[Excel]** **Ctrl+S**.
+8. **[Git Bash]** `git checkout -- src-vba/modBuildInfo.bas` (placeholder; stamp se ne commit-uje).
+9. **[bilo gde]** Pošalji `.xlsm` klijentima (Drive / OneDrive / mejl).
+10. **[Browser/GAS]** `OtkupApp_Monitoring_PROD` → tab **Fleet**: kad klijent otvori fajl, u redu vidiš `BuildVersion = vba-v2.2.2`.
+11. **[uređivač]** Dopuni `docs/RELEASE_NOTES.md` — par rečenica šta je u ovom izdanju.
+
+### Ako stane
+- **„Radni direktorijum nije cist"** (korak 2) → commit-uj ili odloži izmene pa ponovi.
+- **Push padne (mreža)** → ponovi `bash tools/release.sh 2.2.2` (preskoči gotovo, gurne ostatak).

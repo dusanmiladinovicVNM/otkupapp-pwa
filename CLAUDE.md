@@ -80,6 +80,10 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
   proveri preklapanja + `git merge-tree` → **rebase lokalno** na `origin/main` →
   pokaži rezultat (log, diff vs `main`, statičke provere) → `push --force-with-lease`
   TEK po eksplicitnom odobrenju. Nikad force-push pre pokazivanja.
+- **Posle kreiranja PR-a ka `main`:** podseti korisnika na release/verzionisanje —
+  `tools/release.sh <verzija>` → Excel `ImportAllVBA` → `Compile` → snimi → ship →
+  `Fleet` provera, da se novi `AgriX_OtkupApp.xlsm` pravilno verzioniše. Vidi
+  `docs/RELEASE_PROCEDURE.md` i dopuni `docs/RELEASE_NOTES.md`.
 
 ---
 
