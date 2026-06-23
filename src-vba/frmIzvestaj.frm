@@ -451,6 +451,8 @@ Private Sub UpdateReportMode()
     Next pg
     If firstVisible >= 0 Then mpReports.value = firstVisible
 
+    RefreshHeaders   ' header-i Otkupljene robe i Zbirnog zavise od aktivnog entiteta
+
 End Sub
 
 ' ============================================================
@@ -1432,6 +1434,7 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_KK5, "Razduženje"
     SetColumnHeader lbl_H_KK6, "Saldo"
     LayoutKarticaHeaders            ' kreira lbl_H_KK7 + auto-fit sirine/pozicije (mora poslednje)
+    RefreshHeaders                  ' poravnaj header-e ostalih tabova nad kolonama (po entitetu)
 
     On Error GoTo 0
 End Sub
@@ -1494,6 +1497,126 @@ Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
     StyleListHeaderLabel lbl
     lbl.caption = txt
     On Error GoTo 0
+End Sub
+
+' Generalizacija LayoutKarticaHeaders za ostale tabove: pozicionira .frx header
+' labele (po imenima) nad kolonama liste i postavlja caption + lst.ColumnCount +
+' lst.ColumnWidths -- SVE iz istih PROPORCIJA (zbir ~1.0) * stvarna lst.width, pa
+' su header i kolone uvek poravnati i sve kolone staju. Labela van proporcija (p=0)
+' se sakriva (visak kolona kod entiteta sa manje kolona). Top se NE dira (zadrzava
+' .frx red iznad liste).
+Private Sub LayoutHeaders(ByVal lst As MSForms.ListBox, ByVal names As Variant, _
+                          ByVal caps As Variant, ByVal prop As Variant)
+    On Error Resume Next
+    If lst Is Nothing Then Exit Sub
+
+    Dim availW As Double
+    availW = lst.width - 16                  ' rezerva za scrollbar/border
+    If availW < 80 Then availW = lst.width
+
+    Dim x As Double: x = lst.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To UBound(names)
+        Dim p As Double: p = 0
+        If k <= UBound(prop) Then p = CDbl(prop(k))
+        Dim wCol As Long: wCol = CLng(Int(availW * p))
+
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lst.parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            If wCol > 0 Then
+                lbl.visible = True
+                lbl.Left = x
+                lbl.width = wCol
+                StyleListHeaderLabel lbl
+                If k <= UBound(caps) Then lbl.caption = CStr(caps(k))
+            Else
+                lbl.visible = False
+            End If
+        End If
+
+        cw = cw & CStr(wCol) & ";"
+        x = x + wCol
+    Next k
+    If Len(cw) > 0 Then cw = Left$(cw, Len(cw) - 1)
+    lst.ColumnCount = UBound(names) + 1
+    lst.ColumnWidths = cw
+End Sub
+
+' Jedinstveni izvor poravnatih header-a za izvestaje sa .frx labelama (lbl_H_*).
+' Caption + pozicija + sirina kolone, zavisno od aktivnog entiteta (Otkupljena roba
+' i Zbirni menjaju kolone po entitetu). Kartica / Pregled ambalaze / Otkupni listovi
+' imaju svoje Layout* funkcije. Zove se iz SetupAllColumnHeaders (svaki Activate) i
+' iz UpdateReportMode (promena entiteta/moda). Naslovi su ASCII/ChrW -> nezavisno
+' od kodne strane fajla.
+Private Sub RefreshHeaders()
+    On Error Resume Next
+    Dim ent As String: ent = GetActiveEntitetTip()
+
+    ' Saldo OM
+    LayoutHeaders lstSaldoOM, _
+        Array("lbl_H_SOM1", "lbl_H_SOM2", "lbl_H_SOM3", "lbl_H_SOM4", "lbl_H_SOM5", "lbl_H_SOM6", "lbl_H_SOM7"), _
+        Array("Kooperant", "Kolicina", "Vrednost", "Isplaceno", "Agro zadu" & ChrW(382) & "enje", "Saldo", "Ambala" & ChrW(382) & "a"), _
+        Array(0.2, 0.12, 0.15, 0.13, 0.15, 0.15, 0.1)
+
+    ' Saldo Kupci
+    LayoutHeaders lstSaldoKupci, _
+        Array("lbl_H_SK1", "lbl_H_SK2", "lbl_H_SK3", "lbl_H_SK4", "lbl_H_SK5", "lbl_H_SK6", "lbl_H_SK7"), _
+        Array("Vrsta", "Kolicina", "Cena", "Vrednost", "Novac", "Saldo", "Ambala" & ChrW(382) & "a"), _
+        Array(0.16, 0.13, 0.12, 0.15, 0.15, 0.15, 0.14)
+
+    ' Otkupljena roba (kolone zavise od entiteta)
+    Dim orN As Variant
+    orN = Array("lbl_H_OR1", "lbl_H_OR2", "lbl_H_OR3", "lbl_H_OR4", "lbl_H_OR5", _
+                "lbl_H_OR6", "lbl_H_OR7", "lbl_H_OR8", "lbl_H_OR9", "lbl_H_OR10")
+    If ent = "Otkupna mesta" Then
+        LayoutHeaders lstOtkupRoba, orN, _
+            Array("Datum", "Br. Otp.", "Vrsta", "Klasa", "Vozac", "Otp kg", "Blokovi kg", "Razlika kg", "Manjak kg", "Manjak %"), _
+            Array(0.09, 0.13, 0.1, 0.06, 0.14, 0.1, 0.11, 0.09, 0.09, 0.09)
+    Else
+        LayoutHeaders lstOtkupRoba, orN, _
+            Array("Nr", "Vrsta", "Kolicina kg", "Vrednost"), _
+            Array(0.1, 0.4, 0.25, 0.25)
+    End If
+
+    ' Primljena ambalaza
+    LayoutHeaders lstAmbalaza, _
+        Array("lbl_H_AMB1", "lbl_H_AMB2", "lbl_H_AMB3", "lbl_H_AMB4", "lbl_H_AMB5", "lbl_H_AMB6"), _
+        Array("Datum", "Mesto", "Tip", "Dokument", "Ulaz", "Izlaz"), _
+        Array(0.12, 0.3, 0.14, 0.22, 0.11, 0.11)
+
+    ' Isplata
+    LayoutHeaders lstIsplata, _
+        Array("lbl_H_ISP1", "lbl_H_ISP2", "lbl_H_ISP3", "lbl_H_ISP4", "lbl_H_ISP5"), _
+        Array("Kooperant", "Ke" & ChrW(353) & " otkupac", "Virman firma", "Virman avans", "Ukupno"), _
+        Array(0.28, 0.18, 0.18, 0.18, 0.18)
+
+    ' Zbirni (kolone zavise od entiteta)
+    Dim zbN As Variant
+    zbN = Array("lbl_H_ZB1", "lbl_H_ZB2", "lbl_H_ZB3", "lbl_H_ZB4", "lbl_H_ZB5")
+    If ent = "Vozaci" Then
+        LayoutHeaders lstZbirni, zbN, _
+            Array("Vozac", "Amb izlaz", "Amb vracena", "Manjak kg", "Manjak %"), _
+            Array(0.28, 0.18, 0.2, 0.18, 0.16)
+    Else
+        LayoutHeaders lstZbirni, zbN, _
+            Array("Entitet", "Vrsta", "Kolicina", "Vrednost", "Prosek"), _
+            Array(0.28, 0.2, 0.18, 0.18, 0.16)
+    End If
+
+    ' Prosecna cena
+    LayoutHeaders lstProsecnaCena, _
+        Array("lbl_H_PC1", "lbl_H_PC2", "lbl_H_PC3", "lbl_H_PC4"), _
+        Array("Vrsta", "Kolicina", "Vrednost", "Prosecna cena"), _
+        Array(0.3, 0.22, 0.24, 0.24)
+
+    ' Manjak
+    LayoutHeaders lstManjak, _
+        Array("lbl_H_MAN1", "lbl_H_MAN2", "lbl_H_MAN3", "lbl_H_MAN4", "lbl_H_MAN5", "lbl_H_MAN6"), _
+        Array("Br. zbirne", "Zbirna kg", "Prijemnica kg", "Manjak kg", "Manjak %", "Prosek gajbe"), _
+        Array(0.2, 0.16, 0.18, 0.16, 0.14, 0.16)
 End Sub
 
 ' Runtime tab "Pregled ambalaze" (kooperant): MultiPage page + naslov + lista.
