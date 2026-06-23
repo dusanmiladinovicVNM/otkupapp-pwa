@@ -132,7 +132,7 @@ Public Sub KarticaDetalji_PanelRect(ByRef l As Double, ByRef t As Double, _
     On Error Resume Next
     If Not mLst Is Nothing Then
         l = mLst.Left
-        t = mLst.Top
+        t = mLst.top
         w = mLst.width
         h = mLst.Height
     End If

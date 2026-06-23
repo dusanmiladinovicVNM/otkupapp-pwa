@@ -1,4 +1,5 @@
 Attribute VB_Name = "modVbaTools"
+
 'Attribute VB_Name = "modVbaTools"
 ' ============================================================
 ' modVbaTools - dev alat za EXPORT/IMPORT celog VBA koda iz/u src-vba folder.
@@ -18,7 +19,7 @@ Option Explicit
 Private Const SELF_MODULE As String = "modVbaTools"
 
 Public Sub ExportAllVBA()
-    Const folder As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExport\"        ' <-- IZMENI ("\" na kraju)
+    Const folder As String = "C:\Users\Dusan\Desktop\AgriX\src-vbaExport23.06.2026\"        ' <-- IZMENI ("\" na kraju)
     If Not VBAProjectAccessible() Then Exit Sub
     If Dir(folder, vbDirectory) = "" Then
         MsgBox "Folder ne postoji: " & folder, vbExclamation, "ExportAllVBA": Exit Sub
@@ -42,7 +43,7 @@ Public Sub ExportAllVBA()
 End Sub
 
 Public Sub ImportAllVBA()
-    Const folder As String = "C:\put\do\src-vba\"        ' <-- IZMENI
+    Const folder As String = "C:\Users\Dusan\Documents\GitHub\otkupapp-pwa\src-vba\"        ' <-- IZMENI
     If Not VBAProjectAccessible() Then Exit Sub
 
     Dim proj As Object: Set proj = ThisWorkbook.VBProject

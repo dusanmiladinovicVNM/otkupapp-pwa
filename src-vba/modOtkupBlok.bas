@@ -95,7 +95,7 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     Set mBtnToggle = mForm.Controls.Add("Forms.CommandButton.1", "btnOtkBlokToggle", True)
     mBtnToggle.width = TOGGLE_W
     mBtnToggle.Height = 24
-    mBtnToggle.Top = 6
+    mBtnToggle.top = 6
     mBtnToggle.Left = mForm.InsideWidth - TOGGLE_W - 6
     mBtnToggle.caption = "Otkupni blokovi  »"
     On Error Resume Next
@@ -848,7 +848,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' --- 1) skupi indekse redova koji prolaze filter + sort-kljuc (OM | datum) ---
     Dim n As Long: n = UBound(data, 1)
     Dim idx() As Long: ReDim idx(1 To n)
-    Dim keyS() As String: ReDim keyS(1 To n)
+    Dim keys() As String: ReDim keys(1 To n)
     Dim m As Long: m = 0
     Dim i As Long
     For i = 1 To n
@@ -867,7 +867,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
             idx(m) = i
             Dim dkey As String: dkey = "00000000"
             If IsDate(data(i, cDat)) Then dkey = Format$(CDate(data(i, cDat)), "yyyymmdd")
-            keyS(m) = DictVal(dSt, CStr(data(i, cSt))) & "|" & dkey
+            keys(m) = DictVal(dSt, CStr(data(i, cSt))) & "|" & dkey
         End If
     Next i
 
@@ -883,12 +883,12 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' --- 2) insertion sort po (Otkupno mesto, Datum) ASC (kao u LoadOtpremnice) ---
     Dim a As Long, b As Long, ti As Long, tk As String
     For a = 2 To m
-        ti = idx(a): tk = keyS(a): b = a - 1
+        ti = idx(a): tk = keys(a): b = a - 1
         Do While b >= 1
-            If keyS(b) <= tk Then Exit Do
-            idx(b + 1) = idx(b): keyS(b + 1) = keyS(b): b = b - 1
+            If keys(b) <= tk Then Exit Do
+            idx(b + 1) = idx(b): keys(b + 1) = keys(b): b = b - 1
         Loop
-        idx(b + 1) = ti: keyS(b + 1) = tk
+        idx(b + 1) = ti: keys(b + 1) = tk
     Next a
 
     ' --- 3) ispis ---
@@ -997,7 +997,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
     ' Vremenski pecat u imenu -> nema "file in use" ako je prethodni PDF otvoren.
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    pdfPath = ThisWorkbook.path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
     Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
     ws.Visible = xlSheetVisible
@@ -1325,18 +1325,18 @@ Private Function FmtKgBrutoNeto(ByVal brutoVal As Double, ByVal netoVal As Doubl
     End If
 End Function
 
-Private Function FmtKg(ByVal x As Double) As String
-    FmtKg = Format$(x, "#,##0")
+Private Function FmtKg(ByVal X As Double) As String
+    FmtKg = Format$(X, "#,##0")
 End Function
 
 ' Kolicina (kg): uvek 2 decimale (npr. 1234.00) — panel + liste otpremnica/blokova.
 ' Konvencija ista kao zivi prikaz u frmOtkup.UpdateUkupnoKg ("#,##0.00").
-Private Function FmtKgDec(ByVal x As Double) As String
-    FmtKgDec = Format$(x, "#,##0.00")
+Private Function FmtKgDec(ByVal X As Double) As String
+    FmtKgDec = Format$(X, "#,##0.00")
 End Function
 
-Private Function FmtRsd(ByVal x As Double) As String
-    FmtRsd = Format$(x, "#,##0.00")
+Private Function FmtRsd(ByVal X As Double) As String
+    FmtRsd = Format$(X, "#,##0.00")
 End Function
 
 Private Function FmtDate(ByVal v As Variant) As String
@@ -1350,7 +1350,7 @@ Private Function AddCtl(ByVal kind As String, ByVal nm As String, _
                         ByVal w As Double, ByVal h As Double) As Object
     Dim c As Object
     Set c = mForm.Controls.Add("Forms." & kind & ".1", nm, True)
-    c.Left = l: c.Top = t: c.width = w: c.Height = h
+    c.Left = l: c.top = t: c.width = w: c.Height = h
     mPanelCtls.Add c
     Set AddCtl = c
 End Function
@@ -1359,22 +1359,22 @@ Private Sub AddHeaders(ByVal prefix As String, ByVal baseLeft As Double, _
                        ByVal top As Double, ByVal widths As String, ByVal caps As String)
     Dim wArr() As String: wArr = Split(widths, ";")
     Dim cArr() As String: cArr = Split(caps, ";")
-    Dim x As Double: x = baseLeft
+    Dim X As Double: X = baseLeft
     Dim k As Long
     For k = 0 To UBound(wArr)
-        Dim wv As Double: wv = Val(wArr(k))
+        Dim wv As Double: wv = val(wArr(k))
         If wv > 0 Then
             Dim cap As String: cap = ""
             If k <= UBound(cArr) Then cap = cArr(k)
             Dim c As Object
-            Set c = AddCtl("Label", prefix & "_" & k, x, top, wv, 26)
+            Set c = AddCtl("Label", prefix & "_" & k, X, top, wv, 26)
             c.caption = cap
             On Error Resume Next
             StyleListHeaderLabel c
             c.WordWrap = True
             On Error GoTo 0
         End If
-        x = x + wv
+        X = X + wv
     Next k
 End Sub
 

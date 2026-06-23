@@ -1,4 +1,4 @@
-Attribute VB_Name = "modNovacTests"
+Attribute VB_Name = "modNovacTest"
 Option Explicit
 
 ' ============================================================
