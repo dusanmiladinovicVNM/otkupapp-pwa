@@ -140,3 +140,129 @@ function getMgmtReportsSpreadsheet_() {
 function getKarticeSpreadsheet_() {
   return getSpreadsheetByNameInFolder_('SHEETS_REPORTS', 'Kartice');
 }
+
+// ============================================================
+// One-time bootstrap za novog klijenta (C002, C003, ...).
+// Napravi celo Drive stablo ispod root foldera I upiše svaki
+// folder ID u Script Properties. Time se sažimaju koraci §5
+// (stablo), §8 (skupljanje ID-jeva) i §11 (upis u Script
+// Properties) iz install/AgriX_Onboarding_Vodic_Novi_Klijent_v2.md.
+//
+// VAŽNO: pokreni ovo UNUTAR GAS projekta TOG klijenta
+// (AgriX_C00X_GAS_PROD) — Script Properties su per-projekat.
+// Idempotentno je: postojeći folder se po imenu reuse-uje, ne dupliraju se.
+// ============================================================
+
+// Stablo foldera (vodič §5). `prop` ključevi odgovaraju AGRIX_FOLDER_PROPS gore.
+// Čvorovi bez `prop` se prave ali se ne upisuju u Script Properties (organizacioni).
+const AGRIX_FOLDER_TREE = [
+  { name: '00_Inbox', prop: 'INBOX', children: [
+    { name: 'Bank' }, { name: 'Fiskalni' }, { name: 'Uvoz' }, { name: 'Manual' }
+  ]},
+  { name: '01_Sheets', prop: 'SHEETS', children: [
+    { name: '01_Operational', prop: 'SHEETS_OPERATIONAL' },
+    { name: '02_Master', prop: 'SHEETS_MASTER' },
+    { name: '03_Reports', prop: 'SHEETS_REPORTS' },
+    { name: '04_Archive', prop: 'SHEETS_ARCHIVE' }
+  ]},
+  { name: '02_Bank_Izvodi', prop: 'BANK_IZVODI', children: [
+    { name: '2026', children: [
+      { name: '01_Januar' }, { name: '02_Februar' }, { name: '03_Mart' },
+      { name: '04_April' }, { name: '05_Maj' }, { name: '06_Jun' },
+      { name: '07_Jul' }, { name: '08_Avgust' }, { name: '09_Septembar' },
+      { name: '10_Oktobar' }, { name: '11_Novembar' }, { name: '12_Decembar' }
+    ]}
+  ]},
+  { name: '03_Documents', prop: 'DOCUMENTS', children: [
+    { name: 'Otkupni_Listovi', prop: 'DOC_OTKUPNI_LISTOVI' },
+    { name: 'Otpremnice', prop: 'DOC_OTPREMNICE' },
+    { name: 'Zbirne', prop: 'DOC_ZBIRNE' },
+    { name: 'Fakture', prop: 'DOC_FAKTURE' }
+  ]},
+  { name: '04_Export', prop: 'EXPORT', children: [
+    { name: 'Excel', prop: 'EXPORT_EXCEL' },
+    { name: 'PDF', prop: 'EXPORT_PDF' },
+    { name: 'CSV', prop: 'EXPORT_CSV' },
+    { name: 'API', prop: 'EXPORT_API' }
+  ]},
+  { name: '05_Backup', prop: 'BACKUP', children: [
+    { name: 'Daily', prop: 'BACKUP_DAILY' },
+    { name: 'Weekly', prop: 'BACKUP_WEEKLY' },
+    { name: 'Before_Release', prop: 'BACKUP_BEFORE_RELEASE' }
+  ]},
+  { name: '06_Monitoring', prop: 'MONITORING', children: [
+    { name: 'ErrorLog', prop: 'MONITORING_ERRORLOG' },
+    { name: 'Sync_Reports', prop: 'MONITORING_SYNC_REPORTS' },
+    { name: 'Incidenti', prop: 'MONITORING_INCIDENTI' },
+    { name: 'Health_Checks', prop: 'MONITORING_HEALTH_CHECKS' }
+  ]},
+  { name: '07_Admin', prop: 'ADMIN', children: [
+    { name: 'Config', prop: 'ADMIN_CONFIG' },
+    { name: 'Deployments', prop: 'ADMIN_DEPLOYMENTS' },
+    { name: 'Access', prop: 'ADMIN_ACCESS' },
+    { name: 'Templates', prop: 'ADMIN_TEMPLATES' },
+    { name: 'Runbooks', prop: 'ADMIN_RUNBOOKS' }
+  ]}
+];
+
+function getOrCreateChildFolder_(parentFolder, name) {
+  const existing = parentFolder.getFoldersByName(name);
+  if (existing.hasNext()) {
+    return existing.next();
+  }
+  return parentFolder.createFolder(name);
+}
+
+// Rekurzivno pravi stablo ispod `parentFolder`; za svaki čvor sa `prop`
+// upisuje {propName: folderId} u `propMap`, a u `report` ide čitljiv prikaz.
+function buildAgriXTree_(parentFolder, nodes, propMap, report, indent) {
+  nodes.forEach(function (node) {
+    const folder = getOrCreateChildFolder_(parentFolder, node.name);
+    report.push(indent + node.name + '  ->  ' + folder.getId());
+
+    if (node.prop) {
+      const propName = AGRIX_FOLDER_PROPS[node.prop];
+      if (!propName) {
+        throw new Error('Tree references unknown folder key: ' + node.prop);
+      }
+      propMap[propName] = folder.getId();
+    }
+
+    if (node.children && node.children.length) {
+      buildAgriXTree_(folder, node.children, propMap, report, indent + '  ');
+    }
+  });
+}
+
+// MAIN — pokreni jednom po klijentu, u GAS projektu tog klijenta.
+// Koraci:
+//   1. Ručno napravi root folder AgriX_C00X_PROD i podeli ga sa backup@ (vodič §5–6).
+//   2. Ulepi njegov folder ID u ROOT_FOLDER_ID ispod.
+//   3. Run > bootstrapAgriXFolderTree  → napravi sve podfoldere + upiše Script Properties.
+//   4. Potom pokreni debugAgriXFolders (vodič §13) — svi moraju biti OK.
+function bootstrapAgriXFolderTree() {
+  const ROOT_FOLDER_ID = 'PASTE_AgriX_C00X_PROD_FOLDER_ID_HERE';
+
+  if (!ROOT_FOLDER_ID || ROOT_FOLDER_ID.indexOf('PASTE_') === 0) {
+    throw new Error('Postavi ROOT_FOLDER_ID na ID foldera AgriX_C00X_PROD pre pokretanja.');
+  }
+
+  const root = DriveApp.getFolderById(ROOT_FOLDER_ID);
+  const propMap = {};
+  const report = [];
+
+  // Upiši i sam root.
+  propMap[AGRIX_FOLDER_PROPS.ROOT] = root.getId();
+  report.push(root.getName() + '  (ROOT)  ->  ' + root.getId());
+
+  buildAgriXTree_(root, AGRIX_FOLDER_TREE, propMap, report, '  ');
+
+  // Upiši sve sakupljene ID-jeve u Script Properties u jednom batch-u.
+  // deleteAllOthers = false → ne briše postojeće propse (npr. MONITORING_SPREADSHEET_ID, tajne).
+  PropertiesService.getScriptProperties().setProperties(propMap, false);
+
+  report.push('');
+  report.push('Script Properties upisano: ' + Object.keys(propMap).length + ' (očekivano 33).');
+  Logger.log(report.join('\n'));
+  return report;
+}
