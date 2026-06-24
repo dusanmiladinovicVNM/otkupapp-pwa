@@ -848,6 +848,12 @@ function doPost(e) {
       return jsonResponse(checkLicense(data));
     }
 
+    // Min-version gate (flota): VBA klijent salje svoju verziju, server vraca
+    // minimalnu dozvoljenu + enforce flag. Autentikacija preko MONITORING_SECRET.
+    if (data.action === 'checkVersion') {
+      return jsonResponse(handleCheckVersionPublic_(data));
+    }
+
     var masterSyncWriteBlock = blockWriteIfMasterSyncActive(data.action, data);
     if (masterSyncWriteBlock) return masterSyncWriteBlock;
 

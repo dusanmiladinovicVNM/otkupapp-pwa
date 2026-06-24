@@ -205,6 +205,31 @@ function handlePublicMonitoringAction(data) {
   return result;
 }
 
+// Min-version gate (public). VBA klijent salje svoju verziju; vracamo policy
+// iz Script Properties (menja se BEZ redeploy-a). Autentikacija = isti
+// MONITORING_INGEST_SECRET kao monitorPublic.
+//   VERSION_MIN      minimalna dozvoljena (npr. "2.2.0"); prazno = gate iskljucen
+//   VERSION_LATEST   najnovija (samo za poruku korisniku)
+//   VERSION_ENFORCE  YES/NO (default NO = klijent samo upozori, ne blokira)
+//   VERSION_MESSAGE  opciono custom tekst
+function handleCheckVersionPublic_(data) {
+  if (!isValidMonitoringSecret_(data && data.monitoringSecret)) {
+    return { success: false, error: 'Invalid monitoring secret', code: 401 };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const enforceRaw = String(props.getProperty('VERSION_ENFORCE') || '').trim().toUpperCase();
+  const enforce = (enforceRaw === 'YES' || enforceRaw === 'TRUE' || enforceRaw === '1' || enforceRaw === 'ON');
+
+  return {
+    success: true,
+    minVersion: String(props.getProperty('VERSION_MIN') || '').trim(),
+    latestVersion: String(props.getProperty('VERSION_LATEST') || '').trim(),
+    enforce: enforce ? 'YES' : 'NO',
+    message: String(props.getProperty('VERSION_MESSAGE') || '').trim()
+  };
+}
+
 function handleMonitoringAction(data, tokenData) {
   const action = String(data && data.action || '');
 
