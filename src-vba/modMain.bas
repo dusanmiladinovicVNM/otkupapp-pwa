@@ -32,6 +32,12 @@ Public Sub StartApp()
     ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
     If Not AccessGateOrQuit() Then Exit Sub
 
+    ' --- Min-version gate (flota) ---
+    ' Server (GAS action "checkVersion") javlja minimalnu dozvoljenu verziju;
+    ' zastarela verzija dobija upozorenje, a uz enforce=YES i blok pokretanja.
+    ' Opt-in na MONITORING_ENDPOINT+SECRET; fail-open offline. Vidi modUpdateGate.
+    If Not UpdateGateOrQuit() Then Exit Sub
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme

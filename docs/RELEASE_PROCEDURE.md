@@ -30,6 +30,9 @@ verzija / koji commit radi kod koga.
 | Migracija podataka | `modMigracija.MigrirajPodatkeIzStarog` |
 | Self-heal šeme / fail-fast | `modSetup.Ensure*Schema` / `modSchemaGuard.RequireColumns` |
 | Fleet (ko ima šta) | GAS `OtkupApp_Monitoring_PROD` → tab `Events` / `Fleet` |
+| Distribucija (artefakt) | `builds\AgriX_x.x.x.xlsm` — **blanko** (samo kod, prazne tabele), isti za sve |
+| Blanko provera (build-only) | `modBuildGuard.AssertBlankBuild` (ručno, pre `Save As`) |
+| Min-version gate | GAS Script Properties `VERSION_MIN`/`VERSION_ENFORCE` · `modUpdateGate` |
 
 ---
 
@@ -99,7 +102,13 @@ na kraju. Excel deo se ne automatizuje (cloud/CLI ne pokreću Excel).
 
 Kad isporučuješ NOVU verziju koda, ne nosiš tuđe podatke u njoj:
 
-- Klijent dobije **prazan** novi `.xlsm` (samo kod, prazne tabele).
+- Klijent dobije **prazan** novi `.xlsm` (samo kod, prazne tabele) — to je
+  artefakt `builds\AgriX_x.x.x.xlsm` (ime prati `vba-vX.Y.Z`), **isti za sve**.
+- **Blanko garancija (build-only):** pošto jedan fajl ide svima, gradi ga iz
+  **praznog build-mastera** i pre `Save As` pokreni `Alt+F8 → AssertBlankBuild`
+  (`modBuildGuard`) — nedestruktivno prijavi tabele s podacima. Ako master nosi
+  podatke, oni bi iscureli svim klijentima. Guard je **ručan/build-only**, ne
+  poziva se na `Workbook_Open` → kod klijenata nikad ne okida.
 - `Alt+F8` → `MigrirajPodatkeIzStarog` (`modMigracija`): povuče **vrednosti** iz
   starog fajla **po imenu kolone** (preskače `tblRpt*`, merge-uje config tabele).
   Za preimenovane kolone između verzija koristi `StaroImeKolone` override.
@@ -124,6 +133,37 @@ Svaki klijent na `Workbook_Open` (`Monitor_AppOpen`) i pri proveri licence javi:
     (role management/admin/operator).
 - **Klijent koji „ćuti"** u `Events`: proveri da li je monitoring uključen
   (`MONITORING_ENDPOINT` + `MONITORING_SECRET` u `tblConfig`).
+
+---
+
+## Min-version gate — „niko ne ostaje na staroj verziji"
+
+Fleet ti pokaže ko zaostaje (detekcija); gate to i **sprovede** (prinuda). Na
+`Workbook_Open` (`modMain.StartApp` → `modUpdateGate.UpdateGateOrQuit`) klijent
+sinhrono pita GAS (`action=checkVersion`) koja je minimalna dozvoljena verzija i
+poredi je sa svojom `APP_VERSION`.
+
+- **Opt-in:** radi samo ako su `MONITORING_ENDPOINT` + `MONITORING_SECRET`
+  podešeni u `tblSEFConfig` (isti uslov kao monitoring = „u floti si").
+- **Fail-open:** nema interneta / server ćuti / greška → **propušta** (mreža
+  nikad ne brick-uje korisnika). Pravi autoritet je server.
+- **Dva nivoa:** `VERSION_ENFORCE=NO` (default) → klijent samo **upozori** i
+  radi dalje; `=YES` → **blokira** start (isti mehanizam kao license blok).
+
+**Podešavanje (GAS → Project Settings → Script Properties; menja se BEZ
+redeploy-a):**
+
+| Property | Primer | Značenje |
+|---|---|---|
+| `VERSION_MIN` | `2.2.0` | minimalna dozvoljena; **prazno = gate isključen** |
+| `VERSION_LATEST` | `2.3.0` | samo za poruku korisniku |
+| `VERSION_ENFORCE` | `NO` / `YES` | `NO` = upozorenje, `YES` = blok |
+| `VERSION_MESSAGE` | (opciono) | custom tekst u dijalogu |
+
+**Bezbedan rollout:** prvo objavi novu verziju, prati `Fleet` tab dok se flota
+ne digne, pa **tek onda** podigni `VERSION_MIN` i (po potrebi) `VERSION_ENFORCE=YES`.
+Ako prerano enforce-uješ minimum koji niko nema → zaključaš celu flotu (zato je
+default `NO`). Poredi se `APP_VERSION` (gruba SemVer baza), ne git-describe sufiks.
 
 ---
 
@@ -176,14 +216,16 @@ hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 1. **[Git Bash]** Otvori Git Bash u folderu klona (desni klik → *Git Bash Here*), ili `cd /putanja/do/otkupapp-pwa`.
 2. **[Git Bash]** `bash tools/release.sh 2.2.2`  *(pull → bump APP_VERSION → commit → tag `vba-v2.2.2` → push → stamp)*
 3. **[Git Bash]** `cat src-vba/modBuildInfo.bas` → mora `BUILD_VERSION As String = "vba-v2.2.2"` (bez `+dirty`).
-4. **[Excel]** Otvori master `.xlsm`.
+4. **[Excel]** Otvori **prazan build-master** `.xlsm` (master koji NE drži podatke — vidi R3 „Blanko garancija").
 5. **[Excel]** `Alt+F8` → **ImportAllVBA** → Run.
 6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške).
-7. **[Excel]** **Ctrl+S**.
-8. **[Git Bash]** `git checkout -- src-vba/modBuildInfo.bas` (placeholder; stamp se ne commit-uje).
-9. **[bilo gde]** Pošalji `.xlsm` klijentima (Drive / OneDrive / mejl).
-10. **[Browser/GAS]** `OtkupApp_Monitoring_PROD` → tab **Fleet**: kad klijent otvori fajl, u redu vidiš `BuildVersion = vba-v2.2.2`.
-11. **[uređivač]** Dopuni `docs/RELEASE_NOTES.md` — par rečenica šta je u ovom izdanju.
+7. **[Excel]** `Alt+F8` → **AssertBlankBuild** → mora „BLANKO OK". Ako prijavi tabele s podacima → isprazni ih pa ponovi (taj fajl ide SVIMA).
+8. **[Excel]** **File → Save As** → `builds\AgriX_2.2.2.xlsm` (ime prati `vba-v2.2.2`).
+9. **[Git Bash]** `git checkout -- src-vba/modBuildInfo.bas` (placeholder; stamp se ne commit-uje).
+10. **[bilo gde]** Pošalji `builds\AgriX_2.2.2.xlsm` klijentima (Drive / OneDrive / mejl).
+11. **[Browser/GAS]** `OtkupApp_Monitoring_PROD` → tab **Fleet**: kad klijent otvori fajl, u redu vidiš `BuildVersion = vba-v2.2.2`.
+12. **[uређivač]** Dopuni `docs/RELEASE_NOTES.md` — par rečenica šta je u ovom izdanju.
+13. **[Browser/GAS]** *(opciono)* kad se flota digne na novu verziju: u Script Properties podigni `VERSION_MIN` (i `VERSION_ENFORCE=YES` ako želiš blok). Vidi „Min-version gate".
 
 ### Ako stane
 - **„Radni direktorijum nije cist"** (korak 2) → commit-uj ili odloži izmene pa ponovi.
