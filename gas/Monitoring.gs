@@ -14,7 +14,13 @@ Napomena:
 // ============================================================
 
 const MONITORING_SPREADSHEET_NAME = 'OtkupApp_Monitoring_PROD';
-const MONITORING_PROP_SPREADSHEET_ID = 'MONITORING_PROP_SPREADSHEET_ID';
+// Primarni naziv propsa za ID monitoring workbook-a. Isti šablon kao ALERT_EMAIL/INGEST_SECRET
+// (const ime ima PROP_, vrednost je čist ključ). Ranije je vrednost greškom bila
+// 'MONITORING_PROP_SPREADSHEET_ID' (kopiran naziv konstante); vodič §12 i poruke u kodu uvek
+// pominju 'MONITORING_SPREADSHEET_ID', pa je to sada i stvaran ključ koji se čita.
+const MONITORING_PROP_SPREADSHEET_ID = 'MONITORING_SPREADSHEET_ID';
+// Back-compat: projekti podešeni starim (buggy) nazivom ključa i dalje rade.
+const MONITORING_PROP_SPREADSHEET_ID_LEGACY = 'MONITORING_PROP_SPREADSHEET_ID';
 const MONITORING_PROP_ALERT_EMAIL = 'MONITORING_ALERT_EMAIL';
 const MONITORING_PROP_INGEST_SECRET = 'MONITORING_INGEST_SECRET';
 
@@ -1172,7 +1178,11 @@ function ensureDefaultHealthRows_(ss) {
 
 function getMonitoringSpreadsheet_() {
   const props = PropertiesService.getScriptProperties();
-  const explicitId = String(props.getProperty(MONITORING_PROP_SPREADSHEET_ID) || '').trim();
+  const explicitId = String(
+    props.getProperty(MONITORING_PROP_SPREADSHEET_ID) ||
+    props.getProperty(MONITORING_PROP_SPREADSHEET_ID_LEGACY) ||
+    ''
+  ).trim();
   if (explicitId) return SpreadsheetApp.openById(explicitId);
 
   const files = DriveApp.getFilesByName(MONITORING_SPREADSHEET_NAME);

@@ -617,6 +617,19 @@ MONITORING_INGEST_SECRET = <duga_tajna_vrednost>
 
 `MONITORING_INGEST_SECRET` čuvati u password manager-u.
 
+Zatim u GAS editoru pokreni **`initializeMonitoringWorkbook`** — sam napravi sve tabove
+(Health, Events, Errors, SyncStatus, SEFStatus, UserSessions, Backups, Alerts, AuditCritical)
+sa headerima i seed-uje Health komponente. Idempotentno je; vrati `{success:true, spreadsheetId, spreadsheetName}`.
+
+Napomene:
+
+```text
+[ ] Props ključ je tačno MONITORING_SPREADSHEET_ID (to kod čita; stariji projekti mogu
+    imati legacy MONITORING_PROP_SPREADSHEET_ID — i on i dalje radi kroz back-compat).
+[ ] OBAVEZNO postavi eksplicitan ID. Bez njega kod traži fajl po imenu OtkupApp_Monitoring_PROD
+    po CELOM Drive-u — sa više klijenata to može otvoriti tuđi monitoring fajl.
+```
+
 ---
 
 ## 13. GAS debug funkcije
