@@ -2775,11 +2775,15 @@ Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
 
     If Len(Trim$(otkupID)) = 0 Or Len(Trim$(targetOtpID)) = 0 Then Exit Function
 
-    ' cilj mora postojati i biti aktivan
-    Dim tStor As Variant
-    tStor = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_STORNIRANO)
-    If IsEmpty(tStor) Then Exit Function                        ' cilj ne postoji
-    If UCase$(Trim$(NzToText(tStor))) = "DA" Then Exit Function ' cilj storniran
+    ' cilj mora postojati (BrojOtpremnice nikad nije blank) i biti aktivan.
+    ' NB: Stornirano JE blank za aktivnu otpremnicu -> ne sme se koristiti
+    '     za proveru postojanja (LookupValue bi vratio Empty = lazno "ne postoji").
+    Dim tBroj As Variant
+    tBroj = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ)
+    If IsEmpty(tBroj) Then Exit Function                        ' cilj stvarno ne postoji
+    Dim tStor As String
+    tStor = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_STORNIRANO))
+    If UCase$(Trim$(tStor)) = "DA" Then Exit Function           ' cilj storniran
 
     Dim tZbr As String
     tZbr = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ_ZBIRNE))
@@ -2791,10 +2795,11 @@ Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
     Dim rows As Collection: Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
     If rows.count = 0 Then Err.Raise vbObjectError + 2600, SRC, "Otkup nije nadjen: " & otkupID
 
+    Dim hasZbr As Boolean: hasZbr = (GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) > 0)
     Dim k As Long
     For k = 1 To rows.count
         RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
-        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, tZbr, SRC
+        If hasZbr Then RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, tZbr, SRC
     Next k
 
     tx.CommitTx
