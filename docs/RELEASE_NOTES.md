@@ -16,6 +16,16 @@ Dopunjava se pri svakom `tools/release.sh` (korak B-11 u `RELEASE_PROCEDURE.md`)
 
 ---
 
+## vba-v2.2.3 — 2026-06-25
+- Pregled storniranih: dugme u Dokumentima -> panel sa svim storniranim (po tipu) + lanac zavisnih (Zbirna/Otpremnica/Faktura).
+- Izgubljeni otkup blokovi: upozorenje na dashboardu + sekcija „Izgubljeni" u Otkupnim blokovima sa „Preuzmi" (vrati blok na ispravnu otpremnicu posle storna; cuva OtkupID/uplate/ambalazu).
+- Otkupni blokovi: kolona „Kupac" (firma) umesto prazne „Hladnjaca".
+- Storno dvoklasne otpremnice/prijemnice sada stornira OBE klase (ranije samo jednu).
+- Validacija zbirne vise ne blokira unos kada ima ambalaze Klase II.
+- Prosek gajbi uracunava obe klase.
+  
+---
+
 ## vba-v2.2.x — sledeći release (u pripremi)
 Tačan broj/datum se postavlja pri `tools/release.sh`.
 
