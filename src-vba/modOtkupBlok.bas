@@ -61,6 +61,9 @@ Private mBtnPrint As MSForms.CommandButton
 Private mBtnFilter As MSForms.CommandButton
 Private mBtnBiraj As MSForms.CommandButton
 Private mBtnSpecDatum As MSForms.CommandButton
+Private mBtnLost As MSForms.CommandButton        ' sekcija "Izgubljeni blokovi"
+Private mBtnPreuzmi As MSForms.CommandButton
+Private mLostMode As Boolean
 Private mTxtSpecOd As MSForms.TextBox
 Private mTxtSpecDo As MSForms.TextBox
 Private mLstOtp As MSForms.ListBox
@@ -117,6 +120,8 @@ Public Sub OtkupBlok_OnButton(ByVal action As String)
         Case "FILTER": ToggleFilter
         Case "BIRAJ": BirajOrPrint
         Case "SPECDATUM": PrintSpecOdDo
+        Case "LOST": ToggleLostMode
+        Case "ADOPT": AdoptSelectedLostBlok
     End Select
     Exit Sub
 EH:
@@ -336,6 +341,11 @@ Private Sub BuildPanel()
     mBtnPrint.caption = "Stampaj list"
     Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 170, 66, 124, 22)
     mBtnBiraj.caption = "Biraj otpremnice"
+    ' Sekcija "Izgubljeni blokovi" (slobodan prostor desno na akcionom redu).
+    Set mBtnLost = AddCtl("CommandButton", "btnOtkBlokLost", BLOK_LEFT + 300, 66, 116, 22)
+    mBtnLost.caption = "Izgubljeni"
+    Set mBtnPreuzmi = AddCtl("CommandButton", "btnOtkBlokPreuzmi", BLOK_LEFT + 420, 66, 82, 22)
+    mBtnPreuzmi.caption = "Preuzmi"
 
     On Error Resume Next
     StyleExitButton mBtnFilter, "Prikaz: Sve"
@@ -345,6 +355,8 @@ Private Sub BuildPanel()
     StyleExitButton mBtnStorno, "Storniraj"
     StylePrimaryButton mBtnPrint, "Stampaj list"
     StyleExitButton mBtnBiraj, "Biraj otpremnice"
+    StyleExitButton mBtnLost, "Izgubljeni"
+    StylePrimaryButton mBtnPreuzmi, "Preuzmi"
     On Error GoTo 0
     mTxtSpecOd.value = Format$(Date, "d.m.yyyy")
     mTxtSpecDo.value = Format$(Date, "d.m.yyyy")
@@ -370,6 +382,8 @@ Private Sub BuildPanel()
     WireBtn mBtnFilter, "FILTER"
     WireBtn mBtnBiraj, "BIRAJ"
     WireBtn mBtnSpecDatum, "SPECDATUM"
+    WireBtn mBtnLost, "LOST"
+    WireBtn mBtnPreuzmi, "ADOPT"
 End Sub
 
 Private Sub SetPanelVisible(ByVal b As Boolean)
@@ -475,6 +489,10 @@ End Sub
 
 Private Sub LoadBlokovi()
     On Error GoTo EH
+    If mLostMode Then
+        LoadLostBlokovi
+        Exit Sub
+    End If
     mLstBlok.Clear
     If Len(mActiveOtpID) = 0 Then Exit Sub
 
@@ -692,6 +710,81 @@ Private Sub StornoSelectedBlok()
 EH:
     LogErr "modOtkupBlok.StornoSelectedBlok"
     MsgBox "Greska pri storno bloka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Sekcija "Izgubljeni blokovi": blokovi cija je otpremnica stornirana/nestala.
+Private Sub LoadLostBlokovi()
+    On Error GoTo EH
+    mLstBlok.Clear
+    Dim lost As Variant: lost = GetLostOtkupBlokovi()
+    If Not IsArray(lost) Then Exit Sub
+
+    Dim dKo As Object: Set dKo = BuildKoopNames()
+    Dim i As Long, r As Long
+    For i = 1 To UBound(lost, 1)
+        mLstBlok.AddItem CStr(lost(i, 1))                  ' col0 (skriveno) = OtkupID
+        r = mLstBlok.ListCount - 1
+        mLstBlok.List(r, 1) = CStr(lost(i, 2))             ' br. bloka
+        mLstBlok.List(r, 2) = DictVal(dKo, Trim$(CStr(lost(i, 3))))  ' kooperant
+        mLstBlok.List(r, 3) = FmtDate(lost(i, 4))          ' datum
+        mLstBlok.List(r, 4) = FmtKgDec(NumVal(lost(i, 5))) ' kolicina
+        mLstBlok.List(r, 6) = "stara otp: " & CStr(lost(i, 7))       ' kol. "Vrednost"
+    Next i
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.LoadLostBlokovi"
+End Sub
+
+' Toggle prikaza izgubljenih blokova u listi BLOKOVI.
+Private Sub ToggleLostMode()
+    On Error GoTo EH
+    mLostMode = Not mLostMode
+    If mLostMode Then mBtnLost.caption = "Nazad" Else mBtnLost.caption = "Izgubljeni"
+    LoadBlokovi
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.ToggleLostMode"
+End Sub
+
+' Preuzmi izabrani izgubljeni blok na trenutno izabranu (aktivnu) otpremnicu.
+' Re-point veze (OtpremnicaID + BrojZbirne); OtkupID/uplate/ambalaza ostaju.
+Private Sub AdoptSelectedLostBlok()
+    On Error GoTo EH
+    If Not mLostMode Then
+        MsgBox "Klikni 'Izgubljeni', pa izaberi blok za preuzimanje.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    Dim li As Long: li = mLstBlok.ListIndex
+    If li < 0 Then MsgBox "Izaberite izgubljeni blok.", vbExclamation, APP_NAME: Exit Sub
+    Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
+    If Len(otkupID) = 0 Then Exit Sub
+    Dim brDok As String: brDok = Trim$(CStr(mLstBlok.List(li, 1)))
+
+    If Len(mActiveOtpID) = 0 Then
+        MsgBox "Prvo izaberi CILJNU otpremnicu (leva lista), pa Preuzmi.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim tBroj As String
+    tBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BROJ))
+
+    If MsgBox("Preuzeti blok br. " & brDok & " na otpremnicu " & tBroj & "?" & vbCrLf & _
+              "(menja se samo veza; OtkupID, uplate i ambalaza ostaju.)", _
+              vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+
+    If ReassignOtkupToOtpremnica_TX(otkupID, mActiveOtpID) Then
+        mLostMode = False
+        mBtnLost.caption = "Izgubljeni"
+        LoadOtpremnice
+        LoadBlokovi
+        RefreshSummary
+        MsgBox "Blok preuzet na otpremnicu " & tBroj & ".", vbInformation, APP_NAME
+    Else
+        MsgBox "Preuzimanje nije uspelo (cilj mozda storniran).", vbCritical, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.AdoptSelectedLostBlok"
+    MsgBox "Greska pri preuzimanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub PrintSelectedBlok()

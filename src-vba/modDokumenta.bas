@@ -2680,3 +2680,130 @@ Private Function StornoRowsTo2D(ByVal rows As Collection, ByVal ncol As Long) As
     StornoRowsTo2D = arr
 End Function
 
+' ============================================================
+' IZGUBLJENI OTKUP BLOKOVI (read + bezbedan re-point)
+' Blok je "izgubljen" kad mu OtpremnicaID pokazuje na storniranu ili
+' nepostojecu otpremnicu (a sam blok nije storniran). Koriste: dashboard
+' dijagnostika (modHelpers.CheckVerwaisteDokumente) i panel Otkupni blokovi.
+' ============================================================
+
+' Vrati 2D (1..n, 1..7): OtkupID | BrojDokumenta | KooperantID | Datum |
+' Kolicina | StaraOtpremnicaID | StaraOtpremnicaBroj. Empty ako nema.
+Public Function GetLostOtkupBlokovi() As Variant
+    On Error GoTo EH
+
+    Dim otk As Variant: otk = GetTableData(TBL_OTKUP)
+    If IsEmpty(otk) Then Exit Function
+
+    ' mape otpremnica po ID-u: stornirane i aktivne (ID -> BrojOtpremnice)
+    Dim storMap As Object: Set storMap = CreateObject("Scripting.Dictionary")
+    Dim aktMap As Object: Set aktMap = CreateObject("Scripting.Dictionary")
+    storMap.CompareMode = vbTextCompare: aktMap.CompareMode = vbTextCompare
+
+    Dim otp As Variant: otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsEmpty(otp) Then
+        Dim oId As Long, oBr As Long, oSt As Long
+        oId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+        oBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+        oSt = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+        Dim j As Long, idv As String
+        For j = 1 To UBound(otp, 1)
+            idv = Trim$(NzToText(otp(j, oId)))
+            If Len(idv) > 0 Then
+                If UCase$(Trim$(NzToText(otp(j, oSt)))) = "DA" Then
+                    If Not storMap.Exists(idv) Then storMap.Add idv, Trim$(NzToText(otp(j, oBr)))
+                ElseIf Not aktMap.Exists(idv) Then
+                    aktMap.Add idv, Trim$(NzToText(otp(j, oBr)))
+                End If
+            End If
+        Next j
+    End If
+
+    Dim cId As Long, cBr As Long, cKoop As Long, cDat As Long
+    Dim cKol As Long, cOtp As Long, cStor As Long
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cStor = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim i As Long
+    For i = 1 To UBound(otk, 1)
+        If UCase$(Trim$(NzToText(otk(i, cStor)))) = "DA" Then GoTo NextRow
+        Dim otpId As String: otpId = Trim$(NzToText(otk(i, cOtp)))
+        If Len(otpId) = 0 Then GoTo NextRow            ' nije vezan -> nije "izgubljen"
+
+        Dim staleBroj As String: staleBroj = ""
+        Dim lost As Boolean: lost = False
+        If storMap.Exists(otpId) Then
+            lost = True: staleBroj = CStr(storMap(otpId))
+        ElseIf Not aktMap.Exists(otpId) Then
+            lost = True: staleBroj = "(nepostojeca)"
+        End If
+
+        If lost Then
+            rows.Add Array( _
+                Trim$(NzToText(otk(i, cId))), _
+                Trim$(NzToText(otk(i, cBr))), _
+                Trim$(NzToText(otk(i, cKoop))), _
+                otk(i, cDat), _
+                otk(i, cKol), _
+                otpId, _
+                staleBroj)
+        End If
+NextRow:
+    Next i
+
+    GetLostOtkupBlokovi = StornoRowsTo2D(rows, 7)
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetLostOtkupBlokovi"
+    GetLostOtkupBlokovi = Empty
+End Function
+
+' Bezbedan re-point izgubljenog bloka na ciljnu (aktivnu) otpremnicu:
+' menja SAMO OtpremnicaID + BrojZbirne (cuva OtkupID -> uplate/ambalaza ostaju).
+' Transakciono. Vraca False ako cilj ne postoji/storniran ili upis padne.
+Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
+                                             ByVal targetOtpID As String) As Boolean
+    Const SRC As String = "modDokumenta.ReassignOtkupToOtpremnica_TX"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    If Len(Trim$(otkupID)) = 0 Or Len(Trim$(targetOtpID)) = 0 Then Exit Function
+
+    ' cilj mora postojati i biti aktivan
+    Dim tStor As Variant
+    tStor = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_STORNIRANO)
+    If IsEmpty(tStor) Then Exit Function                        ' cilj ne postoji
+    If UCase$(Trim$(NzToText(tStor))) = "DA" Then Exit Function ' cilj storniran
+
+    Dim tZbr As String
+    tZbr = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ_ZBIRNE))
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+
+    Dim rows As Collection: Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If rows.count = 0 Then Err.Raise vbObjectError + 2600, SRC, "Otkup nije nadjen: " & otkupID
+
+    Dim k As Long
+    For k = 1 To rows.count
+        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
+        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, tZbr, SRC
+    Next k
+
+    tx.CommitTx
+    Set tx = Nothing
+    ReassignOtkupToOtpremnica_TX = True
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    ReassignOtkupToOtpremnica_TX = False
+End Function
+
