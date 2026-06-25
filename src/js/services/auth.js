@@ -41,6 +41,7 @@ function showLoginScreen() {
 
                 <div class="login-card">
                     <div class="login-card-title">Prijava</div>
+                    <div class="login-tenant-badge" style="text-align:center;margin:-6px 0 14px;font-size:13px;font-weight:600;color:#6b7280;letter-spacing:.02em;">${(window.CONFIG && CONFIG.TENANT_NAME) || ''}</div>
 
                     <div class="login-field">
                         <label class="login-field-label">Korisničko ime</label>
