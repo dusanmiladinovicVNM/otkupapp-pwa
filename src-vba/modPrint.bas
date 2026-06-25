@@ -977,9 +977,10 @@ EH:
     LogErr "modPrint.ExportIzdavanjeAmbalazePDF"
 End Function
 
-' Popuni IzdAmbSablon (zaglavlje firme + podaci + stavka + saldo + potpisi).
-' Vraca sheet (ili Nothing). Saldo kooperanta se cita iz ledgera (POSLE upisa,
-' jer se zove posle commita) -> odrazava novo stanje za izdati tip.
+' Popuni IzdAmbSablon: dva identicna primerka jedan iznad drugog, svaki tacno
+' 1/3 A4 (99mm) - ista geometrija kao otkupni list (papir sa dve perforacije;
+' donja trecina ostaje prazna, stampa 1:1). Vraca sheet (ili Nothing). Podaci iz
+' forme; saldo kooperanta se cita iz ledgera (POSLE upisa) -> novo stanje za tip.
 Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok As String, _
                                              ByVal omNaziv As String, ByVal omID As String, _
                                              ByVal koopNaziv As String, ByVal koopID As String, _
@@ -995,7 +996,40 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
-    Const LASTCOL As Long = 6
+    ' --- podaci za list (zaglavlje firme iz configa, kao otkupni list) ---
+    Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
+    h("name") = GetConfigValue("SELLER_NAME")
+    h("pib") = GetConfigValue("SELLER_PIB")
+    h("mb") = GetConfigValue("SELLER_MATICNI_BROJ")
+    h("addr") = Trim$(GetConfigValue("SELLER_STREET") & ", " & _
+                GetConfigValue("SELLER_POSTAL_CODE") & " " & GetConfigValue("SELLER_CITY"))
+    h("acct") = GetConfigValue("SELLER_ACCOUNT")
+    Dim objMesto As String: objMesto = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_MESTO")))
+    Dim objReg As String: objReg = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_BR_REGISTRA")))
+    Dim objLine As String
+    If Len(objMesto) > 0 Then objLine = "Objekat: " & objMesto
+    If Len(objReg) > 0 Then
+        If Len(objLine) > 0 Then
+            objLine = objLine & "    Reg. br: " & objReg
+        Else
+            objLine = "Objekat reg. br: " & objReg
+        End If
+    End If
+    h("objekat") = objLine
+    Dim brLbl As String: brLbl = Trim$(brojDok)
+    If brLbl = "" Then brLbl = "-"
+    h("brDok") = brLbl
+    h("datum") = Format$(datum, "dd.mm.yyyy")
+    h("stanica") = omNaziv
+    h("koop") = Trim$(koopNaziv)
+    Dim bpg As String
+    If Trim$(koopID) <> "" Then _
+        bpg = Trim$(CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG)))
+    h("bpg") = bpg
+    h("tipAmb") = tipAmb
+    h("kolAmb") = kolAmb
+    h("vrsta") = Trim$(vrstaVoca)
+    h("saldo") = IzdAmbSaldoTekst(koopID, tipAmb)
 
     Application.ScreenUpdating = False
     On Error Resume Next
@@ -1008,105 +1042,41 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     ws.cells.Clear
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 8
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
+    ' NAPOMENA: bez AutoFit - visine redova su eksplicitne tako da svaki primerak
+    ' zauzme tacno 1/3 A4 (99mm); AutoFit bi to ponistio.
 
-    ' --- zaglavlje firme + naslov ---
-    Dim rr As Long: rr = 1
-    rr = DocSellerHeader(ws, rr, LASTCOL, LASTCOL)
-    rr = rr + 1
-    Dim brLbl As String: brLbl = Trim$(brojDok)
-    If brLbl = "" Then brLbl = "-"
-    rr = DocTitleBlock(ws, rr, LASTCOL, "Izdavanje prazne ambalaze kooperantu", _
-                       "REVERS  br. " & brLbl)
-    rr = rr + 1
+    ' Dva identicna primerka, svaki dopunjen filler-redom do tacno 1/3 A4. Granice
+    ' izmedju primeraka padaju na perforacije (99mm i 198mm); donja trecina prazna.
+    Dim R0 As Long, lastRow As Long
+    R0 = WriteIzdavanjeCopy(ws, 1, "Primerak: OM (otkupno mesto)", h, _
+                            OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
+    lastRow = WriteIzdavanjeCopy(ws, R0, "Primerak: kooperant", h, OL_THIRD_PT) - 1
 
-    ' --- podaci o izdavanju ---
-    DocLabelVal ws, rr, 1, "Datum:", Format$(datum, "dd.mm.yyyy")
-    DocLabelVal ws, rr, 4, "Broj dokumenta:", brLbl
-    rr = rr + 1
-    DocLabelVal ws, rr, 1, "Otkupno mesto (izdaje):", omNaziv
-    rr = rr + 1
-    DocLabelVal ws, rr, 1, "Kooperant (prima):", Trim$(koopNaziv)
-    rr = rr + 1
-    If Trim$(vrstaVoca) <> "" Then
-        DocLabelVal ws, rr, 1, "Vrsta voca:", vrstaVoca
-        rr = rr + 1
-    End If
-    rr = rr + 1
-
-    ' --- stavka (izdata ambalaza): Rb | Tip ambalaze | Broj gajbica (kom) ---
-    Dim hdr As Long: hdr = rr
-    ws.cells(rr, 1).value = "Rb"
-    ws.cells(rr, 2).value = "Tip ambalaze"
-    ws.cells(rr, 4).value = "Broj gajbica (kom)"
-    ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
-    ws.Range(ws.cells(rr, 4), ws.cells(rr, LASTCOL)).Merge
-    With ws.Range(ws.cells(rr, 1), ws.cells(rr, LASTCOL))
-        .Font.Bold = True
-        .Font.Size = 9
-        .Interior.Color = DocColHeaderFill()
-        .HorizontalAlignment = xlCenter
-        .VerticalAlignment = xlCenter
-    End With
-    rr = rr + 1
-    ws.cells(rr, 1).value = 1
-    ws.cells(rr, 2).value = tipAmb
-    ws.cells(rr, 4).value = kolAmb
-    ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
-    ws.Range(ws.cells(rr, 4), ws.cells(rr, LASTCOL)).Merge
-    ws.cells(rr, 1).HorizontalAlignment = xlCenter
-    ws.cells(rr, 4).HorizontalAlignment = xlCenter
-    rr = rr + 1
-    ' --- ukupno red ---
-    ws.cells(rr, 2).value = "UKUPNO"
-    ws.cells(rr, 4).value = kolAmb
-    ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
-    ws.Range(ws.cells(rr, 4), ws.cells(rr, LASTCOL)).Merge
-    ws.cells(rr, 4).HorizontalAlignment = xlCenter
-    With ws.Range(ws.cells(rr, 1), ws.cells(rr, LASTCOL))
-        .Font.Bold = True
-        .Interior.Color = DocColHeaderFill()
-    End With
-    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, LASTCOL)).Borders
-        .LineStyle = xlContinuous
-        .Weight = xlThin
-    End With
-    rr = rr + 2
-
-    ' --- saldo ambalaze kod kooperanta posle izdavanja (za izdati tip) ---
-    Dim saldoTxt As String: saldoTxt = IzdAmbSaldoTekst(koopID, tipAmb)
-    If saldoTxt <> "" Then
-        DocLabelVal ws, rr, 1, "Stanje ambalaze kod kooperanta (posle izdavanja):", saldoTxt
-        rr = rr + 2
-    End If
-
-    ' --- footer: datum stampe + potpisi ---
-    ws.cells(rr, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
-    ws.cells(rr, 1).Font.Color = DocColGray()
-    rr = rr + 2
-    ws.cells(rr, 1).value = "Izdao (OM): ____________________"
-    ws.cells(rr, 1).Font.Color = DocColGray()
-    ws.cells(rr, 4).value = "Primio (kooperant): ____________________"
-    ws.cells(rr, 4).Font.Color = DocColGray()
-    Dim lastRow As Long: lastRow = rr
-
-    ' --- A4 portrait, sve kolone na jednu stranu po sirini ---
-    ' PageSetup property-ji traze drajver stampaca; na masini bez stampaca bacaju
-    ' 1004. Stitimo ih (On Error Resume Next) da PDF izadje i bez stampaca (isti
-    ' hardening kao FillPrijemnicaSablon).
     On Error Resume Next
+    Application.PrintCommunication = False
     With ws.PageSetup
         .PaperSize = xlPaperA4
         .Orientation = xlPortrait
-        .Zoom = False
-        .FitToPagesWide = 1
-        .FitToPagesTall = False
-        .LeftMargin = Application.InchesToPoints(0.4)
-        .RightMargin = Application.InchesToPoints(0.4)
-        .TopMargin = Application.InchesToPoints(0.5)
-        .BottomMargin = Application.InchesToPoints(0.5)
+        .Zoom = 100                       ' 1:1 -> visine redova u mm su tacne
+        .LeftMargin = Application.InchesToPoints(0.31)
+        .RightMargin = Application.InchesToPoints(0.31)
+        .TopMargin = 0                    ' primerak 1 pocinje na vrhu (gornji red je spacer)
+        .BottomMargin = 0
+        .HeaderMargin = 0
+        .FooterMargin = 0
         .CenterHorizontally = True
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, LASTCOL)).Address
+        .CenterVertically = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
     End With
+    Application.PrintCommunication = True
     On Error GoTo 0
 
     Application.ScreenUpdating = oldScreen
@@ -1117,7 +1087,205 @@ EH:
     LogErr "modPrint.FillIzdavanjeAmbalazeSablon"
 End Function
 
-' Saldo (kom) izdatog tipa kod kooperanta. "" ako nepoznato / nema reda.
+' Ispisuje jedan primerak reversa od reda R0 i dopunjava ga do tacno 1/3 A4
+' (targetPt tacaka). Vraca prvi slobodan red (pocetak sledeceg primerka). Sve
+' visine su eksplicitne (bez AutoFit) - isti pristup kao WriteOtkupCopy.
+Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
+                                    ByVal copyLbl As String, ByVal h As Object, _
+                                    ByVal targetPt As Double) As Long
+    Dim rr As Long
+    Dim grayClr As Long: grayClr = DocColGray()
+    Dim fillClr As Long: fillClr = DocColHeaderFill()
+    Dim usedPt As Double: usedPt = 0
+
+    ' --- gornji prazan razmak (apsorbuje nestampajucu ivicu stampaca) ---
+    ws.rows(R0).RowHeight = OL_TOP_SPACER_PT
+    usedPt = usedPt + OL_TOP_SPACER_PT
+    rr = R0 + 1
+
+    ' --- zaglavlje prodavca (ime; adresa levo + PIB/MB/Ziro desno) ---
+    With ws.cells(rr, 1)
+        .value = CStr(h("name"))
+        .Font.Bold = True
+        .Font.Size = 11
+    End With
+    ws.rows(rr).RowHeight = 15#
+    usedPt = usedPt + 15#
+    rr = rr + 1
+    With ws.cells(rr, 1)
+        .value = CStr(h("addr"))
+        .Font.Size = 9
+        .Font.Color = grayClr
+    End With
+    ws.Range(ws.cells(rr, 5), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 5)
+        .value = "PIB: " & CStr(h("pib")) & "   MB: " & CStr(h("mb")) & "   Ziro: " & CStr(h("acct"))
+        .Font.Size = 9
+        .Font.Color = grayClr
+        .HorizontalAlignment = xlRight
+    End With
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = DocColRule()
+    End With
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
+    rr = rr + 1
+
+    ' --- objekat (samo ako je u configu) ---
+    If Len(CStr(h("objekat"))) > 0 Then
+        With ws.cells(rr, 1)
+            .value = CStr(h("objekat"))
+            .Font.Size = 9
+        End With
+        ws.rows(rr).RowHeight = 12#
+        usedPt = usedPt + 12#
+        rr = rr + 1
+    End If
+
+    ' --- naslov: mali descriptor + veliki REVERS ---
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 1)
+        .value = "Izdavanje prazne ambalaze kooperantu"
+        .Font.Italic = True
+        .Font.Size = 9
+        .Font.Color = grayClr
+        .HorizontalAlignment = xlCenter
+    End With
+    ws.rows(rr).RowHeight = 12#
+    usedPt = usedPt + 12#
+    rr = rr + 1
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 1)
+        .value = "REVERS  br. " & CStr(h("brDok"))
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Borders(xlEdgeBottom)
+        .LineStyle = xlContinuous
+        .Weight = xlMedium
+        .Color = DocColRule()
+    End With
+    ws.rows(rr).RowHeight = 20#
+    usedPt = usedPt + 20#
+    rr = rr + 1
+
+    ' --- datum / otkupno mesto / oznaka primerka (desno) ---
+    DocLabelVal ws, rr, 1, "Datum:", CStr(h("datum"))
+    DocLabelVal ws, rr, 4, "Otkupno mesto:", CStr(h("stanica"))
+    ws.Range(ws.cells(rr, 6), ws.cells(rr, 8)).Merge
+    With ws.cells(rr, 6)
+        .value = copyLbl
+        .Font.Size = 8
+        .Font.Color = grayClr
+        .HorizontalAlignment = xlRight
+    End With
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
+    rr = rr + 1
+
+    ' --- kooperant (prima): ime levo, BPG (ako postoji) desno ---
+    With ws.cells(rr, 1)
+        .value = "Kooperant: " & CStr(h("koop"))
+        .Font.Bold = True
+    End With
+    If Len(CStr(h("bpg"))) > 0 Then DocLabelVal ws, rr, 5, "BPG:", CStr(h("bpg"))
+    ws.rows(rr).RowHeight = 13#
+    usedPt = usedPt + 13#
+    rr = rr + 1
+
+    ' --- vrsta voca (samo ako je uneta) ---
+    If Len(CStr(h("vrsta"))) > 0 Then
+        DocLabelVal ws, rr, 1, "Vrsta voca:", CStr(h("vrsta"))
+        ws.rows(rr).RowHeight = 12#
+        usedPt = usedPt + 12#
+        rr = rr + 1
+    End If
+
+    ' --- stavka: Rb | Tip ambalaze | Broj gajbica (kom) ---
+    Dim hdr As Long: hdr = rr
+    ws.cells(rr, 1).value = "Rb"
+    ws.cells(rr, 2).value = "Tip ambalaze"
+    ws.cells(rr, 5).value = "Broj gajbica (kom)"
+    ws.Range(ws.cells(rr, 2), ws.cells(rr, 4)).Merge
+    ws.Range(ws.cells(rr, 5), ws.cells(rr, 8)).Merge
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
+        .Font.Bold = True
+        .Font.Size = 9
+        .Interior.Color = fillClr
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    ws.rows(rr).RowHeight = 18#
+    usedPt = usedPt + 18#
+    rr = rr + 1
+    ws.cells(rr, 1).value = 1
+    ws.cells(rr, 2).value = CStr(h("tipAmb"))
+    ws.cells(rr, 5).value = h("kolAmb")
+    ws.Range(ws.cells(rr, 2), ws.cells(rr, 4)).Merge
+    ws.Range(ws.cells(rr, 5), ws.cells(rr, 8)).Merge
+    ws.cells(rr, 1).HorizontalAlignment = xlCenter
+    ws.cells(rr, 5).HorizontalAlignment = xlCenter
+    ws.rows(rr).RowHeight = 14#
+    usedPt = usedPt + 14#
+    rr = rr + 1
+    ws.cells(rr, 2).value = "UKUPNO"
+    ws.cells(rr, 5).value = h("kolAmb")
+    ws.Range(ws.cells(rr, 2), ws.cells(rr, 4)).Merge
+    ws.Range(ws.cells(rr, 5), ws.cells(rr, 8)).Merge
+    ws.cells(rr, 5).HorizontalAlignment = xlCenter
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
+        .Font.Bold = True
+        .Interior.Color = fillClr
+    End With
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, 8)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.rows(rr).RowHeight = 14#
+    usedPt = usedPt + 14#
+    rr = rr + 1
+
+    ' --- saldo ambalaze kod kooperanta posle izdavanja (ako je poznat) ---
+    If Len(CStr(h("saldo"))) > 0 Then
+        DocLabelVal ws, rr, 1, "Stanje kod kooperanta posle izdavanja:", CStr(h("saldo"))
+        ws.rows(rr).RowHeight = 13#
+        usedPt = usedPt + 13#
+        rr = rr + 1
+    End If
+
+    ' --- fleksibilni razmak: gura potpise tacno iznad perforacije ---
+    Dim reservePt As Double: reservePt = 16# + OL_MIN_FILLER_PT
+    Dim gapPt As Double: gapPt = targetPt - usedPt - reservePt
+    If gapPt < 6# Then gapPt = 6#
+    ws.rows(rr).RowHeight = gapPt
+    usedPt = usedPt + gapPt
+    rr = rr + 1
+
+    ' --- potpisi ---
+    ws.cells(rr, 1).value = "Izdao (OM):  ____________________"
+    ws.cells(rr, 1).Font.Size = 9
+    ws.cells(rr, 1).Font.Color = grayClr
+    ws.cells(rr, 5).value = "Primio (kooperant):  ____________________"
+    ws.cells(rr, 5).Font.Size = 9
+    ws.cells(rr, 5).Font.Color = grayClr
+    ws.rows(rr).RowHeight = 16#
+    usedPt = usedPt + 16#
+    rr = rr + 1
+
+    ' --- filler red: dopuni primerak do tacno 1/3 A4 (targetPt) ---
+    Dim fillPt As Double: fillPt = targetPt - usedPt
+    If fillPt < OL_MIN_FILLER_PT Then fillPt = OL_MIN_FILLER_PT
+    ws.rows(rr).RowHeight = fillPt
+    rr = rr + 1
+
+    WriteIzdavanjeCopy = rr
+End Function
+
+' Saldo izdatog tipa kod kooperanta, npr. "tip 4/1 = 120 kom". "" ako nepoznato.
 ' GetAmbalazeStanje vraca 2D niz: (.,1)=TipAmbalaze, (.,2)=saldo (Ulaz +, Izlaz -).
 Private Function IzdAmbSaldoTekst(ByVal koopID As String, ByVal tipAmb As String) As String
     On Error GoTo EH
@@ -1127,7 +1295,7 @@ Private Function IzdAmbSaldoTekst(ByVal koopID As String, ByVal tipAmb As String
     Dim i As Long
     For i = LBound(st, 1) To UBound(st, 1)
         If Trim$(CStr(st(i, 1))) = Trim$(tipAmb) Then
-            IzdAmbSaldoTekst = "tip " & tipAmb & ": " & CStr(CLng(st(i, 2))) & " kom"
+            IzdAmbSaldoTekst = "tip " & tipAmb & " = " & CStr(CLng(st(i, 2))) & " kom"
             Exit Function
         End If
     Next i
@@ -1136,8 +1304,8 @@ EH:
     LogErr "modPrint.IzdAmbSaldoTekst"
 End Function
 
-' Kreira IzdAmbSablon (sirine kolona). Sme da ostane vidljiv u workbook-u,
-' kao OtkupSablon / PrijemnicaSablon / PaletaSablon.
+' Kreira IzdAmbSablon (8 kolona, kao OtkupSablon). Sme da ostane vidljiv u
+' workbook-u, kao OtkupSablon / PrijemnicaSablon / PaletaSablon.
 Public Sub EnsureIzdavanjeAmbalazeSablon()
     On Error GoTo EH
     Dim ws As Worksheet
@@ -1148,12 +1316,14 @@ Public Sub EnsureIzdavanjeAmbalazeSablon()
 
     Set ws = ThisWorkbook.Sheets.Add
     ws.name = "IzdAmbSablon"
-    ws.columns("A").ColumnWidth = 5
-    ws.columns("B").ColumnWidth = 18
-    ws.columns("C").ColumnWidth = 14
-    ws.columns("D").ColumnWidth = 12
-    ws.columns("E").ColumnWidth = 12
-    ws.columns("F").ColumnWidth = 12
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 8
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
     Exit Sub
 EH:
     LogErr "modPrint.EnsureIzdavanjeAmbalazeSablon"
