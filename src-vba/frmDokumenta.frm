@@ -1680,6 +1680,20 @@ Private Function UpdateValidacija() As Boolean
         End If
     End If
     
+    ' Klasa II ambalaza (runtime polje) -> inputAmb postaje TOTAL: ValidateZbirnaPreUnosa
+    ' sabira sumaAmb preko OBE klase, pa ulaz mora biti zbir Kl.I + Kl.II.
+    If chkDveKlaseZbr.value And Not m_txtKolAmbIIZbr Is Nothing Then
+        If Trim$(m_txtKolAmbIIZbr.value) <> "" Then
+            Dim inputAmbII As Long
+            If Not TryParseLong(m_txtKolAmbIIZbr.value, inputAmbII) Then
+                lblValidacijaAmb.caption = "Neispravna kolicina ambalaze Kl.II"
+                lblValidacijaAmb.ForeColor = CLR_ERROR()
+                Exit Function
+            End If
+            inputAmb = inputAmb + inputAmbII
+        End If
+    End If
+
     Dim val As Variant
     val = ValidateZbirnaPreUnosa(txtBrojZbirne.value, inputKgKlI, inputKgKlII, inputAmb)
     
@@ -2425,7 +2439,8 @@ Private Sub btnStorno_Click()
                 MsgBox "Otpremnica '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("otpremnicu", brDok) Then Success = StornoOtpremnica_TX(otpID)
+            ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
+            If ConfirmStorno("otpremnicu", brDok) Then Success = StornoOtpremnicaByBroj_TX(brDok)
             
         Case "Zbirna"
             If ConfirmStorno("zbirnu", brDok) Then Success = StornoZbirna_TX(brDok)
@@ -2437,7 +2452,8 @@ Private Sub btnStorno_Click()
                 MsgBox "Prijemnica '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnica_TX(prijID)
+            ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
+            If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnicaByBroj_TX(brDok)
             
         Case "Faktura"
             Dim fakID As String

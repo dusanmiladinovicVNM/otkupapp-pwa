@@ -1540,17 +1540,10 @@ Public Function CalculateProsekGajbe(ByVal brojOtp As String) As Double
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_KOL_AMB, _
                        "modDokumenta.CalculateProsekGajbe"
 
-    Dim kolVal As Variant
-    Dim ambVal As Variant
-
-    kolVal = LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOLICINA)
-    ambVal = LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOL_AMB)
-
-    Dim kol As Double
-    Dim amb As Long
-
-    If IsNumeric(kolVal) Then kol = CDbl(kolVal)
-    If IsNumeric(ambVal) Then amb = CLng(ambVal)
+    ' Dvoklasni doc: sumiraj kol i amb preko SVIH redova broja (ne samo prvi red).
+    Dim kol As Double, amb As Double
+    kol = SumByBroj(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOLICINA)
+    amb = SumByBroj(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOL_AMB)
 
     If amb > 0 Then
         CalculateProsekGajbe = kol / amb
@@ -1577,17 +1570,10 @@ Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Doub
     RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KOL_AMB, _
                        "modDokumenta.CalculateProsekGajbeByZbirna"
 
-    Dim zbrKol As Variant
-    Dim zbrAmb As Variant
-
-    zbrKol = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOLICINA)
-    zbrAmb = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOL_AMB)
-
-    Dim kol As Double
-    Dim amb As Long
-
-    If IsNumeric(zbrKol) Then kol = CDbl(zbrKol)
-    If IsNumeric(zbrAmb) Then amb = CLng(zbrAmb)
+    ' Dvoklasni doc: sumiraj kol i amb preko SVIH redova broja (ne samo prvi red).
+    Dim kol As Double, amb As Double
+    kol = SumByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOLICINA)
+    amb = SumByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOL_AMB)
 
     If amb > 0 Then
         CalculateProsekGajbeByZbirna = kol / amb
@@ -1600,6 +1586,24 @@ Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Doub
 EH:
     LogErr "modDokumenta.CalculateProsekGajbeByZbirna"
     CalculateProsekGajbeByZbirna = 0
+End Function
+
+' Sumira valCol preko SVIH redova gde brojCol = broj (obe klase dvorednog doc-a).
+Private Function SumByBroj(ByVal tbl As String, ByVal brojCol As String, _
+                           ByVal broj As String, ByVal valCol As String) As Double
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cB As Long, cV As Long
+    cB = GetColumnIndex(tbl, brojCol)
+    cV = GetColumnIndex(tbl, valCol)
+    If cB = 0 Or cV = 0 Then Exit Function
+    Dim i As Long, s As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cB))) = Trim$(broj) Then
+            If IsNumeric(data(i, cV)) Then s = s + CDbl(data(i, cV))
+        End If
+    Next i
+    SumByBroj = s
 End Function
 
 ' ============================================================

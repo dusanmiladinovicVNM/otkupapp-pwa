@@ -201,6 +201,69 @@ EH:
     LogAndReraise SRC
 End Function
 
+' Storniraj SVE aktivne redove otpremnice za dati BrojOtpremnice (Klasa I i II
+' dele isti broj, zaseban red po klasi). Mirror StornoOtkupByBrDok_TX.
+Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
+    Const SRC As String = "StornoOtpremnicaByBroj_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    RequireNonBlank brBroj, "BrojOtpremnice", SRC
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTPREMNICA
+    End If
+
+    Dim colBr As Long, colID As Long, colStorno As Long
+    colBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+    colID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    colStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+
+    Dim ids As Collection: Set ids = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBr))) = Trim$(brBroj) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                ids.Add Trim$(CStr(data(i, colID)))
+            End If
+        End If
+    Next i
+
+    If ids.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 9, SRC, _
+                  "Nema aktivne otpremnice za broj: " & brBroj
+    End If
+
+    Dim k As Long
+    For k = 1 To ids.count
+        If Not StornoOtpremnica(CStr(ids(k))) Then
+            Err.Raise ERR_STORNO_BASE + 2, SRC, _
+                      "StornoOtpremnica nije uspeo. OtpremnicaID=" & CStr(ids(k))
+        End If
+    Next k
+
+    tx.CommitTx
+
+    StornoOtpremnicaByBroj_TX = True
+    MonitorStornoSuccess SRC, "Otpremnica", brBroj
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Otpremnica", brBroj, tx
+    StornoOtpremnicaByBroj_TX = False
+End Function
+
 ' ============================================================
 ' ZBIRNA
 ' ============================================================
@@ -375,6 +438,71 @@ Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
 
 EH:
     LogAndReraise SRC
+End Function
+
+' Storniraj SVE aktivne redove prijemnice za dati BrojPrijemnice (Klasa I i II
+' dele isti broj, zaseban red po klasi). Mirror StornoOtkupByBrDok_TX.
+Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String) As Boolean
+    Const SRC As String = "StornoPrijemnicaByBroj_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    RequireNonBlank brBroj, "BrojPrijemnice", SRC
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+
+    Dim data As Variant
+    data = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_PRIJEMNICA
+    End If
+
+    Dim colBr As Long, colID As Long, colStorno As Long
+    colBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+
+    Dim ids As Collection: Set ids = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBr))) = Trim$(brBroj) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                ids.Add Trim$(CStr(data(i, colID)))
+            End If
+        End If
+    Next i
+
+    If ids.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 9, SRC, _
+                  "Nema aktivne prijemnice za broj: " & brBroj
+    End If
+
+    Dim k As Long
+    For k = 1 To ids.count
+        If Not StornoPrijemnica(CStr(ids(k))) Then
+            Err.Raise ERR_STORNO_BASE + 4, SRC, _
+                      "StornoPrijemnica nije uspeo. PrijemnicaID=" & CStr(ids(k))
+        End If
+    Next k
+
+    tx.CommitTx
+
+    StornoPrijemnicaByBroj_TX = True
+    MonitorStornoSuccess SRC, "Prijemnica", brBroj
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Prijemnica", brBroj, tx
+    StornoPrijemnicaByBroj_TX = False
 End Function
 
 ' ============================================================
