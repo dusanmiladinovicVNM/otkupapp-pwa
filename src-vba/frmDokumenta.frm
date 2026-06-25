@@ -1994,6 +1994,9 @@ Private Sub btnUnosPrij_Click()
     defHlad = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
     If Len(defHlad) > 0 And StrComp(kupacID, defHlad, vbTextCompare) = 0 Then
         OutputPrijemnica result
+        ' Malina: grupni otkupni list (obrazac otkupnog lista, podaci s prijemnice);
+        ' izlaz po CFG_OTKUP_PRINT_MODE. Prijemnica ostaje nepromenjena (gore).
+        If IsMalinaMode() Then OutputGrupniOtkupniList result
     End If
 
     ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
