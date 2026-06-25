@@ -1405,6 +1405,14 @@ Private Sub btnUnosOMUlaz_Click()
 
     MsgBox "Sacuvano!", vbInformation, APP_NAME
 
+    ' Izdavanje kooperantu: na "Unesi" izbaci PDF revers (obrazac izdate ambalaze).
+    ' Vrednosti se citaju iz forme PRE reseta polja nize. Best-effort (LogErr unutra).
+    If izdavanje Then
+        OutputIzdavanjeAmbalaze datumDok, brojDok, cmbOtkupnoMesto.value, stanicaID, _
+                                cmbPrimalacOMUlaz.value, kooperantID, _
+                                cmbTipAmbOMUlaz.value, kolAmb, cmbVrstaVoca.value
+    End If
+
     txtBrojDokOMUlaz.value = ""
     txtKolAmbOMUlaz.value = ""
     txtNovacOMUlaz.value = ""

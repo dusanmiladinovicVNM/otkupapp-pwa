@@ -898,3 +898,264 @@ Private Function PrNz(ByVal v As Variant) As Double
     If IsNumeric(v) Then PrNz = CDbl(v)
 End Function
 
+' ============================================================
+' IZDAVANJE PRAZNE AMBALAZE KOOPERANTU (revers) - IzdAmbSablon, jedan A4
+' portrait obrazac. Okida ga frmDokumenta.btnUnosOMUlaz posle uspesnog
+' SaveOMUlaz_TX kad je toggle "Izdavanje kooperantu" aktivan (dvojni upis
+' Kooperant Ulaz + Stanica Izlaz; DOK_TIP_OM_IZLAZ_KOOP). Podaci dolaze iz
+' forme (broj dokumenta je opcioni -> ne cita se iz ledgera). Izlaz po
+' CFG_OM_IZDAVANJE_PRINT_MODE: PDF (DEFAULT, otvori) | PRINT | PREVIEW | OFF.
+' ============================================================
+
+' Glavni ulaz (zove se posle SaveOMUlaz_TX). Best-effort: greska se loguje.
+Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String, _
+                                   ByVal omNaziv As String, ByVal omID As String, _
+                                   ByVal koopNaziv As String, ByVal koopID As String, _
+                                   ByVal tipAmb As String, ByVal kolAmb As Long, _
+                                   ByVal vrstaVoca As String)
+    On Error GoTo EH
+    Dim mode As String
+    mode = UCase$(Trim$(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE)))
+
+    Select Case mode
+        Case "OFF"
+            ' bez izlaza
+        Case "PRINT"
+            Dim ws As Worksheet
+            Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
+                                                 koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
+            If Not ws Is Nothing Then ws.PrintOut Copies:=1
+        Case "PREVIEW"
+            Dim wp As Worksheet
+            Set wp = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
+                                                 koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
+            If Not wp Is Nothing Then wp.PrintPreview
+        Case Else
+            ' PDF ili prazno (DEFAULT) -> tihi PDF koji se otvori.
+            ExportIzdavanjeAmbalazePDF datum, brojDok, omNaziv, omID, _
+                                       koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True
+    End Select
+    Exit Sub
+EH:
+    LogErr "modPrint.OutputIzdavanjeAmbalaze"
+End Sub
+
+' PDF reversa -> <workbook>\IzdavanjeAmbalaze_<suff>_<vreme>.pdf. Vraca putanju.
+' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni otvoren.
+Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As String, _
+                                           ByVal omNaziv As String, ByVal omID As String, _
+                                           ByVal koopNaziv As String, ByVal koopID As String, _
+                                           ByVal tipAmb As String, ByVal kolAmb As Long, _
+                                           ByVal vrstaVoca As String, _
+                                           Optional ByVal openAfter As Boolean = True) As String
+    On Error GoTo EH
+    Dim ws As Worksheet
+    Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
+                                         koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
+    If ws Is Nothing Then
+        MsgBox "PDF reversa (izdavanje ambalaze) nije napravljen: priprema lista nije uspela.", _
+               vbExclamation, APP_NAME
+        Exit Function
+    End If
+
+    Dim folder As String: folder = ThisWorkbook.path
+    If Len(folder) = 0 Then folder = Environ$("TEMP")
+    Dim suff As String: suff = Trim$(brojDok)
+    If suff = "" Then suff = koopID
+    suff = Replace(Replace(suff, " + ", "_"), "/", "-")
+    Dim pdfPath As String
+    pdfPath = folder & "\IzdavanjeAmbalaze_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    ExportIzdavanjeAmbalazePDF = pdfPath
+    Exit Function
+EH:
+    MsgBox "Greska pri izradi PDF reversa (izdavanje ambalaze):" & vbCrLf & _
+           "  [" & Err.Number & "] " & Err.description, vbExclamation, APP_NAME
+    LogErr "modPrint.ExportIzdavanjeAmbalazePDF"
+End Function
+
+' Popuni IzdAmbSablon (zaglavlje firme + podaci + stavka + saldo + potpisi).
+' Vraca sheet (ili Nothing). Saldo kooperanta se cita iz ledgera (POSLE upisa,
+' jer se zove posle commita) -> odrazava novo stanje za izdati tip.
+Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok As String, _
+                                             ByVal omNaziv As String, ByVal omID As String, _
+                                             ByVal koopNaziv As String, ByVal koopID As String, _
+                                             ByVal tipAmb As String, ByVal kolAmb As Long, _
+                                             ByVal vrstaVoca As String) As Worksheet
+    On Error GoTo EH
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+
+    EnsureIzdavanjeAmbalazeSablon
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("IzdAmbSablon")
+    On Error GoTo EH
+    If ws Is Nothing Then Exit Function
+
+    Const LASTCOL As Long = 6
+
+    Application.ScreenUpdating = False
+    On Error Resume Next
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+    ws.cells.UnMerge
+    On Error GoTo EH
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+
+    ' --- zaglavlje firme + naslov ---
+    Dim rr As Long: rr = 1
+    rr = DocSellerHeader(ws, rr, LASTCOL, LASTCOL)
+    rr = rr + 1
+    Dim brLbl As String: brLbl = Trim$(brojDok)
+    If brLbl = "" Then brLbl = "-"
+    rr = DocTitleBlock(ws, rr, LASTCOL, "Izdavanje prazne ambalaze kooperantu", _
+                       "REVERS  br. " & brLbl)
+    rr = rr + 1
+
+    ' --- podaci o izdavanju ---
+    DocLabelVal ws, rr, 1, "Datum:", Format$(datum, "dd.mm.yyyy")
+    DocLabelVal ws, rr, 4, "Broj dokumenta:", brLbl
+    rr = rr + 1
+    DocLabelVal ws, rr, 1, "Otkupno mesto (izdaje):", omNaziv
+    rr = rr + 1
+    DocLabelVal ws, rr, 1, "Kooperant (prima):", Trim$(koopNaziv)
+    rr = rr + 1
+    If Trim$(vrstaVoca) <> "" Then
+        DocLabelVal ws, rr, 1, "Vrsta voca:", vrstaVoca
+        rr = rr + 1
+    End If
+    rr = rr + 1
+
+    ' --- stavka (izdata ambalaza): Rb | Tip ambalaze | Broj gajbica (kom) ---
+    Dim hdr As Long: hdr = rr
+    ws.cells(rr, 1).value = "Rb"
+    ws.cells(rr, 2).value = "Tip ambalaze"
+    ws.cells(rr, 4).value = "Broj gajbica (kom)"
+    ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
+    ws.Range(ws.cells(rr, 4), ws.cells(rr, LASTCOL)).Merge
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, LASTCOL))
+        .Font.Bold = True
+        .Font.Size = 9
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    rr = rr + 1
+    ws.cells(rr, 1).value = 1
+    ws.cells(rr, 2).value = tipAmb
+    ws.cells(rr, 4).value = kolAmb
+    ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
+    ws.Range(ws.cells(rr, 4), ws.cells(rr, LASTCOL)).Merge
+    ws.cells(rr, 1).HorizontalAlignment = xlCenter
+    ws.cells(rr, 4).HorizontalAlignment = xlCenter
+    rr = rr + 1
+    ' --- ukupno red ---
+    ws.cells(rr, 2).value = "UKUPNO"
+    ws.cells(rr, 4).value = kolAmb
+    ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
+    ws.Range(ws.cells(rr, 4), ws.cells(rr, LASTCOL)).Merge
+    ws.cells(rr, 4).HorizontalAlignment = xlCenter
+    With ws.Range(ws.cells(rr, 1), ws.cells(rr, LASTCOL))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+    End With
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, LASTCOL)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    rr = rr + 2
+
+    ' --- saldo ambalaze kod kooperanta posle izdavanja (za izdati tip) ---
+    Dim saldoTxt As String: saldoTxt = IzdAmbSaldoTekst(koopID, tipAmb)
+    If saldoTxt <> "" Then
+        DocLabelVal ws, rr, 1, "Stanje ambalaze kod kooperanta (posle izdavanja):", saldoTxt
+        rr = rr + 2
+    End If
+
+    ' --- footer: datum stampe + potpisi ---
+    ws.cells(rr, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
+    ws.cells(rr, 1).Font.Color = DocColGray()
+    rr = rr + 2
+    ws.cells(rr, 1).value = "Izdao (OM): ____________________"
+    ws.cells(rr, 1).Font.Color = DocColGray()
+    ws.cells(rr, 4).value = "Primio (kooperant): ____________________"
+    ws.cells(rr, 4).Font.Color = DocColGray()
+    Dim lastRow As Long: lastRow = rr
+
+    ' --- A4 portrait, sve kolone na jednu stranu po sirini ---
+    ' PageSetup property-ji traze drajver stampaca; na masini bez stampaca bacaju
+    ' 1004. Stitimo ih (On Error Resume Next) da PDF izadje i bez stampaca (isti
+    ' hardening kao FillPrijemnicaSablon).
+    On Error Resume Next
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, LASTCOL)).Address
+    End With
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillIzdavanjeAmbalazeSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr "modPrint.FillIzdavanjeAmbalazeSablon"
+End Function
+
+' Saldo (kom) izdatog tipa kod kooperanta. "" ako nepoznato / nema reda.
+' GetAmbalazeStanje vraca 2D niz: (.,1)=TipAmbalaze, (.,2)=saldo (Ulaz +, Izlaz -).
+Private Function IzdAmbSaldoTekst(ByVal koopID As String, ByVal tipAmb As String) As String
+    On Error GoTo EH
+    If Trim$(koopID) = "" Then Exit Function
+    Dim st As Variant: st = GetAmbalazeStanje(koopID, "Kooperant")
+    If Not IsArray(st) Then Exit Function
+    Dim i As Long
+    For i = LBound(st, 1) To UBound(st, 1)
+        If Trim$(CStr(st(i, 1))) = Trim$(tipAmb) Then
+            IzdAmbSaldoTekst = "tip " & tipAmb & ": " & CStr(CLng(st(i, 2))) & " kom"
+            Exit Function
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr "modPrint.IzdAmbSaldoTekst"
+End Function
+
+' Kreira IzdAmbSablon (sirine kolona). Sme da ostane vidljiv u workbook-u,
+' kao OtkupSablon / PrijemnicaSablon / PaletaSablon.
+Public Sub EnsureIzdavanjeAmbalazeSablon()
+    On Error GoTo EH
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("IzdAmbSablon")
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = "IzdAmbSablon"
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 18
+    ws.columns("C").ColumnWidth = 14
+    ws.columns("D").ColumnWidth = 12
+    ws.columns("E").ColumnWidth = 12
+    ws.columns("F").ColumnWidth = 12
+    Exit Sub
+EH:
+    LogErr "modPrint.EnsureIzdavanjeAmbalazeSablon"
+End Sub
+

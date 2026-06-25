@@ -301,6 +301,10 @@ Public Const CFG_OTKUP_PRINT_MODE As String = "OTKUP_PRINT_MODE"
 ' Štampa prijemnice — auto izlaz na "Unos prijemnice". Default OFF (kao do sada;
 ' prijemnica se ne stampa). PDF | PRINT | PREVIEW | OFF (kao PALETA_PRINT_MODE).
 Public Const CFG_PRIJEMNICA_PRINT_MODE As String = "PRIJEMNICA_PRINT_MODE"
+' Izdavanje prazne ambalaze kooperantu (revers) - auto izlaz na "Unesi" u OM-Ulaz
+' frame-u kad je toggle "Izdavanje kooperantu" aktivan. Default PDF (otvori PDF,
+' kao OTKUP_PRINT_MODE). PDF | PRINT | PREVIEW | OFF (kao PALETA_PRINT_MODE).
+Public Const CFG_OM_IZDAVANJE_PRINT_MODE As String = "OM_IZDAVANJE_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
