@@ -62,6 +62,22 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 - Pri merge-u: čist git-merge može dati VBA compile grešku (dupli `Public`
   `Sub`/`Function`/`Const` → „Ambiguous name"). Posle merge-a uradi
   `Debug → Compile VBAProject` i proveri duple definicije.
+- **Encoding: VBA fajlovi (`.bas`/`.cls`/`.frm`) su jednobajtni ANSI —
+  Windows-1250 (srednjoevropski; ima `š/ž/č/ć`) + LF — NE UTF-8.** Edit/Write alat
+  ih pri snimanju prebaci u UTF-8 i **tiho ošteti** sve `š/ž/č/ć` i nemačke znake —
+  uključujući `MsgBox` poruke vidljive korisniku (gubitak je nepovratan jer više
+  bajtova mapira na isti `�`). Već se dešavalo (vidi `f08a0ee`). Pravilo (da se NE
+  ispravlja stalno posle greške):
+  - PRE editovanja proveri `file <fajl>` → „Non-ISO extended-ASCII" = jednobajtni ANSI.
+  - Ako fajl ima ne-ASCII znake, **NE diraj ga Edit/Write alatom direktno.**
+    Primeni izmenu **byte-preserving latin-1 round-trip skriptom** (Python
+    `open(..., encoding='latin-1', newline='')` za čitanje i pisanje — latin-1 čuva
+    bajtove bez obzira na 1250/1252; **očuvaj originalni EOL**, u ovom repo-u LF), a
+    sopstvene dodatke drži **ASCII-only** (bez dijakritike, npr. „pocetno").
+    Po potrebi: `git checkout HEAD -- <fajl>` pa re-apliciraj izmene tom skriptom.
+  - POSLE izmene: `file` MORA i dalje da kaže „Non-ISO extended-ASCII" (ne „UTF-8"),
+    a `git diff` sme da pokaže **samo namerne linije** (bez `�` šuma na netaknutim).
+  - `.md` / `.js` / ostali UTF-8 fajlovi: Edit/Write je bezbedan (nema konverzije).
 
 ## 5) Verifikacija (CI ne pokreće Excel)
 
