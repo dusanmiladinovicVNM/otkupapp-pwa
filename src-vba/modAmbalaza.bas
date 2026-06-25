@@ -410,6 +410,41 @@ EH:
 End Function
 
 ' ============================================================
+' READ: entitetski saldo gajbica STANICE (OM) za dati tip ambalaze.
+'
+' Pandan GetKooperantAmbOpening, ali za entitet "Stanica" (puni se iz
+' otpremnica / OM-ulaz). Vraca pun trenutni saldo (Ulaz +, Izlaz -). Za
+' grupni otkupni list to je "pocetno stanje" jer prijemnica pise "Kupac"
+' stranu i ne pomera "Stanica" entitet. 0 ako nema pokreta / pri gresci.
+' ============================================================
+Public Function GetStanicaAmbSaldo(ByVal stanicaID As String, _
+                                   ByVal tipAmb As String) As Long
+    Const SRC As String = "modAmbalaza.GetStanicaAmbSaldo"
+
+    On Error GoTo EH
+
+    GetStanicaAmbSaldo = 0
+    If Len(Trim$(stanicaID)) = 0 Or Len(Trim$(tipAmb)) = 0 Then Exit Function
+
+    Dim st As Variant
+    st = GetAmbalazeStanje(stanicaID, "Stanica")
+    If Not IsArray(st) Then Exit Function
+
+    Dim i As Long
+    For i = LBound(st, 1) To UBound(st, 1)
+        If AmbText(st(i, 1)) = Trim$(tipAmb) Then
+            If IsNumeric(st(i, 2)) Then GetStanicaAmbSaldo = CLng(st(i, 2))
+            Exit Function
+        End If
+    Next i
+    Exit Function
+
+EH:
+    LogErr SRC
+    GetStanicaAmbSaldo = 0
+End Function
+
+' ============================================================
 ' READ: saldo ambalaze po vozacu
 '
 ' Returns:

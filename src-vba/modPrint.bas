@@ -284,6 +284,8 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
     h("klauzula") = kl
+    h("naslov") = "OTKUPNI LIST"
+    h("grupni") = ""
 
     Application.ScreenUpdating = False
     On Error Resume Next
@@ -417,7 +419,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     rr = rr + 1
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = "OTKUPNI LIST  br. " & h("brDok")
+        .value = CStr(h("naslov")) & "  br. " & h("brDok")
         .Font.Bold = True
         .Font.Size = 14
         .HorizontalAlignment = xlCenter
@@ -445,13 +447,17 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     usedPt = usedPt + 13#
     rr = rr + 1
 
-    ' --- poljoprivrednik: ime skroz levo, pa BPG, pa tekuci racun (1 red) ---
+    ' --- subjekt (1 red): poljoprivrednik (otkup) ili otkupno mesto (grupni/malina) ---
     With ws.cells(rr, 1)
-        .value = CStr(h("koop"))
+        .value = IIf(CStr(h("grupni")) = "1", CStr(h("stanica")), CStr(h("koop")))
         .Font.Bold = True
     End With
-    DocLabelVal ws, rr, 4, "BPG:", CStr(h("bpg"))
-    DocLabelVal ws, rr, 6, "TR:", CStr(h("racun"))
+    If CStr(h("grupni")) <> "1" Then
+        ' BPG i tekuci racun samo na pojedinacnom otkupnom listu (proizvodjac);
+        ' grupni otkupni list nema pojedinacnog proizvodjaca.
+        DocLabelVal ws, rr, 4, "BPG:", CStr(h("bpg"))
+        DocLabelVal ws, rr, 6, "TR:", CStr(h("racun"))
+    End If
     ws.rows(rr).RowHeight = 13#
     usedPt = usedPt + 13#
     rr = rr + 1
@@ -603,6 +609,280 @@ Public Sub EnsureOtkupSablon()
     Exit Sub
 EH:
     LogErr "modPrint.EnsureOtkupSablon"
+End Sub
+
+' ============================================================
+' GRUPNI OTKUPNI LIST (malina mod) - isti obrazac kao otkupni list (dva primerka,
+' 1/3 A4), ali podaci se citaju iz PRIJEMNICE, a umesto proizvodjaca (kooperant +
+' BPG + TR) stoji otkupno mesto (stanica = vozac u malina modu). Cena s prijemnice
+' je BRUTO (kao otkup) -> prikaz neto + PDV nadoknada. Ambalaza = saldo na nivou
+' stanice (entitet "Stanica"). Izlaz po CFG_OTKUP_PRINT_MODE (kao otkupni list).
+' Okida frmDokumenta.btnUnosPrij posle snimanja prijemnice (samo u malina modu).
+' prijemnicaIDs = rezultat SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2").
+' ============================================================
+
+' Glavni ulaz. Best-effort: greska se loguje, ne prekida tok prijemnice.
+Public Sub OutputGrupniOtkupniList(ByVal prijemnicaIDs As String)
+    On Error GoTo EH
+    Dim mode As String
+    mode = UCase$(Trim$(GetConfigValue(CFG_OTKUP_PRINT_MODE)))
+
+    Select Case mode
+        Case "OFF"
+            ' bez izlaza
+        Case "PRINT"
+            Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaIDs)
+            If Not ws Is Nothing Then ws.PrintOut Copies:=1
+        Case "PREVIEW"
+            Dim wp As Worksheet: Set wp = FillGrupniOtkupSablon(prijemnicaIDs)
+            If Not wp Is Nothing Then wp.PrintPreview
+        Case Else
+            ExportGrupniOtkupniListPDF prijemnicaIDs, True   ' default: tihi PDF
+    End Select
+    Exit Sub
+EH:
+    LogErr "modPrint.OutputGrupniOtkupniList"
+End Sub
+
+' PDF grupnog otkupnog lista -> <workbook>\GrupniOtkupniList_<brPrij>.pdf
+Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaIDs As String, _
+                                           Optional ByVal openAfter As Boolean = True) As String
+    On Error GoTo EH
+    Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaIDs)
+    If ws Is Nothing Then Exit Function
+
+    Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
+    Dim pdfPath As String: pdfPath = ThisWorkbook.path & "\GrupniOtkupniList_" & suff & ".pdf"
+
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    ExportGrupniOtkupniListPDF = pdfPath
+    Exit Function
+EH:
+    LogErr "modPrint.ExportGrupniOtkupniListPDF"
+End Function
+
+' Popuni GrupniOtkupSablon iz podataka prijemnice. Vraca sheet (ili Nothing).
+Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Worksheet
+    On Error GoTo EH
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+
+    EnsureGrupniOtkupSablon
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("GrupniOtkupSablon")
+    On Error GoTo EH
+    If ws Is Nothing Then Exit Function
+
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iDat As Long, iVoz As Long, iBr As Long
+    Dim iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long, iTip As Long
+    Dim iKolAmb As Long, iKolAmbV As Long, iBruto As Long
+    iID = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    iDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    iVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    iBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    iVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    iSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    iKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+    iKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    iCe = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
+    iTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    iKolAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
+    iKolAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
+    iBruto = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BRUTO)
+
+    Dim ids() As String: ids = Split(prijemnicaIDs, " + ")
+    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 6)
+    Dim cnt As Long: cnt = 0
+    Dim osnovica As Double: osnovica = 0
+    ' Cena na prijemnici je BRUTO (sadrzi PDV nadoknadu), kao na otkupu: prikazujemo
+    ' NETO cenu/vrednost, a PDV nadoknadu kao posebnu stavku.
+    Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+    Dim vozID As String, brPrij As String, datum As String
+    Dim tipAmb As String, kolAmb As Double, kolAmbVr As Double
+    Dim j As Long, r As Long
+    For j = 0 To UBound(ids)
+        Dim wantID As String: wantID = Trim$(ids(j))
+        If wantID <> "" Then
+            For r = 1 To UBound(d, 1)
+                If CStr(d(r, iID)) = wantID Then
+                    Dim kol As Double: kol = PrNz(d(r, iKol))
+                    Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
+                    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
+                    ' Bruto: zamrznut iz unosa (BrutoKg) ako postoji, inace izvedeno iz
+                    ' tare gajbice (fallback za neto redove). Isto kao otkupni list.
+                    Dim storedBruto As Double: storedBruto = 0
+                    If iBruto > 0 Then storedBruto = PrNz(d(r, iBruto))
+                    Dim kolBruto As Double
+                    If storedBruto > 0 Then
+                        kolBruto = storedBruto
+                    Else
+                        Dim crateW As Double
+                        crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
+                        kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
+                    End If
+                    stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
+                    stavke(cnt, 1) = CStr(d(r, iKl))
+                    stavke(cnt, 2) = cenNeto        ' Cena bez PDV
+                    stavke(cnt, 3) = cenBruto       ' Cena s PDV
+                    stavke(cnt, 4) = kol            ' Kolicina neto
+                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto
+                    stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
+                    osnovica = osnovica + kol * cenNeto
+                    kolAmb = kolAmb + PrNz(d(r, iKolAmb))   ' primljeno (sve klase)
+                    If cnt = 0 Then
+                        vozID = CStr(d(r, iVoz))
+                        brPrij = CStr(d(r, iBr))
+                        datum = Format$(d(r, iDat), "dd.mm.yyyy")
+                        tipAmb = CStr(d(r, iTip))
+                        If iKolAmbV > 0 Then kolAmbVr = PrNz(d(r, iKolAmbV))
+                    End If
+                    cnt = cnt + 1
+                    Exit For
+                End If
+            Next r
+        End If
+    Next j
+    If cnt = 0 Then Exit Function
+
+    Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
+    h("name") = GetConfigValue("SELLER_NAME")
+    h("pib") = GetConfigValue("SELLER_PIB")
+    h("mb") = GetConfigValue("SELLER_MATICNI_BROJ")
+    h("addr") = Trim$(GetConfigValue("SELLER_STREET") & ", " & _
+                GetConfigValue("SELLER_POSTAL_CODE") & " " & GetConfigValue("SELLER_CITY"))
+    h("acct") = GetConfigValue("SELLER_ACCOUNT")
+    Dim objMesto As String: objMesto = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_MESTO")))
+    Dim objReg As String: objReg = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_BR_REGISTRA")))
+    Dim objLine As String: objLine = ""
+    If Len(objMesto) > 0 Then objLine = "Objekat: " & objMesto
+    If Len(objReg) > 0 Then
+        If Len(objLine) > 0 Then
+            objLine = objLine & "    Reg. br: " & objReg
+        Else
+            objLine = "Objekat reg. br: " & objReg
+        End If
+    End If
+    h("objekat") = objLine
+    h("brDok") = brPrij
+    h("datum") = datum
+    ' Otkupno mesto = stanica (u malina modu VozacID == StanicaID). Naziv iz tblStanice;
+    ' fallback na ime+prezime vozaca ako stanica nije nadjena.
+    Dim stanicaNaziv As String
+    stanicaNaziv = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", vozID, "Naziv")))
+    If Len(stanicaNaziv) = 0 Then
+        stanicaNaziv = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Ime")) & " " & _
+                             CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Prezime")))
+    End If
+    h("stanica") = stanicaNaziv
+    h("koop") = "": h("bpg") = "": h("racun") = ""
+
+    ' Ambalaza - saldo na nivou stanice (entitet "Stanica"): Pocetno = saldo gajbica
+    ' stanice iz tblAmbalaza (prijemnica pise "Kupac" stranu, ne pomera "Stanica");
+    ' Primljeno/Izdato sa prijemnice; Saldo = Pocetno + Izdato - Primljeno (ista
+    ' formula kao otkupni list).
+    Dim ambPoc As Long: ambPoc = GetStanicaAmbSaldo(vozID, tipAmb)
+    h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
+    h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))
+    h("ambIzdavanje") = tipAmb & " x " & CStr(CLng(kolAmbVr))
+    h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc + kolAmbVr - kolAmb))
+
+    h("stopa") = stopa
+    h("osnovica") = osnovica
+    h("nadoknada") = osnovica * stopa / 100
+    h("ukupno") = osnovica + osnovica * stopa / 100
+    h("rok") = DocConfigOr(CFG_OTKUP_ROK, OTKUP_ROK_DEFAULT)
+
+    ' Klauzula ostaje kako jeste; producent-tokeni ({POLJOPRIVREDNIK}/{RACUN}/{BPG})
+    ' su prazni jer grupni list nema pojedinacnog proizvodjaca; datum/broj se popune.
+    Dim kl As String: kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
+    kl = Replace(kl, "{BPG}", "", , , vbTextCompare)
+    kl = Replace(kl, "{POLJOPRIVREDNIK}", "", , , vbTextCompare)
+    kl = Replace(kl, "{RACUN}", "", , , vbTextCompare)
+    kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
+    kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
+    h("klauzula") = kl
+
+    h("naslov") = "GRUPNI OTKUPNI LIST"
+    h("grupni") = "1"
+
+    ' --- prep + dva primerka + PageSetup. DRZATI U SINHRONIZACIJI sa FillOtkupSablon
+    '     (isti obrazac/geometrija 1/3 A4; renderuje isti WriteOtkupCopy). ---
+    Application.ScreenUpdating = False
+    On Error Resume Next
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+    ws.cells.UnMerge
+    On Error GoTo EH
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 6
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
+
+    Dim R0 As Long, lastRow As Long
+    R0 = WriteOtkupCopy(ws, 1, "", h, stavke, cnt, OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
+    lastRow = WriteOtkupCopy(ws, R0, "", h, stavke, cnt, OL_THIRD_PT) - 1
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = 100
+        .LeftMargin = Application.InchesToPoints(0.31)
+        .RightMargin = Application.InchesToPoints(0.31)
+        .TopMargin = 0
+        .BottomMargin = 0
+        .HeaderMargin = 0
+        .FooterMargin = 0
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillGrupniOtkupSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr "modPrint.FillGrupniOtkupSablon"
+End Function
+
+Public Sub EnsureGrupniOtkupSablon()
+    On Error GoTo EH
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("GrupniOtkupSablon")
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = "GrupniOtkupSablon"
+    ws.columns("A").ColumnWidth = 6
+    ws.columns("B").ColumnWidth = 24
+    ws.columns("C").ColumnWidth = 8
+    ws.columns("D").ColumnWidth = 16
+    ws.columns("E").ColumnWidth = 12
+    ws.columns("F").ColumnWidth = 16
+    Exit Sub
+EH:
+    LogErr "modPrint.EnsureGrupniOtkupSablon"
 End Sub
 
 ' ============================================================
