@@ -2594,7 +2594,7 @@ Private Sub EnsureStorniraniPanel()
     With m_lstStorno
         .ColumnCount = 12
         ' Broj Datum Partner Vrsta Sorta Klasa Kolicina Cena Iznos | Zbirna Otpremnica Faktura
-        .ColumnWidths = "58;54;104;58;58;34;54;46;62;88;92;78"
+        .ColumnWidths = "86;58;120;60;80;32;54;48;68;92;96;84"
     End With
     StyleListBox m_lstStorno
 

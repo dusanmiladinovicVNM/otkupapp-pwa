@@ -2433,6 +2433,13 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
             otp = DictGet(otpByZbr, zbr)
             If Len(fakId) > 0 Then fak = DictGet(fakById, fakId) Else fak = DictGet(fakByZbr, zbr)
 
+            ' Iznos: stored (Faktura=Iznos, Novac=Uplata-Isplata) ili izracunat
+            ' Kolicina × Cena (Otkup/Otpremnica/Prijemnica nemaju zaseban iznos).
+            Dim iznos As String
+            iznos = StornoIznosText(StornoCellRaw(data, i, iIzn), StornoCellRaw(data, i, iIzn2))
+            If Len(iznos) = 0 Then _
+                iznos = StornoMnozi(StornoCellRaw(data, i, iKol), StornoCellRaw(data, i, iCena))
+
             rows.Add Array( _
                 StornoCellText(data, i, iBroj), _
                 StornoDateText(StornoCellRaw(data, i, iDat)), _
@@ -2442,7 +2449,7 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
                 StornoCellText(data, i, iKlasa), _
                 StornoNumText(StornoCellRaw(data, i, iKol), "#,##0.##"), _
                 StornoNumText(StornoCellRaw(data, i, iCena), "#,##0.##"), _
-                StornoIznosText(StornoCellRaw(data, i, iIzn), StornoCellRaw(data, i, iIzn2)), _
+                iznos, _
                 zbr, otp, fak)
         End If
     Next i
@@ -2554,6 +2561,15 @@ Private Function StornoIznosText(ByVal v1 As Variant, ByVal v2 As Variant) As St
     If Not TryParseDouble(Trim$(NzToText(v2)), s) Then s = 0
     Dim net As Double: net = u - s
     If net <> 0 Then StornoIznosText = Format$(net, "#,##0")
+End Function
+
+' Iznos = Kolicina × Cena (prazno ako je proizvod 0).
+Private Function StornoMnozi(ByVal vKol As Variant, ByVal vCena As Variant) As String
+    Dim kol As Double, cena As Double
+    If Not TryParseDouble(Trim$(NzToText(vKol)), kol) Then kol = 0
+    If Not TryParseDouble(Trim$(NzToText(vCena)), cena) Then cena = 0
+    Dim p As Double: p = kol * cena
+    If p <> 0 Then StornoMnozi = Format$(p, "#,##0")
 End Function
 
 ' --- Indeks lanca dokumenata (reverzni lookup-i preko BrojZbirne / FakturaID) ---
