@@ -4,12 +4,12 @@ Attribute VB_Name = "modDokumenta"
 Option Explicit
 
 ' ============================================================
-' modDokumenta – Otpremnica, Zbirna, Prijemnica
+' modDokumenta ï¿½ Otpremnica, Zbirna, Prijemnica
 ' Dokumentenfluss: Otkup zu Otpremnica zu Zbirna zu Prijemnica zu Faktura
 ' ============================================================
 
 ' ============================================================
-' OTPREMNICA – Station gibt Ware an Fahrer
+' OTPREMNICA ï¿½ Station gibt Ware an Fahrer
 ' ============================================================
 Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        ByVal stanicaID As String, _
@@ -260,7 +260,7 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
         SaveOtpremnica = newID
     Else
         Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
-                  "AppendRow fehlgeschlagen für tblOtpremnica"
+                  "AppendRow fehlgeschlagen fï¿½r tblOtpremnica"
     End If
     Exit Function
     
@@ -358,7 +358,7 @@ EH:
 End Function
 
 ' ============================================================
-' ZBIRNA – Gesamtdokument Fahrer
+' ZBIRNA ï¿½ Gesamtdokument Fahrer
 ' ============================================================
 Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
                                    ByVal vozacID As String, _
@@ -589,7 +589,7 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
         SaveZbirna = newID
     Else
         Err.Raise vbObjectError + 1010, "SaveZbirna", _
-                  "AppendRow fehlgeschlagen für tblZbirna."
+                  "AppendRow fehlgeschlagen fï¿½r tblZbirna."
     End If
 
     Exit Function
@@ -658,7 +658,7 @@ End Function
 ' ZBIRNA VALIDIERUNG
 ' ============================================================
 Public Function ValidateZbirna(ByVal brojZbirne As String) As Variant
-    ' Prüft Summe Otpremnice vs Zbirna
+    ' Prï¿½ft Summe Otpremnice vs Zbirna
     ' Returns: Array(SumaOtpKg, ZbirnaKg, RazlikaKg, ValidKg,
     '                SumaOtpAmb, ZbirnaAmb, RazlikaAmb)
     On Error GoTo EH
@@ -785,7 +785,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIJEMNICA – Kunde wiegt bei Annahme
+' PRIJEMNICA ï¿½ Kunde wiegt bei Annahme
 ' ============================================================
 
 Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
@@ -1078,7 +1078,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
 
     If appendedRow <= 0 Then
         Err.Raise vbObjectError + 1014, "SavePrijemnica", _
-                "AppendRow fehlgeschlagen für tblPrijemnica."
+                "AppendRow fehlgeschlagen fï¿½r tblPrijemnica."
     End If
 
     ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
@@ -1246,7 +1246,7 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
 
     If kolAmb <= 0 And novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  "Nema ambalaže ni novca za cuvanje."
+                  "Nema ambalaï¿½e ni novca za cuvanje."
     End If
 
     tx.BeginTx
@@ -1306,7 +1306,7 @@ EH:
 End Function
 
 ' ============================================================
-' MANJAK – Schwundberechnung
+' MANJAK ï¿½ Schwundberechnung
 ' ============================================================
 
 Public Function CalculateManjak(ByVal brojZbirne As String) As Variant
@@ -1525,7 +1525,7 @@ EH:
 End Function
 
 ' ============================================================
-' PROSEK GAJBE – Durchschnittsgewicht pro Kästchen
+' PROSEK GAJBE ï¿½ Durchschnittsgewicht pro Kï¿½stchen
 ' ============================================================
 
 Public Function CalculateProsekGajbe(ByVal brojOtp As String) As Double
@@ -1950,7 +1950,7 @@ EH:
 End Sub
 
 ' ============================================================
-' HELPER – Vozac-Report (ersetzt alten modTransport)
+' HELPER ï¿½ Vozac-Report (ersetzt alten modTransport)
 ' ============================================================
 
 Public Function GetVozacDokumenta(ByVal vozacID As String, _
@@ -2289,7 +2289,8 @@ End Function
 ' prikaz u panelu unutar frmDokumenta (dugme "Pregled storniranih").
 ' Soft-delete: red je storniran kad je COL_STORNIRANO = "Da" (modStorno).
 ' Jedinstven (unifikovan) skup korisnih kolona za sve tipove:
-'   Broj | Datum | Partner | Vrsta | Sorta | Klasa | Kolicina | Cena | Iznos | Napomena
+'   Broj | Datum | Partner | Vrsta | Sorta | Klasa | Kolicina | Cena | Iznos
+'   | Zbirna | Otpremnica | Faktura  (poslednje 3 = lanac zavisnih dokumenata)
 ' Partner se razresava na naziv/ime (best-effort; fallback = ID).
 ' ============================================================
 
@@ -2298,23 +2299,27 @@ Public Function StorniraniTipovi() As Variant
     StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac")
 End Function
 
-' Zaglavlja unifikovanih kolona (0-bazni niz, 10 kolona).
+' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
 Public Function StorniraniHeaders() As Variant
     StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
-                              "Klasa", "Kolicina", "Cena", "Iznos (RSD)", "Napomena")
+                              "Klasa", "Kolicina", "Cena", "Iznos (RSD)", _
+                              "Zbirna", "Otpremnica", "Faktura")
 End Function
 
-' Vrati 2D niz (1..n, 1..10) storniranih redova za dati tip u unifikovanom
-' rasporedu kolona. Empty ako nema storniranih (ili tabela/storno kolona fali).
-Public Function GetStorniraniByTip(ByVal tip As String) As Variant
+' Vrati 2D niz (1..n, 1..12) storniranih redova za dati tip u unifikovanom
+' rasporedu kolona (osnovne + lanac: Zbirna/Otpremnica/Faktura). Empty ako nema.
+' chainIdx: pre-izgradjen indeks lanca (BuildChainIndex); ako fali, gradi se sam.
+Public Function GetStorniraniByTip(ByVal tip As String, _
+                                   Optional ByVal chainIdx As Object = Nothing) As Variant
     On Error GoTo EH
+    If chainIdx Is Nothing Then Set chainIdx = BuildChainIndex()
 
     Dim tbl As String
     Dim iBroj As Long, iDat As Long, iPart As Long, iVrsta As Long, iSorta As Long
-    Dim iKlasa As Long, iKol As Long, iCena As Long, iIzn As Long, iIzn2 As Long, iNap As Long
+    Dim iKlasa As Long, iKol As Long, iCena As Long, iIzn As Long, iIzn2 As Long
+    Dim iZbr As Long, iFak As Long
     Dim partnerIsName As Boolean
     Dim pdict As Object
-    Dim napPrefix As String
 
     Select Case tip
         Case "Otkup"
@@ -2329,7 +2334,7 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
             iKol = GetColumnIndex(tbl, COL_OTK_KOLICINA)
             iCena = GetColumnIndex(tbl, COL_OTK_CENA)
             iIzn = GetColumnIndex(tbl, COL_OTK_NOVAC)
-            iNap = GetColumnIndex(tbl, COL_OTK_BROJ_ZBIRNE): napPrefix = "Zbirna: "
+            iZbr = GetColumnIndex(tbl, COL_OTK_BROJ_ZBIRNE)
 
         Case "Otpremnica"
             tbl = TBL_OTPREMNICA
@@ -2342,7 +2347,7 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
             iKlasa = GetColumnIndex(tbl, COL_OTP_KLASA)
             iKol = GetColumnIndex(tbl, COL_OTP_KOLICINA)
             iCena = GetColumnIndex(tbl, COL_OTP_CENA)
-            iNap = GetColumnIndex(tbl, COL_OTP_BROJ_ZBIRNE): napPrefix = "Zbirna: "
+            iZbr = GetColumnIndex(tbl, COL_OTP_BROJ_ZBIRNE)
 
         Case "Zbirna"
             tbl = TBL_ZBIRNA
@@ -2354,7 +2359,7 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
             iSorta = GetColumnIndex(tbl, COL_ZBR_SORTA)
             iKlasa = GetColumnIndex(tbl, COL_ZBR_KLASA)
             iKol = GetColumnIndex(tbl, COL_ZBR_KOLICINA)
-            iNap = GetColumnIndex(tbl, COL_ZBR_HLADNJACA)
+            iZbr = GetColumnIndex(tbl, COL_ZBR_BROJ)        ' sopstveni broj = pivot zbirne
 
         Case "Prijemnica"
             tbl = TBL_PRIJEMNICA
@@ -2367,7 +2372,8 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
             iKlasa = GetColumnIndex(tbl, COL_PRJ_KLASA)
             iKol = GetColumnIndex(tbl, COL_PRJ_KOLICINA)
             iCena = GetColumnIndex(tbl, COL_PRJ_CENA)
-            iNap = GetColumnIndex(tbl, COL_PRJ_BROJ_ZBIRNE): napPrefix = "Zbirna: "
+            iZbr = GetColumnIndex(tbl, COL_PRJ_BROJ_ZBIRNE)
+            iFak = GetColumnIndex(tbl, COL_PRJ_FAKTURA_ID)
 
         Case "Faktura"
             tbl = TBL_FAKTURE
@@ -2376,7 +2382,7 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
             iDat = GetColumnIndex(tbl, COL_FAK_DATUM)
             iPart = GetColumnIndex(tbl, COL_FAK_KUPAC)
             iIzn = GetColumnIndex(tbl, COL_FAK_IZNOS)
-            iNap = GetColumnIndex(tbl, COL_FAK_STATUS)
+            iFak = GetColumnIndex(tbl, COL_FAK_ID)          ' sopstveni FakturaID
 
         Case "Novac"
             tbl = TBL_NOVAC
@@ -2387,7 +2393,7 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
             iVrsta = GetColumnIndex(tbl, COL_NOV_VRSTA)
             iIzn = GetColumnIndex(tbl, COL_NOV_UPLATA)
             iIzn2 = GetColumnIndex(tbl, COL_NOV_ISPLATA)    ' Iznos = Uplata - Isplata
-            iNap = GetColumnIndex(tbl, COL_NOV_TIP)
+            iFak = GetColumnIndex(tbl, COL_NOV_FAKTURA_ID)
 
         Case Else
             Exit Function
@@ -2400,6 +2406,11 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
     Dim colStorno As Long
     colStorno = GetColumnIndex(tbl, COL_STORNIRANO)
     If colStorno = 0 Then Exit Function        ' tabela bez storno markera -> nista
+
+    Dim otpByZbr As Object: Set otpByZbr = chainIdx("otpByZbr")
+    Dim fakByZbr As Object: Set fakByZbr = chainIdx("fakByZbr")
+    Dim fakById As Object:  Set fakById = chainIdx("fakById")
+    Dim zbrByFak As Object: Set zbrByFak = chainIdx("zbrByFak")
 
     Dim rows As Collection
     Set rows = New Collection
@@ -2414,6 +2425,14 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
                 part = ResolveNameFromDict(pdict, StornoCellRaw(data, i, iPart))
             End If
 
+            ' Lanac zavisnih dokumenata preko BrojZbirne / FakturaID.
+            Dim zbr As String, fakId As String, otp As String, fak As String
+            zbr = StornoCellText(data, i, iZbr)
+            fakId = StornoCellText(data, i, iFak)
+            If Len(zbr) = 0 And Len(fakId) > 0 Then zbr = DictGet(zbrByFak, fakId)
+            otp = DictGet(otpByZbr, zbr)
+            If Len(fakId) > 0 Then fak = DictGet(fakById, fakId) Else fak = DictGet(fakByZbr, zbr)
+
             rows.Add Array( _
                 StornoCellText(data, i, iBroj), _
                 StornoDateText(StornoCellRaw(data, i, iDat)), _
@@ -2424,16 +2443,37 @@ Public Function GetStorniraniByTip(ByVal tip As String) As Variant
                 StornoNumText(StornoCellRaw(data, i, iKol), "#,##0.##"), _
                 StornoNumText(StornoCellRaw(data, i, iCena), "#,##0.##"), _
                 StornoIznosText(StornoCellRaw(data, i, iIzn), StornoCellRaw(data, i, iIzn2)), _
-                StornoComposeNap(napPrefix, StornoCellText(data, i, iNap)))
+                zbr, otp, fak)
         End If
     Next i
 
-    GetStorniraniByTip = StornoRowsTo2D(rows, 10)
+    GetStorniraniByTip = StornoRowsTo2D(rows, 12)
     Exit Function
 
 EH:
     LogErr "modDokumenta.GetStorniraniByTip(" & tip & ")"
     GetStorniraniByTip = Empty
+End Function
+
+' Svi stornirani grupisano: Collection of Array(tipNaziv, rows2D(1..n,1..12)).
+' Indeks lanca se gradi JEDNOM (reverzni cross-table lookup-i) i deli svim tipovima.
+Public Function GetStorniraniGrupisano() As Collection
+    On Error GoTo EH
+    Dim res As Collection
+    Set res = New Collection
+    Set GetStorniraniGrupisano = res
+
+    Dim idx As Object: Set idx = BuildChainIndex()
+    Dim tipovi As Variant: tipovi = StorniraniTipovi()
+    Dim k As Long
+    For k = LBound(tipovi) To UBound(tipovi)
+        Dim tip As String: tip = CStr(tipovi(k))
+        Dim rowsv As Variant: rowsv = GetStorniraniByTip(tip, idx)
+        If Not IsEmpty(rowsv) Then res.Add Array(tip, rowsv)
+    Next k
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetStorniraniGrupisano"
 End Function
 
 ' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
@@ -2516,12 +2556,94 @@ Private Function StornoIznosText(ByVal v1 As Variant, ByVal v2 As Variant) As St
     If net <> 0 Then StornoIznosText = Format$(net, "#,##0")
 End Function
 
-Private Function StornoComposeNap(ByVal prefix As String, ByVal val As String) As String
-    If Len(Trim$(val)) = 0 Then Exit Function
-    If Len(prefix) = 0 Then
-        StornoComposeNap = val
+' --- Indeks lanca dokumenata (reverzni lookup-i preko BrojZbirne / FakturaID) ---
+
+' Prazan recnik sa case-insensitive poredjenjem kljuceva.
+Private Function NewDict() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set NewDict = d
+End Function
+
+Private Function DictGet(ByVal d As Object, ByVal key As String) As String
+    If d Is Nothing Then Exit Function
+    If Len(key) = 0 Then Exit Function
+    If d.Exists(key) Then DictGet = CStr(d(key))
+End Function
+
+' Dodaj val u listu pod key (", "-spojeno, bez duplikata).
+Private Sub DictAppend(ByVal d As Object, ByVal key As String, ByVal val As String)
+    If d Is Nothing Then Exit Sub
+    If Len(key) = 0 Or Len(val) = 0 Then Exit Sub
+    If Not d.Exists(key) Then
+        d.Add key, val
     Else
-        StornoComposeNap = prefix & val
+        Dim cur As String: cur = CStr(d(key))
+        If InStr(1, ", " & cur & ", ", ", " & val & ", ", vbTextCompare) = 0 Then
+            d(key) = cur & ", " & val
+        End If
+    End If
+End Sub
+
+' Izgradi indeks lanca: otpByZbr, fakByZbr, fakById, zbrByFak (sve case-insensitive).
+Private Function BuildChainIndex() As Object
+    Dim idx As Object: Set idx = CreateObject("Scripting.Dictionary")
+    Set BuildChainIndex = idx
+
+    Dim fakById As Object:  Set fakById = NewDict()
+    Dim otpByZbr As Object: Set otpByZbr = NewDict()
+    Dim fakByZbr As Object: Set fakByZbr = NewDict()
+    Dim zbrByFak As Object: Set zbrByFak = NewDict()
+    idx.Add "fakById", fakById
+    idx.Add "otpByZbr", otpByZbr
+    idx.Add "fakByZbr", fakByZbr
+    idx.Add "zbrByFak", zbrByFak
+
+    Dim d As Variant, i As Long, k As String, v As String
+
+    ' Faktura: FakturaID -> BrojFakture
+    d = GetTableData(TBL_FAKTURE)
+    If Not IsEmpty(d) Then
+        Dim cfi As Long, cfb As Long
+        cfi = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+        cfb = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
+        If cfi > 0 And cfb > 0 Then
+            For i = 1 To UBound(d, 1)
+                k = Trim$(NzToText(d(i, cfi))): v = Trim$(NzToText(d(i, cfb)))
+                If Len(k) > 0 And Not fakById.Exists(k) Then fakById.Add k, v
+            Next i
+        End If
+    End If
+
+    ' Otpremnica: BrojZbirne -> lista BrojOtpremnice
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsEmpty(d) Then
+        Dim coz As Long, cob As Long
+        coz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+        cob = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+        If coz > 0 And cob > 0 Then
+            For i = 1 To UBound(d, 1)
+                DictAppend otpByZbr, Trim$(NzToText(d(i, coz))), Trim$(NzToText(d(i, cob)))
+            Next i
+        End If
+    End If
+
+    ' Prijemnica: BrojZbirne <-> FakturaID  (i BrojZbirne -> BrojFakture preko fakById)
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsEmpty(d) Then
+        Dim cpz As Long, cpf As Long
+        cpz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+        cpf = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
+        If cpz > 0 And cpf > 0 Then
+            For i = 1 To UBound(d, 1)
+                Dim z As String, fid As String
+                z = Trim$(NzToText(d(i, cpz))): fid = Trim$(NzToText(d(i, cpf)))
+                If Len(fid) > 0 Then
+                    DictAppend zbrByFak, fid, z
+                    If fakById.Exists(fid) Then DictAppend fakByZbr, z, CStr(fakById(fid))
+                End If
+            Next i
+        End If
     End If
 End Function
 
