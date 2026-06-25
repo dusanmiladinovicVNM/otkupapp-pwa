@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmSledljivost 
    Caption         =   "UserForm1"
-   ClientHeight    =   10755
+   ClientHeight    =   13815
    ClientLeft      =   120
    ClientTop       =   465
-   ClientWidth     =   19290
+   ClientWidth     =   20235
    OleObjectBlob   =   "frmSledljivost.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,8 +13,9 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 ' ============================================================
-' frmOtkupniBlokovi â€“ Sledljivost & Povezivanje
+' frmOtkupniBlokovi – Sledljivost & Povezivanje
 ' ============================================================
 Option Explicit
 
@@ -63,8 +64,8 @@ Private Sub UserForm_Activate()
     
     ' Action buttons
     StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
-    StylePrimaryButton btnPovezi, "PoveÅ¾i"
-    StylePrimaryButton btnStampaj, "Å tampaj"
+    StylePrimaryButton btnPovezi, "Poveži"
+    StylePrimaryButton btnStampaj, "Štampaj"
     StyleExitButton btnPovratak, "Povratak"
     
     ' Filter label
@@ -127,8 +128,8 @@ End Sub
 
 Private Sub ResetActionButtons()
     StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
-    StylePrimaryButton btnPovezi, "PoveÅ¾i"
-    StylePrimaryButton btnStampaj, "Å tampaj"
+    StylePrimaryButton btnPovezi, "Poveži"
+    StylePrimaryButton btnStampaj, "Štampaj"
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 
@@ -163,57 +164,57 @@ Private Sub RelayoutSledljivost()
     On Error Resume Next
     
     ' === POVEZIVANJE ZONE - eksplicitno uskladjenje ===
-    lstNepovezani.Top = 134
+    lstNepovezani.top = 134
     lstNepovezani.Height = 280
     
-    LstOtpremnice.Top = 134
+    LstOtpremnice.top = 134
     LstOtpremnice.Height = 280
     
-    btnPovezi.Top = 254
+    btnPovezi.top = 254
     
     ' === SLEDLJIVOST ZONE - pomereno gore ===
     ' Listbox-i Povezivanje zone se zavrsavaju na 134 + 280 = 414
     ' Sledljivost section pocinje 30 pt nize = 444
     
-    lblSidebarTrace.Top = 444
+    lblSidebarTrace.top = 444
     lblSidebarTrace.Left = 16
     lblSidebarTrace.width = 250
     lblSidebarTrace.Height = 14
     
-    lblAccentTrace.Top = 462
+    lblAccentTrace.top = 462
     lblAccentTrace.Left = 16
     lblAccentTrace.width = 990
     lblAccentTrace.Height = 2
     
-    lblZbirnaLabel.Top = 474
+    lblZbirnaLabel.top = 474
     lblZbirnaLabel.Left = 16
     lblZbirnaLabel.width = 60
     lblZbirnaLabel.Height = 14
     
-    cmbZbirna.Top = 494
+    cmbZbirna.top = 494
     cmbZbirna.Left = 16
     cmbZbirna.width = 300
     cmbZbirna.Height = 22
     
-    btnStampaj.Top = 492
+    btnStampaj.top = 492
     btnStampaj.Left = 330
     btnStampaj.width = 100
     btnStampaj.Height = 26
     
     ' Column headers iznad lstTrace
-    lbl_H_TRC1.Top = 532
-    lbl_H_TRC2.Top = 532
-    lbl_H_TRC3.Top = 532
-    lbl_H_TRC4.Top = 532
-    lbl_H_TRC5.Top = 532
+    lbl_H_TRC1.top = 532
+    lbl_H_TRC2.top = 532
+    lbl_H_TRC3.top = 532
+    lbl_H_TRC4.top = 532
+    lbl_H_TRC5.top = 532
     
-    lstTrace.Top = 552
+    lstTrace.top = 552
     lstTrace.Left = 16
     lstTrace.width = 990
     lstTrace.Height = 380
     
     ' btnPovratak - dno desno, dynamic od InsideHeight
-    btnPovratak.Top = Me.InsideHeight - 50
+    btnPovratak.top = Me.InsideHeight - 50
     btnPovratak.Left = Me.InsideWidth - btnPovratak.width - 16
     btnPovratak.width = 100
     btnPovratak.Height = 30
@@ -308,7 +309,7 @@ EH:
 End Sub
 
 ' ============================================================
-' NEPOVEZANI (UnverknÃ¼pfte Otkupi)
+' NEPOVEZANI (Unverknüpfte Otkupi)
 ' ============================================================
 
 Private Sub LoadNepovezani()
@@ -344,7 +345,7 @@ Private Sub LoadNepovezani()
 End Sub
 
 Private Sub lstNepovezani_Click()
-    ' Zeige mÃ¶gliche Otpremnice fÃ¼r ausgewÃ¤hlten Otkup
+    ' Zeige mögliche Otpremnice für ausgewählten Otkup
     LstOtpremnice.Clear
     Erase m_CandidateOtpIDs
     
@@ -356,7 +357,7 @@ Private Sub lstNepovezani_Click()
     Dim stanicaID As String: stanicaID = CStr(m_UnlinkedData(idx, 3))
     Dim datum As Date: datum = CDate(m_UnlinkedData(idx, 2))
     
-    ' Alle Otpremnice fÃ¼r diese Station + Datum
+    ' Alle Otpremnice für diese Station + Datum
     Dim otpData As Variant
     otpData = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(otpData) Then Exit Sub
@@ -407,7 +408,7 @@ Private Sub lstNepovezani_Click()
 End Sub
 
 ' ============================================================
-' MANUELLES VERKNÃœPFEN
+' MANUELLES VERKNÜPFEN
 ' ============================================================
 
 Private Sub btnPovezi_Click()
@@ -491,7 +492,7 @@ EH:
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)
-    ' Template Sheet prÃ¼fen
+    ' Template Sheet prüfen
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
@@ -546,7 +547,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim kupacNaziv As String
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
     
-    ' Header befÃ¼llen
+    ' Header befüllen
     Application.ScreenUpdating = False
     
     ws.Range("LOTBroj").value = brojZbirne
@@ -557,7 +558,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     
     Const NUM_COLS As Long = 12      ' <-- war 10, jetzt 12
     
-    ' Alte Daten lÃ¶schen
+    ' Alte Daten löschen
     Dim startRow As Long
     startRow = ws.Range("TraceStart").row
     Dim lastRow As Long
@@ -567,12 +568,12 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
     End If
     
-    ' Text-Format fÃ¼r BPG + KatParcela + KatBroj(Parcela)
+    ' Text-Format für BPG + KatParcela + KatBroj(Parcela)
     ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 50, 4)).NumberFormat = "@"
     
     
     
-    ' Trace-Zeilen einfÃ¼gen
+    ' Trace-Zeilen einfügen
     Dim totalOtkupKg As Double
     Dim i As Long
     For i = 1 To UBound(traceData, 1)
@@ -666,7 +667,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     
     ' PDF Export
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.Path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
+    pdfPath = ThisWorkbook.path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
     
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _

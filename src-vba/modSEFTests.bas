@@ -250,8 +250,8 @@ Private Sub Test_BuildDtoAndUBL(ByVal fakturaID As String)
     AssertTrue Len(Trim$(dto.BuyerPIB)) > 0, "DTO buyer PIB exists"
     AssertTrue dto.TotalNet > 0, "DTO total net > 0"
     AssertTrue dto.TotalGross > 0, "DTO total gross > 0"
-    AssertTrue Not dto.Lines Is Nothing, "DTO lines collection exists"
-    AssertTrue dto.Lines.count > 0, "DTO has invoice lines"
+    AssertTrue Not dto.lines Is Nothing, "DTO lines collection exists"
+    AssertTrue dto.lines.count > 0, "DTO has invoice lines"
 
     xml = SerializeUBLInvoice(dto)
     ValidateSEFPayload xml
@@ -829,7 +829,7 @@ Private Sub InitSEFTestLog()
     Set ws = ThisWorkbook.Worksheets(TEST_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
         ws.name = TEST_LOG_SHEET
         ws.Range("A1:F1").value = Array("Timestamp", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True
@@ -1096,7 +1096,7 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
         Exit Sub
     End If
 
-    ' ISPRAVNO â€” commentText je drugi param, stornoNumber je treci
+    ' ISPRAVNO — commentText je drugi param, stornoNumber je treci
     Dim stornoOk As Boolean
 
     stornoOk = StornoInvoiceOnSEF_TX(fakturaID, commentText, stornoNumber)
@@ -1242,7 +1242,7 @@ Private Function IsCancelFinalStatus(ByVal sefStatus As String) As Boolean
 End Function
 
 ' ============================================================
-' PATCH 5 â€” RunHttpUtilsSmokeSuite
+' PATCH 5 — RunHttpUtilsSmokeSuite
 ' Dodaje se u modSEFTests (postojeci modul, postojeca konvencija)
 ' ============================================================
 '
@@ -1335,4 +1335,115 @@ EH:
     FinishSuite
 End Sub
 
+' ============================================================
+' PATCH 10 — RunSEFDocumentIdShapeSuite u modSEFTests (audit #4)
+' ============================================================
+'
+' Lokacija: modSEFTests (postojeci modul, postojeca konvencija)
+' Akcija:   Dodaj na kraj modSEFTests, ispred sekcije
+'           "DESTRUCTIVE LIVE TESTS: CANCEL / STORNO".
+'
+' Konvencija: Run*Suite, ResetSEFCounters, InitSEFTestLog, StartSuite,
+'             AssertEquals, LogPass, LogFail, FinishSuite. Identicna
+'             struktura kao RunHttpUtilsSmokeSuite iz prosle iteracije.
+'
+' Pozivaj sa: ?RunSEFDocumentIdShapeSuite
+' Ocekivano:  PASS=14 FAIL=0
+' ============================================================
+
+Public Sub RunSEFDocumentIdShapeSuite()
+    On Error GoTo EH
+
+    ResetSEFCounters
+    InitSEFTestLog
+
+    StartSuite "SEF DOCUMENT ID SHAPE SUITE (audit #4)"
+
+    ' --- GetJsonNumericIdLiteral with numeric IDs (current SEF format)
+    AssertEquals "5317568", _
+                 GetJsonNumericIdLiteralPublicProxy("5317568"), _
+                 "Numeric 7-digit returns raw"
+    
+    AssertEquals "123456789012", _
+                 GetJsonNumericIdLiteralPublicProxy("123456789012"), _
+                 "Numeric 12-digit returns raw"
+    
+    AssertEquals "123456789012345678", _
+                 GetJsonNumericIdLiteralPublicProxy("123456789012345678"), _
+                 "Numeric 18-digit (over Long range) returns raw - no precision loss"
+    
+    AssertEquals "0001234", _
+                 GetJsonNumericIdLiteralPublicProxy("0001234"), _
+                 "Leading zeros preserved"
+    
+    ' --- GetJsonNumericIdLiteral with GUID-like IDs (future SEF format)
+    AssertEquals """a3f2b1c0-1234-4567-89ab-cdef01234567""", _
+                 GetJsonNumericIdLiteralPublicProxy("a3f2b1c0-1234-4567-89ab-cdef01234567"), _
+                 "Hyphenated GUID returns quoted string"
+    
+    AssertEquals """{a3f2b1c0-1234-4567-89ab-cdef01234567}""", _
+                 GetJsonNumericIdLiteralPublicProxy("{a3f2b1c0-1234-4567-89ab-cdef01234567}"), _
+                 "Bracketed GUID returns quoted string"
+    
+    AssertEquals """a3f2b1c012344567890abcdef0123456""", _
+                 GetJsonNumericIdLiteralPublicProxy("a3f2b1c012344567890abcdef0123456"), _
+                 "Bare 32-hex returns quoted string"
+    
+    ' --- Empty raises
+    Test_GetJsonNumericIdLiteralRaises "", "Empty raises"
+    
+    ' --- Whitespace-only raises (Trim collapses to empty)
+    Test_GetJsonNumericIdLiteralRaises "   ", "Whitespace-only raises"
+    
+    ' --- Garbage raises
+    Test_GetJsonNumericIdLiteralRaises "abc!@#", "Garbage with special chars raises"
+    Test_GetJsonNumericIdLiteralRaises "abc def", "Garbage with space raises"
+    Test_GetJsonNumericIdLiteralRaises "xyz12345", "Non-hex letters raise"
+    
+    ' --- Real-world JSON body fragment shape verification
+    ' Pozivaoc embeduje rezultat direktno: "{""invoiceId"":" & GetJsonNumericIdLiteral(...) & ", ..."
+    ' Mora dati validan JSON za oba shape-a.
+    AssertEquals "{""invoiceId"":5317568,""x"":1}", _
+                 "{""invoiceId"":" & GetJsonNumericIdLiteralPublicProxy("5317568") & ",""x"":1}", _
+                 "Numeric ID embedded as JSON number"
+    
+    AssertEquals "{""invoiceId"":""a3f2b1c0-1234-4567-89ab-cdef01234567"",""x"":1}", _
+                 "{""invoiceId"":" & GetJsonNumericIdLiteralPublicProxy("a3f2b1c0-1234-4567-89ab-cdef01234567") & ",""x"":1}", _
+                 "GUID ID embedded as JSON string"
+
+    FinishSuite
+    Exit Sub
+
+EH:
+    LogFatal "RunSEFDocumentIdShapeSuite", Err.Number, Err.description
+    FinishSuite
+End Sub
+
+' Helper to invoke private GetJsonNumericIdLiteral from this test module.
+' The function itself is Private in modSEFClient (correct scope), so we
+' need a public proxy for testing. Add this proxy in modSEFClient.
+'
+' (Smatra se test-only delom API-ja modSEFClient. Ne koristi se iz
+' production koda. Slicni proxy patterni koriste se za RunSEFClientParserSmokeSuite.)
+Private Function GetJsonNumericIdLiteralPublicProxy(ByVal rawID As String) As String
+    GetJsonNumericIdLiteralPublicProxy = TestProxyForGetJsonNumericIdLiteral(rawID)
+End Function
+
+Private Sub Test_GetJsonNumericIdLiteralRaises(ByVal idValue As String, _
+                                                ByVal testName As String)
+    Dim raised As Boolean
+    raised = False
+    
+    On Error Resume Next
+    Err.Clear
+    Call GetJsonNumericIdLiteralPublicProxy(idValue)
+    raised = (Err.Number <> 0)
+    On Error GoTo 0
+    
+    If raised Then
+        LogPass testName
+    Else
+        LogFail testName, "Expected ERR_SEF_VALIDATION but no error was raised."
+    End If
+End Sub
 

@@ -269,7 +269,7 @@ Private Sub InitNovacTestLog()
     Set ws = ThisWorkbook.Worksheets(NOVAC_TEST_LOG_SHEET)
 
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
         ws.name = NOVAC_TEST_LOG_SHEET
         ws.Range("A1:F1").value = Array("Timestamp", "Kind", "Name", "Status", "Details", "Operator")
         ws.rows(1).Font.Bold = True

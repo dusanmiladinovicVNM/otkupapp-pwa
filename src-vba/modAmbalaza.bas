@@ -1,9 +1,10 @@
 Attribute VB_Name = "modAmbalaza"
+
 'Attribute VB_Name = "modAmbalaza"
 Option Explicit
 
 ' ============================================================
-' modAmbalaza v2.2 â€“ Verpackung-Tracking / Ambalaza ledger
+' modAmbalaza v2.2 – Verpackung-Tracking / Ambalaza ledger
 '
 ' v2.2 hardening:
 ' - TrackAmbalaza fail-fast validation
@@ -27,7 +28,7 @@ Private Const AMB_SMER_IZLAZ As String = "Izlaz"
 ' ============================================================
 
 Private Function AmbText(ByVal v As Variant) As String
-    If IsError(v) Or IsNull(v) Or IsEmpty(v) Then
+    If isError(v) Or IsNull(v) Or IsEmpty(v) Then
         AmbText = ""
     Else
         AmbText = Trim$(CStr(v))
@@ -561,7 +562,7 @@ End Function
 '
 ' Vraca tipove koje je kupac uneo u tblTipAmbalaze (maticni podaci).
 ' Fallback na ugradjene konstante (12/1, 6/1) ako je sifarnik prazan
-' ili tabela ne postoji â€” da postojece instalacije ne ostanu bez opcija.
+' ili tabela ne postoji — da postojece instalacije ne ostanu bez opcija.
 ' ============================================================
 Public Function GetTipAmbalazeOptions() As Variant
     On Error GoTo Fallback
@@ -590,18 +591,18 @@ Public Function GetKulturaTipAmbalaze(ByVal vrsta As String, ByVal sorta As Stri
     data = GetTableData(TBL_KULTURE)
     If IsEmpty(data) Then Exit Function
 
-    Dim cV As Long, cS As Long, cT As Long
-    cV = GetColumnIndex(TBL_KULTURE, "VrstaVoca")
+    Dim cv As Long, cS As Long, cT As Long
+    cv = GetColumnIndex(TBL_KULTURE, "VrstaVoca")
     cS = GetColumnIndex(TBL_KULTURE, "SortaVoca")
     cT = GetColumnIndex(TBL_KULTURE, COL_KUL_TIP_AMBALAZE)
-    If cV = 0 Or cT = 0 Then Exit Function
+    If cv = 0 Or cT = 0 Then Exit Function
 
     Dim i As Long, hit As String
     For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(Nz(data(i, cV))), Trim$(vrsta), vbTextCompare) = 0 Then
+        If StrComp(Trim$(nz(data(i, cv))), Trim$(vrsta), vbTextCompare) = 0 Then
             If Len(Trim$(sorta)) = 0 Or cS = 0 _
-               Or StrComp(Trim$(Nz(data(i, cS))), Trim$(sorta), vbTextCompare) = 0 Then
-                hit = Trim$(Nz(data(i, cT)))
+               Or StrComp(Trim$(nz(data(i, cS))), Trim$(sorta), vbTextCompare) = 0 Then
+                hit = Trim$(nz(data(i, cT)))
                 If Len(hit) > 0 Then
                     GetKulturaTipAmbalaze = hit
                     Exit Function

@@ -11,10 +11,10 @@ Option Explicit
 
 Public prijemnicaID As String
 Public brojPrijemnice As String
-Public Naziv As String
+Public naziv As String
 Public kolicina As Double
 Public cena As Double
 Public klasa As String
-Public Neto As Double
-Public PDV As Double
+Public neto As Double
+Public pdv As Double
 Public iznos As Double

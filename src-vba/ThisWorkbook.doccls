@@ -1,14 +1,19 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
 Private Sub Workbook_Open()
     On Error Resume Next
     Monitor_AppOpen "Operator"
     On Error GoTo EH
     
     StartApp
-
-    ' Pristup odbijen (licenca ILI trial) -> ne pokrecemo dalji startup
-    ' (cleanup/monitoring). modLicense je zakazao zatvaranje na sledeci tick.
-    If AccessWasDenied() Then Exit Sub
-
+    
     ' Stale lock cleanup (prethodna sesija crash-ovala ? lock ostao u SyncControl).
     ' Brisanje VBA-owned stanica lockova starijih od TTL (10 min).
     ' Fail-soft: ako Google nije dostupan, samo se loguje i ide dalje.
@@ -47,7 +52,7 @@ EH:
     LogErr "ThisWorkbook.Workbook_Open"
 
     Application.Visible = True
-    MsgBox "Gre≈°ka pri pokretanju aplikacije. Pogledajte log.", vbCritical
+    MsgBox "Greöka pri pokretanju aplikacije. Pogledajte log.", vbCritical
 End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
@@ -77,4 +82,5 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
 EH:
     LogErr "ThisWorkbook.Workbook_BeforeClose"
 End Sub
+
 

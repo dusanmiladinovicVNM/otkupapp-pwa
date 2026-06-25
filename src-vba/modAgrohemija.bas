@@ -193,7 +193,7 @@ Public Function SaveMagacin_TX(ByVal datum As Date, ByVal artikalID As String, _
             moduleName:="modAgrohemija", _
             procedureName:="SaveMagacin_TX", _
             entityType:="Magacin", _
-            entityId:=SaveMagacin_TX, _
+            entityID:=SaveMagacin_TX, _
             correlationId:=SaveMagacin_TX
         On Error GoTo 0
     End If
@@ -219,7 +219,7 @@ EH:
         moduleName:="modAgrohemija", _
         procedureName:="SaveMagacin_TX", _
         entityType:="Magacin", _
-        entityId:=SaveMagacin_TX, _
+        entityID:=SaveMagacin_TX, _
         correlationId:=brojDok, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -236,13 +236,13 @@ EH:
         moduleName:="modAgrohemija", _
         procedureName:="SaveMagacin_TX", _
         entityType:="Magacin", _
-        entityId:=SaveMagacin_TX, _
+        entityID:=SaveMagacin_TX, _
         correlationId:=brojDok
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     
-    MsgBox "GreÅ¡ka pri unosu magacina, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Greška pri unosu magacina, promene vracene: " & errDesc, vbCritical, APP_NAME
     SaveMagacin_TX = ""
 End Function
 
@@ -454,7 +454,7 @@ NextDob:
 End Function
 
 Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
-    ' Summe aller Izlaz-Vrednosti fÃ¼r diesen Kooperant
+    ' Summe aller Izlaz-Vrednosti für diesen Kooperant
     Dim data As Variant
     data = GetTableData(TBL_MAGACIN)
     If IsEmpty(data) Then Exit Function

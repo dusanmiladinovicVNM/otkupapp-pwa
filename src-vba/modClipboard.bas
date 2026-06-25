@@ -14,7 +14,7 @@ Option Explicit
     Private Declare PtrSafe Function IsClipboardFormatAvailable Lib "user32" (ByVal wFormat As Long) As Long
     Private Declare PtrSafe Function GetClipboardData Lib "user32" (ByVal uFormat As Long) As LongPtr
     Private Declare PtrSafe Function lstrlenA Lib "kernel32" (ByVal lpString As LongPtr) As Long
-    Private Declare PtrSafe Sub RtlMoveMemory Lib "kernel32" (ByRef Destination As Any, ByVal Source As LongPtr, ByVal Length As LongPtr)
+    Private Declare PtrSafe Sub RtlMoveMemory Lib "kernel32" (ByRef Destination As Any, ByVal SOURCE As LongPtr, ByVal Length As LongPtr)
 #Else
     Private Declare Function OpenClipboard Lib "user32" (ByVal hwnd As Long) As Long
     Private Declare Function EmptyClipboard Lib "user32" () As Long

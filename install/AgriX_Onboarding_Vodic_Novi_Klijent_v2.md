@@ -282,6 +282,13 @@ AgriX_C00X_PROD/
     Runbooks/
 ```
 
+> **Automatizacija (preporučeno):** ručno pravljenje ovih podfoldera (ovaj korak) +
+> skupljanje folder ID-jeva (§8) + upis u Script Properties (§11) možeš zameniti jednom
+> GAS funkcijom. Napravi **samo root** `AgriX_C00X_PROD` (i podeli ga sa backup nalogom, §6),
+> pa kad postaviš GAS projekat (§10) pokreni `bootstrapAgriXFolderTree` iz `DriveFolder.gs` —
+> on napravi celo stablo i upiše svih 33 folder ID-ja odjednom. Ručni postupak ispod
+> (§8, §11) ostaje kao referenca/fallback.
+
 ---
 
 ## 6. Share pristup za backup nalog
@@ -359,6 +366,9 @@ Ovo je bio uzrok C001 login problema: GAS je tražio `Stammdaten` u `02_Master`,
 ---
 
 ## 8. Prikupljanje folder ID-jeva
+
+> Ako koristiš `bootstrapAgriXFolderTree` (vidi §5/§11), ovaj korak preskačeš — funkcija
+> sama upiše sve ID-jeve u Script Properties. Ispod je ručni postupak.
 
 Za svaki folder otvori ga u browseru i uzmi ID iz URL-a.
 
@@ -492,7 +502,16 @@ getOperationalSpreadsheet_
 getReportSpreadsheet_
 getMonitoringErrorLogSpreadsheet_
 getLoginLogSpreadsheet_
+
+AGRIX_FOLDER_TREE
+getOrCreateChildFolder_
+buildAgriXTree_
+bootstrapAgriXFolderTree
 ```
+
+`bootstrapAgriXFolderTree` je one-time bootstrap za novog klijenta: napravi celo Drive
+stablo (§5) i upiše svih 33 folder ID-ja u Script Properties (§8 + §11) u jednom run-u.
+Pokreni ga u GAS projektu **tog** klijenta (Script Properties su per-projekat); idempotentan je.
 
 Obavezno dodati `getLoginLogSpreadsheet_()`:
 
@@ -511,6 +530,11 @@ Bez ove funkcije login može raditi, ali se `LoginLog` neće napraviti, jer logi
 ---
 
 ## 11. Script Properties u Apps Script
+
+> **Brži put:** umesto ručnog upisa folder ID-jeva ispod, pokreni `bootstrapAgriXFolderTree`
+> (`DriveFolder.gs`, §10) — napravi stablo i upiše svih 33 `AGRIX_*_FOLDER_ID` propsa odjednom.
+> Posle njega idi pravo na §13 (`debugAgriXFolders`) za proveru. Lista ispod je referenca šta
+> mora da postoji (i za ručni upis). `MONITORING_*` tajne (§12) se i dalje upisuju ručno.
 
 Idi na:
 

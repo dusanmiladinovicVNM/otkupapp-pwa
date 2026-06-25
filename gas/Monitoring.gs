@@ -49,7 +49,10 @@ const MONITORING_TABS = {
     'CorrelationId',
     'Severity',
     'Message',
-    'PayloadJson'
+    'PayloadJson',
+    'BuildSha',
+    'BuildDate',
+    'BuildVersion'
   ],
   Errors: [
     'Timestamp',
@@ -154,6 +157,18 @@ const MONITORING_TABS = {
     'AfterHash',
     'Message',
     'PayloadJson'
+  ],
+  Fleet: [
+    'DeviceId',
+    'UserId',
+    'Source',
+    'AppVersion',
+    'BuildVersion',
+    'BuildSha',
+    'BuildDate',
+    'LastSeenAt',
+    'FirstSeenAt',
+    'EventCount'
   ]
 };
 
@@ -190,6 +205,31 @@ function handlePublicMonitoringAction(data) {
   return result;
 }
 
+// Min-version gate (public). VBA klijent salje svoju verziju; vracamo policy
+// iz Script Properties (menja se BEZ redeploy-a). Autentikacija = isti
+// MONITORING_INGEST_SECRET kao monitorPublic.
+//   VERSION_MIN      minimalna dozvoljena (npr. "2.2.0"); prazno = gate iskljucen
+//   VERSION_LATEST   najnovija (samo za poruku korisniku)
+//   VERSION_ENFORCE  YES/NO (default NO = klijent samo upozori, ne blokira)
+//   VERSION_MESSAGE  opciono custom tekst
+function handleCheckVersionPublic_(data) {
+  if (!isValidMonitoringSecret_(data && data.monitoringSecret)) {
+    return { success: false, error: 'Invalid monitoring secret', code: 401 };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const enforceRaw = String(props.getProperty('VERSION_ENFORCE') || '').trim().toUpperCase();
+  const enforce = (enforceRaw === 'YES' || enforceRaw === 'TRUE' || enforceRaw === '1' || enforceRaw === 'ON');
+
+  return {
+    success: true,
+    minVersion: String(props.getProperty('VERSION_MIN') || '').trim(),
+    latestVersion: String(props.getProperty('VERSION_LATEST') || '').trim(),
+    enforce: enforce ? 'YES' : 'NO',
+    message: String(props.getProperty('VERSION_MESSAGE') || '').trim()
+  };
+}
+
 function handleMonitoringAction(data, tokenData) {
   const action = String(data && data.action || '');
 
@@ -202,6 +242,20 @@ function handleMonitoringAction(data, tokenData) {
       return { success: false, error: 'Nemate pristup', code: 403 };
     }
     return getMonitoringHealth();
+  }
+
+  if (action === 'getMonitoringFleet') {
+    if (!monitoringCanReadHealth_(tokenData)) {
+      return { success: false, error: 'Nemate pristup', code: 403 };
+    }
+    return getMonitoringFleet();
+  }
+
+  if (action === 'rebuildMonitoringFleet') {
+    if (!monitoringCanReadHealth_(tokenData)) {
+      return { success: false, error: 'Nemate pristup', code: 403 };
+    }
+    return rebuildMonitoringFleet();
   }
 
   if (action === 'ackMonitoringAlert') {
@@ -306,6 +360,9 @@ function normalizeMonitoringEvent_(input, tokenData, now) {
     role: String(input.role || payload.role || tokenRole || ''),
     deviceId: String(input.deviceId || input.DeviceId || payload.deviceId || ''),
     appVersion: String(input.appVersion || payload.appVersion || ''),
+    buildSha: String(input.buildSha || payload.buildSha || ''),
+    buildVersion: String(input.buildVersion || payload.buildVersion || ''),
+    buildDate: String(input.buildDate || payload.buildDate || ''),
     buildNumber: String(input.buildNumber || payload.buildNumber || ''),
     browser: String(input.browser || payload.browser || ''),
     os: String(input.os || payload.os || ''),
@@ -345,7 +402,10 @@ function appendMonitoringEvent_(ss, event) {
     event.correlationId,
     event.severity,
     event.message,
-    stringifyPayload_(event.payload)
+    stringifyPayload_(event.payload),
+    event.buildSha,
+    event.buildDate,
+    event.buildVersion
   ]);
 }
 
@@ -567,6 +627,92 @@ function getMonitoringHealth() {
 }
 
 // ============================================================
+// FLEET INVENTORY ("ko ima koju verziju")
+// Agregat poslednjeg stanja po uredjaju iz Events taba.
+// rebuildMonitoringFleet() moze se pokrenuti rucno iz Apps Script editora.
+// ============================================================
+
+function rebuildMonitoringFleet() {
+  return monitoringWithLock_(function() {
+    const ss = getMonitoringSpreadsheet_();
+    ensureMonitoringWorkbook_(ss);
+    const rows = buildFleetRows_(ss);
+    writeFleetSheet_(ss, rows);
+    return { success: true, devices: rows.length, rebuiltAt: new Date().toISOString() };
+  });
+}
+
+function getMonitoringFleet() {
+  return monitoringWithLock_(function() {
+    const ss = getMonitoringSpreadsheet_();
+    ensureMonitoringWorkbook_(ss);
+    return { success: true, timestamp: new Date().toISOString(), fleet: buildFleetRows_(ss) };
+  });
+}
+
+function buildFleetRows_(ss) {
+  const events = readSheetAsObjects_(getMonitoringSheet_(ss, 'Events'));
+  const byDevice = {};
+
+  events.forEach(function(e) {
+    const deviceId = String(e.DeviceId || '').trim();
+    if (!deviceId) return;
+    const ts = fleetTs_(e.Timestamp);
+
+    let d = byDevice[deviceId];
+    if (!d) {
+      d = byDevice[deviceId] = {
+        deviceId: deviceId,
+        userId: String(e.UserId || ''),
+        source: String(e.Source || ''),
+        appVersion: String(e.AppVersion || ''),
+        buildVersion: String(e.BuildVersion || ''),
+        buildSha: String(e.BuildSha || ''),
+        buildDate: String(e.BuildDate || ''),
+        lastSeenAt: ts,
+        firstSeenAt: ts,
+        count: 0
+      };
+    }
+
+    d.count++;
+    if (ts && ts >= d.lastSeenAt) {
+      d.lastSeenAt = ts;
+      d.userId = String(e.UserId || d.userId);
+      d.source = String(e.Source || d.source);
+      d.appVersion = String(e.AppVersion || d.appVersion);
+      d.buildVersion = String(e.BuildVersion || d.buildVersion);
+      d.buildSha = String(e.BuildSha || d.buildSha);
+      d.buildDate = String(e.BuildDate || d.buildDate);
+    }
+    if (ts && (!d.firstSeenAt || ts < d.firstSeenAt)) d.firstSeenAt = ts;
+  });
+
+  return Object.keys(byDevice)
+    .map(function(k) { return byDevice[k]; })
+    .sort(function(a, b) { return a.lastSeenAt < b.lastSeenAt ? 1 : -1; });
+}
+
+function writeFleetSheet_(ss, rows) {
+  const sh = getMonitoringSheet_(ss, 'Fleet');
+  ensureHeader_(sh, MONITORING_TABS.Fleet);
+
+  const last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, sh.getLastColumn()).clearContent();
+  if (!rows.length) return;
+
+  const values = rows.map(function(d) {
+    return [d.deviceId, d.userId, d.source, d.appVersion, d.buildVersion, d.buildSha, d.buildDate, d.lastSeenAt, d.firstSeenAt, d.count];
+  });
+  sh.getRange(2, 1, values.length, MONITORING_TABS.Fleet.length).setValues(values);
+}
+
+function fleetTs_(v) {
+  if (v instanceof Date) return v.toISOString();
+  return String(v || '');
+}
+
+// ============================================================
 // ALERTS
 // ============================================================
 
@@ -764,6 +910,11 @@ function installMonitoringTriggers() {
     .atHour(7)
     .create();
 
+  ScriptApp.newTrigger('rebuildMonitoringFleet')
+    .timeBased()
+    .everyHours(1)
+    .create();
+
   return { success: true };
 }
 
@@ -771,7 +922,7 @@ function removeMonitoringTriggers_() {
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(function(t) {
     const fn = t.getHandlerFunction();
-    if (fn === 'runMonitoringWatchdog' || fn === 'sendDailyMonitoringSummary') {
+    if (fn === 'runMonitoringWatchdog' || fn === 'sendDailyMonitoringSummary' || fn === 'rebuildMonitoringFleet') {
       ScriptApp.deleteTrigger(t);
     }
   });

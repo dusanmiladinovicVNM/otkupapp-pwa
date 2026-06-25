@@ -2,17 +2,17 @@ Attribute VB_Name = "modMasterSync"
  Option Explicit
 
 ' ============================================================
-' modMasterSync ‚Äì Import OTK-Sheets ? tblOtkup
+' modMasterSync ñ Import OTK-Sheets ? tblOtkup
 '
 ' Liest alle Google Sheets "OTK-*" aus dem PWA-Folder,
 ' importiert neue Zeilen (SyncStatus != "Synced?Master")
-' in tblOtkup, und schreibt SyncStatus zur√ºck.
+' in tblOtkup, und schreibt SyncStatus zur¸ck.
 '
 ' Flow:
 '   1. Liste alle OTK-* Sheets im PWA-Folder
-'   2. Pro Sheet: ReadSheetData ? pr√ºfe SyncStatus
+'   2. Pro Sheet: ReadSheetData ? pr¸fe SyncStatus
 '   3. Neue Zeilen ? Validierung ? AppendRow tblOtkup
-'   4. SyncStatus ? "Synced?Master" zur√ºckschreiben
+'   4. SyncStatus ? "Synced?Master" zur¸ckschreiben
 '
 ' Config-Keys:
 '   GOOGLE_PWA_FOLDER_ID (bereits vorhanden)
@@ -79,7 +79,7 @@ Private Const VS_RECEIVED_AT As Long = 19       ' S
 Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
 
 ' ============================================================
-' PUBLIC ‚Äî Hauptfunktion
+' PUBLIC ó Hauptfunktion
 ' ============================================================
 
 Public Sub ImportOtkupFromPWA()
@@ -198,10 +198,10 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz OTK nije potvrden zbog fatal sync gre≈°ke." & vbCrLf & _
+            MsgBox "Uvoz OTK nije potvrden zbog fatal sync greöke." & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Gre≈°ke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Greöke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbCritical, APP_NAME
         End If
@@ -221,11 +221,11 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz OTK zavr≈°en sa gre≈°kama." & vbCrLf & vbCrLf & _
+            MsgBox "Uvoz OTK zavröen sa greökama." & vbCrLf & vbCrLf & _
                    "Fajlova: " & CStr(filesCount) & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Gre≈°ke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Greöke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbExclamation, APP_NAME
         End If
@@ -242,11 +242,11 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
         filesCount:=filesCount
 
     If showMessages Then
-        MsgBox "Uvoz OTK zavr≈°en!" & vbCrLf & vbCrLf & _
+        MsgBox "Uvoz OTK zavröen!" & vbCrLf & vbCrLf & _
                "Fajlova: " & CStr(filesCount) & vbCrLf & _
                "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-               "Gre≈°ke: " & CStr(totalErrors), _
+               "Greöke: " & CStr(totalErrors), _
                vbInformation, APP_NAME
     End If
 
@@ -277,7 +277,7 @@ EH:
         errorCount:=totalErrors
 
     If showMessages Then
-        MsgBox "Gre≈°ka pri uvozu OTK: " & errDesc, vbCritical, APP_NAME
+        MsgBox "Greöka pri uvozu OTK: " & errDesc, vbCritical, APP_NAME
     End If
 
     ImportOtkupFromPWA_Core = False
@@ -306,14 +306,14 @@ Public Sub ImportOtkupFromPWA_TX()
             errDesc:="PWA import was not confirmed. Transaction rolled back because of fatal sync error.", _
             errSrc:="modMasterSync.ImportOtkupFromPWA_TX"
 
-        MsgBox "PWA uvoz nije potvrden. Promene su vracene zbog fatal sync gre≈°ke. Proveri log.", _
+        MsgBox "PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greöke. Proveri log.", _
             vbCritical, APP_NAME
         Exit Sub
     End If
 
     tx.CommitTx
 
-    MsgBox "PWA uvoz zavr≈°en i potvrden.", vbInformation, APP_NAME
+    MsgBox "PWA uvoz zavröen i potvrden.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -387,7 +387,7 @@ End Sub
 ' Full sync koristi ovu core funkciju sa showMessages=False.
 '
 ' Returns:
-'   True  - sve aktivne stanice imaju OTK sheet ili su uspe≈°no kreirane
+'   True  - sve aktivne stanice imaju OTK sheet ili su uspeöno kreirane
 '   False - fatal config/auth/schema greska ili bar jedan create/write fail
 '======================================================================
 Public Function CreateOTKSheetsForAllStanice_Core( _
@@ -451,8 +451,8 @@ Public Function CreateOTKSheetsForAllStanice_Core( _
     headers = BuildOTKOperationalHeaders_()
 
     For i = 1 To UBound(data, 1)
-        stanicaID = Trim$(CStr(Nz(data(i, colID), "")))
-        stanicaNaziv = Trim$(CStr(Nz(data(i, colNaziv), "")))
+        stanicaID = Trim$(CStr(nz(data(i, colID), "")))
+        stanicaNaziv = Trim$(CStr(nz(data(i, colNaziv), "")))
 
         If Len(stanicaID) = 0 Then
             failedCount = failedCount + 1
@@ -579,7 +579,7 @@ End Function
 Private Function IsStanicaActiveForOTK_(ByVal activeValue As Variant) As Boolean
     Dim s As String
 
-    s = UCase$(Trim$(CStr(Nz(activeValue, ""))))
+    s = UCase$(Trim$(CStr(nz(activeValue, ""))))
 
     IsStanicaActiveForOTK_ = Not (s = "NE")
 End Function
@@ -626,7 +626,7 @@ EH:
 End Function
 
 Public Function AutoCreateOtpremniceFromPWA() As Long
-    ' Nach ImportOtkupFromPWA: erstellt Otpremnice f√ºr PWA-Otkupi mit VozacID
+    ' Nach ImportOtkupFromPWA: erstellt Otpremnice f¸r PWA-Otkupi mit VozacID
     ' Gruppierung: StanicaID + Datum + VozacID + Klasa (= AutoLink Key)
     ' Returns: Anzahl erstellter Otpremnice
     
@@ -653,15 +653,15 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, "AutoCreateOtpremniceFromPWA")
     colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "AutoCreateOtpremniceFromPWA")
     
-    ' Sammle unverkn√ºpfte Otkupi MIT VozacID ? gruppiere nach Key
+    ' Sammle unverkn¸pfte Otkupi MIT VozacID ? gruppiere nach Key
     ' Key = StanicaID|Datum|VozacID|Klasa
     Dim groups As Object
     Set groups = CreateObject("Scripting.Dictionary")
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        Dim vozID As String: vozID = Trim$(CStr(Nz(data(i, colVoz), "")))
-        Dim otpID As String: otpID = Trim$(CStr(Nz(data(i, colOtpID), "")))
+        Dim vozID As String: vozID = Trim$(CStr(nz(data(i, colVoz), "")))
+        Dim otpID As String: otpID = Trim$(CStr(nz(data(i, colOtpID), "")))
         
         ' Nur Otkupi ohne Otpremnica UND mit VozacID
         If otpID = "" And vozID <> "" Then
@@ -669,7 +669,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
             gKey = CStr(data(i, colSt)) & "|" & _
                    Format$(CDate(data(i, colDat)), "YYYY-MM-DD") & "|" & _
                    vozID & "|" & _
-                   CStr(Nz(data(i, colKlasa), ""))
+                   CStr(nz(data(i, colKlasa), ""))
             
             If Not groups.Exists(gKey) Then
                 groups.Add gKey, New Collection
@@ -683,12 +683,12 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         Exit Function
     End If
     
-    ' F√ºr jede Gruppe: Otpremnica erstellen + Otkupi verkn√ºpfen
+    ' F¸r jede Gruppe: Otpremnica erstellen + Otkupi verkn¸pfen
     Dim created As Long
     Dim keys As Variant: keys = groups.keys
     Dim k As Long
     
-    ' Otpremnica-Z√§hler pro Stanica+Datum vorladen
+    ' Otpremnica-Z‰hler pro Stanica+Datum vorladen
     Dim otpAll As Variant
     otpAll = GetTableData(TBL_OTPREMNICA)
     If Not IsEmpty(otpAll) Then otpAll = ExcludeStornirano(otpAll, TBL_OTPREMNICA)
@@ -714,8 +714,8 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
             RequireSingleMasterSyncRow TBL_OTKUP, COL_OTK_ID, CStr(data(ri, colID)), _
                                "AutoCreateOtpremniceFromPWA"
 
-            totalKol = totalKol + CDbl(Nz(data(ri, colKol), 0))
-            totalAmb = totalAmb + CLng(Nz(data(ri, colKolAmb), 0))
+            totalKol = totalKol + CDbl(nz(data(ri, colKol), 0))
+            totalAmb = totalAmb + CLng(nz(data(ri, colKolAmb), 0))
         Next r
         
         ' BrojOtpremnice: kanon "x/ddmmyy[-rb]" preko modBrojevi.GenerateBrojOtpremnice.
@@ -728,7 +728,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
                 "GenerateBrojOtpremnice nije vratio broj za stanica=" & parts(0)
         End If
         
-        ' Otpremnica erstellen (BrojZbirne leer ‚Äî Vozac/Operator setzt sp√§ter)
+        ' Otpremnica erstellen (BrojZbirne leer ó Vozac/Operator setzt sp‰ter)
         Dim newOtpID As String
         newOtpID = SaveOtpremnica_TX( _
             CDate(parts(1)), _
@@ -736,11 +736,11 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
             parts(2), _
             brojOtp, _
             "", _
-            CStr(Nz(data(firstRow, colVrsta), "")), _
-            CStr(Nz(data(firstRow, colSorta), "")), _
+            CStr(nz(data(firstRow, colVrsta), "")), _
+            CStr(nz(data(firstRow, colSorta), "")), _
             totalKol, _
-            CDbl(Nz(data(firstRow, colCena), 0)), _
-            CStr(Nz(data(firstRow, colTipAmb), "")), _
+            CDbl(nz(data(firstRow, colCena), 0)), _
+            CStr(nz(data(firstRow, colTipAmb), "")), _
             totalAmb, _
             parts(3) _
         )
@@ -770,12 +770,12 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
 End Function
 
 ' ============================================================
-' MALINA MOD ‚Äî C: VozacID := StanicaID na tblOtkup.
+' MALINA MOD ó C: VozacID := StanicaID na tblOtkup.
 '
 ' AutoCreateOtpremniceFromPWA pravi otpremnice samo za otkupe koji IMAJU
 ' VozacID (grupisanje StanicaID|Datum|VozacID|Klasa, vidi filter gore).
 ' U malina modu nema vozaca, pa se PRE auto-otpremnice VozacID popunjava
-' StanicaID-em ‚Äî time se okidac pali, a brojevi ostaju konzistentni
+' StanicaID-em ó time se okidac pali, a brojevi ostaju konzistentni
 ' (otkupac == stanica). Idempotentno: dira samo prazan VozacID.
 ' Self-gated: u visnji ne radi nista.
 ' ============================================================
@@ -829,10 +829,10 @@ Public Function StampVozacFromStanicaForMalina() As Long
     For r = 1 To UBound(data, 1)
         Dim skip As Boolean
         skip = (colStorno > 0) And _
-               (UCase$(Trim$(CStr(Nz(data(r, colStorno), "")))) = "DA")
+               (UCase$(Trim$(CStr(nz(data(r, colStorno), "")))) = "DA")
         If Not skip Then
-            Dim voz As String: voz = Trim$(CStr(Nz(data(r, colVoz), "")))
-            Dim st As String: st = Trim$(CStr(Nz(data(r, colSt), "")))
+            Dim voz As String: voz = Trim$(CStr(nz(data(r, colVoz), "")))
+            Dim st As String: st = Trim$(CStr(nz(data(r, colSt), "")))
             If voz = "" And st <> "" Then
                 RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, st, SRC
                 cnt = cnt + 1
@@ -844,7 +844,7 @@ Public Function StampVozacFromStanicaForMalina() As Long
 End Function
 
 ' ============================================================
-' MALINA MOD ‚Äî D: auto-zbirna iz otpremnice (1:1).
+' MALINA MOD ó D: auto-zbirna iz otpremnice (1:1).
 '
 ' Za svaku aktivnu otpremnicu sa praznim BrojZbirne (grupisano po
 ' BrojOtpremnice, Klasa I+II istog dokumenta zajedno) pravi zbirnu preko
@@ -905,7 +905,7 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
     End If
 
     Dim hladnjaca As String
-    hladnjaca = CStr(Nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
+    hladnjaca = CStr(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
 
     Dim data As Variant
     data = GetTableData(TBL_OTPREMNICA)
@@ -939,21 +939,21 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
     Dim created As Long: created = 0
     Dim r As Long
     For r = 1 To UBound(data, 1)
-        Dim brZ As String: brZ = Trim$(CStr(Nz(data(r, cBrZ), "")))
-        Dim brO As String: brO = Trim$(CStr(Nz(data(r, cBrO), "")))
+        Dim brz As String: brz = Trim$(CStr(nz(data(r, cBrZ), "")))
+        Dim brO As String: brO = Trim$(CStr(nz(data(r, cBrO), "")))
         Dim isStorno As Boolean
         isStorno = (cStorno > 0) And _
-                   (UCase$(Trim$(CStr(Nz(data(r, cStorno), "")))) = "DA")
+                   (UCase$(Trim$(CStr(nz(data(r, cStorno), "")))) = "DA")
 
-        If brZ = "" And brO <> "" And Not isStorno Then
+        If brz = "" And brO <> "" And Not isStorno Then
             Dim datum As Date: datum = CDate(data(r, cDat))
-            Dim vozacID As String: vozacID = Trim$(CStr(Nz(data(r, cVoz), "")))
-            Dim vrsta As String: vrsta = CStr(Nz(data(r, cVrsta), ""))
-            Dim sorta As String: sorta = CStr(Nz(data(r, cSorta), ""))
-            Dim tipAmb As String: tipAmb = CStr(Nz(data(r, cTipAmb), ""))
-            Dim klasa As String: klasa = CStr(Nz(data(r, cKlasa), ""))
-            Dim kol As Double: kol = CDbl(Nz(data(r, cKol), 0))
-            Dim amb As Long: amb = CLng(Nz(data(r, cKolAmb), 0))
+            Dim vozacID As String: vozacID = Trim$(CStr(nz(data(r, cVoz), "")))
+            Dim vrsta As String: vrsta = CStr(nz(data(r, cVrsta), ""))
+            Dim sorta As String: sorta = CStr(nz(data(r, cSorta), ""))
+            Dim tipAmb As String: tipAmb = CStr(nz(data(r, cTipAmb), ""))
+            Dim klasa As String: klasa = CStr(nz(data(r, cKlasa), ""))
+            Dim kol As Double: kol = CDbl(nz(data(r, cKol), 0))
+            Dim amb As Long: amb = CLng(nz(data(r, cKolAmb), 0))
 
             ' Mirror-stanica (VozacID==StanicaID) -> zbirna nosi "S" prefiks
             ' (S1/ddmmyy); otpremnica zadrzava svoj broj (BrojOtpremnice = 1/ddmmyy).
@@ -970,7 +970,7 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
             End If
 
             RequireUpdateCell TBL_OTPREMNICA, r, COL_OTP_BROJ_ZBIRNE, brZbirne, SRC
-            Dim otpID As String: otpID = Trim$(CStr(Nz(data(r, cId), "")))
+            Dim otpID As String: otpID = Trim$(CStr(nz(data(r, cId), "")))
             If otpID <> "" Then otpMap(otpID) = brZbirne
 
             created = created + 1
@@ -999,10 +999,10 @@ Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal ca
 
     Dim r As Long
     For r = 1 To UBound(data, 1)
-        Dim otpID As String: otpID = Trim$(CStr(Nz(data(r, cOtpID), "")))
+        Dim otpID As String: otpID = Trim$(CStr(nz(data(r, cOtpID), "")))
         If otpID <> "" Then
             If otpMap.Exists(otpID) Then
-                Dim cur As String: cur = Trim$(CStr(Nz(data(r, cBrZ), "")))
+                Dim cur As String: cur = Trim$(CStr(nz(data(r, cBrZ), "")))
                 If cur = "" Then
                     RequireUpdateCell TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, _
                         CStr(otpMap(otpID)), callerSrc
@@ -1013,7 +1013,7 @@ Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal ca
 End Sub
 
 ' ============================================================
-' PRIVATE ‚Äî Find OTK-* Sheets in Folder
+' PRIVATE ó Find OTK-* Sheets in Folder
 ' ============================================================
 
 Private Function FindOTKSheets(ByVal folderID As String, _
@@ -1105,7 +1105,7 @@ Private Sub ParseFileList(ByVal json As String, _
     
     pos = 1
     Do
-        ' Suche n√§chstes "id"
+        ' Suche n‰chstes "id"
         pos = InStr(pos, json, """id""", vbTextCompare)
         If pos = 0 Then Exit Do
         
@@ -1236,7 +1236,7 @@ Private Function RequireOTKHeaderValue(ByVal data As Variant, _
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî Import eines einzelnen OTK-Sheets
+' PRIVATE ó Import eines einzelnen OTK-Sheets
 ' ============================================================
 Public Sub TestHook_ImportOneOTKSheet(ByVal spreadsheetID As String, _
                                       ByVal sheetName As String, _
@@ -1290,7 +1290,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Set statusUpdates = New Collection
     
     For i = 2 To UBound(data, 1)
-        ' Pr√ºfe SyncStatus
+        ' Pr¸fe SyncStatus
         syncStatus = Trim$(CStr(data(i, GS_SYNC_STATUS)))
         
         ' Nur "Synced" importieren (= vom Apps Script geschrieben, noch nicht im Master)
@@ -1311,7 +1311,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
             If IsDuplicateInMaster(clientRecordID) Then
                 ' Proveri da li je VozacID update (Otprema tab)
                 Dim sheetVozac As String
-                sheetVozac = Trim$(CStr(Nz(data(i, GS_VOZAC_ID), "")))
+                sheetVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
                 If Len(sheetVozac) > 0 Then
                     If TryUpdateVozacID(clientRecordID, sheetVozac) Then
                         statusUpdates.Add Array(i, SYNC_STATUS_MASTER)
@@ -1345,14 +1345,14 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 End If
             End If
         Else
-            ' Bereits importiert oder Error ? √ºberspringen
+            ' Bereits importiert oder Error ? ¸berspringen
             outSkipped = outSkipped + 1
         End If
 
 NextImportRow:
     Next i
     
-    ' SyncStatus zur√ºckschreiben in Google Sheet
+    ' SyncStatus zur¸ckschreiben in Google Sheet
     If statusUpdates.count > 0 Then
         If Not WriteBackSyncStatus(spreadsheetID, statusUpdates) Then
             outErrors = outErrors + 1
@@ -1375,11 +1375,11 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIVATE ‚Äî Validierung
+' PRIVATE ó Validierung
 ' ============================================================
 
 Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As String
-    ' Pr√ºft Pflichtfelder und Plausibilit√§t
+    ' Pr¸ft Pflichtfelder und Plausibilit‰t
     ' Returns "" wenn OK, sonst Fehlermeldung
     
     Dim koopID As String
@@ -1429,10 +1429,10 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As S
     Dim kolAmb As Long
     Dim tipAmb As String
 
-    tipAmb = Trim$(CStr(Nz(data(row, GS_TIP_AMB), "")))
+    tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
 
     On Error Resume Next
-    kolAmb = CLng(Nz(data(row, GS_KOL_AMB), 0))
+    kolAmb = CLng(nz(data(row, GS_KOL_AMB), 0))
     On Error GoTo 0
 
     If kolAmb < 0 Then
@@ -1467,7 +1467,7 @@ Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colCRID), "")) = clientRecordID Then
+        If CStr(nz(data(i, colCRID), "")) = clientRecordID Then
             IsDuplicateInMaster = True
             Exit Function
         End If
@@ -1477,7 +1477,7 @@ Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî Import Row
+' PRIVATE ó Import Row
 ' ============================================================
 Private Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
                                            ByVal row As Long, _
@@ -1569,10 +1569,10 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     
     ' Procitaj BrojDokumenta iz OTK sheet-a (PWA-generated, kolona 23)
     Dim brojDokumenta As String
-    brojDokumenta = Trim$(CStr(Nz(data(row, GS_BROJ_DOKUMENTA), "")))
+    brojDokumenta = Trim$(CStr(nz(data(row, GS_BROJ_DOKUMENTA), "")))
     
     ' StanicaID aus Kooperant holen
-    stanicaID = CStr(Nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
+    stanicaID = CStr(nz(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     
     ' Wenn OtkupacID = StanicaID (wie bei deinem Setup), nutze das
     If Len(stanicaID) = 0 And Left$(otkupacID, 3) = "ST-" Then
@@ -1580,7 +1580,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     End If
     
     ' KulturaID Lookup
-    kulturaID = CStr(Nz(LookupValue(TBL_KULTURE, "VrstaVoca", vrstaVoca, "KulturaID"), ""))
+    kulturaID = CStr(nz(LookupValue(TBL_KULTURE, "VrstaVoca", vrstaVoca, "KulturaID"), ""))
     If Len(kulturaID) = 0 Then kulturaID = vrstaVoca & "-" & sortaVoca
     
     ' Fallback: prazno = legacy / PWA pre-rollout.
@@ -1609,7 +1609,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     End If
     
     ' VozacID
-    ' BrojDokumenta = "PWA:" & clientRecordID (f√ºr Duplikat-Check)
+    ' BrojDokumenta = "PWA:" & clientRecordID (f¸r Duplikat-Check)
     ' Novac = 0, PrimalacNovca = ""
     
     Dim rowData As Variant
@@ -1634,7 +1634,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
                 " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
         ImportRowToTblOtkup = newID
     Else
-        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen f√ºr PWA:" & clientRecordID
+        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen f¸r PWA:" & clientRecordID
         ImportRowToTblOtkup = ""
     End If
     Exit Function
@@ -1657,7 +1657,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî SyncStatus zur√ºckschreiben
+' PRIVATE ó SyncStatus zur¸ckschreiben
 ' ============================================================
 
 Private Function WriteBackSyncStatus(ByVal spreadsheetID As String, _
@@ -1772,7 +1772,7 @@ End Function
 
 Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
                                    ByVal newVozacID As String) As Boolean
-    ' Ako Otkup u masteru nema VozacID a sheet ga ima ‚Äî updateuj
+    ' Ako Otkup u masteru nema VozacID a sheet ga ima ó updateuj
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
@@ -1783,9 +1783,9 @@ Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colCRID), "")) = clientRecordID Then
+        If CStr(nz(data(i, colCRID), "")) = clientRecordID Then
             Dim currentVoz As String
-            currentVoz = Trim$(CStr(Nz(data(i, colVoz), "")))
+            currentVoz = Trim$(CStr(nz(data(i, colVoz), "")))
             If currentVoz = "" And newVozacID <> "" Then
                 UpdateCell TBL_OTKUP, i, COL_OTK_VOZAC, newVozacID
                 LogInfo "TryUpdateVozacID", "Updated VozacID=" & newVozacID & _
@@ -1798,20 +1798,20 @@ Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî Helpers
+' PRIVATE ó Helpers
 ' ============================================================
 
-Private Function Nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
+Private Function nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
     If isError(v) Then
-        Nz = Fallback
+        nz = Fallback
     ElseIf IsNull(v) Then
-        Nz = Fallback
+        nz = Fallback
     ElseIf IsEmpty(v) Then
-        Nz = Fallback
+        nz = Fallback
     ElseIf Trim$(CStr(v)) = "" Then
-        Nz = Fallback
+        nz = Fallback
     Else
-        Nz = v
+        nz = v
     End If
 End Function
 
@@ -1909,7 +1909,7 @@ Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
     Dim colBroj As Long
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, sourceName)
 
-    GetBrojZbirneForIDStrict = Trim$(CStr(Nz(data(rowZbirna, colBroj), "")))
+    GetBrojZbirneForIDStrict = Trim$(CStr(nz(data(rowZbirna, colBroj), "")))
 
     If Len(GetBrojZbirneForIDStrict) = 0 Then
         Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 41, sourceName, _
@@ -1917,11 +1917,11 @@ Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
     End If
 End Function
 ' ============================================================
-' modMasterSync ‚Äî ZBIRNA IMPORT (dodati u postojeci modMasterSync)
+' modMasterSync ó ZBIRNA IMPORT (dodati u postojeci modMasterSync)
 ' ============================================================
 
 ' ============================================================
-' PUBLIC ‚Äî Hauptfunktion Zbirna Import
+' PUBLIC ó Hauptfunktion Zbirna Import
 ' ============================================================
 Public Sub ImportZbirneFromPWA()
     Call ImportZbirneFromPWA_Core(True)
@@ -2070,10 +2070,10 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz zbirnih nije potvrden zbog fatal sync gre≈°ke." & vbCrLf & _
+            MsgBox "Uvoz zbirnih nije potvrden zbog fatal sync greöke." & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Gre≈°ke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Greöke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbCritical, APP_NAME
         End If
@@ -2093,11 +2093,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz zbirnih zavr≈°en sa gre≈°kama." & vbCrLf & vbCrLf & _
+            MsgBox "Uvoz zbirnih zavröen sa greökama." & vbCrLf & vbCrLf & _
                    "Fajlova: " & CStr(filesCount) & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Gre≈°ke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   "Greöke: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbExclamation, APP_NAME
         End If
@@ -2114,11 +2114,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
         filesCount:=filesCount
 
     If showMessages Then
-        MsgBox "Uvoz zbirnih zavr≈°en!" & vbCrLf & vbCrLf & _
+        MsgBox "Uvoz zbirnih zavröen!" & vbCrLf & vbCrLf & _
                "Fajlova: " & CStr(filesCount) & vbCrLf & _
                "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-               "Gre≈°ke: " & CStr(totalErrors), _
+               "Greöke: " & CStr(totalErrors), _
                vbInformation, APP_NAME
     End If
 
@@ -2149,7 +2149,7 @@ EH:
         errorCount:=totalErrors
 
     If showMessages Then
-        MsgBox "Gre≈°ka pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+        MsgBox "Greöka pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
     End If
 
     ImportZbirneFromPWA_Core = False
@@ -2178,15 +2178,15 @@ Public Sub ImportZbirneFromPWA_TX()
     ok = ImportZbirneFromPWA_Core(False)
 
     If Not ok Then
-        MsgBox "Uvoz zbirnih zavr≈°en sa gre≈°kama ili fatal sync problemom." & vbCrLf & _
-               "Uspe≈°ni redovi koji su potvrdeni kroz row-level TX ostaju upisani." & vbCrLf & _
-               "Neuspe≈°ni redovi su oznaceni kao gre≈°ka gde je writeback uspeo." & vbCrLf & _
+        MsgBox "Uvoz zbirnih zavröen sa greökama ili fatal sync problemom." & vbCrLf & _
+               "Uspeöni redovi koji su potvrdeni kroz row-level TX ostaju upisani." & vbCrLf & _
+               "Neuspeöni redovi su oznaceni kao greöka gde je writeback uspeo." & vbCrLf & _
                "Proveri log.", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
 
-    MsgBox "Uvoz zbirnih zavr≈°en i potvrden.", vbInformation, APP_NAME
+    MsgBox "Uvoz zbirnih zavröen i potvrden.", vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -2202,11 +2202,11 @@ EH:
     LogErr SRC
     On Error GoTo 0
 
-    MsgBox "Gre≈°ka pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Greöka pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' PRIVATE ‚Äî Find VOZ-* Sheets in Folder
+' PRIVATE ó Find VOZ-* Sheets in Folder
 ' ============================================================
 
 Private Function FindVOZSheets(ByVal folderID As String, _
@@ -2303,7 +2303,7 @@ Private Sub ParseFileListVOZ(ByVal json As String, _
 End Sub
 
 ' ============================================================
-' PRIVATE ‚Äî Import eines einzelnen VOZ-Sheets
+' PRIVATE ó Import eines einzelnen VOZ-Sheets
 ' ============================================================
 
 Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
@@ -2454,7 +2454,7 @@ Private Function ImportVOZRow_RowTX(ByRef data As Variant, _
 
     outBrojZbirne = GetBrojZbirneForIDStrict(outZbirnaID, SRC)
 
-    otkupRecordIDs = Trim$(CStr(Nz(data(rowIndex, VS_OTKUP_RECORD_IDS), "")))
+    otkupRecordIDs = Trim$(CStr(nz(data(rowIndex, VS_OTKUP_RECORD_IDS), "")))
 
     LinkZbirnaToOtkupAndOtpremnica outBrojZbirne, otkupRecordIDs
 
@@ -2493,7 +2493,7 @@ EH:
     ImportVOZRow_RowTX = False
 End Function
 ' ============================================================
-' PRIVATE ‚Äî Validierung
+' PRIVATE ó Validierung
 ' ============================================================
 
 Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As String
@@ -2555,7 +2555,7 @@ Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Bo
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(Nz(data(i, colCRID), "")) = clientRecordID Then
+        If CStr(nz(data(i, colCRID), "")) = clientRecordID Then
             IsDuplicateZbirnaInMaster = True
             Exit Function
         End If
@@ -2565,7 +2565,7 @@ Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Bo
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî Import Row to tblZbirna
+' PRIVATE ó Import Row to tblZbirna
 ' ============================================================
 
 Private Function ImportRowToTblZbirna(ByVal data As Variant, _
@@ -2590,7 +2590,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     kupacID = Trim$(CStr(data(row, VS_KUPAC_ID)))
     vrstaVoca = Trim$(CStr(data(row, VS_VRSTA)))
     sortaVoca = Trim$(CStr(data(row, VS_SORTA)))
-    tipAmb = Trim$(CStr(Nz(data(row, VS_TIP_AMB), "")))
+    tipAmb = Trim$(CStr(nz(data(row, VS_TIP_AMB), "")))
     
     ' Datum
     On Error Resume Next
@@ -2621,7 +2621,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     End If
     
     ' Procitaj BrojZbirne iz VOZ sheet-a (PWA-generated, kolona 20)
-    brojZbirne = Trim$(CStr(Nz(data(row, VS_BROJ_ZBIRNE), "")))
+    brojZbirne = Trim$(CStr(nz(data(row, VS_BROJ_ZBIRNE), "")))
 
     ' Fallback: prazno znaci legacy zapis ili PWA pre-rollout-a
     If Len(brojZbirne) = 0 Then
@@ -2643,7 +2643,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     
     ' Hladnjaca iz KupacID
     Dim hladnjaca As String
-    hladnjaca = CStr(Nz(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Hladnjaca"), ""))
+    hladnjaca = CStr(nz(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Hladnjaca"), ""))
     
     newID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
     If Len(Trim$(newID)) = 0 Then
@@ -2682,7 +2682,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
                 " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"
         ImportRowToTblZbirna = newID
     Else
-        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen f√ºr PWA:" & clientRecordID
+        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen f¸r PWA:" & clientRecordID
         ImportRowToTblZbirna = ""
     End If
     Exit Function
@@ -2693,7 +2693,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
+' PRIVATE ó Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
 ' ============================================================
 
 Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
@@ -2757,7 +2757,7 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
             RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, brojZbirne, SRC
 
             Dim otpID As String
-            otpID = Trim$(CStr(Nz(otkData(rowOtkup, colOtkOtpID), "")))
+            otpID = Trim$(CStr(nz(otkData(rowOtkup, colOtkOtpID), "")))
 
             If Len(otpID) > 0 Then
                 If Not updatedOtp.Exists(otpID) Then
@@ -2779,7 +2779,7 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Sub
 ' ============================================================
-' PRIVATE ‚Äî Helper: BrojZbirne aus ZbirnaID
+' PRIVATE ó Helper: BrojZbirne aus ZbirnaID
 ' ============================================================
 
 Private Function GetBrojZbirneForID(ByVal zbirnaID As String) As String
@@ -2802,7 +2802,7 @@ Private Function IsValidBrojZbirneFormat(ByVal s As String) As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî WriteBack VOZ SyncStatus + ServerRecordID
+' PRIVATE ó WriteBack VOZ SyncStatus + ServerRecordID
 ' ============================================================
 
 Private Function WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
@@ -2833,11 +2833,11 @@ Private Function WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
         If Not isFirst Then body = body & ","
         isFirst = False
         
-        ' Kolona F ‚Äî SyncStatus
+        ' Kolona F ó SyncStatus
         body = body & "{""range"":""Sheet1!F" & CStr(update(0)) & """," & _
                """values"":[[""" & JsonEscape(CStr(update(1))) & """]]}"
         
-        ' Kolona B ‚Äî ServerRecordID (2. kolona = B)
+        ' Kolona B ó ServerRecordID (2. kolona = B)
         If UBound(update) >= 2 Then
             If Len(CStr(update(2))) > 0 Then
                 body = body & ",{""range"":""Sheet1!B" & CStr(update(0)) & """," & _
@@ -3081,7 +3081,7 @@ Private Sub Monitor_MasterSyncFail(ByVal procedureName As String, _
 End Sub
 
 ' ============================================================
-' PARCEL GEO PULL ‚Äî Google/Stammdaten -> tblParcele
+' PARCEL GEO PULL ó Google/Stammdaten -> tblParcele
 ' ============================================================
 
 Public Function ImportParcelGeoFromGoogleToMaster() As Boolean
@@ -3418,8 +3418,8 @@ Private Sub GeoUpdateFieldIfNeeded(ByVal parcelData As Variant, _
 
     newText = Trim$(GeoText(newValue))
 
-    ' VA≈ΩNO:
-    ' Prazan Google value NE sme da obri≈°e postojeci lokalni geo podatak.
+    ' VAéNO:
+    ' Prazan Google value NE sme da obriöe postojeci lokalni geo podatak.
     If Len(newText) = 0 Then Exit Sub
 
     oldText = Trim$(GeoText(parcelData(masterRow, masterCol)))
@@ -3441,5 +3441,4 @@ End Sub
 Public Sub Test_ImportOtkupFromPWA()
     Call ImportOtkupFromPWA
 End Sub
-
 

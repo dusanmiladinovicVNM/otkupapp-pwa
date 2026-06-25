@@ -7,10 +7,11 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
-' clsLookupMenuBtn â€“ Event-omotac za dinamicki kreirano dugme
+' clsLookupMenuBtn – Event-omotac za dinamicki kreirano dugme
 ' menija "Maticni podaci" (vidi modMaticniLookups).
 '
 ' Dugmad menija se prave u kodu (Controls.Add) da se NE bi dirao
@@ -25,6 +26,7 @@ Public sekcijaTag As String       ' Tag za frmStammdaten (npr. "TipAmbalaze")
 Public sekcijaCaption As String   ' Naziv u meniju / naslovu (npr. "Ambalaza")
 
 Public WithEvents btn As MSForms.CommandButton
+Attribute btn.VB_VarHelpID = -1
 
 Private Sub btn_Click()
     MaticniMenu_OnClick sekcijaTag, sekcijaCaption
@@ -34,3 +36,4 @@ Private Sub btn_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, _
                           ByVal X As Single, ByVal Y As Single)
     MaticniMenu_OnHover btn
 End Sub
+

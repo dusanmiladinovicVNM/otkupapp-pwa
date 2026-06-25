@@ -31,7 +31,7 @@ Public Function FilterArray(ByVal data As Variant, ByVal filters As Collection) 
     For i = 1 To rowCount
         matches(i) = True
         For Each fp In filters
-            If Not MatchesFilter(data(i, fp.ColIndex), fp) Then
+            If Not MatchesFilter(data(i, fp.colIndex), fp) Then
                 matches(i) = False
                 Exit For
             End If

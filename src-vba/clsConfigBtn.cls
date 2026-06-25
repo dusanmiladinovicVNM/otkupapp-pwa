@@ -7,10 +7,11 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
-' clsConfigBtn â€” Event-omotac za dinamicki kreirano dugme u editoru
+' clsConfigBtn — Event-omotac za dinamicki kreirano dugme u editoru
 ' "Podesavanja" (vidi modPodesavanja).
 '
 ' Dugmad se prave u kodu (Controls.Add) da se NE bi dirao
@@ -22,6 +23,7 @@ Option Explicit
 
 Public action As String            ' "save" | "toggle" | "back"
 Public WithEvents btn As MSForms.CommandButton
+Attribute btn.VB_VarHelpID = -1
 
 Private Sub btn_Click()
     ConfigEditor_OnClick action

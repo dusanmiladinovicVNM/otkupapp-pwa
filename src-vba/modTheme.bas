@@ -2,8 +2,8 @@ Attribute VB_Name = "modTheme"
 Option Explicit
 
 ' ============================================================
-' modTheme â€“ OtkupAPP shared theme
-' SVETLA KREM TEMA â€” uskladena sa agrix.rs
+' modTheme – OtkupAPP shared theme
+' SVETLA KREM TEMA — uskladena sa agrix.rs
 ' (krem #F7F4EE, forest #1E2D14, brand zelena #5EA135, zlatna #C8A84B)
 ' ============================================================
 
@@ -18,32 +18,32 @@ Public Const FONT_SIZE_HEADER As Single = 11
 Public Const FONT_SIZE_TITLE As Single = 13
 
 ' =========================
-' PALETA â€” svetla krem tema
+' PALETA — svetla krem tema
 ' =========================
 
-' â€” POZADINE â€”
-Public Function BG_MAIN() As Long: BG_MAIN = RGB(247, 244, 238): End Function    ' #F7F4EE krem â€” glavna forma
-Public Function BG_TOP() As Long: BG_TOP = RGB(242, 237, 228): End Function      ' #F2EDE4 topla krem â€” top traka / nav
-Public Function BG_PANEL() As Long: BG_PANEL = RGB(255, 255, 255): End Function  ' belo â€” paneli / kartice
+' — POZADINE —
+Public Function BG_MAIN() As Long: BG_MAIN = RGB(247, 244, 238): End Function    ' #F7F4EE krem — glavna forma
+Public Function BG_TOP() As Long: BG_TOP = RGB(242, 237, 228): End Function      ' #F2EDE4 topla krem — top traka / nav
+Public Function BG_PANEL() As Long: BG_PANEL = RGB(255, 255, 255): End Function  ' belo — paneli / kartice
 
-' â€” DUGMAD â€”
-Public Function BTN_BG() As Long: BTN_BG = RGB(46, 71, 38): End Function         ' forest zelena â€” meni / sekundarna
-Public Function BTN_HOVER() As Long: BTN_HOVER = RGB(74, 104, 56): End Function  ' svetlija zelena â€” hover
-Public Function BTN_ACTIVE() As Long: BTN_ACTIVE = RGB(200, 168, 75): End Function ' #C8A84B zlatna â€” aktivno / primarno
+' — DUGMAD —
+Public Function BTN_BG() As Long: BTN_BG = RGB(46, 71, 38): End Function         ' forest zelena — meni / sekundarna
+Public Function BTN_HOVER() As Long: BTN_HOVER = RGB(74, 104, 56): End Function  ' svetlija zelena — hover
+Public Function BTN_ACTIVE() As Long: BTN_ACTIVE = RGB(200, 168, 75): End Function ' #C8A84B zlatna — aktivno / primarno
 
-' â€” TEKST â€”
-Public Function TXT_LIGHT() As Long: TXT_LIGHT = RGB(30, 45, 20): End Function       ' #1E2D14 forest â€” GLAVNI TAMNI tekst (polja, labele)
-Public Function TXT_ON_DARK() As Long: TXT_ON_DARK = RGB(247, 244, 238): End Function ' krem â€” tekst NA zelenim/crvenim dugmadima
-Public Function TXT_MUTED() As Long: TXT_MUTED = RGB(122, 133, 110): End Function    ' #7A856E priguÅ¡eni
+' — TEKST —
+Public Function TXT_LIGHT() As Long: TXT_LIGHT = RGB(30, 45, 20): End Function       ' #1E2D14 forest — GLAVNI TAMNI tekst (polja, labele)
+Public Function TXT_ON_DARK() As Long: TXT_ON_DARK = RGB(247, 244, 238): End Function ' krem — tekst NA zelenim/crvenim dugmadima
+Public Function TXT_MUTED() As Long: TXT_MUTED = RGB(122, 133, 110): End Function    ' #7A856E prigušeni
 Public Function TXT_ALERT() As Long: TXT_ALERT = RGB(192, 57, 57): End Function      ' crvena
 Public Function BORDER_SOFT() As Long: BORDER_SOFT = RGB(208, 210, 196): End Function ' meka sage ivica
 
-' â€” POLJA (INPUT) â€”
+' — POLJA (INPUT) —
 Public Function INPUT_BG() As Long: INPUT_BG = RGB(255, 255, 255): End Function          ' belo polje
 Public Function INPUT_DISABLED_BG() As Long: INPUT_DISABLED_BG = RGB(235, 229, 216): End Function ' #EBE5D8 zakljucano
 Public Function INPUT_BORDER() As Long: INPUT_BORDER = RGB(168, 176, 150): End Function   ' sage ivica (vidljiva na belom)
 
-' â€” STATUS â€”
+' — STATUS —
 Public Function CLR_SUCCESS() As Long: CLR_SUCCESS = RGB(74, 140, 52): End Function   ' zelena (citljiva na krem)
 Public Function CLR_WARNING() As Long: CLR_WARNING = RGB(180, 134, 26): End Function  ' amber
 Public Function CLR_ERROR() As Long: CLR_ERROR = RGB(192, 57, 57): End Function       ' crvena
@@ -123,7 +123,7 @@ NextCtrl:
     Next c
 End Sub
 
-' ako negde rucno zoveÅ¡ ovo ime
+' ako negde rucno zoveš ovo ime
 Public Sub ApplyThemeToControls(ByVal frm As Object)
     StyleControls frm
 End Sub
@@ -292,7 +292,7 @@ Public Sub StylePrimaryButton(ByVal btn As MSForms.CommandButton, Optional ByVal
     With btn
         If Len(captionText) > 0 Then .caption = captionText
         .BackColor = BTN_ACTIVE
-        .ForeColor = TXT_LIGHT            ' taman tekst na zlatnom â€” visok kontrast
+        .ForeColor = TXT_LIGHT            ' taman tekst na zlatnom — visok kontrast
         .Font.name = APP_FONT_BOLD
         .Font.Size = FONT_SIZE_NORMAL
         .TakeFocusOnClick = False
@@ -363,7 +363,7 @@ End Sub
 
 Public Sub SetButtonNav(ByVal btn As Object)
     btn.BackColor = BG_TOP
-    btn.ForeColor = TXT_MUTED             ' priguÅ¡en tekst na krem
+    btn.ForeColor = TXT_MUTED             ' prigušen tekst na krem
     btn.Font.Bold = False
 End Sub
 
@@ -484,7 +484,7 @@ Private Function IsDirectChild(ByVal c As Object, ByVal parent As Object) As Boo
 End Function
 
 ' ============================================================
-' v6.11 UI ENHANCEMENTS â€” focus border, section header,
+' v6.11 UI ENHANCEMENTS — focus border, section header,
 ' status dot, accent bar, badge, KPI card, step indicator
 ' ============================================================
 
@@ -714,14 +714,14 @@ Public Sub LayoutTopKpiInternals(ByVal frm As MSForms.Frame, _
 
     With lblTitle
         .Left = padL
-        .Top = padT
+        .top = padT
         .width = frm.InsideWidth - padL - 16
         .Height = 14
     End With
 
     With lblValue
         .Left = padL
-        .Top = lblTitle.Top + lblTitle.Height + 4
+        .top = lblTitle.top + lblTitle.Height + 4
         .width = frm.InsideWidth - padL - 16
         .Height = 22
     End With
@@ -731,7 +731,7 @@ Public Sub LayoutTopKpiInternals(ByVal frm As MSForms.Frame, _
         .width = 3
         .Height = frm.InsideHeight - 16
         .Left = frm.InsideWidth - 11
-        .Top = 8
+        .top = 8
     End With
 End Sub
 
@@ -764,14 +764,14 @@ Public Sub StyleSectionAccent(ByVal lbl As MSForms.label, _
     End If
 
     If isChildOfFrame Then
-        ' label zivi unutar Frame-a â€” pozicija u Frame koordinatama
+        ' label zivi unutar Frame-a — pozicija u Frame koordinatama
         lbl.Left = 0
-        lbl.Top = 0
+        lbl.top = 0
         lbl.width = frmBelow.InsideWidth
     Else
-        ' label zivi na formi â€” pozicija u form koordinatama
+        ' label zivi na formi — pozicija u form koordinatama
         lbl.Left = frmBelow.Left
-        lbl.Top = frmBelow.Top
+        lbl.top = frmBelow.top
         lbl.width = frmBelow.width
     End If
 
@@ -816,7 +816,7 @@ End Sub
 '======================================================================
 ' StyleListHeaderLabel
 '
-' Header label iznad ListBox kolone. Vizuelno suptilan ali jasan â€”
+' Header label iznad ListBox kolone. Vizuelno suptilan ali jasan —
 ' bold + gold boja na krem podlozi.
 '
 ' Koristi se za "fake header row" iznad VBA ListBox-a (MSForms ListBox

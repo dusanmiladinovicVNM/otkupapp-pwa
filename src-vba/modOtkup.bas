@@ -2,7 +2,7 @@ Attribute VB_Name = "modOtkup"
 Option Explicit
 
 ' ============================================================
-' modOtkup ‚Äì Aufkauf-Gesch√§ftslogik
+' modOtkup ñ Aufkauf-Gesch‰ftslogik
 ' Kernmodul: Erfassung Lieferant zu Station
 ' ============================================================
 
@@ -50,7 +50,7 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkup_TX", _
         entityType:="Otkup", _
-        entityId:=SaveOtkup_TX, _
+        entityID:=SaveOtkup_TX, _
         correlationId:=SaveOtkup_TX
     On Error GoTo 0
 
@@ -72,7 +72,7 @@ EH:
         moduleName:="modOtkup", _
         procedureName:="SaveOtkup_TX", _
         entityType:="Otkup", _
-        entityId:=SaveOtkup_TX, _
+        entityID:=SaveOtkup_TX, _
         correlationId:=brDok, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -89,7 +89,7 @@ EH:
         moduleName:="modOtkup", _
         procedureName:="SaveOtkup_TX", _
         entityType:="Otkup", _
-        entityId:=SaveOtkup_TX, _
+        entityID:=SaveOtkup_TX, _
         correlationId:=brDok
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -312,7 +312,7 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkupMulti_TX", _
         entityType:="Otkup", _
-        entityId:=SaveOtkupMulti_TX, _
+        entityID:=SaveOtkupMulti_TX, _
         correlationId:=resultI
     On Error GoTo 0
 
@@ -333,7 +333,7 @@ EH:
         moduleName:="modOtkup", _
         procedureName:="SaveOtkupMulti_TX", _
         entityType:="Otkup", _
-        entityId:=SaveOtkupMulti_TX, _
+        entityID:=SaveOtkupMulti_TX, _
         correlationId:=brDok, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -350,7 +350,7 @@ EH:
         moduleName:="modOtkup", _
         procedureName:="SaveOtkupMulti_TX", _
         entityType:="Otkup", _
-        entityId:=SaveOtkupMulti_TX, _
+        entityID:=SaveOtkupMulti_TX, _
         correlationId:=brDok
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -496,7 +496,7 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     newRow = AppendRow(TBL_OTKUP, rowData)
     If newRow <= 0 Then
         Err.Raise vbObjectError + 1829, "SaveOtkup", _
-                  "AppendRow fehlgeschlagen f√ºr tblOtkup."
+                  "AppendRow fehlgeschlagen f¸r tblOtkup."
     End If
 
     ' Izdata ambalaza (OM->kooperant) -> upis u kolonu PO IMENU (kolona je na kraju
@@ -714,8 +714,8 @@ Public Function GetSaldoByStation(ByVal stanicaID As String, _
 
     ' TODO:
     ' Ovaj helper trenutno racuna samo bruto saldo iz tblOtkup.
-    ' Banka/Novac/Isporuka korekcije treba re≈°iti u posebnom report modulu,
-    ' ne ≈°iriti ovaj core save modul bez jasnog accounting pravila.
+    ' Banka/Novac/Isporuka korekcije treba reöiti u posebnom report modulu,
+    ' ne öiriti ovaj core save modul bez jasnog accounting pravila.
 
     If dict.count = 0 Then
         GetSaldoByStation = Empty

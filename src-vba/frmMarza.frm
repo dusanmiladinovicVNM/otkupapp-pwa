@@ -13,6 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 ' ============================================================
@@ -31,7 +32,7 @@ Private Sub RemoveTitleBar()
     Dim hwnd As LongPtr
     Dim style As Long
 
-    hwnd = FindWindow("ThunderDFrame", Me.Caption)
+    hwnd = FindWindow("ThunderDFrame", Me.caption)
 
     If hwnd <> 0 Then
         style = GetWindowLong(hwnd, GWL_STYLE)
@@ -43,7 +44,7 @@ End Sub
 
 Private Sub UserForm_Activate()
     If Not mChromeRemoved Then
-        Me.Caption = ""
+        Me.caption = ""
         RemoveTitleBar
         mChromeRemoved = True
     End If
@@ -51,9 +52,9 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
     
-    Me.Caption = "Marza"
-    txtDatumOd.Value = "1.1." & Year(Date)
-    txtDatumDo.Value = Format$(Date, "d.m.yyyy")
+    Me.caption = "Marza"
+    txtDatumOd.value = "1.1." & Year(Date)
+    txtDatumDo.value = Format$(Date, "d.m.yyyy")
     
     cmbTipMarze.Clear
     cmbTipMarze.AddItem "Po Kupcu"
@@ -75,9 +76,9 @@ End Sub
 
 Private Sub LoadEntiteti()
     cmbEntitet.Clear
-    cmbEntitet.Enabled = True
+    cmbEntitet.enabled = True
     
-    Select Case cmbTipMarze.Value
+    Select Case cmbTipMarze.value
         Case "Po Kupcu"
             Dim kupci As Variant
             kupci = GetLookupList(TBL_KUPCI, "Naziv")
@@ -96,7 +97,7 @@ Private Sub LoadEntiteti()
                 Next i
             End If
         Case "Ukupno"
-            cmbEntitet.Enabled = False
+            cmbEntitet.enabled = False
     End Select
     
     If cmbEntitet.ListCount > 0 Then cmbEntitet.ListIndex = 0
@@ -105,20 +106,20 @@ End Sub
 Private Sub btnPrikazi_Click()
     On Error GoTo EH
     Dim datumOd As Date, datumDo As Date
-    datumOd = CDate(txtDatumOd.Value)
-    datumDo = CDate(txtDatumDo.Value)
+    datumOd = CDate(txtDatumOd.value)
+    datumDo = CDate(txtDatumDo.value)
     
     lstMarza.Clear
     
     Dim data As Variant
-    Select Case cmbTipMarze.Value
+    Select Case cmbTipMarze.value
         Case "Po Kupcu"
             Dim kupacID As String
-            kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbEntitet.Value, "KupacID"))
+            kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbEntitet.value, "KupacID"))
             data = ReportMarzaByKupac(kupacID, datumOd, datumDo)
         Case "Po Otkupnom mestu"
             Dim stanicaID As String
-            stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbEntitet.Value, "StanicaID"))
+            stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbEntitet.value, "StanicaID"))
             data = ReportMarzaByOM(stanicaID, datumOd, datumDo)
         Case "Ukupno"
             data = ReportMarzaUkupno(datumOd, datumDo)
@@ -135,7 +136,7 @@ Private Sub btnPrikazi_Click()
     Exit Sub
 EH:
     LogErr "frmMarza.btnPrikazi"
-    MsgBox "Greska pri ucitavanju marze: " & Err.Description, vbCritical, APP_NAME
+    MsgBox "Greska pri ucitavanju marze: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillMarzaList(ByVal data As Variant)
@@ -186,7 +187,7 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = vbFormControlMenu Then
         Cancel = True
         Unload Me
-        frmMain.Show
+        frmOtkupAPP.Show
     End If
 End Sub
 

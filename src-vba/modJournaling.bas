@@ -2,16 +2,16 @@ Attribute VB_Name = "modJournaling"
 Option Explicit
 
 ' ============================================================
-' modJournal â€“ TX-Level CSV Journaling
+' modJournal – TX-Level CSV Journaling
 '
 ' Schreibt jede AppendRow-Operation sofort als CSV-Zeile.
-' Zweck: Crash-Recovery. Wenn Excel abstÃ¼rzt bevor gespeichert
-' wird, kÃ¶nnen alle Transaktionen aus dem Journal reimportiert
+' Zweck: Crash-Recovery. Wenn Excel abstürzt bevor gespeichert
+' wird, können alle Transaktionen aus dem Journal reimportiert
 ' werden.
 '
 ' Journal-Pfad: ThisWorkbook.Path & "\Journal\"
 ' Dateiname:    tblName_YYYY-MM-DD.csv (eine pro Tabelle pro Tag)
-' Rotation:     Dateien Ã¤lter als 30 Tage werden bei App-Start gelÃ¶scht
+' Rotation:     Dateien älter als 30 Tage werden bei App-Start gelöscht
 '
 ' WICHTIG: Journal-Write darf NIEMALS die eigentliche Operation
 ' blockieren. Daher: On Error Resume Next um den Write.
@@ -23,7 +23,7 @@ Private Const BACKUP_FOLDER As String = "Backup"
 Private Const BACKUP_MAX_DAYS As Long = 30
 
 ' ============================================================
-' AutoSave state â€” AR-002
+' AutoSave state — AR-002
 ' ============================================================
 Private m_LastAutoSaveAt As Date
 Private m_HasAutoSaved As Boolean
@@ -31,13 +31,19 @@ Private m_AutoSaveInProgress As Boolean
 
 Private Const AUTOSAVE_DEBOUNCE_SECONDS As Long = 3
 
+' AR-002a: deferred AutoSave scheduling (Application.OnTime)
+Private Const AUTOSAVE_IDLE_SECONDS    As Long = 60    ' snimi 60s posle poslednje aktivnosti
+Private Const AUTOSAVE_MAX_AGE_SECONDS As Long = 600   ' kapica za neprekidan unos
+Private m_NextSaveTime  As Date
+Private m_SaveScheduled As Boolean
+
 ' ============================================================
 ' PUBLIC - Aufgerufen aus modDataAccess.AppendRow
 ' ============================================================
 
 Public Sub WriteJournalRow(ByVal tblName As String, ByVal rowData As Variant)
     ' Schreibt eine komplette rowData-Zeile als CSV-Append
-    ' Fehlschlag ist still â€“ Journal darf nie die App blockieren
+    ' Fehlschlag ist still – Journal darf nie die App blockieren
     
     Dim journalPath As String
     Dim fileName As String
@@ -49,7 +55,7 @@ Public Sub WriteJournalRow(ByVal tblName As String, ByVal rowData As Variant)
     On Error Resume Next
     
     ' Pfad bauen
-    journalPath = ThisWorkbook.Path & "\" & JOURNAL_FOLDER
+    journalPath = ThisWorkbook.path & "\" & JOURNAL_FOLDER
     
     ' Ordner erstellen falls nicht vorhanden
     If Dir(journalPath, vbDirectory) = "" Then
@@ -101,7 +107,7 @@ End Sub
 ' ============================================================
 
 Public Sub PurgeOldJournals()
-    ' LÃ¶scht Journal-Dateien die Ã¤lter als JOURNAL_MAX_DAYS sind
+    ' Löscht Journal-Dateien die älter als JOURNAL_MAX_DAYS sind
     
     Dim journalPath As String
     Dim fileName As String
@@ -112,7 +118,7 @@ Public Sub PurgeOldJournals()
     
     On Error Resume Next
     
-    journalPath = ThisWorkbook.Path & "\" & JOURNAL_FOLDER
+    journalPath = ThisWorkbook.path & "\" & JOURNAL_FOLDER
     
     If Dir(journalPath, vbDirectory) = "" Then Exit Sub
     
@@ -146,7 +152,7 @@ End Sub
 ' ============================================================
 
 Public Function CheckJournalForRecovery() As String
-    ' PrÃ¼ft ob heute Journal-EintrÃ¤ge existieren die nicht in Excel sind
+    ' Prüft ob heute Journal-Einträge existieren die nicht in Excel sind
     ' Returns: "" wenn alles OK, oder Warn-String mit Details
     
     Dim journalPath As String
@@ -164,14 +170,14 @@ Public Function CheckJournalForRecovery() As String
     
     On Error Resume Next
     
-    journalPath = ThisWorkbook.Path & "\" & JOURNAL_FOLDER
+    journalPath = ThisWorkbook.path & "\" & JOURNAL_FOLDER
     
     If Dir(journalPath, vbDirectory) = "" Then
         CheckJournalForRecovery = ""
         Exit Function
     End If
     
-    ' Nur heutige Dateien prÃ¼fen
+    ' Nur heutige Dateien prüfen
     fileName = Dir(journalPath & "\*_" & Format$(Date, "yyyy-mm-dd") & ".csv")
     
     Do While fileName <> ""
@@ -185,7 +191,7 @@ Public Function CheckJournalForRecovery() As String
         
         filePath = journalPath & "\" & fileName
         
-        ' Journal-Zeilen zÃ¤hlen (minus Header)
+        ' Journal-Zeilen zählen (minus Header)
         journalCount = 0
         ff = FreeFile
         Open filePath For Input As #ff
@@ -198,7 +204,7 @@ Public Function CheckJournalForRecovery() As String
         
         If journalCount < 0 Then journalCount = 0
         
-        ' Excel-Zeilen zÃ¤hlen
+        ' Excel-Zeilen zählen
         Set lo = GetTable(tblName)
         If lo Is Nothing Then
             excelCount = 0
@@ -212,8 +218,8 @@ Public Function CheckJournalForRecovery() As String
         If journalCount > excelCount Then
             If warnings <> "" Then warnings = warnings & vbCrLf
             warnings = warnings & tblName & ": Journal hat " & journalCount & _
-                       " EintrÃ¤ge, Excel hat " & excelCount & " Zeilen. " & _
-                       "MÃ¶glicher Datenverlust nach Absturz!"
+                       " Einträge, Excel hat " & excelCount & " Zeilen. " & _
+                       "Möglicher Datenverlust nach Absturz!"
         End If
         
 NextFile:
@@ -245,7 +251,7 @@ Public Sub BackupFileOnStart()
     On Error GoTo EH
     
     srcPath = ThisWorkbook.fullName
-    backupPath = ThisWorkbook.Path & "\" & BACKUP_FOLDER
+    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
     
     ' Ordner erstellen falls nicht vorhanden
     If Dir(backupPath, vbDirectory) = "" Then
@@ -313,7 +319,7 @@ EH:
         moduleName:="modMain", _
         procedureName:="BackupFileOnStart", _
         entityType:="Backup", _
-        entityId:="STARTUP_BACKUP", _
+        entityID:="STARTUP_BACKUP", _
         correlationId:="BACKUP-STARTUP", _
         errorNumber:=errNo, _
         errorDescription:=errDesc, _
@@ -326,7 +332,7 @@ EH:
 End Sub
 
 Public Sub PurgeOldBackups()
-    ' LÃ¶scht Backup-Dateien die Ã¤lter als BACKUP_MAX_DAYS sind
+    ' Löscht Backup-Dateien die älter als BACKUP_MAX_DAYS sind
     ' Basiert auf Dateiname-Datum, nicht File-System-Datum
     
     Dim backupPath As String
@@ -338,7 +344,7 @@ Public Sub PurgeOldBackups()
     
     On Error Resume Next
     
-    backupPath = ThisWorkbook.Path & "\" & BACKUP_FOLDER
+    backupPath = ThisWorkbook.path & "\" & BACKUP_FOLDER
     
     If Dir(backupPath, vbDirectory) = "" Then Exit Sub
     
@@ -374,7 +380,7 @@ End Sub
 ' ============================================================
 
 Private Function EscapeCSV(ByVal s As String) As String
-    ' CSV-Escape: Wenn Semikolon, AnfÃ¼hrungszeichen oder Newline enthalten
+    ' CSV-Escape: Wenn Semikolon, Anführungszeichen oder Newline enthalten
     If InStr(s, ";") > 0 Or InStr(s, """") > 0 Or InStr(s, vbCrLf) > 0 Or InStr(s, vbLf) > 0 Then
         s = Replace(s, """", """""")
         EscapeCSV = """" & s & """"
@@ -384,7 +390,7 @@ Private Function EscapeCSV(ByVal s As String) As String
 End Function
 
 Private Function NzJournal(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
-    If IsError(v) Then
+    If isError(v) Then
         NzJournal = Fallback
     ElseIf IsNull(v) Then
         NzJournal = Fallback
@@ -408,18 +414,19 @@ End Function
 ' Excel session bez obzira koja clsTransaction ga okida.
 ' ============================================================
 
-Public Sub AutoSaveAfterCommit(ByVal sourceName As String)
+Public Sub AutoSaveAfterCommit(ByVal sourceName As String, _
+                               Optional ByVal force As Boolean = False)
     Dim prevAlerts As Boolean
     Dim alertsTouched As Boolean
     
     On Error GoTo EH
     
-    ' Reentrancy guard â€” set BEFORE any other check.
+    ' Reentrancy guard — set BEFORE any other check.
     ' Guards against Excel events firing during Save that might re-enter here.
     If m_AutoSaveInProgress Then Exit Sub
     m_AutoSaveInProgress = True
     
-    If Not ShouldAutoSaveNow() Then
+    If (Not force) And (Not ShouldAutoSaveNow()) Then
         ' Silent skip when debounce active. Log on INFO level for traceability.
         LogInfo "AutoSaveAfterCommit", _
                 "Skipped (debounce). Source=" & sourceName
@@ -432,7 +439,7 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String)
         GoTo CleanExit
     End If
     
-    If Len(Trim$(ThisWorkbook.Path)) = 0 Then
+    If Len(Trim$(ThisWorkbook.path)) = 0 Then
         LogWarn "AutoSaveAfterCommit", _
                 "Workbook has no path. AutoSave skipped. Source=" & sourceName
         GoTo CleanExit
@@ -469,6 +476,70 @@ EH:
     If alertsTouched Then Application.DisplayAlerts = prevAlerts
     m_AutoSaveInProgress = False
     ' Intentionally no Err.Raise.
+End Sub
+
+' ============================================================
+' AR-002a: Deferred AutoSave (Application.OnTime)
+'
+' CommitTx vise ne zove AutoSaveAfterCommit sinhrono -> MsgBox ne ceka
+' ThisWorkbook.Save. Stvarni save i dalje radi AutoSaveAfterCommit
+' (jedino mesto sa log stringovima/gardama -> runbook ostaje isti).
+' Dirty-flag je ugradjeni ThisWorkbook.Saved -> bez dodatnog brojaca.
+' Schedule/Cancel obrazac preslikan iz modStanicaLock heartbeat-a.
+' ============================================================
+
+Public Sub MarkDirtyAndSchedule(ByVal sourceName As String)
+    On Error Resume Next
+
+    Dim delaySec As Long
+    delaySec = AUTOSAVE_IDLE_SECONDS               ' uvek 60s posle poslednje aktivnosti
+
+    ' Force-save SAMO ako neprekidan unos traje duze od MAX_AGE od poslednjeg save-a.
+    If m_HasAutoSaved And _
+       DateDiff("s", m_LastAutoSaveAt, Now) >= AUTOSAVE_MAX_AGE_SECONDS Then
+        delaySec = 0
+    End If
+
+    ScheduleAutoSaveTimer delaySec
+    LogInfo "AutoSaveAfterCommit", _
+            "Scheduled deferred save in " & delaySec & "s. Source=" & sourceName
+End Sub
+
+Public Sub AutoSaveTick()
+    ' Application.OnTime callback. MORA biti Public u standardnom modulu.
+    m_SaveScheduled = False
+    If ThisWorkbook.Saved Then Exit Sub        ' nista nesnimljeno -> ne snimaj
+    AutoSaveAfterCommit "autosave-timer"       ' force=False -> postojeci debounce/log
+End Sub
+
+Public Sub FlushNow(ByVal sourceName As String)
+    ' Trenutni flush na granici: section switch / dashboard / shutdown.
+    ' Hvata i ne-TX izmene (maticni/SEF/config) jer gleda Saved, ne TX-trigger.
+    CancelAutoSaveTimer
+    If ThisWorkbook.Saved Then Exit Sub
+    AutoSaveAfterCommit sourceName, True        ' force=True -> bypass debounce
+End Sub
+
+Public Sub StopAutoSaveTimer()
+    CancelAutoSaveTimer
+End Sub
+
+Private Sub ScheduleAutoSaveTimer(ByVal delaySec As Long)
+    CancelAutoSaveTimer                          ' uvek otkazi prethodni pre novog
+    If delaySec < 0 Then delaySec = 0
+    m_NextSaveTime = Now + TimeSerial(0, 0, delaySec)
+    On Error Resume Next
+    Application.OnTime m_NextSaveTime, "modJournaling.AutoSaveTick"
+    On Error GoTo 0
+    m_SaveScheduled = True
+End Sub
+
+Private Sub CancelAutoSaveTimer()
+    If Not m_SaveScheduled Then Exit Sub
+    On Error Resume Next
+    Application.OnTime m_NextSaveTime, "modJournaling.AutoSaveTick", , False
+    On Error GoTo 0
+    m_SaveScheduled = False
 End Sub
 
 
@@ -509,6 +580,7 @@ Public Sub ResetAutoSaveStateForTests()
     m_LastAutoSaveAt = 0
     m_HasAutoSaved = False
     m_AutoSaveInProgress = False
+    CancelAutoSaveTimer                          ' <-- DODATO
 End Sub
 
 

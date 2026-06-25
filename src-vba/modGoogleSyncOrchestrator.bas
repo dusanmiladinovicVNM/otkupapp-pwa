@@ -481,7 +481,7 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
         moduleName:=ORCH_MODULE, _
         procedureName:="SyncPWAFullCycle_Core", _
         entityType:="MasterData", _
-        entityId:="PWA-FULL-CYCLE", _
+        entityID:="PWA-FULL-CYCLE", _
         correlationId:=corrId
 
     If Not cycleOk Then
@@ -489,7 +489,7 @@ Private Sub Monitor_PWAFullCycle(ByVal okGeo As Boolean, _
             moduleName:=ORCH_MODULE, _
             procedureName:="SyncPWAFullCycle_Core", _
             entityType:="MasterData", _
-            entityId:="PWA-FULL-CYCLE", _
+            entityID:="PWA-FULL-CYCLE", _
             correlationId:=corrId, _
             errorNumber:=0, _
             errorDescription:="PWA full sync cycle failed or completed degraded. " & msg, _
@@ -509,7 +509,7 @@ Private Sub Monitor_PWAMasterUnlockFail(ByVal errorDescription As String)
         moduleName:=ORCH_MODULE, _
         procedureName:="SyncPWAFullCycle_Core", _
         entityType:="MasterData", _
-        entityId:="PWA-MASTER-SYNC-LOCK", _
+        entityID:="PWA-MASTER-SYNC-LOCK", _
         correlationId:=corrId, _
         errorNumber:=0, _
         errorDescription:=errorDescription, _
@@ -523,7 +523,7 @@ Private Sub Monitor_PWAMasterUnlockFail(ByVal errorDescription As String)
         moduleName:=ORCH_MODULE, _
         procedureName:="SyncPWAFullCycle_Core", _
         entityType:="MasterData", _
-        entityId:="PWA-MASTER-SYNC-LOCK", _
+        entityID:="PWA-MASTER-SYNC-LOCK", _
         correlationId:=corrId
 
     On Error GoTo 0

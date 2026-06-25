@@ -2,7 +2,7 @@ Attribute VB_Name = "modSledljivost"
 Option Explicit
 
 ' ============================================================
-' modSledljivost v1.1 â€“ Automatische Zuordnung Otkup ? Otpremnica
+' modSledljivost v1.1 – Automatische Zuordnung Otkup ? Otpremnica
 '
 ' Hardening only:
 '   - same matching logic
@@ -35,7 +35,7 @@ Public Function AutoLinkOtkupOtpremnica_TX() As Long
         moduleName:="modSledljivost", _
         procedureName:="AutoLinkOtkupOtpremnica_TX", _
         entityType:="Otkup", _
-        entityId:="", _
+        entityID:="", _
         correlationId:="AutoLinkOtkupOtpremnica"
     On Error GoTo 0
 
@@ -59,7 +59,7 @@ EH:
         moduleName:="modSledljivost", _
         procedureName:="AutoLinkOtkupOtpremnica_TX", _
         entityType:="Otkup", _
-        entityId:="", _
+        entityID:="", _
         correlationId:="AutoLinkOtkupOtpremnica", _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -73,7 +73,7 @@ EH:
         moduleName:="modSledljivost", _
         procedureName:="AutoLinkOtkupOtpremnica_TX", _
         entityType:="Otkup", _
-        entityId:="", _
+        entityID:="", _
         correlationId:="AutoLinkOtkupOtpremnica"
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -406,7 +406,7 @@ End Function
 Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     On Error GoTo EH
 
-    ' Komplette RÃ¼ckverfolgung:
+    ' Komplette Rückverfolgung:
     '   Zbirna ? Otpremnice ? Otkupi ? Kooperanti
     '
     ' Return shape ostaje isti:
@@ -522,7 +522,7 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     colOtkParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, _
                                        "modSledljivost.TraceByZbirna")
 
-    ' Lookup table guards â€” ne menjaju logiku, samo fail-fast za schema drift
+    ' Lookup table guards — ne menjaju logiku, samo fail-fast za schema drift
     RequireColumnIndex TBL_KOOPERANTI, "KooperantID", "modSledljivost.TraceByZbirna"
     RequireColumnIndex TBL_KOOPERANTI, "Ime", "modSledljivost.TraceByZbirna"
     RequireColumnIndex TBL_KOOPERANTI, "Prezime", "modSledljivost.TraceByZbirna"
@@ -555,7 +555,7 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     Dim ime As String
     Dim prezime As String
     Dim koopID As String
-    Dim pID As String
+    Dim pid As String
 
     For i = 1 To UBound(otkupData, 1)
         If otpIDs.Exists(CStr(otkupData(i, colOtkOtpID))) Then
@@ -576,13 +576,13 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
             result(idx, 8) = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", _
                                              koopID, COL_KOOP_BPG))
 
-            pID = CStr(otkupData(i, colOtkParcela))
+            pid = CStr(otkupData(i, colOtkParcela))
 
-            If pID <> "" Then
-                result(idx, 9) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pID, COL_PAR_KAT_BROJ))
-                result(idx, 10) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pID, COL_PAR_GGAP))
-                result(idx, 13) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pID, COL_PAR_KULTURA))
-                result(idx, 14) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pID, COL_PAR_POVRSINA))
+            If pid <> "" Then
+                result(idx, 9) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_KAT_BROJ))
+                result(idx, 10) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_GGAP))
+                result(idx, 13) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_KULTURA))
+                result(idx, 14) = CStr(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_POVRSINA))
             Else
                 result(idx, 9) = ""
                 result(idx, 10) = ""
@@ -591,7 +591,7 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
             End If
 
             result(idx, 11) = CStr(otkupData(i, colKlasa))
-            result(idx, 12) = pID
+            result(idx, 12) = pid
         End If
     Next i
 

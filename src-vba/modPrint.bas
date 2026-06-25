@@ -1,4 +1,5 @@
 Attribute VB_Name = "modPrint"
+'Attribute VB_Name = "modPrint"
 Option Explicit
 
 ' --- Geometrija otkupnog lista (svaki primerak = tacno 1/3 A4) -------------
@@ -15,13 +16,13 @@ Private Const OL_MIN_FILLER_PT As Double = 17#    ' donji razmak do perforacije 
 Private Const OL_TOP_MARGIN_TRIM_PT As Double = 0#
 
 ' ============================================================
-' modPrint â€“ Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
+' modPrint – Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
 ' ============================================================
 
 Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
                          ByVal headers As Variant)
     ' Generischer Report-Druck
-    ' Schreibt in ein temporÃ¤res Print-Sheet und druckt
+    ' Schreibt in ein temporäres Print-Sheet und druckt
     
     Dim wsPrint As Worksheet
     On Error Resume Next
@@ -46,12 +47,12 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     ' Drucken
     wsPrint.PrintOut Copies:=1
     
-    ' AufrÃ¤umen
+    ' Aufräumen
     wsPrint.Visible = xlSheetVeryHidden
 End Sub
 
 ' ============================================================
-' OTKUPNI LIST (zakonski) â€” OtkupSablon, dva primerka jedan iznad drugog,
+' OTKUPNI LIST (zakonski) — OtkupSablon, dva primerka jedan iznad drugog,
 ' A4 portrait. PDV nadoknada se racuna (CFG_PDV_NADOKNADA_STOPA, default 8%).
 ' Izlaz po CFG_OTKUP_PRINT_MODE: (prazno/PDF) | PRINT | PREVIEW | OFF.
 ' otkupIDs = rezultat SaveOtkupMulti_TX (npr. "OTK-1 + OTK-2" ili "OTK-1").
@@ -93,7 +94,7 @@ Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
     If ws Is Nothing Then Exit Function
 
     Dim suff As String: suff = Replace(Replace(otkupIDs, " + ", "_"), "/", "-")
-    Dim pdfPath As String: pdfPath = ThisWorkbook.Path & "\OtkupniList_" & suff & ".pdf"
+    Dim pdfPath As String: pdfPath = ThisWorkbook.path & "\OtkupniList_" & suff & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -103,6 +104,45 @@ Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
 EH:
     LogErr "modPrint.ExportOtkupniListPDF"
 End Function
+
+' Reprint celog otkupnog lista na osnovu jednog OtkupID-a. Klasa I i II dele isti
+' BrDok (zasebni OtkupID po klasi) -> skupi SVE aktivne redove tog BrDok-a i
+' odstampaj ih zajedno (kao posle unosa), pa list ne bude nepotpun. Izlaz po
+' CFG_OTKUP_PRINT_MODE (kao OutputOtkupniList).
+Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
+    On Error GoTo EH
+    If Trim$(otkupID) = "" Then Exit Sub
+
+    Dim d As Variant: d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Sub
+    d = ExcludeStornirano(d, TBL_OTKUP)
+    If Not IsArray(d) Then Exit Sub
+
+    Dim iID As Long, iBr As Long
+    iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    iBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    If iID = 0 Or iBr = 0 Then Exit Sub
+
+    Dim brDok As String, r As Long
+    For r = 1 To UBound(d, 1)
+        If CStr(d(r, iID)) = otkupID Then brDok = CStr(d(r, iBr)): Exit For
+    Next r
+
+    Dim ids As String
+    If brDok <> "" Then
+        For r = 1 To UBound(d, 1)
+            If CStr(d(r, iBr)) = brDok Then
+                If ids = "" Then ids = CStr(d(r, iID)) Else ids = ids & " + " & CStr(d(r, iID))
+            End If
+        Next r
+    End If
+    If ids = "" Then ids = otkupID   ' fallback: bar taj red
+
+    OutputOtkupniList ids
+    Exit Sub
+EH:
+    LogErr "modPrint.ReprintOtkupniListByOtkupID"
+End Sub
 
 ' Popuni OtkupSablon sa dva primerka. Vraca sheet (ili Nothing).
 Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
@@ -271,10 +311,10 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ' stampane linije za secenje - papir je vec perforiran; granice izmedju
     ' primeraka padaju tacno na perforacije (99mm i 198mm od vrha lista), a
     ' donja trecina (198-297mm) ostaje prazna.
-    Dim r0 As Long, lastRow As Long
-    r0 = WriteOtkupCopy(ws, 1, "Primerak za poljoprivrednika", h, stavke, cnt, _
+    Dim R0 As Long, lastRow As Long
+    R0 = WriteOtkupCopy(ws, 1, "Primerak za poljoprivrednika", h, stavke, cnt, _
                         OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
-    lastRow = WriteOtkupCopy(ws, r0, "Primerak za otkupljivaca", h, stavke, cnt, _
+    lastRow = WriteOtkupCopy(ws, R0, "Primerak za otkupljivaca", h, stavke, cnt, _
                              OL_THIRD_PT) - 1
 
     On Error Resume Next
@@ -308,7 +348,7 @@ End Function
 ' tacno 1/3 A4 (targetPt tacaka). Vraca prvi slobodan red (pocetak sledeceg
 ' primerka). Sve visine redova su eksplicitne (bez AutoFit) da bi zbir bio tacan.
 ' Optimalno 1-2 stavke po primerku; vise stavki smanjuje donji razmak.
-Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
+Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
                                 ByVal copyLbl As String, ByVal h As Object, _
                                 ByVal stavke As Variant, ByVal nStavke As Long, _
                                 ByVal targetPt As Double) As Long
@@ -318,9 +358,9 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal r0 As Long, _
     Dim usedPt As Double: usedPt = 0
 
     ' --- gornji prazan razmak (apsorbuje nestampajucu ivicu stampaca) ---
-    ws.rows(r0).RowHeight = OL_TOP_SPACER_PT
+    ws.rows(R0).RowHeight = OL_TOP_SPACER_PT
     usedPt = usedPt + OL_TOP_SPACER_PT
-    rr = r0 + 1
+    rr = R0 + 1
 
     ' --- zaglavlje prodavca (2 reda): ime; adresa levo + PIB/MB/Ziro desno ---
     With ws.cells(rr, 1)
@@ -566,9 +606,9 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIJEMNICA â€” PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
+' PRIJEMNICA — PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
 ' hladnjacu). Izlaz po CFG_PRIJEMNICA_PRINT_MODE: OFF/prazno (DEFAULT, bez
-' izlaza â€” kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
+' izlaza — kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
 ' frmDokumenta.btnUnosPrij posle snimanja. prijemnicaIDs = rezultat
 ' SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2" za dve klase).
 ' ============================================================
@@ -614,7 +654,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
         Exit Function
     End If
 
-    Dim folder As String: folder = ThisWorkbook.Path
+    Dim folder As String: folder = ThisWorkbook.path
     If Len(folder) = 0 Then folder = Environ$("TEMP")
     Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
     ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni PDF otvoren.
@@ -628,7 +668,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
     Exit Function
 EH:
     MsgBox "Greska pri izradi PDF prijemnice:" & vbCrLf & _
-           "  [" & Err.Number & "] " & Err.Description, vbExclamation, APP_NAME
+           "  [" & Err.Number & "] " & Err.description, vbExclamation, APP_NAME
     LogErr "modPrint.ExportPrijemnicaPDF"
 End Function
 

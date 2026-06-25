@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmAgrohemija 
    Caption         =   "UserForm1"
-   ClientHeight    =   10560
+   ClientHeight    =   13035
    ClientLeft      =   120
    ClientTop       =   465
-   ClientWidth     =   14400
+   ClientWidth     =   20235
    OleObjectBlob   =   "frmAgrohemija.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,6 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 Private Type tKorpaItem
     artikalID As String
@@ -50,21 +51,21 @@ Private Sub UserForm_Activate()
     
     ' Header zone (ako dodas lblKopf + lblSubtitle u Designer-u)
     StyleFrameTitleLabel lblKopf, "Agrohemija"
-    StyleSubtitle lblSubtitle, "Magacin â€” izdavanje robe i prijem od dobavljaca"
+    StyleSubtitle lblSubtitle, "Magacin — izdavanje robe i prijem od dobavljaca"
     
     ' Section headers + akcent linije
-    StyleSectionHeader fraIzlaz, "Izlaz â€” Izdavanje robe kooperantu"
-    StyleSectionHeader fraUlaz, "Ulaz â€” Prijem robe od dobavljaca"
+    StyleSectionHeader fraIzlaz, "Izlaz — Izdavanje robe kooperantu"
+    StyleSectionHeader fraUlaz, "Ulaz — Prijem robe od dobavljaca"
     StyleSectionAccent lblAccentIzlaz, fraIzlaz, "primary"    ' gold
     StyleSectionAccent lblAccentUlaz, fraUlaz, "info"          ' blue
     
     ' Action buttons - izlaz
     StylePrimaryButton btnDodajIzlaz, "+ Dodaj u korpu"
-    StylePrimaryButton btnZavrsiIzlaz, "ZavrÅ¡i izdavanje"
+    StylePrimaryButton btnZavrsiIzlaz, "Završi izdavanje"
     
     ' Action buttons - ulaz
     StylePrimaryButton btnDodajUlaz, "+ Prijem"
-    StylePrimaryButton btnZavrsiUlaz, "ZavrÅ¡i prijem"
+    StylePrimaryButton btnZavrsiUlaz, "Završi prijem"
     
     ' Exit
     StyleExitButton btnPovratak, "Povratak"
@@ -198,7 +199,7 @@ Private Sub UpdatePreporuka()
         Exit Sub
     End If
     
-    ' Summiere ha aller ausgewÃ¤hlten Parcele
+    ' Summiere ha aller ausgewählten Parcele
     Dim totalHa As Double
     Dim selectedParcele As String
     Dim i As Long
@@ -231,7 +232,7 @@ Private Sub UpdatePreporuka()
     ' Invariant: svi artikli moraju imati Pakovanje field popunjeno
     If Not IsNumeric(pakStr) Or CDbl(pakStr) <= 0 Then
         lblPreporuka.caption = "Greska: artikal nema definisano Pakovanje. " & _
-                               "Popuni 'Pakovanje' field u tblArtikli pre koriÅ¡cenja."
+                               "Popuni 'Pakovanje' field u tblArtikli pre korišcenja."
         lblPreporuka.ForeColor = CLR_ERROR()
         Exit Sub
     End If
@@ -336,7 +337,7 @@ Private Sub btnDodajIzlaz_Click()
         Exit Sub
     End If
     
-    ' Mindestens eine Parcela ausgewÃ¤hlt
+    ' Mindestens eine Parcela ausgewählt
     Dim hasSelection As Boolean
     Dim i As Long
     For i = 0 To lstParcele.ListCount - 1
@@ -365,7 +366,7 @@ Private Sub btnDodajIzlaz_Click()
     ' Invariant: svi artikli moraju imati Pakovanje field popunjeno
     If Not IsNumeric(pakStr) Or CDbl(pakStr) <= 0 Then
         MsgBox "Artikal '" & artNaziv & "' nema definisano Pakovanje." & vbCrLf & _
-               "Popuni 'Pakovanje' field u tblArtikli pre koriÅ¡cenja.", _
+               "Popuni 'Pakovanje' field u tblArtikli pre korišcenja.", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -392,7 +393,7 @@ Private Sub btnDodajIzlaz_Click()
         MsgBox "Nedovoljno stanje za artikal!" & vbCrLf & _
             "Na stanju: " & FormatKol(dostupno) & " " & jm & vbCrLf & _
             "Vec u korpi: " & FormatKol(trenutnoUKorpi) & " " & jm & vbCrLf & _
-            "PokuÅ¡avate dodati: " & brojPakovanja & " x " & FormatKol(pakovanje) & _
+            "Pokušavate dodati: " & brojPakovanja & " x " & FormatKol(pakovanje) & _
             " = " & FormatKol(ukupnaKolicina) & " " & jm, _
             vbExclamation, APP_NAME
         Exit Sub
@@ -421,11 +422,11 @@ Private Sub btnDodajIzlaz_Click()
     End With
     
     ' ListBox prikaz - pokaze BOTH (broj pakovanja + kg + RSD)
-    lstKorpa.AddItem artNaziv & " â€” " & brojPakovanja & " x " & FormatKol(pakovanje) & " " & jm & _
+    lstKorpa.AddItem artNaziv & " — " & brojPakovanja & " x " & FormatKol(pakovanje) & " " & jm & _
                      " = " & FormatKol(ukupnaKolicina) & " " & jm & _
                      " | " & Format$(ukupnaKolicina * cena, "#,##0") & " RSD"
     
-    ' Felder zurÃ¼cksetzen
+    ' Felder zurücksetzen
     cmbArtikal.value = ""
     txtKolicina.value = ""
     lblPreporuka.caption = ""
@@ -497,7 +498,7 @@ Private Sub btnZavrsiIzlaz_Click()
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4301, SRC, _
-                      "GreÅ¡ka pri cuvanju izlaza. ArtikalID=" & _
+                      "Greška pri cuvanju izlaza. ArtikalID=" & _
                       m_KorpaIzlaz(i).artikalID & _
                       "; Kolicina=" & CStr(m_KorpaIzlaz(i).kolicina)
         End If
@@ -506,7 +507,7 @@ Private Sub btnZavrsiIzlaz_Click()
     tx.CommitTx
     txStarted = False
 
-    MsgBox "Izdavanje zavrÅ¡eno: " & brojDok & vbCrLf & _
+    MsgBox "Izdavanje završeno: " & brojDok & vbCrLf & _
            m_KorpaIzlazCount & " stavki", vbInformation, APP_NAME
 
     ClearKorpaIzlaz
@@ -530,7 +531,7 @@ EH:
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "GreÅ¡ka pri cuvanju izdavanja, promene vracene: " & errDesc, _
+    MsgBox "Greška pri cuvanju izdavanja, promene vracene: " & errDesc, _
            vbCritical, APP_NAME
 
     Set tx = Nothing
@@ -584,7 +585,7 @@ Private Sub cmbArtikalUlaz_Change()
     jm = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artID, COL_ART_JM))
     lblUlazDoza.caption = "Doza: " & dozaStr & " " & jm & "/ha"
     
-    ' Cena vorausfÃ¼llen
+    ' Cena vorausfüllen
     Dim cenaStr As String
     cenaStr = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, artID, COL_ART_CENA))
     If IsNumeric(cenaStr) Then txtCenaUlaz.value = cenaStr
@@ -710,7 +711,7 @@ Private Sub btnZavrsiUlaz_Click()
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4311, SRC, _
-                      "GreÅ¡ka pri cuvanju ulaza. ArtikalID=" & _
+                      "Greška pri cuvanju ulaza. ArtikalID=" & _
                       m_KorpaUlaz(i).artikalID & _
                       "; Kolicina=" & CStr(m_KorpaUlaz(i).kolicina)
         End If
@@ -719,7 +720,7 @@ Private Sub btnZavrsiUlaz_Click()
     tx.CommitTx
     txStarted = False
 
-    MsgBox "Prijem zavrÅ¡en: " & brojDok & vbCrLf & _
+    MsgBox "Prijem završen: " & brojDok & vbCrLf & _
            m_KorpaUlazCount & " stavki", vbInformation, APP_NAME
 
     ClearKorpaUlaz
@@ -742,7 +743,7 @@ EH:
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "GreÅ¡ka pri cuvanju prijema, promene vracene: " & errDesc, _
+    MsgBox "Greška pri cuvanju prijema, promene vracene: " & errDesc, _
            vbCritical, APP_NAME
 
     Set tx = Nothing
@@ -808,7 +809,7 @@ Private Sub ValidateKorpaIzlazStanje()
         artID = Trim$(m_KorpaIzlaz(i).artikalID)
 
         If Len(artID) = 0 Then
-            Err.Raise vbObjectError + 4320, SRC, "Korpa sadrÅ¾i stavku bez ArtikalID."
+            Err.Raise vbObjectError + 4320, SRC, "Korpa sadrži stavku bez ArtikalID."
         End If
 
         If Not needDict.Exists(artID) Then
@@ -913,7 +914,7 @@ Public Sub RefreshTopKpis()
     StyleTopKpi fraKpiDug, lblKpiDugTitle, lblKpiDugValue, lblKpiDugAccent, dugKind
     lblKpiDugTitle.caption = "Dug kooperanta"
     If cmbKooperant.value = "" Then
-        lblKpiDugValue.caption = "â€”"
+        lblKpiDugValue.caption = "—"
     Else
         lblKpiDugValue.caption = Format$(dug, "#,##0") & " RSD"
     End If
@@ -952,7 +953,7 @@ Public Sub RefreshTopKpis()
     StyleTopKpi fraKpiDugPosle, lblKpiDPTitle, lblKpiDPValue, lblKpiDPAccent, dpKind
     lblKpiDPTitle.caption = "Dug posle izdavanja"
     If cmbKooperant.value = "" Then
-        lblKpiDPValue.caption = "â€”"
+        lblKpiDPValue.caption = "—"
     Else
         lblKpiDPValue.caption = Format$(dugPosle, "#,##0") & " RSD"
     End If
@@ -998,9 +999,9 @@ End Sub
 
 Private Sub ResetActionButtons()
     StylePrimaryButton btnDodajIzlaz, "+ Dodaj u korpu"
-    StylePrimaryButton btnZavrsiIzlaz, "ZavrÅ¡i izdavanje"
+    StylePrimaryButton btnZavrsiIzlaz, "Završi izdavanje"
     StylePrimaryButton btnDodajUlaz, "+ Prijem"
-    StylePrimaryButton btnZavrsiUlaz, "ZavrÅ¡i prijem"
+    StylePrimaryButton btnZavrsiUlaz, "Završi prijem"
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 

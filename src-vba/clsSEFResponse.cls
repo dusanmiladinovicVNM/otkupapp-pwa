@@ -9,14 +9,14 @@ Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 Option Explicit
 
-Public HttpStatus As Long
+Public httpStatus As Long
 Public apiStatus As String
 Public Success As Boolean
 Public Accepted As Boolean
 Public Rejected As Boolean
-Public CorrelationId As String
+Public correlationId As String
 Public sefDocumentId As String
 Public SEFInvoiceNumber As String
 Public errorCode As String
 Public errorMessage As String
-Public RawBody As String
+Public rawBody As String

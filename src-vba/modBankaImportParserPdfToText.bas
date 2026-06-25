@@ -3,11 +3,11 @@ Option Explicit
 
 ' ============================================================
 ' modBankaImport_PdfText
-' Parser f√ºr pdftotext-Ausgabe von Komercijalna Banka Izvod
+' Parser f¸r pdftotext-Ausgabe von Komercijalna Banka Izvod
 '
 ' Output-Spalten:
 ' 1  Datum Izvoda
-' 2  Datum Izvr≈°
+' 2  Datum Izvrö
 ' 3  Partner
 ' 4  Racun
 ' 5  Zaduzenje
@@ -21,9 +21,9 @@ Option Explicit
 Public Type BankIzvodSaldo
     PocetnoStanje As Double           ' "Prethodno stanje" iz STANJE bloka
     UkupanDuguje As Double            ' "Duguje" (suma isplata reported)
-    UkupanPotrazuje As Double         ' "Potra≈æivuje" (suma uplata reported)
+    UkupanPotrazuje As Double         ' "Potraûivuje" (suma uplata reported)
     ZavrsnoStanje As Double           ' "Novo stanje"
-    BrojNalogaZaduzenje As Long       ' Broj naloga - Zadu≈æenje
+    BrojNalogaZaduzenje As Long       ' Broj naloga - Zaduûenje
     BrojNalogaOdobrenje As Long       ' Broj naloga - Odobrenje
     parsed As Boolean                  ' True iff sva polja uspesno parsed
 End Type
@@ -109,8 +109,8 @@ Private Function ResolvePdfToTextExePath() As String
     rootPath = GetLocalConfigValue("APP_ROOT_PATH", "")
 
     If Len(Trim$(rootPath)) = 0 Then
-        If Len(Trim$(ThisWorkbook.Path)) > 0 Then
-            rootPath = ThisWorkbook.Path
+        If Len(Trim$(ThisWorkbook.path)) > 0 Then
+            rootPath = ThisWorkbook.path
         Else
             rootPath = "C:\OtkupApp"
         End If
@@ -264,7 +264,7 @@ Function PickPdf() As String
 
     With Application.FileDialog(msoFileDialogFilePicker)
     
-        .title = "PDF ausw√§hlen"
+        .title = "PDF ausw‰hlen"
         .filters.Clear
         .filters.Add "PDF", "*.pdf"
         
@@ -533,7 +533,7 @@ Private Function FindStandaloneAmountNearAmountLinePdf(ByRef lines() As String, 
     
     If amountLineIdx <= 0 Then Exit Function
     
-    ' zuerst r√ºckw√§rts suchen
+    ' zuerst r¸ckw‰rts suchen
     For i = amountLineIdx - 1 To LBound(lines) Step -1
         If IsAmountPdf(Trim$(lines(i))) Then
             FindStandaloneAmountNearAmountLinePdf = i
@@ -543,7 +543,7 @@ Private Function FindStandaloneAmountNearAmountLinePdf(ByRef lines() As String, 
         If IsDateLinePdf(Trim$(lines(i))) Then Exit For
     Next i
     
-    ' dann vorw√§rts suchen
+    ' dann vorw‰rts suchen
     For i = amountLineIdx + 1 To UBound(lines)
         If IsAmountPdf(Trim$(lines(i))) Then
             FindStandaloneAmountNearAmountLinePdf = i
@@ -633,7 +633,7 @@ Private Sub ParsePdfOdobrenjeSifraLineStrict(ByVal s As String, _
         sifra = m.SubMatches(2)
         svrha = NormalizeSpacesPdf(m.SubMatches(3))
         
-        ' Alles ab "Ukupno za ..." abschneiden, falls es in derselben Zeile h√§ngt
+        ' Alles ab "Ukupno za ..." abschneiden, falls es in derselben Zeile h‰ngt
         pUk = InStr(1, svrha, "Ukupno za racun", vbTextCompare)
         If pUk = 0 Then pUk = InStr(1, svrha, "Ukupno za racun", vbTextCompare)
         If pUk > 0 Then
@@ -819,7 +819,7 @@ Private Function CleanSvrhaPdf(ByVal s As String) As String
     
     s = NormalizeSpacesPdf(s)
     
-    ' H√§ngendes [97] entfernen
+    ' H‰ngendes [97] entfernen
     If Right$(s, 4) = "[97]" Then
         s = Trim$(Left$(s, Len(s) - 4))
     End If
@@ -917,9 +917,9 @@ End Function
 ' Format koji parser ocekuje (svi labeli na zasebnim linijama,
 ' zatim 6 tokenova na jednoj data liniji):
 '   "Prethodno stanje"
-'   "Duguje Potra≈æivuje"      (ili "Duguje   Potra≈æivuje")
+'   "Duguje Potraûivuje"      (ili "Duguje   Potraûivuje")
 '   "Novo stanje"
-'   "Zadu≈æenje Odobrenje"
+'   "Zaduûenje Odobrenje"
 '   "1,775.16 5,230.00 6,000.00 2,545.16 3 1"
 '
 ' Lokator: "Prethodno stanje" label-a se nalazi unutar STANJE sekcije
@@ -1113,7 +1113,7 @@ Sub TestPdfTextParser()
     For i = 1 To UBound(result, 1)
         Debug.Print "--- Txn " & i & " ---"
         Debug.Print "Datum Izvoda: " & result(i, 1)
-        Debug.Print "Datum Izvr≈°: " & result(i, 2)
+        Debug.Print "Datum Izvrö: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
         Debug.Print "Racun: " & result(i, 4)
         Debug.Print "Zaduzenje: " & result(i, 5)
@@ -1171,7 +1171,7 @@ Sub TestPdfTextParser123()
         Debug.Print "Broj Izvoda: " & brojIzvoda
         Debug.Print "Datum Izvoda: " & datumIzvoda
         Debug.Print "Broj Racuna: " & brojRacuna
-        Debug.Print "Datum Izvr≈°: " & result(i, 2)
+        Debug.Print "Datum Izvrö: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
         Debug.Print "Racun: " & result(i, 4)
         Debug.Print "Zaduzenje: " & result(i, 5)

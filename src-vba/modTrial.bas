@@ -2,7 +2,7 @@ Attribute VB_Name = "modTrial"
 Option Explicit
 
 ' ============================================================
-' modTrial â€” vremenski ogranicen rad (trial / demo lock)
+' modTrial — vremenski ogranicen rad (trial / demo lock)
 '
 ' Cita SISTEMSKI datum i BLOKIRA pokretanje posle TRIAL_DAYS dana od
 ' zadatog pocetnog datuma (TRIAL_START_*). Dodatno detektuje vracanje
@@ -113,7 +113,7 @@ Public Function TrialEnabled() As Boolean
 End Function
 
 ' Da li je trial TRENUTNO aktivan (ukljucen, u roku, sat nije vracen unazad).
-' CISTA provera bez side-efekata (ne blokira, ne pise HWM) â€” ogledalo allow-uslova
+' CISTA provera bez side-efekata (ne blokira, ne pise HWM) — ogledalo allow-uslova
 ' iz TrialGateOrQuit. Koristi je modLicense.AccessGateOrQuit da bira izmedju
 ' trial-a i inline unosa licence.
 Public Function TrialActive() As Boolean
@@ -167,6 +167,7 @@ Private Sub TrialBlock(ByVal reason As String, ByVal deadline As Date)
            "Kontaktirajte dobavljaca za nastavak rada.", vbCritical, APP_NAME
 
     ' Pouzdano zatvaranje preko deljenog mehanizma (modLicense). NE zatvarati
-    ' sinhrono iz Workbook_Open toka â€” Excel Close tu odlaze/ignorise.
+    ' sinhrono iz Workbook_Open toka — Excel Close tu odlaze/ignorise.
     DenyAccessAndScheduleClose
 End Sub
+

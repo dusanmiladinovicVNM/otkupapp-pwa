@@ -1,20 +1,21 @@
 Attribute VB_Name = "modHelpers"
+'Attribute VB_Name = "modHelpers"
 Option Explicit
 
 ' Format kolicine (kg) za izvestaje: ceo broj BEZ decimalnog zareza
 ' (1000 -> "1.000"), a sa decimalom prikazi decimale (1234.5 -> "1.234,5").
 ' Eksplicitan If jer Format$(n,"#,##0.##") u nekim lokalizacijama (DE) ostavi
 ' prazan decimalni zarez ("500,"). Jedinstveni izvor istine za kg prikaz.
-Public Function FmtKolicina(ByVal x As Double) As String
-    If x = Int(x) Then
-        FmtKolicina = Format$(x, "#,##0")
+Public Function FmtKolicina(ByVal X As Double) As String
+    If X = Int(X) Then
+        FmtKolicina = Format$(X, "#,##0")
     Else
-        FmtKolicina = Format$(x, "#,##0.##")
+        FmtKolicina = Format$(X, "#,##0.##")
     End If
 End Function
 
 Public Function ExtractIDFromDisplay(ByVal displayText As String) As String
-    ' Unterst�tzt: "ID - Name" und "(ID) Name"
+    ' Unterst?tzt: "ID - Name" und "(ID) Name"
     Dim dashPos As Long
     dashPos = InStr(displayText, " - ")
     If dashPos > 0 Then
@@ -146,7 +147,7 @@ End Sub
 
 Public Function ExcludeStornirano(ByVal data As Variant, _
                                   ByVal tblName As String) As Variant
-    ' Filtert Stornirano="Da" Zeilen raus, gibt bereinigtes Array zur�ck
+    ' Filtert Stornirano="Da" Zeilen raus, gibt bereinigtes Array zur?ck
     If IsEmpty(data) Then
         ExcludeStornirano = data
         Exit Function
@@ -175,11 +176,11 @@ Public Function SafeGetTable(ByVal tableName As String) As ListObject
 End Function
 
 
-Public Function Nz(ByVal val As Variant, Optional ByVal default As String = "") As String
+Public Function nz(ByVal val As Variant, Optional ByVal default As String = "") As String
     If IsEmpty(val) Or IsNull(val) Then
-        Nz = default
+        nz = default
     Else
-        Nz = CStr(val)
+        nz = CStr(val)
     End If
 End Function
 
@@ -188,7 +189,7 @@ End Function
 Public Function NzToText(ByVal v As Variant) As String
     If IsNull(v) Or IsEmpty(v) Then
         NzToText = ""
-    ElseIf IsError(v) Then
+    ElseIf isError(v) Then
         NzToText = ""
     Else
         NzToText = CStr(v)

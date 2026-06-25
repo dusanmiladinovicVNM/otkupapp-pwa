@@ -328,7 +328,7 @@ EH:
         moduleName:="modSEFStatusSync", _
         procedureName:="RefreshSEFStatus_TX", _
         entityType:="Faktura", _
-        entityId:=fakturaID, _
+        entityID:=fakturaID, _
         correlationId:=fakturaID, _
         errorNumber:=errNo, _
         errorDescription:=errDesc, _
@@ -393,7 +393,7 @@ Private Sub ApplySEFStateOrRefreshOnly(ByVal fakturaID As String, _
     End If
 
     ' Ne vracamo finalne lokalne state-ove nazad u SEF_SENT samo zato
-    ' Å¡to eksterni API vrati pending/non-final status.
+    ' što eksterni API vrati pending/non-final status.
     If targetState = UCase$(WF_SEF_SENT) Then
         If IsFinalLocalSEFWorkflowState(currentState) Then
             UpdateFakturaSEFRefreshFields_Row _
@@ -473,7 +473,7 @@ Public Sub RefreshPendingOutboundInvoices_TX()
         moduleName:="modSEFStatusSync", _
         procedureName:="RefreshPendingOutboundInvoices_TX", _
         entityType:="SEF", _
-        entityId:="PendingOutbound", _
+        entityID:="PendingOutbound", _
         correlationId:="SEF-PENDING-REFRESH"
     On Error GoTo EH
 
@@ -535,7 +535,7 @@ Public Sub RefreshPendingOutboundInvoices_TX()
                         moduleName:="modSEFStatusSync", _
                         procedureName:="RefreshPendingOutboundInvoices_TX.Invoice", _
                         entityType:="Faktura", _
-                        entityId:=fakturaID, _
+                        entityID:=fakturaID, _
                         correlationId:=fakturaID, _
                         errorNumber:=itemErrNo, _
                         errorDescription:=itemErrDesc, _
@@ -582,11 +582,10 @@ NextInvoice:
         moduleName:="modSEFStatusSync", _
         procedureName:="RefreshPendingOutboundInvoices_TX", _
         entityType:="SEF", _
-        entityId:="PendingOutbound", _
+        entityID:="PendingOutbound", _
         correlationId:="SEF-PENDING-REFRESH"
     On Error GoTo 0
 
-    Exit Sub
     Exit Sub
 
 EH:
@@ -606,7 +605,7 @@ EH:
         moduleName:="modSEFStatusSync", _
         procedureName:="RefreshPendingOutboundInvoices_TX", _
         entityType:="SEF", _
-        entityId:="PendingOutbound", _
+        entityID:="PendingOutbound", _
         correlationId:="SEF-PENDING-REFRESH", _
         errorNumber:=errNo, _
         errorDescription:=errDesc, _
@@ -620,7 +619,7 @@ EH:
         moduleName:="modSEFStatusSync", _
         procedureName:="RefreshPendingOutboundInvoices_TX", _
         entityType:="SEF", _
-        entityId:="PendingOutbound", _
+        entityID:="PendingOutbound", _
         correlationId:="SEF-PENDING-REFRESH"
 
     On Error GoTo 0

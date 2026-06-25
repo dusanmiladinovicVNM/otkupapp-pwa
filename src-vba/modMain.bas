@@ -2,7 +2,7 @@ Attribute VB_Name = "modMain"
 Option Explicit
 
 ' ============================================================
-' modMain v2.1 â€“ ValidateAllTables aktualisiert
+' modMain v2.1 – ValidateAllTables aktualisiert
 ' ============================================================
 
 Private m_Initialized As Boolean
@@ -26,11 +26,17 @@ Public Sub StartApp()
 
     If Not m_Initialized Then InitApp
 
-    ' --- Pristup: licenca + trial ("trial samo ako NIJE licenciran") ---
-    ' Licencirana masina propusta; nelicencirana dobija trial (ako je ukljucen)
-    ' ili pada na license gate. Opt-in: LICENSE_ENABLED / TRIAL_ENABLED.
-    ' Detalji: modLicense.AccessGateOrQuit.
+    ' --- Licenca (per-uredjaj / node-locked) ---
+    ' Blokira pokretanje ako licenca nije vazeca za OVAJ racunar.
+    ' Opt-in: radi samo ako je LICENSE_ENABLED = YES u tblSEFConfig
+    ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
     If Not AccessGateOrQuit() Then Exit Sub
+
+    ' --- Min-version gate (flota) ---
+    ' Server (GAS action "checkVersion") javlja minimalnu dozvoljenu verziju;
+    ' zastarela verzija dobija upozorenje, a uz enforce=YES i blok pokretanja.
+    ' Opt-in na MONITORING_ENDPOINT+SECRET; fail-open offline. Vidi modUpdateGate.
+    If Not UpdateGateOrQuit() Then Exit Sub
 
     Application.Visible = False
 
@@ -43,7 +49,7 @@ Public Sub StartApp()
     Call LogAppStart
 
     ' SEF recovery ostaje non-blocking za startup.
-    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada Å¡alje monitoring.
+    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada šalje monitoring.
     On Error Resume Next
     Call RecoverAllStuckSEFSendingInvoices
     On Error GoTo EH

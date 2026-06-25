@@ -1,4 +1,5 @@
 Attribute VB_Name = "modPregledListova"
+'Attribute VB_Name = "modPregledListova"
 ' ============================================================
 ' modPregledListova - pravi / azurira list "Pregled listova":
 '   kolona A = naziv lista, kolona B = klikabilan link ka tom listu.
@@ -24,16 +25,16 @@ Public Sub NapraviPregledListova()
     Set wsPregled = GetOrCreatePregledSheet()
 
     Application.ScreenUpdating = False
-    On Error GoTo Fail
+    On Error GoTo fail
 
     ' Ocisti prethodni sadrzaj i stara dugmad (Cells.Clear ne brise dugmad).
-    wsPregled.Cells.Clear
+    wsPregled.cells.Clear
     ObrisiDugmad wsPregled
 
     ' Zaglavlje tabele.
-    wsPregled.Cells(HDR_ROW, 1).Value = "Naziv lista"
-    wsPregled.Cells(HDR_ROW, 2).Value = "Link"
-    wsPregled.Range(wsPregled.Cells(HDR_ROW, 1), wsPregled.Cells(HDR_ROW, 2)).Font.Bold = True
+    wsPregled.cells(HDR_ROW, 1).value = "Naziv lista"
+    wsPregled.cells(HDR_ROW, 2).value = "Link"
+    wsPregled.Range(wsPregled.cells(HDR_ROW, 1), wsPregled.cells(HDR_ROW, 2)).Font.Bold = True
 
     ' Jedan red po listu (preskoci sam "Pregled listova").
     Dim ws As Worksheet, r As Long
@@ -41,10 +42,10 @@ Public Sub NapraviPregledListova()
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.name, PREGLED_SHEET, vbTextCompare) <> 0 Then
             ' Kolona A: naziv lista.
-            wsPregled.Cells(r, 1).Value = ws.name
+            wsPregled.cells(r, 1).value = ws.name
             ' Kolona B: klikabilan link -> celija A1 ciljnog lista.
             wsPregled.Hyperlinks.Add _
-                Anchor:=wsPregled.Cells(r, 2), _
+                anchor:=wsPregled.cells(r, 2), _
                 Address:="", _
                 SubAddress:=SubAdresaLista(ws.name), _
                 TextToDisplay:=ws.name
@@ -53,7 +54,7 @@ Public Sub NapraviPregledListova()
     Next ws
 
     ' Dugmad iznad tabele + kozmetika (autofit, zamrznut band sa dugmadima/headerom).
-    wsPregled.Columns("A:B").AutoFit
+    wsPregled.columns("A:B").AutoFit
     DodajDugmad wsPregled
     wsPregled.Activate
     wsPregled.Range("A" & DATA_ROW).Select
@@ -66,7 +67,7 @@ Public Sub NapraviPregledListova()
            vbInformation, "Pregled listova"
     Exit Sub
 
-Fail:
+fail:
     Application.ScreenUpdating = True
     MsgBox "Greska pri pravljenju pregleda: " & Err.description, _
            vbExclamation, "Pregled listova"
@@ -78,10 +79,10 @@ End Sub
 ' odradjeni pri otvaranju fajla (StartApp), pa ovde samo prikazujemo glavnu
 ' formu, isto kao i ostali pozivaci (frmMarza, frmIzvestaj, frmMaticniPodaci...).
 Public Sub PokreniProgram()
-    On Error GoTo Fail
+    On Error GoTo fail
     frmOtkupAPP.Show
     Exit Sub
-Fail:
+fail:
     MsgBox "Ne mogu da otvorim program: " & Err.description, _
            vbExclamation, "Pregled listova"
 End Sub
@@ -101,10 +102,10 @@ End Sub
 ' "Migracije" -> jednokratni uvoz cistih podataka iz starog OtkupApp fajla.
 ' Reuse modMigracija.MigrirajPodatkeIzStarog (sam bira fajl i ima svoju potvrdu).
 Public Sub PokreniMigraciju()
-    On Error GoTo Fail
+    On Error GoTo fail
     MigrirajPodatkeIzStarog
     Exit Sub
-Fail:
+fail:
     MsgBox "Greska pri migraciji: " & Err.description, _
            vbExclamation, "Migracije"
 End Sub
@@ -133,7 +134,7 @@ Public Sub OcistiTabele()
     End If
 
     Application.ScreenUpdating = False
-    On Error GoTo Fail
+    On Error GoTo fail
 
     Dim i As Long, ocisceno As Long, nedostaju As String
     For i = LBound(tbls) To UBound(tbls)
@@ -150,7 +151,7 @@ Public Sub OcistiTabele()
            vbInformation, "Ocisti tabele"
     Exit Sub
 
-Fail:
+fail:
     Application.ScreenUpdating = True
     MsgBox "Greska pri ciscenju tabela: " & Err.description, _
            vbExclamation, "Ocisti tabele"
@@ -165,7 +166,7 @@ Private Function GetOrCreatePregledSheet() As Worksheet
     On Error GoTo 0
 
     If GetOrCreatePregledSheet Is Nothing Then
-        Set GetOrCreatePregledSheet = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+        Set GetOrCreatePregledSheet = ThisWorkbook.Worksheets.Add(before:=ThisWorkbook.Worksheets(1))
         GetOrCreatePregledSheet.name = PREGLED_SHEET
     End If
 End Function
@@ -192,8 +193,8 @@ End Function
 ' Ukloni sva (stara) dugmad sa lista - poziva se pre ponovnog crtanja.
 Private Sub ObrisiDugmad(ByVal ws As Worksheet)
     On Error Resume Next
-    Do While ws.Buttons.count > 0
-        ws.Buttons(1).Delete
+    Do While ws.buttons.count > 0
+        ws.buttons(1).Delete
     Loop
     On Error GoTo 0
 End Sub
@@ -209,13 +210,14 @@ Private Sub DodajDugmad(ByVal ws As Worksheet)
 
     Dim leftPt As Double, topPt As Double, wPt As Double, hPt As Double, gap As Double
     leftPt = ws.Range("A1").Left
-    topPt = ws.Range("A1").Top + 2
+    topPt = ws.Range("A1").top + 2
     wPt = 120: hPt = 26: gap = 8
 
     Dim i As Long, btn As Button
     For i = LBound(specs) To UBound(specs)
-        Set btn = ws.Buttons.Add(leftPt + i * (wPt + gap), topPt, wPt, hPt)
-        btn.Caption = specs(i)(0)
+        Set btn = ws.buttons.Add(leftPt + i * (wPt + gap), topPt, wPt, hPt)
+        btn.caption = specs(i)(0)
         btn.OnAction = specs(i)(1)
     Next i
 End Sub
+

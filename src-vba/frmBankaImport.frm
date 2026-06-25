@@ -4,7 +4,7 @@ Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmBankaImport
    ClientHeight    =   13590
    ClientLeft      =   120
    ClientTop       =   465
-   ClientWidth     =   21855
+   ClientWidth     =   20235
    OleObjectBlob   =   "frmBankaImport.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,6 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 Option Explicit
 
 Private m_Data As Variant
@@ -29,7 +30,7 @@ Private Sub UserForm_Activate()
     
     ' Headers
     StyleFrameTitleLabel lblKopf, "Bank Import"
-    StyleSubtitle lblSubtitle, "Uvoz transakcija iz bankarskih izvoda â€” mapiranje na partnere"
+    StyleSubtitle lblSubtitle, "Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere"
     
     ' Section headers (ako koristis frames)
     ' StyleSectionHeader fraDetail, "Detalji selektovane stavke"
@@ -66,7 +67,7 @@ Private Sub UserForm_Activate()
     SetupList
     LoadBankaRows
     
-    ' KPI strip (opciono â€” vidi Izmena 2)
+    ' KPI strip (opciono — vidi Izmena 2)
      LayoutTopKpis
      RefreshTopKpis
     
@@ -116,9 +117,9 @@ Private Sub LoadBankaRows()
         lstBanka.List(lstBanka.ListCount - 1, 1) = Format$(m_Data(i, colDatum), "d.m.yyyy")
         lstBanka.List(lstBanka.ListCount - 1, 2) = CStr(m_Data(i, colPartner))
         lstBanka.List(lstBanka.ListCount - 1, 3) = CStr(m_Data(i, colPoziv))
-        lstBanka.List(lstBanka.ListCount - 1, 4) = Format$(CDbl(Nz(m_Data(i, colUplata), "0")), "#,##0.00")
-        lstBanka.List(lstBanka.ListCount - 1, 5) = Format$(CDbl(Nz(m_Data(i, colIsplata), "0")), "#,##0.00")
-        lstBanka.List(lstBanka.ListCount - 1, 6) = CStr(Nz(m_Data(i, colObr), ""))
+        lstBanka.List(lstBanka.ListCount - 1, 4) = Format$(CDbl(nz(m_Data(i, colUplata), "0")), "#,##0.00")
+        lstBanka.List(lstBanka.ListCount - 1, 5) = Format$(CDbl(nz(m_Data(i, colIsplata), "0")), "#,##0.00")
+        lstBanka.List(lstBanka.ListCount - 1, 6) = CStr(nz(m_Data(i, colObr), ""))
         
         m_BimIDs(i - 1) = CStr(m_Data(i, colID))
     Next i
@@ -148,8 +149,8 @@ Private Sub ShowSelectedRow()
     lblSvrha.caption = CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_SVRHA_PLACANJA))
     
     Dim uplata As Double, isplata As Double
-    uplata = CDbl(Nz(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_UPLATA), "0"))
-    isplata = CDbl(Nz(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_ISPLATA), "0"))
+    uplata = CDbl(nz(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_UPLATA), "0"))
+    isplata = CDbl(nz(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_ISPLATA), "0"))
     
     lblIznos.caption = "Uplata: " & Format$(uplata, "#,##0.00") & _
                        " | Isplata: " & Format$(isplata, "#,##0.00")
@@ -656,10 +657,10 @@ Private Sub UpdateIzvodSummaryLabel()
     
     brIzv = CStr(data(maxRow, colBrojIzvoda))
     datumIzv = CStr(data(maxRow, colDatumIzvoda))
-    pocetno = CDbl(Nz(data(maxRow, colPocetno), "0"))
-    zavrsno = CDbl(Nz(data(maxRow, colZavrsno), "0"))
-    duguje = CDbl(Nz(data(maxRow, colDuguje), "0"))
-    potraz = CDbl(Nz(data(maxRow, colPotrazuje), "0"))
+    pocetno = CDbl(nz(data(maxRow, colPocetno), "0"))
+    zavrsno = CDbl(nz(data(maxRow, colZavrsno), "0"))
+    duguje = CDbl(nz(data(maxRow, colDuguje), "0"))
+    potraz = CDbl(nz(data(maxRow, colPotrazuje), "0"))
     
     ' Level 1 read-side math check
     Dim expected As Double
@@ -732,8 +733,8 @@ Private Sub RefreshTopKpis()
         
         Dim i As Long
         For i = 1 To UBound(m_Data, 1)
-            totalUplata = totalUplata + CDbl(Nz(m_Data(i, colUplata), "0"))
-            totalIsplata = totalIsplata + CDbl(Nz(m_Data(i, colIsplata), "0"))
+            totalUplata = totalUplata + CDbl(nz(m_Data(i, colUplata), "0"))
+            totalIsplata = totalIsplata + CDbl(nz(m_Data(i, colIsplata), "0"))
             
             ' Check if auto-match exists
             Dim partnerName As String

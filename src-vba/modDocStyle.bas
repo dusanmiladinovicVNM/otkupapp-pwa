@@ -1,4 +1,5 @@
 Attribute VB_Name = "modDocStyle"
+'Attribute VB_Name = "modDocStyle"
 Option Explicit
 
 ' ============================================================
@@ -50,9 +51,9 @@ Public Function DocLogoPath() As String
         If Dir$(p) <> "" Then DocLogoPath = p: Exit Function
     End If
     Dim cand As String
-    cand = ThisWorkbook.Path & "\logo.png"
+    cand = ThisWorkbook.path & "\logo.png"
     If Dir$(cand) <> "" Then DocLogoPath = cand: Exit Function
-    cand = ThisWorkbook.Path & "\logo.jpg"
+    cand = ThisWorkbook.path & "\logo.jpg"
     If Dir$(cand) <> "" Then DocLogoPath = cand
 End Function
 
@@ -65,14 +66,14 @@ Public Sub DocDrawLogo(ByVal ws As Worksheet, ByVal topRow As Long, ByVal rightC
     Dim w As Double, hgt As Double
     w = 52: hgt = 40
     Dim rcell As Range: Set rcell = ws.cells(topRow, rightCol)
-    Dim L As Double, T As Double
-    L = rcell.Left + rcell.Width - w
-    If L < ws.cells(topRow, 1).Left Then L = ws.cells(topRow, 1).Left
-    T = rcell.Top
+    Dim l As Double, t As Double
+    l = rcell.Left + rcell.width - w
+    If l < ws.cells(topRow, 1).Left Then l = ws.cells(topRow, 1).Left
+    t = rcell.top
 
     ws.Shapes.AddPicture fileName:=p, LinkToFile:=msoFalse, _
                          SaveWithDocument:=msoTrue, _
-                         Left:=L, Top:=T, Width:=w, Height:=hgt
+                         Left:=l, top:=t, width:=w, Height:=hgt
 done:
 End Sub
 
@@ -95,7 +96,7 @@ End Sub
 ' Zaglavlje firme (naziv/adresa/PIB-MB-ziro) u koloni 1, logo gore desno,
 ' linija ispod. Cita SELLER_* iz configa. Vraca prvi slobodan red.
 Public Function DocSellerHeader(ByVal ws As Worksheet, ByVal atRow As Long, _
-                                ByVal lastCol As Long, ByVal rightCol As Long) As Long
+                                ByVal LASTCOL As Long, ByVal rightCol As Long) As Long
     With ws.cells(atRow, 1)
         .value = GetConfigValue("SELLER_NAME")
         .Font.Bold = True
@@ -111,7 +112,7 @@ Public Function DocSellerHeader(ByVal ws As Worksheet, ByVal atRow As Long, _
         .Font.Color = DocColGray()
     End With
     DocDrawLogo ws, atRow, rightCol
-    With ws.Range(ws.cells(atRow + 2, 1), ws.cells(atRow + 2, lastCol)).Borders(xlEdgeBottom)
+    With ws.Range(ws.cells(atRow + 2, 1), ws.cells(atRow + 2, LASTCOL)).Borders(xlEdgeBottom)
         .LineStyle = xlContinuous
         .Weight = xlMedium
         .Color = DocColRule()
@@ -122,9 +123,9 @@ End Function
 ' Naslov: sitan opis + veliki naslov, centrirano preko 1..lastCol, linija ispod.
 ' Vraca prvi slobodan red.
 Public Function DocTitleBlock(ByVal ws As Worksheet, ByVal atRow As Long, _
-                              ByVal lastCol As Long, ByVal descriptor As String, _
+                              ByVal LASTCOL As Long, ByVal descriptor As String, _
                               ByVal title As String) As Long
-    ws.Range(ws.cells(atRow, 1), ws.cells(atRow, lastCol)).Merge
+    ws.Range(ws.cells(atRow, 1), ws.cells(atRow, LASTCOL)).Merge
     With ws.cells(atRow, 1)
         .value = descriptor
         .Font.Italic = True
@@ -132,7 +133,7 @@ Public Function DocTitleBlock(ByVal ws As Worksheet, ByVal atRow As Long, _
         .Font.Color = DocColGray()
         .HorizontalAlignment = xlCenter
     End With
-    ws.Range(ws.cells(atRow + 1, 1), ws.cells(atRow + 1, lastCol)).Merge
+    ws.Range(ws.cells(atRow + 1, 1), ws.cells(atRow + 1, LASTCOL)).Merge
     With ws.cells(atRow + 1, 1)
         .value = title
         .Font.Bold = True
@@ -140,10 +141,11 @@ Public Function DocTitleBlock(ByVal ws As Worksheet, ByVal atRow As Long, _
         .HorizontalAlignment = xlCenter
     End With
     ws.rows(atRow + 1).RowHeight = 22
-    With ws.Range(ws.cells(atRow + 1, 1), ws.cells(atRow + 1, lastCol)).Borders(xlEdgeBottom)
+    With ws.Range(ws.cells(atRow + 1, 1), ws.cells(atRow + 1, LASTCOL)).Borders(xlEdgeBottom)
         .LineStyle = xlContinuous
         .Weight = xlMedium
         .Color = DocColRule()
     End With
     DocTitleBlock = atRow + 2
 End Function
+

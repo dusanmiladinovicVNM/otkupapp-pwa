@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmStammdaten 
    Caption         =   "UserForm1"
-   ClientHeight    =   10035
+   ClientHeight    =   10980
    ClientLeft      =   120
    ClientTop       =   465
-   ClientWidth     =   19515
+   ClientWidth     =   20235
    OleObjectBlob   =   "frmStammdaten.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,11 +13,13 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
+
 Option Explicit
 
 ' ============================================================
-' frmStammdaten â€“ Universelles Stammdaten-Form
-' Wird Ã¼ber .Tag gesteuert: "Kooperanti", "Stanice", "Kupci", "Vozaci"
+' frmStammdaten – Universelles Stammdaten-Form
+' Wird über .Tag gesteuert: "Kooperanti", "Stanice", "Kupci", "Vozaci"
 ' ============================================================
 
 Private m_TableName As String
@@ -33,7 +35,7 @@ Private mChromeRemoved As Boolean
 
 Private mGeoClearConfirmPending As Boolean
 
-' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) â€” WithEvents omotac.
+' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) — WithEvents omotac.
 Private m_softWrap As clsStmBtn
 
 Private Sub RemoveTitleBar()
@@ -52,7 +54,7 @@ End Sub
 
 Private Sub UserForm_Initialize()
     
-    ' Nichts hier â€“ Tag ist noch nicht verfÃ¼gbar
+    ' Nichts hier – Tag ist noch nicht verfügbar
 End Sub
 
 Private Sub UserForm_Activate()
@@ -64,7 +66,7 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
 
-    ' Podesavanja: ne ucitavamo maticni-podaci listu â€” gradimo config editor
+    ' Podesavanja: ne ucitavamo maticni-podaci listu — gradimo config editor
     ' u runtime-u (modPodesavanja; isti runtime-controls pristup kao
     ' modOtkupBlok/clsBlokUI). frmStammdaten.frx se NE dira.
     If Me.Tag = "Podesavanja" Then
@@ -87,7 +89,7 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnGeoOpen, "Otvori GeoSrbija"
     StylePrimaryButton btnPasteCoords, "Paste koordinata"
     StylePrimaryButton btnGeoSave, "Sacuvaj geo"
-    StyleExitButton btnGeoClear, "ObriÅ¡i geo"
+    StyleExitButton btnGeoClear, "Obriši geo"
     StylePrimaryButton btnOpenMap, "Google Maps"
     StylePrimaryButton btnOpenPolygonEditor, "Polygon editor"
     On Error GoTo EH
@@ -130,7 +132,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmStammdaten.UserForm_Activate"
-    MsgBox "GreÅ¡ka pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub StyleAllFields()
@@ -138,7 +140,7 @@ Private Sub StyleAllFields()
     
     Dim i As Long
     
-    ' lblField1..10 â€” naslovne labele, muted small
+    ' lblField1..10 — naslovne labele, muted small
     For i = 1 To 10
         Dim lbl As MSForms.label
         Set lbl = Me.Controls("lblField" & i)
@@ -193,7 +195,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 6, "Kontakt Ime", True
             ShowHeader 7, "Kontakt Prezime", True
             ShowHeader 8, "Pin", True
-            ShowHeader 9, "HladnjaÄa", True
+            ShowHeader 9, "Hladnjaca", True
 
         Case "Kupci"
             ShowHeader 1, "ID", True
@@ -301,7 +303,7 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
 End Sub
 
 ' ============================================================
-' SETUP â€“ Konfiguriert das Form je nach EntitÃ¤t
+' SETUP – Konfiguriert das Form je nach Entität
 ' ============================================================
 
 Private Sub SetupKooperanti()
@@ -380,12 +382,12 @@ Private Sub SetupStanice()
     lblField4.caption = "Kontakt Ime": lblField4.Visible = True: txtField4.Visible = True
     lblField5.caption = "Kontakt Prezime": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "Pin": lblField6.Visible = True: txtField6.Visible = True
-    lblField7.caption = "HladnjaÄa?": lblField7.Visible = True: txtField7.Visible = False
+    lblField7.caption = "Hladnjaca?": lblField7.Visible = True: txtField7.Visible = False
     lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
 
-    ' Hladnjaca flag (Da/Ne) â€” auto-lanac otpremnica+zbirna+prijemnica.
+    ' Hladnjaca flag (Da/Ne) — auto-lanac otpremnica+zbirna+prijemnica.
     cmbField1.Visible = True
     cmbField1.Clear
     cmbField1.AddItem "Ne"
@@ -649,7 +651,7 @@ Private Sub SetupKulture()
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
 
-    ' Tip ambalaze (podrazumevani za kulturu) â€” combo iz tblTipAmbalaze.
+    ' Tip ambalaze (podrazumevani za kulturu) — combo iz tblTipAmbalaze.
     cmbField1.Visible = True
     cmbField1.Clear
     cmbField1.AddItem ""
@@ -705,12 +707,12 @@ Private Sub SetupCenovnik()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "CENOVNIK"
-    StyleSubtitle lblSubtitle, "Cene po proizvodu â€” svaka promena je novi red (vazi poslednji)"
+    StyleSubtitle lblSubtitle, "Cene po proizvodu — svaka promena je novi red (vazi poslednji)"
     On Error GoTo 0
 
     m_TableName = TBL_CENOVNIK
 
-    ' Prikaz (lista) â€” samo kljucne kolone:
+    ' Prikaz (lista) — samo kljucne kolone:
     m_Headers = Array( _
         COL_CEN_ID, _
         COL_CEN_DATUM, _
@@ -771,7 +773,7 @@ End Sub
 Private Sub AlignControlToRow(ByVal ctl As MSForms.Control, ByVal refCtl As MSForms.Control)
     On Error Resume Next
     ctl.Left = refCtl.Left
-    ctl.Top = refCtl.Top
+    ctl.top = refCtl.top
     ctl.width = refCtl.width
     ctl.Height = refCtl.Height
 End Sub
@@ -799,7 +801,7 @@ Private Sub EnsureSoftDeleteButton()
         Dim c As MSForms.CommandButton
         Set c = Me.Controls.Add("Forms.CommandButton.1", "btnSoftDelete", True)
         c.Left = btnIzmeni.Left + btnIzmeni.width + 8
-        c.Top = btnIzmeni.Top
+        c.top = btnIzmeni.top
         c.width = btnIzmeni.width
         c.Height = btnIzmeni.Height
         StyleStornoButton c, "Deaktiviraj/Aktiviraj"
@@ -812,7 +814,7 @@ Private Sub EnsureSoftDeleteButton()
     m_softWrap.btn.Visible = (Len(AktivanColName()) > 0)
 End Sub
 
-' Public â€” poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
+' Public — poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
 Public Sub OnSoftDeleteClick()
     On Error GoTo EH
 
@@ -860,7 +862,7 @@ EH:
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    MsgBox "GreÅ¡ka pri promeni statusa: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri promeni statusa: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.
@@ -1018,11 +1020,11 @@ Private Sub LoadList()
         Case "Parcele"
             lstData.ColumnCount = 10
 
-            Dim pID As Long, pKoop As Long, pKat As Long, pOpstina As Long
+            Dim pid As Long, pKoop As Long, pKat As Long, pOpstina As Long
             Dim pKultura As Long, pPov As Long, pGGAP As Long
             Dim pGeoStatus As Long, pGeoSource As Long, pRizik As Long, pNapomena As Long
 
-            pID = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
+            pid = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
             pKoop = GetColumnIndex(TBL_PARCELE, COL_PAR_KOOP)
             pKat = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ)
             pOpstina = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_OPSTINA)
@@ -1034,7 +1036,7 @@ Private Sub LoadList()
             pRizik = GetColumnIndex(TBL_PARCELE, COL_PAR_RIZIK)
             pNapomena = GetColumnIndex(TBL_PARCELE, COL_PAR_NAPOMENA)
 
-            If pID = 0 Or pKoop = 0 Or pKat = 0 Or pOpstina = 0 Or _
+            If pid = 0 Or pKoop = 0 Or pKat = 0 Or pOpstina = 0 Or _
                pKultura = 0 Or pPov = 0 Or pGGAP = 0 Or pGeoStatus = 0 Or _
                pGeoSource = 0 Or pRizik = 0 Or pNapomena = 0 Then
                 Err.Raise vbObjectError + 7203, "frmStammdaten.LoadList", _
@@ -1047,7 +1049,7 @@ Private Sub LoadList()
             Dim rizikInfo As String
 
             For i = 1 To UBound(data, 1)
-                If Trim$(NzToText(data(i, pID))) <> "" Then
+                If Trim$(NzToText(data(i, pid))) <> "" Then
                     AddRowMap i
 
                     koopID = NzToText(data(i, pKoop))
@@ -1063,7 +1065,7 @@ Private Sub LoadList()
 
                     rizikInfo = NzToText(data(i, pRizik))
 
-                    lstData.AddItem NzToText(data(i, pID))
+                    lstData.AddItem NzToText(data(i, pid))
                     lstData.List(lstData.ListCount - 1, 1) = koopNaziv
                     lstData.List(lstData.ListCount - 1, 2) = NzToText(data(i, pKat))
                     lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, pOpstina))
@@ -1150,11 +1152,11 @@ Private Sub LoadList()
 
 EH:
     LogErr "frmStammdaten.LoadList"
-    MsgBox "GreÅ¡ka pri ucitavanju liste: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri ucitavanju liste: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' AUSWAHL IN LISTE ? Felder fÃ¼llen
+' AUSWAHL IN LISTE ? Felder füllen
 ' ============================================================
 
 Private Sub lstData_Click()
@@ -1258,7 +1260,7 @@ Private Sub lstData_Click()
             txtField2.value = lstData.List(lstData.ListIndex, 1)   ' Tezina
 
         Case "Cenovnik"
-            ' Append-only istorija â€” klik samo prikazuje (bez izmene).
+            ' Append-only istorija — klik samo prikazuje (bez izmene).
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 2)   ' Vrsta
             cmbField2.Clear
             If Trim$(cmbField1.value) <> "" Then
@@ -1292,7 +1294,7 @@ Private Sub cmbField1_Change()
 End Sub
 
 ' ============================================================
-' HINZUFÃœGEN
+' HINZUFÜGEN
 ' ============================================================
 
 Private Sub btnDodaj_Click()
@@ -1440,7 +1442,7 @@ Private Sub btnDodaj_Click()
             End If
 
             If Trim$(txtField3.value) = "" Then
-                MsgBox "Unesite katastarsku opÅ¡tinu!", vbExclamation, APP_NAME
+                MsgBox "Unesite katastarsku opštinu!", vbExclamation, APP_NAME
                 txtField3.SetFocus
                 Exit Sub
             End If
@@ -1463,7 +1465,7 @@ Private Sub btnDodaj_Click()
             koopID = ExtractIDFromDisplay(cmbField1.value)
 
             If Not TryParseDouble(txtField5.value, povrsina) Or povrsina <= 0 Then
-                MsgBox "Unesite validnu povrÅ¡inu!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu površinu!", vbExclamation, APP_NAME
                 txtField5.SetFocus
                 Exit Sub
             End If
@@ -1586,7 +1588,7 @@ Private Sub btnDodaj_Click()
                 LoadList
                 ClearFields
             Else
-                MsgBox "GreÅ¡ka pri dodavanju!", vbCritical, APP_NAME
+                MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
             End If
             Exit Sub
 
@@ -1666,7 +1668,7 @@ Private Sub btnDodaj_Click()
                 LoadList
                 txtField5.value = ""        ' spremno za sledecu cenu; proizvod ostaje
             Else
-                MsgBox "GreÅ¡ka pri dodavanju cene!", vbCritical, APP_NAME
+                MsgBox "Greška pri dodavanju cene!", vbCritical, APP_NAME
             End If
             Exit Sub
 
@@ -1691,18 +1693,18 @@ Private Sub btnDodaj_Click()
         LoadList
         ClearFields
     Else
-        MsgBox "GreÅ¡ka pri dodavanju!", vbCritical, APP_NAME
+        MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
     End If
 
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.btnDodaj_Click"
-    MsgBox "GreÅ¡ka pri dodavanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri dodavanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' Ã„NDERN
+' ÄNDERN
 ' ============================================================
 
 Private Sub btnIzmeni_Click()
@@ -1856,7 +1858,7 @@ Private Sub btnIzmeni_Click()
             End If
 
             If Trim$(txtField3.value) = "" Then
-                MsgBox "Unesite katastarsku opÅ¡tinu!", vbExclamation, APP_NAME
+                MsgBox "Unesite katastarsku opštinu!", vbExclamation, APP_NAME
                 txtField3.SetFocus
                 Exit Sub
             End If
@@ -1874,7 +1876,7 @@ Private Sub btnIzmeni_Click()
             End If
 
             If Not TryParseDouble(txtField5.value, povrsinaEdit) Or povrsinaEdit <= 0 Then
-                MsgBox "Unesite validnu povrÅ¡inu!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu površinu!", vbExclamation, APP_NAME
                 txtField5.SetFocus
                 Exit Sub
             End If
@@ -2023,7 +2025,7 @@ Private Sub btnIzmeni_Click()
         Case "Cenovnik"
             ' Append-only: istorija cena se ne menja. Nova cena = Dodaj.
             MsgBox "Cenovnik je append-only." & vbCrLf & _
-                   "Za novu cenu koristite 'Dodaj' â€” stari redovi ostaju radi istorije.", _
+                   "Za novu cenu koristite 'Dodaj' — stari redovi ostaju radi istorije.", _
                    vbInformation, APP_NAME
             Exit Sub
 
@@ -2050,7 +2052,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "GreÅ¡ka pri izmeni: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri izmeni: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -2231,7 +2233,7 @@ Private Sub btnGeoOpen_Click()
     katOpstina = Trim$(NzToText(lstData.List(lstData.ListIndex, 3)))
 
     If Len(katBroj) = 0 Or Len(katOpstina) = 0 Then
-        SetGeoStatus "Parcela nema katastarski broj ili katastarsku opÅ¡tinu.", True
+        SetGeoStatus "Parcela nema katastarski broj ili katastarsku opštinu.", True
         Exit Sub
     End If
 
@@ -2245,7 +2247,7 @@ Private Sub btnGeoOpen_Click()
 
 EH:
     LogErr "frmStammdaten.btnGeoOpen_Click"
-    SetGeoStatus "GreÅ¡ka pri otvaranju GeoSrbije. Pogledaj log.", True
+    SetGeoStatus "Greška pri otvaranju GeoSrbije. Pogledaj log.", True
 End Sub
 
 Private Sub btnGeoSave_Click()
@@ -2297,7 +2299,7 @@ Private Sub btnGeoSave_Click()
 
 EH:
     LogErr "frmStammdaten.btnGeoSave_Click"
-    SetGeoStatus "GreÅ¡ka pri cuvanju geo podataka. Pogledaj log.", True
+    SetGeoStatus "Greška pri cuvanju geo podataka. Pogledaj log.", True
 End Sub
 
 Private Sub btnGeoClear_Click()
@@ -2312,7 +2314,7 @@ Private Sub btnGeoClear_Click()
     If Not mGeoClearConfirmPending Then
         mGeoClearConfirmPending = True
         btnGeoClear.caption = "Potvrdi brisanje"
-        SetGeoStatus "Klikni joÅ¡ jednom za brisanje geo podataka.", True
+        SetGeoStatus "Klikni još jednom za brisanje geo podataka.", True
         Exit Sub
     End If
 
@@ -2337,7 +2339,7 @@ Private Sub btnGeoClear_Click()
 EH:
     ResetGeoClearConfirm
     LogErr "frmStammdaten.btnGeoClear_Click"
-    SetGeoStatus "GreÅ¡ka pri brisanju geo podataka. Pogledaj log.", True
+    SetGeoStatus "Greška pri brisanju geo podataka. Pogledaj log.", True
 End Sub
 
 Private Sub btnPasteCoords_Click()
@@ -2373,7 +2375,7 @@ Private Sub btnPasteCoords_Click()
 
 EH:
     LogErr "frmStammdaten.btnPasteCoords_Click"
-    SetGeoStatus "GreÅ¡ka pri ucitavanju koordinata. Pogledaj log.", True
+    SetGeoStatus "Greška pri ucitavanju koordinata. Pogledaj log.", True
 End Sub
 
 Private Sub btnOpenMap_Click()
@@ -2424,7 +2426,7 @@ Private Sub btnOpenMap_Click()
 
 EH:
     LogErr "frmStammdaten.btnOpenMap_Click"
-    SetGeoStatus "GreÅ¡ka pri otvaranju Google Maps. Pogledaj log.", True
+    SetGeoStatus "Greška pri otvaranju Google Maps. Pogledaj log.", True
 End Sub
 
 Private Sub btnOpenPolygonEditor_Click()
@@ -2486,7 +2488,7 @@ EH:
     On Error GoTo 0
 
     LogErr "frmStammdaten.btnOpenPolygonEditor_Click"
-    SetGeoStatus "GreÅ¡ka pri otvaranju polygon editora. Pogledaj log.", True
+    SetGeoStatus "Greška pri otvaranju polygon editora. Pogledaj log.", True
 End Sub
 Private Sub SetGeoStatus(ByVal message As String, Optional ByVal isError As Boolean = False)
     On Error Resume Next
@@ -2518,7 +2520,7 @@ Private Sub ResetGeoClearConfirm()
     On Error Resume Next
 
     mGeoClearConfirmPending = False
-    btnGeoClear.caption = "ObriÅ¡i geo"
+    btnGeoClear.caption = "Obriši geo"
 
     On Error GoTo 0
 End Sub
@@ -2652,7 +2654,7 @@ Private Sub LoadStaniceIntoCombo()
 
 EH:
     LogErr "frmStammdaten.LoadStaniceIntoCombo"
-    MsgBox "GreÅ¡ka pri ucitavanju stanica: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri ucitavanju stanica: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function FormatCoordForTextBox(ByVal v As Double) As String
@@ -2845,3 +2847,4 @@ EH:
     LogErr "frmStammdaten.OpenParcelPolygonEditor"
     OpenParcelPolygonEditor = False
 End Function
+

@@ -1,15 +1,16 @@
 Attribute VB_Name = "modKarticaDetalji"
+'Attribute VB_Name = "modKarticaDetalji"
 Option Explicit
 
 ' ============================================================
-' modKarticaDetalji â€” read-only panel "Detalji otkupa" uz karticu
+' modKarticaDetalji — read-only panel "Detalji otkupa" uz karticu
 ' kooperanta (frmIzvestaj, Page 8 / lstKartica).
 '
 ' Klik na red kartice prikazuje SVE bitne stavke izabranog otkupnog
-' lista (polja koja se unose u frmOtkup) u listi DESNO â€” samo pregled
+' lista (polja koja se unose u frmOtkup) u listi DESNO — samo pregled
 ' ("ne za izmenu, samo za pregled"); ListBox po prirodi nije editabilan.
 '
-' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica â€”
+' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica —
 ' lstKartica.Parent.Controls, kao frmDokumenta), frmIzvestaj.frx se NE
 ' dira (CLAUDE.md). Ref-kljuc reda se nosi u skrivenoj koloni lstKartica
 ' (idx 7, vidi frmIzvestaj.SetupListBoxes): "OTK|<OtkupID>" / "NOV" / "MAG".
@@ -23,6 +24,7 @@ Private mLst As MSForms.ListBox        ' detail lista (2 kolone: Stavka | Vredno
 Private mLblTitle As MSForms.label
 Private mBuilt As Boolean
 Private mFormLevel As Boolean          ' True ako su kontrole na formi (fallback), ne na Page-u
+Private mCurOtkupID As String          ' OtkupID trenutno prikazan u panelu (za "Stampaj otkupni list")
 
 ' Dijagnostika (samo kad build ne uspe): jednom po sesiji prikazi razlog.
 Private mDiag As String
@@ -34,6 +36,7 @@ Public Sub KarticaDetalji_Reset()
     Set mLst = Nothing
     Set mLblTitle = Nothing
     mBuilt = False
+    mCurOtkupID = ""
 End Sub
 
 ' Lazy-build panel desno od lstKartica (idempotentno).
@@ -42,7 +45,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     If mBuilt Then Exit Sub
     If lstKartica Is Nothing Then Exit Sub
 
-    ' Kontrole se prave NA FORMI (frm.Controls.Add â€” proveren obrazac, modOtkupBlok)
+    ' Kontrole se prave NA FORMI (frm.Controls.Add — proveren obrazac, modOtkupBlok)
     ' i pozicioniraju forma-relativnim koordinatama (frm.InsideWidth/Height) tako da
     ' NE mogu da budu van ekrana. ZOrder ih dize u prvi plan (preko MultiPage-a).
     ' SetVisible ih krije van kartice (mFormLevel=True).
@@ -77,8 +80,8 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     Set mLblTitle = cont.Controls.Add("Forms.Label.1", "lblKarticaDetaljiNaslov", True)
     With mLblTitle
         .Left = leftX
-        .Top = topY - 16
-        If .Top < 0 Then .Top = topY
+        .top = topY - 16
+        If .top < 0 Then .top = topY
         .width = availW
         .Height = 14
         .caption = "DETALJI OTKUPA (klik na red)"
@@ -90,7 +93,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     Set mLst = cont.Controls.Add("Forms.ListBox.1", "lstKarticaDetalji", True)
     With mLst
         .Left = leftX
-        .Top = topY
+        .top = topY
         .width = availW
         .Height = panelH
         .ColumnCount = 2
@@ -111,19 +114,39 @@ End Sub
 
 Public Sub KarticaDetalji_Clear()
     On Error Resume Next
+    mCurOtkupID = ""
     If Not mLst Is Nothing Then mLst.Clear
     If Not mLblTitle Is Nothing Then mLblTitle.caption = "DETALJI OTKUPA (klik na red)"
+End Sub
+
+' OtkupID trenutno prikazanog reda ("" ako trenutni red nije otkup).
+Public Function KarticaDetalji_CurrentOtkupID() As String
+    KarticaDetalji_CurrentOtkupID = mCurOtkupID
+End Function
+
+' Geometrija panela detalja (za pozicioniranje dugmeta ispod njega). 0 ako panel
+' jos ne postoji.
+Public Sub KarticaDetalji_PanelRect(ByRef l As Double, ByRef t As Double, _
+                                    ByRef w As Double, ByRef h As Double)
+    l = 0: t = 0: w = 0: h = 0
+    On Error Resume Next
+    If Not mLst Is Nothing Then
+        l = mLst.Left
+        t = mLst.top
+        w = mLst.width
+        h = mLst.Height
+    End If
 End Sub
 
 Public Sub KarticaDetalji_SetVisible(ByVal b As Boolean)
     On Error Resume Next
     If b Then
-        If Not mLst Is Nothing Then mLst.visible = True
-        If Not mLblTitle Is Nothing Then mLblTitle.visible = True
+        If Not mLst Is Nothing Then mLst.Visible = True
+        If Not mLblTitle Is Nothing Then mLblTitle.Visible = True
     ElseIf mFormLevel Then
         ' Sakrij samo forma-level kontrole; page-deca se kriju zajedno sa stranicom.
-        If Not mLst Is Nothing Then mLst.visible = False
-        If Not mLblTitle Is Nothing Then mLblTitle.visible = False
+        If Not mLst Is Nothing Then mLst.Visible = False
+        If Not mLblTitle Is Nothing Then mLblTitle.Visible = False
     End If
 End Sub
 
@@ -144,8 +167,8 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
     End If
 
     ' Panel postoji -> osiguraj da je vidljiv i u prvom planu.
-    mLst.visible = True
-    If Not mLblTitle Is Nothing Then mLblTitle.visible = True
+    mLst.Visible = True
+    If Not mLblTitle Is Nothing Then mLblTitle.Visible = True
     On Error Resume Next
     mLst.ZOrder 0          ' u prvi plan (preko praznog dela liste)
     mLblTitle.ZOrder 0
@@ -175,6 +198,7 @@ End Sub
 ' Ne-otkup red (novac/agrohemija/UKUPNO): prikazi osnovne stavke iz same liste.
 Private Sub ShowBasicRow(ByVal lstKartica As MSForms.ListBox, ByVal idx As Long)
     On Error Resume Next
+    mCurOtkupID = ""
     mLblTitle.caption = "DETALJI STAVKE"
     AddPair "Datum", CStr(lstKartica.List(idx, 0))
     AddPair "Broj dok.", CStr(lstKartica.List(idx, 1))
@@ -188,6 +212,7 @@ End Sub
 ' Otkup red: sve bitne stavke otkupnog lista (polja iz frmOtkup), read-only.
 Private Sub ShowOtkupDetails(ByVal otkupID As String)
     On Error GoTo EH
+    mCurOtkupID = ""
     mLblTitle.caption = "DETALJI OTKUPA"
 
     Dim data As Variant
@@ -210,6 +235,7 @@ Private Sub ShowOtkupDetails(ByVal otkupID As String)
         AddPair "Otkup", "Nije pronadjen (" & otkupID & ")"
         Exit Sub
     End If
+    mCurOtkupID = otkupID   ' validan otkup red -> dostupan za "Stampaj otkupni list"
 
     Dim datum As Variant: datum = CellVal(data, found, COL_OTK_DATUM)
     Dim brDok As String: brDok = CStr(CellVal(data, found, COL_OTK_BR_DOK))
@@ -317,3 +343,4 @@ Private Function DisplayParcela(ByVal parcelaID As String) As String
     If Len(Trim$(kult)) > 0 Then s = Trim$(s & " | " & kult)
     If Len(s) > 0 Then DisplayParcela = s
 End Function
+

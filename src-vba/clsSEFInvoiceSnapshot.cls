@@ -28,4 +28,4 @@ Public TotalNet As Double
 Public TotalVat As Double
 Public TotalGross As Double
 
-Public Lines As Collection
+Public lines As Collection

@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmFakturisanje 
    Caption         =   "UserForm1"
-   ClientHeight    =   10665
+   ClientHeight    =   13815
    ClientLeft      =   120
    ClientTop       =   465
-   ClientWidth     =   21495
+   ClientWidth     =   20235
    OleObjectBlob   =   "frmFakturisanje.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -14,24 +14,25 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 
+
 Option Explicit
 
 ' ============================================================
-' frmFakturisanje v2.1 â€“ Rechnungserstellung
-' GEÃ„NDERT: Basiert auf tblPrijemnica statt tblIsporuka
-' Faktura = Prijemnica.Kolicina Ã— Prijemnica.Cena
+' frmFakturisanje v2.1 – Rechnungserstellung
+' GEÄNDERT: Basiert auf tblPrijemnica statt tblIsporuka
+' Faktura = Prijemnica.Kolicina × Prijemnica.Cena
 ' ============================================================
 '
 ' CONTROLS:
-'   cmbKupac (ComboBox) â€“ Label: "Izaberi Kupca/Hladnjacu"
-'   btnUnesi (CommandButton) â€“ Caption: "Unesi"
-'   lstPrijemnice (ListBox) â€“ ColumnCount=8, MultiSelect
-'   btnIzradiFakturu (CommandButton) â€“ Caption: "Izradi Fakturu"
-'   btnStampaj (CommandButton) â€“ Caption: "Stampaj"
-'   btnPovratak (CommandButton) â€“ Caption: "Povratak u glavni meni"
-'   cmbFaktura (ComboBox) â€“ Faktura za Å¡tampu, display text + hidden FakturaID
+'   cmbKupac (ComboBox) – Label: "Izaberi Kupca/Hladnjacu"
+'   btnUnesi (CommandButton) – Caption: "Unesi"
+'   lstPrijemnice (ListBox) – ColumnCount=8, MultiSelect
+'   btnIzradiFakturu (CommandButton) – Caption: "Izradi Fakturu"
+'   btnStampaj (CommandButton) – Caption: "Stampaj"
+'   btnPovratak (CommandButton) – Caption: "Povratak u glavni meni"
+'   cmbFaktura (ComboBox) – Faktura za štampu, display text + hidden FakturaID
 '
-' Header-Labels Ã¼ber lstPrijemnice:
+' Header-Labels über lstPrijemnice:
 '   BrojPrij | BrojZbirne | Datum | Klasa | Kolicina | Cena | Vrednost | Fakturisano
 
 Private m_SetupDone As Boolean
@@ -52,7 +53,7 @@ Private Sub UserForm_Activate()
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
 
-    ' Header zone (dodati u Designer ako nemaÅ¡)
+    ' Header zone (dodati u Designer ako nemaš)
     On Error Resume Next
     StyleFrameTitleLabel lblKopf, "Fakturisanje"
     StyleSubtitle lblSubtitle, "Kreiranje faktura na osnovu prijemnica kupca"
@@ -79,7 +80,7 @@ Private Sub UserForm_Activate()
     ' Action buttons
     StylePrimaryButton btnUnesi, "Unesi"
     StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
-    StylePrimaryButton btnStampaj, "Å tampaj"
+    StylePrimaryButton btnStampaj, "Štampaj"
     StylePrimaryButton btnSEF, "SEF"
     StyleExitButton btnPovratak, "Povratak"
 
@@ -136,7 +137,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmFakturisanje.UserForm_Activate"
-    MsgBox "GreÅ¡ka pri otvaranju fakturisanja: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri otvaranju fakturisanja: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupAllColumnHeaders()
@@ -237,7 +238,7 @@ End Sub
 Private Sub ResetActionButtons()
     StylePrimaryButton btnUnesi, "Unesi"
     StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
-    StylePrimaryButton btnStampaj, "Å tampaj"
+    StylePrimaryButton btnStampaj, "Štampaj"
     StylePrimaryButton btnSEF, "SEF"
     StyleExitButton btnPovratak, "Povratak"
 End Sub
@@ -423,7 +424,7 @@ NextPrij:
 
 EH:
     LogErr "frmFakturisanje.btnUnesi"
-    MsgBox "GreÅ¡ka pri ucitavanju prijemnica: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri ucitavanju prijemnica: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillFaktureZaKupca()
@@ -611,7 +612,7 @@ Private Sub btnIzradiFakturu_Click()
             End If
 
             If seenPrijemnice.Exists(prijemnicaID) Then
-                MsgBox "Ista prijemnica je izabrana viÅ¡e puta: " & prijemnicaID, _
+                MsgBox "Ista prijemnica je izabrana više puta: " & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -619,7 +620,7 @@ Private Sub btnIzradiFakturu_Click()
             seenPrijemnice.Add prijemnicaID, True
 
             If Trim$(CStr(m_PrijemniceData(dataRow, colStorno))) = "Da" Then
-                MsgBox "Izabrana prijemnica je stornirana i ne moÅ¾e se fakturisati.", _
+                MsgBox "Izabrana prijemnica je stornirana i ne može se fakturisati.", _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -627,7 +628,7 @@ Private Sub btnIzradiFakturu_Click()
             If Trim$(CStr(m_PrijemniceData(dataRow, colFakturisano))) = "Da" Or _
                Trim$(CStr(m_PrijemniceData(dataRow, colFakturaID))) <> "" Then
 
-                MsgBox "Izabrana prijemnica je vec fakturisana i ne moÅ¾e biti ukljucena u novu fakturu.", _
+                MsgBox "Izabrana prijemnica je vec fakturisana i ne može biti ukljucena u novu fakturu.", _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -708,14 +709,14 @@ Private Sub btnIzradiFakturu_Click()
         SetComboByID cmbFaktura, fakturaID
 
     Else
-        MsgBox "GreÅ¡ka pri kreiranju fakture. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox "Greška pri kreiranju fakture. Promene su vracene.", vbCritical, APP_NAME
     End If
 
     Exit Sub
 
 EH:
     LogErr "frmFakturisanje.btnIzradiFakturu"
-    MsgBox "GreÅ¡ka pri izradi fakture: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri izradi fakture: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function CalculateTotal(ByVal stavke As Collection) As Double
@@ -765,7 +766,7 @@ Private Sub btnStampaj_Click()
     fakturaID = GetComboID(cmbFaktura)
 
     If fakturaID = "" Then
-        MsgBox "Nije pronaden ID fakture za Å¡tampu.", vbExclamation, APP_NAME
+        MsgBox "Nije pronaden ID fakture za štampu.", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -774,7 +775,7 @@ Private Sub btnStampaj_Click()
 
 EH:
     LogErr "frmFakturisanje.btnStampaj"
-    MsgBox "GreÅ¡ka pri Å¡tampanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greška pri štampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================

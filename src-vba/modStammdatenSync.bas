@@ -2,14 +2,14 @@ Attribute VB_Name = "modStammdatenSync"
 Option Explicit
 
 ' ============================================================
-' modStammdatenSync ‚Äì Export Stammdaten zu Google Sheet
+' modStammdatenSync ñ Export Stammdaten zu Google Sheet
 '
 ' Schreibt tblKooperanti, tblKulture, tblConfig (Cene)
-' in ein Google Sheet "Stammdaten" f√ºr die PWA.
+' in ein Google Sheet "Stammdaten" f¸r die PWA.
 '
 ' Config-Keys in tblConfig:
 '   GOOGLE_STAMMDATEN_SHEET_ID   (wird automatisch erstellt)
-'   GOOGLE_PWA_FOLDER_ID         (Drive Folder f√ºr PWA-Sheets)
+'   GOOGLE_PWA_FOLDER_ID         (Drive Folder f¸r PWA-Sheets)
 '
 ' Aufruf: Button in frmMain oder manuell via SyncStammdatenToGoogle
 ' ============================================================
@@ -117,7 +117,7 @@ End Sub
  
 
 ' ============================================================
-' PUBLIC ‚Äî Hauptfunktion
+' PUBLIC ó Hauptfunktion
 ' ============================================================
 Public Sub SyncStammdatenToGoogle()
     Call SyncStammdatenToGoogle_Core(True)
@@ -573,7 +573,7 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
         Dim vals As Variant
         vals = dict(key)
         vals(0) = vals(0) + CDbl(data(i, colKolicina))
-        vals(1) = vals(1) + CDbl(Nz(data(i, colAmb), 0))
+        vals(1) = vals(1) + CDbl(nz(data(i, colAmb), 0))
         vals(2) = vals(2) + CDbl(data(i, colKolicina)) * CDbl(data(i, colCena))
         vals(3) = vals(3) + 1
         dict(key) = vals
@@ -641,6 +641,9 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     Dim colVozac As Long
     Dim colBrDok As Long
     Dim colParcela As Long
+    Dim colBrojZbirne As Long
+    Dim colOtpremnicaID As Long
+    Dim prjIndex As Object
 
     On Error GoTo EH
 
@@ -657,7 +660,10 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
             "DeviceID", "OtkupacID", "Datum", "KooperantID", _
             "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
             "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", _
-            "ParcelaID", "VozacID", "Napomena", "ReceivedAt")
+            "ParcelaID", "VozacID", "Napomena", "ReceivedAt", _
+            "BrojZbirne", "OtpremnicaID", "PrijemnicaID", _
+            "BrojPrijemnice", "KupacID", "DatumPrijema", _
+            "Primljeno", "TransportStatus")
         Exit Function
     End If
 
@@ -675,8 +681,12 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     colVozac = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, "ExportOtkupiAll")
     colBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, "ExportOtkupiAll")
     colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, "ExportOtkupiAll")
+    colBrojZbirne = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, "ExportOtkupiAll")
+    colOtpremnicaID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, "ExportOtkupiAll")
 
-    ReDim result(1 To UBound(data, 1) + 1, 1 To 22)
+    Set prjIndex = BuildPrijemnicaIndexByBrojZbirne()
+
+    ReDim result(1 To UBound(data, 1) + 1, 1 To 30)
 
     result(1, 1) = "ClientRecordID"
     result(1, 2) = "ServerRecordID"
@@ -700,6 +710,14 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     result(1, 20) = "VozacID"
     result(1, 21) = "Napomena"
     result(1, 22) = "ReceivedAt"
+    result(1, 23) = "BrojZbirne"
+    result(1, 24) = "OtpremnicaID"
+    result(1, 25) = "PrijemnicaID"
+    result(1, 26) = "BrojPrijemnice"
+    result(1, 27) = "KupacID"
+    result(1, 28) = "DatumPrijema"
+    result(1, 29) = "Primljeno"
+    result(1, 30) = "TransportStatus"
 
     outRow = 1
 
@@ -707,10 +725,52 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
         Dim otkupID As String
         Dim koopID As String
         Dim koopName As String
+        Dim brojZbirne As String
+        Dim otpremnicaID As String
+        Dim prijemnicaID As String
+        Dim brojPrijemnice As String
+        Dim kupacID As String
+        Dim datumPrijema As String
+        Dim primljeno As String
+        Dim transportStatus As String
+        Dim prjInfo As Variant
 
-        otkupID = CStr(Nz(data(i, colID), ""))
-        koopID = CStr(Nz(data(i, colKoop), ""))
+        otkupID = CStr(nz(data(i, colID), ""))
+        koopID = CStr(nz(data(i, colKoop), ""))
         koopName = GetKooperantDisplayNameForExport(koopID)
+        
+        brojZbirne = CStr(nz(data(i, colBrojZbirne), ""))
+        otpremnicaID = CStr(nz(data(i, colOtpremnicaID), ""))
+
+        prijemnicaID = ""
+        brojPrijemnice = ""
+        kupacID = ""
+        datumPrijema = ""
+        primljeno = "Ne"
+
+        If Len(Trim$(brojZbirne)) > 0 Then
+            If Not prjIndex Is Nothing Then
+                If prjIndex.Exists(brojZbirne) Then
+                    prjInfo = prjIndex(brojZbirne)
+
+                    prijemnicaID = CStr(prjInfo(0))
+                    brojPrijemnice = CStr(prjInfo(1))
+                    kupacID = CStr(prjInfo(2))
+                    datumPrijema = CStr(prjInfo(3))
+                    primljeno = "Da"
+                End If
+            End If
+        End If
+
+        If primljeno = "Da" Then
+            transportStatus = "received"
+        ElseIf Len(Trim$(otpremnicaID)) > 0 Or Len(Trim$(brojZbirne)) > 0 Then
+            transportStatus = "in_transport"
+        ElseIf Len(Trim$(CStr(nz(data(i, colVozac), "")))) > 0 Then
+            transportStatus = "assigned"
+        Else
+            transportStatus = "unassigned"
+        End If
 
         outRow = outRow + 1
 
@@ -721,21 +781,29 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
         result(outRow, 5) = Now
         result(outRow, 6) = "Synced>Master"
         result(outRow, 7) = "VBA"
-        result(outRow, 8) = CStr(Nz(data(i, colStanica), ""))
+        result(outRow, 8) = CStr(nz(data(i, colStanica), ""))
         result(outRow, 9) = data(i, colDatum)
         result(outRow, 10) = koopID
         result(outRow, 11) = koopName
-        result(outRow, 12) = CStr(Nz(data(i, colVrsta), ""))
-        result(outRow, 13) = CStr(Nz(data(i, colSorta), ""))
-        result(outRow, 14) = CStr(Nz(data(i, colKlasa), "I"))
-        result(outRow, 15) = CDbl(Nz(data(i, colKolicina), 0))
-        result(outRow, 16) = CDbl(Nz(data(i, colCena), 0))
-        result(outRow, 17) = CStr(Nz(data(i, colTipAmb), ""))
-        result(outRow, 18) = CLng(Nz(data(i, colKolAmb), 0))
-        result(outRow, 19) = CStr(Nz(data(i, colParcela), ""))
-        result(outRow, 20) = CStr(Nz(data(i, colVozac), ""))
-        result(outRow, 21) = CStr(Nz(data(i, colBrDok), ""))
+        result(outRow, 12) = CStr(nz(data(i, colVrsta), ""))
+        result(outRow, 13) = CStr(nz(data(i, colSorta), ""))
+        result(outRow, 14) = CStr(nz(data(i, colKlasa), "I"))
+        result(outRow, 15) = CDbl(nz(data(i, colKolicina), 0))
+        result(outRow, 16) = CDbl(nz(data(i, colCena), 0))
+        result(outRow, 17) = CStr(nz(data(i, colTipAmb), ""))
+        result(outRow, 18) = CLng(nz(data(i, colKolAmb), 0))
+        result(outRow, 19) = CStr(nz(data(i, colParcela), ""))
+        result(outRow, 20) = CStr(nz(data(i, colVozac), ""))
+        result(outRow, 21) = CStr(nz(data(i, colBrDok), ""))
         result(outRow, 22) = Now
+        result(outRow, 23) = brojZbirne
+        result(outRow, 24) = otpremnicaID
+        result(outRow, 25) = prijemnicaID
+        result(outRow, 26) = brojPrijemnice
+        result(outRow, 27) = kupacID
+        result(outRow, 28) = datumPrijema
+        result(outRow, 29) = primljeno
+        result(outRow, 30) = transportStatus
     Next i
 
     ExportOtkupiAll = WriteSheetData(sheetID, TAB_NAME, result)
@@ -746,6 +814,72 @@ EH:
     ExportOtkupiAll = False
 End Function
 
+Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
+    Const SOURCE As String = "BuildPrijemnicaIndexByBrojZbirne"
+
+    Dim dict As Object
+    Dim data As Variant
+    Dim i As Long
+
+    Dim colPrjID As Long
+    Dim colBrojPrijemnice As Long
+    Dim colBrojZbirne As Long
+    Dim colKupac As Long
+    Dim colDatum As Long
+
+    On Error GoTo EH
+
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set BuildPrijemnicaIndexByBrojZbirne = dict
+
+    data = GetTableData(TBL_PRIJEMNICA)
+
+    If Not IsEmpty(data) Then
+        data = ExcludeStornirano(data, TBL_PRIJEMNICA)
+    End If
+
+    If IsEmpty(data) Then Exit Function
+
+    colPrjID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SOURCE)
+    colBrojPrijemnice = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SOURCE)
+    colBrojZbirne = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SOURCE)
+    colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SOURCE)
+    colDatum = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SOURCE)
+
+    For i = 1 To UBound(data, 1)
+        Dim bz As String
+        Dim prjID As String
+        Dim brojPrj As String
+        Dim kupacID As String
+        Dim datumPrj As String
+
+        bz = Trim$(CStr(nz(data(i, colBrojZbirne), "")))
+
+        If Len(bz) > 0 Then
+            prjID = CStr(nz(data(i, colPrjID), ""))
+            brojPrj = CStr(nz(data(i, colBrojPrijemnice), ""))
+            kupacID = CStr(nz(data(i, colKupac), ""))
+
+            If IsDate(data(i, colDatum)) Then
+                datumPrj = Format$(CDate(data(i, colDatum)), "yyyy-mm-dd")
+            Else
+                datumPrj = CStr(nz(data(i, colDatum), ""))
+            End If
+
+            ' Ako postoji viöe prijemnica za isti BrojZbirne, prva je dovoljna
+            ' za status "received". Kasnije moûemo agregirati ako bude trebalo.
+            If Not dict.Exists(bz) Then
+                dict.Add bz, Array(prjID, brojPrj, kupacID, datumPrj)
+            End If
+        End If
+    Next i
+
+    Exit Function
+
+EH:
+    LogErr SOURCE
+    Set BuildPrijemnicaIndexByBrojZbirne = dict
+End Function
 Private Function GetKooperantDisplayNameForExport(ByVal kooperantID As String) As String
     On Error GoTo EH
 
@@ -755,7 +889,7 @@ Private Function GetKooperantDisplayNameForExport(ByVal kooperantID As String) A
     ime = LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime")
     prezime = LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime")
 
-    GetKooperantDisplayNameForExport = Trim$(CStr(Nz(ime, "")) & " " & CStr(Nz(prezime, "")))
+    GetKooperantDisplayNameForExport = Trim$(CStr(nz(ime, "")) & " " & CStr(nz(prezime, "")))
 
     If Len(GetKooperantDisplayNameForExport) = 0 Then
         GetKooperantDisplayNameForExport = kooperantID
@@ -803,7 +937,7 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
         Dim vals As Variant
         vals = dict(key)
         vals(0) = vals(0) + CDbl(data(i, colKolicina))
-        vals(1) = vals(1) + CDbl(Nz(data(i, colAmb), 0))
+        vals(1) = vals(1) + CDbl(nz(data(i, colAmb), 0))
         vals(2) = vals(2) + CDbl(data(i, colKolicina)) * CDbl(data(i, colCena))
         vals(3) = vals(3) + 1
         dict(key) = vals
@@ -837,7 +971,7 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
         Dim kupacNaziv As Variant
         kupacNaziv = LookupValue(TBL_KUPCI, "KupacID", parts(0), "Naziv")
         
-        result(r + 2, 1) = CStr(Nz(kupacNaziv, parts(0)))
+        result(r + 2, 1) = CStr(nz(kupacNaziv, parts(0)))
         result(r + 2, 2) = parts(1)
         result(r + 2, 3) = parts(2)
         result(r + 2, 4) = CStr(vals(0))
@@ -858,7 +992,7 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
     
     On Error GoTo EH
     
-    ' ReportSaldoOM gibt Daten in ein ListBox ‚Äî wir brauchen die Rohdaten
+    ' ReportSaldoOM gibt Daten in ein ListBox ó wir brauchen die Rohdaten
     ' Hier vereinfacht: OM-Saldo aus tblNovac berechnen
     Dim data As Variant
     Dim colOMID As Long, colTip As Long, colIsplata As Long, colUplata As Long
@@ -967,9 +1101,9 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
                 End If
                 Dim v As Variant
                 v = dict(koopID)
-                v(1) = v(1) + CDbl(Nz(otkData(i, colOtkKg), 0))
-                v(2) = v(2) + CDbl(Nz(otkData(i, colOtkKg), 0)) * CDbl(Nz(otkData(i, colOtkCena), 0))
-                v(3) = v(3) + CDbl(Nz(otkData(i, colOtkAmb), 0))
+                v(1) = v(1) + CDbl(nz(otkData(i, colOtkKg), 0))
+                v(2) = v(2) + CDbl(nz(otkData(i, colOtkKg), 0)) * CDbl(nz(otkData(i, colOtkCena), 0))
+                v(3) = v(3) + CDbl(nz(otkData(i, colOtkAmb), 0))
                 dict(koopID) = v
             End If
         Next i
@@ -990,10 +1124,10 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
             tip = CStr(novData(i, colNovTip))
             If tip = NOV_KES_OTKUPAC_KOOP Or tip = NOV_VIRMAN_FIRMA_KOOP Or tip = NOV_VIRMAN_AVANS_KOOP Then
                 Dim nKoop As String
-                nKoop = CStr(Nz(novData(i, colNovKoop), ""))
+                nKoop = CStr(nz(novData(i, colNovKoop), ""))
                 If dict.Exists(nKoop) Then
                     v = dict(nKoop)
-                    v(4) = v(4) + CDbl(Nz(novData(i, colNovIsplata), 0))
+                    v(4) = v(4) + CDbl(nz(novData(i, colNovIsplata), 0))
                     dict(nKoop) = v
                 End If
             End If
@@ -1013,10 +1147,10 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
         For i = 1 To UBound(magData, 1)
             If CStr(magData(i, colMagTip)) = MAG_IZLAZ Then
                 Dim mKoop As String
-                mKoop = CStr(Nz(magData(i, colMagKoop), ""))
+                mKoop = CStr(nz(magData(i, colMagKoop), ""))
                 If dict.Exists(mKoop) Then
                     v = dict(mKoop)
-                    v(5) = v(5) + CDbl(Nz(magData(i, colMagVrednost), 0))
+                    v(5) = v(5) + CDbl(nz(magData(i, colMagVrednost), 0))
                     dict(mKoop) = v
                 End If
             End If
@@ -1057,7 +1191,7 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
         saldo = v(2) - v(4) - v(5) ' Vrednost - Isplaceno - AgroZaduzenje
         
         result(r + 2, 1) = keys(r)
-        result(r + 2, 2) = CStr(Nz(koopName, "")) & " " & CStr(Nz(koopPrezime, ""))
+        result(r + 2, 2) = CStr(nz(koopName, "")) & " " & CStr(nz(koopPrezime, ""))
         result(r + 2, 3) = CStr(v(0))
         result(r + 2, 4) = CStr(v(1))
         result(r + 2, 5) = CStr(v(2))
@@ -1123,12 +1257,12 @@ Private Function ExportSaldoKupci(ByVal sheetID As String) As Boolean
             Dim tip As String
             tip = CStr(novData(i, colNovTip))
             If tip = NOV_KUPCI_UPLATA Or tip = NOV_KUPCI_AVANS Then
-                Dim pID As String
-                pID = CStr(novData(i, colNovPartner))
-                If dict.Exists(pID) Then
-                    vals = dict(pID)
+                Dim pid As String
+                pid = CStr(novData(i, colNovPartner))
+                If dict.Exists(pid) Then
+                    vals = dict(pid)
                     vals(1) = vals(1) + CDbl(novData(i, colNovUplata))
-                    dict(pID) = vals
+                    dict(pid) = vals
                 End If
             End If
         Next i
@@ -1158,7 +1292,7 @@ Private Function ExportSaldoKupci(ByVal sheetID As String) As Boolean
         kupacNaziv = LookupValue(TBL_KUPCI, "KupacID", keys(r), "Naziv")
         
         result(r + 2, 1) = keys(r)
-        result(r + 2, 2) = CStr(Nz(kupacNaziv, keys(r)))
+        result(r + 2, 2) = CStr(nz(kupacNaziv, keys(r)))
         result(r + 2, 3) = CStr(vals(0))
         result(r + 2, 4) = CStr(vals(1))
         result(r + 2, 5) = CStr(vals(0) - vals(1))
@@ -1172,7 +1306,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE ‚Äî Export einzelner Tabellen
+' PRIVATE ó Export einzelner Tabellen
 ' ============================================================
 
 Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
@@ -1240,11 +1374,11 @@ Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
             result(outRow, 2) = CStr(data(i, colIme))
             result(outRow, 3) = CStr(data(i, colPrezime))
             result(outRow, 4) = CStr(data(i, colStanica))
-            result(outRow, 5) = CStr(Nz(data(i, colMesto), ""))
-            result(outRow, 6) = CStr(Nz(data(i, colTelefon), ""))
-            result(outRow, 7) = CStr(Nz(data(i, colBPG), ""))
-            result(outRow, 8) = CStr(Nz(data(i, colAdresa), ""))
-            result(outRow, 9) = CStr(Nz(data(i, colJMBG), ""))
+            result(outRow, 5) = CStr(nz(data(i, colMesto), ""))
+            result(outRow, 6) = CStr(nz(data(i, colTelefon), ""))
+            result(outRow, 7) = CStr(nz(data(i, colBPG), ""))
+            result(outRow, 8) = CStr(nz(data(i, colAdresa), ""))
+            result(outRow, 9) = CStr(nz(data(i, colJMBG), ""))
         End If
     Next i
     
@@ -1401,26 +1535,26 @@ Private Function ExportParcele(ByVal sheetID As String) As Boolean
         If IsPWAActive(data(i, colAktivna)) Then
             outRow = outRow + 1
 
-            result(outRow, 1) = CStr(Nz(data(i, colID), ""))
-            result(outRow, 2) = CStr(Nz(data(i, colKoop), ""))
-            result(outRow, 3) = CStr(Nz(data(i, colKatBroj), ""))
-            result(outRow, 4) = CStr(Nz(data(i, colKatOpstina), ""))
-            result(outRow, 5) = CStr(Nz(data(i, colKultura), ""))
-            result(outRow, 6) = CStr(Nz(data(i, colPovrsina), ""))
-            result(outRow, 7) = CStr(Nz(data(i, colGGAP), ""))
-            result(outRow, 8) = CStr(Nz(data(i, colAktivna), ""))
-            result(outRow, 9) = CStr(Nz(data(i, colGeoStatus), ""))
-            result(outRow, 10) = CStr(Nz(data(i, colGeoSource), ""))
-            result(outRow, 11) = CStr(Nz(data(i, colN), ""))
-            result(outRow, 12) = CStr(Nz(data(i, colE), ""))
-            result(outRow, 13) = CStr(Nz(data(i, colLat), ""))
-            result(outRow, 14) = CStr(Nz(data(i, colLng), ""))
-            result(outRow, 15) = CStr(Nz(data(i, colPolygon), ""))
-            result(outRow, 16) = CStr(Nz(data(i, colMeteo), ""))
-            result(outRow, 17) = CStr(Nz(data(i, colRizik), ""))
-            result(outRow, 18) = CStr(Nz(data(i, colDatumGeo), ""))
-            result(outRow, 19) = CStr(Nz(data(i, colDatumAzur), ""))
-            result(outRow, 20) = CStr(Nz(data(i, colNapomena), ""))
+            result(outRow, 1) = CStr(nz(data(i, colID), ""))
+            result(outRow, 2) = CStr(nz(data(i, colKoop), ""))
+            result(outRow, 3) = CStr(nz(data(i, colKatBroj), ""))
+            result(outRow, 4) = CStr(nz(data(i, colKatOpstina), ""))
+            result(outRow, 5) = CStr(nz(data(i, colKultura), ""))
+            result(outRow, 6) = CStr(nz(data(i, colPovrsina), ""))
+            result(outRow, 7) = CStr(nz(data(i, colGGAP), ""))
+            result(outRow, 8) = CStr(nz(data(i, colAktivna), ""))
+            result(outRow, 9) = CStr(nz(data(i, colGeoStatus), ""))
+            result(outRow, 10) = CStr(nz(data(i, colGeoSource), ""))
+            result(outRow, 11) = CStr(nz(data(i, colN), ""))
+            result(outRow, 12) = CStr(nz(data(i, colE), ""))
+            result(outRow, 13) = CStr(nz(data(i, colLat), ""))
+            result(outRow, 14) = CStr(nz(data(i, colLng), ""))
+            result(outRow, 15) = CStr(nz(data(i, colPolygon), ""))
+            result(outRow, 16) = CStr(nz(data(i, colMeteo), ""))
+            result(outRow, 17) = CStr(nz(data(i, colRizik), ""))
+            result(outRow, 18) = CStr(nz(data(i, colDatumGeo), ""))
+            result(outRow, 19) = CStr(nz(data(i, colDatumAzur), ""))
+            result(outRow, 20) = CStr(nz(data(i, colNapomena), ""))
         End If
     Next i
     
@@ -1501,7 +1635,7 @@ EH:
     LogErr SRC
 
     If showMessages Then
-        MsgBox "Gre≈°ka pri exportu parcela: " & Err.description, vbCritical, APP_NAME
+        MsgBox "Greöka pri exportu parcela: " & Err.description, vbCritical, APP_NAME
     End If
 
     SyncParceleToGoogle_Core = False
@@ -1534,7 +1668,7 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_STANICE, "Mesto")
     colAktivan = GetColumnIndex(TBL_STANICE, "Aktivan")
     
-    ' Erst z√§hlen wieviele aktiv
+    ' Erst z‰hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1557,8 +1691,8 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colID))
-            result(outRow, 2) = CStr(Nz(data(i, colNaziv), ""))
-            result(outRow, 3) = CStr(Nz(data(i, colMesto), ""))
+            result(outRow, 2) = CStr(nz(data(i, colNaziv), ""))
+            result(outRow, 3) = CStr(nz(data(i, colMesto), ""))
             outRow = outRow + 1
         End If
     Next i
@@ -1596,7 +1730,7 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
     colAktivan = GetColumnIndex(TBL_KUPCI, "Aktivan")
     
-    ' Erst z√§hlen wieviele aktiv
+    ' Erst z‰hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1619,8 +1753,8 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colID))
-            result(outRow, 2) = CStr(Nz(data(i, colNaziv), ""))
-            result(outRow, 3) = CStr(Nz(data(i, colMesto), ""))
+            result(outRow, 2) = CStr(nz(data(i, colNaziv), ""))
+            result(outRow, 3) = CStr(nz(data(i, colMesto), ""))
             outRow = outRow + 1
         End If
     Next i
@@ -1660,7 +1794,7 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     colKapacitetKG = GetColumnIndex(TBL_VOZACI, "KapacitetKG")
     colAktivan = GetColumnIndex(TBL_VOZACI, "Aktivan")
     
-    ' Erst z√§hlen wieviele aktiv
+    ' Erst z‰hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1685,10 +1819,10 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colID))
-            result(outRow, 2) = CStr(Nz(data(i, colIme), ""))
-            result(outRow, 3) = CStr(Nz(data(i, colPrezime), ""))
-            result(outRow, 4) = CStr(Nz(data(i, colTelefon), ""))
-            result(outRow, 5) = CStr(Nz(data(i, colKapacitetKG), ""))
+            result(outRow, 2) = CStr(nz(data(i, colIme), ""))
+            result(outRow, 3) = CStr(nz(data(i, colPrezime), ""))
+            result(outRow, 4) = CStr(nz(data(i, colTelefon), ""))
+            result(outRow, 5) = CStr(nz(data(i, colKapacitetKG), ""))
             outRow = outRow + 1
         End If
     Next i
@@ -1734,7 +1868,7 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     Dim colKarenca As Long: colKarenca = GetColumnIndex(TBL_ARTIKLI, "KarencaDana")
     Dim colAktivan As Long: colAktivan = GetColumnIndex(TBL_ARTIKLI, "Aktivan")
     
-    ' Erst z√§hlen wieviele aktiv
+    ' Erst z‰hlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1766,16 +1900,16 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then
             result(outRow, 1) = CStr(data(i, colArtID))
-            result(outRow, 2) = CStr(Nz(data(i, colNaziv), ""))
-            result(outRow, 3) = CStr(Nz(data(i, colTip), ""))
-            result(outRow, 4) = CStr(Nz(data(i, colJM), ""))
-            result(outRow, 5) = CStr(Nz(data(i, colCena), ""))
-            result(outRow, 6) = CStr(Nz(data(i, colDoza), ""))
-            result(outRow, 7) = CStr(Nz(data(i, colKultura), ""))
-            result(outRow, 8) = CStr(Nz(data(i, colPak), ""))
-            result(outRow, 9) = CStr(Nz(data(i, colBarKod), ""))
-            result(outRow, 10) = CStr(Nz(data(i, colKarenca), ""))
-            result(outRow, 11) = CStr(Nz(data(i, colAktivan), ""))
+            result(outRow, 2) = CStr(nz(data(i, colNaziv), ""))
+            result(outRow, 3) = CStr(nz(data(i, colTip), ""))
+            result(outRow, 4) = CStr(nz(data(i, colJM), ""))
+            result(outRow, 5) = CStr(nz(data(i, colCena), ""))
+            result(outRow, 6) = CStr(nz(data(i, colDoza), ""))
+            result(outRow, 7) = CStr(nz(data(i, colKultura), ""))
+            result(outRow, 8) = CStr(nz(data(i, colPak), ""))
+            result(outRow, 9) = CStr(nz(data(i, colBarKod), ""))
+            result(outRow, 10) = CStr(nz(data(i, colKarenca), ""))
+            result(outRow, 11) = CStr(nz(data(i, colAktivan), ""))
             
             outRow = outRow + 1
         End If
@@ -1830,19 +1964,19 @@ Private Function ExportMagacinKoop(ByVal sheetID As String) As Boolean
     Set dict = CreateObject("Scripting.Dictionary")
     
     For i = 1 To UBound(magData, 1)
-        If CStr(Nz(magData(i, colMTip), "")) = "Izlaz" Then
+        If CStr(nz(magData(i, colMTip), "")) = "Izlaz" Then
             Dim koopID As String
             Dim artID As String
             Dim key As String
             
-            koopID = CStr(Nz(magData(i, colMKoop), ""))
-            artID = CStr(Nz(magData(i, colMArt), ""))
+            koopID = CStr(nz(magData(i, colMKoop), ""))
+            artID = CStr(nz(magData(i, colMArt), ""))
             
             If koopID <> "" And artID <> "" Then
                 key = koopID & "|" & artID
                 
                 If Not dict.Exists(key) Then dict.Add key, 0#
-                dict(key) = CDbl(dict(key)) + CDbl(Nz(magData(i, colMKol), 0))
+                dict(key) = CDbl(dict(key)) + CDbl(nz(magData(i, colMKol), 0))
             End If
         End If
     Next i
@@ -1869,17 +2003,17 @@ Private Function ExportMagacinKoop(ByVal sheetID As String) As Boolean
         Dim colKarenca As Long: colKarenca = GetColumnIndex(TBL_ARTIKLI, "KarencaDana")
         
         For i = 1 To UBound(artData, 1)
-            artID = CStr(Nz(artData(i, colArtID), ""))
+            artID = CStr(nz(artData(i, colArtID), ""))
             If artID <> "" Then
                 If Not artDict.Exists(artID) Then
                     artDict.Add artID, Array( _
-                        CStr(Nz(artData(i, colNaziv), "")), _
-                        CStr(Nz(artData(i, colTip), "")), _
-                        CStr(Nz(artData(i, colJM), "")), _
-                        CStr(Nz(artData(i, colCena), "")), _
-                        CStr(Nz(artData(i, colDoza), "")), _
-                        CStr(Nz(artData(i, colPak), "")), _
-                        CStr(Nz(artData(i, colKarenca), "")))
+                        CStr(nz(artData(i, colNaziv), "")), _
+                        CStr(nz(artData(i, colTip), "")), _
+                        CStr(nz(artData(i, colJM), "")), _
+                        CStr(nz(artData(i, colCena), "")), _
+                        CStr(nz(artData(i, colDoza), "")), _
+                        CStr(nz(artData(i, colPak), "")), _
+                        CStr(nz(artData(i, colKarenca), "")))
                 End If
             End If
         Next i
@@ -1985,7 +2119,7 @@ Private Function ExportConfig(ByVal sheetID As String) As Boolean
                     "SELLER_STREET", "SELLER_CITY", "SELLER_POSTAL_CODE", _
                     "SELLER_ACCOUNT")
     
-    ' Z√§hlen
+    ' Z‰hlen
     Dim matchCount As Long
     For i = 1 To UBound(data, 1)
         keyStr = CStr(data(i, colKey))
@@ -2027,7 +2161,7 @@ EH:
 End Function
 
 Private Function IsPwaConfigKey(ByVal keyStr As String, ByVal pwaKeys As Variant) As Boolean
-    ' Credentials ausschlie√üen
+    ' Credentials ausschlieﬂen
     If Left$(keyStr, 7) = "GOOGLE_" Then Exit Function
     If Left$(keyStr, 4) = "SEF_" Then Exit Function
     If Left$(keyStr, 5) = "SYNC_" Then Exit Function
@@ -2098,7 +2232,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
             For i = 1 To UBound(koopData, 1)
                 If IsPWAActive(koopData(i, colKAktivan)) Then
                     Dim kPin As String
-                    kPin = Trim$(CStr(Nz(koopData(i, colKPIN), "")))
+                    kPin = Trim$(CStr(nz(koopData(i, colKPIN), "")))
                     If Len(kPin) > 0 Then
                         outRow = outRow + 1
                         Dim kIme As String, kPrezime As String
@@ -2131,7 +2265,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
             For i = 1 To UBound(staData, 1)
                 If IsPWAActive(staData(i, colSAktivan)) Then
                     Dim sPin As String
-                    sPin = Trim$(CStr(Nz(staData(i, colSPIN), "")))
+                    sPin = Trim$(CStr(nz(staData(i, colSPIN), "")))
                     If Len(sPin) > 0 Then
                         outRow = outRow + 1
                         Dim sIme As String, sPrezime As String
@@ -2163,7 +2297,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
             For i = 1 To UBound(vozData, 1)
                 If IsPWAActive(vozData(i, colVAktivan)) Then
                     Dim vPin As String
-                    vPin = Trim$(CStr(Nz(vozData(i, colVPIN), "")))
+                    vPin = Trim$(CStr(nz(vozData(i, colVPIN), "")))
                     If Len(vPin) > 0 Then
                         outRow = outRow + 1
                         Dim vIme As String, vPrezime As String
@@ -2203,11 +2337,11 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
                         ' Expand array
                         Dim tmp() As Variant
                         ReDim tmp(1 To outRow + 5, 1 To 5)
-                        Dim ri As Long, ci As Long
+                        Dim ri As Long, cI As Long
                         For ri = 1 To outRow - 1
-                            For ci = 1 To 5
-                                tmp(ri, ci) = result(ri, ci)
-                            Next ci
+                            For cI = 1 To 5
+                                tmp(ri, cI) = result(ri, cI)
+                            Next cI
                         Next ri
                         result = tmp
                     End If
@@ -2221,7 +2355,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         Next i
     End If
     
-    ' Auf tats√§chliche Gr√∂√üe k√ºrzen
+    ' Auf tats‰chliche Grˆﬂe k¸rzen
     If outRow < UBound(result, 1) Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
@@ -2287,13 +2421,13 @@ Private Function ExportFakture(ByVal sheetID As String) As Boolean
         Dim n As Long
         For n = 1 To UBound(novData, 1)
             Dim fakID As String
-            fakID = Trim$(CStr(Nz(novData(n, colNovFaktura), "")))
+            fakID = Trim$(CStr(nz(novData(n, colNovFaktura), "")))
             If Len(fakID) > 0 Then
                 Dim tip As String
                 tip = CStr(novData(n, colNovTip))
                 If tip = NOV_KUPCI_UPLATA Then
                     If Not dictPlaceno.Exists(fakID) Then dictPlaceno.Add fakID, 0#
-                    dictPlaceno(fakID) = dictPlaceno(fakID) + CDbl(Nz(novData(n, colNovUplata), 0))
+                    dictPlaceno(fakID) = dictPlaceno(fakID) + CDbl(nz(novData(n, colNovUplata), 0))
                 End If
             End If
         Next n
@@ -2317,7 +2451,7 @@ Private Function ExportFakture(ByVal sheetID As String) As Boolean
         Dim kupacNaziv As Variant
         kupacNaziv = LookupValue(TBL_KUPCI, "KupacID", CStr(data(i, colKupac)), "Naziv")
         Dim iznos As Double
-        iznos = CDbl(Nz(data(i, colIznos), 0))
+        iznos = CDbl(nz(data(i, colIznos), 0))
         Dim fID As String
         fID = CStr(data(i, colID))
         Dim placeno As Double
@@ -2328,12 +2462,12 @@ Private Function ExportFakture(ByVal sheetID As String) As Boolean
         result(i + 1, 2) = CStr(data(i, colBroj))
         result(i + 1, 3) = CStr(data(i, colDatum))
         result(i + 1, 4) = CStr(data(i, colKupac))
-        result(i + 1, 5) = CStr(Nz(kupacNaziv, data(i, colKupac)))
+        result(i + 1, 5) = CStr(nz(kupacNaziv, data(i, colKupac)))
         result(i + 1, 6) = CStr(iznos)
         result(i + 1, 7) = CStr(placeno)
         result(i + 1, 8) = CStr(iznos - placeno)
         result(i + 1, 9) = CStr(data(i, colStatus))
-        result(i + 1, 10) = CStr(Nz(data(i, colSEFStatus), ""))
+        result(i + 1, 10) = CStr(nz(data(i, colSEFStatus), ""))
     Next i
     
     ExportFakture = WriteSheetData(sheetID, "Fakture", result)
@@ -2384,13 +2518,13 @@ Private Function ExportFakturaStavke(ByVal sheetID As String) As Boolean
         colPrijVrsta = GetColumnIndex(TBL_PRIJEMNICA, "VrstaVoca")
         Dim p As Long
         For p = 1 To UBound(prijData, 1)
-            Dim pID As String
-            pID = CStr(prijData(p, colPrijPrijID))
-            If Not dictZbirna.Exists(pID) Then
-                dictZbirna.Add pID, CStr(Nz(prijData(p, colPrijZbirna), ""))
+            Dim pid As String
+            pid = CStr(prijData(p, colPrijPrijID))
+            If Not dictZbirna.Exists(pid) Then
+                dictZbirna.Add pid, CStr(nz(prijData(p, colPrijZbirna), ""))
             End If
-            If Not dictVrsta.Exists(pID) Then
-                dictVrsta.Add pID, CStr(Nz(prijData(p, colPrijVrsta), ""))
+            If Not dictVrsta.Exists(pid) Then
+                dictVrsta.Add pid, CStr(nz(prijData(p, colPrijVrsta), ""))
             End If
         Next p
     End If
@@ -2410,19 +2544,19 @@ Private Function ExportFakturaStavke(ByVal sheetID As String) As Boolean
     
     For i = 1 To UBound(data, 1)
         Dim prijemnicaID As String
-        prijemnicaID = CStr(Nz(data(i, colPrijID), ""))
+        prijemnicaID = CStr(nz(data(i, colPrijID), ""))
         Dim kg As Double, cena As Double
-        kg = CDbl(Nz(data(i, colKolicina), 0))
-        cena = CDbl(Nz(data(i, colCena), 0))
+        kg = CDbl(nz(data(i, colKolicina), 0))
+        cena = CDbl(nz(data(i, colCena), 0))
         
         result(i + 1, 1) = CStr(data(i, colFakID))
         result(i + 1, 2) = prijemnicaID
-        result(i + 1, 3) = CStr(Nz(data(i, colBrojPrij), ""))
+        result(i + 1, 3) = CStr(nz(data(i, colBrojPrij), ""))
         result(i + 1, 4) = ""
         If dictZbirna.Exists(prijemnicaID) Then result(i + 1, 4) = dictZbirna(prijemnicaID)
         result(i + 1, 5) = ""
         If dictVrsta.Exists(prijemnicaID) Then result(i + 1, 5) = dictVrsta(prijemnicaID)
-        result(i + 1, 6) = CStr(Nz(data(i, colKlasa), ""))
+        result(i + 1, 6) = CStr(nz(data(i, colKlasa), ""))
         result(i + 1, 7) = CStr(kg)
         result(i + 1, 8) = CStr(cena)
         result(i + 1, 9) = CStr(kg * cena)
@@ -2466,7 +2600,7 @@ End Function
 
 Private Function IsPWAActive(ByVal value As Variant) As Boolean
     Dim s As String
-    s = UCase$(Trim$(CStr(Nz(value, ""))))
+    s = UCase$(Trim$(CStr(nz(value, ""))))
 
     Select Case s
         Case "NE", "NO", "FALSE", "0", "NEAKTIVAN", "INACTIVE"
@@ -2488,7 +2622,7 @@ Private Sub Monitor_StammdatenSyncSuccess(ByVal successCount As Long, _
         moduleName:="modStammdatenSync", _
         procedureName:="SyncStammdatenToGoogle_Core", _
         entityType:="MasterData", _
-        entityId:="Stammdaten", _
+        entityID:="Stammdaten", _
         correlationId:="STAMMDATEN-SYNC"
 End Sub
 
@@ -2503,7 +2637,7 @@ Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
         moduleName:="modStammdatenSync", _
         procedureName:="SyncStammdatenToGoogle_Core", _
         entityType:="MasterData", _
-        entityId:="Stammdaten", _
+        entityID:="Stammdaten", _
         correlationId:="STAMMDATEN-SYNC", _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -2518,12 +2652,12 @@ Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
         moduleName:="modStammdatenSync", _
         procedureName:="SyncStammdatenToGoogle_Core", _
         entityType:="MasterData", _
-        entityId:="Stammdaten", _
+        entityID:="Stammdaten", _
         correlationId:="STAMMDATEN-SYNC"
 End Sub
 
 ' ============================================================
-' PUBLIC ‚Äî Test
+' PUBLIC ó Test
 ' ============================================================
 
 Public Sub Test_SyncStammdaten()

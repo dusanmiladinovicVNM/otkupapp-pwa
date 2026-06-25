@@ -3,7 +3,7 @@ Attribute VB_Name = "modStorno"
 Option Explicit
 
 ' ============================================================
-' modStorno v4.0 – Hardened Soft-Delete
+' modStorno v4.0 � Hardened Soft-Delete
 '
 ' Stil uskladjen sa modNovac/modFaktura:
 ' - fail-fast schema guards
@@ -87,9 +87,9 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTKUP
     End If
 
-    Dim colBr As Long, colId As Long, colStorno As Long
+    Dim colBr As Long, colID As Long, colStorno As Long
     colBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
-    colId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
 
     ' Sakupi OtkupID-jeve SVIH aktivnih redova za ovaj broj dokumenta (obe klase).
@@ -98,18 +98,18 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colBr))) = Trim$(brDok) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
-                ids.Add Trim$(CStr(data(i, colId)))
+                ids.Add Trim$(CStr(data(i, colID)))
             End If
         End If
     Next i
 
-    If ids.Count = 0 Then
+    If ids.count = 0 Then
         Err.Raise ERR_STORNO_BASE + 9, SRC, _
                   "Nema aktivnog otkupa za broj dokumenta: " & brDok
     End If
 
     Dim k As Long
-    For k = 1 To ids.Count
+    For k = 1 To ids.count
         If Not StornoOtkup(CStr(ids(k))) Then
             Err.Raise ERR_STORNO_BASE + 1, SRC, _
                       "StornoOtkup nije uspeo. OtkupID=" & CStr(ids(k))
@@ -631,7 +631,7 @@ Public Function StornoPrerada(ByVal preradaID As String) As Boolean
 
     MarkRowStornirano TBL_PRERADA, rowPre, SRC
 
-    ' storniraj stavke + vrati prerađene palete u lager (Preradjeno = "")
+    ' storniraj stavke + vrati preradene palete u lager (Preradjeno = "")
     Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
     If Not IsEmpty(s) Then
         Dim sPre As Long, sPalID As Long, sStorno As Long
@@ -1009,7 +1009,7 @@ End Sub
 
 Private Sub HandleStornoTxError(ByVal procedureName As String, _
                                 ByVal entityType As String, _
-                                ByVal entityId As String, _
+                                ByVal entityID As String, _
                                 ByRef tx As clsTransaction)
     Dim errNum As Long
     Dim errDesc As String
@@ -1029,8 +1029,8 @@ Private Sub HandleStornoTxError(ByVal procedureName As String, _
         moduleName:=MOD_NAME, _
         procedureName:=procedureName, _
         entityType:=entityType, _
-        entityId:=entityId, _
-        correlationId:=entityId, _
+        entityID:=entityID, _
+        correlationId:=entityID, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
         errorSource:=errSrc
@@ -1038,14 +1038,14 @@ Private Sub HandleStornoTxError(ByVal procedureName As String, _
     Monitor_Event _
         eventType:="STORNO_" & UCase$(entityType) & "_FAIL", _
         severity:="ERROR", _
-        message:=entityType & " storno failed. ID=" & entityId & _
+        message:=entityType & " storno failed. ID=" & entityID & _
                  "; Error=" & errDesc, _
         userId:="Operator", _
         moduleName:=MOD_NAME, _
         procedureName:=procedureName, _
         entityType:=entityType, _
-        entityId:=entityId, _
-        correlationId:=entityId
+        entityID:=entityID, _
+        correlationId:=entityID
 
     Debug.Print procedureName & " failed. Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _
@@ -1056,19 +1056,19 @@ End Sub
 
 Private Sub MonitorStornoSuccess(ByVal procedureName As String, _
                                  ByVal entityType As String, _
-                                 ByVal entityId As String)
+                                 ByVal entityID As String)
     On Error Resume Next
 
     Monitor_Event _
         eventType:="STORNO_" & UCase$(entityType) & "_SUCCESS", _
         severity:="INFO", _
-        message:=entityType & " stornirano. ID=" & entityId, _
+        message:=entityType & " stornirano. ID=" & entityID, _
         userId:="Operator", _
         moduleName:=MOD_NAME, _
         procedureName:=procedureName, _
         entityType:=entityType, _
-        entityId:=entityId, _
-        correlationId:=entityId
+        entityID:=entityID, _
+        correlationId:=entityID
 
     On Error GoTo 0
 End Sub

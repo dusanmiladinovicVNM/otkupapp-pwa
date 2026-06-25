@@ -1,4 +1,5 @@
 Attribute VB_Name = "modAutoHladnjaca"
+'Attribute VB_Name = "modAutoHladnjaca"
 Option Explicit
 
 ' ============================================================
@@ -13,7 +14,7 @@ Option Explicit
 '
 ' Broj prijemnice (modBrojevi.GenerateBrojPrijemnice): "1/ddmmyy" za prvu tog
 ' dana, pa "1/ddmmyy-2", "-3" ... -n. Dvoklasna prijemnica (Kl I + Kl II) nosi
-' ISTI broj â€” jedna prijemnica = jedan broj (kao i kod rucnog unosa).
+' ISTI broj — jedna prijemnica = jedan broj (kao i kod rucnog unosa).
 ' Broj otpremnice = broj zbirne = broj otkupnog dokumenta (malina konvencija);
 ' ako otkup nema broj, generise se HL-ddmmyy-hhnnss.
 '
@@ -30,7 +31,7 @@ Option Explicit
 Public Function IsHladnjacaStanica(ByVal stanicaID As String) As Boolean
     On Error Resume Next
     Dim v As String
-    v = Trim$(Nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, COL_STA_JE_HLADNJACA), ""))
+    v = Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, COL_STA_JE_HLADNJACA), ""))
     IsHladnjacaStanica = (StrComp(v, "Da", vbTextCompare) = 0)
 End Function
 
@@ -70,7 +71,7 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     End If
 
     Dim hladnjaca As String
-    hladnjaca = Trim$(Nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
+    hladnjaca = Trim$(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, "Hladnjaca"), ""))
 
     ' Vozac je obavezan na otpremnici/zbirnoj/prijemnici. U malina/hladnjaca
     ' konvenciji par-vozac ima VozacID == StanicaID. Ako otkup nema vozaca,
@@ -78,7 +79,7 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     If Len(Trim$(vozacID)) = 0 Then
         On Error Resume Next
         EnsureVozacMirrorForStanica stanicaID, _
-            Trim$(Nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), _
+            Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), _
             "(hladnjaca)", ""
         On Error GoTo EH
         vozacID = stanicaID
@@ -184,7 +185,7 @@ Private Sub LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As Strin
     If rows.count = 0 Then Exit Sub
 
     Dim curVoz As String
-    curVoz = Trim$(Nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC), ""))
+    curVoz = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC), ""))
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -368,3 +369,4 @@ Private Function ClassOrDefault(ByVal v As Variant) As String
     ClassOrDefault = Trim$(CStr(v))
     If Len(ClassOrDefault) = 0 Then ClassOrDefault = KLASA_I
 End Function
+

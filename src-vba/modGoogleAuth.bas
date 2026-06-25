@@ -2,13 +2,13 @@ Attribute VB_Name = "modGoogleAuth"
 Option Explicit
 
 ' ============================================================
-' modGoogleAuth â€“ OAuth2 fÃ¼r Google APIs aus VBA
+' modGoogleAuth – OAuth2 für Google APIs aus VBA
 '
 ' Flow:
-' 1. Erster Start: GetAuthorizationCode ? Browser Ã¶ffnet Google Login
+' 1. Erster Start: GetAuthorizationCode ? Browser öffnet Google Login
 ' 2. User kopiert Authorization Code ? ExchangeCodeForTokens
 ' 3. Access Token + Refresh Token werden in tblSEFConfig gespeichert
-' 4. Bei jedem API-Call: GetAccessToken prÃ¼ft Ablauf, refresht wenn nÃ¶tig
+' 4. Bei jedem API-Call: GetAccessToken prüft Ablauf, refresht wenn nötig
 '
 ' Config-Keys in central ConfigKey/ConfigValue table: tblSEFConfig
 '   GOOGLE_CLIENT_ID
@@ -20,7 +20,7 @@ Option Explicit
 ' Setup:
 ' 1. Google Cloud Console ? OAuth 2.0 Client ID (Desktop App) erstellen
 ' 2. client_id und client_secret in tblSEFConfig eintragen
-' 3. Einmalig: RunGoogleAuthSetup ausfÃ¼hren
+' 3. Einmalig: RunGoogleAuthSetup ausführen
 ' ============================================================
 
 Private Const GOOGLE_AUTH_URL As String = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -29,11 +29,11 @@ Private Const GOOGLE_REDIRECT_URI As String = "urn:ietf:wg:oauth:2.0:oob"
 Private Const GOOGLE_SCOPE As String = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive"
 
 ' ============================================================
-' PUBLIC â€” Setup (einmalig)
+' PUBLIC — Setup (einmalig)
 ' ============================================================
 
 Public Sub RunGoogleAuthSetup()
-    ' Schritt 1: Browser Ã¶ffnet Google Login
+    ' Schritt 1: Browser öffnet Google Login
     ' Schritt 2: User kopiert Code
     ' Schritt 3: Code ? Tokens
     
@@ -49,7 +49,7 @@ Public Sub RunGoogleAuthSetup()
         Exit Sub
     End If
     
-    ' Browser Ã¶ffnen
+    ' Browser öffnen
     Dim authUrl As String
     authUrl = GOOGLE_AUTH_URL & _
               "?client_id=" & UrlEncode(clientID) & _
@@ -78,16 +78,16 @@ Public Sub RunGoogleAuthSetup()
     If ExchangeCodeForTokens(authCode) Then
         MsgBox "Google OAuth2 erfolgreich eingerichtet!", vbInformation, APP_NAME
     Else
-        MsgBox "Token-Austausch fehlgeschlagen. PrÃ¼fe Client ID/Secret.", vbCritical, APP_NAME
+        MsgBox "Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.", vbCritical, APP_NAME
     End If
 End Sub
 
 ' ============================================================
-' PUBLIC â€” Access Token holen (fÃ¼r jeden API-Call)
+' PUBLIC — Access Token holen (für jeden API-Call)
 ' ============================================================
 
 Public Function GetAccessToken() As String
-    ' Gibt gÃ¼ltigen Access Token zurÃ¼ck
+    ' Gibt gültigen Access Token zurück
     ' Refresht automatisch wenn abgelaufen
     ' Returns "" bei Fehler
     
@@ -103,7 +103,7 @@ Public Function GetAccessToken() As String
         Exit Function
     End If
     
-    ' PrÃ¼fe ob abgelaufen (mit 60s Puffer)
+    ' Prüfe ob abgelaufen (mit 60s Puffer)
     If IsTokenExpired(expiresAt) Then
         If RefreshAccessToken() Then
             GetAccessToken = GetConfigValue("GOOGLE_ACCESS_TOKEN")
@@ -129,7 +129,7 @@ Public Function IsGoogleAuthConfigured() As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE â€” Token Exchange
+' PRIVATE — Token Exchange
 ' ============================================================
 
 Private Function ExchangeCodeForTokens(ByVal authCode As String) As Boolean
@@ -272,7 +272,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE â€” Helpers
+' PRIVATE — Helpers
 ' ============================================================
 
 Private Function RequireGoogleOAuthConfig(ByVal sourceName As String) As Boolean
@@ -348,18 +348,18 @@ Private Function CalculateExpiryTimestamp(ByVal expiresInSeconds As Long) As Str
 End Function
 
 Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As String) As String
-    ' Einfacher JSON-String-Extraktor (kein vollstÃ¤ndiger Parser)
+    ' Einfacher JSON-String-Extraktor (kein vollständiger Parser)
     Dim pattern As String
     Dim p As Long, startPos As Long, endPos As Long
     
-    ' Suche "key" : "value" oder "key": value (fÃ¼r Zahlen)
+    ' Suche "key" : "value" oder "key": value (für Zahlen)
     pattern = """" & key & """"
     p = InStr(1, json, pattern, vbTextCompare)
     If p = 0 Then Exit Function
     
     startPos = p + Len(pattern)
     
-    ' Ãœberspringe : und Whitespace
+    ' Überspringe : und Whitespace
     Do While startPos <= Len(json)
         Select Case Mid$(json, startPos, 1)
             Case ":", " ", vbTab: startPos = startPos + 1
@@ -367,7 +367,7 @@ Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As Strin
         End Select
     Loop
     
-    ' String-Wert (in AnfÃ¼hrungszeichen)
+    ' String-Wert (in Anführungszeichen)
     If Mid$(json, startPos, 1) = """" Then
         startPos = startPos + 1
         endPos = InStr(startPos, json, """")
@@ -375,7 +375,7 @@ Public Function ExtractJsonStringGoogle(ByVal json As String, ByVal key As Strin
             ExtractJsonStringGoogle = Mid$(json, startPos, endPos - startPos)
         End If
     Else
-        ' Numerischer Wert (ohne AnfÃ¼hrungszeichen)
+        ' Numerischer Wert (ohne Anführungszeichen)
         endPos = startPos
         Do While endPos <= Len(json)
             Select Case Mid$(json, endPos, 1)

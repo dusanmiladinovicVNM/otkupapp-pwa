@@ -921,7 +921,7 @@ Public Function SkipBankaImportRow_TX(ByVal bankaImportID As String) As Boolean
             moduleName:="modBankaMapiranje", _
             procedureName:="SkipBankaImportRow_TX", _
             entityType:="BankaImport", _
-            entityId:=bankaImportID, _
+            entityID:=bankaImportID, _
             correlationId:=bankaImportID
         On Error GoTo 0
     End If
@@ -984,7 +984,7 @@ Public Function AutoMapAllBankaImport_TX() As Long
         moduleName:="modBankaMapiranje", _
         procedureName:="AutoMapAllBankaImport_TX", _
         entityType:="BankaImport", _
-        entityId:="Batch", _
+        entityID:="Batch", _
         correlationId:="BANKA-AUTOMAP-ALL"
     On Error GoTo EH
     
@@ -1021,7 +1021,7 @@ Public Function AutoMapAllBankaImport_TX() As Long
         moduleName:="modBankaMapiranje", _
         procedureName:="AutoMapAllBankaImport_TX", _
         entityType:="BankaImport", _
-        entityId:="Batch", _
+        entityID:="Batch", _
         correlationId:="BANKA-AUTOMAP-ALL"
     On Error GoTo 0
 
@@ -1044,7 +1044,7 @@ EH:
         moduleName:="modBankaMapiranje", _
         procedureName:="AutoMapAllBankaImport_TX", _
         entityType:="BankaImport", _
-        entityId:="Batch", _
+        entityID:="Batch", _
         correlationId:="BANKA-AUTOMAP-ALL", _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -1060,7 +1060,7 @@ EH:
         moduleName:="modBankaMapiranje", _
         procedureName:="AutoMapAllBankaImport_TX", _
         entityType:="BankaImport", _
-        entityId:="Batch", _
+        entityID:="Batch", _
         correlationId:="BANKA-AUTOMAP-ALL"
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -1331,13 +1331,13 @@ NextI:
     ' Max 2 reda -> jednostavan swap, veca otvorena prva
     If count = 2 Then
         If CDbl(finalResult(2, 2)) > CDbl(finalResult(1, 2)) Then
-            Dim T1 As Variant, t2 As Variant, t3 As Variant
+            Dim t1 As Variant, t2 As Variant, t3 As Variant
             
-            T1 = finalResult(1, 1): t2 = finalResult(1, 2): t3 = finalResult(1, 3)
+            t1 = finalResult(1, 1): t2 = finalResult(1, 2): t3 = finalResult(1, 3)
             finalResult(1, 1) = finalResult(2, 1)
             finalResult(1, 2) = finalResult(2, 2)
             finalResult(1, 3) = finalResult(2, 3)
-            finalResult(2, 1) = T1
+            finalResult(2, 1) = t1
             finalResult(2, 2) = t2
             finalResult(2, 3) = t3
         End If
@@ -1667,7 +1667,7 @@ Private Sub Monitor_BankaMapSuccess(ByVal procedureName As String, _
         moduleName:="modBankaMapiranje", _
         procedureName:=procedureName, _
         entityType:="BankaImport", _
-        entityId:=bankaImportID, _
+        entityID:=bankaImportID, _
         correlationId:=bankaImportID
 End Sub
 
@@ -1685,7 +1685,7 @@ Private Sub Monitor_BankaMapFail(ByVal procedureName As String, _
         moduleName:="modBankaMapiranje", _
         procedureName:=procedureName, _
         entityType:="BankaImport", _
-        entityId:=bankaImportID, _
+        entityID:=bankaImportID, _
         correlationId:=bankaImportID, _
         errorNumber:=errNum, _
         errorDescription:=errDesc, _
@@ -1703,7 +1703,7 @@ Private Sub Monitor_BankaMapFail(ByVal procedureName As String, _
         moduleName:="modBankaMapiranje", _
         procedureName:=procedureName, _
         entityType:="BankaImport", _
-        entityId:=bankaImportID, _
+        entityID:=bankaImportID, _
         correlationId:=bankaImportID
 End Sub
 

@@ -29,7 +29,7 @@ Public Const LOG_INFO As String = "INFO"
 ' PUBLIC - Hauptfunktion
 ' ============================================================
 
-Public Sub LogError(ByVal Source As String, ByVal message As String, _
+Public Sub LogError(ByVal SOURCE As String, ByVal message As String, _
                     Optional ByVal errNumber As Long = 0, _
                     Optional ByVal level As String = "ERROR", _
                     Optional ByVal details As String = "")
@@ -49,7 +49,7 @@ Public Sub LogError(ByVal Source As String, ByVal message As String, _
     
     On Error Resume Next
     
-    logPath = ThisWorkbook.Path & "\" & LOG_FOLDER
+    logPath = ThisWorkbook.path & "\" & LOG_FOLDER
     
     ' Ordner erstellen
     If Dir(logPath, vbDirectory) = "" Then
@@ -64,7 +64,7 @@ Public Sub LogError(ByVal Source As String, ByVal message As String, _
     ' Format: 2026-03-18 14:35:22 | ERROR | SaveOtkup | 5 | Kooperant mora biti izabran! | details
     line = Format$(Now, "yyyy-mm-dd hh:nn:ss") & " | " & _
            PadRight(level, 5) & " | " & _
-           PadRight(Source, 30) & " | "
+           PadRight(SOURCE, 30) & " | "
     
     If errNumber <> 0 Then
         line = line & CStr(errNumber) & " | "
@@ -94,24 +94,24 @@ End Sub
 ' PUBLIC - Kurzformen
 ' ============================================================
 
-Public Sub LogErr(ByVal Source As String, Optional ByVal details As String = "")
+Public Sub LogErr(ByVal SOURCE As String, Optional ByVal details As String = "")
     ' Kurzform: loggt aktuellen Err direkt
     ' Aufruf: LogErr "SaveOtkup"
     ' Muss im EH-Block aufgerufen werden wo Err noch aktiv ist
     
     If Err.Number <> 0 Then
-        LogError Source, Err.Description, Err.Number, LOG_ERROR, details
+        LogError SOURCE, Err.description, Err.Number, LOG_ERROR, details
     End If
 End Sub
 
-Public Sub LogWarn(ByVal Source As String, ByVal message As String, _
+Public Sub LogWarn(ByVal SOURCE As String, ByVal message As String, _
                    Optional ByVal details As String = "")
-    LogError Source, message, 0, LOG_WARN, details
+    LogError SOURCE, message, 0, LOG_WARN, details
 End Sub
 
-Public Sub LogInfo(ByVal Source As String, ByVal message As String, _
+Public Sub LogInfo(ByVal SOURCE As String, ByVal message As String, _
                    Optional ByVal details As String = "")
-    LogError Source, message, 0, LOG_INFO, details
+    LogError SOURCE, message, 0, LOG_INFO, details
 End Sub
 
 ' ============================================================
@@ -120,7 +120,7 @@ End Sub
 
 Public Sub LogAppStart()
     LogInfo "APP", "=== OtkupApp " & APP_VERSION & " gestartet ==="
-    LogInfo "APP", "File: " & ThisWorkbook.Name
+    LogInfo "APP", "File: " & ThisWorkbook.name
     LogInfo "APP", "User: " & Environ$("Username")
 End Sub
 
@@ -143,7 +143,7 @@ Public Sub PurgeOldLogs()
     
     On Error Resume Next
     
-    logPath = ThisWorkbook.Path & "\" & LOG_FOLDER
+    logPath = ThisWorkbook.path & "\" & LOG_FOLDER
     
     If Dir(logPath, vbDirectory) = "" Then Exit Sub
     

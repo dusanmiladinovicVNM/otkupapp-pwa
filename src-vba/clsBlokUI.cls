@@ -7,10 +7,8 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
-Option Explicit
-
 ' ============================================================
-' clsBlokUI â€“ Event-omotac za dinamicki kreirane kontrole
+' clsBlokUI – Event-omotac za dinamicki kreirane kontrole
 ' panela "Otkupni blokovi" (vidi modOtkupBlok).
 '
 ' Kontrole se prave u kodu (Controls.Add), pa im se eventi
@@ -22,8 +20,11 @@ Option Explicit
 Public action As String
 
 Public WithEvents btn As MSForms.CommandButton
+Attribute btn.VB_VarHelpID = -1
 Public WithEvents txt As MSForms.TextBox
+Attribute txt.VB_VarHelpID = -1
 Public WithEvents lst As MSForms.ListBox
+Attribute lst.VB_VarHelpID = -1
 
 Private Sub btn_Click()
     OtkupBlok_OnButton action
