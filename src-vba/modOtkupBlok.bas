@@ -2,9 +2,9 @@ Attribute VB_Name = "modOtkupBlok"
 Option Explicit
 
 ' ============================================================
-' modOtkupBlok ï¿½ Panel "Otkupni blokovi" u frmOtkup.
+' modOtkupBlok – Panel "Otkupni blokovi" u frmOtkup.
 '
-' Panel NE unosi sam u tblOtkup ï¿½ vodi POSTOJECU levu frmOtkup formu:
+' Panel NE unosi sam u tblOtkup – vodi POSTOJECU levu frmOtkup formu:
 '   - Klik na otpremnicu (sredina) popuni levu formu: otkupno mesto,
 '     vrsta, sorta, vozac, datum, broj zbirne i cenu; broj otkupnog
 '     lista racuna kanonski SuggestNextBroj (OM iz polja + datum otpr.).
@@ -20,7 +20,7 @@ Option Explicit
 '   - Lista otpremnica: kolona "Ostatak", filter "samo nezavrsene",
 '     sort po datumu (najnovije gore).
 '
-' Sve kontrole panela su dinamicke (Controls.Add) ï¿½ frmOtkup.frx se ne
+' Sve kontrole panela su dinamicke (Controls.Add) – frmOtkup.frx se ne
 ' menja. Cena se cuva kao BRUTO (sa PDV nadoknadom); neto/PDV iz nje.
 '
 ' Integracija u frmOtkup:
@@ -74,7 +74,7 @@ Private mLblNapisanoAmb As MSForms.label
 Private mLblPreostaloAmb As MSForms.label
 
 ' ============================================================
-' PUBLIC ï¿½ ulazna tacka + event ruteri + frmOtkup hooks
+' PUBLIC – ulazna tacka + event ruteri + frmOtkup hooks
 ' ============================================================
 
 Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
@@ -97,9 +97,9 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     mBtnToggle.Height = 24
     mBtnToggle.top = 6
     mBtnToggle.Left = mForm.InsideWidth - TOGGLE_W - 6
-    mBtnToggle.caption = "Otkupni blokovi  ï¿½"
+    mBtnToggle.caption = "Otkupni blokovi  »"
     On Error Resume Next
-    StylePrimaryButton mBtnToggle, "Otkupni blokovi  ï¿½"
+    StylePrimaryButton mBtnToggle, "Otkupni blokovi  »"
     On Error GoTo EH
 
     WireBtn mBtnToggle, "TOGGLE"
@@ -220,7 +220,7 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     ' "Cena po otpremnici" je DEFAULT za SLEDECI blok: ClearOtkupFields je obrisao
     ' txtCena, pa ga vracamo na default radi brzog unosa. Cenu UPRAVO unetog bloka
-    ' (txtCena u trenutku snimanja ï¿½ moze biti rucni override) NE diramo: vec je
+    ' (txtCena u trenutku snimanja — moze biti rucni override) NE diramo: vec je
     ' sacuvana sa blokom i default ne sme da je pregazi.
     If mCenaBlok.Exists(mActiveOtpID) Then
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
@@ -264,10 +264,10 @@ Private Sub TogglePanel()
         LoadOtpremnice
         LoadBlokovi
         mForm.width = EXP_WIDTH
-        mBtnToggle.caption = "ï¿½  Sakrij blokove"
+        mBtnToggle.caption = "«  Sakrij blokove"
     Else
         mForm.width = mOrigWidth
-        mBtnToggle.caption = "Otkupni blokovi  ï¿½"
+        mBtnToggle.caption = "Otkupni blokovi  »"
     End If
 
     mBtnToggle.Left = mForm.InsideWidth - mBtnToggle.width - 6
@@ -295,17 +295,17 @@ Private Sub BuildPanel()
     Set mLblUkupno = AddCtl("Label", "lblOtkBlokUk", PANEL_LEFT + 190, 7, 150, 14)
     Set mLblNapisano = AddCtl("Label", "lblOtkBlokNap", PANEL_LEFT + 346, 7, 150, 14)
     Set mLblPreostalo = AddCtl("Label", "lblOtkBlokPre", PANEL_LEFT + 502, 7, 150, 14)
-    mLblUkupno.caption = "Ukupno kg: ï¿½"
-    mLblNapisano.caption = "U blokovima: ï¿½"
-    mLblPreostalo.caption = "Ostatak: ï¿½"
+    mLblUkupno.caption = "Ukupno kg: —"
+    mLblNapisano.caption = "U blokovima: —"
+    mLblPreostalo.caption = "Ostatak: —"
 
     ' Drugi red sazetka: ambalaza (ispod kg)
     Set mLblUkupnoAmb = AddCtl("Label", "lblOtkBlokUkAmb", PANEL_LEFT + 190, 22, 150, 14)
     Set mLblNapisanoAmb = AddCtl("Label", "lblOtkBlokNapAmb", PANEL_LEFT + 346, 22, 150, 14)
     Set mLblPreostaloAmb = AddCtl("Label", "lblOtkBlokPreAmb", PANEL_LEFT + 502, 22, 150, 14)
-    mLblUkupnoAmb.caption = "Ukupno amb: ï¿½"
-    mLblNapisanoAmb.caption = "U blokovima amb: ï¿½"
-    mLblPreostaloAmb.caption = "Ostatak amb: ï¿½"
+    mLblUkupnoAmb.caption = "Ukupno amb: —"
+    mLblNapisanoAmb.caption = "U blokovima amb: —"
+    mLblPreostaloAmb.caption = "Ostatak amb: —"
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
@@ -382,7 +382,7 @@ Private Sub SetPanelVisible(ByVal b As Boolean)
 End Sub
 
 ' ============================================================
-' LOAD ï¿½ pregled otpremnica (sredina) + blokovi izabrane otpremnice (desno)
+' LOAD – pregled otpremnica (sredina) + blokovi izabrane otpremnice (desno)
 ' ============================================================
 
 Private Sub LoadOtpremnice()
@@ -1034,12 +1034,12 @@ Private Sub RefreshSummary()
     On Error GoTo EH
 
     If Len(mActiveOtpID) = 0 Then
-        mLblUkupno.caption = "Ukupno kg: ï¿½"
-        mLblNapisano.caption = "U blokovima: ï¿½"
-        mLblPreostalo.caption = "Ostatak: ï¿½"
-        mLblUkupnoAmb.caption = "Ukupno amb: ï¿½"
-        mLblNapisanoAmb.caption = "U blokovima amb: ï¿½"
-        mLblPreostaloAmb.caption = "Ostatak amb: ï¿½"
+        mLblUkupno.caption = "Ukupno kg: —"
+        mLblNapisano.caption = "U blokovima: —"
+        mLblPreostalo.caption = "Ostatak: —"
+        mLblUkupnoAmb.caption = "Ukupno amb: —"
+        mLblNapisanoAmb.caption = "U blokovima amb: —"
+        mLblPreostaloAmb.caption = "Ostatak amb: —"
         Exit Sub
     End If
 
@@ -1339,7 +1339,7 @@ Private Function FmtKg(ByVal X As Double) As String
     FmtKg = Format$(X, "#,##0")
 End Function
 
-' Kolicina (kg): uvek 2 decimale (npr. 1234.00) ï¿½ panel + liste otpremnica/blokova.
+' Kolicina (kg): uvek 2 decimale (npr. 1234.00) — panel + liste otpremnica/blokova.
 ' Konvencija ista kao zivi prikaz u frmOtkup.UpdateUkupnoKg ("#,##0.00").
 Private Function FmtKgDec(ByVal X As Double) As String
     FmtKgDec = Format$(X, "#,##0.00")
