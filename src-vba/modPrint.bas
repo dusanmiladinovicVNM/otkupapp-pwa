@@ -15,6 +15,11 @@ Private Const OL_MIN_FILLER_PT As Double = 17#    ' donji razmak do perforacije 
 ' se vraca na 99mm. Podrazumevano 0 (stampac postuje 0 marginu / borderless).
 Private Const OL_TOP_MARGIN_TRIM_PT As Double = 0#
 
+' Smer trenutnog OM<->koop reversa (postavlja OutputIzdavanjeAmbalaze): False =
+' izdavanje (OM->koop), True = prijem/povrat (koop->OM). Cita ga Export (ime PDF)
+' i WriteIzdavanjeCopy (preko h("prijem")) za naslov/saldo/potpise.
+Private m_izdAmbPrijem As Boolean
+
 ' ============================================================
 ' modPrint – Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
 ' ============================================================
@@ -899,12 +904,12 @@ Private Function PrNz(ByVal v As Variant) As Double
 End Function
 
 ' ============================================================
-' IZDAVANJE PRAZNE AMBALAZE KOOPERANTU (revers) - IzdAmbSablon, jedan A4
-' portrait obrazac. Okida ga frmDokumenta.btnUnosOMUlaz posle uspesnog
-' SaveOMUlaz_TX kad je toggle "Izdavanje kooperantu" aktivan (dvojni upis
-' Kooperant Ulaz + Stanica Izlaz; DOK_TIP_OM_IZLAZ_KOOP). Podaci dolaze iz
-' forme (broj dokumenta je opcioni -> ne cita se iz ledgera). Izlaz po
-' CFG_OM_IZDAVANJE_PRINT_MODE: PDF (DEFAULT, otvori) | PRINT | PREVIEW | OFF.
+' OM <-> KOOPERANT: REVERS kretanja prazne ambalaze - IzdAmbSablon, dva primerka
+' po 1/3 A4 (kao otkupni list). Okida ga frmDokumenta.btnUnosOMUlaz posle uspesnog
+' SaveOMUlaz_TX kad je aktivan "Izdato koop." (OM->koop; DOK_TIP_OM_IZLAZ_KOOP) ili
+' "Prijem koop." (koop->OM povrat; DOK_TIP_OM_ULAZ_KOOP). Smer nosi parametar prijem
+' (False=izdavanje, True=prijem) -> naslov/saldo/potpisi/ime PDF. Podaci iz forme
+' (broj dok. opcioni). Izlaz po CFG_OM_IZDAVANJE_PRINT_MODE: PDF | PRINT | PREVIEW | OFF.
 ' ============================================================
 
 ' Glavni ulaz (zove se posle SaveOMUlaz_TX). Best-effort: greska se loguje.
@@ -912,8 +917,10 @@ Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String,
                                    ByVal omNaziv As String, ByVal omID As String, _
                                    ByVal koopNaziv As String, ByVal koopID As String, _
                                    ByVal tipAmb As String, ByVal kolAmb As Long, _
-                                   ByVal vrstaVoca As String)
+                                   ByVal vrstaVoca As String, _
+                                   ByVal prijem As Boolean)
     On Error GoTo EH
+    m_izdAmbPrijem = prijem
     Dim mode As String
     mode = UCase$(Trim$(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE)))
 
@@ -963,8 +970,9 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     Dim suff As String: suff = Trim$(brojDok)
     If suff = "" Then suff = koopID
     suff = Replace(Replace(suff, " + ", "_"), "/", "-")
+    Dim pref As String: pref = IIf(m_izdAmbPrijem, "PrijemAmbalaze_", "IzdavanjeAmbalaze_")
     Dim pdfPath As String
-    pdfPath = folder & "\IzdavanjeAmbalaze_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    pdfPath = folder & "\" & pref & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -1029,7 +1037,18 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     h("tipAmb") = tipAmb
     h("kolAmb") = kolAmb
     h("vrsta") = Trim$(vrstaVoca)
-    h("saldo") = IzdAmbSaldoTekst(koopID, tipAmb)
+    h("prijem") = m_izdAmbPrijem
+    ' Saldo kod kooperanta: novo stanje (POSLE upisa) i izvedeno pocetno (pre dokumenta).
+    ' delta na kooperantu: izdavanje +kolAmb (Ulaz), prijem/povrat -kolAmb (Izlaz).
+    Dim saldoNovo As Long
+    h("ambHaveSaldo") = IzdAmbSaldoVal(koopID, tipAmb, saldoNovo)
+    If h("ambHaveSaldo") Then
+        Dim ambDelta As Long
+        If m_izdAmbPrijem Then ambDelta = -kolAmb Else ambDelta = kolAmb
+        h("ambPocetno") = CStr(saldoNovo - ambDelta) & " kom"
+        h("ambSaldo") = CStr(saldoNovo) & " kom"
+    End If
+    h("ambKretanje") = CStr(kolAmb) & " kom"
 
     Application.ScreenUpdating = False
     On Error Resume Next
@@ -1147,7 +1166,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- naslov: mali descriptor + veliki REVERS ---
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = "Izdavanje prazne ambalaze kooperantu"
+        .value = IIf(h("prijem"), "Prijem (povrat) prazne ambalaze od kooperanta", "Izdavanje prazne ambalaze kooperantu")
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
@@ -1249,9 +1268,21 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     usedPt = usedPt + 14#
     rr = rr + 1
 
-    ' --- saldo ambalaze kod kooperanta posle izdavanja (ako je poznat) ---
-    If Len(CStr(h("saldo"))) > 0 Then
-        DocLabelVal ws, rr, 1, "Stanje kod kooperanta posle izdavanja:", CStr(h("saldo"))
+    ' --- ambalaza kod kooperanta: Pocetno stanje -> kretanje -> Novo saldo ---
+    '     (entitetski saldo, ista logika kao otkupni list; novo = posle ovog dokumenta)
+    If h("ambHaveSaldo") Then
+        Dim kretLbl As String
+        kretLbl = IIf(h("prijem"), "Primljeno (od kooperanta):", "Izdato (kooperantu):")
+        DocLabelVal ws, rr, 1, "Pocetno stanje (tip " & CStr(h("tipAmb")) & "):", CStr(h("ambPocetno"))
+        ws.rows(rr).RowHeight = 13#
+        usedPt = usedPt + 13#
+        rr = rr + 1
+        DocLabelVal ws, rr, 1, kretLbl, CStr(h("ambKretanje"))
+        ws.rows(rr).RowHeight = 13#
+        usedPt = usedPt + 13#
+        rr = rr + 1
+        DocLabelVal ws, rr, 1, "Novo stanje (saldo):", CStr(h("ambSaldo"))
+        ws.cells(rr, 1).Font.Bold = True
         ws.rows(rr).RowHeight = 13#
         usedPt = usedPt + 13#
         rr = rr + 1
@@ -1266,10 +1297,10 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     rr = rr + 1
 
     ' --- potpisi ---
-    ws.cells(rr, 1).value = "Izdao (OM):  ____________________"
+    ws.cells(rr, 1).value = IIf(h("prijem"), "Predao (kooperant):  ____________________", "Izdao (OM):  ____________________")
     ws.cells(rr, 1).Font.Size = 9
     ws.cells(rr, 1).Font.Color = grayClr
-    ws.cells(rr, 5).value = "Primio (kooperant):  ____________________"
+    ws.cells(rr, 5).value = IIf(h("prijem"), "Primio (OM):  ____________________", "Primio (kooperant):  ____________________")
     ws.cells(rr, 5).Font.Size = 9
     ws.cells(rr, 5).Font.Color = grayClr
     ws.rows(rr).RowHeight = 16#
@@ -1285,23 +1316,27 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     WriteIzdavanjeCopy = rr
 End Function
 
-' Saldo izdatog tipa kod kooperanta, npr. "tip 4/1 = 120 kom". "" ako nepoznato.
-' GetAmbalazeStanje vraca 2D niz: (.,1)=TipAmbalaze, (.,2)=saldo (Ulaz +, Izlaz -).
-Private Function IzdAmbSaldoTekst(ByVal koopID As String, ByVal tipAmb As String) As String
+' Entitetski saldo (kom) datog tipa kod kooperanta -> ByRef saldo; True ako je tip
+' nadjen u ledgeru. GetAmbalazeStanje vraca 2D niz: (.,1)=Tip, (.,2)=saldo (Ulaz +,
+' Izlaz -). Saldo se cita POSLE upisa pa odrazava novo stanje; pocetno = saldo - delta.
+Private Function IzdAmbSaldoVal(ByVal koopID As String, ByVal tipAmb As String, _
+                                ByRef saldo As Long) As Boolean
     On Error GoTo EH
+    saldo = 0
     If Trim$(koopID) = "" Then Exit Function
     Dim st As Variant: st = GetAmbalazeStanje(koopID, "Kooperant")
     If Not IsArray(st) Then Exit Function
     Dim i As Long
     For i = LBound(st, 1) To UBound(st, 1)
         If Trim$(CStr(st(i, 1))) = Trim$(tipAmb) Then
-            IzdAmbSaldoTekst = "tip " & tipAmb & " = " & CStr(CLng(st(i, 2))) & " kom"
+            saldo = CLng(st(i, 2))
+            IzdAmbSaldoVal = True
             Exit Function
         End If
     Next i
     Exit Function
 EH:
-    LogErr "modPrint.IzdAmbSaldoTekst"
+    LogErr "modPrint.IzdAmbSaldoVal"
 End Function
 
 ' Kreira IzdAmbSablon (8 kolona, kao OtkupSablon). Sme da ostane vidljiv u

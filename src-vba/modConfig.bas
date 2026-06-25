@@ -321,6 +321,7 @@ Public Const DOK_TIP_OTPREMNICA As String = "Otpremnica"
 Public Const DOK_TIP_PRIJEMNICA As String = "Prijemnica"
 Public Const DOK_TIP_IZLAZ_KUPCI As String = "Kupci-Otpremnica"
 Public Const DOK_TIP_OM_IZLAZ_KOOP As String = "OM-Izlaz-Koop"  ' OM izdaje (praznu) ambalazu kooperantu
+Public Const DOK_TIP_OM_ULAZ_KOOP As String = "OM-Ulaz-Koop"    ' kooperant vraca (praznu) ambalazu na OM (povrat)
 
 ' --- Spaltennamen tblFakture ---
 Public Const COL_FAK_ID As String = "FakturaID"
