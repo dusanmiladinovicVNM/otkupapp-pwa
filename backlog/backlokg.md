@@ -256,3 +256,27 @@ P3-2	Shared modDataAccessGuards	🔴	Izvući RequireSingleRow, RequireActiveSing
 P3-3	modGoogleAuth.GetAccessToken formatiranje	🔴	Samo čitljivost.
 P3-4	modGeoParcele geo source parametar	🔴	Umesto hardcoded "selenium".
 P3-5	Ukloniti “PATCH” komentare iz production modula	🟡	Dobri su za review, ali dugoročno treba normalan module header.
+P3-6	Izgubljeni blokovi: „Preuzmi obe klase po BrDok“	🔴	Adopt radi po jednom OtkupID; Klasa I+II (isti BrDok, 2 OtkupID) se preuzimaju posebno.
+P3-7	Izgubljeni blokovi: auto-predlog ciljne otpremnice	🔴	Detekcija ne zna „pravu“ novu otpremnicu; operater bira ručno. Predložiti aktivnu sa istim BrojOtpremnice/BrojZbirne.
+P3-8	Izgubljeni blokovi: zaglavlja kolona u lost-modu	🔴	„stara otp“ se prikazuje u koloni „Vrednost“ (kozmetika); dati zasebno zaglavlje/kolonu.
+
+P3-6..8 — Izgubljeni blokovi (dorade; prioritet za slobodno vreme)
+
+Kontekst: feature „Izgubljeni blokovi“ (commit-i cfa12e4 + fix 315bd04). Komponente:
+- modDokumenta.GetLostOtkupBlokovi (detekcija, inference),
+- modDokumenta.ReassignOtkupToOtpremnica_TX (bezbedan re-point = opcija A: menja samo OtpremnicaID + BrojZbirne, čuva OtkupID),
+- modHelpers.CheckVerwaisteDokumente (dashboard sekcija #5),
+- modOtkupBlok (panel: ToggleLostMode / LoadLostBlokovi / AdoptSelectedLostBlok).
+Radi i potvrđeno u produkciji.
+
+P3-6 — „Preuzmi obe klase po BrDok“
+AdoptSelectedLostBlok i ReassignOtkupToOtpremnica_TX rade po jednom OtkupID. Otkup sa Klasa I i II ima dva reda (isti BrojDokumenta, dva OtkupID) -> oba se pojave kao izgubljena i preuzimaju se posebno.
+Dorada: preuzmi sve redove istog BrojDokumenta odjednom (obrazac StornoOtkupByBrDok_TX). Konkretno: dodati ReassignOtkupByBrDok_TX(brDok, targetOtpID) koja FindRows po COL_OTK_BR_DOK i re-pointuje svaki NEstornirani red; ili petlja u adopt-u. Paziti: ne dirati već stornirane redove.
+
+P3-7 — auto-predlog ciljne otpremnice
+GetLostOtkupBlokovi ne zna koja je „prava“ nova otpremnica; operater ručno bira cilj u levoj listi (mActiveOtpID) pre Preuzmi. Čest scenario je storno + ponovni unos sa ISTIM poslovnim brojem (BrojOtpremnice/BrojZbirne).
+Dorada (opciono): kad postoji aktivna otpremnica sa istim BrojOtpremnice (ili BrojZbirne) kao „stara“, predložiti/preselektovati je kao cilj. Smanjuje rizik preuzimanja na pogrešnu otpremnicu.
+
+P3-8 — zaglavlja kolona u lost-modu
+U „Izgubljeni“ režimu lista BLOKOVI (mLstBlok) koristi normalna zaglavlja (BLOK_CAPS), a „stara otp: X“ se prikazuje u koloni sa zaglavljem „Vrednost“ -> zbunjujuće.
+Dorada: privremeno zameniti zaglavlja u lost-modu (npr. kolona „Stara otpremnica“) ili zaseban mali grid. Čista kozmetika.

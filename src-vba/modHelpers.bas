@@ -403,6 +403,21 @@ Public Function CheckVerwaisteDokumente() As String
         End If
     End If
     
+    ' 5. Izgubljeni otkup blokovi (OtpremnicaID -> stornirana/nepostojeca otpremnica)
+    Dim lostBlk As Variant
+    lostBlk = GetLostOtkupBlokovi()
+    If IsArray(lostBlk) Then
+        warnings = warnings & UBound(lostBlk, 1) & " blok(ova) vezano za nepostojecu otpremnicu:" & vbCrLf
+        Dim lb As Long
+        For lb = 1 To IIf(UBound(lostBlk, 1) > 5, 5, UBound(lostBlk, 1))
+            Dim lbKg As String: lbKg = ""
+            If IsNumeric(lostBlk(lb, 5)) Then lbKg = Format$(CDbl(lostBlk(lb, 5)), "#,##0") & "kg"
+            warnings = warnings & "  blok " & CStr(lostBlk(lb, 2)) & " " & lbKg & _
+                       " -> otp " & CStr(lostBlk(lb, 7)) & vbCrLf
+        Next lb
+        If UBound(lostBlk, 1) > 5 Then warnings = warnings & "  ..." & vbCrLf
+    End If
+
     CheckVerwaisteDokumente = warnings
 End Function
 

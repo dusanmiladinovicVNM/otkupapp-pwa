@@ -41,6 +41,16 @@ Private m_ambIOtpFullW As Single
 Private m_ambIZbrFullW As Single
 Private m_ambIPrijFullW As Single
 
+' Storno pregled (runtime kontrole; .frx se ne dira). Dugme u storno sekciji
+' otvara overlay panel sa listom svih storniranih dokumenata, grupisano po tipu.
+Private WithEvents m_btnStornoPregled As MSForms.CommandButton
+Private WithEvents m_btnStornoClose As MSForms.CommandButton
+Private m_stornoBack As MSForms.label
+Private m_stornoTitle As MSForms.label
+Private m_lstStorno As MSForms.ListBox
+Private m_stornoBuilt As Boolean
+Private m_stornoHidden As Collection      ' kontrole privremeno sakrivene dok je panel otvoren
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
@@ -184,6 +194,9 @@ Private Sub UserForm_Activate()
 
     ' Runtime toggle smera ambalaze u OM-Ulaz frame-u (ne dira .frx).
     SetupOMIzdavanjeToggle
+
+    ' Runtime dugme "Pregled storniranih" u storno sekciji (ne dira .frx).
+    SetupStornoPregledButton
 
     Exit Sub
 
@@ -1667,6 +1680,20 @@ Private Function UpdateValidacija() As Boolean
         End If
     End If
     
+    ' Klasa II ambalaza (runtime polje) -> inputAmb postaje TOTAL: ValidateZbirnaPreUnosa
+    ' sabira sumaAmb preko OBE klase, pa ulaz mora biti zbir Kl.I + Kl.II.
+    If chkDveKlaseZbr.value And Not m_txtKolAmbIIZbr Is Nothing Then
+        If Trim$(m_txtKolAmbIIZbr.value) <> "" Then
+            Dim inputAmbII As Long
+            If Not TryParseLong(m_txtKolAmbIIZbr.value, inputAmbII) Then
+                lblValidacijaAmb.caption = "Neispravna kolicina ambalaze Kl.II"
+                lblValidacijaAmb.ForeColor = CLR_ERROR()
+                Exit Function
+            End If
+            inputAmb = inputAmb + inputAmbII
+        End If
+    End If
+
     Dim val As Variant
     val = ValidateZbirnaPreUnosa(txtBrojZbirne.value, inputKgKlI, inputKgKlII, inputAmb)
     
@@ -2412,7 +2439,8 @@ Private Sub btnStorno_Click()
                 MsgBox "Otpremnica '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("otpremnicu", brDok) Then Success = StornoOtpremnica_TX(otpID)
+            ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
+            If ConfirmStorno("otpremnicu", brDok) Then Success = StornoOtpremnicaByBroj_TX(brDok)
             
         Case "Zbirna"
             If ConfirmStorno("zbirnu", brDok) Then Success = StornoZbirna_TX(brDok)
@@ -2424,7 +2452,8 @@ Private Sub btnStorno_Click()
                 MsgBox "Prijemnica '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnica_TX(prijID)
+            ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
+            If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnicaByBroj_TX(brDok)
             
         Case "Faktura"
             Dim fakID As String
@@ -2490,6 +2519,236 @@ Private Sub CheckVerwaisteDokumente()
     lblStornoWarning.caption = msg
     lblStornoWarning.ForeColor = CLR_WARNING()
     lblStornoWarning.Visible = True
+End Sub
+
+' ============================================================
+' STORNO PREGLED — runtime dugme + overlay panel (lista svih storniranih
+' dokumenata, grupisano po tipu). .frx se ne dira (Controls.Add + WithEvents).
+' Podaci: modDokumenta.GetStorniraniGrupisano / StorniraniHeaders.
+' ============================================================
+
+Private Sub SetupStornoPregledButton()
+    ' Pozicija u odnosu na btnStorno (po potrebi podesi):
+    Const STP_DX As Single = 0      ' x-pomeraj
+    Const STP_DY As Single = 6      ' razmak ISPOD btnStorno
+    On Error GoTo done
+
+    If Not m_btnStornoPregled Is Nothing Then Exit Sub
+
+    ' Isti container kao btnStorno -> iste (frame/forma) koordinate.
+    Set m_btnStornoPregled = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnStornoPregledRT", True)
+    If m_btnStornoPregled Is Nothing Then GoTo done
+
+    With m_btnStornoPregled
+        .width = btnStorno.width
+        .Height = btnStorno.Height
+        .Left = btnStorno.Left + STP_DX
+        .top = btnStorno.top + btnStorno.Height + STP_DY
+        .visible = True
+    End With
+    StylePrimaryButton m_btnStornoPregled, "Pregled storniranih"
+
+    On Error Resume Next
+    m_btnStornoPregled.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupStornoPregledButton"
+    Set m_btnStornoPregled = Nothing
+End Sub
+
+Private Sub m_btnStornoPregled_Click()
+    On Error GoTo EH
+    ShowStorniraniPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnStornoPregled_Click"
+    MsgBox "Greška pri prikazu storniranih: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub m_btnStornoClose_Click()
+    SetStorniraniPanelVisible False
+End Sub
+
+' Izgradi panel (jednom), napuni svezim podacima i prikazi ga.
+Private Sub ShowStorniraniPanel()
+    EnsureStorniraniPanel
+    If Not m_stornoBuilt Then Exit Sub
+    PopulateStorniraniPanel
+    SetStorniraniPanelVisible True
+End Sub
+
+' Runtime izgradnja overlay panela (kontrole se samo kreiraju; geometrija ide u
+' LayoutStorniraniPanel, koji se zove na svako otvaranje -> robusno na resize forme).
+Private Sub EnsureStorniraniPanel()
+    On Error GoTo done
+    If m_stornoBuilt Then Exit Sub
+
+    ' Pozadina (pun panel: bela podloga preko CELE forme).
+    Set m_stornoBack = Me.Controls.Add("Forms.Label.1", "lblStornoBackRT", True)
+    With m_stornoBack
+        .caption = ""
+        .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL()
+        .BorderStyle = fmBorderStyleNone
+    End With
+
+    ' Naslov.
+    Set m_stornoTitle = Me.Controls.Add("Forms.Label.1", "lblStornoTitleRT", True)
+    With m_stornoTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT()
+        .caption = "Stornirani dokumenti"
+    End With
+
+    ' Dugme Zatvori (gore desno).
+    Set m_btnStornoClose = Me.Controls.Add("Forms.CommandButton.1", "btnStornoCloseRT", True)
+    StyleExitButton m_btnStornoClose, "Zatvori"
+
+    ' Lista. Kolone: osnovne + lanac zavisnih dokumenata (Zbirna/Otpremnica/Faktura).
+    Set m_lstStorno = Me.Controls.Add("Forms.ListBox.1", "lstStornoRT", True)
+    With m_lstStorno
+        .ColumnCount = 12
+        ' Broj Datum Partner Vrsta Sorta Klasa Kolicina Cena Iznos | Zbirna Otpremnica Faktura
+        .ColumnWidths = "86;58;120;60;80;32;54;48;68;92;96;84"
+    End With
+    StyleListBox m_lstStorno
+
+    m_stornoBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureStorniraniPanel"
+End Sub
+
+' Full-bleed raspored: panel prekriva ceo klijentski prostor frmDokumenta
+' (iste dimenzije kao "Otkup i prodaja" ekran). Zove se na svako otvaranje.
+Private Sub LayoutStorniraniPanel()
+    On Error Resume Next
+    If Not m_stornoBuilt Then Exit Sub
+
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Dim w As Single, h As Single
+    w = Me.InsideWidth
+    h = Me.InsideHeight
+
+    m_stornoBack.Move 0, 0, w, h
+    m_stornoTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnStornoClose.Move w - PAD - 92, PAD, 92, 24
+    m_lstStorno.Move PAD, PAD + HDR, w - 2 * PAD, h - 2 * PAD - HDR
+End Sub
+
+' Napuni listu: header red, pa po tipu grupni naslov + redovi. Total u naslovu.
+Private Sub PopulateStorniraniPanel()
+    On Error GoTo EH
+    If m_lstStorno Is Nothing Then Exit Sub
+
+    m_lstStorno.Clear
+    AddStornoListRow StorniraniHeaders()
+
+    Dim grupe As Collection
+    Set grupe = GetStorniraniGrupisano()
+    Dim total As Long: total = 0
+
+    If Not grupe Is Nothing Then
+        Dim g As Long
+        For g = 1 To grupe.count
+            Dim tip As String: tip = CStr(grupe(g)(0))
+            Dim rowsv As Variant: rowsv = grupe(g)(1)
+            Dim cnt As Long: cnt = UBound(rowsv, 1)
+
+            Dim hdr(0 To 11) As Variant
+            Dim z As Long
+            For z = 0 To 11: hdr(z) = "": Next z
+            hdr(0) = ChrW$(187) & " " & UCase$(tip) & " (" & cnt & ")"
+            AddStornoListRow hdr
+
+            Dim r As Long, c As Long
+            For r = 1 To cnt
+                Dim one(0 To 11) As Variant
+                For c = 0 To 11: one(c) = rowsv(r, c + 1): Next c
+                AddStornoListRow one
+            Next r
+
+            total = total + cnt
+        Next g
+    End If
+
+    If total = 0 Then
+        m_lstStorno.Clear
+        m_lstStorno.AddItem "Nema storniranih dokumenata."
+    End If
+
+    m_stornoTitle.caption = "Stornirani dokumenti  (" & total & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateStorniraniPanel"
+End Sub
+
+' Dodaj jedan red (0-bazni Variant niz celija) u listu, kolona po kolona.
+Private Sub AddStornoListRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_lstStorno.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_lstStorno.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_lstStorno.ColumnCount - 1 Then
+            m_lstStorno.List(idx, c - lb) = CStr(cells(c))
+        End If
+    Next c
+End Sub
+
+Private Sub SetStorniraniPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_stornoBuilt Then Exit Sub
+
+    If bShow Then
+        LayoutStorniraniPanel          ' full-bleed na trenutnu velicinu forme
+        HideBehindPanel                ' sakrij sve ostale kontrole (potpuno prekrivanje)
+        m_stornoBack.visible = True
+        m_lstStorno.visible = True
+        m_stornoTitle.visible = True
+        m_btnStornoClose.visible = True
+        ' Na vrh (redosled: back -> lista -> naslov -> zatvori).
+        m_stornoBack.ZOrder 0
+        m_lstStorno.ZOrder 0
+        m_stornoTitle.ZOrder 0
+        m_btnStornoClose.ZOrder 0
+    Else
+        m_stornoBack.visible = False
+        m_lstStorno.visible = False
+        m_stornoTitle.visible = False
+        m_btnStornoClose.visible = False
+        RestoreBehindPanel
+    End If
+End Sub
+
+' Sakrij sve kontrole forme osim panela; zapamti prethodno stanje za restore.
+Private Sub HideBehindPanel()
+    On Error Resume Next
+    Set m_stornoHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_stornoBack Or ctl Is m_lstStorno _
+           Or ctl Is m_stornoTitle Or ctl Is m_btnStornoClose Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_stornoHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+' Vrati vidljivost kontrolama sakrivenim u HideBehindPanel.
+Private Sub RestoreBehindPanel()
+    On Error Resume Next
+    If m_stornoHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_stornoHidden.count
+        Me.Controls(m_stornoHidden(i)).visible = True
+    Next i
+    Set m_stornoHidden = Nothing
 End Sub
 
 ' ============================================================

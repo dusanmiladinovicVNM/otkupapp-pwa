@@ -1540,17 +1540,10 @@ Public Function CalculateProsekGajbe(ByVal brojOtp As String) As Double
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_KOL_AMB, _
                        "modDokumenta.CalculateProsekGajbe"
 
-    Dim kolVal As Variant
-    Dim ambVal As Variant
-
-    kolVal = LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOLICINA)
-    ambVal = LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOL_AMB)
-
-    Dim kol As Double
-    Dim amb As Long
-
-    If IsNumeric(kolVal) Then kol = CDbl(kolVal)
-    If IsNumeric(ambVal) Then amb = CLng(ambVal)
+    ' Dvoklasni doc: sumiraj kol i amb preko SVIH redova broja (ne samo prvi red).
+    Dim kol As Double, amb As Double
+    kol = SumByBroj(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOLICINA)
+    amb = SumByBroj(TBL_OTPREMNICA, COL_OTP_BROJ, brojOtp, COL_OTP_KOL_AMB)
 
     If amb > 0 Then
         CalculateProsekGajbe = kol / amb
@@ -1577,17 +1570,10 @@ Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Doub
     RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KOL_AMB, _
                        "modDokumenta.CalculateProsekGajbeByZbirna"
 
-    Dim zbrKol As Variant
-    Dim zbrAmb As Variant
-
-    zbrKol = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOLICINA)
-    zbrAmb = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOL_AMB)
-
-    Dim kol As Double
-    Dim amb As Long
-
-    If IsNumeric(zbrKol) Then kol = CDbl(zbrKol)
-    If IsNumeric(zbrAmb) Then amb = CLng(zbrAmb)
+    ' Dvoklasni doc: sumiraj kol i amb preko SVIH redova broja (ne samo prvi red).
+    Dim kol As Double, amb As Double
+    kol = SumByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOLICINA)
+    amb = SumByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOL_AMB)
 
     If amb > 0 Then
         CalculateProsekGajbeByZbirna = kol / amb
@@ -1600,6 +1586,24 @@ Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Doub
 EH:
     LogErr "modDokumenta.CalculateProsekGajbeByZbirna"
     CalculateProsekGajbeByZbirna = 0
+End Function
+
+' Sumira valCol preko SVIH redova gde brojCol = broj (obe klase dvorednog doc-a).
+Private Function SumByBroj(ByVal tbl As String, ByVal brojCol As String, _
+                           ByVal broj As String, ByVal valCol As String) As Double
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cB As Long, cV As Long
+    cB = GetColumnIndex(tbl, brojCol)
+    cV = GetColumnIndex(tbl, valCol)
+    If cB = 0 Or cV = 0 Then Exit Function
+    Dim i As Long, s As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cB))) = Trim$(broj) Then
+            If IsNumeric(data(i, cV)) Then s = s + CDbl(data(i, cV))
+        End If
+    Next i
+    SumByBroj = s
 End Function
 
 ' ============================================================
@@ -2282,5 +2286,533 @@ Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
     End If
 
     FindPrijemnicaRowByIDAndKlasa = foundRow
+End Function
+
+' ============================================================
+' STORNO PREGLED (read-only) — agregira stornirane dokumente po tipu za
+' prikaz u panelu unutar frmDokumenta (dugme "Pregled storniranih").
+' Soft-delete: red je storniran kad je COL_STORNIRANO = "Da" (modStorno).
+' Jedinstven (unifikovan) skup korisnih kolona za sve tipove:
+'   Broj | Datum | Partner | Vrsta | Sorta | Klasa | Kolicina | Cena | Iznos
+'   | Zbirna | Otpremnica | Faktura  (poslednje 3 = lanac zavisnih dokumenata)
+' Partner se razresava na naziv/ime (best-effort; fallback = ID).
+' ============================================================
+
+' Tipovi storno dokumenata u redosledu prikaza (isti nazivi kao cmbStornoDokument).
+Public Function StorniraniTipovi() As Variant
+    StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac")
+End Function
+
+' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
+Public Function StorniraniHeaders() As Variant
+    StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
+                              "Klasa", "Kolicina", "Cena", "Iznos (RSD)", _
+                              "Zbirna", "Otpremnica", "Faktura")
+End Function
+
+' Vrati 2D niz (1..n, 1..12) storniranih redova za dati tip u unifikovanom
+' rasporedu kolona (osnovne + lanac: Zbirna/Otpremnica/Faktura). Empty ako nema.
+' chainIdx: pre-izgradjen indeks lanca (BuildChainIndex); ako fali, gradi se sam.
+Public Function GetStorniraniByTip(ByVal tip As String, _
+                                   Optional ByVal chainIdx As Object = Nothing) As Variant
+    On Error GoTo EH
+    If chainIdx Is Nothing Then Set chainIdx = BuildChainIndex()
+
+    Dim tbl As String
+    Dim iBroj As Long, iDat As Long, iPart As Long, iVrsta As Long, iSorta As Long
+    Dim iKlasa As Long, iKol As Long, iCena As Long, iIzn As Long, iIzn2 As Long
+    Dim iZbr As Long, iFak As Long
+    Dim partnerIsName As Boolean
+    Dim pdict As Object
+
+    Select Case tip
+        Case "Otkup"
+            tbl = TBL_OTKUP
+            Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+            iBroj = GetColumnIndex(tbl, COL_OTK_BR_DOK)
+            iDat = GetColumnIndex(tbl, COL_OTK_DATUM)
+            iPart = GetColumnIndex(tbl, COL_OTK_KOOPERANT)
+            iVrsta = GetColumnIndex(tbl, COL_OTK_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_OTK_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_OTK_KLASA)
+            iKol = GetColumnIndex(tbl, COL_OTK_KOLICINA)
+            iCena = GetColumnIndex(tbl, COL_OTK_CENA)
+            iIzn = GetColumnIndex(tbl, COL_OTK_NOVAC)
+            iZbr = GetColumnIndex(tbl, COL_OTK_BROJ_ZBIRNE)
+
+        Case "Otpremnica"
+            tbl = TBL_OTPREMNICA
+            Set pdict = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
+            iBroj = GetColumnIndex(tbl, COL_OTP_BROJ)
+            iDat = GetColumnIndex(tbl, COL_OTP_DATUM)
+            iPart = GetColumnIndex(tbl, COL_OTP_STANICA)
+            iVrsta = GetColumnIndex(tbl, COL_OTP_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_OTP_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_OTP_KLASA)
+            iKol = GetColumnIndex(tbl, COL_OTP_KOLICINA)
+            iCena = GetColumnIndex(tbl, COL_OTP_CENA)
+            iZbr = GetColumnIndex(tbl, COL_OTP_BROJ_ZBIRNE)
+
+        Case "Zbirna"
+            tbl = TBL_ZBIRNA
+            Set pdict = BuildIdNameDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+            iBroj = GetColumnIndex(tbl, COL_ZBR_BROJ)
+            iDat = GetColumnIndex(tbl, COL_ZBR_DATUM)
+            iPart = GetColumnIndex(tbl, COL_ZBR_KUPAC)
+            iVrsta = GetColumnIndex(tbl, COL_ZBR_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_ZBR_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_ZBR_KLASA)
+            iKol = GetColumnIndex(tbl, COL_ZBR_KOLICINA)
+            iZbr = GetColumnIndex(tbl, COL_ZBR_BROJ)        ' sopstveni broj = pivot zbirne
+
+        Case "Prijemnica"
+            tbl = TBL_PRIJEMNICA
+            Set pdict = BuildIdNameDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+            iBroj = GetColumnIndex(tbl, COL_PRJ_BROJ)
+            iDat = GetColumnIndex(tbl, COL_PRJ_DATUM)
+            iPart = GetColumnIndex(tbl, COL_PRJ_KUPAC)
+            iVrsta = GetColumnIndex(tbl, COL_PRJ_VRSTA)
+            iSorta = GetColumnIndex(tbl, COL_PRJ_SORTA)
+            iKlasa = GetColumnIndex(tbl, COL_PRJ_KLASA)
+            iKol = GetColumnIndex(tbl, COL_PRJ_KOLICINA)
+            iCena = GetColumnIndex(tbl, COL_PRJ_CENA)
+            iZbr = GetColumnIndex(tbl, COL_PRJ_BROJ_ZBIRNE)
+            iFak = GetColumnIndex(tbl, COL_PRJ_FAKTURA_ID)
+
+        Case "Faktura"
+            tbl = TBL_FAKTURE
+            Set pdict = BuildIdNameDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+            iBroj = GetColumnIndex(tbl, COL_FAK_BROJ)
+            iDat = GetColumnIndex(tbl, COL_FAK_DATUM)
+            iPart = GetColumnIndex(tbl, COL_FAK_KUPAC)
+            iIzn = GetColumnIndex(tbl, COL_FAK_IZNOS)
+            iFak = GetColumnIndex(tbl, COL_FAK_ID)          ' sopstveni FakturaID
+
+        Case "Novac"
+            tbl = TBL_NOVAC
+            partnerIsName = True       ' Partner je vec naziv (ne ID)
+            iBroj = GetColumnIndex(tbl, COL_NOV_BROJ_DOK)
+            iDat = GetColumnIndex(tbl, COL_NOV_DATUM)
+            iPart = GetColumnIndex(tbl, COL_NOV_PARTNER)
+            iVrsta = GetColumnIndex(tbl, COL_NOV_VRSTA)
+            iIzn = GetColumnIndex(tbl, COL_NOV_UPLATA)
+            iIzn2 = GetColumnIndex(tbl, COL_NOV_ISPLATA)    ' Iznos = Uplata - Isplata
+            iFak = GetColumnIndex(tbl, COL_NOV_FAKTURA_ID)
+
+        Case Else
+            Exit Function
+    End Select
+
+    Dim data As Variant
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colStorno As Long
+    colStorno = GetColumnIndex(tbl, COL_STORNIRANO)
+    If colStorno = 0 Then Exit Function        ' tabela bez storno markera -> nista
+
+    Dim otpByZbr As Object: Set otpByZbr = chainIdx("otpByZbr")
+    Dim fakByZbr As Object: Set fakByZbr = chainIdx("fakByZbr")
+    Dim fakById As Object:  Set fakById = chainIdx("fakById")
+    Dim zbrByFak As Object: Set zbrByFak = chainIdx("zbrByFak")
+
+    Dim rows As Collection
+    Set rows = New Collection
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If UCase$(Trim$(NzToText(data(i, colStorno)))) = "DA" Then
+            Dim part As String
+            If partnerIsName Then
+                part = StornoCellText(data, i, iPart)
+            Else
+                part = ResolveNameFromDict(pdict, StornoCellRaw(data, i, iPart))
+            End If
+
+            ' Lanac zavisnih dokumenata preko BrojZbirne / FakturaID.
+            Dim zbr As String, fakId As String, otp As String, fak As String
+            zbr = StornoCellText(data, i, iZbr)
+            fakId = StornoCellText(data, i, iFak)
+            If Len(zbr) = 0 And Len(fakId) > 0 Then zbr = DictGet(zbrByFak, fakId)
+            otp = DictGet(otpByZbr, zbr)
+            If Len(fakId) > 0 Then fak = DictGet(fakById, fakId) Else fak = DictGet(fakByZbr, zbr)
+
+            ' Iznos: stored (Faktura=Iznos, Novac=Uplata-Isplata) ili izracunat
+            ' Kolicina × Cena (Otkup/Otpremnica/Prijemnica nemaju zaseban iznos).
+            Dim iznos As String
+            iznos = StornoIznosText(StornoCellRaw(data, i, iIzn), StornoCellRaw(data, i, iIzn2))
+            If Len(iznos) = 0 Then _
+                iznos = StornoMnozi(StornoCellRaw(data, i, iKol), StornoCellRaw(data, i, iCena))
+
+            rows.Add Array( _
+                StornoCellText(data, i, iBroj), _
+                StornoDateText(StornoCellRaw(data, i, iDat)), _
+                part, _
+                StornoCellText(data, i, iVrsta), _
+                StornoCellText(data, i, iSorta), _
+                StornoCellText(data, i, iKlasa), _
+                StornoNumText(StornoCellRaw(data, i, iKol), "#,##0.##"), _
+                StornoNumText(StornoCellRaw(data, i, iCena), "#,##0.##"), _
+                iznos, _
+                zbr, otp, fak)
+        End If
+    Next i
+
+    GetStorniraniByTip = StornoRowsTo2D(rows, 12)
+    Exit Function
+
+EH:
+    LogErr "modDokumenta.GetStorniraniByTip(" & tip & ")"
+    GetStorniraniByTip = Empty
+End Function
+
+' Svi stornirani grupisano: Collection of Array(tipNaziv, rows2D(1..n,1..12)).
+' Indeks lanca se gradi JEDNOM (reverzni cross-table lookup-i) i deli svim tipovima.
+Public Function GetStorniraniGrupisano() As Collection
+    On Error GoTo EH
+    Dim res As Collection
+    Set res = New Collection
+    Set GetStorniraniGrupisano = res
+
+    Dim idx As Object: Set idx = BuildChainIndex()
+    Dim tipovi As Variant: tipovi = StorniraniTipovi()
+    Dim k As Long
+    For k = LBound(tipovi) To UBound(tipovi)
+        Dim tip As String: tip = CStr(tipovi(k))
+        Dim rowsv As Variant: rowsv = GetStorniraniByTip(tip, idx)
+        If Not IsEmpty(rowsv) Then res.Add Array(tip, rowsv)
+    Next k
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetStorniraniGrupisano"
+End Function
+
+' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
+Private Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
+                                 ByVal nameCol1 As String, _
+                                 Optional ByVal nameCol2 As String = "") As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set BuildIdNameDict = d
+
+    Dim data As Variant
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+
+    Dim ci As Long, c1 As Long, c2 As Long
+    ci = GetColumnIndex(tbl, idCol)
+    c1 = GetColumnIndex(tbl, nameCol1)
+    If Len(nameCol2) > 0 Then c2 = GetColumnIndex(tbl, nameCol2)
+    If ci = 0 Or c1 = 0 Then Exit Function
+
+    Dim i As Long, idv As String, nm As String
+    For i = 1 To UBound(data, 1)
+        idv = Trim$(NzToText(data(i, ci)))
+        If Len(idv) > 0 Then
+            nm = Trim$(NzToText(data(i, c1)))
+            If c2 > 0 Then nm = Trim$(nm & " " & NzToText(data(i, c2)))
+            If Not d.Exists(idv) Then d.Add idv, nm
+        End If
+    Next i
+End Function
+
+Private Function ResolveNameFromDict(ByVal d As Object, ByVal idRaw As Variant) As String
+    Dim s As String
+    s = Trim$(NzToText(idRaw))
+    If Len(s) = 0 Then Exit Function
+    If Not d Is Nothing Then
+        If d.Exists(s) Then
+            If Len(Trim$(NzToText(d(s)))) > 0 Then
+                ResolveNameFromDict = d(s)
+                Exit Function
+            End If
+        End If
+    End If
+    ResolveNameFromDict = s          ' fallback: prikazi ID ako nema imena
+End Function
+
+' Sirova vrednost celije (Empty ako kolona ne postoji -> idx=0).
+Private Function StornoCellRaw(ByVal data As Variant, ByVal r As Long, ByVal idx As Long) As Variant
+    If idx = 0 Then Exit Function
+    StornoCellRaw = data(r, idx)
+End Function
+
+Private Function StornoCellText(ByVal data As Variant, ByVal r As Long, ByVal idx As Long) As String
+    If idx = 0 Then Exit Function
+    StornoCellText = Trim$(NzToText(data(r, idx)))
+End Function
+
+Private Function StornoDateText(ByVal v As Variant) As String
+    If IsDate(v) Then
+        StornoDateText = Format$(CDate(v), "d.m.yyyy")
+    Else
+        StornoDateText = Trim$(NzToText(v))
+    End If
+End Function
+
+Private Function StornoNumText(ByVal v As Variant, ByVal fmt As String) As String
+    Dim d As Double
+    If TryParseDouble(Trim$(NzToText(v)), d) Then
+        If d <> 0 Then StornoNumText = Format$(d, fmt)
+    End If
+End Function
+
+' Iznos = v1 - v2 (Novac: Uplata - Isplata; ostali: v2 prazno -> samo v1).
+Private Function StornoIznosText(ByVal v1 As Variant, ByVal v2 As Variant) As String
+    Dim u As Double, s As Double
+    If Not TryParseDouble(Trim$(NzToText(v1)), u) Then u = 0
+    If Not TryParseDouble(Trim$(NzToText(v2)), s) Then s = 0
+    Dim net As Double: net = u - s
+    If net <> 0 Then StornoIznosText = Format$(net, "#,##0")
+End Function
+
+' Iznos = Kolicina × Cena (prazno ako je proizvod 0).
+Private Function StornoMnozi(ByVal vKol As Variant, ByVal vCena As Variant) As String
+    Dim kol As Double, cena As Double
+    If Not TryParseDouble(Trim$(NzToText(vKol)), kol) Then kol = 0
+    If Not TryParseDouble(Trim$(NzToText(vCena)), cena) Then cena = 0
+    Dim p As Double: p = kol * cena
+    If p <> 0 Then StornoMnozi = Format$(p, "#,##0")
+End Function
+
+' --- Indeks lanca dokumenata (reverzni lookup-i preko BrojZbirne / FakturaID) ---
+
+' Prazan recnik sa case-insensitive poredjenjem kljuceva.
+Private Function NewDict() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set NewDict = d
+End Function
+
+Private Function DictGet(ByVal d As Object, ByVal key As String) As String
+    If d Is Nothing Then Exit Function
+    If Len(key) = 0 Then Exit Function
+    If d.Exists(key) Then DictGet = CStr(d(key))
+End Function
+
+' Dodaj val u listu pod key (", "-spojeno, bez duplikata).
+Private Sub DictAppend(ByVal d As Object, ByVal key As String, ByVal val As String)
+    If d Is Nothing Then Exit Sub
+    If Len(key) = 0 Or Len(val) = 0 Then Exit Sub
+    If Not d.Exists(key) Then
+        d.Add key, val
+    Else
+        Dim cur As String: cur = CStr(d(key))
+        If InStr(1, ", " & cur & ", ", ", " & val & ", ", vbTextCompare) = 0 Then
+            d(key) = cur & ", " & val
+        End If
+    End If
+End Sub
+
+' Izgradi indeks lanca: otpByZbr, fakByZbr, fakById, zbrByFak (sve case-insensitive).
+Private Function BuildChainIndex() As Object
+    Dim idx As Object: Set idx = CreateObject("Scripting.Dictionary")
+    Set BuildChainIndex = idx
+
+    Dim fakById As Object:  Set fakById = NewDict()
+    Dim otpByZbr As Object: Set otpByZbr = NewDict()
+    Dim fakByZbr As Object: Set fakByZbr = NewDict()
+    Dim zbrByFak As Object: Set zbrByFak = NewDict()
+    idx.Add "fakById", fakById
+    idx.Add "otpByZbr", otpByZbr
+    idx.Add "fakByZbr", fakByZbr
+    idx.Add "zbrByFak", zbrByFak
+
+    Dim d As Variant, i As Long, k As String, v As String
+
+    ' Faktura: FakturaID -> BrojFakture
+    d = GetTableData(TBL_FAKTURE)
+    If Not IsEmpty(d) Then
+        Dim cfi As Long, cfb As Long
+        cfi = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+        cfb = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
+        If cfi > 0 And cfb > 0 Then
+            For i = 1 To UBound(d, 1)
+                k = Trim$(NzToText(d(i, cfi))): v = Trim$(NzToText(d(i, cfb)))
+                If Len(k) > 0 And Not fakById.Exists(k) Then fakById.Add k, v
+            Next i
+        End If
+    End If
+
+    ' Otpremnica: BrojZbirne -> lista BrojOtpremnice
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsEmpty(d) Then
+        Dim coz As Long, cob As Long
+        coz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+        cob = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+        If coz > 0 And cob > 0 Then
+            For i = 1 To UBound(d, 1)
+                DictAppend otpByZbr, Trim$(NzToText(d(i, coz))), Trim$(NzToText(d(i, cob)))
+            Next i
+        End If
+    End If
+
+    ' Prijemnica: BrojZbirne <-> FakturaID  (i BrojZbirne -> BrojFakture preko fakById)
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsEmpty(d) Then
+        Dim cpz As Long, cpf As Long
+        cpz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+        cpf = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
+        If cpz > 0 And cpf > 0 Then
+            For i = 1 To UBound(d, 1)
+                Dim z As String, fid As String
+                z = Trim$(NzToText(d(i, cpz))): fid = Trim$(NzToText(d(i, cpf)))
+                If Len(fid) > 0 Then
+                    DictAppend zbrByFak, fid, z
+                    If fakById.Exists(fid) Then DictAppend fakByZbr, z, CStr(fakById(fid))
+                End If
+            Next i
+        End If
+    End If
+End Function
+
+' Kolekcija 0-baznih 1D nizova -> 2D (1..n, 1..ncol). Empty ako je prazna.
+Private Function StornoRowsTo2D(ByVal rows As Collection, ByVal ncol As Long) As Variant
+    If rows Is Nothing Then Exit Function
+    If rows.count = 0 Then Exit Function
+
+    Dim arr() As Variant
+    ReDim arr(1 To rows.count, 1 To ncol)
+    Dim r As Long, c As Long, one As Variant
+    For r = 1 To rows.count
+        one = rows(r)
+        For c = 1 To ncol
+            arr(r, c) = one(c - 1)
+        Next c
+    Next r
+    StornoRowsTo2D = arr
+End Function
+
+' ============================================================
+' IZGUBLJENI OTKUP BLOKOVI (read + bezbedan re-point)
+' Blok je "izgubljen" kad mu OtpremnicaID pokazuje na storniranu ili
+' nepostojecu otpremnicu (a sam blok nije storniran). Koriste: dashboard
+' dijagnostika (modHelpers.CheckVerwaisteDokumente) i panel Otkupni blokovi.
+' ============================================================
+
+' Vrati 2D (1..n, 1..7): OtkupID | BrojDokumenta | KooperantID | Datum |
+' Kolicina | StaraOtpremnicaID | StaraOtpremnicaBroj. Empty ako nema.
+Public Function GetLostOtkupBlokovi() As Variant
+    On Error GoTo EH
+
+    Dim otk As Variant: otk = GetTableData(TBL_OTKUP)
+    If IsEmpty(otk) Then Exit Function
+
+    ' mape otpremnica po ID-u: stornirane i aktivne (ID -> BrojOtpremnice)
+    Dim storMap As Object: Set storMap = CreateObject("Scripting.Dictionary")
+    Dim aktMap As Object: Set aktMap = CreateObject("Scripting.Dictionary")
+    storMap.CompareMode = vbTextCompare: aktMap.CompareMode = vbTextCompare
+
+    Dim otp As Variant: otp = GetTableData(TBL_OTPREMNICA)
+    If Not IsEmpty(otp) Then
+        Dim oId As Long, oBr As Long, oSt As Long
+        oId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+        oBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+        oSt = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+        Dim j As Long, idv As String
+        For j = 1 To UBound(otp, 1)
+            idv = Trim$(NzToText(otp(j, oId)))
+            If Len(idv) > 0 Then
+                If UCase$(Trim$(NzToText(otp(j, oSt)))) = "DA" Then
+                    If Not storMap.Exists(idv) Then storMap.Add idv, Trim$(NzToText(otp(j, oBr)))
+                ElseIf Not aktMap.Exists(idv) Then
+                    aktMap.Add idv, Trim$(NzToText(otp(j, oBr)))
+                End If
+            End If
+        Next j
+    End If
+
+    Dim cId As Long, cBr As Long, cKoop As Long, cDat As Long
+    Dim cKol As Long, cOtp As Long, cStor As Long
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cStor = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim i As Long
+    For i = 1 To UBound(otk, 1)
+        If UCase$(Trim$(NzToText(otk(i, cStor)))) = "DA" Then GoTo NextRow
+        Dim otpId As String: otpId = Trim$(NzToText(otk(i, cOtp)))
+        If Len(otpId) = 0 Then GoTo NextRow            ' nije vezan -> nije "izgubljen"
+
+        Dim staleBroj As String: staleBroj = ""
+        Dim lost As Boolean: lost = False
+        If storMap.Exists(otpId) Then
+            lost = True: staleBroj = CStr(storMap(otpId))
+        ElseIf Not aktMap.Exists(otpId) Then
+            lost = True: staleBroj = "(nepostojeca)"
+        End If
+
+        If lost Then
+            rows.Add Array( _
+                Trim$(NzToText(otk(i, cId))), _
+                Trim$(NzToText(otk(i, cBr))), _
+                Trim$(NzToText(otk(i, cKoop))), _
+                otk(i, cDat), _
+                otk(i, cKol), _
+                otpId, _
+                staleBroj)
+        End If
+NextRow:
+    Next i
+
+    GetLostOtkupBlokovi = StornoRowsTo2D(rows, 7)
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetLostOtkupBlokovi"
+    GetLostOtkupBlokovi = Empty
+End Function
+
+' Bezbedan re-point izgubljenog bloka na ciljnu (aktivnu) otpremnicu:
+' menja SAMO OtpremnicaID + BrojZbirne (cuva OtkupID -> uplate/ambalaza ostaju).
+' Transakciono. Vraca False ako cilj ne postoji/storniran ili upis padne.
+Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
+                                             ByVal targetOtpID As String) As Boolean
+    Const SRC As String = "modDokumenta.ReassignOtkupToOtpremnica_TX"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    If Len(Trim$(otkupID)) = 0 Or Len(Trim$(targetOtpID)) = 0 Then Exit Function
+
+    ' cilj mora postojati (BrojOtpremnice nikad nije blank) i biti aktivan.
+    ' NB: Stornirano JE blank za aktivnu otpremnicu -> ne sme se koristiti
+    '     za proveru postojanja (LookupValue bi vratio Empty = lazno "ne postoji").
+    Dim tBroj As Variant
+    tBroj = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ)
+    If IsEmpty(tBroj) Then Exit Function                        ' cilj stvarno ne postoji
+    Dim tStor As String
+    tStor = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_STORNIRANO))
+    If UCase$(Trim$(tStor)) = "DA" Then Exit Function           ' cilj storniran
+
+    Dim tZbr As String
+    tZbr = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, targetOtpID, COL_OTP_BROJ_ZBIRNE))
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+
+    Dim rows As Collection: Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If rows.count = 0 Then Err.Raise vbObjectError + 2600, SRC, "Otkup nije nadjen: " & otkupID
+
+    Dim hasZbr As Boolean: hasZbr = (GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) > 0)
+    Dim k As Long
+    For k = 1 To rows.count
+        RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
+        If hasZbr Then RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, tZbr, SRC
+    Next k
+
+    tx.CommitTx
+    Set tx = Nothing
+    ReassignOtkupToOtpremnica_TX = True
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    ReassignOtkupToOtpremnica_TX = False
 End Function
 

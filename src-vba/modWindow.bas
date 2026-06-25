@@ -1,4 +1,3 @@
-Attribute VB_Name = "modWindow"
 Option Explicit
 
 #If VBA7 Then
