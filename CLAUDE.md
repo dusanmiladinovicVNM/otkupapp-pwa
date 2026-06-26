@@ -90,6 +90,9 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
   `cd ~/Documents/GitHub/otkupapp-pwa` → `git fetch origin <grana>` →
   `git checkout <grana>` → `git pull --ff-only origin <grana>`; zatim u Excelu
   `Alt+F8 → ImportAllVBA → Debug → Compile → snimi → test`.
+- **Uz to, svaki rad završi kratkom test-checklistom direktno u chatu:** numerisani,
+  konkretni koraci šta operater proba u Excelu (klik po klik + očekivani rezultat),
+  fokusiran na ono što je u toj izmeni dodato/promenjeno. Kratko i praktično.
 
 ---
 
