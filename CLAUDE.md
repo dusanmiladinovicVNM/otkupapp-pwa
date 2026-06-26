@@ -100,6 +100,10 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
   `tools/release.sh <verzija>` → Excel `ImportAllVBA` → `Compile` → snimi → ship →
   `Fleet` provera, da se novi `AgriX_OtkupApp.xlsm` pravilno verzioniše. Vidi
   `docs/RELEASE_PROCEDURE.md` i dopuni `docs/RELEASE_NOTES.md`.
+- **RELEASE_NOTES UVEK u PR granu** (ne odvojeno na `main` posle): kad PR ka `main`
+  uvodi promenu vrednu beleške, dodaj zapis u `docs/RELEASE_NOTES.md`
+  (`## vba-vX.Y.Z`) U ISTU granu/PR, da se mergeuje ZAJEDNO sa radom. Verziju/datum
+  uskladi sa planiranim release tagom (ako tag još nije fiksan, upiši ciljnu verziju).
 - **Na kraju SVAKE izmene koda (posle commit/push):** UVEK daj git bash komandu za
   preuzimanje feature grane radi testa kroz `ImportAllVBA`. Lokalni klon je
   `~/Documents/GitHub/otkupapp-pwa` (= `ImportAllVBA` folder). Šablon:
