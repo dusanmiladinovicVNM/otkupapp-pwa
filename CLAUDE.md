@@ -84,6 +84,12 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
   `tools/release.sh <verzija>` → Excel `ImportAllVBA` → `Compile` → snimi → ship →
   `Fleet` provera, da se novi `AgriX_OtkupApp.xlsm` pravilno verzioniše. Vidi
   `docs/RELEASE_PROCEDURE.md` i dopuni `docs/RELEASE_NOTES.md`.
+- **Na kraju SVAKE izmene koda (posle commit/push):** UVEK daj git bash komandu za
+  preuzimanje feature grane radi testa kroz `ImportAllVBA`. Lokalni klon je
+  `~/Documents/GitHub/otkupapp-pwa` (= `ImportAllVBA` folder). Šablon:
+  `cd ~/Documents/GitHub/otkupapp-pwa` → `git fetch origin <grana>` →
+  `git checkout <grana>` → `git pull --ff-only origin <grana>`; zatim u Excelu
+  `Alt+F8 → ImportAllVBA → Debug → Compile → snimi → test`.
 
 ---
 
