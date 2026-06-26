@@ -310,34 +310,31 @@ End Sub
 ' PRIVATE — scan helperi
 ' ============================================================
 
-' Max sekvenca reversa (OM<->koop) za stanicu+datum iz tblAmbalaza. Broji samo
-' Stanica nogu (EntitetID=stanica) revers tokova; bare "x/ddmmyy" = seq 1.
+' Max sekvenca broja za stanicu+datum nad CELOM tblAmbalaza (svi tipovi/noge).
+' Revers deli "x/ddmmyy" namespace sa ostalim ambalaza dokumentima, a btnUnosOMUlaz
+' radi CheckDuplicate nad celom tblAmbalaza -> broji se po PREFIKSU broja da auto-broj
+' nikad ne kolidira (npr. sa rucnim OM-Ulaz brojem istog prefiksa). OTP-/PRJ-/OTK-
+' ID-evi drugih tokova ne odgovaraju prefiksu, pa ne uticu; bare "x/ddmmyy" = seq 1.
 Private Function MaxSeqReversAmbalaza(ByVal stanicaID As String, _
                                      ByVal datum As Date) As Long
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
 
-    Dim iBroj As Long, iDat As Long, iEntID As Long, iEntTip As Long, iDokTip As Long
-    iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    iDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
-    iEntID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
-    iEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    iDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
-    If iBroj = 0 Or iDat = 0 Or iEntID = 0 Or iDokTip = 0 Then Exit Function
+    Dim iBroj As Long: iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    If iBroj = 0 Then Exit Function
 
-    Dim datumStr As String: datumStr = Format$(datum, "ddmmyy")
-    Dim r As Long, best As Long, seq As Long, rowDat As String, tip As String
+    Dim base As String
+    base = CStr(ExtractNumericFromEntityID(stanicaID)) & "/" & Format$(datum, "ddmmyy")
+    Dim baseDash As String: baseDash = base & "-"
+    Dim nDash As Long: nDash = Len(baseDash)
+
+    Dim r As Long, best As Long, broj As String, seq As Long
     For r = 1 To UBound(data, 1)
-        If IsDate(data(r, iDat)) Then rowDat = Format$(CDate(data(r, iDat)), "ddmmyy") Else rowDat = ""
-        If rowDat = datumStr Then
-            tip = Trim$(CStr(data(r, iDokTip)))
-            If (tip = DOK_TIP_OM_IZLAZ_KOOP Or tip = DOK_TIP_OM_ULAZ_KOOP) And _
-               Trim$(CStr(data(r, iEntTip))) = "Stanica" And _
-               Trim$(CStr(data(r, iEntID))) = Trim$(stanicaID) Then
-                seq = ExtractSeqFromBroj(CStr(data(r, iBroj)))
-                If seq > best Then best = seq
-            End If
+        broj = Trim$(CStr(data(r, iBroj)))
+        If broj = base Or (Len(broj) > nDash And Left$(broj, nDash) = baseDash) Then
+            seq = ExtractSeqFromBroj(broj)
+            If seq > best Then best = seq
         End If
     Next r
     MaxSeqReversAmbalaza = best
