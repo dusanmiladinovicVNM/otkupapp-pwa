@@ -52,6 +52,21 @@ Private m_lstStorno As MSForms.ListBox
 Private m_stornoBuilt As Boolean
 Private m_stornoHidden As Collection      ' kontrole privremeno sakrivene dok je panel otvoren
 
+' Recovery panel (runtime kontrole; .frx se ne dira). Dugme otvara overlay sa
+' dve liste: osirocene prijemnice (levo) + aktivne zbirne (desno) + "Prevezi".
+Private WithEvents m_btnRecovery As MSForms.CommandButton
+Private WithEvents m_btnRecClose As MSForms.CommandButton
+Private WithEvents m_btnRecPrevezi As MSForms.CommandButton
+Private m_recBack As MSForms.Label
+Private m_recTitle As MSForms.Label
+Private m_recLblPrij As MSForms.Label
+Private m_recLblZbr As MSForms.Label
+Private m_recStatus As MSForms.Label
+Private m_lstOsirPrij As MSForms.ListBox
+Private m_lstAktZbr As MSForms.ListBox
+Private m_recBuilt As Boolean
+Private m_recHidden As Collection
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
 
@@ -200,6 +215,9 @@ Private Sub UserForm_Activate()
 
     ' Runtime dugme "Pregled storniranih" u storno sekciji (ne dira .frx).
     SetupStornoPregledButton
+
+    ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
+    SetupRecoveryButton
 
     Exit Sub
 
@@ -2892,6 +2910,293 @@ Private Sub RestoreBehindPanel()
         Me.Controls(m_stornoHidden(i)).visible = True
     Next i
     Set m_stornoHidden = Nothing
+End Sub
+
+' ============================================================
+' RECOVERY PANEL: re-point osirocene prijemnice na aktivnu zbirnu.
+' Dve liste (osirocene prijemnice | aktivne zbirne) + Prevezi. .frx se ne dira.
+' Motor: modDokumenta.ReassignPrijemnicaToZbirna_TX. Podaci: GetOsirocenePrijemnice
+' / GetAktivneZbirne.
+' ============================================================
+
+Private Sub SetupRecoveryButton()
+    Const RC_DY As Single = 6
+    On Error GoTo done
+    If Not m_btnRecovery Is Nothing Then Exit Sub
+
+    Dim anchor As MSForms.Control
+    If Not m_btnStornoPregled Is Nothing Then Set anchor = m_btnStornoPregled Else Set anchor = btnStorno
+
+    Set m_btnRecovery = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnRecoveryRT", True)
+    If m_btnRecovery Is Nothing Then GoTo done
+    With m_btnRecovery
+        .width = btnStorno.width
+        .Height = btnStorno.Height
+        .Left = anchor.Left
+        .top = anchor.top + anchor.Height + RC_DY
+        .visible = True
+    End With
+    StylePrimaryButton m_btnRecovery, "Osiroceni dokumenti"
+
+    On Error Resume Next
+    m_btnRecovery.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupRecoveryButton"
+    Set m_btnRecovery = Nothing
+End Sub
+
+Private Sub m_btnRecovery_Click()
+    On Error GoTo EH
+    ShowRecoveryPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnRecovery_Click"
+    MsgBox "Greska pri prikazu recovery panela: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub m_btnRecClose_Click()
+    SetRecoveryPanelVisible False
+End Sub
+
+Private Sub m_btnRecPrevezi_Click()
+    On Error GoTo EH
+    Dim brp As String, brz As String
+    brp = SelectedRecKey(m_lstOsirPrij)
+    brz = SelectedRecKey(m_lstAktZbr)
+    If Len(brp) = 0 Then
+        MsgBox "Izaberi osirocenu prijemnicu (leva lista).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If Len(brz) = 0 Then
+        MsgBox "Izaberi ciljnu (aktivnu) zbirnu (desna lista).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If MsgBox("Prevezati prijemnicu " & brp & " na zbirnu " & brz & "?" & vbCrLf & _
+              "(PrijemnicaID se ne menja; menja se samo BrojZbirne.)", _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    If ReassignPrijemnicaToZbirna_TX(brp, brz) Then
+        m_recStatus.caption = "Prevezano: prijemnica " & brp & " -> zbirna " & brz
+        PopulateRecoveryPanel
+    Else
+        m_recStatus.caption = "Neuspelo. Proveri da je zbirna " & brz & " aktivna."
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnRecPrevezi_Click"
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub ShowRecoveryPanel()
+    EnsureRecoveryPanel
+    If Not m_recBuilt Then Exit Sub
+    PopulateRecoveryPanel
+    SetRecoveryPanelVisible True
+End Sub
+
+Private Sub EnsureRecoveryPanel()
+    On Error GoTo done
+    If m_recBuilt Then Exit Sub
+
+    Set m_recBack = Me.Controls.Add("Forms.Label.1", "lblRecBackRT", True)
+    With m_recBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+
+    Set m_recTitle = Me.Controls.Add("Forms.Label.1", "lblRecTitleRT", True)
+    With m_recTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Osiroceni dokumenti"
+    End With
+
+    Set m_recLblPrij = Me.Controls.Add("Forms.Label.1", "lblRecPrijRT", True)
+    With m_recLblPrij
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .ForeColor = TXT_LIGHT()
+        .caption = "Osirocene prijemnice"
+    End With
+
+    Set m_recLblZbr = Me.Controls.Add("Forms.Label.1", "lblRecZbrRT", True)
+    With m_recLblZbr
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .ForeColor = TXT_LIGHT()
+        .caption = "Ciljna (aktivna) zbirna"
+    End With
+
+    Set m_btnRecClose = Me.Controls.Add("Forms.CommandButton.1", "btnRecCloseRT", True)
+    StyleExitButton m_btnRecClose, "Zatvori"
+
+    Set m_btnRecPrevezi = Me.Controls.Add("Forms.CommandButton.1", "btnRecPreveziRT", True)
+    StylePrimaryButton m_btnRecPrevezi, "Prevezi >>"
+
+    Set m_recStatus = Me.Controls.Add("Forms.Label.1", "lblRecStatusRT", True)
+    With m_recStatus
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = TXT_LIGHT(): .caption = ""
+    End With
+
+    Set m_lstOsirPrij = Me.Controls.Add("Forms.ListBox.1", "lstOsirPrijRT", True)
+    With m_lstOsirPrij
+        .ColumnCount = 7
+        .ColumnWidths = "80;58;60;72;48;82;96"
+    End With
+    StyleListBox m_lstOsirPrij
+
+    Set m_lstAktZbr = Me.Controls.Add("Forms.ListBox.1", "lstAktZbrRT", True)
+    With m_lstAktZbr
+        .ColumnCount = 5
+        .ColumnWidths = "92;58;60;72;48"
+    End With
+    StyleListBox m_lstAktZbr
+
+    m_recBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureRecoveryPanel"
+End Sub
+
+' Full-bleed: dve liste sa "Prevezi" dugmetom izmedju. Zove se na svako otvaranje.
+Private Sub LayoutRecoveryPanel()
+    On Error Resume Next
+    If Not m_recBuilt Then Exit Sub
+
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Const LBLH As Single = 16
+    Const BTNW As Single = 92
+    Const STATH As Single = 18
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+
+    m_recBack.Move 0, 0, w, h
+    m_recTitle.Move PAD, PAD, w - 2 * PAD - (BTNW + PAD), 24
+    m_btnRecClose.Move w - PAD - BTNW, PAD, BTNW, 24
+
+    Dim listTop As Single: listTop = PAD + HDR + LBLH
+    Dim listH As Single: listH = h - listTop - PAD - STATH - 6
+    Dim midGap As Single: midGap = BTNW + 24
+    Dim colW As Single: colW = (w - 2 * PAD - midGap) / 2
+
+    m_recLblPrij.Move PAD, PAD + HDR, colW, LBLH
+    m_lstOsirPrij.Move PAD, listTop, colW, listH
+
+    m_recLblZbr.Move w - PAD - colW, PAD + HDR, colW, LBLH
+    m_lstAktZbr.Move w - PAD - colW, listTop, colW, listH
+
+    m_btnRecPrevezi.Move PAD + colW + 12, listTop + (listH - 26) / 2, BTNW, 26
+    m_recStatus.Move PAD, h - PAD - STATH, w - 2 * PAD, STATH
+End Sub
+
+Private Sub PopulateRecoveryPanel()
+    On Error GoTo EH
+    If m_lstOsirPrij Is Nothing Or m_lstAktZbr Is Nothing Then Exit Sub
+
+    m_lstOsirPrij.Clear
+    AddRecRow m_lstOsirPrij, Array("Broj", "Datum", "Vrsta", "Sorta", "Kol", "Stara zbirna", "Status")
+    Dim op As Variant: op = GetOsirocenePrijemnice()
+    Dim nOp As Long: nOp = 0
+    If Not IsEmpty(op) Then
+        Dim i As Long, c As Long
+        For i = 1 To UBound(op, 1)
+            Dim row1(0 To 6) As Variant
+            For c = 0 To 6: row1(c) = op(i, c + 1): Next c
+            AddRecRow m_lstOsirPrij, row1
+            nOp = nOp + 1
+        Next i
+    End If
+    If nOp = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih prijemnica."
+
+    m_lstAktZbr.Clear
+    AddRecRow m_lstAktZbr, Array("Broj zbirne", "Datum", "Vrsta", "Sorta", "Kol")
+    Dim az As Variant: az = GetAktivneZbirne()
+    If Not IsEmpty(az) Then
+        Dim j As Long, d As Long
+        For j = 1 To UBound(az, 1)
+            Dim row2(0 To 4) As Variant
+            For d = 0 To 4: row2(d) = az(j, d + 1): Next d
+            AddRecRow m_lstAktZbr, row2
+        Next j
+    End If
+
+    m_recTitle.caption = "Osiroceni dokumenti  (prijemnice: " & nOp & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateRecoveryPanel"
+End Sub
+
+Private Sub AddRecRow(ByVal lst As MSForms.ListBox, ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    lst.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = lst.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= lst.ColumnCount - 1 Then lst.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+' Kljuc (kolona 0) izabranog reda; "" za header (indeks 0) ili nista izabrano.
+Private Function SelectedRecKey(ByVal lst As MSForms.ListBox) As String
+    On Error Resume Next
+    If lst Is Nothing Then Exit Function
+    Dim li As Long: li = lst.ListIndex
+    If li < 1 Then Exit Function
+    SelectedRecKey = Trim$(CStr(lst.List(li, 0)))
+End Function
+
+Private Sub SetRecoveryPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_recBuilt Then Exit Sub
+
+    If bShow Then
+        LayoutRecoveryPanel
+        HideBehindRecovery
+        m_recBack.visible = True: m_recTitle.visible = True
+        m_recLblPrij.visible = True: m_recLblZbr.visible = True
+        m_lstOsirPrij.visible = True: m_lstAktZbr.visible = True
+        m_btnRecClose.visible = True: m_btnRecPrevezi.visible = True
+        m_recStatus.visible = True
+        m_recBack.ZOrder 0
+        m_lstOsirPrij.ZOrder 0: m_lstAktZbr.ZOrder 0
+        m_recTitle.ZOrder 0: m_recLblPrij.ZOrder 0: m_recLblZbr.ZOrder 0
+        m_btnRecClose.ZOrder 0: m_btnRecPrevezi.ZOrder 0: m_recStatus.ZOrder 0
+    Else
+        m_recBack.visible = False: m_recTitle.visible = False
+        m_recLblPrij.visible = False: m_recLblZbr.visible = False
+        m_lstOsirPrij.visible = False: m_lstAktZbr.visible = False
+        m_btnRecClose.visible = False: m_btnRecPrevezi.visible = False
+        m_recStatus.visible = False
+        RestoreBehindRecovery
+    End If
+End Sub
+
+Private Sub HideBehindRecovery()
+    On Error Resume Next
+    Set m_recHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_recBack Or ctl Is m_recTitle Or ctl Is m_recLblPrij _
+           Or ctl Is m_recLblZbr Or ctl Is m_lstOsirPrij Or ctl Is m_lstAktZbr _
+           Or ctl Is m_btnRecClose Or ctl Is m_btnRecPrevezi Or ctl Is m_recStatus Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_recHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindRecovery()
+    On Error Resume Next
+    If m_recHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_recHidden.count
+        Me.Controls(m_recHidden(i)).visible = True
+    Next i
+    Set m_recHidden = Nothing
 End Sub
 
 ' ============================================================

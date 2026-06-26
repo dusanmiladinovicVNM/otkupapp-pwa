@@ -87,18 +87,28 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTKUP
     End If
 
-    Dim colBr As Long, colID As Long, colStorno As Long
+    Dim colBr As Long, colID As Long, colStorno As Long, colSta As Long, colZbr As Long
     colBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
+    colSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    colZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
 
     ' Sakupi OtkupID-jeve SVIH aktivnih redova za ovaj broj dokumenta (obe klase).
+    ' Usput zapamti stanicu i BrojZbirne (za autohladnjaca kaskadu nize).
     Dim ids As Collection: Set ids = New Collection
+    Dim zbrSet As Object: Set zbrSet = CreateObject("Scripting.Dictionary")
+    Dim stanicaID As String
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colBr))) = Trim$(brDok) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 ids.Add Trim$(CStr(data(i, colID)))
+                If colSta > 0 Then stanicaID = Trim$(CStr(data(i, colSta)))
+                If colZbr > 0 Then
+                    Dim bz As String: bz = Trim$(CStr(data(i, colZbr)))
+                    If bz <> "" Then zbrSet(bz) = True
+                End If
             End If
         End If
     Next i
@@ -108,6 +118,19 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
                   "Nema aktivnog otkupa za broj dokumenta: " & brDok
     End If
 
+    ' Autohladnjaca: ceo lanac (otpremnica+zbirna+prijemnica) je auto-generisan iz
+    ' ovog bloka i deli njegov BrojZbirne -> storno bloka povlaci i njih. Gejt je
+    ' stanica-hladnjaca (struktura), ne toggle: ako lanca nema, kaskada je no-op.
+    Dim hladnjacaBlock As Boolean
+    hladnjacaBlock = (Len(stanicaID) > 0) And IsHladnjacaStanica(stanicaID)
+    If hladnjacaBlock Then
+        tx.AddTableSnapshot TBL_OTPREMNICA
+        tx.AddTableSnapshot TBL_ZBIRNA
+        tx.AddTableSnapshot TBL_PRIJEMNICA
+        tx.AddTableSnapshot TBL_FAKTURE
+        tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    End If
+
     Dim k As Long
     For k = 1 To ids.count
         If Not StornoOtkup(CStr(ids(k))) Then
@@ -115,6 +138,17 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
                       "StornoOtkup nije uspeo. OtkupID=" & CStr(ids(k))
         End If
     Next k
+
+    ' Autohladnjaca kaskada: za svaki BrojZbirne bloka obori otpremnicu, zbirnu i
+    ' prijemnicu (idempotentno; faktura se NAMERNO ne dira). Van hladnjace: preskace.
+    If hladnjacaBlock Then
+        Dim z As Variant
+        For Each z In zbrSet.Keys
+            StornoOtpremnicaCascade CStr(z), SRC
+            StornoZbirnaCascade CStr(z), SRC
+            StornoPrijemnicaCascade CStr(z), SRC
+        Next z
+    End If
 
     tx.CommitTx
 
@@ -213,9 +247,13 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
 
     RequireNonBlank brBroj, "BrojOtpremnice", SRC
 
+    Dim malinaMode As Boolean
+    malinaMode = IsMalinaMode()
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
+    If malinaMode Then tx.AddTableSnapshot TBL_ZBIRNA
 
     Dim data As Variant
     data = GetTableData(TBL_OTPREMNICA)
@@ -223,17 +261,23 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTPREMNICA
     End If
 
-    Dim colBr As Long, colID As Long, colStorno As Long
+    Dim colBr As Long, colID As Long, colStorno As Long, colZbr As Long
     colBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
     colID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     colStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+    colZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
 
     Dim ids As Collection: Set ids = New Collection
+    Dim zbrSet As Object: Set zbrSet = CreateObject("Scripting.Dictionary")
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colBr))) = Trim$(brBroj) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 ids.Add Trim$(CStr(data(i, colID)))
+                If malinaMode And colZbr > 0 Then
+                    Dim bz As String: bz = Trim$(CStr(data(i, colZbr)))
+                    If bz <> "" Then zbrSet(bz) = True
+                End If
             End If
         End If
     Next i
@@ -251,6 +295,16 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
         End If
     Next k
 
+    ' Malina mod: otpremnica je 1:1 sa zbirnom (BrojZbirne izveden iz
+    ' BrojOtpremnice), pa storno otpremnice povlaci i njenu zbirnu.
+    ' NAMERNO ne kaskadira dalje na prijemnicu/fakturu.
+    If malinaMode Then
+        Dim keyZ As Variant
+        For Each keyZ In zbrSet.Keys
+            StornoZbirnaCascade CStr(keyZ), SRC
+        Next keyZ
+    End If
+
     tx.CommitTx
 
     StornoOtpremnicaByBroj_TX = True
@@ -267,6 +321,104 @@ End Function
 ' ============================================================
 ' ZBIRNA
 ' ============================================================
+
+' Kaskadni storno zbirne iz storna otpremnice (malina mod). Idempotentno:
+' ne podize gresku ako zbirna ne postoji ili je vec stornirana (cilj - da
+' zbirna nije aktivna - je tada vec ispunjen). Markira samo aktivne redove.
+' Mora se pozvati unutar otvorene transakcije (snapshot TBL_ZBIRNA obavezan).
+Private Function StornoZbirnaCascade(ByVal brojZbirne As String, ByVal callerSrc As String) As Long
+    If Trim$(brojZbirne) = "" Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colBroj As Long, colStorno As Long
+    colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, callerSrc)
+    colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, callerSrc)
+
+    Dim i As Long, changed As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                MarkRowStornirano TBL_ZBIRNA, i, callerSrc
+                changed = changed + 1
+            End If
+        End If
+    Next i
+
+    StornoZbirnaCascade = changed
+End Function
+
+' Kaskadni storno otpremnice po BrojZbirne (autohladnjaca, iz storna bloka).
+' Idempotentno: obradi samo aktivne redove; nema aktivnih -> no-op (bez greske).
+' Reuse StornoOtpremnica (ambalaza se stornira unutra). Vraca broj oborenih.
+Private Function StornoOtpremnicaCascade(ByVal brojZbirne As String, ByVal callerSrc As String) As Long
+    If Trim$(brojZbirne) = "" Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cZbr As Long, cId As Long, cStorno As Long
+    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    If cZbr = 0 Then Exit Function
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, callerSrc)
+    cStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, callerSrc)
+
+    Dim ids As Collection: Set ids = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cZbr))) = Trim$(brojZbirne) Then
+            If Not IsStorniranoValue(data(i, cStorno)) Then ids.Add Trim$(CStr(data(i, cId)))
+        End If
+    Next i
+
+    Dim k As Long
+    For k = 1 To ids.count
+        If Not StornoOtpremnica(CStr(ids(k))) Then
+            Err.Raise ERR_STORNO_BASE + 2, callerSrc, _
+                      "StornoOtpremnica (kaskada) nije uspeo. OtpremnicaID=" & CStr(ids(k))
+        End If
+    Next k
+
+    StornoOtpremnicaCascade = ids.count
+End Function
+
+' Kaskadni storno prijemnice po BrojZbirne (autohladnjaca, iz storna bloka).
+' Idempotentno (samo aktivni redovi). Reuse StornoPrijemnica (faktura se orphanuje
+' unutra, ambalaza se stornira). NE dira tblPaletaStavka (re-point je zaseban).
+Private Function StornoPrijemnicaCascade(ByVal brojZbirne As String, ByVal callerSrc As String) As Long
+    If Trim$(brojZbirne) = "" Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cZbr As Long, cId As Long, cStorno As Long
+    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    If cZbr = 0 Then Exit Function
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, callerSrc)
+    cStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, callerSrc)
+
+    Dim ids As Collection: Set ids = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cZbr))) = Trim$(brojZbirne) Then
+            If Not IsStorniranoValue(data(i, cStorno)) Then ids.Add Trim$(CStr(data(i, cId)))
+        End If
+    Next i
+
+    Dim k As Long
+    For k = 1 To ids.count
+        If Not StornoPrijemnica(CStr(ids(k))) Then
+            Err.Raise ERR_STORNO_BASE + 4, callerSrc, _
+                      "StornoPrijemnica (kaskada) nije uspeo. PrijemnicaID=" & CStr(ids(k))
+        End If
+    Next k
+
+    StornoPrijemnicaCascade = ids.count
+End Function
 
 Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
     Const SRC As String = "StornoZbirna_TX"
