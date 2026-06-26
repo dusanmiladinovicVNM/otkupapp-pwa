@@ -2877,3 +2877,115 @@ EH:
     ReassignOtkupToOtpremnica_TX = False
 End Function
 
+' Re-point prijemnice na drugu (aktivnu) zbirnu po BrojZbirne. Koristi se posle
+' storna otpremnice+zbirne (van autohladnjace): operater napravi novu otpremnicu+
+' zbirnu pa "osirocenu" prijemnicu prevezuje na nju. Handle = BrojPrijemnice
+' (citljiv, eksteran kad nije autohladnjaca); stvarna veza lanca = BrojZbirne.
+' PrijemnicaID se NE dira -> faktura-stavke i paleta-stavke ostaju ispravne.
+Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
+                                              ByVal targetBrZbirne As String) As Boolean
+    Const SRC As String = "modDokumenta.ReassignPrijemnicaToZbirna_TX"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    brPrijemnice = Trim$(brPrijemnice)
+    targetBrZbirne = Trim$(targetBrZbirne)
+    If Len(brPrijemnice) = 0 Or Len(targetBrZbirne) = 0 Then Exit Function
+
+    ' Cilj mora biti AKTIVNA zbirna (postoji + nije stornirana). ZbirnaID je uvek
+    ' popunjen -> dokaz postojanja; Stornirano je blank za aktivnu pa se NE sme
+    ' koristiti kao dokaz postojanja.
+    Dim tId As Variant
+    tId = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_ZBR_ID)
+    If IsEmpty(tId) Then Exit Function                          ' zbirna ne postoji
+    Dim tStor As String
+    tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
+    If UCase$(Trim$(tStor)) = "DA" Then Exit Function           ' cilj-zbirna stornirana
+
+    Dim cBrPrij As Long, cBrZbr As Long, cStorno As Long
+    cBrPrij = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    If cBrPrij = 0 Or cBrZbr = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+
+    ' Aktivni redovi prijemnice za dati BrojPrijemnice (Klasa I i II dele broj).
+    Dim targetRows As Collection: Set targetRows = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cBrPrij))) = brPrijemnice Then
+            If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> "DA" Then
+                targetRows.Add i
+            End If
+        End If
+    Next i
+    If targetRows.count = 0 Then Exit Function                  ' nema aktivne prijemnice
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+
+    Dim k As Long
+    For k = 1 To targetRows.count
+        RequireUpdateCell TBL_PRIJEMNICA, targetRows(k), COL_PRJ_BROJ_ZBIRNE, targetBrZbirne, SRC
+    Next k
+
+    tx.CommitTx
+    Set tx = Nothing
+    ReassignPrijemnicaToZbirna_TX = True
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    ReassignPrijemnicaToZbirna_TX = False
+End Function
+
+' Alt+F8 alat (van autohladnjace): prevezi "osirocenu" prijemnicu na novu zbirnu.
+' Scenario: stornirana otpremnica+zbirna, napravljena nova -> prijemnica se rucno
+' prevezuje na novu zbirnu. PrijemnicaID se ne dira (stavke ostaju ispravne).
+Public Sub PrevezPrijemnicuNaZbirnu()
+    Const SRC As String = "modDokumenta.PrevezPrijemnicuNaZbirnu"
+    On Error GoTo EH
+
+    Dim brPrij As String
+    brPrij = Trim$(InputBox("Broj prijemnice koju prevezujes:", APP_NAME))
+    If Len(brPrij) = 0 Then Exit Sub
+
+    Dim brZbr As String
+    brZbr = Trim$(InputBox("Broj nove (aktivne) zbirne na koju je vezujes:", APP_NAME))
+    If Len(brZbr) = 0 Then Exit Sub
+
+    ' Lako upozorenje na neslaganje vrste/sorte (operater i dalje odlucuje).
+    Dim warn As String
+    Dim pV As String, pS As String, zV As String, zS As String
+    pV = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrij, COL_PRJ_VRSTA))
+    pS = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrij, COL_PRJ_SORTA))
+    zV = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_VRSTA))
+    zS = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_SORTA))
+    If (Len(pV) > 0 And StrComp(pV, zV, vbTextCompare) <> 0) Or _
+       (Len(pS) > 0 And StrComp(pS, zS, vbTextCompare) <> 0) Then
+        warn = vbCrLf & vbCrLf & "PAZNJA: vrsta/sorta se NE poklapaju!" & vbCrLf & _
+               "  prijemnica: " & pV & " / " & pS & vbCrLf & _
+               "  zbirna:     " & zV & " / " & zS
+    End If
+
+    If MsgBox("Prevezati prijemnicu " & brPrij & " na zbirnu " & brZbr & "?" & vbCrLf & _
+              "(PrijemnicaID se ne menja; menja se samo BrojZbirne.)" & warn, _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    If ReassignPrijemnicaToZbirna_TX(brPrij, brZbr) Then
+        MsgBox "Prijemnica " & brPrij & " prevezana na zbirnu " & brZbr & ".", _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "Prevezivanje nije uspelo. Proveri da li prijemnica " & brPrij & _
+               " postoji i aktivna je, i da li je zbirna " & brZbr & " aktivna.", _
+               vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr SRC
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
