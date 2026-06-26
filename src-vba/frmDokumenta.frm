@@ -66,6 +66,8 @@ Private m_lstOsirPrij As MSForms.ListBox
 Private m_lstAktZbr As MSForms.ListBox
 Private m_recBuilt As Boolean
 Private m_recHidden As Collection
+Private WithEvents m_btnRecMode As MSForms.CommandButton
+Private m_recMode As String      ' "PRIJ" (default) ili "PAL"
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -2959,8 +2961,44 @@ Private Sub m_btnRecClose_Click()
     SetRecoveryPanelVisible False
 End Sub
 
+Private Sub m_btnRecMode_Click()
+    On Error Resume Next
+    If m_recMode = "PAL" Then m_recMode = "PRIJ" Else m_recMode = "PAL"
+    If m_recMode = "PAL" Then m_btnRecMode.caption = "Mod: Palete" Else m_btnRecMode.caption = "Mod: Prijemnice"
+    m_recStatus.caption = ""
+    PopulateRecoveryPanel
+End Sub
+
 Private Sub m_btnRecPrevezi_Click()
     On Error GoTo EH
+    If Len(m_recMode) = 0 Then m_recMode = "PRIJ"
+
+    If m_recMode = "PAL" Then
+        Dim oldP As String, newP As String
+        oldP = SelectedRecKey(m_lstOsirPrij)
+        newP = SelectedRecKey(m_lstAktZbr)
+        If Len(oldP) = 0 Then
+            MsgBox "Izaberi storniranu prijemnicu sa osirocenim paletama (levo).", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+        If Len(newP) = 0 Then
+            MsgBox "Izaberi ciljnu (novu) prijemnicu (desno).", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+        If MsgBox("Prevezati palete sa prijemnice " & oldP & " na " & newP & "?" & vbCrLf & _
+                  "(Ponistava svezu paletizaciju nove + re-point starih stavki.)", _
+                  vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+        Dim warn As String: warn = ""
+        If ReassignPaleteToPrijemnica_TX(oldP, newP, warn) Then
+            m_recStatus.caption = "Palete prevezane: " & oldP & " -> " & newP & _
+                                  IIf(Len(warn) > 0, "  |  " & warn, "")
+            PopulateRecoveryPanel
+        Else
+            m_recStatus.caption = "Neuspelo." & IIf(Len(warn) > 0, " " & warn, "")
+        End If
+        Exit Sub
+    End If
+
     Dim brp As String, brz As String
     brp = SelectedRecKey(m_lstOsirPrij)
     brz = SelectedRecKey(m_lstAktZbr)
@@ -2998,6 +3036,7 @@ End Sub
 Private Sub EnsureRecoveryPanel()
     On Error GoTo done
     If m_recBuilt Then Exit Sub
+    If Len(m_recMode) = 0 Then m_recMode = "PRIJ"
 
     Set m_recBack = Me.Controls.Add("Forms.Label.1", "lblRecBackRT", True)
     With m_recBack
@@ -3028,6 +3067,9 @@ Private Sub EnsureRecoveryPanel()
 
     Set m_btnRecClose = Me.Controls.Add("Forms.CommandButton.1", "btnRecCloseRT", True)
     StyleExitButton m_btnRecClose, "Zatvori"
+
+    Set m_btnRecMode = Me.Controls.Add("Forms.CommandButton.1", "btnRecModeRT", True)
+    StyleExitButton m_btnRecMode, "Mod: Prijemnice"
 
     Set m_btnRecPrevezi = Me.Controls.Add("Forms.CommandButton.1", "btnRecPreveziRT", True)
     StylePrimaryButton m_btnRecPrevezi, "Prevezi >>"
@@ -3068,12 +3110,14 @@ Private Sub LayoutRecoveryPanel()
     Const LBLH As Single = 16
     Const BTNW As Single = 92
     Const STATH As Single = 18
+    Const MODEW As Single = 124
     Dim w As Single, h As Single
     w = Me.InsideWidth: h = Me.InsideHeight
 
     m_recBack.Move 0, 0, w, h
-    m_recTitle.Move PAD, PAD, w - 2 * PAD - (BTNW + PAD), 24
+    m_recTitle.Move PAD, PAD, w - 2 * PAD - (BTNW + PAD) - (MODEW + PAD), 24
     m_btnRecClose.Move w - PAD - BTNW, PAD, BTNW, 24
+    m_btnRecMode.Move w - PAD - BTNW - PAD - MODEW, PAD, MODEW, 24
 
     Dim listTop As Single: listTop = PAD + HDR + LBLH
     Dim listH As Single: listH = h - listTop - PAD - STATH - 6
@@ -3093,35 +3137,80 @@ End Sub
 Private Sub PopulateRecoveryPanel()
     On Error GoTo EH
     If m_lstOsirPrij Is Nothing Or m_lstAktZbr Is Nothing Then Exit Sub
+    If Len(m_recMode) = 0 Then m_recMode = "PRIJ"
+    Dim nL As Long: nL = 0
 
-    m_lstOsirPrij.Clear
-    AddRecRow m_lstOsirPrij, Array("Broj", "Datum", "Vrsta", "Sorta", "Kol", "Stara zbirna", "Status")
-    Dim op As Variant: op = GetOsirocenePrijemnice()
-    Dim nOp As Long: nOp = 0
-    If Not IsEmpty(op) Then
-        Dim i As Long, c As Long
-        For i = 1 To UBound(op, 1)
-            Dim row1(0 To 6) As Variant
-            For c = 0 To 6: row1(c) = op(i, c + 1): Next c
-            AddRecRow m_lstOsirPrij, row1
-            nOp = nOp + 1
-        Next i
+    If m_recMode = "PAL" Then
+        m_lstOsirPrij.ColumnCount = 6
+        m_lstOsirPrij.ColumnWidths = "80;58;60;72;48;52"
+        m_lstOsirPrij.Clear
+        AddRecRow m_lstOsirPrij, Array("Broj", "Datum", "Vrsta", "Sorta", "Gajb", "Stavki")
+        Dim op As Variant: op = GetPrijemniceSaOsirocenimPaletama()
+        If Not IsEmpty(op) Then
+            Dim i As Long, c As Long
+            For i = 1 To UBound(op, 1)
+                Dim r1(0 To 5) As Variant
+                For c = 0 To 5: r1(c) = op(i, c + 1): Next c
+                AddRecRow m_lstOsirPrij, r1
+                nL = nL + 1
+            Next i
+        End If
+        If nL = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih paleta."
+
+        m_lstAktZbr.ColumnCount = 6
+        m_lstAktZbr.ColumnWidths = "80;58;60;72;48;72"
+        m_lstAktZbr.Clear
+        AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Vrsta", "Sorta", "Gajb", "Zbirna")
+        Dim az As Variant: az = GetAktivnePrijemnice()
+        If Not IsEmpty(az) Then
+            Dim j As Long, d As Long
+            For j = 1 To UBound(az, 1)
+                Dim r2(0 To 5) As Variant
+                For d = 0 To 5: r2(d) = az(j, d + 1): Next d
+                AddRecRow m_lstAktZbr, r2
+            Next j
+        End If
+
+        m_recLblPrij.caption = "Stornirane prijemnice (osirocene palete)"
+        m_recLblZbr.caption = "Ciljna (nova) prijemnica"
+        m_btnRecPrevezi.caption = "Prevezi palete >>"
+        m_recTitle.caption = "Osiroceni dokumenti - PALETE  (" & nL & ")"
+    Else
+        m_lstOsirPrij.ColumnCount = 7
+        m_lstOsirPrij.ColumnWidths = "80;58;60;72;48;82;96"
+        m_lstOsirPrij.Clear
+        AddRecRow m_lstOsirPrij, Array("Broj", "Datum", "Vrsta", "Sorta", "Kol", "Stara zbirna", "Status")
+        Dim opp As Variant: opp = GetOsirocenePrijemnice()
+        If Not IsEmpty(opp) Then
+            Dim ii As Long, cc As Long
+            For ii = 1 To UBound(opp, 1)
+                Dim r3(0 To 6) As Variant
+                For cc = 0 To 6: r3(cc) = opp(ii, cc + 1): Next cc
+                AddRecRow m_lstOsirPrij, r3
+                nL = nL + 1
+            Next ii
+        End If
+        If nL = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih prijemnica."
+
+        m_lstAktZbr.ColumnCount = 5
+        m_lstAktZbr.ColumnWidths = "92;58;60;72;48"
+        m_lstAktZbr.Clear
+        AddRecRow m_lstAktZbr, Array("Broj zbirne", "Datum", "Vrsta", "Sorta", "Kol")
+        Dim azz As Variant: azz = GetAktivneZbirne()
+        If Not IsEmpty(azz) Then
+            Dim jj As Long, dd As Long
+            For jj = 1 To UBound(azz, 1)
+                Dim r4(0 To 4) As Variant
+                For dd = 0 To 4: r4(dd) = azz(jj, dd + 1): Next dd
+                AddRecRow m_lstAktZbr, r4
+            Next jj
+        End If
+
+        m_recLblPrij.caption = "Osirocene prijemnice"
+        m_recLblZbr.caption = "Ciljna (aktivna) zbirna"
+        m_btnRecPrevezi.caption = "Prevezi >>"
+        m_recTitle.caption = "Osiroceni dokumenti - PRIJEMNICE  (" & nL & ")"
     End If
-    If nOp = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih prijemnica."
-
-    m_lstAktZbr.Clear
-    AddRecRow m_lstAktZbr, Array("Broj zbirne", "Datum", "Vrsta", "Sorta", "Kol")
-    Dim az As Variant: az = GetAktivneZbirne()
-    If Not IsEmpty(az) Then
-        Dim j As Long, d As Long
-        For j = 1 To UBound(az, 1)
-            Dim row2(0 To 4) As Variant
-            For d = 0 To 4: row2(d) = az(j, d + 1): Next d
-            AddRecRow m_lstAktZbr, row2
-        Next j
-    End If
-
-    m_recTitle.caption = "Osiroceni dokumenti  (prijemnice: " & nOp & ")"
     Exit Sub
 EH:
     LogErr "frmDokumenta.PopulateRecoveryPanel"
@@ -3158,16 +3247,19 @@ Private Sub SetRecoveryPanelVisible(ByVal bShow As Boolean)
         m_recLblPrij.visible = True: m_recLblZbr.visible = True
         m_lstOsirPrij.visible = True: m_lstAktZbr.visible = True
         m_btnRecClose.visible = True: m_btnRecPrevezi.visible = True
+        m_btnRecMode.visible = True
         m_recStatus.visible = True
         m_recBack.ZOrder 0
         m_lstOsirPrij.ZOrder 0: m_lstAktZbr.ZOrder 0
         m_recTitle.ZOrder 0: m_recLblPrij.ZOrder 0: m_recLblZbr.ZOrder 0
         m_btnRecClose.ZOrder 0: m_btnRecPrevezi.ZOrder 0: m_recStatus.ZOrder 0
+        m_btnRecMode.ZOrder 0
     Else
         m_recBack.visible = False: m_recTitle.visible = False
         m_recLblPrij.visible = False: m_recLblZbr.visible = False
         m_lstOsirPrij.visible = False: m_lstAktZbr.visible = False
         m_btnRecClose.visible = False: m_btnRecPrevezi.visible = False
+        m_btnRecMode.visible = False
         m_recStatus.visible = False
         RestoreBehindRecovery
     End If
@@ -3180,7 +3272,8 @@ Private Sub HideBehindRecovery()
     For Each ctl In Me.Controls
         If ctl Is m_recBack Or ctl Is m_recTitle Or ctl Is m_recLblPrij _
            Or ctl Is m_recLblZbr Or ctl Is m_lstOsirPrij Or ctl Is m_lstAktZbr _
-           Or ctl Is m_btnRecClose Or ctl Is m_btnRecPrevezi Or ctl Is m_recStatus Then
+           Or ctl Is m_btnRecClose Or ctl Is m_btnRecPrevezi Or ctl Is m_recStatus _
+           Or ctl Is m_btnRecMode Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_recHidden.Add ctl.name

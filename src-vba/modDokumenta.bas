@@ -2942,6 +2942,140 @@ EH:
     GetAktivneZbirne = Empty
 End Function
 
+' Stornirane prijemnice koje imaju AKTIVNE (osirocene) paleta-stavke. Za P1 pallet
+' re-point. Kolone 1..6: BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica|StavkiAktivnih
+Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
+    On Error GoTo EH
+    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(ps) Then Exit Function
+
+    Dim stPrij As Object: Set stPrij = CreateObject("Scripting.Dictionary"): stPrij.CompareMode = vbTextCompare
+    Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
+    If Not IsEmpty(prj) Then
+        Dim qId As Long, qSt As Long, q As Long
+        qId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+        qSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+        For q = 1 To UBound(prj, 1)
+            If qSt > 0 Then
+                If UCase$(Trim$(NzToText(prj(q, qSt)))) = "DA" Then stPrij(Trim$(NzToText(prj(q, qId)))) = True
+            End If
+        Next q
+    End If
+
+    Dim cBr As Long, cPid As Long, cVr As Long, cSo As Long, cGajb As Long, cSt As Long
+    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    cPid = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    cVr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_VRSTA)
+    cSo = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_SORTA)
+    cGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If cBr = 0 Or cPid = 0 Then Exit Function
+
+    Dim gSum As Object: Set gSum = CreateObject("Scripting.Dictionary"): gSum.CompareMode = vbTextCompare
+    Dim sCnt As Object: Set sCnt = CreateObject("Scripting.Dictionary"): sCnt.CompareMode = vbTextCompare
+    Dim vrD As Object: Set vrD = CreateObject("Scripting.Dictionary"): vrD.CompareMode = vbTextCompare
+    Dim soD As Object: Set soD = CreateObject("Scripting.Dictionary"): soD.CompareMode = vbTextCompare
+    Dim order As Collection: Set order = New Collection
+    Dim i As Long
+    For i = 1 To UBound(ps, 1)
+        Dim stx As Boolean: stx = False
+        If cSt > 0 Then stx = (UCase$(Trim$(NzToText(ps(i, cSt)))) = "DA")
+        If Not stx Then
+            Dim pid As String: pid = Trim$(NzToText(ps(i, cPid)))
+            Dim br As String: br = Trim$(NzToText(ps(i, cBr)))
+            If stPrij.Exists(pid) And Len(br) > 0 Then
+                If Not gSum.Exists(br) Then
+                    gSum(br) = 0&: sCnt(br) = 0&: order.Add br
+                    vrD(br) = Trim$(NzToText(ps(i, cVr))): soD(br) = Trim$(NzToText(ps(i, cSo)))
+                End If
+                If IsNumeric(ps(i, cGajb)) Then gSum(br) = CLng(gSum(br)) + CLng(ps(i, cGajb))
+                sCnt(br) = CLng(sCnt(br)) + 1
+            End If
+        End If
+    Next i
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim v As Variant
+    For Each v In order
+        Dim br2 As String: br2 = CStr(v)
+        rows.Add Array(br2, LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, br2, COL_PRJ_DATUM), _
+                       CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), CLng(sCnt(br2)))
+    Next v
+    GetPrijemniceSaOsirocenimPaletama = StornoRowsTo2D(rows, 6)
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetPrijemniceSaOsirocenimPaletama"
+    GetPrijemniceSaOsirocenimPaletama = Empty
+End Function
+
+' Aktivne prijemnice koje su paletizovane (imaju aktivnu paleta-stavku) = ciljevi
+' za P1. Kolone 1..6: BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica(KolAmb)|Zbirna
+Public Function GetAktivnePrijemnice() As Variant
+    On Error GoTo EH
+    Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(prj) Then Exit Function
+
+    Dim palBr As Object: Set palBr = CreateObject("Scripting.Dictionary"): palBr.CompareMode = vbTextCompare
+    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsEmpty(ps) Then
+        Dim xBr As Long, xSt As Long, x As Long
+        xBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+        xSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        For x = 1 To UBound(ps, 1)
+            Dim sx As Boolean: sx = False
+            If xSt > 0 Then sx = (UCase$(Trim$(NzToText(ps(x, xSt)))) = "DA")
+            If Not sx Then palBr(Trim$(NzToText(ps(x, xBr)))) = True
+        Next x
+    End If
+
+    Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long, cAmb As Long, cZbr As Long, cSt As Long
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    cSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    cAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
+    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    If cBr = 0 Then Exit Function
+
+    Dim gSum As Object: Set gSum = CreateObject("Scripting.Dictionary"): gSum.CompareMode = vbTextCompare
+    Dim datD As Object: Set datD = CreateObject("Scripting.Dictionary"): datD.CompareMode = vbTextCompare
+    Dim vrD As Object: Set vrD = CreateObject("Scripting.Dictionary"): vrD.CompareMode = vbTextCompare
+    Dim soD As Object: Set soD = CreateObject("Scripting.Dictionary"): soD.CompareMode = vbTextCompare
+    Dim zbD As Object: Set zbD = CreateObject("Scripting.Dictionary"): zbD.CompareMode = vbTextCompare
+    Dim order As Collection: Set order = New Collection
+    Dim i As Long
+    For i = 1 To UBound(prj, 1)
+        Dim stp As Boolean: stp = False
+        If cSt > 0 Then stp = (UCase$(Trim$(NzToText(prj(i, cSt)))) = "DA")
+        If Not stp Then
+            Dim br As String: br = Trim$(NzToText(prj(i, cBr)))
+            If Len(br) > 0 Then
+                If palBr.Exists(br) Then
+                    If Not gSum.Exists(br) Then
+                        gSum(br) = 0&: order.Add br
+                        datD(br) = prj(i, cDat): vrD(br) = Trim$(NzToText(prj(i, cVr)))
+                        soD(br) = Trim$(NzToText(prj(i, cSo))): zbD(br) = Trim$(NzToText(prj(i, cZbr)))
+                    End If
+                    If cAmb > 0 Then If IsNumeric(prj(i, cAmb)) Then gSum(br) = CLng(gSum(br)) + CLng(prj(i, cAmb))
+                End If
+            End If
+        End If
+    Next i
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim v As Variant
+    For Each v In order
+        Dim br2 As String: br2 = CStr(v)
+        rows.Add Array(br2, datD(br2), CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), CStr(zbD(br2)))
+    Next v
+    GetAktivnePrijemnice = StornoRowsTo2D(rows, 6)
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetAktivnePrijemnice"
+    GetAktivnePrijemnice = Empty
+End Function
+
 ' Bezbedan re-point izgubljenog bloka na ciljnu (aktivnu) otpremnicu:
 ' menja SAMO OtpremnicaID + BrojZbirne (cuva OtkupID -> uplate/ambalaza ostaju).
 ' Transakciono. Vraca False ako cilj ne postoji/storniran ili upis padne.
@@ -3054,51 +3188,3 @@ EH:
     LogErr SRC
     ReassignPrijemnicaToZbirna_TX = False
 End Function
-
-' Alt+F8 alat (van autohladnjace): prevezi "osirocenu" prijemnicu na novu zbirnu.
-' Scenario: stornirana otpremnica+zbirna, napravljena nova -> prijemnica se rucno
-' prevezuje na novu zbirnu. PrijemnicaID se ne dira (stavke ostaju ispravne).
-Public Sub PrevezPrijemnicuNaZbirnu()
-    Const SRC As String = "modDokumenta.PrevezPrijemnicuNaZbirnu"
-    On Error GoTo EH
-
-    Dim brPrij As String
-    brPrij = Trim$(InputBox("Broj prijemnice koju prevezujes:", APP_NAME))
-    If Len(brPrij) = 0 Then Exit Sub
-
-    Dim brZbr As String
-    brZbr = Trim$(InputBox("Broj nove (aktivne) zbirne na koju je vezujes:", APP_NAME))
-    If Len(brZbr) = 0 Then Exit Sub
-
-    ' Lako upozorenje na neslaganje vrste/sorte (operater i dalje odlucuje).
-    Dim warn As String
-    Dim pV As String, pS As String, zV As String, zS As String
-    pV = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrij, COL_PRJ_VRSTA))
-    pS = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrij, COL_PRJ_SORTA))
-    zV = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_VRSTA))
-    zS = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_SORTA))
-    If (Len(pV) > 0 And StrComp(pV, zV, vbTextCompare) <> 0) Or _
-       (Len(pS) > 0 And StrComp(pS, zS, vbTextCompare) <> 0) Then
-        warn = vbCrLf & vbCrLf & "PAZNJA: vrsta/sorta se NE poklapaju!" & vbCrLf & _
-               "  prijemnica: " & pV & " / " & pS & vbCrLf & _
-               "  zbirna:     " & zV & " / " & zS
-    End If
-
-    If MsgBox("Prevezati prijemnicu " & brPrij & " na zbirnu " & brZbr & "?" & vbCrLf & _
-              "(PrijemnicaID se ne menja; menja se samo BrojZbirne.)" & warn, _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
-
-    If ReassignPrijemnicaToZbirna_TX(brPrij, brZbr) Then
-        MsgBox "Prijemnica " & brPrij & " prevezana na zbirnu " & brZbr & ".", _
-               vbInformation, APP_NAME
-    Else
-        MsgBox "Prevezivanje nije uspelo. Proveri da li prijemnica " & brPrij & _
-               " postoji i aktivna je, i da li je zbirna " & brZbr & " aktivna.", _
-               vbExclamation, APP_NAME
-    End If
-    Exit Sub
-EH:
-    LogErr SRC
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
-End Sub
-
