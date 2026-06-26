@@ -211,8 +211,13 @@ izdatu `OM-Izlaz-Koop`, jer dele `DokumentID = otkupID`). Koristi se iz `frmDoku
 panela (`modOtkupBlok.StornoSelectedBlok`, fallback na `OtkupID`), pa storno dvoklasnog
 dokumenta više ne ostavlja drugu klasu nestorniranu.
 
-> Poznata praznina (nasleđena): `OMUlaz`, `OM-Izlaz-Koop` i `OM-Ulaz-Koop` nisu u storno
-> comboboxu forme, pa za njih trenutno nema storno-UI putanje (kao ni ranije za `OMUlaz`).
+> Storno-UI: `OM-Izlaz-Koop` (revers izdavanje) i `OM-Ulaz-Koop` (revers povrat) imaju
+> putanju u storno comboboxu („Revers izdavanje koop." / „Revers povrat koop.") —
+> `modStorno.StornoOMKoopByBrDok_TX(brDok, dokumentTip)` markira **obe noge** po broju
+> dokumenta (broj je obavezan; unos bez broja nema jedinstven ključ). Novac unet uz isti
+> broj stornira se zasebno („Novac"). Preostala praznina: plain `OMUlaz` (prijem na OM od
+> vozača) i dalje nije u storno comboboxu. Napomena: storno OM-koop reversa se još ne
+> prikazuje u „Pregled storniranih" (`GetStorniraniByTip` je po prodajnim tabelama).
 >
 > Izuzetak: `OM-Izlaz-Koop` knjižen **uz otkup** (polje „Izdata ambalaza" u `frmOtkup`)
 > deli `DokumentID = otkupID`, pa ga `StornoOtkup` automatski stornira (dodatni

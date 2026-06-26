@@ -145,6 +145,8 @@ Private Sub UserForm_Activate()
         .AddItem "Prijemnica"
         .AddItem "Faktura"
         .AddItem "Novac"
+        .AddItem "Revers izdavanje koop."
+        .AddItem "Revers povrat koop."
     End With
     
     CheckVerwaisteDokumente
@@ -2559,6 +2561,24 @@ Private Sub btnStorno_Click()
             
         Case "Novac"
             If ConfirmStorno("novac stavku", brDok) Then Success = StornoNovac_TX(brDok)
+
+        Case "Revers izdavanje koop."
+            If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_KOOP) Then
+                MsgBox "Revers izdavanje '" & brDok & "' nije pronadjen (ili je vec storniran)!", _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If ConfirmStorno("revers izdavanje (koop)", brDok) Then _
+                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_IZLAZ_KOOP)
+
+        Case "Revers povrat koop."
+            If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_ULAZ_KOOP) Then
+                MsgBox "Revers povrat '" & brDok & "' nije pronadjen (ili je vec storniran)!", _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If ConfirmStorno("revers povrat (koop)", brDok) Then _
+                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_KOOP)
     End Select
     
     If Success Then

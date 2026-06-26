@@ -1037,6 +1037,123 @@ Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
 End Sub
 
 ' ============================================================
+' OM <-> KOOPERANT AMBALAZA (revers): izdavanje (OM-Izlaz-Koop) i povrat
+' (OM-Ulaz-Koop). Standalone storno po broju dokumenta -> obe noge dvojnog
+' upisa (dele DokumentID = broj + DokumentTip) storniraju se zajedno preko
+' iste skenirajuce logike. Broj je obavezan (unos bez broja nema jedinstven
+' kljuc). Novac unet uz isti broj stornira se zasebno ("Novac").
+' ============================================================
+
+Public Function StornoOMKoopByBrDok_TX(ByVal brDok As String, _
+                                       ByVal dokumentTip As String) As Boolean
+    Const SRC As String = "StornoOMKoopByBrDok_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    If Not StornoOMKoopByBrDok(brDok, dokumentTip) Then
+        Err.Raise ERR_STORNO_BASE + 3, SRC, _
+                  "StornoOMKoopByBrDok nije uspeo. Broj=" & brDok
+    End If
+
+    tx.CommitTx
+
+    StornoOMKoopByBrDok_TX = True
+    MonitorStornoSuccess SRC, dokumentTip, brDok
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, dokumentTip, brDok, tx
+    StornoOMKoopByBrDok_TX = False
+End Function
+
+' Markira sve AKTIVNE tblAmbalaza redove za (broj + DokumentTip). Raise ako nema
+' reda ili je vec sve stornirano (forma prikazuje gresku). Obe noge (Kooperant +
+' Stanica) dele isti DokumentID/Tip pa se hvataju zajedno.
+Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
+                                    ByVal dokumentTip As String) As Boolean
+    Const SRC As String = "StornoOMKoopByBrDok"
+
+    On Error GoTo EH
+
+    RequireNonBlank brDok, "BrojDokumenta", SRC
+    RequireNonBlank dokumentTip, "DokumentTip", SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 20, SRC, "Tabela je prazna: " & TBL_AMBALAZA
+    End If
+
+    Dim colDokID As Long, colDokTip As Long, colStorno As Long
+    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+
+    Dim foundAny As Boolean, changedCount As Long, i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colDokID))) = Trim$(brDok) And _
+           Trim$(CStr(data(i, colDokTip))) = Trim$(dokumentTip) Then
+            foundAny = True
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                MarkRowStornirano TBL_AMBALAZA, i, SRC
+                changedCount = changedCount + 1
+            End If
+        End If
+    Next i
+
+    If Not foundAny Then
+        Err.Raise ERR_STORNO_BASE + 21, SRC, _
+                  "Dokument nije pronadjen u ambalazi. Broj=" & brDok & " Tip=" & dokumentTip
+    End If
+    If changedCount = 0 Then
+        Err.Raise ERR_STORNO_BASE + 22, SRC, _
+                  "Dokument je vec storniran. Broj=" & brDok
+    End If
+
+    StornoOMKoopByBrDok = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
+End Function
+
+' True ako postoji bar jedan AKTIVAN red u tblAmbalaza za (broj + DokumentTip).
+' Forma to koristi za jasnu "nije pronadjen" poruku pre poziva storna.
+Public Function ActiveAmbalazaDokExists(ByVal brDok As String, _
+                                        ByVal dokumentTip As String) As Boolean
+    Const SRC As String = "ActiveAmbalazaDokExists"
+    On Error GoTo EH
+    If Trim$(brDok) = "" Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+    Dim colDokID As Long, colDokTip As Long, colStorno As Long
+    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colDokID))) = Trim$(brDok) And _
+           Trim$(CStr(data(i, colDokTip))) = Trim$(dokumentTip) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then
+                ActiveAmbalazaDokExists = True
+                Exit Function
+            End If
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr "modStorno.ActiveAmbalazaDokExists"
+End Function
+
+' ============================================================
 ' PRIVATE GUARDS / LOW-LEVEL HELPERS
 ' ============================================================
 
