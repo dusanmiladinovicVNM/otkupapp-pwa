@@ -280,3 +280,10 @@ Dorada (opciono): kad postoji aktivna otpremnica sa istim BrojOtpremnice (ili Br
 P3-8 — zaglavlja kolona u lost-modu
 U „Izgubljeni“ režimu lista BLOKOVI (mLstBlok) koristi normalna zaglavlja (BLOK_CAPS), a „stara otp: X“ se prikazuje u koloni sa zaglavljem „Vrednost“ -> zbunjujuće.
 Dorada: privremeno zameniti zaglavlja u lost-modu (npr. kolona „Stara otpremnica“) ili zaseban mali grid. Čista kozmetika.
+
+P3-9	Palete re-point: auto-aneks (višak) / deficit gajbica	🔴	ReassignPaleteToPrijemnica_TX sad samo UPOZORI kad se broj gajbica po klasi razlikuje (re-point + KG-sync rade samo na poklapanju). Dorada: auto-aneks paleta DATIRANA NA ORIGINAL za višak (ne preko GetOrCreateOpenPaleta — da ne padne na današnju paletu); kontrolisan deficit.
+
+P3-9 — Palete re-point: višak/deficit gajbica (warn-only za sada)
+Kontekst: P1 — modPaletniList.ReassignPaleteToPrijemnica_TX + UI „Palete“ mod u recovery panelu (frmDokumenta). Re-point + KG-sync (skaliranje neta) rade kad se broj gajbica PO KLASI poklapa. Kad se razlikuje → samo upozorenje u statusnoj liniji; operater rešava ručno.
+Razlog odlaganja (svesno): auto-rutiranje viška preko GetOrCreateOpenPaleta stavilo bi ga na DANAŠNJU otvorenu paletu → pogrešan datum/lokacija za robu od pre par dana.
+Dorada (kad bude vremena): za višak praviti NAMENSKU aneks paletu datiranu na original; za deficit kontrolisano skidanje sa poslednje delimične stavke uz potvrdu. Edge koji „ne bi trebalo da se dešava“ → nizak prioritet.
