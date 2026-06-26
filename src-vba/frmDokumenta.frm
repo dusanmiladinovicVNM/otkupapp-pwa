@@ -449,6 +449,7 @@ Private Sub cmbOtkupnoMesto_Change()
     FillComboKooperantiByStanica cmbPrimalacOMUlaz, stanicaID
     UpdateOMAvansSaldo
     RefreshBrojOtpSuggestion
+    RefreshBrojReversSuggestion
 
     ' MALINA: vozac == par-vozac OM (VozacID == StanicaID) -> auto-izbor (radi i za
     ' Zbirnu/Prijemnicu jer dele isti cmbVozac). Ako par-vozac ne postoji, ostaje.
@@ -847,6 +848,23 @@ Private Sub RefreshBrojOtpSuggestion()
 
 EH:
     LogErr "frmDokumenta.RefreshBrojOtpSuggestion"
+End Sub
+
+Private Sub RefreshBrojReversSuggestion()
+    ' Predlog broja reversa (OM<->koop). Samo kad je aktivan jedan smer (Izdato/
+    ' Prijem); postuje AUTO_BROJ_DOKUMENTA (SuggestNextBroj vraca "" kad je OFF).
+    On Error GoTo EH
+    If Not (OMIzdavanjeAktivno() Or OMPrijemKoopAktivno()) Then Exit Sub
+    Dim stanicaID As String: stanicaID = GetComboID(cmbOtkupnoMesto)
+    If Len(stanicaID) = 0 Then Exit Sub
+    Dim datumDok As Date
+    If Not TryParseDateValue(txtDatum.value, datumDok) Then Exit Sub
+    Dim suggested As String
+    suggested = SuggestNextBroj(KIND_REV, stanicaID, datumDok)
+    If Len(suggested) > 0 Then txtBrojDokOMUlaz.value = suggested
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.RefreshBrojReversSuggestion"
 End Sub
 
 Private Sub RefreshBrojZbirneSuggestion()
@@ -1286,6 +1304,7 @@ Private Sub m_tglIzdKoop_Change()
     If m_tglIzdKoop Is Nothing Then Exit Sub
     If m_tglIzdKoop.value = True Then
         If Not m_tglPrijemKoop Is Nothing Then m_tglPrijemKoop.value = False
+        RefreshBrojReversSuggestion
     End If
 End Sub
 
@@ -1294,6 +1313,7 @@ Private Sub m_tglPrijemKoop_Change()
     If m_tglPrijemKoop Is Nothing Then Exit Sub
     If m_tglPrijemKoop.value = True Then
         If Not m_tglIzdKoop Is Nothing Then m_tglIzdKoop.value = False
+        RefreshBrojReversSuggestion
     End If
 End Sub
 
@@ -1459,6 +1479,13 @@ Private Sub btnUnosOMUlaz_Click()
             otkupID = ""
             tipNovca = NOV_KES_FIRMA_OTKUPAC
         End If
+    End If
+
+    ' Auto-broj reversa (postuje AUTO_BROJ_DOKUMENTA): ako broj nije unet/predlozen,
+    ' generisi ga sada po modelu x/ddmmyy[-N] iz revers tokova (tblAmbalaza).
+    If (izdavanje Or prijemKoop) And brojDok = "" Then
+        brojDok = SuggestNextBroj(KIND_REV, stanicaID, datumDok)
+        txtBrojDokOMUlaz.value = brojDok
     End If
 
     Dim koopSmer As String

@@ -247,6 +247,7 @@ nedostajućih redova). Pokrenuti **tačno jednom** i tek **posle** re-importa ko
 | Otpremnica / Prijemnica / Izlaz-Kupci | `modDokumenta` (`SaveOtpremnica`, `SavePrijemnica`, `SaveKupciIzlaz_TX`) |
 | Otkup | `modOtkup.SaveOtkup` (desktop), `modMasterSync.ImportRowToTblOtkup` (PWA) |
 | OM-Ulaz / OM-izdavanje / OM-prijem-koop | `frmDokumenta.SaveOMUlaz_TX` + runtime toggle-i `tglIzdKoop` (izdato) i `tglPrijemKoop` (prijem/povrat); smer = parametar `koopSmer` |
+| Broj reversa (auto) | `modBrojevi.SuggestNextBroj(KIND_REV, stanicaID, datum)` → `x/ddmmyy[-N]`; poštuje toggle `AUTO_BROJ_DOKUMENTA` (`IsAutoBrojDokumenta`); sopstveni dnevni niz po stanici (scan `tblAmbalaza`, OM-koop tokovi) |
 | Vozač/entitet izveštaji | `modIzvestaj.ReportAmbalaza` (+ `ReportAmbalazePojedinacni`/`Zbirni`) |
-| Storno | `modStorno.StornoAmbalazaByDokument` |
+| Storno | `modStorno.StornoAmbalazaByDokument`; standalone revers: `StornoOMKoopByBrDok_TX(brDok, dokumentTip)`; pregled: `modDokumenta.GetStorniraniRevers` |
 | Konstante tipova | `modConfig` (`DOK_TIP_OTKUP`, `DOK_TIP_OTPREMNICA`, `DOK_TIP_PRIJEMNICA`, `DOK_TIP_IZLAZ_KUPCI`, `DOK_TIP_OM_ULAZ`, `DOK_TIP_OM_IZLAZ_KOOP`, `DOK_TIP_OM_ULAZ_KOOP`) |
