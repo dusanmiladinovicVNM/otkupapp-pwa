@@ -68,8 +68,9 @@ Svako od ovih kretanja je **entitetski-relativno** (vidi §1).
 | **Izlaz Kupci** | `modDokumenta.SaveKupciIzlaz_TX` | `Kupac` **Izlaz** | da | `Kupci-Otpremnica` |
 | **Otkup** (desktop) | `modOtkup.SaveOtkup` | `Kooperant` **Izlaz** + `Stanica` **Ulaz** | — | `Otkup` |
 | **Otkup** (PWA sync) | `modMasterSync.ImportRowToTblOtkup` | `Kooperant` **Izlaz** + `Stanica` **Ulaz** | — | `Otkup` |
-| **OM izdaje kooperantu** | `frmDokumenta.SaveOMUlaz_TX` (toggle „Izdavanje") | `Kooperant` **Ulaz** + `Stanica` **Izlaz** | — | `OM-Izlaz-Koop` |
+| **OM izdaje kooperantu** | `frmDokumenta.SaveOMUlaz_TX` (toggle „Izdato koop.") | `Kooperant` **Ulaz** + `Stanica` **Izlaz** | — | `OM-Izlaz-Koop` |
 | **OM izdaje kooperantu (uz otkup)** | `modOtkup.SaveOtkup` (polje „Izdata ambalaza" u `frmOtkup`) | `Kooperant` **Ulaz** + `Stanica` **Izlaz** | — | `OM-Izlaz-Koop` |
+| **OM prima od kooperanta (povrat prazne)** | `frmDokumenta.SaveOMUlaz_TX` (toggle „Prijem koop.") | `Kooperant` **Izlaz** + `Stanica` **Ulaz** | — | `OM-Ulaz-Koop` |
 | **OM-Ulaz** (prijem na OM) | `frmDokumenta.SaveOMUlaz_TX` (default) | `Stanica` **Ulaz** | da | `OMUlaz` |
 
 **Zbirna** ne dira ambalažu (nema upisa).
@@ -90,11 +91,14 @@ Pitanje: zašto neki dokumenti knjiže **dva** reda, a neki **jedan**?
 
 - **Dvojni upis** se koristi kada kretanje menja saldo **dva realna entiteta** od kojih
   se **nijedan ne može izvesti** iz reda onog drugog:
-  - **Otkup**: gajbice idu **kooperant → OM**. `Kooperant Izlaz` (kooperant se razdužuje)
-    **+** `Stanica Ulaz` (OM se zadužuje).
-  - **OM-izdavanje**: gajbice idu **OM → kooperant**. `Kooperant Ulaz` (dobija prazne)
-    **+** `Stanica Izlaz` (OM se razdužuje).
-  - Ovo su jedina dva toka između **dva realna entiteta** (kooperant ↔ OM).
+  - **Otkup**: gajbice idu **kooperant → OM** (pune). `Kooperant Izlaz` (kooperant se
+    razdužuje) **+** `Stanica Ulaz` (OM se zadužuje).
+  - **OM-izdavanje**: gajbice idu **OM → kooperant** (prazne). `Kooperant Ulaz` (dobija
+    prazne) **+** `Stanica Izlaz` (OM se razdužuje).
+  - **OM-prijem (povrat prazne)**: gajbice idu **kooperant → OM** (prazne, bez otkupa).
+    `Kooperant Izlaz` **+** `Stanica Ulaz` — isti smer kao otkup, ali zaseban `DokumentTip`
+    (`OM-Ulaz-Koop`) jer nije nabavka (ne ulazi u otkupne izveštaje/izuzeća).
+  - Svi tokovi su između **dva realna entiteta** (kooperant ↔ OM); vozač nije strana.
 
 - **Jednostran upis** se koristi kada je druga strana kretanja **vozač** — a vozač se
   **izvodi pri čitanju** (vidi §5), pa nije potreban drugi red:
@@ -207,8 +211,13 @@ izdatu `OM-Izlaz-Koop`, jer dele `DokumentID = otkupID`). Koristi se iz `frmDoku
 panela (`modOtkupBlok.StornoSelectedBlok`, fallback na `OtkupID`), pa storno dvoklasnog
 dokumenta više ne ostavlja drugu klasu nestorniranu.
 
-> Poznata praznina (nasleđena): `OMUlaz` i `OM-Izlaz-Koop` nisu u storno comboboxu forme,
-> pa za njih trenutno nema storno-UI putanje (kao ni ranije za `OMUlaz`).
+> Storno-UI: `OM-Izlaz-Koop` (revers izdavanje) i `OM-Ulaz-Koop` (revers povrat) imaju
+> putanju u storno comboboxu („Revers izdavanje koop." / „Revers povrat koop.") —
+> `modStorno.StornoOMKoopByBrDok_TX(brDok, dokumentTip)` markira **obe noge** po broju
+> dokumenta (broj je obavezan; unos bez broja nema jedinstven ključ). Novac unet uz isti
+> broj stornira se zasebno („Novac"). Preostala praznina: plain `OMUlaz` (prijem na OM od
+> vozača) i dalje nije u storno comboboxu. Napomena: storno OM-koop reversa se još ne
+> prikazuje u „Pregled storniranih" (`GetStorniraniByTip` je po prodajnim tabelama).
 >
 > Izuzetak: `OM-Izlaz-Koop` knjižen **uz otkup** (polje „Izdata ambalaza" u `frmOtkup`)
 > deli `DokumentID = otkupID`, pa ga `StornoOtkup` automatski stornira (dodatni
@@ -237,7 +246,8 @@ nedostajućih redova). Pokrenuti **tačno jednom** i tek **posle** re-importa ko
 | Ledger / upis | `modAmbalaza.TrackAmbalaza`, `GetAmbalazeStanje`, `GetVozacAmbSaldo`, `VozacAmbEffectiveSmer`, `GetKooperantAmbOpening` |
 | Otpremnica / Prijemnica / Izlaz-Kupci | `modDokumenta` (`SaveOtpremnica`, `SavePrijemnica`, `SaveKupciIzlaz_TX`) |
 | Otkup | `modOtkup.SaveOtkup` (desktop), `modMasterSync.ImportRowToTblOtkup` (PWA) |
-| OM-Ulaz / OM-izdavanje | `frmDokumenta.SaveOMUlaz_TX` + runtime toggle `tglIzdKoop` |
+| OM-Ulaz / OM-izdavanje / OM-prijem-koop | `frmDokumenta.SaveOMUlaz_TX` + runtime toggle-i `tglIzdKoop` (izdato) i `tglPrijemKoop` (prijem/povrat); smer = parametar `koopSmer` |
+| Broj reversa (auto) | `modBrojevi.SuggestNextBroj(KIND_REV, stanicaID, datum)` → `x/ddmmyy[-N]`; poštuje toggle `AUTO_BROJ_DOKUMENTA` (`IsAutoBrojDokumenta`); sopstveni dnevni niz po stanici (scan `tblAmbalaza`, OM-koop tokovi) |
 | Vozač/entitet izveštaji | `modIzvestaj.ReportAmbalaza` (+ `ReportAmbalazePojedinacni`/`Zbirni`) |
-| Storno | `modStorno.StornoAmbalazaByDokument` |
-| Konstante tipova | `modConfig` (`DOK_TIP_OTKUP`, `DOK_TIP_OTPREMNICA`, `DOK_TIP_PRIJEMNICA`, `DOK_TIP_IZLAZ_KUPCI`, `DOK_TIP_OM_ULAZ`, `DOK_TIP_OM_IZLAZ_KOOP`) |
+| Storno | `modStorno.StornoAmbalazaByDokument`; standalone revers: `StornoOMKoopByBrDok_TX(brDok, dokumentTip)`; pregled: `modDokumenta.GetStorniraniRevers` |
+| Konstante tipova | `modConfig` (`DOK_TIP_OTKUP`, `DOK_TIP_OTPREMNICA`, `DOK_TIP_PRIJEMNICA`, `DOK_TIP_IZLAZ_KUPCI`, `DOK_TIP_OM_ULAZ`, `DOK_TIP_OM_IZLAZ_KOOP`, `DOK_TIP_OM_ULAZ_KOOP`) |

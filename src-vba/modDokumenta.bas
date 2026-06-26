@@ -2300,7 +2300,8 @@ End Function
 
 ' Tipovi storno dokumenata u redosledu prikaza (isti nazivi kao cmbStornoDokument).
 Public Function StorniraniTipovi() As Variant
-    StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac")
+    StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac", _
+                         "Revers izdavanje koop.", "Revers povrat koop.")
 End Function
 
 ' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
@@ -2317,6 +2318,17 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
                                    Optional ByVal chainIdx As Object = Nothing) As Variant
     On Error GoTo EH
     If chainIdx Is Nothing Then Set chainIdx = BuildChainIndex()
+
+    ' OM<->koop revers (ambalaza) ima drugaciju strukturu (2 noge, EntitetID/Tip) ->
+    ' poseban scan tblAmbalaze.
+    Select Case tip
+        Case "Revers izdavanje koop."
+            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_IZLAZ_KOOP)
+            Exit Function
+        Case "Revers povrat koop."
+            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_ULAZ_KOOP)
+            Exit Function
+    End Select
 
     Dim tbl As String
     Dim iBroj As Long, iDat As Long, iPart As Long, iVrsta As Long, iSorta As Long
@@ -2464,6 +2476,55 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
 EH:
     LogErr "modDokumenta.GetStorniraniByTip(" & tip & ")"
     GetStorniraniByTip = Empty
+End Function
+
+' Stornirani OM<->koop revers (dokTip) iz tblAmbalaza -> unifikovane 12 kolona.
+' Jedan red po dokumentu: Kooperant noga (nosi partnera); Stanica noga se preskace.
+' Mapiranje: Vrsta=TipAmbalaze, Kolicina=broj gajbica; ostalo prazno.
+' Preskace OM-Izlaz-Koop noge knjizene UZ otkup (DokumentID = otkupID "OTK-...";
+' vec se vide pod grupom 'Otkup') -> ostaju samo standalone reversi (broj x/ddmmyy).
+Private Function GetStorniraniRevers(ByVal dokTip As String) As Variant
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim iBroj As Long, iDat As Long, iEntID As Long, iEntTip As Long
+    Dim iDokTip As Long, iTipAmb As Long, iKol As Long, iStorno As Long
+    iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    iDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    iEntID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    iEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    iDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    iTipAmb = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    iKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    iStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    If iBroj = 0 Or iDokTip = 0 Or iStorno = 0 Then Exit Function
+
+    Dim pdict As Object
+    Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Dim rows As Collection: Set rows = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA" Then
+            If Trim$(CStr(data(i, iDokTip))) = dokTip And _
+               Trim$(CStr(data(i, iEntTip))) = "Kooperant" And _
+               UCase$(Left$(Trim$(CStr(data(i, iBroj))), 3)) <> "OTK" Then
+                rows.Add Array( _
+                    StornoCellText(data, i, iBroj), _
+                    StornoDateText(StornoCellRaw(data, i, iDat)), _
+                    ResolveNameFromDict(pdict, StornoCellRaw(data, i, iEntID)), _
+                    StornoCellText(data, i, iTipAmb), _
+                    "", "", _
+                    StornoNumText(StornoCellRaw(data, i, iKol), "#,##0"), _
+                    "", "", "", "", "")
+            End If
+        End If
+    Next i
+    GetStorniraniRevers = StornoRowsTo2D(rows, 12)
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetStorniraniRevers(" & dokTip & ")"
+    GetStorniraniRevers = Empty
 End Function
 
 ' Svi stornirani grupisano: Collection of Array(tipNaziv, rows2D(1..n,1..12)).

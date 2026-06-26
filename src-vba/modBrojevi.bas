@@ -28,6 +28,7 @@ Private gSheetIDCache As Object
 Public Const KIND_OTK As String = "OTK"
 Public Const KIND_OTP As String = "OTP"
 Public Const KIND_ZBR As String = "ZBR"
+Public Const KIND_REV As String = "REV"   ' OM<->koop revers (izdavanje/povrat ambalaze)
 
 ' ============================================================
 ' PUBLIC — forma prefill
@@ -78,6 +79,11 @@ Public Function SuggestNextBroj(ByVal kind As String, _
                 maxRemote = MaxSeqFromGoogleSheet("VOZ-" & entityID, _
                                                   "BrojZbirne", datum)
             End If
+        Case KIND_REV
+            ' Revers (OM<->koop ambalaza): sopstveni dnevni niz po stanici;
+            ' scan tblAmbalaza (OM-Izlaz-Koop / OM-Ulaz-Koop, Stanica noga).
+            maxLocal = MaxSeqReversAmbalaza(entityID, datum)
+            maxRemote = 0
         Case Else
             LogError SRC, "Nepoznata kind vrednost: " & kind
             SuggestNextBroj = ""
@@ -303,6 +309,39 @@ End Sub
 ' ============================================================
 ' PRIVATE — scan helperi
 ' ============================================================
+
+' Max sekvenca broja za stanicu+datum nad CELOM tblAmbalaza (svi tipovi/noge).
+' Revers deli "x/ddmmyy" namespace sa ostalim ambalaza dokumentima, a btnUnosOMUlaz
+' radi CheckDuplicate nad celom tblAmbalaza -> broji se po PREFIKSU broja da auto-broj
+' nikad ne kolidira (npr. sa rucnim OM-Ulaz brojem istog prefiksa). OTP-/PRJ-/OTK-
+' ID-evi drugih tokova ne odgovaraju prefiksu, pa ne uticu; bare "x/ddmmyy" = seq 1.
+Private Function MaxSeqReversAmbalaza(ByVal stanicaID As String, _
+                                     ByVal datum As Date) As Long
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim iBroj As Long: iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    If iBroj = 0 Then Exit Function
+
+    Dim base As String
+    base = CStr(ExtractNumericFromEntityID(stanicaID)) & "/" & Format$(datum, "ddmmyy")
+    Dim baseDash As String: baseDash = base & "-"
+    Dim nDash As Long: nDash = Len(baseDash)
+
+    Dim r As Long, best As Long, broj As String, seq As Long
+    For r = 1 To UBound(data, 1)
+        broj = Trim$(CStr(data(r, iBroj)))
+        If broj = base Or (Len(broj) > nDash And Left$(broj, nDash) = baseDash) Then
+            seq = ExtractSeqFromBroj(broj)
+            If seq > best Then best = seq
+        End If
+    Next r
+    MaxSeqReversAmbalaza = best
+    Exit Function
+EH:
+    LogErr "modBrojevi.MaxSeqReversAmbalaza", "stanica=" & stanicaID
+End Function
 
 Private Function MaxSeqFromTable(ByVal tblName As String, _
                                   ByVal colBroj As String, _
