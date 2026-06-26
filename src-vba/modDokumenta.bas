@@ -2481,6 +2481,8 @@ End Function
 ' Stornirani OM<->koop revers (dokTip) iz tblAmbalaza -> unifikovane 12 kolona.
 ' Jedan red po dokumentu: Kooperant noga (nosi partnera); Stanica noga se preskace.
 ' Mapiranje: Vrsta=TipAmbalaze, Kolicina=broj gajbica; ostalo prazno.
+' Preskace OM-Izlaz-Koop noge knjizene UZ otkup (DokumentID = otkupID "OTK-...";
+' vec se vide pod grupom 'Otkup') -> ostaju samo standalone reversi (broj x/ddmmyy).
 Private Function GetStorniraniRevers(ByVal dokTip As String) As Variant
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
@@ -2505,7 +2507,8 @@ Private Function GetStorniraniRevers(ByVal dokTip As String) As Variant
     For i = 1 To UBound(data, 1)
         If UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA" Then
             If Trim$(CStr(data(i, iDokTip))) = dokTip And _
-               Trim$(CStr(data(i, iEntTip))) = "Kooperant" Then
+               Trim$(CStr(data(i, iEntTip))) = "Kooperant" And _
+               UCase$(Left$(Trim$(CStr(data(i, iBroj))), 3)) <> "OTK" Then
                 rows.Add Array( _
                     StornoCellText(data, i, iBroj), _
                     StornoDateText(StornoCellRaw(data, i, iDat)), _
