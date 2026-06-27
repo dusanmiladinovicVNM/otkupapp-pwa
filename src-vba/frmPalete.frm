@@ -399,9 +399,17 @@ Private Sub LayoutDynamic()
     PutCtl Me.lstPaleteHdr, leftX, lrHdrY, leftW
     PutCtl Me.lstPalete, leftX, lrListY, leftW
     Me.lstPalete.Height = btnTop - 12 - lrListY
-    PutCtl mLstPradeHdr, rightX, lrHdrY, rightW
     PutCtl mLstPrerade, rightX, lrListY, rightW
     mLstPrerade.Height = btnTop - 12 - lrListY
+    ' header EKSPLICITNO iste sirine/pozicije kao data lista -> kolone poravnate
+    With mLstPradeHdr
+        .Left = mLstPrerade.Left
+        .Top = lrHdrY
+        .width = mLstPrerade.width
+        .Height = 15
+        .ColumnWidths = mLstPrerade.ColumnWidths
+        .Visible = True
+    End With
 
     ' Srednja kolona: iznad stavki samo Gotov proizvod (Preradjeno je filter
     ' uz Osvezi -> u redu 1), pa lista stavki.
