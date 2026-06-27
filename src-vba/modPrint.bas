@@ -50,8 +50,9 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     OutputToSheet data, wsPrint.Range("A3"), headers
     
     ' Izlaz: PDF koji se otvori (pouzdanije od direktne stampe; bez zavisnosti
-    ' od podrazumevanog stampaca).
+    ' od podrazumevanog stampaca). Sheet mora biti vidljiv za ExportAsFixedFormat.
     On Error Resume Next
+    wsPrint.Visible = xlSheetVisible
     Dim pdfPath As String
     pdfPath = ThisWorkbook.path & "\Izvestaj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
     wsPrint.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
@@ -63,79 +64,193 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
 End Sub
 
 ' ============================================================
-' OTPREMNICA (PDF) - na bazi reda iz tblOtpremnice (label|value layout).
+' OTPREMNICA (PDF) - isti vizuelni stil kao otkupni / grupni otkupni list
+' (WriteOtkupCopy, dva primerka 1/3 A4), podaci iz reda tblOtpremnice.
 ' ============================================================
 Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     On Error GoTo EH
-    Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
-    If Not IsArray(d) Then Exit Sub
-    Dim cId As Long: cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
-    If cId = 0 Then Exit Sub
-    Dim r As Long, fr As Long: fr = 0
-    For r = 1 To UBound(d, 1)
-        If CStr(d(r, cId)) = otpID Then fr = r: Exit For
-    Next r
-    If fr = 0 Then
-        MsgBox "Otpremnica nije pronadjena (" & otpID & ").", vbExclamation, APP_NAME
+    Dim ws As Worksheet: Set ws = FillOtpremnicaSablon(otpID)
+    If ws Is Nothing Then
+        MsgBox "Otpremnica nije pronadjena ili se ne moze pripremiti (" & otpID & ").", _
+               vbExclamation, APP_NAME
         Exit Sub
     End If
-
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("_Print")
-    On Error GoTo EH
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Sheets.Add
-        ws.name = "_Print"
-    End If
-    ws.Visible = xlSheetVisible
-    ws.cells.Clear
-
-    Dim broj As String: broj = CStr(OtpC(d, fr, COL_OTP_BROJ))
-    ws.Range("A1").value = "OTPREMNICA  " & broj
-    ws.Range("A1").Font.Size = 16
-    ws.Range("A1").Font.Bold = True
-
-    Dim stID As String: stID = CStr(OtpC(d, fr, COL_OTP_STANICA))
-    Dim vzID As String: vzID = CStr(OtpC(d, fr, COL_OTP_VOZAC))
-    Dim stNaziv As String: stNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv"))
-    Dim vzNaziv As String
-    vzNaziv = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", vzID, "Ime")) & " " & _
-                    CStr(LookupValue(TBL_VOZACI, "VozacID", vzID, "Prezime")))
-    Dim kol As Double: kol = OtpN(d, fr, COL_OTP_KOLICINA)
-    Dim cena As Double: cena = OtpN(d, fr, COL_OTP_CENA)
-    Dim bruto As Double: bruto = OtpN(d, fr, COL_OTP_BRUTO)
-    Dim dat As Variant: dat = OtpC(d, fr, COL_OTP_DATUM)
-
-    Dim rr As Long: rr = 3
-    Dim datStr As String
-    If IsDate(dat) Then datStr = Format$(CDate(dat), "d.m.yyyy") Else datStr = CStr(dat)
-    OtpRow ws, rr, "Datum", datStr
-    OtpRow ws, rr, "Otkupno mesto", IIf(Len(stNaziv) > 0, stNaziv & " (" & stID & ")", stID)
-    OtpRow ws, rr, "Vozac", vzNaziv
-    OtpRow ws, rr, "Vrsta voca", CStr(OtpC(d, fr, COL_OTP_VRSTA))
-    OtpRow ws, rr, "Sorta", CStr(OtpC(d, fr, COL_OTP_SORTA))
-    OtpRow ws, rr, "Klasa", CStr(OtpC(d, fr, COL_OTP_KLASA))
-    OtpRow ws, rr, "Kolicina (kg)", Format$(kol, "#,##0.##")
-    OtpRow ws, rr, "Cena", Format$(cena, "#,##0.00")
-    OtpRow ws, rr, "Vrednost", Format$(kol * cena, "#,##0.00")
-    OtpRow ws, rr, "Tip ambalaze", CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
-    OtpRow ws, rr, "Kol. ambalaze", CStr(OtpC(d, fr, COL_OTP_KOL_AMB))
-    If bruto > 0 Then OtpRow ws, rr, "Bruto (kg)", Format$(bruto, "#,##0.##")
-    OtpRow ws, rr, "Broj zbirne", CStr(OtpC(d, fr, COL_OTP_BROJ_ZBIRNE))
-
-    ws.Columns("A:B").AutoFit
-    On Error Resume Next
-    Dim pdfPath2 As String
-    pdfPath2 = ThisWorkbook.path & "\Otpremnica_" & Replace(Replace(broj, "/", "-"), "\", "-") & ".pdf"
-    ws.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath2, _
-                                     Quality:=xlQualityStandard, OpenAfterPublish:=True
-    On Error GoTo EH
-    ws.Visible = xlSheetVeryHidden
+    Dim broj As String: broj = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ))
+    Dim suff As String: suff = Replace(Replace(broj, "/", "-"), "\\", "-")
+    If Len(Trim$(suff)) = 0 Then suff = otpID
+    Dim pdfPath As String: pdfPath = ThisWorkbook.path & "\Otpremnica_" & suff & ".pdf"
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, IncludeDocProperties:=False, _
+                           OpenAfterPublish:=True
     Exit Sub
 EH:
     LogErr "modPrint.OutputOtpremnicaPDF"
     MsgBox "Greska pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Popuni OtpremnicaSablon iz reda tblOtpremnice (isti obrazac kao grupni otkupni
+' list: WriteOtkupCopy, dva primerka). Vraca sheet (ili Nothing).
+Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
+    On Error GoTo EH
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+
+    EnsureOtpremnicaSablon
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("OtpremnicaSablon")
+    On Error GoTo EH
+    If ws Is Nothing Then Exit Function
+
+    Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cId As Long: cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    If cId = 0 Then Exit Function
+    Dim fr As Long, r As Long: fr = 0
+    For r = 1 To UBound(d, 1)
+        If CStr(d(r, cId)) = otpID Then fr = r: Exit For
+    Next r
+    If fr = 0 Then Exit Function
+
+    Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+
+    Dim kol As Double: kol = OtpN(d, fr, COL_OTP_KOLICINA)
+    Dim cenBruto As Double: cenBruto = OtpN(d, fr, COL_OTP_CENA)
+    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
+    Dim storedBruto As Double: storedBruto = OtpN(d, fr, COL_OTP_BRUTO)
+    Dim tipAmb As String: tipAmb = CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
+    Dim kolAmb As Double: kolAmb = OtpN(d, fr, COL_OTP_KOL_AMB)
+    Dim kolBruto As Double
+    If storedBruto > 0 Then
+        kolBruto = storedBruto
+    Else
+        Dim crateW As Double
+        crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
+        kolBruto = kol + kolAmb * crateW
+    End If
+
+    Dim stavke() As Variant: ReDim stavke(0 To 0, 0 To 6)
+    stavke(0, 0) = Trim$(CStr(OtpC(d, fr, COL_OTP_VRSTA)) & " " & CStr(OtpC(d, fr, COL_OTP_SORTA)))
+    stavke(0, 1) = CStr(OtpC(d, fr, COL_OTP_KLASA))
+    stavke(0, 2) = cenNeto
+    stavke(0, 3) = cenBruto
+    stavke(0, 4) = kol
+    stavke(0, 5) = kolBruto
+    stavke(0, 6) = kol * cenNeto
+    Dim cnt As Long: cnt = 1
+    Dim osnovica As Double: osnovica = kol * cenNeto
+
+    Dim stID As String: stID = CStr(OtpC(d, fr, COL_OTP_STANICA))
+
+    Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
+    h("name") = GetConfigValue("SELLER_NAME")
+    h("pib") = GetConfigValue("SELLER_PIB")
+    h("mb") = GetConfigValue("SELLER_MATICNI_BROJ")
+    h("addr") = Trim$(GetConfigValue("SELLER_STREET") & ", " & _
+                GetConfigValue("SELLER_POSTAL_CODE") & " " & GetConfigValue("SELLER_CITY"))
+    h("acct") = GetConfigValue("SELLER_ACCOUNT")
+    Dim objMesto As String: objMesto = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_MESTO")))
+    Dim objReg As String: objReg = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_BR_REGISTRA")))
+    Dim objLine As String: objLine = ""
+    If Len(objMesto) > 0 Then objLine = "Objekat: " & objMesto
+    If Len(objReg) > 0 Then
+        If Len(objLine) > 0 Then objLine = objLine & "    Reg. br: " & objReg Else objLine = "Objekat reg. br: " & objReg
+    End If
+    h("objekat") = objLine
+    h("brDok") = CStr(OtpC(d, fr, COL_OTP_BROJ))
+    Dim datV As Variant: datV = OtpC(d, fr, COL_OTP_DATUM)
+    If IsDate(datV) Then h("datum") = Format$(CDate(datV), "dd.mm.yyyy") Else h("datum") = CStr(datV)
+    Dim stanicaNaziv As String: stanicaNaziv = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv")))
+    If Len(stanicaNaziv) = 0 Then stanicaNaziv = stID
+    h("stanica") = stanicaNaziv
+    h("koop") = "": h("bpg") = "": h("racun") = ""
+
+    Dim ambPoc As Long: ambPoc = GetStanicaAmbSaldo(stID, tipAmb)
+    h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
+    h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))
+    h("ambIzdavanje") = tipAmb & " x 0"
+    h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc - kolAmb))
+
+    h("stopa") = stopa
+    h("osnovica") = osnovica
+    h("nadoknada") = osnovica * stopa / 100
+    h("ukupno") = osnovica + osnovica * stopa / 100
+    h("rok") = DocConfigOr(CFG_OTKUP_ROK, OTKUP_ROK_DEFAULT)
+
+    Dim kl As String: kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
+    kl = Replace(kl, "{BPG}", "", , , vbTextCompare)
+    kl = Replace(kl, "{POLJOPRIVREDNIK}", "", , , vbTextCompare)
+    kl = Replace(kl, "{RACUN}", "", , , vbTextCompare)
+    kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
+    kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
+    h("klauzula") = kl
+
+    h("naslov") = "OTPREMNICA"
+    h("grupni") = "1"
+
+    Application.ScreenUpdating = False
+    On Error Resume Next
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+    ws.cells.UnMerge
+    On Error GoTo EH
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 6
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
+
+    Dim R0 As Long, lastRow As Long
+    R0 = WriteOtkupCopy(ws, 1, "", h, stavke, cnt, OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
+    lastRow = WriteOtkupCopy(ws, R0, "", h, stavke, cnt, OL_THIRD_PT) - 1
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = 100
+        .LeftMargin = Application.InchesToPoints(0.31)
+        .RightMargin = Application.InchesToPoints(0.31)
+        .TopMargin = 0
+        .BottomMargin = 0
+        .HeaderMargin = 0
+        .FooterMargin = 0
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillOtpremnicaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr "modPrint.FillOtpremnicaSablon"
+End Function
+
+Public Sub EnsureOtpremnicaSablon()
+    On Error GoTo EH
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("OtpremnicaSablon")
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = "OtpremnicaSablon"
+    Exit Sub
+EH:
+    LogErr "modPrint.EnsureOtpremnicaSablon"
 End Sub
 
 Private Function OtpC(ByVal d As Variant, ByVal r As Long, ByVal colName As String) As Variant
@@ -147,13 +262,6 @@ Private Function OtpN(ByVal d As Variant, ByVal r As Long, ByVal colName As Stri
     Dim v As Variant: v = OtpC(d, r, colName)
     If IsNumeric(v) Then OtpN = CDbl(v)
 End Function
-
-Private Sub OtpRow(ByVal ws As Worksheet, ByRef rr As Long, ByVal lbl As String, ByVal val As String)
-    ws.cells(rr, 1).value = lbl
-    ws.cells(rr, 1).Font.Bold = True
-    ws.cells(rr, 2).value = val
-    rr = rr + 1
-End Sub
 
 ' ============================================================
 ' OTKUPNI LIST (zakonski) — OtkupSablon, dva primerka jedan iznad drugog,

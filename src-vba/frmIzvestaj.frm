@@ -1531,7 +1531,7 @@ Private Sub LayoutOtkupRobaHeaders()
 
     Dim caps As Variant
     caps = Array("Datum", "Br. Otp.", "Vrsta", "Klasa", "Vozac", "Otp kg", _
-                 "Blokovi kg", "Razlika kg" & vbLf & "(Otk. listovi - Otprem.)", _
+                 "Blokovi kg", "Razlika kg", _
                  "Prijemnica kg", "Manjak kg / %")
     Dim prop As Variant
     prop = Array(0.085, 0.12, 0.09, 0.05, 0.135, 0.09, 0.09, 0.085, 0.09, 0.165)
@@ -1556,11 +1556,6 @@ Private Sub LayoutOtkupRobaHeaders()
             lbl.Left = X
             lbl.width = wCol
             StyleListHeaderLabel lbl
-            If k = 7 Then
-                lbl.WordWrap = True
-                lbl.Height = lbl_H_OR10.Height * 2 + 6
-                lbl.top = lbl_H_OR10.top - (lbl_H_OR10.Height + 6)
-            End If
             lbl.caption = CStr(caps(k))
         End If
         cw = cw & CStr(wCol)

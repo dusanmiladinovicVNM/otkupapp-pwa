@@ -285,8 +285,37 @@ Private Sub ShowOtpremnicaRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, B
         kol = NumOf(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_KOLICINA))
         If cena > 0 Then AddPair "Cena", Format$(cena, "#,##0.00")
         If cena > 0 And kol > 0 Then AddPair "Vrednost", Format$(kol * cena, "#,##0.00")
+        Dim brPrij As String: brPrij = PrijemnicaBrojZaOtpremnicu(otpID)
+        If Len(Trim$(brPrij)) > 0 Then AddPair "Broj prijemnice", brPrij
     End If
 End Sub
+
+' Poslovni broj(evi) prijemnice za zbirnu kojoj pripada otpremnica (spojeni zarezom).
+Private Function PrijemnicaBrojZaOtpremnicu(ByVal otpID As String) As String
+    On Error Resume Next
+    Dim brZb As String
+    brZb = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
+    If Len(Trim$(brZb)) = 0 Then Exit Function
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cZb As Long, cBr As Long
+    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    If cZb = 0 Or cBr = 0 Then Exit Function
+    Dim res As String, i As Long
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cZb)) = brZb Then
+            Dim br As String: br = Trim$(CStr(d(i, cBr)))
+            If Len(br) > 0 And InStr(", " & res & ", ", ", " & br & ", ") = 0 Then
+                If Len(res) > 0 Then res = res & ", "
+                res = res & br
+            End If
+        End If
+    Next i
+    PrijemnicaBrojZaOtpremnicu = res
+End Function
 
 ' Ambalaza red (dokument): prikazi kolone reda + zapamti DokumentID/Tip za stampu.
 ' refRest = "<DokumentTip>|<DokumentID>".
