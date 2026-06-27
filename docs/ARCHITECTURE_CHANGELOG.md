@@ -114,6 +114,34 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
 
+## v6.41 — 2026-06-27
+
+### Summary
+
+Print / šablon DRY konsolidacija (Faza 1). Rasuta logika za štampu obrazaca svedena na zajednički `modDocStyle` sloj, bez promene poslovne logike ili izgleda dokumenata (presentation-only).
+
+### Changed
+
+- `modDocStyle.DocExportPdf(ws, pdfPath, openAfter)` — jedan helper umesto 11 skoro identičnih `ExportAsFixedFormat` poziva (modPrint, modPaletniList, modIzvestaj, modOtkupBlok, frmSledljivost). `modPrint:_Print` (`UsedRange` izvoz) namerno ostavljen.
+- `modDocStyle.DocPageSetupThirdA4(ws, lastRow)` — četiri bajt-identična 1/3-A4 `PageSetup` bloka (otkupni / grupni / otpremnica / revers ambalaže) na jednom mestu; geometrija 99/198 mm perforacije ne može da drift-uje. Profil B (prijemnica / paletni / preradni) nedirnut (različite margine/kolone).
+- `modConfig` `Public Const WS_*_SABLON` — imena šablon sheet-ova kao jedinstven izvor istine (26 hardkodovanih stringova → konstante, uz postojeći `TBL_*`/`COL_*` obrazac).
+
+### Known Issues / Known Limitations
+
+- `FakturaSablon` / `KarticaSablon` / `SledljivostSablon` su i dalje ručni sheet-ovi (greška ako ne postoje, bez `Ensure*` ni `H1` verzije) — kandidat za Fazu 3.
+- Izlazni dispečer (`Output*` `Select Case PRINT/PREVIEW/PDF/OFF`) još nije konsolidovan (PDF grana re-fill-uje preko `Export*PDF`); odloženo jer nije čisto behavior-preserving.
+
+### Verification / Acceptance Gates
+
+- Statički: balans `Sub`/`End Sub` u `modDocStyle`, jedinstvene definicije helpera, ispravna arnost poziva, encoding (Windows-1250) i LF očuvani, bez `�` šuma u diffu. Excel smoke (operater): otkupni list, prijemnica, paletni/preradni, faktura, kartica, sledljivost — PDF/print izlaze isto kao pre.
+
+### Migration / Data Notes
+
+- Nema schema/data migracije. Re-import 8 modula (`modDocStyle`, `modConfig`, `modPrint`, `modPaletniList`, `modFaktura`, `modIzvestaj`, `modOtkupBlok`, `frmSledljivost`) → `Debug → Compile`.
+
+Reference updated: Yes — AR §5.12 (modDocStyle `DocExportPdf` / `DocPageSetupThirdA4`, `WS_*_SABLON` konstante, known inconsistency za ručne šablone).
+
+
 ## v6.36 — 2026-06-22
 
 ### Summary

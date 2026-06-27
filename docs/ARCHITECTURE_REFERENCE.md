@@ -834,6 +834,12 @@ The printed/PDF documents (otkupni list, prijemnica, paletni list, preradni list
 - `DocLabelVal` — "label + bold value" in one cell (rich-text bolding of the value part).
 - `DocLogoPath` / `DocDrawLogo` — optional logo from config `SELLER_LOGO_PATH`, else `<workbook>\logo.png` / `logo.jpg`; silently skipped if absent.
 - `DocConfigOr` and color helpers (`DocColHeaderFill` / `DocColGray` / `DocColRule`).
+- `DocExportPdf` — single worksheet → PDF with the shared export parameters (`Quality:=xlQualityStandard`, `IncludeDocProperties:=False`, `OpenAfterPublish`). Single home for every printed document's PDF export (modPrint / modPaletniList / modIzvestaj / modOtkupBlok / frmSledljivost); the `_Print` izveštaj sheet keeps its own `UsedRange` export.
+- `DocPageSetupThirdA4` — shared 1/3-A4 1:1 page setup (`Zoom=100`, margins `0` / `0.31"`, `PrintArea` `A1:H<lastRow>`) for the two-up perforated documents (otkupni / grupni / otpremnica / revers ambalaže). The four formerly-identical `PageSetup` blocks now live here so the 99/198 mm geometry cannot drift. Fit-to-page documents (prijemnica / paletni / preradni) keep their own setup (different margins/columns).
+
+Sheet-name source of truth: template worksheet names are `Public Const WS_*_SABLON` in `modConfig` (e.g. `WS_OTKUP_SABLON`, `WS_PRIJEMNICA_SABLON`, `WS_PALETA_SABLON`, `WS_FAKTURA_SABLON`, `WS_KARTICA_SABLON`, `WS_SLEDLJIVOST_SABLON`), referenced via `Sheets(WS_*)` instead of scattered string literals.
+
+> Beyond the four otkup-flow templates above, the same render-onto-worksheet pattern is reused by `GrupniOtkupSablon` / `OtpremnicaSablon` / `IzdAmbSablon` (modPrint), `FakturaSablon` (modFaktura), `KarticaSablon` (modIzvestaj), `SledljivostSablon` (frmSledljivost) and the hidden `SpecifikacijaSablon` (modOtkupBlok). **Known inconsistency:** `FakturaSablon` / `KarticaSablon` / `SledljivostSablon` are pre-built sheets that error if missing (no `Ensure*`/no layout-version marker) — candidate to align with the generated-and-versioned templates.
 
 Domain rules:
 
