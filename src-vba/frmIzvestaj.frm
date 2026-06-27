@@ -524,6 +524,7 @@ Private Sub SetupListBoxes()
     ' (auto-fit, da "Saldo amb." kolona i njen header stanu i budu poravnati).
     LayoutKarticaHeaders
     LayoutOtkupRobaHeaders
+    LayoutSaldoOMHeaders
 End Sub
 
 Private Sub UpdateStatusLabel()
@@ -1409,6 +1410,8 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SOM6, "Saldo"
     SetColumnHeader lbl_H_SOM7, "Ambalaža"
     
+    LayoutSaldoOMHeaders
+
     ' === SaldoKupci Page ===
     SetColumnHeader lbl_H_SK1, "Vrsta"
     SetColumnHeader lbl_H_SK2, "Kolicina"
@@ -1520,6 +1523,38 @@ Private Sub LayoutKarticaHeaders()
     cw = cw & "0"                            ' skrivena ref-kljuc kolona (idx 7)
     lstKartica.ColumnCount = 8
     lstKartica.ColumnWidths = cw
+End Sub
+
+' Poravnaj header labele Saldo OM tacno nad kolonama (auto-fit iz lstSaldoOM.width,
+' kao LayoutKarticaHeaders) - .frx pozicije su se razilazile sa kolonama. I header
+' Left/Width i lstSaldoOM.ColumnWidths idu iz istog izvora -> uvek poravnato.
+Private Sub LayoutSaldoOMHeaders()
+    On Error Resume Next
+    Dim prop As Variant
+    prop = Array(0.216, 0.117, 0.144, 0.144, 0.144, 0.144, 0.091)
+    Dim names As Variant
+    names = Array("lbl_H_SOM1", "lbl_H_SOM2", "lbl_H_SOM3", "lbl_H_SOM4", _
+                  "lbl_H_SOM5", "lbl_H_SOM6", "lbl_H_SOM7")
+    Dim availW As Double: availW = lstSaldoOM.width - 16
+    If availW < 120 Then Exit Sub
+    Dim X As Double: X = lstSaldoOM.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 6
+        Dim wCol As Long: wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lstSaldoOM.parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            lbl.Left = X
+            lbl.width = wCol
+        End If
+        cw = cw & CStr(wCol)
+        If k < 6 Then cw = cw & ";"
+        X = X + wCol
+    Next k
+    lstSaldoOM.ColumnCount = 7
+    lstSaldoOM.ColumnWidths = cw
 End Sub
 
 ' Naslovi + sirine kolona za "Otkupljena roba" (OM varijanta): 10 vidljivih kolona

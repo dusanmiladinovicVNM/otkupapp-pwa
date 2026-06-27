@@ -196,6 +196,34 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
             Next m
     End If
     
+    ' --- Aktivni saldo ambalaze po kooperantu (neto iz ledgera: Ulaz - Izlaz,
+    '     EntitetTip="Kooperant"); prikazuje se umesto zbira predatih gajbica. ---
+    Dim koopAmbDict As Object: Set koopAmbDict = CreateObject("Scripting.Dictionary")
+    Dim ambData As Variant: ambData = GetTableData(TBL_AMBALAZA)
+    If IsArray(ambData) Then
+        ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
+        If IsArray(ambData) And Not IsEmpty(ambData) Then
+            Dim caEnt As Long, caEntTip As Long, caKol As Long, caSmer As Long
+            caEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+            caEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+            caKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
+            caSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
+            Dim ai As Long
+            For ai = 1 To UBound(ambData, 1)
+                If Trim$(CStr(ambData(ai, caEntTip))) = "Kooperant" Then
+                    Dim akoop As String: akoop = Trim$(CStr(ambData(ai, caEnt)))
+                    If akoop <> "" And IsNumeric(ambData(ai, caKol)) Then
+                        If Not koopAmbDict.Exists(akoop) Then koopAmbDict.Add akoop, 0&
+                        Select Case Trim$(CStr(ambData(ai, caSmer)))
+                            Case "Ulaz":  koopAmbDict(akoop) = koopAmbDict(akoop) + CLng(ambData(ai, caKol))
+                            Case "Izlaz": koopAmbDict(akoop) = koopAmbDict(akoop) - CLng(ambData(ai, caKol))
+                        End Select
+                    End If
+                End If
+            Next ai
+        End If
+    End If
+
     ' --- Ergebnis-Array: 7 Spalten ---
     ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza
     
@@ -233,13 +261,15 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         result(i + 1, 4) = novacSum                         ' Isplaceno
         result(i + 1, 5) = agroSum                          ' AgroZaduzenje
         result(i + 1, 6) = vals(1) - novacSum - agroSum     ' Saldo
-        result(i + 1, 7) = vals(2)                          ' Ambalaza
+        Dim ambSaldo As Long: ambSaldo = 0
+        If koopAmbDict.Exists(keys(i)) Then ambSaldo = CLng(koopAmbDict(keys(i)))
+        result(i + 1, 7) = ambSaldo                         ' Ambalaza (aktivni saldo, neto)
         
         totKol = totKol + vals(0)
         totVr = totVr + vals(1)
         totNov = totNov + novacSum
         totAgro = totAgro + agroSum
-        totAmb = totAmb + vals(2)
+        totAmb = totAmb + ambSaldo
     Next i
     
     ' OM Avans (nerasporedjen)
