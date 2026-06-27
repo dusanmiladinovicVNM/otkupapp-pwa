@@ -190,3 +190,28 @@ Public Sub DocPageSetupThirdA4(ByVal ws As Worksheet, ByVal lastRow As Long)
     On Error GoTo 0
 End Sub
 
+' ------------------------------------------------------------
+' Izlazni mod obrasca. Prizna OFF/PRINT/PREVIEW/PDF; prazno ili nepoznato
+' -> defMode (default ponasanje tog dokumenta: "PDF" ili "OFF"). Centralizuje
+' razliku u defaultu (otkupni/grupni/izdamb=PDF, prijemnica/paleta=OFF) i daje
+' jedno mesto za dispatch po modu (DocPrintWs za stampu/pregled).
+' ------------------------------------------------------------
+Public Function DocResolveMode(ByVal mode As String, ByVal defMode As String) As String
+    Dim m As String: m = UCase$(Trim$(mode))
+    Select Case m
+        Case "OFF", "PRINT", "PREVIEW", "PDF"
+            DocResolveMode = m
+        Case Else
+            DocResolveMode = UCase$(Trim$(defMode))
+    End Select
+End Function
+
+' Stampa ili pregled vec napunjenog sheeta: PREVIEW -> pregled, inace stampac.
+Public Sub DocPrintWs(ByVal ws As Worksheet, ByVal mode As String)
+    If UCase$(Trim$(mode)) = "PREVIEW" Then
+        ws.PrintPreview
+    Else
+        ws.PrintOut Copies:=1
+    End If
+End Sub
+

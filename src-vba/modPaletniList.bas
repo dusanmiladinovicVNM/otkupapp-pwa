@@ -627,7 +627,7 @@ End Function
 '   (prazno/PDF) -> tihi PDF | PRINT -> stampac | PREVIEW -> pregled | OFF -> nista
 Private Sub OutputPaletniListByMode(ByVal palID As String)
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_PALETA_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_PALETA_PRINT_MODE), "OFF")
 
     Select Case mode
         Case "PRINT"
@@ -636,13 +636,11 @@ Private Sub OutputPaletniListByMode(ByVal palID As String)
             Dim broj As String, god As String
             Dim ws As Worksheet
             Set ws = FillPaletaSablon(palID, broj, god)
-            If Not ws Is Nothing Then ws.PrintPreview
+            If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
             ExportPaletniListPDF palID, True    ' PDF + otvori (kao otkupni list)
-        Case Else
-            ' OFF ili prazno (DEFAULT) -> bez izlaza; snimanje ostaje trenutno.
-            ' Auto-izlaz pune palete se ukljucuje rucno:
-            '   SetConfigValue "PALETA_PRINT_MODE", "PDF" | "PRINT" | "PREVIEW"
+        ' OFF / prazno (DEFAULT) -> bez izlaza; auto-izlaz pune palete rucno:
+        '   SetConfigValue "PALETA_PRINT_MODE", "PDF" | "PRINT" | "PREVIEW"
     End Select
 End Sub
 

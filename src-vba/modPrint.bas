@@ -260,19 +260,15 @@ End Sub
 Public Sub OutputOtkupniList(ByVal otkupIDs As String)
     On Error GoTo EH
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_OTKUP_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_OTKUP_PRINT_MODE), "PDF")
 
     Select Case mode
-        Case "OFF"
-            ' bez izlaza
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet: Set ws = FillOtkupSablon(otkupIDs)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet: Set wp = FillOtkupSablon(otkupIDs)
-            If Not wp Is Nothing Then wp.PrintPreview
-        Case Else
-            ExportOtkupniListPDF otkupIDs, True   ' default: tihi PDF
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
+            ExportOtkupniListPDF otkupIDs, True   ' default (prazno) -> tihi PDF
+        ' OFF -> bez izlaza
     End Select
     Exit Sub
 EH:
@@ -799,19 +795,15 @@ End Sub
 Public Sub OutputGrupniOtkupniList(ByVal prijemnicaIDs As String)
     On Error GoTo EH
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_OTKUP_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_OTKUP_PRINT_MODE), "PDF")
 
     Select Case mode
-        Case "OFF"
-            ' bez izlaza
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaIDs)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet: Set wp = FillGrupniOtkupSablon(prijemnicaIDs)
-            If Not wp Is Nothing Then wp.PrintPreview
-        Case Else
-            ExportGrupniOtkupniListPDF prijemnicaIDs, True   ' default: tihi PDF
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
+            ExportGrupniOtkupniListPDF prijemnicaIDs, True   ' default (prazno) -> tihi PDF
+        ' OFF -> bez izlaza
     End Select
     Exit Sub
 EH:
@@ -1052,19 +1044,15 @@ End Sub
 Public Sub OutputPrijemnica(ByVal prijemnicaIDs As String)
     On Error GoTo EH
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_PRIJEMNICA_PRINT_MODE), "OFF")
 
     Select Case mode
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet: Set wp = FillPrijemnicaSablon(prijemnicaIDs)
-            If Not wp Is Nothing Then wp.PrintPreview
+            If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
             ExportPrijemnicaPDF prijemnicaIDs, True
-        Case Else
-            ' OFF ili prazno (DEFAULT) -> bez izlaza; ponasanje kao do sada.
+        ' OFF / prazno (DEFAULT) -> bez izlaza; ponasanje kao do sada.
     End Select
     Exit Sub
 EH:
@@ -1349,25 +1337,18 @@ Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String,
     On Error GoTo EH
     m_izdAmbPrijem = prijem
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE), "PDF")
 
     Select Case mode
-        Case "OFF"
-            ' bez izlaza
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet
             Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
                                                  koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet
-            Set wp = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
-                                                 koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
-            If Not wp Is Nothing Then wp.PrintPreview
-        Case Else
-            ' PDF ili prazno (DEFAULT) -> tihi PDF koji se otvori.
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
             ExportIzdavanjeAmbalazePDF datum, brojDok, omNaziv, omID, _
                                        koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True
+        ' OFF -> bez izlaza
     End Select
     Exit Sub
 EH:
