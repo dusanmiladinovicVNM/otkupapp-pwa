@@ -41,14 +41,6 @@ Private Const TOGGLE_W    As Double = 130
 Private Const OTP_COLW  As String = "0;0;58;38;56;58;44;42;36"
 Private Const BLOK_COLW As String = "0;62;104;58;44;46;66;58;66"
 
-' Const ne moze da sadrzi ChrW() poziv -- koristimo funkcije umesto konstanti
-Private Function OTP_CAPS() As String
-    OTP_CAPS = ";;Otkupno mesto;Koli" & ChrW(269) & "ina;Datum;Kupac;Prodajna;Cena za;Ostatak"
-End Function
-Private Function BLOK_CAPS() As String
-    BLOK_CAPS = ";br. bloka;Ime i Prezime;Datum;Koli" & ChrW(269) & "ina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
-End Function
-
 ' --- Stanje (modul-level; jedna frmOtkup instanca po sekciji) ---
 Private mForm As Object
 Private mWrappers As Collection
@@ -82,6 +74,16 @@ Private mLblUkupnoAmb As MSForms.label
 Private mLblNapisanoAmb As MSForms.label
 Private mLblPreostaloAmb As MSForms.label
 Private mLblZbirna As MSForms.label
+
+' ============================================================
+' Const ne moze da sadrzi ChrW() poziv -- bezparametarske funkcije
+' ============================================================
+Private Function OTP_CAPS() As String
+    OTP_CAPS = ";;Otkupno mesto;Koli" & ChrW(269) & "ina;Datum;Kupac;Prodajna;Cena za;Ostatak"
+End Function
+Private Function BLOK_CAPS() As String
+    BLOK_CAPS = ";br. bloka;Ime i Prezime;Datum;Koli" & ChrW(269) & "ina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
+End Function
 
 ' ============================================================
 ' PUBLIC - ulazna tacka + event ruteri + frmOtkup hooks
