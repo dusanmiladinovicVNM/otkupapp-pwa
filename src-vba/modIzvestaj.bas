@@ -2142,7 +2142,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         End If
         result(r + 1, 2) = rr(1)
         result(r + 1, 3) = rr(2)
-        result(r + 1, 4) = rr(3)
+        result(r + 1, 4) = ResolveDokBroj(CStr(rr(6)), CStr(rr(3)))
         result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
         result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
         result(r + 1, 7) = "AMB|" & CStr(rr(6)) & "|" & CStr(rr(3))
@@ -2162,6 +2162,26 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
 
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Poslovni broj dokumenta iz internog DokumentID-a (za prikaz u Ambalaza pregledu).
+' Vraca DokumentID ako broj nije razresiv.
+Private Function ResolveDokBroj(ByVal dokTip As String, ByVal dokID As String) As String
+    On Error Resume Next
+    Dim sOut As String: sOut = dokID
+    Select Case dokTip
+        Case DOK_TIP_OTPREMNICA
+            sOut = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, dokID, COL_OTP_BROJ))
+        Case DOK_TIP_PRIJEMNICA
+            sOut = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, dokID, COL_PRJ_BROJ))
+        Case DOK_TIP_OTKUP, DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
+            ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone revers: DokumentID = brojDok
+            Dim br As String
+            br = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_BR_DOK))
+            If Len(Trim$(br)) > 0 Then sOut = br Else sOut = dokID
+    End Select
+    If Len(Trim$(sOut)) = 0 Then sOut = dokID
+    ResolveDokBroj = sOut
 End Function
 
 ' ============================================================

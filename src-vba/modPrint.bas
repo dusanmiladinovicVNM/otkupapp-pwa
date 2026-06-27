@@ -49,11 +49,110 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     ' Daten ausgeben
     OutputToSheet data, wsPrint.Range("A3"), headers
     
-    ' Drucken
-    wsPrint.PrintOut Copies:=1
+    ' Izlaz: PDF koji se otvori (pouzdanije od direktne stampe; bez zavisnosti
+    ' od podrazumevanog stampaca).
+    On Error Resume Next
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.path & "\Izvestaj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    wsPrint.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                                          Quality:=xlQualityStandard, OpenAfterPublish:=True
+    On Error GoTo 0
     
     ' Aufräumen
     wsPrint.Visible = xlSheetVeryHidden
+End Sub
+
+' ============================================================
+' OTPREMNICA (PDF) - na bazi reda iz tblOtpremnice (label|value layout).
+' ============================================================
+Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Sub
+    Dim cId As Long: cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    If cId = 0 Then Exit Sub
+    Dim r As Long, fr As Long: fr = 0
+    For r = 1 To UBound(d, 1)
+        If CStr(d(r, cId)) = otpID Then fr = r: Exit For
+    Next r
+    If fr = 0 Then
+        MsgBox "Otpremnica nije pronadjena (" & otpID & ").", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("_Print")
+    On Error GoTo EH
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.name = "_Print"
+    End If
+    ws.Visible = xlSheetVisible
+    ws.cells.Clear
+
+    Dim broj As String: broj = CStr(OtpC(d, fr, COL_OTP_BROJ))
+    ws.Range("A1").value = "OTPREMNICA  " & broj
+    ws.Range("A1").Font.Size = 16
+    ws.Range("A1").Font.Bold = True
+
+    Dim stID As String: stID = CStr(OtpC(d, fr, COL_OTP_STANICA))
+    Dim vzID As String: vzID = CStr(OtpC(d, fr, COL_OTP_VOZAC))
+    Dim stNaziv As String: stNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv"))
+    Dim vzNaziv As String
+    vzNaziv = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", vzID, "Ime")) & " " & _
+                    CStr(LookupValue(TBL_VOZACI, "VozacID", vzID, "Prezime")))
+    Dim kol As Double: kol = OtpN(d, fr, COL_OTP_KOLICINA)
+    Dim cena As Double: cena = OtpN(d, fr, COL_OTP_CENA)
+    Dim bruto As Double: bruto = OtpN(d, fr, COL_OTP_BRUTO)
+    Dim dat As Variant: dat = OtpC(d, fr, COL_OTP_DATUM)
+
+    Dim rr As Long: rr = 3
+    Dim datStr As String
+    If IsDate(dat) Then datStr = Format$(CDate(dat), "d.m.yyyy") Else datStr = CStr(dat)
+    OtpRow ws, rr, "Datum", datStr
+    OtpRow ws, rr, "Otkupno mesto", IIf(Len(stNaziv) > 0, stNaziv & " (" & stID & ")", stID)
+    OtpRow ws, rr, "Vozac", vzNaziv
+    OtpRow ws, rr, "Vrsta voca", CStr(OtpC(d, fr, COL_OTP_VRSTA))
+    OtpRow ws, rr, "Sorta", CStr(OtpC(d, fr, COL_OTP_SORTA))
+    OtpRow ws, rr, "Klasa", CStr(OtpC(d, fr, COL_OTP_KLASA))
+    OtpRow ws, rr, "Kolicina (kg)", Format$(kol, "#,##0.##")
+    OtpRow ws, rr, "Cena", Format$(cena, "#,##0.00")
+    OtpRow ws, rr, "Vrednost", Format$(kol * cena, "#,##0.00")
+    OtpRow ws, rr, "Tip ambalaze", CStr(OtpC(d, fr, COL_OTP_TIP_AMB))
+    OtpRow ws, rr, "Kol. ambalaze", CStr(OtpC(d, fr, COL_OTP_KOL_AMB))
+    If bruto > 0 Then OtpRow ws, rr, "Bruto (kg)", Format$(bruto, "#,##0.##")
+    OtpRow ws, rr, "Broj zbirne", CStr(OtpC(d, fr, COL_OTP_BROJ_ZBIRNE))
+
+    ws.Columns("A:B").AutoFit
+    On Error Resume Next
+    Dim pdfPath2 As String
+    pdfPath2 = ThisWorkbook.path & "\Otpremnica_" & Replace(Replace(broj, "/", "-"), "\", "-") & ".pdf"
+    ws.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath2, _
+                                     Quality:=xlQualityStandard, OpenAfterPublish:=True
+    On Error GoTo EH
+    ws.Visible = xlSheetVeryHidden
+    Exit Sub
+EH:
+    LogErr "modPrint.OutputOtpremnicaPDF"
+    MsgBox "Greska pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Function OtpC(ByVal d As Variant, ByVal r As Long, ByVal colName As String) As Variant
+    Dim c As Long: c = GetColumnIndex(TBL_OTPREMNICA, colName)
+    If c >= 1 Then OtpC = d(r, c) Else OtpC = ""
+End Function
+
+Private Function OtpN(ByVal d As Variant, ByVal r As Long, ByVal colName As String) As Double
+    Dim v As Variant: v = OtpC(d, r, colName)
+    If IsNumeric(v) Then OtpN = CDbl(v)
+End Function
+
+Private Sub OtpRow(ByVal ws As Worksheet, ByRef rr As Long, ByVal lbl As String, ByVal val As String)
+    ws.cells(rr, 1).value = lbl
+    ws.cells(rr, 1).Font.Bold = True
+    ws.cells(rr, 2).value = val
+    rr = rr + 1
 End Sub
 
 ' ============================================================

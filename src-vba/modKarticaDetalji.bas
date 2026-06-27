@@ -278,6 +278,14 @@ Private Sub ShowOtpremnicaRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, B
     AddPair "Razlika kg", CStr(lst.List(idx, 7))
     AddPair "Prijemnica kg", CStr(lst.List(idx, 8))
     AddPair "Manjak kg / %", CStr(lst.List(idx, 9))
+    ' Cena/Vrednost iz tblOtpremnice (nisu kolone u listi).
+    If Len(Trim$(otpID)) > 0 Then
+        Dim cena As Double, kol As Double
+        cena = NumOf(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_CENA))
+        kol = NumOf(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_KOLICINA))
+        If cena > 0 Then AddPair "Cena", Format$(cena, "#,##0.00")
+        If cena > 0 And kol > 0 Then AddPair "Vrednost", Format$(kol * cena, "#,##0.00")
+    End If
 End Sub
 
 ' Ambalaza red (dokument): prikazi kolone reda + zapamti DokumentID/Tip za stampu.

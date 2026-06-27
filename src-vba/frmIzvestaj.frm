@@ -1558,8 +1558,8 @@ Private Sub LayoutOtkupRobaHeaders()
             StyleListHeaderLabel lbl
             If k = 7 Then
                 lbl.WordWrap = True
-                lbl.Height = lbl_H_OR7.Height + 12
-                lbl.top = lbl_H_OR7.top - 12
+                lbl.Height = lbl_H_OR10.Height * 2 + 6
+                lbl.top = lbl_H_OR10.top - (lbl_H_OR10.Height + 6)
             End If
             lbl.caption = CStr(caps(k))
         End If
@@ -1892,7 +1892,7 @@ Private Sub EnsureDetaljiButtons()
             .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
         End With
         StylePrimaryButton m_btnStampajOtkRoba
-        m_btnStampajOtkRoba.caption = ChrW(352) & "tampaj grupni otkupni list"
+        m_btnStampajOtkRoba.caption = ChrW(352) & "tampaj otpremnicu"
         On Error Resume Next
         m_btnStampajOtkRoba.ZOrder 0
         On Error GoTo EH
@@ -1924,17 +1924,11 @@ Private Sub m_btnStampajOtkRoba_Click()
         MsgBox "Izaberite otpremnicu (klik na red u listi).", vbExclamation, APP_NAME
         Exit Sub
     End If
-    Dim prijIDs As String
-    prijIDs = PrijemniceZaOtpremnicu(otpID)
-    If Len(Trim$(prijIDs)) = 0 Then
-        MsgBox "Za izabranu otpremnicu nije pronadjena prijemnica (zbirna).", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-    OutputGrupniOtkupniList prijIDs
+    OutputOtpremnicaPDF otpID
     Exit Sub
 EH:
     LogErr "frmIzvestaj.m_btnStampajOtkRoba_Click"
-    MsgBox "Greska pri stampi grupnog otkupnog lista: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Greska pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Stampa dokument izabranog ambalaza reda, ruta po tipu dokumenta.
@@ -1952,13 +1946,7 @@ Private Sub m_btnStampajAmb_Click()
         Case DOK_TIP_OTKUP
             ReprintOtkupniListByOtkupID dokID
         Case DOK_TIP_OTPREMNICA
-            Dim prijIDs As String
-            prijIDs = PrijemniceZaOtpremnicu(dokID)
-            If Len(Trim$(prijIDs)) = 0 Then
-                MsgBox "Za otpremnicu nije pronadjena prijemnica.", vbExclamation, APP_NAME
-            Else
-                OutputGrupniOtkupniList prijIDs
-            End If
+            OutputOtpremnicaPDF dokID
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
             ' OM<->kooperant kretanje (prazne gajbe) -> revers.
             StampajReversAmbDok dokID, dokTip
