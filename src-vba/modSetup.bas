@@ -772,6 +772,56 @@ EH:
 End Sub
 
 ' ============================================================
+' Audit kolone (timestamp + userstamp) na svim glavnim tabelama.
+' Idempotentno. Alt+F8 -> EnsureAuditColumns.
+' Posle ovoga modDataAccess.AppendRow/UpdateCell automatski upisuju
+' CreatedAt/CreatedBy (na unos) i ModifiedAt/ModifiedBy (na svaku izmenu) —
+' vidi se KO je i KADA radio. Userstamp: prijavljeni korisnik (AUTH) ili Windows nalog.
+' ============================================================
+Public Sub EnsureAuditColumns()
+    On Error GoTo EH
+
+    InitSetupLog
+
+    Dim tbls As Variant
+    tbls = AuditableTables()
+
+    Dim i As Long, n As Long
+    For i = LBound(tbls) To UBound(tbls)
+        If Not GetTable(CStr(tbls(i))) Is Nothing Then
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_AT
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_BY
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_AT
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_BY
+            n = n + 1
+        End If
+    Next i
+
+    LogSetup "OK", "EnsureAuditColumns done (" & n & " tabela)"
+    MsgBox "Audit kolone postavljene na " & n & " tabela:" & vbCrLf & _
+           "CreatedAt / CreatedBy / ModifiedAt / ModifiedBy." & vbCrLf & vbCrLf & _
+           "Od sada se svaki unos i izmena beleže (ko i kada).", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureAuditColumns failed: " & Err.description
+    MsgBox "Greska u EnsureAuditColumns: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Spisak tabela koje dobijaju audit kolone (master + transakcione + ledger).
+' Config/log/report tabele se namerno preskacu.
+Private Function AuditableTables() As Variant
+    AuditableTables = Array( _
+        TBL_KOOPERANTI, TBL_STANICE, TBL_VOZACI, TBL_KUPCI, TBL_KULTURE, _
+        TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
+        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA, _
+        TBL_PARCELE, TBL_ARTIKLI, TBL_MAGACIN, TBL_CENOVNIK, TBL_KORISNICI, _
+        TBL_PALETA, TBL_PALETA_STAVKA, TBL_PRERADA, TBL_PRERADA_STAVKA, _
+        TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT)
+End Function
+
+' ============================================================
 ' Poruke (resource table) -- idempotent.
 ' Creates tblPoruke on hidden sheet sPoruke and seeds strings.
 ' Alt+F8 -> EnsurePoruke.

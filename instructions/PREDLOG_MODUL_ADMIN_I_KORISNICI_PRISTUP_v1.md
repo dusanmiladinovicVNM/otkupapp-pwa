@@ -286,6 +286,15 @@ Public Const TBL_KORISNICI As String = "tblKorisnici"
   PIN hash je **opt-in** (`PIN_HASH_ENABLED`, default `NE`) + self-test → bez rizika lockout-a.
   Salt se čuva inline (`sha256$salt$hash` u `PIN` koloni) → bez izmene šeme.
   Per-oblast read/write (matrica) namerno **preskočena** (kontra Model A).
+- **Faza 4 (audit — timestamp + userstamp):** `modConfig` (`COL_AUDIT_CREATED_AT/BY`,
+  `MODIFIED_AT/BY`) · `modDataAccess` (centralni stamp u `AppendRow` = `CreatedAt/By` +
+  `ModifiedAt/By`, i u `UpdateCell` = `ModifiedAt/By`; userstamp = `modAuth.GetCurrentUser`
+  → fallback Windows nalog) · `modSetup` (`EnsureAuditColumns` dodaje 4 kolone na sve
+  glavne tabele). Stamp je **no-op** dok tabela nema audit kolone → ništa se ne lomi pre
+  pokretanja `EnsureAuditColumns`. Vidi se **ko** je i **kada** uneo/menjao svaki red.
+
+> **Sinhronizacija sa `main`:** grana je merge-ovana sa `origin/main` (v2.4.0); konflikti
+> rešeni „keep both" (Podešavanja/Dorade/UpdateGate sa main + Korisnici/auth/audit). `main` nije menjan.
 
 ---
 
@@ -311,8 +320,13 @@ Public Const TBL_KORISNICI As String = "tblKorisnici"
    Excelu), pa **Alt+F8 → `EnablePinHash`**. Postojeći plaintext PIN-ovi se migriraju na
    hash pri prvoj prijavi; admin više ne vidi PIN (prazno polje = bez promene).
    Isključenje: **Alt+F8 → `DisablePinHash`** (već heširani PIN-ovi i dalje rade).
+9. (Audit — ko/kada) **Alt+F8 → `EnsureAuditColumns`** → dodaje `CreatedAt/CreatedBy/
+   ModifiedAt/ModifiedBy` na sve glavne tabele. Od tada se svaki unos/izmena automatski
+   beleži (userstamp = prijavljeni korisnik ili Windows nalog). Dok je AUTH uključen,
+   userstamp je app-korisnik → najjasnije „ko je radio".
 
 > Napomena: dok je `AUTH_ENABLED` ≠ `YES`, ponašanje aplikacije je **identično** kao pre.
+> Audit stamp je no-op dok ne pokreneš `EnsureAuditColumns`.
 
 ---
 

@@ -580,6 +580,14 @@ Public Const OBL_MARZA As String = "Marza"
 Public Const OBL_SLEDLJIVOST As String = "Sledljivost"
 Public Const OBL_MATICNI As String = "MaticniPodaci"
 
+' --- Audit (timestamp + userstamp) — zajednicke kolone za sve glavne tabele ---
+' Upisuju se centralno u modDataAccess.AppendRow (insert) i UpdateCell (izmena).
+' Kolone se kreiraju jednokratno: Alt+F8 -> EnsureAuditColumns.
+Public Const COL_AUDIT_CREATED_AT As String = "CreatedAt"
+Public Const COL_AUDIT_CREATED_BY As String = "CreatedBy"
+Public Const COL_AUDIT_MODIFIED_AT As String = "ModifiedAt"
+Public Const COL_AUDIT_MODIFIED_BY As String = "ModifiedBy"
+
 ' =========================
 ' Workflow states
 ' =========================
