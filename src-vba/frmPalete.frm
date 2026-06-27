@@ -315,7 +315,7 @@ Private Sub BuildPreradaControls()
     Set mLblPrerade = Me.Controls.Add("Forms.Label.1", "lblPrerade", True)
     mLblPrerade.caption = "Preradjene palete (dvoklik = PDF)"
     mLstPrerade.ColumnCount = 7
-    mLstPrerade.ColumnWidths = "0;26;50;46;28;28;48"
+    mLstPrerade.ColumnWidths = "0;22;42;36;22;22;38"
     mLstPradeHdr.ColumnCount = 7
     mLstPradeHdr.ColumnWidths = mLstPrerade.ColumnWidths
     Dim hp(0 To 0, 0 To 6) As Variant
@@ -372,6 +372,8 @@ Private Sub LayoutDynamic()
     PutCtl mCmbFilterSorta, x, ry, 90: x = x + 96
     PutLbl Me.lblFilterStatus, x, ry, 40: x = x + 42
     PutCtl Me.cmbFilterStatus, x, ry, 84: x = x + 90
+    PutLbl Me.lblFilterPre, x, ry, 60: x = x + 62
+    PutCtl Me.cmbFilterPre, x, ry, 66: x = x + 72
     Me.btnOsvezi.Left = x: Me.btnOsvezi.Top = ry - 2
 
     ' --- 3 kolone (desno fiksne sirine, leva uzima ostatak) ---
@@ -401,13 +403,12 @@ Private Sub LayoutDynamic()
     PutCtl mLstPrerade, rightX, lrListY, rightW
     mLstPrerade.Height = btnTop - 12 - lrListY
 
-    ' Srednja kolona: iznad stavki Gotov proizvod + Preradjeno, pa lista.
+    ' Srednja kolona: iznad stavki samo Gotov proizvod (Preradjeno je filter
+    ' uz Osvezi -> u redu 1), pa lista stavki.
     PutLbl mLblFilterTipGP, midX, titleY + 17, 80
     PutCtl mCmbFilterTipGP, midX + 84, titleY + 16, midW - 84
-    PutLbl Me.lblFilterPre, midX, titleY + 41, 80
-    PutCtl Me.cmbFilterPre, midX + 84, titleY + 40, midW - 84
-    Dim mHdrY As Double: mHdrY = titleY + 64
-    Dim mListY As Double: mListY = titleY + 78
+    Dim mHdrY As Double: mHdrY = titleY + 40
+    Dim mListY As Double: mListY = titleY + 54
     PutCtl Me.lstStavkeHdr, midX, mHdrY, midW
     PutCtl Me.lstStavke, midX, mListY, midW
     Me.lstStavke.Height = pTop - 8 - mListY
