@@ -29,6 +29,9 @@ Private mLblTezinaPalete As MSForms.label
 Private mLblBruto As MSForms.label
 Private mLblFilterSorta As MSForms.label
 Private mLblFilterTipGP As MSForms.label
+Private WithEvents mLstPrerade As MSForms.ListBox
+Private mLstPradeHdr As MSForms.ListBox
+Private mLblPrerade As MSForms.label
 Private mBuilt As Boolean
 
 Private Sub UserForm_Initialize()
@@ -118,6 +121,7 @@ Private Sub RefreshGrid()
     Else
         Me.lstPalete.List = data
     End If
+    RefreshPrerade
     Exit Sub
 EH:
     MsgBox "Greska pri osvezavanju: " & Err.description, vbCritical, APP_NAME
@@ -304,6 +308,23 @@ Private Sub BuildPreradaControls()
     FillCmb mCmbFilterTipGP, GetVrstaGPOptions()
     mCmbFilterTipGP.AddItem "", 0
     RefreshSortaFilter
+
+    ' Pregled preradjenih paleta (desno od stavki); dvoklik = PDF.
+    Set mLstPrerade = Me.Controls.Add("Forms.ListBox.1", "lstPrerade", True)
+    Set mLstPradeHdr = Me.Controls.Add("Forms.ListBox.1", "lstPradeHdr", True)
+    Set mLblPrerade = Me.Controls.Add("Forms.Label.1", "lblPrerade", True)
+    mLblPrerade.caption = "Preradjene palete (dvoklik = PDF)"
+    mLstPrerade.ColumnCount = 7
+    mLstPrerade.ColumnWidths = "0;26;50;46;28;28;48"
+    mLstPradeHdr.ColumnCount = 7
+    mLstPradeHdr.ColumnWidths = mLstPrerade.ColumnWidths
+    Dim hp(0 To 0, 0 To 6) As Variant
+    hp(0, 1) = "Broj": hp(0, 2) = "Datum": hp(0, 3) = "Neto"
+    hp(0, 4) = "Kut": hp(0, 5) = "Kes": hp(0, 6) = "Gotov pr."
+    mLstPradeHdr.List = hp
+    mLstPradeHdr.locked = True
+    RefreshPrerade
+
     SetPreradaTabOrder
 
     mBuilt = True
@@ -328,47 +349,103 @@ Private Sub SetPreradaTabOrder()
     Me.txtNapomena.TabIndex = b + 7
 End Sub
 
-' Idempotentan raspored (apsolutne pozicije iz stabilnih sidrista) - moze
-' se zvati vise puta (Activate / posle teme) bez gomilanja pomeraja.
+' Idempotentan 3-kolonski raspored (Palete | Stavke+unos | Preradjene palete).
+' Apsolutne pozicije iz Me.InsideWidth + dugmadi -> moze se zvati vise puta.
 Private Sub LayoutDynamic()
     On Error Resume Next
     If Not mBuilt Then Exit Sub
 
-    ' Filter red 2: Sorta + Tip gotovog proizvoda (ispod reda 1).
-    ' Sekvencijalni raspored sa sopstvenim razmacima -> duza labela
-    ' "Gotov proizvod" se ne preklapa sa combo-om (red 1 koordinate ne valjaju).
-    Dim f1 As Double: f1 = Me.txtFilterGod.Top
-    Dim f2 As Double: f2 = f1 + 26
-    Dim rl As Double: rl = Me.lblFilterGod.Left
-    Dim sCmbW As Double: sCmbW = Me.cmbFilterVrsta.width
-    Dim sCmbX As Double: sCmbX = rl + 40
-    PutLbl mLblFilterSorta, rl, f2, 36
-    PutCtl mCmbFilterSorta, sCmbX, f2, sCmbW
-    Dim tLblX As Double: tLblX = sCmbX + sCmbW + 14
-    PutLbl mLblFilterTipGP, tLblX, f2, 88
-    PutCtl mCmbFilterTipGP, tLblX + 90, f2, 150
-
-    ' Pomeri grid zonu ispod reda 2 (apsolutno -> idempotentno).
-    Dim gTop As Double: gTop = f2 + 26
-    ShiftTop Me.lblPalete, gTop
-    ShiftTop Me.lstPaleteHdr, gTop + 13
-    ShiftTop Me.lstPalete, gTop + 27
-    ShiftTop Me.lblStavke, gTop
-    ShiftTop Me.lstStavkeHdr, gTop + 13
-    ShiftTop Me.lstStavke, gTop + 27
-
-    ' Desni panel inputa ispod stavki (anchored: lstStavke + dugmad).
-    Dim px As Double: px = Me.lstStavke.Left
-    Dim pw As Double: pw = Me.lstStavke.width
+    Const PAD As Double = 8
+    Const GAP As Double = 10
+    Dim W As Double: W = Me.InsideWidth
+    If W < 700 Then W = 980
     Dim btnTop As Double: btnTop = Me.btnPreradi.Top
+
+    ' --- Red 1: Godina Vrsta Sorta Status Osvezi ---
+    Dim ry As Double: ry = 52
+    Dim x As Double: x = PAD
+    PutLbl Me.lblFilterGod, x, ry, 42: x = x + 44
+    PutCtl Me.txtFilterGod, x, ry, 44: x = x + 50
+    PutLbl Me.lblFilterVrsta, x, ry, 34: x = x + 36
+    PutCtl Me.cmbFilterVrsta, x, ry, 90: x = x + 96
+    PutLbl mLblFilterSorta, x, ry, 34: x = x + 36
+    PutCtl mCmbFilterSorta, x, ry, 90: x = x + 96
+    PutLbl Me.lblFilterStatus, x, ry, 40: x = x + 42
+    PutCtl Me.cmbFilterStatus, x, ry, 84: x = x + 90
+    Me.btnOsvezi.Left = x: Me.btnOsvezi.Top = ry - 2
+
+    ' --- 3 kolone (desno fiksne sirine, leva uzima ostatak) ---
+    Dim rightW As Double: rightW = 230
+    Dim midW As Double: midW = 232
+    Dim rightX As Double: rightX = W - PAD - rightW
+    Dim midX As Double: midX = rightX - GAP - midW
+    Dim leftX As Double: leftX = PAD
+    Dim leftW As Double: leftW = midX - GAP - leftX
+    If leftW < 280 Then leftW = 280
+
+    Dim titleY As Double: titleY = ry + 28
+    Dim hdrY As Double: hdrY = titleY + 64
+    Dim listY As Double: listY = hdrY + 14
+
+    PutLbl Me.lblPalete, leftX, titleY, leftW
+    PutLbl Me.lblStavke, midX, titleY, midW
+    PutLbl mLblPrerade, rightX, titleY, rightW
+
+    ' Iznad stavki (srednja kolona): Gotov proizvod + Preradjeno
+    PutLbl mLblFilterTipGP, midX, titleY + 17, 80
+    PutCtl mCmbFilterTipGP, midX + 82, titleY + 16, midW - 82
+    PutLbl Me.lblFilterPre, midX, titleY + 41, 80
+    PutCtl Me.cmbFilterPre, midX + 82, titleY + 40, midW - 82
+
+    ' Leva kolona: palete
+    PutCtl Me.lstPaleteHdr, leftX, hdrY, leftW
+    PutCtl Me.lstPalete, leftX, listY, leftW
+    Me.lstPalete.Height = btnTop - 12 - listY
+
+    ' Desna kolona: preradjene palete
+    PutCtl mLstPradeHdr, rightX, hdrY, rightW
+    PutCtl mLstPrerade, rightX, listY, rightW
+    mLstPrerade.Height = btnTop - 12 - listY
+
+    ' Srednja kolona: stavke (kraca) + panel unosa ispod
     Const ROWH As Double = 24
     Dim pTop As Double: pTop = btnTop - 12 - 6 * ROWH
+    PutCtl Me.lstStavkeHdr, midX, hdrY, midW
+    PutCtl Me.lstStavke, midX, listY, midW
+    Me.lstStavke.Height = pTop - 8 - listY
+    If Me.lstStavke.Height < 40 Then Me.lstStavke.Height = 40
 
-    Me.lstPalete.Height = btnTop - 12 - Me.lstPalete.Top
-    Me.lstStavke.Height = pTop - 8 - Me.lstStavke.Top
-    If Me.lstStavke.Height < 48 Then Me.lstStavke.Height = 48
+    LayoutPreradaRows midX, midW, pTop, ROWH
 
-    LayoutPreradaRows px, pw, pTop, ROWH
+    mLstPradeHdr.Font.Bold = True
+    mLstPradeHdr.BackColor = BG_TOP()
+End Sub
+
+' Osvezi listu preradjenih paleta (desni pregled) za izabranu godinu.
+Private Sub RefreshPrerade()
+    On Error Resume Next
+    If mLstPrerade Is Nothing Then Exit Sub
+    Dim god As Long
+    If IsNumeric(Me.txtFilterGod.value) Then god = CLng(Me.txtFilterGod.value)
+    Dim p As Variant: p = GetPreradeForGrid(god)
+    If IsEmpty(p) Then
+        mLstPrerade.Clear
+    Else
+        mLstPrerade.List = p
+    End If
+End Sub
+
+' Dvoklik na preradjenu paletu = (re)stampa PDF preradnog lista.
+Private Sub mLstPrerade_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    On Error GoTo EH
+    Dim i As Long: i = mLstPrerade.ListIndex
+    If i < 0 Then Exit Sub
+    Dim preID As String: preID = CStr(mLstPrerade.List(i, 0))
+    If preID = "" Then Exit Sub
+    ExportPreradaPDF preID, True
+    Exit Sub
+EH:
+    MsgBox "Greska pri otvaranju preradnog lista: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub LayoutPreradaRows(ByVal x As Double, ByVal w As Double, _

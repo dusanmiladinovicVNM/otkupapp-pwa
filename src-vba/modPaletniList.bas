@@ -330,6 +330,56 @@ Private Function PreradMatch(ByVal CellVal As String, ByVal filter As String) As
     End Select
 End Function
 
+' Prerade za desni pregled. god=0 -> sve. Stornirane se ne prikazuju.
+' Kolone (0-based): 0 PreradaID(skriveno),1 Broj,2 Datum,3 Neto,4 Kutije,
+' 5 Kese,6 TipGotovogProizvoda.
+Public Function GetPreradeForGrid(Optional ByVal god As Long = 0) As Variant
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_PRERADA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iBroj As Long, iGod As Long, iDat As Long
+    Dim iNeto As Long, iKut As Long, iKes As Long, iGP As Long, iStorno As Long
+    iID = GetColumnIndex(TBL_PRERADA, COL_PRE_ID)
+    iBroj = GetColumnIndex(TBL_PRERADA, COL_PRE_BROJ)
+    iGod = GetColumnIndex(TBL_PRERADA, COL_PRE_GODINA)
+    iDat = GetColumnIndex(TBL_PRERADA, COL_PRE_DATUM)
+    iNeto = GetColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ)
+    iKut = GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)
+    iKes = GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)
+    iGP = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP)
+    iStorno = GetColumnIndex(TBL_PRERADA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(SafeCell(d, r, iID))) <> "" _
+           And UCase$(Trim$(CStr(SafeCell(d, r, iStorno)))) <> "DA" _
+           And (god = 0 Or NzL(SafeCell(d, r, iGod)) = god) Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 6)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(d, r, iID))
+        res(k, 1) = NzL(SafeCell(d, r, iBroj))
+        res(k, 2) = ""
+        If IsDate(SafeCell(d, r, iDat)) Then res(k, 2) = Format$(CDate(SafeCell(d, r, iDat)), "dd.mm.yyyy")
+        res(k, 3) = NzD(SafeCell(d, r, iNeto))
+        res(k, 4) = NzL(SafeCell(d, r, iKut))
+        res(k, 5) = NzL(SafeCell(d, r, iKes))
+        If iGP > 0 Then res(k, 6) = CStr(SafeCell(d, r, iGP))
+    Next k
+    GetPreradeForGrid = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPreradeForGrid"
+End Function
+
 ' Stavke izabrane palete za grid. Kolone (0-based): 0 PrijemnicaID,
 ' 1 BrojPrijemnice, 2 BrojZbirne, 3 Gajbice, 4 NetoKg. Empty ako nema.
 Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
