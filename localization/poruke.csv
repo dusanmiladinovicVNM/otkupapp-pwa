@@ -46,13 +46,13 @@ FAK_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju fakturisanja: ;frmFakturisanj
 FAK_ERR_GRESKA_PRI_UCITAVANJU;Greška pri učitavanju prijemnica: ;frmFakturisanje.frm;427;DA;;
 FAK_MSG_ISTA_PRIJEMNICA_IZABRANA;Ista prijemnica je izabrana više puta: ;frmFakturisanje.frm;615;DA;;
 FAK_MSG_IZABRANA_PRIJEMNICA_STORNIRANA;Izabrana prijemnica je stornirana i ne može se fakturisati.;frmFakturisanje.frm;623;DA;;
-FAK_MSG_IZABRANA_PRIJEMNICA_VEC;Izabrana prijemnica je vec fakturisana i ne može biti ukljucena u novu fakturu.;frmFakturisanje.frm;631;DA;;
+FAK_MSG_IZABRANA_PRIJEMNICA_VEC;Izabrana prijemnica je već fakturisana i ne može biti uključena u novu fakturu.;frmFakturisanje.frm;631;DA;;
 FAK_MSG_GRESKA_PRI_KREIRANJU;Greška pri kreiranju fakture. Promene su vraćene.;frmFakturisanje.frm;712;DA;;
 FAK_ERR_GRESKA_PRI_IZRADI;Greška pri izradi fakture: ;frmFakturisanje.frm;719;DA;;
-FAK_MSG_NIJE_PRONADEN_FAKTURE;Nije pronaden ID fakture za štampu.;frmFakturisanje.frm;769;DA;;
+FAK_MSG_NIJE_PRONADEN_FAKTURE;Nije pronađen ID fakture za štampu.;frmFakturisanje.frm;769;DA;;
 FAK_ERR_GRESKA_PRI_STAMPANJU;Greška pri štampanju: ;frmFakturisanje.frm;778;DA;;
 RPT_LBL_IZVESTAJI;Izveštaji;frmIzvestaj.frm;84;DA;;
-RPT_LBL_PREGLED_SALDO_OTKUPLJENE;Pregled saldo, otkupljene robe, ambalaže i prosecne cene;frmIzvestaj.frm;85;DA;;
+RPT_LBL_PREGLED_SALDO_OTKUPLJENE;Pregled saldo, otkupljene robe, ambalaže i prosečne cene;frmIzvestaj.frm;85;DA;;
 RPT_LBL_PRIKAZI;Prikaži;frmIzvestaj.frm;89;DA;;Koristi se i u: frmIzvestaj.frm:380
 RPT_LBL_STAMPAJ_KARTICU;Štampaj karticu;frmIzvestaj.frm;110;DA;;Koristi se i u: frmIzvestaj.frm:385
 RPT_LBL_TIP_IZVESTAJA;TIP IZVEŠTAJA;frmIzvestaj.frm;117;DA;;

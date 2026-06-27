@@ -137,7 +137,15 @@ Public Sub InitApp()
     Application.EnableEvents = False
     
     On Error GoTo ErrHandler
-    
+
+    On Error Resume Next
+    EnsurePoruke
+    If Err.Number <> 0 Then
+        LogErr "modMain.InitApp.EnsurePoruke"
+        Err.Clear
+    End If
+    On Error GoTo ErrHandler
+
     ValidateAllTables
     m_Initialized = True
     
@@ -211,7 +219,7 @@ Private Sub ValidateAllTables()
                      TBL_KUPCI, TBL_KULTURE, TBL_OTKUP, _
                      TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
                      TBL_FAKTURE, TBL_FAKTURA_STAVKE, _
-                     TBL_NOVAC, TBL_AMBALAZA, TBL_CONFIG)
+                     TBL_NOVAC, TBL_AMBALAZA, TBL_CONFIG, TBL_PORUKE)
     
     Dim i As Long
     Dim missing As String

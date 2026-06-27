@@ -545,7 +545,7 @@ Private Function CheckRequiredTablesForSetup() As String
         TBL_CONFIG, TBL_SEF_CONFIG, TBL_BANKA_IMPORT, TBL_PARTNER_MAP, _
         TBL_KOOPERANTI, TBL_STANICE, TBL_VOZACI, TBL_KUPCI, TBL_KULTURE, _
         TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
-        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA _
+        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA, TBL_PORUKE _
     )
 
     For i = LBound(tbls) To UBound(tbls)
@@ -785,7 +785,7 @@ Public Sub EnsurePoruke()
         Dim ws As Worksheet
         Set ws = lo.Parent
         If ws.Visible <> xlSheetVeryHidden Then ws.Visible = xlSheetVeryHidden
-        modPoruke.SeedPoruke lo
+        modPoruke.UpsertPoruke lo
     End If
 
     LogSetup "OK", "EnsurePoruke done"
