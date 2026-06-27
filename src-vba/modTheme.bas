@@ -851,10 +851,20 @@ Public Sub FixFormCaptions(ByVal parent As Object)
     On Error Resume Next
     For Each c In parent.Controls
         Select Case TypeName(c)
-            Case "Label"
+            Case "Label", "CommandButton", "CheckBox", "OptionButton", "ToggleButton"
                 c.Caption = CorrectSrCaption(c.Caption)
-            Case "Frame", "Page"
+            Case "Frame"
+                c.Caption = CorrectSrCaption(c.Caption)
                 FixFormCaptions c
+            Case "Page"
+                c.Caption = CorrectSrCaption(c.Caption)
+                FixFormCaptions c
+            Case "MultiPage"
+                Dim pg As Object
+                For Each pg In c.Pages
+                    pg.Caption = CorrectSrCaption(pg.Caption)
+                    FixFormCaptions pg
+                Next pg
         End Select
     Next c
     On Error GoTo 0
@@ -955,11 +965,14 @@ Private Function CorrectSrWord(ByVal w As String) As String
         Case "pretrazi":   fixed = "pretra" & ChrW(382) & "i"
         Case "pretrazivanje": fixed = "pretra" & ChrW(382) & "ivanje"
         Case "kreiraj":    fixed = "kreiraj"
-        Case "osvezi":     fixed = "osve" & ChrW(382) & "i"
+        Case "osvezi":      fixed = "osve" & ChrW(382) & "i"
         Case "osvezavanje": fixed = "osve" & ChrW(382) & "avanje"
-        Case "storno":     fixed = "storno"
-        Case "stornirano": fixed = "stornirano"
-        Case Else:         CorrectSrWord = w: Exit Function
+        Case "osiroceni":   fixed = "osiro" & ChrW(269) & "eni"
+        Case "osirocena":   fixed = "osiro" & ChrW(269) & "ena"
+        Case "osirocenih":  fixed = "osiro" & ChrW(269) & "enih"
+        Case "izdavanje":   fixed = "izdavanje"
+        Case "izdavanja":   fixed = "izdavanja"
+        Case Else:          CorrectSrWord = w: Exit Function
     End Select
     If isTitle Then
         CorrectSrWord = UCase(Left(fixed, 1)) & Mid(fixed, 2)
