@@ -133,6 +133,29 @@ Public Function KarticaDetalji_CurrentOtkupID() As String
     KarticaDetalji_CurrentOtkupID = mCurOtkupID
 End Function
 
+' Prikazi detalje otpremnice za dati red lste, sa eksplicitnim OtpremnicaID
+' (lstOtkupRoba nema skrivenu ref-kljuc kolonu - ListBox limit 10 kolona).
+Public Sub KarticaDetalji_ShowOtpremnica(ByVal frm As Object, ByVal lst As MSForms.ListBox, _
+                                         ByVal idx As Long, ByVal otpID As String)
+    On Error GoTo EH
+    If lst Is Nothing Then Exit Sub
+    KarticaDetalji_Ensure frm, lst
+    If mLst Is Nothing Then Exit Sub
+    mLst.Visible = True
+    If Not mLblTitle Is Nothing Then mLblTitle.Visible = True
+    On Error Resume Next
+    mLst.ZOrder 0
+    mLblTitle.ZOrder 0
+    On Error GoTo EH
+    If idx < 0 Then Exit Sub
+    mLst.Clear
+    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = ""
+    ShowOtpremnicaRow lst, idx, otpID
+    Exit Sub
+EH:
+    LogErr "modKarticaDetalji.KarticaDetalji_ShowOtpremnica"
+End Sub
+
 ' OtpremnicaID trenutno prikazanog reda ("" ako red nije otpremnica).
 Public Function KarticaDetalji_CurrentOtpremnicaID() As String
     KarticaDetalji_CurrentOtpremnicaID = mCurOtpremnicaID
@@ -254,8 +277,7 @@ Private Sub ShowOtpremnicaRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, B
     AddPair "Otk. listovi kg", CStr(lst.List(idx, 6))
     AddPair "Razlika kg", CStr(lst.List(idx, 7))
     AddPair "Prijemnica kg", CStr(lst.List(idx, 8))
-    AddPair "Manjak kg", CStr(lst.List(idx, 9))
-    AddPair "Manjak %", CStr(lst.List(idx, 10))
+    AddPair "Manjak kg / %", CStr(lst.List(idx, 9))
 End Sub
 
 ' Ambalaza red (dokument): prikazi kolone reda + zapamti DokumentID/Tip za stampu.

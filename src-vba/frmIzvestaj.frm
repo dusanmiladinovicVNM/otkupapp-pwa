@@ -54,6 +54,9 @@ Private WithEvents m_btnStampajOtkRoba As MSForms.CommandButton
 Attribute m_btnStampajOtkRoba.VB_VarHelpID = -1
 Private WithEvents m_btnStampajAmb As MSForms.CommandButton
 Attribute m_btnStampajAmb.VB_VarHelpID = -1
+' OtpremnicaID po redu lstOtkupRoba (ListBox podrzava max 10 kolona -> bez
+' skrivene ref-kljuc kolone; kljuc = CStr(ListIndex)).
+Private m_otkOtpID As Object
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -483,8 +486,8 @@ Private Sub SetupListBoxes()
     End With
     
     With lstOtkupRoba
-        .ColumnCount = 12          ' 11 vidljivih + skrivena ref-kljuc kolona (idx 11)
-        .ColumnWidths = "45;78;45;25;80;50;50;45;50;45;40;0"   ' fallback; LayoutOtkupRobaHeaders prepisuje
+        .ColumnCount = 10          ' MSForms ListBox limit; Manjak kg+% spojeni, refkey u dict
+        .ColumnWidths = "45;70;45;25;75;50;50;50;55;80"   ' fallback; LayoutOtkupRobaHeaders prepisuje
     End With
     
     With lstAmbalaza
@@ -745,38 +748,53 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
                                     ByVal datumOd As Date, ByVal datumDo As Date)
     lstOtkupRoba.Clear
     KarticaDetalji_Clear
-    
+    Set m_otkOtpID = CreateObject("Scripting.Dictionary")
+
     Dim data As Variant
     data = ReportOtkupRoba(entitetTip, entitetID, datumOd, datumDo)
     If IsEmpty(data) Then Exit Sub
-    
-    Dim i As Long, j As Long
+
+    Dim isOM As Boolean: isOM = (entitetTip = "OM")
+    Dim i As Long, j As Long, li As Long
     For i = 1 To UBound(data, 1)
         If IsDate(data(i, 1)) Then
             lstOtkupRoba.AddItem Format$(CDate(data(i, 1)), "d.m.yy")
         Else
             lstOtkupRoba.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
         End If
-        
-        For j = 2 To UBound(data, 2)
-            If j = 11 Then
-                ' Manjak% formatieren
+        li = lstOtkupRoba.ListCount - 1
+
+        If isOM Then
+            ' OM: 12 logickih kolona -> 10 listbox kolona (Manjak kg+% spojeni;
+            ' OtpremnicaID u m_otkOtpID jer ListBox podrzava max 10 kolona).
+            lstOtkupRoba.List(li, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+            lstOtkupRoba.List(li, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+            lstOtkupRoba.List(li, 3) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
+            lstOtkupRoba.List(li, 4) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))
+            If IsNumeric(data(i, 6)) Then lstOtkupRoba.List(li, 5) = FmtKolicina(CDbl(data(i, 6)))
+            If IsNumeric(data(i, 7)) Then lstOtkupRoba.List(li, 6) = FmtKolicina(CDbl(data(i, 7)))
+            If IsNumeric(data(i, 8)) Then lstOtkupRoba.List(li, 7) = FmtKolicina(CDbl(data(i, 8)))
+            If IsNumeric(data(i, 9)) Then lstOtkupRoba.List(li, 8) = FmtKolicina(CDbl(data(i, 9)))
+            Dim mStr As String: mStr = ""
+            If IsNumeric(data(i, 10)) And Not IsEmpty(data(i, 10)) Then mStr = FmtKolicina(CDbl(data(i, 10)))
+            If IsNumeric(data(i, 11)) And Not IsEmpty(data(i, 11)) Then _
+                mStr = Trim$(mStr & " / " & Format$(CDbl(data(i, 11)), "0.0") & "%")
+            lstOtkupRoba.List(li, 9) = mStr
+            Dim rk As String: rk = CStr(IIf(IsEmpty(data(i, 12)), "", data(i, 12)))
+            If Left$(rk, 4) = "OTP|" Then m_otkOtpID(CStr(li)) = Mid$(rk, 5)
+        Else
+            For j = 2 To UBound(data, 2)
                 If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "0.00") & "%"
-                End If
-            ElseIf IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                If GetActiveEntitetTip() = "Kupci" And j = UBound(data, 2) Then
-                    ' Kupci: poslednja kolona = Vrednost (novac) -> uvek 2 decimale
-                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+                    If GetActiveEntitetTip() = "Kupci" And j = UBound(data, 2) Then
+                        lstOtkupRoba.List(li, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+                    Else
+                        lstOtkupRoba.List(li, j - 1) = FmtKolicina(CDbl(data(i, j)))
+                    End If
                 Else
-                    ' kolicina (kg): decimale samo kad postoje (bez ",0"/",00" za ceo broj)
-                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = FmtKolicina(CDbl(data(i, j)))
+                    lstOtkupRoba.List(li, j - 1) = CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
                 End If
-            Else
-                lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = _
-                    CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
-            End If
-        Next j
+            Next j
+        End If
     Next i
 End Sub
 
@@ -1214,15 +1232,13 @@ Private Sub btnStampaj_Click()
                     "Blokovi kg", _
                     "Razlika kg (Otk. listovi - Otprem.)", _
                     "Prijemnica kg", _
-                    "Manjak kg", _
-                    "Manjak %")
+                    "Manjak kg / %")
             Else
                 headers = Array( _
                     "Nr", _
                     "Vrsta", _
                     "Kolicina kg", _
                     "Vrednost", _
-                    "", _
                     "", _
                     "", _
                     "", _
@@ -1506,33 +1522,22 @@ Private Sub LayoutKarticaHeaders()
     lstKartica.ColumnWidths = cw
 End Sub
 
-' Naslovi + sirine kolona za "Otkupljena roba" (OM varijanta): 11 vidljivih +
-' skrivena ref-kljuc kolona (idx 11). lbl_H_OR11 ("Manjak %") se kreira u runtime-u
-' (nije u .frx); OR8 ima podnaslov u zagradi. Auto-fit iz lstOtkupRoba.width (kao
+' Naslovi + sirine kolona za "Otkupljena roba" (OM varijanta): 10 vidljivih kolona
+' (ListBox limit; Manjak kg+% spojeni u jednu kolonu, OtpremnicaID u m_otkOtpID).
+' OR8 ima podnaslov u zagradi. Auto-fit iz lstOtkupRoba.width (kao
 ' LayoutKarticaHeaders). .frx se ne dira (CLAUDE.md).
 Private Sub LayoutOtkupRobaHeaders()
     On Error Resume Next
 
-    ' OR11 ("Manjak %") - kreiraj idempotentno (lookup po imenu).
-    Dim lbl11 As MSForms.label
-    Set lbl11 = lstOtkupRoba.parent.Controls("lbl_H_OR11")
-    If lbl11 Is Nothing Then
-        Set lbl11 = lstOtkupRoba.parent.Controls.Add("Forms.Label.1", "lbl_H_OR11", True)
-        If Not lbl11 Is Nothing Then
-            lbl11.top = lbl_H_OR10.top
-            lbl11.Height = lbl_H_OR10.Height
-        End If
-    End If
-
     Dim caps As Variant
     caps = Array("Datum", "Br. Otp.", "Vrsta", "Klasa", "Vozac", "Otp kg", _
                  "Blokovi kg", "Razlika kg" & vbLf & "(Otk. listovi - Otprem.)", _
-                 "Prijemnica kg", "Manjak kg", "Manjak %")
+                 "Prijemnica kg", "Manjak kg / %")
     Dim prop As Variant
-    prop = Array(0.081, 0.141, 0.081, 0.045, 0.145, 0.09, 0.09, 0.081, 0.09, 0.081, 0.075)
+    prop = Array(0.085, 0.12, 0.09, 0.05, 0.135, 0.09, 0.09, 0.085, 0.09, 0.165)
     Dim names As Variant
     names = Array("lbl_H_OR1", "lbl_H_OR2", "lbl_H_OR3", "lbl_H_OR4", "lbl_H_OR5", _
-                  "lbl_H_OR6", "lbl_H_OR7", "lbl_H_OR8", "lbl_H_OR9", "lbl_H_OR10", "lbl_H_OR11")
+                  "lbl_H_OR6", "lbl_H_OR7", "lbl_H_OR8", "lbl_H_OR9", "lbl_H_OR10")
 
     Dim availW As Double
     availW = lstOtkupRoba.width - 16
@@ -1541,7 +1546,7 @@ Private Sub LayoutOtkupRobaHeaders()
     Dim X As Double: X = lstOtkupRoba.Left
     Dim cw As String: cw = ""
     Dim k As Long
-    For k = 0 To 10
+    For k = 0 To 9
         Dim wCol As Long
         wCol = CLng(Int(availW * CDbl(prop(k))))
         Dim lbl As MSForms.label
@@ -1552,18 +1557,17 @@ Private Sub LayoutOtkupRobaHeaders()
             lbl.width = wCol
             StyleListHeaderLabel lbl
             If k = 7 Then
-                ' "Razlika kg" + podnaslov "(Otk. listovi - Otprem.)" u dva reda.
                 lbl.WordWrap = True
                 lbl.Height = lbl_H_OR7.Height + 12
                 lbl.top = lbl_H_OR7.top - 12
             End If
             lbl.caption = CStr(caps(k))
         End If
-        cw = cw & CStr(wCol) & ";"
+        cw = cw & CStr(wCol)
+        If k < 9 Then cw = cw & ";"
         X = X + wCol
     Next k
-    cw = cw & "0"   ' skrivena ref-kljuc kolona (idx 11)
-    lstOtkupRoba.ColumnCount = 12
+    lstOtkupRoba.ColumnCount = 10
     lstOtkupRoba.ColumnWidths = cw
 End Sub
 
@@ -1851,11 +1855,20 @@ End Sub
 ' ============================================================
 Private Sub lstOtkupRoba_Click()
     On Error Resume Next
-    KarticaDetalji_ShowForRow Me, lstOtkupRoba, 11   ' skrivena kol. 11 = OTP|<id>
+    ShowOtkupRobaDetalji
 End Sub
 Private Sub lstOtkupRoba_Change()
     On Error Resume Next
-    KarticaDetalji_ShowForRow Me, lstOtkupRoba, 11
+    ShowOtkupRobaDetalji
+End Sub
+Private Sub ShowOtkupRobaDetalji()
+    On Error Resume Next
+    Dim idx As Long: idx = lstOtkupRoba.ListIndex
+    Dim oid As String
+    If Not m_otkOtpID Is Nothing Then
+        If m_otkOtpID.Exists(CStr(idx)) Then oid = CStr(m_otkOtpID(CStr(idx)))
+    End If
+    KarticaDetalji_ShowOtpremnica Me, lstOtkupRoba, idx, oid
 End Sub
 Private Sub lstAmbalaza_Click()
     On Error Resume Next
