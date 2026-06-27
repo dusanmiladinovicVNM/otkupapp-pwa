@@ -40,8 +40,11 @@ Dopunjava se pri svakom `tools/release.sh` (korak B-11 u `RELEASE_PROCEDURE.md`)
 
 ---
 
-## sledeći release (u pripremi)
-Tačan broj/datum se postavlja pri `tools/release.sh`.
+## sledeći release (u pripremi) — planirano vba-v2.5.0
+Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.5.0**).
+
+> Napomena: `vba-v2.4.0` je bio samo bump `APP_VERSION` (2.3.0 → 2.4.0) bez zasebne
+> changelog sekcije — u trenutku bump-a „u pripremi" je bila prazna.
 
 - **Izveštaji — „Detalji" panel + štampa na Otkupljena roba i Ambalaza:** klik na red prikazuje read-only pregled desno (kao Kartica/Otkupni listovi), sa dugmetom za štampu. Otkupljena roba → **„Štampaj otpremnicu"** (PDF u stilu otkupnog lista, podaci iz `tblOtpremnice`). Ambalaza → **„Štampaj dokument"** rutiran po tipu (Prijemnica/Otkup/Otpremnica/Revers).
 - **Otkupljena roba (po otpremnici):** nova kolona **„Prijemnica kg"** (malina = direktno iz prijemnice; inače srazmerno udelu otpremnice u zbirnoj); „Manjak kg" i „Manjak %" spojeni u jednu kolonu (ListBox limit 10 kolona).
