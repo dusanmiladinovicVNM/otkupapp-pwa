@@ -153,6 +153,7 @@ SKIP_LINE_PATTERNS = [
     re.compile(r'GS_KOLICINA\s*,\s*"'), # sync column name param
     re.compile(r'RequireOTKHeaderValue'),
     re.compile(r'ChrW\('),              # already fixed
+    re.compile(r'\bConst\b'),           # Const ne dozvoljava ChrW() poziv
 ]
 
 # Files to completely skip
