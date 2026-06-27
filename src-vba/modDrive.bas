@@ -1,0 +1,167 @@
+Attribute VB_Name = "modDrive"
+Option Explicit
+
+' ============================================================
+' modDrive - tanki Drive REST helperi (download / find / upload).
+'
+' Reuse: GetAccessToken (modGoogleAuth), UrlEncode (modHttpUtils),
+'        ExtractJsonStringGoogle (modGoogleAuth), LogErr (modLogError).
+'
+' Koriste ga:
+'   - self-update (povlacenje koda iz AgriX_Release) - modSelfUpdate
+'   - PublishReleaseToDrive (build) - modRelease
+'
+' SVE binarno (ADODB.Stream + responseBody/Send bytes) -> cuva izvorne
+' bajtove .bas/.cls/.frm (Windows-1250) bez transkodiranja.
+' ASCII-only modul (vidi CLAUDE.md, sekcija 4 - encoding).
+' ============================================================
+
+Private Const DRIVE_FILES As String = "https://www.googleapis.com/drive/v3/files"
+Private Const DRIVE_UPLOAD As String = "https://www.googleapis.com/upload/drive/v3/files"
+
+' Skini fajl sa Drive-a (alt=media) i snimi kao sirove bajtove na destPath.
+Public Function DriveDownloadToFile(ByVal fileID As String, ByVal destPath As String) As Boolean
+    Const SRC As String = "modDrive.DriveDownloadToFile"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "GET", DRIVE_FILES & "/" & fileID & "?alt=media&supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.Send
+
+    If http.status <> 200 Then
+        LogErr SRC, "HTTP " & http.status & " za " & fileID
+        Exit Function
+    End If
+
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1                 ' adTypeBinary
+    stm.Open
+    stm.Write http.responseBody
+    stm.SaveToFile destPath, 2   ' adSaveCreateOverWrite
+    stm.Close
+
+    DriveDownloadToFile = True
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
+' Vrati fileID istoimenog fajla u datom folderu, ili "" ako ga nema.
+Public Function DriveFindInFolder(ByVal folderID As String, ByVal fileName As String) As String
+    Const SRC As String = "modDrive.DriveFindInFolder"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    Dim q As String
+    q = "name='" & DriveEscapeQ(fileName) & "' and '" & folderID & "' in parents and trashed=false"
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "GET", DRIVE_FILES & "?q=" & UrlEncode(q) & _
+              "&fields=files(id,name)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.Send
+
+    If http.status = 200 Then
+        DriveFindInFolder = ExtractJsonStringGoogle(http.responseText, "id")
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
+' Upload fajla u folder (create-or-update po imenu). Vrati fileID ili "".
+' Dvostepeno (metadata POST -> media PATCH) da se izbegne multipart boundary.
+Public Function DriveUploadFile(ByVal folderID As String, _
+                                ByVal localPath As String, _
+                                ByVal fileName As String) As String
+    Const SRC As String = "modDrive.DriveUploadFile"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    Dim fileID As String: fileID = DriveFindInFolder(folderID, fileName)
+    If Len(fileID) = 0 Then
+        fileID = DriveCreateEmpty(folderID, fileName, token)
+        If Len(fileID) = 0 Then Exit Function
+    End If
+
+    Dim bytes() As Byte: bytes = DriveLoadFileBytes(localPath)
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "PATCH", DRIVE_UPLOAD & "/" & fileID & "?uploadType=media&supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/octet-stream"
+    http.Send bytes
+
+    If http.status = 200 Then
+        DriveUploadFile = fileID
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
+' ---------------- private ----------------
+
+' Kreiraj prazan fajl (samo metadata) u folderu -> vrati novi fileID.
+Private Function DriveCreateEmpty(ByVal folderID As String, _
+                                  ByVal fileName As String, _
+                                  ByVal token As String) As String
+    Const SRC As String = "modDrive.DriveCreateEmpty"
+    On Error GoTo EH
+
+    Dim body As String
+    body = "{""name"":""" & DriveJsonEsc(fileName) & """,""parents"":[""" & folderID & """]}"
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "POST", DRIVE_FILES & "?supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/json; charset=UTF-8"
+    http.Send body
+
+    If http.status = 200 Then
+        DriveCreateEmpty = ExtractJsonStringGoogle(http.responseText, "id")
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
+Private Function DriveNewHttp() As Object
+    Set DriveNewHttp = CreateObject("WinHttp.WinHttpRequest.5.1")
+    DriveNewHttp.SetTimeouts 15000, 15000, 30000, 60000
+End Function
+
+Private Function DriveLoadFileBytes(ByVal path As String) As Byte()
+    Dim stm As Object: Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1                 ' adTypeBinary
+    stm.Open
+    stm.LoadFromFile path
+    DriveLoadFileBytes = stm.Read
+    stm.Close
+End Function
+
+' Drive query escape: ' -> \'
+Private Function DriveEscapeQ(ByVal s As String) As String
+    DriveEscapeQ = Replace$(s, "'", "\'")
+End Function
+
+Private Function DriveJsonEsc(ByVal s As String) As String
+    Dim t As String: t = s
+    t = Replace$(t, "\", "\\")
+    t = Replace$(t, """", "\""")
+    DriveJsonEsc = t
+End Function

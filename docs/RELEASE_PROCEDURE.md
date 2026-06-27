@@ -31,6 +31,7 @@ verzija / koji commit radi kod koga.
 | Self-heal šeme / fail-fast | `modSetup.Ensure*Schema` / `modSchemaGuard.RequireColumns` |
 | Fleet (ko ima šta) | GAS `OtkupApp_Monitoring_PROD` → tab `Events` / `Fleet` |
 | Distribucija (artefakt) | `builds\AgriX_x.x.x.xlsm` — **blanko** (samo kod, prazne tabele), isti za sve |
+| Self-update kanal (postojeći klijenti) | Drive `AgriX_Release` (kod + `version.json`) ← `modRelease.PublishReleaseToDrive`; Drive helperi `modDrive` |
 | Blanko provera (build-only) | `modBuildGuard.AssertBlankBuild` (ručno, pre `Save As`) |
 | Min-version gate | GAS Script Properties `VERSION_MIN`/`VERSION_ENFORCE` · `modUpdateGate` |
 
@@ -220,6 +221,7 @@ hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 5. **[Excel]** `Alt+F8` → **ImportAllVBA** → Run.
 6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške).
 7. **[Excel]** `Alt+F8` → **AssertBlankBuild** → mora „BLANKO OK". Ako prijavi tabele s podacima → isprazni ih pa ponovi (taj fajl ide SVIMA).
+7b. **[Excel]** `Alt+F8` → **PublishReleaseToDrive** (`modRelease`) → objavi `src-vba` kod + `version.json` u Drive folder `AgriX_Release` (kanal za self-update postojećih klijenata). Radi **tek pošto Compile prođe**, a **pre** koraka 9 (čita stamp-ovan `BUILD_*`). Preduslov: `REL_FOLDER_ID` postavljen u `modConfig.bas`.
 8. **[Excel]** **File → Save As** → `builds\AgriX_2.2.2.xlsm` (ime prati `vba-v2.2.2`).
 9. **[Git Bash]** `git checkout -- src-vba/modBuildInfo.bas` (placeholder; stamp se ne commit-uje).
 10. **[bilo gde]** Pošalji `builds\AgriX_2.2.2.xlsm` klijentima (Drive / OneDrive / mejl).

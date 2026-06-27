@@ -12,6 +12,11 @@ Option Explicit
 Public Const APP_NAME As String = "OtkupApp"
 Public Const APP_VERSION As String = "2.5.0"
 
+' --- Self-update / backup (Drive folder ID-jevi; popuni jednokratno) ---
+' Vidi docs/RELEASE_PROCEDURE.md (self-update kanal) i modDrive/modRelease.
+Public Const REL_FOLDER_ID As String = ""      ' AgriX_Release: kod + version.json
+Public Const BACKUP_FOLDER_ID As String = ""   ' AgriX_Backup: xlsx data backup
+
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
 Public Const TBL_STANICE As String = "tblStanice"
