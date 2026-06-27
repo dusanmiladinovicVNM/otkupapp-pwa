@@ -6,7 +6,7 @@ Option Explicit
 ' modMaticniLookups - jedinstveni (data-driven) meni "Maticni podaci"
 '
 ' Ceo meni frmMaticniPodaci se gradi iz JEDNE registracije sekcija
-' (MaticniSekcije). Za svaku sekciju se dinamicki kreira dugme
+' (MaticniSekcijeGrupisano). Za svaku sekciju se dinamicki kreira dugme
 ' (Controls.Add) pa se njegov klik hvata preko clsLookupMenuBtn
 ' (WithEvents). Tako:
 '   - frmMaticniPodaci.frx se NE dira,
@@ -30,21 +30,58 @@ Private Const STATIC_BTNS As String = _
 ' Registracija svih sekcija: Array(Naziv u meniju, Tag za frmStammdaten).
 ' Redosled ovde = redosled u meniju.
 Public Function MaticniSekcije() As Variant
-    MaticniSekcije = Array( _
-        Array("Kooperanti", "Kooperanti"), _
-        Array("Stanice", "Stanice"), _
-        Array("Kupci", "Kupci"), _
-        Array("Vozaci", "Vozaci"), _
-        Array("Artikli", "Artikli"), _
-        Array("Parcele", "Parcele"), _
-        Array("Kulture", "Kulture"), _
-        Array("Ambala" & ChrW(382) & "a", "TipAmbalaze"), _
-        Array("Palete", "TipPalete"), _
-        Array("Cenovnik", "Cenovnik"), _
-        Array("Kutije", "Kutije"), _
-        Array("Kese", "Kese"), _
-        Array("Vrsta got. proizvoda", "VrstaGP"), _
-        Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Pode" & ChrW(353) & "avanja"))
+    ' Ravna lista (zadrzana radi kompatibilnosti) izvedena iz grupisane
+    ' registracije MaticniSekcijeGrupisano - jedan izvor istine.
+    Dim groups As Variant
+    groups = MaticniSekcijeGrupisano()
+
+    Dim out As Collection
+    Set out = New Collection
+
+    Dim gi As Long, ii As Long
+    Dim grp As Variant, items As Variant
+    For gi = LBound(groups) To UBound(groups)
+        grp = groups(gi)
+        items = grp(1)
+        For ii = LBound(items) To UBound(items)
+            out.Add items(ii)
+        Next ii
+    Next gi
+
+    Dim a() As Variant, k As Long
+    ReDim a(0 To out.count - 1)
+    For k = 1 To out.count
+        a(k - 1) = out(k)
+    Next k
+    MaticniSekcije = a
+End Function
+
+' Grupisana registracija sekcija menija "Maticni podaci".
+' Vraca Array(Array(GrupaNaziv, Array(Array(Caption, Tag), ...)), ...).
+' Redosled grupa i stavki = redosled u meniju. Pakovanje (ambalaza, palete,
+' kutije, kese) je svoja grupa - vizuelno podredjena osnovnim sifarnicima,
+' a ne ravnopravno sa Kooperanti/Kupci/Stanice.
+' Dodavanje sekcije = jedan red u odgovarajucoj grupi + Case u frmStammdaten.
+Public Function MaticniSekcijeGrupisano() As Variant
+    MaticniSekcijeGrupisano = Array( _
+        Array(ChrW(352) & "ifarnici", Array( _
+            Array("Kooperanti", "Kooperanti"), _
+            Array("Stanice", "Stanice"), _
+            Array("Kupci", "Kupci"), _
+            Array("Vozaci", "Vozaci"), _
+            Array("Parcele", "Parcele"))), _
+        Array("Proizvodi i cene", Array( _
+            Array("Artikli", "Artikli"), _
+            Array("Kulture", "Kulture"), _
+            Array("Cenovnik", "Cenovnik"), _
+            Array("Vrsta got. proizvoda", "VrstaGP"))), _
+        Array("Ambala" & ChrW(382) & "a i pakovanje", Array( _
+            Array("Ambala" & ChrW(382) & "a", "TipAmbalaze"), _
+            Array("Palete", "TipPalete"), _
+            Array("Kutije", "Kutije"), _
+            Array("Kese", "Kese"))), _
+        Array("Sistem", Array( _
+            Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Pode" & ChrW(353) & "avanja"))))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).
@@ -62,74 +99,102 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
     Dim exitBtn As MSForms.CommandButton
     Set exitBtn = frm.Controls("btnExit")
 
-    Dim X As Single, w As Single, top0 As Single, bandBottom As Single
+    Dim X As Single, w As Single, top0 As Single
     X = tmpl.Left
     w = tmpl.width
     top0 = tmpl.top
-    bandBottom = exitBtn.top      ' Exit ostaje na svom mestu; dugmad popunjavaju iznad
-
-    Dim secs As Variant
-    secs = MaticniSekcije()
-
-    Dim n As Long
-    n = UBound(secs) - LBound(secs) + 1
-    If n <= 0 Then Exit Sub
-
-    ' Spakuj n dugmadi u isti vertikalni opseg koji su zauzimala staticna
-    ' dugmad (top0 .. Exit.Top) -- bez resize-a forme.
-    Const SPACING As Single = 3
-
-    ' Citljiv pitch = visina sablonskog dugmeta + razmak. Ako n dugmadi ne
-    ' staju u postojeci opseg (top0 .. Exit), povecaj formu i spusti Exit
-    ' nanize, umesto da se dugmad gnjece -> sve sekcije ostaju citljive.
-    Dim pitch As Single
-    pitch = tmpl.Height + SPACING
-
-    If top0 + n * pitch > bandBottom Then
-        Dim grow As Single
-        grow = (top0 + n * pitch) - bandBottom
-        exitBtn.top = exitBtn.top + grow
-        frm.Height = frm.Height + grow
-        bandBottom = exitBtn.top
-    Else
-        pitch = (bandBottom - top0) / n
-    End If
 
     Dim btnH As Single
-    btnH = pitch - SPACING
-    If btnH < 14 Then btnH = 14
+    btnH = tmpl.Height
+    If btnH < 16 Then btnH = 16
 
-    Dim i As Long
-    For i = 0 To n - 1
-        Dim sec As Variant
-        sec = secs(LBound(secs) + i)
+    Const ITEMGAP As Single = 3
+    Const HDRH As Single = 15
+    Const HDRGAP As Single = 2
+    Const GROUPGAP As Single = 9
 
-        Dim nm As String
-        nm = "btnMD_" & CStr(sec(1))
+    Dim groups As Variant
+    groups = MaticniSekcijeGrupisano()
 
+    Dim Y As Single
+    Y = top0
+
+    Dim gi As Long, ii As Long, hdrIdx As Long
+    Dim grp As Variant, items As Variant, it As Variant
+    Dim grpName As String, cap As String, tg As String
+    Dim hnm As String, nm As String
+    Dim hl As MSForms.label
+    Dim c As MSForms.CommandButton
+    Dim wrp As clsLookupMenuBtn
+    hdrIdx = 0
+
+    For gi = LBound(groups) To UBound(groups)
+        grp = groups(gi)
+        grpName = CStr(grp(0))
+        items = grp(1)
+
+        If gi > LBound(groups) Then Y = Y + GROUPGAP
+
+        ' Sekcijski header - labela (nije klikabilna); vizuelno grupise sekcije.
+        hdrIdx = hdrIdx + 1
+        hnm = "lblMDgrp_" & CStr(hdrIdx)
         On Error Resume Next
-        frm.Controls.Remove nm      ' u slucaju re-init
+        frm.Controls.Remove hnm
         On Error GoTo EH
 
-        Dim c As MSForms.CommandButton
-        Set c = frm.Controls.Add("Forms.CommandButton.1", nm, True)
-        c.Left = X
-        c.width = w
-        c.top = top0 + i * pitch
-        c.Height = btnH
-        StyleMenuButton c, CStr(sec(0))
+        Set hl = frm.Controls.Add("Forms.Label.1", hnm, True)
+        hl.Left = X
+        hl.width = w
+        hl.top = Y
+        hl.Height = HDRH
+        hl.caption = UCase$(grpName)
+        hl.BackStyle = fmBackStyleTransparent
+        hl.TextAlign = fmTextAlignLeft
+        hl.Font.name = APP_FONT_BOLD
+        hl.Font.Size = FONT_SIZE_SMALL
+        hl.Font.Bold = True
+        hl.ForeColor = TXT_MUTED()
+        Y = Y + HDRH + HDRGAP
 
-        Dim wrp As clsLookupMenuBtn
-        Set wrp = New clsLookupMenuBtn
-        wrp.sekcijaTag = CStr(sec(1))
-        wrp.sekcijaCaption = CStr(sec(0))
-        Set wrp.btn = c
+        For ii = LBound(items) To UBound(items)
+            it = items(ii)
+            cap = CStr(it(0))
+            tg = CStr(it(1))
 
-        mWrappers.Add wrp
-        mBtns.Add c
-    Next i
+            nm = "btnMD_" & tg
+            On Error Resume Next
+            frm.Controls.Remove nm
+            On Error GoTo EH
 
-    ' Uspeh -- sakrij staticna dugmad (dinamicka su preko njih).
+            Set c = frm.Controls.Add("Forms.CommandButton.1", nm, True)
+            c.Left = X
+            c.width = w
+            c.top = Y
+            c.Height = btnH
+            StyleMenuButton c, cap
+
+            Set wrp = New clsLookupMenuBtn
+            wrp.sekcijaTag = tg
+            wrp.sekcijaCaption = cap
+            Set wrp.btn = c
+
+            mWrappers.Add wrp
+            mBtns.Add c
+
+            Y = Y + btnH + ITEMGAP
+        Next ii
+    Next gi
+
+    ' Exit ispod sadrzaja; rastegni formu da sve sekcije ostanu citljive.
+    Const BOTTOMPAD As Single = 10
+    exitBtn.top = Y + BOTTOMPAD
+    Dim desiredInside As Single
+    desiredInside = exitBtn.top + exitBtn.Height + BOTTOMPAD
+    If frm.InsideHeight < desiredInside Then
+        frm.Height = frm.Height + (desiredInside - frm.InsideHeight)
+    End If
+
+    ' Uspeh - sakrij staticna dugmad (dinamicka su preko njih).
     HideStaticButtons frm
     Exit Sub
 

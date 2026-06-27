@@ -28,6 +28,16 @@ Private mFrm As Object              ' frmStammdaten instanca (host)
 Private mInputs As Collection       ' input kontrole, key = ConfigKey
 Private mWrappers As Collection     ' clsConfigBtn (drzi WithEvents zivim)
 Private mBtnToggle As MSForms.CommandButton
+Private mGroupOrder As Collection       ' imena grupa po redosledu
+Private mRowsByGroup As Collection      ' key=grupa -> Collection of Array(lbl, input, typ)
+Private mGroupHeaders As Collection     ' key=grupa -> header CommandButton (Tag "1"=collapsed)
+Private mFormW As Single
+Private mMargin As Single
+Private mColCount As Long
+Private mCellW As Single
+Private mCol0X As Single
+Private mCol1X As Single
+Private mTopContentY As Single
 
 ' --- Registar polja: Array(Grupa, ConfigKey, Labela, Tip) ---
 ' Tip: "bool" (YES/NO), "list:A;B;C" (combo sa zadatim opcijama), "int",
@@ -203,37 +213,61 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     StyleLabel lblHint, TXT_MUTED(), False
     lblHint.Font.Size = FONT_SIZE_SMALL
 
-    ' Polja
+    ' Alatna traka: rasiri / skupi sve grupe odjednom.
+    Dim btnExpand As MSForms.CommandButton
+    Set btnExpand = AddButton("btnCfgExpandAll", m, 80, 150, 22)
+    StyleExitButton btnExpand, "[+] Rasiri sve"
+    WireButton btnExpand, "expandall"
+
+    Dim btnCollapse As MSForms.CommandButton
+    Set btnCollapse = AddButton("btnCfgCollapseAll", m + 158, 80, 150, 22)
+    StyleExitButton btnCollapse, "[-] Skupi sve"
+    WireButton btnCollapse, "collapseall"
+
+    ' Geometrija kolona: 2 kolone kad ima dovoljno sirine, inace 1.
+    Const COLGAP As Single = 16
+    mFormW = w
+    mMargin = m
+    mColCount = IIf(w >= 720, 2, 1)
+    mCellW = (w - 2 * m - (mColCount - 1) * COLGAP) / mColCount
+    mCol0X = m
+    mCol1X = m + mCellW + COLGAP
+    mTopContentY = 112
+
+    ' Izgradnja grupa (data-driven iz ConfigEditorFields; kolona "Grupa").
+    ' Svaka grupa = collapsible sekcija (header dugme) sa svojim poljima.
+    Set mGroupOrder = New Collection
+    Set mRowsByGroup = New Collection
+    Set mGroupHeaders = New Collection
+
     Dim flds As Variant: flds = ConfigEditorFields()
-    Dim Y As Single: Y = 86
-    Dim curGroup As String: curGroup = ""
-    Dim f As Variant, grp As String, key As String, cap As String, typ As String, typRaw As String
-    Dim rowH As Single, cur As String
-    Dim hdr As MSForms.label, lbl As MSForms.label
-    Dim cmb As MSForms.ComboBox, tb As MSForms.TextBox
+    Dim i As Long, f As Variant
+    Dim grp As String, key As String, cap As String, typRaw As String, typ As String
+    Dim cur As String
+    Dim lbl As MSForms.label, tb As MSForms.TextBox, cmb As MSForms.ComboBox
     Dim opts As Variant, oi As Long
-    Dim i As Long
+    Dim inCtl As MSForms.Control
+    Dim rowsColl As Collection
+    Dim hdrBtn As MSForms.CommandButton
+    Dim curGroup As String: curGroup = ""
+    Dim grpIdx As Long: grpIdx = 0
 
     For i = LBound(flds) To UBound(flds)
         f = flds(i)
-        grp = CStr(f(0))
-        key = CStr(f(1))
-        cap = CStr(f(2))
-        typRaw = CStr(f(3))
-        typ = LCase$(typRaw)
+        grp = CStr(f(0)): key = CStr(f(1)): cap = CStr(f(2))
+        typRaw = CStr(f(3)): typ = LCase$(typRaw)
 
         If grp <> curGroup Then
             curGroup = grp
-            Y = Y + 8
-            Set hdr = AddLabel("cfghdr_" & i, m, Y, w - 2 * m, 18)
-            hdr.caption = Poruka("CFG_LBL_STR") & grp & Poruka("CFG_LBL_STR_2")
-            StyleLabel hdr, TXT_LIGHT(), True
-            Y = Y + 22
+            grpIdx = grpIdx + 1
+            mGroupOrder.Add grp
+            Set rowsColl = New Collection
+            mRowsByGroup.Add rowsColl, grp
+            Set hdrBtn = AddGroupHeaderBtn(grp, grpIdx)
+            mGroupHeaders.Add hdrBtn, grp
         End If
 
-        rowH = IIf(typ = "memo", 46, 18)
-
-        Set lbl = AddLabel("cfglbl_" & key, m, Y + 1, LBLW, 16)
+        Set lbl = AddLabel("cfglbl_" & key, 0, 0, mCellW, 14)
         lbl.caption = cap
         StyleLabel lbl, TXT_MUTED(), False
         lbl.Font.Size = FONT_SIZE_SMALL
@@ -241,7 +275,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         cur = GetConfigValue(key)
 
         If typ = "bool" Or Left$(typ, 5) = "list:" Then
-            Set cmb = AddCombo("cfg_" & key, inLeft, Y, 160, 18)
+            Set cmb = AddCombo("cfg_" & key, 0, 0, mCellW, 18)
             cmb.style = fmStyleDropDownCombo
             If typ = "bool" Then
                 opts = Array("YES", "NO")
@@ -254,8 +288,9 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             cmb.value = cur
             StyleComboBox cmb
             mInputs.Add cmb, key
+            Set inCtl = cmb
         Else
-            Set tb = AddText("cfg_" & key, inLeft, Y, inW, rowH)
+            Set tb = AddText("cfg_" & key, 0, 0, mCellW, IIf(typ = "memo", 46, 18))
             If typ = "memo" Then
                 tb.MultiLine = True
                 tb.WordWrap = True
@@ -264,17 +299,19 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             tb.value = cur
             StyleTextBox tb
             mInputs.Add tb, key
+            Set inCtl = tb
         End If
 
-        Y = Y + rowH + 8
+        mRowsByGroup(grp).Add Array(lbl, inCtl, typ)
     Next i
 
-    ' Skrol forme (footer je na vrhu pa je dostupan na scroll=0)
-    On Error Resume Next
-    frm.ScrollBars = fmScrollBarsVertical
-    frm.ScrollHeight = Y + 16
-    frm.KeepScrollBarsVisible = fmScrollBarsVertical
-    On Error GoTo EH
+    ' Pocetno stanje: sve grupe skupljene (pregledan "sadrzaj"); siri po potrebi.
+    Dim gname As Variant
+    For Each gname In mGroupOrder
+        mGroupHeaders(CStr(gname)).Tag = "1"
+    Next gname
+
+    RelayoutGroups
 
     Exit Sub
 EH:
@@ -285,16 +322,155 @@ End Sub
 ' ============================================================
 ' PUBLIC -- click ruter (zove clsConfigBtn)
 ' ============================================================
-Public Sub ConfigEditor_OnClick(ByVal action As String)
+Public Sub ConfigEditor_OnClick(ByVal action As String, Optional ByVal groupKey As String = "")
     On Error GoTo EH
     Select Case LCase$(action)
         Case "save": SaveConfigEditor
         Case "toggle": ToggleConfigSheet
         Case "back": CloseConfigEditor
+        Case "grp": ConfigEditor_ToggleGroup groupKey
+        Case "expandall": ConfigEditor_SetAll False
+        Case "collapseall": ConfigEditor_SetAll True
     End Select
     Exit Sub
 EH:
     LogErr "modPodesavanja.ConfigEditor_OnClick"
+End Sub
+
+' Toggle collapse/expand jedne grupe (header.Tag "1"=collapsed).
+Public Sub ConfigEditor_ToggleGroup(ByVal grp As String)
+    On Error GoTo EH
+    If mGroupHeaders Is Nothing Then Exit Sub
+    Dim hdr As MSForms.CommandButton
+    On Error Resume Next
+    Set hdr = mGroupHeaders(grp)
+    On Error GoTo EH
+    If hdr Is Nothing Then Exit Sub
+    hdr.Tag = IIf(hdr.Tag = "1", "0", "1")
+    RelayoutGroups
+    Exit Sub
+EH:
+    LogErr "modPodesavanja.ConfigEditor_ToggleGroup"
+End Sub
+
+' Skupi (collapseAll=True) ili rasiri (False) sve grupe odjednom.
+Public Sub ConfigEditor_SetAll(ByVal collapseAll As Boolean)
+    On Error GoTo EH
+    If mGroupOrder Is Nothing Then Exit Sub
+    Dim g As Variant
+    For Each g In mGroupOrder
+        mGroupHeaders(CStr(g)).Tag = IIf(collapseAll, "1", "0")
+    Next g
+    RelayoutGroups
+    Exit Sub
+EH:
+    LogErr "modPodesavanja.ConfigEditor_SetAll"
+End Sub
+
+' Preracunaj pozicije svih grupa/polja (collapse-aware, 2-kolonski grid).
+' Memo polja zauzimaju ceo red; ostala se ravnaju u kolone radi gustine.
+Private Sub RelayoutGroups()
+    On Error GoTo EH
+    If mGroupOrder Is Nothing Then Exit Sub
+
+    Const HDRH As Single = 20
+    Const HDRGAP As Single = 4
+    Const LBLH As Single = 12
+    Const LBLGAP As Single = 2
+    Const INH As Single = 18
+    Const ROWGAP As Single = 8
+    Const MEMOH As Single = 46
+    Const GROUPGAP As Single = 10
+
+    Dim cellH As Single: cellH = LBLH + LBLGAP + INH + ROWGAP
+    Dim memoCellH As Single: memoCellH = LBLH + LBLGAP + MEMOH + ROWGAP
+
+    Dim Y As Single: Y = mTopContentY
+    Dim gname As Variant, grp As String
+    Dim hdr As MSForms.CommandButton
+    Dim collapsed As Boolean
+    Dim grpRows As Collection, r As Variant
+    Dim lbl As MSForms.label, inCtl As MSForms.Control, typ As String
+    Dim col As Long, cx As Single, idx As Long
+
+    For Each gname In mGroupOrder
+        grp = CStr(gname)
+        Set hdr = mGroupHeaders(grp)
+        hdr.Left = mMargin
+        hdr.width = mFormW - 2 * mMargin
+        hdr.top = Y
+        hdr.Visible = True
+        collapsed = (hdr.Tag = "1")
+        hdr.caption = IIf(collapsed, "[+]  ", "[-]  ") & grp
+        Y = Y + HDRH + HDRGAP
+
+        Set grpRows = mRowsByGroup(grp)
+        col = 0
+        For idx = 1 To grpRows.count
+            r = grpRows(idx)
+            Set lbl = r(0)
+            Set inCtl = r(1)
+            typ = CStr(r(2))
+
+            If collapsed Then
+                lbl.Visible = False
+                inCtl.Visible = False
+            ElseIf typ = "memo" Then
+                If col = 1 Then Y = Y + cellH: col = 0
+                lbl.Left = mMargin: lbl.top = Y: lbl.width = mFormW - 2 * mMargin
+                lbl.Visible = True
+                inCtl.Left = mMargin: inCtl.top = Y + LBLH + LBLGAP
+                inCtl.width = mFormW - 2 * mMargin: inCtl.Height = MEMOH
+                inCtl.Visible = True
+                Y = Y + memoCellH
+                col = 0
+            Else
+                cx = IIf(col = 0, mCol0X, mCol1X)
+                lbl.Left = cx: lbl.top = Y: lbl.width = mCellW
+                lbl.Visible = True
+                inCtl.Left = cx: inCtl.top = Y + LBLH + LBLGAP
+                inCtl.width = mCellW
+                inCtl.Visible = True
+                If mColCount = 1 Then
+                    Y = Y + cellH
+                ElseIf col = 1 Then
+                    Y = Y + cellH: col = 0
+                Else
+                    col = 1
+                End If
+            End If
+        Next idx
+
+        If (Not collapsed) And col = 1 Then Y = Y + cellH
+        If Not collapsed Then Y = Y + GROUPGAP
+    Next gname
+
+    On Error Resume Next
+    mFrm.ScrollBars = fmScrollBarsVertical
+    mFrm.ScrollHeight = Y + 16
+    mFrm.KeepScrollBarsVisible = fmScrollBarsVertical
+    On Error GoTo 0
+    Exit Sub
+EH:
+    LogErr "modPodesavanja.RelayoutGroups"
+End Sub
+
+' Header dugme jedne grupe (collapsible). Klik hvata clsConfigBtn (action="grp").
+Private Function AddGroupHeaderBtn(ByVal grp As String, ByVal idx As Long) As MSForms.CommandButton
+    Dim b As MSForms.CommandButton
+    Set b = AddButton("cfggrp_" & CStr(idx), mMargin, 0, mFormW - 2 * mMargin, 20)
+    StyleMenuButton b, grp
+    WireGroupButton b, grp
+    Set AddGroupHeaderBtn = b
+End Function
+
+Private Sub WireGroupButton(ByVal b As MSForms.CommandButton, ByVal grp As String)
+    Dim wrp As clsConfigBtn
+    Set wrp = New clsConfigBtn
+    wrp.action = "grp"
+    wrp.groupKey = grp
+    Set wrp.btn = b
+    mWrappers.Add wrp
 End Sub
 
 ' ============================================================
@@ -348,6 +524,9 @@ Private Sub CloseConfigEditor()
     Set mInputs = Nothing
     Set mWrappers = Nothing
     Set mBtnToggle = Nothing
+    Set mGroupOrder = Nothing
+    Set mRowsByGroup = Nothing
+    Set mGroupHeaders = Nothing
 End Sub
 
 ' ============================================================
@@ -481,4 +660,7 @@ Public Sub Podesavanja_Release()
     Set mInputs = Nothing
     Set mWrappers = Nothing
     Set mBtnToggle = Nothing
+    Set mGroupOrder = Nothing
+    Set mRowsByGroup = Nothing
+    Set mGroupHeaders = Nothing
 End Sub
