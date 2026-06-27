@@ -54,7 +54,7 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     On Error Resume Next
     wsPrint.Visible = xlSheetVisible
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Izve" & ChrW(353) & "taj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    pdfPath = EnsureDocFolder(PDF_DIR_IZVESTAJI) & "\Izve" & ChrW(353) & "taj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
     wsPrint.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                                           Quality:=xlQualityStandard, OpenAfterPublish:=True
     On Error GoTo 0
@@ -78,7 +78,7 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     Dim broj As String: broj = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ))
     Dim suff As String: suff = Replace(Replace(broj, "/", "-"), "\\", "-")
     If Len(Trim$(suff)) = 0 Then suff = otpID
-    Dim pdfPath As String: pdfPath = ThisWorkbook.path & "\Otpremnica_" & suff & ".pdf"
+    Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTPREMNICE) & "\Otpremnica_" & suff & ".pdf"
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, IncludeDocProperties:=False, _
                            OpenAfterPublish:=True
@@ -298,7 +298,7 @@ EH:
     LogErr "modPrint.OutputOtkupniList"
 End Sub
 
-' PDF otkupnog lista -> <workbook>\OtkupniList_<brDok>.pdf
+' PDF otkupnog lista -> <workbook>\Otkupni listovi\OtkupniList_<brDok>.pdf
 Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
                                      Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
@@ -306,7 +306,7 @@ Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
     If ws Is Nothing Then Exit Function
 
     Dim suff As String: suff = Replace(Replace(otkupIDs, " + ", "_"), "/", "-")
-    Dim pdfPath As String: pdfPath = ThisWorkbook.path & "\OtkupniList_" & suff & ".pdf"
+    Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\OtkupniList_" & suff & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -856,7 +856,7 @@ EH:
     LogErr "modPrint.OutputGrupniOtkupniList"
 End Sub
 
-' PDF grupnog otkupnog lista -> <workbook>\GrupniOtkupniList_<brPrij>.pdf
+' PDF grupnog otkupnog lista -> <workbook>\Otkupni listovi\GrupniOtkupniList_<brPrij>.pdf
 Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaIDs As String, _
                                            Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
@@ -864,7 +864,7 @@ Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaIDs As String, _
     If ws Is Nothing Then Exit Function
 
     Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
-    Dim pdfPath As String: pdfPath = ThisWorkbook.path & "\GrupniOtkupniList_" & suff & ".pdf"
+    Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\GrupniOtkupniList_" & suff & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -1134,7 +1134,7 @@ Public Sub PrintPrijemnica(ByVal prijemnicaID As String)
     If Not ws Is Nothing Then ws.PrintOut Copies:=1
 End Sub
 
-' PDF prijemnice -> <workbook>\Prijemnica_<brPrij>.pdf. Vraca putanju.
+' PDF prijemnice -> <workbook>\Prijemnice\Prijemnica_<brPrij>.pdf. Vraca putanju.
 Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
                                     Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
@@ -1146,8 +1146,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
         Exit Function
     End If
 
-    Dim folder As String: folder = ThisWorkbook.path
-    If Len(folder) = 0 Then folder = Environ$("TEMP")
+    Dim folder As String: folder = EnsureDocFolder(PDF_DIR_PRIJEMNICE)
     Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
     ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni PDF otvoren.
     Dim pdfPath As String
@@ -1434,7 +1433,7 @@ EH:
     LogErr "modPrint.OutputIzdavanjeAmbalaze"
 End Sub
 
-' PDF reversa -> <workbook>\IzdavanjeAmbalaze_<suff>_<vreme>.pdf. Vraca putanju.
+' PDF reversa -> <workbook>\Revers ambalaze\IzdavanjeAmbalaze_<suff>_<vreme>.pdf. Vraca putanju.
 ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni otvoren.
 Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As String, _
                                            ByVal omNaziv As String, ByVal omID As String, _
@@ -1452,8 +1451,7 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
         Exit Function
     End If
 
-    Dim folder As String: folder = ThisWorkbook.path
-    If Len(folder) = 0 Then folder = Environ$("TEMP")
+    Dim folder As String: folder = EnsureDocFolder(PDF_DIR_REVERS)
     Dim suff As String: suff = Trim$(brojDok)
     If suff = "" Then suff = koopID
     suff = Replace(Replace(suff, " + ", "_"), "/", "-")

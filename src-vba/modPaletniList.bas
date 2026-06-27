@@ -603,7 +603,7 @@ EH:
     LogErr "modPaletniList.PrintPaletniList"
 End Sub
 
-' PDF jednog paletnog lista -> <workbook>\Paleta_<broj>-<god>.pdf. Vraca putanju.
+' PDF jednog paletnog lista -> <workbook>\Paletni listovi\Paleta_<broj>-<god>.pdf. Vraca putanju.
 Public Function ExportPaletniListPDF(ByVal palID As String, _
                                      Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
@@ -613,7 +613,7 @@ Public Function ExportPaletniListPDF(ByVal palID As String, _
     If ws Is Nothing Then Exit Function
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Paleta_" & broj & "-" & god & ".pdf"
+    pdfPath = EnsureDocFolder(PDF_DIR_PALETNI) & "\Paleta_" & broj & "-" & god & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
@@ -1743,7 +1743,7 @@ EH:
     Err.Raise errNum, SRC, errDesc
 End Function
 
-' PDF preradnog lista -> <workbook>\Prerada_<broj>-<god>.pdf.
+' PDF preradnog lista -> <workbook>\Preradni listovi\Prerada_<broj>-<god>.pdf.
 Public Function ExportPreradaPDF(ByVal preID As String, _
                                  Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
@@ -1753,7 +1753,7 @@ Public Function ExportPreradaPDF(ByVal preID As String, _
     If ws Is Nothing Then Exit Function
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Prerada_" & broj & "-" & god & ".pdf"
+    pdfPath = EnsureDocFolder(PDF_DIR_PRERADA) & "\Prerada_" & broj & "-" & god & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                            Quality:=xlQualityStandard, _
