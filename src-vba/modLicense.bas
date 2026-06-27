@@ -213,7 +213,7 @@ Public Function LicenseGateOrQuit() As Boolean
         ' da privremeni nestanak interneta ne zakljuca platisu. Ako masina
         ' NIJE vezana (nema validnog kesa) -> blokiraj (aktivacija mora online).
         If LicenseIsBoundMachine(bound, parts) Then
-            LogWarn SRC, "Server nedostupan — offline grace (masina je vezana)."
+            LogWarn SRC, Poruka("LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE")
             LicenseGateOrQuit = True
             Exit Function
         End If
@@ -264,7 +264,7 @@ Public Function LicenseGateOrQuit() As Boolean
             ' privremeno: vezana masina -> offline grace; inace pozovi na ponovni
             ' pokusaj (NE alarmantno "kontaktirajte dobavljaca").
             If LicenseIsBoundMachine(bound, parts) Then
-                LogWarn SRC, "Prolazna greska/status='" & status & "' — propustam vezanu masinu."
+                LogWarn SRC, "Prolazna greska/status='" & status & Poruka("LIC_MSG_PROPUSTAM_VEZANU_MASINU")
                 LicenseGateOrQuit = True
             Else
                 LicenseBlock "Licencni server trenutno nije dostupan.", _

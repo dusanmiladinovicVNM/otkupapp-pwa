@@ -242,7 +242,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     
-    MsgBox "Greška pri unosu magacina, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox Poruka("AGRO_MSG_GRESKA_PRI_UNOSU") & errDesc, vbCritical, APP_NAME
     SaveMagacin_TX = ""
 End Function
 

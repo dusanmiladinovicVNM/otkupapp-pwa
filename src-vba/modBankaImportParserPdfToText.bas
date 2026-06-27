@@ -264,7 +264,7 @@ Function PickPdf() As String
 
     With Application.FileDialog(msoFileDialogFilePicker)
     
-        .title = "PDF auswählen"
+        .title = Poruka("BANKA_LBL_PDF_AUSWAHLEN")
         .filters.Clear
         .filters.Add "PDF", "*.pdf"
         

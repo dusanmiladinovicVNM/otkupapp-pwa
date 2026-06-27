@@ -64,8 +64,8 @@ Private Sub UserForm_Activate()
     
     ' Action buttons
     StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
-    StylePrimaryButton btnPovezi, "Poveži"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnPovezi, Poruka("SLED_LBL_POVEZI")
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StyleExitButton btnPovratak, "Povratak"
     
     ' Filter label
@@ -128,8 +128,8 @@ End Sub
 
 Private Sub ResetActionButtons()
     StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
-    StylePrimaryButton btnPovezi, "Poveži"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnPovezi, Poruka("SLED_LBL_POVEZI")
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 

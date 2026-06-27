@@ -86,15 +86,15 @@ Private Sub UserForm_Activate()
 
     ' Action buttons (single faktura)
     StylePrimaryButton btnUcitaj, "Ucitaj fakturu"
-    StylePrimaryButton btnPosalji, "Pošalji na SEF"
-    StylePrimaryButton btnOsvezi, "Osveži status"
+    StylePrimaryButton btnPosalji, Poruka("SEF_LBL_POSALJI_SEF")
+    StylePrimaryButton btnOsvezi, Poruka("SEF_LBL_OSVEZI_STATUS")
     StylePrimaryButton btnPrepareResubmit, "Pripremi za ponovno slanje"
-    StylePrimaryButton btnCancel, "Otkaži slanje na SEF"
+    StylePrimaryButton btnCancel, Poruka("SEF_LBL_OTKAZI_SLANJE_SEF")
     StylePrimaryButton btnStorno, "Storniraj u SEFu"
     StylePrimaryButton btnRecoverSending, "Recover sending"
 
     ' Batch buttons
-    StylePrimaryButton btnRefreshPending, "Osveži sve Pending"
+    StylePrimaryButton btnRefreshPending, Poruka("SEF_LBL_OSVEZI_SVE_PENDING")
     StylePrimaryButton btnRecoverAllSending, "Recover sve sending"
 
     ' Exit
@@ -156,7 +156,7 @@ On Error GoTo 0
 
 EH:
     LogErr "frmSEF.UserForm_Activate"
-    MsgBox "Greška pri otvaranju SEF forme: " & Err.description, vbExclamation, APP_NAME
+    MsgBox Poruka("SEF_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbExclamation, APP_NAME
 End Sub
 
 ' === Column headers setup ===
@@ -196,12 +196,12 @@ Private Sub ResetActionButtons()
     StylePrimaryButton btnUcitaj, "Ucitaj fakturu"
     ' btnPosalji caption se menja dinamicki, pa ne forsiramo
     StylePrimaryButton btnPosalji, btnPosalji.caption
-    StylePrimaryButton btnOsvezi, "Osveži status"
+    StylePrimaryButton btnOsvezi, Poruka("SEF_LBL_OSVEZI_STATUS")
     StylePrimaryButton btnPrepareResubmit, "Pripremi za ponovno slanje"
-    StylePrimaryButton btnCancel, "Otkaži slanje na SEF"
+    StylePrimaryButton btnCancel, Poruka("SEF_LBL_OTKAZI_SLANJE_SEF")
     StylePrimaryButton btnStorno, "Storniraj u SEFu"
     StylePrimaryButton btnRecoverSending, "Recover sending"
-    StylePrimaryButton btnRefreshPending, "Osveži sve Pending"
+    StylePrimaryButton btnRefreshPending, Poruka("SEF_LBL_OSVEZI_SVE_PENDING")
     StylePrimaryButton btnRecoverAllSending, "Recover sve sending"
     StyleExitButton btnPovratak, "Zatvori"
 End Sub
@@ -398,11 +398,11 @@ Private Sub UpdateSEFButtonStates()
     If workflowState = UCase$(WF_SEF_TECH_FAILED) Then
         Me.btnPosalji.caption = "Retry slanje na SEF"
     Else
-        Me.btnPosalji.caption = "Pošalji na SEF"
+        Me.btnPosalji.caption = Poruka("SEF_LBL_POSALJI_SEF")
     End If
     
     If Not Me.btnPosalji.enabled Then
-        Me.btnPosalji.caption = "Pošalji na SEF"
+        Me.btnPosalji.caption = Poruka("SEF_LBL_POSALJI_SEF")
     End If
     
     Me.btnOsvezi.enabled = (workflowState = UCase$(WF_SEF_SENT) Or _
@@ -481,7 +481,7 @@ Private Sub btnOsvezi_Click()
     Call RefreshSEFStatus_TX(fakturaID)
     Call LoadSelectedFakturaInfo
     
-    MsgBox "SEF status osvežen.", vbInformation, APP_NAME
+    MsgBox Poruka("SEF_MSG_SEF_STATUS_OSVEZEN"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -537,7 +537,7 @@ Private Sub btnCancel_Click()
     Call LoadSelectedFakturaInfo
     
     If ok Then
-        MsgBox "Cancel uspešno poslat.", vbInformation, APP_NAME
+        MsgBox Poruka("SEF_MSG_CANCEL_USPESNO_POSLAT"), vbInformation, APP_NAME
     Else
         MsgBox "Cancel nije uspeo.", vbExclamation, APP_NAME
     End If
@@ -575,7 +575,7 @@ Private Sub btnStorno_Click()
     Call LoadSelectedFakturaInfo
     
     If ok Then
-        MsgBox "Storno uspešno poslat.", vbInformation, APP_NAME
+        MsgBox Poruka("SEF_MSG_STORNO_USPESNO_POSLAT"), vbInformation, APP_NAME
     Else
         MsgBox "Storno nije uspeo.", vbExclamation, APP_NAME
     End If
@@ -600,7 +600,7 @@ Private Sub btnRecoverSending_Click()
     Call RecoverStuckSEFSendingInvoice(fakturaID)
     Call LoadSelectedFakturaInfo
     
-    MsgBox "Recovery završen.", vbInformation, APP_NAME
+    MsgBox Poruka("SEF_MSG_RECOVERY_ZAVRSEN"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -614,7 +614,7 @@ Private Sub btnRefreshPending_Click()
     Call RefreshPendingOutboundInvoices_TX
     Call LoadSelectedFakturaInfo
     
-    MsgBox "Pending fakture osvežene.", vbInformation, APP_NAME
+    MsgBox Poruka("SEF_MSG_PENDING_FAKTURE_OSVEZENE"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -628,7 +628,7 @@ Private Sub btnRecoverAllSending_Click()
     Call RecoverAllStuckSEFSendingInvoices
     Call LoadSelectedFakturaInfo
     
-    MsgBox "SEF_SENDING recovery završen.", vbInformation, APP_NAME
+    MsgBox Poruka("SEF_MSG_SEF_SENDING_RECOVERY"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -671,16 +671,16 @@ Private Sub SetupHelpPage()
                "============================" & vbCrLf & vbCrLf & _
                "1. STATUSI FAKTURE:" & vbCrLf & _
                "- READY: Faktura je spremna." & vbCrLf & _
-               "- SENDING: Faktura se trenutno šalje." & vbCrLf & _
-               "- SENT: Faktura uspešno primljena na SEF." & vbCrLf & _
+               Poruka("SEF_MSG_SENDING_FAKTURA_TRENUTNO") & vbCrLf & _
+               Poruka("SEF_MSG_SENT_FAKTURA_USPESNO") & vbCrLf & _
                "- ACCEPTED: Faktura potvrdena." & vbCrLf & _
-               "- REJECTED: Greška! Proveri 'Poslednja greška'." & vbCrLf & vbCrLf & _
+               Poruka("SEF_MSG_REJECTED_GRESKA_PROVERI") & vbCrLf & vbCrLf & _
                "2. PROCEDURA SLANJA:" & vbCrLf & _
-               "Izaberi fakturu iz liste -> Klikni 'Pošalji na SEF'." & vbCrLf & _
+               Poruka("SEF_MSG_IZABERI_FAKTURU_LISTE") & vbCrLf & _
                "Ako se pojavi status REJECTED, klikni 'Pripremi za ponovno slanje'." & vbCrLf & vbCrLf & _
-               "3. TEHNICKA PODRŠKA:" & vbCrLf & _
-               "Za sve probleme koji se ne rešavaju sa 'Osveži status'," & vbCrLf & _
-               "kontaktiraj administratora i pošalji SEF Event Log (donja tabela)."
+               Poruka("SEF_MSG_TEHNICKA_PODRSKA") & vbCrLf & _
+               Poruka("SEF_MSG_SVE_PROBLEME_KOJI") & vbCrLf & _
+               Poruka("SEF_MSG_KONTAKTIRAJ_ADMINISTRATORA_POSALJI")
 
     Me.txtHelpBox.value = helpText
 End Sub

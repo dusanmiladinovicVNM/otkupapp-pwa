@@ -101,9 +101,9 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     mBtnToggle.Height = 24
     mBtnToggle.top = 6
     mBtnToggle.Left = mForm.InsideWidth - TOGGLE_W - 6
-    mBtnToggle.caption = "Otkupni blokovi  »"
+    mBtnToggle.caption = Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
     On Error Resume Next
-    StylePrimaryButton mBtnToggle, "Otkupni blokovi  »"
+    StylePrimaryButton mBtnToggle, Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
     On Error GoTo EH
 
     WireBtn mBtnToggle, "TOGGLE"
@@ -270,10 +270,10 @@ Private Sub TogglePanel()
         LoadOtpremnice
         LoadBlokovi
         mForm.width = EXP_WIDTH
-        mBtnToggle.caption = "«  Sakrij blokove"
+        mBtnToggle.caption = Poruka("OTKUP_LBL_SAKRIJ_BLOKOVE")
     Else
         mForm.width = mOrigWidth
-        mBtnToggle.caption = "Otkupni blokovi  »"
+        mBtnToggle.caption = Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
     End If
 
     mBtnToggle.Left = mForm.InsideWidth - mBtnToggle.width - 6
@@ -301,9 +301,9 @@ Private Sub BuildPanel()
     Set mLblUkupno = AddCtl("Label", "lblOtkBlokUk", PANEL_LEFT + 190, 7, 150, 14)
     Set mLblNapisano = AddCtl("Label", "lblOtkBlokNap", PANEL_LEFT + 346, 7, 150, 14)
     Set mLblPreostalo = AddCtl("Label", "lblOtkBlokPre", PANEL_LEFT + 502, 7, 150, 14)
-    mLblUkupno.caption = "Ukupno kg: —"
-    mLblNapisano.caption = "U blokovima: —"
-    mLblPreostalo.caption = "Ostatak: —"
+    mLblUkupno.caption = Poruka("OTKUP_LBL_UKUPNO")
+    mLblNapisano.caption = Poruka("OTKUP_LBL_BLOKOVIMA")
+    mLblPreostalo.caption = Poruka("OTKUP_LBL_OSTATAK")
 
     ' Drugi red sazetka: ambalaza (ispod kg)
     Set mLblUkupnoAmb = AddCtl("Label", "lblOtkBlokUkAmb", PANEL_LEFT + 190, 22, 150, 14)
@@ -316,9 +316,9 @@ Private Sub BuildPanel()
     On Error GoTo 0
     StyleHdr mLblZbirna
     mLblZbirna.caption = "Zbirna: -"
-    mLblUkupnoAmb.caption = "Ukupno amb: —"
-    mLblNapisanoAmb.caption = "U blokovima amb: —"
-    mLblPreostaloAmb.caption = "Ostatak amb: —"
+    mLblUkupnoAmb.caption = Poruka("OTKUP_LBL_UKUPNO_AMB")
+    mLblNapisanoAmb.caption = Poruka("OTKUP_LBL_BLOKOVIMA_AMB")
+    mLblPreostaloAmb.caption = Poruka("OTKUP_LBL_OSTATAK_AMB")
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
@@ -1151,12 +1151,12 @@ Private Sub RefreshSummary()
     End If
 
     If Len(mActiveOtpID) = 0 Then
-        mLblUkupno.caption = "Ukupno kg: —"
-        mLblNapisano.caption = "U blokovima: —"
-        mLblPreostalo.caption = "Ostatak: —"
-        mLblUkupnoAmb.caption = "Ukupno amb: —"
-        mLblNapisanoAmb.caption = "U blokovima amb: —"
-        mLblPreostaloAmb.caption = "Ostatak amb: —"
+        mLblUkupno.caption = Poruka("OTKUP_LBL_UKUPNO")
+        mLblNapisano.caption = Poruka("OTKUP_LBL_BLOKOVIMA")
+        mLblPreostalo.caption = Poruka("OTKUP_LBL_OSTATAK")
+        mLblUkupnoAmb.caption = Poruka("OTKUP_LBL_UKUPNO_AMB")
+        mLblNapisanoAmb.caption = Poruka("OTKUP_LBL_BLOKOVIMA_AMB")
+        mLblPreostaloAmb.caption = Poruka("OTKUP_LBL_OSTATAK_AMB")
         Exit Sub
     End If
 

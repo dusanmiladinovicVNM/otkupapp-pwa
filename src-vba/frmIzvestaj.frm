@@ -81,13 +81,13 @@ Private Sub UserForm_Activate()
     
     ' Header zone (dodati u Designer ako nemaš)
     On Error Resume Next
-    StyleFrameTitleLabel lblKopf, "Izveštaji"
-    StyleSubtitle lblSubtitle, "Pregled saldo, otkupljene robe, ambalaže i prosecne cene"
+    StyleFrameTitleLabel lblKopf, Poruka("RPT_LBL_IZVESTAJI")
+    StyleSubtitle lblSubtitle, Poruka("RPT_LBL_PREGLED_SALDO_OTKUPLJENE")
     On Error GoTo EH
     
     ' Style action buttons
-    StylePrimaryButton btnUnos, "Prikaži"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnUnos, Poruka("RPT_LBL_PRIKAZI")
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StyleExitButton btnPovratak, "Povratak"
     
     ' Style entity toggle buttons (default: inactive look)
@@ -107,14 +107,14 @@ Private Sub UserForm_Activate()
     
     ' Kartica print button (specijalan za kooperante)
     On Error Resume Next
-    StylePrimaryButton btnStampajKarticu, "Štampaj karticu"
+    StylePrimaryButton btnStampajKarticu, Poruka("RPT_LBL_STAMPAJ_KARTICU")
     On Error GoTo EH
     
     StyleListHeaderLabel lblSidebarEntitet
     lblSidebarEntitet.caption = "ENTITET"
 
     StyleListHeaderLabel lblSidebarTip
-    lblSidebarTip.caption = "TIP IZVEŠTAJA"
+    lblSidebarTip.caption = Poruka("RPT_LBL_TIP_IZVESTAJA")
 
     StyleListHeaderLabel lblSidebarFilter
     lblSidebarFilter.caption = "FILTER"
@@ -377,12 +377,12 @@ End Sub
 
 
 Private Sub ResetActionButtons()
-    StylePrimaryButton btnUnos, "Prikaži"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnUnos, Poruka("RPT_LBL_PRIKAZI")
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StyleExitButton btnPovratak, "Povratak"
     
     On Error Resume Next
-    StylePrimaryButton btnStampajKarticu, "Štampaj karticu"
+    StylePrimaryButton btnStampajKarticu, Poruka("RPT_LBL_STAMPAJ_KARTICU")
     On Error GoTo 0
 End Sub
 
@@ -1406,9 +1406,9 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SOM2, "Kolicina"
     SetColumnHeader lbl_H_SOM3, "Vrednost"
     SetColumnHeader lbl_H_SOM4, "Isplaceno"
-    SetColumnHeader lbl_H_SOM5, "Agro zaduženje"
+    SetColumnHeader lbl_H_SOM5, Poruka("RPT_LBL_AGRO_ZADUZENJE")
     SetColumnHeader lbl_H_SOM6, "Saldo"
-    SetColumnHeader lbl_H_SOM7, "Ambalaža"
+    SetColumnHeader lbl_H_SOM7, Poruka("RPT_LBL_AMBALAZA")
     
     LayoutSaldoOMHeaders
 
@@ -1419,7 +1419,7 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SK4, "Vrednost"
     SetColumnHeader lbl_H_SK5, "Novac"
     SetColumnHeader lbl_H_SK6, "Saldo"
-    SetColumnHeader lbl_H_SK7, "Ambalaža"
+    SetColumnHeader lbl_H_SK7, Poruka("RPT_LBL_AMBALAZA")
     
     ' === OtkupRoba Page === (naslovi + sirine + OR11 -> LayoutOtkupRobaHeaders)
     LayoutOtkupRobaHeaders
@@ -1434,7 +1434,7 @@ Private Sub SetupAllColumnHeaders()
     
     ' === Isplata Page ===
     SetColumnHeader lbl_H_ISP1, "Kooperant"
-    SetColumnHeader lbl_H_ISP2, "Keš otkupac"
+    SetColumnHeader lbl_H_ISP2, Poruka("RPT_LBL_KES_OTKUPAC")
     SetColumnHeader lbl_H_ISP3, "Virman firma"
     SetColumnHeader lbl_H_ISP4, "Virman avans"
     SetColumnHeader lbl_H_ISP5, "Ukupno"
@@ -1464,8 +1464,8 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_KK1, "Datum"
     SetColumnHeader lbl_H_KK2, "Broj dok."
     SetColumnHeader lbl_H_KK3, "Opis"
-    SetColumnHeader lbl_H_KK4, "Zaduženje"
-    SetColumnHeader lbl_H_KK5, "Razduženje"
+    SetColumnHeader lbl_H_KK4, Poruka("RPT_LBL_ZADUZENJE")
+    SetColumnHeader lbl_H_KK5, Poruka("RPT_LBL_RAZDUZENJE")
     SetColumnHeader lbl_H_KK6, "Saldo"
     LayoutKarticaHeaders            ' kreira lbl_H_KK7 + auto-fit sirine/pozicije (mora poslednje)
 

@@ -30,7 +30,7 @@ Private Sub UserForm_Activate()
     
     ' Headers
     StyleFrameTitleLabel lblKopf, "Bank Import"
-    StyleSubtitle lblSubtitle, "Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere"
+    StyleSubtitle lblSubtitle, Poruka("BANKA_LBL_UVOZ_TRANSAKCIJA_BANKARSKIH")
     
     ' Section headers (ako koristis frames)
     ' StyleSectionHeader fraDetail, "Detalji selektovane stavke"

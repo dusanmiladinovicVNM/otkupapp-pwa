@@ -52,7 +52,7 @@ EH:
     LogErr "ThisWorkbook.Workbook_Open"
 
     Application.Visible = True
-    MsgBox "Greška pri pokretanju aplikacije. Pogledajte log.", vbCritical
+    MsgBox Poruka("APP_MSG_GRESKA_PRI_POKRETANJU"), vbCritical
 End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)

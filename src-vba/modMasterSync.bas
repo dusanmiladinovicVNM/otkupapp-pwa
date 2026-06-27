@@ -198,10 +198,10 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz OTK nije potvrden zbog fatal sync greške." & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_OTK_NIJE") & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbCritical, APP_NAME
         End If
@@ -221,11 +221,11 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz OTK završen sa greškama." & vbCrLf & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_OTK_ZAVRSEN") & vbCrLf & vbCrLf & _
                    "Fajlova: " & CStr(filesCount) & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbExclamation, APP_NAME
         End If
@@ -242,11 +242,11 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
         filesCount:=filesCount
 
     If showMessages Then
-        MsgBox "Uvoz OTK završen!" & vbCrLf & vbCrLf & _
+        MsgBox Poruka("SYNC_ERR_UVOZ_OTK_ZAVRSEN_2") & vbCrLf & vbCrLf & _
                "Fajlova: " & CStr(filesCount) & vbCrLf & _
                "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-               "Greške: " & CStr(totalErrors), _
+               Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors), _
                vbInformation, APP_NAME
     End If
 
@@ -277,7 +277,7 @@ EH:
         errorCount:=totalErrors
 
     If showMessages Then
-        MsgBox "Greška pri uvozu OTK: " & errDesc, vbCritical, APP_NAME
+        MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU") & errDesc, vbCritical, APP_NAME
     End If
 
     ImportOtkupFromPWA_Core = False
@@ -306,14 +306,14 @@ Public Sub ImportOtkupFromPWA_TX()
             errDesc:="PWA import was not confirmed. Transaction rolled back because of fatal sync error.", _
             errSrc:="modMasterSync.ImportOtkupFromPWA_TX"
 
-        MsgBox "PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greške. Proveri log.", _
+        MsgBox Poruka("SYNC_MSG_PWA_UVOZ_NIJE"), _
             vbCritical, APP_NAME
         Exit Sub
     End If
 
     tx.CommitTx
 
-    MsgBox "PWA uvoz završen i potvrden.", vbInformation, APP_NAME
+    MsgBox Poruka("SYNC_MSG_PWA_UVOZ_ZAVRSEN"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -2070,10 +2070,10 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz zbirnih nije potvrden zbog fatal sync greške." & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_ZBIRNIH_NIJE") & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbCritical, APP_NAME
         End If
@@ -2093,11 +2093,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz zbirnih završen sa greškama." & vbCrLf & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN") & vbCrLf & vbCrLf & _
                    "Fajlova: " & CStr(filesCount) & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbExclamation, APP_NAME
         End If
@@ -2114,11 +2114,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
         filesCount:=filesCount
 
     If showMessages Then
-        MsgBox "Uvoz zbirnih završen!" & vbCrLf & vbCrLf & _
+        MsgBox Poruka("SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN_2") & vbCrLf & vbCrLf & _
                "Fajlova: " & CStr(filesCount) & vbCrLf & _
                "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-               "Greške: " & CStr(totalErrors), _
+               Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors), _
                vbInformation, APP_NAME
     End If
 
@@ -2149,7 +2149,7 @@ EH:
         errorCount:=totalErrors
 
     If showMessages Then
-        MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+        MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU_2") & errDesc, vbCritical, APP_NAME
     End If
 
     ImportZbirneFromPWA_Core = False
@@ -2178,15 +2178,15 @@ Public Sub ImportZbirneFromPWA_TX()
     ok = ImportZbirneFromPWA_Core(False)
 
     If Not ok Then
-        MsgBox "Uvoz zbirnih završen sa greškama ili fatal sync problemom." & vbCrLf & _
-               "Uspešni redovi koji su potvrdeni kroz row-level TX ostaju upisani." & vbCrLf & _
-               "Neuspešni redovi su oznaceni kao greška gde je writeback uspeo." & vbCrLf & _
+        MsgBox Poruka("SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN") & vbCrLf & _
+               Poruka("SYNC_MSG_USPESNI_REDOVI_KOJI") & vbCrLf & _
+               Poruka("SYNC_MSG_NEUSPESNI_REDOVI_OZNACENI") & vbCrLf & _
                "Proveri log.", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
 
-    MsgBox "Uvoz zbirnih završen i potvrden.", vbInformation, APP_NAME
+    MsgBox Poruka("SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN_2"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -2202,7 +2202,7 @@ EH:
     LogErr SRC
     On Error GoTo 0
 
-    MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+    MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU_2") & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================

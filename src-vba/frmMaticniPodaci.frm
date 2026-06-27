@@ -70,7 +70,7 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmStammdatenMenu.UserForm_Initialize"
-    MsgBox "Greška pri otvaranju menija šifarnika: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("MATICNI_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -189,7 +189,7 @@ EH:
     On Error Resume Next
     Me.Show
     On Error GoTo 0
-    MsgBox "Greška pri otvaranju šifarnika: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("MATICNI_ERR_GRESKA_PRI_OTVARANJU_2") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Staticni handleri (fallback dugmad) idu kroz isti put.

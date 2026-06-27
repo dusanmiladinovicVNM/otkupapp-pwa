@@ -78,7 +78,7 @@ Public Sub RunGoogleAuthSetup()
     If ExchangeCodeForTokens(authCode) Then
         MsgBox "Google OAuth2 erfolgreich eingerichtet!", vbInformation, APP_NAME
     Else
-        MsgBox "Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.", vbCritical, APP_NAME
+        MsgBox Poruka("GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN"), vbCritical, APP_NAME
     End If
 End Sub
 

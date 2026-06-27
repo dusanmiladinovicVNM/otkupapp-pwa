@@ -434,7 +434,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
 
     If UCase$(Trim$(CStr(data(fRow, colFakStornirano)))) = "DA" Then
         Err.Raise vbObjectError + 1736, "PrintFaktura", _
-              "Stornirana faktura se ne može štampati kao aktivna faktura: " & fakturaID
+              Poruka("FAK_ERR_STORNIRANA_FAKTURA_MOZE") & fakturaID
     End If
 
     Dim kupacID As String

@@ -1246,7 +1246,7 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
 
     If kolAmb <= 0 And novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  "Nema ambalaže ni novca za cuvanje."
+                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
     End If
 
     tx.BeginTx

@@ -90,7 +90,7 @@ Private Sub UserForm_Activate()
     ApplyThemeToControls Me
 
     StyleFrameTitleLabel lblKopf, "Palete"
-    StyleSubtitle lblSubtitle, "Pregled paleta, štampa i prerada"
+    StyleSubtitle lblSubtitle, Poruka("PAL_LBL_PREGLED_PALETA_STAMPA")
 
     Me.lstPaleteHdr.Font.Bold = True
     Me.lstPaleteHdr.BackColor = BG_TOP()

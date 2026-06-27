@@ -80,7 +80,7 @@ Private Sub UserForm_Activate()
     ' Action buttons
     StylePrimaryButton btnUnesi, "Unesi"
     StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StylePrimaryButton btnSEF, "SEF"
     StyleExitButton btnPovratak, "Povratak"
 
@@ -137,7 +137,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmFakturisanje.UserForm_Activate"
-    MsgBox "Greška pri otvaranju fakturisanja: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupAllColumnHeaders()
@@ -238,7 +238,7 @@ End Sub
 Private Sub ResetActionButtons()
     StylePrimaryButton btnUnesi, "Unesi"
     StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StylePrimaryButton btnSEF, "SEF"
     StyleExitButton btnPovratak, "Povratak"
 End Sub
@@ -424,7 +424,7 @@ NextPrij:
 
 EH:
     LogErr "frmFakturisanje.btnUnesi"
-    MsgBox "Greška pri ucitavanju prijemnica: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_UCITAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillFaktureZaKupca()
@@ -612,7 +612,7 @@ Private Sub btnIzradiFakturu_Click()
             End If
 
             If seenPrijemnice.Exists(prijemnicaID) Then
-                MsgBox "Ista prijemnica je izabrana više puta: " & prijemnicaID, _
+                MsgBox Poruka("FAK_MSG_ISTA_PRIJEMNICA_IZABRANA") & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -620,7 +620,7 @@ Private Sub btnIzradiFakturu_Click()
             seenPrijemnice.Add prijemnicaID, True
 
             If Trim$(CStr(m_PrijemniceData(dataRow, colStorno))) = "Da" Then
-                MsgBox "Izabrana prijemnica je stornirana i ne može se fakturisati.", _
+                MsgBox Poruka("FAK_MSG_IZABRANA_PRIJEMNICA_STORNIRANA"), _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -628,7 +628,7 @@ Private Sub btnIzradiFakturu_Click()
             If Trim$(CStr(m_PrijemniceData(dataRow, colFakturisano))) = "Da" Or _
                Trim$(CStr(m_PrijemniceData(dataRow, colFakturaID))) <> "" Then
 
-                MsgBox "Izabrana prijemnica je vec fakturisana i ne može biti ukljucena u novu fakturu.", _
+                MsgBox Poruka("FAK_MSG_IZABRANA_PRIJEMNICA_VEC"), _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -709,14 +709,14 @@ Private Sub btnIzradiFakturu_Click()
         SetComboByID cmbFaktura, fakturaID
 
     Else
-        MsgBox "Greška pri kreiranju fakture. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("FAK_MSG_GRESKA_PRI_KREIRANJU"), vbCritical, APP_NAME
     End If
 
     Exit Sub
 
 EH:
     LogErr "frmFakturisanje.btnIzradiFakturu"
-    MsgBox "Greška pri izradi fakture: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_IZRADI") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function CalculateTotal(ByVal stavke As Collection) As Double
@@ -766,7 +766,7 @@ Private Sub btnStampaj_Click()
     fakturaID = GetComboID(cmbFaktura)
 
     If fakturaID = "" Then
-        MsgBox "Nije pronaden ID fakture za štampu.", vbExclamation, APP_NAME
+        MsgBox Poruka("FAK_MSG_NIJE_PRONADEN_FAKTURE"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -775,7 +775,7 @@ Private Sub btnStampaj_Click()
 
 EH:
     LogErr "frmFakturisanje.btnStampaj"
-    MsgBox "Greška pri štampanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_STAMPANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================

@@ -68,8 +68,8 @@ Public Sub SetupNewPC()
     report = report & CheckRequiredColumnsForSetup()
 
     If Len(report) = 0 Then
-        SetLocalConfigValue "APP_SETUP_COMPLETED", "DA", "Da li je ovaj racunar prošao SetupNewPC"
-        SetLocalConfigValue "APP_SETUP_COMPLETED_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Datum i vreme završetka setup-a"
+        SetLocalConfigValue "APP_SETUP_COMPLETED", "DA", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
+        SetLocalConfigValue "APP_SETUP_COMPLETED_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), Poruka("SETUP_MSG_DATUM_VREME_ZAVRSETKA")
         SetLocalConfigValue "APP_SETUP_MACHINE_NAME", Environ$("COMPUTERNAME"), "Naziv racunara"
         SetLocalConfigValue "APP_SETUP_WINDOWS_USER", Environ$("USERNAME"), "Windows korisnik"
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
@@ -83,17 +83,17 @@ Public Sub SetupNewPC()
 
         LogSetup "OK", "Setup completed successfully"
 
-        MsgBox "Setup je uspešno završen." & vbCrLf & vbCrLf & _
+        MsgBox Poruka("SETUP_MSG_SETUP_USPESNO_ZAVRSEN") & vbCrLf & vbCrLf & _
                "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
-               "Podešavanja: Maticni podaci -> Podešavanja (tblSEFConfig je skriven).", _
+               Poruka("SETUP_MSG_PODESAVANJA_MATICNI_PODACI"), _
                vbInformation, APP_NAME
     Else
-        SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", "Da li je ovaj racunar prošao SetupNewPC"
+        SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
         LogSetup "WARN", report
 
-        MsgBox "Setup je završen, ali postoje stavke za proveru:" & _
+        MsgBox Poruka("SETUP_MSG_SETUP_ZAVRSEN_ALI") & _
                vbCrLf & vbCrLf & report, _
                vbExclamation, APP_NAME
     End If
@@ -102,7 +102,7 @@ Public Sub SetupNewPC()
 
 EH:
     LogSetup "ERROR", "SetupNewPC failed: " & Err.Number & " - " & Err.description
-    MsgBox "Greška tokom setup-a: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("SETUP_ERR_GRESKA_TOKOM_SETUP") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub RunSetupHealthCheck()
@@ -128,10 +128,10 @@ Public Sub RunSetupHealthCheck()
 
     If Len(report) = 0 Then
         LogSetup "OK", "Health-check passed"
-        MsgBox "Health-check je prošao. Racunar je podešen.", vbInformation, APP_NAME
+        MsgBox Poruka("SETUP_MSG_HEALTH_CHECK_PROSAO"), vbInformation, APP_NAME
     Else
         LogSetup "WARN", report
-        MsgBox "Health-check je našao stavke za proveru:" & vbCrLf & vbCrLf & report, _
+        MsgBox Poruka("SETUP_MSG_HEALTH_CHECK_NASAO") & vbCrLf & vbCrLf & report, _
                vbExclamation, APP_NAME
     End If
 
@@ -139,7 +139,7 @@ Public Sub RunSetupHealthCheck()
 
 EH:
     LogSetup "ERROR", "RunSetupHealthCheck failed: " & Err.description
-    MsgBox "Greška tokom health-check-a: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("SETUP_ERR_GRESKA_TOKOM_HEALTH") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Function IsSetupHealthy() As Boolean
@@ -186,7 +186,7 @@ Public Sub EnableDesktopOnlyMode()
     LogSetup "OK", "Desktop-only mod UKLJUCEN (CLOUD_SYNC_ENABLED=NO)"
 
     MsgBox "Desktop-only mod je ukljucen." & vbCrLf & vbCrLf & _
-           "Aplikacija radi lokalno — Google/PWA se ne koristi niti proverava." & vbCrLf & _
+           Poruka("SETUP_MSG_APLIKACIJA_RADI_LOKALNO") & vbCrLf & _
            "Pokrenite SetupNewPC ponovo.", _
            vbInformation, APP_NAME
     Exit Sub
@@ -243,14 +243,14 @@ Public Sub SetupBankFoldersInteractive()
 
     SetLocalConfigValue "BANKA_INBOX_PATH", inboxPath, "Folder za nove bankarske izvode"
     SetLocalConfigValue "BANKA_PROCESSED_PATH", processedPath, "Folder za obradene bankarske izvode"
-    SetLocalConfigValue "BANKA_ERROR_PATH", errorPath, "Folder za bankarske izvode sa greškom"
+    SetLocalConfigValue "BANKA_ERROR_PATH", errorPath, Poruka("SETUP_MSG_FOLDER_BANKARSKE_IZVODE")
 
-    MsgBox "Bankarski folderi su podešeni.", vbInformation, APP_NAME
+    MsgBox Poruka("SETUP_MSG_BANKARSKI_FOLDERI_PODESENI"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "SetupBankFoldersInteractive failed: " & Err.description
-    MsgBox "Greška pri podešavanju bankarskih foldera: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("SETUP_ERR_GRESKA_PRI_PODESAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -448,7 +448,7 @@ Private Function SetupBankFolders() As String
 
     inboxPath = GetLocalConfigWithDefault("BANKA_INBOX_PATH", bankRoot & "\Inbox", "Folder za nove bankarske izvode")
     processedPath = GetLocalConfigWithDefault("BANKA_PROCESSED_PATH", bankRoot & "\Processed", "Folder za obradene bankarske izvode")
-    errorPath = GetLocalConfigWithDefault("BANKA_ERROR_PATH", bankRoot & "\Error", "Folder za bankarske izvode sa greškom")
+    errorPath = GetLocalConfigWithDefault("BANKA_ERROR_PATH", bankRoot & "\Error", Poruka("SETUP_MSG_FOLDER_BANKARSKE_IZVODE"))
 
     EnsureFolder inboxPath
     EnsureFolder processedPath
@@ -522,15 +522,15 @@ Private Function CheckSEFConfigForSetup() As String
     End If
 
     If Trim$(GetConfigValue("SEF_BASE_URL")) = "" Then
-        msg = msg & "- SEF_BASE_URL nije podešen." & vbCrLf
+        msg = msg & Poruka("SETUP_MSG_SEF_BASE_URL") & vbCrLf
     End If
 
     If Trim$(GetConfigValue("SEF_API_KEY")) = "" Then
-        msg = msg & "- SEF_API_KEY nije podešen." & vbCrLf
+        msg = msg & Poruka("SETUP_MSG_SEF_API_KEY") & vbCrLf
     End If
 
     If Trim$(GetConfigValue("SEF_ENV")) = "" Then
-        msg = msg & "- SEF_ENV nije podešen." & vbCrLf
+        msg = msg & Poruka("SETUP_MSG_SEF_ENV_NIJE") & vbCrLf
     End If
 
     CheckSEFConfigForSetup = msg
@@ -634,7 +634,7 @@ Private Function CheckFolderExists(ByVal configKey As String, ByVal labelText As
     p = Trim$(GetLocalConfigValue(configKey, ""))
 
     If p = "" Then
-        CheckFolderExists = "- " & labelText & " nije podešen: " & configKey & vbCrLf
+        CheckFolderExists = "- " & labelText & Poruka("SETUP_MSG_NIJE_PODESEN") & configKey & vbCrLf
     ElseIf Dir$(p, vbDirectory) = "" Then
         CheckFolderExists = "- " & labelText & " ne postoji: " & p & vbCrLf
     End If

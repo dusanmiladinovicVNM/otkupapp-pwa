@@ -88,13 +88,13 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"
     CfgAdd c, "Otkup / dokumenta", "AUTO_BROJ_DOKUMENTA", "Automatsko generisanje brojeva dokumenata", "bool"
     CfgAdd c, "Otkup / dokumenta", "PALETIRANJE", "Paletiranje (izrada paletnih listova)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", "Štampa otkupnog lista", "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", "Štampa paletnog lista", "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_PRINT_MODE", "Štampa prijemnice (auto na unos)", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", Poruka("CFG_MSG_STAMPA_OTKUPNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PALETNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PRIJEMNICE_AUTO"), "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", "Kupac unosi BRUTO težinu (oduzmi ambalažu)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta voca", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta voca", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "KOOP_FILTER_BY_OM", "Filtriraj kooperante po otkupnom mestu", "bool"
@@ -103,8 +103,8 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "KES_ISPLATE", "Postoje kes isplate proizvodjacima", "bool"
     CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
 
-    CfgAdd c, "Malina režim", "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
-    CfgAdd c, "Malina režim", "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
+    CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
+    CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Alati / putanje", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text"
 
@@ -178,7 +178,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     ' Naslov
     Dim lblTitle As MSForms.label
     Set lblTitle = AddLabel("cfg_title", m, 8, w - 2 * m, 20)
-    lblTitle.caption = "Podešavanja (tblSEFConfig)"
+    lblTitle.caption = Poruka("CFG_LBL_PODESAVANJA_TBLSEFCONFIG")
     StyleLabel lblTitle, TXT_LIGHT(), True
     lblTitle.Font.Size = FONT_SIZE_HEADER
 
@@ -226,7 +226,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             curGroup = grp
             Y = Y + 8
             Set hdr = AddLabel("cfghdr_" & i, m, Y, w - 2 * m, 18)
-            hdr.caption = "— " & grp & " —"
+            hdr.caption = Poruka("CFG_LBL_STR") & grp & Poruka("CFG_LBL_STR_2")
             StyleLabel hdr, TXT_LIGHT(), True
             Y = Y + 22
         End If
@@ -279,7 +279,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Exit Sub
 EH:
     LogErr SRC
-    MsgBox "Greška pri otvaranju podešavanja: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("CFG_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -330,19 +330,19 @@ Private Sub SaveConfigEditor()
 
     If Len(errs) > 0 Then
         MsgBox "Sacuvano: " & n & " polja." & vbCrLf & vbCrLf & _
-               "Preskoceno (greška):" & vbCrLf & errs, vbExclamation, APP_NAME
+               Poruka("CFG_MSG_PRESKOCENO_GRESKA") & vbCrLf & errs, vbExclamation, APP_NAME
     Else
         MsgBox "Sacuvano: " & n & " polja.", vbInformation, APP_NAME
     End If
     Exit Sub
 EH:
     LogErr SRC
-    MsgBox "Greška pri cuvanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("CFG_ERR_GRESKA_PRI_CUVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub CloseConfigEditor()
     On Error Resume Next
-    frmOtkupAPP.ReturnToDashboard "Podešavanja zatvorena."
+    frmOtkupAPP.ReturnToDashboard Poruka("CFG_MSG_PODESAVANJA_ZATVORENA")
     Unload mFrm
     Set mFrm = Nothing
     Set mInputs = Nothing
@@ -362,7 +362,7 @@ Public Sub ToggleConfigSheet()
         HideConfigSheet
         MsgBox "tblSEFConfig je sada SAKRIVEN (VeryHidden)." & vbCrLf & _
                "Ureduj ga iskljucivo preko ove forme." & vbCrLf & _
-               "(Izlaz u nuždi: Alt+F8 -> ShowConfigSheet.)", vbInformation, APP_NAME
+               Poruka("CFG_MSG_IZLAZ_NUZDI_ALT"), vbInformation, APP_NAME
     End If
     If Not mBtnToggle Is Nothing Then mBtnToggle.caption = ToggleCaption()
     Exit Sub
@@ -388,7 +388,7 @@ EH:
 End Sub
 
 Private Function ToggleCaption() As String
-    ToggleCaption = IIf(ConfigSheetIsHidden(), "Prikaži config tabelu", "Sakrij config tabelu")
+    ToggleCaption = IIf(ConfigSheetIsHidden(), Poruka("CFG_MSG_PRIKAZI_CONFIG_TABELU"), "Sakrij config tabelu")
 End Function
 
 Private Function ConfigSheetIsHidden() As Boolean

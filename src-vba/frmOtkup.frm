@@ -526,7 +526,7 @@ Private Sub cmbOtkupnoMesto_Change()
     HideLockStatus
 
     If Not acquired Then
-        MsgBox "Nije moguce preuzeti stanicu " & stanicaID & ". Pokušaj ponovo.", _
+        MsgBox "Nije moguce preuzeti stanicu " & stanicaID & Poruka("OTKUP_MSG_POKUSAJ_PONOVO"), _
                vbExclamation, APP_NAME
         cmbOtkupnoMesto.value = ""
         Exit Sub
@@ -774,7 +774,7 @@ Private Sub btnUnos_Click()
             Exit Sub
         End If
         If Trim$(txtKolAmbalaze.value) <> "" Then
-            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+            MsgBox Poruka("DOK_MSG_UNOSI_SAMO_KLASA"), _
                    vbExclamation, APP_NAME
             txtKolAmbalaze.SetFocus
             Exit Sub
@@ -801,7 +801,7 @@ Private Sub btnUnos_Click()
     Dim kolAmb As Long
     If Trim$(txtKolAmbalaze.value) <> "" Then
         If Not TryParseLong(txtKolAmbalaze.value, kolAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtKolAmbalaze.SetFocus
             Exit Sub
         End If
@@ -811,7 +811,7 @@ Private Sub btnUnos_Click()
     If Not m_txtKolAmbalazeII Is Nothing Then
         If chkDveKlase.value And Trim$(m_txtKolAmbalazeII.value) <> "" Then
             If Not TryParseLong(m_txtKolAmbalazeII.value, kolAmbII) Then
-                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2"), vbExclamation, APP_NAME
                 m_txtKolAmbalazeII.SetFocus
                 Exit Sub
             End If
@@ -822,7 +822,7 @@ Private Sub btnUnos_Click()
     If Not m_txtAmbIzdata Is Nothing Then
         If Trim$(m_txtAmbIzdata.value) <> "" Then
             If Not TryParseLong(m_txtAmbIzdata.value, kolAmbIzdata) Then
-                MsgBox "Unesite ispravnu kolicinu izdate ambalaže!", vbExclamation, APP_NAME
+                MsgBox Poruka("OTKUP_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
                 m_txtAmbIzdata.SetFocus
                 Exit Sub
             End If
@@ -830,19 +830,19 @@ Private Sub btnUnos_Click()
     End If
 
     If kolAmb > 0 And cmbTipAmbalaze.value = "" Then
-        MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
 
     If kolAmbII > 0 And cmbTipAmbalaze.value = "" Then
-        MsgBox "Izaberite tip ambalaže (za II klasu)!", vbExclamation, APP_NAME
+        MsgBox Poruka("OTKUP_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
 
     If kolAmbIzdata > 0 And cmbTipAmbalaze.value = "" Then
-        MsgBox "Izaberite tip ambalaže (za izdatu ambalažu)!", vbExclamation, APP_NAME
+        MsgBox Poruka("OTKUP_MSG_IZABERITE_TIP_AMBALAZE_2"), vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
@@ -850,13 +850,13 @@ Private Sub btnUnos_Click()
     ' #1 Bruto rezim: broj gajbi je OBAVEZAN (inace se bruto ne pretvara u neto, tj.
     ' tezina gajbi bi se platila kao voce). Vazi za I i (ako je ukljucena) II klasu.
     If OtkupBrutoUnos() And kolicinaI > 0 And kolAmb <= 0 Then
-        MsgBox "Bruto režim: unesite broj gajbi za I klasu " & _
+        MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE") & _
                "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
         txtKolAmbalaze.SetFocus
         Exit Sub
     End If
     If chkDveKlase.value And OtkupBrutoUnos() And kolicinaII > 0 And kolAmbII <= 0 Then
-        MsgBox "Bruto režim: unesite broj gajbi za II klasu " & _
+        MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE_2") & _
                "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
         If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
         Exit Sub
@@ -870,16 +870,16 @@ Private Sub btnUnos_Click()
         Dim taraKg As Double
         taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbalaze.value)
         If taraKg <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbalaze.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_MOZE_PRETVORITI"), vbExclamation, APP_NAME
             cmbTipAmbalaze.SetFocus
             Exit Sub
         End If
         If taraKg >= kolicinaI Then
-            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
-                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
             txtKolicina.SetFocus
             Exit Sub
         End If
@@ -893,16 +893,16 @@ Private Sub btnUnos_Click()
         Dim taraKgII As Double
         taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbalaze.value)
         If taraKgII <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbalaze.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_KLASA_MOZE"), vbExclamation, APP_NAME
             cmbTipAmbalaze.SetFocus
             Exit Sub
         End If
         If taraKgII >= kolicinaII Then
-            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
-                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE_KLASE") & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
+                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
             If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
             Exit Sub
         End If
@@ -972,7 +972,7 @@ Private Sub btnUnos_Click()
                         ans = MsgBox("Kultura parcele (" & parKultura & _
                                      ") ne odgovara izabranoj sorti/kulturi (" & _
                                      selectedKultura & ")!" & vbCrLf & vbCrLf & _
-                                     "Želite li ipak da nastavite?", _
+                                     Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
                                      vbExclamation + vbYesNo, APP_NAME)
                         If ans = vbNo Then Exit Sub
                     End If
@@ -1011,7 +1011,7 @@ Private Sub btnUnos_Click()
         brutoKgII:=brutoKgII)
 
     If result = "" Then
-        MsgBox "Greška pri cuvanju otkupa. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -1046,7 +1046,7 @@ Private Sub btnUnos_Click()
 
 EH:
     LogErr "frmOtkup.btnUnos"
-    MsgBox "Greška pri unosu otkupa: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub ClearOtkupFields()

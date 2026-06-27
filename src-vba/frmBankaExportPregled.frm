@@ -607,7 +607,7 @@ Private Sub ResetActionButtons()
     StylePrimaryButton btnOsvezi, "Osvezi"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
-    StylePrimaryButton btnGenerisiCSV, "Generiši CSV (Commit 3)"
+    StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 

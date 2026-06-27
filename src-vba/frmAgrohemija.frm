@@ -51,21 +51,21 @@ Private Sub UserForm_Activate()
     
     ' Header zone (ako dodas lblKopf + lblSubtitle u Designer-u)
     StyleFrameTitleLabel lblKopf, "Agrohemija"
-    StyleSubtitle lblSubtitle, "Magacin — izdavanje robe i prijem od dobavljaca"
+    StyleSubtitle lblSubtitle, Poruka("AGRO_LBL_MAGACIN_IZDAVANJE_ROBE")
     
     ' Section headers + akcent linije
-    StyleSectionHeader fraIzlaz, "Izlaz — Izdavanje robe kooperantu"
-    StyleSectionHeader fraUlaz, "Ulaz — Prijem robe od dobavljaca"
+    StyleSectionHeader fraIzlaz, Poruka("AGRO_LBL_IZLAZ_IZDAVANJE_ROBE")
+    StyleSectionHeader fraUlaz, Poruka("AGRO_LBL_ULAZ_PRIJEM_ROBE")
     StyleSectionAccent lblAccentIzlaz, fraIzlaz, "primary"    ' gold
     StyleSectionAccent lblAccentUlaz, fraUlaz, "info"          ' blue
     
     ' Action buttons - izlaz
     StylePrimaryButton btnDodajIzlaz, "+ Dodaj u korpu"
-    StylePrimaryButton btnZavrsiIzlaz, "Završi izdavanje"
+    StylePrimaryButton btnZavrsiIzlaz, Poruka("AGRO_LBL_ZAVRSI_IZDAVANJE")
     
     ' Action buttons - ulaz
     StylePrimaryButton btnDodajUlaz, "+ Prijem"
-    StylePrimaryButton btnZavrsiUlaz, "Završi prijem"
+    StylePrimaryButton btnZavrsiUlaz, Poruka("AGRO_LBL_ZAVRSI_PRIJEM")
     
     ' Exit
     StyleExitButton btnPovratak, "Povratak"
@@ -232,7 +232,7 @@ Private Sub UpdatePreporuka()
     ' Invariant: svi artikli moraju imati Pakovanje field popunjeno
     If Not IsNumeric(pakStr) Or CDbl(pakStr) <= 0 Then
         lblPreporuka.caption = "Greska: artikal nema definisano Pakovanje. " & _
-                               "Popuni 'Pakovanje' field u tblArtikli pre korišcenja."
+                               Poruka("AGRO_LBL_POPUNI_PAKOVANJE_FIELD")
         lblPreporuka.ForeColor = CLR_ERROR()
         Exit Sub
     End If
@@ -366,7 +366,7 @@ Private Sub btnDodajIzlaz_Click()
     ' Invariant: svi artikli moraju imati Pakovanje field popunjeno
     If Not IsNumeric(pakStr) Or CDbl(pakStr) <= 0 Then
         MsgBox "Artikal '" & artNaziv & "' nema definisano Pakovanje." & vbCrLf & _
-               "Popuni 'Pakovanje' field u tblArtikli pre korišcenja.", _
+               Poruka("AGRO_LBL_POPUNI_PAKOVANJE_FIELD"), _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -393,7 +393,7 @@ Private Sub btnDodajIzlaz_Click()
         MsgBox "Nedovoljno stanje za artikal!" & vbCrLf & _
             "Na stanju: " & FormatKol(dostupno) & " " & jm & vbCrLf & _
             "Vec u korpi: " & FormatKol(trenutnoUKorpi) & " " & jm & vbCrLf & _
-            "Pokušavate dodati: " & brojPakovanja & " x " & FormatKol(pakovanje) & _
+            Poruka("AGRO_MSG_POKUSAVATE_DODATI") & brojPakovanja & " x " & FormatKol(pakovanje) & _
             " = " & FormatKol(ukupnaKolicina) & " " & jm, _
             vbExclamation, APP_NAME
         Exit Sub
@@ -507,7 +507,7 @@ Private Sub btnZavrsiIzlaz_Click()
     tx.CommitTx
     txStarted = False
 
-    MsgBox "Izdavanje završeno: " & brojDok & vbCrLf & _
+    MsgBox Poruka("AGRO_MSG_IZDAVANJE_ZAVRSENO") & brojDok & vbCrLf & _
            m_KorpaIzlazCount & " stavki", vbInformation, APP_NAME
 
     ClearKorpaIzlaz
@@ -531,7 +531,7 @@ EH:
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "Greška pri cuvanju izdavanja, promene vracene: " & errDesc, _
+    MsgBox Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU") & errDesc, _
            vbCritical, APP_NAME
 
     Set tx = Nothing
@@ -720,7 +720,7 @@ Private Sub btnZavrsiUlaz_Click()
     tx.CommitTx
     txStarted = False
 
-    MsgBox "Prijem završen: " & brojDok & vbCrLf & _
+    MsgBox Poruka("AGRO_MSG_PRIJEM_ZAVRSEN") & brojDok & vbCrLf & _
            m_KorpaUlazCount & " stavki", vbInformation, APP_NAME
 
     ClearKorpaUlaz
@@ -743,7 +743,7 @@ EH:
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "Greška pri cuvanju prijema, promene vracene: " & errDesc, _
+    MsgBox Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU_2") & errDesc, _
            vbCritical, APP_NAME
 
     Set tx = Nothing
@@ -999,9 +999,9 @@ End Sub
 
 Private Sub ResetActionButtons()
     StylePrimaryButton btnDodajIzlaz, "+ Dodaj u korpu"
-    StylePrimaryButton btnZavrsiIzlaz, "Završi izdavanje"
+    StylePrimaryButton btnZavrsiIzlaz, Poruka("AGRO_LBL_ZAVRSI_IZDAVANJE")
     StylePrimaryButton btnDodajUlaz, "+ Prijem"
-    StylePrimaryButton btnZavrsiUlaz, "Završi prijem"
+    StylePrimaryButton btnZavrsiUlaz, Poruka("AGRO_LBL_ZAVRSI_PRIJEM")
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 

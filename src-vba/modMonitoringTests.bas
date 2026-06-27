@@ -51,7 +51,7 @@ Public Sub TestMonitoring_ErrorEvent()
 
     On Error GoTo EH
 
-    Err.Raise 9101, "TestMonitoring_ErrorEvent", "Namerno testirana VBA greška bez sensitive podataka"
+    Err.Raise 9101, "TestMonitoring_ErrorEvent", Poruka("MONITO_ERR_NAMERNO_TESTIRANA_VBA")
 
     Exit Sub
 

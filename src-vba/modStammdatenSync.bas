@@ -1635,7 +1635,7 @@ EH:
     LogErr SRC
 
     If showMessages Then
-        MsgBox "Greška pri exportu parcela: " & Err.description, vbCritical, APP_NAME
+        MsgBox Poruka("STM_ERR_GRESKA_PRI_EXPORTU") & Err.description, vbCritical, APP_NAME
     End If
 
     SyncParceleToGoogle_Core = False

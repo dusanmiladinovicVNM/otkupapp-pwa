@@ -44,7 +44,7 @@ Public Function MaticniSekcije() As Variant
         Array("Kutije", "Kutije"), _
         Array("Kese", "Kese"), _
         Array("Vrsta got. proizvoda", "VrstaGP"), _
-        Array("Podešavanja", "Podesavanja"))
+        Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Podesavanja"))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).
