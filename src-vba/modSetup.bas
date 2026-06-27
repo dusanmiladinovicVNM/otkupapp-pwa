@@ -706,11 +706,22 @@ Public Sub EnsurePaletniListSchema()
     EnsureDataTable TBL_PRERADA, "Prerada", _
         Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
               COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
+              COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
+              COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
               COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO)
 
     EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
         Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
               COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_PRES_CREATED, COL_STORNIRANO)
+
+    EnsureDataTable TBL_KUTIJE, "Kutije", _
+        Array(COL_KUT_TIP, COL_KUT_TEZINA, "Aktivan")
+
+    EnsureDataTable TBL_KESE, "Kese", _
+        Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
+
+    EnsureDataTable TBL_VRSTA_GP, "VrstaGotProizvoda", _
+        Array(COL_VGP_TIP, "Aktivan")
 
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
 
@@ -723,6 +734,8 @@ Public Sub EnsurePaletniListSchema()
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
            "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
            "i kolonu GajbicaPoPaleti u tblKulture (malina = 240)." & vbCrLf & _
+           "Sifarnici tblKutije/tblKese (tip -> kg) i tblVrstaGotovihProizvoda" & vbCrLf & _
+           "se popunjavaju preko Maticnih podataka." & vbCrLf & _
            "Cenovnik (tblCenovnik) se popunjava preko Maticnih podataka.", _
            vbInformation, APP_NAME
     Exit Sub
@@ -765,6 +778,9 @@ Public Sub EnsureDoradeSchema()
     EnsureAktivanColumn TBL_KULTURE
     EnsureAktivanColumn TBL_TIP_AMBALAZE
     EnsureAktivanColumn TBL_TIP_PALETE
+    EnsureAktivanColumn TBL_KUTIJE
+    EnsureAktivanColumn TBL_KESE
+    EnsureAktivanColumn TBL_VRSTA_GP
 
     ' #6: podrazumevani tip ambalaze po kulturi.
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE

@@ -105,6 +105,9 @@ Private Sub UserForm_Activate()
         Case "TipAmbalaze": SetupTipAmbalaze
         Case "TipPalete": SetupTipPalete
         Case "Cenovnik": SetupCenovnik
+        Case "Kutije": SetupKutije
+        Case "Kese": SetupKese
+        Case "VrstaGP": SetupVrstaGP
         Case Else: SetupKooperanti
     End Select
 
@@ -264,6 +267,20 @@ Private Sub SetupColumnHeaders()
             ShowHeader 4, "Sorta", True
             ShowHeader 5, "Klasa", True
             ShowHeader 6, "Cena", True
+
+        Case "Kutije"
+            ShowHeader 1, "Tip kutije", True
+            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 3, "Aktivan", True
+
+        Case "Kese"
+            ShowHeader 1, "Tip kese", True
+            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 3, "Aktivan", True
+
+        Case "VrstaGP"
+            ShowHeader 1, "Tip gotovog proizvoda", True
+            ShowHeader 2, "Aktivan", True
     End Select
     
     On Error GoTo 0
@@ -699,6 +716,59 @@ Private Sub SetupTipPalete()
 
     lblField1.caption = "Tip palete": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+End Sub
+
+Private Sub SetupKutije()
+    ResetFieldVisibility
+    Me.caption = "Kutije"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KUTIJE"
+    StyleSubtitle lblSubtitle, "Sifarnik kutija (tip i tezina prazne kutije)"
+    On Error GoTo 0
+
+    m_TableName = TBL_KUTIJE
+
+    m_Headers = Array(COL_KUT_TIP, COL_KUT_TEZINA, "Aktivan")
+    m_FieldCount = 2
+
+    lblField1.caption = "Tip kutije": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+End Sub
+
+Private Sub SetupKese()
+    ResetFieldVisibility
+    Me.caption = "Kese"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KESE"
+    StyleSubtitle lblSubtitle, "Sifarnik kesa (tip i tezina prazne kese)"
+    On Error GoTo 0
+
+    m_TableName = TBL_KESE
+
+    m_Headers = Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
+    m_FieldCount = 2
+
+    lblField1.caption = "Tip kese": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+End Sub
+
+Private Sub SetupVrstaGP()
+    ResetFieldVisibility
+    Me.caption = "Vrsta gotovog proizvoda"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "VRSTA GOTOVOG PROIZVODA"
+    StyleSubtitle lblSubtitle, "Sifarnik tipova gotovog proizvoda"
+    On Error GoTo 0
+
+    m_TableName = TBL_VRSTA_GP
+
+    m_Headers = Array(COL_VGP_TIP, "Aktivan")
+    m_FieldCount = 1
+
+    lblField1.caption = "Tip gotovog proizvoda": lblField1.Visible = True: txtField1.Visible = True
 End Sub
 
 Private Sub SetupCenovnik()
@@ -1259,6 +1329,13 @@ Private Sub lstData_Click()
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
             txtField2.value = lstData.List(lstData.ListIndex, 1)   ' Tezina
 
+        Case "Kutije", "Kese"
+            txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
+            txtField2.value = lstData.List(lstData.ListIndex, 1)   ' Tezina
+
+        Case "VrstaGP"
+            txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
+
         Case "Cenovnik"
             ' Append-only istorija — klik samo prikazuje (bez izmene).
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 2)   ' Vrsta
@@ -1635,6 +1712,65 @@ Private Sub btnDodaj_Click()
 
             newID = Trim$(txtField1.value)
             rowData = Array(Trim$(txtField1.value), tezinaPal, STATUS_AKTIVAN)
+
+        Case "Kutije"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip kutije!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaKut As Double
+            If Not TryParseDouble(txtField2.value, tezinaKut) Or tezinaKut < 0 Then
+                MsgBox "Unesite validnu tezinu kutije (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_KUT_TIP, Trim$(txtField1.value), COL_KUT_TIP)))) > 0 Then
+                MsgBox "Tip kutije '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            newID = Trim$(txtField1.value)
+            rowData = Array(Trim$(txtField1.value), tezinaKut, STATUS_AKTIVAN)
+
+        Case "Kese"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip kese!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaKes As Double
+            If Not TryParseDouble(txtField2.value, tezinaKes) Or tezinaKes < 0 Then
+                MsgBox "Unesite validnu tezinu kese (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_KES_TIP, Trim$(txtField1.value), COL_KES_TIP)))) > 0 Then
+                MsgBox "Tip kese '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            newID = Trim$(txtField1.value)
+            rowData = Array(Trim$(txtField1.value), tezinaKes, STATUS_AKTIVAN)
+
+        Case "VrstaGP"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip gotovog proizvoda!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            If Len(Trim$(NzToText(LookupValue(m_TableName, COL_VGP_TIP, Trim$(txtField1.value), COL_VGP_TIP)))) > 0 Then
+                MsgBox "Tip gotovog proizvoda '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            newID = Trim$(txtField1.value)
+            rowData = Array(Trim$(txtField1.value), STATUS_AKTIVAN)
 
         Case "Cenovnik"
             ' Append-only: dodaje novi (vazeci) red preko modCenovnik.
@@ -2019,6 +2155,64 @@ Private Sub btnIzmeni_Click()
 
             RequireUpdateCell m_TableName, m_SelectedRow, COL_TPAL_TIP, Trim$(txtField1.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_TPAL_TEZINA, tezinaPalEdit, SRC
+
+            tx.CommitTx
+
+        Case "Kutije"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip kutije!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaKutEdit As Double
+            If Not TryParseDouble(txtField2.value, tezinaKutEdit) Or tezinaKutEdit < 0 Then
+                MsgBox "Unesite validnu tezinu kutije (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUT_TIP, Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUT_TEZINA, tezinaKutEdit, SRC
+
+            tx.CommitTx
+
+        Case "Kese"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip kese!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            Dim tezinaKesEdit As Double
+            If Not TryParseDouble(txtField2.value, tezinaKesEdit) Or tezinaKesEdit < 0 Then
+                MsgBox "Unesite validnu tezinu kese (kg)!", vbExclamation, APP_NAME
+                txtField2.SetFocus
+                Exit Sub
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KES_TIP, Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KES_TEZINA, tezinaKesEdit, SRC
+
+            tx.CommitTx
+
+        Case "VrstaGP"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox "Unesite tip gotovog proizvoda!", vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_VGP_TIP, Trim$(txtField1.value), SRC
 
             tx.CommitTx
 

@@ -41,6 +41,9 @@ Public Function MaticniSekcije() As Variant
         Array("Ambalaza", "TipAmbalaze"), _
         Array("Palete", "TipPalete"), _
         Array("Cenovnik", "Cenovnik"), _
+        Array("Kutije", "Kutije"), _
+        Array("Kese", "Kese"), _
+        Array("Vrsta got. proizvoda", "VrstaGP"), _
         Array("Podešavanja", "Podesavanja"))
 End Function
 
@@ -74,11 +77,24 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
 
     ' Spakuj n dugmadi u isti vertikalni opseg koji su zauzimala staticna
     ' dugmad (top0 .. Exit.Top) — bez resize-a forme.
-    Dim pitch As Single
-    pitch = (bandBottom - top0) / n
-    If pitch <= 0 Then pitch = tmpl.Height + 3
-
     Const SPACING As Single = 3
+
+    ' Citljiv pitch = visina sablonskog dugmeta + razmak. Ako n dugmadi ne
+    ' staju u postojeci opseg (top0 .. Exit), povecaj formu i spusti Exit
+    ' nanize, umesto da se dugmad gnjece -> sve sekcije ostaju citljive.
+    Dim pitch As Single
+    pitch = tmpl.Height + SPACING
+
+    If top0 + n * pitch > bandBottom Then
+        Dim grow As Single
+        grow = (top0 + n * pitch) - bandBottom
+        exitBtn.top = exitBtn.top + grow
+        frm.Height = frm.Height + grow
+        bandBottom = exitBtn.top
+    Else
+        pitch = (bandBottom - top0) / n
+    End If
+
     Dim btnH As Single
     btnH = pitch - SPACING
     If btnH < 14 Then btnH = 14

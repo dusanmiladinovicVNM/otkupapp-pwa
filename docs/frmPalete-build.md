@@ -459,3 +459,37 @@ End Sub
   iznad liste sa nazivima.
 - Forma ne piše direktno u tabele — sve ide preko `*_TX` / read-model funkcija u
   `modPaletniList`.
+
+## 7. Prerada panel (gotovi proizvodi) — dinamičke kontrole
+
+Panel za preradu (desno, ispod `lstStavke`) je **proširen za gotove proizvode** i
+sada se gradi u runtime-u (`Controls.Add` + `WithEvents`), pa se `.frx` NE dira za
+nova polja. Sve je u `frmPalete` code-behind-u:
+
+- **Build:** `BuildPreradaControls` (zvano iz `UserForm_Activate`, jednom — `mBuilt`
+  flag) dodaje: `txtTezinaPalete`, `txtBruto`, `ddTipKutije` (dropdown-list iz
+  `tblKutije`), `cmbTipKese` (combo iz `tblKese`), te u redu filtera `cmbFilterSorta`
+  i `cmbFilterTipGP` (izbor gotovog proizvoda za izlaz — iz `tblVrstaGotovihProizvoda`).
+  Postojeća polja se **reuse-uju**: `txtKutije`/`txtKese` = broj kom; `txtNeto` je sada
+  zaključan (računati izlaz); labela `lblNeto` → „Neto (izr.)".
+- **Raspored:** `LayoutDynamic`/`LayoutPreradaRows` postavljaju apsolutne pozicije
+  (idempotentno — sidrišta su `txtFilterGod`, `lstStavke`, `btnPreradi`), pa se grid
+  spušta za jedan filter-red. Redosled redova panela: Tež. palete · Kutije (tip+broj)
+  · Kese (tip+broj) · Bruto · Neto (izr.) · Napomena.
+- **Preračun:** `RecomputeNeto` (na `_Change` svakog ulaza) →
+  `neto = bruto − tež_palete − (broj_kutija·tež_tipa_kutije + broj_kesa·tež_tipa_kese)`.
+  Težine tipa: `GetTezinaKutije`/`GetTezinaKese` (`modPaletniListUI`).
+- **Snimanje:** `btnPreradi_Click` prosleđuje nove vrednosti prošireniom
+  `SavePrerada_TX(...)` (novi parametri su Opcioni → stari pozivi i dalje rade); polja
+  se upisuju na `tblPrerada` (`TezinaPaleteKg`, `BrutoKg`, `AmbalazaKg`, `TipKutije`,
+  `TipKese`, `TipGotovogProizvoda`).
+- **Layout (PreradaSablon):** naslov „PALETNI LIST GOTOVIH PROIZVODA"; vrsta-red =
+  `DZ` + vrsta + sorta (iz prve izabrane palete sveže robe) + tip gotovog proizvoda;
+  desni sažetak ima 6 redova (tež. palete / bruto / kutije / kese / tež. ambalaže /
+  neto). `LAYOUT_VER` podignut na `4` → šablon se sam ponovo izgradi.
+
+**Šifarnici (Matični podaci → Kutije / Kese / Vrsta got. proizvoda):** `tblKutije`
+(`TipKutije`,`TezinaKg`,`Aktivan`), `tblKese` (`TipKese`,`TezinaKg`,`Aktivan`),
+`tblVrstaGotovihProizvoda` (`TipGotovogProizvoda`,`Aktivan`). Sekcije su data-driven
+(`modMaticniLookups.MaticniSekcije` + `Case` u `frmStammdaten`, isti obrazac kao
+TipAmbalaze/TipPalete). Šeme se kreiraju jednokratno: `Alt+F8 → EnsurePaletniListSchema`.

@@ -48,6 +48,9 @@ Public Const TBL_PALETA_STAVKA As String = "tblPaletaStavka"
 Public Const TBL_PRERADA_STAVKA As String = "tblPreradaStavka"
 Public Const TBL_TIP_AMBALAZE As String = "tblTipAmbalaze"
 Public Const TBL_TIP_PALETE As String = "tblTipPalete"
+Public Const TBL_KUTIJE As String = "tblKutije"
+Public Const TBL_KESE As String = "tblKese"
+Public Const TBL_VRSTA_GP As String = "tblVrstaGotovihProizvoda"
 Public Const TBL_KVALITET As String = "tblKvalitet"
 Public Const TBL_SEF As String = "tblSEF"
 Public Const TBL_SLEDLJIVOST As String = "tblSledljivost"
@@ -255,6 +258,13 @@ Public Const COL_TAMB_TEZINA As String = "TezinaGajbiceKg"
 Public Const COL_TPAL_TIP As String = "TipPalete"
 Public Const COL_TPAL_TEZINA As String = "TezinaKg"
 
+' tblKutije / tblKese (sifarnici tezina) + tblVrstaGotovihProizvoda
+Public Const COL_KUT_TIP As String = "TipKutije"
+Public Const COL_KUT_TEZINA As String = "TezinaKg"
+Public Const COL_KES_TIP As String = "TipKese"
+Public Const COL_KES_TEZINA As String = "TezinaKg"
+Public Const COL_VGP_TIP As String = "TipGotovogProizvoda"
+
 ' tblCenovnik (cene po proizvodu — append-only istorija)
 ' Kljuc: VrstaVoca + SortaVoca + Klasa. Poslednji red (najnoviji Datum)
 ' je vazeci za otkup i dokumenta. Stari redovi ostaju radi kretanja cena.
@@ -285,6 +295,14 @@ Public Const COL_PRE_NETO_IZLAZ As String = "NetoIzlazKg"
 Public Const COL_PRE_NAPOMENA As String = "Napomena"
 Public Const COL_PRE_CREATED As String = "CreatedAt"
 Public Const COL_PRES_CREATED As String = "CreatedAt"
+
+' tblPrerada (Paletni list gotovih proizvoda) - tezine i izbori
+Public Const COL_PRE_TEZINA_PALETE As String = "TezinaPaleteKg"
+Public Const COL_PRE_BRUTO As String = "BrutoKg"
+Public Const COL_PRE_AMBALAZA As String = "AmbalazaKg"
+Public Const COL_PRE_TIP_KUTIJE As String = "TipKutije"
+Public Const COL_PRE_TIP_KESE As String = "TipKese"
+Public Const COL_PRE_TIP_GP As String = "TipGotovogProizvoda"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"

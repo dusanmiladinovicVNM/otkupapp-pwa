@@ -258,7 +258,8 @@ End Function
 Public Function GetPaleteForGrid(Optional ByVal god As Long = 0, _
                                  Optional ByVal vrsta As String = "", _
                                  Optional ByVal status As String = "", _
-                                 Optional ByVal preradjeno As String = "") As Variant
+                                 Optional ByVal preradjeno As String = "", _
+                                 Optional ByVal sorta As String = "") As Variant
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_PALETA)
     If IsEmpty(d) Then Exit Function
@@ -287,6 +288,7 @@ Public Function GetPaleteForGrid(Optional ByVal god As Long = 0, _
         If UCase$(Trim$(CStr(SafeCell(d, r, iStorno)))) <> "DA" _
            And (god = 0 Or NzL(SafeCell(d, r, iGod)) = god) _
            And (vrsta = "" Or CStr(SafeCell(d, r, iVrsta)) = vrsta) _
+           And (sorta = "" Or CStr(SafeCell(d, r, iSorta)) = sorta) _
            And (status = "" Or CStr(SafeCell(d, r, iStat)) = status) _
            And PreradMatch(CStr(SafeCell(d, r, iPre)), preradjeno) Then
             rows.Add r
@@ -326,6 +328,56 @@ Private Function PreradMatch(ByVal CellVal As String, ByVal filter As String) As
         Case "NE": PreradMatch = (UCase$(Trim$(CellVal)) <> "DA")
         Case Else: PreradMatch = True
     End Select
+End Function
+
+' Prerade za desni pregled. god=0 -> sve. Stornirane se ne prikazuju.
+' Kolone (0-based): 0 PreradaID(skriveno),1 Broj,2 Datum,3 Neto,4 Kutije,
+' 5 Kese,6 TipGotovogProizvoda.
+Public Function GetPreradeForGrid(Optional ByVal god As Long = 0) As Variant
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_PRERADA)
+    If IsEmpty(d) Then Exit Function
+
+    Dim iID As Long, iBroj As Long, iGod As Long, iDat As Long
+    Dim iNeto As Long, iKut As Long, iKes As Long, iGP As Long, iStorno As Long
+    iID = GetColumnIndex(TBL_PRERADA, COL_PRE_ID)
+    iBroj = GetColumnIndex(TBL_PRERADA, COL_PRE_BROJ)
+    iGod = GetColumnIndex(TBL_PRERADA, COL_PRE_GODINA)
+    iDat = GetColumnIndex(TBL_PRERADA, COL_PRE_DATUM)
+    iNeto = GetColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ)
+    iKut = GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)
+    iKes = GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)
+    iGP = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP)
+    iStorno = GetColumnIndex(TBL_PRERADA, COL_STORNIRANO)
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(SafeCell(d, r, iID))) <> "" _
+           And UCase$(Trim$(CStr(SafeCell(d, r, iStorno)))) <> "DA" _
+           And (god = 0 Or NzL(SafeCell(d, r, iGod)) = god) Then
+            rows.Add r
+        End If
+    Next r
+    If rows.count = 0 Then Exit Function
+
+    Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 6)
+    Dim k As Long
+    For k = 0 To rows.count - 1
+        r = rows(k + 1)
+        res(k, 0) = CStr(SafeCell(d, r, iID))
+        res(k, 1) = NzL(SafeCell(d, r, iBroj))
+        res(k, 2) = ""
+        If IsDate(SafeCell(d, r, iDat)) Then res(k, 2) = Format$(CDate(SafeCell(d, r, iDat)), "dd.mm.yyyy")
+        res(k, 3) = NzD(SafeCell(d, r, iNeto))
+        res(k, 4) = NzL(SafeCell(d, r, iKut))
+        res(k, 5) = NzL(SafeCell(d, r, iKes))
+        If iGP > 0 Then res(k, 6) = CStr(SafeCell(d, r, iGP))
+    Next k
+    GetPreradeForGrid = res
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPreradeForGrid"
 End Function
 
 ' Stavke izabrane palete za grid. Kolone (0-based): 0 PrijemnicaID,
@@ -1492,6 +1544,31 @@ Private Sub RequirePreradaStavkaSchema(ByVal SRC As String)
         COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_STORNIRANO
 End Sub
 
+' Schema-drift: dodaj nove tblPrerada kolone (bruto/paleta/ambalaza/tipovi)
+' ako fale. Idempotentno (no-op kad postoje). Resava 0 u sazetku paletnog
+' lista kada EnsurePaletniListSchema nije pokrenut posle nadogradnje.
+Private Sub EnsurePreradaCols()
+    On Error Resume Next
+    Dim lo As ListObject: Set lo = GetTable(TBL_PRERADA)
+    If lo Is Nothing Then Exit Sub
+    EnsurePreradaCol lo, COL_PRE_TEZINA_PALETE
+    EnsurePreradaCol lo, COL_PRE_BRUTO
+    EnsurePreradaCol lo, COL_PRE_AMBALAZA
+    EnsurePreradaCol lo, COL_PRE_TIP_KUTIJE
+    EnsurePreradaCol lo, COL_PRE_TIP_KESE
+    EnsurePreradaCol lo, COL_PRE_TIP_GP
+End Sub
+
+Private Sub EnsurePreradaCol(ByVal lo As ListObject, ByVal colName As String)
+    On Error Resume Next
+    Dim c As ListColumn
+    Set c = lo.ListColumns(colName)
+    If c Is Nothing Then
+        lo.ListColumns.Add
+        lo.ListColumns(lo.ListColumns.count).name = colName
+    End If
+End Sub
+
 ' Exact-row lookup po kljucu. Puca ako nema reda (0) ili ima vise (>1).
 ' Za IDENTITET (PaletaID, PrijemnicaID), NE za pretragu otvorenih paleta.
 Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
@@ -1552,7 +1629,13 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
                                ByVal brojKutija As Long, _
                                ByVal brojKesa As Long, _
                                ByVal netoIzlazKg As Double, _
-                               Optional ByVal napomena As String = "") As String
+                               Optional ByVal napomena As String = "", _
+                               Optional ByVal tezinaPaleteKg As Double = 0, _
+                               Optional ByVal brutoKg As Double = 0, _
+                               Optional ByVal tezinaAmbalazeKg As Double = 0, _
+                               Optional ByVal tipKutije As String = "", _
+                               Optional ByVal tipKese As String = "", _
+                               Optional ByVal tipGotovogProizvoda As String = "") As String
     Const SRC As String = "modPaletniList.SavePrerada_TX"
 
     Dim tx As clsTransaction
@@ -1571,6 +1654,10 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     If brojKutija <= 0 And brojKesa <= 0 Then
         Err.Raise vbObjectError + 7342, SRC, "Broj kutija ili kesa mora biti > 0."
     End If
+
+    ' Osiguraj nove kolone PRE transakcije (inace PalAppendRow tiho preskoci
+    ' upis bruto/paleta/ambalaza -> 0 u sazetku paletnog lista).
+    EnsurePreradaCols
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -1621,9 +1708,13 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     PalAppendRow TBL_PRERADA, _
         Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
               COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
+              COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
+              COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
               COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO), _
         Array(preID, brPre, Year(Date), Date, _
               netoUlaz, netoIzlazKg, brojKutija, brojKesa, _
+              tezinaPaleteKg, brutoKg, tezinaAmbalazeKg, _
+              tipKutije, tipKese, tipGotovogProizvoda, _
               napomena, Now, "")
 
     Dim k As Variant
@@ -1730,6 +1821,9 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     ws.Range("PreKutije").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)))
     ws.Range("PreKese").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)))
     ws.Range("PreNeto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ)))
+    ws.Range("PreTezinaPalete").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_TEZINA_PALETE)))
+    ws.Range("PreBruto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_BRUTO)))
+    ws.Range("PreAmbalaza").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_AMBALAZA)))
 
     Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
     Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
@@ -1754,11 +1848,21 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     End If
 
     Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
-    If IsEmpty(o) Then
-        ws.Range("PreVrsta").value = ""
-    Else
-        ws.Range("PreVrsta").value = CStr(o(1, 2))
+
+    ' Naslov vrste: uvek "DZ" + vrsta + sorta (iz prve izabrane palete sveze
+    ' robe) + tip gotovog proizvoda (sa prerade). DZ = duboko zamrznuto.
+    Dim vrstaTxt As String, sortaTxt As String, tipGP As String
+    If palIDs.count > 0 Then
+        Dim pidFirst As String: pidFirst = CStr(palIDs(1))
+        vrstaTxt = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, pidFirst, COL_PAL_VRSTA))
+        sortaTxt = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, pidFirst, COL_PAL_SORTA))
     End If
+    tipGP = NzToText(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP)))
+    Dim vrstaLine As String
+    vrstaLine = "DZ " & Trim$(vrstaTxt)
+    If Len(Trim$(sortaTxt)) > 0 Then vrstaLine = vrstaLine & " " & Trim$(sortaTxt)
+    If Len(Trim$(tipGP)) > 0 Then vrstaLine = vrstaLine & "  " & Trim$(tipGP)
+    ws.Range("PreVrsta").value = vrstaLine
     Dim outR As Long, rb As Long
     outR = startRow: rb = 0
     If Not IsEmpty(o) Then
@@ -1780,6 +1884,12 @@ Private Function FillPreradaSablon(ByVal preID As String, _
             .LineStyle = xlContinuous
             .Weight = xlThin
         End With
+        ' uniforman font na svim redovima kooperanata (fix: prvih redova font)
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5))
+            .Font.Size = 10
+            .Font.Bold = False
+        End With
+        ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).EntireRow.AutoFit
         ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
         ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
         Dim zr As Long
@@ -1830,7 +1940,7 @@ End Function
 ' Kreira/obnavlja PreradaSablon u zajednickom stilu. Verzija layouta je u H1.
 Public Sub EnsurePreradaSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "3"
+    Const LAYOUT_VER As String = "4"
 
     Dim ws As Worksheet
     On Error Resume Next
@@ -1856,39 +1966,49 @@ Public Sub EnsurePreradaSablon()
 
     Dim r As Long
     r = DocSellerHeader(ws, 1, 5, 5)
-    r = DocTitleBlock(ws, r, 5, "Prerada i pakovanje", "PRERADNI LIST")
+    r = DocTitleBlock(ws, r, 5, "Prerada i pakovanje", "PALETNI LIST GOTOVIH PROIZVODA")
 
     Dim fr As Long: fr = r + 1
     ws.cells(fr, 1).value = "Broj:"
     ws.cells(fr + 1, 1).value = "Datum:"
-    ws.cells(fr, 4).value = "Broj kutija:"
-    ws.cells(fr + 1, 4).value = "Broj kesa:"
-    ws.cells(fr + 2, 4).value = "Neto (kg):"
+    ws.cells(fr, 4).value = "Tezina palete (kg):"
+    ws.cells(fr + 1, 4).value = "Bruto (kg):"
+    ws.cells(fr + 2, 4).value = "Broj kutija:"
+    ws.cells(fr + 3, 4).value = "Broj kesa:"
+    ws.cells(fr + 4, 4).value = "Tezina ambalaze (kg):"
+    ws.cells(fr + 5, 4).value = "Neto (kg):"
 
     ws.cells(fr, 2).name = "PreBroj"
     ws.cells(fr + 1, 2).name = "PreDatum"
-    ws.cells(fr, 5).name = "PreKutije"
-    ws.cells(fr + 1, 5).name = "PreKese"
-    ws.cells(fr + 2, 5).name = "PreNeto"
+    ws.cells(fr, 5).name = "PreTezinaPalete"
+    ws.cells(fr + 1, 5).name = "PreBruto"
+    ws.cells(fr + 2, 5).name = "PreKutije"
+    ws.cells(fr + 3, 5).name = "PreKese"
+    ws.cells(fr + 4, 5).name = "PreAmbalaza"
+    ws.cells(fr + 5, 5).name = "PreNeto"
 
     ws.Range(ws.cells(fr, 2), ws.cells(fr + 1, 2)).Font.Bold = True
-    ws.Range(ws.cells(fr, 5), ws.cells(fr + 2, 5)).Font.Bold = True
-    ws.Range(ws.cells(fr, 5), ws.cells(fr + 1, 5)).NumberFormat = "0"
-    ws.cells(fr + 2, 5).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(fr, 5), ws.cells(fr + 5, 5)).Font.Bold = True
+    ' broj kutija/kesa = celi; tezine = 2 decimale
+    ws.Range(ws.cells(fr + 2, 5), ws.cells(fr + 3, 5)).NumberFormat = "0"
+    ws.cells(fr, 5).NumberFormat = "#,##0.00"
+    ws.cells(fr + 1, 5).NumberFormat = "#,##0.00"
+    ws.cells(fr + 4, 5).NumberFormat = "#,##0.00"
+    ws.cells(fr + 5, 5).NumberFormat = "#,##0.00"
 
-    ' desni sazetak: uokviri + istakni Neto
-    ws.Range(ws.cells(fr, 4), ws.cells(fr + 2, 5)).BorderAround Weight:=xlThin
-    With ws.Range(ws.cells(fr + 2, 4), ws.cells(fr + 2, 5))
+    ' desni sazetak: uokviri + istakni Neto (poslednji red)
+    ws.Range(ws.cells(fr, 4), ws.cells(fr + 5, 5)).BorderAround Weight:=xlThin
+    With ws.Range(ws.cells(fr + 5, 4), ws.cells(fr + 5, 5))
         .Interior.Color = DocColHeaderFill()
         .Font.Bold = True
     End With
-    With ws.Range(ws.cells(fr + 2, 4), ws.cells(fr + 2, 5)).Borders(xlEdgeTop)
+    With ws.Range(ws.cells(fr + 5, 4), ws.cells(fr + 5, 5)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
 
     ' vrsta voca kao podnaslov iznad tabele (na preradi je uvek ista vrsta)
-    Dim subRow As Long: subRow = fr + 4
+    Dim subRow As Long: subRow = fr + 7
     ws.cells(subRow, 1).value = "Vrsta voca:"
     ws.cells(subRow, 1).Font.Color = DocColGray()
     ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge

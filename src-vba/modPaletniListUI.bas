@@ -205,3 +205,41 @@ EH:
     MsgBox "Greska pri stornu: " & Err.description, vbCritical, APP_NAME
 End Sub
 
+' ============================================================
+' Sifarnik helperi za frmPalete (tip/tezina kutija i kesa, vrste gotovog
+' proizvoda). Reuse GetLookupList/LookupValue; samo aktivni u izboru.
+' ============================================================
+
+' Distinct aktivni tipovi kutija (dropdown na frmPalete).
+Public Function GetKutijeOptions() As Variant
+    GetKutijeOptions = GetLookupList(TBL_KUTIJE, COL_KUT_TIP, , , True)
+End Function
+
+' Distinct aktivni tipovi kesa.
+Public Function GetKeseOptions() As Variant
+    GetKeseOptions = GetLookupList(TBL_KESE, COL_KES_TIP, , , True)
+End Function
+
+' Distinct aktivni tipovi gotovog proizvoda.
+Public Function GetVrstaGPOptions() As Variant
+    GetVrstaGPOptions = GetLookupList(TBL_VRSTA_GP, COL_VGP_TIP, , , True)
+End Function
+
+' Tezina (kg) prazne kutije za dati tip; 0 ako nije nadjeno.
+Public Function GetTezinaKutije(ByVal tip As String) As Double
+    On Error Resume Next
+    If Trim$(tip) = "" Then Exit Function
+    Dim v As Variant
+    v = LookupValue(TBL_KUTIJE, COL_KUT_TIP, Trim$(tip), COL_KUT_TEZINA)
+    If IsNumeric(v) Then GetTezinaKutije = CDbl(v)
+End Function
+
+' Tezina (kg) prazne kese za dati tip; 0 ako nije nadjeno.
+Public Function GetTezinaKese(ByVal tip As String) As Double
+    On Error Resume Next
+    If Trim$(tip) = "" Then Exit Function
+    Dim v As Variant
+    v = LookupValue(TBL_KESE, COL_KES_TIP, Trim$(tip), COL_KES_TEZINA)
+    If IsNumeric(v) Then GetTezinaKese = CDbl(v)
+End Function
+
