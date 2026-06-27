@@ -156,7 +156,7 @@ CleanUp:
     Exit Sub
     
 ErrHandler:
-    MsgBox "Greska pri inicijalizaciji: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri inicijalizaciji: " & Err.description, vbCritical, APP_NAME
     Resume CleanUp
 End Sub
 

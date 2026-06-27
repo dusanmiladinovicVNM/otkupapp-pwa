@@ -584,7 +584,7 @@ Private Sub btnAgro_Click()
 End Sub
 
 Private Sub btnReports_Click()
-    OpenContentForm frmIzvestaj, btnReports, "Izvestaji"
+    OpenContentForm frmIzvestaj, btnReports, "Izve" & ChrW(353) & "taji"
 End Sub
 
 Private Sub btnInvoicing_Click()
@@ -1437,11 +1437,11 @@ End Sub
 
 Public Sub FinishPWASyncLog(ByVal ok As Boolean)
     If ok Then
-        AppendPWASyncLog "Sync zavrsen uspesno."
+        AppendPWASyncLog "Sync zavr" & ChrW(353) & "en uspe" & ChrW(353) & "no."
         lblStatus.ForeColor = RGB(120, 220, 140)
         lblStatus.Font.Bold = True
     Else
-        AppendPWASyncLog "Sync zavrsen sa greskom. Proveri log."
+        AppendPWASyncLog "Sync zavr" & ChrW(353) & "en sa gre" & ChrW(353) & "kom. Proveri log."
         lblStatus.ForeColor = RGB(255, 90, 90)
         lblStatus.Font.Bold = True
     End If

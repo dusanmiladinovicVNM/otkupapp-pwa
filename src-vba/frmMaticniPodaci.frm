@@ -177,7 +177,7 @@ Public Sub OpenSekcija(ByVal sekTag As String, Optional ByVal sekCaption As Stri
     ' frmOtkupAPP otvara frmStammdaten kao mActiveContent (modeless child)
     On Error Resume Next
     frmOtkupAPP.Show
-    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Maticni podaci: " & sekCaption
+    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Mati" & ChrW(269) & "ni podaci: " & sekCaption
     On Error GoTo EH
 
     Unload Me

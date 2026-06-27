@@ -202,12 +202,12 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
         If Not IsPrijemnicaAvailableForFaktura(rowPrijValidate, prijemnicaID) Then
             Err.Raise vbObjectError + 1709, "CreateFaktura", _
-                      "Prijemnica je vec fakturisana ili stornirana: " & prijemnicaID
+                      "Prijemnica je ve" & ChrW(263) & " fakturisana ili stornirana: " & prijemnicaID
         End If
 
         If Not IsNumeric(prijData(rowPrijValidate, colPrjKol)) Then
             Err.Raise vbObjectError + 1711, "CreateFaktura", _
-                      "Kolicina nije numericka za prijemnicu: " & prijemnicaID
+                      "Koli" & ChrW(269) & "ina nije numericka za prijemnicu: " & prijemnicaID
         End If
 
         If Not IsNumeric(prijData(rowPrijValidate, colPrjCena)) Then
@@ -227,7 +227,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
         If prjKolicina <= 0 Then
             Err.Raise vbObjectError + 1712, "CreateFaktura", _
-                      "Kolicina mora biti veca od nule. PrijemnicaID=" & prijemnicaID
+                      "Koli" & ChrW(269) & "ina mora biti veca od nule. PrijemnicaID=" & prijemnicaID
         End If
 
         If prjCena < 0 Then

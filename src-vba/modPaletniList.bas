@@ -169,7 +169,7 @@ Private Sub EnsurePrijemnicaNotAlreadyPaletized(ByVal prijemnicaID As String, _
         If CStr(d(r, iPrij)) = prijemnicaID _
            And UCase$(Trim$(CStr(d(r, iStorno)))) <> "DA" Then
             Err.Raise vbObjectError + 7330, SRC, _
-                      "Prijemnica " & prijemnicaID & " je vec paletizovana."
+                      "Prijemnica " & prijemnicaID & " je ve" & ChrW(263) & " paletizovana."
         End If
     Next r
 End Sub
@@ -521,7 +521,7 @@ Public Function ClosePaletaManual_TX(ByVal palID As String) As String
         Err.Raise vbObjectError + 7351, SRC, "Paleta je stornirana."
     End If
     If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA" Then
-        Err.Raise vbObjectError + 7352, SRC, "Paleta je vec preradjena."
+        Err.Raise vbObjectError + 7352, SRC, "Paleta je ve" & ChrW(263) & " preradjena."
     End If
     If CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS))) <> PAL_STATUS_OTVORENA Then
         Err.Raise vbObjectError + 7353, SRC, "Paleta nije otvorena."
@@ -823,7 +823,7 @@ Public Sub EnsurePaletaSablon()
     ws.cells(fr + 3, 1).value = "Status:"
     ws.cells(fr, 4).value = "Broj gajbica:"
     ws.cells(fr + 1, 4).value = "Neto (kg):"
-    ws.cells(fr + 2, 4).value = "Ambalaza (kg):"
+    ws.cells(fr + 2, 4).value = "Ambala" & ChrW(382) & "a (kg):"
     ws.cells(fr + 3, 4).value = "Paleta (kg):"
     ws.cells(fr + 4, 4).value = "BRUTO (kg):"
 
@@ -855,7 +855,7 @@ Public Sub EnsurePaletaSablon()
 
     ' vrsta voca kao podnaslov iznad tabele (na paleti je uvek ista vrsta)
     Dim subRow As Long: subRow = fr + 6
-    ws.cells(subRow, 1).value = "Vrsta voca:"
+    ws.cells(subRow, 1).value = "Vrsta vo" & ChrW(263) & "a:"
     ws.cells(subRow, 1).Font.Color = DocColGray()
     ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
     ws.cells(subRow, 2).name = "PalVrsta"
@@ -872,7 +872,7 @@ Public Sub EnsurePaletaSablon()
     ws.cells(hdr, 2).value = "Kooperant"
     ws.cells(hdr, 3).value = "Neto kg"
     ws.Range(ws.cells(hdr, 4), ws.cells(hdr, 5)).Merge
-    ws.cells(hdr, 4).value = "Ambalaza"
+    ws.cells(hdr, 4).value = "Ambala" & ChrW(382) & "a"
     With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
@@ -968,7 +968,7 @@ Public Function GajbeDoZatvaranjaPaleteInfo(ByVal vrstaVoca As String, _
 
                 GajbeDoZatvaranjaPaleteInfo = "Paleta br. " & _
                     CStr(NzL(SafeCell(data, r, iBroj))) & "/" & _
-                    CStr(NzL(SafeCell(data, r, iGod))) & ": jos " & _
+                    CStr(NzL(SafeCell(data, r, iGod))) & ": jo" & ChrW(353) & " " & _
                     CStr(ostatak) & " gajbi do zatvaranja (" & _
                     CStr(used) & "/" & CStr(cap) & ")"
                 Exit Function
@@ -1582,7 +1582,7 @@ Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
                   "Nema reda u " & tblName & " za " & keyCol & "=" & keyValue & "."
     ElseIf hits.count > 1 Then
         Err.Raise vbObjectError + 7321, SRC, _
-                  "Vise redova (" & hits.count & ") u " & tblName & " za " & _
+                  "Vi" & ChrW(353) & "e redova (" & hits.count & ") u " & tblName & " za " & _
                   keyCol & "=" & keyValue & "."
     End If
     RequireSingleRowIndexByKey = CLng(hits(1))
@@ -1690,7 +1690,7 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
                 Err.Raise vbObjectError + 7343, SRC, "Paleta " & pid & " je stornirana."
             End If
             If UCase$(Trim$(CStr(SafeCell(dPal, rIdx, iPre)))) = "DA" Then
-                Err.Raise vbObjectError + 7344, SRC, "Paleta " & pid & " je vec preradjena."
+                Err.Raise vbObjectError + 7344, SRC, "Paleta " & pid & " je ve" & ChrW(263) & " preradjena."
             End If
             palRows.Add pid, rIdx
             netoUlaz = netoUlaz + NzD(SafeCell(dPal, rIdx, iNeto))
@@ -1971,11 +1971,11 @@ Public Sub EnsurePreradaSablon()
     Dim fr As Long: fr = r + 1
     ws.cells(fr, 1).value = "Broj:"
     ws.cells(fr + 1, 1).value = "Datum:"
-    ws.cells(fr, 4).value = "Tezina palete (kg):"
+    ws.cells(fr, 4).value = "Te" & ChrW(382) & "ina palete (kg):"
     ws.cells(fr + 1, 4).value = "Bruto (kg):"
     ws.cells(fr + 2, 4).value = "Broj kutija:"
     ws.cells(fr + 3, 4).value = "Broj kesa:"
-    ws.cells(fr + 4, 4).value = "Tezina ambalaze (kg):"
+    ws.cells(fr + 4, 4).value = "Te" & ChrW(382) & "ina ambala" & ChrW(382) & "e (kg):"
     ws.cells(fr + 5, 4).value = "Neto (kg):"
 
     ws.cells(fr, 2).name = "PreBroj"
@@ -2009,7 +2009,7 @@ Public Sub EnsurePreradaSablon()
 
     ' vrsta voca kao podnaslov iznad tabele (na preradi je uvek ista vrsta)
     Dim subRow As Long: subRow = fr + 7
-    ws.cells(subRow, 1).value = "Vrsta voca:"
+    ws.cells(subRow, 1).value = "Vrsta vo" & ChrW(263) & "a:"
     ws.cells(subRow, 1).Font.Color = DocColGray()
     ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
     ws.cells(subRow, 2).name = "PreVrsta"
@@ -2026,7 +2026,7 @@ Public Sub EnsurePreradaSablon()
     ws.cells(hdr, 2).value = "Kooperant"
     ws.cells(hdr, 3).value = "Neto kg"
     ws.Range(ws.cells(hdr, 4), ws.cells(hdr, 5)).Merge
-    ws.cells(hdr, 4).value = "Ambalaza"
+    ws.cells(hdr, 4).value = "Ambala" & ChrW(382) & "a"
     With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()

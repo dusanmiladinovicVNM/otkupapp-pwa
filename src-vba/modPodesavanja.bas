@@ -70,16 +70,16 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "SEF", "SEF_PAYMENT_DUE_DAYS", "Rok placanja (dana)", "int"
     CfgAdd c, "SEF", "SEF_PAYMENT_MEANS_CODE", "Sifra nacina placanja", "text"
     CfgAdd c, "SEF", "SEF_NOTE_DEFAULT", "Podrazumevana napomena", "text"
-    CfgAdd c, "SEF", "SEF_FORCE_TODAY_ISSUE_DATE", "Forsiraj danasnji datum izdavanja", "bool"
+    CfgAdd c, "SEF", "SEF_FORCE_TODAY_ISSUE_DATE", "Forsiraj dana" & ChrW(353) & "nji datum izdavanja", "bool"
 
     CfgAdd c, "Prodavac (firma)", "SELLER_NAME", "Naziv firme", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_PIB", "PIB", "text"
-    CfgAdd c, "Prodavac (firma)", "SELLER_MATICNI_BROJ", "Maticni broj", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_MATICNI_BROJ", "Mati" & ChrW(269) & "ni broj", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_STREET", "Ulica i broj", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_CITY", "Grad", "text"
-    CfgAdd c, "Prodavac (firma)", "SELLER_POSTAL_CODE", "Postanski broj", "text"
-    CfgAdd c, "Prodavac (firma)", "SELLER_COUNTRY_CODE", "Drzava (kod, npr. RS)", "text"
-    CfgAdd c, "Prodavac (firma)", "SELLER_ACCOUNT", "Tekuci racun", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_POSTAL_CODE", "Po" & ChrW(353) & "tanski broj", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_COUNTRY_CODE", "Dr" & ChrW(382) & "ava (kod, npr. RS)", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_ACCOUNT", "Teku" & ChrW(263) & "i ra" & ChrW(269) & "un", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_EMAIL", "Email", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_OBJEKAT_MESTO", "Objekat - lokacija/mesto", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_OBJEKAT_BR_REGISTRA", "Objekat - broj registra", "text"
@@ -95,12 +95,12 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta voca", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta voca", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "KOOP_FILTER_BY_OM", "Filtriraj kooperante po otkupnom mestu", "bool"
     CfgAdd c, "Otkup / dokumenta", "KOOP_AUTO_CREATE", "Auto-kreiraj kooperanta iz unetog imena", "bool"
     CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "KES_ISPLATE", "Postoje kes isplate proizvodjacima", "bool"
+    CfgAdd c, "Otkup / dokumenta", "KES_ISPLATE", "Postoje ke" & ChrW(353) & " isplate proizvodjacima", "bool"
     CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"

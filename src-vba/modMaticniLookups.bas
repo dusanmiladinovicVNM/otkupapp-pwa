@@ -38,13 +38,13 @@ Public Function MaticniSekcije() As Variant
         Array("Artikli", "Artikli"), _
         Array("Parcele", "Parcele"), _
         Array("Kulture", "Kulture"), _
-        Array("Ambalaza", "TipAmbalaze"), _
+        Array("Ambala" & ChrW(382) & "a", "TipAmbalaze"), _
         Array("Palete", "TipPalete"), _
         Array("Cenovnik", "Cenovnik"), _
         Array("Kutije", "Kutije"), _
         Array("Kese", "Kese"), _
         Array("Vrsta got. proizvoda", "VrstaGP"), _
-        Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Podesavanja"))
+        Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Pode" & ChrW(353) & "avanja"))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).

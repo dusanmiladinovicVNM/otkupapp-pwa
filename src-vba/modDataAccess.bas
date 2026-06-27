@@ -272,7 +272,7 @@ Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String,
             Else
                 datumStr = "(nepoznat datum)"
             End If
-            CheckDuplicate = "Dokument '" & searchValue & "' vec postoji! " & _
+            CheckDuplicate = "Dokument '" & searchValue & "' ve" & ChrW(263) & " postoji! " & _
                              "Unet je " & datumStr & "."
             Exit Function
         End If

@@ -35,7 +35,7 @@ Private Sub UserForm_Activate()
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
     
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StyleExitButton btnPovratak, "Povratak"
@@ -71,7 +71,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmBankaExportPregled.UserForm_Activate"
-    MsgBox "Greska pri otvaranju pregleda: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju pregleda: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
@@ -269,7 +269,7 @@ Private Sub UpdateEmptyState()
            Len(Trim$(txtDatumOd.value)) > 0 Or _
            Len(Trim$(txtDatumDo.value)) > 0 Then
             lblEmptyState.caption = "Nema rezultata za izabran filter." & vbCrLf & _
-                                    "Probaj sira pravila ili klikni Osvezi."
+                                    "Probaj sira pravila ili klikni Osve" & ChrW(382) & "i."
         Else
             lblEmptyState.caption = "Sve otvorene stavke su zatvorene. ?" & vbCrLf & _
                                     "Nema blokova za isplatu."
@@ -529,7 +529,7 @@ Private Sub btnExport_Click()
 
 EH:
     LogErr "frmBankaExportPregled.btnExport_Click"
-    MsgBox "Greska pri export-u: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri export-u: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 '======================================================================
@@ -604,7 +604,7 @@ End Sub
 
 ' Mouse hover pattern
 Private Sub ResetActionButtons()
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")

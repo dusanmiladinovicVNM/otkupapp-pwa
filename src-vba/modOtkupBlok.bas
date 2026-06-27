@@ -39,9 +39,9 @@ Private Const EXP_WIDTH   As Double = 1164
 Private Const TOGGLE_W    As Double = 130
 
 Private Const OTP_COLW  As String = "0;0;58;38;56;58;44;42;36"
-Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Kupac;Prodajna;Cena za;Ostatak"
+Private Const OTP_CAPS  As String = ";;Otkupno mesto;Koli" & ChrW(269) & "ina;Datum;Kupac;Prodajna;Cena za;Ostatak"
 Private Const BLOK_COLW As String = "0;62;104;58;44;46;66;58;66"
-Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Kolicina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
+Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Koli" & ChrW(269) & "ina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
 
 ' --- Stanje (modul-level; jedna frmOtkup instanca po sekciji) ---
 Private mForm As Object
@@ -717,7 +717,7 @@ Private Sub StornoSelectedBlok()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.StornoSelectedBlok"
-    MsgBox "Greska pri storno bloka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri storno bloka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Sekcija "Izgubljeni blokovi": blokovi cija je otpremnica stornirana/nestala.
@@ -776,7 +776,7 @@ Private Sub AdoptSelectedLostBlok()
     tBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BROJ))
 
     If MsgBox("Preuzeti blok br. " & brDok & " na otpremnicu " & tBroj & "?" & vbCrLf & _
-              "(menja se samo veza; OtkupID, uplate i ambalaza ostaju.)", _
+              "(menja se samo veza; OtkupID, uplate i ambala" & ChrW(382) & "a ostaju.)", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
 
     If ReassignOtkupToOtpremnica_TX(otkupID, mActiveOtpID) Then
@@ -792,14 +792,14 @@ Private Sub AdoptSelectedLostBlok()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.AdoptSelectedLostBlok"
-    MsgBox "Greska pri preuzimanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri preuzimanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub PrintSelectedBlok()
     On Error GoTo EH
     Dim li As Long: li = mLstBlok.ListIndex
     If li < 0 Then
-        MsgBox "Izaberite blok za stampu.", vbExclamation, APP_NAME
+        MsgBox "Izaberite blok za " & ChrW(353) & "tampu.", vbExclamation, APP_NAME
         Exit Sub
     End If
     Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
@@ -809,7 +809,7 @@ Private Sub PrintSelectedBlok()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.PrintSelectedBlok"
-    MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -872,7 +872,7 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     Exit Sub
 EH:
     LogErr "modOtkupBlok.PrintSpecifikacija"
-    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Handler dugmeta ChrW(352) & "tampaj po datumu" (footer strip). Cita Od/Do polja
@@ -915,7 +915,7 @@ Private Sub PrintSpecifikacijaPoDatumu(ByVal datumOd As Date, ByVal datumDo As D
     Exit Sub
 EH:
     LogErr "modOtkupBlok.PrintSpecifikacijaPoDatumu"
-    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Jezgro: ispisuje specifikaciju otkupnih blokova (tabela sa okvirima, A4
@@ -1006,7 +1006,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
 
     Dim hdr As Variant
     hdr = Array("Broj zbirne", "Broj otpremnice", "Otkupno mesto", "br. bloka", "Ime i Prezime", _
-                "Datum", "Kolicina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
+                "Datum", "Koli" & ChrW(269) & "ina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
     Const R0 As Long = 4
     Const NC As Long = 11
     Dim cc As Long
@@ -1114,7 +1114,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
 EH:
     Application.ScreenUpdating = True
     LogErr "modOtkupBlok.RenderSpec"
-    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function EnsureSpecSheet() As Worksheet

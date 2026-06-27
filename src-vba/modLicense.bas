@@ -155,7 +155,7 @@ Public Function LicenseGateOrQuit() As Boolean
     If Len(endpoint) = 0 Then
         ' Ukljuceno ali nema endpoint-a = misconfig. Fail-OPEN da ne brick-ujemo
         ' korisnika; operater mora da podesi LICENSE_ENDPOINT.
-        LogWarn SRC, "LICENSE_ENABLED=YES ali endpoint nije podesen. Preskacem proveru (fail-open)."
+        LogWarn SRC, "LICENSE_ENABLED=YES ali endpoint nije pode" & ChrW(353) & "en. Preskacem proveru (fail-open)."
         LicenseGateOrQuit = True
         Exit Function
     End If
@@ -230,8 +230,8 @@ Public Function LicenseGateOrQuit() As Boolean
             LicenseGateOrQuit = True
 
         Case "BOUND_OTHER"
-            LicenseBlock "Licenca je vec aktivirana na drugom racunaru.", _
-                         "Za prenos na ovaj racunar kontaktirajte dobavljaca."
+            LicenseBlock "Licenca je ve" & ChrW(263) & " aktivirana na drugom racunaru.", _
+                         "Za prenos na ovaj racunar kontaktirajte dobavlja" & ChrW(269) & "a."
             LicenseGateOrQuit = False
 
         Case "SUSPENDED"
@@ -244,7 +244,7 @@ Public Function LicenseGateOrQuit() As Boolean
 
         Case "UNKNOWN_KEY"
             LicenseBlock "Licencni kljuc nije prepoznat.", _
-                         "Proverite kljuc ili kontaktirajte dobavljaca."
+                         "Proverite kljuc ili kontaktirajte dobavlja" & ChrW(269) & "a."
             LicenseGateOrQuit = False
 
         Case "BAD_DEVICE"
@@ -254,7 +254,7 @@ Public Function LicenseGateOrQuit() As Boolean
                 LicenseGateOrQuit = True
             Else
                 LicenseBlock "Ne mogu pouzdano da ocitam ovaj uredjaj.", _
-                             "WMI/registry nedostupan. Kontaktirajte dobavljaca."
+                             "WMI/registry nedostupan. Kontaktirajte dobavlja" & ChrW(269) & "a."
                 LicenseGateOrQuit = False
             End If
 
@@ -264,7 +264,7 @@ Public Function LicenseGateOrQuit() As Boolean
             ' privremeno: vezana masina -> offline grace; inace pozovi na ponovni
             ' pokusaj (NE alarmantno "kontaktirajte dobavljaca").
             If LicenseIsBoundMachine(bound, parts) Then
-                LogWarn SRC, "Prolazna greska/status='" & status & Poruka("LIC_MSG_PROPUSTAM_VEZANU_MASINU")
+                LogWarn SRC, "Prolazna gre" & ChrW(353) & "ka/status='" & status & Poruka("LIC_MSG_PROPUSTAM_VEZANU_MASINU")
                 LicenseGateOrQuit = True
             Else
                 LicenseBlock "Licencni server trenutno nije dostupan.", _
@@ -320,7 +320,7 @@ Private Function PromptLicenseOnTrialExpiry() As Boolean
         "Unesite licencni kljuc za nastavak (Cancel = izlaz):", APP_NAME))
     If Len(key) = 0 Then
         LicenseBlock "Probni period je istekao.", _
-                     "Unesite licencu (Alt+F8 -> ActivateLicensePrompt) ili kontaktirajte dobavljaca."
+                     "Unesite licencu (Alt+F8 -> ActivateLicensePrompt) ili kontaktirajte dobavlja" & ChrW(269) & "a."
         PromptLicenseOnTrialExpiry = False
         Exit Function
     End If
@@ -354,7 +354,7 @@ Public Sub ActivateLicensePrompt()
 
     Dim endpoint As String: endpoint = LicenseEndpoint()
     If Len(endpoint) = 0 Then
-        MsgBox "LICENSE_ENDPOINT (ili MONITORING_ENDPOINT) nije podesen u tblSEFConfig.", _
+        MsgBox "LICENSE_ENDPOINT (ili MONITORING_ENDPOINT) nije pode" & ChrW(353) & "en u tblSEFConfig.", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -379,7 +379,7 @@ Public Sub ActivateLicensePrompt()
     Dim status As String: status = UCase$(ExtractJsonStringGoogle(resp, "status"))
     If status = "OK" Then
         Call PersistLicenseOk(parts, resp)
-        MsgBox "Licenca je uspesno aktivirana na ovom racunaru." & vbCrLf & _
+        MsgBox "Licenca je uspe" & ChrW(353) & "no aktivirana na ovom racunaru." & vbCrLf & _
                "Korisnik: " & ExtractJsonStringGoogle(resp, "customer"), _
                vbInformation, APP_NAME
     Else
@@ -390,7 +390,7 @@ Public Sub ActivateLicensePrompt()
 
 EH:
     LogErr SRC
-    MsgBox "Greska pri aktivaciji: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri aktivaciji: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Dijagnostika: prikazi otisak ovog racunara (za support / rucni bind).
@@ -590,7 +590,7 @@ End Function
 Private Function LicenseErr(ByVal resp As String) As String
     Dim e As String
     e = ExtractJsonStringGoogle(resp, "error")
-    If Len(Trim$(e)) = 0 Then e = "Kontaktirajte dobavljaca."
+    If Len(Trim$(e)) = 0 Then e = "Kontaktirajte dobavlja" & ChrW(269) & "a."
     LicenseErr = e
 End Function
 
@@ -612,7 +612,7 @@ Private Sub LicenseBlock(ByVal reason As String, ByVal hint As String)
     On Error Resume Next
     Application.Visible = True
     MsgBox reason & vbCrLf & vbCrLf & hint & vbCrLf & vbCrLf & _
-           "Kontaktirajte dobavljaca za nastavak rada.", vbCritical, APP_NAME
+           "Kontaktirajte dobavlja" & ChrW(269) & "a za nastavak rada.", vbCritical, APP_NAME
     DenyAccessAndScheduleClose
 End Sub
 

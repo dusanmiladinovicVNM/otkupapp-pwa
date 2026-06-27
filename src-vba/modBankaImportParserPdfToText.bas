@@ -123,7 +123,7 @@ Private Function ResolvePdfToTextExePath() As String
 
     If Len(configuredPath) = 0 Then
         Err.Raise vbObjectError + 2610, SRC, _
-                  CONFIG_KEY_PDFTOTEXT_EXE_PATH & " nije podesen. " & _
+                  CONFIG_KEY_PDFTOTEXT_EXE_PATH & " nije pode" & ChrW(353) & "en. " & _
                   "Podesi putanju do pdftotext.exe u tblLocalConfig."
     End If
 
@@ -360,8 +360,8 @@ Private Function CollectPdfTextTxnBlocks(ByRef lines() As String) As Collection
             inTxn = True
         
         ElseIf inTxn Then
-            If InStr(1, s, "Ukupno za racun", vbTextCompare) > 0 Or _
-               InStr(1, s, "Ukupno za racun", vbTextCompare) > 0 Or _
+            If InStr(1, s, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Or _
+               InStr(1, s, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Or _
                InStr(1, s, "(postoji", vbTextCompare) > 0 Or _
                InStr(1, s, "Ukupno RSD", vbTextCompare) > 0 Or _
                InStr(1, s, "Iznos ukupno naplacene naknade", vbTextCompare) > 0 Or _
@@ -480,8 +480,8 @@ NextPartner:
         If IsAmountPdf(ln) Then GoTo NextSvrha
         If IsAccountLinePdf(ln) Then GoTo NextSvrha
         
-        If InStr(1, ln, "Ukupno za racun", vbTextCompare) > 0 Or _
-        InStr(1, ln, "Ukupno za racun", vbTextCompare) > 0 Then
+        If InStr(1, ln, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Or _
+        InStr(1, ln, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Then
     
         ' Falls schon Text davor in derselben Zeile steht, nur den Teil vor "Ukupno..." behalten
         Dim pUk As Long
@@ -634,8 +634,8 @@ Private Sub ParsePdfOdobrenjeSifraLineStrict(ByVal s As String, _
         svrha = NormalizeSpacesPdf(m.SubMatches(3))
         
         ' Alles ab "Ukupno za ..." abschneiden, falls es in derselben Zeile haengt
-        pUk = InStr(1, svrha, "Ukupno za racun", vbTextCompare)
-        If pUk = 0 Then pUk = InStr(1, svrha, "Ukupno za racun", vbTextCompare)
+        pUk = InStr(1, svrha, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare)
+        If pUk = 0 Then pUk = InStr(1, svrha, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare)
         If pUk > 0 Then
             svrha = Trim$(Left$(svrha, pUk - 1))
         End If
@@ -672,8 +672,8 @@ Private Function FindAccountInLinesPdf(ByRef lines() As String) As String
     For i = LBound(lines) To UBound(lines)
         s = NormalizeSpacesPdf(lines(i))
         
-        If InStr(1, s, "Ukupno za racun", vbTextCompare) > 0 Or _
-           InStr(1, s, "Ukupno za racun", vbTextCompare) > 0 Then
+        If InStr(1, s, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Or _
+           InStr(1, s, "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Then
             Exit Function
         End If
         
@@ -1115,8 +1115,8 @@ Sub TestPdfTextParser()
         Debug.Print "Datum Izvoda: " & result(i, 1)
         Debug.Print "Datum Izvrs: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
-        Debug.Print "Racun: " & result(i, 4)
-        Debug.Print "Zaduzenje: " & result(i, 5)
+        Debug.Print "Ra" & ChrW(269) & "un: " & result(i, 4)
+        Debug.Print "Zadu" & ChrW(382) & "enje: " & result(i, 5)
         Debug.Print "Odobrenje: " & result(i, 6)
         Debug.Print "Sifra: " & result(i, 7)
         Debug.Print "Svrha: " & result(i, 8)
@@ -1156,7 +1156,7 @@ Sub TestPdfTextParser123()
     Debug.Print "PDF: " & pdfPath
     Debug.Print "Broj Izvoda: " & brojIzvoda
     Debug.Print "Datum Izvoda: " & datumIzvoda
-    Debug.Print "Broj Racuna: " & brojRacuna
+    Debug.Print "Broj Ra" & ChrW(269) & "una: " & brojRacuna
     Debug.Print "========================================"
     
     result = ParseBankaIzvodPdfText(txt)
@@ -1170,11 +1170,11 @@ Sub TestPdfTextParser123()
         Debug.Print "--- Txn " & i & " ---"
         Debug.Print "Broj Izvoda: " & brojIzvoda
         Debug.Print "Datum Izvoda: " & datumIzvoda
-        Debug.Print "Broj Racuna: " & brojRacuna
+        Debug.Print "Broj Ra" & ChrW(269) & "una: " & brojRacuna
         Debug.Print "Datum Izvrs: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
-        Debug.Print "Racun: " & result(i, 4)
-        Debug.Print "Zaduzenje: " & result(i, 5)
+        Debug.Print "Ra" & ChrW(269) & "un: " & result(i, 4)
+        Debug.Print "Zadu" & ChrW(382) & "enje: " & result(i, 5)
         Debug.Print "Odobrenje: " & result(i, 6)
         Debug.Print "Sifra: " & result(i, 7)
         Debug.Print "Svrha: " & result(i, 8)

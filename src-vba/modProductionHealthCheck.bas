@@ -70,13 +70,13 @@ Private Sub Check_CoreTablesAndColumns()
     HealthRequireTable TBL_AMBALAZA
 
     HealthRequireColumns TBL_OTKUP, Array( _
-        "OtkupID", "Datum", "KooperantID", "StanicaID", "Kolicina", "Cena", _
+        "OtkupID", "Datum", "KooperantID", "StanicaID", "Koli" & ChrW(269) & "ina", "Cena", _
         "VozacID", "BrojDokumenta", "Klasa", "Stornirano", "BrojZbirne", _
         "Isplaceno", "DatumIsplate", "OtpremnicaID")
 
     HealthRequireColumns TBL_OTPREMNICA, Array( _
         "OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", _
-        "BrojZbirne", "Kolicina", "Cena", "KolAmbalaze", "Klasa", "Stornirano")
+        "BrojZbirne", "Koli" & ChrW(269) & "ina", "Cena", "KolAmbalaze", "Klasa", "Stornirano")
 
     HealthRequireColumns TBL_ZBIRNA, Array( _
         "ZbirnaID", "Datum", "VozacID", "BrojZbirne", "KupacID", _
@@ -84,7 +84,7 @@ Private Sub Check_CoreTablesAndColumns()
 
     HealthRequireColumns TBL_PRIJEMNICA, Array( _
         "PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", _
-        "BrojZbirne", "Kolicina", "Cena", "KolAmbalaze", "kolAmbVracena", _
+        "BrojZbirne", "Koli" & ChrW(269) & "ina", "Cena", "KolAmbalaze", "kolAmbVracena", _
         "Klasa", "Fakturisano", "FakturaID", "Stornirano")
 
     HealthRequireColumns TBL_FAKTURE, Array( _
@@ -92,7 +92,7 @@ Private Sub Check_CoreTablesAndColumns()
         "Status", "DatumPlacanja", "Stornirano")
 
     HealthRequireColumns TBL_FAKTURA_STAVKE, Array( _
-        "StavkaID", "FakturaID", "PrijemnicaID", "Kolicina", "Cena", _
+        "StavkaID", "FakturaID", "PrijemnicaID", "Koli" & ChrW(269) & "ina", "Cena", _
         "Klasa", "BrojPrijemnice")
 
     HealthRequireColumns TBL_NOVAC, Array( _
@@ -798,7 +798,7 @@ Private Sub Check_GoogleSyncMasterSchema()
         "Datum", _
         "KooperantID", _
         "StanicaID", _
-        "Kolicina", _
+        "Koli" & ChrW(269) & "ina", _
         "Cena", _
         "Klasa", _
         "Stornirano", _

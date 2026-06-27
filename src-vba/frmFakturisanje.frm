@@ -147,7 +147,7 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_FAK2, "Broj zbirne"
     SetColumnHeader lbl_H_FAK3, "Datum"
     SetColumnHeader lbl_H_FAK4, "Klasa"
-    SetColumnHeader lbl_H_FAK5, "Kolicina"
+    SetColumnHeader lbl_H_FAK5, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_FAK6, "Cena"
     SetColumnHeader lbl_H_FAK7, "Vrednost"
     SetColumnHeader lbl_H_FAK8, "Fakturisano (det. placanja)"
@@ -291,7 +291,7 @@ Private Sub btnUnesi_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca.", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca.", vbExclamation, APP_NAME
         Exit Sub
     End If
     
@@ -417,7 +417,7 @@ NextPrij:
     Next i
 
     If count = 0 Then
-        MsgBox "Sve prijemnice su vec fakturisane!", vbInformation, APP_NAME
+        MsgBox "Sve prijemnice su ve" & ChrW(263) & " fakturisane!", vbInformation, APP_NAME
     End If
 
     Exit Sub
@@ -558,7 +558,7 @@ Private Sub btnIzradiFakturu_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca.", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca.", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -634,7 +634,7 @@ Private Sub btnIzradiFakturu_Click()
             End If
 
             If Not IsNumeric(m_PrijemniceData(dataRow, colKol)) Then
-                MsgBox "Kolicina nije ispravna za prijemnicu: " & prijemnicaID, _
+                MsgBox "Koli" & ChrW(269) & "ina nije ispravna za prijemnicu: " & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -652,7 +652,7 @@ Private Sub btnIzradiFakturu_Click()
             cena = CDbl(m_PrijemniceData(dataRow, colCena))
 
             If kolicina <= 0 Then
-                MsgBox "Kolicina mora biti veca od nule za prijemnicu: " & prijemnicaID, _
+                MsgBox "Koli" & ChrW(269) & "ina mora biti veca od nule za prijemnicu: " & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If

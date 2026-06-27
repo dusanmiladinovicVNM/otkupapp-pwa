@@ -250,14 +250,14 @@ Public Sub StyleButton(ByVal c As MSForms.CommandButton)
     cap = LCase$(c.caption)
 
     If nm Like "*unos*" Or nm Like "*save*" Or nm Like "*sacuvaj*" _
-       Or nm Like "*izradi*" Or nm Like "*prikazi*" _
+       Or nm Like "*izradi*" Or nm Like "*prika" & ChrW(382) & "i*" _
        Or cap Like "*unos*" Or cap Like "*sacuvaj*" _
-       Or cap Like "*izradi*" Or cap Like "*prikazi*" Then
+       Or cap Like "*izradi*" Or cap Like "*prika" & ChrW(382) & "i*" Then
 
         SetButtonPrimary c
 
-    ElseIf nm Like "*obrisi*" Or nm Like "*delete*" _
-       Or cap Like "*obrisi*" Or cap Like "*delete*" Then
+    ElseIf nm Like "*obri" & ChrW(353) & "i*" Or nm Like "*delete*" _
+       Or cap Like "*obri" & ChrW(353) & "i*" Or cap Like "*delete*" Then
 
         SetButtonDanger c
 

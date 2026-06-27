@@ -66,7 +66,7 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
         LogError "modAutoHladnjaca.AutoChainHladnjaca", _
                  "AUTO_PRIJEMNICA_HLADNJACA ukljucen ali MALINA_DEFAULT_KUPAC prazan."
         AutoChainHladnjaca = "Auto-lanac hladnjace nije pokrenut: kupac-hladnjaca " & _
-            "(MALINA_DEFAULT_KUPAC) nije podesen u Podesavanjima."
+            "(MALINA_DEFAULT_KUPAC) nije pode" & ChrW(353) & "en u Podesavanjima."
         Exit Function
     End If
 
@@ -153,9 +153,9 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     ' tblPaletaStavka posle ciscenja tblPrijemnica). Tehnicki razlog je u logu
     ' (Monitor_Event DOKUMENT_SAVE_FAIL / SavePrijemnica_TX).
     If Len(failKlase) > 0 Then
-        AutoChainHladnjaca = "Otkup je sacuvan, ali AUTO-LANAC hladnjace je NEPOTPUN: " & _
+        AutoChainHladnjaca = "Otkup je sa" & ChrW(269) & "uvan, ali AUTO-LANAC hladnjace je NEPOTPUN: " & _
             "otpremnica i zbirna su kreirane, a PRIJEMNICA nije (Klasa " & failKlase & "). " & _
-            "Najcesci uzrok: broj prijemnice je vec paletizovan (zaostala stavka u " & _
+            "Najcesci uzrok: broj prijemnice je ve" & ChrW(263) & " paletizovan (zaostala stavka u " & _
             "tblPaletaStavka). Detalji su u logu."
     End If
     Exit Function
@@ -163,7 +163,7 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
 EH:
     Dim eDesc As String: eDesc = Err.description
     LogErr "modAutoHladnjaca.AutoChainHladnjaca"
-    AutoChainHladnjaca = "Auto-lanac hladnjace prekinut greskom: " & eDesc & " (vidi log)."
+    AutoChainHladnjaca = "Auto-lanac hladnjace prekinut gre" & ChrW(353) & "kom: " & eDesc & " (vidi log)."
 End Function
 
 ' Upisi vezu nazad u tblOtkup red(ove) za dati OtkupID:
@@ -234,7 +234,7 @@ Public Sub BackfillPrijemniceHladnjaca()
     Dim kupacID As String
     kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
     If Len(kupacID) = 0 Then
-        MsgBox "MALINA_DEFAULT_KUPAC (kupac-hladnjaca) nije podesen. " & _
+        MsgBox "MALINA_DEFAULT_KUPAC (kupac-hladnjaca) nije pode" & ChrW(353) & "en. " & _
                "Podesi ga u Podesavanjima pa pokreni ponovo.", vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -338,7 +338,7 @@ ContinueLoop:
     Next i
 
     LogInfo SRC, "Backfill prijemnice: ok=" & ok & " fail=" & fail
-    MsgBox "Backfill zavrsen." & vbCrLf & _
+    MsgBox "Backfill zavr" & ChrW(353) & "en." & vbCrLf & _
            "Kreirano prijemnica: " & ok & vbCrLf & _
            "Neuspesno: " & fail & _
            IIf(fail > 0, vbCrLf & "(vidi log; najcesce orphan paleta -> ocisti " & _
@@ -347,7 +347,7 @@ ContinueLoop:
     Exit Sub
 EH:
     LogErr SRC
-    MsgBox "Greska u backfill-u: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka u backfill-u: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function KeyZbrKlasa(ByVal zbr As String, ByVal klasa As String) As String

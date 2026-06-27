@@ -154,7 +154,7 @@ Private Sub SetupAmbIzdataField()
         .top = yIzdata
         .width = txtKolAmbalaze.width
         .Height = txtKolAmbalaze.Height
-        .ControlTipText = "Ambalaza koju OM izdaje kooperantu (preuzima od OM)"
+        .ControlTipText = "Ambala" & ChrW(382) & "a koju OM izdaje kooperantu (preuzima od OM)"
     End With
     StyleTextBox m_txtAmbIzdata
 
@@ -738,7 +738,7 @@ Private Sub btnUnos_Click()
     End If
 
     If cmbVrstaVoca.value = "" Then
-        MsgBox "Izaberite vrstu voca!", vbExclamation, APP_NAME
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
     End If
@@ -758,7 +758,7 @@ Private Sub btnUnos_Click()
 
     If hasKlasaI Then
         If Not TryParseDouble(txtKolicina.value, kolicinaI) Or kolicinaI <= 0 Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicina.SetFocus
             Exit Sub
         End If
@@ -769,7 +769,7 @@ Private Sub btnUnos_Click()
         End If
     Else
         If Not chkDveKlase.value Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicina.SetFocus
             Exit Sub
         End If
@@ -786,7 +786,7 @@ Private Sub btnUnos_Click()
 
     If chkDveKlase.value Then
         If Not TryParseDouble(txtKolicinaKLII.value, kolicinaII) Or kolicinaII <= 0 Then
-            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            MsgBox "Unesite koli" & ChrW(269) & "inu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKLII.SetFocus
             Exit Sub
         End If
@@ -923,7 +923,7 @@ Private Sub btnUnos_Click()
     stanicaID = GetComboID(cmbOtkupnoMesto)
 
     If stanicaID = "" Then
-        MsgBox "Nije pronaden ID otkupnog mesta!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID otkupnog mesta!", vbExclamation, APP_NAME
         cmbOtkupnoMesto.SetFocus
         Exit Sub
     End If
@@ -932,7 +932,7 @@ Private Sub btnUnos_Click()
     kooperantID = ResolveKooperantByName(cmbKooperant, stanicaID)
 
     If kooperantID = "" Then
-        MsgBox "Nije pronaden ID kooperanta!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kooperanta!", vbExclamation, APP_NAME
         cmbKooperant.SetFocus
         Exit Sub
     End If
@@ -1015,7 +1015,7 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
-    MsgBox "Otkup sacuvan: " & result, vbInformation, APP_NAME
+    MsgBox "Otkup sa" & ChrW(269) & "uvan: " & result, vbInformation, APP_NAME
 
     ' Otkupni list: PDF (po CFG_OTKUP_PRINT_MODE; podrazumevano PDF + otvori) za
     ' upravo sacuvani blok. Best-effort: greska ne sme da obori potvrdu snimanja.

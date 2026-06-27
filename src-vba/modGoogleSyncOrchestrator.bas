@@ -87,7 +87,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         LogWarn ORCH_MODULE, "SyncPWAFullCycle_Core re-entered. Aborting."
 
         If showMessages Then
-            MsgBox "Sync je vec u toku. Sacekaj da se zavrsi pa pokusaj ponovo.", _
+            MsgBox "Sync je ve" & ChrW(263) & " u toku. Sacekaj da se zavr" & ChrW(353) & "i pa poku" & ChrW(353) & "aj ponovo.", _
                    vbExclamation, APP_NAME
         End If
 
@@ -105,7 +105,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     If Not IsGoogleAuthConfigured() Then
         LogError ORCH_MODULE, "Google OAuth2 nije konfigurisan."
 
-        summary = summary & "GRESKA - Google OAuth2 nije konfigurisan." & vbCrLf
+        summary = summary & "GRE" & ChrW(352) & "KA - Google OAuth2 nije konfigurisan." & vbCrLf
 
         Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                              okStammdaten, okKartice, okMgmt, False
@@ -122,7 +122,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     If Len(Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))) = 0 Then
         LogError ORCH_MODULE, "GOOGLE_PWA_FOLDER_ID nije postavljen."
 
-        summary = summary & "GRESKA - GOOGLE_PWA_FOLDER_ID nije postavljen." & vbCrLf
+        summary = summary & "GRE" & ChrW(352) & "KA - GOOGLE_PWA_FOLDER_ID nije postavljen." & vbCrLf
 
         Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                              okStammdaten, okKartice, okMgmt, False
@@ -139,7 +139,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
     If Not SetPWAMasterSyncLock(True, "Master sync je u toku. Sacekajte zavrsetak.") Then
         LogError ORCH_MODULE, "PWA lock could not be acquired. Cycle aborted."
 
-        summary = summary & "GRESKA - PWA lock nije postavljen. Sync prekinut." & vbCrLf
+        summary = summary & "GRE" & ChrW(352) & "KA - PWA lock nije postavljen. Sync prekinut." & vbCrLf
 
         Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
                              okStammdaten, okKartice, okMgmt, False
@@ -322,9 +322,9 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         "; MgmtReports=" & CStr(okMgmt)
 
     If SyncPWAFullCycle_Core Then
-        SyncProgress "Full sync uspesno zavrsen."
+        SyncProgress "Full sync uspe" & ChrW(353) & "no zavr" & ChrW(353) & "en."
     Else
-        SyncProgress "Full sync zavrsen sa greskom / partial statusom."
+        SyncProgress "Full sync zavr" & ChrW(353) & "en sa gre" & ChrW(353) & "kom / partial statusom."
     End If
 
     If showMessages Then
@@ -332,7 +332,7 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
             If SyncPWAFullCycle_Core Then
                 MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
             Else
-                MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
+                MsgBox summary & vbCrLf & "Status: GRE" & ChrW(352) & "KA / PARTIAL", vbExclamation, APP_NAME
             End If
             finalMessageAlreadyShown = True
         End If
@@ -342,16 +342,16 @@ CleanExit:
     If pwaLockAcquired Then
         SyncProgress "Otkljucavam PWA upis..."
 
-        If Not SetPWAMasterSyncLock(False, "Master sync zavrsen.") Then
+        If Not SetPWAMasterSyncLock(False, "Master sync zavr" & ChrW(353) & "en.") Then
             pwaUnlockOk = False
             unlockErrDesc = _
                 "PWA master sync lock nije skinut iz VBA ciklusa. " & _
-                "PWA moze ostati privremeno zakljucan do isteka GAS/PWA lock TTL-a " & _
+                "PWA mo" & ChrW(382) & "e ostati privremeno zakljucan do isteka GAS/PWA lock TTL-a " & _
                 "(~" & CStr(MASTER_SYNC_LOCK_TTL_MIN) & " min). " & _
                 "Ako se stanje ne oporavi automatski, proveri Stammdaten/SyncControl i MASTER_SYNC_LOCK."
 
             LogError ORCH_MODULE, unlockErrDesc
-            SyncProgress "GRESKA: PWA lock nije skinut iz VBA ciklusa; ocekuje se automatski TTL oporavak."
+            SyncProgress "GRE" & ChrW(352) & "KA: PWA lock nije skinut iz VBA ciklusa; ocekuje se automatski TTL oporavak."
 
             ' Not permanent lockout, but the operator must not see a green cycle.
             SyncPWAFullCycle_Core = False
@@ -365,7 +365,7 @@ CleanExit:
 
             If showMessages Then
                 MsgBox summary & vbCrLf & _
-                       "Status: GRESKA / PARTIAL" & vbCrLf & vbCrLf & _
+                       "Status: GRE" & ChrW(352) & "KA / PARTIAL" & vbCrLf & vbCrLf & _
                        "Sync koraci su mozda zavrseni, ali VBA nije uspeo da skine PWA lock." & vbCrLf & _
                        "PWA se po GAS/PWA pravilu automatski oporavlja posle ~" & _
                        CStr(MASTER_SYNC_LOCK_TTL_MIN) & " minuta." & vbCrLf & _
@@ -380,7 +380,7 @@ CleanExit:
                 If SyncPWAFullCycle_Core Then
                     MsgBox summary & vbCrLf & "Status: OK", vbInformation, APP_NAME
                 Else
-                    MsgBox summary & vbCrLf & "Status: GRESKA / PARTIAL", vbExclamation, APP_NAME
+                    MsgBox summary & vbCrLf & "Status: GRE" & ChrW(352) & "KA / PARTIAL", vbExclamation, APP_NAME
                 End If
                 finalMessageAlreadyShown = True
             End If
@@ -400,7 +400,7 @@ EH:
                          okStammdaten, okKartice, okMgmt, False
 
     If showMessages Then
-        MsgBox "Greska u PWA / Google sync ciklusu: " & fatalDesc, _
+        MsgBox "Gre" & ChrW(353) & "ka u PWA / Google sync ciklusu: " & fatalDesc, _
                vbCritical, APP_NAME
     End If
 
@@ -415,7 +415,7 @@ Private Sub AppendStep(ByRef summary As String, _
         summary = summary & "OK - " & stepName & vbCrLf
         LogInfo ORCH_MODULE, "OK - " & stepName
     Else
-        summary = summary & "GRESKA - " & stepName & vbCrLf
+        summary = summary & "GRE" & ChrW(352) & "KA - " & stepName & vbCrLf
         LogError ORCH_MODULE, "FAIL - " & stepName
     End If
 End Sub

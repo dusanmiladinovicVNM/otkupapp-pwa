@@ -492,7 +492,7 @@ Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
 
     If changedCount = 0 Then
         Err.Raise ERR_STORNO_BASE + 22, SRC, _
-                  "Zbirna je vec stornirana. BrojZbirne=" & brojZbirne
+                  "Zbirna je ve" & ChrW(263) & " stornirana. BrojZbirne=" & brojZbirne
     End If
 
     StornoZbirna = True
@@ -1267,7 +1267,7 @@ Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
     End If
     If changedCount = 0 Then
         Err.Raise ERR_STORNO_BASE + 22, SRC, _
-                  "Dokument je vec storniran. Broj=" & brDok
+                  "Dokument je ve" & ChrW(263) & " storniran. Broj=" & brDok
     End If
 
     StornoOMKoopByBrDok = True
@@ -1358,7 +1358,7 @@ Private Function RequireStornoAllowed(ByVal tblName As String, _
 
     If IsStorniranoValue(data(rowIndex, colStorno)) Then
         Err.Raise ERR_STORNO_BASE + 64, sourceName, _
-                  "Vec stornirano. Table=" & tblName & _
+                  "Ve" & ChrW(263) & " stornirano. Table=" & tblName & _
                   " ID=" & recordID
     End If
 

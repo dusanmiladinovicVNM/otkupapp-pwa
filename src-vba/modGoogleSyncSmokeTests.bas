@@ -568,7 +568,7 @@ Private Function BuildOTKFixtureData(ByVal clientRecordID As String, _
     data(1, 12) = "VrstaVoca"
     data(1, 13) = "SortaVoca"
     data(1, 14) = "Klasa"
-    data(1, 15) = "Kolicina"
+    data(1, 15) = "Koli" & ChrW(269) & "ina"
     data(1, 16) = "Cena"
     data(1, 17) = "TipAmbalaze"
     data(1, 18) = "KolAmbalaze"

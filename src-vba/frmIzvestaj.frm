@@ -74,7 +74,7 @@ Private Sub UserForm_Activate()
     ' Nova instanca forme -> resetuj modul-stanje panela "Detalji otkupa"
     ' (dinamicke kontrole prethodne instance vise ne postoje posle Unload-a).
     KarticaDetalji_Reset
-    m_ambPageIdx = -1   ' dok se runtime tab "Pregled ambalaze" ne kreira
+    m_ambPageIdx = -1   ' dok se runtime tab "Pregled ambala" & ChrW(382) & "e" ne kreira
     m_otkPageIdx = -1   ' dok se runtime tab "Otkupni listovi" ne kreira
 
     m_IsInitializing = True
@@ -161,7 +161,7 @@ Private Sub UserForm_Activate()
     On Error Resume Next
     mpReports.Pages(3).caption = "Ambala" & ChrW(382) & "a"   ' "Primljena ambalaza" -> "Ambala" & ChrW(382) & "a"
     On Error GoTo EH
-    EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
+    EnsureKarticaAmbPage          ' runtime tab "Pregled ambala" & ChrW(382) & "e" (pre UpdateReportMode)
     EnsureOtkupListePage          ' runtime tab "Otkupni listovi" (pre UpdateReportMode)
     EnsureDetaljiButtons          ' dugmad za stampu uz "Detalji" (Otk.roba / Ambalaza)
     UpdateReportMode
@@ -648,7 +648,7 @@ Private Sub btnUnos_Click()
 EH:
     LogErr "frmIzvestaj.btnUnos"
     Application.ScreenUpdating = True
-    MsgBox "Greska pri ucitavanju izvestaja: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju izve" & ChrW(353) & "taja: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub mpReports_Change()
@@ -1102,7 +1102,7 @@ EH:
         Case vbObjectError + 7501, vbObjectError + 7502
             MsgBox Err.description, vbExclamation, APP_NAME
         Case Else
-            MsgBox "Greska pri stampanju kartice: " & Err.description, vbCritical, APP_NAME
+            MsgBox "Gre" & ChrW(353) & "ka pri " & ChrW(353) & "tampanju kartice: " & Err.description, vbCritical, APP_NAME
     End Select
 End Sub
 
@@ -1199,10 +1199,10 @@ Private Sub btnStampaj_Click()
             title = "Saldo OM"
             headers = Array( _
                 "Kooperant", _
-                "Kolicina", _
+                "Koli" & ChrW(269) & "ina", _
                 "Vrednost", _
                 "Isplaceno", _
-                "Agro zaduzenje", _
+                "Agro zadu" & ChrW(382) & "enje", _
                 "Saldo", _
                 "Ambala" & ChrW(382) & "a")
                 
@@ -1211,7 +1211,7 @@ Private Sub btnStampaj_Click()
             title = "Saldo Kupci"
             headers = Array( _
                 "Vrsta", _
-                "Kolicina", _
+                "Koli" & ChrW(269) & "ina", _
                 "Cena", _
                 "Vrednost", _
                 "Novac", _
@@ -1238,7 +1238,7 @@ Private Sub btnStampaj_Click()
                 headers = Array( _
                     "Nr", _
                     "Vrsta", _
-                    "Kolicina kg", _
+                    "Koli" & ChrW(269) & "ina kg", _
                     "Vrednost", _
                     "", _
                     "", _
@@ -1264,14 +1264,14 @@ Private Sub btnStampaj_Click()
             title = "Isplata"
             headers = Array( _
                 "Kooperant", _
-                "Kes otkupac", _
+                "Ke" & ChrW(353) & " otkupac", _
                 "Virman firma", _
                 "Virman avans", _
                 "Ukupno")
                 
         Case 5
             Set lst = lstZbirni
-            title = "Zbirni izvestaj"
+            title = "Zbirni izve" & ChrW(353) & "taj"
             
             If GetActiveEntitetTip() = "Vozaci" Then
                 headers = Array( _
@@ -1284,7 +1284,7 @@ Private Sub btnStampaj_Click()
                 headers = Array( _
                     "Entitet", _
                     "Vrsta", _
-                    "Kolicina", _
+                    "Koli" & ChrW(269) & "ina", _
                     "Vrednost", _
                     "Prosek")
             End If
@@ -1294,7 +1294,7 @@ Private Sub btnStampaj_Click()
             title = "Prosecna cena"
             headers = Array( _
                 "Vrsta", _
-                "Kolicina", _
+                "Koli" & ChrW(269) & "ina", _
                 "Vrednost", _
                 "Prosecna cena")
                 
@@ -1316,8 +1316,8 @@ Private Sub btnStampaj_Click()
                 "Datum", _
                 "Broj dok.", _
                 "Opis", _
-                "Zaduzenje", _
-                "Razduzenje", _
+                "Zadu" & ChrW(382) & "enje", _
+                "Razdu" & ChrW(382) & "enje", _
                 "Saldo", _
                 "Saldo amb.")
     End Select
@@ -1325,7 +1325,7 @@ Private Sub btnStampaj_Click()
     ' Runtime tab "Pregled ambalaze" (dinamicki index, nije u Select Case 0-8)
     If lst Is Nothing And m_ambPageIdx >= 0 And activeTab = m_ambPageIdx Then
         Set lst = m_lstAmb
-        title = "Pregled ambalaze"
+        title = "Pregled ambala" & ChrW(382) & "e"
         headers = Array("Datum", "Broj dok.", "Opis", "Ulaz", "Izlaz", "Saldo")
     End If
 
@@ -1334,12 +1334,12 @@ Private Sub btnStampaj_Click()
     If lst Is Nothing And m_otkPageIdx >= 0 And activeTab = m_otkPageIdx Then
         Set lst = m_lstOtk
         title = "Otkupni listovi"
-        headers = Array("Datum", "Broj dok.", "Kooperant", "Vrsta", "Klasa", "Kolicina", "Vrednost")
+        headers = Array("Datum", "Broj dok.", "Kooperant", "Vrsta", "Klasa", "Koli" & ChrW(269) & "ina", "Vrednost")
     End If
 
     If lst Is Nothing Then Exit Sub
     If lst.ListCount = 0 Then
-        MsgBox "Nema podataka za stampu!", vbExclamation, APP_NAME
+        MsgBox "Nema podataka za " & ChrW(353) & "tampu!", vbExclamation, APP_NAME
         Exit Sub
     End If
     
@@ -1375,7 +1375,7 @@ Private Sub btnStampaj_Click()
     Exit Sub
 EH:
     LogErr "frmIzvestaj.btnStampaj"
-    MsgBox "Greska pri stampanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri " & ChrW(353) & "tampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1403,7 +1403,7 @@ Private Sub SetupAllColumnHeaders()
     
     ' === SaldoOM Page ===
     SetColumnHeader lbl_H_SOM1, "Kooperant"
-    SetColumnHeader lbl_H_SOM2, "Kolicina"
+    SetColumnHeader lbl_H_SOM2, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_SOM3, "Vrednost"
     SetColumnHeader lbl_H_SOM4, "Isplaceno"
     SetColumnHeader lbl_H_SOM5, Poruka("RPT_LBL_AGRO_ZADUZENJE")
@@ -1414,7 +1414,7 @@ Private Sub SetupAllColumnHeaders()
 
     ' === SaldoKupci Page ===
     SetColumnHeader lbl_H_SK1, "Vrsta"
-    SetColumnHeader lbl_H_SK2, "Kolicina"
+    SetColumnHeader lbl_H_SK2, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_SK3, "Cena"
     SetColumnHeader lbl_H_SK4, "Vrednost"
     SetColumnHeader lbl_H_SK5, "Novac"
@@ -1442,13 +1442,13 @@ Private Sub SetupAllColumnHeaders()
     ' === Zbirni Page ===
     SetColumnHeader lbl_H_ZB1, "Entitet"
     SetColumnHeader lbl_H_ZB2, "Vrsta"
-    SetColumnHeader lbl_H_ZB3, "Kolicina"
+    SetColumnHeader lbl_H_ZB3, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_ZB4, "Vrednost"
     SetColumnHeader lbl_H_ZB5, "Prosek"
     
     ' === ProsecnaCena Page ===
     SetColumnHeader lbl_H_PC1, "Vrsta"
-    SetColumnHeader lbl_H_PC2, "Kolicina"
+    SetColumnHeader lbl_H_PC2, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_PC3, "Vrednost"
     SetColumnHeader lbl_H_PC4, "Prosecna cena"
     
@@ -1618,7 +1618,7 @@ Private Sub EnsureKarticaAmbPage()
     If mpReports Is Nothing Then Exit Sub
 
     Dim pg As MSForms.Page
-    Set pg = mpReports.Pages.Add("pgKarticaAmb", "Pregled ambalaze")
+    Set pg = mpReports.Pages.Add("pgKarticaAmb", "Pregled ambala" & ChrW(382) & "e")
     If pg Is Nothing Then Exit Sub
     m_ambPageIdx = pg.index
     On Error Resume Next
@@ -1775,7 +1775,7 @@ End Sub
 Private Sub LayoutOtkListeHeaders(ByVal pg As MSForms.Page)
     On Error Resume Next
     Dim caps As Variant
-    caps = Array("Datum", "Broj dok.", "Kooperant", "Vrsta", "Klasa", "Kolicina", "Vrednost")
+    caps = Array("Datum", "Broj dok.", "Kooperant", "Vrsta", "Klasa", "Koli" & ChrW(269) & "ina", "Vrednost")
     Dim prop As Variant
     prop = Array(0.11, 0.15, 0.24, 0.13, 0.08, 0.13, 0.16)   ' zbir = 1.0
 
@@ -1876,7 +1876,7 @@ Private Sub m_btnStampajOtk_Click()
     Exit Sub
 EH:
     LogErr "frmIzvestaj.m_btnStampajOtk_Click"
-    MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1958,7 +1958,7 @@ Private Sub m_btnStampajOtkRoba_Click()
     Exit Sub
 EH:
     LogErr "frmIzvestaj.m_btnStampajOtkRoba_Click"
-    MsgBox "Greska pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Stampa dokument izabranog ambalaza reda, ruta po tipu dokumenta.
@@ -1981,13 +1981,13 @@ Private Sub m_btnStampajAmb_Click()
             ' OM<->kooperant kretanje (prazne gajbe) -> revers.
             StampajReversAmbDok dokID, dokTip
         Case Else
-            MsgBox "Za tip dokumenta '" & dokTip & "' stampa nije dostupna iz ovog pregleda.", _
+            MsgBox "Za tip dokumenta '" & dokTip & "' " & ChrW(353) & "tampa nije dostupna iz ovog pregleda.", _
                    vbInformation, APP_NAME
     End Select
     Exit Sub
 EH:
     LogErr "frmIzvestaj.m_btnStampajAmb_Click"
-    MsgBox "Greska pri stampi dokumenta: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi dokumenta: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Revers (OM<->kooperant kretanje ambalaze) za izabrani ambalaza red. Argumenti se
@@ -2048,7 +2048,7 @@ Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String)
     Exit Sub
 EH:
     LogErr "frmIzvestaj.StampajReversAmbDok"
-    MsgBox "Greska pri stampi reversa: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi reversa: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Prijemnice (" + "-spojeni ID-jevi) za zbirnu kojoj pripada otpremnica.

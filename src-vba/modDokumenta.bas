@@ -2124,7 +2124,7 @@ Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
     'End If
 
     If kolicina <= 0 Then
-        Err.Raise vbObjectError + 1405, SRC, "Kolicina mora biti veca od nule."
+        Err.Raise vbObjectError + 1405, SRC, "Koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If cena < 0 Then
@@ -2132,11 +2132,11 @@ Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
     End If
 
     If kolAmb < 0 Then
-        Err.Raise vbObjectError + 1407, SRC, "Kolicina ambalaze ne sme biti negativna."
+        Err.Raise vbObjectError + 1407, SRC, "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1408, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+        Err.Raise vbObjectError + 1408, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     RequireValidDocumentClass klasa, SRC
@@ -2165,15 +2165,15 @@ Private Sub ValidateZbirnaInput(ByVal vozacID As String, _
     End If
 
     If ukupnoKol <= 0 Then
-        Err.Raise vbObjectError + 1413, SRC, "Ukupna kolicina mora biti veca od nule."
+        Err.Raise vbObjectError + 1413, SRC, "Ukupna koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If ukupnoAmb < 0 Then
-        Err.Raise vbObjectError + 1414, SRC, "Ukupna ambalaza ne sme biti negativna."
+        Err.Raise vbObjectError + 1414, SRC, "Ukupna ambala" & ChrW(382) & "a ne sme biti negativna."
     End If
 
     If ukupnoAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1415, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+        Err.Raise vbObjectError + 1415, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     RequireValidDocumentClass klasa, SRC
@@ -2209,7 +2209,7 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     End If
 
     If kolicina <= 0 Then
-        Err.Raise vbObjectError + 1424, SRC, "Kolicina mora biti veca od nule."
+        Err.Raise vbObjectError + 1424, SRC, "Koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If cena < 0 Then
@@ -2217,11 +2217,11 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     End If
 
     If kolAmb < 0 Or kolAmbVracena < 0 Then
-        Err.Raise vbObjectError + 1426, SRC, "Kolicina ambalaze ne sme biti negativna."
+        Err.Raise vbObjectError + 1426, SRC, "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If (kolAmb > 0 Or kolAmbVracena > 0) And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1427, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+        Err.Raise vbObjectError + 1427, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     RequireValidDocumentClass klasa, SRC
@@ -2307,7 +2307,7 @@ End Function
 ' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
 Public Function StorniraniHeaders() As Variant
     StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
-                              "Klasa", "Kolicina", "Cena", "Iznos (RSD)", _
+                              "Klasa", "Koli" & ChrW(269) & "ina", "Cena", "Iznos (RSD)", _
                               "Zbirna", "Otpremnica", "Faktura")
 End Function
 

@@ -242,7 +242,7 @@ Public Function AutoLinkOtkupOtpremnica() As Long
 
             If otkRows.count <> 1 Then
                 Err.Raise vbObjectError + 4502, SRC, _
-                        "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & _
+                        "OtkupID nije jedinstven ili nije prona" & ChrW(273) & "en. OtkupID=" & _
                         otkupID & "; Count=" & CStr(otkRows.count)
             End If
 

@@ -136,7 +136,7 @@ Private Sub btnPrikazi_Click()
     Exit Sub
 EH:
     LogErr "frmMarza.btnPrikazi"
-    MsgBox "Greska pri ucitavanju marze: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju marze: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillMarzaList(ByVal data As Variant)

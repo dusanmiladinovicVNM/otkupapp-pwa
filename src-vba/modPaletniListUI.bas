@@ -32,7 +32,7 @@ Public Sub ExportPaletniListPDF_Prompt()
     Exit Sub
 EH:
     LogErr "modPaletniListUI.ExportPaletniListPDF_Prompt"
-    MsgBox "Greska pri izvozu paletnog lista: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri izvozu paletnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Alt+F8: broj prerade (tekuca godina) -> PDF preradnog lista.
@@ -57,7 +57,7 @@ Public Sub ExportPreradaPDF_Prompt()
     Exit Sub
 EH:
     LogErr "modPaletniListUI.ExportPreradaPDF_Prompt"
-    MsgBox "Greska pri izvozu preradnog lista: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri izvozu preradnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Alt+F8: unos paleta (brojevi, zarezom) + kutije/kese/neto/napomena ->
@@ -116,7 +116,7 @@ Public Sub PrintNepotpunePalete_Prompt()
     Exit Sub
 EH:
     LogErr "modPaletniListUI.PrintNepotpunePalete_Prompt"
-    MsgBox "Greska pri stampi nepotpunih paleta: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi nepotpunih paleta: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Alt+F8 / dugme: rucno zatvori otvorenu paletu po broju (tekuca godina).
@@ -172,7 +172,7 @@ Public Sub StornoPaleta_Prompt()
     Exit Sub
 EH:
     LogErr "modPaletniListUI.StornoPaleta_Prompt"
-    MsgBox "Greska pri stornu: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stornu: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Alt+F8: storno prerade po broju (tekuca godina), uz potvrdu.
@@ -202,7 +202,7 @@ Public Sub StornoPrerada_Prompt()
     Exit Sub
 EH:
     LogErr "modPaletniListUI.StornoPrerada_Prompt"
-    MsgBox "Greska pri stornu: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stornu: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================

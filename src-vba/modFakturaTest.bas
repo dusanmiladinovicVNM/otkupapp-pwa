@@ -86,7 +86,7 @@ Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
 
     AssertFakturaDoubleEquals 100#, _
         CDbl(GetFirstFakturaStavkaValue(fakturaID, COL_FS_KOLICINA)), _
-        "FakturaStavka Kolicina comes from Prijemnica"
+        "FakturaStavka Koli" & ChrW(269) & "ina comes from Prijemnica"
 
     AssertFakturaDoubleEquals 10#, _
         CDbl(GetFirstFakturaStavkaValue(fakturaID, COL_FS_CENA)), _

@@ -164,7 +164,7 @@ Private Sub TrialBlock(ByVal reason As String, ByVal deadline As Date)
     Application.Visible = True
     MsgBox reason & vbCrLf & _
            "Vazenje do: " & Format$(deadline, "dd.mm.yyyy") & "." & vbCrLf & vbCrLf & _
-           "Kontaktirajte dobavljaca za nastavak rada.", vbCritical, APP_NAME
+           "Kontaktirajte dobavlja" & ChrW(269) & "a za nastavak rada.", vbCritical, APP_NAME
 
     ' Pouzdano zatvaranje preko deljenog mehanizma (modLicense). NE zatvarati
     ' sinhrono iz Workbook_Open toka -- Excel Close tu odlaze/ignorise.

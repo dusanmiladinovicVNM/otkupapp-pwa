@@ -24,7 +24,7 @@ Private mLst As MSForms.ListBox        ' detail lista (2 kolone: Stavka | Vredno
 Private mLblTitle As MSForms.label
 Private mBuilt As Boolean
 Private mFormLevel As Boolean          ' True ako su kontrole na formi (fallback), ne na Page-u
-Private mCurOtkupID As String          ' OtkupID trenutno prikazan u panelu (za "Stampaj otkupni list")
+Private mCurOtkupID As String          ' OtkupID trenutno prikazan u panelu (za ChrW(352) & "tampaj otkupni list")
 Private mCurOtpremnicaID As String     ' OtpremnicaID prikazanog reda (za grupni otkupni list)
 Private mCurAmbDokID As String         ' Ambalaza: DokumentID izabranog reda (za stampu po tipu)
 Private mCurAmbDokTip As String        ' Ambalaza: DokumentTip izabranog reda
@@ -256,8 +256,8 @@ Private Sub ShowBasicRow(ByVal lstKartica As MSForms.ListBox, ByVal idx As Long)
     AddPair "Datum", CStr(lstKartica.List(idx, 0))
     AddPair "Broj dok.", CStr(lstKartica.List(idx, 1))
     AddPair "Opis", CStr(lstKartica.List(idx, 2))
-    If Len(Trim$(CStr(lstKartica.List(idx, 3)))) > 0 Then AddPair "Zaduzenje", CStr(lstKartica.List(idx, 3))
-    If Len(Trim$(CStr(lstKartica.List(idx, 4)))) > 0 Then AddPair "Razduzenje", CStr(lstKartica.List(idx, 4))
+    If Len(Trim$(CStr(lstKartica.List(idx, 3)))) > 0 Then AddPair "Zadu" & ChrW(382) & "enje", CStr(lstKartica.List(idx, 3))
+    If Len(Trim$(CStr(lstKartica.List(idx, 4)))) > 0 Then AddPair "Razdu" & ChrW(382) & "enje", CStr(lstKartica.List(idx, 4))
     AddPair "Saldo", CStr(lstKartica.List(idx, 5))
     If Len(Trim$(CStr(lstKartica.List(idx, 6)))) > 0 Then AddPair "Saldo amb.", CStr(lstKartica.List(idx, 6))
 End Sub
@@ -331,7 +331,7 @@ Private Sub ShowAmbRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, ByVal re
     mLblTitle.caption = "DETALJI AMBALA" & ChrW(381) & "E"
     AddPair "Datum", CStr(lst.List(idx, 0))
     AddPair "Mesto", CStr(lst.List(idx, 1))
-    AddPair "Tip ambalaze", CStr(lst.List(idx, 2))
+    AddPair "Tip ambala" & ChrW(382) & "e", CStr(lst.List(idx, 2))
     AddPair "Dokument", CStr(lst.List(idx, 3))
     AddPair "Ulaz (gajbe)", CStr(lst.List(idx, 4))
     AddPair "Izlaz (gajbe)", CStr(lst.List(idx, 5))
@@ -364,7 +364,7 @@ Private Sub ShowOtkupDetails(ByVal otkupID As String)
         AddPair "Otkup", "Nije pronadjen (" & otkupID & ")"
         Exit Sub
     End If
-    mCurOtkupID = otkupID   ' validan otkup red -> dostupan za "Stampaj otkupni list"
+    mCurOtkupID = otkupID   ' validan otkup red -> dostupan za ChrW(352) & "tampaj otkupni list"
 
     Dim datum As Variant: datum = CellVal(data, found, COL_OTK_DATUM)
     Dim brDok As String: brDok = CStr(CellVal(data, found, COL_OTK_BR_DOK))
@@ -390,19 +390,19 @@ Private Sub ShowOtkupDetails(ByVal otkupID As String)
     AddPair "Otkupno mesto", DisplayStanica(stanicaID)
     AddPair "Kooperant", DisplayKooperant(koopID)
     If Len(Trim$(parcelaID)) > 0 Then AddPair "Parcela", DisplayParcela(parcelaID)
-    AddPair "Vrsta voca", vrsta
+    AddPair "Vrsta vo" & ChrW(263) & "a", vrsta
     If Len(Trim$(sorta)) > 0 Then AddPair "Sorta", sorta
     AddPair "Klasa", klasa
-    AddPair "Kolicina", FmtKolicina(kol) & " kg"
+    AddPair "Koli" & ChrW(269) & "ina", FmtKolicina(kol) & " kg"
     If bruto > 0 Then AddPair "Bruto", FmtKolicina(bruto) & " kg"
     AddPair "Cena", Format$(cena, "#,##0.00")
     AddPair "Vrednost", Format$(kol * cena, "#,##0.00")
-    If Len(Trim$(tipAmb)) > 0 Then AddPair "Tip ambalaze", tipAmb
-    If kolAmb > 0 Then AddPair "Ambalaza (gajbe)", Format$(kolAmb, "#,##0")
-    If ambIzdata > 0 Then AddPair "Izdata ambalaza", Format$(ambIzdata, "#,##0")
+    If Len(Trim$(tipAmb)) > 0 Then AddPair "Tip ambala" & ChrW(382) & "e", tipAmb
+    If kolAmb > 0 Then AddPair "Ambala" & ChrW(382) & "a (gajbe)", Format$(kolAmb, "#,##0")
+    If ambIzdata > 0 Then AddPair "Izdata ambala" & ChrW(382) & "a", Format$(ambIzdata, "#,##0")
     If Len(Trim$(vozacID)) > 0 Then AddPair "Vozac", DisplayVozac(vozacID)
     If Len(Trim$(brZbirne)) > 0 Then AddPair "Broj zbirne", brZbirne
-    If novac > 0 Then AddPair "Isplaceno (kes)", Format$(novac, "#,##0.00")
+    If novac > 0 Then AddPair "Isplaceno (ke" & ChrW(353) & ")", Format$(novac, "#,##0.00")
     If Len(Trim$(primalac)) > 0 Then AddPair "Primalac novca", primalac
     Exit Sub
 EH:

@@ -392,7 +392,7 @@ Private Sub btnDodajIzlaz_Click()
     If trenutnoUKorpi + ukupnaKolicina > dostupno Then
         MsgBox "Nedovoljno stanje za artikal!" & vbCrLf & _
             "Na stanju: " & FormatKol(dostupno) & " " & jm & vbCrLf & _
-            "Vec u korpi: " & FormatKol(trenutnoUKorpi) & " " & jm & vbCrLf & _
+            "Ve" & ChrW(263) & " u korpi: " & FormatKol(trenutnoUKorpi) & " " & jm & vbCrLf & _
             Poruka("AGRO_MSG_POKUSAVATE_DODATI") & brojPakovanja & " x " & FormatKol(pakovanje) & _
             " = " & FormatKol(ukupnaKolicina) & " " & jm, _
             vbExclamation, APP_NAME
@@ -441,7 +441,7 @@ Private Sub btnDodajIzlaz_Click()
     Exit Sub
 EH:
     LogErr "frmAgrohemija.btnDodajIzlaz"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnZavrsiIzlaz_Click()
@@ -498,9 +498,9 @@ Private Sub btnZavrsiIzlaz_Click()
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4301, SRC, _
-                      "Greska pri cuvanju izlaza. ArtikalID=" & _
+                      "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju izlaza. ArtikalID=" & _
                       m_KorpaIzlaz(i).artikalID & _
-                      "; Kolicina=" & CStr(m_KorpaIzlaz(i).kolicina)
+                      "; Koli" & ChrW(269) & "ina=" & CStr(m_KorpaIzlaz(i).kolicina)
         End If
     Next i
 
@@ -617,7 +617,7 @@ Private Sub btnDodajUlaz_Click()
         Exit Sub
     End If
     If Not IsNumeric(txtKolicinaUlaz.value) Or CDbl(txtKolicinaUlaz.value) <= 0 Then
-        MsgBox "Unesite validnu kolicinu!", vbExclamation, APP_NAME
+        MsgBox "Unesite validnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
         Exit Sub
     End If
     If Not IsNumeric(txtCenaUlaz.value) Or CDbl(txtCenaUlaz.value) <= 0 Then
@@ -661,7 +661,7 @@ Private Sub btnDodajUlaz_Click()
     Exit Sub
 EH:
     LogErr "frmAgrohemija.btnDodajUlaz"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnZavrsiUlaz_Click()
@@ -711,9 +711,9 @@ Private Sub btnZavrsiUlaz_Click()
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4311, SRC, _
-                      "Greska pri cuvanju ulaza. ArtikalID=" & _
+                      "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju ulaza. ArtikalID=" & _
                       m_KorpaUlaz(i).artikalID & _
-                      "; Kolicina=" & CStr(m_KorpaUlaz(i).kolicina)
+                      "; Koli" & ChrW(269) & "ina=" & CStr(m_KorpaUlaz(i).kolicina)
         End If
     Next i
 

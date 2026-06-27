@@ -83,7 +83,7 @@ Private Sub ValidateAmbalazaInput(ByVal tipAmb As String, _
 
     If kolicina < 0 Then
         Err.Raise vbObjectError + 4401, sourceName, _
-                  "Kolicina ambalaze ne sme biti negativna."
+                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     ' Nula je legalan no-op.
@@ -91,22 +91,22 @@ Private Sub ValidateAmbalazaInput(ByVal tipAmb As String, _
 
     If Len(Trim$(tipAmb)) = 0 Then
         Err.Raise vbObjectError + 4402, sourceName, _
-                  "Tip ambalaze je obavezan kada postoji kolicina."
+                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji koli" & ChrW(269) & "ina."
     End If
 
     If Not IsValidAmbSmer(smer) Then
         Err.Raise vbObjectError + 4403, sourceName, _
-                  "Neispravan smer ambalaze: " & smer
+                  "Neispravan smer ambala" & ChrW(382) & "e: " & smer
     End If
 
     If Len(Trim$(entitetID)) = 0 Then
         Err.Raise vbObjectError + 4404, sourceName, _
-                  "EntitetID je obavezan za ambalazu."
+                  "EntitetID je obavezan za ambala" & ChrW(382) & "u."
     End If
 
     If Len(Trim$(entitetTip)) = 0 Then
         Err.Raise vbObjectError + 4405, sourceName, _
-                  "EntitetTip je obavezan za ambalazu."
+                  "EntitetTip je obavezan za ambala" & ChrW(382) & "u."
     End If
 End Sub
 
@@ -258,7 +258,7 @@ Public Function GetAmbalazeStanje(ByVal entitetID As String, _
 
             If Not IsNumeric(data(i, colKol)) Then
                 Err.Raise vbObjectError + 4410, SRC, _
-                          "Neispravna kolicina ambalaze u redu " & CStr(i)
+                          "Neispravna koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e u redu " & CStr(i)
             End If
 
             If Not dict.Exists(key) Then dict.Add key, 0&
@@ -272,7 +272,7 @@ Public Function GetAmbalazeStanje(ByVal entitetID As String, _
 
                 Case Else
                     Err.Raise vbObjectError + 4412, SRC, _
-                              "Neispravan smer ambalaze u redu " & CStr(i)
+                              "Neispravan smer ambala" & ChrW(382) & "e u redu " & CStr(i)
             End Select
         End If
     Next i
@@ -533,7 +533,7 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
 
             If Not IsNumeric(data(i, colKol)) Then
                 Err.Raise vbObjectError + 4420, SRC, _
-                          "Neispravna kolicina ambalaze u redu " & CStr(i)
+                          "Neispravna koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e u redu " & CStr(i)
             End If
 
             If Not dict.Exists(key) Then dict.Add key, Array(0&, 0&) ' Izlaz, Ulaz
@@ -555,7 +555,7 @@ Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
 
                 Case Else
                     Err.Raise vbObjectError + 4422, SRC, _
-                              "Neispravan smer ambalaze u redu " & CStr(i)
+                              "Neispravan smer ambala" & ChrW(382) & "e u redu " & CStr(i)
             End Select
 
             dict(key) = vals

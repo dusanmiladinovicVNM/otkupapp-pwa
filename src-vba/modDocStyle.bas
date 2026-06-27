@@ -39,7 +39,7 @@ Public Function OtkupKlauzulaDefault() As String
         "vrednost otkupljenih poljoprivrednih proizvoda uvecanu za iznos PDV " & _
         "nadoknade. Pravo na odbitak PDV nadoknade kao prethodnog poreza " & _
         "otkupljivac ostvaruje pod uslovom da je izvrsio isplatu poljoprivredniku " & _
-        "na njegov tekuci racun."
+        "na njegov teku" & ChrW(263) & "i ra" & ChrW(269) & "un."
 End Function
 
 ' Putanja loga: config SELLER_LOGO_PATH, pa <workbook>\logo.png / logo.jpg. "" ako nema.

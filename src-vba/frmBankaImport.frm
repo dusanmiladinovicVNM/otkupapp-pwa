@@ -41,7 +41,7 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnAutoSve, "Automatski mapiraj sve"
     StylePrimaryButton btnSacuvajRucno, "Rucno mapiraj red"
     StylePrimaryButton btnSkip, "Preskoci red"
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StyleExitButton btnPovratak, "Zatvori"     ' ili "Povratak"
     
     ' Status labels
@@ -77,7 +77,7 @@ Private Sub UserForm_Activate()
     
 EH:
     LogErr "frmBankaImport.UserForm_Activate"
-    MsgBox "Greska pri otvaranju forme: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju forme: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
@@ -779,7 +779,7 @@ Private Sub ResetActionButtons()
     StylePrimaryButton btnAutoSve, "Automatski mapiraj sve"
     StylePrimaryButton btnSacuvajRucno, "Rucno mapiraj red"
     StylePrimaryButton btnSkip, "Preskoci red"
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StyleExitButton btnPovratak, "Zatvori"
 End Sub
 

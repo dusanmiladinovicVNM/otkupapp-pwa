@@ -438,7 +438,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                 
                                 tipNovca = CStr(novData(n, colNovTip))
                                 Select Case tipNovca
-                                    Case NOV_KES_OTKUPAC_KOOP: novOpis = "Kes Otkupac"
+                                    Case NOV_KES_OTKUPAC_KOOP: novOpis = "Ke" & ChrW(353) & " Otkupac"
                                     Case NOV_VIRMAN_FIRMA_KOOP: novOpis = "Virman Firma"
                                     Case NOV_VIRMAN_AVANS_KOOP: novOpis = "Virman Avans"
                                     Case Else: novOpis = tipNovca
@@ -569,7 +569,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                 aLbl = ""
                                 If cAmbDokTip > 0 Then aLbl = KarticaAmbDocLabel(NzToText(ambData(a, cAmbDokTip)))
                                 Dim aOpis As String
-                                aOpis = "Ambalaza"
+                                aOpis = "Ambala" & ChrW(382) & "a"
                                 If aLbl <> "" Then aOpis = aOpis & ": " & aLbl
                                 aOpis = aOpis & " (" & aTip & " x " & CStr(CLng(aKol)) & ")"
 
@@ -1182,7 +1182,7 @@ Public Sub PrintKarticaAmbalazePDF(ByVal kooperantID As String, _
     ime = NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime"))
     prezime = NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime"))
 
-    ws.Range("A1").value = "KARTICA AMBALAZE"
+    ws.Range("A1").value = "KARTICA AMBALA" & ChrW(381) & "E"
     ws.Range("A1").Font.Size = 14
     ws.Range("A1").Font.Bold = True
 

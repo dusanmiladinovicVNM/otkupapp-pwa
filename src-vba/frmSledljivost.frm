@@ -33,7 +33,7 @@ Private Sub UserForm_Activate()
     
     ' Header zone
     On Error Resume Next
-    StyleFrameTitleLabel lblKopf, "Izvestaj o sledljivosti"
+    StyleFrameTitleLabel lblKopf, "Izve" & ChrW(353) & "taj o sledljivosti"
     StyleSubtitle lblSubtitle, "Auto/manuelno povezivanje + sledljivost po zbirnoj"
     On Error GoTo EH
     
@@ -107,19 +107,19 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_NEP2, "Stanica"
     SetColumnHeader lbl_H_NEP3, "Vozac"
     SetColumnHeader lbl_H_NEP4, "Kooperant"
-    SetColumnHeader lbl_H_NEP5, "Kolicina"
+    SetColumnHeader lbl_H_NEP5, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_NEP6, "Klasa"
     
     ' Otpremnice (kolone 1-4 vidljive, OtpremnicaID hidden)
     SetColumnHeader lbl_H_OTP1, "Broj otp."
     SetColumnHeader lbl_H_OTP2, "Broj zbirne"
-    SetColumnHeader lbl_H_OTP3, "Kolicina"
+    SetColumnHeader lbl_H_OTP3, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_OTP4, "Klasa"
     
     ' Trace (kolone 1-5 vidljive, OtkupID/OtpremnicaID hidden)
     SetColumnHeader lbl_H_TRC1, "Kooperant"
-    SetColumnHeader lbl_H_TRC2, "Kolicina"
-    SetColumnHeader lbl_H_TRC3, "Vrsta voca"
+    SetColumnHeader lbl_H_TRC2, "Koli" & ChrW(269) & "ina"
+    SetColumnHeader lbl_H_TRC3, "Vrsta vo" & ChrW(263) & "a"
     SetColumnHeader lbl_H_TRC4, "Stanica"
     SetColumnHeader lbl_H_TRC5, "Datum"
     
@@ -305,7 +305,7 @@ Private Sub btnAutoLink_Click()
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnAutoLink"
-    MsgBox "Greska pri povezivanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri povezivanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -434,7 +434,7 @@ Private Sub btnPovezi_Click()
 
     If rows.count = 0 Then
         Err.Raise vbObjectError + 1910, "frmSledljivost.btnPovezi", _
-                "Otkup row nije pronaden: " & otkupID
+                "Otkup row nije prona" & ChrW(273) & "en: " & otkupID
     End If
 
 RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
@@ -445,7 +445,7 @@ RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnPovezi"
-    MsgBox "Greska pri povezivanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri povezivanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -488,7 +488,7 @@ Private Sub btnStampaj_Click()
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnStampaj"
-    MsgBox "Greska pri stampanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri " & ChrW(353) & "tampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)

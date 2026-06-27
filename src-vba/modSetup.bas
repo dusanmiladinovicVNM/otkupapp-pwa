@@ -736,15 +736,15 @@ Public Sub EnsurePaletniListSchema()
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
            "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
            "i kolonu GajbicaPoPaleti u tblKulture (malina = 240)." & vbCrLf & _
-           "Sifarnici tblKutije/tblKese (tip -> kg) i tblVrstaGotovihProizvoda" & vbCrLf & _
-           "se popunjavaju preko Maticnih podataka." & vbCrLf & _
-           "Cenovnik (tblCenovnik) se popunjava preko Maticnih podataka.", _
+           ChrW(352) & "ifarnici tblKutije/tblKese (tip -> kg) i tblVrstaGotovihProizvoda" & vbCrLf & _
+           "se popunjavaju preko Mati" & ChrW(269) & "nih podataka." & vbCrLf & _
+           "Cenovnik (tblCenovnik) se popunjava preko Mati" & ChrW(269) & "nih podataka.", _
            vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
-    MsgBox "Greska u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -844,18 +844,18 @@ Public Sub EnsureDoradeSchema()
 
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
-           "- Aktivan: Kulture/Ambalaza/Palete (postojeci -> Aktivan)" & vbCrLf & _
+           "- Aktivan: Kulture/Ambala" & ChrW(382) & "a/Palete (postojeci -> Aktivan)" & vbCrLf & _
            "- TipAmbalaze: tblKulture (podrazumevani po kulturi)" & vbCrLf & _
            "- JeHladnjaca: tblStanice (Da/Ne)" & vbCrLf & _
            "- Decimalni format kolicine (0.00)" & vbCrLf & _
-           "- KolAmbIzdata: tblOtkup (izdata ambalaza OM->kooperant)" & vbCrLf & _
+           "- KolAmbIzdata: tblOtkup (izdata ambala" & ChrW(382) & "a OM->kooperant)" & vbCrLf & _
            "- VremeUnosa: tblOtkup (vreme snimanja otkupa)" & vbCrLf & _
            "- BrutoKg: tblOtkup/tblPrijemnica (bruto unos -> cuva neto)", vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "EnsureDoradeSchema failed: " & Err.description
-    MsgBox "Greska u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Dodaj kolonu Aktivan ako fali i postavi "Aktivan" na sve prazne (backfill).

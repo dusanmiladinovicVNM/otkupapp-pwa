@@ -124,7 +124,7 @@ Private Function CreateKooperantByName(ByVal nm As String, ByVal stanicaID As St
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr "modKooperant.CreateKooperantByName"
-    MsgBox "Greska pri kreiranju kooperanta: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri kreiranju kooperanta: " & Err.description, vbCritical, APP_NAME
 End Function
 
 ' "Marko MARKOVIC" -> Ime="Marko", Prezime="MARKOVIC"

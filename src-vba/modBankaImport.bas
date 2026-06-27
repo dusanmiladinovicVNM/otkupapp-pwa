@@ -353,7 +353,7 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     End If
     
     If Trim$(brojRacuna) = "" Then
-        Err.Raise vbObjectError + 1002, "ParseBankaIzvodForImport", "Broj racuna izvoda nije pronadjen."
+        Err.Raise vbObjectError + 1002, "ParseBankaIzvodForImport", "Broj ra" & ChrW(269) & "una izvoda nije pronadjen."
     End If
     
     ' v6.18+: extract saldo block
@@ -361,7 +361,7 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     If Not saldo.parsed Then
         Err.Raise vbObjectError + 1003, "ParseBankaIzvodForImport", _
             "STANJE blok izvoda " & brojIzvoda & " nije pronadjen ili ne sadrzi " & _
-            "ocekivana saldo polja (Prethodno stanje, Duguje, Potrazuje, Novo stanje, Zaduzenje, Odobrenje)."
+            "ocekivana saldo polja (Prethodno stanje, Duguje, Potrazuje, Novo stanje, Zadu" & ChrW(382) & "enje, Odobrenje)."
     End If
     
     txData = ParseBankaIzvodPdfText(txt)
@@ -430,7 +430,7 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
         Err.Raise vbObjectError + 1008, "ParseBankaIzvodForImport", _
             "PARSER COUNT MISMATCH izvod " & brojIzvoda & ": " & _
             "Parsed isplata=" & countIsplata & _
-            ", banka reported Zaduzenje=" & saldo.BrojNalogaZaduzenje
+            ", banka reported Zadu" & ChrW(382) & "enje=" & saldo.BrojNalogaZaduzenje
     End If
     
     ' v6.18+: result shape 13 -> 17 kolona (4 nova saldo polja)
@@ -759,7 +759,7 @@ Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
        InStr(1, s, "PARSER", vbTextCompare) > 0 Or _
        InStr(1, s, "BROJ IZVODA", vbTextCompare) > 0 Or _
        InStr(1, s, "DATUM IZVODA", vbTextCompare) > 0 Or _
-       InStr(1, s, "BROJ RACUNA", vbTextCompare) > 0 Then
+       InStr(1, s, "BROJ RA" & ChrW(268) & "UNA", vbTextCompare) > 0 Then
         ClassifyBankaImportError = BIM_STATUS_PARSE_ERROR
         Exit Function
     End If

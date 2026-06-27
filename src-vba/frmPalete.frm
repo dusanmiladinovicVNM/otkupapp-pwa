@@ -80,7 +80,7 @@ Private Sub UserForm_Initialize()
     RefreshGrid
     Exit Sub
 EH:
-    MsgBox "Greska pri otvaranju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -123,7 +123,7 @@ Private Sub RefreshGrid()
     RefreshPrerade
     Exit Sub
 EH:
-    MsgBox "Greska pri osvezavanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri osvezavanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnOsvezi_Click()
@@ -186,7 +186,7 @@ Private Sub btnStampajNepotpune_Click()
            vbInformation, APP_NAME
     Exit Sub
 EH:
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnZatvori_Click()
@@ -208,7 +208,7 @@ Private Sub btnPreradi_Click()
     On Error GoTo EH
     Dim ids As Collection: Set ids = SelectedPaletaIDs()
     If ids.count = 0 Then
-        MsgBox "Izaberite bar jednu paletu (Ctrl/Shift za vise).", vbInformation, APP_NAME
+        MsgBox "Izaberite bar jednu paletu (Ctrl/Shift za vi" & ChrW(353) & "e).", vbInformation, APP_NAME
         Exit Sub
     End If
 
@@ -257,7 +257,7 @@ Private Sub btnStorniraj_Click()
     End If
     Exit Sub
 EH:
-    MsgBox "Greska pri stornu: " & Err.description, vbExclamation, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stornu: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub btnPovratak_Click()
@@ -317,7 +317,7 @@ Private Sub BuildPreradaControls()
     ' Zaglavlje kao Label-i (po jedan na kolonu). Label-ima sirina/pozicija
     ' uvek rade; dinamickoj ListBox header-i sirina nije htela da se primeni.
     Dim hcap As Variant
-    hcap = Array("Broj", "Datum", "Neto", "Kut", "Kes", "Gotov pr.")
+    hcap = Array("Broj", "Datum", "Neto", "Kut", "Ke" & ChrW(353), "Gotov pr.")
     Dim hi As Long
     For hi = 0 To 5
         Dim hl As MSForms.label
@@ -458,7 +458,7 @@ Private Sub mLstPrerade_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
     ExportPreradaPDF preID, True
     Exit Sub
 EH:
-    MsgBox "Greska pri otvaranju preradnog lista: " & Err.description, vbExclamation, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju preradnog lista: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub LayoutPreradaRows(ByVal x As Double, ByVal w As Double, _
