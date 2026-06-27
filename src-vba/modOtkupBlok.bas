@@ -310,7 +310,7 @@ Private Sub BuildPanel()
     Set mLblNapisanoAmb = AddCtl("Label", "lblOtkBlokNapAmb", PANEL_LEFT + 346, 22, 150, 14)
     Set mLblPreostaloAmb = AddCtl("Label", "lblOtkBlokPreAmb", PANEL_LEFT + 502, 22, 150, 14)
     ' Info (#4): broj zbirne za izabranu otpremnicu (azurira RefreshSummary).
-    Set mLblZbirna = AddCtl("Label", "lblOtkBlokZbirna", BLOK_LEFT + 70, 44, 300, 16)
+    Set mLblZbirna = AddCtl("Label", "lblOtkBlokZbirna", BLOK_LEFT + 70, 44, 380, 16)
     On Error Resume Next
     mLblZbirna.WordWrap = True
     On Error GoTo 0
@@ -1138,10 +1138,15 @@ Private Sub RefreshSummary()
         If Len(mActiveOtpID) = 0 Then
             mLblZbirna.caption = "Zbirna: -"
         Else
-            Dim zbrBroj As String
+            Dim zbrBroj As String, prjBroj As String
             zbrBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BROJ_ZBIRNE))
+            If Len(Trim$(zbrBroj)) > 0 Then prjBroj = PrijemnicaBrojZaZbirnu(zbrBroj)
             If Len(Trim$(zbrBroj)) = 0 Then zbrBroj = "(nije vezana)"
-            mLblZbirna.caption = "Zbirna: " & zbrBroj
+            If Len(prjBroj) > 0 Then
+                mLblZbirna.caption = "Zbirna: " & zbrBroj & " | Prijemnica: " & prjBroj
+            Else
+                mLblZbirna.caption = "Zbirna: " & zbrBroj
+            End If
         End If
     End If
 
@@ -1232,6 +1237,40 @@ End Sub
 ' ============================================================
 ' HELPERS
 ' ============================================================
+
+' BrojZbirne -> broj(evi) prijemnice (veza otpremnica<->prijemnica je preko
+' BrojZbirne). Vise prijemnica iste zbirne -> spojeno zarezom; storno preskace.
+Private Function PrijemnicaBrojZaZbirnu(ByVal brojZbirne As String) As String
+    On Error GoTo EH
+    If Len(Trim$(brojZbirne)) = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cZbr As Long, cBroj As Long
+    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cBroj = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    If cZbr = 0 Or cBroj = 0 Then Exit Function
+
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim i As Long, out As String, b As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cZbr))) = Trim$(brojZbirne) Then
+            b = Trim$(CStr(data(i, cBroj)))
+            If Len(b) > 0 And Not seen.Exists(b) Then
+                seen.Add b, True
+                If Len(out) > 0 Then out = out & ", "
+                out = out & b
+            End If
+        End If
+    Next i
+    PrijemnicaBrojZaZbirnu = out
+    Exit Function
+EH:
+    LogErr "modOtkupBlok.PrijemnicaBrojZaZbirnu"
+End Function
 
 Private Sub SetLeftCtl(ByVal nm As String, ByVal val As String)
     On Error Resume Next

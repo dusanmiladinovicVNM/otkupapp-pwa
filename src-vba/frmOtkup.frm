@@ -406,19 +406,19 @@ Private Sub AutoFillCenaOtkup()
     UpdatePaletaInfo
 End Sub
 
-' Runtime labela "gajbe do zatvaranja aktivne palete": meri poziciju iz
-' lblUkupnoKG (forme se renderuju samo u Excelu; .frx se ne dira).
+' Runtime labela "gajbe do zatvaranja aktivne palete": meri poziciju ispod
+' dugmeta Povratak (forme se renderuju samo u Excelu; .frx se ne dira).
 Private Sub SetupPaletaInfoField()
     On Error GoTo done
     If Not m_lblPaletaInfo Is Nothing Then Exit Sub
 
     Set m_lblPaletaInfo = Me.Controls.Add("Forms.Label.1", "lblPaletaInfoRT", True)
     With m_lblPaletaInfo
-        .Left = lblUkupnoKG.Left
-        .top = lblUkupnoKG.top + lblUkupnoKG.Height + 2
-        .width = lblUkupnoKG.width
-        If .width < 220 Then .width = 220
-        .Height = 26
+        .Left = txtKolicina.Left
+        .top = btnPovratak.top + btnPovratak.Height + 6
+        .width = Me.InsideWidth - txtKolicina.Left - 12
+        If .width < 240 Then .width = 240
+        .Height = 28
         .WordWrap = True
         .caption = ""
     End With
