@@ -14,8 +14,8 @@ Public Const APP_VERSION As String = "2.5.0"
 
 ' --- Self-update / backup (Drive folder ID-jevi; popuni jednokratno) ---
 ' Vidi docs/RELEASE_PROCEDURE.md (self-update kanal) i modDrive/modRelease.
-Public Const REL_FOLDER_ID As String = ""      ' AgriX_Release: kod + version.json
-Public Const BACKUP_FOLDER_ID As String = ""   ' AgriX_Backup: xlsx data backup
+Public Const REL_FOLDER_ID As String = "1zL7ronXQUsOY56p7rULsqrM1u1U8sxod"      ' AgriX_Release: kod + version.json
+Public Const BACKUP_FOLDER_ID As String = "199is7nQW3d4wfGX974AFTjpS4wo8itpl"   ' AgriX_Backup: xlsx data backup
 
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
