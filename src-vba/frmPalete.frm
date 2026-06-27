@@ -318,12 +318,18 @@ Private Sub LayoutDynamic()
     If Not mBuilt Then Exit Sub
 
     ' Filter red 2: Sorta + Tip gotovog proizvoda (ispod reda 1).
+    ' Sekvencijalni raspored sa sopstvenim razmacima -> duza labela
+    ' "Gotov proizvod" se ne preklapa sa combo-om (red 1 koordinate ne valjaju).
     Dim f1 As Double: f1 = Me.txtFilterGod.Top
     Dim f2 As Double: f2 = f1 + 26
-    PutLbl mLblFilterSorta, Me.lblFilterGod.Left, f2, 42
-    PutCtl mCmbFilterSorta, Me.cmbFilterVrsta.Left, f2, Me.cmbFilterVrsta.width
-    PutLbl mLblFilterTipGP, Me.lblFilterStatus.Left, f2, 92
-    PutCtl mCmbFilterTipGP, Me.cmbFilterStatus.Left, f2, 130
+    Dim rl As Double: rl = Me.lblFilterGod.Left
+    Dim sCmbW As Double: sCmbW = Me.cmbFilterVrsta.width
+    Dim sCmbX As Double: sCmbX = rl + 40
+    PutLbl mLblFilterSorta, rl, f2, 36
+    PutCtl mCmbFilterSorta, sCmbX, f2, sCmbW
+    Dim tLblX As Double: tLblX = sCmbX + sCmbW + 14
+    PutLbl mLblFilterTipGP, tLblX, f2, 88
+    PutCtl mCmbFilterTipGP, tLblX + 90, f2, 150
 
     ' Pomeri grid zonu ispod reda 2 (apsolutno -> idempotentno).
     Dim gTop As Double: gTop = f2 + 26
