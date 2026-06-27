@@ -50,6 +50,7 @@ Public Sub SetupNewPC()
 
     InitSetupLog
     EnsureLocalConfigTable
+    EnsurePoruke
 
     LogSetup "INFO", "SetupNewPC started"
     LogSetup "INFO", "Workbook: " & ThisWorkbook.fullName
@@ -112,6 +113,7 @@ Public Sub RunSetupHealthCheck()
 
     InitSetupLog
     EnsureLocalConfigTable
+    EnsurePoruke
 
     LogSetup "INFO", "RunSetupHealthCheck started"
 
@@ -764,6 +766,34 @@ Public Sub EnsureCenovnikSchema()
 EH:
     LogSetup "ERROR", "EnsureCenovnikSchema failed: " & Err.description
     Err.Raise Err.Number, "EnsureCenovnikSchema", Err.description
+End Sub
+
+' ============================================================
+' Poruke (resource table) -- idempotent.
+' Creates tblPoruke on hidden sheet sPoruke and seeds strings.
+' Alt+F8 -> EnsurePoruke.
+' ============================================================
+Public Sub EnsurePoruke()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_PORUKE, PORUKE_SHEET, Array(COL_POR_KLJUC, COL_POR_TEKST)
+
+    Dim lo As ListObject
+    Set lo = FindListObject(TBL_PORUKE)
+
+    If Not lo Is Nothing Then
+        Dim ws As Worksheet
+        Set ws = lo.Parent
+        If ws.Visible <> xlSheetVeryHidden Then ws.Visible = xlSheetVeryHidden
+        modPoruke.SeedPoruke lo
+    End If
+
+    LogSetup "OK", "EnsurePoruke done"
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsurePoruke failed: " & Err.description
+    Err.Raise Err.Number, "EnsurePoruke", Err.description
 End Sub
 
 ' ============================================================

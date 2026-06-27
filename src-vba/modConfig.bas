@@ -63,6 +63,12 @@ Public Const TBL_RPT_MARZA As String = "tblRptMarza"
 Public Const TBL_RPT_VOZACI As String = "tblRptVozaci"
 Public Const TBL_RPT_ZBIRNI As String = "tblRptZbirni"
 
+' --- Poruke (resource table) ---
+Public Const TBL_PORUKE   As String = "tblPoruke"
+Public Const COL_POR_KLJUC As String = "Kljuc"
+Public Const COL_POR_TEKST  As String = "Tekst"
+Public Const PORUKE_SHEET  As String = "sPoruke"
+
 ' --- Sheet-Codenamen (robust gegen Umbenennung) ---
 Public Const SHT_CONFIG As String = "sConfig"
 Public Const SHT_KOOPERANTI As String = "sKooperanti"
