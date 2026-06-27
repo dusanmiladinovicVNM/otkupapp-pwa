@@ -304,11 +304,28 @@ Private Sub BuildPreradaControls()
     FillCmb mCmbFilterTipGP, GetVrstaGPOptions()
     mCmbFilterTipGP.AddItem "", 0
     RefreshSortaFilter
+    SetPreradaTabOrder
 
     mBuilt = True
     Exit Sub
 EH:
     LogErr "frmPalete.BuildPreradaControls"
+End Sub
+
+' Tab redosled u panelu prerade. Dinamicke kontrole se po defaultu dodaju na
+' kraj tab-order-a; ovde ih ubacujemo u vizuelni niz (odozgo nadole). Neto je
+' zakljucan (TabStop=False) pa ispada iz tabovanja, ali ostaje u nizu.
+Private Sub SetPreradaTabOrder()
+    On Error Resume Next
+    Dim b As Integer: b = Me.txtKutije.TabIndex
+    mTxtTezinaPalete.TabIndex = b
+    mDdTipKutije.TabIndex = b + 1
+    Me.txtKutije.TabIndex = b + 2
+    mCmbTipKese.TabIndex = b + 3
+    Me.txtKese.TabIndex = b + 4
+    mTxtBruto.TabIndex = b + 5
+    Me.txtNeto.TabIndex = b + 6
+    Me.txtNapomena.TabIndex = b + 7
 End Sub
 
 ' Idempotentan raspored (apsolutne pozicije iz stabilnih sidrista) - moze
