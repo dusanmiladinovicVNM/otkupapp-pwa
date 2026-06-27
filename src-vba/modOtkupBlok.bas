@@ -434,6 +434,14 @@ Private Sub LoadOtpremnice()
     Dim dCe As Object: Set dCe = BuildFirstBlokCena()
     Dim dNap As Object: Set dNap = BuildNapisanoByOtp()
 
+    ' Malina mod: kolona "Kupac" se redefinise (hladnjaca OM -> kooperant; obicna -> OM).
+    Dim malina As Boolean: malina = IsMalinaMode()
+    Dim dKoId As Object, dKoop As Object
+    If malina Then
+        Set dKoId = BuildKoopByOtpremnica()
+        Set dKoop = BuildKoopNames()
+    End If
+
     ' Indeksi za prikaz (uz filter "samo nezavrsene") + sort po datumu DESC
     Dim n As Long: n = UBound(data, 1)
     Dim idx() As Long: ReDim idx(1 To n)
@@ -485,7 +493,10 @@ Private Sub LoadOtpremnice()
         mLstOtp.List(r, 2) = DictVal(dSt, CStr(data(i, cSt)))
         mLstOtp.List(r, 3) = FmtKgDec(ukupno)
         mLstOtp.List(r, 4) = FmtDate(data(i, cDat))
-        mLstOtp.List(r, 5) = KupacNazivZaZbirnu(dKupId, dKupNaziv, CStr(data(i, cZbr)))
+        Dim koopNm As String
+        If malina Then koopNm = DictVal(dKoop, DictVal(dKoId, otpID)) Else koopNm = ""
+        mLstOtp.List(r, 5) = KupacColValue(malina, CStr(data(i, cSt)), koopNm, _
+                                           CStr(data(i, cZbr)), dSt, dKupId, dKupNaziv)
         mLstOtp.List(r, 6) = FmtKg(prodajna)
         mLstOtp.List(r, 7) = FmtKg(cenaBlok)
         mLstOtp.List(r, 8) = FmtKgDec(ukupno - nap)
@@ -933,6 +944,9 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     Dim dZbr As Object: Set dZbr = BuildLookup(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ_ZBIRNE)
     Dim dOtp As Object: Set dOtp = BuildLookup(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ)
     Dim stopa As Double: stopa = PdvStopa()
+    Dim dKupId As Object: Set dKupId = BuildLookup(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KUPAC)
+    Dim dKupNaziv As Object: Set dKupNaziv = BuildLookup(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    Dim malina As Boolean: malina = IsMalinaMode()
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then MsgBox "Nema podataka u otkupu.", vbInformation, APP_NAME: Exit Sub
@@ -1005,10 +1019,10 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ws.cells(1, 1).Font.Bold = True
 
     Dim hdr As Variant
-    hdr = Array("Broj zbirne", "Broj otpremnice", "Otkupno mesto", "br. bloka", "Ime i Prezime", _
+    hdr = Array("Broj zbirne", "Broj otpremnice", "Otkupno mesto", "Kupac", "br. bloka", "Ime i Prezime", _
                 "Datum", "Kolicina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
     Const R0 As Long = 4
-    Const NC As Long = 11
+    Const NC As Long = 12
     Dim cc As Long
     For cc = 0 To UBound(hdr)
         ws.cells(R0, cc + 1).value = hdr(cc)
@@ -1028,17 +1042,20 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
         Dim pdv As Double: pdv = vred * stopa / 100
         Dim uk As Double: uk = kol * bruto
 
+        Dim koopNm As String: koopNm = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
         ws.cells(r, 1).value = DictVal(dZbr, oid2)
         ws.cells(r, 2).value = DictVal(dOtp, oid2)
         ws.cells(r, 3).value = DictVal(dSt, CStr(data(i, cSt)))
-        ws.cells(r, 4).value = CStr(data(i, cBr))
-        ws.cells(r, 5).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
-        ws.cells(r, 6).value = FmtDate(data(i, cDat))
-        ws.cells(r, 7).value = kol
-        ws.cells(r, 8).value = neto
-        ws.cells(r, 9).value = vred
-        ws.cells(r, 10).value = pdv
-        ws.cells(r, 11).value = uk
+        ws.cells(r, 4).value = KupacColValue(malina, CStr(data(i, cSt)), koopNm, _
+                                             DictVal(dZbr, oid2), dSt, dKupId, dKupNaziv)
+        ws.cells(r, 5).value = CStr(data(i, cBr))
+        ws.cells(r, 6).value = koopNm
+        ws.cells(r, 7).value = FmtDate(data(i, cDat))
+        ws.cells(r, 8).value = kol
+        ws.cells(r, 9).value = neto
+        ws.cells(r, 10).value = vred
+        ws.cells(r, 11).value = pdv
+        ws.cells(r, 12).value = uk
         sumKol = sumKol + kol: sumVred = sumVred + vred
         sumPdv = sumPdv + pdv: sumUk = sumUk + uk
         cnt = cnt + 1
@@ -1046,18 +1063,18 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     Next j
 
     ' UKUPNO red
-    ws.cells(r, 5).value = "UKUPNO"
-    ws.cells(r, 7).value = sumKol
-    ws.cells(r, 9).value = sumVred
-    ws.cells(r, 10).value = sumPdv
-    ws.cells(r, 11).value = sumUk
+    ws.cells(r, 6).value = "UKUPNO"
+    ws.cells(r, 8).value = sumKol
+    ws.cells(r, 10).value = sumVred
+    ws.cells(r, 11).value = sumPdv
+    ws.cells(r, 12).value = sumUk
     ws.Range(ws.cells(r, 1), ws.cells(r, NC)).Font.Bold = True
 
     ws.cells(2, 1).value = subtitle & "     Blokova: " & cnt
 
     ' formati: kolicina sa decimalama samo ako su unete, novac 2 decimale
-    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 7)).NumberFormat = "#,##0.###"
-    ws.Range(ws.cells(R0 + 1, 8), ws.cells(r, NC)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(R0 + 1, 8), ws.cells(r, 8)).NumberFormat = "#,##0.###"
+    ws.Range(ws.cells(R0 + 1, 9), ws.cells(r, NC)).NumberFormat = "#,##0.00"
 
     ' iscrtana polja
     Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, NC))
@@ -1069,14 +1086,15 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ws.columns("A").ColumnWidth = 12   ' Broj zbirne
     ws.columns("B").ColumnWidth = 14   ' Broj otpremnice
     ws.columns("C").ColumnWidth = 18   ' Otkupno mesto
-    ws.columns("D").ColumnWidth = 12   ' br. bloka
-    ws.columns("E").ColumnWidth = 24   ' Ime i Prezime
-    ws.columns("F").ColumnWidth = 11   ' Datum
-    ws.columns("G").ColumnWidth = 9    ' Kolicina
-    ws.columns("H").ColumnWidth = 11   ' Cena bez PDV
-    ws.columns("I").ColumnWidth = 13   ' Vrednost
-    ws.columns("J").ColumnWidth = 12   ' Iznos PDV
-    ws.columns("K").ColumnWidth = 14   ' Ukupna vrednost
+    ws.columns("D").ColumnWidth = 20   ' Kupac
+    ws.columns("E").ColumnWidth = 12   ' br. bloka
+    ws.columns("F").ColumnWidth = 24   ' Ime i Prezime
+    ws.columns("G").ColumnWidth = 11   ' Datum
+    ws.columns("H").ColumnWidth = 9    ' Kolicina
+    ws.columns("I").ColumnWidth = 11   ' Cena bez PDV
+    ws.columns("J").ColumnWidth = 13   ' Vrednost
+    ws.columns("K").ColumnWidth = 12   ' Iznos PDV
+    ws.columns("L").ColumnWidth = 14   ' Ukupna vrednost
 
     ' PageSetup (Orientation/PaperSize/FitToPages) trazi drajver stampaca.
     ' Na racunaru bez podrazumevanog stampaca ti property-ji bacaju gresku 1004,
@@ -1464,6 +1482,48 @@ Private Function KupacNazivZaZbirnu(ByVal dKupId As Object, ByVal dKupNaziv As O
     Dim kid As String: kid = DictVal(dKupId, brojZbirne)
     Dim nm As String: nm = DictVal(dKupNaziv, kid)
     If Len(nm) > 0 Then KupacNazivZaZbirnu = nm Else KupacNazivZaZbirnu = kid
+End Function
+
+' OtpremnicaID -> KooperantID prvog (ne-storniranog) povezanog otkup bloka.
+' Malina mod: kolona "Kupac" za hladnjaca-OM prikazuje tog kooperanta.
+Private Function BuildKoopByOtpremnica() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Set BuildKoopByOtpremnica = d
+
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOtp As Long, cKoop As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    If cOtp = 0 Or cKoop = 0 Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        Dim oid As String: oid = Trim$(CStr(data(i, cOtp)))
+        If Len(oid) > 0 And Not d.Exists(oid) Then d.Add oid, Trim$(CStr(data(i, cKoop)))
+    Next i
+End Function
+
+' Jedinstvena definicija kolone "Kupac" (panel lista otpremnica + specifikacija):
+'   malina mod + hladnjaca OM      -> Ime i Prezime kooperanta (koopName, sa bloka)
+'   malina mod + obicna otpremnica -> Otkupno mesto (OM)
+'   malina mod off                 -> firma-kupac iz zbirne (kao i do sada)
+Private Function KupacColValue(ByVal malina As Boolean, ByVal stanicaID As String, _
+                               ByVal koopName As String, ByVal brojZbirne As String, _
+                               ByVal dSt As Object, ByVal dKupId As Object, _
+                               ByVal dKupNaziv As Object) As String
+    If malina Then
+        If IsHladnjacaStanica(stanicaID) Then
+            KupacColValue = koopName
+        Else
+            KupacColValue = DictVal(dSt, stanicaID)
+        End If
+    Else
+        KupacColValue = KupacNazivZaZbirnu(dKupId, dKupNaziv, brojZbirne)
+    End If
 End Function
 
 Private Function PdvStopa() As Double
