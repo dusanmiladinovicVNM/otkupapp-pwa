@@ -112,8 +112,8 @@ Private Sub UserForm_Initialize()
     SetupPaletaInfoField
     UpdatePaletaInfo
 
-    ' Podesavanja: sakrij parcela / novac+primalac kad su toggle-i iskljuceni.
-    ApplyOtkupTogglesVisibility
+    ' Podesavanja: disable parcela / novac+primalac kad su toggle-i iskljuceni.
+    ApplyOtkupTogglesState
 End Sub
 
 ' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
@@ -468,21 +468,19 @@ EH:
     LogErr "frmOtkup.UpdatePaletaInfo"
 End Sub
 
-' Podesavanja: vidljivost polja prema toggle-ima (parcele / kes isplate).
-' Vidljivost se postavlja u oba smera pa re-otvaranje forme prati config.
-Private Sub ApplyOtkupTogglesVisibility()
+' Podesavanja: stanje polja prema toggle-ima (parcele / kes isplate). Polja
+' ostaju VIDLJIVA, ali su disabled kad je toggle OFF (bez unosa; tab ih
+' preskace). Postavlja se u oba smera pa re-otvaranje forme prati config.
+Private Sub ApplyOtkupTogglesState()
     On Error Resume Next
-    SetFieldVisibleWithLabel cmbParcela, IsPracenjeParcela()
-    SetFieldVisibleWithLabel txtNovac, IsKesIsplate()
-    SetFieldVisibleWithLabel txtPrimalac, IsKesIsplate()
-End Sub
-
-' Postavi vidljivost kontrole i njene labele (labela je DESNO; RowLabelRightOf).
-Private Sub SetFieldVisibleWithLabel(ByVal ctl As MSForms.Control, ByVal vis As Boolean)
-    On Error Resume Next
-    Dim lbl As MSForms.Control: Set lbl = RowLabelRightOf(ctl)
-    ctl.Visible = vis
-    If Not lbl Is Nothing Then lbl.Visible = vis
+    If IsPracenjeParcela() Then EnableCombo cmbParcela Else DisableCombo cmbParcela
+    If IsKesIsplate() Then
+        EnableField txtNovac
+        EnableField txtPrimalac
+    Else
+        DisableField txtNovac
+        DisableField txtPrimalac
+    End If
 End Sub
 
 Private Sub cmbOtkupnoMesto_Change()
