@@ -1,0 +1,209 @@
+Kljuc;Tekst;Fajl;Linija;Tip;NemackiOriginal;Napomena
+APP_MSG_GRESKA_PRI_POKRETANJU;Greška pri pokretanju aplikacije. Pogledajte log.;ThisWorkbook.doccls;55;DA;;
+AGRO_LBL_MAGACIN_IZDAVANJE_ROBE;Magacin — izdavanje robe i prijem od dobavljaca;frmAgrohemija.frm;54;DA;;
+AGRO_LBL_IZLAZ_IZDAVANJE_ROBE;Izlaz — Izdavanje robe kooperantu;frmAgrohemija.frm;57;DA;;
+AGRO_LBL_ULAZ_PRIJEM_ROBE;Ulaz — Prijem robe od dobavljaca;frmAgrohemija.frm;58;DA;;
+AGRO_LBL_ZAVRSI_IZDAVANJE;Završi izdavanje;frmAgrohemija.frm;64;DA;;Koristi se i u: frmAgrohemija.frm:1002
+AGRO_LBL_ZAVRSI_PRIJEM;Završi prijem;frmAgrohemija.frm;68;DA;;Koristi se i u: frmAgrohemija.frm:1004
+AGRO_LBL_POPUNI_PAKOVANJE_FIELD;Popuni 'Pakovanje' field u tblArtikli pre korišcenja.;frmAgrohemija.frm;235;DA;;Koristi se i u: frmAgrohemija.frm:369
+AGRO_MSG_POKUSAVATE_DODATI;Pokušavate dodati: ;frmAgrohemija.frm;396;DA;;
+UI_SEPARATOR_EMDASH_SPACE; — ;frmAgrohemija.frm;425;DA;;Koristi se i u: frmBankaExportPregled.frm:301
+AGRO_MSG_IZDAVANJE_ZAVRSENO;Izdavanje završeno: ;frmAgrohemija.frm;510;DA;;
+AGRO_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju izdavanja, promene vracene: ;frmAgrohemija.frm;534;DA;;
+AGRO_MSG_PRIJEM_ZAVRSEN;Prijem završen: ;frmAgrohemija.frm;723;DA;;
+AGRO_MSG_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju prijema, promene vracene: ;frmAgrohemija.frm;746;DA;;
+UI_SEPARATOR_EMDASH;—;frmAgrohemija.frm;917;DA;;Koristi se i u: frmAgrohemija.frm:956, frmBankaExportPregled.frm:182, frmOtkupAPP.frm:1157
+UI_PLACEHOLDER_NEDOSTAJE;—nedostaje—;frmBankaExportPregled.frm;315;DA;;
+BANKA_LBL_GENERISI_CSV_COMMIT;Generiši CSV (Commit 3);frmBankaExportPregled.frm;610;DA;;
+BANKA_LBL_UVOZ_TRANSAKCIJA_BANKARSKIH;Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere;frmBankaImport.frm;33;DA;;
+DOK_LBL_OPERATIVNI_UNOS_DOKUMENATA;Operativni unos dokumenata, ambalaže i novca;frmDokumenta.frm;179;DA;;
+DOK_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju dokumenata: ;frmDokumenta.frm;231;DA;;
+UI_SEPARATOR_BULLET;  •  ;frmDokumenta.frm;408;DA;;Koristi se i u: frmDokumenta.frm:2287
+DOK_MSG_UNOSI_SAMO_KLASA;Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.;frmDokumenta.frm;677;DA;;Koristi se i u: frmDokumenta.frm:1669, frmDokumenta.frm:1968, frmOtkup.frm:777
+DOK_MSG_UNESITE_ISPRAVNU_KOLICINU;Unesite ispravnu kolicinu ambalaže!;frmDokumenta.frm;696;DA;;Koristi se i u: frmDokumenta.frm:1401, frmDokumenta.frm:1688, frmDokumenta.frm:1987, frmDokumenta.frm:2369, frmOtkup.frm:804
+DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2;Unesite ispravnu kolicinu ambalaže za II klasu!;frmDokumenta.frm;706;DA;;Koristi se i u: frmDokumenta.frm:1698, frmDokumenta.frm:2006, frmOtkup.frm:814
+DOK_MSG_TIP_AMBALAZE;Tip ambalaže ';frmDokumenta.frm;720;DA;;Koristi se i u: frmDokumenta.frm:774, frmDokumenta.frm:2037, frmDokumenta.frm:2061, frmOtkup.frm:873, frmOtkup.frm:896
+DOK_MSG_NEMA_UNETU_TEZINU;' nema unetu težinu gajbice ;frmDokumenta.frm;720;DA;;Koristi se i u: frmDokumenta.frm:774, frmDokumenta.frm:2037, frmDokumenta.frm:2061, frmOtkup.frm:873, frmOtkup.frm:896
+DOK_MSG_MATICNI_PODACI_TIP;(Maticni podaci ? Tip ambalaže).;frmDokumenta.frm;721;DA;;Koristi se i u: frmDokumenta.frm:775, frmDokumenta.frm:2038, frmDokumenta.frm:2062, frmOtkup.frm:874, frmOtkup.frm:897
+DOK_MSG_BRUTO_MOZE_PRETVORITI;Bruto se ne može pretvoriti u neto.;frmDokumenta.frm;722;DA;;Koristi se i u: frmDokumenta.frm:2039, frmOtkup.frm:875
+DOK_MSG_TEZINA_AMBALAZE;Težina ambalaže (;frmDokumenta.frm;727;DA;;Koristi se i u: frmDokumenta.frm:2044, frmOtkup.frm:880
+DOK_MSG_JEDNAKA_BRUTO_TEZINI;jednaka bruto težini (;frmDokumenta.frm;728;DA;;Koristi se i u: frmDokumenta.frm:782, frmDokumenta.frm:2045, frmDokumenta.frm:2069, frmOtkup.frm:881, frmOtkup.frm:904
+DOK_MSG_PROVERITE_BROJ_KOMADA;Proverite broj komada ili tip ambalaže.;frmDokumenta.frm;729;DA;;Koristi se i u: frmDokumenta.frm:2046, frmOtkup.frm:882, frmOtkup.frm:905
+DOK_MSG_BRUTO_KLASA_MOZE;Bruto (II klasa) se ne može pretvoriti u neto.;frmDokumenta.frm;776;DA;;Koristi se i u: frmDokumenta.frm:2063, frmOtkup.frm:898
+DOK_MSG_TEZINA_AMBALAZE_KLASE;Težina ambalaže II klase (;frmDokumenta.frm;781;DA;;Koristi se i u: frmDokumenta.frm:2068, frmOtkup.frm:903
+DOK_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju otpremnice. Promene su vracene.;frmDokumenta.frm;819;DA;;
+DOK_ERR_GRESKA;Greška: ;frmDokumenta.frm;846;DA;;Koristi se i u: frmDokumenta.frm:1573, frmDokumenta.frm:1784, frmDokumenta.frm:2184, frmDokumenta.frm:2464
+DOK_MSG_UNESITE_AMBALAZU_ILI;Unesite ambalažu ili novac za OM ulaz.;frmDokumenta.frm;1417;DA;;
+DOK_MSG_IZABERITE_TIP_AMBALAZE;Izaberite tip ambalaže!;frmDokumenta.frm;1422;DA;;Koristi se i u: frmDokumenta.frm:2390, frmOtkup.frm:833
+DOK_MSG_NEDOVOLJNO_AVANSA_RASPOLOZIVO;Nedovoljno OM avansa! Raspoloživo: ;frmDokumenta.frm;1495;DA;;
+DOK_MSG_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju OM ulaza. Promene su vracene.;frmDokumenta.frm;1544;DA;;
+DOK_MSG_VALIDACIJA_NIJE_PROSLA;Validacija nije prošla. Proverite kg i ambalažu (razlika mora biti 0).;frmDokumenta.frm;1727;DA;;
+DOK_MSG_GRESKA_PRI_CUVANJU_3;Greška pri cuvanju zbirne. Promene su vracene.;frmDokumenta.frm;1762;DA;;
+DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE;Neispravna kolicina ambalaže;frmDokumenta.frm;1830;DA;;
+DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_3;Unesite ispravnu kolicinu vracene ambalaže!;frmDokumenta.frm;1996;DA;;
+DOK_MSG_GRESKA_PRI_CUVANJU_4;Greška pri cuvanju prijemnice. Promene su vracene.;frmDokumenta.frm;2131;DA;;
+DOK_MSG_UNESITE_AMBALAZU_ILI_2;Unesite ambalažu ili uplatu kupca.;frmDokumenta.frm;2385;DA;;
+DOK_MSG_GRESKA_PRI_CUVANJU_5;Greška pri cuvanju izlaza kupca. Promene su vracene.;frmDokumenta.frm;2447;DA;;
+DOK_ERR_GRESKA_PRI_PRIKAZU;Greška pri prikazu storniranih: ;frmDokumenta.frm;2739;DA;;
+FAK_LBL_STAMPAJ;Štampaj;frmFakturisanje.frm;83;DA;;Koristi se i u: frmFakturisanje.frm:241, frmIzvestaj.frm:90, frmIzvestaj.frm:381, frmSledljivost.frm:68, frmSledljivost.frm:132
+FAK_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju fakturisanja: ;frmFakturisanje.frm;140;DA;;
+FAK_ERR_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju prijemnica: ;frmFakturisanje.frm;427;DA;;
+FAK_MSG_ISTA_PRIJEMNICA_IZABRANA;Ista prijemnica je izabrana više puta: ;frmFakturisanje.frm;615;DA;;
+FAK_MSG_IZABRANA_PRIJEMNICA_STORNIRANA;Izabrana prijemnica je stornirana i ne može se fakturisati.;frmFakturisanje.frm;623;DA;;
+FAK_MSG_IZABRANA_PRIJEMNICA_VEC;Izabrana prijemnica je vec fakturisana i ne može biti ukljucena u novu fakturu.;frmFakturisanje.frm;631;DA;;
+FAK_MSG_GRESKA_PRI_KREIRANJU;Greška pri kreiranju fakture. Promene su vracene.;frmFakturisanje.frm;712;DA;;
+FAK_ERR_GRESKA_PRI_IZRADI;Greška pri izradi fakture: ;frmFakturisanje.frm;719;DA;;
+FAK_MSG_NIJE_PRONADEN_FAKTURE;Nije pronaden ID fakture za štampu.;frmFakturisanje.frm;769;DA;;
+FAK_ERR_GRESKA_PRI_STAMPANJU;Greška pri štampanju: ;frmFakturisanje.frm;778;DA;;
+RPT_LBL_IZVESTAJI;Izveštaji;frmIzvestaj.frm;84;DA;;
+RPT_LBL_PREGLED_SALDO_OTKUPLJENE;Pregled saldo, otkupljene robe, ambalaže i prosecne cene;frmIzvestaj.frm;85;DA;;
+RPT_LBL_PRIKAZI;Prikaži;frmIzvestaj.frm;89;DA;;Koristi se i u: frmIzvestaj.frm:380
+RPT_LBL_STAMPAJ_KARTICU;Štampaj karticu;frmIzvestaj.frm;110;DA;;Koristi se i u: frmIzvestaj.frm:385
+RPT_LBL_TIP_IZVESTAJA;TIP IZVEŠTAJA;frmIzvestaj.frm;117;DA;;
+RPT_LBL_AGRO_ZADUZENJE;Agro zaduženje;frmIzvestaj.frm;1409;DA;;
+RPT_LBL_AMBALAZA;Ambalaža;frmIzvestaj.frm;1411;DA;;Koristi se i u: frmIzvestaj.frm:1422
+RPT_LBL_KES_OTKUPAC;Keš otkupac;frmIzvestaj.frm;1437;DA;;
+RPT_LBL_ZADUZENJE;Zaduženje;frmIzvestaj.frm;1467;DA;;
+RPT_LBL_RAZDUZENJE;Razduženje;frmIzvestaj.frm;1468;DA;;
+MATICNI_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju menija šifarnika: ;frmMaticniPodaci.frm;73;DA;;
+MATICNI_ERR_GRESKA_PRI_OTVARANJU_2;Greška pri otvaranju šifarnika: ;frmMaticniPodaci.frm;192;DA;;
+OTKUP_MSG_POKUSAJ_PONOVO;. Pokušaj ponovo.;frmOtkup.frm;529;DA;;
+OTKUP_MSG_UNESITE_ISPRAVNU_KOLICINU;Unesite ispravnu kolicinu izdate ambalaže!;frmOtkup.frm;825;DA;;
+OTKUP_MSG_IZABERITE_TIP_AMBALAZE;Izaberite tip ambalaže (za II klasu)!;frmOtkup.frm;839;DA;;
+OTKUP_MSG_IZABERITE_TIP_AMBALAZE_2;Izaberite tip ambalaže (za izdatu ambalažu)!;frmOtkup.frm;845;DA;;
+OTKUP_MSG_BRUTO_REZIM_UNESITE;Bruto režim: unesite broj gajbi za I klasu ;frmOtkup.frm;853;DA;;
+OTKUP_MSG_BRUTO_REZIM_UNESITE_2;Bruto režim: unesite broj gajbi za II klasu ;frmOtkup.frm;859;DA;;
+OTKUP_MSG_ZELITE_IPAK_NASTAVITE;Želite li ipak da nastavite?;frmOtkup.frm;975;DA;;
+OTKUP_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju otkupa. Promene su vracene.;frmOtkup.frm;1014;DA;;
+OTKUP_ERR_GRESKA_PRI_UNOSU;Greška pri unosu otkupa: ;frmOtkup.frm;1049;DA;;
+OTKUP_ERR_GRESKA_PRI_POKRETANJU;Greška pri pokretanju glavnog ekrana: ;frmOtkupAPP.frm;52;DA;;
+OTKUP_LBL_GRESKA_PRI_PROVERI;Greška pri proveri dokumenata. Pogledajte log.;frmOtkupAPP.frm;94;DA;;
+OTKUP_LBL_IZVESTAJ;Izveštaj;frmOtkupAPP.frm;378;DA;;
+OTKUP_LBL_MARZA;Marža;frmOtkupAPP.frm;393;DA;;Koristi se i u: frmOtkupAPP.frm:684
+OTKUP_LBL_IZVESTAJ_SLEDLJIVOSTI;Izveštaj o sledljivosti;frmOtkupAPP.frm;396;DA;;Koristi se i u: frmOtkupAPP.frm:690
+OTKUP_LBL_GRESKA_PRI_UVOZU;Greška pri uvozu banke. Otvaram mapiranje za postojece stavke.;frmOtkupAPP.frm;629;DA;;
+OTKUP_MSG_GRESKA_PRI_UVOZU;Greška pri uvozu bankovnih izvoda:;frmOtkupAPP.frm;633;DA;;
+OTKUP_LBL_SEKCIJA_IZVESTAJ_SLEDLJIVOSTI;Sekcija: Izveštaj o sledljivosti;frmOtkupAPP.frm;689;DA;;
+OTKUP_LBL_GRESKA_PRI_SNIMANJU;Greška pri snimanju. Pogledajte log.;frmOtkupAPP.frm;725;DA;;
+OTKUP_ERR_GRESKA_PRI_SNIMANJU;Greška pri snimanju: ;frmOtkupAPP.frm;729;DA;;
+OTKUP_ERR_FAJL_NIJE_USPESNO;Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: ;frmOtkupAPP.frm;754;DA;;
+OTKUP_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju maticnih podataka: ;frmOtkupAPP.frm;768;DA;;Koristi se i u: frmOtkupAPP.frm:787, frmStammdaten.frm:138
+OTKUP_LBL_GRESKA_PRI_OTVARANJU;Greška pri otvaranju sekcije: ;frmOtkupAPP.frm;971;DA;;
+OTKUP_ERR_GRESKA_PRI_OTVARANJU_2;Greška pri otvaranju sekcije ';frmOtkupAPP.frm;976;DA;;
+OTKUP_LBL_DANASNJI_OTKUP;Današnji otkup;frmOtkupAPP.frm;1091;DA;;
+OTKUP_LBL_OTPREMNICA; otpremnica  •  ;frmOtkupAPP.frm;1151;DA;;
+PAL_LBL_PREGLED_PALETA_STAMPA;Pregled paleta, štampa i prerada;frmPalete.frm;93;DA;;
+SEF_LBL_POSALJI_SEF;Pošalji na SEF;frmSEF.frm;89;DA;;Koristi se i u: frmSEF.frm:401, frmSEF.frm:405
+SEF_LBL_OSVEZI_STATUS;Osveži status;frmSEF.frm;90;DA;;Koristi se i u: frmSEF.frm:199
+SEF_LBL_OTKAZI_SLANJE_SEF;Otkaži slanje na SEF;frmSEF.frm;92;DA;;Koristi se i u: frmSEF.frm:201
+SEF_LBL_OSVEZI_SVE_PENDING;Osveži sve Pending;frmSEF.frm;97;DA;;Koristi se i u: frmSEF.frm:204
+SEF_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju SEF forme: ;frmSEF.frm;159;DA;;
+SEF_MSG_SEF_STATUS_OSVEZEN;SEF status osvežen.;frmSEF.frm;484;DA;;
+SEF_MSG_CANCEL_USPESNO_POSLAT;Cancel uspešno poslat.;frmSEF.frm;540;DA;;
+SEF_MSG_STORNO_USPESNO_POSLAT;Storno uspešno poslat.;frmSEF.frm;578;DA;;
+SEF_MSG_RECOVERY_ZAVRSEN;Recovery završen.;frmSEF.frm;603;DA;;
+SEF_MSG_PENDING_FAKTURE_OSVEZENE;Pending fakture osvežene.;frmSEF.frm;617;DA;;
+SEF_MSG_SEF_SENDING_RECOVERY;SEF_SENDING recovery završen.;frmSEF.frm;631;DA;;
+SLED_LBL_POVEZI;Poveži;frmSledljivost.frm;67;DA;;Koristi se i u: frmSledljivost.frm:131
+STM_LBL_OBRISI_GEO;Obriši geo;frmStammdaten.frm;92;DA;;Koristi se i u: frmStammdaten.frm:2717
+STM_LBL_CENE_PROIZVODU_SVAKA;Cene po proizvodu — svaka promena je novi red (vazi poslednji);frmStammdaten.frm;780;DA;;
+STM_ERR_GRESKA_PRI_PROMENI;Greška pri promeni statusa: ;frmStammdaten.frm;935;DA;;
+STM_ERR_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju liste: ;frmStammdaten.frm;1225;DA;;
+STM_MSG_UNESITE_KATASTARSKU_OPSTINU;Unesite katastarsku opštinu!;frmStammdaten.frm;1522;DA;;Koristi se i u: frmStammdaten.frm:1997
+STM_MSG_UNESITE_VALIDNU_POVRSINU;Unesite validnu površinu!;frmStammdaten.frm;1545;DA;;Koristi se i u: frmStammdaten.frm:2015
+STM_MSG_GRESKA_PRI_DODAVANJU;Greška pri dodavanju!;frmStammdaten.frm;1668;DA;;Koristi se i u: frmStammdaten.frm:1832
+STM_MSG_GRESKA_PRI_DODAVANJU_2;Greška pri dodavanju cene!;frmStammdaten.frm;1807;DA;;
+STM_ERR_GRESKA_PRI_DODAVANJU;Greška pri dodavanju: ;frmStammdaten.frm;1839;DA;;
+STM_MSG_NOVU_CENU_KORISTITE;Za novu cenu koristite 'Dodaj' — stari redovi ostaju radi istorije.;frmStammdaten.frm;2222;DA;;
+STM_ERR_GRESKA_PRI_IZMENI;Greška pri izmeni: ;frmStammdaten.frm;2249;DA;;
+STM_ERR_GRESKA_PRI_UCITAVANJU_2;Greška pri ucitavanju stanica: ;frmStammdaten.frm;2851;DA;;
+AGRO_MSG_GRESKA_PRI_UNOSU;Greška pri unosu magacina, promene vracene: ;modAgrohemija.bas;245;DA;;
+BANKA_LBL_PDF_AUSWAHLEN;PDF auswählen;modBankaImportParserPdfToText.bas;267;DA;PDF auswählen;"[PREVESTI (auswählen→izaberi; PDF→PDF)]"
+GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN;Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.;modGoogleAuth.bas;81;DA;Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.;"[PREVESTI (fehlgeschlagen→nije uspelo; Prüfe→proveri; Austausch→razmena)]"
+SYNC_ERR_UVOZ_OTK_NIJE;Uvoz OTK nije potvrden zbog fatal sync greške.;modMasterSync.bas;201;DA;;
+SYNC_ERR_GRESKE;Greške: ;modMasterSync.bas;204;DA;;Koristi se i u: modMasterSync.bas:228, modMasterSync.bas:249, modMasterSync.bas:2076, modMasterSync.bas:2100, modMasterSync.bas:2121
+SYNC_ERR_UVOZ_OTK_ZAVRSEN;Uvoz OTK završen sa greškama.;modMasterSync.bas;224;DA;;
+SYNC_ERR_UVOZ_OTK_ZAVRSEN_2;Uvoz OTK završen!;modMasterSync.bas;245;DA;;
+SYNC_MSG_GRESKA_PRI_UVOZU;Greška pri uvozu OTK: ;modMasterSync.bas;280;DA;;
+SYNC_MSG_PWA_UVOZ_NIJE;PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greške. Proveri log.;modMasterSync.bas;309;DA;;
+SYNC_MSG_PWA_UVOZ_ZAVRSEN;PWA uvoz završen i potvrden.;modMasterSync.bas;316;DA;;
+SYNC_ERR_UVOZ_ZBIRNIH_NIJE;Uvoz zbirnih nije potvrden zbog fatal sync greške.;modMasterSync.bas;2073;DA;;
+SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN;Uvoz zbirnih završen sa greškama.;modMasterSync.bas;2096;DA;;
+SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN_2;Uvoz zbirnih završen!;modMasterSync.bas;2117;DA;;
+SYNC_MSG_GRESKA_PRI_UVOZU_2;Greška pri uvozu zbirnih: ;modMasterSync.bas;2152;DA;;Koristi se i u: modMasterSync.bas:2205
+SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN;Uvoz zbirnih završen sa greškama ili fatal sync problemom.;modMasterSync.bas;2181;DA;;
+SYNC_MSG_USPESNI_REDOVI_KOJI;Uspešni redovi koji su potvrdeni kroz row-level TX ostaju upisani.;modMasterSync.bas;2182;DA;;
+SYNC_MSG_NEUSPESNI_REDOVI_OZNACENI;Neuspešni redovi su oznaceni kao greška gde je writeback uspeo.;modMasterSync.bas;2183;DA;;
+SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN_2;Uvoz zbirnih završen i potvrden.;modMasterSync.bas;2189;DA;;
+OTKUP_LBL_OTKUPNI_BLOKOVI;Otkupni blokovi  »;modOtkupBlok.bas;104;DA;;Koristi se i u: modOtkupBlok.bas:106, modOtkupBlok.bas:276
+OTKUP_LBL_SAKRIJ_BLOKOVE;«  Sakrij blokove;modOtkupBlok.bas;273;DA;;
+OTKUP_LBL_UKUPNO;Ukupno kg: —;modOtkupBlok.bas;304;DA;;Koristi se i u: modOtkupBlok.bas:1154
+OTKUP_LBL_BLOKOVIMA;U blokovima: —;modOtkupBlok.bas;305;DA;;Koristi se i u: modOtkupBlok.bas:1155
+OTKUP_LBL_OSTATAK;Ostatak: —;modOtkupBlok.bas;306;DA;;Koristi se i u: modOtkupBlok.bas:1156
+OTKUP_LBL_UKUPNO_AMB;Ukupno amb: —;modOtkupBlok.bas;319;DA;;Koristi se i u: modOtkupBlok.bas:1157
+OTKUP_LBL_BLOKOVIMA_AMB;U blokovima amb: —;modOtkupBlok.bas;320;DA;;Koristi se i u: modOtkupBlok.bas:1158
+OTKUP_LBL_OSTATAK_AMB;Ostatak amb: —;modOtkupBlok.bas;321;DA;;Koristi se i u: modOtkupBlok.bas:1159
+CFG_LBL_PODESAVANJA_TBLSEFCONFIG;Podešavanja (tblSEFConfig);modPodesavanja.bas;181;DA;;
+CFG_LBL_STR;— ;modPodesavanja.bas;229;DA;;
+CFG_LBL_STR_2; —;modPodesavanja.bas;229;DA;;
+CFG_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju podešavanja: ;modPodesavanja.bas;282;DA;;
+CFG_MSG_PRESKOCENO_GRESKA;Preskoceno (greška):;modPodesavanja.bas;333;DA;;
+CFG_ERR_GRESKA_PRI_CUVANJU;Greška pri cuvanju: ;modPodesavanja.bas;340;DA;;
+CFG_MSG_IZLAZ_NUZDI_ALT;(Izlaz u nuždi: Alt+F8 -> ShowConfigSheet.);modPodesavanja.bas;365;DA;;
+SETUP_MSG_SETUP_USPESNO_ZAVRSEN;Setup je uspešno završen.;modSetup.bas;85;DA;;
+SETUP_MSG_PODESAVANJA_MATICNI_PODACI;Podešavanja: Maticni podaci -> Podešavanja (tblSEFConfig je skriven).;modSetup.bas;87;DA;;
+SETUP_MSG_SETUP_ZAVRSEN_ALI;Setup je završen, ali postoje stavke za proveru:;modSetup.bas;95;DA;;
+SETUP_ERR_GRESKA_TOKOM_SETUP;Greška tokom setup-a: ;modSetup.bas;104;DA;;
+SETUP_MSG_HEALTH_CHECK_PROSAO;Health-check je prošao. Racunar je podešen.;modSetup.bas;129;DA;;
+SETUP_MSG_HEALTH_CHECK_NASAO;Health-check je našao stavke za proveru:;modSetup.bas;132;DA;;
+SETUP_ERR_GRESKA_TOKOM_HEALTH;Greška tokom health-check-a: ;modSetup.bas;140;DA;;
+SETUP_MSG_APLIKACIJA_RADI_LOKALNO;Aplikacija radi lokalno — Google/PWA se ne koristi niti proverava.;modSetup.bas;187;DA;;
+SETUP_MSG_BANKARSKI_FOLDERI_PODESENI;Bankarski folderi su podešeni.;modSetup.bas;246;DA;;
+SETUP_ERR_GRESKA_PRI_PODESAVANJU;Greška pri podešavanju bankarskih foldera: ;modSetup.bas;251;DA;;
+STM_ERR_GRESKA_PRI_EXPORTU;Greška pri exportu parcela: ;modStammdatenSync.bas;1638;DA;;
+AGRO_ERR_GRESKA_PRI_CUVANJU;Greška pri cuvanju izlaza. ArtikalID=;frmAgrohemija.frm;501;SUMNJIVO;;
+AGRO_ERR_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju ulaza. ArtikalID=;frmAgrohemija.frm;714;SUMNJIVO;;
+AGRO_ERR_KORPA_SADRZI_STAVKU;Korpa sadrži stavku bez ArtikalID.;frmAgrohemija.frm;812;SUMNJIVO;;
+DOK_ERR_NEMA_AMBALAZE_NOVCA;Nema ambalaže ni novca za cuvanje.;frmDokumenta.frm;1143;SUMNJIVO;;Koristi se i u: modDokumenta.bas:1249
+SEF_MSG_SENDING_FAKTURA_TRENUTNO;- SENDING: Faktura se trenutno šalje.;frmSEF.frm;674;SUMNJIVO;;
+SEF_MSG_SENT_FAKTURA_USPESNO;- SENT: Faktura uspešno primljena na SEF.;frmSEF.frm;675;SUMNJIVO;;
+SEF_MSG_REJECTED_GRESKA_PROVERI;- REJECTED: Greška! Proveri 'Poslednja greška'.;frmSEF.frm;677;SUMNJIVO;;
+SEF_MSG_IZABERI_FAKTURU_LISTE;Izaberi fakturu iz liste -> Klikni 'Pošalji na SEF'.;frmSEF.frm;679;SUMNJIVO;;
+SEF_MSG_TEHNICKA_PODRSKA;3. TEHNICKA PODRŠKA:;frmSEF.frm;681;SUMNJIVO;;
+SEF_MSG_SVE_PROBLEME_KOJI;Za sve probleme koji se ne rešavaju sa 'Osveži status',;frmSEF.frm;682;SUMNJIVO;;
+SEF_MSG_KONTAKTIRAJ_ADMINISTRATORA_POSALJI;kontaktiraj administratora i pošalji SEF Event Log (donja tabela).;frmSEF.frm;683;SUMNJIVO;;
+STM_MSG_PARCELA_NEMA_KATASTARSKI;Parcela nema katastarski broj ili katastarsku opštinu.;frmStammdaten.frm;2430;SUMNJIVO;;
+STM_MSG_GRESKA_PRI_OTVARANJU;Greška pri otvaranju GeoSrbije. Pogledaj log.;frmStammdaten.frm;2444;SUMNJIVO;;
+STM_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju geo podataka. Pogledaj log.;frmStammdaten.frm;2496;SUMNJIVO;;
+STM_MSG_KLIKNI_JOS_JEDNOM;Klikni još jednom za brisanje geo podataka.;frmStammdaten.frm;2511;SUMNJIVO;;
+STM_MSG_GRESKA_PRI_BRISANJU;Greška pri brisanju geo podataka. Pogledaj log.;frmStammdaten.frm;2536;SUMNJIVO;;
+STM_MSG_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju koordinata. Pogledaj log.;frmStammdaten.frm;2572;SUMNJIVO;;
+STM_MSG_GRESKA_PRI_OTVARANJU_2;Greška pri otvaranju Google Maps. Pogledaj log.;frmStammdaten.frm;2623;SUMNJIVO;;
+STM_MSG_GRESKA_PRI_OTVARANJU_3;Greška pri otvaranju polygon editora. Pogledaj log.;frmStammdaten.frm;2685;SUMNJIVO;;
+DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow fehlgeschlagen für tblOtpremnica;modDokumenta.bas;263;SUMNJIVO;AppendRow fehlgeschlagen für tblOtpremnica;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow fehlgeschlagen für tblZbirna.;modDokumenta.bas;592;SUMNJIVO;AppendRow fehlgeschlagen für tblZbirna.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_3;AppendRow fehlgeschlagen für tblPrijemnica.;modDokumenta.bas;1081;SUMNJIVO;AppendRow fehlgeschlagen für tblPrijemnica.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow fehlgeschlagen für tblFakture.;modFaktura.bas;286;SUMNJIVO;AppendRow fehlgeschlagen für tblFakture.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow fehlgeschlagen für tblFakturaStavke.;modFaktura.bas;318;SUMNJIVO;AppendRow fehlgeschlagen für tblFakturaStavke.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+FAK_ERR_STORNIRANA_FAKTURA_MOZE;Stornirana faktura se ne može štampati kao aktivna faktura: ;modFaktura.bas;437;SUMNJIVO;;
+LOG_MSG_EINTRAGE_EXCEL_HAT; Einträge, Excel hat ;modJournaling.bas;221;SUMNJIVO; Einträge, Excel hat ;"[PREVESTI (Einträge→stavki/redova; hat→ima; Excel→Excel)]"
+LOG_MSG_MOGLICHER_DATENVERLUST_NACH;Möglicher Datenverlust nach Absturz!;modJournaling.bas;222;SUMNJIVO;Möglicher Datenverlust nach Absturz!;"[PREVESTI (Möglicher→moguc; Datenverlust→gubitak podataka; Absturz→pad aplikacije; nach→posle)]"
+LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE;Server nedostupan — offline grace (masina je vezana).;modLicense.bas;216;SUMNJIVO;;
+LIC_MSG_PROPUSTAM_VEZANU_MASINU;' — propustam vezanu masinu.;modLicense.bas;267;SUMNJIVO;;
+MATICNI_MSG_PODESAVANJA;Podešavanja;modMaticniLookups.bas;47;SUMNJIVO;;
+MONITO_ERR_NAMERNO_TESTIRANA_VBA;Namerno testirana VBA greška bez sensitive podataka;modMonitoringTests.bas;54;SUMNJIVO;;
+OTKUP_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow fehlgeschlagen für tblOtkup.;modOtkup.bas;499;SUMNJIVO;AppendRow fehlgeschlagen für tblOtkup.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+CFG_MSG_STAMPA_OTKUPNOG_LISTA;Štampa otkupnog lista;modPodesavanja.bas;91;SUMNJIVO;;
+CFG_MSG_STAMPA_PALETNOG_LISTA;Štampa paletnog lista;modPodesavanja.bas;92;SUMNJIVO;;
+CFG_MSG_STAMPA_PRIJEMNICE_AUTO;Štampa prijemnice (auto na unos);modPodesavanja.bas;93;SUMNJIVO;;
+CFG_MSG_KUPAC_UNOSI_BRUTO;Kupac unosi BRUTO težinu (oduzmi ambalažu);modPodesavanja.bas;97;SUMNJIVO;;
+CFG_MSG_MALINA_REZIM;Malina režim;modPodesavanja.bas;106;SUMNJIVO;;Koristi se i u: modPodesavanja.bas:107
+CFG_MSG_PODESAVANJA_ZATVORENA;Podešavanja zatvorena.;modPodesavanja.bas;345;SUMNJIVO;;
+CFG_MSG_PRIKAZI_CONFIG_TABELU;Prikaži config tabelu;modPodesavanja.bas;391;SUMNJIVO;;
+SETUP_MSG_OVAJ_RACUNAR_PROSAO;Da li je ovaj racunar prošao SetupNewPC;modSetup.bas;70;SUMNJIVO;;Koristi se i u: modSetup.bas:90
+SETUP_MSG_DATUM_VREME_ZAVRSETKA;Datum i vreme završetka setup-a;modSetup.bas;71;SUMNJIVO;;
+SETUP_MSG_FOLDER_BANKARSKE_IZVODE;Folder za bankarske izvode sa greškom;modSetup.bas;244;SUMNJIVO;;Koristi se i u: modSetup.bas:449
+SETUP_MSG_SEF_BASE_URL;- SEF_BASE_URL nije podešen.;modSetup.bas;523;SUMNJIVO;;
+SETUP_MSG_SEF_API_KEY;- SEF_API_KEY nije podešen.;modSetup.bas;527;SUMNJIVO;;
+SETUP_MSG_SEF_ENV_NIJE;- SEF_ENV nije podešen.;modSetup.bas;531;SUMNJIVO;;
+SETUP_MSG_NIJE_PODESEN; nije podešen: ;modSetup.bas;635;SUMNJIVO;;
