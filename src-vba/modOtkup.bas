@@ -2,7 +2,7 @@ Attribute VB_Name = "modOtkup"
 Option Explicit
 
 ' ============================================================
-' modOtkup – Aufkauf-Geschäftslogik
+' modOtkup - Aufkauf-Geschaeftslogik
 ' Kernmodul: Erfassung Lieferant zu Station
 ' ============================================================
 
@@ -45,7 +45,7 @@ Public Function SaveOtkup_TX(ByVal datum As Date, ByVal kooperantID As String, _
         message:="Otkup saved. KooperantID=" & kooperantID & _
                  "; StanicaID=" & stanicaID & _
                  "; Vrsta=" & vrstaVoca & _
-                 "; Kolicina=" & CStr(kolicina), _
+                 "; Koli" & ChrW(269) & "ina=" & CStr(kolicina), _
         userId:="Operator", _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkup_TX", _
@@ -153,23 +153,23 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
     If hasKlasaII Then
         If kolicinaII <= 0 Or cenaII <= 0 Then
             Err.Raise vbObjectError + 1813, "SaveOtkupMulti_TX", _
-                      "Kolicina i cena za Klasu II moraju biti vece od nule."
+                      "Koli" & ChrW(269) & "ina i cena za Klasu II moraju biti vece od nule."
         End If
     End If
 
     If kolAmb < 0 Then
         Err.Raise vbObjectError + 1814, "SaveOtkupMulti_TX", _
-                  "Kolicina ambalaze ne sme biti negativna."
+                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If kolAmbIzdata < 0 Then
         Err.Raise vbObjectError + 1841, "SaveOtkupMulti_TX", _
-                  "Kolicina izdate ambalaze ne sme biti negativna."
+                  "Koli" & ChrW(269) & "ina izdate ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If kolAmbII < 0 Then
         Err.Raise vbObjectError + 1842, "SaveOtkupMulti_TX", _
-                  "Kolicina ambalaze (Klasa II) ne sme biti negativna."
+                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e (Klasa II) ne sme biti negativna."
     End If
 
     If novac < 0 Then
@@ -179,7 +179,7 @@ Public Function SaveOtkupMulti_TX(ByVal datum As Date, _
 
     If (kolAmb > 0 Or kolAmbII > 0) And Trim$(tipAmb) = "" Then
         Err.Raise vbObjectError + 1816, "SaveOtkupMulti_TX", _
-                  "Tip ambalaze je obavezan kada postoji ambalaza."
+                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     tx.BeginTx
@@ -387,12 +387,12 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
 
     If Trim$(vrstaVoca) = "" Then
         Err.Raise vbObjectError + 1822, "SaveOtkup", _
-                  "Vrsta voca je obavezna."
+                  "Vrsta vo" & ChrW(263) & "a je obavezna."
     End If
 
     If kolicina <= 0 Then
         Err.Raise vbObjectError + 1823, "SaveOtkup", _
-                  "Kolicina mora biti veca od nule."
+                  "Koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If cena <= 0 Then
@@ -402,7 +402,7 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
 
     If kolAmb < 0 Then
         Err.Raise vbObjectError + 1825, "SaveOtkup", _
-                  "Kolicina ambalaze ne sme biti negativna."
+                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If novac < 0 Then
@@ -412,17 +412,17 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
 
     If kolAmb > 0 And Trim$(tipAmb) = "" Then
         Err.Raise vbObjectError + 1827, "SaveOtkup", _
-                  "Tip ambalaze je obavezan kada postoji ambalaza."
+                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     If kolAmbIzdata < 0 Then
         Err.Raise vbObjectError + 1831, "SaveOtkup", _
-                  "Kolicina izdate ambalaze ne sme biti negativna."
+                  "Koli" & ChrW(269) & "ina izdate ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If kolAmbIzdata > 0 And Trim$(tipAmb) = "" Then
         Err.Raise vbObjectError + 1832, "SaveOtkup", _
-                  "Tip ambalaze je obavezan kada postoji izdata ambalaza."
+                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji izdata ambala" & ChrW(382) & "a."
     End If
     
     Call RequireValidOtkupClass(klasa, "SaveOtkup")
@@ -496,7 +496,7 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     newRow = AppendRow(TBL_OTKUP, rowData)
     If newRow <= 0 Then
         Err.Raise vbObjectError + 1829, "SaveOtkup", _
-                  "AppendRow fehlgeschlagen für tblOtkup."
+                  "AppendRow fehlgeschlagen fuer tblOtkup."
     End If
 
     ' Izdata ambalaza (OM->kooperant) -> upis u kolonu PO IMENU (kolona je na kraju
@@ -714,8 +714,8 @@ Public Function GetSaldoByStation(ByVal stanicaID As String, _
 
     ' TODO:
     ' Ovaj helper trenutno racuna samo bruto saldo iz tblOtkup.
-    ' Banka/Novac/Isporuka korekcije treba rešiti u posebnom report modulu,
-    ' ne širiti ovaj core save modul bez jasnog accounting pravila.
+    ' Banka/Novac/Isporuka korekcije treba resiti u posebnom report modulu,
+    ' ne siriti ovaj core save modul bez jasnog accounting pravila.
 
     If dict.count = 0 Then
         GetSaldoByStation = Empty

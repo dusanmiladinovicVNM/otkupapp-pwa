@@ -3,9 +3,9 @@ Attribute VB_Name = "modFaktura"
 Option Explicit
 
 ' ============================================================
-' modFaktura v2.1 – Rechnungserstellung
-' GEÄNDERT: Basiert auf tblPrijemnica statt tblIsporuka
-' Faktura-Betrag = Prijemnica.Kolicina × Prijemnica.Cena
+' modFaktura v2.1 - Rechnungserstellung
+' GEAeNDERT: Basiert auf tblPrijemnica statt tblIsporuka
+' Faktura-Betrag = Prijemnica.Kolicina x Prijemnica.Cena
 ' ============================================================
 
 Public Function CreateFaktura_TX(ByVal kupacID As String, _
@@ -202,12 +202,12 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
         If Not IsPrijemnicaAvailableForFaktura(rowPrijValidate, prijemnicaID) Then
             Err.Raise vbObjectError + 1709, "CreateFaktura", _
-                      "Prijemnica je vec fakturisana ili stornirana: " & prijemnicaID
+                      "Prijemnica je ve" & ChrW(263) & " fakturisana ili stornirana: " & prijemnicaID
         End If
 
         If Not IsNumeric(prijData(rowPrijValidate, colPrjKol)) Then
             Err.Raise vbObjectError + 1711, "CreateFaktura", _
-                      "Kolicina nije numericka za prijemnicu: " & prijemnicaID
+                      "Koli" & ChrW(269) & "ina nije numericka za prijemnicu: " & prijemnicaID
         End If
 
         If Not IsNumeric(prijData(rowPrijValidate, colPrjCena)) Then
@@ -227,7 +227,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
         If prjKolicina <= 0 Then
             Err.Raise vbObjectError + 1712, "CreateFaktura", _
-                      "Kolicina mora biti veca od nule. PrijemnicaID=" & prijemnicaID
+                      "Koli" & ChrW(269) & "ina mora biti veca od nule. PrijemnicaID=" & prijemnicaID
         End If
 
         If prjCena < 0 Then
@@ -283,7 +283,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
     If AppendRow(TBL_FAKTURE, fakturaRow) <= 0 Then
         Err.Raise vbObjectError + 1715, "CreateFaktura", _
-                  "AppendRow fehlgeschlagen für tblFakture."
+                  "AppendRow fehlgeschlagen fuer tblFakture."
     End If
 
     ' Faktura stavke + markiranje prijemnica
@@ -315,7 +315,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
         If AppendRow(TBL_FAKTURA_STAVKE, stavkaRow) <= 0 Then
             Err.Raise vbObjectError + 1716, "CreateFaktura", _
-                      "AppendRow fehlgeschlagen für tblFakturaStavke."
+                      "AppendRow fehlgeschlagen fuer tblFakturaStavke."
         End If
 
         RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, _
@@ -327,7 +327,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
     ' Avans automatisch verrechnen.
     ' Ovo mora biti base funkcija, ne ApplyAvansToFaktura_TX,
-    ' jer CreateFaktura_TX vec drži širu transakciju.
+    ' jer CreateFaktura_TX vec drzi siru transakciju.
     ApplyAvansToFaktura kupacID, fakturaID
 
     CreateFaktura = fakturaID
@@ -434,7 +434,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
 
     If UCase$(Trim$(CStr(data(fRow, colFakStornirano)))) = "DA" Then
         Err.Raise vbObjectError + 1736, "PrintFaktura", _
-              "Stornirana faktura se ne može štampati kao aktivna faktura: " & fakturaID
+              Poruka("FAK_ERR_STORNIRANA_FAKTURA_MOZE") & fakturaID
     End If
 
     Dim kupacID As String
@@ -551,7 +551,7 @@ Private Sub ClearFakturaStavkeArea(ByVal ws As Worksheet)
     Dim startCell As Range
     Set startCell = ws.Range("StavkaStart")
 
-    ' Cisti 50 redova × 6 kolona:
+    ' Cisti 50 redova x 6 kolona:
     ' R.br | BrojPrij | Klasa | Kolicina | Cena | Vrednost
     startCell.Resize(50, 6).ClearContents
 

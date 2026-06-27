@@ -17,9 +17,9 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmMarza v2.1 – Margenberechnung
-' GEÄNDERT: tblIsporuka ? tblPrijemnica
-' Verkaufsseite = Prijemnica.Kolicina × Prijemnica.Cena
+' frmMarza v2.1 - Margenberechnung
+' GEAeNDERT: tblIsporuka ? tblPrijemnica
+' Verkaufsseite = Prijemnica.Kolicina x Prijemnica.Cena
 ' VrstaVoca-Lookup: Prijemnica.BrojZbirne ? Otpremnica.VrstaVoca
 ' ============================================================
 
@@ -52,7 +52,7 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
     
-    Me.caption = "Marza"
+    Me.caption = "Mar" & ChrW(382) & "a"
     txtDatumOd.value = "1.1." & Year(Date)
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
     
@@ -136,7 +136,7 @@ Private Sub btnPrikazi_Click()
     Exit Sub
 EH:
     LogErr "frmMarza.btnPrikazi"
-    MsgBox "Greska pri ucitavanju marze: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju marze: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillMarzaList(ByVal data As Variant)

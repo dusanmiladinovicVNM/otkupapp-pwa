@@ -17,17 +17,17 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmOtkup v2.1 – NUR Otkup (Kooperant ? Station)
+' frmOtkup v2.1 - NUR Otkup (Kooperant ? Station)
 ' Rechte Seite (Isporuka) wurde entfernt.
 ' Otpremnica/Zbirna/Prijemnica sind jetzt in frmDokumenta.
 ' ============================================================
 Private mChromeRemoved As Boolean
 
-' Runtime polje "Izdata ambalaza" (OM izdaje prazne kooperantu uz otkup).
+' Runtime polje "Izdata ambala" & ChrW(382) & "a" (OM izdaje prazne kooperantu uz otkup).
 ' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
 Private m_txtAmbIzdata As MSForms.TextBox
 
-' Runtime polje "Kolicina ambalaze (II)" — Klasa II je zaseban tblOtkup red sa
+' Runtime polje "Kolicina ambalaze (II)" -- Klasa II je zaseban tblOtkup red sa
 ' svojom KolAmbalaze; deli "Kolicina ambalaze" red sa Klasom I (kao Kolicina/Cena),
 ' vidljivo samo kad je chkDveKlase ukljucen (CLAUDE.md: ne dira .frx).
 Private m_txtKolAmbalazeII As MSForms.TextBox
@@ -73,7 +73,7 @@ Private Sub UserForm_Initialize()
     ' Datum defaults
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
-    ' ComboBoxen füllen
+    ' ComboBoxen fuellen
     FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillCmb cmbVozac, GetVozacDisplayList()
@@ -85,7 +85,7 @@ Private Sub UserForm_Initialize()
     txtKolAmbalaze.value = ""
     txtNovac.value = "0"
     
-    ' Klasa II – initial disabled
+    ' Klasa II - initial disabled
     DisableField txtKolicinaKLII
     DisableField txtCenaKLII
     chkDveKlase.value = False
@@ -101,7 +101,7 @@ Private Sub UserForm_Initialize()
     ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
     On Error GoTo 0
 
-    ' Runtime polje "Izdata ambalaza" (ne dira .frx).
+    ' Runtime polje "Izdata ambala" & ChrW(382) & "a" (ne dira .frx).
     SetupAmbIzdataField
 
     ' Runtime polje "Kol. ambalaze (II)" za Klasu II (ne dira .frx; skriveno dok
@@ -116,7 +116,7 @@ Private Sub UserForm_Initialize()
     ApplyOtkupTogglesState
 End Sub
 
-' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
+' Kreira runtime "Izdata ambala" & ChrW(382) & "a" u SOPSTVENOM redu ispod "Kolicina ambalaze":
 ' otvara prazan red tako sto Novac/Primalac (+ njihove labele) i dugmad spusti za
 ' jednu visinu reda, pa popuni vakantno mesto (textbox levo + labela desno, kao
 ' ostala polja). Sva geometrija se MERI u runtime-u (.frx se ne cita iz koda).
@@ -138,7 +138,7 @@ Private Sub SetupAmbIzdataField()
     Dim lblNovac As MSForms.Control: Set lblNovac = RowLabelRightOf(txtNovac)
     Dim lblPrimalac As MSForms.Control: Set lblPrimalac = RowLabelRightOf(txtPrimalac)
 
-    ' Spusti donji blok za jedan red da se oslobodi mesto za "Izdata ambalaza".
+    ' Spusti donji blok za jedan red da se oslobodi mesto za "Izdata ambala" & ChrW(382) & "a".
     ShiftCtlDown txtNovac, dy
     ShiftCtlDown lblNovac, dy
     ShiftCtlDown txtPrimalac, dy
@@ -154,7 +154,7 @@ Private Sub SetupAmbIzdataField()
         .top = yIzdata
         .width = txtKolAmbalaze.width
         .Height = txtKolAmbalaze.Height
-        .ControlTipText = "Ambalaza koju OM izdaje kooperantu (preuzima od OM)"
+        .ControlTipText = "Ambala" & ChrW(382) & "a koju OM izdaje kooperantu (preuzima od OM)"
     End With
     StyleTextBox m_txtAmbIzdata
 
@@ -167,7 +167,7 @@ Private Sub SetupAmbIzdataField()
     Dim lbl As MSForms.label
     Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)
     With lbl
-        .caption = "Izdata ambalaza"
+        .caption = "Izdata ambala" & ChrW(382) & "a"
         .top = yIzdata + 2
         .Height = 14
         If Not refLbl Is Nothing Then
@@ -364,11 +364,11 @@ EH:
 End Sub
 
 ' ============================================================
-' KASKADIERUNG – VrstaVoca ? SortaVoca
+' KASKADIERUNG - VrstaVoca ? SortaVoca
 ' ============================================================
 
 Private Sub cmbVrstaVoca_Change()
-    ' Wenn VrstaVoca gewählt wird, SortaVoca-Liste filtern
+    ' Wenn VrstaVoca gewaehlt wird, SortaVoca-Liste filtern
     cmbSortaVoca.Clear
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
@@ -490,7 +490,7 @@ Private Sub cmbOtkupnoMesto_Change()
     cmbParcela.Clear
 
     If cmbOtkupnoMesto.value = "" Then
-        ' Operater je obrisao izbor — pusti aktivnu stanicu (sa bulk push)
+        ' Operater je obrisao izbor -- pusti aktivnu stanicu (sa bulk push)
         If Len(GetActiveStanica()) > 0 Then
             ShowLockStatus "Sinhronizujem prethodnu stanicu..."
             ReleaseStanicaLock GetActiveStanica()
@@ -507,7 +507,7 @@ Private Sub cmbOtkupnoMesto_Change()
     ' Parse datum (vec treba da je popunjen u txtDatum)
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
-        datumDok = Date   ' fallback na danas; korisnik može promeniti
+        datumDok = Date   ' fallback na danas; korisnik moze promeniti
     End If
 
     ' Lock acquire (interno: bulk push + release prethodne ako postoji + acquire nove)
@@ -526,7 +526,7 @@ Private Sub cmbOtkupnoMesto_Change()
     HideLockStatus
 
     If Not acquired Then
-        MsgBox "Nije moguce preuzeti stanicu " & stanicaID & ". Pokušaj ponovo.", _
+        MsgBox "Nije moguce preuzeti stanicu " & stanicaID & Poruka("OTKUP_MSG_POKUSAJ_PONOVO"), _
                vbExclamation, APP_NAME
         cmbOtkupnoMesto.value = ""
         Exit Sub
@@ -668,17 +668,17 @@ Private Sub txtDatum_AfterUpdate()
     ' Parse novi datum
     Dim newDatum As Date
     If Not TryParseDateValue(txtDatum.value, newDatum) Then
-        ' Loš format — operator vidi u polju, ne menjamo lock state
+        ' Los format -- operator vidi u polju, ne menjamo lock state
         Exit Sub
     End If
 
-    ' Ako je isti datum, ništa
+    ' Ako je isti datum, nista
     If GetActiveDatum() = newDatum Then
         RefreshBrojDokumentaSuggestion
         Exit Sub
     End If
 
-    ' Drugaciji datum — re-acquire (bulk push staro + acquire novo)
+    ' Drugaciji datum -- re-acquire (bulk push staro + acquire novo)
     ShowLockStatus "Sinhronizujem prethodni datum..."
     Dim acquired As Boolean
     acquired = AcquireStanicaLock(GetActiveStanica(), newDatum)
@@ -738,7 +738,7 @@ Private Sub btnUnos_Click()
     End If
 
     If cmbVrstaVoca.value = "" Then
-        MsgBox "Izaberite vrstu voca!", vbExclamation, APP_NAME
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
     End If
@@ -758,7 +758,7 @@ Private Sub btnUnos_Click()
 
     If hasKlasaI Then
         If Not TryParseDouble(txtKolicina.value, kolicinaI) Or kolicinaI <= 0 Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicina.SetFocus
             Exit Sub
         End If
@@ -769,12 +769,12 @@ Private Sub btnUnos_Click()
         End If
     Else
         If Not chkDveKlase.value Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicina.SetFocus
             Exit Sub
         End If
         If Trim$(txtKolAmbalaze.value) <> "" Then
-            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+            MsgBox Poruka("DOK_MSG_UNOSI_SAMO_KLASA"), _
                    vbExclamation, APP_NAME
             txtKolAmbalaze.SetFocus
             Exit Sub
@@ -786,7 +786,7 @@ Private Sub btnUnos_Click()
 
     If chkDveKlase.value Then
         If Not TryParseDouble(txtKolicinaKLII.value, kolicinaII) Or kolicinaII <= 0 Then
-            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            MsgBox "Unesite koli" & ChrW(269) & "inu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKLII.SetFocus
             Exit Sub
         End If
@@ -801,7 +801,7 @@ Private Sub btnUnos_Click()
     Dim kolAmb As Long
     If Trim$(txtKolAmbalaze.value) <> "" Then
         If Not TryParseLong(txtKolAmbalaze.value, kolAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtKolAmbalaze.SetFocus
             Exit Sub
         End If
@@ -811,7 +811,7 @@ Private Sub btnUnos_Click()
     If Not m_txtKolAmbalazeII Is Nothing Then
         If chkDveKlase.value And Trim$(m_txtKolAmbalazeII.value) <> "" Then
             If Not TryParseLong(m_txtKolAmbalazeII.value, kolAmbII) Then
-                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2"), vbExclamation, APP_NAME
                 m_txtKolAmbalazeII.SetFocus
                 Exit Sub
             End If
@@ -822,7 +822,7 @@ Private Sub btnUnos_Click()
     If Not m_txtAmbIzdata Is Nothing Then
         If Trim$(m_txtAmbIzdata.value) <> "" Then
             If Not TryParseLong(m_txtAmbIzdata.value, kolAmbIzdata) Then
-                MsgBox "Unesite ispravnu kolicinu izdate ambalaže!", vbExclamation, APP_NAME
+                MsgBox Poruka("OTKUP_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
                 m_txtAmbIzdata.SetFocus
                 Exit Sub
             End If
@@ -830,19 +830,19 @@ Private Sub btnUnos_Click()
     End If
 
     If kolAmb > 0 And cmbTipAmbalaze.value = "" Then
-        MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
 
     If kolAmbII > 0 And cmbTipAmbalaze.value = "" Then
-        MsgBox "Izaberite tip ambalaže (za II klasu)!", vbExclamation, APP_NAME
+        MsgBox Poruka("OTKUP_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
 
     If kolAmbIzdata > 0 And cmbTipAmbalaze.value = "" Then
-        MsgBox "Izaberite tip ambalaže (za izdatu ambalažu)!", vbExclamation, APP_NAME
+        MsgBox Poruka("OTKUP_MSG_IZABERITE_TIP_AMBALAZE_2"), vbExclamation, APP_NAME
         cmbTipAmbalaze.SetFocus
         Exit Sub
     End If
@@ -850,13 +850,13 @@ Private Sub btnUnos_Click()
     ' #1 Bruto rezim: broj gajbi je OBAVEZAN (inace se bruto ne pretvara u neto, tj.
     ' tezina gajbi bi se platila kao voce). Vazi za I i (ako je ukljucena) II klasu.
     If OtkupBrutoUnos() And kolicinaI > 0 And kolAmb <= 0 Then
-        MsgBox "Bruto režim: unesite broj gajbi za I klasu " & _
+        MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE") & _
                "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
         txtKolAmbalaze.SetFocus
         Exit Sub
     End If
     If chkDveKlase.value And OtkupBrutoUnos() And kolicinaII > 0 And kolAmbII <= 0 Then
-        MsgBox "Bruto režim: unesite broj gajbi za II klasu " & _
+        MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE_2") & _
                "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
         If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
         Exit Sub
@@ -870,16 +870,16 @@ Private Sub btnUnos_Click()
         Dim taraKg As Double
         taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbalaze.value)
         If taraKg <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbalaze.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_MOZE_PRETVORITI"), vbExclamation, APP_NAME
             cmbTipAmbalaze.SetFocus
             Exit Sub
         End If
         If taraKg >= kolicinaI Then
-            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
-                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
             txtKolicina.SetFocus
             Exit Sub
         End If
@@ -893,16 +893,16 @@ Private Sub btnUnos_Click()
         Dim taraKgII As Double
         taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbalaze.value)
         If taraKgII <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbalaze.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_KLASA_MOZE"), vbExclamation, APP_NAME
             cmbTipAmbalaze.SetFocus
             Exit Sub
         End If
         If taraKgII >= kolicinaII Then
-            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
-                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE_KLASE") & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
+                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
             If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
             Exit Sub
         End If
@@ -923,7 +923,7 @@ Private Sub btnUnos_Click()
     stanicaID = GetComboID(cmbOtkupnoMesto)
 
     If stanicaID = "" Then
-        MsgBox "Nije pronaden ID otkupnog mesta!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID otkupnog mesta!", vbExclamation, APP_NAME
         cmbOtkupnoMesto.SetFocus
         Exit Sub
     End If
@@ -932,7 +932,7 @@ Private Sub btnUnos_Click()
     kooperantID = ResolveKooperantByName(cmbKooperant, stanicaID)
 
     If kooperantID = "" Then
-        MsgBox "Nije pronaden ID kooperanta!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kooperanta!", vbExclamation, APP_NAME
         cmbKooperant.SetFocus
         Exit Sub
     End If
@@ -972,7 +972,7 @@ Private Sub btnUnos_Click()
                         ans = MsgBox("Kultura parcele (" & parKultura & _
                                      ") ne odgovara izabranoj sorti/kulturi (" & _
                                      selectedKultura & ")!" & vbCrLf & vbCrLf & _
-                                     "Želite li ipak da nastavite?", _
+                                     Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
                                      vbExclamation + vbYesNo, APP_NAME)
                         If ans = vbNo Then Exit Sub
                     End If
@@ -1011,11 +1011,11 @@ Private Sub btnUnos_Click()
         brutoKgII:=brutoKgII)
 
     If result = "" Then
-        MsgBox "Greška pri cuvanju otkupa. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU"), vbCritical, APP_NAME
         Exit Sub
     End If
 
-    MsgBox "Otkup sacuvan: " & result, vbInformation, APP_NAME
+    MsgBox "Otkup sa" & ChrW(269) & "uvan: " & result, vbInformation, APP_NAME
 
     ' Otkupni list: PDF (po CFG_OTKUP_PRINT_MODE; podrazumevano PDF + otvori) za
     ' upravo sacuvani blok. Best-effort: greska ne sme da obori potvrdu snimanja.
@@ -1046,7 +1046,7 @@ Private Sub btnUnos_Click()
 
 EH:
     LogErr "frmOtkup.btnUnos"
-    MsgBox "Greška pri unosu otkupa: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub ClearOtkupFields()
@@ -1074,7 +1074,7 @@ Private Sub ClearOtkupFields()
 
     txtKolicina.SetFocus
 
-    ' Lokalni predlog (bez Google) — just-saved red je vec u tblOtkup-u
+    ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
     RefreshBrojDokumentaSuggestion False
 End Sub
 

@@ -15,7 +15,7 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 
 ' ============================================================
-' frmOtkupniBlokovi – Sledljivost & Povezivanje
+' frmOtkupniBlokovi - Sledljivost & Povezivanje
 ' ============================================================
 Option Explicit
 
@@ -33,7 +33,7 @@ Private Sub UserForm_Activate()
     
     ' Header zone
     On Error Resume Next
-    StyleFrameTitleLabel lblKopf, "Izvestaj o sledljivosti"
+    StyleFrameTitleLabel lblKopf, "Izve" & ChrW(353) & "taj o sledljivosti"
     StyleSubtitle lblSubtitle, "Auto/manuelno povezivanje + sledljivost po zbirnoj"
     On Error GoTo EH
     
@@ -64,8 +64,8 @@ Private Sub UserForm_Activate()
     
     ' Action buttons
     StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
-    StylePrimaryButton btnPovezi, "Poveži"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnPovezi, Poruka("SLED_LBL_POVEZI")
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StyleExitButton btnPovratak, "Povratak"
     
     ' Filter label
@@ -107,19 +107,19 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_NEP2, "Stanica"
     SetColumnHeader lbl_H_NEP3, "Vozac"
     SetColumnHeader lbl_H_NEP4, "Kooperant"
-    SetColumnHeader lbl_H_NEP5, "Kolicina"
+    SetColumnHeader lbl_H_NEP5, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_NEP6, "Klasa"
     
     ' Otpremnice (kolone 1-4 vidljive, OtpremnicaID hidden)
     SetColumnHeader lbl_H_OTP1, "Broj otp."
     SetColumnHeader lbl_H_OTP2, "Broj zbirne"
-    SetColumnHeader lbl_H_OTP3, "Kolicina"
+    SetColumnHeader lbl_H_OTP3, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_OTP4, "Klasa"
     
     ' Trace (kolone 1-5 vidljive, OtkupID/OtpremnicaID hidden)
     SetColumnHeader lbl_H_TRC1, "Kooperant"
-    SetColumnHeader lbl_H_TRC2, "Kolicina"
-    SetColumnHeader lbl_H_TRC3, "Vrsta voca"
+    SetColumnHeader lbl_H_TRC2, "Koli" & ChrW(269) & "ina"
+    SetColumnHeader lbl_H_TRC3, "Vrsta vo" & ChrW(263) & "a"
     SetColumnHeader lbl_H_TRC4, "Stanica"
     SetColumnHeader lbl_H_TRC5, "Datum"
     
@@ -128,8 +128,8 @@ End Sub
 
 Private Sub ResetActionButtons()
     StylePrimaryButton btnAutoLink, "Automatsko povezivanje"
-    StylePrimaryButton btnPovezi, "Poveži"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnPovezi, Poruka("SLED_LBL_POVEZI")
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 
@@ -305,11 +305,11 @@ Private Sub btnAutoLink_Click()
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnAutoLink"
-    MsgBox "Greska pri povezivanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri povezivanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' NEPOVEZANI (Unverknüpfte Otkupi)
+' NEPOVEZANI (Unverknuepfte Otkupi)
 ' ============================================================
 
 Private Sub LoadNepovezani()
@@ -345,7 +345,7 @@ Private Sub LoadNepovezani()
 End Sub
 
 Private Sub lstNepovezani_Click()
-    ' Zeige mögliche Otpremnice für ausgewählten Otkup
+    ' Zeige moegliche Otpremnice fuer ausgewaehlten Otkup
     LstOtpremnice.Clear
     Erase m_CandidateOtpIDs
     
@@ -357,7 +357,7 @@ Private Sub lstNepovezani_Click()
     Dim stanicaID As String: stanicaID = CStr(m_UnlinkedData(idx, 3))
     Dim datum As Date: datum = CDate(m_UnlinkedData(idx, 2))
     
-    ' Alle Otpremnice für diese Station + Datum
+    ' Alle Otpremnice fuer diese Station + Datum
     Dim otpData As Variant
     otpData = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(otpData) Then Exit Sub
@@ -408,7 +408,7 @@ Private Sub lstNepovezani_Click()
 End Sub
 
 ' ============================================================
-' MANUELLES VERKNÜPFEN
+' MANUELLES VERKNUePFEN
 ' ============================================================
 
 Private Sub btnPovezi_Click()
@@ -434,7 +434,7 @@ Private Sub btnPovezi_Click()
 
     If rows.count = 0 Then
         Err.Raise vbObjectError + 1910, "frmSledljivost.btnPovezi", _
-                "Otkup row nije pronaden: " & otkupID
+                "Otkup row nije prona" & ChrW(273) & "en: " & otkupID
     End If
 
 RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
@@ -445,7 +445,7 @@ RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnPovezi"
-    MsgBox "Greska pri povezivanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri povezivanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -488,11 +488,11 @@ Private Sub btnStampaj_Click()
     Exit Sub
 EH:
     LogErr "frmSledljivost.btnStampaj"
-    MsgBox "Greska pri stampanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri " & ChrW(353) & "tampanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)
-    ' Template Sheet prüfen
+    ' Template Sheet pruefen
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
@@ -547,7 +547,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim kupacNaziv As String
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
     
-    ' Header befüllen
+    ' Header befuellen
     Application.ScreenUpdating = False
     
     ws.Range("LOTBroj").value = brojZbirne
@@ -558,7 +558,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     
     Const NUM_COLS As Long = 12      ' <-- war 10, jetzt 12
     
-    ' Alte Daten löschen
+    ' Alte Daten loeschen
     Dim startRow As Long
     startRow = ws.Range("TraceStart").row
     Dim lastRow As Long
@@ -568,12 +568,12 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
     End If
     
-    ' Text-Format für BPG + KatParcela + KatBroj(Parcela)
+    ' Text-Format fuer BPG + KatParcela + KatBroj(Parcela)
     ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 50, 4)).NumberFormat = "@"
     
     
     
-    ' Trace-Zeilen einfügen
+    ' Trace-Zeilen einfuegen
     Dim totalOtkupKg As Double
     Dim i As Long
     For i = 1 To UBound(traceData, 1)

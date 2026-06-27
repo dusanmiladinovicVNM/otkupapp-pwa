@@ -2,7 +2,7 @@ Attribute VB_Name = "modBankaImportParserClipboard"
 Option Explicit
 
 ' ============================================================
-' modBankaImport – Parser für Komercijalna Banka Izvod
+' modBankaImport - Parser fuer Komercijalna Banka Izvod
 ' Input: Clipboard-Text (Strg+A, Strg+C aus PDF)
 ' Output: 2D Array der Transaktionen
 '
@@ -44,7 +44,7 @@ Public Function ParseBankaIzvod(ByVal txt As String) As Variant
         End If
     Next i
     
-' Transaktions-Blöcke sammeln
+' Transaktions-Bloecke sammeln
 Dim blocks As New Collection
 Dim currBlock As String
 Dim inTxn As Boolean
@@ -59,8 +59,8 @@ For i = LBound(lines) To UBound(lines)
         inTxn = True
     
     ElseIf inTxn Then
-        If InStr(1, lines(i), "Ukupno za racun", vbTextCompare) > 0 Or _
-           InStr(1, lines(i), "Ukupno za racun", vbTextCompare) > 0 Then
+        If InStr(1, lines(i), "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Or _
+           InStr(1, lines(i), "Ukupno za ra" & ChrW(269) & "un", vbTextCompare) > 0 Then
             If Len(Trim$(currBlock)) > 0 Then
                 blocks.Add currBlock
             End If
@@ -81,7 +81,7 @@ Next i
         Exit Function
     End If
     
-    ' Blöcke parsen
+    ' Bloecke parsen
     Dim result() As Variant
     ReDim result(1 To blocks.count, 1 To 10)
     
@@ -191,7 +191,7 @@ Private Function ParseTxnBlock(ByVal blockText As String) As Variant
     
     partner = NormalizeSpaces(partner)
     
-    ' Phase 3: Beträge + Sifra
+    ' Phase 3: Betraege + Sifra
     Dim zaduzenje As Double, odobrenje As Double, sifra As String
     Dim naknada As Double
     Dim amountRest As String
@@ -541,10 +541,10 @@ Sub TestParser()
     For i = 1 To UBound(result, 1)
         Debug.Print "--- Txn " & i & " ---"
         Debug.Print "Datum Izvoda: " & result(i, 1)
-        Debug.Print "Datum Izvrš: " & result(i, 2)
+        Debug.Print "Datum Izvrs: " & result(i, 2)
         Debug.Print "Partner: " & result(i, 3)
-        Debug.Print "Racun: " & result(i, 4)
-        Debug.Print "Zaduzenje: " & result(i, 5)
+        Debug.Print "Ra" & ChrW(269) & "un: " & result(i, 4)
+        Debug.Print "Zadu" & ChrW(382) & "enje: " & result(i, 5)
         Debug.Print "Odobrenje: " & result(i, 6)
         Debug.Print "Sifra: " & result(i, 7)
         Debug.Print "Svrha: " & result(i, 8)

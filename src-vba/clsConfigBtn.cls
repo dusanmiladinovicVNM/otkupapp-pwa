@@ -11,7 +11,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' clsConfigBtn — Event-omotac za dinamicki kreirano dugme u editoru
+' clsConfigBtn -- Event-omotac za dinamicki kreirano dugme u editoru
 ' "Podesavanja" (vidi modPodesavanja).
 '
 ' Dugmad se prave u kodu (Controls.Add) da se NE bi dirao

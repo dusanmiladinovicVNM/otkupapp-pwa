@@ -3,7 +3,7 @@ Option Explicit
 
 ' =========================================================
 ' modSEFPersistence
-' Alle SEF-Reads/Writes laufen über modDataAccess
+' Alle SEF-Reads/Writes laufen ueber modDataAccess
 ' =========================================================
 Private Const TBL_SEF_SUBMISSION As String = "tblSEFSubmission"
 Private Const TBL_SEF_EVENT_LOG As String = "tblSEFEventLog"

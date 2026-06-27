@@ -18,21 +18,21 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmFakturisanje v2.1 – Rechnungserstellung
-' GEÄNDERT: Basiert auf tblPrijemnica statt tblIsporuka
-' Faktura = Prijemnica.Kolicina × Prijemnica.Cena
+' frmFakturisanje v2.1 - Rechnungserstellung
+' GEAeNDERT: Basiert auf tblPrijemnica statt tblIsporuka
+' Faktura = Prijemnica.Kolicina x Prijemnica.Cena
 ' ============================================================
 '
 ' CONTROLS:
-'   cmbKupac (ComboBox) – Label: "Izaberi Kupca/Hladnjacu"
-'   btnUnesi (CommandButton) – Caption: "Unesi"
-'   lstPrijemnice (ListBox) – ColumnCount=8, MultiSelect
-'   btnIzradiFakturu (CommandButton) – Caption: "Izradi Fakturu"
-'   btnStampaj (CommandButton) – Caption: "Stampaj"
-'   btnPovratak (CommandButton) – Caption: "Povratak u glavni meni"
-'   cmbFaktura (ComboBox) – Faktura za štampu, display text + hidden FakturaID
+'   cmbKupac (ComboBox) - Label: "Izaberi Kupca/Hladnjacu"
+'   btnUnesi (CommandButton) - Caption: "Unesi"
+'   lstPrijemnice (ListBox) - ColumnCount=8, MultiSelect
+'   btnIzradiFakturu (CommandButton) - Caption: "Izradi Fakturu"
+'   btnStampaj (CommandButton) - Caption: "Stampaj"
+'   btnPovratak (CommandButton) - Caption: "Povratak u glavni meni"
+'   cmbFaktura (ComboBox) - Faktura za stampu, display text + hidden FakturaID
 '
-' Header-Labels über lstPrijemnice:
+' Header-Labels ueber lstPrijemnice:
 '   BrojPrij | BrojZbirne | Datum | Klasa | Kolicina | Cena | Vrednost | Fakturisano
 
 Private m_SetupDone As Boolean
@@ -53,7 +53,7 @@ Private Sub UserForm_Activate()
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
 
-    ' Header zone (dodati u Designer ako nemaš)
+    ' Header zone (dodati u Designer ako nemas)
     On Error Resume Next
     StyleFrameTitleLabel lblKopf, "Fakturisanje"
     StyleSubtitle lblSubtitle, "Kreiranje faktura na osnovu prijemnica kupca"
@@ -80,7 +80,7 @@ Private Sub UserForm_Activate()
     ' Action buttons
     StylePrimaryButton btnUnesi, "Unesi"
     StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StylePrimaryButton btnSEF, "SEF"
     StyleExitButton btnPovratak, "Povratak"
 
@@ -137,7 +137,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmFakturisanje.UserForm_Activate"
-    MsgBox "Greška pri otvaranju fakturisanja: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupAllColumnHeaders()
@@ -147,7 +147,7 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_FAK2, "Broj zbirne"
     SetColumnHeader lbl_H_FAK3, "Datum"
     SetColumnHeader lbl_H_FAK4, "Klasa"
-    SetColumnHeader lbl_H_FAK5, "Kolicina"
+    SetColumnHeader lbl_H_FAK5, "Koli" & ChrW(269) & "ina"
     SetColumnHeader lbl_H_FAK6, "Cena"
     SetColumnHeader lbl_H_FAK7, "Vrednost"
     SetColumnHeader lbl_H_FAK8, "Fakturisano (det. placanja)"
@@ -238,7 +238,7 @@ End Sub
 Private Sub ResetActionButtons()
     StylePrimaryButton btnUnesi, "Unesi"
     StylePrimaryButton btnIzradiFakturu, "Izradi fakturu"
-    StylePrimaryButton btnStampaj, "Štampaj"
+    StylePrimaryButton btnStampaj, Poruka("FAK_LBL_STAMPAJ")
     StylePrimaryButton btnSEF, "SEF"
     StyleExitButton btnPovratak, "Povratak"
 End Sub
@@ -291,7 +291,7 @@ Private Sub btnUnesi_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca.", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca.", vbExclamation, APP_NAME
         Exit Sub
     End If
     
@@ -417,14 +417,14 @@ NextPrij:
     Next i
 
     If count = 0 Then
-        MsgBox "Sve prijemnice su vec fakturisane!", vbInformation, APP_NAME
+        MsgBox "Sve prijemnice su ve" & ChrW(263) & " fakturisane!", vbInformation, APP_NAME
     End If
 
     Exit Sub
 
 EH:
     LogErr "frmFakturisanje.btnUnesi"
-    MsgBox "Greška pri ucitavanju prijemnica: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_UCITAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillFaktureZaKupca()
@@ -558,7 +558,7 @@ Private Sub btnIzradiFakturu_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca.", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca.", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -612,7 +612,7 @@ Private Sub btnIzradiFakturu_Click()
             End If
 
             If seenPrijemnice.Exists(prijemnicaID) Then
-                MsgBox "Ista prijemnica je izabrana više puta: " & prijemnicaID, _
+                MsgBox Poruka("FAK_MSG_ISTA_PRIJEMNICA_IZABRANA") & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -620,7 +620,7 @@ Private Sub btnIzradiFakturu_Click()
             seenPrijemnice.Add prijemnicaID, True
 
             If Trim$(CStr(m_PrijemniceData(dataRow, colStorno))) = "Da" Then
-                MsgBox "Izabrana prijemnica je stornirana i ne može se fakturisati.", _
+                MsgBox Poruka("FAK_MSG_IZABRANA_PRIJEMNICA_STORNIRANA"), _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -628,13 +628,13 @@ Private Sub btnIzradiFakturu_Click()
             If Trim$(CStr(m_PrijemniceData(dataRow, colFakturisano))) = "Da" Or _
                Trim$(CStr(m_PrijemniceData(dataRow, colFakturaID))) <> "" Then
 
-                MsgBox "Izabrana prijemnica je vec fakturisana i ne može biti ukljucena u novu fakturu.", _
+                MsgBox Poruka("FAK_MSG_IZABRANA_PRIJEMNICA_VEC"), _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
 
             If Not IsNumeric(m_PrijemniceData(dataRow, colKol)) Then
-                MsgBox "Kolicina nije ispravna za prijemnicu: " & prijemnicaID, _
+                MsgBox "Koli" & ChrW(269) & "ina nije ispravna za prijemnicu: " & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -652,7 +652,7 @@ Private Sub btnIzradiFakturu_Click()
             cena = CDbl(m_PrijemniceData(dataRow, colCena))
 
             If kolicina <= 0 Then
-                MsgBox "Kolicina mora biti veca od nule za prijemnicu: " & prijemnicaID, _
+                MsgBox "Koli" & ChrW(269) & "ina mora biti veca od nule za prijemnicu: " & prijemnicaID, _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -709,14 +709,14 @@ Private Sub btnIzradiFakturu_Click()
         SetComboByID cmbFaktura, fakturaID
 
     Else
-        MsgBox "Greška pri kreiranju fakture. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("FAK_MSG_GRESKA_PRI_KREIRANJU"), vbCritical, APP_NAME
     End If
 
     Exit Sub
 
 EH:
     LogErr "frmFakturisanje.btnIzradiFakturu"
-    MsgBox "Greška pri izradi fakture: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_IZRADI") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function CalculateTotal(ByVal stavke As Collection) As Double
@@ -766,7 +766,7 @@ Private Sub btnStampaj_Click()
     fakturaID = GetComboID(cmbFaktura)
 
     If fakturaID = "" Then
-        MsgBox "Nije pronaden ID fakture za štampu.", vbExclamation, APP_NAME
+        MsgBox Poruka("FAK_MSG_NIJE_PRONADEN_FAKTURE"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -775,7 +775,7 @@ Private Sub btnStampaj_Click()
 
 EH:
     LogErr "frmFakturisanje.btnStampaj"
-    MsgBox "Greška pri štampanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("FAK_ERR_GRESKA_PRI_STAMPANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================

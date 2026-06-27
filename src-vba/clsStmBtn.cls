@@ -11,7 +11,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' clsStmBtn – Event-omotac za runtime dugme "Deaktiviraj/Aktiviraj"
+' clsStmBtn - Event-omotac za runtime dugme "Deaktiviraj/Aktiviraj"
 ' u frmStammdaten (soft-delete). Dugme se pravi u kodu (Controls.Add),
 ' pa se klik hvata preko WithEvents (kao clsLookupMenuBtn/clsBlokUI).
 ' ============================================================

@@ -178,7 +178,7 @@ Public Function SaveMagacin_TX(ByVal datum As Date, ByVal artikalID As String, _
         Err.Raise vbObjectError + 4210, "SaveMagacin_TX", _
           "SaveMagacin nije uspeo. Tip=" & tip & _
           "; ArtikalID=" & artikalID & _
-          "; Kolicina=" & CStr(kolicina)
+          "; Koli" & ChrW(269) & "ina=" & CStr(kolicina)
     Else
         tx.CommitTx
 
@@ -188,7 +188,7 @@ Public Function SaveMagacin_TX(ByVal datum As Date, ByVal artikalID As String, _
             severity:="INFO", _
             message:="Magacin transaction saved. Tip=" & tip & _
                     "; ArtikalID=" & artikalID & _
-                    "; Kolicina=" & CStr(kolicina), _
+                    "; Koli" & ChrW(269) & "ina=" & CStr(kolicina), _
             userId:="Operator", _
             moduleName:="modAgrohemija", _
             procedureName:="SaveMagacin_TX", _
@@ -230,7 +230,7 @@ EH:
         severity:="ERROR", _
         message:="Magacin transaction failed. Tip=" & tip & _
              "; ArtikalID=" & artikalID & _
-             "; Kolicina=" & CStr(kolicina) & _
+             "; Koli" & ChrW(269) & "ina=" & CStr(kolicina) & _
              "; Error=" & errDesc, _
         userId:="Operator", _
         moduleName:="modAgrohemija", _
@@ -242,7 +242,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     
-    MsgBox "Greška pri unosu magacina, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox Poruka("AGRO_MSG_GRESKA_PRI_UNOSU") & errDesc, vbCritical, APP_NAME
     SaveMagacin_TX = ""
 End Function
 
@@ -454,7 +454,7 @@ NextDob:
 End Function
 
 Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
-    ' Summe aller Izlaz-Vrednosti für diesen Kooperant
+    ' Summe aller Izlaz-Vrednosti fuer diesen Kooperant
     Dim data As Variant
     data = GetTableData(TBL_MAGACIN)
     If IsEmpty(data) Then Exit Function
@@ -496,7 +496,7 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
     End If
 
     If kolicina <= 0 Then
-        Err.Raise vbObjectError + 4203, SRC, "Kolicina mora biti veca od 0."
+        Err.Raise vbObjectError + 4203, SRC, "Koli" & ChrW(269) & "ina mora biti veca od 0."
     End If
 
     If tip = MAG_IZLAZ And Len(Trim$(kooperantID)) = 0 Then

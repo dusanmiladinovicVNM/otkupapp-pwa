@@ -70,7 +70,7 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmStammdatenMenu.UserForm_Initialize"
-    MsgBox "Greška pri otvaranju menija šifarnika: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("MATICNI_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -147,7 +147,7 @@ EH:
     LogErr "frmStammdatenMenu.HoverMenuButton"
 End Sub
 
-' Javna ulazna tacka — otvara frmStammdaten za datu sekciju.
+' Javna ulazna tacka -- otvara frmStammdaten za datu sekciju.
 ' sekTag      = Tag za frmStammdaten (npr. "TipAmbalaze")
 ' sekCaption  = naziv u naslovu (npr. "Ambalaza"); fallback na sekTag.
 ' Poziva je i staticni handler (OpenStammdatenForm) i dinamicki meni
@@ -177,7 +177,7 @@ Public Sub OpenSekcija(ByVal sekTag As String, Optional ByVal sekCaption As Stri
     ' frmOtkupAPP otvara frmStammdaten kao mActiveContent (modeless child)
     On Error Resume Next
     frmOtkupAPP.Show
-    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Maticni podaci: " & sekCaption
+    frmOtkupAPP.OpenContentFormPublic frmStammdaten, "Mati" & ChrW(269) & "ni podaci: " & sekCaption
     On Error GoTo EH
 
     Unload Me
@@ -189,7 +189,7 @@ EH:
     On Error Resume Next
     Me.Show
     On Error GoTo 0
-    MsgBox "Greška pri otvaranju šifarnika: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("MATICNI_ERR_GRESKA_PRI_OTVARANJU_2") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Staticni handleri (fallback dugmad) idu kroz isti put.

@@ -2,9 +2,9 @@ Attribute VB_Name = "modOtkupBlok"
 Option Explicit
 
 ' ============================================================
-' modOtkupBlok – Panel "Otkupni blokovi" u frmOtkup.
+' modOtkupBlok - Panel "Otkupni blokovi" u frmOtkup.
 '
-' Panel NE unosi sam u tblOtkup – vodi POSTOJECU levu frmOtkup formu:
+' Panel NE unosi sam u tblOtkup - vodi POSTOJECU levu frmOtkup formu:
 '   - Klik na otpremnicu (sredina) popuni levu formu: otkupno mesto,
 '     vrsta, sorta, vozac, datum, broj zbirne i cenu; broj otkupnog
 '     lista racuna kanonski SuggestNextBroj (OM iz polja + datum otpr.).
@@ -16,11 +16,11 @@ Option Explicit
 '     (vezivanje OtkupID->OtpremnicaID + osvezavanje + auto-deselekcija
 '     kad Preostalo padne na 0).
 '   - Desno: blokovi izabrane otpremnice (+ zbirni red), sa dugmadima
-'     "Storniraj blok" (StornoOtkup_TX) i "Stampaj list" (PrintOtkupniList).
+'     "Storniraj blok" (StornoOtkup_TX) i ChrW(352) & "tampaj list" (PrintOtkupniList).
 '   - Lista otpremnica: kolona "Ostatak", filter "samo nezavrsene",
 '     sort po datumu (najnovije gore).
 '
-' Sve kontrole panela su dinamicke (Controls.Add) – frmOtkup.frx se ne
+' Sve kontrole panela su dinamicke (Controls.Add) - frmOtkup.frx se ne
 ' menja. Cena se cuva kao BRUTO (sa PDV nadoknadom); neto/PDV iz nje.
 '
 ' Integracija u frmOtkup:
@@ -39,9 +39,7 @@ Private Const EXP_WIDTH   As Double = 1164
 Private Const TOGGLE_W    As Double = 130
 
 Private Const OTP_COLW  As String = "0;0;58;38;56;58;44;42;36"
-Private Const OTP_CAPS  As String = ";;Otkupno mesto;Kolicina;Datum;Kupac;Prodajna;Cena za;Ostatak"
 Private Const BLOK_COLW As String = "0;62;104;58;44;46;66;58;66"
-Private Const BLOK_CAPS As String = ";br. bloka;Ime i Prezime;Datum;Kolicina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
 
 ' --- Stanje (modul-level; jedna frmOtkup instanca po sekciji) ---
 Private mForm As Object
@@ -78,7 +76,17 @@ Private mLblPreostaloAmb As MSForms.label
 Private mLblZbirna As MSForms.label
 
 ' ============================================================
-' PUBLIC – ulazna tacka + event ruteri + frmOtkup hooks
+' Const ne moze da sadrzi ChrW() poziv -- bezparametarske funkcije
+' ============================================================
+Private Function OTP_CAPS() As String
+    OTP_CAPS = ";;Otkupno mesto;Koli" & ChrW(269) & "ina;Datum;Kupac;Prodajna;Cena za;Ostatak"
+End Function
+Private Function BLOK_CAPS() As String
+    BLOK_CAPS = ";br. bloka;Ime i Prezime;Datum;Koli" & ChrW(269) & "ina;Cena bez PDV;Vrednost;Iznos PDV;Ukupna vrednost"
+End Function
+
+' ============================================================
+' PUBLIC - ulazna tacka + event ruteri + frmOtkup hooks
 ' ============================================================
 
 Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
@@ -101,9 +109,9 @@ Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
     mBtnToggle.Height = 24
     mBtnToggle.top = 6
     mBtnToggle.Left = mForm.InsideWidth - TOGGLE_W - 6
-    mBtnToggle.caption = "Otkupni blokovi  »"
+    mBtnToggle.caption = Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
     On Error Resume Next
-    StylePrimaryButton mBtnToggle, "Otkupni blokovi  »"
+    StylePrimaryButton mBtnToggle, Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
     On Error GoTo EH
 
     WireBtn mBtnToggle, "TOGGLE"
@@ -226,7 +234,7 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     ' "Cena po otpremnici" je DEFAULT za SLEDECI blok: ClearOtkupFields je obrisao
     ' txtCena, pa ga vracamo na default radi brzog unosa. Cenu UPRAVO unetog bloka
-    ' (txtCena u trenutku snimanja — moze biti rucni override) NE diramo: vec je
+    ' (txtCena u trenutku snimanja -- moze biti rucni override) NE diramo: vec je
     ' sacuvana sa blokom i default ne sme da je pregazi.
     If mCenaBlok.Exists(mActiveOtpID) Then
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
@@ -270,10 +278,10 @@ Private Sub TogglePanel()
         LoadOtpremnice
         LoadBlokovi
         mForm.width = EXP_WIDTH
-        mBtnToggle.caption = "«  Sakrij blokove"
+        mBtnToggle.caption = Poruka("OTKUP_LBL_SAKRIJ_BLOKOVE")
     Else
         mForm.width = mOrigWidth
-        mBtnToggle.caption = "Otkupni blokovi  »"
+        mBtnToggle.caption = Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
     End If
 
     mBtnToggle.Left = mForm.InsideWidth - mBtnToggle.width - 6
@@ -301,9 +309,9 @@ Private Sub BuildPanel()
     Set mLblUkupno = AddCtl("Label", "lblOtkBlokUk", PANEL_LEFT + 190, 7, 150, 14)
     Set mLblNapisano = AddCtl("Label", "lblOtkBlokNap", PANEL_LEFT + 346, 7, 150, 14)
     Set mLblPreostalo = AddCtl("Label", "lblOtkBlokPre", PANEL_LEFT + 502, 7, 150, 14)
-    mLblUkupno.caption = "Ukupno kg: —"
-    mLblNapisano.caption = "U blokovima: —"
-    mLblPreostalo.caption = "Ostatak: —"
+    mLblUkupno.caption = Poruka("OTKUP_LBL_UKUPNO")
+    mLblNapisano.caption = Poruka("OTKUP_LBL_BLOKOVIMA")
+    mLblPreostalo.caption = Poruka("OTKUP_LBL_OSTATAK")
 
     ' Drugi red sazetka: ambalaza (ispod kg)
     Set mLblUkupnoAmb = AddCtl("Label", "lblOtkBlokUkAmb", PANEL_LEFT + 190, 22, 150, 14)
@@ -316,9 +324,9 @@ Private Sub BuildPanel()
     On Error GoTo 0
     StyleHdr mLblZbirna
     mLblZbirna.caption = "Zbirna: -"
-    mLblUkupnoAmb.caption = "Ukupno amb: —"
-    mLblNapisanoAmb.caption = "U blokovima amb: —"
-    mLblPreostaloAmb.caption = "Ostatak amb: —"
+    mLblUkupnoAmb.caption = Poruka("OTKUP_LBL_UKUPNO_AMB")
+    mLblNapisanoAmb.caption = Poruka("OTKUP_LBL_BLOKOVIMA_AMB")
+    mLblPreostaloAmb.caption = Poruka("OTKUP_LBL_OSTATAK_AMB")
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
@@ -340,13 +348,13 @@ Private Sub BuildPanel()
     lblDo.caption = "Do:": StyleHdr lblDo
     Set mTxtSpecDo = AddCtl("TextBox", "txtOtkBlokSpecDo", PANEL_LEFT + 118, 66, 64, 18)
     Set mBtnSpecDatum = AddCtl("CommandButton", "btnOtkBlokSpecDatum", PANEL_LEFT + 190, 66, 150, 22)
-    mBtnSpecDatum.caption = "Stampaj po datumu"
+    mBtnSpecDatum.caption = ChrW(352) & "tampaj po datumu"
 
     ' Desno (nad blokovima): storno / stampa lista / biranje otpremnica za spec.
     Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT, 66, 78, 22)
     mBtnStorno.caption = "Storniraj"
     Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 82, 66, 84, 22)
-    mBtnPrint.caption = "Stampaj list"
+    mBtnPrint.caption = ChrW(352) & "tampaj list"
     Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 170, 66, 124, 22)
     mBtnBiraj.caption = "Biraj otpremnice"
     ' Sekcija "Izgubljeni blokovi" (slobodan prostor desno na akcionom redu).
@@ -359,9 +367,9 @@ Private Sub BuildPanel()
     StyleExitButton mBtnFilter, "Prikaz: Sve"
     StyleTextBox mTxtSpecOd
     StyleTextBox mTxtSpecDo
-    StylePrimaryButton mBtnSpecDatum, "Stampaj po datumu"
+    StylePrimaryButton mBtnSpecDatum, ChrW(352) & "tampaj po datumu"
     StyleExitButton mBtnStorno, "Storniraj"
-    StylePrimaryButton mBtnPrint, "Stampaj list"
+    StylePrimaryButton mBtnPrint, ChrW(352) & "tampaj list"
     StyleExitButton mBtnBiraj, "Biraj otpremnice"
     StyleExitButton mBtnLost, "Izgubljeni"
     StylePrimaryButton mBtnPreuzmi, "Preuzmi"
@@ -404,7 +412,7 @@ Private Sub SetPanelVisible(ByVal b As Boolean)
 End Sub
 
 ' ============================================================
-' LOAD – pregled otpremnica (sredina) + blokovi izabrane otpremnice (desno)
+' LOAD - pregled otpremnica (sredina) + blokovi izabrane otpremnice (desno)
 ' ============================================================
 
 Private Sub LoadOtpremnice()
@@ -717,7 +725,7 @@ Private Sub StornoSelectedBlok()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.StornoSelectedBlok"
-    MsgBox "Greska pri storno bloka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri storno bloka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Sekcija "Izgubljeni blokovi": blokovi cija je otpremnica stornirana/nestala.
@@ -776,7 +784,7 @@ Private Sub AdoptSelectedLostBlok()
     tBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BROJ))
 
     If MsgBox("Preuzeti blok br. " & brDok & " na otpremnicu " & tBroj & "?" & vbCrLf & _
-              "(menja se samo veza; OtkupID, uplate i ambalaza ostaju.)", _
+              "(menja se samo veza; OtkupID, uplate i ambala" & ChrW(382) & "a ostaju.)", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
 
     If ReassignOtkupToOtpremnica_TX(otkupID, mActiveOtpID) Then
@@ -792,14 +800,14 @@ Private Sub AdoptSelectedLostBlok()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.AdoptSelectedLostBlok"
-    MsgBox "Greska pri preuzimanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri preuzimanju: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub PrintSelectedBlok()
     On Error GoTo EH
     Dim li As Long: li = mLstBlok.ListIndex
     If li < 0 Then
-        MsgBox "Izaberite blok za stampu.", vbExclamation, APP_NAME
+        MsgBox "Izaberite blok za " & ChrW(353) & "tampu.", vbExclamation, APP_NAME
         Exit Sub
     End If
     Dim otkupID As String: otkupID = Trim$(CStr(mLstBlok.List(li, 0)))
@@ -809,14 +817,14 @@ Private Sub PrintSelectedBlok()
     Exit Sub
 EH:
     LogErr "modOtkupBlok.PrintSelectedBlok"
-    MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
 ' MULTISELECT + SPECIFIKACIJA (batch stampa otpremnica)
 ' ============================================================
 
-' Dugme "Biraj otpremnice" <-> "Stampaj specifikaciju".
+' Dugme "Biraj otpremnice" <-> ChrW(352) & "tampaj specifikaciju".
 Private Sub BirajOrPrint()
     On Error GoTo EH
     If Not mMultiMode Then
@@ -826,7 +834,7 @@ Private Sub BirajOrPrint()
         On Error Resume Next
         mLstOtp.MultiSelect = fmMultiSelectMulti
         On Error GoTo EH
-        mBtnBiraj.caption = "Stampaj specifikaciju"
+        mBtnBiraj.caption = ChrW(352) & "tampaj specifikaciju"
         LoadBlokovi
         RefreshSummary
     Else
@@ -855,7 +863,7 @@ EH:
 End Sub
 
 ' Specifikacija RUCNO izabranih otpremnica (postojeci tok: dugme "Biraj
-' otpremnice" -> multiselect -> "Stampaj specifikaciju"). Tanak omotac oko
+' otpremnice" -> multiselect -> ChrW(352) & "tampaj specifikaciju"). Tanak omotac oko
 ' zajednickog renderera RenderSpec (filter po skupu OtpremnicaID).
 Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     On Error GoTo EH
@@ -872,10 +880,10 @@ Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     Exit Sub
 EH:
     LogErr "modOtkupBlok.PrintSpecifikacija"
-    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
-' Handler dugmeta "Stampaj po datumu" (footer strip). Cita Od/Do polja
+' Handler dugmeta ChrW(352) & "tampaj po datumu" (footer strip). Cita Od/Do polja
 ' (TryParseDateValue) i zove renderer u rezimu filtera po datumu.
 Private Sub PrintSpecOdDo()
     On Error GoTo EH
@@ -915,7 +923,7 @@ Private Sub PrintSpecifikacijaPoDatumu(ByVal datumOd As Date, ByVal datumDo As D
     Exit Sub
 EH:
     LogErr "modOtkupBlok.PrintSpecifikacijaPoDatumu"
-    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Jezgro: ispisuje specifikaciju otkupnih blokova (tabela sa okvirima, A4
@@ -1006,7 +1014,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
 
     Dim hdr As Variant
     hdr = Array("Broj zbirne", "Broj otpremnice", "Otkupno mesto", "br. bloka", "Ime i Prezime", _
-                "Datum", "Kolicina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
+                "Datum", "Koli" & ChrW(269) & "ina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
     Const R0 As Long = 4
     Const NC As Long = 11
     Dim cc As Long
@@ -1114,7 +1122,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
 EH:
     Application.ScreenUpdating = True
     LogErr "modOtkupBlok.RenderSpec"
-    MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function EnsureSpecSheet() As Worksheet
@@ -1151,12 +1159,12 @@ Private Sub RefreshSummary()
     End If
 
     If Len(mActiveOtpID) = 0 Then
-        mLblUkupno.caption = "Ukupno kg: —"
-        mLblNapisano.caption = "U blokovima: —"
-        mLblPreostalo.caption = "Ostatak: —"
-        mLblUkupnoAmb.caption = "Ukupno amb: —"
-        mLblNapisanoAmb.caption = "U blokovima amb: —"
-        mLblPreostaloAmb.caption = "Ostatak amb: —"
+        mLblUkupno.caption = Poruka("OTKUP_LBL_UKUPNO")
+        mLblNapisano.caption = Poruka("OTKUP_LBL_BLOKOVIMA")
+        mLblPreostalo.caption = Poruka("OTKUP_LBL_OSTATAK")
+        mLblUkupnoAmb.caption = Poruka("OTKUP_LBL_UKUPNO_AMB")
+        mLblNapisanoAmb.caption = Poruka("OTKUP_LBL_BLOKOVIMA_AMB")
+        mLblPreostaloAmb.caption = Poruka("OTKUP_LBL_OSTATAK_AMB")
         Exit Sub
     End If
 
@@ -1490,7 +1498,7 @@ Private Function FmtKg(ByVal X As Double) As String
     FmtKg = Format$(X, "#,##0")
 End Function
 
-' Kolicina (kg): uvek 2 decimale (npr. 1234.00) — panel + liste otpremnica/blokova.
+' Kolicina (kg): uvek 2 decimale (npr. 1234.00) -- panel + liste otpremnica/blokova.
 ' Konvencija ista kao zivi prikaz u frmOtkup.UpdateUkupnoKg ("#,##0.00").
 Private Function FmtKgDec(ByVal X As Double) As String
     FmtKgDec = Format$(X, "#,##0.00")

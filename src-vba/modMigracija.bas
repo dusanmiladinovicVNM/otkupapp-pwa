@@ -22,7 +22,7 @@ Public Sub MigrirajPodatkeIzStarog()
     Set chk = NadjiListObject(ThisWorkbook, "tblOtkup")
     If Not chk Is Nothing Then
         If chk.ListRows.count > 0 Then
-            If MsgBox("Ovaj fajl VEC ima podatke (tblOtkup: " & chk.ListRows.count & _
+            If MsgBox("Ovaj fajl VE" & ChrW(262) & " ima podatke (tblOtkup: " & chk.ListRows.count & _
                       " redova). Migracija ce ih PREPISATI." & vbCrLf & vbCrLf & _
                       "Nastaviti?", vbExclamation + vbYesNo + vbDefaultButton2, _
                       "Migracija podataka") = vbNo Then Exit Sub
@@ -65,7 +65,7 @@ Public Sub MigrirajPodatkeIzStarog()
                 On Error GoTo CLEAN
 
                 If errNum <> 0 Then
-                    summary = summary & "  " & loNovi.name & " - GRESKA: " & eDesc & vbCrLf
+                    summary = summary & "  " & loNovi.name & " - GRE" & ChrW(352) & "KA: " & eDesc & vbCrLf
                 ElseIf n = -1 Then
                     summary = summary & "  " & loNovi.name & " - (nema u starom)" & vbCrLf
                 ElseIf n = -2 Then
@@ -85,7 +85,7 @@ Public Sub MigrirajPodatkeIzStarog()
 
 CLEAN:
     Dim em As String
-    If Err.Number <> 0 Then em = "GRESKA: " & Err.description & vbCrLf & vbCrLf
+    If Err.Number <> 0 Then em = "GRE" & ChrW(352) & "KA: " & Err.description & vbCrLf & vbCrLf
     On Error Resume Next
     If Not stari Is Nothing Then stari.Close SaveChanges:=False
     Application.Calculation = prevCalc

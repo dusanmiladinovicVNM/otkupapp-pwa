@@ -2,7 +2,7 @@ Attribute VB_Name = "modArrayUtils"
 Option Explicit
 
 ' ============================================================
-' modArrayUtils – Array-Operationen im Speicher
+' modArrayUtils - Array-Operationen im Speicher
 ' Ersetzt ALLE Copy/Paste/Sort Operationen auf Sheets
 ' ============================================================
 
@@ -20,7 +20,7 @@ Public Function FilterArray(ByVal data As Variant, ByVal filters As Collection) 
     rowCount = UBound(data, 1)
     colCount = UBound(data, 2)
     
-    ' Erst zählen wie viele Zeilen matchen
+    ' Erst zaehlen wie viele Zeilen matchen
     Dim matchCount As Long
     Dim matches() As Boolean
     ReDim matches(1 To rowCount)
@@ -63,7 +63,7 @@ Public Function FilterArray(ByVal data As Variant, ByVal filters As Collection) 
 End Function
 
 Private Function MatchesFilter(ByVal cellValue As Variant, ByVal fp As clsFilterParam) As Boolean
-    ' Prüft ob ein Wert dem Filter entspricht
+    ' Prueft ob ein Wert dem Filter entspricht
     Select Case fp.Operator
         Case "="
             MatchesFilter = (CStr(cellValue) = CStr(fp.Value1))
@@ -109,7 +109,7 @@ Public Function SortArray(ByVal data As Variant, ByVal sortCol As Long, _
     rowCount = UBound(data, 1)
     colCount = UBound(data, 2)
     
-    ' Index-Array für Sortierung
+    ' Index-Array fuer Sortierung
     Dim idx() As Long
     ReDim idx(1 To rowCount)
     Dim i As Long
@@ -193,7 +193,7 @@ Private Function CompareValues(v1 As Variant, v2 As Variant, _
         cmp = StrComp(CStr(v1), CStr(v2), vbTextCompare)
     End If
     
-    ' Sekundäre Sortierung
+    ' Sekundaere Sortierung
     If cmp = 0 And sortCol2 > 0 Then
         Dim s1 As Variant, s2 As Variant
         s1 = data(idx1, sortCol2): s2 = data(idx2, sortCol2)
@@ -228,7 +228,7 @@ Public Function SumColumn(ByVal data As Variant, ByVal colIdx As Long) As Double
 End Function
 
 Public Function GroupBySum(ByVal data As Variant, ByVal groupCol As Long, ByRef sumCols() As Long) As Variant
-    ' GROUP BY mit SUM – ersetzt die Zbirni-Reports
+    ' GROUP BY mit SUM - ersetzt die Zbirni-Reports
     If IsEmpty(data) Then
         GroupBySum = Empty
         Exit Function

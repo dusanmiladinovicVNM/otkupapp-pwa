@@ -523,7 +523,7 @@ EH:
 End Function
 
 Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As String)
-    ' Suche alle unverbrauchten Avans-Zahlungen für diesen Kupac
+    ' Suche alle unverbrauchten Avans-Zahlungen fuer diesen Kupac
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
@@ -555,7 +555,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
 
     If preostalo <= 0 Then Exit Sub
     
-    ' Alle Avans-Zeilen für diesen Kupac sammeln (chronologisch)
+    ' Alle Avans-Zeilen fuer diesen Kupac sammeln (chronologisch)
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
@@ -574,7 +574,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
             ' Ganzer Avans wird verbraucht
             apply = avansIznos
         Else
-            ' Avans ist größer als Restbetrag ? aufteilen
+            ' Avans ist groesser als Restbetrag ? aufteilen
             apply = preostalo
         End If
         
@@ -630,7 +630,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
 NextAvans:
     Next i
     
-    ' Faktura-Status prüfen
+    ' Faktura-Status pruefen
     If preostalo <= 0 Then
         UpdateFakturaStatus fakturaID
     End If
@@ -666,7 +666,7 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
     colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
     colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, SRC)
     
-    ' Erst zählen
+    ' Erst zaehlen
     Dim count As Long
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -965,7 +965,7 @@ Public Function GetOpenOtkupi(Optional ByVal kooperantID As String = "") As Vari
     Dim filterByKoop As Boolean
     filterByKoop = (LenB(Trim$(kooperantID)) > 0)
     
-    ' Zählen
+    ' Zaehlen
     Dim count As Long, i As Long
     For i = 1 To UBound(data, 1)
         If filterByKoop Then
@@ -1441,7 +1441,7 @@ End Function
 ' BuildKooperantUnallocatedAvansDict
 '
 ' Single-pass dict KooperantID -> nedodeljeni avans saldo.
-' Koristi se kao cache u frmIsplatePregled da izbegnemo N×M pozive.
+' Koristi se kao cache u frmIsplatePregled da izbegnemo NxM pozive.
 '======================================================================
 Public Function BuildKooperantUnallocatedAvansDict() As Object
     Const SRC As String = "BuildKooperantUnallocatedAvansDict"

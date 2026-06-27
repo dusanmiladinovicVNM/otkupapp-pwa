@@ -1396,7 +1396,7 @@ Private Sub SeedVozac()
 End Sub
 
 ' ============================================================
-' MALINA MOD — D: auto-zbirna iz otpremnice (1:1; BrojZbirne==BrojOtpremnice)
+' MALINA MOD -- D: auto-zbirna iz otpremnice (1:1; BrojZbirne==BrojOtpremnice)
 ' ============================================================
 Private Sub Test_MalinaAutoZbirnaFromOtpremnice()
     Dim prevMode As String, prevKupac As String
@@ -1466,7 +1466,7 @@ EH:
 End Sub
 
 ' ============================================================
-' MALINA MOD — vozac mirror: nova stanica -> par-vozac sa istim ID-em
+' MALINA MOD -- vozac mirror: nova stanica -> par-vozac sa istim ID-em
 ' ============================================================
 Private Sub Test_MalinaVozacMirror()
     Dim prevMode As String
@@ -2282,7 +2282,7 @@ Private Function DeleteTestRowsFromTable(ByVal tableName As String, _
 
     If IsEmpty(data) Then Exit Function
 
-    ' Sakupi indekse redova koji treba brisati — od dna ka vrhu
+    ' Sakupi indekse redova koji treba brisati -- od dna ka vrhu
     Dim toDelete() As Long
     Dim deleteCount As Long
     ReDim toDelete(1 To lo.DataBodyRange.rows.count)

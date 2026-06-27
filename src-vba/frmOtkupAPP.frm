@@ -49,7 +49,7 @@ Private Sub UserForm_Initialize()
 
 EH:
     LogErr "frmOtkupAPP.UserForm_Initialize"
-    MsgBox "Greška pri pokretanju glavnog ekrana: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_POKRETANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub UserForm_Activate()
@@ -91,7 +91,7 @@ EH:
 
     On Error Resume Next
     lblStatus.Visible = True
-    lblStatus.caption = "Greška pri proveri dokumenata. Pogledajte log."
+    lblStatus.caption = Poruka("OTKUP_LBL_GRESKA_PRI_PROVERI")
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 End Sub
@@ -321,7 +321,7 @@ Private Sub SetupHeader()
     End With
     
     With btnMaticni
-        .caption = "Maticni podaci"
+        .caption = "Mati" & ChrW(269) & "ni podaci"
         .Left = Me.InsideWidth - 170
         .top = 7
         .width = 125
@@ -375,7 +375,7 @@ Private Sub SetupButtons()
     StyleNavButton btnAgro, "Agrohemija", topPos
     topPos = topPos + 38
 
-    StyleNavButton btnReports, "Izveštaj", topPos
+    StyleNavButton btnReports, Poruka("OTKUP_LBL_IZVESTAJ"), topPos
     topPos = topPos + 38
 
     StyleNavButton btnInvoicing, "Fakturisanje", topPos
@@ -390,10 +390,10 @@ Private Sub SetupButtons()
     StyleNavButton btnSyncPWA, "Sinhronizuj PWA", topPos
     topPos = topPos + 38
 
-    StyleNavButton btnMargin, "Marža", topPos
+    StyleNavButton btnMargin, Poruka("OTKUP_LBL_MARZA"), topPos
     topPos = topPos + 38
 
-    StyleNavButton btnTrace, "Izveštaj o sledljivosti", topPos
+    StyleNavButton btnTrace, Poruka("OTKUP_LBL_IZVESTAJ_SLEDLJIVOSTI"), topPos
     topPos = topPos + 38
 
     StyleNavButton btnOpenExcel, "Otvori Excel", topPos
@@ -491,7 +491,7 @@ Private Sub HighlightActive(activeBtn As MSForms.CommandButton)
     activeBtn.BackColor = BTN_ACTIVE
     activeBtn.ForeColor = vbWhite
 
-    ' Accent bar — koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
+    ' Accent bar -- koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
     StyleAccentBar lblNavAccent
     With lblNavAccent
         .Visible = True
@@ -584,7 +584,7 @@ Private Sub btnAgro_Click()
 End Sub
 
 Private Sub btnReports_Click()
-    OpenContentForm frmIzvestaj, btnReports, "Izvestaji"
+    OpenContentForm frmIzvestaj, btnReports, "Izve" & ChrW(353) & "taji"
 End Sub
 
 Private Sub btnInvoicing_Click()
@@ -626,11 +626,11 @@ EH:
 
     On Error Resume Next
     lblStatus.Visible = True
-    lblStatus.caption = "Greška pri uvozu banke. Otvaram mapiranje za postojece stavke."
+    lblStatus.caption = Poruka("OTKUP_LBL_GRESKA_PRI_UVOZU")
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "Greška pri uvozu bankovnih izvoda:" & vbCrLf & errDesc & vbCrLf & vbCrLf & _
+    MsgBox Poruka("OTKUP_MSG_GRESKA_PRI_UVOZU") & vbCrLf & errDesc & vbCrLf & vbCrLf & _
            "Mapiranje ce biti otvoreno za postojece neuparene stavke.", vbExclamation
 
     OpenContentForm frmBankaImport, btnBanka, "Banka uvoz izvoda"
@@ -681,13 +681,13 @@ EH:
 End Sub
 
 Private Sub btnMargin_Click()
-    OpenContentForm frmMarza, btnMargin, "Marža"
+    OpenContentForm frmMarza, btnMargin, Poruka("OTKUP_LBL_MARZA")
 End Sub
 
 Private Sub btnTrace_Click()
     HighlightActive btnTrace
-    lblStatus.caption = "Sekcija: Izveštaj o sledljivosti"
-    OpenContentForm frmSledljivost, btnTrace, "Izveštaj o sledljivosti"
+    lblStatus.caption = Poruka("OTKUP_LBL_SEKCIJA_IZVESTAJ_SLEDLJIVOSTI")
+    OpenContentForm frmSledljivost, btnTrace, Poruka("OTKUP_LBL_IZVESTAJ_SLEDLJIVOSTI")
 End Sub
 
 Private Sub btnOpenExcel_Click()
@@ -722,11 +722,11 @@ EH:
     LogErr "frmOtkupAPP.btnSnapshot_Click"
 
     lblStatus.Visible = True
-    lblStatus.caption = "Greška pri snimanju. Pogledajte log."
+    lblStatus.caption = Poruka("OTKUP_LBL_GRESKA_PRI_SNIMANJU")
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "Greška pri snimanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_SNIMANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub btnExit_Click()
@@ -751,21 +751,21 @@ EH:
     Application.DisplayAlerts = True
     On Error GoTo 0
 
-    MsgBox "Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: " & Err.description, vbExclamation, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_FAJL_NIJE_USPESNO") & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub btnMaticni_Click()
     On Error GoTo EH
 
     HighlightActive btnMaticni
-    lblStatus.caption = "Sekcija: Maticni podaci"
+    lblStatus.caption = "Sekcija: Mati" & ChrW(269) & "ni podaci"
     OpenMaticniForm
 
     Exit Sub
 
 EH:
     LogErr "frmOtkupAPP.btnMaticni_Click"
-    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub OpenMaticniForm()
@@ -784,7 +784,7 @@ Public Sub OpenMaticniForm()
 
 EH:
     LogErr "frmOtkupAPP.OpenMaticniForm"
-    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' =========================
@@ -968,12 +968,12 @@ EH:
 
     LogErr "frmOtkupAPP.OpenContentForm"
 
-    ShowDashboardArea "Greška pri otvaranju sekcije: " & sectionTitle
+    ShowDashboardArea Poruka("OTKUP_LBL_GRESKA_PRI_OTVARANJU") & sectionTitle
 
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
 
-    MsgBox "Greška pri otvaranju sekcije '" & sectionTitle & "': " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU_2") & sectionTitle & "': " & Err.description, vbCritical, APP_NAME
 End Sub
 
 
@@ -1066,7 +1066,7 @@ EH:
 End Sub
 
 ' ============================================================
-' v6.11 UI: KPI CARD u dnu sidebara (Današnji otkup kg)
+' v6.11 UI: KPI CARD u dnu sidebara (Danasnji otkup kg)
 ' ============================================================
 
 Private Sub LayoutSidebarKpiCard()
@@ -1088,7 +1088,7 @@ Private Sub LayoutSidebarKpiCard()
     With lblKPITitle
         .Move 10, 8, fraSidebarKPI.width - 20, 14
         StyleKpiLabel lblKPITitle, "title"
-        .caption = "Današnji otkup"
+        .caption = Poruka("OTKUP_LBL_DANASNJI_OTKUP")
     End With
 
     With lblKPIValue
@@ -1148,13 +1148,13 @@ Public Sub RefreshSidebarKpi()
         lblKPIDelta.caption = ""
     End If
 
-    lblKPISub.caption = cntOtp & " otpremnica  •  " & cntPrij & " prijemnica"
+    lblKPISub.caption = cntOtp & Poruka("OTKUP_LBL_OTPREMNICA") & cntPrij & " prijemnica"
 
     Exit Sub
 
 EH:
     LogErr "frmOtkupAPP.RefreshSidebarKpi"
-    lblKPIValue.caption = "—"
+    lblKPIValue.caption = "--"
     lblKPIDelta.caption = ""
     lblKPISub.caption = ""
 End Sub
@@ -1278,7 +1278,7 @@ Public Sub RefreshBankaBadge()
     StyleBadge lblBankaBadge, openCount
 
     If openCount > 0 Then
-        ' Pozicija — desno gornji ugao btnBanka
+        ' Pozicija -- desno gornji ugao btnBanka
         With lblBankaBadge
             .width = 22
             .Height = 14
@@ -1388,7 +1388,7 @@ End Sub
 Private Function GetCurrentOperatorName() As String
     On Error Resume Next
     GetCurrentOperatorName = Environ$("USERNAME")
-    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "—"
+    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "--"
     On Error GoTo 0
 End Function
 
@@ -1437,11 +1437,11 @@ End Sub
 
 Public Sub FinishPWASyncLog(ByVal ok As Boolean)
     If ok Then
-        AppendPWASyncLog "Sync zavrsen uspesno."
+        AppendPWASyncLog "Sync zavr" & ChrW(353) & "en uspe" & ChrW(353) & "no."
         lblStatus.ForeColor = RGB(120, 220, 140)
         lblStatus.Font.Bold = True
     Else
-        AppendPWASyncLog "Sync zavrsen sa greskom. Proveri log."
+        AppendPWASyncLog "Sync zavr" & ChrW(353) & "en sa gre" & ChrW(353) & "kom. Proveri log."
         lblStatus.ForeColor = RGB(255, 90, 90)
         lblStatus.Font.Bold = True
     End If

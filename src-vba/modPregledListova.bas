@@ -69,7 +69,7 @@ Public Sub NapraviPregledListova()
 
 fail:
     Application.ScreenUpdating = True
-    MsgBox "Greska pri pravljenju pregleda: " & Err.description, _
+    MsgBox "Gre" & ChrW(353) & "ka pri pravljenju pregleda: " & Err.description, _
            vbExclamation, "Pregled listova"
 End Sub
 
@@ -106,7 +106,7 @@ Public Sub PokreniMigraciju()
     MigrirajPodatkeIzStarog
     Exit Sub
 fail:
-    MsgBox "Greska pri migraciji: " & Err.description, _
+    MsgBox "Gre" & ChrW(353) & "ka pri migraciji: " & Err.description, _
            vbExclamation, "Migracije"
 End Sub
 
@@ -128,7 +128,7 @@ Public Sub OcistiTabele()
 
     If MsgBox("Obrisati SVE unose iz " & n & " tabela?" & vbCrLf & _
               "(zaglavlja i tabele ostaju)" & vbCrLf & vbCrLf & _
-              "Ova radnja se NE moze opozvati.", _
+              "Ova radnja se NE mo" & ChrW(382) & "e opozvati.", _
               vbExclamation + vbYesNo + vbDefaultButton2, "Ocisti tabele") <> vbYes Then
         Exit Sub
     End If
@@ -153,7 +153,7 @@ Public Sub OcistiTabele()
 
 fail:
     Application.ScreenUpdating = True
-    MsgBox "Greska pri ciscenju tabela: " & Err.description, _
+    MsgBox "Gre" & ChrW(353) & "ka pri ciscenju tabela: " & Err.description, _
            vbExclamation, "Ocisti tabele"
 End Sub
 

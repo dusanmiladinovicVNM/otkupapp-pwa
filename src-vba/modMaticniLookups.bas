@@ -3,7 +3,7 @@ Attribute VB_Name = "modMaticniLookups"
 Option Explicit
 
 ' ============================================================
-' modMaticniLookups – jedinstveni (data-driven) meni "Maticni podaci"
+' modMaticniLookups - jedinstveni (data-driven) meni "Maticni podaci"
 '
 ' Ceo meni frmMaticniPodaci se gradi iz JEDNE registracije sekcija
 ' (MaticniSekcije). Za svaku sekciju se dinamicki kreira dugme
@@ -38,13 +38,13 @@ Public Function MaticniSekcije() As Variant
         Array("Artikli", "Artikli"), _
         Array("Parcele", "Parcele"), _
         Array("Kulture", "Kulture"), _
-        Array("Ambalaza", "TipAmbalaze"), _
+        Array("Ambala" & ChrW(382) & "a", "TipAmbalaze"), _
         Array("Palete", "TipPalete"), _
         Array("Cenovnik", "Cenovnik"), _
         Array("Kutije", "Kutije"), _
         Array("Kese", "Kese"), _
         Array("Vrsta got. proizvoda", "VrstaGP"), _
-        Array("Podešavanja", "Podesavanja"))
+        Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Pode" & ChrW(353) & "avanja"))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).
@@ -76,7 +76,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
     If n <= 0 Then Exit Sub
 
     ' Spakuj n dugmadi u isti vertikalni opseg koji su zauzimala staticna
-    ' dugmad (top0 .. Exit.Top) — bez resize-a forme.
+    ' dugmad (top0 .. Exit.Top) -- bez resize-a forme.
     Const SPACING As Single = 3
 
     ' Citljiv pitch = visina sablonskog dugmeta + razmak. Ako n dugmadi ne
@@ -129,7 +129,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
         mBtns.Add c
     Next i
 
-    ' Uspeh — sakrij staticna dugmad (dinamicka su preko njih).
+    ' Uspeh -- sakrij staticna dugmad (dinamicka su preko njih).
     HideStaticButtons frm
     Exit Sub
 
@@ -166,7 +166,7 @@ Public Sub MaticniMenu_OnHover(ByVal b As Object)
     ButtonHover b
 End Sub
 
-' Klik na sekciju — otvori frmStammdaten preko forme (ona drzi flag
+' Klik na sekciju -- otvori frmStammdaten preko forme (ona drzi flag
 ' m_IsOpeningChild, pa se meni ne zatvori usput).
 Public Sub MaticniMenu_OnClick(ByVal sekTag As String, ByVal sekCaption As String)
     On Error GoTo EH

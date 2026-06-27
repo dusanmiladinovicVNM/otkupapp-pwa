@@ -2,14 +2,14 @@ Attribute VB_Name = "modLogError"
 Option Explicit
 
 ' ============================================================
-' modLogError – Zentralisiertes Error-Logging
+' modLogError - Zentralisiertes Error-Logging
 '
-' Schreibt Fehler in eine Textdatei für Remote-Support.
+' Schreibt Fehler in eine Textdatei fuer Remote-Support.
 ' Wenn der Kunde anruft, kann er die Log-Datei schicken.
 '
 ' Log-Pfad: ThisWorkbook.Path & "\Log\"
 ' Dateiname: OtkupApp_2026-03-18.log (eine pro Tag)
-' Rotation:  Dateien älter als 30 Tage werden bei App-Start gelöscht
+' Rotation:  Dateien aelter als 30 Tage werden bei App-Start geloescht
 '
 ' WICHTIG: Log-Write darf NIEMALS die App blockieren.
 ' ============================================================
@@ -35,7 +35,7 @@ Public Sub LogError(ByVal SOURCE As String, ByVal message As String, _
                     Optional ByVal details As String = "")
     ' Schreibt eine Log-Zeile in die Tagesdatei
     '
-    ' Aufruf aus EH-Blöcken:
+    ' Aufruf aus EH-Bloecken:
     '   LogError "SaveOtkup", Err.Description, Err.Number
     '
     ' Oder als Info:
@@ -133,7 +133,7 @@ End Sub
 ' ============================================================
 
 Public Sub PurgeOldLogs()
-    ' Löscht Log-Dateien die älter als LOG_MAX_DAYS sind
+    ' Loescht Log-Dateien die aelter als LOG_MAX_DAYS sind
     
     Dim logPath As String
     Dim fileName As String

@@ -4,7 +4,7 @@ Attribute VB_Name = "modMonitoring"
 ' ============================================================
 '
 ' Svrha:
-' - VBA šalje monitoring evente u GAS endpoint preko action="monitorPublic".
+' - VBA salje monitoring evente u GAS endpoint preko action="monitorPublic".
 ' - Monitoring je best-effort: nikada ne sme da obori business operaciju.
 ' - Ne logovati tokene, SEF API key, pun XML/PDF, pun JMBG ili bankovne podatke.
 '
@@ -17,7 +17,7 @@ Attribute VB_Name = "modMonitoring"
 '    action = monitorPublic
 '
 ' Preporuka:
-' - Secret drži u hidden/very hidden Config sheet-u ili Named Range-u.
+' - Secret drzi u hidden/very hidden Config sheet-u ili Named Range-u.
 ' - Ne stavljaj secret u PWA frontend. Ovo je samo za VBA/desktop.
 '
 ' ============================================================
@@ -30,7 +30,7 @@ Private Const DEFAULT_APP_VERSION As String = APP_VERSION
 Private Const HTTP_TIMEOUT_MS As Long = 1200
 Private Const HTTP_DEBUG_TIMEOUT_MS As Long = 10000
 
-' Modulska referenca: drži in-flight async zahteve da WinHttp ne otkaže slanje pre vremena
+' Modulska referenca: drzi in-flight async zahteve da WinHttp ne otkaze slanje pre vremena
 Private m_inFlight As Collection
 
 ' ============================================================
@@ -351,7 +351,7 @@ Private Function Monitoring_PostJson(ByVal url As String, ByVal jsonBody As Stri
     http.Send jsonBody
     ' NE pozivamo WaitForResponse -> vraca se odmah; round-trip ide u pozadini
 
-    ' Zadrži referencu da se zahtev ne otkaže kad lokalni objekat izade iz opsega.
+    ' Zadrzi referencu da se zahtev ne otkaze kad lokalni objekat izade iz opsega.
     If m_inFlight Is Nothing Then Set m_inFlight = New Collection
     m_inFlight.Add http
     Do While m_inFlight.count > 12              ' ogranici; stariji su odavno poslati

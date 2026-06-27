@@ -2,7 +2,7 @@ Attribute VB_Name = "modMain"
 Option Explicit
 
 ' ============================================================
-' modMain v2.1 – ValidateAllTables aktualisiert
+' modMain v2.1 - ValidateAllTables aktualisiert
 ' ============================================================
 
 Private m_Initialized As Boolean
@@ -49,7 +49,7 @@ Public Sub StartApp()
     Call LogAppStart
 
     ' SEF recovery ostaje non-blocking za startup.
-    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada šalje monitoring.
+    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada salje monitoring.
     On Error Resume Next
     Call RecoverAllStuckSEFSendingInvoices
     On Error GoTo EH
@@ -137,7 +137,15 @@ Public Sub InitApp()
     Application.EnableEvents = False
     
     On Error GoTo ErrHandler
-    
+
+    On Error Resume Next
+    EnsurePoruke
+    If Err.Number <> 0 Then
+        LogErr "modMain.InitApp.EnsurePoruke"
+        Err.Clear
+    End If
+    On Error GoTo ErrHandler
+
     ValidateAllTables
     m_Initialized = True
     
@@ -148,7 +156,7 @@ CleanUp:
     Exit Sub
     
 ErrHandler:
-    MsgBox "Greska pri inicijalizaciji: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri inicijalizaciji: " & Err.description, vbCritical, APP_NAME
     Resume CleanUp
 End Sub
 
@@ -211,7 +219,7 @@ Private Sub ValidateAllTables()
                      TBL_KUPCI, TBL_KULTURE, TBL_OTKUP, _
                      TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
                      TBL_FAKTURE, TBL_FAKTURA_STAVKE, _
-                     TBL_NOVAC, TBL_AMBALAZA, TBL_CONFIG)
+                     TBL_NOVAC, TBL_AMBALAZA, TBL_CONFIG, TBL_PORUKE)
     
     Dim i As Long
     Dim missing As String

@@ -2,21 +2,21 @@ Attribute VB_Name = "modGoogleSheets"
 Option Explicit
 
 ' ============================================================
-' modGoogleSheets – Google Sheets API v4 Wrapper
+' modGoogleSheets - Google Sheets API v4 Wrapper
 '
 ' Liest und schreibt Google Sheets via REST API.
 ' Auth via modGoogleAuth.GetAccessToken()
 '
 ' Hauptfunktionen:
-'   WriteSheetData   — schreibt 2D-Array in ein Sheet-Tab
-'   ReadSheetData    — liest Sheet-Tab als 2D-Array
-'   ClearSheet       — löscht alle Daten in einem Tab
-'   CreateSpreadsheet — erstellt neues Google Sheet
-'   GetSpreadsheetID — sucht Sheet-ID nach Name in einem Folder
+'   WriteSheetData   -- schreibt 2D-Array in ein Sheet-Tab
+'   ReadSheetData    -- liest Sheet-Tab als 2D-Array
+'   ClearSheet       -- loescht alle Daten in einem Tab
+'   CreateSpreadsheet -- erstellt neues Google Sheet
+'   GetSpreadsheetID -- sucht Sheet-ID nach Name in einem Folder
 ' ============================================================
 
 ' ============================================================
-' PATCH: P1 — modGoogleSheets.WriteSheetData staging/verify/replace
+' PATCH: P1 -- modGoogleSheets.WriteSheetData staging/verify/replace
 ' File: src-vba/modGoogleSheets.bas
 '
 ' Problem:
@@ -257,7 +257,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — Write
+' PUBLIC -- Write
 ' ============================================================
 
 Public Function WriteSheetData(ByVal spreadsheetID As String, _
@@ -1038,16 +1038,16 @@ EH:
 End Sub
 
 ' ============================================================
-' Public — Append single row to existing tab.
+' Public -- Append single row to existing tab.
 ' Koristi Sheets API values:append endpoint sa INSERT_ROWS.
 '
 ' Razlika u odnosu na WriteSheetData (full-tab replace via staging+swap):
-'   - ne pravi staging, ne briše postojece redove
+'   - ne pravi staging, ne brise postojece redove
 '   - append-only, atomska operacija ~300-500ms
 '   - rowData je 1D Array (jedna vrsta), interno se wrap-uje u 2D
 '
 ' Caller (modStanicaLock.BulkPushPendingForStanica) zove ovo u petlji
-' kad se stanica unlock-uje — svaki red se append-uje pojedinacno.
+' kad se stanica unlock-uje -- svaki red se append-uje pojedinacno.
 ' Pojedinacni fail ostavlja red sa praznim ClientRecordID u tblOtkup-u,
 ' pa retry pri sledecem unlock event-u pokupi.
 '
@@ -1110,9 +1110,9 @@ Public Function AppendRowToSheet(ByVal spreadsheetID As String, _
 
     body = BuildValuesJson(wrappedData)
 
-    ' Sheets API values:append — INSERT_ROWS pravi NOV red (ne overwrite
+    ' Sheets API values:append -- INSERT_ROWS pravi NOV red (ne overwrite
     ' praznih redova ispod date). RAW cuva format brojeva sa "/" znakovima
-    ' (12/1 ambalaža, 1/220526-2 broj dokumenta).
+    ' (12/1 ambalaza, 1/220526-2 broj dokumenta).
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
           "/values/" & UrlEncode(tabName) & "!A1:append" & _
           "?valueInputOption=RAW" & _
@@ -1170,7 +1170,7 @@ End Function
     
 
 ' ============================================================
-' PUBLIC — Read
+' PUBLIC -- Read
 ' ============================================================
 
 Public Function ReadSheetData(ByVal spreadsheetID As String, _
@@ -1227,7 +1227,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — Clear
+' PUBLIC -- Clear
 ' ============================================================
 
 Public Function ClearSheet(ByVal spreadsheetID As String, _
@@ -1285,12 +1285,12 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — Create Spreadsheet
+' PUBLIC -- Create Spreadsheet
 ' ============================================================
 
 Public Function CreateSpreadsheet(ByVal title As String, _
                                   Optional ByVal folderID As String = "") As String
-    ' Erstellt ein neues Google Sheet, gibt SpreadsheetID zurück
+    ' Erstellt ein neues Google Sheet, gibt SpreadsheetID zurueck
     ' Wenn folderID angegeben, wird es in den Folder verschoben
     
     Dim accessToken As String
@@ -1359,7 +1359,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — Find Spreadsheet by Name in Folder
+' PUBLIC -- Find Spreadsheet by Name in Folder
 ' ============================================================
 
 Public Function GetSpreadsheetID(ByVal title As String, _
@@ -1491,7 +1491,7 @@ Private Function ExtractJsonSimpleValueAt(ByVal json As String, _
 End Function
 
 ' ============================================================
-' PUBLIC — Add Tab to existing Spreadsheet
+' PUBLIC -- Add Tab to existing Spreadsheet
 ' ============================================================
 
 Public Function AddSheetTab(ByVal spreadsheetID As String, _
@@ -1578,7 +1578,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Move file to folder (Drive API)
+' PRIVATE -- Move file to folder (Drive API)
 ' ============================================================
 
 Private Function MoveFileToFolder(ByVal fileID As String, ByVal folderID As String) As Boolean
@@ -1686,11 +1686,11 @@ Private Function GetFirstParent(ByVal json As String) As String
 End Function
 
 ' ============================================================
-' PRIVATE — JSON Builder für Sheets API
+' PRIVATE -- JSON Builder fuer Sheets API
 ' ============================================================
 
 Private Function BuildValuesJson(ByVal data As Variant) As String
-    ' Baut JSON body für values:update API
+    ' Baut JSON body fuer values:update API
     ' {"values":[["a","b"],["c","d"]]}
     ' ALLES als String schreiben uz valueInputOption=RAW.
     ' Ovo cuva vodece nule i ID vrednosti kao tekst.
@@ -1801,7 +1801,7 @@ Public Function ParseValuesJson(ByVal json As String) As Variant
     ParseValuesJson = result
 End Function
 Private Function SplitCsvJson(ByVal s As String) As String()
-    ' Split auf Komma, aber nicht innerhalb von Anführungszeichen
+    ' Split auf Komma, aber nicht innerhalb von Anfuehrungszeichen
     Dim result() As String
     Dim count As Long, i As Long
     Dim inQuote As Boolean

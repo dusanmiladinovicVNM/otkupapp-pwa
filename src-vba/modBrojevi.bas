@@ -3,7 +3,7 @@ Attribute VB_Name = "modBrojevi"
 Option Explicit
 
 ' ============================================================
-' modBrojevi — broj-allocation helperi za OTK, OTP, ZBR.
+' modBrojevi -- broj-allocation helperi za OTK, OTP, ZBR.
 '
 ' Format (kanon v6.15):
 '   x/ddmmyy[-rb]
@@ -13,14 +13,14 @@ Option Explicit
 '   - prvi u danu: bez "-"
 '
 ' Javni API:
-'   SuggestNextBroj(kind, entityID, datum)   — VBA forma prefill
-'   GenerateBrojDokumenta(stanicaID, datum)  — VBA fallback za ImportRowToTblOtkup
-'   GenerateBrojOtpremnice(stanicaID, datum) — VBA jedinstveni generator za OTP
-'   ExtractNumericFromEntityID(entityID)     — "ST-00001" -> 1
-'   ExtractSeqFromBroj(broj)                 — "1/220526-3" -> 3
-'   IsValidBrojFormat(broj)                  — regex check kanonskog formata
-'   FormatBroj(entityID, datum, seq)         — kompozit
-'   ClearSpreadsheetIDCache                  — reset session cache (retko)
+'   SuggestNextBroj(kind, entityID, datum)   -- VBA forma prefill
+'   GenerateBrojDokumenta(stanicaID, datum)  -- VBA fallback za ImportRowToTblOtkup
+'   GenerateBrojOtpremnice(stanicaID, datum) -- VBA jedinstveni generator za OTP
+'   ExtractNumericFromEntityID(entityID)     -- "ST-00001" -> 1
+'   ExtractSeqFromBroj(broj)                 -- "1/220526-3" -> 3
+'   IsValidBrojFormat(broj)                  -- regex check kanonskog formata
+'   FormatBroj(entityID, datum, seq)         -- kompozit
+'   ClearSpreadsheetIDCache                  -- reset session cache (retko)
 ' ============================================================
 
 Private gSheetIDCache As Object
@@ -31,7 +31,7 @@ Public Const KIND_ZBR As String = "ZBR"
 Public Const KIND_REV As String = "REV"   ' OM<->koop revers (izdavanje/povrat ambalaze)
 
 ' ============================================================
-' PUBLIC — forma prefill
+' PUBLIC -- forma prefill
 ' ============================================================
 Public Function SuggestNextBroj(ByVal kind As String, _
                                 ByVal entityID As String, _
@@ -116,7 +116,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — fallback generatori (PWA broj nedostaje ili je VBA-only)
+' PUBLIC -- fallback generatori (PWA broj nedostaje ili je VBA-only)
 ' ============================================================
 
 ' Fallback za OTK kad ImportRowToTblOtkup primi prazan brojDokumenta
@@ -128,7 +128,7 @@ Public Function GenerateBrojDokumenta(ByVal stanicaID As String, _
     On Error GoTo EH
 
     If ExtractNumericFromEntityID(stanicaID) = 0 Then
-        LogError SRC, "Nevažeci stanicaID (bez cifara): " & stanicaID
+        LogError SRC, "Nevazeci stanicaID (bez cifara): " & stanicaID
         GenerateBrojDokumenta = ""
         Exit Function
     End If
@@ -157,7 +157,7 @@ Public Function GenerateBrojOtpremnice(ByVal stanicaID As String, _
     On Error GoTo EH
 
     If ExtractNumericFromEntityID(stanicaID) = 0 Then
-        LogError SRC, "Nevažeci stanicaID (bez cifara): " & stanicaID
+        LogError SRC, "Nevazeci stanicaID (bez cifara): " & stanicaID
         GenerateBrojOtpremnice = ""
         Exit Function
     End If
@@ -204,7 +204,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — utility (drugi moduli ih koriste)
+' PUBLIC -- utility (drugi moduli ih koriste)
 ' ============================================================
 
 ' "VOZ-00004" -> 4 ; "ST-00001" -> 1 ; "ST-103" -> 103 ; "garbage" -> 0
@@ -252,8 +252,8 @@ Public Function ExtractSeqFromBroj(ByVal broj As String) As Long
     End If
 End Function
 
-' Regex check kanonskog formata. Reuse ako se vracaš na modMasterSync
-' IsValidBrojZbirneFormat — ista regex pattern.
+' Regex check kanonskog formata. Reuse ako se vracas na modMasterSync
+' IsValidBrojZbirneFormat -- ista regex pattern.
 Public Function IsValidBrojFormat(ByVal s As String) As Boolean
     Dim re As Object
     Set re = CreateObject("VBScript.RegExp")
@@ -301,13 +301,13 @@ Public Function ApplyMirrorPrefix(ByVal vozacID As String, ByVal broj As String)
 End Function
 
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
-' ili obriše tokom rada workbook-a (retko).
+' ili obrise tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()
     Set gSheetIDCache = Nothing
 End Sub
 
 ' ============================================================
-' PRIVATE — scan helperi
+' PRIVATE -- scan helperi
 ' ============================================================
 
 ' Max sekvenca broja za stanicu+datum nad CELOM tblAmbalaza (svi tipovi/noge).
@@ -425,7 +425,7 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
                                         ByVal datum As Date) As Long
     On Error GoTo EH
     
-    ' DODATO: desktop-only — ne idemo na Google. Lokal scan je dovoljan.
+    ' DODATO: desktop-only -- ne idemo na Google. Lokal scan je dovoljan.
     If Not IsCloudSyncEnabled() Then
         MaxSeqFromGoogleSheet = 0
         Exit Function

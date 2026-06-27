@@ -84,3 +84,63 @@ Zapazio sam u tvojoj memoriji:
 "tblZbirna / tblOtkup schema: Both tables require ClientRecordID and SyncSource columns at end. ClientRecordID and SyncSource as columns 15–16 in rowData are not yet in the AR canonical tblZbirna schema (14 columns) — requires schema extension or removal."
 
 Drugu si možda već rešio jer u v6.14 Reference vidim 16-kolonsku kanonu. Prva (Stanica Ulaz call) — ne mogu da potvrdim, ali ako je tako — to je p1 ambalaza-tačnost issue koji je veći nego BrojZbirne diskusija.
+
+---
+
+## BACKLOG: Migracija svih form Caption-a u kod (Poruka sistem)
+
+**Prioritet:** P2 — funkcionalna zaobilaznica postoji (FixFormCaptions u modTheme), ali nije skalabilna.
+
+**Problem:**
+VBA Form Designer ne dozvoljava unos srpske dijakritike u Caption property.
+Trenutno rešenje (`FixFormCaptions` u `modTheme.bas`) iterira sve Label/Button/CheckBox kontrole
+pri otvaranju forme i word-by-word zamenjuje poznate ASCII reči unicode ekvivalentima.
+Mane: svaki novi string koji neko pronađe zahteva novi `Case` u `CorrectSrWord`; nema
+jednog izvora istine; iza `.frx` binarnog fajla se ne vidi šta piše.
+
+**Pravo rešenje:**
+Svaki korisnički vidljivi tekst forme ide kroz `Poruka("KLJUC")` i postavlja se u
+`UserForm_Initialize` eksplicitno po kontroli. `.frx` drži samo layout (Top, Left,
+Width, Height, Font, Color) — nikad Caption tekst.
+
+**Primer (target stanje):**
+```vba
+Private Sub UserForm_Initialize()
+    Me.Caption               = Poruka("FRM_OTKUP_TITLE")
+    lblVrstaVoca.Caption     = Poruka("FRM_OTKUP_LBL_VRSTA_VOCA")
+    lblSortaVoca.Caption     = Poruka("FRM_OTKUP_LBL_SORTA_VOCA")
+    lblKolicina.Caption      = Poruka("FRM_OTKUP_LBL_KOLICINA")
+    btnUnos.Caption          = Poruka("FRM_OTKUP_BTN_UNOS")
+    btnStampajKarticu.Caption = Poruka("FRM_OTKUP_BTN_STAMPAJ_KARTICU")
+    btnPovratak.Caption      = Poruka("FRM_OTKUP_BTN_POVRATAK")
+    ' ...
+End Sub
+```
+
+**Forme koje treba obraditi (frm po frm):**
+- [ ] frmOtkup
+- [ ] frmDokumenta
+- [ ] frmStammdaten
+- [ ] frmIzvestaj
+- [ ] frmAgrohemija
+- [ ] frmBankaImport
+- [ ] frmBankaExportPregled
+- [ ] frmFakturisanje
+- [ ] frmMarza
+- [ ] frmMaticniPodaci
+- [ ] frmOtkupAPP
+- [ ] frmPalete
+- [ ] frmSEF
+- [ ] frmSledljivost
+
+**Proces za svaku formu:**
+1. VBE → dvostruki klik na formu → svaka kontrola → Properties: beleži `(Name)` i `Caption`
+2. Za svaki Caption: dodaj ključ u `poruke.csv` + `UpsertPoruke` (ako nije već tu)
+3. Postavi Caption u `UserForm_Initialize` via `Poruka("KEY")`
+4. U Form Designeru: obriši Caption (postavi prazan string `""`)
+5. `ImportAllVBA → Debug → Compile → test`
+
+**Kad je urađeno:** `FixFormCaptions` u `modTheme.bas` može da se ukloni (ili ostavi kao
+no-op safeguard za legacy instalacije).
+
+**Dodata:** 2026-06-28 | **Grana lokalizacije:** claude/vba-localization-extraction-1jj9xw

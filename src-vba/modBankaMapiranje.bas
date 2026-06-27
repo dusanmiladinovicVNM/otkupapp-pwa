@@ -199,7 +199,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri automatskom mapiranju banke, promene vracene: " & errDesc, _
+    MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju banke, promene vra" & ChrW(263) & "ene: " & errDesc, _
            vbCritical, APP_NAME
 
     AutoMapBankaImportRow_TX = ""
@@ -335,7 +335,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri mapiranju kupca, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kupca, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     MapBankaImportAsKupac_TX = ""
 End Function
@@ -479,7 +479,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri mapiranju kooperanta, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     MapBankaImportAsKooperant_TX = ""
 End Function
@@ -593,7 +593,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri mapiranju OM, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju OM, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     MapBankaImportAsOM_TX = ""
 End Function
@@ -662,7 +662,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri mapiranju kooperanta po bloku, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     MapBankaImportAsKooperantBlock_TX = 0
 End Function
@@ -732,7 +732,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri rucnom mapiranju kooperanta po bloku, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     MapBankaImportAsKooperantBlockManual_TX = 0
 End Function
@@ -951,7 +951,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri preskakanju bank stavke, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri preskakanju bank stavke, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     SkipBankaImportRow_TX = False
 End Function
@@ -1065,7 +1065,7 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Greska pri automatskom mapiranju svih bank stavki, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju svih bank stavki, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
 
     AutoMapAllBankaImport_TX = 0
 End Function

@@ -3,13 +3,13 @@ Attribute VB_Name = "modKooperant"
 Option Explicit
 
 ' ============================================================
-' modKooperant – razresavanje/kreiranje kooperanta po imenu.
+' modKooperant - razresavanje/kreiranje kooperanta po imenu.
 '
 ' frmOtkup.cmbKooperant je sada 2-kolonski: kol0 = "Ime Prezime"
 ' (vidljivo, filtrira se po imenu), kol1 = KooperantID (skriveno).
 ' Kada operater ukuca ime koje nije u bazi, kreira se novi
 ' tblKooperanti red (samo Ime/Prezime + StanicaID; BPG/racun se
-' dopunjavaju kasnije u Maticnim podacima). Bez odmah sync-a –
+' dopunjavaju kasnije u Maticnim podacima). Bez odmah sync-a -
 ' PWA/Google ce povuci pri sledecoj sinhronizaciji.
 ' ============================================================
 
@@ -124,7 +124,7 @@ Private Function CreateKooperantByName(ByVal nm As String, ByVal stanicaID As St
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr "modKooperant.CreateKooperantByName"
-    MsgBox "Greska pri kreiranju kooperanta: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri kreiranju kooperanta: " & Err.description, vbCritical, APP_NAME
 End Function
 
 ' "Marko MARKOVIC" -> Ime="Marko", Prezime="MARKOVIC"

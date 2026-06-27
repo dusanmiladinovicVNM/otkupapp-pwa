@@ -2,7 +2,7 @@ Attribute VB_Name = "modSledljivost"
 Option Explicit
 
 ' ============================================================
-' modSledljivost v1.1 – Automatische Zuordnung Otkup ? Otpremnica
+' modSledljivost v1.1 - Automatische Zuordnung Otkup ? Otpremnica
 '
 ' Hardening only:
 '   - same matching logic
@@ -242,7 +242,7 @@ Public Function AutoLinkOtkupOtpremnica() As Long
 
             If otkRows.count <> 1 Then
                 Err.Raise vbObjectError + 4502, SRC, _
-                        "OtkupID nije jedinstven ili nije pronaden. OtkupID=" & _
+                        "OtkupID nije jedinstven ili nije prona" & ChrW(273) & "en. OtkupID=" & _
                         otkupID & "; Count=" & CStr(otkRows.count)
             End If
 
@@ -406,7 +406,7 @@ End Function
 Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     On Error GoTo EH
 
-    ' Komplette Rückverfolgung:
+    ' Komplette Rueckverfolgung:
     '   Zbirna ? Otpremnice ? Otkupi ? Kooperanti
     '
     ' Return shape ostaje isti:
@@ -522,7 +522,7 @@ Public Function TraceByZbirna(ByVal brojZbirne As String) As Variant
     colOtkParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, _
                                        "modSledljivost.TraceByZbirna")
 
-    ' Lookup table guards — ne menjaju logiku, samo fail-fast za schema drift
+    ' Lookup table guards -- ne menjaju logiku, samo fail-fast za schema drift
     RequireColumnIndex TBL_KOOPERANTI, "KooperantID", "modSledljivost.TraceByZbirna"
     RequireColumnIndex TBL_KOOPERANTI, "Ime", "modSledljivost.TraceByZbirna"
     RequireColumnIndex TBL_KOOPERANTI, "Prezime", "modSledljivost.TraceByZbirna"

@@ -2,17 +2,17 @@ Attribute VB_Name = "modMasterSync"
  Option Explicit
 
 ' ============================================================
-' modMasterSync – Import OTK-Sheets ? tblOtkup
+' modMasterSync - Import OTK-Sheets ? tblOtkup
 '
 ' Liest alle Google Sheets "OTK-*" aus dem PWA-Folder,
 ' importiert neue Zeilen (SyncStatus != "Synced?Master")
-' in tblOtkup, und schreibt SyncStatus zurück.
+' in tblOtkup, und schreibt SyncStatus zurueck.
 '
 ' Flow:
 '   1. Liste alle OTK-* Sheets im PWA-Folder
-'   2. Pro Sheet: ReadSheetData ? prüfe SyncStatus
+'   2. Pro Sheet: ReadSheetData ? pruefe SyncStatus
 '   3. Neue Zeilen ? Validierung ? AppendRow tblOtkup
-'   4. SyncStatus ? "Synced?Master" zurückschreiben
+'   4. SyncStatus ? "Synced?Master" zurueckschreiben
 '
 ' Config-Keys:
 '   GOOGLE_PWA_FOLDER_ID (bereits vorhanden)
@@ -79,7 +79,7 @@ Private Const VS_RECEIVED_AT As Long = 19       ' S
 Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
 
 ' ============================================================
-' PUBLIC — Hauptfunktion
+' PUBLIC -- Hauptfunktion
 ' ============================================================
 
 Public Sub ImportOtkupFromPWA()
@@ -198,10 +198,10 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz OTK nije potvrden zbog fatal sync greške." & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_OTK_NIJE") & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbCritical, APP_NAME
         End If
@@ -221,11 +221,11 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz OTK završen sa greškama." & vbCrLf & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_OTK_ZAVRSEN") & vbCrLf & vbCrLf & _
                    "Fajlova: " & CStr(filesCount) & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbExclamation, APP_NAME
         End If
@@ -242,11 +242,11 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
         filesCount:=filesCount
 
     If showMessages Then
-        MsgBox "Uvoz OTK završen!" & vbCrLf & vbCrLf & _
+        MsgBox Poruka("SYNC_ERR_UVOZ_OTK_ZAVRSEN_2") & vbCrLf & vbCrLf & _
                "Fajlova: " & CStr(filesCount) & vbCrLf & _
                "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-               "Greške: " & CStr(totalErrors), _
+               Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors), _
                vbInformation, APP_NAME
     End If
 
@@ -277,7 +277,7 @@ EH:
         errorCount:=totalErrors
 
     If showMessages Then
-        MsgBox "Greška pri uvozu OTK: " & errDesc, vbCritical, APP_NAME
+        MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU") & errDesc, vbCritical, APP_NAME
     End If
 
     ImportOtkupFromPWA_Core = False
@@ -306,14 +306,14 @@ Public Sub ImportOtkupFromPWA_TX()
             errDesc:="PWA import was not confirmed. Transaction rolled back because of fatal sync error.", _
             errSrc:="modMasterSync.ImportOtkupFromPWA_TX"
 
-        MsgBox "PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greške. Proveri log.", _
+        MsgBox Poruka("SYNC_MSG_PWA_UVOZ_NIJE"), _
             vbCritical, APP_NAME
         Exit Sub
     End If
 
     tx.CommitTx
 
-    MsgBox "PWA uvoz završen i potvrden.", vbInformation, APP_NAME
+    MsgBox Poruka("SYNC_MSG_PWA_UVOZ_ZAVRSEN"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -387,7 +387,7 @@ End Sub
 ' Full sync koristi ovu core funkciju sa showMessages=False.
 '
 ' Returns:
-'   True  - sve aktivne stanice imaju OTK sheet ili su uspešno kreirane
+'   True  - sve aktivne stanice imaju OTK sheet ili su uspesno kreirane
 '   False - fatal config/auth/schema greska ili bar jedan create/write fail
 '======================================================================
 Public Function CreateOTKSheetsForAllStanice_Core( _
@@ -626,7 +626,7 @@ EH:
 End Function
 
 Public Function AutoCreateOtpremniceFromPWA() As Long
-    ' Nach ImportOtkupFromPWA: erstellt Otpremnice für PWA-Otkupi mit VozacID
+    ' Nach ImportOtkupFromPWA: erstellt Otpremnice fuer PWA-Otkupi mit VozacID
     ' Gruppierung: StanicaID + Datum + VozacID + Klasa (= AutoLink Key)
     ' Returns: Anzahl erstellter Otpremnice
     
@@ -653,7 +653,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     colTipAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB, "AutoCreateOtpremniceFromPWA")
     colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "AutoCreateOtpremniceFromPWA")
     
-    ' Sammle unverknüpfte Otkupi MIT VozacID ? gruppiere nach Key
+    ' Sammle unverknuepfte Otkupi MIT VozacID ? gruppiere nach Key
     ' Key = StanicaID|Datum|VozacID|Klasa
     Dim groups As Object
     Set groups = CreateObject("Scripting.Dictionary")
@@ -683,12 +683,12 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         Exit Function
     End If
     
-    ' Für jede Gruppe: Otpremnica erstellen + Otkupi verknüpfen
+    ' Fuer jede Gruppe: Otpremnica erstellen + Otkupi verknuepfen
     Dim created As Long
     Dim keys As Variant: keys = groups.keys
     Dim k As Long
     
-    ' Otpremnica-Zähler pro Stanica+Datum vorladen
+    ' Otpremnica-Zaehler pro Stanica+Datum vorladen
     Dim otpAll As Variant
     otpAll = GetTableData(TBL_OTPREMNICA)
     If Not IsEmpty(otpAll) Then otpAll = ExcludeStornirano(otpAll, TBL_OTPREMNICA)
@@ -728,7 +728,7 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
                 "GenerateBrojOtpremnice nije vratio broj za stanica=" & parts(0)
         End If
         
-        ' Otpremnica erstellen (BrojZbirne leer — Vozac/Operator setzt später)
+        ' Otpremnica erstellen (BrojZbirne leer -- Vozac/Operator setzt spaeter)
         Dim newOtpID As String
         newOtpID = SaveOtpremnica_TX( _
             CDate(parts(1)), _
@@ -770,12 +770,12 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
 End Function
 
 ' ============================================================
-' MALINA MOD — C: VozacID := StanicaID na tblOtkup.
+' MALINA MOD -- C: VozacID := StanicaID na tblOtkup.
 '
 ' AutoCreateOtpremniceFromPWA pravi otpremnice samo za otkupe koji IMAJU
 ' VozacID (grupisanje StanicaID|Datum|VozacID|Klasa, vidi filter gore).
 ' U malina modu nema vozaca, pa se PRE auto-otpremnice VozacID popunjava
-' StanicaID-em — time se okidac pali, a brojevi ostaju konzistentni
+' StanicaID-em -- time se okidac pali, a brojevi ostaju konzistentni
 ' (otkupac == stanica). Idempotentno: dira samo prazan VozacID.
 ' Self-gated: u visnji ne radi nista.
 ' ============================================================
@@ -844,7 +844,7 @@ Public Function StampVozacFromStanicaForMalina() As Long
 End Function
 
 ' ============================================================
-' MALINA MOD — D: auto-zbirna iz otpremnice (1:1).
+' MALINA MOD -- D: auto-zbirna iz otpremnice (1:1).
 '
 ' Za svaku aktivnu otpremnicu sa praznim BrojZbirne (grupisano po
 ' BrojOtpremnice, Klasa I+II istog dokumenta zajedno) pravi zbirnu preko
@@ -1013,7 +1013,7 @@ Private Sub BackfillOtkupBrojZbirneByOtpremnica(ByVal otpMap As Object, ByVal ca
 End Sub
 
 ' ============================================================
-' PRIVATE — Find OTK-* Sheets in Folder
+' PRIVATE -- Find OTK-* Sheets in Folder
 ' ============================================================
 
 Private Function FindOTKSheets(ByVal folderID As String, _
@@ -1105,7 +1105,7 @@ Private Sub ParseFileList(ByVal json As String, _
     
     pos = 1
     Do
-        ' Suche nächstes "id"
+        ' Suche naechstes "id"
         pos = InStr(pos, json, """id""", vbTextCompare)
         If pos = 0 Then Exit Do
         
@@ -1236,7 +1236,7 @@ Private Function RequireOTKHeaderValue(ByVal data As Variant, _
 End Function
 
 ' ============================================================
-' PRIVATE — Import eines einzelnen OTK-Sheets
+' PRIVATE -- Import eines einzelnen OTK-Sheets
 ' ============================================================
 Public Sub TestHook_ImportOneOTKSheet(ByVal spreadsheetID As String, _
                                       ByVal sheetName As String, _
@@ -1290,7 +1290,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Set statusUpdates = New Collection
     
     For i = 2 To UBound(data, 1)
-        ' Prüfe SyncStatus
+        ' Pruefe SyncStatus
         syncStatus = Trim$(CStr(data(i, GS_SYNC_STATUS)))
         
         ' Nur "Synced" importieren (= vom Apps Script geschrieben, noch nicht im Master)
@@ -1345,14 +1345,14 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 End If
             End If
         Else
-            ' Bereits importiert oder Error ? überspringen
+            ' Bereits importiert oder Error ? ueberspringen
             outSkipped = outSkipped + 1
         End If
 
 NextImportRow:
     Next i
     
-    ' SyncStatus zurückschreiben in Google Sheet
+    ' SyncStatus zurueckschreiben in Google Sheet
     If statusUpdates.count > 0 Then
         If Not WriteBackSyncStatus(spreadsheetID, statusUpdates) Then
             outErrors = outErrors + 1
@@ -1375,11 +1375,11 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIVATE — Validierung
+' PRIVATE -- Validierung
 ' ============================================================
 
 Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As String
-    ' Prüft Pflichtfelder und Plausibilität
+    ' Prueft Pflichtfelder und Plausibilitaet
     ' Returns "" wenn OK, sonst Fehlermeldung
     
     Dim koopID As String
@@ -1477,7 +1477,7 @@ Private Function IsDuplicateInMaster(ByVal clientRecordID As String) As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE — Import Row
+' PRIVATE -- Import Row
 ' ============================================================
 Private Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
                                            ByVal row As Long, _
@@ -1609,7 +1609,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     End If
     
     ' VozacID
-    ' BrojDokumenta = "PWA:" & clientRecordID (für Duplikat-Check)
+    ' BrojDokumenta = "PWA:" & clientRecordID (fuer Duplikat-Check)
     ' Novac = 0, PrimalacNovca = ""
     
     Dim rowData As Variant
@@ -1634,7 +1634,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
                 " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
         ImportRowToTblOtkup = newID
     Else
-        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen für PWA:" & clientRecordID
+        LogError "ImportRowToTblOtkup", "AppendRow fehlgeschlagen fuer PWA:" & clientRecordID
         ImportRowToTblOtkup = ""
     End If
     Exit Function
@@ -1657,7 +1657,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — SyncStatus zurückschreiben
+' PRIVATE -- SyncStatus zurueckschreiben
 ' ============================================================
 
 Private Function WriteBackSyncStatus(ByVal spreadsheetID As String, _
@@ -1772,7 +1772,7 @@ End Function
 
 Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
                                    ByVal newVozacID As String) As Boolean
-    ' Ako Otkup u masteru nema VozacID a sheet ga ima — updateuj
+    ' Ako Otkup u masteru nema VozacID a sheet ga ima -- updateuj
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
@@ -1798,7 +1798,7 @@ Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
 End Function
 
 ' ============================================================
-' PRIVATE — Helpers
+' PRIVATE -- Helpers
 ' ============================================================
 
 Private Function nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "") As Variant
@@ -1917,11 +1917,11 @@ Private Function GetBrojZbirneForIDStrict(ByVal zbirnaID As String, _
     End If
 End Function
 ' ============================================================
-' modMasterSync — ZBIRNA IMPORT (dodati u postojeci modMasterSync)
+' modMasterSync -- ZBIRNA IMPORT (dodati u postojeci modMasterSync)
 ' ============================================================
 
 ' ============================================================
-' PUBLIC — Hauptfunktion Zbirna Import
+' PUBLIC -- Hauptfunktion Zbirna Import
 ' ============================================================
 Public Sub ImportZbirneFromPWA()
     Call ImportZbirneFromPWA_Core(True)
@@ -2070,10 +2070,10 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz zbirnih nije potvrden zbog fatal sync greške." & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_ZBIRNIH_NIJE") & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbCritical, APP_NAME
         End If
@@ -2093,11 +2093,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
             errorCount:=totalErrors
 
         If showMessages Then
-            MsgBox "Uvoz zbirnih završen sa greškama." & vbCrLf & vbCrLf & _
+            MsgBox Poruka("SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN") & vbCrLf & vbCrLf & _
                    "Fajlova: " & CStr(filesCount) & vbCrLf & _
                    "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                    "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-                   "Greške: " & CStr(totalErrors) & vbCrLf & vbCrLf & _
+                   Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors) & vbCrLf & vbCrLf & _
                    "Proveri log.", _
                    vbExclamation, APP_NAME
         End If
@@ -2114,11 +2114,11 @@ Public Function ImportZbirneFromPWA_Core(ByVal showMessages As Boolean) As Boole
         filesCount:=filesCount
 
     If showMessages Then
-        MsgBox "Uvoz zbirnih završen!" & vbCrLf & vbCrLf & _
+        MsgBox Poruka("SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN_2") & vbCrLf & vbCrLf & _
                "Fajlova: " & CStr(filesCount) & vbCrLf & _
                "Uvezeno: " & CStr(totalImported) & vbCrLf & _
                "Preskoceno: " & CStr(totalSkipped) & vbCrLf & _
-               "Greške: " & CStr(totalErrors), _
+               Poruka("SYNC_ERR_GRESKE") & CStr(totalErrors), _
                vbInformation, APP_NAME
     End If
 
@@ -2149,7 +2149,7 @@ EH:
         errorCount:=totalErrors
 
     If showMessages Then
-        MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+        MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU_2") & errDesc, vbCritical, APP_NAME
     End If
 
     ImportZbirneFromPWA_Core = False
@@ -2178,15 +2178,15 @@ Public Sub ImportZbirneFromPWA_TX()
     ok = ImportZbirneFromPWA_Core(False)
 
     If Not ok Then
-        MsgBox "Uvoz zbirnih završen sa greškama ili fatal sync problemom." & vbCrLf & _
-               "Uspešni redovi koji su potvrdeni kroz row-level TX ostaju upisani." & vbCrLf & _
-               "Neuspešni redovi su oznaceni kao greška gde je writeback uspeo." & vbCrLf & _
+        MsgBox Poruka("SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN") & vbCrLf & _
+               Poruka("SYNC_MSG_USPESNI_REDOVI_KOJI") & vbCrLf & _
+               Poruka("SYNC_MSG_NEUSPESNI_REDOVI_OZNACENI") & vbCrLf & _
                "Proveri log.", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
 
-    MsgBox "Uvoz zbirnih završen i potvrden.", vbInformation, APP_NAME
+    MsgBox Poruka("SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN_2"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -2202,11 +2202,11 @@ EH:
     LogErr SRC
     On Error GoTo 0
 
-    MsgBox "Greška pri uvozu zbirnih: " & errDesc, vbCritical, APP_NAME
+    MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU_2") & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' PRIVATE — Find VOZ-* Sheets in Folder
+' PRIVATE -- Find VOZ-* Sheets in Folder
 ' ============================================================
 
 Private Function FindVOZSheets(ByVal folderID As String, _
@@ -2303,7 +2303,7 @@ Private Sub ParseFileListVOZ(ByVal json As String, _
 End Sub
 
 ' ============================================================
-' PRIVATE — Import eines einzelnen VOZ-Sheets
+' PRIVATE -- Import eines einzelnen VOZ-Sheets
 ' ============================================================
 
 Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
@@ -2493,7 +2493,7 @@ EH:
     ImportVOZRow_RowTX = False
 End Function
 ' ============================================================
-' PRIVATE — Validierung
+' PRIVATE -- Validierung
 ' ============================================================
 
 Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As String
@@ -2565,7 +2565,7 @@ Private Function IsDuplicateZbirnaInMaster(ByVal clientRecordID As String) As Bo
 End Function
 
 ' ============================================================
-' PRIVATE — Import Row to tblZbirna
+' PRIVATE -- Import Row to tblZbirna
 ' ============================================================
 
 Private Function ImportRowToTblZbirna(ByVal data As Variant, _
@@ -2682,7 +2682,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
                 " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"
         ImportRowToTblZbirna = newID
     Else
-        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen für PWA:" & clientRecordID
+        LogError "ImportRowToTblZbirna", "AppendRow fehlgeschlagen fuer PWA:" & clientRecordID
         ImportRowToTblZbirna = ""
     End If
     Exit Function
@@ -2693,7 +2693,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
+' PRIVATE -- Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
 ' ============================================================
 
 Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
@@ -2779,7 +2779,7 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Sub
 ' ============================================================
-' PRIVATE — Helper: BrojZbirne aus ZbirnaID
+' PRIVATE -- Helper: BrojZbirne aus ZbirnaID
 ' ============================================================
 
 Private Function GetBrojZbirneForID(ByVal zbirnaID As String) As String
@@ -2802,7 +2802,7 @@ Private Function IsValidBrojZbirneFormat(ByVal s As String) As Boolean
 End Function
 
 ' ============================================================
-' PRIVATE — WriteBack VOZ SyncStatus + ServerRecordID
+' PRIVATE -- WriteBack VOZ SyncStatus + ServerRecordID
 ' ============================================================
 
 Private Function WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
@@ -2833,11 +2833,11 @@ Private Function WriteBackVOZSyncStatus(ByVal spreadsheetID As String, _
         If Not isFirst Then body = body & ","
         isFirst = False
         
-        ' Kolona F — SyncStatus
+        ' Kolona F -- SyncStatus
         body = body & "{""range"":""Sheet1!F" & CStr(update(0)) & """," & _
                """values"":[[""" & JsonEscape(CStr(update(1))) & """]]}"
         
-        ' Kolona B — ServerRecordID (2. kolona = B)
+        ' Kolona B -- ServerRecordID (2. kolona = B)
         If UBound(update) >= 2 Then
             If Len(CStr(update(2))) > 0 Then
                 body = body & ",{""range"":""Sheet1!B" & CStr(update(0)) & """," & _
@@ -3081,7 +3081,7 @@ Private Sub Monitor_MasterSyncFail(ByVal procedureName As String, _
 End Sub
 
 ' ============================================================
-' PARCEL GEO PULL — Google/Stammdaten -> tblParcele
+' PARCEL GEO PULL -- Google/Stammdaten -> tblParcele
 ' ============================================================
 
 Public Function ImportParcelGeoFromGoogleToMaster() As Boolean
@@ -3418,8 +3418,8 @@ Private Sub GeoUpdateFieldIfNeeded(ByVal parcelData As Variant, _
 
     newText = Trim$(GeoText(newValue))
 
-    ' VAŽNO:
-    ' Prazan Google value NE sme da obriše postojeci lokalni geo podatak.
+    ' VAZNO:
+    ' Prazan Google value NE sme da obrise postojeci lokalni geo podatak.
     If Len(newText) = 0 Then Exit Sub
 
     oldText = Trim$(GeoText(parcelData(masterRow, masterCol)))

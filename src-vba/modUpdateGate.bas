@@ -63,14 +63,14 @@ Public Function UpdateGateOrQuit() As Boolean
             Application.Visible = True
             MsgBox msg & vbCrLf & vbCrLf & _
                    "Potrebno je azuriranje pre nastavka rada." & vbCrLf & _
-                   "Kontaktirajte dobavljaca za novu verziju.", vbCritical, APP_NAME
+                   "Kontaktirajte dobavlja" & ChrW(269) & "a za novu verziju.", vbCritical, APP_NAME
             DenyAccessAndScheduleClose            ' isti mehanizam kao license blok
             UpdateGateOrQuit = False
         Case Else
             ' WARN (default): obavesti, ali pusti da radi.
             Application.Visible = True
             MsgBox msg & vbCrLf & vbCrLf & _
-                   "Preporucuje se azuriranje. Kontaktirajte dobavljaca.", _
+                   "Preporucuje se azuriranje. Kontaktirajte dobavlja" & ChrW(269) & "a.", _
                    vbExclamation, APP_NAME
             UpdateGateOrQuit = True
     End Select

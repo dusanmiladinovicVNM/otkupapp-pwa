@@ -393,7 +393,7 @@ Private Sub ApplySEFStateOrRefreshOnly(ByVal fakturaID As String, _
     End If
 
     ' Ne vracamo finalne lokalne state-ove nazad u SEF_SENT samo zato
-    ' što eksterni API vrati pending/non-final status.
+    ' sto eksterni API vrati pending/non-final status.
     If targetState = UCase$(WF_SEF_SENT) Then
         If IsFinalLocalSEFWorkflowState(currentState) Then
             UpdateFakturaSEFRefreshFields_Row _

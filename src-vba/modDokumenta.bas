@@ -4,12 +4,12 @@ Attribute VB_Name = "modDokumenta"
 Option Explicit
 
 ' ============================================================
-' modDokumenta – Otpremnica, Zbirna, Prijemnica
+' modDokumenta - Otpremnica, Zbirna, Prijemnica
 ' Dokumentenfluss: Otkup zu Otpremnica zu Zbirna zu Prijemnica zu Faktura
 ' ============================================================
 
 ' ============================================================
-' OTPREMNICA – Station gibt Ware an Fahrer
+' OTPREMNICA - Station gibt Ware an Fahrer
 ' ============================================================
 Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                                        ByVal stanicaID As String, _
@@ -260,7 +260,7 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
         SaveOtpremnica = newID
     Else
         Err.Raise vbObjectError + 1003, "SaveOtpremnica", _
-                  "AppendRow fehlgeschlagen für tblOtpremnica"
+                  "AppendRow fehlgeschlagen fuer tblOtpremnica"
     End If
     Exit Function
     
@@ -358,7 +358,7 @@ EH:
 End Function
 
 ' ============================================================
-' ZBIRNA – Gesamtdokument Fahrer
+' ZBIRNA - Gesamtdokument Fahrer
 ' ============================================================
 Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
                                    ByVal vozacID As String, _
@@ -589,7 +589,7 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
         SaveZbirna = newID
     Else
         Err.Raise vbObjectError + 1010, "SaveZbirna", _
-                  "AppendRow fehlgeschlagen für tblZbirna."
+                  "AppendRow fehlgeschlagen fuer tblZbirna."
     End If
 
     Exit Function
@@ -658,7 +658,7 @@ End Function
 ' ZBIRNA VALIDIERUNG
 ' ============================================================
 Public Function ValidateZbirna(ByVal brojZbirne As String) As Variant
-    ' Prüft Summe Otpremnice vs Zbirna
+    ' Prueft Summe Otpremnice vs Zbirna
     ' Returns: Array(SumaOtpKg, ZbirnaKg, RazlikaKg, ValidKg,
     '                SumaOtpAmb, ZbirnaAmb, RazlikaAmb)
     On Error GoTo EH
@@ -785,7 +785,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIJEMNICA – Kunde wiegt bei Annahme
+' PRIJEMNICA - Kunde wiegt bei Annahme
 ' ============================================================
 
 Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
@@ -1078,7 +1078,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
 
     If appendedRow <= 0 Then
         Err.Raise vbObjectError + 1014, "SavePrijemnica", _
-                "AppendRow fehlgeschlagen für tblPrijemnica."
+                "AppendRow fehlgeschlagen fuer tblPrijemnica."
     End If
 
     ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
@@ -1246,7 +1246,7 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
 
     If kolAmb <= 0 And novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  "Nema ambalaže ni novca za cuvanje."
+                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
     End If
 
     tx.BeginTx
@@ -1306,7 +1306,7 @@ EH:
 End Function
 
 ' ============================================================
-' MANJAK – Schwundberechnung
+' MANJAK - Schwundberechnung
 ' ============================================================
 
 Public Function CalculateManjak(ByVal brojZbirne As String) As Variant
@@ -1525,7 +1525,7 @@ EH:
 End Function
 
 ' ============================================================
-' PROSEK GAJBE – Durchschnittsgewicht pro Kästchen
+' PROSEK GAJBE - Durchschnittsgewicht pro Kaestchen
 ' ============================================================
 
 Public Function CalculateProsekGajbe(ByVal brojOtp As String) As Double
@@ -1954,7 +1954,7 @@ EH:
 End Sub
 
 ' ============================================================
-' HELPER – Vozac-Report (ersetzt alten modTransport)
+' HELPER - Vozac-Report (ersetzt alten modTransport)
 ' ============================================================
 
 Public Function GetVozacDokumenta(ByVal vozacID As String, _
@@ -2124,7 +2124,7 @@ Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
     'End If
 
     If kolicina <= 0 Then
-        Err.Raise vbObjectError + 1405, SRC, "Kolicina mora biti veca od nule."
+        Err.Raise vbObjectError + 1405, SRC, "Koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If cena < 0 Then
@@ -2132,11 +2132,11 @@ Private Sub ValidateOtpremnicaInput(ByVal stanicaID As String, _
     End If
 
     If kolAmb < 0 Then
-        Err.Raise vbObjectError + 1407, SRC, "Kolicina ambalaze ne sme biti negativna."
+        Err.Raise vbObjectError + 1407, SRC, "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1408, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+        Err.Raise vbObjectError + 1408, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     RequireValidDocumentClass klasa, SRC
@@ -2165,15 +2165,15 @@ Private Sub ValidateZbirnaInput(ByVal vozacID As String, _
     End If
 
     If ukupnoKol <= 0 Then
-        Err.Raise vbObjectError + 1413, SRC, "Ukupna kolicina mora biti veca od nule."
+        Err.Raise vbObjectError + 1413, SRC, "Ukupna koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If ukupnoAmb < 0 Then
-        Err.Raise vbObjectError + 1414, SRC, "Ukupna ambalaza ne sme biti negativna."
+        Err.Raise vbObjectError + 1414, SRC, "Ukupna ambala" & ChrW(382) & "a ne sme biti negativna."
     End If
 
     If ukupnoAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1415, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+        Err.Raise vbObjectError + 1415, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     RequireValidDocumentClass klasa, SRC
@@ -2209,7 +2209,7 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     End If
 
     If kolicina <= 0 Then
-        Err.Raise vbObjectError + 1424, SRC, "Kolicina mora biti veca od nule."
+        Err.Raise vbObjectError + 1424, SRC, "Koli" & ChrW(269) & "ina mora biti veca od nule."
     End If
 
     If cena < 0 Then
@@ -2217,11 +2217,11 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     End If
 
     If kolAmb < 0 Or kolAmbVracena < 0 Then
-        Err.Raise vbObjectError + 1426, SRC, "Kolicina ambalaze ne sme biti negativna."
+        Err.Raise vbObjectError + 1426, SRC, "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
     End If
 
     If (kolAmb > 0 Or kolAmbVracena > 0) And Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 1427, SRC, "Tip ambalaze je obavezan kada postoji ambalaza."
+        Err.Raise vbObjectError + 1427, SRC, "Tip ambala" & ChrW(382) & "e je obavezan kada postoji ambala" & ChrW(382) & "a."
     End If
 
     RequireValidDocumentClass klasa, SRC
@@ -2289,7 +2289,7 @@ Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
 End Function
 
 ' ============================================================
-' STORNO PREGLED (read-only) — agregira stornirane dokumente po tipu za
+' STORNO PREGLED (read-only) -- agregira stornirane dokumente po tipu za
 ' prikaz u panelu unutar frmDokumenta (dugme "Pregled storniranih").
 ' Soft-delete: red je storniran kad je COL_STORNIRANO = "Da" (modStorno).
 ' Jedinstven (unifikovan) skup korisnih kolona za sve tipove:
@@ -2307,7 +2307,7 @@ End Function
 ' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
 Public Function StorniraniHeaders() As Variant
     StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
-                              "Klasa", "Kolicina", "Cena", "Iznos (RSD)", _
+                              "Klasa", "Koli" & ChrW(269) & "ina", "Cena", "Iznos (RSD)", _
                               "Zbirna", "Otpremnica", "Faktura")
 End Function
 
@@ -2450,7 +2450,7 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
             If Len(fakId) > 0 Then fak = DictGet(fakById, fakId) Else fak = DictGet(fakByZbr, zbr)
 
             ' Iznos: stored (Faktura=Iznos, Novac=Uplata-Isplata) ili izracunat
-            ' Kolicina × Cena (Otkup/Otpremnica/Prijemnica nemaju zaseban iznos).
+            ' Kolicina x Cena (Otkup/Otpremnica/Prijemnica nemaju zaseban iznos).
             Dim iznos As String
             iznos = StornoIznosText(StornoCellRaw(data, i, iIzn), StornoCellRaw(data, i, iIzn2))
             If Len(iznos) = 0 Then _
@@ -2628,7 +2628,7 @@ Private Function StornoIznosText(ByVal v1 As Variant, ByVal v2 As Variant) As St
     If net <> 0 Then StornoIznosText = Format$(net, "#,##0")
 End Function
 
-' Iznos = Kolicina × Cena (prazno ako je proizvod 0).
+' Iznos = Kolicina x Cena (prazno ako je proizvod 0).
 Private Function StornoMnozi(ByVal vKol As Variant, ByVal vCena As Variant) As String
     Dim kol As Double, cena As Double
     If Not TryParseDouble(Trim$(NzToText(vKol)), kol) Then kol = 0

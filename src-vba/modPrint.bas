@@ -21,13 +21,13 @@ Private Const OL_TOP_MARGIN_TRIM_PT As Double = 0#
 Private m_izdAmbPrijem As Boolean
 
 ' ============================================================
-' modPrint – Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
+' modPrint - Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
 ' ============================================================
 
 Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
                          ByVal headers As Variant)
     ' Generischer Report-Druck
-    ' Schreibt in ein temporäres Print-Sheet und druckt
+    ' Schreibt in ein temporaeres Print-Sheet und druckt
     
     Dim wsPrint As Worksheet
     On Error Resume Next
@@ -54,12 +54,12 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     On Error Resume Next
     wsPrint.Visible = xlSheetVisible
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Izvestaj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    pdfPath = ThisWorkbook.path & "\Izve" & ChrW(353) & "taj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
     wsPrint.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
                                           Quality:=xlQualityStandard, OpenAfterPublish:=True
     On Error GoTo 0
     
-    ' Aufräumen
+    ' Aufraeumen
     wsPrint.Visible = xlSheetVeryHidden
 End Sub
 
@@ -71,7 +71,7 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     On Error GoTo EH
     Dim ws As Worksheet: Set ws = FillOtpremnicaSablon(otpID)
     If ws Is Nothing Then
-        MsgBox "Otpremnica nije pronadjena ili se ne moze pripremiti (" & otpID & ").", _
+        MsgBox "Otpremnica nije pronadjena ili se ne mo" & ChrW(382) & "e pripremiti (" & otpID & ").", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -85,7 +85,7 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     Exit Sub
 EH:
     LogErr "modPrint.OutputOtpremnicaPDF"
-    MsgBox "Greska pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Popuni OtpremnicaSablon iz reda tblOtpremnice (isti obrazac kao grupni otkupni
@@ -163,7 +163,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     Dim stanicaNaziv As String: stanicaNaziv = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv")))
     If Len(stanicaNaziv) = 0 Then stanicaNaziv = stID
     h("stanica") = stanicaNaziv
-    h("koop") = "": h("bpg") = "": h("racun") = ""
+    h("koop") = "": h("bpg") = "": h("ra" & ChrW(269) & "un") = ""
 
     Dim ambPoc As Long: ambPoc = GetStanicaAmbSaldo(stID, tipAmb)
     h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
@@ -180,7 +180,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     Dim kl As String: kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
     kl = Replace(kl, "{BPG}", "", , , vbTextCompare)
     kl = Replace(kl, "{POLJOPRIVREDNIK}", "", , , vbTextCompare)
-    kl = Replace(kl, "{RACUN}", "", , , vbTextCompare)
+    kl = Replace(kl, "{RA" & ChrW(268) & "UN}", "", , , vbTextCompare)
     kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
     h("klauzula") = kl
@@ -264,7 +264,7 @@ Private Function OtpN(ByVal d As Variant, ByVal r As Long, ByVal colName As Stri
 End Function
 
 ' ============================================================
-' OTKUPNI LIST (zakonski) — OtkupSablon, dva primerka jedan iznad drugog,
+' OTKUPNI LIST (zakonski) -- OtkupSablon, dva primerka jedan iznad drugog,
 ' A4 portrait. PDV nadoknada se racuna (CFG_PDV_NADOKNADA_STOPA, default 8%).
 ' Izlaz po CFG_OTKUP_PRINT_MODE: (prazno/PDF) | PRINT | PREVIEW | OFF.
 ' otkupIDs = rezultat SaveOtkupMulti_TX (npr. "OTK-1 + OTK-2" ili "OTK-1").
@@ -492,7 +492,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     Dim kl As String: kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
     kl = Replace(kl, "{BPG}", CStr(h("bpg")), , , vbTextCompare)
     kl = Replace(kl, "{POLJOPRIVREDNIK}", CStr(h("koop")), , , vbTextCompare)
-    kl = Replace(kl, "{RACUN}", CStr(h("racun")), , , vbTextCompare)
+    kl = Replace(kl, "{RA" & ChrW(268) & "UN}", CStr(h("ra" & ChrW(269) & "un")), , , vbTextCompare)
     kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
     h("klauzula") = kl
@@ -668,7 +668,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
         ' BPG i tekuci racun samo na pojedinacnom otkupnom listu (proizvodjac);
         ' grupni otkupni list nema pojedinacnog proizvodjaca.
         DocLabelVal ws, rr, 4, "BPG:", CStr(h("bpg"))
-        DocLabelVal ws, rr, 6, "TR:", CStr(h("racun"))
+        DocLabelVal ws, rr, 6, "TR:", CStr(h("ra" & ChrW(269) & "un"))
     End If
     ws.rows(rr).RowHeight = 13#
     usedPt = usedPt + 13#
@@ -725,7 +725,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ws.cells(ob, 4).value = CStr(h("ambPocetno"))
     DocLabelVal ws, ob + 1, 1, "Primljeno:", CStr(h("ambPrijem"))
     DocLabelVal ws, ob + 1, 3, "Izdato:", CStr(h("ambIzdavanje"))
-    DocLabelVal ws, ob + 2, 1, "Saldo ambalaze:", ""
+    DocLabelVal ws, ob + 2, 1, "Saldo ambala" & ChrW(382) & "e:", ""
     ws.cells(ob + 2, 4).value = CStr(h("ambSaldo"))
     ws.cells(ob + 2, 1).Font.Bold = True
     ws.cells(ob + 2, 4).Font.Bold = True
@@ -992,7 +992,7 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
                              CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Prezime")))
     End If
     h("stanica") = stanicaNaziv
-    h("koop") = "": h("bpg") = "": h("racun") = ""
+    h("koop") = "": h("bpg") = "": h("ra" & ChrW(269) & "un") = ""
 
     ' Ambalaza - saldo na nivou stanice (entitet "Stanica"): Pocetno = saldo gajbica
     ' stanice iz tblAmbalaza (prijemnica pise "Kupac" stranu, ne pomera "Stanica");
@@ -1015,7 +1015,7 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     Dim kl As String: kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
     kl = Replace(kl, "{BPG}", "", , , vbTextCompare)
     kl = Replace(kl, "{POLJOPRIVREDNIK}", "", , , vbTextCompare)
-    kl = Replace(kl, "{RACUN}", "", , , vbTextCompare)
+    kl = Replace(kl, "{RA" & ChrW(268) & "UN}", "", , , vbTextCompare)
     kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
     h("klauzula") = kl
@@ -1098,9 +1098,9 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIJEMNICA — PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
+' PRIJEMNICA -- PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
 ' hladnjacu). Izlaz po CFG_PRIJEMNICA_PRINT_MODE: OFF/prazno (DEFAULT, bez
-' izlaza — kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
+' izlaza -- kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
 ' frmDokumenta.btnUnosPrij posle snimanja. prijemnicaIDs = rezultat
 ' SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2" za dve klase).
 ' ============================================================
@@ -1159,7 +1159,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
     ExportPrijemnicaPDF = pdfPath
     Exit Function
 EH:
-    MsgBox "Greska pri izradi PDF prijemnice:" & vbCrLf & _
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi PDF prijemnice:" & vbCrLf & _
            "  [" & Err.Number & "] " & Err.description, vbExclamation, APP_NAME
     LogErr "modPrint.ExportPrijemnicaPDF"
 End Function
@@ -1319,7 +1319,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
 
     ' --- vracena ambalaza (ako je uneta) ---
     If ambV > 0 Then
-        DocLabelVal ws, rr, 1, "Vracena ambalaza (kom):", CStr(CLng(ambV))
+        DocLabelVal ws, rr, 1, "Vracena ambala" & ChrW(382) & "a (kom):", CStr(CLng(ambV))
         rr = rr + 2
     End If
 
@@ -1447,7 +1447,7 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
                                          koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
     If ws Is Nothing Then
-        MsgBox "PDF reversa (izdavanje ambalaze) nije napravljen: priprema lista nije uspela.", _
+        MsgBox "PDF reversa (izdavanje ambala" & ChrW(382) & "e) nije napravljen: priprema lista nije uspela.", _
                vbExclamation, APP_NAME
         Exit Function
     End If
@@ -1467,7 +1467,7 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     ExportIzdavanjeAmbalazePDF = pdfPath
     Exit Function
 EH:
-    MsgBox "Greska pri izradi PDF reversa (izdavanje ambalaze):" & vbCrLf & _
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi PDF reversa (izdavanje ambala" & ChrW(382) & "e):" & vbCrLf & _
            "  [" & Err.Number & "] " & Err.description, vbExclamation, APP_NAME
     LogErr "modPrint.ExportIzdavanjeAmbalazePDF"
 End Function
@@ -1653,7 +1653,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- naslov: mali descriptor + veliki REVERS ---
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = IIf(h("prijem"), "Prijem (povrat) prazne ambalaze od kooperanta", "Izdavanje prazne ambalaze kooperantu")
+        .value = IIf(h("prijem"), "Prijem (povrat) prazne ambala" & ChrW(382) & "e od kooperanta", "Izdavanje prazne ambala" & ChrW(382) & "e kooperantu")
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
@@ -1705,7 +1705,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
 
     ' --- vrsta voca (samo ako je uneta) ---
     If Len(CStr(h("vrsta"))) > 0 Then
-        DocLabelVal ws, rr, 1, "Vrsta voca:", CStr(h("vrsta"))
+        DocLabelVal ws, rr, 1, "Vrsta vo" & ChrW(263) & "a:", CStr(h("vrsta"))
         ws.rows(rr).RowHeight = 12#
         usedPt = usedPt + 12#
         rr = rr + 1
@@ -1714,7 +1714,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- stavka: Rb | Tip ambalaze | Broj gajbica (kom) ---
     Dim hdr As Long: hdr = rr
     ws.cells(rr, 1).value = "Rb"
-    ws.cells(rr, 2).value = "Tip ambalaze"
+    ws.cells(rr, 2).value = "Tip ambala" & ChrW(382) & "e"
     ws.cells(rr, 5).value = "Broj gajbica (kom)"
     ws.Range(ws.cells(rr, 2), ws.cells(rr, 4)).Merge
     ws.Range(ws.cells(rr, 5), ws.cells(rr, 8)).Merge

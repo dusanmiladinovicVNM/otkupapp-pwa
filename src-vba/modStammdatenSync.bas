@@ -2,14 +2,14 @@ Attribute VB_Name = "modStammdatenSync"
 Option Explicit
 
 ' ============================================================
-' modStammdatenSync – Export Stammdaten zu Google Sheet
+' modStammdatenSync - Export Stammdaten zu Google Sheet
 '
 ' Schreibt tblKooperanti, tblKulture, tblConfig (Cene)
-' in ein Google Sheet "Stammdaten" für die PWA.
+' in ein Google Sheet "Stammdaten" fuer die PWA.
 '
 ' Config-Keys in tblConfig:
 '   GOOGLE_STAMMDATEN_SHEET_ID   (wird automatisch erstellt)
-'   GOOGLE_PWA_FOLDER_ID         (Drive Folder für PWA-Sheets)
+'   GOOGLE_PWA_FOLDER_ID         (Drive Folder fuer PWA-Sheets)
 '
 ' Aufruf: Button in frmMain oder manuell via SyncStammdatenToGoogle
 ' ============================================================
@@ -117,7 +117,7 @@ End Sub
  
 
 ' ============================================================
-' PUBLIC — Hauptfunktion
+' PUBLIC -- Hauptfunktion
 ' ============================================================
 Public Sub SyncStammdatenToGoogle()
     Call SyncStammdatenToGoogle_Core(True)
@@ -260,7 +260,7 @@ EH:
         totalTabs:=TOTAL_STAMMDATEN_TABS
     
     If showMessages Then
-        MsgBox "Greska pri eksportu stammdaten: " & errDesc, vbCritical, APP_NAME
+        MsgBox "Gre" & ChrW(353) & "ka pri eksportu stammdaten: " & errDesc, vbCritical, APP_NAME
     End If
     
     SyncStammdatenToGoogle_Core = False
@@ -321,7 +321,7 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     If IsEmpty(koopData) Then
         ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, KARTICE_TAB_NAME, _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
-            "Opis", "Zaduzenje", "Razduzenje", "Saldo")
+            "Opis", "Zadu" & ChrW(382) & "enje", "Razdu" & ChrW(382) & "enje", "Saldo")
         
         If showMessages Then MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
         Exit Function
@@ -332,7 +332,7 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     If IsEmpty(koopData) Then
         ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, KARTICE_TAB_NAME, _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
-            "Opis", "Zaduzenje", "Razduzenje", "Saldo")
+            "Opis", "Zadu" & ChrW(382) & "enje", "Razdu" & ChrW(382) & "enje", "Saldo")
         
         If showMessages Then MsgBox "Kartice exportiert: 0 stavki.", vbInformation, APP_NAME
         Exit Function
@@ -359,7 +359,7 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     If koopCount = 0 Then
         ExportKarticeToGoogle_Core = WriteHeaderOnly(sheetID, KARTICE_TAB_NAME, _
             "KooperantID", "Datum", "BrojDok", "BrojParcele", _
-            "Opis", "Zaduzenje", "Razduzenje", "Saldo")
+            "Opis", "Zadu" & ChrW(382) & "enje", "Razdu" & ChrW(382) & "enje", "Saldo")
         
         If showMessages Then
             MsgBox "Kartice exportiert: 0 stavki za 0 aktivnih kooperanata.", _
@@ -388,8 +388,8 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     allRows(1, 3) = "BrojDok"
     allRows(1, 4) = "BrojParcele"
     allRows(1, 5) = "Opis"
-    allRows(1, 6) = "Zaduzenje"
-    allRows(1, 7) = "Razduzenje"
+    allRows(1, 6) = "Zadu" & ChrW(382) & "enje"
+    allRows(1, 7) = "Razdu" & ChrW(382) & "enje"
     allRows(1, 8) = "Saldo"
     
     outRow = 1
@@ -454,7 +454,7 @@ EH:
     LogErr "ExportKarticeToGoogle_Core"
     
     If showMessages Then
-        MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+        MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
     End If
     
     ExportKarticeToGoogle_Core = False
@@ -532,7 +532,7 @@ EH:
     LogErr "ExportMgmtReports_Core"
     
     If showMessages Then
-        MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+        MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
     End If
     
     ExportMgmtReports_Core = False
@@ -549,8 +549,8 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTKUP)
     If IsEmpty(data) Then
         ExportOtkupPoOM = WriteHeaderOnly(sheetID, "OtkupPoOM", _
-            "StanicaID", "VrstaVoca", "Klasa", "Kolicina", _
-            "Ambalaza", "Vrednost", "BrojOtkupa")
+            "StanicaID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
+            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojOtkupa")
         Exit Function
     End If
     
@@ -581,8 +581,8 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
     
     If dict.count = 0 Then
         ExportOtkupPoOM = WriteHeaderOnly(sheetID, "OtkupPoOM", _
-            "StanicaID", "VrstaVoca", "Klasa", "Kolicina", _
-            "Ambalaza", "Vrednost", "BrojOtkupa")
+            "StanicaID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
+            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojOtkupa")
         Exit Function
     End If
     
@@ -591,8 +591,8 @@ Private Function ExportOtkupPoOM(ByVal sheetID As String) As Boolean
     result(1, 1) = "StanicaID"
     result(1, 2) = "VrstaVoca"
     result(1, 3) = "Klasa"
-    result(1, 4) = "Kolicina"
-    result(1, 5) = "Ambalaza"
+    result(1, 4) = "Koli" & ChrW(269) & "ina"
+    result(1, 5) = "Ambala" & ChrW(382) & "a"
     result(1, 6) = "Vrednost"
     result(1, 7) = "BrojOtkupa"
     
@@ -659,7 +659,7 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
             "UpdatedAtClient", "UpdatedAtServer", "SyncStatus", _
             "DeviceID", "OtkupacID", "Datum", "KooperantID", _
             "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
-            "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", _
+            "Koli" & ChrW(269) & "ina", "Cena", "TipAmbalaze", "KolAmbalaze", _
             "ParcelaID", "VozacID", "Napomena", "ReceivedAt", _
             "BrojZbirne", "OtpremnicaID", "PrijemnicaID", _
             "BrojPrijemnice", "KupacID", "DatumPrijema", _
@@ -702,7 +702,7 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     result(1, 12) = "VrstaVoca"
     result(1, 13) = "SortaVoca"
     result(1, 14) = "Klasa"
-    result(1, 15) = "Kolicina"
+    result(1, 15) = "Koli" & ChrW(269) & "ina"
     result(1, 16) = "Cena"
     result(1, 17) = "TipAmbalaze"
     result(1, 18) = "KolAmbalaze"
@@ -866,8 +866,8 @@ Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
                 datumPrj = CStr(nz(data(i, colDatum), ""))
             End If
 
-            ' Ako postoji više prijemnica za isti BrojZbirne, prva je dovoljna
-            ' za status "received". Kasnije možemo agregirati ako bude trebalo.
+            ' Ako postoji vise prijemnica za isti BrojZbirne, prva je dovoljna
+            ' za status "received". Kasnije mozemo agregirati ako bude trebalo.
             If Not dict.Exists(bz) Then
                 dict.Add bz, Array(prjID, brojPrj, kupacID, datumPrj)
             End If
@@ -913,8 +913,8 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_PRIJEMNICA)
     If IsEmpty(data) Then
         ExportPredatoPoKupcu = WriteHeaderOnly(sheetID, "PredatoPoKupcu", _
-            "KupacID", "VrstaVoca", "Klasa", "Kolicina", _
-            "Ambalaza", "Vrednost", "BrojPrijemnica")
+            "KupacID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
+            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojPrijemnica")
         Exit Function
     End If
     
@@ -945,8 +945,8 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
     
     If dict.count = 0 Then
         ExportPredatoPoKupcu = WriteHeaderOnly(sheetID, "PredatoPoKupcu", _
-            "KupacID", "VrstaVoca", "Klasa", "Kolicina", _
-            "Ambalaza", "Vrednost", "BrojPrijemnica")
+            "KupacID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
+            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojPrijemnica")
         Exit Function
     End If
     
@@ -955,8 +955,8 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
     result(1, 1) = "KupacID"
     result(1, 2) = "VrstaVoca"
     result(1, 3) = "Klasa"
-    result(1, 4) = "Kolicina"
-    result(1, 5) = "Ambalaza"
+    result(1, 4) = "Koli" & ChrW(269) & "ina"
+    result(1, 5) = "Ambala" & ChrW(382) & "a"
     result(1, 6) = "Vrednost"
     result(1, 7) = "BrojPrijemnica"
     
@@ -992,7 +992,7 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
     
     On Error GoTo EH
     
-    ' ReportSaldoOM gibt Daten in ein ListBox — wir brauchen die Rohdaten
+    ' ReportSaldoOM gibt Daten in ein ListBox -- wir brauchen die Rohdaten
     ' Hier vereinfacht: OM-Saldo aus tblNovac berechnen
     Dim data As Variant
     Dim colOMID As Long, colTip As Long, colIsplata As Long, colUplata As Long
@@ -1159,8 +1159,8 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
     
     If dict.count = 0 Then
         ExportSaldoOMDetail = WriteHeaderOnly(sheetID, "SaldoOMDetail", _
-            "KooperantID", "Kooperant", "StanicaID", "Kolicina", _
-            "Vrednost", "Isplaceno", "AgroZaduzenje", "Saldo", "Ambalaza")
+            "KooperantID", "Kooperant", "StanicaID", "Koli" & ChrW(269) & "ina", _
+            "Vrednost", "Isplaceno", "AgroZaduzenje", "Saldo", "Ambala" & ChrW(382) & "a")
         Exit Function
     End If
     
@@ -1170,12 +1170,12 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
     result(1, 1) = "KooperantID"
     result(1, 2) = "Kooperant"
     result(1, 3) = "StanicaID"
-    result(1, 4) = "Kolicina"
+    result(1, 4) = "Koli" & ChrW(269) & "ina"
     result(1, 5) = "Vrednost"
     result(1, 6) = "Isplaceno"
     result(1, 7) = "AgroZaduzenje"
     result(1, 8) = "Saldo"
-    result(1, 9) = "Ambalaza"
+    result(1, 9) = "Ambala" & ChrW(382) & "a"
     
     Dim keys As Variant
     keys = dict.keys
@@ -1306,7 +1306,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Export einzelner Tabellen
+' PRIVATE -- Export einzelner Tabellen
 ' ============================================================
 
 Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
@@ -1635,7 +1635,7 @@ EH:
     LogErr SRC
 
     If showMessages Then
-        MsgBox "Greška pri exportu parcela: " & Err.description, vbCritical, APP_NAME
+        MsgBox Poruka("STM_ERR_GRESKA_PRI_EXPORTU") & Err.description, vbCritical, APP_NAME
     End If
 
     SyncParceleToGoogle_Core = False
@@ -1668,7 +1668,7 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_STANICE, "Mesto")
     colAktivan = GetColumnIndex(TBL_STANICE, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1730,7 +1730,7 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
     colAktivan = GetColumnIndex(TBL_KUPCI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1794,7 +1794,7 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     colKapacitetKG = GetColumnIndex(TBL_VOZACI, "KapacitetKG")
     colAktivan = GetColumnIndex(TBL_VOZACI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1868,7 +1868,7 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     Dim colKarenca As Long: colKarenca = GetColumnIndex(TBL_ARTIKLI, "KarencaDana")
     Dim colAktivan As Long: colAktivan = GetColumnIndex(TBL_ARTIKLI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -2119,7 +2119,7 @@ Private Function ExportConfig(ByVal sheetID As String) As Boolean
                     "SELLER_STREET", "SELLER_CITY", "SELLER_POSTAL_CODE", _
                     "SELLER_ACCOUNT")
     
-    ' Zählen
+    ' Zaehlen
     Dim matchCount As Long
     For i = 1 To UBound(data, 1)
         keyStr = CStr(data(i, colKey))
@@ -2161,7 +2161,7 @@ EH:
 End Function
 
 Private Function IsPwaConfigKey(ByVal keyStr As String, ByVal pwaKeys As Variant) As Boolean
-    ' Credentials ausschließen
+    ' Credentials ausschliessen
     If Left$(keyStr, 7) = "GOOGLE_" Then Exit Function
     If Left$(keyStr, 4) = "SEF_" Then Exit Function
     If Left$(keyStr, 5) = "SYNC_" Then Exit Function
@@ -2355,7 +2355,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         Next i
     End If
     
-    ' Auf tatsächliche Größe kürzen
+    ' Auf tatsaechliche Groesse kuerzen
     If outRow < UBound(result, 1) Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
@@ -2490,7 +2490,7 @@ Private Function ExportFakturaStavke(ByVal sheetID As String) As Boolean
     If IsEmpty(data) Then
         ExportFakturaStavke = WriteHeaderOnly(sheetID, "FakturaStavke", _
             "FakturaID", "PrijemnicaID", "BrojPrijemnice", "BrojZbirne", _
-            "VrstaVoca", "Klasa", "Kolicina", "Cena", "Iznos")
+            "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", "Cena", "Iznos")
         Exit Function
     End If
     
@@ -2538,7 +2538,7 @@ Private Function ExportFakturaStavke(ByVal sheetID As String) As Boolean
     result(1, 4) = "BrojZbirne"
     result(1, 5) = "VrstaVoca"
     result(1, 6) = "Klasa"
-    result(1, 7) = "Kolicina"
+    result(1, 7) = "Koli" & ChrW(269) & "ina"
     result(1, 8) = "Cena"
     result(1, 9) = "Iznos"
     
@@ -2657,7 +2657,7 @@ Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
 End Sub
 
 ' ============================================================
-' PUBLIC — Test
+' PUBLIC -- Test
 ' ============================================================
 
 Public Sub Test_SyncStammdaten()

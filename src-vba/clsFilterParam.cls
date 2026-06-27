@@ -10,13 +10,13 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' clsFilterParam – Filter-Parameter Objekt
+' clsFilterParam - Filter-Parameter Objekt
 ' ============================================================
 
 Public colIndex As Long     ' Spaltenindex im Array
 Public Operator As String   ' "=", ">=", "<=", "BETWEEN", "<>", "LIKE"
-Public Value1 As Variant    ' Primärwert
-Public Value2 As Variant    ' Sekundärwert (nur für BETWEEN)
+Public Value1 As Variant    ' Primaerwert
+Public Value2 As Variant    ' Sekundaerwert (nur fuer BETWEEN)
 
 Public Function Init(ByVal col As Long, ByVal op As String, _
                      ByVal val1 As Variant, _

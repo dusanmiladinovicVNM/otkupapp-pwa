@@ -18,8 +18,8 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmStammdaten – Universelles Stammdaten-Form
-' Wird über .Tag gesteuert: "Kooperanti", "Stanice", "Kupci", "Vozaci"
+' frmStammdaten - Universelles Stammdaten-Form
+' Wird ueber .Tag gesteuert: "Kooperanti", "Stanice", "Kupci", "Vozaci"
 ' ============================================================
 
 Private m_TableName As String
@@ -35,7 +35,7 @@ Private mChromeRemoved As Boolean
 
 Private mGeoClearConfirmPending As Boolean
 
-' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) — WithEvents omotac.
+' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) -- WithEvents omotac.
 Private m_softWrap As clsStmBtn
 
 Private Sub RemoveTitleBar()
@@ -54,7 +54,7 @@ End Sub
 
 Private Sub UserForm_Initialize()
     
-    ' Nichts hier – Tag ist noch nicht verfügbar
+    ' Nichts hier - Tag ist noch nicht verfuegbar
 End Sub
 
 Private Sub UserForm_Activate()
@@ -66,10 +66,10 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
 
-    ' Podesavanja: ne ucitavamo maticni-podaci listu — gradimo config editor
+    ' Podesavanja: ne ucitavamo maticni-podaci listu -- gradimo config editor
     ' u runtime-u (modPodesavanja; isti runtime-controls pristup kao
     ' modOtkupBlok/clsBlokUI). frmStammdaten.frx se NE dira.
-    If Me.Tag = "Podesavanja" Then
+    If Me.Tag = "Pode" & ChrW(353) & "avanja" Then
         modPodesavanja.BuildConfigEditor Me
         If Not mChromeRemoved Then
             Me.caption = ""             ' brisi caption
@@ -89,7 +89,7 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnGeoOpen, "Otvori GeoSrbija"
     StylePrimaryButton btnPasteCoords, "Paste koordinata"
     StylePrimaryButton btnGeoSave, "Sacuvaj geo"
-    StyleExitButton btnGeoClear, "Obriši geo"
+    StyleExitButton btnGeoClear, Poruka("STM_LBL_OBRISI_GEO")
     StylePrimaryButton btnOpenMap, "Google Maps"
     StylePrimaryButton btnOpenPolygonEditor, "Polygon editor"
     On Error GoTo EH
@@ -135,7 +135,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmStammdaten.UserForm_Activate"
-    MsgBox "Greška pri otvaranju maticnih podataka: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub StyleAllFields()
@@ -143,7 +143,7 @@ Private Sub StyleAllFields()
     
     Dim i As Long
     
-    ' lblField1..10 — naslovne labele, muted small
+    ' lblField1..10 -- naslovne labele, muted small
     For i = 1 To 10
         Dim lbl As MSForms.label
         Set lbl = Me.Controls("lblField" & i)
@@ -183,7 +183,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 3, "Telefon", True
             ShowHeader 4, "Stanica", True
             ShowHeader 5, "BPG", True
-            ShowHeader 6, "Racun", True
+            ShowHeader 6, "Ra" & ChrW(269) & "un", True
             ShowHeader 7, "Pin", True
             ShowHeader 8, "Adresa", True
             ShowHeader 9, "JMBG", True
@@ -204,13 +204,13 @@ Private Sub SetupColumnHeaders()
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
             ShowHeader 3, "Adresa", True
-            ShowHeader 4, "Drzava", True
+            ShowHeader 4, "Dr" & ChrW(382) & "ava", True
             ShowHeader 5, "PIB", True
             ShowHeader 6, "MB", True
             ShowHeader 7, "Email", True
             ShowHeader 8, "Hladnjaca", True
             ShowHeader 9, "Aktivan", True
-            ShowHeader 10, "Racun", True
+            ShowHeader 10, "Ra" & ChrW(269) & "un", True
             
         Case "Vozaci"
             ShowHeader 1, "ID", True
@@ -244,20 +244,20 @@ Private Sub SetupColumnHeaders()
 
         Case "Kulture"
             ShowHeader 1, "ID", True
-            ShowHeader 2, "Vrsta voca", True
-            ShowHeader 3, "Sorta voca", True
+            ShowHeader 2, "Vrsta vo" & ChrW(263) & "a", True
+            ShowHeader 3, "Sorta vo" & ChrW(263) & "a", True
             ShowHeader 4, "Gajbica/paleti", True
             ShowHeader 5, "Aktivan", True
             ShowHeader 6, "Tip amb.", True
 
         Case "TipAmbalaze"
-            ShowHeader 1, "Tip ambalaze", True
-            ShowHeader 2, "Tezina gajbice (kg)", True
+            ShowHeader 1, "Tip ambala" & ChrW(382) & "e", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina gajbice (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "TipPalete"
             ShowHeader 1, "Tip palete", True
-            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "Cenovnik"
@@ -270,12 +270,12 @@ Private Sub SetupColumnHeaders()
 
         Case "Kutije"
             ShowHeader 1, "Tip kutije", True
-            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "Kese"
             ShowHeader 1, "Tip kese", True
-            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "VrstaGP"
@@ -320,7 +320,7 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
 End Sub
 
 ' ============================================================
-' SETUP – Konfiguriert das Form je nach Entität
+' SETUP - Konfiguriert das Form je nach Entitaet
 ' ============================================================
 
 Private Sub SetupKooperanti()
@@ -330,7 +330,7 @@ Private Sub SetupKooperanti()
     
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KOOPERANTI"
-    StyleSubtitle lblSubtitle, "Maticni podaci o kooperantima i njihovim stanicama"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o kooperantima i njihovim stanicama"
     On Error GoTo 0
     
     m_TableName = TBL_KOOPERANTI
@@ -357,7 +357,7 @@ Private Sub SetupKooperanti()
 
     lblField5.caption = "Stanica": lblField5.Visible = True: cmbField1.Visible = True
     lblField6.caption = "BPG Broj": lblField6.Visible = True: txtField6.Visible = True
-    lblField7.caption = "Tekuci Racun": lblField7.Visible = True: txtField7.Visible = True
+    lblField7.caption = "Teku" & ChrW(263) & "i Ra" & ChrW(269) & "un": lblField7.Visible = True: txtField7.Visible = True
     lblField8.caption = "Pin": lblField8.Visible = True: txtField8.Visible = True
     lblField9.caption = "Adresa": lblField9.Visible = True: txtField9.Visible = True
     lblField10.caption = "JMBG": lblField10.Visible = True: txtField10.Visible = True
@@ -372,7 +372,7 @@ Private Sub SetupStanice()
     
         On Error Resume Next
     StyleFrameTitleLabel lblTitle, "OTKUPNE STANICE"
-    StyleSubtitle lblSubtitle, "Maticni podaci o otkupnim stanicama"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o otkupnim stanicama"
     On Error GoTo 0
     
     m_TableName = TBL_STANICE
@@ -404,7 +404,7 @@ Private Sub SetupStanice()
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
 
-    ' Hladnjaca flag (Da/Ne) — auto-lanac otpremnica+zbirna+prijemnica.
+    ' Hladnjaca flag (Da/Ne) -- auto-lanac otpremnica+zbirna+prijemnica.
     cmbField1.Visible = True
     cmbField1.Clear
     cmbField1.AddItem "Ne"
@@ -419,7 +419,7 @@ Private Sub SetupKupci()
     
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KUPCI"
-    StyleSubtitle lblSubtitle, "Maticni podaci o kupcima"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o kupcima"
     On Error GoTo 0
     
     m_TableName = TBL_KUPCI
@@ -428,7 +428,7 @@ Private Sub SetupKupci()
         "KupacID", _
         "Naziv", _
         "Adresa", _
-        "Drzava", _
+        "Dr" & ChrW(382) & "ava", _
         "PIB", _
         "MaticniBroj", _
         "Email", _
@@ -442,13 +442,13 @@ Private Sub SetupKupci()
     lblField1.caption = "Naziv": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Ulica": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Mesto": lblField3.Visible = True: txtField3.Visible = True
-    lblField4.caption = "Postanski Broj": lblField4.Visible = True: txtField4.Visible = True
-    lblField5.caption = "Drzava": lblField5.Visible = True: txtField5.Visible = True
+    lblField4.caption = "Po" & ChrW(353) & "tanski Broj": lblField4.Visible = True: txtField4.Visible = True
+    lblField5.caption = "Dr" & ChrW(382) & "ava": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "PIB": lblField6.Visible = True: txtField6.Visible = True
-    lblField7.caption = "Maticni Broj": lblField7.Visible = True: txtField7.Visible = True
+    lblField7.caption = "Mati" & ChrW(269) & "ni Broj": lblField7.Visible = True: txtField7.Visible = True
     lblField8.caption = "Email": lblField8.Visible = True: txtField8.Visible = True
     lblField9.caption = "Hladnjaca": lblField9.Visible = True: txtField9.Visible = True
-    lblField10.caption = "Tekuci Racun": lblField10.Visible = True: txtField10.Visible = True
+    lblField10.caption = "Teku" & ChrW(263) & "i Ra" & ChrW(269) & "un": lblField10.Visible = True: txtField10.Visible = True
 End Sub
 
 Private Sub SetupVozaci()
@@ -457,7 +457,7 @@ Private Sub SetupVozaci()
     Me.caption = "Vozaci"
         On Error Resume Next
     StyleFrameTitleLabel lblTitle, "VOZACI"
-    StyleSubtitle lblSubtitle, "Maticni podaci o vozacima"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o vozacima"
     On Error GoTo 0
     m_TableName = TBL_VOZACI
 
@@ -491,7 +491,7 @@ Private Sub SetupParcele()
     
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KATASTARSKE PARCELE"
-    StyleSubtitle lblSubtitle, "Maticni podaci o parcelama kooperanata"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o parcelama kooperanata"
     On Error GoTo 0
     
     m_TableName = TBL_PARCELE
@@ -522,7 +522,7 @@ Private Sub SetupParcele()
 
     lblField1.caption = "Kooperant": lblField1.Visible = True: txtField1.Visible = False
     lblField2.caption = "Kat. Broj": lblField2.Visible = True: txtField2.Visible = True
-    lblField3.caption = "Kat. Opstina": lblField3.Visible = True: txtField3.Visible = True
+    lblField3.caption = "Kat. Op" & ChrW(353) & "tina": lblField3.Visible = True: txtField3.Visible = True
     lblField4.caption = "Kultura": lblField4.Visible = True: txtField4.Visible = False
     lblField5.caption = "Povrsina (ha)": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "GGAP Status": lblField6.Visible = True: txtField6.Visible = False
@@ -573,7 +573,7 @@ Private Sub SetupArtikli()
     
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "ARTIKLI"
-    StyleSubtitle lblSubtitle, "Maticni podaci o artiklima"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o artiklima"
     On Error GoTo 0
     
     m_TableName = TBL_ARTIKLI
@@ -639,7 +639,7 @@ Private Sub SetupKulture()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KULTURE"
-    StyleSubtitle lblSubtitle, "Maticni podaci o vrstama i sortama voca"
+    StyleSubtitle lblSubtitle, "Mati" & ChrW(269) & "ni podaci o vrstama i sortama vo" & ChrW(263) & "a"
     On Error GoTo 0
 
     m_TableName = TBL_KULTURE
@@ -657,10 +657,10 @@ Private Sub SetupKulture()
 
     m_FieldCount = 4
 
-    lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = True
+    lblField1.caption = "Vrsta vo" & ChrW(263) & "a": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Sorta vo" & ChrW(263) & "a": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Gajbica po paleti": lblField3.Visible = True: txtField3.Visible = True
-    lblField4.caption = "Tip ambalaze (podraz.)": lblField4.Visible = True: txtField4.Visible = False
+    lblField4.caption = "Tip ambala" & ChrW(382) & "e (podraz.)": lblField4.Visible = True: txtField4.Visible = False
     lblField5.caption = "": lblField5.Visible = False: txtField5.Visible = False
     lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
     lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
@@ -668,7 +668,7 @@ Private Sub SetupKulture()
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
 
-    ' Tip ambalaze (podrazumevani za kulturu) — combo iz tblTipAmbalaze.
+    ' Tip ambalaze (podrazumevani za kulturu) -- combo iz tblTipAmbalaze.
     cmbField1.Visible = True
     cmbField1.Clear
     cmbField1.AddItem ""
@@ -684,11 +684,11 @@ End Sub
 
 Private Sub SetupTipAmbalaze()
     ResetFieldVisibility
-    Me.caption = "Tip ambalaze"
+    Me.caption = "Tip ambala" & ChrW(382) & "e"
 
     On Error Resume Next
-    StyleFrameTitleLabel lblTitle, "TIP AMBALAZE"
-    StyleSubtitle lblSubtitle, "Sifarnik ambalaze (tip i tezina prazne gajbice)"
+    StyleFrameTitleLabel lblTitle, "TIP AMBALA" & ChrW(381) & "E"
+    StyleSubtitle lblSubtitle, ChrW(352) & "ifarnik ambala" & ChrW(382) & "e (tip i te" & ChrW(382) & "ina prazne gajbice)"
     On Error GoTo 0
 
     m_TableName = TBL_TIP_AMBALAZE
@@ -696,8 +696,8 @@ Private Sub SetupTipAmbalaze()
     m_Headers = Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
     m_FieldCount = 2
 
-    lblField1.caption = "Tip ambalaze": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina gajbice (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField1.caption = "Tip ambala" & ChrW(382) & "e": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina gajbice (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupTipPalete()
@@ -706,7 +706,7 @@ Private Sub SetupTipPalete()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "TIP PALETE"
-    StyleSubtitle lblSubtitle, "Sifarnik paleta (tip i tezina prazne palete)"
+    StyleSubtitle lblSubtitle, ChrW(352) & "ifarnik paleta (tip i te" & ChrW(382) & "ina prazne palete)"
     On Error GoTo 0
 
     m_TableName = TBL_TIP_PALETE
@@ -715,7 +715,7 @@ Private Sub SetupTipPalete()
     m_FieldCount = 2
 
     lblField1.caption = "Tip palete": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupKutije()
@@ -724,7 +724,7 @@ Private Sub SetupKutije()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KUTIJE"
-    StyleSubtitle lblSubtitle, "Sifarnik kutija (tip i tezina prazne kutije)"
+    StyleSubtitle lblSubtitle, ChrW(352) & "ifarnik kutija (tip i te" & ChrW(382) & "ina prazne kutije)"
     On Error GoTo 0
 
     m_TableName = TBL_KUTIJE
@@ -733,7 +733,7 @@ Private Sub SetupKutije()
     m_FieldCount = 2
 
     lblField1.caption = "Tip kutije": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupKese()
@@ -742,7 +742,7 @@ Private Sub SetupKese()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "KESE"
-    StyleSubtitle lblSubtitle, "Sifarnik kesa (tip i tezina prazne kese)"
+    StyleSubtitle lblSubtitle, ChrW(352) & "ifarnik kesa (tip i te" & ChrW(382) & "ina prazne kese)"
     On Error GoTo 0
 
     m_TableName = TBL_KESE
@@ -751,7 +751,7 @@ Private Sub SetupKese()
     m_FieldCount = 2
 
     lblField1.caption = "Tip kese": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupVrstaGP()
@@ -760,7 +760,7 @@ Private Sub SetupVrstaGP()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "VRSTA GOTOVOG PROIZVODA"
-    StyleSubtitle lblSubtitle, "Sifarnik tipova gotovog proizvoda"
+    StyleSubtitle lblSubtitle, ChrW(352) & "ifarnik tipova gotovog proizvoda"
     On Error GoTo 0
 
     m_TableName = TBL_VRSTA_GP
@@ -777,12 +777,12 @@ Private Sub SetupCenovnik()
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "CENOVNIK"
-    StyleSubtitle lblSubtitle, "Cene po proizvodu — svaka promena je novi red (vazi poslednji)"
+    StyleSubtitle lblSubtitle, Poruka("STM_LBL_CENE_PROIZVODU_SVAKA")
     On Error GoTo 0
 
     m_TableName = TBL_CENOVNIK
 
-    ' Prikaz (lista) — samo kljucne kolone:
+    ' Prikaz (lista) -- samo kljucne kolone:
     m_Headers = Array( _
         COL_CEN_ID, _
         COL_CEN_DATUM, _
@@ -794,8 +794,8 @@ Private Sub SetupCenovnik()
 
     m_FieldCount = 5
 
-    lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = False
-    lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = False
+    lblField1.caption = "Vrsta vo" & ChrW(263) & "a": lblField1.Visible = True: txtField1.Visible = False
+    lblField2.caption = "Sorta vo" & ChrW(263) & "a": lblField2.Visible = True: txtField2.Visible = False
     lblField3.caption = "Klasa": lblField3.Visible = True: txtField3.Visible = False
     lblField4.caption = "Datum": lblField4.Visible = True: txtField4.Visible = True
     lblField5.caption = "Cena": lblField5.Visible = True: txtField5.Visible = True
@@ -884,7 +884,7 @@ Private Sub EnsureSoftDeleteButton()
     m_softWrap.btn.Visible = (Len(AktivanColName()) > 0)
 End Sub
 
-' Public — poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
+' Public -- poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
 Public Sub OnSoftDeleteClick()
     On Error GoTo EH
 
@@ -932,7 +932,7 @@ EH:
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    MsgBox "Greška pri promeni statusa: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_PROMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Azurira prvu kolonu iz liste alias-a koja stvarno postoji u tabeli.
@@ -1041,7 +1041,7 @@ Private Sub LoadList()
             kupUlica = GetColumnIndex(TBL_KUPCI, "Ulica")
             kupMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
             kupPosta = GetColumnIndex(TBL_KUPCI, "PostanskiBroj")
-            kupDrzava = GetColumnIndex(TBL_KUPCI, "Drzava")
+            kupDrzava = GetColumnIndex(TBL_KUPCI, "Dr" & ChrW(382) & "ava")
             kupPIB = GetColumnIndex(TBL_KUPCI, "PIB")
             kupMB = GetColumnIndex(TBL_KUPCI, "MaticniBroj")
             kupEmail = GetColumnIndex(TBL_KUPCI, "Email")
@@ -1222,11 +1222,11 @@ Private Sub LoadList()
 
 EH:
     LogErr "frmStammdaten.LoadList"
-    MsgBox "Greška pri ucitavanju liste: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_UCITAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' AUSWAHL IN LISTE ? Felder füllen
+' AUSWAHL IN LISTE ? Felder fuellen
 ' ============================================================
 
 Private Sub lstData_Click()
@@ -1337,7 +1337,7 @@ Private Sub lstData_Click()
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
 
         Case "Cenovnik"
-            ' Append-only istorija — klik samo prikazuje (bez izmene).
+            ' Append-only istorija -- klik samo prikazuje (bez izmene).
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 2)   ' Vrsta
             cmbField2.Clear
             If Trim$(cmbField1.value) <> "" Then
@@ -1371,7 +1371,7 @@ Private Sub cmbField1_Change()
 End Sub
 
 ' ============================================================
-' HINZUFÜGEN
+' HINZUFUeGEN
 ' ============================================================
 
 Private Sub btnDodaj_Click()
@@ -1409,7 +1409,7 @@ Private Sub btnDodaj_Click()
             End If
 
             If stanicaID = "" Then
-                MsgBox "Nije pronaden StanicaID za izabranu stanicu.", vbExclamation, APP_NAME
+                MsgBox "Nije prona" & ChrW(273) & "en StanicaID za izabranu stanicu.", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1519,7 +1519,7 @@ Private Sub btnDodaj_Click()
             End If
 
             If Trim$(txtField3.value) = "" Then
-                MsgBox "Unesite katastarsku opštinu!", vbExclamation, APP_NAME
+                MsgBox Poruka("STM_MSG_UNESITE_KATASTARSKU_OPSTINU"), vbExclamation, APP_NAME
                 txtField3.SetFocus
                 Exit Sub
             End If
@@ -1542,7 +1542,7 @@ Private Sub btnDodaj_Click()
             koopID = ExtractIDFromDisplay(cmbField1.value)
 
             If Not TryParseDouble(txtField5.value, povrsina) Or povrsina <= 0 Then
-                MsgBox "Unesite validnu površinu!", vbExclamation, APP_NAME
+                MsgBox Poruka("STM_MSG_UNESITE_VALIDNU_POVRSINU"), vbExclamation, APP_NAME
                 txtField5.SetFocus
                 Exit Sub
             End If
@@ -1628,13 +1628,13 @@ Private Sub btnDodaj_Click()
 
         Case "Kulture"
             If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite vrstu voca!", vbExclamation, APP_NAME
+                MsgBox "Unesite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
                 txtField1.SetFocus
                 Exit Sub
             End If
 
             If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite sortu voca!", vbExclamation, APP_NAME
+                MsgBox "Unesite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
@@ -1665,26 +1665,26 @@ Private Sub btnDodaj_Click()
                 LoadList
                 ClearFields
             Else
-                MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
+                MsgBox Poruka("STM_MSG_GRESKA_PRI_DODAVANJU"), vbCritical, APP_NAME
             End If
             Exit Sub
 
         Case "TipAmbalaze"
             If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip ambalaze!", vbExclamation, APP_NAME
+                MsgBox "Unesite tip ambala" & ChrW(382) & "e!", vbExclamation, APP_NAME
                 txtField1.SetFocus
                 Exit Sub
             End If
 
             Dim tezinaAmb As Double
             If Not TryParseDouble(txtField2.value, tezinaAmb) Or tezinaAmb < 0 Then
-                MsgBox "Unesite validnu tezinu gajbice (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu gajbice (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
 
             If Len(Trim$(NzToText(LookupValue(m_TableName, COL_TAMB_TIP, Trim$(txtField1.value), COL_TAMB_TIP)))) > 0 Then
-                MsgBox "Tip ambalaze '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                MsgBox "Tip ambala" & ChrW(382) & "e '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1700,13 +1700,13 @@ Private Sub btnDodaj_Click()
 
             Dim tezinaPal As Double
             If Not TryParseDouble(txtField2.value, tezinaPal) Or tezinaPal < 0 Then
-                MsgBox "Unesite validnu tezinu palete (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu palete (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
 
             If Len(Trim$(NzToText(LookupValue(m_TableName, COL_TPAL_TIP, Trim$(txtField1.value), COL_TPAL_TIP)))) > 0 Then
-                MsgBox "Tip palete '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                MsgBox "Tip palete '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1722,13 +1722,13 @@ Private Sub btnDodaj_Click()
 
             Dim tezinaKut As Double
             If Not TryParseDouble(txtField2.value, tezinaKut) Or tezinaKut < 0 Then
-                MsgBox "Unesite validnu tezinu kutije (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu kutije (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
 
             If Len(Trim$(NzToText(LookupValue(m_TableName, COL_KUT_TIP, Trim$(txtField1.value), COL_KUT_TIP)))) > 0 Then
-                MsgBox "Tip kutije '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                MsgBox "Tip kutije '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1744,13 +1744,13 @@ Private Sub btnDodaj_Click()
 
             Dim tezinaKes As Double
             If Not TryParseDouble(txtField2.value, tezinaKes) Or tezinaKes < 0 Then
-                MsgBox "Unesite validnu tezinu kese (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu kese (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
 
             If Len(Trim$(NzToText(LookupValue(m_TableName, COL_KES_TIP, Trim$(txtField1.value), COL_KES_TIP)))) > 0 Then
-                MsgBox "Tip kese '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                MsgBox "Tip kese '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1765,7 +1765,7 @@ Private Sub btnDodaj_Click()
             End If
 
             If Len(Trim$(NzToText(LookupValue(m_TableName, COL_VGP_TIP, Trim$(txtField1.value), COL_VGP_TIP)))) > 0 Then
-                MsgBox "Tip gotovog proizvoda '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
+                MsgBox "Tip gotovog proizvoda '" & Trim$(txtField1.value) & "' ve" & ChrW(263) & " postoji!", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1775,7 +1775,7 @@ Private Sub btnDodaj_Click()
         Case "Cenovnik"
             ' Append-only: dodaje novi (vazeci) red preko modCenovnik.
             If Trim$(cmbField1.value) = "" Then
-                MsgBox "Izaberite vrstu voca!", vbExclamation, APP_NAME
+                MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
                 cmbField1.SetFocus
                 Exit Sub
             End If
@@ -1804,12 +1804,12 @@ Private Sub btnDodaj_Click()
                 LoadList
                 txtField5.value = ""        ' spremno za sledecu cenu; proizvod ostaje
             Else
-                MsgBox "Greška pri dodavanju cene!", vbCritical, APP_NAME
+                MsgBox Poruka("STM_MSG_GRESKA_PRI_DODAVANJU_2"), vbCritical, APP_NAME
             End If
             Exit Sub
 
         Case Else
-            MsgBox "Nepoznat tip maticnih podataka: " & Me.Tag, vbCritical, APP_NAME
+            MsgBox "Nepoznat tip mati" & ChrW(269) & "nih podataka: " & Me.Tag, vbCritical, APP_NAME
             Exit Sub
 
     End Select
@@ -1829,18 +1829,18 @@ Private Sub btnDodaj_Click()
         LoadList
         ClearFields
     Else
-        MsgBox "Greška pri dodavanju!", vbCritical, APP_NAME
+        MsgBox Poruka("STM_MSG_GRESKA_PRI_DODAVANJU"), vbCritical, APP_NAME
     End If
 
     Exit Sub
 
 EH:
     LogErr "frmStammdaten.btnDodaj_Click"
-    MsgBox "Greška pri dodavanju: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_DODAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' ÄNDERN
+' AeNDERN
 ' ============================================================
 
 Private Sub btnIzmeni_Click()
@@ -1889,7 +1889,7 @@ Private Sub btnIzmeni_Click()
             End If
 
             If stID = "" Then
-                MsgBox "Nije pronaden StanicaID za izabranu stanicu.", vbExclamation, APP_NAME
+                MsgBox "Nije prona" & ChrW(273) & "en StanicaID za izabranu stanicu.", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1948,7 +1948,7 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "Ulica", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField3.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PostanskiBroj", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Drzava", Trim$(txtField5.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, "Dr" & ChrW(382) & "ava", Trim$(txtField5.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PIB", Trim$(txtField6.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "MaticniBroj", Trim$(txtField7.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Email", Trim$(txtField8.value), SRC
@@ -1994,7 +1994,7 @@ Private Sub btnIzmeni_Click()
             End If
 
             If Trim$(txtField3.value) = "" Then
-                MsgBox "Unesite katastarsku opštinu!", vbExclamation, APP_NAME
+                MsgBox Poruka("STM_MSG_UNESITE_KATASTARSKU_OPSTINU"), vbExclamation, APP_NAME
                 txtField3.SetFocus
                 Exit Sub
             End If
@@ -2012,7 +2012,7 @@ Private Sub btnIzmeni_Click()
             End If
 
             If Not TryParseDouble(txtField5.value, povrsinaEdit) Or povrsinaEdit <= 0 Then
-                MsgBox "Unesite validnu površinu!", vbExclamation, APP_NAME
+                MsgBox Poruka("STM_MSG_UNESITE_VALIDNU_POVRSINU"), vbExclamation, APP_NAME
                 txtField5.SetFocus
                 Exit Sub
             End If
@@ -2084,13 +2084,13 @@ Private Sub btnIzmeni_Click()
 
         Case "Kulture"
             If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite vrstu voca!", vbExclamation, APP_NAME
+                MsgBox "Unesite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
                 txtField1.SetFocus
                 Exit Sub
             End If
 
             If Trim$(txtField2.value) = "" Then
-                MsgBox "Unesite sortu voca!", vbExclamation, APP_NAME
+                MsgBox "Unesite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
@@ -2116,14 +2116,14 @@ Private Sub btnIzmeni_Click()
 
         Case "TipAmbalaze"
             If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite tip ambalaze!", vbExclamation, APP_NAME
+                MsgBox "Unesite tip ambala" & ChrW(382) & "e!", vbExclamation, APP_NAME
                 txtField1.SetFocus
                 Exit Sub
             End If
 
             Dim tezinaAmbEdit As Double
             If Not TryParseDouble(txtField2.value, tezinaAmbEdit) Or tezinaAmbEdit < 0 Then
-                MsgBox "Unesite validnu tezinu gajbice (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu gajbice (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
@@ -2145,7 +2145,7 @@ Private Sub btnIzmeni_Click()
 
             Dim tezinaPalEdit As Double
             If Not TryParseDouble(txtField2.value, tezinaPalEdit) Or tezinaPalEdit < 0 Then
-                MsgBox "Unesite validnu tezinu palete (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu palete (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
@@ -2167,7 +2167,7 @@ Private Sub btnIzmeni_Click()
 
             Dim tezinaKutEdit As Double
             If Not TryParseDouble(txtField2.value, tezinaKutEdit) Or tezinaKutEdit < 0 Then
-                MsgBox "Unesite validnu tezinu kutije (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu kutije (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
@@ -2189,7 +2189,7 @@ Private Sub btnIzmeni_Click()
 
             Dim tezinaKesEdit As Double
             If Not TryParseDouble(txtField2.value, tezinaKesEdit) Or tezinaKesEdit < 0 Then
-                MsgBox "Unesite validnu tezinu kese (kg)!", vbExclamation, APP_NAME
+                MsgBox "Unesite validnu te" & ChrW(382) & "inu kese (kg)!", vbExclamation, APP_NAME
                 txtField2.SetFocus
                 Exit Sub
             End If
@@ -2219,12 +2219,12 @@ Private Sub btnIzmeni_Click()
         Case "Cenovnik"
             ' Append-only: istorija cena se ne menja. Nova cena = Dodaj.
             MsgBox "Cenovnik je append-only." & vbCrLf & _
-                   "Za novu cenu koristite 'Dodaj' — stari redovi ostaju radi istorije.", _
+                   Poruka("STM_MSG_NOVU_CENU_KORISTITE"), _
                    vbInformation, APP_NAME
             Exit Sub
 
         Case Else
-            MsgBox "Nepoznat tip maticnih podataka: " & Me.Tag, vbCritical, APP_NAME
+            MsgBox "Nepoznat tip mati" & ChrW(269) & "nih podataka: " & Me.Tag, vbCritical, APP_NAME
             Exit Sub
 
     End Select
@@ -2246,7 +2246,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    MsgBox "Greška pri izmeni: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_IZMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -2258,7 +2258,7 @@ Private Sub btnPovratak_Click()
 
     ButtonActive btnPovratak
     
-    frmOtkupAPP.ReturnToDashboard "Maticni podaci zatvoreni."
+    frmOtkupAPP.ReturnToDashboard "Mati" & ChrW(269) & "ni podaci zatvoreni."
     Unload Me
 
     Exit Sub
@@ -2274,7 +2274,7 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
 
     If CloseMode = vbFormControlMenu Then
-        frmOtkupAPP.ReturnToDashboard "Maticni podaci zatvoreni."
+        frmOtkupAPP.ReturnToDashboard "Mati" & ChrW(269) & "ni podaci zatvoreni."
     End If
 
     On Error GoTo 0
@@ -2427,7 +2427,7 @@ Private Sub btnGeoOpen_Click()
     katOpstina = Trim$(NzToText(lstData.List(lstData.ListIndex, 3)))
 
     If Len(katBroj) = 0 Or Len(katOpstina) = 0 Then
-        SetGeoStatus "Parcela nema katastarski broj ili katastarsku opštinu.", True
+        SetGeoStatus Poruka("STM_MSG_PARCELA_NEMA_KATASTARSKI"), True
         Exit Sub
     End If
 
@@ -2441,7 +2441,7 @@ Private Sub btnGeoOpen_Click()
 
 EH:
     LogErr "frmStammdaten.btnGeoOpen_Click"
-    SetGeoStatus "Greška pri otvaranju GeoSrbije. Pogledaj log.", True
+    SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_OTVARANJU"), True
 End Sub
 
 Private Sub btnGeoSave_Click()
@@ -2493,7 +2493,7 @@ Private Sub btnGeoSave_Click()
 
 EH:
     LogErr "frmStammdaten.btnGeoSave_Click"
-    SetGeoStatus "Greška pri cuvanju geo podataka. Pogledaj log.", True
+    SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_CUVANJU"), True
 End Sub
 
 Private Sub btnGeoClear_Click()
@@ -2508,7 +2508,7 @@ Private Sub btnGeoClear_Click()
     If Not mGeoClearConfirmPending Then
         mGeoClearConfirmPending = True
         btnGeoClear.caption = "Potvrdi brisanje"
-        SetGeoStatus "Klikni još jednom za brisanje geo podataka.", True
+        SetGeoStatus Poruka("STM_MSG_KLIKNI_JOS_JEDNOM"), True
         Exit Sub
     End If
 
@@ -2533,7 +2533,7 @@ Private Sub btnGeoClear_Click()
 EH:
     ResetGeoClearConfirm
     LogErr "frmStammdaten.btnGeoClear_Click"
-    SetGeoStatus "Greška pri brisanju geo podataka. Pogledaj log.", True
+    SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_BRISANJU"), True
 End Sub
 
 Private Sub btnPasteCoords_Click()
@@ -2569,7 +2569,7 @@ Private Sub btnPasteCoords_Click()
 
 EH:
     LogErr "frmStammdaten.btnPasteCoords_Click"
-    SetGeoStatus "Greška pri ucitavanju koordinata. Pogledaj log.", True
+    SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_UCITAVANJU"), True
 End Sub
 
 Private Sub btnOpenMap_Click()
@@ -2620,7 +2620,7 @@ Private Sub btnOpenMap_Click()
 
 EH:
     LogErr "frmStammdaten.btnOpenMap_Click"
-    SetGeoStatus "Greška pri otvaranju Google Maps. Pogledaj log.", True
+    SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_OTVARANJU_2"), True
 End Sub
 
 Private Sub btnOpenPolygonEditor_Click()
@@ -2682,7 +2682,7 @@ EH:
     On Error GoTo 0
 
     LogErr "frmStammdaten.btnOpenPolygonEditor_Click"
-    SetGeoStatus "Greška pri otvaranju polygon editora. Pogledaj log.", True
+    SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_OTVARANJU_3"), True
 End Sub
 Private Sub SetGeoStatus(ByVal message As String, Optional ByVal isError As Boolean = False)
     On Error Resume Next
@@ -2714,7 +2714,7 @@ Private Sub ResetGeoClearConfirm()
     On Error Resume Next
 
     mGeoClearConfirmPending = False
-    btnGeoClear.caption = "Obriši geo"
+    btnGeoClear.caption = Poruka("STM_LBL_OBRISI_GEO")
 
     On Error GoTo 0
 End Sub
@@ -2848,7 +2848,7 @@ Private Sub LoadStaniceIntoCombo()
 
 EH:
     LogErr "frmStammdaten.LoadStaniceIntoCombo"
-    MsgBox "Greška pri ucitavanju stanica: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("STM_ERR_GRESKA_PRI_UCITAVANJU_2") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function FormatCoordForTextBox(ByVal v As Double) As String

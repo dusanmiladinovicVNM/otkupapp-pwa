@@ -3,7 +3,7 @@ Attribute VB_Name = "modSetup"
 Option Explicit
 
 ' ============================================================
-' modSetup – OtkupApp new PC setup / workstation health-check
+' modSetup - OtkupApp new PC setup / workstation health-check
 '
 ' CONFIG STRATEGY:
 '
@@ -50,6 +50,7 @@ Public Sub SetupNewPC()
 
     InitSetupLog
     EnsureLocalConfigTable
+    EnsurePoruke
 
     LogSetup "INFO", "SetupNewPC started"
     LogSetup "INFO", "Workbook: " & ThisWorkbook.fullName
@@ -67,8 +68,8 @@ Public Sub SetupNewPC()
     report = report & CheckRequiredColumnsForSetup()
 
     If Len(report) = 0 Then
-        SetLocalConfigValue "APP_SETUP_COMPLETED", "DA", "Da li je ovaj racunar prošao SetupNewPC"
-        SetLocalConfigValue "APP_SETUP_COMPLETED_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Datum i vreme završetka setup-a"
+        SetLocalConfigValue "APP_SETUP_COMPLETED", "DA", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
+        SetLocalConfigValue "APP_SETUP_COMPLETED_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), Poruka("SETUP_MSG_DATUM_VREME_ZAVRSETKA")
         SetLocalConfigValue "APP_SETUP_MACHINE_NAME", Environ$("COMPUTERNAME"), "Naziv racunara"
         SetLocalConfigValue "APP_SETUP_WINDOWS_USER", Environ$("USERNAME"), "Windows korisnik"
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
@@ -82,17 +83,17 @@ Public Sub SetupNewPC()
 
         LogSetup "OK", "Setup completed successfully"
 
-        MsgBox "Setup je uspešno završen." & vbCrLf & vbCrLf & _
+        MsgBox Poruka("SETUP_MSG_SETUP_USPESNO_ZAVRSEN") & vbCrLf & vbCrLf & _
                "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
-               "Podešavanja: Maticni podaci -> Podešavanja (tblSEFConfig je skriven).", _
+               Poruka("SETUP_MSG_PODESAVANJA_MATICNI_PODACI"), _
                vbInformation, APP_NAME
     Else
-        SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", "Da li je ovaj racunar prošao SetupNewPC"
+        SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
         LogSetup "WARN", report
 
-        MsgBox "Setup je završen, ali postoje stavke za proveru:" & _
+        MsgBox Poruka("SETUP_MSG_SETUP_ZAVRSEN_ALI") & _
                vbCrLf & vbCrLf & report, _
                vbExclamation, APP_NAME
     End If
@@ -101,7 +102,7 @@ Public Sub SetupNewPC()
 
 EH:
     LogSetup "ERROR", "SetupNewPC failed: " & Err.Number & " - " & Err.description
-    MsgBox "Greška tokom setup-a: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("SETUP_ERR_GRESKA_TOKOM_SETUP") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Sub RunSetupHealthCheck()
@@ -112,6 +113,7 @@ Public Sub RunSetupHealthCheck()
 
     InitSetupLog
     EnsureLocalConfigTable
+    EnsurePoruke
 
     LogSetup "INFO", "RunSetupHealthCheck started"
 
@@ -126,10 +128,10 @@ Public Sub RunSetupHealthCheck()
 
     If Len(report) = 0 Then
         LogSetup "OK", "Health-check passed"
-        MsgBox "Health-check je prošao. Racunar je podešen.", vbInformation, APP_NAME
+        MsgBox Poruka("SETUP_MSG_HEALTH_CHECK_PROSAO"), vbInformation, APP_NAME
     Else
         LogSetup "WARN", report
-        MsgBox "Health-check je našao stavke za proveru:" & vbCrLf & vbCrLf & report, _
+        MsgBox Poruka("SETUP_MSG_HEALTH_CHECK_NASAO") & vbCrLf & vbCrLf & report, _
                vbExclamation, APP_NAME
     End If
 
@@ -137,7 +139,7 @@ Public Sub RunSetupHealthCheck()
 
 EH:
     LogSetup "ERROR", "RunSetupHealthCheck failed: " & Err.description
-    MsgBox "Greška tokom health-check-a: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("SETUP_ERR_GRESKA_TOKOM_HEALTH") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Public Function IsSetupHealthy() As Boolean
@@ -168,9 +170,9 @@ End Function
 ' ------------------------------------------------------------
 ' Desktop-only prekidac.
 '
-' UKLJUCEN (CLOUD_SYNC_ENABLED=NO): aplikacija radi 100% lokalno — nema
+' UKLJUCEN (CLOUD_SYNC_ENABLED=NO): aplikacija radi 100% lokalno -- nema
 ' Google/PWA saobracaja, a SetupNewPC ne trazi Google kredencijale.
-' Flag se cuva u tblSEFConfig i cita ga IsCloudSyncEnabled() (modConfig) —
+' Flag se cuva u tblSEFConfig i cita ga IsCloudSyncEnabled() (modConfig) --
 ' isti koji vec gasi runtime sync (modBrojevi, modStanicaLock).
 '
 ' Alt+F8 -> EnableDesktopOnlyMode  (pa ponovo SetupNewPC).
@@ -184,7 +186,7 @@ Public Sub EnableDesktopOnlyMode()
     LogSetup "OK", "Desktop-only mod UKLJUCEN (CLOUD_SYNC_ENABLED=NO)"
 
     MsgBox "Desktop-only mod je ukljucen." & vbCrLf & vbCrLf & _
-           "Aplikacija radi lokalno — Google/PWA se ne koristi niti proverava." & vbCrLf & _
+           Poruka("SETUP_MSG_APLIKACIJA_RADI_LOKALNO") & vbCrLf & _
            "Pokrenite SetupNewPC ponovo.", _
            vbInformation, APP_NAME
     Exit Sub
@@ -241,14 +243,14 @@ Public Sub SetupBankFoldersInteractive()
 
     SetLocalConfigValue "BANKA_INBOX_PATH", inboxPath, "Folder za nove bankarske izvode"
     SetLocalConfigValue "BANKA_PROCESSED_PATH", processedPath, "Folder za obradene bankarske izvode"
-    SetLocalConfigValue "BANKA_ERROR_PATH", errorPath, "Folder za bankarske izvode sa greškom"
+    SetLocalConfigValue "BANKA_ERROR_PATH", errorPath, Poruka("SETUP_MSG_FOLDER_BANKARSKE_IZVODE")
 
-    MsgBox "Bankarski folderi su podešeni.", vbInformation, APP_NAME
+    MsgBox Poruka("SETUP_MSG_BANKARSKI_FOLDERI_PODESENI"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "SetupBankFoldersInteractive failed: " & Err.description
-    MsgBox "Greška pri podešavanju bankarskih foldera: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("SETUP_ERR_GRESKA_PRI_PODESAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -446,7 +448,7 @@ Private Function SetupBankFolders() As String
 
     inboxPath = GetLocalConfigWithDefault("BANKA_INBOX_PATH", bankRoot & "\Inbox", "Folder za nove bankarske izvode")
     processedPath = GetLocalConfigWithDefault("BANKA_PROCESSED_PATH", bankRoot & "\Processed", "Folder za obradene bankarske izvode")
-    errorPath = GetLocalConfigWithDefault("BANKA_ERROR_PATH", bankRoot & "\Error", "Folder za bankarske izvode sa greškom")
+    errorPath = GetLocalConfigWithDefault("BANKA_ERROR_PATH", bankRoot & "\Error", Poruka("SETUP_MSG_FOLDER_BANKARSKE_IZVODE"))
 
     EnsureFolder inboxPath
     EnsureFolder processedPath
@@ -520,15 +522,15 @@ Private Function CheckSEFConfigForSetup() As String
     End If
 
     If Trim$(GetConfigValue("SEF_BASE_URL")) = "" Then
-        msg = msg & "- SEF_BASE_URL nije podešen." & vbCrLf
+        msg = msg & Poruka("SETUP_MSG_SEF_BASE_URL") & vbCrLf
     End If
 
     If Trim$(GetConfigValue("SEF_API_KEY")) = "" Then
-        msg = msg & "- SEF_API_KEY nije podešen." & vbCrLf
+        msg = msg & Poruka("SETUP_MSG_SEF_API_KEY") & vbCrLf
     End If
 
     If Trim$(GetConfigValue("SEF_ENV")) = "" Then
-        msg = msg & "- SEF_ENV nije podešen." & vbCrLf
+        msg = msg & Poruka("SETUP_MSG_SEF_ENV_NIJE") & vbCrLf
     End If
 
     CheckSEFConfigForSetup = msg
@@ -543,7 +545,7 @@ Private Function CheckRequiredTablesForSetup() As String
         TBL_CONFIG, TBL_SEF_CONFIG, TBL_BANKA_IMPORT, TBL_PARTNER_MAP, _
         TBL_KOOPERANTI, TBL_STANICE, TBL_VOZACI, TBL_KUPCI, TBL_KULTURE, _
         TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
-        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA _
+        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA, TBL_PORUKE _
     )
 
     For i = LBound(tbls) To UBound(tbls)
@@ -632,7 +634,7 @@ Private Function CheckFolderExists(ByVal configKey As String, ByVal labelText As
     p = Trim$(GetLocalConfigValue(configKey, ""))
 
     If p = "" Then
-        CheckFolderExists = "- " & labelText & " nije podešen: " & configKey & vbCrLf
+        CheckFolderExists = "- " & labelText & Poruka("SETUP_MSG_NIJE_PODESEN") & configKey & vbCrLf
     ElseIf Dir$(p, vbDirectory) = "" Then
         CheckFolderExists = "- " & labelText & " ne postoji: " & p & vbCrLf
     End If
@@ -676,7 +678,7 @@ EH:
 End Sub
 
 ' ============================================================
-' Paletni list (Phase 2) — jednokratni schema setup.
+' Paletni list (Phase 2) -- jednokratni schema setup.
 ' Idempotentno: kreira nedostajuce tabele i kolonu na tblKulture.
 ' Pokrenuti JEDNOM na master workbook-u (Alt+F8 -> EnsurePaletniListSchema).
 ' Reuse: FindListObject / GetOrCreateWorksheet / LogSetup (gore).
@@ -734,19 +736,19 @@ Public Sub EnsurePaletniListSchema()
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
            "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
            "i kolonu GajbicaPoPaleti u tblKulture (malina = 240)." & vbCrLf & _
-           "Sifarnici tblKutije/tblKese (tip -> kg) i tblVrstaGotovihProizvoda" & vbCrLf & _
-           "se popunjavaju preko Maticnih podataka." & vbCrLf & _
-           "Cenovnik (tblCenovnik) se popunjava preko Maticnih podataka.", _
+           ChrW(352) & "ifarnici tblKutije/tblKese (tip -> kg) i tblVrstaGotovihProizvoda" & vbCrLf & _
+           "se popunjavaju preko Mati" & ChrW(269) & "nih podataka." & vbCrLf & _
+           "Cenovnik (tblCenovnik) se popunjava preko Mati" & ChrW(269) & "nih podataka.", _
            vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
-    MsgBox "Greska u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' Cenovnik (cene po proizvodu) — jednokratni schema setup.
+' Cenovnik (cene po proizvodu) -- jednokratni schema setup.
 ' Idempotentno: kreira tblCenovnik ako ne postoji, inace dopuni kolone.
 ' Pokrenuti na master workbook-u (deo je EnsurePaletniListSchema, a moze
 ' i samostalno: Alt+F8 -> EnsureCenovnikSchema).
@@ -767,8 +769,36 @@ EH:
 End Sub
 
 ' ============================================================
+' Poruke (resource table) -- idempotent.
+' Creates tblPoruke on hidden sheet sPoruke and seeds strings.
+' Alt+F8 -> EnsurePoruke.
+' ============================================================
+Public Sub EnsurePoruke()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_PORUKE, PORUKE_SHEET, Array(COL_POR_KLJUC, COL_POR_TEKST)
+
+    Dim lo As ListObject
+    Set lo = FindListObject(TBL_PORUKE)
+
+    If Not lo Is Nothing Then
+        Dim ws As Worksheet
+        Set ws = lo.Parent
+        If ws.Visible <> xlSheetVeryHidden Then ws.Visible = xlSheetVeryHidden
+        modPoruke.UpsertPoruke lo
+    End If
+
+    LogSetup "OK", "EnsurePoruke done"
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsurePoruke failed: " & Err.description
+    Err.Raise Err.Number, "EnsurePoruke", Err.description
+End Sub
+
+' ============================================================
 ' Dorade (soft-delete + tip ambalaze po kulturi + hladnjaca + decimalna
-' kolicina) — jednokratni schema setup. Idempotentno.
+' kolicina) -- jednokratni schema setup. Idempotentno.
 ' Alt+F8 -> EnsureDoradeSchema.
 ' ============================================================
 Public Sub EnsureDoradeSchema()
@@ -814,18 +844,18 @@ Public Sub EnsureDoradeSchema()
 
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
-           "- Aktivan: Kulture/Ambalaza/Palete (postojeci -> Aktivan)" & vbCrLf & _
+           "- Aktivan: Kulture/Ambala" & ChrW(382) & "a/Palete (postojeci -> Aktivan)" & vbCrLf & _
            "- TipAmbalaze: tblKulture (podrazumevani po kulturi)" & vbCrLf & _
            "- JeHladnjaca: tblStanice (Da/Ne)" & vbCrLf & _
            "- Decimalni format kolicine (0.00)" & vbCrLf & _
-           "- KolAmbIzdata: tblOtkup (izdata ambalaza OM->kooperant)" & vbCrLf & _
+           "- KolAmbIzdata: tblOtkup (izdata ambala" & ChrW(382) & "a OM->kooperant)" & vbCrLf & _
            "- VremeUnosa: tblOtkup (vreme snimanja otkupa)" & vbCrLf & _
            "- BrutoKg: tblOtkup/tblPrijemnica (bruto unos -> cuva neto)", vbInformation, APP_NAME
     Exit Sub
 
 EH:
     LogSetup "ERROR", "EnsureDoradeSchema failed: " & Err.description
-    MsgBox "Greska u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Dodaj kolonu Aktivan ako fali i postavi "Aktivan" na sve prazne (backfill).

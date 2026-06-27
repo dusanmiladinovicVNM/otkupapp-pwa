@@ -2,16 +2,16 @@ Attribute VB_Name = "modJournaling"
 Option Explicit
 
 ' ============================================================
-' modJournal – TX-Level CSV Journaling
+' modJournal - TX-Level CSV Journaling
 '
 ' Schreibt jede AppendRow-Operation sofort als CSV-Zeile.
-' Zweck: Crash-Recovery. Wenn Excel abstürzt bevor gespeichert
-' wird, können alle Transaktionen aus dem Journal reimportiert
+' Zweck: Crash-Recovery. Wenn Excel abstuerzt bevor gespeichert
+' wird, koennen alle Transaktionen aus dem Journal reimportiert
 ' werden.
 '
 ' Journal-Pfad: ThisWorkbook.Path & "\Journal\"
 ' Dateiname:    tblName_YYYY-MM-DD.csv (eine pro Tabelle pro Tag)
-' Rotation:     Dateien älter als 30 Tage werden bei App-Start gelöscht
+' Rotation:     Dateien aelter als 30 Tage werden bei App-Start geloescht
 '
 ' WICHTIG: Journal-Write darf NIEMALS die eigentliche Operation
 ' blockieren. Daher: On Error Resume Next um den Write.
@@ -23,7 +23,7 @@ Private Const BACKUP_FOLDER As String = "Backup"
 Private Const BACKUP_MAX_DAYS As Long = 30
 
 ' ============================================================
-' AutoSave state — AR-002
+' AutoSave state -- AR-002
 ' ============================================================
 Private m_LastAutoSaveAt As Date
 Private m_HasAutoSaved As Boolean
@@ -43,7 +43,7 @@ Private m_SaveScheduled As Boolean
 
 Public Sub WriteJournalRow(ByVal tblName As String, ByVal rowData As Variant)
     ' Schreibt eine komplette rowData-Zeile als CSV-Append
-    ' Fehlschlag ist still – Journal darf nie die App blockieren
+    ' Fehlschlag ist still - Journal darf nie die App blockieren
     
     Dim journalPath As String
     Dim fileName As String
@@ -107,7 +107,7 @@ End Sub
 ' ============================================================
 
 Public Sub PurgeOldJournals()
-    ' Löscht Journal-Dateien die älter als JOURNAL_MAX_DAYS sind
+    ' Loescht Journal-Dateien die aelter als JOURNAL_MAX_DAYS sind
     
     Dim journalPath As String
     Dim fileName As String
@@ -152,7 +152,7 @@ End Sub
 ' ============================================================
 
 Public Function CheckJournalForRecovery() As String
-    ' Prüft ob heute Journal-Einträge existieren die nicht in Excel sind
+    ' Prueft ob heute Journal-Eintraege existieren die nicht in Excel sind
     ' Returns: "" wenn alles OK, oder Warn-String mit Details
     
     Dim journalPath As String
@@ -177,7 +177,7 @@ Public Function CheckJournalForRecovery() As String
         Exit Function
     End If
     
-    ' Nur heutige Dateien prüfen
+    ' Nur heutige Dateien pruefen
     fileName = Dir(journalPath & "\*_" & Format$(Date, "yyyy-mm-dd") & ".csv")
     
     Do While fileName <> ""
@@ -191,7 +191,7 @@ Public Function CheckJournalForRecovery() As String
         
         filePath = journalPath & "\" & fileName
         
-        ' Journal-Zeilen zählen (minus Header)
+        ' Journal-Zeilen zaehlen (minus Header)
         journalCount = 0
         ff = FreeFile
         Open filePath For Input As #ff
@@ -204,7 +204,7 @@ Public Function CheckJournalForRecovery() As String
         
         If journalCount < 0 Then journalCount = 0
         
-        ' Excel-Zeilen zählen
+        ' Excel-Zeilen zaehlen
         Set lo = GetTable(tblName)
         If lo Is Nothing Then
             excelCount = 0
@@ -218,8 +218,8 @@ Public Function CheckJournalForRecovery() As String
         If journalCount > excelCount Then
             If warnings <> "" Then warnings = warnings & vbCrLf
             warnings = warnings & tblName & ": Journal hat " & journalCount & _
-                       " Einträge, Excel hat " & excelCount & " Zeilen. " & _
-                       "Möglicher Datenverlust nach Absturz!"
+                       " Eintraege, Excel hat " & excelCount & " Zeilen. " & _
+                       "Moeglicher Datenverlust nach Absturz!"
         End If
         
 NextFile:
@@ -332,7 +332,7 @@ EH:
 End Sub
 
 Public Sub PurgeOldBackups()
-    ' Löscht Backup-Dateien die älter als BACKUP_MAX_DAYS sind
+    ' Loescht Backup-Dateien die aelter als BACKUP_MAX_DAYS sind
     ' Basiert auf Dateiname-Datum, nicht File-System-Datum
     
     Dim backupPath As String
@@ -380,7 +380,7 @@ End Sub
 ' ============================================================
 
 Private Function EscapeCSV(ByVal s As String) As String
-    ' CSV-Escape: Wenn Semikolon, Anführungszeichen oder Newline enthalten
+    ' CSV-Escape: Wenn Semikolon, Anfuehrungszeichen oder Newline enthalten
     If InStr(s, ";") > 0 Or InStr(s, """") > 0 Or InStr(s, vbCrLf) > 0 Or InStr(s, vbLf) > 0 Then
         s = Replace(s, """", """""")
         EscapeCSV = """" & s & """"
@@ -421,7 +421,7 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String, _
     
     On Error GoTo EH
     
-    ' Reentrancy guard — set BEFORE any other check.
+    ' Reentrancy guard -- set BEFORE any other check.
     ' Guards against Excel events firing during Save that might re-enter here.
     If m_AutoSaveInProgress Then Exit Sub
     m_AutoSaveInProgress = True

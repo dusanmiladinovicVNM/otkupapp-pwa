@@ -2,8 +2,8 @@ Attribute VB_Name = "modTheme"
 Option Explicit
 
 ' ============================================================
-' modTheme – OtkupAPP shared theme
-' SVETLA KREM TEMA — uskladena sa agrix.rs
+' modTheme - OtkupAPP shared theme
+' SVETLA KREM TEMA -- uskladena sa agrix.rs
 ' (krem #F7F4EE, forest #1E2D14, brand zelena #5EA135, zlatna #C8A84B)
 ' ============================================================
 
@@ -18,32 +18,32 @@ Public Const FONT_SIZE_HEADER As Single = 11
 Public Const FONT_SIZE_TITLE As Single = 13
 
 ' =========================
-' PALETA — svetla krem tema
+' PALETA -- svetla krem tema
 ' =========================
 
-' — POZADINE —
-Public Function BG_MAIN() As Long: BG_MAIN = RGB(247, 244, 238): End Function    ' #F7F4EE krem — glavna forma
-Public Function BG_TOP() As Long: BG_TOP = RGB(242, 237, 228): End Function      ' #F2EDE4 topla krem — top traka / nav
-Public Function BG_PANEL() As Long: BG_PANEL = RGB(255, 255, 255): End Function  ' belo — paneli / kartice
+' -- POZADINE --
+Public Function BG_MAIN() As Long: BG_MAIN = RGB(247, 244, 238): End Function    ' #F7F4EE krem -- glavna forma
+Public Function BG_TOP() As Long: BG_TOP = RGB(242, 237, 228): End Function      ' #F2EDE4 topla krem -- top traka / nav
+Public Function BG_PANEL() As Long: BG_PANEL = RGB(255, 255, 255): End Function  ' belo -- paneli / kartice
 
-' — DUGMAD —
-Public Function BTN_BG() As Long: BTN_BG = RGB(46, 71, 38): End Function         ' forest zelena — meni / sekundarna
-Public Function BTN_HOVER() As Long: BTN_HOVER = RGB(74, 104, 56): End Function  ' svetlija zelena — hover
-Public Function BTN_ACTIVE() As Long: BTN_ACTIVE = RGB(200, 168, 75): End Function ' #C8A84B zlatna — aktivno / primarno
+' -- DUGMAD --
+Public Function BTN_BG() As Long: BTN_BG = RGB(46, 71, 38): End Function         ' forest zelena -- meni / sekundarna
+Public Function BTN_HOVER() As Long: BTN_HOVER = RGB(74, 104, 56): End Function  ' svetlija zelena -- hover
+Public Function BTN_ACTIVE() As Long: BTN_ACTIVE = RGB(200, 168, 75): End Function ' #C8A84B zlatna -- aktivno / primarno
 
-' — TEKST —
-Public Function TXT_LIGHT() As Long: TXT_LIGHT = RGB(30, 45, 20): End Function       ' #1E2D14 forest — GLAVNI TAMNI tekst (polja, labele)
-Public Function TXT_ON_DARK() As Long: TXT_ON_DARK = RGB(247, 244, 238): End Function ' krem — tekst NA zelenim/crvenim dugmadima
-Public Function TXT_MUTED() As Long: TXT_MUTED = RGB(122, 133, 110): End Function    ' #7A856E prigušeni
+' -- TEKST --
+Public Function TXT_LIGHT() As Long: TXT_LIGHT = RGB(30, 45, 20): End Function       ' #1E2D14 forest -- GLAVNI TAMNI tekst (polja, labele)
+Public Function TXT_ON_DARK() As Long: TXT_ON_DARK = RGB(247, 244, 238): End Function ' krem -- tekst NA zelenim/crvenim dugmadima
+Public Function TXT_MUTED() As Long: TXT_MUTED = RGB(122, 133, 110): End Function    ' #7A856E priguseni
 Public Function TXT_ALERT() As Long: TXT_ALERT = RGB(192, 57, 57): End Function      ' crvena
 Public Function BORDER_SOFT() As Long: BORDER_SOFT = RGB(208, 210, 196): End Function ' meka sage ivica
 
-' — POLJA (INPUT) —
+' -- POLJA (INPUT) --
 Public Function INPUT_BG() As Long: INPUT_BG = RGB(255, 255, 255): End Function          ' belo polje
 Public Function INPUT_DISABLED_BG() As Long: INPUT_DISABLED_BG = RGB(235, 229, 216): End Function ' #EBE5D8 zakljucano
 Public Function INPUT_BORDER() As Long: INPUT_BORDER = RGB(168, 176, 150): End Function   ' sage ivica (vidljiva na belom)
 
-' — STATUS —
+' -- STATUS --
 Public Function CLR_SUCCESS() As Long: CLR_SUCCESS = RGB(74, 140, 52): End Function   ' zelena (citljiva na krem)
 Public Function CLR_WARNING() As Long: CLR_WARNING = RGB(180, 134, 26): End Function  ' amber
 Public Function CLR_ERROR() As Long: CLR_ERROR = RGB(192, 57, 57): End Function       ' crvena
@@ -123,9 +123,10 @@ NextCtrl:
     Next c
 End Sub
 
-' ako negde rucno zoveš ovo ime
+' ako negde rucno zoves ovo ime
 Public Sub ApplyThemeToControls(ByVal frm As Object)
     StyleControls frm
+    FixFormCaptions frm
 End Sub
 
 ' ============================================================
@@ -250,14 +251,14 @@ Public Sub StyleButton(ByVal c As MSForms.CommandButton)
     cap = LCase$(c.caption)
 
     If nm Like "*unos*" Or nm Like "*save*" Or nm Like "*sacuvaj*" _
-       Or nm Like "*izradi*" Or nm Like "*prikazi*" _
+       Or nm Like "*izradi*" Or nm Like "*prika" & ChrW(382) & "i*" _
        Or cap Like "*unos*" Or cap Like "*sacuvaj*" _
-       Or cap Like "*izradi*" Or cap Like "*prikazi*" Then
+       Or cap Like "*izradi*" Or cap Like "*prika" & ChrW(382) & "i*" Then
 
         SetButtonPrimary c
 
-    ElseIf nm Like "*obrisi*" Or nm Like "*delete*" _
-       Or cap Like "*obrisi*" Or cap Like "*delete*" Then
+    ElseIf nm Like "*obri" & ChrW(353) & "i*" Or nm Like "*delete*" _
+       Or cap Like "*obri" & ChrW(353) & "i*" Or cap Like "*delete*" Then
 
         SetButtonDanger c
 
@@ -292,7 +293,7 @@ Public Sub StylePrimaryButton(ByVal btn As MSForms.CommandButton, Optional ByVal
     With btn
         If Len(captionText) > 0 Then .caption = captionText
         .BackColor = BTN_ACTIVE
-        .ForeColor = TXT_LIGHT            ' taman tekst na zlatnom — visok kontrast
+        .ForeColor = TXT_LIGHT            ' taman tekst na zlatnom -- visok kontrast
         .Font.name = APP_FONT_BOLD
         .Font.Size = FONT_SIZE_NORMAL
         .TakeFocusOnClick = False
@@ -363,7 +364,7 @@ End Sub
 
 Public Sub SetButtonNav(ByVal btn As Object)
     btn.BackColor = BG_TOP
-    btn.ForeColor = TXT_MUTED             ' prigušen tekst na krem
+    btn.ForeColor = TXT_MUTED             ' prigusen tekst na krem
     btn.Font.Bold = False
 End Sub
 
@@ -484,7 +485,7 @@ Private Function IsDirectChild(ByVal c As Object, ByVal parent As Object) As Boo
 End Function
 
 ' ============================================================
-' v6.11 UI ENHANCEMENTS — focus border, section header,
+' v6.11 UI ENHANCEMENTS -- focus border, section header,
 ' status dot, accent bar, badge, KPI card, step indicator
 ' ============================================================
 
@@ -764,12 +765,12 @@ Public Sub StyleSectionAccent(ByVal lbl As MSForms.label, _
     End If
 
     If isChildOfFrame Then
-        ' label zivi unutar Frame-a — pozicija u Frame koordinatama
+        ' label zivi unutar Frame-a -- pozicija u Frame koordinatama
         lbl.Left = 0
         lbl.top = 0
         lbl.width = frmBelow.InsideWidth
     Else
-        ' label zivi na formi — pozicija u form koordinatama
+        ' label zivi na formi -- pozicija u form koordinatama
         lbl.Left = frmBelow.Left
         lbl.top = frmBelow.top
         lbl.width = frmBelow.width
@@ -816,7 +817,7 @@ End Sub
 '======================================================================
 ' StyleListHeaderLabel
 '
-' Header label iznad ListBox kolone. Vizuelno suptilan ali jasan —
+' Header label iznad ListBox kolone. Vizuelno suptilan ali jasan --
 ' bold + gold boja na krem podlozi.
 '
 ' Koristi se za "fake header row" iznad VBA ListBox-a (MSForms ListBox
@@ -838,4 +839,145 @@ Public Sub StyleListHeaderLabel(ByVal lbl As MSForms.label)
     On Error GoTo 0
 End Sub
 
+' ============================================================
+' STATIC LABEL DIACRITICS FIX
+' Form designer ne dozvoljava unos srpske dijakritike u Caption.
+' FixFormCaptions se poziva iz ApplyThemeToControls i prolazi kroz
+' sve Label kontrole, ispravljajuci poznate ASCII reci u Unicode
+' (ChrW) ekvivalente. Idempotentno: vec ispravljeni Caption ostaje.
+' ============================================================
+Public Sub FixFormCaptions(ByVal parent As Object)
+    Dim c As Object
+    On Error Resume Next
+    For Each c In parent.Controls
+        Select Case TypeName(c)
+            Case "Label", "CommandButton", "CheckBox", "OptionButton", "ToggleButton"
+                c.Caption = CorrectSrCaption(c.Caption)
+            Case "Frame"
+                c.Caption = CorrectSrCaption(c.Caption)
+                FixFormCaptions c
+            Case "Page"
+                c.Caption = CorrectSrCaption(c.Caption)
+                FixFormCaptions c
+            Case "MultiPage"
+                Dim pg As Object
+                For Each pg In c.Pages
+                    pg.Caption = CorrectSrCaption(pg.Caption)
+                    FixFormCaptions pg
+                Next pg
+        End Select
+    Next c
+    On Error GoTo 0
+End Sub
+
+Private Function CorrectSrCaption(ByVal s As String) As String
+    Dim parts() As String
+    Dim i As Long
+    parts = Split(s, " ")
+    For i = 0 To UBound(parts)
+        parts(i) = CorrectSrWord(parts(i))
+    Next i
+    CorrectSrCaption = Join(parts, " ")
+End Function
+
+Private Function CorrectSrWord(ByVal w As String) As String
+    Dim fixed As String
+    Dim isTitle As Boolean
+    isTitle = (Len(w) > 0 And Asc(Left(w, 1)) >= 65 And Asc(Left(w, 1)) <= 90 _
+               And w <> UCase(w))
+    Select Case LCase(w)
+        Case "voca":       fixed = "vo" & ChrW(263) & "a"
+        Case "voce":       fixed = "vo" & ChrW(263) & "e"
+        Case "vocu":       fixed = "vo" & ChrW(263) & "u"
+        Case "vocama":     fixed = "vo" & ChrW(263) & "ama"
+        Case "ambalaza":   fixed = "ambala" & ChrW(382) & "a"
+        Case "ambalaze":   fixed = "ambala" & ChrW(382) & "e"
+        Case "ambalazu":   fixed = "ambala" & ChrW(382) & "u"
+        Case "kolicina":   fixed = "koli" & ChrW(269) & "ina"
+        Case "kolicine":   fixed = "koli" & ChrW(269) & "ine"
+        Case "kolicinu":   fixed = "koli" & ChrW(269) & "inu"
+        Case "tezina":     fixed = "te" & ChrW(382) & "ina"
+        Case "tezine":     fixed = "te" & ChrW(382) & "ine"
+        Case "tezinu":     fixed = "te" & ChrW(382) & "inu"
+        Case "maticni":    fixed = "mati" & ChrW(269) & "ni"
+        Case "maticnih":   fixed = "mati" & ChrW(269) & "nih"
+        Case "maticnom":   fixed = "mati" & ChrW(269) & "nom"
+        Case "racun":      fixed = "ra" & ChrW(269) & "un"
+        Case "racuna":     fixed = "ra" & ChrW(269) & "una"
+        Case "racune":     fixed = "ra" & ChrW(269) & "une"
+        Case "racunu":     fixed = "ra" & ChrW(269) & "unu"
+        Case "greska":     fixed = "gre" & ChrW(353) & "ka"
+        Case "greske":     fixed = "gre" & ChrW(353) & "ke"
+        Case "gresku":     fixed = "gre" & ChrW(353) & "ku"
+        Case "drzava":     fixed = "dr" & ChrW(382) & "ava"
+        Case "drzave":     fixed = "dr" & ChrW(382) & "ave"
+        Case "drzavu":     fixed = "dr" & ChrW(382) & "avu"
+        Case "postanski":  fixed = "po" & ChrW(353) & "tanski"
+        Case "postanskog": fixed = "po" & ChrW(353) & "tanskog"
+        Case "sifarnik":   fixed = ChrW(353) & "ifarnik"
+        Case "sifarnici":  fixed = ChrW(353) & "ifarnici"
+        Case "sifarnika":  fixed = ChrW(353) & "ifarnika"
+        Case "tekuci":     fixed = "teku" & ChrW(263) & "i"
+        Case "tekuceg":    fixed = "teku" & ChrW(263) & "eg"
+        Case "pronaden":   fixed = "prona" & ChrW(273) & "en"
+        Case "pronadjen":  fixed = "prona" & ChrW(273) & "en"
+        Case "izvestaj":   fixed = "izve" & ChrW(353) & "taj"
+        Case "izvestaje":  fixed = "izve" & ChrW(353) & "taje"
+        Case "marza":      fixed = "mar" & ChrW(382) & "a"
+        Case "marze":      fixed = "mar" & ChrW(382) & "e"
+        Case "opstina":    fixed = "op" & ChrW(353) & "tina"
+        Case "opstine":    fixed = "op" & ChrW(353) & "tine"
+        Case "vozac":      fixed = "voza" & ChrW(269)
+        Case "vozaca":     fixed = "voza" & ChrW(269) & "a"
+        Case "vozace":     fixed = "voza" & ChrW(269) & "e"
+        Case "vozaci":     fixed = "voza" & ChrW(269) & "i"
+        Case "vozacu":     fixed = "voza" & ChrW(269) & "u"
+        Case "hladnjaca":  fixed = "hladnja" & ChrW(269) & "a"
+        Case "hladnjace":  fixed = "hladnja" & ChrW(269) & "e"
+        Case "hladnjaci":  fixed = "hladnja" & ChrW(269) & "i"
+        Case "rucno":      fixed = "ru" & ChrW(269) & "no"
+        Case "rucni":      fixed = "ru" & ChrW(269) & "ni"
+        Case "rucna":      fixed = "ru" & ChrW(269) & "na"
+        Case "rucnih":     fixed = "ru" & ChrW(269) & "nih"
+        Case "dobavljac":  fixed = "dobavlja" & ChrW(269)
+        Case "dobavljaca": fixed = "dobavlja" & ChrW(269) & "a"
+        Case "dobavljace": fixed = "dobavlja" & ChrW(269) & "e"
+        Case "pocetak":    fixed = "po" & ChrW(269) & "etak"
+        Case "pocetka":    fixed = "po" & ChrW(269) & "etka"
+        Case "pocetku":    fixed = "po" & ChrW(269) & "etku"
+        Case "prosecna":   fixed = "prose" & ChrW(269) & "na"
+        Case "prosecne":   fixed = "prose" & ChrW(269) & "ne"
+        Case "prosecno":   fixed = "prose" & ChrW(269) & "no"
+        Case "prosecni":   fixed = "prose" & ChrW(269) & "ni"
+        Case "prosecnih":  fixed = "prose" & ChrW(269) & "nih"
+        Case "stampaj":    fixed = ChrW(353) & "tampaj"
+        Case "stampanje":  fixed = ChrW(353) & "tampanje"
+        Case "stampa":     fixed = ChrW(353) & "tampa"
+        Case "stampac":    fixed = ChrW(353) & "tampa" & ChrW(269)
+        Case "ucitaj":     fixed = "u" & ChrW(269) & "itaj"
+        Case "ucitavanje": fixed = "u" & ChrW(269) & "itavanje"
+        Case "ucitava":    fixed = "u" & ChrW(269) & "itava"
+        Case "povezi":     fixed = "pove" & ChrW(382) & "i"
+        Case "tez.":       fixed = "te" & ChrW(382) & "."
+        Case "tezina:":    fixed = "te" & ChrW(382) & "ina:"
+        Case "sacuvaj":    fixed = "sa" & ChrW(269) & "uvaj"
+        Case "obrisi":     fixed = "obri" & ChrW(353) & "i"
+        Case "pretrazi":   fixed = "pretra" & ChrW(382) & "i"
+        Case "pretrazivanje": fixed = "pretra" & ChrW(382) & "ivanje"
+        Case "kreiraj":    fixed = "kreiraj"
+        Case "osvezi":      fixed = "osve" & ChrW(382) & "i"
+        Case "osvezavanje": fixed = "osve" & ChrW(382) & "avanje"
+        Case "osiroceni":   fixed = "osiro" & ChrW(269) & "eni"
+        Case "osirocena":   fixed = "osiro" & ChrW(269) & "ena"
+        Case "osirocenih":  fixed = "osiro" & ChrW(269) & "enih"
+        Case "izdavanje":   fixed = "izdavanje"
+        Case "izdavanja":   fixed = "izdavanja"
+        Case Else:          CorrectSrWord = w: Exit Function
+    End Select
+    If isTitle Then
+        CorrectSrWord = UCase(Left(fixed, 1)) & Mid(fixed, 2)
+    Else
+        CorrectSrWord = fixed
+    End If
+End Function
 

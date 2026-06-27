@@ -18,14 +18,14 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmDokumenta v2.1 – Otpremnica + Zbirna + Prijemnica
+' frmDokumenta v2.1 - Otpremnica + Zbirna + Prijemnica
 ' Ein Form, 6 Frames, kein MultiPage
 ' ============================================================
 
 Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
-' Runtime toggle (fraOMUlaz): smer ambalaze — Prijem na OM / Izdavanje kooperantu.
+' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
 Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
 Private WithEvents m_tglPrijemKoop As MSForms.ToggleButton
 
@@ -101,7 +101,7 @@ Private Sub UserForm_Activate()
     StyleLabel lblOMAvansSaldo, TXT_MUTED(), True
     StyleLabel lblStornoWarning, CLR_WARNING(), True
 
-    ' important frames — section headers (UPPERCASE + gold)
+    ' important frames -- section headers (UPPERCASE + gold)
     StyleSectionHeader fraOtpremnica, "Izlaz OM  (Otpremnica)"
     StyleSectionHeader fraZbirna, "Zbirna otpremnica"
     StyleSectionHeader fraPrijemnica, "Ulaz Kupci  (Prijemnica)"
@@ -153,7 +153,7 @@ Private Sub UserForm_Activate()
     ' Van malina moda ostaje aktivna (rucni unos zbirne).
     If IsMalinaMode() Then DisableFraZbirnaMalina
     
-    ' Storno ComboBox füllen
+    ' Storno ComboBox fuellen
     With cmbStornoDokument
         .Clear
         .AddItem "Otkup"
@@ -176,7 +176,7 @@ Private Sub UserForm_Activate()
     'Me.KeyPreview = True
     
     ' v6.11 UI: subtitle, KPI traka, akcent linije
-    StyleSubtitle lblSubtitle, "Operativni unos dokumenata, ambalaže i novca"
+    StyleSubtitle lblSubtitle, Poruka("DOK_LBL_OPERATIVNI_UNOS_DOKUMENATA")
     StyleFrameTitleLabel lblKopf, "Osnovni podaci"
     LayoutTopKpis
     RefreshTopKpis
@@ -189,7 +189,7 @@ Private Sub UserForm_Activate()
     StyleSectionAccent lblAccentStorno, fraStorno, "warn"
     StyleSectionAccent lblAccentZbirne, fraListaZbirnih, "info"
     
-    ' Frame captions empty — naslovi idu kao zasebni Label-i ispod akcent linije
+    ' Frame captions empty -- naslovi idu kao zasebni Label-i ispod akcent linije
     fraOtpremnica.caption = ""
     fraZbirna.caption = ""
     fraPrijemnica.caption = ""
@@ -206,7 +206,7 @@ Private Sub UserForm_Activate()
     StyleFrameTitleLabel lblTitleStorno, "Storno"
     StyleFrameTitleLabel lblTitleZbirne, "Lista zbirnih"
 
-    ' Podrazumevana vrsta/sorta (Podesavanja) — samo ako nije vec izabrano,
+    ' Podrazumevana vrsta/sorta (Podesavanja) -- samo ako nije vec izabrano,
     ' da re-aktivacija ne pregazi tekuci izbor. Okida auto-cenu/auto-tip.
     On Error Resume Next
     If Trim$(cmbVrstaVoca.value) = "" Then ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
@@ -228,7 +228,7 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmDokumenta.UserForm_Activate"
-    MsgBox "Greška pri otvaranju dokumenata: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Podesavanja: kes isplate OFF -> "Br. otk. blk." (cmbOtkupBlok) je disabled u
@@ -246,7 +246,7 @@ Private Sub cmbFakturaIzlaz_Change()
     On Error GoTo EH
 
     If cmbFakturaIzlaz.value = "" Then
-        lblManjak.caption = ""        ' kupacSaldo dummy — ako imaš zaseban label, zameni
+        lblManjak.caption = ""        ' kupacSaldo dummy -- ako imas zaseban label, zameni
         Exit Sub
     End If
 
@@ -263,7 +263,7 @@ Private Sub cmbFakturaIzlaz_Change()
         uplaceno = GetUplataForFaktura(fakturaID)
         preostalo = iznos - uplaceno
 
-        ' Koristi lblOMAvansSaldo kao multipurpose status bar — ili dodaj novi lblSaldoKupca
+        ' Koristi lblOMAvansSaldo kao multipurpose status bar -- ili dodaj novi lblSaldoKupca
         lblOMAvansSaldo.caption = "SALDO KUPCA   Uplaceno: " & Format$(uplaceno, "#,##0") & _
                                   "   Ostatak: " & Format$(preostalo, "#,##0") & " RSD"
         If preostalo <= 0 Then
@@ -405,7 +405,7 @@ Private Sub UpdateUkupnoKgOtp()
     If chkDveKlaseOtp.value Then
         lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
         If ukupnoRsd > 0 Then
-            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  •  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  *  " & Format$(ukupnoRsd, "#,##0") & " RSD"
         End If
     Else
         If ukupnoRsd > 0 Then
@@ -614,7 +614,7 @@ Private Sub btnUnosOtp_Click()
     ' Klasa I obavezna OSIM kad je samo Klasa II (dve-klase + prazna Klasa I).
     If Not (chkDveKlaseOtp.value And Trim$(txtKolicinaOtp.value) = "") Then
         If Not IsNumeric(txtKolicinaOtp.value) Or val(txtKolicinaOtp.value) <= 0 Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicinaOtp.SetFocus
             Exit Sub
         End If
@@ -622,7 +622,7 @@ Private Sub btnUnosOtp_Click()
 
     If chkDveKlaseOtp.value Then
         If Not IsNumeric(txtKolicinaKlIIOtp.value) Or val(txtKolicinaKlIIOtp.value) <= 0 Then
-            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            MsgBox "Unesite koli" & ChrW(269) & "inu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKlIIOtp.SetFocus
             Exit Sub
         End If
@@ -645,7 +645,7 @@ Private Sub btnUnosOtp_Click()
     stanicaID = GetComboID(cmbOtkupnoMesto)
 
     If stanicaID = "" Then
-        MsgBox "Nije pronaden ID otkupnog mesta!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID otkupnog mesta!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -653,7 +653,7 @@ Private Sub btnUnosOtp_Click()
     vozacID = ExtractIDFromDisplay(cmbVozac.value)
 
     If vozacID = "" Then
-        MsgBox "Nije pronaden ID vozaca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID vozaca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -663,18 +663,18 @@ Private Sub btnUnosOtp_Click()
     Dim hasKlasaI As Boolean: hasKlasaI = (Trim$(txtKolicinaOtp.value) <> "")
     If hasKlasaI Then
         If Not TryParseDouble(txtKolicinaOtp.value, kolicinaI) Or kolicinaI <= 0 Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicinaOtp.SetFocus
             Exit Sub
         End If
     Else
         If Not chkDveKlaseOtp.value Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicinaOtp.SetFocus
             Exit Sub
         End If
         If txtKolAmbOtp.value <> "" Then
-            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+            MsgBox Poruka("DOK_MSG_UNOSI_SAMO_KLASA"), _
                    vbExclamation, APP_NAME
             txtKolAmbOtp.SetFocus
             Exit Sub
@@ -693,7 +693,7 @@ Private Sub btnUnosOtp_Click()
     Dim kolAmb As Long
     If txtKolAmbOtp.value <> "" Then
         If Not TryParseLong(txtKolAmbOtp.value, kolAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtKolAmbOtp.SetFocus
             Exit Sub
         End If
@@ -703,7 +703,7 @@ Private Sub btnUnosOtp_Click()
     If chkDveKlaseOtp.value And Not m_txtKolAmbIIOtp Is Nothing Then
         If Trim$(m_txtKolAmbIIOtp.value) <> "" Then
             If Not TryParseLong(m_txtKolAmbIIOtp.value, kolAmbII) Then
-                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2"), vbExclamation, APP_NAME
                 m_txtKolAmbIIOtp.SetFocus
                 Exit Sub
             End If
@@ -717,16 +717,16 @@ Private Sub btnUnosOtp_Click()
         Dim taraKg As Double
         taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbOtp.value)
         If taraKg <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbOtp.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbOtp.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_MOZE_PRETVORITI"), vbExclamation, APP_NAME
             cmbTipAmbOtp.SetFocus
             Exit Sub
         End If
         If taraKg >= kolicinaI Then
-            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
-                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
             txtKolicinaOtp.SetFocus
             Exit Sub
         End If
@@ -752,7 +752,7 @@ Private Sub btnUnosOtp_Click()
 
     If chkDveKlaseOtp.value Then
         If Not TryParseDouble(txtKolicinaKlIIOtp.value, kolicinaII) Or kolicinaII <= 0 Then
-            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            MsgBox "Unesite koli" & ChrW(269) & "inu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKlIIOtp.SetFocus
             Exit Sub
         End If
@@ -771,15 +771,15 @@ Private Sub btnUnosOtp_Click()
         Dim taraKgII As Double
         taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbOtp.value)
         If taraKgII <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbOtp.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbOtp.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_KLASA_MOZE"), vbExclamation, APP_NAME
             cmbTipAmbOtp.SetFocus
             Exit Sub
         End If
         If taraKgII >= kolicinaII Then
-            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg).", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE_KLASE") & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaII, "#,##0.00") & " kg).", vbExclamation, APP_NAME
             If Not m_txtKolAmbIIOtp Is Nothing Then m_txtKolAmbIIOtp.SetFocus
             Exit Sub
         End If
@@ -816,7 +816,7 @@ Private Sub btnUnosOtp_Click()
         brutoKgII:=brutoKgII)
 
     If result = "" Then
-        MsgBox "Greška pri cuvanju otpremnice. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("DOK_MSG_GRESKA_PRI_CUVANJU"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -843,7 +843,7 @@ Private Sub btnUnosOtp_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosOtp"
-    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
 End Sub
 Private Sub ClearOtpremnicaFields()
     txtBrojOtp.value = ""
@@ -855,11 +855,11 @@ Private Sub ClearOtpremnicaFields()
     DisableField txtCenaKlIIOtp
     lblUkupnoKgOtp.caption = ""
     
-    RefreshBrojOtpSuggestion   ' ? DODATO: predloži sledeci za istu stanicu/datum
+    RefreshBrojOtpSuggestion   ' ? DODATO: predlozi sledeci za istu stanicu/datum
 End Sub
 
 Private Sub RefreshBrojOtpSuggestion()
-    ' Predlaže BrojOtpremnice. OTP je VBA-only — scan samo tblOtpremnica.
+    ' Predlaze BrojOtpremnice. OTP je VBA-only -- scan samo tblOtpremnica.
     On Error GoTo EH
 
     Dim stanicaID As String
@@ -899,7 +899,7 @@ EH:
 End Sub
 
 Private Sub RefreshBrojZbirneSuggestion()
-    ' Predlaže BrojZbirne. ZBR scan = tblZbirna + VOZ-{vozacID} sheet.
+    ' Predlaze BrojZbirne. ZBR scan = tblZbirna + VOZ-{vozacID} sheet.
     On Error GoTo EH
 
     If cmbVozac.value = "" Then Exit Sub
@@ -1140,7 +1140,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
 
     If kolAmb <= 0 And novac <= 0 Then
         Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
-                  "Nema ambalaže ni novca za cuvanje."
+                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
     End If
 
     tx.BeginTx
@@ -1159,7 +1159,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             End If
             If Trim$(stanicaID) = "" Then
                 Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razduzenje."
+                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
             End If
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", kooperantID, "Kooperant", _
@@ -1176,7 +1176,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             End If
             If Trim$(stanicaID) = "" Then
                 Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zaduzenje."
+                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
             End If
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Izlaz", kooperantID, "Kooperant", _
@@ -1367,7 +1367,7 @@ Private Sub btnUnosOMUlaz_Click()
     stanicaID = GetComboID(cmbOtkupnoMesto)
 
     If stanicaID = "" Then
-        MsgBox "Nije pronaden ID otkupnog mesta!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID otkupnog mesta!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -1398,7 +1398,7 @@ Private Sub btnUnosOMUlaz_Click()
     Dim kolAmb As Long
     If Trim$(txtKolAmbOMUlaz.value) <> "" Then
         If Not TryParseLong(txtKolAmbOMUlaz.value, kolAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtKolAmbOMUlaz.SetFocus
             Exit Sub
         End If
@@ -1414,12 +1414,12 @@ Private Sub btnUnosOMUlaz_Click()
     End If
 
     If kolAmb <= 0 And novac <= 0 Then
-        MsgBox "Unesite ambalažu ili novac za OM ulaz.", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_UNESITE_AMBALAZU_ILI"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If kolAmb > 0 And cmbTipAmbOMUlaz.value = "" Then
-        MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -1433,7 +1433,7 @@ Private Sub btnUnosOMUlaz_Click()
     izdavanje = OMIzdavanjeAktivno()
     prijemKoop = OMPrijemKoopAktivno()
     If izdavanje And prijemKoop Then
-        MsgBox "Izaberite samo jedan smer ambalaze: Izdato ILI Prijem (kooperant).", _
+        MsgBox "Izaberite samo jedan smer ambala" & ChrW(382) & "e: Izdato ILI Prijem (kooperant).", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -1441,20 +1441,20 @@ Private Sub btnUnosOMUlaz_Click()
         Dim smerTxt As String
         If prijemKoop Then smerTxt = "prijem" Else smerTxt = "izdavanje"
         If kolAmb <= 0 Then
-            MsgBox "Za " & smerTxt & " ambalaze (kooperant) unesite kolicinu.", _
+            MsgBox "Za " & smerTxt & " ambala" & ChrW(382) & "e (kooperant) unesite koli" & ChrW(269) & "inu.", _
                    vbExclamation, APP_NAME
             txtKolAmbOMUlaz.SetFocus
             Exit Sub
         End If
         If Trim$(cmbPrimalacOMUlaz.value) = "" Then
-            MsgBox "Izaberite kooperanta za " & smerTxt & " ambalaze.", _
+            MsgBox "Izaberite kooperanta za " & smerTxt & " ambala" & ChrW(382) & "e.", _
                    vbExclamation, APP_NAME
             cmbPrimalacOMUlaz.SetFocus
             Exit Sub
         End If
         kooperantID = GetComboID(cmbPrimalacOMUlaz)
         If kooperantID = "" Then
-            MsgBox "Nije pronaden ID kooperanta.", vbExclamation, APP_NAME
+            MsgBox "Nije prona" & ChrW(273) & "en ID kooperanta.", vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
@@ -1464,7 +1464,7 @@ Private Sub btnUnosOMUlaz_Click()
             kooperantID = GetComboID(cmbPrimalacOMUlaz)
 
             If kooperantID = "" Then
-                MsgBox "Nije pronaden ID primaoca.", vbExclamation, APP_NAME
+                MsgBox "Nije prona" & ChrW(273) & "en ID primaoca.", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -1492,7 +1492,7 @@ Private Sub btnUnosOMUlaz_Click()
                     omSaldo = GetOMAvansSaldo(stanicaID)
 
                     If novac > omSaldo Then
-                        MsgBox "Nedovoljno OM avansa! Raspoloživo: " & _
+                        MsgBox Poruka("DOK_MSG_NEDOVOLJNO_AVANSA_RASPOLOZIVO") & _
                                Format$(omSaldo, "#,##0") & " RSD", _
                                vbExclamation, APP_NAME
                         Exit Sub
@@ -1541,7 +1541,7 @@ Private Sub btnUnosOMUlaz_Click()
         tipNovca:=tipNovca, _
         koopSmer:=koopSmer) Then
 
-        MsgBox "Greška pri cuvanju OM ulaza. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_2"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -1570,7 +1570,7 @@ Private Sub btnUnosOMUlaz_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosOMUlaz"
-    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub cmbPrimalacOMUlaz_Change()
@@ -1655,18 +1655,18 @@ Private Sub btnUnosZbr_Click()
     Dim hasKlasaI As Boolean: hasKlasaI = (Trim$(txtUkupnoKGZbr.value) <> "")
     If hasKlasaI Then
         If Not TryParseDouble(txtUkupnoKGZbr.value, ukupnoKolI) Or ukupnoKolI <= 0 Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtUkupnoKGZbr.SetFocus
             Exit Sub
         End If
     Else
         If Not chkDveKlaseZbr.value Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtUkupnoKGZbr.SetFocus
             Exit Sub
         End If
         If Trim$(txtUkupnoAmbZbr.value) <> "" Then
-            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+            MsgBox Poruka("DOK_MSG_UNOSI_SAMO_KLASA"), _
                    vbExclamation, APP_NAME
             txtUkupnoAmbZbr.SetFocus
             Exit Sub
@@ -1676,7 +1676,7 @@ Private Sub btnUnosZbr_Click()
     Dim ukupnoKolII As Double
     If chkDveKlaseZbr.value Then
         If Not TryParseDouble(txtUkupnoKgKlIIZbr.value, ukupnoKolII) Or ukupnoKolII <= 0 Then
-            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            MsgBox "Unesite koli" & ChrW(269) & "inu za II klasu!", vbExclamation, APP_NAME
             txtUkupnoKgKlIIZbr.SetFocus
             Exit Sub
         End If
@@ -1685,7 +1685,7 @@ Private Sub btnUnosZbr_Click()
     Dim ukupnoAmb As Long
     If Trim$(txtUkupnoAmbZbr.value) <> "" Then
         If Not TryParseLong(txtUkupnoAmbZbr.value, ukupnoAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtUkupnoAmbZbr.SetFocus
             Exit Sub
         End If
@@ -1695,7 +1695,7 @@ Private Sub btnUnosZbr_Click()
     If chkDveKlaseZbr.value And Not m_txtKolAmbIIZbr Is Nothing Then
         If Trim$(m_txtKolAmbIIZbr.value) <> "" Then
             If Not TryParseLong(m_txtKolAmbIIZbr.value, ukupnoAmbII) Then
-                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2"), vbExclamation, APP_NAME
                 m_txtKolAmbIIZbr.SetFocus
                 Exit Sub
             End If
@@ -1706,12 +1706,12 @@ Private Sub btnUnosZbr_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -1719,12 +1719,12 @@ Private Sub btnUnosZbr_Click()
     vozacID = ExtractIDFromDisplay(cmbVozac.value)
 
     If vozacID = "" Then
-        MsgBox "Nije pronaden ID vozaca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID vozaca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If Not UpdateValidacija() Then
-        MsgBox "Validacija nije prošla. Proverite kg i ambalažu (razlika mora biti 0).", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -1759,7 +1759,7 @@ Private Sub btnUnosZbr_Click()
         ukupnoAmbII:=ukupnoAmbII)
 
     If result = "" Then
-        MsgBox "Greška pri cuvanju zbirne. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_3"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -1775,21 +1775,21 @@ Private Sub btnUnosZbr_Click()
     txtBrojZbirnePrij.value = txtBrojZbirne.value
     If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
 
-    ' Predloži sledeci broj za istog vozaca/datum
+    ' Predlozi sledeci broj za istog vozaca/datum
     RefreshBrojZbirneSuggestion
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.btnUnosZbr"
-    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
-' ZBIRNA VALIDIERUNG – Live-Update
+' ZBIRNA VALIDIERUNG - Live-Update
 ' ============================================================
 
 Private Sub txtBrojZbirne_AfterUpdate()
-    ' BrojZbirne auch in Otpremnica-Feld setzen (NE u malina modu — otpremnica
+    ' BrojZbirne auch in Otpremnica-Feld setzen (NE u malina modu -- otpremnica
     ' mora ostati bez BrojZbirne da je auto-zbirna pokupi).
     If Not IsMalinaMode() Then txtBrojZbirneOtp.value = txtBrojZbirne.value
     UpdateValidacija
@@ -1809,7 +1809,7 @@ Private Function UpdateValidacija() As Boolean
     Dim inputAmb As Long
     If Trim$(txtUkupnoKGZbr.value) <> "" Then
         If Not TryParseDouble(txtUkupnoKGZbr.value, inputKgKlI) Then
-            lblValidacijaKG.caption = "Neispravna kolicina Kl.I"
+            lblValidacijaKG.caption = "Neispravna koli" & ChrW(269) & "ina Kl.I"
             lblValidacijaKG.ForeColor = CLR_ERROR()
             Exit Function
         End If
@@ -1818,7 +1818,7 @@ Private Function UpdateValidacija() As Boolean
     If chkDveKlaseZbr.value Then
         If Trim$(txtUkupnoKgKlIIZbr.value) <> "" Then
             If Not TryParseDouble(txtUkupnoKgKlIIZbr.value, inputKgKlII) Then
-                lblValidacijaKG.caption = "Neispravna kolicina Kl.II"
+                lblValidacijaKG.caption = "Neispravna koli" & ChrW(269) & "ina Kl.II"
                 lblValidacijaKG.ForeColor = CLR_ERROR()
                 Exit Function
             End If
@@ -1827,7 +1827,7 @@ Private Function UpdateValidacija() As Boolean
 
     If Trim$(txtUkupnoAmbZbr.value) <> "" Then
         If Not TryParseLong(txtUkupnoAmbZbr.value, inputAmb) Then
-            lblValidacijaAmb.caption = "Neispravna kolicina ambalaže"
+            lblValidacijaAmb.caption = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE")
             lblValidacijaAmb.ForeColor = CLR_ERROR()
             Exit Function
         End If
@@ -1839,7 +1839,7 @@ Private Function UpdateValidacija() As Boolean
         If Trim$(m_txtKolAmbIIZbr.value) <> "" Then
             Dim inputAmbII As Long
             If Not TryParseLong(m_txtKolAmbIIZbr.value, inputAmbII) Then
-                lblValidacijaAmb.caption = "Neispravna kolicina ambalaze Kl.II"
+                lblValidacijaAmb.caption = "Neispravna koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e Kl.II"
                 lblValidacijaAmb.ForeColor = CLR_ERROR()
                 Exit Function
             End If
@@ -1867,7 +1867,7 @@ Private Function UpdateValidacija() As Boolean
                 "Zbr: " & Format$(zbrKgI, "#,##0.0") & " kg | " & _
                 "Raz: " & Format$(razKgI, "#,##0.0") & " kg"
     
-    ' KlII hinzufügen wenn aktiv
+    ' KlII hinzufuegen wenn aktiv
     If chkDveKlaseZbr.value Then
         kgCaption = kgCaption & "  ||  Kl.II - Otp: " & Format$(sumaKgII, "#,##0.0") & _
                     " | Zbr: " & Format$(zbrKgII, "#,##0.0") & _
@@ -1876,7 +1876,7 @@ Private Function UpdateValidacija() As Boolean
     
     lblValidacijaKG.caption = kgCaption
     
-    ' Farbe: beide Klassen müssen stimmen
+    ' Farbe: beide Klassen muessen stimmen
     Dim kgValid As Boolean
     If chkDveKlaseZbr.value Then
         kgValid = validKgI And validKgII
@@ -1954,18 +1954,18 @@ Private Sub btnUnosPrij_Click()
     Dim hasKlasaI As Boolean: hasKlasaI = (Trim$(txtKolicinaPrij.value) <> "")
     If hasKlasaI Then
         If Not TryParseDouble(txtKolicinaPrij.value, kolicinaI) Or kolicinaI <= 0 Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicinaPrij.SetFocus
             Exit Sub
         End If
     Else
         If Not chkDveKlasePrij.value Then
-            MsgBox "Unesite ispravnu kolicinu!", vbExclamation, APP_NAME
+            MsgBox "Unesite ispravnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
             txtKolicinaPrij.SetFocus
             Exit Sub
         End If
         If Trim$(txtKolAmbPrij.value) <> "" Then
-            MsgBox "Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.", _
+            MsgBox Poruka("DOK_MSG_UNOSI_SAMO_KLASA"), _
                    vbExclamation, APP_NAME
             txtKolAmbPrij.SetFocus
             Exit Sub
@@ -1984,7 +1984,7 @@ Private Sub btnUnosPrij_Click()
     Dim kolAmb As Long
     If Trim$(txtKolAmbPrij.value) <> "" Then
         If Not TryParseLong(txtKolAmbPrij.value, kolAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtKolAmbPrij.SetFocus
             Exit Sub
         End If
@@ -1993,7 +1993,7 @@ Private Sub btnUnosPrij_Click()
     Dim kolAmbVracena As Long
     If Trim$(txtKolAmbVracena.value) <> "" Then
         If Not TryParseLong(txtKolAmbVracena.value, kolAmbVracena) Then
-            MsgBox "Unesite ispravnu kolicinu vracene ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_3"), vbExclamation, APP_NAME
             txtKolAmbVracena.SetFocus
             Exit Sub
         End If
@@ -2003,7 +2003,7 @@ Private Sub btnUnosPrij_Click()
     If chkDveKlasePrij.value And Not m_txtKolAmbIIPrij Is Nothing Then
         If Trim$(m_txtKolAmbIIPrij.value) <> "" Then
             If Not TryParseLong(m_txtKolAmbIIPrij.value, kolAmbII) Then
-                MsgBox "Unesite ispravnu kolicinu ambalaže za II klasu!", vbExclamation, APP_NAME
+                MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2"), vbExclamation, APP_NAME
                 m_txtKolAmbIIPrij.SetFocus
                 Exit Sub
             End If
@@ -2015,7 +2015,7 @@ Private Sub btnUnosPrij_Click()
 
     If chkDveKlasePrij.value Then
         If Not TryParseDouble(txtKolicinaKlIIPrij.value, kolicinaII) Or kolicinaII <= 0 Then
-            MsgBox "Unesite kolicinu za II klasu!", vbExclamation, APP_NAME
+            MsgBox "Unesite koli" & ChrW(269) & "inu za II klasu!", vbExclamation, APP_NAME
             txtKolicinaKlIIPrij.SetFocus
             Exit Sub
         End If
@@ -2034,16 +2034,16 @@ Private Sub btnUnosPrij_Click()
         Dim taraKg As Double
         taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbPrij.value)
         If taraKg <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbPrij.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbPrij.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_MOZE_PRETVORITI"), vbExclamation, APP_NAME
             cmbTipAmbPrij.SetFocus
             Exit Sub
         End If
         If taraKg >= kolicinaI Then
-            MsgBox "Težina ambalaže (" & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
-                   "Proverite broj komada ili tip ambalaže.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
             txtKolicinaPrij.SetFocus
             Exit Sub
         End If
@@ -2058,15 +2058,15 @@ Private Sub btnUnosPrij_Click()
         Dim taraKgII As Double
         taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbPrij.value)
         If taraKgII <= 0 Then
-            MsgBox "Tip ambalaže '" & cmbTipAmbPrij.value & "' nema unetu težinu gajbice " & _
-                   "(Maticni podaci ? Tip ambalaže)." & vbCrLf & _
-                   "Bruto (II klasa) se ne može pretvoriti u neto.", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbPrij.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                   Poruka("DOK_MSG_BRUTO_KLASA_MOZE"), vbExclamation, APP_NAME
             cmbTipAmbPrij.SetFocus
             Exit Sub
         End If
         If taraKgII >= kolicinaII Then
-            MsgBox "Težina ambalaže II klase (" & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
-                   "jednaka bruto težini (" & Format$(kolicinaII, "#,##0.00") & " kg).", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE_KLASE") & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
+                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaII, "#,##0.00") & " kg).", vbExclamation, APP_NAME
             If Not m_txtKolAmbIIPrij Is Nothing Then m_txtKolAmbIIPrij.SetFocus
             Exit Sub
         End If
@@ -2078,12 +2078,12 @@ Private Sub btnUnosPrij_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -2091,7 +2091,7 @@ Private Sub btnUnosPrij_Click()
     vozacID = ExtractIDFromDisplay(cmbVozac.value)
 
     If vozacID = "" Then
-        MsgBox "Nije pronaden ID vozaca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID vozaca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -2128,7 +2128,7 @@ Private Sub btnUnosPrij_Click()
         brutoKgII:=brutoKgII)
 
     If result = "" Then
-        MsgBox "Greška pri cuvanju prijemnice. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_4"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -2181,7 +2181,7 @@ Private Sub btnUnosPrij_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosPrij"
-    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub ClearPrijemnicaFields()
@@ -2284,7 +2284,7 @@ Private Sub UpdateUkupnoKgPrij()
     If chkDveKlasePrij.value Then
         lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
         If ukupnoRsd > 0 Then
-            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  •  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  *  " & Format$(ukupnoRsd, "#,##0") & " RSD"
         End If
     Else
         If ukupnoRsd > 0 Then
@@ -2335,7 +2335,7 @@ Private Sub btnUnosIzlaz_Click()
     kupacID = GetComboID(cmbKupac)
 
     If kupacID = "" Then
-        MsgBox "Nije pronaden ID kupca!", vbExclamation, APP_NAME
+        MsgBox "Nije prona" & ChrW(273) & "en ID kupca!", vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -2366,7 +2366,7 @@ Private Sub btnUnosIzlaz_Click()
     Dim kolAmb As Long
     If Trim$(txtKolAmbIzlaz.value) <> "" Then
         If Not TryParseLong(txtKolAmbIzlaz.value, kolAmb) Then
-            MsgBox "Unesite ispravnu kolicinu ambalaže!", vbExclamation, APP_NAME
+            MsgBox Poruka("DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"), vbExclamation, APP_NAME
             txtKolAmbIzlaz.SetFocus
             Exit Sub
         End If
@@ -2382,12 +2382,12 @@ Private Sub btnUnosIzlaz_Click()
     End If
 
     If kolAmb <= 0 And novac <= 0 Then
-        MsgBox "Unesite ambalažu ili uplatu kupca.", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_UNESITE_AMBALAZU_ILI_2"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If kolAmb > 0 And cmbTipAmbIzlaz.value = "" Then
-        MsgBox "Izaberite tip ambalaže!", vbExclamation, APP_NAME
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -2400,7 +2400,7 @@ Private Sub btnUnosIzlaz_Click()
             fakturaID = GetComboID(cmbFakturaIzlaz)
 
             If fakturaID = "" Then
-                MsgBox "Nije pronaden ID izabrane fakture.", vbExclamation, APP_NAME
+                MsgBox "Nije prona" & ChrW(273) & "en ID izabrane fakture.", vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -2444,7 +2444,7 @@ Private Sub btnUnosIzlaz_Click()
         napomena:=napomena, _
         tipNovca:=tipNovca) Then
 
-        MsgBox "Greška pri cuvanju izlaza kupca. Promene su vracene.", vbCritical, APP_NAME
+        MsgBox Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_5"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -2461,7 +2461,7 @@ Private Sub btnUnosIzlaz_Click()
 
 EH:
     LogErr "frmDokumenta.btnUnosIzlaz"
-    MsgBox "Greška: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillOpenFakture()
@@ -2625,7 +2625,7 @@ Private Sub btnStorno_Click()
 
         Case "Revers izdavanje koop."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_KOOP) Then
-                MsgBox "Revers izdavanje '" & brDok & "' nije pronadjen (ili je vec storniran)!", _
+                MsgBox "Revers izdavanje '" & brDok & "' nije pronadjen (ili je ve" & ChrW(263) & " storniran)!", _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -2634,7 +2634,7 @@ Private Sub btnStorno_Click()
 
         Case "Revers povrat koop."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_ULAZ_KOOP) Then
-                MsgBox "Revers povrat '" & brDok & "' nije pronadjen (ili je vec storniran)!", _
+                MsgBox "Revers povrat '" & brDok & "' nije pronadjen (ili je ve" & ChrW(263) & " storniran)!", _
                        vbExclamation, APP_NAME
                 Exit Sub
             End If
@@ -2650,7 +2650,7 @@ Private Sub btnStorno_Click()
     Exit Sub
 EH:
     LogErr "frmDokumenta.btnStorno"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function ConfirmStorno(ByVal tipText As String, ByVal broj As String) As Boolean
@@ -2696,7 +2696,7 @@ Private Sub CheckVerwaisteDokumente()
 End Sub
 
 ' ============================================================
-' STORNO PREGLED — runtime dugme + overlay panel (lista svih storniranih
+' STORNO PREGLED -- runtime dugme + overlay panel (lista svih storniranih
 ' dokumenata, grupisano po tipu). .frx se ne dira (Controls.Add + WithEvents).
 ' Podaci: modDokumenta.GetStorniraniGrupisano / StorniraniHeaders.
 ' ============================================================
@@ -2736,7 +2736,7 @@ Private Sub m_btnStornoPregled_Click()
     Exit Sub
 EH:
     LogErr "frmDokumenta.m_btnStornoPregled_Click"
-    MsgBox "Greška pri prikazu storniranih: " & Err.description, vbExclamation, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA_PRI_PRIKAZU") & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub m_btnStornoClose_Click()
@@ -2965,7 +2965,7 @@ Private Sub m_btnRecovery_Click()
     Exit Sub
 EH:
     LogErr "frmDokumenta.m_btnRecovery_Click"
-    MsgBox "Greska pri prikazu recovery panela: " & Err.description, vbExclamation, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri prikazu recovery panela: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub m_btnRecClose_Click()
@@ -3034,7 +3034,7 @@ Private Sub m_btnRecPrevezi_Click()
     Exit Sub
 EH:
     LogErr "frmDokumenta.m_btnRecPrevezi_Click"
-    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub ShowRecoveryPanel()
@@ -3503,13 +3503,13 @@ Private Sub txtStornoBroj_Exit(ByVal Cancel As MSForms.ReturnBoolean):  RemoveFo
 ' ============================================================
 
 Private Sub SetupFkeyAccelerators()
-    ' Prazno — KeyDown radi rutiranje. Zovem proceduru da ostane explicit hook tacka
+    ' Prazno -- KeyDown radi rutiranje. Zovem proceduru da ostane explicit hook tacka
     ' za buducu konfiguraciju (npr. role-based shortcuts).
 End Sub
 
 Private Sub SetupFkeyHints()
     On Error Resume Next
-    ' Pokušaj da nade i stilizuje F-key hint label-e ako ih dodaš u Designer:
+    ' Pokusaj da nade i stilizuje F-key hint label-e ako ih dodas u Designer:
     ' lblFkeyOtp, lblFkeyZbr, lblFkeyPrij, lblFkeyOMUlaz, lblFkeyIzlaz, lblFkeyStorno
     StyleFkeyHint Me.Controls("lblFkeyOtp"), "F2"
     StyleFkeyHint Me.Controls("lblFkeyZbr"), "F3"
@@ -3663,7 +3663,7 @@ Public Sub RefreshTopKpis()
 
     If txtBrojZbirne.value = "" Then
         valKind = "neutral"
-        valText = "—"
+        valText = "--"
     Else
         ' Zovem postojecu UpdateValidacija (vraca True ako je 0/0)
         If UpdateValidacija() Then

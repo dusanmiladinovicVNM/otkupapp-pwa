@@ -30,7 +30,7 @@ Private Sub UserForm_Activate()
     
     ' Headers
     StyleFrameTitleLabel lblKopf, "Bank Import"
-    StyleSubtitle lblSubtitle, "Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere"
+    StyleSubtitle lblSubtitle, Poruka("BANKA_LBL_UVOZ_TRANSAKCIJA_BANKARSKIH")
     
     ' Section headers (ako koristis frames)
     ' StyleSectionHeader fraDetail, "Detalji selektovane stavke"
@@ -41,7 +41,7 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnAutoSve, "Automatski mapiraj sve"
     StylePrimaryButton btnSacuvajRucno, "Rucno mapiraj red"
     StylePrimaryButton btnSkip, "Preskoci red"
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StyleExitButton btnPovratak, "Zatvori"     ' ili "Povratak"
     
     ' Status labels
@@ -67,7 +67,7 @@ Private Sub UserForm_Activate()
     SetupList
     LoadBankaRows
     
-    ' KPI strip (opciono — vidi Izmena 2)
+    ' KPI strip (opciono -- vidi Izmena 2)
      LayoutTopKpis
      RefreshTopKpis
     
@@ -77,7 +77,7 @@ Private Sub UserForm_Activate()
     
 EH:
     LogErr "frmBankaImport.UserForm_Activate"
-    MsgBox "Greska pri otvaranju forme: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju forme: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
@@ -696,7 +696,7 @@ Private Sub UpdateIzvodSummaryLabel()
 
 EH:
     On Error Resume Next
-    Me.lblIzvodSummary.caption = "(greska pri citanju saldo info-a)"
+    Me.lblIzvodSummary.caption = "(gre" & ChrW(353) & "ka pri " & ChrW(269) & "itanju saldo info-a)"
     Me.lblIzvodSummary.ForeColor = RGB(128, 128, 128)
     
     LogErr "frmBankaImport.UpdateIzvodSummaryLabel"
@@ -779,7 +779,7 @@ Private Sub ResetActionButtons()
     StylePrimaryButton btnAutoSve, "Automatski mapiraj sve"
     StylePrimaryButton btnSacuvajRucno, "Rucno mapiraj red"
     StylePrimaryButton btnSkip, "Preskoci red"
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StyleExitButton btnPovratak, "Zatvori"
 End Sub
 

@@ -59,5 +59,5 @@ Public Function AssertBlankBuild() As Boolean
 EH:
     LogErr SRC
     AssertBlankBuild = False
-    MsgBox "Greska pri proveri blanko build-a: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri proveri blanko build-a: " & Err.description, vbCritical, APP_NAME
 End Function

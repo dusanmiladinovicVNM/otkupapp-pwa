@@ -2,7 +2,7 @@ Attribute VB_Name = "modDataAccess"
 Option Explicit
 
 ' ============================================================
-' modDataAccess – EINZIGER Ort für Sheet/Table-Zugriffe
+' modDataAccess - EINZIGER Ort fuer Sheet/Table-Zugriffe
 ' Alles andere ruft NUR diese Funktionen auf.
 ' Daten rein als Arrays, Daten raus als Arrays.
 ' ============================================================
@@ -10,7 +10,7 @@ Option Explicit
 ' --- Table Access ---
 
 Public Function GetTable(ByVal tblName As String) As ListObject
-    ' Findet ein ListObject über alle Sheets hinweg
+    ' Findet ein ListObject ueber alle Sheets hinweg
     Dim ws As Worksheet
     Dim lo As ListObject
     For Each ws In ThisWorkbook.Worksheets
@@ -25,7 +25,7 @@ Public Function GetTable(ByVal tblName As String) As ListObject
 End Function
 
 Public Function GetTableData(ByVal tblName As String) As Variant
-    ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurück
+    ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurueck
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -40,7 +40,7 @@ Public Function GetTableData(ByVal tblName As String) As Variant
 End Function
 
 Public Function GetTableHeaders(ByVal tblName As String) As Variant
-    ' Gibt die Spaltennamen als 1D-Array zurück
+    ' Gibt die Spaltennamen als 1D-Array zurueck
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -57,7 +57,7 @@ Public Function GetTableHeaders(ByVal tblName As String) As Variant
 End Function
 
 Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String) As Long
-    ' Gibt den Spaltenindex innerhalb der Tabelle zurück (1-basiert)
+    ' Gibt den Spaltenindex innerhalb der Tabelle zurueck (1-basiert)
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -70,7 +70,7 @@ Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String)
 End Function
 
 Public Function GetColumnData(ByVal tblName As String, ByVal colName As String) As Variant
-    ' Gibt eine einzelne Spalte als 1D-Array zurück
+    ' Gibt eine einzelne Spalte als 1D-Array zurueck
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -103,7 +103,7 @@ End Function
 ' --- WRITE Operations ---
 
 Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As Long
-    ' Fügt eine neue Zeile an die Tabelle an
+    ' Fuegt eine neue Zeile an die Tabelle an
     ' rowData = 1D Array mit Werten in Spaltenreihenfolge
     ' Returns: Zeilennummer der neuen Zeile (0 bei Fehler)
     Dim lo As ListObject
@@ -192,7 +192,7 @@ End Function
 
 Public Function GetNextID(ByVal tblName As String, ByVal idColName As String, _
                           Optional ByVal prefix As String = "") As String
-    ' Generiert die nächste ID (z.B. "OTK-00001")
+    ' Generiert die naechste ID (z.B. "OTK-00001")
     Dim data As Variant
     Dim colIdx As Long
     colIdx = GetColumnIndex(tblName, idColName)
@@ -233,7 +233,7 @@ End Function
 Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String, _
                                ByVal searchValue As String, _
                                ByVal datumColName As String) As String
-    ' Prüft ob searchValue in colName bereits existiert
+    ' Prueft ob searchValue in colName bereits existiert
     ' Returns: "" wenn kein Duplikat, sonst Fehlermeldung mit Datum
     
     If searchValue = "" Then
@@ -260,7 +260,7 @@ Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String,
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        ' Stornierte überspringen
+        ' Stornierte ueberspringen
         If colStorno > 0 Then
             If CStr(data(i, colStorno)) = "Da" Then GoTo NextRow
         End If
@@ -272,7 +272,7 @@ Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String,
             Else
                 datumStr = "(nepoznat datum)"
             End If
-            CheckDuplicate = "Dokument '" & searchValue & "' vec postoji! " & _
+            CheckDuplicate = "Dokument '" & searchValue & "' ve" & ChrW(263) & " postoji! " & _
                              "Unet je " & datumStr & "."
             Exit Function
         End If
@@ -287,7 +287,7 @@ End Function
 
 Public Function LookupValue(ByVal tblName As String, ByVal searchCol As String, _
                             ByVal searchVal As Variant, ByVal returnCol As String) As Variant
-    ' Einfacher VLOOKUP-Ersatz über ListObjects
+    ' Einfacher VLOOKUP-Ersatz ueber ListObjects
     Dim data As Variant
     data = GetTableData(tblName)
     If IsEmpty(data) Then
@@ -319,7 +319,7 @@ Public Function GetLookupList(ByVal tblName As String, ByVal colName As String, 
                               Optional ByVal filterCol As String = "", _
                               Optional ByVal filterVal As Variant, _
                               Optional ByVal onlyActive As Boolean = False) As Variant
-    ' Gibt eindeutige Werte einer Spalte als Array zurück (für ComboBox-Füllung).
+    ' Gibt eindeutige Werte einer Spalte als Array zurueck (fuer ComboBox-Fuellung).
     ' onlyActive: preskoci redove gde je Aktivan = "Neaktivan" (soft-delete).
     Dim data As Variant
     data = GetTableData(tblName)

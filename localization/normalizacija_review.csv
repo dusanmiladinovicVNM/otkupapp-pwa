@@ -1,0 +1,37 @@
+Kljuc;Tekst;Fajl;Linija;Tip;NemackiOriginal;Napomena;SumljiviObrasci
+AGRO_LBL_MAGACIN_IZDAVANJE_ROBE;Magacin — izdavanje robe i prijem od dobavljaca;frmAgrohemija.frm;54;DA;;;dobavljac→dobavljač
+AGRO_LBL_ULAZ_PRIJEM_ROBE;Ulaz — Prijem robe od dobavljaca;frmAgrohemija.frm;58;DA;;;dobavljac→dobavljač
+AGRO_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju izdavanja, promene vracene: ;frmAgrohemija.frm;534;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+AGRO_MSG_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju prijema, promene vracene: ;frmAgrohemija.frm;746;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+DOK_MSG_UNOSI_SAMO_KLASA;Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.;frmDokumenta.frm;677;DA;;Koristi se i u: frmDokumenta.frm:1669, frmDokumenta.frm:1968, frmOtkup.frm:777;kolicin→količin
+DOK_MSG_UNESITE_ISPRAVNU_KOLICINU;Unesite ispravnu kolicinu ambalaže!;frmDokumenta.frm;696;DA;;Koristi se i u: frmDokumenta.frm:1401, frmDokumenta.frm:1688, frmDokumenta.frm:1987, frmDokumenta.frm:2369, frmOtkup.frm:804;kolicin→količin
+DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2;Unesite ispravnu kolicinu ambalaže za II klasu!;frmDokumenta.frm;706;DA;;Koristi se i u: frmDokumenta.frm:1698, frmDokumenta.frm:2006, frmOtkup.frm:814;kolicin→količin
+DOK_MSG_MATICNI_PODACI_TIP;(Maticni podaci ? Tip ambalaže).;frmDokumenta.frm;721;DA;;Koristi se i u: frmDokumenta.frm:775, frmDokumenta.frm:2038, frmDokumenta.frm:2062, frmOtkup.frm:874, frmOtkup.frm:897;maticn→matičn
+DOK_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju otpremnice. Promene su vracene.;frmDokumenta.frm;819;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+DOK_MSG_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju OM ulaza. Promene su vracene.;frmDokumenta.frm;1544;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+DOK_MSG_GRESKA_PRI_CUVANJU_3;Greška pri cuvanju zbirne. Promene su vracene.;frmDokumenta.frm;1762;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE;Neispravna kolicina ambalaže;frmDokumenta.frm;1830;DA;;;kolicin→količin
+DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_3;Unesite ispravnu kolicinu vracene ambalaže!;frmDokumenta.frm;1996;DA;;;"vracen→vraćen; kolicin→količin"
+DOK_MSG_GRESKA_PRI_CUVANJU_4;Greška pri cuvanju prijemnice. Promene su vracene.;frmDokumenta.frm;2131;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+DOK_MSG_GRESKA_PRI_CUVANJU_5;Greška pri cuvanju izlaza kupca. Promene su vracene.;frmDokumenta.frm;2447;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+FAK_ERR_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju prijemnica: ;frmFakturisanje.frm;427;DA;;;ucitavan→učitavan
+FAK_MSG_GRESKA_PRI_KREIRANJU;Greška pri kreiranju fakture. Promene su vracene.;frmFakturisanje.frm;712;DA;;;vracen→vraćen
+OTKUP_MSG_UNESITE_ISPRAVNU_KOLICINU;Unesite ispravnu kolicinu izdate ambalaže!;frmOtkup.frm;825;DA;;;kolicin→količin
+OTKUP_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju otkupa. Promene su vracene.;frmOtkup.frm;1014;DA;;;"cuvan→čuvan  (čuvanje/čuvanju); vracen→vraćen"
+OTKUP_ERR_FAJL_NIJE_USPESNO;Fajl nije uspešno sacuvan ili aplikacija nije zatvorena: ;frmOtkupAPP.frm;754;DA;;;sacuvan→sačuvan
+OTKUP_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju maticnih podataka: ;frmOtkupAPP.frm;768;DA;;Koristi se i u: frmOtkupAPP.frm:787, frmStammdaten.frm:138;maticn→matičn
+STM_ERR_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju liste: ;frmStammdaten.frm;1225;DA;;;ucitavan→učitavan
+STM_ERR_GRESKA_PRI_UCITAVANJU_2;Greška pri ucitavanju stanica: ;frmStammdaten.frm;2851;DA;;;ucitavan→učitavan
+AGRO_MSG_GRESKA_PRI_UNOSU;Greška pri unosu magacina, promene vracene: ;modAgrohemija.bas;245;DA;;;vracen→vraćen
+SYNC_ERR_UVOZ_OTK_NIJE;Uvoz OTK nije potvrden zbog fatal sync greške.;modMasterSync.bas;201;DA;;;potvrden→potvrđen
+SYNC_MSG_PWA_UVOZ_NIJE;PWA uvoz nije potvrden. Promene su vracene zbog fatal sync greške. Proveri log.;modMasterSync.bas;309;DA;;;"vracen→vraćen; potvrden→potvrđen"
+SYNC_MSG_PWA_UVOZ_ZAVRSEN;PWA uvoz završen i potvrden.;modMasterSync.bas;316;DA;;;potvrden→potvrđen
+SYNC_ERR_UVOZ_ZBIRNIH_NIJE;Uvoz zbirnih nije potvrden zbog fatal sync greške.;modMasterSync.bas;2073;DA;;;potvrden→potvrđen
+SYNC_MSG_USPESNI_REDOVI_KOJI;Uspešni redovi koji su potvrdeni kroz row-level TX ostaju upisani.;modMasterSync.bas;2182;DA;;;potvrden→potvrđen
+SYNC_MSG_NEUSPESNI_REDOVI_OZNACENI;Neuspešni redovi su oznaceni kao greška gde je writeback uspeo.;modMasterSync.bas;2183;DA;;;oznacen→označen
+SYNC_MSG_UVOZ_ZBIRNIH_ZAVRSEN_2;Uvoz zbirnih završen i potvrden.;modMasterSync.bas;2189;DA;;;potvrden→potvrđen
+CFG_ERR_GRESKA_PRI_CUVANJU;Greška pri cuvanju: ;modPodesavanja.bas;340;DA;;;cuvan→čuvan  (čuvanje/čuvanju)
+SETUP_MSG_PODESAVANJA_MATICNI_PODACI;Podešavanja: Maticni podaci -> Podešavanja (tblSEFConfig je skriven).;modSetup.bas;87;DA;;;maticn→matičn
+DOK_ERR_NEMA_AMBALAZE_NOVCA;Nema ambalaže ni novca za cuvanje.;frmDokumenta.frm;1143;DA;;Koristi se i u: modDokumenta.bas:1249;cuvan→čuvan  (čuvanje/čuvanju)
+STM_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju geo podataka. Pogledaj log.;frmStammdaten.frm;2496;DA;;;cuvan→čuvan  (čuvanje/čuvanju)
+STM_MSG_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju koordinata. Pogledaj log.;frmStammdaten.frm;2572;DA;;;ucitavan→učitavan

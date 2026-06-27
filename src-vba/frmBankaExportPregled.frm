@@ -35,7 +35,7 @@ Private Sub UserForm_Activate()
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
     
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StyleExitButton btnPovratak, "Povratak"
@@ -71,12 +71,12 @@ Private Sub UserForm_Activate()
 
 EH:
     LogErr "frmBankaExportPregled.UserForm_Activate"
-    MsgBox "Greska pri otvaranju pregleda: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju pregleda: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
     With lstBlokovi
-        .ColumnCount = 9   ' jedna više za "Isplatiti"
+        .ColumnCount = 9   ' jedna vise za "Isplatiti"
         ' Datum | Kooperant | Stanica | BrojDok | Ukupan | Isplaceno | Otvoreno | TR | Isplatiti
         .ColumnWidths = "60;140;50;60;75;75;75;30;75"
         .MultiSelect = fmMultiSelectMulti
@@ -120,7 +120,7 @@ Private Sub LoadBlokovi()
 
 EH:
     LogErr "frmBankaExportPregled.LoadBlokovi"
-    lblStatus.caption = "Greska pri ucitavanju."
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
 End Sub
 
 Private Sub PruneStaleOverrides()
@@ -179,7 +179,7 @@ Private Sub RenderListbox()
         lstBlokovi.List(row, 4) = Format$(blk.UkupanIznos, "#,##0.00")
         lstBlokovi.List(row, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
         lstBlokovi.List(row, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
-        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "—")
+        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "--")
         lstBlokovi.List(row, 8) = Format$(isplatitiAmount, "#,##0.00")
     Next v
 End Sub
@@ -237,7 +237,7 @@ Private Sub HandleListSelectionChange()
     ' Bez TR redovi: skini check, prikazi gresku u detail panelu
     If Not blk.HasTekuciRacun Then
         lstBlokovi.Selected(lstBlokovi.ListIndex) = False
-        lblDetailValidacija.caption = "Ovaj kooperant nema TekuciRacun. Ne moze biti u paketu."
+        lblDetailValidacija.caption = "Ovaj kooperant nema TekuciRacun. Ne mo" & ChrW(382) & "e biti u paketu."
         lblDetailValidacija.ForeColor = CLR_ERROR()
         lblDetailValidacija.Visible = True
     Else
@@ -269,7 +269,7 @@ Private Sub UpdateEmptyState()
            Len(Trim$(txtDatumOd.value)) > 0 Or _
            Len(Trim$(txtDatumDo.value)) > 0 Then
             lblEmptyState.caption = "Nema rezultata za izabran filter." & vbCrLf & _
-                                    "Probaj sira pravila ili klikni Osvezi."
+                                    "Probaj sira pravila ili klikni Osve" & ChrW(382) & "i."
         Else
             lblEmptyState.caption = "Sve otvorene stavke su zatvorene. ?" & vbCrLf & _
                                     "Nema blokova za isplatu."
@@ -298,7 +298,7 @@ End Function
 ' PopulateDetailPanel - pokazi info izabranog bloka
 '======================================================================
 Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
-    lblDetailBlok.caption = blk.brojDokumenta & " — " & blk.kooperantNaziv
+    lblDetailBlok.caption = blk.brojDokumenta & " -- " & blk.kooperantNaziv
     lblDetailOtvoreno.caption = "Otvoreno: " & Format$(blk.OtvorenIznos, "#,##0.00") & " RSD"
     
     Dim currentAmount As Double
@@ -312,7 +312,7 @@ Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
         lblDetailAvans.ForeColor = TXT_MUTED()
     End If
     
-    lblDetailTR.caption = "Tek. racun: " & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "—nedostaje—")
+    lblDetailTR.caption = "Tek. ra" & ChrW(269) & "un:" & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "--nedostaje--")
     
     If blk.KooperantAvansSaldo > 0 Then
         lblDetailAvansHint.caption = "Primeni avans kroz Dokumenta pre isplate"
@@ -529,7 +529,7 @@ Private Sub btnExport_Click()
 
 EH:
     LogErr "frmBankaExportPregled.btnExport_Click"
-    MsgBox "Greska pri export-u: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri export-u: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 '======================================================================
@@ -604,10 +604,10 @@ End Sub
 
 ' Mouse hover pattern
 Private Sub ResetActionButtons()
-    StylePrimaryButton btnOsvezi, "Osvezi"
+    StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
-    StylePrimaryButton btnGenerisiCSV, "Generiši CSV (Commit 3)"
+    StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
     StyleExitButton btnPovratak, "Povratak"
 End Sub
 
@@ -628,7 +628,7 @@ End Sub
 
 Private Sub btnGenerisiCSV_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetActionButtons
-    ' ne radi hover na disabled — ali bezbedno
+    ' ne radi hover na disabled -- ali bezbedno
 End Sub
 
 Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
