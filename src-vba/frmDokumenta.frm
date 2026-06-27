@@ -221,11 +221,28 @@ Private Sub UserForm_Activate()
     ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
     SetupRecoveryButton
 
+    ' Podesavanja: kad kes isplate ne postoje -> sakrij "Br. otk. blk." u Ulaz OM.
+    ApplyKesIsplateVisibility
+
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.UserForm_Activate"
     MsgBox "Greška pri otvaranju dokumenata: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Podesavanja: kes isplate OFF -> sakrij "Br. otk. blk." (cmbOtkupBlok + labela)
+' u frame-u "Ulaz OM". Vidljivost u oba smera pa re-aktivacija prati config.
+Private Sub ApplyKesIsplateVisibility()
+    On Error Resume Next
+    Dim vis As Boolean: vis = IsKesIsplate()
+    cmbOtkupBlok.Visible = vis
+    Dim c As MSForms.Control
+    For Each c In Me.Controls
+        If TypeOf c Is MSForms.label Then
+            If InStr(LCase$(c.caption), "otk. blk") > 0 Then c.Visible = vis
+        End If
+    Next c
 End Sub
 
 Private Sub txtCenaOtp_Change():       UpdateUkupnoKgOtp: End Sub

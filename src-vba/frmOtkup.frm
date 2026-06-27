@@ -111,6 +111,9 @@ Private Sub UserForm_Initialize()
     ' Runtime labela: gajbe do zatvaranja aktivne palete (info; .frx se ne dira).
     SetupPaletaInfoField
     UpdatePaletaInfo
+
+    ' Podesavanja: sakrij parcela / novac+primalac kad su toggle-i iskljuceni.
+    ApplyOtkupTogglesVisibility
 End Sub
 
 ' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
@@ -465,6 +468,23 @@ EH:
     LogErr "frmOtkup.UpdatePaletaInfo"
 End Sub
 
+' Podesavanja: vidljivost polja prema toggle-ima (parcele / kes isplate).
+' Vidljivost se postavlja u oba smera pa re-otvaranje forme prati config.
+Private Sub ApplyOtkupTogglesVisibility()
+    On Error Resume Next
+    SetFieldVisibleWithLabel cmbParcela, IsPracenjeParcela()
+    SetFieldVisibleWithLabel txtNovac, IsKesIsplate()
+    SetFieldVisibleWithLabel txtPrimalac, IsKesIsplate()
+End Sub
+
+' Postavi vidljivost kontrole i njene labele (labela je DESNO; RowLabelRightOf).
+Private Sub SetFieldVisibleWithLabel(ByVal ctl As MSForms.Control, ByVal vis As Boolean)
+    On Error Resume Next
+    Dim lbl As MSForms.Control: Set lbl = RowLabelRightOf(ctl)
+    ctl.Visible = vis
+    If Not lbl Is Nothing Then lbl.Visible = vis
+End Sub
+
 Private Sub cmbOtkupnoMesto_Change()
     On Error GoTo EH
 
@@ -537,6 +557,9 @@ End Sub
 
 Private Sub cmbKooperant_Change()
     On Error GoTo EH
+
+    ' Pracenje parcela OFF (Podesavanja) -> parcela polje se preskace.
+    If Not IsPracenjeParcela() Then Exit Sub
 
     cmbParcela.Clear
 
