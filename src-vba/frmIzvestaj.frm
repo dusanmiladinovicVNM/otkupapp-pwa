@@ -49,6 +49,11 @@ Attribute m_lstOtk.VB_VarHelpID = -1
 Private m_lblOtkTitle As MSForms.label
 Private WithEvents m_btnStampajOtk As MSForms.CommandButton
 Attribute m_btnStampajOtk.VB_VarHelpID = -1
+' Dugmad za stampu uz deljeni "Detalji" panel: Otkupljena roba / Ambalaza.
+Private WithEvents m_btnStampajOtkRoba As MSForms.CommandButton
+Attribute m_btnStampajOtkRoba.VB_VarHelpID = -1
+Private WithEvents m_btnStampajAmb As MSForms.CommandButton
+Attribute m_btnStampajAmb.VB_VarHelpID = -1
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -155,6 +160,7 @@ Private Sub UserForm_Activate()
     On Error GoTo EH
     EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
     EnsureOtkupListePage          ' runtime tab "Otkupni listovi" (pre UpdateReportMode)
+    EnsureDetaljiButtons          ' dugmad za stampu uz "Detalji" (Otk.roba / Ambalaza)
     UpdateReportMode
     ForceDarkAllPages
     
@@ -482,8 +488,8 @@ Private Sub SetupListBoxes()
     End With
     
     With lstAmbalaza
-        .ColumnCount = 6
-        .ColumnWidths = "55;90;45;80;50;50"
+        .ColumnCount = 7          ' 6 vidljivih + skrivena ref-kljuc kolona (idx 6)
+        .ColumnWidths = "55;90;45;80;50;50;0"
     End With
     
     With lstIsplata
@@ -643,12 +649,17 @@ End Sub
 
 Private Sub mpReports_Change()
     UpdateStatusLabel
-    ' Panel "Detalji otkupa" se deli izmedju Kartice (Page 8) i "Otkupni listovi".
+    ' Deljeni "Detalji" panel: Kartica (8), "Otkupni listovi", Otkupljena roba (2),
+    ' Ambalaza (3).
     Dim onOtk As Boolean
     onOtk = (m_otkPageIdx >= 0 And mpReports.value = m_otkPageIdx)
-    KarticaDetalji_SetVisible (mpReports.value = 8 Or onOtk)
-    ' Dugme "Stampaj otkupni list" je samo na tabu "Otkupni listovi".
+    Dim onRoba As Boolean: onRoba = (mpReports.value = 2)
+    Dim onAmb As Boolean: onAmb = (mpReports.value = 3)
+    KarticaDetalji_SetVisible (mpReports.value = 8 Or onOtk Or onRoba Or onAmb)
+    ' Dugmad za stampu vidljiva samo na svom tabu.
     If Not m_btnStampajOtk Is Nothing Then m_btnStampajOtk.Visible = onOtk
+    If Not m_btnStampajOtkRoba Is Nothing Then m_btnStampajOtkRoba.Visible = onRoba
+    If Not m_btnStampajAmb Is Nothing Then m_btnStampajAmb.Visible = onAmb
 End Sub
 Private Sub UpdateUnosButtonState()
 
@@ -733,6 +744,7 @@ End Sub
 Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                     ByVal datumOd As Date, ByVal datumDo As Date)
     lstOtkupRoba.Clear
+    KarticaDetalji_Clear
     
     Dim data As Variant
     data = ReportOtkupRoba(entitetTip, entitetID, datumOd, datumDo)
@@ -775,6 +787,7 @@ End Sub
 Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                    ByVal datumOd As Date, ByVal datumDo As Date)
     lstAmbalaza.Clear
+    KarticaDetalji_Clear
     
     Dim isZb As Boolean
     isZb = IsZbirniMode()
@@ -798,6 +811,10 @@ Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID A
         End If
         If IsNumeric(data(i, 6)) And data(i, 6) <> "" Then
             lstAmbalaza.List(lstAmbalaza.ListCount - 1, 5) = Format$(CLng(data(i, 6)), "#,##0")
+        End If
+        ' Skrivena kol. 6 = ref-kljuc (AMB|<DokTip>|<DokID>); samo pojedinacni (7 kol).
+        If UBound(data, 2) >= 7 Then
+            lstAmbalaza.List(lstAmbalaza.ListCount - 1, 6) = CStr(IIf(IsEmpty(data(i, 7)), "", data(i, 7)))
         End If
     Next i
 End Sub
@@ -1827,6 +1844,141 @@ EH:
     LogErr "frmIzvestaj.m_btnStampajOtk_Click"
     MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' ============================================================
+' "Detalji" panel: klik na red Otkupljena roba / Ambalaza -> deljeni panel
+' (modKarticaDetalji). Ispod panela dugme za stampu (po tabu).
+' ============================================================
+Private Sub lstOtkupRoba_Click()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstOtkupRoba, 11   ' skrivena kol. 11 = OTP|<id>
+End Sub
+Private Sub lstOtkupRoba_Change()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstOtkupRoba, 11
+End Sub
+Private Sub lstAmbalaza_Click()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstAmbalaza, 6     ' skrivena kol. 6 = AMB|<tip>|<id>
+End Sub
+Private Sub lstAmbalaza_Change()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstAmbalaza, 6
+End Sub
+
+' Dugmad za stampu uz deljeni panel (kreirana forma-level kao m_btnStampajOtk).
+Private Sub EnsureDetaljiButtons()
+    On Error GoTo EH
+    KarticaDetalji_Ensure Me, lstKartica
+    Dim pl As Double, pt As Double, pw As Double, ph As Double
+    KarticaDetalji_PanelRect pl, pt, pw, ph
+    If pw <= 0 Then Exit Sub
+    If m_btnStampajOtkRoba Is Nothing Then
+        Set m_btnStampajOtkRoba = Me.Controls.Add("Forms.CommandButton.1", "btnStampajOtkRoba", True)
+        With m_btnStampajOtkRoba
+            .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
+        End With
+        StylePrimaryButton m_btnStampajOtkRoba
+        m_btnStampajOtkRoba.caption = ChrW(352) & "tampaj grupni otkupni list"
+        On Error Resume Next
+        m_btnStampajOtkRoba.ZOrder 0
+        On Error GoTo EH
+        m_btnStampajOtkRoba.Visible = False
+    End If
+    If m_btnStampajAmb Is Nothing Then
+        Set m_btnStampajAmb = Me.Controls.Add("Forms.CommandButton.1", "btnStampajAmbDok", True)
+        With m_btnStampajAmb
+            .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
+        End With
+        StylePrimaryButton m_btnStampajAmb
+        m_btnStampajAmb.caption = ChrW(352) & "tampaj dokument"
+        On Error Resume Next
+        m_btnStampajAmb.ZOrder 0
+        On Error GoTo EH
+        m_btnStampajAmb.Visible = False
+    End If
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.EnsureDetaljiButtons"
+End Sub
+
+' Stampa grupni otkupni list za otpremnicu izabranu u panelu "Detalji".
+Private Sub m_btnStampajOtkRoba_Click()
+    On Error GoTo EH
+    Dim otpID As String
+    otpID = KarticaDetalji_CurrentOtpremnicaID()
+    If Len(Trim$(otpID)) = 0 Then
+        MsgBox "Izaberite otpremnicu (klik na red u listi).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim prijIDs As String
+    prijIDs = PrijemniceZaOtpremnicu(otpID)
+    If Len(Trim$(prijIDs)) = 0 Then
+        MsgBox "Za izabranu otpremnicu nije pronadjena prijemnica (zbirna).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    OutputGrupniOtkupniList prijIDs
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.m_btnStampajOtkRoba_Click"
+    MsgBox "Greska pri stampi grupnog otkupnog lista: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Stampa dokument izabranog ambalaza reda, ruta po tipu dokumenta.
+Private Sub m_btnStampajAmb_Click()
+    On Error GoTo EH
+    Dim dokID As String, dokTip As String
+    KarticaDetalji_CurrentAmbDok dokID, dokTip
+    If Len(Trim$(dokID)) = 0 Then
+        MsgBox "Izaberite dokument (klik na red u listi).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Select Case dokTip
+        Case DOK_TIP_PRIJEMNICA
+            PrintPrijemnica dokID
+        Case DOK_TIP_OTKUP
+            ReprintOtkupniListByOtkupID dokID
+        Case DOK_TIP_OTPREMNICA
+            Dim prijIDs As String
+            prijIDs = PrijemniceZaOtpremnicu(dokID)
+            If Len(Trim$(prijIDs)) = 0 Then
+                MsgBox "Za otpremnicu nije pronadjena prijemnica.", vbExclamation, APP_NAME
+            Else
+                OutputGrupniOtkupniList prijIDs
+            End If
+        Case Else
+            MsgBox "Za tip dokumenta '" & dokTip & "' stampa nije dostupna iz ovog pregleda.", _
+                   vbInformation, APP_NAME
+    End Select
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.m_btnStampajAmb_Click"
+    MsgBox "Greska pri stampi dokumenta: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Prijemnice (" + "-spojeni ID-jevi) za zbirnu kojoj pripada otpremnica.
+Private Function PrijemniceZaOtpremnicu(ByVal otpID As String) As String
+    On Error Resume Next
+    Dim brZbirne As String
+    brZbirne = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
+    If Len(Trim$(brZbirne)) = 0 Then Exit Function
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cId As Long, cZb As Long
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    If cId = 0 Or cZb = 0 Then Exit Function
+    Dim res As String, i As Long
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cZb)) = brZbirne Then
+            If Len(res) > 0 Then res = res & " + "
+            res = res & CStr(d(i, cId))
+        End If
+    Next i
+    PrijemniceZaOtpremnicu = res
+End Function
 
 Private Sub ForceDarkAllPages()
     On Error Resume Next

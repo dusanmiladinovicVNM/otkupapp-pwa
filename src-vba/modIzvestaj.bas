@@ -1985,12 +1985,13 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
     End If
     
     Dim colTip As Long, colKol As Long, colSmer As Long
-    Dim colDokID As Long, colDatum As Long
+    Dim colDokID As Long, colDokTip As Long, colDatum As Long
     Dim colEntitet As Long, colEntTip As Long
     colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, "modIzvestaj.ReportAmbalaza")
     colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, "modIzvestaj.ReportAmbalaza")
     colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, "modIzvestaj.ReportAmbalaza")
     colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "modIzvestaj.ReportAmbalaza")
+    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "modIzvestaj.ReportAmbalaza")
     colDatum = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "modIzvestaj.ReportAmbalaza")
     colEntitet = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza")
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza")
@@ -2005,7 +2006,7 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
         ReportAmbalaza = ReportAmbalazeZbirni(filtered, colTip, colKol, colSmer, colEntTip, isVozac)
     Else
         ReportAmbalaza = ReportAmbalazePojedinacni(filtered, colDatum, colEntitet, colEntTip, _
-                                                    colTip, colDokID, colKol, colSmer, isVozac)
+                                                    colTip, colDokID, colDokTip, colKol, colSmer, isVozac)
     End If
     Exit Function
 
@@ -2075,7 +2076,8 @@ End Function
 Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
                                             ByVal colDatum As Long, ByVal colEntitet As Long, _
                                             ByVal colEntTip As Long, ByVal colTip As Long, _
-                                            ByVal colDokID As Long, ByVal colKol As Long, _
+                                            ByVal colDokID As Long, ByVal colDokTip As Long, _
+                                            ByVal colKol As Long, _
                                             ByVal colSmer As Long, ByVal isVozac As Boolean) As Variant
     
     Const SRC As String = "modIzvestaj.ReportAmbalazePojedinacni"
@@ -2100,6 +2102,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         Dim entTipVal As String: entTipVal = CStr(filtered(i, colEntTip))
         Dim dokIDv As String: dokIDv = CStr(filtered(i, colDokID))
         Dim tipv As String: tipv = CStr(filtered(i, colTip))
+        Dim dokTipv As String: dokTipv = CStr(filtered(i, colDokTip))
 
         Dim effSmer As String
         effSmer = CStr(filtered(i, colSmer))
@@ -2112,7 +2115,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         Else
             ' Datum, Mesto, Tip, Dokument, Ulaz, Izlaz
             rec = Array(filtered(i, colDatum), ResolveEntitetName(entID, entTipVal), _
-                        tipv, dokIDv, 0&, 0&)
+                        tipv, dokIDv, 0&, 0&, dokTipv)
         End If
         If effSmer = "Ulaz" Then
             rec(4) = CLng(rec(4)) + kol
@@ -2126,7 +2129,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
 
     Dim nGrp As Long: nGrp = grp.Count
     Dim result() As Variant
-    ReDim result(1 To nGrp + 1, 1 To 6)  ' +1 UKUPNO
+    ReDim result(1 To nGrp + 1, 1 To 7)  ' +1 UKUPNO, kol.7 = skriveni ref-kljuc
 
     Dim keys As Variant: keys = grp.keys
     Dim r As Long
@@ -2142,6 +2145,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         result(r + 1, 4) = rr(3)
         result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
         result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
+        result(r + 1, 7) = "AMB|" & CStr(rr(6)) & "|" & CStr(rr(3))
     Next r
 
     ' UKUPNO
@@ -2151,6 +2155,7 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     result(nGrp + 1, 4) = "Saldo: " & Format$(totalUlaz - totalIzlaz, "#,##0")
     result(nGrp + 1, 5) = totalUlaz
     result(nGrp + 1, 6) = totalIzlaz
+    result(nGrp + 1, 7) = ""
 
     ReportAmbalazePojedinacni = result
     Exit Function
