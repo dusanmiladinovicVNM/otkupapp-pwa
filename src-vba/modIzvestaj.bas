@@ -841,7 +841,7 @@ Private Function KarticaAmbDocLabel(ByVal dokTip As String) As String
 End Function
 
 ' ============================================================
-' OTKUPNI LISTOVI (Otkupna mesta) aEUR" sve otkup linije jedne stanice.
+' OTKUPNI LISTOVI (Otkupna mesta) -- sve otkup linije jedne stanice.
 ' Grain = po OtkupID (linija/klasa), kao kartica; Klasa I/II dele BrDok ali su
 ' zasebni redovi. Kol. 8 = ref-kljuc "OTK|<OtkupID>" za panel "Detalji otkupa"
 ' (modKarticaDetalji, KART_REFKEY_COL=7) i za stampu celog lista po BrDok-u.
@@ -1140,7 +1140,7 @@ EH:
 End Sub
 
 ' ============================================================
-' KARTICA AMBALAZE (PDF) aEUR" pandan PrintKarticaPDF za tab "Pregled ambalaze".
+' KARTICA AMBALAZE (PDF) -- pandan PrintKarticaPDF za tab "Pregled ambalaze".
 ' Bez "KarticaSablon" templejta (on je finansijski): layout se gradi u kodu na
 ' posvecenom skrivenom sheetu (_KartAmbPrint), pa export u PDF (otvara po zavrsetku).
 ' Podaci iz ReportKarticaAmbalaze (6 kol: Datum, BrojDok, Opis, Ulaz, Izlaz, Saldo;
