@@ -3,7 +3,7 @@ Attribute VB_Name = "modPaletniListUI"
 Option Explicit
 
 ' ============================================================
-' modPaletniListUI — operater-facing ulazi (InputBox/MsgBox) za paletni
+' modPaletniListUI -- operater-facing ulazi (InputBox/MsgBox) za paletni
 ' list i preradu. Drzi UI/business granicu: business sloj (modPaletniList)
 ' ne koristi MsgBox za kontrolu toka; ovde su Alt+F8 stubovi dok ne stigne
 ' frmPalete (PR #44). Resolucija broj->PaletaID i poziv SavePrerada_TX su

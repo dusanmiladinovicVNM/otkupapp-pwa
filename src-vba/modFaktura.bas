@@ -3,9 +3,9 @@ Attribute VB_Name = "modFaktura"
 Option Explicit
 
 ' ============================================================
-' modFaktura v2.1 – Rechnungserstellung
-' GEÄNDERT: Basiert auf tblPrijemnica statt tblIsporuka
-' Faktura-Betrag = Prijemnica.Kolicina × Prijemnica.Cena
+' modFaktura v2.1 - Rechnungserstellung
+' GEAeNDERT: Basiert auf tblPrijemnica statt tblIsporuka
+' Faktura-Betrag = Prijemnica.Kolicina x Prijemnica.Cena
 ' ============================================================
 
 Public Function CreateFaktura_TX(ByVal kupacID As String, _
@@ -283,7 +283,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
     If AppendRow(TBL_FAKTURE, fakturaRow) <= 0 Then
         Err.Raise vbObjectError + 1715, "CreateFaktura", _
-                  "AppendRow fehlgeschlagen für tblFakture."
+                  "AppendRow fehlgeschlagen fuer tblFakture."
     End If
 
     ' Faktura stavke + markiranje prijemnica
@@ -315,7 +315,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
         If AppendRow(TBL_FAKTURA_STAVKE, stavkaRow) <= 0 Then
             Err.Raise vbObjectError + 1716, "CreateFaktura", _
-                      "AppendRow fehlgeschlagen für tblFakturaStavke."
+                      "AppendRow fehlgeschlagen fuer tblFakturaStavke."
         End If
 
         RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, _
@@ -327,7 +327,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
 
     ' Avans automatisch verrechnen.
     ' Ovo mora biti base funkcija, ne ApplyAvansToFaktura_TX,
-    ' jer CreateFaktura_TX vec drži širu transakciju.
+    ' jer CreateFaktura_TX vec drzi siru transakciju.
     ApplyAvansToFaktura kupacID, fakturaID
 
     CreateFaktura = fakturaID
@@ -551,7 +551,7 @@ Private Sub ClearFakturaStavkeArea(ByVal ws As Worksheet)
     Dim startCell As Range
     Set startCell = ws.Range("StavkaStart")
 
-    ' Cisti 50 redova × 6 kolona:
+    ' Cisti 50 redova x 6 kolona:
     ' R.br | BrojPrij | Klasa | Kolicina | Cena | Vrednost
     startCell.Resize(50, 6).ClearContents
 

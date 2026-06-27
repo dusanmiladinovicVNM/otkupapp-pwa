@@ -67,7 +67,7 @@ Private Sub UserForm_Activate()
     SetupList
     LoadBankaRows
     
-    ' KPI strip (opciono — vidi Izmena 2)
+    ' KPI strip (opciono -- vidi Izmena 2)
      LayoutTopKpis
      RefreshTopKpis
     

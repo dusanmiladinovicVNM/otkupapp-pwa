@@ -18,21 +18,21 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmFakturisanje v2.1 – Rechnungserstellung
-' GEÄNDERT: Basiert auf tblPrijemnica statt tblIsporuka
-' Faktura = Prijemnica.Kolicina × Prijemnica.Cena
+' frmFakturisanje v2.1 - Rechnungserstellung
+' GEAeNDERT: Basiert auf tblPrijemnica statt tblIsporuka
+' Faktura = Prijemnica.Kolicina x Prijemnica.Cena
 ' ============================================================
 '
 ' CONTROLS:
-'   cmbKupac (ComboBox) – Label: "Izaberi Kupca/Hladnjacu"
-'   btnUnesi (CommandButton) – Caption: "Unesi"
-'   lstPrijemnice (ListBox) – ColumnCount=8, MultiSelect
-'   btnIzradiFakturu (CommandButton) – Caption: "Izradi Fakturu"
-'   btnStampaj (CommandButton) – Caption: "Stampaj"
-'   btnPovratak (CommandButton) – Caption: "Povratak u glavni meni"
-'   cmbFaktura (ComboBox) – Faktura za štampu, display text + hidden FakturaID
+'   cmbKupac (ComboBox) - Label: "Izaberi Kupca/Hladnjacu"
+'   btnUnesi (CommandButton) - Caption: "Unesi"
+'   lstPrijemnice (ListBox) - ColumnCount=8, MultiSelect
+'   btnIzradiFakturu (CommandButton) - Caption: "Izradi Fakturu"
+'   btnStampaj (CommandButton) - Caption: "Stampaj"
+'   btnPovratak (CommandButton) - Caption: "Povratak u glavni meni"
+'   cmbFaktura (ComboBox) - Faktura za stampu, display text + hidden FakturaID
 '
-' Header-Labels über lstPrijemnice:
+' Header-Labels ueber lstPrijemnice:
 '   BrojPrij | BrojZbirne | Datum | Klasa | Kolicina | Cena | Vrednost | Fakturisano
 
 Private m_SetupDone As Boolean
@@ -53,7 +53,7 @@ Private Sub UserForm_Activate()
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
 
-    ' Header zone (dodati u Designer ako nemaš)
+    ' Header zone (dodati u Designer ako nemas)
     On Error Resume Next
     StyleFrameTitleLabel lblKopf, "Fakturisanje"
     StyleSubtitle lblSubtitle, "Kreiranje faktura na osnovu prijemnica kupca"

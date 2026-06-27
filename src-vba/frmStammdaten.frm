@@ -18,8 +18,8 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmStammdaten – Universelles Stammdaten-Form
-' Wird über .Tag gesteuert: "Kooperanti", "Stanice", "Kupci", "Vozaci"
+' frmStammdaten - Universelles Stammdaten-Form
+' Wird ueber .Tag gesteuert: "Kooperanti", "Stanice", "Kupci", "Vozaci"
 ' ============================================================
 
 Private m_TableName As String
@@ -35,7 +35,7 @@ Private mChromeRemoved As Boolean
 
 Private mGeoClearConfirmPending As Boolean
 
-' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) — WithEvents omotac.
+' Runtime dugme "Deaktiviraj/Aktiviraj" (soft-delete) -- WithEvents omotac.
 Private m_softWrap As clsStmBtn
 
 Private Sub RemoveTitleBar()
@@ -54,7 +54,7 @@ End Sub
 
 Private Sub UserForm_Initialize()
     
-    ' Nichts hier – Tag ist noch nicht verfügbar
+    ' Nichts hier - Tag ist noch nicht verfuegbar
 End Sub
 
 Private Sub UserForm_Activate()
@@ -66,7 +66,7 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
 
-    ' Podesavanja: ne ucitavamo maticni-podaci listu — gradimo config editor
+    ' Podesavanja: ne ucitavamo maticni-podaci listu -- gradimo config editor
     ' u runtime-u (modPodesavanja; isti runtime-controls pristup kao
     ' modOtkupBlok/clsBlokUI). frmStammdaten.frx se NE dira.
     If Me.Tag = "Podesavanja" Then
@@ -143,7 +143,7 @@ Private Sub StyleAllFields()
     
     Dim i As Long
     
-    ' lblField1..10 — naslovne labele, muted small
+    ' lblField1..10 -- naslovne labele, muted small
     For i = 1 To 10
         Dim lbl As MSForms.label
         Set lbl = Me.Controls("lblField" & i)
@@ -320,7 +320,7 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
 End Sub
 
 ' ============================================================
-' SETUP – Konfiguriert das Form je nach Entität
+' SETUP - Konfiguriert das Form je nach Entitaet
 ' ============================================================
 
 Private Sub SetupKooperanti()
@@ -404,7 +404,7 @@ Private Sub SetupStanice()
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
 
-    ' Hladnjaca flag (Da/Ne) — auto-lanac otpremnica+zbirna+prijemnica.
+    ' Hladnjaca flag (Da/Ne) -- auto-lanac otpremnica+zbirna+prijemnica.
     cmbField1.Visible = True
     cmbField1.Clear
     cmbField1.AddItem "Ne"
@@ -668,7 +668,7 @@ Private Sub SetupKulture()
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
     lblField10.caption = "": lblField10.Visible = False: txtField10.Visible = False
 
-    ' Tip ambalaze (podrazumevani za kulturu) — combo iz tblTipAmbalaze.
+    ' Tip ambalaze (podrazumevani za kulturu) -- combo iz tblTipAmbalaze.
     cmbField1.Visible = True
     cmbField1.Clear
     cmbField1.AddItem ""
@@ -782,7 +782,7 @@ Private Sub SetupCenovnik()
 
     m_TableName = TBL_CENOVNIK
 
-    ' Prikaz (lista) — samo kljucne kolone:
+    ' Prikaz (lista) -- samo kljucne kolone:
     m_Headers = Array( _
         COL_CEN_ID, _
         COL_CEN_DATUM, _
@@ -884,7 +884,7 @@ Private Sub EnsureSoftDeleteButton()
     m_softWrap.btn.Visible = (Len(AktivanColName()) > 0)
 End Sub
 
-' Public — poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
+' Public -- poziva ga clsStmBtn na klik. Flipuje status izabranog reda.
 Public Sub OnSoftDeleteClick()
     On Error GoTo EH
 
@@ -1226,7 +1226,7 @@ EH:
 End Sub
 
 ' ============================================================
-' AUSWAHL IN LISTE ? Felder füllen
+' AUSWAHL IN LISTE ? Felder fuellen
 ' ============================================================
 
 Private Sub lstData_Click()
@@ -1337,7 +1337,7 @@ Private Sub lstData_Click()
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
 
         Case "Cenovnik"
-            ' Append-only istorija — klik samo prikazuje (bez izmene).
+            ' Append-only istorija -- klik samo prikazuje (bez izmene).
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 2)   ' Vrsta
             cmbField2.Clear
             If Trim$(cmbField1.value) <> "" Then
@@ -1371,7 +1371,7 @@ Private Sub cmbField1_Change()
 End Sub
 
 ' ============================================================
-' HINZUFÜGEN
+' HINZUFUeGEN
 ' ============================================================
 
 Private Sub btnDodaj_Click()
@@ -1840,7 +1840,7 @@ EH:
 End Sub
 
 ' ============================================================
-' ÄNDERN
+' AeNDERN
 ' ============================================================
 
 Private Sub btnIzmeni_Click()

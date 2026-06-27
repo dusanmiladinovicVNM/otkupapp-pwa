@@ -3,7 +3,7 @@ Attribute VB_Name = "modPodesavanja"
 Option Explicit
 
 ' ============================================================
-' modPodesavanja — editor podesavanja (tblSEFConfig) u UI-u.
+' modPodesavanja -- editor podesavanja (tblSEFConfig) u UI-u.
 '
 ' Cilj: kad je tblSEFConfig sakriven (VeryHidden), operativna podesavanja se
 ' uredjuju kroz formu umesto rucnog editovanja celija. Otvara se kao nova
@@ -11,14 +11,14 @@ Option Explicit
 '   modMaticniLookups.MaticniSekcije -> frmMaticniPodaci.OpenSekcija ->
 '   frmStammdaten (Tag = "Podesavanja") -> UserForm_Activate -> BuildConfigEditor.
 '
-' Kontrole se grade u RUNTIME-u (Controls.Add) — frmStammdaten.frx se NE dira,
+' Kontrole se grade u RUNTIME-u (Controls.Add) -- frmStammdaten.frx se NE dira,
 ' isti obrazac kao modMaticniLookups/clsLookupMenuBtn i modOtkupBlok/clsBlokUI.
 ' Klik Sacuvaj/Sakrij/Povratak hvata clsConfigBtn (WithEvents).
 '
 ' BEZBEDNOST: prikazuju se SAMO operativna (slobodan-unos) polja. Interni kes /
 ' anti-tamper kljucevi (LICENSE_TOKEN, LICENSE_BOUND_PARTS, LICENSE_NEXT_CHECK,
 ' LICENSE_STATUS, LICENSE_HWM, TRIAL_HWM, GOOGLE_*_TOKEN, APP_SETUP_*...) se
-' NAMERNO NE prikazuju — njihovo rucno menjanje je upravo bypass koji sakrivanje
+' NAMERNO NE prikazuju -- njihovo rucno menjanje je upravo bypass koji sakrivanje
 ' tabele zatvara.
 '
 ' Izlaz u nuzdi (ako forma nije dostupna): Alt+F8 -> ShowConfigSheet.
@@ -146,7 +146,7 @@ Private Function LookupCSV(ByVal tbl As String, ByVal col As String, _
 End Function
 
 ' ============================================================
-' PUBLIC — izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
+' PUBLIC -- izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
 ' ============================================================
 Public Sub BuildConfigEditor(ByVal frm As Object)
     Const SRC As String = "modPodesavanja.BuildConfigEditor"
@@ -157,7 +157,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Set mWrappers = New Collection
     Set mBtnToggle = Nothing
 
-    ' Sakri sve postojece (maticni-podaci) kontrole — gradimo svoj panel preko.
+    ' Sakri sve postojece (maticni-podaci) kontrole -- gradimo svoj panel preko.
     Dim ctl As MSForms.Control
     For Each ctl In frm.Controls
         On Error Resume Next
@@ -182,7 +182,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     StyleLabel lblTitle, TXT_LIGHT(), True
     lblTitle.Font.Size = FONT_SIZE_HEADER
 
-    ' Footer dugmad (na vrhu — vidljiva pre skrolovanja)
+    ' Footer dugmad (na vrhu -- vidljiva pre skrolovanja)
     Dim btnSave As MSForms.CommandButton
     Set btnSave = AddButton("btnCfgSave", m, 32, 120, 24)
     StylePrimaryButton btnSave, "Sacuvaj"
@@ -283,7 +283,7 @@ EH:
 End Sub
 
 ' ============================================================
-' PUBLIC — click ruter (zove clsConfigBtn)
+' PUBLIC -- click ruter (zove clsConfigBtn)
 ' ============================================================
 Public Sub ConfigEditor_OnClick(ByVal action As String)
     On Error GoTo EH
@@ -298,7 +298,7 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIVATE — save / back
+' PRIVATE -- save / back
 ' ============================================================
 Private Sub SaveConfigEditor()
     Const SRC As String = "modPodesavanja.SaveConfigEditor"
@@ -351,7 +351,7 @@ Private Sub CloseConfigEditor()
 End Sub
 
 ' ============================================================
-' PUBLIC — vidljivost tblSEFConfig sheet-a (toggle + Alt+F8 makroi)
+' PUBLIC -- vidljivost tblSEFConfig sheet-a (toggle + Alt+F8 makroi)
 ' ============================================================
 Public Sub ToggleConfigSheet()
     On Error GoTo EH
@@ -408,7 +408,7 @@ Private Function ConfigSheet() As Object
 End Function
 
 ' ============================================================
-' PRIVATE — runtime control helperi (Controls.Add; .frx se ne dira)
+' PRIVATE -- runtime control helperi (Controls.Add; .frx se ne dira)
 ' ============================================================
 Private Sub WireButton(ByVal b As MSForms.CommandButton, ByVal act As String)
     Dim wrp As clsConfigBtn

@@ -8,7 +8,7 @@ Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 ' ============================================================
-' clsBlokUI – Event-omotac za dinamicki kreirane kontrole
+' clsBlokUI - Event-omotac za dinamicki kreirane kontrole
 ' panela "Otkupni blokovi" (vidi modOtkupBlok).
 '
 ' Kontrole se prave u kodu (Controls.Add), pa im se eventi

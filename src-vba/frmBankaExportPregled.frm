@@ -76,7 +76,7 @@ End Sub
 
 Private Sub SetupList()
     With lstBlokovi
-        .ColumnCount = 9   ' jedna više za "Isplatiti"
+        .ColumnCount = 9   ' jedna vise za "Isplatiti"
         ' Datum | Kooperant | Stanica | BrojDok | Ukupan | Isplaceno | Otvoreno | TR | Isplatiti
         .ColumnWidths = "60;140;50;60;75;75;75;30;75"
         .MultiSelect = fmMultiSelectMulti
@@ -179,7 +179,7 @@ Private Sub RenderListbox()
         lstBlokovi.List(row, 4) = Format$(blk.UkupanIznos, "#,##0.00")
         lstBlokovi.List(row, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
         lstBlokovi.List(row, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
-        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "—")
+        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "--")
         lstBlokovi.List(row, 8) = Format$(isplatitiAmount, "#,##0.00")
     Next v
 End Sub
@@ -298,7 +298,7 @@ End Function
 ' PopulateDetailPanel - pokazi info izabranog bloka
 '======================================================================
 Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
-    lblDetailBlok.caption = blk.brojDokumenta & " — " & blk.kooperantNaziv
+    lblDetailBlok.caption = blk.brojDokumenta & " -- " & blk.kooperantNaziv
     lblDetailOtvoreno.caption = "Otvoreno: " & Format$(blk.OtvorenIznos, "#,##0.00") & " RSD"
     
     Dim currentAmount As Double
@@ -312,7 +312,7 @@ Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
         lblDetailAvans.ForeColor = TXT_MUTED()
     End If
     
-    lblDetailTR.caption = "Tek. racun: " & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "—nedostaje—")
+    lblDetailTR.caption = "Tek. racun: " & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "--nedostaje--")
     
     If blk.KooperantAvansSaldo > 0 Then
         lblDetailAvansHint.caption = "Primeni avans kroz Dokumenta pre isplate"
@@ -628,7 +628,7 @@ End Sub
 
 Private Sub btnGenerisiCSV_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetActionButtons
-    ' ne radi hover na disabled — ali bezbedno
+    ' ne radi hover na disabled -- ali bezbedno
 End Sub
 
 Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)

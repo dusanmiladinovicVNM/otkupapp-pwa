@@ -3,7 +3,7 @@ Attribute VB_Name = "modLicense"
 Option Explicit
 
 ' ============================================================
-' modLicense — per-uredjaj (node-locked) licenciranje.
+' modLicense -- per-uredjaj (node-locked) licenciranje.
 '
 ' Model: licenca se prodaje PO RACUNARU. Vezivanje (bind) ZIVI NA SERVERU
 ' (GAS, akcija "checkLicense"), NE u ovom fajlu. Klijent samo izracuna
@@ -13,9 +13,9 @@ Option Explicit
 ' BOUND_OTHER i blokira se. Kopiranje .xlsm na drugi racun ne pomaze: drugi
 ' racunar daje drugaciji otisak -> server ne izdaje token.
 '
-' VAZNO — granica zastite: ovo zaustavlja casual deljenje ("kolega, posalji
+' VAZNO -- granica zastite: ovo zaustavlja casual deljenje ("kolega, posalji
 ' mi fajl"), sto je ~99% realnog rizika. Ko otvori VBE moze da izbaci poziv
-' i radi offline — to je univerzalni plafon svakog VBA-locka. Prava tvrda
+' i radi offline -- to je univerzalni plafon svakog VBA-locka. Prava tvrda
 ' zastita = kriticni podaci/obracun zive samo na serveru.
 '
 ' OPT-IN + LATCH: gate radi ako je u tblSEFConfig LICENSE_ENABLED = YES, ILI
@@ -27,9 +27,9 @@ Option Explicit
 ' adminSuspendLicense / adminActivateLicense / adminResetLicenseBinding).
 '
 ' Config kljucevi (tblSEFConfig):
-'   LICENSE_ENABLED      YES/NO  (default NO — provera iskljucena DOK masina
+'   LICENSE_ENABLED      YES/NO  (default NO -- provera iskljucena DOK masina
 '                        nije aktivirana; posle prve aktivacije latch tera
-'                        proveru i bez YES — vidi LicenseRequired)
+'                        proveru i bez YES -- vidi LicenseRequired)
 '   LICENSE_ENDPOINT     GAS Web App /exec URL (ako prazno -> MONITORING_ENDPOINT)
 '   LICENSE_KEY          licencni kljuc dodeljen ovom racunaru
 '   LICENSE_TOKEN        (interno) potpisan token sa servera
@@ -78,7 +78,7 @@ Private Const HTTP_RECV_TIMEOUT_MS As Long = 15000
 Private gAccessDenied As Boolean
 
 ' ============================================================
-' PUBLIC — Glavni gate (poziva se iz modMain.StartApp)
+' PUBLIC -- Glavni gate (poziva se iz modMain.StartApp)
 ' ============================================================
 '
 ' Kombinuje licencu i trial po pravilu "TRIAL SAMO AKO NIJE LICENCIRAN":
@@ -130,7 +130,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — Licencni gate (interni; zove ga AccessGateOrQuit)
+' PUBLIC -- Licencni gate (interni; zove ga AccessGateOrQuit)
 ' ============================================================
 
 ' Vraca True ako sme da nastavi; inace blokira, prikaze poruku i zatvori svesku.
@@ -179,7 +179,7 @@ Public Function LicenseGateOrQuit() As Boolean
     Dim bound As String: bound = Trim$(GetConfigValue(CFG_LIC_BOUND_PARTS))
     ' NEXT_CHECK je upisan kao ISO sa 'T' (Format "...\Thh:nn:ss"). VBA CDate/
     ' IsDate NE razumeju 'T' separator (IsDate vrati False), pa ga zamenjujemo
-    ' razmakom pre parse-a — isti obrazac kao modGoogleAuth.IsTokenExpired i
+    ' razmakom pre parse-a -- isti obrazac kao modGoogleAuth.IsTokenExpired i
     ' modStanicaLock. Bez ovoga brzi offline put se nikad ne bi izvrsio.
     Dim nextChk As String: nextChk = Replace(Trim$(GetConfigValue(CFG_LIC_NEXT_CHECK)), "T", " ")
 
@@ -248,7 +248,7 @@ Public Function LicenseGateOrQuit() As Boolean
             LicenseGateOrQuit = False
 
         Case "BAD_DEVICE"
-            ' N2: otisak preslab (prakticno nedostizno — klijent pre-proverava).
+            ' N2: otisak preslab (prakticno nedostizno -- klijent pre-proverava).
             ' Vezanu masinu propusti; inace jasna poruka o uredjaju.
             If LicenseIsBoundMachine(bound, parts) Then
                 LicenseGateOrQuit = True
@@ -282,7 +282,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — gate helperi (bound check, anti-rollback, inline aktivacija)
+' PRIVATE -- gate helperi (bound check, anti-rollback, inline aktivacija)
 ' ============================================================
 
 ' Da li je ovo VEZANA masina: ima sacuvane BOUND_PARTS i fuzzy match >= prag.
@@ -335,7 +335,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — Jednokratna aktivacija na novom racunaru
+' PUBLIC -- Jednokratna aktivacija na novom racunaru
 ' ============================================================
 
 Public Sub ActivateLicensePrompt()
@@ -405,7 +405,7 @@ Public Sub LicenseShowDevice()
 End Sub
 
 ' ============================================================
-' PRIVATE — perzistencija uspesne provere
+' PRIVATE -- perzistencija uspesne provere
 ' ============================================================
 
 Private Sub PersistLicenseOk(ByVal parts As String, ByVal resp As String)
@@ -420,7 +420,7 @@ Private Sub PersistLicenseOk(ByVal parts As String, ByVal resp As String)
 End Sub
 
 ' ============================================================
-' PRIVATE — HTTP ka GAS-u (sinhrono; isti obrazac kao modMonitoring)
+' PRIVATE -- HTTP ka GAS-u (sinhrono; isti obrazac kao modMonitoring)
 ' ============================================================
 
 Private Function LicenseHttpCheck(ByVal endpoint As String, _
@@ -510,8 +510,8 @@ Private Function ReadVolumeSerial() As String
 End Function
 
 ' ============================================================
-' PUBLIC — helperi za poredjenje komponenti
-' (cista logika, Public radi testabilnosti — vidi modLicenseTests)
+' PUBLIC -- helperi za poredjenje komponenti
+' (cista logika, Public radi testabilnosti -- vidi modLicenseTests)
 ' ============================================================
 
 ' Uvek vrati niz od bar 3 elementa (pad praznima).
@@ -544,7 +544,7 @@ Public Function LicNonEmptyParts(ByVal a As String) As Long
 End Function
 
 ' ============================================================
-' PRIVATE — config / poruke
+' PRIVATE -- config / poruke
 ' ============================================================
 
 ' Latch: da li je na OVOM racunaru licenca vec jednom USPESNO aktivirana.
@@ -561,7 +561,7 @@ End Function
 
 ' Da li gate UOPSTE treba da radi: opt-in flag YES ILI latch (vec aktivirana
 ' masina). Sve "da li uopste proveravati" tacke gledaju ovo umesto golog
-' LicenseEnabled() — tako se anti-bypass primenjuje na jednom mestu.
+' LicenseEnabled() -- tako se anti-bypass primenjuje na jednom mestu.
 Private Function LicenseRequired() As Boolean
     LicenseRequired = LicenseEnabled() Or LicenseActivatedOnThisMachine()
 End Function
@@ -576,7 +576,7 @@ Private Function LicenseEnabled() As Boolean
 End Function
 
 Private Function LicenseEndpoint() As String
-    ' Pin (ako postoji) je autoritet — config NE moze da ga prebaci na lazni server.
+    ' Pin (ako postoji) je autoritet -- config NE moze da ga prebaci na lazni server.
     If Len(Trim$(LIC_ENDPOINT_PINNED)) > 0 Then
         LicenseEndpoint = Trim$(LIC_ENDPOINT_PINNED)
         Exit Function
@@ -617,7 +617,7 @@ Private Sub LicenseBlock(ByVal reason As String, ByVal hint As String)
 End Sub
 
 ' ============================================================
-' PUBLIC — Deljeni "access denied" + Workbook_Open integracija
+' PUBLIC -- Deljeni "access denied" + Workbook_Open integracija
 ' (koriste ga i license i trial gate)
 ' ============================================================
 
@@ -628,7 +628,7 @@ Public Function AccessWasDenied() As Boolean
 End Function
 
 ' Deljena blokada: oznaci pristup odbijenim i zakazi POUZDANO zatvaranje na
-' sledeci idle tick. Pozivaju je i LicenseBlock i modTrial.TrialBlock — nikada
+' sledeci idle tick. Pozivaju je i LicenseBlock i modTrial.TrialBlock -- nikada
 ' ne zatvarati svesku sinhrono iz Workbook_Open toka (Excel Close odlaze/ignorise).
 Public Sub DenyAccessAndScheduleClose()
     On Error Resume Next

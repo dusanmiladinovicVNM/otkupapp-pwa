@@ -23,7 +23,7 @@ Public Sub TestMonitoring_Config()
     Debug.Print vbCrLf & "[1] CONFIG TEST"
     Debug.Print Monitoring_DiagnoseConfig()
     
-    Debug.Print "PASS ako vidiš:"
+    Debug.Print "PASS ako vidis:"
     Debug.Print "- Endpoint length > 0"
     Debug.Print "- Endpoint ends with /exec = True"
     Debug.Print "- Secret length > 0"

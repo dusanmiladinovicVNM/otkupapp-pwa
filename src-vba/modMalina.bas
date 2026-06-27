@@ -3,7 +3,7 @@ Attribute VB_Name = "modMalina"
 Option Explicit
 
 ' ============================================================
-' modMalina – malina-mod master-data glue
+' modMalina - malina-mod master-data glue
 '
 ' U malina modu (IsMalinaMode, vidi modConfig) vazi: otkupac == stanica
 ' == vozac. Da izvestaji/ambalaza koji joinuju na tblVozaci imaju naziv,
@@ -14,7 +14,7 @@ Option Explicit
 ' (modStammdatenSync je export-only, frmStammdaten je UI shell).
 '
 ' Append po nazivu kolone (ReDim na ListColumns.Count + RequireColumnIndex)
-' je isti obrazac kao modConfig.SetConfigValue — schema-robustno, bez
+' je isti obrazac kao modConfig.SetConfigValue -- schema-robustno, bez
 ' pozicijskog Array-a i bez test-only BlankRow/SetField helpera.
 ' ============================================================
 

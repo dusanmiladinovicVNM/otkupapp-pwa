@@ -553,7 +553,7 @@ Private Function BuildOTKFixtureData(ByVal clientRecordID As String, _
 
     otkupacID = GetFirstOptionalTableValue(TBL_STANICE, "StanicaID", "ST-00001")
 
-    ' Header row — must match GAS/VBA OTK schema exactly.
+    ' Header row -- must match GAS/VBA OTK schema exactly.
     data(1, 1) = "ClientRecordID"
     data(1, 2) = "ServerRecordID"
     data(1, 3) = "CreatedAtClient"

@@ -3,7 +3,7 @@ Attribute VB_Name = "modStorno"
 Option Explicit
 
 ' ============================================================
-' modStorno v4.0 – Hardened Soft-Delete
+' modStorno v4.0 - Hardened Soft-Delete
 '
 ' Stil uskladjen sa modNovac/modFaktura:
 ' - fail-fast schema guards

@@ -3,7 +3,7 @@ Attribute VB_Name = "modSetup"
 Option Explicit
 
 ' ============================================================
-' modSetup – OtkupApp new PC setup / workstation health-check
+' modSetup - OtkupApp new PC setup / workstation health-check
 '
 ' CONFIG STRATEGY:
 '
@@ -170,9 +170,9 @@ End Function
 ' ------------------------------------------------------------
 ' Desktop-only prekidac.
 '
-' UKLJUCEN (CLOUD_SYNC_ENABLED=NO): aplikacija radi 100% lokalno — nema
+' UKLJUCEN (CLOUD_SYNC_ENABLED=NO): aplikacija radi 100% lokalno -- nema
 ' Google/PWA saobracaja, a SetupNewPC ne trazi Google kredencijale.
-' Flag se cuva u tblSEFConfig i cita ga IsCloudSyncEnabled() (modConfig) —
+' Flag se cuva u tblSEFConfig i cita ga IsCloudSyncEnabled() (modConfig) --
 ' isti koji vec gasi runtime sync (modBrojevi, modStanicaLock).
 '
 ' Alt+F8 -> EnableDesktopOnlyMode  (pa ponovo SetupNewPC).
@@ -678,7 +678,7 @@ EH:
 End Sub
 
 ' ============================================================
-' Paletni list (Phase 2) — jednokratni schema setup.
+' Paletni list (Phase 2) -- jednokratni schema setup.
 ' Idempotentno: kreira nedostajuce tabele i kolonu na tblKulture.
 ' Pokrenuti JEDNOM na master workbook-u (Alt+F8 -> EnsurePaletniListSchema).
 ' Reuse: FindListObject / GetOrCreateWorksheet / LogSetup (gore).
@@ -748,7 +748,7 @@ EH:
 End Sub
 
 ' ============================================================
-' Cenovnik (cene po proizvodu) — jednokratni schema setup.
+' Cenovnik (cene po proizvodu) -- jednokratni schema setup.
 ' Idempotentno: kreira tblCenovnik ako ne postoji, inace dopuni kolone.
 ' Pokrenuti na master workbook-u (deo je EnsurePaletniListSchema, a moze
 ' i samostalno: Alt+F8 -> EnsureCenovnikSchema).
@@ -798,7 +798,7 @@ End Sub
 
 ' ============================================================
 ' Dorade (soft-delete + tip ambalaze po kulturi + hladnjaca + decimalna
-' kolicina) — jednokratni schema setup. Idempotentno.
+' kolicina) -- jednokratni schema setup. Idempotentno.
 ' Alt+F8 -> EnsureDoradeSchema.
 ' ============================================================
 Public Sub EnsureDoradeSchema()

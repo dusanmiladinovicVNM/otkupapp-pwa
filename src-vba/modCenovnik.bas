@@ -3,7 +3,7 @@ Attribute VB_Name = "modCenovnik"
 Option Explicit
 
 ' ============================================================
-' modCenovnik – cenovnik (cena po proizvodu), append-only istorija
+' modCenovnik - cenovnik (cena po proizvodu), append-only istorija
 '
 ' Model:
 '   - tblCenovnik je append-only: svaka promena cene = NOVI red.

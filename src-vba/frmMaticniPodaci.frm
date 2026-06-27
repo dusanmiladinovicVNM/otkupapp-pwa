@@ -147,7 +147,7 @@ EH:
     LogErr "frmStammdatenMenu.HoverMenuButton"
 End Sub
 
-' Javna ulazna tacka — otvara frmStammdaten za datu sekciju.
+' Javna ulazna tacka -- otvara frmStammdaten za datu sekciju.
 ' sekTag      = Tag za frmStammdaten (npr. "TipAmbalaze")
 ' sekCaption  = naziv u naslovu (npr. "Ambalaza"); fallback na sekTag.
 ' Poziva je i staticni handler (OpenStammdatenForm) i dinamicki meni

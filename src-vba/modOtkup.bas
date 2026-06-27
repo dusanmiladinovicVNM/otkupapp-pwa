@@ -2,7 +2,7 @@ Attribute VB_Name = "modOtkup"
 Option Explicit
 
 ' ============================================================
-' modOtkup – Aufkauf-Geschäftslogik
+' modOtkup - Aufkauf-Geschaeftslogik
 ' Kernmodul: Erfassung Lieferant zu Station
 ' ============================================================
 
@@ -496,7 +496,7 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     newRow = AppendRow(TBL_OTKUP, rowData)
     If newRow <= 0 Then
         Err.Raise vbObjectError + 1829, "SaveOtkup", _
-                  "AppendRow fehlgeschlagen für tblOtkup."
+                  "AppendRow fehlgeschlagen fuer tblOtkup."
     End If
 
     ' Izdata ambalaza (OM->kooperant) -> upis u kolonu PO IMENU (kolona je na kraju
@@ -714,8 +714,8 @@ Public Function GetSaldoByStation(ByVal stanicaID As String, _
 
     ' TODO:
     ' Ovaj helper trenutno racuna samo bruto saldo iz tblOtkup.
-    ' Banka/Novac/Isporuka korekcije treba rešiti u posebnom report modulu,
-    ' ne širiti ovaj core save modul bez jasnog accounting pravila.
+    ' Banka/Novac/Isporuka korekcije treba resiti u posebnom report modulu,
+    ' ne siriti ovaj core save modul bez jasnog accounting pravila.
 
     If dict.count = 0 Then
         GetSaldoByStation = Empty

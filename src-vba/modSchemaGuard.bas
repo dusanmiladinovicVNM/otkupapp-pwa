@@ -24,7 +24,7 @@ Public Sub RequireColumns(ByVal tableName As String, _
 
     For i = LBound(columnNames) To UBound(columnNames)
         If RequireColumnIndex(tableName, CStr(columnNames(i)), sourceName) = 0 Then
-            ' RequireColumnIndex vec baca grešku.
+            ' RequireColumnIndex vec baca gresku.
         End If
     Next i
 End Sub

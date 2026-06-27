@@ -1096,7 +1096,7 @@ Private Sub Test_LiveStornoInvoice(ByVal fakturaID As String, _
         Exit Sub
     End If
 
-    ' ISPRAVNO — commentText je drugi param, stornoNumber je treci
+    ' ISPRAVNO -- commentText je drugi param, stornoNumber je treci
     Dim stornoOk As Boolean
 
     stornoOk = StornoInvoiceOnSEF_TX(fakturaID, commentText, stornoNumber)
@@ -1242,7 +1242,7 @@ Private Function IsCancelFinalStatus(ByVal sefStatus As String) As Boolean
 End Function
 
 ' ============================================================
-' PATCH 5 — RunHttpUtilsSmokeSuite
+' PATCH 5 -- RunHttpUtilsSmokeSuite
 ' Dodaje se u modSEFTests (postojeci modul, postojeca konvencija)
 ' ============================================================
 '
@@ -1336,7 +1336,7 @@ EH:
 End Sub
 
 ' ============================================================
-' PATCH 10 — RunSEFDocumentIdShapeSuite u modSEFTests (audit #4)
+' PATCH 10 -- RunSEFDocumentIdShapeSuite u modSEFTests (audit #4)
 ' ============================================================
 '
 ' Lokacija: modSEFTests (postojeci modul, postojeca konvencija)

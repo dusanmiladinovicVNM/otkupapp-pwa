@@ -759,7 +759,7 @@ Public Function ComputePayloadHash(ByVal payload As String) As String
         ' Rolling hash ohne Bitoperatoren
         h = (h * 33#) + c
         
-        ' manuelles Modulo, damit h nie zu groﬂ wird
+        ' manuelles Modulo, damit h nie zu gross wird
         h = h - Int(h / 2147483647#) * 2147483647#
         
     Next i

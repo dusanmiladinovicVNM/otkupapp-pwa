@@ -2,14 +2,14 @@ Attribute VB_Name = "modStammdatenSync"
 Option Explicit
 
 ' ============================================================
-' modStammdatenSync – Export Stammdaten zu Google Sheet
+' modStammdatenSync - Export Stammdaten zu Google Sheet
 '
 ' Schreibt tblKooperanti, tblKulture, tblConfig (Cene)
-' in ein Google Sheet "Stammdaten" für die PWA.
+' in ein Google Sheet "Stammdaten" fuer die PWA.
 '
 ' Config-Keys in tblConfig:
 '   GOOGLE_STAMMDATEN_SHEET_ID   (wird automatisch erstellt)
-'   GOOGLE_PWA_FOLDER_ID         (Drive Folder für PWA-Sheets)
+'   GOOGLE_PWA_FOLDER_ID         (Drive Folder fuer PWA-Sheets)
 '
 ' Aufruf: Button in frmMain oder manuell via SyncStammdatenToGoogle
 ' ============================================================
@@ -117,7 +117,7 @@ End Sub
  
 
 ' ============================================================
-' PUBLIC — Hauptfunktion
+' PUBLIC -- Hauptfunktion
 ' ============================================================
 Public Sub SyncStammdatenToGoogle()
     Call SyncStammdatenToGoogle_Core(True)
@@ -866,8 +866,8 @@ Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
                 datumPrj = CStr(nz(data(i, colDatum), ""))
             End If
 
-            ' Ako postoji više prijemnica za isti BrojZbirne, prva je dovoljna
-            ' za status "received". Kasnije možemo agregirati ako bude trebalo.
+            ' Ako postoji vise prijemnica za isti BrojZbirne, prva je dovoljna
+            ' za status "received". Kasnije mozemo agregirati ako bude trebalo.
             If Not dict.Exists(bz) Then
                 dict.Add bz, Array(prjID, brojPrj, kupacID, datumPrj)
             End If
@@ -992,7 +992,7 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
     
     On Error GoTo EH
     
-    ' ReportSaldoOM gibt Daten in ein ListBox — wir brauchen die Rohdaten
+    ' ReportSaldoOM gibt Daten in ein ListBox -- wir brauchen die Rohdaten
     ' Hier vereinfacht: OM-Saldo aus tblNovac berechnen
     Dim data As Variant
     Dim colOMID As Long, colTip As Long, colIsplata As Long, colUplata As Long
@@ -1306,7 +1306,7 @@ EH:
 End Function
 
 ' ============================================================
-' PRIVATE — Export einzelner Tabellen
+' PRIVATE -- Export einzelner Tabellen
 ' ============================================================
 
 Private Function ExportKooperanti(ByVal sheetID As String) As Boolean
@@ -1668,7 +1668,7 @@ Private Function ExportStanice(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_STANICE, "Mesto")
     colAktivan = GetColumnIndex(TBL_STANICE, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1730,7 +1730,7 @@ Private Function ExportKupci(ByVal sheetID As String) As Boolean
     colMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
     colAktivan = GetColumnIndex(TBL_KUPCI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1794,7 +1794,7 @@ Private Function ExportVozaci(ByVal sheetID As String) As Boolean
     colKapacitetKG = GetColumnIndex(TBL_VOZACI, "KapacitetKG")
     colAktivan = GetColumnIndex(TBL_VOZACI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -1868,7 +1868,7 @@ Private Function ExportArtikli(ByVal sheetID As String) As Boolean
     Dim colKarenca As Long: colKarenca = GetColumnIndex(TBL_ARTIKLI, "KarencaDana")
     Dim colAktivan As Long: colAktivan = GetColumnIndex(TBL_ARTIKLI, "Aktivan")
     
-    ' Erst zählen wieviele aktiv
+    ' Erst zaehlen wieviele aktiv
     Dim cnt As Long: cnt = 0
     For i = 1 To UBound(data, 1)
         If IsPWAActive(data(i, colAktivan)) Then cnt = cnt + 1
@@ -2119,7 +2119,7 @@ Private Function ExportConfig(ByVal sheetID As String) As Boolean
                     "SELLER_STREET", "SELLER_CITY", "SELLER_POSTAL_CODE", _
                     "SELLER_ACCOUNT")
     
-    ' Zählen
+    ' Zaehlen
     Dim matchCount As Long
     For i = 1 To UBound(data, 1)
         keyStr = CStr(data(i, colKey))
@@ -2161,7 +2161,7 @@ EH:
 End Function
 
 Private Function IsPwaConfigKey(ByVal keyStr As String, ByVal pwaKeys As Variant) As Boolean
-    ' Credentials ausschließen
+    ' Credentials ausschliessen
     If Left$(keyStr, 7) = "GOOGLE_" Then Exit Function
     If Left$(keyStr, 4) = "SEF_" Then Exit Function
     If Left$(keyStr, 5) = "SYNC_" Then Exit Function
@@ -2355,7 +2355,7 @@ Private Function ExportUsers(ByVal sheetID As String) As Boolean
         Next i
     End If
     
-    ' Auf tatsächliche Größe kürzen
+    ' Auf tatsaechliche Groesse kuerzen
     If outRow < UBound(result, 1) Then
         Dim finalRows() As Variant
         Dim r As Long, c As Long
@@ -2657,7 +2657,7 @@ Private Sub Monitor_StammdatenSyncFail(ByVal errNum As Long, _
 End Sub
 
 ' ============================================================
-' PUBLIC — Test
+' PUBLIC -- Test
 ' ============================================================
 
 Public Sub Test_SyncStammdaten()

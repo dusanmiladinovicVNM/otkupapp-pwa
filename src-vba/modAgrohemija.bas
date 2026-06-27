@@ -454,7 +454,7 @@ NextDob:
 End Function
 
 Public Function GetAgrohemijaDug(ByVal kooperantID As String) As Double
-    ' Summe aller Izlaz-Vrednosti für diesen Kooperant
+    ' Summe aller Izlaz-Vrednosti fuer diesen Kooperant
     Dim data As Variant
     data = GetTableData(TBL_MAGACIN)
     If IsEmpty(data) Then Exit Function

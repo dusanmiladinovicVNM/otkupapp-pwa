@@ -17,7 +17,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmOtkup v2.1 – NUR Otkup (Kooperant ? Station)
+' frmOtkup v2.1 - NUR Otkup (Kooperant ? Station)
 ' Rechte Seite (Isporuka) wurde entfernt.
 ' Otpremnica/Zbirna/Prijemnica sind jetzt in frmDokumenta.
 ' ============================================================
@@ -27,7 +27,7 @@ Private mChromeRemoved As Boolean
 ' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
 Private m_txtAmbIzdata As MSForms.TextBox
 
-' Runtime polje "Kolicina ambalaze (II)" — Klasa II je zaseban tblOtkup red sa
+' Runtime polje "Kolicina ambalaze (II)" -- Klasa II je zaseban tblOtkup red sa
 ' svojom KolAmbalaze; deli "Kolicina ambalaze" red sa Klasom I (kao Kolicina/Cena),
 ' vidljivo samo kad je chkDveKlase ukljucen (CLAUDE.md: ne dira .frx).
 Private m_txtKolAmbalazeII As MSForms.TextBox
@@ -73,7 +73,7 @@ Private Sub UserForm_Initialize()
     ' Datum defaults
     txtDatum.value = Format$(Date, "d.m.yyyy")
     
-    ' ComboBoxen füllen
+    ' ComboBoxen fuellen
     FillCmb cmbVrstaVoca, GetLookupList(TBL_KULTURE, "VrstaVoca", , , True)
     FillComboDisplayID cmbOtkupnoMesto, TBL_STANICE, "Naziv", "StanicaID"
     FillCmb cmbVozac, GetVozacDisplayList()
@@ -85,7 +85,7 @@ Private Sub UserForm_Initialize()
     txtKolAmbalaze.value = ""
     txtNovac.value = "0"
     
-    ' Klasa II – initial disabled
+    ' Klasa II - initial disabled
     DisableField txtKolicinaKLII
     DisableField txtCenaKLII
     chkDveKlase.value = False
@@ -364,11 +364,11 @@ EH:
 End Sub
 
 ' ============================================================
-' KASKADIERUNG – VrstaVoca ? SortaVoca
+' KASKADIERUNG - VrstaVoca ? SortaVoca
 ' ============================================================
 
 Private Sub cmbVrstaVoca_Change()
-    ' Wenn VrstaVoca gewählt wird, SortaVoca-Liste filtern
+    ' Wenn VrstaVoca gewaehlt wird, SortaVoca-Liste filtern
     cmbSortaVoca.Clear
     If cmbVrstaVoca.value <> "" Then
         FillCmb cmbSortaVoca, _
@@ -490,7 +490,7 @@ Private Sub cmbOtkupnoMesto_Change()
     cmbParcela.Clear
 
     If cmbOtkupnoMesto.value = "" Then
-        ' Operater je obrisao izbor — pusti aktivnu stanicu (sa bulk push)
+        ' Operater je obrisao izbor -- pusti aktivnu stanicu (sa bulk push)
         If Len(GetActiveStanica()) > 0 Then
             ShowLockStatus "Sinhronizujem prethodnu stanicu..."
             ReleaseStanicaLock GetActiveStanica()
@@ -507,7 +507,7 @@ Private Sub cmbOtkupnoMesto_Change()
     ' Parse datum (vec treba da je popunjen u txtDatum)
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
-        datumDok = Date   ' fallback na danas; korisnik može promeniti
+        datumDok = Date   ' fallback na danas; korisnik moze promeniti
     End If
 
     ' Lock acquire (interno: bulk push + release prethodne ako postoji + acquire nove)
@@ -668,17 +668,17 @@ Private Sub txtDatum_AfterUpdate()
     ' Parse novi datum
     Dim newDatum As Date
     If Not TryParseDateValue(txtDatum.value, newDatum) Then
-        ' Loš format — operator vidi u polju, ne menjamo lock state
+        ' Los format -- operator vidi u polju, ne menjamo lock state
         Exit Sub
     End If
 
-    ' Ako je isti datum, ništa
+    ' Ako je isti datum, nista
     If GetActiveDatum() = newDatum Then
         RefreshBrojDokumentaSuggestion
         Exit Sub
     End If
 
-    ' Drugaciji datum — re-acquire (bulk push staro + acquire novo)
+    ' Drugaciji datum -- re-acquire (bulk push staro + acquire novo)
     ShowLockStatus "Sinhronizujem prethodni datum..."
     Dim acquired As Boolean
     acquired = AcquireStanicaLock(GetActiveStanica(), newDatum)
@@ -1074,7 +1074,7 @@ Private Sub ClearOtkupFields()
 
     txtKolicina.SetFocus
 
-    ' Lokalni predlog (bez Google) — just-saved red je vec u tblOtkup-u
+    ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
     RefreshBrojDokumentaSuggestion False
 End Sub
 

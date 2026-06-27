@@ -4,8 +4,8 @@ Option Explicit
 
 
 ' ============================================================
-' modMarza v3.0 – Margenberechnung Business Logic
-' Alle Funktionen geben 2D-Arrays zurück
+' modMarza v3.0 - Margenberechnung Business Logic
+' Alle Funktionen geben 2D-Arrays zurueck
 ' Spalten: Vrsta, OtkKg, ProsekOtk, IspKg, IspRSD, OtkKosten, Marza, MarzaPct
 ' ============================================================
 
@@ -267,12 +267,12 @@ Private Function BuildMarzaResult(ByVal dictVerkauf As Object, _
 End Function
 
 ' ============================================================
-' SHARED: Dict ? 2D Result (OM-Modus – umgekehrte Logik)
+' SHARED: Dict ? 2D Result (OM-Modus - umgekehrte Logik)
 ' ============================================================
 
 Private Function BuildMarzaResultOM(ByVal dictEinkauf As Object, _
                                     ByVal dictVerkauf As Object) As Variant
-    ' OM: EK ist Basis, VK-Durchschnitt als fiktiver Erlös
+    ' OM: EK ist Basis, VK-Durchschnitt als fiktiver Erloes
     
     If dictEinkauf.count = 0 Then
         BuildMarzaResultOM = Empty

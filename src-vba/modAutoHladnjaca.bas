@@ -14,7 +14,7 @@ Option Explicit
 '
 ' Broj prijemnice (modBrojevi.GenerateBrojPrijemnice): "1/ddmmyy" za prvu tog
 ' dana, pa "1/ddmmyy-2", "-3" ... -n. Dvoklasna prijemnica (Kl I + Kl II) nosi
-' ISTI broj — jedna prijemnica = jedan broj (kao i kod rucnog unosa).
+' ISTI broj -- jedna prijemnica = jedan broj (kao i kod rucnog unosa).
 ' Broj otpremnice = broj zbirne = broj otkupnog dokumenta (malina konvencija);
 ' ako otkup nema broj, generise se HL-ddmmyy-hhnnss.
 '

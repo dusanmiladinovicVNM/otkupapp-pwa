@@ -18,14 +18,14 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmDokumenta v2.1 – Otpremnica + Zbirna + Prijemnica
+' frmDokumenta v2.1 - Otpremnica + Zbirna + Prijemnica
 ' Ein Form, 6 Frames, kein MultiPage
 ' ============================================================
 
 Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
-' Runtime toggle (fraOMUlaz): smer ambalaze — Prijem na OM / Izdavanje kooperantu.
+' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
 Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
 Private WithEvents m_tglPrijemKoop As MSForms.ToggleButton
 
@@ -101,7 +101,7 @@ Private Sub UserForm_Activate()
     StyleLabel lblOMAvansSaldo, TXT_MUTED(), True
     StyleLabel lblStornoWarning, CLR_WARNING(), True
 
-    ' important frames — section headers (UPPERCASE + gold)
+    ' important frames -- section headers (UPPERCASE + gold)
     StyleSectionHeader fraOtpremnica, "Izlaz OM  (Otpremnica)"
     StyleSectionHeader fraZbirna, "Zbirna otpremnica"
     StyleSectionHeader fraPrijemnica, "Ulaz Kupci  (Prijemnica)"
@@ -153,7 +153,7 @@ Private Sub UserForm_Activate()
     ' Van malina moda ostaje aktivna (rucni unos zbirne).
     If IsMalinaMode() Then DisableFraZbirnaMalina
     
-    ' Storno ComboBox füllen
+    ' Storno ComboBox fuellen
     With cmbStornoDokument
         .Clear
         .AddItem "Otkup"
@@ -189,7 +189,7 @@ Private Sub UserForm_Activate()
     StyleSectionAccent lblAccentStorno, fraStorno, "warn"
     StyleSectionAccent lblAccentZbirne, fraListaZbirnih, "info"
     
-    ' Frame captions empty — naslovi idu kao zasebni Label-i ispod akcent linije
+    ' Frame captions empty -- naslovi idu kao zasebni Label-i ispod akcent linije
     fraOtpremnica.caption = ""
     fraZbirna.caption = ""
     fraPrijemnica.caption = ""
@@ -206,7 +206,7 @@ Private Sub UserForm_Activate()
     StyleFrameTitleLabel lblTitleStorno, "Storno"
     StyleFrameTitleLabel lblTitleZbirne, "Lista zbirnih"
 
-    ' Podrazumevana vrsta/sorta (Podesavanja) — samo ako nije vec izabrano,
+    ' Podrazumevana vrsta/sorta (Podesavanja) -- samo ako nije vec izabrano,
     ' da re-aktivacija ne pregazi tekuci izbor. Okida auto-cenu/auto-tip.
     On Error Resume Next
     If Trim$(cmbVrstaVoca.value) = "" Then ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
@@ -246,7 +246,7 @@ Private Sub cmbFakturaIzlaz_Change()
     On Error GoTo EH
 
     If cmbFakturaIzlaz.value = "" Then
-        lblManjak.caption = ""        ' kupacSaldo dummy — ako imaš zaseban label, zameni
+        lblManjak.caption = ""        ' kupacSaldo dummy -- ako imas zaseban label, zameni
         Exit Sub
     End If
 
@@ -263,7 +263,7 @@ Private Sub cmbFakturaIzlaz_Change()
         uplaceno = GetUplataForFaktura(fakturaID)
         preostalo = iznos - uplaceno
 
-        ' Koristi lblOMAvansSaldo kao multipurpose status bar — ili dodaj novi lblSaldoKupca
+        ' Koristi lblOMAvansSaldo kao multipurpose status bar -- ili dodaj novi lblSaldoKupca
         lblOMAvansSaldo.caption = "SALDO KUPCA   Uplaceno: " & Format$(uplaceno, "#,##0") & _
                                   "   Ostatak: " & Format$(preostalo, "#,##0") & " RSD"
         If preostalo <= 0 Then
@@ -405,7 +405,7 @@ Private Sub UpdateUkupnoKgOtp()
     If chkDveKlaseOtp.value Then
         lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
         If ukupnoRsd > 0 Then
-            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  •  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  *  " & Format$(ukupnoRsd, "#,##0") & " RSD"
         End If
     Else
         If ukupnoRsd > 0 Then
@@ -855,11 +855,11 @@ Private Sub ClearOtpremnicaFields()
     DisableField txtCenaKlIIOtp
     lblUkupnoKgOtp.caption = ""
     
-    RefreshBrojOtpSuggestion   ' ? DODATO: predloži sledeci za istu stanicu/datum
+    RefreshBrojOtpSuggestion   ' ? DODATO: predlozi sledeci za istu stanicu/datum
 End Sub
 
 Private Sub RefreshBrojOtpSuggestion()
-    ' Predlaže BrojOtpremnice. OTP je VBA-only — scan samo tblOtpremnica.
+    ' Predlaze BrojOtpremnice. OTP je VBA-only -- scan samo tblOtpremnica.
     On Error GoTo EH
 
     Dim stanicaID As String
@@ -899,7 +899,7 @@ EH:
 End Sub
 
 Private Sub RefreshBrojZbirneSuggestion()
-    ' Predlaže BrojZbirne. ZBR scan = tblZbirna + VOZ-{vozacID} sheet.
+    ' Predlaze BrojZbirne. ZBR scan = tblZbirna + VOZ-{vozacID} sheet.
     On Error GoTo EH
 
     If cmbVozac.value = "" Then Exit Sub
@@ -1775,7 +1775,7 @@ Private Sub btnUnosZbr_Click()
     txtBrojZbirnePrij.value = txtBrojZbirne.value
     If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
 
-    ' Predloži sledeci broj za istog vozaca/datum
+    ' Predlozi sledeci broj za istog vozaca/datum
     RefreshBrojZbirneSuggestion
     Exit Sub
 
@@ -1785,11 +1785,11 @@ EH:
 End Sub
 
 ' ============================================================
-' ZBIRNA VALIDIERUNG – Live-Update
+' ZBIRNA VALIDIERUNG - Live-Update
 ' ============================================================
 
 Private Sub txtBrojZbirne_AfterUpdate()
-    ' BrojZbirne auch in Otpremnica-Feld setzen (NE u malina modu — otpremnica
+    ' BrojZbirne auch in Otpremnica-Feld setzen (NE u malina modu -- otpremnica
     ' mora ostati bez BrojZbirne da je auto-zbirna pokupi).
     If Not IsMalinaMode() Then txtBrojZbirneOtp.value = txtBrojZbirne.value
     UpdateValidacija
@@ -1867,7 +1867,7 @@ Private Function UpdateValidacija() As Boolean
                 "Zbr: " & Format$(zbrKgI, "#,##0.0") & " kg | " & _
                 "Raz: " & Format$(razKgI, "#,##0.0") & " kg"
     
-    ' KlII hinzufügen wenn aktiv
+    ' KlII hinzufuegen wenn aktiv
     If chkDveKlaseZbr.value Then
         kgCaption = kgCaption & "  ||  Kl.II - Otp: " & Format$(sumaKgII, "#,##0.0") & _
                     " | Zbr: " & Format$(zbrKgII, "#,##0.0") & _
@@ -1876,7 +1876,7 @@ Private Function UpdateValidacija() As Boolean
     
     lblValidacijaKG.caption = kgCaption
     
-    ' Farbe: beide Klassen müssen stimmen
+    ' Farbe: beide Klassen muessen stimmen
     Dim kgValid As Boolean
     If chkDveKlaseZbr.value Then
         kgValid = validKgI And validKgII
@@ -2284,7 +2284,7 @@ Private Sub UpdateUkupnoKgPrij()
     If chkDveKlasePrij.value Then
         lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
         If ukupnoRsd > 0 Then
-            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  •  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  *  " & Format$(ukupnoRsd, "#,##0") & " RSD"
         End If
     Else
         If ukupnoRsd > 0 Then
@@ -2696,7 +2696,7 @@ Private Sub CheckVerwaisteDokumente()
 End Sub
 
 ' ============================================================
-' STORNO PREGLED — runtime dugme + overlay panel (lista svih storniranih
+' STORNO PREGLED -- runtime dugme + overlay panel (lista svih storniranih
 ' dokumenata, grupisano po tipu). .frx se ne dira (Controls.Add + WithEvents).
 ' Podaci: modDokumenta.GetStorniraniGrupisano / StorniraniHeaders.
 ' ============================================================
@@ -3503,13 +3503,13 @@ Private Sub txtStornoBroj_Exit(ByVal Cancel As MSForms.ReturnBoolean):  RemoveFo
 ' ============================================================
 
 Private Sub SetupFkeyAccelerators()
-    ' Prazno — KeyDown radi rutiranje. Zovem proceduru da ostane explicit hook tacka
+    ' Prazno -- KeyDown radi rutiranje. Zovem proceduru da ostane explicit hook tacka
     ' za buducu konfiguraciju (npr. role-based shortcuts).
 End Sub
 
 Private Sub SetupFkeyHints()
     On Error Resume Next
-    ' Pokušaj da nade i stilizuje F-key hint label-e ako ih dodaš u Designer:
+    ' Pokusaj da nade i stilizuje F-key hint label-e ako ih dodas u Designer:
     ' lblFkeyOtp, lblFkeyZbr, lblFkeyPrij, lblFkeyOMUlaz, lblFkeyIzlaz, lblFkeyStorno
     StyleFkeyHint Me.Controls("lblFkeyOtp"), "F2"
     StyleFkeyHint Me.Controls("lblFkeyZbr"), "F3"
@@ -3663,7 +3663,7 @@ Public Sub RefreshTopKpis()
 
     If txtBrojZbirne.value = "" Then
         valKind = "neutral"
-        valText = "—"
+        valText = "--"
     Else
         ' Zovem postojecu UpdateValidacija (vraca True ako je 0/0)
         If UpdateValidacija() Then

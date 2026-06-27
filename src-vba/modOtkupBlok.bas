@@ -2,9 +2,9 @@ Attribute VB_Name = "modOtkupBlok"
 Option Explicit
 
 ' ============================================================
-' modOtkupBlok – Panel "Otkupni blokovi" u frmOtkup.
+' modOtkupBlok - Panel "Otkupni blokovi" u frmOtkup.
 '
-' Panel NE unosi sam u tblOtkup – vodi POSTOJECU levu frmOtkup formu:
+' Panel NE unosi sam u tblOtkup - vodi POSTOJECU levu frmOtkup formu:
 '   - Klik na otpremnicu (sredina) popuni levu formu: otkupno mesto,
 '     vrsta, sorta, vozac, datum, broj zbirne i cenu; broj otkupnog
 '     lista racuna kanonski SuggestNextBroj (OM iz polja + datum otpr.).
@@ -20,7 +20,7 @@ Option Explicit
 '   - Lista otpremnica: kolona "Ostatak", filter "samo nezavrsene",
 '     sort po datumu (najnovije gore).
 '
-' Sve kontrole panela su dinamicke (Controls.Add) – frmOtkup.frx se ne
+' Sve kontrole panela su dinamicke (Controls.Add) - frmOtkup.frx se ne
 ' menja. Cena se cuva kao BRUTO (sa PDV nadoknadom); neto/PDV iz nje.
 '
 ' Integracija u frmOtkup:
@@ -78,7 +78,7 @@ Private mLblPreostaloAmb As MSForms.label
 Private mLblZbirna As MSForms.label
 
 ' ============================================================
-' PUBLIC – ulazna tacka + event ruteri + frmOtkup hooks
+' PUBLIC - ulazna tacka + event ruteri + frmOtkup hooks
 ' ============================================================
 
 Public Sub AttachOtkupBlokPanel(ByVal frm As Object)
@@ -226,7 +226,7 @@ Public Sub OtkupBlok_AfterUnos(ByVal otkupIDs As String)
 
     ' "Cena po otpremnici" je DEFAULT za SLEDECI blok: ClearOtkupFields je obrisao
     ' txtCena, pa ga vracamo na default radi brzog unosa. Cenu UPRAVO unetog bloka
-    ' (txtCena u trenutku snimanja — moze biti rucni override) NE diramo: vec je
+    ' (txtCena u trenutku snimanja -- moze biti rucni override) NE diramo: vec je
     ' sacuvana sa blokom i default ne sme da je pregazi.
     If mCenaBlok.Exists(mActiveOtpID) Then
         SetLeftCtl "txtCena", Format$(CDbl(mCenaBlok(mActiveOtpID)), "0.00")
@@ -404,7 +404,7 @@ Private Sub SetPanelVisible(ByVal b As Boolean)
 End Sub
 
 ' ============================================================
-' LOAD – pregled otpremnica (sredina) + blokovi izabrane otpremnice (desno)
+' LOAD - pregled otpremnica (sredina) + blokovi izabrane otpremnice (desno)
 ' ============================================================
 
 Private Sub LoadOtpremnice()
@@ -1490,7 +1490,7 @@ Private Function FmtKg(ByVal X As Double) As String
     FmtKg = Format$(X, "#,##0")
 End Function
 
-' Kolicina (kg): uvek 2 decimale (npr. 1234.00) — panel + liste otpremnica/blokova.
+' Kolicina (kg): uvek 2 decimale (npr. 1234.00) -- panel + liste otpremnica/blokova.
 ' Konvencija ista kao zivi prikaz u frmOtkup.UpdateUkupnoKg ("#,##0.00").
 Private Function FmtKgDec(ByVal X As Double) As String
     FmtKgDec = Format$(X, "#,##0.00")

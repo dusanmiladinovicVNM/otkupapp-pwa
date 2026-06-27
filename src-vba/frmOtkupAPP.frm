@@ -491,7 +491,7 @@ Private Sub HighlightActive(activeBtn As MSForms.CommandButton)
     activeBtn.BackColor = BTN_ACTIVE
     activeBtn.ForeColor = vbWhite
 
-    ' Accent bar — koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
+    ' Accent bar -- koristi koordinate iste kao activeBtn (oba su child of fraSidebar)
     StyleAccentBar lblNavAccent
     With lblNavAccent
         .Visible = True
@@ -1066,7 +1066,7 @@ EH:
 End Sub
 
 ' ============================================================
-' v6.11 UI: KPI CARD u dnu sidebara (Današnji otkup kg)
+' v6.11 UI: KPI CARD u dnu sidebara (Danasnji otkup kg)
 ' ============================================================
 
 Private Sub LayoutSidebarKpiCard()
@@ -1154,7 +1154,7 @@ Public Sub RefreshSidebarKpi()
 
 EH:
     LogErr "frmOtkupAPP.RefreshSidebarKpi"
-    lblKPIValue.caption = "—"
+    lblKPIValue.caption = "--"
     lblKPIDelta.caption = ""
     lblKPISub.caption = ""
 End Sub
@@ -1278,7 +1278,7 @@ Public Sub RefreshBankaBadge()
     StyleBadge lblBankaBadge, openCount
 
     If openCount > 0 Then
-        ' Pozicija — desno gornji ugao btnBanka
+        ' Pozicija -- desno gornji ugao btnBanka
         With lblBankaBadge
             .width = 22
             .Height = 14
@@ -1388,7 +1388,7 @@ End Sub
 Private Function GetCurrentOperatorName() As String
     On Error Resume Next
     GetCurrentOperatorName = Environ$("USERNAME")
-    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "—"
+    If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "--"
     On Error GoTo 0
 End Function
 

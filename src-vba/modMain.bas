@@ -2,7 +2,7 @@ Attribute VB_Name = "modMain"
 Option Explicit
 
 ' ============================================================
-' modMain v2.1 – ValidateAllTables aktualisiert
+' modMain v2.1 - ValidateAllTables aktualisiert
 ' ============================================================
 
 Private m_Initialized As Boolean
@@ -49,7 +49,7 @@ Public Sub StartApp()
     Call LogAppStart
 
     ' SEF recovery ostaje non-blocking za startup.
-    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada šalje monitoring.
+    ' Sama procedura RecoverAllStuckSEFSendingInvoices sada salje monitoring.
     On Error Resume Next
     Call RecoverAllStuckSEFSendingInvoices
     On Error GoTo EH

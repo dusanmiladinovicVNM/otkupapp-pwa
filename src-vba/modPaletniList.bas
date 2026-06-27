@@ -3,7 +3,7 @@ Attribute VB_Name = "modPaletniList"
 Option Explicit
 
 ' ============================================================
-' modPaletniList — paletni list sveze robe + prerada (Phase 2)
+' modPaletniList -- paletni list sveze robe + prerada (Phase 2)
 '
 ' Inkrement 1: numeracija po godini (1..n, reset svake godine).
 '   Pattern preuzet iz modFaktura.GenerateBrojFakture (per-year max+1),
@@ -60,7 +60,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — paletizacija iz modDokumenta.SavePrijemnica_TX / Multi_TX.
+' PUBLIC -- paletizacija iz modDokumenta.SavePrijemnica_TX / Multi_TX.
 ' Poziva se UNUTAR transakcije, PRE CommitTx -> atomicno sa prijemnicom.
 ' (TX vec drzi Calculation=manual, pa nema poseban calc-guard ovde.)
 '
@@ -550,7 +550,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — rucna stampa nepotpunih (otvorenih) paleta.
+' PUBLIC -- rucna stampa nepotpunih (otvorenih) paleta.
 ' Kraj smene: Alt+F8 -> PrintNepotpunePalete (kasnije dugme u UI).
 ' ============================================================
 ' Izlaz (po PALETA_PRINT_MODE) za sve otvorene (nepotpune) palete. Vraca broj
@@ -584,9 +584,9 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC — paletni list dokument preko PaletaSablon (isti pristup kao
+' PUBLIC -- paletni list dokument preko PaletaSablon (isti pristup kao
 ' frmSledljivost.PrintTracePDF: Sablon + named-range fill + Export/Print).
-' PaletaSablon se auto-kreira (EnsurePaletaSablon) i sme da se stilizuje —
+' PaletaSablon se auto-kreira (EnsurePaletaSablon) i sme da se stilizuje --
 ' popunjavanje ide po imenima opsega, ne po poziciji.
 ' ============================================================
 
@@ -914,7 +914,7 @@ Public Function FindPaletaIDByBroj(ByVal broj As Long, ByVal god As Long) As Str
 End Function
 
 ' ============================================================
-' PRIVATE — paleta lifecycle + lookup + util
+' PRIVATE -- paleta lifecycle + lookup + util
 ' ============================================================
 
 ' ============================================================
@@ -1589,7 +1589,7 @@ Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
 End Function
 
 ' ============================================================
-' PRERADA (preradni list) — palete -> kutije/kese.
+' PRERADA (preradni list) -- palete -> kutije/kese.
 ' Palete se markiraju Preradjeno=Da i izlaze iz lagera. Sopstveni broj
 ' 1..n po godini; PDF preko PreradaSablon (isti stil). Bez kalo racunice.
 ' ============================================================

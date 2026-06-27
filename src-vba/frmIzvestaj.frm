@@ -18,8 +18,8 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmIzvestaj v2.1 – Reporting
-' GEÄNDERT: tblIsporuka ? tblPrijemnica
+' frmIzvestaj v2.1 - Reporting
+' GEAeNDERT: tblIsporuka ? tblPrijemnica
 ' NEU: Manjak-Tab (Page 6)
 ' Tabs: Saldo | Otkupljena roba | Primljena ambalaza |
 '       Isplata | Zbirni po OM | Prosecna cena | Manjak
@@ -79,7 +79,7 @@ Private Sub UserForm_Activate()
 
     m_IsInitializing = True
     
-    ' Header zone (dodati u Designer ako nemaš)
+    ' Header zone (dodati u Designer ako nemas)
     On Error Resume Next
     StyleFrameTitleLabel lblKopf, Poruka("RPT_LBL_IZVESTAJI")
     StyleSubtitle lblSubtitle, Poruka("RPT_LBL_PREGLED_SALDO_OTKUPLJENE")
@@ -201,7 +201,7 @@ CleanFail:
     Resume CleanExit
 End Sub
 
-' === Toggle styling — inline u frmIzvestaj ===
+' === Toggle styling -- inline u frmIzvestaj ===
 
 Private Sub StyleToggleActive(ByVal tgl As MSForms.ToggleButton, ByVal lbl As String)
     On Error Resume Next
@@ -800,7 +800,7 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
 End Sub
 
 ' ============================================================
-' AMBALAZA (unverändert)
+' AMBALAZA (unveraendert)
 ' ============================================================
 
 Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID As String, _
@@ -839,7 +839,7 @@ Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID A
 End Sub
 
 ' ============================================================
-' ISPLATA (unverändert)
+' ISPLATA (unveraendert)
 ' ============================================================
 
 Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As String, _
@@ -864,7 +864,7 @@ Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As
 End Sub
 
 ' ============================================================
-' ZBIRNI PO OM (unverändert)
+' ZBIRNI PO OM (unveraendert)
 ' ============================================================
 
 Private Sub GenerateZbirniReport(ByVal datumOd As Date, ByVal datumDo As Date, _

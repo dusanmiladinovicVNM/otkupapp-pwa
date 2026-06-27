@@ -4,7 +4,7 @@ Attribute VB_Name = "modAmbalaza"
 Option Explicit
 
 ' ============================================================
-' modAmbalaza v2.2 – Verpackung-Tracking / Ambalaza ledger
+' modAmbalaza v2.2 - Verpackung-Tracking / Ambalaza ledger
 '
 ' v2.2 hardening:
 ' - TrackAmbalaza fail-fast validation
@@ -597,7 +597,7 @@ End Function
 '
 ' Vraca tipove koje je kupac uneo u tblTipAmbalaze (maticni podaci).
 ' Fallback na ugradjene konstante (12/1, 6/1) ako je sifarnik prazan
-' ili tabela ne postoji — da postojece instalacije ne ostanu bez opcija.
+' ili tabela ne postoji -- da postojece instalacije ne ostanu bez opcija.
 ' ============================================================
 Public Function GetTipAmbalazeOptions() As Variant
     On Error GoTo Fallback

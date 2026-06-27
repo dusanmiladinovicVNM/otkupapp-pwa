@@ -2,7 +2,7 @@ Attribute VB_Name = "modBankaImport"
 Option Explicit
 
 ' ============================================================
-' PATCH: Option B — deferred file moves after batch commit
+' PATCH: Option B -- deferred file moves after batch commit
 ' File: src-vba/modBankaImport.bas
 '
 ' Intent:
@@ -707,7 +707,7 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-' helper jer je GetFileNameFromPath u modBankaImport private — kopija
+' helper jer je GetFileNameFromPath u modBankaImport private -- kopija
 Private Function GetFileNameFromPath2(ByVal filePath As String) As String
     Dim p As Long
     p = InStrRev(filePath, "\")

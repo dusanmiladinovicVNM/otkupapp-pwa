@@ -11,7 +11,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' clsLookupMenuBtn – Event-omotac za dinamicki kreirano dugme
+' clsLookupMenuBtn - Event-omotac za dinamicki kreirano dugme
 ' menija "Maticni podaci" (vidi modMaticniLookups).
 '
 ' Dugmad menija se prave u kodu (Controls.Add) da se NE bi dirao

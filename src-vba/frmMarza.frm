@@ -17,9 +17,9 @@ Attribute VB_Exposed = False
 Option Explicit
 
 ' ============================================================
-' frmMarza v2.1 – Margenberechnung
-' GEÄNDERT: tblIsporuka ? tblPrijemnica
-' Verkaufsseite = Prijemnica.Kolicina × Prijemnica.Cena
+' frmMarza v2.1 - Margenberechnung
+' GEAeNDERT: tblIsporuka ? tblPrijemnica
+' Verkaufsseite = Prijemnica.Kolicina x Prijemnica.Cena
 ' VrstaVoca-Lookup: Prijemnica.BrojZbirne ? Otpremnica.VrstaVoca
 ' ============================================================
 

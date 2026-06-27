@@ -3,14 +3,14 @@ Attribute VB_Name = "modKarticaDetalji"
 Option Explicit
 
 ' ============================================================
-' modKarticaDetalji — read-only panel "Detalji otkupa" uz karticu
+' modKarticaDetalji -- read-only panel "Detalji otkupa" uz karticu
 ' kooperanta (frmIzvestaj, Page 8 / lstKartica).
 '
 ' Klik na red kartice prikazuje SVE bitne stavke izabranog otkupnog
-' lista (polja koja se unose u frmOtkup) u listi DESNO — samo pregled
+' lista (polja koja se unose u frmOtkup) u listi DESNO -- samo pregled
 ' ("ne za izmenu, samo za pregled"); ListBox po prirodi nije editabilan.
 '
-' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica —
+' Kontrole su dinamicke (Controls.Add u ISTI container kao lstKartica --
 ' lstKartica.Parent.Controls, kao frmDokumenta), frmIzvestaj.frx se NE
 ' dira (CLAUDE.md). Ref-kljuc reda se nosi u skrivenoj koloni lstKartica
 ' (idx 7, vidi frmIzvestaj.SetupListBoxes): "OTK|<OtkupID>" / "NOV" / "MAG".
@@ -51,7 +51,7 @@ Public Sub KarticaDetalji_Ensure(ByVal frm As Object, ByVal lstKartica As MSForm
     If mBuilt Then Exit Sub
     If lstKartica Is Nothing Then Exit Sub
 
-    ' Kontrole se prave NA FORMI (frm.Controls.Add — proveren obrazac, modOtkupBlok)
+    ' Kontrole se prave NA FORMI (frm.Controls.Add -- proveren obrazac, modOtkupBlok)
     ' i pozicioniraju forma-relativnim koordinatama (frm.InsideWidth/Height) tako da
     ' NE mogu da budu van ekrana. ZOrder ih dize u prvi plan (preko MultiPage-a).
     ' SetVisible ih krije van kartice (mFormLevel=True).

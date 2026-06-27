@@ -66,7 +66,7 @@ Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
 
     Dim stavke As New Collection
 
-    ' Namerno pogrešni caller payload.
+    ' Namerno pogreL^ni caller payload.
     ' CreateFaktura sme da koristi samo stavka(0) = PrijemnicaID.
     stavke.Add Array(prijemnicaID, 9999#, 9999#, "BAD-KLASA", "BAD-BROJ")
 

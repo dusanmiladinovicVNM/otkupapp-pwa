@@ -21,13 +21,13 @@ Private Const OL_TOP_MARGIN_TRIM_PT As Double = 0#
 Private m_izdAmbPrijem As Boolean
 
 ' ============================================================
-' modPrint – Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
+' modPrint - Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
 ' ============================================================
 
 Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
                          ByVal headers As Variant)
     ' Generischer Report-Druck
-    ' Schreibt in ein temporäres Print-Sheet und druckt
+    ' Schreibt in ein temporaeres Print-Sheet und druckt
     
     Dim wsPrint As Worksheet
     On Error Resume Next
@@ -59,7 +59,7 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
                                           Quality:=xlQualityStandard, OpenAfterPublish:=True
     On Error GoTo 0
     
-    ' Aufräumen
+    ' Aufraeumen
     wsPrint.Visible = xlSheetVeryHidden
 End Sub
 
@@ -264,7 +264,7 @@ Private Function OtpN(ByVal d As Variant, ByVal r As Long, ByVal colName As Stri
 End Function
 
 ' ============================================================
-' OTKUPNI LIST (zakonski) — OtkupSablon, dva primerka jedan iznad drugog,
+' OTKUPNI LIST (zakonski) -- OtkupSablon, dva primerka jedan iznad drugog,
 ' A4 portrait. PDV nadoknada se racuna (CFG_PDV_NADOKNADA_STOPA, default 8%).
 ' Izlaz po CFG_OTKUP_PRINT_MODE: (prazno/PDF) | PRINT | PREVIEW | OFF.
 ' otkupIDs = rezultat SaveOtkupMulti_TX (npr. "OTK-1 + OTK-2" ili "OTK-1").
@@ -1098,9 +1098,9 @@ EH:
 End Sub
 
 ' ============================================================
-' PRIJEMNICA — PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
+' PRIJEMNICA -- PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
 ' hladnjacu). Izlaz po CFG_PRIJEMNICA_PRINT_MODE: OFF/prazno (DEFAULT, bez
-' izlaza — kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
+' izlaza -- kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
 ' frmDokumenta.btnUnosPrij posle snimanja. prijemnicaIDs = rezultat
 ' SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2" za dve klase).
 ' ============================================================

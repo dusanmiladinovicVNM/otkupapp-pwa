@@ -15,7 +15,7 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 
 ' ============================================================
-' frmOtkupniBlokovi – Sledljivost & Povezivanje
+' frmOtkupniBlokovi - Sledljivost & Povezivanje
 ' ============================================================
 Option Explicit
 
@@ -309,7 +309,7 @@ EH:
 End Sub
 
 ' ============================================================
-' NEPOVEZANI (Unverknüpfte Otkupi)
+' NEPOVEZANI (Unverknuepfte Otkupi)
 ' ============================================================
 
 Private Sub LoadNepovezani()
@@ -345,7 +345,7 @@ Private Sub LoadNepovezani()
 End Sub
 
 Private Sub lstNepovezani_Click()
-    ' Zeige mögliche Otpremnice für ausgewählten Otkup
+    ' Zeige moegliche Otpremnice fuer ausgewaehlten Otkup
     LstOtpremnice.Clear
     Erase m_CandidateOtpIDs
     
@@ -357,7 +357,7 @@ Private Sub lstNepovezani_Click()
     Dim stanicaID As String: stanicaID = CStr(m_UnlinkedData(idx, 3))
     Dim datum As Date: datum = CDate(m_UnlinkedData(idx, 2))
     
-    ' Alle Otpremnice für diese Station + Datum
+    ' Alle Otpremnice fuer diese Station + Datum
     Dim otpData As Variant
     otpData = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(otpData) Then Exit Sub
@@ -408,7 +408,7 @@ Private Sub lstNepovezani_Click()
 End Sub
 
 ' ============================================================
-' MANUELLES VERKNÜPFEN
+' MANUELLES VERKNUePFEN
 ' ============================================================
 
 Private Sub btnPovezi_Click()
@@ -492,7 +492,7 @@ EH:
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)
-    ' Template Sheet prüfen
+    ' Template Sheet pruefen
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
@@ -547,7 +547,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim kupacNaziv As String
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
     
-    ' Header befüllen
+    ' Header befuellen
     Application.ScreenUpdating = False
     
     ws.Range("LOTBroj").value = brojZbirne
@@ -558,7 +558,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     
     Const NUM_COLS As Long = 12      ' <-- war 10, jetzt 12
     
-    ' Alte Daten löschen
+    ' Alte Daten loeschen
     Dim startRow As Long
     startRow = ws.Range("TraceStart").row
     Dim lastRow As Long
@@ -568,12 +568,12 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
         ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
     End If
     
-    ' Text-Format für BPG + KatParcela + KatBroj(Parcela)
+    ' Text-Format fuer BPG + KatParcela + KatBroj(Parcela)
     ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 50, 4)).NumberFormat = "@"
     
     
     
-    ' Trace-Zeilen einfügen
+    ' Trace-Zeilen einfuegen
     Dim totalOtkupKg As Double
     Dim i As Long
     For i = 1 To UBound(traceData, 1)

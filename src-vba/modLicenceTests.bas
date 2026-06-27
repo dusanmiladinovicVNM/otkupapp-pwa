@@ -3,12 +3,12 @@ Attribute VB_Name = "modLicenceTests"
 Option Explicit
 
 ' ============================================================
-' modLicenseTests — unit testovi za cistu logiku modLicense.
+' modLicenseTests -- unit testovi za cistu logiku modLicense.
 '
 ' Pokreni: Alt+F8 -> TestLicense_All  (rezultati u Immediate / Ctrl+G)
 '
 ' Testira fuzzy-match logiku otiska (LicSplitParts / LicPartsMatch /
-' LicNonEmptyParts) koja odlucuje da li je masina "ista" — to je deo gde
+' LicNonEmptyParts) koja odlucuje da li je masina "ista" -- to je deo gde
 ' off-by-one greska direktno znaci lazni lockout ili rupu. Mrezni put i
 ' GAS bind se testiraju server-side: gas/Code.gs -> runLicenseSelfTest.
 ' ============================================================
@@ -35,7 +35,7 @@ End Sub
 
 ' LicSplitParts uvek mora da vrati >= 3 elementa (stiti od index out of range).
 Public Sub TestLicense_SplitParts()
-    Debug.Print vbCrLf & "[1] LicSplitParts — padding na 3"
+    Debug.Print vbCrLf & "[1] LicSplitParts -- padding na 3"
     Dim p() As String
 
     p = LicSplitParts("A|B|C")
@@ -55,7 +55,7 @@ End Sub
 
 ' Srce fuzzy matcha: koliko se od 3 komponente poklapa.
 Public Sub TestLicense_PartsMatch()
-    Debug.Print vbCrLf & "[2] LicPartsMatch — broj poklapanja"
+    Debug.Print vbCrLf & "[2] LicPartsMatch -- broj poklapanja"
 
     AssertEq "identicno = 3", LicPartsMatch("A|B|C", "A|B|C"), 3
     AssertEq "2 od 3 (drift) = 2", LicPartsMatch("A|B|C", "A|B|Z"), 2
@@ -72,7 +72,7 @@ End Sub
 
 ' Koliko ne-praznih komponenti imamo (otisak slabiji od 2 => preskoci proveru).
 Public Sub TestLicense_NonEmptyParts()
-    Debug.Print vbCrLf & "[3] LicNonEmptyParts — ne-prazne komponente"
+    Debug.Print vbCrLf & "[3] LicNonEmptyParts -- ne-prazne komponente"
 
     AssertEq "sve tri", LicNonEmptyParts("A|B|C"), 3
     AssertEq "dve", LicNonEmptyParts("A||C"), 2
