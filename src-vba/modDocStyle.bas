@@ -161,3 +161,32 @@ Public Sub DocExportPdf(ByVal ws As Worksheet, ByVal pdfPath As String, _
                            IncludeDocProperties:=False, OpenAfterPublish:=openAfter
 End Sub
 
+' ------------------------------------------------------------
+' PageSetup za 1/3-A4 obrasce sa dva primerka (otkupni / grupni /
+' otpremnica / revers ambalaze). Stampa 1:1 (Zoom=100, sve margine 0
+' osim 0.31" levo/desno) tako da eksplicitne visine redova padaju tacno
+' na 99mm/198mm perforacije. PrintArea = A1:H<lastRow> (8 kolona).
+' On Error + PrintCommunication=False: brz batch upis, radi i bez stampaca.
+' Geometrija je deljena -> svi 1/3-A4 obrasci se menjaju na jednom mestu.
+' ------------------------------------------------------------
+Public Sub DocPageSetupThirdA4(ByVal ws As Worksheet, ByVal lastRow As Long)
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = 100
+        .LeftMargin = Application.InchesToPoints(0.31)
+        .RightMargin = Application.InchesToPoints(0.31)
+        .TopMargin = 0
+        .BottomMargin = 0
+        .HeaderMargin = 0
+        .FooterMargin = 0
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+End Sub
+

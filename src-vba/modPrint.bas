@@ -210,24 +210,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     R0 = WriteOtkupCopy(ws, 1, "", h, stavke, cnt, OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteOtkupCopy(ws, R0, "", h, stavke, cnt, OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillOtpremnicaSablon = ws
@@ -527,24 +510,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     lastRow = WriteOtkupCopy(ws, R0, "Primerak za otkupljivaca", h, stavke, cnt, _
                              OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100                       ' fiksna skala 1:1 -> visine redova u mm su tacne
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0                    ' primerak 1 pocinje na vrhu lista (gornji red je prazan spacer)
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillOtkupSablon = ws
@@ -1043,24 +1009,7 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     R0 = WriteOtkupCopy(ws, 1, "", h, stavke, cnt, OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteOtkupCopy(ws, R0, "", h, stavke, cnt, OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillGrupniOtkupSablon = ws
@@ -1554,24 +1503,7 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
                             OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteIzdavanjeCopy(ws, R0, "Primerak: kooperant", h, OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100                       ' 1:1 -> visine redova u mm su tacne
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0                    ' primerak 1 pocinje na vrhu (gornji red je spacer)
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillIzdavanjeAmbalazeSablon = ws
