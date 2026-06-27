@@ -865,6 +865,69 @@ End Function
 ' PRIVATE — paleta lifecycle + lookup + util
 ' ============================================================
 
+' ============================================================
+' PUBLIC - info za frmOtkup: koliko gajbi jos treba da se zatvori AKTIVNA
+' (otvorena) paleta za dati proizvod/klasu. Read-only: NE kreira paletu.
+' Vraca "" ako je paletiranje iskljuceno ili nema otvorene palete.
+' tipAmb (opciono) suzava na konkretan tip ambalaze; prazno = bilo koji.
+Public Function GajbeDoZatvaranjaPaleteInfo(ByVal vrstaVoca As String, _
+                                            ByVal sortaVoca As String, _
+                                            ByVal klasa As String, _
+                                            Optional ByVal tipAmb As String = "") As String
+    On Error GoTo EH
+    If Not IsPaletiranjeEnabled() Then Exit Function
+    If Len(Trim$(vrstaVoca)) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_PALETA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim iVrsta As Long, iSorta As Long, iKlasa As Long, iTipAmb As Long
+    Dim iStatus As Long, iStorno As Long, iPre As Long
+    Dim iGajb As Long, iKap As Long, iBroj As Long, iGod As Long
+    iVrsta = GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA)
+    iSorta = GetColumnIndex(TBL_PALETA, COL_PAL_SORTA)
+    iKlasa = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
+    iTipAmb = GetColumnIndex(TBL_PALETA, COL_PAL_TIP_AMBALAZE)
+    iStatus = GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)
+    iStorno = GetColumnIndex(TBL_PALETA, COL_STORNIRANO)
+    iPre = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+    iGajb = GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)
+    iKap = GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)
+    iBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+    iGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        If CStr(data(r, iVrsta)) = vrstaVoca _
+           And CStr(SafeCell(data, r, iSorta)) = sortaVoca _
+           And CStr(SafeCell(data, r, iKlasa)) = klasa _
+           And CStr(data(r, iStatus)) = PAL_STATUS_OTVORENA _
+           And UCase$(CStr(data(r, iStorno))) <> "DA" _
+           And UCase$(Trim$(CStr(SafeCell(data, r, iPre)))) <> "DA" Then
+
+            If Len(Trim$(tipAmb)) = 0 Or CStr(SafeCell(data, r, iTipAmb)) = tipAmb Then
+                Dim used As Long, cap As Long, ostatak As Long
+                used = NzL(SafeCell(data, r, iGajb))
+                cap = NzL(SafeCell(data, r, iKap))
+                If cap <= 0 Then cap = GetKapacitetPalete(vrstaVoca)
+                ostatak = cap - used
+                If ostatak < 0 Then ostatak = 0
+
+                GajbeDoZatvaranjaPaleteInfo = "Paleta br. " & _
+                    CStr(NzL(SafeCell(data, r, iBroj))) & "/" & _
+                    CStr(NzL(SafeCell(data, r, iGod))) & ": jos " & _
+                    CStr(ostatak) & " gajbi do zatvaranja (" & _
+                    CStr(used) & "/" & CStr(cap) & ")"
+                Exit Function
+            End If
+        End If
+    Next r
+    Exit Function
+EH:
+    LogErr "modPaletniList.GajbeDoZatvaranjaPaleteInfo"
+End Function
+
 ' Vraca PaletaID otvorene palete za vrstu voca (i njen rowIndex preko
 ' outRow); ako je nema, kreira novu i vraca nju.
 ' Vraca PaletaID otvorene palete iste vrste/sorte/klase/tipa ambalaze (i njen

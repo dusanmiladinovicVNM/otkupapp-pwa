@@ -33,6 +33,9 @@ Private m_txtAmbIzdata As MSForms.TextBox
 Private m_txtKolAmbalazeII As MSForms.TextBox
 Private m_kolAmbFullWidth As Single
 
+' Runtime labela "Gajbe do zatvaranja aktivne palete" (info; .frx se ne dira).
+Private m_lblPaletaInfo As MSForms.label
+
 Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 End Sub
@@ -104,6 +107,10 @@ Private Sub UserForm_Initialize()
     ' Runtime polje "Kol. ambalaze (II)" za Klasu II (ne dira .frx; skriveno dok
     ' chkDveKlase nije ukljucen).
     SetupKolAmbalazeIIField
+
+    ' Runtime labela: gajbe do zatvaranja aktivne palete (info; .frx se ne dira).
+    SetupPaletaInfoField
+    UpdatePaletaInfo
 End Sub
 
 ' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
@@ -289,6 +296,7 @@ Private Sub chkDveKlase_Click()
         DisableField txtCenaKLII
         ShowKolAmbalazeII False
         lblUkupnoKG.caption = ""
+        UpdatePaletaInfo
     End If
 End Sub
 
@@ -394,6 +402,67 @@ Private Sub AutoFillCenaOtkup()
     Dim ta As String
     ta = GetKulturaTipAmbalaze(vrsta, sorta)
     If Len(ta) > 0 Then cmbTipAmbalaze.value = ta
+
+    UpdatePaletaInfo
+End Sub
+
+' Runtime labela "gajbe do zatvaranja aktivne palete": meri poziciju iz
+' lblUkupnoKG (forme se renderuju samo u Excelu; .frx se ne dira).
+Private Sub SetupPaletaInfoField()
+    On Error GoTo done
+    If Not m_lblPaletaInfo Is Nothing Then Exit Sub
+
+    Set m_lblPaletaInfo = Me.Controls.Add("Forms.Label.1", "lblPaletaInfoRT", True)
+    With m_lblPaletaInfo
+        .Left = lblUkupnoKG.Left
+        .top = lblUkupnoKG.top + lblUkupnoKG.Height + 2
+        .width = lblUkupnoKG.width
+        If .width < 220 Then .width = 220
+        .Height = 26
+        .WordWrap = True
+        .caption = ""
+    End With
+    On Error Resume Next
+    StyleLabel m_lblPaletaInfo, TXT_MUTED, False
+    On Error GoTo done
+    Exit Sub
+done:
+    LogErr "frmOtkup.SetupPaletaInfoField"
+    Set m_lblPaletaInfo = Nothing
+End Sub
+
+' Osvezi info koliko gajbi treba da se zatvori aktivna paleta za trenutno
+' izabranu vrstu/sortu. Klasa I uvek; Klasa II kad je chkDveKlase ON.
+Private Sub UpdatePaletaInfo()
+    On Error GoTo EH
+    If m_lblPaletaInfo Is Nothing Then Exit Sub
+
+    Dim vrsta As String, sorta As String
+    vrsta = Trim$(cmbVrstaVoca.value)
+    sorta = Trim$(cmbSortaVoca.value)
+    If Len(vrsta) = 0 Then
+        m_lblPaletaInfo.caption = ""
+        Exit Sub
+    End If
+
+    Dim info As String
+    info = GajbeDoZatvaranjaPaleteInfo(vrsta, sorta, KLASA_I)
+    If chkDveKlase.value Then
+        Dim info2 As String
+        info2 = GajbeDoZatvaranjaPaleteInfo(vrsta, sorta, KLASA_II)
+        If Len(info2) > 0 Then
+            If Len(info) > 0 Then
+                info = info & vbCrLf & "II: " & info2
+            Else
+                info = "II: " & info2
+            End If
+        End If
+    End If
+
+    m_lblPaletaInfo.caption = info
+    Exit Sub
+EH:
+    LogErr "frmOtkup.UpdatePaletaInfo"
 End Sub
 
 Private Sub cmbOtkupnoMesto_Change()
@@ -974,6 +1043,13 @@ Private Sub ClearOtkupFields()
     DisableField txtCenaKLII
     ShowKolAmbalazeII False
     lblUkupnoKG.caption = ""
+
+    ' Auto-cena/tip se gube posle prvog unosa (txtCena ocisceno, a vrsta/sorta
+    ' combo nije menjan pa _Change ne okida). Vrati ih za jos izabran proizvod.
+    ' (AutoFillCenaOtkup osvezava i info o aktivnoj paleti.)
+    On Error Resume Next
+    AutoFillCenaOtkup
+    On Error GoTo 0
 
     txtKolicina.SetFocus
 

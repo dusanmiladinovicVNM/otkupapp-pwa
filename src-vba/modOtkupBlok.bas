@@ -75,6 +75,7 @@ Private mLblPreostalo As MSForms.label
 Private mLblUkupnoAmb As MSForms.label
 Private mLblNapisanoAmb As MSForms.label
 Private mLblPreostaloAmb As MSForms.label
+Private mLblZbirna As MSForms.label
 
 ' ============================================================
 ' PUBLIC – ulazna tacka + event ruteri + frmOtkup hooks
@@ -308,6 +309,13 @@ Private Sub BuildPanel()
     Set mLblUkupnoAmb = AddCtl("Label", "lblOtkBlokUkAmb", PANEL_LEFT + 190, 22, 150, 14)
     Set mLblNapisanoAmb = AddCtl("Label", "lblOtkBlokNapAmb", PANEL_LEFT + 346, 22, 150, 14)
     Set mLblPreostaloAmb = AddCtl("Label", "lblOtkBlokPreAmb", PANEL_LEFT + 502, 22, 150, 14)
+    ' Info (#4): broj zbirne za izabranu otpremnicu (azurira RefreshSummary).
+    Set mLblZbirna = AddCtl("Label", "lblOtkBlokZbirna", BLOK_LEFT + 70, 44, 300, 16)
+    On Error Resume Next
+    mLblZbirna.WordWrap = True
+    On Error GoTo 0
+    StyleHdr mLblZbirna
+    mLblZbirna.caption = "Zbirna: -"
     mLblUkupnoAmb.caption = "Ukupno amb: —"
     mLblNapisanoAmb.caption = "U blokovima amb: —"
     mLblPreostaloAmb.caption = "Ostatak amb: —"
@@ -1125,6 +1133,17 @@ End Function
 
 Private Sub RefreshSummary()
     On Error GoTo EH
+
+    If Not mLblZbirna Is Nothing Then
+        If Len(mActiveOtpID) = 0 Then
+            mLblZbirna.caption = "Zbirna: -"
+        Else
+            Dim zbrBroj As String
+            zbrBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_BROJ_ZBIRNE))
+            If Len(Trim$(zbrBroj)) = 0 Then zbrBroj = "(nije vezana)"
+            mLblZbirna.caption = "Zbirna: " & zbrBroj
+        End If
+    End If
 
     If Len(mActiveOtpID) = 0 Then
         mLblUkupno.caption = "Ukupno kg: —"
