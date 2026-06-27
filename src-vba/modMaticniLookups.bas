@@ -41,6 +41,9 @@ Public Function MaticniSekcije() As Variant
         Array("Ambalaza", "TipAmbalaze"), _
         Array("Palete", "TipPalete"), _
         Array("Cenovnik", "Cenovnik"), _
+        Array("Kutije", "Kutije"), _
+        Array("Kese", "Kese"), _
+        Array("Vrsta got. proizvoda", "VrstaGP"), _
         Array("Podešavanja", "Podesavanja"))
 End Function
 
