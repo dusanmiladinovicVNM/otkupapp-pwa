@@ -1126,7 +1126,15 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     pdfPath = EnsureDocFolder(PDF_DIR_KARTICE) & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
     
-    DocExportPdf ws, pdfPath, True
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_KARTICA_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
     
     Application.ScreenUpdating = True
     Exit Sub

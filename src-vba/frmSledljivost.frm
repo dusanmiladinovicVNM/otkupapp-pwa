@@ -669,7 +669,15 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim pdfPath As String
     pdfPath = ThisWorkbook.path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
     
-    DocExportPdf ws, pdfPath, True
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_SLEDLJIVOST_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
     
     Application.ScreenUpdating = True
 End Sub

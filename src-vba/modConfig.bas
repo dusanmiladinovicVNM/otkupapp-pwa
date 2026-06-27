@@ -345,6 +345,11 @@ Public Const CFG_PRIJEMNICA_PRINT_MODE As String = "PRIJEMNICA_PRINT_MODE"
 ' frame-u kad je toggle "Izdavanje kooperantu" aktivan. Default PDF (otvori PDF,
 ' kao OTKUP_PRINT_MODE). PDF | PRINT | PREVIEW | OFF (kao PALETA_PRINT_MODE).
 Public Const CFG_OM_IZDAVANJE_PRINT_MODE As String = "OM_IZDAVANJE_PRINT_MODE"
+' Rucni obrasci (faktura/kartica/sledljivost) - konfigurabilan izlaz (Faza 2B).
+' PDF | PRINT | PREVIEW | OFF; prazno -> default tog dokumenta (DocResolveMode).
+Public Const CFG_FAKTURA_PRINT_MODE As String = "FAKTURA_PRINT_MODE"
+Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
+Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 

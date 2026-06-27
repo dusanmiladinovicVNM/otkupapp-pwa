@@ -537,7 +537,18 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     wsSablon.Range("UkupnoFaktura").value = data(fRow, colFakIznos)
     On Error GoTo EH
 
-    wsSablon.PrintOut Copies:=1
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_FAKTURA_PRINT_MODE), "PRINT")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs wsSablon, mode
+        Case "PDF"
+            Dim fpdf As String
+            fpdf = ThisWorkbook.path & "\Faktura_" & _
+                   Replace(CStr(data(fRow, colFakBroj)), "/", "-") & ".pdf"
+            DocExportPdf wsSablon, fpdf, True
+        ' OFF -> bez izlaza
+    End Select
     Exit Sub
 
 EH:
