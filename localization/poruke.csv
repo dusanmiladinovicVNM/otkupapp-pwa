@@ -7,18 +7,14 @@ AGRO_LBL_ZAVRSI_IZDAVANJE;Završi izdavanje;frmAgrohemija.frm;64;DA;;Koristi se 
 AGRO_LBL_ZAVRSI_PRIJEM;Završi prijem;frmAgrohemija.frm;68;DA;;Koristi se i u: frmAgrohemija.frm:1004
 AGRO_LBL_POPUNI_PAKOVANJE_FIELD;Popuni 'Pakovanje' field u tblArtikli pre korišcenja.;frmAgrohemija.frm;235;DA;;Koristi se i u: frmAgrohemija.frm:369
 AGRO_MSG_POKUSAVATE_DODATI;Pokušavate dodati: ;frmAgrohemija.frm;396;DA;;
-UI_SEPARATOR_EMDASH_SPACE; — ;frmAgrohemija.frm;425;DA;;Koristi se i u: frmBankaExportPregled.frm:301
 AGRO_MSG_IZDAVANJE_ZAVRSENO;Izdavanje završeno: ;frmAgrohemija.frm;510;DA;;
 AGRO_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju izdavanja, promene vracene: ;frmAgrohemija.frm;534;DA;;
 AGRO_MSG_PRIJEM_ZAVRSEN;Prijem završen: ;frmAgrohemija.frm;723;DA;;
 AGRO_MSG_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju prijema, promene vracene: ;frmAgrohemija.frm;746;DA;;
-UI_SEPARATOR_EMDASH;—;frmAgrohemija.frm;917;DA;;Koristi se i u: frmAgrohemija.frm:956, frmBankaExportPregled.frm:182, frmOtkupAPP.frm:1157
-UI_PLACEHOLDER_NEDOSTAJE;—nedostaje—;frmBankaExportPregled.frm;315;DA;;
 BANKA_LBL_GENERISI_CSV_COMMIT;Generiši CSV (Commit 3);frmBankaExportPregled.frm;610;DA;;
 BANKA_LBL_UVOZ_TRANSAKCIJA_BANKARSKIH;Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere;frmBankaImport.frm;33;DA;;
 DOK_LBL_OPERATIVNI_UNOS_DOKUMENATA;Operativni unos dokumenata, ambalaže i novca;frmDokumenta.frm;179;DA;;
 DOK_ERR_GRESKA_PRI_OTVARANJU;Greška pri otvaranju dokumenata: ;frmDokumenta.frm;231;DA;;
-UI_SEPARATOR_BULLET;  •  ;frmDokumenta.frm;408;DA;;Koristi se i u: frmDokumenta.frm:2287
 DOK_MSG_UNOSI_SAMO_KLASA;Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.;frmDokumenta.frm;677;DA;;Koristi se i u: frmDokumenta.frm:1669, frmDokumenta.frm:1968, frmOtkup.frm:777
 DOK_MSG_UNESITE_ISPRAVNU_KOLICINU;Unesite ispravnu kolicinu ambalaže!;frmDokumenta.frm;696;DA;;Koristi se i u: frmDokumenta.frm:1401, frmDokumenta.frm:1688, frmDokumenta.frm:1987, frmDokumenta.frm:2369, frmOtkup.frm:804
 DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2;Unesite ispravnu kolicinu ambalaže za II klasu!;frmDokumenta.frm;706;DA;;Koristi se i u: frmDokumenta.frm:1698, frmDokumenta.frm:2006, frmOtkup.frm:814
@@ -161,9 +157,6 @@ SETUP_MSG_APLIKACIJA_RADI_LOKALNO;Aplikacija radi lokalno — Google/PWA se ne k
 SETUP_MSG_BANKARSKI_FOLDERI_PODESENI;Bankarski folderi su podešeni.;modSetup.bas;246;DA;;
 SETUP_ERR_GRESKA_PRI_PODESAVANJU;Greška pri podešavanju bankarskih foldera: ;modSetup.bas;251;DA;;
 STM_ERR_GRESKA_PRI_EXPORTU;Greška pri exportu parcela: ;modStammdatenSync.bas;1638;DA;;
-AGRO_ERR_GRESKA_PRI_CUVANJU;Greška pri cuvanju izlaza. ArtikalID=;frmAgrohemija.frm;501;DA;;
-AGRO_ERR_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju ulaza. ArtikalID=;frmAgrohemija.frm;714;DA;;
-AGRO_ERR_KORPA_SADRZI_STAVKU;Korpa sadrži stavku bez ArtikalID.;frmAgrohemija.frm;812;DA;;
 DOK_ERR_NEMA_AMBALAZE_NOVCA;Nema ambalaže ni novca za cuvanje.;frmDokumenta.frm;1143;DA;;Koristi se i u: modDokumenta.bas:1249
 SEF_MSG_SENDING_FAKTURA_TRENUTNO;- SENDING: Faktura se trenutno šalje.;frmSEF.frm;674;DA;;
 SEF_MSG_SENT_FAKTURA_USPESNO;- SENT: Faktura uspešno primljena na SEF.;frmSEF.frm;675;DA;;
@@ -180,19 +173,11 @@ STM_MSG_GRESKA_PRI_BRISANJU;Greška pri brisanju geo podataka. Pogledaj log.;frm
 STM_MSG_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju koordinata. Pogledaj log.;frmStammdaten.frm;2572;DA;;
 STM_MSG_GRESKA_PRI_OTVARANJU_2;Greška pri otvaranju Google Maps. Pogledaj log.;frmStammdaten.frm;2623;DA;;
 STM_MSG_GRESKA_PRI_OTVARANJU_3;Greška pri otvaranju polygon editora. Pogledaj log.;frmStammdaten.frm;2685;DA;;
-DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow nije uspeo za tblOtpremnica;modDokumenta.bas;263;DA;AppendRow fehlgeschlagen für tblOtpremnica;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow nije uspeo za tblZbirna.;modDokumenta.bas;592;DA;AppendRow fehlgeschlagen für tblZbirna.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_3;AppendRow nije uspeo za tblPrijemnica.;modDokumenta.bas;1081;DA;AppendRow fehlgeschlagen für tblPrijemnica.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow nije uspeo za tblFakture.;modFaktura.bas;286;DA;AppendRow fehlgeschlagen für tblFakture.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow nije uspeo za tblFakturaStavke.;modFaktura.bas;318;DA;AppendRow fehlgeschlagen für tblFakturaStavke.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
 FAK_ERR_STORNIRANA_FAKTURA_MOZE;Stornirana faktura se ne može štampati kao aktivna faktura: ;modFaktura.bas;437;DA;;
-LOG_MSG_EINTRAGE_EXCEL_HAT; stavki, Excel ima ;modJournaling.bas;221;DA; Einträge, Excel hat ;"[PREVESTI (Einträge→stavki/redova; hat→ima; Excel→Excel)]"
-LOG_MSG_MOGLICHER_DATENVERLUST_NACH;Mogući gubitak podataka posle pada aplikacije!;modJournaling.bas;222;DA;Möglicher Datenverlust nach Absturz!;"[PREVESTI (Möglicher→moguc; Datenverlust→gubitak podataka; Absturz→pad aplikacije; nach→posle)]"
 LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE;Server nedostupan — offline grace (masina je vezana).;modLicense.bas;216;DA;;
 LIC_MSG_PROPUSTAM_VEZANU_MASINU;' — propustam vezanu masinu.;modLicense.bas;267;DA;;
 MATICNI_MSG_PODESAVANJA;Podešavanja;modMaticniLookups.bas;47;DA;;
 MONITO_ERR_NAMERNO_TESTIRANA_VBA;Namerno testirana VBA greška bez sensitive podataka;modMonitoringTests.bas;54;DA;;
-OTKUP_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow nije uspeo za tblOtkup.;modOtkup.bas;499;DA;AppendRow fehlgeschlagen für tblOtkup.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
 CFG_MSG_STAMPA_OTKUPNOG_LISTA;Štampa otkupnog lista;modPodesavanja.bas;91;DA;;
 CFG_MSG_STAMPA_PALETNOG_LISTA;Štampa paletnog lista;modPodesavanja.bas;92;DA;;
 CFG_MSG_STAMPA_PRIJEMNICE_AUTO;Štampa prijemnice (auto na unos);modPodesavanja.bas;93;DA;;

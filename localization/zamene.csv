@@ -8,26 +8,16 @@ frmAgrohemija.frm;68;"""Završi prijem""";"Poruka(""AGRO_LBL_ZAVRSI_PRIJEM"")"; 
 frmAgrohemija.frm;235;"""Popuni 'Pakovanje' field u tblArtikli pre korišcenja.""";"Poruka(""AGRO_LBL_POPUNI_PAKOVANJE_FIELD"")";"CONCAT: lblPreporuka.caption = ""Greska: artikal nema definisano Pakovanje. "" & ""Popuni 'Pakovanje' field u t"
 frmAgrohemija.frm;369;"""Popuni 'Pakovanje' field u tblArtikli pre korišcenja.""";"Poruka(""AGRO_LBL_POPUNI_PAKOVANJE_FIELD"")";"CONCAT: MsgBox ""Artikal '"" & artNaziv & ""' nema definisano Pakovanje."" & vbCrLf & ""Popuni 'Pakovanje' field "
 frmAgrohemija.frm;396;"""Pokušavate dodati: """;"Poruka(""AGRO_MSG_POKUSAVATE_DODATI"")";"CONCAT: MsgBox ""Nedovoljno stanje za artikal!"" & vbCrLf & ""Na stanju: "" & FormatKol(dostupno) & "" "" & jm & v"
-frmAgrohemija.frm;425;""" — """;"Poruka(""UI_SEPARATOR_EMDASH_SPACE"")";"CONCAT: lstKorpa.AddItem artNaziv & "" — "" & brojPakovanja & "" x "" & FormatKol(pakovanje) & "" "" & jm & "" = "" "
-frmAgrohemija.frm;501;"""Greška pri cuvanju izlaza. ArtikalID=""";"Poruka(""AGRO_ERR_GRESKA_PRI_CUVANJU"")";"CONCAT: Err.Raise vbObjectError + 4301, SRC, ""Greška pri cuvanju izlaza. ArtikalID="" & m_KorpaIzlaz(i).artik"
 frmAgrohemija.frm;510;"""Izdavanje završeno: """;"Poruka(""AGRO_MSG_IZDAVANJE_ZAVRSENO"")";"CONCAT: MsgBox ""Izdavanje završeno: "" & brojDok & vbCrLf & m_KorpaIzlazCount & "" stavki"", vbInformation, APP"
 frmAgrohemija.frm;534;"""Greška pri cuvanju izdavanja, promene vracene: """;"Poruka(""AGRO_MSG_GRESKA_PRI_CUVANJU"")";"CONCAT: MsgBox ""Greška pri cuvanju izdavanja, promene vracene: "" & errDesc, vbCritical, APP_NAME"
-frmAgrohemija.frm;714;"""Greška pri cuvanju ulaza. ArtikalID=""";"Poruka(""AGRO_ERR_GRESKA_PRI_CUVANJU_2"")";"CONCAT: Err.Raise vbObjectError + 4311, SRC, ""Greška pri cuvanju ulaza. ArtikalID="" & m_KorpaUlaz(i).artikal"
 frmAgrohemija.frm;723;"""Prijem završen: """;"Poruka(""AGRO_MSG_PRIJEM_ZAVRSEN"")";"CONCAT: MsgBox ""Prijem završen: "" & brojDok & vbCrLf & m_KorpaUlazCount & "" stavki"", vbInformation, APP_NAME"
 frmAgrohemija.frm;746;"""Greška pri cuvanju prijema, promene vracene: """;"Poruka(""AGRO_MSG_GRESKA_PRI_CUVANJU_2"")";"CONCAT: MsgBox ""Greška pri cuvanju prijema, promene vracene: "" & errDesc, vbCritical, APP_NAME"
-frmAgrohemija.frm;812;"""Korpa sadrži stavku bez ArtikalID.""";"Poruka(""AGRO_ERR_KORPA_SADRZI_STAVKU"")";            Err.Raise vbObjectError + 4320, SRC,
-frmAgrohemija.frm;917;"""—""";"Poruka(""UI_SEPARATOR_EMDASH"")";        lblKpiDugValue.caption =
-frmAgrohemija.frm;956;"""—""";"Poruka(""UI_SEPARATOR_EMDASH"")";        lblKpiDPValue.caption =
 frmAgrohemija.frm;1002;"""Završi izdavanje""";"Poruka(""AGRO_LBL_ZAVRSI_IZDAVANJE"")";    StylePrimaryButton btnZavrsiIzlaz,
 frmAgrohemija.frm;1004;"""Završi prijem""";"Poruka(""AGRO_LBL_ZAVRSI_PRIJEM"")";    StylePrimaryButton btnZavrsiUlaz,
-frmBankaExportPregled.frm;182;"""—""";"Poruka(""UI_SEPARATOR_EMDASH"")";"        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, ""OK"","
-frmBankaExportPregled.frm;301;""" — """;"Poruka(""UI_SEPARATOR_EMDASH_SPACE"")";"CONCAT: lblDetailBlok.caption = blk.brojDokumenta & "" — "" & blk.kooperantNaziv"
-frmBankaExportPregled.frm;315;"""—nedostaje—""";"Poruka(""UI_PLACEHOLDER_NEDOSTAJE"")";"CONCAT: lblDetailTR.caption = ""Tek. racun: "" & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, ""—nedostaje—"""
 frmBankaExportPregled.frm;610;"""Generiši CSV (Commit 3)""";"Poruka(""BANKA_LBL_GENERISI_CSV_COMMIT"")";    StylePrimaryButton btnGenerisiCSV,
 frmBankaImport.frm;33;"""Uvoz transakcija iz bankarskih izvoda — mapiranje na partnere""";"Poruka(""BANKA_LBL_UVOZ_TRANSAKCIJA_BANKARSKIH"")";    StyleSubtitle lblSubtitle,
 frmDokumenta.frm;179;"""Operativni unos dokumenata, ambalaže i novca""";"Poruka(""DOK_LBL_OPERATIVNI_UNOS_DOKUMENATA"")";    StyleSubtitle lblSubtitle,
 frmDokumenta.frm;231;"""Greška pri otvaranju dokumenata: """;"Poruka(""DOK_ERR_GRESKA_PRI_OTVARANJU"")";"CONCAT: MsgBox ""Greška pri otvaranju dokumenata: "" & Err.description, vbCritical, APP_NAME"
-frmDokumenta.frm;408;"""  •  """;"Poruka(""UI_SEPARATOR_BULLET"")";"CONCAT: lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & ""  •  "" & Format$(ukupnoRsd, ""#,##0"") & "" RSD"""
 frmDokumenta.frm;677;"""Unosi se samo II klasa: obrišite kolicinu ambalaže za I klasu.""";"Poruka(""DOK_MSG_UNOSI_SAMO_KLASA"")";            MsgBox
 frmDokumenta.frm;696;"""Unesite ispravnu kolicinu ambalaže!""";"Poruka(""DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"")";            MsgBox
 frmDokumenta.frm;706;"""Unesite ispravnu kolicinu ambalaže za II klasu!""";"Poruka(""DOK_MSG_UNESITE_ISPRAVNU_KOLICINU_2"")";                MsgBox
@@ -79,7 +69,6 @@ frmDokumenta.frm;2068;"""Težina ambalaže II klase (""";"Poruka(""DOK_MSG_TEZIN
 frmDokumenta.frm;2069;"""jednaka bruto težini (""";"Poruka(""DOK_MSG_JEDNAKA_BRUTO_TEZINI"")";"CONCAT: MsgBox ""Težina ambalaže II klase ("" & Format$(taraKgII, ""#,##0.00"") & "" kg) je veca ili "" & ""jednaka"
 frmDokumenta.frm;2131;"""Greška pri cuvanju prijemnice. Promene su vracene.""";"Poruka(""DOK_MSG_GRESKA_PRI_CUVANJU_4"")";        MsgBox
 frmDokumenta.frm;2184;"""Greška: """;"Poruka(""DOK_ERR_GRESKA"")";"CONCAT: MsgBox ""Greška: "" & Err.description, vbCritical, APP_NAME"
-frmDokumenta.frm;2287;"""  •  """;"Poruka(""UI_SEPARATOR_BULLET"")";"CONCAT: lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & ""  •  "" & Format$(ukupnoRsd, ""#,##0"") & "" RSD"""
 frmDokumenta.frm;2369;"""Unesite ispravnu kolicinu ambalaže!""";"Poruka(""DOK_MSG_UNESITE_ISPRAVNU_KOLICINU"")";            MsgBox
 frmDokumenta.frm;2385;"""Unesite ambalažu ili uplatu kupca.""";"Poruka(""DOK_MSG_UNESITE_AMBALAZU_ILI_2"")";        MsgBox
 frmDokumenta.frm;2390;"""Izaberite tip ambalaže!""";"Poruka(""DOK_MSG_IZABERITE_TIP_AMBALAZE"")";        MsgBox
@@ -160,7 +149,6 @@ frmOtkupAPP.frm;971;"""Greška pri otvaranju sekcije: """;"Poruka(""OTKUP_LBL_GR
 frmOtkupAPP.frm;976;"""Greška pri otvaranju sekcije '""";"Poruka(""OTKUP_ERR_GRESKA_PRI_OTVARANJU_2"")";"CONCAT: MsgBox ""Greška pri otvaranju sekcije '"" & sectionTitle & ""': "" & Err.description, vbCritical, APP_NA"
 frmOtkupAPP.frm;1091;"""Današnji otkup""";"Poruka(""OTKUP_LBL_DANASNJI_OTKUP"")";        .caption =
 frmOtkupAPP.frm;1151;""" otpremnica  •  """;"Poruka(""OTKUP_LBL_OTPREMNICA"")";"CONCAT: lblKPISub.caption = cntOtp & "" otpremnica  •  "" & cntPrij & "" prijemnica"""
-frmOtkupAPP.frm;1157;"""—""";"Poruka(""UI_SEPARATOR_EMDASH"")";    lblKPIValue.caption =
 frmPalete.frm;93;"""Pregled paleta, štampa i prerada""";"Poruka(""PAL_LBL_PREGLED_PALETA_STAMPA"")";    StyleSubtitle lblSubtitle,
 frmSEF.frm;89;"""Pošalji na SEF""";"Poruka(""SEF_LBL_POSALJI_SEF"")";    StylePrimaryButton btnPosalji,
 frmSEF.frm;90;"""Osveži status""";"Poruka(""SEF_LBL_OSVEZI_STATUS"")";    StylePrimaryButton btnOsvezi,
@@ -216,16 +204,9 @@ frmStammdaten.frm;2717;"""Obriši geo""";"Poruka(""STM_LBL_OBRISI_GEO"")";    bt
 frmStammdaten.frm;2851;"""Greška pri ucitavanju stanica: """;"Poruka(""STM_ERR_GRESKA_PRI_UCITAVANJU_2"")";"CONCAT: MsgBox ""Greška pri ucitavanju stanica: "" & Err.description, vbCritical, APP_NAME"
 modAgrohemija.bas;245;"""Greška pri unosu magacina, promene vracene: """;"Poruka(""AGRO_MSG_GRESKA_PRI_UNOSU"")";"CONCAT: MsgBox ""Greška pri unosu magacina, promene vracene: "" & errDesc, vbCritical, APP_NAME"
 modBankaImportParserPdfToText.bas;267;"""PDF auswählen""";"Poruka(""BANKA_LBL_PDF_AUSWAHLEN"")";        .title =
-modDokumenta.bas;263;"""AppendRow fehlgeschlagen für tblOtpremnica""";"Poruka(""DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR"")";"Err.Raise vbObjectError + 1003, ""SaveOtpremnica"", ""AppendRow fehlgeschlagen für "
-modDokumenta.bas;592;"""AppendRow fehlgeschlagen für tblZbirna.""";"Poruka(""DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2"")";"Err.Raise vbObjectError + 1010, ""SaveZbirna"", ""AppendRow fehlgeschlagen für tblZ"
-modDokumenta.bas;1081;"""AppendRow fehlgeschlagen für tblPrijemnica.""";"Poruka(""DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_3"")";"Err.Raise vbObjectError + 1014, ""SavePrijemnica"", ""AppendRow fehlgeschlagen für "
 modDokumenta.bas;1249;"""Nema ambalaže ni novca za cuvanje.""";"Poruka(""DOK_ERR_NEMA_AMBALAZE_NOVCA"")";"Err.Raise vbObjectError + 1602, ""SaveKupciIzlaz_TX"", ""Nema ambalaže ni novca za "
-modFaktura.bas;286;"""AppendRow fehlgeschlagen für tblFakture.""";"Poruka(""FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR"")";"Err.Raise vbObjectError + 1715, ""CreateFaktura"", ""AppendRow fehlgeschlagen für t"
-modFaktura.bas;318;"""AppendRow fehlgeschlagen für tblFakturaStavke.""";"Poruka(""FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2"")";"Err.Raise vbObjectError + 1716, ""CreateFaktura"", ""AppendRow fehlgeschlagen für t"
 modFaktura.bas;437;"""Stornirana faktura se ne može štampati kao aktivna faktura: """;"Poruka(""FAK_ERR_STORNIRANA_FAKTURA_MOZE"")";"CONCAT: Err.Raise vbObjectError + 1736, ""PrintFaktura"", ""Stornirana faktura se ne može štampati kao aktivna "
 modGoogleAuth.bas;81;"""Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.""";"Poruka(""GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN"")";        MsgBox
-modJournaling.bas;221;""" Einträge, Excel hat """;"Poruka(""LOG_MSG_EINTRAGE_EXCEL_HAT"")";"CONCAT: warnings = warnings & tblName & "": Journal hat "" & journalCount & "" Einträge, Excel hat "" & excelCou"
-modJournaling.bas;222;"""Möglicher Datenverlust nach Absturz!""";"Poruka(""LOG_MSG_MOGLICHER_DATENVERLUST_NACH"")";"CONCAT: warnings = warnings & tblName & "": Journal hat "" & journalCount & "" Einträge, Excel hat "" & excelCou"
 modLicense.bas;216;"""Server nedostupan — offline grace (masina je vezana).""";"Poruka(""LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE"")";            LogWarn SRC,
 modLicense.bas;267;"""' — propustam vezanu masinu.""";"Poruka(""LIC_MSG_PROPUSTAM_VEZANU_MASINU"")";"CONCAT: LogWarn SRC, ""Prolazna greska/status='"" & status & ""' — propustam vezanu masinu."""
 modMasterSync.bas;201;"""Uvoz OTK nije potvrden zbog fatal sync greške.""";"Poruka(""SYNC_ERR_UVOZ_OTK_NIJE"")";"CONCAT: MsgBox ""Uvoz OTK nije potvrden zbog fatal sync greške."" & vbCrLf & ""Uvezeno: "" & CStr(totalImported)"
@@ -251,7 +232,6 @@ modMasterSync.bas;2189;"""Uvoz zbirnih završen i potvrden.""";"Poruka(""SYNC_MS
 modMasterSync.bas;2205;"""Greška pri uvozu zbirnih: """;"Poruka(""SYNC_MSG_GRESKA_PRI_UVOZU_2"")";"CONCAT: MsgBox ""Greška pri uvozu zbirnih: "" & errDesc, vbCritical, APP_NAME"
 modMaticniLookups.bas;47;"""Podešavanja""";"Poruka(""MATICNI_MSG_PODESAVANJA"")";        Array(
 modMonitoringTests.bas;54;"""Namerno testirana VBA greška bez sensitive podataka""";"Poruka(""MONITO_ERR_NAMERNO_TESTIRANA_VBA"")";"    Err.Raise 9101, ""TestMonitoring_ErrorEvent"","
-modOtkup.bas;499;"""AppendRow fehlgeschlagen für tblOtkup.""";"Poruka(""OTKUP_ERR_APPENDROW_FEHLGESCHLAGEN_FUR"")";"Err.Raise vbObjectError + 1829, ""SaveOtkup"", ""AppendRow fehlgeschlagen für tblOt"
 modOtkupBlok.bas;104;"""Otkupni blokovi  »""";"Poruka(""OTKUP_LBL_OTKUPNI_BLOKOVI"")";    mBtnToggle.caption =
 modOtkupBlok.bas;106;"""Otkupni blokovi  »""";"Poruka(""OTKUP_LBL_OTKUPNI_BLOKOVI"")";    StylePrimaryButton mBtnToggle,
 modOtkupBlok.bas;273;"""«  Sakrij blokove""";"Poruka(""OTKUP_LBL_SAKRIJ_BLOKOVE"")";        mBtnToggle.caption =
