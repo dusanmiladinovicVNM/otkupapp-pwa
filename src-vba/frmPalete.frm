@@ -322,7 +322,6 @@ Private Sub BuildPreradaControls()
     hp(0, 1) = "Broj": hp(0, 2) = "Datum": hp(0, 3) = "Neto"
     hp(0, 4) = "Kut": hp(0, 5) = "Kes": hp(0, 6) = "Gotov pr."
     mLstPradeHdr.List = hp
-    mLstPradeHdr.locked = True
     RefreshPrerade
 
     SetPreradaTabOrder
@@ -399,17 +398,16 @@ Private Sub LayoutDynamic()
     PutCtl Me.lstPaleteHdr, leftX, lrHdrY, leftW
     PutCtl Me.lstPalete, leftX, lrListY, leftW
     Me.lstPalete.Height = btnTop - 12 - lrListY
-    PutCtl mLstPrerade, rightX, lrListY, rightW
-    mLstPrerade.Height = btnTop - 12 - lrListY
-    ' header EKSPLICITNO iste sirine/pozicije kao data lista -> kolone poravnate
-    With mLstPradeHdr
-        .Left = mLstPrerade.Left
-        .Top = lrHdrY
-        .width = mLstPrerade.width
-        .Height = 15
-        .ColumnWidths = mLstPrerade.ColumnWidths
-        .Visible = True
-    End With
+    mLstPrerade.Left = rightX: mLstPrerade.Top = lrListY
+    mLstPrerade.width = rightW: mLstPrerade.Height = btnTop - 12 - lrListY
+    mLstPrerade.Visible = True
+    mLstPradeHdr.Left = rightX: mLstPradeHdr.Top = lrHdrY
+    mLstPradeHdr.width = rightW: mLstPradeHdr.Height = 15
+    mLstPradeHdr.ColumnWidths = mLstPrerade.ColumnWidths
+    mLstPradeHdr.Visible = True
+    Me.Repaint
+    mLstPradeHdr.width = rightW
+    mLstPrerade.width = rightW
 
     ' Srednja kolona: iznad stavki samo Gotov proizvod (Preradjeno je filter
     ' uz Osvezi -> u redu 1), pa lista stavki.
