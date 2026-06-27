@@ -615,10 +615,7 @@ Public Function ExportPaletniListPDF(ByVal palID As String, _
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_PALETNI) & "\Paleta_" & broj & "-" & god & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, _
-                           OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
 
     ExportPaletniListPDF = pdfPath
     Exit Function
@@ -1755,10 +1752,7 @@ Public Function ExportPreradaPDF(ByVal preID As String, _
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_PRERADA) & "\Prerada_" & broj & "-" & god & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, _
-                           OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
 
     ExportPreradaPDF = pdfPath
     Exit Function

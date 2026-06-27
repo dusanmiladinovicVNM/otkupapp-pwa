@@ -669,10 +669,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim pdfPath As String
     pdfPath = ThisWorkbook.path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
     
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, _
-                           OpenAfterPublish:=True
+    DocExportPdf ws, pdfPath, True
     
     Application.ScreenUpdating = True
 End Sub

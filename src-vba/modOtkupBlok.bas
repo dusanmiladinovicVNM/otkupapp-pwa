@@ -1112,9 +1112,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
 
     Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
     ws.Visible = xlSheetVisible
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=True
+    DocExportPdf ws, pdfPath, True
     If wasHidden Then ws.Visible = xlSheetHidden
 
     Application.ScreenUpdating = True

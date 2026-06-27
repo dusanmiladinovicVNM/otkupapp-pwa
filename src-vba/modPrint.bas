@@ -79,9 +79,7 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     Dim suff As String: suff = Replace(Replace(broj, "/", "-"), "\\", "-")
     If Len(Trim$(suff)) = 0 Then suff = otpID
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTPREMNICE) & "\Otpremnica_" & suff & ".pdf"
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, IncludeDocProperties:=False, _
-                           OpenAfterPublish:=True
+    DocExportPdf ws, pdfPath, True
     Exit Sub
 EH:
     LogErr "modPrint.OutputOtpremnicaPDF"
@@ -308,9 +306,7 @@ Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
     Dim suff As String: suff = Replace(Replace(otkupIDs, " + ", "_"), "/", "-")
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\OtkupniList_" & suff & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportOtkupniListPDF = pdfPath
     Exit Function
 EH:
@@ -866,9 +862,7 @@ Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaIDs As String, _
     Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\GrupniOtkupniList_" & suff & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportGrupniOtkupniListPDF = pdfPath
     Exit Function
 EH:
@@ -1152,9 +1146,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
     Dim pdfPath As String
     pdfPath = folder & "\Prijemnica_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportPrijemnicaPDF = pdfPath
     Exit Function
 EH:
@@ -1459,9 +1451,7 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     Dim pdfPath As String
     pdfPath = folder & "\" & pref & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportIzdavanjeAmbalazePDF = pdfPath
     Exit Function
 EH:

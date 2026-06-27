@@ -149,3 +149,15 @@ Public Function DocTitleBlock(ByVal ws As Worksheet, ByVal atRow As Long, _
     DocTitleBlock = atRow + 2
 End Function
 
+' ------------------------------------------------------------
+' Zajednicki izlaz jednog sheeta u PDF (isti parametri za sve
+' stampane obrasce). Zamena za rasute ExportAsFixedFormat pozive
+' (modPrint / modPaletniList / modIzvestaj / modOtkupBlok / frmSledljivost).
+' ------------------------------------------------------------
+Public Sub DocExportPdf(ByVal ws As Worksheet, ByVal pdfPath As String, _
+                        ByVal openAfter As Boolean)
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+End Sub
+
