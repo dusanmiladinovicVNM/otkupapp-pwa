@@ -150,6 +150,9 @@ Private Sub UserForm_Activate()
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
     
     SetupListBoxes
+    On Error Resume Next
+    mpReports.Pages(3).caption = "Ambalaza"   ' "Primljena ambalaza" -> "Ambalaza"
+    On Error GoTo EH
     EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
     EnsureOtkupListePage          ' runtime tab "Otkupni listovi" (pre UpdateReportMode)
     UpdateReportMode
@@ -474,8 +477,8 @@ Private Sub SetupListBoxes()
     End With
     
     With lstOtkupRoba
-        .ColumnCount = 10
-        .ColumnWidths = "45;78;45;25;80;50;50;45;45;40"
+        .ColumnCount = 12          ' 11 vidljivih + skrivena ref-kljuc kolona (idx 11)
+        .ColumnWidths = "45;78;45;25;80;50;50;45;50;45;40;0"   ' fallback; LayoutOtkupRobaHeaders prepisuje
     End With
     
     With lstAmbalaza
@@ -511,6 +514,7 @@ Private Sub SetupListBoxes()
     ' Sirine + header pozicije kartice se racunaju iz stvarne lstKartica.width
     ' (auto-fit, da "Saldo amb." kolona i njen header stanu i budu poravnati).
     LayoutKarticaHeaders
+    LayoutOtkupRobaHeaders
 End Sub
 
 Private Sub UpdateStatusLabel()
@@ -743,7 +747,7 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
         End If
         
         For j = 2 To UBound(data, 2)
-            If j = 10 Then
+            If j = 11 Then
                 ' Manjak% formatieren
                 If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
                     lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "0.00") & "%"
@@ -1191,7 +1195,8 @@ Private Sub btnStampaj_Click()
                     "Vozac", _
                     "Otp kg", _
                     "Blokovi kg", _
-                    "Razlika kg", _
+                    "Razlika kg (Otk. listovi - Otprem.)", _
+                    "Prijemnica kg", _
                     "Manjak kg", _
                     "Manjak %")
             Else
@@ -1205,12 +1210,13 @@ Private Sub btnStampaj_Click()
                     "", _
                     "", _
                     "", _
+                    "", _
                     "")
             End If
                 
         Case 3
             Set lst = lstAmbalaza
-            title = "Primljena ambalaza"
+            title = "Ambalaza"
             headers = Array( _
                 "Datum", _
                 "Mesto", _
@@ -1379,17 +1385,8 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SK6, "Saldo"
     SetColumnHeader lbl_H_SK7, "Ambalaža"
     
-    ' === OtkupRoba Page ===
-    SetColumnHeader lbl_H_OR1, "Datum"
-    SetColumnHeader lbl_H_OR2, "Br. Otp."
-    SetColumnHeader lbl_H_OR3, "Vrsta"
-    SetColumnHeader lbl_H_OR4, "Klasa"
-    SetColumnHeader lbl_H_OR5, "Vozac"
-    SetColumnHeader lbl_H_OR6, "Otp kg"
-    SetColumnHeader lbl_H_OR7, "Blokovi kg"
-    SetColumnHeader lbl_H_OR8, "Razlika kg"
-    SetColumnHeader lbl_H_OR9, "Manjak kg"
-    SetColumnHeader lbl_H_OR10, "Manjak %"
+    ' === OtkupRoba Page === (naslovi + sirine + OR11 -> LayoutOtkupRobaHeaders)
+    LayoutOtkupRobaHeaders
     
     ' === Ambalaza Page ===
     SetColumnHeader lbl_H_AMB1, "Datum"
@@ -1490,6 +1487,67 @@ Private Sub LayoutKarticaHeaders()
     cw = cw & "0"                            ' skrivena ref-kljuc kolona (idx 7)
     lstKartica.ColumnCount = 8
     lstKartica.ColumnWidths = cw
+End Sub
+
+' Naslovi + sirine kolona za "Otkupljena roba" (OM varijanta): 11 vidljivih +
+' skrivena ref-kljuc kolona (idx 11). lbl_H_OR11 ("Manjak %") se kreira u runtime-u
+' (nije u .frx); OR8 ima podnaslov u zagradi. Auto-fit iz lstOtkupRoba.width (kao
+' LayoutKarticaHeaders). .frx se ne dira (CLAUDE.md).
+Private Sub LayoutOtkupRobaHeaders()
+    On Error Resume Next
+
+    ' OR11 ("Manjak %") - kreiraj idempotentno (lookup po imenu).
+    Dim lbl11 As MSForms.label
+    Set lbl11 = lstOtkupRoba.parent.Controls("lbl_H_OR11")
+    If lbl11 Is Nothing Then
+        Set lbl11 = lstOtkupRoba.parent.Controls.Add("Forms.Label.1", "lbl_H_OR11", True)
+        If Not lbl11 Is Nothing Then
+            lbl11.top = lbl_H_OR10.top
+            lbl11.Height = lbl_H_OR10.Height
+        End If
+    End If
+
+    Dim caps As Variant
+    caps = Array("Datum", "Br. Otp.", "Vrsta", "Klasa", "Vozac", "Otp kg", _
+                 "Blokovi kg", "Razlika kg" & vbLf & "(Otk. listovi - Otprem.)", _
+                 "Prijemnica kg", "Manjak kg", "Manjak %")
+    Dim prop As Variant
+    prop = Array(0.081, 0.141, 0.081, 0.045, 0.145, 0.09, 0.09, 0.081, 0.09, 0.081, 0.075)
+    Dim names As Variant
+    names = Array("lbl_H_OR1", "lbl_H_OR2", "lbl_H_OR3", "lbl_H_OR4", "lbl_H_OR5", _
+                  "lbl_H_OR6", "lbl_H_OR7", "lbl_H_OR8", "lbl_H_OR9", "lbl_H_OR10", "lbl_H_OR11")
+
+    Dim availW As Double
+    availW = lstOtkupRoba.width - 16
+    If availW < 140 Then Exit Sub
+
+    Dim X As Double: X = lstOtkupRoba.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 10
+        Dim wCol As Long
+        wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lstOtkupRoba.parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            lbl.Left = X
+            lbl.width = wCol
+            StyleListHeaderLabel lbl
+            If k = 7 Then
+                ' "Razlika kg" + podnaslov "(Otk. listovi - Otprem.)" u dva reda.
+                lbl.WordWrap = True
+                lbl.Height = lbl_H_OR7.Height + 12
+                lbl.top = lbl_H_OR7.top - 12
+            End If
+            lbl.caption = CStr(caps(k))
+        End If
+        cw = cw & CStr(wCol) & ";"
+        X = X + wCol
+    Next k
+    cw = cw & "0"   ' skrivena ref-kljuc kolona (idx 11)
+    lstOtkupRoba.ColumnCount = 12
+    lstOtkupRoba.ColumnWidths = cw
 End Sub
 
 Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)

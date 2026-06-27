@@ -1717,10 +1717,12 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     rowCount = UBound(otpData, 1)
     
     Dim result() As Variant
-    ReDim result(1 To rowCount + 1, 1 To 10)
+    ReDim result(1 To rowCount + 1, 1 To 12)   ' +Prijemnica kg (9), +skriveni OTP|<id> (12)
     
     Dim totOtp As Double, totBlokovi As Double
     Dim totRazlika As Double, totManjak As Double
+    Dim totPrijemnica As Double
+    Dim malinaMode As Boolean: malinaMode = IsMalinaMode()
     Dim i As Long
     
     For i = 1 To rowCount
@@ -1742,18 +1744,23 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         
         Dim manjak As Double: manjak = 0
         Dim manjakPct As Double: manjakPct = 0
+        Dim prijemnicaKg As Double: prijemnicaKg = 0
         Dim mVals As Variant
         If manjakDict.Exists(thisBrZbirne) Then
             mVals = manjakDict(thisBrZbirne)
             Dim zbirnaTotal As Double: zbirnaTotal = mVals(0)
             Dim prijTotal As Double: prijTotal = mVals(1)
             
-            If zbirnaTotal > 0 And prijTotal > 0 Then
-                ' Proportionaler Manjak: (Zbirna - Prijemnica) × (OtpKg / ZbirnaKg)
-                Dim ukupnoManjak As Double
-                ukupnoManjak = zbirnaTotal - prijTotal
-                manjak = ukupnoManjak * (kgOtp / zbirnaTotal)
-                manjakPct = ukupnoManjak / zbirnaTotal * 100
+            If prijTotal > 0 Then
+                If malinaMode Then
+                    ' Malina: 1 otpremnica = 1 zbirna = 1 prijemnica -> direktno.
+                    prijemnicaKg = prijTotal
+                ElseIf zbirnaTotal > 0 Then
+                    ' Prijemnica kg srazmerno udelu otpremnice u zbirnoj otpremnici.
+                    prijemnicaKg = prijTotal * (kgOtp / zbirnaTotal)
+                End If
+                manjak = kgOtp - prijemnicaKg
+                If kgOtp > 0 Then manjakPct = manjak / kgOtp * 100
             End If
         End If
         
@@ -1776,13 +1783,16 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         result(i, 6) = kgOtp
         result(i, 7) = kgBlokovi
         result(i, 8) = razlika
-        result(i, 9) = manjak
-        result(i, 10) = manjakPct
+        result(i, 9) = prijemnicaKg
+        result(i, 10) = manjak
+        result(i, 11) = manjakPct
+        result(i, 12) = "OTP|" & thisOtpID
         
         totOtp = totOtp + kgOtp
         totBlokovi = totBlokovi + kgBlokovi
         totRazlika = totRazlika + razlika
         totManjak = totManjak + manjak
+        totPrijemnica = totPrijemnica + prijemnicaKg
     Next i
     
     ' UKUPNO
@@ -1790,8 +1800,9 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     result(rowCount + 1, 6) = totOtp
     result(rowCount + 1, 7) = totBlokovi
     result(rowCount + 1, 8) = totRazlika
-    result(rowCount + 1, 9) = totManjak
-    If totOtp > 0 Then result(rowCount + 1, 10) = totManjak / totOtp * 100
+    result(rowCount + 1, 9) = totPrijemnica
+    result(rowCount + 1, 10) = totManjak
+    If totOtp > 0 Then result(rowCount + 1, 11) = totManjak / totOtp * 100
     
     ReportOtkupRobaOM = result
     Exit Function
@@ -2072,48 +2083,75 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     
     Dim rowCount As Long
     rowCount = UBound(filtered, 1)
-    
-    Dim result() As Variant
-    ReDim result(1 To rowCount + 1, 1 To 6)  ' +1 UKUPNO
-    
+
+    ' Grupisanje po Dokumentu (+Tip): ako isti dokument ima i Ulaz i Izlaz red,
+    ' prikazi oba u istom redu. Ako ima samo jedan smer -> red ostaje kao i do sada.
+    ' Scripting.Dictionary cuva redosled umetanja (kao redosled filtriranih redova).
+    Dim grp As Object
+    Set grp = CreateObject("Scripting.Dictionary")
+
     Dim totalUlaz As Long, totalIzlaz As Long
     Dim i As Long
-    
     For i = 1 To rowCount
         Dim kol As Long: kol = 0
         If IsNumeric(filtered(i, colKol)) Then kol = CLng(filtered(i, colKol))
-        
-        ' Mesto-Name auflösen
+
         Dim entID As String: entID = CStr(filtered(i, colEntitet))
         Dim entTipVal As String: entTipVal = CStr(filtered(i, colEntTip))
-        
-        result(i, 1) = CDate(filtered(i, colDatum))
-        result(i, 2) = ResolveEntitetName(entID, entTipVal)
-        result(i, 3) = CStr(filtered(i, colTip))
-        result(i, 4) = CStr(filtered(i, colDokID))
-        
+        Dim dokIDv As String: dokIDv = CStr(filtered(i, colDokID))
+        Dim tipv As String: tipv = CStr(filtered(i, colTip))
+
         Dim effSmer As String
         effSmer = CStr(filtered(i, colSmer))
         If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, entTipVal)
+
+        Dim gkey As String: gkey = dokIDv & "|" & tipv
+        Dim rec As Variant
+        If grp.Exists(gkey) Then
+            rec = grp(gkey)
+        Else
+            ' Datum, Mesto, Tip, Dokument, Ulaz, Izlaz
+            rec = Array(filtered(i, colDatum), ResolveEntitetName(entID, entTipVal), _
+                        tipv, dokIDv, 0&, 0&)
+        End If
         If effSmer = "Ulaz" Then
-            result(i, 5) = kol
-            result(i, 6) = ""
+            rec(4) = CLng(rec(4)) + kol
             totalUlaz = totalUlaz + kol
         Else
-            result(i, 5) = ""
-            result(i, 6) = kol
+            rec(5) = CLng(rec(5)) + kol
             totalIzlaz = totalIzlaz + kol
         End If
+        grp(gkey) = rec
     Next i
-    
+
+    Dim nGrp As Long: nGrp = grp.Count
+    Dim result() As Variant
+    ReDim result(1 To nGrp + 1, 1 To 6)  ' +1 UKUPNO
+
+    Dim keys As Variant: keys = grp.keys
+    Dim r As Long
+    For r = 0 To nGrp - 1
+        Dim rr As Variant: rr = grp(keys(r))
+        If IsDate(rr(0)) Then
+            result(r + 1, 1) = CDate(rr(0))
+        Else
+            result(r + 1, 1) = rr(0)
+        End If
+        result(r + 1, 2) = rr(1)
+        result(r + 1, 3) = rr(2)
+        result(r + 1, 4) = rr(3)
+        result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
+        result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
+    Next r
+
     ' UKUPNO
-    result(rowCount + 1, 1) = "UKUPNO"
-    result(rowCount + 1, 2) = ""
-    result(rowCount + 1, 3) = ""
-    result(rowCount + 1, 4) = "Saldo: " & Format$(totalUlaz - totalIzlaz, "#,##0")
-    result(rowCount + 1, 5) = totalUlaz
-    result(rowCount + 1, 6) = totalIzlaz
-    
+    result(nGrp + 1, 1) = "UKUPNO"
+    result(nGrp + 1, 2) = ""
+    result(nGrp + 1, 3) = ""
+    result(nGrp + 1, 4) = "Saldo: " & Format$(totalUlaz - totalIzlaz, "#,##0")
+    result(nGrp + 1, 5) = totalUlaz
+    result(nGrp + 1, 6) = totalIzlaz
+
     ReportAmbalazePojedinacni = result
     Exit Function
 
