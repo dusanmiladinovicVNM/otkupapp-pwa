@@ -1,0 +1,217 @@
+Fajl;OrigLiteral;SuggestedText;Status;Line
+frmAgrohemija.frm;"""Greska: artikal nema definisano Pakovanje. """;Greška: artikal nema definisano Pakovanje. ;SUGGESTED;234
+frmAgrohemija.frm;"""Greska: artikal nema Pakovanje""";Greška: artikal nema Pakovanje;SUGGESTED;283
+frmAgrohemija.frm;"""Prijem sacuvan: """;Prijem sačuvan: ;SUGGESTED;730
+frmBankaExportPregled.frm;"""Greska pri ucitavanju.""";Greška pri učitavanju.;SUGGESTED;123
+frmBankaExportPregled.frm;"""Ovaj kooperant nema TekuciRacun. Ne moze biti u paketu.""";Ovaj kooperant nema TekuciRacun. Ne može biti u paketu.;SUGGESTED;240
+frmBankaExportPregled.frm;"""Tek. racun: """;Tek. račun: ;SUGGESTED;315
+frmBankaImport.frm;"""(greska pri citanju saldo info-a)""";(greška pri čitanju saldo info-a);SUGGESTED;699
+frmDokumenta.frm;"""Neispravna kolicina Kl.I""";Neispravna količina Kl.I;SUGGESTED;1812
+frmDokumenta.frm;"""Neispravna kolicina Kl.II""";Neispravna količina Kl.II;SUGGESTED;1821
+frmDokumenta.frm;"""Neispravna kolicina ambalaze Kl.II""";Neispravna količina ambalaže Kl.II;SUGGESTED;1842
+frmIzvestaj.frm;"""Ambalaza""";Ambalaža;SUGGESTED;162
+frmIzvestaj.frm;"""Spreman za izvestaj""";Spreman za izveštaj;SUGGESTED;560
+frmIzvestaj.frm;"""PREGLED AMBALAZE: """;PREGLED AMBALAŽE: ;SUGGESTED;1033
+frmIzvestaj.frm;"""PREGLED AMBALAZE""";PREGLED AMBALAŽE;SUGGESTED;1637
+frmMarza.frm;"""Marza""";Marža;SUGGESTED;55
+frmOtkup.frm;"""Izdata ambalaza""";Izdata ambalaža;SUGGESTED;170
+frmOtkupAPP.frm;"""Maticni podaci""";Matični podaci;SUGGESTED;324
+frmOtkupAPP.frm;"""Sekcija: Maticni podaci""";Sekcija: Matični podaci;SUGGESTED;761
+frmStammdaten.frm;"""Tekuci Racun""";Tekući Račun;SUGGESTED;360
+frmStammdaten.frm;"""Postanski Broj""";Poštanski Broj;SUGGESTED;445
+frmStammdaten.frm;"""Drzava""";Država;SUGGESTED;446
+frmStammdaten.frm;"""Maticni Broj""";Matični Broj;SUGGESTED;448
+frmStammdaten.frm;"""Kat. Opstina""";Kat. Opština;SUGGESTED;525
+frmStammdaten.frm;"""Vrsta voca""";Vrsta voća;SUGGESTED;660
+frmStammdaten.frm;"""Sorta voca""";Sorta voća;SUGGESTED;661
+frmStammdaten.frm;"""Tip ambalaze (podraz.)""";Tip ambalaže (podraz.);SUGGESTED;663
+frmStammdaten.frm;"""Tip ambalaze""";Tip ambalaže;SUGGESTED;687
+frmStammdaten.frm;"""Tezina gajbice (kg)""";Težina gajbice (kg);SUGGESTED;700
+frmStammdaten.frm;"""Tezina (kg)""";Težina (kg);SUGGESTED;718
+modKarticaDetalji.bas;"""DETALJI AMBALAZE""";DETALJI AMBALAŽE;SUGGESTED;331
+modOtkupBlok.bas;"""Stampaj po datumu""";Štampaj po datumu;SUGGESTED;343
+modOtkupBlok.bas;"""Stampaj list""";Štampaj list;SUGGESTED;349
+modOtkupBlok.bas;"""Stampaj specifikaciju""";Štampaj specifikaciju;SUGGESTED;829
+frmAgrohemija.frm;"""Dug: """;Dug: ;OK;169
+frmAgrohemija.frm;"""Izaberi artikal i parcele za preporuku""";Izaberi artikal i parcele za preporuku;OK;197
+frmAgrohemija.frm;"""Izaberi parceleza preporuku""";Izaberi parceleza preporuku;OK;215
+frmAgrohemija.frm;"""Doza: """;Doza: ;OK;250
+frmAgrohemija.frm;"""Izdavanje sacuvano: """;Izdavanje sacuvano: ;OK;518
+frmAgrohemija.frm;"""Vrednost: """;Vrednost: ;OK;609
+frmAgrohemija.frm;"""Dug kooperanta""";Dug kooperanta;OK;915
+frmAgrohemija.frm;"""--""";--;OK;917
+frmAgrohemija.frm;"""Korpa izlaza""";Korpa izlaza;OK;932
+frmAgrohemija.frm;"""Korpa ulaza""";Korpa ulaza;OK;944
+frmAgrohemija.frm;"""Dug posle izdavanja""";Dug posle izdavanja;OK;954
+frmAgrohemija.frm;"""Izaberi kooperanta za pocetak izdavanja""";Izaberi kooperanta za pocetak izdavanja;OK;974
+frmBankaExportPregled.frm;"""Nema podataka.""";Nema podataka.;OK;261
+frmBankaExportPregled.frm;"""Nema rezultata za izabran filter.""";Nema rezultata za izabran filter.;OK;271
+frmBankaExportPregled.frm;"""Sve otvorene stavke su zatvorene. ?""";Sve otvorene stavke su zatvorene. ?;OK;274
+frmBankaExportPregled.frm;"""Otvoreno: """;Otvoreno: ;OK;302
+frmBankaExportPregled.frm;"""Kooperant avans: """;Kooperant avans: ;OK;308
+frmBankaExportPregled.frm;"""Primeni avans kroz Dokumenta pre isplate""";Primeni avans kroz Dokumenta pre isplate;OK;318
+frmBankaExportPregled.frm;"""(izaberi blok klikom na red)""";(izaberi blok klikom na red);OK;329
+frmBankaExportPregled.frm;"""Neispravan iznos.""";Neispravan iznos.;OK;355
+frmBankaExportPregled.frm;"""Iznos mora biti veci od 0.""";Iznos mora biti veci od 0.;OK;363
+frmBankaExportPregled.frm;"""Iznos veci od otvorenog (""";Iznos veci od otvorenog (;OK;371
+frmBankaExportPregled.frm;"""Otvoreno ukupno""";Otvoreno ukupno;OK;715
+frmBankaExportPregled.frm;"""Selektovano""";Selektovano;OK;722
+frmBankaExportPregled.frm;"""Bez TR""";Bez TR;OK;729
+frmBankaExportPregled.frm;"""0 (svi imaju)""";0 (svi imaju);OK;731
+frmBankaExportPregled.frm;"""Avans pool""";Avans pool;OK;740
+frmBankaImport.frm;"""Nema otvorenih stavki.""";Nema otvorenih stavki.;OK;100
+frmBankaImport.frm;"""Uplata: """;Uplata: ;OK;155
+frmBankaImport.frm;"""Nema importovanih izvoda.""";Nema importovanih izvoda.;OK;599
+frmBankaImport.frm;"""Nema aktivnih izvoda.""";Nema aktivnih izvoda.;OK;611
+frmBankaImport.frm;"""Nema aktivnih izvoda sa validnim datumom.""";Nema aktivnih izvoda sa validnim datumom.;OK;647
+frmBankaImport.frm;"""Otvoreno""";Otvoreno;OK;752
+frmBankaImport.frm;"""Auto match""";Auto match;OK;759
+frmBankaImport.frm;"""Uplate""";Uplate;OK;764
+frmBankaImport.frm;"""Isplate""";Isplate;OK;769
+frmDokumenta.frm;"""SALDO KUPCA   Uplaceno: """;SALDO KUPCA   Uplaceno: ;OK;267
+frmDokumenta.frm;"""UKUPNO  """;UKUPNO  ;OK;406
+frmDokumenta.frm;"""Prosek gajbe: """;Prosek gajbe: ;OK;452
+frmDokumenta.frm;"""Broj zbirne""";Broj zbirne;OK;999
+frmDokumenta.frm;"""Datum""";Datum;OK;1000
+frmDokumenta.frm;"""Vrsta""";Vrsta;OK;1001
+frmDokumenta.frm;"""Sorta""";Sorta;OK;1002
+frmDokumenta.frm;"""Kg""";Kg;OK;1014
+frmDokumenta.frm;"""Izdato koop.""";Izdato koop.;OK;1287
+frmDokumenta.frm;"""Prijem koop.""";Prijem koop.;OK;1297
+frmDokumenta.frm;"""OM Avans: """;OM Avans: ;OK;1610
+frmDokumenta.frm;"""Amb Otp: """;Amb Otp: ;OK;1900
+frmDokumenta.frm;"""Zbirna: """;Zbirna: ;OK;2232
+frmDokumenta.frm;"""Stornirani dokumenti""";Stornirani dokumenti;OK;2775
+frmDokumenta.frm;"""Stornirani dokumenti  (""";Stornirani dokumenti  (;OK;2856
+frmDokumenta.frm;"""Mod: Palete""";Mod: Palete;OK;2978
+frmDokumenta.frm;"""Mod: Prijemnice""";Mod: Prijemnice;OK;2978
+frmDokumenta.frm;"""Palete prevezane: """;Palete prevezane: ;OK;3004
+frmDokumenta.frm;"""Neuspelo.""";Neuspelo.;OK;3008
+frmDokumenta.frm;"""Prevezano: prijemnica """;Prevezano: prijemnica ;OK;3029
+frmDokumenta.frm;"""Neuspelo. Proveri da je zbirna """;Neuspelo. Proveri da je zbirna ;OK;3032
+frmDokumenta.frm;"""Osiroceni dokumenti""";Osiroceni dokumenti;OK;3062
+frmDokumenta.frm;"""Osirocene prijemnice""";Osirocene prijemnice;OK;3069
+frmDokumenta.frm;"""Ciljna (aktivna) zbirna""";Ciljna (aktivna) zbirna;OK;3076
+frmDokumenta.frm;"""Stornirane prijemnice (osirocene palete)""";Stornirane prijemnice (osirocene palete);OK;3185
+frmDokumenta.frm;"""Ciljna (nova) prijemnica""";Ciljna (nova) prijemnica;OK;3186
+frmDokumenta.frm;"""Prevezi palete >>""";Prevezi palete >>;OK;3187
+frmDokumenta.frm;"""Osiroceni dokumenti - PALETE  (""";Osiroceni dokumenti - PALETE  (;OK;3188
+frmDokumenta.frm;"""Prevezi >>""";Prevezi >>;OK;3222
+frmDokumenta.frm;"""Osiroceni dokumenti - PRIJEMNICE  (""";Osiroceni dokumenti - PRIJEMNICE  (;OK;3223
+frmDokumenta.frm;"""Danas""";Danas;OK;3634
+frmDokumenta.frm;"""OM saldo""";OM saldo;OK;3648
+frmDokumenta.frm;"""Otvoreno kg""";Otvoreno kg;OK;3657
+frmDokumenta.frm;"""Validacija""";Validacija;OK;3679
+frmExcelMini.frm;"""Zatvori Excel""";Zatvori Excel;OK;50
+frmFakturisanje.frm;"""FILTER""";FILTER;OK;65
+frmFakturisanje.frm;"""AKCIJE""";AKCIJE;OK;74
+frmIzvestaj.frm;"""ENTITET""";ENTITET;OK;114
+frmIzvestaj.frm;"""FILTER""";FILTER;OK;120
+frmIzvestaj.frm;"""Nema podataka za izabran filter""";Nema podataka za izabran filter;OK;563
+frmIzvestaj.frm;"""KARTICA: """;KARTICA: ;OK;967
+frmIzvestaj.frm;"""Period: """;Period: ;OK;968
+frmIzvestaj.frm;"""OTKUPNI LISTOVI""";OTKUPNI LISTOVI;OK;1728
+frmIzvestaj.frm;"""OTKUPNI LISTOVI: """;OTKUPNI LISTOVI: ;OK;1826
+frmOtkup.frm;"""Neto: """;Neto: ;OK;334
+frmOtkup.frm;"""Ukupno: """;Ukupno: ;OK;358
+frmOtkupAPP.frm;"""Uvozim nove bankovne izvode...""";Uvozim nove bankovne izvode...;OK;606
+frmOtkupAPP.frm;"""Banka uvezena. Otvaram mapiranje...""";Banka uvezena. Otvaram mapiranje...;OK;612
+frmOtkupAPP.frm;"""Sekcija: Otvori Excel""";Sekcija: Otvori Excel;OK;695
+frmOtkupAPP.frm;"""Snimam podatke...""";Snimam podatke...;OK;708
+frmOtkupAPP.frm;"""Sacuvano.""";Sacuvano.;OK;714
+frmOtkupAPP.frm;"""--""";--;OK;1157
+frmOtkupAPP.frm;"""Online""";Online;OK;1345
+frmOtkupAPP.frm;"""Operator: """;Operator: ;OK;1358
+frmOtkupAPP.frm;"""Sezona """;Sezona ;OK;1371
+frmPalete.frm;"""Tez. palete:""";Tez. palete:;OK;286
+frmPalete.frm;"""Bruto:""";Bruto:;OK;287
+frmPalete.frm;"""Sorta:""";Sorta:;OK;288
+frmPalete.frm;"""Gotov proizvod:""";Gotov proizvod:;OK;289
+frmPalete.frm;"""Kutije:""";Kutije:;OK;298
+frmPalete.frm;"""Kese:""";Kese:;OK;299
+frmPalete.frm;"""Neto (izr.):""";Neto (izr.):;OK;300
+frmPalete.frm;"""Preradjene palete (dvoklik = PDF)""";Preradjene palete (dvoklik = PDF);OK;314
+frmSEF.frm;"""Retry slanje na SEF""";Retry slanje na SEF;OK;399
+frmSledljivost.frm;"""NEPOVEZANI OTKUPI""";NEPOVEZANI OTKUPI;OK;43
+frmSledljivost.frm;"""MOGUCE OTPREMNICE""";MOGUCE OTPREMNICE;OK;46
+frmSledljivost.frm;"""SLEDLJIVOST PO ZBIRNOJ""";SLEDLJIVOST PO ZBIRNOJ;OK;49
+frmSledljivost.frm;"""Povezano: """;Povezano: ;OK;288
+frmSplash.frm;"""OtkupApp""";OtkupApp;OK;52
+frmSplash.frm;"""v""";v;OK;53
+frmSplash.frm;"""Powered by AgriX""";Powered by AgriX;OK;54
+frmStammdaten.frm;"""Kooperanti""";Kooperanti;OK;329
+frmStammdaten.frm;"""Ime""";Ime;OK;353
+frmStammdaten.frm;"""Prezime""";Prezime;OK;354
+frmStammdaten.frm;"""Mesto""";Mesto;OK;355
+frmStammdaten.frm;"""Telefon""";Telefon;OK;356
+frmStammdaten.frm;"""Stanica""";Stanica;OK;358
+frmStammdaten.frm;"""BPG Broj""";BPG Broj;OK;359
+frmStammdaten.frm;"""Pin""";Pin;OK;361
+frmStammdaten.frm;"""Adresa""";Adresa;OK;362
+frmStammdaten.frm;"""JMBG""";JMBG;OK;363
+frmStammdaten.frm;"""Otkupna Mesta""";Otkupna Mesta;OK;371
+frmStammdaten.frm;"""Naziv""";Naziv;OK;396
+frmStammdaten.frm;"""Kontakt Ime""";Kontakt Ime;OK;399
+frmStammdaten.frm;"""Kontakt Prezime""";Kontakt Prezime;OK;400
+frmStammdaten.frm;"""Hladnjaca?""";Hladnjaca?;OK;402
+frmStammdaten.frm;"""Kupci""";Kupci;OK;418
+frmStammdaten.frm;"""Ulica""";Ulica;OK;443
+frmStammdaten.frm;"""PIB""";PIB;OK;447
+frmStammdaten.frm;"""Email""";Email;OK;449
+frmStammdaten.frm;"""Hladnjaca""";Hladnjaca;OK;450
+frmStammdaten.frm;"""Vozaci""";Vozaci;OK;457
+frmStammdaten.frm;"""PIN""";PIN;OK;478
+frmStammdaten.frm;"""Parcele""";Parcele;OK;490
+frmStammdaten.frm;"""Kooperant""";Kooperant;OK;523
+frmStammdaten.frm;"""Kat. Broj""";Kat. Broj;OK;524
+frmStammdaten.frm;"""Kultura""";Kultura;OK;526
+frmStammdaten.frm;"""Povrsina (ha)""";Povrsina (ha);OK;527
+frmStammdaten.frm;"""GGAP Status""";GGAP Status;OK;528
+frmStammdaten.frm;"""Napomena""";Napomena;OK;529
+frmStammdaten.frm;"""Artikli""";Artikli;OK;572
+frmStammdaten.frm;"""Tip""";Tip;OK;596
+frmStammdaten.frm;"""Jedinica Mere""";Jedinica Mere;OK;597
+frmStammdaten.frm;"""Cena po jed.""";Cena po jed.;OK;598
+frmStammdaten.frm;"""Doza po ha""";Doza po ha;OK;600
+frmStammdaten.frm;"""Pakovanje""";Pakovanje;OK;601
+frmStammdaten.frm;"""Kulture""";Kulture;OK;638
+frmStammdaten.frm;"""Gajbica po paleti""";Gajbica po paleti;OK;662
+frmStammdaten.frm;"""Tip palete""";Tip palete;OK;705
+frmStammdaten.frm;"""Kutije""";Kutije;OK;723
+frmStammdaten.frm;"""Tip kutije""";Tip kutije;OK;735
+frmStammdaten.frm;"""Kese""";Kese;OK;741
+frmStammdaten.frm;"""Tip kese""";Tip kese;OK;753
+frmStammdaten.frm;"""Vrsta gotovog proizvoda""";Vrsta gotovog proizvoda;OK;759
+frmStammdaten.frm;"""Tip gotovog proizvoda""";Tip gotovog proizvoda;OK;771
+frmStammdaten.frm;"""Cenovnik""";Cenovnik;OK;776
+frmStammdaten.frm;"""Klasa""";Klasa;OK;799
+frmStammdaten.frm;"""Datum""";Datum;OK;800
+frmStammdaten.frm;"""Cena""";Cena;OK;801
+frmStammdaten.frm;"""Potvrdi brisanje""";Potvrdi brisanje;OK;2510
+modKarticaDetalji.bas;"""DETALJI OTKUPA (klik na red)""";DETALJI OTKUPA (klik na red);OK;93
+modKarticaDetalji.bas;"""DETALJI""";DETALJI;OK;242
+modKarticaDetalji.bas;"""DETALJI STAVKE""";DETALJI STAVKE;OK;255
+modKarticaDetalji.bas;"""DETALJI OTPREMNICE""";DETALJI OTPREMNICE;OK;270
+modKarticaDetalji.bas;"""DETALJI OTKUPA""";DETALJI OTKUPA;OK;345
+modOtkupBlok.bas;"""Cena po otpremnici:""";Cena po otpremnici:;OK;295
+modOtkupBlok.bas;"""Zbirna: -""";Zbirna: -;OK;318
+modOtkupBlok.bas;"""OTPREMNICE  (klik = izbor)""";OTPREMNICE  (klik = izbor);OK;325
+modOtkupBlok.bas;"""Prikaz: Sve""";Prikaz: Sve;OK;327
+modOtkupBlok.bas;"""BLOKOVI""";BLOKOVI;OK;330
+modOtkupBlok.bas;"""Od:""";Od:;OK;337
+modOtkupBlok.bas;"""Do:""";Do:;OK;340
+modOtkupBlok.bas;"""Storniraj""";Storniraj;OK;347
+modOtkupBlok.bas;"""Biraj otpremnice""";Biraj otpremnice;OK;351
+modOtkupBlok.bas;"""Izgubljeni""";Izgubljeni;OK;354
+modOtkupBlok.bas;"""Preuzmi""";Preuzmi;OK;356
+modOtkupBlok.bas;"""Prikaz: Nezavrsene""";Prikaz: Nezavrsene;OK;675
+modOtkupBlok.bas;"""Nazad""";Nazad;OK;750
+modOtkupBlok.bas;"""Zbirna: """;Zbirna: ;OK;1146
+modOtkupBlok.bas;"""Ukupno kg: """;Ukupno kg: ;OK;1177
+modOtkupBlok.bas;"""U blokovima: """;U blokovima: ;OK;1178
+modOtkupBlok.bas;"""Ostatak: """;Ostatak: ;OK;1179
+modOtkupBlok.bas;"""Ukupno amb: """;Ukupno amb: ;OK;1181
+modOtkupBlok.bas;"""U blokovima amb: """;U blokovima amb: ;OK;1182
+modOtkupBlok.bas;"""Ostatak amb: """;Ostatak amb: ;OK;1183
+modPodesavanja.bas;"""Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju.""";Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju.;OK;202
+modTheme.bas;"""[""";[;OK;645
