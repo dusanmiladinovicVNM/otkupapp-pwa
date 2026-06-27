@@ -375,44 +375,42 @@ Private Sub LayoutDynamic()
     Me.btnOsvezi.Left = x: Me.btnOsvezi.Top = ry - 2
 
     ' --- 3 kolone (desno fiksne sirine, leva uzima ostatak) ---
-    Dim rightW As Double: rightW = 230
-    Dim midW As Double: midW = 232
+    Dim rightW As Double: rightW = 252
+    Dim midW As Double: midW = 252
     Dim rightX As Double: rightX = W - PAD - rightW
     Dim midX As Double: midX = rightX - GAP - midW
     Dim leftX As Double: leftX = PAD
     Dim leftW As Double: leftW = midX - GAP - leftX
-    If leftW < 280 Then leftW = 280
+    If leftW < 300 Then leftW = 300
 
     Dim titleY As Double: titleY = ry + 28
-    Dim hdrY As Double: hdrY = titleY + 64
-    Dim listY As Double: listY = hdrY + 14
+    Const ROWH As Double = 24
+    Dim pTop As Double: pTop = btnTop - 12 - 6 * ROWH
 
     PutLbl Me.lblPalete, leftX, titleY, leftW
     PutLbl Me.lblStavke, midX, titleY, midW
     PutLbl mLblPrerade, rightX, titleY, rightW
 
-    ' Iznad stavki (srednja kolona): Gotov proizvod + Preradjeno
+    ' Leva i desna kolona: lista odmah ispod naslova (nema combo-a iznad).
+    Dim lrHdrY As Double: lrHdrY = titleY + 15
+    Dim lrListY As Double: lrListY = titleY + 29
+    PutCtl Me.lstPaleteHdr, leftX, lrHdrY, leftW
+    PutCtl Me.lstPalete, leftX, lrListY, leftW
+    Me.lstPalete.Height = btnTop - 12 - lrListY
+    PutCtl mLstPradeHdr, rightX, lrHdrY, rightW
+    PutCtl mLstPrerade, rightX, lrListY, rightW
+    mLstPrerade.Height = btnTop - 12 - lrListY
+
+    ' Srednja kolona: iznad stavki Gotov proizvod + Preradjeno, pa lista.
     PutLbl mLblFilterTipGP, midX, titleY + 17, 80
-    PutCtl mCmbFilterTipGP, midX + 82, titleY + 16, midW - 82
+    PutCtl mCmbFilterTipGP, midX + 84, titleY + 16, midW - 84
     PutLbl Me.lblFilterPre, midX, titleY + 41, 80
-    PutCtl Me.cmbFilterPre, midX + 82, titleY + 40, midW - 82
-
-    ' Leva kolona: palete
-    PutCtl Me.lstPaleteHdr, leftX, hdrY, leftW
-    PutCtl Me.lstPalete, leftX, listY, leftW
-    Me.lstPalete.Height = btnTop - 12 - listY
-
-    ' Desna kolona: preradjene palete
-    PutCtl mLstPradeHdr, rightX, hdrY, rightW
-    PutCtl mLstPrerade, rightX, listY, rightW
-    mLstPrerade.Height = btnTop - 12 - listY
-
-    ' Srednja kolona: stavke (kraca) + panel unosa ispod
-    Const ROWH As Double = 24
-    Dim pTop As Double: pTop = btnTop - 12 - 6 * ROWH
-    PutCtl Me.lstStavkeHdr, midX, hdrY, midW
-    PutCtl Me.lstStavke, midX, listY, midW
-    Me.lstStavke.Height = pTop - 8 - listY
+    PutCtl Me.cmbFilterPre, midX + 84, titleY + 40, midW - 84
+    Dim mHdrY As Double: mHdrY = titleY + 64
+    Dim mListY As Double: mListY = titleY + 78
+    PutCtl Me.lstStavkeHdr, midX, mHdrY, midW
+    PutCtl Me.lstStavke, midX, mListY, midW
+    Me.lstStavke.Height = pTop - 8 - mListY
     If Me.lstStavke.Height < 40 Then Me.lstStavke.Height = 40
 
     LayoutPreradaRows midX, midW, pTop, ROWH
