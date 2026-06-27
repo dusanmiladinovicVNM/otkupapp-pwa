@@ -25,6 +25,9 @@ Private mLblTitle As MSForms.label
 Private mBuilt As Boolean
 Private mFormLevel As Boolean          ' True ako su kontrole na formi (fallback), ne na Page-u
 Private mCurOtkupID As String          ' OtkupID trenutno prikazan u panelu (za "Stampaj otkupni list")
+Private mCurOtpremnicaID As String     ' OtpremnicaID prikazanog reda (za grupni otkupni list)
+Private mCurAmbDokID As String         ' Ambalaza: DokumentID izabranog reda (za stampu po tipu)
+Private mCurAmbDokTip As String        ' Ambalaza: DokumentTip izabranog reda
 
 ' Dijagnostika (samo kad build ne uspe): jednom po sesiji prikazi razlog.
 Private mDiag As String
@@ -37,6 +40,9 @@ Public Sub KarticaDetalji_Reset()
     Set mLblTitle = Nothing
     mBuilt = False
     mCurOtkupID = ""
+    mCurOtpremnicaID = ""
+    mCurAmbDokID = ""
+    mCurAmbDokTip = ""
 End Sub
 
 ' Lazy-build panel desno od lstKartica (idempotentno).
@@ -115,6 +121,9 @@ End Sub
 Public Sub KarticaDetalji_Clear()
     On Error Resume Next
     mCurOtkupID = ""
+    mCurOtpremnicaID = ""
+    mCurAmbDokID = ""
+    mCurAmbDokTip = ""
     If Not mLst Is Nothing Then mLst.Clear
     If Not mLblTitle Is Nothing Then mLblTitle.caption = "DETALJI OTKUPA (klik na red)"
 End Sub
@@ -123,6 +132,40 @@ End Sub
 Public Function KarticaDetalji_CurrentOtkupID() As String
     KarticaDetalji_CurrentOtkupID = mCurOtkupID
 End Function
+
+' Prikazi detalje otpremnice za dati red lste, sa eksplicitnim OtpremnicaID
+' (lstOtkupRoba nema skrivenu ref-kljuc kolonu - ListBox limit 10 kolona).
+Public Sub KarticaDetalji_ShowOtpremnica(ByVal frm As Object, ByVal lst As MSForms.ListBox, _
+                                         ByVal idx As Long, ByVal otpID As String)
+    On Error GoTo EH
+    If lst Is Nothing Then Exit Sub
+    KarticaDetalji_Ensure frm, lst
+    If mLst Is Nothing Then Exit Sub
+    mLst.Visible = True
+    If Not mLblTitle Is Nothing Then mLblTitle.Visible = True
+    On Error Resume Next
+    mLst.ZOrder 0
+    mLblTitle.ZOrder 0
+    On Error GoTo EH
+    If idx < 0 Then Exit Sub
+    mLst.Clear
+    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = ""
+    ShowOtpremnicaRow lst, idx, otpID
+    Exit Sub
+EH:
+    LogErr "modKarticaDetalji.KarticaDetalji_ShowOtpremnica"
+End Sub
+
+' OtpremnicaID trenutno prikazanog reda ("" ako red nije otpremnica).
+Public Function KarticaDetalji_CurrentOtpremnicaID() As String
+    KarticaDetalji_CurrentOtpremnicaID = mCurOtpremnicaID
+End Function
+
+' Dokument (ID + Tip) trenutno prikazanog ambalaza reda.
+Public Sub KarticaDetalji_CurrentAmbDok(ByRef dokID As String, ByRef dokTip As String)
+    dokID = mCurAmbDokID
+    dokTip = mCurAmbDokTip
+End Sub
 
 ' Geometrija panela detalja (za pozicioniranje dugmeta ispod njega). 0 ako panel
 ' jos ne postoji.
@@ -151,7 +194,8 @@ Public Sub KarticaDetalji_SetVisible(ByVal b As Boolean)
 End Sub
 
 ' Prikazi detalje za trenutno izabran red lstKartica.
-Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MSForms.ListBox)
+Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MSForms.ListBox, _
+                                     Optional ByVal refKeyCol As Long = -1)
     On Error GoTo EH
     If lstKartica Is Nothing Then Exit Sub
 
@@ -178,15 +222,24 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
     idx = lstKartica.ListIndex
     If idx < 0 Then Exit Sub
 
+    Dim rkc As Long: rkc = KART_REFKEY_COL
+    If refKeyCol >= 0 Then rkc = refKeyCol
     Dim refKey As String
     On Error Resume Next
-    refKey = CStr(lstKartica.List(idx, KART_REFKEY_COL))
+    refKey = CStr(lstKartica.List(idx, rkc))
     On Error GoTo EH
 
     mLst.Clear
+    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = ""
 
     If Left$(refKey, 4) = "OTK|" Then
         ShowOtkupDetails Mid$(refKey, 5)
+    ElseIf Left$(refKey, 4) = "OTP|" Then
+        ShowOtpremnicaRow lstKartica, idx, Mid$(refKey, 5)
+    ElseIf Left$(refKey, 4) = "AMB|" Then
+        ShowAmbRow lstKartica, idx, Mid$(refKey, 5)
+    ElseIf Len(refKey) = 0 Then
+        mLblTitle.caption = "DETALJI"   ' UKUPNO / red bez ref-kljuca
     Else
         ShowBasicRow lstKartica, idx
     End If
@@ -207,6 +260,82 @@ Private Sub ShowBasicRow(ByVal lstKartica As MSForms.ListBox, ByVal idx As Long)
     If Len(Trim$(CStr(lstKartica.List(idx, 4)))) > 0 Then AddPair "Razduzenje", CStr(lstKartica.List(idx, 4))
     AddPair "Saldo", CStr(lstKartica.List(idx, 5))
     If Len(Trim$(CStr(lstKartica.List(idx, 6)))) > 0 Then AddPair "Saldo amb.", CStr(lstKartica.List(idx, 6))
+End Sub
+
+' Otkupljena roba red (otpremnica): prikazi kolone reda (read-only) + zapamti
+' OtpremnicaID za "Stampaj grupni otkupni list".
+Private Sub ShowOtpremnicaRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, ByVal otpID As String)
+    On Error Resume Next
+    mCurOtpremnicaID = otpID
+    mLblTitle.caption = "DETALJI OTPREMNICE"
+    AddPair "Datum", CStr(lst.List(idx, 0))
+    AddPair "Otpremnica", CStr(lst.List(idx, 1))
+    AddPair "Vrsta", CStr(lst.List(idx, 2))
+    AddPair "Klasa", CStr(lst.List(idx, 3))
+    AddPair "Vozac", CStr(lst.List(idx, 4))
+    AddPair "Otp kg", CStr(lst.List(idx, 5))
+    AddPair "Otk. listovi kg", CStr(lst.List(idx, 6))
+    AddPair "Razlika kg", CStr(lst.List(idx, 7))
+    AddPair "Prijemnica kg", CStr(lst.List(idx, 8))
+    AddPair "Manjak kg / %", CStr(lst.List(idx, 9))
+    ' Cena/Vrednost iz tblOtpremnice (nisu kolone u listi).
+    If Len(Trim$(otpID)) > 0 Then
+        Dim cena As Double, kol As Double
+        cena = NumOf(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_CENA))
+        kol = NumOf(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_KOLICINA))
+        If cena > 0 Then AddPair "Cena", Format$(cena, "#,##0.00")
+        If cena > 0 And kol > 0 Then AddPair "Vrednost", Format$(kol * cena, "#,##0.00")
+        Dim brPrij As String: brPrij = PrijemnicaBrojZaOtpremnicu(otpID)
+        If Len(Trim$(brPrij)) > 0 Then AddPair "Broj prijemnice", brPrij
+    End If
+End Sub
+
+' Poslovni broj(evi) prijemnice za zbirnu kojoj pripada otpremnica (spojeni zarezom).
+Private Function PrijemnicaBrojZaOtpremnicu(ByVal otpID As String) As String
+    On Error Resume Next
+    Dim brZb As String
+    brZb = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
+    If Len(Trim$(brZb)) = 0 Then Exit Function
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cZb As Long, cBr As Long
+    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    If cZb = 0 Or cBr = 0 Then Exit Function
+    Dim res As String, i As Long
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cZb)) = brZb Then
+            Dim br As String: br = Trim$(CStr(d(i, cBr)))
+            If Len(br) > 0 And InStr(", " & res & ", ", ", " & br & ", ") = 0 Then
+                If Len(res) > 0 Then res = res & ", "
+                res = res & br
+            End If
+        End If
+    Next i
+    PrijemnicaBrojZaOtpremnicu = res
+End Function
+
+' Ambalaza red (dokument): prikazi kolone reda + zapamti DokumentID/Tip za stampu.
+' refRest = "<DokumentTip>|<DokumentID>".
+Private Sub ShowAmbRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, ByVal refRest As String)
+    On Error Resume Next
+    Dim p As Long: p = InStr(refRest, "|")
+    If p > 0 Then
+        mCurAmbDokTip = Left$(refRest, p - 1)
+        mCurAmbDokID = Mid$(refRest, p + 1)
+    Else
+        mCurAmbDokID = refRest
+    End If
+    mLblTitle.caption = "DETALJI AMBALAZE"
+    AddPair "Datum", CStr(lst.List(idx, 0))
+    AddPair "Mesto", CStr(lst.List(idx, 1))
+    AddPair "Tip ambalaze", CStr(lst.List(idx, 2))
+    AddPair "Dokument", CStr(lst.List(idx, 3))
+    AddPair "Ulaz (gajbe)", CStr(lst.List(idx, 4))
+    AddPair "Izlaz (gajbe)", CStr(lst.List(idx, 5))
+    If Len(Trim$(mCurAmbDokTip)) > 0 Then AddPair "Tip dokumenta", mCurAmbDokTip
 End Sub
 
 ' Otkup red: sve bitne stavke otkupnog lista (polja iz frmOtkup), read-only.

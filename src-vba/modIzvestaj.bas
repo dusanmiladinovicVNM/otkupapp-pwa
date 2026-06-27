@@ -196,6 +196,34 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
             Next m
     End If
     
+    ' --- Aktivni saldo ambalaze po kooperantu (neto iz ledgera: Ulaz - Izlaz,
+    '     EntitetTip="Kooperant"); prikazuje se umesto zbira predatih gajbica. ---
+    Dim koopAmbDict As Object: Set koopAmbDict = CreateObject("Scripting.Dictionary")
+    Dim ambData As Variant: ambData = GetTableData(TBL_AMBALAZA)
+    If IsArray(ambData) Then
+        ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
+        If IsArray(ambData) And Not IsEmpty(ambData) Then
+            Dim caEnt As Long, caEntTip As Long, caKol As Long, caSmer As Long
+            caEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+            caEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+            caKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
+            caSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
+            Dim ai As Long
+            For ai = 1 To UBound(ambData, 1)
+                If Trim$(CStr(ambData(ai, caEntTip))) = "Kooperant" Then
+                    Dim akoop As String: akoop = Trim$(CStr(ambData(ai, caEnt)))
+                    If akoop <> "" And IsNumeric(ambData(ai, caKol)) Then
+                        If Not koopAmbDict.Exists(akoop) Then koopAmbDict.Add akoop, 0&
+                        Select Case Trim$(CStr(ambData(ai, caSmer)))
+                            Case "Ulaz":  koopAmbDict(akoop) = koopAmbDict(akoop) + CLng(ambData(ai, caKol))
+                            Case "Izlaz": koopAmbDict(akoop) = koopAmbDict(akoop) - CLng(ambData(ai, caKol))
+                        End Select
+                    End If
+                End If
+            Next ai
+        End If
+    End If
+
     ' --- Ergebnis-Array: 7 Spalten ---
     ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza
     
@@ -233,13 +261,15 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         result(i + 1, 4) = novacSum                         ' Isplaceno
         result(i + 1, 5) = agroSum                          ' AgroZaduzenje
         result(i + 1, 6) = vals(1) - novacSum - agroSum     ' Saldo
-        result(i + 1, 7) = vals(2)                          ' Ambalaza
+        Dim ambSaldo As Long: ambSaldo = 0
+        If koopAmbDict.Exists(keys(i)) Then ambSaldo = CLng(koopAmbDict(keys(i)))
+        result(i + 1, 7) = ambSaldo                         ' Ambalaza (aktivni saldo, neto)
         
         totKol = totKol + vals(0)
         totVr = totVr + vals(1)
         totNov = totNov + novacSum
         totAgro = totAgro + agroSum
-        totAmb = totAmb + vals(2)
+        totAmb = totAmb + ambSaldo
     Next i
     
     ' OM Avans (nerasporedjen)
@@ -1717,10 +1747,12 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     rowCount = UBound(otpData, 1)
     
     Dim result() As Variant
-    ReDim result(1 To rowCount + 1, 1 To 10)
+    ReDim result(1 To rowCount + 1, 1 To 12)   ' +Prijemnica kg (9), +skriveni OTP|<id> (12)
     
     Dim totOtp As Double, totBlokovi As Double
     Dim totRazlika As Double, totManjak As Double
+    Dim totPrijemnica As Double
+    Dim malinaMode As Boolean: malinaMode = IsMalinaMode()
     Dim i As Long
     
     For i = 1 To rowCount
@@ -1742,18 +1774,23 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         
         Dim manjak As Double: manjak = 0
         Dim manjakPct As Double: manjakPct = 0
+        Dim prijemnicaKg As Double: prijemnicaKg = 0
         Dim mVals As Variant
         If manjakDict.Exists(thisBrZbirne) Then
             mVals = manjakDict(thisBrZbirne)
             Dim zbirnaTotal As Double: zbirnaTotal = mVals(0)
             Dim prijTotal As Double: prijTotal = mVals(1)
             
-            If zbirnaTotal > 0 And prijTotal > 0 Then
-                ' Proportionaler Manjak: (Zbirna - Prijemnica) × (OtpKg / ZbirnaKg)
-                Dim ukupnoManjak As Double
-                ukupnoManjak = zbirnaTotal - prijTotal
-                manjak = ukupnoManjak * (kgOtp / zbirnaTotal)
-                manjakPct = ukupnoManjak / zbirnaTotal * 100
+            If prijTotal > 0 Then
+                If malinaMode Then
+                    ' Malina: 1 otpremnica = 1 zbirna = 1 prijemnica -> direktno.
+                    prijemnicaKg = prijTotal
+                ElseIf zbirnaTotal > 0 Then
+                    ' Prijemnica kg srazmerno udelu otpremnice u zbirnoj otpremnici.
+                    prijemnicaKg = prijTotal * (kgOtp / zbirnaTotal)
+                End If
+                manjak = kgOtp - prijemnicaKg
+                If kgOtp > 0 Then manjakPct = manjak / kgOtp * 100
             End If
         End If
         
@@ -1776,13 +1813,16 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         result(i, 6) = kgOtp
         result(i, 7) = kgBlokovi
         result(i, 8) = razlika
-        result(i, 9) = manjak
-        result(i, 10) = manjakPct
+        result(i, 9) = prijemnicaKg
+        result(i, 10) = manjak
+        result(i, 11) = manjakPct
+        result(i, 12) = "OTP|" & thisOtpID
         
         totOtp = totOtp + kgOtp
         totBlokovi = totBlokovi + kgBlokovi
         totRazlika = totRazlika + razlika
         totManjak = totManjak + manjak
+        totPrijemnica = totPrijemnica + prijemnicaKg
     Next i
     
     ' UKUPNO
@@ -1790,8 +1830,9 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     result(rowCount + 1, 6) = totOtp
     result(rowCount + 1, 7) = totBlokovi
     result(rowCount + 1, 8) = totRazlika
-    result(rowCount + 1, 9) = totManjak
-    If totOtp > 0 Then result(rowCount + 1, 10) = totManjak / totOtp * 100
+    result(rowCount + 1, 9) = totPrijemnica
+    result(rowCount + 1, 10) = totManjak
+    If totOtp > 0 Then result(rowCount + 1, 11) = totManjak / totOtp * 100
     
     ReportOtkupRobaOM = result
     Exit Function
@@ -1974,12 +2015,13 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
     End If
     
     Dim colTip As Long, colKol As Long, colSmer As Long
-    Dim colDokID As Long, colDatum As Long
+    Dim colDokID As Long, colDokTip As Long, colDatum As Long
     Dim colEntitet As Long, colEntTip As Long
     colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, "modIzvestaj.ReportAmbalaza")
     colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, "modIzvestaj.ReportAmbalaza")
     colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, "modIzvestaj.ReportAmbalaza")
     colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "modIzvestaj.ReportAmbalaza")
+    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "modIzvestaj.ReportAmbalaza")
     colDatum = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "modIzvestaj.ReportAmbalaza")
     colEntitet = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza")
     colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza")
@@ -1994,7 +2036,7 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
         ReportAmbalaza = ReportAmbalazeZbirni(filtered, colTip, colKol, colSmer, colEntTip, isVozac)
     Else
         ReportAmbalaza = ReportAmbalazePojedinacni(filtered, colDatum, colEntitet, colEntTip, _
-                                                    colTip, colDokID, colKol, colSmer, isVozac)
+                                                    colTip, colDokID, colDokTip, colKol, colSmer, isVozac)
     End If
     Exit Function
 
@@ -2064,7 +2106,8 @@ End Function
 Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
                                             ByVal colDatum As Long, ByVal colEntitet As Long, _
                                             ByVal colEntTip As Long, ByVal colTip As Long, _
-                                            ByVal colDokID As Long, ByVal colKol As Long, _
+                                            ByVal colDokID As Long, ByVal colDokTip As Long, _
+                                            ByVal colKol As Long, _
                                             ByVal colSmer As Long, ByVal isVozac As Boolean) As Variant
     
     Const SRC As String = "modIzvestaj.ReportAmbalazePojedinacni"
@@ -2072,53 +2115,103 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     
     Dim rowCount As Long
     rowCount = UBound(filtered, 1)
-    
-    Dim result() As Variant
-    ReDim result(1 To rowCount + 1, 1 To 6)  ' +1 UKUPNO
-    
+
+    ' Grupisanje po Dokumentu (+Tip): ako isti dokument ima i Ulaz i Izlaz red,
+    ' prikazi oba u istom redu. Ako ima samo jedan smer -> red ostaje kao i do sada.
+    ' Scripting.Dictionary cuva redosled umetanja (kao redosled filtriranih redova).
+    Dim grp As Object
+    Set grp = CreateObject("Scripting.Dictionary")
+
     Dim totalUlaz As Long, totalIzlaz As Long
     Dim i As Long
-    
     For i = 1 To rowCount
         Dim kol As Long: kol = 0
         If IsNumeric(filtered(i, colKol)) Then kol = CLng(filtered(i, colKol))
-        
-        ' Mesto-Name auflösen
+
         Dim entID As String: entID = CStr(filtered(i, colEntitet))
         Dim entTipVal As String: entTipVal = CStr(filtered(i, colEntTip))
-        
-        result(i, 1) = CDate(filtered(i, colDatum))
-        result(i, 2) = ResolveEntitetName(entID, entTipVal)
-        result(i, 3) = CStr(filtered(i, colTip))
-        result(i, 4) = CStr(filtered(i, colDokID))
-        
+        Dim dokIDv As String: dokIDv = CStr(filtered(i, colDokID))
+        Dim tipv As String: tipv = CStr(filtered(i, colTip))
+        Dim dokTipv As String: dokTipv = CStr(filtered(i, colDokTip))
+
         Dim effSmer As String
         effSmer = CStr(filtered(i, colSmer))
         If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, entTipVal)
+
+        Dim gkey As String: gkey = dokIDv & "|" & tipv
+        Dim rec As Variant
+        If grp.Exists(gkey) Then
+            rec = grp(gkey)
+        Else
+            ' Datum, Mesto, Tip, Dokument, Ulaz, Izlaz
+            rec = Array(filtered(i, colDatum), ResolveEntitetName(entID, entTipVal), _
+                        tipv, dokIDv, 0&, 0&, dokTipv)
+        End If
         If effSmer = "Ulaz" Then
-            result(i, 5) = kol
-            result(i, 6) = ""
+            rec(4) = CLng(rec(4)) + kol
             totalUlaz = totalUlaz + kol
         Else
-            result(i, 5) = ""
-            result(i, 6) = kol
+            rec(5) = CLng(rec(5)) + kol
             totalIzlaz = totalIzlaz + kol
         End If
+        grp(gkey) = rec
     Next i
-    
+
+    Dim nGrp As Long: nGrp = grp.Count
+    Dim result() As Variant
+    ReDim result(1 To nGrp + 1, 1 To 7)  ' +1 UKUPNO, kol.7 = skriveni ref-kljuc
+
+    Dim keys As Variant: keys = grp.keys
+    Dim r As Long
+    For r = 0 To nGrp - 1
+        Dim rr As Variant: rr = grp(keys(r))
+        If IsDate(rr(0)) Then
+            result(r + 1, 1) = CDate(rr(0))
+        Else
+            result(r + 1, 1) = rr(0)
+        End If
+        result(r + 1, 2) = rr(1)
+        result(r + 1, 3) = rr(2)
+        result(r + 1, 4) = ResolveDokBroj(CStr(rr(6)), CStr(rr(3)))
+        result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
+        result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
+        result(r + 1, 7) = "AMB|" & CStr(rr(6)) & "|" & CStr(rr(3))
+    Next r
+
     ' UKUPNO
-    result(rowCount + 1, 1) = "UKUPNO"
-    result(rowCount + 1, 2) = ""
-    result(rowCount + 1, 3) = ""
-    result(rowCount + 1, 4) = "Saldo: " & Format$(totalUlaz - totalIzlaz, "#,##0")
-    result(rowCount + 1, 5) = totalUlaz
-    result(rowCount + 1, 6) = totalIzlaz
-    
+    result(nGrp + 1, 1) = "UKUPNO"
+    result(nGrp + 1, 2) = ""
+    result(nGrp + 1, 3) = ""
+    result(nGrp + 1, 4) = "Saldo: " & Format$(totalUlaz - totalIzlaz, "#,##0")
+    result(nGrp + 1, 5) = totalUlaz
+    result(nGrp + 1, 6) = totalIzlaz
+    result(nGrp + 1, 7) = ""
+
     ReportAmbalazePojedinacni = result
     Exit Function
 
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Poslovni broj dokumenta iz internog DokumentID-a (za prikaz u Ambalaza pregledu).
+' Vraca DokumentID ako broj nije razresiv.
+Private Function ResolveDokBroj(ByVal dokTip As String, ByVal dokID As String) As String
+    On Error Resume Next
+    Dim sOut As String: sOut = dokID
+    Select Case dokTip
+        Case DOK_TIP_OTPREMNICA
+            sOut = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, dokID, COL_OTP_BROJ))
+        Case DOK_TIP_PRIJEMNICA
+            sOut = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, dokID, COL_PRJ_BROJ))
+        Case DOK_TIP_OTKUP, DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
+            ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone revers: DokumentID = brojDok
+            Dim br As String
+            br = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_BR_DOK))
+            If Len(Trim$(br)) > 0 Then sOut = br Else sOut = dokID
+    End Select
+    If Len(Trim$(sOut)) = 0 Then sOut = dokID
+    ResolveDokBroj = sOut
 End Function
 
 ' ============================================================

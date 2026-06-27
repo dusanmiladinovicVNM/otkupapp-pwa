@@ -49,6 +49,14 @@ Attribute m_lstOtk.VB_VarHelpID = -1
 Private m_lblOtkTitle As MSForms.label
 Private WithEvents m_btnStampajOtk As MSForms.CommandButton
 Attribute m_btnStampajOtk.VB_VarHelpID = -1
+' Dugmad za stampu uz deljeni "Detalji" panel: Otkupljena roba / Ambalaza.
+Private WithEvents m_btnStampajOtkRoba As MSForms.CommandButton
+Attribute m_btnStampajOtkRoba.VB_VarHelpID = -1
+Private WithEvents m_btnStampajAmb As MSForms.CommandButton
+Attribute m_btnStampajAmb.VB_VarHelpID = -1
+' OtpremnicaID po redu lstOtkupRoba (ListBox podrzava max 10 kolona -> bez
+' skrivene ref-kljuc kolone; kljuc = CStr(ListIndex)).
+Private m_otkOtpID As Object
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -150,8 +158,12 @@ Private Sub UserForm_Activate()
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
     
     SetupListBoxes
+    On Error Resume Next
+    mpReports.Pages(3).caption = "Ambalaza"   ' "Primljena ambalaza" -> "Ambalaza"
+    On Error GoTo EH
     EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
     EnsureOtkupListePage          ' runtime tab "Otkupni listovi" (pre UpdateReportMode)
+    EnsureDetaljiButtons          ' dugmad za stampu uz "Detalji" (Otk.roba / Ambalaza)
     UpdateReportMode
     ForceDarkAllPages
     
@@ -474,13 +486,13 @@ Private Sub SetupListBoxes()
     End With
     
     With lstOtkupRoba
-        .ColumnCount = 10
-        .ColumnWidths = "45;78;45;25;80;50;50;45;45;40"
+        .ColumnCount = 10          ' MSForms ListBox limit; Manjak kg+% spojeni, refkey u dict
+        .ColumnWidths = "45;70;45;25;75;50;50;50;55;80"   ' fallback; LayoutOtkupRobaHeaders prepisuje
     End With
     
     With lstAmbalaza
-        .ColumnCount = 6
-        .ColumnWidths = "55;90;45;80;50;50"
+        .ColumnCount = 7          ' 6 vidljivih + skrivena ref-kljuc kolona (idx 6)
+        .ColumnWidths = "55;90;45;80;50;50;0"
     End With
     
     With lstIsplata
@@ -511,6 +523,8 @@ Private Sub SetupListBoxes()
     ' Sirine + header pozicije kartice se racunaju iz stvarne lstKartica.width
     ' (auto-fit, da "Saldo amb." kolona i njen header stanu i budu poravnati).
     LayoutKarticaHeaders
+    LayoutOtkupRobaHeaders
+    LayoutSaldoOMHeaders
 End Sub
 
 Private Sub UpdateStatusLabel()
@@ -639,12 +653,17 @@ End Sub
 
 Private Sub mpReports_Change()
     UpdateStatusLabel
-    ' Panel "Detalji otkupa" se deli izmedju Kartice (Page 8) i "Otkupni listovi".
+    ' Deljeni "Detalji" panel: Kartica (8), "Otkupni listovi", Otkupljena roba (2),
+    ' Ambalaza (3).
     Dim onOtk As Boolean
     onOtk = (m_otkPageIdx >= 0 And mpReports.value = m_otkPageIdx)
-    KarticaDetalji_SetVisible (mpReports.value = 8 Or onOtk)
-    ' Dugme "Stampaj otkupni list" je samo na tabu "Otkupni listovi".
+    Dim onRoba As Boolean: onRoba = (mpReports.value = 2)
+    Dim onAmb As Boolean: onAmb = (mpReports.value = 3)
+    KarticaDetalji_SetVisible (mpReports.value = 8 Or onOtk Or onRoba Or onAmb)
+    ' Dugmad za stampu vidljiva samo na svom tabu.
     If Not m_btnStampajOtk Is Nothing Then m_btnStampajOtk.Visible = onOtk
+    If Not m_btnStampajOtkRoba Is Nothing Then m_btnStampajOtkRoba.Visible = onRoba
+    If Not m_btnStampajAmb Is Nothing Then m_btnStampajAmb.Visible = onAmb
 End Sub
 Private Sub UpdateUnosButtonState()
 
@@ -729,38 +748,54 @@ End Sub
 Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                     ByVal datumOd As Date, ByVal datumDo As Date)
     lstOtkupRoba.Clear
-    
+    KarticaDetalji_Clear
+    Set m_otkOtpID = CreateObject("Scripting.Dictionary")
+
     Dim data As Variant
     data = ReportOtkupRoba(entitetTip, entitetID, datumOd, datumDo)
     If IsEmpty(data) Then Exit Sub
-    
-    Dim i As Long, j As Long
+
+    Dim isOM As Boolean: isOM = (entitetTip = "OM")
+    Dim i As Long, j As Long, li As Long
     For i = 1 To UBound(data, 1)
         If IsDate(data(i, 1)) Then
             lstOtkupRoba.AddItem Format$(CDate(data(i, 1)), "d.m.yy")
         Else
             lstOtkupRoba.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
         End If
-        
-        For j = 2 To UBound(data, 2)
-            If j = 10 Then
-                ' Manjak% formatieren
+        li = lstOtkupRoba.ListCount - 1
+
+        If isOM Then
+            ' OM: 12 logickih kolona -> 10 listbox kolona (Manjak kg+% spojeni;
+            ' OtpremnicaID u m_otkOtpID jer ListBox podrzava max 10 kolona).
+            lstOtkupRoba.List(li, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+            lstOtkupRoba.List(li, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+            lstOtkupRoba.List(li, 3) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
+            lstOtkupRoba.List(li, 4) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))
+            If IsNumeric(data(i, 6)) Then lstOtkupRoba.List(li, 5) = FmtKolicina(CDbl(data(i, 6)))
+            If IsNumeric(data(i, 7)) Then lstOtkupRoba.List(li, 6) = FmtKolicina(CDbl(data(i, 7)))
+            If IsNumeric(data(i, 8)) Then lstOtkupRoba.List(li, 7) = FmtKolicina(CDbl(data(i, 8)))
+            If IsNumeric(data(i, 9)) Then lstOtkupRoba.List(li, 8) = FmtKolicina(CDbl(data(i, 9)))
+            Dim mStr As String: mStr = ""
+            If IsNumeric(data(i, 10)) And Not IsEmpty(data(i, 10)) Then mStr = FmtKolicina(CDbl(data(i, 10)))
+            If IsNumeric(data(i, 11)) And Not IsEmpty(data(i, 11)) Then _
+                mStr = Trim$(mStr & " / " & Format$(CDbl(data(i, 11)), "0.0") & "%")
+            lstOtkupRoba.List(li, 9) = mStr
+            Dim rk As String: rk = CStr(IIf(IsEmpty(data(i, 12)), "", data(i, 12)))
+            If Left$(rk, 4) = "OTP|" Then m_otkOtpID(CStr(li)) = Mid$(rk, 5)
+        Else
+            For j = 2 To UBound(data, 2)
                 If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "0.00") & "%"
-                End If
-            ElseIf IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                If GetActiveEntitetTip() = "Kupci" And j = UBound(data, 2) Then
-                    ' Kupci: poslednja kolona = Vrednost (novac) -> uvek 2 decimale
-                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+                    If GetActiveEntitetTip() = "Kupci" And j = UBound(data, 2) Then
+                        lstOtkupRoba.List(li, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+                    Else
+                        lstOtkupRoba.List(li, j - 1) = FmtKolicina(CDbl(data(i, j)))
+                    End If
                 Else
-                    ' kolicina (kg): decimale samo kad postoje (bez ",0"/",00" za ceo broj)
-                    lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = FmtKolicina(CDbl(data(i, j)))
+                    lstOtkupRoba.List(li, j - 1) = CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
                 End If
-            Else
-                lstOtkupRoba.List(lstOtkupRoba.ListCount - 1, j - 1) = _
-                    CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
-            End If
-        Next j
+            Next j
+        End If
     Next i
 End Sub
 
@@ -771,6 +806,7 @@ End Sub
 Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                    ByVal datumOd As Date, ByVal datumDo As Date)
     lstAmbalaza.Clear
+    KarticaDetalji_Clear
     
     Dim isZb As Boolean
     isZb = IsZbirniMode()
@@ -794,6 +830,10 @@ Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID A
         End If
         If IsNumeric(data(i, 6)) And data(i, 6) <> "" Then
             lstAmbalaza.List(lstAmbalaza.ListCount - 1, 5) = Format$(CLng(data(i, 6)), "#,##0")
+        End If
+        ' Skrivena kol. 6 = ref-kljuc (AMB|<DokTip>|<DokID>); samo pojedinacni (7 kol).
+        If UBound(data, 2) >= 7 Then
+            lstAmbalaza.List(lstAmbalaza.ListCount - 1, 6) = CStr(IIf(IsEmpty(data(i, 7)), "", data(i, 7)))
         End If
     Next i
 End Sub
@@ -1191,9 +1231,9 @@ Private Sub btnStampaj_Click()
                     "Vozac", _
                     "Otp kg", _
                     "Blokovi kg", _
-                    "Razlika kg", _
-                    "Manjak kg", _
-                    "Manjak %")
+                    "Razlika kg (Otk. listovi - Otprem.)", _
+                    "Prijemnica kg", _
+                    "Manjak kg / %")
             Else
                 headers = Array( _
                     "Nr", _
@@ -1210,7 +1250,7 @@ Private Sub btnStampaj_Click()
                 
         Case 3
             Set lst = lstAmbalaza
-            title = "Primljena ambalaza"
+            title = "Ambalaza"
             headers = Array( _
                 "Datum", _
                 "Mesto", _
@@ -1370,6 +1410,8 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SOM6, "Saldo"
     SetColumnHeader lbl_H_SOM7, "Ambalaža"
     
+    LayoutSaldoOMHeaders
+
     ' === SaldoKupci Page ===
     SetColumnHeader lbl_H_SK1, "Vrsta"
     SetColumnHeader lbl_H_SK2, "Kolicina"
@@ -1379,17 +1421,8 @@ Private Sub SetupAllColumnHeaders()
     SetColumnHeader lbl_H_SK6, "Saldo"
     SetColumnHeader lbl_H_SK7, "Ambalaža"
     
-    ' === OtkupRoba Page ===
-    SetColumnHeader lbl_H_OR1, "Datum"
-    SetColumnHeader lbl_H_OR2, "Br. Otp."
-    SetColumnHeader lbl_H_OR3, "Vrsta"
-    SetColumnHeader lbl_H_OR4, "Klasa"
-    SetColumnHeader lbl_H_OR5, "Vozac"
-    SetColumnHeader lbl_H_OR6, "Otp kg"
-    SetColumnHeader lbl_H_OR7, "Blokovi kg"
-    SetColumnHeader lbl_H_OR8, "Razlika kg"
-    SetColumnHeader lbl_H_OR9, "Manjak kg"
-    SetColumnHeader lbl_H_OR10, "Manjak %"
+    ' === OtkupRoba Page === (naslovi + sirine + OR11 -> LayoutOtkupRobaHeaders)
+    LayoutOtkupRobaHeaders
     
     ' === Ambalaza Page ===
     SetColumnHeader lbl_H_AMB1, "Datum"
@@ -1490,6 +1523,82 @@ Private Sub LayoutKarticaHeaders()
     cw = cw & "0"                            ' skrivena ref-kljuc kolona (idx 7)
     lstKartica.ColumnCount = 8
     lstKartica.ColumnWidths = cw
+End Sub
+
+' Poravnaj header labele Saldo OM tacno nad kolonama (auto-fit iz lstSaldoOM.width,
+' kao LayoutKarticaHeaders) - .frx pozicije su se razilazile sa kolonama. I header
+' Left/Width i lstSaldoOM.ColumnWidths idu iz istog izvora -> uvek poravnato.
+Private Sub LayoutSaldoOMHeaders()
+    On Error Resume Next
+    Dim prop As Variant
+    prop = Array(0.216, 0.117, 0.144, 0.144, 0.144, 0.144, 0.091)
+    Dim names As Variant
+    names = Array("lbl_H_SOM1", "lbl_H_SOM2", "lbl_H_SOM3", "lbl_H_SOM4", _
+                  "lbl_H_SOM5", "lbl_H_SOM6", "lbl_H_SOM7")
+    Dim availW As Double: availW = lstSaldoOM.width - 16
+    If availW < 120 Then Exit Sub
+    Dim X As Double: X = lstSaldoOM.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 6
+        Dim wCol As Long: wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lstSaldoOM.parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            lbl.Left = X
+            lbl.width = wCol
+        End If
+        cw = cw & CStr(wCol)
+        If k < 6 Then cw = cw & ";"
+        X = X + wCol
+    Next k
+    lstSaldoOM.ColumnCount = 7
+    lstSaldoOM.ColumnWidths = cw
+End Sub
+
+' Naslovi + sirine kolona za "Otkupljena roba" (OM varijanta): 10 vidljivih kolona
+' (ListBox limit; Manjak kg+% spojeni u jednu kolonu, OtpremnicaID u m_otkOtpID).
+' OR8 ima podnaslov u zagradi. Auto-fit iz lstOtkupRoba.width (kao
+' LayoutKarticaHeaders). .frx se ne dira (CLAUDE.md).
+Private Sub LayoutOtkupRobaHeaders()
+    On Error Resume Next
+
+    Dim caps As Variant
+    caps = Array("Datum", "Br. Otp.", "Vrsta", "Klasa", "Vozac", "Otp kg", _
+                 "Blokovi kg", "Razlika kg", _
+                 "Prijemnica kg", "Manjak kg / %")
+    Dim prop As Variant
+    prop = Array(0.085, 0.12, 0.09, 0.05, 0.135, 0.09, 0.09, 0.085, 0.09, 0.165)
+    Dim names As Variant
+    names = Array("lbl_H_OR1", "lbl_H_OR2", "lbl_H_OR3", "lbl_H_OR4", "lbl_H_OR5", _
+                  "lbl_H_OR6", "lbl_H_OR7", "lbl_H_OR8", "lbl_H_OR9", "lbl_H_OR10")
+
+    Dim availW As Double
+    availW = lstOtkupRoba.width - 16
+    If availW < 140 Then Exit Sub
+
+    Dim X As Double: X = lstOtkupRoba.Left
+    Dim cw As String: cw = ""
+    Dim k As Long
+    For k = 0 To 9
+        Dim wCol As Long
+        wCol = CLng(Int(availW * CDbl(prop(k))))
+        Dim lbl As MSForms.label
+        Set lbl = Nothing
+        Set lbl = lstOtkupRoba.parent.Controls(CStr(names(k)))
+        If Not lbl Is Nothing Then
+            lbl.Left = X
+            lbl.width = wCol
+            StyleListHeaderLabel lbl
+            lbl.caption = CStr(caps(k))
+        End If
+        cw = cw & CStr(wCol)
+        If k < 9 Then cw = cw & ";"
+        X = X + wCol
+    Next k
+    lstOtkupRoba.ColumnCount = 10
+    lstOtkupRoba.ColumnWidths = cw
 End Sub
 
 Private Sub SetColumnHeader(ByVal lbl As MSForms.label, ByVal txt As String)
@@ -1769,6 +1878,202 @@ EH:
     LogErr "frmIzvestaj.m_btnStampajOtk_Click"
     MsgBox "Greska pri stampi otkupnog lista: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' ============================================================
+' "Detalji" panel: klik na red Otkupljena roba / Ambalaza -> deljeni panel
+' (modKarticaDetalji). Ispod panela dugme za stampu (po tabu).
+' ============================================================
+Private Sub lstOtkupRoba_Click()
+    On Error Resume Next
+    ShowOtkupRobaDetalji
+End Sub
+Private Sub lstOtkupRoba_Change()
+    On Error Resume Next
+    ShowOtkupRobaDetalji
+End Sub
+Private Sub ShowOtkupRobaDetalji()
+    On Error Resume Next
+    Dim idx As Long: idx = lstOtkupRoba.ListIndex
+    Dim oid As String
+    If Not m_otkOtpID Is Nothing Then
+        If m_otkOtpID.Exists(CStr(idx)) Then oid = CStr(m_otkOtpID(CStr(idx)))
+    End If
+    KarticaDetalji_ShowOtpremnica Me, lstOtkupRoba, idx, oid
+End Sub
+Private Sub lstAmbalaza_Click()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstAmbalaza, 6     ' skrivena kol. 6 = AMB|<tip>|<id>
+End Sub
+Private Sub lstAmbalaza_Change()
+    On Error Resume Next
+    KarticaDetalji_ShowForRow Me, lstAmbalaza, 6
+End Sub
+
+' Dugmad za stampu uz deljeni panel (kreirana forma-level kao m_btnStampajOtk).
+Private Sub EnsureDetaljiButtons()
+    On Error GoTo EH
+    KarticaDetalji_Ensure Me, lstKartica
+    Dim pl As Double, pt As Double, pw As Double, ph As Double
+    KarticaDetalji_PanelRect pl, pt, pw, ph
+    If pw <= 0 Then Exit Sub
+    If m_btnStampajOtkRoba Is Nothing Then
+        Set m_btnStampajOtkRoba = Me.Controls.Add("Forms.CommandButton.1", "btnStampajOtkRoba", True)
+        With m_btnStampajOtkRoba
+            .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
+        End With
+        StylePrimaryButton m_btnStampajOtkRoba
+        m_btnStampajOtkRoba.caption = ChrW(352) & "tampaj otpremnicu"
+        On Error Resume Next
+        m_btnStampajOtkRoba.ZOrder 0
+        On Error GoTo EH
+        m_btnStampajOtkRoba.Visible = False
+    End If
+    If m_btnStampajAmb Is Nothing Then
+        Set m_btnStampajAmb = Me.Controls.Add("Forms.CommandButton.1", "btnStampajAmbDok", True)
+        With m_btnStampajAmb
+            .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
+        End With
+        StylePrimaryButton m_btnStampajAmb
+        m_btnStampajAmb.caption = ChrW(352) & "tampaj dokument"
+        On Error Resume Next
+        m_btnStampajAmb.ZOrder 0
+        On Error GoTo EH
+        m_btnStampajAmb.Visible = False
+    End If
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.EnsureDetaljiButtons"
+End Sub
+
+' Stampa grupni otkupni list za otpremnicu izabranu u panelu "Detalji".
+Private Sub m_btnStampajOtkRoba_Click()
+    On Error GoTo EH
+    Dim otpID As String
+    otpID = KarticaDetalji_CurrentOtpremnicaID()
+    If Len(Trim$(otpID)) = 0 Then
+        MsgBox "Izaberite otpremnicu (klik na red u listi).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    OutputOtpremnicaPDF otpID
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.m_btnStampajOtkRoba_Click"
+    MsgBox "Greska pri stampi otpremnice: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Stampa dokument izabranog ambalaza reda, ruta po tipu dokumenta.
+Private Sub m_btnStampajAmb_Click()
+    On Error GoTo EH
+    Dim dokID As String, dokTip As String
+    KarticaDetalji_CurrentAmbDok dokID, dokTip
+    If Len(Trim$(dokID)) = 0 Then
+        MsgBox "Izaberite dokument (klik na red u listi).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Select Case dokTip
+        Case DOK_TIP_PRIJEMNICA
+            PrintPrijemnica dokID
+        Case DOK_TIP_OTKUP
+            ReprintOtkupniListByOtkupID dokID
+        Case DOK_TIP_OTPREMNICA
+            OutputOtpremnicaPDF dokID
+        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
+            ' OM<->kooperant kretanje (prazne gajbe) -> revers.
+            StampajReversAmbDok dokID, dokTip
+        Case Else
+            MsgBox "Za tip dokumenta '" & dokTip & "' stampa nije dostupna iz ovog pregleda.", _
+                   vbInformation, APP_NAME
+    End Select
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.m_btnStampajAmb_Click"
+    MsgBox "Greska pri stampi dokumenta: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Revers (OM<->kooperant kretanje ambalaze) za izabrani ambalaza red. Argumenti se
+' rekonstruisu iz dve noge ledger-a (Kooperant + Stanica) koje dele DokumentID
+' (vazi i za samostalni revers i za nogu knjizenu uz otkup). prijem=True za povrat.
+Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Sub
+    Dim cDat As Long, cTip As Long, cKol As Long, cEnt As Long
+    Dim cEntTip As Long, cDok As Long, cDokTip As Long
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    If cDok = 0 Or cDokTip = 0 Then Exit Sub
+
+    Dim datum As Date, haveDatum As Boolean
+    Dim tipAmb As String, omID As String, koopID As String
+    Dim kolAmb As Long
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cDok)) = dokID And CStr(d(i, cDokTip)) = dokTip Then
+            If Not haveDatum And IsDate(d(i, cDat)) Then
+                datum = CDate(d(i, cDat)): haveDatum = True
+            End If
+            If Len(tipAmb) = 0 Then tipAmb = CStr(d(i, cTip))
+            Dim et As String: et = CStr(d(i, cEntTip))
+            If et = "Stanica" Then
+                omID = CStr(d(i, cEnt))
+            ElseIf et = "Kooperant" Then
+                koopID = CStr(d(i, cEnt))
+                If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
+            End If
+        End If
+    Next i
+
+    If Len(Trim$(koopID)) = 0 Or Len(Trim$(omID)) = 0 Then
+        MsgBox "Revers nije moguce rekonstruisati (nedostaje OM ili kooperant noga).", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If Not haveDatum Then datum = Date
+
+    Dim omNaziv As String, koopNaziv As String, vrsta As String
+    omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
+    koopNaziv = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Ime")) & " " & _
+                      CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Prezime")))
+    ' Uz-otkup revers: DokumentID = otkupID -> vrsta iz otkupa; standalone -> prazno.
+    vrsta = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_VRSTA))
+
+    Dim prijem As Boolean: prijem = (dokTip = DOK_TIP_OM_ULAZ_KOOP)
+    OutputIzdavanjeAmbalaze datum, dokID, omNaziv, omID, koopNaziv, koopID, _
+                            tipAmb, kolAmb, vrsta, prijem
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.StampajReversAmbDok"
+    MsgBox "Greska pri stampi reversa: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Prijemnice (" + "-spojeni ID-jevi) za zbirnu kojoj pripada otpremnica.
+Private Function PrijemniceZaOtpremnicu(ByVal otpID As String) As String
+    On Error Resume Next
+    Dim brZbirne As String
+    brZbirne = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
+    If Len(Trim$(brZbirne)) = 0 Then Exit Function
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cId As Long, cZb As Long
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    If cId = 0 Or cZb = 0 Then Exit Function
+    Dim res As String, i As Long
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cZb)) = brZbirne Then
+            If Len(res) > 0 Then res = res & " + "
+            res = res & CStr(d(i, cId))
+        End If
+    Next i
+    PrijemniceZaOtpremnicu = res
+End Function
 
 Private Sub ForceDarkAllPages()
     On Error Resume Next
