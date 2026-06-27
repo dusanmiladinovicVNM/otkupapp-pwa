@@ -118,8 +118,8 @@ STM_MSG_NOVU_CENU_KORISTITE;Za novu cenu koristite 'Dodaj' — stari redovi osta
 STM_ERR_GRESKA_PRI_IZMENI;Greška pri izmeni: ;frmStammdaten.frm;2249;DA;;
 STM_ERR_GRESKA_PRI_UCITAVANJU_2;Greška pri ucitavanju stanica: ;frmStammdaten.frm;2851;DA;;
 AGRO_MSG_GRESKA_PRI_UNOSU;Greška pri unosu magacina, promene vracene: ;modAgrohemija.bas;245;DA;;
-BANKA_LBL_PDF_AUSWAHLEN;PDF auswählen;modBankaImportParserPdfToText.bas;267;DA;PDF auswählen;"[PREVESTI (auswählen→izaberi; PDF→PDF)]"
-GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN;Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.;modGoogleAuth.bas;81;DA;Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.;"[PREVESTI (fehlgeschlagen→nije uspelo; Prüfe→proveri; Austausch→razmena)]"
+BANKA_LBL_PDF_AUSWAHLEN;Izaberi PDF;modBankaImportParserPdfToText.bas;267;DA;PDF auswählen;"[PREVESTI (auswählen→izaberi; PDF→PDF)]"
+GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN;Razmena tokena nije uspela. Proveri Client ID/Secret.;modGoogleAuth.bas;81;DA;Token-Austausch fehlgeschlagen. Prüfe Client ID/Secret.;"[PREVESTI (fehlgeschlagen→nije uspelo; Prüfe→proveri; Austausch→razmena)]"
 SYNC_ERR_UVOZ_OTK_NIJE;Uvoz OTK nije potvrden zbog fatal sync greške.;modMasterSync.bas;201;DA;;
 SYNC_ERR_GRESKE;Greške: ;modMasterSync.bas;204;DA;;Koristi se i u: modMasterSync.bas:228, modMasterSync.bas:249, modMasterSync.bas:2076, modMasterSync.bas:2100, modMasterSync.bas:2121
 SYNC_ERR_UVOZ_OTK_ZAVRSEN;Uvoz OTK završen sa greškama.;modMasterSync.bas;224;DA;;
@@ -161,49 +161,49 @@ SETUP_MSG_APLIKACIJA_RADI_LOKALNO;Aplikacija radi lokalno — Google/PWA se ne k
 SETUP_MSG_BANKARSKI_FOLDERI_PODESENI;Bankarski folderi su podešeni.;modSetup.bas;246;DA;;
 SETUP_ERR_GRESKA_PRI_PODESAVANJU;Greška pri podešavanju bankarskih foldera: ;modSetup.bas;251;DA;;
 STM_ERR_GRESKA_PRI_EXPORTU;Greška pri exportu parcela: ;modStammdatenSync.bas;1638;DA;;
-AGRO_ERR_GRESKA_PRI_CUVANJU;Greška pri cuvanju izlaza. ArtikalID=;frmAgrohemija.frm;501;SUMNJIVO;;
-AGRO_ERR_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju ulaza. ArtikalID=;frmAgrohemija.frm;714;SUMNJIVO;;
-AGRO_ERR_KORPA_SADRZI_STAVKU;Korpa sadrži stavku bez ArtikalID.;frmAgrohemija.frm;812;SUMNJIVO;;
-DOK_ERR_NEMA_AMBALAZE_NOVCA;Nema ambalaže ni novca za cuvanje.;frmDokumenta.frm;1143;SUMNJIVO;;Koristi se i u: modDokumenta.bas:1249
-SEF_MSG_SENDING_FAKTURA_TRENUTNO;- SENDING: Faktura se trenutno šalje.;frmSEF.frm;674;SUMNJIVO;;
-SEF_MSG_SENT_FAKTURA_USPESNO;- SENT: Faktura uspešno primljena na SEF.;frmSEF.frm;675;SUMNJIVO;;
-SEF_MSG_REJECTED_GRESKA_PROVERI;- REJECTED: Greška! Proveri 'Poslednja greška'.;frmSEF.frm;677;SUMNJIVO;;
-SEF_MSG_IZABERI_FAKTURU_LISTE;Izaberi fakturu iz liste -> Klikni 'Pošalji na SEF'.;frmSEF.frm;679;SUMNJIVO;;
-SEF_MSG_TEHNICKA_PODRSKA;3. TEHNICKA PODRŠKA:;frmSEF.frm;681;SUMNJIVO;;
-SEF_MSG_SVE_PROBLEME_KOJI;Za sve probleme koji se ne rešavaju sa 'Osveži status',;frmSEF.frm;682;SUMNJIVO;;
-SEF_MSG_KONTAKTIRAJ_ADMINISTRATORA_POSALJI;kontaktiraj administratora i pošalji SEF Event Log (donja tabela).;frmSEF.frm;683;SUMNJIVO;;
-STM_MSG_PARCELA_NEMA_KATASTARSKI;Parcela nema katastarski broj ili katastarsku opštinu.;frmStammdaten.frm;2430;SUMNJIVO;;
-STM_MSG_GRESKA_PRI_OTVARANJU;Greška pri otvaranju GeoSrbije. Pogledaj log.;frmStammdaten.frm;2444;SUMNJIVO;;
-STM_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju geo podataka. Pogledaj log.;frmStammdaten.frm;2496;SUMNJIVO;;
-STM_MSG_KLIKNI_JOS_JEDNOM;Klikni još jednom za brisanje geo podataka.;frmStammdaten.frm;2511;SUMNJIVO;;
-STM_MSG_GRESKA_PRI_BRISANJU;Greška pri brisanju geo podataka. Pogledaj log.;frmStammdaten.frm;2536;SUMNJIVO;;
-STM_MSG_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju koordinata. Pogledaj log.;frmStammdaten.frm;2572;SUMNJIVO;;
-STM_MSG_GRESKA_PRI_OTVARANJU_2;Greška pri otvaranju Google Maps. Pogledaj log.;frmStammdaten.frm;2623;SUMNJIVO;;
-STM_MSG_GRESKA_PRI_OTVARANJU_3;Greška pri otvaranju polygon editora. Pogledaj log.;frmStammdaten.frm;2685;SUMNJIVO;;
-DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow fehlgeschlagen für tblOtpremnica;modDokumenta.bas;263;SUMNJIVO;AppendRow fehlgeschlagen für tblOtpremnica;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow fehlgeschlagen für tblZbirna.;modDokumenta.bas;592;SUMNJIVO;AppendRow fehlgeschlagen für tblZbirna.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_3;AppendRow fehlgeschlagen für tblPrijemnica.;modDokumenta.bas;1081;SUMNJIVO;AppendRow fehlgeschlagen für tblPrijemnica.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow fehlgeschlagen für tblFakture.;modFaktura.bas;286;SUMNJIVO;AppendRow fehlgeschlagen für tblFakture.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow fehlgeschlagen für tblFakturaStavke.;modFaktura.bas;318;SUMNJIVO;AppendRow fehlgeschlagen für tblFakturaStavke.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-FAK_ERR_STORNIRANA_FAKTURA_MOZE;Stornirana faktura se ne može štampati kao aktivna faktura: ;modFaktura.bas;437;SUMNJIVO;;
-LOG_MSG_EINTRAGE_EXCEL_HAT; Einträge, Excel hat ;modJournaling.bas;221;SUMNJIVO; Einträge, Excel hat ;"[PREVESTI (Einträge→stavki/redova; hat→ima; Excel→Excel)]"
-LOG_MSG_MOGLICHER_DATENVERLUST_NACH;Möglicher Datenverlust nach Absturz!;modJournaling.bas;222;SUMNJIVO;Möglicher Datenverlust nach Absturz!;"[PREVESTI (Möglicher→moguc; Datenverlust→gubitak podataka; Absturz→pad aplikacije; nach→posle)]"
-LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE;Server nedostupan — offline grace (masina je vezana).;modLicense.bas;216;SUMNJIVO;;
-LIC_MSG_PROPUSTAM_VEZANU_MASINU;' — propustam vezanu masinu.;modLicense.bas;267;SUMNJIVO;;
-MATICNI_MSG_PODESAVANJA;Podešavanja;modMaticniLookups.bas;47;SUMNJIVO;;
-MONITO_ERR_NAMERNO_TESTIRANA_VBA;Namerno testirana VBA greška bez sensitive podataka;modMonitoringTests.bas;54;SUMNJIVO;;
-OTKUP_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow fehlgeschlagen für tblOtkup.;modOtkup.bas;499;SUMNJIVO;AppendRow fehlgeschlagen für tblOtkup.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
-CFG_MSG_STAMPA_OTKUPNOG_LISTA;Štampa otkupnog lista;modPodesavanja.bas;91;SUMNJIVO;;
-CFG_MSG_STAMPA_PALETNOG_LISTA;Štampa paletnog lista;modPodesavanja.bas;92;SUMNJIVO;;
-CFG_MSG_STAMPA_PRIJEMNICE_AUTO;Štampa prijemnice (auto na unos);modPodesavanja.bas;93;SUMNJIVO;;
-CFG_MSG_KUPAC_UNOSI_BRUTO;Kupac unosi BRUTO težinu (oduzmi ambalažu);modPodesavanja.bas;97;SUMNJIVO;;
-CFG_MSG_MALINA_REZIM;Malina režim;modPodesavanja.bas;106;SUMNJIVO;;Koristi se i u: modPodesavanja.bas:107
-CFG_MSG_PODESAVANJA_ZATVORENA;Podešavanja zatvorena.;modPodesavanja.bas;345;SUMNJIVO;;
-CFG_MSG_PRIKAZI_CONFIG_TABELU;Prikaži config tabelu;modPodesavanja.bas;391;SUMNJIVO;;
-SETUP_MSG_OVAJ_RACUNAR_PROSAO;Da li je ovaj racunar prošao SetupNewPC;modSetup.bas;70;SUMNJIVO;;Koristi se i u: modSetup.bas:90
-SETUP_MSG_DATUM_VREME_ZAVRSETKA;Datum i vreme završetka setup-a;modSetup.bas;71;SUMNJIVO;;
-SETUP_MSG_FOLDER_BANKARSKE_IZVODE;Folder za bankarske izvode sa greškom;modSetup.bas;244;SUMNJIVO;;Koristi se i u: modSetup.bas:449
-SETUP_MSG_SEF_BASE_URL;- SEF_BASE_URL nije podešen.;modSetup.bas;523;SUMNJIVO;;
-SETUP_MSG_SEF_API_KEY;- SEF_API_KEY nije podešen.;modSetup.bas;527;SUMNJIVO;;
-SETUP_MSG_SEF_ENV_NIJE;- SEF_ENV nije podešen.;modSetup.bas;531;SUMNJIVO;;
-SETUP_MSG_NIJE_PODESEN; nije podešen: ;modSetup.bas;635;SUMNJIVO;;
+AGRO_ERR_GRESKA_PRI_CUVANJU;Greška pri cuvanju izlaza. ArtikalID=;frmAgrohemija.frm;501;DA;;
+AGRO_ERR_GRESKA_PRI_CUVANJU_2;Greška pri cuvanju ulaza. ArtikalID=;frmAgrohemija.frm;714;DA;;
+AGRO_ERR_KORPA_SADRZI_STAVKU;Korpa sadrži stavku bez ArtikalID.;frmAgrohemija.frm;812;DA;;
+DOK_ERR_NEMA_AMBALAZE_NOVCA;Nema ambalaže ni novca za cuvanje.;frmDokumenta.frm;1143;DA;;Koristi se i u: modDokumenta.bas:1249
+SEF_MSG_SENDING_FAKTURA_TRENUTNO;- SENDING: Faktura se trenutno šalje.;frmSEF.frm;674;DA;;
+SEF_MSG_SENT_FAKTURA_USPESNO;- SENT: Faktura uspešno primljena na SEF.;frmSEF.frm;675;DA;;
+SEF_MSG_REJECTED_GRESKA_PROVERI;- REJECTED: Greška! Proveri 'Poslednja greška'.;frmSEF.frm;677;DA;;
+SEF_MSG_IZABERI_FAKTURU_LISTE;Izaberi fakturu iz liste -> Klikni 'Pošalji na SEF'.;frmSEF.frm;679;DA;;
+SEF_MSG_TEHNICKA_PODRSKA;3. TEHNICKA PODRŠKA:;frmSEF.frm;681;DA;;
+SEF_MSG_SVE_PROBLEME_KOJI;Za sve probleme koji se ne rešavaju sa 'Osveži status',;frmSEF.frm;682;DA;;
+SEF_MSG_KONTAKTIRAJ_ADMINISTRATORA_POSALJI;kontaktiraj administratora i pošalji SEF Event Log (donja tabela).;frmSEF.frm;683;DA;;
+STM_MSG_PARCELA_NEMA_KATASTARSKI;Parcela nema katastarski broj ili katastarsku opštinu.;frmStammdaten.frm;2430;DA;;
+STM_MSG_GRESKA_PRI_OTVARANJU;Greška pri otvaranju GeoSrbije. Pogledaj log.;frmStammdaten.frm;2444;DA;;
+STM_MSG_GRESKA_PRI_CUVANJU;Greška pri cuvanju geo podataka. Pogledaj log.;frmStammdaten.frm;2496;DA;;
+STM_MSG_KLIKNI_JOS_JEDNOM;Klikni još jednom za brisanje geo podataka.;frmStammdaten.frm;2511;DA;;
+STM_MSG_GRESKA_PRI_BRISANJU;Greška pri brisanju geo podataka. Pogledaj log.;frmStammdaten.frm;2536;DA;;
+STM_MSG_GRESKA_PRI_UCITAVANJU;Greška pri ucitavanju koordinata. Pogledaj log.;frmStammdaten.frm;2572;DA;;
+STM_MSG_GRESKA_PRI_OTVARANJU_2;Greška pri otvaranju Google Maps. Pogledaj log.;frmStammdaten.frm;2623;DA;;
+STM_MSG_GRESKA_PRI_OTVARANJU_3;Greška pri otvaranju polygon editora. Pogledaj log.;frmStammdaten.frm;2685;DA;;
+DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow nije uspeo za tblOtpremnica;modDokumenta.bas;263;DA;AppendRow fehlgeschlagen für tblOtpremnica;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow nije uspeo za tblZbirna.;modDokumenta.bas;592;DA;AppendRow fehlgeschlagen für tblZbirna.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+DOK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_3;AppendRow nije uspeo za tblPrijemnica.;modDokumenta.bas;1081;DA;AppendRow fehlgeschlagen für tblPrijemnica.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow nije uspeo za tblFakture.;modFaktura.bas;286;DA;AppendRow fehlgeschlagen für tblFakture.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+FAK_ERR_APPENDROW_FEHLGESCHLAGEN_FUR_2;AppendRow nije uspeo za tblFakturaStavke.;modFaktura.bas;318;DA;AppendRow fehlgeschlagen für tblFakturaStavke.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+FAK_ERR_STORNIRANA_FAKTURA_MOZE;Stornirana faktura se ne može štampati kao aktivna faktura: ;modFaktura.bas;437;DA;;
+LOG_MSG_EINTRAGE_EXCEL_HAT; stavki, Excel ima ;modJournaling.bas;221;DA; Einträge, Excel hat ;"[PREVESTI (Einträge→stavki/redova; hat→ima; Excel→Excel)]"
+LOG_MSG_MOGLICHER_DATENVERLUST_NACH;Mogući gubitak podataka posle pada aplikacije!;modJournaling.bas;222;DA;Möglicher Datenverlust nach Absturz!;"[PREVESTI (Möglicher→moguc; Datenverlust→gubitak podataka; Absturz→pad aplikacije; nach→posle)]"
+LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE;Server nedostupan — offline grace (masina je vezana).;modLicense.bas;216;DA;;
+LIC_MSG_PROPUSTAM_VEZANU_MASINU;' — propustam vezanu masinu.;modLicense.bas;267;DA;;
+MATICNI_MSG_PODESAVANJA;Podešavanja;modMaticniLookups.bas;47;DA;;
+MONITO_ERR_NAMERNO_TESTIRANA_VBA;Namerno testirana VBA greška bez sensitive podataka;modMonitoringTests.bas;54;DA;;
+OTKUP_ERR_APPENDROW_FEHLGESCHLAGEN_FUR;AppendRow nije uspeo za tblOtkup.;modOtkup.bas;499;DA;AppendRow fehlgeschlagen für tblOtkup.;"[PREVESTI (fehlgeschlagen→nije uspelo; für→za)]"
+CFG_MSG_STAMPA_OTKUPNOG_LISTA;Štampa otkupnog lista;modPodesavanja.bas;91;DA;;
+CFG_MSG_STAMPA_PALETNOG_LISTA;Štampa paletnog lista;modPodesavanja.bas;92;DA;;
+CFG_MSG_STAMPA_PRIJEMNICE_AUTO;Štampa prijemnice (auto na unos);modPodesavanja.bas;93;DA;;
+CFG_MSG_KUPAC_UNOSI_BRUTO;Kupac unosi BRUTO težinu (oduzmi ambalažu);modPodesavanja.bas;97;DA;;
+CFG_MSG_MALINA_REZIM;Malina režim;modPodesavanja.bas;106;DA;;Koristi se i u: modPodesavanja.bas:107
+CFG_MSG_PODESAVANJA_ZATVORENA;Podešavanja zatvorena.;modPodesavanja.bas;345;DA;;
+CFG_MSG_PRIKAZI_CONFIG_TABELU;Prikaži config tabelu;modPodesavanja.bas;391;DA;;
+SETUP_MSG_OVAJ_RACUNAR_PROSAO;Da li je ovaj racunar prošao SetupNewPC;modSetup.bas;70;DA;;Koristi se i u: modSetup.bas:90
+SETUP_MSG_DATUM_VREME_ZAVRSETKA;Datum i vreme završetka setup-a;modSetup.bas;71;DA;;
+SETUP_MSG_FOLDER_BANKARSKE_IZVODE;Folder za bankarske izvode sa greškom;modSetup.bas;244;DA;;Koristi se i u: modSetup.bas:449
+SETUP_MSG_SEF_BASE_URL;- SEF_BASE_URL nije podešen.;modSetup.bas;523;DA;;
+SETUP_MSG_SEF_API_KEY;- SEF_API_KEY nije podešen.;modSetup.bas;527;DA;;
+SETUP_MSG_SEF_ENV_NIJE;- SEF_ENV nije podešen.;modSetup.bas;531;DA;;
+SETUP_MSG_NIJE_PODESEN; nije podešen: ;modSetup.bas;635;DA;;
