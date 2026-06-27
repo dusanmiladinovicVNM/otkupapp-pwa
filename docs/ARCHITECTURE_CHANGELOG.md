@@ -114,6 +114,34 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
 
+## v6.42 — 2026-06-27
+
+### Summary
+
+Izlazni dispečer obrazaca konsolidovan (Faza 2) i ručni dokumenti dobili konfigurabilan izlaz. Bez promene podrazumevanog ponašanja (defaulti čuvaju zatečeno).
+
+### Added
+
+- `modDocStyle.DocResolveMode(mode, defMode)` — normalizuje `*_PRINT_MODE` na `OFF/PRINT/PREVIEW/PDF`; prazno/nepoznato → `defMode` (po dokumentu). Centralizuje razliku u defaultu (otkupni/grupni/izdamb/kartica/sledljivost = PDF, prijemnica/paletni = OFF, faktura = PRINT) i typo handling.
+- `modDocStyle.DocPrintWs(ws, mode)` — štampa/pregled napunjenog sheeta (`PREVIEW` → pregled, inače `PrintOut Copies:=1`).
+- `modConfig` `CFG_FAKTURA_PRINT_MODE` / `CFG_KARTICA_PRINT_MODE` / `CFG_SLEDLJIVOST_PRINT_MODE`.
+
+### Changed
+
+- 5 `Output*` dispečera (otkupni/grupni/prijemnica/izdamb/paletni) svedeno na zajednički obrazac: `DocResolveMode` + spojene `PRINT`/`PREVIEW` grane preko `DocPrintWs` (jedan `Fill` umesto dva); `PDF` grana i dalje delegira na `Export*PDF` (čuva putanju folder+timestamp).
+- `PrintFaktura` (default `PRINT`), `PrintKarticaKooperanta` (default `PDF`) i `frmSledljivost.PrintTracePDF` (default `PDF`) više nemaju zakovan izlaz — koriste isti obrazac. `PrintKarticaAmbalazePDF` namerno nedirnut (zaseban dokument).
+
+### Verification / Acceptance Gates
+
+- Statički: balans `Select Case`/`End Select` i `Sub`/`End Sub` u svim diranim modulima, jedinstvene definicije helpera, encoding (Windows-1250) + LF očuvani, bez `�` šuma. Excel smoke: otkupni/prijemnica/paletni/revers izlaze isto kao pre; faktura štampa (default), kartica/sledljivost PDF (default); provera da `*_PRINT_MODE = PREVIEW/PDF/OFF` menja izlaz.
+
+### Migration / Data Notes
+
+- Nema schema/data migracije. Re-import `modDocStyle`, `modConfig`, `modPrint`, `modPaletniList`, `modFaktura`, `modIzvestaj`, `frmSledljivost` → `Compile`. Novi config ključevi su opcioni (prazno = zatečeno ponašanje).
+
+Reference updated: Yes — AR §5.12 (`DocResolveMode` / `DocPrintWs`, `*_PRINT_MODE` ključevi za sve obrasce).
+
+
 ## v6.41 — 2026-06-27
 
 ### Summary
