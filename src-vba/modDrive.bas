@@ -112,6 +112,48 @@ EH:
     LogErr SRC, Err.description
 End Function
 
+' Vrati Dictionary (ime fajla -> fileID) svih fajlova u folderu.
+' Jedna strana (pageSize=1000); AgriX_Release ima ~100 src-vba fajlova.
+Public Function DriveListFolder(ByVal folderID As String) As Object
+    Const SRC As String = "modDrive.DriveListFolder"
+    On Error GoTo EH
+
+    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+    Set DriveListFolder = dict
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    Dim q As String
+    q = "'" & folderID & "' in parents and trashed=false"
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "GET", DRIVE_FILES & "?q=" & UrlEncode(q) & _
+              "&fields=files(id,name)&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.Send
+
+    If http.status <> 200 Then
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+        Exit Function
+    End If
+
+    ' Parsiraj files(id,name) - po jedan objekat izmedju "}" granica
+    ' (isti pristup kao ExtractJson* u ostatku koda; bez JSON biblioteke).
+    Dim parts() As String, i As Long, id As String, nm As String
+    parts = Split(http.responseText, "}")
+    For i = LBound(parts) To UBound(parts)
+        id = ExtractJsonStringGoogle(parts(i), "id")
+        nm = ExtractJsonStringGoogle(parts(i), "name")
+        If Len(id) > 0 And Len(nm) > 0 Then
+            If Not dict.Exists(nm) Then dict.Add nm, id
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
 ' ---------------- private ----------------
 
 ' Kreiraj prazan fajl (samo metadata) u folderu -> vrati novi fileID.
@@ -142,7 +184,9 @@ End Function
 
 Private Function DriveNewHttp() As Object
     Set DriveNewHttp = CreateObject("WinHttp.WinHttpRequest.5.1")
-    DriveNewHttp.SetTimeouts 15000, 15000, 30000, 60000
+    ' resolve/connect kratko (da offline ne blokira Workbook_Open self-update
+    ' proveru); send/receive dugo (download .xlsm/koda moze potrajati).
+    DriveNewHttp.SetTimeouts 5000, 5000, 30000, 120000
 End Function
 
 Private Function DriveLoadFileBytes(ByVal path As String) As Byte()
