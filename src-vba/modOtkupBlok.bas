@@ -16,7 +16,7 @@ Option Explicit
 '     (vezivanje OtkupID->OtpremnicaID + osvezavanje + auto-deselekcija
 '     kad Preostalo padne na 0).
 '   - Desno: blokovi izabrane otpremnice (+ zbirni red), sa dugmadima
-'     "Storniraj blok" (StornoOtkup_TX) i "Stampaj list" (PrintOtkupniList).
+'     "Storniraj blok" (StornoOtkup_TX) i ChrW(352) & "tampaj list" (PrintOtkupniList).
 '   - Lista otpremnica: kolona "Ostatak", filter "samo nezavrsene",
 '     sort po datumu (najnovije gore).
 '
@@ -340,13 +340,13 @@ Private Sub BuildPanel()
     lblDo.caption = "Do:": StyleHdr lblDo
     Set mTxtSpecDo = AddCtl("TextBox", "txtOtkBlokSpecDo", PANEL_LEFT + 118, 66, 64, 18)
     Set mBtnSpecDatum = AddCtl("CommandButton", "btnOtkBlokSpecDatum", PANEL_LEFT + 190, 66, 150, 22)
-    mBtnSpecDatum.caption = "Stampaj po datumu"
+    mBtnSpecDatum.caption = ChrW(352) & "tampaj po datumu"
 
     ' Desno (nad blokovima): storno / stampa lista / biranje otpremnica za spec.
     Set mBtnStorno = AddCtl("CommandButton", "btnOtkBlokStorno", BLOK_LEFT, 66, 78, 22)
     mBtnStorno.caption = "Storniraj"
     Set mBtnPrint = AddCtl("CommandButton", "btnOtkBlokPrint", BLOK_LEFT + 82, 66, 84, 22)
-    mBtnPrint.caption = "Stampaj list"
+    mBtnPrint.caption = ChrW(352) & "tampaj list"
     Set mBtnBiraj = AddCtl("CommandButton", "btnOtkBlokBiraj", BLOK_LEFT + 170, 66, 124, 22)
     mBtnBiraj.caption = "Biraj otpremnice"
     ' Sekcija "Izgubljeni blokovi" (slobodan prostor desno na akcionom redu).
@@ -359,9 +359,9 @@ Private Sub BuildPanel()
     StyleExitButton mBtnFilter, "Prikaz: Sve"
     StyleTextBox mTxtSpecOd
     StyleTextBox mTxtSpecDo
-    StylePrimaryButton mBtnSpecDatum, "Stampaj po datumu"
+    StylePrimaryButton mBtnSpecDatum, ChrW(352) & "tampaj po datumu"
     StyleExitButton mBtnStorno, "Storniraj"
-    StylePrimaryButton mBtnPrint, "Stampaj list"
+    StylePrimaryButton mBtnPrint, ChrW(352) & "tampaj list"
     StyleExitButton mBtnBiraj, "Biraj otpremnice"
     StyleExitButton mBtnLost, "Izgubljeni"
     StylePrimaryButton mBtnPreuzmi, "Preuzmi"
@@ -816,7 +816,7 @@ End Sub
 ' MULTISELECT + SPECIFIKACIJA (batch stampa otpremnica)
 ' ============================================================
 
-' Dugme "Biraj otpremnice" <-> "Stampaj specifikaciju".
+' Dugme "Biraj otpremnice" <-> ChrW(352) & "tampaj specifikaciju".
 Private Sub BirajOrPrint()
     On Error GoTo EH
     If Not mMultiMode Then
@@ -826,7 +826,7 @@ Private Sub BirajOrPrint()
         On Error Resume Next
         mLstOtp.MultiSelect = fmMultiSelectMulti
         On Error GoTo EH
-        mBtnBiraj.caption = "Stampaj specifikaciju"
+        mBtnBiraj.caption = ChrW(352) & "tampaj specifikaciju"
         LoadBlokovi
         RefreshSummary
     Else
@@ -855,7 +855,7 @@ EH:
 End Sub
 
 ' Specifikacija RUCNO izabranih otpremnica (postojeci tok: dugme "Biraj
-' otpremnice" -> multiselect -> "Stampaj specifikaciju"). Tanak omotac oko
+' otpremnice" -> multiselect -> ChrW(352) & "tampaj specifikaciju"). Tanak omotac oko
 ' zajednickog renderera RenderSpec (filter po skupu OtpremnicaID).
 Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     On Error GoTo EH
@@ -875,7 +875,7 @@ EH:
     MsgBox "Greska pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
-' Handler dugmeta "Stampaj po datumu" (footer strip). Cita Od/Do polja
+' Handler dugmeta ChrW(352) & "tampaj po datumu" (footer strip). Cita Od/Do polja
 ' (TryParseDateValue) i zove renderer u rezimu filtera po datumu.
 Private Sub PrintSpecOdDo()
     On Error GoTo EH

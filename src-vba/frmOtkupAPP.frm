@@ -321,7 +321,7 @@ Private Sub SetupHeader()
     End With
     
     With btnMaticni
-        .caption = "Maticni podaci"
+        .caption = "Mati" & ChrW(269) & "ni podaci"
         .Left = Me.InsideWidth - 170
         .top = 7
         .width = 125
@@ -758,7 +758,7 @@ Private Sub btnMaticni_Click()
     On Error GoTo EH
 
     HighlightActive btnMaticni
-    lblStatus.caption = "Sekcija: Maticni podaci"
+    lblStatus.caption = "Sekcija: Mati" & ChrW(269) & "ni podaci"
     OpenMaticniForm
 
     Exit Sub

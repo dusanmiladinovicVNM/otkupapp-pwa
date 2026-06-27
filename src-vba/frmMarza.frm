@@ -52,7 +52,7 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
     
-    Me.caption = "Marza"
+    Me.caption = "Mar" & ChrW(382) & "a"
     txtDatumOd.value = "1.1." & Year(Date)
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
     

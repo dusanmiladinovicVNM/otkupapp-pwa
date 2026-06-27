@@ -328,7 +328,7 @@ Private Sub ShowAmbRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, ByVal re
     Else
         mCurAmbDokID = refRest
     End If
-    mLblTitle.caption = "DETALJI AMBALAZE"
+    mLblTitle.caption = "DETALJI AMBALA" & ChrW(381) & "E"
     AddPair "Datum", CStr(lst.List(idx, 0))
     AddPair "Mesto", CStr(lst.List(idx, 1))
     AddPair "Tip ambalaze", CStr(lst.List(idx, 2))

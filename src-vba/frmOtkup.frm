@@ -23,7 +23,7 @@ Option Explicit
 ' ============================================================
 Private mChromeRemoved As Boolean
 
-' Runtime polje "Izdata ambalaza" (OM izdaje prazne kooperantu uz otkup).
+' Runtime polje "Izdata ambala" & ChrW(382) & "a" (OM izdaje prazne kooperantu uz otkup).
 ' CLAUDE.md: nove kontrole se ne dodaju u .frx -> Controls.Add u runtime-u.
 Private m_txtAmbIzdata As MSForms.TextBox
 
@@ -101,7 +101,7 @@ Private Sub UserForm_Initialize()
     ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
     On Error GoTo 0
 
-    ' Runtime polje "Izdata ambalaza" (ne dira .frx).
+    ' Runtime polje "Izdata ambala" & ChrW(382) & "a" (ne dira .frx).
     SetupAmbIzdataField
 
     ' Runtime polje "Kol. ambalaze (II)" za Klasu II (ne dira .frx; skriveno dok
@@ -116,7 +116,7 @@ Private Sub UserForm_Initialize()
     ApplyOtkupTogglesState
 End Sub
 
-' Kreira runtime "Izdata ambalaza" u SOPSTVENOM redu ispod "Kolicina ambalaze":
+' Kreira runtime "Izdata ambala" & ChrW(382) & "a" u SOPSTVENOM redu ispod "Kolicina ambalaze":
 ' otvara prazan red tako sto Novac/Primalac (+ njihove labele) i dugmad spusti za
 ' jednu visinu reda, pa popuni vakantno mesto (textbox levo + labela desno, kao
 ' ostala polja). Sva geometrija se MERI u runtime-u (.frx se ne cita iz koda).
@@ -138,7 +138,7 @@ Private Sub SetupAmbIzdataField()
     Dim lblNovac As MSForms.Control: Set lblNovac = RowLabelRightOf(txtNovac)
     Dim lblPrimalac As MSForms.Control: Set lblPrimalac = RowLabelRightOf(txtPrimalac)
 
-    ' Spusti donji blok za jedan red da se oslobodi mesto za "Izdata ambalaza".
+    ' Spusti donji blok za jedan red da se oslobodi mesto za "Izdata ambala" & ChrW(382) & "a".
     ShiftCtlDown txtNovac, dy
     ShiftCtlDown lblNovac, dy
     ShiftCtlDown txtPrimalac, dy
@@ -167,7 +167,7 @@ Private Sub SetupAmbIzdataField()
     Dim lbl As MSForms.label
     Set lbl = Me.Controls.Add("Forms.Label.1", "lblAmbIzdataRT", True)
     With lbl
-        .caption = "Izdata ambalaza"
+        .caption = "Izdata ambala" & ChrW(382) & "a"
         .top = yIzdata + 2
         .Height = 14
         If Not refLbl Is Nothing Then

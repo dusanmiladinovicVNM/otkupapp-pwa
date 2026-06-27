@@ -696,7 +696,7 @@ Private Sub UpdateIzvodSummaryLabel()
 
 EH:
     On Error Resume Next
-    Me.lblIzvodSummary.caption = "(greska pri citanju saldo info-a)"
+    Me.lblIzvodSummary.caption = "(gre" & ChrW(353) & "ka pri " & ChrW(269) & "itanju saldo info-a)"
     Me.lblIzvodSummary.ForeColor = RGB(128, 128, 128)
     
     LogErr "frmBankaImport.UpdateIzvodSummaryLabel"

@@ -231,7 +231,7 @@ Private Sub UpdatePreporuka()
     
     ' Invariant: svi artikli moraju imati Pakovanje field popunjeno
     If Not IsNumeric(pakStr) Or CDbl(pakStr) <= 0 Then
-        lblPreporuka.caption = "Greska: artikal nema definisano Pakovanje. " & _
+        lblPreporuka.caption = "Gre" & ChrW(353) & "ka: artikal nema definisano Pakovanje." & _
                                Poruka("AGRO_LBL_POPUNI_PAKOVANJE_FIELD")
         lblPreporuka.ForeColor = CLR_ERROR()
         Exit Sub
@@ -280,7 +280,7 @@ Private Sub UpdateVrednost()
     
     ' Invariant
     If Not IsNumeric(pakStr) Or CDbl(pakStr) <= 0 Then
-        lblVrednost.caption = "Greska: artikal nema Pakovanje"
+        lblVrednost.caption = "Gre" & ChrW(353) & "ka: artikal nema Pakovanje"
         lblVrednost.ForeColor = CLR_ERROR()
         Exit Sub
     End If
@@ -727,7 +727,7 @@ Private Sub btnZavrsiUlaz_Click()
     txtBrojDokUlaz.value = ""
 
     RefreshTopKpis
-    lblStatus.caption = "Prijem sacuvan: " & brojDok
+    lblStatus.caption = "Prijem sa" & ChrW(269) & "uvan:" & brojDok
     lblStatus.ForeColor = CLR_SUCCESS()
 
     Set tx = Nothing

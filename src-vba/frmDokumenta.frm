@@ -1809,7 +1809,7 @@ Private Function UpdateValidacija() As Boolean
     Dim inputAmb As Long
     If Trim$(txtUkupnoKGZbr.value) <> "" Then
         If Not TryParseDouble(txtUkupnoKGZbr.value, inputKgKlI) Then
-            lblValidacijaKG.caption = "Neispravna kolicina Kl.I"
+            lblValidacijaKG.caption = "Neispravna koli" & ChrW(269) & "ina Kl.I"
             lblValidacijaKG.ForeColor = CLR_ERROR()
             Exit Function
         End If
@@ -1818,7 +1818,7 @@ Private Function UpdateValidacija() As Boolean
     If chkDveKlaseZbr.value Then
         If Trim$(txtUkupnoKgKlIIZbr.value) <> "" Then
             If Not TryParseDouble(txtUkupnoKgKlIIZbr.value, inputKgKlII) Then
-                lblValidacijaKG.caption = "Neispravna kolicina Kl.II"
+                lblValidacijaKG.caption = "Neispravna koli" & ChrW(269) & "ina Kl.II"
                 lblValidacijaKG.ForeColor = CLR_ERROR()
                 Exit Function
             End If
@@ -1839,7 +1839,7 @@ Private Function UpdateValidacija() As Boolean
         If Trim$(m_txtKolAmbIIZbr.value) <> "" Then
             Dim inputAmbII As Long
             If Not TryParseLong(m_txtKolAmbIIZbr.value, inputAmbII) Then
-                lblValidacijaAmb.caption = "Neispravna kolicina ambalaze Kl.II"
+                lblValidacijaAmb.caption = "Neispravna koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e Kl.II"
                 lblValidacijaAmb.ForeColor = CLR_ERROR()
                 Exit Function
             End If

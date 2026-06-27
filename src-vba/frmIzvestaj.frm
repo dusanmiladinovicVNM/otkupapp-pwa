@@ -159,7 +159,7 @@ Private Sub UserForm_Activate()
     
     SetupListBoxes
     On Error Resume Next
-    mpReports.Pages(3).caption = "Ambalaza"   ' "Primljena ambalaza" -> "Ambalaza"
+    mpReports.Pages(3).caption = "Ambala" & ChrW(382) & "a"   ' "Primljena ambalaza" -> "Ambala" & ChrW(382) & "a"
     On Error GoTo EH
     EnsureKarticaAmbPage          ' runtime tab "Pregled ambalaze" (pre UpdateReportMode)
     EnsureOtkupListePage          ' runtime tab "Otkupni listovi" (pre UpdateReportMode)
@@ -557,7 +557,7 @@ Private Sub UpdateStatusLabel()
     End If
 
     If activeList Is Nothing Then
-        lblStatus.caption = "Spreman za izvestaj"
+        lblStatus.caption = "Spreman za izve" & ChrW(353) & "taj"
         lblStatus.ForeColor = TXT_MUTED()
     ElseIf activeList.ListCount = 0 Then
         lblStatus.caption = "Nema podataka za izabran filter"
@@ -1030,7 +1030,7 @@ Private Sub GenerateKarticaAmbReport(ByVal entitetID As String, _
     ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Ime"))
     prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Prezime"))
     If Not m_lblAmbTitle Is Nothing Then
-        m_lblAmbTitle.caption = "PREGLED AMBALAZE: " & ime & " " & prezime & " (" & entitetID & ")"
+        m_lblAmbTitle.caption = "PREGLED AMBALA" & ChrW(381) & "E:" & ime & " " & prezime & " (" & entitetID & ")"
     End If
     On Error GoTo 0
 
@@ -1204,7 +1204,7 @@ Private Sub btnStampaj_Click()
                 "Isplaceno", _
                 "Agro zaduzenje", _
                 "Saldo", _
-                "Ambalaza")
+                "Ambala" & ChrW(382) & "a")
                 
         Case 1
             Set lst = lstSaldoKupci
@@ -1216,7 +1216,7 @@ Private Sub btnStampaj_Click()
                 "Vrednost", _
                 "Novac", _
                 "Saldo", _
-                "Ambalaza")
+                "Ambala" & ChrW(382) & "a")
                 
         Case 2
             Set lst = lstOtkupRoba
@@ -1250,7 +1250,7 @@ Private Sub btnStampaj_Click()
                 
         Case 3
             Set lst = lstAmbalaza
-            title = "Ambalaza"
+            title = "Ambala" & ChrW(382) & "a"
             headers = Array( _
                 "Datum", _
                 "Mesto", _
@@ -1634,7 +1634,7 @@ Private Sub EnsureKarticaAmbPage()
         .Height = 14
     End With
     StyleListHeaderLabel m_lblAmbTitle
-    m_lblAmbTitle.caption = "PREGLED AMBALAZE"
+    m_lblAmbTitle.caption = "PREGLED AMBALA" & ChrW(381) & "E"
 
     Set m_lstAmb = pg.Controls.Add("Forms.ListBox.1", "lstKarticaAmb", True)
     With m_lstAmb

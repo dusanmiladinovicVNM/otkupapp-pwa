@@ -120,7 +120,7 @@ Private Sub LoadBlokovi()
 
 EH:
     LogErr "frmBankaExportPregled.LoadBlokovi"
-    lblStatus.caption = "Greska pri ucitavanju."
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
 End Sub
 
 Private Sub PruneStaleOverrides()
@@ -237,7 +237,7 @@ Private Sub HandleListSelectionChange()
     ' Bez TR redovi: skini check, prikazi gresku u detail panelu
     If Not blk.HasTekuciRacun Then
         lstBlokovi.Selected(lstBlokovi.ListIndex) = False
-        lblDetailValidacija.caption = "Ovaj kooperant nema TekuciRacun. Ne moze biti u paketu."
+        lblDetailValidacija.caption = "Ovaj kooperant nema TekuciRacun. Ne mo" & ChrW(382) & "e biti u paketu."
         lblDetailValidacija.ForeColor = CLR_ERROR()
         lblDetailValidacija.Visible = True
     Else
@@ -312,7 +312,7 @@ Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
         lblDetailAvans.ForeColor = TXT_MUTED()
     End If
     
-    lblDetailTR.caption = "Tek. racun: " & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "--nedostaje--")
+    lblDetailTR.caption = "Tek. ra" & ChrW(269) & "un:" & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "--nedostaje--")
     
     If blk.KooperantAvansSaldo > 0 Then
         lblDetailAvansHint.caption = "Primeni avans kroz Dokumenta pre isplate"

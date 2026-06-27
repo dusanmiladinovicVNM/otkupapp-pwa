@@ -204,7 +204,7 @@ Private Sub SetupColumnHeaders()
             ShowHeader 1, "ID", True
             ShowHeader 2, "Naziv", True
             ShowHeader 3, "Adresa", True
-            ShowHeader 4, "Drzava", True
+            ShowHeader 4, "Dr" & ChrW(382) & "ava", True
             ShowHeader 5, "PIB", True
             ShowHeader 6, "MB", True
             ShowHeader 7, "Email", True
@@ -244,20 +244,20 @@ Private Sub SetupColumnHeaders()
 
         Case "Kulture"
             ShowHeader 1, "ID", True
-            ShowHeader 2, "Vrsta voca", True
-            ShowHeader 3, "Sorta voca", True
+            ShowHeader 2, "Vrsta vo" & ChrW(263) & "a", True
+            ShowHeader 3, "Sorta vo" & ChrW(263) & "a", True
             ShowHeader 4, "Gajbica/paleti", True
             ShowHeader 5, "Aktivan", True
             ShowHeader 6, "Tip amb.", True
 
         Case "TipAmbalaze"
-            ShowHeader 1, "Tip ambalaze", True
-            ShowHeader 2, "Tezina gajbice (kg)", True
+            ShowHeader 1, "Tip ambala" & ChrW(382) & "e", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina gajbice (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "TipPalete"
             ShowHeader 1, "Tip palete", True
-            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "Cenovnik"
@@ -270,12 +270,12 @@ Private Sub SetupColumnHeaders()
 
         Case "Kutije"
             ShowHeader 1, "Tip kutije", True
-            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "Kese"
             ShowHeader 1, "Tip kese", True
-            ShowHeader 2, "Tezina (kg)", True
+            ShowHeader 2, "Te" & ChrW(382) & "ina (kg)", True
             ShowHeader 3, "Aktivan", True
 
         Case "VrstaGP"
@@ -357,7 +357,7 @@ Private Sub SetupKooperanti()
 
     lblField5.caption = "Stanica": lblField5.Visible = True: cmbField1.Visible = True
     lblField6.caption = "BPG Broj": lblField6.Visible = True: txtField6.Visible = True
-    lblField7.caption = "Tekuci Racun": lblField7.Visible = True: txtField7.Visible = True
+    lblField7.caption = "Teku" & ChrW(263) & "i Ra" & ChrW(269) & "un": lblField7.Visible = True: txtField7.Visible = True
     lblField8.caption = "Pin": lblField8.Visible = True: txtField8.Visible = True
     lblField9.caption = "Adresa": lblField9.Visible = True: txtField9.Visible = True
     lblField10.caption = "JMBG": lblField10.Visible = True: txtField10.Visible = True
@@ -428,7 +428,7 @@ Private Sub SetupKupci()
         "KupacID", _
         "Naziv", _
         "Adresa", _
-        "Drzava", _
+        "Dr" & ChrW(382) & "ava", _
         "PIB", _
         "MaticniBroj", _
         "Email", _
@@ -442,13 +442,13 @@ Private Sub SetupKupci()
     lblField1.caption = "Naziv": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Ulica": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Mesto": lblField3.Visible = True: txtField3.Visible = True
-    lblField4.caption = "Postanski Broj": lblField4.Visible = True: txtField4.Visible = True
-    lblField5.caption = "Drzava": lblField5.Visible = True: txtField5.Visible = True
+    lblField4.caption = "Po" & ChrW(353) & "tanski Broj": lblField4.Visible = True: txtField4.Visible = True
+    lblField5.caption = "Dr" & ChrW(382) & "ava": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "PIB": lblField6.Visible = True: txtField6.Visible = True
-    lblField7.caption = "Maticni Broj": lblField7.Visible = True: txtField7.Visible = True
+    lblField7.caption = "Mati" & ChrW(269) & "ni Broj": lblField7.Visible = True: txtField7.Visible = True
     lblField8.caption = "Email": lblField8.Visible = True: txtField8.Visible = True
     lblField9.caption = "Hladnjaca": lblField9.Visible = True: txtField9.Visible = True
-    lblField10.caption = "Tekuci Racun": lblField10.Visible = True: txtField10.Visible = True
+    lblField10.caption = "Teku" & ChrW(263) & "i Ra" & ChrW(269) & "un": lblField10.Visible = True: txtField10.Visible = True
 End Sub
 
 Private Sub SetupVozaci()
@@ -522,7 +522,7 @@ Private Sub SetupParcele()
 
     lblField1.caption = "Kooperant": lblField1.Visible = True: txtField1.Visible = False
     lblField2.caption = "Kat. Broj": lblField2.Visible = True: txtField2.Visible = True
-    lblField3.caption = "Kat. Opstina": lblField3.Visible = True: txtField3.Visible = True
+    lblField3.caption = "Kat. Op" & ChrW(353) & "tina": lblField3.Visible = True: txtField3.Visible = True
     lblField4.caption = "Kultura": lblField4.Visible = True: txtField4.Visible = False
     lblField5.caption = "Povrsina (ha)": lblField5.Visible = True: txtField5.Visible = True
     lblField6.caption = "GGAP Status": lblField6.Visible = True: txtField6.Visible = False
@@ -657,10 +657,10 @@ Private Sub SetupKulture()
 
     m_FieldCount = 4
 
-    lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = True
+    lblField1.caption = "Vrsta vo" & ChrW(263) & "a": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Sorta vo" & ChrW(263) & "a": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Gajbica po paleti": lblField3.Visible = True: txtField3.Visible = True
-    lblField4.caption = "Tip ambalaze (podraz.)": lblField4.Visible = True: txtField4.Visible = False
+    lblField4.caption = "Tip ambala" & ChrW(382) & "e (podraz.)": lblField4.Visible = True: txtField4.Visible = False
     lblField5.caption = "": lblField5.Visible = False: txtField5.Visible = False
     lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
     lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
@@ -684,7 +684,7 @@ End Sub
 
 Private Sub SetupTipAmbalaze()
     ResetFieldVisibility
-    Me.caption = "Tip ambalaze"
+    Me.caption = "Tip ambala" & ChrW(382) & "e"
 
     On Error Resume Next
     StyleFrameTitleLabel lblTitle, "TIP AMBALAZE"
@@ -696,8 +696,8 @@ Private Sub SetupTipAmbalaze()
     m_Headers = Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
     m_FieldCount = 2
 
-    lblField1.caption = "Tip ambalaze": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina gajbice (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField1.caption = "Tip ambala" & ChrW(382) & "e": lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina gajbice (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupTipPalete()
@@ -715,7 +715,7 @@ Private Sub SetupTipPalete()
     m_FieldCount = 2
 
     lblField1.caption = "Tip palete": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupKutije()
@@ -733,7 +733,7 @@ Private Sub SetupKutije()
     m_FieldCount = 2
 
     lblField1.caption = "Tip kutije": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupKese()
@@ -751,7 +751,7 @@ Private Sub SetupKese()
     m_FieldCount = 2
 
     lblField1.caption = "Tip kese": lblField1.Visible = True: txtField1.Visible = True
-    lblField2.caption = "Tezina (kg)": lblField2.Visible = True: txtField2.Visible = True
+    lblField2.caption = "Te" & ChrW(382) & "ina (kg)": lblField2.Visible = True: txtField2.Visible = True
 End Sub
 
 Private Sub SetupVrstaGP()
@@ -794,8 +794,8 @@ Private Sub SetupCenovnik()
 
     m_FieldCount = 5
 
-    lblField1.caption = "Vrsta voca": lblField1.Visible = True: txtField1.Visible = False
-    lblField2.caption = "Sorta voca": lblField2.Visible = True: txtField2.Visible = False
+    lblField1.caption = "Vrsta vo" & ChrW(263) & "a": lblField1.Visible = True: txtField1.Visible = False
+    lblField2.caption = "Sorta vo" & ChrW(263) & "a": lblField2.Visible = True: txtField2.Visible = False
     lblField3.caption = "Klasa": lblField3.Visible = True: txtField3.Visible = False
     lblField4.caption = "Datum": lblField4.Visible = True: txtField4.Visible = True
     lblField5.caption = "Cena": lblField5.Visible = True: txtField5.Visible = True
@@ -1041,7 +1041,7 @@ Private Sub LoadList()
             kupUlica = GetColumnIndex(TBL_KUPCI, "Ulica")
             kupMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
             kupPosta = GetColumnIndex(TBL_KUPCI, "PostanskiBroj")
-            kupDrzava = GetColumnIndex(TBL_KUPCI, "Drzava")
+            kupDrzava = GetColumnIndex(TBL_KUPCI, "Dr" & ChrW(382) & "ava")
             kupPIB = GetColumnIndex(TBL_KUPCI, "PIB")
             kupMB = GetColumnIndex(TBL_KUPCI, "MaticniBroj")
             kupEmail = GetColumnIndex(TBL_KUPCI, "Email")
@@ -1948,7 +1948,7 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "Ulica", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField3.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PostanskiBroj", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Drzava", Trim$(txtField5.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, "Dr" & ChrW(382) & "ava", Trim$(txtField5.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PIB", Trim$(txtField6.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "MaticniBroj", Trim$(txtField7.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Email", Trim$(txtField8.value), SRC
