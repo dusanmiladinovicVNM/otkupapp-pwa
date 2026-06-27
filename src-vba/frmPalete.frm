@@ -30,7 +30,6 @@ Private mLblBruto As MSForms.label
 Private mLblFilterSorta As MSForms.label
 Private mLblFilterTipGP As MSForms.label
 Private WithEvents mLstPrerade As MSForms.ListBox
-Private mLstPradeHdr As MSForms.ListBox
 Private mLblPrerade As MSForms.label
 Private mBuilt As Boolean
 
@@ -311,17 +310,22 @@ Private Sub BuildPreradaControls()
 
     ' Pregled preradjenih paleta (desno od stavki); dvoklik = PDF.
     Set mLstPrerade = Me.Controls.Add("Forms.ListBox.1", "lstPrerade", True)
-    Set mLstPradeHdr = Me.Controls.Add("Forms.ListBox.1", "lstPradeHdr", True)
     Set mLblPrerade = Me.Controls.Add("Forms.Label.1", "lblPrerade", True)
     mLblPrerade.caption = "Preradjene palete (dvoklik = PDF)"
     mLstPrerade.ColumnCount = 7
-    mLstPrerade.ColumnWidths = "0;22;42;36;22;22;38"
-    mLstPradeHdr.ColumnCount = 7
-    mLstPradeHdr.ColumnWidths = mLstPrerade.ColumnWidths
-    Dim hp(0 To 0, 0 To 6) As Variant
-    hp(0, 1) = "Broj": hp(0, 2) = "Datum": hp(0, 3) = "Neto"
-    hp(0, 4) = "Kut": hp(0, 5) = "Kes": hp(0, 6) = "Gotov pr."
-    mLstPradeHdr.List = hp
+    mLstPrerade.ColumnWidths = "0;30;58;48;30;30;52"
+    ' Zaglavlje kao Label-i (po jedan na kolonu). Label-ima sirina/pozicija
+    ' uvek rade; dinamickoj ListBox header-i sirina nije htela da se primeni.
+    Dim hcap As Variant
+    hcap = Array("Broj", "Datum", "Neto", "Kut", "Kes", "Gotov pr.")
+    Dim hi As Long
+    For hi = 0 To 5
+        Dim hl As MSForms.label
+        Set hl = Me.Controls.Add("Forms.Label.1", "hdrPre" & hi, True)
+        hl.caption = CStr(hcap(hi))
+        hl.Font.Bold = True
+        hl.BackStyle = fmBackStyleOpaque
+    Next hi
     RefreshPrerade
 
     SetPreradaTabOrder
@@ -401,13 +405,20 @@ Private Sub LayoutDynamic()
     mLstPrerade.Left = rightX: mLstPrerade.Top = lrListY
     mLstPrerade.width = rightW: mLstPrerade.Height = btnTop - 12 - lrListY
     mLstPrerade.Visible = True
-    mLstPradeHdr.Left = rightX: mLstPradeHdr.Top = lrHdrY
-    mLstPradeHdr.width = rightW: mLstPradeHdr.Height = 15
-    mLstPradeHdr.ColumnWidths = mLstPrerade.ColumnWidths
-    mLstPradeHdr.Visible = True
-    Me.Repaint
-    mLstPradeHdr.width = rightW
-    mLstPrerade.width = rightW
+    ' header Label-i poravnati sa kolonama data liste (col0 skriven = 0)
+    Dim hoff As Variant: hoff = Array(0, 30, 88, 136, 166, 196)
+    Dim hwid As Variant: hwid = Array(30, 58, 48, 30, 30, 52)
+    Dim hi As Long
+    For hi = 0 To 5
+        With Me.Controls("hdrPre" & hi)
+            .Left = rightX + 2 + hoff(hi)
+            .Top = lrHdrY
+            .width = hwid(hi)
+            .Height = 14
+            .Font.Bold = True
+            .BackColor = BG_TOP()
+        End With
+    Next hi
 
     ' Srednja kolona: iznad stavki samo Gotov proizvod (Preradjeno je filter
     ' uz Osvezi -> u redu 1), pa lista stavki.
@@ -421,9 +432,6 @@ Private Sub LayoutDynamic()
     If Me.lstStavke.Height < 40 Then Me.lstStavke.Height = 40
 
     LayoutPreradaRows midX, midW, pTop, ROWH
-
-    mLstPradeHdr.Font.Bold = True
-    mLstPradeHdr.BackColor = BG_TOP()
 End Sub
 
 ' Osvezi listu preradjenih paleta (desni pregled) za izabranu godinu.
