@@ -353,6 +353,22 @@ Public Const CFG_OTKUP_KLAUZULA As String = "OTKUP_KLAUZULA"
 Public Const CFG_OTKUP_ROK As String = "OTKUP_ROK_ISPLATE"
 Public Const OTKUP_ROK_DEFAULT As String = "Po dogovoru"
 
+' --- Imena sablon sheet-ova (template worksheets za stampu) ---
+' Jedinstveni izvor istine za nazive sheet-ova-sablona (umesto rasutih
+' hardkodovanih stringova: modPrint/modPaletniList/modFaktura/modIzvestaj/
+' modOtkupBlok/frmSledljivost).
+Public Const WS_OTKUP_SABLON As String = "OtkupSablon"
+Public Const WS_GRUPNI_OTKUP_SABLON As String = "GrupniOtkupSablon"
+Public Const WS_OTPREMNICA_SABLON As String = "OtpremnicaSablon"
+Public Const WS_PRIJEMNICA_SABLON As String = "PrijemnicaSablon"
+Public Const WS_IZDAMB_SABLON As String = "IzdAmbSablon"
+Public Const WS_PALETA_SABLON As String = "PaletaSablon"
+Public Const WS_PRERADA_SABLON As String = "PreradaSablon"
+Public Const WS_FAKTURA_SABLON As String = "FakturaSablon"
+Public Const WS_KARTICA_SABLON As String = "KarticaSablon"
+Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
+Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
+
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"
 Public Const COL_OSIROCENO_OD As String = "OsirocenoOd"

@@ -1126,11 +1126,11 @@ End Sub
 Private Function EnsureSpecSheet() As Worksheet
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("SpecifikacijaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then
         Set ws = ThisWorkbook.Sheets.Add
-        ws.name = "SpecifikacijaSablon"
+        ws.name = WS_SPECIFIKACIJA_SABLON
         ws.Visible = xlSheetHidden
     End If
     ws.cells.Clear

@@ -496,7 +496,7 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("SledljivostSablon")
+    Set ws = ThisWorkbook.Sheets(WS_SLEDLJIVOST_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then
         MsgBox "SledljivostSablon sheet ne postoji!", vbExclamation, APP_NAME

@@ -657,7 +657,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PALETA_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
 
@@ -789,7 +789,7 @@ Public Sub EnsurePaletaSablon()
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PALETA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then
         If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
@@ -800,7 +800,7 @@ Public Sub EnsurePaletaSablon()
     End If
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "PaletaSablon"
+    ws.name = WS_PALETA_SABLON
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
     ws.columns("A").ColumnWidth = 12
@@ -1788,7 +1788,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRERADA_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
 
@@ -1938,7 +1938,7 @@ Public Sub EnsurePreradaSablon()
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRERADA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then
         If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
@@ -1949,7 +1949,7 @@ Public Sub EnsurePreradaSablon()
     End If
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "PreradaSablon"
+    ws.name = WS_PRERADA_SABLON
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
     ws.columns("A").ColumnWidth = 12

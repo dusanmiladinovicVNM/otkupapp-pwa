@@ -95,7 +95,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     EnsureOtpremnicaSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtpremnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTPREMNICA_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -241,11 +241,11 @@ Public Sub EnsureOtpremnicaSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtpremnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTPREMNICA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "OtpremnicaSablon"
+    ws.name = WS_OTPREMNICA_SABLON
     Exit Sub
 EH:
     LogErr "modPrint.EnsureOtpremnicaSablon"
@@ -360,7 +360,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     EnsureOtkupSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTKUP_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -802,12 +802,12 @@ Public Sub EnsureOtkupSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTKUP_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "OtkupSablon"
+    ws.name = WS_OTKUP_SABLON
     ws.columns("A").ColumnWidth = 6
     ws.columns("B").ColumnWidth = 24
     ws.columns("C").ColumnWidth = 8
@@ -877,7 +877,7 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     EnsureGrupniOtkupSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("GrupniOtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_GRUPNI_OTKUP_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -1074,12 +1074,12 @@ Public Sub EnsureGrupniOtkupSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("GrupniOtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_GRUPNI_OTKUP_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "GrupniOtkupSablon"
+    ws.name = WS_GRUPNI_OTKUP_SABLON
     ws.columns("A").ColumnWidth = 6
     ws.columns("B").ColumnWidth = 24
     ws.columns("C").ColumnWidth = 8
@@ -1165,7 +1165,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     EnsurePrijemnicaSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PrijemnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRIJEMNICA_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -1357,12 +1357,12 @@ Public Sub EnsurePrijemnicaSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PrijemnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRIJEMNICA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "PrijemnicaSablon"
+    ws.name = WS_PRIJEMNICA_SABLON
     ws.columns("A").ColumnWidth = 5
     ws.columns("B").ColumnWidth = 20
     ws.columns("C").ColumnWidth = 7
@@ -1475,7 +1475,7 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     EnsureIzdavanjeAmbalazeSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("IzdAmbSablon")
+    Set ws = ThisWorkbook.Sheets(WS_IZDAMB_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -1820,12 +1820,12 @@ Public Sub EnsureIzdavanjeAmbalazeSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("IzdAmbSablon")
+    Set ws = ThisWorkbook.Sheets(WS_IZDAMB_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "IzdAmbSablon"
+    ws.name = WS_IZDAMB_SABLON
     ws.columns("A").ColumnWidth = 4
     ws.columns("B").ColumnWidth = 17
     ws.columns("C").ColumnWidth = 8

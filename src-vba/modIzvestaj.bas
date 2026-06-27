@@ -991,7 +991,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     Dim ws As Worksheet
     Set ws = Nothing
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("KarticaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then
         Err.Raise vbObjectError + 7501, SRC, _

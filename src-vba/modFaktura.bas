@@ -449,7 +449,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     Set wsSablon = Nothing
 
     On Error Resume Next
-    Set wsSablon = ThisWorkbook.Worksheets("FakturaSablon")
+    Set wsSablon = ThisWorkbook.Worksheets(WS_FAKTURA_SABLON)
     On Error GoTo EH
 
     If wsSablon Is Nothing Then
