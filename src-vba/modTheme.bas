@@ -126,6 +126,7 @@ End Sub
 ' ako negde rucno zoves ovo ime
 Public Sub ApplyThemeToControls(ByVal frm As Object)
     StyleControls frm
+    FixFormCaptions frm
 End Sub
 
 ' ============================================================
@@ -838,4 +839,90 @@ Public Sub StyleListHeaderLabel(ByVal lbl As MSForms.label)
     On Error GoTo 0
 End Sub
 
+' ============================================================
+' STATIC LABEL DIACRITICS FIX
+' Form designer ne dozvoljava unos srpske dijakritike u Caption.
+' FixFormCaptions se poziva iz ApplyThemeToControls i prolazi kroz
+' sve Label kontrole, ispravljajuci poznate ASCII reci u Unicode
+' (ChrW) ekvivalente. Idempotentno: vec ispravljeni Caption ostaje.
+' ============================================================
+Public Sub FixFormCaptions(ByVal parent As Object)
+    Dim c As Object
+    On Error Resume Next
+    For Each c In parent.Controls
+        Select Case TypeName(c)
+            Case "Label"
+                c.Caption = CorrectSrCaption(c.Caption)
+            Case "Frame", "Page"
+                FixFormCaptions c
+        End Select
+    Next c
+    On Error GoTo 0
+End Sub
+
+Private Function CorrectSrCaption(ByVal s As String) As String
+    Dim parts() As String
+    Dim i As Long
+    parts = Split(s, " ")
+    For i = 0 To UBound(parts)
+        parts(i) = CorrectSrWord(parts(i))
+    Next i
+    CorrectSrCaption = Join(parts, " ")
+End Function
+
+Private Function CorrectSrWord(ByVal w As String) As String
+    Dim fixed As String
+    Dim isTitle As Boolean
+    isTitle = (Len(w) > 0 And Asc(Left(w, 1)) >= 65 And Asc(Left(w, 1)) <= 90 _
+               And w <> UCase(w))
+    Select Case LCase(w)
+        Case "voca":       fixed = "vo" & ChrW(263) & "a"
+        Case "voce":       fixed = "vo" & ChrW(263) & "e"
+        Case "vocu":       fixed = "vo" & ChrW(263) & "u"
+        Case "vocama":     fixed = "vo" & ChrW(263) & "ama"
+        Case "ambalaza":   fixed = "ambala" & ChrW(382) & "a"
+        Case "ambalaze":   fixed = "ambala" & ChrW(382) & "e"
+        Case "ambalazu":   fixed = "ambala" & ChrW(382) & "u"
+        Case "kolicina":   fixed = "koli" & ChrW(269) & "ina"
+        Case "kolicine":   fixed = "koli" & ChrW(269) & "ine"
+        Case "kolicinu":   fixed = "koli" & ChrW(269) & "inu"
+        Case "tezina":     fixed = "te" & ChrW(382) & "ina"
+        Case "tezine":     fixed = "te" & ChrW(382) & "ine"
+        Case "tezinu":     fixed = "te" & ChrW(382) & "inu"
+        Case "maticni":    fixed = "mati" & ChrW(269) & "ni"
+        Case "maticnih":   fixed = "mati" & ChrW(269) & "nih"
+        Case "maticnom":   fixed = "mati" & ChrW(269) & "nom"
+        Case "racun":      fixed = "ra" & ChrW(269) & "un"
+        Case "racuna":     fixed = "ra" & ChrW(269) & "una"
+        Case "racune":     fixed = "ra" & ChrW(269) & "une"
+        Case "racunu":     fixed = "ra" & ChrW(269) & "unu"
+        Case "greska":     fixed = "gre" & ChrW(353) & "ka"
+        Case "greske":     fixed = "gre" & ChrW(353) & "ke"
+        Case "gresku":     fixed = "gre" & ChrW(353) & "ku"
+        Case "drzava":     fixed = "dr" & ChrW(382) & "ava"
+        Case "drzave":     fixed = "dr" & ChrW(382) & "ave"
+        Case "drzavu":     fixed = "dr" & ChrW(382) & "avu"
+        Case "postanski":  fixed = "po" & ChrW(353) & "tanski"
+        Case "postanskog": fixed = "po" & ChrW(353) & "tanskog"
+        Case "sifarnik":   fixed = ChrW(353) & "ifarnik"
+        Case "sifarnici":  fixed = ChrW(353) & "ifarnici"
+        Case "sifarnika":  fixed = ChrW(353) & "ifarnika"
+        Case "tekuci":     fixed = "teku" & ChrW(263) & "i"
+        Case "tekuceg":    fixed = "teku" & ChrW(263) & "eg"
+        Case "pronaden":   fixed = "prona" & ChrW(273) & "en"
+        Case "pronadjen":  fixed = "prona" & ChrW(273) & "en"
+        Case "izvestaj":   fixed = "izve" & ChrW(353) & "taj"
+        Case "izvestaje":  fixed = "izve" & ChrW(353) & "taje"
+        Case "marza":      fixed = "mar" & ChrW(382) & "a"
+        Case "marze":      fixed = "mar" & ChrW(382) & "e"
+        Case "opstina":    fixed = "op" & ChrW(353) & "tina"
+        Case "opstine":    fixed = "op" & ChrW(353) & "tine"
+        Case Else:         CorrectSrWord = w: Exit Function
+    End Select
+    If isTitle Then
+        CorrectSrWord = UCase(Left(fixed, 1)) & Mid(fixed, 2)
+    Else
+        CorrectSrWord = fixed
+    End If
+End Function
 
