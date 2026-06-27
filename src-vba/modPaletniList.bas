@@ -1494,6 +1494,31 @@ Private Sub RequirePreradaStavkaSchema(ByVal SRC As String)
         COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_STORNIRANO
 End Sub
 
+' Schema-drift: dodaj nove tblPrerada kolone (bruto/paleta/ambalaza/tipovi)
+' ako fale. Idempotentno (no-op kad postoje). Resava 0 u sazetku paletnog
+' lista kada EnsurePaletniListSchema nije pokrenut posle nadogradnje.
+Private Sub EnsurePreradaCols()
+    On Error Resume Next
+    Dim lo As ListObject: Set lo = GetTable(TBL_PRERADA)
+    If lo Is Nothing Then Exit Sub
+    EnsurePreradaCol lo, COL_PRE_TEZINA_PALETE
+    EnsurePreradaCol lo, COL_PRE_BRUTO
+    EnsurePreradaCol lo, COL_PRE_AMBALAZA
+    EnsurePreradaCol lo, COL_PRE_TIP_KUTIJE
+    EnsurePreradaCol lo, COL_PRE_TIP_KESE
+    EnsurePreradaCol lo, COL_PRE_TIP_GP
+End Sub
+
+Private Sub EnsurePreradaCol(ByVal lo As ListObject, ByVal colName As String)
+    On Error Resume Next
+    Dim c As ListColumn
+    Set c = lo.ListColumns(colName)
+    If c Is Nothing Then
+        lo.ListColumns.Add
+        lo.ListColumns(lo.ListColumns.count).name = colName
+    End If
+End Sub
+
 ' Exact-row lookup po kljucu. Puca ako nema reda (0) ili ima vise (>1).
 ' Za IDENTITET (PaletaID, PrijemnicaID), NE za pretragu otvorenih paleta.
 Private Function RequireSingleRowIndexByKey(ByVal tblName As String, _
@@ -1579,6 +1604,10 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     If brojKutija <= 0 And brojKesa <= 0 Then
         Err.Raise vbObjectError + 7342, SRC, "Broj kutija ili kesa mora biti > 0."
     End If
+
+    ' Osiguraj nove kolone PRE transakcije (inace PalAppendRow tiho preskoci
+    ' upis bruto/paleta/ambalaza -> 0 u sazetku paletnog lista).
+    EnsurePreradaCols
 
     Set tx = New clsTransaction
     tx.BeginTx
