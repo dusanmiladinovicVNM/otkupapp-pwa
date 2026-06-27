@@ -1946,6 +1946,9 @@ Private Sub m_btnStampajAmb_Click()
             Else
                 OutputGrupniOtkupniList prijIDs
             End If
+        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
+            ' OM<->kooperant kretanje (prazne gajbe) -> revers.
+            StampajReversAmbDok dokID, dokTip
         Case Else
             MsgBox "Za tip dokumenta '" & dokTip & "' stampa nije dostupna iz ovog pregleda.", _
                    vbInformation, APP_NAME
@@ -1954,6 +1957,67 @@ Private Sub m_btnStampajAmb_Click()
 EH:
     LogErr "frmIzvestaj.m_btnStampajAmb_Click"
     MsgBox "Greska pri stampi dokumenta: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Revers (OM<->kooperant kretanje ambalaze) za izabrani ambalaza red. Argumenti se
+' rekonstruisu iz dve noge ledger-a (Kooperant + Stanica) koje dele DokumentID
+' (vazi i za samostalni revers i za nogu knjizenu uz otkup). prijem=True za povrat.
+Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Sub
+    Dim cDat As Long, cTip As Long, cKol As Long, cEnt As Long
+    Dim cEntTip As Long, cDok As Long, cDokTip As Long
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    If cDok = 0 Or cDokTip = 0 Then Exit Sub
+
+    Dim datum As Date, haveDatum As Boolean
+    Dim tipAmb As String, omID As String, koopID As String
+    Dim kolAmb As Long
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cDok)) = dokID And CStr(d(i, cDokTip)) = dokTip Then
+            If Not haveDatum And IsDate(d(i, cDat)) Then
+                datum = CDate(d(i, cDat)): haveDatum = True
+            End If
+            If Len(tipAmb) = 0 Then tipAmb = CStr(d(i, cTip))
+            Dim et As String: et = CStr(d(i, cEntTip))
+            If et = "Stanica" Then
+                omID = CStr(d(i, cEnt))
+            ElseIf et = "Kooperant" Then
+                koopID = CStr(d(i, cEnt))
+                If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
+            End If
+        End If
+    Next i
+
+    If Len(Trim$(koopID)) = 0 Or Len(Trim$(omID)) = 0 Then
+        MsgBox "Revers nije moguce rekonstruisati (nedostaje OM ili kooperant noga).", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If Not haveDatum Then datum = Date
+
+    Dim omNaziv As String, koopNaziv As String, vrsta As String
+    omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
+    koopNaziv = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Ime")) & " " & _
+                      CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Prezime")))
+    ' Uz-otkup revers: DokumentID = otkupID -> vrsta iz otkupa; standalone -> prazno.
+    vrsta = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_VRSTA))
+
+    Dim prijem As Boolean: prijem = (dokTip = DOK_TIP_OM_ULAZ_KOOP)
+    OutputIzdavanjeAmbalaze datum, dokID, omNaziv, omID, koopNaziv, koopID, _
+                            tipAmb, kolAmb, vrsta, prijem
+    Exit Sub
+EH:
+    LogErr "frmIzvestaj.StampajReversAmbDok"
+    MsgBox "Greska pri stampi reversa: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Prijemnice (" + "-spojeni ID-jevi) za zbirnu kojoj pripada otpremnica.
