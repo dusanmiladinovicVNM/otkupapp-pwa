@@ -49,7 +49,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     Dim k As String
     For Each r In lo.ListRows
         k = CStr(r.Range(1).Value)
-        If k <> "" Then existing(k) = True
+        If k <> "" Then existing(k) = r.Index
     Next r
     UpsertRow lo, existing, "APP_MSG_GRESKA_PRI_POKRETANJU", "Gre" & ChrW(353) & "ka pri pokretanju aplikacije. Pogledajte log."
     UpsertRow lo, existing, "AGRO_LBL_MAGACIN_IZDAVANJE_ROBE", "Magacin " & ChrW(8212) & " izdavanje robe i prijem od dobavlja" & ChrW(269) & "a"
@@ -249,10 +249,15 @@ End Sub
 
 Private Sub UpsertRow(lo As ListObject, existing As Object, _
                       ByVal kljuc As String, ByVal tekst As String)
-    If existing.Exists(kljuc) Then Exit Sub
-    Dim r As ListRow
-    Set r = lo.ListRows.Add
-    r.Range(1).Value = kljuc
-    r.Range(2).Value = tekst
-    existing(kljuc) = True
+    If existing.Exists(kljuc) Then
+        If CStr(lo.ListRows(existing(kljuc)).Range(2).Value) <> tekst Then
+            lo.ListRows(existing(kljuc)).Range(2).Value = tekst
+        End If
+    Else
+        Dim r As ListRow
+        Set r = lo.ListRows.Add
+        r.Range(1).Value = kljuc
+        r.Range(2).Value = tekst
+        existing(kljuc) = r.Index
+    End If
 End Sub
