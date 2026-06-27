@@ -36,6 +36,10 @@ Public Function ResolveKooperantByName(ByVal cmb As MSForms.ComboBox, _
         Exit Function
     End If
 
+    ' Toggle (Podesavanja): auto-kreiranje nepoznatog kooperanta. OFF -> vrati ""
+    ' pa frmOtkup javlja da kooperant nije pronadjen (bez tihog kreiranja).
+    If Not KoopAutoCreate() Then Exit Function
+
     ResolveKooperantByName = CreateKooperantByName(nm, stanicaID)
     Exit Function
 EH:

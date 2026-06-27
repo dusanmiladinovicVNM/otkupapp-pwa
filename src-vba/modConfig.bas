@@ -461,6 +461,13 @@ Public Const CFG_AUTO_PRIJEMNICA_HLADNJACA As String = "AUTO_PRIJEMNICA_HLADNJAC
 Public Const CFG_AUTO_BROJ_DOK As String = "AUTO_BROJ_DOKUMENTA"
 ' Kupac unosi BRUTO tezinu (sa ambalazom); sistem oduzima taru -> cuva neto (default OFF).
 Public Const CFG_OTKUP_BRUTO_UNOS As String = "OTKUP_BRUTO_UNOS"
+' Auto-kreiranje kooperanta iz unetog imena u frmOtkup (default ON / prazno = ON).
+Public Const CFG_KOOP_AUTO_CREATE As String = "KOOP_AUTO_CREATE"
+' Pracenje parcela: dozvoli unos parcele u frmOtkup (default ON). OFF -> polje skip.
+Public Const CFG_PRACENJE_PARCELA As String = "PRACENJE_PARCELA"
+' Kes isplate proizvodjacima postoje (default ON). OFF -> skip Novac/Primalac u
+' frmOtkup i "Br. otk. blk." u Ulaz OM (frmDokumenta).
+Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
 
 ' --- tblKulture: podrazumevani tip ambalaze (auto-puni u otkupu/dokumentima) ---
 Public Const COL_KUL_TIP_AMBALAZE As String = "TipAmbalaze"
@@ -699,5 +706,23 @@ End Function
 ' neto u Kolicina, a bruto u BrutoKg (frmOtkup). Default OFF -> postojece ponasanje.
 Public Function OtkupBrutoUnos() As Boolean
     OtkupBrutoUnos = ConfigFlag(CFG_OTKUP_BRUTO_UNOS, False)
+End Function
+
+' Auto-kreiranje kooperanta kad se u frmOtkup unese ime koje nije u bazi.
+' Default ON (kao do sada). NO -> nepoznato ime se ne kreira (operater bira
+' postojeceg ili rucno doda u Maticnim podacima).
+Public Function KoopAutoCreate() As Boolean
+    KoopAutoCreate = ConfigFlag(CFG_KOOP_AUTO_CREATE, True)
+End Function
+
+' Pracenje parcela u frmOtkup (cmbParcela). Default ON. OFF -> polje se skip.
+Public Function IsPracenjeParcela() As Boolean
+    IsPracenjeParcela = ConfigFlag(CFG_PRACENJE_PARCELA, True)
+End Function
+
+' Postoje kes isplate proizvodjacima. Default ON. OFF -> skip Novac/Primalac
+' (frmOtkup) i "Br. otk. blk." (Ulaz OM, frmDokumenta).
+Public Function IsKesIsplate() As Boolean
+    IsKesIsplate = ConfigFlag(CFG_KES_ISPLATE, True)
 End Function
 

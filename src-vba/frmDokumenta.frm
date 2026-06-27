@@ -221,11 +221,22 @@ Private Sub UserForm_Activate()
     ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
     SetupRecoveryButton
 
+    ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
+    ApplyKesIsplateState
+
     Exit Sub
 
 EH:
     LogErr "frmDokumenta.UserForm_Activate"
     MsgBox "Greška pri otvaranju dokumenata: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Podesavanja: kes isplate OFF -> "Br. otk. blk." (cmbOtkupBlok) je disabled u
+' frame-u "Ulaz OM" (vidljiv, sivo, tab preskace). Oba smera pa re-aktivacija
+' prati config.
+Private Sub ApplyKesIsplateState()
+    On Error Resume Next
+    If IsKesIsplate() Then EnableCombo cmbOtkupBlok Else DisableCombo cmbOtkupBlok
 End Sub
 
 Private Sub txtCenaOtp_Change():       UpdateUkupnoKgOtp: End Sub
