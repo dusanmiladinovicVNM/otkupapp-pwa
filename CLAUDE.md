@@ -62,21 +62,15 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 - Pri merge-u: čist git-merge može dati VBA compile grešku (dupli `Public`
   `Sub`/`Function`/`Const` → „Ambiguous name"). Posle merge-a uradi
   `Debug → Compile VBAProject` i proveri duple definicije.
-- **Encoding: VBA fajlovi (`.bas`/`.cls`/`.frm`) su jednobajtni ANSI —
-  Windows-1250 (srednjoevropski; ima `š/ž/č/ć`) + LF — NE UTF-8.** Edit/Write alat
-  ih pri snimanju prebaci u UTF-8 i **tiho ošteti** sve `š/ž/č/ć` i nemačke znake —
-  uključujući `MsgBox` poruke vidljive korisniku (gubitak je nepovratan jer više
-  bajtova mapira na isti `�`). Već se dešavalo (vidi `f08a0ee`). Pravilo (da se NE
-  ispravlja stalno posle greške):
-  - PRE editovanja proveri `file <fajl>` → „Non-ISO extended-ASCII" = jednobajtni ANSI.
-  - Ako fajl ima ne-ASCII znake, **NE diraj ga Edit/Write alatom direktno.**
-    Primeni izmenu **byte-preserving latin-1 round-trip skriptom** (Python
-    `open(..., encoding='latin-1', newline='')` za čitanje i pisanje — latin-1 čuva
-    bajtove bez obzira na 1250/1252; **očuvaj originalni EOL**, u ovom repo-u LF), a
-    sopstvene dodatke drži **ASCII-only** (bez dijakritike, npr. „pocetno").
-    Po potrebi: `git checkout HEAD -- <fajl>` pa re-apliciraj izmene tom skriptom.
-  - POSLE izmene: `file` MORA i dalje da kaže „Non-ISO extended-ASCII" (ne „UTF-8"),
-    a `git diff` sme da pokaže **samo namerne linije** (bez `�` šuma na netaknutim).
+- **Encoding (posle lokalizacije — `1jj9xw` / v2.6): VBA izvori (`.bas`/`.cls`/`.frm`/`.doccls`) su sada 100% ASCII i MORAJU ostati ASCII.** Sva dijakritika je izmeštena u runtime katalog (`modPoruke` → `Poruka("KLJUC")`, tekst se gradi sa `ChrW`), pa u izvoru nema ne-ASCII bajtova koje bi Edit/Write iskvario.
+  - Pošto su fajlovi ASCII, **Edit/Write je sada bezbedan** na `.bas`/`.cls`/`.frm` (latin-1 round-trip više nije potreban). `file <fajl>` treba da kaže „ASCII text“.
+  - **NIKAD ne upisuj ne-ASCII znak direktno u VBA izvor** — ni `š ž č ć đ Š Ž Č Ć Đ`, ni nemačke `ä ö ü ß`, ni tipografske `— « » • „ “`. Time fajl ponovo postaje UTF-8/mešan, a `ImportAllVBA` ga učita kao smeće (ista klasa greške kao `f08a0ee`).
+  - **Korisnički tekst sa dijakritikom ide ISKLJUČIVO kroz katalog:** dodaj red u `modPoruke.UpsertPoruke` (`UpsertRow lo, existing, "KLJUC", "Gre" & ChrW(353) & "ka..."`), a na mestu prikaza koristi `Poruka("KLJUC")`. Dijakritika nastaje tek u runtime-u.
+  - **NE „sređuj radi čitljivosti“** vraćanjem `ChrW` u literal (`"Gre" & ChrW(353) & "ka"` → `"Greška"`) — to je tačno reintrodukcija greške.
+  - ChrW kodovi: `š=353 Š=352 ž=382 Ž=381 č=269 Č=268 ć=263 Ć=262 đ=273 Đ=272` · em-dash `—=8212` · `«=171 »=187 •=8226`. Interne/nemačke (dev) stringove transliteruj u ASCII (`ü→ue ö→oe ä→ae ß→ss`), ne u ChrW.
+  - **`.frx` ostaje binarni Windows-1250 — i dalje se NE dira kao tekst** (nepromenjeno). Caption koji živi samo u `.frx` menja se u dizajneru forme.
+  - **Verifikacija posle SVAKE VBA izmene:** `file` = „ASCII text“ (NE „UTF-8“, NE „Non-ISO extended-ASCII“); grep ne-ASCII nad `src-vba/*.bas src-vba/*.frm src-vba/*.cls` = prazno; svaki novi `Poruka("KLJUC")` ima par u `UpsertPoruke` (0 orphan-a); posle import-a `Alt+F8 → EnsurePoruke`.
+  - Prelazno: ako `file` na nekom VBA fajlu i dalje kaže „Non-ISO extended-ASCII“ (nije transliterovan), za njega važi STARO pravilo (latin-1 round-trip, vidi git istoriju ovog odeljka) dok se ne prebaci na ASCII.
   - `.md` / `.js` / ostali UTF-8 fajlovi: Edit/Write je bezbedan (nema konverzije).
 
 ## 5) Verifikacija (CI ne pokreće Excel)
