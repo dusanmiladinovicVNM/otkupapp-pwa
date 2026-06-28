@@ -178,7 +178,8 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim fil As Object, ext As String, baseName As String, vbc As Object
-    Dim body As String, merged As Long, added As Long, skippedNew As String, t As Long
+    Dim body As String, merged As Long, added As Long, skippedNew As String
+    Dim failed As String, t As Long
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
 
     For Each fil In fso.GetFolder(folder).files
@@ -187,12 +188,14 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         Select Case ext
             Case "bas", "cls", "frm", "doccls"
                 If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
+                    ' per-fajl hvatanje: jedan los modul ne rusi ceo update i
+                    ' prijavi se TACNO koji modul + greska (dijagnostika).
+                    On Error Resume Next
+                    Err.Clear
                     body = ExtractModuleCode(fil.path)
 
                     Set vbc = Nothing
-                    On Error Resume Next
                     Set vbc = proj.VBComponents(baseName)
-                    On Error GoTo 0
 
                     If Not vbc Is Nothing Then
                         ' postoji -> zameni SAMO kod (bez Remove/Import)
@@ -200,24 +203,32 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                             If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
                             If Len(body) > 0 Then .AddFromString body
                         End With
-                        merged = merged + 1
+                        If Err.Number = 0 Then merged = merged + 1
                     ElseIf ext = "bas" Or ext = "cls" Then
                         ' nov standardni/klasni modul -> dodaj (bez Remove)
                         t = IIf(ext = "bas", 1, 2)
                         Set vbc = proj.VBComponents.Add(t)
                         vbc.name = baseName
                         If Len(body) > 0 Then vbc.CodeModule.AddFromString body
-                        added = added + 1
+                        If Err.Number = 0 Then added = added + 1
                     Else
                         ' nova forma / novi sheet -> ne pravimo u runtime-u (reinstall)
                         skippedNew = skippedNew & "  " & fil.name & vbCrLf
                     End If
+
+                    If Err.Number <> 0 Then
+                        failed = failed & "  " & fil.name & " -> [" & _
+                                 Err.Number & "] " & Err.description & vbCrLf
+                        Err.Clear
+                    End If
+                    On Error GoTo 0
                 End If
         End Select
     Next fil
 
-    ImportFromFolder = "Azurirano (kod): " & merged & ", novih modula: " & added & _
-        IIf(Len(skippedNew) > 0, vbCrLf & "Preskoceno (novo, treba reinstall):" & vbCrLf & skippedNew, "")
+    ImportFromFolder = "Azurirano (kod): " & merged & ", novih: " & added & _
+        IIf(Len(skippedNew) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skippedNew, "") & _
+        IIf(Len(failed) > 0, vbCrLf & "GRESKE po modulu:" & vbCrLf & failed, "")
 End Function
 
 Private Function ReadAllText(ByVal path As String) As String
