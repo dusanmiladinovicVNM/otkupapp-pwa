@@ -62,16 +62,13 @@ Public Sub RunSelfUpdate()
     Const SRC As String = "modSelfUpdate.RunSelfUpdate"
     On Error GoTo EH
 
-    ' Preduslov: programski pristup VBA projektu (helper sam prijavi ako fali).
     If Not SelfVBAAccessible() Then Exit Sub
 
-    ' 1) Backup pre svega (rollback ako import pukne)
     If Not MakePreUpdateBackup() Then
         If MsgBox("Backup pre azuriranja nije uspeo." & vbCrLf & _
                   "Nastaviti ipak?", vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
     End If
 
-    ' 2) Download svih fajlova iz AgriX_Release u temp folder
     Dim tempDir As String: tempDir = MakeTempDir()
     Dim n As Long: n = DownloadReleaseFiles(tempDir)
     If n = 0 Then
@@ -80,10 +77,31 @@ Public Sub RunSelfUpdate()
         Exit Sub
     End If
 
-    ' 3) Import (skip moduli na stack-u; ThisWorkbook se merge-uje)
-    Dim summary As String: summary = ImportFromFolder(tempDir, SKIP_MODULES)
+    ' Faza 1: code-merge svih komponenti (AddFromFile). failed = oni koje ne moze.
+    Dim failed As Object: Set failed = CreateObject("Scripting.Dictionary")
+    Dim summary As String: summary = ImportFromFolder(tempDir, SKIP_MODULES, failed)
 
-    ' 4) Snimi (restart aktivira nov kod + schema self-heal kroz InitApp)
+    ' Faza 2 (za module koje code-merge ne moze - dinamicke kontrole/WithEvents):
+    ' ukloni ih SADA (Remove se "flush"-uje tek kad makro zavrsi), pa ih uvezi u
+    ' sledecem OnTime prolazu Import-om (rekreacija komponente; drugi mehanizam od
+    ' CodeModule edita - ne diskonektuje; Import ovih modula radi i u ImportAllVBA).
+    ' Flush izmedju faza -> Import pravi CIST modul (bez modX1 duplikata).
+    If failed.count > 0 Then
+        Dim proj As Object: Set proj = ThisWorkbook.VBProject
+        Dim k As Variant
+        For Each k In failed.Keys
+            On Error Resume Next
+            proj.VBComponents.Remove proj.VBComponents(CStr(k))
+            On Error GoTo EH
+        Next k
+        SaveSetting "AgriXSelfUpdate", "phase2", "dir", tempDir
+        SaveSetting "AgriXSelfUpdate", "phase2", "n", CStr(n)
+        ' +2s: da queued Remove sigurno bude flush-ovan pre nego sto faza 2
+        ' proveri koji moduli nedostaju (inace bi ih videla kao postojece).
+        Application.OnTime Now + TimeSerial(0, 0, 2), "RunSelfUpdatePhase2"
+        Exit Sub                  ' kraj makroa -> Remove se flush-uje -> faza 2
+    End If
+
     On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo EH
@@ -98,6 +116,63 @@ EH:
     MsgBox "Greska pri azuriranju: " & Err.description & vbCrLf & vbCrLf & _
            "Ako program ne radi ispravno, vratite kopiju iz 'Backup' foldera " & _
            "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
+End Sub
+
+' Faza 2 (Application.OnTime; posle flush-a Remove-ova iz faze 1). Uvezi (Import)
+' module koji su uklonjeni u fazi 1 - sad su stvarno obrisani pa Import pravi
+' cist modul (bez duplikata). Public zbog OnTime.
+Public Sub RunSelfUpdatePhase2()
+    Const SRC As String = "modSelfUpdate.RunSelfUpdatePhase2"
+    On Error GoTo EH
+
+    Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", "phase2", "dir", "")
+    Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", "phase2", "n", "?")
+    DeleteSetting "AgriXSelfUpdate", "phase2"
+    If Len(p2dir) = 0 Then Exit Sub
+
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim fil As Object, ext As String, baseName As String, imported As Long, stillFail As String
+    Dim comExists As Boolean, tmpc As Object
+
+    For Each fil In fso.GetFolder(p2dir).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        If ext = "bas" Or ext = "cls" Then
+            baseName = fso.GetBaseName(fil.name)
+            comExists = True
+            On Error Resume Next
+            Set tmpc = Nothing
+            Set tmpc = proj.VBComponents(baseName)
+            comExists = Not (tmpc Is Nothing)
+            On Error GoTo 0
+            If Not comExists Then              ' uvezi samo uklonjene (faza 1)
+                On Error Resume Next
+                Err.Clear
+                proj.VBComponents.Import fil.path
+                If Err.Number = 0 Then
+                    imported = imported + 1
+                Else
+                    stillFail = stillFail & "  " & fil.name & " -> [" & Err.Number & "] " & Err.description & vbCrLf
+                End If
+                Err.Clear
+                On Error GoTo 0
+            End If
+        End If
+    Next fil
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo EH
+
+    MsgBox "Azuriranje zavrseno. Preuzeto: " & nTxt & ", 2. faza uvezeno: " & imported & _
+           IIf(Len(stillFail) > 0, vbCrLf & vbCrLf & "I DALJE NIJE USPELO:" & vbCrLf & stillFail, "") & vbCrLf & vbCrLf & _
+           "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
+           IIf(Len(stillFail) > 0, vbExclamation, vbInformation), APP_NAME
+    Exit Sub
+EH:
+    LogErr SRC, Err.description
+    MsgBox "Greska u 2. fazi azuriranja: " & Err.description & vbCrLf & _
+           "Vratite kopiju iz 'Backup' foldera (AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
 
 ' ---------------- private ----------------
@@ -171,7 +246,7 @@ End Function
 ' Uvezi nov kod: CIST code-merge u mestu preko AddFromFile (detalji u telu).
 ' Bez Remove (nema modX1 duplikata), bez Import (nema form-load greske).
 ' Dizajn formi (.frx/kontrole) se NE menja - za to treba pun reinstall .xlsm.
-Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
+Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String, ByRef failedOut As Object) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
     Dim st As Object: Set st = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> "ok"/"skip"
@@ -245,7 +320,10 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         End If
     Next k
     For Each k In er.Keys
-        If Not st.Exists(CStr(k)) Then failS = failS & "  " & k & " -> " & er(k) & vbCrLf
+        If Not st.Exists(CStr(k)) Then
+            failS = failS & "  " & k & " -> " & er(k) & vbCrLf
+            If Not failedOut Is Nothing Then failedOut(fso.GetBaseName(CStr(k))) = folder & "\" & CStr(k)
+        End If
     Next k
 
     ImportFromFolder = "Azurirano: " & okN & " (prolaza: " & usedPass & ")" & _
