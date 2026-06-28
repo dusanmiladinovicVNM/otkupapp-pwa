@@ -144,3 +144,23 @@ End Sub
 no-op safeguard za legacy instalacije).
 
 **Dodata:** 2026-06-28 | **Grana lokalizacije:** claude/vba-localization-extraction-1jj9xw
+
+
+---
+
+## Funkcija B — nedeljni backup podataka na Drive (AgriX_Backup)
+
+Kontekst: self-update (Funkcija A) je gotov (vidi docs/SELF_UPDATE.md). Funkcija B
+je odvojen, disaster-recovery zadatak — nedeljni backup PODATAKA na Drive.
+
+Cilj: jednom nedeljno otpremi kopiju radne sveske kao `.xlsx` (bez makroa, manji
+fajl, čist data snapshot) u Drive folder `AgriX_Backup` (BACKUP_FOLDER_ID već
+postoji u modConfig), u podfolder po stanici: `AgriX_Backup/<StanicaID>/AgriX_<datum>.xlsx`.
+
+Reuse: `modDrive.DriveUploadFile` (već postoji), `modJournaling.BackupFileOnStart`
+(lokalni full backup na svaki start — proširiti, ne duplirati). Okidač: na
+`Workbook_Open`, čuvaj „datum poslednjeg Drive backup-a" (SaveSetting/registry ili
+SyncControl ćelija); ako > 7 dana → SaveAs privremeni `.xlsx` → upload → upiši novi
+datum. Fail-soft (kao CleanupOrphanedLocks).
+
+Prioritet: P2. Nije blokada — Funkcija A radi nezavisno.
