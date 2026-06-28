@@ -169,10 +169,11 @@ EH:
 End Function
 
 ' Zameni KOD postojecih komponenti - NE Remove/Import. Remove+Import formi u
-' runtime-u rusi projekat ("Errors during load" / korupcija). Forme imaju
-' Begin/End dizajn blok pa kod vade kroz SelfReadFormCode; ostalo kroz
-' SelfReadCodeBody. Dizajn formi (.frx/kontrole) se NE menja - za izmene
-' dizajna formi treba pun reinstall .xlsm.
+' runtime-u rusi projekat ("Errors during load" / korupcija). Kod svake
+' komponente se vadi kroz ExtractModuleCode (strip header + sve Attribute
+' linije, da AddFromString ne baci "Syntax error" na member atributima).
+' Dizajn formi (.frx/kontrole) se NE menja - za izmene dizajna formi treba
+' pun reinstall .xlsm.
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
@@ -186,11 +187,7 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         Select Case ext
             Case "bas", "cls", "frm", "doccls"
                 If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
-                    If ext = "frm" Then
-                        body = SelfReadFormCode(fil.path)
-                    Else
-                        body = SelfReadCodeBody(fil.path)
-                    End If
+                    body = ExtractModuleCode(fil.path)
 
                     Set vbc = Nothing
                     On Error Resume Next
@@ -249,41 +246,51 @@ Private Function SelfVBAAccessible() As Boolean
 End Function
 
 
-' Vrati samo kod (preskoci VBA header blok ako postoji) - za .doccls merge.
-Private Function SelfReadCodeBody(ByVal path As String) As String
-    Dim ff As Integer, s As String, ls As String, body As String, started As Boolean
-    ff = FreeFile
-    Open path For Input As #ff
-    Do While Not EOF(ff)
-        Line Input #ff, s
-        If started Then
-            body = body & vbCrLf & s
-        Else
-            ls = LTrim$(s)
-            If Not (ls Like "VERSION*" Or ls = "BEGIN" Or ls = "END" _
-                Or ls Like "MultiUse =*" Or ls Like "Attribute VB_*" Or Len(Trim$(s)) = 0) Then
-                started = True: body = s
-            End If
-        End If
-    Loop
-    Close #ff
-    SelfReadCodeBody = body
-End Function
+' Izvuci editabilni kod iz izvoznog VBA fajla (.bas/.cls/.frm/.doccls) bezbedan
+' za AddFromString:
+'  - preskoci header: VERSION, Begin..End dizajn blok (forme/cls, uklj.
+'    BeginProperty/EndProperty i ugnezdene kontrole), module Attribute linije;
+'  - u kodu STRIP-uj sve "Attribute ..." linije (member atributi tipa
+'    Attribute x.VB_VarHelpID = -1) - AddFromString ih ne prima (Syntax error).
+' Case-insensitive (cls: BEGIN/END velikim; forme: Begin/End).
+Private Function ExtractModuleCode(ByVal path As String) As String
+    Dim allTxt As String, arr() As String, i As Long, depth As Long
+    Dim inHeader As Boolean, ls As String, u As String, body As String
 
-' Izvuci SAMO code-behind iz .frm: sve posle POSLEDNJE "Attribute VB_*" linije
-' (time se preskace VERSION + Begin/End dizajn blok). Dizajn (.frx) se ne dira.
-Private Function SelfReadFormCode(ByVal path As String) As String
-    Dim allTxt As String, arr() As String, i As Long, lastAttr As Long, body As String
     allTxt = ReadAllText(path)
     arr = Split(allTxt, vbCrLf)
     If UBound(arr) <= 0 Then arr = Split(allTxt, vbLf)
-    lastAttr = -1
+
+    inHeader = True
     For i = 0 To UBound(arr)
-        If LTrim$(arr(i)) Like "Attribute VB_*" Then lastAttr = i
+        ls = LTrim$(arr(i))
+        u = UCase$(ls)
+        If inHeader Then
+            If depth > 0 Then
+                If u Like "BEGIN*" Then
+                    depth = depth + 1
+                ElseIf u Like "END*" Then
+                    depth = depth - 1
+                End If
+            ElseIf u Like "VERSION *" Then
+                ' skip
+            ElseIf u Like "BEGIN*" Then
+                depth = depth + 1
+            ElseIf u Like "ATTRIBUTE *" Then
+                ' module attribute -> skip
+            ElseIf Len(Trim$(arr(i))) = 0 Then
+                ' prazna linija u headeru -> skip
+            Else
+                inHeader = False
+                body = arr(i)                ' prva kod linija (nije Attribute)
+            End If
+        Else
+            If Not (u Like "ATTRIBUTE *") Then
+                If Len(body) = 0 Then body = arr(i) Else body = body & vbCrLf & arr(i)
+            End If
+        End If
     Next i
-    If lastAttr < 0 Then Exit Function          ' nije validan .frm -> ne diraj
-    For i = lastAttr + 1 To UBound(arr)
-        If Len(body) = 0 Then body = arr(i) Else body = body & vbCrLf & arr(i)
-    Next i
-    SelfReadFormCode = body
+
+    ExtractModuleCode = body
 End Function
+
