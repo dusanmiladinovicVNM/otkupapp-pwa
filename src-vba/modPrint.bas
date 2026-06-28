@@ -1793,6 +1793,7 @@ Public Sub EnsureFakturaSablon()
     ws.cells(fr + 1, 1).value = "Datum:"
     ws.cells(fr + 2, 1).value = "Kupac:"
     ws.cells(fr, 2).name = "FakBroj"
+    ws.cells(fr, 2).NumberFormat = "@"   ' broj kao tekst (npr. 1/2026), ne kao datum
     ws.cells(fr + 1, 2).name = "FakDatum"
     ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 6)).Merge
     ws.cells(fr + 2, 2).name = "FakKupac"
@@ -1843,6 +1844,7 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
         .Borders.LineStyle = xlNone
         .Interior.ColorIndex = xlNone
     End With
+    ws.Range(startCell.Offset(0, 1), startCell.Offset(79, 1)).NumberFormat = "@"   ' broj prijemnice kao tekst
 
     Dim i As Long
     For i = 1 To nStavke
