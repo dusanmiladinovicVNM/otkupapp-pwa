@@ -114,6 +114,39 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
 
+## v6.43 — 2026-06-27
+
+### Summary
+
+Ručni šabloni (faktura, kartica kooperanta, sledljivost) prevaziđeni — sada su generisani house-style šabloni u modPrint grupi, istovetnog dizajna kao otkupni/paletni (Faza 3). **Menja štampani izgled ova tri dokumenta** (sadržaj/podaci verno reprodukovani; izgled prelazi na house style).
+
+### Added
+
+- `modPrint`: `EnsureFakturaSablon`/`FillFakturaSablon`, `EnsureKarticaSablon`/`FillKarticaSablon`, `EnsureSledljivostSablon`/`FillSledljivostSablon`. Generišu sheet od nule (`DocSellerHeader` + `DocTitleBlock` + stilizovana tabela), sa layout-version markerom (`H1` faktura/kartica, `N1` sledljivost — 12 kolona, landscape) kao `PaletaSablon`; auto-rebuild na promenu verzije.
+
+### Changed
+
+- `FakturaSablon`/`KarticaSablon`/`SledljivostSablon` više nisu ručni sheet-ovi koji pucaju ako ne postoje — auto-generišu se. Print logika izmeštena iz `frmSledljivost` (forme) u `modPrint`.
+- Entry-point funkcije zadržavaju podatke/gardove, render delegiraju na modPrint: `modFaktura.PrintFaktura` (gardovi: single-row, storno, duplicate-FakturaID), `modIzvestaj.PrintKarticaPDF` (`ReportKarticaKooperanta`), `frmSledljivost.PrintTracePDF` (`TraceByZbirna` + prijemnica). Izlaz preko Faza2 dispečera (`*_PRINT_MODE`).
+- Nova unikatna named-range imena: faktura `Fak*`, kartica `Kart*`, sledljivost `Sled*` (izbegava koliziju sa starim workbook imenima).
+
+### Known Issues / Known Limitations
+
+- Stara workbook imena ručnog `SledljivostSablon`-a (npr. `KupacNaziv`, `LOTBroj`) mogu ostati kao neaktivna `#REF` posle prvog auto-rebuild-a — bezopasno; očistiti kroz Name Manager po želji.
+- `modFaktura.ClearFakturaStavkeArea` je sada mrtav (inertan) kod — kandidat za uklanjanje.
+- `PrintKarticaAmbalazePDF` (kartica ambalaže, code-built `_KartAmbPrint`) namerno nedirnut — zaseban dokument.
+
+### Verification / Acceptance Gates
+
+- Statički: balans `Sub`/`Function`, `Select Case`, `With`, `For/Next` u svim diranim modulima; named-range konzistentnost Ensure↔Fill po dokumentu; gardovi fakture očuvani; encoding (Windows-1250) + LF, bez korupcije. **Excel proof obavezan** (izgled se ne može verifikovati bez Excela): odštampati/PDF-ovati po jednu fakturu, karticu i sledljivost.
+
+### Migration / Data Notes
+
+- Nema schema/data migracije. Re-import `modPrint`, `modFaktura`, `modIzvestaj`, `frmSledljivost`, `modDocStyle` → `Compile`. Prvi print svakog dokumenta rebuild-uje šablon (briše stari ručni sheet, generiše house-style); šabloni ne nose poslovne podatke pa je rebuild bezbedan.
+
+Reference updated: Yes — AR §5.12 (generisani Faktura/Kartica/Sledljivost u modPrint, known-inconsistency rešen).
+
+
 ## v6.42 — 2026-06-27
 
 ### Summary
