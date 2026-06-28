@@ -504,6 +504,14 @@ Private Sub cmbOtkupnoMesto_Change()
     stanicaID = GetComboID(cmbOtkupnoMesto)
     If stanicaID = "" Then Exit Sub
 
+    ' Rucna promena stanice -> datum nazad na danas AKO je trenutni datum
+    ' nasledjen iz otpremnice (blok prefill). Tokom samog prefill-a ne diramo
+    ' (OtkupBlok_IsPrefilling), niti ako je operater rucno ukucao datum.
+    If Not OtkupBlok_IsPrefilling() And OtkupBlok_DatumIzBloka() Then
+        txtDatum.value = Format$(Date, "d.m.yyyy")
+        OtkupBlok_ClearDatumIzBloka
+    End If
+
     ' Parse datum (vec treba da je popunjen u txtDatum)
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
@@ -658,6 +666,10 @@ End Function
 
 Private Sub txtDatum_AfterUpdate()
     On Error GoTo EH
+
+    ' Operater je rucno izmenio datum -> vise nije "iz bloka" (ne resetuj ga
+    ' pri sledecoj promeni stanice).
+    OtkupBlok_ClearDatumIzBloka
 
     ' Ako nema aktivne stanice, samo refresh predlog (suggestion zavisi od datuma)
     If Len(GetActiveStanica()) = 0 Then
@@ -1057,6 +1069,9 @@ Private Sub ClearOtkupFields()
     If Not m_txtAmbIzdata Is Nothing Then m_txtAmbIzdata.value = ""
     txtNovac.value = "0"
     txtPrimalac.value = ""
+    ' Kooperant se cisti posle unosa (sledeci lot je najcesce drugi kooperant);
+    ' ListIndex=-1 deselektuje a zadrzava listu kooperanata za aktivnu stanicu.
+    cmbKooperant.ListIndex = -1
     cmbParcela.Clear
 
     chkDveKlase.value = False
@@ -1072,7 +1087,8 @@ Private Sub ClearOtkupFields()
     AutoFillCenaOtkup
     On Error GoTo 0
 
-    txtKolicina.SetFocus
+    ' Kooperant je ocisten -> fokus nazad na njega (prvi sledeci korak operatera).
+    cmbKooperant.SetFocus
 
     ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
     RefreshBrojDokumentaSuggestion False

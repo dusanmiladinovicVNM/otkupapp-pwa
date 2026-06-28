@@ -53,6 +53,14 @@ Private mActiveOtpID As String
 Private mFilterNezavrsene As Boolean
 Private mMultiMode As Boolean
 
+' Datum-provenance (za frmOtkup.cmbOtkupnoMesto_Change reset logiku):
+'   mPrefilling   - PrefillLeftForm trenutno postavlja levu formu (stanica se
+'                   menja programski; NE resetuj datum tada).
+'   mDatumIzBloka - txtDatum je naslednjen iz otpremnice (blok prefill); rucna
+'                   promena stanice ga vraca na danas, rucni unos datuma ga gasi.
+Private mPrefilling As Boolean
+Private mDatumIzBloka As Boolean
+
 Private mBtnToggle As MSForms.CommandButton
 Private mBtnStorno As MSForms.CommandButton
 Private mBtnPrint As MSForms.CommandButton
@@ -613,12 +621,30 @@ EH:
     LogErr "modOtkupBlok.SelectOtpFromList"
 End Sub
 
+' --- Datum-provenance accessors (koristi frmOtkup.cmbOtkupnoMesto_Change /
+'     txtDatum_AfterUpdate) ---
+Public Function OtkupBlok_IsPrefilling() As Boolean
+    OtkupBlok_IsPrefilling = mPrefilling
+End Function
+
+Public Function OtkupBlok_DatumIzBloka() As Boolean
+    OtkupBlok_DatumIzBloka = mDatumIzBloka
+End Function
+
+Public Sub OtkupBlok_ClearDatumIzBloka()
+    mDatumIzBloka = False
+End Sub
+
 Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     On Error Resume Next
+    mPrefilling = True
 
     ' Datum (i broj zbirne) PRE otkupnog mesta.
     Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
-    If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
+    If IsDate(vDat) Then
+        SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
+        mDatumIzBloka = True   ' datum potice iz otpremnice
+    End If
     SetLeftCtl "txtBrojZbirne", CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
 
     SetComboByIdAny mForm.Controls("cmbOtkupnoMesto"), _
@@ -637,6 +663,8 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
         Dim brDok As String: brDok = SuggestNextBroj(KIND_OTK, stanicaID, CDate(vDat), False)
         If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
     End If
+
+    mPrefilling = False   ' kraj prefill-a: rucne promene stanice opet resetuju datum
 End Sub
 
 ' Kucanje u "Cena po otpremnici" (Change) -> uzivo u levu txtCena + kolona "Cena za".
