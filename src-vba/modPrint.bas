@@ -2275,3 +2275,163 @@ EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillSledljivostSablon"
 End Function
+
+
+' ============================================================
+' KARTICA AMBALAZE - generisan house-style sablon (zamena za code-built
+' _KartAmbPrint). 6 kolona (Datum/Broj dok./Opis/Ulaz/Izlaz/Saldo, UKUPNO red).
+' Podatke (Report 2D niz + header) prikuplja modIzvestaj.PrintKarticaAmbalazePDF.
+' ============================================================
+Public Sub EnsureKarticaAmbalazeSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_KARTICA_AMB_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_KARTICA_AMB_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 40
+    ws.columns("D").ColumnWidth = 11
+    ws.columns("E").ColumnWidth = 11
+    ws.columns("F").ColumnWidth = 12
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 6, 6)
+    r = DocTitleBlock(ws, r, 6, "Kartica ambalaze - promet gajbi po kooperantu", "KARTICA AMBALAZE")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Kooperant:"
+    ws.cells(fr + 1, 1).value = "Period:"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr, 6)).Merge
+    ws.cells(fr, 2).name = "KartAmbKoop"
+    ws.Range(ws.cells(fr + 1, 2), ws.cells(fr + 1, 6)).Merge
+    ws.cells(fr + 1, 2).name = "KartAmbPeriod"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 1, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 3
+    ws.cells(hdr, 1).value = "Datum"
+    ws.cells(hdr, 2).value = "Broj dok."
+    ws.cells(hdr, 3).value = "Opis"
+    ws.cells(hdr, 4).value = "Ulaz"
+    ws.cells(hdr, 5).value = "Izlaz"
+    ws.cells(hdr, 6).value = "Saldo"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 6))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "KartAmbStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureKarticaAmbalazeSablon"
+End Sub
+
+' Popuni KarticaAmbalazeSablon. data = Report niz (1..N, 1..6); poslednji red = UKUPNO.
+' Kolone: 1=Datum 2=BrojDok 3=Opis 4=Ulaz 5=Izlaz 6=Saldo (gajbe, ceo broj).
+Public Function FillKarticaAmbalazeSablon(ByVal koopNaziv As String, _
+        ByVal period As String, ByVal data As Variant) As Worksheet
+    On Error GoTo EH
+    EnsureKarticaAmbalazeSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KARTICA_AMB_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("KartAmbKoop").value = koopNaziv
+    ws.Range("KartAmbPeriod").value = period
+
+    Dim startRow As Long: startRow = ws.Range("KartAmbStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 300, 6))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, outRow As Long
+    For i = 1 To UBound(data, 1)
+        outRow = startRow + i - 1
+        If IsDate(data(i, 1)) Then
+            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
+        Else
+            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        ws.cells(outRow, 3).value = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        If IsNumeric(data(i, 4)) Then
+            If CDbl(data(i, 4)) <> 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 4))
+        End If
+        If IsNumeric(data(i, 5)) Then
+            If CDbl(data(i, 5)) <> 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 5))
+        End If
+        If IsNumeric(data(i, 6)) Then ws.cells(outRow, 6).value = CDbl(data(i, 6))
+    Next i
+
+    Dim dataRows As Long: dataRows = UBound(data, 1)
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + dataRows - 1, 6)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, 6)).NumberFormat = "#,##0"
+
+    Dim rr As Long
+    For rr = 0 To dataRows - 1
+        If rr Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + rr, 1), ws.cells(startRow + rr, 6)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next rr
+
+    Dim ukRow As Long: ukRow = startRow + dataRows - 1
+    With ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 6))
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    Dim footRow As Long: footRow = ukRow + 2
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
+    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 1, 6)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillKarticaAmbalazeSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillKarticaAmbalazeSablon"
+End Function

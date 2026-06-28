@@ -1050,147 +1050,31 @@ Public Sub PrintKarticaAmbalazePDF(ByVal kooperantID As String, _
                   "Nema podataka o ambalazi za ovog kooperanta."
     End If
 
-    Dim ws As Worksheet
-    Set ws = Nothing
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("_KartAmbPrint")
-    On Error GoTo EH
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add
-        ws.name = "_KartAmbPrint"
-    End If
-
-    Dim oldScreen As Boolean
-    oldScreen = Application.ScreenUpdating
-    Application.ScreenUpdating = False
-
-    ws.Visible = xlSheetVisible
-    ws.cells.Clear
-
-    ' --- Zaglavlje ---
     Dim ime As String, prezime As String
     ime = NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime"))
     prezime = NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime"))
+    Dim koopNaziv As String
+    koopNaziv = Trim$(ime & " " & prezime) & " (" & kooperantID & ")"
+    Dim period As String
+    period = Format$(datumOd, "DD.MM.YYYY") & " - " & Format$(datumDo, "DD.MM.YYYY")
 
-    ws.Range("A1").value = "KARTICA AMBALA" & ChrW(381) & "E"
-    ws.Range("A1").Font.Size = 14
-    ws.Range("A1").Font.Bold = True
-
-    ws.Range("A2").value = "Kooperant:"
-    ws.Range("B2").value = Trim$(ime & " " & prezime) & " (" & kooperantID & ")"
-    ws.Range("A3").value = "Period:"
-    ws.Range("B3").value = Format$(datumOd, "DD.MM.YYYY") & " - " & Format$(datumDo, "DD.MM.YYYY")
-    ws.Range("A2").Font.Bold = True
-    ws.Range("A3").Font.Bold = True
-
-    ' --- Header tabele ---
-    Dim hdrRow As Long
-    hdrRow = 5
-    Dim headers As Variant
-    headers = Array("Datum", "Broj dok.", "Opis", "Ulaz", "Izlaz", "Saldo")
-    Dim c As Long
-    For c = 1 To NUM_COLS
-        ws.cells(hdrRow, c).value = headers(c - 1)
-    Next c
-    With ws.Range(ws.cells(hdrRow, 1), ws.cells(hdrRow, NUM_COLS))
-        .Font.Bold = True
-        .Interior.Color = RGB(68, 114, 196)
-        .Font.Color = RGB(255, 255, 255)
-    End With
-
-    ' --- Podaci ---
-    Dim startRow As Long
-    startRow = hdrRow + 1
-    Dim dataRows As Long
-    dataRows = UBound(data, 1)
-
-    Dim i As Long, outRow As Long
-    For i = 1 To dataRows
-        outRow = startRow + i - 1
-
-        ' Datum
-        If IsDate(data(i, 1)) Then
-            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
-        Else
-            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
-        End If
-
-        ' Broj dok.
-        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
-        ' Opis
-        ws.cells(outRow, 3).value = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
-
-        ' Ulaz / Izlaz (prazno kad je 0)
-        If IsNumeric(data(i, 4)) Then
-            If CDbl(data(i, 4)) <> 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 4))
-        End If
-        If IsNumeric(data(i, 5)) Then
-            If CDbl(data(i, 5)) <> 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 5))
-        End If
-
-        ' Saldo (running)
-        If IsNumeric(data(i, 6)) Then ws.cells(outRow, 6).value = CDbl(data(i, 6))
-    Next i
-
-    ' --- Formatiranje (header + podaci + UKUPNO) ---
-    Dim dataRange As Range
-    Set dataRange = ws.Range(ws.cells(hdrRow, 1), ws.cells(startRow + dataRows - 1, NUM_COLS))
-    With dataRange.Borders
-        .LineStyle = xlContinuous
-        .Weight = xlThin
-    End With
-
-    ' Gajbe = ceo broj (D:F)
-    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, NUM_COLS)).NumberFormat = "#,##0"
-
-    ' Alternirajuca boja redova
-    Dim r As Long
-    For r = 0 To dataRows - 1
-        If r Mod 2 = 1 Then
-            ws.Range(ws.cells(startRow + r, 1), _
-                     ws.cells(startRow + r, NUM_COLS)).Interior.Color = RGB(217, 225, 242)
-        End If
-    Next r
-
-    ' UKUPNO red (poslednji) fett + plava pozadina
-    Dim ukRow As Long
-    ukRow = startRow + dataRows - 1
-    With ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, NUM_COLS))
-        .Font.Bold = True
-        .Interior.Color = RGB(68, 114, 196)
-        .Font.Color = RGB(255, 255, 255)
-    End With
-
-    ' --- Fusszeile / potpisi ---
-    Dim footRow As Long
-    footRow = ukRow + 2
-    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
-    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
-    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
-
-    ' --- Sirine kolona ---
-    ws.columns("A").ColumnWidth = 12
-    ws.columns("B").ColumnWidth = 16
-    ws.columns("C").ColumnWidth = 38
-    ws.columns("D:F").ColumnWidth = 10
-
-    ' --- Page setup + PDF ---
-    ws.PageSetup.PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 1, NUM_COLS)).Address
-    With ws.PageSetup
-        .Orientation = xlPortrait
-        .Zoom = False
-        .FitToPagesWide = 1
-        .FitToPagesTall = False
-    End With
+    Dim ws As Worksheet
+    Set ws = FillKarticaAmbalazeSablon(koopNaziv, period, data)
+    If ws Is Nothing Then Exit Sub
 
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_KARTICE) & "\KarticaAmbalaze_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
 
-    DocExportPdf ws, pdfPath, True
-
-    ws.Visible = xlSheetVeryHidden
-    Application.ScreenUpdating = oldScreen
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_KARTICA_AMB_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
     Exit Sub
 
 EH:

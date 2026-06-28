@@ -350,6 +350,8 @@ Public Const CFG_OM_IZDAVANJE_PRINT_MODE As String = "OM_IZDAVANJE_PRINT_MODE"
 Public Const CFG_FAKTURA_PRINT_MODE As String = "FAKTURA_PRINT_MODE"
 Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
 Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
+Public Const CFG_KARTICA_AMB_PRINT_MODE As String = "KARTICA_AMB_PRINT_MODE"
+Public Const CFG_SPECIFIKACIJA_PRINT_MODE As String = "SPECIFIKACIJA_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
@@ -371,6 +373,7 @@ Public Const WS_PALETA_SABLON As String = "PaletaSablon"
 Public Const WS_PRERADA_SABLON As String = "PreradaSablon"
 Public Const WS_FAKTURA_SABLON As String = "FakturaSablon"
 Public Const WS_KARTICA_SABLON As String = "KarticaSablon"
+Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
 Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
 Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
 
