@@ -244,6 +244,16 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "SETUP_MSG_SEF_API_KEY", "- SEF_API_KEY nije pode" & ChrW(353) & "en."
     UpsertRow lo, existing, "SETUP_MSG_SEF_ENV_NIJE", "- SEF_ENV nije pode" & ChrW(353) & "en."
     UpsertRow lo, existing, "SETUP_MSG_NIJE_PODESEN", "nije pode" & ChrW(353) & "en:"
+    ' --- Self-update (modSelfUpdate); dijakritika preko ChrW ---
+    UpsertRow lo, existing, "SU_AZURIRATI_SADA", "A" & ChrW(382) & "urirati sada? (preporu" & ChrW(269) & "eno)"
+    UpsertRow lo, existing, "SU_BACKUP_NIJE", "Backup pre a" & ChrW(382) & "uriranja nije uspeo."
+    UpsertRow lo, existing, "SU_PREUZIMANJE_OTKAZANO", "Preuzimanje nije uspelo (0 fajlova). A" & ChrW(382) & "uriranje otkazano."
+    UpsertRow lo, existing, "SU_POKUSAJTE", "Poku" & ChrW(353) & "ajte ponovo ili preuzmite novu verziju ru" & ChrW(269) & "no."
+    UpsertRow lo, existing, "SU_ZAVRSENO_FAJLOVA", "A" & ChrW(382) & "uriranje zavr" & ChrW(353) & "eno. Preuzeto fajlova: "
+    UpsertRow lo, existing, "SU_ZAVRSENO_PREUZETO", "A" & ChrW(382) & "uriranje zavr" & ChrW(353) & "eno. Preuzeto: "
+    UpsertRow lo, existing, "SU_GRESKA_AZURIRANJE", "Gre" & ChrW(353) & "ka pri a" & ChrW(382) & "uriranju: "
+    UpsertRow lo, existing, "SU_GRESKA_2FAZA", "Gre" & ChrW(353) & "ka u 2. fazi a" & ChrW(382) & "uriranja: "
+    UpsertRow lo, existing, "SU_TRUST", "Nema programskog pristupa VBA projektu." & vbCrLf & vbCrLf & "Uklju" & ChrW(269) & "i: File > Options > Trust Center > Trust Center Settings >" & vbCrLf & "Macro Settings > 'Trust access to the VBA project object model'."
     InvalidateCache
 End Sub
 

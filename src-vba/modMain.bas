@@ -38,6 +38,15 @@ Public Sub StartApp()
     ' Opt-in na MONITORING_ENDPOINT+SECRET; fail-open offline. Vidi modUpdateGate.
     If Not UpdateGateOrQuit() Then Exit Sub
 
+    ' --- Self-update (povuci novu verziju koda iz AgriX_Release) ---
+    ' Opt-in na REL_FOLDER_ID; fail-soft. Na "Da" -> import na praznom
+    ' stack-u pa Exit (ne pokrecemo ostatak; restart aktivira nov kod).
+    ' Vidi modSelfUpdate.
+    If CheckForUpdateOnOpen() Then
+        Application.OnTime Now, "RunSelfUpdate"
+        Exit Sub
+    End If
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme

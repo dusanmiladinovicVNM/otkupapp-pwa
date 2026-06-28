@@ -36,13 +36,17 @@ Private mDiagShown As Boolean
 ' Reset modul-stanja (zovi iz frmIzvestaj setup-a): posle Unload-a forme
 ' dinamicke kontrole vise ne postoje, pa se mBuilt/mLst moraju resetovati.
 Public Sub KarticaDetalji_Reset()
+    On Error Resume Next
     Set mLst = Nothing
     Set mLblTitle = Nothing
     mBuilt = False
+    mFormLevel = False
     mCurOtkupID = ""
     mCurOtpremnicaID = ""
     mCurAmbDokID = ""
     mCurAmbDokTip = ""
+    mDiag = ""
+    mDiagShown = False
 End Sub
 
 ' Lazy-build panel desno od lstKartica (idempotentno).

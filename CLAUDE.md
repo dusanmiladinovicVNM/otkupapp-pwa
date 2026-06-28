@@ -41,6 +41,7 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 | Cena — DVA modela (ne mešati) | single-current po artiklu = `tblArtikli.CenaPoJedinici` (inline `LookupValue`, agrohemija); append-only istorija za otkup voća = `tblCenovnik` |
 | Dinamičke kontrole (bez `.frx`) | `Controls.Add` + WithEvents klasa (`clsBlokUI`/`modOtkupBlok`, `clsLookupMenuBtn`/`modMaticniLookups`) |
 | Sync / PWA | `modStammdatenSync`, `modMasterSync`, `gas/` |
+| Self-update (kod) | klijent `modSelfUpdate` (`CheckForUpdateOnOpen`/`RunSelfUpdate` dvofazni) · build `modRelease.PublishReleaseToDrive` · Drive REST `modDrive` · **vidi `docs/SELF_UPDATE.md` (zamke!)** |
 | Setup / šeme | `modSetup` (`EnsureDataTable`, `EnsurePaletniListSchema`, `EnsureCenovnikSchema`), dijagnostika `DebugKoloneTabele` |
 
 ## 4) VBA / Excel — specifična pravila (naučeno)

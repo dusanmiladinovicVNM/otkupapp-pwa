@@ -472,3 +472,13 @@ Public Sub ApplyDefaultProizvod(ByVal cmbVrsta As Object, ByVal cmbSorta As Obje
     If Len(s) > 0 Then cmbSorta.value = s
 End Sub
 
+
+' Otpusti module-level reference (clsConfigBtn WithEvents + kontrole) pre
+' self-update importa (zivi event-sink obara CodeModule edit). Idempotentno.
+Public Sub Podesavanja_Release()
+    On Error Resume Next
+    Set mFrm = Nothing
+    Set mInputs = Nothing
+    Set mWrappers = Nothing
+    Set mBtnToggle = Nothing
+End Sub
