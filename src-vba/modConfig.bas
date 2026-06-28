@@ -10,7 +10,7 @@ Option Explicit
 
 ' --- App Info ---
 Public Const APP_NAME As String = "OtkupApp"
-Public Const APP_VERSION As String = "2.5.0"
+Public Const APP_VERSION As String = "2.6.0"
 
 ' --- Self-update / backup (Drive folder ID-jevi; popuni jednokratno) ---
 ' Vidi docs/RELEASE_PROCEDURE.md (self-update kanal) i modDrive/modRelease.
