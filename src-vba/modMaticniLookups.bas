@@ -142,11 +142,16 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
         frm.Controls.Remove hnm
         On Error GoTo EH
 
+        ' Duzi naslovi se prelamaju u 2 reda; daj im visu kutiju (sa WordWrap)
+        ' da se ceo tekst vidi. Kratki naslovi ostaju 1 red.
+        Dim hdrThisH As Single
+        hdrThisH = IIf(Len(grpName) > 12, HDRH + 13, HDRH)
         Set hl = frm.Controls.Add("Forms.Label.1", hnm, True)
         hl.Left = X
         hl.width = w
         hl.top = Y
-        hl.Height = HDRH
+        hl.Height = hdrThisH
+        hl.WordWrap = True
         hl.caption = UCase$(grpName)
         hl.BackStyle = fmBackStyleTransparent
         hl.TextAlign = fmTextAlignLeft
@@ -154,7 +159,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
         hl.Font.Size = FONT_SIZE_SMALL
         hl.Font.Bold = True
         hl.ForeColor = TXT_MUTED()
-        Y = Y + HDRH + HDRGAP
+        Y = Y + hdrThisH + HDRGAP
 
         For ii = LBound(items) To UBound(items)
             it = items(ii)
