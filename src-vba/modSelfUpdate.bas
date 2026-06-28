@@ -175,60 +175,74 @@ End Function
 ' Dizajn formi (.frx/kontrole) se NE menja - za izmene dizajna formi treba
 ' pun reinstall .xlsm.
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
-    Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
-    Dim fil As Object, ext As String, baseName As String, vbc As Object
-    Dim body As String, merged As Long, added As Long, skippedNew As String
-    Dim failed As String, t As Long
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
+    Dim st As Object: Set st = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> "ok"/"skip"
+    Dim er As Object: Set er = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> poslednja greska
+    Dim pass As Long, anyLeft As Boolean, usedPass As Long
+    Dim fil As Object, ext As String, baseName As String, fkey As String
+    Dim body As String, vbc As Object, t As Long, proj As Object
 
-    For Each fil In fso.GetFolder(folder).files
-        ext = LCase$(fso.GetExtensionName(fil.name))
-        baseName = fso.GetBaseName(fil.name)
-        Select Case ext
-            Case "bas", "cls", "frm", "doccls"
-                If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
-                    ' per-fajl hvatanje: jedan los modul ne rusi ceo update i
-                    ' prijavi se TACNO koji modul + greska (dijagnostika).
+    ' Vise prolaza: RPC "disconnected" greska (zamena koda modula sa zivim
+    ' module-level stanjem iz InitApp) je TRANZITORNA - retry je resava, isto
+    ' kao "ImportAllVBA uradi opet". Sveza VBProject referenca svaki prolaz.
+    For pass = 1 To 5
+        usedPass = pass
+        anyLeft = False
+        Set proj = ThisWorkbook.VBProject
+        For Each fil In fso.GetFolder(folder).files
+            ext = LCase$(fso.GetExtensionName(fil.name))
+            If ext = "bas" Or ext = "cls" Or ext = "frm" Or ext = "doccls" Then
+                baseName = fso.GetBaseName(fil.name)
+                fkey = LCase$(fil.name)
+                If InStr(skip, "," & LCase$(baseName) & ",") = 0 And Not st.Exists(fkey) Then
                     On Error Resume Next
                     Err.Clear
                     body = ExtractModuleCode(fil.path)
-
                     Set vbc = Nothing
                     Set vbc = proj.VBComponents(baseName)
-
                     If Not vbc Is Nothing Then
-                        ' postoji -> zameni SAMO kod (bez Remove/Import)
                         With vbc.CodeModule
                             If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
                             If Len(body) > 0 Then .AddFromString body
                         End With
-                        If Err.Number = 0 Then merged = merged + 1
+                        If Err.Number = 0 Then st(fkey) = "ok"
                     ElseIf ext = "bas" Or ext = "cls" Then
-                        ' nov standardni/klasni modul -> dodaj (bez Remove)
                         t = IIf(ext = "bas", 1, 2)
                         Set vbc = proj.VBComponents.Add(t)
                         vbc.name = baseName
                         If Len(body) > 0 Then vbc.CodeModule.AddFromString body
-                        If Err.Number = 0 Then added = added + 1
+                        If Err.Number = 0 Then st(fkey) = "ok"
                     Else
-                        ' nova forma / novi sheet -> ne pravimo u runtime-u (reinstall)
-                        skippedNew = skippedNew & "  " & fil.name & vbCrLf
+                        st(fkey) = "skip"     ' nova forma/sheet -> reinstall (ne retry)
                     End If
-
                     If Err.Number <> 0 Then
-                        failed = failed & "  " & fil.name & " -> [" & _
-                                 Err.Number & "] " & Err.description & vbCrLf
+                        er(fkey) = "[" & Err.Number & "] " & Err.description
+                        anyLeft = True
                         Err.Clear
                     End If
                     On Error GoTo 0
                 End If
-        End Select
-    Next fil
+            End If
+        Next fil
+        If Not anyLeft Then Exit For
+    Next pass
 
-    ImportFromFolder = "Azurirano (kod): " & merged & ", novih: " & added & _
-        IIf(Len(skippedNew) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skippedNew, "") & _
-        IIf(Len(failed) > 0, vbCrLf & "GRESKE po modulu:" & vbCrLf & failed, "")
+    Dim okN As Long, k As Variant, failS As String, skipS As String
+    For Each k In st.Keys
+        If st(k) = "ok" Then
+            okN = okN + 1
+        Else
+            skipS = skipS & "  " & k & vbCrLf
+        End If
+    Next k
+    For Each k In er.Keys
+        If Not st.Exists(CStr(k)) Then failS = failS & "  " & k & " -> " & er(k) & vbCrLf
+    Next k
+
+    ImportFromFolder = "Azurirano (kod): " & okN & " (prolaza: " & usedPass & ")" & _
+        IIf(Len(skipS) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skipS, "") & _
+        IIf(Len(failS) > 0, vbCrLf & "GRESKE (i posle retry-ja):" & vbCrLf & failS, "")
 End Function
 
 Private Function ReadAllText(ByVal path As String) As String
