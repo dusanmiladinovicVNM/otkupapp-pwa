@@ -154,6 +154,52 @@ EH:
     LogErr SRC, Err.description
 End Function
 
+' Dijagnostika (RUCNO, Alt+F8): pokazuje zasto upload pada - duzinu tokena,
+' status LIST GET-a (citanje) i status + Google error JSON za CREATE POST (upis).
+Public Sub DriveSelfTest()
+    Const SRC As String = "modDrive.DriveSelfTest"
+    On Error GoTo EH
+
+    Dim msg As String, token As String
+    token = GetAccessToken()
+    msg = "REL_FOLDER_ID: " & REL_FOLDER_ID & vbCrLf & _
+          "Token duzina:  " & Len(token) & vbCrLf & vbCrLf
+
+    If Len(token) = 0 Then
+        MsgBox msg & "GetAccessToken() je PRAZAN -> Google nije autentifikovan na OVOM fajlu." & vbCrLf & _
+               "Uradi Google login/sync u ovom fajlu (kao za obican sync) pa ponovi.", _
+               vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    ' 1) LIST (GET) - isti obrazac kao postojeci radni Drive read
+    Dim http As Object, q As String
+    q = "'" & REL_FOLDER_ID & "' in parents and trashed=false"
+    Set http = DriveNewHttp()
+    http.Open "GET", DRIVE_FILES & "?q=" & UrlEncode(q) & _
+              "&fields=files(id,name)&pageSize=5&supportsAllDrives=true&includeItemsFromAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.Send
+    msg = msg & "LIST (GET) status: " & http.status & vbCrLf & _
+          "  " & Left$(http.responseText, 250) & vbCrLf & vbCrLf
+
+    ' 2) CREATE (POST metadata) - novi upload pipeline; Google error JSON kaze sve
+    Dim body As String
+    body = "{""name"":""agrix_selftest.txt"",""parents"":[""" & REL_FOLDER_ID & """]}"
+    Set http = DriveNewHttp()
+    http.Open "POST", DRIVE_FILES & "?supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/json; charset=UTF-8"
+    http.Send body
+    msg = msg & "CREATE (POST) status: " & http.status & vbCrLf & _
+          "  " & Left$(http.responseText, 450)
+
+    MsgBox msg, vbInformation, APP_NAME
+    Exit Sub
+EH:
+    MsgBox "DriveSelfTest greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
 ' ---------------- private ----------------
 
 ' Kreiraj prazan fajl (samo metadata) u folderu -> vrati novi fileID.
