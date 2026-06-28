@@ -615,10 +615,7 @@ Public Function ExportPaletniListPDF(ByVal palID As String, _
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_PALETNI) & "\Paleta_" & broj & "-" & god & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, _
-                           OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
 
     ExportPaletniListPDF = pdfPath
     Exit Function
@@ -630,7 +627,7 @@ End Function
 '   (prazno/PDF) -> tihi PDF | PRINT -> stampac | PREVIEW -> pregled | OFF -> nista
 Private Sub OutputPaletniListByMode(ByVal palID As String)
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_PALETA_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_PALETA_PRINT_MODE), "OFF")
 
     Select Case mode
         Case "PRINT"
@@ -639,13 +636,11 @@ Private Sub OutputPaletniListByMode(ByVal palID As String)
             Dim broj As String, god As String
             Dim ws As Worksheet
             Set ws = FillPaletaSablon(palID, broj, god)
-            If Not ws Is Nothing Then ws.PrintPreview
+            If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
             ExportPaletniListPDF palID, True    ' PDF + otvori (kao otkupni list)
-        Case Else
-            ' OFF ili prazno (DEFAULT) -> bez izlaza; snimanje ostaje trenutno.
-            ' Auto-izlaz pune palete se ukljucuje rucno:
-            '   SetConfigValue "PALETA_PRINT_MODE", "PDF" | "PRINT" | "PREVIEW"
+        ' OFF / prazno (DEFAULT) -> bez izlaza; auto-izlaz pune palete rucno:
+        '   SetConfigValue "PALETA_PRINT_MODE", "PDF" | "PRINT" | "PREVIEW"
     End Select
 End Sub
 
@@ -660,7 +655,7 @@ Private Function FillPaletaSablon(ByVal palID As String, _
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PALETA_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
 
@@ -792,7 +787,7 @@ Public Sub EnsurePaletaSablon()
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PaletaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PALETA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then
         If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
@@ -803,7 +798,7 @@ Public Sub EnsurePaletaSablon()
     End If
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "PaletaSablon"
+    ws.name = WS_PALETA_SABLON
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
     ws.columns("A").ColumnWidth = 12
@@ -1755,10 +1750,7 @@ Public Function ExportPreradaPDF(ByVal preID As String, _
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_PRERADA) & "\Prerada_" & broj & "-" & god & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, _
-                           OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
 
     ExportPreradaPDF = pdfPath
     Exit Function
@@ -1794,7 +1786,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRERADA_SABLON)
     On Error GoTo 0
     If ws Is Nothing Then Exit Function
 
@@ -1944,7 +1936,7 @@ Public Sub EnsurePreradaSablon()
 
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PreradaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRERADA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then
         If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
@@ -1955,7 +1947,7 @@ Public Sub EnsurePreradaSablon()
     End If
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "PreradaSablon"
+    ws.name = WS_PRERADA_SABLON
     ws.cells.Font.name = "Calibri"
     ws.cells.Font.Size = 10
     ws.columns("A").ColumnWidth = 12

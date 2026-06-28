@@ -114,6 +114,95 @@ VBA-fallback traceability rule, shared parse/combo/schema guards and business/UI
 The following entries are kept in the active changelog because they affect current architecture, launch gates, migration notes or recent production hardening.
 
 
+## v6.43 — 2026-06-27
+
+### Summary
+
+Ručni šabloni (faktura, kartica kooperanta, sledljivost) prevaziđeni — sada su generisani house-style šabloni u modPrint grupi, istovetnog dizajna kao otkupni/paletni (Faza 3). **Menja štampani izgled ova tri dokumenta** (sadržaj/podaci verno reprodukovani; izgled prelazi na house style).
+
+### Added
+
+- `modPrint`: `EnsureFakturaSablon`/`FillFakturaSablon`, `EnsureKarticaSablon`/`FillKarticaSablon`, `EnsureSledljivostSablon`/`FillSledljivostSablon`. Generišu sheet od nule (`DocSellerHeader` + `DocTitleBlock` + stilizovana tabela), sa layout-version markerom (`H1` faktura/kartica, `N1` sledljivost — 12 kolona, landscape) kao `PaletaSablon`; auto-rebuild na promenu verzije.
+
+### Changed
+
+- `FakturaSablon`/`KarticaSablon`/`SledljivostSablon` više nisu ručni sheet-ovi koji pucaju ako ne postoje — auto-generišu se. Print logika izmeštena iz `frmSledljivost` (forme) u `modPrint`.
+- Entry-point funkcije zadržavaju podatke/gardove, render delegiraju na modPrint: `modFaktura.PrintFaktura` (gardovi: single-row, storno, duplicate-FakturaID), `modIzvestaj.PrintKarticaPDF` (`ReportKarticaKooperanta`), `frmSledljivost.PrintTracePDF` (`TraceByZbirna` + prijemnica). Izlaz preko Faza2 dispečera (`*_PRINT_MODE`).
+- Nova unikatna named-range imena: faktura `Fak*`, kartica `Kart*`, sledljivost `Sled*` (izbegava koliziju sa starim workbook imenima).
+
+### Known Issues / Known Limitations
+
+- Stara workbook imena ručnog `SledljivostSablon`-a (npr. `KupacNaziv`, `LOTBroj`) mogu ostati kao neaktivna `#REF` posle prvog auto-rebuild-a — bezopasno; očistiti kroz Name Manager po želji.
+- `modFaktura.ClearFakturaStavkeArea` je sada mrtav (inertan) kod — kandidat za uklanjanje.
+- `PrintKarticaAmbalazePDF` (kartica ambalaže, code-built `_KartAmbPrint`) namerno nedirnut — zaseban dokument.
+
+### Verification / Acceptance Gates
+
+- Statički: balans `Sub`/`Function`, `Select Case`, `With`, `For/Next` u svim diranim modulima; named-range konzistentnost Ensure↔Fill po dokumentu; gardovi fakture očuvani; encoding (Windows-1250) + LF, bez korupcije. **Excel proof obavezan** (izgled se ne može verifikovati bez Excela): odštampati/PDF-ovati po jednu fakturu, karticu i sledljivost.
+
+### Migration / Data Notes
+
+- Nema schema/data migracije. Re-import `modPrint`, `modFaktura`, `modIzvestaj`, `frmSledljivost`, `modDocStyle` → `Compile`. Prvi print svakog dokumenta rebuild-uje šablon (briše stari ručni sheet, generiše house-style); šabloni ne nose poslovne podatke pa je rebuild bezbedan.
+
+Reference updated: Yes — AR §5.12 (generisani Faktura/Kartica/Sledljivost u modPrint, known-inconsistency rešen).
+
+
+## v6.42 — 2026-06-27
+
+### Summary
+
+Izlazni dispečer obrazaca konsolidovan (Faza 2) i ručni dokumenti dobili konfigurabilan izlaz. Bez promene podrazumevanog ponašanja (defaulti čuvaju zatečeno).
+
+### Added
+
+- `modDocStyle.DocResolveMode(mode, defMode)` — normalizuje `*_PRINT_MODE` na `OFF/PRINT/PREVIEW/PDF`; prazno/nepoznato → `defMode` (po dokumentu). Centralizuje razliku u defaultu (otkupni/grupni/izdamb/kartica/sledljivost = PDF, prijemnica/paletni = OFF, faktura = PRINT) i typo handling.
+- `modDocStyle.DocPrintWs(ws, mode)` — štampa/pregled napunjenog sheeta (`PREVIEW` → pregled, inače `PrintOut Copies:=1`).
+- `modConfig` `CFG_FAKTURA_PRINT_MODE` / `CFG_KARTICA_PRINT_MODE` / `CFG_SLEDLJIVOST_PRINT_MODE`.
+
+### Changed
+
+- 5 `Output*` dispečera (otkupni/grupni/prijemnica/izdamb/paletni) svedeno na zajednički obrazac: `DocResolveMode` + spojene `PRINT`/`PREVIEW` grane preko `DocPrintWs` (jedan `Fill` umesto dva); `PDF` grana i dalje delegira na `Export*PDF` (čuva putanju folder+timestamp).
+- `PrintFaktura` (default `PRINT`), `PrintKarticaKooperanta` (default `PDF`) i `frmSledljivost.PrintTracePDF` (default `PDF`) više nemaju zakovan izlaz — koriste isti obrazac. `PrintKarticaAmbalazePDF` namerno nedirnut (zaseban dokument).
+
+### Verification / Acceptance Gates
+
+- Statički: balans `Select Case`/`End Select` i `Sub`/`End Sub` u svim diranim modulima, jedinstvene definicije helpera, encoding (Windows-1250) + LF očuvani, bez `�` šuma. Excel smoke: otkupni/prijemnica/paletni/revers izlaze isto kao pre; faktura štampa (default), kartica/sledljivost PDF (default); provera da `*_PRINT_MODE = PREVIEW/PDF/OFF` menja izlaz.
+
+### Migration / Data Notes
+
+- Nema schema/data migracije. Re-import `modDocStyle`, `modConfig`, `modPrint`, `modPaletniList`, `modFaktura`, `modIzvestaj`, `frmSledljivost` → `Compile`. Novi config ključevi su opcioni (prazno = zatečeno ponašanje).
+
+Reference updated: Yes — AR §5.12 (`DocResolveMode` / `DocPrintWs`, `*_PRINT_MODE` ključevi za sve obrasce).
+
+
+## v6.41 — 2026-06-27
+
+### Summary
+
+Print / šablon DRY konsolidacija (Faza 1). Rasuta logika za štampu obrazaca svedena na zajednički `modDocStyle` sloj, bez promene poslovne logike ili izgleda dokumenata (presentation-only).
+
+### Changed
+
+- `modDocStyle.DocExportPdf(ws, pdfPath, openAfter)` — jedan helper umesto 11 skoro identičnih `ExportAsFixedFormat` poziva (modPrint, modPaletniList, modIzvestaj, modOtkupBlok, frmSledljivost). `modPrint:_Print` (`UsedRange` izvoz) namerno ostavljen.
+- `modDocStyle.DocPageSetupThirdA4(ws, lastRow)` — četiri bajt-identična 1/3-A4 `PageSetup` bloka (otkupni / grupni / otpremnica / revers ambalaže) na jednom mestu; geometrija 99/198 mm perforacije ne može da drift-uje. Profil B (prijemnica / paletni / preradni) nedirnut (različite margine/kolone).
+- `modConfig` `Public Const WS_*_SABLON` — imena šablon sheet-ova kao jedinstven izvor istine (26 hardkodovanih stringova → konstante, uz postojeći `TBL_*`/`COL_*` obrazac).
+
+### Known Issues / Known Limitations
+
+- `FakturaSablon` / `KarticaSablon` / `SledljivostSablon` su i dalje ručni sheet-ovi (greška ako ne postoje, bez `Ensure*` ni `H1` verzije) — kandidat za Fazu 3.
+- Izlazni dispečer (`Output*` `Select Case PRINT/PREVIEW/PDF/OFF`) još nije konsolidovan (PDF grana re-fill-uje preko `Export*PDF`); odloženo jer nije čisto behavior-preserving.
+
+### Verification / Acceptance Gates
+
+- Statički: balans `Sub`/`End Sub` u `modDocStyle`, jedinstvene definicije helpera, ispravna arnost poziva, encoding (Windows-1250) i LF očuvani, bez `�` šuma u diffu. Excel smoke (operater): otkupni list, prijemnica, paletni/preradni, faktura, kartica, sledljivost — PDF/print izlaze isto kao pre.
+
+### Migration / Data Notes
+
+- Nema schema/data migracije. Re-import 8 modula (`modDocStyle`, `modConfig`, `modPrint`, `modPaletniList`, `modFaktura`, `modIzvestaj`, `modOtkupBlok`, `frmSledljivost`) → `Debug → Compile`.
+
+Reference updated: Yes — AR §5.12 (modDocStyle `DocExportPdf` / `DocPageSetupThirdA4`, `WS_*_SABLON` konstante, known inconsistency za ručne šablone).
+
+
 ## v6.36 — 2026-06-22
 
 ### Summary

@@ -345,6 +345,13 @@ Public Const CFG_PRIJEMNICA_PRINT_MODE As String = "PRIJEMNICA_PRINT_MODE"
 ' frame-u kad je toggle "Izdavanje kooperantu" aktivan. Default PDF (otvori PDF,
 ' kao OTKUP_PRINT_MODE). PDF | PRINT | PREVIEW | OFF (kao PALETA_PRINT_MODE).
 Public Const CFG_OM_IZDAVANJE_PRINT_MODE As String = "OM_IZDAVANJE_PRINT_MODE"
+' Rucni obrasci (faktura/kartica/sledljivost) - konfigurabilan izlaz (Faza 2B).
+' PDF | PRINT | PREVIEW | OFF; prazno -> default tog dokumenta (DocResolveMode).
+Public Const CFG_FAKTURA_PRINT_MODE As String = "FAKTURA_PRINT_MODE"
+Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
+Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
+Public Const CFG_KARTICA_AMB_PRINT_MODE As String = "KARTICA_AMB_PRINT_MODE"
+Public Const CFG_SPECIFIKACIJA_PRINT_MODE As String = "SPECIFIKACIJA_PRINT_MODE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
@@ -352,6 +359,23 @@ Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 Public Const CFG_OTKUP_KLAUZULA As String = "OTKUP_KLAUZULA"
 Public Const CFG_OTKUP_ROK As String = "OTKUP_ROK_ISPLATE"
 Public Const OTKUP_ROK_DEFAULT As String = "Po dogovoru"
+
+' --- Imena sablon sheet-ova (template worksheets za stampu) ---
+' Jedinstveni izvor istine za nazive sheet-ova-sablona (umesto rasutih
+' hardkodovanih stringova: modPrint/modPaletniList/modFaktura/modIzvestaj/
+' modOtkupBlok/frmSledljivost).
+Public Const WS_OTKUP_SABLON As String = "OtkupSablon"
+Public Const WS_GRUPNI_OTKUP_SABLON As String = "GrupniOtkupSablon"
+Public Const WS_OTPREMNICA_SABLON As String = "OtpremnicaSablon"
+Public Const WS_PRIJEMNICA_SABLON As String = "PrijemnicaSablon"
+Public Const WS_IZDAMB_SABLON As String = "IzdAmbSablon"
+Public Const WS_PALETA_SABLON As String = "PaletaSablon"
+Public Const WS_PRERADA_SABLON As String = "PreradaSablon"
+Public Const WS_FAKTURA_SABLON As String = "FakturaSablon"
+Public Const WS_KARTICA_SABLON As String = "KarticaSablon"
+Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
+Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
+Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

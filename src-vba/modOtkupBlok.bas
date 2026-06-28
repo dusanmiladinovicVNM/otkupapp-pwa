@@ -1002,28 +1002,8 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
         idx(b + 1) = ti: keys(b + 1) = tk
     Next a
 
-    ' --- 3) ispis ---
-    Dim ws As Worksheet: Set ws = EnsureSpecSheet()
-    Application.ScreenUpdating = False
-    ws.cells.Font.name = "Calibri"
-    ws.cells.Font.Size = 9
-
-    ws.cells(1, 1).value = "SPECIFIKACIJA OTKUPNIH BLOKOVA"
-    ws.cells(1, 1).Font.Size = 12
-    ws.cells(1, 1).Font.Bold = True
-
-    Dim hdr As Variant
-    hdr = Array("Broj zbirne", "Broj otpremnice", "Otkupno mesto", "br. bloka", "Ime i Prezime", _
-                "Datum", "Koli" & ChrW(269) & "ina", "Cena bez PDV", "Vrednost", "Iznos PDV", "Ukupna vrednost")
-    Const R0 As Long = 4
-    Const NC As Long = 11
-    Dim cc As Long
-    For cc = 0 To UBound(hdr)
-        ws.cells(R0, cc + 1).value = hdr(cc)
-        ws.cells(R0, cc + 1).Font.Bold = True
-    Next cc
-
-    Dim r As Long: r = R0 + 1
+    ' --- 3) prikupi u niz + sume; render i izlaz u modPrint ---
+    Dim spec() As Variant: ReDim spec(1 To m, 1 To 11)
     Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, cnt As Long
     Dim j As Long
     For j = 1 To m
@@ -1035,89 +1015,37 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
         Dim vred As Double: vred = kol * neto
         Dim pdv As Double: pdv = vred * stopa / 100
         Dim uk As Double: uk = kol * bruto
-
-        ws.cells(r, 1).value = DictVal(dZbr, oid2)
-        ws.cells(r, 2).value = DictVal(dOtp, oid2)
-        ws.cells(r, 3).value = DictVal(dSt, CStr(data(i, cSt)))
-        ws.cells(r, 4).value = CStr(data(i, cBr))
-        ws.cells(r, 5).value = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
-        ws.cells(r, 6).value = FmtDate(data(i, cDat))
-        ws.cells(r, 7).value = kol
-        ws.cells(r, 8).value = neto
-        ws.cells(r, 9).value = vred
-        ws.cells(r, 10).value = pdv
-        ws.cells(r, 11).value = uk
+        spec(j, 1) = DictVal(dZbr, oid2)
+        spec(j, 2) = DictVal(dOtp, oid2)
+        spec(j, 3) = DictVal(dSt, CStr(data(i, cSt)))
+        spec(j, 4) = CStr(data(i, cBr))
+        spec(j, 5) = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
+        spec(j, 6) = FmtDate(data(i, cDat))
+        spec(j, 7) = kol
+        spec(j, 8) = neto
+        spec(j, 9) = vred
+        spec(j, 10) = pdv
+        spec(j, 11) = uk
         sumKol = sumKol + kol: sumVred = sumVred + vred
         sumPdv = sumPdv + pdv: sumUk = sumUk + uk
         cnt = cnt + 1
-        r = r + 1
     Next j
 
-    ' UKUPNO red
-    ws.cells(r, 5).value = "UKUPNO"
-    ws.cells(r, 7).value = sumKol
-    ws.cells(r, 9).value = sumVred
-    ws.cells(r, 10).value = sumPdv
-    ws.cells(r, 11).value = sumUk
-    ws.Range(ws.cells(r, 1), ws.cells(r, NC)).Font.Bold = True
+    Dim ws As Worksheet
+    Set ws = FillSpecifikacijaSablon(spec, m, subtitle, cnt, sumKol, sumVred, sumPdv, sumUk)
+    If ws Is Nothing Then Exit Sub
 
-    ws.cells(2, 1).value = subtitle & "     Blokova: " & cnt
-
-    ' formati: kolicina sa decimalama samo ako su unete, novac 2 decimale
-    ws.Range(ws.cells(R0 + 1, 7), ws.cells(r, 7)).NumberFormat = "#,##0.###"
-    ws.Range(ws.cells(R0 + 1, 8), ws.cells(r, NC)).NumberFormat = "#,##0.00"
-
-    ' iscrtana polja
-    Dim tbl As Range: Set tbl = ws.Range(ws.cells(R0, 1), ws.cells(r, NC))
-    tbl.Borders.LineStyle = xlContinuous
-    tbl.Borders.Weight = xlThin
-    tbl.rows.RowHeight = 13
-
-    ' sirine kolona
-    ws.columns("A").ColumnWidth = 12   ' Broj zbirne
-    ws.columns("B").ColumnWidth = 14   ' Broj otpremnice
-    ws.columns("C").ColumnWidth = 18   ' Otkupno mesto
-    ws.columns("D").ColumnWidth = 12   ' br. bloka
-    ws.columns("E").ColumnWidth = 24   ' Ime i Prezime
-    ws.columns("F").ColumnWidth = 11   ' Datum
-    ws.columns("G").ColumnWidth = 9    ' Kolicina
-    ws.columns("H").ColumnWidth = 11   ' Cena bez PDV
-    ws.columns("I").ColumnWidth = 13   ' Vrednost
-    ws.columns("J").ColumnWidth = 12   ' Iznos PDV
-    ws.columns("K").ColumnWidth = 14   ' Ukupna vrednost
-
-    ' PageSetup (Orientation/PaperSize/FitToPages) trazi drajver stampaca.
-    ' Na racunaru bez podrazumevanog stampaca ti property-ji bacaju gresku 1004,
-    ' pa ih stitimo: PDF mora da izadje i kad stampaca nema (best-effort izgled).
-    On Error Resume Next
-    With ws.PageSetup
-        .Orientation = xlLandscape
-        .PaperSize = xlPaperA4
-        .Zoom = False
-        .FitToPagesWide = 1
-        .FitToPagesTall = False
-        .PrintTitleRows = "$" & R0 & ":$" & R0
-        .LeftMargin = Application.InchesToPoints(0.3)
-        .RightMargin = Application.InchesToPoints(0.3)
-        .TopMargin = Application.InchesToPoints(0.4)
-        .BottomMargin = Application.InchesToPoints(0.4)
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, NC)).Address
-    End With
-    On Error GoTo EH
-
-    ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
-    ' Vremenski pecat u imenu -> nema "file in use" ako je prethodni PDF otvoren.
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_SPECIFIKACIJE) & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
-
-    Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
-    ws.Visible = xlSheetVisible
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=True
-    If wasHidden Then ws.Visible = xlSheetHidden
-
-    Application.ScreenUpdating = True
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_SPECIFIKACIJA_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
     Exit Sub
 EH:
     Application.ScreenUpdating = True
@@ -1125,19 +1053,6 @@ EH:
     MsgBox "Gre" & ChrW(353) & "ka pri stampi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
 
-Private Function EnsureSpecSheet() As Worksheet
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("SpecifikacijaSablon")
-    On Error GoTo 0
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Sheets.Add
-        ws.name = "SpecifikacijaSablon"
-        ws.Visible = xlSheetHidden
-    End If
-    ws.cells.Clear
-    Set EnsureSpecSheet = ws
-End Function
 
 Private Sub RefreshSummary()
     On Error GoTo EH

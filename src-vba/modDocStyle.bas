@@ -149,3 +149,69 @@ Public Function DocTitleBlock(ByVal ws As Worksheet, ByVal atRow As Long, _
     DocTitleBlock = atRow + 2
 End Function
 
+' ------------------------------------------------------------
+' Zajednicki izlaz jednog sheeta u PDF (isti parametri za sve
+' stampane obrasce). Zamena za rasute ExportAsFixedFormat pozive
+' (modPrint / modPaletniList / modIzvestaj / modOtkupBlok / frmSledljivost).
+' ------------------------------------------------------------
+Public Sub DocExportPdf(ByVal ws As Worksheet, ByVal pdfPath As String, _
+                        ByVal openAfter As Boolean)
+    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                           Quality:=xlQualityStandard, _
+                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+End Sub
+
+' ------------------------------------------------------------
+' PageSetup za 1/3-A4 obrasce sa dva primerka (otkupni / grupni /
+' otpremnica / revers ambalaze). Stampa 1:1 (Zoom=100, sve margine 0
+' osim 0.31" levo/desno) tako da eksplicitne visine redova padaju tacno
+' na 99mm/198mm perforacije. PrintArea = A1:H<lastRow> (8 kolona).
+' On Error + PrintCommunication=False: brz batch upis, radi i bez stampaca.
+' Geometrija je deljena -> svi 1/3-A4 obrasci se menjaju na jednom mestu.
+' ------------------------------------------------------------
+Public Sub DocPageSetupThirdA4(ByVal ws As Worksheet, ByVal lastRow As Long)
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = 100
+        .LeftMargin = Application.InchesToPoints(0.31)
+        .RightMargin = Application.InchesToPoints(0.31)
+        .TopMargin = 0
+        .BottomMargin = 0
+        .HeaderMargin = 0
+        .FooterMargin = 0
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+End Sub
+
+' ------------------------------------------------------------
+' Izlazni mod obrasca. Prizna OFF/PRINT/PREVIEW/PDF; prazno ili nepoznato
+' -> defMode (default ponasanje tog dokumenta: "PDF" ili "OFF"). Centralizuje
+' razliku u defaultu (otkupni/grupni/izdamb=PDF, prijemnica/paleta=OFF) i daje
+' jedno mesto za dispatch po modu (DocPrintWs za stampu/pregled).
+' ------------------------------------------------------------
+Public Function DocResolveMode(ByVal mode As String, ByVal defMode As String) As String
+    Dim m As String: m = UCase$(Trim$(mode))
+    Select Case m
+        Case "OFF", "PRINT", "PREVIEW", "PDF"
+            DocResolveMode = m
+        Case Else
+            DocResolveMode = UCase$(Trim$(defMode))
+    End Select
+End Function
+
+' Stampa ili pregled vec napunjenog sheeta: PREVIEW -> pregled, inace stampac.
+Public Sub DocPrintWs(ByVal ws As Worksheet, ByVal mode As String)
+    If UCase$(Trim$(mode)) = "PREVIEW" Then
+        ws.PrintPreview
+    Else
+        ws.PrintOut Copies:=1
+    End If
+End Sub
+

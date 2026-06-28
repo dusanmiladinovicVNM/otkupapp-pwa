@@ -79,9 +79,7 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     Dim suff As String: suff = Replace(Replace(broj, "/", "-"), "\\", "-")
     If Len(Trim$(suff)) = 0 Then suff = otpID
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTPREMNICE) & "\Otpremnica_" & suff & ".pdf"
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, IncludeDocProperties:=False, _
-                           OpenAfterPublish:=True
+    DocExportPdf ws, pdfPath, True
     Exit Sub
 EH:
     LogErr "modPrint.OutputOtpremnicaPDF"
@@ -97,7 +95,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     EnsureOtpremnicaSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtpremnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTPREMNICA_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -212,24 +210,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     R0 = WriteOtkupCopy(ws, 1, "", h, stavke, cnt, OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteOtkupCopy(ws, R0, "", h, stavke, cnt, OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillOtpremnicaSablon = ws
@@ -243,11 +224,11 @@ Public Sub EnsureOtpremnicaSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtpremnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTPREMNICA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "OtpremnicaSablon"
+    ws.name = WS_OTPREMNICA_SABLON
     Exit Sub
 EH:
     LogErr "modPrint.EnsureOtpremnicaSablon"
@@ -279,19 +260,15 @@ End Sub
 Public Sub OutputOtkupniList(ByVal otkupIDs As String)
     On Error GoTo EH
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_OTKUP_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_OTKUP_PRINT_MODE), "PDF")
 
     Select Case mode
-        Case "OFF"
-            ' bez izlaza
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet: Set ws = FillOtkupSablon(otkupIDs)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet: Set wp = FillOtkupSablon(otkupIDs)
-            If Not wp Is Nothing Then wp.PrintPreview
-        Case Else
-            ExportOtkupniListPDF otkupIDs, True   ' default: tihi PDF
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
+            ExportOtkupniListPDF otkupIDs, True   ' default (prazno) -> tihi PDF
+        ' OFF -> bez izlaza
     End Select
     Exit Sub
 EH:
@@ -308,9 +285,7 @@ Public Function ExportOtkupniListPDF(ByVal otkupIDs As String, _
     Dim suff As String: suff = Replace(Replace(otkupIDs, " + ", "_"), "/", "-")
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\OtkupniList_" & suff & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportOtkupniListPDF = pdfPath
     Exit Function
 EH:
@@ -364,7 +339,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     EnsureOtkupSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTKUP_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -531,24 +506,7 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     lastRow = WriteOtkupCopy(ws, R0, "Primerak za otkupljivaca", h, stavke, cnt, _
                              OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100                       ' fiksna skala 1:1 -> visine redova u mm su tacne
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0                    ' primerak 1 pocinje na vrhu lista (gornji red je prazan spacer)
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillOtkupSablon = ws
@@ -806,12 +764,12 @@ Public Sub EnsureOtkupSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("OtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_OTKUP_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "OtkupSablon"
+    ws.name = WS_OTKUP_SABLON
     ws.columns("A").ColumnWidth = 6
     ws.columns("B").ColumnWidth = 24
     ws.columns("C").ColumnWidth = 8
@@ -837,19 +795,15 @@ End Sub
 Public Sub OutputGrupniOtkupniList(ByVal prijemnicaIDs As String)
     On Error GoTo EH
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_OTKUP_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_OTKUP_PRINT_MODE), "PDF")
 
     Select Case mode
-        Case "OFF"
-            ' bez izlaza
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaIDs)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet: Set wp = FillGrupniOtkupSablon(prijemnicaIDs)
-            If Not wp Is Nothing Then wp.PrintPreview
-        Case Else
-            ExportGrupniOtkupniListPDF prijemnicaIDs, True   ' default: tihi PDF
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
+            ExportGrupniOtkupniListPDF prijemnicaIDs, True   ' default (prazno) -> tihi PDF
+        ' OFF -> bez izlaza
     End Select
     Exit Sub
 EH:
@@ -866,9 +820,7 @@ Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaIDs As String, _
     Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\GrupniOtkupniList_" & suff & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportGrupniOtkupniListPDF = pdfPath
     Exit Function
 EH:
@@ -883,7 +835,7 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     EnsureGrupniOtkupSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("GrupniOtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_GRUPNI_OTKUP_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -1049,24 +1001,7 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     R0 = WriteOtkupCopy(ws, 1, "", h, stavke, cnt, OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteOtkupCopy(ws, R0, "", h, stavke, cnt, OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillGrupniOtkupSablon = ws
@@ -1080,12 +1015,12 @@ Public Sub EnsureGrupniOtkupSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("GrupniOtkupSablon")
+    Set ws = ThisWorkbook.Sheets(WS_GRUPNI_OTKUP_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "GrupniOtkupSablon"
+    ws.name = WS_GRUPNI_OTKUP_SABLON
     ws.columns("A").ColumnWidth = 6
     ws.columns("B").ColumnWidth = 24
     ws.columns("C").ColumnWidth = 8
@@ -1109,19 +1044,15 @@ End Sub
 Public Sub OutputPrijemnica(ByVal prijemnicaIDs As String)
     On Error GoTo EH
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_PRIJEMNICA_PRINT_MODE), "OFF")
 
     Select Case mode
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet: Set wp = FillPrijemnicaSablon(prijemnicaIDs)
-            If Not wp Is Nothing Then wp.PrintPreview
+            If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
             ExportPrijemnicaPDF prijemnicaIDs, True
-        Case Else
-            ' OFF ili prazno (DEFAULT) -> bez izlaza; ponasanje kao do sada.
+        ' OFF / prazno (DEFAULT) -> bez izlaza; ponasanje kao do sada.
     End Select
     Exit Sub
 EH:
@@ -1152,9 +1083,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
     Dim pdfPath As String
     pdfPath = folder & "\Prijemnica_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportPrijemnicaPDF = pdfPath
     Exit Function
 EH:
@@ -1173,7 +1102,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     EnsurePrijemnicaSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PrijemnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRIJEMNICA_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -1365,12 +1294,12 @@ Public Sub EnsurePrijemnicaSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("PrijemnicaSablon")
+    Set ws = ThisWorkbook.Sheets(WS_PRIJEMNICA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "PrijemnicaSablon"
+    ws.name = WS_PRIJEMNICA_SABLON
     ws.columns("A").ColumnWidth = 5
     ws.columns("B").ColumnWidth = 20
     ws.columns("C").ColumnWidth = 7
@@ -1408,25 +1337,18 @@ Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String,
     On Error GoTo EH
     m_izdAmbPrijem = prijem
     Dim mode As String
-    mode = UCase$(Trim$(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE)))
+    mode = DocResolveMode(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE), "PDF")
 
     Select Case mode
-        Case "OFF"
-            ' bez izlaza
-        Case "PRINT"
+        Case "PRINT", "PREVIEW"
             Dim ws As Worksheet
             Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
                                                  koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
-            If Not ws Is Nothing Then ws.PrintOut Copies:=1
-        Case "PREVIEW"
-            Dim wp As Worksheet
-            Set wp = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
-                                                 koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
-            If Not wp Is Nothing Then wp.PrintPreview
-        Case Else
-            ' PDF ili prazno (DEFAULT) -> tihi PDF koji se otvori.
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
             ExportIzdavanjeAmbalazePDF datum, brojDok, omNaziv, omID, _
                                        koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True
+        ' OFF -> bez izlaza
     End Select
     Exit Sub
 EH:
@@ -1459,9 +1381,7 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     Dim pdfPath As String
     pdfPath = folder & "\" & pref & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    DocExportPdf ws, pdfPath, openAfter
     ExportIzdavanjeAmbalazePDF = pdfPath
     Exit Function
 EH:
@@ -1485,7 +1405,7 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     EnsureIzdavanjeAmbalazeSablon
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("IzdAmbSablon")
+    Set ws = ThisWorkbook.Sheets(WS_IZDAMB_SABLON)
     On Error GoTo EH
     If ws Is Nothing Then Exit Function
 
@@ -1564,24 +1484,7 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
                             OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteIzdavanjeCopy(ws, R0, "Primerak: kooperant", h, OL_THIRD_PT) - 1
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlPortrait
-        .Zoom = 100                       ' 1:1 -> visine redova u mm su tacne
-        .LeftMargin = Application.InchesToPoints(0.31)
-        .RightMargin = Application.InchesToPoints(0.31)
-        .TopMargin = 0                    ' primerak 1 pocinje na vrhu (gornji red je spacer)
-        .BottomMargin = 0
-        .HeaderMargin = 0
-        .FooterMargin = 0
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(lastRow, 8)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    DocPageSetupThirdA4 ws, lastRow
 
     Application.ScreenUpdating = oldScreen
     Set FillIzdavanjeAmbalazeSablon = ws
@@ -1830,12 +1733,12 @@ Public Sub EnsureIzdavanjeAmbalazeSablon()
     On Error GoTo EH
     Dim ws As Worksheet
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("IzdAmbSablon")
+    Set ws = ThisWorkbook.Sheets(WS_IZDAMB_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then Exit Sub
 
     Set ws = ThisWorkbook.Sheets.Add
-    ws.name = "IzdAmbSablon"
+    ws.name = WS_IZDAMB_SABLON
     ws.columns("A").ColumnWidth = 4
     ws.columns("B").ColumnWidth = 17
     ws.columns("C").ColumnWidth = 8
@@ -1849,3 +1752,835 @@ EH:
     LogErr "modPrint.EnsureIzdavanjeAmbalazeSablon"
 End Sub
 
+
+' ============================================================
+' FAKTURA - generisan house-style sablon (zamena za rucni FakturaSablon).
+' EnsureFakturaSablon (H1 verzija, isti obrazac kao PaletaSablon) +
+' FillFakturaSablon. Podatke prikuplja modFaktura.PrintFaktura.
+' ============================================================
+Public Sub EnsureFakturaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_FAKTURA_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 22
+    ws.columns("C").ColumnWidth = 8
+    ws.columns("D").ColumnWidth = 13
+    ws.columns("E").ColumnWidth = 13
+    ws.columns("F").ColumnWidth = 15
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 6, 6)
+    r = DocTitleBlock(ws, r, 6, "Racun za isporucene poljoprivredne proizvode", "FAKTURA")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Broj:"
+    ws.cells(fr + 1, 1).value = "Datum:"
+    ws.cells(fr + 2, 1).value = "Kupac:"
+    ws.cells(fr, 2).name = "FakBroj"
+    ws.cells(fr, 2).NumberFormat = "@"   ' broj kao tekst (npr. 1/2026), ne kao datum
+    ws.cells(fr + 1, 2).name = "FakDatum"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 6)).Merge
+    ws.cells(fr + 2, 2).name = "FakKupac"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Broj prijemnice"
+    ws.cells(hdr, 3).value = "Klasa"
+    ws.cells(hdr, 4).value = "Kolicina"
+    ws.cells(hdr, 5).value = "Cena"
+    ws.cells(hdr, 6).value = "Vrednost"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 6))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "FakStavkaStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureFakturaSablon"
+End Sub
+
+' Popuni FakturaSablon iz prikupljenih podataka. stavke(1..nStavke, 1..5):
+' 1=BrojPrijemnice 2=Klasa 3=Kolicina 4=Cena 5=Vrednost. Vraca sheet.
+Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, _
+        ByVal kupacNaziv As String, ByVal stavke As Variant, ByVal nStavke As Long, _
+        ByVal ukupno As Double) As Worksheet
+    On Error GoTo EH
+    EnsureFakturaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+
+    ws.Range("FakBroj").value = broj
+    ws.Range("FakDatum").value = datum
+    ws.Range("FakDatum").NumberFormat = "DD.MM.YYYY"
+    ws.Range("FakKupac").value = kupacNaziv
+
+    Dim startCell As Range: Set startCell = ws.Range("FakStavkaStart")
+    With ws.Range(startCell, startCell.Offset(80, 5))
+        .ClearContents
+        .Borders.LineStyle = xlNone
+        .Interior.ColorIndex = xlNone
+    End With
+    ws.Range(startCell.Offset(0, 1), startCell.Offset(79, 1)).NumberFormat = "@"   ' broj prijemnice kao tekst
+
+    Dim i As Long
+    For i = 1 To nStavke
+        startCell.Offset(i - 1, 0).value = i
+        startCell.Offset(i - 1, 1).value = stavke(i, 1)
+        startCell.Offset(i - 1, 2).value = stavke(i, 2)
+        startCell.Offset(i - 1, 3).value = stavke(i, 3)
+        startCell.Offset(i - 1, 4).value = stavke(i, 4)
+        startCell.Offset(i - 1, 5).value = stavke(i, 5)
+    Next i
+
+    If nStavke > 0 Then
+        With ws.Range(startCell, startCell.Offset(nStavke - 1, 5))
+            .Borders.LineStyle = xlContinuous
+            .Borders.Weight = xlThin
+        End With
+        ws.Range(startCell, startCell.Offset(nStavke - 1, 0)).HorizontalAlignment = xlCenter
+        ws.Range(startCell.Offset(0, 2), startCell.Offset(nStavke - 1, 2)).HorizontalAlignment = xlCenter
+        ws.Range(startCell.Offset(0, 3), startCell.Offset(nStavke - 1, 5)).NumberFormat = "#,##0.00"
+    End If
+
+    Dim tot As Range: Set tot = startCell.Offset(nStavke, 0)
+    ws.Range(tot, tot.Offset(0, 4)).Merge
+    tot.value = "UKUPNO:"
+    tot.HorizontalAlignment = xlRight
+    tot.Font.Bold = True
+    tot.Offset(0, 5).value = ukupno
+    tot.Offset(0, 5).NumberFormat = "#,##0.00"
+    tot.Offset(0, 5).Font.Bold = True
+    With ws.Range(tot, tot.Offset(0, 5))
+        .Interior.Color = DocColHeaderFill()
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+
+    Dim sgnRow As Long: sgnRow = tot.row + 3
+    ws.cells(sgnRow, 2).value = "Potpis kupca: ___________"
+    ws.cells(sgnRow, 5).value = "Potpis prodavca: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgnRow, 6)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Set FillFakturaSablon = ws
+    Exit Function
+EH:
+    LogErr "modPrint.FillFakturaSablon"
+End Function
+
+
+' ============================================================
+' KARTICA KOOPERANTA - generisan house-style sablon (zamena za rucni
+' KarticaSablon). EnsureKarticaSablon (H1) + FillKarticaSablon. Podatke
+' (Report 2D niz + header) prikuplja modIzvestaj.PrintKarticaPDF.
+' ============================================================
+Public Sub EnsureKarticaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_KARTICA_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 38
+    ws.columns("D").ColumnWidth = 13
+    ws.columns("E").ColumnWidth = 13
+    ws.columns("F").ColumnWidth = 13
+    ws.columns("G").ColumnWidth = 11
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 7, 7)
+    r = DocTitleBlock(ws, r, 7, "Analiticka kartica - promet po kooperantu", "KARTICA KOOPERANTA")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Kooperant:"
+    ws.cells(fr + 1, 1).value = "BPG:"
+    ws.cells(fr + 2, 1).value = "Period:"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr, 7)).Merge
+    ws.cells(fr, 2).name = "KartKoop"
+    ws.cells(fr + 1, 2).name = "KartBPG"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 7)).Merge
+    ws.cells(fr + 2, 2).name = "KartPeriod"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Datum"
+    ws.cells(hdr, 2).value = "Broj dok."
+    ws.cells(hdr, 3).value = "Opis"
+    ws.cells(hdr, 4).value = "Zaduzenje"
+    ws.cells(hdr, 5).value = "Razduzenje"
+    ws.cells(hdr, 6).value = "Saldo"
+    ws.cells(hdr, 7).value = "Saldo amb."
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 7))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "KartStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureKarticaSablon"
+End Sub
+
+' Popuni KarticaSablon. data = Report 2D niz (1..N, 1..>=8); poslednji red = UKUPNO.
+' Kolone niza: 1=Datum 2=BrojDok 3=Parcela 4=Opis 5=Zaduzenje 6=Razduzenje 7=Saldo 8=SaldoAmb.
+Public Function FillKarticaSablon(ByVal koopNaziv As String, ByVal bpg As String, _
+        ByVal period As String, ByVal data As Variant) As Worksheet
+    On Error GoTo EH
+    EnsureKarticaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("KartKoop").value = koopNaziv
+    ws.Range("KartBPG").value = bpg
+    ws.Range("KartPeriod").value = period
+
+    Dim startRow As Long: startRow = ws.Range("KartStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 300, 7))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, outRow As Long
+    Dim opisK As String, parcK As String
+    For i = 1 To UBound(data, 1)
+        outRow = startRow + i - 1
+        If IsDate(data(i, 1)) Then
+            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
+        Else
+            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        opisK = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
+        parcK = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        If Trim$(parcK) <> "" Then opisK = opisK & " / Parcela: " & parcK
+        ws.cells(outRow, 3).value = opisK
+        If IsNumeric(data(i, 5)) And Not IsEmpty(data(i, 5)) Then
+            If CDbl(data(i, 5)) > 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 5))
+        End If
+        If IsNumeric(data(i, 6)) And Not IsEmpty(data(i, 6)) Then
+            If CDbl(data(i, 6)) > 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 6))
+        End If
+        If IsNumeric(data(i, 7)) And Not IsEmpty(data(i, 7)) Then ws.cells(outRow, 6).value = CDbl(data(i, 7))
+        If IsNumeric(data(i, 8)) And Not IsEmpty(data(i, 8)) Then ws.cells(outRow, 7).value = CDbl(data(i, 8))
+    Next i
+
+    Dim dataRows As Long: dataRows = UBound(data, 1)
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + dataRows - 1, 7)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, 6)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(startRow, 7), ws.cells(startRow + dataRows - 1, 7)).NumberFormat = "#,##0"
+
+    Dim rr As Long
+    For rr = 0 To dataRows - 1
+        If rr Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + rr, 1), ws.cells(startRow + rr, 7)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next rr
+
+    Dim ukRow As Long: ukRow = startRow + dataRows - 1
+    With ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 7))
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    Dim footRow As Long: footRow = ukRow + 2
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
+    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 1, 7)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillKarticaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillKarticaSablon"
+End Function
+
+
+' ============================================================
+' SLEDLJIVOST (LOT) - generisan house-style sablon (zamena za rucni
+' SledljivostSablon). Landscape, 12 kolona. EnsureSledljivostSablon (H1) +
+' FillSledljivostSablon. Podatke prikuplja frmSledljivost.PrintTracePDF.
+' Unikatna Sled* imena (izbegava koliziju sa starim workbook imenima).
+' ============================================================
+Public Sub EnsureSledljivostSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_SLEDLJIVOST_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("N1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_SLEDLJIVOST_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 18
+    ws.columns("C").ColumnWidth = 12
+    ws.columns("D").ColumnWidth = 12
+    ws.columns("E").ColumnWidth = 8
+    ws.columns("F").ColumnWidth = 12
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 16
+    ws.columns("I").ColumnWidth = 11
+    ws.columns("J").ColumnWidth = 9
+    ws.columns("K").ColumnWidth = 7
+    ws.columns("L").ColumnWidth = 12
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 12, 12)
+    r = DocTitleBlock(ws, r, 12, "Sledljivost porekla - zbirna otpremnica (LOT)", "SLEDLJIVOST")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "LOT broj:"
+    ws.cells(fr + 1, 1).value = "Datum otpreme:"
+    ws.cells(fr + 2, 1).value = "Vrsta voca:"
+    ws.cells(fr, 2).name = "SledLot"
+    ws.cells(fr + 1, 2).name = "SledDatum"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 5)).Merge
+    ws.cells(fr + 2, 2).name = "SledVrsta"
+    ws.cells(fr, 7).value = "Vozac:"
+    ws.cells(fr + 1, 7).value = "Kupac:"
+    ws.Range(ws.cells(fr, 8), ws.cells(fr, 12)).Merge
+    ws.cells(fr, 8).name = "SledVozac"
+    ws.Range(ws.cells(fr + 1, 8), ws.cells(fr + 1, 12)).Merge
+    ws.cells(fr + 1, 8).name = "SledKupac"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+    ws.cells(fr, 8).Font.Bold = True
+    ws.cells(fr + 1, 8).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Kooperant"
+    ws.cells(hdr, 3).value = "BPG"
+    ws.cells(hdr, 4).value = "Kat. parcela"
+    ws.cells(hdr, 5).value = "GGAP"
+    ws.cells(hdr, 6).value = "Kultura"
+    ws.cells(hdr, 7).value = "Povrsina"
+    ws.cells(hdr, 8).value = "Stanica"
+    ws.cells(hdr, 9).value = "Datum"
+    ws.cells(hdr, 10).value = "Kg"
+    ws.cells(hdr, 11).value = "Klasa"
+    ws.cells(hdr, 12).value = "OtkupID"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 12))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "SledStart"
+
+    ws.Range("N1").value = LAYOUT_VER
+    ws.Range("N1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureSledljivostSablon"
+End Sub
+
+' Popuni SledljivostSablon. traceData = TraceByZbirna 2D niz (1..N, 1..14).
+' Mapiranje (kao original): 1=Kooperant 2=Kg 4=StanicaID 5=Datum 6=OtkupID
+' 8=BPG 9=KatBroj 10=GGAP 11=Klasa 13=Kultura 14=Povrsina. prijKg = suma prijemnica.
+Public Function FillSledljivostSablon(ByVal lot As String, ByVal datumOtpreme As String, _
+        ByVal vozac As String, ByVal kupac As String, ByVal vrsta As String, _
+        ByVal traceData As Variant, ByVal prijKg As Double) As Worksheet
+    On Error GoTo EH
+    EnsureSledljivostSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_SLEDLJIVOST_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("SledLot").value = lot
+    ws.Range("SledDatum").value = datumOtpreme
+    ws.Range("SledVozac").value = vozac
+    ws.Range("SledKupac").value = kupac
+    ws.Range("SledVrsta").value = vrsta
+
+    Const NUM_COLS As Long = 12
+    Dim startRow As Long: startRow = ws.Range("SledStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 300, NUM_COLS))
+        .ClearContents
+        .ClearFormats
+    End With
+    ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 200, 4)).NumberFormat = "@"
+
+    Dim totalOtkupKg As Double
+    Dim i As Long, outRow As Long, stNaziv As String
+    For i = 1 To UBound(traceData, 1)
+        outRow = startRow + i - 1
+        stNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(traceData(i, 4)), "Naziv"))
+        ws.cells(outRow, 1).value = i
+        ws.cells(outRow, 2).value = CStr(traceData(i, 1))
+        ws.cells(outRow, 3).value = CStr(traceData(i, 8))
+        ws.cells(outRow, 4).value = CStr(traceData(i, 9))
+        ws.cells(outRow, 5).value = CStr(traceData(i, 10))
+        ws.cells(outRow, 6).value = CStr(traceData(i, 13))
+        ws.cells(outRow, 7).value = CStr(traceData(i, 14))
+        ws.cells(outRow, 8).value = stNaziv
+        ws.cells(outRow, 9).value = Format$(CDate(traceData(i, 5)), "DD.MM.YYYY")
+        ws.cells(outRow, 10).value = CDbl(traceData(i, 2))
+        ws.cells(outRow, 11).value = CStr(traceData(i, 11))
+        ws.cells(outRow, 12).value = CStr(traceData(i, 6))
+        totalOtkupKg = totalOtkupKg + CDbl(traceData(i, 2))
+    Next i
+
+    Dim nRows As Long: nRows = UBound(traceData, 1)
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, NUM_COLS)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(startRow, 10), ws.cells(startRow + nRows - 1, 10)).NumberFormat = "#,##0"
+
+    Dim rr As Long
+    For rr = 0 To nRows - 1
+        If rr Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + rr, 1), ws.cells(startRow + rr, NUM_COLS)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next rr
+
+    Dim sumRow As Long: sumRow = startRow + nRows + 1
+    Dim manjak As Double: manjak = totalOtkupKg - prijKg
+    Dim manjakPct As Double
+    If totalOtkupKg > 0 Then manjakPct = manjak / totalOtkupKg * 100
+    ws.cells(sumRow, 1).value = "Ukupno otkup:"
+    ws.cells(sumRow, 10).value = totalOtkupKg
+    ws.cells(sumRow + 1, 1).value = "Ukupno prijemnica:"
+    ws.cells(sumRow + 1, 10).value = prijKg
+    ws.cells(sumRow + 2, 1).value = "Manjak:"
+    ws.cells(sumRow + 2, 10).value = manjak
+    ws.cells(sumRow + 2, 11).value = Format$(manjakPct, "0.00") & "%"
+    ws.Range(ws.cells(sumRow, 10), ws.cells(sumRow + 2, 10)).NumberFormat = "#,##0"
+    ws.Range(ws.cells(sumRow, 1), ws.cells(sumRow + 2, 1)).Font.Bold = True
+
+    ws.cells(sumRow + 4, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(sumRow + 5, 1).value = "Potpis: ___________"
+    ws.cells(sumRow + 5, 8).value = "Pecat: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlLandscape
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sumRow + 5, NUM_COLS)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillSledljivostSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillSledljivostSablon"
+End Function
+
+
+' ============================================================
+' KARTICA AMBALAZE - generisan house-style sablon (zamena za code-built
+' _KartAmbPrint). 6 kolona (Datum/Broj dok./Opis/Ulaz/Izlaz/Saldo, UKUPNO red).
+' Podatke (Report 2D niz + header) prikuplja modIzvestaj.PrintKarticaAmbalazePDF.
+' ============================================================
+Public Sub EnsureKarticaAmbalazeSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_KARTICA_AMB_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_KARTICA_AMB_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 40
+    ws.columns("D").ColumnWidth = 11
+    ws.columns("E").ColumnWidth = 11
+    ws.columns("F").ColumnWidth = 12
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 6, 6)
+    r = DocTitleBlock(ws, r, 6, "Kartica ambalaze - promet gajbi po kooperantu", "KARTICA AMBALAZE")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Kooperant:"
+    ws.cells(fr + 1, 1).value = "Period:"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr, 6)).Merge
+    ws.cells(fr, 2).name = "KartAmbKoop"
+    ws.Range(ws.cells(fr + 1, 2), ws.cells(fr + 1, 6)).Merge
+    ws.cells(fr + 1, 2).name = "KartAmbPeriod"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 1, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 3
+    ws.cells(hdr, 1).value = "Datum"
+    ws.cells(hdr, 2).value = "Broj dok."
+    ws.cells(hdr, 3).value = "Opis"
+    ws.cells(hdr, 4).value = "Ulaz"
+    ws.cells(hdr, 5).value = "Izlaz"
+    ws.cells(hdr, 6).value = "Saldo"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 6))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "KartAmbStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureKarticaAmbalazeSablon"
+End Sub
+
+' Popuni KarticaAmbalazeSablon. data = Report niz (1..N, 1..6); poslednji red = UKUPNO.
+' Kolone: 1=Datum 2=BrojDok 3=Opis 4=Ulaz 5=Izlaz 6=Saldo (gajbe, ceo broj).
+Public Function FillKarticaAmbalazeSablon(ByVal koopNaziv As String, _
+        ByVal period As String, ByVal data As Variant) As Worksheet
+    On Error GoTo EH
+    EnsureKarticaAmbalazeSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KARTICA_AMB_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("KartAmbKoop").value = koopNaziv
+    ws.Range("KartAmbPeriod").value = period
+
+    Dim startRow As Long: startRow = ws.Range("KartAmbStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 300, 6))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, outRow As Long
+    For i = 1 To UBound(data, 1)
+        outRow = startRow + i - 1
+        If IsDate(data(i, 1)) Then
+            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
+        Else
+            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        ws.cells(outRow, 3).value = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        If IsNumeric(data(i, 4)) Then
+            If CDbl(data(i, 4)) <> 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 4))
+        End If
+        If IsNumeric(data(i, 5)) Then
+            If CDbl(data(i, 5)) <> 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 5))
+        End If
+        If IsNumeric(data(i, 6)) Then ws.cells(outRow, 6).value = CDbl(data(i, 6))
+    Next i
+
+    Dim dataRows As Long: dataRows = UBound(data, 1)
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + dataRows - 1, 6)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, 6)).NumberFormat = "#,##0"
+
+    Dim rr As Long
+    For rr = 0 To dataRows - 1
+        If rr Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + rr, 1), ws.cells(startRow + rr, 6)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next rr
+
+    Dim ukRow As Long: ukRow = startRow + dataRows - 1
+    With ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 6))
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    Dim footRow As Long: footRow = ukRow + 2
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
+    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 1, 6)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillKarticaAmbalazeSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillKarticaAmbalazeSablon"
+End Function
+
+
+' ============================================================
+' SPECIFIKACIJA OTKUPNIH BLOKOVA - generisan house-style sablon u modPrint.
+' Landscape, 11 kolona. EnsureSpecifikacijaSablon (verzija u M1) +
+' FillSpecifikacijaSablon. Podatke (filter/sort/PDV) prikuplja
+' modOtkupBlok.RenderSpec i prosledjuje niz + sume.
+' ============================================================
+Public Sub EnsureSpecifikacijaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("M1").value) = LAYOUT_VER And ws.Visible = xlSheetVisible Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_SPECIFIKACIJA_SABLON
+    ws.Visible = xlSheetVisible
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 18
+    ws.columns("D").ColumnWidth = 9
+    ws.columns("E").ColumnWidth = 24
+    ws.columns("F").ColumnWidth = 11
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 11
+    ws.columns("I").ColumnWidth = 13
+    ws.columns("J").ColumnWidth = 12
+    ws.columns("K").ColumnWidth = 14
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 11, 11)
+    r = DocTitleBlock(ws, r, 11, "Pregled otkupnih blokova po otkupnom mestu", "SPECIFIKACIJA OTKUPNIH BLOKOVA")
+
+    Dim subRow As Long: subRow = r
+    ws.Range(ws.cells(subRow, 1), ws.cells(subRow, 11)).Merge
+    ws.cells(subRow, 1).name = "SpecSubtitle"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.rows(subRow).RowHeight = 14
+
+    Dim hdr As Long: hdr = subRow + 2
+    ws.cells(hdr, 1).value = "Broj zbirne"
+    ws.cells(hdr, 2).value = "Broj otpremnice"
+    ws.cells(hdr, 3).value = "Otkupno mesto"
+    ws.cells(hdr, 4).value = "br. bloka"
+    ws.cells(hdr, 5).value = "Ime i Prezime"
+    ws.cells(hdr, 6).value = "Datum"
+    ws.cells(hdr, 7).value = "Kolicina"
+    ws.cells(hdr, 8).value = "Cena bez PDV"
+    ws.cells(hdr, 9).value = "Vrednost"
+    ws.cells(hdr, 10).value = "Iznos PDV"
+    ws.cells(hdr, 11).value = "Ukupna vrednost"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 11))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "SpecStart"
+
+    ws.Range("M1").value = LAYOUT_VER
+    ws.Range("M1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureSpecifikacijaSablon"
+End Sub
+
+' Popuni SpecifikacijaSablon. spec(1..nRows, 1..11) = redovi; sume za UKUPNO red.
+Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Long, _
+        ByVal subtitle As String, ByVal cnt As Long, _
+        ByVal sumKol As Double, ByVal sumVred As Double, _
+        ByVal sumPdv As Double, ByVal sumUk As Double) As Worksheet
+    On Error GoTo EH
+    EnsureSpecifikacijaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("SpecSubtitle").value = subtitle & "     Blokova: " & cnt
+
+    Dim startRow As Long: startRow = ws.Range("SpecStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 1000, 11))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, c As Long, outRow As Long
+    For i = 1 To nRows
+        outRow = startRow + i - 1
+        For c = 1 To 11
+            ws.cells(outRow, c).value = spec(i, c)
+        Next c
+    Next i
+
+    Dim ukRow As Long: ukRow = startRow + nRows
+    ws.cells(ukRow, 5).value = "UKUPNO"
+    ws.cells(ukRow, 7).value = sumKol
+    ws.cells(ukRow, 9).value = sumVred
+    ws.cells(ukRow, 10).value = sumPdv
+    ws.cells(ukRow, 11).value = sumUk
+    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 11)).Font.Bold = True
+
+    ws.Range(ws.cells(startRow, 7), ws.cells(ukRow, 7)).NumberFormat = "#,##0.###"
+    ws.Range(ws.cells(startRow, 8), ws.cells(ukRow, 11)).NumberFormat = "#,##0.00"
+
+    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 11)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlLandscape
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & (startRow - 1) & ":$" & (startRow - 1)
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 11)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillSpecifikacijaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillSpecifikacijaSablon"
+End Function

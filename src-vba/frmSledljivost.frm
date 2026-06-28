@@ -492,30 +492,17 @@ EH:
 End Sub
 
 Public Sub PrintTracePDF(ByVal brojZbirne As String)
-    ' Template Sheet pruefen
-    Dim ws As Worksheet
-    Set ws = Nothing
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("SledljivostSablon")
-    On Error GoTo 0
-    If ws Is Nothing Then
-        MsgBox "SledljivostSablon sheet ne postoji!", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-    
-    ' Trace-Daten holen
     Dim traceData As Variant
     traceData = TraceByZbirna(brojZbirne)
     If IsEmpty(traceData) Then
         MsgBox "Nema podataka za zbirnu: " & brojZbirne, vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    ' Zbirna-Daten
+
     Dim zbrData As Variant
     zbrData = GetTableData(TBL_ZBIRNA)
     If IsEmpty(zbrData) Then Exit Sub
-    
+
     Dim colZbrBroj As Long, colZbrDatum As Long, colZbrVozac As Long
     Dim colZbrKupac As Long, colZbrVrsta As Long
     colZbrBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
@@ -523,111 +510,24 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
     colZbrVozac = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
     colZbrKupac = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
     colZbrVrsta = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
-    
-    Dim zbrRow As Long
-    Dim z As Long
+
+    Dim zbrRow As Long, z As Long
     For z = 1 To UBound(zbrData, 1)
-        If CStr(zbrData(z, colZbrBroj)) = brojZbirne Then
-            zbrRow = z
-            Exit For
-        End If
+        If CStr(zbrData(z, colZbrBroj)) = brojZbirne Then zbrRow = z: Exit For
     Next z
     If zbrRow = 0 Then Exit Sub
-    
-    ' Vozac Name
-    Dim vozacID As String
-    vozacID = CStr(zbrData(zbrRow, colZbrVozac))
+
+    Dim vozacID As String: vozacID = CStr(zbrData(zbrRow, colZbrVozac))
     Dim vozacNaziv As String
     vozacNaziv = CStr(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Ime")) & " " & _
                  CStr(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Prezime"))
-    
-    ' Kupac Name
-    Dim kupacID As String
-    kupacID = CStr(zbrData(zbrRow, colZbrKupac))
+    Dim kupacID As String: kupacID = CStr(zbrData(zbrRow, colZbrKupac))
     Dim kupacNaziv As String
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
-    
-    ' Header befuellen
-    Application.ScreenUpdating = False
-    
-    ws.Range("LOTBroj").value = brojZbirne
-    ws.Range("DatumOtpreme").value = Format$(CDate(zbrData(zbrRow, colZbrDatum)), "DD.MM.YYYY")
-    ws.Range("VozacNaziv").value = vozacNaziv
-    ws.Range("KupacNaziv").value = kupacNaziv
-    ws.Range("VrstaVoca").value = CStr(zbrData(zbrRow, colZbrVrsta))
-    
-    Const NUM_COLS As Long = 12      ' <-- war 10, jetzt 12
-    
-    ' Alte Daten loeschen
-    Dim startRow As Long
-    startRow = ws.Range("TraceStart").row
-    Dim lastRow As Long
-    lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
-    If lastRow >= startRow Then
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearContents
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
-    End If
-    
-    ' Text-Format fuer BPG + KatParcela + KatBroj(Parcela)
-    ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 50, 4)).NumberFormat = "@"
-    
-    
-    
-    ' Trace-Zeilen einfuegen
-    Dim totalOtkupKg As Double
-    Dim i As Long
-    For i = 1 To UBound(traceData, 1)
-    
-        Dim outRow As Long
-        outRow = startRow + i - 1
-        
-        Dim stNaziv As String
-        stNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(traceData(i, 4)), "Naziv"))
-        
-        ws.cells(outRow, 1).value = i                          ' Rb
-        ws.cells(outRow, 2).value = CStr(traceData(i, 1))      ' Kooperant
-        ws.cells(outRow, 3).value = CStr(traceData(i, 8))      ' BPG
-        ws.cells(outRow, 4).value = CStr(traceData(i, 9))      ' KatBroj (Parcela)
-        ws.cells(outRow, 5).value = CStr(traceData(i, 10))     ' GGAP (Parcela)
-        ws.cells(outRow, 6).value = CStr(traceData(i, 13))     ' Kultura (Parcela)
-        ws.cells(outRow, 7).value = CStr(traceData(i, 14))     ' Povrsina (Parcela)
-        ws.cells(outRow, 8).value = stNaziv                     ' Stanica
-        ws.cells(outRow, 9).value = Format$(CDate(traceData(i, 5)), "DD.MM.YYYY")
-        ws.cells(outRow, 10).value = CDbl(traceData(i, 2))     ' Kg
-        ws.cells(outRow, 11).value = CStr(traceData(i, 11))    ' Klasa
-        ws.cells(outRow, 12).value = CStr(traceData(i, 6))     ' OtkupID
-        
-        totalOtkupKg = totalOtkupKg + CDbl(traceData(i, 2))
-    Next i
-    
-    ' Formatierung
-    Dim dataRange As Range
-    Set dataRange = ws.Range(ws.cells(startRow, 1), _
-                    ws.cells(startRow + UBound(traceData, 1) - 1, NUM_COLS))
-    
-    With dataRange.Borders
-        .LineStyle = xlContinuous
-        .Weight = xlThin
-    End With
-    
-    ' Kg-Spalte = Spalte 10
-    ws.Range(ws.cells(startRow, 10), _
-             ws.cells(startRow + UBound(traceData, 1) - 1, 10)).NumberFormat = "#,##0"
-    
-    ' Alternierende Farbe
-    Dim r As Long
-    For r = 0 To UBound(traceData, 1) - 1
-        If r Mod 2 = 1 Then
-            ws.Range(ws.cells(startRow + r, 1), _
-                     ws.cells(startRow + r, NUM_COLS)).Interior.Color = RGB(217, 225, 242)
-        End If
-    Next r
-    
-    ' Summen
-    Dim sumRow As Long
-    sumRow = startRow + UBound(traceData, 1) + 1
-    
-    ' Prijemnica Kolicina
+    Dim datumOtpreme As String
+    datumOtpreme = Format$(CDate(zbrData(zbrRow, colZbrDatum)), "DD.MM.YYYY")
+    Dim vrsta As String: vrsta = CStr(zbrData(zbrRow, colZbrVrsta))
+
     Dim prijKg As Double
     Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
@@ -640,41 +540,28 @@ Public Sub PrintTracePDF(ByVal brojZbirne As String)
             Dim p As Long
             For p = 1 To UBound(prijData, 1)
                 If CStr(prijData(p, colPrjZbr)) = brojZbirne Then
-                    If IsNumeric(prijData(p, colPrjKol)) Then
-                        prijKg = prijKg + CDbl(prijData(p, colPrjKol))
-                    End If
+                    If IsNumeric(prijData(p, colPrjKol)) Then prijKg = prijKg + CDbl(prijData(p, colPrjKol))
                 End If
             Next p
         End If
     End If
-    
-    Dim manjak As Double
-    manjak = totalOtkupKg - prijKg
-    Dim manjakPct As Double
-    If totalOtkupKg > 0 Then manjakPct = manjak / totalOtkupKg * 100
-    
-    ws.cells(sumRow, 1).value = "Ukupno otkup:"
-    ws.cells(sumRow, 10).value = totalOtkupKg           ' <-- war 8, jetzt 10
-    ws.cells(sumRow + 1, 1).value = "Ukupno prijemnica:"
-    ws.cells(sumRow + 1, 10).value = prijKg              ' <-- war 8
-    ws.cells(sumRow + 2, 1).value = "Manjak:"
-    ws.cells(sumRow + 2, 10).value = manjak              ' <-- war 8
-    ws.cells(sumRow + 2, 11).value = Format$(manjakPct, "0.00") & "%"  ' <-- war 9
-    
-    ws.cells(sumRow + 4, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
-    ws.cells(sumRow + 5, 1).value = "Potpis: ___________"
-    ws.cells(sumRow + 5, 8).value = "Pecat: ___________"  ' <-- war 6
-    
-    ' PDF Export
+
+    Dim ws As Worksheet
+    Set ws = FillSledljivostSablon(brojZbirne, datumOtpreme, vozacNaziv, kupacNaziv, _
+                                   vrsta, traceData, prijKg)
+    If ws Is Nothing Then Exit Sub
+
     Dim pdfPath As String
     pdfPath = ThisWorkbook.path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
-    
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, _
-                           OpenAfterPublish:=True
-    
-    Application.ScreenUpdating = True
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_SLEDLJIVOST_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
 End Sub
 
 Private Sub btnPovratak_Click()
