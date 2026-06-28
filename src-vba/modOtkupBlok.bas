@@ -52,6 +52,7 @@ Private mOrigWidth As Double
 Private mActiveOtpID As String
 Private mFilterNezavrsene As Boolean
 Private mMultiMode As Boolean
+Private mPrefilling As Boolean          ' True dok PrefillLeftForm puni levu formu
 
 Private mBtnToggle As MSForms.CommandButton
 Private mBtnStorno As MSForms.CommandButton
@@ -282,6 +283,13 @@ Private Sub TogglePanel()
     Else
         mForm.width = mOrigWidth
         mBtnToggle.caption = Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
+        ' Napustanje otpremnice: datum/zbirna su bili nasledjeni sa selektovane
+        ' otpremnice -> vrati levu formu na danas i raskini vezu, da svez unos
+        ' (npr. direktno na hladnjaci) ne nosi stari datum.
+        If Len(mActiveOtpID) > 0 Then
+            mActiveOtpID = ""
+            mForm.ResetDatumKontekst
+        End If
     End If
 
     mBtnToggle.Left = mForm.InsideWidth - mBtnToggle.width - 6
@@ -616,6 +624,10 @@ End Sub
 Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     On Error Resume Next
 
+    ' Gard: dok prefill puni levu formu, cmbOtkupnoMesto_Change (okida ga
+    ' postavljanje stanice nize) NE sme da resetuje datum/zbirnu koje upravo postavljamo.
+    mPrefilling = True
+
     ' Datum (i broj zbirne) PRE otkupnog mesta.
     Dim vDat As Variant: vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
     If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
@@ -636,6 +648,39 @@ Private Sub PrefillLeftForm(ByVal otpID As String, ByVal cena As Double)
     If Len(stanicaID) > 0 And IsDate(vDat) Then
         Dim brDok As String: brDok = SuggestNextBroj(KIND_OTK, stanicaID, CDate(vDat), False)
         If Len(brDok) > 0 Then SetLeftCtl "txtBrojDokumenta", brDok
+    End If
+
+    mPrefilling = False
+End Sub
+
+' ============================================================
+' frmOtkup hook-ovi: kontekst selektovane otpremnice (datum/zbirna reset)
+' ============================================================
+
+' True dok PrefillLeftForm puni levu formu. frmOtkup.cmbOtkupnoMesto_Change NE sme
+' da resetuje datum/zbirnu dok traje prefill (prefill sam postavlja stanicu, sto
+' okida _Change); bez ovog garda prefill bi pregazio datum koji upravo postavlja.
+Public Function OtkupBlok_IsPrefilling() As Boolean
+    OtkupBlok_IsPrefilling = mPrefilling
+End Function
+
+' StanicaID trenutno vezane otpremnice (prazno ako nema veze). frmOtkup poredi sa
+' novom stanicom da prepozna napustanje konteksta otpremnice.
+Public Function OtkupBlok_ActiveStanica() As String
+    On Error Resume Next
+    If Len(mActiveOtpID) = 0 Then Exit Function
+    OtkupBlok_ActiveStanica = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mActiveOtpID, COL_OTP_STANICA))
+End Function
+
+' Raskini vezu sa otpremnicom (operater presao na svez unos van panela). Osvezi
+' prikaz blokova/sazetka ako je panel vidljiv.
+Public Sub OtkupBlok_ClearActiveOtp()
+    On Error Resume Next
+    If Len(mActiveOtpID) = 0 Then Exit Sub
+    mActiveOtpID = ""
+    If mVisible Then
+        LoadBlokovi
+        RefreshSummary
     End If
 End Sub
 
