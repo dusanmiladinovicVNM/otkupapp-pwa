@@ -1905,3 +1905,174 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
 EH:
     LogErr "modPrint.FillFakturaSablon"
 End Function
+
+
+' ============================================================
+' KARTICA KOOPERANTA - generisan house-style sablon (zamena za rucni
+' KarticaSablon). EnsureKarticaSablon (H1) + FillKarticaSablon. Podatke
+' (Report 2D niz + header) prikuplja modIzvestaj.PrintKarticaPDF.
+' ============================================================
+Public Sub EnsureKarticaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_KARTICA_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 38
+    ws.columns("D").ColumnWidth = 13
+    ws.columns("E").ColumnWidth = 13
+    ws.columns("F").ColumnWidth = 13
+    ws.columns("G").ColumnWidth = 11
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 7, 7)
+    r = DocTitleBlock(ws, r, 7, "Analiticka kartica - promet po kooperantu", "KARTICA KOOPERANTA")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Kooperant:"
+    ws.cells(fr + 1, 1).value = "BPG:"
+    ws.cells(fr + 2, 1).value = "Period:"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr, 7)).Merge
+    ws.cells(fr, 2).name = "KartKoop"
+    ws.cells(fr + 1, 2).name = "KartBPG"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 7)).Merge
+    ws.cells(fr + 2, 2).name = "KartPeriod"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Datum"
+    ws.cells(hdr, 2).value = "Broj dok."
+    ws.cells(hdr, 3).value = "Opis"
+    ws.cells(hdr, 4).value = "Zaduzenje"
+    ws.cells(hdr, 5).value = "Razduzenje"
+    ws.cells(hdr, 6).value = "Saldo"
+    ws.cells(hdr, 7).value = "Saldo amb."
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 7))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "KartStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureKarticaSablon"
+End Sub
+
+' Popuni KarticaSablon. data = Report 2D niz (1..N, 1..>=8); poslednji red = UKUPNO.
+' Kolone niza: 1=Datum 2=BrojDok 3=Parcela 4=Opis 5=Zaduzenje 6=Razduzenje 7=Saldo 8=SaldoAmb.
+Public Function FillKarticaSablon(ByVal koopNaziv As String, ByVal bpg As String, _
+        ByVal period As String, ByVal data As Variant) As Worksheet
+    On Error GoTo EH
+    EnsureKarticaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("KartKoop").value = koopNaziv
+    ws.Range("KartBPG").value = bpg
+    ws.Range("KartPeriod").value = period
+
+    Dim startRow As Long: startRow = ws.Range("KartStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 300, 7))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, outRow As Long
+    Dim opisK As String, parcK As String
+    For i = 1 To UBound(data, 1)
+        outRow = startRow + i - 1
+        If IsDate(data(i, 1)) Then
+            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
+        Else
+            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        End If
+        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        opisK = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
+        parcK = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        If Trim$(parcK) <> "" Then opisK = opisK & " / Parcela: " & parcK
+        ws.cells(outRow, 3).value = opisK
+        If IsNumeric(data(i, 5)) And Not IsEmpty(data(i, 5)) Then
+            If CDbl(data(i, 5)) > 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 5))
+        End If
+        If IsNumeric(data(i, 6)) And Not IsEmpty(data(i, 6)) Then
+            If CDbl(data(i, 6)) > 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 6))
+        End If
+        If IsNumeric(data(i, 7)) And Not IsEmpty(data(i, 7)) Then ws.cells(outRow, 6).value = CDbl(data(i, 7))
+        If IsNumeric(data(i, 8)) And Not IsEmpty(data(i, 8)) Then ws.cells(outRow, 7).value = CDbl(data(i, 8))
+    Next i
+
+    Dim dataRows As Long: dataRows = UBound(data, 1)
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + dataRows - 1, 7)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, 6)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(startRow, 7), ws.cells(startRow + dataRows - 1, 7)).NumberFormat = "#,##0"
+
+    Dim rr As Long
+    For rr = 0 To dataRows - 1
+        If rr Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + rr, 1), ws.cells(startRow + rr, 7)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next rr
+
+    Dim ukRow As Long: ukRow = startRow + dataRows - 1
+    With ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 7))
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    Dim footRow As Long: footRow = ukRow + 2
+    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
+    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(footRow + 1, 7)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillKarticaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillKarticaSablon"
+End Function

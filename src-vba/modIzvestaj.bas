@@ -987,145 +987,32 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
                            
     Const SRC As String = "modIzvestaj.PrintKarticaPDF"
     On Error GoTo EH
-    
-    Dim ws As Worksheet
-    Set ws = Nothing
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        Err.Raise vbObjectError + 7501, SRC, _
-                  "KarticaSablon sheet ne postoji."
-    End If
-    
-    ' Kartica-Daten holen
+
     Dim data As Variant
     data = ReportKarticaKooperanta(kooperantID, datumOd, datumDo)
     If IsEmpty(data) Then
         Err.Raise vbObjectError + 7502, SRC, _
                   "Nema podataka za ovog kooperanta."
     End If
-    
-    Application.ScreenUpdating = False
-    
-    ' Header
-    Dim ime As String, prezime As String
+
+    Dim ime As String, prezime As String, bpg As String
     ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Ime"))
     prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, "Prezime"))
-    Dim bpg As String
     bpg = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_BPG))
-    
-    ws.Range("KartKoop").value = ime & " " & prezime & " (" & kooperantID & ")"
-    ws.Range("KartBPG").value = bpg
-    ws.Range("KartPeriod").value = Format$(datumOd, "DD.MM.YYYY") & " - " & Format$(datumDo, "DD.MM.YYYY")
-    
-    Const NUM_COLS As Long = 7   ' Datum, BrojDok, Opis, Zaduzenje, Razduzenje, Saldo, Saldo amb.
 
-    ' Alte Daten loeschen
-    Dim startRow As Long
-    startRow = ws.Range("KartStart").row
-    Dim lastRow As Long
-    lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
-    If lastRow >= startRow Then
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearContents
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, NUM_COLS)).ClearFormats
-    End If
-    
-    ' Daten einfuegen
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        Dim outRow As Long
-        outRow = startRow + i - 1
-        
-        ' Datum
-        If IsDate(data(i, 1)) Then
-            ws.cells(outRow, 1).value = Format$(CDate(data(i, 1)), "DD.MM.YYYY")
-        Else
-            ws.cells(outRow, 1).value = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
-        End If
-        
-        ' BrojDok
-        ws.cells(outRow, 2).value = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
-        
-        ' Opis (+ parcela ako postoji)
-        Dim opisKartice As String
-        Dim parcelaKartice As String
-        
-        opisKartice = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
-        parcelaKartice = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
-        
-        If Trim$(parcelaKartice) <> "" Then
-            opisKartice = opisKartice & " / Parcela: " & parcelaKartice
-        End If
-        
-        ws.cells(outRow, 3).value = opisKartice
-        
-        ' Zaduzenje
-        If IsNumeric(data(i, 5)) And Not IsEmpty(data(i, 5)) Then
-            If CDbl(data(i, 5)) > 0 Then ws.cells(outRow, 4).value = CDbl(data(i, 5))
-        End If
-        
-        ' Razduzenje
-        If IsNumeric(data(i, 6)) And Not IsEmpty(data(i, 6)) Then
-            If CDbl(data(i, 6)) > 0 Then ws.cells(outRow, 5).value = CDbl(data(i, 6))
-        End If
-        
-        ' Saldo
-        If IsNumeric(data(i, 7)) And Not IsEmpty(data(i, 7)) Then
-            ws.cells(outRow, 6).value = CDbl(data(i, 7))
-        End If
+    Dim koopNaziv As String
+    koopNaziv = ime & " " & prezime & " (" & kooperantID & ")"
+    Dim period As String
+    period = Format$(datumOd, "DD.MM.YYYY") & " - " & Format$(datumDo, "DD.MM.YYYY")
 
-        ' Saldo ambalaze (gajbe, running)
-        If IsNumeric(data(i, 8)) And Not IsEmpty(data(i, 8)) Then
-            ws.cells(outRow, 7).value = CDbl(data(i, 8))
-        End If
-    Next i
-    
-    ' Formatierung Datenbereich
-    Dim dataRows As Long
-    dataRows = UBound(data, 1)
-    Dim dataRange As Range
-    Set dataRange = ws.Range(ws.cells(startRow, 1), ws.cells(startRow + dataRows - 1, NUM_COLS))
-    
-    ' Rahmen
-    With dataRange.Borders
-        .LineStyle = xlContinuous
-        .Weight = xlThin
-    End With
-    
-    ' Zahlenformat D-F (novac, 2 decimale)
-    ws.Range(ws.cells(startRow, 4), ws.cells(startRow + dataRows - 1, 6)).NumberFormat = "#,##0.00"
-    ' Saldo ambalaze (G) = ceo broj gajbi
-    ws.Range(ws.cells(startRow, 7), ws.cells(startRow + dataRows - 1, 7)).NumberFormat = "#,##0"
-    
-    ' Alternierende Farbe
-    Dim r As Long
-    For r = 0 To dataRows - 1
-        If r Mod 2 = 1 Then
-            ws.Range(ws.cells(startRow + r, 1), _
-                     ws.cells(startRow + r, NUM_COLS)).Interior.Color = RGB(217, 225, 242)
-        End If
-    Next r
-    
-    ' UKUPNO Zeile fett
-    Dim ukRow As Long
-    ukRow = startRow + dataRows - 1
-    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, NUM_COLS)).Font.Bold = True
-    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, NUM_COLS)).Interior.Color = RGB(68, 114, 196)
-    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, NUM_COLS)).Font.Color = RGB(255, 255, 255)
-    
-    ' Fusszeile
-    Dim footRow As Long
-    footRow = ukRow + 2
-    ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
-    ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
-    ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
-    
-    ' PDF Export
+    Dim ws As Worksheet
+    Set ws = FillKarticaSablon(koopNaziv, bpg, period, data)
+    If ws Is Nothing Then Exit Sub
+
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_KARTICE) & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
-    
+
     Dim mode As String
     mode = DocResolveMode(GetConfigValue(CFG_KARTICA_PRINT_MODE), "PDF")
     Select Case mode
@@ -1135,8 +1022,6 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
             DocExportPdf ws, pdfPath, True
         ' OFF -> bez izlaza
     End Select
-    
-    Application.ScreenUpdating = True
     Exit Sub
 
 EH:
