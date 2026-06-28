@@ -2435,3 +2435,152 @@ EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillKarticaAmbalazeSablon"
 End Function
+
+
+' ============================================================
+' SPECIFIKACIJA OTKUPNIH BLOKOVA - generisan house-style sablon u modPrint.
+' Landscape, 11 kolona. EnsureSpecifikacijaSablon (verzija u M1) +
+' FillSpecifikacijaSablon. Podatke (filter/sort/PDV) prikuplja
+' modOtkupBlok.RenderSpec i prosledjuje niz + sume.
+' ============================================================
+Public Sub EnsureSpecifikacijaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("M1").value) = LAYOUT_VER And ws.Visible = xlSheetVisible Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_SPECIFIKACIJA_SABLON
+    ws.Visible = xlSheetVisible
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 12
+    ws.columns("B").ColumnWidth = 14
+    ws.columns("C").ColumnWidth = 18
+    ws.columns("D").ColumnWidth = 9
+    ws.columns("E").ColumnWidth = 24
+    ws.columns("F").ColumnWidth = 11
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 11
+    ws.columns("I").ColumnWidth = 13
+    ws.columns("J").ColumnWidth = 12
+    ws.columns("K").ColumnWidth = 14
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 11, 11)
+    r = DocTitleBlock(ws, r, 11, "Pregled otkupnih blokova po otkupnom mestu", "SPECIFIKACIJA OTKUPNIH BLOKOVA")
+
+    Dim subRow As Long: subRow = r
+    ws.Range(ws.cells(subRow, 1), ws.cells(subRow, 11)).Merge
+    ws.cells(subRow, 1).name = "SpecSubtitle"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.rows(subRow).RowHeight = 14
+
+    Dim hdr As Long: hdr = subRow + 2
+    ws.cells(hdr, 1).value = "Broj zbirne"
+    ws.cells(hdr, 2).value = "Broj otpremnice"
+    ws.cells(hdr, 3).value = "Otkupno mesto"
+    ws.cells(hdr, 4).value = "br. bloka"
+    ws.cells(hdr, 5).value = "Ime i Prezime"
+    ws.cells(hdr, 6).value = "Datum"
+    ws.cells(hdr, 7).value = "Kolicina"
+    ws.cells(hdr, 8).value = "Cena bez PDV"
+    ws.cells(hdr, 9).value = "Vrednost"
+    ws.cells(hdr, 10).value = "Iznos PDV"
+    ws.cells(hdr, 11).value = "Ukupna vrednost"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 11))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "SpecStart"
+
+    ws.Range("M1").value = LAYOUT_VER
+    ws.Range("M1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureSpecifikacijaSablon"
+End Sub
+
+' Popuni SpecifikacijaSablon. spec(1..nRows, 1..11) = redovi; sume za UKUPNO red.
+Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Long, _
+        ByVal subtitle As String, ByVal cnt As Long, _
+        ByVal sumKol As Double, ByVal sumVred As Double, _
+        ByVal sumPdv As Double, ByVal sumUk As Double) As Worksheet
+    On Error GoTo EH
+    EnsureSpecifikacijaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("SpecSubtitle").value = subtitle & "     Blokova: " & cnt
+
+    Dim startRow As Long: startRow = ws.Range("SpecStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 1000, 11))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, c As Long, outRow As Long
+    For i = 1 To nRows
+        outRow = startRow + i - 1
+        For c = 1 To 11
+            ws.cells(outRow, c).value = spec(i, c)
+        Next c
+    Next i
+
+    Dim ukRow As Long: ukRow = startRow + nRows
+    ws.cells(ukRow, 5).value = "UKUPNO"
+    ws.cells(ukRow, 7).value = sumKol
+    ws.cells(ukRow, 9).value = sumVred
+    ws.cells(ukRow, 10).value = sumPdv
+    ws.cells(ukRow, 11).value = sumUk
+    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 11)).Font.Bold = True
+
+    ws.Range(ws.cells(startRow, 7), ws.cells(ukRow, 7)).NumberFormat = "#,##0.###"
+    ws.Range(ws.cells(startRow, 8), ws.cells(ukRow, 11)).NumberFormat = "#,##0.00"
+
+    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 11)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlLandscape
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & (startRow - 1) & ":$" & (startRow - 1)
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 11)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillSpecifikacijaSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillSpecifikacijaSablon"
+End Function
