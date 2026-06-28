@@ -142,10 +142,10 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
         frm.Controls.Remove hnm
         On Error GoTo EH
 
-        ' Duzi naslovi se prelamaju u 2 reda; daj im visu kutiju (sa WordWrap)
-        ' da se ceo tekst vidi. Kratki naslovi ostaju 1 red.
+        ' Samo najduzi naslov (npr. "Ambalaza i pakovanje") se prelama u 2 reda;
+        ' njemu dajemo visu kutiju (WordWrap) da se 2. red vidi. Ostali 1 red.
         Dim hdrThisH As Single
-        hdrThisH = IIf(Len(grpName) > 12, HDRH + 13, HDRH)
+        hdrThisH = IIf(Len(grpName) > 18, HDRH + 13, HDRH)
         Set hl = frm.Controls.Add("Forms.Label.1", hnm, True)
         hl.Left = X
         hl.width = w
