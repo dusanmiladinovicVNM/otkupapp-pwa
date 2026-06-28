@@ -1108,7 +1108,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     ' Direktno u PDF pored radne sveske i otvori odmah (bez preview-a).
     ' Vremenski pecat u imenu -> nema "file in use" ako je prethodni PDF otvoren.
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    pdfPath = EnsureDocFolder(PDF_DIR_SPECIFIKACIJE) & "\Specifikacija_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
     Dim wasHidden As Boolean: wasHidden = (ws.Visible <> xlSheetVisible)
     ws.Visible = xlSheetVisible

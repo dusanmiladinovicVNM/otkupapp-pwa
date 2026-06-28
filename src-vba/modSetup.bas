@@ -432,6 +432,9 @@ Private Function EnsureAppFolders() As String
     EnsureFolder GetLocalConfigWithDefault("APP_TEMP_PATH", rootPath & "\Temp", "Privremeni folder")
     EnsureFolder GetLocalConfigWithDefault("APP_SECRETS_PATH", rootPath & "\Secrets", "Folder za lokalne tajne/token fajlove ako se koriste")
 
+    ' PDF dokument folderi (pored radne sveske) - da postoje i pre prvog PDF-a
+    EnsureAllDocFolders
+
     EnsureAppFolders = msg
 End Function
 
@@ -1081,6 +1084,50 @@ Private Sub EnsureFolder(ByVal folderPath As String)
 
 EH:
     LogSetup "ERROR", "Cannot create folder: " & folderPath & " | " & Err.description
+End Sub
+
+' Vraca putanju do podfoldera za generisane PDF dokumente (pored radne sveske) i
+' kreira ga ako fali. Npr. EnsureDocFolder(PDF_DIR_OTKUPNI). Fallback na TEMP ako
+' sveska nije snimljena; ako kreiranje ne uspe, vraca root (PDF se i dalje snima).
+Public Function EnsureDocFolder(ByVal category As String) As String
+    On Error GoTo EH
+    Dim rootPath As String
+    rootPath = ThisWorkbook.path
+    If Len(Trim$(rootPath)) = 0 Then rootPath = Environ$("TEMP")
+
+    If Len(Trim$(category)) = 0 Then
+        EnsureDocFolder = rootPath
+        Exit Function
+    End If
+
+    Dim target As String
+    target = rootPath & "\" & category
+    EnsureFolder target
+
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If fso.FolderExists(target) Then
+        EnsureDocFolder = target
+    Else
+        EnsureDocFolder = rootPath
+    End If
+    Exit Function
+EH:
+    EnsureDocFolder = rootPath
+End Function
+
+' Kreira sve PDF dokument foldere pored radne sveske (poziva se iz setup-a da
+' folderi postoje i pre prvog generisanog PDF-a).
+Public Sub EnsureAllDocFolders()
+    EnsureDocFolder PDF_DIR_OTKUPNI
+    EnsureDocFolder PDF_DIR_PRIJEMNICE
+    EnsureDocFolder PDF_DIR_OTPREMNICE
+    EnsureDocFolder PDF_DIR_REVERS
+    EnsureDocFolder PDF_DIR_KARTICE
+    EnsureDocFolder PDF_DIR_PALETNI
+    EnsureDocFolder PDF_DIR_PRERADA
+    EnsureDocFolder PDF_DIR_SPECIFIKACIJE
+    EnsureDocFolder PDF_DIR_IZVESTAJI
 End Sub
 
 Private Function PickFolder(ByVal titleText As String) As String

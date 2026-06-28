@@ -1123,7 +1123,7 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     
     ' PDF Export
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
+    pdfPath = EnsureDocFolder(PDF_DIR_KARTICE) & "\Kartica_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
     
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
@@ -1294,7 +1294,7 @@ Public Sub PrintKarticaAmbalazePDF(ByVal kooperantID As String, _
     End With
 
     Dim pdfPath As String
-    pdfPath = ThisWorkbook.path & "\KarticaAmbalaze_" & Replace(kooperantID, "-", "") & "_" & _
+    pdfPath = EnsureDocFolder(PDF_DIR_KARTICE) & "\KarticaAmbalaze_" & Replace(kooperantID, "-", "") & "_" & _
               Format$(datumOd, "YYYYMMDD") & "-" & Format$(datumDo, "YYYYMMDD") & ".pdf"
 
     ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _

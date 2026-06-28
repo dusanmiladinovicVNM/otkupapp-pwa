@@ -17,6 +17,17 @@ Public Const APP_VERSION As String = "2.6.0"
 Public Const REL_FOLDER_ID As String = "1zL7ronXQUsOY56p7rULsqrM1u1U8sxod"      ' AgriX_Release: kod + version.json
 Public Const BACKUP_FOLDER_ID As String = "199is7nQW3d4wfGX974AFTjpS4wo8itpl"   ' AgriX_Backup: xlsx data backup
 
+' --- PDF dokument folderi (generisani PDF-ovi -> svoj podfolder pored sveske) ---
+Public Const PDF_DIR_OTKUPNI As String = "Otkupni listovi"
+Public Const PDF_DIR_PRIJEMNICE As String = "Prijemnice"
+Public Const PDF_DIR_OTPREMNICE As String = "Otpremnice"
+Public Const PDF_DIR_REVERS As String = "Revers ambalaze"
+Public Const PDF_DIR_KARTICE As String = "Kartice kooperanata"
+Public Const PDF_DIR_PALETNI As String = "Paletni listovi"
+Public Const PDF_DIR_PRERADA As String = "Preradni listovi"
+Public Const PDF_DIR_SPECIFIKACIJE As String = "Specifikacije"
+Public Const PDF_DIR_IZVESTAJI As String = "Izvestaji"
+
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
 Public Const TBL_STANICE As String = "tblStanice"
