@@ -52,7 +52,7 @@ Public Function CheckForUpdateOnOpen() As Boolean
     Application.Visible = True
     If MsgBox("Postoji nova verzija programa: " & remoteVer & vbCrLf & _
               "Trenutna verzija: " & APP_VERSION & vbCrLf & vbCrLf & _
-              "Azurirati sada? (preporuceno)", _
+              Poruka("SU_AZURIRATI_SADA"), _
               vbYesNo + vbQuestion, APP_NAME) = vbYes Then
         CheckForUpdateOnOpen = True
     End If
@@ -70,7 +70,7 @@ Public Sub RunSelfUpdate()
 
     ' 1) Backup pre svega (rollback ako import pukne)
     If Not MakePreUpdateBackup() Then
-        If MsgBox("Backup pre azuriranja nije uspeo." & vbCrLf & _
+        If MsgBox(Poruka("SU_BACKUP_NIJE") & vbCrLf & _
                   "Nastaviti ipak?", vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
     End If
 
@@ -78,8 +78,8 @@ Public Sub RunSelfUpdate()
     Dim tempDir As String: tempDir = MakeTempDir()
     Dim n As Long: n = DownloadReleaseFiles(tempDir)
     If n = 0 Then
-        MsgBox "Preuzimanje nije uspelo (0 fajlova). Azuriranje otkazano." & vbCrLf & _
-               "Pokusajte ponovo ili preuzmite novu verziju rucno.", vbCritical, APP_NAME
+        MsgBox Poruka("SU_PREUZIMANJE_OTKAZANO") & vbCrLf & _
+               Poruka("SU_POKUSAJTE"), vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -114,14 +114,14 @@ Public Sub RunSelfUpdate()
     ThisWorkbook.Save
     On Error GoTo EH
 
-    MsgBox "Azuriranje zavrseno. Preuzeto fajlova: " & n & vbCrLf & _
+    MsgBox Poruka("SU_ZAVRSENO_FAJLOVA") & n & vbCrLf & _
            summary & vbCrLf & vbCrLf & _
            "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
            vbInformation, APP_NAME
     Exit Sub
 EH:
     LogErr SRC, Err.description
-    MsgBox "Greska pri azuriranju: " & Err.description & vbCrLf & vbCrLf & _
+    MsgBox Poruka("SU_GRESKA_AZURIRANJE") & Err.description & vbCrLf & vbCrLf & _
            "Ako program ne radi ispravno, vratite kopiju iz 'Backup' foldera " & _
            "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
@@ -173,14 +173,14 @@ Public Sub RunSelfUpdatePhase2()
     ThisWorkbook.Save
     On Error GoTo EH
 
-    MsgBox "Azuriranje zavrseno. Preuzeto: " & nTxt & ", 2. faza uvezeno: " & imported & _
+    MsgBox Poruka("SU_ZAVRSENO_PREUZETO") & nTxt & ", 2. faza uvezeno: " & imported & _
            IIf(Len(stillFail) > 0, vbCrLf & vbCrLf & "I DALJE NIJE USPELO:" & vbCrLf & stillFail, "") & vbCrLf & vbCrLf & _
            "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
            IIf(Len(stillFail) > 0, vbExclamation, vbInformation), APP_NAME
     Exit Sub
 EH:
     LogErr SRC, Err.description
-    MsgBox "Greska u 2. fazi azuriranja: " & Err.description & vbCrLf & _
+    MsgBox Poruka("SU_GRESKA_2FAZA") & Err.description & vbCrLf & _
            "Vratite kopiju iz 'Backup' foldera (AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
 
@@ -368,10 +368,7 @@ Private Function SelfVBAAccessible() As Boolean
     SelfVBAAccessible = (Err.Number = 0)
     On Error GoTo 0
     If Not SelfVBAAccessible Then
-        MsgBox "Nema programskog pristupa VBA projektu." & vbCrLf & vbCrLf & _
-               "Ukljuci: File > Options > Trust Center > Trust Center Settings >" & vbCrLf & _
-               "Macro Settings > 'Trust access to the VBA project object model'.", _
-               vbExclamation, APP_NAME
+        MsgBox Poruka("SU_TRUST"), vbExclamation, APP_NAME
     End If
 End Function
 
