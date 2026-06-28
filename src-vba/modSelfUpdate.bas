@@ -168,8 +168,8 @@ EH:
     LogErr SRC, Err.description
 End Function
 
-' Uvezi nov kod iz foldera (hibrid po tipu komponente; detalji u telu).
-' .bas/.cls = native Remove+Import; .frm/.doccls = code-merge (ExtractModuleCode).
+' Uvezi nov kod: CIST code-merge u mestu preko AddFromFile (detalji u telu).
+' Bez Remove (nema modX1 duplikata), bez Import (nema form-load greske).
 ' Dizajn formi (.frx/kontrole) se NE menja - za to treba pun reinstall .xlsm.
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
@@ -178,13 +178,15 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
     Dim er As Object: Set er = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> poslednja greska
     Dim pass As Long, anyLeft As Boolean, usedPass As Long
     Dim fil As Object, ext As String, baseName As String, fkey As String
-    Dim body As String, vbc As Object, proj As Object
+    Dim body As String, bodyFile As String, vbc As Object, proj As Object
 
-    ' Hibrid + retry (do 5 prolaza, sveza VBProject referenca svaki):
-    '  - .bas/.cls -> native Remove+Import (kao ImportAllVBA). AddFromString na
-    '    nekim .bas modulima baca RPC "disconnected" pa ih NE diramo tako.
-    '  - .frm/.doccls -> code-merge (forme: izbegni "Errors during load";
-    '    doccls: ne moze Remove). Dizajn formi (.frx) se ne dira.
+    ' CIST code-merge (NE Remove/Import): zameni kod komponente u mestu.
+    '  - body se vadi kroz ExtractModuleCode (strip header + Attribute linije);
+    '  - upise se u temp fajl pa ucita preko CodeModule.AddFromFile (DRUGI COM
+    '    code-path od AddFromString, koji je diskonektovao na 3 .bas modula).
+    '  - bez Remove -> nema modX1 duplikata; bez Import -> nema form-load greske.
+    ' Forme: code-behind se menja, dizajn (.frx) ostaje. Nova forma/sheet -> skip.
+    bodyFile = folder & "\_selfupdate_body.tmp"
     For pass = 1 To 5
         usedPass = pass
         anyLeft = False
@@ -197,24 +199,26 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                 If InStr(skip, "," & LCase$(baseName) & ",") = 0 And Not st.Exists(fkey) Then
                     On Error Resume Next
                     Err.Clear
-                    If ext = "bas" Or ext = "cls" Then
-                        proj.VBComponents.Remove proj.VBComponents(baseName)  ' ukloni istoimenu
-                        Err.Clear                                            ' ignorisi ako ne postoji
-                        proj.VBComponents.Import fil.path
+                    body = ExtractModuleCode(fil.path)
+                    Set vbc = Nothing
+                    Set vbc = proj.VBComponents(baseName)
+                    If Not vbc Is Nothing Then
+                        vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
+                        If Len(body) > 0 Then
+                            WriteUtf8None bodyFile, body
+                            vbc.CodeModule.AddFromFile bodyFile
+                        End If
+                        If Err.Number = 0 Then st(fkey) = "ok"
+                    ElseIf ext = "bas" Or ext = "cls" Then
+                        Set vbc = proj.VBComponents.Add(IIf(ext = "bas", 1, 2))
+                        vbc.name = baseName
+                        If Len(body) > 0 Then
+                            WriteUtf8None bodyFile, body
+                            vbc.CodeModule.AddFromFile bodyFile
+                        End If
                         If Err.Number = 0 Then st(fkey) = "ok"
                     Else
-                        body = ExtractModuleCode(fil.path)
-                        Set vbc = Nothing
-                        Set vbc = proj.VBComponents(baseName)
-                        If Not vbc Is Nothing Then
-                            With vbc.CodeModule
-                                If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
-                                If Len(body) > 0 Then .AddFromString body
-                            End With
-                            If Err.Number = 0 Then st(fkey) = "ok"
-                        Else
-                            st(fkey) = "skip"     ' nova forma/sheet -> reinstall
-                        End If
+                        st(fkey) = "skip"     ' nova forma/sheet -> reinstall
                     End If
                     If Err.Number <> 0 Then
                         er(fkey) = "[" & Err.Number & "] " & Err.description
@@ -227,6 +231,10 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         Next fil
         If Not anyLeft Then Exit For
     Next pass
+
+    On Error Resume Next
+    If Len(Dir(bodyFile)) > 0 Then Kill bodyFile
+    On Error GoTo 0
 
     Dim okN As Long, k As Variant, failS As String, skipS As String
     For Each k In st.Keys
@@ -244,6 +252,14 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         IIf(Len(skipS) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skipS, "") & _
         IIf(Len(failS) > 0, vbCrLf & "GRESKE (i posle retry-ja):" & vbCrLf & failS, "")
 End Function
+
+' Upisi tekst u fajl kao obican ANSI (bez BOM-a); body je ASCII pa je bezbedno.
+Private Sub WriteUtf8None(ByVal path As String, ByVal content As String)
+    Dim ff As Integer: ff = FreeFile
+    Open path For Output As #ff
+    Print #ff, content
+    Close #ff
+End Sub
 
 Private Function ReadAllText(ByVal path As String) As String
     Dim ff As Integer: ff = FreeFile
