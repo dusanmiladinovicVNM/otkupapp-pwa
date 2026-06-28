@@ -1575,3 +1575,42 @@ Private Sub WireLst(ByVal l As Object, ByVal act As String)
     Set w.lst = l
     mWrappers.Add w
 End Sub
+
+
+' Otpusti SVE module-level reference (dinamicke kontrole + clsBlokUI WithEvents)
+' i resetuj stanje. Poziva PrepareRuntimeForSelfUpdate pre self-update importa -
+' zivi event-sink obara CodeModule edit ([-2147417848]). Idempotentno.
+Public Sub OtkupBlok_Release()
+    On Error Resume Next
+    Set mForm = Nothing
+    Set mWrappers = Nothing
+    Set mPanelCtls = Nothing
+    Set mCenaBlok = Nothing
+    Set mBtnToggle = Nothing
+    Set mBtnStorno = Nothing
+    Set mBtnPrint = Nothing
+    Set mBtnFilter = Nothing
+    Set mBtnBiraj = Nothing
+    Set mBtnSpecDatum = Nothing
+    Set mBtnLost = Nothing
+    Set mBtnPreuzmi = Nothing
+    Set mTxtSpecOd = Nothing
+    Set mTxtSpecDo = Nothing
+    Set mLstOtp = Nothing
+    Set mLstBlok = Nothing
+    Set mTxtCenaOtp = Nothing
+    Set mLblUkupno = Nothing
+    Set mLblNapisano = Nothing
+    Set mLblPreostalo = Nothing
+    Set mLblUkupnoAmb = Nothing
+    Set mLblNapisanoAmb = Nothing
+    Set mLblPreostaloAmb = Nothing
+    Set mLblZbirna = Nothing
+    mBuilt = False
+    mVisible = False
+    mOrigWidth = 0
+    mActiveOtpID = ""
+    mFilterNezavrsene = False
+    mMultiMode = False
+    mLostMode = False
+End Sub

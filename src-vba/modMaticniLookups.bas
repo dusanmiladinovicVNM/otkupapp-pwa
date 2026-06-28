@@ -193,3 +193,11 @@ Private Sub ButtonActiveByTag(ByVal sekTag As String)
     Next c
 End Sub
 
+
+' Otpusti module-level reference (clsLookupMenuBtn WithEvents + dugmad) pre
+' self-update importa (zivi event-sink obara CodeModule edit). Idempotentno.
+Public Sub MaticniMenu_Release()
+    On Error Resume Next
+    Set mWrappers = Nothing
+    Set mBtns = Nothing
+End Sub

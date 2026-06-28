@@ -9,24 +9,25 @@ Option Explicit
 '     - cita AgriX_Release/version.json (modDrive), poredi app_version sa
 '       lokalnim APP_VERSION (modUpdateGate.VersionCompare).
 '     - ako je novije -> MsgBox vbYesNo. Na "Da" vrati True.
-'   StartApp tada: Application.OnTime Now, "RunSelfUpdate" + Exit Sub
-'     (ne importuje se u toku Workbook_Open/StartApp stack-a; tek na praznom
-'      stack-u i bez otvorene glavne forme).
-'   RunSelfUpdate(): backup -> download svih fajlova -> import -> save ->
-'     poruka "zatvori i otvori" (restart pokrece InitApp/ValidateAllTables sa
-'     novim kodom -> schema self-heal kroz postojeci put, bez rucne migracije).
+'   StartApp tada: Application.OnTime Now, "RunSelfUpdate" + Exit Sub.
+'   RunSelfUpdate(): backup -> download -> PrepareRuntimeForSelfUpdate ->
+'     code-merge import -> save -> "zatvori i otvori".
+'
+' KLJUCNO (root cause): moduli koji grade dinamicke kontrole sa WithEvents
+' (modOtkupBlok/modPodesavanja/modMaticniLookups/modKarticaDetalji) drze ZIVE
+' event-sink reference; dok su zive, editovanje njihovog CodeModule-a obara COM
+' ([-2147417848] "disconnected"). Zato PrepareRuntimeForSelfUpdate PRE importa
+' oslobodi sve te reference (Release/Reset) + unload sve forme + stop scheduled
+' sync. Posle toga je CIST code-merge (AddFromString) bezbedan za SVE module -
+' bez Remove/Import (nema modX1 duplikata), bez form-load greske.
 '
 ' OPT-IN: radi samo ako je REL_FOLDER_ID postavljen (modConfig).
 ' FAIL-SOFT: svaka greska u proveri samo se loguje, start ide dalje.
 ' Reuse: modDrive (download/list), modUpdateGate.VersionCompare,
-'        modGoogleAuth.ExtractJsonStringGoogle.
-' VBA-pristup / import helperi su LOKALNI (Self*) - NE zovu modVbaTools, jer
-' ImportAllVBA preskace modVbaTools (SELF_MODULE) pa njegov Public ne stigne na
-' klijenta ("sub or function not defined"). Zato je modSelfUpdate samodovoljan.
-'
-' Skip pri importu: moduli koji su NA call stack-u (modSelfUpdate) + dev tool
-' (modVbaTools, klijent ga nikad ne pokrece) -> njih ne diramo da se kod koji
-' se izvrsava ne obrise. ThisWorkbook se MERGE-uje (ne brise).
+'        modGoogleAuth.ExtractJsonStringGoogle, StopScheduledSync, *_Release/Reset.
+' VBA-pristup helperi su LOKALNI (Self*) - modVbaTools se ne update-uje na
+' klijentu (SELF_MODULE skip) pa njegov Public ne stigne.
+' Skip pri importu: modSelfUpdate (na stack-u) + modVbaTools (dev tool).
 ' ASCII-only modul (vidi CLAUDE.md, sekcija 4 - encoding).
 ' ============================================================
 
@@ -64,11 +65,13 @@ Public Sub RunSelfUpdate()
 
     If Not SelfVBAAccessible() Then Exit Sub
 
+    ' 1) Backup pre svega (rollback ako import pukne)
     If Not MakePreUpdateBackup() Then
         If MsgBox("Backup pre azuriranja nije uspeo." & vbCrLf & _
                   "Nastaviti ipak?", vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
     End If
 
+    ' 2) Download svih fajlova iz AgriX_Release u temp folder
     Dim tempDir As String: tempDir = MakeTempDir()
     Dim n As Long: n = DownloadReleaseFiles(tempDir)
     If n = 0 Then
@@ -77,31 +80,13 @@ Public Sub RunSelfUpdate()
         Exit Sub
     End If
 
-    ' Faza 1: code-merge svih komponenti (AddFromFile). failed = oni koje ne moze.
-    Dim failed As Object: Set failed = CreateObject("Scripting.Dictionary")
-    Dim summary As String: summary = ImportFromFolder(tempDir, SKIP_MODULES, failed)
+    ' 3) Oslobodi runtime stanje (root cause fix) PRE importa
+    PrepareRuntimeForSelfUpdate
 
-    ' Faza 2 (za module koje code-merge ne moze - dinamicke kontrole/WithEvents):
-    ' ukloni ih SADA (Remove se "flush"-uje tek kad makro zavrsi), pa ih uvezi u
-    ' sledecem OnTime prolazu Import-om (rekreacija komponente; drugi mehanizam od
-    ' CodeModule edita - ne diskonektuje; Import ovih modula radi i u ImportAllVBA).
-    ' Flush izmedju faza -> Import pravi CIST modul (bez modX1 duplikata).
-    If failed.count > 0 Then
-        Dim proj As Object: Set proj = ThisWorkbook.VBProject
-        Dim k As Variant
-        For Each k In failed.Keys
-            On Error Resume Next
-            proj.VBComponents.Remove proj.VBComponents(CStr(k))
-            On Error GoTo EH
-        Next k
-        SaveSetting "AgriXSelfUpdate", "phase2", "dir", tempDir
-        SaveSetting "AgriXSelfUpdate", "phase2", "n", CStr(n)
-        ' +2s: da queued Remove sigurno bude flush-ovan pre nego sto faza 2
-        ' proveri koji moduli nedostaju (inace bi ih videla kao postojece).
-        Application.OnTime Now + TimeSerial(0, 0, 2), "RunSelfUpdatePhase2"
-        Exit Sub                  ' kraj makroa -> Remove se flush-uje -> faza 2
-    End If
+    ' 4) Code-merge import svih komponenti
+    Dim summary As String: summary = ImportFromFolder(tempDir, SKIP_MODULES)
 
+    ' 5) Snimi (restart aktivira nov kod + schema self-heal kroz InitApp)
     On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo EH
@@ -118,61 +103,31 @@ EH:
            "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
 
-' Faza 2 (Application.OnTime; posle flush-a Remove-ova iz faze 1). Uvezi (Import)
-' module koji su uklonjeni u fazi 1 - sad su stvarno obrisani pa Import pravi
-' cist modul (bez duplikata). Public zbog OnTime.
-Public Sub RunSelfUpdatePhase2()
-    Const SRC As String = "modSelfUpdate.RunSelfUpdatePhase2"
-    On Error GoTo EH
-
-    Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", "phase2", "dir", "")
-    Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", "phase2", "n", "?")
-    DeleteSetting "AgriXSelfUpdate", "phase2"
-    If Len(p2dir) = 0 Then Exit Sub
-
-    Dim proj As Object: Set proj = ThisWorkbook.VBProject
-    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
-    Dim fil As Object, ext As String, baseName As String, imported As Long, stillFail As String
-    Dim comExists As Boolean, tmpc As Object
-
-    For Each fil In fso.GetFolder(p2dir).files
-        ext = LCase$(fso.GetExtensionName(fil.name))
-        If ext = "bas" Or ext = "cls" Then
-            baseName = fso.GetBaseName(fil.name)
-            comExists = True
-            On Error Resume Next
-            Set tmpc = Nothing
-            Set tmpc = proj.VBComponents(baseName)
-            comExists = Not (tmpc Is Nothing)
-            On Error GoTo 0
-            If Not comExists Then              ' uvezi samo uklonjene (faza 1)
-                On Error Resume Next
-                Err.Clear
-                proj.VBComponents.Import fil.path
-                If Err.Number = 0 Then
-                    imported = imported + 1
-                Else
-                    stillFail = stillFail & "  " & fil.name & " -> [" & Err.Number & "] " & Err.description & vbCrLf
-                End If
-                Err.Clear
-                On Error GoTo 0
-            End If
-        End If
-    Next fil
-
+' Oslobodi runtime stanje pre self-update importa: ugasi evente/sync, otpusti
+' module-level reference dinamickih kontrola/WithEvents (inace CodeModule edit
+' tih modula diskonektuje COM), unload sve forme. Best-effort (On Error Resume
+' Next) - ako neki Release fali (nije u toj verziji), preskoci.
+Private Sub PrepareRuntimeForSelfUpdate()
     On Error Resume Next
-    ThisWorkbook.Save
-    On Error GoTo EH
 
-    MsgBox "Azuriranje zavrseno. Preuzeto: " & nTxt & ", 2. faza uvezeno: " & imported & _
-           IIf(Len(stillFail) > 0, vbCrLf & vbCrLf & "I DALJE NIJE USPELO:" & vbCrLf & stillFail, "") & vbCrLf & vbCrLf & _
-           "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
-           IIf(Len(stillFail) > 0, vbExclamation, vbInformation), APP_NAME
-    Exit Sub
-EH:
-    LogErr SRC, Err.description
-    MsgBox "Greska u 2. fazi azuriranja: " & Err.description & vbCrLf & _
-           "Vratite kopiju iz 'Backup' foldera (AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    StopScheduledSync               ' modGoogleSyncOrchestrator (otkazi pending OnTime sync)
+
+    ' Release module-level WithEvents/kontrole (dinamicki paneli)
+    OtkupBlok_Release               ' modOtkupBlok (clsBlokUI)
+    Podesavanja_Release             ' modPodesavanja (clsConfigBtn)
+    MaticniMenu_Release             ' modMaticniLookups (clsLookupMenuBtn)
+    KarticaDetalji_Reset            ' modKarticaDetalji
+
+    ' Unload sve forme (otpusti njihove kontrole / event sink-ove)
+    Do While VBA.UserForms.count > 0
+        Unload VBA.UserForms(0)
+    Loop
+
+    DoEvents
+    On Error GoTo 0
 End Sub
 
 ' ---------------- private ----------------
@@ -243,26 +198,21 @@ EH:
     LogErr SRC, Err.description
 End Function
 
-' Uvezi nov kod: CIST code-merge u mestu preko AddFromFile (detalji u telu).
-' Bez Remove (nema modX1 duplikata), bez Import (nema form-load greske).
-' Dizajn formi (.frx/kontrole) se NE menja - za to treba pun reinstall .xlsm.
-Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String, ByRef failedOut As Object) As String
+' Cist code-merge u mestu (DeleteLines + AddFromString). Radi za SVE jer je
+' runtime stanje oslobodjeno (PrepareRuntimeForSelfUpdate) pa CodeModule edit
+' vise ne diskonektuje. Bez Remove (nema modX1 duplikata), bez Import (nema
+' form-load greske). Dizajn formi (.frx) se NE menja - za to treba pun reinstall.
+' Retry (3 prolaza) + per-modul greska kao safety net.
+Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
     Dim st As Object: Set st = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> "ok"/"skip"
     Dim er As Object: Set er = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> poslednja greska
     Dim pass As Long, anyLeft As Boolean, usedPass As Long
     Dim fil As Object, ext As String, baseName As String, fkey As String
-    Dim body As String, bodyFile As String, vbc As Object, proj As Object
+    Dim body As String, vbc As Object, proj As Object
 
-    ' CIST code-merge (NE Remove/Import): zameni kod komponente u mestu.
-    '  - body se vadi kroz ExtractModuleCode (strip header + Attribute linije);
-    '  - upise se u temp fajl pa ucita preko CodeModule.AddFromFile (DRUGI COM
-    '    code-path od AddFromString, koji je diskonektovao na 3 .bas modula).
-    '  - bez Remove -> nema modX1 duplikata; bez Import -> nema form-load greske.
-    ' Forme: code-behind se menja, dizajn (.frx) ostaje. Nova forma/sheet -> skip.
-    bodyFile = folder & "\_selfupdate_body.tmp"
-    For pass = 1 To 5
+    For pass = 1 To 3
         usedPass = pass
         anyLeft = False
         Set proj = ThisWorkbook.VBProject
@@ -278,19 +228,14 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                     Set vbc = Nothing
                     Set vbc = proj.VBComponents(baseName)
                     If Not vbc Is Nothing Then
-                        vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
-                        If Len(body) > 0 Then
-                            WriteUtf8None bodyFile, body
-                            vbc.CodeModule.AddFromFile bodyFile
-                        End If
+                        If vbc.CodeModule.CountOfLines > 0 Then _
+                            vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
+                        If Len(body) > 0 Then vbc.CodeModule.AddFromString body
                         If Err.Number = 0 Then st(fkey) = "ok"
                     ElseIf ext = "bas" Or ext = "cls" Then
                         Set vbc = proj.VBComponents.Add(IIf(ext = "bas", 1, 2))
                         vbc.name = baseName
-                        If Len(body) > 0 Then
-                            WriteUtf8None bodyFile, body
-                            vbc.CodeModule.AddFromFile bodyFile
-                        End If
+                        If Len(body) > 0 Then vbc.CodeModule.AddFromString body
                         If Err.Number = 0 Then st(fkey) = "ok"
                     Else
                         st(fkey) = "skip"     ' nova forma/sheet -> reinstall
@@ -307,10 +252,6 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         If Not anyLeft Then Exit For
     Next pass
 
-    On Error Resume Next
-    If Len(Dir(bodyFile)) > 0 Then Kill bodyFile
-    On Error GoTo 0
-
     Dim okN As Long, k As Variant, failS As String, skipS As String
     For Each k In st.Keys
         If st(k) = "ok" Then
@@ -320,24 +261,13 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         End If
     Next k
     For Each k In er.Keys
-        If Not st.Exists(CStr(k)) Then
-            failS = failS & "  " & k & " -> " & er(k) & vbCrLf
-            If Not failedOut Is Nothing Then failedOut(fso.GetBaseName(CStr(k))) = folder & "\" & CStr(k)
-        End If
+        If Not st.Exists(CStr(k)) Then failS = failS & "  " & k & " -> " & er(k) & vbCrLf
     Next k
 
     ImportFromFolder = "Azurirano: " & okN & " (prolaza: " & usedPass & ")" & _
         IIf(Len(skipS) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skipS, "") & _
-        IIf(Len(failS) > 0, vbCrLf & "GRESKE (i posle retry-ja):" & vbCrLf & failS, "")
+        IIf(Len(failS) > 0, vbCrLf & "GRESKE:" & vbCrLf & failS, "")
 End Function
-
-' Upisi tekst u fajl kao obican ANSI (bez BOM-a); body je ASCII pa je bezbedno.
-Private Sub WriteUtf8None(ByVal path As String, ByVal content As String)
-    Dim ff As Integer: ff = FreeFile
-    Open path For Output As #ff
-    Print #ff, content
-    Close #ff
-End Sub
 
 Private Function ReadAllText(ByVal path As String) As String
     Dim ff As Integer: ff = FreeFile
@@ -345,9 +275,6 @@ Private Function ReadAllText(ByVal path As String) As String
     If LOF(ff) > 0 Then ReadAllText = Input$(LOF(ff), ff)
     Close #ff
 End Function
-
-' --- lokalni helperi (kopija logike iz modVbaTools; samodovoljno jer se
-'     modVbaTools ne update-uje na klijentu - SELF_MODULE skip u ImportAllVBA) ---
 
 ' True ako VBA projekat ima programski pristup (inace prijavi sta da ukljuci).
 Private Function SelfVBAAccessible() As Boolean
@@ -363,7 +290,6 @@ Private Function SelfVBAAccessible() As Boolean
                vbExclamation, APP_NAME
     End If
 End Function
-
 
 ' Izvuci editabilni kod iz izvoznog VBA fajla (.bas/.cls/.frm/.doccls) bezbedan
 ' za AddFromString:
@@ -412,4 +338,3 @@ Private Function ExtractModuleCode(ByVal path As String) As String
 
     ExtractModuleCode = body
 End Function
-
