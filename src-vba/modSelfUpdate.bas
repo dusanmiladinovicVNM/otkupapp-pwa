@@ -19,7 +19,10 @@ Option Explicit
 ' OPT-IN: radi samo ako je REL_FOLDER_ID postavljen (modConfig).
 ' FAIL-SOFT: svaka greska u proveri samo se loguje, start ide dalje.
 ' Reuse: modDrive (download/list), modUpdateGate.VersionCompare,
-'        modVbaTools.VBAProjectAccessible/FileHasVBHeader/ReadCodeBody.
+'        modGoogleAuth.ExtractJsonStringGoogle.
+' VBA-pristup / import helperi su LOKALNI (Self*) - NE zovu modVbaTools, jer
+' ImportAllVBA preskace modVbaTools (SELF_MODULE) pa njegov Public ne stigne na
+' klijenta ("sub or function not defined"). Zato je modSelfUpdate samodovoljan.
 '
 ' Skip pri importu: moduli koji su NA call stack-u (modSelfUpdate) + dev tool
 ' (modVbaTools, klijent ga nikad ne pokrece) -> njih ne diramo da se kod koji
@@ -60,7 +63,7 @@ Public Sub RunSelfUpdate()
     On Error GoTo EH
 
     ' Preduslov: programski pristup VBA projektu (helper sam prijavi ako fali).
-    If Not VBAProjectAccessible() Then Exit Sub
+    If Not SelfVBAAccessible() Then Exit Sub
 
     ' 1) Backup pre svega (rollback ako import pukne)
     If Not MakePreUpdateBackup() Then
@@ -165,8 +168,8 @@ EH:
 End Function
 
 ' Import iz foldera (adaptirano iz modVbaTools.ImportAllVBA; razlike: proizvoljan
-' folder, multi-modul skip-lista, vraca summary string, ne MsgBox). Reuse
-' modVbaTools.FileHasVBHeader/ReadCodeBody (Public).
+' folder, multi-modul skip-lista, vraca summary string, ne MsgBox). Koristi
+' LOKALNE Self* helpere (ne modVbaTools - vidi zaglavlje modula).
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
@@ -185,7 +188,7 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
             If Not vbc Is Nothing Then
                 With vbc.CodeModule
                     If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
-                    .AddFromString ReadCodeBody(fil.path)
+                    .AddFromString SelfReadCodeBody(fil.path)
                 End With
                 imported = imported + 1
             End If
@@ -206,7 +209,7 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                 proj.VBComponents.Remove proj.VBComponents(baseName)
                 On Error GoTo 0
 
-                If FileHasVBHeader(fil.path) Then
+                If SelfHasVBHeader(fil.path) Then
                     proj.VBComponents.Import fil.path
                     imported = imported + 1
                 Else
@@ -235,4 +238,53 @@ Private Function ReadAllText(ByVal path As String) As String
     Open path For Input As #ff
     If LOF(ff) > 0 Then ReadAllText = Input$(LOF(ff), ff)
     Close #ff
+End Function
+
+' --- lokalni helperi (kopija logike iz modVbaTools; samodovoljno jer se
+'     modVbaTools ne update-uje na klijentu - SELF_MODULE skip u ImportAllVBA) ---
+
+' True ako VBA projekat ima programski pristup (inace prijavi sta da ukljuci).
+Private Function SelfVBAAccessible() As Boolean
+    On Error Resume Next
+    Dim c As Long
+    c = ThisWorkbook.VBProject.VBComponents.count
+    SelfVBAAccessible = (Err.Number = 0)
+    On Error GoTo 0
+    If Not SelfVBAAccessible Then
+        MsgBox "Nema programskog pristupa VBA projektu." & vbCrLf & vbCrLf & _
+               "Ukljuci: File > Options > Trust Center > Trust Center Settings >" & vbCrLf & _
+               "Macro Settings > 'Trust access to the VBA project object model'.", _
+               vbExclamation, APP_NAME
+    End If
+End Function
+
+Private Function SelfHasVBHeader(ByVal path As String) As Boolean
+    Dim ff As Integer, s As String
+    ff = FreeFile
+    Open path For Input As #ff
+    If Not EOF(ff) Then Line Input #ff, s
+    Close #ff
+    SelfHasVBHeader = (InStr(1, s, "Attribute VB_Name", vbTextCompare) > 0) _
+                   Or (UCase$(Left$(LTrim$(s), 7)) = "VERSION")
+End Function
+
+' Vrati samo kod (preskoci VBA header blok ako postoji) - za .doccls merge.
+Private Function SelfReadCodeBody(ByVal path As String) As String
+    Dim ff As Integer, s As String, ls As String, body As String, started As Boolean
+    ff = FreeFile
+    Open path For Input As #ff
+    Do While Not EOF(ff)
+        Line Input #ff, s
+        If started Then
+            body = body & vbCrLf & s
+        Else
+            ls = LTrim$(s)
+            If Not (ls Like "VERSION*" Or ls = "BEGIN" Or ls = "END" _
+                Or ls Like "MultiUse =*" Or ls Like "Attribute VB_*" Or Len(Trim$(s)) = 0) Then
+                started = True: body = s
+            End If
+        End If
+    Loop
+    Close #ff
+    SelfReadCodeBody = body
 End Function

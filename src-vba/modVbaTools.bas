@@ -118,10 +118,8 @@ Public Sub ImportAllVBA()
 End Sub
 
 ' ---------------- helperi ----------------
-' VBAProjectAccessible / FileHasVBHeader / ReadCodeBody su Public radi reuse-a
-' u modSelfUpdate (self-update import koristi iste provere; ne dupliramo).
 
-Public Function VBAProjectAccessible() As Boolean
+Private Function VBAProjectAccessible() As Boolean
     On Error Resume Next
     Dim c As Long
     c = ThisWorkbook.VBProject.VBComponents.count
@@ -135,7 +133,7 @@ Public Function VBAProjectAccessible() As Boolean
     End If
 End Function
 
-Public Function FileHasVBHeader(ByVal path As String) As Boolean
+Private Function FileHasVBHeader(ByVal path As String) As Boolean
     Dim ff As Integer, s As String
     ff = FreeFile
     Open path For Input As #ff
@@ -146,7 +144,7 @@ Public Function FileHasVBHeader(ByVal path As String) As Boolean
 End Function
 
 ' Vrati samo kod (preskoci VBA header blok ako postoji) - za .doccls merge.
-Public Function ReadCodeBody(ByVal path As String) As String
+Private Function ReadCodeBody(ByVal path As String) As String
     Dim ff As Integer, s As String, ls As String, body As String, started As Boolean
     ff = FreeFile
     Open path For Input As #ff
