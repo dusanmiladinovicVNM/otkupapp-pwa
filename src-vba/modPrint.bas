@@ -1878,9 +1878,9 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
         .Borders.Weight = xlThin
     End With
 
-    Dim sgn As Long: sgn = tot.row + 3
-    ws.cells(sgn, 2).value = "Potpis kupca: ___________"
-    ws.cells(sgn, 5).value = "Potpis prodavca: ___________"
+    Dim sgnRow As Long: sgnRow = tot.row + 3
+    ws.cells(sgnRow, 2).value = "Potpis kupca: ___________"
+    ws.cells(sgnRow, 5).value = "Potpis prodavca: ___________"
 
     On Error Resume Next
     Application.PrintCommunication = False
@@ -1895,7 +1895,7 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
         .TopMargin = Application.InchesToPoints(0.5)
         .BottomMargin = Application.InchesToPoints(0.5)
         .CenterHorizontally = True
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgn, 6)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgnRow, 6)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
