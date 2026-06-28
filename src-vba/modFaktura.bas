@@ -508,23 +508,6 @@ EH:
     Err.Raise Err.Number, "PrintFaktura", Err.description
 End Sub
 
-Private Sub ClearFakturaStavkeArea(ByVal ws As Worksheet)
-    On Error GoTo EH
-
-    Dim startCell As Range
-    Set startCell = ws.Range("StavkaStart")
-
-    ' Cisti 50 redova x 6 kolona:
-    ' R.br | BrojPrij | Klasa | Kolicina | Cena | Vrednost
-    startCell.Resize(50, 6).ClearContents
-
-    Exit Sub
-
-EH:
-    LogErr "ClearFakturaStavkeArea"
-    Err.Raise Err.Number, "ClearFakturaStavkeArea", Err.description
-End Sub
-
 Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
     On Error GoTo EH
 
