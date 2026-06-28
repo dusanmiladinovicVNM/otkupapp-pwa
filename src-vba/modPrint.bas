@@ -1752,3 +1752,156 @@ EH:
     LogErr "modPrint.EnsureIzdavanjeAmbalazeSablon"
 End Sub
 
+
+' ============================================================
+' FAKTURA - generisan house-style sablon (zamena za rucni FakturaSablon).
+' EnsureFakturaSablon (H1 verzija, isti obrazac kao PaletaSablon) +
+' FillFakturaSablon. Podatke prikuplja modFaktura.PrintFaktura.
+' ============================================================
+Public Sub EnsureFakturaSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_FAKTURA_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 22
+    ws.columns("C").ColumnWidth = 8
+    ws.columns("D").ColumnWidth = 13
+    ws.columns("E").ColumnWidth = 13
+    ws.columns("F").ColumnWidth = 15
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 6, 6)
+    r = DocTitleBlock(ws, r, 6, "Racun za isporucene poljoprivredne proizvode", "FAKTURA")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Broj:"
+    ws.cells(fr + 1, 1).value = "Datum:"
+    ws.cells(fr + 2, 1).value = "Kupac:"
+    ws.cells(fr, 2).name = "FakBroj"
+    ws.cells(fr + 1, 2).name = "FakDatum"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 6)).Merge
+    ws.cells(fr + 2, 2).name = "FakKupac"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Broj prijemnice"
+    ws.cells(hdr, 3).value = "Klasa"
+    ws.cells(hdr, 4).value = "Kolicina"
+    ws.cells(hdr, 5).value = "Cena"
+    ws.cells(hdr, 6).value = "Vrednost"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 6))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "FakStavkaStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureFakturaSablon"
+End Sub
+
+' Popuni FakturaSablon iz prikupljenih podataka. stavke(1..nStavke, 1..5):
+' 1=BrojPrijemnice 2=Klasa 3=Kolicina 4=Cena 5=Vrednost. Vraca sheet.
+Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, _
+        ByVal kupacNaziv As String, ByVal stavke As Variant, ByVal nStavke As Long, _
+        ByVal ukupno As Double) As Worksheet
+    On Error GoTo EH
+    EnsureFakturaSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+
+    ws.Range("FakBroj").value = broj
+    ws.Range("FakDatum").value = datum
+    ws.Range("FakDatum").NumberFormat = "DD.MM.YYYY"
+    ws.Range("FakKupac").value = kupacNaziv
+
+    Dim startCell As Range: Set startCell = ws.Range("FakStavkaStart")
+    With ws.Range(startCell, startCell.Offset(80, 5))
+        .ClearContents
+        .Borders.LineStyle = xlNone
+        .Interior.ColorIndex = xlNone
+    End With
+
+    Dim i As Long
+    For i = 1 To nStavke
+        startCell.Offset(i - 1, 0).value = i
+        startCell.Offset(i - 1, 1).value = stavke(i, 1)
+        startCell.Offset(i - 1, 2).value = stavke(i, 2)
+        startCell.Offset(i - 1, 3).value = stavke(i, 3)
+        startCell.Offset(i - 1, 4).value = stavke(i, 4)
+        startCell.Offset(i - 1, 5).value = stavke(i, 5)
+    Next i
+
+    If nStavke > 0 Then
+        With ws.Range(startCell, startCell.Offset(nStavke - 1, 5))
+            .Borders.LineStyle = xlContinuous
+            .Borders.Weight = xlThin
+        End With
+        ws.Range(startCell, startCell.Offset(nStavke - 1, 0)).HorizontalAlignment = xlCenter
+        ws.Range(startCell.Offset(0, 2), startCell.Offset(nStavke - 1, 2)).HorizontalAlignment = xlCenter
+        ws.Range(startCell.Offset(0, 3), startCell.Offset(nStavke - 1, 5)).NumberFormat = "#,##0.00"
+    End If
+
+    Dim tot As Range: Set tot = startCell.Offset(nStavke, 0)
+    ws.Range(tot, tot.Offset(0, 4)).Merge
+    tot.value = "UKUPNO:"
+    tot.HorizontalAlignment = xlRight
+    tot.Font.Bold = True
+    tot.Offset(0, 5).value = ukupno
+    tot.Offset(0, 5).NumberFormat = "#,##0.00"
+    tot.Offset(0, 5).Font.Bold = True
+    With ws.Range(tot, tot.Offset(0, 5))
+        .Interior.Color = DocColHeaderFill()
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+
+    Dim sgn As Long: sgn = tot.row + 3
+    ws.cells(sgn, 2).value = "Potpis kupca: ___________"
+    ws.cells(sgn, 5).value = "Potpis prodavca: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgn, 6)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Set FillFakturaSablon = ws
+    Exit Function
+EH:
+    LogErr "modPrint.FillFakturaSablon"
+End Function

@@ -445,86 +445,36 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
 
     If kupacNaziv = "" Then kupacNaziv = kupacID
 
-    Dim wsSablon As Worksheet
-    Set wsSablon = Nothing
-
-    On Error Resume Next
-    Set wsSablon = ThisWorkbook.Worksheets(WS_FAKTURA_SABLON)
-    On Error GoTo EH
-
-    If wsSablon Is Nothing Then
-        Err.Raise vbObjectError + 1733, "PrintFaktura", _
-                  "FakturaSablon sheet ne postoji."
-    End If
-
-    With wsSablon
-        .Range("BrojFakture").value = data(fRow, colFakBroj)
-        .Range("DatumFakture").value = data(fRow, colFakDatum)
-        .Range("KupacNaziv").value = kupacNaziv
-    End With
-
-    ClearFakturaStavkeArea wsSablon
-
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-
     If IsEmpty(stavkeData) Then
         Err.Raise vbObjectError + 1734, "PrintFaktura", _
                   "Faktura nema stavke: " & fakturaID
     End If
 
-    Dim colStFakID As Long
-    Dim colStBrojPrij As Long
-    Dim colStKlasa As Long
-    Dim colStKol As Long
-    Dim colStCena As Long
+    Dim colStFakID As Long, colStBrojPrij As Long, colStKlasa As Long
+    Dim colStKol As Long, colStCena As Long
+    colStFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "PrintFaktura")
+    colStBrojPrij = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRIJEMNICE, "PrintFaktura")
+    colStKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA, "PrintFaktura")
+    colStKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, "PrintFaktura")
+    colStCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, "PrintFaktura")
 
-    colStFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, _
-                                    "PrintFaktura")
-    colStBrojPrij = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRIJEMNICE, _
-                                       "PrintFaktura")
-    colStKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA, _
-                                    "PrintFaktura")
-    colStKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, _
-                                  "PrintFaktura")
-    colStCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, _
-                                   "PrintFaktura")
-
-    Dim startCell As Range
-    Set startCell = wsSablon.Range("StavkaStart")
-
-    Dim outRow As Long
-    Dim j As Long
-    Dim kolicina As Double
-    Dim cena As Double
-    Dim vrednost As Double
-
+    Dim stavke() As Variant
+    ReDim stavke(1 To UBound(stavkeData, 1), 1 To 5)
+    Dim outRow As Long, j As Long
+    Dim kolicina As Double, cena As Double
     For j = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(j, colStFakID))) = fakturaID Then
             outRow = outRow + 1
-
-            kolicina = 0
-            cena = 0
-            vrednost = 0
-
+            kolicina = 0: cena = 0
             If IsNumeric(stavkeData(j, colStKol)) Then kolicina = CDbl(stavkeData(j, colStKol))
             If IsNumeric(stavkeData(j, colStCena)) Then cena = CDbl(stavkeData(j, colStCena))
-
-            vrednost = kolicina * cena
-
-            ' Pretpostavljeni layout od StavkaStart:
-            ' Col 0 = R.br.
-            ' Col 1 = Broj prijemnice
-            ' Col 2 = Klasa
-            ' Col 3 = Kolicina
-            ' Col 4 = Cena
-            ' Col 5 = Vrednost
-            startCell.Offset(outRow - 1, 0).value = outRow
-            startCell.Offset(outRow - 1, 1).value = stavkeData(j, colStBrojPrij)
-            startCell.Offset(outRow - 1, 2).value = stavkeData(j, colStKlasa)
-            startCell.Offset(outRow - 1, 3).value = kolicina
-            startCell.Offset(outRow - 1, 4).value = cena
-            startCell.Offset(outRow - 1, 5).value = vrednost
+            stavke(outRow, 1) = stavkeData(j, colStBrojPrij)
+            stavke(outRow, 2) = stavkeData(j, colStKlasa)
+            stavke(outRow, 3) = kolicina
+            stavke(outRow, 4) = cena
+            stavke(outRow, 5) = kolicina * cena
         End If
     Next j
 
@@ -533,20 +483,22 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
                   "Nisu pronadene stavke za fakturu: " & fakturaID
     End If
 
-    On Error Resume Next
-    wsSablon.Range("UkupnoFaktura").value = data(fRow, colFakIznos)
-    On Error GoTo EH
+    Dim ukupno As Double
+    If IsNumeric(data(fRow, colFakIznos)) Then ukupno = CDbl(data(fRow, colFakIznos))
+
+    Dim ws As Worksheet
+    Set ws = FillFakturaSablon(CStr(data(fRow, colFakBroj)), data(fRow, colFakDatum), _
+                               kupacNaziv, stavke, outRow, ukupno)
+    If ws Is Nothing Then Exit Sub
 
     Dim mode As String
     mode = DocResolveMode(GetConfigValue(CFG_FAKTURA_PRINT_MODE), "PRINT")
     Select Case mode
         Case "PRINT", "PREVIEW"
-            DocPrintWs wsSablon, mode
+            DocPrintWs ws, mode
         Case "PDF"
-            Dim fpdf As String
-            fpdf = ThisWorkbook.path & "\Faktura_" & _
-                   Replace(CStr(data(fRow, colFakBroj)), "/", "-") & ".pdf"
-            DocExportPdf wsSablon, fpdf, True
+            DocExportPdf ws, ThisWorkbook.path & "\Faktura_" & _
+                         Replace(CStr(data(fRow, colFakBroj)), "/", "-") & ".pdf", True
         ' OFF -> bez izlaza
     End Select
     Exit Sub
