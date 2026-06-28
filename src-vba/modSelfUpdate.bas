@@ -168,12 +168,9 @@ EH:
     LogErr SRC, Err.description
 End Function
 
-' Zameni KOD postojecih komponenti - NE Remove/Import. Remove+Import formi u
-' runtime-u rusi projekat ("Errors during load" / korupcija). Kod svake
-' komponente se vadi kroz ExtractModuleCode (strip header + sve Attribute
-' linije, da AddFromString ne baci "Syntax error" na member atributima).
-' Dizajn formi (.frx/kontrole) se NE menja - za izmene dizajna formi treba
-' pun reinstall .xlsm.
+' Uvezi nov kod iz foldera (hibrid po tipu komponente; detalji u telu).
+' .bas/.cls = native Remove+Import; .frm/.doccls = code-merge (ExtractModuleCode).
+' Dizajn formi (.frx/kontrole) se NE menja - za to treba pun reinstall .xlsm.
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
@@ -181,11 +178,13 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
     Dim er As Object: Set er = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> poslednja greska
     Dim pass As Long, anyLeft As Boolean, usedPass As Long
     Dim fil As Object, ext As String, baseName As String, fkey As String
-    Dim body As String, vbc As Object, t As Long, proj As Object
+    Dim body As String, vbc As Object, proj As Object
 
-    ' Vise prolaza: RPC "disconnected" greska (zamena koda modula sa zivim
-    ' module-level stanjem iz InitApp) je TRANZITORNA - retry je resava, isto
-    ' kao "ImportAllVBA uradi opet". Sveza VBProject referenca svaki prolaz.
+    ' Hibrid + retry (do 5 prolaza, sveza VBProject referenca svaki):
+    '  - .bas/.cls -> native Remove+Import (kao ImportAllVBA). AddFromString na
+    '    nekim .bas modulima baca RPC "disconnected" pa ih NE diramo tako.
+    '  - .frm/.doccls -> code-merge (forme: izbegni "Errors during load";
+    '    doccls: ne moze Remove). Dizajn formi (.frx) se ne dira.
     For pass = 1 To 5
         usedPass = pass
         anyLeft = False
@@ -198,23 +197,24 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                 If InStr(skip, "," & LCase$(baseName) & ",") = 0 And Not st.Exists(fkey) Then
                     On Error Resume Next
                     Err.Clear
-                    body = ExtractModuleCode(fil.path)
-                    Set vbc = Nothing
-                    Set vbc = proj.VBComponents(baseName)
-                    If Not vbc Is Nothing Then
-                        With vbc.CodeModule
-                            If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
-                            If Len(body) > 0 Then .AddFromString body
-                        End With
-                        If Err.Number = 0 Then st(fkey) = "ok"
-                    ElseIf ext = "bas" Or ext = "cls" Then
-                        t = IIf(ext = "bas", 1, 2)
-                        Set vbc = proj.VBComponents.Add(t)
-                        vbc.name = baseName
-                        If Len(body) > 0 Then vbc.CodeModule.AddFromString body
+                    If ext = "bas" Or ext = "cls" Then
+                        proj.VBComponents.Remove proj.VBComponents(baseName)  ' ukloni istoimenu
+                        Err.Clear                                            ' ignorisi ako ne postoji
+                        proj.VBComponents.Import fil.path
                         If Err.Number = 0 Then st(fkey) = "ok"
                     Else
-                        st(fkey) = "skip"     ' nova forma/sheet -> reinstall (ne retry)
+                        body = ExtractModuleCode(fil.path)
+                        Set vbc = Nothing
+                        Set vbc = proj.VBComponents(baseName)
+                        If Not vbc Is Nothing Then
+                            With vbc.CodeModule
+                                If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
+                                If Len(body) > 0 Then .AddFromString body
+                            End With
+                            If Err.Number = 0 Then st(fkey) = "ok"
+                        Else
+                            st(fkey) = "skip"     ' nova forma/sheet -> reinstall
+                        End If
                     End If
                     If Err.Number <> 0 Then
                         er(fkey) = "[" & Err.Number & "] " & Err.description
@@ -240,7 +240,7 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         If Not st.Exists(CStr(k)) Then failS = failS & "  " & k & " -> " & er(k) & vbCrLf
     Next k
 
-    ImportFromFolder = "Azurirano (kod): " & okN & " (prolaza: " & usedPass & ")" & _
+    ImportFromFolder = "Azurirano: " & okN & " (prolaza: " & usedPass & ")" & _
         IIf(Len(skipS) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skipS, "") & _
         IIf(Len(failS) > 0, vbCrLf & "GRESKE (i posle retry-ja):" & vbCrLf & failS, "")
 End Function
