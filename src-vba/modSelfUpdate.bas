@@ -168,70 +168,59 @@ EH:
     LogErr SRC, Err.description
 End Function
 
-' Import iz foldera (adaptirano iz modVbaTools.ImportAllVBA; razlike: proizvoljan
-' folder, multi-modul skip-lista, vraca summary string, ne MsgBox). Koristi
-' LOKALNE Self* helpere (ne modVbaTools - vidi zaglavlje modula).
+' Zameni KOD postojecih komponenti - NE Remove/Import. Remove+Import formi u
+' runtime-u rusi projekat ("Errors during load" / korupcija). Forme imaju
+' Begin/End dizajn blok pa kod vade kroz SelfReadFormCode; ostalo kroz
+' SelfReadCodeBody. Dizajn formi (.frx/kontrole) se NE menja - za izmene
+' dizajna formi treba pun reinstall .xlsm.
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim fil As Object, ext As String, baseName As String, vbc As Object
-    Dim imported As Long, t As Long
+    Dim body As String, merged As Long, added As Long, skippedNew As String, t As Long
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
 
-    ' 1) document moduli (.doccls): kod se MERGE-uje u postojecu komponentu
-    For Each fil In fso.GetFolder(folder).files
-        If LCase$(fso.GetExtensionName(fil.name)) = "doccls" Then
-            baseName = fso.GetBaseName(fil.name)
-            Set vbc = Nothing
-            On Error Resume Next
-            Set vbc = proj.VBComponents(baseName)
-            On Error GoTo 0
-            If Not vbc Is Nothing Then
-                With vbc.CodeModule
-                    If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
-                    .AddFromString SelfReadCodeBody(fil.path)
-                End With
-                imported = imported + 1
-            End If
-        End If
-    Next fil
-
-    ' 2) standardni / klasni / forme
     For Each fil In fso.GetFolder(folder).files
         ext = LCase$(fso.GetExtensionName(fil.name))
         baseName = fso.GetBaseName(fil.name)
-        If (ext = "bas" Or ext = "cls" Or ext = "frm") _
-           And InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
-
-            If ext = "frm" And Not fso.FileExists(folder & "\" & baseName & ".frx") Then
-                ' nema .frx para -> preskoci formu (kao ImportAllVBA)
-            Else
-                On Error Resume Next                         ' ukloni istoimenu (izbegni 'modX1')
-                proj.VBComponents.Remove proj.VBComponents(baseName)
-                On Error GoTo 0
-
-                If SelfHasVBHeader(fil.path) Then
-                    proj.VBComponents.Import fil.path
-                    imported = imported + 1
-                Else
-                    t = 0
-                    If ext = "bas" Then
-                        t = 1
-                    ElseIf ext = "cls" Then
-                        t = 2
+        Select Case ext
+            Case "bas", "cls", "frm", "doccls"
+                If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
+                    If ext = "frm" Then
+                        body = SelfReadFormCode(fil.path)
+                    Else
+                        body = SelfReadCodeBody(fil.path)
                     End If
-                    If t > 0 Then
+
+                    Set vbc = Nothing
+                    On Error Resume Next
+                    Set vbc = proj.VBComponents(baseName)
+                    On Error GoTo 0
+
+                    If Not vbc Is Nothing Then
+                        ' postoji -> zameni SAMO kod (bez Remove/Import)
+                        With vbc.CodeModule
+                            If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
+                            If Len(body) > 0 Then .AddFromString body
+                        End With
+                        merged = merged + 1
+                    ElseIf ext = "bas" Or ext = "cls" Then
+                        ' nov standardni/klasni modul -> dodaj (bez Remove)
+                        t = IIf(ext = "bas", 1, 2)
                         Set vbc = proj.VBComponents.Add(t)
                         vbc.name = baseName
-                        vbc.CodeModule.AddFromFile fil.path
-                        imported = imported + 1
+                        If Len(body) > 0 Then vbc.CodeModule.AddFromString body
+                        added = added + 1
+                    Else
+                        ' nova forma / novi sheet -> ne pravimo u runtime-u (reinstall)
+                        skippedNew = skippedNew & "  " & fil.name & vbCrLf
                     End If
                 End If
-            End If
-        End If
+        End Select
     Next fil
 
-    ImportFromFolder = "Uvezeno komponenti: " & imported
+    ImportFromFolder = "Azurirano (kod): " & merged & ", novih modula: " & added & _
+        IIf(Len(skippedNew) > 0, vbCrLf & "Preskoceno (novo, treba reinstall):" & vbCrLf & skippedNew, "")
 End Function
 
 Private Function ReadAllText(ByVal path As String) As String
@@ -259,15 +248,6 @@ Private Function SelfVBAAccessible() As Boolean
     End If
 End Function
 
-Private Function SelfHasVBHeader(ByVal path As String) As Boolean
-    Dim ff As Integer, s As String
-    ff = FreeFile
-    Open path For Input As #ff
-    If Not EOF(ff) Then Line Input #ff, s
-    Close #ff
-    SelfHasVBHeader = (InStr(1, s, "Attribute VB_Name", vbTextCompare) > 0) _
-                   Or (UCase$(Left$(LTrim$(s), 7)) = "VERSION")
-End Function
 
 ' Vrati samo kod (preskoci VBA header blok ako postoji) - za .doccls merge.
 Private Function SelfReadCodeBody(ByVal path As String) As String
@@ -288,4 +268,22 @@ Private Function SelfReadCodeBody(ByVal path As String) As String
     Loop
     Close #ff
     SelfReadCodeBody = body
+End Function
+
+' Izvuci SAMO code-behind iz .frm: sve posle POSLEDNJE "Attribute VB_*" linije
+' (time se preskace VERSION + Begin/End dizajn blok). Dizajn (.frx) se ne dira.
+Private Function SelfReadFormCode(ByVal path As String) As String
+    Dim allTxt As String, arr() As String, i As Long, lastAttr As Long, body As String
+    allTxt = ReadAllText(path)
+    arr = Split(allTxt, vbCrLf)
+    If UBound(arr) <= 0 Then arr = Split(allTxt, vbLf)
+    lastAttr = -1
+    For i = 0 To UBound(arr)
+        If LTrim$(arr(i)) Like "Attribute VB_*" Then lastAttr = i
+    Next i
+    If lastAttr < 0 Then Exit Function          ' nije validan .frm -> ne diraj
+    For i = lastAttr + 1 To UBound(arr)
+        If Len(body) = 0 Then body = arr(i) Else body = body & vbCrLf & arr(i)
+    Next i
+    SelfReadFormCode = body
 End Function
