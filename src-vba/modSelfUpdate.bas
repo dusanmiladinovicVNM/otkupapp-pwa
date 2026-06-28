@@ -122,11 +122,12 @@ End Function
 ' Snimi kopiju trenutnog .xlsm u <putanja>\Backup\AgriX_pre-update_*.xlsm.
 Private Function MakePreUpdateBackup() As Boolean
     On Error GoTo EH
-    Dim dir As String: dir = ThisWorkbook.path & "\Backup"
-    If Dir(dir, vbDirectory) = "" Then MkDir dir
+    ' NB: ne zovi promenljivu 'dir' - sudara se sa ugradjenom Dir() ("expected array").
+    Dim bkDir As String: bkDir = ThisWorkbook.path & "\Backup"
+    If Dir(bkDir, vbDirectory) = "" Then MkDir bkDir
     Dim nm As String
     nm = "AgriX_pre-update_" & APP_VERSION & "_" & Format$(Now, "yyyy-mm-dd_hhmm") & ".xlsm"
-    ThisWorkbook.SaveCopyAs dir & "\" & nm
+    ThisWorkbook.SaveCopyAs bkDir & "\" & nm
     MakePreUpdateBackup = True
     Exit Function
 EH:

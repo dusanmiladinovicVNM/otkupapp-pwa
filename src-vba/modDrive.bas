@@ -194,7 +194,9 @@ Private Function DriveLoadFileBytes(ByVal path As String) As Byte()
     stm.Type = 1                 ' adTypeBinary
     stm.Open
     stm.LoadFromFile path
-    DriveLoadFileBytes = stm.Read
+    ' adReadAll na praznom stream-u vraca Null -> Type mismatch u Byte(); na 0
+    ' bajtova ostavi neinicijalizovan Byte() (validan prazan sadrzaj).
+    If stm.size > 0 Then DriveLoadFileBytes = stm.Read
     stm.Close
 End Function
 
