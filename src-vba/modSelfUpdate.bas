@@ -11,15 +11,18 @@ Option Explicit
 '     - ako je novije -> MsgBox vbYesNo. Na "Da" vrati True.
 '   StartApp tada: Application.OnTime Now, "RunSelfUpdate" + Exit Sub.
 '   RunSelfUpdate(): backup -> download -> PrepareRuntimeForSelfUpdate ->
-'     code-merge import -> save -> "zatvori i otvori".
+'     code-merge (faza 1) -> za "tvrde" Remove+OnTime+Import (faza 2) -> save.
 '
-' KLJUCNO (root cause): moduli koji grade dinamicke kontrole sa WithEvents
-' (modOtkupBlok/modPodesavanja/modMaticniLookups/modKarticaDetalji) drze ZIVE
-' event-sink reference; dok su zive, editovanje njihovog CodeModule-a obara COM
-' ([-2147417848] "disconnected"). Zato PrepareRuntimeForSelfUpdate PRE importa
-' oslobodi sve te reference (Release/Reset) + unload sve forme + stop scheduled
-' sync. Posle toga je CIST code-merge (AddFromString) bezbedan za SVE module -
-' bez Remove/Import (nema modX1 duplikata), bez form-load greske.
+' KLJUCNO (potvrdjen root cause): moduli sa MODULE-LEVEL deklaracijom MSForms
+' kontrole (Private mBtn As MSForms.CommandButton ...) - modOtkupBlok(20),
+' modKarticaDetalji(2), modPodesavanja(1) - NE mogu kroz AddFromString: dodavanje
+' tih deklaracija bind-uje MSForms tip-biblioteku u toku COM edita pa diskonektuje
+' CodeModule ([-2147417848]). (DeleteLines prodje; pada tek AddFromString.
+' Nije stvar zivih instanci - Release nije pomogao.) Resenje: njih ide FAZA 2
+' preko Import-a (rekreacija komponente, podnosi MSForms decls; radi u
+' ImportAllVBA), uz Remove->flush(OnTime)->Import da nema modX1 duplikata.
+' PrepareRuntimeForSelfUpdate (unload formi + release + stop sync) je higijena
+' pre Remove-a (da forma ne drzi kontrole tih modula).
 '
 ' OPT-IN: radi samo ako je REL_FOLDER_ID postavljen (modConfig).
 ' FAIL-SOFT: svaka greska u proveri samo se loguje, start ide dalje.
@@ -83,10 +86,30 @@ Public Sub RunSelfUpdate()
     ' 3) Oslobodi runtime stanje (root cause fix) PRE importa
     PrepareRuntimeForSelfUpdate
 
-    ' 4) Code-merge import svih komponenti
-    Dim summary As String: summary = ImportFromFolder(tempDir, SKIP_MODULES)
+    ' 4) Code-merge import. failed = moduli koje AddFromString ne moze (module-
+    '    level MSForms kontrole -> bind na MSForms tip-biblioteku diskonektuje
+    '    CodeModule). Njih ide FAZA 2 preko Import-a (koji to podnosi).
+    Dim failed As Object: Set failed = CreateObject("Scripting.Dictionary")
+    Dim summary As String: summary = ImportFromFolder(tempDir, SKIP_MODULES, failed)
 
-    ' 5) Snimi (restart aktivira nov kod + schema self-heal kroz InitApp)
+    ' 5) Faza 2: ukloni "tvrde" SADA (Remove se flush-uje kad makro zavrsi), pa
+    '    ih uvezi Import-om u sledecem OnTime prolazu (rekreacija komponente -
+    '    drugi mehanizam, podnosi MSForms decls; flush -> bez modX1 duplikata).
+    If failed.count > 0 Then
+        Dim proj As Object: Set proj = ThisWorkbook.VBProject
+        Dim fk As Variant
+        For Each fk In failed.Keys
+            On Error Resume Next
+            proj.VBComponents.Remove proj.VBComponents(CStr(fk))
+            On Error GoTo EH
+        Next fk
+        SaveSetting "AgriXSelfUpdate", "phase2", "dir", tempDir
+        SaveSetting "AgriXSelfUpdate", "phase2", "n", CStr(n)
+        Application.OnTime Now + TimeSerial(0, 0, 2), "RunSelfUpdatePhase2"
+        Exit Sub                  ' kraj makroa -> Remove se flush-uje -> faza 2
+    End If
+
+    ' 6) Snimi (sve proslo code-merge-om, nema faze 2)
     On Error Resume Next
     ThisWorkbook.Save
     On Error GoTo EH
@@ -101,6 +124,64 @@ EH:
     MsgBox "Greska pri azuriranju: " & Err.description & vbCrLf & vbCrLf & _
            "Ako program ne radi ispravno, vratite kopiju iz 'Backup' foldera " & _
            "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
+End Sub
+
+' Faza 2 (Application.OnTime; posle flush-a Remove-ova iz faze 1). Uvezi (Import)
+' module uklonjene u fazi 1 - sad stvarno obrisane pa Import pravi cist modul
+' (bez duplikata). Import podnosi module-level MSForms kontrole koje AddFromString
+' ne moze. Public zbog OnTime.
+Public Sub RunSelfUpdatePhase2()
+    Const SRC As String = "modSelfUpdate.RunSelfUpdatePhase2"
+    On Error GoTo EH
+
+    Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", "phase2", "dir", "")
+    Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", "phase2", "n", "?")
+    DeleteSetting "AgriXSelfUpdate", "phase2"
+    If Len(p2dir) = 0 Then Exit Sub
+
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim fil As Object, ext As String, baseName As String, imported As Long, stillFail As String
+    Dim comExists As Boolean, tmpc As Object
+
+    For Each fil In fso.GetFolder(p2dir).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        If ext = "bas" Or ext = "cls" Then
+            baseName = fso.GetBaseName(fil.name)
+            comExists = True
+            On Error Resume Next
+            Set tmpc = Nothing
+            Set tmpc = proj.VBComponents(baseName)
+            comExists = Not (tmpc Is Nothing)
+            On Error GoTo 0
+            If Not comExists Then              ' uvezi samo uklonjene (faza 1)
+                On Error Resume Next
+                Err.Clear
+                proj.VBComponents.Import fil.path
+                If Err.Number = 0 Then
+                    imported = imported + 1
+                Else
+                    stillFail = stillFail & "  " & fil.name & " -> [" & Err.Number & "] " & Err.description & vbCrLf
+                End If
+                Err.Clear
+                On Error GoTo 0
+            End If
+        End If
+    Next fil
+
+    On Error Resume Next
+    ThisWorkbook.Save
+    On Error GoTo EH
+
+    MsgBox "Azuriranje zavrseno. Preuzeto: " & nTxt & ", 2. faza uvezeno: " & imported & _
+           IIf(Len(stillFail) > 0, vbCrLf & vbCrLf & "I DALJE NIJE USPELO:" & vbCrLf & stillFail, "") & vbCrLf & vbCrLf & _
+           "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
+           IIf(Len(stillFail) > 0, vbExclamation, vbInformation), APP_NAME
+    Exit Sub
+EH:
+    LogErr SRC, Err.description
+    MsgBox "Greska u 2. fazi azuriranja: " & Err.description & vbCrLf & _
+           "Vratite kopiju iz 'Backup' foldera (AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
 
 ' Oslobodi runtime stanje pre self-update importa: ugasi evente/sync, otpusti
@@ -203,7 +284,7 @@ End Function
 ' vise ne diskonektuje. Bez Remove (nema modX1 duplikata), bez Import (nema
 ' form-load greske). Dizajn formi (.frx) se NE menja - za to treba pun reinstall.
 ' Retry (3 prolaza) + per-modul greska kao safety net.
-Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String) As String
+Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String, ByRef failedOut As Object) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
     Dim st As Object: Set st = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> "ok"/"skip"
@@ -261,7 +342,10 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         End If
     Next k
     For Each k In er.Keys
-        If Not st.Exists(CStr(k)) Then failS = failS & "  " & k & " -> " & er(k) & vbCrLf
+        If Not st.Exists(CStr(k)) Then
+            failS = failS & "  " & k & " -> " & er(k) & vbCrLf
+            If Not failedOut Is Nothing Then failedOut(fso.GetBaseName(CStr(k))) = folder & "\" & CStr(k)
+        End If
     Next k
 
     ImportFromFolder = "Azurirano: " & okN & " (prolaza: " & usedPass & ")" & _
