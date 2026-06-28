@@ -232,3 +232,55 @@ hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 ### Ako stane
 - **„Radni direktorijum nije cist"** (korak 2) → commit-uj ili odloži izmene pa ponovi.
 - **Push padne (mreža)** → ponovi `bash tools/release.sh 2.2.2` (preskoči gotovo, gurne ostatak).
+
+---
+
+## Distribucija preko self-update (od v2.6.1)
+
+> **Prelaz:** `v2.6.0` je **poslednja** verzija distribuirana po starom (mejl +
+> `MigrirajPodatkeIzStarog`) — jer stariji klijenti još nemaju self-update kod, ne
+> mogu da ga povuku. `v2.6.0` uvodi Funkciju A (`modSelfUpdate`); od **`v2.6.1`**
+> sve izmene **koda** idu preko self-update kanala, bez mejla. Detalji:
+> `docs/SELF_UPDATE.md`.
+
+### Jednokratno po klijentu (pri instalaciji v2.6.0)
+Da bi self-update radio ubuduće, na svakoj mašini:
+- uključi **„Trust access to the VBA project object model"** (File → Options →
+  Trust Center → Trust Center Settings → Macro Settings);
+- potvrdi da je **Google auth** podešen (self-update čita token; bez njega
+  `Alt+F8 → DriveSelfTest` u `modDrive` prijavi prazan token);
+- dodaj **AV exception** ako AV reaguje na prepisivanje VBA projekta.
+
+### Svaki release od v2.6.1 (kod-only)
+1. **[Git Bash]** razvoj na grani → merge u `main`.
+2. **[Git Bash]** `bash tools/release.sh 2.6.1` *(pull → bump APP_VERSION → commit
+   → tag `vba-v2.6.1` → push → stamp)*.
+3. **[Excel — prazan build-master]** `Alt+F8 → ImportAllVBA` (ako baci form-grešku
+   → import opet, dev quirk) → **Debug → Compile** (čisto) → `Alt+F8 →
+   AssertBlankBuild` („BLANKO OK") → **`Alt+F8 → PublishReleaseToDrive`** (objavi
+   kod + `version.json` u `AgriX_Release`).
+4. **[Git Bash]** `git checkout -- src-vba/modBuildInfo.bas`.
+5. **(opciono)** `Save As builds\AgriX_2.6.1.xlsm` — **samo za NOVE instalacije**;
+   postojeći klijenti ga **ne** dobijaju (ažuriraju se sami).
+6. **[GAS]** podigni `VERSION_LATEST = 2.6.1` (i, kad se flota digne, po potrebi
+   `VERSION_MIN` — „Min-version gate").
+
+**To je sve.** Klijent na sledećem `Workbook_Open` vidi „Postoji nova verzija
+2.6.1 — ažurirati?" → „Da" → povuče i uveze (faza 1 code-merge + faza 2 `Import`),
+napravi lokalni backup pre toga, pa traži restart. Bez mejla, bez migracije
+(isti `.xlsm`; `Ensure*Schema` dovuče nove kolone posle restarta).
+
+> **Staged rollout (preporuka):** posle `PublishReleaseToDrive` prvo testiraj na
+> **jednom** klijentu; ako je dobro, ostali se sami ažuriraju. Za prinudu
+> zaostalih → `VERSION_MIN`.
+
+### Šta i dalje ide REINSTALL-om (mejl/Drive `.xlsm`, NE self-update)
+Self-update povlači samo **kod**. Nov `.xlsm` (+ `MigrirajPodatkeIzStarog`) treba za:
+- **izmene dizajna formi** (`.frx` / statičke kontrole) — self-update menja samo
+  code-behind formi *(većina kontrola se gradi runtime-om `Controls.Add`, pa retko)*;
+- **nove forme / nove sheetove** (faza 1 ih prijavi „Preskočeno, reinstall");
+- izmene **`modSelfUpdate`** ili **`modVbaTools`** (skip-lista — kod koji se izvršava
+  / dev tool).
+
+> Promene **šeme** (nove kolone/tabele) NE traže reinstall — `modSetup.Ensure*Schema`
+> ih self-heal-uje posle update-restarta.
