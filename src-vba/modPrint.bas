@@ -2076,3 +2076,200 @@ EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillKarticaSablon"
 End Function
+
+
+' ============================================================
+' SLEDLJIVOST (LOT) - generisan house-style sablon (zamena za rucni
+' SledljivostSablon). Landscape, 12 kolona. EnsureSledljivostSablon (H1) +
+' FillSledljivostSablon. Podatke prikuplja frmSledljivost.PrintTracePDF.
+' Unikatna Sled* imena (izbegava koliziju sa starim workbook imenima).
+' ============================================================
+Public Sub EnsureSledljivostSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_SLEDLJIVOST_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("N1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_SLEDLJIVOST_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 18
+    ws.columns("C").ColumnWidth = 12
+    ws.columns("D").ColumnWidth = 12
+    ws.columns("E").ColumnWidth = 8
+    ws.columns("F").ColumnWidth = 12
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 16
+    ws.columns("I").ColumnWidth = 11
+    ws.columns("J").ColumnWidth = 9
+    ws.columns("K").ColumnWidth = 7
+    ws.columns("L").ColumnWidth = 12
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 12, 12)
+    r = DocTitleBlock(ws, r, 12, "Sledljivost porekla - zbirna otpremnica (LOT)", "SLEDLJIVOST")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "LOT broj:"
+    ws.cells(fr + 1, 1).value = "Datum otpreme:"
+    ws.cells(fr + 2, 1).value = "Vrsta voca:"
+    ws.cells(fr, 2).name = "SledLot"
+    ws.cells(fr + 1, 2).name = "SledDatum"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 5)).Merge
+    ws.cells(fr + 2, 2).name = "SledVrsta"
+    ws.cells(fr, 7).value = "Vozac:"
+    ws.cells(fr + 1, 7).value = "Kupac:"
+    ws.Range(ws.cells(fr, 8), ws.cells(fr, 12)).Merge
+    ws.cells(fr, 8).name = "SledVozac"
+    ws.Range(ws.cells(fr + 1, 8), ws.cells(fr + 1, 12)).Merge
+    ws.cells(fr + 1, 8).name = "SledKupac"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+    ws.cells(fr, 8).Font.Bold = True
+    ws.cells(fr + 1, 8).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Kooperant"
+    ws.cells(hdr, 3).value = "BPG"
+    ws.cells(hdr, 4).value = "Kat. parcela"
+    ws.cells(hdr, 5).value = "GGAP"
+    ws.cells(hdr, 6).value = "Kultura"
+    ws.cells(hdr, 7).value = "Povrsina"
+    ws.cells(hdr, 8).value = "Stanica"
+    ws.cells(hdr, 9).value = "Datum"
+    ws.cells(hdr, 10).value = "Kg"
+    ws.cells(hdr, 11).value = "Klasa"
+    ws.cells(hdr, 12).value = "OtkupID"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 12))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "SledStart"
+
+    ws.Range("N1").value = LAYOUT_VER
+    ws.Range("N1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureSledljivostSablon"
+End Sub
+
+' Popuni SledljivostSablon. traceData = TraceByZbirna 2D niz (1..N, 1..14).
+' Mapiranje (kao original): 1=Kooperant 2=Kg 4=StanicaID 5=Datum 6=OtkupID
+' 8=BPG 9=KatBroj 10=GGAP 11=Klasa 13=Kultura 14=Povrsina. prijKg = suma prijemnica.
+Public Function FillSledljivostSablon(ByVal lot As String, ByVal datumOtpreme As String, _
+        ByVal vozac As String, ByVal kupac As String, ByVal vrsta As String, _
+        ByVal traceData As Variant, ByVal prijKg As Double) As Worksheet
+    On Error GoTo EH
+    EnsureSledljivostSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_SLEDLJIVOST_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("SledLot").value = lot
+    ws.Range("SledDatum").value = datumOtpreme
+    ws.Range("SledVozac").value = vozac
+    ws.Range("SledKupac").value = kupac
+    ws.Range("SledVrsta").value = vrsta
+
+    Const NUM_COLS As Long = 12
+    Dim startRow As Long: startRow = ws.Range("SledStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 300, NUM_COLS))
+        .ClearContents
+        .ClearFormats
+    End With
+    ws.Range(ws.cells(startRow, 3), ws.cells(startRow + 200, 4)).NumberFormat = "@"
+
+    Dim totalOtkupKg As Double
+    Dim i As Long, outRow As Long, stNaziv As String
+    For i = 1 To UBound(traceData, 1)
+        outRow = startRow + i - 1
+        stNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(traceData(i, 4)), "Naziv"))
+        ws.cells(outRow, 1).value = i
+        ws.cells(outRow, 2).value = CStr(traceData(i, 1))
+        ws.cells(outRow, 3).value = CStr(traceData(i, 8))
+        ws.cells(outRow, 4).value = CStr(traceData(i, 9))
+        ws.cells(outRow, 5).value = CStr(traceData(i, 10))
+        ws.cells(outRow, 6).value = CStr(traceData(i, 13))
+        ws.cells(outRow, 7).value = CStr(traceData(i, 14))
+        ws.cells(outRow, 8).value = stNaziv
+        ws.cells(outRow, 9).value = Format$(CDate(traceData(i, 5)), "DD.MM.YYYY")
+        ws.cells(outRow, 10).value = CDbl(traceData(i, 2))
+        ws.cells(outRow, 11).value = CStr(traceData(i, 11))
+        ws.cells(outRow, 12).value = CStr(traceData(i, 6))
+        totalOtkupKg = totalOtkupKg + CDbl(traceData(i, 2))
+    Next i
+
+    Dim nRows As Long: nRows = UBound(traceData, 1)
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, NUM_COLS)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(startRow, 10), ws.cells(startRow + nRows - 1, 10)).NumberFormat = "#,##0"
+
+    Dim rr As Long
+    For rr = 0 To nRows - 1
+        If rr Mod 2 = 1 Then
+            ws.Range(ws.cells(startRow + rr, 1), ws.cells(startRow + rr, NUM_COLS)).Interior.Color = RGB(217, 225, 242)
+        End If
+    Next rr
+
+    Dim sumRow As Long: sumRow = startRow + nRows + 1
+    Dim manjak As Double: manjak = totalOtkupKg - prijKg
+    Dim manjakPct As Double
+    If totalOtkupKg > 0 Then manjakPct = manjak / totalOtkupKg * 100
+    ws.cells(sumRow, 1).value = "Ukupno otkup:"
+    ws.cells(sumRow, 10).value = totalOtkupKg
+    ws.cells(sumRow + 1, 1).value = "Ukupno prijemnica:"
+    ws.cells(sumRow + 1, 10).value = prijKg
+    ws.cells(sumRow + 2, 1).value = "Manjak:"
+    ws.cells(sumRow + 2, 10).value = manjak
+    ws.cells(sumRow + 2, 11).value = Format$(manjakPct, "0.00") & "%"
+    ws.Range(ws.cells(sumRow, 10), ws.cells(sumRow + 2, 10)).NumberFormat = "#,##0"
+    ws.Range(ws.cells(sumRow, 1), ws.cells(sumRow + 2, 1)).Font.Bold = True
+
+    ws.cells(sumRow + 4, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
+    ws.cells(sumRow + 5, 1).value = "Potpis: ___________"
+    ws.cells(sumRow + 5, 8).value = "Pecat: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlLandscape
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sumRow + 5, NUM_COLS)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillSledljivostSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillSledljivostSablon"
+End Function
