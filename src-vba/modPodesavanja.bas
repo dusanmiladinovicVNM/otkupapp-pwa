@@ -74,13 +74,12 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "AUTO_BROJ_DOKUMENTA", "Automatsko generisanje brojeva dokumenata", "bool"
     CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
-    CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
     CfgAdd c, "Otkup / dokumenta", "KES_ISPLATE", "Postoje ke" & ChrW(353) & " isplate proizvodjacima", "bool"
-    CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
     CfgAdd c, "Otkup / dokumenta", "PALETIRANJE", "Paletiranje (izrada paletnih listova)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
 
     ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
     ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).
@@ -95,6 +94,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "SPECIFIKACIJA_PRINT_MODE", "Specifikacija", "list:PDF;PRINT;PREVIEW;OFF"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
+    CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Management / Klijent", "MGMT_USER_1", "Management korisnik 1", "text"
