@@ -1171,6 +1171,12 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
         frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
     End If
 
+    ' Oslobodi dinamicki panel (WithEvents wrappers + runtime kontrole) PRE unload-a.
+    ' Bez ovoga Excel pri rusenju forme cisti ~35 event-sink objekata -> sporo
+    ' zatvaranje. OtkupBlok_Release je idempotentan; AttachOtkupBlokPanel ga
+    ' ponovo izgradi pri sledecem otvaranju sekcije.
+    OtkupBlok_Release
+
     On Error GoTo 0
 End Sub
 

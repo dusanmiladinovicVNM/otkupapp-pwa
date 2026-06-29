@@ -197,14 +197,17 @@ Public Sub ShutdownApp()
     On Error GoTo EH
 
     Application.Visible = True
+    Application.ScreenUpdating = False
 
     UnloadAllUserForms
 
+    Application.ScreenUpdating = True
     LogAppShutdown
 
     Exit Sub
 
 EH:
+    Application.ScreenUpdating = True
     Application.Visible = True
     LogErr "modMain.ShutdownApp"
 End Sub

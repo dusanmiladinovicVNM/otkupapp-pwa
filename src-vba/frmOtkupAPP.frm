@@ -961,6 +961,7 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
 
     oldPointer = Me.MousePointer
     Me.MousePointer = fmMousePointerHourGlass
+    Application.ScreenUpdating = False
 
     mIsSwitchingContent = True
 
@@ -993,11 +994,13 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
 CleanExit:
     mIsSwitchingContent = False
     Me.MousePointer = oldPointer
+    Application.ScreenUpdating = True
     Exit Sub
 
 EH:
     mIsSwitchingContent = False
     Me.MousePointer = oldPointer
+    Application.ScreenUpdating = True
 
     LogErr "frmOtkupAPP.OpenContentForm"
 

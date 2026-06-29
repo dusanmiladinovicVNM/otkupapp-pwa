@@ -30,6 +30,7 @@ Private m_IsInitializing As Boolean
 Private m_IsChangingToggle As Boolean
 Private m_IsChangingTipToggle As Boolean
 Private m_IsRefreshing As Boolean
+Private m_IsLoadingEntiteti As Boolean
 
 Private mChromeRemoved As Boolean
 
@@ -340,6 +341,11 @@ Private Sub tglZbirni_Click()
 End Sub
 
 Private Sub LoadEntiteti()
+    ' Guard: programsko punjenje + ListIndex=0 ne sme da okine cmbEntitet_Change
+    ' (inace AutoRefresh generise sve izvestaje jos jednom). On Error GoTo done
+    ' garantuje da se guard uvek vrati na False.
+    m_IsLoadingEntiteti = True
+    On Error GoTo done
     cmbEntitet.Clear
 
     Select Case GetActiveEntitetTip()
@@ -370,8 +376,15 @@ Private Sub LoadEntiteti()
     End Select
 
     If cmbEntitet.ListCount > 0 Then cmbEntitet.ListIndex = 0
+
+done:
+    m_IsLoadingEntiteti = False
 End Sub
 Private Sub cmbEntitet_Change()
+    ' LoadEntiteti postavlja ListIndex=0 sto bi inace okinulo jos jedan AutoRefresh
+    ' (duplo generisanje svih izvestaja). Guard preskace taj programski Change;
+    ' rucni izbor kooperanta i dalje refreshuje.
+    If m_IsLoadingEntiteti Then Exit Sub
     AutoRefresh
 End Sub
 
