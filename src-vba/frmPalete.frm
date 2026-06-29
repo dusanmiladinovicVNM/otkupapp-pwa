@@ -230,7 +230,7 @@ Private Sub btnPreradi_Click()
     preID = SavePrerada_TX(ids, brKut, brKes, neto, Trim$(Me.txtNapomena.value), _
                 tezPal, bruto, amb, tipKut, tipKes, tipGP)
 
-    If preID <> "" Then ExportPreradaPDF preID, True
+    If preID <> "" Then OutputPreradaList preID
 
     ClearPreradaInputs
     RefreshGrid

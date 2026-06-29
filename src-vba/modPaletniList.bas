@@ -1758,6 +1758,27 @@ EH:
     LogErr "modPaletniList.ExportPreradaPDF"
 End Function
 
+' Auto-izlaz preradnog lista (paletni list got. proizvoda) po CFG_PRERADA_PRINT_MODE:
+' PDF (default) | PRINT | PREVIEW | OFF. Eksplicitni dvoklik-reprint i dalje ide
+' kroz ExportPreradaPDF (uvek PDF).
+Public Sub OutputPreradaList(ByVal preID As String)
+    On Error GoTo EH
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_PRERADA_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            Dim broj As String, god As String
+            Dim ws As Worksheet: Set ws = FillPreradaSablon(preID, broj, god)
+            If Not ws Is Nothing Then DocPrintWs ws, mode
+        Case "PDF"
+            ExportPreradaPDF preID, True
+        ' OFF -> bez izlaza
+    End Select
+    Exit Sub
+EH:
+    LogErr "modPaletniList.OutputPreradaList"
+End Sub
+
 Public Function FindPreradaIDByBroj(ByVal broj As Long, ByVal god As Long) As String
     Dim d As Variant
     d = GetTableData(TBL_PRERADA)

@@ -84,8 +84,11 @@ Public Function ConfigEditorFields() As Variant
     ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
     ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).
     CfgAdd c, ChrW(352) & "tampa", "OTKUP_PRINT_MODE", Poruka("CFG_MSG_STAMPA_OTKUPNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "GRUPNI_OTKUP_PRINT_MODE", "Grupni otkupni list", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "PRIJEMNICA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PRIJEMNICE_AUTO"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "OTPREMNICA_PRINT_MODE", "Otpremnica", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "PALETA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PALETNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "PRERADA_PRINT_MODE", "Paletni list got. proizvoda", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "OM_IZDAVANJE_PRINT_MODE", "Revers ambala" & ChrW(382) & "e (izdavanje/povrat)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "FAKTURA_PRINT_MODE", "Faktura", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_PRINT_MODE", "Kartica kooperanta", "list:PDF;PRINT;PREVIEW;OFF"
