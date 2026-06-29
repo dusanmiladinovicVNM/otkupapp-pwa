@@ -504,6 +504,20 @@ Private Sub cmbOtkupnoMesto_Change()
     stanicaID = GetComboID(cmbOtkupnoMesto)
     If stanicaID = "" Then Exit Sub
 
+    ' Promena stanice VAN konteksta selektovane otpremnice (panel): datum i broj
+    ' zbirne su nasledjeni sa te otpremnice -> vrati datum na danas i ocisti
+    ' zaostalu zbirnu, da svez unos ne nosi stari datum. mPrefilling gard: prefill
+    ' sam postavlja stanicu i NE sme da se resetuje (vidi modOtkupBlok).
+    If Not OtkupBlok_IsPrefilling() Then
+        Dim otpStanica As String: otpStanica = OtkupBlok_ActiveStanica()
+        If Len(otpStanica) > 0 And otpStanica <> stanicaID Then
+            txtDatum.value = Format$(Date, "d.m.yyyy")
+            txtBrojZbirne.value = ""
+            ResetProizvodNaDefault
+            OtkupBlok_ClearActiveOtp
+        End If
+    End If
+
     ' Parse datum (vec treba da je popunjen u txtDatum)
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
@@ -714,6 +728,28 @@ Private Sub RefreshBrojDokumentaSuggestion(Optional ByVal checkRemote As Boolean
 
 EH:
     LogErr "frmOtkup.RefreshBrojDokumentaSuggestion"
+End Sub
+
+' Vrati levu formu na "danas" kontekst kad se napusti otpremnica iz panela
+' (Sakrij blokove): datum -> danas, ocisti zaostali broj zbirne, pa preracunaj
+' predlog broja otkupnog lista za tekuci kontekst. Public: zove modOtkupBlok.
+Public Sub ResetDatumKontekst()
+    On Error Resume Next
+    txtDatum.value = Format$(Date, "d.m.yyyy")
+    txtBrojZbirne.value = ""
+    ResetProizvodNaDefault
+    RefreshBrojDokumentaSuggestion False
+End Sub
+
+' Vrati vrstu/sortu voca na podrazumevani proizvod (kao pri otvaranju forme) kad
+' se napusti otpremnica iz panela -- da svez unos ne nosi vrstu/sortu otpremnice.
+' Cisti pa primeni default (CFG_DEFAULT_VRSTA/SORTA); bez podesenog default-a
+' ostaju prazni. ApplyDefaultProizvod okida auto-cenu/tip ambalaze (cmbVrsta_Change).
+Private Sub ResetProizvodNaDefault()
+    On Error Resume Next
+    cmbVrstaVoca.value = ""
+    cmbSortaVoca.value = ""
+    ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
 End Sub
 
 ' ============================================================
@@ -1057,6 +1093,7 @@ Private Sub ClearOtkupFields()
     If Not m_txtAmbIzdata Is Nothing Then m_txtAmbIzdata.value = ""
     txtNovac.value = "0"
     txtPrimalac.value = ""
+    cmbKooperant.value = ""
     cmbParcela.Clear
 
     chkDveKlase.value = False
@@ -1072,7 +1109,8 @@ Private Sub ClearOtkupFields()
     AutoFillCenaOtkup
     On Error GoTo 0
 
-    txtKolicina.SetFocus
+    ' Kooperant je ociscen -> fokus na njega (sledeci unos = novi kooperant).
+    cmbKooperant.SetFocus
 
     ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
     RefreshBrojDokumentaSuggestion False
