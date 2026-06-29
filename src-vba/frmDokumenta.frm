@@ -243,9 +243,12 @@ Private Sub ApplyKesIsplateState()
     If IsKesIsplate() Then
         EnableCombo cmbOtkupBlok
         EnableField txtNovacOMUlaz
+        tglIzOMAvansa.enabled = (cmbPrimalacOMUlaz.value <> "")
     Else
         DisableCombo cmbOtkupBlok
         DisableField txtNovacOMUlaz
+        tglIzOMAvansa.value = False
+        tglIzOMAvansa.enabled = False
     End If
 End Sub
 
@@ -1444,12 +1447,15 @@ Private Function MakeLbl(ByVal nm As String, ByVal cap As String, _
         .Visible = True
     End With
     ' Font usaglasen sa ostalim elementima forme (Segoe UI / FONT_SIZE_NORMAL, bez bold).
+    ' With lb.Font blok: sve na ISTOM Font objektu (chain-set lb.Font.X zna da ne primi).
     On Error Resume Next
     lb.BackStyle = fmBackStyleTransparent
     lb.ForeColor = TXT_LIGHT
-    lb.Font.name = APP_FONT
-    lb.Font.Bold = False
-    lb.Font.Size = FONT_SIZE_NORMAL
+    With lb.Font
+        .Bold = False
+        .name = APP_FONT
+        .Size = FONT_SIZE_NORMAL
+    End With
     On Error GoTo 0
     Set MakeLbl = lb
 End Function
@@ -1786,7 +1792,7 @@ End Sub
 
 Private Sub cmbPrimalacOMUlaz_Change()
     cmbOtkupBlok.Clear
-    tglIzOMAvansa.enabled = (cmbPrimalacOMUlaz.value <> "")
+    tglIzOMAvansa.enabled = IsKesIsplate() And (cmbPrimalacOMUlaz.value <> "")
     
     If cmbPrimalacOMUlaz.value = "" Then
         tglIzOMAvansa.value = False
