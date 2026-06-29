@@ -450,6 +450,18 @@ Private Sub LoadOtpremnice()
     Dim dCe As Object: Set dCe = BuildFirstBlokCena()
     Dim dNap As Object: Set dNap = BuildNapisanoByOtp()
 
+    ' Malina mod: kolona "Kupac" SAMO za otpremnice cije je OM (stanica) hladnjaca
+    ' (tblStanice.JeHladnjaca = "Da") prikazuje KOOPERANTA vezanog bloka (1 koop.
+    ' po otpremnici/prijemnici), umesto naziva firme-hladnjace. Ostale otpremnice
+    ' (i van malina moda, mal=False) ostaju nepromenjene -> lookupi se ne grade.
+    Dim mal As Boolean: mal = IsMalinaMode()
+    Dim dHlad As Object, dKoopOtp As Object, dKoopNm As Object
+    If mal Then
+        Set dHlad = BuildLookup(TBL_STANICE, "StanicaID", COL_STA_JE_HLADNJACA)
+        Set dKoopOtp = BuildKoopIdByOtp()
+        Set dKoopNm = BuildKoopNames()
+    End If
+
     ' Indeksi za prikaz (uz filter "samo nezavrsene") + sort po datumu DESC
     Dim n As Long: n = UBound(data, 1)
     Dim idx() As Long: ReDim idx(1 To n)
@@ -501,7 +513,20 @@ Private Sub LoadOtpremnice()
         mLstOtp.List(r, 2) = DictVal(dSt, CStr(data(i, cSt)))
         mLstOtp.List(r, 3) = FmtKgDec(ukupno)
         mLstOtp.List(r, 4) = FmtDate(data(i, cDat))
-        mLstOtp.List(r, 5) = KupacNazivZaZbirnu(dKupId, dKupNaziv, CStr(data(i, cZbr)))
+
+        ' Kolona "Kupac": podrazumevano firma (zbirna->kupac). U malina modu, SAMO
+        ' ako je OM (stanica) hladnjaca, prikazi kooperanta vezanog bloka.
+        Dim kupacCol As String
+        kupacCol = KupacNazivZaZbirnu(dKupId, dKupNaziv, CStr(data(i, cZbr)))
+        If mal Then
+            If UCase$(Trim$(DictVal(dHlad, CStr(data(i, cSt))))) = "DA" Then
+                Dim koopNm As String
+                koopNm = DictVal(dKoopNm, DictVal(dKoopOtp, otpID))
+                If Len(koopNm) > 0 Then kupacCol = koopNm
+            End If
+        End If
+        mLstOtp.List(r, 5) = kupacCol
+
         mLstOtp.List(r, 6) = FmtKg(prodajna)
         mLstOtp.List(r, 7) = FmtKg(cenaBlok)
         mLstOtp.List(r, 8) = FmtKgDec(ukupno - nap)
@@ -1375,6 +1400,29 @@ Private Function BuildNapisanoByOtp() As Object
                 d.Add k, NumVal(data(i, cKol))
             End If
         End If
+    Next i
+End Function
+
+' OtpremnicaID -> KooperantID prvog (ne-storniranog) povezanog bloka.
+' Malina/hladnjaca: 1 kooperant po otpremnici -> prvi je dovoljan.
+Private Function BuildKoopIdByOtp() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Set BuildKoopIdByOtp = d
+
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cOtp As Long, cKoop As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    If cOtp = 0 Or cKoop = 0 Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        Dim k As String: k = Trim$(CStr(data(i, cOtp)))
+        Dim kp As String: kp = Trim$(CStr(data(i, cKoop)))
+        If Len(k) > 0 And Len(kp) > 0 And Not d.Exists(k) Then d.Add k, kp
     Next i
 End Function
 
