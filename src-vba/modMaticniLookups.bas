@@ -23,6 +23,7 @@ Option Explicit
 
 Private mWrappers As Collection   ' clsLookupMenuBtn instance (drzi WithEvents zivim)
 Private mBtns As Collection       ' MSForms.CommandButton kontrole (za reset/hover)
+Private mHoverNm As String        ' poslednje hover-ovano dugme (anti-flicker)
 
 Private Const STATIC_BTNS As String = _
     "btnKooperanti;btnStanice;btnKupci;btnVozaci;btnArtikli;btnParcele"
@@ -93,6 +94,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
 
     Set mWrappers = New Collection
     Set mBtns = New Collection
+    mHoverNm = ""
 
     ' Geometrija se cita sa postojeceg dugmeta (robusno, bez magic broja).
     Dim tmpl As MSForms.CommandButton
@@ -234,6 +236,11 @@ End Sub
 
 Public Sub MaticniMenu_OnHover(ByVal b As Object)
     On Error Resume Next
+    If b Is Nothing Then Exit Sub
+    ' Anti-flicker: MouseMove okida vise puta nad ISTIM dugmetom -> restajluj
+    ' samo kad se hover-ovano dugme promeni (ne na svaki piksel pomeraja).
+    If StrComp(b.name, mHoverNm, vbTextCompare) = 0 Then Exit Sub
+    mHoverNm = b.name
     MaticniMenu_ResetAll
     ButtonHover b
 End Sub
