@@ -2,7 +2,7 @@ Attribute VB_Name = "modAuth"
 Option Explicit
 
 ' ============================================================
-' modAuth – per-user prijava + prava po oblasti (Faza 1)
+' modAuth - per-user prijava + prava po oblasti (Faza 1)
 '
 ' Cilj: admin sa svim pravima + korisnici kojima admin odobrava
 ' pristup PO OBLASTI (Otkup, Dokumenta, Agrohemija, ...). Model A:
@@ -38,17 +38,36 @@ EH:
 End Function
 
 ' ------------------------------------------------------------
-' Prikazi login formu i vrati True ako je prijava uspela.
+' Prijava preko InputBox-a (bez zasebne forme -> uvek se kompajlira/uvozi).
+' Vrati True ako je prijava uspela. 3 pokusaja; Cancel/prazno = odustani.
 ' Poziva se iz modMain.StartApp (posle AccessGateOrQuit, pre frmSplash).
+' Napomena: maskiran PIN je opciono kasnije (rucno napravljena frmLogin forma).
 ' ------------------------------------------------------------
 Public Function Login() As Boolean
     On Error GoTo EH
     Logout
 
-    frmLogin.LoginOK = False
-    frmLogin.Show                       ' modal (default)
-    Login = frmLogin.LoginOK
-    Unload frmLogin
+    Dim u As String, pin As String
+    Dim attempt As Long
+
+    For attempt = 1 To 3
+        u = Trim$(InputBox("Korisnicko ime:", APP_NAME))
+        If Len(u) = 0 Then Exit Function          ' Cancel / prazno -> Login = False
+
+        pin = Trim$(InputBox("PIN za '" & u & "':", APP_NAME))
+        If Len(pin) = 0 Then Exit Function
+
+        If ValidateLogin(u, pin) Then
+            Login = True
+            Exit Function
+        End If
+
+        If attempt < 3 Then
+            MsgBox "Pogresno korisnicko ime ili PIN (" & attempt & "/3).", vbExclamation, APP_NAME
+        End If
+    Next attempt
+
+    MsgBox "Previse pogresnih pokusaja prijave.", vbCritical, APP_NAME
     Exit Function
 EH:
     LogErr "modAuth.Login"
@@ -200,12 +219,12 @@ End Function
 ' ------------------------------------------------------------
 Public Sub QuitAfterFailedLogin()
     On Error Resume Next
-    MsgBox "Prijava neuspešna. Aplikacija se zatvara.", vbCritical, APP_NAME
+    MsgBox "Prijava neuspesna. Aplikacija se zatvara.", vbCritical, APP_NAME
     ThisWorkbook.Close SaveChanges:=False
 End Sub
 
 ' ============================================================
-' Faza 3 — PIN hashing (opt-in: PIN_HASH_ENABLED, default NO).
+' Faza 3 - PIN hashing (opt-in: PIN_HASH_ENABLED, default NO).
 ' Format sacuvanog PIN-a: "sha256$<salt>$<hexHash>" (hash) ili plaintext (legacy).
 ' SHA-256 preko .NET (System.Security.Cryptography). PRE ukljucenja: Alt+F8 ->
 ' TestPinHash (mora PASS). Migracija plaintext->hash je transparentna pri prijavi.
@@ -290,11 +309,11 @@ Public Sub TestPinHash()
     Dim got As String
     got = Sha256Hex("abc")
     If StrComp(got, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", vbTextCompare) = 0 Then
-        MsgBox "PIN hash (SHA-256) RADI ispravno u ovom okruženju." & vbCrLf & _
-               "Možeš uključiti: Alt+F8 -> EnablePinHash.", vbInformation, APP_NAME
+        MsgBox "PIN hash (SHA-256) RADI ispravno u ovom okruzenju." & vbCrLf & _
+               "Mozes ukljuciti: Alt+F8 -> EnablePinHash.", vbInformation, APP_NAME
     Else
-        MsgBox "PIN hash NE radi u ovom okruženju (SHA-256 nedostupan)." & vbCrLf & _
-               "NE uključuj PIN hash — ostani na plaintext PIN-u." & vbCrLf & _
+        MsgBox "PIN hash NE radi u ovom okruzenju (SHA-256 nedostupan)." & vbCrLf & _
+               "NE ukljucuj PIN hash - ostani na plaintext PIN-u." & vbCrLf & _
                "Dobijeno: '" & got & "'", vbExclamation, APP_NAME
     End If
 End Sub

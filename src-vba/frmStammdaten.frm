@@ -446,7 +446,7 @@ Private Sub SetupKorisnici()
     m_TableName = TBL_KORISNICI
 
     ' Display-headeri (lista). CRUD se radi po IMENU kolone (drift-safe),
-    ' ne pozicijski — jer tblKorisnici ima i 9 kolona oblasti (DA/NE).
+    ' ne pozicijski - jer tblKorisnici ima i 9 kolona oblasti (DA/NE).
     m_Headers = Array( _
         COL_KOR_ID, _
         COL_KOR_USERNAME, _
@@ -458,7 +458,7 @@ Private Sub SetupKorisnici()
 
     m_FieldCount = 7
 
-    lblField1.caption = "Korisničko ime": lblField1.Visible = True: txtField1.Visible = True
+    lblField1.caption = "Korisnicko ime": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Ime i prezime": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "PIN (izmena: prazno=isti)": lblField3.Visible = True: txtField3.Visible = True
     lblField4.caption = "Uloga (Admin/Korisnik)": lblField4.Visible = True: txtField4.Visible = True
@@ -1619,7 +1619,7 @@ Private Sub btnDodaj_Click()
 
         Case "Korisnici"
             If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite korisničko ime!", vbExclamation, APP_NAME
+                MsgBox "Unesite korisnicko ime!", vbExclamation, APP_NAME
                 txtField1.SetFocus
                 Exit Sub
             End If
@@ -1634,7 +1634,7 @@ Private Sub btnDodaj_Click()
             postojiKor = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
             If Not IsEmpty(postojiKor) Then
                 If Len(Trim$(CStr(postojiKor))) > 0 Then
-                    MsgBox "Korisnik '" & Trim$(txtField1.value) & "' već postoji!", vbExclamation, APP_NAME
+                    MsgBox "Korisnik '" & Trim$(txtField1.value) & "' vec postoji!", vbExclamation, APP_NAME
                     Exit Sub
                 End If
             End If
@@ -2152,7 +2152,7 @@ Private Sub btnIzmeni_Click()
 
         Case "Korisnici"
             If Trim$(txtField1.value) = "" Then
-                MsgBox "Unesite korisničko ime!", vbExclamation, APP_NAME
+                MsgBox "Unesite korisnicko ime!", vbExclamation, APP_NAME
                 txtField1.SetFocus
                 Exit Sub
             End If

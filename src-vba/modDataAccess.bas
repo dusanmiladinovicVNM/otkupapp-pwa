@@ -164,7 +164,7 @@ ErrHandler:
 End Function
 
 ' ============================================================
-' Audit stamp (timestamp + userstamp) — centralno za AppendRow/UpdateCell.
+' Audit stamp (timestamp + userstamp) - centralno za AppendRow/UpdateCell.
 ' Upisuje direktno u celije (ne preko UpdateCell) -> nema rekurzije.
 ' No-op ako tabela nema audit kolone (npr. config/report tabele).
 ' Userstamp: prijavljeni korisnik (modAuth) -> fallback Windows nalog.
