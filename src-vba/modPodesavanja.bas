@@ -68,24 +68,36 @@ Public Function ConfigEditorFields() As Variant
 
     CfgAdd c, "Otkup / dokumenta", "OTKUP_KLAUZULA", "Klauzula (otkupni list)", "memo"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"
-    CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
-    CfgAdd c, "Otkup / dokumenta", "AUTO_BROJ_DOKUMENTA", "Automatsko generisanje brojeva dokumenata", "bool"
-    CfgAdd c, "Otkup / dokumenta", "PALETIRANJE", "Paletiranje (izrada paletnih listova)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_PRINT_MODE", Poruka("CFG_MSG_STAMPA_OTKUPNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "PALETA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PALETNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PRIJEMNICE_AUTO"), "list:PDF;PRINT;PREVIEW;OFF"
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
-    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
-    CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
     CfgAdd c, "Otkup / dokumenta", "KOOP_FILTER_BY_OM", "Filtriraj kooperante po otkupnom mestu", "bool"
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_VRSTA_VOCA", "Podrazumevana vrsta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "VrstaVoca", True)
     CfgAdd c, "Otkup / dokumenta", "KOOP_AUTO_CREATE", "Auto-kreiraj kooperanta iz unetog imena", "bool"
-    CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_SORTA_VOCA", "Podrazumevana sorta vo" & ChrW(263) & "a", "list:" & LookupCSV(TBL_KULTURE, "SortaVoca", True)
+    CfgAdd c, "Otkup / dokumenta", "AUTO_BROJ_DOKUMENTA", "Automatsko generisanje brojeva dokumenata", "bool"
+    CfgAdd c, "Otkup / dokumenta", "DEFAULT_TIP_PALETE", "Podrazumevani tip palete", "text"
     CfgAdd c, "Otkup / dokumenta", "KES_ISPLATE", "Postoje ke" & ChrW(353) & " isplate proizvodjacima", "bool"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BRUTO_UNOS", Poruka("CFG_MSG_KUPAC_UNOSI_BRUTO"), "bool"
+    CfgAdd c, "Otkup / dokumenta", "PALETIRANJE", "Paletiranje (izrada paletnih listova)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "PDV_NADOKNADA_STOPA", "PDV nadoknada stopa (%)", "int"
+    CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
+    CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
+
+    ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
+    ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).
+    CfgAdd c, ChrW(352) & "tampa", "OTKUP_PRINT_MODE", Poruka("CFG_MSG_STAMPA_OTKUPNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "GRUPNI_OTKUP_PRINT_MODE", "Grupni otkupni list", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "PRIJEMNICA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PRIJEMNICE_AUTO"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "OTPREMNICA_PRINT_MODE", "Otpremnica", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "PALETA_PRINT_MODE", Poruka("CFG_MSG_STAMPA_PALETNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "PRERADA_PRINT_MODE", "Paletni list got. proizvoda", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "OM_IZDAVANJE_PRINT_MODE", "Revers ambala" & ChrW(382) & "e (izdavanje/povrat)", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "FAKTURA_PRINT_MODE", "Faktura", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "KARTICA_PRINT_MODE", "Kartica kooperanta", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "KARTICA_AMB_PRINT_MODE", "Kartica ambala" & ChrW(382) & "e", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "SPECIFIKACIJA_PRINT_MODE", "Specifikacija", "list:PDF;PRINT;PREVIEW;OFF"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
+    CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Management / Klijent", "MGMT_USER_1", "Management korisnik 1", "text"

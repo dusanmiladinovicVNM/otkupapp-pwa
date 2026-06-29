@@ -69,6 +69,10 @@ End Sub
 ' ============================================================
 Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     On Error GoTo EH
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_OTPREMNICA_PRINT_MODE), "PDF")
+    If mode = "OFF" Then Exit Sub
+
     Dim ws As Worksheet: Set ws = FillOtpremnicaSablon(otpID)
     If ws Is Nothing Then
         MsgBox "Otpremnica nije pronadjena ili se ne mo" & ChrW(382) & "e pripremiti (" & otpID & ").", _
@@ -79,7 +83,11 @@ Public Sub OutputOtpremnicaPDF(ByVal otpID As String)
     Dim suff As String: suff = Replace(Replace(broj, "/", "-"), "\\", "-")
     If Len(Trim$(suff)) = 0 Then suff = otpID
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTPREMNICE) & "\Otpremnica_" & suff & ".pdf"
-    DocExportPdf ws, pdfPath, True
+    If mode = "PRINT" Or mode = "PREVIEW" Then
+        DocPrintWs ws, mode
+    Else
+        DocExportPdf ws, pdfPath, True
+    End If
     Exit Sub
 EH:
     LogErr "modPrint.OutputOtpremnicaPDF"
@@ -794,8 +802,10 @@ End Sub
 ' Glavni ulaz. Best-effort: greska se loguje, ne prekida tok prijemnice.
 Public Sub OutputGrupniOtkupniList(ByVal prijemnicaIDs As String)
     On Error GoTo EH
-    Dim mode As String
-    mode = DocResolveMode(GetConfigValue(CFG_OTKUP_PRINT_MODE), "PDF")
+    ' Zaseban kljuc; prazno -> prati otkupni list (CFG_OTKUP_PRINT_MODE).
+    Dim raw As String: raw = Trim$(GetConfigValue(CFG_GRUPNI_OTKUP_PRINT_MODE))
+    If Len(raw) = 0 Then raw = GetConfigValue(CFG_OTKUP_PRINT_MODE)
+    Dim mode As String: mode = DocResolveMode(raw, "PDF")
 
     Select Case mode
         Case "PRINT", "PREVIEW"
@@ -1245,9 +1255,9 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr, 6)).NumberFormat = "#,##0.00"
     rr = rr + 2
 
-    ' --- vracena ambalaza (ako je uneta) ---
+    ' --- izdata ambalaza (label; podatak je KolAmbVracena, ako je uneta) ---
     If ambV > 0 Then
-        DocLabelVal ws, rr, 1, "Vracena ambala" & ChrW(382) & "a (kom):", CStr(CLng(ambV))
+        DocLabelVal ws, rr, 1, "Izdata ambala" & ChrW(382) & "a (kom):", CStr(CLng(ambV))
         rr = rr + 2
     End If
 

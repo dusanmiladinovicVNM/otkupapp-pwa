@@ -96,7 +96,7 @@ Public Sub SavePrerada_Prompt()
     Dim preID As String
     preID = SavePrerada_TX(ids, CLng(val(sk)), CLng(val(se)), _
                            CDbl(val(Replace(sn, ",", "."))), snap)
-    If preID <> "" Then ExportPreradaPDF preID, True
+    If preID <> "" Then OutputPreradaList preID
     Exit Sub
 EH:
     LogErr "modPaletniListUI.SavePrerada_Prompt"
