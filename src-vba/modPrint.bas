@@ -1255,9 +1255,9 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     ws.Range(ws.cells(hdr + 1, 4), ws.cells(rr, 6)).NumberFormat = "#,##0.00"
     rr = rr + 2
 
-    ' --- vracena ambalaza (ako je uneta) ---
+    ' --- izdata ambalaza (label; podatak je KolAmbVracena, ako je uneta) ---
     If ambV > 0 Then
-        DocLabelVal ws, rr, 1, "Vracena ambala" & ChrW(382) & "a (kom):", CStr(CLng(ambV))
+        DocLabelVal ws, rr, 1, "Izdata ambala" & ChrW(382) & "a (kom):", CStr(CLng(ambV))
         rr = rr + 2
     End If
 
