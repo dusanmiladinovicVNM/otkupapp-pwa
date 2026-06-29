@@ -79,6 +79,18 @@ Private Sub UserForm_Activate()
         Exit Sub
     End If
 
+    ' Admin: runtime panel (modAdmin) -- isti runtime-controls pristup kao
+    ' Podesavanja; frmStammdaten.frx se NE dira.
+    If Me.Tag = "Admin" Then
+        modAdmin.BuildAdminPanel Me
+        If Not mChromeRemoved Then
+            Me.caption = ""             ' brisi caption
+            RemoveTitleBar               ' onda ga sakri
+            mChromeRemoved = True
+        End If
+        Exit Sub
+    End If
+
     ' Style staticnih elemenata koji ne menjaju za Setup
     On Error Resume Next
     StylePrimaryButton btnDodaj, "Dodaj"
