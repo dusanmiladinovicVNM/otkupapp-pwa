@@ -28,6 +28,8 @@ Private m_OtkupIDs() As String
 ' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
 Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
 Private WithEvents m_tglPrijemKoop As MSForms.ToggleButton
+Private WithEvents m_tglIzdatoOM As MSForms.ToggleButton
+Private WithEvents m_tglPrijemOdOM As MSForms.ToggleButton
 
 Private m_FocusableInputs As Collection
 
@@ -164,6 +166,8 @@ Private Sub UserForm_Activate()
         .AddItem "Novac"
         .AddItem "Revers izdavanje koop."
         .AddItem "Revers povrat koop."
+        .AddItem "Revers izdato OM (firma)."
+        .AddItem "Revers prijem od OM (firma)."
     End With
     
     CheckVerwaisteDokumente
@@ -885,7 +889,8 @@ Private Sub RefreshBrojReversSuggestion()
     ' Predlog broja reversa (OM<->koop). Samo kad je aktivan jedan smer (Izdato/
     ' Prijem); postuje AUTO_BROJ_DOKUMENTA (SuggestNextBroj vraca "" kad je OFF).
     On Error GoTo EH
-    If Not (OMIzdavanjeAktivno() Or OMPrijemKoopAktivno()) Then Exit Sub
+    If Not (OMIzdavanjeAktivno() Or OMPrijemKoopAktivno() Or _
+            OMIzdatoOMAktivno() Or OMPrijemOdOMAktivno()) Then Exit Sub
     Dim stanicaID As String: stanicaID = GetComboID(cmbOtkupnoMesto)
     If Len(stanicaID) = 0 Then Exit Sub
     Dim datumDok As Date
@@ -1184,6 +1189,36 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             TrackAmbalaza datum, tipAmb, kolAmb, _
                           "Ulaz", stanicaID, "Stanica", _
                           "", brojDok, DOK_TIP_OM_ULAZ_KOOP
+        Case "IZDATO_OM"
+            ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
+            ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
+            ' kod kupca (prijemnica-povrat / kupci-izlaz) -> hladnjaca se NE knjizi ovde.
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1507, "SaveOMUlaz_TX", _
+                          "Izdato OM: OM (otkupno mesto) je obavezan."
+            End If
+            If Trim$(vozacID) = "" Then
+                Err.Raise vbObjectError + 1509, "SaveOMUlaz_TX", _
+                          "Izdato OM: vozac je obavezan (firma<->OM ide preko vozaca)."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Ulaz", stanicaID, "Stanica", _
+                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA
+        Case "PRIJEM_OD_OM"
+            ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
+            ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
+            ' (hladnjaci) kroz postojece kupac tokove -> hladnjaca se NE knjizi ovde.
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1508, "SaveOMUlaz_TX", _
+                          "Prijem od OM: OM (otkupno mesto) je obavezan."
+            End If
+            If Trim$(vozacID) = "" Then
+                Err.Raise vbObjectError + 1510, "SaveOMUlaz_TX", _
+                          "Prijem od OM: vozac je obavezan (firma<->OM ide preko vozaca)."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Izlaz", stanicaID, "Stanica", _
+                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA
         Case Else
             ' OM PRIMA ambalazu od vozaca -> Stanica ULAZ (postojece ponasanje).
             TrackAmbalaza datum, tipAmb, kolAmb, _
@@ -1304,6 +1339,44 @@ Private Sub SetupOMIzdavanjeToggle()
         .value = False
     End With
 
+    ' Drugi red: firma toggle-i (OM<->firma) ispod koop para. Best-effort: ako
+    ' kreiranje ne uspe (npr. nema mesta u frame-u), koop par i forma i dalje rade.
+    On Error Resume Next
+    If asChild Then
+        Set m_tglIzdatoOM = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglIzdatoOMRT", True)
+        Set m_tglPrijemOdOM = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
+    Else
+        Set m_tglIzdatoOM = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdatoOMRT", True)
+        Set m_tglPrijemOdOM = Me.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
+    End If
+    If (Not m_tglIzdatoOM Is Nothing) And (Not m_tglPrijemOdOM Is Nothing) Then
+        With m_tglIzdatoOM
+            .caption = "Izdato OM"
+            .width = TGL_W
+            .Height = 20
+            .Left = baseLeft
+            .top = baseTop + 24
+            .WordWrap = False
+            .Visible = True
+            .value = False
+        End With
+        With m_tglPrijemOdOM
+            .caption = "Prijem od OM"
+            .width = TGL_W
+            .Height = 20
+            .Left = baseLeft + TGL_W + TGL_GAP
+            .top = baseTop + 24
+            .WordWrap = False
+            .Visible = True
+            .value = False
+        End With
+        If Not asChild Then
+            m_tglIzdatoOM.ZOrder 0
+            m_tglPrijemOdOM.ZOrder 0
+        End If
+    End If
+    On Error GoTo done
+
     If Not asChild Then
         On Error Resume Next
         m_tglIzdKoop.ZOrder 0          ' na vrh, da se vidi preko frame-a
@@ -1328,13 +1401,33 @@ Private Function OMPrijemKoopAktivno() As Boolean
     If Not m_tglPrijemKoop Is Nothing Then OMPrijemKoopAktivno = (m_tglPrijemKoop.value = True)
 End Function
 
+Private Function OMIzdatoOMAktivno() As Boolean
+    On Error Resume Next
+    If Not m_tglIzdatoOM Is Nothing Then OMIzdatoOMAktivno = (m_tglIzdatoOM.value = True)
+End Function
+
+Private Function OMPrijemOdOMAktivno() As Boolean
+    On Error Resume Next
+    If Not m_tglPrijemOdOM Is Nothing Then OMPrijemOdOMAktivno = (m_tglPrijemOdOM.value = True)
+End Function
+
 ' Dva toggle-a su medjusobno iskljuciva (jedan smer po unosu): kad se jedan ukljuci,
 ' drugi se gasi. Postavljanje value=False ne ulazi u True-granu -> nema rekurzije.
+' Iskljuci sve revers toggle-e osim datog (sva cetiri smera su medjusobno
+' iskljuciva: jedan smer po unosu).
+Private Sub TurnOffReversTogglesExcept(ByVal keep As MSForms.ToggleButton)
+    On Error Resume Next
+    If Not m_tglIzdKoop Is Nothing Then If Not (m_tglIzdKoop Is keep) Then m_tglIzdKoop.value = False
+    If Not m_tglPrijemKoop Is Nothing Then If Not (m_tglPrijemKoop Is keep) Then m_tglPrijemKoop.value = False
+    If Not m_tglIzdatoOM Is Nothing Then If Not (m_tglIzdatoOM Is keep) Then m_tglIzdatoOM.value = False
+    If Not m_tglPrijemOdOM Is Nothing Then If Not (m_tglPrijemOdOM Is keep) Then m_tglPrijemOdOM.value = False
+End Sub
+
 Private Sub m_tglIzdKoop_Change()
     On Error Resume Next
     If m_tglIzdKoop Is Nothing Then Exit Sub
     If m_tglIzdKoop.value = True Then
-        If Not m_tglPrijemKoop Is Nothing Then m_tglPrijemKoop.value = False
+        TurnOffReversTogglesExcept m_tglIzdKoop
         RefreshBrojReversSuggestion
     End If
 End Sub
@@ -1343,7 +1436,25 @@ Private Sub m_tglPrijemKoop_Change()
     On Error Resume Next
     If m_tglPrijemKoop Is Nothing Then Exit Sub
     If m_tglPrijemKoop.value = True Then
-        If Not m_tglIzdKoop Is Nothing Then m_tglIzdKoop.value = False
+        TurnOffReversTogglesExcept m_tglPrijemKoop
+        RefreshBrojReversSuggestion
+    End If
+End Sub
+
+Private Sub m_tglIzdatoOM_Change()
+    On Error Resume Next
+    If m_tglIzdatoOM Is Nothing Then Exit Sub
+    If m_tglIzdatoOM.value = True Then
+        TurnOffReversTogglesExcept m_tglIzdatoOM
+        RefreshBrojReversSuggestion
+    End If
+End Sub
+
+Private Sub m_tglPrijemOdOM_Change()
+    On Error Resume Next
+    If m_tglPrijemOdOM Is Nothing Then Exit Sub
+    If m_tglPrijemOdOM.value = True Then
+        TurnOffReversTogglesExcept m_tglPrijemOdOM
         RefreshBrojReversSuggestion
     End If
 End Sub
@@ -1432,8 +1543,14 @@ Private Sub btnUnosOMUlaz_Click()
     Dim izdavanje As Boolean, prijemKoop As Boolean
     izdavanje = OMIzdavanjeAktivno()
     prijemKoop = OMPrijemKoopAktivno()
-    If izdavanje And prijemKoop Then
-        MsgBox "Izaberite samo jedan smer ambala" & ChrW(382) & "e: Izdato ILI Prijem (kooperant).", _
+    Dim izdatoOM As Boolean, prijemOdOM As Boolean
+    izdatoOM = OMIzdatoOMAktivno()
+    prijemOdOM = OMPrijemOdOMAktivno()
+    Dim smerCount As Integer
+    smerCount = Abs(CInt(izdavanje)) + Abs(CInt(prijemKoop)) + _
+                Abs(CInt(izdatoOM)) + Abs(CInt(prijemOdOM))
+    If smerCount > 1 Then
+        MsgBox "Izaberite samo jedan smer ambala" & ChrW(382) & "e (koop ILI firma; izdavanje ILI prijem).", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -1455,6 +1572,23 @@ Private Sub btnUnosOMUlaz_Click()
         kooperantID = GetComboID(cmbPrimalacOMUlaz)
         If kooperantID = "" Then
             MsgBox "Nije prona" & ChrW(273) & "en ID kooperanta.", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
+    ' Firma<->OM kretanje (toggle): kolicina i vozac obavezni; OM je vec validiran.
+    ' Tok firma<->OM uvek ide preko vozaca (malina: auto par-vozac stanice; off: rucno).
+    If izdatoOM Or prijemOdOM Then
+        If kolAmb <= 0 Then
+            MsgBox "Za revers OM<->firma unesite koli" & ChrW(269) & "inu ambala" & ChrW(382) & "e.", _
+                   vbExclamation, APP_NAME
+            txtKolAmbOMUlaz.SetFocus
+            Exit Sub
+        End If
+        If Trim$(vozacID) = "" Then
+            MsgBox "Za revers OM<->firma izaberite voza" & ChrW(269) & "a (kretanje ide preko voza" & ChrW(269) & "a).", _
+                   vbExclamation, APP_NAME
+            cmbVozac.SetFocus
             Exit Sub
         End If
     End If
@@ -1514,7 +1648,7 @@ Private Sub btnUnosOMUlaz_Click()
 
     ' Auto-broj reversa (postuje AUTO_BROJ_DOKUMENTA): ako broj nije unet/predlozen,
     ' generisi ga sada po modelu x/ddmmyy[-N] iz revers tokova (tblAmbalaza).
-    If (izdavanje Or prijemKoop) And brojDok = "" Then
+    If (izdavanje Or prijemKoop Or izdatoOM Or prijemOdOM) And brojDok = "" Then
         brojDok = SuggestNextBroj(KIND_REV, stanicaID, datumDok)
         txtBrojDokOMUlaz.value = brojDok
     End If
@@ -1524,6 +1658,10 @@ Private Sub btnUnosOMUlaz_Click()
         koopSmer = "IZDAVANJE"
     ElseIf prijemKoop Then
         koopSmer = "PRIJEM"
+    ElseIf izdatoOM Then
+        koopSmer = "IZDATO_OM"
+    ElseIf prijemOdOM Then
+        koopSmer = "PRIJEM_OD_OM"
     End If
     If Not SaveOMUlaz_TX( _
         datum:=datumDok, _
@@ -1555,6 +1693,13 @@ Private Sub btnUnosOMUlaz_Click()
         OutputIzdavanjeAmbalaze datumDok, brojDok, cmbOtkupnoMesto.value, stanicaID, _
                                 cmbPrimalacOMUlaz.value, kooperantID, _
                                 cmbTipAmbOMUlaz.value, kolAmb, cmbVrstaVoca.value, prijemKoop
+    ElseIf izdatoOM Or prijemOdOM Then
+        Dim vozacNazivRev As String
+        vozacNazivRev = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Ime")) & " " & _
+                              CStr(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Prezime")))
+        OutputIzdavanjeAmbalaze datumDok, brojDok, cmbOtkupnoMesto.value, stanicaID, _
+                                vozacNazivRev, "", _
+                                cmbTipAmbOMUlaz.value, kolAmb, cmbVrstaVoca.value, izdatoOM, "FIRMA"
     End If
 
     txtBrojDokOMUlaz.value = ""
@@ -1563,6 +1708,8 @@ Private Sub btnUnosOMUlaz_Click()
     cmbPrimalacOMUlaz.value = ""
     If Not m_tglIzdKoop Is Nothing Then m_tglIzdKoop.value = False
     If Not m_tglPrijemKoop Is Nothing Then m_tglPrijemKoop.value = False
+    If Not m_tglIzdatoOM Is Nothing Then m_tglIzdatoOM.value = False
+    If Not m_tglPrijemOdOM Is Nothing Then m_tglPrijemOdOM.value = False
     cmbOtkupBlok.Clear
     tglIzOMAvansa.value = False
 
@@ -2640,6 +2787,24 @@ Private Sub btnStorno_Click()
             End If
             If ConfirmStorno("revers povrat (koop)", brDok) Then _
                 Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_KOOP)
+
+        Case "Revers izdato OM (firma)."
+            If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_ULAZ_FIRMA) Then
+                MsgBox "Revers 'izdato OM' '" & brDok & "' nije pronadjen (ili je ve" & ChrW(263) & " storniran)!", _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If ConfirmStorno("revers izdato OM (firma)", brDok) Then _
+                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_FIRMA)
+
+        Case "Revers prijem od OM (firma)."
+            If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_FIRMA) Then
+                MsgBox "Revers 'prijem od OM' '" & brDok & "' nije pronadjen (ili je ve" & ChrW(263) & " storniran)!", _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If ConfirmStorno("revers prijem od OM (firma)", brDok) Then _
+                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_IZLAZ_FIRMA)
     End Select
     
     If Success Then
