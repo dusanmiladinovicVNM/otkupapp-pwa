@@ -2301,7 +2301,8 @@ End Function
 ' Tipovi storno dokumenata u redosledu prikaza (isti nazivi kao cmbStornoDokument).
 Public Function StorniraniTipovi() As Variant
     StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac", _
-                         "Revers izdavanje koop.", "Revers povrat koop.")
+                         "Revers izdavanje koop.", "Revers povrat koop.", _
+                         "Revers izdato OM (firma).", "Revers prijem od OM (firma).")
 End Function
 
 ' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
@@ -2327,6 +2328,12 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
             Exit Function
         Case "Revers povrat koop."
             GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_ULAZ_KOOP)
+            Exit Function
+        Case "Revers izdato OM (firma)."
+            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_ULAZ_FIRMA, "Stanica")
+            Exit Function
+        Case "Revers prijem od OM (firma)."
+            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_IZLAZ_FIRMA, "Stanica")
             Exit Function
     End Select
 
@@ -2483,7 +2490,8 @@ End Function
 ' Mapiranje: Vrsta=TipAmbalaze, Kolicina=broj gajbica; ostalo prazno.
 ' Preskace OM-Izlaz-Koop noge knjizene UZ otkup (DokumentID = otkupID "OTK-...";
 ' vec se vide pod grupom 'Otkup') -> ostaju samo standalone reversi (broj x/ddmmyy).
-Private Function GetStorniraniRevers(ByVal dokTip As String) As Variant
+Private Function GetStorniraniRevers(ByVal dokTip As String, _
+                                     Optional ByVal entType As String = "Kooperant") As Variant
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
@@ -2501,13 +2509,17 @@ Private Function GetStorniraniRevers(ByVal dokTip As String) As Variant
     If iBroj = 0 Or iDokTip = 0 Or iStorno = 0 Then Exit Function
 
     Dim pdict As Object
-    Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    If entType = "Stanica" Then
+        Set pdict = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
+    Else
+        Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    End If
     Dim rows As Collection: Set rows = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA" Then
             If Trim$(CStr(data(i, iDokTip))) = dokTip And _
-               Trim$(CStr(data(i, iEntTip))) = "Kooperant" And _
+               Trim$(CStr(data(i, iEntTip))) = entType And _
                UCase$(Left$(Trim$(CStr(data(i, iBroj))), 3)) <> "OTK" Then
                 rows.Add Array( _
                     StornoCellText(data, i, iBroj), _

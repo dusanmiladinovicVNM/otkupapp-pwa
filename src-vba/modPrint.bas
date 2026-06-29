@@ -1343,7 +1343,8 @@ Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String,
                                    ByVal koopNaziv As String, ByVal koopID As String, _
                                    ByVal tipAmb As String, ByVal kolAmb As Long, _
                                    ByVal vrstaVoca As String, _
-                                   ByVal prijem As Boolean)
+                                   ByVal prijem As Boolean, _
+                                   Optional ByVal counterparty As String = "KOOP")
     On Error GoTo EH
     m_izdAmbPrijem = prijem
     Dim mode As String
@@ -1353,11 +1354,11 @@ Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String,
         Case "PRINT", "PREVIEW"
             Dim ws As Worksheet
             Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
-                                                 koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
+                                                 koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, counterparty)
             If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
             ExportIzdavanjeAmbalazePDF datum, brojDok, omNaziv, omID, _
-                                       koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True
+                                       koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True, counterparty
         ' OFF -> bez izlaza
     End Select
     Exit Sub
@@ -1372,11 +1373,12 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
                                            ByVal koopNaziv As String, ByVal koopID As String, _
                                            ByVal tipAmb As String, ByVal kolAmb As Long, _
                                            ByVal vrstaVoca As String, _
-                                           Optional ByVal openAfter As Boolean = True) As String
+                                           Optional ByVal openAfter As Boolean = True, _
+                                           Optional ByVal counterparty As String = "KOOP") As String
     On Error GoTo EH
     Dim ws As Worksheet
     Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
-                                         koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca)
+                                         koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, counterparty)
     If ws Is Nothing Then
         MsgBox "PDF reversa (izdavanje ambala" & ChrW(382) & "e) nije napravljen: priprema lista nije uspela.", _
                vbExclamation, APP_NAME
@@ -1387,7 +1389,12 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     Dim suff As String: suff = Trim$(brojDok)
     If suff = "" Then suff = koopID
     suff = Replace(Replace(suff, " + ", "_"), "/", "-")
-    Dim pref As String: pref = IIf(m_izdAmbPrijem, "PrijemAmbalaze_", "IzdavanjeAmbalaze_")
+    Dim pref As String
+    If counterparty = "FIRMA" Then
+        pref = IIf(m_izdAmbPrijem, "PrijemAmbFirma_", "IzdavanjeAmbFirma_")
+    Else
+        pref = IIf(m_izdAmbPrijem, "PrijemAmbalaze_", "IzdavanjeAmbalaze_")
+    End If
     Dim pdfPath As String
     pdfPath = folder & "\" & pref & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
 
@@ -1408,7 +1415,8 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
                                              ByVal omNaziv As String, ByVal omID As String, _
                                              ByVal koopNaziv As String, ByVal koopID As String, _
                                              ByVal tipAmb As String, ByVal kolAmb As Long, _
-                                             ByVal vrstaVoca As String) As Worksheet
+                                             ByVal vrstaVoca As String, _
+                                             Optional ByVal counterparty As String = "KOOP") As Worksheet
     On Error GoTo EH
     Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
 
@@ -1453,13 +1461,25 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     h("kolAmb") = kolAmb
     h("vrsta") = Trim$(vrstaVoca)
     h("prijem") = m_izdAmbPrijem
+    h("ctype") = counterparty
     ' Saldo kod kooperanta: novo stanje (POSLE upisa) i izvedeno pocetno (pre dokumenta).
     ' delta na kooperantu: izdavanje +kolAmb (Ulaz), prijem/povrat -kolAmb (Izlaz).
     Dim saldoNovo As Long
-    h("ambHaveSaldo") = IzdAmbSaldoVal(koopID, tipAmb, saldoNovo)
+    If counterparty = "FIRMA" Then
+        ' Firma revers prikazuje stanje praznih gajbi NA OM-u (Stanica saldo).
+        h("ambHaveSaldo") = IzdAmbSaldoVal(omID, tipAmb, saldoNovo, "Stanica")
+    Else
+        h("ambHaveSaldo") = IzdAmbSaldoVal(koopID, tipAmb, saldoNovo)
+    End If
     If h("ambHaveSaldo") Then
         Dim ambDelta As Long
-        If m_izdAmbPrijem Then ambDelta = -kolAmb Else ambDelta = kolAmb
+        If counterparty = "FIRMA" Then
+            ' Perspektiva OM-a: prijem od firme +kol (Ulaz), izdavanje firmi -kol (Izlaz).
+            If m_izdAmbPrijem Then ambDelta = kolAmb Else ambDelta = -kolAmb
+        Else
+            ' Perspektiva kooperanta: izdavanje +kol (Ulaz), prijem/povrat -kol (Izlaz).
+            If m_izdAmbPrijem Then ambDelta = -kolAmb Else ambDelta = kolAmb
+        End If
         h("ambPocetno") = CStr(saldoNovo - ambDelta) & " kom"
         h("ambSaldo") = CStr(saldoNovo) & " kom"
     End If
@@ -1490,9 +1510,11 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     ' Dva identicna primerka, svaki dopunjen filler-redom do tacno 1/3 A4. Granice
     ' izmedju primeraka padaju na perforacije (99mm i 198mm); donja trecina prazna.
     Dim R0 As Long, lastRow As Long
+    Dim copy2Lbl As String
+    copy2Lbl = IIf(counterparty = "FIRMA", "Primerak: firma (centrala)", "Primerak: kooperant")
     R0 = WriteIzdavanjeCopy(ws, 1, "Primerak: OM (otkupno mesto)", h, _
                             OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
-    lastRow = WriteIzdavanjeCopy(ws, R0, "Primerak: kooperant", h, OL_THIRD_PT) - 1
+    lastRow = WriteIzdavanjeCopy(ws, R0, copy2Lbl, h, OL_THIRD_PT) - 1
 
     DocPageSetupThirdA4 ws, lastRow
 
@@ -1514,6 +1536,29 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     Dim grayClr As Long: grayClr = DocColGray()
     Dim fillClr As Long: fillClr = DocColHeaderFill()
     Dim usedPt As Double: usedPt = 0
+
+    ' Naljepnice zavisne od protivpartnera (kooperant vs firma) i smera (h("prijem")).
+    Dim isFirma As Boolean: isFirma = (UCase$(Trim$(CStr(h("ctype")))) = "FIRMA")
+    Dim lblDescr As String, lblParty As String, lblKret As String
+    Dim lblSigLeft As String, lblSigRight As String
+    Dim lblPocetno As String, lblNovo As String
+    If isFirma Then
+        lblDescr = IIf(h("prijem"), "Prijem prazne ambala" & ChrW(382) & "e na OM (od firme, preko voza" & ChrW(269) & "a)", "Predaja prazne ambala" & ChrW(382) & "e sa OM (firmi, preko voza" & ChrW(269) & "a)")
+        lblParty = "Voza" & ChrW(269) & ": " & CStr(h("koop"))
+        lblKret = IIf(h("prijem"), "Primljeno na OM (od firme):", "Izdato sa OM (firmi):")
+        lblSigLeft = IIf(h("prijem"), "Predao (voza" & ChrW(269) & "):  ____________________", "Predao (OM):  ____________________")
+        lblSigRight = IIf(h("prijem"), "Primio (OM):  ____________________", "Primio (voza" & ChrW(269) & "):  ____________________")
+        lblPocetno = "Pocetno stanje na OM-u (tip " & CStr(h("tipAmb")) & "):"
+        lblNovo = "Novo stanje na OM-u (saldo):"
+    Else
+        lblDescr = IIf(h("prijem"), "Prijem (povrat) prazne ambala" & ChrW(382) & "e od kooperanta", "Izdavanje prazne ambala" & ChrW(382) & "e kooperantu")
+        lblParty = "Kooperant: " & CStr(h("koop"))
+        lblKret = IIf(h("prijem"), "Primljeno (od kooperanta):", "Izdato (kooperantu):")
+        lblSigLeft = IIf(h("prijem"), "Predao (kooperant):  ____________________", "Izdao (OM):  ____________________")
+        lblSigRight = IIf(h("prijem"), "Primio (OM):  ____________________", "Primio (kooperant):  ____________________")
+        lblPocetno = "Pocetno stanje (tip " & CStr(h("tipAmb")) & "):"
+        lblNovo = "Novo stanje (saldo):"
+    End If
 
     ' --- gornji prazan razmak (apsorbuje nestampajucu ivicu stampaca) ---
     ws.rows(R0).RowHeight = OL_TOP_SPACER_PT
@@ -1564,7 +1609,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- naslov: mali descriptor + veliki REVERS ---
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = IIf(h("prijem"), "Prijem (povrat) prazne ambala" & ChrW(382) & "e od kooperanta", "Izdavanje prazne ambala" & ChrW(382) & "e kooperantu")
+        .value = lblDescr
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
@@ -1606,7 +1651,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
 
     ' --- kooperant (prima): ime levo, BPG (ako postoji) desno ---
     With ws.cells(rr, 1)
-        .value = "Kooperant: " & CStr(h("koop"))
+        .value = lblParty
         .Font.Bold = True
     End With
     If Len(CStr(h("bpg"))) > 0 Then DocLabelVal ws, rr, 5, "BPG:", CStr(h("bpg"))
@@ -1669,17 +1714,15 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- ambalaza kod kooperanta: Pocetno stanje -> kretanje -> Novo saldo ---
     '     (entitetski saldo, ista logika kao otkupni list; novo = posle ovog dokumenta)
     If h("ambHaveSaldo") Then
-        Dim kretLbl As String
-        kretLbl = IIf(h("prijem"), "Primljeno (od kooperanta):", "Izdato (kooperantu):")
-        DocLabelVal ws, rr, 1, "Pocetno stanje (tip " & CStr(h("tipAmb")) & "):", CStr(h("ambPocetno"))
+        DocLabelVal ws, rr, 1, lblPocetno, CStr(h("ambPocetno"))
         ws.rows(rr).RowHeight = 13#
         usedPt = usedPt + 13#
         rr = rr + 1
-        DocLabelVal ws, rr, 1, kretLbl, CStr(h("ambKretanje"))
+        DocLabelVal ws, rr, 1, lblKret, CStr(h("ambKretanje"))
         ws.rows(rr).RowHeight = 13#
         usedPt = usedPt + 13#
         rr = rr + 1
-        DocLabelVal ws, rr, 1, "Novo stanje (saldo):", CStr(h("ambSaldo"))
+        DocLabelVal ws, rr, 1, lblNovo, CStr(h("ambSaldo"))
         ws.cells(rr, 1).Font.Bold = True
         ws.rows(rr).RowHeight = 13#
         usedPt = usedPt + 13#
@@ -1695,10 +1738,10 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     rr = rr + 1
 
     ' --- potpisi ---
-    ws.cells(rr, 1).value = IIf(h("prijem"), "Predao (kooperant):  ____________________", "Izdao (OM):  ____________________")
+    ws.cells(rr, 1).value = lblSigLeft
     ws.cells(rr, 1).Font.Size = 9
     ws.cells(rr, 1).Font.Color = grayClr
-    ws.cells(rr, 5).value = IIf(h("prijem"), "Primio (OM):  ____________________", "Primio (kooperant):  ____________________")
+    ws.cells(rr, 5).value = lblSigRight
     ws.cells(rr, 5).Font.Size = 9
     ws.cells(rr, 5).Font.Color = grayClr
     ws.rows(rr).RowHeight = 16#
@@ -1718,11 +1761,12 @@ End Function
 ' nadjen u ledgeru. GetAmbalazeStanje vraca 2D niz: (.,1)=Tip, (.,2)=saldo (Ulaz +,
 ' Izlaz -). Saldo se cita POSLE upisa pa odrazava novo stanje; pocetno = saldo - delta.
 Private Function IzdAmbSaldoVal(ByVal koopID As String, ByVal tipAmb As String, _
-                                ByRef saldo As Long) As Boolean
+                                ByRef saldo As Long, _
+                                Optional ByVal entType As String = "Kooperant") As Boolean
     On Error GoTo EH
     saldo = 0
     If Trim$(koopID) = "" Then Exit Function
-    Dim st As Variant: st = GetAmbalazeStanje(koopID, "Kooperant")
+    Dim st As Variant: st = GetAmbalazeStanje(koopID, entType)
     If Not IsArray(st) Then Exit Function
     Dim i As Long
     For i = LBound(st, 1) To UBound(st, 1)
