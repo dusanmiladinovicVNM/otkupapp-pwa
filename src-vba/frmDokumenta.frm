@@ -1350,12 +1350,19 @@ Private Sub SetupOMIzdavanjeToggle()
         Set m_tglPrijemOdOM = Me.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
     End If
     If (Not m_tglIzdatoOM Is Nothing) And (Not m_tglPrijemOdOM Is Nothing) Then
+        ' Firma par ide ISPOD kes dropdowna (cmbOtkupBlok) da se ne preklapa s njim.
+        Dim firmaTop As Single
+        If asChild Then
+            firmaTop = cmbOtkupBlok.top + cmbOtkupBlok.Height + OMIZD_DY
+        Else
+            firmaTop = fraOMUlaz.top + cmbOtkupBlok.top + cmbOtkupBlok.Height + OMIZD_DY
+        End If
         With m_tglIzdatoOM
             .caption = "Izdato OM"
             .width = TGL_W
             .Height = 20
             .Left = baseLeft
-            .top = baseTop + 24
+            .top = firmaTop
             .WordWrap = False
             .Visible = True
             .value = False
@@ -1365,7 +1372,7 @@ Private Sub SetupOMIzdavanjeToggle()
             .width = TGL_W
             .Height = 20
             .Left = baseLeft + TGL_W + TGL_GAP
-            .top = baseTop + 24
+            .top = firmaTop
             .WordWrap = False
             .Visible = True
             .value = False
