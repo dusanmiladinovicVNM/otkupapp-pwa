@@ -203,7 +203,7 @@ End Function
 ' ------------------------------------------------------------
 Public Sub QuitAfterFailedLogin()
     On Error Resume Next
-    MsgBox "Prijava neuspesna. Aplikacija se zatvara.", vbCritical, APP_NAME
+    MsgBox Poruka("AUTH_MSG_PRIJAVA_NEUSPESNA"), vbCritical, APP_NAME
     ThisWorkbook.Close SaveChanges:=False
 End Sub
 
@@ -293,12 +293,9 @@ Public Sub TestPinHash()
     Dim got As String
     got = Sha256Hex("abc")
     If StrComp(got, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", vbTextCompare) = 0 Then
-        MsgBox "PIN hash (SHA-256) RADI ispravno u ovom okruzenju." & vbCrLf & _
-               "Mozes ukljuciti: Alt+F8 -> EnablePinHash.", vbInformation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_PINHASH_RADI"), vbInformation, APP_NAME
     Else
-        MsgBox "PIN hash NE radi u ovom okruzenju (SHA-256 nedostupan)." & vbCrLf & _
-               "NE ukljucuj PIN hash - ostani na plaintext PIN-u." & vbCrLf & _
-               "Dobijeno: '" & got & "'", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_PINHASH_NE_RADI") & got & "'", vbExclamation, APP_NAME
     End If
 End Sub
 

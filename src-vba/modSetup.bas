@@ -798,9 +798,7 @@ Public Sub EnsureAuditColumns()
     Next i
 
     LogSetup "OK", "EnsureAuditColumns done (" & n & " tabela)"
-    MsgBox "Audit kolone postavljene na " & n & " tabela:" & vbCrLf & _
-           "CreatedAt / CreatedBy / ModifiedAt / ModifiedBy." & vbCrLf & vbCrLf & _
-           "Od sada se svaki unos i izmena beleze (ko i kada).", _
+    MsgBox "Audit kolone postavljene na " & n & Poruka("AUD_MSG_KOLONE_SUFIX"), _
            vbInformation, APP_NAME
     Exit Sub
 
@@ -977,7 +975,7 @@ Public Sub KreirajPrvogAdmina()
     On Error GoTo EH
 
     If Not modAuth.MozeAdministraciju() Then
-        MsgBox "Samo administrator moze da kreira korisnike.", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_KREIRA"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
@@ -995,7 +993,7 @@ Public Sub KreirajPrvogAdmina()
     postoji = LookupValue(TBL_KORISNICI, COL_KOR_USERNAME, u, COL_KOR_ID)
     If Not IsEmpty(postoji) Then
         If Len(Trim$(CStr(postoji))) > 0 Then
-            MsgBox "Korisnik '" & u & "' vec postoji.", vbExclamation, APP_NAME
+            MsgBox "Korisnik '" & u & Poruka("AUTH_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
@@ -1028,8 +1026,7 @@ Public Sub KreirajPrvogAdmina()
         UpdateCell TBL_KORISNICI, idx, CStr(obl), "DA"
     Next obl
 
-    MsgBox "Admin '" & u & "' je kreiran." & vbCrLf & vbCrLf & _
-           "Sledece: ukljuci prijavu sa Alt+F8 -> EnableAuth.", _
+    MsgBox "Admin '" & u & Poruka("AUTH_MSG_ADMIN_KREIRAN"), _
            vbInformation, APP_NAME
     Exit Sub
 
@@ -1045,26 +1042,23 @@ Public Sub EnableAuth()
     On Error GoTo EH
 
     If Not modAuth.MozeAdministraciju() Then
-        MsgBox "Samo administrator moze da menja prijavu.", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_PRIJAVA"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If Not PostojiAktivanAdmin() Then
-        MsgBox "Ne mogu da ukljucim prijavu: ne postoji nijedan aktivan Admin." & vbCrLf & _
-               "Prvo pokreni: Alt+F8 -> KreirajPrvogAdmina.", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_NEMA_ADMINA"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     SetConfigValue CFG_KEY_AUTH_ENABLED, "YES"
     InitSetupLog
     LogSetup "OK", "AUTH_ENABLED = YES"
-    MsgBox "Prijava korisnika je UKLJUCENA." & vbCrLf & _
-           "Pri sledecem otvaranju aplikacije trazi se prijava.", _
-           vbInformation, APP_NAME
+    MsgBox Poruka("AUTH_MSG_PRIJAVA_UKLJUCENA"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
-    MsgBox "Ne mogu da ukljucim prijavu: " & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("AUTH_ERR_NE_MOGU_UKLJUCITI") & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Iskljuci prijavu (AUTH_ENABLED=NO). Alt+F8 -> DisableAuth.
@@ -1072,14 +1066,14 @@ Public Sub DisableAuth()
     On Error GoTo EH
 
     If Not modAuth.MozeAdministraciju() Then
-        MsgBox "Samo administrator moze da iskljuci prijavu.", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_ISKLJUCI"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     SetConfigValue CFG_KEY_AUTH_ENABLED, "NO"
     InitSetupLog
     LogSetup "OK", "AUTH_ENABLED = NO"
-    MsgBox "Prijava korisnika je ISKLJUCENA (app radi bez prijave).", vbInformation, APP_NAME
+    MsgBox Poruka("AUTH_MSG_PRIJAVA_ISKLJUCENA"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -1091,24 +1085,21 @@ Public Sub EnablePinHash()
     On Error GoTo EH
 
     If Not modAuth.MozeAdministraciju() Then
-        MsgBox "Samo administrator moze da menja PIN hash.", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_PINHASH"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     If StrComp(modAuth.Sha256Hex("abc"), _
                "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", _
                vbTextCompare) <> 0 Then
-        MsgBox "SHA-256 ne radi u ovom okruzenju (pokreni Alt+F8 -> TestPinHash)." & vbCrLf & _
-               "PIN hash NIJE ukljucen.", vbCritical, APP_NAME
+        MsgBox Poruka("AUTH_ERR_SHA_NE_RADI"), vbCritical, APP_NAME
         Exit Sub
     End If
 
     SetConfigValue CFG_KEY_PIN_HASH_ENABLED, "YES"
     InitSetupLog
     LogSetup "OK", "PIN_HASH_ENABLED = YES"
-    MsgBox "PIN hash je UKLJUCEN." & vbCrLf & _
-           "Postojeci plaintext PIN-ovi migriraju na hash pri prvoj prijavi;" & vbCrLf & _
-           "novi/izmenjeni PIN-ovi se odmah cuvaju kao hash.", vbInformation, APP_NAME
+    MsgBox Poruka("AUTH_MSG_PINHASH_UKLJUCEN"), vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -1120,14 +1111,14 @@ Public Sub DisablePinHash()
     On Error GoTo EH
 
     If Not modAuth.MozeAdministraciju() Then
-        MsgBox "Samo administrator moze da menja PIN hash.", vbExclamation, APP_NAME
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_PINHASH"), vbExclamation, APP_NAME
         Exit Sub
     End If
 
     SetConfigValue CFG_KEY_PIN_HASH_ENABLED, "NO"
     InitSetupLog
     LogSetup "OK", "PIN_HASH_ENABLED = NO"
-    MsgBox "PIN hash je ISKLJUCEN (novi PIN-ovi se cuvaju kao plaintext).", vbInformation, APP_NAME
+    MsgBox Poruka("AUTH_MSG_PINHASH_ISKLJUCEN"), vbInformation, APP_NAME
     Exit Sub
 
 EH:

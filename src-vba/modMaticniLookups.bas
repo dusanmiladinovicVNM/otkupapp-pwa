@@ -246,7 +246,7 @@ Public Sub MaticniMenu_OnClick(ByVal sekTag As String, ByVal sekCaption As Strin
     ' "Korisnici" (administracija pristupa) -- samo za admina (ili dok je AUTH iskljucen).
     If StrComp(sekTag, "Korisnici", vbTextCompare) = 0 Then
         If Not modAuth.MozeAdministraciju() Then
-            MsgBox "Samo administrator moze da upravlja korisnicima.", vbExclamation, APP_NAME
+            MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_KORISNICI"), vbExclamation, APP_NAME
             Exit Sub
         End If
     End If
