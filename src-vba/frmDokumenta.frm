@@ -1274,128 +1274,155 @@ EH:
 End Function
 
 ' Runtime toggle-i u fraOMUlaz (CLAUDE.md: nove kontrole se ne dodaju u .frx):
-' "Izdato koop." (OM->kooperant) i "Prijem koop." (kooperant->OM, povrat), svaki
-' pola sirine, jedan pored drugog ispod kooperant-dd-a. Medjusobno iskljucivi
-' (vidi *_Change). Ako pozicija smeta layout-u, podesi OMIZD_DY.
+' 4 revers smera ("Izdato koop."/"Prijem koop."/"Izdato OM"/"Prijem od OM"),
+' medjusobno iskljucivi (vidi *_Change). Kreira ih i poziva RelayoutOMUlaz koji
+' preuredjuje ceo ULAZ OM frejm (raspored konstante su u RelayoutOMUlaz).
 Private Sub SetupOMIzdavanjeToggle()
-    Const OMIZD_DX As Single = 0     ' x-pomeraj u odnosu na kooperant-dd
-    Const OMIZD_DY As Single = 4     ' razmak ISPOD kooperant-dd-a
-    Const TGL_W As Single = 72       ' pola sirine (dva toggle-a jedan pored drugog)
-    Const TGL_GAP As Single = 4
     On Error GoTo done
 
     If Not m_tglIzdKoop Is Nothing Then Exit Sub
 
-    ' 1) Pokusaj kao CHILD OM-Ulaz frame-a (renderuje se UNUTAR frame-a).
+    ' Kreira 4 revers toggle-a (koop + firma). CHILD frejma ako moze, inace na formi.
     Dim asChild As Boolean
     On Error Resume Next
     Set m_tglIzdKoop = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
     On Error GoTo done
     asChild = Not (m_tglIzdKoop Is Nothing)
-
-    ' 2) Fallback: dodaj na formu (uvek radi) i digni ZOrder na vrh (preko frame-a).
-    If Not asChild Then
-        Set m_tglIzdKoop = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
-    End If
+    If Not asChild Then Set m_tglIzdKoop = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdKoopRT", True)
     If m_tglIzdKoop Is Nothing Then GoTo done
 
-    ' Drugi toggle (prijem/povrat) ide na istu povrsinu (child ili forma) kao prvi.
     On Error Resume Next
     If asChild Then
         Set m_tglPrijemKoop = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglPrijemKoopRT", True)
+        Set m_tglIzdatoOM = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglIzdatoOMRT", True)
+        Set m_tglPrijemOdOM = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
     Else
         Set m_tglPrijemKoop = Me.Controls.Add("Forms.ToggleButton.1", "tglPrijemKoopRT", True)
+        Set m_tglIzdatoOM = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdatoOMRT", True)
+        Set m_tglPrijemOdOM = Me.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
     End If
     On Error GoTo done
     If m_tglPrijemKoop Is Nothing Then GoTo done
 
-    Dim baseLeft As Single, baseTop As Single
-    If asChild Then
-        baseLeft = cmbPrimalacOMUlaz.Left + OMIZD_DX
-        baseTop = cmbPrimalacOMUlaz.top + cmbPrimalacOMUlaz.Height + OMIZD_DY
-    Else
-        baseLeft = fraOMUlaz.Left + cmbPrimalacOMUlaz.Left + OMIZD_DX
-        baseTop = fraOMUlaz.top + cmbPrimalacOMUlaz.top + cmbPrimalacOMUlaz.Height + OMIZD_DY
-    End If
-
-    With m_tglIzdKoop
-        .caption = "Izdato koop."
-        .width = TGL_W
-        .Height = 20
-        .Left = baseLeft
-        .top = baseTop
-        .WordWrap = False
-        .Visible = True
-        .value = False
-    End With
-    With m_tglPrijemKoop
-        .caption = "Prijem koop."
-        .width = TGL_W
-        .Height = 20
-        .Left = baseLeft + TGL_W + TGL_GAP
-        .top = baseTop
-        .WordWrap = False
-        .Visible = True
-        .value = False
-    End With
-
-    ' Drugi red: firma toggle-i (OM<->firma) ispod koop para. Best-effort: ako
-    ' kreiranje ne uspe (npr. nema mesta u frame-u), koop par i forma i dalje rade.
-    On Error Resume Next
-    If asChild Then
-        Set m_tglIzdatoOM = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglIzdatoOMRT", True)
-        Set m_tglPrijemOdOM = fraOMUlaz.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
-    Else
-        Set m_tglIzdatoOM = Me.Controls.Add("Forms.ToggleButton.1", "tglIzdatoOMRT", True)
-        Set m_tglPrijemOdOM = Me.Controls.Add("Forms.ToggleButton.1", "tglPrijemOdOMRT", True)
-    End If
-    If (Not m_tglIzdatoOM Is Nothing) And (Not m_tglPrijemOdOM Is Nothing) Then
-        ' Firma par ide ISPOD kes dropdowna (cmbOtkupBlok) da se ne preklapa s njim.
-        Dim firmaTop As Single
-        If asChild Then
-            firmaTop = cmbOtkupBlok.top + cmbOtkupBlok.Height + OMIZD_DY
-        Else
-            firmaTop = fraOMUlaz.top + cmbOtkupBlok.top + cmbOtkupBlok.Height + OMIZD_DY
-        End If
-        With m_tglIzdatoOM
-            .caption = "Izdato OM"
-            .width = TGL_W
-            .Height = 20
-            .Left = baseLeft
-            .top = firmaTop
-            .WordWrap = False
-            .Visible = True
-            .value = False
-        End With
-        With m_tglPrijemOdOM
-            .caption = "Prijem od OM"
-            .width = TGL_W
-            .Height = 20
-            .Left = baseLeft + TGL_W + TGL_GAP
-            .top = firmaTop
-            .WordWrap = False
-            .Visible = True
-            .value = False
-        End With
-        If Not asChild Then
-            m_tglIzdatoOM.ZOrder 0
-            m_tglPrijemOdOM.ZOrder 0
-        End If
-    End If
-    On Error GoTo done
-
-    If Not asChild Then
-        On Error Resume Next
-        m_tglIzdKoop.ZOrder 0          ' na vrh, da se vidi preko frame-a
-        m_tglPrijemKoop.ZOrder 0
-        On Error GoTo done
-    End If
+    RelayoutOMUlaz asChild
     Exit Sub
 done:
     LogErr "frmDokumenta.SetupOMIzdavanjeToggle"
     Set m_tglIzdKoop = Nothing
     Set m_tglPrijemKoop = Nothing
 End Sub
+
+' Preuredjuje ULAZ OM frejm po zeljenom redosledu:
+'   Broj dokumenta -> Kooperant -> Tip ambalaze -> Kolicina ambalaze
+'   -> [4 revers toggle-a 2x2] -> Novac -> Preostali kes -> Iz OM avansa -> Unos.
+' Stare .frx labele se SAKRIJU (osim naslov/akcenat/fkey) i prave se sopstvene
+' (lbl*RT) preko MakeLbl. Sve frame-relativno; ako su toggle-i na formi (fallback),
+' dodaje se offset frejma. Idempotentno (zove se jednom iz SetupOMIzdavanjeToggle).
+Private Sub RelayoutOMUlaz(ByVal asChild As Boolean)
+    On Error GoTo done
+    Dim L As Single, fw As Single, fh As Single, y As Single, pitch As Single, labX As Single
+    L = txtBrojDokOMUlaz.Left
+    fw = txtBrojDokOMUlaz.width
+    fh = txtBrojDokOMUlaz.Height
+    pitch = fh + 6
+    labX = L + fw + 8
+
+    ' 1) sakrij stare labele u frejmu (osim naslova/akcenta/fkey hinta)
+    Dim ctl As MSForms.Control, nmL As String
+    For Each ctl In fraOMUlaz.Controls
+        If TypeOf ctl Is MSForms.label Then
+            nmL = LCase$(ctl.name)
+            If InStr(nmL, "title") = 0 And InStr(nmL, "accent") = 0 And InStr(nmL, "fkey") = 0 Then
+                ctl.Visible = False
+            End If
+        End If
+    Next ctl
+
+    ' 2) polja u kolonu (Left=L), sopstvene labele desno (labX)
+    y = txtBrojDokOMUlaz.top
+    txtBrojDokOMUlaz.Left = L: txtBrojDokOMUlaz.top = y
+    MakeLbl "lblBrojDokRT", "Broj dokumenta", labX, y, fh
+    y = y + pitch
+    cmbPrimalacOMUlaz.Left = L: cmbPrimalacOMUlaz.top = y: cmbPrimalacOMUlaz.width = fw
+    MakeLbl "lblKoopRT", "Kooperant", labX, y, fh
+    y = y + pitch
+    cmbTipAmbOMUlaz.Left = L: cmbTipAmbOMUlaz.top = y: cmbTipAmbOMUlaz.width = fw
+    MakeLbl "lblTipAmbRT", "Tip ambala" & ChrW(382) & "e", labX, y, fh
+    y = y + pitch
+    txtKolAmbOMUlaz.Left = L: txtKolAmbOMUlaz.top = y
+    MakeLbl "lblKolAmbRT", "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e", labX, y, fh
+
+    ' 3) 4 revers toggle-a 2x2 ODMAH ispod kolicine
+    y = y + pitch
+    Dim tw As Single, tg As Single, dx As Single, dy As Single
+    tw = 80: tg = 4
+    dx = IIf(asChild, 0, fraOMUlaz.Left)
+    dy = IIf(asChild, 0, fraOMUlaz.top)
+    SetTgl m_tglIzdKoop, "Izdato koop.", L + dx, y + dy, tw
+    SetTgl m_tglPrijemKoop, "Prijem koop.", L + tw + tg + dx, y + dy, tw
+    SetTgl m_tglIzdatoOM, "Izdato OM", L + dx, y + 22 + dy, tw
+    SetTgl m_tglPrijemOdOM, "Prijem od OM", L + tw + tg + dx, y + 22 + dy, tw
+    If Not asChild Then
+        m_tglIzdKoop.ZOrder 0: m_tglPrijemKoop.ZOrder 0
+        m_tglIzdatoOM.ZOrder 0: m_tglPrijemOdOM.ZOrder 0
+    End If
+
+    ' 4) ispod toggle bloka: Novac -> Preostali kes -> Iz OM avansa
+    y = y + 44 + 8
+    txtNovacOMUlaz.Left = L: txtNovacOMUlaz.top = y
+    MakeLbl "lblNovacRT", "Novac", labX, y, fh
+    y = y + pitch
+    cmbOtkupBlok.Left = L: cmbOtkupBlok.top = y: cmbOtkupBlok.width = fw
+    MakeLbl "lblOtkBlkRT", "Preostali kes", labX, y, fh
+    y = y + pitch
+    tglIzOMAvansa.Left = L: tglIzOMAvansa.top = y
+
+    ' 5) Unos dugme na dno
+    btnUnosOMUlaz.top = y + tglIzOMAvansa.Height + 6
+    Exit Sub
+done:
+    LogErr "frmDokumenta.RelayoutOMUlaz"
+End Sub
+
+' Postavi runtime toggle (pozicija + caption + velicina).
+Private Sub SetTgl(ByVal t As MSForms.ToggleButton, ByVal cap As String, _
+                   ByVal x As Single, ByVal y As Single, ByVal w As Single)
+    If t Is Nothing Then Exit Sub
+    With t
+        .caption = cap
+        .width = w
+        .Height = 20
+        .Left = x
+        .top = y
+        .WordWrap = False
+        .Visible = True
+        .value = False
+    End With
+End Sub
+
+' Sopstvena labela u OM-Ulaz frejmu (idempotentno po imenu). Stil = StyleLabel.
+Private Function MakeLbl(ByVal nm As String, ByVal cap As String, _
+                         ByVal x As Single, ByVal y As Single, ByVal h As Single) As MSForms.label
+    Dim lb As MSForms.label
+    On Error Resume Next
+    Set lb = fraOMUlaz.Controls(nm)
+    If lb Is Nothing Then Set lb = fraOMUlaz.Controls.Add("Forms.Label.1", nm, True)
+    On Error GoTo 0
+    If lb Is Nothing Then Exit Function
+    With lb
+        .AutoSize = False
+        .caption = cap
+        .Left = x
+        .top = y + 2
+        .width = 150
+        .Height = h
+        .Visible = True
+    End With
+    On Error Resume Next
+    StyleLabel lb
+    On Error GoTo 0
+    Set MakeLbl = lb
+End Function
 
 ' Bezbedno cita stanje toggle-a (False ako kontrola nije kreirana).
 Private Function OMIzdavanjeAktivno() As Boolean
