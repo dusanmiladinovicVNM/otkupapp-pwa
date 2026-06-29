@@ -15,7 +15,7 @@ Option Explicit
 '
 ' Panel NE implementira novu logiku -- svako dugme zove POSTOJECU javnu ulaznu
 ' tacku (reuse). Mapa:
-'   Proveri azuriranje  -> modSelfUpdate.CheckForUpdateOnOpen + OnTime RunSelfUpdate
+'   Proveri azuriranje  -> modUpdateGate.ReleaseManifestVersion + OnTime RunSelfUpdate
 '   Ensure (setup+seme) -> modSetup.SetupNewPC + Ensure* seme (agregat)
 '   Health check setup  -> modSetup.RunSetupHealthCheck
 '   Production health   -> modProductionHealthCheck.RunProductionHealthCheck
@@ -222,16 +222,28 @@ End Sub
 ' PRIVATE -- akcije koje zahtevaju omotac (potvrda / OnTime / agregacija)
 ' ============================================================
 
-' Rucna provera azuriranja: reuse modSelfUpdate.CheckForUpdateOnOpen (vec na svim
-' klijentima), koja SAMA prikaze dijalog ako ima novije i vrati True na "Da".
-' modSelfUpdate se NE dira (SKIP_MODULES) -- panel ostaje self-update-safe.
-' Kad nema novije/offline -> tiho (isto kao provera na startu).
+' Rucna provera azuriranja: read-only modUpdateGate.ReleaseManifestVersion
+' (NE dira modSelfUpdate/SKIP -> self-update-safe) + VersionCompare. Panel SAM
+' vodi dijalog, pa daje JASAN feedback i kad nema novije (bez dvostruke poruke
+' koju bi dao reuse CheckForUpdateOnOpen).
 ' ZAMKA: RunSelfUpdate NIKAD direktno -- preko OnTime (prazan stack), kao modMain.
 Private Sub AdminCheckUpdate()
     On Error GoTo EH
-    If CheckForUpdateOnOpen() Then
-        CloseAdminPanel
-        Application.OnTime Now, "RunSelfUpdate"
+    Dim remote As String
+    remote = ReleaseManifestVersion()
+
+    If Len(remote) > 0 And VersionCompare(APP_VERSION, remote) < 0 Then
+        If MsgBox("Dostupno je a" & ChrW(382) & "uriranje: " & remote & vbCrLf & _
+                  "Trenutna verzija: " & APP_VERSION & vbCrLf & vbCrLf & _
+                  "A" & ChrW(382) & "urirati sada? (program " & ChrW(263) & "e se zatvoriti i ponovo otvoriti)", _
+                  vbYesNo + vbQuestion, APP_NAME) = vbYes Then
+            CloseAdminPanel
+            Application.OnTime Now, "RunSelfUpdate"
+        End If
+    Else
+        MsgBox "Nema novih a" & ChrW(382) & "uriranja. Koristite najnoviju verziju (" & APP_VERSION & ")." & _
+               IIf(Len(remote) = 0, vbCrLf & "(Napomena: kanal a" & ChrW(382) & "uriranja trenutno nije dostupan -- offline / nije objavljeno.)", ""), _
+               vbInformation, APP_NAME
     End If
     Exit Sub
 EH:

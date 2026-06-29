@@ -164,3 +164,37 @@ Private Function SafeLng(ByVal s As String) As Long
     On Error Resume Next
     SafeLng = CLng(val(s))
 End Function
+
+' ============================================================
+' PUBLIC - rucna provera self-update kanala (AgriX_Release/version.json)
+' ============================================================
+
+' Read-only: vrati app_version objavljen u AgriX_Release/version.json (isti
+' izvor i format kao modSelfUpdate.CheckForUpdateOnOpen), ili "" ako nedostupno
+' (opt-out / offline / nije objavljeno). BEZ UI i side-efekata.
+' Reuse modDrive (find/download) + modGoogleAuth (JSON) + REL_FOLDER_ID.
+' Stoji OVDE (a ne u modSelfUpdate) namerno: modSelfUpdate je SKIP_MODULES (ne
+' stize preko self-update-a), pa bi pozivalac (Admin panel) posle inkrementalnog
+' update-a dobio "Sub not defined". modUpdateGate se update-uje normalno.
+Public Function ReleaseManifestVersion() As String
+    Const SRC As String = "modUpdateGate.ReleaseManifestVersion"
+    On Error GoTo EH
+
+    If Len(REL_FOLDER_ID) = 0 Then Exit Function            ' opt-in (kao self-update)
+    Dim id As String: id = DriveFindInFolder(REL_FOLDER_ID, "version.json")
+    If Len(id) = 0 Then Exit Function
+    Dim tmp As String: tmp = Environ$("TEMP") & "\AgriX_relcheck.json"
+    If Not DriveDownloadToFile(id, tmp) Then Exit Function
+
+    ReleaseManifestVersion = Trim$(ExtractJsonStringGoogle(ReadManifestFile(tmp), "app_version"))
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
+Private Function ReadManifestFile(ByVal path As String) As String
+    Dim ff As Integer: ff = FreeFile
+    Open path For Input As #ff
+    If LOF(ff) > 0 Then ReadManifestFile = Input$(LOF(ff), ff)
+    Close #ff
+End Function
