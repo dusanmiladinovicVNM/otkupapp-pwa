@@ -61,24 +61,6 @@ EH:
     LogErr SRC, Err.description                            ' bug u checku ne sme da spreci start
 End Function
 
-' Rucna provera (Admin panel): vrati remote app_version ako postoji NOVIJE,
-' inace "". Read-only, bez UI/side-efekata -- reuse istih primitiva kao
-' CheckForUpdateOnOpen (GetRemoteAppVersion + VersionCompare). Fail-soft.
-Public Function GetAvailableUpdateVersion() As String
-    Const SRC As String = "modSelfUpdate.GetAvailableUpdateVersion"
-    On Error GoTo EH
-
-    If Len(REL_FOLDER_ID) = 0 Then Exit Function           ' opt-in
-    Dim remoteVer As String: remoteVer = GetRemoteAppVersion()
-    If Len(remoteVer) = 0 Then Exit Function               ' offline / nema manifesta
-    If VersionCompare(APP_VERSION, remoteVer) >= 0 Then Exit Function   ' vec azurno
-
-    GetAvailableUpdateVersion = remoteVer
-    Exit Function
-EH:
-    LogErr SRC, Err.description
-End Function
-
 ' Pokrece se preko Application.OnTime (prazan stack). Public zbog OnTime.
 Public Sub RunSelfUpdate()
     Const SRC As String = "modSelfUpdate.RunSelfUpdate"
@@ -217,7 +199,6 @@ Private Sub PrepareRuntimeForSelfUpdate()
     ' Release module-level WithEvents/kontrole (dinamicki paneli)
     OtkupBlok_Release               ' modOtkupBlok (clsBlokUI)
     Podesavanja_Release             ' modPodesavanja (clsConfigBtn)
-    Admin_Release                   ' modAdmin (clsAdminBtn)
     MaticniMenu_Release             ' modMaticniLookups (clsLookupMenuBtn)
     KarticaDetalji_Reset            ' modKarticaDetalji
 

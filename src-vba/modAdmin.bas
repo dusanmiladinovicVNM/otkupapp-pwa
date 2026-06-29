@@ -15,7 +15,7 @@ Option Explicit
 '
 ' Panel NE implementira novu logiku -- svako dugme zove POSTOJECU javnu ulaznu
 ' tacku (reuse). Mapa:
-'   Proveri azuriranje  -> modSelfUpdate.GetAvailableUpdateVersion + OnTime RunSelfUpdate
+'   Proveri azuriranje  -> modSelfUpdate.CheckForUpdateOnOpen + OnTime RunSelfUpdate
 '   Ensure (setup+seme) -> modSetup.SetupNewPC + Ensure* seme (agregat)
 '   Health check setup  -> modSetup.RunSetupHealthCheck
 '   Production health   -> modProductionHealthCheck.RunProductionHealthCheck
@@ -222,25 +222,14 @@ End Sub
 ' PRIVATE -- akcije koje zahtevaju omotac (potvrda / OnTime / agregacija)
 ' ============================================================
 
-' Rucna provera azuriranja. Daje feedback i kad NEMA novije verzije (za razliku
-' od tihe provere na startu). ZAMKA: RunSelfUpdate NIKAD direktno -- preko OnTime
-' (prazan stack), isto kao modMain (vidi docs/SELF_UPDATE.md).
+' Rucna provera azuriranja: reuse modSelfUpdate.CheckForUpdateOnOpen (vec na svim
+' klijentima), koja SAMA prikaze dijalog ako ima novije i vrati True na "Da".
+' modSelfUpdate se NE dira (SKIP_MODULES) -- panel ostaje self-update-safe.
+' Kad nema novije/offline -> tiho (isto kao provera na startu).
+' ZAMKA: RunSelfUpdate NIKAD direktno -- preko OnTime (prazan stack), kao modMain.
 Private Sub AdminCheckUpdate()
     On Error GoTo EH
-    Dim v As String
-    v = GetAvailableUpdateVersion()
-
-    If Len(v) = 0 Then
-        MsgBox "Imate najnoviju verziju (" & APP_VERSION & ")." & vbCrLf & _
-               "A" & ChrW(382) & "uriranje trenutno nije dostupno (ili nema konekcije).", _
-               vbInformation, APP_NAME
-        Exit Sub
-    End If
-
-    If MsgBox("Dostupno je a" & ChrW(382) & "uriranje: " & v & vbCrLf & _
-              "Trenutna verzija: " & APP_VERSION & vbCrLf & vbCrLf & _
-              "A" & ChrW(382) & "urirati sada? (program " & ChrW(263) & "e se zatvoriti i ponovo otvoriti)", _
-              vbYesNo + vbQuestion, APP_NAME) = vbYes Then
+    If CheckForUpdateOnOpen() Then
         CloseAdminPanel
         Application.OnTime Now, "RunSelfUpdate"
     End If
@@ -333,13 +322,4 @@ Private Sub RemoveCtl(ByVal nm As String)
     On Error Resume Next
     mFrm.Controls.Remove nm
     On Error GoTo 0
-End Sub
-
-' Otpusti module-level reference (clsAdminBtn WithEvents + kontrole) pre
-' self-update importa (zivi event-sink obara CodeModule edit). Idempotentno.
-' Isti obrazac kao modPodesavanja.Podesavanja_Release.
-Public Sub Admin_Release()
-    On Error Resume Next
-    Set mFrm = Nothing
-    Set mWrappers = Nothing
 End Sub
