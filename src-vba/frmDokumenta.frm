@@ -1386,6 +1386,15 @@ Private Sub RelayoutOMUlaz(ByVal asChild As Boolean)
     ' 5) Unos dugme na dno
     btnUnosOMUlaz.top = y + tglIzOMAvansa.Height + 6
     fraOMUlaz.Height = btnUnosOMUlaz.top + btnUnosOMUlaz.Height + 16
+
+    ' 6) tab order prati layout (TabIndex po vizuelnom redosledu)
+    Dim ti As Integer: ti = 0
+    SetTab txtBrojDokOMUlaz, ti: SetTab cmbPrimalacOMUlaz, ti
+    SetTab cmbTipAmbOMUlaz, ti: SetTab txtKolAmbOMUlaz, ti
+    SetTab m_tglIzdKoop, ti: SetTab m_tglPrijemKoop, ti
+    SetTab m_tglIzdatoOM, ti: SetTab m_tglPrijemOdOM, ti
+    SetTab txtNovacOMUlaz, ti: SetTab cmbOtkupBlok, ti
+    SetTab tglIzOMAvansa, ti: SetTab btnUnosOMUlaz, ti
     Exit Sub
 done:
     LogErr "frmDokumenta.RelayoutOMUlaz"
@@ -1407,7 +1416,16 @@ Private Sub SetTgl(ByVal t As MSForms.ToggleButton, ByVal cap As String, _
     End With
 End Sub
 
-' Sopstvena labela u OM-Ulaz frejmu (idempotentno po imenu). Stil = StyleLabel.
+' Postavi TabIndex po redu (preskace Nothing; ti raste samo za postavljene).
+Private Sub SetTab(ByVal c As Object, ByRef ti As Integer)
+    On Error Resume Next
+    If c Is Nothing Then Exit Sub
+    c.TabIndex = ti
+    ti = ti + 1
+End Sub
+
+' Sopstvena labela u OM-Ulaz frejmu (idempotentno po imenu). Font kao ostali
+' elementi forme (Segoe UI / FONT_SIZE_NORMAL, bez bold).
 Private Function MakeLbl(ByVal nm As String, ByVal cap As String, _
                          ByVal x As Single, ByVal y As Single, ByVal h As Single) As MSForms.label
     Dim lb As MSForms.label
@@ -1425,8 +1443,13 @@ Private Function MakeLbl(ByVal nm As String, ByVal cap As String, _
         .Height = h
         .Visible = True
     End With
+    ' Font usaglasen sa ostalim elementima forme (Segoe UI / FONT_SIZE_NORMAL, bez bold).
     On Error Resume Next
-    StyleLabel lb
+    lb.BackStyle = fmBackStyleTransparent
+    lb.ForeColor = TXT_LIGHT
+    lb.Font.name = APP_FONT
+    lb.Font.Bold = False
+    lb.Font.Size = FONT_SIZE_NORMAL
     On Error GoTo 0
     Set MakeLbl = lb
 End Function
