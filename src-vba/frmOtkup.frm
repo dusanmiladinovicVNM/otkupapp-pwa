@@ -513,6 +513,7 @@ Private Sub cmbOtkupnoMesto_Change()
         If Len(otpStanica) > 0 And otpStanica <> stanicaID Then
             txtDatum.value = Format$(Date, "d.m.yyyy")
             txtBrojZbirne.value = ""
+            ResetProizvodNaDefault
             OtkupBlok_ClearActiveOtp
         End If
     End If
@@ -736,7 +737,19 @@ Public Sub ResetDatumKontekst()
     On Error Resume Next
     txtDatum.value = Format$(Date, "d.m.yyyy")
     txtBrojZbirne.value = ""
+    ResetProizvodNaDefault
     RefreshBrojDokumentaSuggestion False
+End Sub
+
+' Vrati vrstu/sortu voca na podrazumevani proizvod (kao pri otvaranju forme) kad
+' se napusti otpremnica iz panela -- da svez unos ne nosi vrstu/sortu otpremnice.
+' Cisti pa primeni default (CFG_DEFAULT_VRSTA/SORTA); bez podesenog default-a
+' ostaju prazni. ApplyDefaultProizvod okida auto-cenu/tip ambalaze (cmbVrsta_Change).
+Private Sub ResetProizvodNaDefault()
+    On Error Resume Next
+    cmbVrstaVoca.value = ""
+    cmbSortaVoca.value = ""
+    ApplyDefaultProizvod cmbVrstaVoca, cmbSortaVoca
 End Sub
 
 ' ============================================================
