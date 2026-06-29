@@ -1370,18 +1370,19 @@ Private Sub SetupTopBarStatus()
         .Height = 16
     End With
 
-    ' Operator
+    ' Operator (klik = odjava + prijava drugog korisnika, kad je AUTH ukljucen)
     With lblOperator
-        .caption = "Operator: " & GetCurrentOperatorName()
         .BackStyle = fmBackStyleTransparent
         .ForeColor = TXT_MUTED()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
         .Left = lblOnlineText.Left + lblOnlineText.width + 14
         .top = 14
-        .width = 200
+        .width = 280
         .Height = 16
+        .ControlTipText = "Klik: odjava i prijava drugog korisnika"
     End With
+    RefreshOperatorCaption
 
     ' Sezona
     With lblSezona
@@ -1416,6 +1417,45 @@ Private Function GetCurrentOperatorName() As String
     If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "--"
     On Error GoTo 0
 End Function
+
+' Osvezi top-bar labelu operatera. Kad je AUTH ukljucen dodaj "[Odjava]" hint
+' (labela je klikabilna -> lblOperator_Click).
+Private Sub RefreshOperatorCaption()
+    On Error Resume Next
+    Dim opCap As String
+    opCap = "Operator: " & GetCurrentOperatorName()
+    If modAuth.AuthEnabled() Then opCap = opCap & "   [Odjava]"
+    lblOperator.caption = opCap
+End Sub
+
+' Odjava + prijava drugog korisnika u toku sesije (klik na operatera u top baru).
+' Tok je isti kao pri pokretanju app-a: frmLogin; neuspela/otkazana prijava gasi
+' app (mirror startne kapije u modMain). Bez efekta dok je AUTH iskljucen.
+Private Sub lblOperator_Click()
+    On Error GoTo EH
+
+    If Not modAuth.AuthEnabled() Then Exit Sub
+
+    If MsgBox("Odjaviti trenutnog korisnika i prijaviti drugog?", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    ' Zatvori ekran prethodnog korisnika (cist start kao pri paljenju app-a).
+    CloseActiveContent
+
+    modAuth.Logout
+
+    If modAuth.Login() Then
+        RefreshOperatorCaption
+    Else
+        ' Otkazano / neuspelo -> zatvori app (kao na startu).
+        Application.Visible = True
+        Application.OnTime Now + TimeSerial(0, 0, 1), "QuitAfterFailedLogin"
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.lblOperator_Click"
+End Sub
 
 
 Public Sub BeginPWASyncLog()

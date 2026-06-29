@@ -572,9 +572,10 @@ Private Sub BuildKorisniciOblasti()
     If rowH < 15 Then rowH = 18
 
     Const ROWGAP As Single = 4
-    Const LBLW As Single = 118
-    Const CMBW As Single = 64
-    Const COLGAP As Single = 48
+    Const LBLW As Single = 124      ' prostor za naziv oblasti
+    Const LBLGAP As Single = 16     ' razmak labela -> combo (da cmb ne pada preko labele)
+    Const CMBW As Single = 86       ' siri combo (citljiviji DA/NE)
+    Const COLGAP As Single = 120    ' jasno odvojeno od leve kolone polja
 
     ' Desna kolona pocinje desno od leve kolone polja.
     Dim colX As Single
@@ -587,7 +588,7 @@ Private Sub BuildKorisniciOblasti()
     Set hdr = Me.Controls.Add("Forms.Label.1", "lblOblHdr", True)
     hdr.Left = colX
     hdr.top = y0
-    hdr.width = LBLW + 6 + CMBW
+    hdr.width = LBLW + LBLGAP + CMBW
     hdr.Height = rowH
     hdr.caption = "OBLASTI (pristup)"
     hdr.WordWrap = False
@@ -614,7 +615,7 @@ Private Sub BuildKorisniciOblasti()
         lb.Font.Size = FONT_SIZE_SMALL
 
         Set cb = Me.Controls.Add("Forms.ComboBox.1", "cmbObl_" & oname, True)
-        cb.Left = colX + LBLW + 6
+        cb.Left = colX + LBLW + LBLGAP
         cb.top = yy
         cb.width = CMBW
         cb.Height = rowH
@@ -629,7 +630,7 @@ Private Sub BuildKorisniciOblasti()
 
     ' Prosiri formu ako desna kolona prelazi vidljivu sirinu.
     Dim needW As Single
-    needW = colX + LBLW + 6 + CMBW + 24
+    needW = colX + LBLW + LBLGAP + CMBW + 24
     If Me.InsideWidth < needW Then
         Me.width = Me.width + (needW - Me.InsideWidth)
     End If
