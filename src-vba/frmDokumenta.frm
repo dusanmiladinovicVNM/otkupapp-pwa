@@ -240,7 +240,13 @@ End Sub
 ' prati config.
 Private Sub ApplyKesIsplateState()
     On Error Resume Next
-    If IsKesIsplate() Then EnableCombo cmbOtkupBlok Else DisableCombo cmbOtkupBlok
+    If IsKesIsplate() Then
+        EnableCombo cmbOtkupBlok
+        EnableField txtNovacOMUlaz
+    Else
+        DisableCombo cmbOtkupBlok
+        DisableField txtNovacOMUlaz
+    End If
 End Sub
 
 Private Sub txtCenaOtp_Change():       UpdateUkupnoKgOtp: End Sub
@@ -1379,6 +1385,7 @@ Private Sub RelayoutOMUlaz(ByVal asChild As Boolean)
 
     ' 5) Unos dugme na dno
     btnUnosOMUlaz.top = y + tglIzOMAvansa.Height + 6
+    fraOMUlaz.Height = btnUnosOMUlaz.top + btnUnosOMUlaz.Height + 16
     Exit Sub
 done:
     LogErr "frmDokumenta.RelayoutOMUlaz"
