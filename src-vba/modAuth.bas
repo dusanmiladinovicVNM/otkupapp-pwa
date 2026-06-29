@@ -22,6 +22,7 @@ Option Explicit
 
 Private gCurrentUser As String
 Private gCurrentUserUloga As String
+Private gCurrentUserIme As String
 Private gLoggedIn As Boolean
 
 ' ------------------------------------------------------------
@@ -104,6 +105,7 @@ Public Function ValidateLogin(ByVal username As String, ByVal pin As String) As 
 
     gCurrentUser = u
     gCurrentUserUloga = SafeStr(LookupValue(TBL_KORISNICI, COL_KOR_USERNAME, u, COL_KOR_ULOGA))
+    gCurrentUserIme = SafeStr(LookupValue(TBL_KORISNICI, COL_KOR_USERNAME, u, COL_KOR_IME))
     gLoggedIn = True
     AuditAuth "AUTH_LOGIN", "INFO", u & " (" & gCurrentUserUloga & ")"
     ValidateLogin = True
@@ -115,6 +117,13 @@ End Function
 
 Public Function GetCurrentUser() As String
     GetCurrentUser = gCurrentUser
+End Function
+
+' Ime i prezime prijavljenog app-korisnika (za prikaz u top baru / userstamp).
+' Prazno ako AUTH nije ukljucen ili niko nije prijavljen -> pozivalac fallback-uje
+' na Windows nalog.
+Public Function GetCurrentUserIme() As String
+    GetCurrentUserIme = gCurrentUserIme
 End Function
 
 Public Function CurrentUserIsAdmin() As Boolean
@@ -175,6 +184,7 @@ Public Sub Logout()
     gLoggedIn = False
     gCurrentUser = vbNullString
     gCurrentUserUloga = vbNullString
+    gCurrentUserIme = vbNullString
 End Sub
 
 ' ------------------------------------------------------------

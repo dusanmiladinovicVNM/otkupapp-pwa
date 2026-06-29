@@ -1404,6 +1404,14 @@ End Sub
 
 Private Function GetCurrentOperatorName() As String
     On Error Resume Next
+    ' Prijavljen app-korisnik (AUTH) -> ime i prezime onoga ko radi;
+    ' u suprotnom (AUTH iskljucen / nema prijave) -> Windows nalog.
+    Dim ime As String
+    ime = modAuth.GetCurrentUserIme()
+    If Len(Trim$(ime)) > 0 Then
+        GetCurrentOperatorName = Trim$(ime)
+        Exit Function
+    End If
     GetCurrentOperatorName = Environ$("USERNAME")
     If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "--"
     On Error GoTo 0

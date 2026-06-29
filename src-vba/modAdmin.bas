@@ -259,6 +259,8 @@ Private Sub AdminEnsureEverything()
     EnsureCenovnikSchema
     EnsurePaletniListSchema
     EnsureDoradeSchema
+    EnsureKorisniciSchema
+    EnsureAuditColumns
     MsgBox "Ensure zavr" & ChrW(353) & "en (setup + sve " & ChrW(353) & "eme provereno).", _
            vbInformation, APP_NAME
     Exit Sub
