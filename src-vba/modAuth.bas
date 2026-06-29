@@ -38,36 +38,20 @@ EH:
 End Function
 
 ' ------------------------------------------------------------
-' Prijava preko InputBox-a (bez zasebne forme -> uvek se kompajlira/uvozi).
-' Vrati True ako je prijava uspela. 3 pokusaja; Cancel/prazno = odustani.
-' Poziva se iz modMain.StartApp (posle AccessGateOrQuit, pre frmSplash).
-' Napomena: maskiran PIN je opciono kasnije (rucno napravljena frmLogin forma).
+' Prikazi login formu (frmLogin) i vrati True ako je prijava uspela.
+' Validaciju radi frmLogin.btnOK_Click preko modAuth.ValidateLogin; forma
+' postavi Me.LoginOK. Poziva se iz modMain.StartApp (posle AccessGateOrQuit,
+' pre frmSplash). frmLogin se pravi u dizajneru (kontrole: txtUser, txtPin
+' [PasswordChar], lblErr, btnOK, btnCancel) i izvozi sa svojim .frx parom.
 ' ------------------------------------------------------------
 Public Function Login() As Boolean
     On Error GoTo EH
     Logout
 
-    Dim u As String, pin As String
-    Dim attempt As Long
-
-    For attempt = 1 To 3
-        u = Trim$(InputBox("Korisnicko ime:", APP_NAME))
-        If Len(u) = 0 Then Exit Function          ' Cancel / prazno -> Login = False
-
-        pin = Trim$(InputBox("PIN za '" & u & "':", APP_NAME))
-        If Len(pin) = 0 Then Exit Function
-
-        If ValidateLogin(u, pin) Then
-            Login = True
-            Exit Function
-        End If
-
-        If attempt < 3 Then
-            MsgBox "Pogresno korisnicko ime ili PIN (" & attempt & "/3).", vbExclamation, APP_NAME
-        End If
-    Next attempt
-
-    MsgBox "Previse pogresnih pokusaja prijave.", vbCritical, APP_NAME
+    frmLogin.LoginOK = False
+    frmLogin.Show                 ' modal (default)
+    Login = frmLogin.LoginOK
+    Unload frmLogin
     Exit Function
 EH:
     LogErr "modAuth.Login"
