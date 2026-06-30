@@ -7,6 +7,34 @@ Option Explicit
 ' Daten rein als Arrays, Daten raus als Arrays.
 ' ============================================================
 
+' --- Request-scoped cache za GetTableData ---
+' Aktivira se SAMO oko read-only blokova (npr. generisanje izvestaja, preko
+' BeginTableCache/EndTableCache). Dok je aktivan, svaka tabela se cita JEDNOM
+' pa se vraca kesirana kopija -- jedan "Prikazi" je citao 17-18 puta iste
+' velike tabele (TBL_OTKUP 5x, TBL_AMBALAZA 4x, TBL_NOVAC 3x...).
+' AppendRow/UpdateCell invalidiraju kes za tu tabelu (sigurnosna mreza ako se
+' ipak pise dok je prozor aktivan). Depth-brojac podrzava ugnjezdene Begin/End.
+Private mTableCache As Object
+Private mTableCacheDepth As Long
+
+Public Sub BeginTableCache()
+    If mTableCacheDepth = 0 Then Set mTableCache = CreateObject("Scripting.Dictionary")
+    mTableCacheDepth = mTableCacheDepth + 1
+End Sub
+
+Public Sub EndTableCache()
+    If mTableCacheDepth > 0 Then mTableCacheDepth = mTableCacheDepth - 1
+    If mTableCacheDepth <= 0 Then
+        mTableCacheDepth = 0
+        Set mTableCache = Nothing
+    End If
+End Sub
+
+Private Sub InvalidateTableCache(ByVal tblName As String)
+    If mTableCache Is Nothing Then Exit Sub
+    If mTableCache.Exists(tblName) Then mTableCache.Remove tblName
+End Sub
+
 ' --- Table Access ---
 
 Public Function GetTable(ByVal tblName As String) As ListObject
@@ -26,6 +54,12 @@ End Function
 
 Public Function GetTableData(ByVal tblName As String) As Variant
     ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurueck
+    If Not mTableCache Is Nothing Then
+        If mTableCache.Exists(tblName) Then
+            GetTableData = mTableCache(tblName)
+            Exit Function
+        End If
+    End If
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -37,6 +71,7 @@ Public Function GetTableData(ByVal tblName As String) As Variant
         Exit Function
     End If
     GetTableData = lo.DataBodyRange.value
+    If Not mTableCache Is Nothing Then mTableCache(tblName) = GetTableData
 End Function
 
 Public Function GetTableHeaders(ByVal tblName As String) As Variant
@@ -129,6 +164,7 @@ Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As 
     AppendRow = newRow.index
     StampRowAudit lo, newRow.index, True
     WriteJournalRow tblName, rowData
+    InvalidateTableCache tblName
     ' KPI sidebar (frmOtkupAPP) zavisi samo od ovih tabela -> oznaci za osvezavanje
     ' pri sledecem povratku na dashboard (umesto racunanja pri svakom Activate).
     If tblName = TBL_OTKUP Or tblName = TBL_OTPREMNICA Or tblName = TBL_PRIJEMNICA Then
@@ -162,6 +198,7 @@ Public Function UpdateCell(ByVal tblName As String, ByVal rowIndex As Long, _
     lo.DataBodyRange.cells(rowIndex, colIdx).value = newValue
     StampRowAudit lo, rowIndex, False
     UpdateCell = True
+    InvalidateTableCache tblName
     Exit Function
 
 ErrHandler:

@@ -632,6 +632,7 @@ Private Sub btnUnos_Click()
     End If
 
     Application.ScreenUpdating = False
+    BeginTableCache   ' citaj svaku tabelu jednom za sve Generate* (read-only blok)
 
     If zbirni Then
         GenerateZbirniReport datumOd, datumDo, entitetTip
@@ -653,11 +654,13 @@ Private Sub btnUnos_Click()
 
     UpdateStatusLabel
     
+    EndTableCache
     Application.ScreenUpdating = True
     Exit Sub
 
 EH:
     LogErr "frmIzvestaj.btnUnos"
+    EndTableCache
     Application.ScreenUpdating = True
     MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju izve" & ChrW(353) & "taja: " & Err.description, vbCritical, APP_NAME
 End Sub
