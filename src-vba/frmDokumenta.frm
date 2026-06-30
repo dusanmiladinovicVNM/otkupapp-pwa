@@ -624,6 +624,18 @@ Private Sub btnUnosOtp_Click()
         Exit Sub
     End If
 
+    If cmbVrstaVoca.value = "" Then
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbVrstaVoca.SetFocus
+        Exit Sub
+    End If
+
+    If cmbSortaVoca.value = "" Then
+        MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbSortaVoca.SetFocus
+        Exit Sub
+    End If
+
     ' Klasa I obavezna OSIM kad je samo Klasa II (dve-klase + prazna Klasa I).
     If Not (chkDveKlaseOtp.value And Trim$(txtKolicinaOtp.value) = "") Then
         If Not IsNumeric(txtKolicinaOtp.value) Or val(txtKolicinaOtp.value) <= 0 Then
@@ -695,7 +707,13 @@ Private Sub btnUnosOtp_Click()
     End If
 
     Dim cenaI As Double
-    If txtCenaOtp.value <> "" Then
+    If hasKlasaI Then
+        If Not TryParseDouble(txtCenaOtp.value, cenaI) Or cenaI <= 0 Then
+            MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
+            txtCenaOtp.SetFocus
+            Exit Sub
+        End If
+    ElseIf Trim$(txtCenaOtp.value) <> "" Then
         If Not TryParseDouble(txtCenaOtp.value, cenaI) Or cenaI < 0 Then
             MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
             txtCenaOtp.SetFocus
@@ -723,6 +741,23 @@ Private Sub btnUnosOtp_Click()
         End If
     End If
 
+    ' Ambalaza (broj gajbi) i tip ambalaze su obavezni za svaku unetu klasu.
+    If hasKlasaI And kolAmb <= 0 Then
+        MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
+        txtKolAmbOtp.SetFocus
+        Exit Sub
+    End If
+    If chkDveKlaseOtp.value And kolAmbII <= 0 Then
+        MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
+        If Not m_txtKolAmbIIOtp Is Nothing Then m_txtKolAmbIIOtp.SetFocus
+        Exit Sub
+    End If
+    If (kolAmb > 0 Or kolAmbII > 0) And cmbTipAmbOtp.value = "" Then
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
+        cmbTipAmbOtp.SetFocus
+        Exit Sub
+    End If
+
     ' BRUTO unos (toggle OTKUP_BRUTO_UNOS): otpremnica se cuva u NETO (kao otkup),
     ' bruto se zamrzava u BrutoKg -> panel/blokovi porede neto sa neto (ne bruto).
     Dim brutoKgI As Double
@@ -745,6 +780,13 @@ Private Sub btnUnosOtp_Click()
         End If
         brutoKgI = kolicinaI             ' zamrzni uneti bruto
         kolicinaI = kolicinaI - taraKg   ' u Kolicina ide neto
+    End If
+
+    ' Broj dokumenta je obavezan.
+    If Trim$(txtBrojOtp.value) = "" Then
+        MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
+        txtBrojOtp.SetFocus
+        Exit Sub
     End If
 
     ' Duplikat check
@@ -1537,6 +1579,18 @@ Private Sub btnUnosOMUlaz_Click()
         Exit Sub
     End If
 
+    If cmbVozac.value = "" Then
+        MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
+        cmbVozac.SetFocus
+        Exit Sub
+    End If
+
+    If cmbVrstaVoca.value = "" Then
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbVrstaVoca.SetFocus
+        Exit Sub
+    End If
+
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
         MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
@@ -1723,6 +1777,13 @@ Private Sub btnUnosOMUlaz_Click()
         txtBrojDokOMUlaz.value = brojDok
     End If
 
+    ' Broj dokumenta je obavezan (smer-tokovi ga auto-predloze iznad).
+    If brojDok = "" Then
+        MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
+        txtBrojDokOMUlaz.SetFocus
+        Exit Sub
+    End If
+
     Dim koopSmer As String
     If izdavanje Then
         koopSmer = "IZDAVANJE"
@@ -1858,6 +1919,18 @@ Private Sub btnUnosZbr_Click()
         txtBrojZbirne.SetFocus
         Exit Sub
     End If
+
+    If cmbVrstaVoca.value = "" Then
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbVrstaVoca.SetFocus
+        Exit Sub
+    End If
+
+    If cmbSortaVoca.value = "" Then
+        MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbSortaVoca.SetFocus
+        Exit Sub
+    End If
     
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
@@ -1917,6 +1990,13 @@ Private Sub btnUnosZbr_Click()
                 Exit Sub
             End If
         End If
+    End If
+
+    ' Tip ambalaze je obavezan kad je uneta ambalaza.
+    If (ukupnoAmb > 0 Or ukupnoAmbII > 0) And cmbTipAmbZbr.value = "" Then
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
+        cmbTipAmbZbr.SetFocus
+        Exit Sub
     End If
 
     Dim kupacID As String
@@ -2158,6 +2238,18 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
+    If cmbVrstaVoca.value = "" Then
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbVrstaVoca.SetFocus
+        Exit Sub
+    End If
+
+    If cmbSortaVoca.value = "" Then
+        MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbSortaVoca.SetFocus
+        Exit Sub
+    End If
+
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
         MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
@@ -2190,7 +2282,13 @@ Private Sub btnUnosPrij_Click()
     End If
 
     Dim cenaI As Double
-    If Trim$(txtCenaPrij.value) <> "" Then
+    If hasKlasaI Then
+        If Not TryParseDouble(txtCenaPrij.value, cenaI) Or cenaI <= 0 Then
+            MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
+            txtCenaPrij.SetFocus
+            Exit Sub
+        End If
+    ElseIf Trim$(txtCenaPrij.value) <> "" Then
         If Not TryParseDouble(txtCenaPrij.value, cenaI) Or cenaI < 0 Then
             MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
             txtCenaPrij.SetFocus
@@ -2225,6 +2323,23 @@ Private Sub btnUnosPrij_Click()
                 Exit Sub
             End If
         End If
+    End If
+
+    ' Ambalaza (broj gajbi) i tip ambalaze su obavezni za svaku unetu klasu.
+    If hasKlasaI And kolAmb <= 0 Then
+        MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
+        txtKolAmbPrij.SetFocus
+        Exit Sub
+    End If
+    If chkDveKlasePrij.value And kolAmbII <= 0 Then
+        MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
+        If Not m_txtKolAmbIIPrij Is Nothing Then m_txtKolAmbIIPrij.SetFocus
+        Exit Sub
+    End If
+    If (kolAmb > 0 Or kolAmbII > 0) And cmbTipAmbPrij.value = "" Then
+        MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
+        cmbTipAmbPrij.SetFocus
+        Exit Sub
     End If
 
     Dim kolicinaII As Double
@@ -2541,6 +2656,18 @@ Private Sub btnUnosIzlaz_Click()
         Exit Sub
     End If
 
+    If cmbVozac.value = "" Then
+        MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
+        cmbVozac.SetFocus
+        Exit Sub
+    End If
+
+    If cmbVrstaVoca.value = "" Then
+        MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbVrstaVoca.SetFocus
+        Exit Sub
+    End If
+
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
         MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
@@ -2563,6 +2690,12 @@ Private Sub btnUnosIzlaz_Click()
 
     Dim brojDok As String
     brojDok = Trim$(txtBrojDokIzlaz.value)
+
+    If brojDok = "" Then
+        MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
+        txtBrojDokIzlaz.SetFocus
+        Exit Sub
+    End If
 
     If brojDok <> "" Then
         Dim dupMsg As String
