@@ -8,6 +8,11 @@ Option Explicit
 Private m_Initialized As Boolean
 Private mIsShuttingDown As Boolean
 
+' KPI sidebar je "dirty" kad se doda red u TBL_OTKUP/OTPREMNICA/PRIJEMNICA
+' (postavlja modDataAccess.AppendRow) ili posle PWA importa. frmOtkupAPP.UserForm_Activate
+' osvezava KPI samo kad je dirty -- ne pri svakom povratku na dashboard.
+Public gKpiDirty As Boolean
+
 Public Sub StartApp()
     On Error GoTo EH
 

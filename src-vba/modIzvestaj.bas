@@ -72,6 +72,12 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         End If
     End If
     
+    ' Mape kooperanata (ime/prezime, stanica) -- jednom, umesto LookupValue u petljama nize.
+    Dim koopNameDict As Object
+    Set koopNameDict = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime")
+    Dim koopStanicaDict As Object
+    Set koopStanicaDict = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "StanicaID")
+
     ' --- Novac pro Kooperant aus tblNovac ---
     Dim novacDict As Object
     Set novacDict = CreateObject("Scripting.Dictionary")
@@ -101,7 +107,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                         If Not dict.Exists(koopID) Then
                             ' Pruefen ob Kooperant zu dieser Station gehoert
                             Dim koopStation As String
-                            koopStation = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "StanicaID"))
+                            If koopStanicaDict.Exists(koopID) Then koopStation = koopStanicaDict(koopID) Else koopStation = ""
                             If koopStation = stanicaID Then
                                 dict.Add koopID, Array(0#, 0#, 0#)
                             End If
@@ -250,12 +256,11 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         Dim agroSum As Double
         agroSum = 0
         If agroKoopDict.Exists(keys(i)) Then agroSum = agroKoopDict(keys(i))
-        
-        Dim ime As String, prezime As String
-        ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", keys(i), "Ime"))
-        prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", keys(i), "Prezime"))
-        
-        result(i + 1, 1) = ime & " " & prezime
+
+        Dim koopNaziv As String
+        If koopNameDict.Exists(CStr(keys(i))) Then koopNaziv = koopNameDict(CStr(keys(i))) Else koopNaziv = ""
+
+        result(i + 1, 1) = koopNaziv
         result(i + 1, 2) = vals(0)                          ' Kolicina
         result(i + 1, 3) = vals(1)                          ' Vrednost
         result(i + 1, 4) = novacSum                         ' Isplaceno
@@ -476,7 +481,11 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
             colMagVrednost = RequireColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST, "modIzvestaj.ReportKarticaKooperanta")
             colMagArtikal = RequireColumnIndex(TBL_MAGACIN, COL_MAG_ARTIKAL, "modIzvestaj.ReportKarticaKooperanta")
             colMagBrDok = RequireColumnIndex(TBL_MAGACIN, COL_MAG_BR_DOK, "modIzvestaj.ReportKarticaKooperanta")
-            
+
+            ' Mapa artikala (ID -> naziv) -- jednom, umesto LookupValue u petlji nize.
+            Dim artikalDict As Object
+            Set artikalDict = BuildLookupDict(TBL_ARTIKLI, COL_ART_ID, COL_ART_NAZIV)
+
             Dim m As Long
             For m = 1 To UBound(magData, 1)
                 If CStr(magData(m, colMagKoop)) = kooperantID Then
@@ -494,8 +503,8 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                 
                                 If magVr > 0 Then
                                     Dim artNaziv As String
-                                    artNaziv = CStr(LookupValue(TBL_ARTIKLI, COL_ART_ID, _
-                                                  CStr(magData(m, colMagArtikal)), COL_ART_NAZIV))
+                                    Dim artKey As String: artKey = CStr(magData(m, colMagArtikal))
+                                    If artikalDict.Exists(artKey) Then artNaziv = artikalDict(artKey) Else artNaziv = ""
                                     
                                     moves.Add Array( _
                                         magDatum, _
@@ -1377,16 +1386,17 @@ NextRow:
     
     Dim keys As Variant
     If dict.count > 0 Then keys = dict.keys
+    Dim koopNameDict As Object
+    Set koopNameDict = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime")
     Dim totKes As Double, totVirman As Double, totAvans As Double
     
     For i = 0 To dict.count - 1
         vals = dict(keys(i))
         
-        Dim ime As String, prezime As String
-        ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", keys(i), "Ime"))
-        prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", keys(i), "Prezime"))
-        
-        result(i + 1, 1) = ime & " " & prezime
+        Dim koopNaziv As String
+        If koopNameDict.Exists(CStr(keys(i))) Then koopNaziv = koopNameDict(CStr(keys(i))) Else koopNaziv = ""
+
+        result(i + 1, 1) = koopNaziv
         result(i + 1, 2) = vals(0)                          ' KesOtkupac
         result(i + 1, 3) = vals(1)                          ' VirmanFirma
         result(i + 1, 4) = vals(2)                          ' VirmanAvans
@@ -1524,8 +1534,11 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     Dim totRazlika As Double, totManjak As Double
     Dim totPrijemnica As Double
     Dim malinaMode As Boolean: malinaMode = IsMalinaMode()
+    ' Mapa vozaca (ID -> "Ime Prezime") -- jednom, umesto LookupValue u petlji nize.
+    Dim vozacDict As Object
+    Set vozacDict = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
     Dim i As Long
-    
+
     For i = 1 To rowCount
         Dim kgOtp As Double: kgOtp = 0
         If IsNumeric(otpData(i, colKol)) Then kgOtp = CDbl(otpData(i, colKol))
@@ -1570,8 +1583,7 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         vozID = CStr(otpData(i, colVozac))
         Dim vozNaziv As String
         If vozID <> "" Then
-            vozNaziv = CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Ime")) & " " & _
-                       CStr(LookupValue(TBL_VOZACI, "VozacID", vozID, "Prezime"))
+            If vozacDict.Exists(vozID) Then vozNaziv = vozacDict(vozID) Else vozNaziv = ""
         Else
             vozNaziv = ""
         End If
@@ -1893,6 +1905,11 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     Dim grp As Object
     Set grp = CreateObject("Scripting.Dictionary")
 
+    ' Memo za ResolveEntitetName: (tip|id) -> naziv za trajanje ovog izvestaja, da se
+    ' LookupValue ne ponavlja po svakom redu (O(jedinstvenih) umesto O(redova)).
+    Dim nameMemo As Object
+    Set nameMemo = CreateObject("Scripting.Dictionary")
+
     Dim totalUlaz As Long, totalIzlaz As Long
     Dim i As Long
     For i = 1 To rowCount
@@ -1915,7 +1932,9 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
             rec = grp(gkey)
         Else
             ' Datum, Mesto, Tip, Dokument, Ulaz, Izlaz
-            rec = Array(filtered(i, colDatum), ResolveEntitetName(entID, entTipVal), _
+            Dim entMemoKey As String: entMemoKey = entTipVal & "|" & entID
+            If Not nameMemo.Exists(entMemoKey) Then nameMemo.Add entMemoKey, ResolveEntitetName(entID, entTipVal)
+            rec = Array(filtered(i, colDatum), CStr(nameMemo(entMemoKey)), _
                         tipv, dokIDv, 0&, 0&, dokTipv)
         End If
         If effSmer = "Ulaz" Then
@@ -2619,6 +2638,8 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
     
     Dim keys As Variant
     keys = dict.keys
+    Dim vozacDict As Object
+    Set vozacDict = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
     Dim tAmbIzl As Long, tAmbVr As Long, tZbrKg As Double, tPrijKg As Double
     
     For i = 0 To dict.count - 1
@@ -2629,8 +2650,9 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
         Dim manjakPct As Double
         If vals(2) > 0 Then manjakPct = manjakKg / vals(2) * 100 Else manjakPct = 0
         
-        result(i + 1, 1) = CStr(LookupValue(TBL_VOZACI, "VozacID", keys(i), "Ime")) & " " & _
-                           CStr(LookupValue(TBL_VOZACI, "VozacID", keys(i), "Prezime"))
+        Dim vozNaz As String
+        If vozacDict.Exists(CStr(keys(i))) Then vozNaz = vozacDict(CStr(keys(i))) Else vozNaz = ""
+        result(i + 1, 1) = vozNaz
         result(i + 1, 2) = vals(0)       ' AmbIzlaz
         result(i + 1, 3) = vals(1)       ' AmbVracena
         result(i + 1, 4) = manjakKg      ' ManjakKg

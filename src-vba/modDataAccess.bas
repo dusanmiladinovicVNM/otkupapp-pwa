@@ -129,6 +129,11 @@ Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As 
     AppendRow = newRow.index
     StampRowAudit lo, newRow.index, True
     WriteJournalRow tblName, rowData
+    ' KPI sidebar (frmOtkupAPP) zavisi samo od ovih tabela -> oznaci za osvezavanje
+    ' pri sledecem povratku na dashboard (umesto racunanja pri svakom Activate).
+    If tblName = TBL_OTKUP Or tblName = TBL_OTPREMNICA Or tblName = TBL_PRIJEMNICA Then
+        gKpiDirty = True
+    End If
     Exit Function
     
 ErrHandler:
@@ -378,6 +383,44 @@ Public Function LookupValue(ByVal tblName As String, ByVal searchCol As String, 
     Next i
     
     LookupValue = Empty
+End Function
+
+Public Function BuildLookupDict(ByVal tblName As String, ByVal keyCol As String, _
+                                ByVal valCol As String, _
+                                Optional ByVal valCol2 As String = "") As Object
+    ' Jednoprolazna mapa keyCol -> valCol (opc. + valCol2 spojeno razmakom).
+    ' Zamena za LookupValue pozvan U PETLJI: gradi se O(n) JEDNOM, pa je svaki
+    ' lookup O(1) -- umesto O(n) po redu (sto je ukupno bilo O(n*m)).
+    ' Kljucevi su CStr; prvi pojav pobedjuje (isto kao LookupValue -> prvi match).
+    ' Vrednost je CStr (pozivaoci ionako rade CStr(LookupValue(...))).
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BuildLookupDict = d
+
+    Dim data As Variant
+    data = GetTableData(tblName)
+    If IsEmpty(data) Then Exit Function
+
+    Dim ki As Long, vi As Long, vi2 As Long
+    ki = GetColumnIndex(tblName, keyCol)
+    vi = GetColumnIndex(tblName, valCol)
+    If ki = 0 Or vi = 0 Then Exit Function
+    If valCol2 <> "" Then vi2 = GetColumnIndex(tblName, valCol2)
+
+    Dim i As Long, k As String, v As String
+    For i = 1 To UBound(data, 1)
+        k = CStr(data(i, ki))
+        If Len(k) > 0 Then
+            If Not d.Exists(k) Then
+                If vi2 > 0 Then
+                    v = CStr(data(i, vi)) & " " & CStr(data(i, vi2))
+                Else
+                    v = CStr(data(i, vi))
+                End If
+                d.Add k, v
+            End If
+        End If
+    Next i
 End Function
 
 Public Function GetLookupList(ByVal tblName As String, ByVal colName As String, _
