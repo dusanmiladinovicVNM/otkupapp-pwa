@@ -270,6 +270,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "AUTH_MSG_PINHASH_UKLJUCEN", "PIN hash je UKLJU" & ChrW(268) & "EN." & vbCrLf & "Postoje" & ChrW(263) & "i plaintext PIN-ovi migriraju na hash pri prvoj prijavi;" & vbCrLf & "novi/izmenjeni PIN-ovi se odmah " & ChrW(269) & "uvaju kao hash."
     UpsertRow lo, existing, "AUTH_MSG_PINHASH_ISKLJUCEN", "PIN hash je ISKLJU" & ChrW(268) & "EN (novi PIN-ovi se " & ChrW(269) & "uvaju kao plaintext)."
     UpsertRow lo, existing, "AUTH_MSG_PRIJAVA_NEUSPESNA", "Prijava neuspe" & ChrW(353) & "na. Aplikacija se zatvara."
+    UpsertRow lo, existing, "AUTH_LBL_PRIJAVA_GRESKA", "Pogre" & ChrW(353) & "no korisni" & ChrW(269) & "ko ime ili PIN."
     UpsertRow lo, existing, "AUTH_MSG_PINHASH_RADI", "PIN hash (SHA-256) RADI ispravno u ovom okru" & ChrW(382) & "enju." & vbCrLf & "Mo" & ChrW(382) & "e" & ChrW(353) & " uklju" & ChrW(269) & "iti: Alt+F8 -> EnablePinHash."
     UpsertRow lo, existing, "AUTH_MSG_PINHASH_NE_RADI", "PIN hash NE radi u ovom okru" & ChrW(382) & "enju (SHA-256 nedostupan)." & vbCrLf & "NE uklju" & ChrW(269) & "uj PIN hash " & ChrW(8212) & " ostani na plaintext PIN-u." & vbCrLf & "Dobijeno: '"
     UpsertRow lo, existing, "AUD_MSG_KOLONE_SUFIX", " tabela:" & vbCrLf & "CreatedAt / CreatedBy / ModifiedAt / ModifiedBy." & vbCrLf & vbCrLf & "Od sada se svaki unos i izmena bele" & ChrW(382) & "e (ko i kada)."
