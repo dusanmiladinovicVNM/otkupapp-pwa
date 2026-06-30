@@ -868,14 +868,11 @@ Public Function ReportOtkupListe(ByVal stanicaID As String, _
         ReportOtkupListe = Empty
         Exit Function
     End If
-    d = ExcludeStornirano(d, TBL_OTKUP)
-    If Not IsArray(d) Then
-        ReportOtkupListe = Empty
-        Exit Function
-    End If
-
+    ' Bez zasebnog ExcludeStornirano -> storno se preskace u glavnoj petlji nize
+    ' (izbegnuta jos jedna kopija cele tblOtkup).
     Dim cId As Long, cDat As Long, cBr As Long, cSt As Long, cKoop As Long
-    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long
+    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long, cStorno As Long
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
     cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
     cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
@@ -893,7 +890,9 @@ Public Function ReportOtkupListe(ByVal stanicaID As String, _
     Dim moves As New Collection
     Dim i As Long
     For i = 1 To UBound(d, 1)
-        If NzToText(d(i, cSt)) = Trim$(stanicaID) Then
+        Dim okStorno As Boolean: okStorno = True
+        If cStorno > 0 Then okStorno = (NzToText(d(i, cStorno)) <> "Da")   ' VBA Or ne short-circuituje
+        If okStorno And NzToText(d(i, cSt)) = Trim$(stanicaID) Then
             If IsDate(d(i, cDat)) Then
                 Dim dt As Date
                 dt = CDate(d(i, cDat))
@@ -1745,15 +1744,20 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
         ReportAmbalaza = Empty
         Exit Function
     End If
-    data = ExcludeStornirano(data, TBL_AMBALAZA)
-    If IsEmpty(data) Or Not IsArray(data) Then
-        ReportAmbalaza = Empty
-        Exit Function
-    End If
     ' --- Filter aufbauen ---
+    ' Storno se filtrira UNUTAR FilterArray (umesto zasebnog ExcludeStornirano koji
+    ' je pravio JOS jednu kopiju cele tblAmbalaza) -> jedan prolaz umesto dva.
     Dim filters As New Collection
     Dim fp As clsFilterParam
-    
+
+    Dim colStornoAmb As Long
+    colStornoAmb = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    If colStornoAmb > 0 Then
+        Set fp = New clsFilterParam
+        fp.Init colStornoAmb, "<>", "Da"
+        filters.Add fp
+    End If
+
     Set fp = New clsFilterParam
     fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "modIzvestaj.ReportAmbalaza"), "BETWEEN", datumOd, datumDo
     filters.Add fp

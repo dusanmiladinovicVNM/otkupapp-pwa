@@ -16,9 +16,15 @@ Option Explicit
 ' ipak pise dok je prozor aktivan). Depth-brojac podrzava ugnjezdene Begin/End.
 Private mTableCache As Object
 Private mTableCacheDepth As Long
+Private mExclCache As Object        ' kes ExcludeStornirano rezultata (po tblName), isti prozor
+Private mColCache As Object         ' kes GetColumnIndex ("tbl|col" -> index), isti prozor
 
 Public Sub BeginTableCache()
-    If mTableCacheDepth = 0 Then Set mTableCache = CreateObject("Scripting.Dictionary")
+    If mTableCacheDepth = 0 Then
+        Set mTableCache = CreateObject("Scripting.Dictionary")
+        Set mExclCache = CreateObject("Scripting.Dictionary")
+        Set mColCache = CreateObject("Scripting.Dictionary")
+    End If
     mTableCacheDepth = mTableCacheDepth + 1
 End Sub
 
@@ -27,12 +33,39 @@ Public Sub EndTableCache()
     If mTableCacheDepth <= 0 Then
         mTableCacheDepth = 0
         Set mTableCache = Nothing
+        Set mExclCache = Nothing
+        Set mColCache = Nothing
     End If
 End Sub
 
 Private Sub InvalidateTableCache(ByVal tblName As String)
-    If mTableCache Is Nothing Then Exit Sub
-    If mTableCache.Exists(tblName) Then mTableCache.Remove tblName
+    If Not mTableCache Is Nothing Then
+        If mTableCache.Exists(tblName) Then mTableCache.Remove tblName
+    End If
+    If Not mExclCache Is Nothing Then
+        If mExclCache.Exists(tblName) Then mExclCache.Remove tblName
+    End If
+End Sub
+
+' --- ExcludeStornirano kes (koristi modHelpers.ExcludeStornirano) ---
+' Kesira se SAMO kad je ulaz PUNA tabela (broj redova = GetTableData), pa
+' filtrirani podskupovi (manje redova) nikad ne pogode kes pune tabele.
+Public Function ExclCacheActive() As Boolean
+    ExclCacheActive = Not (mExclCache Is Nothing)
+End Function
+
+Public Function ExclCacheTryGet(ByVal tblName As String, ByRef outData As Variant) As Boolean
+    ExclCacheTryGet = False
+    If mExclCache Is Nothing Then Exit Function
+    If mExclCache.Exists(tblName) Then
+        outData = mExclCache(tblName)
+        ExclCacheTryGet = True
+    End If
+End Function
+
+Public Sub ExclCachePut(ByVal tblName As String, ByVal data As Variant)
+    If mExclCache Is Nothing Then Exit Sub
+    mExclCache(tblName) = data
 End Sub
 
 ' --- Table Access ---
@@ -93,6 +126,16 @@ End Function
 
 Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String) As Long
     ' Gibt den Spaltenindex innerhalb der Tabelle zurueck (1-basiert)
+    ' Request-scoped kes: u jednom "Prikazi" prozoru kolone se ne menjaju, pa
+    ' izbegavamo ~80 GetTable skenova (svaki ide kroz sve sheetove/tabele).
+    Dim ck As String
+    If Not mColCache Is Nothing Then
+        ck = tblName & "|" & colName
+        If mColCache.Exists(ck) Then
+            GetColumnIndex = mColCache(ck)
+            Exit Function
+        End If
+    End If
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -102,6 +145,7 @@ Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String)
     On Error Resume Next
     GetColumnIndex = lo.ListColumns(colName).index
     On Error GoTo 0
+    If Not mColCache Is Nothing Then mColCache(ck) = GetColumnIndex
 End Function
 
 Public Function GetColumnData(ByVal tblName As String, ByVal colName As String) As Variant

@@ -152,21 +152,39 @@ Public Function ExcludeStornirano(ByVal data As Variant, _
         ExcludeStornirano = data
         Exit Function
     End If
-    
+
+    ' Request-scoped kes: samo kad je 'data' PUNA tabela (isti broj redova kao
+    ' kesiran GetTableData) -> filtrirani podskupovi se NE kesiraju po tblName.
+    Dim canCache As Boolean: canCache = False
+    If ExclCacheActive() And IsArray(data) Then
+        Dim fullData As Variant: fullData = GetTableData(tblName)   ' iz kesa (mTableCache)
+        If IsArray(fullData) Then
+            If UBound(data, 1) = UBound(fullData, 1) Then canCache = True
+        End If
+    End If
+    If canCache Then
+        Dim cached As Variant
+        If ExclCacheTryGet(tblName, cached) Then
+            ExcludeStornirano = cached
+            Exit Function
+        End If
+    End If
+
     Dim colStorno As Long
     colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
     If colStorno = 0 Then
         ExcludeStornirano = data
         Exit Function
     End If
-    
+
     Dim filters As New Collection
     Dim fp As clsFilterParam
     Set fp = New clsFilterParam
     fp.Init colStorno, "<>", "Da"
     filters.Add fp
-    
+
     ExcludeStornirano = FilterArray(data, filters)
+    If canCache Then ExclCachePut tblName, ExcludeStornirano
 End Function
 
 Public Function SafeGetTable(ByVal tableName As String) As ListObject

@@ -82,10 +82,14 @@ Private Sub UserForm_Activate()
     If m_SetupDone Then Exit Sub
     m_SetupDone = True
     
+    ' Tema: ApplyTheme vec radi StyleControls (pun obilazak stabla). Ranije je
+    ' ApplyThemeToControls radio JOS jedan StyleControls -> dupli obilazak (~70ms na
+    ' ovako velikoj formi). Dovoljan je FixFormCaptions (caption fix); StyleControls
+    ' jednom. (Ista dedup pouka kao frmIzvestaj.)
     'ModernUI_ApplyTheme Me
-    ApplyTheme Me, BG_MAIN()
-    ApplyThemeToControls Me
-    
+    ApplyTheme Me, BG_MAIN()       ' BackColor + StyleControls (jedan obilazak)
+    FixFormCaptions Me             ' caption fix (bez drugog StyleControls iz ApplyThemeToControls)
+
     ' action buttons
     StylePrimaryButton btnUnosOtp, "Unos otpremnice"
     StylePrimaryButton btnUnosZbr, "Unos zbirne"
@@ -123,7 +127,7 @@ Private Sub UserForm_Activate()
     FillCmb cmbTipAmbPrij, GetTipAmbalazeOptions()
     FillCmb cmbTipAmbOMUlaz, GetTipAmbalazeOptions()
     FillCmb cmbTipAmbIzlaz, GetTipAmbalazeOptions()
-    
+
     lblValidacijaKG.caption = ""
     lblValidacijaAmb.caption = ""
     lblManjak.caption = ""
@@ -4071,14 +4075,23 @@ Private Function SumOtkupKgToday() As Double
     Dim i As Long, total As Double, rowKg As Double
 
     For i = 1 To UBound(data, 1)
+        ' Excel error vrednost (npr. #N/A / #VALUE!) u celiji je ranije obarala CEO
+        ' zbir: NzToText/CStr nad Variant/Error baca Type mismatch (13) -> EH -> 0,
+        ' pa je "kg danas" KPI bio nepouzdan. Preskoci takve celije po redu.
         If colStorno > 0 Then
-            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+            If Not IsError(data(i, colStorno)) Then
+                If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
+            End If
         End If
 
-        If IsDate(data(i, colDatum)) Then
-            If DateValue(CDate(data(i, colDatum))) = DateValue(Date) Then
-                If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
-                    total = total + rowKg
+        If Not IsError(data(i, colDatum)) Then
+            If IsDate(data(i, colDatum)) Then
+                If DateValue(CDate(data(i, colDatum))) = DateValue(Date) Then
+                    If Not IsError(data(i, colKg)) Then
+                        If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
+                            total = total + rowKg
+                        End If
+                    End If
                 End If
             End If
         End If

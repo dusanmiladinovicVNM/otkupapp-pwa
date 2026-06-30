@@ -59,18 +59,36 @@ Attribute m_btnStampajAmb.VB_VarHelpID = -1
 ' skrivene ref-kljuc kolone; kljuc = CStr(ListIndex)).
 Private m_otkOtpID As Object
 
+' Lazy generisanje po tabu: na otvaranju / promeni entiteta generise se SAMO aktivan
+' tab; ostali tek kad korisnik klikne na njih (mpReports_Change). Ambalaza izvestaj
+' (~550ms nad celim ledgerom) se vise ne pravi na otvaranju ako taj tab nije aktivan.
+' m_genTabs: pageIdx -> True (generisan za tekuce parametre). m_inUpdateMode: guard da
+' programsko UpdateReportMode (menja mpReports.value) ne okine lazy gen pre vremena.
+Private m_curTip As String
+Private m_curID As String
+Private m_curOd As Date
+Private m_curDo As Date
+Private m_curZbirni As Boolean
+Private m_genTabs As Object
+Private m_inUpdateMode As Boolean
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
     EnsureUserFormChromeRemoved Me, mChromeRemoved
-    
-    ApplyTheme Me, BG_MAIN()
-    ApplyThemeToControls Me
-    
-    SetupAllColumnHeaders
-    
+
+    ' Forma je modeless (Show vbModeless) pa UserForm_Activate okida na SVAKO
+    ' vracanje fokusa, ne samo na otvaranje. Ranije se tu, pre m_SetupDone guarda,
+    ' radio pun obilazak stabla kontrola DVA puta (ApplyTheme + ApplyThemeToControls)
+    ' + SetupAllColumnHeaders -> glavni trosak otvaranja/aktivacije forme.
+    ' Tema i naslovi kolona se NE menjaju u toku sesije (nema runtime dark/light
+    ' prebacivanja, kontrole zadrze stil), pa je dovoljno jednom po instanci.
     If m_SetupDone Then GoTo Continue_Setup
     m_SetupDone = True
+
+    ApplyTheme Me, BG_MAIN()       ' BackColor + StyleControls (jedan obilazak)
+    FixFormCaptions Me             ' caption fix (bez drugog StyleControls iz ApplyThemeToControls)
+    SetupAllColumnHeaders
 
     ' Nova instanca forme -> resetuj modul-stanje panela "Detalji otkupa"
     ' (dinamicke kontrole prethodne instance vise ne postoje posle Unload-a).
@@ -142,7 +160,7 @@ Private Sub UserForm_Activate()
     ' defaults
     SetTipToggle "tglPojedinacni"
     SetEntitetToggle "tglOM"
-    
+
     LoadEntiteti
     
     cmbVrstaRobe.Clear
@@ -157,7 +175,7 @@ Private Sub UserForm_Activate()
     
     txtDatumOd.value = "1.1." & Year(Date)
     txtDatumDo.value = Format$(Date, "d.m.yyyy")
-    
+
     SetupListBoxes
     On Error Resume Next
     mpReports.Pages(3).caption = "Ambala" & ChrW(382) & "a"   ' "Primljena ambalaza" -> "Ambala" & ChrW(382) & "a"
@@ -167,7 +185,7 @@ Private Sub UserForm_Activate()
     EnsureDetaljiButtons          ' dugmad za stampu uz "Detalji" (Otk.roba / Ambalaza)
     UpdateReportMode
     ForceDarkAllPages
-    
+
     m_IsInitializing = False
     AutoRefresh
 
@@ -430,6 +448,7 @@ End Sub
 ' ============================================================
 
 Private Sub UpdateReportMode()
+    m_inUpdateMode = True   ' guard: mpReports.value setovanje ispod okida mpReports_Change
     Dim isPojed As Boolean
     isPojed = tglPojedinacni.value
     cmbEntitet.enabled = isPojed
@@ -479,6 +498,7 @@ Private Sub UpdateReportMode()
     Next pg
     If firstVisible >= 0 Then mpReports.value = firstVisible
 
+    m_inUpdateMode = False
 End Sub
 
 ' ============================================================
@@ -631,38 +651,83 @@ Private Sub btnUnos_Click()
         entitetID = ""
     End If
 
-    Application.ScreenUpdating = False
-    BeginTableCache   ' citaj svaku tabelu jednom za sve Generate* (read-only blok)
+    ' Lazy generisanje: zapamti parametre, oznaci sve tabove "prljavim" i generisi
+    ' SAMO trenutno aktivan tab. Ostali vidljivi tabovi se generisu tek kad korisnik
+    ' predje na njih (mpReports_Change -> GenerateActivePage). Tako se npr. Ambalaza
+    ' izvestaj (~550ms nad celim ledgerom) ne pravi na otvaranju OM-a (aktivan = Saldo).
+    m_curTip = entitetTip
+    m_curID = entitetID
+    m_curOd = datumOd
+    m_curDo = datumDo
+    m_curZbirni = zbirni
+    If m_genTabs Is Nothing Then Set m_genTabs = CreateObject("Scripting.Dictionary")
+    m_genTabs.RemoveAll   ' novi parametri -> svi tabovi ponovo prljavi
 
-    If zbirni Then
-        GenerateZbirniReport datumOd, datumDo, entitetTip
-        GenerateProsecnaCenaReport entitetTip, "", datumOd, datumDo
-        GenerateManjakReport entitetTip, "", datumOd, datumDo
-    Else
-        GenerateSaldoReport entitetTip, entitetID, datumOd, datumDo
-        GenerateOtkupRobaReport entitetTip, entitetID, datumOd, datumDo
-        GenerateAmbalazeReport entitetTip, entitetID, datumOd, datumDo
-        GenerateIsplataReport entitetTip, entitetID, datumOd, datumDo
-        GenerateProsecnaCenaReport entitetTip, entitetID, datumOd, datumDo
-        GenerateManjakReport entitetTip, entitetID, datumOd, datumDo
-        If entitetTip = "OM" Then GenerateOtkupListeReport entitetID, datumOd, datumDo
-        If entitetTip = "Kooperant" Then
-            GenerateKarticaReport entitetID, datumOd, datumDo
-            GenerateKarticaAmbReport entitetID, datumOd, datumDo
-        End If
-    End If
-
-    UpdateStatusLabel
-    
-    EndTableCache
-    Application.ScreenUpdating = True
+    GenerateActivePage
     Exit Sub
 
 EH:
     LogErr "frmIzvestaj.btnUnos"
+    MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju izve" & ChrW(353) & "taja: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Lazy: generisi trenutno aktivan tab (ako je vidljiv i jos nije generisan za
+' tekuce parametre). Zove se iz btnUnos_Click (aktivan tab) i iz mpReports_Change
+' (kad korisnik predje na drugi tab). Jedan tab = jedan BeginTableCache blok.
+Private Sub GenerateActivePage()
+    If m_genTabs Is Nothing Then Set m_genTabs = CreateObject("Scripting.Dictionary")
+    Dim idx As Long
+    idx = mpReports.value
+    If idx < 0 Then Exit Sub
+    If idx >= mpReports.Pages.count Then Exit Sub
+    If Not mpReports.Pages(idx).Visible Then Exit Sub
+    If m_genTabs.Exists(CStr(idx)) Then Exit Sub
+
+    Application.ScreenUpdating = False
+    BeginTableCache
+    On Error GoTo CleanFail
+    GenerateTabForPage idx
+    m_genTabs(CStr(idx)) = True
+    UpdateStatusLabel
+
+CleanExit:
     EndTableCache
     Application.ScreenUpdating = True
-    MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju izve" & ChrW(353) & "taja: " & Err.description, vbCritical, APP_NAME
+    Exit Sub
+
+CleanFail:
+    LogErr "frmIzvestaj.GenerateActivePage"
+    Resume CleanExit
+End Sub
+
+' Mapiranje pageIdx -> odgovarajuci Generate* (sa zapamcenim parametrima). Indeksi
+' prate UpdateReportMode (0 SaldoOM, 1 SaldoKupci, 2 OtkupRoba, 3 Ambalaza, 4 Isplata,
+' 5 Zbirni, 6 ProsecnaCena, 7 Manjak, 8 Kartica; runtime m_otkPageIdx/m_ambPageIdx).
+Private Sub GenerateTabForPage(ByVal idx As Long)
+    If m_curZbirni Then
+        Select Case idx
+            Case 5: GenerateZbirniReport m_curOd, m_curDo, m_curTip
+            Case 6: GenerateProsecnaCenaReport m_curTip, "", m_curOd, m_curDo
+            Case 7: GenerateManjakReport m_curTip, "", m_curOd, m_curDo
+        End Select
+        Exit Sub
+    End If
+
+    Select Case idx
+        Case 0, 1: GenerateSaldoReport m_curTip, m_curID, m_curOd, m_curDo
+        Case 2:    GenerateOtkupRobaReport m_curTip, m_curID, m_curOd, m_curDo
+        Case 3:    GenerateAmbalazeReport m_curTip, m_curID, m_curOd, m_curDo
+        Case 4:    GenerateIsplataReport m_curTip, m_curID, m_curOd, m_curDo
+        Case 6:    GenerateProsecnaCenaReport m_curTip, m_curID, m_curOd, m_curDo
+        Case 7:    GenerateManjakReport m_curTip, m_curID, m_curOd, m_curDo
+        Case 8:    GenerateKarticaReport m_curID, m_curOd, m_curDo
+        Case Else
+            If idx = m_otkPageIdx Then
+                GenerateOtkupListeReport m_curID, m_curOd, m_curDo
+            ElseIf idx = m_ambPageIdx Then
+                GenerateKarticaAmbReport m_curID, m_curOd, m_curDo
+            End If
+    End Select
 End Sub
 
 Private Sub mpReports_Change()
@@ -678,6 +743,13 @@ Private Sub mpReports_Change()
     If Not m_btnStampajOtk Is Nothing Then m_btnStampajOtk.Visible = onOtk
     If Not m_btnStampajOtkRoba Is Nothing Then m_btnStampajOtkRoba.Visible = onRoba
     If Not m_btnStampajAmb Is Nothing Then m_btnStampajAmb.Visible = onAmb
+
+    ' Lazy: generisi tab tek kad korisnik predje na njega (ako vec nije generisan za
+    ' tekuce parametre). Preskoci tokom Activate i programskog UpdateReportMode (oba
+    ' menjaju mpReports.value, a aktivan tab tad generise btnUnos_Click/AutoRefresh).
+    If m_IsInitializing Then Exit Sub
+    If m_inUpdateMode Then Exit Sub
+    GenerateActivePage
 End Sub
 Private Sub UpdateUnosButtonState()
 
@@ -690,6 +762,28 @@ Private Sub UpdateUnosButtonState()
     ' If Pojedinacni ? entitet must be selected
     btnUnos.enabled = (cmbEntitet.ListIndex >= 0 And cmbEntitet.value <> "")
 
+End Sub
+
+' ============================================================
+' ListBox brzo punjenje: gradi 2D array u memoriji pa JEDAN ".List = arr"
+' (umesto .List(i,j) po celiji = stotine/hiljade COM poziva). Merenje: OtkupRoba
+' 922 ms -> 16 ms. src je 1-based (1..nR, 1..nC); helper radi 0-based + prenos.
+' ============================================================
+Private Sub FillListBox(ByRef lst As Object, ByRef src As Variant)
+    lst.Clear
+    If IsEmpty(src) Then Exit Sub
+    If Not IsArray(src) Then Exit Sub
+    Dim nR As Long: nR = UBound(src, 1)
+    Dim nC As Long: nC = UBound(src, 2)
+    Dim a() As Variant
+    ReDim a(0 To nR - 1, 0 To nC - 1)
+    Dim i As Long, j As Long
+    For i = 1 To nR
+        For j = 1 To nC
+            a(i - 1, j - 1) = src(i, j)
+        Next j
+    Next i
+    lst.List = a
 End Sub
 
 ' ============================================================
@@ -707,52 +801,57 @@ End Sub
 
 Private Sub GenerateSaldoOM(ByVal stanicaID As String, _
                             ByVal datumOd As Date, ByVal datumDo As Date)
-    lstSaldoOM.Clear
-    
     Dim data As Variant
     data = ReportSaldoOM(stanicaID, datumOd, datumDo)
-    If IsEmpty(data) Then Exit Sub
-    
+    If IsEmpty(data) Then lstSaldoOM.Clear: Exit Sub
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim nC As Long: nC = UBound(data, 2)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To nC)
     Dim i As Long, j As Long
-    For i = 1 To UBound(data, 1)
-        lstSaldoOM.AddItem CStr(data(i, 1))
-        For j = 2 To UBound(data, 2)
+    For i = 1 To nR
+        src(i, 1) = CStr(data(i, 1))
+        For j = 2 To nC
             If IsNumeric(data(i, j)) Then
                 If j = 7 Then  ' Ambalaza
-                    lstSaldoOM.List(lstSaldoOM.ListCount - 1, j - 1) = Format$(data(i, j), "#,##0")
+                    src(i, j) = Format$(data(i, j), "#,##0")
                 Else
-                    lstSaldoOM.List(lstSaldoOM.ListCount - 1, j - 1) = Format$(data(i, j), "#,##0.00")
+                    src(i, j) = Format$(data(i, j), "#,##0.00")
                 End If
             Else
-                lstSaldoOM.List(lstSaldoOM.ListCount - 1, j - 1) = CStr(data(i, j))
+                src(i, j) = CStr(data(i, j))
             End If
         Next j
     Next i
+    FillListBox lstSaldoOM, src
 End Sub
 
 Private Sub GenerateSaldoKupci(ByVal kupacID As String, _
                                ByVal datumOd As Date, ByVal datumDo As Date)
-    lstSaldoKupci.Clear
-    
     Dim data As Variant
     data = ReportSaldoKupci(kupacID, datumOd, datumDo)
-    If IsEmpty(data) Then Exit Sub
-    
+    If IsEmpty(data) Then lstSaldoKupci.Clear: Exit Sub
+
     Dim fmts As Variant
     fmts = Array("", "#,##0.00", "#,##0.00", "#,##0.00", "#,##0.00", "#,##0.00", "#,##0")
-    
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim nC As Long: nC = UBound(data, 2)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To nC)
     Dim i As Long, j As Long
-    For i = 1 To UBound(data, 1)
-        lstSaldoKupci.AddItem CStr(data(i, 1))
-        For j = 2 To UBound(data, 2)
+    For i = 1 To nR
+        src(i, 1) = CStr(data(i, 1))
+        For j = 2 To nC
             If IsNumeric(data(i, j)) And data(i, j) <> "" Then
-                lstSaldoKupci.List(lstSaldoKupci.ListCount - 1, j - 1) = _
-                    Format$(CDbl(data(i, j)), CStr(fmts(j - 1)))
+                src(i, j) = Format$(CDbl(data(i, j)), CStr(fmts(j - 1)))
             ElseIf CStr(data(i, j)) <> "" Then
-                lstSaldoKupci.List(lstSaldoKupci.ListCount - 1, j - 1) = CStr(data(i, j))
+                src(i, j) = CStr(data(i, j))
             End If
         Next j
     Next i
+    FillListBox lstSaldoKupci, src
 End Sub
 
 ' ============================================================
@@ -770,47 +869,67 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
     If IsEmpty(data) Then Exit Sub
 
     Dim isOM As Boolean: isOM = (entitetTip = "OM")
-    Dim i As Long, j As Long, li As Long
-    For i = 1 To UBound(data, 1)
-        If IsDate(data(i, 1)) Then
-            lstOtkupRoba.AddItem Format$(CDate(data(i, 1)), "d.m.yy")
-        Else
-            lstOtkupRoba.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
-        End If
-        li = lstOtkupRoba.ListCount - 1
+    Dim nR As Long: nR = UBound(data, 1)
 
-        If isOM Then
-            ' OM: 12 logickih kolona -> 10 listbox kolona (Manjak kg+% spojeni;
-            ' OtpremnicaID u m_otkOtpID jer ListBox podrzava max 10 kolona).
-            lstOtkupRoba.List(li, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
-            lstOtkupRoba.List(li, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
-            lstOtkupRoba.List(li, 3) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
-            lstOtkupRoba.List(li, 4) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))
-            If IsNumeric(data(i, 6)) Then lstOtkupRoba.List(li, 5) = FmtKolicina(CDbl(data(i, 6)))
-            If IsNumeric(data(i, 7)) Then lstOtkupRoba.List(li, 6) = FmtKolicina(CDbl(data(i, 7)))
-            If IsNumeric(data(i, 8)) Then lstOtkupRoba.List(li, 7) = FmtKolicina(CDbl(data(i, 8)))
-            If IsNumeric(data(i, 9)) Then lstOtkupRoba.List(li, 8) = FmtKolicina(CDbl(data(i, 9)))
+    If isOM Then
+        ' OM: gradi 2D string array u MEMORIJI pa ga prenese u ListBox JEDNIM
+        ' ".List = arr" (umesto ~10 COM .List poziva po redu = glavni trosak).
+        ' 12 logickih kolona -> 10 listbox kolona (Manjak kg+% spojeni;
+        ' OtpremnicaID u m_otkOtpID jer ListBox podrzava max 10 kolona).
+        Dim arr() As String
+        ReDim arr(0 To nR - 1, 0 To 9)
+        Dim i As Long, r As Long
+        For i = 1 To nR
+            r = i - 1
+            If IsDate(data(i, 1)) Then
+                arr(r, 0) = Format$(CDate(data(i, 1)), "d.m.yy")
+            Else
+                arr(r, 0) = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+            End If
+            arr(r, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+            arr(r, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+            arr(r, 3) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
+            arr(r, 4) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))
+            If IsNumeric(data(i, 6)) Then arr(r, 5) = FmtKolicina(CDbl(data(i, 6)))
+            If IsNumeric(data(i, 7)) Then arr(r, 6) = FmtKolicina(CDbl(data(i, 7)))
+            If IsNumeric(data(i, 8)) Then arr(r, 7) = FmtKolicina(CDbl(data(i, 8)))
+            If IsNumeric(data(i, 9)) Then arr(r, 8) = FmtKolicina(CDbl(data(i, 9)))
             Dim mStr As String: mStr = ""
             If IsNumeric(data(i, 10)) And Not IsEmpty(data(i, 10)) Then mStr = FmtKolicina(CDbl(data(i, 10)))
             If IsNumeric(data(i, 11)) And Not IsEmpty(data(i, 11)) Then _
                 mStr = Trim$(mStr & " / " & Format$(CDbl(data(i, 11)), "0.0") & "%")
-            lstOtkupRoba.List(li, 9) = mStr
+            arr(r, 9) = mStr
             Dim rk As String: rk = CStr(IIf(IsEmpty(data(i, 12)), "", data(i, 12)))
-            If Left$(rk, 4) = "OTP|" Then m_otkOtpID(CStr(li)) = Mid$(rk, 5)
-        Else
-            For j = 2 To UBound(data, 2)
-                If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                    If GetActiveEntitetTip() = "Kupci" And j = UBound(data, 2) Then
-                        lstOtkupRoba.List(li, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
+            If Left$(rk, 4) = "OTP|" Then m_otkOtpID(CStr(r)) = Mid$(rk, 5)
+        Next i
+        lstOtkupRoba.List = arr
+    Else
+        ' Kupci: isti ".List = arr" pristup (jedan COM prenos umesto per-celija).
+        Dim nC As Long: nC = UBound(data, 2)
+        Dim isKupci As Boolean: isKupci = (GetActiveEntitetTip() = "Kupci")
+        Dim src() As String
+        ReDim src(1 To nR, 1 To nC)
+        Dim k As Long, j As Long
+        For k = 1 To nR
+            If IsDate(data(k, 1)) Then
+                src(k, 1) = Format$(CDate(data(k, 1)), "d.m.yy")
+            Else
+                src(k, 1) = CStr(IIf(IsEmpty(data(k, 1)), "", data(k, 1)))
+            End If
+            For j = 2 To nC
+                If IsNumeric(data(k, j)) And Not IsEmpty(data(k, j)) Then
+                    If isKupci And j = nC Then
+                        src(k, j) = Format$(CDbl(data(k, j)), "#,##0.00")
                     Else
-                        lstOtkupRoba.List(li, j - 1) = FmtKolicina(CDbl(data(i, j)))
+                        src(k, j) = FmtKolicina(CDbl(data(k, j)))
                     End If
                 Else
-                    lstOtkupRoba.List(li, j - 1) = CStr(IIf(IsEmpty(data(i, j)), "", data(i, j)))
+                    src(k, j) = CStr(IIf(IsEmpty(data(k, j)), "", data(k, j)))
                 End If
             Next j
-        End If
-    Next i
+        Next k
+        FillListBox lstOtkupRoba, src
+    End If
 End Sub
 
 ' ============================================================
@@ -819,37 +938,41 @@ End Sub
 
 Private Sub GenerateAmbalazeReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                    ByVal datumOd As Date, ByVal datumDo As Date)
-    lstAmbalaza.Clear
     KarticaDetalji_Clear
-    
+
     Dim isZb As Boolean
     isZb = IsZbirniMode()
-    
+
     Dim data As Variant
     data = ReportAmbalaza(entitetTip, entitetID, datumOd, datumDo, isZb)
-    If IsEmpty(data) Then Exit Sub
-    
+    If IsEmpty(data) Then lstAmbalaza.Clear: Exit Sub
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim nC As Long: nC = UBound(data, 2)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To nC)
     Dim i As Long
-    For i = 1 To UBound(data, 1)
+    For i = 1 To nR
         If IsDate(data(i, 1)) Then
-            lstAmbalaza.AddItem Format$(CDate(data(i, 1)), "d.m.yy")
+            src(i, 1) = Format$(CDate(data(i, 1)), "d.m.yy")
         Else
-            lstAmbalaza.AddItem CStr(data(i, 1))
+            src(i, 1) = CStr(data(i, 1))
         End If
-        lstAmbalaza.List(lstAmbalaza.ListCount - 1, 1) = CStr(data(i, 2))
-        lstAmbalaza.List(lstAmbalaza.ListCount - 1, 2) = CStr(data(i, 3))
-        lstAmbalaza.List(lstAmbalaza.ListCount - 1, 3) = CStr(data(i, 4))
+        src(i, 2) = CStr(data(i, 2))
+        src(i, 3) = CStr(data(i, 3))
+        src(i, 4) = CStr(data(i, 4))
         If IsNumeric(data(i, 5)) And data(i, 5) <> "" Then
-            lstAmbalaza.List(lstAmbalaza.ListCount - 1, 4) = Format$(CLng(data(i, 5)), "#,##0")
+            src(i, 5) = Format$(CLng(data(i, 5)), "#,##0")
         End If
         If IsNumeric(data(i, 6)) And data(i, 6) <> "" Then
-            lstAmbalaza.List(lstAmbalaza.ListCount - 1, 5) = Format$(CLng(data(i, 6)), "#,##0")
+            src(i, 6) = Format$(CLng(data(i, 6)), "#,##0")
         End If
-        ' Skrivena kol. 6 = ref-kljuc (AMB|<DokTip>|<DokID>); samo pojedinacni (7 kol).
-        If UBound(data, 2) >= 7 Then
-            lstAmbalaza.List(lstAmbalaza.ListCount - 1, 6) = CStr(IIf(IsEmpty(data(i, 7)), "", data(i, 7)))
+        ' Skrivena 7. kolona = ref-kljuc (AMB|<DokTip>|<DokID>); samo pojedinacni.
+        If nC >= 7 Then
+            src(i, 7) = CStr(IIf(IsEmpty(data(i, 7)), "", data(i, 7)))
         End If
     Next i
+    FillListBox lstAmbalaza, src
 End Sub
 
 ' ============================================================
@@ -858,23 +981,24 @@ End Sub
 
 Private Sub GenerateIsplataReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                   ByVal datumOd As Date, ByVal datumDo As Date)
-    lstIsplata.Clear
-    
     Dim data As Variant
     data = ReportIsplata(entitetTip, entitetID, datumOd, datumDo)
-    If IsEmpty(data) Then Exit Sub
-    
+    If IsEmpty(data) Then lstIsplata.Clear: Exit Sub
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim nC As Long: nC = UBound(data, 2)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To nC)
     Dim i As Long, j As Long
-    For i = 1 To UBound(data, 1)
-        lstIsplata.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
-        For j = 2 To UBound(data, 2)
+    For i = 1 To nR
+        src(i, 1) = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+        For j = 2 To nC
             If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                lstIsplata.List(lstIsplata.ListCount - 1, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
-            Else
-                lstIsplata.List(lstIsplata.ListCount - 1, j - 1) = ""
+                src(i, j) = Format$(CDbl(data(i, j)), "#,##0.00")
             End If
         Next j
     Next i
+    FillListBox lstIsplata, src
 End Sub
 
 ' ============================================================
@@ -883,37 +1007,37 @@ End Sub
 
 Private Sub GenerateZbirniReport(ByVal datumOd As Date, ByVal datumDo As Date, _
                                  ByVal entitetTip As String)
-    lstZbirni.Clear
-    
     Dim data As Variant
     data = ReportZbirni(entitetTip, datumOd, datumDo)
-    If IsEmpty(data) Then Exit Sub
-    
+    If IsEmpty(data) Then lstZbirni.Clear: Exit Sub
+
     Dim isVozac As Boolean
     isVozac = (entitetTip = "Vozac")
-    
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim nC As Long: nC = UBound(data, 2)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To nC)
     Dim i As Long
-    For i = 1 To UBound(data, 1)
-        lstZbirni.AddItem CStr(data(i, 1))
-        
+    For i = 1 To nR
+        src(i, 1) = CStr(data(i, 1))
         If isVozac Then
             ' Amb Izlaz, Amb Vracena, Manjak kg, Manjak %
-            If IsNumeric(data(i, 2)) Then lstZbirni.List(lstZbirni.ListCount - 1, 1) = Format$(CLng(data(i, 2)), "#,##0")
-            If IsNumeric(data(i, 3)) Then lstZbirni.List(lstZbirni.ListCount - 1, 2) = Format$(CLng(data(i, 3)), "#,##0")
-            If IsNumeric(data(i, 4)) Then lstZbirni.List(lstZbirni.ListCount - 1, 3) = Format$(CDbl(data(i, 4)), "#,##0.0") & " kg"
-            If IsNumeric(data(i, 5)) Then lstZbirni.List(lstZbirni.ListCount - 1, 4) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
+            If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CLng(data(i, 2)), "#,##0")
+            If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CLng(data(i, 3)), "#,##0")
+            If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.0") & " kg"
+            If IsNumeric(data(i, 5)) Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
         Else
             ' Vrsta, Kolicina, Vrednost, Prosek
-            lstZbirni.List(lstZbirni.ListCount - 1, 1) = CStr(data(i, 2))
-            If IsNumeric(data(i, 3)) Then lstZbirni.List(lstZbirni.ListCount - 1, 2) = Format$(CDbl(data(i, 3)), "#,##0.00")
-            If IsNumeric(data(i, 4)) Then lstZbirni.List(lstZbirni.ListCount - 1, 3) = Format$(CDbl(data(i, 4)), "#,##0.00")
+            src(i, 2) = CStr(data(i, 2))
+            If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.00")
+            If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.00")
             If IsNumeric(data(i, 5)) Then
-                If CDbl(data(i, 5)) > 0 Then
-                    lstZbirni.List(lstZbirni.ListCount - 1, 4) = Format$(CDbl(data(i, 5)), "#,##0.00")
-                End If
+                If CDbl(data(i, 5)) > 0 Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00")
             End If
         End If
     Next i
+    FillListBox lstZbirni, src
 End Sub
 
 ' ============================================================
@@ -922,23 +1046,24 @@ End Sub
 
 Private Sub GenerateProsecnaCenaReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                        ByVal datumOd As Date, ByVal datumDo As Date)
-    lstProsecnaCena.Clear
-    
     Dim data As Variant
     data = ReportProsecnaCena(entitetTip, entitetID, datumOd, datumDo)
-    If IsEmpty(data) Then Exit Sub
-    
+    If IsEmpty(data) Then lstProsecnaCena.Clear: Exit Sub
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim nC As Long: nC = UBound(data, 2)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To nC)
     Dim i As Long
-    For i = 1 To UBound(data, 1)
-        lstProsecnaCena.AddItem CStr(data(i, 1))
-        If IsNumeric(data(i, 2)) Then lstProsecnaCena.List(lstProsecnaCena.ListCount - 1, 1) = Format$(CDbl(data(i, 2)), "#,##0.00")
-        If IsNumeric(data(i, 3)) Then lstProsecnaCena.List(lstProsecnaCena.ListCount - 1, 2) = Format$(CDbl(data(i, 3)), "#,##0.00")
+    For i = 1 To nR
+        src(i, 1) = CStr(data(i, 1))
+        If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CDbl(data(i, 2)), "#,##0.00")
+        If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.00")
         If IsNumeric(data(i, 4)) Then
-            If CDbl(data(i, 4)) > 0 Then
-                lstProsecnaCena.List(lstProsecnaCena.ListCount - 1, 3) = Format$(CDbl(data(i, 4)), "#,##0.00")
-            End If
+            If CDbl(data(i, 4)) > 0 Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.00")
         End If
     Next i
+    FillListBox lstProsecnaCena, src
 End Sub
 
 
@@ -949,26 +1074,28 @@ End Sub
 
 Private Sub GenerateManjakReport(ByVal entitetTip As String, ByVal entitetID As String, _
                                  ByVal datumOd As Date, ByVal datumDo As Date)
-    lstManjak.Clear
     If lstManjak Is Nothing Then Exit Sub
-    
+    lstManjak.Clear
+
     Dim data As Variant
     data = ReportManjak(entitetTip, entitetID, datumOd, datumDo)
     If IsEmpty(data) Then Exit Sub
-    
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To 6)
     Dim i As Long
-    For i = 1 To UBound(data, 1)
-        lstManjak.AddItem CStr(data(i, 1))
-        If IsNumeric(data(i, 2)) Then lstManjak.List(lstManjak.ListCount - 1, 1) = Format$(CDbl(data(i, 2)), "#,##0.0")
-        If IsNumeric(data(i, 3)) Then lstManjak.List(lstManjak.ListCount - 1, 2) = Format$(CDbl(data(i, 3)), "#,##0.0")
-        If IsNumeric(data(i, 4)) Then lstManjak.List(lstManjak.ListCount - 1, 3) = Format$(CDbl(data(i, 4)), "#,##0.0")
-        If IsNumeric(data(i, 5)) Then lstManjak.List(lstManjak.ListCount - 1, 4) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
+    For i = 1 To nR
+        src(i, 1) = CStr(data(i, 1))
+        If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CDbl(data(i, 2)), "#,##0.0")
+        If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.0")
+        If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.0")
+        If IsNumeric(data(i, 5)) Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
         If IsNumeric(data(i, 6)) Then
-            If CDbl(data(i, 6)) > 0 Then
-                lstManjak.List(lstManjak.ListCount - 1, 5) = Format$(CDbl(data(i, 6)), "#,##0.00")
-            End If
+            If CDbl(data(i, 6)) > 0 Then src(i, 6) = Format$(CDbl(data(i, 6)), "#,##0.00")
         End If
     Next i
+    FillListBox lstManjak, src
 End Sub
 
 Private Sub GenerateKarticaReport(ByVal entitetID As String, _
@@ -984,50 +1111,48 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
     Dim data As Variant
     data = ReportKarticaKooperanta(entitetID, datumOd, datumDo)
     If IsEmpty(data) Then Exit Sub
-    
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
+
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To 8)
+    Dim i As Long, j As Long
+    For i = 1 To nR
         ' Spalte 1: Datum
         If IsDate(data(i, 1)) Then
-            lstKartica.AddItem Format$(CDate(data(i, 1)), "d.m.yyyy")
+            src(i, 1) = Format$(CDate(data(i, 1)), "d.m.yyyy")
         Else
-            lstKartica.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+            src(i, 1) = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
         End If
-        
+
         ' Spalte 2: BrojDok
-        lstKartica.List(lstKartica.ListCount - 1, 1) = _
-            CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
-        
+        src(i, 2) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+
         ' Spalte 3: Opis (+ parcela ako postoji)
         Dim opisKartice As String
         Dim parcelaKartice As String
-        
         opisKartice = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))
         parcelaKartice = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
-        
         If Trim$(parcelaKartice) <> "" Then
             opisKartice = opisKartice & " / Parcela: " & parcelaKartice
         End If
-        
-        lstKartica.List(lstKartica.ListCount - 1, 2) = opisKartice
-        
+        src(i, 3) = opisKartice
+
         ' Spalten 4-6: Zaduzenje, Razduzenje, Saldo (novac -> uvek 2 decimale)
-        Dim j As Long
         For j = 5 To 7
             If IsNumeric(data(i, j)) And Not IsEmpty(data(i, j)) Then
-                lstKartica.List(lstKartica.ListCount - 1, j - 2) = Format$(CDbl(data(i, j)), "#,##0.00")
+                src(i, j - 1) = Format$(CDbl(data(i, j)), "#,##0.00")
             End If
         Next j
 
         ' Spalte 7: Saldo ambalaze (gajbe -> ceo broj, sa znakom)
         If IsNumeric(data(i, 8)) And Not IsEmpty(data(i, 8)) Then
-            lstKartica.List(lstKartica.ListCount - 1, 6) = Format$(CDbl(data(i, 8)), "#,##0")
+            src(i, 7) = Format$(CDbl(data(i, 8)), "#,##0")
         End If
 
-        ' Skrivena kolona 7: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
-        lstKartica.List(lstKartica.ListCount - 1, 7) = _
-            CStr(IIf(IsEmpty(data(i, 9)), "", data(i, 9)))
+        ' Skrivena kolona 8: ref-kljuc reda (OTK|<id> / NOV / MAG) za "Detalji otkupa"
+        src(i, 8) = CStr(IIf(IsEmpty(data(i, 9)), "", data(i, 9)))
     Next i
+    FillListBox lstKartica, src
 
     ' Novi izvestaj kartice -> ocisti panel detalja (prethodni kooperant)
     KarticaDetalji_Clear
@@ -1052,29 +1177,33 @@ Private Sub GenerateKarticaAmbReport(ByVal entitetID As String, _
     data = ReportKarticaAmbalaze(entitetID, datumOd, datumDo)
     If IsEmpty(data) Then Exit Sub
 
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To 6)
     Dim i As Long
-    For i = 1 To UBound(data, 1)
+    For i = 1 To nR
         ' Datum
         If IsDate(data(i, 1)) Then
-            m_lstAmb.AddItem Format$(CDate(data(i, 1)), "d.m.yyyy")
+            src(i, 1) = Format$(CDate(data(i, 1)), "d.m.yyyy")
         Else
-            m_lstAmb.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+            src(i, 1) = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
         End If
         ' Broj dok + Opis
-        m_lstAmb.List(m_lstAmb.ListCount - 1, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
-        m_lstAmb.List(m_lstAmb.ListCount - 1, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
+        src(i, 2) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))
+        src(i, 3) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))
         ' Ulaz / Izlaz (gajbe -> ceo broj; prazno kad je 0)
         If IsNumeric(data(i, 4)) And data(i, 4) <> "" Then
-            If CDbl(data(i, 4)) <> 0 Then m_lstAmb.List(m_lstAmb.ListCount - 1, 3) = Format$(CDbl(data(i, 4)), "#,##0")
+            If CDbl(data(i, 4)) <> 0 Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0")
         End If
         If IsNumeric(data(i, 5)) And data(i, 5) <> "" Then
-            If CDbl(data(i, 5)) <> 0 Then m_lstAmb.List(m_lstAmb.ListCount - 1, 4) = Format$(CDbl(data(i, 5)), "#,##0")
+            If CDbl(data(i, 5)) <> 0 Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0")
         End If
         ' Saldo (running)
         If IsNumeric(data(i, 6)) And data(i, 6) <> "" Then
-            m_lstAmb.List(m_lstAmb.ListCount - 1, 5) = Format$(CDbl(data(i, 6)), "#,##0")
+            src(i, 6) = Format$(CDbl(data(i, 6)), "#,##0")
         End If
     Next i
+    FillListBox m_lstAmb, src
 End Sub
 
 ' Klik na red kartice -> read-only panel "Detalji otkupa" desno (sve stavke
@@ -1773,25 +1902,29 @@ Private Sub GenerateOtkupListeReport(ByVal stanicaID As String, _
     data = ReportOtkupListe(stanicaID, datumOd, datumDo)
     If IsEmpty(data) Then Exit Sub
 
+    Dim nR As Long: nR = UBound(data, 1)
+    Dim src() As String
+    ReDim src(1 To nR, 1 To 8)
     Dim i As Long
-    For i = 1 To UBound(data, 1)
+    For i = 1 To nR
         ' Datum
         If IsDate(data(i, 1)) Then
-            m_lstOtk.AddItem Format$(CDate(data(i, 1)), "d.m.yyyy")
+            src(i, 1) = Format$(CDate(data(i, 1)), "d.m.yyyy")
         Else
-            m_lstOtk.AddItem CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
+            src(i, 1) = CStr(IIf(IsEmpty(data(i, 1)), "", data(i, 1)))
         End If
-        m_lstOtk.List(m_lstOtk.ListCount - 1, 1) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))   ' BrDok
-        m_lstOtk.List(m_lstOtk.ListCount - 1, 2) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))   ' Kooperant
-        m_lstOtk.List(m_lstOtk.ListCount - 1, 3) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))   ' Vrsta
-        m_lstOtk.List(m_lstOtk.ListCount - 1, 4) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))   ' Klasa
+        src(i, 2) = CStr(IIf(IsEmpty(data(i, 2)), "", data(i, 2)))   ' BrDok
+        src(i, 3) = CStr(IIf(IsEmpty(data(i, 3)), "", data(i, 3)))   ' Kooperant
+        src(i, 4) = CStr(IIf(IsEmpty(data(i, 4)), "", data(i, 4)))   ' Vrsta
+        src(i, 5) = CStr(IIf(IsEmpty(data(i, 5)), "", data(i, 5)))   ' Klasa
         ' Kolicina (kg)
-        If IsNumeric(data(i, 6)) Then m_lstOtk.List(m_lstOtk.ListCount - 1, 5) = FmtKolicina(CDbl(data(i, 6)))
+        If IsNumeric(data(i, 6)) Then src(i, 6) = FmtKolicina(CDbl(data(i, 6)))
         ' Vrednost
-        If IsNumeric(data(i, 7)) Then m_lstOtk.List(m_lstOtk.ListCount - 1, 6) = Format$(CDbl(data(i, 7)), "#,##0.00")
+        If IsNumeric(data(i, 7)) Then src(i, 7) = Format$(CDbl(data(i, 7)), "#,##0.00")
         ' Skrivena ref-kljuc kolona (idx 7) = OTK|<OtkupID>
-        m_lstOtk.List(m_lstOtk.ListCount - 1, 7) = CStr(IIf(IsEmpty(data(i, 8)), "", data(i, 8)))
+        src(i, 8) = CStr(IIf(IsEmpty(data(i, 8)), "", data(i, 8)))
     Next i
+    FillListBox m_lstOtk, src
 End Sub
 
 ' Klik/izbor reda "Otkupni listovi" -> isti panel "Detalji otkupa" desno.
