@@ -161,3 +161,15 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Dug se prikazuje i za kooperanta bez parcela:** ranije se, kad praćenje parcela radi, dug nije prikazivao ako kooperant nema unetu parcelu — sada se prikazuje uvek.
 - **Bez novih zavisnosti:** izvori (`frmAgrohemija`, `modAgrohemija`, `modConfig`) ostaju **ASCII-only** (dijakritika u prikazu preko inline `ChrW`); nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
 - **Poznato ograničenje:** stavke početnog duga se za sada **šalju i na PWA** (`ExportMagacinKoop`) sa fantomskom količinom 1 — biće filtrirano u sledećem patch-u (vidi ROADMAP / KI-006).
+
+---
+
+## vba-v2.8.5 — 2026-06-30
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Patch: **performanse (nastavak 2.8.3)** — dalje ubrzanje izveštaja i otvaranja formi, **bez promene rezultata**; uz ispravku KPI „kg danas".
+
+- **Izveštaji — punjenje liste jednim prenosom (`.List = arr`):** sve liste u `frmIzvestaj` se grade kao 2D niz u memoriji pa prenose **jednom** u ListBox, umesto ćeliju-po-ćeliju (`.List(i, j)` = stotine/hiljade COM poziva po izveštaju). Mereno na „Otkupljena roba": **922 ms → 16 ms**; otvaranje `frmIzvestaj` sa ~15 s na **~0,3 s**.
+- **Izveštaji — lazy generisanje po tabu:** pri otvaranju i promeni entiteta generiše se **samo aktivan tab**; ostali tek kad korisnik klikne na njih (keširani do sledećeg „Prikaži"). Najskuplji izveštaj (Ambalaža, ~550 ms nad celim ledgerom) se više ne računa na svakom otvaranju ako se taj tab i ne gleda. Rezultat svakog taba je **identičan**.
+- **Izveštaji — manje skeniranja u istom „Prikaži" prozoru:** `GetColumnIndex` i `ExcludeStornirano` se sada keširaju u istom request-scoped bloku (uz `tblData` keš iz 2.8.3). `ReportOtkupListe`/`ReportAmbalaza` više ne prave **dodatnu kopiju cele tabele** za storno — storno se gleda inline u petlji, odnosno kao filter u jednom prolazu.
+- **Forme — tema/stilizacija jednom po instanci:** `frmIzvestaj` je modeless, pa je `UserForm_Activate` na **svaki povratak fokusa** radio pun (i dupli) obilazak stabla kontrola — sada jednom po instanci, uz uklanjanje duplog `StyleControls`. `frmDokumenta`: ista dedup teme (~70 ms brže otvaranje).
+- **Ispravka — KPI „kg danas" (`SumOtkupKgToday`):** jedna ćelija sa Excel greškom (`#N/A`/`#VALUE!`) u `tblOtkup` je obarala **ceo** dnevni zbir na 0 (Type mismatch). Sada se takve ćelije preskaču po redu (`IsError` guard) — KPI je pouzdan.
+- **Bez promene podataka i bez novih zavisnosti:** izvori ostaju **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
