@@ -673,9 +673,10 @@ Current invariants:
 Current rules:
 
 - `tblMagacin` is a movement ledger, not a mutable stock-total table.
-- `MAG_IZLAZ` requires positive quantity, required kooperant and sufficient stock before append.
+- `MAG_IZLAZ` requires positive quantity, required kooperant and sufficient stock before append, **except** opening-balance bookings made through `allowNoStock` (see §13.1).
 - PWA management and kooperant flows must store real item-unit quantity, not package count.
 - Treatment sync does not automatically decrement server-side `magacinkoop` stock in the current contract.
+- `ART_POCETNI_DUG` (`modConfig`) is a reserved virtual article carrying opening kooperant-debt (`MAG_IZLAZ`) bookings. It is excluded from desktop article combos and from `GetMagacinStanje()`. **Export caveat:** the `MagacinKoop` PWA export (`ExportMagacinKoop`) does not yet filter it, so opening-debt rows currently reach the PWA read model with a phantom quantity of 1 (see ROADMAP / KI-006).
 
 ### 5.9 Monitoring Tables
 
@@ -3492,14 +3493,16 @@ Current rules:
   - valid movement type;
   - positive quantity;
   - required kooperant for `MAG_IZLAZ`.
-- `MAG_IZLAZ` must check current article stock before writing a movement row.
+- `MAG_IZLAZ` must check current article stock before writing a movement row, **except** when the caller passes the optional `allowNoStock:=True` (default `False`). `allowNoStock` is reserved for opening-balance bookings on the virtual debt article and must not be used to bypass stock checks for real goods.
 - `SaveMagacin_TX` is the single-row transaction wrapper and snapshots `tblMagacin` before delegating to `SaveMagacin`.
 - `SaveMagacin_TX` emits `MAGACIN_SAVE_SUCCESS` after successful commit.
 - Failure paths emit `MAGACIN_SAVE_FAIL` and `Monitor_Error` where monitoring is configured.
 - Monitoring after commit is best-effort and must never convert a committed business save into a false failure.
 - The original failure reason from `SaveMagacin` is preserved for the transaction wrapper, logs and operator diagnostics.
 - Required column reads in stock, report, debt and parcela paths use fail-fast schema guards such as `RequireColumnIndex`.
-- `GetMagacinStanje()` is the canonical desktop read model for current article stock after excluding stornirano rows.
+- `GetMagacinStanje()` is the canonical desktop read model for current article stock after excluding stornirano rows; it additionally excludes the reserved opening-debt article `ART_POCETNI_DUG` so it never surfaces as phantom negative stock.
+- Opening kooperant debt (migration) is booked by `BookPocetniDug(kooperantID, iznos, brojDok, datum)` as a single `MAG_IZLAZ` row with `Vrednost = iznos` (`overrideCena = iznos`, `kolicina = 1`) on the reserved virtual article `ART_POCETNI_DUG`, wrapped in `clsTransaction` and using `allowNoStock:=True` (the virtual article has no `MAG_ULAZ`). The article is lazy-seeded by `EnsureArtikalPocetniDug`.
+- `ART_POCETNI_DUG` (`modConfig`) is the single reserved opening-debt article: never operator-selectable, excluded from `frmAgrohemija` article combos and from `GetMagacinStanje()`. The opening-debt row flows into every desktop `MAG_IZLAZ` debt consumer (`GetAgrohemijaDug`, `ReportSaldoOM` AgroZaduzenje, `ReportIzdavanjePoKooperantu`) so the debt is consistent, and is reversible by storniranjem the magacin row. It is not yet filtered from the `MagacinKoop` PWA export (ROADMAP / KI-006).
 - `ReportIzdavanjePoKooperantu()` supports open-ended date filters; `datumOd` and `datumDo` are evaluated independently.
 - `ReportStanjePoDobavljacu()` is the correct public spelling.
 - The older `ReportStanjePoDoabvljacu()` spelling may remain as a compatibility wrapper.
@@ -3520,6 +3523,9 @@ Current rules:
 - Multiple basket lines for the same article are summed before comparing to current stock.
 - Optional add-to-basket UX validation may block adding a line that would make the current basket exceed available stock.
 - Multiple parcel IDs are serialized with semicolon (`;`) separators.
+- Parcel handling is gated by `IsPracenjeParcela()` (config `PRACENJE_PARCELA`, default ON, the same flag `frmOtkup` uses). When OFF, issuing is accepted **without a parcel**: the smart-dosage recommendation (`UpdatePreporuka`) is skipped, the „Izaberite parcelu!" validation in add-to-basket is bypassed, and `lstParcele` is disabled (`ApplyAgroTogglesState`). When ON, parcel selection and dosage behave as before.
+- `cmbKooperant_Change` shows the kooperant debt **even when the kooperant has no parcele** (the earlier early-exit on an empty parcel list was intentionally removed); parcel loading itself is skipped when `PRACENJE_PARCELA` is OFF.
+- The „Pocetni dug" (opening-debt migration) button is created at runtime via form-local `Private WithEvents` + `Controls.Add` (the `.frx` is not edited) and delegates to `BookPocetniDug` (§13.1); it requires a selected kooperant and prompts for the amount via `InputBox`.
 - The form may show user-facing `MsgBox` feedback because it is a UI layer.
 - Business/data modules must not own UI popups as control flow.
 - Return navigation and query-close behavior must route back to `frmOtkupAPP` without embedding business writes.

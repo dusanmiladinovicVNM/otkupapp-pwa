@@ -37,9 +37,10 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 | Filter/sort/util nad nizovima | `modArrayUtils.bas` (`FilterArray`, `SortArray`), `modHelpers.bas` (`Nz/NzToText/ExcludeStornirano/FillCmb`) |
 | Maticni podaci (UI) | `frmMaticniPodaci` + `frmStammdaten` (`Select Case Me.Tag`) + `modMaticniLookups` (data-driven meni) |
 | Otkup / dokumenta | `frmOtkup`+`modOtkup`, `frmDokumenta`+`modDokumenta` |
+| Agrohemija / magacin | `frmAgrohemija`+`modAgrohemija` (`SaveMagacin` ledger `MAG_ULAZ`/`MAG_IZLAZ`, `GetMagacinStanje`, `GetAgrohemijaDug`). Izlaz **opciono bez parcele** kad je `PRACENJE_PARCELA` OFF (`IsPracenjeParcela`, isti flag kao `frmOtkup`; smart-doza se preskače). **Početni dug kooperanta (migracija)** = rezervisani virtuelni artikal `ART_POCETNI_DUG` (`modConfig`) + `BookPocetniDug` → `SaveMagacin(... allowNoStock:=True)`; artikal je izuzet iz combo-lista i iz `GetMagacinStanje` (NE dirati to izuzimanje). **PWA `ExportMagacinKoop` ga još NE izuzima** (KI-006). |
 | Ambalaza ledger | `modAmbalaza` · **Cenovnik (append-only):** `modCenovnik` (`GetVazecaCena/AddCena`) |
 | Cena — DVA modela (ne mešati) | single-current po artiklu = `tblArtikli.CenaPoJedinici` (inline `LookupValue`, agrohemija); append-only istorija za otkup voća = `tblCenovnik` |
-| Dinamičke kontrole (bez `.frx`) | `Controls.Add` + WithEvents klasa (`clsBlokUI`/`modOtkupBlok`, `clsLookupMenuBtn`/`modMaticniLookups`) |
+| Dinamičke kontrole (bez `.frx`) | `Controls.Add` + WithEvents klasa (`clsBlokUI`/`modOtkupBlok`, `clsLookupMenuBtn`/`modMaticniLookups`) · ili **form-local `Private WithEvents`** u samoj formi (`frmDokumenta` storno/recovery dugmad, `frmAgrohemija` „Pocetni dug") |
 | Sync / PWA | `modStammdatenSync`, `modMasterSync`, `gas/` |
 | Self-update (kod) | klijent `modSelfUpdate` (`CheckForUpdateOnOpen`/`RunSelfUpdate` dvofazni) · build `modRelease.PublishReleaseToDrive` · Drive REST `modDrive` · **vidi `docs/SELF_UPDATE.md` (zamke!)** |
 | Setup / šeme | `modSetup` (`EnsureDataTable`, `EnsurePaletniListSchema`, `EnsureCenovnikSchema`), dijagnostika `DebugKoloneTabele` |

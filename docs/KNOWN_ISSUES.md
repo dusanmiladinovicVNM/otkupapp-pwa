@@ -29,6 +29,7 @@ Rules:
 | KI-003 | Runtime gates have not been executed as part of the documentation refactor. | OPEN | Documentation can be clean while VBA/GAS/PWA runtime is unverified. | Run compile, smoke, route health, PWA role smoke, monitoring and SEF gates. | RELEASE_GATES |
 | KI-004 | Canonical Banka PDF parser module name differs across source material: `modBankaImport_PdfText` vs `modBankaImportParserPdfToText`. | NEEDS REVIEW | Confusion during code lookup, onboarding and future patching. | Verify actual exported `.bas` module name and normalize AR/CL wording. | AR §§8, 19 |
 | KI-005 | Endpoint matrix is documented, but must be reconciled with deployed `Code.gs` before production handoff. | NEEDS REVIEW | Authorization table may drift from deployed GAS code. | Compare AR endpoint table with deployed handler/action list. | AR §9; RELEASE_GATES §3 |
+| KI-006 | Opening-debt rows on reserved article `ART_POCETNI_DUG` (v6.41 „Pocetni dug" migration) are not filtered from the `MagacinKoop` PWA export (`ExportMagacinKoop`). They reach the PWA read model as a `MAG_IZLAZ` row with a synthetic `Kolicina = 1` and a virtual `ArtikalID`. | OPEN | PWA kooperant lager validation / management stock view may show a phantom 1-unit issue for an article that does not exist in the PWA catalog. Desktop debt is correct and unaffected. | Audit `src/` `MagacinKoop` consumer; exclude `ART_POCETNI_DUG` from `ExportMagacinKoop` (preferred) or confirm PWA tolerates the row. | AR §5.8, §13.1; ROADMAP §2.9 |
 
 ---
 
