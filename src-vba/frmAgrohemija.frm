@@ -89,11 +89,22 @@ Private Sub UserForm_Activate()
     
     ' Inicijalni empty state
     UpdateEmptyState
-    
+
+    ' Podesavanja: pracenje parcela ON/OFF -> stanje liste parcela
+    ApplyAgroTogglesState
+
     Exit Sub
 
 EH:
     LogErr "frmAgrohemija.UserForm_Activate"
+End Sub
+
+' Podesavanja: pracenje parcela OFF -> lista parcela disabled (unos bez
+' parcele, smart doza se preskace); ON -> lista aktivna. Postavlja se u oba
+' smera pa re-otvaranje forme prati config.
+Private Sub ApplyAgroTogglesState()
+    On Error Resume Next
+    lstParcele.enabled = IsPracenjeParcela()
 End Sub
 
 Private Sub LoadKooperanti()
@@ -147,21 +158,25 @@ Private Sub cmbKooperant_Change()
     
     Dim koopID As String
     koopID = ExtractIDFromDisplay(cmbKooperant.value)
-    
-    Dim parcele As Variant
-    parcele = GetParceleByKooperant(koopID)
-    If IsEmpty(parcele) Then Exit Sub
-    
-    ReDim m_ParcelaIDs(0 To UBound(parcele, 1) - 1)
-    ReDim m_ParcelaHa(0 To UBound(parcele, 1) - 1)
-    
-    Dim i As Long
-    For i = 1 To UBound(parcele, 1)
-        m_ParcelaIDs(i - 1) = CStr(parcele(i, 1))
-        m_ParcelaHa(i - 1) = CDbl(parcele(i, 5))
-        lstParcele.AddItem CStr(parcele(i, 6))  ' Display string
-    Next i
-    
+
+    ' Pracenje parcela ON -> ucitaj parcele kooperanta u listu; OFF -> preskoci
+    ' (lista je disabled, unos ide bez parcele). Dug se prikazuje u oba slucaja.
+    If IsPracenjeParcela() Then
+        Dim parcele As Variant
+        parcele = GetParceleByKooperant(koopID)
+        If Not IsEmpty(parcele) Then
+            ReDim m_ParcelaIDs(0 To UBound(parcele, 1) - 1)
+            ReDim m_ParcelaHa(0 To UBound(parcele, 1) - 1)
+
+            Dim i As Long
+            For i = 1 To UBound(parcele, 1)
+                m_ParcelaIDs(i - 1) = CStr(parcele(i, 1))
+                m_ParcelaHa(i - 1) = CDbl(parcele(i, 5))
+                lstParcele.AddItem CStr(parcele(i, 6))  ' Display string
+            Next i
+        End If
+    End If
+
     ' Dug anzeigen
     Dim dug As Double
     dug = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
@@ -192,7 +207,19 @@ Private Sub UpdatePreporuka()
     lblPreporuka.caption = ""
     lblVrednost.caption = ""
     txtKolicina.value = ""
-    
+
+    ' Pracenje parcela OFF -> smart doza (preporuka) se preskace; broj
+    ' pakovanja se unosi rucno, bez odabira parcele.
+    If Not IsPracenjeParcela() Then
+        If cmbArtikal.value = "" Then
+            lblPreporuka.caption = "Izaberi artikal i unesi broj pakovanja"
+        Else
+            lblPreporuka.caption = "Unesi broj pakovanja rucno"
+        End If
+        lblPreporuka.ForeColor = TXT_MUTED()
+        Exit Sub
+    End If
+
     If cmbArtikal.value = "" Then
         lblPreporuka.caption = "Izaberi artikal i parcele za preporuku"
         lblPreporuka.ForeColor = TXT_MUTED()
@@ -337,15 +364,18 @@ Private Sub btnDodajIzlaz_Click()
         Exit Sub
     End If
     
-    ' Mindestens eine Parcela ausgewaehlt
-    Dim hasSelection As Boolean
+    ' Mindestens eine Parcela ausgewaehlt -- samo kad je pracenje parcela ON.
+    ' OFF -> unos bez parcele (parcelaID ostaje prazan).
     Dim i As Long
-    For i = 0 To lstParcele.ListCount - 1
-        If lstParcele.Selected(i) Then hasSelection = True: Exit For
-    Next i
-    If Not hasSelection Then
-        MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
-        Exit Sub
+    If IsPracenjeParcela() Then
+        Dim hasSelection As Boolean
+        For i = 0 To lstParcele.ListCount - 1
+            If lstParcele.Selected(i) Then hasSelection = True: Exit For
+        Next i
+        If Not hasSelection Then
+            MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
+            Exit Sub
+        End If
     End If
     
     Dim artikalID As String
