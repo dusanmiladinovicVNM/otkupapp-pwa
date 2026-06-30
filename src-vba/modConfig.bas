@@ -138,6 +138,12 @@ Public Const COL_ART_DOZA As String = "DozaPoHa"
 Public Const COL_ART_KULTURA As String = "Kultura"
 Public Const COL_ART_PAKOVANJE As String = "Pakovanje"
 
+' Rezervisani virtuelni artikal za knjizenje POCETNOG DUGA kooperanta
+' (migracija). Operater ga NE bira -- upisuje ga BookPocetniDug kao magacin
+' IZLAZ stavku (Vrednost = iznos duga). Skriven iz combo lista i iz stanja
+' magacina (vidi LoadArtikli/LoadArtikliUlaz i GetMagacinStanje).
+Public Const ART_POCETNI_DUG As String = "ART-POC-DUG"
+
 ' --- Spaltennamen tblMagacin ---
 Public Const COL_MAG_ID As String = "MagacinID"
 Public Const COL_MAG_DATUM As String = "Datum"

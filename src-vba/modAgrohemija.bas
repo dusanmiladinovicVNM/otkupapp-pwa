@@ -84,9 +84,10 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
                              Optional ByVal brojDok As String = "", _
                              Optional ByVal napomena As String = "", _
                              Optional ByVal dobavljacID As String = "", _
-                             Optional ByVal overrideCena As Variant) As String
+                             Optional ByVal overrideCena As Variant, _
+                             Optional ByVal allowNoStock As Boolean = False) As String
     On Error GoTo EH
-    
+
     Call ValidateMagacinInput( _
         datum:=datum, _
         artikalID:=artikalID, _
@@ -118,7 +119,7 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
         End If
     End If
     
-    If tip = MAG_IZLAZ Then
+    If tip = MAG_IZLAZ And Not allowNoStock Then
         If GetArtikalStanje(artikalID) < kolicina Then
             Err.Raise vbObjectError + 4205, "SaveMagacin", _
                     "Nedovoljno stanje za artikal " & artikalID
@@ -246,6 +247,111 @@ EH:
     SaveMagacin_TX = ""
 End Function
 
+' Proknjizi POCETNI DUG kooperanta (migracija) kao magacin IZLAZ stavku na
+' rezervisani virtuelni artikal ART_POCETNI_DUG, sa Vrednost = iznos (cena =
+' iznos, kolicina = 1). Preskace stanje-check (allowNoStock) jer virtuelni
+' artikal nema ulaz. Tako se dug konzistentno vidi u frmAgrohemija (dug) i u
+' izvestaju (ReportSaldoOM -> AgroZaduzenje, koji sumira IZLAZ vrednost).
+' Reverzibilno: storniranje te magacin stavke ponistava dug.
+Public Function BookPocetniDug(ByVal kooperantID As String, _
+                               ByVal iznos As Double, _
+                               Optional ByVal brojDok As String = "", _
+                               Optional ByVal datum As Date) As String
+    Const SRC As String = "BookPocetniDug"
+
+    Dim tx As clsTransaction
+    Dim txStarted As Boolean
+
+    On Error GoTo EH
+
+    If Len(Trim$(kooperantID)) = 0 Then
+        Err.Raise vbObjectError + 4330, SRC, "KooperantID je obavezan."
+    End If
+
+    If iznos <= 0 Then
+        Err.Raise vbObjectError + 4331, SRC, "Iznos pocetnog duga mora biti veci od 0."
+    End If
+
+    If datum = 0 Then datum = Date
+
+    EnsureArtikalPocetniDug
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txStarted = True
+    tx.AddTableSnapshot TBL_MAGACIN
+
+    Dim newID As String
+    newID = SaveMagacin( _
+        datum, _
+        ART_POCETNI_DUG, _
+        MAG_IZLAZ, _
+        1#, _
+        kooperantID, _
+        "", _
+        brojDok, _
+        "Pocetni dug (migracija)", _
+        "", _
+        iznos, _
+        True)
+
+    If Len(Trim$(newID)) = 0 Then
+        Err.Raise vbObjectError + 4332, SRC, "Knjizenje pocetnog duga nije uspelo."
+    End If
+
+    tx.CommitTx
+    txStarted = False
+
+    BookPocetniDug = newID
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    LogErr SRC
+
+    On Error Resume Next
+    If txStarted And Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    BookPocetniDug = ""
+    Set tx = Nothing
+End Function
+
+' Lazy-seed rezervisanog virtuelnog artikla za pocetni dug. Upis po imenu
+' kolone (redosled kolona u tblArtikli nije siguran -> ne pozicijski).
+Private Sub EnsureArtikalPocetniDug()
+    On Error GoTo EH
+
+    If FindRows(TBL_ARTIKLI, COL_ART_ID, ART_POCETNI_DUG).count > 0 Then Exit Sub
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_ARTIKLI)
+    If lo Is Nothing Then Exit Sub
+
+    Dim rowData() As Variant
+    ReDim rowData(1 To lo.ListColumns.count)
+
+    SetArtCell rowData, COL_ART_ID, ART_POCETNI_DUG
+    SetArtCell rowData, COL_ART_NAZIV, "Pocetni dug (migracija)"
+    SetArtCell rowData, COL_ART_TIP, "Virtuelno"
+    SetArtCell rowData, COL_ART_JM, "RSD"
+    SetArtCell rowData, COL_ART_CENA, 1
+    SetArtCell rowData, COL_ART_DOZA, 0
+    SetArtCell rowData, COL_ART_PAKOVANJE, 1
+
+    AppendRow TBL_ARTIKLI, rowData
+    Exit Sub
+
+EH:
+    LogErr "modAgrohemija.EnsureArtikalPocetniDug"
+End Sub
+
+Private Sub SetArtCell(ByRef rowData As Variant, ByVal colName As String, ByVal value As Variant)
+    Dim idx As Long
+    idx = GetColumnIndex(TBL_ARTIKLI, colName)
+    If idx > 0 Then rowData(idx) = value
+End Sub
+
 Public Function GetMagacinStanje() As Variant
     ' Returns: 2D Array (ArtikalID, Naziv, Tip, JM, Ulaz, Izlaz, Stanje)
     Dim data As Variant
@@ -275,6 +381,10 @@ Public Function GetMagacinStanje() As Variant
     For i = 1 To UBound(data, 1)
         Dim artID As String
         artID = CStr(data(i, colArt))
+        ' Rezervisani virtuelni artikal (pocetni dug) nije realna roba ->
+        ' iskljuci iz stanja magacina (inace bi prikazao fantomsko negativno
+        ' stanje, jer ima samo IZLAZ bez ULAZ-a).
+        If artID = ART_POCETNI_DUG Then GoTo NextStanje
         If Not dict.Exists(artID) Then dict.Add artID, Array(0#, 0#)
         
         Dim vals As Variant: vals = dict(artID)
@@ -286,8 +396,9 @@ Public Function GetMagacinStanje() As Variant
             End If
         End If
         dict(artID) = vals
+NextStanje:
     Next i
-    
+
     If dict.count = 0 Then
         GetMagacinStanje = Empty
         Exit Function

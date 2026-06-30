@@ -35,6 +35,10 @@ Private m_ParcelaHa() As Double
 
 Private mChromeRemoved As Boolean
 
+' Dinamicko dugme "Pocetni dug" (migracija). Kontrola se pravi u runtime-u
+' (Controls.Add) jer se .frx ne dira; klik se hvata preko WithEvents.
+Private WithEvents m_btnPocetniDug As MSForms.CommandButton
+
 Private Sub UserForm_Initialize()
     ApplyTheme Me, BG_MAIN()
     LoadKooperanti
@@ -93,10 +97,108 @@ Private Sub UserForm_Activate()
     ' Podesavanja: pracenje parcela ON/OFF -> stanje liste parcela
     ApplyAgroTogglesState
 
+    ' Dinamicko dugme "Pocetni dug" (migracija duga kooperanta)
+    SetupPocetniDugButton
+
     Exit Sub
 
 EH:
     LogErr "frmAgrohemija.UserForm_Activate"
+End Sub
+
+' Runtime dugme "Pocetni dug" -- proknjizi pocetni dug izabranog kooperanta
+' (migracija). .frx se ne dira; kontrola se pravi jednom (guard) i pozicionira
+' ispod "Zavrsi izdavanje".
+Private Sub SetupPocetniDugButton()
+    On Error GoTo done
+
+    If Not m_btnPocetniDug Is Nothing Then Exit Sub
+
+    Set m_btnPocetniDug = btnZavrsiIzlaz.parent.Controls.Add("Forms.CommandButton.1", "btnPocetniDugRT", True)
+    If m_btnPocetniDug Is Nothing Then GoTo done
+
+    With m_btnPocetniDug
+        .width = btnZavrsiIzlaz.width
+        .Height = btnZavrsiIzlaz.Height
+        .Left = btnZavrsiIzlaz.Left
+        .top = btnZavrsiIzlaz.top + btnZavrsiIzlaz.Height + 6
+        .visible = True
+    End With
+    StyleExitButton m_btnPocetniDug, "Pocetni dug"
+
+    On Error Resume Next
+    m_btnPocetniDug.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmAgrohemija.SetupPocetniDugButton"
+    Set m_btnPocetniDug = Nothing
+End Sub
+
+Private Sub m_btnPocetniDug_Click()
+    On Error GoTo EH
+
+    If cmbKooperant.value = "" Then
+        MsgBox "Prvo izaberite kooperanta.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim koopID As String
+    koopID = ExtractIDFromDisplay(cmbKooperant.value)
+
+    Dim koopNaziv As String
+    koopNaziv = cmbKooperant.value
+
+    Dim trenutni As Double
+    trenutni = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
+
+    Dim odg As String
+    odg = InputBox("Pocetni dug (migracija) za:" & vbCrLf & koopNaziv & vbCrLf & vbCrLf & _
+                   "Trenutni dug: " & Format$(trenutni, "#,##0") & " RSD" & vbCrLf & vbCrLf & _
+                   "Unesi iznos pocetnog duga (RSD):", APP_NAME)
+    If Trim$(odg) = "" Then Exit Sub
+
+    If Not IsNumeric(odg) Then
+        MsgBox "Iznos mora biti broj.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim iznos As Double
+    iznos = CDbl(odg)
+    If iznos <= 0 Then
+        MsgBox "Iznos mora biti veci od 0.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim brDok As String
+    brDok = Trim$(InputBox("Broj dokumenta (opciono):", APP_NAME, "POC-DUG"))
+
+    If MsgBox("Proknjiziti pocetni dug " & Format$(iznos, "#,##0") & " RSD za:" & vbCrLf & _
+              koopNaziv & "?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim newID As String
+    newID = BookPocetniDug(koopID, iznos, brDok, Date)
+
+    If Len(Trim$(newID)) = 0 Then
+        MsgBox "Knjizenje nije uspelo. Pogledaj log.", vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    MsgBox "Pocetni dug proknjizen (" & newID & ").", vbInformation, APP_NAME
+
+    ' Osvezi prikaz duga + KPI
+    Dim noviDug As Double
+    noviDug = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
+    If noviDug > 0 Then
+        lblDug.caption = "Dug: " & Format$(noviDug, "#,##0") & " RSD"
+    Else
+        lblDug.caption = ""
+    End If
+    RefreshTopKpis
+    Exit Sub
+
+EH:
+    LogErr "frmAgrohemija.m_btnPocetniDug_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Podesavanja: pracenje parcela OFF -> lista parcela disabled (unos bez
@@ -140,7 +242,7 @@ Private Sub LoadArtikli()
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, 1)) <> "" Then
+        If CStr(data(i, 1)) <> "" And CStr(data(i, colID)) <> ART_POCETNI_DUG Then
             cmbArtikal.AddItem CStr(data(i, colNaziv)) & " [" & CStr(data(i, colJM)) & "] (" & CStr(data(i, colID)) & ")"
         End If
     Next i
@@ -591,7 +693,7 @@ Private Sub LoadArtikliUlaz()
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, 1)) <> "" Then
+        If CStr(data(i, 1)) <> "" And CStr(data(i, colID)) <> ART_POCETNI_DUG Then
             cmbArtikalUlaz.AddItem CStr(data(i, colNaziv)) & " [" & _
                 CStr(data(i, colJM)) & "] (" & CStr(data(i, colID)) & ")"
         End If
