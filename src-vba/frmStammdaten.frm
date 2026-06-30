@@ -598,19 +598,20 @@ Private Sub BuildKorisniciOblasti()
     Const LBLW As Single = 124      ' prostor za naziv oblasti
     Const LBLGAP As Single = 16     ' razmak labela -> combo (da cmb ne pada preko labele)
     Const CMBW As Single = 86       ' siri combo (citljiviji DA/NE)
-    Const COLGAP As Single = 150    ' jos vise odvojeno od leve kolone polja
+    Const COLGAP As Single = 190    ' jos vise desno od leve kolone polja
 
     ' Desna kolona pocinje desno od leve kolone polja.
     Dim colX As Single
     colX = txtField1.Left + txtField1.width + COLGAP
 
-    Dim y0 As Single
-    y0 = lblField1.top
+    ' Prvi combo se ravna sa poljem "Korisnicko ime" (txtField1); header tik iznad.
+    Dim firstTop As Single
+    firstTop = txtField1.top
 
     Dim hdr As MSForms.label
     Set hdr = Me.Controls.Add("Forms.Label.1", "lblOblHdr", True)
     hdr.Left = colX
-    hdr.top = y0
+    hdr.top = firstTop - rowH - 2
     hdr.width = LBLW + LBLGAP + CMBW
     hdr.Height = rowH
     hdr.caption = "OBLASTI (pristup)"
@@ -620,7 +621,7 @@ Private Sub BuildKorisniciOblasti()
     hdr.Font.Bold = True
 
     Dim yy As Single
-    yy = y0 + rowH + ROWGAP
+    yy = firstTop
 
     Dim k As Long, oname As String
     Dim lb As MSForms.label, cb As MSForms.ComboBox
