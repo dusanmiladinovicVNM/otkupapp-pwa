@@ -1010,6 +1010,9 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     Dim dSt As Object: Set dSt = BuildLookup(TBL_STANICE, "StanicaID", "Naziv")
     Dim dZbr As Object: Set dZbr = BuildLookup(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ_ZBIRNE)
     Dim dOtp As Object: Set dOtp = BuildLookup(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ)
+    ' Kolona "Kupac" (firma kome ide roba): BrojZbirne -> KupacID (zbirna) -> Naziv (kupci).
+    Dim dKupId As Object: Set dKupId = BuildLookup(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KUPAC)
+    Dim dKupNaziv As Object: Set dKupNaziv = BuildLookup(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
     Dim stopa As Double: stopa = PdvStopa()
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
@@ -1073,7 +1076,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     Next a
 
     ' --- 3) prikupi u niz + sume; render i izlaz u modPrint ---
-    Dim spec() As Variant: ReDim spec(1 To m, 1 To 11)
+    Dim spec() As Variant: ReDim spec(1 To m, 1 To 12)
     Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, cnt As Long
     Dim j As Long
     For j = 1 To m
@@ -1086,16 +1089,17 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
         Dim pdv As Double: pdv = vred * stopa / 100
         Dim uk As Double: uk = kol * bruto
         spec(j, 1) = DictVal(dZbr, oid2)
-        spec(j, 2) = DictVal(dOtp, oid2)
-        spec(j, 3) = DictVal(dSt, CStr(data(i, cSt)))
-        spec(j, 4) = CStr(data(i, cBr))
-        spec(j, 5) = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
-        spec(j, 6) = FmtDate(data(i, cDat))
-        spec(j, 7) = kol
-        spec(j, 8) = neto
-        spec(j, 9) = vred
-        spec(j, 10) = pdv
-        spec(j, 11) = uk
+        spec(j, 2) = KupacNazivZaZbirnu(dKupId, dKupNaziv, CStr(spec(j, 1)))
+        spec(j, 3) = DictVal(dOtp, oid2)
+        spec(j, 4) = DictVal(dSt, CStr(data(i, cSt)))
+        spec(j, 5) = CStr(data(i, cBr))
+        spec(j, 6) = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
+        spec(j, 7) = FmtDate(data(i, cDat))
+        spec(j, 8) = kol
+        spec(j, 9) = neto
+        spec(j, 10) = vred
+        spec(j, 11) = pdv
+        spec(j, 12) = uk
         sumKol = sumKol + kol: sumVred = sumVred + vred
         sumPdv = sumPdv + pdv: sumUk = sumUk + uk
         cnt = cnt + 1
