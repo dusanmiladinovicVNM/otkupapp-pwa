@@ -76,8 +76,12 @@ Private Sub UserForm_Activate()
         lblStatus.Visible = False
     End If
     
-    ' v6.11 UI refresh
-    RefreshSidebarKpi
+    ' v6.11 UI refresh -- KPI samo kad je dirty (posle unosa/PWA importa),
+    ' ne pri svakom povratku na dashboard. Vidi gKpiDirty (modMain).
+    If gKpiDirty Then
+        RefreshSidebarKpi
+        gKpiDirty = False
+    End If
     RefreshBankaBadge
     PositionAccentBar
     ' v6.11 UI: nakon final layout-a, repozicioniraj accent bar na aktivno dugme
@@ -961,6 +965,7 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
 
     oldPointer = Me.MousePointer
     Me.MousePointer = fmMousePointerHourGlass
+    Application.ScreenUpdating = False
 
     mIsSwitchingContent = True
 
@@ -993,11 +998,13 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
 CleanExit:
     mIsSwitchingContent = False
     Me.MousePointer = oldPointer
+    Application.ScreenUpdating = True
     Exit Sub
 
 EH:
     mIsSwitchingContent = False
     Me.MousePointer = oldPointer
+    Application.ScreenUpdating = True
 
     LogErr "frmOtkupAPP.OpenContentForm"
 

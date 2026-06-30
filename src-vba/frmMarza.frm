@@ -24,7 +24,6 @@ Option Explicit
 ' ============================================================
 
 Private m_SetupDone As Boolean
-Private m_LastMarzaData As Variant
 
 Private mChromeRemoved As Boolean
 
@@ -130,9 +129,7 @@ Private Sub btnPrikazi_Click()
         Exit Sub
     End If
     
-    m_LastMarzaData = data
     FillMarzaList data
-    WriteMarza datumOd, datumDo
     Exit Sub
 EH:
     LogErr "frmMarza.btnPrikazi"
@@ -155,29 +152,6 @@ Private Sub FillMarzaList(ByVal data As Variant)
     Next i
 End Sub
 
-Private Sub WriteMarza(ByVal datumOd As Date, ByVal datumDo As Date)
-    If IsEmpty(m_LastMarzaData) Then Exit Sub
-    
-    Dim lo As ListObject
-    Set lo = GetTable(TBL_RPT_MARZA)
-    If lo Is Nothing Then Exit Sub
-    
-    If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
-    
-    Dim i As Long
-    For i = 1 To UBound(m_LastMarzaData, 1)
-        Dim rowData As Variant
-        rowData = Array(Format$(Date, "yyyy-mm-dd"), _
-                       m_LastMarzaData(i, 1), _
-                       m_LastMarzaData(i, 2), _
-                       m_LastMarzaData(i, 3), _
-                       m_LastMarzaData(i, 4), _
-                       m_LastMarzaData(i, 5), _
-                       m_LastMarzaData(i, 6), _
-                       m_LastMarzaData(i, 7))
-        AppendRow TBL_RPT_MARZA, rowData
-    Next i
-End Sub
 Private Sub btnPovratak_Click()
     Me.Hide
     frmOtkupAPP.Show

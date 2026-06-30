@@ -7,6 +7,34 @@ Option Explicit
 ' Daten rein als Arrays, Daten raus als Arrays.
 ' ============================================================
 
+' --- Request-scoped cache za GetTableData ---
+' Aktivira se SAMO oko read-only blokova (npr. generisanje izvestaja, preko
+' BeginTableCache/EndTableCache). Dok je aktivan, svaka tabela se cita JEDNOM
+' pa se vraca kesirana kopija -- jedan "Prikazi" je citao 17-18 puta iste
+' velike tabele (TBL_OTKUP 5x, TBL_AMBALAZA 4x, TBL_NOVAC 3x...).
+' AppendRow/UpdateCell invalidiraju kes za tu tabelu (sigurnosna mreza ako se
+' ipak pise dok je prozor aktivan). Depth-brojac podrzava ugnjezdene Begin/End.
+Private mTableCache As Object
+Private mTableCacheDepth As Long
+
+Public Sub BeginTableCache()
+    If mTableCacheDepth = 0 Then Set mTableCache = CreateObject("Scripting.Dictionary")
+    mTableCacheDepth = mTableCacheDepth + 1
+End Sub
+
+Public Sub EndTableCache()
+    If mTableCacheDepth > 0 Then mTableCacheDepth = mTableCacheDepth - 1
+    If mTableCacheDepth <= 0 Then
+        mTableCacheDepth = 0
+        Set mTableCache = Nothing
+    End If
+End Sub
+
+Private Sub InvalidateTableCache(ByVal tblName As String)
+    If mTableCache Is Nothing Then Exit Sub
+    If mTableCache.Exists(tblName) Then mTableCache.Remove tblName
+End Sub
+
 ' --- Table Access ---
 
 Public Function GetTable(ByVal tblName As String) As ListObject
@@ -26,6 +54,12 @@ End Function
 
 Public Function GetTableData(ByVal tblName As String) As Variant
     ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurueck
+    If Not mTableCache Is Nothing Then
+        If mTableCache.Exists(tblName) Then
+            GetTableData = mTableCache(tblName)
+            Exit Function
+        End If
+    End If
     Dim lo As ListObject
     Set lo = GetTable(tblName)
     If lo Is Nothing Then
@@ -37,6 +71,7 @@ Public Function GetTableData(ByVal tblName As String) As Variant
         Exit Function
     End If
     GetTableData = lo.DataBodyRange.value
+    If Not mTableCache Is Nothing Then mTableCache(tblName) = GetTableData
 End Function
 
 Public Function GetTableHeaders(ByVal tblName As String) As Variant
@@ -129,6 +164,12 @@ Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As 
     AppendRow = newRow.index
     StampRowAudit lo, newRow.index, True
     WriteJournalRow tblName, rowData
+    InvalidateTableCache tblName
+    ' KPI sidebar (frmOtkupAPP) zavisi samo od ovih tabela -> oznaci za osvezavanje
+    ' pri sledecem povratku na dashboard (umesto racunanja pri svakom Activate).
+    If tblName = TBL_OTKUP Or tblName = TBL_OTPREMNICA Or tblName = TBL_PRIJEMNICA Then
+        gKpiDirty = True
+    End If
     Exit Function
     
 ErrHandler:
@@ -157,6 +198,7 @@ Public Function UpdateCell(ByVal tblName As String, ByVal rowIndex As Long, _
     lo.DataBodyRange.cells(rowIndex, colIdx).value = newValue
     StampRowAudit lo, rowIndex, False
     UpdateCell = True
+    InvalidateTableCache tblName
     Exit Function
 
 ErrHandler:
@@ -378,6 +420,44 @@ Public Function LookupValue(ByVal tblName As String, ByVal searchCol As String, 
     Next i
     
     LookupValue = Empty
+End Function
+
+Public Function BuildLookupDict(ByVal tblName As String, ByVal keyCol As String, _
+                                ByVal valCol As String, _
+                                Optional ByVal valCol2 As String = "") As Object
+    ' Jednoprolazna mapa keyCol -> valCol (opc. + valCol2 spojeno razmakom).
+    ' Zamena za LookupValue pozvan U PETLJI: gradi se O(n) JEDNOM, pa je svaki
+    ' lookup O(1) -- umesto O(n) po redu (sto je ukupno bilo O(n*m)).
+    ' Kljucevi su CStr; prvi pojav pobedjuje (isto kao LookupValue -> prvi match).
+    ' Vrednost je CStr (pozivaoci ionako rade CStr(LookupValue(...))).
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BuildLookupDict = d
+
+    Dim data As Variant
+    data = GetTableData(tblName)
+    If IsEmpty(data) Then Exit Function
+
+    Dim ki As Long, vi As Long, vi2 As Long
+    ki = GetColumnIndex(tblName, keyCol)
+    vi = GetColumnIndex(tblName, valCol)
+    If ki = 0 Or vi = 0 Then Exit Function
+    If valCol2 <> "" Then vi2 = GetColumnIndex(tblName, valCol2)
+
+    Dim i As Long, k As String, v As String
+    For i = 1 To UBound(data, 1)
+        k = CStr(data(i, ki))
+        If Len(k) > 0 Then
+            If Not d.Exists(k) Then
+                If vi2 > 0 Then
+                    v = CStr(data(i, vi)) & " " & CStr(data(i, vi2))
+                Else
+                    v = CStr(data(i, vi))
+                End If
+                d.Add k, v
+            End If
+        End If
+    Next i
 End Function
 
 Public Function GetLookupList(ByVal tblName As String, ByVal colName As String, _

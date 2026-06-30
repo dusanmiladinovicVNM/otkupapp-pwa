@@ -30,6 +30,7 @@ Private m_IsInitializing As Boolean
 Private m_IsChangingToggle As Boolean
 Private m_IsChangingTipToggle As Boolean
 Private m_IsRefreshing As Boolean
+Private m_IsLoadingEntiteti As Boolean
 
 Private mChromeRemoved As Boolean
 
@@ -340,6 +341,11 @@ Private Sub tglZbirni_Click()
 End Sub
 
 Private Sub LoadEntiteti()
+    ' Guard: programsko punjenje + ListIndex=0 ne sme da okine cmbEntitet_Change
+    ' (inace AutoRefresh generise sve izvestaje jos jednom). On Error GoTo done
+    ' garantuje da se guard uvek vrati na False.
+    m_IsLoadingEntiteti = True
+    On Error GoTo done
     cmbEntitet.Clear
 
     Select Case GetActiveEntitetTip()
@@ -370,8 +376,15 @@ Private Sub LoadEntiteti()
     End Select
 
     If cmbEntitet.ListCount > 0 Then cmbEntitet.ListIndex = 0
+
+done:
+    m_IsLoadingEntiteti = False
 End Sub
 Private Sub cmbEntitet_Change()
+    ' LoadEntiteti postavlja ListIndex=0 sto bi inace okinulo jos jedan AutoRefresh
+    ' (duplo generisanje svih izvestaja). Guard preskace taj programski Change;
+    ' rucni izbor kooperanta i dalje refreshuje.
+    If m_IsLoadingEntiteti Then Exit Sub
     AutoRefresh
 End Sub
 
@@ -619,6 +632,7 @@ Private Sub btnUnos_Click()
     End If
 
     Application.ScreenUpdating = False
+    BeginTableCache   ' citaj svaku tabelu jednom za sve Generate* (read-only blok)
 
     If zbirni Then
         GenerateZbirniReport datumOd, datumDo, entitetTip
@@ -638,15 +652,15 @@ Private Sub btnUnos_Click()
         End If
     End If
 
-    WriteReportTables entitetTip, entitetID, datumOd, datumDo, zbirni
-
     UpdateStatusLabel
     
+    EndTableCache
     Application.ScreenUpdating = True
     Exit Sub
 
 EH:
     LogErr "frmIzvestaj.btnUnos"
+    EndTableCache
     Application.ScreenUpdating = True
     MsgBox "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju izve" & ChrW(353) & "taja: " & Err.description, vbCritical, APP_NAME
 End Sub
@@ -1106,80 +1120,8 @@ EH:
     End Select
 End Sub
 
-' ============================================================
-' REPORT-TABELLEN
-' ============================================================
+' (REPORT-TABELLEN sekcija uklonjena -- tblRpt* se nigde ne citaju)
 
-Private Sub WriteReportTables(ByVal entitetTip As String, ByVal entitetID As String, _
-                              ByVal datumOd As Date, ByVal datumDo As Date, _
-                              ByVal zbirni As Boolean)
-    Dim lo As ListObject
-    Dim i As Long
-    
-    If Not zbirni Then
-        If entitetTip = "OM" Then
-            Set lo = SafeGetTable(TBL_RPT_SALDO_OM)
-            If Not lo Is Nothing Then
-                If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
-                For i = 0 To lstSaldoOM.ListCount - 1
-                    AppendRow TBL_RPT_SALDO_OM, Array( _
-                        Format$(Date, "yyyy-mm-dd"), entitetID, _
-                        lstSaldoOM.List(i, 0), _
-                        lstSaldoOM.List(i, 1), _
-                        lstSaldoOM.List(i, 2), _
-                        lstSaldoOM.List(i, 3), _
-                        lstSaldoOM.List(i, 4), _
-                        lstSaldoOM.List(i, 5), _
-                        lstSaldoOM.List(i, 6))
-                Next i
-            End If
-            
-        ElseIf entitetTip = "Kupac" Then
-            Set lo = SafeGetTable(TBL_RPT_SALDO_KUPCI)
-            If Not lo Is Nothing Then
-                If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
-                For i = 0 To lstSaldoKupci.ListCount - 1
-                    AppendRow TBL_RPT_SALDO_KUPCI, Array( _
-                        Format$(Date, "yyyy-mm-dd"), entitetID, _
-                        lstSaldoKupci.List(i, 0), _
-                        lstSaldoKupci.List(i, 1), _
-                        lstSaldoKupci.List(i, 2), _
-                        lstSaldoKupci.List(i, 3), _
-                        lstSaldoKupci.List(i, 4), _
-                        lstSaldoKupci.List(i, 5), _
-                        lstSaldoKupci.List(i, 6))
-                Next i
-            End If
-        End If
-    End If
-    
-    Set lo = SafeGetTable(TBL_RPT_MARZA)
-    If Not lo Is Nothing Then
-        If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
-        For i = 0 To lstProsecnaCena.ListCount - 1
-            AppendRow TBL_RPT_MARZA, Array( _
-                Format$(Date, "yyyy-mm-dd"), _
-                lstProsecnaCena.List(i, 0), _
-                lstProsecnaCena.List(i, 1), _
-                lstProsecnaCena.List(i, 2), _
-                "", "", "", lstProsecnaCena.List(i, 3))
-        Next i
-    End If
-    
-    If zbirni Then
-        Set lo = SafeGetTable(TBL_RPT_ZBIRNI)
-        If Not lo Is Nothing Then
-            If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
-            For i = 0 To lstZbirni.ListCount - 1
-                AppendRow TBL_RPT_ZBIRNI, Array( _
-                    Format$(Date, "yyyy-mm-dd"), _
-                    lstZbirni.List(i, 0), lstZbirni.List(i, 1), _
-                    lstZbirni.List(i, 2), lstZbirni.List(i, 3), _
-                    lstZbirni.List(i, 4))
-            Next i
-        End If
-    End If
-End Sub
 
 ' ============================================================
 ' DRUCKEN
