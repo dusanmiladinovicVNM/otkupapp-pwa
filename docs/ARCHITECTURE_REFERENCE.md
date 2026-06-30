@@ -4353,7 +4353,7 @@ Script Properties are the canonical deployment-specific configuration surface:
 
 | Script Property | Purpose |
 |---|---|
-| `MONITORING_SPREADSHEET_ID` | Explicit ID of `OtkupApp_Monitoring_PROD`. |
+| `MONITORING_SPREADSHEET_ID` | Explicit ID of `OtkupApp_Monitoring_PROD`. **Optional** — see auto-provisioning note below. |
 | `MONITORING_ALERT_EMAIL` | Recipient for `ERROR` / `CRITICAL` alert emails. |
 | `MONITORING_INGEST_SECRET` | Shared secret for public VBA ingest. |
 
@@ -4364,6 +4364,8 @@ const MONITORING_PROP_SPREADSHEET_ID = 'MONITORING_SPREADSHEET_ID';
 const MONITORING_PROP_ALERT_EMAIL = 'MONITORING_ALERT_EMAIL';
 const MONITORING_PROP_INGEST_SECRET = 'MONITORING_INGEST_SECRET';
 ```
+
+`getMonitoringSpreadsheet_()` is self-provisioning, so `MONITORING_SPREADSHEET_ID` does not have to be set by hand on every install. Resolution order: (1) read the ID from `MONITORING_SPREADSHEET_ID` (legacy key `MONITORING_PROP_SPREADSHEET_ID` is still read as a fallback, and a stored-but-stale ID falls through); (2) find the workbook by name `OtkupApp_Monitoring_PROD` and remember its ID; (3) otherwise create `OtkupApp_Monitoring_PROD` and remember its ID. The resolved ID is written back to `MONITORING_SPREADSHEET_ID` so later calls reuse it. Setting the property explicitly is still supported and pins a specific workbook (e.g. a shared one), short-circuiting discovery/creation.
 
 The public VBA ingest action is:
 

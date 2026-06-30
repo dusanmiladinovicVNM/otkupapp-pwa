@@ -14,7 +14,10 @@ Napomena:
 // ============================================================
 
 const MONITORING_SPREADSHEET_NAME = 'OtkupApp_Monitoring_PROD';
-const MONITORING_PROP_SPREADSHEET_ID = 'MONITORING_PROP_SPREADSHEET_ID';
+// Kanonski Script Property kljuc (isti naming kao alert/ingest ispod, kao u docs/ARCHITECTURE_REFERENCE.md).
+const MONITORING_PROP_SPREADSHEET_ID = 'MONITORING_SPREADSHEET_ID';
+// Legacy kljuc koji je stara verzija koda citala/sugerisala u error poruci; citamo ga kao fallback radi kompatibilnosti.
+const MONITORING_PROP_SPREADSHEET_ID_LEGACY = 'MONITORING_PROP_SPREADSHEET_ID';
 const MONITORING_PROP_ALERT_EMAIL = 'MONITORING_ALERT_EMAIL';
 const MONITORING_PROP_INGEST_SECRET = 'MONITORING_INGEST_SECRET';
 
@@ -1323,15 +1326,43 @@ function ensureDefaultHealthRows_(ss) {
 
 function getMonitoringSpreadsheet_() {
   const props = PropertiesService.getScriptProperties();
-  const explicitId = String(props.getProperty(MONITORING_PROP_SPREADSHEET_ID) || '').trim();
-  if (explicitId) return SpreadsheetApp.openById(explicitId);
 
-  const files = DriveApp.getFilesByName(MONITORING_SPREADSHEET_NAME);
-  if (files.hasNext()) {
-    return SpreadsheetApp.open(files.next());
+  // 1) Eksplicitni ID iz Script Properties (kanonski kljuc, uz legacy fallback).
+  let storedId = String(props.getProperty(MONITORING_PROP_SPREADSHEET_ID) || '').trim();
+  if (!storedId) {
+    storedId = String(props.getProperty(MONITORING_PROP_SPREADSHEET_ID_LEGACY) || '').trim();
+  }
+  if (storedId) {
+    try {
+      return SpreadsheetApp.openById(storedId);
+    } catch (errOpen) {
+      // ID vise nije upotrebljiv (obrisan / u trash-u / nema pristup) -> nastavi na discovery/create.
+      try { Logger.log('Stored monitoring spreadsheet id not usable: ' + errOpen.message); } catch (ignore) {}
+    }
   }
 
-  throw new Error('Monitoring spreadsheet not found. Set Script Property ' + MONITORING_PROP_SPREADSHEET_ID + ' or create file named ' + MONITORING_SPREADSHEET_NAME);
+  // 2) Postojeci fajl po kanonskom imenu -> zapamti ID za ubuduce.
+  const files = DriveApp.getFilesByName(MONITORING_SPREADSHEET_NAME);
+  if (files.hasNext()) {
+    const ss = SpreadsheetApp.open(files.next());
+    rememberMonitoringSpreadsheetId_(props, ss.getId());
+    return ss;
+  }
+
+  // 3) Ne postoji nista -> auto-kreiraj kanonski workbook i zapamti ID.
+  //    Tako nema potrebe za rucnim setovanjem Script Property na svakoj instalaciji.
+  const created = SpreadsheetApp.create(MONITORING_SPREADSHEET_NAME);
+  rememberMonitoringSpreadsheetId_(props, created.getId());
+  return created;
+}
+
+function rememberMonitoringSpreadsheetId_(props, id) {
+  if (!id) return;
+  try {
+    props.setProperty(MONITORING_PROP_SPREADSHEET_ID, id);
+  } catch (err) {
+    try { Logger.log('Could not persist ' + MONITORING_PROP_SPREADSHEET_ID + ': ' + (err && err.message ? err.message : err)); } catch (ignore) {}
+  }
 }
 
 function getMonitoringSheet_(ss, name) {

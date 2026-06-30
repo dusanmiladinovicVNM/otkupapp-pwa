@@ -522,6 +522,8 @@ MONITORING_INGEST_SECRET
 7. Ako HTTP nije 200, problem je endpoint/deployment/network.
 8. Ako HTTP 200, ali nema reda, problem je workbook ID / permissions / Monitoring.gs routing.
 
+> **`MONITORING_SPREADSHEET_ID` je opcioni.** `getMonitoringSpreadsheet_()` je self-provisioning: ako property nije setovan, prvo traži workbook po imenu `OtkupApp_Monitoring_PROD`, a ako ga nema — sam ga kreira i upiše ID nazad u `MONITORING_SPREADSHEET_ID` (legacy ključ `MONITORING_PROP_SPREADSHEET_ID` se i dalje čita kao fallback). Zato nije potrebno ručno setovati property na svakoj instalaciji. Ako i dalje vidiš grešku tipa „Monitoring spreadsheet not found" ili pad pri kreiranju, to znači da Apps Script nema Drive/Sheets autorizaciju — pokreni jednom `initializeMonitoringWorkbook` iz editora i odobri tražene permisije (ili eksplicitno setuj `MONITORING_SPREADSHEET_ID` na ID postojećeg fajla da se preskoči auto-kreiranje).
+
 ### 7.2. Monitoring secret mismatch
 
 Simptom:
