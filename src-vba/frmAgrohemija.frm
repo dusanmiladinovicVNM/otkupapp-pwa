@@ -124,7 +124,7 @@ Private Sub SetupPocetniDugButton()
         .top = btnZavrsiIzlaz.top - btnZavrsiIzlaz.Height - 6
         .visible = True
     End With
-    StyleExitButton m_btnPocetniDug, "Pocetni dug"
+    StyleExitButton m_btnPocetniDug, "Po" & ChrW(269) & "etni dug"
 
     On Error Resume Next
     m_btnPocetniDug.ZOrder 0
@@ -152,9 +152,9 @@ Private Sub m_btnPocetniDug_Click()
     trenutni = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
 
     Dim odg As String
-    odg = InputBox("Pocetni dug (migracija) za:" & vbCrLf & koopNaziv & vbCrLf & vbCrLf & _
+    odg = InputBox("Po" & ChrW(269) & "etni dug (migracija) za:" & vbCrLf & koopNaziv & vbCrLf & vbCrLf & _
                    "Trenutni dug: " & Format$(trenutni, "#,##0") & " RSD" & vbCrLf & vbCrLf & _
-                   "Unesi iznos pocetnog duga (RSD):", APP_NAME)
+                   "Unesi iznos po" & ChrW(269) & "etnog duga (RSD):", APP_NAME)
     If Trim$(odg) = "" Then Exit Sub
 
     If Not IsNumeric(odg) Then
@@ -172,7 +172,7 @@ Private Sub m_btnPocetniDug_Click()
     Dim brDok As String
     brDok = Trim$(InputBox("Broj dokumenta (opciono):", APP_NAME, "POC-DUG"))
 
-    If MsgBox("Proknjiziti pocetni dug " & Format$(iznos, "#,##0") & " RSD za:" & vbCrLf & _
+    If MsgBox("Proknjiziti po" & ChrW(269) & "etni dug " & Format$(iznos, "#,##0") & " RSD za:" & vbCrLf & _
               koopNaziv & "?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
     Dim newID As String
@@ -183,7 +183,7 @@ Private Sub m_btnPocetniDug_Click()
         Exit Sub
     End If
 
-    MsgBox "Pocetni dug proknjizen (" & newID & ").", vbInformation, APP_NAME
+    MsgBox "Po" & ChrW(269) & "etni dug proknjizen (" & newID & ").", vbInformation, APP_NAME
 
     ' Osvezi prikaz duga + KPI
     Dim noviDug As Double

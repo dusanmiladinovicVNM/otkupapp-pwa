@@ -290,7 +290,7 @@ Public Function BookPocetniDug(ByVal kooperantID As String, _
         kooperantID, _
         "", _
         brojDok, _
-        "Pocetni dug (migracija)", _
+        "Po" & ChrW(269) & "etni dug (migracija)", _
         "", _
         iznos, _
         True)
@@ -332,7 +332,7 @@ Private Sub EnsureArtikalPocetniDug()
     ReDim rowData(1 To lo.ListColumns.count)
 
     SetArtCell rowData, COL_ART_ID, ART_POCETNI_DUG
-    SetArtCell rowData, COL_ART_NAZIV, "Pocetni dug (migracija)"
+    SetArtCell rowData, COL_ART_NAZIV, "Po" & ChrW(269) & "etni dug (migracija)"
     SetArtCell rowData, COL_ART_TIP, "Virtuelno"
     SetArtCell rowData, COL_ART_JM, "RSD"
     SetArtCell rowData, COL_ART_CENA, 1
