@@ -43,6 +43,13 @@ Status after v6.22: `PrintFaktura` and `UpdateFakturaStatus` duplicate-`FakturaI
 ### 2.8 Relink Regression Test
 Add a targeted regression test for the orphan scenario where an old/stornirano prijemnica row exists and a new row with the same `BrojPrijemnice + Klasa` relinks the faktura stavka exactly once to the replacement `PrijemnicaID`.
 
+### 2.9 Opening-Debt (`ART_POCETNI_DUG`) PWA / Sync Filter + Tests
+Introduced in v6.41 (desktop „Pocetni dug" migration via reserved virtual article `ART_POCETNI_DUG`, booked as a `MAG_IZLAZ` row with `allowNoStock`). Open follow-ups:
+
+- **PWA / sync filter (KI-006):** `modStammdatenSync.ExportMagacinKoop` exports all `MAG_IZLAZ` rows including `ART_POCETNI_DUG` (phantom `Kolicina = 1`, virtual `ArtikalID`). Audit `src/` (PWA `MagacinKoop`/`magacinkoop` consumer + Kooperant lager validation `agromere.js`) and decide: exclude `ART_POCETNI_DUG` from `ExportMagacinKoop` (preferred — opening debt is a desktop finance migration, not PWA stock) or confirm the PWA tolerates the synthetic row. Same audit applies to any other `MAG_IZLAZ` quantity consumer.
+- **Tests (`modBusinessFlowProTests`):** add coverage for `BookPocetniDug`: book → `GetAgrohemijaDug` increases by the amount; the row is excluded from `GetMagacinStanje`; storno of the magacin row restores the debt; `ReportSaldoOM` AgroZaduzenje reflects the booking. Currently the financial booking helper has no automated test.
+- **Seed placement:** `EnsureArtikalPocetniDug` lives in `modAgrohemija` (lazy-seed); evaluate moving it to `modSetup` alongside the other `Ensure*` schema/seed helpers per the CLAUDE.md code map.
+
 ---
 
 

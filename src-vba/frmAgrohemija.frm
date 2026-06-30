@@ -35,6 +35,10 @@ Private m_ParcelaHa() As Double
 
 Private mChromeRemoved As Boolean
 
+' Dinamicko dugme "Pocetni dug" (migracija). Kontrola se pravi u runtime-u
+' (Controls.Add) jer se .frx ne dira; klik se hvata preko WithEvents.
+Private WithEvents m_btnPocetniDug As MSForms.CommandButton
+
 Private Sub UserForm_Initialize()
     ApplyTheme Me, BG_MAIN()
     LoadKooperanti
@@ -89,11 +93,120 @@ Private Sub UserForm_Activate()
     
     ' Inicijalni empty state
     UpdateEmptyState
-    
+
+    ' Podesavanja: pracenje parcela ON/OFF -> stanje liste parcela
+    ApplyAgroTogglesState
+
+    ' Dinamicko dugme "Pocetni dug" (migracija duga kooperanta)
+    SetupPocetniDugButton
+
     Exit Sub
 
 EH:
     LogErr "frmAgrohemija.UserForm_Activate"
+End Sub
+
+' Runtime dugme "Pocetni dug" -- proknjizi pocetni dug izabranog kooperanta
+' (migracija). .frx se ne dira; kontrola se pravi jednom (guard) i pozicionira
+' ispod "Zavrsi izdavanje".
+Private Sub SetupPocetniDugButton()
+    On Error GoTo done
+
+    If Not m_btnPocetniDug Is Nothing Then Exit Sub
+
+    Set m_btnPocetniDug = btnZavrsiIzlaz.parent.Controls.Add("Forms.CommandButton.1", "btnPocetniDugRT", True)
+    If m_btnPocetniDug Is Nothing Then GoTo done
+
+    With m_btnPocetniDug
+        .width = btnZavrsiIzlaz.width
+        .Height = btnZavrsiIzlaz.Height
+        .Left = btnZavrsiIzlaz.Left
+        .top = btnZavrsiIzlaz.top - btnZavrsiIzlaz.Height - 6
+        .visible = True
+    End With
+    StyleExitButton m_btnPocetniDug, "Po" & ChrW(269) & "etni dug"
+
+    On Error Resume Next
+    m_btnPocetniDug.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmAgrohemija.SetupPocetniDugButton"
+    Set m_btnPocetniDug = Nothing
+End Sub
+
+Private Sub m_btnPocetniDug_Click()
+    On Error GoTo EH
+
+    If cmbKooperant.value = "" Then
+        MsgBox "Prvo izaberite kooperanta.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim koopID As String
+    koopID = ExtractIDFromDisplay(cmbKooperant.value)
+
+    Dim koopNaziv As String
+    koopNaziv = cmbKooperant.value
+
+    Dim trenutni As Double
+    trenutni = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
+
+    Dim odg As String
+    odg = InputBox("Po" & ChrW(269) & "etni dug (migracija) za:" & vbCrLf & koopNaziv & vbCrLf & vbCrLf & _
+                   "Trenutni dug: " & Format$(trenutni, "#,##0") & " RSD" & vbCrLf & vbCrLf & _
+                   "Unesi iznos po" & ChrW(269) & "etnog duga (RSD):", APP_NAME)
+    If Trim$(odg) = "" Then Exit Sub
+
+    If Not IsNumeric(odg) Then
+        MsgBox "Iznos mora biti broj.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim iznos As Double
+    iznos = CDbl(odg)
+    If iznos <= 0 Then
+        MsgBox "Iznos mora biti veci od 0.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim brDok As String
+    brDok = Trim$(InputBox("Broj dokumenta (opciono):", APP_NAME, "POC-DUG"))
+
+    If MsgBox("Proknjiziti po" & ChrW(269) & "etni dug " & Format$(iznos, "#,##0") & " RSD za:" & vbCrLf & _
+              koopNaziv & "?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim newID As String
+    newID = BookPocetniDug(koopID, iznos, brDok, Date)
+
+    If Len(Trim$(newID)) = 0 Then
+        MsgBox "Knjizenje nije uspelo. Pogledaj log.", vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    MsgBox "Po" & ChrW(269) & "etni dug proknjizen (" & newID & ").", vbInformation, APP_NAME
+
+    ' Osvezi prikaz duga + KPI
+    Dim noviDug As Double
+    noviDug = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
+    If noviDug > 0 Then
+        lblDug.caption = "Dug: " & Format$(noviDug, "#,##0") & " RSD"
+    Else
+        lblDug.caption = ""
+    End If
+    RefreshTopKpis
+    Exit Sub
+
+EH:
+    LogErr "frmAgrohemija.m_btnPocetniDug_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Podesavanja: pracenje parcela OFF -> lista parcela disabled (unos bez
+' parcele, smart doza se preskace); ON -> lista aktivna. Postavlja se u oba
+' smera pa re-otvaranje forme prati config.
+Private Sub ApplyAgroTogglesState()
+    On Error Resume Next
+    lstParcele.enabled = IsPracenjeParcela()
 End Sub
 
 Private Sub LoadKooperanti()
@@ -129,7 +242,7 @@ Private Sub LoadArtikli()
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, 1)) <> "" Then
+        If CStr(data(i, 1)) <> "" And CStr(data(i, colID)) <> ART_POCETNI_DUG Then
             cmbArtikal.AddItem CStr(data(i, colNaziv)) & " [" & CStr(data(i, colJM)) & "] (" & CStr(data(i, colID)) & ")"
         End If
     Next i
@@ -147,21 +260,25 @@ Private Sub cmbKooperant_Change()
     
     Dim koopID As String
     koopID = ExtractIDFromDisplay(cmbKooperant.value)
-    
-    Dim parcele As Variant
-    parcele = GetParceleByKooperant(koopID)
-    If IsEmpty(parcele) Then Exit Sub
-    
-    ReDim m_ParcelaIDs(0 To UBound(parcele, 1) - 1)
-    ReDim m_ParcelaHa(0 To UBound(parcele, 1) - 1)
-    
-    Dim i As Long
-    For i = 1 To UBound(parcele, 1)
-        m_ParcelaIDs(i - 1) = CStr(parcele(i, 1))
-        m_ParcelaHa(i - 1) = CDbl(parcele(i, 5))
-        lstParcele.AddItem CStr(parcele(i, 6))  ' Display string
-    Next i
-    
+
+    ' Pracenje parcela ON -> ucitaj parcele kooperanta u listu; OFF -> preskoci
+    ' (lista je disabled, unos ide bez parcele). Dug se prikazuje u oba slucaja.
+    If IsPracenjeParcela() Then
+        Dim parcele As Variant
+        parcele = GetParceleByKooperant(koopID)
+        If Not IsEmpty(parcele) Then
+            ReDim m_ParcelaIDs(0 To UBound(parcele, 1) - 1)
+            ReDim m_ParcelaHa(0 To UBound(parcele, 1) - 1)
+
+            Dim i As Long
+            For i = 1 To UBound(parcele, 1)
+                m_ParcelaIDs(i - 1) = CStr(parcele(i, 1))
+                m_ParcelaHa(i - 1) = CDbl(parcele(i, 5))
+                lstParcele.AddItem CStr(parcele(i, 6))  ' Display string
+            Next i
+        End If
+    End If
+
     ' Dug anzeigen
     Dim dug As Double
     dug = GetAgrohemijaDug(koopID) - GetAgroAbzug(koopID)
@@ -192,7 +309,19 @@ Private Sub UpdatePreporuka()
     lblPreporuka.caption = ""
     lblVrednost.caption = ""
     txtKolicina.value = ""
-    
+
+    ' Pracenje parcela OFF -> smart doza (preporuka) se preskace; broj
+    ' pakovanja se unosi rucno, bez odabira parcele.
+    If Not IsPracenjeParcela() Then
+        If cmbArtikal.value = "" Then
+            lblPreporuka.caption = "Izaberi artikal i unesi broj pakovanja"
+        Else
+            lblPreporuka.caption = "Unesi broj pakovanja rucno"
+        End If
+        lblPreporuka.ForeColor = TXT_MUTED()
+        Exit Sub
+    End If
+
     If cmbArtikal.value = "" Then
         lblPreporuka.caption = "Izaberi artikal i parcele za preporuku"
         lblPreporuka.ForeColor = TXT_MUTED()
@@ -337,15 +466,18 @@ Private Sub btnDodajIzlaz_Click()
         Exit Sub
     End If
     
-    ' Mindestens eine Parcela ausgewaehlt
-    Dim hasSelection As Boolean
+    ' Mindestens eine Parcela ausgewaehlt -- samo kad je pracenje parcela ON.
+    ' OFF -> unos bez parcele (parcelaID ostaje prazan).
     Dim i As Long
-    For i = 0 To lstParcele.ListCount - 1
-        If lstParcele.Selected(i) Then hasSelection = True: Exit For
-    Next i
-    If Not hasSelection Then
-        MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
-        Exit Sub
+    If IsPracenjeParcela() Then
+        Dim hasSelection As Boolean
+        For i = 0 To lstParcele.ListCount - 1
+            If lstParcele.Selected(i) Then hasSelection = True: Exit For
+        Next i
+        If Not hasSelection Then
+            MsgBox "Izaberite parcelu!", vbExclamation, APP_NAME
+            Exit Sub
+        End If
     End If
     
     Dim artikalID As String
@@ -561,7 +693,7 @@ Private Sub LoadArtikliUlaz()
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If CStr(data(i, 1)) <> "" Then
+        If CStr(data(i, 1)) <> "" And CStr(data(i, colID)) <> ART_POCETNI_DUG Then
             cmbArtikalUlaz.AddItem CStr(data(i, colNaziv)) & " [" & _
                 CStr(data(i, colJM)) & "] (" & CStr(data(i, colID)) & ")"
         End If

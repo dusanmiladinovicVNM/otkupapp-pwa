@@ -150,3 +150,14 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **KPI na dashboardu („Današnji otkup kg") se osvežava samo kad treba:** posle unosa u `frmOtkup`/`frmDokumenta` ili PWA importa (sve ide kroz `AppendRow`), a ne pri svakom povratku na dashboard.
 - **Uklonjen mrtav kod — `tblRpt*` izveštajne tabele:** `WriteReportTables` i `WriteMarza` su pri svakom „Prikaži" pisali u `tblRptSaldoOM/Kupci/Marza/Zbirni` **redom-po-red kroz `AppendRow`** (uz CSV-journal na disk po redu), a te tabele se **nigde ne čitaju** (`modMigracija` ih ionako preskače kao izvedene). Upis je uklonjen; same tabele/sheetovi su ostavljeni netaknuti.
 - **Bez promene podataka i bez novih zavisnosti:** journaling **stvarnih** unosa (`tblOtkup`, `tblNovac`, `tblOtpremnica`…) je nepromenjen; izvori ostaju **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+---
+
+## vba-v2.8.4 — 2026-06-30
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Agrohemija: **izdavanje bez parcele** kad je praćenje parcela isključeno + **unos početnog duga kooperanta** (migracija) bez vezivanja za artikal.
+
+- **Izdavanje robe bez parcele (kad je praćenje parcela OFF):** ako je u Podešavanjima `Praćenje parcela` isključeno (`PRACENJE_PARCELA`), Agrohemija sada prihvata izdavanje robe **bez odabira parcele** — lista parcela je zaključana, a „smart" preporuka doze po hektaru se preskače (broj pakovanja se unosi ručno). Kad je praćenje uključeno, sve radi kao i pre (obavezna parcela + preporuka). Isti prekidač koji već postoji u Otkupu (`IsPracenjeParcela`).
+- **Početni dug kooperanta (migracija) — dugme „Početni dug":** novo dugme iznad „Završi izdavanje" knjiži **čist iznos duga u RSD** za izabranog kooperanta, bez biranja realnog artikla i bez greške „Nedovoljno stanje". Knjiži se kao jedna stavka izdavanja na rezervisani interni artikal (`ART_POCETNI_DUG`), pa se dug **konzistentno** vidi i u Agrohemiji i u kartici/saldo izveštaju kooperanta. **Reverzibilno** preko storniranja te stavke. Rezervisani artikal je sakriven iz lista artikala i iz pregleda stanja magacina (nema fantomskog negativnog stanja).
+- **Dug se prikazuje i za kooperanta bez parcela:** ranije se, kad praćenje parcela radi, dug nije prikazivao ako kooperant nema unetu parcelu — sada se prikazuje uvek.
+- **Bez novih zavisnosti:** izvori (`frmAgrohemija`, `modAgrohemija`, `modConfig`) ostaju **ASCII-only** (dijakritika u prikazu preko inline `ChrW`); nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+- **Poznato ograničenje:** stavke početnog duga se za sada **šalju i na PWA** (`ExportMagacinKoop`) sa fantomskom količinom 1 — biće filtrirano u sledećem patch-u (vidi ROADMAP / KI-006).
