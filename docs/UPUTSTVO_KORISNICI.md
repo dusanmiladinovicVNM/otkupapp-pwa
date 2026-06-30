@@ -14,8 +14,9 @@ Modul „Korisnici" uvodi **prijavu** u aplikaciju i **prava po oblasti**:
 - **Korisnik** — admin mu odobrava pristup **po oblasti**. Vidi i otvara samo
   ono za šta ima „DA"; ostalo je zaključano.
 
-**Oblasti (9):** Otkup · Dokumenta · Agrohemija · Izveštaji · Fakturisanje ·
-Banka · Marža · Sledljivost · Matični podaci.
+**Oblasti (12):** Otkup · Dokumenta · Agrohemija · Izveštaji · Fakturisanje ·
+Banka · Marža · Sledljivost · Matični podaci · Palete · Otvori Excel ·
+Sinhronizuj PWA.
 
 > **Sve je opciono (opt-in).** Dok administrator ne uključi prijavu, aplikacija
 > radi tačno kao i pre — bez prijave i bez ograničenja. Nema rizika da se

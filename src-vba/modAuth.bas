@@ -177,7 +177,8 @@ End Function
 ' Jedinstven izvor liste oblasti (= nazivi kolona prava u tblKorisnici).
 Public Function OblastiList() As Variant
     OblastiList = Array(OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
-                        OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI)
+                        OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI, _
+                        OBL_PALETE, OBL_OTVORI_EXCEL, OBL_SYNC_PWA)
 End Function
 
 Public Sub Logout()
@@ -202,6 +203,7 @@ Public Function OblastZaFormu(ByVal formName As String) As String
         Case "frmmarza":               OblastZaFormu = OBL_MARZA
         Case "frmsledljivost":         OblastZaFormu = OBL_SLEDLJIVOST
         Case "frmmaticnipodaci":       OblastZaFormu = OBL_MATICNI
+        Case "frmpalete":              OblastZaFormu = OBL_PALETE
         Case Else:                     OblastZaFormu = vbNullString
     End Select
 End Function

@@ -579,6 +579,9 @@ Public Const OBL_BANKA As String = "Banka"
 Public Const OBL_MARZA As String = "Marza"
 Public Const OBL_SLEDLJIVOST As String = "Sledljivost"
 Public Const OBL_MATICNI As String = "MaticniPodaci"
+Public Const OBL_PALETE As String = "Palete"
+Public Const OBL_OTVORI_EXCEL As String = "OtvoriExcel"
+Public Const OBL_SYNC_PWA As String = "SyncPWA"
 
 ' --- Audit (timestamp + userstamp) - zajednicke kolone za sve glavne tabele ---
 ' Upisuju se centralno u modDataAccess.AppendRow (insert) i UpdateCell (izmena).

@@ -645,6 +645,14 @@ End Sub
 Private Sub btnSyncPWA_Click()
     On Error GoTo EH
 
+    ' Kontrola pristupa (opt-in AUTH): oblast "Sinhronizuj PWA".
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_SYNC_PWA) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: Sinhronizuj PWA", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     Dim oldPointer As Integer
     Dim ok As Boolean
 
@@ -691,6 +699,14 @@ Private Sub btnTrace_Click()
 End Sub
 
 Private Sub btnOpenExcel_Click()
+    ' Kontrola pristupa (opt-in AUTH): oblast "Otvori Excel".
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_OTVORI_EXCEL) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: Otvori Excel", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     HighlightActive btnOpenExcel
     lblStatus.caption = "Sekcija: Otvori Excel"
 
