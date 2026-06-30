@@ -129,3 +129,12 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **OM Ulaz / Izlaz (tok ambalaže/novca):** obavezni **vozač**, **vrsta voća** i **broj dokumenta** (kod OM Ulaza smer-tokovi i dalje sami predlažu broj; pun blok tek ako ostane prazno).
 - **Palete — prerada (`frmPalete` → „Preradi izabrane"):** uz već postojeći izbor palete sada blokira ako su prazni **bruto**, **težina palete**, **gotov proizvod**, **broj + tip kutija** i **broj + tip kesa** — sprečava preradu sa neto = 0 i neoznačen izlazni proizvod.
 - **Bez novih zavisnosti:** sve poruke su **ASCII-only** u izvoru (inline `ChrW` za dijakritiku), uz reuse postojećeg `Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")` — nema novih katalog ključeva, pa posle importa **ne treba `EnsurePoruke`**.
+
+---
+
+## vba-v2.8.2 — 2026-06-30
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Patch: **specifikacija dnevnog/periodičnog otkupa dobija kolonu „Kupac"** (firma kome ide roba).
+
+- **Specifikacija otkupnih blokova — kolona „Kupac":** dnevna/periodična specifikacija (Otkup → „Štampaj po datumu") i specifikacija ručno izabranih otpremnica („Biraj otpremnice" → „Štampaj specifikaciju") sada uz „Broj zbirne"/„Broj otpremnice" prikazuju i **kupca (firmu) kome ide roba** — izvedeno lancem `BrojZbirne → tblZbirna.KupacID → tblKupci.Naziv` (reuse postojećeg `KupacNazivZaZbirnu`, isti podatak kao kolona „Kupac" u listi otpremnica). Ubačena je kao **druga kolona** (uz „Broj zbirne").
+- **Raspored i dalje staje na 1 A4 landscape:** šablon već koristi `FitToPagesWide = 1` (garantovano 1 strana po širini); uz blagi trim širina ostalih kolona (Ime i Prezime 24→20, Otkupno mesto 18→16, Broj otpremnice 14→12, Datum 11→10…) ukupna širina je ~152 jedinice (pre 147), pa su auto-skaliranje i čitljivost praktično nepromenjeni. `SpecifikacijaSablon` se sam obnavlja (LAYOUT_VER 1→2 → stari šablon se prepravlja pri prvom otvaranju).
+- **Bez novih zavisnosti:** izvori (`modOtkupBlok`, `modPrint`) ostaju **ASCII-only**; nema novih katalog ključeva (`Poruka()`), pa posle importa **ne treba `EnsurePoruke`**.
