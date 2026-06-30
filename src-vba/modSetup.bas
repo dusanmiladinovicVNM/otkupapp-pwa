@@ -781,6 +781,21 @@ End Sub
 Public Sub EnsureAuditColumns()
     On Error GoTo EH
 
+    Dim n As Long
+    n = EnsureAuditColumnsCore()
+
+    MsgBox "Audit kolone postavljene na " & n & Poruka("AUD_MSG_KOLONE_SUFIX"), _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureAuditColumns failed: " & Err.description
+    MsgBox "Greska u EnsureAuditColumns: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Silent worker (bez MsgBox-a) -- vraca broj obradjenih tabela. Reuse iz
+' migracije (modMigracija) gde ne zelimo popup usred toka kopiranja.
+Public Function EnsureAuditColumnsCore() As Long
     InitSetupLog
 
     Dim tbls As Variant
@@ -798,14 +813,8 @@ Public Sub EnsureAuditColumns()
     Next i
 
     LogSetup "OK", "EnsureAuditColumns done (" & n & " tabela)"
-    MsgBox "Audit kolone postavljene na " & n & Poruka("AUD_MSG_KOLONE_SUFIX"), _
-           vbInformation, APP_NAME
-    Exit Sub
-
-EH:
-    LogSetup "ERROR", "EnsureAuditColumns failed: " & Err.description
-    MsgBox "Greska u EnsureAuditColumns: " & Err.description, vbCritical, APP_NAME
-End Sub
+    EnsureAuditColumnsCore = n
+End Function
 
 ' Spisak tabela koje dobijaju audit kolone (master + transakcione + ledger).
 ' Config/log/report tabele se namerno preskacu.

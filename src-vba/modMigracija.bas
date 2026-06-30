@@ -39,6 +39,15 @@ Public Sub MigrirajPodatkeIzStarog()
     prevSec = Application.AutomationSecurity
     prevSU = Application.ScreenUpdating
 
+    ' Foolproof: novi fajl MORA imati tblKorisnici (+ audit kolone) PRE kopiranja,
+    ' jer migracija prolazi kroz tabele NOVOG fajla pa povlaci istoimene iz starog.
+    ' Bez ovoga, ako Ensure nije rucno pokrenut, korisnici se ne bi preneli.
+    ' Idempotentno; best-effort (greska u semi ne sme da obori migraciju).
+    On Error Resume Next
+    EnsureKorisniciSchema
+    EnsureAuditColumnsCore
+    On Error GoTo 0
+
     On Error GoTo CLEAN
     Application.EnableEvents = False                    ' ne pokreci Workbook_Open starog
     Application.AutomationSecurity = 3                  ' msoAutomationSecurityForceDisable (bez makroa)
