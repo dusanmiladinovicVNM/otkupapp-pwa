@@ -23,6 +23,7 @@ Option Explicit
 
 Private mWrappers As Collection   ' clsLookupMenuBtn instance (drzi WithEvents zivim)
 Private mBtns As Collection       ' MSForms.CommandButton kontrole (za reset/hover)
+Private mHoverNm As String        ' poslednje hover-ovano dugme (anti-flicker)
 
 Private Const STATIC_BTNS As String = _
     "btnKooperanti;btnStanice;btnKupci;btnVozaci;btnArtikli;btnParcele"
@@ -82,7 +83,8 @@ Public Function MaticniSekcijeGrupisano() As Variant
             Array("Kese", "Kese"))), _
         Array("Sistem", Array( _
             Array(Poruka("MATICNI_MSG_PODESAVANJA"), "Pode" & ChrW(353) & "avanja"), _
-            Array("Admin", "Admin"))))
+            Array("Admin", "Admin"), _
+            Array("Korisnici", "Korisnici"))))
 End Function
 
 ' Gradi ceo meni na prosledjenoj formi (frmMaticniPodaci).
@@ -92,6 +94,7 @@ Public Sub AttachMaticniMenu(ByVal frm As Object)
 
     Set mWrappers = New Collection
     Set mBtns = New Collection
+    mHoverNm = ""
 
     ' Geometrija se cita sa postojeceg dugmeta (robusno, bez magic broja).
     Dim tmpl As MSForms.CommandButton
@@ -233,6 +236,11 @@ End Sub
 
 Public Sub MaticniMenu_OnHover(ByVal b As Object)
     On Error Resume Next
+    If b Is Nothing Then Exit Sub
+    ' Anti-flicker: MouseMove okida vise puta nad ISTIM dugmetom -> restajluj
+    ' samo kad se hover-ovano dugme promeni (ne na svaki piksel pomeraja).
+    If StrComp(b.name, mHoverNm, vbTextCompare) = 0 Then Exit Sub
+    mHoverNm = b.name
     MaticniMenu_ResetAll
     ButtonHover b
 End Sub
@@ -241,6 +249,14 @@ End Sub
 ' m_IsOpeningChild, pa se meni ne zatvori usput).
 Public Sub MaticniMenu_OnClick(ByVal sekTag As String, ByVal sekCaption As String)
     On Error GoTo EH
+
+    ' "Korisnici" (administracija pristupa) -- samo za admina (ili dok je AUTH iskljucen).
+    If StrComp(sekTag, "Korisnici", vbTextCompare) = 0 Then
+        If Not modAuth.MozeAdministraciju() Then
+            MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_KORISNICI"), vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
 
     ButtonActiveByTag sekTag
     frmMaticniPodaci.OpenSekcija sekTag, sekCaption

@@ -109,6 +109,7 @@ Private Sub UserForm_Activate()
     Select Case Me.Tag
         Case "Kooperanti": SetupKooperanti
         Case "Stanice": SetupStanice
+        Case "Korisnici": SetupKorisnici
         Case "Kupci": SetupKupci
         Case "Vozaci": SetupVozaci
         Case "Parcele": SetupParcele
@@ -211,6 +212,14 @@ Private Sub SetupColumnHeaders()
             ShowHeader 7, "Kontakt Prezime", True
             ShowHeader 8, "Pin", True
             ShowHeader 9, "Hladnjaca", True
+
+        Case "Korisnici"
+            ShowHeader 1, "ID", True
+            ShowHeader 2, "Korisnik", True
+            ShowHeader 3, "Ime i prezime", True
+            ShowHeader 4, "Uloga", True
+            ShowHeader 5, "Aktivan", True
+            ShowHeader 6, "Oblasti (DA)", True
 
         Case "Kupci"
             ShowHeader 1, "ID", True
@@ -423,6 +432,278 @@ Private Sub SetupStanice()
     cmbField1.AddItem "Da"
     AlignControlToRow cmbField1, txtField7
 End Sub
+
+Private Sub SetupKorisnici()
+    ResetFieldVisibility
+    RemoveKorisniciOblasti          ' ukloni eventualne stare dinamicke oblasti kontrole
+
+    Me.caption = "Korisnici"
+
+    On Error Resume Next
+    StyleFrameTitleLabel lblTitle, "KORISNICI"
+    StyleSubtitle lblSubtitle, "Prijava i prava pristupa po oblasti (admin + korisnici)"
+    On Error GoTo 0
+
+    m_TableName = TBL_KORISNICI
+
+    ' Display-headeri (lista). CRUD se radi po IMENU kolone (drift-safe),
+    ' ne pozicijski - jer tblKorisnici ima i 9 kolona oblasti (DA/NE).
+    m_Headers = Array( _
+        COL_KOR_ID, _
+        COL_KOR_USERNAME, _
+        COL_KOR_IME, _
+        COL_KOR_ULOGA, _
+        COL_KOR_AKTIVAN, _
+        "Oblasti" _
+    )
+
+    m_FieldCount = 6
+
+    ' Leva kolona: tekstualna polja (ime/PIN) + 3 dropdowna (Uloga/Aktivan/Stanica).
+    lblField1.caption = Poruka("KOR_LBL_KORISNICKO_IME"): lblField1.Visible = True: txtField1.Visible = True
+    lblField2.caption = "Ime i prezime": lblField2.Visible = True: txtField2.Visible = True
+    lblField3.caption = "PIN (izmena: prazno=isti)": lblField3.Visible = True: txtField3.Visible = True
+    lblField4.caption = "Uloga": lblField4.Visible = True: cmbField1.Visible = True
+    lblField5.caption = "Aktivan": lblField5.Visible = True: cmbField2.Visible = True
+    lblField6.caption = "Stanica": lblField6.Visible = True: cmbField3.Visible = True
+
+    ' Labele bez preloma u dva reda.
+    Dim li As Long
+    For li = 1 To 6
+        Me.Controls("lblField" & li).WordWrap = False
+    Next li
+
+    ' Uloga (Admin/Korisnik) -- dropdown na redu txtField4.
+    cmbField1.Clear
+    cmbField1.ColumnCount = 1
+    cmbField1.AddItem ULOGA_ADMIN
+    cmbField1.AddItem ULOGA_KORISNIK
+    cmbField1.style = fmStyleDropDownList
+    AlignControlToRow cmbField1, txtField4
+
+    ' Aktivan (DA/NE) -- dropdown na redu txtField5.
+    cmbField2.Clear
+    cmbField2.ColumnCount = 1
+    cmbField2.AddItem "DA"
+    cmbField2.AddItem "NE"
+    cmbField2.style = fmStyleDropDownList
+    AlignControlToRow cmbField2, txtField5
+
+    ' Stanica (Naziv + skriveni StanicaID, opciono) -- dropdown na redu txtField6.
+    LoadStaniceIntoCombo cmbField3
+    cmbField3.AddItem "", 0          ' prazno = bez stanice (opciono)
+    cmbField3.style = fmStyleDropDownList
+    AlignControlToRow cmbField3, txtField6
+
+    ' Desna kolona: oblasti kao DA/NE dropdown (Model A, eksplicitno).
+    BuildKorisniciOblasti
+
+    ' Podrazumevano za NOVOG korisnika: Korisnik + Aktivan, sve oblasti NE.
+    ' (Admin se bira rucno -> ApplyAdminOblastiLock postavi sve na DA i zakljuca.)
+    KorisniciSetDefaults
+End Sub
+
+' Podrazumevano stanje editora za NOVOG korisnika: uloga Korisnik, Aktivan DA,
+' sve oblasti NE (i otkljucane). Admin se bira rucno (cmbField1_Change -> DA+lock).
+Private Sub KorisniciSetDefaults()
+    On Error GoTo EH
+    cmbField1.value = ULOGA_KORISNIK
+    cmbField2.value = "DA"
+
+    Dim o As Variant, cb As MSForms.ComboBox
+    For Each o In modAuth.OblastiList()
+        Set cb = Nothing
+        On Error Resume Next                       ' kontrola mozda jos nije izgradjena
+        Set cb = Me.Controls("cmbObl_" & CStr(o))
+        On Error GoTo EH
+        If Not cb Is Nothing Then
+            cb.Locked = False
+            cb.value = "NE"
+        End If
+    Next o
+    Exit Sub
+EH:
+    LogErr "frmStammdaten.KorisniciSetDefaults"
+End Sub
+
+' --- Korisnici helperi (prava po oblasti, Model A) ---
+Private Function NormalizeUloga(ByVal v As String) As String
+    If StrComp(Trim$(v), ULOGA_ADMIN, vbTextCompare) = 0 Then
+        NormalizeUloga = ULOGA_ADMIN
+    Else
+        NormalizeUloga = ULOGA_KORISNIK
+    End If
+End Function
+
+' "DA"/"NE" za datu oblast iz desne kolone dropdowna: Admin -> uvek DA
+' (bypass, isto kao modAuth.KorisnikImaPravo); inace vrednost iz cmbObl_<oblast>.
+Private Function OblComboVal(ByVal isAdmin As Boolean, ByVal oblast As String) As String
+    If isAdmin Then
+        OblComboVal = "DA"
+        Exit Function
+    End If
+
+    Dim cb As MSForms.ComboBox
+    On Error Resume Next
+    Set cb = Me.Controls("cmbObl_" & oblast)
+    On Error GoTo 0
+
+    If cb Is Nothing Then
+        OblComboVal = "NE"
+    ElseIf StrComp(Trim$(cb.value), "DA", vbTextCompare) = 0 Then
+        OblComboVal = "DA"
+    Else
+        OblComboVal = "NE"
+    End If
+End Function
+
+' "DA"/"NE" za datu oblast iz reda tabele (za punjenje dropdowna pri izboru).
+Private Function OblastValueFromRow(ByVal data As Variant, ByVal rowIdx As Long, ByVal oblast As String) As String
+    Dim ci As Long
+    ci = GetColumnIndex(TBL_KORISNICI, oblast)
+    If ci > 0 Then
+        If StrComp(Trim$(NzToText(data(rowIdx, ci))), "DA", vbTextCompare) = 0 Then
+            OblastValueFromRow = "DA"
+        Else
+            OblastValueFromRow = "NE"
+        End If
+    Else
+        OblastValueFromRow = "NE"
+    End If
+End Function
+
+' Prikaz naziva oblasti (dijakritika kroz ChrW -- izvor ostaje ASCII; kolone
+' u tblKorisnici su ASCII konstante OBL_*). Prikaz != naziv kolone.
+Private Function OblastCaption(ByVal oblast As String) As String
+    Select Case oblast
+        Case OBL_IZVESTAJI:    OblastCaption = "Izve" & ChrW(353) & "taji"
+        Case OBL_MARZA:        OblastCaption = "Mar" & ChrW(382) & "a"
+        Case OBL_MATICNI:      OblastCaption = "Mati" & ChrW(269) & "ni podaci"
+        Case OBL_OTVORI_EXCEL: OblastCaption = "Otvori Excel"
+        Case OBL_SYNC_PWA:     OblastCaption = "Sinhronizuj PWA"
+        Case Else:             OblastCaption = oblast
+    End Select
+End Function
+
+' Desna kolona Korisnici editora: po jedan DA/NE dropdown za svaku oblast
+' (Model A). Kontrole su dinamicke (Controls.Add) jer .frx ima samo cmbField1..6;
+' forma se po sekciji Unload-uje (frmMaticniPodaci.OpenSekcija) pa ne cure dalje.
+Private Sub BuildKorisniciOblasti()
+    On Error GoTo EH
+
+    Dim oblasti As Variant
+    oblasti = modAuth.OblastiList()
+
+    ' Geometrija reda iz txtField1 (pouzdano poravnat u .frx).
+    Dim rowH As Single
+    rowH = txtField1.Height
+    If rowH < 15 Then rowH = 18
+
+    Const ROWGAP As Single = 4
+    Const LBLW As Single = 124      ' prostor za naziv oblasti
+    Const LBLGAP As Single = 16     ' razmak labela -> combo (da cmb ne pada preko labele)
+    Const CMBW As Single = 86       ' siri combo (citljiviji DA/NE)
+    Const COLGAP As Single = 190    ' jos vise desno od leve kolone polja
+
+    ' Desna kolona pocinje desno od leve kolone polja.
+    Dim colX As Single
+    colX = txtField1.Left + txtField1.width + COLGAP
+
+    ' Prvi combo se ravna sa poljem "Korisnicko ime" (txtField1); header tik iznad.
+    Dim firstTop As Single
+    firstTop = txtField1.top
+
+    ' Header tik iznad prvog reda; clamp da ne isklizne iznad forme.
+    Dim hdrTop As Single
+    hdrTop = firstTop - rowH - 2
+    If hdrTop < 4 Then hdrTop = 4
+
+    Dim hdr As MSForms.label
+    Set hdr = Me.Controls.Add("Forms.Label.1", "lblOblHdr", True)
+    hdr.Left = colX
+    hdr.top = hdrTop
+    hdr.width = LBLW + LBLGAP + CMBW
+    hdr.Height = rowH
+    hdr.caption = "OBLASTI (pristup)"
+    hdr.WordWrap = False
+    StyleLabel hdr, TXT_MUTED(), True
+    hdr.Font.Size = FONT_SIZE_SMALL
+    hdr.Font.Bold = True
+
+    Dim yy As Single
+    yy = firstTop
+
+    Dim k As Long, oname As String
+    Dim lb As MSForms.label, cb As MSForms.ComboBox
+    For k = LBound(oblasti) To UBound(oblasti)
+        oname = CStr(oblasti(k))
+
+        Set lb = Me.Controls.Add("Forms.Label.1", "lblObl_" & oname, True)
+        lb.Left = colX
+        lb.top = yy + 2
+        lb.width = LBLW
+        lb.Height = rowH
+        lb.caption = OblastCaption(oname)
+        lb.WordWrap = False
+        StyleLabel lb, TXT_MUTED(), False
+        lb.Font.Size = FONT_SIZE_SMALL
+
+        Set cb = Me.Controls.Add("Forms.ComboBox.1", "cmbObl_" & oname, True)
+        cb.Left = colX + LBLW + LBLGAP
+        cb.top = yy
+        cb.width = CMBW
+        cb.Height = rowH
+        cb.Clear
+        cb.AddItem "DA"
+        cb.AddItem "NE"
+        cb.style = fmStyleDropDownList
+        cb.value = "NE"
+
+        yy = yy + rowH + ROWGAP
+    Next k
+
+    ' Prosiri formu ako desna kolona prelazi vidljivu sirinu.
+    Dim needW As Single
+    needW = colX + LBLW + LBLGAP + CMBW + 24
+    If Me.InsideWidth < needW Then
+        Me.width = Me.width + (needW - Me.InsideWidth)
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmStammdaten.BuildKorisniciOblasti"
+End Sub
+
+' Ukloni dinamicke oblasti kontrole (idempotentno).
+Private Sub RemoveKorisniciOblasti()
+    On Error Resume Next
+    Dim oblasti As Variant
+    oblasti = modAuth.OblastiList()
+    Dim k As Long
+    For k = LBound(oblasti) To UBound(oblasti)
+        Me.Controls.Remove "lblObl_" & CStr(oblasti(k))
+        Me.Controls.Remove "cmbObl_" & CStr(oblasti(k))
+    Next k
+    Me.Controls.Remove "lblOblHdr"
+    On Error GoTo 0
+End Sub
+
+' CSV dozvoljenih oblasti iz reda tabele (kolone gde je vrednost "DA").
+Private Function OblastiCsvFromRow(ByVal data As Variant, ByVal rowIdx As Long) As String
+    Dim res As String
+    Dim obl As Variant
+    Dim ci As Long
+    For Each obl In modAuth.OblastiList()
+        ci = GetColumnIndex(TBL_KORISNICI, CStr(obl))
+        If ci > 0 Then
+            If StrComp(Trim$(NzToText(data(rowIdx, ci))), "DA", vbTextCompare) = 0 Then
+                If Len(res) > 0 Then res = res & ", "
+                res = res & OblastCaption(CStr(obl))   ' prikaz sa dijakritikom
+            End If
+        End If
+    Next obl
+    OblastiCsvFromRow = res
+End Function
 
 Private Sub SetupKupci()
     ResetFieldVisibility
@@ -1212,6 +1493,39 @@ Private Sub LoadList()
                 End If
             Next i
 
+        Case "Korisnici"
+            lstData.ColumnCount = 6
+
+            Dim koID As Long, koU As Long, koIme As Long, koUl As Long, koAk As Long
+            koID = GetColumnIndex(TBL_KORISNICI, COL_KOR_ID)
+            koU = GetColumnIndex(TBL_KORISNICI, COL_KOR_USERNAME)
+            koIme = GetColumnIndex(TBL_KORISNICI, COL_KOR_IME)
+            koUl = GetColumnIndex(TBL_KORISNICI, COL_KOR_ULOGA)
+            koAk = GetColumnIndex(TBL_KORISNICI, COL_KOR_AKTIVAN)
+
+            If koID = 0 Or koU = 0 Then
+                Err.Raise vbObjectError + 7211, "frmStammdaten.LoadList", _
+                          "Nedostaju kolone u tblKorisnici."
+            End If
+
+            For i = 1 To UBound(data, 1)
+                If Trim$(NzToText(data(i, koID))) <> "" Then
+                    AddRowMap i
+
+                    lstData.AddItem NzToText(data(i, koID))
+                    lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, koU))
+                    lstData.List(lstData.ListCount - 1, 2) = NzToText(data(i, koIme))
+                    lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, koUl))
+                    lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, koAk))
+
+                    If StrComp(Trim$(NzToText(data(i, koUl))), ULOGA_ADMIN, vbTextCompare) = 0 Then
+                        lstData.List(lstData.ListCount - 1, 5) = "SVE (admin)"
+                    Else
+                        lstData.List(lstData.ListCount - 1, 5) = OblastiCsvFromRow(data, i)
+                    End If
+                End If
+            Next i
+
         Case Else
             lstData.ColumnCount = UBound(m_Headers) - LBound(m_Headers) + 1
             maxCols = lstData.ColumnCount
@@ -1281,6 +1595,38 @@ Private Sub lstData_Click()
             txtField5.value = lstData.List(lstData.ListIndex, 6) ' Prezime
             txtField6.value = lstData.List(lstData.ListIndex, 7) ' Pin
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 8) ' JeHladnjaca
+
+        Case "Korisnici"
+            data = GetTableData(m_TableName)
+            If IsEmpty(data) Then Exit Sub
+
+            Dim ciU As Long, ciIme As Long, ciPin As Long, ciUl As Long, ciAk As Long, ciSt As Long
+            ciU = GetColumnIndex(TBL_KORISNICI, COL_KOR_USERNAME)
+            ciIme = GetColumnIndex(TBL_KORISNICI, COL_KOR_IME)
+            ciPin = GetColumnIndex(TBL_KORISNICI, COL_KOR_PIN)
+            ciUl = GetColumnIndex(TBL_KORISNICI, COL_KOR_ULOGA)
+            ciAk = GetColumnIndex(TBL_KORISNICI, COL_KOR_AKTIVAN)
+            ciSt = GetColumnIndex(TBL_KORISNICI, COL_KOR_STANICA)
+
+            txtField1.value = NzToText(data(m_SelectedRow, ciU))
+            txtField2.value = NzToText(data(m_SelectedRow, ciIme))
+            txtField3.value = ""   ' PIN se ne prikazuje; prazno pri izmeni = bez promene
+            SafeSetCombo cmbField1, NzToText(data(m_SelectedRow, ciUl))                ' Uloga
+            SafeSetCombo cmbField2, IIf(UCase$(Trim$(NzToText(data(m_SelectedRow, ciAk)))) = "NE", "NE", "DA")  ' Aktivan
+            ' Stanica: prikazi Naziv iz sacuvanog StanicaID (skrivena kolona = ID).
+            SafeSetCombo cmbField3, CStr(LookupValue(TBL_STANICE, "StanicaID", NzToText(data(m_SelectedRow, ciSt)), "Naziv"))
+
+            ' Oblasti -- desni DA/NE dropdowni iz reda tabele.
+            Dim oblSel As Variant, cbSel As MSForms.ComboBox
+            For Each oblSel In modAuth.OblastiList()
+                Set cbSel = Nothing
+                On Error Resume Next
+                Set cbSel = Me.Controls("cmbObl_" & CStr(oblSel))
+                On Error GoTo 0
+                If Not cbSel Is Nothing Then
+                    SafeSetCombo cbSel, OblastValueFromRow(data, m_SelectedRow, CStr(oblSel))
+                End If
+            Next oblSel
 
         Case "Kupci"
             data = GetTableData(m_TableName)
@@ -1368,6 +1714,13 @@ End Sub
 ' ima drugu ulogu, pa tu ne radimo nista.
 Private Sub cmbField1_Change()
     On Error Resume Next
+
+    ' Korisnici: uloga Admin -> sve oblasti DA i zakljucane (admin vidi sve).
+    If Me.Tag = "Korisnici" Then
+        ApplyAdminOblastiLock
+        Exit Sub
+    End If
+
     If Me.Tag <> "Cenovnik" Then Exit Sub
 
     Dim trenutnaSorta As String
@@ -1382,6 +1735,34 @@ Private Sub cmbField1_Change()
     If Len(trenutnaSorta) > 0 Then SafeSetCombo cmbField2, trenutnaSorta
 End Sub
 
+' Uloga Admin -> sve oblasti DA i zakljucane (bypass kao modAuth.KorisnikImaPravo);
+' Korisnik -> otkljucaj da admin moze birati po oblasti. Idempotentno; bez efekta
+' dok desni dropdowni jos nisu izgradjeni (BuildKorisniciOblasti).
+Private Sub ApplyAdminOblastiLock()
+    On Error GoTo EH
+    Dim isAdmin As Boolean
+    isAdmin = (StrComp(Trim$(cmbField1.value), ULOGA_ADMIN, vbTextCompare) = 0)
+
+    Dim oblLock As Variant, cbL As MSForms.ComboBox
+    For Each oblLock In modAuth.OblastiList()
+        Set cbL = Nothing
+        On Error Resume Next                       ' kontrola mozda jos nije izgradjena
+        Set cbL = Me.Controls("cmbObl_" & CStr(oblLock))
+        On Error GoTo EH
+        If Not cbL Is Nothing Then
+            If isAdmin Then
+                cbL.value = "DA"
+                cbL.Locked = True
+            Else
+                cbL.Locked = False
+            End If
+        End If
+    Next oblLock
+    Exit Sub
+EH:
+    LogErr "frmStammdaten.ApplyAdminOblastiLock"
+End Sub
+
 ' ============================================================
 ' HINZUFUeGEN
 ' ============================================================
@@ -1389,9 +1770,12 @@ End Sub
 Private Sub btnDodaj_Click()
     On Error GoTo EH
 
+    Const SRC As String = "frmStammdaten.btnDodaj_Click"
+
     Dim rowData As Variant
     Dim newID As String
     Dim stanicaID As String
+    Dim korTx As clsTransaction          ' Korisnici: atomican upis (rollback na gresku)
 
     Select Case Me.Tag
 
@@ -1468,6 +1852,76 @@ Private Sub btnDodaj_Click()
                 Trim$(txtField6.value), _
                 IIf(Trim$(cmbField1.value) = "", "Ne", Trim$(cmbField1.value)) _
             )
+
+        Case "Korisnici"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox Poruka("KOR_MSG_UNESITE_IME"), vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            If Trim$(txtField3.value) = "" Then
+                MsgBox "Unesite PIN!", vbExclamation, APP_NAME
+                txtField3.SetFocus
+                Exit Sub
+            End If
+
+            Dim postojiKor As Variant
+            postojiKor = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
+            If Not IsEmpty(postojiKor) Then
+                If Len(Trim$(CStr(postojiKor))) > 0 Then
+                    MsgBox "Korisnik '" & Trim$(txtField1.value) & Poruka("KOR_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
+                    Exit Sub
+                End If
+            End If
+
+            Dim ulogaDodaj As String
+            ulogaDodaj = NormalizeUloga(cmbField1.value)
+
+            Dim admDodaj As Boolean
+            admDodaj = (StrComp(ulogaDodaj, ULOGA_ADMIN, vbTextCompare) = 0)
+
+            Dim aktivDodaj As String
+            If UCase$(Trim$(cmbField2.value)) = "NE" Then aktivDodaj = "NE" Else aktivDodaj = "DA"
+
+            ' Upis PO IMENU u TRANSAKCIJI (atomicno; rollback uklanja delimican red
+            ' ako neki upis padne). tblKorisnici ima vise kolona oblasti + audit
+            ' kolone pa pozicijski AppendRow nije pouzdan (nove oblasti se dodaju
+            ' posle audit kolona). Isti obrazac kao btnIzmeni (RequireUpdateCell).
+            Dim korNewID As String
+            korNewID = GetNextID(m_TableName, COL_KOR_ID, "KOR-")
+
+            Set korTx = New clsTransaction
+            korTx.BeginTx
+            korTx.AddTableSnapshot m_TableName
+
+            Dim korEmpty() As Variant
+            ReDim korEmpty(1 To GetTable(m_TableName).ListColumns.count)
+            Dim korIdx As Long
+            korIdx = AppendRow(m_TableName, korEmpty)
+            If korIdx = 0 Then Err.Raise vbObjectError + 9500, SRC, "AppendRow nije uspeo."
+
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_ID, korNewID, SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_IME, Trim$(txtField2.value), SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_ULOGA, ulogaDodaj, SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_AKTIVAN, aktivDodaj, SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_STANICA, GetSelectedComboHiddenID(cmbField3), SRC
+            RequireUpdateCell m_TableName, korIdx, COL_KOR_CREATED, Format$(Now, "yyyy-mm-dd hh:nn:ss"), SRC
+
+            Dim oblDod As Variant
+            For Each oblDod In modAuth.OblastiList()
+                RequireUpdateCell m_TableName, korIdx, CStr(oblDod), OblComboVal(admDodaj, CStr(oblDod)), SRC
+            Next oblDod
+
+            korTx.CommitTx
+
+            MsgBox "Dodato: " & korNewID, vbInformation, APP_NAME
+            LoadList
+            ClearFields
+            KorisniciSetDefaults
+            Exit Sub
 
         Case "Kupci"
             If Trim$(txtField1.value) = "" Then
@@ -1847,6 +2301,7 @@ Private Sub btnDodaj_Click()
     Exit Sub
 
 EH:
+    If Not korTx Is Nothing Then korTx.RollbackTx   ' ukloni delimican red (Korisnici)
     LogErr "frmStammdaten.btnDodaj_Click"
     MsgBox Poruka("STM_ERR_GRESKA_PRI_DODAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
@@ -1943,6 +2398,53 @@ Private Sub btnIzmeni_Click()
             UpdateFirstExistingCol SRC, Trim$(txtField5.value), "Prezime", "KontaktPrezime"
             UpdateFirstExistingCol SRC, Trim$(txtField6.value), "PIN", "Pin"
             UpdateFirstExistingCol SRC, Trim$(cmbField1.value), COL_STA_JE_HLADNJACA
+
+            tx.CommitTx
+
+        Case "Korisnici"
+            If Trim$(txtField1.value) = "" Then
+                MsgBox Poruka("KOR_MSG_UNESITE_IME"), vbExclamation, APP_NAME
+                txtField1.SetFocus
+                Exit Sub
+            End If
+
+            ' Spreci duplikat korisnickog imena (drugi red sa istim username-om).
+            Dim dupIzm As Variant, curIDIzm As String
+            curIDIzm = Trim$(lstData.List(lstData.ListIndex, 0))   ' ID reda koji se menja
+            dupIzm = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
+            If Not IsEmpty(dupIzm) Then
+                If Len(Trim$(CStr(dupIzm))) > 0 And StrComp(Trim$(CStr(dupIzm)), curIDIzm, vbTextCompare) <> 0 Then
+                    MsgBox "Korisnik '" & Trim$(txtField1.value) & Poruka("KOR_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
+                    Exit Sub
+                End If
+            End If
+
+            tx.BeginTx
+            tx.AddTableSnapshot m_TableName
+
+            Dim ulogaIzm As String
+            ulogaIzm = NormalizeUloga(cmbField1.value)
+
+            Dim admIzm As Boolean
+            admIzm = (StrComp(ulogaIzm, ULOGA_ADMIN, vbTextCompare) = 0)
+
+            Dim aktivIzm As String
+            If UCase$(Trim$(cmbField2.value)) = "NE" Then aktivIzm = "NE" Else aktivIzm = "DA"
+
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_IME, Trim$(txtField2.value), SRC
+            If Len(Trim$(txtField3.value)) > 0 Then
+                RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
+            End If
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_ULOGA, ulogaIzm, SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_AKTIVAN, aktivIzm, SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_STANICA, GetSelectedComboHiddenID(cmbField3), SRC
+
+            Dim oblIzm As Variant
+            For Each oblIzm In modAuth.OblastiList()
+                RequireUpdateCell m_TableName, m_SelectedRow, CStr(oblIzm), _
+                                  OblComboVal(admIzm, CStr(oblIzm)), SRC
+            Next oblIzm
 
             tx.CommitTx
 
@@ -2825,15 +3327,18 @@ EH:
     ExtractIDFromDisplaySafe = ""
 End Function
 
-Private Sub LoadStaniceIntoCombo()
+Private Sub LoadStaniceIntoCombo(Optional ByRef cmb As MSForms.ComboBox)
     On Error GoTo EH
+
+    ' Podrazumevano cmbField1 (Kooperanti); Korisnici prosledjuje cmbField3.
+    If cmb Is Nothing Then Set cmb = cmbField1
 
     Dim data As Variant
     Dim i As Long
 
-    cmbField1.Clear
-    cmbField1.ColumnCount = 2
-    cmbField1.ColumnWidths = "150 pt;0 pt"
+    cmb.Clear
+    cmb.ColumnCount = 2
+    cmb.ColumnWidths = "150 pt;0 pt"
 
     data = GetTableData(TBL_STANICE)
     If IsEmpty(data) Then Exit Sub
@@ -2851,8 +3356,8 @@ Private Sub LoadStaniceIntoCombo()
 
     For i = 1 To UBound(data, 1)
         If Trim$(NzToText(data(i, colID))) <> "" Then
-            cmbField1.AddItem NzToText(data(i, colNaziv))
-            cmbField1.List(cmbField1.ListCount - 1, 1) = NzToText(data(i, colID))
+            cmb.AddItem NzToText(data(i, colNaziv))
+            cmb.List(cmb.ListCount - 1, 1) = NzToText(data(i, colID))
         End If
     Next i
 

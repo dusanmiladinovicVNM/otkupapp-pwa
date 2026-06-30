@@ -127,6 +127,7 @@ Public Function AppendRow(ByVal tblName As String, ByVal rowData As Variant) As 
     Next i
     
     AppendRow = newRow.index
+    StampRowAudit lo, newRow.index, True
     WriteJournalRow tblName, rowData
     Exit Function
     
@@ -154,11 +155,75 @@ Public Function UpdateCell(ByVal tblName As String, ByVal rowIndex As Long, _
     
     On Error GoTo ErrHandler
     lo.DataBodyRange.cells(rowIndex, colIdx).value = newValue
+    StampRowAudit lo, rowIndex, False
     UpdateCell = True
     Exit Function
-    
+
 ErrHandler:
     UpdateCell = False
+End Function
+
+' ============================================================
+' Audit stamp (timestamp + userstamp) - centralno za AppendRow/UpdateCell.
+' Upisuje direktno u celije (ne preko UpdateCell) -> nema rekurzije.
+' No-op ako tabela nema audit kolone (npr. config/report tabele).
+' Userstamp: prijavljeni korisnik (modAuth) -> fallback Windows nalog.
+' ============================================================
+Private Sub StampRowAudit(ByVal lo As ListObject, ByVal rowIndex As Long, ByVal isInsert As Boolean)
+    On Error Resume Next
+
+    If lo Is Nothing Then Exit Sub
+    If lo.DataBodyRange Is Nothing Then Exit Sub
+    If rowIndex < 1 Then Exit Sub
+
+    Dim cCA As Long, cCB As Long, cMA As Long, cMB As Long
+    cCA = LoColIdx(lo, COL_AUDIT_CREATED_AT)
+    cCB = LoColIdx(lo, COL_AUDIT_CREATED_BY)
+    cMA = LoColIdx(lo, COL_AUDIT_MODIFIED_AT)
+    cMB = LoColIdx(lo, COL_AUDIT_MODIFIED_BY)
+    If cCA = 0 And cCB = 0 And cMA = 0 And cMB = 0 Then Exit Sub
+
+    Dim ts As String, usr As String
+    ts = Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    usr = AuditUser()
+
+    ' Created* samo na insert i samo ako je prazno (ne gazi eksplicitnu vrednost).
+    If isInsert Then
+        If cCA > 0 Then
+            If Len(Trim$(CStr(lo.DataBodyRange.cells(rowIndex, cCA).value))) = 0 Then _
+                lo.DataBodyRange.cells(rowIndex, cCA).value = ts
+        End If
+        If cCB > 0 Then
+            If Len(Trim$(CStr(lo.DataBodyRange.cells(rowIndex, cCB).value))) = 0 Then _
+                lo.DataBodyRange.cells(rowIndex, cCB).value = usr
+        End If
+    End If
+
+    ' Modified* uvek (i na insert i na izmenu).
+    If cMA > 0 Then lo.DataBodyRange.cells(rowIndex, cMA).value = ts
+    If cMB > 0 Then lo.DataBodyRange.cells(rowIndex, cMB).value = usr
+End Sub
+
+' Indeks kolone po imenu UNUTAR datog ListObject-a (bez ponovnog trazenja tabele).
+Private Function LoColIdx(ByVal lo As ListObject, ByVal colName As String) As Long
+    On Error Resume Next
+    Dim i As Long
+    For i = 1 To lo.ListColumns.count
+        If StrComp(Trim$(lo.ListColumns(i).name), Trim$(colName), vbTextCompare) = 0 Then
+            LoColIdx = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Userstamp: prijavljeni app-korisnik (kad je AUTH ukljucen) -> Windows nalog -> "Operator".
+Private Function AuditUser() As String
+    On Error Resume Next
+    Dim u As String
+    u = modAuth.GetCurrentUser()
+    If Len(Trim$(u)) = 0 Then u = Environ$("USERNAME")
+    If Len(Trim$(u)) = 0 Then u = "Operator"
+    AuditUser = u
 End Function
 
 Public Function FindRows(ByVal tblName As String, ByVal colName As String, _

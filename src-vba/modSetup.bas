@@ -772,6 +772,63 @@ EH:
 End Sub
 
 ' ============================================================
+' Audit kolone (timestamp + userstamp) na svim glavnim tabelama.
+' Idempotentno. Alt+F8 -> EnsureAuditColumns.
+' Posle ovoga modDataAccess.AppendRow/UpdateCell automatski upisuju
+' CreatedAt/CreatedBy (na unos) i ModifiedAt/ModifiedBy (na svaku izmenu) -
+' vidi se KO je i KADA radio. Userstamp: prijavljeni korisnik (AUTH) ili Windows nalog.
+' ============================================================
+Public Sub EnsureAuditColumns()
+    On Error GoTo EH
+
+    Dim n As Long
+    n = EnsureAuditColumnsCore()
+
+    MsgBox "Audit kolone postavljene na " & n & Poruka("AUD_MSG_KOLONE_SUFIX"), _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureAuditColumns failed: " & Err.description
+    MsgBox "Greska u EnsureAuditColumns: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Silent worker (bez MsgBox-a) -- vraca broj obradjenih tabela. Reuse iz
+' migracije (modMigracija) gde ne zelimo popup usred toka kopiranja.
+Public Function EnsureAuditColumnsCore() As Long
+    InitSetupLog
+
+    Dim tbls As Variant
+    tbls = AuditableTables()
+
+    Dim i As Long, n As Long
+    For i = LBound(tbls) To UBound(tbls)
+        If Not GetTable(CStr(tbls(i))) Is Nothing Then
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_AT
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_BY
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_AT
+            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_BY
+            n = n + 1
+        End If
+    Next i
+
+    LogSetup "OK", "EnsureAuditColumns done (" & n & " tabela)"
+    EnsureAuditColumnsCore = n
+End Function
+
+' Spisak tabela koje dobijaju audit kolone (master + transakcione + ledger).
+' Config/log/report tabele se namerno preskacu.
+Private Function AuditableTables() As Variant
+    AuditableTables = Array( _
+        TBL_KOOPERANTI, TBL_STANICE, TBL_VOZACI, TBL_KUPCI, TBL_KULTURE, _
+        TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
+        TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_NOVAC, TBL_AMBALAZA, _
+        TBL_PARCELE, TBL_ARTIKLI, TBL_MAGACIN, TBL_CENOVNIK, TBL_KORISNICI, _
+        TBL_PALETA, TBL_PALETA_STAVKA, TBL_PRERADA, TBL_PRERADA_STAVKA, _
+        TBL_TIP_AMBALAZE, TBL_TIP_PALETE, TBL_PARTNER_MAP, TBL_BANKA_IMPORT)
+End Function
+
+' ============================================================
 ' Poruke (resource table) -- idempotent.
 ' Creates tblPoruke on hidden sheet sPoruke and seeds strings.
 ' Alt+F8 -> EnsurePoruke.
@@ -896,6 +953,218 @@ Private Sub SetColumnNumberFormat(ByVal tblName As String, ByVal colName As Stri
     If col Is Nothing Then Exit Sub
     col.DataBodyRange.NumberFormat = fmt
 End Sub
+
+' ============================================================
+' Korisnici (Faza 1) - admin + prava po oblasti. Idempotentni schema setup.
+' Model A: jedan red = korisnik; kolona po oblasti = "DA"/"NE". Admin = bypass.
+' Reuse: EnsureDataTable / EnsureColumnOnTable (schema-drift safe).
+' Pokreni JEDNOM: Alt+F8 -> EnsureKorisniciSchema (ili KreirajPrvogAdmina).
+' ============================================================
+Public Sub EnsureKorisniciSchema()
+    On Error GoTo EH
+
+    EnsureDataTable TBL_KORISNICI, "Korisnici", _
+        Array(COL_KOR_ID, COL_KOR_USERNAME, COL_KOR_IME, COL_KOR_PIN, _
+              COL_KOR_ULOGA, COL_KOR_AKTIVAN, COL_KOR_STANICA, COL_KOR_CREATED, _
+              OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
+              OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI, _
+              OBL_PALETE, OBL_OTVORI_EXCEL, OBL_SYNC_PWA)
+
+    LogSetup "OK", "EnsureKorisniciSchema done"
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureKorisniciSchema failed: " & Err.description
+    Err.Raise Err.Number, "EnsureKorisniciSchema", Err.description
+End Sub
+
+' Kreira prvog ADMINA (sa svim pravima). Bezbedan bootstrap protiv lockout-a:
+' prijava se ukljucuje tek posle ovoga (EnableAuth proverava da admin postoji).
+' Alt+F8 -> KreirajPrvogAdmina.
+Public Sub KreirajPrvogAdmina()
+    On Error GoTo EH
+
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_KREIRA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    EnsureKorisniciSchema
+
+    Dim u As String, pin As String, ime As String
+    u = Trim$(InputBox("Korisnicko ime za ADMINA:", APP_NAME, "admin"))
+    If Len(u) = 0 Then Exit Sub
+    pin = Trim$(InputBox("PIN za '" & u & "':", APP_NAME))
+    If Len(pin) = 0 Then Exit Sub
+    ime = Trim$(InputBox("Ime i prezime (opciono):", APP_NAME))
+
+    ' Spreci duplikat username-a
+    Dim postoji As Variant
+    postoji = LookupValue(TBL_KORISNICI, COL_KOR_USERNAME, u, COL_KOR_ID)
+    If Not IsEmpty(postoji) Then
+        If Len(Trim$(CStr(postoji))) > 0 Then
+            MsgBox "Korisnik '" & u & Poruka("AUTH_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
+    Dim newId As String
+    newId = GetNextID(TBL_KORISNICI, COL_KOR_ID, "KOR-")
+
+    Dim colCount As Long
+    colCount = GetTable(TBL_KORISNICI).ListColumns.count
+
+    Dim rowData() As Variant
+    ReDim rowData(1 To colCount)
+
+    Dim idx As Long
+    idx = AppendRow(TBL_KORISNICI, rowData)
+    If idx = 0 Then Err.Raise vbObjectError + 9400, "KreirajPrvogAdmina", "AppendRow nije uspeo."
+
+    ' Upis po imenu (drift-safe, CLAUDE.md)
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_ID, newId
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_USERNAME, u
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_IME, ime
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_PIN, modAuth.PreparePin(pin)
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_ULOGA, ULOGA_ADMIN
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_AKTIVAN, "DA"
+    UpdateCell TBL_KORISNICI, idx, COL_KOR_CREATED, Format$(Now, "yyyy-mm-dd hh:nn:ss")
+
+    ' Admin svejedno bypass-uje; setujemo DA radi preglednosti u gridu.
+    Dim obl As Variant
+    For Each obl In modAuth.OblastiList()
+        UpdateCell TBL_KORISNICI, idx, CStr(obl), "DA"
+    Next obl
+
+    MsgBox "Admin '" & u & Poruka("AUTH_MSG_ADMIN_KREIRAN"), _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "KreirajPrvogAdmina failed: " & Err.description
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Ukljuci prijavu korisnika (AUTH_ENABLED=YES). Mirror EnableDesktopOnlyMode.
+' Bezbednost: ne dozvoljava ukljucivanje bez bar jednog AKTIVNOG admina.
+' Alt+F8 -> EnableAuth.
+Public Sub EnableAuth()
+    On Error GoTo EH
+
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_PRIJAVA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If Not PostojiAktivanAdmin() Then
+        MsgBox Poruka("AUTH_MSG_NEMA_ADMINA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    SetConfigValue CFG_KEY_AUTH_ENABLED, "YES"
+    InitSetupLog
+    LogSetup "OK", "AUTH_ENABLED = YES"
+    MsgBox Poruka("AUTH_MSG_PRIJAVA_UKLJUCENA"), vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox Poruka("AUTH_ERR_NE_MOGU_UKLJUCITI") & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Iskljuci prijavu (AUTH_ENABLED=NO). Alt+F8 -> DisableAuth.
+Public Sub DisableAuth()
+    On Error GoTo EH
+
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_ISKLJUCI"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    SetConfigValue CFG_KEY_AUTH_ENABLED, "NO"
+    InitSetupLog
+    LogSetup "OK", "AUTH_ENABLED = NO"
+    MsgBox Poruka("AUTH_MSG_PRIJAVA_ISKLJUCENA"), vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Ukljuci PIN hash (opt-in). Self-test SHA pre ukljucenja. Alt+F8 -> EnablePinHash.
+Public Sub EnablePinHash()
+    On Error GoTo EH
+
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_PINHASH"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If StrComp(modAuth.Sha256Hex("abc"), _
+               "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", _
+               vbTextCompare) <> 0 Then
+        MsgBox Poruka("AUTH_ERR_SHA_NE_RADI"), vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    SetConfigValue CFG_KEY_PIN_HASH_ENABLED, "YES"
+    InitSetupLog
+    LogSetup "OK", "PIN_HASH_ENABLED = YES"
+    MsgBox Poruka("AUTH_MSG_PINHASH_UKLJUCEN"), vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Iskljuci PIN hash. Vec hesirani PIN-ovi i dalje rade (prijava ih prepoznaje).
+Public Sub DisablePinHash()
+    On Error GoTo EH
+
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_PINHASH"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    SetConfigValue CFG_KEY_PIN_HASH_ENABLED, "NO"
+    InitSetupLog
+    LogSetup "OK", "PIN_HASH_ENABLED = NO"
+    MsgBox Poruka("AUTH_MSG_PINHASH_ISKLJUCEN"), vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    MsgBox "Greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Function PostojiAktivanAdmin() As Boolean
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_KORISNICI)
+    If lo Is Nothing Then Exit Function
+    If lo.DataBodyRange Is Nothing Then Exit Function
+
+    Dim colUloga As Long, colAkt As Long, r As Long
+    colUloga = GetColumnIndex(TBL_KORISNICI, COL_KOR_ULOGA)
+    colAkt = GetColumnIndex(TBL_KORISNICI, COL_KOR_AKTIVAN)
+    If colUloga = 0 Then Exit Function
+
+    For r = 1 To lo.DataBodyRange.rows.count
+        If StrComp(Trim$(CStr(lo.DataBodyRange.cells(r, colUloga).value)), ULOGA_ADMIN, vbTextCompare) = 0 Then
+            If colAkt = 0 Then
+                PostojiAktivanAdmin = True
+                Exit Function
+            ElseIf UCase$(Trim$(CStr(lo.DataBodyRange.cells(r, colAkt).value))) <> "NE" Then
+                PostojiAktivanAdmin = True
+                Exit Function
+            End If
+        End If
+    Next r
+
+    Exit Function
+
+EH:
+    PostojiAktivanAdmin = False
+End Function
 
 ' Dijagnostika: prikazi STVARNE nazive kolona neke tabele.
 ' Pokreni: Alt+F8 -> DebugKoloneTabele -> unesi npr. tblStanice.

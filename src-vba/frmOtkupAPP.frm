@@ -645,6 +645,14 @@ End Sub
 Private Sub btnSyncPWA_Click()
     On Error GoTo EH
 
+    ' Kontrola pristupa (opt-in AUTH): oblast "Sinhronizuj PWA".
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_SYNC_PWA) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: Sinhronizuj PWA", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     Dim oldPointer As Integer
     Dim ok As Boolean
 
@@ -691,6 +699,14 @@ Private Sub btnTrace_Click()
 End Sub
 
 Private Sub btnOpenExcel_Click()
+    ' Kontrola pristupa (opt-in AUTH): oblast "Otvori Excel".
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_OTVORI_EXCEL) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: Otvori Excel", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     HighlightActive btnOpenExcel
     lblStatus.caption = "Sekcija: Otvori Excel"
 
@@ -770,6 +786,14 @@ End Sub
 
 Public Sub OpenMaticniForm()
     On Error GoTo EH
+
+    ' --- Kontrola pristupa: oblast MaticniPodaci (opt-in AUTH_ENABLED) ---
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_MATICNI) Then
+            MsgBox "Nemate dozvolu za Maticne podatke.", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
 
     Load frmMaticniPodaci
 
@@ -922,6 +946,15 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal activeBtn As MSForms.CommandButton, _
                             ByVal sectionTitle As String)
     On Error GoTo EH
+
+    ' --- Kontrola pristupa (opt-in AUTH_ENABLED): prava po oblasti ---
+    ' Jedna tacka za sve sekcije. Admin = bypass; AUTH iskljucen = sve dozvoljeno.
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(modAuth.OblastZaFormu(contentForm.name)) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: " & sectionTitle, vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
 
     Dim oldContent As Object
     Dim oldPointer As Integer
@@ -1353,18 +1386,19 @@ Private Sub SetupTopBarStatus()
         .Height = 16
     End With
 
-    ' Operator
+    ' Operator (klik = odjava + prijava drugog korisnika, kad je AUTH ukljucen)
     With lblOperator
-        .caption = "Operator: " & GetCurrentOperatorName()
         .BackStyle = fmBackStyleTransparent
         .ForeColor = TXT_MUTED()
         .Font.name = APP_FONT
         .Font.Size = FONT_SIZE_SMALL
         .Left = lblOnlineText.Left + lblOnlineText.width + 14
         .top = 14
-        .width = 200
+        .width = 280
         .Height = 16
+        .ControlTipText = "Klik: odjava i prijava drugog korisnika"
     End With
+    RefreshOperatorCaption
 
     ' Sezona
     With lblSezona
@@ -1387,10 +1421,57 @@ End Sub
 
 Private Function GetCurrentOperatorName() As String
     On Error Resume Next
+    ' Prijavljen app-korisnik (AUTH) -> ime i prezime onoga ko radi;
+    ' u suprotnom (AUTH iskljucen / nema prijave) -> Windows nalog.
+    Dim ime As String
+    ime = modAuth.GetCurrentUserIme()
+    If Len(Trim$(ime)) > 0 Then
+        GetCurrentOperatorName = Trim$(ime)
+        Exit Function
+    End If
     GetCurrentOperatorName = Environ$("USERNAME")
     If GetCurrentOperatorName = "" Then GetCurrentOperatorName = "--"
     On Error GoTo 0
 End Function
+
+' Osvezi top-bar labelu operatera. Kad je AUTH ukljucen dodaj "[Odjava]" hint
+' (labela je klikabilna -> lblOperator_Click).
+Private Sub RefreshOperatorCaption()
+    On Error Resume Next
+    Dim opCap As String
+    opCap = "Operator: " & GetCurrentOperatorName()
+    If modAuth.AuthEnabled() Then opCap = opCap & "   [Odjava]"
+    lblOperator.caption = opCap
+End Sub
+
+' Odjava + prijava drugog korisnika u toku sesije (klik na operatera u top baru).
+' Tok je isti kao pri pokretanju app-a: frmLogin; neuspela/otkazana prijava gasi
+' app (mirror startne kapije u modMain). Bez efekta dok je AUTH iskljucen.
+Private Sub lblOperator_Click()
+    On Error GoTo EH
+
+    If Not modAuth.AuthEnabled() Then Exit Sub
+
+    If MsgBox("Odjaviti trenutnog korisnika i prijaviti drugog?", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    ' Zatvori ekran prethodnog korisnika (cist start kao pri paljenju app-a).
+    CloseActiveContent
+
+    modAuth.Logout
+
+    If modAuth.Login() Then
+        RefreshOperatorCaption
+    Else
+        ' Otkazano / neuspelo -> zatvori app (kao na startu).
+        Application.Visible = True
+        Application.OnTime Now + TimeSerial(0, 0, 1), "QuitAfterFailedLogin"
+    End If
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.lblOperator_Click"
+End Sub
 
 
 Public Sub BeginPWASyncLog()
