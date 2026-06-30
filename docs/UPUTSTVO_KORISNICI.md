@@ -34,8 +34,10 @@ postoji bar jedan aktivan admin).
 2. **Napravi prvog admina:** `Alt+F8 → KreirajPrvogAdmina`
    (pita: korisničko ime, PIN, ime i prezime).
 3. **Uključi prijavu:** `Alt+F8 → EnableAuth`.
-4. (Opciono, jača bezbednost) **Uključi PIN hashing:** `Alt+F8 → EnablePinHash`.
-5. Zatvori i ponovo otvori aplikaciju — sada traži prijavu.
+4. Zatvori i ponovo otvori aplikaciju — sada traži prijavu.
+
+> **PIN hashing je podrazumevano UKLJUČEN** — PIN-ovi se čuvaju kao heš, ne kao
+> goli tekst. Po potrebi se isključuje sa `Alt+F8 → DisablePinHash`.
 
 **Isključivanje prijave** (vraćanje na rad bez prijave): `Alt+F8 → DisableAuth`.
 
@@ -102,9 +104,10 @@ korisnika (isti tok kao paljenje aplikacije). Nema potrebe gasiti Excel.
 
 - PIN je lični; ne deli se. Admin može u svakom trenutku postaviti nov PIN
   korisniku (vidi tačku 4).
-- **PIN hashing** (opciono, `EnablePinHash`) čuva PIN kao nečitljiv „otisak"
-  (SHA-256) umesto golog teksta — preporučeno za produkciju. Resetovanje PIN-a
-  radi isto i kad je hashing uključen (novi PIN se automatski hešira).
+- **PIN hashing je podrazumevano uključen** — PIN se čuva kao nečitljiv „otisak"
+  (SHA-256), ne kao goli tekst. Ako SHA nije dostupan, sistem bezbedno pada na
+  plaintext (bez zaključavanja). Resetovanje PIN-a radi isto (novi PIN se hešira).
+  Isključiti se može sa `Alt+F8 → DisablePinHash`.
 
 ---
 
@@ -166,7 +169,7 @@ audit kolone) — mapiranjem po imenu kolone.
 
 - **Najmanje dva admina** — ako jedan zaboravi PIN, drugi ga resetuje bez procedure 8.2.
 - Zapiši admin PIN na sigurno mesto (sef/menadžer lozinki).
-- Za produkciju uključi **PIN hashing**.
+- **PIN hashing je već uključen** (ne ostavljaj plaintext osim ako baš moraš).
 - Uvodi prijavu **tek kad napraviš admina** (zaštita to i traži).
 
 ---

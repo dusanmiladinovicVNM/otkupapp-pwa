@@ -228,12 +228,15 @@ End Sub
 ' ============================================================
 Public Function PinHashEnabled() As Boolean
     On Error GoTo EH
+    ' Podrazumevano UKLJUCENO (opt-out): samo eksplicitno NO/NE/FALSE/0 gasi hash.
+    ' Bezbedno: ako SHA (.NET) nije dostupan, PreparePin/VerifyPin padaju nazad na
+    ' plaintext (bez rizika od lockout-a), a postojeci plaintext PIN-ovi i dalje rade.
     Dim v As String
     v = UCase$(Trim$(GetConfigValue(CFG_KEY_PIN_HASH_ENABLED)))
-    PinHashEnabled = (v = "YES" Or v = "DA" Or v = "TRUE" Or v = "1")
+    PinHashEnabled = Not (v = "NO" Or v = "NE" Or v = "FALSE" Or v = "0")
     Exit Function
 EH:
-    PinHashEnabled = False
+    PinHashEnabled = True
 End Function
 
 Public Function Sha256Hex(ByVal text As String) As String
