@@ -779,6 +779,12 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
+    If cmbSortaVoca.value = "" Then
+        MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
+        cmbSortaVoca.SetFocus
+        Exit Sub
+    End If
+
     Dim datumDok As Date
     If Not TryParseDateValue(txtDatum.value, datumDok) Then
         MsgBox "Unesite ispravan datum!", vbExclamation, APP_NAME
@@ -883,17 +889,16 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
-    ' #1 Bruto rezim: broj gajbi je OBAVEZAN (inace se bruto ne pretvara u neto, tj.
-    ' tezina gajbi bi se platila kao voce). Vazi za I i (ako je ukljucena) II klasu.
-    If OtkupBrutoUnos() And kolicinaI > 0 And kolAmb <= 0 Then
-        MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE") & _
-               "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
+    ' Broj gajbi (ambalaza) je OBAVEZAN za svaku unetu klasu. U bruto rezimu je
+    ' dodatno kriticno (inace se bruto ne pretvara u neto -> tezina gajbi bi se
+    ' platila kao voce).
+    If kolicinaI > 0 And kolAmb <= 0 Then
+        MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
         txtKolAmbalaze.SetFocus
         Exit Sub
     End If
-    If chkDveKlase.value And OtkupBrutoUnos() And kolicinaII > 0 And kolAmbII <= 0 Then
-        MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE_2") & _
-               "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
+    If chkDveKlase.value And kolicinaII > 0 And kolAmbII <= 0 Then
+        MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
         If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
         Exit Sub
     End If
@@ -976,6 +981,12 @@ Private Sub btnUnos_Click()
     Dim vozacID As String
     If cmbVozac.value <> "" Then
         vozacID = ExtractIDFromDisplay(cmbVozac.value)
+    End If
+
+    If Trim$(txtBrojDokumenta.value) = "" Then
+        MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
+        txtBrojDokumenta.SetFocus
+        Exit Sub
     End If
 
     If Trim$(txtBrojDokumenta.value) <> "" Then
