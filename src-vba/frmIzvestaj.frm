@@ -634,28 +634,36 @@ Private Sub btnUnos_Click()
     Application.ScreenUpdating = False
     BeginTableCache   ' citaj svaku tabelu jednom za sve Generate* (read-only blok)
 
+    ' === DEBUG MERENJE (privremeno; ukloniti posle dijagnoze) ===
+    Dim dbgT As Double, dbgMsg As String, dbgTot As Double
+    dbgTot = Timer
+
     If zbirni Then
-        GenerateZbirniReport datumOd, datumDo, entitetTip
-        GenerateProsecnaCenaReport entitetTip, "", datumOd, datumDo
-        GenerateManjakReport entitetTip, "", datumOd, datumDo
+        dbgT = Timer: GenerateZbirniReport datumOd, datumDo, entitetTip: dbgMsg = dbgMsg & "Zbirni: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateProsecnaCenaReport entitetTip, "", datumOd, datumDo: dbgMsg = dbgMsg & "ProsecnaCena: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateManjakReport entitetTip, "", datumOd, datumDo: dbgMsg = dbgMsg & "Manjak: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
     Else
-        GenerateSaldoReport entitetTip, entitetID, datumOd, datumDo
-        GenerateOtkupRobaReport entitetTip, entitetID, datumOd, datumDo
-        GenerateAmbalazeReport entitetTip, entitetID, datumOd, datumDo
-        GenerateIsplataReport entitetTip, entitetID, datumOd, datumDo
-        GenerateProsecnaCenaReport entitetTip, entitetID, datumOd, datumDo
-        GenerateManjakReport entitetTip, entitetID, datumOd, datumDo
-        If entitetTip = "OM" Then GenerateOtkupListeReport entitetID, datumOd, datumDo
+        dbgT = Timer: GenerateSaldoReport entitetTip, entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "Saldo: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateOtkupRobaReport entitetTip, entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "OtkupRoba: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateAmbalazeReport entitetTip, entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "Ambalaza: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateIsplataReport entitetTip, entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "Isplata: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateProsecnaCenaReport entitetTip, entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "ProsecnaCena: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        dbgT = Timer: GenerateManjakReport entitetTip, entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "Manjak: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        If entitetTip = "OM" Then
+            dbgT = Timer: GenerateOtkupListeReport entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "OtkupListe: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+        End If
         If entitetTip = "Kooperant" Then
-            GenerateKarticaReport entitetID, datumOd, datumDo
-            GenerateKarticaAmbReport entitetID, datumOd, datumDo
+            dbgT = Timer: GenerateKarticaReport entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "Kartica: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+            dbgT = Timer: GenerateKarticaAmbReport entitetID, datumOd, datumDo: dbgMsg = dbgMsg & "KarticaAmb: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
         End If
     End If
 
-    UpdateStatusLabel
-    
+    dbgT = Timer: UpdateStatusLabel: dbgMsg = dbgMsg & "StatusLabel: " & Format$((Timer - dbgT) * 1000, "0") & " ms" & vbCrLf
+    dbgMsg = dbgMsg & "----------" & vbCrLf & "UKUPNO btnUnos: " & Format$((Timer - dbgTot) * 1000, "0") & " ms"
+
     EndTableCache
     Application.ScreenUpdating = True
+    MsgBox dbgMsg, vbInformation, "MERENJE IZVESTAJA (" & entitetTip & ")"
     Exit Sub
 
 EH:
