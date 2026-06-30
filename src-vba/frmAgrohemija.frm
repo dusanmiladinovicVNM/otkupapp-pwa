@@ -121,7 +121,7 @@ Private Sub SetupPocetniDugButton()
         .width = btnZavrsiIzlaz.width
         .Height = btnZavrsiIzlaz.Height
         .Left = btnZavrsiIzlaz.Left
-        .top = btnZavrsiIzlaz.top + btnZavrsiIzlaz.Height + 6
+        .top = btnZavrsiIzlaz.top - btnZavrsiIzlaz.Height - 6
         .visible = True
     End With
     StyleExitButton m_btnPocetniDug, "Pocetni dug"
