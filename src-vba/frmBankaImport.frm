@@ -65,6 +65,13 @@ Private Sub UserForm_Activate()
     End If
     
     SetupList
+
+    ' Auto-map sve sto se moze preko jakih kljuceva (poziv->otkup/faktura, tekuci racun)
+    ' pre prikaza; dvosmislene ostaju otvorene za rucno. Ne obara formu ako padne.
+    On Error Resume Next
+    AutoMapStrongKeysBankaImport_TX
+    On Error GoTo EH
+
     LoadBankaRows
     
     ' KPI strip (opciono -- vidi Izmena 2)
@@ -850,43 +857,38 @@ Private Sub RefreshTopKpis()
     Dim totalCount As Long
     Dim totalUplata As Double
     Dim totalIsplata As Double
-    Dim autoMatchCount As Long
-    
+    Dim mappedCount As Long
+    Dim totalStaged As Long
+
     If IsArray(m_Data) Then
         totalCount = UBound(m_Data, 1)
-        
-        Dim colUplata As Long, colIsplata As Long, colPartner As Long
+
+        Dim colUplata As Long, colIsplata As Long
         colUplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA)
         colIsplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA)
-        colPartner = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER)
-        
+
         Dim i As Long
         For i = 1 To UBound(m_Data, 1)
             totalUplata = totalUplata + CDbl(nz(m_Data(i, colUplata), "0"))
             totalIsplata = totalIsplata + CDbl(nz(m_Data(i, colIsplata), "0"))
-            
-            ' Check if auto-match exists
-            Dim partnerName As String
-            partnerName = CStr(m_Data(i, colPartner))
-            Dim mapped As Variant
-            mapped = LookupPartnerMap(partnerName)
-            If Not IsEmpty(mapped) Then
-                autoMatchCount = autoMatchCount + 1
-            End If
         Next i
     End If
+
+    ' Stvarno stanje mapiranja iz cele tblBankaImport (ne samo otvorene):
+    ' Mapirano = Obradjeno "Da"; Ukupno = sve nestornirane staging stavke.
+    ComputeBankaMapState mappedCount, totalStaged
     
     ' Card 1: Otvoreno
     StyleTopKpi fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent, "neutral"
     lblKpiOtvTitle.caption = "Otvoreno"
     lblKpiOtvValue.caption = totalCount & " stavki"
     
-    ' Card 2: Auto match (ok ako >0)
+    ' Card 2: Mapirano (stvarno stanje: Obradjeno "Da" / Ukupno staged)
     Dim autoKind As String
-    If autoMatchCount > 0 Then autoKind = "ok" Else autoKind = "neutral"
+    If mappedCount > 0 Then autoKind = "ok" Else autoKind = "neutral"
     StyleTopKpi fraKpiAutoMatch, lblKpiAutoTitle, lblKpiAutoValue, lblKpiAutoAccent, autoKind
-    lblKpiAutoTitle.caption = "Auto match"
-    lblKpiAutoValue.caption = autoMatchCount & " / " & totalCount
+    lblKpiAutoTitle.caption = "Mapirano"
+    lblKpiAutoValue.caption = mappedCount & " / " & totalStaged
     
     ' Card 3: Uplate ukupno
     StyleTopKpi fraKpiUplate, lblKpiUplTitle, lblKpiUplValue, lblKpiUplAccent, "neutral"
@@ -901,6 +903,36 @@ Private Sub RefreshTopKpis()
     Exit Sub
 EH:
     LogErr "frmBankaImport.RefreshTopKpis"
+End Sub
+
+' Realno stanje mapiranja iz cele tblBankaImport (ne samo otvorenih redova u m_Data).
+Private Sub ComputeBankaMapState(ByRef mappedCount As Long, ByRef totalStaged As Long)
+    On Error GoTo EH
+
+    Dim data As Variant
+    Dim colObr As Long
+    Dim i As Long
+    Dim st As String
+
+    mappedCount = 0
+    totalStaged = 0
+
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Sub
+
+    colObr = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO)
+
+    For i = 1 To UBound(data, 1)
+        totalStaged = totalStaged + 1
+        st = UCase$(Trim$(CStr(nz(data(i, colObr), ""))))
+        If st = "DA" Then mappedCount = mappedCount + 1
+    Next i
+
+    Exit Sub
+EH:
+    LogErr "frmBankaImport.ComputeBankaMapState"
 End Sub
 
 Private Sub ResetActionButtons()

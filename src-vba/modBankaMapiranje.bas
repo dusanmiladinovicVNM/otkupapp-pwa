@@ -54,6 +54,10 @@ Option Explicit
 
 Private Const ERR_BMAP_BASE As Long = vbObjectError + 2900
 
+' Kad je True, batch auto-map (strong pass / Auto sve) ne prikazuje blokirajuci
+' MsgBox po redu (npr. "Kooperant nema StanicaID"). Postavlja ga pozivalac oko petlje.
+Public gBankaSilentBatch As Boolean
+
 ' ============================================================
 ' PUBLIC
 ' ============================================================
@@ -111,42 +115,50 @@ Public Function GetBankaImportOpen() As Variant
     GetBankaImportOpen = finalResult
 End Function
 
-Public Function AutoMapBankaImportRow(ByVal bankaImportID As String) As String
+Public Function AutoMapBankaImportRow(ByVal bankaImportID As String, _
+                                      Optional ByVal strongOnly As Boolean = False, _
+                                      Optional ByVal markErrorOnFail As Boolean = True) As String
     Dim bim As Variant
     Dim uplata As Double
     Dim isplata As Double
     Dim partnerName As String
-    
+
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then
         AutoMapBankaImportRow = ""
         Exit Function
     End If
-    
+
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then
-        MsgBox "BankaImport red nije pronadjen: " & bankaImportID, vbExclamation, APP_NAME
+        If Not gBankaSilentBatch Then MsgBox "BankaImport red nije pronadjen: " & bankaImportID, vbExclamation, APP_NAME
         AutoMapBankaImportRow = ""
         Exit Function
     End If
-    
+
     uplata = CDbl(NzBIM(bim(1, 5), 0#))
     isplata = CDbl(NzBIM(bim(1, 6), 0#))
     partnerName = CStr(bim(1, 3))
-    
+
     If uplata > 0 And isplata = 0 Then
-        AutoMapBankaImportRow = AutoMapIncomingKupac(bankaImportID)
-        If AutoMapBankaImportRow = "" Then UpdateBankaImportStatus bankaImportID, "Error"
+        AutoMapBankaImportRow = AutoMapIncomingKupac(bankaImportID, strongOnly)
+        If AutoMapBankaImportRow = "" And markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
         Exit Function
     End If
-    
+
     If isplata > 0 And uplata = 0 Then
-        AutoMapBankaImportRow = AutoMapOutgoingKooperantOrOM(bankaImportID)
-        If AutoMapBankaImportRow = "" Then UpdateBankaImportStatus bankaImportID, "Error"
+        AutoMapBankaImportRow = AutoMapOutgoingKooperantOrOM(bankaImportID, strongOnly)
+        If AutoMapBankaImportRow = "" And markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
         Exit Function
     End If
-    
-    MsgBox "Stavka nema cist smer uplata/isplata: " & partnerName, vbExclamation, APP_NAME
-    UpdateBankaImportStatus bankaImportID, "Error"
+
+    ' Nema cist smer uplata/isplata. U strong-only rezimu preskoci tiho (bez Error/MsgBox).
+    If strongOnly Then
+        AutoMapBankaImportRow = ""
+        Exit Function
+    End If
+
+    If Not gBankaSilentBatch Then MsgBox "Stavka nema cist smer uplata/isplata: " & partnerName, vbExclamation, APP_NAME
+    If markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
     AutoMapBankaImportRow = ""
 End Function
 
@@ -765,7 +777,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     
     omID = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     If omID = "" Then
-        MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
+        If Not gBankaSilentBatch Then MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
         Exit Function
     End If
     
@@ -1077,7 +1089,66 @@ End Function
 ' PRIVATE - AUTO MAP
 ' ============================================================
 
-Private Function AutoMapIncomingKupac(ByVal bankaImportID As String) As String
+' ============================================================
+' AUTO-MAP SAMO PREKO JAKIH KLJUCEVA (poziv->otkup/faktura, tekuci racun).
+' Ne koristi ime/PartnerMap heuristiku i NE markira Error na promasaj -
+' dvosmislene stavke ostaju otvorene za rucno mapiranje. Namenjeno auto-pokretanju
+' pri otvaranju frmBankaImport (i kao Immediate/backfill jednim pozivom).
+' Vraca broj auto-mapiranih stavki.
+' ============================================================
+Public Function AutoMapStrongKeysBankaImport_TX() As Long
+    Const SRC As String = "AutoMapStrongKeysBankaImport_TX"
+
+    Dim tx As clsTransaction
+    Dim data As Variant
+    Dim colID As Long
+    Dim i As Long
+    Dim res As String
+    Dim mappedCount As Long
+
+    On Error GoTo EH
+
+    data = GetBankaImportOpen()
+    If IsEmpty(data) Then
+        AutoMapStrongKeysBankaImport_TX = 0
+        Exit Function
+    End If
+
+    colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
+
+    gBankaSilentBatch = True
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_PARTNER_MAP
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_FAKTURE
+
+    For i = 1 To UBound(data, 1)
+        res = AutoMapBankaImportRow(CStr(data(i, colID)), True, False)
+        If res <> "" Then mappedCount = mappedCount + 1
+    Next i
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    gBankaSilentBatch = False
+
+    AutoMapStrongKeysBankaImport_TX = mappedCount
+    Exit Function
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    If Not tx Is Nothing Then tx.RollbackTx
+    gBankaSilentBatch = False
+    On Error GoTo 0
+    AutoMapStrongKeysBankaImport_TX = 0
+End Function
+
+Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
     Dim partnerName As String
     Dim konto As String
@@ -1133,6 +1204,12 @@ Private Function AutoMapIncomingKupac(ByVal bankaImportID As String) As String
         Exit Function
     End If
 
+    ' Strong-only rezim (auto na otvaranje): ne idi na ime/PartnerMap heuristiku.
+    If strongOnly Then
+        AutoMapIncomingKupac = ""
+        Exit Function
+    End If
+
     ' FALLBACK (nepromenjeno): PartnerMap -> egzaktno ime -> OM.
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
@@ -1159,7 +1236,7 @@ Private Function AutoMapIncomingKupac(ByVal bankaImportID As String) As String
     AutoMapIncomingKupac = ""
 End Function
 
-Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String) As String
+Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
     Dim partnerName As String
     Dim konto As String
@@ -1204,6 +1281,12 @@ Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String) As 
     If resolvedKoop <> "" Then
         createdCount = MapBankaImportAsKooperantBlock(bankaImportID, resolvedKoop, learn)
         If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
+        Exit Function
+    End If
+
+    ' Strong-only rezim (auto na otvaranje): ne idi na ime/PartnerMap heuristiku.
+    If strongOnly Then
+        AutoMapOutgoingKooperantOrOM = ""
         Exit Function
     End If
 
