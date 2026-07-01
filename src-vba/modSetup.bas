@@ -284,6 +284,83 @@ EH:
     MsgBox Poruka("SETUP_ERR_GRESKA_PRI_PODESAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
+' RUCNO (Alt+F8): podesi pdftotext.exe (Poppler) za banka import.
+' Logika (isto sto ResolvePdfToTextExePath koristi):
+'   1) Ako poppler VEC stoji pored xlsm-a (<xlsm>\Tools\poppler\Library\bin\
+'      pdftotext.exe) -> upisi PRAZAN PDFTOTEXT_EXE_PATH. Prazna vrednost znaci
+'      "koristi auto-default relativan na xlsm" (GetLocalConfigValue na prazno vraca
+'      default), pa putanja UVEK prati radnu svesku ako se paket premesti.
+'   2) Inace -> pitaj operatera za folder sa pdftotext.exe (trazi i u uobicajenim
+'      podfolderima) i upisi apsolutnu putanju.
+Public Sub SetupPopplerInteractive()
+    On Error GoTo EH
+
+    InitSetupLog
+    EnsureLocalConfigTable
+
+    ' 1) Auto pored xlsm-a?
+    Dim autoExe As String
+    autoExe = Trim$(ThisWorkbook.path) & "\" & APP_PDFTOTEXT_RELATIVE_EXE_PATH
+    If Dir$(autoExe) <> "" Then
+        SetLocalConfigValue "PDFTOTEXT_EXE_PATH", "", _
+            "Prazno = auto (Tools\poppler pored xlsm-a; putanja prati radnu svesku)"
+        MsgBox "Poppler je pronadjen pored radne sveske:" & vbCrLf & autoExe & vbCrLf & vbCrLf & _
+               "Podeseno na AUTOMATSKI rezim (putanja se racuna relativno na xlsm), " & _
+               "pa nastavlja da radi i ako premestis ceo paket.", _
+               vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    ' 2) Nije pored xlsm-a -> picker.
+    Dim picked As String
+    picked = PickFolder("Izaberi folder sa pdftotext.exe (npr. ...\Tools\poppler\Library\bin ili poppler root)")
+    If Len(Trim$(picked)) = 0 Then Exit Sub
+
+    Dim exePath As String
+    exePath = FindPdfToTextExe(picked)
+
+    If Len(exePath) = 0 Then
+        MsgBox "pdftotext.exe nije pronadjen u izabranom folderu ni u uobicajenim " & _
+               "podfolderima (\Library\bin, \bin, \poppler\Library\bin, \poppler\bin)." & vbCrLf & vbCrLf & _
+               "Izaberi tacan folder gde je pdftotext.exe (ili raspakovani poppler root).", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    SetLocalConfigValue "PDFTOTEXT_EXE_PATH", exePath, "pdftotext.exe (rucno izabran)"
+    MsgBox "Poppler podesen:" & vbCrLf & exePath & vbCrLf & vbCrLf & _
+           "NAPOMENA: ovo je APSOLUTNA putanja i ostaje ista ako premestis xlsm. " & _
+           "Za putanju koja prati radnu svesku, drzi Tools\poppler pored xlsm-a pa " & _
+           "ponovo pokreni ovu komandu (upisace se automatski rezim).", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "SetupPopplerInteractive failed: " & Err.description
+    MsgBox Poruka("SETUP_ERR_GRESKA_PRI_PODESAVANJU") & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Trazi pdftotext.exe u zadatom folderu i uobicajenim podfolderima (poppler layout-i).
+' Vraca punu putanju do exe-a ili "" ako nije nadjen. Bez wildcard Dir$ petlje (Dir$ je
+' stateful) -- fiksni skup kandidata.
+Private Function FindPdfToTextExe(ByVal root As String) As String
+    root = Trim$(root)
+    If Len(root) = 0 Then Exit Function
+    If Right$(root, 1) = "\" Then root = Left$(root, Len(root) - 1)
+
+    Dim subs As Variant
+    subs = Array("", "\Library\bin", "\bin", "\poppler\Library\bin", "\poppler\bin")
+
+    Dim i As Long, cand As String
+    For i = LBound(subs) To UBound(subs)
+        cand = root & subs(i) & "\pdftotext.exe"
+        If Dir$(cand) <> "" Then
+            FindPdfToTextExe = cand
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' ============================================================
 ' PUBLIC CONFIG HELPERS
 ' ============================================================
@@ -678,7 +755,9 @@ Private Function CheckPdfToTextExists() As String
     p = ResolvePdfToTextExePath()
     Exit Function
 EH:
-    CheckPdfToTextExists = "- pdftotext.exe (banka import): " & Err.description & vbCrLf
+    CheckPdfToTextExists = "- pdftotext.exe (banka import): " & Err.description & _
+                           " (Alt+F8 -> SetupPopplerInteractive da izaberes folder, ili " & _
+                           "stavi Tools\poppler pored xlsm-a)" & vbCrLf
 End Function
 
 ' Zivi link desktop<->server. Advisory (reuse postojecih primitiva; bez novog HTTP-a):
