@@ -119,6 +119,7 @@ Public Sub RunSetupHealthCheck()
 
     report = report & CheckRuntimeEnvironment()
     report = report & CheckCoreFoldersExist()
+    report = report & CheckPdfToTextExists()
     report = report & CheckGoogleOAuthConfig()
     report = report & CheckSEFConfigForSetup()
     report = report & CheckRequiredTablesForSetup()
@@ -223,6 +224,17 @@ Public Sub SetupBankFoldersInteractive()
     Dim inboxPath As String
     Dim processedPath As String
     Dim errorPath As String
+    Dim driveSourcePath As String
+
+    ' Drive izvor: folder koji Google Drive for Desktop sinhronizuje lokalno
+    ' (npr. H:\My Drive\AgriX_C001_PROD\00_Inbox\01_Bank). Puller (modBankaImport)
+    ' cita odavde. NE pravimo ga (pravi ga Drive sync) -- samo pamtimo putanju.
+    ' Cancel = preskoci (puller je onda iskljucen dok se rucno ne podesi).
+    driveSourcePath = PickFolder("Izaberi Drive izvor (sinhronizovan 00_Inbox\01_Bank); Cancel da preskocis")
+    If Len(Trim$(driveSourcePath)) > 0 Then
+        SetLocalConfigValue "BANKA_DRIVE_SOURCE_PATH", driveSourcePath, _
+                            "Drive izvor (sinhronizovan folder) za povlacenje izvoda"
+    End If
 
     inboxPath = PickFolder("Izaberi folder za nove bankarske izvode / Inbox")
     If Len(Trim$(inboxPath)) = 0 Then Exit Sub
@@ -641,6 +653,18 @@ Private Function CheckFolderExists(ByVal configKey As String, ByVal labelText As
     ElseIf Dir$(p, vbDirectory) = "" Then
         CheckFolderExists = "- " & labelText & " ne postoji: " & p & vbCrLf
     End If
+End Function
+
+' Poppler (pdftotext.exe) je neophodan za banka import. Reuse razresavanja putanje
+' iz parsera (ResolvePdfToTextExePath) da ne dupliramo logiku; on raise-uje kad
+' nije podesen ili fajl ne postoji, pa ovde samo hvatamo poruku za report.
+Private Function CheckPdfToTextExists() As String
+    On Error GoTo EH
+    Dim p As String
+    p = ResolvePdfToTextExePath()
+    Exit Function
+EH:
+    CheckPdfToTextExists = "- pdftotext.exe (banka import): " & Err.description & vbCrLf
 End Function
 
 ' ============================================================

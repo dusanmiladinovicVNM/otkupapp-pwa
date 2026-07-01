@@ -99,7 +99,9 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-Private Function ResolvePdfToTextExePath() As String
+' Public: koristi ga i setup health-check (modSetup.CheckPdfToTextExists) da ne
+' duplira logiku razresavanja putanje. Raise-uje kad nije podesen / ne postoji.
+Public Function ResolvePdfToTextExePath() As String
     Const SRC As String = "ResolvePdfToTextExePath"
 
     Dim rootPath As String
