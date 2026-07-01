@@ -779,7 +779,7 @@ Private Sub btnUnos_Click()
         Exit Sub
     End If
 
-    If cmbSortaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbSortaVoca.value = "" Then
         MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbSortaVoca.SetFocus
         Exit Sub
@@ -892,15 +892,32 @@ Private Sub btnUnos_Click()
     ' Broj gajbi (ambalaza) je OBAVEZAN za svaku unetu klasu. U bruto rezimu je
     ' dodatno kriticno (inace se bruto ne pretvara u neto -> tezina gajbi bi se
     ' platila kao voce).
-    If kolicinaI > 0 And kolAmb <= 0 Then
-        MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
-        txtKolAmbalaze.SetFocus
-        Exit Sub
-    End If
-    If chkDveKlase.value And kolicinaII > 0 And kolAmbII <= 0 Then
-        MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
-        If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
-        Exit Sub
+    If IsValidacijaUnosa() Then
+        If kolicinaI > 0 And kolAmb <= 0 Then
+            MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
+            txtKolAmbalaze.SetFocus
+            Exit Sub
+        End If
+        If chkDveKlase.value And kolicinaII > 0 And kolAmbII <= 0 Then
+            MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
+            If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
+            Exit Sub
+        End If
+    Else
+        ' Minimalna validacija (kao pre utegnute izmene): broj gajbi obavezan SAMO
+        ' u bruto rezimu (bez toga se bruto ne pretvara u neto).
+        If OtkupBrutoUnos() And kolicinaI > 0 And kolAmb <= 0 Then
+            MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE") & _
+                   "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
+            txtKolAmbalaze.SetFocus
+            Exit Sub
+        End If
+        If chkDveKlase.value And OtkupBrutoUnos() And kolicinaII > 0 And kolAmbII <= 0 Then
+            MsgBox Poruka("OTKUP_MSG_BRUTO_REZIM_UNESITE_2") & _
+                   "(bez toga se bruto ne pretvara u neto).", vbExclamation, APP_NAME
+            If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
+            Exit Sub
+        End If
     End If
 
     ' --- BRUTO unos (toggle OTKUP_BRUTO_UNOS): kupac unosi bruto (voce + ambalaza).
@@ -983,7 +1000,7 @@ Private Sub btnUnos_Click()
         vozacID = ExtractIDFromDisplay(cmbVozac.value)
     End If
 
-    If Trim$(txtBrojDokumenta.value) = "" Then
+    If IsValidacijaUnosa() And Trim$(txtBrojDokumenta.value) = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         txtBrojDokumenta.SetFocus
         Exit Sub

@@ -223,37 +223,38 @@ Private Sub btnPreradi_Click()
     If Not mCmbFilterTipGP Is Nothing Then tipGP = Trim$(mCmbFilterTipGP.value)
 
     ' Blokator: sva relevantna polja prerade moraju biti popunjena pre snimanja.
-    If bruto <= 0 Then
+    ' Gejtovano toggle-om VALIDACIJA_UNOSA (OFF -> kao pre utegnute izmene, bez blokade).
+    If IsValidacijaUnosa() And bruto <= 0 Then
         MsgBox "Unesite bruto te" & ChrW(382) & "inu!", vbExclamation, APP_NAME
         If Not mTxtBruto Is Nothing Then mTxtBruto.SetFocus
         Exit Sub
     End If
-    If tezPal <= 0 Then
+    If IsValidacijaUnosa() And tezPal <= 0 Then
         MsgBox "Unesite te" & ChrW(382) & "inu palete!", vbExclamation, APP_NAME
         If Not mTxtTezinaPalete Is Nothing Then mTxtTezinaPalete.SetFocus
         Exit Sub
     End If
-    If tipGP = "" Then
+    If IsValidacijaUnosa() And tipGP = "" Then
         MsgBox "Izaberite gotov proizvod!", vbExclamation, APP_NAME
         If Not mCmbFilterTipGP Is Nothing Then mCmbFilterTipGP.SetFocus
         Exit Sub
     End If
-    If brKut <= 0 Then
+    If IsValidacijaUnosa() And brKut <= 0 Then
         MsgBox "Unesite broj kutija!", vbExclamation, APP_NAME
         Me.txtKutije.SetFocus
         Exit Sub
     End If
-    If tipKut = "" Then
+    If IsValidacijaUnosa() And tipKut = "" Then
         MsgBox "Izaberite tip kutija!", vbExclamation, APP_NAME
         If Not mDdTipKutije Is Nothing Then mDdTipKutije.SetFocus
         Exit Sub
     End If
-    If brKes <= 0 Then
+    If IsValidacijaUnosa() And brKes <= 0 Then
         MsgBox "Unesite broj kesa!", vbExclamation, APP_NAME
         Me.txtKese.SetFocus
         Exit Sub
     End If
-    If tipKes = "" Then
+    If IsValidacijaUnosa() And tipKes = "" Then
         MsgBox "Izaberite tip kesa!", vbExclamation, APP_NAME
         If Not mCmbTipKese Is Nothing Then mCmbTipKese.SetFocus
         Exit Sub
