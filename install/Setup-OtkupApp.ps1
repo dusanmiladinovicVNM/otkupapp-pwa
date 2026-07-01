@@ -64,6 +64,26 @@ try {
     Write-Warning "Could not unblock workbook: $($_.Exception.Message)"
 }
 
+# Poppler (pdftotext.exe) for bank statement import.
+# Tools\ must sit next to the workbook: VBA (ResolvePdfToTextExePath) resolves the
+# default as <workbook>\Tools\poppler\Library\bin\pdftotext.exe. Non-fatal: some
+# deployments use a PATH-installed pdftotext or set PDFTOTEXT_EXE_PATH manually.
+$SourceTools = Join-Path $ScriptRoot "Tools"
+$TargetTools = Join-Path $InstallRoot "Tools"
+$PopplerExe  = Join-Path $InstallRoot "Tools\poppler\Library\bin\pdftotext.exe"
+
+if (Test-Path $SourceTools) {
+    Copy-Item $SourceTools $InstallRoot -Recurse -Force
+    if (Test-Path $PopplerExe) {
+        Write-Host "Copied Poppler tools to: $TargetTools"
+    } else {
+        Write-Warning "Tools copied but pdftotext.exe not at expected path: $PopplerExe"
+    }
+} else {
+    Write-Warning "Poppler tools not found in package (skipping): $SourceTools"
+    Write-Warning "Bank import needs pdftotext.exe. Ship Tools\poppler\ next to the workbook, or set PDFTOTEXT_EXE_PATH in tblLocalConfig."
+}
+
 if (Test-Path $SourceCert) {
     try {
         Import-Certificate -FilePath $SourceCert -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
