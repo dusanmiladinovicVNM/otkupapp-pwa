@@ -477,7 +477,7 @@ Public Const COL_BIM_UKUPAN_POTRAZUJE As String = "UkupanPotrazuje"
 
 Public Const CONFIG_KEY_PDFTOTEXT_EXE_PATH As String = "PDFTOTEXT_EXE_PATH"
 Public Const APP_PDFTOTEXT_RELATIVE_EXE_PATH As String = "Tools\poppler\Library\bin\pdftotext.exe"
-Public Const APP_BANKA_INBOX As String = "G:\My Drive\Bank_Izvodi"
+Public Const APP_BANKA_INBOX As String = "G:\My Drive\Bank_Izvodi\Inbox"
 Public Const APP_BANKA_PROCESSED As String = "G:\My Drive\Bank_Izvodi\Processed"
 Public Const APP_BANKA_ERROR As String = "G:\My Drive\Bank_Izvodi\Error"
 
