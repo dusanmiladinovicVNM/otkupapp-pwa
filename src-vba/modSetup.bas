@@ -63,6 +63,12 @@ Public Sub SetupNewPC()
     report = report & CheckRequiredTablesForSetup()
     report = report & CheckRequiredColumnsForSetup()
 
+    ' Zivi server-link je ADVISORY: prikazuje se, ali NE ulazi u `report` -> ne obara
+    ' zeleno (APP_SETUP_COMPLETED). Offline / ne-autentifikovan Google i sl. daju samo
+    ' NAPOMENU; setup i dalje moze da prodje ako je lokalni deo ispravan.
+    Dim linkWarn As String
+    linkWarn = CheckServerLink()
+
     If Len(report) = 0 Then
         SetLocalConfigValue "APP_SETUP_COMPLETED", "DA", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
         SetLocalConfigValue "APP_SETUP_COMPLETED_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), Poruka("SETUP_MSG_DATUM_VREME_ZAVRSETKA")
@@ -78,19 +84,33 @@ Public Sub SetupNewPC()
         On Error GoTo EH
 
         LogSetup "OK", "Setup completed successfully"
+        If Len(linkWarn) > 0 Then LogSetup "WARN", "Server link: " & linkWarn
 
-        MsgBox Poruka("SETUP_MSG_SETUP_USPESNO_ZAVRSEN") & vbCrLf & vbCrLf & _
-               "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
-               Poruka("SETUP_MSG_PODESAVANJA_MATICNI_PODACI"), _
-               vbInformation, APP_NAME
+        Dim okMsg As String
+        okMsg = Poruka("SETUP_MSG_SETUP_USPESNO_ZAVRSEN") & vbCrLf & vbCrLf & _
+                "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
+                Poruka("SETUP_MSG_PODESAVANJA_MATICNI_PODACI")
+
+        If Len(linkWarn) > 0 Then
+            okMsg = okMsg & vbCrLf & vbCrLf & _
+                    "NAPOMENA - server link (ne blokira setup):" & vbCrLf & linkWarn
+            MsgBox okMsg, vbExclamation, APP_NAME
+        Else
+            MsgBox okMsg, vbInformation, APP_NAME
+        End If
     Else
         SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
-        LogSetup "WARN", report
+        Dim failMsg As String
+        failMsg = report
+        If Len(linkWarn) > 0 Then _
+            failMsg = failMsg & vbCrLf & "Server link (ne blokira):" & vbCrLf & linkWarn
+
+        LogSetup "WARN", failMsg
 
         MsgBox Poruka("SETUP_MSG_SETUP_ZAVRSEN_ALI") & _
-               vbCrLf & vbCrLf & report, _
+               vbCrLf & vbCrLf & failMsg, _
                vbExclamation, APP_NAME
     End If
 
