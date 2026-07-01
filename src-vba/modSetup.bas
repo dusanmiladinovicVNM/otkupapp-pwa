@@ -536,17 +536,25 @@ Private Function CheckSEFConfigForSetup() As String
         Exit Function
     End If
 
-    If Trim$(GetConfigValue("SEF_BASE_URL")) = "" Then
-        msg = msg & Poruka("SETUP_MSG_SEF_BASE_URL") & vbCrLf
+    Dim baseUrl As String, apiKey As String, sefEnv As String
+    baseUrl = Trim$(GetConfigValue("SEF_BASE_URL"))
+    apiKey = Trim$(GetConfigValue("SEF_API_KEY"))
+    sefEnv = Trim$(GetConfigValue("SEF_ENV"))
+
+    ' SEF (e-faktura) je opcion. Ako NIJEDNO SEF polje nije popunjeno -> SEF se ne
+    ' koristi na ovoj instalaciji -> preskoci proveru (bez laznog upozorenja). Cim je
+    ' bar jedno polje popunjeno, SEF je delimicno podesen pa prijavi sta nedostaje.
+    ' Runtime i dalje cvrsto zaustavlja slanje ka SEF-u ako fali kljuc
+    ' (modSEFClient/modSEFValidator), pa preskakanje ovde nista ne razbija.
+    If Len(baseUrl) = 0 And Len(apiKey) = 0 And Len(sefEnv) = 0 Then
+        LogSetup "INFO", "SEF se ne koristi (sva SEF polja prazna) -- preskacem SEF proveru"
+        CheckSEFConfigForSetup = vbNullString
+        Exit Function
     End If
 
-    If Trim$(GetConfigValue("SEF_API_KEY")) = "" Then
-        msg = msg & Poruka("SETUP_MSG_SEF_API_KEY") & vbCrLf
-    End If
-
-    If Trim$(GetConfigValue("SEF_ENV")) = "" Then
-        msg = msg & Poruka("SETUP_MSG_SEF_ENV_NIJE") & vbCrLf
-    End If
+    If Len(baseUrl) = 0 Then msg = msg & Poruka("SETUP_MSG_SEF_BASE_URL") & vbCrLf
+    If Len(apiKey) = 0 Then msg = msg & Poruka("SETUP_MSG_SEF_API_KEY") & vbCrLf
+    If Len(sefEnv) = 0 Then msg = msg & Poruka("SETUP_MSG_SEF_ENV_NIJE") & vbCrLf
 
     CheckSEFConfigForSetup = msg
 End Function
