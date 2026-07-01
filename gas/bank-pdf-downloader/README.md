@@ -1,86 +1,109 @@
-# AgriX_C00X_BankPdfDownloader
+# Bank PDF Gmail Downloader (multi-client)
 
-Zaseban Apps Script projekat instaliran na **Google nalogu koji PRIMA mejlove
-banke sa PDF izvodima**. Jedina odgovornost:
+Google Apps Script projekat instaliran na **Gmail nalogu koji STVARNO prima
+mejlove banke** sa PDF izvodima. Jedina odgovornost:
 
-> Gmail PDF prilozi (od banke) → deljeni Drive folder `Bank_Izvodi`
+> Gmail PDF prilozi (od banke) → deljeni Drive folder(i)
 
-Ne parsira PDF, ne piše u `tblBankaImport`, ne dira `tblNovac`. Sve nizvodno već
-postoji u Excel/VBA klijentu i ostaje nepromenjeno.
+Ne parsira PDF, ne piše u `tblBankaImport`, ne dira `tblNovac`. Sve nizvodno
+(parsiranje, saldo integritet, staging, mapiranje) ostaje u Excel/VBA klijentu.
 
-## Gde se uklapa u postojeći lanac
+> Ovo je **kanonska, deployovana verzija** (`Code.gs` = ono što stvarno radi na
+> nalogu). Ne menjati u repou „radi lepote" — sinhronizovati sa GAS-om.
+
+## Gde se uklapa u lanac
 
 ```
 Banka (email)
-  └─[OVAJ PROJEKAT]→ Drive: Bank_Izvodi
-        └─[Google Drive for Desktop sync]→ G:\My Drive\Bank_Izvodi
+  └─[OVAJ GAS]→ Drive: deljeni folder (npr. 01_Bank u AgriX_C001_PROD)
+        └─[Google Drive for Desktop sync]→ H:\My Drive\AgriX_C001_PROD\00_Inbox\01_Bank
               └─ PullBankPdfsFromDriveProduction   (src-vba/modBankaImport.bas)
                    └─ ImportBankaInbox_TX           → tblBankaImport
                         └─ modBankaMapiranje        → tblNovac  (frmBankaImport)
 ```
 
-Karika **Gmail → Drive** je jedino što je falilo; sve ostalo je već u repou
-(runbook: `docs/production-runbook-banka-novac.md`).
+## Fajlovi
 
-## Model deploya (odluka)
+| Fajl | Šta je |
+|---|---|
+| `Code.gs` | ceo skript (nalepiti u Apps Script projekat) |
+| `appsscript.json` | manifest (timeZone, V8, oauthScopes) |
 
-- **Zaseban GAS projekat**, NE deo `AgriX_C00X_GAS_PROD` → nema `doPost` kolizije
-  sa `gas/Code.gs`.
-- **Samo dnevni time-trigger** → nema Web App / `doPost` / `BANK_IMPORT_SECRET`.
-  (Web-app „skini sad" dugme iz Excela namerno izostavljeno; VBA ionako povlači iz
-  Drive foldera pri svakom importu.)
+## Script Properties (per-instalacija)
 
-## Script Properties (po klijentu — NE u izvoru)
-
-Isti izvor ide na svaki `C00X`; razlike su u Script Properties
-(`Project Settings → Script properties`):
+`Project Settings → Script properties`:
 
 | Property | Obavezno | Vrednost |
 |---|---|---|
-| `AGRIX_BANK_IZVODI_FOLDER_ID` | da | ID Drive foldera `Bank_Izvodi` koji se sinhronizuje na VBA bank inbox (`BANKA_INBOX_PATH` / `BANKA_DRIVE_SOURCE_PATH`). **Isti** folder ID koji glavni projekat drži pod ovim imenom (`gas/DriveFolder.gs` → `BANK_IZVODI`). |
-| `BANK_PDF_SENDERS` | da | Email adrese banke, razdvojene zarezom/tačka-zarezom/razmakom, npr. `izvodi@banka.rs, noreply@komercijalna.rs`. |
+| `BANK_IMPORT_CLIENTS_JSON` | da | JSON **niz** klijenata (vidi dole). Multi-client: jedan GAS može puniti više foldera. |
+| `BANK_IMPORT_SECRET` | samo za WebApp | dug random string; bez njega su WebApp pozivi isključeni. |
+| `BANK_IMPORT_BACKFILL_FROM_DATE` | samo za backfill | `YYYY-MM-DD` (npr. `2026-01-01`). |
+| `BANK_IMPORT_BACKFILL_TO_DATE` | opciono | `YYYY-MM-DD`; prazno = danas. |
 
-> Folder `Bank_Izvodi` mora biti **podeljen sa ovim Gmail nalogom kao Editor**.
-
-## Setup (jednom)
-
-1. `script.google.com` → New project → preimenuj u `AgriX_C00X_BankPdfDownloader`.
-2. Nalepi `Code.gs` iz ovog foldera.
-3. Postavi Script Properties iz tabele gore.
-4. `Run → testGmailAccessOnly` → odobri Gmail scope (authorize).
-5. `Run → testBankPdfDownloaderConfig` → proveri `folderName`, `senders`, `query`,
-   `sampleThreadCount`.
-6. `Run → saveBankPdfsToProjectDrive` (ručno, jednom) → proveri da PDF-ovi padnu
-   u `Bank_Izvodi`.
-7. `Run → setupDailyBankPdfDownloader` → kreira dnevni trigger (07h).
-
-## Dedupe (zašto Gmail label, ne samo ime fajla)
-
-VBA strana **iseli** fajl iz foldera posle obrade (`Downloaded` / `Verarbeitet`),
-pa provera „postoji li fajl po imenu" sama nije dovoljna — sledeći run bi ponovo
-skinuo isti izvod. Zato:
-
-- thread koji je sačuvao bar jedan PDF dobija label **`AgriX-BankPdfSaved`**;
-- query isključuje taj label (`-label:AgriX-BankPdfSaved`) → izvod se skida tačno
-  jednom, nezavisno od toga što ga VBA kasnije pomeri.
-
-Provera po imenu fajla ostaje kao sekundarni štit unutar istog run-a.
-Staging-dedup u Excelu (`IsDuplicateBankaImport`, `BrojDokumenta` + `BankaReferenz`)
-je treći, nezavisni sloj.
-
-## Integracioni ugovor (važno)
-
-- Piši u **koren** foldera `Bank_Izvodi` (onaj čiji je ID u
-  `AGRIX_BANK_IZVODI_FOLDER_ID`), **ne** u mesečne podfoldere (`2026/06_Jun`) —
-  VBA puller čita jedan ravan folder i ne ulazi rekurzivno.
-- Ime fajla uvek završava `.pdf` (garantovano u `buildStableDriveFileName_`) jer
-  VBA filtrira `Dir$ "*.pdf"`.
+`BANK_IMPORT_CLIENTS_JSON` primer:
+```json
+[
+  {
+    "clientId": "CLIENT_A",
+    "enabled": true,
+    "driveFolderId": "OVDE_ID_DELJENOG_FOLDERA",
+    "bankSenders": ["izvodi@banka.rs", "noreply@banka.rs"],
+    "searchDays": 30,
+    "maxThreadsPerRun": 100,
+    "pageSize": 50,
+    "gmailQueryExtra": "",
+    "fileNamePrefix": "CLIENT_A",
+    "archiveAfterSave": false,
+    "markReadAfterSave": false
+  }
+]
+```
+- `driveFolderId` = ID deljenog foldera (za C001 = folder `01_Bank`); **samo ID**, ne URL. Folder mora biti **podeljen ovom Gmail nalogu kao Editor**.
+- `bankSenders` — mejlovi banke (ili koristi `gmailQueryExtra` za custom Gmail upit).
+- `fileNamePrefix` — prefiks u imenu fajla (npr. `C001`), korisno kad jedan nalog puni više klijenata.
+- Za pomoć oko vrednosti: `Run → printExampleBankImportProperties`.
 
 ## Funkcije
 
 | Funkcija | Namena |
 |---|---|
-| `saveBankPdfsToProjectDrive` | glavna; dnevni trigger ili ručno |
-| `setupDailyBankPdfDownloader` | kreira/zamenjuje dnevni trigger (07h) |
-| `testBankPdfDownloaderConfig` | provera config-a + sample threadova |
+| `runBankPdfImportDaily` | dnevni trigger; svi `enabled` klijenti |
+| `runBankPdfImportNow` | ručno iz editora (isto kao daily) |
+| `runBankPdfImportBackfill` | backfill po `BANK_IMPORT_BACKFILL_FROM/TO_DATE` |
+| `testBankPdfImportConfig` | provera config-a + Gmail/Drive (bez upisa) |
 | `testGmailAccessOnly` | minimalni Gmail scope smoke-test |
+| `setupDailyBankPdfImportTrigger` | kreira dnevni okidač (07h) |
+| `removeDailyBankPdfImportTrigger` | briše dnevni okidač |
+| `doPost` | opcioni WebApp (`runNow` / `backfill` / `test`), štiti ga `BANK_IMPORT_SECRET` |
+| `printExampleBankImportProperties` | ispiše primer Script Properties |
+
+## Setup (jednom)
+
+1. `script.google.com` → novi projekat → nalepi `Code.gs`.
+2. `Project Settings → Show "appsscript.json" manifest` → nalepi `appsscript.json`.
+3. Script Properties: `BANK_IMPORT_CLIENTS_JSON` (+ `BANK_IMPORT_SECRET` ako koristiš WebApp).
+4. Deljeni folder podeli ovom Gmail nalogu kao **Editor**.
+5. `Run → testGmailAccessOnly` → odobri Gmail scope (authorize).
+6. `Run → testBankPdfImportConfig` → proveri `folderName`, `query`, `sampleThreadCount` po klijentu.
+7. `Run → runBankPdfImportNow` → PDF-ovi padnu u folder(e).
+8. `Run → setupDailyBankPdfImportTrigger` → dnevni trigger (07h).
+
+## Backfill (istorija od npr. 1. januara)
+
+1. Postavi `BANK_IMPORT_BACKFILL_FROM_DATE` (i po želji `..._TO_DATE`).
+2. `Run → runBankPdfImportBackfill` → skine PDF-ove iz tog opsega (Gmail `after:`/`before:`).
+3. Podigni `maxThreadsPerRun`/`pageSize` u klijent JSON-u ako je opseg velik.
+
+## WebApp (opciono — „skini sad" iz VBA)
+
+Deploy: `Execute as: Me`, `Who has access: Anyone with the link`. Poziv (JSON):
+```json
+{ "action": "runNow", "secret": "<BANK_IMPORT_SECRET>" }
+```
+ili `"action": "backfill"` sa `fromDate`/`toDate`/`clientId`, `"action": "test"`.
+
+## Dedupe i integracioni ugovor
+
+- Dedupe: stabilno ime fajla (`[prefix_]YYYY-MM-DD_<msgId>_attN_original.pdf`) + provera postojanja u folderu. Ime **uvek završava `.pdf`** (VBA puller filtrira `Dir$ "*.pdf"`).
+- Piši u **koren** deljenog foldera (onaj koji se sinhronizuje na VBA bank-inbox putanju), ne u mesečne podfoldere.
+- Staging-dedup u Excelu (`IsDuplicateBankaImport`, `BrojDokumenta`+`BankaReferenz`) je nezavisni drugi sloj.
