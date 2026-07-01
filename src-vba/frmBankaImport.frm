@@ -406,7 +406,70 @@ Private Function BuildIncomingPreview(ByVal bankaImportID As String, ByVal partn
     Dim kupacID As String
     Dim fakturaID As String
     Dim s As String
-    
+    Dim konto As String
+    Dim poziv As String
+    Dim kupacByKonto As Variant
+    Dim fakByPoziv As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+    Dim resolvedKupac As String
+    Dim matchVia As String
+
+    ' PRIORITET (kao AutoMapIncomingKupac): tekuci racun (kupac) + poziv na broj (faktura).
+    konto = CStr(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_PARTNER_KONTO), ""))
+    poziv = CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ))
+
+    kupacByKonto = TryResolveKupacByKonto(konto)
+    fakByPoziv = TryResolveFakturaByPoziv(poziv)
+
+    fakturaID = ""
+    idDoc = ""
+    If Not IsEmpty(fakByPoziv) Then
+        fakturaID = CStr(fakByPoziv(0))
+        idDoc = CStr(fakByPoziv(1))
+    End If
+
+    If IsEmpty(kupacByKonto) Then
+        idKonto = ""
+    Else
+        idKonto = CStr(kupacByKonto(0))
+    End If
+
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        BuildIncomingPreview = "Smer: Uplata" & vbCrLf & _
+            "Auto match: KONFLIKT (poziv->" & idDoc & " / racun->" & idKonto & ") -> rucno"
+        Exit Function
+    End If
+
+    resolvedKupac = idDoc
+    matchVia = "poziv na broj"
+    If resolvedKupac = "" Then
+        resolvedKupac = idKonto
+        matchVia = "tekuci racun"
+    End If
+
+    If resolvedKupac <> "" Then
+        kupacID = resolvedKupac
+        If fakturaID = "" Then fakturaID = TryResolveFakturaForKupac(bankaImportID, kupacID)
+
+        s = "Smer: Uplata" & vbCrLf
+        s = s & "Auto match: Kupac (" & matchVia & ")" & vbCrLf
+        s = s & "KupacID: " & kupacID & vbCrLf
+        s = s & "Kupac: " & CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv")) & vbCrLf
+
+        If fakturaID <> "" Then
+            s = s & "FakturaID: " & fakturaID & vbCrLf
+            s = s & "Broj fakture: " & CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_BROJ)) & vbCrLf
+            s = s & "Tip knjizenja: " & NOV_KUPCI_UPLATA
+        Else
+            s = s & "Faktura: nije jednoznacno nadjena" & vbCrLf
+            s = s & "Tip knjizenja: " & NOV_KUPCI_AVANS
+        End If
+
+        BuildIncomingPreview = s
+        Exit Function
+    End If
+
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
         If CStr(mapped(1)) = "Kupac" Then
@@ -476,7 +539,73 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
     Dim s As String
     Dim blockNo As String
     Dim i As Long
-    
+    Dim konto As String
+    Dim poziv As String
+    Dim koopByPoziv As String
+    Dim koopByKonto As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+    Dim resolvedKoop As String
+    Dim matchVia As String
+
+    ' PRIORITET (kao AutoMapOutgoingKooperantOrOM): poziv na broj (otkup) + tekuci racun.
+    konto = CStr(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_PARTNER_KONTO), ""))
+    poziv = CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ))
+
+    koopByPoziv = TryResolveKooperantByOtkupPoziv(poziv)
+    koopByKonto = TryResolveKooperantByKonto(konto)
+
+    idDoc = koopByPoziv
+    If IsEmpty(koopByKonto) Then
+        idKonto = ""
+    Else
+        idKonto = CStr(koopByKonto(0))
+    End If
+
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        BuildOutgoingPreview = "Smer: Isplata" & vbCrLf & _
+            "Auto match: KONFLIKT (poziv->" & idDoc & " / racun->" & idKonto & ") -> rucno"
+        Exit Function
+    End If
+
+    resolvedKoop = idDoc
+    matchVia = "poziv na broj"
+    If resolvedKoop = "" Then
+        resolvedKoop = idKonto
+        matchVia = "tekuci racun"
+    End If
+
+    If resolvedKoop <> "" Then
+        kooperantID = resolvedKoop
+        blockNo = poziv
+        kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo)
+
+        s = "Smer: Isplata" & vbCrLf
+        s = s & "Auto match: Kooperant (" & matchVia & ")" & vbCrLf
+        s = s & "KooperantID: " & kooperantID & vbCrLf
+        s = s & "Kooperant: " & GetKooperantNaziv(kooperantID) & vbCrLf
+
+        If Trim$(blockNo) <> "" Then
+            s = s & "Blok: " & blockNo & vbCrLf
+        End If
+
+        If IsEmpty(kandidati) Then
+            s = s & "Otkup kandidati: nema otvorenih stavki" & vbCrLf
+            s = s & "Tip knjizenja: " & NOV_VIRMAN_AVANS_KOOP
+        Else
+            s = s & "Otkup kandidati:" & vbCrLf
+            For i = 1 To UBound(kandidati, 1)
+                s = s & " - " & CStr(kandidati(i, 1)) & " | otvoreno: " & _
+                    Format$(CDbl(kandidati(i, 2)), "#,##0.00") & " | " & _
+                    CStr(kandidati(i, 3)) & vbCrLf
+            Next i
+            s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_KOOP
+        End If
+
+        BuildOutgoingPreview = s
+        Exit Function
+    End If
+
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
         Select Case CStr(mapped(1))
