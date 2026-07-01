@@ -382,7 +382,10 @@ AGRIX_SHEETS_MASTER_FOLDER_ID =
 AGRIX_SHEETS_REPORTS_FOLDER_ID =
 AGRIX_SHEETS_ARCHIVE_FOLDER_ID =
 
-AGRIX_BANK_IZVODI_FOLDER_ID =
+# 00_Inbox/01_Bank NEMA Script Property (bootstrap ga pravi ali ne upisuje ID).
+# ID uzmi RUCNO iz Drive URL-a -- treba za: Editor share nalogu koji prima izvode
+# + BANK_IMPORT_CLIENTS_JSON.driveFolderId (GAS #1) + BANKA_DRIVE_SOURCE_PATH.
+INBOX_01_BANK_FOLDER_ID =
 
 AGRIX_DOCUMENTS_FOLDER_ID =
 AGRIX_DOC_OTKUPNI_LISTOVI_FOLDER_ID =
@@ -450,7 +453,7 @@ GOOGLE_CLIENT_SECRET
 
 u password manager.
 
-U Excel `tblConfig` će ići:
+U Excel `tblSEFConfig` će ići (kod čita GOOGLE_* iz tblSEFConfig, ne tblConfig):
 
 ```text
 GOOGLE_CLIENT_ID
@@ -541,8 +544,6 @@ AGRIX_SHEETS_OPERATIONAL_FOLDER_ID
 AGRIX_SHEETS_MASTER_FOLDER_ID
 AGRIX_SHEETS_REPORTS_FOLDER_ID
 AGRIX_SHEETS_ARCHIVE_FOLDER_ID
-
-AGRIX_BANK_IZVODI_FOLDER_ID
 
 AGRIX_DOCUMENTS_FOLDER_ID
 AGRIX_DOC_OTKUPNI_LISTOVI_FOLDER_ID
@@ -697,9 +698,9 @@ Ako ping radi u jednom browser profilu, a ne radi u drugom, problem je Google mu
 
 ---
 
-## 15. Excel `tblConfig`
+## 15. Excel `tblSEFConfig` — Google + klijent
 
-U `OtkupApp.xlsm`, u `tblConfig`, postavi:
+U `OtkupApp.xlsm`, u `tblSEFConfig`, postavi (kod čita GOOGLE_*/CLIENT_* iz tblSEFConfig, ne tblConfig):
 
 ```text
 Kljuc                         Vrednost
@@ -1379,15 +1380,18 @@ Minimalni installer mora da uradi sledeće:
 [ ] BANKA_PROCESSED_PATH postoji.
 [ ] BANKA_ERROR_PATH postoji.
 [ ] PDFTOTEXT_EXE_PATH postoji i pokazuje na pdftotext.exe.
-[ ] GOOGLE_CLIENT_ID postoji.
-[ ] GOOGLE_CLIENT_SECRET postoji.
-[ ] GOOGLE_PWA_FOLDER_ID postoji i pokazuje na 01_Sheets/02_Master.
-[ ] GOOGLE_REPORTS_FOLDER_ID postoji i pokazuje na 01_Sheets/03_Reports.
+[ ] GOOGLE_CLIENT_ID postoji (u tblSEFConfig).
+[ ] GOOGLE_CLIENT_SECRET postoji (u tblSEFConfig).
+[ ] GOOGLE_PWA_FOLDER_ID postoji (tblSEFConfig) i pokazuje na 01_Sheets/02_Master.
+[ ] GOOGLE_REPORTS_FOLDER_ID postoji (tblSEFConfig) i pokazuje na 01_Sheets/03_Reports.
 [ ] MONITORING_ENDPOINT postoji.
 [ ] CLIENT_ID postoji.
 [ ] ENV = PROD.
-[ ] APP_SETUP_COMPLETED = DA samo ako su obavezne stavke OK.
+[ ] APP_SETUP_COMPLETED = DA samo ako su obavezne (LOKALNE) stavke OK.
 ```
+
+> NAPOMENA (v2.8.6): Google / GAS / banka-Drive dostupnost proverava `CheckServerLink`
+> ADVISORY — prikaže se kao napomena, ali NE obara „zeleno". Ručno: `Alt+F8 → TestServerLink`.
 
 Ako nešto fali:
 
@@ -1550,25 +1554,25 @@ Proveri:
 
 ## 27. Bankarski email / PDF import pre-test
 
-Za sada standardni tok:
+Stvarni tok (GAS #1 downloader → Drive → Drive for Desktop → VBA; VBA NE čita mailbox):
 
 ```text
 Banka / klijentov email
-→ forwarding ili direktno slanje
-→ mailbox koji VBA čita
-→ VBA skida PDF
-→ C:\OtkupApp\Bank_Izvodi\Inbox
-→ ImportBankaInbox_TX
+→ GAS #1 „Bank PDF Downloader" (na nalogu koji prima izvode; Editor na 01_Bank)
+→ Drive 00_Inbox/01_Bank
+→ Google Drive for Desktop → lokalni ...\01_Bank  (= BANKA_DRIVE_SOURCE_PATH)
+→ VBA puller → C:\OtkupApp\Bank_Izvodi\Inbox
+→ ImportBankaInbox_TX → tblBankaImport
 ```
 
 U kancelariji pripremi:
 
 ```text
-[ ] znaš koji mailbox će VBA čitati
-[ ] znaš IMAP/POP/Outlook tok ako se koristi
-[ ] znaš kako će se podesiti forwarding
-[ ] imaš test PDF izvod
-[ ] Poppler radi
+[ ] znaš na koji nalog banka šalje izvode (tamo ide GAS #1 downloader)
+[ ] folder ID od 01_Bank (za Editor share + BANK_IMPORT_CLIENTS_JSON.driveFolderId)
+[ ] Drive for Desktop plan za mašinu (koji nalog vidi 01_Bank)
+[ ] imaš test PDF izvod (tekst, ne skenirana slika)
+[ ] Poppler radi (pdftotext.exe)
 [ ] ImportBankaInbox_TX radi na test PDF-u
 ```
 
@@ -1886,23 +1890,46 @@ Sa klijentom proveri:
 [ ] Da li PDF ima tekst, ne samo skeniranu sliku.
 ```
 
-Podesi najjednostavniji tok:
+Stvarni tok (dva GAS-a povezana preko deljenog `01_Bank` foldera; VBA NE čita mailbox direktno):
 
 ```text
-email sa izvodom
-→ mailbox koji VBA čita
-→ VBA download
+Banka (email)
+→ GAS #1 „Bank PDF Downloader" (na nalogu koji PRIMA izvode; Editor na 01_Bank)
+→ Drive 00_Inbox/01_Bank (u stablu glavnog GAS-a #2)
+→ Google Drive for Desktop (sync na lokalni disk)
+→ lokalni ...\00_Inbox\01_Bank   (= BANKA_DRIVE_SOURCE_PATH)
+→ VBA puller (PullBankPdfsFromDriveProduction)
 → C:\OtkupApp\Bank_Izvodi\Inbox
+→ ImportBankaInbox_TX → tblBankaImport → tblNovac
 ```
 
-Test:
+Povezivanje dva GAS-a (pivot = folder ID od `01_Bank`; isti ID na tri mesta):
 
 ```text
-[ ] Pošalji test email sa PDF izvodom.
-[ ] Proveri da VBA može da ga skine.
-[ ] PDF završi u lokalnom Inbox-u.
-[ ] ImportBankaInbox_TX ga obrađuje.
+[ ] Uzmi folder ID od 00_Inbox/01_Bank iz Drive URL-a (nema Script Property).
+[ ] Podeli 01_Bank kao Editor nalogu koji prima izvode (na kom radi GAS #1).
+[ ] GAS #1 (gas/bank-pdf-downloader): BANK_IMPORT_CLIENTS_JSON.driveFolderId = taj isti ID.
+[ ] GAS #1: testGmailAccessOnly → testBankPdfImportConfig → runBankPdfImportNow → setupDailyBankPdfImportTrigger (07h).
 ```
+
+Drive for Desktop na mašini sa Excelom:
+
+```text
+[ ] Drive for Desktop ulogovan na nalog koji vidi 01_Bank (ili: Add shortcut to Drive → My Drive).
+[ ] 00_Inbox → desni klik → Available offline (da pdftotext čita realne bajtove, ne cloud placeholder).
+[ ] BANKA_DRIVE_SOURCE_PATH (tblLocalConfig) = lokalna putanja do 01_Bank (Podesavanja → „Banka / lokalno" → „...").
+```
+
+Test (end-to-end):
+
+```text
+[ ] runBankPdfImportNow (GAS #1) spusti PDF u 01_Bank.
+[ ] Drive for Desktop materijalizuje fajl lokalno.
+[ ] „Banka uvoz izvoda" (ImportBankaInbox_WithDrivePull) povuče → tblBankaImport.
+[ ] ImportBankaInbox_TX / auto-map → tblNovac.
+```
+
+Detaljno: `docs/production-runbook-banka-import-setup.md` i `docs/DESKTOP_SETUP_REFERENCE.md` §6.
 
 ---
 

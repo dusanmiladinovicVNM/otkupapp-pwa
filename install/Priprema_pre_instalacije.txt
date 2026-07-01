@@ -34,9 +34,9 @@ Desktop app
 
 Ako je OAuth aplikacija u test modu, dodati korisnički Google nalog kao test user.
 
-U OtkupApp tblConfig moraju postojati redovi:
+U OtkupApp tblSEFConfig moraju postojati redovi (NE tblConfig -- kod cita GOOGLE_* iz tblSEFConfig):
 
-Kljuc                 Vrednost
+ConfigKey             ConfigValue
 GOOGLE_CLIENT_ID      <client id>
 GOOGLE_CLIENT_SECRET  <client secret>
 GOOGLE_PWA_FOLDER_ID  <drive folder id>
