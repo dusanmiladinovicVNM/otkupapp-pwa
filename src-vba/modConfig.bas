@@ -543,6 +543,9 @@ Public Const CFG_OTKUP_BRUTO_UNOS As String = "OTKUP_BRUTO_UNOS"
 Public Const CFG_KOOP_AUTO_CREATE As String = "KOOP_AUTO_CREATE"
 ' Pracenje parcela: dozvoli unos parcele u frmOtkup (default ON). OFF -> polje skip.
 Public Const CFG_PRACENJE_PARCELA As String = "PRACENJE_PARCELA"
+' Kompletna validacija unosa (obavezna polja pre snimanja) u frmOtkup, frmDokumenta
+' i frmPalete. Default ON (kao od v2.8.1). OFF -> minimalna validacija kao pre te izmene.
+Public Const CFG_VALIDACIJA_UNOSA As String = "VALIDACIJA_UNOSA"
 ' Kes isplate proizvodjacima postoje (default ON). OFF -> skip Novac/Primalac u
 ' frmOtkup i "Br. otk. blk." u Ulaz OM (frmDokumenta).
 Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
@@ -841,6 +844,14 @@ End Function
 ' Pracenje parcela u frmOtkup (cmbParcela). Default ON. OFF -> polje se skip.
 Public Function IsPracenjeParcela() As Boolean
     IsPracenjeParcela = ConfigFlag(CFG_PRACENJE_PARCELA, True)
+End Function
+
+' Kompletna validacija unosa (obavezna polja pre snimanja) u frmOtkup/frmDokumenta/
+' frmPalete. Default ON (kao od v2.8.1 -- "Blokator obaveznih polja"). OFF vraca
+' minimalnu validaciju kao pre te izmene (npr. broj gajbi u frmOtkup tada ostaje
+' obavezan iskljucivo u bruto rezimu).
+Public Function IsValidacijaUnosa() As Boolean
+    IsValidacijaUnosa = ConfigFlag(CFG_VALIDACIJA_UNOSA, True)
 End Function
 
 ' Postoje kes isplate proizvodjacima. Default ON. OFF -> skip Novac/Primalac

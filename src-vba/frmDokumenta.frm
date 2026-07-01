@@ -628,13 +628,13 @@ Private Sub btnUnosOtp_Click()
         Exit Sub
     End If
 
-    If cmbVrstaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbVrstaVoca.value = "" Then
         MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
     End If
 
-    If cmbSortaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbSortaVoca.value = "" Then
         MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbSortaVoca.SetFocus
         Exit Sub
@@ -711,7 +711,7 @@ Private Sub btnUnosOtp_Click()
     End If
 
     Dim cenaI As Double
-    If hasKlasaI Then
+    If IsValidacijaUnosa() And hasKlasaI Then
         If Not TryParseDouble(txtCenaOtp.value, cenaI) Or cenaI <= 0 Then
             MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
             txtCenaOtp.SetFocus
@@ -746,17 +746,17 @@ Private Sub btnUnosOtp_Click()
     End If
 
     ' Ambalaza (broj gajbi) i tip ambalaze su obavezni za svaku unetu klasu.
-    If hasKlasaI And kolAmb <= 0 Then
+    If IsValidacijaUnosa() And hasKlasaI And kolAmb <= 0 Then
         MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
         txtKolAmbOtp.SetFocus
         Exit Sub
     End If
-    If chkDveKlaseOtp.value And kolAmbII <= 0 Then
+    If IsValidacijaUnosa() And chkDveKlaseOtp.value And kolAmbII <= 0 Then
         MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
         If Not m_txtKolAmbIIOtp Is Nothing Then m_txtKolAmbIIOtp.SetFocus
         Exit Sub
     End If
-    If (kolAmb > 0 Or kolAmbII > 0) And cmbTipAmbOtp.value = "" Then
+    If IsValidacijaUnosa() And (kolAmb > 0 Or kolAmbII > 0) And cmbTipAmbOtp.value = "" Then
         MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbOtp.SetFocus
         Exit Sub
@@ -787,7 +787,7 @@ Private Sub btnUnosOtp_Click()
     End If
 
     ' Broj dokumenta je obavezan.
-    If Trim$(txtBrojOtp.value) = "" Then
+    If IsValidacijaUnosa() And Trim$(txtBrojOtp.value) = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         txtBrojOtp.SetFocus
         Exit Sub
@@ -1583,13 +1583,13 @@ Private Sub btnUnosOMUlaz_Click()
         Exit Sub
     End If
 
-    If cmbVozac.value = "" Then
+    If IsValidacijaUnosa() And cmbVozac.value = "" Then
         MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
         cmbVozac.SetFocus
         Exit Sub
     End If
 
-    If cmbVrstaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbVrstaVoca.value = "" Then
         MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
@@ -1782,7 +1782,7 @@ Private Sub btnUnosOMUlaz_Click()
     End If
 
     ' Broj dokumenta je obavezan (smer-tokovi ga auto-predloze iznad).
-    If brojDok = "" Then
+    If IsValidacijaUnosa() And brojDok = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         txtBrojDokOMUlaz.SetFocus
         Exit Sub
@@ -1924,13 +1924,13 @@ Private Sub btnUnosZbr_Click()
         Exit Sub
     End If
 
-    If cmbVrstaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbVrstaVoca.value = "" Then
         MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
     End If
 
-    If cmbSortaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbSortaVoca.value = "" Then
         MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbSortaVoca.SetFocus
         Exit Sub
@@ -1997,7 +1997,7 @@ Private Sub btnUnosZbr_Click()
     End If
 
     ' Tip ambalaze je obavezan kad je uneta ambalaza.
-    If (ukupnoAmb > 0 Or ukupnoAmbII > 0) And cmbTipAmbZbr.value = "" Then
+    If IsValidacijaUnosa() And (ukupnoAmb > 0 Or ukupnoAmbII > 0) And cmbTipAmbZbr.value = "" Then
         MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbZbr.SetFocus
         Exit Sub
@@ -2242,13 +2242,13 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
-    If cmbVrstaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbVrstaVoca.value = "" Then
         MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
     End If
 
-    If cmbSortaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbSortaVoca.value = "" Then
         MsgBox "Izaberite sortu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbSortaVoca.SetFocus
         Exit Sub
@@ -2286,7 +2286,7 @@ Private Sub btnUnosPrij_Click()
     End If
 
     Dim cenaI As Double
-    If hasKlasaI Then
+    If IsValidacijaUnosa() And hasKlasaI Then
         If Not TryParseDouble(txtCenaPrij.value, cenaI) Or cenaI <= 0 Then
             MsgBox "Unesite ispravnu cenu!", vbExclamation, APP_NAME
             txtCenaPrij.SetFocus
@@ -2330,17 +2330,17 @@ Private Sub btnUnosPrij_Click()
     End If
 
     ' Ambalaza (broj gajbi) i tip ambalaze su obavezni za svaku unetu klasu.
-    If hasKlasaI And kolAmb <= 0 Then
+    If IsValidacijaUnosa() And hasKlasaI And kolAmb <= 0 Then
         MsgBox "Unesite broj gajbi za I klasu!", vbExclamation, APP_NAME
         txtKolAmbPrij.SetFocus
         Exit Sub
     End If
-    If chkDveKlasePrij.value And kolAmbII <= 0 Then
+    If IsValidacijaUnosa() And chkDveKlasePrij.value And kolAmbII <= 0 Then
         MsgBox "Unesite broj gajbi za II klasu!", vbExclamation, APP_NAME
         If Not m_txtKolAmbIIPrij Is Nothing Then m_txtKolAmbIIPrij.SetFocus
         Exit Sub
     End If
-    If (kolAmb > 0 Or kolAmbII > 0) And cmbTipAmbPrij.value = "" Then
+    If IsValidacijaUnosa() And (kolAmb > 0 Or kolAmbII > 0) And cmbTipAmbPrij.value = "" Then
         MsgBox Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), vbExclamation, APP_NAME
         cmbTipAmbPrij.SetFocus
         Exit Sub
@@ -2660,13 +2660,13 @@ Private Sub btnUnosIzlaz_Click()
         Exit Sub
     End If
 
-    If cmbVozac.value = "" Then
+    If IsValidacijaUnosa() And cmbVozac.value = "" Then
         MsgBox "Izaberite vozaca!", vbExclamation, APP_NAME
         cmbVozac.SetFocus
         Exit Sub
     End If
 
-    If cmbVrstaVoca.value = "" Then
+    If IsValidacijaUnosa() And cmbVrstaVoca.value = "" Then
         MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus
         Exit Sub
@@ -2695,7 +2695,7 @@ Private Sub btnUnosIzlaz_Click()
     Dim brojDok As String
     brojDok = Trim$(txtBrojDokIzlaz.value)
 
-    If brojDok = "" Then
+    If IsValidacijaUnosa() And brojDok = "" Then
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         txtBrojDokIzlaz.SetFocus
         Exit Sub
