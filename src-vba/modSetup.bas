@@ -1623,7 +1623,8 @@ Public Sub EnsureAllDocFolders()
     EnsureDocFolder PDF_DIR_IZVESTAJI
 End Sub
 
-Private Function PickFolder(ByVal titleText As String) As String
+' Public: reuse-uje ga i modPodesavanja (inline "..." browse dugmad u config editoru).
+Public Function PickFolder(ByVal titleText As String) As String
     On Error GoTo EH
 
     Dim fd As FileDialog

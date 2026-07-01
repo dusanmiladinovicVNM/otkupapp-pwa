@@ -142,12 +142,12 @@ Public Function ConfigEditorFields() As Variant
     ' Banka / lokalno -- per-masina putanje i parametri (tblLocalConfig, store="local").
     ' Citaju se preko GetLocalConfigValue u modBankaImport / modBankaImportParserPdfToText,
     ' zato OVDE moraju ici u "local" (inace se upisu u tblSEFConfig a ne procitaju).
-    CfgAdd c, "Banka / lokalno", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text", "local"
-    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_SOURCE_PATH", "Drive izvor (sinhronizovan 00_Inbox\01_Bank folder)", "text", "local"
-    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_DOWNLOADED_PATH", "Drive obradjeno (opciono; prazno = ne premesta)", "text", "local"
-    CfgAdd c, "Banka / lokalno", "BANKA_INBOX_PATH", "Lokalni inbox (staging)", "text", "local"
-    CfgAdd c, "Banka / lokalno", "BANKA_PROCESSED_PATH", "Lokalni processed", "text", "local"
-    CfgAdd c, "Banka / lokalno", "BANKA_ERROR_PATH", "Lokalni error", "text", "local"
+    CfgAdd c, "Banka / lokalno", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text", "local", "poppler"
+    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_SOURCE_PATH", "Drive izvor (sinhronizovan 00_Inbox\01_Bank folder)", "text", "local", "folder"
+    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_DOWNLOADED_PATH", "Drive obradjeno (opciono; prazno = ne premesta)", "text", "local", "folder"
+    CfgAdd c, "Banka / lokalno", "BANKA_INBOX_PATH", "Lokalni inbox (staging)", "text", "local", "folder"
+    CfgAdd c, "Banka / lokalno", "BANKA_PROCESSED_PATH", "Lokalni processed", "text", "local", "folder"
+    CfgAdd c, "Banka / lokalno", "BANKA_ERROR_PATH", "Lokalni error", "text", "local", "folder"
     CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_MAX_FILES", "Max fajlova po povlacenju (Drive)", "int", "local"
     CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_MIN_FILE_AGE_SECONDS", "Min. starost fajla (s) pre povlacenja", "int", "local"
     CfgAdd c, "Banka / lokalno", "BANKA_AUTO_IMPORT_ON_START", "Auto-uvoz izvoda pri startu", "list:DA;NE", "local"
@@ -168,10 +168,13 @@ End Function
 ' Helper: dodaj jedan red u registar (izbegava line-continuation limit).
 Private Sub CfgAdd(ByRef c As Collection, ByVal grp As String, ByVal key As String, _
                    ByVal lbl As String, ByVal typ As String, _
-                   Optional ByVal store As String = "sef")
+                   Optional ByVal store As String = "sef", _
+                   Optional ByVal browse As String = "")
     ' store: "sef" -> tblSEFConfig (Get/SetConfigValue); "local" -> tblLocalConfig
     ' (Get/SetLocalConfigValue), za per-masina putanje (Poppler, banka lokalne putanje).
-    c.Add Array(grp, key, lbl, typ, store)
+    ' browse: "" (nema) | "folder" (folder picker -> upisi u polje) | "poppler"
+    ' (SetupPopplerInteractive: auto pored xlsm-a ili picker). Dodaje inline "..." dugme.
+    c.Add Array(grp, key, lbl, typ, store, browse)
 End Sub
 
 ' Helper: distinct vrednosti kolone kao "A;B;C" za dinamicki "list:" tip.
@@ -255,13 +258,6 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     StyleExitButton btnCollapse, "[-] Skupi sve"
     WireButton btnCollapse, "collapseall"
 
-    ' Direktan izbor Poppler-a (pdftotext.exe) bez Alt+F8 -- otvara folder picker
-    ' (modSetup.SetupPopplerInteractive) i osvezi polje PDFTOTEXT_EXE_PATH u formi.
-    Dim btnPoppler As MSForms.CommandButton
-    Set btnPoppler = AddButton("btnCfgPoppler", m + 316, 80, 210, 22)
-    StyleExitButton btnPoppler, "Izaberi Poppler (pdftotext.exe)"
-    WireButton btnPoppler, "poppler"
-
     ' Geometrija kolona: 2 kolone kad ima dovoljno sirine, inace 1.
     Const COLGAP As Single = 16
     mFormW = w
@@ -281,11 +277,12 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Dim flds As Variant: flds = ConfigEditorFields()
     Dim i As Long, f As Variant
     Dim grp As String, key As String, cap As String, typRaw As String, typ As String
-    Dim store As String
+    Dim store As String, browse As String
     Dim cur As String
     Dim lbl As MSForms.label, tb As MSForms.TextBox, cmb As MSForms.ComboBox
     Dim opts As Variant, oi As Long
     Dim inCtl As MSForms.Control
+    Dim brBtn As MSForms.CommandButton
     Dim rowsColl As Collection
     Dim hdrBtn As MSForms.CommandButton
     Dim curGroup As String: curGroup = ""
@@ -296,6 +293,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         grp = CStr(f(0)): key = CStr(f(1)): cap = CStr(f(2))
         typRaw = CStr(f(3)): typ = LCase$(typRaw)
         store = "sef": If UBound(f) >= 4 Then store = LCase$(CStr(f(4)))
+        browse = "": If UBound(f) >= 5 Then browse = LCase$(CStr(f(5)))
 
         If grp <> curGroup Then
             curGroup = grp
@@ -346,7 +344,20 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             Set inCtl = tb
         End If
 
-        mRowsByGroup(grp).Add Array(lbl, inCtl, typ)
+        ' Inline "..." dugme za browse polja (samo obicni text; ne memo/combo).
+        ' Repozicionira ga RelayoutGroups; klik -> ConfigEditor_OnClick(action, key).
+        Set brBtn = Nothing
+        If browse <> "" And typ <> "memo" And typ <> "bool" And Left$(typ, 5) <> "list:" Then
+            Set brBtn = AddButton("cfgbr_" & key, 0, 0, 24, 18)
+            StyleExitButton brBtn, "..."
+            If browse = "poppler" Then
+                WireButtonKey brBtn, "browsepoppler", key
+            Else
+                WireButtonKey brBtn, "browsefolder", key
+            End If
+        End If
+
+        mRowsByGroup(grp).Add Array(lbl, inCtl, typ, brBtn)
     Next i
 
     ' Pocetno stanje: sve grupe skupljene (pregledan "sadrzaj"); siri po potrebi.
@@ -375,7 +386,8 @@ Public Sub ConfigEditor_OnClick(ByVal action As String, Optional ByVal groupKey 
         Case "grp": ConfigEditor_ToggleGroup groupKey
         Case "expandall": ConfigEditor_SetAll False
         Case "collapseall": ConfigEditor_SetAll True
-        Case "poppler": ConfigEditor_PickPoppler
+        Case "poppler", "browsepoppler": ConfigEditor_PickPoppler
+        Case "browsefolder": ConfigEditor_PickFolderInto groupKey
     End Select
     Exit Sub
 EH:
@@ -427,6 +439,20 @@ EH:
     LogErr "modPodesavanja.ConfigEditor_PickPoppler"
 End Sub
 
+' Inline "..." dugme za path polja (BANKA_*_PATH): folder picker -> upisi u polje.
+' Ne pise u tblLocalConfig odmah -- "Sacuvaj" persistuje (isti model kao ostala polja).
+Public Sub ConfigEditor_PickFolderInto(ByVal fieldKey As String)
+    On Error GoTo EH
+    Dim p As String
+    p = modSetup.PickFolder("Izaberi folder: " & fieldKey)
+    If Len(Trim$(p)) = 0 Then Exit Sub
+    On Error Resume Next
+    If Not mInputs Is Nothing Then mInputs(fieldKey).value = p
+    Exit Sub
+EH:
+    LogErr "modPodesavanja.ConfigEditor_PickFolderInto"
+End Sub
+
 ' Preracunaj pozicije svih grupa/polja (collapse-aware, 2-kolonski grid).
 ' Memo polja zauzimaju ceo red; ostala se ravnaju u kolone radi gustine.
 Private Sub RelayoutGroups()
@@ -451,7 +477,9 @@ Private Sub RelayoutGroups()
     Dim collapsed As Boolean
     Dim grpRows As Collection, r As Variant
     Dim lbl As MSForms.label, inCtl As MSForms.Control, typ As String
+    Dim brBtn As MSForms.CommandButton
     Dim col As Long, cx As Single, idx As Long
+    Const BRW As Single = 24, BRGAP As Single = 3
 
     For Each gname In mGroupOrder
         grp = CStr(gname)
@@ -471,10 +499,13 @@ Private Sub RelayoutGroups()
             Set lbl = r(0)
             Set inCtl = r(1)
             typ = CStr(r(2))
+            Set brBtn = Nothing
+            If UBound(r) >= 3 Then Set brBtn = r(3)
 
             If collapsed Then
                 lbl.Visible = False
                 inCtl.Visible = False
+                If Not brBtn Is Nothing Then brBtn.Visible = False
             ElseIf typ = "memo" Then
                 If col = 1 Then Y = Y + cellH: col = 0
                 lbl.Left = mMargin: lbl.top = Y: lbl.width = mFormW - 2 * mMargin
@@ -482,6 +513,7 @@ Private Sub RelayoutGroups()
                 inCtl.Left = mMargin: inCtl.top = Y + LBLH + LBLGAP
                 inCtl.width = mFormW - 2 * mMargin: inCtl.Height = MEMOH
                 inCtl.Visible = True
+                If Not brBtn Is Nothing Then brBtn.Visible = False
                 Y = Y + memoCellH
                 col = 0
             Else
@@ -489,8 +521,17 @@ Private Sub RelayoutGroups()
                 lbl.Left = cx: lbl.top = Y: lbl.width = mCellW
                 lbl.Visible = True
                 inCtl.Left = cx: inCtl.top = Y + LBLH + LBLGAP
-                inCtl.width = mCellW
                 inCtl.Visible = True
+                If brBtn Is Nothing Then
+                    inCtl.width = mCellW
+                Else
+                    inCtl.width = mCellW - BRW - BRGAP
+                    brBtn.Left = cx + inCtl.width + BRGAP
+                    brBtn.top = inCtl.top
+                    brBtn.width = BRW
+                    brBtn.Height = INH
+                    brBtn.Visible = True
+                End If
                 If mColCount = 1 Then
                     Y = Y + cellH
                 ElseIf col = 1 Then
@@ -529,6 +570,17 @@ Private Sub WireGroupButton(ByVal b As MSForms.CommandButton, ByVal grp As Strin
     Set wrp = New clsConfigBtn
     wrp.action = "grp"
     wrp.groupKey = grp
+    Set wrp.btn = b
+    mWrappers.Add wrp
+End Sub
+
+' Kao WireButton, ali nosi i payload (groupKey). Za inline browse dugmad: groupKey =
+' ConfigKey ciljanog polja, action = "browsefolder"/"browsepoppler".
+Private Sub WireButtonKey(ByVal b As MSForms.CommandButton, ByVal act As String, ByVal key As String)
+    Dim wrp As clsConfigBtn
+    Set wrp = New clsConfigBtn
+    wrp.action = act
+    wrp.groupKey = key
     Set wrp.btn = b
     mWrappers.Add wrp
 End Sub
