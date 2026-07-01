@@ -7,16 +7,12 @@ Option Explicit
 '
 ' CONFIG STRATEGY:
 '
-' 1) tblConfig
-'    Existing Google/PWA config only:
-'       Kljuc | Vrednost | Opis
-'
-'    Expected keys:
-'       GOOGLE_CLIENT_ID
-'       GOOGLE_CLIENT_SECRET
-'       GOOGLE_PWA_FOLDER_ID
-'
-'    This module READS tblConfig but does not write local setup values to it.
+' 1) tblConfig  (legacy)
+'    Istorijski je drzao Google/PWA kljuceve. Danas Google/PWA config zivi u
+'    tblSEFConfig -- runtime (modGoogleAuth, modBrojevi, modGoogleSyncOrchestrator)
+'    i Podesavanja ga citaju/pisu preko Get/SetConfigValue, pa i setup provera
+'    (CheckGoogleOAuthConfig) gleda tblSEFConfig. tblConfig se ovde samo kolonski
+'    validira ako uopste postoji (ne pise se u njega).
 '
 ' 2) tblLocalConfig
 '    Local workstation setup config:
@@ -207,7 +203,7 @@ Public Sub EnableCloudSyncMode()
     LogSetup "OK", "Cloud/PWA sync UKLJUCEN (CLOUD_SYNC_ENABLED=YES)"
 
     MsgBox "Cloud/PWA sync je ukljucen." & vbCrLf & vbCrLf & _
-           "SetupNewPC ce ponovo traziti Google kredencijale u tblConfig.", _
+           "SetupNewPC ce ponovo traziti Google kredencijale u tblSEFConfig.", _
            vbInformation, APP_NAME
     Exit Sub
 
@@ -383,27 +379,9 @@ EH:
     Err.Raise Err.Number, "SetLocalConfigValue", Err.description
 End Sub
 
-Public Function GetGoogleConfigValue(ByVal keyName As String, _
-                                     Optional ByVal defaultValue As String = "") As String
-    On Error GoTo EH
-
-    Dim v As Variant
-
-    v = LookupValue(TBL_CONFIG, CFG_KEY, keyName, CFG_VALUE)
-
-    If isError(v) Or IsNull(v) Or IsEmpty(v) Then
-        GetGoogleConfigValue = defaultValue
-    ElseIf Len(Trim$(CStr(v))) = 0 Then
-        GetGoogleConfigValue = defaultValue
-    Else
-        GetGoogleConfigValue = Trim$(CStr(v))
-    End If
-
-    Exit Function
-
-EH:
-    GetGoogleConfigValue = defaultValue
-End Function
+' GetGoogleConfigValue (citac tblConfig-a) je uklonjen: Google/PWA config se cita iz
+' tblSEFConfig preko GetConfigValue -- isto kao runtime (modGoogleAuth). Dva citaca na
+' dve razlicite tabele su bila uzrok laznog "Nedostaje GOOGLE_... u tblConfig".
 
 ' ============================================================
 ' CHECKS
@@ -500,29 +478,33 @@ Private Function CheckGoogleOAuthConfig() As String
     Dim googleClientSecret As String
     Dim googlePwaFolderID As String
 
-    googleClientID = Trim$(GetGoogleConfigValue("GOOGLE_CLIENT_ID", ""))
-    googleClientSecret = Trim$(GetGoogleConfigValue("GOOGLE_CLIENT_SECRET", ""))
-    googlePwaFolderID = Trim$(GetGoogleConfigValue("GOOGLE_PWA_FOLDER_ID", ""))
+    ' Google/PWA kredencijali zive u tblSEFConfig -- runtime ih cita preko
+    ' GetConfigValue (modGoogleAuth, modBrojevi, modGoogleSyncOrchestrator), a
+    ' Podesavanja ih tamo i pisu. Zato i setup provera cita tblSEFConfig (ranije je
+    ' greskom gledala tblConfig preko GetGoogleConfigValue -> lazan "Nedostaje").
+    googleClientID = Trim$(GetConfigValue("GOOGLE_CLIENT_ID"))
+    googleClientSecret = Trim$(GetConfigValue("GOOGLE_CLIENT_SECRET"))
+    googlePwaFolderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
 
     If Len(googleClientID) > 0 _
        And Len(googleClientSecret) > 0 _
        And Len(googlePwaFolderID) > 0 Then
 
-        LogSetup "OK", "Google OAuth/PWA config found in tblConfig"
+        LogSetup "OK", "Google OAuth/PWA config found in tblSEFConfig"
         CheckGoogleOAuthConfig = vbNullString
         Exit Function
     End If
 
     If Len(googleClientID) = 0 Then
-        msg = msg & "- Nedostaje GOOGLE_CLIENT_ID u tblConfig." & vbCrLf
+        msg = msg & "- Nedostaje GOOGLE_CLIENT_ID u tblSEFConfig." & vbCrLf
     End If
 
     If Len(googleClientSecret) = 0 Then
-        msg = msg & "- Nedostaje GOOGLE_CLIENT_SECRET u tblConfig." & vbCrLf
+        msg = msg & "- Nedostaje GOOGLE_CLIENT_SECRET u tblSEFConfig." & vbCrLf
     End If
 
     If Len(googlePwaFolderID) = 0 Then
-        msg = msg & "- Nedostaje GOOGLE_PWA_FOLDER_ID u tblConfig." & vbCrLf
+        msg = msg & "- Nedostaje GOOGLE_PWA_FOLDER_ID u tblSEFConfig." & vbCrLf
     End If
 
     CheckGoogleOAuthConfig = msg
@@ -590,7 +572,8 @@ Private Function CheckRequiredColumnsForSetup() As String
 
     On Error GoTo EH
 
-    ' tblConfig: existing Google config table
+    ' tblConfig: legacy tabela (validiraj kolone samo ako postoji; Google config je
+    ' danas u tblSEFConfig)
     If Not GetTable(TBL_CONFIG) Is Nothing Then
         If GetColumnIndex(TBL_CONFIG, CFG_KEY) = 0 Then
             msg = msg & "- tblConfig nema kolonu Kljuc." & vbCrLf
