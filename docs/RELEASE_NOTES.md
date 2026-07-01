@@ -185,3 +185,18 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Pre-postojeće provere se ne diraju:** obavezni kupac / otkupno mesto / datum / količina i drugi ranije postojeći uslovi ostaju **uvek aktivni**, nezavisno od prekidača — prekidač gasi samo ono što je 2.8.1 dodala.
 - **Default DA → postojeće instalacije rade identično** kao na 2.8.1 dok se prekidač ručno ne postavi na NE.
 - **Bez novih zavisnosti:** data-driven kroz postojeći editor podešavanja (`modPodesavanja`) + `IsValidacijaUnosa()` u `modConfig` (`ConfigFlag`, default ON); izvori ostaju **ASCII-only**, nema novih `Poruka()` ključeva (reuse postojećih) → posle importa **ne treba `EnsurePoruke`**.
+
+---
+
+## vba-v2.8.7 — 2026-07-01
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **puštanje bankarskog importa u rad + zaokruženo prvo podešavanje računara** (config putanje, first-run, provere veze). Novi `Poruka()` ključ → posle importa **`EnsurePoruke`**.
+
+- **Banka import (izvodi) — end-to-end:** Gmail → Drive → lokalni disk → `pdftotext` → `tblBankaImport` → `tblNovac`. GAS downloader (multi-client) `gas/bank-pdf-downloader/` puni deljeni `01_Bank` folder; VBA povlači, parsira (Komercijalna banka, saldo-integrity) i stage-uje.
+  - **Dva prioritetna auto-map ključa (jača od imena):** `poziv na broj` (= broj otkupnog lista za isplate / broj fakture za uplate) i `tekući račun` partnera. Normalizacija tolerantna na format (`205-...-XX`, gole cifre, model).
+  - `frmBankaImport`: **auto-map na otvaranje** po jakim ključevima, brojač **„Mapirano X / Y"** prati stvarno stanje, zaglavlja kolona iznad liste.
+- **Podešavanja — grupa „Banka / lokalno" + inline „…" browse dugmad:** per-mašina putanje (`PDFTOTEXT_EXE_PATH`, `BANKA_DRIVE_SOURCE_PATH`, Inbox/Processed/Error, `BANKA_DRIVE_*`) sada se rutiraju u **`tblLocalConfig`** (ranije su odlazile u `tblSEFConfig` a čitane iz Local → polje „nije radilo"). Svako path-polje ima folder picker; poppler dugme = `SetupPopplerInteractive` (auto pored xlsm-a ili picker). Poppler default se računa relativno na radnu svesku.
+- **Prvi start / setup:** na otvaranju, ako računar nije podešen (`APP_SETUP_COMPLETED != DA`), aplikacija ponudi `SetupNewPC` (jednokratno). **SEF je opcion** — ako sva SEF polja prazna, provera se preskače (ne blokira „zeleno" setup). **Google config** se čita iz `tblSEFConfig` (kao runtime) — nestao lažan „Nedostaje GOOGLE_… u tblConfig".
+- **Provera veze desktop↔server (advisory):** `RunSetupHealthCheck` / `TestServerLink` / Admin dugme „Health check (setup)" proveravaju živi Google OAuth token, GAS monitoring i banka Drive folder. U `SetupNewPC` je samo NAPOMENA — offline ne obara setup.
+- **Fix:** `RunProductionHealthCheck` je tražio kolonu `Količina` (dijakritika) umesto ASCII `Kolicina` → lažan „Missing column: tblOtkup.Kolicina" na ispravnoj šemi.
+- **Usklađena folder struktura + docs:** `00_Inbox/01_Bank` + `Downloaded` (GAS `DriveFolder.gs`, uklonjen mrtvi `02_Bank_Izvodi`), `Processed` umesto `Verarbeitet`, `Setup-OtkupApp.ps1` kopira `Tools\poppler` pored sveske; runbook/onboarding/`CLAUDE.md` usklađeni.
+- **Encoding:** izvori ostaju **ASCII-only**; jedini novi `Poruka()` ključ je `SETUP_MSG_FIRSTRUN_PONUDA` (dijakritika kroz `ChrW`) → posle importa pokrenuti **`EnsurePoruke`**.
