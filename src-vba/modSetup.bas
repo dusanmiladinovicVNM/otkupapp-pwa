@@ -120,6 +120,9 @@ Public Sub RunSetupHealthCheck()
     report = report & CheckSEFConfigForSetup()
     report = report & CheckRequiredTablesForSetup()
     report = report & CheckRequiredColumnsForSetup()
+    ' Zivi link desktop<->server (advisory; NIJE u SetupNewPC zelenom gate-u da offline
+    ' ne obara setup). Reuse: GetAccessToken/DriveListFolder/Monitor_Test.
+    report = report & CheckServerLink()
 
     SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
@@ -657,6 +660,113 @@ Private Function CheckPdfToTextExists() As String
 EH:
     CheckPdfToTextExists = "- pdftotext.exe (banka import): " & Err.description & vbCrLf
 End Function
+
+' Zivi link desktop<->server. Advisory (reuse postojecih primitiva; bez novog HTTP-a):
+'   - Google Drive/Sheets: GetAccessToken (OAuth zivi token) + DriveListFolder(PWA folder)
+'   - GAS monitoring:       Monitor_Test() ako je MONITORING_ENDPOINT podesen
+'   - GAS license:          prisustvo LICENSE_ENDPOINT (zivi check radi startup gate)
+'   - Banka Drive folder:   lokalni BANKA_DRIVE_SOURCE_PATH (Drive-for-Desktop)
+' Desktop-only (CLOUD_SYNC_ENABLED=NO): preskace server deo, ali i dalje proverava
+' lokalni banka folder. Sve fail-soft -- nikad ne baca, samo skuplja poruke.
+Private Function CheckServerLink() As String
+    Dim msg As String
+
+    If Not IsCloudSyncEnabled() Then
+        LogSetup "INFO", "Desktop-only: preskacem server link (proveravam samo lokalni banka folder)"
+        CheckServerLink = CheckBankaDriveFolderLink()
+        Exit Function
+    End If
+
+    ' 1) Google Drive/Sheets -- OAuth zivi token je pouzdan signal "spojen na Google".
+    On Error Resume Next
+    If Not IsGoogleAuthConfigured() Then
+        msg = msg & "- Google OAuth nije konfigurisan (GOOGLE_* / refresh token). Pokreni RunGoogleAuthSetup." & vbCrLf
+    Else
+        Dim token As String
+        token = ""
+        token = GetAccessToken()
+        If Len(Trim$(token)) = 0 Then
+            msg = msg & "- Google link: ne mogu da dobijem access token (re-auth: RunGoogleAuthSetup)." & vbCrLf
+        Else
+            ' Folder read-proba (soft): 0 stavki = prazan ILI nedostupan -> WARN, ne FAIL.
+            Dim pwaFolder As String
+            pwaFolder = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+            If Len(pwaFolder) > 0 Then
+                Dim d As Object
+                Set d = DriveListFolder(pwaFolder)
+                If d Is Nothing Then
+                    msg = msg & "- Google PWA folder: nedostupan (DriveListFolder). Proveri GOOGLE_PWA_FOLDER_ID / deljenje." & vbCrLf
+                ElseIf d.count = 0 Then
+                    msg = msg & "- Google PWA folder: 0 stavki (prazan ili nedostupan). Detaljnije: RunProductionHealthCheck." & vbCrLf
+                End If
+            End If
+        End If
+    End If
+    On Error GoTo 0
+
+    ' 2) GAS monitoring endpoint (samo ako je podesen; inace Monitor_Test lazno pada).
+    If Len(Trim$(GetConfigValue("MONITORING_ENDPOINT"))) > 0 Then
+        Dim monOk As Boolean
+        monOk = False
+        On Error Resume Next
+        monOk = Monitor_Test()
+        On Error GoTo 0
+        If Not monOk Then
+            msg = msg & "- GAS monitoring endpoint ne odgovara (MONITORING_ENDPOINT / MONITORING_SECRET)." & vbCrLf
+        End If
+    End If
+
+    ' 3) GAS license endpoint -- samo ako se licenciranje koristi. Zivi check radi
+    '    startup gate (AccessGateOrQuit); ovde proveravamo da je endpoint uopste zadat.
+    If UCase$(Trim$(GetConfigValue("LICENSE_ENABLED"))) = "YES" Then
+        If Len(Trim$(GetConfigValue("LICENSE_ENDPOINT"))) = 0 _
+           And Len(Trim$(GetConfigValue("MONITORING_ENDPOINT"))) = 0 Then
+            msg = msg & "- Licenciranje ukljuceno, a LICENSE_ENDPOINT (ni MONITORING_ENDPOINT fallback) nije podesen." & vbCrLf
+        End If
+    End If
+
+    ' 4) Banka Drive folder (lokalni Drive-for-Desktop izvor).
+    msg = msg & CheckBankaDriveFolderLink()
+
+    CheckServerLink = msg
+End Function
+
+' Lokalni banka Drive izvor (BANKA_DRIVE_SOURCE_PATH). Ako nije podesen -> banka
+' Drive-pull se ne koristi (prazno, bez poruke). Ako je podesen a folder ne postoji
+' -> Drive-for-Desktop ne sinhronizuje ili je putanja pogresna.
+Private Function CheckBankaDriveFolderLink() As String
+    Dim p As String
+    p = Trim$(GetLocalConfigValue("BANKA_DRIVE_SOURCE_PATH", ""))
+    If Len(p) = 0 Then Exit Function
+
+    On Error Resume Next
+    If Dir$(p, vbDirectory) = "" Then
+        CheckBankaDriveFolderLink = "- Banka Drive izvor nedostupan (BANKA_DRIVE_SOURCE_PATH): " & p & vbCrLf
+    End If
+    On Error GoTo 0
+End Function
+
+' RUCNO (Alt+F8): proveri samo zivi link desktop<->server i prikazi rezultat.
+Public Sub TestServerLink()
+    On Error GoTo EH
+    InitSetupLog
+
+    Dim report As String
+    report = CheckServerLink()
+
+    If Len(report) = 0 Then
+        MsgBox "Server link OK (Google / GAS / banka Drive folder dostupni ili nisu u upotrebi).", _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "Server link -- stavke za proveru:" & vbCrLf & vbCrLf & report, _
+               vbExclamation, APP_NAME
+    End If
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "TestServerLink failed: " & Err.description
+    MsgBox "Greska pri proveri server linka: " & Err.description, vbCritical, APP_NAME
+End Sub
 
 ' ============================================================
 ' LOCAL CONFIG TABLE CREATION
