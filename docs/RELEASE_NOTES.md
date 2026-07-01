@@ -173,3 +173,15 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Forme — tema/stilizacija jednom po instanci:** `frmIzvestaj` je modeless, pa je `UserForm_Activate` na **svaki povratak fokusa** radio pun (i dupli) obilazak stabla kontrola — sada jednom po instanci, uz uklanjanje duplog `StyleControls`. `frmDokumenta`: ista dedup teme (~70 ms brže otvaranje).
 - **Ispravka — KPI „kg danas" (`SumOtkupKgToday`):** jedna ćelija sa Excel greškom (`#N/A`/`#VALUE!`) u `tblOtkup` je obarala **ceo** dnevni zbir na 0 (Type mismatch). Sada se takve ćelije preskaču po redu (`IsError` guard) — KPI je pouzdan.
 - **Bez promene podataka i bez novih zavisnosti:** izvori ostaju **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+---
+
+## vba-v2.8.6 — 2026-07-01
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Podešavanje: **prekidač „Kompletna validacija unosa"** — pali/gasi utegnutu proveru obaveznih polja uvedenu u 2.8.1.
+
+- **Podešavanja — toggle „Kompletna validacija unosa (obavezna polja pre snimanja)":** novo podešavanje u grupi **„Otkup / dokumenta"** (DA/NE, default **DA**). Kontroliše „Blokator obaveznih polja" iz 2.8.1 u `frmOtkup`, `frmDokumenta` i `frmPalete`.
+  - **DA (kao dosad):** pre snimanja su obavezni svi polja iz 2.8.1 — sorta voća, broj gajbi i tip ambalaže po klasi, cena I klase, broj dokumenta, vozač; u preradi (`frmPalete`) bruto / težina palete / gotov proizvod / broj + tip kutija i kesa.
+  - **NE (kao pre 2.8.1):** minimalna validacija — ta polja više ne blokiraju snimanje. U `frmOtkup` broj gajbi ostaje obavezan **isključivo u BRUTO režimu** (bez toga se bruto ne pretvara u neto) — kao i pre te izmene.
+- **Pre-postojeće provere se ne diraju:** obavezni kupac / otkupno mesto / datum / količina i drugi ranije postojeći uslovi ostaju **uvek aktivni**, nezavisno od prekidača — prekidač gasi samo ono što je 2.8.1 dodala.
+- **Default DA → postojeće instalacije rade identično** kao na 2.8.1 dok se prekidač ručno ne postavi na NE.
+- **Bez novih zavisnosti:** data-driven kroz postojeći editor podešavanja (`modPodesavanja`) + `IsValidacijaUnosa()` u `modConfig` (`ConfigFlag`, default ON); izvori ostaju **ASCII-only**, nema novih `Poruka()` ključeva (reuse postojećih) → posle importa **ne treba `EnsurePoruke`**.
