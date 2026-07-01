@@ -65,6 +65,7 @@ Private Sub UserForm_Activate()
     End If
     
     SetupList
+    BuildListHeaders
 
     ' Auto-map sve sto se moze preko jakih kljuceva (poziv->otkup/faktura, tekuci racun)
     ' pre prikaza; dvosmislene ostaju otvorene za rucno. Ne obara formu ako padne.
@@ -92,6 +93,40 @@ Private Sub SetupList()
         .ColumnCount = 7
         .ColumnWidths = "70;70;140;80;70;70;60"
     End With
+End Sub
+
+' Runtime kolone-headeri iznad lstBanka (listbox se puni AddItem-om, pa ColumnHeads
+' ne radi bez RowSource-a). Idempotentno: ukloni pa dodaj (Activate moze vise puta).
+' Sirine odgovaraju SetupList .ColumnWidths "70;70;140;80;70;70;60".
+Private Sub BuildListHeaders()
+    On Error Resume Next
+
+    Dim titles As Variant
+    Dim widths As Variant
+    Dim i As Long
+    Dim x As Single
+    Dim lbl As MSForms.label
+    Dim nm As String
+
+    titles = Array("BIM", "Datum", "Partner", "Poziv na broj", "Uplata", "Isplata", "Status")
+    widths = Array(70, 70, 140, 80, 70, 70, 60)
+
+    x = lstBanka.Left
+    For i = LBound(titles) To UBound(titles)
+        nm = "hdrBanka_" & CStr(i)
+        Me.Controls.Remove nm
+
+        Set lbl = Me.Controls.Add("Forms.Label.1", nm, True)
+        lbl.Left = x
+        lbl.Top = lstBanka.Top - 13
+        lbl.Width = CSng(widths(i))
+        lbl.Height = 12
+        lbl.caption = CStr(titles(i))
+        lbl.Font.Bold = True
+        lbl.Font.Size = 8
+
+        x = x + CSng(widths(i))
+    Next i
 End Sub
 
 Private Sub LoadBankaRows()
