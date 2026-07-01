@@ -113,6 +113,8 @@ Parser koristi lokalni `pdftotext.exe` (Poppler).
 2. **Preporučeni (auto-default) raspored:** preimenuj raspakovani folder u `poppler` i stavi ga pored radne sveske, tako da putanja bude `<folder sa OtkupApp.xlsm>\Tools\poppler\Library\bin\pdftotext.exe`. Tada `PDFTOTEXT_EXE_PATH` može ostati prazan — VBA računa default relativno na radnu svesku (`Setup-OtkupApp.ps1` ovo radi automatski kopiranjem `Tools\`).
 3. **Alternativa (versioned):** ostavi folder kako je (`poppler-XX`) i zapamti punu putanju do `pdftotext.exe` — nju upisuješ eksplicitno u `PDFTOTEXT_EXE_PATH` (Faza 4). Za pronalazak: `where /R C:\Users\<user> pdftotext.exe`.
 
+> **Najlakše (bez ručnog upisa):** Podešavanja → grupa „Banka / lokalno" → dugme **„…"** pored `PDFTOTEXT_EXE_PATH` (= `SetupPopplerInteractive`): ako je poppler pored xlsm-a upiše auto-režim (prazna vrednost = relativno na svesku), inače otvori folder picker i sam nađe `pdftotext.exe` (traži i u `\Library\bin`, `\bin`, `\poppler\Library\bin`).
+
 ---
 
 ## Faza 4 — VBA lokalna konfiguracija (`tblLocalConfig`)
@@ -121,7 +123,12 @@ Dva ekvivalentna načina — izaberi jedan:
 
 **A) Matični podaci → Podešavanja → grupa „Banka / lokalno".** Sva polja te grupe
 (`PDFTOTEXT_EXE_PATH`, `BANKA_DRIVE_SOURCE_PATH`, `BANKA_INBOX/PROCESSED/ERROR_PATH`,
-`BANKA_DRIVE_*`, …) sada pišu direktno u `tblLocalConfig`. Najlakše za operatera.
+`BANKA_DRIVE_*`, …) sada pišu direktno u `tblLocalConfig`. Najlakše za operatera —
+svako path-polje ima **inline „…" dugme** (folder picker): `PDFTOTEXT_EXE_PATH` zove
+`SetupPopplerInteractive`, `BANKA_*` putanje otvaraju folder picker i upišu izbor u
+polje; klik **„Sačuvaj"** persistuje. (Int/lista polja — `BANKA_DRIVE_MAX_FILES`,
+`..._MIN_FILE_AGE_SECONDS`, `BANKA_AUTO_IMPORT_ON_START`, `BANKA_ALLOWED_EXTENSIONS` —
+nemaju „…", to su brojevi/opcije.)
 
 **B) Immediate (`Ctrl+G`)** ili ručni upis u `tblLocalConfig` listu:
 ```vba
@@ -143,6 +150,29 @@ Provera (mora vratiti vrednosti, ne prazno):
 ?Dir$(GetLocalConfigValue("BANKA_DRIVE_SOURCE_PATH","") & "\*.pdf")   ' ime .pdf iz 01_Bank
 ?Dir$(GetLocalConfigValue("PDFTOTEXT_EXE_PATH",""))                    ' pdftotext.exe
 ```
+
+---
+
+## Faza 4.5 — Podešavanje računara i provere veze
+
+- **Prvi start:** na otvaranju `.xlsm`, ako računar nije podešen (`APP_SETUP_COMPLETED != DA`
+  u `tblLocalConfig`), aplikacija ponudi **„Ovaj računar nije podešen — pokrenuti
+  podešavanje?"** → na „Da" pokrene `SetupNewPC`. Jednokratno (posle „zelenog" setup-a
+  se više ne javlja). Ručno: **Admin → „Ensure…"** ili `Alt+F8 → SetupNewPC`.
+- **`SetupNewPC`** pravi lokalne foldere (uklj. `Bank_Izvodi\{Inbox,Processed,Error}`),
+  validira šeme/config i upiše `APP_SETUP_COMPLETED`. **SEF je opcion** (ako sva SEF
+  polja prazna, provera se preskače — ne blokira „zeleno"). **Google** kredencijali se
+  čitaju iz `tblSEFConfig` (isto kao runtime); desktop-only isključi Google proveru
+  preko **`EnableDesktopOnlyMode`** (`CLOUD_SYNC_ENABLED=NO`).
+- **Provere (UI dugmad, bez Alt+F8) — Matični podaci → Admin:**
+  - **„Health check (setup)"** (`RunSetupHealthCheck`) — folderi, poppler, Google/SEF
+    config **i živi server-link** (Google OAuth token, GAS monitoring, banka Drive folder).
+    Server-link je advisory: u `SetupNewPC` je samo NAPOMENA, ne obara „zeleno" (offline
+    ne blokira setup).
+  - **„Production health check"** (`RunProductionHealthCheck`) — dublji audit šema/integriteta.
+  - **„Google autorizacija"** (`RunGoogleAuthSetup`) — jednokratni Google login (samo za
+    cloud/PWA sync; banka import ga NE traži, radi 100% lokalno).
+- Brza provera samo veze: `Alt+F8 → TestServerLink`.
 
 ---
 

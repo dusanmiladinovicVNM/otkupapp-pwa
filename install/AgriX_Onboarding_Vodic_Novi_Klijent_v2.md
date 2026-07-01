@@ -1362,6 +1362,13 @@ Minimalni installer mora da uradi sledeće:
 
 `SetupNewPC` nije zamena za PS1. PS1 priprema Windows/fajlove, a `SetupNewPC` proverava aplikacionu konfiguraciju.
 
+> **UI umesto Alt+F8 (v2.8.6+):** na prvom otvaranju aplikacija sama ponudi `SetupNewPC`
+> (dok `APP_SETUP_COMPLETED != DA`). Poppler i banka putanje se biraju preko inline „…"
+> browse dugmadi u **Podešavanja → „Banka / lokalno"** (poppler = auto pored xlsm-a ili
+> picker). Provere i Google login su dugmad u **Matični podaci → Admin**: „Health check
+> (setup)" (uklj. živi server-link), „Production health check", „Google autorizacija".
+> SEF je opcion (prazna SEF polja → provera se preskače); desktop-only = `EnableDesktopOnlyMode`.
+
 `SetupNewPC` mora da proveri:
 
 ```text
