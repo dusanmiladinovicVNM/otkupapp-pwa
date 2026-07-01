@@ -65,6 +65,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Prodavac (firma)", "SELLER_EMAIL", "Email", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_OBJEKAT_MESTO", "Objekat - lokacija/mesto", "text"
     CfgAdd c, "Prodavac (firma)", "SELLER_OBJEKAT_BR_REGISTRA", "Objekat - broj registra", "text"
+    CfgAdd c, "Prodavac (firma)", "SELLER_LOGO_PATH", "Putanja do logotipa (prazno = <workbook>\logo.png)", "text"
 
     CfgAdd c, "Otkup / dokumenta", "OTKUP_KLAUZULA", "Klauzula (otkupni list)", "memo"
     CfgAdd c, "Otkup / dokumenta", "OTKUP_ROK_ISPLATE", "Rok isplate (otkupni list)", "text"
@@ -138,7 +139,19 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Google", "GOOGLE_MGMT_SHEET_ID", "Management Sheet ID", "text"
     CfgAdd c, "Google", "GOOGLE_REPORTS_FOLDER_ID", "Reports Folder ID", "text"
 
-    CfgAdd c, "Alati / putanje", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text"
+    ' Banka / lokalno -- per-masina putanje i parametri (tblLocalConfig, store="local").
+    ' Citaju se preko GetLocalConfigValue u modBankaImport / modBankaImportParserPdfToText,
+    ' zato OVDE moraju ici u "local" (inace se upisu u tblSEFConfig a ne procitaju).
+    CfgAdd c, "Banka / lokalno", "PDFTOTEXT_EXE_PATH", "pdftotext.exe (banka import)", "text", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_SOURCE_PATH", "Drive izvor (sinhronizovan 00_Inbox\01_Bank folder)", "text", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_DOWNLOADED_PATH", "Drive obradjeno (opciono; prazno = ne premesta)", "text", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_INBOX_PATH", "Lokalni inbox (staging)", "text", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_PROCESSED_PATH", "Lokalni processed", "text", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_ERROR_PATH", "Lokalni error", "text", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_MAX_FILES", "Max fajlova po povlacenju (Drive)", "int", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_MIN_FILE_AGE_SECONDS", "Min. starost fajla (s) pre povlacenja", "int", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_AUTO_IMPORT_ON_START", "Auto-uvoz izvoda pri startu", "list:DA;NE", "local"
+    CfgAdd c, "Banka / lokalno", "BANKA_ALLOWED_EXTENSIONS", "Dozvoljene ekstenzije (npr. pdf)", "text", "local"
 
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_LIVE", "SEF test: dozvoli LIVE slanje", "bool"
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_CANCEL_STORNO", "SEF test: dozvoli cancel/storno", "bool"
@@ -154,8 +167,11 @@ End Function
 
 ' Helper: dodaj jedan red u registar (izbegava line-continuation limit).
 Private Sub CfgAdd(ByRef c As Collection, ByVal grp As String, ByVal key As String, _
-                   ByVal lbl As String, ByVal typ As String)
-    c.Add Array(grp, key, lbl, typ)
+                   ByVal lbl As String, ByVal typ As String, _
+                   Optional ByVal store As String = "sef")
+    ' store: "sef" -> tblSEFConfig (Get/SetConfigValue); "local" -> tblLocalConfig
+    ' (Get/SetLocalConfigValue), za per-masina putanje (Poppler, banka lokalne putanje).
+    c.Add Array(grp, key, lbl, typ, store)
 End Sub
 
 ' Helper: distinct vrednosti kolone kao "A;B;C" za dinamicki "list:" tip.
@@ -224,7 +240,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
 
     Dim lblHint As MSForms.label
     Set lblHint = AddLabel("cfg_hint", m, 60, w - 2 * m, 16)
-    lblHint.caption = "Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju."
+    lblHint.caption = "Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju. Grupa 'Banka / lokalno' se cuva u tblLocalConfig (per-masina)."
     StyleLabel lblHint, TXT_MUTED(), False
     lblHint.Font.Size = FONT_SIZE_SMALL
 
@@ -258,6 +274,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Dim flds As Variant: flds = ConfigEditorFields()
     Dim i As Long, f As Variant
     Dim grp As String, key As String, cap As String, typRaw As String, typ As String
+    Dim store As String
     Dim cur As String
     Dim lbl As MSForms.label, tb As MSForms.TextBox, cmb As MSForms.ComboBox
     Dim opts As Variant, oi As Long
@@ -271,6 +288,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         f = flds(i)
         grp = CStr(f(0)): key = CStr(f(1)): cap = CStr(f(2))
         typRaw = CStr(f(3)): typ = LCase$(typRaw)
+        store = "sef": If UBound(f) >= 4 Then store = LCase$(CStr(f(4)))
 
         If grp <> curGroup Then
             curGroup = grp
@@ -287,7 +305,11 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         StyleLabel lbl, TXT_MUTED(), False
         lbl.Font.Size = FONT_SIZE_SMALL
 
-        cur = GetConfigValue(key)
+        If store = "local" Then
+            cur = GetLocalConfigValue(key, "")
+        Else
+            cur = GetConfigValue(key)
+        End If
 
         If typ = "bool" Or Left$(typ, 5) = "list:" Then
             Set cmb = AddCombo("cfg_" & key, 0, 0, mCellW, 18)
@@ -499,12 +521,14 @@ Private Sub SaveConfigEditor()
     Dim flds As Variant: flds = ConfigEditorFields()
     Dim errs As String, n As Long
     Dim f As Variant, key As String, typ As String, v As String
+    Dim store As String
     Dim i As Long
 
     For i = LBound(flds) To UBound(flds)
         f = flds(i)
         key = CStr(f(1))
         typ = LCase$(CStr(f(3)))
+        store = "sef": If UBound(f) >= 4 Then store = LCase$(CStr(f(4)))
 
         v = ""
         On Error Resume Next
@@ -514,7 +538,11 @@ Private Sub SaveConfigEditor()
         If typ = "int" And Len(v) > 0 And Not IsNumeric(v) Then
             errs = errs & " - " & key & " mora biti broj." & vbCrLf
         Else
-            SetConfigValue key, v
+            If store = "local" Then
+                SetLocalConfigValue key, v
+            Else
+                SetConfigValue key, v
+            End If
             n = n + 1
         End If
     Next i

@@ -825,7 +825,10 @@ Private Sub Check_GoogleSyncFeatureFlags()
     Dim setupCompleted As String
 
     syncEnabled = Trim$(GetConfigValue("SHEETS_SYNC_ENABLED"))
-    setupCompleted = Trim$(GetConfigValue("APP_SETUP_COMPLETED"))
+    ' APP_SETUP_COMPLETED zivi u tblLocalConfig (per-masina; modSetup ga pise/cita
+    ' preko Set/GetLocalConfigValue). Citanje preko GetConfigValue (tblSEFConfig) bi
+    ' uvek vratilo prazno -> lazan WARN. Zato GetLocalConfigValue.
+    setupCompleted = Trim$(GetLocalConfigValue("APP_SETUP_COMPLETED", ""))
 
     If Len(syncEnabled) = 0 Then
         HealthWarn "SHEETS_SYNC_ENABLED", _
