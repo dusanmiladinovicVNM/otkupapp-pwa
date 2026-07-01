@@ -64,6 +64,19 @@ Public Sub StartApp()
         End If
     End If
 
+    ' --- First-run setup gate (per-masina) ---
+    ' Ako ovaj racunar jos nije prosao SetupNewPC (APP_SETUP_COMPLETED != "DA" u
+    ' tblLocalConfig), ponudi podesavanje odmah -- pre skrivanja Excela i splash-a,
+    ' dok je prozor jos vidljiv i interaktivan. Jednokratno: cim SetupNewPC prodje
+    ' zeleno i upise "DA", ova kapija se vise ne javlja. Fail-soft (ne obara start).
+    On Error Resume Next
+    If UCase$(Trim$(GetLocalConfigValue("APP_SETUP_COMPLETED", ""))) <> "DA" Then
+        If MsgBox(Poruka("SETUP_MSG_FIRSTRUN_PONUDA"), vbYesNo + vbQuestion, APP_NAME) = vbYes Then
+            SetupNewPC
+        End If
+    End If
+    On Error GoTo EH
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme

@@ -244,6 +244,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "SETUP_MSG_SEF_API_KEY", "- SEF_API_KEY nije pode" & ChrW(353) & "en."
     UpsertRow lo, existing, "SETUP_MSG_SEF_ENV_NIJE", "- SEF_ENV nije pode" & ChrW(353) & "en."
     UpsertRow lo, existing, "SETUP_MSG_NIJE_PODESEN", "nije pode" & ChrW(353) & "en:"
+    UpsertRow lo, existing, "SETUP_MSG_FIRSTRUN_PONUDA", "Ovaj ra" & ChrW(269) & "unar jo" & ChrW(353) & " nije pode" & ChrW(353) & "en. " & ChrW(381) & "elite li da pokrenete pode" & ChrW(353) & "avanje (SetupNewPC) sada?"
     ' --- Self-update (modSelfUpdate); dijakritika preko ChrW ---
     UpsertRow lo, existing, "SU_AZURIRATI_SADA", "A" & ChrW(382) & "urirati sada? (preporu" & ChrW(269) & "eno)"
     UpsertRow lo, existing, "SU_BACKUP_NIJE", "Backup pre a" & ChrW(382) & "uriranja nije uspeo."
