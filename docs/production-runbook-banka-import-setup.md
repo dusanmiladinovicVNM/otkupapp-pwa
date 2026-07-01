@@ -110,14 +110,20 @@ Na **mašini gde radi Excel**:
 
 Parser koristi lokalni `pdftotext.exe` (Poppler).
 1. Ako nije instaliran: skini „poppler-windows" release, raspakuj (layout `...\poppler-XX\Library\bin\pdftotext.exe`), kopiraj **ceo** folder (treba mu prateći DLL-ovi).
-2. Nađi tačnu putanju (Command Prompt): `where /R C:\Users\<user> pdftotext.exe`.
-3. Zapamti punu putanju do `pdftotext.exe` (za Fazu 4).
+2. **Preporučeni (auto-default) raspored:** preimenuj raspakovani folder u `poppler` i stavi ga pored radne sveske, tako da putanja bude `<folder sa OtkupApp.xlsm>\Tools\poppler\Library\bin\pdftotext.exe`. Tada `PDFTOTEXT_EXE_PATH` može ostati prazan — VBA računa default relativno na radnu svesku (`Setup-OtkupApp.ps1` ovo radi automatski kopiranjem `Tools\`).
+3. **Alternativa (versioned):** ostavi folder kako je (`poppler-XX`) i zapamti punu putanju do `pdftotext.exe` — nju upisuješ eksplicitno u `PDFTOTEXT_EXE_PATH` (Faza 4). Za pronalazak: `where /R C:\Users\<user> pdftotext.exe`.
 
 ---
 
 ## Faza 4 — VBA lokalna konfiguracija (`tblLocalConfig`)
 
-Immediate (`Ctrl+G`) ili upis u `tblLocalConfig` listu:
+Dva ekvivalentna načina — izaberi jedan:
+
+**A) Matični podaci → Podešavanja → grupa „Banka / lokalno".** Sva polja te grupe
+(`PDFTOTEXT_EXE_PATH`, `BANKA_DRIVE_SOURCE_PATH`, `BANKA_INBOX/PROCESSED/ERROR_PATH`,
+`BANKA_DRIVE_*`, …) sada pišu direktno u `tblLocalConfig`. Najlakše za operatera.
+
+**B) Immediate (`Ctrl+G`)** ili ručni upis u `tblLocalConfig` listu:
 ```vba
 SetLocalConfigValue "BANKA_DRIVE_SOURCE_PATH", "H:\My Drive\AgriX_C001_PROD\00_Inbox\01_Bank", "Drive izvor izvoda"
 SetLocalConfigValue "PDFTOTEXT_EXE_PATH", "<puna putanja do pdftotext.exe>", "Poppler pdftotext"
@@ -127,9 +133,10 @@ SetLocalConfigValue "PDFTOTEXT_EXE_PATH", "<puna putanja do pdftotext.exe>", "Po
 SetLocalConfigValue "BANKA_DRIVE_MAX_FILES", "500", "Backfill kapacitet"
 ```
 
-> **VAŽNO:** `PDFTOTEXT_EXE_PATH` postavi kroz `tblLocalConfig` (`SetLocalConfigValue`),
-> **NE** kroz Matični podaci → Podešavanja — taj editor piše u `tblSEFConfig`, a
-> bankarski import čita iz `tblLocalConfig`.
+> **NAPOMENA:** `PDFTOTEXT_EXE_PATH` i `BANKA_*` putanje su per-mašina i žive u
+> `tblLocalConfig`. Grupa „Banka / lokalno" u Podešavanjima ih rutira tamo; ostatak
+> editora i dalje piše u `tblSEFConfig`. Ako `Tools\poppler` stoji pored `OtkupApp.xlsm`,
+> `PDFTOTEXT_EXE_PATH` možeš i ostaviti prazan — default se računa relativno na radnu svesku.
 
 Provera (mora vratiti vrednosti, ne prazno):
 ```vba
@@ -200,7 +207,7 @@ Dnevna rutina:
 |---|---|---|
 | Uvoz „ne daje ništa", bez greške | `BANKA_INBOX_PATH`/`BANKA_DRIVE_SOURCE_PATH` ne pokazuje na `01_Bank` (prazan inbox) | Faza 4: postavi `BANKA_DRIVE_SOURCE_PATH` na lokalnu putanju `01_Bank`; `?Dir$(...\*.pdf)` mora vratiti fajl |
 | `extract error: pdftotext.exe nije pronadjen` | Poppler ne postoji ili `PDFTOTEXT_EXE_PATH` prazan/pogrešan | Faza 3 + 4: instaliraj Poppler, `SetLocalConfigValue "PDFTOTEXT_EXE_PATH", ...` (u `tblLocalConfig`, ne SEFConfig) |
-| Podešeno kroz Matične podatke, i dalje ne radi | `PDFTOTEXT_EXE_PATH` upisan u `tblSEFConfig`, a import čita `tblLocalConfig` | Postavi ga preko `SetLocalConfigValue` |
+| Podešeno kroz Matične podatke, i dalje ne radi (STAR build) | stariji editor je `PDFTOTEXT_EXE_PATH` pisao u `tblSEFConfig`, a import čita `tblLocalConfig` | Ažuriraj build (`ImportAllVBA`) — grupa „Banka / lokalno" sada piše u `tblLocalConfig`; ili postavi preko `SetLocalConfigValue` |
 | `STANJE blok / Izvod broj nije pronadjen` | Parser je za Komercijalnu banku; drugi format | Proveri banku; `Diag_DumpPdfTextAroundStanje`; prilagođavanje parsera je zaseban posao |
 | Ceo batch rollback na jednom PDF-u | „sve ili ništa" import + jedan loš PDF | `ImportOnePdfIntoBankaImport "<fajl>"` da izoluješ; izbaci/reši taj PDF |
 | Preview „Auto match: Nije pronađen" iako račun postoji | forma nije reimportovana (star preview) ili račun/stanica nisu uneti | `ImportAllVBA` (sa formom); Faza 5 (unesi `TekuciRacun`/`StanicaID`) |
