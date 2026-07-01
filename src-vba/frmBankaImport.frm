@@ -65,6 +65,14 @@ Private Sub UserForm_Activate()
     End If
     
     SetupList
+    BuildListHeaders
+
+    ' Auto-map sve sto se moze preko jakih kljuceva (poziv->otkup/faktura, tekuci racun)
+    ' pre prikaza; dvosmislene ostaju otvorene za rucno. Ne obara formu ako padne.
+    On Error Resume Next
+    AutoMapStrongKeysBankaImport_TX
+    On Error GoTo EH
+
     LoadBankaRows
     
     ' KPI strip (opciono -- vidi Izmena 2)
@@ -85,6 +93,40 @@ Private Sub SetupList()
         .ColumnCount = 7
         .ColumnWidths = "70;70;140;80;70;70;60"
     End With
+End Sub
+
+' Runtime kolone-headeri iznad lstBanka (listbox se puni AddItem-om, pa ColumnHeads
+' ne radi bez RowSource-a). Idempotentno: ukloni pa dodaj (Activate moze vise puta).
+' Sirine odgovaraju SetupList .ColumnWidths "70;70;140;80;70;70;60".
+Private Sub BuildListHeaders()
+    On Error Resume Next
+
+    Dim titles As Variant
+    Dim widths As Variant
+    Dim i As Long
+    Dim x As Single
+    Dim lbl As MSForms.label
+    Dim nm As String
+
+    titles = Array("BIM", "Datum", "Partner", "Poziv na broj", "Uplata", "Isplata", "Status")
+    widths = Array(70, 70, 140, 80, 70, 70, 60)
+
+    x = lstBanka.Left
+    For i = LBound(titles) To UBound(titles)
+        nm = "hdrBanka_" & CStr(i)
+        Me.Controls.Remove nm
+
+        Set lbl = Me.Controls.Add("Forms.Label.1", nm, True)
+        lbl.Left = x
+        lbl.Top = lstBanka.Top - 13
+        lbl.Width = CSng(widths(i))
+        lbl.Height = 12
+        lbl.caption = CStr(titles(i))
+        lbl.Font.Bold = True
+        lbl.Font.Size = 8
+
+        x = x + CSng(widths(i))
+    Next i
 End Sub
 
 Private Sub LoadBankaRows()
@@ -406,7 +448,70 @@ Private Function BuildIncomingPreview(ByVal bankaImportID As String, ByVal partn
     Dim kupacID As String
     Dim fakturaID As String
     Dim s As String
-    
+    Dim konto As String
+    Dim poziv As String
+    Dim kupacByKonto As Variant
+    Dim fakByPoziv As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+    Dim resolvedKupac As String
+    Dim matchVia As String
+
+    ' PRIORITET (kao AutoMapIncomingKupac): tekuci racun (kupac) + poziv na broj (faktura).
+    konto = CStr(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_PARTNER_KONTO), ""))
+    poziv = CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ))
+
+    kupacByKonto = TryResolveKupacByKonto(konto)
+    fakByPoziv = TryResolveFakturaByPoziv(poziv)
+
+    fakturaID = ""
+    idDoc = ""
+    If Not IsEmpty(fakByPoziv) Then
+        fakturaID = CStr(fakByPoziv(0))
+        idDoc = CStr(fakByPoziv(1))
+    End If
+
+    If IsEmpty(kupacByKonto) Then
+        idKonto = ""
+    Else
+        idKonto = CStr(kupacByKonto(0))
+    End If
+
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        BuildIncomingPreview = "Smer: Uplata" & vbCrLf & _
+            "Auto match: KONFLIKT (poziv->" & idDoc & " / racun->" & idKonto & ") -> rucno"
+        Exit Function
+    End If
+
+    resolvedKupac = idDoc
+    matchVia = "poziv na broj"
+    If resolvedKupac = "" Then
+        resolvedKupac = idKonto
+        matchVia = "tekuci racun"
+    End If
+
+    If resolvedKupac <> "" Then
+        kupacID = resolvedKupac
+        If fakturaID = "" Then fakturaID = TryResolveFakturaForKupac(bankaImportID, kupacID)
+
+        s = "Smer: Uplata" & vbCrLf
+        s = s & "Auto match: Kupac (" & matchVia & ")" & vbCrLf
+        s = s & "KupacID: " & kupacID & vbCrLf
+        s = s & "Kupac: " & CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv")) & vbCrLf
+
+        If fakturaID <> "" Then
+            s = s & "FakturaID: " & fakturaID & vbCrLf
+            s = s & "Broj fakture: " & CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_BROJ)) & vbCrLf
+            s = s & "Tip knjizenja: " & NOV_KUPCI_UPLATA
+        Else
+            s = s & "Faktura: nije jednoznacno nadjena" & vbCrLf
+            s = s & "Tip knjizenja: " & NOV_KUPCI_AVANS
+        End If
+
+        BuildIncomingPreview = s
+        Exit Function
+    End If
+
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
         If CStr(mapped(1)) = "Kupac" Then
@@ -476,7 +581,73 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
     Dim s As String
     Dim blockNo As String
     Dim i As Long
-    
+    Dim konto As String
+    Dim poziv As String
+    Dim koopByPoziv As String
+    Dim koopByKonto As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+    Dim resolvedKoop As String
+    Dim matchVia As String
+
+    ' PRIORITET (kao AutoMapOutgoingKooperantOrOM): poziv na broj (otkup) + tekuci racun.
+    konto = CStr(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_PARTNER_KONTO), ""))
+    poziv = CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ))
+
+    koopByPoziv = TryResolveKooperantByOtkupPoziv(poziv)
+    koopByKonto = TryResolveKooperantByKonto(konto)
+
+    idDoc = koopByPoziv
+    If IsEmpty(koopByKonto) Then
+        idKonto = ""
+    Else
+        idKonto = CStr(koopByKonto(0))
+    End If
+
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        BuildOutgoingPreview = "Smer: Isplata" & vbCrLf & _
+            "Auto match: KONFLIKT (poziv->" & idDoc & " / racun->" & idKonto & ") -> rucno"
+        Exit Function
+    End If
+
+    resolvedKoop = idDoc
+    matchVia = "poziv na broj"
+    If resolvedKoop = "" Then
+        resolvedKoop = idKonto
+        matchVia = "tekuci racun"
+    End If
+
+    If resolvedKoop <> "" Then
+        kooperantID = resolvedKoop
+        blockNo = poziv
+        kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo)
+
+        s = "Smer: Isplata" & vbCrLf
+        s = s & "Auto match: Kooperant (" & matchVia & ")" & vbCrLf
+        s = s & "KooperantID: " & kooperantID & vbCrLf
+        s = s & "Kooperant: " & GetKooperantNaziv(kooperantID) & vbCrLf
+
+        If Trim$(blockNo) <> "" Then
+            s = s & "Blok: " & blockNo & vbCrLf
+        End If
+
+        If IsEmpty(kandidati) Then
+            s = s & "Otkup kandidati: nema otvorenih stavki" & vbCrLf
+            s = s & "Tip knjizenja: " & NOV_VIRMAN_AVANS_KOOP
+        Else
+            s = s & "Otkup kandidati:" & vbCrLf
+            For i = 1 To UBound(kandidati, 1)
+                s = s & " - " & CStr(kandidati(i, 1)) & " | otvoreno: " & _
+                    Format$(CDbl(kandidati(i, 2)), "#,##0.00") & " | " & _
+                    CStr(kandidati(i, 3)) & vbCrLf
+            Next i
+            s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_KOOP
+        End If
+
+        BuildOutgoingPreview = s
+        Exit Function
+    End If
+
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
         Select Case CStr(mapped(1))
@@ -721,43 +892,38 @@ Private Sub RefreshTopKpis()
     Dim totalCount As Long
     Dim totalUplata As Double
     Dim totalIsplata As Double
-    Dim autoMatchCount As Long
-    
+    Dim mappedCount As Long
+    Dim totalStaged As Long
+
     If IsArray(m_Data) Then
         totalCount = UBound(m_Data, 1)
-        
-        Dim colUplata As Long, colIsplata As Long, colPartner As Long
+
+        Dim colUplata As Long, colIsplata As Long
         colUplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA)
         colIsplata = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA)
-        colPartner = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER)
-        
+
         Dim i As Long
         For i = 1 To UBound(m_Data, 1)
             totalUplata = totalUplata + CDbl(nz(m_Data(i, colUplata), "0"))
             totalIsplata = totalIsplata + CDbl(nz(m_Data(i, colIsplata), "0"))
-            
-            ' Check if auto-match exists
-            Dim partnerName As String
-            partnerName = CStr(m_Data(i, colPartner))
-            Dim mapped As Variant
-            mapped = LookupPartnerMap(partnerName)
-            If Not IsEmpty(mapped) Then
-                autoMatchCount = autoMatchCount + 1
-            End If
         Next i
     End If
+
+    ' Stvarno stanje mapiranja iz cele tblBankaImport (ne samo otvorene):
+    ' Mapirano = Obradjeno "Da"; Ukupno = sve nestornirane staging stavke.
+    ComputeBankaMapState mappedCount, totalStaged
     
     ' Card 1: Otvoreno
     StyleTopKpi fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent, "neutral"
     lblKpiOtvTitle.caption = "Otvoreno"
     lblKpiOtvValue.caption = totalCount & " stavki"
     
-    ' Card 2: Auto match (ok ako >0)
+    ' Card 2: Mapirano (stvarno stanje: Obradjeno "Da" / Ukupno staged)
     Dim autoKind As String
-    If autoMatchCount > 0 Then autoKind = "ok" Else autoKind = "neutral"
+    If mappedCount > 0 Then autoKind = "ok" Else autoKind = "neutral"
     StyleTopKpi fraKpiAutoMatch, lblKpiAutoTitle, lblKpiAutoValue, lblKpiAutoAccent, autoKind
-    lblKpiAutoTitle.caption = "Auto match"
-    lblKpiAutoValue.caption = autoMatchCount & " / " & totalCount
+    lblKpiAutoTitle.caption = "Mapirano"
+    lblKpiAutoValue.caption = mappedCount & " / " & totalStaged
     
     ' Card 3: Uplate ukupno
     StyleTopKpi fraKpiUplate, lblKpiUplTitle, lblKpiUplValue, lblKpiUplAccent, "neutral"
@@ -772,6 +938,36 @@ Private Sub RefreshTopKpis()
     Exit Sub
 EH:
     LogErr "frmBankaImport.RefreshTopKpis"
+End Sub
+
+' Realno stanje mapiranja iz cele tblBankaImport (ne samo otvorenih redova u m_Data).
+Private Sub ComputeBankaMapState(ByRef mappedCount As Long, ByRef totalStaged As Long)
+    On Error GoTo EH
+
+    Dim data As Variant
+    Dim colObr As Long
+    Dim i As Long
+    Dim st As String
+
+    mappedCount = 0
+    totalStaged = 0
+
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Sub
+
+    colObr = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO)
+
+    For i = 1 To UBound(data, 1)
+        totalStaged = totalStaged + 1
+        st = UCase$(Trim$(CStr(nz(data(i, colObr), ""))))
+        If st = "DA" Then mappedCount = mappedCount + 1
+    Next i
+
+    Exit Sub
+EH:
+    LogErr "frmBankaImport.ComputeBankaMapState"
 End Sub
 
 Private Sub ResetActionButtons()

@@ -7,16 +7,12 @@ Option Explicit
 '
 ' CONFIG STRATEGY:
 '
-' 1) tblConfig
-'    Existing Google/PWA config only:
-'       Kljuc | Vrednost | Opis
-'
-'    Expected keys:
-'       GOOGLE_CLIENT_ID
-'       GOOGLE_CLIENT_SECRET
-'       GOOGLE_PWA_FOLDER_ID
-'
-'    This module READS tblConfig but does not write local setup values to it.
+' 1) tblConfig  (legacy)
+'    Istorijski je drzao Google/PWA kljuceve. Danas Google/PWA config zivi u
+'    tblSEFConfig -- runtime (modGoogleAuth, modBrojevi, modGoogleSyncOrchestrator)
+'    i Podesavanja ga citaju/pisu preko Get/SetConfigValue, pa i setup provera
+'    (CheckGoogleOAuthConfig) gleda tblSEFConfig. tblConfig se ovde samo kolonski
+'    validira ako uopste postoji (ne pise se u njega).
 '
 ' 2) tblLocalConfig
 '    Local workstation setup config:
@@ -67,6 +63,12 @@ Public Sub SetupNewPC()
     report = report & CheckRequiredTablesForSetup()
     report = report & CheckRequiredColumnsForSetup()
 
+    ' Zivi server-link je ADVISORY: prikazuje se, ali NE ulazi u `report` -> ne obara
+    ' zeleno (APP_SETUP_COMPLETED). Offline / ne-autentifikovan Google i sl. daju samo
+    ' NAPOMENU; setup i dalje moze da prodje ako je lokalni deo ispravan.
+    Dim linkWarn As String
+    linkWarn = CheckServerLink()
+
     If Len(report) = 0 Then
         SetLocalConfigValue "APP_SETUP_COMPLETED", "DA", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
         SetLocalConfigValue "APP_SETUP_COMPLETED_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), Poruka("SETUP_MSG_DATUM_VREME_ZAVRSETKA")
@@ -82,19 +84,33 @@ Public Sub SetupNewPC()
         On Error GoTo EH
 
         LogSetup "OK", "Setup completed successfully"
+        If Len(linkWarn) > 0 Then LogSetup "WARN", "Server link: " & linkWarn
 
-        MsgBox Poruka("SETUP_MSG_SETUP_USPESNO_ZAVRSEN") & vbCrLf & vbCrLf & _
-               "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
-               Poruka("SETUP_MSG_PODESAVANJA_MATICNI_PODACI"), _
-               vbInformation, APP_NAME
+        Dim okMsg As String
+        okMsg = Poruka("SETUP_MSG_SETUP_USPESNO_ZAVRSEN") & vbCrLf & vbCrLf & _
+                "Aplikacija je spremna za ovaj racunar." & vbCrLf & _
+                Poruka("SETUP_MSG_PODESAVANJA_MATICNI_PODACI")
+
+        If Len(linkWarn) > 0 Then
+            okMsg = okMsg & vbCrLf & vbCrLf & _
+                    "NAPOMENA - server link (ne blokira setup):" & vbCrLf & linkWarn
+            MsgBox okMsg, vbExclamation, APP_NAME
+        Else
+            MsgBox okMsg, vbInformation, APP_NAME
+        End If
     Else
         SetLocalConfigValue "APP_SETUP_COMPLETED", "NE", Poruka("SETUP_MSG_OVAJ_RACUNAR_PROSAO")
         SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
-        LogSetup "WARN", report
+        Dim failMsg As String
+        failMsg = report
+        If Len(linkWarn) > 0 Then _
+            failMsg = failMsg & vbCrLf & "Server link (ne blokira):" & vbCrLf & linkWarn
+
+        LogSetup "WARN", failMsg
 
         MsgBox Poruka("SETUP_MSG_SETUP_ZAVRSEN_ALI") & _
-               vbCrLf & vbCrLf & report, _
+               vbCrLf & vbCrLf & failMsg, _
                vbExclamation, APP_NAME
     End If
 
@@ -119,10 +135,14 @@ Public Sub RunSetupHealthCheck()
 
     report = report & CheckRuntimeEnvironment()
     report = report & CheckCoreFoldersExist()
+    report = report & CheckPdfToTextExists()
     report = report & CheckGoogleOAuthConfig()
     report = report & CheckSEFConfigForSetup()
     report = report & CheckRequiredTablesForSetup()
     report = report & CheckRequiredColumnsForSetup()
+    ' Zivi link desktop<->server (advisory; NIJE u SetupNewPC zelenom gate-u da offline
+    ' ne obara setup). Reuse: GetAccessToken/DriveListFolder/Monitor_Test.
+    report = report & CheckServerLink()
 
     SetLocalConfigValue "APP_LAST_HEALTHCHECK_AT", Format$(Now, "yyyy-mm-dd hh:nn:ss"), "Poslednji health-check"
 
@@ -206,7 +226,7 @@ Public Sub EnableCloudSyncMode()
     LogSetup "OK", "Cloud/PWA sync UKLJUCEN (CLOUD_SYNC_ENABLED=YES)"
 
     MsgBox "Cloud/PWA sync je ukljucen." & vbCrLf & vbCrLf & _
-           "SetupNewPC ce ponovo traziti Google kredencijale u tblConfig.", _
+           "SetupNewPC ce ponovo traziti Google kredencijale u tblSEFConfig.", _
            vbInformation, APP_NAME
     Exit Sub
 
@@ -223,6 +243,17 @@ Public Sub SetupBankFoldersInteractive()
     Dim inboxPath As String
     Dim processedPath As String
     Dim errorPath As String
+    Dim driveSourcePath As String
+
+    ' Drive izvor: folder koji Google Drive for Desktop sinhronizuje lokalno
+    ' (npr. H:\My Drive\AgriX_C001_PROD\00_Inbox\01_Bank). Puller (modBankaImport)
+    ' cita odavde. NE pravimo ga (pravi ga Drive sync) -- samo pamtimo putanju.
+    ' Cancel = preskoci (puller je onda iskljucen dok se rucno ne podesi).
+    driveSourcePath = PickFolder("Izaberi Drive izvor (sinhronizovan 00_Inbox\01_Bank); Cancel da preskocis")
+    If Len(Trim$(driveSourcePath)) > 0 Then
+        SetLocalConfigValue "BANKA_DRIVE_SOURCE_PATH", driveSourcePath, _
+                            "Drive izvor (sinhronizovan folder) za povlacenje izvoda"
+    End If
 
     inboxPath = PickFolder("Izaberi folder za nove bankarske izvode / Inbox")
     If Len(Trim$(inboxPath)) = 0 Then Exit Sub
@@ -252,6 +283,83 @@ EH:
     LogSetup "ERROR", "SetupBankFoldersInteractive failed: " & Err.description
     MsgBox Poruka("SETUP_ERR_GRESKA_PRI_PODESAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
+
+' RUCNO (Alt+F8): podesi pdftotext.exe (Poppler) za banka import.
+' Logika (isto sto ResolvePdfToTextExePath koristi):
+'   1) Ako poppler VEC stoji pored xlsm-a (<xlsm>\Tools\poppler\Library\bin\
+'      pdftotext.exe) -> upisi PRAZAN PDFTOTEXT_EXE_PATH. Prazna vrednost znaci
+'      "koristi auto-default relativan na xlsm" (GetLocalConfigValue na prazno vraca
+'      default), pa putanja UVEK prati radnu svesku ako se paket premesti.
+'   2) Inace -> pitaj operatera za folder sa pdftotext.exe (trazi i u uobicajenim
+'      podfolderima) i upisi apsolutnu putanju.
+Public Sub SetupPopplerInteractive()
+    On Error GoTo EH
+
+    InitSetupLog
+    EnsureLocalConfigTable
+
+    ' 1) Auto pored xlsm-a?
+    Dim autoExe As String
+    autoExe = Trim$(ThisWorkbook.path) & "\" & APP_PDFTOTEXT_RELATIVE_EXE_PATH
+    If Dir$(autoExe) <> "" Then
+        SetLocalConfigValue "PDFTOTEXT_EXE_PATH", "", _
+            "Prazno = auto (Tools\poppler pored xlsm-a; putanja prati radnu svesku)"
+        MsgBox "Poppler je pronadjen pored radne sveske:" & vbCrLf & autoExe & vbCrLf & vbCrLf & _
+               "Podeseno na AUTOMATSKI rezim (putanja se racuna relativno na xlsm), " & _
+               "pa nastavlja da radi i ako premestis ceo paket.", _
+               vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    ' 2) Nije pored xlsm-a -> picker.
+    Dim picked As String
+    picked = PickFolder("Izaberi folder sa pdftotext.exe (npr. ...\Tools\poppler\Library\bin ili poppler root)")
+    If Len(Trim$(picked)) = 0 Then Exit Sub
+
+    Dim exePath As String
+    exePath = FindPdfToTextExe(picked)
+
+    If Len(exePath) = 0 Then
+        MsgBox "pdftotext.exe nije pronadjen u izabranom folderu ni u uobicajenim " & _
+               "podfolderima (\Library\bin, \bin, \poppler\Library\bin, \poppler\bin)." & vbCrLf & vbCrLf & _
+               "Izaberi tacan folder gde je pdftotext.exe (ili raspakovani poppler root).", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    SetLocalConfigValue "PDFTOTEXT_EXE_PATH", exePath, "pdftotext.exe (rucno izabran)"
+    MsgBox "Poppler podesen:" & vbCrLf & exePath & vbCrLf & vbCrLf & _
+           "NAPOMENA: ovo je APSOLUTNA putanja i ostaje ista ako premestis xlsm. " & _
+           "Za putanju koja prati radnu svesku, drzi Tools\poppler pored xlsm-a pa " & _
+           "ponovo pokreni ovu komandu (upisace se automatski rezim).", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "SetupPopplerInteractive failed: " & Err.description
+    MsgBox Poruka("SETUP_ERR_GRESKA_PRI_PODESAVANJU") & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Trazi pdftotext.exe u zadatom folderu i uobicajenim podfolderima (poppler layout-i).
+' Vraca punu putanju do exe-a ili "" ako nije nadjen. Bez wildcard Dir$ petlje (Dir$ je
+' stateful) -- fiksni skup kandidata.
+Private Function FindPdfToTextExe(ByVal root As String) As String
+    root = Trim$(root)
+    If Len(root) = 0 Then Exit Function
+    If Right$(root, 1) = "\" Then root = Left$(root, Len(root) - 1)
+
+    Dim subs As Variant
+    subs = Array("", "\Library\bin", "\bin", "\poppler\Library\bin", "\poppler\bin")
+
+    Dim i As Long, cand As String
+    For i = LBound(subs) To UBound(subs)
+        cand = root & subs(i) & "\pdftotext.exe"
+        If Dir$(cand) <> "" Then
+            FindPdfToTextExe = cand
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' ============================================================
 ' PUBLIC CONFIG HELPERS
@@ -371,27 +479,9 @@ EH:
     Err.Raise Err.Number, "SetLocalConfigValue", Err.description
 End Sub
 
-Public Function GetGoogleConfigValue(ByVal keyName As String, _
-                                     Optional ByVal defaultValue As String = "") As String
-    On Error GoTo EH
-
-    Dim v As Variant
-
-    v = LookupValue(TBL_CONFIG, CFG_KEY, keyName, CFG_VALUE)
-
-    If isError(v) Or IsNull(v) Or IsEmpty(v) Then
-        GetGoogleConfigValue = defaultValue
-    ElseIf Len(Trim$(CStr(v))) = 0 Then
-        GetGoogleConfigValue = defaultValue
-    Else
-        GetGoogleConfigValue = Trim$(CStr(v))
-    End If
-
-    Exit Function
-
-EH:
-    GetGoogleConfigValue = defaultValue
-End Function
+' GetGoogleConfigValue (citac tblConfig-a) je uklonjen: Google/PWA config se cita iz
+' tblSEFConfig preko GetConfigValue -- isto kao runtime (modGoogleAuth). Dva citaca na
+' dve razlicite tabele su bila uzrok laznog "Nedostaje GOOGLE_... u tblConfig".
 
 ' ============================================================
 ' CHECKS
@@ -488,29 +578,33 @@ Private Function CheckGoogleOAuthConfig() As String
     Dim googleClientSecret As String
     Dim googlePwaFolderID As String
 
-    googleClientID = Trim$(GetGoogleConfigValue("GOOGLE_CLIENT_ID", ""))
-    googleClientSecret = Trim$(GetGoogleConfigValue("GOOGLE_CLIENT_SECRET", ""))
-    googlePwaFolderID = Trim$(GetGoogleConfigValue("GOOGLE_PWA_FOLDER_ID", ""))
+    ' Google/PWA kredencijali zive u tblSEFConfig -- runtime ih cita preko
+    ' GetConfigValue (modGoogleAuth, modBrojevi, modGoogleSyncOrchestrator), a
+    ' Podesavanja ih tamo i pisu. Zato i setup provera cita tblSEFConfig (ranije je
+    ' greskom gledala tblConfig preko GetGoogleConfigValue -> lazan "Nedostaje").
+    googleClientID = Trim$(GetConfigValue("GOOGLE_CLIENT_ID"))
+    googleClientSecret = Trim$(GetConfigValue("GOOGLE_CLIENT_SECRET"))
+    googlePwaFolderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
 
     If Len(googleClientID) > 0 _
        And Len(googleClientSecret) > 0 _
        And Len(googlePwaFolderID) > 0 Then
 
-        LogSetup "OK", "Google OAuth/PWA config found in tblConfig"
+        LogSetup "OK", "Google OAuth/PWA config found in tblSEFConfig"
         CheckGoogleOAuthConfig = vbNullString
         Exit Function
     End If
 
     If Len(googleClientID) = 0 Then
-        msg = msg & "- Nedostaje GOOGLE_CLIENT_ID u tblConfig." & vbCrLf
+        msg = msg & "- Nedostaje GOOGLE_CLIENT_ID u tblSEFConfig." & vbCrLf
     End If
 
     If Len(googleClientSecret) = 0 Then
-        msg = msg & "- Nedostaje GOOGLE_CLIENT_SECRET u tblConfig." & vbCrLf
+        msg = msg & "- Nedostaje GOOGLE_CLIENT_SECRET u tblSEFConfig." & vbCrLf
     End If
 
     If Len(googlePwaFolderID) = 0 Then
-        msg = msg & "- Nedostaje GOOGLE_PWA_FOLDER_ID u tblConfig." & vbCrLf
+        msg = msg & "- Nedostaje GOOGLE_PWA_FOLDER_ID u tblSEFConfig." & vbCrLf
     End If
 
     CheckGoogleOAuthConfig = msg
@@ -524,17 +618,25 @@ Private Function CheckSEFConfigForSetup() As String
         Exit Function
     End If
 
-    If Trim$(GetConfigValue("SEF_BASE_URL")) = "" Then
-        msg = msg & Poruka("SETUP_MSG_SEF_BASE_URL") & vbCrLf
+    Dim baseUrl As String, apiKey As String, sefEnv As String
+    baseUrl = Trim$(GetConfigValue("SEF_BASE_URL"))
+    apiKey = Trim$(GetConfigValue("SEF_API_KEY"))
+    sefEnv = Trim$(GetConfigValue("SEF_ENV"))
+
+    ' SEF (e-faktura) je opcion. Ako NIJEDNO SEF polje nije popunjeno -> SEF se ne
+    ' koristi na ovoj instalaciji -> preskoci proveru (bez laznog upozorenja). Cim je
+    ' bar jedno polje popunjeno, SEF je delimicno podesen pa prijavi sta nedostaje.
+    ' Runtime i dalje cvrsto zaustavlja slanje ka SEF-u ako fali kljuc
+    ' (modSEFClient/modSEFValidator), pa preskakanje ovde nista ne razbija.
+    If Len(baseUrl) = 0 And Len(apiKey) = 0 And Len(sefEnv) = 0 Then
+        LogSetup "INFO", "SEF se ne koristi (sva SEF polja prazna) -- preskacem SEF proveru"
+        CheckSEFConfigForSetup = vbNullString
+        Exit Function
     End If
 
-    If Trim$(GetConfigValue("SEF_API_KEY")) = "" Then
-        msg = msg & Poruka("SETUP_MSG_SEF_API_KEY") & vbCrLf
-    End If
-
-    If Trim$(GetConfigValue("SEF_ENV")) = "" Then
-        msg = msg & Poruka("SETUP_MSG_SEF_ENV_NIJE") & vbCrLf
-    End If
+    If Len(baseUrl) = 0 Then msg = msg & Poruka("SETUP_MSG_SEF_BASE_URL") & vbCrLf
+    If Len(apiKey) = 0 Then msg = msg & Poruka("SETUP_MSG_SEF_API_KEY") & vbCrLf
+    If Len(sefEnv) = 0 Then msg = msg & Poruka("SETUP_MSG_SEF_ENV_NIJE") & vbCrLf
 
     CheckSEFConfigForSetup = msg
 End Function
@@ -570,7 +672,8 @@ Private Function CheckRequiredColumnsForSetup() As String
 
     On Error GoTo EH
 
-    ' tblConfig: existing Google config table
+    ' tblConfig: legacy tabela (validiraj kolone samo ako postoji; Google config je
+    ' danas u tblSEFConfig)
     If Not GetTable(TBL_CONFIG) Is Nothing Then
         If GetColumnIndex(TBL_CONFIG, CFG_KEY) = 0 Then
             msg = msg & "- tblConfig nema kolonu Kljuc." & vbCrLf
@@ -642,6 +745,127 @@ Private Function CheckFolderExists(ByVal configKey As String, ByVal labelText As
         CheckFolderExists = "- " & labelText & " ne postoji: " & p & vbCrLf
     End If
 End Function
+
+' Poppler (pdftotext.exe) je neophodan za banka import. Reuse razresavanja putanje
+' iz parsera (ResolvePdfToTextExePath) da ne dupliramo logiku; on raise-uje kad
+' nije podesen ili fajl ne postoji, pa ovde samo hvatamo poruku za report.
+Private Function CheckPdfToTextExists() As String
+    On Error GoTo EH
+    Dim p As String
+    p = ResolvePdfToTextExePath()
+    Exit Function
+EH:
+    CheckPdfToTextExists = "- pdftotext.exe (banka import): " & Err.description & _
+                           " (Alt+F8 -> SetupPopplerInteractive da izaberes folder, ili " & _
+                           "stavi Tools\poppler pored xlsm-a)" & vbCrLf
+End Function
+
+' Zivi link desktop<->server. Advisory (reuse postojecih primitiva; bez novog HTTP-a):
+'   - Google Drive/Sheets: GetAccessToken (OAuth zivi token) + DriveListFolder(PWA folder)
+'   - GAS monitoring:       Monitor_Test() ako je MONITORING_ENDPOINT podesen
+'   - GAS license:          prisustvo LICENSE_ENDPOINT (zivi check radi startup gate)
+'   - Banka Drive folder:   lokalni BANKA_DRIVE_SOURCE_PATH (Drive-for-Desktop)
+' Desktop-only (CLOUD_SYNC_ENABLED=NO): preskace server deo, ali i dalje proverava
+' lokalni banka folder. Sve fail-soft -- nikad ne baca, samo skuplja poruke.
+Private Function CheckServerLink() As String
+    Dim msg As String
+
+    If Not IsCloudSyncEnabled() Then
+        LogSetup "INFO", "Desktop-only: preskacem server link (proveravam samo lokalni banka folder)"
+        CheckServerLink = CheckBankaDriveFolderLink()
+        Exit Function
+    End If
+
+    ' 1) Google Drive/Sheets -- OAuth zivi token je pouzdan signal "spojen na Google".
+    On Error Resume Next
+    If Not IsGoogleAuthConfigured() Then
+        msg = msg & "- Google OAuth nije konfigurisan (GOOGLE_* / refresh token). Pokreni RunGoogleAuthSetup." & vbCrLf
+    Else
+        Dim token As String
+        token = ""
+        token = GetAccessToken()
+        If Len(Trim$(token)) = 0 Then
+            msg = msg & "- Google link: ne mogu da dobijem access token (re-auth: RunGoogleAuthSetup)." & vbCrLf
+        Else
+            ' Folder read-proba (soft): 0 stavki = prazan ILI nedostupan -> WARN, ne FAIL.
+            Dim pwaFolder As String
+            pwaFolder = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+            If Len(pwaFolder) > 0 Then
+                Dim d As Object
+                Set d = DriveListFolder(pwaFolder)
+                If d Is Nothing Then
+                    msg = msg & "- Google PWA folder: nedostupan (DriveListFolder). Proveri GOOGLE_PWA_FOLDER_ID / deljenje." & vbCrLf
+                ElseIf d.count = 0 Then
+                    msg = msg & "- Google PWA folder: 0 stavki (prazan ili nedostupan). Detaljnije: RunProductionHealthCheck." & vbCrLf
+                End If
+            End If
+        End If
+    End If
+    On Error GoTo 0
+
+    ' 2) GAS monitoring endpoint (samo ako je podesen; inace Monitor_Test lazno pada).
+    If Len(Trim$(GetConfigValue("MONITORING_ENDPOINT"))) > 0 Then
+        Dim monOk As Boolean
+        monOk = False
+        On Error Resume Next
+        monOk = Monitor_Test()
+        On Error GoTo 0
+        If Not monOk Then
+            msg = msg & "- GAS monitoring endpoint ne odgovara (MONITORING_ENDPOINT / MONITORING_SECRET)." & vbCrLf
+        End If
+    End If
+
+    ' 3) GAS license endpoint -- samo ako se licenciranje koristi. Zivi check radi
+    '    startup gate (AccessGateOrQuit); ovde proveravamo da je endpoint uopste zadat.
+    If UCase$(Trim$(GetConfigValue("LICENSE_ENABLED"))) = "YES" Then
+        If Len(Trim$(GetConfigValue("LICENSE_ENDPOINT"))) = 0 _
+           And Len(Trim$(GetConfigValue("MONITORING_ENDPOINT"))) = 0 Then
+            msg = msg & "- Licenciranje ukljuceno, a LICENSE_ENDPOINT (ni MONITORING_ENDPOINT fallback) nije podesen." & vbCrLf
+        End If
+    End If
+
+    ' 4) Banka Drive folder (lokalni Drive-for-Desktop izvor).
+    msg = msg & CheckBankaDriveFolderLink()
+
+    CheckServerLink = msg
+End Function
+
+' Lokalni banka Drive izvor (BANKA_DRIVE_SOURCE_PATH). Ako nije podesen -> banka
+' Drive-pull se ne koristi (prazno, bez poruke). Ako je podesen a folder ne postoji
+' -> Drive-for-Desktop ne sinhronizuje ili je putanja pogresna.
+Private Function CheckBankaDriveFolderLink() As String
+    Dim p As String
+    p = Trim$(GetLocalConfigValue("BANKA_DRIVE_SOURCE_PATH", ""))
+    If Len(p) = 0 Then Exit Function
+
+    On Error Resume Next
+    If Dir$(p, vbDirectory) = "" Then
+        CheckBankaDriveFolderLink = "- Banka Drive izvor nedostupan (BANKA_DRIVE_SOURCE_PATH): " & p & vbCrLf
+    End If
+    On Error GoTo 0
+End Function
+
+' RUCNO (Alt+F8): proveri samo zivi link desktop<->server i prikazi rezultat.
+Public Sub TestServerLink()
+    On Error GoTo EH
+    InitSetupLog
+
+    Dim report As String
+    report = CheckServerLink()
+
+    If Len(report) = 0 Then
+        MsgBox "Server link OK (Google / GAS / banka Drive folder dostupni ili nisu u upotrebi).", _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "Server link -- stavke za proveru:" & vbCrLf & vbCrLf & report, _
+               vbExclamation, APP_NAME
+    End If
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "TestServerLink failed: " & Err.description
+    MsgBox "Greska pri proveri server linka: " & Err.description, vbCritical, APP_NAME
+End Sub
 
 ' ============================================================
 ' LOCAL CONFIG TABLE CREATION
@@ -1399,7 +1623,8 @@ Public Sub EnsureAllDocFolders()
     EnsureDocFolder PDF_DIR_IZVESTAJI
 End Sub
 
-Private Function PickFolder(ByVal titleText As String) As String
+' Public: reuse-uje ga i modPodesavanja (inline "..." browse dugmad u config editoru).
+Public Function PickFolder(ByVal titleText As String) As String
     On Error GoTo EH
 
     Dim fd As FileDialog

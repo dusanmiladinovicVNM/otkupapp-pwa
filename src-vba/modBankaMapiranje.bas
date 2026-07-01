@@ -54,6 +54,10 @@ Option Explicit
 
 Private Const ERR_BMAP_BASE As Long = vbObjectError + 2900
 
+' Kad je True, batch auto-map (strong pass / Auto sve) ne prikazuje blokirajuci
+' MsgBox po redu (npr. "Kooperant nema StanicaID"). Postavlja ga pozivalac oko petlje.
+Public gBankaSilentBatch As Boolean
+
 ' ============================================================
 ' PUBLIC
 ' ============================================================
@@ -111,42 +115,50 @@ Public Function GetBankaImportOpen() As Variant
     GetBankaImportOpen = finalResult
 End Function
 
-Public Function AutoMapBankaImportRow(ByVal bankaImportID As String) As String
+Public Function AutoMapBankaImportRow(ByVal bankaImportID As String, _
+                                      Optional ByVal strongOnly As Boolean = False, _
+                                      Optional ByVal markErrorOnFail As Boolean = True) As String
     Dim bim As Variant
     Dim uplata As Double
     Dim isplata As Double
     Dim partnerName As String
-    
+
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then
         AutoMapBankaImportRow = ""
         Exit Function
     End If
-    
+
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then
-        MsgBox "BankaImport red nije pronadjen: " & bankaImportID, vbExclamation, APP_NAME
+        If Not gBankaSilentBatch Then MsgBox "BankaImport red nije pronadjen: " & bankaImportID, vbExclamation, APP_NAME
         AutoMapBankaImportRow = ""
         Exit Function
     End If
-    
+
     uplata = CDbl(NzBIM(bim(1, 5), 0#))
     isplata = CDbl(NzBIM(bim(1, 6), 0#))
     partnerName = CStr(bim(1, 3))
-    
+
     If uplata > 0 And isplata = 0 Then
-        AutoMapBankaImportRow = AutoMapIncomingKupac(bankaImportID)
-        If AutoMapBankaImportRow = "" Then UpdateBankaImportStatus bankaImportID, "Error"
+        AutoMapBankaImportRow = AutoMapIncomingKupac(bankaImportID, strongOnly)
+        If AutoMapBankaImportRow = "" And markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
         Exit Function
     End If
-    
+
     If isplata > 0 And uplata = 0 Then
-        AutoMapBankaImportRow = AutoMapOutgoingKooperantOrOM(bankaImportID)
-        If AutoMapBankaImportRow = "" Then UpdateBankaImportStatus bankaImportID, "Error"
+        AutoMapBankaImportRow = AutoMapOutgoingKooperantOrOM(bankaImportID, strongOnly)
+        If AutoMapBankaImportRow = "" And markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
         Exit Function
     End If
-    
-    MsgBox "Stavka nema cist smer uplata/isplata: " & partnerName, vbExclamation, APP_NAME
-    UpdateBankaImportStatus bankaImportID, "Error"
+
+    ' Nema cist smer uplata/isplata. U strong-only rezimu preskoci tiho (bez Error/MsgBox).
+    If strongOnly Then
+        AutoMapBankaImportRow = ""
+        Exit Function
+    End If
+
+    If Not gBankaSilentBatch Then MsgBox "Stavka nema cist smer uplata/isplata: " & partnerName, vbExclamation, APP_NAME
+    If markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
     AutoMapBankaImportRow = ""
 End Function
 
@@ -161,7 +173,8 @@ Public Function AutoMapBankaImportRow_TX(ByVal bankaImportID As String) As Strin
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_PARTNER_MAP
     tx.AddTableSnapshot TBL_OTKUP
-    
+    tx.AddTableSnapshot TBL_FAKTURE
+
     AutoMapBankaImportRow_TX = AutoMapBankaImportRow(bankaImportID)
     
     tx.CommitTx
@@ -764,7 +777,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     
     omID = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     If omID = "" Then
-        MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
+        If Not gBankaSilentBatch Then MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
         Exit Function
     End If
     
@@ -997,7 +1010,8 @@ Public Function AutoMapAllBankaImport_TX() As Long
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_PARTNER_MAP
     tx.AddTableSnapshot TBL_OTKUP
-    
+    tx.AddTableSnapshot TBL_FAKTURE
+
         For i = 1 To UBound(data, 1)
         novID = AutoMapBankaImportRow(CStr(data(i, colID)))
 
@@ -1075,17 +1089,128 @@ End Function
 ' PRIVATE - AUTO MAP
 ' ============================================================
 
-Private Function AutoMapIncomingKupac(ByVal bankaImportID As String) As String
+' ============================================================
+' AUTO-MAP SAMO PREKO JAKIH KLJUCEVA (poziv->otkup/faktura, tekuci racun).
+' Ne koristi ime/PartnerMap heuristiku i NE markira Error na promasaj -
+' dvosmislene stavke ostaju otvorene za rucno mapiranje. Namenjeno auto-pokretanju
+' pri otvaranju frmBankaImport (i kao Immediate/backfill jednim pozivom).
+' Vraca broj auto-mapiranih stavki.
+' ============================================================
+Public Function AutoMapStrongKeysBankaImport_TX() As Long
+    Const SRC As String = "AutoMapStrongKeysBankaImport_TX"
+
+    Dim tx As clsTransaction
+    Dim data As Variant
+    Dim colID As Long
+    Dim i As Long
+    Dim res As String
+    Dim mappedCount As Long
+
+    On Error GoTo EH
+
+    data = GetBankaImportOpen()
+    If IsEmpty(data) Then
+        AutoMapStrongKeysBankaImport_TX = 0
+        Exit Function
+    End If
+
+    colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
+
+    gBankaSilentBatch = True
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_PARTNER_MAP
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_FAKTURE
+
+    For i = 1 To UBound(data, 1)
+        res = AutoMapBankaImportRow(CStr(data(i, colID)), True, False)
+        If res <> "" Then mappedCount = mappedCount + 1
+    Next i
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    gBankaSilentBatch = False
+
+    AutoMapStrongKeysBankaImport_TX = mappedCount
+    Exit Function
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    If Not tx Is Nothing Then tx.RollbackTx
+    gBankaSilentBatch = False
+    On Error GoTo 0
+    AutoMapStrongKeysBankaImport_TX = 0
+End Function
+
+Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
     Dim partnerName As String
+    Dim konto As String
+    Dim poziv As String
     Dim mapped As Variant
     Dim fakturaID As String
-    
+    Dim kupacByKonto As Variant
+    Dim fakByPoziv As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+    Dim resolvedKupac As String
+    Dim learn As Boolean
+
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then Exit Function
-    
+
     partnerName = CStr(bim(1, 3))
-    
+    konto = CStr(NzBIM(bim(1, 4), ""))
+    poziv = CStr(NzBIM(bim(1, 10), ""))
+    learn = (Len(Trim$(partnerName)) > 0)
+
+    ' PRIORITET: tekuci racun (kupac) + poziv na broj (faktura), uz unakrsnu proveru.
+    kupacByKonto = TryResolveKupacByKonto(konto)
+    fakByPoziv = TryResolveFakturaByPoziv(poziv)
+
+    fakturaID = ""
+    idDoc = ""
+    If Not IsEmpty(fakByPoziv) Then
+        fakturaID = CStr(fakByPoziv(0))
+        idDoc = CStr(fakByPoziv(1))
+    End If
+
+    If IsEmpty(kupacByKonto) Then
+        idKonto = ""
+    Else
+        idKonto = CStr(kupacByKonto(0))
+    End If
+
+    ' Konflikt: racun i poziv na broj pokazuju na razlicite kupce -> rucno, ne auto.
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        AutoMapIncomingKupac = ""
+        Exit Function
+    End If
+
+    resolvedKupac = idDoc
+    If resolvedKupac = "" Then resolvedKupac = idKonto
+
+    If resolvedKupac <> "" Then
+        If fakturaID = "" Then
+            fakturaID = TryResolveFakturaForKupac(bankaImportID, resolvedKupac)
+        End If
+        AutoMapIncomingKupac = MapBankaImportAsKupac(bankaImportID, resolvedKupac, fakturaID, learn)
+        Exit Function
+    End If
+
+    ' Strong-only rezim (auto na otvaranje): ne idi na ime/PartnerMap heuristiku.
+    If strongOnly Then
+        AutoMapIncomingKupac = ""
+        Exit Function
+    End If
+
+    ' FALLBACK (nepromenjeno): PartnerMap -> egzaktno ime -> OM.
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
         If CStr(mapped(1)) = "Kupac" Then
@@ -1094,34 +1219,78 @@ Private Function AutoMapIncomingKupac(ByVal bankaImportID As String) As String
             Exit Function
         End If
     End If
-    
+
     mapped = TryResolveKupacBIM(partnerName)
     If Not IsEmpty(mapped) Then
         fakturaID = TryResolveFakturaForKupac(bankaImportID, CStr(mapped(0)))
         AutoMapIncomingKupac = MapBankaImportAsKupac(bankaImportID, CStr(mapped(0)), fakturaID, False)
         Exit Function
     End If
-    
+
     mapped = TryResolveOMBIM(partnerName)
     If Not IsEmpty(mapped) Then
         AutoMapIncomingKupac = MapBankaImportAsOM(bankaImportID, CStr(mapped(0)), "", False)
         Exit Function
     End If
-    
+
     AutoMapIncomingKupac = ""
 End Function
 
-Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String) As String
+Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
     Dim partnerName As String
+    Dim konto As String
+    Dim poziv As String
     Dim mapped As Variant
     Dim createdCount As Long
-    
+    Dim koopByPoziv As String
+    Dim koopByKonto As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+    Dim resolvedKoop As String
+    Dim learn As Boolean
+
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then Exit Function
-    
+
     partnerName = CStr(bim(1, 3))
-    
+    konto = CStr(NzBIM(bim(1, 4), ""))
+    poziv = CStr(NzBIM(bim(1, 10), ""))
+    learn = (Len(Trim$(partnerName)) > 0)
+
+    ' PRIORITET: poziv na broj (otkupni list) + tekuci racun, uz unakrsnu proveru.
+    koopByPoziv = TryResolveKooperantByOtkupPoziv(poziv)
+    koopByKonto = TryResolveKooperantByKonto(konto)
+
+    idDoc = koopByPoziv
+    If IsEmpty(koopByKonto) Then
+        idKonto = ""
+    Else
+        idKonto = CStr(koopByKonto(0))
+    End If
+
+    ' Konflikt: poziv na broj i racun pokazuju na razlicite kooperante -> rucno, ne auto.
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        AutoMapOutgoingKooperantOrOM = ""
+        Exit Function
+    End If
+
+    resolvedKoop = idDoc
+    If resolvedKoop = "" Then resolvedKoop = idKonto
+
+    If resolvedKoop <> "" Then
+        createdCount = MapBankaImportAsKooperantBlock(bankaImportID, resolvedKoop, learn)
+        If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
+        Exit Function
+    End If
+
+    ' Strong-only rezim (auto na otvaranje): ne idi na ime/PartnerMap heuristiku.
+    If strongOnly Then
+        AutoMapOutgoingKooperantOrOM = ""
+        Exit Function
+    End If
+
+    ' FALLBACK (nepromenjeno): PartnerMap -> egzaktno ime -> OM.
     mapped = LookupPartnerMap(partnerName)
     If Not IsEmpty(mapped) Then
         Select Case CStr(mapped(1))
@@ -1134,20 +1303,20 @@ Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String) As 
                 Exit Function
         End Select
     End If
-    
+
     mapped = TryResolveKooperantBIM(partnerName)
     If Not IsEmpty(mapped) Then
         createdCount = MapBankaImportAsKooperantBlock(bankaImportID, CStr(mapped(0)), False)
         If createdCount > 0 Then AutoMapOutgoingKooperantOrOM = "OK"
         Exit Function
     End If
-    
+
     mapped = TryResolveOMBIM(partnerName)
     If Not IsEmpty(mapped) Then
         AutoMapOutgoingKooperantOrOM = MapBankaImportAsOM(bankaImportID, CStr(mapped(0)), "", False)
         Exit Function
     End If
-    
+
     AutoMapOutgoingKooperantOrOM = ""
 End Function
 
@@ -1243,7 +1412,7 @@ Private Function TryResolveOtkupForKooperant(ByVal bankaImportID As String, _
     For i = 1 To UBound(otkData, 1)
         If CStr(otkData(i, colKoop)) <> kooperantID Then GoTo NextI
         
-        If NormalizeLooseBIM(CStr(otkData(i, colBrDok))) = NormalizeLooseBIM(pozivNaBroj) Then
+        If NormalizePozivKey(CStr(otkData(i, colBrDok))) = NormalizePozivKey(pozivNaBroj) Then
             hitCount = hitCount + 1
             hitID = CStr(otkData(i, colOtkID))
         End If
@@ -1290,7 +1459,7 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextI
         
-        If NormalizeLooseBIM(CStr(data(i, colBrDok))) = NormalizeLooseBIM(brojBloka) Then
+        If NormalizePozivKey(CStr(data(i, colBrDok))) = NormalizePozivKey(brojBloka) Then
             Dim vrednost As Double
             Dim uplaceno As Double
             Dim otvoreno As Double
@@ -1639,6 +1808,253 @@ Public Function NzBIM(ByVal v As Variant, Optional ByVal Fallback As Variant = "
     Else
         NzBIM = v
     End If
+End Function
+
+' ============================================================
+' PRIORITETNI RESOLVERI: tekuci racun + poziv na broj
+' Jaki poslovni kljucevi za auto-map. Sve je single-hit
+' (0 ili >1 pogodaka -> ne auto). Reuse Map*/SaveNovac putanja.
+' ============================================================
+
+Public Function TryResolveKupacByKonto(ByVal partnerKonto As String) As Variant
+    Dim data As Variant
+    Dim colID As Long
+    Dim colRac As Long
+    Dim i As Long
+    Dim hits As Long
+    Dim hitID As String
+    Dim target As String
+
+    TryResolveKupacByKonto = Empty
+
+    target = NormalizeKonto(partnerKonto)
+    If target = "" Then Exit Function
+
+    colRac = GetColumnIndex(TBL_KUPCI, COL_KUP_TEKUCI_RACUN)
+    If colRac = 0 Then Exit Function
+
+    data = GetTableData(TBL_KUPCI)
+    If IsEmpty(data) Then Exit Function
+
+    colID = GetColumnIndex(TBL_KUPCI, COL_KUP_ID)
+
+    For i = 1 To UBound(data, 1)
+        If NormalizeKonto(CStr(data(i, colRac))) = target Then
+            hits = hits + 1
+            hitID = CStr(data(i, colID))
+        End If
+    Next i
+
+    If hits = 1 Then TryResolveKupacByKonto = Array(hitID, "Kupac", "")
+End Function
+
+Public Function TryResolveKooperantByKonto(ByVal partnerKonto As String) As Variant
+    Dim data As Variant
+    Dim colID As Long
+    Dim colRac As Long
+    Dim i As Long
+    Dim hits As Long
+    Dim hitID As String
+    Dim hitOMID As String
+    Dim target As String
+
+    TryResolveKooperantByKonto = Empty
+
+    target = NormalizeKonto(partnerKonto)
+    If target = "" Then Exit Function
+
+    colRac = GetColumnIndex(TBL_KOOPERANTI, COL_KOOP_TEKUCI_RACUN)
+    If colRac = 0 Then Exit Function
+
+    data = GetTableData(TBL_KOOPERANTI)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_KOOPERANTI)
+    If IsEmpty(data) Then Exit Function
+
+    colID = GetColumnIndex(TBL_KOOPERANTI, COL_KOOP_ID)
+
+    For i = 1 To UBound(data, 1)
+        If NormalizeKonto(CStr(data(i, colRac))) = target Then
+            hits = hits + 1
+            hitID = CStr(data(i, colID))
+        End If
+    Next i
+
+    If hits = 1 Then
+        hitOMID = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, hitID, COL_KOOP_STANICA), ""))
+        TryResolveKooperantByKonto = Array(hitID, "Kooperant", hitOMID)
+    End If
+End Function
+
+' Poziv na broj -> otkupni list (BrDok) -> KooperantID.
+' Vise otkupa istog bloka pripada istom kooperantu = i dalje jedan kooperant.
+Public Function TryResolveKooperantByOtkupPoziv(ByVal pozivNaBroj As String) As String
+    Dim data As Variant
+    Dim colBrDok As Long
+    Dim colKoop As Long
+    Dim i As Long
+    Dim hits As Long
+    Dim hitKoop As String
+    Dim curKoop As String
+    Dim target As String
+
+    target = NormalizePozivKey(pozivNaBroj)
+    If target = "" Then Exit Function
+
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    colBrDok = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    colKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+
+    For i = 1 To UBound(data, 1)
+        If NormalizePozivKey(CStr(data(i, colBrDok))) = target Then
+            curKoop = CStr(data(i, colKoop))
+            If hitKoop = "" Then
+                hits = 1
+                hitKoop = curKoop
+            ElseIf UCase$(curKoop) <> UCase$(hitKoop) Then
+                hits = hits + 1
+            End If
+        End If
+    Next i
+
+    If hits = 1 Then TryResolveKooperantByOtkupPoziv = hitKoop
+End Function
+
+' Poziv na broj -> Broj fakture -> Array(FakturaID, KupacID); Empty ako nije jednoznacno.
+Public Function TryResolveFakturaByPoziv(ByVal pozivNaBroj As String) As Variant
+    Dim data As Variant
+    Dim colFID As Long
+    Dim colBroj As Long
+    Dim colKup As Long
+    Dim i As Long
+    Dim hits As Long
+    Dim hitFID As String
+    Dim hitKup As String
+    Dim target As String
+    Dim k As String
+
+    TryResolveFakturaByPoziv = Empty
+
+    target = NormalizePozivKey(pozivNaBroj)
+    If target = "" Then Exit Function
+
+    data = GetTableData(TBL_FAKTURE)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_FAKTURE)
+    If IsEmpty(data) Then Exit Function
+
+    colFID = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+    colBroj = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
+    colKup = GetColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC)
+
+    For i = 1 To UBound(data, 1)
+        k = NormalizePozivKey(CStr(data(i, colBroj)))
+        If k <> "" And k = target Then
+            hits = hits + 1
+            hitFID = CStr(data(i, colFID))
+            hitKup = CStr(data(i, colKup))
+        End If
+    Next i
+
+    If hits = 1 Then TryResolveFakturaByPoziv = Array(hitFID, hitKup)
+End Function
+
+' Kanonski tekuci racun: 3 (banka) + 13 (partija, vodece nule) + 2 (kontrola) = 18 cifara.
+' Banka salje 205-0000000420902-31; operater u sifarnik moze uneti sa/bez crtica i nula.
+Public Function NormalizeKonto(ByVal s As String) As String
+    Dim raw As String
+    Dim onlyDigits As String
+    Dim ch As String
+    Dim i As Long
+    Dim groups As Collection
+    Dim g1 As String
+    Dim g2 As String
+    Dim g3 As String
+
+    raw = Trim$(s)
+    If Len(raw) = 0 Then Exit Function
+
+    Set groups = SplitDigitGroups(raw)
+
+    If groups.count = 3 Then
+        g1 = CStr(groups(1))
+        g2 = CStr(groups(2))
+        g3 = CStr(groups(3))
+        If Len(g1) <= 3 And Len(g2) <= 13 And Len(g3) <= 2 Then
+            g1 = Right$("000" & g1, 3)
+            g2 = Right$(String$(13, "0") & g2, 13)
+            g3 = Right$("00" & g3, 2)
+            NormalizeKonto = g1 & g2 & g3
+            Exit Function
+        End If
+    End If
+
+    For i = 1 To Len(raw)
+        ch = Mid$(raw, i, 1)
+        If ch Like "[0-9]" Then onlyDigits = onlyDigits & ch
+    Next i
+    NormalizeKonto = onlyDigits
+End Function
+
+Private Function SplitDigitGroups(ByVal s As String) As Collection
+    Dim result As Collection
+    Dim i As Long
+    Dim ch As String
+    Dim cur As String
+
+    Set result = New Collection
+
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If ch Like "[0-9]" Then
+            cur = cur & ch
+        Else
+            If Len(cur) > 0 Then
+                result.Add cur
+                cur = ""
+            End If
+        End If
+    Next i
+    If Len(cur) > 0 Then result.Add cur
+
+    Set SplitDigitGroups = result
+End Function
+
+' Kljuc za poredjenje poziva-na-broj sa BrDok otkupa / Broj fakture.
+' Skida [NN] model (npr. [97]) i sve ne-alfanumericke znakove; UPPERCASE.
+' "[97]182106264" -> "182106264"; "18/210626-4" -> "182106264".
+Public Function NormalizePozivKey(ByVal s As String) As String
+    Dim r As String
+    Dim out As String
+    Dim i As Long
+    Dim ch As String
+    Dim p1 As Long
+    Dim p2 As Long
+
+    r = UCase$(Trim$(s))
+    If Len(r) = 0 Then Exit Function
+
+    Do
+        p1 = InStr(r, "[")
+        If p1 = 0 Then Exit Do
+        p2 = InStr(p1, r, "]")
+        If p2 = 0 Then Exit Do
+        r = Left$(r, p1 - 1) & Mid$(r, p2 + 1)
+    Loop
+
+    For i = 1 To Len(r)
+        ch = Mid$(r, i, 1)
+        If ch Like "[0-9A-Z]" Then out = out & ch
+    Next i
+
+    NormalizePozivKey = out
 End Function
 
 Public Function GetKooperantNaziv(ByVal kooperantID As String) As String

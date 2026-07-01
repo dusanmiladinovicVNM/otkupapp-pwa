@@ -99,22 +99,23 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-Private Function ResolvePdfToTextExePath() As String
+' Public: koristi ga i setup health-check (modSetup.CheckPdfToTextExists) da ne
+' duplira logiku razresavanja putanje. Raise-uje kad nije podesen / ne postoji.
+Public Function ResolvePdfToTextExePath() As String
     Const SRC As String = "ResolvePdfToTextExePath"
 
     Dim rootPath As String
     Dim defaultExePath As String
     Dim configuredPath As String
 
-    rootPath = GetLocalConfigValue("APP_ROOT_PATH", "")
-
-    If Len(Trim$(rootPath)) = 0 Then
-        If Len(Trim$(ThisWorkbook.path)) > 0 Then
-            rootPath = ThisWorkbook.path
-        Else
-            rootPath = "C:\OtkupApp"
-        End If
-    End If
+    ' Poppler (Tools\) uvek stoji pored xlsm-a (isti folder), pa je DEFAULT putanja
+    ' relativna na ThisWorkbook.path -- NE na perzistiranu APP_ROOT_PATH (koja ostane
+    ' bajata ako se ceo paket premesti). APP_ROOT_PATH je samo fallback kad workbook
+    ' putanja nije dostupna. Eksplicitni PDFTOTEXT_EXE_PATH iz tblLocalConfig i dalje
+    ' ima prioritet (override ispod).
+    rootPath = Trim$(ThisWorkbook.path)
+    If Len(rootPath) = 0 Then rootPath = Trim$(GetLocalConfigValue("APP_ROOT_PATH", ""))
+    If Len(rootPath) = 0 Then rootPath = "C:\OtkupApp"
 
     defaultExePath = rootPath & "\" & APP_PDFTOTEXT_RELATIVE_EXE_PATH
 

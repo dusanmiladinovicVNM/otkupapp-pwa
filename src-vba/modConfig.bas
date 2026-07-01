@@ -10,7 +10,7 @@ Option Explicit
 
 ' --- App Info ---
 Public Const APP_NAME As String = "OtkupApp"
-Public Const APP_VERSION As String = "2.8.6"
+Public Const APP_VERSION As String = "2.8.7"
 
 ' --- Self-update / backup (Drive folder ID-jevi; popuni jednokratno) ---
 ' Vidi docs/RELEASE_PROCEDURE.md (self-update kanal) i modDrive/modRelease.
@@ -477,8 +477,8 @@ Public Const COL_BIM_UKUPAN_POTRAZUJE As String = "UkupanPotrazuje"
 
 Public Const CONFIG_KEY_PDFTOTEXT_EXE_PATH As String = "PDFTOTEXT_EXE_PATH"
 Public Const APP_PDFTOTEXT_RELATIVE_EXE_PATH As String = "Tools\poppler\Library\bin\pdftotext.exe"
-Public Const APP_BANKA_INBOX As String = "G:\My Drive\Bank_Izvodi"
-Public Const APP_BANKA_PROCESSED As String = "G:\My Drive\Bank_Izvodi\Verarbeitet"
+Public Const APP_BANKA_INBOX As String = "G:\My Drive\Bank_Izvodi\Inbox"
+Public Const APP_BANKA_PROCESSED As String = "G:\My Drive\Bank_Izvodi\Processed"
 Public Const APP_BANKA_ERROR As String = "G:\My Drive\Bank_Izvodi\Error"
 
 ' --- tblPartnerMap ---

@@ -41,9 +41,10 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 | Ambalaza ledger | `modAmbalaza` · **Cenovnik (append-only):** `modCenovnik` (`GetVazecaCena/AddCena`) |
 | Cena — DVA modela (ne mešati) | single-current po artiklu = `tblArtikli.CenaPoJedinici` (inline `LookupValue`, agrohemija); append-only istorija za otkup voća = `tblCenovnik` |
 | Dinamičke kontrole (bez `.frx`) | `Controls.Add` + WithEvents klasa (`clsBlokUI`/`modOtkupBlok`, `clsLookupMenuBtn`/`modMaticniLookups`) · ili **form-local `Private WithEvents`** u samoj formi (`frmDokumenta` storno/recovery dugmad, `frmAgrohemija` „Pocetni dug") |
-| Sync / PWA | `modStammdatenSync`, `modMasterSync`, `gas/` |
+| Banka import (izvodi) | `modBankaImport` (pull+`ImportBankaInbox_TX`), parser `modBankaImportParserPdfToText` (`pdftotext`/Poppler), mapiranje `modBankaMapiranje`→`tblNovac`, forma `frmBankaImport` (auto-map **jaki ključevi**: `poziv na broj`=otkup/faktura, `tekući račun`). GAS `gas/bank-pdf-downloader/` (Gmail→Drive). Runbook: `docs/production-runbook-banka-import-setup.md`. |
+| Sync / PWA | `modStammdatenSync`, `modMasterSync`, `gas/` · Google/PWA kredencijali žive u **`tblSEFConfig`** (`GetConfigValue`), auth `modGoogleAuth.RunGoogleAuthSetup` |
 | Self-update (kod) | klijent `modSelfUpdate` (`CheckForUpdateOnOpen`/`RunSelfUpdate` dvofazni) · build `modRelease.PublishReleaseToDrive` · Drive REST `modDrive` · **vidi `docs/SELF_UPDATE.md` (zamke!)** |
-| Setup / šeme | `modSetup` (`EnsureDataTable`, `EnsurePaletniListSchema`, `EnsureCenovnikSchema`), dijagnostika `DebugKoloneTabele` |
+| Setup / šeme | `modSetup` (`SetupNewPC`, `Ensure*Schema`; `SetupPopplerInteractive`/`SetupBankFoldersInteractive` pickeri; `RunSetupHealthCheck` uklj. živi `CheckServerLink`/`TestServerLink`), first-run kapija u `StartApp` (nudi `SetupNewPC` dok `APP_SETUP_COMPLETED!=DA`), Admin dugmad `modAdmin` (health/googleauth/ensure), dijagnostika `DebugKoloneTabele` |
 
 ## 4) VBA / Excel — specifična pravila (naučeno)
 
@@ -55,6 +56,15 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
   (`Alt+F8 → DebugKoloneTabele`). Primeri naučeni:
   - `tblStanice`: telefon je u koloni `Kontakt` (NE `Telefon`); kontakt = `Ime`/`Prezime`/`PIN`.
   - `tblKulture`: `KulturaID | VrstaVoca | SortaVoca | GajbicaPoPaleti` (NEMA `Aktivan`).
+  - `tblOtkup/Otpremnica/Prijemnica/FakturaStavke`: količina je ASCII `Kolicina` (NE `Količina`); koristi `COL_*_KOLICINA`, ne hardkoduj dijakritiku (bio `RunProductionHealthCheck` bug).
+- **TRI config tabele — ČITANJE i UPIS moraju u ISTU tabelu** (inače polje „ne radi"):
+  `tblSEFConfig` (poslovni + **Google/PWA + SEF**; `Get/SetConfigValue`), `tblLocalConfig`
+  (per-mašina: `PDFTOTEXT_EXE_PATH`, `BANKA_*_PATH`, `APP_SETUP_COMPLETED`; `Get/SetLocalConfigValue`),
+  `tblConfig` (**legacy**, ne koristi se). Podešavanja editor rutira po `store` ("sef"/"local")
+  u `CfgAdd`; path polja imaju inline „…" browse dugme. Naučene greške: poppler upisan u
+  SEFConfig a čitan iz Local; Google/`APP_SETUP_COMPLETED` čitani iz pogrešne tabele.
+  `GetLocalConfigValue` na **praznu** vrednost vraća **default** (pa prazan `PDFTOTEXT_EXE_PATH`
+  = auto `<xlsm>\Tools\poppler\Library\bin\pdftotext.exe`).
 - **Pozicijski `AppendRow` zavisi od redosleda kolona** — bezbedan samo ako je
   redosled potvrđen. Za polja čiji redosled nije siguran koristi upis **po imenu**
   (`UpdateCell`/`GetColumnIndex`).

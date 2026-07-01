@@ -9,8 +9,6 @@ const AGRIX_FOLDER_PROPS = {
   SHEETS_REPORTS: 'AGRIX_SHEETS_REPORTS_FOLDER_ID',
   SHEETS_ARCHIVE: 'AGRIX_SHEETS_ARCHIVE_FOLDER_ID',
 
-  BANK_IZVODI: 'AGRIX_BANK_IZVODI_FOLDER_ID',
-
   DOCUMENTS: 'AGRIX_DOCUMENTS_FOLDER_ID',
   DOC_OTKUPNI_LISTOVI: 'AGRIX_DOC_OTKUPNI_LISTOVI_FOLDER_ID',
   DOC_OTPREMNICE: 'AGRIX_DOC_OTPREMNICE_FOLDER_ID',
@@ -157,21 +155,18 @@ function getKarticeSpreadsheet_() {
 // Čvorovi bez `prop` se prave ali se ne upisuju u Script Properties (organizacioni).
 const AGRIX_FOLDER_TREE = [
   { name: '00_Inbox', prop: 'INBOX', children: [
-    { name: 'Bank' }, { name: 'Fiskalni' }, { name: 'Uvoz' }, { name: 'Manual' }
+    // '01_Bank' = odrediste Bank PDF Gmail Downloader-a (driveFolderId u
+    // BANK_IMPORT_CLIENTS_JSON) i BANKA_DRIVE_SOURCE_PATH koji VBA puller cita.
+    // 'Downloaded' = sibling u koji puller premesta vec povucene PDF-ove
+    // (default BANKA_DRIVE_DOWNLOADED_PATH = <parent(source)>\Downloaded).
+    { name: '01_Bank' }, { name: 'Downloaded' },
+    { name: 'Fiskalni' }, { name: 'Uvoz' }, { name: 'Manual' }
   ]},
   { name: '01_Sheets', prop: 'SHEETS', children: [
     { name: '01_Operational', prop: 'SHEETS_OPERATIONAL' },
     { name: '02_Master', prop: 'SHEETS_MASTER' },
     { name: '03_Reports', prop: 'SHEETS_REPORTS' },
     { name: '04_Archive', prop: 'SHEETS_ARCHIVE' }
-  ]},
-  { name: '02_Bank_Izvodi', prop: 'BANK_IZVODI', children: [
-    { name: '2026', children: [
-      { name: '01_Januar' }, { name: '02_Februar' }, { name: '03_Mart' },
-      { name: '04_April' }, { name: '05_Maj' }, { name: '06_Jun' },
-      { name: '07_Jul' }, { name: '08_Avgust' }, { name: '09_Septembar' },
-      { name: '10_Oktobar' }, { name: '11_Novembar' }, { name: '12_Decembar' }
-    ]}
   ]},
   { name: '03_Documents', prop: 'DOCUMENTS', children: [
     { name: 'Otkupni_Listovi', prop: 'DOC_OTKUPNI_LISTOVI' },

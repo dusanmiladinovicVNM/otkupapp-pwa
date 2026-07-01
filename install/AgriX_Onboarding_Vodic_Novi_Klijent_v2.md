@@ -225,7 +225,8 @@ Unutra napravi kompletnu strukturu:
 ```text
 AgriX_C00X_PROD/
   00_Inbox/
-    Bank/
+    01_Bank/       # Bank PDF Gmail Downloader pise ovde (= BANKA_DRIVE_SOURCE_PATH)
+    Downloaded/    # puller premesta vec povucene PDF-ove ovde (sibling)
     Fiskalni/
     Uvoz/
     Manual/
@@ -235,21 +236,6 @@ AgriX_C00X_PROD/
     02_Master/
     03_Reports/
     04_Archive/
-
-  02_Bank_Izvodi/
-    2026/
-      01_Januar/
-      02_Februar/
-      03_Mart/
-      04_April/
-      05_Maj/
-      06_Jun/
-      07_Jul/
-      08_Avgust/
-      09_Septembar/
-      10_Oktobar/
-      11_Novembar/
-      12_Decembar/
 
   03_Documents/
     Otkupni_Listovi/
@@ -1315,8 +1301,8 @@ Posebno proveriti:
 
 ```text
 [ ] C:\OtkupApp\OtkupApp.xlsm nije blocked
-[ ] C:\OtkupApp\tools\poppler\bin\pdftotext.exe nije blocked
-[ ] C:\OtkupApp\tools\poppler\bin\pdfinfo.exe nije blocked
+[ ] C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe nije blocked
+[ ] C:\OtkupApp\Tools\poppler\Library\bin\pdfinfo.exe nije blocked
 ```
 
 ---
@@ -1358,7 +1344,7 @@ Minimalni installer mora da uradi sledeće:
     C:\OtkupApp\Export
 
 [ ] Kopira app/OtkupApp.xlsm u C:\OtkupApp.
-[ ] Kopira tools/poppler u C:\OtkupApp\tools\poppler.
+[ ] Kopira Tools\poppler u C:\OtkupApp\Tools\poppler (pored OtkupApp.xlsm).
 [ ] Kopira docs u C:\OtkupApp\docs.
 [ ] Unblock svih fajlova.
 [ ] Instalira OtkupApp-VBA-Publisher.cer ako postoji.
@@ -1376,6 +1362,13 @@ Minimalni installer mora da uradi sledeće:
 
 `SetupNewPC` nije zamena za PS1. PS1 priprema Windows/fajlove, a `SetupNewPC` proverava aplikacionu konfiguraciju.
 
+> **UI umesto Alt+F8 (v2.8.6+):** na prvom otvaranju aplikacija sama ponudi `SetupNewPC`
+> (dok `APP_SETUP_COMPLETED != DA`). Poppler i banka putanje se biraju preko inline „…"
+> browse dugmadi u **Podešavanja → „Banka / lokalno"** (poppler = auto pored xlsm-a ili
+> picker). Provere i Google login su dugmad u **Matični podaci → Admin**: „Health check
+> (setup)" (uklj. živi server-link), „Production health check", „Google autorizacija".
+> SEF je opcion (prazna SEF polja → provera se preskače); desktop-only = `EnableDesktopOnlyMode`.
+
 `SetupNewPC` mora da proveri:
 
 ```text
@@ -1385,7 +1378,7 @@ Minimalni installer mora da uradi sledeće:
 [ ] BANKA_INBOX_PATH postoji.
 [ ] BANKA_PROCESSED_PATH postoji.
 [ ] BANKA_ERROR_PATH postoji.
-[ ] POPPLER_PDFTOTEXT_PATH postoji i pokazuje na pdftotext.exe.
+[ ] PDFTOTEXT_EXE_PATH postoji i pokazuje na pdftotext.exe.
 [ ] GOOGLE_CLIENT_ID postoji.
 [ ] GOOGLE_CLIENT_SECRET postoji.
 [ ] GOOGLE_PWA_FOLDER_ID postoji i pokazuje na 01_Sheets/02_Master.
@@ -1523,7 +1516,7 @@ Na test Windows računaru ili čistom Windows profilu:
 [ ] Pokreni Setup-OtkupApp.ps1.
 [ ] C:\OtkupApp postoji.
 [ ] OtkupApp.xlsm je kopiran.
-[ ] tools\poppler\bin\pdftotext.exe postoji.
+[ ] Tools\poppler\Library\bin\pdftotext.exe postoji.
 [ ] Desktop shortcut radi.
 [ ] Trusted Location radi.
 [ ] Nema macro warning-a.
@@ -1547,7 +1540,7 @@ Proveri:
 [ ] BANKA_INBOX_PATH
 [ ] BANKA_PROCESSED_PATH
 [ ] BANKA_ERROR_PATH
-[ ] POPPLER_PDFTOTEXT_PATH
+[ ] PDFTOTEXT_EXE_PATH
 [ ] GOOGLE config
 [ ] MONITORING config
 [ ] SEF config
@@ -1660,8 +1653,8 @@ Unutra mora biti:
 ```text
 [ ] app/OtkupApp.xlsm
 [ ] install/Setup-OtkupApp.ps1
-[ ] tools/poppler/bin/pdftotext.exe
-[ ] tools/poppler/bin/pdfinfo.exe
+[ ] Tools/poppler/Library/bin/pdftotext.exe
+[ ] Tools/poppler/Library/bin/pdfinfo.exe
 [ ] cert/OtkupApp-VBA-Publisher.cer ako se koristi
 [ ] docs/on-site checklist
 ```
@@ -1763,7 +1756,7 @@ Očekivanje:
 [ ] BANKA_INBOX_PATH postoji.
 [ ] BANKA_PROCESSED_PATH postoji.
 [ ] BANKA_ERROR_PATH postoji.
-[ ] POPPLER_PDFTOTEXT_PATH postoji.
+[ ] PDFTOTEXT_EXE_PATH postoji.
 [ ] Google config pronađen.
 [ ] SEF config pronađen.
 [ ] Monitoring config pronađen.
@@ -1927,7 +1920,7 @@ Na računaru klijenta:
 Ako ne radi:
 
 ```text
-[ ] Proveri POPPLER_PDFTOTEXT_PATH.
+[ ] Proveri PDFTOTEXT_EXE_PATH.
 [ ] Proveri da pdftotext.exe postoji.
 [ ] Proveri da PDF nije skenirana slika.
 [ ] Proveri BANKA_*_PATH.
