@@ -21,7 +21,7 @@ Option Explicit
 ' Isti obrazac kao clsLookupMenuBtn / clsBlokUI.
 ' ============================================================
 
-Public action As String            ' "save"|"toggle"|"back"|"grp"|"expandall"|"collapseall"
+Public action As String            ' "save"|"toggle"|"back"|"grp"|"expandall"|"collapseall"|"poppler"
 Public groupKey As String          ' za action="grp": naziv grupe za toggle
 Public WithEvents btn As MSForms.CommandButton
 Attribute btn.VB_VarHelpID = -1

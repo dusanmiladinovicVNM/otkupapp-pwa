@@ -255,6 +255,13 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     StyleExitButton btnCollapse, "[-] Skupi sve"
     WireButton btnCollapse, "collapseall"
 
+    ' Direktan izbor Poppler-a (pdftotext.exe) bez Alt+F8 -- otvara folder picker
+    ' (modSetup.SetupPopplerInteractive) i osvezi polje PDFTOTEXT_EXE_PATH u formi.
+    Dim btnPoppler As MSForms.CommandButton
+    Set btnPoppler = AddButton("btnCfgPoppler", m + 316, 80, 210, 22)
+    StyleExitButton btnPoppler, "Izaberi Poppler (pdftotext.exe)"
+    WireButton btnPoppler, "poppler"
+
     ' Geometrija kolona: 2 kolone kad ima dovoljno sirine, inace 1.
     Const COLGAP As Single = 16
     mFormW = w
@@ -368,6 +375,7 @@ Public Sub ConfigEditor_OnClick(ByVal action As String, Optional ByVal groupKey 
         Case "grp": ConfigEditor_ToggleGroup groupKey
         Case "expandall": ConfigEditor_SetAll False
         Case "collapseall": ConfigEditor_SetAll True
+        Case "poppler": ConfigEditor_PickPoppler
     End Select
     Exit Sub
 EH:
@@ -402,6 +410,21 @@ Public Sub ConfigEditor_SetAll(ByVal collapseAll As Boolean)
     Exit Sub
 EH:
     LogErr "modPodesavanja.ConfigEditor_SetAll"
+End Sub
+
+' Dugme "Izaberi Poppler" -- direktan izbor pdftotext.exe iz Podesavanja (bez Alt+F8).
+' Pokrece folder picker + upis (modSetup.SetupPopplerInteractive), pa osvezi prikaz
+' polja PDFTOTEXT_EXE_PATH da odmah pokaze novu vrednost (prazno = auto pored xlsm-a).
+Public Sub ConfigEditor_PickPoppler()
+    On Error GoTo EH
+    modSetup.SetupPopplerInteractive
+    On Error Resume Next
+    If Not mInputs Is Nothing Then
+        mInputs("PDFTOTEXT_EXE_PATH").value = GetLocalConfigValue("PDFTOTEXT_EXE_PATH", "")
+    End If
+    Exit Sub
+EH:
+    LogErr "modPodesavanja.ConfigEditor_PickPoppler"
 End Sub
 
 ' Preracunaj pozicije svih grupa/polja (collapse-aware, 2-kolonski grid).
