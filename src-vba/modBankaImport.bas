@@ -320,6 +320,75 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
+' Multi-bank dispatch: prepoznaj banku iz pdftotext teksta.
+' Default (nema fingerprint-a) = "KOMERC" (postojeci Komercijalna parser).
+Public Function DetectBank(ByRef lines() As String) As String
+    Dim i As Long, s As String
+    Dim hasProCreditHeader As Boolean, hasProCreditAccount As Boolean
+    Dim hasHalkHeader As Boolean, hasHalkAccount As Boolean
+
+    ' Fingerprint = NASLOV izvoda + PREFIKS racuna banke (ne naziv banke).
+    ' Nazivi "ProCredit"/"HALKBANK" se javljaju kao PARTNER u tudjim izvodima, pa
+    ' bi labava detekcija po nazivu pogresno preusmerila ceo izvod (regresija na
+    ' Komercijalna putu). Racun-prefiks 220-/155- je stabilan kod banke izvoda.
+    For i = LBound(lines) To UBound(lines)
+        s = lines(i)
+        If InStr(1, s, "STANJE I PROMENE SREDSTAVA", vbTextCompare) > 0 Then hasProCreditHeader = True
+        If InStr(1, s, "220-", vbTextCompare) > 0 Then hasProCreditAccount = True
+        If InStr(1, s, "INFORMACIJE O PLATNIM TRANSAKCIJAMA", vbTextCompare) > 0 Then hasHalkHeader = True
+        If InStr(1, s, "155-", vbTextCompare) > 0 Then hasHalkAccount = True
+    Next i
+
+    If hasProCreditHeader And hasProCreditAccount Then
+        DetectBank = "PROCREDIT"
+    ElseIf hasHalkHeader And hasHalkAccount Then
+        DetectBank = "HALK"
+    Else
+        DetectBank = "KOMERC"
+    End If
+End Function
+
+' Alt+F8: bank-agnostic test -- DetectBank + pun parse + per-red dump. Radi za sve banke.
+Public Sub Test_BankParse()
+    Dim pdfPath As String, txt As String, tmp As String, lines() As String
+    Dim parsed As Variant, i As Long
+
+    pdfPath = PickPdf()
+    If pdfPath = "" Then Exit Sub
+
+    txt = ExtractTextFromPdf(pdfPath)
+    tmp = Replace(Replace(txt, Chr$(12), vbLf), vbCr, "")
+    lines = Split(tmp, vbLf)
+
+    Debug.Print "=== DetectBank: " & DetectBank(lines) & " ==="
+
+    On Error Resume Next
+    parsed = ParseBankaIzvodForImport(txt, "test.pdf")
+    If Err.Number <> 0 Then
+        Debug.Print "PARSE FAIL: [" & Err.Number & "] " & Err.description
+        On Error GoTo 0
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    If IsEmpty(parsed) Then
+        Debug.Print "PARSE: Empty (nema transakcija)"
+        Exit Sub
+    End If
+
+    Debug.Print "Izvod=" & parsed(1, 1) & "  Datum=" & parsed(1, 2) & "  Racun=" & parsed(1, 3)
+    Debug.Print "Saldo: Pocetno=" & parsed(1, 14) & " Novo=" & parsed(1, 15) & _
+                " Duguje=" & parsed(1, 16) & " Potrazuje=" & parsed(1, 17)
+    Debug.Print "--- OK: " & UBound(parsed, 1) & " transakcija ---"
+    For i = 1 To UBound(parsed, 1)
+        Debug.Print i & " | " & parsed(i, 4) & " | " & parsed(i, 5) & _
+                    " | racun=" & parsed(i, 6) & _
+                    " | Isl=" & parsed(i, 8) & " Upl=" & parsed(i, 7) & _
+                    " | sif=" & parsed(i, 9) & " | " & parsed(i, 10) & _
+                    " | poz=" & parsed(i, 11) & " | ref=" & parsed(i, 12)
+    Next i
+End Sub
+
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
     Dim lines() As String
     Dim txData As Variant
@@ -340,9 +409,30 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     txt = Replace(txt, vbCr, "")
     lines = Split(txt, vbLf)
 
-    brojIzvoda = ExtractIzvodBrojPdfText(lines)
-    datumIzvoda = ExtractIzvodDatumPdfText(lines)
-    brojRacuna = ExtractIzvodRacunPdfText(lines)
+    ' Multi-bank dispatch (Case Else = Komercijalna, backward-compatible).
+    Dim bankId As String
+    bankId = DetectBank(lines)
+
+    Select Case bankId
+        Case "PROCREDIT"
+            brojIzvoda = ExtractIzvodBrojProCredit(lines)
+            datumIzvoda = ExtractIzvodDatumProCredit(lines)
+            brojRacuna = ExtractIzvodRacunProCredit(lines)
+            saldo = ExtractIzvodSaldoProCredit(lines)
+            txData = ParseBankaIzvodProCredit(txt)
+        Case "HALK"
+            brojIzvoda = ExtractIzvodBrojHalk(lines)
+            datumIzvoda = ExtractIzvodDatumHalk(lines)
+            brojRacuna = ExtractIzvodRacunHalk(lines)
+            saldo = ExtractIzvodSaldoHalk(lines)
+            txData = ParseBankaIzvodHalk(txt)
+        Case Else
+            brojIzvoda = ExtractIzvodBrojPdfText(lines)
+            datumIzvoda = ExtractIzvodDatumPdfText(lines)
+            brojRacuna = ExtractIzvodRacunPdfText(lines)
+            saldo = ExtractIzvodSaldoPdfText(lines)
+            txData = ParseBankaIzvodPdfText(txt)
+    End Select
     
     If Trim$(brojIzvoda) = "" Then
         Err.Raise vbObjectError + 1000, "ParseBankaIzvodForImport", "Broj izvoda nije pronadjen."
@@ -356,15 +446,14 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
         Err.Raise vbObjectError + 1002, "ParseBankaIzvodForImport", "Broj ra" & ChrW(269) & "una izvoda nije pronadjen."
     End If
     
-    ' v6.18+: extract saldo block
-    saldo = ExtractIzvodSaldoPdfText(lines)
+    ' v6.18+: saldo block je izvucen po banci u dispatch-u gore.
     If Not saldo.parsed Then
         Err.Raise vbObjectError + 1003, "ParseBankaIzvodForImport", _
             "STANJE blok izvoda " & brojIzvoda & " nije pronadjen ili ne sadrzi " & _
             "ocekivana saldo polja (Prethodno stanje, Duguje, Potrazuje, Novo stanje, Zadu" & ChrW(382) & "enje, Odobrenje)."
     End If
     
-    txData = ParseBankaIzvodPdfText(txt)
+    ' txData je izvucen po banci u dispatch-u gore.
     If IsEmpty(txData) Then
         ParseBankaIzvodForImport = Empty
         Exit Function
