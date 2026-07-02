@@ -320,6 +320,21 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
+' Multi-bank dispatch: prepoznaj banku iz pdftotext teksta.
+' Default (nema fingerprint-a) = "KOMERC" (postojeci Komercijalna parser).
+Public Function DetectBank(ByRef lines() As String) As String
+    Dim i As Long, s As String
+    For i = LBound(lines) To UBound(lines)
+        s = lines(i)
+        If InStr(1, s, "STANJE I PROMENE SREDSTAVA", vbTextCompare) > 0 _
+           Or InStr(1, s, "ProCredit", vbTextCompare) > 0 Then
+            DetectBank = "PROCREDIT"
+            Exit Function
+        End If
+    Next i
+    DetectBank = "KOMERC"
+End Function
+
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
     Dim lines() As String
     Dim txData As Variant
@@ -340,9 +355,24 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     txt = Replace(txt, vbCr, "")
     lines = Split(txt, vbLf)
 
-    brojIzvoda = ExtractIzvodBrojPdfText(lines)
-    datumIzvoda = ExtractIzvodDatumPdfText(lines)
-    brojRacuna = ExtractIzvodRacunPdfText(lines)
+    ' Multi-bank dispatch (Case Else = Komercijalna, backward-compatible).
+    Dim bankId As String
+    bankId = DetectBank(lines)
+
+    Select Case bankId
+        Case "PROCREDIT"
+            brojIzvoda = ExtractIzvodBrojProCredit(lines)
+            datumIzvoda = ExtractIzvodDatumProCredit(lines)
+            brojRacuna = ExtractIzvodRacunProCredit(lines)
+            saldo = ExtractIzvodSaldoProCredit(lines)
+            txData = ParseBankaIzvodProCredit(txt)
+        Case Else
+            brojIzvoda = ExtractIzvodBrojPdfText(lines)
+            datumIzvoda = ExtractIzvodDatumPdfText(lines)
+            brojRacuna = ExtractIzvodRacunPdfText(lines)
+            saldo = ExtractIzvodSaldoPdfText(lines)
+            txData = ParseBankaIzvodPdfText(txt)
+    End Select
     
     If Trim$(brojIzvoda) = "" Then
         Err.Raise vbObjectError + 1000, "ParseBankaIzvodForImport", "Broj izvoda nije pronadjen."
@@ -356,15 +386,14 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
         Err.Raise vbObjectError + 1002, "ParseBankaIzvodForImport", "Broj ra" & ChrW(269) & "una izvoda nije pronadjen."
     End If
     
-    ' v6.18+: extract saldo block
-    saldo = ExtractIzvodSaldoPdfText(lines)
+    ' v6.18+: saldo block je izvucen po banci u dispatch-u gore.
     If Not saldo.parsed Then
         Err.Raise vbObjectError + 1003, "ParseBankaIzvodForImport", _
             "STANJE blok izvoda " & brojIzvoda & " nije pronadjen ili ne sadrzi " & _
             "ocekivana saldo polja (Prethodno stanje, Duguje, Potrazuje, Novo stanje, Zadu" & ChrW(382) & "enje, Odobrenje)."
     End If
     
-    txData = ParseBankaIzvodPdfText(txt)
+    ' txData je izvucen po banci u dispatch-u gore.
     If IsEmpty(txData) Then
         ParseBankaIzvodForImport = Empty
         Exit Function
