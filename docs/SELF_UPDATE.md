@@ -92,7 +92,9 @@ se desio i fix koji radi:
    diskonektuje `CodeModule` (`-2147417848`). `DeleteLines` prođe; pada baš
    `AddFromString`. **Ti moduli MORAJU kroz `Import`** (rekreacija komponente —
    podnosi MSForms decls; radi i u `ImportAllVBA`). Trenutno: `modOtkupBlok`,
-   `modKarticaDetalji`, `modPodesavanja`. NIJE stvar živih instanci — `Release`
+   `modKarticaDetalji`, `modPodesavanja`, `modMouseWheel`, `clsWheelList`
+   (rutiranje je automatsko: greška u fazi 1 → `failed` → faza 2 `Import`;
+   nema hardkodirane liste). NIJE stvar živih instanci — `Release`
    referenci NE pomaže.
 4. **`VBComponents.Remove` je ODLOŽEN** u runtime-u (izvrši se tek kad makro
    završi). `Remove`+`Import` u istom makrou → **`modX1` duplikati** → „Ambiguous

@@ -201,6 +201,7 @@ Private Sub PrepareRuntimeForSelfUpdate()
     Podesavanja_Release             ' modPodesavanja (clsConfigBtn)
     MaticniMenu_Release             ' modMaticniLookups (clsLookupMenuBtn)
     KarticaDetalji_Reset            ' modKarticaDetalji
+    MouseWheel_Off                  ' modMouseWheel (skini LL mouse hook pre izmene koda)
 
     ' Unload sve forme (otpusti njihove kontrole / event sink-ove)
     Do While VBA.UserForms.count > 0

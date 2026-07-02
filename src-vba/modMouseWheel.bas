@@ -39,8 +39,10 @@ Option Explicit
 '     bez ijedne geometrijske/DPI/HWND racunice.
 '
 ' KORISCENJE: forme vec zovu Attach/Detach (idempotentno), ali dok se ne
-' "naoruza" sve je no-op. Ukljuci (najbolje sa ZATVORENIM VBE):
-'     MouseWheel_SetEnabled True     ' pa otvori/re-fokusiraj formu sa listom
+' "naoruza" sve je no-op. Paljenje je KONFIGURISANO, ne rucno:
+'     - StartApp cita MOUSEWHEEL_SCROLL (tblLocalConfig; prazno = DA) i zove
+'       MouseWheel_On/Off; Podesavanja ("Interfejs / lokalno") primenjuju odmah.
+'     - Rucno (Alt+F8, dijagnostika): MouseWheel_On / MouseWheel_Off.
 ' Po formi (vec oziceno):
 '     Private Sub UserForm_Activate()
 '         MouseWheel_Attach Me
