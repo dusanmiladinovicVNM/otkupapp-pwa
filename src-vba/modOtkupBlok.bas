@@ -390,6 +390,7 @@ Private Sub BuildPanel()
     On Error Resume Next
     StyleListBox mLstRang
     On Error GoTo 0
+    MouseWheel_Register mLstRang
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
