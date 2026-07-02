@@ -459,8 +459,14 @@ End Function
 Private Sub ExtractPozivHalk(ByRef svrha As String, ByRef poziv As String)
     Dim re As Object, m As Object
 
-    ' 1) Model poziv "(NN) <broj>"
     Set re = CreateObject("VBScript.RegExp")
+
+    ' 0) Ukloni sistemske "[...]" tagove iz svrhe (nisu poziv na broj).
+    re.Global = True
+    re.pattern = "\[[^\]]*\]"
+    svrha = NormalizeSpacesHalk(re.Replace(svrha, ""))
+
+    ' 1) Model poziv "(NN) <broj>"
     re.Global = False
     re.pattern = "\(\d{2}\)\s*\d+"
     If re.Test(svrha) Then
