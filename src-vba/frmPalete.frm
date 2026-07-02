@@ -102,6 +102,20 @@ Private Sub UserForm_Activate()
 
     BuildPreradaControls
     LayoutDynamic
+
+    ' Tockic misa nad listama (posle BuildPreradaControls -> i mLstPrerade je
+    ' obuhvacen). Skida se u UserForm_Deactivate / UserForm_Terminate.
+    MouseWheel_Attach Me
+End Sub
+
+Private Sub UserForm_Deactivate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
+Private Sub UserForm_Terminate()
+    On Error Resume Next
+    MouseWheel_Detach
 End Sub
 
 Private Sub RefreshGrid()

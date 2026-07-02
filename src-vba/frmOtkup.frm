@@ -38,6 +38,12 @@ Private m_lblPaletaInfo As MSForms.label
 
 Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
+    MouseWheel_Attach Me
+End Sub
+
+Private Sub UserForm_Deactivate()
+    On Error Resume Next
+    MouseWheel_Detach
 End Sub
 
 Private Sub UserForm_Initialize()
@@ -1182,7 +1188,8 @@ End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
-    
+    MouseWheel_Detach
+
     ' Release lock pre zatvaranja (vbFormControlMenu = X klik, ostalo = Code/Excel close)
     If Len(GetActiveStanica()) > 0 Then
         ShowLockStatus "Sinhronizujem unos pre zatvaranja..."

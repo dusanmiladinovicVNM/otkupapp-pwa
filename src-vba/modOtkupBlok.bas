@@ -453,6 +453,11 @@ Private Sub BuildPanel()
     mLstBlok.ColumnCount = 9
     mLstBlok.ColumnWidths = BLOK_COLW
 
+    ' Tockic misa nad panel-listama (dinamicke -> registruj ih odmah po
+    ' kreiranju; skidanje ide preko frmOtkup Deactivate/QueryClose).
+    MouseWheel_Register mLstOtp
+    MouseWheel_Register mLstBlok
+
     ' Eventi
     WireTxt mTxtCenaOtp, "CENA"
     WireLst mLstOtp, "OTP"

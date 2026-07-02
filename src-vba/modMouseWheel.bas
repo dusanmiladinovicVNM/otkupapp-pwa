@@ -80,7 +80,7 @@ Public Sub MouseWheel_Attach(ByVal frm As Object)
     ' Omotaci za liste ove forme - gradimo samo ako ih nema (posle Detach-a).
     If mWrappers Is Nothing Then
         Set mWrappers = New Collection
-        BuildWrappers frm, mWrappers
+        BuildWrappers frm
     End If
 
     ' Hook instaliramo jednom, thread-scoped na tekucu (Excel UI) nit.
@@ -118,23 +118,50 @@ Public Sub MouseWheel_SetHot(ByVal lb As MSForms.ListBox)
 End Sub
 
 ' ------------------------------------------------------------
-' BuildWrappers - rekurzivno nadje sve ListBox-ove (i one u Frame /
-' MultiPage / Page) i obmota ih u clsWheelList. Sve guardovano.
+' Register - registruj JEDNU listu na zahtev. Za dinamicke liste koje ne
+' postoje u trenutku MouseWheel_Attach (npr. paneli koji se grade lazy,
+' modOtkupBlok liste). Pozovi odmah posle Controls.Add. No-op-safe.
 ' ------------------------------------------------------------
-Private Sub BuildWrappers(ByVal container As Object, ByVal coll As Collection)
+Public Sub MouseWheel_Register(ByVal lb As MSForms.ListBox)
     On Error Resume Next
-    Dim c As Object, w As clsWheelList, pg As Object
+    If mDisabled Then Exit Sub
+    If lb Is Nothing Then Exit Sub
+
+    AddWrapper lb
+
+    ' Hook instaliramo i ovde (ako Attach jos nije pozvan za ovu formu).
+    If mHook = 0 Then
+        mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
+    End If
+End Sub
+
+' Napravi omotac za JEDNU listu i dodaj ga u mWrappers.
+' Deljeno: BuildWrappers + MouseWheel_Register (anti-duplikacija).
+Private Sub AddWrapper(ByVal lb As MSForms.ListBox)
+    On Error Resume Next
+    If mWrappers Is Nothing Then Set mWrappers = New Collection
+    Dim w As clsWheelList
+    Set w = New clsWheelList
+    Set w.lst = lb
+    mWrappers.Add w
+End Sub
+
+' ------------------------------------------------------------
+' BuildWrappers - rekurzivno nadje sve ListBox-ove (i one u Frame /
+' MultiPage / Page) i obmota ih (AddWrapper). Sve guardovano.
+' ------------------------------------------------------------
+Private Sub BuildWrappers(ByVal container As Object)
+    On Error Resume Next
+    Dim c As Object, pg As Object
     For Each c In container.Controls
         Select Case TypeName(c)
             Case "ListBox"
-                Set w = New clsWheelList
-                Set w.lst = c
-                coll.Add w
+                AddWrapper c
             Case "Frame"
-                BuildWrappers c, coll
+                BuildWrappers c
             Case "MultiPage"
                 For Each pg In c.Pages
-                    BuildWrappers pg, coll
+                    BuildWrappers pg
                 Next pg
         End Select
     Next c
@@ -204,5 +231,8 @@ Public Sub MouseWheel_SetEnabled(ByVal onOff As Boolean)
 End Sub
 
 Public Sub MouseWheel_SetHot(ByVal lb As Object)
+End Sub
+
+Public Sub MouseWheel_Register(ByVal lb As Object)
 End Sub
 #End If
