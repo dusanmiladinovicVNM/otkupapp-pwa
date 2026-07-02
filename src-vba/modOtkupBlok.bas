@@ -76,6 +76,16 @@ Private mLblNapisanoAmb As MSForms.label
 Private mLblPreostaloAmb As MSForms.label
 Private mLblZbirna As MSForms.label
 
+' Desno od "Ostatak"/"Ostatak amb": ukupan iznos izdatih otkupnih listova
+' (Sum Kolicina*Cena = "Ukupna vrednost") za IZABRANOG kooperanta u tekucoj godini.
+' Dugme ispod otvara rang svih kooperanata firme po istom iznosu (overlay preko grida).
+Private mLblKoopTotal As MSForms.label
+Private mBtnKoopRang As MSForms.CommandButton
+Private mCurKoopID As String
+Private mLblRangTitle As MSForms.label
+Private mLstRang As MSForms.ListBox
+Private mBtnRangClose As MSForms.CommandButton
+
 ' ============================================================
 ' Const ne moze da sadrzi ChrW() poziv -- bezparametarske funkcije
 ' ============================================================
@@ -132,6 +142,8 @@ Public Sub OtkupBlok_OnButton(ByVal action As String)
         Case "SPECDATUM": PrintSpecOdDo
         Case "LOST": ToggleLostMode
         Case "ADOPT": AdoptSelectedLostBlok
+        Case "KOOPRANG": ShowKoopRang
+        Case "KOOPRANGCLOSE": HideKoopRang
     End Select
     Exit Sub
 EH:
@@ -278,6 +290,8 @@ Private Sub TogglePanel()
     If mVisible Then
         LoadOtpremnice
         LoadBlokovi
+        HideKoopRang               ' overlay ranga ostaje skriven dok se ne klikne dugme
+        RefreshKoopTotalInline     ' inline suma za trenutno izabranog kooperanta
         mForm.width = EXP_WIDTH
         mBtnToggle.caption = Poruka("OTKUP_LBL_SAKRIJ_BLOKOVE")
     Else
@@ -326,7 +340,8 @@ Private Sub BuildPanel()
     Set mLblNapisanoAmb = AddCtl("Label", "lblOtkBlokNapAmb", PANEL_LEFT + 346, 22, 150, 14)
     Set mLblPreostaloAmb = AddCtl("Label", "lblOtkBlokPreAmb", PANEL_LEFT + 502, 22, 150, 14)
     ' Info (#4): broj zbirne za izabranu otpremnicu (azurira RefreshSummary).
-    Set mLblZbirna = AddCtl("Label", "lblOtkBlokZbirna", BLOK_LEFT + 70, 44, 380, 16)
+    ' Suzeno (bilo 380) da oslobodi desnu traku za "Kooperant ukupno" + rang dugme.
+    Set mLblZbirna = AddCtl("Label", "lblOtkBlokZbirna", BLOK_LEFT + 70, 44, 228, 16)
     On Error Resume Next
     mLblZbirna.WordWrap = True
     On Error GoTo 0
@@ -335,6 +350,34 @@ Private Sub BuildPanel()
     mLblUkupnoAmb.caption = Poruka("OTKUP_LBL_UKUPNO_AMB")
     mLblNapisanoAmb.caption = Poruka("OTKUP_LBL_BLOKOVIMA_AMB")
     mLblPreostaloAmb.caption = Poruka("OTKUP_LBL_OSTATAK_AMB")
+
+    ' Desno od "Ostatak"/"Ostatak amb": ukupan iznos otkupnih listova izabranog
+    ' kooperanta (tekuca god.) + dugme koje otvara rang svih kooperanata.
+    ' (mLblPreostalo/Amb zauzimaju PANEL_LEFT+502..+652; toggle je gore-desno.)
+    Set mLblKoopTotal = AddCtl("Label", "lblOtkBlokKoopTot", PANEL_LEFT + 656, 31, 198, 14)
+    mLblKoopTotal.caption = ""
+    StyleHdr mLblKoopTotal
+    Set mBtnKoopRang = AddCtl("CommandButton", "btnOtkBlokKoopRang", PANEL_LEFT + 656, 47, 150, 18)
+    mBtnKoopRang.caption = "Rang kooperanata"
+    On Error Resume Next
+    StyleExitButton mBtnKoopRang, "Rang kooperanata"
+    On Error GoTo 0
+
+    ' Overlay "Rang kooperanata" (preko oba grida; skriven dok se ne klikne dugme).
+    Dim rangW As Double: rangW = EXP_WIDTH - PANEL_LEFT - 12
+    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 94, rangW - 110, 16)
+    StyleHdr mLblRangTitle
+    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 100, 90, 100, 22)
+    mBtnRangClose.caption = "Zatvori"
+    On Error Resume Next
+    StyleExitButton mBtnRangClose, "Zatvori"
+    On Error GoTo 0
+    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, GRID_TOP, rangW, gridH)
+    mLstRang.ColumnCount = 3
+    mLstRang.ColumnWidths = "50;520;260"
+    On Error Resume Next
+    StyleListBox mLstRang
+    On Error GoTo 0
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
@@ -408,6 +451,8 @@ Private Sub BuildPanel()
     WireBtn mBtnSpecDatum, "SPECDATUM"
     WireBtn mBtnLost, "LOST"
     WireBtn mBtnPreuzmi, "ADOPT"
+    WireBtn mBtnKoopRang, "KOOPRANG"
+    WireBtn mBtnRangClose, "KOOPRANGCLOSE"
 End Sub
 
 Private Sub SetPanelVisible(ByVal b As Boolean)
@@ -1524,6 +1569,197 @@ Private Function FmtDate(ByVal v As Variant) As String
     If IsDate(v) Then FmtDate = Format$(CDate(v), "d.m.yyyy")
 End Function
 
+' ============================================================
+' KOOPERANT: ukupan iznos otkupnih listova (tekuca god.) + rang
+' ============================================================
+
+' Public hook (frmOtkup.cmbKooperant_Change): osvezi inline sumu za izabranog
+' kooperanta. No-op ako panel nije izgradjen/otvoren (label postoji samo u panelu).
+Public Sub OtkupBlok_RefreshKoopTotal()
+    On Error GoTo EH
+    If Not mBuilt Then Exit Sub
+    If Not mVisible Then Exit Sub
+    RefreshKoopTotalInline
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.OtkupBlok_RefreshKoopTotal"
+End Sub
+
+Private Sub RefreshKoopTotalInline()
+    On Error GoTo EH
+    If mLblKoopTotal Is Nothing Then Exit Sub
+
+    Dim koopID As String: koopID = CurrentKoopIDFromForm()
+    mCurKoopID = koopID
+    If Len(koopID) = 0 Then
+        mLblKoopTotal.caption = ""     ' slobodan tekst / bez izbora -> prazno (bez skeniranja)
+        Exit Sub
+    End If
+
+    Dim yr As Integer: yr = Year(Date)
+    Dim iznos As Double: iznos = KoopPrometYear(koopID, yr)
+    mLblKoopTotal.caption = "Koop. " & yr & ": " & FmtRsd(iznos) & " RSD"
+    On Error Resume Next
+    mLblKoopTotal.ControlTipText = "Ukupan iznos izdatih otkupnih listova za izabranog " & _
+        "kooperanta u " & yr & ". godini (Sum Kolicina x Cena)."
+    On Error GoTo 0
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.RefreshKoopTotalInline"
+End Sub
+
+' KooperantID trenutnog izbora u cmbKooperant (bez auto-kreiranja): bound ID iz
+' liste; slobodan tekst -> "" (pa se inline suma ne prikazuje dok se ne izabere).
+Private Function CurrentKoopIDFromForm() As String
+    On Error Resume Next
+    Dim cmb As MSForms.ComboBox
+    Set cmb = mForm.Controls("cmbKooperant")
+    If cmb Is Nothing Then Exit Function
+    CurrentKoopIDFromForm = GetComboID(cmb)
+End Function
+
+' Ukupan iznos izdatih otkupnih listova (Sum Kolicina*Cena = "Ukupna vrednost",
+' Cena je BRUTO sa PDV nadoknadom) za kooperanta u datoj godini; bez storniranih.
+Private Function KoopPrometYear(ByVal koopID As String, ByVal yr As Integer) As Double
+    On Error GoTo EH
+    If Len(Trim$(koopID)) = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cKoop As Long, cKol As Long, cCena As Long, cDat As Long
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Function
+
+    Dim s As Double, i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKoop))) = koopID Then
+            If cDat = 0 Or RowYear(data(i, cDat)) = yr Then
+                s = s + NumVal(data(i, cKol)) * NumVal(data(i, cCena))
+            End If
+        End If
+    Next i
+    KoopPrometYear = s
+    Exit Function
+EH:
+    LogErr "modOtkupBlok.KoopPrometYear"
+End Function
+
+Private Function RowYear(ByVal v As Variant) As Integer
+    On Error Resume Next
+    If IsDate(v) Then RowYear = Year(CDate(v))
+End Function
+
+' Overlay rang: prikazi (populate + u prvi plan preko grida).
+Private Sub ShowKoopRang()
+    On Error GoTo EH
+    If mLstRang Is Nothing Then Exit Sub
+    LoadKoopRang
+    mLstRang.Visible = True
+    If Not mLblRangTitle Is Nothing Then mLblRangTitle.Visible = True
+    If Not mBtnRangClose Is Nothing Then mBtnRangClose.Visible = True
+    On Error Resume Next
+    mLstRang.ZOrder 0
+    mLblRangTitle.ZOrder 0
+    mBtnRangClose.ZOrder 0
+    On Error GoTo 0
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.ShowKoopRang"
+End Sub
+
+Private Sub HideKoopRang()
+    On Error Resume Next
+    If Not mLstRang Is Nothing Then mLstRang.Visible = False
+    If Not mLblRangTitle Is Nothing Then mLblRangTitle.Visible = False
+    If Not mBtnRangClose Is Nothing Then mBtnRangClose.Visible = False
+End Sub
+
+' Napuni rang: svi kooperanti firme sortirani opadajuce po ukupnom iznosu
+' otkupnih listova (Sum Kolicina*Cena) u tekucoj godini; bez storniranih.
+Private Sub LoadKoopRang()
+    On Error GoTo EH
+    mLstRang.Clear
+    Dim yr As Integer: yr = Year(Date)
+    mLblRangTitle.caption = "RANG KOOPERANATA PO IZNOSU OTKUPNIH LISTOVA (" & yr & _
+                            ")  --  klik 'Zatvori' za povratak"
+
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim cKoop As Long, cKol As Long, cCena As Long, cDat As Long
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Sub
+
+    ' Agregacija po KooperantID (samo tekuca godina).
+    Dim agg As Object: Set agg = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If cDat = 0 Or RowYear(data(i, cDat)) = yr Then
+            Dim k As String: k = Trim$(CStr(data(i, cKoop)))
+            If Len(k) > 0 Then
+                Dim vred As Double: vred = NumVal(data(i, cKol)) * NumVal(data(i, cCena))
+                If agg.Exists(k) Then
+                    agg(k) = CDbl(agg(k)) + vred
+                Else
+                    agg.Add k, vred
+                End If
+            End If
+        End If
+    Next i
+    If agg.count = 0 Then Exit Sub
+
+    ' Kljucevi + iznosi u paralelne nizove, pa sort opadajuce po iznosu.
+    Dim n As Long: n = agg.count
+    Dim koopIDs() As String: ReDim koopIDs(1 To n)
+    Dim iznosi() As Double: ReDim iznosi(1 To n)
+    Dim kk As Variant, j As Long: j = 0
+    For Each kk In agg.keys
+        j = j + 1
+        koopIDs(j) = CStr(kk)
+        iznosi(j) = CDbl(agg(kk))
+    Next kk
+    SortDescByVal koopIDs, iznosi
+
+    Dim dKo As Object: Set dKo = BuildKoopNames()
+    Dim r As Long
+    For i = 1 To n
+        mLstRang.AddItem CStr(i)
+        r = mLstRang.ListCount - 1
+        Dim nm As String: nm = DictVal(dKo, koopIDs(i))
+        If Len(nm) = 0 Then nm = koopIDs(i)
+        mLstRang.List(r, 1) = nm
+        mLstRang.List(r, 2) = FmtRsd(iznosi(i))
+    Next i
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.LoadKoopRang"
+End Sub
+
+' Opadajuci sort paralelnih nizova po iznosu (umeren broj kooperanata -> bubble).
+Private Sub SortDescByVal(ByRef ids() As String, ByRef vals() As Double)
+    Dim i As Long, j As Long, n As Long
+    n = UBound(vals)
+    For i = 1 To n - 1
+        For j = 1 To n - i
+            If vals(j) < vals(j + 1) Then
+                Dim tv As Double: tv = vals(j): vals(j) = vals(j + 1): vals(j + 1) = tv
+                Dim ts As String: ts = ids(j): ids(j) = ids(j + 1): ids(j + 1) = ts
+            End If
+        Next j
+    Next i
+End Sub
+
 ' --- dinamicke kontrole + event wiring ---
 
 Private Function AddCtl(ByVal kind As String, ByVal nm As String, _
@@ -1618,6 +1854,12 @@ Public Sub OtkupBlok_Release()
     Set mLblNapisanoAmb = Nothing
     Set mLblPreostaloAmb = Nothing
     Set mLblZbirna = Nothing
+    Set mLblKoopTotal = Nothing
+    Set mBtnKoopRang = Nothing
+    Set mLblRangTitle = Nothing
+    Set mLstRang = Nothing
+    Set mBtnRangClose = Nothing
+    mCurKoopID = ""
     mBuilt = False
     mVisible = False
     mOrigWidth = 0

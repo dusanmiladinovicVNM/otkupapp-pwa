@@ -570,6 +570,12 @@ End Sub
 Private Sub cmbKooperant_Change()
     On Error GoTo EH
 
+    ' Panel "Otkupni blokovi": osvezi inline "ukupan iznos otk. listova" za izabranog
+    ' kooperanta (no-op ako panel nije otvoren). Pre early-exit-a za parcele.
+    On Error Resume Next
+    OtkupBlok_RefreshKoopTotal
+    On Error GoTo EH
+
     ' Pracenje parcela OFF (Podesavanja) -> parcela polje se preskace.
     If Not IsPracenjeParcela() Then Exit Sub
 
