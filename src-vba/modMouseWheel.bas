@@ -9,11 +9,12 @@ Option Explicit
 ' DIZAJN JE PODredjen jednom cilju: NIKAD ne srusiti / usporiti / cudno
 ' ponasati app. Konkretne mere:
 '
-'  1) THREAD hook (WH_MOUSE), NE globalni WH_MOUSE_LL. Hvata samo mouse
-'     poruke Excel-ove UI niti -> minimalan trosak; ne dira sistemsko
-'     ponasanje misa. Ako Windows ikad skine hook (timeout pod opterece-
-'     njem), posledica je samo "tockic privremeno ne radi" (fail-safe),
-'     nikad crash; sledeci UserForm_Activate ga ponovo instalira.
+'  1) LOW-LEVEL hook (WH_MOUSE_LL). Hvata tockic na sistemskom nivou, pouzdano
+'     bez obzira na fokus/foreground i trenutak instalacije. (Thread WH_MOUSE
+'     hook NIJE hvatao tockic dok se foreground ne osvezi -> radilo "tek posle
+'     minimize/restore".) Ako Windows skine hook (timeout), posledica je samo
+'     "tockic privremeno ne radi" (fail-safe), nikad crash; sledeci hover ga
+'     ponovo instalira.
 '
 '  2) Hook zivi SAMO dok forma ima fokus I dok je VBE ZATVOREN:
 '     - Instalira se LENJIVO, tek na prvi MouseMove nad listom (EnsureHook),
@@ -57,21 +58,17 @@ Option Explicit
 Private Declare PtrSafe Function SetWindowsHookEx Lib "user32" Alias "SetWindowsHookExA" (ByVal idHook As Long, ByVal lpfn As LongPtr, ByVal hMod As LongPtr, ByVal dwThreadId As Long) As LongPtr
 Private Declare PtrSafe Function CallNextHookEx Lib "user32" (ByVal hHook As LongPtr, ByVal nCode As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
 Private Declare PtrSafe Function UnhookWindowsHookEx Lib "user32" (ByVal hHook As LongPtr) As Long
-Private Declare PtrSafe Function GetCurrentThreadId Lib "kernel32" () As Long
+Private Declare PtrSafe Function GetModuleHandle Lib "kernel32" Alias "GetModuleHandleA" (ByVal lpModuleName As String) As LongPtr
 Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByRef Destination As Any, ByVal SOURCE As LongPtr, ByVal Length As LongPtr)
 
-Private Const WH_MOUSE As Long = 7
+Private Const WH_MOUSE_LL As Long = 14
 Private Const WM_MOUSEWHEEL As Long = &H20A
 Private Const WHEEL_STEP As Long = 3      ' redova po jednom "kliku" tockica
 
-' Ofset polja mouseData u MOUSEHOOKSTRUCTEX (razlicit 32/64-bit zbog
-' velicine pointera). Citamo SAMO ta 4 bajta -> bez zavisnosti od
-' poravnanja (packing) celog Type-a.
-#If Win64 Then
-Private Const MD_OFFSET As LongPtr = 32
-#Else
-Private Const MD_OFFSET As LongPtr = 20
-#End If
+' Ofset polja mouseData u MSLLHOOKSTRUCT: POINT pt (x,y = 2x4 = 8 bajta) pa
+' mouseData -> UVEK offset 8 (isto na 32 i 64-bit; nema pointera pre njega).
+' Citamo SAMO ta 4 bajta -> bez zavisnosti od poravnanja celog Type-a.
+Private Const MD_OFFSET As LongPtr = 8
 
 ' --- Stanje modula ---
 Private mHook As LongPtr                  ' handle hook-a; 0 = nije instaliran
@@ -165,7 +162,7 @@ Private Sub EnsureHook()
     ' okine cim odes sa forme na VBE.)
     If VbeIsOpen Then Exit Sub
 
-    mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
+    mHook = SetWindowsHookEx(WH_MOUSE_LL, AddressOf MouseProc, GetModuleHandle(vbNullString), 0)
 End Sub
 
 ' True ako je VBE prozor otvoren/vidljiv. Na gresku (npr. iskljucen "Trust access
