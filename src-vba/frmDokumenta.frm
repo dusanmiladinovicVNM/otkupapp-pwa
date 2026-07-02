@@ -73,6 +73,7 @@ Private m_recMode As String      ' "PRIJ" (default) ili "PAL"
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
+    MouseWheel_Attach Me
 
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 
@@ -3158,6 +3159,7 @@ Private Sub EnsureStorniraniPanel()
         ' Broj Datum Partner Vrsta Sorta Klasa Kolicina Cena Iznos | Zbirna Otpremnica Faktura
         .ColumnWidths = "86;58;120;60;80;32;54;48;68;92;96;84"
     End With
+    MouseWheel_Register m_lstStorno
     StyleListBox m_lstStorno
 
     m_stornoBuilt = True
@@ -3469,6 +3471,7 @@ Private Sub EnsureRecoveryPanel()
         .ColumnWidths = "80;58;60;72;48;82;96"
     End With
     StyleListBox m_lstOsirPrij
+    MouseWheel_Register m_lstOsirPrij
 
     Set m_lstAktZbr = Me.Controls.Add("Forms.ListBox.1", "lstAktZbrRT", True)
     With m_lstAktZbr
@@ -3476,6 +3479,7 @@ Private Sub EnsureRecoveryPanel()
         .ColumnWidths = "92;58;60;72;48"
     End With
     StyleListBox m_lstAktZbr
+    MouseWheel_Register m_lstAktZbr
 
     m_recBuilt = True
     Exit Sub
@@ -3741,8 +3745,14 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
     ResetActionButtons
 End Sub
 
+Private Sub UserForm_Deactivate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    MouseWheel_Detach
 
     If CloseMode = vbFormControlMenu Then
         frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."

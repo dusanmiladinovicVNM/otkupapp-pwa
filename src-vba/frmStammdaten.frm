@@ -59,6 +59,7 @@ End Sub
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
+    MouseWheel_Attach Me
 
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
@@ -2784,8 +2785,14 @@ EH:
     On Error GoTo 0
 End Sub
 
+Private Sub UserForm_Deactivate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    MouseWheel_Detach
 
     If CloseMode = vbFormControlMenu Then
         frmOtkupAPP.ReturnToDashboard "Mati" & ChrW(269) & "ni podaci zatvoreni."
