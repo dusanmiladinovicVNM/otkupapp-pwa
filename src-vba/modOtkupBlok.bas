@@ -371,19 +371,20 @@ Private Sub BuildPanel()
     ' Naslovna traka (opaque -> pokriva sazetak) + "Zatvori" gore-desno; lista ispod
     ' popunjava sve do dna. Skrivena dok se ne klikne "Lista kooperanata".
     Dim rangW As Double: rangW = EXP_WIDTH - PANEL_LEFT - 12
-    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 4, rangW, 24)
+    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 2, rangW, 22)
     StyleHdr mLblRangTitle
     On Error Resume Next
     mLblRangTitle.BackStyle = fmBackStyleOpaque
     mLblRangTitle.BackColor = mForm.BackColor
     On Error GoTo 0
-    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 104, 4, 100, 22)
+    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 104, 2, 100, 22)
     mBtnRangClose.caption = "Zatvori"
     On Error Resume Next
     StyleExitButton mBtnRangClose, "Zatvori"
     On Error GoTo 0
-    ' Visina se rastegne do dna panela u ShowKoopRang (realna geometrija); ovo je fallback.
-    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, 30, rangW, gridH + 100)
+    ' Lista pocinje tacno ispod naslovne trake (top 24 = naslov dno) da ne viri
+    ' sazetak; visina se rastegne do dna panela u ShowKoopRang (realna geometrija).
+    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, 24, rangW, gridH + 100)
     mLstRang.ColumnCount = 4
     mLstRang.ColumnWidths = "50;360;200;220"
     On Error Resume Next
