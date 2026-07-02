@@ -361,7 +361,7 @@ Private Sub BuildPanel()
     mLblKoopTotal.Font.Size = 8
     mLblKoopTotal.Font.Bold = False    ' da pun "Otk.listovi: <iznos> RSD" stane u 136pt
     On Error GoTo 0
-    Set mBtnKoopRang = AddCtl("CommandButton", "btnOtkBlokKoopRang", PANEL_LEFT + 576, 22, 136, 18)
+    Set mBtnKoopRang = AddCtl("CommandButton", "btnOtkBlokKoopRang", PANEL_LEFT + 576, 22, 136, 22)
     mBtnKoopRang.caption = "Lista kooperanata"
     On Error Resume Next
     StyleExitButton mBtnKoopRang, "Lista kooperanata"
@@ -371,18 +371,19 @@ Private Sub BuildPanel()
     ' Naslovna traka (opaque -> pokriva sazetak) + "Zatvori" gore-desno; lista ispod
     ' popunjava sve do dna. Skrivena dok se ne klikne "Lista kooperanata".
     Dim rangW As Double: rangW = EXP_WIDTH - PANEL_LEFT - 12
-    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 4, rangW, 20)
+    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 4, rangW, 24)
     StyleHdr mLblRangTitle
     On Error Resume Next
     mLblRangTitle.BackStyle = fmBackStyleOpaque
     mLblRangTitle.BackColor = mForm.BackColor
     On Error GoTo 0
-    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 104, 5, 100, 18)
+    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 104, 4, 100, 22)
     mBtnRangClose.caption = "Zatvori"
     On Error Resume Next
     StyleExitButton mBtnRangClose, "Zatvori"
     On Error GoTo 0
-    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, 24, rangW, gridH + 100)
+    ' Visina se rastegne do dna panela u ShowKoopRang (realna geometrija); ovo je fallback.
+    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, 30, rangW, gridH + 100)
     mLstRang.ColumnCount = 4
     mLstRang.ColumnWidths = "50;360;200;220"
     On Error Resume Next
@@ -1699,6 +1700,20 @@ Private Sub ShowKoopRang()
     On Error GoTo EH
     If mLstRang Is Nothing Then Exit Sub
     LoadKoopRang
+
+    ' Rastegni listu do dna panela (da ne viri osnovni grid dole) -- realna geometrija
+    ' u trenutku prikaza; anchor na stvarno dno grida (mLstBlok/mLstOtp) + margina.
+    On Error Resume Next
+    Dim btm As Double: btm = mForm.InsideHeight - 2
+    If Not mLstBlok Is Nothing Then
+        If mLstBlok.top + mLstBlok.Height + 4 > btm Then btm = mLstBlok.top + mLstBlok.Height + 4
+    End If
+    If Not mLstOtp Is Nothing Then
+        If mLstOtp.top + mLstOtp.Height + 4 > btm Then btm = mLstOtp.top + mLstOtp.Height + 4
+    End If
+    If btm - mLstRang.top > 60 Then mLstRang.Height = btm - mLstRang.top
+    On Error GoTo 0
+
     mLstRang.Visible = True
     If Not mLblRangTitle Is Nothing Then mLblRangTitle.Visible = True
     If Not mBtnRangClose Is Nothing Then mBtnRangClose.Visible = True
