@@ -9,7 +9,7 @@ Option Explicit
 ' ============================================================
 
 ' --- App Info ---
-Public Const APP_NAME As String = "OtkupApp"
+Public Const APP_NAME As String = "AgriX"
 Public Const APP_VERSION As String = "2.8.7"
 
 ' --- Self-update / backup (Drive folder ID-jevi; popuni jednokratno) ---

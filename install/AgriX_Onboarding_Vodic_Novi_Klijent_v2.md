@@ -110,7 +110,7 @@ app.agrix.rs
   - univerzalni PWA frontend
   - config.js pokazuje na aktivni GAS Web App URL za trenutnog klijenta
 
-OtkupApp.xlsm
+AgriX.xlsm
   - lokalni Excel/VBA sistem
   - čita/piše Google Sheets preko OAuth-a
   - radi full sync
@@ -157,9 +157,9 @@ Pre nego što počneš sa novim klijentom, potvrdi:
 [ ] backup@agrix.rs Google Account radi.
 [ ] Imaš pristup Loopia emailovima.
 [ ] Imaš pristup GitHub/repo kodu.
-[ ] Imaš poslednji stabilan OtkupApp.xlsm.
+[ ] Imaš poslednji stabilan AgriX.xlsm.
 [ ] Imaš poslednji stabilan GAS Code.gs / Monitoring.gs / DriveFolder.gs.
-[ ] Imaš poslednji stabilan Setup-OtkupApp.ps1.
+[ ] Imaš poslednji stabilan Setup-AgriX.ps1.
 [ ] Imaš Poppler paket.
 [ ] Imaš AgriX OPS browser profil.
 [ ] Znaš novi CLIENT_ID.
@@ -700,7 +700,7 @@ Ako ping radi u jednom browser profilu, a ne radi u drugom, problem je Google mu
 
 ## 15. Excel `tblSEFConfig` — Google + klijent
 
-U `OtkupApp.xlsm`, u `tblSEFConfig`, postavi (kod čita GOOGLE_*/CLIENT_* iz tblSEFConfig, ne tblConfig):
+U `AgriX.xlsm`, u `tblSEFConfig`, postavi (kod čita GOOGLE_*/CLIENT_* iz tblSEFConfig, ne tblConfig):
 
 ```text
 Kljuc                         Vrednost
@@ -1077,10 +1077,10 @@ Ovaj deo je obavezan deo install package-a. Cilj nije da se Excel sigurnost nasi
 Za produkcioni paket koristi sledeći model:
 
 ```text
-[ ] OtkupApp.xlsm je digitalno potpisan.
+[ ] AgriX.xlsm je digitalno potpisan.
 [ ] Certifikat za proveru potpisa je u install package-u kao .cer fajl.
-[ ] Setup-OtkupApp.ps1 instalira javni certifikat kod korisnika.
-[ ] Setup-OtkupApp.ps1 dodaje C:\OtkupApp kao Excel Trusted Location.
+[ ] Setup-AgriX.ps1 instalira javni certifikat kod korisnika.
+[ ] Setup-AgriX.ps1 dodaje C:\AgriX kao Excel Trusted Location.
 [ ] Svi fajlovi iz paketa su unblocked.
 [ ] Makroi se ne omogućavaju globalno za ceo Excel.
 [ ] Ne koristi se opcija “Enable all macros”.
@@ -1089,7 +1089,7 @@ Za produkcioni paket koristi sledeći model:
 Dozvoljeno:
 
 ```text
-Trusted Location za C:\OtkupApp
+Trusted Location za C:\AgriX
 +
 potpisan workbook
 +
@@ -1114,7 +1114,7 @@ Za prve klijente možeš koristiti self-signed VBA certifikat, jer ti radiš ini
 Preporučeni minimum za prve rollout-e:
 
 ```text
-Certifikat: OtkupApp VBA Publisher
+Certifikat: AgriX VBA Publisher
 Namena: VBA project signing
 Lokacija privatnog ključa: samo tvoj dev računar
 U install package ide samo javni .cer, ne privatni ključ
@@ -1145,7 +1145,7 @@ Koraci:
 
 ```text
 [ ] Pokreni SELFCERT.EXE.
-[ ] Certificate name: OtkupApp VBA Publisher
+[ ] Certificate name: AgriX VBA Publisher
 [ ] Potvrdi kreiranje certifikata.
 [ ] Certifikat ostaje u Current User / Personal store na dev računaru.
 ```
@@ -1154,20 +1154,20 @@ Ako koristiš komercijalni certifikat, preskačeš SelfCert i koristiš certifik
 
 ---
 
-### 24A.4 Potpisivanje OtkupApp.xlsm
+### 24A.4 Potpisivanje AgriX.xlsm
 
 Potpisivanje radiš tek kada je VBA kod spreman za release. Svaka izmena VBA koda posle potpisivanja poništava potpis.
 
 Redosled:
 
 ```text
-[ ] Otvori OtkupApp.xlsm na dev računaru.
+[ ] Otvori AgriX.xlsm na dev računaru.
 [ ] VBA Editor: ALT + F11.
 [ ] Debug > Compile VBAProject.
 [ ] Ako compile ne prođe, ne potpisivati.
 [ ] Tools > Digital Signature.
 [ ] Choose.
-[ ] Izaberi OtkupApp VBA Publisher.
+[ ] Izaberi AgriX VBA Publisher.
 [ ] Save workbook.
 [ ] Zatvori Excel.
 [ ] Ponovo otvori workbook i proveri da potpis nije pao.
@@ -1176,7 +1176,7 @@ Redosled:
 Release pravilo:
 
 ```text
-Poslednji korak pre pakovanja app/OtkupApp.xlsm je:
+Poslednji korak pre pakovanja app/AgriX.xlsm je:
 1. Compile VBA
 2. Save
 3. Digital Signature
@@ -1201,7 +1201,7 @@ Zatim:
 Current User
   Personal
     Certificates
-      OtkupApp VBA Publisher
+      AgriX VBA Publisher
 ```
 
 Export:
@@ -1211,25 +1211,25 @@ Export:
 [ ] All Tasks > Export.
 [ ] No, do not export the private key.
 [ ] DER encoded binary X.509 (.CER) ili Base-64 encoded X.509 (.CER).
-[ ] Naziv fajla: OtkupApp-VBA-Publisher.cer
+[ ] Naziv fajla: AgriX-VBA-Publisher.cer
 ```
 
 Fajl ide u install package:
 
 ```text
-AgriX_C00X_Install_v1.0.0/cert/OtkupApp-VBA-Publisher.cer
+AgriX_C00X_Install_v1.0.0/cert/AgriX-VBA-Publisher.cer
 ```
 
 ---
 
 ### 24A.6 Instalacija certifikata kod klijenta
 
-`Setup-OtkupApp.ps1` treba da uveze javni certifikat u Current User store.
+`Setup-AgriX.ps1` treba da uveze javni certifikat u Current User store.
 
 Preporučeni Current User model:
 
 ```powershell
-$certPath = Join-Path $PackageRoot "cert\OtkupApp-VBA-Publisher.cer"
+$certPath = Join-Path $PackageRoot "cert\AgriX-VBA-Publisher.cer"
 
 if (Test-Path $certPath) {
     Import-Certificate -FilePath $certPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
@@ -1252,7 +1252,7 @@ Za prvi rollout koristi CurrentUser, jer instaliraš aplikaciju za konkretnog Wi
 Trusted Location mora biti:
 
 ```text
-C:\OtkupApp\
+C:\AgriX\
 ```
 
 sa subfolderima.
@@ -1263,19 +1263,19 @@ Primer registry upisa za Current User:
 
 ```powershell
 $officeVersion = "16.0"
-$trustedLocationName = "AgriX_OtkupApp"
+$trustedLocationName = "AgriX_AgriX"
 $trustedLocationPath = "HKCU:\Software\Microsoft\Office\$officeVersion\Excel\Security\Trusted Locations\$trustedLocationName"
 
 New-Item -Path $trustedLocationPath -Force | Out-Null
-New-ItemProperty -Path $trustedLocationPath -Name "Path" -Value "C:\OtkupApp\" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $trustedLocationPath -Name "Path" -Value "C:\AgriX\" -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $trustedLocationPath -Name "AllowSubfolders" -Value 1 -PropertyType DWord -Force | Out-Null
-New-ItemProperty -Path $trustedLocationPath -Name "Description" -Value "AgriX OtkupApp trusted location" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $trustedLocationPath -Name "Description" -Value "AgriX AgriX trusted location" -PropertyType String -Force | Out-Null
 ```
 
 Ako Excel i dalje prikazuje macro warning:
 
 ```text
-[ ] proveri da li workbook stvarno leži u C:\OtkupApp\
+[ ] proveri da li workbook stvarno leži u C:\AgriX\
 [ ] proveri registry Trusted Location
 [ ] proveri da li je fajl blokiran iz interneta
 [ ] proveri da li je potpis validan
@@ -1289,7 +1289,7 @@ Ako Excel i dalje prikazuje macro warning:
 Ako je install package skinut sa interneta ili kopiran sa USB-a, Windows može staviti Mark-of-the-Web. PS1 treba da uradi unblock za ceo paket i finalnu aplikaciju.
 
 ```powershell
-Get-ChildItem -Path "C:\OtkupApp" -Recurse -File | ForEach-Object {
+Get-ChildItem -Path "C:\AgriX" -Recurse -File | ForEach-Object {
     try {
         Unblock-File -Path $_.FullName -ErrorAction SilentlyContinue
     } catch {
@@ -1301,9 +1301,9 @@ Get-ChildItem -Path "C:\OtkupApp" -Recurse -File | ForEach-Object {
 Posebno proveriti:
 
 ```text
-[ ] C:\OtkupApp\OtkupApp.xlsm nije blocked
-[ ] C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe nije blocked
-[ ] C:\OtkupApp\Tools\poppler\Library\bin\pdfinfo.exe nije blocked
+[ ] C:\AgriX\AgriX.xlsm nije blocked
+[ ] C:\AgriX\Tools\poppler\Library\bin\pdftotext.exe nije blocked
+[ ] C:\AgriX\Tools\poppler\Library\bin\pdfinfo.exe nije blocked
 ```
 
 ---
@@ -1313,7 +1313,7 @@ Posebno proveriti:
 Za instalaciju koristi se procesni bypass, ne trajna promena sistema:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install\Setup-OtkupApp.ps1
+powershell -ExecutionPolicy Bypass -File .\install\Setup-AgriX.ps1
 ```
 
 Ovo ne menja trajno execution policy na računaru klijenta.
@@ -1329,31 +1329,31 @@ PS1 potpisivanje može biti uvedeno kasnije. Za prve rollout-e je dovoljno:
 
 ---
 
-### 24A.10 Šta `Setup-OtkupApp.ps1` mora da radi
+### 24A.10 Šta `Setup-AgriX.ps1` mora da radi
 
 Minimalni installer mora da uradi sledeće:
 
 ```text
 [ ] Detektuje package root.
-[ ] Kreira C:\OtkupApp.
+[ ] Kreira C:\AgriX.
 [ ] Kreira lokalne foldere:
-    C:\OtkupApp\Bank_Izvodi\Inbox
-    C:\OtkupApp\Bank_Izvodi\Processed
-    C:\OtkupApp\Bank_Izvodi\Error
-    C:\OtkupApp\Logs
-    C:\OtkupApp\Backup
-    C:\OtkupApp\Export
+    C:\AgriX\Bank_Izvodi\Inbox
+    C:\AgriX\Bank_Izvodi\Processed
+    C:\AgriX\Bank_Izvodi\Error
+    C:\AgriX\Logs
+    C:\AgriX\Backup
+    C:\AgriX\Export
 
-[ ] Kopira app/OtkupApp.xlsm u C:\OtkupApp.
-[ ] Kopira Tools\poppler u C:\OtkupApp\Tools\poppler (pored OtkupApp.xlsm).
-[ ] Kopira docs u C:\OtkupApp\docs.
+[ ] Kopira app/AgriX.xlsm u C:\AgriX.
+[ ] Kopira Tools\poppler u C:\AgriX\Tools\poppler (pored AgriX.xlsm).
+[ ] Kopira docs u C:\AgriX\docs.
 [ ] Unblock svih fajlova.
-[ ] Instalira OtkupApp-VBA-Publisher.cer ako postoji.
-[ ] Dodaje C:\OtkupApp kao Excel Trusted Location.
+[ ] Instalira AgriX-VBA-Publisher.cer ako postoji.
+[ ] Dodaje C:\AgriX kao Excel Trusted Location.
 [ ] Kreira Desktop shortcut.
 [ ] Verifikuje pdftotext.exe.
-[ ] Verifikuje da OtkupApp.xlsm postoji.
-[ ] Piše install log u C:\OtkupApp\Logs\install-log.txt.
+[ ] Verifikuje da AgriX.xlsm postoji.
+[ ] Piše install log u C:\AgriX\Logs\install-log.txt.
 [ ] Na kraju ispisuje PASS/FAIL summary.
 ```
 
@@ -1431,10 +1431,10 @@ Minimalni `manifest.json`:
 Pre odlaska kod klijenta proveri:
 
 ```text
-[ ] OtkupApp.xlsm u paketu je poslednja potpisana verzija.
+[ ] AgriX.xlsm u paketu je poslednja potpisana verzija.
 [ ] APP_VERSION u tblSEFConfig odgovara manifestu.
 [ ] PWA APP_VERSION odgovara release-u.
-[ ] Setup-OtkupApp.ps1 je iz istog release paketa.
+[ ] Setup-AgriX.ps1 je iz istog release paketa.
 [ ] Poppler je prisutan.
 [ ] Certifikat je prisutan.
 ```
@@ -1467,10 +1467,10 @@ Pripremi folder:
 ```text
 AgriX_C00X_Install_v1.0.0/
   app/
-    OtkupApp.xlsm
+    AgriX.xlsm
 
   install/
-    Setup-OtkupApp.ps1
+    Setup-AgriX.ps1
 
   tools/
     poppler/
@@ -1480,7 +1480,7 @@ AgriX_C00X_Install_v1.0.0/
         ...
 
   cert/
-    OtkupApp-VBA-Publisher.cer
+    AgriX-VBA-Publisher.cer
 
   docs/
     PRE-INSTALL-C00X.md
@@ -1495,19 +1495,19 @@ AgriX_C00X_Install_v1.0.0/
 Provera:
 
 ```text
-[ ] OtkupApp.xlsm ima ispravan tblConfig.
-[ ] OtkupApp.xlsm ima ispravan tblSEFConfig.
+[ ] AgriX.xlsm ima ispravan tblConfig.
+[ ] AgriX.xlsm ima ispravan tblSEFConfig.
 [ ] modSetup postoji.
 [ ] SetupNewPC postoji.
 [ ] modBankaImport koristi local config paths.
 [ ] Poppler postoji.
 [ ] VBA compile prolazi.
 [ ] Workbook je potpisan.
-[ ] Javni certifikat je u cert/OtkupApp-VBA-Publisher.cer.
-[ ] Setup-OtkupApp.ps1 instalira certifikat.
-[ ] Setup-OtkupApp.ps1 dodaje Trusted Location.
-[ ] Setup-OtkupApp.ps1 radi Unblock-File.
-[ ] Setup-OtkupApp.ps1 postoji.
+[ ] Javni certifikat je u cert/AgriX-VBA-Publisher.cer.
+[ ] Setup-AgriX.ps1 instalira certifikat.
+[ ] Setup-AgriX.ps1 dodaje Trusted Location.
+[ ] Setup-AgriX.ps1 radi Unblock-File.
+[ ] Setup-AgriX.ps1 postoji.
 ```
 
 ---
@@ -1517,9 +1517,9 @@ Provera:
 Na test Windows računaru ili čistom Windows profilu:
 
 ```text
-[ ] Pokreni Setup-OtkupApp.ps1.
-[ ] C:\OtkupApp postoji.
-[ ] OtkupApp.xlsm je kopiran.
+[ ] Pokreni Setup-AgriX.ps1.
+[ ] C:\AgriX postoji.
+[ ] AgriX.xlsm je kopiran.
 [ ] Tools\poppler\Library\bin\pdftotext.exe postoji.
 [ ] Desktop shortcut radi.
 [ ] Trusted Location radi.
@@ -1561,7 +1561,7 @@ Banka / klijentov email
 → GAS #1 „Bank PDF Downloader" (na nalogu koji prima izvode; Editor na 01_Bank)
 → Drive 00_Inbox/01_Bank
 → Google Drive for Desktop → lokalni ...\01_Bank  (= BANKA_DRIVE_SOURCE_PATH)
-→ VBA puller → C:\OtkupApp\Bank_Izvodi\Inbox
+→ VBA puller → C:\AgriX\Bank_Izvodi\Inbox
 → ImportBankaInbox_TX → tblBankaImport
 ```
 
@@ -1592,7 +1592,7 @@ Test:
 Pre terena napravi backup:
 
 ```text
-[ ] OtkupApp.xlsm baseline kopija.
+[ ] AgriX.xlsm baseline kopija.
 [ ] tblConfig export ili screenshot.
 [ ] tblSEFConfig export ili screenshot.
 [ ] folder ID evidencija.
@@ -1655,11 +1655,11 @@ AgriX_C00X_Install_v1.0.0
 Unutra mora biti:
 
 ```text
-[ ] app/OtkupApp.xlsm
-[ ] install/Setup-OtkupApp.ps1
+[ ] app/AgriX.xlsm
+[ ] install/Setup-AgriX.ps1
 [ ] Tools/poppler/Library/bin/pdftotext.exe
 [ ] Tools/poppler/Library/bin/pdfinfo.exe
-[ ] cert/OtkupApp-VBA-Publisher.cer ako se koristi
+[ ] cert/AgriX-VBA-Publisher.cer ako se koristi
 [ ] docs/on-site checklist
 ```
 
@@ -1704,22 +1704,22 @@ Kopiraj install paket na računar klijenta.
 Pokreni PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install\Setup-OtkupApp.ps1
+powershell -ExecutionPolicy Bypass -File .\install\Setup-AgriX.ps1
 ```
 
 Proveri rezultat:
 
 ```text
-[ ] C:\OtkupApp napravljen.
-[ ] OtkupApp.xlsm kopiran.
+[ ] C:\AgriX napravljen.
+[ ] AgriX.xlsm kopiran.
 [ ] Poppler kopiran.
 [ ] pdftotext.exe postoji.
 [ ] workbook je unblocked.
 [ ] javni certifikat je instaliran u CurrentUser TrustedPublisher.
 [ ] javni certifikat je instaliran u CurrentUser Root ako je self-signed.
-[ ] Trusted Location dodat: C:\OtkupApp\.
+[ ] Trusted Location dodat: C:\AgriX\.
 [ ] Desktop shortcut napravljen.
-[ ] install-log.txt postoji u C:\OtkupApp\Logs.
+[ ] install-log.txt postoji u C:\AgriX\Logs.
 ```
 
 Ako PS1 failuje, ne otvarati aplikaciju dok se ne reši uzrok.
@@ -1731,13 +1731,13 @@ Ako PS1 failuje, ne otvarati aplikaciju dok se ne reši uzrok.
 Pokreni preko desktop ikonice:
 
 ```text
-OtkupApp
+AgriX
 ```
 
 Proveri:
 
 ```text
-[ ] Otvara C:\OtkupApp\OtkupApp.xlsm.
+[ ] Otvara C:\AgriX\AgriX.xlsm.
 [ ] Nema macro warning-a.
 [ ] Ako macro warning postoji, rešiti Trusted Location/certifikat pre nastavka.
 ```
@@ -1899,7 +1899,7 @@ Banka (email)
 → Google Drive for Desktop (sync na lokalni disk)
 → lokalni ...\00_Inbox\01_Bank   (= BANKA_DRIVE_SOURCE_PATH)
 → VBA puller (PullBankPdfsFromDriveProduction)
-→ C:\OtkupApp\Bank_Izvodi\Inbox
+→ C:\AgriX\Bank_Izvodi\Inbox
 → ImportBankaInbox_TX → tblBankaImport → tblNovac
 ```
 
@@ -1938,7 +1938,7 @@ Detaljno: `docs/production-runbook-banka-import-setup.md` i `docs/DESKTOP_SETUP_
 Na računaru klijenta:
 
 ```text
-[ ] Ubaci validan PDF izvod u C:\OtkupApp\Bank_Izvodi\Inbox.
+[ ] Ubaci validan PDF izvod u C:\AgriX\Bank_Izvodi\Inbox.
 [ ] Pokreni ImportBankaInbox_TX.
 [ ] Proveri tblBankaImport.
 [ ] PDF ode u Processed ili Error.
@@ -2018,7 +2018,7 @@ Korisniku objasni:
 
 ```text
 [ ] Aplikaciju otvara preko Desktop ikonice.
-[ ] Ne premešta C:\OtkupApp.
+[ ] Ne premešta C:\AgriX.
 [ ] Bankarske izvode koristi kroz dogovoreni tok.
 [ ] Ne dira tblConfig.
 [ ] Ne dira tblSEFConfig.

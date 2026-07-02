@@ -1,4 +1,4 @@
-# AgriX / OtkupApp — Desktop Setup Reference
+# AgriX — Desktop Setup Reference
 
 > **Svrha.** Jedinstveni izvor istine za dva pitanja:
 > 1) Šta je sve od fajlova, foldera i podešavanja neophodno da AgriX radi na desktopu **u punom obimu**.
@@ -21,8 +21,8 @@ Sistem se pušta u rad kroz tri odvojena nivoa; ne mešati ih:
 
 | Nivo | Ko / gde | Rezultat |
 |---|---|---|
-| **1. Dev priprema „blanko master"** | Ti, na dev mašini (`release.sh` → Excel `ImportAllVBA`) | `OtkupApp.xlsm` = **sav kod + sve tabele (shema) + config placeholderi**, prazne transakcione tabele |
-| **2. Windows priprema po mašini** | `install/Setup-OtkupApp.ps1` (kod klijenta, admin) | Folderi, kopiran/unblock-ovan `.xlsm`, Poppler, sertifikat, Trusted Location, shortcut |
+| **1. Dev priprema „blanko master"** | Ti, na dev mašini (`release.sh` → Excel `ImportAllVBA`) | `AgriX.xlsm` = **sav kod + sve tabele (shema) + config placeholderi**, prazne transakcione tabele |
+| **2. Windows priprema po mašini** | `install/Setup-AgriX.ps1` (kod klijenta, admin) | Folderi, kopiran/unblock-ovan `.xlsm`, Poppler, sertifikat, Trusted Location, shortcut |
 | **3. Aplikaciona provera po mašini** | `SetupNewPC` unutar Excela (prvo otvaranje) | `tblLocalConfig` putanje + health-check → `APP_SETUP_COMPLETED=DA` |
 
 **Ključna činjenica:** `SetupNewPC` **ne pravi domenske tabele** — samo ih proverava
@@ -92,8 +92,8 @@ Root aplikacije = folder u kome stoji `.xlsm` (`GetDefaultRootPath = ThisWorkboo
 `modSetup.bas`). Sve se pravi **pored radne sveske**:
 
 ```
-<APP_ROOT> (npr. C:\OtkupApp\)
-├─ OtkupApp.xlsm
+<APP_ROOT> (npr. C:\AgriX\)
+├─ AgriX.xlsm
 ├─ Tools\poppler\Library\bin\pdftotext.exe     ← Poppler (default, APP_PDFTOTEXT_RELATIVE_EXE_PATH)
 ├─ Backups\  Logs\  Journal\  Export\  Temp\  Secrets\   ← EnsureAppFolders
 ├─ Bank_Izvodi\Inbox\  \Processed\  \Error\    ← SetupBankFolders (LOKALNI, ne Drive!)
@@ -231,13 +231,13 @@ Legenda aktera: **[DEV]** ti na dev mašini · **[KLIJENT-GOOGLE]** ti, jednom p
 
 ### FAZA 2 — Install paket [DEV]
 
-13. Spakuj (onboarding §25): `app/OtkupApp.xlsm` (potpisan, BLANKO OK) · `install/Setup-OtkupApp.ps1`
-    · `tools/poppler/…/pdftotext.exe` (+ DLL) · `cert/OtkupApp-VBA-Publisher.cer` (samo javni `.cer`)
+13. Spakuj (onboarding §25): `app/AgriX.xlsm` (potpisan, BLANKO OK) · `install/Setup-AgriX.ps1`
+    · `tools/poppler/…/pdftotext.exe` (+ DLL) · `cert/AgriX-VBA-Publisher.cer` (samo javni `.cer`)
     · `docs/` · `manifest.json` + `checksums.sha256`.
 
 ### FAZA 3 — Windows instalacija po mašini [MAŠINA]
 
-14. `Setup-OtkupApp.ps1` (kao admin): pravi `C:\OtkupApp` + podfoldere → kopira + **`Unblock-File`**
+14. `Setup-AgriX.ps1` (kao admin): pravi `C:\AgriX` + podfoldere → kopira + **`Unblock-File`**
     xlsm → kopira `Tools\poppler` **pored** xlsm → import `.cer` u `CurrentUser\Root`+`TrustedPublisher`
     → **Excel Trusted Location** (`AllowSubfolders=1`) → Desktop shortcut.
 
@@ -294,23 +294,23 @@ Legenda aktera: **[DEV]** ti na dev mašini · **[KLIJENT-GOOGLE]** ti, jednom p
 
 ## 7. Install package (trenutno stanje)
 
-**Verzionisano u `install/`:** `Setup-OtkupApp.ps1`, `AgriX_Onboarding_Vodic_Novi_Klijent_v2.md`,
-`Priprema_pre_instalacije.txt`. **Build-artefakti (NISU u repo-u):** potpisan `OtkupApp.xlsm`,
-`Tools\poppler\`, `OtkupApp-VBA-Publisher.cer`. Sklopljena struktura: onboarding §25.
+**Verzionisano u `install/`:** `Setup-AgriX.ps1`, `AgriX_Onboarding_Vodic_Novi_Klijent_v2.md`,
+`Priprema_pre_instalacije.txt`. **Build-artefakti (NISU u repo-u):** potpisan `AgriX.xlsm`,
+`Tools\poppler\`, `AgriX-VBA-Publisher.cer`. Sklopljena struktura: onboarding §25.
 
-**`Setup-OtkupApp.ps1` radi:** param `InstallRoot=C:\OtkupApp`, `ExcelVersion=16.0` → folderi
+**`Setup-AgriX.ps1` radi:** param `InstallRoot=C:\AgriX`, `ExcelVersion=16.0` → folderi
 (`Backups/Logs/Journal/Export/Temp/Secrets` + `Bank_Izvodi\{Inbox,Processed,Error}`) → kopira xlsm
 (throw ako fali) → `Unblock-File` → kopira `Tools\` (Poppler) i `docs\` (non-fatal) → import `.cer` u
 `CurrentUser\Root`+`TrustedPublisher` → Trusted Location (`AllowSubfolders=1`) → Desktop shortcut →
 piše `Logs\install-log.txt` + **PASS/FAIL** summary → osveženi next-steps (SetupNewPC,
 SetupPopplerInteractive, Drive-for-Desktop / `BANKA_DRIVE_SOURCE_PATH`, `TestServerLink`).
 
-**Konzistentno sa kodom:** `InstallRoot` = mesto xlsm-a → `APP_ROOT_PATH` = `C:\OtkupApp`; Poppler
+**Konzistentno sa kodom:** `InstallRoot` = mesto xlsm-a → `APP_ROOT_PATH` = `C:\AgriX`; Poppler
 layout = `APP_PDFTOTEXT_RELATIVE_EXE_PATH`; `Bank_Izvodi\{…}` = LOKALNI processed folderi (Drive izvor
 `01_Bank` ide preko Drive for Desktop, ps1 ga s pravom ne dira).
 
 **Preostalo (build-time, ne installer):** `manifest.json` / `checksums.sha256` (onboarding §24A.12/§25)
-se generišu pri pakovanju paketa, ne u `Setup-OtkupApp.ps1`. Install-log, PASS/FAIL summary, `docs\`
+se generišu pri pakovanju paketa, ne u `Setup-AgriX.ps1`. Install-log, PASS/FAIL summary, `docs\`
 kopija i osveženi next-steps su dodati u ovoj grani (v. §10).
 
 ---
@@ -355,7 +355,7 @@ offline do `LICENSE_NEXT_CHECK`. Detalji: `docs/licenciranje-po-uredjaju.md`.
    SEFConfig → tiho ne radi; rešeno grupom „Banka/lokalno".
 4. **Dve `APP_VERSION`.** `modConfig.APP_VERSION=2.8.7` (verzija koda za version-gate/self-update) ≠
    `tblSEFConfig.APP_VERSION` (npr. `1.0.0-C00X`, monitoring/fleet tag). Ne poistovećivati.
-5. **[REŠENO u grani] ps1 §24A.10 spec.** `Setup-OtkupApp.ps1` sada piše `Logs\install-log.txt`,
+5. **[REŠENO u grani] ps1 §24A.10 spec.** `Setup-AgriX.ps1` sada piše `Logs\install-log.txt`,
    ispisuje PASS/FAIL summary, kopira `docs\`, i ima osvežene next-steps (SetupPopplerInteractive,
    Podešavanja „Izaberi Poppler"/„…", `TestServerLink`, povezivanje dva GAS-a).
 6. **[REŠENO u grani] Povezivanje dva GAS-a + Drive for Desktop** dodato u onboarding §27/§39 kao

@@ -209,7 +209,7 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
         If Not mDiagShown Then
             mDiagShown = True
             MsgBox "Panel 'Detalji otkupa' nije kreiran." & vbCrLf & mDiag, _
-                   vbExclamation, "OtkupApp"
+                   vbExclamation, "AgriX"
         End If
         Exit Sub
     End If

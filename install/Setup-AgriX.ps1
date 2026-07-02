@@ -1,10 +1,10 @@
-# Setup-OtkupApp.ps1
-# OtkupApp initial workstation setup
+# Setup-AgriX.ps1
+# AgriX initial workstation setup
 #
 # Run as Administrator if possible.
 # This script:
-#   - creates C:\OtkupApp folder structure
-#   - copies OtkupApp.xlsm and unblocks it
+#   - creates C:\AgriX folder structure
+#   - copies AgriX.xlsm and unblocks it
 #   - copies Tools\poppler (pdftotext.exe) next to the workbook
 #   - copies docs\ (if present)
 #   - installs VBA publisher certificate if present
@@ -13,7 +13,7 @@
 #   - writes an install log and prints a PASS/FAIL summary
 
 param(
-    [string]$InstallRoot = "C:\OtkupApp",
+    [string]$InstallRoot = "C:\AgriX",
     [string]$ExcelVersion = "16.0"
 )
 
@@ -21,11 +21,11 @@ $ErrorActionPreference = "Stop"
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-$SourceWorkbook = Join-Path $ScriptRoot "OtkupApp.xlsm"
-$SourceCert     = Join-Path $ScriptRoot "OtkupApp-VBA-Publisher.cer"
+$SourceWorkbook = Join-Path $ScriptRoot "AgriX.xlsm"
+$SourceCert     = Join-Path $ScriptRoot "AgriX-VBA-Publisher.cer"
 $SourceTools    = Join-Path $ScriptRoot "Tools"
 $SourceDocs     = Join-Path $ScriptRoot "docs"
-$TargetWorkbook = Join-Path $InstallRoot "OtkupApp.xlsm"
+$TargetWorkbook = Join-Path $InstallRoot "AgriX.xlsm"
 
 $Folders = @(
     $InstallRoot,
@@ -59,7 +59,7 @@ function Write-Log {
 function Add-WarnLog { param([string]$Message) $script:Warnings += $Message; Write-Log $Message "WARN" }
 
 Write-Log ""
-Write-Log "=== OtkupApp setup started ==="
+Write-Log "=== AgriX setup started ==="
 Write-Log ("Machine: {0}  User: {1}  InstallRoot: {2}" -f $env:COMPUTERNAME, $env:USERNAME, $InstallRoot)
 
 try {
@@ -75,7 +75,7 @@ try {
 
     # --- workbook (critical) ---
     if (!(Test-Path $SourceWorkbook)) {
-        throw "Missing OtkupApp.xlsm in install folder: $SourceWorkbook"
+        throw "Missing AgriX.xlsm in install folder: $SourceWorkbook"
     }
     Copy-Item $SourceWorkbook $TargetWorkbook -Force
     Write-Log "Copied workbook to: $TargetWorkbook"
@@ -118,7 +118,7 @@ try {
         try {
             Import-Certificate -FilePath $SourceCert -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
             Import-Certificate -FilePath $SourceCert -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
-            Write-Log "Installed OtkupApp certificate for CurrentUser."
+            Write-Log "Installed AgriX certificate for CurrentUser."
         } catch {
             Add-WarnLog "Could not install certificate: $($_.Exception.Message)"
         }
@@ -127,23 +127,23 @@ try {
     }
 
     # --- Excel Trusted Location ---
-    $TrustedLocationKey = "HKCU:\Software\Microsoft\Office\$ExcelVersion\Excel\Security\Trusted Locations\OtkupApp"
+    $TrustedLocationKey = "HKCU:\Software\Microsoft\Office\$ExcelVersion\Excel\Security\Trusted Locations\AgriX"
     if (!(Test-Path $TrustedLocationKey)) {
         New-Item -Path $TrustedLocationKey -Force | Out-Null
     }
     New-ItemProperty -Path $TrustedLocationKey -Name "Path" -Value "$InstallRoot\" -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $TrustedLocationKey -Name "AllowSubfolders" -Value 1 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -Path $TrustedLocationKey -Name "Description" -Value "OtkupApp trusted location" -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $TrustedLocationKey -Name "Description" -Value "AgriX trusted location" -PropertyType String -Force | Out-Null
     Write-Log "Added Excel Trusted Location: $InstallRoot"
 
     # --- Desktop shortcut ---
     $Desktop = [Environment]::GetFolderPath("Desktop")
-    $ShortcutPath = Join-Path $Desktop "OtkupApp.lnk"
+    $ShortcutPath = Join-Path $Desktop "AgriX.lnk"
     $Shell = New-Object -ComObject WScript.Shell
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath = $TargetWorkbook
     $Shortcut.WorkingDirectory = $InstallRoot
-    $Shortcut.Description = "Otvori OtkupApp"
+    $Shortcut.Description = "Otvori AgriX"
     $Shortcut.Save()
     Write-Log "Created desktop shortcut: $ShortcutPath"
 
@@ -154,7 +154,7 @@ try {
 
     # --- PASS/FAIL summary ---
     Write-Log ""
-    Write-Log "=== OtkupApp setup completed ==="
+    Write-Log "=== AgriX setup completed ==="
     if ($script:Warnings.Count -eq 0) {
         Write-Log "RESULT: PASS (no warnings)."
     } else {
@@ -163,8 +163,8 @@ try {
     }
 
     Write-Host ""
-    Write-Host "Next steps (inside OtkupApp):"
-    Write-Host "  1. Open OtkupApp from the Desktop shortcut."
+    Write-Host "Next steps (inside AgriX):"
+    Write-Host "  1. Open AgriX from the Desktop shortcut."
     Write-Host "  2. Accept the first-run prompt -> SetupNewPC (must end with APP_SETUP_COMPLETED = DA)."
     Write-Host "  3. Poppler: Alt+F8 -> SetupPopplerInteractive (auto if Tools\poppler sits next to the"
     Write-Host "     workbook), or Maticni podaci -> Podesavanja -> 'Izaberi Poppler'."
@@ -180,7 +180,7 @@ try {
     Write-Host ""
 }
 catch {
-    Write-Log "=== OtkupApp setup FAILED ===" "ERROR"
+    Write-Log "=== AgriX setup FAILED ===" "ERROR"
     Write-Log ("RESULT: FAIL - {0}" -f $_.Exception.Message) "ERROR"
     Write-Host ""
     Write-Host ("Install log: {0}" -f $LogFile)

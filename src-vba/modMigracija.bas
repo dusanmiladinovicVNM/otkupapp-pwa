@@ -13,8 +13,8 @@ Option Explicit
 Public Sub MigrirajPodatkeIzStarog()
     Dim putanja As Variant
     putanja = Application.GetOpenFilename( _
-        "OtkupApp fajlovi (*.xlsm;*.xlsb),*.xlsm;*.xlsb", , _
-        "Izaberi STARI OtkupApp fajl (sa podacima)")
+        "AgriX fajlovi (*.xlsm;*.xlsb),*.xlsm;*.xlsb", , _
+        "Izaberi STARI AgriX fajl (sa podacima)")
     If VarType(putanja) = vbBoolean Then Exit Sub      ' Cancel
 
     ' --- Zastita od slucajnog destruktivnog rerun-a ---

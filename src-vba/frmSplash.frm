@@ -49,7 +49,7 @@ Private Sub UserForm_Initialize()
     m_Started = False
     m_IsNavigating = False
 
-    lblApp.caption = "OtkupApp"
+    lblApp.caption = "AgriX"
     lblVersion.caption = "v" & APP_VERSION
     lblBy.caption = "Powered by AgriX"
 

@@ -1,67 +1,68 @@
-OTKUPAPP - PRIPREMA PRE INSTALACIJE
+AGRIX - PRIPREMA PRE INSTALACIJE
 
-Pre lokalne instalacije potrebno je pripremiti Google i SEF podatke.
+Pre lokalne instalacije pripremi Google, banku i (opciono) SEF podatke.
 
-1. GOOGLE NALOG I DRIVE FOLDER
+1. GOOGLE - JEDAN NALOG, FOLDERI I GAS PO KLIJENTU
 
-Za korisnika otvoriti ili koristiti postojeći Google nalog.
+Svi klijenti su na ISTOM Google nalogu: ops@agrix.rs.
+Unutar tog naloga, PO KLIJENTU napravi:
+- poseban root folder na Drive-u: AgriX_C00X_PROD
+  (celu strukturu pravi bootstrapAgriXFolderTree; vidi onboarding vodic
+   install/AgriX_Onboarding_Vodic_Novi_Klijent_v2.md, sekcije 5/8/11)
+- poseban Apps Script projekat: AgriX_C00X_GAS_PROD (Web App /exec)
 
-Preporuka:
-- namenski Google nalog po firmi/klijentu
-- poseban Google Drive folder za OtkupApp
-
-Na Google Drive napraviti folder:
-OtkupApp
-
-Iz URL-a foldera kopirati folder ID.
-
-Primer:
-https://drive.google.com/drive/folders/1AbCDefGhIJkLmNoPQRsTuVwxyz
-
-GOOGLE_PWA_FOLDER_ID je:
-1AbCDefGhIJkLmNoPQRsTuVwxyz
+Stammdaten nastaje u 01_Sheets/02_Master -> GOOGLE_PWA_FOLDER_ID je ID
+foldera 02_Master (NE ceo 01_Sheets).
 
 2. GOOGLE OAUTH
 
-U Google Cloud Console pripremiti OAuth credentials.
+U Google Cloud Console (nalog ops@agrix.rs) pripremi OAuth credentials,
+tip: Desktop app. Ako je app u test modu, dodaj nalog kao test user.
 
-Potrebne vrednosti:
-- GOOGLE_CLIENT_ID
-- GOOGLE_CLIENT_SECRET
-
-Za VBA desktop aplikaciju koristiti OAuth client tip:
-Desktop app
-
-Ako je OAuth aplikacija u test modu, dodati korisnički Google nalog kao test user.
-
-U OtkupApp tblSEFConfig moraju postojati redovi (NE tblConfig -- kod cita GOOGLE_* iz tblSEFConfig):
+Vrednosti idu u AgriX tblSEFConfig (NE tblConfig -- kod cita GOOGLE_* iz
+tblSEFConfig):
 
 ConfigKey             ConfigValue
 GOOGLE_CLIENT_ID      <client id>
 GOOGLE_CLIENT_SECRET  <client secret>
-GOOGLE_PWA_FOLDER_ID  <drive folder id>
+GOOGLE_PWA_FOLDER_ID  <ID foldera 01_Sheets/02_Master>
+MONITORING_ENDPOINT   <GAS Web App /exec URL>
+MONITORING_SECRET     <MONITORING_INGEST_SECRET>
+CLOUD_SYNC_ENABLED    YES
 
-3. SEF API KEY
+3. BANKA - POSEBAN NALOG PO KLIJENTU + DOWNLOADER GAS
 
-Ulogovati se u SEF/eFaktura kao ovlašćeni korisnik firme.
+Za banku napravi POSEBAN Google nalog PO KLIJENTU (na njega banka salje
+izvode). Na tom nalogu instaliraj Bank PDF Downloader GAS
+(gas/bank-pdf-downloader/) koji PDF izvode spusta u Drive folder
+00_Inbox/01_Bank (koji zivi u stablu klijenta AgriX_C00X_PROD).
 
-U podešavanjima / integracijama / API pristupu generisati ili kopirati API ključ.
+Povezivanje (isti folder ID od 01_Bank na tri mesta):
+- podeli folder 01_Bank tom bankarskom nalogu kao Editor
+- taj isti folder ID upisi u BANK_IMPORT_CLIENTS_JSON.driveFolderId (GAS)
+- na masini sa Excelom: Google Drive for Desktop -> Add shortcut to Drive
+  za 01_Bank (da bi ga VBA video lokalno); 00_Inbox -> Available offline
+- lokalnu putanju do 01_Bank upisi u BANKA_DRIVE_SOURCE_PATH (tblLocalConfig)
 
-U OtkupApp tblSEFConfig moraju postojati:
+4. SEF API KEY (opciono, samo ako se koristi e-faktura)
+
+Uloguj se u SEF/eFaktura kao ovlasceni korisnik firme, pa u API pristupu
+generisi/kopiraj API kljuc. U AgriX tblSEFConfig:
 
 ConfigKey       ConfigValue
 SEF_BASE_URL    <SEF endpoint>
-SEF_API_KEY     <API ključ>
+SEF_API_KEY     <API kljuc>
 SEF_ENV         PROD ili TEST/DEMO
 
-API ključ je tajna vrednost i ne sme se slati javno niti commitovati u GitHub.
+API kljuc je tajna vrednost - ne slati javno niti commitovati u GitHub.
 
-4. LOKALNA INSTALACIJA
+5. LOKALNA INSTALACIJA
 
-Pokrenuti:
-Setup-OtkupApp.ps1
+Pokreni: Setup-AgriX.ps1
+Zatim otvori AgriX i pokreni: SetupNewPC
+Ako setup prodje, APP_SETUP_COMPLETED bice DA.
 
-Zatim otvoriti OtkupApp i pokrenuti:
-SetupNewPC
-
-Ako setup prođe, APP_SETUP_COMPLETED biće DA.
+Detaljno:
+- install/AgriX_Onboarding_Vodic_Novi_Klijent_v2.md
+- docs/DESKTOP_SETUP_REFERENCE.md
+- docs/production-runbook-banka-import-setup.md
