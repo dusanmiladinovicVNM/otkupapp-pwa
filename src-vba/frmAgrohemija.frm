@@ -48,6 +48,7 @@ End Sub
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
+    MouseWheel_Attach Me
     
     EnsureUserFormChromeRemoved Me, mChromeRemoved
     
@@ -900,8 +901,19 @@ EH:
     Unload Me
 End Sub
 
+Private Sub UserForm_Deactivate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
+Private Sub UserForm_Terminate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    MouseWheel_Detach
 
     If CloseMode = vbFormControlMenu Then
         frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."

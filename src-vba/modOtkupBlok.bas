@@ -390,6 +390,7 @@ Private Sub BuildPanel()
     On Error Resume Next
     StyleListBox mLstRang
     On Error GoTo 0
+    MouseWheel_Register mLstRang
 
     ' Naslovi (red 44) + filter nad listom otpremnica.
     Dim t1 As Object: Set t1 = AddCtl("Label", "lblOtkBlokT1", PANEL_LEFT, 44, 226, 14)
@@ -452,6 +453,11 @@ Private Sub BuildPanel()
     Set mLstBlok = AddCtl("ListBox", "lstOtkBlokBlok", BLOK_LEFT, GRID_TOP, BLOK_W, gridH)
     mLstBlok.ColumnCount = 9
     mLstBlok.ColumnWidths = BLOK_COLW
+
+    ' Tockic misa nad panel-listama (dinamicke -> registruj ih odmah po
+    ' kreiranju; skidanje ide preko frmOtkup Deactivate/QueryClose).
+    MouseWheel_Register mLstOtp
+    MouseWheel_Register mLstBlok
 
     ' Eventi
     WireTxt mTxtCenaOtp, "CENA"

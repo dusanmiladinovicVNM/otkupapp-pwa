@@ -92,7 +92,9 @@ se desio i fix koji radi:
    diskonektuje `CodeModule` (`-2147417848`). `DeleteLines` prođe; pada baš
    `AddFromString`. **Ti moduli MORAJU kroz `Import`** (rekreacija komponente —
    podnosi MSForms decls; radi i u `ImportAllVBA`). Trenutno: `modOtkupBlok`,
-   `modKarticaDetalji`, `modPodesavanja`. NIJE stvar živih instanci — `Release`
+   `modKarticaDetalji`, `modPodesavanja`, `modMouseWheel`, `clsWheelList`
+   (rutiranje je automatsko: greška u fazi 1 → `failed` → faza 2 `Import`;
+   nema hardkodirane liste). NIJE stvar živih instanci — `Release`
    referenci NE pomaže.
 4. **`VBComponents.Remove` je ODLOŽEN** u runtime-u (izvrši se tek kad makro
    završi). `Remove`+`Import` u istom makrou → **`modX1` duplikati** → „Ambiguous
@@ -121,6 +123,23 @@ se desio i fix koji radi:
   - **`modSelfUpdate`** (na call-stack-u) i **`modVbaTools`** (dev tool) —
     `SKIP_MODULES`; ako se menjaju baš oni → reinstall;
   - **nove forme / novi sheetovi** (faza 1 ih prijavi „Preskočeno, reinstall").
+
+---
+
+## Smoke test posle release-a (naročito kad se menjaju moduli sa MSForms decls)
+
+Novi/izmenjeni moduli sa `module-level MSForms.` deklaracijama ili `WithEvents`
+(npr. `modMouseWheel`, `clsWheelList`) idu kroz dvofazni `Remove`+`Import`
+(zamka #3/#4). Posle release-a koji ih dira, na **kopiji** klijenta:
+
+1. `PublishReleaseToDrive` sa izmenjenim modulima.
+2. Na kopiji klijenta pokreni self-update (`Workbook_Open` → „Da").
+3. Posle restarta `Alt+F11` → proveri da **nema duplikata** (`modMouseWheel1`,
+   `clsWheelList1`, `modX1` …); duplikat = „Ambiguous name" = faza 2 pala.
+4. `Debug → Compile VBAProject` → mora proći bez greške.
+5. Otvori formu sa ListBox-om, upali točkić (Podešavanja ili `MouseWheel_On`),
+   proveri scroll; otvori/zatvori VBE (ne sme freeze).
+6. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
 
 ---
 

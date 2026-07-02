@@ -77,6 +77,13 @@ Public Sub StartApp()
     End If
     On Error GoTo EH
 
+    ' --- Tockic misa nad listama (per-masina; Podesavanja -> "Interfejs / lokalno") ---
+    ' MOUSEWHEEL_SCROLL: DA/NE, prazno = DA (ukljuceno). Brane u modMouseWheel
+    ' (VBE-guard, lenjivi hook samo nad listom) vaze i kad je ukljuceno.
+    On Error Resume Next
+    If UCase$(Trim$(GetLocalConfigValue("MOUSEWHEEL_SCROLL", "DA"))) <> "NE" Then MouseWheel_On Else MouseWheel_Off
+    On Error GoTo EH
+
     Application.Visible = False
 
     frmSplash.Show             ' <-- splash pre main forme
@@ -212,6 +219,11 @@ Public Sub ShutdownApp()
         LogErr "modMain.ShutdownApp.StopScheduledSync"
         Err.Clear
     End If
+    On Error GoTo EH
+
+    ' Skini mouse hook pre gasenja (higijena; inace ga skida i QueryClose formi).
+    On Error Resume Next
+    MouseWheel_Off
     On Error GoTo EH
 
     Application.Visible = True

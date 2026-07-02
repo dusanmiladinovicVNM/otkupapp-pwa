@@ -83,6 +83,10 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
     CfgAdd c, "Otkup / dokumenta", "VALIDACIJA_UNOSA", "Kompletna validacija unosa (obavezna polja pre snimanja)", "bool"
 
+    ' --- Interfejs / lokalno -- per-masina UI podesavanja (tblLocalConfig, store="local") ---
+    ' MOUSEWHEEL_SCROLL cita StartApp (i SaveConfigEditor primenjuje odmah); prazno = DA.
+    CfgAdd c, "Interfejs / lokalno", "MOUSEWHEEL_SCROLL", "Skrolovanje listi to" & ChrW(269) & "ki" & ChrW(263) & "em mi" & ChrW(353) & "a (prazno = DA)", "list:DA;NE", "local"
+
     ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
     ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).
     CfgAdd c, ChrW(352) & "tampa", "OTKUP_PRINT_MODE", Poruka("CFG_MSG_STAMPA_OTKUPNOG_LISTA"), "list:PDF;PRINT;PREVIEW;OFF"
@@ -621,6 +625,11 @@ Private Sub SaveConfigEditor()
             n = n + 1
         End If
     Next i
+
+    ' Primeni odmah podesavanja sa runtime efektom (bez restarta): tockic misa.
+    On Error Resume Next
+    If UCase$(Trim$(GetLocalConfigValue("MOUSEWHEEL_SCROLL", "DA"))) <> "NE" Then MouseWheel_On Else MouseWheel_Off
+    On Error GoTo EH
 
     If Len(errs) > 0 Then
         MsgBox "Sacuvano: " & n & " polja." & vbCrLf & vbCrLf & _
