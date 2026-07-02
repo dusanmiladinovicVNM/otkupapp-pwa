@@ -611,7 +611,9 @@ Private Sub btnBanka_Click()
     lblStatus.ForeColor = RGB(220, 220, 220)
     lblStatus.Font.Bold = False
 
-    ImportBankaInbox_TX
+    ' Povuci nove PDF-ove sa Drive-a (ako je BANKA_DRIVE_SOURCE_PATH podesen)
+    ' pa uvezi lokalni Inbox. Bez Drive konfiguracije = isto kao lokalni uvoz.
+    ImportBankaInbox_WithDrivePull
 
     lblStatus.caption = "Banka uvezena. Otvaram mapiranje..."
 
