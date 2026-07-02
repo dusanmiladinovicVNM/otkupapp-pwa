@@ -324,19 +324,28 @@ End Sub
 ' Default (nema fingerprint-a) = "KOMERC" (postojeci Komercijalna parser).
 Public Function DetectBank(ByRef lines() As String) As String
     Dim i As Long, s As String
+    Dim hasProCreditHeader As Boolean, hasProCreditAccount As Boolean
+    Dim hasHalkHeader As Boolean, hasHalkAccount As Boolean
+
+    ' Fingerprint = NASLOV izvoda + PREFIKS racuna banke (ne naziv banke).
+    ' Nazivi "ProCredit"/"HALKBANK" se javljaju kao PARTNER u tudjim izvodima, pa
+    ' bi labava detekcija po nazivu pogresno preusmerila ceo izvod (regresija na
+    ' Komercijalna putu). Racun-prefiks 220-/155- je stabilan kod banke izvoda.
     For i = LBound(lines) To UBound(lines)
         s = lines(i)
-        If InStr(1, s, "STANJE I PROMENE SREDSTAVA", vbTextCompare) > 0 _
-           Or InStr(1, s, "ProCredit", vbTextCompare) > 0 Then
-            DetectBank = "PROCREDIT"
-            Exit Function
-        End If
-        If InStr(1, s, "INFORMACIJE O PLATNIM TRANSAKCIJAMA", vbTextCompare) > 0 Then
-            DetectBank = "HALK"
-            Exit Function
-        End If
+        If InStr(1, s, "STANJE I PROMENE SREDSTAVA", vbTextCompare) > 0 Then hasProCreditHeader = True
+        If InStr(1, s, "220-", vbTextCompare) > 0 Then hasProCreditAccount = True
+        If InStr(1, s, "INFORMACIJE O PLATNIM TRANSAKCIJAMA", vbTextCompare) > 0 Then hasHalkHeader = True
+        If InStr(1, s, "155-", vbTextCompare) > 0 Then hasHalkAccount = True
     Next i
-    DetectBank = "KOMERC"
+
+    If hasProCreditHeader And hasProCreditAccount Then
+        DetectBank = "PROCREDIT"
+    ElseIf hasHalkHeader And hasHalkAccount Then
+        DetectBank = "HALK"
+    Else
+        DetectBank = "KOMERC"
+    End If
 End Function
 
 ' Alt+F8: bank-agnostic test -- DetectBank + pun parse + per-red dump. Radi za sve banke.

@@ -130,37 +130,23 @@ Public Function ExtractIzvodSaldoHalk(ByRef lines() As String) As BankIzvodSaldo
 
     On Error GoTo EH
 
-    Dim i As Long, j As Long, anchorIdx As Long
-    anchorIdx = -1
-
-    ' Anchor: label linija "stanje duguje potrazuje novo stanje ..." (rec "duguje" je ASCII).
-    For i = LBound(lines) To UBound(lines)
-        If InStr(1, NormalizeSpacesHalk(lines(i)), "duguje", vbTextCompare) > 0 Then
-            anchorIdx = i
-            Exit For
-        End If
-    Next i
-
-    If anchorIdx >= 0 Then
-        Dim scanEnd As Long
-        scanEnd = anchorIdx + 4
-        If scanEnd > UBound(lines) Then scanEnd = UBound(lines)
-        For j = anchorIdx + 1 To scanEnd
-            If TryParseSaldoLineHalk(lines(j), result) Then
-                result.parsed = True
-                ExtractIzvodSaldoHalk = result
-                Exit Function
-            End If
-        Next j
+    ' Saldo data-linija (4 iznosa + 2 broja) je odmah ispod labela
+    ' "... duguje potrazuje ..." / "... broj naloga ..." / "novo stanje". Trazi je
+    ' SAMO u blizini saldo-konteksta (ne globalno -- da ne pokupi pogresnu summary
+    ' liniju ako se PDF promeni). Ako se ne nadje -> parsed=False i orkestrator
+    ' digne cist "STANJE blok nije pronadjen".
+    If FindSaldoNearAnchorHalk(lines, "duguje", result) Then
+        ExtractIzvodSaldoHalk = result
+        Exit Function
     End If
-
-    ' Fallback: globalno trazi jedinu 4-iznosa+2-broja liniju.
-    For i = LBound(lines) To UBound(lines)
-        If TryParseSaldoLineHalk(lines(i), result) Then
-            result.parsed = True
-            Exit For
-        End If
-    Next i
+    If FindSaldoNearAnchorHalk(lines, "broj naloga", result) Then
+        ExtractIzvodSaldoHalk = result
+        Exit Function
+    End If
+    If FindSaldoNearAnchorHalk(lines, "novo stanje", result) Then
+        ExtractIzvodSaldoHalk = result
+        Exit Function
+    End If
 
     ExtractIzvodSaldoHalk = result
     Exit Function
@@ -168,6 +154,27 @@ Public Function ExtractIzvodSaldoHalk(ByRef lines() As String) As BankIzvodSaldo
 EH:
     result.parsed = False
     ExtractIzvodSaldoHalk = result
+End Function
+
+' Trazi saldo data-liniju (4 iznosa + 2 broja) u prozoru od 4 linije ISPOD
+' datog saldo-anchor teksta. Kontekst-ograniceno (ne globalno).
+Private Function FindSaldoNearAnchorHalk(ByRef lines() As String, _
+                                         ByVal anchorText As String, _
+                                         ByRef result As BankIzvodSaldo) As Boolean
+    Dim i As Long, j As Long, scanEnd As Long
+    For i = LBound(lines) To UBound(lines)
+        If InStr(1, NormalizeSpacesHalk(lines(i)), anchorText, vbTextCompare) > 0 Then
+            scanEnd = i + 4
+            If scanEnd > UBound(lines) Then scanEnd = UBound(lines)
+            For j = i + 1 To scanEnd
+                If TryParseSaldoLineHalk(lines(j), result) Then
+                    result.parsed = True
+                    FindSaldoNearAnchorHalk = True
+                    Exit Function
+                End If
+            Next j
+        End If
+    Next i
 End Function
 
 Public Function ParseBankaIzvodHalk(ByVal txt As String) As Variant
@@ -193,11 +200,23 @@ Public Function ParseBankaIzvodHalk(ByVal txt As String) As Variant
         End If
     Next i
 
-    ' R.B. anchori ("N.") u [0..executedEnd].
+    ' Pocetak izvrsene tabele: prvi header kolone "Poreklo naloga" (javlja se samo
+    ' u zaglavlju tabele, ne per-transakciju). Sprecava da se "N." iz naslova/
+    ' rezimea (iznad tabele) uzme kao R.B.
+    Dim executedStart As Long
+    executedStart = LBound(lines)
+    For i = LBound(lines) To executedEnd
+        If InStr(1, lines(i), "Poreklo naloga", vbTextCompare) > 0 Then
+            executedStart = i + 1
+            Exit For
+        End If
+    Next i
+
+    ' R.B. anchori ("N.") u [executedStart..executedEnd].
     Dim rbIdx() As Long, nRb As Long
     ReDim rbIdx(0 To (UBound(lines) - LBound(lines)))
     nRb = 0
-    For i = LBound(lines) To executedEnd
+    For i = executedStart To executedEnd
         If IsRbLineHalk(lines(i)) Then
             rbIdx(nRb) = i
             nRb = nRb + 1

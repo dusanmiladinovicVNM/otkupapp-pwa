@@ -195,8 +195,11 @@ Public Function ParseBankaIzvodProCredit(ByVal txt As String) As Variant
     Next i
 
     ' 3) Parsiraj svaku transakciju; donja granica = R.B. sledece (ili kraj).
-    Dim result() As Variant
-    ReDim result(1 To nPiv, 1 To 10)
+    '    Validacija odbacuje phantom transakcije (standalone datum van tabele):
+    '    integrity ih NE hvata jer 0/0 red ne menja ni sume ni brojeve naloga.
+    Dim tmp() As Variant
+    ReDim tmp(1 To nPiv, 1 To 10)
+    Dim nValid As Long: nValid = 0
 
     Dim afterEnd As Long, c As Long, txn As Variant
     For i = 0 To nPiv - 1
@@ -209,12 +212,44 @@ Public Function ParseBankaIzvodProCredit(ByVal txt As String) As Variant
 
         txn = ParseOneProCreditTxn(lines, rbIdx(i), pivots(i), afterEnd, izvodDatum)
 
+        If IsRealTxnPC(txn) Then
+            nValid = nValid + 1
+            For c = 1 To 10
+                tmp(nValid, c) = txn(c - 1)
+            Next c
+        End If
+    Next i
+
+    If nValid = 0 Then
+        ParseBankaIzvodProCredit = Empty
+        Exit Function
+    End If
+
+    Dim result() As Variant
+    ReDim result(1 To nValid, 1 To 10)
+    For i = 1 To nValid
         For c = 1 To 10
-            result(i + 1, c) = txn(c - 1)
+            result(i, c) = tmp(i, c)
         Next c
     Next i
 
     ParseBankaIzvodProCredit = result
+End Function
+
+' Prava transakcija: ima datum transakcije + (racun ili bar jedan iznos > 0).
+' Odbacuje phantom pivote (standalone datum bez racuna i bez iznosa).
+Private Function IsRealTxnPC(ByRef txn As Variant) As Boolean
+    Dim datum As String, racun As String
+    Dim zad As Double, odo As Double
+
+    datum = Trim$(CStr(txn(1)))
+    racun = Trim$(CStr(txn(3)))
+    zad = CDbl(txn(4))
+    odo = CDbl(txn(5))
+
+    If datum = "" Then Exit Function
+    If racun = "" And zad = 0 And odo = 0 Then Exit Function
+    IsRealTxnPC = True
 End Function
 
 
@@ -260,15 +295,17 @@ Private Function ParseOneProCreditTxn(ByRef lines() As String, _
     partner = NormalizeSpacesPC(partner)
 
     ' --- Posle datuma: 4 iznosa (Zad, provZ, Odo, provO), pa sifra ---
-    If pivotIdx + 1 <= UBound(lines) Then
+    ' Bound na afterEnd (kraj OVE transakcije), ne UBound(lines) -- da se kod
+    ' loseg preloma ne procita linija iz sledece transakcije.
+    If pivotIdx + 1 <= afterEnd Then
         If IsAmountPC(lines(pivotIdx + 1)) Then zaduzenje = ToNumberPC(lines(pivotIdx + 1))
     End If
-    If pivotIdx + 3 <= UBound(lines) Then
+    If pivotIdx + 3 <= afterEnd Then
         If IsAmountPC(lines(pivotIdx + 3)) Then odobrenje = ToNumberPC(lines(pivotIdx + 3))
     End If
 
     Dim sifraIdx As Long: sifraIdx = pivotIdx + 5
-    If sifraIdx <= UBound(lines) Then sifra = Trim$(lines(sifraIdx))
+    If sifraIdx <= afterEnd Then sifra = Trim$(lines(sifraIdx))
 
     ' --- Referenca (Doznake) = prvi standalone ceo broj >= 6 cifara posle sifre ---
     Dim refIdx As Long: refIdx = -1
