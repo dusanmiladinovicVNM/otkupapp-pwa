@@ -121,6 +121,17 @@ Public Sub MouseWheel_SetEnabled(ByVal onOff As Boolean)
     If Not mArmed Then MouseWheel_Detach
 End Sub
 
+' Bezargumentni obmotaci - vidljivi u Alt+F8, pa mogu iz Excela BEZ VBE:
+'   MouseWheel_On  -> naoruzaj (pa otvori/re-fokusiraj formu sa listom)
+'   MouseWheel_Off -> ugasi i skini hook
+Public Sub MouseWheel_On()
+    MouseWheel_SetEnabled True
+End Sub
+
+Public Sub MouseWheel_Off()
+    MouseWheel_SetEnabled False
+End Sub
+
 ' Poziva clsWheelList.lst_MouseMove: lista pod misem postaje "aktivna".
 Public Sub MouseWheel_SetHot(ByVal lb As MSForms.ListBox)
     On Error Resume Next
@@ -244,5 +255,11 @@ Public Sub MouseWheel_SetHot(ByVal lb As Object)
 End Sub
 
 Public Sub MouseWheel_Register(ByVal lb As Object)
+End Sub
+
+Public Sub MouseWheel_On()
+End Sub
+
+Public Sub MouseWheel_Off()
 End Sub
 #End If
