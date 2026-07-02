@@ -77,6 +77,10 @@ Private Sub UserForm_Activate()
     
     EnsureUserFormChromeRemoved Me, mChromeRemoved
 
+    ' Tockic misa nad listama (idempotentno, no-op-safe). Skida se u
+    ' UserForm_Deactivate / QueryClose -> hook zivi samo dok forma ima fokus.
+    MouseWheel_Attach Me
+
     ' Forma je modeless (Show vbModeless) pa UserForm_Activate okida na SVAKO
     ' vracanje fokusa, ne samo na otvaranje. Ranije se tu, pre m_SetupDone guarda,
     ' radio pun obilazak stabla kontrola DVA puta (ApplyTheme + ApplyThemeToControls)
@@ -1458,7 +1462,13 @@ Private Sub btnPovratak_Click()
     frmOtkupAPP.Show
 End Sub
 
+Private Sub UserForm_Deactivate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    MouseWheel_Detach
     If CloseMode = vbFormControlMenu Then
         Cancel = True
         Unload Me
