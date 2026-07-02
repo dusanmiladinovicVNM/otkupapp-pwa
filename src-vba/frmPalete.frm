@@ -118,6 +118,11 @@ Private Sub UserForm_Terminate()
     MouseWheel_Detach
 End Sub
 
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub RefreshGrid()
     On Error GoTo EH
     Dim god As Long

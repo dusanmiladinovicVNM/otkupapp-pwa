@@ -815,6 +815,11 @@ Private Sub UserForm_Deactivate()
     MouseWheel_Detach
 End Sub
 
+Private Sub UserForm_Terminate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
     MouseWheel_Detach

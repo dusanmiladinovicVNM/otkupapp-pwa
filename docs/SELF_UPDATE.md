@@ -126,6 +126,23 @@ se desio i fix koji radi:
 
 ---
 
+## Smoke test posle release-a (naročito kad se menjaju moduli sa MSForms decls)
+
+Novi/izmenjeni moduli sa `module-level MSForms.` deklaracijama ili `WithEvents`
+(npr. `modMouseWheel`, `clsWheelList`) idu kroz dvofazni `Remove`+`Import`
+(zamka #3/#4). Posle release-a koji ih dira, na **kopiji** klijenta:
+
+1. `PublishReleaseToDrive` sa izmenjenim modulima.
+2. Na kopiji klijenta pokreni self-update (`Workbook_Open` → „Da").
+3. Posle restarta `Alt+F11` → proveri da **nema duplikata** (`modMouseWheel1`,
+   `clsWheelList1`, `modX1` …); duplikat = „Ambiguous name" = faza 2 pala.
+4. `Debug → Compile VBAProject` → mora proći bez greške.
+5. Otvori formu sa ListBox-om, upali točkić (Podešavanja ili `MouseWheel_On`),
+   proveri scroll; otvori/zatvori VBE (ne sme freeze).
+6. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
+
+---
+
 ## Funkcija B (backlog)
 
 Nedeljni `.xlsx` backup **podataka** u Drive `AgriX_Backup` (`BACKUP_FOLDER_ID`) —

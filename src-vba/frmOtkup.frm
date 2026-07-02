@@ -46,6 +46,11 @@ Private Sub UserForm_Deactivate()
     MouseWheel_Detach
 End Sub
 
+Private Sub UserForm_Terminate()
+    On Error Resume Next
+    MouseWheel_Detach
+End Sub
+
 Private Sub UserForm_Initialize()
 
     ApplyFormTheme Me, BG_MAIN

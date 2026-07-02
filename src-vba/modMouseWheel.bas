@@ -6,15 +6,15 @@ Option Explicit
 ' ogranicenje) - traka za skrolovanje radi, ali tockic ne. Ovaj modul
 ' hvata tockic preko Windows mouse hook-a i skroluje listu pod misem.
 '
-' DIZAJN JE PODredjen jednom cilju: NIKAD ne srusiti / usporiti / cudno
-' ponasati app. Konkretne mere:
+' Cilj: minimizovati rizik i fail-safe ugasiti hook kad uslovi nisu sigurni
+' (VBE otvoren, mis van liste, ...). Low-level hook iz VBA nosi rezidualni
+' rizik; ovde ga svodimo na minimum. Konkretne mere:
 '
 '  1) LOW-LEVEL hook (WH_MOUSE_LL). Hvata tockic na sistemskom nivou, pouzdano
 '     bez obzira na fokus/foreground i trenutak instalacije. (Thread WH_MOUSE
 '     hook NIJE hvatao tockic dok se foreground ne osvezi -> radilo "tek posle
 '     minimize/restore".) Ako Windows skine hook (timeout), posledica je samo
-'     "tockic privremeno ne radi" (fail-safe), nikad crash; sledeci hover ga
-'     ponovo instalira.
+'     "tockic privremeno ne radi" (fail-safe); sledeci hover ga ponovo digne.
 '
 '  2) Hook zivi SAMO dok forma ima fokus I dok je VBE ZATVOREN:
 '     - Instalira se LENJIVO, tek na prvi MouseMove nad listom (EnsureHook),
@@ -25,9 +25,9 @@ Option Explicit
 '       VBE) odmah skine hook, PRE nego sto VBA reset moze da ostavi "mrtav"
 '       AddressOf pointer (jedini realan nacin da mouse hook srusi Excel).
 '
-'  3) Callback (MouseProc) je neprobojan: "On Error Resume Next" prva
-'     linija, TVRDI re-entrancy guard (mInHook) oko CELOG callback-a,
-'     jeftina common-path grana, i UVEK CallNextHookEx (lanac se ne prekida).
+'  3) Callback (MouseProc) je defanzivan i kratak: "On Error Resume Next"
+'     prva linija, re-entrancy guard (mInHook), jeftina common-path grana,
+'     i UVEK CallNextHookEx (lanac se ne prekida).
 '
 '  4) OFF PO DEFAULTU (mArmed=False): na import se NE instalira nikakav hook;
 '     Attach/Register su no-op dok se ne "naoruza". Ukljucuje se SAMO eksplicitno:
@@ -144,6 +144,13 @@ Public Sub MouseWheel_Off()
     MouseWheel_SetEnabled False
 End Sub
 
+' Dijagnostika (Alt+F8): ugasi pa upali - cist restart hook-a bez zatvaranja
+' aplikacije, za slucaj da operater prijavi cudno ponasanje.
+Public Sub MouseWheel_Reset()
+    MouseWheel_Off
+    MouseWheel_On
+End Sub
+
 ' Poziva clsWheelList.lst_MouseMove: lista pod misem postaje "aktivna".
 ' Ovde se hook i instalira (lenjivo) - forma je do ovog trenutka vec iscrtana.
 ' Svaki pokret nad listom osvezava mAlive (keep-alive) -> hook ostaje.
@@ -239,15 +246,21 @@ Private Sub BuildWrappers(ByVal container As Object)
 End Sub
 
 ' ------------------------------------------------------------
-' MouseProc - Windows callback. MORA biti neprobojan i jeftin.
-' Vraca CallNextHookEx u SVIM granama (nikad ne prekida lanac).
+' MouseProc - Windows callback. Mora biti sto kraci, defanzivan i UVEK
+' proslediti dogadjaj dalje (CallNextHookEx u svim granama).
 ' ------------------------------------------------------------
 Public Function MouseProc(ByVal nCode As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
     On Error Resume Next
 
+    ' Handle iz trenutka ulaska u callback. Koristi se za CallNextHookEx cak i
+    ' ako se hook u medjuvremenu skine (mHook -> 0), da prosledjivanje ostane
+    ' ispravno umesto poziva sa nulom.
+    Dim h As LongPtr
+    h = mHook
+
     ' Re-entrancy guard + brzi izlaz. (mArmed se proverava po grani.)
-    If mInHook Or nCode < 0 Or mHook = 0 Then
-        MouseProc = CallNextHookEx(mHook, nCode, wParam, lParam)
+    If mInHook Or nCode < 0 Or h = 0 Then
+        MouseProc = CallNextHookEx(h, nCode, wParam, lParam)
         Exit Function
     End If
 
@@ -264,17 +277,17 @@ Public Function MouseProc(ByVal nCode As Long, ByVal wParam As LongPtr, ByVal lP
     Else
         ' Bilo koji drugi dogadjaj (uglavnom POKRET misa). Dok je mis nad
         ' listom, clsWheelList MouseMove stalno vraca mAlive na pun iznos.
-        ' Cim mis SIDJE s liste, mAlive padne na 0 i globalni LL hook se SAM
-        ' skine -> kursor van liste vise NE secka. Re-hover ga ponovo digne.
+        ' Cim mis SIDJE s liste, mAlive padne na 0 i hook se SAM skine
+        ' (fail-safe) -> kursor van liste vise NE secka. Re-hover ga vrati.
         mAlive = mAlive - 1
         If mAlive <= 0 Then
-            UnhookWindowsHookEx mHook
-            mHook = 0
+            UnhookWindowsHookEx h
+            If mHook = h Then mHook = 0
             Set mHot = Nothing
         End If
     End If
 
-    MouseProc = CallNextHookEx(mHook, nCode, wParam, lParam)
+    MouseProc = CallNextHookEx(h, nCode, wParam, lParam)
 End Function
 
 ' Skroluj aktivnu listu za WHEEL_STEP redova, sa clamp-om.
@@ -320,5 +333,8 @@ Public Sub MouseWheel_On()
 End Sub
 
 Public Sub MouseWheel_Off()
+End Sub
+
+Public Sub MouseWheel_Reset()
 End Sub
 #End If
