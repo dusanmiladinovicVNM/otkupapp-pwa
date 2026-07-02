@@ -1183,3 +1183,78 @@ Sub TestPdfTextParser123()
         Debug.Print "Referenca: " & result(i, 10)
     Next i
 End Sub
+
+'----------------------------------------------------------------------
+' Diag_DumpFullPdfText  (Alt+F8)
+'
+' Operater-alat za slanje uzorka NOVE banke (dizajn parsera), bez CMD-a:
+' izaberi PDF -> pun pdftotext izlaz (ISTI flagovi kao uvoz:
+' -raw -nopgbrk -enc UTF-8) se snimi u <isti_folder>\<ime>.pdftext.txt i
+' otvori u Notepad-u, spremno za kopiranje.
+'
+' Reuse: PickPdf + ExtractTextFromPdf (isti modul); nista novo za PDF citanje.
+'----------------------------------------------------------------------
+Public Sub Diag_DumpFullPdfText()
+    Const SRC As String = "Diag_DumpFullPdfText"
+
+    Dim pdfPath As String
+    Dim txt As String
+    Dim outPath As String
+    Dim p As Long
+
+    On Error GoTo EH
+
+    pdfPath = PickPdf()
+    If Len(Trim$(pdfPath)) = 0 Then Exit Sub
+
+    txt = ExtractTextFromPdf(pdfPath)
+
+    If Len(Trim$(txt)) = 0 Then
+        MsgBox "pdftotext nije vratio nikakav tekst." & vbCrLf & _
+               "Verovatno je PDF skeniran (slika bez tekstualnog sloja) -> treba OCR.", _
+               vbExclamation, "OtkupApp - Dump PDF teksta"
+        Exit Sub
+    End If
+
+    ' Izlaz: isti folder i ime kao PDF, ekstenzija .pdftext.txt
+    outPath = pdfPath
+    p = InStrRev(outPath, ".")
+    If p > 0 Then outPath = Left$(outPath, p - 1)
+    outPath = outPath & ".pdftext.txt"
+
+    WriteAllTextUtf8 outPath, txt
+
+    ' Otvori u Notepad-u (best-effort; ne obara uspeh ako zafali)
+    On Error Resume Next
+    Shell "notepad.exe """ & outPath & """", vbNormalFocus
+    On Error GoTo EH
+
+    MsgBox "Tekst PDF-a je sacuvan u:" & vbCrLf & outPath & vbCrLf & vbCrLf & _
+           "Fajl se otvara u Notepad-u. Kopiraj ceo sadrzaj i posalji ga.", _
+           vbInformation, "OtkupApp - Dump PDF teksta"
+    Exit Sub
+
+EH:
+    Dim eDesc As String
+    eDesc = Err.description
+    LogErr SRC
+    MsgBox "Greska pri citanju PDF-a:" & vbCrLf & eDesc, _
+           vbCritical, "OtkupApp - Dump PDF teksta"
+End Sub
+
+'----------------------------------------------------------------------
+' WriteAllTextUtf8 - upis String-a u fajl kao UTF-8 (ADODB.Stream).
+' Parnjak postojecem ReadAllText (koji cita UTF-8) u ovom modulu.
+'----------------------------------------------------------------------
+Private Sub WriteAllTextUtf8(ByVal filePath As String, ByVal content As String)
+    Dim stm As Object
+
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2              ' adTypeText
+    stm.Charset = "utf-8"
+    stm.Open
+    stm.WriteText content
+    stm.SaveToFile filePath, 2   ' adSaveCreateOverWrite
+    stm.Close
+    Set stm = Nothing
+End Sub
