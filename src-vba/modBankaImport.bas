@@ -331,9 +331,54 @@ Public Function DetectBank(ByRef lines() As String) As String
             DetectBank = "PROCREDIT"
             Exit Function
         End If
+        If InStr(1, s, "INFORMACIJE O PLATNIM TRANSAKCIJAMA", vbTextCompare) > 0 Then
+            DetectBank = "HALK"
+            Exit Function
+        End If
     Next i
     DetectBank = "KOMERC"
 End Function
+
+' Alt+F8: bank-agnostic test -- DetectBank + pun parse + per-red dump. Radi za sve banke.
+Public Sub Test_BankParse()
+    Dim pdfPath As String, txt As String, tmp As String, lines() As String
+    Dim parsed As Variant, i As Long
+
+    pdfPath = PickPdf()
+    If pdfPath = "" Then Exit Sub
+
+    txt = ExtractTextFromPdf(pdfPath)
+    tmp = Replace(Replace(txt, Chr$(12), vbLf), vbCr, "")
+    lines = Split(tmp, vbLf)
+
+    Debug.Print "=== DetectBank: " & DetectBank(lines) & " ==="
+
+    On Error Resume Next
+    parsed = ParseBankaIzvodForImport(txt, "test.pdf")
+    If Err.Number <> 0 Then
+        Debug.Print "PARSE FAIL: [" & Err.Number & "] " & Err.description
+        On Error GoTo 0
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    If IsEmpty(parsed) Then
+        Debug.Print "PARSE: Empty (nema transakcija)"
+        Exit Sub
+    End If
+
+    Debug.Print "Izvod=" & parsed(1, 1) & "  Datum=" & parsed(1, 2) & "  Racun=" & parsed(1, 3)
+    Debug.Print "Saldo: Pocetno=" & parsed(1, 14) & " Novo=" & parsed(1, 15) & _
+                " Duguje=" & parsed(1, 16) & " Potrazuje=" & parsed(1, 17)
+    Debug.Print "--- OK: " & UBound(parsed, 1) & " transakcija ---"
+    For i = 1 To UBound(parsed, 1)
+        Debug.Print i & " | " & parsed(i, 4) & " | " & parsed(i, 5) & _
+                    " | racun=" & parsed(i, 6) & _
+                    " | Isl=" & parsed(i, 8) & " Upl=" & parsed(i, 7) & _
+                    " | sif=" & parsed(i, 9) & " | " & parsed(i, 10) & _
+                    " | poz=" & parsed(i, 11) & " | ref=" & parsed(i, 12)
+    Next i
+End Sub
 
 Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile As String) As Variant
     Dim lines() As String
@@ -366,6 +411,12 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
             brojRacuna = ExtractIzvodRacunProCredit(lines)
             saldo = ExtractIzvodSaldoProCredit(lines)
             txData = ParseBankaIzvodProCredit(txt)
+        Case "HALK"
+            brojIzvoda = ExtractIzvodBrojHalk(lines)
+            datumIzvoda = ExtractIzvodDatumHalk(lines)
+            brojRacuna = ExtractIzvodRacunHalk(lines)
+            saldo = ExtractIzvodSaldoHalk(lines)
+            txData = ParseBankaIzvodHalk(txt)
         Case Else
             brojIzvoda = ExtractIzvodBrojPdfText(lines)
             datumIzvoda = ExtractIzvodDatumPdfText(lines)
