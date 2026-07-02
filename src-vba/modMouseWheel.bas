@@ -15,11 +15,14 @@ Option Explicit
 '     njem), posledica je samo "tockic privremeno ne radi" (fail-safe),
 '     nikad crash; sledeci UserForm_Activate ga ponovo instalira.
 '
-'  2) Hook zivi SAMO dok forma ima fokus: Attach na UserForm_Activate,
-'     Detach na UserForm_Deactivate/QueryClose. Posto su forme modeless,
-'     odlazak na VBE odmah okine Deactivate -> hook se skine PRE nego sto
-'     bilo kakav VBA reset moze da ostavi "mrtav" AddressOf pointer (to
-'     je jedini realan nacin da mouse hook srusi Excel).
+'  2) Hook zivi SAMO dok forma ima fokus I dok je VBE ZATVOREN:
+'     - Instalira se LENJIVO, tek na prvi MouseMove nad listom (EnsureHook),
+'       NE u Activate -> ne kvari iscrtavanje novootvorene forme (beli ekran).
+'     - EnsureHook NE dize hook dok je VBE otvoren -> tockic se SAM ugasi cim
+'       otvoris VBE i sam upali kad ga zatvoris (bez rucnog gasenja).
+'     - Detach na UserForm_Deactivate/QueryClose: odlazak sa forme (npr. na
+'       VBE) odmah skine hook, PRE nego sto VBA reset moze da ostavi "mrtav"
+'       AddressOf pointer (jedini realan nacin da mouse hook srusi Excel).
 '
 '  3) Callback (MouseProc) je neprobojan: "On Error Resume Next" prva
 '     linija, TVRDI re-entrancy guard (mInHook) oko CELOG callback-a,
@@ -146,10 +149,28 @@ End Sub
 Private Sub EnsureHook()
     On Error Resume Next
     If Not mArmed Then Exit Sub
-    If mHook = 0 Then
-        mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
-    End If
+    If mHook <> 0 Then Exit Sub          ' vec instaliran -> izlaz (bez per-move provera)
+
+    ' BRANA: NE dizi hook dok je VBE (editor) otvoren. Mouse hook uz otvoren VBE
+    ' ume da zaledi Excel. Ovim se tockic AUTOMATSKI gasi cim je VBE otvoren
+    ' (bilo gde, makar u pozadini) i sam upali kad zatvoris VBE - bez rucnog
+    ' iskljucivanja. (Uz to, hook se ionako skida na UserForm_Deactivate, koje
+    ' okine cim odes sa forme na VBE.)
+    If VbeIsOpen Then Exit Sub
+
+    mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
 End Sub
+
+' True ako je VBE prozor otvoren/vidljiv. Na gresku (npr. iskljucen "Trust access
+' to the VBA project object model") vraca True = tretiraj kao otvoren (bezbednije:
+' ne dizi hook). Poziva se retko (samo kad bi se hook dizao), pa COM poziv ne smeta.
+Private Function VbeIsOpen() As Boolean
+    On Error GoTo assumeOpen
+    VbeIsOpen = Application.VBE.MainWindow.Visible
+    Exit Function
+assumeOpen:
+    VbeIsOpen = True
+End Function
 
 ' ------------------------------------------------------------
 ' Register - registruj JEDNU listu na zahtev. Za dinamicke liste koje ne
