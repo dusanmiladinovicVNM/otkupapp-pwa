@@ -22,15 +22,22 @@ Option Explicit
 '     je jedini realan nacin da mouse hook srusi Excel).
 '
 '  3) Callback (MouseProc) je neprobojan: "On Error Resume Next" prva
-'     linija, re-entrancy guard (mBusy), jeftina common-path grana za
-'     ne-wheel poruke, i UVEK CallNextHookEx (lanac se nikad ne prekida).
+'     linija, TVRDI re-entrancy guard (mInHook) oko CELOG callback-a,
+'     jeftina common-path grana, i UVEK CallNextHookEx (lanac se ne prekida).
 '
-'  4) Master prekidac: MouseWheel_SetEnabled False iskljuci sve u hodu.
+'  4) OFF PO DEFAULTU (mArmed=False): na import se NE instalira nikakav hook;
+'     Attach/Register su no-op dok se ne "naoruza". Ukljucuje se SAMO eksplicitno:
+'     MouseWheel_SetEnabled True (pa otvori/re-fokusiraj formu). Razlog: mouse
+'     hook uz OTVOREN VBE ume da zaledi Excel, pa feature ne sme da se pali sam
+'     na startu. Iskljucivanje u hodu: MouseWheel_SetEnabled False.
 '
 '  5) Koja lista se skroluje bira se preko MouseMove (clsWheelList),
 '     bez ijedne geometrijske/DPI/HWND racunice.
 '
-' KORISCENJE (po formi koja ima liste, sve idempotentno / no-op-safe):
+' KORISCENJE: forme vec zovu Attach/Detach (idempotentno), ali dok se ne
+' "naoruza" sve je no-op. Ukljuci (najbolje sa ZATVORENIM VBE):
+'     MouseWheel_SetEnabled True     ' pa otvori/re-fokusiraj formu sa listom
+' Po formi (vec oziceno):
 '     Private Sub UserForm_Activate()
 '         MouseWheel_Attach Me
 '         ...
@@ -67,15 +74,18 @@ Private Const MD_OFFSET As LongPtr = 20
 Private mHook As LongPtr                  ' handle hook-a; 0 = nije instaliran
 Private mHot As MSForms.ListBox           ' lista trenutno pod misem
 Private mWrappers As Collection           ' clsWheelList instance (drzi ih zivim)
-Private mBusy As Boolean                  ' re-entrancy guard u callback-u
-Private mDisabled As Boolean              ' master kill-switch (False = ukljuceno)
+Private mInHook As Boolean                ' TVRDI re-entrancy guard oko celog callback-a
+Private mArmed As Boolean                 ' OFF po defaultu (False)! Hook se NE instalira dok
+                                          ' ga MouseWheel_SetEnabled True eksplicitno ne "naoruza".
+                                          ' Razlog: mouse hook + otvoren VBE ume da zaledi Excel;
+                                          ' zato feature ne sme da se pali sam od sebe na import.
 
 ' ------------------------------------------------------------
 ' Attach - poziva se iz UserForm_Activate. Idempotentno.
 ' ------------------------------------------------------------
 Public Sub MouseWheel_Attach(ByVal frm As Object)
     On Error Resume Next
-    If mDisabled Then Exit Sub
+    If Not mArmed Then Exit Sub
 
     ' Omotaci za liste ove forme - gradimo samo ako ih nema (posle Detach-a).
     If mWrappers Is Nothing Then
@@ -107,8 +117,8 @@ End Sub
 ' Master prekidac - MouseWheel_SetEnabled False ugasi sve odmah.
 ' ------------------------------------------------------------
 Public Sub MouseWheel_SetEnabled(ByVal onOff As Boolean)
-    mDisabled = Not onOff
-    If mDisabled Then MouseWheel_Detach
+    mArmed = onOff
+    If Not mArmed Then MouseWheel_Detach
 End Sub
 
 ' Poziva clsWheelList.lst_MouseMove: lista pod misem postaje "aktivna".
@@ -124,7 +134,7 @@ End Sub
 ' ------------------------------------------------------------
 Public Sub MouseWheel_Register(ByVal lb As MSForms.ListBox)
     On Error Resume Next
-    If mDisabled Then Exit Sub
+    If Not mArmed Then Exit Sub
     If lb Is Nothing Then Exit Sub
 
     AddWrapper lb
@@ -174,11 +184,13 @@ End Sub
 Public Function MouseProc(ByVal nCode As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
     On Error Resume Next
 
-    ' Common path: sve sto nije nas slucaj prosledi dalje i izadji.
-    If nCode < 0 Or mDisabled Or mBusy Or mHook = 0 Then
+    ' TVRDI re-entrancy guard + brzi izlaz za sve sto nije nas slucaj.
+    ' Ako nas je Windows pozvao re-entrantno (mInHook) -> odmah prosledi dalje.
+    If mInHook Or nCode < 0 Or Not mArmed Or mHook = 0 Then
         MouseProc = CallNextHookEx(mHook, nCode, wParam, lParam)
         Exit Function
     End If
+    mInHook = True
 
     If wParam = WM_MOUSEWHEEL Then
         If Not mHot Is Nothing Then
@@ -186,13 +198,11 @@ Public Function MouseProc(ByVal nCode As Long, ByVal wParam As LongPtr, ByVal lP
             md = 0
             ' Procitaj samo mouseData (hi-word = smer tockica).
             CopyMemory md, lParam + MD_OFFSET, 4
-            If md <> 0 Then
-                mBusy = True
-                ScrollHot (md > 0)        ' md>0 = tockic gore, md<0 = dole
-                mBusy = False
-            End If
+            If md <> 0 Then ScrollHot (md > 0)   ' md>0 = tockic gore, md<0 = dole
         End If
     End If
+
+    mInHook = False
 
     MouseProc = CallNextHookEx(mHook, nCode, wParam, lParam)
 End Function
