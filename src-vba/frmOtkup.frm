@@ -557,12 +557,7 @@ Private Sub cmbOtkupnoMesto_Change()
         Exit Sub
     End If
 
-    ' #4 toggle: ON -> kooperanti po OM; OFF -> svi kooperanti ("" = svi)
-    If KoopFilterByOM() Then
-        FillComboKooperantiByStanica cmbKooperant, stanicaID
-    Else
-        FillComboKooperantiByStanica cmbKooperant, ""
-    End If
+    FillKooperantCombo stanicaID
     RefreshBrojDokumentaSuggestion
 
     ' MALINA: vozac == par-vozac OM (VozacID == StanicaID) -> auto-izbor, da
@@ -1004,7 +999,8 @@ Private Sub btnUnos_Click()
     End If
 
     Dim kooperantID As String
-    kooperantID = ResolveKooperantByName(cmbKooperant, stanicaID)
+    Dim koopCreated As Boolean
+    kooperantID = ResolveKooperantByName(cmbKooperant, stanicaID, koopCreated)
 
     If kooperantID = "" Then
         MsgBox "Nije prona" & ChrW(273) & "en ID kooperanta!", vbExclamation, APP_NAME
@@ -1122,6 +1118,11 @@ Private Sub btnUnos_Click()
 
     ClearOtkupFields
 
+    ' Auto-kreiran nov kooperant tokom snimanja -> osvezi combo listu odmah,
+    ' da bude vidljiv bez zatvaranja/otvaranja forme. (Samo kad je stvarno
+    ' kreiran nov; obican izbor postojeceg ne dira listu.)
+    If koopCreated Then FillKooperantCombo stanicaID
+
     ' Panel "Otkupni blokovi": vezi upravo sacuvani red za izabranu otpremnicu
     On Error Resume Next
     OtkupBlok_AfterUnos result
@@ -1163,6 +1164,17 @@ Private Sub ClearOtkupFields()
 
     ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
     RefreshBrojDokumentaSuggestion False
+End Sub
+
+' Napuni cmbKooperant po #4 toggle-u: ON -> kooperanti izabrane stanice;
+' OFF -> svi kooperanti ("" = svi). Jedno mesto (koristi cmbOtkupnoMesto_Change
+' i osvezavanje posle auto-kreiranja novog kooperanta u btnUnos).
+Private Sub FillKooperantCombo(ByVal stanicaID As String)
+    If KoopFilterByOM() Then
+        FillComboKooperantiByStanica cmbKooperant, stanicaID
+    Else
+        FillComboKooperantiByStanica cmbKooperant, ""
+    End If
 End Sub
 
 Private Sub btnStornoOtkup_Click()
