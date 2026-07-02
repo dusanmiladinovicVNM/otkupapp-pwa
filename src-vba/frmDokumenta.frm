@@ -235,8 +235,9 @@ Private Sub UserForm_Activate()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.UserForm_Activate"
-    MsgBox Poruka("DOK_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA_PRI_OTVARANJU") & eDesc, vbCritical, APP_NAME
 End Sub
 
 ' Podesavanja: kes isplate OFF -> "Br. otk. blk." (cmbOtkupBlok) je disabled u
@@ -901,8 +902,9 @@ Private Sub btnUnosOtp_Click()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.btnUnosOtp"
-    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & eDesc, vbCritical, APP_NAME
 End Sub
 Private Sub ClearOtpremnicaFields()
     txtBrojOtp.value = ""
@@ -1851,8 +1853,9 @@ Private Sub btnUnosOMUlaz_Click()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.btnUnosOMUlaz"
-    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & eDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub cmbPrimalacOMUlaz_Change()
@@ -2081,8 +2084,9 @@ Private Sub btnUnosZbr_Click()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.btnUnosZbr"
-    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & eDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -2516,8 +2520,9 @@ Private Sub btnUnosPrij_Click()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.btnUnosPrij"
-    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & eDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub ClearPrijemnicaFields()
@@ -2814,8 +2819,9 @@ Private Sub btnUnosIzlaz_Click()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.btnUnosIzlaz"
-    MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA") & eDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub FillOpenFakture()
@@ -2931,7 +2937,12 @@ Private Sub btnStorno_Click()
     End If
     
     Dim Success As Boolean
-    
+    ' attempted = operater je POTVRDIO storno pa je _TX stvarno pokusan (vidi dole):
+    ' bez ovoga je neuspeh (_TX vrati False) prolazio POTPUNO tiho -- bez ikakve
+    ' poruke operateru (Success=False i kad klikne "Ne" na potvrdi, pa Else ne sme
+    ' da se veze samo za Success).
+    Dim attempted As Boolean
+
     Select Case tipDok
         Case "Otkup"
             ' Otkup: Klasa I i II dele isti BrDok (zaseban red po klasi) -> storniraj
@@ -2940,7 +2951,7 @@ Private Sub btnStorno_Click()
                 MsgBox "Otkup '" & brDok & "' nije pronadjen!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("otkup", brDok) Then Success = StornoOtkupByBrDok_TX(brDok)
+            If ConfirmStorno("otkup", brDok) Then attempted = True: Success = StornoOtkupByBrDok_TX(brDok)
             
         Case "Otpremnica"
             Dim otpID As String
@@ -2950,10 +2961,14 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
-            If ConfirmStorno("otpremnicu", brDok) Then Success = StornoOtpremnicaByBroj_TX(brDok)
-            
+            If ConfirmStorno("otpremnicu", brDok) Then attempted = True: Success = StornoOtpremnicaByBroj_TX(brDok)
+
         Case "Zbirna"
-            If ConfirmStorno("zbirnu", brDok) Then Success = StornoZbirna_TX(brDok)
+            If LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, brDok, COL_ZBR_ID) = "" Then
+                MsgBox "Zbirna '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If ConfirmStorno("zbirnu", brDok) Then attempted = True: Success = StornoZbirna_TX(brDok)
             
         Case "Prijemnica"
             Dim prijID As String
@@ -2963,7 +2978,7 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
-            If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnicaByBroj_TX(brDok)
+            If ConfirmStorno("prijemnicu", brDok) Then attempted = True: Success = StornoPrijemnicaByBroj_TX(brDok)
             
         Case "Faktura"
             Dim fakID As String
@@ -2972,10 +2987,28 @@ Private Sub btnStorno_Click()
                 MsgBox "Faktura '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
                 Exit Sub
             End If
-            If ConfirmStorno("fakturu", brDok) Then Success = StornoFaktura_TX(fakID)
-            
+            If ConfirmStorno("fakturu", brDok) Then attempted = True: Success = StornoFaktura_TX(fakID)
+
         Case "Novac"
-            If ConfirmStorno("novac stavku", brDok) Then Success = StornoNovac_TX(brDok)
+            ' StornoNovac_TX ocekuje NovacID (NOV-xxxxx). Broj dokumenta NIJE
+            ' jedinstven u tblNovac (split avans redovi ga dele) -> prihvati NOV- ID
+            ' direktno, a po broju razresi SAMO kad je jednoznacan. Stari kod je
+            ' slao uneti broj pravo u StornoNovac_TX -> uvek "nije pronadjena".
+            Dim novacID As String
+            Dim novN As Long
+            novacID = LookupActiveID(TBL_NOVAC, COL_NOV_ID, brDok, COL_NOV_ID)
+            If novacID = "" Then novacID = NovacIDByBrojUnique(brDok, novN)
+            If novacID = "" Then
+                If novN > 1 Then
+                    MsgBox "Vi" & ChrW(353) & "e novac stavki deli broj '" & brDok & _
+                           "' -- unesite NOV- ID konkretne stavke (vidi karticu/pregled).", _
+                           vbExclamation, APP_NAME
+                Else
+                    MsgBox "Novac stavka '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
+                End If
+                Exit Sub
+            End If
+            If ConfirmStorno("novac stavku", brDok) Then attempted = True: Success = StornoNovac_TX(novacID)
 
         Case "Revers izdavanje koop."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_KOOP) Then
@@ -2984,7 +3017,7 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             If ConfirmStorno("revers izdavanje (koop)", brDok) Then _
-                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_IZLAZ_KOOP)
+                attempted = True: Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_IZLAZ_KOOP)
 
         Case "Revers povrat koop."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_ULAZ_KOOP) Then
@@ -2993,7 +3026,7 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             If ConfirmStorno("revers povrat (koop)", brDok) Then _
-                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_KOOP)
+                attempted = True: Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_KOOP)
 
         Case "Revers izdato OM (firma)."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_ULAZ_FIRMA) Then
@@ -3002,7 +3035,7 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             If ConfirmStorno("revers izdato OM (firma)", brDok) Then _
-                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_FIRMA)
+                attempted = True: Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_ULAZ_FIRMA)
 
         Case "Revers prijem od OM (firma)."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_FIRMA) Then
@@ -3011,23 +3044,65 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             If ConfirmStorno("revers prijem od OM (firma)", brDok) Then _
-                Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_IZLAZ_FIRMA)
+                attempted = True: Success = StornoOMKoopByBrDok_TX(brDok, DOK_TIP_OM_IZLAZ_FIRMA)
     End Select
-    
+
     If Success Then
         MsgBox "Stornirano!", vbInformation, APP_NAME
         txtStornoBroj.value = ""
         CheckVerwaisteDokumente
+    ElseIf attempted Then
+        ' _TX je pokusan i vratio False (rollback) -- ranije je ovo prolazilo bez
+        ' IKAKVE poruke. Detaljan uzrok je u dnevnom logu (folder Log) i telemetriji.
+        MsgBox "Storno NIJE uspeo za '" & brDok & "'." & vbCrLf & _
+               "Proverite dnevni log (folder Log) za detalje.", vbCritical, APP_NAME
     End If
     Exit Sub
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.btnStorno"
-    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & eDesc, vbCritical, APP_NAME
 End Sub
 
 Private Function ConfirmStorno(ByVal tipText As String, ByVal broj As String) As Boolean
     ConfirmStorno = (MsgBox("Stornirati " & tipText & " " & broj & "?", _
                             vbQuestion + vbYesNo, APP_NAME) = vbYes)
+End Function
+
+' Jedinstven AKTIVAN NovacID po broju dokumenta (za storno "Novac" po broju).
+' matchCount vraca broj aktivnih redova sa tim brojem: broj NIJE jedinstven u
+' tblNovac (split avans redovi ga dele, OM ulaz deli broj sa ambalazom), pa se
+' po broju stornira SAMO kad je jednoznacan; inace operater unosi NOV- ID.
+Private Function NovacIDByBrojUnique(ByVal broj As String, ByRef matchCount As Long) As String
+    On Error GoTo EH
+    matchCount = 0
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cBr As Long, cID As Long, cSt As Long
+    cBr = GetColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK)
+    cID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
+    cSt = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+    If cBr = 0 Or cID = 0 Then Exit Function
+
+    Dim i As Long
+    Dim hit As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cBr))) = Trim$(broj) Then
+            If cSt = 0 Or UCase$(Trim$(NzToText(data(i, cSt)))) <> "DA" Then
+                matchCount = matchCount + 1
+                hit = Trim$(NzToText(data(i, cID)))
+            End If
+        End If
+    Next i
+
+    If matchCount = 1 Then NovacIDByBrojUnique = hit
+    Exit Function
+EH:
+    LogErr "frmDokumenta.NovacIDByBrojUnique"
+    matchCount = 0
 End Function
 
 Private Sub CheckVerwaisteDokumente()
@@ -3107,8 +3182,9 @@ Private Sub m_btnStornoPregled_Click()
     ShowStorniraniPanel
     Exit Sub
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.m_btnStornoPregled_Click"
-    MsgBox Poruka("DOK_ERR_GRESKA_PRI_PRIKAZU") & Err.description, vbExclamation, APP_NAME
+    MsgBox Poruka("DOK_ERR_GRESKA_PRI_PRIKAZU") & eDesc, vbExclamation, APP_NAME
 End Sub
 
 Private Sub m_btnStornoClose_Click()
@@ -3336,8 +3412,9 @@ Private Sub m_btnRecovery_Click()
     ShowRecoveryPanel
     Exit Sub
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.m_btnRecovery_Click"
-    MsgBox "Gre" & ChrW(353) & "ka pri prikazu recovery panela: " & Err.description, vbExclamation, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri prikazu recovery panela: " & eDesc, vbExclamation, APP_NAME
 End Sub
 
 Private Sub m_btnRecClose_Click()
@@ -3405,8 +3482,9 @@ Private Sub m_btnRecPrevezi_Click()
     End If
     Exit Sub
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmDokumenta.m_btnRecPrevezi_Click"
-    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & eDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub ShowRecoveryPanel()

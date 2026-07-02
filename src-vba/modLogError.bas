@@ -98,7 +98,14 @@ Public Sub LogErr(ByVal SOURCE As String, Optional ByVal details As String = "")
     ' Kurzform: loggt aktuellen Err direkt
     ' Aufruf: LogErr "SaveOtkup"
     ' Muss im EH-Block aufgerufen werden wo Err noch aktiv ist
-    
+    '
+    ' PAZNJA (CLAUDE.md sekcija 4): LogError unutra izvrsava "On Error Resume Next",
+    ' a svaki On Error iskaz RESETUJE globalni Err -> posle povratka iz LogErr je
+    ' Err.Number = 0. Ako ti Err treba i POSLE logovanja (MsgBox / Err.Raise),
+    ' uhvati Err.Number/Description/Source u lokale PRE poziva. U EH blokovima gde
+    ' je "On Error Resume Next" vec izvrsen (tipicni _TX handleri) OVAJ poziv je
+    ' tihi no-op -> tamo loguj direktno: LogError SRC, errDesc, errNum.
+
     If Err.Number <> 0 Then
         LogError SOURCE, Err.description, Err.Number, LOG_ERROR, details
     End If

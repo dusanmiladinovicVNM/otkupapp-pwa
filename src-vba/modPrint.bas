@@ -453,7 +453,11 @@ Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     h("koop") = Trim$(CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Ime")) & " " & _
                 CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Prezime")))
     h("bpg") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
-    h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
+    ' Kljuc MORA biti "ra"&ChrW(269)&"un" ("racun" sa c-kvakom): inicijalizacija i
+    ' OBA citaoca ({RACUN} token klauzule + "TR:" polje) koriste ChrW kljuc, a
+    ' Scripting.Dictionary je binary-compare -> ASCII "racun" je bio DRUGI kljuc,
+    ' pa se tekuci racun kooperanta stampao PRAZAN na otkupnom listu.
+    h("ra" & ChrW(269) & "un") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
     ' Saldo ambalaze = entitetski saldo kooperanta (koliko gajbica drzi/duguje):
     ' pocetno stanje pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz)
     ' - primljeno (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu

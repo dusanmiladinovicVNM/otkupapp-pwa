@@ -67,7 +67,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtkup_TX"
+    LogError "SaveOtkup_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkup_TX", _
@@ -328,7 +328,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtkupMulti_TX"
+    LogError "SaveOtkupMulti_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkupMulti_TX", _
@@ -549,7 +549,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtkup"
+    LogError "SaveOtkup", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     On Error GoTo 0
 
     Err.Raise errNum, "SaveOtkup", _

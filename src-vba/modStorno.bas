@@ -1394,7 +1394,7 @@ Private Sub LogAndReraise(ByVal sourceName As String)
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr sourceName
+    LogError sourceName, errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     On Error GoTo 0
 
     Err.Raise errNum, sourceName, "Source=" & errSrc & " | " & errDesc
@@ -1418,7 +1418,8 @@ Private Sub HandleStornoTxError(ByVal procedureName As String, _
 
     On Error Resume Next
 
-    LogErr procedureName
+    ' Err je vec resetovan gornjim "On Error Resume Next" -> LogErr bi bio no-op.
+    LogError procedureName, errDesc, errNum
 
     If Not tx Is Nothing Then tx.RollbackTx
 

@@ -113,7 +113,7 @@ EH:
 
     On Error Resume Next
 
-    LogErr "SaveOtpremnicaMulti_TX"
+    LogError "SaveOtpremnicaMulti_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
 
     Monitor_Error _
         moduleName:="modDokumenta", _
@@ -189,7 +189,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtpremnica_TX"
+    LogError "SaveOtpremnica_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SaveOtpremnica_TX", _
@@ -274,7 +274,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtpremnica"
+    LogError "SaveOtpremnica", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     On Error GoTo 0
 
     Err.Raise errNum, "SaveOtpremnica", _
@@ -456,7 +456,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveZbirnaMulti_TX"
+    LogError "SaveZbirnaMulti_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirnaMulti_TX", _
@@ -527,7 +527,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveZbirna_TX"
+    LogError "SaveZbirna_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirna_TX", _
@@ -604,7 +604,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveZbirna"
+    LogError "SaveZbirna", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     On Error GoTo 0
 
     Err.Raise errNum, "SaveZbirna", _
@@ -918,7 +918,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SavePrijemnicaMulti_TX"
+    LogError "SavePrijemnicaMulti_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnicaMulti_TX", _
@@ -1010,7 +1010,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SavePrijemnica_TX"
+    LogError "SavePrijemnica_TX", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnica_TX", _
@@ -1113,7 +1113,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SavePrijemnica"
+    LogError "SavePrijemnica", errDesc, errNum   ' LogErr bi bio no-op (Err vec resetovan)
     On Error GoTo 0
 
     Err.Raise errNum, "SavePrijemnica", _
@@ -1949,8 +1949,23 @@ NextStavka:
     Exit Sub
 
 EH:
-    LogErr "modDokumenta.RelinkFakturaStavke"
-    Err.Raise Err.Number, "modDokumenta.RelinkFakturaStavke", Err.description
+    ' Uhvati Err PRE logovanja: LogErr/LogError unutra izvrsavaju On Error iskaz
+    ' koji RESETUJE Err -> stari kod je posle LogErr radio "Err.Raise Err.Number"
+    ' (= Err.Raise 0 = runtime error 5 sa praznim opisom, unistena dijagnostika).
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    LogError "modDokumenta.RelinkFakturaStavke", errDesc, errNum
+    On Error GoTo 0
+
+    Err.Raise errNum, "modDokumenta.RelinkFakturaStavke", _
+              "Source=" & errSrc & " | " & errDesc
 End Sub
 
 ' ============================================================

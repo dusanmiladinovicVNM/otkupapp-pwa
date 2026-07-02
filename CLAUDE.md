@@ -57,6 +57,19 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
   - `tblStanice`: telefon je u koloni `Kontakt` (NE `Telefon`); kontakt = `Ime`/`Prezime`/`PIN`.
   - `tblKulture`: `KulturaID | VrstaVoca | SortaVoca | GajbicaPoPaleti` (NEMA `Aktivan`).
   - `tblOtkup/Otpremnica/Prijemnica/FakturaStavke`: količina je ASCII `Kolicina` (NE `Količina`); koristi `COL_*_KOLICINA`, ne hardkoduj dijakritiku (bio `RunProductionHealthCheck` bug).
+- **Ledgeri i NETO su izvor istine za obračune; kolone na dokumentnim redovima su evidencija/keš.**
+  Sva računanja (manjak, vrednosti, isplate, statusi, izveštaji) idu isključivo nad NETO
+  `Kolicina` (bruto→neto konverzija se dešava u FORMI pre snimanja) i nad ledgerima
+  `tblNovac`/`tblAmbalaza`/`tblMagacin`. Kolone poput `BrutoKg` (zamrznuti uneti bruto;
+  štampa ima fallback neto + gajbe×tara), `KolAmbIzdata`, `VremeUnosa`, `Isplaceno`/
+  `DatumIsplate` (keš koji `UpdateOtkupStatus` rekomputira iz `tblNovac`) su prikazna
+  evidencija — izmene/nalazi oko njih su prikaznog, NE obračunskog uticaja. Ne „popravljati"
+  obračune čitanjem tih kolona i ne tretirati njihov izostanak kao finansijski bug.
+- **`LogErr`/`LogError` interno izvršavaju `On Error Resume Next`, a svaki `On Error` iskaz
+  RESETUJE globalni `Err`** → posle poziva `LogErr` je `Err.Number = 0`. Ako `Err` treba i
+  posle logovanja (`MsgBox`/`Err.Raise`), uhvati `Err.Number/Description/Source` u lokale PRE
+  poziva; u `_TX` EH blokovima (gde lokali već postoje) loguj sa `LogError SRC, errDesc, errNum`
+  (poziv `LogErr` posle `On Error Resume Next` je tihi no-op — ništa se ne upiše u log).
 - **TRI config tabele — ČITANJE i UPIS moraju u ISTU tabelu** (inače polje „ne radi"):
   `tblSEFConfig` (poslovni + **Google/PWA + SEF**; `Get/SetConfigValue`), `tblLocalConfig`
   (per-mašina: `PDFTOTEXT_EXE_PATH`, `BANKA_*_PATH`, `APP_SETUP_COMPLETED`; `Get/SetLocalConfigValue`),

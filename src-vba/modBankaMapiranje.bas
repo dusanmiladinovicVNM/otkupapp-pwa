@@ -1472,9 +1472,14 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
             otvoreno = vrednost - uplaceno
             
             If otvoreno > 0.009 Then
+                ' Bafer je ReDim (1 To 2): STANI PRE inkrementa na trecem kandidatu.
+                ' Stari kod je inkrementirao pa izlazio (count ostane 3) -> dole
+                ' ReDim finalResult(1 To count) + citanje result(3, c) = subscript
+                ' out of range cim kooperant ima >= 3 otvorena otkup reda na istom
+                ' broju bloka (dvoklasni otkup vec pravi 2 reda po BrDok!).
+                If count >= 2 Then Exit For
                 count = count + 1
-                If count > 2 Then Exit For
-                
+
                 result(count, 1) = CStr(data(i, colOtkID))
                 result(count, 2) = otvoreno
                 result(count, 3) = CStr(data(i, colVrsta))

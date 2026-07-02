@@ -1109,8 +1109,9 @@ Private Sub btnUnos_Click()
     Exit Sub
 
 EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
     LogErr "frmOtkup.btnUnos"
-    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description, vbCritical, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & eDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub ClearOtkupFields()
@@ -1145,7 +1146,40 @@ Private Sub ClearOtkupFields()
 End Sub
 
 Private Sub btnStornoOtkup_Click()
+    ' Do sada MRTVO dugme (samo stil pritiska, bez akcije). Sada: storno celog
+    ' otkupnog dokumenta po broju (obe klase) -- isti motor kao frmDokumenta i
+    ' panel Otkupni blokovi (StornoOtkupByBrDok_TX; hvata i ambalazu + novac link).
+    On Error GoTo EH
+
     ButtonActive btnStornoOtkup
+
+    Dim brDok As String
+    brDok = Trim$(InputBox("Broj otkupnog dokumenta za storno:", APP_NAME))
+    If brDok = "" Then Exit Sub
+
+    If LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_ID) = "" Then
+        MsgBox "Otkup '" & brDok & "' nije prona" & ChrW(273) & "en (ili je ve" & ChrW(263) & " storniran)!", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If MsgBox("Stornirati ceo otkup br. " & brDok & " (sve klase)?", _
+              vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
+
+    If StornoOtkupByBrDok_TX(brDok) Then
+        MsgBox "Otkup storniran: " & brDok, vbInformation, APP_NAME
+        ' Oslobodjeni broj sme ponovo da se predlozi (lokalno, bez Google skena).
+        RefreshBrojDokumentaSuggestion False
+    Else
+        MsgBox "Storno NIJE uspeo za '" & brDok & "'." & vbCrLf & _
+               "Proverite dnevni log (folder Log) za detalje.", vbCritical, APP_NAME
+    End If
+    Exit Sub
+
+EH:
+    Dim eDesc As String: eDesc = Err.description   ' uhvati PRE LogErr (LogErr resetuje Err)
+    LogErr "frmOtkup.btnStornoOtkup_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & eDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
