@@ -64,6 +64,7 @@ Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (ByR
 Private Const WH_MOUSE_LL As Long = 14
 Private Const WM_MOUSEWHEEL As Long = &H20A
 Private Const WHEEL_STEP As Long = 3      ' redova po jednom "kliku" tockica
+Private Const ALIVE_MOVES As Long = 24    ' koliko pokreta misa hook "zivi" posto mis sidje s liste
 
 ' Ofset polja mouseData u MSLLHOOKSTRUCT: POINT pt (x,y = 2x4 = 8 bajta) pa
 ' mouseData -> UVEK offset 8 (isto na 32 i 64-bit; nema pointera pre njega).
@@ -75,6 +76,7 @@ Private mHook As LongPtr                  ' handle hook-a; 0 = nije instaliran
 Private mHot As MSForms.ListBox           ' lista trenutno pod misem
 Private mWrappers As Collection           ' clsWheelList instance (drzi ih zivim)
 Private mInHook As Boolean                ' TVRDI re-entrancy guard oko celog callback-a
+Private mAlive As Long                    ' keep-alive: hook aktivan SAMO dok je mis nad listom
 Private mArmed As Boolean                 ' OFF po defaultu (False)! Hook se NE instalira dok
                                           ' ga MouseWheel_SetEnabled True eksplicitno ne "naoruza".
                                           ' Razlog: mouse hook + otvoren VBE ume da zaledi Excel;
@@ -142,9 +144,11 @@ End Sub
 
 ' Poziva clsWheelList.lst_MouseMove: lista pod misem postaje "aktivna".
 ' Ovde se hook i instalira (lenjivo) - forma je do ovog trenutka vec iscrtana.
+' Svaki pokret nad listom osvezava mAlive (keep-alive) -> hook ostaje.
 Public Sub MouseWheel_SetHot(ByVal lb As MSForms.ListBox)
     On Error Resume Next
     Set mHot = lb
+    mAlive = ALIVE_MOVES     ' mis je NAD listom -> drzi hook zivim
     EnsureHook
 End Sub
 
@@ -239,25 +243,34 @@ End Sub
 Public Function MouseProc(ByVal nCode As Long, ByVal wParam As LongPtr, ByVal lParam As LongPtr) As LongPtr
     On Error Resume Next
 
-    ' TVRDI re-entrancy guard + brzi izlaz za sve sto nije nas slucaj.
-    ' Ako nas je Windows pozvao re-entrantno (mInHook) -> odmah prosledi dalje.
-    If mInHook Or nCode < 0 Or Not mArmed Or mHook = 0 Then
+    ' Re-entrancy guard + brzi izlaz. (mArmed se proverava po grani.)
+    If mInHook Or nCode < 0 Or mHook = 0 Then
         MouseProc = CallNextHookEx(mHook, nCode, wParam, lParam)
         Exit Function
     End If
-    mInHook = True
 
     If wParam = WM_MOUSEWHEEL Then
-        If Not mHot Is Nothing Then
+        ' Tockic: skroluj aktivnu listu.
+        mInHook = True
+        If mArmed And Not mHot Is Nothing Then
             Dim md As Long
             md = 0
-            ' Procitaj samo mouseData (hi-word = smer tockica).
-            CopyMemory md, lParam + MD_OFFSET, 4
-            If md <> 0 Then ScrollHot (md > 0)   ' md>0 = tockic gore, md<0 = dole
+            CopyMemory md, lParam + MD_OFFSET, 4   ' samo mouseData (smer)
+            If md <> 0 Then ScrollHot (md > 0)      ' md>0 = gore, md<0 = dole
+        End If
+        mInHook = False
+    Else
+        ' Bilo koji drugi dogadjaj (uglavnom POKRET misa). Dok je mis nad
+        ' listom, clsWheelList MouseMove stalno vraca mAlive na pun iznos.
+        ' Cim mis SIDJE s liste, mAlive padne na 0 i globalni LL hook se SAM
+        ' skine -> kursor van liste vise NE secka. Re-hover ga ponovo digne.
+        mAlive = mAlive - 1
+        If mAlive <= 0 Then
+            UnhookWindowsHookEx mHook
+            mHook = 0
+            Set mHot = Nothing
         End If
     End If
-
-    mInHook = False
 
     MouseProc = CallNextHookEx(mHook, nCode, wParam, lParam)
 End Function
