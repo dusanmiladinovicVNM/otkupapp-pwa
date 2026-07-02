@@ -294,9 +294,11 @@ Private Sub TogglePanel()
         RefreshKoopTotalInline     ' inline suma za trenutno izabranog kooperanta
         mForm.width = EXP_WIDTH
         mBtnToggle.caption = Poruka("OTKUP_LBL_SAKRIJ_BLOKOVE")
+        mBtnToggle.top = 41        ' spusti ispod info "Otk.listovi:" + "Lista kooperanata"
     Else
         mForm.width = mOrigWidth
         mBtnToggle.caption = Poruka("OTKUP_LBL_OTKUPNI_BLOKOVI")
+        mBtnToggle.top = 6         ' zatvoreno: nazad u gornji-desni ugao (uska forma)
         ' Napustanje otpremnice: datum/zbirna su bili nasledjeni sa selektovane
         ' otpremnice -> vrati levu formu na danas i raskini vezu, da svez unos
         ' (npr. direktno na hladnjaci) ne nosi stari datum.
@@ -351,28 +353,33 @@ Private Sub BuildPanel()
     mLblNapisanoAmb.caption = Poruka("OTKUP_LBL_BLOKOVIMA_AMB")
     mLblPreostaloAmb.caption = Poruka("OTKUP_LBL_OSTATAK_AMB")
 
-    ' Desno od "Ostatak"/"Ostatak amb": ukupan iznos otkupnih listova izabranog
-    ' kooperanta (tekuca god.) + dugme koje otvara rang svih kooperanata.
-    ' (mLblPreostalo/Amb zauzimaju PANEL_LEFT+502..+652; toggle je gore-desno.)
-    Set mLblKoopTotal = AddCtl("Label", "lblOtkBlokKoopTot", PANEL_LEFT + 656, 31, 198, 14)
+    ' Info "Otk.listovi:" na liniji "Ostatak" (top 6), desno poravnato do desne ivice;
+    ' ispod je dugme "Lista kooperanata". Toggle "Sakrij blokove" se pri otvaranju
+    ' panela spusta ispod njih (TogglePanel) da oslobodi liniju "Ostatak" za ovu info.
+    Set mLblKoopTotal = AddCtl("Label", "lblOtkBlokKoopTot", PANEL_LEFT + 656, 6, 196, 14)
     mLblKoopTotal.caption = ""
-    StyleHdr mLblKoopTotal
-    Set mBtnKoopRang = AddCtl("CommandButton", "btnOtkBlokKoopRang", PANEL_LEFT + 656, 47, 150, 18)
-    mBtnKoopRang.caption = "Rang kooperanata"
     On Error Resume Next
-    StyleExitButton mBtnKoopRang, "Rang kooperanata"
+    mLblKoopTotal.TextAlign = fmTextAlignRight
+    On Error GoTo 0
+    StyleHdr mLblKoopTotal
+    Set mBtnKoopRang = AddCtl("CommandButton", "btnOtkBlokKoopRang", PANEL_LEFT + 690, 23, 162, 18)
+    mBtnKoopRang.caption = "Lista kooperanata"
+    On Error Resume Next
+    StyleExitButton mBtnKoopRang, "Lista kooperanata"
     On Error GoTo 0
 
-    ' Overlay "Rang kooperanata" (preko oba grida; skriven dok se ne klikne dugme).
+    ' Overlay "Lista kooperanata" (preko oba grida; skriven dok se ne klikne dugme).
+    ' Listbox pokriva i zaglavlje grida (od top 88, iznad reda 90) i ceo grid na dole
+    ' (gridH+40) -> bez "delica" osnovne tabele gore/dole.
     Dim rangW As Double: rangW = EXP_WIDTH - PANEL_LEFT - 12
-    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 94, rangW - 110, 16)
+    Set mLblRangTitle = AddCtl("Label", "lblOtkBlokRangT", PANEL_LEFT, 68, rangW - 120, 16)
     StyleHdr mLblRangTitle
-    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 100, 90, 100, 22)
+    Set mBtnRangClose = AddCtl("CommandButton", "btnOtkBlokRangClose", PANEL_LEFT + rangW - 100, 66, 100, 20)
     mBtnRangClose.caption = "Zatvori"
     On Error Resume Next
     StyleExitButton mBtnRangClose, "Zatvori"
     On Error GoTo 0
-    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, GRID_TOP, rangW, gridH)
+    Set mLstRang = AddCtl("ListBox", "lstOtkBlokRang", PANEL_LEFT, 88, rangW, gridH + 40)
     mLstRang.ColumnCount = 3
     mLstRang.ColumnWidths = "50;520;260"
     On Error Resume Next
@@ -1598,7 +1605,7 @@ Private Sub RefreshKoopTotalInline()
 
     Dim yr As Integer: yr = Year(Date)
     Dim iznos As Double: iznos = KoopPrometYear(koopID, yr)
-    mLblKoopTotal.caption = "Koop. " & yr & ": " & FmtRsd(iznos) & " RSD"
+    mLblKoopTotal.caption = "Otk.listovi: " & FmtRsd(iznos) & " RSD"
     On Error Resume Next
     mLblKoopTotal.ControlTipText = "Ukupan iznos izdatih otkupnih listova za izabranog " & _
         "kooperanta u " & yr & ". godini (Sum Kolicina x Cena)."
@@ -1686,7 +1693,7 @@ Private Sub LoadKoopRang()
     On Error GoTo EH
     mLstRang.Clear
     Dim yr As Integer: yr = Year(Date)
-    mLblRangTitle.caption = "RANG KOOPERANATA PO IZNOSU OTKUPNIH LISTOVA (" & yr & _
+    mLblRangTitle.caption = "LISTA KOOPERANATA PO IZNOSU OTKUPNIH LISTOVA (" & yr & _
                             ")  --  klik 'Zatvori' za povratak"
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
