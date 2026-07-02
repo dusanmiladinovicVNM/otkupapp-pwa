@@ -90,11 +90,11 @@ Public Sub MouseWheel_Attach(ByVal frm As Object)
     On Error Resume Next
     If Not mArmed Then Exit Sub
 
-    ' Omotaci za liste ove forme - gradimo samo ako ih nema (posle Detach-a).
-    If mWrappers Is Nothing Then
-        Set mWrappers = New Collection
-        BuildWrappers frm
-    End If
+    ' Obmotaj liste ove forme. UVEK (ne samo kad je mWrappers prazno) jer se
+    ' MouseWheel_On moze pozvati DOK je forma vec otvorena (njen Activate je
+    ' prosao neoruzan pa nista nije obmotao). AddWrapper dedupe-uje.
+    If mWrappers Is Nothing Then Set mWrappers = New Collection
+    BuildWrappers frm
 
     ' Hook se NE instalira ovde! Instalacija bas u trenutku iscrtavanja forme
     ' (Activate) izgladnjuje WM_PAINT (najnizi prioritet) -> beli/neiscrtan
@@ -130,6 +130,13 @@ End Sub
 '   MouseWheel_Off -> ugasi i skini hook
 Public Sub MouseWheel_On()
     MouseWheel_SetEnabled True
+    ' Obmotaj liste na SVIM trenutno otvorenim formama, da tockic radi ODMAH
+    ' (bez cekanja na sledeci UserForm_Activate, tj. bez minimize/restore).
+    On Error Resume Next
+    Dim i As Long
+    For i = 0 To UserForms.Count - 1
+        MouseWheel_Attach UserForms(i)
+    Next i
 End Sub
 
 Public Sub MouseWheel_Off()
@@ -191,7 +198,16 @@ End Sub
 ' Deljeno: BuildWrappers + MouseWheel_Register (anti-duplikacija).
 Private Sub AddWrapper(ByVal lb As MSForms.ListBox)
     On Error Resume Next
+    If lb Is Nothing Then Exit Sub
     If mWrappers Is Nothing Then Set mWrappers = New Collection
+
+    ' Dedupe: preskoci ako je ova ista lista vec obmotana (Attach se sada
+    ' zove vise puta / iz vise izvora).
+    Dim wx As clsWheelList
+    For Each wx In mWrappers
+        If wx.lst Is lb Then Exit Sub
+    Next wx
+
     Dim w As clsWheelList
     Set w = New clsWheelList
     Set w.lst = lb
