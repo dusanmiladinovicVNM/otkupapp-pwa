@@ -200,3 +200,12 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Fix:** `RunProductionHealthCheck` je tražio kolonu `Količina` (dijakritika) umesto ASCII `Kolicina` → lažan „Missing column: tblOtkup.Kolicina" na ispravnoj šemi.
 - **Usklađena folder struktura + docs:** `00_Inbox/01_Bank` + `Downloaded` (GAS `DriveFolder.gs`, uklonjen mrtvi `02_Bank_Izvodi`), `Processed` umesto `Verarbeitet`, `Setup-OtkupApp.ps1` kopira `Tools\poppler` pored sveske; runbook/onboarding/`CLAUDE.md` usklađeni.
 - **Encoding:** izvori ostaju **ASCII-only**; jedini novi `Poruka()` ključ je `SETUP_MSG_FIRSTRUN_PONUDA` (dijakritika kroz `ChrW`) → posle importa pokrenuti **`EnsurePoruke`**.
+
+---
+
+## vba-v2.9.0 — 2026-07-02
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **pregled prometa kooperanta u panelu „Otkupni blokovi"**. Bez promene podataka; izvori ostaju **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+- **Otkup / „Otkupni blokovi" panel — „Otk.listovi: <iznos> RSD":** na liniji „Ostatak" (između sažetka i dugmeta „Sakrij"), nova info pokazuje **ukupan iznos izdatih otkupnih listova** (Σ Količina × Cena = „Ukupna vrednost", bruto sa PDV nadoknadom) za **trenutno izabranog kooperanta u tekućoj godini**; osvežava se na promenu kooperanta i pri otvaranju panela. Slobodan unos / bez izbora → prazno (bez skeniranja, bez auto-kreiranja kooperanta).
+- **Dugme „Lista kooperanata":** ispod info; otvara overlay preko **celog panela** sa **svim kooperantima firme, sortiranim opadajuće** po istom iznosu u tekućoj godini. Kolone: `# | Kooperant | OM | Iznos (RSD)` (OM = matična stanica kooperanta). „Zatvori" vraća na panel.
+- **Bez novih zavisnosti / bez promene podataka:** sve kontrole su dinamičke (`Controls.Add` + `clsBlokUI`, `frmOtkup.frx` se ne dira); reuse postojećih helpera (`ExcludeStornirano`, `BuildKoopNames`, `BuildLookup`, `FmtRsd`, `GetComboID`). Sažetak (Ukupno / U blokovima / Ostatak) blago sužen i pomeren levo da oslobodi mesto za info na istoj liniji. Izvori **ASCII-only**, nema novih `Poruka()` ključeva.
