@@ -93,10 +93,11 @@ Public Sub MouseWheel_Attach(ByVal frm As Object)
         BuildWrappers frm
     End If
 
-    ' Hook instaliramo jednom, thread-scoped na tekucu (Excel UI) nit.
-    If mHook = 0 Then
-        mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
-    End If
+    ' Hook se NE instalira ovde! Instalacija bas u trenutku iscrtavanja forme
+    ' (Activate) izgladnjuje WM_PAINT (najnizi prioritet) -> beli/neiscrtan
+    ' ekran dok minimize/restore ne forsira repaint. Zato ide LENJIVO, na prvi
+    ' MouseMove nad listom (EnsureHook iz SetHot), kad je forma vec iscrtana.
+    ' Tako se navigacija (otvaranje ekrana) uvek desava bez instaliranog hook-a.
 End Sub
 
 ' ------------------------------------------------------------
@@ -133,9 +134,21 @@ Public Sub MouseWheel_Off()
 End Sub
 
 ' Poziva clsWheelList.lst_MouseMove: lista pod misem postaje "aktivna".
+' Ovde se hook i instalira (lenjivo) - forma je do ovog trenutka vec iscrtana.
 Public Sub MouseWheel_SetHot(ByVal lb As MSForms.ListBox)
     On Error Resume Next
     Set mHot = lb
+    EnsureHook
+End Sub
+
+' Instaliraj hook tek kad zaista treba (mis dosao nad listu), da instalacija
+' NE padne u kriticni trenutak iscrtavanja forme (beli ekran). Idempotentno.
+Private Sub EnsureHook()
+    On Error Resume Next
+    If Not mArmed Then Exit Sub
+    If mHook = 0 Then
+        mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
+    End If
 End Sub
 
 ' ------------------------------------------------------------
@@ -149,11 +162,8 @@ Public Sub MouseWheel_Register(ByVal lb As MSForms.ListBox)
     If lb Is Nothing Then Exit Sub
 
     AddWrapper lb
-
-    ' Hook instaliramo i ovde (ako Attach jos nije pozvan za ovu formu).
-    If mHook = 0 Then
-        mHook = SetWindowsHookEx(WH_MOUSE, AddressOf MouseProc, 0, GetCurrentThreadId())
-    End If
+    ' Hook se NE instalira ovde - lenjivo, na prvi MouseMove nad listom
+    ' (EnsureHook iz SetHot), da se ne pokvari iscrtavanje forme.
 End Sub
 
 ' Napravi omotac za JEDNU listu i dodaj ga u mWrappers.
