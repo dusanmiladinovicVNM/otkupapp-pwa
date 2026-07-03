@@ -31,6 +31,14 @@ Private mKoopComboFilling As Boolean       ' guard: refill ne sme da okine Chang
 Private mRacuni() As String                ' cisti racuni, paralelno sa mCmbRacun stavkama
 Private mRacuniCount As Long
 
+' Runtime dugmad: vezivanje virman avansa (NOV_VIRMAN_AVANS_KOOP) na blokove.
+' Motor je ApplyAvansToOtkup_TX (postojeci, transakciono bezbedan); dugmad
+' ga samo pozivaju za izabran blok / cekirane blokove.
+Private WithEvents mBtnAvansBlok As MSForms.CommandButton    ' fokusiran blok (detail panel)
+Private WithEvents mBtnAvansSel As MSForms.CommandButton     ' cekirani blokovi (akcije)
+Private Const AVANS_BLOK_CAPTION As String = "Primeni avans na blok"
+Private Const AVANS_SEL_CAPTION As String = "Primeni avans (sel.)"
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     MouseWheel_Attach Me
@@ -113,6 +121,54 @@ End Sub
 Private Sub EnsureRuntimeControls()
     EnsureKooperantFilter
     EnsureRacunCombo
+    EnsureAvansButtons        ' posle EnsureRacunCombo (sel. dugme se sidri levo od "Sa racuna")
+End Sub
+
+'======================================================================
+' EnsureAvansButtons - runtime dugmad za vezivanje virman avansa na blokove
+' (.frx se ne dira). Po bloku (dole u detail panelu) + na cekirane blokove
+' (u akcijskoj traci, levo od "Sa racuna" combo-a).
+'======================================================================
+Private Sub EnsureAvansButtons()
+    On Error GoTo EH
+
+    ' 1) Po bloku -- dno detalj frejma (ispod avans info-a)
+    If mBtnAvansBlok Is Nothing Then
+        Dim dp As Object
+        Set dp = btnPostaviFull.Parent
+        Set mBtnAvansBlok = dp.Controls.Add("Forms.CommandButton.1", "btnAvansBlok", True)
+        With mBtnAvansBlok
+            .Left = btnPostaviFull.Left
+            .width = dp.InsideWidth - btnPostaviFull.Left - 10
+            If .width < 80 Then .width = btnPostaviFull.width
+            .Height = btnPostaviFull.Height
+            .top = dp.InsideHeight - .Height - 10
+            .enabled = False
+        End With
+        StylePrimaryButton mBtnAvansBlok, AVANS_BLOK_CAPTION
+    End If
+
+    ' 2) Na cekirane -- akcijska traka, levo od "Sa racuna" combo-a
+    If mBtnAvansSel Is Nothing Then
+        Dim ah As Object
+        Set ah = btnGenerisiCSV.Parent
+        Set mBtnAvansSel = ah.Controls.Add("Forms.CommandButton.1", "btnAvansSel", True)
+        With mBtnAvansSel
+            .width = 130
+            .Height = btnGenerisiCSV.Height
+            .top = btnGenerisiCSV.top
+            If Not mLblRacun Is Nothing Then
+                .Left = mLblRacun.Left - .width - 18
+            Else
+                .Left = btnGenerisiCSV.Left - .width - 18
+            End If
+            If .Left < 6 Then .Left = 6
+        End With
+        StylePrimaryButton mBtnAvansSel, AVANS_SEL_CAPTION
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.EnsureAvansButtons"
 End Sub
 
 ' Desna ivica postojeceg filter reda (u istom kontejneru kao cmbStanica).
@@ -649,13 +705,17 @@ Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
     
     lblDetailTR.caption = "Tek. ra" & ChrW(269) & "un:" & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "--nedostaje--")
     
-    If blk.KooperantAvansSaldo > 0 Then
-        lblDetailAvansHint.caption = "Primeni avans kroz Dokumenta pre isplate"
+    Dim imaAvans As Boolean
+    imaAvans = (blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0)
+    If imaAvans Then
+        lblDetailAvansHint.caption = "Klikni 'Primeni avans na blok' da avans vezes na ovaj otkup"
         lblDetailAvansHint.Visible = True
     Else
         lblDetailAvansHint.Visible = False
     End If
-    
+
+    If Not mBtnAvansBlok Is Nothing Then mBtnAvansBlok.enabled = imaAvans
+
     EnableField txtIsplatiti
     btnPostaviFull.enabled = True
 End Sub
@@ -670,6 +730,7 @@ Private Sub ClearDetailPanel()
     DisableField txtIsplatiti
     btnPostaviFull.enabled = False
     lblDetailAvansHint.Visible = False
+    If Not mBtnAvansBlok Is Nothing Then mBtnAvansBlok.enabled = False
 End Sub
 
 '======================================================================
@@ -951,12 +1012,129 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
 End Sub
 
 ' Mouse hover pattern
+'======================================================================
+' Vezivanje virman avansa na blokove (NOV_VIRMAN_AVANS_KOOP -> OtkupID).
+' Motor: ApplyAvansToOtkup_TX (postojeci, transakcija). Po vezivanju se
+' skida "Isplatiti" override (otvoreno bloka se menja) i radi pun reload
+' (LoadBlokovi) jer je tblNovac promenjen.
+'======================================================================
+Private Function PrimeniAvansTX(ByVal blk As clsBlokIsplata) As Boolean
+    PrimeniAvansTX = ApplyAvansToOtkup_TX(blk.kooperantID, blk.otkupID)
+    If PrimeniAvansTX Then
+        If Not m_OverrideAmounts Is Nothing Then
+            If m_OverrideAmounts.Exists(blk.otkupID) Then m_OverrideAmounts.Remove blk.otkupID
+        End If
+    End If
+End Function
+
+' Po bloku: veze avans kooperanta na fokusiran blok (do njegovog otvorenog).
+Private Sub mBtnAvansBlok_Click()
+    On Error GoTo EH
+    If lstBlokovi.ListIndex < 0 Then Exit Sub
+
+    Dim blk As clsBlokIsplata
+    Set blk = GetBlokByListIndex(lstBlokovi.ListIndex)
+    If blk Is Nothing Then Exit Sub
+
+    If blk.KooperantAvansSaldo <= 0 Then
+        MsgBox "Kooperant nema neraspore" & ChrW(273) & "en avans.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    If blk.OtvorenIznos <= 0 Then
+        MsgBox "Blok nema otvoren iznos.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim vezuje As Double
+    vezuje = blk.KooperantAvansSaldo
+    If vezuje > blk.OtvorenIznos Then vezuje = blk.OtvorenIznos
+
+    Dim msg As String
+    msg = "Vezati avans na blok " & blk.brojDokumenta & " (" & blk.kooperantNaziv & ")?" & vbCrLf & vbCrLf & _
+          "Otvoreno bloka:  " & Format$(blk.OtvorenIznos, "#,##0.00") & " RSD" & vbCrLf & _
+          "Dostupan avans:  " & Format$(blk.KooperantAvansSaldo, "#,##0.00") & " RSD" & vbCrLf & _
+          "Veze se pribl.:  " & Format$(vezuje, "#,##0.00") & " RSD" & vbCrLf & vbCrLf & _
+          "(upisuje se u tblNovac -- OtkupID na avans red)"
+    If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim brDok As String: brDok = blk.brojDokumenta
+    If PrimeniAvansTX(blk) Then
+        LoadBlokovi
+        lblStatus.caption = "Avans vezan na blok " & brDok & "."
+    Else
+        MsgBox "Gre" & ChrW(353) & "ka pri vezivanju avansa. Pogledajte log.", vbCritical, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.mBtnAvansBlok_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Na cekirane: veze avans na svaki cekiran blok sa raspolozivim avansom.
+Private Sub mBtnAvansSel_Click()
+    On Error GoTo EH
+
+    Dim sel As Collection: Set sel = New Collection
+    Dim i As Long
+    For i = 0 To lstBlokovi.ListCount - 1
+        If lstBlokovi.Selected(i) Then
+            Dim b As clsBlokIsplata
+            Set b = GetBlokByListIndex(i)
+            If Not b Is Nothing Then
+                If b.KooperantAvansSaldo > 0 And b.OtvorenIznos > 0 Then sel.Add b
+            End If
+        End If
+    Next i
+
+    If sel.count = 0 Then
+        MsgBox "Nema selektovanih blokova sa raspolo" & ChrW(382) & "ivim avansom." & vbCrLf & _
+               "(cekiraj blokove ciji kooperant ima avans)", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    If MsgBox("Vezati avans na " & sel.count & " selektovanih blokova?" & vbCrLf & vbCrLf & _
+              "(upisuje se u tblNovac za svaki blok)", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim okCount As Long, failCount As Long
+    Dim v As Variant
+    For Each v In sel
+        Dim blk As clsBlokIsplata
+        Set blk = v
+        If PrimeniAvansTX(blk) Then okCount = okCount + 1 Else failCount = failCount + 1
+    Next v
+
+    LoadBlokovi
+    lblStatus.caption = "Avans obradjen: " & okCount & " blokova" & _
+                        IIf(failCount > 0, " | gre" & ChrW(353) & "ka: " & failCount, "")
+    If failCount > 0 Then
+        MsgBox "Obra" & ChrW(273) & "eno: " & okCount & ". Gre" & ChrW(353) & "ka: " & failCount & _
+               ". Pogledajte log.", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.mBtnAvansSel_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub mBtnAvansBlok_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    If mBtnAvansBlok.enabled Then ButtonHover mBtnAvansBlok
+End Sub
+
+Private Sub mBtnAvansSel_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover mBtnAvansSel
+End Sub
+
 Private Sub ResetActionButtons()
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "PDF specifikacija"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
     StyleExitButton btnPovratak, "Povratak"
+    If Not mBtnAvansBlok Is Nothing Then StylePrimaryButton mBtnAvansBlok, AVANS_BLOK_CAPTION
+    If Not mBtnAvansSel Is Nothing Then StylePrimaryButton mBtnAvansSel, AVANS_SEL_CAPTION
 End Sub
 
 Private Sub btnOsvezi_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
