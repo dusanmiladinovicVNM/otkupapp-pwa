@@ -236,7 +236,7 @@ EH:
 End Sub
 
 ' Combo "Sa racuna" uz action dugmad: racun firme sa koga idu nalozi
-' (BANKA_NALOG_RACUNI lista; prazno -> SELLER_ACCOUNT). Samo izbor.
+' (BankaNalogRacuniCSV: RACUN_1/2/3, fallback legacy pa SELLER_ACCOUNT). Samo izbor.
 Private Sub EnsureRacunCombo()
     On Error GoTo EH
     If Not mCmbRacun Is Nothing Then Exit Sub
@@ -303,15 +303,15 @@ EH:
     LogErr "frmBankaExportPregled.EnsureRacunCombo"
 End Sub
 
-' Napuni combo racuna iz BANKA_NALOG_RACUNI (";"-lista); prazno ->
-' SELLER_ACCOUNT. Default izbor = SELLER_ACCOUNT ako je medju racunima.
+' Napuni combo racuna iz BankaNalogRacuniCSV (tri polja RACUN_1/2/3; fallback na
+' legacy ";"-spisak pa SELLER_ACCOUNT). Default izbor = SELLER_ACCOUNT ako je
+' medju racunima.
 Private Sub PopulateRacunCombo()
     On Error GoTo EH
     If mCmbRacun Is Nothing Then Exit Sub
 
     Dim raw As String
-    raw = DocConfigOr(CFG_BANKA_NALOG_RACUNI, "")
-    If LenB(Trim$(raw)) = 0 Then raw = DocConfigOr("SELLER_ACCOUNT", "")
+    raw = BankaNalogRacuniCSV()
 
     mRacuniCount = 0
     ReDim mRacuni(0 To 0)
@@ -1183,7 +1183,7 @@ Private Sub btnGenerisiCSV_Click()
         Exit Sub
     End If
 
-    ' Racun platioca: combo "Sa racuna" (BANKA_NALOG_RACUNI / SELLER_ACCOUNT)
+    ' Racun platioca: combo "Sa racuna" (BankaNalogRacuniCSV: RACUN_1/2/3 / SELLER_ACCOUNT)
     Dim racun As String
     racun = SelectedRacun()
     If LenB(racun) = 0 Then

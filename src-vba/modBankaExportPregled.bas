@@ -289,6 +289,33 @@ EH:
 End Sub
 
 '======================================================================
+' BankaNalogRacuniCSV - efektivni ";"-spisak racuna firme za isplate.
+'
+' Izvor istine: tri zasebna polja iz Podesavanja (grupa "Banka / nalozi")
+' CFG_BANKA_NALOG_RACUN_1/2/3 -- spajaju se (preskacuci prazna) u ";"-listu.
+' Fallback (stare instalacije): ako su sva tri prazna -> legacy jedinstveni
+' ";"-spisak CFG_BANKA_NALOG_RACUNI; ako i to prazno -> SELLER_ACCOUNT (firma
+' sa jednim racunom). Vraca "" ako nista nije uneto (forma tada javlja poruku).
+'
+' Koristi frmBankaExportPregled.PopulateRacunCombo (combo "Sa racuna").
+'======================================================================
+Public Function BankaNalogRacuniCSV() As String
+    Dim res As String, v As String, i As Long
+    Dim keys As Variant
+    keys = Array(CFG_BANKA_NALOG_RACUN_1, CFG_BANKA_NALOG_RACUN_2, CFG_BANKA_NALOG_RACUN_3)
+    For i = LBound(keys) To UBound(keys)
+        v = Trim$(GetConfigValue(CStr(keys(i))))
+        If LenB(v) > 0 Then
+            If LenB(res) > 0 Then res = res & ";"
+            res = res & v
+        End If
+    Next i
+    If LenB(res) = 0 Then res = Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUNI))
+    If LenB(res) = 0 Then res = Trim$(GetConfigValue("SELLER_ACCOUNT"))
+    BankaNalogRacuniCSV = res
+End Function
+
+'======================================================================
 ' GenerisiNalogeCSV - CSV naloga za prenos za uvoz u e-banking.
 '
 ' Jedan red = jedan nalog za prenos po otkupnom bloku:
