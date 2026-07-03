@@ -112,8 +112,18 @@ Public Sub ImportBankaInbox_WithDrivePull()
 
     On Error GoTo EH
 
+    ' Drive povlacenje je BEST-EFFORT: ako Drive putanja nije dostupna (offline,
+    ' pogresan BANKA_DRIVE_SOURCE_PATH, nepristupacan folder) NE obaraj uvoz --
+    ' zabelezi WARN i uvezi lokalni Inbox svejedno. Sam uvoz (_TX) ostaje hard.
     If BankaDrivePullConfigured() Then
+        On Error Resume Next
         PullBankPdfsFromDriveProduction
+        If Err.Number <> 0 Then
+            Err.Clear
+            LogError SRC, "Drive pull preskocen -- nastavljam sa lokalnim Inboxom " & _
+                          "(detalji: PullBankPdfsFromDriveProduction u dnevnom logu).", 0, "WARN"
+        End If
+        On Error GoTo EH
     End If
 
     ImportBankaInbox_TX
@@ -959,16 +969,22 @@ Private Sub ClearRowBuffer(ByRef rowData() As Variant)
 End Sub
 
 Private Sub EnsureFolderExists(ByVal folderPath As String)
-    If Dir$(folderPath, vbDirectory) = "" Then
-        MkDir folderPath
-    End If
+    ' Rekurzivno + FSO: kreira i nedostajuce roditelje (goli MkDir je non-rekurzivan
+    ' -> greska 76 "Path not found" kad roditelj fali) i pouzdano proverava
+    ' postojanje i na Drive virtuelnim putanjama.
+    BankaEnsureFolderExistsRecursive folderPath
 End Sub
 
 Private Sub MoveFileSafe(ByVal sourcePath As String, ByVal targetPath As String)
     Dim finalTarget As String
     
     finalTarget = GetUniqueTargetPath(targetPath)
-    Name sourcePath As finalTarget
+    ' Copy+Delete preko FSO umesto Name: Name puca (75) na Google Drive virtuelnim
+    ' (.shortcut-targets-by-id) putanjama i ne moze preko volumena.
+    With CreateObject("Scripting.FileSystemObject")
+        .CopyFile sourcePath, finalTarget
+        .DeleteFile sourcePath
+    End With
 End Sub
 
 Private Function GetUniqueTargetPath(ByVal targetPath As String) As String
@@ -979,7 +995,7 @@ Private Function GetUniqueTargetPath(ByVal targetPath As String) As String
     Dim n As Long
     Dim candidate As String
     
-    If Dir$(targetPath) = "" Then
+    If Not BankaFileExists(targetPath) Then
         GetUniqueTargetPath = targetPath
         Exit Function
     End If
@@ -1000,7 +1016,7 @@ Private Function GetUniqueTargetPath(ByVal targetPath As String) As String
     n = 1
     Do
         candidate = folderPath & "\" & baseName & "_" & Format$(n, "000") & ext
-        If Dir$(candidate) = "" Then
+        If Not BankaFileExists(candidate) Then
             GetUniqueTargetPath = candidate
             Exit Function
         End If
@@ -1207,7 +1223,7 @@ Public Function PullBankPdfsFromDriveProduction() As Long
         driveDownloadedPath = BankaParentFolderPath(driveSourcePath) & "\Downloaded"
     End If
 
-    If Dir$(driveSourcePath, vbDirectory) = "" Then
+    If Not BankaFolderExists(driveSourcePath) Then
         Err.Raise vbObjectError + 9501, SRC, _
             "Drive source folder ne postoji ili nije dostupan: " & driveSourcePath
     End If
@@ -1257,7 +1273,7 @@ Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _
     Dim copiedSize As Long
     Dim movedOk As Boolean
 
-    If Dir$(sourcePdfPath) = "" Then
+    If Not BankaFileExists(sourcePdfPath) Then
         Err.Raise vbObjectError + 9510, SRC, "PDF ne postoji: " & sourcePdfPath
     End If
 
@@ -1267,7 +1283,7 @@ Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _
         Err.Raise vbObjectError + 9511, SRC, "Fajl nije PDF: " & fileName
     End If
 
-    sourceSize = FileLen(sourcePdfPath)
+    sourceSize = BankaFileSize(sourcePdfPath)
     If sourceSize <= 0 Then
         Err.Raise vbObjectError + 9512, SRC, "PDF je prazan: " & sourcePdfPath
     End If
@@ -1278,7 +1294,7 @@ Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _
 
     If Dir$(localTempPath) <> "" Then Kill localTempPath
 
-    FileCopy sourcePdfPath, localTempPath
+    CreateObject("Scripting.FileSystemObject").CopyFile sourcePdfPath, localTempPath
 
     If Dir$(localTempPath) = "" Then
         Err.Raise vbObjectError + 9513, SRC, "Temp lokalni PDF nije kreiran."
@@ -1352,17 +1368,17 @@ Private Function BankaIsFileReadyForPull(ByVal filePath As String, _
     Dim s1 As Long
     Dim s2 As Long
 
-    If Dir$(filePath) = "" Then GoTo NotReady
+    If Not BankaFileExists(filePath) Then GoTo NotReady
 
-    ageSeconds = DateDiff("s", FileDateTime(filePath), Now)
+    ageSeconds = DateDiff("s", CreateObject("Scripting.FileSystemObject").GetFile(filePath).DateLastModified, Now)
     If ageSeconds < minAgeSeconds Then GoTo NotReady
 
-    s1 = FileLen(filePath)
+    s1 = BankaFileSize(filePath)
     If s1 <= 0 Then GoTo NotReady
 
     DoEvents
 
-    s2 = FileLen(filePath)
+    s2 = BankaFileSize(filePath)
     If s1 <> s2 Then GoTo NotReady
 
     BankaIsFileReadyForPull = True
@@ -1424,6 +1440,27 @@ Private Function BankaSafeFileName(ByVal fileName As String) As String
     BankaSafeFileName = fileName
 End Function
 
+' Pouzdana provera postojanja foldera -- radi i na Google Drive virtuelnim
+' (.shortcut-targets-by-id) i online-only putanjama, gde Dir$(..., vbDirectory)
+' vraca lazno "" pa je kod pokusavao MkDir na VEC POSTOJECEM folderu = greska 75.
+Private Function BankaFolderExists(ByVal folderPath As String) As Boolean
+    On Error Resume Next
+    BankaFolderExists = CreateObject("Scripting.FileSystemObject").FolderExists(folderPath)
+    On Error GoTo 0
+End Function
+
+Private Function BankaFileExists(ByVal filePath As String) As Boolean
+    On Error Resume Next
+    BankaFileExists = CreateObject("Scripting.FileSystemObject").FileExists(filePath)
+    On Error GoTo 0
+End Function
+
+Private Function BankaFileSize(ByVal filePath As String) As Double
+    On Error Resume Next
+    BankaFileSize = CreateObject("Scripting.FileSystemObject").GetFile(filePath).Size
+    On Error GoTo 0
+End Function
+
 Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
     Dim parts() As String
     Dim currentPath As String
@@ -1432,7 +1469,7 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
     folderPath = BankaNormalizeFolderPath(folderPath)
 
     If Len(folderPath) = 0 Then Exit Sub
-    If Dir$(folderPath, vbDirectory) <> "" Then Exit Sub
+    If BankaFolderExists(folderPath) Then Exit Sub
 
     parts = Split(folderPath, "\")
     currentPath = parts(0)
@@ -1444,7 +1481,7 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
             If Right$(currentPath, 1) <> "\" Then currentPath = currentPath & "\"
             currentPath = currentPath & parts(i)
 
-            If Dir$(currentPath, vbDirectory) = "" Then MkDir currentPath
+            If Not BankaFolderExists(currentPath) Then MkDir currentPath
         End If
     Next i
 End Sub
