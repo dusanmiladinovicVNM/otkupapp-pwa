@@ -1457,18 +1457,22 @@ Private Function BankaSafeFileName(ByVal fileName As String) As String
 End Function
 
 Private Function BankaFolderExists(ByVal folderPath As String) As Boolean
-    ' Robusna provera postojanja foldera preko GetAttr.
-    ' Dir$(path, vbDirectory) NE vidi skrivene/sistemske foldere (vraca "")
-    ' kao npr. Google Drive virtuelni "G:\.shortcut-targets-by-id" -> zbog toga
-    ' je BankaEnsureFolderExistsRecursive pokusavao MkDir nad postojecim
-    ' skrivenim folderom i dobijao error 75 (Path/File access error).
+    ' Robusna provera postojanja foldera. GetAttr vidi i skrivene/sistemske
+    ' foldere (Dir$(path, vbDirectory) za skriven folder vraca ""), ali GetAttr
+    ' zna da zakaze na Google Drive virtuelnim putanjama - zato je Dir$ fallback
+    ' za obicne, dostupne foldere (npr. sam "01_Bank" i "Downloaded").
     Dim attr As Long
 
     On Error Resume Next
     attr = GetAttr(folderPath)
     If Err.Number = 0 Then
         BankaFolderExists = ((attr And vbDirectory) = vbDirectory)
+        On Error GoTo 0
+        Exit Function
     End If
+
+    Err.Clear
+    BankaFolderExists = (Len(Dir$(folderPath, vbDirectory)) > 0)
     On Error GoTo 0
 End Function
 
@@ -1492,8 +1496,22 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
             If Right$(currentPath, 1) <> "\" Then currentPath = currentPath & "\"
             currentPath = currentPath & parts(i)
 
-            If Not BankaFolderExists(currentPath) Then MkDir currentPath
+            ' MkDir nad postojecim Google Drive virtuelnim folderom
+            ' (.shortcut-targets-by-id, <id>) baca error 75 iako folder POSTOJI.
+            ' Greske na PRECIMA namerno ignorisemo - bitno je samo da lisni
+            ' folder na kraju postoji (proveravamo posle petlje). Posto Downloaded
+            ' pravimo UNUTAR postojeceg source foldera, lisni MkDir uspeva.
+            If Not BankaFolderExists(currentPath) Then
+                On Error Resume Next
+                MkDir currentPath
+                On Error GoTo 0
+            End If
         End If
     Next i
+
+    If Not BankaFolderExists(folderPath) Then
+        Err.Raise vbObjectError + 9503, "BankaEnsureFolderExistsRecursive", _
+            "Ne mogu da kreiram folder: " & folderPath
+    End If
 End Sub
 
