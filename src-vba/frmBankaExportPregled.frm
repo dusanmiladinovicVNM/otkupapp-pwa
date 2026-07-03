@@ -140,10 +140,13 @@ Private Sub EnsureKooperantFilter()
     Set host = cmbStanica.Parent
 
     ' Osvezi dugme (iz .frx) je stajalo odmah posle datum polja -> nalegalo je
-    ' na kooperant combo. Pomeri ga skroz desno u filter redu da oslobodi mesto;
-    ' combo ostaje odmah posle datuma (gde je i bio).
+    ' na kooperant combo. Pomeri ga desno (ali odmaknuto od ivice) i visinski
+    ' centriraj u frame; combo ostaje odmah posle datuma (gde je i bio).
     On Error Resume Next
-    btnOsvezi.Left = btnOsvezi.Parent.InsideWidth - btnOsvezi.width - 12
+    Dim ob As Object
+    Set ob = btnOsvezi.Parent
+    btnOsvezi.Left = ob.InsideWidth - btnOsvezi.width - 48      ' malo od desne ivice
+    btnOsvezi.top = (ob.InsideHeight - btnOsvezi.Height) / 2    ' visinski centrirano u frame
     On Error GoTo EH
 
     Dim edge As Single
