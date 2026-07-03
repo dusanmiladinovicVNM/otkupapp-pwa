@@ -5,15 +5,18 @@ Option Explicit
 ' modIsplatePregled v6.18+
 '
 ' Read-only helper sloj za pregled otvorenih otkup blokova
-' (per-kooperant aggregation + already-paid awareness + TR check).
+' (per-kooperant aggregation + already-paid awareness + TR check)
+' + izlazi za pripremu isplata:
+'   - GenerisiNalogeCSV: CSV naloga za prenos (uvoz u e-banking);
+'     iznos po bloku = clsBlokIsplata.IsplatitiIznos (operater unos).
 '
 ' Bazira se na postojecim helperima:
 '   - GetOpenOtkupi (extended 7-col shape)
 '   - GetKooperantNaziv (modBankaMapiranje)
 '   - LookupValue za TekuciRacun
 '
-' NE pise nista u tblNovac. CSV generisanje + selection ide u
-' kasnijim commit-ima.
+' NE pise nista u tblNovac: isplata se knjizi tek kroz uvoz izvoda
+' (modBankaImport/modBankaMapiranje, auto-map poziv na broj = broj bloka).
 ' ============================================================
 
 '======================================================================
@@ -236,7 +239,107 @@ Public Function ExportBlokListAsTSV(ByVal blokovi As Collection) As String
                 Format$(blk.OtvorenIznos, "0.00") & vbTab & _
                 blk.TekuciRacun & vbCrLf
     Next v
-    
+
     ExportBlokListAsTSV = s
+End Function
+
+'======================================================================
+' GenerisiNalogeCSV - CSV naloga za prenos za uvoz u e-banking.
+'
+' Jedan red = jedan nalog za prenos po otkupnom bloku:
+'   - platilac: SELLER_NAME / SELLER_ACCOUNT (config, grupa "Prodavac (firma)")
+'   - primalac: kooperant (naziv + TekuciRacun iz tblKooperanti)
+'   - iznos:    blk.IsplatitiIznos (postavlja forma: operater unos ili otvoreno)
+'   - poziv na broj (odobrenje) = broj otkupnog bloka -> jaki kljuc za
+'     auto-map pri kasnijem uvozu izvoda (frmBankaImport)
+'
+' Ocekuje blokove SA tekucim racunom (filtrira ih forma). Blokove bez TR
+' preskace i tiho broji (defenzivno). Vraca punu putanju CSV fajla,
+' "" ako nema nijednog reda ili upis ne uspe.
+'
+' Format: ";" separator, UTF-8 (BOM - vidi WriteAllTextUtf8), decimalna
+' tacka u iznosu (deterministicki, nezavisno od Windows locale-a).
+' Kolone drzati stabilnim: e-banking uvozi se mapiraju po pozicijama.
+'======================================================================
+Public Function GenerisiNalogeCSV(ByVal blokovi As Collection) As String
+    On Error GoTo EH
+
+    GenerisiNalogeCSV = ""
+    If blokovi Is Nothing Then Exit Function
+    If blokovi.count = 0 Then Exit Function
+
+    Dim platilacNaziv As String, platilacRacun As String
+    platilacNaziv = DocConfigOr("SELLER_NAME", "")
+    platilacRacun = NormalizujRacun(DocConfigOr("SELLER_ACCOUNT", ""))
+    If LenB(platilacRacun) = 0 Then Exit Function   ' forma validira i javlja poruku
+
+    Dim sifra As String, svrhaBase As String
+    sifra = DocConfigOr(CFG_BANKA_NALOG_SIFRA, BANKA_NALOG_SIFRA_DEFAULT)
+    svrhaBase = DocConfigOr(CFG_BANKA_NALOG_SVRHA, BANKA_NALOG_SVRHA_DEFAULT)
+
+    Dim datumValute As String
+    datumValute = Format$(Date, "dd.mm.yyyy")
+
+    Dim s As String
+    s = "RacunPlatioca;NazivPlatioca;RacunPrimaoca;NazivPrimaoca;Iznos;Valuta;" & _
+        "SifraPlacanja;Model;PozivNaBroj;SvrhaPlacanja;DatumValute" & vbCrLf
+
+    Dim rows As Long
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In blokovi
+        Set blk = v
+        If blk.HasTekuciRacun And blk.IsplatitiIznos > 0 Then
+            s = s & CsvField(platilacRacun) & ";" & _
+                    CsvField(platilacNaziv) & ";" & _
+                    CsvField(NormalizujRacun(blk.TekuciRacun)) & ";" & _
+                    CsvField(blk.kooperantNaziv) & ";" & _
+                    CsvIznos(blk.IsplatitiIznos) & ";" & _
+                    "RSD;" & _
+                    CsvField(sifra) & ";" & _
+                    ";" & _
+                    CsvField(blk.brojDokumenta) & ";" & _
+                    CsvField(svrhaBase & " " & blk.brojDokumenta) & ";" & _
+                    datumValute & vbCrLf
+            rows = rows + 1
+        End If
+    Next v
+
+    If rows = 0 Then Exit Function
+
+    Dim csvPath As String
+    csvPath = EnsureDocFolder(CSV_DIR_BANKA_NALOZI) & "\Nalozi_za_prenos_" & _
+              Format$(Now, "yyyymmdd_hhnnss") & ".csv"
+    WriteAllTextUtf8 csvPath, s
+
+    GenerisiNalogeCSV = csvPath
+    Exit Function
+
+EH:
+    LogErr "modBankaExportPregled.GenerisiNalogeCSV"
+    GenerisiNalogeCSV = ""
+End Function
+
+' Iznos za CSV: uvek decimalna TACKA, bez hiljada separatora, 2 decimale.
+' Format$ "0.00" na sr locale daje zarez -> normalizuj deterministicki.
+Private Function CsvIznos(ByVal amt As Double) As String
+    CsvIznos = Replace(Format$(amt, "0.00"), ",", ".")
+End Function
+
+' CSV polje: trim + quote ako sadrzi separator/navodnik/novi red.
+Private Function CsvField(ByVal s As String) As String
+    Dim t As String
+    t = Trim$(s)
+    If InStr(t, ";") > 0 Or InStr(t, """") > 0 Or _
+       InStr(t, vbCr) > 0 Or InStr(t, vbLf) > 0 Then
+        t = """" & Replace(t, """", """""") & """"
+    End If
+    CsvField = t
+End Function
+
+' Tekuci racun za nalog: skini razmake (format "160-xxxx-xx" ili 18 cifara
+' ostaje kako je unet u maticne podatke / config).
+Private Function NormalizujRacun(ByVal racun As String) As String
+    NormalizujRacun = Replace(Trim$(racun), " ", "")
 End Function
 

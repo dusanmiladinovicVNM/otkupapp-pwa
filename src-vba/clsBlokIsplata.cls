@@ -29,3 +29,4 @@ Public VecIsplaceno As Double
 Public OtvorenIznos As Double
 Public HasTekuciRacun As Boolean
 Public KooperantAvansSaldo As Double      ' info display: nedodeljeni avans
+Public IsplatitiIznos As Double           ' finalni iznos za nalog/specifikaciju (operater unos ili OtvorenIznos)

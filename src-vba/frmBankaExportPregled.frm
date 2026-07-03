@@ -39,8 +39,10 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "Export u clipboard"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
+    StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
+    btnGenerisiCSV.enabled = True
     StyleExitButton btnPovratak, "Povratak"
-    
+
     StyleLabel lblStatus, TXT_MUTED(), True
     StyleLabel lblSelectionSummary, TXT_MUTED(), True
     StyleSubtitle lblSubtitle, "Pregled otvorenih blokova za isplatu"
@@ -585,6 +587,50 @@ Private Function CountSelected() As Long
     CountSelected = n
 End Function
 
+'======================================================================
+' CollectIsplataBlokovi - blokovi za CSV naloge / specifikaciju isplata:
+'   - selektovani redovi ako selekcije ima, inace svi prikazani
+'   - preskace blokove bez tekuceg racuna (broji ih u outMissingTR)
+'   - IsplatitiIznos = operater unos (override) ili OtvorenIznos
+'======================================================================
+Private Function CollectIsplataBlokovi(ByRef outMissingTR As Long) As Collection
+    Dim result As New Collection
+    outMissingTR = 0
+
+    Dim hasSelection As Boolean
+    hasSelection = (CountSelected() > 0)
+
+    Dim i As Long
+    For i = 0 To lstBlokovi.ListCount - 1
+        If hasSelection And Not lstBlokovi.Selected(i) Then GoTo NextRow
+
+        Dim blk As clsBlokIsplata
+        Set blk = GetBlokByListIndex(i)
+        If blk Is Nothing Then GoTo NextRow
+
+        If Not blk.HasTekuciRacun Then
+            outMissingTR = outMissingTR + 1
+            GoTo NextRow
+        End If
+
+        blk.IsplatitiIznos = GetIsplatitiAmount(blk)
+        If blk.IsplatitiIznos > 0 Then result.Add blk
+NextRow:
+    Next i
+
+    Set CollectIsplataBlokovi = result
+End Function
+
+' Suma IsplatitiIznos preko kolekcije (za potvrdu i status liniju).
+Private Function SumIsplatiti(ByVal blokovi As Collection) As Double
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In blokovi
+        Set blk = v
+        SumIsplatiti = SumIsplatiti + blk.IsplatitiIznos
+    Next v
+End Function
+
 Private Sub btnPovratak_Click()
     On Error GoTo EH
     frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
@@ -640,7 +686,7 @@ End Sub
 
 Private Sub btnGenerisiCSV_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetActionButtons
-    ' ne radi hover na disabled -- ali bezbedno
+    ButtonHover btnGenerisiCSV
 End Sub
 
 Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
@@ -652,10 +698,77 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
     ResetActionButtons
 End Sub
 
+'======================================================================
+' btnGenerisiCSV - CSV naloga za prenos (uvoz u e-banking).
+' Selektovani blokovi (ili svi ako selekcije nema), iznos po bloku =
+' "Isplatiti" (operater unos ili otvoreno). Potvrda pre upisa fajla.
+'======================================================================
 Private Sub btnGenerisiCSV_Click()
-    MsgBox "Generisanje NPS CSV za bank import je deo Commit 3." & vbCrLf & vbCrLf & _
-           "Trenutno: za pripremu liste virmana koristi 'Export u clipboard'.", _
+    On Error GoTo EH
+
+    If m_Blokovi Is Nothing Then
+        MsgBox "Nema podataka za naloge.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    If m_Blokovi.count = 0 Then
+        MsgBox "Nema podataka za naloge.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    ' Platilac (firma) mora biti podesen pre generisanja
+    If LenB(Trim$(DocConfigOr("SELLER_ACCOUNT", ""))) = 0 Then
+        MsgBox "Nije unet teku" & ChrW(263) & "i ra" & ChrW(269) & "un firme (platilac)." & vbCrLf & _
+               "Unesite ga u Pode" & ChrW(353) & "avanja -> Prodavac (firma) -> Teku" & ChrW(263) & "i ra" & ChrW(269) & "un.", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim missingTR As Long
+    Dim blokovi As Collection
+    Set blokovi = CollectIsplataBlokovi(missingTR)
+
+    If blokovi.count = 0 Then
+        MsgBox "Nema blokova za naloge: izabrani blokovi nemaju teku" & ChrW(263) & "i ra" & ChrW(269) & "un.", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim total As Double
+    total = SumIsplatiti(blokovi)
+
+    Dim msg As String
+    msg = "Generisati " & blokovi.count & " naloga za prenos?" & vbCrLf & vbCrLf & _
+          "Ukupan iznos: " & Format$(total, "#,##0.00") & " RSD" & vbCrLf & _
+          "Datum valute: " & Format$(Date, "d.m.yyyy")
+    If missingTR > 0 Then
+        msg = msg & vbCrLf & vbCrLf & "Presko" & ChrW(269) & "eno (bez TR): " & missingTR & " blokova"
+    End If
+
+    If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim csvPath As String
+    csvPath = GenerisiNalogeCSV(blokovi)
+
+    If LenB(csvPath) = 0 Then
+        MsgBox "Gre" & ChrW(353) & "ka pri generisanju CSV fajla. Pogledajte log.", vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    lblStatus.caption = "CSV: " & blokovi.count & " naloga | " & _
+                        Format$(total, "#,##0.00") & " RSD"
+
+    MsgBox "Generisano " & blokovi.count & " naloga." & vbCrLf & vbCrLf & csvPath, _
            vbInformation, APP_NAME
+
+    ' Otvori folder sa oznacenim fajlom (operater ga odatle uvozi u e-banking)
+    On Error Resume Next
+    Shell "explorer.exe /select,""" & csvPath & """", vbNormalFocus
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogErr "frmBankaExportPregled.btnGenerisiCSV_Click"
+    MsgBox "Gre" & ChrW(353) & "ka pri generisanju naloga: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 '======================================================================

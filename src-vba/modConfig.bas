@@ -27,6 +27,8 @@ Public Const PDF_DIR_PALETNI As String = "Paletni listovi"
 Public Const PDF_DIR_PRERADA As String = "Preradni listovi"
 Public Const PDF_DIR_SPECIFIKACIJE As String = "Specifikacije"
 Public Const PDF_DIR_IZVESTAJI As String = "Izvestaji"
+' CSV nalozi za prenos (banka export) - isti root kao PDF folderi (EnsureDocFolder)
+Public Const CSV_DIR_BANKA_NALOZI As String = "Nalozi za banku"
 
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
@@ -371,6 +373,17 @@ Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 Public Const CFG_OTKUP_KLAUZULA As String = "OTKUP_KLAUZULA"
 Public Const CFG_OTKUP_ROK As String = "OTKUP_ROK_ISPLATE"
 Public Const OTKUP_ROK_DEFAULT As String = "Po dogovoru"
+
+' Banka - nalozi za prenos (CSV export iz frmBankaExportPregled za uvoz u
+' e-banking). Platilac = SELLER_NAME / SELLER_ACCOUNT (grupa "Prodavac (firma)").
+' Sifra placanja: NBS sifarnik, default 221 (bezgotovinski promet robe i usluga).
+' Svrha: osnovni tekst, po nalogu se dopisuje broj otkupnog bloka; poziv na broj
+' odobrenja = broj bloka (jaki kljuc za auto-map pri uvozu izvoda, vidi
+' docs/production-runbook-banka-import-setup.md).
+Public Const CFG_BANKA_NALOG_SIFRA As String = "BANKA_NALOG_SIFRA_PLACANJA"
+Public Const BANKA_NALOG_SIFRA_DEFAULT As String = "221"
+Public Const CFG_BANKA_NALOG_SVRHA As String = "BANKA_NALOG_SVRHA"
+Public Const BANKA_NALOG_SVRHA_DEFAULT As String = "Otkup poljoprivrednih proizvoda"
 
 ' --- Imena sablon sheet-ova (template worksheets za stampu) ---
 ' Jedinstveni izvor istine za nazive sheet-ova-sablona (umesto rasutih

@@ -157,6 +157,11 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Banka / lokalno", "BANKA_AUTO_IMPORT_ON_START", "Auto-uvoz izvoda pri startu", "list:DA;NE", "local"
     CfgAdd c, "Banka / lokalno", "BANKA_ALLOWED_EXTENSIONS", "Dozvoljene ekstenzije (npr. pdf)", "text", "local"
 
+    ' Banka / nalozi -- parametri naloga za prenos (CSV export, poslovni config
+    ' u tblSEFConfig; platilac je SELLER_NAME/SELLER_ACCOUNT iz "Prodavac (firma)").
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SIFRA_PLACANJA", ChrW(352) & "ifra pla" & ChrW(263) & "anja na nalozima (prazno = 221)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SVRHA", "Svrha pla" & ChrW(263) & "anja - osnovni tekst (+ broj bloka)", "text"
+
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_LIVE", "SEF test: dozvoli LIVE slanje", "bool"
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_CANCEL_STORNO", "SEF test: dozvoli cancel/storno", "bool"
     CfgAdd c, "Napredno / Test", "SEF_DEBUG_LOG", "SEF debug log", "bool"
