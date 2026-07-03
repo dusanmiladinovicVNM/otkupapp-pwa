@@ -195,23 +195,17 @@ Public Function OtkupBlok_ConfirmUnos() As Boolean
     ' Bruto unos: preostalo otpremnice je u NETO -> oduzmi taru ambalaze sa Klase I
     ' (i Klase II, ako postoji) da poredjenje bude nedvosmisleno (neto vs neto).
     If OtkupBrutoUnos() Then
-        Dim ka As Long, tw As Double
+        Dim ka As Long, tw As Double, netoKol As Double
         Dim tip As String
         On Error Resume Next
         tip = CStr(mForm.Controls("cmbTipAmbalaze").value)
         If TryParseLong(CStr(mForm.Controls("txtKolAmbalaze").value), ka) Then
-            If ka > 0 And Len(Trim$(tip)) > 0 Then
-                tw = ka * GetTezinaGajbice(tip)
-                If tw > 0 And tw < kol Then kol = kol - tw
-            End If
+            If ComputeNetoFromBruto(kol, ka, tip, netoKol, tw) Then kol = netoKol
         End If
         ' Klasa II: zasebne gajbe (runtime polje txtKolAmbalazeIIRT).
-        Dim ka2 As Long, tw2 As Double
+        Dim ka2 As Long, tw2 As Double, netoKol2 As Double
         If k2 > 0 And TryParseLong(CStr(mForm.Controls("txtKolAmbalazeIIRT").value), ka2) Then
-            If ka2 > 0 And Len(Trim$(tip)) > 0 Then
-                tw2 = ka2 * GetTezinaGajbice(tip)
-                If tw2 > 0 And tw2 < k2 Then k2 = k2 - tw2
-            End If
+            If ComputeNetoFromBruto(k2, ka2, tip, netoKol2, tw2) Then k2 = netoKol2
         End If
         On Error GoTo EH
     End If
@@ -1262,7 +1256,10 @@ End Sub
 ' VEZIVANJE + CENA
 ' ============================================================
 
-Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
+' Public: cist data sloj (bez form state) -- poziva ga OtkupBlok_AfterUnos,
+' a testira modBusinessFlowProTests. otkupIDs = "ID" ili "ID1 + ID2"
+' (format rezultata SaveOtkupMulti_TX).
+Public Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
     Dim tx As clsTransaction
     On Error GoTo EH
     If Len(otpID) = 0 Or Len(Trim$(otkupIDs)) = 0 Then Exit Sub
@@ -1300,7 +1297,8 @@ End Sub
 
 ' BrojZbirne -> broj(evi) prijemnice (veza otpremnica<->prijemnica je preko
 ' BrojZbirne). Vise prijemnica iste zbirne -> spojeno zarezom; storno preskace.
-Private Function PrijemnicaBrojZaZbirnu(ByVal brojZbirne As String) As String
+' Public (cist data sloj) -- testira ga modBusinessFlowProTests.
+Public Function PrijemnicaBrojZaZbirnu(ByVal brojZbirne As String) As String
     On Error GoTo EH
     If Len(Trim$(brojZbirne)) = 0 Then Exit Function
 
@@ -1356,7 +1354,10 @@ Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
     Next i
 End Sub
 
-Private Function SumKolByOtp(ByVal otpID As String) As Double
+' Sum* helperi: cist data sloj nad tblOtkup (bez form state) -- Public da bi
+' ih modBusinessFlowProTests pokrio (prekoracenje otpremnice / auto-deselekcija
+' zavise od ovih suma).
+Public Function SumKolByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1374,7 +1375,7 @@ Private Function SumKolByOtp(ByVal otpID As String) As Double
 End Function
 
 ' Zbir BRUTO kg otkup blokova za otpremnicu (BrutoKg po redu; ako je prazno -> neto).
-Private Function SumBrutoByOtp(ByVal otpID As String) As Double
+Public Function SumBrutoByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1397,7 +1398,7 @@ Private Function SumBrutoByOtp(ByVal otpID As String) As Double
     SumBrutoByOtp = s
 End Function
 
-Private Function SumAmbByOtp(ByVal otpID As String) As Double
+Public Function SumAmbByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)

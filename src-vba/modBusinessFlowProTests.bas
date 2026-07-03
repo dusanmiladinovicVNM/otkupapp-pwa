@@ -50,6 +50,7 @@ Private Const TEST_PAR_ID As String = "PAR-90001"
 Private Const TEST_VRSTA As String = "Test Jabuka"
 Private Const TEST_SORTA As String = "Test Sorta"
 Private Const TEST_TIP_AMB As String = "Test Gajba"
+Private Const TEST_TIP_AMB_2KG As String = "TST-PRO Gajba2kg"
 
 Private Const TEST_PREFIX As String = "TST-PRO"
 
@@ -73,6 +74,24 @@ Public Sub RunBusinessFlowProSuite()
     Test_InvalidSavesDoNotAppend
     Test_OtkupInputValidationHardening
     Test_OtkupReadHelpersExcludeStornirano
+
+    Test_OtkupSamoKlasaII
+    Test_OtkupKesIsplataKnjiziNovac
+    Test_OtkupAmbalazaDvojniUpis
+    Test_OtkupBrutoIVremeUnosa
+    Test_OtkupMultiResultFormat
+    Test_KulturaIDFallback
+    Test_OtkupAutoAvansPriSnimanju
+    Test_OtkupRejectLeavesAllTablesUntouched
+    Test_GetSaldoByStation
+    Test_OtkupReadHelpersDateRange
+    Test_ComputeNetoFromBruto
+    Test_LinkOtkupIDsToOtpremnica
+    Test_SumHelpersByOtp
+    Test_PrijemnicaBrojZaZbirnu
+    Test_StornoOtkupObeKlase
+    Test_LostBlokAdoptFlow
+
     Test_DokumentaInputValidationHardening
     Test_DokumentaReadHelpersExcludeStornirano
     Test_DualClassDocumentWrappers
@@ -124,6 +143,47 @@ Public Sub RunBusinessFlowProTraceabilityOnly()
 
 EH:
     LogFatal "RunBusinessFlowProTraceabilityOnly", Err.Number, Err.description
+    EndRun
+End Sub
+
+' Fokusiran pod-suite: samo otkup sloj (modOtkup + otkup-blok data helperi).
+' Za brzu regresiju posle izmena u modOtkup / frmOtkup / modOtkupBlok.
+Public Sub RunOtkupCoverageOnly()
+    On Error GoTo EH
+
+    BeginRun "OTKUP COVERAGE ONLY"
+
+    Test_CoreTablesAndColumnsExist
+    SeedBusinessFlowProMasterData
+    Test_SeedMasterDataAvailable
+
+    Test_OtkupAtomicMultiClassSave
+    Test_OtkupClassIIAmbalaza
+    Test_OtkupInputValidationHardening
+    Test_OtkupReadHelpersExcludeStornirano
+
+    Test_OtkupSamoKlasaII
+    Test_OtkupKesIsplataKnjiziNovac
+    Test_OtkupAmbalazaDvojniUpis
+    Test_OtkupBrutoIVremeUnosa
+    Test_OtkupMultiResultFormat
+    Test_KulturaIDFallback
+    Test_OtkupAutoAvansPriSnimanju
+    Test_OtkupRejectLeavesAllTablesUntouched
+    Test_GetSaldoByStation
+    Test_OtkupReadHelpersDateRange
+    Test_ComputeNetoFromBruto
+    Test_LinkOtkupIDsToOtpremnica
+    Test_SumHelpersByOtp
+    Test_PrijemnicaBrojZaZbirnu
+    Test_StornoOtkupObeKlase
+    Test_LostBlokAdoptFlow
+
+    EndRun
+    Exit Sub
+
+EH:
+    LogFatal "RunOtkupCoverageOnly", Err.Number, Err.description
     EndRun
 End Sub
 
@@ -969,6 +1029,970 @@ EH:
     LogFail "Otkup read helpers exclude stornirano", Err.description
 End Sub
 
+' ============================================================
+' OTKUP COVERAGE (modOtkup + otkup-blok data sloj)
+' ============================================================
+
+' Samo Klasa II (kolicinaI = 0): kes i izdata ambalaza MORAJU na red Klase II
+' (SaveOtkupMulti_TX preusmerava novac/kolAmbIzdata kad Klase I nema).
+Private Sub Test_OtkupSamoKlasaII()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKII")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojDok As String
+    Dim brojZbirne As String
+    brojDok = TEST_PREFIX & "-OTK-II-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim hasIzdataCol As Boolean
+    hasIzdataCol = (GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA) > 0)
+
+    Dim izdata As Long
+    If hasIzdataCol Then izdata = 5 Else izdata = 0
+
+    Dim beforeOtkup As Long
+    Dim beforeNovac As Long
+    beforeOtkup = CountRows(TBL_OTKUP)
+    beforeNovac = CountRows(TBL_NOVAC)
+
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        0#, 0#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok, _
+        500#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
+        hasKlasaII:=True, kolicinaII:=150#, cenaII:=70#, kolAmbIzdata:=izdata)
+
+    AssertTrue Len(Trim$(result)) > 0, "Samo Klasa II: save returns ID"
+    AssertEquals "0", CStr(InStr(result, " + ")), "Samo Klasa II: single ID (no plus separator)"
+    AssertEquals CStr(beforeOtkup + 1), CStr(CountRows(TBL_OTKUP)), _
+                 "Samo Klasa II: exactly one otkup row appended"
+
+    Dim otkII As String
+    otkII = FindOtkupIDByBrojAndKlasa(brojDok, "II")
+
+    AssertEquals otkII, result, "Samo Klasa II: result is the class II row"
+    AssertEquals "", FindOtkupIDByBrojAndKlasa(brojDok, "I"), "Samo Klasa II: no class I row"
+
+    AssertEquals "500", CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkII, COL_OTK_NOVAC)), _
+                 "Samo Klasa II: kes zabelezen na redu Klase II"
+
+    If hasIzdataCol Then
+        AssertEquals "5", CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkII, COL_OTK_KOL_AMB_IZDATA)), _
+                     "Samo Klasa II: izdata ambalaza zabelezena na redu Klase II"
+    Else
+        LogSkip "Samo Klasa II: izdata ambalaza", "Nema kolone " & COL_OTK_KOL_AMB_IZDATA
+    End If
+
+    AssertEquals CStr(beforeNovac + 1), CStr(CountRows(TBL_NOVAC)), _
+                 "Samo Klasa II: exactly one novac row appended"
+    AssertEquals NOV_KES_OTKUPAC_KOOP, _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, otkII, COL_NOV_TIP)), _
+                 "Samo Klasa II: novac red vezan na OtkupID Klase II"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup samo Klasa II", Err.description
+End Sub
+
+' Kes isplata na otkupu (novac > 0) -> tacno jedan tblNovac red
+' (NOV_KES_OTKUPAC_KOOP) vezan na primarni OtkupID, sa imenom kooperanta;
+' nepoznat kooperant -> Partner fallback na KooperantID; novac = 0 -> bez reda.
+Private Sub Test_OtkupKesIsplataKnjiziNovac()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKKES")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim beforeNovac As Long
+    beforeNovac = CountRows(TBL_NOVAC)
+
+    Dim brojDok As String
+    brojDok = TEST_PREFIX & "-OTK-KES-" & scenario
+
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok, _
+        300#, "TEST PRIMALAC", GetTestParcelaID(), brojZbirne)
+
+    AssertTrue Len(Trim$(result)) > 0, "Kes isplata: save returns ID"
+    AssertEquals CStr(beforeNovac + 1), CStr(CountRows(TBL_NOVAC)), _
+                 "Kes isplata: exactly one novac row appended"
+
+    AssertEquals NOV_KES_OTKUPAC_KOOP, _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_TIP)), _
+                 "Kes isplata: novac tip je KesOtkupacKoop"
+    AssertDoubleNear 300#, TestNumVal(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_ISPLATA)), _
+                     0.001, "Kes isplata: iznos isplate = novac"
+    AssertDoubleNear 0#, TestNumVal(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_UPLATA)), _
+                     0.001, "Kes isplata: uplata je nula"
+    AssertEquals "Test Kooperant", _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_PARTNER)), _
+                 "Kes isplata: partner je Ime + Prezime kooperanta"
+    AssertEquals TEST_KOOP_ID, _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_KOOP_ID)), _
+                 "Kes isplata: novac red nosi KooperantID"
+    AssertEquals "TEST PRIMALAC", _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_NAPOMENA)), _
+                 "Kes isplata: primalac zabelezen u napomeni"
+    AssertEquals brojDok, _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result, COL_NOV_BROJ_DOK)), _
+                 "Kes isplata: novac red nosi broj otkupnog bloka"
+
+    ' Fallback: kooperant koji NE postoji u tblKooperanti -> Partner = KooperantID.
+    Dim koopX As String
+    koopX = "KOOP-TSTX-" & scenario
+
+    Dim brojDok2 As String
+    brojDok2 = TEST_PREFIX & "-OTK-KESX-" & scenario
+
+    Dim result2 As String
+    result2 = SaveOtkupMulti_TX( _
+        testDate, koopX, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok2, _
+        100#, "TEST OPERATOR", "", brojZbirne)
+
+    AssertTrue Len(Trim$(result2)) > 0, "Kes isplata: fallback save returns ID"
+    AssertEquals koopX, _
+                 CStr(GetValueByKey(TBL_NOVAC, COL_NOV_OTKUP_ID, result2, COL_NOV_PARTNER)), _
+                 "Kes isplata: nepoznat kooperant -> Partner = KooperantID"
+
+    ' Bez kesa (novac = 0) -> nema novog novac reda.
+    Dim beforeNoCash As Long
+    beforeNoCash = CountRows(TBL_NOVAC)
+
+    Dim brojDok3 As String
+    brojDok3 = TEST_PREFIX & "-OTK-KES0-" & scenario
+
+    Dim result3 As String
+    result3 = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok3, _
+        0#, "TEST OPERATOR", "", brojZbirne)
+
+    AssertTrue Len(Trim$(result3)) > 0, "Kes isplata: zero-cash save returns ID"
+    AssertEquals CStr(beforeNoCash), CStr(CountRows(TBL_NOVAC)), _
+                 "Kes isplata: novac = 0 ne knjizi novac red"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup kes isplata knjizi novac", Err.description
+End Sub
+
+' Ambalaza dvojni upis: primljena (kolAmb) = Kooperant Izlaz + Stanica Ulaz
+' (DOK_TIP_OTKUP); izdata (kolAmbIzdata) = Kooperant Ulaz + Stanica Izlaz
+' (DOK_TIP_OM_IZLAZ_KOOP). Tacno po jedna noga, ispravne kolicine.
+Private Sub Test_OtkupAmbalazaDvojniUpis()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAMB")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojDok As String
+    Dim brojZbirne As String
+    brojDok = TEST_PREFIX & "-OTK-AMB-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim hasIzdataCol As Boolean
+    hasIzdataCol = (GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA) > 0)
+
+    Dim izdata As Long
+    If hasIzdataCol Then izdata = 4 Else izdata = 0
+
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brojDok, _
+        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
+        kolAmbIzdata:=izdata)
+
+    AssertTrue Len(Trim$(result)) > 0, "Amb dvojni upis: save returns ID"
+
+    Dim legs As Long
+    Dim kol As Double
+
+    kol = SumAmbalazaLegKolicina(result, TEST_KOOP_ID, "Izlaz", DOK_TIP_OTKUP, legs)
+    AssertEquals "1", CStr(legs), "Amb dvojni upis: jedna noga Kooperant-Izlaz (otkup)"
+    AssertDoubleNear 10#, kol, 0.001, "Amb dvojni upis: Kooperant-Izlaz kolicina"
+
+    kol = SumAmbalazaLegKolicina(result, TEST_ST_ID, "Ulaz", DOK_TIP_OTKUP, legs)
+    AssertEquals "1", CStr(legs), "Amb dvojni upis: jedna noga Stanica-Ulaz (otkup)"
+    AssertDoubleNear 10#, kol, 0.001, "Amb dvojni upis: Stanica-Ulaz kolicina"
+
+    If hasIzdataCol Then
+        kol = SumAmbalazaLegKolicina(result, TEST_KOOP_ID, "Ulaz", DOK_TIP_OM_IZLAZ_KOOP, legs)
+        AssertEquals "1", CStr(legs), "Amb dvojni upis: jedna noga Kooperant-Ulaz (izdata)"
+        AssertDoubleNear 4#, kol, 0.001, "Amb dvojni upis: Kooperant-Ulaz izdata kolicina"
+
+        kol = SumAmbalazaLegKolicina(result, TEST_ST_ID, "Izlaz", DOK_TIP_OM_IZLAZ_KOOP, legs)
+        AssertEquals "1", CStr(legs), "Amb dvojni upis: jedna noga Stanica-Izlaz (izdata)"
+        AssertDoubleNear 4#, kol, 0.001, "Amb dvojni upis: Stanica-Izlaz izdata kolicina"
+
+        AssertEquals "4", CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result, COL_OTK_KOL_AMB_IZDATA)), _
+                     "Amb dvojni upis: KolAmbIzdata upisana po imenu kolone"
+    Else
+        LogSkip "Amb dvojni upis: izdata ambalaza", "Nema kolone " & COL_OTK_KOL_AMB_IZDATA
+    End If
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup ambalaza dvojni upis", Err.description
+End Sub
+
+' BrutoKg: upis po imenu kolone kad je bruto rezim dao neto (brutoKgI > 0);
+' bez bruto unosa kolona ostaje prazna (prazno = unet neto). VremeUnosa se
+' puni pri svakom snimanju.
+Private Sub Test_OtkupBrutoIVremeUnosa()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKBRT")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    If GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO) = 0 Then
+        LogSkip "Otkup BrutoKg upis", "Nema kolone " & COL_OTK_BRUTO
+        Exit Sub
+    End If
+
+    Dim brojDok1 As String
+    brojDok1 = TEST_PREFIX & "-OTK-BRT-" & scenario
+
+    Dim result1 As String
+    result1 = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brojDok1, _
+        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
+        brutoKgI:=120#)
+
+    AssertTrue Len(Trim$(result1)) > 0, "BrutoKg: save returns ID"
+    AssertEquals "120", CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result1, COL_OTK_BRUTO)), _
+                 "BrutoKg: bruto zamrznut u koloni BrutoKg"
+    AssertEquals "100", CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result1, COL_OTK_KOLICINA)), _
+                 "BrutoKg: Kolicina nosi neto"
+
+    If GetColumnIndex(TBL_OTKUP, COL_OTK_VREME_UNOSA) > 0 Then
+        AssertTrue Len(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result1, COL_OTK_VREME_UNOSA))) > 0, _
+                   "BrutoKg: VremeUnosa popunjeno pri snimanju"
+    Else
+        LogSkip "BrutoKg: VremeUnosa", "Nema kolone " & COL_OTK_VREME_UNOSA
+    End If
+
+    Dim brojDok2 As String
+    brojDok2 = TEST_PREFIX & "-OTK-NETO-" & scenario
+
+    Dim result2 As String
+    result2 = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brojDok2, _
+        0#, "TEST OPERATOR", "", brojZbirne)
+
+    AssertTrue Len(Trim$(result2)) > 0, "BrutoKg: neto save returns ID"
+    AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result2, COL_OTK_BRUTO)), _
+                 "BrutoKg: bez bruto unosa kolona ostaje prazna"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup BrutoKg i VremeUnosa", Err.description
+End Sub
+
+' Format rezultata za dve klase: "OTK-x + OTK-y". Ugovor sa
+' modOtkupBlok.LinkOtkupIDsToOtpremnica (Split na " + ").
+Private Sub Test_OtkupMultiResultFormat()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKFMT")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojDok As String
+    Dim brojZbirne As String
+    brojDok = TEST_PREFIX & "-OTK-FMT-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok, _
+        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
+        hasKlasaII:=True, kolicinaII:=50#, cenaII:=5#)
+
+    Dim otkI As String
+    Dim otkII As String
+    otkI = FindOtkupIDByBrojAndKlasa(brojDok, "I")
+    otkII = FindOtkupIDByBrojAndKlasa(brojDok, "II")
+
+    AssertTrue Len(otkI) > 0 And Len(otkII) > 0, "Result format: obe klase snimljene"
+    AssertEquals otkI & " + " & otkII, result, _
+                 "Result format: 'ID-I + ID-II' (ugovor za LinkOtkupIDsToOtpremnica)"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup multi result format", Err.description
+End Sub
+
+' KulturaID fallback: vrsta koje nema u tblKulture -> KulturaID = "vrsta-sorta".
+Private Sub Test_KulturaIDFallback()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKKUL")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim vrsta As String
+    vrsta = TEST_PREFIX & "-VOCE-" & scenario
+
+    Dim brojDok As String
+    brojDok = TEST_PREFIX & "-OTK-KUL-" & scenario
+
+    Dim result As String
+    result = SaveOtkup_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, vrsta, "SortaX", _
+        10#, 5#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok, _
+        0#, "TEST OPERATOR", KLASA_I, "", TEST_PREFIX & "-ZBR-" & scenario)
+
+    AssertTrue Len(Trim$(result)) > 0, "KulturaID fallback: save returns ID"
+    AssertEquals vrsta & "-SortaX", _
+                 CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result, COL_OTK_KULTURA)), _
+                 "KulturaID fallback: nepoznata vrsta -> vrsta-sorta"
+
+    Exit Sub
+
+EH:
+    LogFail "KulturaID fallback", Err.description
+End Sub
+
+' Auto-avans pri snimanju: otvoren virman avans kooperanta se automatski
+' vezuje na novi otkup unutar SaveOtkupMulti_TX (ApplyAvansToOtkup poziv),
+' otkup se markira kao isplacen, ostatak avansa ostaje na originalnom redu.
+Private Sub Test_OtkupAutoAvansPriSnimanju()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKAVN")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    ' Zaseban (sintetski) kooperant: izoluje avans od ostalih testova koji
+    ' koriste TEST_KOOP_ID (da im auto-avans ne "pojede" fixture).
+    Dim koopAv As String
+    koopAv = "KOOP-TSTAV-" & scenario
+
+    Dim avansID As String
+    avansID = SaveNovac( _
+        TEST_PREFIX & "-AVANS-" & scenario, testDate, _
+        "TEST AVANS KOOP", koopAv, "Kooperant", _
+        "", koopAv, "", "", _
+        NOV_VIRMAN_AVANS_KOOP, _
+        0#, 150#, _
+        "TST avans fixture")
+
+    If Len(Trim$(avansID)) = 0 Then
+        LogFail "Otkup auto-avans pri snimanju", "Setup: SaveNovac avans nije uspeo."
+        Exit Sub
+    End If
+
+    Dim brojDok As String
+    brojDok = TEST_PREFIX & "-OTK-AVN-" & scenario
+
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, koopAv, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 1#, TEST_TIP_AMB, 0, TEST_VOZ_ID, brojDok, _
+        0#, "TEST OPERATOR", "", TEST_PREFIX & "-ZBR-" & scenario)
+
+    AssertTrue Len(Trim$(result)) > 0, "Auto-avans: save returns ID"
+
+    AssertDoubleNear 100#, GetIsplataForOtkup(result), 0.01, _
+                     "Auto-avans: iznos otkupa vezan iz avansa pri snimanju"
+    AssertEquals STATUS_ISPLACENO, _
+                 CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, result, COL_OTK_ISPLACENO)), _
+                 "Auto-avans: otkup markiran kao isplacen"
+    AssertDoubleNear 50#, TestNumVal(LookupValue(TBL_NOVAC, COL_NOV_ID, avansID, COL_NOV_ISPLATA)), _
+                     0.01, "Auto-avans: ostatak avansa na originalnom redu"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup auto-avans pri snimanju", Err.description
+End Sub
+
+' Sve validacione grane SaveOtkupMulti_TX: odbijen unos NE sme da dira
+' tblOtkup, tblAmbalaza NI tblNovac (atomicnost / rollback).
+Private Sub Test_OtkupRejectLeavesAllTablesUntouched()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKREJ")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim beforeOtkup As Long
+    Dim beforeAmb As Long
+    Dim beforeNovac As Long
+    beforeOtkup = CountRows(TBL_OTKUP)
+    beforeAmb = CountRows(TBL_AMBALAZA)
+    beforeNovac = CountRows(TBL_NOVAC)
+
+    Dim r As String
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, "", TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ1-" & scenario, _
+        0#, "TEST", "", brojZbirne)
+    AssertEquals "", r, "Reject: prazna stanica"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        0#, 0#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ2-" & scenario, _
+        0#, "TEST", "", brojZbirne)
+    AssertEquals "", r, "Reject: nijedna klasa (kolicinaI = 0, bez Klase II)"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 0#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ3-" & scenario, _
+        0#, "TEST", "", brojZbirne)
+    AssertEquals "", r, "Reject: cena I = 0 uz kolicinu I"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ4-" & scenario, _
+        0#, "TEST", "", brojZbirne, hasKlasaII:=True, kolicinaII:=0#, cenaII:=50#)
+    AssertEquals "", r, "Reject: Klasa II bez kolicine"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ5-" & scenario, _
+        0#, "TEST", "", brojZbirne, hasKlasaII:=True, kolicinaII:=50#, cenaII:=0#)
+    AssertEquals "", r, "Reject: Klasa II bez cene"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, -1, TEST_VOZ_ID, TEST_PREFIX & "-REJ6-" & scenario, _
+        100#, "TEST", "", brojZbirne)
+    AssertEquals "", r, "Reject: negativna ambalaza (uz kes koji ne sme da se knjizi)"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ7-" & scenario, _
+        0#, "TEST", "", brojZbirne, kolAmbIzdata:=-1)
+    AssertEquals "", r, "Reject: negativna izdata ambalaza"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ8-" & scenario, _
+        0#, "TEST", "", brojZbirne, hasKlasaII:=True, kolicinaII:=50#, cenaII:=5#, kolAmbII:=-1)
+    AssertEquals "", r, "Reject: negativna ambalaza Klase II"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, TEST_PREFIX & "-REJ9-" & scenario, _
+        -5#, "TEST", "", brojZbirne)
+    AssertEquals "", r, "Reject: negativan novac"
+
+    r = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, "", 10, TEST_VOZ_ID, TEST_PREFIX & "-REJ10-" & scenario, _
+        0#, "TEST", "", brojZbirne)
+    AssertEquals "", r, "Reject: ambalaza bez tipa"
+
+    AssertEquals CStr(beforeOtkup), CStr(CountRows(TBL_OTKUP)), _
+                 "Reject: tblOtkup netaknut posle svih odbijanja"
+    AssertEquals CStr(beforeAmb), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Reject: tblAmbalaza netaknuta posle svih odbijanja"
+    AssertEquals CStr(beforeNovac), CStr(CountRows(TBL_NOVAC)), _
+                 "Reject: tblNovac netaknut posle svih odbijanja"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup reject leaves tables untouched", Err.description
+End Sub
+
+' GetSaldoByStation: agregat po kooperantu (kolicina / novac / ambalaza),
+' stornirani redovi iskljuceni, nepoznata stanica -> Empty.
+Private Sub Test_GetSaldoByStation()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKSAL")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    ' Sintetska stanica -> potpuna izolacija agregata od ostalih test redova.
+    Dim st As String
+    st = "ST-TSTSAL-" & scenario
+
+    Dim koopA As String
+    Dim koopB As String
+    koopA = "KOOP-TSTSA-" & scenario
+    koopB = "KOOP-TSTSB-" & scenario
+
+    Dim idA1 As String
+    Dim idA2 As String
+    Dim idB1 As String
+    Dim idStorno As String
+
+    idA1 = SaveOtkup_TX(testDate, koopA, st, TEST_VRSTA, TEST_SORTA, _
+                        100#, 10#, TEST_TIP_AMB, 2, TEST_VOZ_ID, _
+                        TEST_PREFIX & "-SAL-A1-" & scenario, 50#, "TEST")
+    idA2 = SaveOtkup_TX(testDate, koopA, st, TEST_VRSTA, TEST_SORTA, _
+                        50#, 10#, TEST_TIP_AMB, 1, TEST_VOZ_ID, _
+                        TEST_PREFIX & "-SAL-A2-" & scenario, 0#, "TEST")
+    idB1 = SaveOtkup_TX(testDate, koopB, st, TEST_VRSTA, TEST_SORTA, _
+                        30#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, _
+                        TEST_PREFIX & "-SAL-B1-" & scenario, 10#, "TEST")
+    idStorno = SaveOtkup_TX(testDate, koopA, st, TEST_VRSTA, TEST_SORTA, _
+                            999#, 10#, TEST_TIP_AMB, 7, TEST_VOZ_ID, _
+                            TEST_PREFIX & "-SAL-S1-" & scenario, 0#, "TEST")
+
+    AssertTrue Len(idA1) > 0 And Len(idA2) > 0 And Len(idB1) > 0 And Len(idStorno) > 0, _
+               "Saldo: fixture redovi snimljeni"
+
+    MarkTestRowStornirano TBL_OTKUP, COL_OTK_ID, idStorno
+
+    Dim saldo As Variant
+    saldo = GetSaldoByStation(st)
+
+    AssertTrue Not IsEmpty(saldo), "Saldo: rezultat nije Empty"
+
+    If Not IsEmpty(saldo) Then
+        AssertEquals "2", CStr(UBound(saldo, 1)), "Saldo: jedan red po kooperantu"
+
+        AssertDoubleNear 150#, FindSaldoRowValue(saldo, koopA, 2), 0.001, _
+                         "Saldo: kolicina kooperanta A (storno iskljucen)"
+        AssertDoubleNear 50#, FindSaldoRowValue(saldo, koopA, 3), 0.001, _
+                         "Saldo: novac kooperanta A"
+        AssertDoubleNear 3#, FindSaldoRowValue(saldo, koopA, 4), 0.001, _
+                         "Saldo: ambalaza kooperanta A"
+
+        AssertDoubleNear 30#, FindSaldoRowValue(saldo, koopB, 2), 0.001, _
+                         "Saldo: kolicina kooperanta B"
+        AssertDoubleNear 10#, FindSaldoRowValue(saldo, koopB, 3), 0.001, _
+                         "Saldo: novac kooperanta B"
+        AssertDoubleNear 0#, FindSaldoRowValue(saldo, koopB, 4), 0.001, _
+                         "Saldo: ambalaza kooperanta B"
+    End If
+
+    AssertTrue IsEmpty(GetSaldoByStation("ST-TSTSAL-EMPTY-" & scenario)), _
+               "Saldo: nepoznata stanica -> Empty"
+
+    Exit Sub
+
+EH:
+    LogFail "GetSaldoByStation", Err.description
+End Sub
+
+' Read helperi: BETWEEN granice datumskog filtera (ukljucive) i poziv bez
+' datuma (bez filtera).
+Private Sub Test_OtkupReadHelpersDateRange()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKDAT")
+
+    Dim d1 As Date
+    d1 = NextTestDate()
+
+    Dim d2 As Date
+    Dim d3 As Date
+    d2 = d1 + 1
+    d3 = d1 + 2
+
+    Dim st As String
+    Dim koopD As String
+    st = "ST-TSTDAT-" & scenario
+    koopD = "KOOP-TSTDT-" & scenario
+
+    Dim id1 As String
+    Dim id2 As String
+    Dim id3 As String
+
+    id1 = SaveOtkup_TX(d1, koopD, st, TEST_VRSTA, TEST_SORTA, 10#, 5#, TEST_TIP_AMB, 0, _
+                       TEST_VOZ_ID, TEST_PREFIX & "-DAT1-" & scenario, 0#, "TEST")
+    id2 = SaveOtkup_TX(d2, koopD, st, TEST_VRSTA, TEST_SORTA, 10#, 5#, TEST_TIP_AMB, 0, _
+                       TEST_VOZ_ID, TEST_PREFIX & "-DAT2-" & scenario, 0#, "TEST")
+    id3 = SaveOtkup_TX(d3, koopD, st, TEST_VRSTA, TEST_SORTA, 10#, 5#, TEST_TIP_AMB, 0, _
+                       TEST_VOZ_ID, TEST_PREFIX & "-DAT3-" & scenario, 0#, "TEST")
+
+    AssertTrue Len(id1) > 0 And Len(id2) > 0 And Len(id3) > 0, _
+               "Date range: fixture redovi snimljeni"
+
+    Dim data As Variant
+    data = GetOtkupByStation(st, d1, d2)
+
+    AssertTrue ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id1), _
+               "Date range: donja granica ukljucena (stanica)"
+    AssertTrue ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id2), _
+               "Date range: gornja granica ukljucena (stanica)"
+    AssertFalse ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id3), _
+                "Date range: red van opsega iskljucen (stanica)"
+
+    data = GetOtkupByStation(st)
+    AssertTrue ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id1) _
+               And ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id3), _
+               "Date range: bez datuma vraca sve redove (stanica)"
+
+    data = GetOtkupByKooperant(koopD, d2, d3)
+    AssertFalse ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id1), _
+                "Date range: red pre opsega iskljucen (kooperant)"
+    AssertTrue ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id2) _
+               And ArrayContainsKeyValue(data, TBL_OTKUP, COL_OTK_ID, id3), _
+               "Date range: opseg ukljucuje granice (kooperant)"
+
+    Exit Sub
+
+EH:
+    LogFail "Otkup read helpers date range", Err.description
+End Sub
+
+' modOtkup.ComputeNetoFromBruto: deljena bruto->neto tara logika
+' (frmOtkup.btnUnos, zivi prikaz i modOtkupBlok.OtkupBlok_ConfirmUnos).
+Private Sub Test_ComputeNetoFromBruto()
+    On Error GoTo EH
+
+    If GetTable(TBL_TIP_AMBALAZE) Is Nothing Then
+        LogSkip "ComputeNetoFromBruto", "Nema tabele " & TBL_TIP_AMBALAZE
+        Exit Sub
+    End If
+
+    SeedTipAmbalaze2kg
+
+    Dim neto As Double
+    Dim tara As Double
+
+    AssertTrue ComputeNetoFromBruto(100#, 10, TEST_TIP_AMB_2KG, neto, tara), _
+               "ComputeNetoFromBruto: validan bruto se konvertuje"
+    AssertDoubleNear 20#, tara, 0.001, "ComputeNetoFromBruto: tara = kolAmb x tezina"
+    AssertDoubleNear 80#, neto, 0.001, "ComputeNetoFromBruto: neto = bruto - tara"
+
+    AssertFalse ComputeNetoFromBruto(100#, 50, TEST_TIP_AMB_2KG, neto, tara), _
+                "ComputeNetoFromBruto: tara >= bruto odbijena"
+    AssertDoubleNear 100#, tara, 0.001, _
+                     "ComputeNetoFromBruto: tara vracena i na odbijanje"
+
+    AssertFalse ComputeNetoFromBruto(100#, 10, TEST_PREFIX & "-NEMA-TEZINU", neto, tara), _
+                "ComputeNetoFromBruto: tip bez tezine odbijen"
+    AssertDoubleNear 0#, tara, 0.001, _
+                     "ComputeNetoFromBruto: tip bez tezine -> tara 0 (signal pozivaocu)"
+
+    AssertFalse ComputeNetoFromBruto(100#, 0, TEST_TIP_AMB_2KG, neto, tara), _
+                "ComputeNetoFromBruto: nula gajbi odbijena"
+    AssertFalse ComputeNetoFromBruto(0#, 10, TEST_TIP_AMB_2KG, neto, tara), _
+                "ComputeNetoFromBruto: nulti bruto odbijen"
+    AssertFalse ComputeNetoFromBruto(100#, 10, "", neto, tara), _
+                "ComputeNetoFromBruto: prazan tip odbijen"
+
+    Exit Sub
+
+EH:
+    LogFail "ComputeNetoFromBruto", Err.description
+End Sub
+
+' modOtkupBlok.LinkOtkupIDsToOtpremnica: parsira "A + B" rezultat i upisuje
+' OtpremnicaID na sve redove; prazni/nepostojeci ID-jevi su bezbedan no-op.
+Private Sub Test_LinkOtkupIDsToOtpremnica()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKLNK")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim idA As String
+    Dim idB As String
+
+    idA = SaveOtkup_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                       10#, 5#, TEST_TIP_AMB, 0, TEST_VOZ_ID, _
+                       TEST_PREFIX & "-LNK-A-" & scenario, 0#, "TEST")
+    idB = SaveOtkup_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                       10#, 5#, TEST_TIP_AMB, 0, TEST_VOZ_ID, _
+                       TEST_PREFIX & "-LNK-B-" & scenario, 0#, "TEST")
+
+    AssertTrue Len(idA) > 0 And Len(idB) > 0, "Link: fixture redovi snimljeni"
+
+    Dim otp1 As String
+    Dim otp2 As String
+    otp1 = "OTP-TSTLNK1-" & scenario
+    otp2 = "OTP-TSTLNK2-" & scenario
+
+    LinkOtkupIDsToOtpremnica idA & " + " & idB, otp1
+
+    AssertEquals otp1, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, idA, COL_OTK_OTPREMNICA_ID)), _
+                 "Link: prvi ID iz 'A + B' vezan"
+    AssertEquals otp1, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, idB, COL_OTK_OTPREMNICA_ID)), _
+                 "Link: drugi ID iz 'A + B' vezan"
+
+    ' Prazni argumenti = no-op (bez greske, bez promene).
+    LinkOtkupIDsToOtpremnica "", otp2
+    LinkOtkupIDsToOtpremnica idA, ""
+
+    AssertEquals otp1, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, idA, COL_OTK_OTPREMNICA_ID)), _
+                 "Link: prazan otpID ne menja postojecu vezu"
+
+    ' Nepostojeci ID u listi ne obara upis postojeceg.
+    LinkOtkupIDsToOtpremnica "OTK-NEPOSTOJI-" & scenario & " + " & idA, otp2
+
+    AssertEquals otp2, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, idA, COL_OTK_OTPREMNICA_ID)), _
+                 "Link: validan ID vezan i pored nepostojeceg u listi"
+
+    Exit Sub
+
+EH:
+    LogFail "LinkOtkupIDsToOtpremnica", Err.description
+End Sub
+
+' modOtkupBlok Sum helperi: kolicina / bruto (fallback na neto) / ambalaza
+' po otpremnici; stornirani blok iskljucen.
+Private Sub Test_SumHelpersByOtp()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKSUM")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim otpID As String
+    otpID = "OTP-TSTSUM-" & scenario
+
+    Dim hasBrutoCol As Boolean
+    hasBrutoCol = (GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO) > 0)
+
+    ' r1: sa BrutoKg 120 (neto 100); r2: bez bruto (fallback bruto = neto 50);
+    ' r3: storniran (999) - ne sme u sume.
+    Dim r1 As String
+    If hasBrutoCol Then
+        r1 = SaveOtkupMulti_TX( _
+            testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+            100#, 10#, TEST_TIP_AMB, 10, TEST_VOZ_ID, _
+            TEST_PREFIX & "-SUM1-" & scenario, 0#, "TEST", "", brojZbirne, _
+            brutoKgI:=120#)
+    Else
+        r1 = SaveOtkup_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                          100#, 10#, TEST_TIP_AMB, 10, TEST_VOZ_ID, _
+                          TEST_PREFIX & "-SUM1-" & scenario, 0#, "TEST")
+    End If
+
+    Dim r2 As String
+    r2 = SaveOtkup_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                      50#, 10#, TEST_TIP_AMB, 5, TEST_VOZ_ID, _
+                      TEST_PREFIX & "-SUM2-" & scenario, 0#, "TEST")
+
+    Dim r3 As String
+    r3 = SaveOtkup_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                      999#, 10#, TEST_TIP_AMB, 9, TEST_VOZ_ID, _
+                      TEST_PREFIX & "-SUM3-" & scenario, 0#, "TEST")
+
+    AssertTrue Len(r1) > 0 And Len(r2) > 0 And Len(r3) > 0, "Sum helperi: fixture redovi snimljeni"
+
+    LinkOtkupIDsToOtpremnica r1 & " + " & r2 & " + " & r3, otpID
+    MarkTestRowStornirano TBL_OTKUP, COL_OTK_ID, r3
+
+    AssertDoubleNear 150#, SumKolByOtp(otpID), 0.001, _
+                     "SumKolByOtp: neto suma bez storniranog"
+    AssertDoubleNear 15#, SumAmbByOtp(otpID), 0.001, _
+                     "SumAmbByOtp: ambalaza suma bez storniranog"
+
+    If hasBrutoCol Then
+        AssertDoubleNear 170#, SumBrutoByOtp(otpID), 0.001, _
+                         "SumBrutoByOtp: bruto 120 + fallback neto 50"
+    Else
+        LogSkip "SumBrutoByOtp", "Nema kolone " & COL_OTK_BRUTO
+    End If
+
+    Exit Sub
+
+EH:
+    LogFail "Sum helperi po otpremnici", Err.description
+End Sub
+
+' modOtkupBlok.PrijemnicaBrojZaZbirnu: dedup po broju (Klasa I+II dele broj),
+' vise prijemnica spojeno zarezom, storno preskocen, prazan ulaz -> prazno.
+Private Sub Test_PrijemnicaBrojZaZbirnu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKPRJ")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim brojP1 As String
+    Dim brojP2 As String
+    brojP1 = TEST_PREFIX & "-PRJ1-" & scenario
+    brojP2 = TEST_PREFIX & "-PRJ2-" & scenario
+
+    Dim p1I As String
+    Dim p1II As String
+    Dim p2I As String
+
+    p1I = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojP1, brojZbirne, _
+                            TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, 0, "I")
+    p1II = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojP1, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 50#, 8#, TEST_TIP_AMB, 0, 0, "II")
+    p2I = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojP2, brojZbirne, _
+                            TEST_VRSTA, TEST_SORTA, 30#, 10#, TEST_TIP_AMB, 0, 0, "I")
+
+    AssertTrue Len(p1I) > 0 And Len(p1II) > 0 And Len(p2I) > 0, _
+               "PrijemnicaBrojZaZbirnu: fixture prijemnice snimljene"
+
+    AssertEquals brojP1 & ", " & brojP2, PrijemnicaBrojZaZbirnu(brojZbirne), _
+                 "PrijemnicaBrojZaZbirnu: dedup klasa + spajanje zarezom"
+
+    MarkTestRowStornirano TBL_PRIJEMNICA, "PrijemnicaID", p2I
+
+    AssertEquals brojP1, PrijemnicaBrojZaZbirnu(brojZbirne), _
+                 "PrijemnicaBrojZaZbirnu: stornirana prijemnica preskocena"
+
+    AssertEquals "", PrijemnicaBrojZaZbirnu(""), _
+                 "PrijemnicaBrojZaZbirnu: prazan BrojZbirne -> prazno"
+
+    Exit Sub
+
+EH:
+    LogFail "PrijemnicaBrojZaZbirnu", Err.description
+End Sub
+
+' StornoOtkupByBrDok_TX (engine iza "Storniraj blok" u otkup-blok panelu):
+' jedan BrDok = obe klase stornirane atomicno; ponovni storno = False.
+Private Sub Test_StornoOtkupObeKlase()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKSTB")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojDok As String
+    Dim brojZbirne As String
+    brojDok = TEST_PREFIX & "-OTK-STB-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
+
+    Dim result As String
+    result = SaveOtkupMulti_TX( _
+        testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+        100#, 10#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brojDok, _
+        0#, "TEST OPERATOR", GetTestParcelaID(), brojZbirne, _
+        hasKlasaII:=True, kolicinaII:=50#, cenaII:=5#)
+
+    Dim otkI As String
+    Dim otkII As String
+    otkI = FindOtkupIDByBrojAndKlasa(brojDok, "I")
+    otkII = FindOtkupIDByBrojAndKlasa(brojDok, "II")
+
+    AssertTrue Len(otkI) > 0 And Len(otkII) > 0, "Storno obe klase: fixture snimljen"
+
+    AssertTrue StornoOtkupByBrDok_TX(brojDok), "Storno obe klase: storno uspesan"
+
+    AssertEquals "DA", UCase$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkI, COL_OTK_STORNIRANO))), _
+                 "Storno obe klase: Klasa I stornirana"
+    AssertEquals "DA", UCase$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkII, COL_OTK_STORNIRANO))), _
+                 "Storno obe klase: Klasa II stornirana"
+
+    AssertFalse StornoOtkupByBrDok_TX(brojDok), _
+                "Storno obe klase: ponovni storno bez aktivnih redova = False"
+
+    Exit Sub
+
+EH:
+    LogFail "Storno otkupa obe klase", Err.description
+End Sub
+
+' Izgubljeni blokovi + preuzimanje (engine iza otkup-blok panela):
+' storno otpremnice -> blok u GetLostOtkupBlokovi; ReassignOtkupToOtpremnica_TX
+' re-pointuje vezu (OtpremnicaID + BrojZbirne); storniran cilj se odbija.
+Private Sub Test_LostBlokAdoptFlow()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKLST")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbrA As String
+    Dim brojZbrB As String
+    brojZbrA = TEST_PREFIX & "-ZBRA-" & scenario
+    brojZbrB = TEST_PREFIX & "-ZBRB-" & scenario
+
+    Dim otpA As String
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTPA-" & scenario, brojZbrA, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, "I")
+
+    Dim otk As String
+    otk = SaveOtkup_TX(testDate, TEST_KOOP_ID, TEST_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                       100#, 10#, TEST_TIP_AMB, 0, TEST_VOZ_ID, _
+                       TEST_PREFIX & "-LST-" & scenario, 0#, "TEST", KLASA_I, "", brojZbrA)
+
+    AssertTrue Len(otpA) > 0 And Len(otk) > 0, "Lost blok: fixture snimljen"
+
+    AssertTrue ReassignOtkupToOtpremnica_TX(otk, otpA), _
+               "Lost blok: vezivanje na aktivnu otpremnicu uspesno"
+    AssertEquals otpA, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otk, COL_OTK_OTPREMNICA_ID)), _
+                 "Lost blok: OtpremnicaID postavljen"
+    AssertFalse LostBlokoviContains(otk), "Lost blok: uredno vezan blok nije 'izgubljen'"
+
+    AssertTrue StornoOtpremnica_TX(otpA), "Lost blok: storno otpremnice uspesan"
+    AssertTrue LostBlokoviContains(otk), _
+               "Lost blok: blok stornirane otpremnice u listi izgubljenih"
+
+    Dim otpB As String
+    otpB = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTPB-" & scenario, brojZbrB, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, "I")
+
+    AssertTrue Len(otpB) > 0, "Lost blok: ciljna otpremnica B snimljena"
+
+    AssertTrue ReassignOtkupToOtpremnica_TX(otk, otpB), _
+               "Lost blok: preuzimanje na novu otpremnicu uspesno"
+    AssertEquals otpB, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otk, COL_OTK_OTPREMNICA_ID)), _
+                 "Lost blok: OtpremnicaID re-pointovan na cilj"
+    AssertEquals brojZbrB, CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otk, COL_OTK_BROJ_ZBIRNE)), _
+                 "Lost blok: BrojZbirne preuzet sa ciljne otpremnice"
+    AssertFalse LostBlokoviContains(otk), "Lost blok: posle preuzimanja vise nije 'izgubljen'"
+
+    AssertFalse ReassignOtkupToOtpremnica_TX(otk, otpA), _
+                "Lost blok: storniran cilj se odbija"
+
+    Exit Sub
+
+EH:
+    LogFail "Lost blok adopt flow", Err.description
+End Sub
+
 Private Sub Test_DualClassDocumentWrappers()
     On Error GoTo EH
 
@@ -1577,6 +2601,20 @@ Private Sub SeedParcelaIfAvailable()
     RequireAppend TBL_PARCELE, rowData, "SeedParcelaIfAvailable"
 End Sub
 
+' Tip ambalaze sa poznatom tezinom (2 kg) za ComputeNetoFromBruto test.
+Private Sub SeedTipAmbalaze2kg()
+    If GetTable(TBL_TIP_AMBALAZE) Is Nothing Then Exit Sub
+    If RowExists(TBL_TIP_AMBALAZE, COL_TAMB_TIP, TEST_TIP_AMB_2KG) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_TIP_AMBALAZE)
+
+    SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TIP, TEST_TIP_AMB_2KG
+    SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TEZINA, 2#
+
+    RequireAppend TBL_TIP_AMBALAZE, rowData, "SeedTipAmbalaze2kg"
+End Sub
+
 ' ============================================================
 ' GENERIC TABLE HELPERS
 ' ============================================================
@@ -1739,6 +2777,79 @@ End Function
 Private Sub AssertFalse(ByVal condition As Boolean, ByVal testName As String)
     AssertTrue Not condition, testName
 End Sub
+
+Private Function TestNumVal(ByVal v As Variant) As Double
+    If IsNumeric(v) Then TestNumVal = CDbl(v)
+End Function
+
+' Suma kolicine + broj nogu u tblAmbalaza za dati dokument/entitet/smer/tip
+' dokumenta (provera dvojnog upisa ambalaze iz otkupa).
+Private Function SumAmbalazaLegKolicina(ByVal dokumentID As String, _
+                                        ByVal entitetID As String, _
+                                        ByVal smer As String, _
+                                        ByVal dokTip As String, _
+                                        ByRef legCount As Long) As Double
+    legCount = 0
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cDok As Long, cEnt As Long, cSmer As Long, cTip As Long, cKol As Long
+    cDok = RequireCol(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cEnt = RequireCol(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cSmer = RequireCol(TBL_AMBALAZA, COL_AMB_SMER)
+    cTip = RequireCol(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    cKol = RequireCol(TBL_AMBALAZA, COL_AMB_KOLICINA)
+
+    Dim i As Long
+    Dim s As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cDok))) = dokumentID _
+           And Trim$(CStr(data(i, cEnt))) = entitetID _
+           And Trim$(CStr(data(i, cSmer))) = smer _
+           And Trim$(CStr(data(i, cTip))) = dokTip Then
+            legCount = legCount + 1
+            If IsNumeric(data(i, cKol)) Then s = s + CDbl(data(i, cKol))
+        End If
+    Next i
+
+    SumAmbalazaLegKolicina = s
+End Function
+
+' Vrednost kolone (2=kolicina, 3=novac, 4=ambalaza) iz GetSaldoByStation
+' rezultata za datog kooperanta; nema reda -> 0.
+Private Function FindSaldoRowValue(ByVal saldo As Variant, _
+                                   ByVal koopID As String, _
+                                   ByVal colIndex As Long) As Double
+    If IsEmpty(saldo) Then Exit Function
+    If Not IsArray(saldo) Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(saldo, 1)
+        If CStr(saldo(i, 1)) = koopID Then
+            If IsNumeric(saldo(i, colIndex)) Then
+                FindSaldoRowValue = CDbl(saldo(i, colIndex))
+            End If
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Da li GetLostOtkupBlokovi (modDokumenta) sadrzi dati OtkupID (kolona 1).
+Private Function LostBlokoviContains(ByVal otkupID As String) As Boolean
+    Dim lost As Variant
+    lost = GetLostOtkupBlokovi()
+    If Not IsArray(lost) Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(lost, 1)
+        If Trim$(CStr(lost(i, 1))) = otkupID Then
+            LostBlokoviContains = True
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Sub MarkTestRowStornirano(ByVal tableName As String, _
                                   ByVal idColumn As String, _

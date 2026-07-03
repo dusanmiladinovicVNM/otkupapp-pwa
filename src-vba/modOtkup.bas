@@ -578,6 +578,39 @@ EH:
     GetKooperantNazivForNovac = kooperantID
 End Function
 
+' Bruto -> neto konverzija za bruto rezim unosa (OTKUP_BRUTO_UNOS):
+' tara = kolAmb * tezina gajbice (tipAmb, tblTipAmbalaze). Uspeh SAMO kad je
+' tara poznata (> 0) i manja od bruto tezine; tada netoKg = brutoKg - taraKg.
+' taraKg se vraca i na neuspeh, da pozivalac razlikuje "tip bez unete tezine"
+' (taraKg <= 0) od "tara >= bruto" (pogresan broj komada/tezina).
+' Deljena logika za frmOtkup (btnUnos + zivi prikaz) i modOtkupBlok.
+Public Function ComputeNetoFromBruto(ByVal brutoKg As Double, _
+                                     ByVal kolAmb As Long, _
+                                     ByVal tipAmb As String, _
+                                     ByRef netoKg As Double, _
+                                     ByRef taraKg As Double) As Boolean
+    netoKg = 0#
+    taraKg = 0#
+
+    On Error GoTo EH
+
+    If brutoKg <= 0 Then Exit Function
+    If kolAmb <= 0 Then Exit Function
+    If Trim$(tipAmb) = "" Then Exit Function
+
+    taraKg = kolAmb * GetTezinaGajbice(tipAmb)
+    If taraKg <= 0 Then Exit Function
+    If taraKg >= brutoKg Then Exit Function
+
+    netoKg = brutoKg - taraKg
+    ComputeNetoFromBruto = True
+    Exit Function
+
+EH:
+    LogErr "modOtkup.ComputeNetoFromBruto"
+    ComputeNetoFromBruto = False
+End Function
+
 Public Function GetOtkupByStation(ByVal stanicaID As String, _
                                   Optional ByVal datumOd As Date = 0, _
                                   Optional ByVal datumDo As Date = 0) As Variant

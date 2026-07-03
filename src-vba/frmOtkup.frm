@@ -339,14 +339,12 @@ Private Sub UpdateUkupnoKg()
         Dim kb As Double, ka As Long
         If Trim$(txtKolicina.value) <> "" Then TryParseDouble txtKolicina.value, kb
         If Trim$(txtKolAmbalaze.value) <> "" Then TryParseLong txtKolAmbalaze.value, ka
-        If kb > 0 And ka > 0 And Trim$(cmbTipAmbalaze.value) <> "" Then
-            Dim tw As Double: tw = ka * GetTezinaGajbice(cmbTipAmbalaze.value)
-            If tw > 0 And tw < kb Then
-                lblUkupnoKG.caption = "Neto: " & Format$(kb - tw, "#,##0.00") & _
-                    " kg  (bruto " & Format$(kb, "#,##0.00") & " - amb " & _
-                    Format$(tw, "#,##0.00") & ")"
-                Exit Sub
-            End If
+        Dim netoKb As Double, tw As Double
+        If ComputeNetoFromBruto(kb, ka, cmbTipAmbalaze.value, netoKb, tw) Then
+            lblUkupnoKG.caption = "Neto: " & Format$(netoKb, "#,##0.00") & _
+                " kg  (bruto " & Format$(kb, "#,##0.00") & " - amb " & _
+                Format$(tw, "#,##0.00") & ")"
+            Exit Sub
         End If
     End If
 
@@ -942,47 +940,47 @@ Private Sub btnUnos_Click()
     ' u BrutoKg. Tara se vezuje za Klasu I (kolAmb se i inace odnosi na Klasu I). ---
     Dim brutoKgI As Double
     If OtkupBrutoUnos() And kolAmb > 0 Then
+        Dim netoKgI As Double
         Dim taraKg As Double
-        taraKg = kolAmb * GetTezinaGajbice(cmbTipAmbalaze.value)
-        If taraKg <= 0 Then
-            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
-                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
-                   Poruka("DOK_MSG_BRUTO_MOZE_PRETVORITI"), vbExclamation, APP_NAME
-            cmbTipAmbalaze.SetFocus
-            Exit Sub
-        End If
-        If taraKg >= kolicinaI Then
-            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
-                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
-                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
-            txtKolicina.SetFocus
+        If Not ComputeNetoFromBruto(kolicinaI, kolAmb, cmbTipAmbalaze.value, netoKgI, taraKg) Then
+            If taraKg <= 0 Then
+                MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                       Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                       Poruka("DOK_MSG_BRUTO_MOZE_PRETVORITI"), vbExclamation, APP_NAME
+                cmbTipAmbalaze.SetFocus
+            Else
+                MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(taraKg, "#,##0.00") & " kg) je veca ili " & _
+                       Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaI, "#,##0.00") & " kg)." & vbCrLf & _
+                       Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
+                txtKolicina.SetFocus
+            End If
             Exit Sub
         End If
         brutoKgI = kolicinaI             ' zamrzni uneti bruto
-        kolicinaI = kolicinaI - taraKg   ' u Kolicina ide neto
+        kolicinaI = netoKgI              ' u Kolicina ide neto
     End If
 
     ' BRUTO unos za Klasu II (zasebne gajbe -> zasebna tara). Isto kao Klasa I.
     Dim brutoKgII As Double
     If chkDveKlase.value And OtkupBrutoUnos() And kolAmbII > 0 Then
+        Dim netoKgII As Double
         Dim taraKgII As Double
-        taraKgII = kolAmbII * GetTezinaGajbice(cmbTipAmbalaze.value)
-        If taraKgII <= 0 Then
-            MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
-                   Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
-                   Poruka("DOK_MSG_BRUTO_KLASA_MOZE"), vbExclamation, APP_NAME
-            cmbTipAmbalaze.SetFocus
-            Exit Sub
-        End If
-        If taraKgII >= kolicinaII Then
-            MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE_KLASE") & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
-                   Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
-                   Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
-            If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
+        If Not ComputeNetoFromBruto(kolicinaII, kolAmbII, cmbTipAmbalaze.value, netoKgII, taraKgII) Then
+            If taraKgII <= 0 Then
+                MsgBox Poruka("DOK_MSG_TIP_AMBALAZE") & cmbTipAmbalaze.value & Poruka("DOK_MSG_NEMA_UNETU_TEZINU") & _
+                       Poruka("DOK_MSG_MATICNI_PODACI_TIP") & vbCrLf & _
+                       Poruka("DOK_MSG_BRUTO_KLASA_MOZE"), vbExclamation, APP_NAME
+                cmbTipAmbalaze.SetFocus
+            Else
+                MsgBox Poruka("DOK_MSG_TEZINA_AMBALAZE_KLASE") & Format$(taraKgII, "#,##0.00") & " kg) je veca ili " & _
+                       Poruka("DOK_MSG_JEDNAKA_BRUTO_TEZINI") & Format$(kolicinaII, "#,##0.00") & " kg)." & vbCrLf & _
+                       Poruka("DOK_MSG_PROVERITE_BROJ_KOMADA"), vbExclamation, APP_NAME
+                If Not m_txtKolAmbalazeII Is Nothing Then m_txtKolAmbalazeII.SetFocus
+            End If
             Exit Sub
         End If
         brutoKgII = kolicinaII             ' zamrzni uneti bruto (II)
-        kolicinaII = kolicinaII - taraKgII ' u Kolicina (II) ide neto
+        kolicinaII = netoKgII              ' u Kolicina (II) ide neto
     End If
 
     Dim novac As Double
