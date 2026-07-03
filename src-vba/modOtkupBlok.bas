@@ -1267,6 +1267,15 @@ Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As St
     On Error GoTo EH
     If Len(otpID) = 0 Or Len(Trim$(otkupIDs)) = 0 Then Exit Sub
 
+    ' INTEGRITET (guard 1): nikad ne vezuj otkup na storniranu ili nepostojecu
+    ' otpremnicu. Ista invarijanta kao modDokumenta.ReassignOtkupToOtpremnica_TX.
+    ' Bez ove provere stale mActiveOtpID (npr. posle storna bloka u panelu, dok
+    ' panel ostaje otvoren) je vezivao svez otkup na mrtvu otpremnicu -> tiha
+    ' korupcija baze (OtkupID pokazuje na storniranu OtpremnicaID).
+    If IsEmpty(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)) Then Exit Sub
+    If UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                         COL_STORNIRANO)))) = "DA" Then Exit Sub
+
     Dim ids() As String: ids = Split(otkupIDs, " + ")
 
     Set tx = New clsTransaction
@@ -1277,12 +1286,20 @@ Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As St
     For j = LBound(ids) To UBound(ids)
         Dim id As String: id = Trim$(ids(j))
         If Len(id) > 0 Then
-            Dim rows As Collection: Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, id)
-            Dim k As Long
-            For k = 1 To rows.count
-                RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, otpID, _
-                                  "modOtkupBlok.LinkOtkupIDsToOtpremnica"
-            Next k
+            ' INTEGRITET (guard 2): NE pregazi vec uspostavljenu vezu. Hladnjaca
+            ' auto-lanac (modAutoHladnjaca) je mozda upravo upisao svoju namensku
+            ' otpremnicu za ovaj otkup. Panel vezuje SAMO redove bez otpremnice
+            ' (prazan OtpremnicaID) -> spreci da panelski mActiveOtpID pregazi
+            ' ispravnu vezu auto-lanca.
+            If Len(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, id, _
+                                              COL_OTK_OTPREMNICA_ID)))) = 0 Then
+                Dim rows As Collection: Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, id)
+                Dim k As Long
+                For k = 1 To rows.count
+                    RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, otpID, _
+                                      "modOtkupBlok.LinkOtkupIDsToOtpremnica"
+                Next k
+            End If
         End If
     Next j
 
