@@ -430,16 +430,17 @@ Private Sub btnPovezi_Click()
     Dim otpremnicaID As String
     otpremnicaID = m_CandidateOtpIDs(LstOtpremnice.ListIndex)
     
-    Dim rows As Collection
-    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-
-    If rows.count = 0 Then
-        Err.Raise vbObjectError + 1910, "frmSledljivost.btnPovezi", _
-                "Otkup row nije prona" & ChrW(273) & "en: " & otkupID
+    ' Vezivanje ide kroz proverenu, transakcionu ReassignOtkupToOtpremnica_TX
+    ' (isti put kao "Preuzmi" u Otkupni blokovi panelu): validira da cilj POSTOJI
+    ' i NIJE storniran u trenutku upisa (ne samo pri ucitavanju liste kandidata),
+    ' transakciono, i drzi OtpremnicaID + BrojZbirne konzistentnim. Sirov
+    ' RequireUpdateCell je mogao da veze otkup na storniranu otpremnicu iz stale
+    ' m_CandidateOtpIDs niza -> tiha korupcija baze.
+    If Not ReassignOtkupToOtpremnica_TX(otkupID, otpremnicaID) Then
+        MsgBox "Povezivanje nije uspelo: ciljna otpremnica je stornirana ili ne postoji.", _
+               vbExclamation, APP_NAME
+        Exit Sub
     End If
-
-RequireUpdateCell TBL_OTKUP, rows(1), COL_OTK_OTPREMNICA_ID, _
-                  otpremnicaID, "frmSledljivost.btnPovezi"
     
     LoadNepovezani
     UpdateStatus
