@@ -234,6 +234,27 @@ Ostaje:
 
 Nađeno tokom v6.28 (VBA OtkupSablon 1/3 A4). Čisto PWA izmena; VBA strana je ispravna.
 
+P1-16 — Link-write storno-guard: novac → otkup/faktura (LinkNovacToOtkupStrict + ApplyAvans*)
+
+Status: 🔴 otvoreno
+
+Nađeno tokom audita korupcije OtpremnicaID (stale mActiveOtpID → stornirana otpremnica; fix commit-i ac0fb57 + c8198ab, grana claude/malina-purchase-data-xujz8g). Srodne rupe ISTE klase („upiši referencu na dokument bez provere da cilj nije storniran"), ali PARAMETARSKE (vrednost dolazi kao argument, nije stale modularna promenljiva) → niža verovatnoća od potvrđenog HIGH buga. Dopuna za P1-4: LinkNovacToOtkupStrict već ima Count=1 exact-row guard, ali NE i storno-proveru cilja.
+
+1) modBankaMapiranje.LinkNovacToOtkupStrict (:2126; pozivi MapBankaImportAsKooperant :433, MapBankaImportAsKooperantBlockCore :864)
+   - Ima RequireSingleRow (postoji + jedinstven) za NovacID i OtkupID, ali NEMA storno-proveru otkupa.
+   - Rizik: uplata čija „poziv na broj“ pogodi STORNIRAN otkup veže se za mrtav dokument; potom uplata nestaje iz open-balance matcha (saldo isključuje stornirane) → novac „izgubljen“.
+   - Fix: posle RequireSingleRow TBL_OTKUP, proveriti da je LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO) <> "Da"; ako je storniran → NE vezuj (tiho preskoči + WARN log da operater ručno reši; ne raise, da ne obori ceo bank-import TX).
+
+2) modNovac.ApplyAvansToOtkup (:1139, COL_NOV_OTKUP_ID) i ApplyAvansToFaktura (:591, COL_NOV_FAKTURA_ID)
+   - Nema storno-proveru cilja (otkup/faktura). Delimično kompenzovano: pri stornu se veza čisti (modStorno.ResetNovacOtkupLink :1156 → COL_NOV_OTKUP_ID = "").
+   - Calleri obično prosleđuju svež otkupID (SaveOtkupMulti_TX) ili otvoren blok (frmBankaExportPregled „Primeni avans na blok“) → niži rizik, ali „Primeni avans na blok“ može da gađa stariji otkup.
+   - Fix: pre vezivanja proveriti da cilj (otkupID/fakturaID) nije storniran; ako jeste → preskoči + poruka operateru.
+
+Ostaje:
+- odluka skip-vs-raise po putanji (bank-import TX = skip + WARN; ručni „Primeni avans“ = poruka + preskoči, ne obarati akciju).
+- eventualno deliti helper sa P3-2 (RequireActiveSingleRow / IsStorniranoValue).
+- smoke: uplata/avans ka storniranom otkupu ne sme da se veže; posle storna otkupa veza ostaje očišćena.
+
 P2 — hardening / održavanje
 ID	Stavka	Status	Komentar
 P2-1	modStammdatenSync: ukloniti hardcoded TOTAL_STAMMDATEN_TABS = 13	🔴	Broj tabova izračunati iz StammdatenTabs().
