@@ -27,6 +27,8 @@ Public Const PDF_DIR_PALETNI As String = "Paletni listovi"
 Public Const PDF_DIR_PRERADA As String = "Preradni listovi"
 Public Const PDF_DIR_SPECIFIKACIJE As String = "Specifikacije"
 Public Const PDF_DIR_IZVESTAJI As String = "Izvestaji"
+' CSV nalozi za prenos (banka export) - isti root kao PDF folderi (EnsureDocFolder)
+Public Const CSV_DIR_BANKA_NALOZI As String = "Nalozi za banku"
 
 ' --- Tabellennamen (ListObjects) ---
 Public Const TBL_KOOPERANTI As String = "tblKooperanti"
@@ -359,6 +361,8 @@ Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
 Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
 Public Const CFG_KARTICA_AMB_PRINT_MODE As String = "KARTICA_AMB_PRINT_MODE"
 Public Const CFG_SPECIFIKACIJA_PRINT_MODE As String = "SPECIFIKACIJA_PRINT_MODE"
+' Specifikacija isplata (banka nalozi, frmBankaExportPregled). Default PDF.
+Public Const CFG_ISPLATA_SPEC_PRINT_MODE As String = "ISPLATA_SPEC_PRINT_MODE"
 ' Otpremnica / grupni otkupni list / paletni list got. proizvoda (prerada).
 ' PDF | PRINT | PREVIEW | OFF. Grupni: prazno -> prati CFG_OTKUP_PRINT_MODE.
 Public Const CFG_OTPREMNICA_PRINT_MODE As String = "OTPREMNICA_PRINT_MODE"
@@ -371,6 +375,20 @@ Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 Public Const CFG_OTKUP_KLAUZULA As String = "OTKUP_KLAUZULA"
 Public Const CFG_OTKUP_ROK As String = "OTKUP_ROK_ISPLATE"
 Public Const OTKUP_ROK_DEFAULT As String = "Po dogovoru"
+
+' Banka - nalozi za prenos (CSV export iz frmBankaExportPregled za uvoz u
+' e-banking). Platilac = SELLER_NAME / SELLER_ACCOUNT (grupa "Prodavac (firma)").
+' Sifra placanja: NBS sifarnik, default 221 (bezgotovinski promet robe i usluga).
+' Svrha: osnovni tekst, po nalogu se dopisuje broj otkupnog bloka; poziv na broj
+' odobrenja = broj bloka (jaki kljuc za auto-map pri uvozu izvoda, vidi
+' docs/production-runbook-banka-import-setup.md).
+Public Const CFG_BANKA_NALOG_SIFRA As String = "BANKA_NALOG_SIFRA_PLACANJA"
+Public Const BANKA_NALOG_SIFRA_DEFAULT As String = "221"
+Public Const CFG_BANKA_NALOG_SVRHA As String = "BANKA_NALOG_SVRHA"
+Public Const BANKA_NALOG_SVRHA_DEFAULT As String = "Otkup poljoprivrednih proizvoda"
+' Racuni firme za isplate, odvojeni ";" (firma moze imati racune u vise banaka).
+' Prazno -> koristi se SELLER_ACCOUNT. Operater bira racun u frmBankaExportPregled.
+Public Const CFG_BANKA_NALOG_RACUNI As String = "BANKA_NALOG_RACUNI"
 
 ' --- Imena sablon sheet-ova (template worksheets za stampu) ---
 ' Jedinstveni izvor istine za nazive sheet-ova-sablona (umesto rasutih
@@ -388,6 +406,7 @@ Public Const WS_KARTICA_SABLON As String = "KarticaSablon"
 Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
 Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
 Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
+Public Const WS_ISPLATA_SPEC_SABLON As String = "IsplataSpecSablon"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

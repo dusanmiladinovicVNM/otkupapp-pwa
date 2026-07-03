@@ -63,7 +63,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "AGRO_MSG_GRESKA_PRI_CUVANJU", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju izdavanja, promene vra" & ChrW(263) & "ene:"
     UpsertRow lo, existing, "AGRO_MSG_PRIJEM_ZAVRSEN", "Prijem zavr" & ChrW(353) & "en:"
     UpsertRow lo, existing, "AGRO_MSG_GRESKA_PRI_CUVANJU_2", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju prijema, promene vra" & ChrW(263) & "ene:"
-    UpsertRow lo, existing, "BANKA_LBL_GENERISI_CSV_COMMIT", "Generi" & ChrW(353) & "i CSV (Commit 3)"
+    UpsertRow lo, existing, "BANKA_LBL_GENERISI_CSV_COMMIT", "Generi" & ChrW(353) & "i CSV naloge"
     UpsertRow lo, existing, "BANKA_LBL_UVOZ_TRANSAKCIJA_BANKARSKIH", "Uvoz transakcija iz bankarskih izvoda " & ChrW(8212) & " mapiranje na partnere"
     UpsertRow lo, existing, "DOK_LBL_OPERATIVNI_UNOS_DOKUMENATA", "Operativni unos dokumenata, ambala" & ChrW(382) & "e i novca"
     UpsertRow lo, existing, "DOK_ERR_GRESKA_PRI_OTVARANJU", "Gre" & ChrW(353) & "ka pri otvaranju dokumenata:"

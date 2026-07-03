@@ -16,10 +16,28 @@ Attribute VB_Exposed = False
 
 Option Explicit
 
-Private m_Blokovi As Collection
+Private m_Blokovi As Collection            ' prikazani blokovi (posle kooperant-filtera)
+Private m_FullBlokovi As Collection        ' pre kooperant-filtera (prune + combo lista)
 Private m_OverrideAmounts As Object        ' Dictionary OtkupID -> custom amount
 Private m_SetupDone As Boolean
 Private mChromeRemoved As Boolean
+
+' Runtime kontrole (.frx se ne dira): filter po kooperantu + izbor racuna firme
+Private WithEvents mCmbKooperant As MSForms.ComboBox
+Private mLblKooperant As MSForms.label
+Private mCmbRacun As MSForms.ComboBox
+Private mLblRacun As MSForms.label
+Private mKoopComboFilling As Boolean       ' guard: refill ne sme da okine Change
+Private mRacuni() As String                ' cisti racuni, paralelno sa mCmbRacun stavkama
+Private mRacuniCount As Long
+
+' Runtime dugmad: vezivanje virman avansa (NOV_VIRMAN_AVANS_KOOP) na blokove.
+' Motor je ApplyAvansToOtkup_TX (postojeci, transakciono bezbedan); dugmad
+' ga samo pozivaju za izabran blok / cekirane blokove.
+Private WithEvents mBtnAvansBlok As MSForms.CommandButton    ' fokusiran blok (detail panel)
+Private WithEvents mBtnAvansSel As MSForms.CommandButton     ' cekirani blokovi (akcije)
+Private Const AVANS_BLOK_CAPTION As String = "Primeni avans na blok"
+Private Const AVANS_SEL_CAPTION As String = "Primeni avans (sel.)"
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -28,19 +46,23 @@ Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
     
     If m_SetupDone Then
+        PopulateRacunCombo    ' racuni u configu su se mogli promeniti u medjuvremenu
         LoadBlokovi
         Exit Sub
     End If
     m_SetupDone = True
-    
+
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
+    EnsureRuntimeControls
     
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
-    StylePrimaryButton btnExport, "Export u clipboard"
+    StylePrimaryButton btnExport, "PDF specifikacija"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
+    StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
+    btnGenerisiCSV.enabled = True
     StyleExitButton btnPovratak, "Povratak"
-    
+
     StyleLabel lblStatus, TXT_MUTED(), True
     StyleLabel lblSelectionSummary, TXT_MUTED(), True
     StyleSubtitle lblSubtitle, "Pregled otvorenih blokova za isplatu"
@@ -91,26 +113,381 @@ Private Sub PopulateStanicaCombo()
     FillCmb cmbStanica, GetLookupList(TBL_STANICE, "Naziv")
 End Sub
 
+'======================================================================
+' Runtime kontrole - .frx se ne dira (Controls.Add idiom kao frmPalete/
+' frmAgrohemija): kooperant filter u filter redu + izbor racuna firme
+' uz action dugmad.
+'======================================================================
+Private Sub EnsureRuntimeControls()
+    EnsureKooperantFilter
+    EnsureRacunCombo
+    EnsureAvansButtons        ' posle EnsureRacunCombo (sel. dugme se sidri levo od "Sa racuna")
+End Sub
+
+'======================================================================
+' EnsureAvansButtons - runtime dugmad za vezivanje virman avansa na blokove
+' (.frx se ne dira). Po bloku (dole u detail panelu) + na cekirane blokove
+' (u akcijskoj traci, levo od "Sa racuna" combo-a).
+'======================================================================
+Private Sub EnsureAvansButtons()
+    On Error GoTo EH
+
+    ' 1) Po bloku -- dno detalj frejma (ispod avans info-a)
+    If mBtnAvansBlok Is Nothing Then
+        Dim dp As Object
+        Set dp = btnPostaviFull.Parent
+        Set mBtnAvansBlok = dp.Controls.Add("Forms.CommandButton.1", "btnAvansBlok", True)
+        With mBtnAvansBlok
+            .Left = btnPostaviFull.Left
+            .width = dp.InsideWidth - btnPostaviFull.Left - 10
+            If .width < 80 Then .width = btnPostaviFull.width
+            .Height = btnPostaviFull.Height
+            .top = dp.InsideHeight - .Height - 10
+            .enabled = False
+        End With
+        StylePrimaryButton mBtnAvansBlok, AVANS_BLOK_CAPTION
+    End If
+
+    ' 2) Na cekirane -- akcijska traka, levo od "Sa racuna" combo-a
+    If mBtnAvansSel Is Nothing Then
+        Dim ah As Object
+        Set ah = btnGenerisiCSV.Parent
+        Set mBtnAvansSel = ah.Controls.Add("Forms.CommandButton.1", "btnAvansSel", True)
+        With mBtnAvansSel
+            .width = 130
+            .Height = btnGenerisiCSV.Height
+            .top = btnGenerisiCSV.top
+            If Not mLblRacun Is Nothing Then
+                .Left = mLblRacun.Left - .width - 18
+            Else
+                .Left = btnGenerisiCSV.Left - .width - 18
+            End If
+            If .Left < 6 Then .Left = 6
+        End With
+        StylePrimaryButton mBtnAvansSel, AVANS_SEL_CAPTION
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.EnsureAvansButtons"
+End Sub
+
+' Desna ivica postojeceg filter reda (u istom kontejneru kao cmbStanica).
+Private Function FilterRowRightEdge(ByVal host As Object) As Single
+    Dim edge As Single
+    edge = cmbStanica.Left + cmbStanica.width
+    On Error Resume Next
+    If txtDatumOd.Parent Is host Then
+        If txtDatumOd.Left + txtDatumOd.width > edge Then edge = txtDatumOd.Left + txtDatumOd.width
+    End If
+    If txtDatumDo.Parent Is host Then
+        If txtDatumDo.Left + txtDatumDo.width > edge Then edge = txtDatumDo.Left + txtDatumDo.width
+    End If
+    On Error GoTo 0
+    FilterRowRightEdge = edge
+End Function
+
+' Combo "Kooperant" u filter redu: radi i na unos (autocomplete +
+' substring filter) i kao padajuca lista. Prazno = svi kooperanti.
+Private Sub EnsureKooperantFilter()
+    On Error GoTo EH
+    If Not mCmbKooperant Is Nothing Then Exit Sub
+
+    Dim host As Object
+    Set host = cmbStanica.Parent
+
+    ' Osvezi dugme (iz .frx) je stajalo odmah posle datum polja -> nalegalo je
+    ' na kooperant combo. Pomeri ga desno (ali odmaknuto od ivice) i visinski
+    ' centriraj u frame; combo ostaje odmah posle datuma (gde je i bio).
+    On Error Resume Next
+    Dim ob As Object
+    Set ob = btnOsvezi.Parent
+    btnOsvezi.Left = ob.InsideWidth - btnOsvezi.width - 48      ' malo od desne ivice
+    btnOsvezi.top = (ob.InsideHeight - btnOsvezi.Height) / 2    ' visinski centrirano u frame
+    On Error GoTo EH
+
+    Dim edge As Single
+    edge = FilterRowRightEdge(host)
+
+    Set mLblKooperant = host.Controls.Add("Forms.Label.1", "lblKooperantFilter", True)
+    With mLblKooperant
+        .caption = "Kooperant:"
+        .Left = edge + 14
+        .top = cmbStanica.top + 3
+        .width = 56
+        .Height = 12
+    End With
+    StyleLabel mLblKooperant, TXT_MUTED(), True
+
+    Set mCmbKooperant = host.Controls.Add("Forms.ComboBox.1", "cmbKooperantFilter", True)
+    With mCmbKooperant
+        .Left = mLblKooperant.Left + mLblKooperant.width + 4
+        .top = cmbStanica.top
+        .width = 160
+        .Height = cmbStanica.Height
+        .style = fmStyleDropDownCombo         ' radi i na unos i kao dropdown
+        .MatchEntry = fmMatchEntryComplete    ' autocomplete pri kucanju
+        .ShowDropButtonWhen = fmShowDropButtonWhenAlways
+        .ControlTipText = "Kucaj deo imena ili izaberi; prazno = svi kooperanti"
+    End With
+    StyleComboBox mCmbKooperant
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.EnsureKooperantFilter"
+End Sub
+
+' Combo "Sa racuna" uz action dugmad: racun firme sa koga idu nalozi
+' (BANKA_NALOG_RACUNI lista; prazno -> SELLER_ACCOUNT). Samo izbor.
+Private Sub EnsureRacunCombo()
+    On Error GoTo EH
+    If Not mCmbRacun Is Nothing Then Exit Sub
+
+    Dim host As Object
+    Set host = btnGenerisiCSV.Parent
+
+    ' sidro = najlevlje od action dugmadi (Export / CSV)
+    Dim anchorLeft As Single, anchorTop As Single, anchorH As Single
+    anchorLeft = btnGenerisiCSV.Left
+    anchorTop = btnGenerisiCSV.top
+    anchorH = btnGenerisiCSV.Height
+    On Error Resume Next
+    If btnExport.Parent Is host Then
+        If btnExport.Left < anchorLeft Then
+            anchorLeft = btnExport.Left
+            anchorTop = btnExport.top
+            anchorH = btnExport.Height
+        End If
+    End If
+    On Error GoTo EH
+
+    Const CMB_W As Single = 185
+    Const LBL_W As Single = 52
+
+    Set mLblRacun = host.Controls.Add("Forms.Label.1", "lblRacunIsplate", True)
+    Set mCmbRacun = host.Controls.Add("Forms.ComboBox.1", "cmbRacunIsplate", True)
+
+    With mLblRacun
+        .caption = "Sa ra" & ChrW(269) & "una:"
+        .width = LBL_W
+        .Height = 12
+    End With
+
+    With mCmbRacun
+        .width = CMB_W
+        .style = fmStyleDropDownList      ' samo izbor - racun mora biti tacan
+        .ShowDropButtonWhen = fmShowDropButtonWhenAlways
+        .ControlTipText = "Ra" & ChrW(269) & "un firme sa koga idu nalozi (Pode" & _
+                          ChrW(353) & "avanja -> Banka / nalozi)"
+    End With
+
+    If anchorLeft - CMB_W - LBL_W - 24 >= 6 Then
+        ' ista linija, levo od dugmadi
+        mCmbRacun.Left = anchorLeft - CMB_W - 12
+        mCmbRacun.top = anchorTop + (anchorH - 18) / 2
+        mLblRacun.Left = mCmbRacun.Left - LBL_W - 4
+        mLblRacun.top = mCmbRacun.top + 3
+    Else
+        ' fallback: iznad dugmeta
+        mCmbRacun.Left = anchorLeft
+        mCmbRacun.top = anchorTop - 22
+        mLblRacun.Left = anchorLeft - LBL_W - 4
+        If mLblRacun.Left < 4 Then mLblRacun.Left = 4
+        mLblRacun.top = mCmbRacun.top + 3
+    End If
+
+    StyleLabel mLblRacun, TXT_MUTED(), True
+    StyleComboBox mCmbRacun
+
+    PopulateRacunCombo
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.EnsureRacunCombo"
+End Sub
+
+' Napuni combo racuna iz BANKA_NALOG_RACUNI (";"-lista); prazno ->
+' SELLER_ACCOUNT. Default izbor = SELLER_ACCOUNT ako je medju racunima.
+Private Sub PopulateRacunCombo()
+    On Error GoTo EH
+    If mCmbRacun Is Nothing Then Exit Sub
+
+    Dim raw As String
+    raw = DocConfigOr(CFG_BANKA_NALOG_RACUNI, "")
+    If LenB(Trim$(raw)) = 0 Then raw = DocConfigOr("SELLER_ACCOUNT", "")
+
+    mRacuniCount = 0
+    ReDim mRacuni(0 To 0)
+    mCmbRacun.Clear
+
+    Dim parts() As String
+    parts = Split(raw, ";")
+    Dim i As Long
+    For i = LBound(parts) To UBound(parts)
+        Dim r As String
+        r = Replace(Trim$(parts(i)), " ", "")
+        If LenB(r) > 0 Then
+            ReDim Preserve mRacuni(0 To mRacuniCount)
+            mRacuni(mRacuniCount) = r
+            Dim disp As String
+            disp = r
+            Dim bn As String
+            bn = BankaNazivZaRacun(r)
+            If LenB(bn) > 0 Then disp = disp & "  (" & bn & ")"
+            mCmbRacun.AddItem disp
+            mRacuniCount = mRacuniCount + 1
+        End If
+    Next i
+
+    If mRacuniCount > 0 Then
+        mCmbRacun.ListIndex = 0
+        Dim def As String
+        def = Replace(Trim$(DocConfigOr("SELLER_ACCOUNT", "")), " ", "")
+        If LenB(def) > 0 Then
+            Dim k As Long
+            For k = 0 To mRacuniCount - 1
+                If mRacuni(k) = def Then mCmbRacun.ListIndex = k: Exit For
+            Next k
+        End If
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.PopulateRacunCombo"
+End Sub
+
+' Cist (normalizovan) racun trenutno izabran u combo-u; "" ako nema.
+Private Function SelectedRacun() As String
+    If mCmbRacun Is Nothing Then Exit Function
+    If mCmbRacun.ListIndex >= 0 And mCmbRacun.ListIndex < mRacuniCount Then
+        SelectedRacun = mRacuni(mCmbRacun.ListIndex)
+    End If
+End Function
+
+' Distinct imena kooperanata iz PUNE liste u combo (sortirano); cuva
+' trenutno ukucani tekst, guard da ne okine Change -> LoadBlokovi.
+Private Sub RefillKooperantCombo()
+    On Error GoTo EH
+    If mCmbKooperant Is Nothing Then Exit Sub
+    If m_FullBlokovi Is Nothing Then Exit Sub
+
+    Dim names As Object
+    Set names = CreateObject("Scripting.Dictionary")
+    names.CompareMode = 1   ' TextCompare
+
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In m_FullBlokovi
+        Set blk = v
+        If LenB(Trim$(blk.kooperantNaziv)) > 0 Then
+            If Not names.Exists(blk.kooperantNaziv) Then names.Add blk.kooperantNaziv, True
+        End If
+    Next v
+
+    Dim arr As Variant
+    arr = names.keys
+
+    ' insertion sort (mala lista) - abecedno, case-insensitive
+    Dim a As Long, b As Long
+    Dim t As String
+    For a = LBound(arr) + 1 To UBound(arr)
+        t = arr(a): b = a - 1
+        Do While b >= LBound(arr)
+            If StrComp(CStr(arr(b)), t, vbTextCompare) <= 0 Then Exit Do
+            arr(b + 1) = arr(b): b = b - 1
+        Loop
+        arr(b + 1) = t
+    Next a
+
+    mKoopComboFilling = True
+    Dim cur As String: cur = CStr(mCmbKooperant.value)
+    mCmbKooperant.Clear
+    Dim i As Long
+    For i = LBound(arr) To UBound(arr)
+        mCmbKooperant.AddItem CStr(arr(i))
+    Next i
+    mCmbKooperant.value = cur
+    mKoopComboFilling = False
+    Exit Sub
+EH:
+    mKoopComboFilling = False
+    LogErr "frmBankaExportPregled.RefillKooperantCombo"
+End Sub
+
+' Substring filter po nazivu kooperanta (case-insensitive): radi i za
+' kucani deo imena i za pun izbor iz liste. Prazno -> ista kolekcija.
+Private Function FilterBlokoviPoKooperantu(ByVal src As Collection, _
+                                           ByVal filter As String) As Collection
+    If src Is Nothing Then
+        Set FilterBlokoviPoKooperantu = New Collection
+        Exit Function
+    End If
+    If LenB(Trim$(filter)) = 0 Then
+        Set FilterBlokoviPoKooperantu = src
+        Exit Function
+    End If
+
+    Dim result As New Collection
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In src
+        Set blk = v
+        If InStr(1, blk.kooperantNaziv, Trim$(filter), vbTextCompare) > 0 Then
+            result.Add blk
+        End If
+    Next v
+    Set FilterBlokoviPoKooperantu = result
+End Function
+
+Private Sub mCmbKooperant_Change()
+    If mKoopComboFilling Then Exit Sub
+    ApplyKooperantFilter          ' lagani re-filter, BEZ rebuild-a pune liste
+End Sub
+
+'======================================================================
+' LoadBlokovi - PUN rebuild otvorenih blokova (cita tabele). Skupo, pa se
+' zove SAMO kad se izvor menja: otvaranje forme, Osvezi, datum/stanica
+' filter. NE zove se na kooperant filter (to je view-filter, ApplyKooperantFilter).
+'======================================================================
 Private Sub LoadBlokovi()
     On Error GoTo EH
-    
+
     Dim datumOd As Date, datumDo As Date
     Dim stanicaID As String
-    
+
     On Error Resume Next
     If Len(Trim$(txtDatumOd.value)) > 0 Then datumOd = CDate(txtDatumOd.value)
     If Len(Trim$(txtDatumDo.value)) > 0 Then datumDo = CDate(txtDatumDo.value)
     On Error GoTo EH
-    
+
     If Len(Trim$(cmbStanica.value)) > 0 Then
         stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbStanica.value, "StanicaID"))
     End If
-    
-    Set m_Blokovi = BuildBlokIsplataList(datumOd, datumDo, stanicaID)
-    
-    ' Pre re-render-a, ocisti overrides koji vise nisu u listi
+
+    Set m_FullBlokovi = BuildBlokIsplataList(datumOd, datumDo, stanicaID)
+
+    ' Override cleanup + punjenje combo imena idu protiv PUNE liste -> SAMO
+    ' pri rebuild-u (kooperant-filter ne sme da obrise "Isplatiti" unose)
     PruneStaleOverrides
-    
+    RefillKooperantCombo
+
+    ApplyKooperantFilter
+    Exit Sub
+
+EH:
+    LogErr "frmBankaExportPregled.LoadBlokovi"
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
+End Sub
+
+'======================================================================
+' ApplyKooperantFilter - LAGANI re-filter nad vec ucitanom m_FullBlokovi
+' (bez citanja tabela). Zove se na svaku promenu kooperant combo-a i na
+' kraju LoadBlokovi. Substring nad nazivom radi i za kucani deo imena i za
+' pun izbor iz padajuce liste; prazno = svi.
+'======================================================================
+Private Sub ApplyKooperantFilter()
+    On Error GoTo EH
+
+    Dim koopFilter As String
+    If Not mCmbKooperant Is Nothing Then koopFilter = Trim$(CStr(mCmbKooperant.value))
+    Set m_Blokovi = FilterBlokoviPoKooperantu(m_FullBlokovi, koopFilter)
+
     RenderListbox
     UpdateEmptyState
     lblStatus.caption = SummarizeBlokList(m_Blokovi)
@@ -120,22 +497,22 @@ Private Sub LoadBlokovi()
     Exit Sub
 
 EH:
-    LogErr "frmBankaExportPregled.LoadBlokovi"
-    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
+    LogErr "frmBankaExportPregled.ApplyKooperantFilter"
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri filtriranju."
 End Sub
 
 Private Sub PruneStaleOverrides()
     If m_OverrideAmounts Is Nothing Then Exit Sub
-    If m_Blokovi Is Nothing Then
+    If m_FullBlokovi Is Nothing Then
         m_OverrideAmounts.RemoveAll
         Exit Sub
     End If
-    
+
     Dim currentSet As Object
     Set currentSet = CreateObject("Scripting.Dictionary")
-    
+
     Dim v As Variant
-    For Each v In m_Blokovi
+    For Each v In m_FullBlokovi
         Dim blk As clsBlokIsplata
         Set blk = v
         currentSet.Add blk.otkupID, True
@@ -158,31 +535,40 @@ Private Sub PruneStaleOverrides()
 End Sub
 
 Private Sub RenderListbox()
-    lstBlokovi.Clear
-    
-    If m_Blokovi Is Nothing Then Exit Sub
-    
+    If m_Blokovi Is Nothing Then
+        lstBlokovi.Clear
+        Exit Sub
+    End If
+
+    Dim n As Long: n = m_Blokovi.count
+    If n = 0 Then
+        lstBlokovi.Clear
+        Exit Sub
+    End If
+
+    ' 2D niz + JEDAN .List upis (umesto AddItem + po-celija: ~9x manje COM
+    ' poziva, bitno na 800+ redova -- isti .List=arr pattern kao izvestaji).
+    Dim arr() As Variant
+    ReDim arr(0 To n - 1, 0 To 8)
+
+    Dim i As Long: i = 0
     Dim blk As clsBlokIsplata
     Dim v As Variant
     For Each v In m_Blokovi
         Set blk = v
-        
-        Dim isplatitiAmount As Double
-        isplatitiAmount = GetIsplatitiAmount(blk)
-        
-        lstBlokovi.AddItem Format$(blk.datum, "d.m.yyyy")
-        Dim row As Long
-        row = lstBlokovi.ListCount - 1
-        
-        lstBlokovi.List(row, 1) = blk.kooperantNaziv
-        lstBlokovi.List(row, 2) = blk.stanicaID
-        lstBlokovi.List(row, 3) = blk.brojDokumenta
-        lstBlokovi.List(row, 4) = Format$(blk.UkupanIznos, "#,##0.00")
-        lstBlokovi.List(row, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
-        lstBlokovi.List(row, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
-        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "--")
-        lstBlokovi.List(row, 8) = Format$(isplatitiAmount, "#,##0.00")
+        arr(i, 0) = Format$(blk.datum, "d.m.yyyy")
+        arr(i, 1) = blk.kooperantNaziv
+        arr(i, 2) = blk.stanicaID
+        arr(i, 3) = blk.brojDokumenta
+        arr(i, 4) = Format$(blk.UkupanIznos, "#,##0.00")
+        arr(i, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
+        arr(i, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
+        arr(i, 7) = IIf(blk.HasTekuciRacun, "OK", "--")
+        arr(i, 8) = Format$(GetIsplatitiAmount(blk), "#,##0.00")
+        i = i + 1
     Next v
+
+    lstBlokovi.List = arr
 End Sub
 
 '======================================================================
@@ -265,10 +651,14 @@ Private Sub UpdateEmptyState()
         Exit Sub
     End If
     
+    Dim koopF As String
+    If Not mCmbKooperant Is Nothing Then koopF = Trim$(CStr(mCmbKooperant.value))
+
     If m_Blokovi.count = 0 Then
         If Len(Trim$(cmbStanica.value)) > 0 Or _
            Len(Trim$(txtDatumOd.value)) > 0 Or _
-           Len(Trim$(txtDatumDo.value)) > 0 Then
+           Len(Trim$(txtDatumDo.value)) > 0 Or _
+           Len(koopF) > 0 Then
             lblEmptyState.caption = "Nema rezultata za izabran filter." & vbCrLf & _
                                     "Probaj sira pravila ili klikni Osve" & ChrW(382) & "i."
         Else
@@ -315,13 +705,17 @@ Private Sub PopulateDetailPanel(ByVal blk As clsBlokIsplata)
     
     lblDetailTR.caption = "Tek. ra" & ChrW(269) & "un:" & IIf(LenB(blk.TekuciRacun) > 0, blk.TekuciRacun, "--nedostaje--")
     
-    If blk.KooperantAvansSaldo > 0 Then
-        lblDetailAvansHint.caption = "Primeni avans kroz Dokumenta pre isplate"
+    Dim imaAvans As Boolean
+    imaAvans = (blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0)
+    If imaAvans Then
+        lblDetailAvansHint.caption = "Klikni 'Primeni avans na blok' da avans vezes na ovaj otkup"
         lblDetailAvansHint.Visible = True
     Else
         lblDetailAvansHint.Visible = False
     End If
-    
+
+    If Not mBtnAvansBlok Is Nothing Then mBtnAvansBlok.enabled = imaAvans
+
     EnableField txtIsplatiti
     btnPostaviFull.enabled = True
 End Sub
@@ -336,6 +730,7 @@ Private Sub ClearDetailPanel()
     DisableField txtIsplatiti
     btnPostaviFull.enabled = False
     lblDetailAvansHint.Visible = False
+    If Not mBtnAvansBlok Is Nothing Then mBtnAvansBlok.enabled = False
 End Sub
 
 '======================================================================
@@ -495,86 +890,44 @@ End Sub
 Private Sub txtDatumOd_Enter():    ApplyFocusBorder txtDatumOd:    End Sub
 Private Sub txtDatumDo_Enter():    ApplyFocusBorder txtDatumDo:    End Sub
 
+'======================================================================
+' btnExport - PDF specifikacija isplata (umesto ranijeg TSV clipboard-a).
+' Isti izbor blokova i iznosa kao CSV nalozi: selektovani (ili svi),
+' iznos po bloku = "Isplatiti" (operater unos ili otvoreno).
+'======================================================================
 Private Sub btnExport_Click()
     On Error GoTo EH
-    
+
     If m_Blokovi Is Nothing Then
-        MsgBox "Nema podataka za export.", vbInformation, APP_NAME
+        MsgBox "Nema podataka za specifikaciju.", vbInformation, APP_NAME
         Exit Sub
     End If
-    
+
     If m_Blokovi.count = 0 Then
-        MsgBox "Nema podataka za export.", vbInformation, APP_NAME
+        MsgBox "Nema podataka za specifikaciju.", vbInformation, APP_NAME
         Exit Sub
     End If
-    
-    Dim tsv As String
-    tsv = ExportSelectionAsTSV()
-    
-    Dim dataObj As Object
-    Set dataObj = CreateObject("New:1C3B4210-F441-11CE-B9EA-00AA006B1A69")
-    dataObj.SetText tsv
-    dataObj.PutInClipboard
-    
-    Dim selCount As Long
-    selCount = CountSelected()
-    
-    If selCount > 0 Then
-        MsgBox "Export selektovanih: " & selCount & " redova kopirano. Paste u Excel.", _
-               vbInformation, APP_NAME
-    Else
-        MsgBox "Nista nije selektovano. Export svih: " & m_Blokovi.count & " redova.", _
-               vbInformation, APP_NAME
+
+    Dim missingTR As Long
+    Dim blokovi As Collection
+    Set blokovi = CollectIsplataBlokovi(missingTR)
+
+    If blokovi.count = 0 Then
+        MsgBox "Nema blokova za specifikaciju: izabrani blokovi nemaju teku" & _
+               ChrW(263) & "i ra" & ChrW(269) & "un.", vbExclamation, APP_NAME
+        Exit Sub
     End If
+
+    PrintIsplataSpecifikacija blokovi, SelectedRacun()
+
+    lblStatus.caption = "Specifikacija: " & blokovi.count & " blokova | " & _
+                        Format$(SumIsplatiti(blokovi), "#,##0.00") & " RSD"
     Exit Sub
 
 EH:
     LogErr "frmBankaExportPregled.btnExport_Click"
-    MsgBox "Gre" & ChrW(353) & "ka pri export-u: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
-
-'======================================================================
-' ExportSelectionAsTSV - selected only ako ima selection, inace sve
-'======================================================================
-Private Function ExportSelectionAsTSV() As String
-    Dim s As String
-    s = "Datum" & vbTab & "Kooperant" & vbTab & "StanicaID" & vbTab & _
-        "BrojDok" & vbTab & "Ukupan" & vbTab & "Isplaceno" & vbTab & _
-        "Otvoren" & vbTab & "Isplatiti" & vbTab & "TekuciRacun" & vbCrLf
-    
-    If m_Blokovi Is Nothing Then
-        ExportSelectionAsTSV = s
-        Exit Function
-    End If
-    
-    Dim hasSelection As Boolean
-    hasSelection = (CountSelected() > 0)
-    
-    Dim i As Long
-    For i = 0 To lstBlokovi.ListCount - 1
-        If hasSelection And Not lstBlokovi.Selected(i) Then GoTo NextRow
-        
-        Dim blk As clsBlokIsplata
-        Set blk = GetBlokByListIndex(i)
-        If blk Is Nothing Then GoTo NextRow
-        
-        Dim isplatitiAmount As Double
-        isplatitiAmount = GetIsplatitiAmount(blk)
-        
-        s = s & Format$(blk.datum, "yyyy-mm-dd") & vbTab & _
-                blk.kooperantNaziv & vbTab & _
-                blk.stanicaID & vbTab & _
-                blk.brojDokumenta & vbTab & _
-                Format$(blk.UkupanIznos, "0.00") & vbTab & _
-                Format$(blk.VecIsplaceno, "0.00") & vbTab & _
-                Format$(blk.OtvorenIznos, "0.00") & vbTab & _
-                Format$(isplatitiAmount, "0.00") & vbTab & _
-                blk.TekuciRacun & vbCrLf
-NextRow:
-    Next i
-    
-    ExportSelectionAsTSV = s
-End Function
 
 Private Function CountSelected() As Long
     Dim n As Long
@@ -583,6 +936,50 @@ Private Function CountSelected() As Long
         If lstBlokovi.Selected(i) Then n = n + 1
     Next i
     CountSelected = n
+End Function
+
+'======================================================================
+' CollectIsplataBlokovi - blokovi za CSV naloge / specifikaciju isplata:
+'   - selektovani redovi ako selekcije ima, inace svi prikazani
+'   - preskace blokove bez tekuceg racuna (broji ih u outMissingTR)
+'   - IsplatitiIznos = operater unos (override) ili OtvorenIznos
+'======================================================================
+Private Function CollectIsplataBlokovi(ByRef outMissingTR As Long) As Collection
+    Dim result As New Collection
+    outMissingTR = 0
+
+    Dim hasSelection As Boolean
+    hasSelection = (CountSelected() > 0)
+
+    Dim i As Long
+    For i = 0 To lstBlokovi.ListCount - 1
+        If hasSelection And Not lstBlokovi.Selected(i) Then GoTo NextRow
+
+        Dim blk As clsBlokIsplata
+        Set blk = GetBlokByListIndex(i)
+        If blk Is Nothing Then GoTo NextRow
+
+        If Not blk.HasTekuciRacun Then
+            outMissingTR = outMissingTR + 1
+            GoTo NextRow
+        End If
+
+        blk.IsplatitiIznos = GetIsplatitiAmount(blk)
+        If blk.IsplatitiIznos > 0 Then result.Add blk
+NextRow:
+    Next i
+
+    Set CollectIsplataBlokovi = result
+End Function
+
+' Suma IsplatitiIznos preko kolekcije (za potvrdu i status liniju).
+Private Function SumIsplatiti(ByVal blokovi As Collection) As Double
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In blokovi
+        Set blk = v
+        SumIsplatiti = SumIsplatiti + blk.IsplatitiIznos
+    Next v
 End Function
 
 Private Sub btnPovratak_Click()
@@ -615,12 +1012,129 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
 End Sub
 
 ' Mouse hover pattern
+'======================================================================
+' Vezivanje virman avansa na blokove (NOV_VIRMAN_AVANS_KOOP -> OtkupID).
+' Motor: ApplyAvansToOtkup_TX (postojeci, transakcija). Po vezivanju se
+' skida "Isplatiti" override (otvoreno bloka se menja) i radi pun reload
+' (LoadBlokovi) jer je tblNovac promenjen.
+'======================================================================
+Private Function PrimeniAvansTX(ByVal blk As clsBlokIsplata) As Boolean
+    PrimeniAvansTX = ApplyAvansToOtkup_TX(blk.kooperantID, blk.otkupID)
+    If PrimeniAvansTX Then
+        If Not m_OverrideAmounts Is Nothing Then
+            If m_OverrideAmounts.Exists(blk.otkupID) Then m_OverrideAmounts.Remove blk.otkupID
+        End If
+    End If
+End Function
+
+' Po bloku: veze avans kooperanta na fokusiran blok (do njegovog otvorenog).
+Private Sub mBtnAvansBlok_Click()
+    On Error GoTo EH
+    If lstBlokovi.ListIndex < 0 Then Exit Sub
+
+    Dim blk As clsBlokIsplata
+    Set blk = GetBlokByListIndex(lstBlokovi.ListIndex)
+    If blk Is Nothing Then Exit Sub
+
+    If blk.KooperantAvansSaldo <= 0 Then
+        MsgBox "Kooperant nema neraspore" & ChrW(273) & "en avans.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    If blk.OtvorenIznos <= 0 Then
+        MsgBox "Blok nema otvoren iznos.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim vezuje As Double
+    vezuje = blk.KooperantAvansSaldo
+    If vezuje > blk.OtvorenIznos Then vezuje = blk.OtvorenIznos
+
+    Dim msg As String
+    msg = "Vezati avans na blok " & blk.brojDokumenta & " (" & blk.kooperantNaziv & ")?" & vbCrLf & vbCrLf & _
+          "Otvoreno bloka:  " & Format$(blk.OtvorenIznos, "#,##0.00") & " RSD" & vbCrLf & _
+          "Dostupan avans:  " & Format$(blk.KooperantAvansSaldo, "#,##0.00") & " RSD" & vbCrLf & _
+          "Veze se pribl.:  " & Format$(vezuje, "#,##0.00") & " RSD" & vbCrLf & vbCrLf & _
+          "(upisuje se u tblNovac -- OtkupID na avans red)"
+    If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim brDok As String: brDok = blk.brojDokumenta
+    If PrimeniAvansTX(blk) Then
+        LoadBlokovi
+        lblStatus.caption = "Avans vezan na blok " & brDok & "."
+    Else
+        MsgBox "Gre" & ChrW(353) & "ka pri vezivanju avansa. Pogledajte log.", vbCritical, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.mBtnAvansBlok_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Na cekirane: veze avans na svaki cekiran blok sa raspolozivim avansom.
+Private Sub mBtnAvansSel_Click()
+    On Error GoTo EH
+
+    Dim sel As Collection: Set sel = New Collection
+    Dim i As Long
+    For i = 0 To lstBlokovi.ListCount - 1
+        If lstBlokovi.Selected(i) Then
+            Dim b As clsBlokIsplata
+            Set b = GetBlokByListIndex(i)
+            If Not b Is Nothing Then
+                If b.KooperantAvansSaldo > 0 And b.OtvorenIznos > 0 Then sel.Add b
+            End If
+        End If
+    Next i
+
+    If sel.count = 0 Then
+        MsgBox "Nema selektovanih blokova sa raspolo" & ChrW(382) & "ivim avansom." & vbCrLf & _
+               "(cekiraj blokove ciji kooperant ima avans)", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    If MsgBox("Vezati avans na " & sel.count & " selektovanih blokova?" & vbCrLf & vbCrLf & _
+              "(upisuje se u tblNovac za svaki blok)", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim okCount As Long, failCount As Long
+    Dim v As Variant
+    For Each v In sel
+        Dim blk As clsBlokIsplata
+        Set blk = v
+        If PrimeniAvansTX(blk) Then okCount = okCount + 1 Else failCount = failCount + 1
+    Next v
+
+    LoadBlokovi
+    lblStatus.caption = "Avans obradjen: " & okCount & " blokova" & _
+                        IIf(failCount > 0, " | gre" & ChrW(353) & "ka: " & failCount, "")
+    If failCount > 0 Then
+        MsgBox "Obra" & ChrW(273) & "eno: " & okCount & ". Gre" & ChrW(353) & "ka: " & failCount & _
+               ". Pogledajte log.", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.mBtnAvansSel_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+Private Sub mBtnAvansBlok_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    If mBtnAvansBlok.enabled Then ButtonHover mBtnAvansBlok
+End Sub
+
+Private Sub mBtnAvansSel_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    ResetActionButtons
+    ButtonHover mBtnAvansSel
+End Sub
+
 Private Sub ResetActionButtons()
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
-    StylePrimaryButton btnExport, "Export u clipboard"
+    StylePrimaryButton btnExport, "PDF specifikacija"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
     StyleExitButton btnPovratak, "Povratak"
+    If Not mBtnAvansBlok Is Nothing Then StylePrimaryButton mBtnAvansBlok, AVANS_BLOK_CAPTION
+    If Not mBtnAvansSel Is Nothing Then StylePrimaryButton mBtnAvansSel, AVANS_SEL_CAPTION
 End Sub
 
 Private Sub btnOsvezi_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
@@ -640,7 +1154,7 @@ End Sub
 
 Private Sub btnGenerisiCSV_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetActionButtons
-    ' ne radi hover na disabled -- ali bezbedno
+    ButtonHover btnGenerisiCSV
 End Sub
 
 Private Sub btnPovratak_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
@@ -652,10 +1166,87 @@ Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, 
     ResetActionButtons
 End Sub
 
+'======================================================================
+' btnGenerisiCSV - CSV naloga za prenos (uvoz u e-banking).
+' Selektovani blokovi (ili svi ako selekcije nema), iznos po bloku =
+' "Isplatiti" (operater unos ili otvoreno). Potvrda pre upisa fajla.
+'======================================================================
 Private Sub btnGenerisiCSV_Click()
-    MsgBox "Generisanje NPS CSV za bank import je deo Commit 3." & vbCrLf & vbCrLf & _
-           "Trenutno: za pripremu liste virmana koristi 'Export u clipboard'.", _
+    On Error GoTo EH
+
+    If m_Blokovi Is Nothing Then
+        MsgBox "Nema podataka za naloge.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+    If m_Blokovi.count = 0 Then
+        MsgBox "Nema podataka za naloge.", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    ' Racun platioca: combo "Sa racuna" (BANKA_NALOG_RACUNI / SELLER_ACCOUNT)
+    Dim racun As String
+    racun = SelectedRacun()
+    If LenB(racun) = 0 Then
+        MsgBox "Izaberite ra" & ChrW(269) & "un sa koga ide isplata." & vbCrLf & _
+               "Ra" & ChrW(269) & "uni firme se unose u Pode" & ChrW(353) & "avanja -> Banka / nalozi" & vbCrLf & _
+               "(ili Prodavac (firma) -> Teku" & ChrW(263) & "i ra" & ChrW(269) & "un).", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim missingTR As Long
+    Dim blokovi As Collection
+    Set blokovi = CollectIsplataBlokovi(missingTR)
+
+    If blokovi.count = 0 Then
+        MsgBox "Nema blokova za naloge: izabrani blokovi nemaju teku" & ChrW(263) & "i ra" & ChrW(269) & "un.", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim total As Double
+    total = SumIsplatiti(blokovi)
+
+    Dim racunInfo As String
+    racunInfo = racun
+    If LenB(BankaNazivZaRacun(racun)) > 0 Then
+        racunInfo = racunInfo & " (" & BankaNazivZaRacun(racun) & ")"
+    End If
+
+    Dim msg As String
+    msg = "Generisati " & blokovi.count & " naloga za prenos?" & vbCrLf & vbCrLf & _
+          "Ukupan iznos: " & Format$(total, "#,##0.00") & " RSD" & vbCrLf & _
+          "Sa ra" & ChrW(269) & "una: " & racunInfo & vbCrLf & _
+          "Datum valute: " & Format$(Date, "d.m.yyyy")
+    If missingTR > 0 Then
+        msg = msg & vbCrLf & vbCrLf & "Presko" & ChrW(269) & "eno (bez TR): " & missingTR & " blokova"
+    End If
+
+    If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim csvPath As String
+    csvPath = GenerisiNalogeCSV(blokovi, racun)
+
+    If LenB(csvPath) = 0 Then
+        MsgBox "Gre" & ChrW(353) & "ka pri generisanju CSV fajla. Pogledajte log.", vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    lblStatus.caption = "CSV: " & blokovi.count & " naloga | " & _
+                        Format$(total, "#,##0.00") & " RSD"
+
+    MsgBox "Generisano " & blokovi.count & " naloga." & vbCrLf & vbCrLf & csvPath, _
            vbInformation, APP_NAME
+
+    ' Otvori folder sa oznacenim fajlom (operater ga odatle uvozi u e-banking)
+    On Error Resume Next
+    Shell "explorer.exe /select,""" & csvPath & """", vbNormalFocus
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogErr "frmBankaExportPregled.btnGenerisiCSV_Click"
+    MsgBox "Gre" & ChrW(353) & "ka pri generisanju naloga: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 '======================================================================

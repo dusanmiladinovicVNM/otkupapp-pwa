@@ -100,6 +100,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_PRINT_MODE", "Kartica kooperanta", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_AMB_PRINT_MODE", "Kartica ambala" & ChrW(382) & "e", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "ISPLATA_SPEC_PRINT_MODE", "Specifikacija isplata (banka nalozi)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SPECIFIKACIJA_PRINT_MODE", "Specifikacija", "list:PDF;PRINT;PREVIEW;OFF"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
@@ -156,6 +157,12 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Banka / lokalno", "BANKA_DRIVE_MIN_FILE_AGE_SECONDS", "Min. starost fajla (s) pre povlacenja", "int", "local"
     CfgAdd c, "Banka / lokalno", "BANKA_AUTO_IMPORT_ON_START", "Auto-uvoz izvoda pri startu", "list:DA;NE", "local"
     CfgAdd c, "Banka / lokalno", "BANKA_ALLOWED_EXTENSIONS", "Dozvoljene ekstenzije (npr. pdf)", "text", "local"
+
+    ' Banka / nalozi -- parametri naloga za prenos (CSV export, poslovni config
+    ' u tblSEFConfig; platilac je SELLER_NAME/SELLER_ACCOUNT iz "Prodavac (firma)").
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SIFRA_PLACANJA", ChrW(352) & "ifra pla" & ChrW(263) & "anja na nalozima (prazno = 221)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SVRHA", "Svrha pla" & ChrW(263) & "anja - osnovni tekst (+ broj bloka)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUNI", "Ra" & ChrW(269) & "uni firme za isplate (vi" & ChrW(353) & "e njih odvojiti sa ;)", "text"
 
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_LIVE", "SEF test: dozvoli LIVE slanje", "bool"
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_CANCEL_STORNO", "SEF test: dozvoli cancel/storno", "bool"

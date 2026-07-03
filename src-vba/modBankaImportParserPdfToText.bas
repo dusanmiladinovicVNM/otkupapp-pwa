@@ -1245,8 +1245,10 @@ End Sub
 '----------------------------------------------------------------------
 ' WriteAllTextUtf8 - upis String-a u fajl kao UTF-8 (ADODB.Stream).
 ' Parnjak postojecem ReadAllText (koji cita UTF-8) u ovom modulu.
+' Public: koristi ga i modBankaExportPregled (CSV nalozi za prenos).
+' Napomena: ADODB.Stream u text modu upisuje UTF-8 BOM na pocetak fajla.
 '----------------------------------------------------------------------
-Private Sub WriteAllTextUtf8(ByVal filePath As String, ByVal content As String)
+Public Sub WriteAllTextUtf8(ByVal filePath As String, ByVal content As String)
     Dim stm As Object
 
     Set stm = CreateObject("ADODB.Stream")

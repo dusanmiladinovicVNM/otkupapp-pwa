@@ -2640,3 +2640,148 @@ EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillSpecifikacijaSablon"
 End Function
+
+' ============================================================
+' SPECIFIKACIJA ISPLATA KOOPERANTIMA (banka nalozi) - house-style
+' sablon, portrait, 9 kolona. Isti pattern kao SpecifikacijaSablon:
+' EnsureIsplataSpecSablon + FillIsplataSpecSablon; podatke (blokovi +
+' Isplatiti iznosi) prikuplja modBankaExportPregled.PrintIsplataSpecifikacija.
+' ============================================================
+Public Sub EnsureIsplataSpecSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_ISPLATA_SPEC_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("K1").value) = LAYOUT_VER And ws.Visible = xlSheetVisible Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_ISPLATA_SPEC_SABLON
+    ws.Visible = xlSheetVisible
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 5       ' R.br.
+    ws.columns("B").ColumnWidth = 10      ' Datum
+    ws.columns("C").ColumnWidth = 11      ' Br. bloka
+    ws.columns("D").ColumnWidth = 24      ' Kooperant
+    ws.columns("E").ColumnWidth = 20      ' Tekuci racun
+    ws.columns("F").ColumnWidth = 12      ' Ukupno
+    ws.columns("G").ColumnWidth = 12      ' Isplaceno
+    ws.columns("H").ColumnWidth = 12      ' Otvoreno
+    ws.columns("I").ColumnWidth = 12      ' Za isplatu
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 9, 9)
+    r = DocTitleBlock(ws, r, 9, "Nalozi za prenos - pregled za isplatu", _
+                      "SPECIFIKACIJA ISPLATA KOOPERANTIMA")
+
+    Dim subRow As Long: subRow = r
+    ws.Range(ws.cells(subRow, 1), ws.cells(subRow, 9)).Merge
+    ws.cells(subRow, 1).name = "IsplataSpecSubtitle"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.rows(subRow).RowHeight = 14
+
+    Dim hdr As Long: hdr = subRow + 2
+    ws.cells(hdr, 1).value = "R.br."
+    ws.cells(hdr, 2).value = "Datum"
+    ws.cells(hdr, 3).value = "Br. bloka"
+    ws.cells(hdr, 4).value = "Kooperant"
+    ws.cells(hdr, 5).value = "Teku" & ChrW(263) & "i ra" & ChrW(269) & "un"
+    ws.cells(hdr, 6).value = "Ukupno"
+    ws.cells(hdr, 7).value = "Ispla" & ChrW(263) & "eno"
+    ws.cells(hdr, 8).value = "Otvoreno"
+    ws.cells(hdr, 9).value = "Za isplatu"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 9))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "IsplataSpecStart"
+
+    ws.Range("K1").value = LAYOUT_VER
+    ws.Range("K1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureIsplataSpecSablon"
+End Sub
+
+' Popuni IsplataSpecSablon. spec(1..nRows, 1..9) = redovi; sume za UKUPNO red.
+Public Function FillIsplataSpecSablon(ByVal spec As Variant, ByVal nRows As Long, _
+        ByVal subtitle As String, _
+        ByVal sumUkupan As Double, ByVal sumIsplaceno As Double, _
+        ByVal sumOtvoreno As Double, ByVal sumIsplatiti As Double) As Worksheet
+    On Error GoTo EH
+    EnsureIsplataSpecSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_ISPLATA_SPEC_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.Range("IsplataSpecSubtitle").value = subtitle & "     Naloga: " & nRows
+
+    Dim startRow As Long: startRow = ws.Range("IsplataSpecStart").row
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 1000, 9))
+        .ClearContents
+        .ClearFormats
+    End With
+
+    Dim i As Long, c As Long, outRow As Long
+    For i = 1 To nRows
+        outRow = startRow + i - 1
+        For c = 1 To 9
+            ws.cells(outRow, c).value = spec(i, c)
+        Next c
+    Next i
+
+    Dim ukRow As Long: ukRow = startRow + nRows
+    ws.cells(ukRow, 4).value = "UKUPNO"
+    ws.cells(ukRow, 6).value = sumUkupan
+    ws.cells(ukRow, 7).value = sumIsplaceno
+    ws.cells(ukRow, 8).value = sumOtvoreno
+    ws.cells(ukRow, 9).value = sumIsplatiti
+    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 9)).Font.Bold = True
+
+    ws.Range(ws.cells(startRow, 1), ws.cells(ukRow, 1)).NumberFormat = "0"
+    ws.Range(ws.cells(startRow, 6), ws.cells(ukRow, 9)).NumberFormat = "#,##0.00"
+
+    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 9)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & (startRow - 1) & ":$" & (startRow - 1)
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 9)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillIsplataSpecSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr "modPrint.FillIsplataSpecSablon"
+End Function
