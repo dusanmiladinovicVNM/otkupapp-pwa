@@ -16,10 +16,20 @@ Attribute VB_Exposed = False
 
 Option Explicit
 
-Private m_Blokovi As Collection
+Private m_Blokovi As Collection            ' prikazani blokovi (posle kooperant-filtera)
+Private m_FullBlokovi As Collection        ' pre kooperant-filtera (prune + combo lista)
 Private m_OverrideAmounts As Object        ' Dictionary OtkupID -> custom amount
 Private m_SetupDone As Boolean
 Private mChromeRemoved As Boolean
+
+' Runtime kontrole (.frx se ne dira): filter po kooperantu + izbor racuna firme
+Private WithEvents mCmbKooperant As MSForms.ComboBox
+Private mLblKooperant As MSForms.label
+Private mCmbRacun As MSForms.ComboBox
+Private mLblRacun As MSForms.label
+Private mKoopComboFilling As Boolean       ' guard: refill ne sme da okine Change
+Private mRacuni() As String                ' cisti racuni, paralelno sa mCmbRacun stavkama
+Private mRacuniCount As Long
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -28,13 +38,15 @@ Private Sub UserForm_Activate()
     EnsureUserFormChromeRemoved Me, mChromeRemoved
     
     If m_SetupDone Then
+        PopulateRacunCombo    ' racuni u configu su se mogli promeniti u medjuvremenu
         LoadBlokovi
         Exit Sub
     End If
     m_SetupDone = True
-    
+
     ApplyTheme Me, BG_MAIN()
     ApplyThemeToControls Me
+    EnsureRuntimeControls
     
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
     StylePrimaryButton btnExport, "PDF specifikacija"
@@ -93,6 +105,288 @@ Private Sub PopulateStanicaCombo()
     FillCmb cmbStanica, GetLookupList(TBL_STANICE, "Naziv")
 End Sub
 
+'======================================================================
+' Runtime kontrole - .frx se ne dira (Controls.Add idiom kao frmPalete/
+' frmAgrohemija): kooperant filter u filter redu + izbor racuna firme
+' uz action dugmad.
+'======================================================================
+Private Sub EnsureRuntimeControls()
+    EnsureKooperantFilter
+    EnsureRacunCombo
+End Sub
+
+' Desna ivica postojeceg filter reda (u istom kontejneru kao cmbStanica).
+Private Function FilterRowRightEdge(ByVal host As Object) As Single
+    Dim edge As Single
+    edge = cmbStanica.Left + cmbStanica.width
+    On Error Resume Next
+    If txtDatumOd.Parent Is host Then
+        If txtDatumOd.Left + txtDatumOd.width > edge Then edge = txtDatumOd.Left + txtDatumOd.width
+    End If
+    If txtDatumDo.Parent Is host Then
+        If txtDatumDo.Left + txtDatumDo.width > edge Then edge = txtDatumDo.Left + txtDatumDo.width
+    End If
+    On Error GoTo 0
+    FilterRowRightEdge = edge
+End Function
+
+' Combo "Kooperant" u filter redu: radi i na unos (autocomplete +
+' substring filter) i kao padajuca lista. Prazno = svi kooperanti.
+Private Sub EnsureKooperantFilter()
+    On Error GoTo EH
+    If Not mCmbKooperant Is Nothing Then Exit Sub
+
+    Dim host As Object
+    Set host = cmbStanica.Parent
+
+    Dim edge As Single
+    edge = FilterRowRightEdge(host)
+
+    Set mLblKooperant = host.Controls.Add("Forms.Label.1", "lblKooperantFilter", True)
+    With mLblKooperant
+        .caption = "Kooperant:"
+        .Left = edge + 14
+        .top = cmbStanica.top + 3
+        .width = 50
+        .Height = 12
+    End With
+    StyleLabel mLblKooperant, TXT_MUTED(), True
+
+    Set mCmbKooperant = host.Controls.Add("Forms.ComboBox.1", "cmbKooperantFilter", True)
+    With mCmbKooperant
+        .Left = mLblKooperant.Left + mLblKooperant.width + 4
+        .top = cmbStanica.top
+        .width = 150
+        .Height = cmbStanica.Height
+        .style = fmStyleDropDownCombo         ' radi i na unos i kao dropdown
+        .MatchEntry = fmMatchEntryComplete    ' autocomplete pri kucanju
+        .ShowDropButtonWhen = fmShowDropButtonWhenAlways
+        .ControlTipText = "Kucaj deo imena ili izaberi; prazno = svi kooperanti"
+    End With
+    StyleComboBox mCmbKooperant
+
+    ' Ako novi controls vire van frame-a, prosiri frame koliko forma dozvoljava
+    If TypeName(host) = "Frame" Then
+        Dim needW As Single
+        needW = mCmbKooperant.Left + mCmbKooperant.width + 10
+        If needW > host.InsideWidth Then
+            Dim delta As Single
+            delta = needW - host.InsideWidth
+            If host.Left + host.width + delta <= Me.InsideWidth - 4 Then
+                host.width = host.width + delta
+            End If
+        End If
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.EnsureKooperantFilter"
+End Sub
+
+' Combo "Sa racuna" uz action dugmad: racun firme sa koga idu nalozi
+' (BANKA_NALOG_RACUNI lista; prazno -> SELLER_ACCOUNT). Samo izbor.
+Private Sub EnsureRacunCombo()
+    On Error GoTo EH
+    If Not mCmbRacun Is Nothing Then Exit Sub
+
+    Dim host As Object
+    Set host = btnGenerisiCSV.Parent
+
+    ' sidro = najlevlje od action dugmadi (Export / CSV)
+    Dim anchorLeft As Single, anchorTop As Single, anchorH As Single
+    anchorLeft = btnGenerisiCSV.Left
+    anchorTop = btnGenerisiCSV.top
+    anchorH = btnGenerisiCSV.Height
+    On Error Resume Next
+    If btnExport.Parent Is host Then
+        If btnExport.Left < anchorLeft Then
+            anchorLeft = btnExport.Left
+            anchorTop = btnExport.top
+            anchorH = btnExport.Height
+        End If
+    End If
+    On Error GoTo EH
+
+    Const CMB_W As Single = 185
+    Const LBL_W As Single = 52
+
+    Set mLblRacun = host.Controls.Add("Forms.Label.1", "lblRacunIsplate", True)
+    Set mCmbRacun = host.Controls.Add("Forms.ComboBox.1", "cmbRacunIsplate", True)
+
+    With mLblRacun
+        .caption = "Sa ra" & ChrW(269) & "una:"
+        .width = LBL_W
+        .Height = 12
+    End With
+
+    With mCmbRacun
+        .width = CMB_W
+        .style = fmStyleDropDownList      ' samo izbor - racun mora biti tacan
+        .ShowDropButtonWhen = fmShowDropButtonWhenAlways
+        .ControlTipText = "Ra" & ChrW(269) & "un firme sa koga idu nalozi (Pode" & _
+                          ChrW(353) & "avanja -> Banka / nalozi)"
+    End With
+
+    If anchorLeft - CMB_W - LBL_W - 24 >= 6 Then
+        ' ista linija, levo od dugmadi
+        mCmbRacun.Left = anchorLeft - CMB_W - 12
+        mCmbRacun.top = anchorTop + (anchorH - 18) / 2
+        mLblRacun.Left = mCmbRacun.Left - LBL_W - 4
+        mLblRacun.top = mCmbRacun.top + 3
+    Else
+        ' fallback: iznad dugmeta
+        mCmbRacun.Left = anchorLeft
+        mCmbRacun.top = anchorTop - 22
+        mLblRacun.Left = anchorLeft - LBL_W - 4
+        If mLblRacun.Left < 4 Then mLblRacun.Left = 4
+        mLblRacun.top = mCmbRacun.top + 3
+    End If
+
+    StyleLabel mLblRacun, TXT_MUTED(), True
+    StyleComboBox mCmbRacun
+
+    PopulateRacunCombo
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.EnsureRacunCombo"
+End Sub
+
+' Napuni combo racuna iz BANKA_NALOG_RACUNI (";"-lista); prazno ->
+' SELLER_ACCOUNT. Default izbor = SELLER_ACCOUNT ako je medju racunima.
+Private Sub PopulateRacunCombo()
+    On Error GoTo EH
+    If mCmbRacun Is Nothing Then Exit Sub
+
+    Dim raw As String
+    raw = DocConfigOr(CFG_BANKA_NALOG_RACUNI, "")
+    If LenB(Trim$(raw)) = 0 Then raw = DocConfigOr("SELLER_ACCOUNT", "")
+
+    mRacuniCount = 0
+    ReDim mRacuni(0 To 0)
+    mCmbRacun.Clear
+
+    Dim parts() As String
+    parts = Split(raw, ";")
+    Dim i As Long
+    For i = LBound(parts) To UBound(parts)
+        Dim r As String
+        r = Replace(Trim$(parts(i)), " ", "")
+        If LenB(r) > 0 Then
+            ReDim Preserve mRacuni(0 To mRacuniCount)
+            mRacuni(mRacuniCount) = r
+            Dim disp As String
+            disp = r
+            Dim bn As String
+            bn = BankaNazivZaRacun(r)
+            If LenB(bn) > 0 Then disp = disp & "  (" & bn & ")"
+            mCmbRacun.AddItem disp
+            mRacuniCount = mRacuniCount + 1
+        End If
+    Next i
+
+    If mRacuniCount > 0 Then
+        mCmbRacun.ListIndex = 0
+        Dim def As String
+        def = Replace(Trim$(DocConfigOr("SELLER_ACCOUNT", "")), " ", "")
+        If LenB(def) > 0 Then
+            Dim k As Long
+            For k = 0 To mRacuniCount - 1
+                If mRacuni(k) = def Then mCmbRacun.ListIndex = k: Exit For
+            Next k
+        End If
+    End If
+    Exit Sub
+EH:
+    LogErr "frmBankaExportPregled.PopulateRacunCombo"
+End Sub
+
+' Cist (normalizovan) racun trenutno izabran u combo-u; "" ako nema.
+Private Function SelectedRacun() As String
+    If mCmbRacun Is Nothing Then Exit Function
+    If mCmbRacun.ListIndex >= 0 And mCmbRacun.ListIndex < mRacuniCount Then
+        SelectedRacun = mRacuni(mCmbRacun.ListIndex)
+    End If
+End Function
+
+' Distinct imena kooperanata iz PUNE liste u combo (sortirano); cuva
+' trenutno ukucani tekst, guard da ne okine Change -> LoadBlokovi.
+Private Sub RefillKooperantCombo()
+    On Error GoTo EH
+    If mCmbKooperant Is Nothing Then Exit Sub
+    If m_FullBlokovi Is Nothing Then Exit Sub
+
+    Dim names As Object
+    Set names = CreateObject("Scripting.Dictionary")
+    names.CompareMode = 1   ' TextCompare
+
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In m_FullBlokovi
+        Set blk = v
+        If LenB(Trim$(blk.kooperantNaziv)) > 0 Then
+            If Not names.Exists(blk.kooperantNaziv) Then names.Add blk.kooperantNaziv, True
+        End If
+    Next v
+
+    Dim arr As Variant
+    arr = names.keys
+
+    ' insertion sort (mala lista) - abecedno, case-insensitive
+    Dim a As Long, b As Long
+    Dim t As String
+    For a = LBound(arr) + 1 To UBound(arr)
+        t = arr(a): b = a - 1
+        Do While b >= LBound(arr)
+            If StrComp(CStr(arr(b)), t, vbTextCompare) <= 0 Then Exit Do
+            arr(b + 1) = arr(b): b = b - 1
+        Loop
+        arr(b + 1) = t
+    Next a
+
+    mKoopComboFilling = True
+    Dim cur As String: cur = CStr(mCmbKooperant.value)
+    mCmbKooperant.Clear
+    Dim i As Long
+    For i = LBound(arr) To UBound(arr)
+        mCmbKooperant.AddItem CStr(arr(i))
+    Next i
+    mCmbKooperant.value = cur
+    mKoopComboFilling = False
+    Exit Sub
+EH:
+    mKoopComboFilling = False
+    LogErr "frmBankaExportPregled.RefillKooperantCombo"
+End Sub
+
+' Substring filter po nazivu kooperanta (case-insensitive): radi i za
+' kucani deo imena i za pun izbor iz liste. Prazno -> ista kolekcija.
+Private Function FilterBlokoviPoKooperantu(ByVal src As Collection, _
+                                           ByVal filter As String) As Collection
+    If src Is Nothing Then
+        Set FilterBlokoviPoKooperantu = New Collection
+        Exit Function
+    End If
+    If LenB(Trim$(filter)) = 0 Then
+        Set FilterBlokoviPoKooperantu = src
+        Exit Function
+    End If
+
+    Dim result As New Collection
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In src
+        Set blk = v
+        If InStr(1, blk.kooperantNaziv, Trim$(filter), vbTextCompare) > 0 Then
+            result.Add blk
+        End If
+    Next v
+    Set FilterBlokoviPoKooperantu = result
+End Function
+
+Private Sub mCmbKooperant_Change()
+    If mKoopComboFilling Then Exit Sub
+    LoadBlokovi
+End Sub
+
 Private Sub LoadBlokovi()
     On Error GoTo EH
     
@@ -108,11 +402,19 @@ Private Sub LoadBlokovi()
         stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbStanica.value, "StanicaID"))
     End If
     
-    Set m_Blokovi = BuildBlokIsplataList(datumOd, datumDo, stanicaID)
-    
-    ' Pre re-render-a, ocisti overrides koji vise nisu u listi
+    Set m_FullBlokovi = BuildBlokIsplataList(datumOd, datumDo, stanicaID)
+
+    ' Kooperant filter (runtime combo): substring nad nazivom -> radi i za
+    ' kucani deo imena i za pun izbor iz padajuce liste
+    Dim koopFilter As String
+    If Not mCmbKooperant Is Nothing Then koopFilter = Trim$(CStr(mCmbKooperant.value))
+    Set m_Blokovi = FilterBlokoviPoKooperantu(m_FullBlokovi, koopFilter)
+
+    ' Prune protiv PUNE liste (ne filtrirane): kooperant-filter ne sme da
+    ' obrise "Isplatiti" unose za blokove van trenutnog filtera
     PruneStaleOverrides
-    
+    RefillKooperantCombo
+
     RenderListbox
     UpdateEmptyState
     lblStatus.caption = SummarizeBlokList(m_Blokovi)
@@ -128,16 +430,16 @@ End Sub
 
 Private Sub PruneStaleOverrides()
     If m_OverrideAmounts Is Nothing Then Exit Sub
-    If m_Blokovi Is Nothing Then
+    If m_FullBlokovi Is Nothing Then
         m_OverrideAmounts.RemoveAll
         Exit Sub
     End If
-    
+
     Dim currentSet As Object
     Set currentSet = CreateObject("Scripting.Dictionary")
-    
+
     Dim v As Variant
-    For Each v In m_Blokovi
+    For Each v In m_FullBlokovi
         Dim blk As clsBlokIsplata
         Set blk = v
         currentSet.Add blk.otkupID, True
@@ -267,10 +569,14 @@ Private Sub UpdateEmptyState()
         Exit Sub
     End If
     
+    Dim koopF As String
+    If Not mCmbKooperant Is Nothing Then koopF = Trim$(CStr(mCmbKooperant.value))
+
     If m_Blokovi.count = 0 Then
         If Len(Trim$(cmbStanica.value)) > 0 Or _
            Len(Trim$(txtDatumOd.value)) > 0 Or _
-           Len(Trim$(txtDatumDo.value)) > 0 Then
+           Len(Trim$(txtDatumDo.value)) > 0 Or _
+           Len(koopF) > 0 Then
             lblEmptyState.caption = "Nema rezultata za izabran filter." & vbCrLf & _
                                     "Probaj sira pravila ili klikni Osve" & ChrW(382) & "i."
         Else
@@ -525,7 +831,7 @@ Private Sub btnExport_Click()
         Exit Sub
     End If
 
-    PrintIsplataSpecifikacija blokovi
+    PrintIsplataSpecifikacija blokovi, SelectedRacun()
 
     lblStatus.caption = "Specifikacija: " & blokovi.count & " blokova | " & _
                         Format$(SumIsplatiti(blokovi), "#,##0.00") & " RSD"
@@ -673,10 +979,13 @@ Private Sub btnGenerisiCSV_Click()
         Exit Sub
     End If
 
-    ' Platilac (firma) mora biti podesen pre generisanja
-    If LenB(Trim$(DocConfigOr("SELLER_ACCOUNT", ""))) = 0 Then
-        MsgBox "Nije unet teku" & ChrW(263) & "i ra" & ChrW(269) & "un firme (platilac)." & vbCrLf & _
-               "Unesite ga u Pode" & ChrW(353) & "avanja -> Prodavac (firma) -> Teku" & ChrW(263) & "i ra" & ChrW(269) & "un.", _
+    ' Racun platioca: combo "Sa racuna" (BANKA_NALOG_RACUNI / SELLER_ACCOUNT)
+    Dim racun As String
+    racun = SelectedRacun()
+    If LenB(racun) = 0 Then
+        MsgBox "Izaberite ra" & ChrW(269) & "un sa koga ide isplata." & vbCrLf & _
+               "Ra" & ChrW(269) & "uni firme se unose u Pode" & ChrW(353) & "avanja -> Banka / nalozi" & vbCrLf & _
+               "(ili Prodavac (firma) -> Teku" & ChrW(263) & "i ra" & ChrW(269) & "un).", _
                vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -694,9 +1003,16 @@ Private Sub btnGenerisiCSV_Click()
     Dim total As Double
     total = SumIsplatiti(blokovi)
 
+    Dim racunInfo As String
+    racunInfo = racun
+    If LenB(BankaNazivZaRacun(racun)) > 0 Then
+        racunInfo = racunInfo & " (" & BankaNazivZaRacun(racun) & ")"
+    End If
+
     Dim msg As String
     msg = "Generisati " & blokovi.count & " naloga za prenos?" & vbCrLf & vbCrLf & _
           "Ukupan iznos: " & Format$(total, "#,##0.00") & " RSD" & vbCrLf & _
+          "Sa ra" & ChrW(269) & "una: " & racunInfo & vbCrLf & _
           "Datum valute: " & Format$(Date, "d.m.yyyy")
     If missingTR > 0 Then
         msg = msg & vbCrLf & vbCrLf & "Presko" & ChrW(269) & "eno (bez TR): " & missingTR & " blokova"
@@ -705,7 +1021,7 @@ Private Sub btnGenerisiCSV_Click()
     If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
 
     Dim csvPath As String
-    csvPath = GenerisiNalogeCSV(blokovi)
+    csvPath = GenerisiNalogeCSV(blokovi, racun)
 
     If LenB(csvPath) = 0 Then
         MsgBox "Gre" & ChrW(353) & "ka pri generisanju CSV fajla. Pogledajte log.", vbCritical, APP_NAME

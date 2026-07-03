@@ -162,6 +162,7 @@ Public Function ConfigEditorFields() As Variant
     ' u tblSEFConfig; platilac je SELLER_NAME/SELLER_ACCOUNT iz "Prodavac (firma)").
     CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SIFRA_PLACANJA", ChrW(352) & "ifra pla" & ChrW(263) & "anja na nalozima (prazno = 221)", "text"
     CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SVRHA", "Svrha pla" & ChrW(263) & "anja - osnovni tekst (+ broj bloka)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUNI", "Ra" & ChrW(269) & "uni firme za isplate (vi" & ChrW(353) & "e njih odvojiti sa ;)", "text"
 
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_LIVE", "SEF test: dozvoli LIVE slanje", "bool"
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_CANCEL_STORNO", "SEF test: dozvoli cancel/storno", "bool"

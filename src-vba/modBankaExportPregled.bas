@@ -221,10 +221,14 @@ End Function
 ' (CollectIsplataBlokovi u frmBankaExportPregled). Render u modPrint
 ' (EnsureIsplataSpecSablon/FillIsplataSpecSablon, house-style).
 '======================================================================
-Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection)
+Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection, _
+                                     Optional ByVal platilacRacun As String = "")
     On Error GoTo EH
     If blokovi Is Nothing Then Exit Sub
     If blokovi.count = 0 Then Exit Sub
+
+    platilacRacun = NormalizujRacun(platilacRacun)
+    If LenB(platilacRacun) = 0 Then platilacRacun = NormalizujRacun(DocConfigOr("SELLER_ACCOUNT", ""))
 
     Dim n As Long: n = blokovi.count
     Dim spec() As Variant: ReDim spec(1 To n, 1 To 9)
@@ -255,7 +259,7 @@ Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection)
     Dim subtitle As String
     subtitle = "Datum: " & Format$(Date, "d.m.yyyy") & _
                "     Platilac: " & DocConfigOr("SELLER_NAME", "") & _
-               " (" & DocConfigOr("SELLER_ACCOUNT", "") & ")"
+               " (" & platilacRacun & ")"
 
     Dim ws As Worksheet
     Set ws = FillIsplataSpecSablon(spec, n, subtitle, _
@@ -298,16 +302,20 @@ End Sub
 ' tacka u iznosu (deterministicki, nezavisno od Windows locale-a).
 ' Kolone drzati stabilnim: e-banking uvozi se mapiraju po pozicijama.
 '======================================================================
-Public Function GenerisiNalogeCSV(ByVal blokovi As Collection) As String
+Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
+                                  Optional ByVal platilacRacun As String = "") As String
     On Error GoTo EH
 
     GenerisiNalogeCSV = ""
     If blokovi Is Nothing Then Exit Function
     If blokovi.count = 0 Then Exit Function
 
-    Dim platilacNaziv As String, platilacRacun As String
+    ' Platilac racun: prosledjen iz forme (combo "Sa racuna"); prazno ->
+    ' SELLER_ACCOUNT (backward-compatible kada racuna ima samo jedan).
+    Dim platilacNaziv As String
     platilacNaziv = DocConfigOr("SELLER_NAME", "")
-    platilacRacun = NormalizujRacun(DocConfigOr("SELLER_ACCOUNT", ""))
+    platilacRacun = NormalizujRacun(platilacRacun)
+    If LenB(platilacRacun) = 0 Then platilacRacun = NormalizujRacun(DocConfigOr("SELLER_ACCOUNT", ""))
     If LenB(platilacRacun) = 0 Then Exit Function   ' forma validira i javlja poruku
 
     Dim sifra As String, svrhaBase As String
@@ -378,5 +386,38 @@ End Function
 ' ostaje kako je unet u maticne podatke / config).
 Private Function NormalizujRacun(ByVal racun As String) As String
     NormalizujRacun = Replace(Trim$(racun), " ", "")
+End Function
+
+'======================================================================
+' BankaNazivZaRacun - ime banke iz vodeceg NBS koda racuna (prve 3
+' cifre / deo pre prve crtice). Za prikaz u combo-u "Sa racuna"
+' (frmBankaExportPregled) kada firma ima racune u vise banaka.
+' Nepoznat kod -> "" (prikaze se samo racun).
+'======================================================================
+Public Function BankaNazivZaRacun(ByVal racun As String) As String
+    Dim r As String
+    r = Replace(Trim$(racun), " ", "")
+
+    Dim kod As String
+    If InStr(r, "-") > 0 Then
+        kod = Left$(r, InStr(r, "-") - 1)
+    ElseIf Len(r) >= 3 Then
+        kod = Left$(r, 3)
+    End If
+
+    Select Case kod
+        Case "105": BankaNazivZaRacun = "AIK"
+        Case "155": BankaNazivZaRacun = "Halkbank"
+        Case "160": BankaNazivZaRacun = "Banca Intesa"
+        Case "165": BankaNazivZaRacun = "Addiko"
+        Case "170": BankaNazivZaRacun = "UniCredit"
+        Case "200": BankaNazivZaRacun = "Po" & ChrW(353) & "tanska " & ChrW(353) & "tedionica"
+        Case "205": BankaNazivZaRacun = "NLB Komercijalna"
+        Case "220": BankaNazivZaRacun = "ProCredit"
+        Case "265": BankaNazivZaRacun = "Raiffeisen"
+        Case "275", "325": BankaNazivZaRacun = "OTP"
+        Case "340": BankaNazivZaRacun = "Erste"
+        Case Else: BankaNazivZaRacun = ""
+    End Select
 End Function
 

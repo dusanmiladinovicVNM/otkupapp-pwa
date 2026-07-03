@@ -386,6 +386,9 @@ Public Const CFG_BANKA_NALOG_SIFRA As String = "BANKA_NALOG_SIFRA_PLACANJA"
 Public Const BANKA_NALOG_SIFRA_DEFAULT As String = "221"
 Public Const CFG_BANKA_NALOG_SVRHA As String = "BANKA_NALOG_SVRHA"
 Public Const BANKA_NALOG_SVRHA_DEFAULT As String = "Otkup poljoprivrednih proizvoda"
+' Racuni firme za isplate, odvojeni ";" (firma moze imati racune u vise banaka).
+' Prazno -> koristi se SELLER_ACCOUNT. Operater bira racun u frmBankaExportPregled.
+Public Const CFG_BANKA_NALOG_RACUNI As String = "BANKA_NALOG_RACUNI"
 
 ' --- Imena sablon sheet-ova (template worksheets za stampu) ---
 ' Jedinstveni izvor istine za nazive sheet-ova-sablona (umesto rasutih
