@@ -110,18 +110,38 @@ End Sub
 Public Sub ImportBankaInbox_WithDrivePull()
     Const SRC As String = "ImportBankaInbox_WithDrivePull"
 
+    Dim drivePullWarning As String
+
     On Error GoTo EH
 
+    ' Drive pull je opcioni predkorak (isti ishod kao kad
+    ' BANKA_DRIVE_SOURCE_PATH nije ni podesen): ako Drive nije dostupan,
+    ' NE blokiraj uvoz lokalnog Inboxa - loguj upozorenje i nastavi dalje.
     If BankaDrivePullConfigured() Then
+        On Error Resume Next
         PullBankPdfsFromDriveProduction
+        If Err.Number <> 0 Then drivePullWarning = Err.description
+        On Error GoTo EH
+
+        If Len(drivePullWarning) > 0 Then
+            LogWarn SRC, "Drive pull preskocen (nastavljam sa lokalnim Inboxom): " & drivePullWarning
+        End If
     End If
 
     ImportBankaInbox_TX
     Exit Sub
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Private Sub ImportBankaInboxToPendingMoves(ByRef successMoves As Collection, _
@@ -1204,10 +1224,14 @@ Public Function PullBankPdfsFromDriveProduction() As Long
     If Len(driveSourcePath) = 0 Then Exit Function
 
     If Len(driveDownloadedPath) = 0 Then
-        driveDownloadedPath = BankaParentFolderPath(driveSourcePath) & "\Downloaded"
+        ' Downloaded ide UNUTAR source foldera (koji je writable), a ne u
+        ' roditelja. Google Drive shortcut putanja
+        ' (G:\.shortcut-targets-by-id\<id>\01_Bank) ima virtuelnog roditelja
+        ' u koji se NE moze praviti novi folder -> MkDir bi bacio error 75.
+        driveDownloadedPath = driveSourcePath & "\Downloaded"
     End If
 
-    If Dir$(driveSourcePath, vbDirectory) = "" Then
+    If Not BankaFolderExists(driveSourcePath) Then
         Err.Raise vbObjectError + 9501, SRC, _
             "Drive source folder ne postoji ili nije dostupan: " & driveSourcePath
     End If
@@ -1238,8 +1262,16 @@ Public Function PullBankPdfsFromDriveProduction() As Long
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _
@@ -1424,6 +1456,22 @@ Private Function BankaSafeFileName(ByVal fileName As String) As String
     BankaSafeFileName = fileName
 End Function
 
+Private Function BankaFolderExists(ByVal folderPath As String) As Boolean
+    ' Robusna provera postojanja foldera preko GetAttr.
+    ' Dir$(path, vbDirectory) NE vidi skrivene/sistemske foldere (vraca "")
+    ' kao npr. Google Drive virtuelni "G:\.shortcut-targets-by-id" -> zbog toga
+    ' je BankaEnsureFolderExistsRecursive pokusavao MkDir nad postojecim
+    ' skrivenim folderom i dobijao error 75 (Path/File access error).
+    Dim attr As Long
+
+    On Error Resume Next
+    attr = GetAttr(folderPath)
+    If Err.Number = 0 Then
+        BankaFolderExists = ((attr And vbDirectory) = vbDirectory)
+    End If
+    On Error GoTo 0
+End Function
+
 Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
     Dim parts() As String
     Dim currentPath As String
@@ -1432,7 +1480,7 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
     folderPath = BankaNormalizeFolderPath(folderPath)
 
     If Len(folderPath) = 0 Then Exit Sub
-    If Dir$(folderPath, vbDirectory) <> "" Then Exit Sub
+    If BankaFolderExists(folderPath) Then Exit Sub
 
     parts = Split(folderPath, "\")
     currentPath = parts(0)
@@ -1444,7 +1492,7 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
             If Right$(currentPath, 1) <> "\" Then currentPath = currentPath & "\"
             currentPath = currentPath & parts(i)
 
-            If Dir$(currentPath, vbDirectory) = "" Then MkDir currentPath
+            If Not BankaFolderExists(currentPath) Then MkDir currentPath
         End If
     Next i
 End Sub
