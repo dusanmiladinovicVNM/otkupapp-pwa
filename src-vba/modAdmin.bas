@@ -269,13 +269,21 @@ EH:
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbExclamation, APP_NAME
 End Sub
 
-' Objava na Drive je outward-facing (ceo fleet) i build/dev komanda -> potvrda.
+' Objava na Drive je outward-facing (ceo fleet) i build/dev komanda -> trazi
+' sifru (RELEASE_PUBLISH_SIFRA, modConfig). Unos sifre je ujedno i potvrda
+' (jedan dijalog); prazno/Cancel = tiho odustao, pogresna sifra = poruka + prekid.
 Private Sub AdminPublishToDrive()
     On Error GoTo EH
-    If MsgBox("Objaviti trenutni kod (src-vba) i version.json na Google Drive" & vbCrLf & _
-              "(AgriX_Release -- vidljivo celom fleetu)?" & vbCrLf & vbCrLf & _
-              "Ovo je build/dev komanda.", _
-              vbYesNo + vbExclamation, APP_NAME) <> vbYes Then Exit Sub
+    Dim s As String
+    s = InputBox("Objaviti trenutni kod (src-vba) i version.json na Google Drive" & vbCrLf & _
+                 "(AgriX_Release -- vidljivo celom fleetu)? Ovo je build/dev komanda." & vbCrLf & vbCrLf & _
+                 "Unesite " & ChrW(353) & "ifru za objavu:", APP_NAME)
+    If Len(s) = 0 Then Exit Sub
+    If s <> RELEASE_PUBLISH_SIFRA Then
+        MsgBox "Pogre" & ChrW(353) & "na " & ChrW(353) & "ifra. Objava je otkazana.", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
     PublishReleaseToDrive
     Exit Sub
 EH:
