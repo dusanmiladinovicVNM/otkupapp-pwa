@@ -1217,7 +1217,7 @@ Public Function PullBankPdfsFromDriveProduction() As Long
         driveDownloadedPath = BankaParentFolderPath(driveSourcePath) & "\Downloaded"
     End If
 
-    If Dir$(driveSourcePath, vbDirectory) = "" Then
+    If Not BankaFolderExists(driveSourcePath) Then
         Err.Raise vbObjectError + 9501, SRC, _
             "Drive source folder ne postoji ili nije dostupan: " & driveSourcePath
     End If
@@ -1434,6 +1434,15 @@ Private Function BankaSafeFileName(ByVal fileName As String) As String
     BankaSafeFileName = fileName
 End Function
 
+' Pouzdana provera postojanja foldera -- radi i na Google Drive virtuelnim
+' (.shortcut-targets-by-id) i online-only putanjama, gde Dir$(..., vbDirectory)
+' vraca lazno "" pa je kod pokusavao MkDir na VEC POSTOJECEM folderu = greska 75.
+Private Function BankaFolderExists(ByVal folderPath As String) As Boolean
+    On Error Resume Next
+    BankaFolderExists = CreateObject("Scripting.FileSystemObject").FolderExists(folderPath)
+    On Error GoTo 0
+End Function
+
 Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
     Dim parts() As String
     Dim currentPath As String
@@ -1442,7 +1451,7 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
     folderPath = BankaNormalizeFolderPath(folderPath)
 
     If Len(folderPath) = 0 Then Exit Sub
-    If Dir$(folderPath, vbDirectory) <> "" Then Exit Sub
+    If BankaFolderExists(folderPath) Then Exit Sub
 
     parts = Split(folderPath, "\")
     currentPath = parts(0)
@@ -1454,7 +1463,7 @@ Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
             If Right$(currentPath, 1) <> "\" Then currentPath = currentPath & "\"
             currentPath = currentPath & parts(i)
 
-            If Dir$(currentPath, vbDirectory) = "" Then MkDir currentPath
+            If Not BankaFolderExists(currentPath) Then MkDir currentPath
         End If
     Next i
 End Sub
