@@ -112,8 +112,18 @@ Public Sub ImportBankaInbox_WithDrivePull()
 
     On Error GoTo EH
 
+    ' Drive povlacenje je BEST-EFFORT: ako Drive putanja nije dostupna (offline,
+    ' pogresan BANKA_DRIVE_SOURCE_PATH, nepristupacan folder) NE obaraj uvoz --
+    ' zabelezi WARN i uvezi lokalni Inbox svejedno. Sam uvoz (_TX) ostaje hard.
     If BankaDrivePullConfigured() Then
+        On Error Resume Next
         PullBankPdfsFromDriveProduction
+        If Err.Number <> 0 Then
+            Err.Clear
+            LogError SRC, "Drive pull preskocen -- nastavljam sa lokalnim Inboxom " & _
+                          "(detalji: PullBankPdfsFromDriveProduction u dnevnom logu).", 0, "WARN"
+        End If
+        On Error GoTo EH
     End If
 
     ImportBankaInbox_TX
