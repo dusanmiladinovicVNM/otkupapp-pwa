@@ -29,11 +29,13 @@ Option Explicit
 '     prva linija, re-entrancy guard (mInHook), jeftina common-path grana,
 '     i UVEK CallNextHookEx (lanac se ne prekida).
 '
-'  4) OFF PO DEFAULTU (mArmed=False): na import se NE instalira nikakav hook;
-'     Attach/Register su no-op dok se ne "naoruza". Ukljucuje se SAMO eksplicitno:
-'     MouseWheel_SetEnabled True (pa otvori/re-fokusiraj formu). Razlog: mouse
-'     hook uz OTVOREN VBE ume da zaledi Excel, pa feature ne sme da se pali sam
-'     na startu. Iskljucivanje u hodu: MouseWheel_SetEnabled False.
+'  4) Ukljucenost je CONFIG-DRIVEN: kljuc MOUSEWHEEL_SCROLL (tblLocalConfig,
+'     prazno = DA). Cita se u StartApp, a i lenjivo u Attach/Register
+'     (EnsureArmedFromConfig) - pa radi i posle ImportAllVBA/self-update bez
+'     rucnog paljenja, cak i kad se Workbook_Open ne okine. Eksplicitno u hodu:
+'     MouseWheel_On / MouseWheel_Off (Alt+F8) ili snimanje u Podesavanjima.
+'     Bezbednost od freeze-a NE zavisi od ovoga vec od VBE-brane (hook se ne
+'     dize dok je VBE otvoren).
 '
 '  5) Koja lista se skroluje bira se preko MouseMove (clsWheelList),
 '     bez ijedne geometrijske/DPI/HWND racunice.
@@ -79,16 +81,15 @@ Private mHot As MSForms.ListBox           ' lista trenutno pod misem
 Private mWrappers As Collection           ' clsWheelList instance (drzi ih zivim)
 Private mInHook As Boolean                ' TVRDI re-entrancy guard oko celog callback-a
 Private mAlive As Long                    ' keep-alive: hook aktivan SAMO dok je mis nad listom
-Private mArmed As Boolean                 ' OFF po defaultu (False)! Hook se NE instalira dok
-                                          ' ga MouseWheel_SetEnabled True eksplicitno ne "naoruza".
-                                          ' Razlog: mouse hook + otvoren VBE ume da zaledi Excel;
-                                          ' zato feature ne sme da se pali sam od sebe na import.
+Private mArmed As Boolean                 ' da li je feature ukljucen (prema configu MOUSEWHEEL_SCROLL)
+Private mInit As Boolean                  ' da li je mArmed vec procitan iz config-a (jednom po ucitavanju koda)
 
 ' ------------------------------------------------------------
 ' Attach - poziva se iz UserForm_Activate. Idempotentno.
 ' ------------------------------------------------------------
 Public Sub MouseWheel_Attach(ByVal frm As Object)
     On Error Resume Next
+    EnsureArmedFromConfig                  ' radi i posle ImportAllVBA/self-update bez rucnog paljenja
     If Not mArmed Then Exit Sub
 
     ' Obmotaj liste ove forme. UVEK (ne samo kad je mWrappers prazno) jer se
@@ -122,8 +123,21 @@ End Sub
 ' Master prekidac - MouseWheel_SetEnabled False ugasi sve odmah.
 ' ------------------------------------------------------------
 Public Sub MouseWheel_SetEnabled(ByVal onOff As Boolean)
+    mInit = True                          ' eksplicitno On/Off ima prednost nad config auto-citanjem
     mArmed = onOff
     If Not mArmed Then MouseWheel_Detach
+End Sub
+
+' Naoruzaj prema configu MOUSEWHEEL_SCROLL (prazno = DA), JEDNOM po ucitavanju
+' koda. Zove se iz Attach/Register, pa feature radi i posle ImportAllVBA /
+' self-update-a (koji resetuju modul-stanje) bez rucnog paljenja - cak i kad se
+' Workbook_Open ne okine (isti vec otvoren fajl). Napomena: i kad je naoruzan,
+' hook se i dalje NE instalira dok je VBE otvoren (EnsureHook / VbeIsOpen).
+Private Sub EnsureArmedFromConfig()
+    If mInit Then Exit Sub
+    mInit = True
+    On Error Resume Next
+    mArmed = (UCase$(Trim$(GetLocalConfigValue("MOUSEWHEEL_SCROLL", "DA"))) <> "NE")
 End Sub
 
 ' Bezargumentni obmotaci - vidljivi u Alt+F8, pa mogu iz Excela BEZ VBE:
@@ -196,6 +210,7 @@ End Function
 ' ------------------------------------------------------------
 Public Sub MouseWheel_Register(ByVal lb As MSForms.ListBox)
     On Error Resume Next
+    EnsureArmedFromConfig
     If Not mArmed Then Exit Sub
     If lb Is Nothing Then Exit Sub
 
