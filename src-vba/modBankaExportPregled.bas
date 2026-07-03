@@ -57,6 +57,10 @@ Public Function BuildBlokIsplataList( _
     Set trCache = BuildKooperantTekuciRacunCache()
     Set nazivCache = CreateObject("Scripting.Dictionary")
     Set avansCache = BuildKooperantUnallocatedAvansDict()
+    ' KooperantID po OtkupID: O(n) mapa JEDNOM (umesto LookupValue O(n) po redu
+    ' u petlji, sto je bilo O(n^2) i glavni uzrok laga pri ucitavanju).
+    Dim koopByOtkup As Object
+    Set koopByOtkup = BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_KOOPERANT)
     
     Dim i As Long
     For i = 1 To UBound(openOtkupi, 1)
@@ -94,8 +98,8 @@ Public Function BuildBlokIsplataList( _
         If datumDo > #1/1/1900# And datumVal > datumDo Then GoTo NextRow
         
         Dim kooperantID As String
-        kooperantID = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KOOPERANT))
-        If LenB(Trim$(kooperantID)) = 0 Then GoTo NextRow
+        If koopByOtkup.Exists(otkupID) Then kooperantID = Trim$(CStr(koopByOtkup(otkupID)))
+        If LenB(kooperantID) = 0 Then GoTo NextRow
         
         Dim kooperantNaziv As String
         If nazivCache.Exists(kooperantID) Then

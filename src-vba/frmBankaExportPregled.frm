@@ -139,6 +139,13 @@ Private Sub EnsureKooperantFilter()
     Dim host As Object
     Set host = cmbStanica.Parent
 
+    ' Osvezi dugme (iz .frx) je stajalo odmah posle datum polja -> nalegalo je
+    ' na kooperant combo. Pomeri ga skroz desno u filter redu da oslobodi mesto;
+    ' combo ostaje odmah posle datuma (gde je i bio).
+    On Error Resume Next
+    btnOsvezi.Left = btnOsvezi.Parent.InsideWidth - btnOsvezi.width - 12
+    On Error GoTo EH
+
     Dim edge As Single
     edge = FilterRowRightEdge(host)
 
@@ -147,7 +154,7 @@ Private Sub EnsureKooperantFilter()
         .caption = "Kooperant:"
         .Left = edge + 14
         .top = cmbStanica.top + 3
-        .width = 50
+        .width = 56
         .Height = 12
     End With
     StyleLabel mLblKooperant, TXT_MUTED(), True
@@ -156,7 +163,7 @@ Private Sub EnsureKooperantFilter()
     With mCmbKooperant
         .Left = mLblKooperant.Left + mLblKooperant.width + 4
         .top = cmbStanica.top
-        .width = 150
+        .width = 160
         .Height = cmbStanica.Height
         .style = fmStyleDropDownCombo         ' radi i na unos i kao dropdown
         .MatchEntry = fmMatchEntryComplete    ' autocomplete pri kucanju
@@ -164,19 +171,6 @@ Private Sub EnsureKooperantFilter()
         .ControlTipText = "Kucaj deo imena ili izaberi; prazno = svi kooperanti"
     End With
     StyleComboBox mCmbKooperant
-
-    ' Ako novi controls vire van frame-a, prosiri frame koliko forma dozvoljava
-    If TypeName(host) = "Frame" Then
-        Dim needW As Single
-        needW = mCmbKooperant.Left + mCmbKooperant.width + 10
-        If needW > host.InsideWidth Then
-            Dim delta As Single
-            delta = needW - host.InsideWidth
-            If host.Left + host.width + delta <= Me.InsideWidth - 4 Then
-                host.width = host.width + delta
-            End If
-        End If
-    End If
     Exit Sub
 EH:
     LogErr "frmBankaExportPregled.EnsureKooperantFilter"
@@ -384,36 +378,56 @@ End Function
 
 Private Sub mCmbKooperant_Change()
     If mKoopComboFilling Then Exit Sub
-    LoadBlokovi
+    ApplyKooperantFilter          ' lagani re-filter, BEZ rebuild-a pune liste
 End Sub
 
+'======================================================================
+' LoadBlokovi - PUN rebuild otvorenih blokova (cita tabele). Skupo, pa se
+' zove SAMO kad se izvor menja: otvaranje forme, Osvezi, datum/stanica
+' filter. NE zove se na kooperant filter (to je view-filter, ApplyKooperantFilter).
+'======================================================================
 Private Sub LoadBlokovi()
     On Error GoTo EH
-    
+
     Dim datumOd As Date, datumDo As Date
     Dim stanicaID As String
-    
+
     On Error Resume Next
     If Len(Trim$(txtDatumOd.value)) > 0 Then datumOd = CDate(txtDatumOd.value)
     If Len(Trim$(txtDatumDo.value)) > 0 Then datumDo = CDate(txtDatumDo.value)
     On Error GoTo EH
-    
+
     If Len(Trim$(cmbStanica.value)) > 0 Then
         stanicaID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbStanica.value, "StanicaID"))
     End If
-    
+
     Set m_FullBlokovi = BuildBlokIsplataList(datumOd, datumDo, stanicaID)
 
-    ' Kooperant filter (runtime combo): substring nad nazivom -> radi i za
-    ' kucani deo imena i za pun izbor iz padajuce liste
+    ' Override cleanup + punjenje combo imena idu protiv PUNE liste -> SAMO
+    ' pri rebuild-u (kooperant-filter ne sme da obrise "Isplatiti" unose)
+    PruneStaleOverrides
+    RefillKooperantCombo
+
+    ApplyKooperantFilter
+    Exit Sub
+
+EH:
+    LogErr "frmBankaExportPregled.LoadBlokovi"
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
+End Sub
+
+'======================================================================
+' ApplyKooperantFilter - LAGANI re-filter nad vec ucitanom m_FullBlokovi
+' (bez citanja tabela). Zove se na svaku promenu kooperant combo-a i na
+' kraju LoadBlokovi. Substring nad nazivom radi i za kucani deo imena i za
+' pun izbor iz padajuce liste; prazno = svi.
+'======================================================================
+Private Sub ApplyKooperantFilter()
+    On Error GoTo EH
+
     Dim koopFilter As String
     If Not mCmbKooperant Is Nothing Then koopFilter = Trim$(CStr(mCmbKooperant.value))
     Set m_Blokovi = FilterBlokoviPoKooperantu(m_FullBlokovi, koopFilter)
-
-    ' Prune protiv PUNE liste (ne filtrirane): kooperant-filter ne sme da
-    ' obrise "Isplatiti" unose za blokove van trenutnog filtera
-    PruneStaleOverrides
-    RefillKooperantCombo
 
     RenderListbox
     UpdateEmptyState
@@ -424,8 +438,8 @@ Private Sub LoadBlokovi()
     Exit Sub
 
 EH:
-    LogErr "frmBankaExportPregled.LoadBlokovi"
-    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
+    LogErr "frmBankaExportPregled.ApplyKooperantFilter"
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri filtriranju."
 End Sub
 
 Private Sub PruneStaleOverrides()
@@ -462,31 +476,40 @@ Private Sub PruneStaleOverrides()
 End Sub
 
 Private Sub RenderListbox()
-    lstBlokovi.Clear
-    
-    If m_Blokovi Is Nothing Then Exit Sub
-    
+    If m_Blokovi Is Nothing Then
+        lstBlokovi.Clear
+        Exit Sub
+    End If
+
+    Dim n As Long: n = m_Blokovi.count
+    If n = 0 Then
+        lstBlokovi.Clear
+        Exit Sub
+    End If
+
+    ' 2D niz + JEDAN .List upis (umesto AddItem + po-celija: ~9x manje COM
+    ' poziva, bitno na 800+ redova -- isti .List=arr pattern kao izvestaji).
+    Dim arr() As Variant
+    ReDim arr(0 To n - 1, 0 To 8)
+
+    Dim i As Long: i = 0
     Dim blk As clsBlokIsplata
     Dim v As Variant
     For Each v In m_Blokovi
         Set blk = v
-        
-        Dim isplatitiAmount As Double
-        isplatitiAmount = GetIsplatitiAmount(blk)
-        
-        lstBlokovi.AddItem Format$(blk.datum, "d.m.yyyy")
-        Dim row As Long
-        row = lstBlokovi.ListCount - 1
-        
-        lstBlokovi.List(row, 1) = blk.kooperantNaziv
-        lstBlokovi.List(row, 2) = blk.stanicaID
-        lstBlokovi.List(row, 3) = blk.brojDokumenta
-        lstBlokovi.List(row, 4) = Format$(blk.UkupanIznos, "#,##0.00")
-        lstBlokovi.List(row, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
-        lstBlokovi.List(row, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
-        lstBlokovi.List(row, 7) = IIf(blk.HasTekuciRacun, "OK", "--")
-        lstBlokovi.List(row, 8) = Format$(isplatitiAmount, "#,##0.00")
+        arr(i, 0) = Format$(blk.datum, "d.m.yyyy")
+        arr(i, 1) = blk.kooperantNaziv
+        arr(i, 2) = blk.stanicaID
+        arr(i, 3) = blk.brojDokumenta
+        arr(i, 4) = Format$(blk.UkupanIznos, "#,##0.00")
+        arr(i, 5) = Format$(blk.VecIsplaceno, "#,##0.00")
+        arr(i, 6) = Format$(blk.OtvorenIznos, "#,##0.00")
+        arr(i, 7) = IIf(blk.HasTekuciRacun, "OK", "--")
+        arr(i, 8) = Format$(GetIsplatitiAmount(blk), "#,##0.00")
+        i = i + 1
     Next v
+
+    lstBlokovi.List = arr
 End Sub
 
 '======================================================================
