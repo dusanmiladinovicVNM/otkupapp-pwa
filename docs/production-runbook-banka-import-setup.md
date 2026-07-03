@@ -107,7 +107,7 @@ Na **mašini gde radi Excel** (za svakog novog klijenta isto):
 3. `BANKA_DRIVE_SOURCE_PATH` = ta putanja (folder picker je razreši sam). **`BANKA_DRIVE_DOWNLOADED_PATH` ostavi PRAZNO** → default se izračuna na `…\<id>\Downloaded` (= `00_Inbox\Downloaded`).
 4. (Preporučeno, ne obavezno) `00_Inbox` → desni klik → **Available offline** — pull koristi `FileSystemObject` koji radi i online-only, ali offline smanjuje hidraciju/kašnjenje.
 
-> **Zašto FSO (v2.10.0+):** legacy `Dir$`/`MkDir`/`Name`/`FileCopy` **pucaju/lažu na `.shortcut-targets-by-id` virtuelnoj putanji** (greške 75 „Path/File access" / 76 „Path not found"). Od **vba-v2.10.0** su sve pull file/folder operacije na `Scripting.FileSystemObject`, pa shortcut putanja radi kao normalna My Drive putanja. Na starijem buildu → `ImportAllVBA`.
+> **Zašto FSO (v2.12.0+):** legacy `Dir$`/`MkDir`/`Name`/`FileCopy` **pucaju/lažu na `.shortcut-targets-by-id` virtuelnoj putanji** (greške 75 „Path/File access" / 76 „Path not found"). Od **vba-v2.12.0** su sve pull file/folder operacije na `Scripting.FileSystemObject`, pa shortcut putanja radi kao normalna My Drive putanja. Na starijem buildu → `ImportAllVBA`.
 
 ---
 
@@ -247,8 +247,8 @@ Dnevna rutina:
 | Ceo batch rollback na jednom PDF-u | „sve ili ništa" import + jedan loš PDF | `ImportOnePdfIntoBankaImport "<fajl>"` da izoluješ; izbaci/reši taj PDF |
 | Preview „Auto match: Nije pronađen" iako račun postoji | forma nije reimportovana (star preview) ili račun/stanica nisu uneti | `ImportAllVBA` (sa formom); Faza 5 (unesi `TekuciRacun`/`StanicaID`) |
 | Isplata se ne knjiži, red ostaje otvoren | kooperant nema `StanicaID` | Dodeli stanicu kooperantu |
-| Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Preporučeno „Available offline"; od v2.10.0 pull koristi FSO pa radi i online-only |
-| Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | STAR build: legacy `Dir$`/`MkDir`/`Name`/`FileCopy` pucaju na deljenom shortcut folderu (`.shortcut-targets-by-id`) | Ažuriraj build (`ImportAllVBA`) — od **v2.10.0** su pull op-e na `Scripting.FileSystemObject`; proveri i **Editor** na `01_Bank`+`Downloaded` |
+| Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Preporučeno „Available offline"; od v2.12.0 pull koristi FSO pa radi i online-only |
+| Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | STAR build: legacy `Dir$`/`MkDir`/`Name`/`FileCopy` pucaju na deljenom shortcut folderu (`.shortcut-targets-by-id`) | Ažuriraj build (`ImportAllVBA`) — od **v2.12.0** su pull op-e na `Scripting.FileSystemObject`; proveri i **Editor** na `01_Bank`+`Downloaded` |
 | GAS re-skida iste izvode / `Downloaded` se puni | filename-dedupe + VBA iseli fajl iz `01_Bank` | benigno (staging-dedupe čuva tačnost); opciono Gmail label/arhiviranje u GAS-u |
 
 ---
