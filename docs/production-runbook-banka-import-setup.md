@@ -99,10 +99,15 @@ Na **nalogu koji STVARNO prima mejlove banke**. Kod i detalji:
 
 ## Faza 2 — Drive → lokalni disk (Google Drive for Desktop)
 
-Na **mašini gde radi Excel**:
-1. Google Drive for Desktop ulogovan na nalog koji vidi `01_Bank`. Ako je folder deljen sa drugog naloga → u Drive web-u desni klik na `01_Bank` → **Add shortcut to Drive → My Drive** (pa je pod `H:\My Drive\...`).
-2. `00_Inbox` → desni klik → **Available offline** (da `pdftotext` čita realne bajtove, ne cloud placeholder).
-3. Zapamti lokalnu putanju foldera (npr. `H:\My Drive\AgriX_C001_PROD\00_Inbox\01_Bank`).
+> **Klijentska mašina se NIKAD ne loguje na vlasnički `ops@agrix`** (on drži foldere/GAS-ove SVIH firmi — multi-tenant izolacija). Zato klijent uvek pristupa svom `01_Bank`-u kroz **deljeni shortcut** (mail nalog te firme), pa je putanja uvek oblika `G:\.shortcut-targets-by-id\<id>\01_Bank` — **to je normalno, ne greška.**
+
+Na **mašini gde radi Excel** (za svakog novog klijenta isto):
+1. **Podeli** klijentskom mail nalogu (kao **Editor**) foldere **`01_Bank`** i **`Downloaded`** — oba su u `00_Inbox` (struktura `00_Inbox/{01_Bank, Downloaded}`). Editor je nužan: pull **čita + briše** original iz `01_Bank` i **piše kopiju** u `Downloaded`.
+2. U Drive web-u desni klik na `00_Inbox` (ili `01_Bank`) → **Add shortcut to Drive → My Drive**. Drive for Desktop ga izloži kao `G:\.shortcut-targets-by-id\<id>\01_Bank`.
+3. `BANKA_DRIVE_SOURCE_PATH` = ta putanja (folder picker je razreši sam). **`BANKA_DRIVE_DOWNLOADED_PATH` ostavi PRAZNO** → default se izračuna na `…\<id>\Downloaded` (= `00_Inbox\Downloaded`).
+4. (Preporučeno, ne obavezno) `00_Inbox` → desni klik → **Available offline** — pull koristi `FileSystemObject` koji radi i online-only, ali offline smanjuje hidraciju/kašnjenje.
+
+> **Zašto FSO (v2.10.0+):** legacy `Dir$`/`MkDir`/`Name`/`FileCopy` **pucaju/lažu na `.shortcut-targets-by-id` virtuelnoj putanji** (greške 75 „Path/File access" / 76 „Path not found"). Od **vba-v2.10.0** su sve pull file/folder operacije na `Scripting.FileSystemObject`, pa shortcut putanja radi kao normalna My Drive putanja. Na starijem buildu → `ImportAllVBA`.
 
 ---
 
@@ -242,7 +247,8 @@ Dnevna rutina:
 | Ceo batch rollback na jednom PDF-u | „sve ili ništa" import + jedan loš PDF | `ImportOnePdfIntoBankaImport "<fajl>"` da izoluješ; izbaci/reši taj PDF |
 | Preview „Auto match: Nije pronađen" iako račun postoji | forma nije reimportovana (star preview) ili račun/stanica nisu uneti | `ImportAllVBA` (sa formom); Faza 5 (unesi `TekuciRacun`/`StanicaID`) |
 | Isplata se ne knjiži, red ostaje otvoren | kooperant nema `StanicaID` | Dodeli stanicu kooperantu |
-| Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Folder → Available offline |
+| Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Preporučeno „Available offline"; od v2.10.0 pull koristi FSO pa radi i online-only |
+| Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | STAR build: legacy `Dir$`/`MkDir`/`Name`/`FileCopy` pucaju na deljenom shortcut folderu (`.shortcut-targets-by-id`) | Ažuriraj build (`ImportAllVBA`) — od **v2.10.0** su pull op-e na `Scripting.FileSystemObject`; proveri i **Editor** na `01_Bank`+`Downloaded` |
 | GAS re-skida iste izvode / `Downloaded` se puni | filename-dedupe + VBA iseli fajl iz `01_Bank` | benigno (staging-dedupe čuva tačnost); opciono Gmail label/arhiviranje u GAS-u |
 
 ---
