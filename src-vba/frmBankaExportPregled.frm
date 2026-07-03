@@ -37,7 +37,7 @@ Private Sub UserForm_Activate()
     ApplyThemeToControls Me
     
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
-    StylePrimaryButton btnExport, "Export u clipboard"
+    StylePrimaryButton btnExport, "PDF specifikacija"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
     btnGenerisiCSV.enabled = True
@@ -497,86 +497,44 @@ End Sub
 Private Sub txtDatumOd_Enter():    ApplyFocusBorder txtDatumOd:    End Sub
 Private Sub txtDatumDo_Enter():    ApplyFocusBorder txtDatumDo:    End Sub
 
+'======================================================================
+' btnExport - PDF specifikacija isplata (umesto ranijeg TSV clipboard-a).
+' Isti izbor blokova i iznosa kao CSV nalozi: selektovani (ili svi),
+' iznos po bloku = "Isplatiti" (operater unos ili otvoreno).
+'======================================================================
 Private Sub btnExport_Click()
     On Error GoTo EH
-    
+
     If m_Blokovi Is Nothing Then
-        MsgBox "Nema podataka za export.", vbInformation, APP_NAME
+        MsgBox "Nema podataka za specifikaciju.", vbInformation, APP_NAME
         Exit Sub
     End If
-    
+
     If m_Blokovi.count = 0 Then
-        MsgBox "Nema podataka za export.", vbInformation, APP_NAME
+        MsgBox "Nema podataka za specifikaciju.", vbInformation, APP_NAME
         Exit Sub
     End If
-    
-    Dim tsv As String
-    tsv = ExportSelectionAsTSV()
-    
-    Dim dataObj As Object
-    Set dataObj = CreateObject("New:1C3B4210-F441-11CE-B9EA-00AA006B1A69")
-    dataObj.SetText tsv
-    dataObj.PutInClipboard
-    
-    Dim selCount As Long
-    selCount = CountSelected()
-    
-    If selCount > 0 Then
-        MsgBox "Export selektovanih: " & selCount & " redova kopirano. Paste u Excel.", _
-               vbInformation, APP_NAME
-    Else
-        MsgBox "Nista nije selektovano. Export svih: " & m_Blokovi.count & " redova.", _
-               vbInformation, APP_NAME
+
+    Dim missingTR As Long
+    Dim blokovi As Collection
+    Set blokovi = CollectIsplataBlokovi(missingTR)
+
+    If blokovi.count = 0 Then
+        MsgBox "Nema blokova za specifikaciju: izabrani blokovi nemaju teku" & _
+               ChrW(263) & "i ra" & ChrW(269) & "un.", vbExclamation, APP_NAME
+        Exit Sub
     End If
+
+    PrintIsplataSpecifikacija blokovi
+
+    lblStatus.caption = "Specifikacija: " & blokovi.count & " blokova | " & _
+                        Format$(SumIsplatiti(blokovi), "#,##0.00") & " RSD"
     Exit Sub
 
 EH:
     LogErr "frmBankaExportPregled.btnExport_Click"
-    MsgBox "Gre" & ChrW(353) & "ka pri export-u: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
-
-'======================================================================
-' ExportSelectionAsTSV - selected only ako ima selection, inace sve
-'======================================================================
-Private Function ExportSelectionAsTSV() As String
-    Dim s As String
-    s = "Datum" & vbTab & "Kooperant" & vbTab & "StanicaID" & vbTab & _
-        "BrojDok" & vbTab & "Ukupan" & vbTab & "Isplaceno" & vbTab & _
-        "Otvoren" & vbTab & "Isplatiti" & vbTab & "TekuciRacun" & vbCrLf
-    
-    If m_Blokovi Is Nothing Then
-        ExportSelectionAsTSV = s
-        Exit Function
-    End If
-    
-    Dim hasSelection As Boolean
-    hasSelection = (CountSelected() > 0)
-    
-    Dim i As Long
-    For i = 0 To lstBlokovi.ListCount - 1
-        If hasSelection And Not lstBlokovi.Selected(i) Then GoTo NextRow
-        
-        Dim blk As clsBlokIsplata
-        Set blk = GetBlokByListIndex(i)
-        If blk Is Nothing Then GoTo NextRow
-        
-        Dim isplatitiAmount As Double
-        isplatitiAmount = GetIsplatitiAmount(blk)
-        
-        s = s & Format$(blk.datum, "yyyy-mm-dd") & vbTab & _
-                blk.kooperantNaziv & vbTab & _
-                blk.stanicaID & vbTab & _
-                blk.brojDokumenta & vbTab & _
-                Format$(blk.UkupanIznos, "0.00") & vbTab & _
-                Format$(blk.VecIsplaceno, "0.00") & vbTab & _
-                Format$(blk.OtvorenIznos, "0.00") & vbTab & _
-                Format$(isplatitiAmount, "0.00") & vbTab & _
-                blk.TekuciRacun & vbCrLf
-NextRow:
-    Next i
-    
-    ExportSelectionAsTSV = s
-End Function
 
 Private Function CountSelected() As Long
     Dim n As Long
@@ -663,7 +621,7 @@ End Sub
 ' Mouse hover pattern
 Private Sub ResetActionButtons()
     StylePrimaryButton btnOsvezi, "Osve" & ChrW(382) & "i"
-    StylePrimaryButton btnExport, "Export u clipboard"
+    StylePrimaryButton btnExport, "PDF specifikacija"
     StylePrimaryButton btnPostaviFull, "Postavi na otvoreno"
     StylePrimaryButton btnGenerisiCSV, Poruka("BANKA_LBL_GENERISI_CSV_COMMIT")
     StyleExitButton btnPovratak, "Povratak"

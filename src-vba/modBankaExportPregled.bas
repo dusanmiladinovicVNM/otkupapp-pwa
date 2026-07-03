@@ -9,6 +9,8 @@ Option Explicit
 ' + izlazi za pripremu isplata:
 '   - GenerisiNalogeCSV: CSV naloga za prenos (uvoz u e-banking);
 '     iznos po bloku = clsBlokIsplata.IsplatitiIznos (operater unos).
+'   - PrintIsplataSpecifikacija: specifikacija isplata (PDF/stampa,
+'     ISPLATA_SPEC_PRINT_MODE), isti blokovi i iznosi kao CSV.
 '
 ' Bazira se na postojecim helperima:
 '   - GetOpenOtkupi (extended 7-col shape)
@@ -213,35 +215,70 @@ Public Function SummarizeBlokList(ByVal blokovi As Collection) As String
 End Function
 
 '======================================================================
-' ExportBlokListAsTSV - clipboard-ready TSV za Excel paste
+' PrintIsplataSpecifikacija - specifikacija isplata po blokovima (PDF/
+' stampa po ISPLATA_SPEC_PRINT_MODE, default PDF -> otvori se).
+' Ocekuje kolekciju blokova SA postavljenim IsplatitiIznos
+' (CollectIsplataBlokovi u frmBankaExportPregled). Render u modPrint
+' (EnsureIsplataSpecSablon/FillIsplataSpecSablon, house-style).
 '======================================================================
-Public Function ExportBlokListAsTSV(ByVal blokovi As Collection) As String
-    Dim s As String
-    s = "Datum" & vbTab & "Kooperant" & vbTab & "StanicaID" & vbTab & _
-        "BrojDok" & vbTab & "Ukupan" & vbTab & "Isplaceno" & vbTab & _
-        "Otvoren" & vbTab & "TekuciRacun" & vbCrLf
-    
-    If blokovi Is Nothing Then
-        ExportBlokListAsTSV = s
-        Exit Function
-    End If
-    
+Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection)
+    On Error GoTo EH
+    If blokovi Is Nothing Then Exit Sub
+    If blokovi.count = 0 Then Exit Sub
+
+    Dim n As Long: n = blokovi.count
+    Dim spec() As Variant: ReDim spec(1 To n, 1 To 9)
+    Dim sumUkupan As Double, sumIsplaceno As Double
+    Dim sumOtvoreno As Double, sumIsplatiti As Double
+
+    Dim i As Long
     Dim blk As clsBlokIsplata
     Dim v As Variant
     For Each v In blokovi
         Set blk = v
-        s = s & Format$(blk.datum, "yyyy-mm-dd") & vbTab & _
-                blk.kooperantNaziv & vbTab & _
-                blk.stanicaID & vbTab & _
-                blk.brojDokumenta & vbTab & _
-                Format$(blk.UkupanIznos, "0.00") & vbTab & _
-                Format$(blk.VecIsplaceno, "0.00") & vbTab & _
-                Format$(blk.OtvorenIznos, "0.00") & vbTab & _
-                blk.TekuciRacun & vbCrLf
+        i = i + 1
+        spec(i, 1) = i
+        spec(i, 2) = Format$(blk.datum, "d.m.yyyy")
+        spec(i, 3) = blk.brojDokumenta
+        spec(i, 4) = blk.kooperantNaziv
+        spec(i, 5) = blk.TekuciRacun
+        spec(i, 6) = blk.UkupanIznos
+        spec(i, 7) = blk.VecIsplaceno
+        spec(i, 8) = blk.OtvorenIznos
+        spec(i, 9) = blk.IsplatitiIznos
+        sumUkupan = sumUkupan + blk.UkupanIznos
+        sumIsplaceno = sumIsplaceno + blk.VecIsplaceno
+        sumOtvoreno = sumOtvoreno + blk.OtvorenIznos
+        sumIsplatiti = sumIsplatiti + blk.IsplatitiIznos
     Next v
 
-    ExportBlokListAsTSV = s
-End Function
+    Dim subtitle As String
+    subtitle = "Datum: " & Format$(Date, "d.m.yyyy") & _
+               "     Platilac: " & DocConfigOr("SELLER_NAME", "") & _
+               " (" & DocConfigOr("SELLER_ACCOUNT", "") & ")"
+
+    Dim ws As Worksheet
+    Set ws = FillIsplataSpecSablon(spec, n, subtitle, _
+                                   sumUkupan, sumIsplaceno, sumOtvoreno, sumIsplatiti)
+    If ws Is Nothing Then Exit Sub
+
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_ISPLATA_SPEC_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            Dim pdfPath As String
+            pdfPath = EnsureDocFolder(PDF_DIR_SPECIFIKACIJE) & "\Specifikacija_isplata_" & _
+                      Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+            DocExportPdf ws, pdfPath, True
+        ' OFF -> bez izlaza
+    End Select
+    Exit Sub
+EH:
+    LogErr "modBankaExportPregled.PrintIsplataSpecifikacija"
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & Err.description, vbCritical, APP_NAME
+End Sub
 
 '======================================================================
 ' GenerisiNalogeCSV - CSV naloga za prenos za uvoz u e-banking.

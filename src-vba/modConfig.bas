@@ -361,6 +361,8 @@ Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
 Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
 Public Const CFG_KARTICA_AMB_PRINT_MODE As String = "KARTICA_AMB_PRINT_MODE"
 Public Const CFG_SPECIFIKACIJA_PRINT_MODE As String = "SPECIFIKACIJA_PRINT_MODE"
+' Specifikacija isplata (banka nalozi, frmBankaExportPregled). Default PDF.
+Public Const CFG_ISPLATA_SPEC_PRINT_MODE As String = "ISPLATA_SPEC_PRINT_MODE"
 ' Otpremnica / grupni otkupni list / paletni list got. proizvoda (prerada).
 ' PDF | PRINT | PREVIEW | OFF. Grupni: prazno -> prati CFG_OTKUP_PRINT_MODE.
 Public Const CFG_OTPREMNICA_PRINT_MODE As String = "OTPREMNICA_PRINT_MODE"
@@ -401,6 +403,7 @@ Public Const WS_KARTICA_SABLON As String = "KarticaSablon"
 Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
 Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
 Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
+Public Const WS_ISPLATA_SPEC_SABLON As String = "IsplataSpecSablon"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"
