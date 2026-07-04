@@ -107,7 +107,7 @@ Na **mašini gde radi Excel** (za svakog novog klijenta isto):
 3. `BANKA_DRIVE_SOURCE_PATH` = ta putanja (folder picker je razreši sam). **`BANKA_DRIVE_DOWNLOADED_PATH` ostavi PRAZNO** → default se izračuna na `…\<id>\Downloaded` (= `00_Inbox\Downloaded`).
 4. (Preporučeno, ne obavezno) `00_Inbox` → desni klik → **Available offline** — pull koristi `FileSystemObject` koji radi i online-only, ali offline smanjuje hidraciju/kašnjenje.
 
-> **Zašto FSO (v2.12.0+):** legacy `Dir$`/`MkDir`/`Name`/`FileCopy` **pucaju/lažu na `.shortcut-targets-by-id` virtuelnoj putanji** (greške 75 „Path/File access" / 76 „Path not found"). Od **vba-v2.12.0** su sve pull file/folder operacije na `Scripting.FileSystemObject`, pa shortcut putanja radi kao normalna My Drive putanja. Na starijem buildu → `ImportAllVBA`.
+> **FSO na pull sloju (v2.12.0+, defanziva):** od **vba-v2.12.0** su pull file/folder operacije na `Scripting.FileSystemObject` (umesto legacy `Dir$`/`MkDir`/`Name`/`FileCopy`) — robusnije na Drive virtuelnim (`.shortcut-targets-by-id`, online-only) putanjama. **Napomena:** u produkciji je 75/76 skoro uvek bilo zbog **nepokrenutog `SetupNewPC`** (nasleđene dev putanje — vidi Faza 4.5), a ne zbog shortcut-a samog; FSO je dodatna sigurnost, ne primarni lek. Ako i dalje puca posle setup-a → `ImportAllVBA` na v2.12.0+.
 
 ---
 
@@ -159,6 +159,16 @@ Provera (mora vratiti vrednosti, ne prazno):
 ---
 
 ## Faza 4.5 — Podešavanje računara i provere veze
+
+> **KRITIČNO — `SetupNewPC` je OBAVEZAN na svakoj novoj klijentskoj mašini (nije opciono).**
+> `tblLocalConfig` (per-mašina putanje: `BANKA_DRIVE_SOURCE_PATH`, `BANKA_INBOX_PATH`/Processed/Error,
+> `PDFTOTEXT_EXE_PATH`, i sam `APP_SETUP_COMPLETED`) **putuje UNUTAR distribuiranog `.xlsm`-a** sa build/dev
+> mašine. Ako se `.xlsm` samo prekopira a `SetupNewPC` se NE pokrene, klijent **nasleđuje dev putanje** —
+> a pošto je `APP_SETUP_COMPLETED=DA` već „upečen" u fajlu, first-run kapija se **preskače** i ništa ne
+> upozori. Posledica: banka uvoz puca **greškom 75/76** jer pull gađa nepostojeću putanju sa dev mašine.
+> **Fix:** `Alt+F8 → SetupNewPC` (ili obriši `APP_SETUP_COMPLETED` iz `tblLocalConfig` pa restart) → sve
+> putanje se resetuju na ovu mašinu. **Ovo je bio stvarni uzrok „75/76 na Drive-u" u produkciji — ne
+> shortcut putanja sama po sebi.**
 
 - **Prvi start:** na otvaranju `.xlsm`, ako računar nije podešen (`APP_SETUP_COMPLETED != DA`
   u `tblLocalConfig`), aplikacija ponudi **„Ovaj računar nije podešen — pokrenuti
@@ -248,7 +258,7 @@ Dnevna rutina:
 | Preview „Auto match: Nije pronađen" iako račun postoji | forma nije reimportovana (star preview) ili račun/stanica nisu uneti | `ImportAllVBA` (sa formom); Faza 5 (unesi `TekuciRacun`/`StanicaID`) |
 | Isplata se ne knjiži, red ostaje otvoren | kooperant nema `StanicaID` | Dodeli stanicu kooperantu |
 | Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Preporučeno „Available offline"; od v2.12.0 pull koristi FSO pa radi i online-only |
-| Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | STAR build: legacy `Dir$`/`MkDir`/`Name`/`FileCopy` pucaju na deljenom shortcut folderu (`.shortcut-targets-by-id`) | Ažuriraj build (`ImportAllVBA`) — od **v2.12.0** su pull op-e na `Scripting.FileSystemObject`; proveri i **Editor** na `01_Bank`+`Downloaded` |
+| Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | **Najčešće: `SetupNewPC` nije pokrenut na klijentu** → `tblLocalConfig` nosi dev putanje iz `.xlsm`-a, pa pull gađa nepostojeći folder. Ređe: nema **Editor**-a na `01_Bank`/`Downloaded`, ili STAR build sa legacy file-op-ama | **1)** `Alt+F8 → SetupNewPC` (resetuje putanje na ovu mašinu) — vidi Faza 4.5 kritičnu napomenu. **2)** Proveri **Editor** na `01_Bank`+`Downloaded`. **3)** Ažuriraj build (od **v2.12.0** su pull op-e na FSO, robusnije na shortcut putanji) |
 | GAS re-skida iste izvode / `Downloaded` se puni | filename-dedupe + VBA iseli fajl iz `01_Bank` | benigno (staging-dedupe čuva tačnost); opciono Gmail label/arhiviranje u GAS-u |
 
 ---
