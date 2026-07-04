@@ -1099,6 +1099,13 @@ Public Sub EnsureDoradeSchema()
     ' #6: podrazumevani tip ambalaze po kulturi.
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE
 
+    ' Pragovi proseka neto kg po gajbici (upozorenje/blokada u otkupu).
+    ' Prazno = bez provere (opt-in po kulturi; npr. malina 2.1 / 2.2).
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
+    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
+    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+
     ' #3: flag hladnjaca na stanici (+ backfill "Ne").
     EnsureColumnOnTable TBL_STANICE, COL_STA_JE_HLADNJACA
     BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
@@ -1134,7 +1141,8 @@ Public Sub EnsureDoradeSchema()
            "- Decimalni format kolicine (0.00)" & vbCrLf & _
            "- KolAmbIzdata: tblOtkup (izdata ambala" & ChrW(382) & "a OM->kooperant)" & vbCrLf & _
            "- VremeUnosa: tblOtkup (vreme snimanja otkupa)" & vbCrLf & _
-           "- BrutoKg: tblOtkup/tblPrijemnica (bruto unos -> cuva neto)", vbInformation, APP_NAME
+           "- BrutoKg: tblOtkup/tblPrijemnica (bruto unos -> cuva neto)" & vbCrLf & _
+           "- PragProsekUpoz/PragProsekBlok: tblKulture (prosek neto kg po gajbici)", vbInformation, APP_NAME
     Exit Sub
 
 EH:

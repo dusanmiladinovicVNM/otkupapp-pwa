@@ -252,6 +252,11 @@ Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
 ' tblKulture extension
 Public Const COL_KUL_GAJBICA_PALETA As String = "GajbicaPoPaleti"
 
+' tblKulture: pragovi proseka neto kg po gajbici (Kolicina / KolAmbalaze).
+' Prazno ili 0 -> provera se preskace (opt-in po kulturi). Upoz < Blok.
+Public Const COL_KUL_PRAG_PROSEK_UPOZ As String = "PragProsekUpoz"
+Public Const COL_KUL_PRAG_PROSEK_BLOK As String = "PragProsekBlok"
+
 ' tblPaleta (header)
 Public Const COL_PAL_ID As String = "PaletaID"
 Public Const COL_PAL_BROJ As String = "BrojPalete"

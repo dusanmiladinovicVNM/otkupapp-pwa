@@ -361,6 +361,86 @@ EH:
     PrintOtkupTxFailure "SaveOtkupMulti_TX", errSrc, errNum, errDesc
 End Function
 
+' ============================================================
+' Kontrola proseka neto kg po gajbici (Kolicina / KolAmbalaze).
+' Pragovi se citaju iz tblKulture po VrstaVoca (PragProsekUpoz/PragProsekBlok).
+' Prazno / 0 -> provera se preskace (opt-in po kulturi; fail-safe i kad kolone
+' jos ne postoje na klijentu -- LookupValue vrati Empty -> 0).
+'   prosek > PragProsekBlok -> tvrda blokada (False, bez override-a)
+'   prosek > PragProsekUpoz -> upozorenje (vbYesNo; False samo ako operater odustane)
+' Poziva se iz frmOtkup.btnUnos_Click POSLE bruto->neto konverzije (Kolicina = neto).
+' Vraca True kad je unos dozvoljen (ili potvrdjen), False kad treba prekinuti.
+' ============================================================
+Public Function OtkupProsekGajbiceOK(ByVal vrstaVoca As String, _
+        ByVal kolicinaI As Double, ByVal kolAmbI As Long, _
+        ByVal kolicinaII As Double, ByVal kolAmbII As Long) As Boolean
+
+    OtkupProsekGajbiceOK = True
+    On Error GoTo EH
+
+    Dim pragUpoz As Double, pragBlok As Double
+    pragUpoz = KulturaProsekPrag(vrstaVoca, COL_KUL_PRAG_PROSEK_UPOZ)
+    pragBlok = KulturaProsekPrag(vrstaVoca, COL_KUL_PRAG_PROSEK_BLOK)
+
+    ' Nijedan prag nije podesen za ovu kulturu -> nema provere.
+    If pragUpoz <= 0 And pragBlok <= 0 Then Exit Function
+
+    ' Najveci prosek po klasama (svaka klasa ima svoje gajbe).
+    Dim maxProsek As Double, klasaLbl As String
+    ProsekKlase kolicinaI, kolAmbI, "I", maxProsek, klasaLbl
+    ProsekKlase kolicinaII, kolAmbII, "II", maxProsek, klasaLbl
+
+    If maxProsek <= 0 Then Exit Function
+
+    Dim poruka As String
+    poruka = "Prosek po gajbici" & IIf(Len(klasaLbl) > 0, " (klasa " & klasaLbl & ")", "") & _
+             " je " & Format$(maxProsek, "0.00") & " kg."
+
+    ' Tvrda blokada.
+    If pragBlok > 0 And maxProsek > pragBlok Then
+        MsgBox poruka & vbCrLf & _
+               "Dozvoljeni maksimum je " & Format$(pragBlok, "0.00") & " kg po gajbici." & vbCrLf & _
+               "Unos je blokiran -- proverite neto kila" & ChrW(382) & "u i broj gajbi.", _
+               vbCritical, APP_NAME
+        OtkupProsekGajbiceOK = False
+        Exit Function
+    End If
+
+    ' Upozorenje uz mogucnost nastavka.
+    If pragUpoz > 0 And maxProsek > pragUpoz Then
+        If MsgBox(poruka & vbCrLf & _
+                  "Preporu" & ChrW(269) & "eni maksimum je " & Format$(pragUpoz, "0.00") & " kg po gajbici." & vbCrLf & _
+                  "Da li ipak " & ChrW(382) & "elite da nastavite?", _
+                  vbExclamation + vbYesNo, APP_NAME) = vbNo Then
+            OtkupProsekGajbiceOK = False
+        End If
+    End If
+    Exit Function
+
+EH:
+    ' Fail-safe: greska u proveri ne sme da obori normalan unos.
+    LogErr "modOtkup.OtkupProsekGajbiceOK"
+    OtkupProsekGajbiceOK = True
+End Function
+
+' Prag proseka za kulturu (po VrstaVoca) iz tblKulture; Empty/ne-broj -> 0.
+Private Function KulturaProsekPrag(ByVal vrstaVoca As String, ByVal colName As String) As Double
+    Dim v As Variant
+    v = LookupValue(TBL_KULTURE, "VrstaVoca", vrstaVoca, colName)
+    If IsNumeric(v) Then KulturaProsekPrag = CDbl(v)
+End Function
+
+' Prosek jedne klase (neto/gajbe); azurira maxProsek + labelu ako je veci od dosad.
+Private Sub ProsekKlase(ByVal kolicina As Double, ByVal kolAmb As Long, _
+        ByVal klasa As String, ByRef maxProsek As Double, ByRef klasaLbl As String)
+    If kolicina <= 0 Or kolAmb <= 0 Then Exit Sub
+    Dim p As Double: p = kolicina / kolAmb
+    If p > maxProsek Then
+        maxProsek = p
+        klasaLbl = klasa
+    End If
+End Sub
+
 Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
                           ByVal stanicaID As String, ByVal vrstaVoca As String, _
                           ByVal sortaVoca As String, ByVal kolicina As Double, _
