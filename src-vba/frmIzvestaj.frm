@@ -901,7 +901,7 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
             Dim mStr As String: mStr = ""
             If IsNumeric(data(i, 10)) And Not IsEmpty(data(i, 10)) Then mStr = FmtKolicina(CDbl(data(i, 10)))
             If IsNumeric(data(i, 11)) And Not IsEmpty(data(i, 11)) Then _
-                mStr = Trim$(mStr & " / " & Format$(CDbl(data(i, 11)), "0.0") & "%")
+                mStr = Trim$(mStr & " / " & Format$(CDbl(data(i, 11)), "0.00") & "%")
             arr(r, 9) = mStr
             Dim rk As String: rk = CStr(IIf(IsEmpty(data(i, 12)), "", data(i, 12)))
             If Left$(rk, 4) = "OTP|" Then m_otkOtpID(CStr(r)) = Mid$(rk, 5)
@@ -1029,7 +1029,7 @@ Private Sub GenerateZbirniReport(ByVal datumOd As Date, ByVal datumDo As Date, _
             ' Amb Izlaz, Amb Vracena, Manjak kg, Manjak %
             If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CLng(data(i, 2)), "#,##0")
             If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CLng(data(i, 3)), "#,##0")
-            If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.0") & " kg"
+            If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.00") & " kg"
             If IsNumeric(data(i, 5)) Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
         Else
             ' Vrsta, Kolicina, Vrednost, Prosek
@@ -1091,9 +1091,9 @@ Private Sub GenerateManjakReport(ByVal entitetTip As String, ByVal entitetID As 
     Dim i As Long
     For i = 1 To nR
         src(i, 1) = CStr(data(i, 1))
-        If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CDbl(data(i, 2)), "#,##0.0")
-        If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.0")
-        If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.0")
+        If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CDbl(data(i, 2)), "#,##0.00")
+        If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.00")
+        If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.00")
         If IsNumeric(data(i, 5)) Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
         If IsNumeric(data(i, 6)) Then
             If CDbl(data(i, 6)) > 0 Then src(i, 6) = Format$(CDbl(data(i, 6)), "#,##0.00")

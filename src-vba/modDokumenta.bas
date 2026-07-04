@@ -2470,8 +2470,8 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
                 StornoCellText(data, i, iVrsta), _
                 StornoCellText(data, i, iSorta), _
                 StornoCellText(data, i, iKlasa), _
-                StornoNumText(StornoCellRaw(data, i, iKol), "#,##0.##"), _
-                StornoNumText(StornoCellRaw(data, i, iCena), "#,##0.##"), _
+                StornoNumText(StornoCellRaw(data, i, iKol), "#,##0.00"), _
+                StornoNumText(StornoCellRaw(data, i, iCena), "#,##0.00"), _
                 iznos, _
                 zbr, otp, fak)
         End If
@@ -2637,7 +2637,7 @@ Private Function StornoIznosText(ByVal v1 As Variant, ByVal v2 As Variant) As St
     If Not TryParseDouble(Trim$(NzToText(v1)), u) Then u = 0
     If Not TryParseDouble(Trim$(NzToText(v2)), s) Then s = 0
     Dim net As Double: net = u - s
-    If net <> 0 Then StornoIznosText = Format$(net, "#,##0")
+    If net <> 0 Then StornoIznosText = Format$(net, "#,##0.00")
 End Function
 
 ' Iznos = Kolicina x Cena (prazno ako je proizvod 0).
@@ -2646,7 +2646,7 @@ Private Function StornoMnozi(ByVal vKol As Variant, ByVal vCena As Variant) As S
     If Not TryParseDouble(Trim$(NzToText(vKol)), kol) Then kol = 0
     If Not TryParseDouble(Trim$(NzToText(vCena)), cena) Then cena = 0
     Dim p As Double: p = kol * cena
-    If p <> 0 Then StornoMnozi = Format$(p, "#,##0")
+    If p <> 0 Then StornoMnozi = Format$(p, "#,##0.00")
 End Function
 
 ' --- Indeks lanca dokumenata (reverzni lookup-i preko BrojZbirne / FakturaID) ---
@@ -2897,7 +2897,7 @@ Public Function GetOsirocenePrijemnice() As Variant
                         Dim st As String
                         If allZbr.Exists(bz) Then st = "zbirna stornirana" Else st = "zbirna ne postoji"
                         rows.Add Array(brp, prj(i, cDat), Trim$(NzToText(prj(i, cVr))), _
-                            Trim$(NzToText(prj(i, cSo))), prj(i, cKol), bz, st)
+                            Trim$(NzToText(prj(i, cSo))), StornoNumText(prj(i, cKol), "#,##0.00"), bz, st)
                     End If
                 End If
             End If
@@ -2941,7 +2941,7 @@ Public Function GetAktivneZbirne() As Variant
                 If Not seen.Exists(bz) Then
                     seen(bz) = True
                     rows.Add Array(bz, zd(i, cDat), Trim$(NzToText(zd(i, cVr))), _
-                        Trim$(NzToText(zd(i, cSo))), zd(i, cKol))
+                        Trim$(NzToText(zd(i, cSo))), StornoNumText(zd(i, cKol), "#,##0.00"))
                 End If
             End If
         End If

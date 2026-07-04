@@ -309,8 +309,8 @@ Public Function GetPaleteForGrid(Optional ByVal god As Long = 0, _
         res(k, 6) = CStr(SafeCell(d, r, iTipA))
         res(k, 7) = NzL(SafeCell(d, r, iGajb))
         res(k, 8) = NzL(SafeCell(d, r, iKap))
-        res(k, 9) = NzD(SafeCell(d, r, iNeto))
-        res(k, 10) = NzD(SafeCell(d, r, iBruto))
+        res(k, 9) = Format$(NzD(SafeCell(d, r, iNeto)), "0.00")
+        res(k, 10) = Format$(NzD(SafeCell(d, r, iBruto)), "0.00")
         res(k, 11) = CStr(SafeCell(d, r, iStat))
         res(k, 12) = CStr(SafeCell(d, r, iPre))
     Next k
@@ -369,7 +369,7 @@ Public Function GetPreradeForGrid(Optional ByVal god As Long = 0) As Variant
         res(k, 1) = NzL(SafeCell(d, r, iBroj))
         res(k, 2) = ""
         If IsDate(SafeCell(d, r, iDat)) Then res(k, 2) = Format$(CDate(SafeCell(d, r, iDat)), "dd.mm.yyyy")
-        res(k, 3) = NzD(SafeCell(d, r, iNeto))
+        res(k, 3) = Format$(NzD(SafeCell(d, r, iNeto)), "0.00")
         res(k, 4) = NzL(SafeCell(d, r, iKut))
         res(k, 5) = NzL(SafeCell(d, r, iKes))
         If iGP > 0 Then res(k, 6) = CStr(SafeCell(d, r, iGP))
@@ -416,7 +416,7 @@ Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
         res(k, 1) = CStr(SafeCell(s, r, iBrPrij))
         res(k, 2) = CStr(SafeCell(s, r, iZbir))
         res(k, 3) = NzL(SafeCell(s, r, iGajb))
-        res(k, 4) = NzD(SafeCell(s, r, iNeto))
+        res(k, 4) = Format$(NzD(SafeCell(s, r, iNeto)), "0.00")
     Next k
 
     GetPaletaStavkeForGrid = res
@@ -486,7 +486,7 @@ Public Function GetPaletaStavkeForGridMulti(ByVal paletaIDs As Collection) As Va
         res(k, 1) = dBr(p)
         res(k, 2) = dZb(p)
         res(k, 3) = dGa(p)
-        res(k, 4) = dNe(p)
+        res(k, 4) = Format$(dNe(p), "0.00")
     Next k
 
     GetPaletaStavkeForGridMulti = res
