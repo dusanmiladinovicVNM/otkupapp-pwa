@@ -1828,6 +1828,18 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     On Error GoTo EH
     Application.ScreenUpdating = False
 
+    ' Zaglavlje firme (SELLER_* iz configa) se osvezava na SVAKO punjenje.
+    ' PreradaSablon je kesiran (EnsurePreradaSablon ga gradi jednom, pa preskace
+    ' dok se LAYOUT_VER ne promeni), pa bi podaci o firmi inace ostali zamrznuti
+    ' od trenutka prve izgradnje (prazni ako SELLER_* tada nije bio popunjen).
+    ' Logo se prvo skida jer ga DocDrawLogo samo dodaje (ne dedupe-uje) -> inace
+    ' bi se gomilao na svaki reprint (dvoklik). Isti pristup kao FillPrijemnicaSablon.
+    Dim si As Long
+    For si = ws.Shapes.count To 1 Step -1
+        ws.Shapes(si).Delete
+    Next si
+    DocSellerHeader ws, 1, 5, 5
+
     ws.Range("PreBroj").NumberFormat = "@"
     ws.Range("PreBroj").value = brojOut & "/" & godOut
     ws.Range("PreDatum").value = Format$(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_DATUM)), "dd.mm.yyyy")
