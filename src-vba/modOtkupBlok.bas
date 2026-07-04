@@ -1084,6 +1084,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     If IsEmpty(data) Then MsgBox "Nema blokova.", vbInformation, APP_NAME: Exit Sub
 
     Dim cOtp As Long, cKoop As Long, cKol As Long, cCena As Long, cBr As Long, cDat As Long, cSt As Long
+    Dim cVrsta As Long, cSorta As Long
     cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
     cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
@@ -1091,6 +1092,8 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    cSorta = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
 
     ' --- 1) skupi indekse redova koji prolaze filter + sort-kljuc (OM | datum) ---
     Dim n As Long: n = UBound(data, 1)
@@ -1139,7 +1142,7 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
     Next a
 
     ' --- 3) prikupi u niz + sume; render i izlaz u modPrint ---
-    Dim spec() As Variant: ReDim spec(1 To m, 1 To 12)
+    Dim spec() As Variant: ReDim spec(1 To m, 1 To 13)
     Dim sumKol As Double, sumVred As Double, sumPdv As Double, sumUk As Double, cnt As Long
     Dim j As Long
     For j = 1 To m
@@ -1158,11 +1161,12 @@ Private Sub RenderSpec(ByVal selSet As Object, ByVal byDate As Boolean, _
         spec(j, 5) = CStr(data(i, cBr))
         spec(j, 6) = DictVal(dKo, Trim$(CStr(data(i, cKoop))))
         spec(j, 7) = FmtDate(data(i, cDat))
-        spec(j, 8) = kol
-        spec(j, 9) = neto
-        spec(j, 10) = vred
-        spec(j, 11) = pdv
-        spec(j, 12) = uk
+        spec(j, 8) = Trim$(CStr(data(i, cVrsta)) & " " & CStr(data(i, cSorta)))
+        spec(j, 9) = kol
+        spec(j, 10) = neto
+        spec(j, 11) = vred
+        spec(j, 12) = pdv
+        spec(j, 13) = uk
         sumKol = sumKol + kol: sumVred = sumVred + vred
         sumPdv = sumPdv + pdv: sumUk = sumUk + uk
         cnt = cnt + 1

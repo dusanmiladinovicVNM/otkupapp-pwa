@@ -2493,13 +2493,13 @@ End Function
 
 ' ============================================================
 ' SPECIFIKACIJA OTKUPNIH BLOKOVA - generisan house-style sablon u modPrint.
-' Landscape, 12 kolona (sa "Kupac"). EnsureSpecifikacijaSablon (verzija u M1) +
+' Landscape, 13 kolona (sa "Kupac" i "Vrsta i sorta"). EnsureSpecifikacijaSablon (verzija u M1) +
 ' FillSpecifikacijaSablon. Podatke (filter/sort/PDV) prikuplja
 ' modOtkupBlok.RenderSpec i prosledjuje niz + sume.
 ' ============================================================
 Public Sub EnsureSpecifikacijaSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "2"
+    Const LAYOUT_VER As String = "3"
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
@@ -2524,18 +2524,19 @@ Public Sub EnsureSpecifikacijaSablon()
     ws.columns("E").ColumnWidth = 9       ' br. bloka
     ws.columns("F").ColumnWidth = 20      ' Ime i Prezime
     ws.columns("G").ColumnWidth = 10      ' Datum
-    ws.columns("H").ColumnWidth = 9       ' Kolicina
-    ws.columns("I").ColumnWidth = 11      ' Cena bez PDV
-    ws.columns("J").ColumnWidth = 12      ' Vrednost
-    ws.columns("K").ColumnWidth = 11      ' Iznos PDV
-    ws.columns("L").ColumnWidth = 13      ' Ukupna vrednost
+    ws.columns("H").ColumnWidth = 18      ' Vrsta i sorta
+    ws.columns("I").ColumnWidth = 9       ' Kolicina
+    ws.columns("J").ColumnWidth = 11      ' Cena bez PDV
+    ws.columns("K").ColumnWidth = 12      ' Vrednost
+    ws.columns("L").ColumnWidth = 11      ' Iznos PDV
+    ws.columns("M").ColumnWidth = 13      ' Ukupna vrednost
 
     Dim r As Long
-    r = DocSellerHeader(ws, 1, 12, 12)
-    r = DocTitleBlock(ws, r, 12, "Pregled otkupnih blokova po otkupnom mestu", "SPECIFIKACIJA OTKUPNIH BLOKOVA")
+    r = DocSellerHeader(ws, 1, 13, 13)
+    r = DocTitleBlock(ws, r, 13, "Pregled otkupnih blokova po otkupnom mestu", "SPECIFIKACIJA OTKUPNIH BLOKOVA")
 
     Dim subRow As Long: subRow = r
-    ws.Range(ws.cells(subRow, 1), ws.cells(subRow, 12)).Merge
+    ws.Range(ws.cells(subRow, 1), ws.cells(subRow, 13)).Merge
     ws.cells(subRow, 1).name = "SpecSubtitle"
     ws.cells(subRow, 1).Font.Color = DocColGray()
     ws.rows(subRow).RowHeight = 14
@@ -2548,12 +2549,13 @@ Public Sub EnsureSpecifikacijaSablon()
     ws.cells(hdr, 5).value = "br. bloka"
     ws.cells(hdr, 6).value = "Ime i Prezime"
     ws.cells(hdr, 7).value = "Datum"
-    ws.cells(hdr, 8).value = "Kolicina"
-    ws.cells(hdr, 9).value = "Cena bez PDV"
-    ws.cells(hdr, 10).value = "Vrednost"
-    ws.cells(hdr, 11).value = "Iznos PDV"
-    ws.cells(hdr, 12).value = "Ukupna vrednost"
-    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 12))
+    ws.cells(hdr, 8).value = "Vrsta i sorta"
+    ws.cells(hdr, 9).value = "Kolicina"
+    ws.cells(hdr, 10).value = "Cena bez PDV"
+    ws.cells(hdr, 11).value = "Vrednost"
+    ws.cells(hdr, 12).value = "Iznos PDV"
+    ws.cells(hdr, 13).value = "Ukupna vrednost"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 13))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
         .HorizontalAlignment = xlCenter
@@ -2572,7 +2574,7 @@ EH:
     LogErr "modPrint.EnsureSpecifikacijaSablon"
 End Sub
 
-' Popuni SpecifikacijaSablon. spec(1..nRows, 1..12) = redovi; sume za UKUPNO red.
+' Popuni SpecifikacijaSablon. spec(1..nRows, 1..13) = redovi; sume za UKUPNO red.
 Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Long, _
         ByVal subtitle As String, ByVal cnt As Long, _
         ByVal sumKol As Double, ByVal sumVred As Double, _
@@ -2586,7 +2588,7 @@ Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Lo
     ws.Range("SpecSubtitle").value = subtitle & "     Blokova: " & cnt
 
     Dim startRow As Long: startRow = ws.Range("SpecStart").row
-    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 1000, 12))
+    With ws.Range(ws.cells(startRow, 1), ws.cells(startRow + 1000, 13))
         .ClearContents
         .ClearFormats
     End With
@@ -2594,23 +2596,23 @@ Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Lo
     Dim i As Long, c As Long, outRow As Long
     For i = 1 To nRows
         outRow = startRow + i - 1
-        For c = 1 To 12
+        For c = 1 To 13
             ws.cells(outRow, c).value = spec(i, c)
         Next c
     Next i
 
     Dim ukRow As Long: ukRow = startRow + nRows
     ws.cells(ukRow, 6).value = "UKUPNO"
-    ws.cells(ukRow, 8).value = sumKol
-    ws.cells(ukRow, 10).value = sumVred
-    ws.cells(ukRow, 11).value = sumPdv
-    ws.cells(ukRow, 12).value = sumUk
-    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 12)).Font.Bold = True
+    ws.cells(ukRow, 9).value = sumKol
+    ws.cells(ukRow, 11).value = sumVred
+    ws.cells(ukRow, 12).value = sumPdv
+    ws.cells(ukRow, 13).value = sumUk
+    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 13)).Font.Bold = True
 
-    ws.Range(ws.cells(startRow, 8), ws.cells(ukRow, 8)).NumberFormat = "#,##0.###"
-    ws.Range(ws.cells(startRow, 9), ws.cells(ukRow, 12)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(startRow, 9), ws.cells(ukRow, 9)).NumberFormat = "#,##0.###"
+    ws.Range(ws.cells(startRow, 10), ws.cells(ukRow, 13)).NumberFormat = "#,##0.00"
 
-    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 12)).Borders
+    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 13)).Borders
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
@@ -2628,7 +2630,7 @@ Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Lo
         .RightMargin = Application.InchesToPoints(0.3)
         .TopMargin = Application.InchesToPoints(0.4)
         .BottomMargin = Application.InchesToPoints(0.4)
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 12)).Address
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 13)).Address
     End With
     Application.PrintCommunication = True
     On Error GoTo 0
