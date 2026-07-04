@@ -17,9 +17,13 @@ Option Explicit
 '   izabran red iz liste -> bound ID (kol1);
 '   slobodan tekst       -> nadji po imenu (prioritet ista stanica),
 '                           inace kreiraj novog i vrati novi ID.
+' created (opcioni out): True SAMO kad je kreiran nov kooperant (pozivalac
+' tada osvezi combo listu da novi red bude odmah vidljiv).
 Public Function ResolveKooperantByName(ByVal cmb As MSForms.ComboBox, _
-                                       ByVal stanicaID As String) As String
+                                       ByVal stanicaID As String, _
+                                       Optional ByRef created As Boolean) As String
     On Error GoTo EH
+    created = False
 
     Dim boundID As String: boundID = GetComboID(cmb)
     If Len(Trim$(boundID)) > 0 Then
@@ -40,7 +44,9 @@ Public Function ResolveKooperantByName(ByVal cmb As MSForms.ComboBox, _
     ' pa frmOtkup javlja da kooperant nije pronadjen (bez tihog kreiranja).
     If Not KoopAutoCreate() Then Exit Function
 
-    ResolveKooperantByName = CreateKooperantByName(nm, stanicaID)
+    Dim newID As String: newID = CreateKooperantByName(nm, stanicaID)
+    If Len(newID) > 0 Then created = True
+    ResolveKooperantByName = newID
     Exit Function
 EH:
     LogErr "modKooperant.ResolveKooperantByName"
