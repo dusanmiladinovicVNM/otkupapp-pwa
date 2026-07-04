@@ -107,6 +107,15 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnOpenPolygonEditor, "Polygon editor"
     On Error GoTo EH
 
+    ' Labeli maticnih podataka: prosiri 50% (duzi natpisi se ne skracuju; desno
+    ' od njih ima slobodnog prostora). Jednokratno (m_SetupDone guard iznad).
+    On Error Resume Next
+    Dim liLbl As Long
+    For liLbl = 1 To 10
+        Me.Controls("lblField" & liLbl).width = Me.Controls("lblField" & liLbl).width * 1.5
+    Next liLbl
+    On Error GoTo EH
+
     Select Case Me.Tag
         Case "Kooperanti": SetupKooperanti
         Case "Stanice": SetupStanice
@@ -1527,6 +1536,43 @@ Private Sub LoadList()
                 End If
             Next i
 
+        Case "Kulture"
+            ' Po IMENU (ne pozicijski): tblKulture ima audit kolone izmedju
+            ' TipAmbalaze i Pragova, pa fiksne pozicije ne vaze na svim instalacijama.
+            ' Kolone liste: 0=ID 1=Vrsta 2=Sorta 3=Gajbica 4=Aktivan 5=TipAmb
+            '               6=PragUpoz 7=PragBlok (klik-load u lstData_Click prati ovo).
+            lstData.ColumnCount = 8
+
+            Dim cKulID As Long, cKulVr As Long, cKulSo As Long, cKulGa As Long
+            Dim cKulAk As Long, cKulTa As Long, cKulPu As Long, cKulPb As Long
+            cKulID = GetColumnIndex(TBL_KULTURE, "KulturaID")
+            cKulVr = GetColumnIndex(TBL_KULTURE, "VrstaVoca")
+            cKulSo = GetColumnIndex(TBL_KULTURE, "SortaVoca")
+            cKulGa = GetColumnIndex(TBL_KULTURE, COL_KUL_GAJBICA_PALETA)
+            cKulAk = GetColumnIndex(TBL_KULTURE, "Aktivan")
+            cKulTa = GetColumnIndex(TBL_KULTURE, COL_KUL_TIP_AMBALAZE)
+            cKulPu = GetColumnIndex(TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ)
+            cKulPb = GetColumnIndex(TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK)
+
+            If cKulID = 0 Then
+                Err.Raise vbObjectError + 7212, "frmStammdaten.LoadList", _
+                          "Nedostaje kolona KulturaID u tblKulture."
+            End If
+
+            For i = 1 To UBound(data, 1)
+                If Trim$(NzToText(data(i, cKulID))) <> "" Then
+                    AddRowMap i
+                    lstData.AddItem NzToText(data(i, cKulID))
+                    If cKulVr > 0 Then lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, cKulVr))
+                    If cKulSo > 0 Then lstData.List(lstData.ListCount - 1, 2) = NzToText(data(i, cKulSo))
+                    If cKulGa > 0 Then lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, cKulGa))
+                    If cKulAk > 0 Then lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, cKulAk))
+                    If cKulTa > 0 Then lstData.List(lstData.ListCount - 1, 5) = NzToText(data(i, cKulTa))
+                    If cKulPu > 0 Then lstData.List(lstData.ListCount - 1, 6) = NzToText(data(i, cKulPu))
+                    If cKulPb > 0 Then lstData.List(lstData.ListCount - 1, 7) = NzToText(data(i, cKulPb))
+                End If
+            Next i
+
         Case Else
             lstData.ColumnCount = UBound(m_Headers) - LBound(m_Headers) + 1
             maxCols = lstData.ColumnCount
@@ -1683,11 +1729,8 @@ Private Sub lstData_Click()
             txtField2.value = lstData.List(lstData.ListIndex, 2)   ' SortaVoca
             txtField3.value = lstData.List(lstData.ListIndex, 3)   ' GajbicaPoPaleti
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 5)   ' TipAmbalaze (podraz.)
-            ' Pragovi proseka -- PO IMENU preko KulturaID (kolone na kraju tabele;
-            ' pozicija u listi nesigurna zbog audit/drift kolona).
-            Dim kulIDsel As String: kulIDsel = lstData.List(lstData.ListIndex, 0)  ' KulturaID
-            txtField5.value = NzToText(LookupValue(TBL_KULTURE, "KulturaID", kulIDsel, COL_KUL_PRAG_PROSEK_UPOZ))
-            txtField6.value = NzToText(LookupValue(TBL_KULTURE, "KulturaID", kulIDsel, COL_KUL_PRAG_PROSEK_BLOK))
+            txtField5.value = lstData.List(lstData.ListIndex, 6)   ' PragProsekUpoz
+            txtField6.value = lstData.List(lstData.ListIndex, 7)   ' PragProsekBlok
 
         Case "TipAmbalaze", "TipPalete"
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
