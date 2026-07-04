@@ -1877,20 +1877,12 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
 
-    ' Naslov vrste: uvek "DZ" + vrsta + sorta (iz prve izabrane palete sveze
-    ' robe) + tip gotovog proizvoda (sa prerade). DZ = duboko zamrznuto.
-    Dim vrstaTxt As String, sortaTxt As String, tipGP As String
-    If palIDs.count > 0 Then
-        Dim pidFirst As String: pidFirst = CStr(palIDs(1))
-        vrstaTxt = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, pidFirst, COL_PAL_VRSTA))
-        sortaTxt = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, pidFirst, COL_PAL_SORTA))
-    End If
+    ' Naslov vrste: SAMO tekst iz comboa "Gotov proizvod:" (tip gotovog
+    ' proizvoda sa prerade, COL_PRE_TIP_GP). Vrsta/sorta iz izabranih paleta
+    ' sveze robe se vise NE citaju iz tblPaleta (zahtev operatera).
+    Dim tipGP As String
     tipGP = NzToText(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP)))
-    Dim vrstaLine As String
-    vrstaLine = "DZ " & Trim$(vrstaTxt)
-    If Len(Trim$(sortaTxt)) > 0 Then vrstaLine = vrstaLine & " " & Trim$(sortaTxt)
-    If Len(Trim$(tipGP)) > 0 Then vrstaLine = vrstaLine & "  " & Trim$(tipGP)
-    ws.Range("PreVrsta").value = vrstaLine
+    ws.Range("PreVrsta").value = Trim$(tipGP)
     Dim outR As Long, rb As Long
     outR = startRow: rb = 0
     If Not IsEmpty(o) Then
