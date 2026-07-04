@@ -45,6 +45,12 @@ Public Sub RunIntegritetProvere()
     Chk_B2_UnlinkedOtkupi
     Chk_B4_DanglingBrojZbirne
     Chk_B5_PrijemnicaBezZbirne
+    Chk_C1_C4_StavkaPrijemnica
+    Chk_C2_StavkaBezZbirne
+    Chk_C3_PaletaBezStavke
+    Chk_C5_DupliBrojPalete
+    Chk_A3_StavkeVsPrijemnica
+    Chk_A4_PaletaHeaderVsStavke
 
     WriteLine "UKUPNO neuskladjenih zapisa: " & CStr(m_totalIssues), True
     FinishIntegritetSheet
@@ -250,6 +256,267 @@ EH:
 End Sub
 
 ' ============================================================
+' CHECK C1 + C4: PALETA-STAVKA -> PRIJEMNICA
+' ============================================================
+' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID).
+' C4 = aktivna stavka ka prijemnici koja postoji ali je STORNIRANA
+'      (kaskadni storno prijemnice ne dira tblPaletaStavka).
+
+Private Sub Chk_C1_C4_StavkaPrijemnica()
+    On Error GoTo EH
+
+    Dim allPrij As Object: Set allPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, False)
+    Dim actPrij As Object: Set actPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, True)
+
+    Dim c1 As Collection: Set c1 = New Collection
+    Dim c4 As Collection: Set c4 = New Collection
+
+    Dim data As Variant: data = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PALETA_STAVKA)
+        If Not IsEmpty(data) Then
+            Dim cS As Long, cPal As Long, cPrij As Long, cBrPrij As Long
+            cS = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, "modIntegritet.C1C4")
+            cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "modIntegritet.C1C4")
+            cPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "modIntegritet.C1C4")
+            cBrPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, "modIntegritet.C1C4")
+
+            Dim i As Long, p As String
+            For i = 1 To UBound(data, 1)
+                p = Trim$(CStr(data(i, cPrij)))
+                If Len(p) = 0 Then
+                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), "(prazno)", CStr(data(i, cBrPrij)))
+                ElseIf Not allPrij.Exists(p) Then
+                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)))
+                ElseIf Not actPrij.Exists(p) Then
+                    c4.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)))
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "C1", "Paleta-stavke bez zive prijemnice (prazan/nepostojeci PrijemnicaID)", _
+               Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice"), CollToArray(c1, 4)
+    WriteBlock "C4", "Paleta-stavke ka storniranoj prijemnici", _
+               Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice"), CollToArray(c4, 4)
+    Exit Sub
+
+EH:
+    WriteErr "C1/C4", Err.description
+End Sub
+
+' ============================================================
+' CHECK C2: PALETA-STAVKA bez ispravne zbirne
+' ============================================================
+
+Private Sub Chk_C2_StavkaBezZbirne()
+    On Error GoTo EH
+
+    Dim zbrSet As Object: Set zbrSet = AllBrojeviInZbirna()
+    Dim bad As Collection: Set bad = New Collection
+
+    Dim data As Variant: data = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PALETA_STAVKA)
+        If Not IsEmpty(data) Then
+            Dim cS As Long, cPal As Long, cZbr As Long
+            cS = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, "modIntegritet.C2")
+            cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "modIntegritet.C2")
+            cZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, "modIntegritet.C2")
+
+            Dim i As Long, b As String, razlog As String
+            For i = 1 To UBound(data, 1)
+                b = Trim$(CStr(data(i, cZbr)))
+                razlog = ""
+                If Len(b) = 0 Then
+                    razlog = "prazan BrojZbirne"
+                ElseIf Not zbrSet.Exists(b) Then
+                    razlog = "BrojZbirne ne postoji u tblZbirna"
+                End If
+                If Len(razlog) > 0 Then
+                    bad.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), b, razlog)
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "C2", "Paleta-stavke bez ispravne zbirne", _
+               Array("StavkaID", "PaletaID", "BrojZbirne", "Razlog"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "C2", Err.description
+End Sub
+
+' ============================================================
+' CHECK C3: PALETA (header) bez ijedne aktivne stavke
+' ============================================================
+
+Private Sub Chk_C3_PaletaBezStavke()
+    On Error GoTo EH
+
+    Dim refPal As Object: Set refPal = AggByBroj(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, COL_PALS_NETO)
+    Dim bad As Collection: Set bad = New Collection
+
+    Dim data As Variant: data = GetTableData(TBL_PALETA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PALETA)
+        If Not IsEmpty(data) Then
+            Dim cId As Long, cBroj As Long, cGod As Long, cNeto As Long
+            cId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, "modIntegritet.C3")
+            cBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, "modIntegritet.C3")
+            cGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, "modIntegritet.C3")
+            cNeto = RequireColumnIndex(TBL_PALETA, COL_PAL_NETO, "modIntegritet.C3")
+
+            Dim i As Long, pid As String
+            For i = 1 To UBound(data, 1)
+                pid = Trim$(CStr(data(i, cId)))
+                If Len(pid) > 0 Then
+                    If Not refPal.Exists(pid) Then
+                        bad.Add Array(pid, CStr(data(i, cBroj)), CStr(data(i, cGod)), data(i, cNeto))
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "C3", "Palete (header) bez ijedne aktivne stavke", _
+               Array("PaletaID", "BrojPalete", "Godina", "NetoKg"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "C3", Err.description
+End Sub
+
+' ============================================================
+' CHECK C5: dupli BrojPalete unutar iste Godine
+' ============================================================
+
+Private Sub Chk_C5_DupliBrojPalete()
+    On Error GoTo EH
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim data As Variant: data = GetTableData(TBL_PALETA)
+
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PALETA)
+        If Not IsEmpty(data) Then
+            Dim cId As Long, cBroj As Long, cGod As Long
+            cId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, "modIntegritet.C5")
+            cBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, "modIntegritet.C5")
+            cGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, "modIntegritet.C5")
+
+            Dim cnt As Object: Set cnt = CreateObject("Scripting.Dictionary")
+            Dim i As Long, key As String, br As String
+            For i = 1 To UBound(data, 1)
+                br = Trim$(CStr(data(i, cBroj)))
+                If Len(br) > 0 Then
+                    key = Trim$(CStr(data(i, cGod))) & "|" & br
+                    If cnt.Exists(key) Then cnt(key) = cnt(key) + 1 Else cnt.Add key, 1
+                End If
+            Next i
+
+            For i = 1 To UBound(data, 1)
+                br = Trim$(CStr(data(i, cBroj)))
+                If Len(br) > 0 Then
+                    key = Trim$(CStr(data(i, cGod))) & "|" & br
+                    If cnt(key) > 1 Then
+                        bad.Add Array(CStr(data(i, cId)), br, CStr(data(i, cGod)), CStr(cnt(key)))
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "C5", "Dupli BrojPalete unutar iste Godine", _
+               Array("PaletaID", "BrojPalete", "Godina", "BrojDuplikata"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "C5", Err.description
+End Sub
+
+' ============================================================
+' CHECK A3: Sigma paleta-stavke NetoKg vs prijemnica.Kolicina
+' ============================================================
+' Samo paletizovane prijemnice (koje imaju bar jednu aktivnu stavku).
+
+Private Sub Chk_A3_StavkeVsPrijemnica()
+    On Error GoTo EH
+
+    Dim stByPrij As Object: Set stByPrij = AggByBroj(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, COL_PALS_NETO)
+    Dim prijKol As Object: Set prijKol = AggByBroj(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_KOLICINA)
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim kk As Variant, sumSt As Double, kol As Double, diff As Double
+    For Each kk In stByPrij.keys
+        If prijKol.Exists(kk) Then
+            sumSt = stByPrij(kk)
+            kol = prijKol(kk)
+            diff = sumSt - kol
+            If Abs(diff) > 0.5 Then
+                bad.Add Array(CStr(kk), sumSt, kol, diff)
+            End If
+        End If
+    Next kk
+
+    WriteBlock "A3", "Paleta-stavke (Sigma NetoKg) vs prijemnica.Kolicina", _
+               Array("PrijemnicaID", "SumaStavkeKg", "PrijemnicaKg", "RazlikaKg"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "A3", Err.description
+End Sub
+
+' ============================================================
+' CHECK A4: paleta header (NetoKg, BrojGajbica) vs Sigma stavke
+' ============================================================
+
+Private Sub Chk_A4_PaletaHeaderVsStavke()
+    On Error GoTo EH
+
+    Dim netoBy As Object: Set netoBy = AggByBroj(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, COL_PALS_NETO)
+    Dim gajbeBy As Object: Set gajbeBy = AggByBroj(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, COL_PALS_BR_GAJBICA)
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim data As Variant: data = GetTableData(TBL_PALETA)
+
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PALETA)
+        If Not IsEmpty(data) Then
+            Dim cId As Long, cNeto As Long, cGajb As Long
+            cId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, "modIntegritet.A4")
+            cNeto = RequireColumnIndex(TBL_PALETA, COL_PAL_NETO, "modIntegritet.A4")
+            cGajb = RequireColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA, "modIntegritet.A4")
+
+            Dim i As Long, pid As String
+            Dim hNeto As Double, hGajb As Double, sNeto As Double, sGajb As Double
+            For i = 1 To UBound(data, 1)
+                pid = Trim$(CStr(data(i, cId)))
+                If Len(pid) > 0 Then
+                    If netoBy.Exists(pid) Then
+                        hNeto = 0: If IsNumeric(data(i, cNeto)) Then hNeto = CDbl(data(i, cNeto))
+                        hGajb = 0: If IsNumeric(data(i, cGajb)) Then hGajb = CDbl(data(i, cGajb))
+                        sNeto = netoBy(pid)
+                        sGajb = 0: If gajbeBy.Exists(pid) Then sGajb = gajbeBy(pid)
+                        If Abs(hNeto - sNeto) > 0.5 Or Abs(hGajb - sGajb) > 0.001 Then
+                            bad.Add Array(pid, hNeto, sNeto, hGajb, sGajb)
+                        End If
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "A4", "Paleta header vs Sigma stavke (NetoKg, BrojGajbica)", _
+               Array("PaletaID", "HeaderNetoKg", "StavkeNetoKg", "HeaderGajbica", "StavkeGajbica"), CollToArray(bad, 5)
+    Exit Sub
+
+EH:
+    WriteErr "A4", Err.description
+End Sub
+
+' ============================================================
 ' SHARED HELPERS
 ' ============================================================
 
@@ -360,6 +627,28 @@ Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
     Next i
 
     DanglingDocs = CollToArray(bad, 4)
+End Function
+
+' Skup ID-jeva iz tabele (opciono samo aktivni). Vraca Dictionary(id -> True).
+Private Function IdSet(ByVal tbl As String, ByVal idCol As String, ByVal activeOnly As Boolean) As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+
+    Dim data As Variant: data = GetTableData(tbl)
+    If Not IsArray(data) Then Set IdSet = d: Exit Function
+    If activeOnly Then data = ExcludeStornirano(data, tbl)
+    If IsEmpty(data) Then Set IdSet = d: Exit Function
+
+    Dim ci As Long: ci = RequireColumnIndex(tbl, idCol, "modIntegritet.IdSet")
+
+    Dim i As Long, s As String
+    For i = 1 To UBound(data, 1)
+        s = Trim$(CStr(data(i, ci)))
+        If Len(s) > 0 Then
+            If Not d.Exists(s) Then d.Add s, True
+        End If
+    Next i
+
+    Set IdSet = d
 End Function
 
 ' ============================================================
