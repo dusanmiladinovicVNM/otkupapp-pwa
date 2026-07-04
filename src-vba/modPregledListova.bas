@@ -111,7 +111,8 @@ fail:
 End Sub
 
 ' "Ocisti tabele" -> brise SAMO unose (DataBodyRange) iz dole navedenih tabela;
-' zaglavlja i sami ListObject-i ostaju. Trazi izricitu potvrdu (NE moze undo).
+' zaglavlja i sami ListObject-i ostaju. Trazi da operater ukuca "OBRISI" (NE moze
+' undo) -- InputBox umesto Da/Ne da se izbegne slucajno brisanje jednim klikom.
 ' Napomena: "otkupna mesta" = tblStanice (nema zasebne tabele).
 Public Sub OcistiTabele()
     Dim tbls As Variant
@@ -126,12 +127,11 @@ Public Sub OcistiTabele()
     Dim n As Long
     n = UBound(tbls) - LBound(tbls) + 1
 
-    If MsgBox("Obrisati SVE unose iz " & n & " tabela?" & vbCrLf & _
-              "(zaglavlja i tabele ostaju)" & vbCrLf & vbCrLf & _
-              "Ova radnja se NE mo" & ChrW(382) & "e opozvati.", _
-              vbExclamation + vbYesNo + vbDefaultButton2, "Ocisti tabele") <> vbYes Then
-        Exit Sub
-    End If
+    Dim odg As String
+    odg = InputBox("Obrisati SVE unose iz " & n & " tabela?" & vbCrLf & _
+                   "(zaglavlja i tabele ostaju; radnja se NE mo" & ChrW(382) & "e opozvati)" & vbCrLf & vbCrLf & _
+                   "Za potvrdu ukucajte: OBRI" & ChrW(352) & "I", "Ocisti tabele")
+    If Not PotvrdaObrisi(odg) Then Exit Sub
 
     Application.ScreenUpdating = False
     On Error GoTo fail
@@ -156,6 +156,16 @@ fail:
     MsgBox "Gre" & ChrW(353) & "ka pri ciscenju tabela: " & Err.description, _
            vbExclamation, "Ocisti tabele"
 End Sub
+
+' Potvrda brisanja: tacno "OBRISI" (sa ili bez dijakritike na S, nezavisno od
+' velicine slova). Prazno / Cancel / bilo sta drugo = False.
+Private Function PotvrdaObrisi(ByVal s As String) As Boolean
+    Dim t As String
+    t = Trim$(s)
+    t = Replace$(t, ChrW(353), "s")   ' s-caron -> s
+    t = Replace$(t, ChrW(352), "S")   ' S-caron -> S
+    PotvrdaObrisi = (UCase$(t) = "OBRISI")
+End Function
 
 ' --- Helperi ----------------------------------------------------------------
 

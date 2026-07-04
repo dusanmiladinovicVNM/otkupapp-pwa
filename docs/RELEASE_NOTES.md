@@ -279,3 +279,12 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 
   Banka se izvodi iz izabranog računa „Sa računa" (`BankaNazivZaRacun`); **nepoznat/prazan račun → naziv sadrži samo datum**. Naziv banke se sanitizuje za ime fajla (SR dijakritika → ASCII, razmaci → `-`), npr. „Poštanska štedionica" → `Postanska-stedionica`.
 - **Bez promene podataka / bez novih zavisnosti:** samo `modConfig`, `modPodesavanja`, `modBankaExportPregled`, `frmBankaExportPregled`; izvori **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+---
+
+## vba-v2.14.0 — 2026-07-04
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **zaštita dve osetljive Admin komande od slučajnog klika** — šifra za objavu release-a, potvrda kucanjem za čišćenje tabela. Izvori ostaju **ASCII-only**, bez novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+- **„Objavi release na Drive" — traži šifru:** dugme u Admin panelu (grupa „Google / Drive") je build/dev komanda koja objavljuje kod **celom fleetu**; ranije ga je štitio samo Da/Ne dijalog, pa je jedan slučajan klik operatera mogao da pokrene objavu. Sada `AdminPublishToDrive` traži **šifru** (`RELEASE_PUBLISH_SIFRA`, nova konstanta u `modConfig`) preko `InputBox`-a — unos šifre je ujedno potvrda (jedan dijalog): prazno/Cancel = tiho odustaje, pogrešna šifra = poruka „Pogrešna šifra. Objava je otkazana." + prekid. **Napomena za build/dev:** default `agrix-release` promeniti u `modConfig` pre isporuke (izvor se objavljuje fleetu → šifra štiti od slučajnog klika, nije prava tajna).
+- **„Očisti tabele od podataka" / „Obriši sve" — potvrda kucanjem:** destruktivno brisanje svih unosa iz ~23 tabele (`OcistiTabele`, dostupno iz Admin panela i sa lista „Pregled listova") je ranije tražilo samo Da/Ne. Sada traži da operater **ukuca „OBRIŠI"** (`InputBox` + helper `PotvrdaObrisi`, prihvata `OBRISI`/`OBRIŠI`, bez razlike u velikim/malim slovima i dijakritici); bilo šta drugo (prazno/Cancel/pogrešno) = prekid. Zaglavlja i sami ListObject-i ostaju kao i pre.
+- **Bez promene podataka / bez novih zavisnosti:** samo `modConfig`, `modAdmin`, `modPregledListova`; izvori **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.

@@ -16,6 +16,9 @@ Public Const APP_VERSION As String = "2.11.0"
 ' Vidi docs/RELEASE_PROCEDURE.md (self-update kanal) i modDrive/modRelease.
 Public Const REL_FOLDER_ID As String = "1zL7ronXQUsOY56p7rULsqrM1u1U8sxod"      ' AgriX_Release: kod + version.json
 Public Const BACKUP_FOLDER_ID As String = "199is7nQW3d4wfGX974AFTjpS4wo8itpl"   ' AgriX_Backup: xlsx data backup
+' Sifra za dugme "Objavi release na Drive" (modAdmin.AdminPublishToDrive) --
+' dev gate koji sprecava slucajnu objavu celom fleetu. PROMENI pre isporuke.
+Public Const RELEASE_PUBLISH_SIFRA As String = "agrix-release"
 
 ' --- PDF dokument folderi (generisani PDF-ovi -> svoj podfolder pored sveske) ---
 Public Const PDF_DIR_OTKUPNI As String = "Otkupni listovi"
