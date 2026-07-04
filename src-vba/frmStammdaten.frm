@@ -1347,6 +1347,7 @@ Private Sub LoadList()
             kupMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
             kupPosta = GetColumnIndex(TBL_KUPCI, "PostanskiBroj")
             kupDrzava = GetColumnIndex(TBL_KUPCI, "Dr" & ChrW(382) & "ava")
+            If kupDrzava = 0 Then kupDrzava = GetColumnIndex(TBL_KUPCI, "Drzava")
             kupPIB = GetColumnIndex(TBL_KUPCI, "PIB")
             kupMB = GetColumnIndex(TBL_KUPCI, "MaticniBroj")
             kupEmail = GetColumnIndex(TBL_KUPCI, "Email")
@@ -1354,11 +1355,13 @@ Private Sub LoadList()
             kupAktivan = GetColumnIndex(TBL_KUPCI, "Aktivan")
             kupRacun = GetColumnIndex(TBL_KUPCI, "TekuciRacun")
 
-            If kupID = 0 Or kupNaziv = 0 Or kupUlica = 0 Or kupMesto = 0 Or _
-               kupPosta = 0 Or kupDrzava = 0 Or kupPIB = 0 Or kupMB = 0 Or _
-               kupEmail = 0 Or kupHlad = 0 Or kupAktivan = 0 Or kupRacun = 0 Then
+            ' Tolerantno na schema-drift: obavezan je samo PK (KupacID); kolone
+            ' koje fale ostaju prazne u listi umesto da obore ceo tab. Ranije je
+            ' tvrdi Err.Raise na bilo koju od 12 kolona rusio otvaranje "Kupci"
+            ' kad se sema instalacije razlikuje (npr. "Drzava" bez dijakritike).
+            If kupID = 0 Then
                 Err.Raise vbObjectError + 7202, "frmStammdaten.LoadList", _
-                          "Nedostaju kolone u tblKupci."
+                          "Nedostaje kolona KupacID u tblKupci."
             End If
 
             Dim kupacAdresa As String
@@ -1367,28 +1370,33 @@ Private Sub LoadList()
                 If Trim$(NzToText(data(i, kupID))) <> "" Then
                     AddRowMap i
 
-                    kupacAdresa = Trim$(NzToText(data(i, kupUlica)))
+                    kupacAdresa = ""
+                    If kupUlica > 0 Then kupacAdresa = Trim$(NzToText(data(i, kupUlica)))
 
-                    If Len(Trim$(NzToText(data(i, kupPosta)))) > 0 Then
-                        If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & ", "
-                        kupacAdresa = kupacAdresa & NzToText(data(i, kupPosta))
+                    If kupPosta > 0 Then
+                        If Len(Trim$(NzToText(data(i, kupPosta)))) > 0 Then
+                            If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & ", "
+                            kupacAdresa = kupacAdresa & NzToText(data(i, kupPosta))
+                        End If
                     End If
 
-                    If Len(Trim$(NzToText(data(i, kupMesto)))) > 0 Then
-                        If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & " "
-                        kupacAdresa = kupacAdresa & NzToText(data(i, kupMesto))
+                    If kupMesto > 0 Then
+                        If Len(Trim$(NzToText(data(i, kupMesto)))) > 0 Then
+                            If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & " "
+                            kupacAdresa = kupacAdresa & NzToText(data(i, kupMesto))
+                        End If
                     End If
 
                     lstData.AddItem NzToText(data(i, kupID))
-                    lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, kupNaziv))
+                    If kupNaziv > 0 Then lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, kupNaziv))
                     lstData.List(lstData.ListCount - 1, 2) = kupacAdresa
-                    lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, kupDrzava))
-                    lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, kupPIB))
-                    lstData.List(lstData.ListCount - 1, 5) = NzToText(data(i, kupMB))
-                    lstData.List(lstData.ListCount - 1, 6) = NzToText(data(i, kupEmail))
-                    lstData.List(lstData.ListCount - 1, 7) = NzToText(data(i, kupHlad))
-                    lstData.List(lstData.ListCount - 1, 8) = NzToText(data(i, kupAktivan))
-                    lstData.List(lstData.ListCount - 1, 9) = NzToText(data(i, kupRacun))
+                    If kupDrzava > 0 Then lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, kupDrzava))
+                    If kupPIB > 0 Then lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, kupPIB))
+                    If kupMB > 0 Then lstData.List(lstData.ListCount - 1, 5) = NzToText(data(i, kupMB))
+                    If kupEmail > 0 Then lstData.List(lstData.ListCount - 1, 6) = NzToText(data(i, kupEmail))
+                    If kupHlad > 0 Then lstData.List(lstData.ListCount - 1, 7) = NzToText(data(i, kupHlad))
+                    If kupAktivan > 0 Then lstData.List(lstData.ListCount - 1, 8) = NzToText(data(i, kupAktivan))
+                    If kupRacun > 0 Then lstData.List(lstData.ListCount - 1, 9) = NzToText(data(i, kupRacun))
                 End If
             Next i
 
@@ -2518,7 +2526,12 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "Ulica", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField3.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PostanskiBroj", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Dr" & ChrW(382) & "ava", Trim$(txtField5.value), SRC
+            ' Drzava: ime kolone po instalaciji ("Drzava" bez dijakritike ili sa),
+            ' isto kao u LoadList -- resi dinamicki da se izmena sacuva.
+            Dim drzColKup As String
+            drzColKup = "Dr" & ChrW(382) & "ava"
+            If GetColumnIndex(m_TableName, drzColKup) = 0 Then drzColKup = "Drzava"
+            RequireUpdateCell m_TableName, m_SelectedRow, drzColKup, Trim$(txtField5.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PIB", Trim$(txtField6.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "MaticniBroj", Trim$(txtField7.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Email", Trim$(txtField8.value), SRC
