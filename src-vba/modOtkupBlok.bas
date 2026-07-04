@@ -1783,19 +1783,29 @@ Private Sub LoadKoopRang()
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Sub
 
-    ' Agregacija po KooperantID (samo tekuca godina).
+    ' Agregacija po KooperantID (samo tekuca godina) + kontrolne sume za
+    ' reconciliation footer: sirov tblOtkup total (kg + vrednost) i deo koji
+    ' ispada iz liste jer ima prazan KooperantID.
     Dim agg As Object: Set agg = CreateObject("Scripting.Dictionary")
+    Dim rawVal As Double, rawKg As Double
+    Dim emptyVal As Double, emptyKg As Double
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If cDat = 0 Or RowYear(data(i, cDat)) = yr Then
+            Dim kg As Double: kg = NumVal(data(i, cKol))
+            Dim vred As Double: vred = kg * NumVal(data(i, cCena))
+            rawKg = rawKg + kg
+            rawVal = rawVal + vred
             Dim k As String: k = Trim$(CStr(data(i, cKoop)))
             If Len(k) > 0 Then
-                Dim vred As Double: vred = NumVal(data(i, cKol)) * NumVal(data(i, cCena))
                 If agg.Exists(k) Then
                     agg(k) = CDbl(agg(k)) + vred
                 Else
                     agg.Add k, vred
                 End If
+            Else
+                emptyKg = emptyKg + kg
+                emptyVal = emptyVal + vred
             End If
         End If
     Next i
@@ -1832,6 +1842,34 @@ Private Sub LoadKoopRang()
         mLstRang.List(r, 2) = DictVal(dOM, koopIDs(i))
         mLstRang.List(r, 3) = FmtRsd(iznosi(i))
     Next i
+
+    ' --- Footer: UKUPNO (prikazano) + reconciliation vs tblOtkup (tekuca god.) ---
+    ' "Prikazano" == tblOtkup total osim za redove sa praznim KooperantID (koje
+    ' lista preskace). Ako takvih ima, prikazi ostatak i sirov tblOtkup total,
+    ' pa operater vidi da li se pregled slaze sa tabelom (prikazano + prazan = tblOtkup).
+    Dim shownVal As Double: shownVal = rawVal - emptyVal
+    Dim shownKg As Double: shownKg = rawKg - emptyKg
+
+    mLstRang.AddItem ""
+    r = mLstRang.ListCount - 1
+    mLstRang.List(r, 1) = "UKUPNO (prikazano)"
+    mLstRang.List(r, 2) = FmtKg(shownKg) & " kg"
+    mLstRang.List(r, 3) = FmtRsd(shownVal)
+
+    If emptyVal > 0.005 Or emptyKg > 0.005 Then
+        mLstRang.AddItem ""
+        r = mLstRang.ListCount - 1
+        mLstRang.List(r, 1) = "Prazan KooperantID (van liste)"
+        mLstRang.List(r, 2) = FmtKg(emptyKg) & " kg"
+        mLstRang.List(r, 3) = FmtRsd(emptyVal)
+
+        mLstRang.AddItem ""
+        r = mLstRang.ListCount - 1
+        mLstRang.List(r, 1) = "tblOtkup UKUPNO (" & yr & ")"
+        mLstRang.List(r, 2) = FmtKg(rawKg) & " kg"
+        mLstRang.List(r, 3) = FmtRsd(rawVal)
+    End If
+
     Exit Sub
 EH:
     LogErr "modOtkupBlok.LoadKoopRang"
