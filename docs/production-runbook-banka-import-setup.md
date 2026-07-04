@@ -75,7 +75,7 @@ Na **nalogu koji STVARNO prima mejlove banke**. Kod i detalji:
      "enabled": true,
      "driveFolderId": "<ID foldera 01_Bank, samo ID a ne URL>",
      "bankSenders": ["<mejl Komercijalne>"],
-     "searchDays": 30,
+     "searchDays": 7,
      "maxThreadsPerRun": 100,
      "pageSize": 50,
      "fileNamePrefix": "C001",
@@ -88,7 +88,9 @@ Na **nalogu koji STVARNO prima mejlove banke**. Kod i detalji:
 5. `Run → testGmailAccessOnly` → odobri Gmail scope (authorize). Očekivano `threadCount >= 0`.
 6. `Run → testBankPdfImportConfig` → proveri `folderName`, `query`, `sampleThreadCount` po klijentu.
 7. `Run → runBankPdfImportNow` → PDF-ovi padnu u `01_Bank`.
-8. `Run → setupDailyBankPdfImportTrigger` → dnevni okidač (07h).
+8. `Run → setupDailyBankPdfImportTrigger` → dnevni okidači **07/08/10/12/14/16** (konstanta `BANK_IMPORT_TRIGGER_HOURS` na vrhu `Code.gs`; re-run briše stare pa postavlja nove). Izvod koji stigne posle jutarnjeg pokretanja se pokupi isti dan. Bezbedno: `LockService` + dedup po imenu fajla → dodatni prolazi su no-op.
+
+> **`searchDays` (default 7):** koliko dana unazad se pretražuje Gmail. Sa 6×/dan to **nije za svežinu** nego je **outage buffer** (auto-nadoknada kad GAS ne radi par dana); manji broj = manje re-download churn-a u `Downloaded` (vidi §10 Troubleshooting / GAS README „Dedupe"). Duži prekid pokriva `runBankPdfImportBackfill`. **Postojeće instalacije sa `searchDays: 30` u `BANK_IMPORT_CLIENTS_JSON`: ručno spusti na 7 na tom nalogu** (default u kodu vredi samo kad se polje izostavi).
 
 **Backfill istorije** (npr. od 1. januara):
 1. Script Properties: `BANK_IMPORT_BACKFILL_FROM_DATE = 2026-01-01` (i po želji `BANK_IMPORT_BACKFILL_TO_DATE`).
@@ -232,7 +234,7 @@ Backfill saveti:
 Verifikacija (par stavki): lanac `BIM → NOV → otkup/faktura/avans`, BIM trag u `tblNovac.Napomena` (`BIM:<id>; Ref:...; Konto:...`). Detalji i incidenti: `docs/production-runbook-banka-novac.md`.
 
 Dnevna rutina:
-1. GAS trigger u 07h puni `01_Bank`.
+1. GAS okidači (07/08/10/12/14/16) pune `01_Bank` tokom dana.
 2. Operater otvori „Banka uvoz izvoda" → (pull+import) → auto-map na otvaranju → dovrši ručno/„Auto sve".
 3. Provera „Mapirano" brojača i otvorenih stavki.
 
@@ -259,7 +261,7 @@ Dnevna rutina:
 | Isplata se ne knjiži, red ostaje otvoren | kooperant nema `StanicaID` | Dodeli stanicu kooperantu |
 | Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Preporučeno „Available offline"; od v2.12.0 pull koristi FSO pa radi i online-only |
 | Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | **Najčešće: `SetupNewPC` nije pokrenut na klijentu** → `tblLocalConfig` nosi dev putanje iz `.xlsm`-a, pa pull gađa nepostojeći folder. Ređe: nema **Editor**-a na `01_Bank`/`Downloaded`, ili STAR build sa legacy file-op-ama | **1)** `Alt+F8 → SetupNewPC` (resetuje putanje na ovu mašinu) — vidi Faza 4.5 kritičnu napomenu. **2)** Proveri **Editor** na `01_Bank`+`Downloaded`. **3)** Ažuriraj build (od **v2.12.0** su pull op-e na FSO, robusnije na shortcut putanji) |
-| GAS re-skida iste izvode / `Downloaded` se puni | filename-dedupe + VBA iseli fajl iz `01_Bank` | benigno (staging-dedupe čuva tačnost); opciono Gmail label/arhiviranje u GAS-u |
+| GAS re-skida iste izvode / `Downloaded` se puni | filename-dedupe + VBA iseli fajl iz `01_Bank`, pa GAS ponovo skine dok je mejl u `searchDays` prozoru | **benigno** (staging-dedupe čuva tačnost, ne knjiži se dvaput; **ne usporava VBA** — `Downloaded` se ne enumeriše). Obim ograničava `searchDays` (default **7**, ranije 30); opciono povremeno obriši stare fajlove iz `Downloaded` (arhiva već uvezenih PDF-ova). Svesno bez Gmail labela |
 
 ---
 
