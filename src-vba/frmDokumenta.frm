@@ -282,8 +282,8 @@ Private Sub cmbFakturaIzlaz_Change()
         preostalo = iznos - uplaceno
 
         ' Koristi lblOMAvansSaldo kao multipurpose status bar -- ili dodaj novi lblSaldoKupca
-        lblOMAvansSaldo.caption = "SALDO KUPCA   Uplaceno: " & Format$(uplaceno, "#,##0") & _
-                                  "   Ostatak: " & Format$(preostalo, "#,##0") & " RSD"
+        lblOMAvansSaldo.caption = "SALDO KUPCA   Uplaceno: " & Format$(uplaceno, "#,##0.00") & _
+                                  "   Ostatak: " & Format$(preostalo, "#,##0.00") & " RSD"
         If preostalo <= 0 Then
             lblOMAvansSaldo.ForeColor = CLR_SUCCESS()
         ElseIf uplaceno > 0 Then
@@ -421,13 +421,13 @@ Private Sub UpdateUkupnoKgOtp()
     End If
 
     If chkDveKlaseOtp.value Then
-        lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
+        lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.00") & " kg"
         If ukupnoRsd > 0 Then
-            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  *  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgOtp.caption = lblUkupnoKgOtp.caption & "  *  " & Format$(ukupnoRsd, "#,##0.00") & " RSD"
         End If
     Else
         If ukupnoRsd > 0 Then
-            lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgOtp.caption = "UKUPNO  " & Format$(ukupnoRsd, "#,##0.00") & " RSD"
         Else
             lblUkupnoKgOtp.caption = ""
         End If
@@ -564,13 +564,13 @@ Private Sub AutoFillCenaDok()
     cII = GetVazecaCena(vrsta, sorta, KLASA_II)
 
     If cI > 0 Then
-        txtCenaOtp.value = Format$(cI, "0.######")
-        txtCenaPrij.value = Format$(cI, "0.######")
+        txtCenaOtp.value = Format$(cI, "0.00")
+        txtCenaPrij.value = Format$(cI, "0.00")
     End If
 
     If cII > 0 Then
-        If chkDveKlaseOtp.value Then txtCenaKlIIOtp.value = Format$(cII, "0.######")
-        If chkDveKlasePrij.value Then txtCenaKlIIPrij.value = Format$(cII, "0.######")
+        If chkDveKlaseOtp.value Then txtCenaKlIIOtp.value = Format$(cII, "0.00")
+        If chkDveKlasePrij.value Then txtCenaKlIIPrij.value = Format$(cII, "0.00")
     End If
 
     ' #6 podrazumevani tip ambalaze iz kulture (otpremnica + zbirna + prijemnica)
@@ -1148,7 +1148,7 @@ Private Sub LoadZbirneListbox()
                 lstZbirne.List(lstZbirne.ListCount - 1, 2) = CStr(nz(data(r, cVrsta), ""))
                 lstZbirne.List(lstZbirne.ListCount - 1, 3) = CStr(nz(data(r, cSorta), ""))
                 If kgByBroj.Exists(broj) Then _
-                    lstZbirne.List(lstZbirne.ListCount - 1, 4) = Format$(kgByBroj(broj), "#,##0.##")
+                    lstZbirne.List(lstZbirne.ListCount - 1, 4) = Format$(kgByBroj(broj), "#,##0.00")
 
                 n = n + 1
                 If n >= 20 Then Exit For
@@ -1741,9 +1741,9 @@ Private Sub btnUnosOMUlaz_Click()
                     Dim preostalo As Double
                     If TryParseDouble(NzToText(otkupi(cmbOtkupBlok.ListIndex + 1, 5)), preostalo) Then
                         If novac > preostalo Then
-                            MsgBox "Iznos (" & Format$(novac, "#,##0") & _
+                            MsgBox "Iznos (" & Format$(novac, "#,##0.00") & _
                                    ") veci od preostalog (" & _
-                                   Format$(preostalo, "#,##0") & ")!", _
+                                   Format$(preostalo, "#,##0.00") & ")!", _
                                    vbExclamation, APP_NAME
                             Exit Sub
                         End If
@@ -1756,7 +1756,7 @@ Private Sub btnUnosOMUlaz_Click()
 
                     If novac > omSaldo Then
                         MsgBox Poruka("DOK_MSG_NEDOVOLJNO_AVANSA_RASPOLOZIVO") & _
-                               Format$(omSaldo, "#,##0") & " RSD", _
+                               Format$(omSaldo, "#,##0.00") & " RSD", _
                                vbExclamation, APP_NAME
                         Exit Sub
                     End If
@@ -1890,7 +1890,7 @@ Private Sub UpdateOMAvansSaldo()
     saldo = GetOMAvansSaldo(stanicaID)
 
     If saldo > 0 Then
-        lblOMAvansSaldo.caption = "OM Avans: " & Format$(saldo, "#,##0") & " RSD"
+        lblOMAvansSaldo.caption = "OM Avans: " & Format$(saldo, "#,##0.00") & " RSD"
     Else
         lblOMAvansSaldo.caption = ""
     End If
@@ -2165,15 +2165,15 @@ Private Function UpdateValidacija() As Boolean
     
     ' KlI Anzeige
     Dim kgCaption As String
-    kgCaption = "Kl.I - Otp: " & Format$(sumaKgI, "#,##0.0") & " kg | " & _
-                "Zbr: " & Format$(zbrKgI, "#,##0.0") & " kg | " & _
-                "Raz: " & Format$(razKgI, "#,##0.0") & " kg"
+    kgCaption = "Kl.I - Otp: " & Format$(sumaKgI, "#,##0.00") & " kg | " & _
+                "Zbr: " & Format$(zbrKgI, "#,##0.00") & " kg | " & _
+                "Raz: " & Format$(razKgI, "#,##0.00") & " kg"
     
     ' KlII hinzufuegen wenn aktiv
     If chkDveKlaseZbr.value Then
-        kgCaption = kgCaption & "  ||  Kl.II - Otp: " & Format$(sumaKgII, "#,##0.0") & _
-                    " | Zbr: " & Format$(zbrKgII, "#,##0.0") & _
-                    " | Raz: " & Format$(razKgII, "#,##0.0")
+        kgCaption = kgCaption & "  ||  Kl.II - Otp: " & Format$(sumaKgII, "#,##0.00") & _
+                    " | Zbr: " & Format$(zbrKgII, "#,##0.00") & _
+                    " | Raz: " & Format$(razKgII, "#,##0.00")
     End If
     
     lblValidacijaKG.caption = kgCaption
@@ -2566,9 +2566,9 @@ Private Sub UpdateManjak(ByVal brojZbirne As String)
     Dim manjakKg As Double: manjakKg = CDbl(manjak(2))
     Dim manjakPct As Double: manjakPct = CDbl(manjak(3))
     
-    lblManjak.caption = "Zbirna: " & Format$(zbrKg, "#,##0.0") & " kg | " & _
-                         "Prijemnica: " & Format$(prijKg, "#,##0.0") & " kg | " & _
-                         "Manjak: " & Format$(manjakKg, "#,##0.0") & " kg (" & _
+    lblManjak.caption = "Zbirna: " & Format$(zbrKg, "#,##0.00") & " kg | " & _
+                         "Prijemnica: " & Format$(prijKg, "#,##0.00") & " kg | " & _
+                         "Manjak: " & Format$(manjakKg, "#,##0.00") & " kg (" & _
                          Format$(manjakPct, "#,##0.00") & "%)"
     
     If Abs(manjakPct) < 0.5 Then
@@ -2619,13 +2619,13 @@ Private Sub UpdateUkupnoKgPrij()
     End If
 
     If chkDveKlasePrij.value Then
-        lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.0") & " kg"
+        lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoKg, "#,##0.00") & " kg"
         If ukupnoRsd > 0 Then
-            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  *  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgPrij.caption = lblUkupnoKgPrij.caption & "  *  " & Format$(ukupnoRsd, "#,##0.00") & " RSD"
         End If
     Else
         If ukupnoRsd > 0 Then
-            lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoRsd, "#,##0") & " RSD"
+            lblUkupnoKgPrij.caption = "UKUPNO  " & Format$(ukupnoRsd, "#,##0.00") & " RSD"
         Else
             lblUkupnoKgPrij.caption = ""
         End If
@@ -2768,9 +2768,9 @@ Private Sub btnUnosIzlaz_Click()
                 preostalo = fakIznos - uplaceno
 
                 If preostalo > 0 And novac > preostalo Then
-                    MsgBox "Uplata (" & Format$(novac, "#,##0") & _
+                    MsgBox "Uplata (" & Format$(novac, "#,##0.00") & _
                            ") je veca od preostalog iznosa fakture (" & _
-                           Format$(preostalo, "#,##0") & ").", _
+                           Format$(preostalo, "#,##0.00") & ").", _
                            vbExclamation, APP_NAME
                     Exit Sub
                 End If
@@ -2893,8 +2893,8 @@ Private Sub FillOpenFakture()
                     displayText = displayText & " | " & datumTxt
                 End If
 
-                displayText = displayText & " | iznos " & Format$(iznos, "#,##0") & _
-                              " | preostalo " & Format$(preostalo, "#,##0")
+                displayText = displayText & " | iznos " & Format$(iznos, "#,##0.00") & _
+                              " | preostalo " & Format$(preostalo, "#,##0.00")
 
                 cmbFakturaIzlaz.AddItem displayText
                 cmbFakturaIzlaz.List(cmbFakturaIzlaz.ListCount - 1, 1) = fakturaID
@@ -4033,7 +4033,7 @@ Public Sub RefreshTopKpis()
     StyleTopKpi fraKpiOM, lblKpiOMTitle, lblKpiOMValue, lblKpiOMAccent, _
                 IIf(omSaldo > 0, "ok", "neutral")
     lblKpiOMTitle.caption = "OM saldo"
-    lblKpiOMValue.caption = Format$(omSaldo, "#,##0")
+    lblKpiOMValue.caption = Format$(omSaldo, "#,##0.00")
 
     ' --- 3) Otvoreno kg (zbir kg za danas iz tblOtkup) ---
     Dim kgToday As Double
@@ -4042,7 +4042,7 @@ Public Sub RefreshTopKpis()
     StyleTopKpi fraKpiOtvoreno, lblKpiOtvTitle, lblKpiOtvValue, lblKpiOtvAccent, _
                 IIf(kgToday > 0, "ok", "neutral")
     lblKpiOtvTitle.caption = "Otvoreno kg"
-    lblKpiOtvValue.caption = Format$(kgToday, "#,##0")
+    lblKpiOtvValue.caption = Format$(kgToday, "#,##0.00")
 
     ' --- 4) Validacija (status zbirne ako je popunjeno, inace neutral) ---
     Dim valKind As String
