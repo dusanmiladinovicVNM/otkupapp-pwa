@@ -3061,13 +3061,20 @@ EH:
     GetPrijemniceSaOsirocenimPaletama = Empty
 End Function
 
-' Aktivne prijemnice koje su paletizovane (imaju aktivnu paleta-stavku) = ciljevi
-' za P1. Kolone 1..6: BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica(KolAmb)|Zbirna
-Public Function GetAktivnePrijemnice() As Variant
+' Aktivne (ne-stornirane) prijemnice = ciljevi za pallet re-point. Ukljucuje i
+' paletizovane (autohladnjaca ciljevi) i NEpaletizovane (motor
+' ReassignPaleteToPrijemnica_TX ih podrzava: STEP1 undo-a nista kad cilj nema
+' svezih stavki). Kolone 1..7:
+'   BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica(KolAmb)|Zbirna|Paletizovana(Da/Ne).
+' Filter: fVrsta/fSorta "" -> bez filtera; inace samo taj (vrsta,sorta) par
+' (suzavanje po izboru leve osirocene prijemnice u recovery panelu).
+Public Function GetAktivnePrijemnice(Optional ByVal fVrsta As String = "", _
+                                     Optional ByVal fSorta As String = "") As Variant
     On Error GoTo EH
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
 
+    ' BrojPrijemnice koje imaju bar jednu AKTIVNU paleta-stavku (-> Paletizovana=Da).
     Dim palBr As Object: Set palBr = CreateObject("Scripting.Dictionary"): palBr.CompareMode = vbTextCompare
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
     If Not IsEmpty(ps) Then
@@ -3103,15 +3110,18 @@ Public Function GetAktivnePrijemnice() As Variant
         If cSt > 0 Then stp = (UCase$(Trim$(NzToText(prj(i, cSt)))) = "DA")
         If Not stp Then
             Dim br As String: br = Trim$(NzToText(prj(i, cBr)))
-            If Len(br) > 0 Then
-                If palBr.Exists(br) Then
-                    If Not gSum.Exists(br) Then
-                        gSum(br) = 0&: order.Add br
-                        datD(br) = prj(i, cDat): vrD(br) = Trim$(NzToText(prj(i, cVr)))
-                        soD(br) = Trim$(NzToText(prj(i, cSo))): zbD(br) = Trim$(NzToText(prj(i, cZbr)))
-                    End If
-                    If cAmb > 0 Then If IsNumeric(prj(i, cAmb)) Then gSum(br) = CLng(gSum(br)) + CLng(prj(i, cAmb))
+            Dim vr As String: vr = Trim$(NzToText(prj(i, cVr)))
+            Dim so As String: so = Trim$(NzToText(prj(i, cSo)))
+            Dim okF As Boolean: okF = True
+            If Len(fVrsta) > 0 Then okF = (StrComp(vr, Trim$(fVrsta), vbTextCompare) = 0)
+            If okF And Len(fSorta) > 0 Then okF = (StrComp(so, Trim$(fSorta), vbTextCompare) = 0)
+            If okF And Len(br) > 0 Then
+                If Not gSum.Exists(br) Then
+                    gSum(br) = 0&: order.Add br
+                    datD(br) = prj(i, cDat): vrD(br) = vr
+                    soD(br) = so: zbD(br) = Trim$(NzToText(prj(i, cZbr)))
                 End If
+                If cAmb > 0 Then If IsNumeric(prj(i, cAmb)) Then gSum(br) = CLng(gSum(br)) + CLng(prj(i, cAmb))
             End If
         End If
     Next i
@@ -3120,9 +3130,10 @@ Public Function GetAktivnePrijemnice() As Variant
     Dim v As Variant
     For Each v In order
         Dim br2 As String: br2 = CStr(v)
-        rows.Add Array(br2, datD(br2), CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), CStr(zbD(br2)))
+        rows.Add Array(br2, datD(br2), CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), _
+                       CStr(zbD(br2)), IIf(palBr.Exists(br2), "Da", "Ne"))
     Next v
-    GetAktivnePrijemnice = StornoRowsTo2D(rows, 6)
+    GetAktivnePrijemnice = StornoRowsTo2D(rows, 7)
     Exit Function
 EH:
     LogErr "modDokumenta.GetAktivnePrijemnice"

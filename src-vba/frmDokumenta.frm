@@ -64,12 +64,13 @@ Private m_recTitle As MSForms.Label
 Private m_recLblPrij As MSForms.Label
 Private m_recLblZbr As MSForms.Label
 Private m_recStatus As MSForms.Label
-Private m_lstOsirPrij As MSForms.ListBox
+Private WithEvents m_lstOsirPrij As MSForms.ListBox
 Private m_lstAktZbr As MSForms.ListBox
 Private m_recBuilt As Boolean
 Private m_recHidden As Collection
 Private WithEvents m_btnRecMode As MSForms.CommandButton
 Private m_recMode As String      ' "PRIJ" (default) ili "PAL"
+Private m_recPopulating As Boolean   ' guard: suppress _Change dok programski punimo levu listu
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -2949,7 +2950,8 @@ Private Sub btnStorno_Click()
     End If
     
     Dim Success As Boolean
-    
+    Dim palWarn As String        ' palete date prijemnice (za upozorenje posle storna)
+
     Select Case tipDok
         Case "Otkup"
             ' Otkup: Klasa I i II dele isti BrDok (zaseban red po klasi) -> storniraj
@@ -2980,6 +2982,8 @@ Private Sub btnStorno_Click()
                 MsgBox "Prijemnica '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
                 Exit Sub
             End If
+            ' Zapamti palete PRE storna (posle su osirocene, ali stavke ostaju aktivne).
+            palWarn = GetPaleteInfoForPrijemnicaBroj(brDok)
             ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
             If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnicaByBroj_TX(brDok)
             
@@ -3033,7 +3037,16 @@ Private Sub btnStorno_Click()
     End Select
     
     If Success Then
-        MsgBox "Stornirano!", vbInformation, APP_NAME
+        If Len(palWarn) > 0 Then
+            MsgBox "Stornirano!" & vbCrLf & vbCrLf & _
+                   "NAPOMENA: prijemnica je bila paletizovana (palete: " & palWarn & ")." & vbCrLf & _
+                   "Palete NISU obrisane - stavke su sada osirocene (i dalje broje robu). " & _
+                   "Posle ponovnog unosa prevezi ih:" & vbCrLf & _
+                   "Osiroceni dokumenti  ->  Mod: Palete  ->  Prevezi palete.", _
+                   vbInformation, APP_NAME
+        Else
+            MsgBox "Stornirano!", vbInformation, APP_NAME
+        End If
         txtStornoBroj.value = ""
         CheckVerwaisteDokumente
     End If
@@ -3542,6 +3555,7 @@ Private Sub PopulateRecoveryPanel()
     On Error GoTo EH
     If m_lstOsirPrij Is Nothing Or m_lstAktZbr Is Nothing Then Exit Sub
     If Len(m_recMode) = 0 Then m_recMode = "PRIJ"
+    m_recPopulating = True
     Dim nL As Long: nL = 0
 
     If m_recMode = "PAL" Then
@@ -3561,22 +3575,12 @@ Private Sub PopulateRecoveryPanel()
         End If
         If nL = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih paleta."
 
-        m_lstAktZbr.ColumnCount = 6
-        m_lstAktZbr.ColumnWidths = "80;58;60;72;48;72"
-        m_lstAktZbr.Clear
-        AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Vrsta", "Sorta", "Gajb", "Zbirna")
-        Dim az As Variant: az = GetAktivnePrijemnice()
-        If Not IsEmpty(az) Then
-            Dim j As Long, d As Long
-            For j = 1 To UBound(az, 1)
-                Dim r2(0 To 5) As Variant
-                For d = 0 To 5: r2(d) = az(j, d + 1): Next d
-                AddRecRow m_lstAktZbr, r2
-            Next j
-        End If
+        ' Desna (ciljna) lista se puni tek po izboru leve prijemnice
+        ' (m_lstOsirPrij_Change -> PopulateRecTargets, filter po vrsti/sorti).
+        PopulateRecTargets "", "", False
 
         m_recLblPrij.caption = "Stornirane prijemnice (osirocene palete)"
-        m_recLblZbr.caption = "Ciljna (nova) prijemnica"
+        m_recLblZbr.caption = "Ciljna prijemnica (iste vrste/sorte)"
         m_btnRecPrevezi.caption = "Prevezi palete >>"
         m_recTitle.caption = "Osiroceni dokumenti - PALETE  (" & nL & ")"
     Else
@@ -3615,9 +3619,70 @@ Private Sub PopulateRecoveryPanel()
         m_btnRecPrevezi.caption = "Prevezi >>"
         m_recTitle.caption = "Osiroceni dokumenti - PRIJEMNICE  (" & nL & ")"
     End If
+    m_recPopulating = False
     Exit Sub
 EH:
+    m_recPopulating = False
     LogErr "frmDokumenta.PopulateRecoveryPanel"
+End Sub
+
+' Puni desnu (ciljnu) listu u PAL modu: aktivne prijemnice iste vrste/sorte kao
+' izabrana leva (i paletizovane i ne), uz kolonu "Palet." (Da/Ne). haveSel=False
+' -> prazna lista sa uputstvom (dok se levo ne izabere). Reuse GetAktivnePrijemnice.
+Private Sub PopulateRecTargets(ByVal fVrsta As String, ByVal fSorta As String, _
+                               ByVal haveSel As Boolean)
+    On Error Resume Next
+    m_lstAktZbr.ColumnCount = 7
+    m_lstAktZbr.ColumnWidths = "76;54;56;64;38;64;36"
+    m_lstAktZbr.Clear
+    AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Vrsta", "Sorta", "Gajb", "Zbirna", "Palet")
+    If Not haveSel Then
+        m_lstAktZbr.AddItem "(izaberi prijemnicu levo)"
+        Exit Sub
+    End If
+    Dim az As Variant: az = GetAktivnePrijemnice(fVrsta, fSorta)
+    If IsEmpty(az) Then
+        m_lstAktZbr.AddItem "(nema ciljeva iste vrste/sorte)"
+        Exit Sub
+    End If
+    Dim j As Long, d As Long
+    For j = 1 To UBound(az, 1)
+        Dim r2(0 To 6) As Variant
+        For d = 0 To 6: r2(d) = az(j, d + 1): Next d
+        AddRecRow m_lstAktZbr, r2
+    Next j
+End Sub
+
+' Izbor leve (osirocene) prijemnice u PAL modu -> filtriraj desne ciljeve po
+' vrsti/sorti + prikazi koje fizicke palete se prevoze (m_recStatus). U PRIJ modu
+' i tokom programske populacije (m_recPopulating) ne radi nista.
+Private Sub m_lstOsirPrij_Change()
+    On Error Resume Next
+    If m_recPopulating Then Exit Sub
+    If m_recMode <> "PAL" Then Exit Sub
+
+    Dim li As Long: li = m_lstOsirPrij.ListIndex
+    Dim broj As String, vr As String, so As String
+    If li >= 1 Then                     ' 0 = header red
+        broj = Trim$(CStr(m_lstOsirPrij.List(li, 0)))
+        vr = Trim$(CStr(m_lstOsirPrij.List(li, 2)))
+        so = Trim$(CStr(m_lstOsirPrij.List(li, 3)))
+    End If
+
+    If Len(vr) = 0 And Len(so) = 0 Then     ' header ili placeholder red
+        PopulateRecTargets "", "", False
+        m_recStatus.caption = ""
+        Exit Sub
+    End If
+
+    PopulateRecTargets vr, so, True
+
+    Dim info As String: info = GetPaleteInfoForPrijemnicaBroj(broj)
+    If Len(info) > 0 Then
+        m_recStatus.caption = "Palete koje se prevoze (" & broj & "): " & info
+    Else
+        m_recStatus.caption = ""
+    End If
 End Sub
 
 Private Sub AddRecRow(ByVal lst As MSForms.ListBox, ByVal cells As Variant)

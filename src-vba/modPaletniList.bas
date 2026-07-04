@@ -245,6 +245,70 @@ EH:
     GetPaletaStatusForPrijemnica = ""
 End Function
 
+' Kompaktan spisak fizickih paleta koje nose AKTIVNE paleta-stavke date prijemnice
+' (po BrojPrijemnice): npr. "12/2026 (10g), 14/2026 (6g)". "" ako nema. Read-only
+' (bez TX). Storno-agnosticno na strani prijemnice: gleda samo aktivne stavke, pa
+' radi i posle storna (osirocene stavke i dalje nose stari BrojPrijemnice).
+' Za: preview u recovery panelu (izbor leve prijemnice) + upozorenje pri stornu.
+Public Function GetPaleteInfoForPrijemnicaBroj(ByVal brojPrij As String) As String
+    On Error GoTo EH
+    brojPrij = Trim$(brojPrij)
+    If Len(brojPrij) = 0 Then Exit Function
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iBr As Long, iPal As Long, iGajb As Long, iSt As Long
+    iBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If iBr = 0 Or iPal = 0 Then Exit Function
+
+    ' PaletaID -> gajbice (agregat), uz redosled pojavljivanja.
+    Dim order As Collection: Set order = New Collection
+    Dim gaj As Object: Set gaj = CreateObject("Scripting.Dictionary")
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, iBr))) = brojPrij _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iSt)))) <> "DA" Then
+            Dim pid As String: pid = CStr(SafeCell(s, r, iPal))
+            If Not gaj.Exists(pid) Then gaj.Add pid, 0&: order.Add pid
+            gaj(pid) = CLng(gaj(pid)) + NzL(SafeCell(s, r, iGajb))
+        End If
+    Next r
+    If order.count = 0 Then Exit Function
+
+    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
+    Dim iPBroj As Long, iPGod As Long
+    iPBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+    iPGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+
+    Const MAXP As Long = 8
+    Dim out As String, n As Long
+    Dim v As Variant
+    For Each v In order
+        n = n + 1
+        If n > MAXP Then
+            out = out & ", +" & (order.count - MAXP) & " jos"
+            Exit For
+        End If
+        Dim ri As Long: ri = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, CStr(v))
+        Dim lbl As String: lbl = "?"
+        If ri > 0 And Not IsEmpty(dp) Then
+            lbl = CStr(NzL(SafeCell(dp, ri, iPBroj))) & "/" & CStr(NzL(SafeCell(dp, ri, iPGod)))
+        End If
+        If Len(out) > 0 Then out = out & ", "
+        out = out & lbl & " (" & CLng(gaj(CStr(v))) & "g)"
+    Next v
+
+    GetPaleteInfoForPrijemnicaBroj = out
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaleteInfoForPrijemnicaBroj"
+    GetPaleteInfoForPrijemnicaBroj = ""
+End Function
+
 ' ============================================================
 ' frmPalete (#44) read-modeli + rucno zatvaranje. Read-modeli su SAMO za
 ' citanje (bez TX); vracaju 0-based 2D Variant (spreman za ListBox.List) ili
