@@ -280,6 +280,8 @@ Private Sub SetupColumnHeaders()
             ShowHeader 4, "Gajbica/paleti", True
             ShowHeader 5, "Aktivan", True
             ShowHeader 6, "Tip amb.", True
+            ShowHeader 7, "Prag upoz.", True
+            ShowHeader 8, "Prag blok.", True
 
         Case "TipAmbalaze"
             ShowHeader 1, "Tip ambala" & ChrW(382) & "e", True
