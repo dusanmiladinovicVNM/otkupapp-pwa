@@ -1,0 +1,73 @@
+# Integritet provere (tabela ↔ tabela)
+
+Konsolidovana, **read-only** revizija integriteta podataka kroz ceo lanac
+dokumenata: `Otkup → Otpremnica → Zbirna → Prijemnica → Paleta → Prerada`.
+Ništa ne menja — samo izlistava neusklađene zapise.
+
+## Pokretanje
+
+- **Admin panel** → grupa „Setup i provere" → **„Integritet provere (tabele)"**, ili
+- `Alt+F8 → RunIntegritetProvere`.
+
+Rezultat se upisuje u sheet **`INTEGRITET_PROVERE`** (obriše se i iznova napiše
+pri svakom pokretanju). Svaki blok: naslov + broj problema, pa „OK – nema" ili
+tabela zapisa. Na kraju „UKUPNO", plus zbirni `MsgBox` sa brojem po proveri.
+Liste se filtriraju/sortiraju/štampaju direktno u Excelu.
+
+Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
+`BrojZbirne` (Klasa I + II dele isti broj → zaseban red).
+
+## Provere
+
+### A — Konzervacija količine (kg)
+| Kod | Značenje | Napomena |
+|---|---|---|
+| A1 | `Σ otpremnica.Kolicina` vs `Σ zbirna.UkupnoKolicina` po `BrojZbirne` | reuse `ValidateZbirna` (prag 0.01 kg) |
+| A2 | Manjak/višak `zbirna → prijemnica`: **VIŠAK** (prijemnica > zbirna), **NIŠTA PRIMLJENO**, **MANJAK > praga** | prag `PRAG_MANJAK_PCT` (10%) |
+| A3 | `Σ paleta-stavke.NetoKg` po prijemnici vs `prijemnica.Kolicina` | samo paletizovane; tol 0.5 kg |
+| A4 | `paleta.NetoKg`/`BrojGajbica` (header) vs `Σ stavke` | tol 0.5 kg / 0.001 gajbe |
+| A5 | prerada `NetoUlazKg` vs `Σ stavke.NetoKg`; `NetoIzlaz ≤ NetoUlaz` | tol 0.5 kg |
+
+### B — Referencijalni integritet lanca
+| Kod | Značenje |
+|---|---|
+| B1a/B1b | **Verwaist** otpremnice/prijemnice: živ dokument, `BrojZbirne` **potpuno stornirane** zbirne (reuse `GetVerwaisteDokumente`) |
+| B2 | **Otkupi bez otpremnice** (`OtpremnicaID` prazan) — reuse `GetUnlinkedOtkupi` |
+| B4a/B4b | Otpremnica/prijemnica sa `BrojZbirne` koji **uopšte ne postoji** u `tblZbirna` (različito od B1) |
+| B5 | Prijemnica **bez `BrojZbirne`** (obavezna veza) |
+
+### C — Palete
+| Kod | Značenje |
+|---|---|
+| C1 | Paleta-stavka bez žive prijemnice (prazan/nepostojeći `PrijemnicaID`) |
+| C2 | Paleta-stavka bez ispravne zbirne (prazan/nepostojeći `BrojZbirne`) |
+| C3 | Paleta (header) bez ijedne aktivne stavke (orphan header) |
+| C4 | Paleta-stavka ka **storniranoj** prijemnici (kaskadni storno ne dira `tblPaletaStavka`) |
+| C5 | Dupli `BrojPalete` unutar iste `Godina` |
+
+### D — Prerada
+| Kod | Značenje |
+|---|---|
+| D1 | Paleta `Preradjeno=Da` bez ijedne aktivne prerada-stavke (reset flaga izostao) |
+| D2 | Prerada-stavka ka nevalidnoj paleti (nesveža/stornirana/nepostojeća) — **očekivano prazno** zbog storno guarda |
+
+## Podesive tolerancije
+
+U `modIntegritet.bas`, vrh modula:
+- `PRAG_MANJAK_PCT` (default 10) — prag za A2 „veliki manjak".
+- kg tolerancije (0.5) su inline u A3/A4/A5 — lako promeniti ako po-gajbi
+  zaokruživanje pravi šum.
+
+## Odnos prema invarijantama (potvrđeno iz koda)
+
+- Razlika `Otkup ↔ Otpremnica` **nije** samo „verwaist": čine je **B2** (unlinked)
+  + broken FK (`Check_OtkupOtpremnicaCrossZbirnaLinks`). Verwaist se tiče
+  `otpremnica/prijemnica ↔ zbirna`.
+- `Otpremnica ↔ Zbirna`: kg = **A1**, reference = **B1** + **B4**.
+- Prijemnica: manjak/višak = **A2**, obavezna zbirna = **B5**.
+- Palete moraju imati prijemnicu = **C1**; bez zbirne = **C2**.
+- „Prerađeno bez sveže palete" = **D2** (očekivano prazno — već-prerađena paleta
+  se ne može stornirati; oporavak samo preko `StornoPrerada`).
+
+Storno **ne kaskadira** globalno (osim hladnjača-blok i malina putanje), pa viseći
+dokumenti i orphan stavke nastaju legitimno — zato ova revizija postoji.
