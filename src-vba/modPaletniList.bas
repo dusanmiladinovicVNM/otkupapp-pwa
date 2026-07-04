@@ -1853,14 +1853,7 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     ws.Range("PreAmbalaza").NumberFormat = "0.00"
     ws.Range("PreAmbalaza").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_AMBALAZA)))
 
-    Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
-    Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
-    If lastRow >= startRow Then
-        ws.Range(ws.cells(startRow, 4), ws.cells(lastRow, 5)).UnMerge
-        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
-    End If
-
-    ' prerada -> preradene palete -> otkupi: jedan red po OTKUPU
+    ' palete ove prerade -> otkupi (potrebno za obe varijante lista)
     Dim palIDs As Collection: Set palIDs = New Collection
     Dim s As Variant: s = GetTableData(TBL_PRERADA_STAVKA)
     If Not IsEmpty(s) Then
@@ -1877,60 +1870,22 @@ Private Function FillPreradaSablon(ByVal preID As String, _
 
     Dim o As Variant: o = GetOtkupiZaPalete(palIDs)
 
-    ' Naslov vrste: uvek "DZ" + vrsta + sorta (iz prve izabrane palete sveze
-    ' robe) + tip gotovog proizvoda (sa prerade). DZ = duboko zamrznuto.
-    Dim vrstaTxt As String, sortaTxt As String, tipGP As String
-    If palIDs.count > 0 Then
-        Dim pidFirst As String: pidFirst = CStr(palIDs(1))
-        vrstaTxt = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, pidFirst, COL_PAL_VRSTA))
-        sortaTxt = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, pidFirst, COL_PAL_SORTA))
-    End If
+    ' Naslov vrste: SAMO tekst iz comboa "Gotov proizvod:" (tip gotovog
+    ' proizvoda sa prerade, COL_PRE_TIP_GP). Vrsta/sorta iz izabranih paleta
+    ' sveze robe se vise NE citaju iz tblPaleta (zahtev operatera).
+    Dim tipGP As String
     tipGP = NzToText(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP)))
-    Dim vrstaLine As String
-    vrstaLine = "DZ " & Trim$(vrstaTxt)
-    If Len(Trim$(sortaTxt)) > 0 Then vrstaLine = vrstaLine & " " & Trim$(sortaTxt)
-    If Len(Trim$(tipGP)) > 0 Then vrstaLine = vrstaLine & "  " & Trim$(tipGP)
-    ws.Range("PreVrsta").value = vrstaLine
-    Dim outR As Long, rb As Long
-    outR = startRow: rb = 0
-    If Not IsEmpty(o) Then
-        Dim k As Long
-        For k = 1 To UBound(o, 1)
-            rb = rb + 1
-            ws.cells(outR, 1).value = rb
-            ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
-            ws.cells(outR, 3).value = o(k, 3)                         ' Neto kg
-            ws.Range(ws.cells(outR, 4), ws.cells(outR, 5)).Merge
-            ws.cells(outR, 4).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip (D:E)
-            outR = outR + 1
-        Next k
+    ws.Range("PreVrsta").value = Trim$(tipGP)
+    ' Telo lista zavisi od toggle-a "Detaljni prikaz sledljivosti" (sablon je vec
+    ' izgradjen u tom rezimu preko EnsurePreradaSablon):
+    '   DA -> puna tabela stavki (jedan red po otkupu)
+    '   NE -> samo lista sifri kooperanata (zarezom)
+    Dim footRow As Long
+    If IsPreradaSledljivostDetalj() Then
+        footRow = FillPreradaStavkeDetalj(ws, o)
+    Else
+        footRow = FillPreradaSifreZbirno(ws, o)
     End If
-
-    Dim dataEnd As Long: dataEnd = outR - 1
-    If dataEnd >= startRow Then
-        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).Borders
-            .LineStyle = xlContinuous
-            .Weight = xlThin
-        End With
-        ' uniforman font na svim redovima kooperanata (fix: prvih redova font)
-        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5))
-            .Font.Size = 10
-            .Font.Bold = False
-        End With
-        ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).EntireRow.AutoFit
-        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
-        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
-        Dim zr As Long
-        For zr = 0 To dataEnd - startRow
-            If zr Mod 2 = 1 Then
-                ws.Range(ws.cells(startRow + zr, 1), _
-                         ws.cells(startRow + zr, 5)).Interior.Color = RGB(217, 225, 242)
-            End If
-        Next zr
-    End If
-
-    Dim footRow As Long: footRow = dataEnd + 2
-    If footRow <= startRow Then footRow = startRow + 1
     ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "dd.mm.yyyy")
     ws.cells(footRow, 1).Font.Color = DocColGray()
     ws.cells(footRow + 2, 1).value = "Potpis: ____________________"
@@ -1965,17 +1920,22 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Function
 
-' Kreira/obnavlja PreradaSablon u zajednickom stilu. Verzija layouta je u H1.
+' Kreira/obnavlja PreradaSablon u zajednickom stilu. Verzija layouta je u H1 i
+' nosi rezim (D=detaljno / N=zbirno) -- promena toggle-a "Detaljni prikaz
+' sledljivosti" (PRERADA_SLEDLJIVOST_DETALJ) rebuild-uje sablon u drugom rasporedu.
 Public Sub EnsurePreradaSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "4"
+    Const LAYOUT_VER As String = "5"
+
+    Dim detalj As Boolean: detalj = IsPreradaSledljivostDetalj()
+    Dim verKey As String: verKey = LAYOUT_VER & IIf(detalj, "-D", "-N")
 
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets(WS_PRERADA_SABLON)
     On Error GoTo EH
     If Not ws Is Nothing Then
-        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        If CStr(ws.Range("H1").value) = verKey Then Exit Sub
         Application.DisplayAlerts = False
         ws.Delete
         Application.DisplayAlerts = True
@@ -1996,9 +1956,32 @@ Public Sub EnsurePreradaSablon()
     r = DocSellerHeader(ws, 1, 5, 5)
     r = DocTitleBlock(ws, r, 5, "Prerada i pakovanje", "PALETNI LIST GOTOVIH PROIZVODA")
 
+    ' zajednicko zaglavlje (Broj/Datum) -- ostatak layouta zavisi od rezima
     Dim fr As Long: fr = r + 1
     ws.cells(fr, 1).value = "Broj:"
     ws.cells(fr + 1, 1).value = "Datum:"
+    ws.cells(fr, 2).name = "PreBroj"
+    ws.cells(fr + 1, 2).name = "PreDatum"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 1, 2)).Font.Bold = True
+
+    If detalj Then
+        BuildPreradaSablonDetalj ws, fr
+    Else
+        BuildPreradaSablonZbirno ws, fr
+    End If
+
+    ws.Range("H1").value = verKey
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPaletniList.EnsurePreradaSablon"
+End Sub
+
+' DA layout (detaljna sledljivost): desni sazetak (tezine/ambalaza) + "Vrsta voca"
+' + zaglavlje tabele stavki (Rb/Kooperant/Neto kg/Ambalaza). Imena opsega:
+' PreTezinaPalete/PreBruto/PreKutije/PreKese/PreAmbalaza/PreNeto/PreVrsta/PreStavkaStart.
+Private Sub BuildPreradaSablonDetalj(ByVal ws As Worksheet, ByVal fr As Long)
     ws.cells(fr, 4).value = "Te" & ChrW(382) & "ina palete (kg):"
     ws.cells(fr + 1, 4).value = "Bruto (kg):"
     ws.cells(fr + 2, 4).value = "Broj kutija:"
@@ -2006,8 +1989,6 @@ Public Sub EnsurePreradaSablon()
     ws.cells(fr + 4, 4).value = "Te" & ChrW(382) & "ina ambala" & ChrW(382) & "e (kg):"
     ws.cells(fr + 5, 4).value = "Neto (kg):"
 
-    ws.cells(fr, 2).name = "PreBroj"
-    ws.cells(fr + 1, 2).name = "PreDatum"
     ws.cells(fr, 5).name = "PreTezinaPalete"
     ws.cells(fr + 1, 5).name = "PreBruto"
     ws.cells(fr + 2, 5).name = "PreKutije"
@@ -2015,7 +1996,6 @@ Public Sub EnsurePreradaSablon()
     ws.cells(fr + 4, 5).name = "PreAmbalaza"
     ws.cells(fr + 5, 5).name = "PreNeto"
 
-    ws.Range(ws.cells(fr, 2), ws.cells(fr + 1, 2)).Font.Bold = True
     ws.Range(ws.cells(fr, 5), ws.cells(fr + 5, 5)).Font.Bold = True
     ' broj kutija/kesa = celi; tezine = 2 decimale
     ws.Range(ws.cells(fr + 2, 5), ws.cells(fr + 3, 5)).NumberFormat = "0"
@@ -2066,13 +2046,172 @@ Public Sub EnsurePreradaSablon()
     ws.cells(hdr + 1, 1).name = "PreStavkaStart"
 
     ws.Range(ws.cells(1, 1), ws.cells(hdr, 5)).EntireRow.AutoFit
-    ws.Range("H1").value = LAYOUT_VER
-    ws.Range("H1").Font.Color = RGB(255, 255, 255)
-    Exit Sub
-EH:
-    Application.DisplayAlerts = True
-    LogErr "modPaletniList.EnsurePreradaSablon"
 End Sub
+
+' NE layout (bez detaljne sledljivosti): "Vrsta voca" + centriran, uvecan sazetak
+' tezina/ambalaze (preko B:D, vece slovo) + lista sifri kooperanata (PreSifre,
+' puni se zarezom). Bez detaljne tabele stavki. Ista imena opsega za sazetak.
+Private Sub BuildPreradaSablonZbirno(ByVal ws As Worksheet, ByVal fr As Long)
+    ' "Vrsta voca" odmah ispod Broj/Datum
+    Dim subRow As Long: subRow = fr + 3
+    ws.cells(subRow, 1).value = "Vrsta vo" & ChrW(263) & "a:"
+    ws.cells(subRow, 1).Font.Color = DocColGray()
+    ws.Range(ws.cells(subRow, 2), ws.cells(subRow, 5)).Merge
+    ws.cells(subRow, 2).name = "PreVrsta"
+    With ws.cells(subRow, 2)
+        .Font.Bold = True
+        .Font.Size = 14
+        .HorizontalAlignment = xlLeft
+    End With
+    ws.rows(subRow).RowHeight = 20
+
+    ' centriran, uvecan sazetak (popunjava prostor osloboden bez detaljne tabele):
+    ' label preko B:C (desno), vrednost u D (levo, bold, vece slovo). Okvir oko B:D.
+    Dim lbl(0 To 5) As String
+    lbl(0) = "Te" & ChrW(382) & "ina palete (kg):"
+    lbl(1) = "Bruto (kg):"
+    lbl(2) = "Broj kutija:"
+    lbl(3) = "Broj kesa:"
+    lbl(4) = "Te" & ChrW(382) & "ina ambala" & ChrW(382) & "e (kg):"
+    lbl(5) = "Neto (kg):"
+    Dim nm(0 To 5) As String
+    nm(0) = "PreTezinaPalete"
+    nm(1) = "PreBruto"
+    nm(2) = "PreKutije"
+    nm(3) = "PreKese"
+    nm(4) = "PreAmbalaza"
+    nm(5) = "PreNeto"
+
+    Dim bt As Long: bt = subRow + 2
+    Dim i As Long, rr As Long
+    For i = 0 To 5
+        rr = bt + i
+        ws.Range(ws.cells(rr, 2), ws.cells(rr, 3)).Merge
+        ws.cells(rr, 2).value = lbl(i)
+        With ws.cells(rr, 2)
+            .HorizontalAlignment = xlRight
+            .Font.Size = 12
+        End With
+        ws.cells(rr, 4).name = nm(i)
+        With ws.cells(rr, 4)
+            .Font.Bold = True
+            .Font.Size = 12
+            .HorizontalAlignment = xlLeft
+        End With
+        ws.rows(rr).RowHeight = 20
+    Next i
+
+    ' broj kutija/kesa = celi; tezine = 2 decimale
+    ws.Range(ws.cells(bt + 2, 4), ws.cells(bt + 3, 4)).NumberFormat = "0"
+    ws.cells(bt, 4).NumberFormat = "#,##0.00"
+    ws.cells(bt + 1, 4).NumberFormat = "#,##0.00"
+    ws.cells(bt + 4, 4).NumberFormat = "#,##0.00"
+    ws.cells(bt + 5, 4).NumberFormat = "#,##0.00"
+
+    Dim bb As Long: bb = bt + 5
+    ws.Range(ws.cells(bt, 2), ws.cells(bb, 4)).BorderAround Weight:=xlMedium
+    With ws.Range(ws.cells(bb, 2), ws.cells(bb, 4))       ' istakni Neto
+        .Interior.Color = DocColHeaderFill()
+        .Font.Bold = True
+    End With
+    With ws.Range(ws.cells(bb, 2), ws.cells(bb, 4)).Borders(xlEdgeTop)
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    ' lista sifri kooperanata (puni FillPreradaSifreZbirno, zarezom)
+    Dim lblRow As Long: lblRow = bb + 2
+    ws.cells(lblRow, 1).value = ChrW(352) & "ifre kooperanata:"
+    ws.cells(lblRow, 1).Font.Bold = True
+    Dim codesRow As Long: codesRow = lblRow + 1
+    ws.Range(ws.cells(codesRow, 1), ws.cells(codesRow, 5)).Merge
+    ws.cells(codesRow, 1).name = "PreSifre"
+    With ws.cells(codesRow, 1)
+        .WrapText = True
+        .VerticalAlignment = xlTop
+        .Font.Size = 11
+    End With
+    ws.rows(codesRow).RowHeight = 48
+
+    ' autofit samo zaglavlje (1..fr+1) da rucne visine sazetka/sifri prezive
+    ws.Range(ws.cells(1, 1), ws.cells(fr + 1, 5)).EntireRow.AutoFit
+End Sub
+
+' DA fill: puna tabela stavki (jedan red po otkupu). o = GetOtkupiZaPalete.
+' Cisti stare redove pre upisa. Vraca footRow (prvi red posle tabele, za footer).
+Private Function FillPreradaStavkeDetalj(ByVal ws As Worksheet, ByVal o As Variant) As Long
+    Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
+    Dim lastRow As Long: lastRow = ws.cells(ws.rows.count, 1).End(xlUp).row
+    If lastRow >= startRow Then
+        ws.Range(ws.cells(startRow, 4), ws.cells(lastRow, 5)).UnMerge
+        ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 5)).Clear
+    End If
+
+    Dim outR As Long, rb As Long
+    outR = startRow: rb = 0
+    If Not IsEmpty(o) Then
+        Dim k As Long
+        For k = 1 To UBound(o, 1)
+            rb = rb + 1
+            ws.cells(outR, 1).value = rb
+            ws.cells(outR, 2).value = CStr(o(k, 1))                   ' Kooperant (sifra)
+            ws.cells(outR, 3).value = o(k, 3)                         ' Neto kg
+            ws.Range(ws.cells(outR, 4), ws.cells(outR, 5)).Merge
+            ws.cells(outR, 4).value = o(k, 4) & " x " & CStr(o(k, 5)) ' Ambalaza: kom x tip (D:E)
+            outR = outR + 1
+        Next k
+    End If
+
+    Dim dataEnd As Long: dataEnd = outR - 1
+    If dataEnd >= startRow Then
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+        End With
+        ' uniforman font na svim redovima kooperanata (fix: prvih redova font)
+        With ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5))
+            .Font.Size = 10
+            .Font.Bold = False
+        End With
+        ws.Range(ws.cells(startRow, 1), ws.cells(dataEnd, 5)).EntireRow.AutoFit
+        ws.Range(ws.cells(startRow, 3), ws.cells(dataEnd, 3)).NumberFormat = "#,##0.00"
+        ws.Range(ws.cells(startRow, 4), ws.cells(dataEnd, 4)).NumberFormat = "@"
+        Dim zr As Long
+        For zr = 0 To dataEnd - startRow
+            If zr Mod 2 = 1 Then
+                ws.Range(ws.cells(startRow + zr, 1), _
+                         ws.cells(startRow + zr, 5)).Interior.Color = RGB(217, 225, 242)
+            End If
+        Next zr
+    End If
+
+    Dim footRow As Long: footRow = dataEnd + 2
+    If footRow <= startRow Then footRow = startRow + 1
+    FillPreradaStavkeDetalj = footRow
+End Function
+
+' NE fill: samo lista sifri kooperanata (distinct, zarezom) u PreSifre.
+' o = GetOtkupiZaPalete (kol 1 = sifra kooperanta). Vraca footRow.
+Private Function FillPreradaSifreZbirno(ByVal ws As Worksheet, ByVal o As Variant) As Long
+    Dim codes As String
+    If Not IsEmpty(o) Then
+        Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+        Dim k As Long, sif As String
+        For k = 1 To UBound(o, 1)
+            sif = Trim$(CStr(o(k, 1)))
+            If Len(sif) > 0 And Not seen.Exists(sif) Then
+                seen.Add sif, True
+                If Len(codes) > 0 Then codes = codes & ", "
+                codes = codes & sif
+            End If
+        Next k
+    End If
+    ws.Range("PreSifre").value = codes
+
+    Dim codesRow As Long: codesRow = ws.Range("PreSifre").row
+    ws.rows(codesRow).RowHeight = 48    ' re-assert (merged red se ne AutoFit-uje)
+    FillPreradaSifreZbirno = codesRow + 2
+End Function
 
 ' --- tblPaleta helper-i za preradu uklonjeni: SavePrerada_TX cita tblPaleta
 '     inline (snapshot dPal) i pise preko RequireUpdateCell. ---
