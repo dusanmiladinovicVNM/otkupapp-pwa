@@ -278,7 +278,7 @@ Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection, _
         Case "PDF"
             Dim pdfPath As String
             pdfPath = EnsureDocFolder(PDF_DIR_SPECIFIKACIJE) & "\Specifikacija_isplata_" & _
-                      Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+                      IsplataFileTag(platilacRacun) & "_" & Format$(Now, "hhnnss") & ".pdf"
             DocExportPdf ws, pdfPath, True
         ' OFF -> bez izlaza
     End Select
@@ -287,6 +287,34 @@ EH:
     LogErr "modBankaExportPregled.PrintIsplataSpecifikacija"
     MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+'======================================================================
+' BankaNalogRacuniCSV - efektivni ";"-spisak racuna firme za isplate.
+'
+' Izvor istine: tri zasebna polja iz Podesavanja (grupa "Banka / nalozi")
+' CFG_BANKA_NALOG_RACUN_1/2/3 -- spajaju se (preskacuci prazna) u ";"-listu.
+' Fallback (stare instalacije): ako su sva tri prazna -> legacy jedinstveni
+' ";"-spisak CFG_BANKA_NALOG_RACUNI; ako i to prazno -> SELLER_ACCOUNT (firma
+' sa jednim racunom). Vraca "" ako nista nije uneto (forma tada javlja poruku).
+'
+' Koristi frmBankaExportPregled.PopulateRacunCombo (combo "Sa racuna").
+'======================================================================
+Public Function BankaNalogRacuniCSV() As String
+    Dim res As String, v As String, i As Long
+    Dim keys As Variant
+    keys = Array(CFG_BANKA_NALOG_RACUN_1, CFG_BANKA_NALOG_RACUN_2, _
+                 CFG_BANKA_NALOG_RACUN_3, CFG_BANKA_NALOG_RACUN_4)
+    For i = LBound(keys) To UBound(keys)
+        v = Trim$(GetConfigValue(CStr(keys(i))))
+        If LenB(v) > 0 Then
+            If LenB(res) > 0 Then res = res & ";"
+            res = res & v
+        End If
+    Next i
+    If LenB(res) = 0 Then res = Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUNI))
+    If LenB(res) = 0 Then res = Trim$(GetConfigValue("SELLER_ACCOUNT"))
+    BankaNalogRacuniCSV = res
+End Function
 
 '======================================================================
 ' GenerisiNalogeCSV - CSV naloga za prenos za uvoz u e-banking.
@@ -358,7 +386,7 @@ Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
 
     Dim csvPath As String
     csvPath = EnsureDocFolder(CSV_DIR_BANKA_NALOZI) & "\Nalozi_za_prenos_" & _
-              Format$(Now, "yyyymmdd_hhnnss") & ".csv"
+              IsplataFileTag(platilacRacun) & "_" & Format$(Now, "hhnnss") & ".csv"
     WriteAllTextUtf8 csvPath, s
 
     GenerisiNalogeCSV = csvPath
@@ -390,6 +418,38 @@ End Function
 ' ostaje kako je unet u maticne podatke / config).
 Private Function NormalizujRacun(ByVal racun As String) As String
     NormalizujRacun = Replace(Trim$(racun), " ", "")
+End Function
+
+' Deo naziva fajla za izlaze isplata: "<yyyy-mm-dd>_<Banka>" -- datum placanja
+' (danas, = DatumValute u nalozima) + naziv banke platioca, radi lakseg
+' snalazenja u folderu. Banka iz BankaNazivZaRacun (sanitizovana za ime fajla);
+' nepoznat/prazan racun -> samo datum.
+Private Function IsplataFileTag(ByVal platilacRacun As String) As String
+    Dim tag As String
+    tag = Format$(Date, "yyyy-mm-dd")
+    Dim banka As String
+    banka = SanitizeFileNamePart(BankaNazivZaRacun(platilacRacun))
+    If LenB(banka) > 0 Then tag = tag & "_" & banka
+    IsplataFileTag = tag
+End Function
+
+' Sanitizuj string za ime fajla: SR dijakritika -> ASCII, razmaci -> "-", ukloni
+' znakove nedozvoljene u Windows imenima. Vraca ASCII-safe deo (npr. "Banca
+' Intesa" -> "Banca-Intesa", "Postanska stedionica" ostaje bez dijakritike).
+Private Function SanitizeFileNamePart(ByVal s As String) As String
+    Dim t As String: t = Trim$(s)
+    t = Replace(t, ChrW(352), "S"): t = Replace(t, ChrW(353), "s")
+    t = Replace(t, ChrW(381), "Z"): t = Replace(t, ChrW(382), "z")
+    t = Replace(t, ChrW(268), "C"): t = Replace(t, ChrW(269), "c")
+    t = Replace(t, ChrW(262), "C"): t = Replace(t, ChrW(263), "c")
+    t = Replace(t, ChrW(272), "Dj"): t = Replace(t, ChrW(273), "dj")
+    t = Replace(t, " ", "-")
+    Dim i As Long, ch As String, out As String
+    For i = 1 To Len(t)
+        ch = Mid$(t, i, 1)
+        If (ch Like "[A-Za-z0-9]") Or ch = "." Or ch = "_" Or ch = "-" Then out = out & ch
+    Next i
+    SanitizeFileNamePart = out
 End Function
 
 '======================================================================

@@ -266,3 +266,16 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Fix — Sledljivost „Poveži":** `frmSledljivost.btnPovezi` je ručno vezivao otkup→otpremnica sirovim upisom iz modularnog niza `m_CandidateOtpIDs` (ista klasa greške, bez provere cilja u trenutku upisa); sada ide kroz proverenu, transakcionu `ReassignOtkupToOtpremnica_TX` (validira cilj + drži `OtpremnicaID`/`BrojZbirne` konzistentnim).
 - **Popravka zatečenih redova (nepromenjeno, već u kodu):** detekcija kroz `RunProductionHealthCheck` (`Check_OtkupOtpremnicaCrossZbirnaLinks` + `Check_DocumentSoftDeleteReferences`) i dashboard `CheckVerwaisteDokumente` (sekcija 5); popravka kroz panel „Otkupni blokovi" → „Izgubljeni" → „Preuzmi" (re-point na ispravnu otpremnicu, čuva OtkupID/uplate/ambalažu).
 - **Bez promene podataka / bez novih zavisnosti:** samo `modOtkupBlok` + `frmSledljivost` (+ backlog beleška **P1-16** za srodne MEDIUM storno-guard rupe u `LinkNovacToOtkupStrict` / `ApplyAvans*`); izvori **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+---
+
+## vba-v2.13.0 — 2026-07-04
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **više tekućih računa firme za isplate** (zasebna polja) + **čitljiviji nazivi bankarskih izlaza** (datum plaćanja + banka). Izvori ostaju **ASCII-only**, bez novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+
+- **Podešavanja — do 4 računa firme za isplate (zasebna polja):** u grupi „Banka / nalozi" je jedno polje `BANKA_NALOG_RACUNI` (više računa u jednom polju, odvojeno `;`) zamenjeno **četirima zasebnim textbox-ovima** — „Račun firme 1 / 2 / 3 / 4 (isplate)" — radi preglednijeg i simetričnog unosa. Combo **„Sa računa"** u „Banke platni nalozi" (`frmBankaExportPregled`) i dalje nudi sve unete račune (uz naziv banke po NBS prefiksu), preskačući prazna polja; ako su sva tri prazna pada na stari `;`-spisak, pa na `SELLER_ACCOUNT` (**kompatibilno unazad**). Postojeća `;`-vrednost se pri prvom otvaranju Podešavanja **automatski razbije** u zasebna polja (jednokratna migracija). Bez izmena na dokumentima/SEF/PWA — glavni račun ostaje `SELLER_ACCOUNT`.
+- **Bankarski izlazi — naziv fajla sadrži datum plaćanja i banku:** CSV nalozi za prenos i PDF specifikacija isplata (`frmBankaExportPregled`) su se imenovali **samo timestamp-om kreiranja** (`yyyymmdd_hhnnss`), pa je snalaženje u folderu bilo teško. Sada naziv **počinje datumom plaćanja** (`yyyy-mm-dd`, = `DatumValute` u nalozima) **i nazivom banke platioca**, uz kratak `hhnnss` na kraju radi jedinstvenosti (regeneracija istog dana istom bankom **ne pregazi** raniji fajl):
+  - CSV: `Nalozi_za_prenos_2026-07-04_Banca-Intesa_143022.csv`
+  - PDF: `Specifikacija_isplata_2026-07-04_Banca-Intesa_143022.pdf`
+
+  Banka se izvodi iz izabranog računa „Sa računa" (`BankaNazivZaRacun`); **nepoznat/prazan račun → naziv sadrži samo datum**. Naziv banke se sanitizuje za ime fajla (SR dijakritika → ASCII, razmaci → `-`), npr. „Poštanska štedionica" → `Postanska-stedionica`.
+- **Bez promene podataka / bez novih zavisnosti:** samo `modConfig`, `modPodesavanja`, `modBankaExportPregled`, `frmBankaExportPregled`; izvori **ASCII-only**, nema novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.

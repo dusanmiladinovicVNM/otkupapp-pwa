@@ -162,7 +162,12 @@ Public Function ConfigEditorFields() As Variant
     ' u tblSEFConfig; platilac je SELLER_NAME/SELLER_ACCOUNT iz "Prodavac (firma)").
     CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SIFRA_PLACANJA", ChrW(352) & "ifra pla" & ChrW(263) & "anja na nalozima (prazno = 221)", "text"
     CfgAdd c, "Banka / nalozi", "BANKA_NALOG_SVRHA", "Svrha pla" & ChrW(263) & "anja - osnovni tekst (+ broj bloka)", "text"
-    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUNI", "Ra" & ChrW(269) & "uni firme za isplate (vi" & ChrW(353) & "e njih odvojiti sa ;)", "text"
+    ' Racuni firme za isplate -- do cetiri zasebna polja (jedan textbox po racunu).
+    ' Spajaju se u modBankaExportPregled.BankaNalogRacuniCSV pri izboru "Sa racuna".
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUN_1", "Ra" & ChrW(269) & "un firme 1 (isplate)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUN_2", "Ra" & ChrW(269) & "un firme 2 (isplate)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUN_3", "Ra" & ChrW(269) & "un firme 3 (isplate)", "text"
+    CfgAdd c, "Banka / nalozi", "BANKA_NALOG_RACUN_4", "Ra" & ChrW(269) & "un firme 4 (isplate)", "text"
 
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_LIVE", "SEF test: dozvoli LIVE slanje", "bool"
     CfgAdd c, "Napredno / Test", "SEF_TEST_ALLOW_CANCEL_STORNO", "SEF test: dozvoli cancel/storno", "bool"
@@ -200,12 +205,35 @@ Private Function LookupCSV(ByVal tbl As String, ByVal col As String, _
     End If
 End Function
 
+' Jednokratna migracija: stari jedinstveni ";"-spisak (CFG_BANKA_NALOG_RACUNI)
+' -> tri zasebna polja CFG_BANKA_NALOG_RACUN_1/2/3, da se postojeca vrednost vidi
+' i uredjuje u novim textbox-ovima. Idempotentno: radi samo kad su sva tri nova
+' polja prazna a legacy ima vrednost (posle toga nova polja imaju prednost).
+Private Sub MigrateBankaRacuniLegacy()
+    On Error Resume Next
+    If Len(Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUN_1))) > 0 _
+       Or Len(Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUN_2))) > 0 _
+       Or Len(Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUN_3))) > 0 _
+       Or Len(Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUN_4))) > 0 Then Exit Sub
+    Dim legacy As String
+    legacy = Trim$(GetConfigValue(CFG_BANKA_NALOG_RACUNI))
+    If Len(legacy) = 0 Then Exit Sub
+    Dim parts() As String
+    parts = Split(legacy, ";")
+    If UBound(parts) >= 0 Then SetConfigValue CFG_BANKA_NALOG_RACUN_1, Trim$(parts(0))
+    If UBound(parts) >= 1 Then SetConfigValue CFG_BANKA_NALOG_RACUN_2, Trim$(parts(1))
+    If UBound(parts) >= 2 Then SetConfigValue CFG_BANKA_NALOG_RACUN_3, Trim$(parts(2))
+    If UBound(parts) >= 3 Then SetConfigValue CFG_BANKA_NALOG_RACUN_4, Trim$(parts(3))
+End Sub
+
 ' ============================================================
 ' PUBLIC -- izgradnja editora (poziva frmStammdaten.UserForm_Activate za Tag)
 ' ============================================================
 Public Sub BuildConfigEditor(ByVal frm As Object)
     Const SRC As String = "modPodesavanja.BuildConfigEditor"
     On Error GoTo EH
+
+    MigrateBankaRacuniLegacy
 
     Set mFrm = frm
     Set mInputs = New Collection
