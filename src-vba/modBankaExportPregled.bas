@@ -302,7 +302,8 @@ End Sub
 Public Function BankaNalogRacuniCSV() As String
     Dim res As String, v As String, i As Long
     Dim keys As Variant
-    keys = Array(CFG_BANKA_NALOG_RACUN_1, CFG_BANKA_NALOG_RACUN_2, CFG_BANKA_NALOG_RACUN_3)
+    keys = Array(CFG_BANKA_NALOG_RACUN_1, CFG_BANKA_NALOG_RACUN_2, _
+                 CFG_BANKA_NALOG_RACUN_3, CFG_BANKA_NALOG_RACUN_4)
     For i = LBound(keys) To UBound(keys)
         v = Trim$(GetConfigValue(CStr(keys(i))))
         If LenB(v) > 0 Then
