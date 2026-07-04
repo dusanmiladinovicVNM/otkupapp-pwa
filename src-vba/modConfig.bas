@@ -582,6 +582,10 @@ Public Const CFG_PRACENJE_PARCELA As String = "PRACENJE_PARCELA"
 ' Kompletna validacija unosa (obavezna polja pre snimanja) u frmOtkup, frmDokumenta
 ' i frmPalete. Default ON (kao od v2.8.1). OFF -> minimalna validacija kao pre te izmene.
 Public Const CFG_VALIDACIJA_UNOSA As String = "VALIDACIJA_UNOSA"
+' Detaljni prikaz sledljivosti na paletnom listu gotovih proizvoda (prerada).
+' Default ON (puna tabela Rb/Kooperant/Neto/Ambalaza). OFF -> samo lista sifri
+' kooperanata (zarezom); sazetak tezina/ambalaze se centrira i uvecava.
+Public Const CFG_PRERADA_SLEDLJIVOST_DETALJ As String = "PRERADA_SLEDLJIVOST_DETALJ"
 ' Kes isplate proizvodjacima postoje (default ON). OFF -> skip Novac/Primalac u
 ' frmOtkup i "Br. otk. blk." u Ulaz OM (frmDokumenta).
 Public Const CFG_KES_ISPLATE As String = "KES_ISPLATE"
@@ -888,6 +892,13 @@ End Function
 ' obavezan iskljucivo u bruto rezimu).
 Public Function IsValidacijaUnosa() As Boolean
     IsValidacijaUnosa = ConfigFlag(CFG_VALIDACIJA_UNOSA, True)
+End Function
+
+' Detaljni prikaz sledljivosti na paletnom listu gotovih proizvoda (prerada).
+' Default ON (kao do sada -- puna tabela Rb/Kooperant/Neto/Ambalaza). OFF -> samo
+' lista sifri kooperanata (zarezom) + centriran/uvecan sazetak tezina/ambalaze.
+Public Function IsPreradaSledljivostDetalj() As Boolean
+    IsPreradaSledljivostDetalj = ConfigFlag(CFG_PRERADA_SLEDLJIVOST_DETALJ, True)
 End Function
 
 ' Postoje kes isplate proizvodjacima. Default ON. OFF -> skip Novac/Primalac
