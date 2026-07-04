@@ -192,6 +192,16 @@ Public Sub InitApp()
     End If
     On Error GoTo ErrHandler
 
+    ' Schema self-heal: kolone dodate kroz self-update KODA nastanu automatski
+    ' posle restarta (silent, idempotentno; isti obrazac kao EnsurePoruke).
+    On Error Resume Next
+    EnsureRuntimeSchema
+    If Err.Number <> 0 Then
+        LogErr "modMain.InitApp.EnsureRuntimeSchema"
+        Err.Clear
+    End If
+    On Error GoTo ErrHandler
+
     ValidateAllTables
     m_Initialized = True
     

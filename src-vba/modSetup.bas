@@ -1081,6 +1081,22 @@ EH:
 End Sub
 
 ' ============================================================
+' Runtime schema self-heal -- MsgBox-free, idempotentno. Poziva se iz
+' modMain.InitApp na SVAKOM startu (kao EnsurePoruke), pa kolone dodate kroz
+' self-update KODA nastanu automatski posle restarta -- bez rucnog Alt+F8.
+' EnsureColumnOnTable je no-op kad kolona postoji (cena posle prvog heal-a
+' zanemarljiva). Ovde idu SAMO sigurne, idempotentne izmene bez backfill-a.
+' ============================================================
+Public Sub EnsureRuntimeSchema()
+    On Error Resume Next
+    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
+    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
+    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+End Sub
+
+' ============================================================
 ' Dorade (soft-delete + tip ambalaze po kulturi + hladnjaca + decimalna
 ' kolicina) -- jednokratni schema setup. Idempotentno.
 ' Alt+F8 -> EnsureDoradeSchema.
@@ -1099,12 +1115,10 @@ Public Sub EnsureDoradeSchema()
     ' #6: podrazumevani tip ambalaze po kulturi.
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE
 
-    ' Pragovi proseka neto kg po gajbici (upozorenje/blokada u otkupu).
-    ' Prazno = bez provere (opt-in po kulturi; npr. malina 2.1 / 2.2).
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
-    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
-    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
+    ' Deljeno sa startup self-heal-om (modMain.InitApp -> EnsureRuntimeSchema),
+    ' pa kolone nastanu i automatski posle self-update-a KODA (bez rucnog koraka).
+    EnsureRuntimeSchema
 
     ' #3: flag hladnjaca na stanici (+ backfill "Ne").
     EnsureColumnOnTable TBL_STANICE, COL_STA_JE_HLADNJACA
