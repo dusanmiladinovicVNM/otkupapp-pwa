@@ -949,14 +949,14 @@ Private Sub SetupKulture()
         "TipAmbalaze" _
     )
 
-    m_FieldCount = 4
+    m_FieldCount = 6
 
     lblField1.caption = "Vrsta vo" & ChrW(263) & "a": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Sorta vo" & ChrW(263) & "a": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Gajbica po paleti": lblField3.Visible = True: txtField3.Visible = True
     lblField4.caption = "Tip ambala" & ChrW(382) & "e (podraz.)": lblField4.Visible = True: txtField4.Visible = False
-    lblField5.caption = "": lblField5.Visible = False: txtField5.Visible = False
-    lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
+    lblField5.caption = "Prag upozorenja (kg/gajb.)": lblField5.Visible = True: txtField5.Visible = True
+    lblField6.caption = "Prag blokade (kg/gajb.)": lblField6.Visible = True: txtField6.Visible = True
     lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
     lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
@@ -1683,6 +1683,11 @@ Private Sub lstData_Click()
             txtField2.value = lstData.List(lstData.ListIndex, 2)   ' SortaVoca
             txtField3.value = lstData.List(lstData.ListIndex, 3)   ' GajbicaPoPaleti
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 5)   ' TipAmbalaze (podraz.)
+            ' Pragovi proseka -- PO IMENU preko KulturaID (kolone na kraju tabele;
+            ' pozicija u listi nesigurna zbog audit/drift kolona).
+            Dim kulIDsel As String: kulIDsel = lstData.List(lstData.ListIndex, 0)  ' KulturaID
+            txtField5.value = NzToText(LookupValue(TBL_KULTURE, "KulturaID", kulIDsel, COL_KUL_PRAG_PROSEK_UPOZ))
+            txtField6.value = NzToText(LookupValue(TBL_KULTURE, "KulturaID", kulIDsel, COL_KUL_PRAG_PROSEK_BLOK))
 
         Case "TipAmbalaze", "TipPalete"
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
@@ -2115,6 +2120,9 @@ Private Sub btnDodaj_Click()
                 End If
             End If
 
+            Dim pragUpozKul As Double, pragBlokKul As Double
+            If Not ValidatePragoviKulture(pragUpozKul, pragBlokKul) Then Exit Sub
+
             newID = GetNextID(m_TableName, "KulturaID", "KUL-")
 
             ' tblKulture: jezgro (ID/Vrsta/Sorta) pozicijski; Gajbica/Aktivan/
@@ -2128,6 +2136,8 @@ Private Sub btnDodaj_Click()
                     UpdateCell m_TableName, newRowKul, COL_KUL_GAJBICA_PALETA, gajbicaKul
                 UpdateCell m_TableName, newRowKul, "Aktivan", STATUS_AKTIVAN
                 UpdateCell m_TableName, newRowKul, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value)
+                UpdateCell m_TableName, newRowKul, COL_KUL_PRAG_PROSEK_UPOZ, pragUpozKul
+                UpdateCell m_TableName, newRowKul, COL_KUL_PRAG_PROSEK_BLOK, pragBlokKul
                 MsgBox "Dodato: " & newID, vbInformation, APP_NAME
                 LoadList
                 ClearFields
@@ -2619,6 +2629,9 @@ Private Sub btnIzmeni_Click()
                 End If
             End If
 
+            Dim pragUpozEdit As Double, pragBlokEdit As Double
+            If Not ValidatePragoviKulture(pragUpozEdit, pragBlokEdit) Then Exit Sub
+
             tx.BeginTx
             tx.AddTableSnapshot m_TableName
 
@@ -2626,6 +2639,8 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "SortaVoca", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_GAJBICA_PALETA, gajbicaEdit, SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_PRAG_PROSEK_UPOZ, pragUpozEdit, SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_PRAG_PROSEK_BLOK, pragBlokEdit, SRC
 
             tx.CommitTx
 
@@ -2837,6 +2852,32 @@ Private Sub ClearFields()
     ClearGeoStatus
 
 End Sub
+
+' Validira pragove proseka (upoz/blok) iz txtField5/txtField6 za "Kulture" tab.
+' Prazno -> 0 (provera iskljucena za tu kulturu). Blok mora biti >= upoz kad su
+' oba > 0 (inace bi blokada gasila upozorenje). Vraca False (uz MsgBox + fokus)
+' na nevalidan unos; inace puni upozOut/blokOut.
+Private Function ValidatePragoviKulture(ByRef upozOut As Double, ByRef blokOut As Double) As Boolean
+    ValidatePragoviKulture = False
+    upozOut = 0: blokOut = 0
+    If Trim$(txtField5.value) <> "" Then
+        If Not TryParseDouble(txtField5.value, upozOut) Or upozOut < 0 Then
+            MsgBox "Unesite validan prag upozorenja (kg po gajbici) ili ostavite prazno.", vbExclamation, APP_NAME
+            txtField5.SetFocus: Exit Function
+        End If
+    End If
+    If Trim$(txtField6.value) <> "" Then
+        If Not TryParseDouble(txtField6.value, blokOut) Or blokOut < 0 Then
+            MsgBox "Unesite validan prag blokade (kg po gajbici) ili ostavite prazno.", vbExclamation, APP_NAME
+            txtField6.SetFocus: Exit Function
+        End If
+    End If
+    If upozOut > 0 And blokOut > 0 And blokOut < upozOut Then
+        MsgBox "Prag blokade mora biti veci ili jednak pragu upozorenja.", vbExclamation, APP_NAME
+        txtField6.SetFocus: Exit Function
+    End If
+    ValidatePragoviKulture = True
+End Function
 
 Private Sub ResetFieldVisibility()
     On Error Resume Next
