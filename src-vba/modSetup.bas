@@ -1094,6 +1094,15 @@ Public Sub EnsureRuntimeSchema()
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+
+    ' Format kolona (schema-drift: reinstall/self-update vrati kolone na General ->
+    ' E-notacija/tarabe na dokumentima). Idempotentno, tera se na SVAKI start.
+    ' BPG je identifikator (dug broj), ne racunska vrednost -> Text ("@").
+    SetColumnNumberFormat TBL_KOOPERANTI, COL_KOOP_BPG, "@"
+    ' Prerada: tezine su Double (samo prikaz) -> fiksni decimalni format spreci General/E.
+    SetColumnNumberFormat TBL_PRERADA, COL_PRE_TEZINA_PALETE, "0.00"
+    SetColumnNumberFormat TBL_PRERADA, COL_PRE_BRUTO, "0.00"
+    SetColumnNumberFormat TBL_PRERADA, COL_PRE_AMBALAZA, "0.00"
 End Sub
 
 ' ============================================================

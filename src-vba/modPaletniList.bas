@@ -1846,8 +1846,11 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     ws.Range("PreKutije").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)))
     ws.Range("PreKese").value = NzL(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)))
     ws.Range("PreNeto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ)))
+    ws.Range("PreTezinaPalete").NumberFormat = "0.00"   ' Double -> bez E-notacije/tarabi
     ws.Range("PreTezinaPalete").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_TEZINA_PALETE)))
+    ws.Range("PreBruto").NumberFormat = "0.00"
     ws.Range("PreBruto").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_BRUTO)))
+    ws.Range("PreAmbalaza").NumberFormat = "0.00"
     ws.Range("PreAmbalaza").value = NzD(SafeCell(d, hRow, GetColumnIndex(TBL_PRERADA, COL_PRE_AMBALAZA)))
 
     Dim startRow As Long: startRow = ws.Range("PreStavkaStart").row
