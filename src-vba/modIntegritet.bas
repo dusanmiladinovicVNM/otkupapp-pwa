@@ -51,6 +51,9 @@ Public Sub RunIntegritetProvere()
     Chk_C5_DupliBrojPalete
     Chk_A3_StavkeVsPrijemnica
     Chk_A4_PaletaHeaderVsStavke
+    Chk_D1_PreradjenoBezPrerade
+    Chk_D2_PreradaNesvezaPaleta
+    Chk_A5_PreradaKg
 
     WriteLine "UKUPNO neuskladjenih zapisa: " & CStr(m_totalIssues), True
     FinishIntegritetSheet
@@ -517,6 +520,155 @@ EH:
 End Sub
 
 ' ============================================================
+' CHECK D1: PALETA Preradjeno=Da bez aktivne prerada-stavke
+' ============================================================
+' Paleta markirana kao preradjena, ali nijedna aktivna tblPreradaStavka je ne
+' referencira (prerada stornirana/obrisana bez reseta Preradjeno flaga).
+
+Private Sub Chk_D1_PreradjenoBezPrerade()
+    On Error GoTo EH
+
+    Dim refPal As Object: Set refPal = AggByBroj(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID, COL_PRES_NETO)
+    Dim bad As Collection: Set bad = New Collection
+
+    Dim data As Variant: data = GetTableData(TBL_PALETA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PALETA)
+        If Not IsEmpty(data) Then
+            Dim cId As Long, cBroj As Long, cPre As Long
+            cId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, "modIntegritet.D1")
+            cBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, "modIntegritet.D1")
+            cPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, "modIntegritet.D1")
+
+            Dim i As Long, pid As String
+            For i = 1 To UBound(data, 1)
+                If UCase$(Trim$(CStr(data(i, cPre)))) = "DA" Then
+                    pid = Trim$(CStr(data(i, cId)))
+                    If Len(pid) > 0 Then
+                        If Not refPal.Exists(pid) Then
+                            bad.Add Array(pid, CStr(data(i, cBroj)))
+                        End If
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "D1", "Palete Preradjeno=Da bez ijedne aktivne prerada-stavke", _
+               Array("PaletaID", "BrojPalete"), CollToArray(bad, 2)
+    Exit Sub
+
+EH:
+    WriteErr "D1", Err.description
+End Sub
+
+' ============================================================
+' CHECK D2: PRERADA-STAVKA ka nevalidnoj paleti
+' ============================================================
+' Aktivna prerada-stavka ciji PaletaID ne postoji / stornirana paleta /
+' paleta nije Preradjeno=Da. Ocekivano prazno (storno guard), ali orphan
+' put (reset tblPrijemnica) moze proizvesti izuzetke.
+
+Private Sub Chk_D2_PreradaNesvezaPaleta()
+    On Error GoTo EH
+
+    Dim palInfo As Object: Set palInfo = PaletaInfoMap()
+    Dim bad As Collection: Set bad = New Collection
+
+    Dim data As Variant: data = GetTableData(TBL_PRERADA_STAVKA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PRERADA_STAVKA)
+        If Not IsEmpty(data) Then
+            Dim cS As Long, cPre As Long, cPal As Long, cBrPal As Long
+            cS = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_ID, "modIntegritet.D2")
+            cPre = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID, "modIntegritet.D2")
+            cPal = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID, "modIntegritet.D2")
+            cBrPal = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_BROJ_PALETE, "modIntegritet.D2")
+
+            Dim i As Long, pid As String, razlog As String, info As Variant
+            For i = 1 To UBound(data, 1)
+                pid = Trim$(CStr(data(i, cPal)))
+                razlog = ""
+                If Len(pid) = 0 Then
+                    razlog = "prazan PaletaID"
+                ElseIf Not palInfo.Exists(pid) Then
+                    razlog = "paleta ne postoji"
+                Else
+                    info = palInfo(pid)
+                    If info(0) = True Then
+                        razlog = "paleta stornirana"
+                    ElseIf UCase$(Trim$(CStr(info(1)))) <> "DA" Then
+                        razlog = "paleta nije Preradjeno=Da"
+                    End If
+                End If
+                If Len(razlog) > 0 Then
+                    bad.Add Array(CStr(data(i, cS)), CStr(data(i, cPre)), pid, CStr(data(i, cBrPal)), razlog)
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "D2", "Prerada-stavke ka nevalidnoj paleti (nesveza/stornirana/nepostojeca)", _
+               Array("StavkaID", "PreradaID", "PaletaID", "BrojPalete", "Razlog"), CollToArray(bad, 5)
+    Exit Sub
+
+EH:
+    WriteErr "D2", Err.description
+End Sub
+
+' ============================================================
+' CHECK A5: prerada kg (ulaz vs Sigma stavke; izlaz <= ulaz)
+' ============================================================
+
+Private Sub Chk_A5_PreradaKg()
+    On Error GoTo EH
+
+    Dim stByPre As Object: Set stByPre = AggByBroj(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID, COL_PRES_NETO)
+    Dim bad As Collection: Set bad = New Collection
+
+    Dim data As Variant: data = GetTableData(TBL_PRERADA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PRERADA)
+        If Not IsEmpty(data) Then
+            Dim cId As Long, cBroj As Long, cUlaz As Long, cIzlaz As Long
+            cId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, "modIntegritet.A5")
+            cBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, "modIntegritet.A5")
+            cUlaz = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_ULAZ, "modIntegritet.A5")
+            cIzlaz = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, "modIntegritet.A5")
+
+            Dim i As Long, pid As String
+            Dim ulaz As Double, izlaz As Double, sumSt As Double, razlog As String
+            For i = 1 To UBound(data, 1)
+                pid = Trim$(CStr(data(i, cId)))
+                If Len(pid) > 0 Then
+                    ulaz = 0: If IsNumeric(data(i, cUlaz)) Then ulaz = CDbl(data(i, cUlaz))
+                    izlaz = 0: If IsNumeric(data(i, cIzlaz)) Then izlaz = CDbl(data(i, cIzlaz))
+                    sumSt = 0: If stByPre.Exists(pid) Then sumSt = stByPre(pid)
+
+                    razlog = ""
+                    If Abs(ulaz - sumSt) > 0.5 Then
+                        razlog = "NetoUlaz != Sigma stavke"
+                    ElseIf izlaz > ulaz + 0.5 Then
+                        razlog = "NetoIzlaz > NetoUlaz"
+                    End If
+
+                    If Len(razlog) > 0 Then
+                        bad.Add Array(pid, CStr(data(i, cBroj)), ulaz, sumSt, izlaz, razlog)
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    WriteBlock "A5", "Prerada kg (NetoUlaz vs Sigma stavke; NetoIzlaz <= NetoUlaz)", _
+               Array("PreradaID", "BrojPrerade", "NetoUlazKg", "SumaStavkeKg", "NetoIzlazKg", "Razlog"), CollToArray(bad, 6)
+    Exit Sub
+
+EH:
+    WriteErr "A5", Err.description
+End Sub
+
+' ============================================================
 ' SHARED HELPERS
 ' ============================================================
 
@@ -649,6 +801,31 @@ Private Function IdSet(ByVal tbl As String, ByVal idCol As String, ByVal activeO
     Next i
 
     Set IdSet = d
+End Function
+
+' PaletaID -> Array(storniranoBool, preradjenoStr). Iz SVIH redova tblPaleta.
+Private Function PaletaInfoMap() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+
+    Dim data As Variant: data = GetTableData(TBL_PALETA)
+    If Not IsArray(data) Then Set PaletaInfoMap = d: Exit Function
+
+    Dim cId As Long, cStor As Long, cPre As Long
+    cId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, "modIntegritet.PaletaInfoMap")
+    cStor = RequireColumnIndex(TBL_PALETA, COL_STORNIRANO, "modIntegritet.PaletaInfoMap")
+    cPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, "modIntegritet.PaletaInfoMap")
+
+    Dim i As Long, pid As String, stor As Boolean, pre As String
+    For i = 1 To UBound(data, 1)
+        pid = Trim$(CStr(data(i, cId)))
+        If Len(pid) > 0 Then
+            stor = (UCase$(Trim$(CStr(data(i, cStor)))) = "DA")
+            pre = Trim$(CStr(data(i, cPre)))
+            If Not d.Exists(pid) Then d.Add pid, Array(stor, pre)
+        End If
+    Next i
+
+    Set PaletaInfoMap = d
 End Function
 
 ' ============================================================
