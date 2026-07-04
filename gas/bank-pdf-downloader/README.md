@@ -48,7 +48,7 @@ Banka (email)
     "enabled": true,
     "driveFolderId": "OVDE_ID_DELJENOG_FOLDERA",
     "bankSenders": ["izvodi@banka.rs", "noreply@banka.rs"],
-    "searchDays": 30,
+    "searchDays": 7,
     "maxThreadsPerRun": 100,
     "pageSize": 50,
     "gmailQueryExtra": "",
@@ -61,6 +61,7 @@ Banka (email)
 - `driveFolderId` = ID deljenog foldera (za C001 = folder `01_Bank`); **samo ID**, ne URL. Folder mora biti **podeljen ovom Gmail nalogu kao Editor**.
 - `bankSenders` — mejlovi banke (ili koristi `gmailQueryExtra` za custom Gmail upit).
 - `fileNamePrefix` — prefiks u imenu fajla (npr. `C001`), korisno kad jedan nalog puni više klijenata.
+- `searchDays` — koliko dana unazad se pretražuje Gmail (**default 7**). Sa 6×/dan rasporedom (`BANK_IMPORT_TRIGGER_HOURS`) nov izvod se uhvati za par sati, pa ovaj prozor **nije za svežinu** nego je **outage buffer**: koliko dana GAS-nerada (pauza, kvota, istekla autorizacija) da se automatski nadoknadi pri oporavku. Ujedno **bounduje re-download churn** (vidi „Dedupe") — manji broj = manje duplikata u `Downloaded`. Preporuka **7** (nedelja); **3** = minimalan churn, i dalje weekend-safe. Ne stavljaj **1** (svaki prekid > 1 dan propušta). Ređi duži prekid: `runBankPdfImportBackfill` (eksplicitan opseg, ne zavisi od `searchDays`).
 - Za pomoć oko vrednosti: `Run → printExampleBankImportProperties`.
 
 ## Funkcije
@@ -72,7 +73,7 @@ Banka (email)
 | `runBankPdfImportBackfill` | backfill po `BANK_IMPORT_BACKFILL_FROM/TO_DATE` |
 | `testBankPdfImportConfig` | provera config-a + Gmail/Drive (bez upisa) |
 | `testGmailAccessOnly` | minimalni Gmail scope smoke-test |
-| `setupDailyBankPdfImportTrigger` | kreira dnevni okidač (07h) |
+| `setupDailyBankPdfImportTrigger` | kreira dnevne okidače (`BANK_IMPORT_TRIGGER_HOURS`, podrazumevano 07/08/10/12/14/16); re-run briše stare pa postavlja nove |
 | `removeDailyBankPdfImportTrigger` | briše dnevni okidač |
 | `doPost` | opcioni WebApp (`runNow` / `backfill` / `test`), štiti ga `BANK_IMPORT_SECRET` |
 | `printExampleBankImportProperties` | ispiše primer Script Properties |
@@ -86,7 +87,7 @@ Banka (email)
 5. `Run → testGmailAccessOnly` → odobri Gmail scope (authorize).
 6. `Run → testBankPdfImportConfig` → proveri `folderName`, `query`, `sampleThreadCount` po klijentu.
 7. `Run → runBankPdfImportNow` → PDF-ovi padnu u folder(e).
-8. `Run → setupDailyBankPdfImportTrigger` → dnevni trigger (07h).
+8. `Run → setupDailyBankPdfImportTrigger` → dnevni okidači (07/08/10/12/14/16; menja se konstanta `BANK_IMPORT_TRIGGER_HOURS` na vrhu skripta, pa re-run ove funkcije).
 
 ## Backfill (istorija od npr. 1. januara)
 
@@ -107,3 +108,5 @@ ili `"action": "backfill"` sa `fromDate`/`toDate`/`clientId`, `"action": "test"`
 - Dedupe: stabilno ime fajla (`[prefix_]YYYY-MM-DD_<msgId>_attN_original.pdf`) + provera postojanja u folderu. Ime **uvek završava `.pdf`** (VBA puller filtrira `Dir$ "*.pdf"`).
 - Piši u **koren** deljenog foldera (onaj koji se sinhronizuje na VBA bank-inbox putanju), ne u mesečne podfoldere.
 - Staging-dedup u Excelu (`IsDuplicateBankaImport`, `BrojDokumenta`+`BankaReferenz`) je nezavisni drugi sloj.
+- **Ponovno skidanje posle VBA povlačenja (očekivano ponašanje):** provera postojanja gleda **samo** taj koren folder. Kad `PullBankPdfsFromDriveProduction` povuče PDF, **premesti** ga u `Downloaded` (folder koji GAS nalog ne vidi), pa naredno pokretanje ne nađe fajl u korenu i **ponovo ga skine** iz Gmail-a (mejl je i dalje u `newer_than` prozoru). To je **bezopasno**: staging-dedup ga odbije, ne knjiži se dvaput. Cena je gomilanje duplikata u `Downloaded` (ime po msgID-u je isto → VBA `GetUniqueTargetPath` doda `_001`, `_002`, …). Ovo **već postoji i pri 1×/dan**; češći raspored samo umnožava pokušaje (i dalje sve odbijeno u stagingu). Svesno prihvaćeno umesto Gmail labela.
+- **Ne usporava VBA:** `BankaCollectPdfFiles` enumeriše samo koren (`01_Bank`), **ne** `Downloaded`; jedini dodir je `GetUniqueTargetPath` probe, čija je dubina bounded na ~`searchDays` po fajlu. `Downloaded` sme slobodno da raste (storage-trivijalno). Ako ikad zasmeta: smanji `searchDays` (manje churn-a) ili periodično obriši stare fajlove iz `Downloaded` (to je samo arhiva već uvezenih PDF-ova).
