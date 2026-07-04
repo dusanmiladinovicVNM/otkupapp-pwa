@@ -562,6 +562,11 @@ Public Const CFG_KEY_MALINA_MODE As String = "MALINA_MODE"
 ' Default kupac (Hladnjaca) za auto-zbirnu u malina modu. KupacID iz tblKupci.
 Public Const CFG_MALINA_DEFAULT_KUPAC As String = "MALINA_DEFAULT_KUPAC"
 
+' Prijemnica: kontrola da uneti broj zbirne vec postoji u tblZbirna.
+'   "BLOK" (default) -> tvrda greska, snimanje prijemnice se prekida.
+'   "UPOZORENJE"     -> upozorenje sa potvrdom (operater moze da nastavi).
+Public Const CFG_PRIJEMNICA_ZBIRNA_PROVERA As String = "PRIJEMNICA_ZBIRNA_PROVERA"
+
 ' --- Dorade: podesavanja (UI: Maticni podaci -> Podesavanja) ---
 ' Default proizvod koji se auto-postavi pri otvaranju frmOtkup/frmDokumenta.
 Public Const CFG_DEFAULT_VRSTA As String = "DEFAULT_VRSTA_VOCA"
@@ -843,6 +848,21 @@ Public Function ConfigFlag(ByVal key As String, ByVal defaultOn As Boolean) As B
             ConfigFlag = False
         Case Else
             ConfigFlag = defaultOn
+    End Select
+End Function
+
+' Prijemnica: da li NEPOSTOJECA zbirna (broj nije u tblZbirna) BLOKIRA snimanje.
+'   True  = blokiraj (tvrda greska)  [default, bezbedno]
+'   False = samo upozori (operater moze da potvrdi i nastavi)
+' Cita CFG_PRIJEMNICA_ZBIRNA_PROVERA: "UPOZORENJE" -> False; sve ostalo -> True.
+Public Function PrijemnicaZbirnaBlokira() As Boolean
+    Dim v As String
+    v = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA)))
+    Select Case v
+        Case "UPOZORENJE", "UPOZORI", "WARN", "WARNING", "NE", "NO", "0", "OFF"
+            PrijemnicaZbirnaBlokira = False
+        Case Else         ' "", "BLOK", "BLOCK", "DA", nepoznato -> blokiraj
+            PrijemnicaZbirnaBlokira = True
     End Select
 End Function
 

@@ -2243,6 +2243,23 @@ Private Sub btnUnosPrij_Click()
         Exit Sub
     End If
 
+    ' Broj zbirne mora da postoji u sistemu (tblZbirna). Ponasanje po podesavanju
+    ' PRIJEMNICA_ZBIRNA_PROVERA: BLOK = prekid; UPOZORENJE = potvrda pa nastavak.
+    If Not ZbirnaPostoji(txtBrojZbirnePrij.value) Then
+        If PrijemnicaZbirnaBlokira() Then
+            MsgBox "Zbirna '" & txtBrojZbirnePrij.value & "' ne postoji u sistemu." & vbCrLf & _
+                   "Prvo unesite zbirnu otpremnicu, pa zatim prijemnicu.", _
+                   vbExclamation, APP_NAME
+            txtBrojZbirnePrij.SetFocus
+            Exit Sub
+        ElseIf MsgBox("Zbirna '" & txtBrojZbirnePrij.value & "' ne postoji u sistemu." & vbCrLf & _
+                      "Ipak snimiti prijemnicu sa ovim brojem zbirne?", _
+                      vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
+            txtBrojZbirnePrij.SetFocus
+            Exit Sub
+        End If
+    End If
+
     If IsValidacijaUnosa() And cmbVrstaVoca.value = "" Then
         MsgBox "Izaberite vrstu vo" & ChrW(263) & "a!", vbExclamation, APP_NAME
         cmbVrstaVoca.SetFocus

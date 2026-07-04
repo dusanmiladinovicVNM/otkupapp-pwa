@@ -314,6 +314,37 @@ EH:
     GetOtpremniceByZbirna = Empty
 End Function
 
+' True ako zbirna sa datim brojem postoji u tblZbirna (iskljucujuci stornirane).
+' Storno-aware namerno: prijemnica ne sme da referencira storniranu zbirnu.
+' (modBrojevi.BrojZbirneExists je Private i broji i stornirane -> drugi scenario.)
+Public Function ZbirnaPostoji(ByVal brojZbirne As String) As Boolean
+    On Error GoTo EH
+
+    Dim b As String: b = Trim$(brojZbirne)
+    If Len(b) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim iBroj As Long
+    iBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modDokumenta.ZbirnaPostoji")
+
+    Dim r As Long
+    For r = 1 To UBound(data, 1)
+        If StrComp(Trim$(CStr(data(r, iBroj))), b, vbTextCompare) = 0 Then
+            ZbirnaPostoji = True
+            Exit Function
+        End If
+    Next r
+    Exit Function
+
+EH:
+    LogErr "modDokumenta.ZbirnaPostoji", "broj=" & brojZbirne
+End Function
+
 Public Function GetOtpremniceByStation(ByVal stanicaID As String, _
                                        Optional ByVal datumOd As Date = 0, _
                                        Optional ByVal datumDo As Date = 0) As Variant
@@ -2206,6 +2237,16 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
 
     If Len(Trim$(brojZbirne)) = 0 Then
         Err.Raise vbObjectError + 1423, SRC, "Broj zbirne je obavezan."
+    End If
+
+    ' Referencijalni integritet: broj zbirne mora da postoji u tblZbirna.
+    ' Samo u BLOK modu -- u UPOZORENJE modu forma trazi potvrdu, pa backend ne
+    ' sme tvrdo da padne. Ujedno je bezbedna mreza i za ne-form pozivaoce.
+    If PrijemnicaZbirnaBlokira() Then
+        If Not ZbirnaPostoji(brojZbirne) Then
+            Err.Raise vbObjectError + 1428, SRC, _
+                "Zbirna '" & brojZbirne & "' ne postoji u sistemu."
+        End If
     End If
 
     If kolicina <= 0 Then
