@@ -524,6 +524,13 @@ Private Sub Test_DuplicateFakturaIsBlocked()
     brojPrij = TEST_PREFIX & "-PRJ-" & scenario
 
     ' Minimal prijemnica fixture for faktura duplicate test.
+    ' Zbirna mora da postoji pre prijemnice (PRIJEMNICA_ZBIRNA_PROVERA guard).
+    Dim zbrFix As String
+    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                           100#, TEST_TIP_AMB, 0, "I")
+    AssertTrue Len(zbrFix) > 0, "Duplicate faktura fixture zbirna created"
+
     Dim prjI As String
     prjI = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
                              TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, "I")
@@ -725,6 +732,7 @@ Private Sub Test_DokumentaInputValidationHardening()
     Test_InvalidOtpremnicaMissingAmbTypeDoesNotAppend
     Test_InvalidZbirnaInvalidClassDoesNotAppend
     Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend
+    Test_PrijemnicaMissingZbirnaDoesNotAppend
 
     Exit Sub
 
@@ -818,11 +826,23 @@ Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
     beforePrj = CountRows(TBL_PRIJEMNICA)
     beforeAmb = CountRows(TBL_AMBALAZA)
 
+    ' Validna zbirna mora da postoji -> jedini razlog odbijanja je negativna
+    ' ambalaza (a ne PRIJEMNICA_ZBIRNA_PROVERA guard, koji bi inace prekinuo pre).
+    Dim scenario As String: scenario = NewScenarioCode("NEGAMB")
+    Dim testDate As Date: testDate = NextTestDate()
+    Dim brojZbirne As String: brojZbirne = TEST_PREFIX & "-BAD-ZBR-" & scenario
+
+    Dim zbrFix As String
+    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                           100#, TEST_TIP_AMB, 0, KLASA_I)
+    AssertTrue Len(zbrFix) > 0, "Negative ambalaza fixture zbirna created"
+
     Dim result As String
     result = SavePrijemnica_TX( _
-        NextTestDate(), TEST_KUP_ID, TEST_VOZ_ID, _
-        TEST_PREFIX & "-BAD-PRJ-" & NewScenarioCode("NEGAMB"), _
-        TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("NEGAMB"), _
+        testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+        TEST_PREFIX & "-BAD-PRJ-" & scenario, _
+        brojZbirne, _
         TEST_VRSTA, TEST_SORTA, _
         100#, 10#, TEST_TIP_AMB, -1, 0, KLASA_I)
 
@@ -836,6 +856,41 @@ Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
 
 EH:
     LogFail "Invalid prijemnica negative ambalaza", Err.description
+End Sub
+
+Private Sub Test_PrijemnicaMissingZbirnaDoesNotAppend()
+    On Error GoTo EH
+
+    ' PRIJEMNICA_ZBIRNA_PROVERA guard: u BLOK modu prijemnica sa nepostojecom
+    ' zbirnom mora biti odbijena (referencijalni integritet, bez orphan reda).
+    Dim prevMode As String
+    prevMode = GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA)
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, "BLOK"
+
+    Dim beforePrj As Long
+    beforePrj = CountRows(TBL_PRIJEMNICA)
+
+    Dim scenario As String
+    scenario = NewScenarioCode("NOZBR")
+
+    Dim result As String
+    result = SavePrijemnica_TX( _
+        NextTestDate(), TEST_KUP_ID, TEST_VOZ_ID, _
+        TEST_PREFIX & "-PRJ-" & scenario, _
+        TEST_PREFIX & "-ZBR-MISSING-" & scenario, _
+        TEST_VRSTA, TEST_SORTA, _
+        100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+
+    AssertEquals "", result, "Prijemnica with missing zbirna is rejected (BLOK)"
+    AssertEquals CStr(beforePrj), CStr(CountRows(TBL_PRIJEMNICA)), _
+                 "Rejected prijemnica did not append a row"
+
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, prevMode
+    Exit Sub
+
+EH:
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, prevMode
+    LogFail "Prijemnica without zbirna is blocked", Err.description
 End Sub
 
 Private Sub Test_DokumentaReadHelpersExcludeStornirano()
