@@ -43,6 +43,8 @@ Public Sub RunIntegritetProvere()
     Chk_A2_ManjakAnomalije
     Chk_B1_Verwaiste
     Chk_B2_UnlinkedOtkupi
+    Chk_B4_DanglingBrojZbirne
+    Chk_B5_PrijemnicaBezZbirne
 
     WriteLine "UKUPNO neuskladjenih zapisa: " & CStr(m_totalIssues), True
     FinishIntegritetSheet
@@ -185,6 +187,69 @@ EH:
 End Sub
 
 ' ============================================================
+' CHECK B4: DANGLING BrojZbirne (zbirna uopste ne postoji)
+' ============================================================
+' Ziv dokument (otpremnica/prijemnica) sa BrojZbirne koji NE postoji ni u
+' jednom redu tblZbirna - ni aktivnom ni storniranom. Razlicito od verwaist
+' (B1), gde zbirna postoji ali je potpuno stornirana.
+
+Private Sub Chk_B4_DanglingBrojZbirne()
+    On Error GoTo EH
+
+    Dim zbrSet As Object: Set zbrSet = AllBrojeviInZbirna()
+
+    WriteBlock "B4a", "Otpremnice sa BrojZbirne koji ne postoji u tblZbirna", _
+               Array("OtpremnicaID", "BrojOtpremnice", "BrojZbirne", "Kolicina"), _
+               DanglingDocs(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KOLICINA, zbrSet)
+
+    WriteBlock "B4b", "Prijemnice sa BrojZbirne koji ne postoji u tblZbirna", _
+               Array("PrijemnicaID", "BrojPrijemnice", "BrojZbirne", "Kolicina"), _
+               DanglingDocs(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KOLICINA, zbrSet)
+    Exit Sub
+
+EH:
+    WriteErr "B4", Err.description
+End Sub
+
+' ============================================================
+' CHECK B5: PRIJEMNICA bez BrojZbirne (obavezna veza)
+' ============================================================
+
+Private Sub Chk_B5_PrijemnicaBezZbirne()
+    On Error GoTo EH
+
+    Dim arr As Variant: arr = Empty
+    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
+
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_PRIJEMNICA)
+        If Not IsEmpty(data) Then
+            Dim cId As Long, cBroj As Long, cZbr As Long, cKol As Long
+            cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIntegritet.Chk_B5")
+            cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "modIntegritet.Chk_B5")
+            cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIntegritet.Chk_B5")
+            cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIntegritet.Chk_B5")
+
+            Dim bad As Collection: Set bad = New Collection
+            Dim i As Long
+            For i = 1 To UBound(data, 1)
+                If Len(Trim$(CStr(data(i, cZbr)))) = 0 Then
+                    bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), data(i, cKol))
+                End If
+            Next i
+            arr = CollToArray(bad, 3)
+        End If
+    End If
+
+    WriteBlock "B5", "Prijemnice bez BrojZbirne (obavezna veza)", _
+               Array("PrijemnicaID", "BrojPrijemnice", "Kolicina"), arr
+    Exit Sub
+
+EH:
+    WriteErr "B5", Err.description
+End Sub
+
+' ============================================================
 ' SHARED HELPERS
 ' ============================================================
 
@@ -246,6 +311,55 @@ Private Function CollToArray(ByVal c As Collection, ByVal cols As Long) As Varia
     Next i
 
     CollToArray = r
+End Function
+
+' Skup SVIH BrojZbirne u tblZbirna (i stornirani se racunaju kao "postoji").
+Private Function AllBrojeviInZbirna() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then Set AllBrojeviInZbirna = d: Exit Function
+
+    Dim cb As Long: cb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.AllBrojeviInZbirna")
+
+    Dim i As Long, b As String
+    For i = 1 To UBound(data, 1)
+        b = Trim$(CStr(data(i, cb)))
+        If Len(b) > 0 Then
+            If Not d.Exists(b) Then d.Add b, True
+        End If
+    Next i
+
+    Set AllBrojeviInZbirna = d
+End Function
+
+' Zivi dokumenti sa BrojZbirne koji nije u zbrSet. Vraca 2D(1..n,1..4) ili Empty.
+Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
+                              ByVal brojCol As String, ByVal zbrCol As String, _
+                              ByVal kolCol As String, ByVal zbrSet As Object) As Variant
+    Dim data As Variant: data = GetTableData(tbl)
+    If Not IsArray(data) Then DanglingDocs = Empty: Exit Function
+    data = ExcludeStornirano(data, tbl)
+    If IsEmpty(data) Then DanglingDocs = Empty: Exit Function
+
+    Dim cId As Long, cBroj As Long, cZbr As Long, cKol As Long
+    cId = RequireColumnIndex(tbl, idCol, "modIntegritet.DanglingDocs")
+    cBroj = RequireColumnIndex(tbl, brojCol, "modIntegritet.DanglingDocs")
+    cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.DanglingDocs")
+    cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DanglingDocs")
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim i As Long, b As String
+    For i = 1 To UBound(data, 1)
+        b = Trim$(CStr(data(i, cZbr)))
+        If Len(b) > 0 Then
+            If Not zbrSet.Exists(b) Then
+                bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), b, data(i, cKol))
+            End If
+        End If
+    Next i
+
+    DanglingDocs = CollToArray(bad, 4)
 End Function
 
 ' ============================================================
