@@ -2006,6 +2006,7 @@ Public Sub EnsureKarticaSablon()
     ws.Range(ws.cells(fr, 2), ws.cells(fr, 7)).Merge
     ws.cells(fr, 2).name = "KartKoop"
     ws.cells(fr + 1, 2).name = "KartBPG"
+    ws.cells(fr + 1, 2).NumberFormat = "@"   ' BPG kao tekst (dug broj) -> bez E-notacije
     ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 7)).Merge
     ws.cells(fr + 2, 2).name = "KartPeriod"
     ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
