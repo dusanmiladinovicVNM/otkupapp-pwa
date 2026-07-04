@@ -31,6 +31,7 @@ Private mLblFilterSorta As MSForms.label
 Private mLblFilterTipGP As MSForms.label
 Private WithEvents mLstPrerade As MSForms.ListBox
 Private mLblPrerade As MSForms.label
+Private WithEvents mBtnStornoPrerada As MSForms.CommandButton
 Private mBuilt As Boolean
 
 Private Sub UserForm_Initialize()
@@ -304,6 +305,18 @@ Private Sub btnStorniraj_Click()
         MsgBox "Izaberite paletu.", vbInformation, APP_NAME
         Exit Sub
     End If
+    ' Preradjena paleta se ne stornira direktno (modStorno to odbija tiho -> "vidi
+    ' log"). Uputi operatera na storno prerade (desno) koja je i vraca u lager.
+    Dim iSel As Long: iSel = Me.lstPalete.ListIndex
+    If iSel >= 0 Then
+        If UCase$(Trim$(CStr(Me.lstPalete.List(iSel, 12)))) = "DA" Then
+            MsgBox "Ova paleta je prera" & ChrW(273) & "ena u gotov proizvod." & vbCrLf & _
+                   "Prvo stornirajte preradu u desnoj listi (dugme Storniraj preradu)," & vbCrLf & _
+                   "pa " & ChrW(263) & "e paleta biti vra" & ChrW(263) & "ena u lager.", _
+                   vbInformation, APP_NAME
+            Exit Sub
+        End If
+    End If
     If MsgBox("Stornirati izabranu paletu?", vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
 
     If StornoPaleta_TX(pid) Then
@@ -383,6 +396,12 @@ Private Sub BuildPreradaControls()
         hl.Font.Bold = True
         hl.BackStyle = fmBackStyleOpaque
     Next hi
+
+    ' Dugme za storno prerade (vraca palete gotovih proizvoda u lager).
+    ' Dinamicko (Controls.Add + WithEvents) -> .frx se ne dira; reuse StornoPrerada_TX.
+    Set mBtnStornoPrerada = Me.Controls.Add("Forms.CommandButton.1", "btnStornoPrerada", True)
+    StyleStornoButton mBtnStornoPrerada, "Storniraj preradu"
+
     RefreshPrerade
 
     SetPreradaTabOrder
@@ -459,9 +478,19 @@ Private Sub LayoutDynamic()
     PutCtl Me.lstPaleteHdr, leftX, lrHdrY, leftW
     PutCtl Me.lstPalete, leftX, lrListY, leftW
     Me.lstPalete.Height = btnTop - 12 - lrListY
+    Dim preBtnH As Double: preBtnH = 22
     mLstPrerade.Left = rightX: mLstPrerade.Top = lrListY
-    mLstPrerade.width = rightW: mLstPrerade.Height = btnTop - 12 - lrListY
+    mLstPrerade.width = rightW
+    mLstPrerade.Height = (btnTop - 12 - lrListY) - (preBtnH + 6)
+    If mLstPrerade.Height < 60 Then mLstPrerade.Height = 60
     mLstPrerade.Visible = True
+    If Not mBtnStornoPrerada Is Nothing Then
+        mBtnStornoPrerada.Left = rightX
+        mBtnStornoPrerada.Top = mLstPrerade.Top + mLstPrerade.Height + 4
+        mBtnStornoPrerada.width = rightW
+        mBtnStornoPrerada.Height = preBtnH
+        mBtnStornoPrerada.Visible = True
+    End If
     ' header Label-i poravnati sa kolonama data liste (col0 skriven = 0)
     Dim hoff As Variant: hoff = Array(0, 30, 88, 136, 166, 196)
     Dim hwid As Variant: hwid = Array(30, 58, 48, 30, 30, 52)
@@ -516,6 +545,38 @@ Private Sub mLstPrerade_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
     Exit Sub
 EH:
     MsgBox "Gre" & ChrW(353) & "ka pri otvaranju preradnog lista: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' Storno prerade iz forme: markira preradu stornirano i vraca njene palete u
+' lager (Preradjeno=""). Reuse modStorno.StornoPrerada_TX (isti put kao Alt+F8
+' StornoPrerada_Prompt). Posle uspeha RefreshGrid osvezava i palete i prerade.
+Private Sub mBtnStornoPrerada_Click()
+    On Error GoTo EH
+    If mLstPrerade Is Nothing Then Exit Sub
+    Dim i As Long: i = mLstPrerade.ListIndex
+    If i < 0 Then
+        MsgBox "Izaberite preradu u desnoj listi (Prera" & ChrW(273) & "ene palete).", _
+               vbInformation, APP_NAME
+        Exit Sub
+    End If
+    Dim preID As String: preID = CStr(mLstPrerade.List(i, 0))
+    If preID = "" Then Exit Sub
+    Dim brP As String: brP = CStr(mLstPrerade.List(i, 1))
+
+    If MsgBox("Stornirati preradu br. " & brP & "?" & vbCrLf & _
+              "Palete gotovih proizvoda se vra" & ChrW(263) & "aju u lager.", _
+              vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+
+    If StornoPrerada_TX(preID) Then
+        RefreshGrid
+        MsgBox "Prerada je stornirana. Palete su vra" & ChrW(263) & "ene u lager.", _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "Storno prerade nije uspeo (vidi log).", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    MsgBox "Gre" & ChrW(353) & "ka pri stornu prerade: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 Private Sub LayoutPreradaRows(ByVal x As Double, ByVal w As Double, _
