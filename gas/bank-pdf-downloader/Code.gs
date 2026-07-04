@@ -28,6 +28,18 @@ const BANK_PROP_BACKFILL_TO_DATE = "BANK_IMPORT_BACKFILL_TO_DATE";
 
 
 /* ======================================================
+ * Schedule
+ * ====================================================== */
+
+// Hours (local time from appsscript.json timeZone) at which the daily
+// import trigger fires. A bank izvod is a ~daily document; a few passes
+// through the working day catch statements that arrive after the first
+// run at no meaningful cost: LockService serializes runs and the per-file
+// dedup makes extra passes safe no-ops.
+const BANK_IMPORT_TRIGGER_HOURS = [7, 8, 10, 12, 14, 16];
+
+
+/* ======================================================
  * Public entrypoints
  * ====================================================== */
 
@@ -135,7 +147,9 @@ function testGmailAccessOnly() {
 
 
 /**
- * Installs one daily trigger.
+ * Installs the daily import triggers, one per hour in
+ * BANK_IMPORT_TRIGGER_HOURS. Existing triggers for the same handler are
+ * removed first, so this is safe to re-run after changing the hours.
  * Run once manually after config test passes.
  */
 function setupDailyBankPdfImportTrigger() {
@@ -145,13 +159,19 @@ function setupDailyBankPdfImportTrigger() {
     }
   });
 
-  ScriptApp.newTrigger("runBankPdfImportDaily")
-    .timeBased()
-    .everyDays(1)
-    .atHour(7)
-    .create();
+  BANK_IMPORT_TRIGGER_HOURS.forEach(function(hour) {
+    ScriptApp.newTrigger("runBankPdfImportDaily")
+      .timeBased()
+      .everyDays(1)
+      .atHour(hour)
+      .create();
+  });
 
-  console.log("Daily trigger installed for runBankPdfImportDaily.");
+  console.log(
+    "Installed " + BANK_IMPORT_TRIGGER_HOURS.length +
+    " daily triggers for runBankPdfImportDaily at hours: " +
+    BANK_IMPORT_TRIGGER_HOURS.join(", ") + "."
+  );
 }
 
 
@@ -501,7 +521,13 @@ function normalizeClientConfig_(rawClient, index) {
         }).filter(Boolean)
       : [],
 
-    searchDays: toPositiveInt_(c.searchDays, 30),
+    // searchDays is an OUTAGE buffer, not a freshness knob. With the
+    // multi-daily trigger schedule (BANK_IMPORT_TRIGGER_HOURS) a new izvod is
+    // caught within hours, so the lookback exists only to auto-recover izvodi
+    // missed while GAS did not run (paused, quota, auth lapse). Kept small by
+    // default to bound the re-download churn (see README "Dedupe"); rare
+    // longer outages recover via runBankPdfImportBackfill.
+    searchDays: toPositiveInt_(c.searchDays, 7),
     maxThreadsPerRun: toPositiveInt_(c.maxThreadsPerRun, 100),
     pageSize: toPositiveInt_(c.pageSize, 50),
 
@@ -814,7 +840,7 @@ function printExampleBankImportProperties() {
         "izvodi@banka.rs",
         "noreply@banka.rs"
       ],
-      searchDays: 30,
+      searchDays: 7,
       maxThreadsPerRun: 100,
       pageSize: 50,
       gmailQueryExtra: "",
