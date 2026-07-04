@@ -1062,6 +1062,10 @@ Private Sub btnUnos_Click()
         End If
     End If
 
+    ' Kontrola proseka neto kg po gajbici (pragovi iz tblKulture; blokada/upozorenje).
+    ' Kolicina je vec neto (bruto->neto konverzija iznad); kolAmb/kolAmbII = broj gajbi.
+    If Not OtkupProsekGajbiceOK(cmbVrstaVoca.value, kolicinaI, kolAmb, kolicinaII, kolAmbII) Then Exit Sub
+
     ' Panel "Otkupni blokovi": upozorenje na prekoracenje preostale kolicine otpremnice
     If Not OtkupBlok_ConfirmUnos() Then Exit Sub
 

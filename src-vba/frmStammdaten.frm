@@ -107,6 +107,15 @@ Private Sub UserForm_Activate()
     StylePrimaryButton btnOpenPolygonEditor, "Polygon editor"
     On Error GoTo EH
 
+    ' Labeli maticnih podataka: prosiri 50% (duzi natpisi se ne skracuju; desno
+    ' od njih ima slobodnog prostora). Jednokratno (m_SetupDone guard iznad).
+    On Error Resume Next
+    Dim liLbl As Long
+    For liLbl = 1 To 10
+        Me.Controls("lblField" & liLbl).width = Me.Controls("lblField" & liLbl).width * 1.5
+    Next liLbl
+    On Error GoTo EH
+
     Select Case Me.Tag
         Case "Kooperanti": SetupKooperanti
         Case "Stanice": SetupStanice
@@ -271,6 +280,8 @@ Private Sub SetupColumnHeaders()
             ShowHeader 4, "Gajbica/paleti", True
             ShowHeader 5, "Aktivan", True
             ShowHeader 6, "Tip amb.", True
+            ShowHeader 7, "Prag upoz.", True
+            ShowHeader 8, "Prag blok.", True
 
         Case "TipAmbalaze"
             ShowHeader 1, "Tip ambala" & ChrW(382) & "e", True
@@ -949,14 +960,14 @@ Private Sub SetupKulture()
         "TipAmbalaze" _
     )
 
-    m_FieldCount = 4
+    m_FieldCount = 6
 
     lblField1.caption = "Vrsta vo" & ChrW(263) & "a": lblField1.Visible = True: txtField1.Visible = True
     lblField2.caption = "Sorta vo" & ChrW(263) & "a": lblField2.Visible = True: txtField2.Visible = True
     lblField3.caption = "Gajbica po paleti": lblField3.Visible = True: txtField3.Visible = True
     lblField4.caption = "Tip ambala" & ChrW(382) & "e (podraz.)": lblField4.Visible = True: txtField4.Visible = False
-    lblField5.caption = "": lblField5.Visible = False: txtField5.Visible = False
-    lblField6.caption = "": lblField6.Visible = False: txtField6.Visible = False
+    lblField5.caption = "Prag upozorenja (kg/gajb.)": lblField5.Visible = True: txtField5.Visible = True
+    lblField6.caption = "Prag blokade (kg/gajb.)": lblField6.Visible = True: txtField6.Visible = True
     lblField7.caption = "": lblField7.Visible = False: txtField7.Visible = False
     lblField8.caption = "": lblField8.Visible = False: txtField8.Visible = False
     lblField9.caption = "": lblField9.Visible = False: txtField9.Visible = False
@@ -1336,6 +1347,7 @@ Private Sub LoadList()
             kupMesto = GetColumnIndex(TBL_KUPCI, "Mesto")
             kupPosta = GetColumnIndex(TBL_KUPCI, "PostanskiBroj")
             kupDrzava = GetColumnIndex(TBL_KUPCI, "Dr" & ChrW(382) & "ava")
+            If kupDrzava = 0 Then kupDrzava = GetColumnIndex(TBL_KUPCI, "Drzava")
             kupPIB = GetColumnIndex(TBL_KUPCI, "PIB")
             kupMB = GetColumnIndex(TBL_KUPCI, "MaticniBroj")
             kupEmail = GetColumnIndex(TBL_KUPCI, "Email")
@@ -1343,11 +1355,13 @@ Private Sub LoadList()
             kupAktivan = GetColumnIndex(TBL_KUPCI, "Aktivan")
             kupRacun = GetColumnIndex(TBL_KUPCI, "TekuciRacun")
 
-            If kupID = 0 Or kupNaziv = 0 Or kupUlica = 0 Or kupMesto = 0 Or _
-               kupPosta = 0 Or kupDrzava = 0 Or kupPIB = 0 Or kupMB = 0 Or _
-               kupEmail = 0 Or kupHlad = 0 Or kupAktivan = 0 Or kupRacun = 0 Then
+            ' Tolerantno na schema-drift: obavezan je samo PK (KupacID); kolone
+            ' koje fale ostaju prazne u listi umesto da obore ceo tab. Ranije je
+            ' tvrdi Err.Raise na bilo koju od 12 kolona rusio otvaranje "Kupci"
+            ' kad se sema instalacije razlikuje (npr. "Drzava" bez dijakritike).
+            If kupID = 0 Then
                 Err.Raise vbObjectError + 7202, "frmStammdaten.LoadList", _
-                          "Nedostaju kolone u tblKupci."
+                          "Nedostaje kolona KupacID u tblKupci."
             End If
 
             Dim kupacAdresa As String
@@ -1356,28 +1370,33 @@ Private Sub LoadList()
                 If Trim$(NzToText(data(i, kupID))) <> "" Then
                     AddRowMap i
 
-                    kupacAdresa = Trim$(NzToText(data(i, kupUlica)))
+                    kupacAdresa = ""
+                    If kupUlica > 0 Then kupacAdresa = Trim$(NzToText(data(i, kupUlica)))
 
-                    If Len(Trim$(NzToText(data(i, kupPosta)))) > 0 Then
-                        If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & ", "
-                        kupacAdresa = kupacAdresa & NzToText(data(i, kupPosta))
+                    If kupPosta > 0 Then
+                        If Len(Trim$(NzToText(data(i, kupPosta)))) > 0 Then
+                            If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & ", "
+                            kupacAdresa = kupacAdresa & NzToText(data(i, kupPosta))
+                        End If
                     End If
 
-                    If Len(Trim$(NzToText(data(i, kupMesto)))) > 0 Then
-                        If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & " "
-                        kupacAdresa = kupacAdresa & NzToText(data(i, kupMesto))
+                    If kupMesto > 0 Then
+                        If Len(Trim$(NzToText(data(i, kupMesto)))) > 0 Then
+                            If Len(kupacAdresa) > 0 Then kupacAdresa = kupacAdresa & " "
+                            kupacAdresa = kupacAdresa & NzToText(data(i, kupMesto))
+                        End If
                     End If
 
                     lstData.AddItem NzToText(data(i, kupID))
-                    lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, kupNaziv))
+                    If kupNaziv > 0 Then lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, kupNaziv))
                     lstData.List(lstData.ListCount - 1, 2) = kupacAdresa
-                    lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, kupDrzava))
-                    lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, kupPIB))
-                    lstData.List(lstData.ListCount - 1, 5) = NzToText(data(i, kupMB))
-                    lstData.List(lstData.ListCount - 1, 6) = NzToText(data(i, kupEmail))
-                    lstData.List(lstData.ListCount - 1, 7) = NzToText(data(i, kupHlad))
-                    lstData.List(lstData.ListCount - 1, 8) = NzToText(data(i, kupAktivan))
-                    lstData.List(lstData.ListCount - 1, 9) = NzToText(data(i, kupRacun))
+                    If kupDrzava > 0 Then lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, kupDrzava))
+                    If kupPIB > 0 Then lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, kupPIB))
+                    If kupMB > 0 Then lstData.List(lstData.ListCount - 1, 5) = NzToText(data(i, kupMB))
+                    If kupEmail > 0 Then lstData.List(lstData.ListCount - 1, 6) = NzToText(data(i, kupEmail))
+                    If kupHlad > 0 Then lstData.List(lstData.ListCount - 1, 7) = NzToText(data(i, kupHlad))
+                    If kupAktivan > 0 Then lstData.List(lstData.ListCount - 1, 8) = NzToText(data(i, kupAktivan))
+                    If kupRacun > 0 Then lstData.List(lstData.ListCount - 1, 9) = NzToText(data(i, kupRacun))
                 End If
             Next i
 
@@ -1524,6 +1543,43 @@ Private Sub LoadList()
                     Else
                         lstData.List(lstData.ListCount - 1, 5) = OblastiCsvFromRow(data, i)
                     End If
+                End If
+            Next i
+
+        Case "Kulture"
+            ' Po IMENU (ne pozicijski): tblKulture ima audit kolone izmedju
+            ' TipAmbalaze i Pragova, pa fiksne pozicije ne vaze na svim instalacijama.
+            ' Kolone liste: 0=ID 1=Vrsta 2=Sorta 3=Gajbica 4=Aktivan 5=TipAmb
+            '               6=PragUpoz 7=PragBlok (klik-load u lstData_Click prati ovo).
+            lstData.ColumnCount = 8
+
+            Dim cKulID As Long, cKulVr As Long, cKulSo As Long, cKulGa As Long
+            Dim cKulAk As Long, cKulTa As Long, cKulPu As Long, cKulPb As Long
+            cKulID = GetColumnIndex(TBL_KULTURE, "KulturaID")
+            cKulVr = GetColumnIndex(TBL_KULTURE, "VrstaVoca")
+            cKulSo = GetColumnIndex(TBL_KULTURE, "SortaVoca")
+            cKulGa = GetColumnIndex(TBL_KULTURE, COL_KUL_GAJBICA_PALETA)
+            cKulAk = GetColumnIndex(TBL_KULTURE, "Aktivan")
+            cKulTa = GetColumnIndex(TBL_KULTURE, COL_KUL_TIP_AMBALAZE)
+            cKulPu = GetColumnIndex(TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ)
+            cKulPb = GetColumnIndex(TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK)
+
+            If cKulID = 0 Then
+                Err.Raise vbObjectError + 7212, "frmStammdaten.LoadList", _
+                          "Nedostaje kolona KulturaID u tblKulture."
+            End If
+
+            For i = 1 To UBound(data, 1)
+                If Trim$(NzToText(data(i, cKulID))) <> "" Then
+                    AddRowMap i
+                    lstData.AddItem NzToText(data(i, cKulID))
+                    If cKulVr > 0 Then lstData.List(lstData.ListCount - 1, 1) = NzToText(data(i, cKulVr))
+                    If cKulSo > 0 Then lstData.List(lstData.ListCount - 1, 2) = NzToText(data(i, cKulSo))
+                    If cKulGa > 0 Then lstData.List(lstData.ListCount - 1, 3) = NzToText(data(i, cKulGa))
+                    If cKulAk > 0 Then lstData.List(lstData.ListCount - 1, 4) = NzToText(data(i, cKulAk))
+                    If cKulTa > 0 Then lstData.List(lstData.ListCount - 1, 5) = NzToText(data(i, cKulTa))
+                    If cKulPu > 0 Then lstData.List(lstData.ListCount - 1, 6) = NzToText(data(i, cKulPu))
+                    If cKulPb > 0 Then lstData.List(lstData.ListCount - 1, 7) = NzToText(data(i, cKulPb))
                 End If
             Next i
 
@@ -1683,6 +1739,8 @@ Private Sub lstData_Click()
             txtField2.value = lstData.List(lstData.ListIndex, 2)   ' SortaVoca
             txtField3.value = lstData.List(lstData.ListIndex, 3)   ' GajbicaPoPaleti
             SafeSetCombo cmbField1, lstData.List(lstData.ListIndex, 5)   ' TipAmbalaze (podraz.)
+            txtField5.value = lstData.List(lstData.ListIndex, 6)   ' PragProsekUpoz
+            txtField6.value = lstData.List(lstData.ListIndex, 7)   ' PragProsekBlok
 
         Case "TipAmbalaze", "TipPalete"
             txtField1.value = lstData.List(lstData.ListIndex, 0)   ' Tip (PK)
@@ -2115,6 +2173,9 @@ Private Sub btnDodaj_Click()
                 End If
             End If
 
+            Dim pragUpozKul As Double, pragBlokKul As Double
+            If Not ValidatePragoviKulture(pragUpozKul, pragBlokKul) Then Exit Sub
+
             newID = GetNextID(m_TableName, "KulturaID", "KUL-")
 
             ' tblKulture: jezgro (ID/Vrsta/Sorta) pozicijski; Gajbica/Aktivan/
@@ -2128,6 +2189,8 @@ Private Sub btnDodaj_Click()
                     UpdateCell m_TableName, newRowKul, COL_KUL_GAJBICA_PALETA, gajbicaKul
                 UpdateCell m_TableName, newRowKul, "Aktivan", STATUS_AKTIVAN
                 UpdateCell m_TableName, newRowKul, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value)
+                UpdateCell m_TableName, newRowKul, COL_KUL_PRAG_PROSEK_UPOZ, pragUpozKul
+                UpdateCell m_TableName, newRowKul, COL_KUL_PRAG_PROSEK_BLOK, pragBlokKul
                 MsgBox "Dodato: " & newID, vbInformation, APP_NAME
                 LoadList
                 ClearFields
@@ -2463,7 +2526,12 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "Ulica", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Mesto", Trim$(txtField3.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PostanskiBroj", Trim$(txtField4.value), SRC
-            RequireUpdateCell m_TableName, m_SelectedRow, "Dr" & ChrW(382) & "ava", Trim$(txtField5.value), SRC
+            ' Drzava: ime kolone po instalaciji ("Drzava" bez dijakritike ili sa),
+            ' isto kao u LoadList -- resi dinamicki da se izmena sacuva.
+            Dim drzColKup As String
+            drzColKup = "Dr" & ChrW(382) & "ava"
+            If GetColumnIndex(m_TableName, drzColKup) = 0 Then drzColKup = "Drzava"
+            RequireUpdateCell m_TableName, m_SelectedRow, drzColKup, Trim$(txtField5.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "PIB", Trim$(txtField6.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "MaticniBroj", Trim$(txtField7.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, "Email", Trim$(txtField8.value), SRC
@@ -2619,6 +2687,9 @@ Private Sub btnIzmeni_Click()
                 End If
             End If
 
+            Dim pragUpozEdit As Double, pragBlokEdit As Double
+            If Not ValidatePragoviKulture(pragUpozEdit, pragBlokEdit) Then Exit Sub
+
             tx.BeginTx
             tx.AddTableSnapshot m_TableName
 
@@ -2626,6 +2697,8 @@ Private Sub btnIzmeni_Click()
             RequireUpdateCell m_TableName, m_SelectedRow, "SortaVoca", Trim$(txtField2.value), SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_GAJBICA_PALETA, gajbicaEdit, SRC
             RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_TIP_AMBALAZE, Trim$(cmbField1.value), SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_PRAG_PROSEK_UPOZ, pragUpozEdit, SRC
+            RequireUpdateCell m_TableName, m_SelectedRow, COL_KUL_PRAG_PROSEK_BLOK, pragBlokEdit, SRC
 
             tx.CommitTx
 
@@ -2837,6 +2910,32 @@ Private Sub ClearFields()
     ClearGeoStatus
 
 End Sub
+
+' Validira pragove proseka (upoz/blok) iz txtField5/txtField6 za "Kulture" tab.
+' Prazno -> 0 (provera iskljucena za tu kulturu). Blok mora biti >= upoz kad su
+' oba > 0 (inace bi blokada gasila upozorenje). Vraca False (uz MsgBox + fokus)
+' na nevalidan unos; inace puni upozOut/blokOut.
+Private Function ValidatePragoviKulture(ByRef upozOut As Double, ByRef blokOut As Double) As Boolean
+    ValidatePragoviKulture = False
+    upozOut = 0: blokOut = 0
+    If Trim$(txtField5.value) <> "" Then
+        If Not TryParseDouble(txtField5.value, upozOut) Or upozOut < 0 Then
+            MsgBox "Unesite validan prag upozorenja (kg po gajbici) ili ostavite prazno.", vbExclamation, APP_NAME
+            txtField5.SetFocus: Exit Function
+        End If
+    End If
+    If Trim$(txtField6.value) <> "" Then
+        If Not TryParseDouble(txtField6.value, blokOut) Or blokOut < 0 Then
+            MsgBox "Unesite validan prag blokade (kg po gajbici) ili ostavite prazno.", vbExclamation, APP_NAME
+            txtField6.SetFocus: Exit Function
+        End If
+    End If
+    If upozOut > 0 And blokOut > 0 And blokOut < upozOut Then
+        MsgBox "Prag blokade mora biti veci ili jednak pragu upozorenja.", vbExclamation, APP_NAME
+        txtField6.SetFocus: Exit Function
+    End If
+    ValidatePragoviKulture = True
+End Function
 
 Private Sub ResetFieldVisibility()
     On Error Resume Next
