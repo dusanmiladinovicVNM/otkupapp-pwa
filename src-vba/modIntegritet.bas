@@ -31,7 +31,7 @@ Private m_totalIssues As Long
 ' PUBLIC ENTRY POINT
 ' ============================================================
 
-Public Sub RunIntegritetProvere()
+Public Sub RunIntegritetProvere(Optional ByVal showSummary As Boolean = True)
     On Error GoTo EH
 
     Application.ScreenUpdating = False
@@ -65,11 +65,13 @@ Public Sub RunIntegritetProvere()
 
     Application.ScreenUpdating = True
 
-    MsgBox "Integritet provere zavrsene." & vbCrLf & vbCrLf & _
-           m_summary & vbCrLf & _
-           "UKUPNO: " & CStr(m_totalIssues) & " neuskladjenih zapisa." & vbCrLf & vbCrLf & _
-           "Detalji: sheet '" & INTEGRITET_SHEET & "'.", _
-           IIf(m_totalIssues > 0, vbExclamation, vbInformation), APP_NAME
+    If showSummary Then
+        MsgBox "Integritet provere zavrsene." & vbCrLf & vbCrLf & _
+               m_summary & vbCrLf & _
+               "UKUPNO: " & CStr(m_totalIssues) & " neuskladjenih zapisa." & vbCrLf & vbCrLf & _
+               "Detalji: sheet '" & INTEGRITET_SHEET & "'.", _
+               IIf(m_totalIssues > 0, vbExclamation, vbInformation), APP_NAME
+    End If
     Exit Sub
 
 EH:

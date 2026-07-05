@@ -69,9 +69,10 @@ Private Sub UserForm_Activate()
 
     If warnText <> "" Then
         lblStatus.Visible = True
-        lblStatus.caption = warnText
+        lblStatus.caption = warnText & vbCrLf & "-- KLIK za pun audit (INTEGRITET) --"
         lblStatus.ForeColor = RGB(255, 80, 80)
         lblStatus.Font.Bold = True
+        lblStatus.ControlTipText = "Klik: pun integritet audit (sheet INTEGRITET_PROVERE)"
     Else
         lblStatus.Visible = False
     End If
@@ -98,6 +99,24 @@ EH:
     lblStatus.caption = Poruka("OTKUP_LBL_GRESKA_PRI_PROVERI")
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
+End Sub
+
+' Upozorenje-baner (crveno) je link: klik -> pun integritet audit + prikaz
+' INTEGRITET_PROVERE sheet-a kao ekran (isti most kao "Otvori Excel").
+Private Sub lblStatus_Click()
+    On Error GoTo EH
+
+    If lblStatus.ForeColor <> RGB(255, 80, 80) Then Exit Sub
+
+    RunIntegritetProvere False        ' izgradi sheet, bez MsgBox-a
+
+    Me.Hide
+    Application.Visible = True
+    frmExcelMini.Show vbModeless
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.lblStatus_Click"
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
