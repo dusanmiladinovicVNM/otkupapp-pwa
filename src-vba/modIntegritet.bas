@@ -44,9 +44,12 @@ Public Sub RunIntegritetProvere()
     Chk_A2_ManjakAnomalije
     Chk_B1_Verwaiste
     Chk_B2_UnlinkedOtkupi
+    Chk_B3_IzgubljeniBlokovi
     Chk_B4_DanglingBrojZbirne
     Chk_B5_PrijemnicaBezZbirne
+    Chk_B5b_OtpremnicaBezZbirne
     Chk_B6_ZbirnaCaseMismatch
+    Chk_B7_ZbirnaNulaKg
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
     Chk_C3_PaletaBezStavke
@@ -198,6 +201,23 @@ EH:
 End Sub
 
 ' ============================================================
+' CHECK B3: izgubljeni otkup blokovi
+' ============================================================
+' Aktivan otkup ciji OtpremnicaID pokazuje na storniranu/nepostojecu
+' otpremnicu (reuse GetLostOtkupBlokovi; frmOtkupAPP baner ovo prikazuje).
+
+Private Sub Chk_B3_IzgubljeniBlokovi()
+    On Error GoTo EH
+    WriteBlock "B3", "Izgubljeni otkup blokovi (OtpremnicaID -> stornirana/nepostojeca otpremnica)", _
+               Array("OtkupID", "BrojDokumenta", "KooperantID", "Datum", "Kolicina", "OtpremnicaID", "StaraOtpremnica"), _
+               GetLostOtkupBlokovi()
+    Exit Sub
+
+EH:
+    WriteErr "B3", Err.description
+End Sub
+
+' ============================================================
 ' CHECK B4: DANGLING BrojZbirne (zbirna uopste ne postoji)
 ' ============================================================
 ' Ziv dokument (otpremnica/prijemnica) sa BrojZbirne koji NE postoji ni u
@@ -228,36 +248,56 @@ End Sub
 
 Private Sub Chk_B5_PrijemnicaBezZbirne()
     On Error GoTo EH
-
-    Dim arr As Variant: arr = Empty
-    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
-
-    If IsArray(data) Then
-        data = ExcludeStornirano(data, TBL_PRIJEMNICA)
-        If Not IsEmpty(data) Then
-            Dim cId As Long, cBroj As Long, cZbr As Long, cKol As Long
-            cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIntegritet.Chk_B5")
-            cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "modIntegritet.Chk_B5")
-            cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIntegritet.Chk_B5")
-            cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIntegritet.Chk_B5")
-
-            Dim bad As Collection: Set bad = New Collection
-            Dim i As Long
-            For i = 1 To UBound(data, 1)
-                If Len(Trim$(CStr(data(i, cZbr)))) = 0 Then
-                    bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), data(i, cKol))
-                End If
-            Next i
-            arr = CollToArray(bad, 3)
-        End If
-    End If
-
     WriteBlock "B5", "Prijemnice bez BrojZbirne (obavezna veza)", _
-               Array("PrijemnicaID", "BrojPrijemnice", "Kolicina"), arr
+               Array("PrijemnicaID", "BrojPrijemnice", "Kolicina"), _
+               DocsBezZbirne(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KOLICINA)
     Exit Sub
 
 EH:
     WriteErr "B5", Err.description
+End Sub
+
+' ============================================================
+' CHECK B5b: OTPREMNICA bez BrojZbirne
+' ============================================================
+' (frmOtkupAPP startup baner ovo prikazuje -- audit je sada nadskup.)
+
+Private Sub Chk_B5b_OtpremnicaBezZbirne()
+    On Error GoTo EH
+    WriteBlock "B5b", "Otpremnice bez BrojZbirne (nije vezana za zbirnu)", _
+               Array("OtpremnicaID", "BrojOtpremnice", "Kolicina"), _
+               DocsBezZbirne(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KOLICINA)
+    Exit Sub
+
+EH:
+    WriteErr "B5b", Err.description
+End Sub
+
+' ============================================================
+' CHECK B7: ZBIRNA sa 0 (ili prazan) UkupnoKolicina
+' ============================================================
+' Zbirna bez kolicine je sama po sebi anomalija. Komplementarno sa A2:
+' A2 hvata zbirne-sa-kg-bez-prijema, B7 hvata prazne zbirne.
+
+Private Sub Chk_B7_ZbirnaNulaKg()
+    On Error GoTo EH
+
+    Dim zbrDict As Object: Set zbrDict = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOLICINA)
+    Dim bad As Collection: Set bad = New Collection
+
+    Dim kk As Variant
+    For Each kk In zbrDict.keys
+        If zbrDict(kk) <= 0.005 Then
+            bad.Add Array(CStr(kk), zbrDict(kk))
+        End If
+    Next kk
+
+    WriteBlock "B7", "Zbirne sa 0 (ili prazan) UkupnoKolicina", _
+               Array("BrojZbirne", "ZbirnaUkupnoKg"), CollToArray(bad, 2)
+    Exit Sub
+
+EH:
+    WriteErr "B7", Err.description
 End Sub
 
 ' ============================================================
@@ -862,6 +902,32 @@ Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
     Next i
 
     DanglingDocs = CollToArray(bad, 4)
+End Function
+
+' Zivi redovi tabele sa praznim BrojZbirne. Vraca 2D(1..n,1..3): ID, Broj, Kolicina.
+Private Function DocsBezZbirne(ByVal tbl As String, ByVal idCol As String, _
+                               ByVal brojCol As String, ByVal zbrCol As String, _
+                               ByVal kolCol As String) As Variant
+    Dim data As Variant: data = GetTableData(tbl)
+    If Not IsArray(data) Then DocsBezZbirne = Empty: Exit Function
+    data = ExcludeStornirano(data, tbl)
+    If IsEmpty(data) Then DocsBezZbirne = Empty: Exit Function
+
+    Dim cId As Long, cBroj As Long, cZbr As Long, cKol As Long
+    cId = RequireColumnIndex(tbl, idCol, "modIntegritet.DocsBezZbirne")
+    cBroj = RequireColumnIndex(tbl, brojCol, "modIntegritet.DocsBezZbirne")
+    cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.DocsBezZbirne")
+    cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DocsBezZbirne")
+
+    Dim bad As Collection: Set bad = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Len(Trim$(CStr(data(i, cZbr)))) = 0 Then
+            bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), data(i, cKol))
+        End If
+    Next i
+
+    DocsBezZbirne = CollToArray(bad, 3)
 End Function
 
 ' Skup ID-jeva iz tabele (opciono samo aktivni). Vraca Dictionary(id -> True).

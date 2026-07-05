@@ -33,9 +33,12 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 |---|---|
 | B1a/B1b | **Verwaist** otpremnice/prijemnice: živ dokument, `BrojZbirne` **potpuno stornirane** zbirne (reuse `GetVerwaisteDokumente`) |
 | B2 | **Otkupi bez otpremnice** (`OtpremnicaID` prazan) — reuse `GetUnlinkedOtkupi` |
+| B3 | **Izgubljeni otkup blokovi**: otkup čiji `OtpremnicaID` → stornirana/nepostojeća otpremnica (reuse `GetLostOtkupBlokovi`) |
 | B4a/B4b | Otpremnica/prijemnica sa `BrojZbirne` koji **uopšte ne postoji** u `tblZbirna` (različito od B1) |
 | B5 | Prijemnica **bez `BrojZbirne`** (obavezna veza) |
+| B5b | Otpremnica **bez `BrojZbirne`** (nije vezana za zbirnu) |
 | B6 | `BrojZbirne` se poklapa sa zbirnom **samo do velikog/malog slova** (npr. `s5/…` vs `S5/…`) — advisory za normalizaciju; skenira otpremnicu/prijemnicu/paleta-stavku/otkup |
+| B7 | **Zbirna sa 0** (ili prazan) `UkupnoKolicina` — sama po sebi anomalija (komplement A2: A2 hvata zbirne-sa-kg-bez-prijema) |
 
 ### C — Palete
 | Kod | Značenje |
