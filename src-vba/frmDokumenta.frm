@@ -25,6 +25,13 @@ Option Explicit
 Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
+' Ispravka storniranog dokumenta (flow #2): kad operater posle storna PALETIZOVANE
+' prijemnice izabere "Uneti ispravku", zapamti se broj stornirane prijemnice + njena
+' BrojZbirne. Sledeci snimljeni unos prijemnice (ista zbirna) automatski prevezuje
+' osirocene palete na sebe (ReassignPaleteToPrijemnica_TX) umesto ponovne paletizacije.
+Private m_pendingRelinkOldPrij As String
+Private m_pendingRelinkZbirne As String
+
 ' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
 Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
 Private WithEvents m_tglPrijemKoop As MSForms.ToggleButton
@@ -2501,15 +2508,54 @@ Private Sub btnUnosPrij_Click()
         If IsMalinaMode() Then OutputGrupniOtkupniList result
     End If
 
-    ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
-    ' iskomitovanih tabela; prikaz uz potvrdu snimanja.
-    Dim palStatus As String
-    palStatus = GetPaletaStatusForPrijemnica(Split(result, " + ")(0))
-    If palStatus <> "" Then
-        MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & palStatus, _
-               vbInformation, APP_NAME
+    ' Ispravka (flow #2): ako je operater posle storna paletizovane prijemnice izabrao
+    ' "Uneti ispravku", ova nova prijemnica preuzima osirocene palete stare (bez ponovne
+    ' paletizacije - ista roba). Guard: ista BrojZbirne (1 zbirna : 1 prijemnica) -> ne
+    ' okida na nepovezanom kasnijem unosu; ako je zbirna promenjena, odustani od auto-relink-a.
+    Dim isCorrection As Boolean
+    isCorrection = (Len(m_pendingRelinkOldPrij) > 0) And _
+                   (Trim$(txtBrojZbirnePrij.value) = m_pendingRelinkZbirne)
+    If Len(m_pendingRelinkOldPrij) > 0 And Not isCorrection Then
+        m_pendingRelinkOldPrij = ""
+        m_pendingRelinkZbirne = ""
+    End If
+
+    If isCorrection Then
+        Dim oldBrojPrij As String: oldBrojPrij = m_pendingRelinkOldPrij
+        Dim newBrojPrij As String: newBrojPrij = Trim$(txtBrojPrij.value)
+        m_pendingRelinkOldPrij = ""            ' potrosi odmah (idempotent)
+        m_pendingRelinkZbirne = ""
+        Dim relWarn As String
+        Dim relOk As Boolean
+        If Len(newBrojPrij) = 0 Then
+            relWarn = "nova prijemnica nema broj"
+            relOk = False
+        Else
+            relOk = ReassignPaleteToPrijemnica_TX(oldBrojPrij, newBrojPrij, relWarn, True)
+        End If
+        If relOk Then
+            MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & _
+                   "Palete stornirane prijemnice " & oldBrojPrij & " prevezane na " & newBrojPrij & "." & vbCrLf & _
+                   "Bez ponovne paletizacije (ista roba)." & _
+                   IIf(Len(relWarn) > 0, vbCrLf & vbCrLf & "Napomena: " & relWarn, ""), _
+                   vbInformation, APP_NAME
+        Else
+            MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & _
+                   "PAZNJA: auto-prevezivanje paleta nije uspelo:" & vbCrLf & relWarn & vbCrLf & vbCrLf & _
+                   "Uradi rucno: Osiroceni dokumenti  ->  Mod: Palete  ->  Prevezi palete.", _
+                   vbExclamation, APP_NAME
+        End If
     Else
-        MsgBox "Prijemnica sacuvana: " & result, vbInformation, APP_NAME
+        ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
+        ' iskomitovanih tabela; prikaz uz potvrdu snimanja.
+        Dim palStatus As String
+        palStatus = GetPaletaStatusForPrijemnica(Split(result, " + ")(0))
+        If palStatus <> "" Then
+            MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & palStatus, _
+                   vbInformation, APP_NAME
+        Else
+            MsgBox "Prijemnica sacuvana: " & result, vbInformation, APP_NAME
+        End If
     End If
 
     txtBrojPrij.value = ""
@@ -2550,6 +2596,113 @@ Private Sub ClearPrijemnicaFields()
     chkDveKlasePrij.value = False
     DisableField txtKolicinaKlIIPrij
     DisableField txtCenaKlIIPrij
+End Sub
+
+' Broj -> string za prefill polja: 0 -> "" (prazno ostaje prazno), inace CStr.
+' NormalizeNumericText pri citanju normalizuje separator, pa je CStr bezbedan.
+Private Function PrefillNumStr(ByVal v As Double) As String
+    If v = 0 Then
+        PrefillNumStr = ""
+    Else
+        PrefillNumStr = CStr(v)
+    End If
+End Function
+
+' Ispravka (flow #2): popuni polja unosa prijemnice iz (upravo stornirane)
+' prijemnice, da operater menja samo gresku. Klasa I -> osnovna polja; ako postoji
+' red Klase II -> ukljuci chkDveKlasePrij i popuni II. Broj prijemnice se NE preuzima
+' (predlaze se novi). Kolicina: u BRUTO modu uzmi BrutoKg (original bruto), inace
+' Kolicina (neto). Cena se postavlja POSLEDNJA (AutoFillCenaDok iz _Change eventova
+' bi je inace pregazio cenom iz cenovnika).
+Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(d) Then Exit Sub
+
+    Dim cBr As Long, cKl As Long, cKup As Long, cVoz As Long, cZbr As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
+    Dim cAmb As Long, cAmbV As Long, cBruto As Long
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    cSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cCena = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
+    cTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    cAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
+    cAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
+    cBruto = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BRUTO)
+    If cBr = 0 Then Exit Sub
+
+    ' Prvi red Klase I (ili prazna klasa) i prvi red Klase II za dati broj.
+    Dim rI As Long, rII As Long: rI = 0: rII = 0
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, cBr))) = brStorn Then
+            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
+            If kl = "II" Then
+                If rII = 0 Then rII = r
+            Else
+                If rI = 0 Then rI = r
+            End If
+        End If
+    Next r
+    If rI = 0 And rII = 0 Then Exit Sub
+    Dim base As Long: base = rI: If base = 0 Then base = rII
+
+    Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
+
+    ' Vrsta PRE Sorte (Vrsta_Change puni listu sorti); zatim kupac/vozac/tip amb.
+    cmbVrstaVoca.value = NzToText(d(base, cVr))
+    cmbSortaVoca.value = NzToText(d(base, cSo))
+    If cKup > 0 Then SelectComboByDisplayID cmbKupac, Trim$(CStr(d(base, cKup)))
+    If cVoz > 0 Then SelectComboByDisplayID cmbVozac, Trim$(CStr(d(base, cVoz)))
+    If cTip > 0 Then cmbTipAmbPrij.value = NzToText(d(base, cTip))
+
+    ' Klasa II ukljuci PRE punjenja II polja (chkDveKlasePrij_Click ih omogucava).
+    chkDveKlasePrij.value = (rII > 0)
+
+    txtBrojZbirnePrij.value = NzToText(d(base, cZbr))
+
+    ' Klasa I kolicina/amb.
+    If rI > 0 Then
+        Dim kolI As Double
+        If brutoMode And cBruto > 0 And NzD(d(rI, cBruto)) > 0 Then
+            kolI = NzD(d(rI, cBruto))
+        Else
+            kolI = NzD(d(rI, cKol))
+        End If
+        txtKolicinaPrij.value = PrefillNumStr(kolI)
+        If cAmb > 0 Then txtKolAmbPrij.value = PrefillNumStr(NzL(d(rI, cAmb)))
+        If cAmbV > 0 Then txtKolAmbVracena.value = PrefillNumStr(NzL(d(rI, cAmbV)))
+    End If
+
+    ' Klasa II kolicina/amb.
+    If rII > 0 Then
+        Dim kolII As Double
+        If brutoMode And cBruto > 0 And NzD(d(rII, cBruto)) > 0 Then
+            kolII = NzD(d(rII, cBruto))
+        Else
+            kolII = NzD(d(rII, cKol))
+        End If
+        txtKolicinaKlIIPrij.value = PrefillNumStr(kolII)
+        If Not m_txtKolAmbIIPrij Is Nothing And cAmb > 0 Then _
+            m_txtKolAmbIIPrij.value = PrefillNumStr(NzL(d(rII, cAmb)))
+    End If
+
+    ' Cena POSLEDNJA (override auto-fill iz _Change eventova).
+    If rI > 0 And cCena > 0 Then txtCenaPrij.value = PrefillNumStr(NzD(d(rI, cCena)))
+    If rII > 0 And cCena > 0 Then txtCenaKlIIPrij.value = PrefillNumStr(NzD(d(rII, cCena)))
+
+    ' Novi broj prijemnice (stari se NE preuzima); predlog zavisi od kupca (postavljen).
+    txtBrojPrij.value = ""
+    RefreshBrojPrijSuggestion
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PrefillPrijemnicaFromStornirana"
 End Sub
 
 Private Sub txtBrojZbirnePrij_AfterUpdate()
@@ -3039,18 +3192,36 @@ Private Sub btnStorno_Click()
     End Select
     
     If Success Then
+        Dim doPrefill As Boolean: doPrefill = False
         If Len(palWarn) > 0 Then
-            MsgBox "Stornirano!" & vbCrLf & vbCrLf & _
-                   "NAPOMENA: prijemnica je bila paletizovana (palete: " & palWarn & ")." & vbCrLf & _
-                   "Palete NISU obrisane - stavke su sada osirocene (i dalje broje robu). " & _
-                   "Posle ponovnog unosa prevezi ih:" & vbCrLf & _
-                   "Osiroceni dokumenti  ->  Mod: Palete  ->  Prevezi palete.", _
-                   vbInformation, APP_NAME
+            ' Paletizovana prijemnica stornirana -> ponudi ISPRAVKU (flow #2): prefill
+            ' polja + auto-prevezivanje osirocenih paleta na novu prijemnicu pri snimanju.
+            If MsgBox("Stornirano." & vbCrLf & vbCrLf & _
+                      "Prijemnica je bila paletizovana (palete: " & palWarn & ")." & vbCrLf & vbCrLf & _
+                      "Uneti ISPRAVKU ove prijemnice sada?" & vbCrLf & _
+                      "(Ista roba - menjas samo gresku u dokumentu; palete se automatski " & _
+                      "prevezuju na novu prijemnicu, bez ponovne paletizacije.)", _
+                      vbQuestion + vbYesNo, APP_NAME) = vbYes Then
+                doPrefill = True
+            Else
+                MsgBox "Palete NISU obrisane - stavke su osirocene (i dalje broje robu)." & vbCrLf & _
+                       "Prevezi ih rucno posle ponovnog unosa:" & vbCrLf & _
+                       "Osiroceni dokumenti  ->  Mod: Palete  ->  Prevezi palete.", _
+                       vbInformation, APP_NAME
+            End If
         Else
             MsgBox "Stornirano!", vbInformation, APP_NAME
         End If
         txtStornoBroj.value = ""
         CheckVerwaisteDokumente
+        If doPrefill Then
+            PrefillPrijemnicaFromStornirana brDok
+            m_pendingRelinkOldPrij = brDok
+            m_pendingRelinkZbirne = Trim$(txtBrojZbirnePrij.value)
+            On Error Resume Next
+            txtKolicinaPrij.SetFocus
+            On Error GoTo EH
+        End If
     End If
     Exit Sub
 EH:
@@ -4016,6 +4187,8 @@ End Sub
 Private Sub UserForm_Terminate()
     On Error Resume Next
     MouseWheel_Detach
+    m_pendingRelinkOldPrij = ""       ' flow #2: ne prenosi pending ispravku van zivota forme
+    m_pendingRelinkZbirne = ""
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
