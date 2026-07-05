@@ -162,6 +162,7 @@ Private Function AdminGroups() As Variant
     a.Add Array("Ensure (setup + " & ChrW(353) & "eme)", "ensure")
     a.Add Array("Health check (setup)", "healthsetup")
     a.Add Array("Production health check", "healthprod")
+    a.Add Array("Integritet provere (tabele)", "integritet")
     g.Add Array("Setup i provere", CollToArr(a))
 
     Set a = New Collection
@@ -203,6 +204,7 @@ Public Sub AdminPanel_OnClick(ByVal action As String)
         Case "ensure":       AdminEnsureEverything
         Case "healthsetup":  RunSetupHealthCheck
         Case "healthprod":   RunProductionHealthCheck
+        Case "integritet":   RunIntegritetProvere
         Case "googleauth":   RunGoogleAuthSetup
         Case "publish":      AdminPublishToDrive
         Case "vbaimport":    AdminVbaImport

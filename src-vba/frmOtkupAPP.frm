@@ -24,6 +24,13 @@ Private dragOffsetY As Double
 Private mChromeRemoved As Boolean
 
 Private mActiveContent As Object
+
+' Integritet overlay (runtime kontrole; .frx se ne dira)
+Private mIntegBg As MSForms.Label
+Private mIntegList As MSForms.ListBox
+Private mIntegTitle As MSForms.Label
+Private WithEvents mIntegClose As MSForms.CommandButton
+Attribute mIntegClose.VB_VarHelpID = -1
 ' v6.11 UI
 Private Const SIDEBAR_KPI_H As Single = 92
 Private mIsSwitchingContent As Boolean
@@ -69,9 +76,10 @@ Private Sub UserForm_Activate()
 
     If warnText <> "" Then
         lblStatus.Visible = True
-        lblStatus.caption = warnText
+        lblStatus.caption = warnText & vbCrLf & "-- KLIK za pun audit (INTEGRITET) --"
         lblStatus.ForeColor = RGB(255, 80, 80)
         lblStatus.Font.Bold = True
+        lblStatus.ControlTipText = "Klik: pun integritet audit (in-app pregled)"
     Else
         lblStatus.Visible = False
     End If
@@ -98,6 +106,110 @@ EH:
     lblStatus.caption = Poruka("OTKUP_LBL_GRESKA_PRI_PROVERI")
     lblStatus.ForeColor = RGB(255, 80, 80)
     lblStatus.Font.Bold = True
+End Sub
+
+' Upozorenje-baner (crveno) je link: klik -> pun integritet audit + prikaz
+' INTEGRITET_PROVERE sheet-a kao ekran (isti most kao "Otvori Excel").
+Private Sub lblStatus_Click()
+    On Error GoTo EH
+
+    If lblStatus.ForeColor <> RGB(255, 80, 80) Then Exit Sub
+
+    ShowIntegritet
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.lblStatus_Click"
+End Sub
+
+' In-app integritet pregled: runtime ListBox overlay (Provera | Detalj).
+' Kontrole se prave jednom (Controls.Add) i skrivaju/prikazuju; .frx se ne dira.
+Private Sub ShowIntegritet()
+    On Error GoTo EH
+
+    Dim rows As Variant
+    rows = GetIntegritetRows()          ' 2D(n,2) ili Empty; ne dira sheet
+
+    If mIntegBg Is Nothing Then
+        Set mIntegBg = Me.Controls.Add("Forms.Label.1", "lblIntegBg", True)
+        Set mIntegTitle = Me.Controls.Add("Forms.Label.1", "lblIntegNaslov", True)
+        Set mIntegClose = Me.Controls.Add("Forms.CommandButton.1", "btnIntegClose", True)
+        Set mIntegList = Me.Controls.Add("Forms.ListBox.1", "lstInteg", True)
+    End If
+
+    ' Overlay samo preko desne content-zone (sidebar + header ostaju vidljivi),
+    ' isto kao ostale content forme. Geometrija iz fraSidebar (SetupShellResponsive).
+    Dim rl As Double, ct As Double, rw As Double, rh As Double
+    ct = fraSidebar.top
+    rl = fraSidebar.Left + fraSidebar.width + 18
+    rw = Me.InsideWidth - rl - 12
+    rh = fraSidebar.Height
+    If rw < 120 Then rw = 120
+    If rh < 120 Then rh = 120
+
+    ' opaque pozadina (tema) -- pokriva dashboard karticu/baner ispod (bez curenja)
+    mIntegBg.Left = rl: mIntegBg.top = ct: mIntegBg.Width = rw: mIntegBg.Height = rh
+    mIntegBg.caption = ""
+    mIntegBg.BackStyle = fmBackStyleOpaque
+    mIntegBg.BackColor = BG_PANEL()
+    mIntegBg.BorderStyle = fmBorderStyleSingle
+    mIntegBg.BorderColor = BORDER_SOFT()
+
+    mIntegTitle.Left = rl + 12: mIntegTitle.top = ct + 10
+    mIntegTitle.Width = rw - 150: mIntegTitle.Height = 24
+    StyleLabel mIntegTitle, TXT_ALERT(), True
+    mIntegTitle.caption = "INTEGRITET  --  " & CStr(IntegritetUkupno()) & " neuskladjenih zapisa"
+
+    mIntegClose.Left = rl + rw - 118: mIntegClose.top = ct + 8
+    mIntegClose.Width = 106: mIntegClose.Height = 26
+    StylePrimaryButton mIntegClose, "Zatvori"
+
+    mIntegList.Left = rl + 10: mIntegList.top = ct + 42
+    mIntegList.Width = rw - 20: mIntegList.Height = rh - 52
+    StyleListBox mIntegList
+    mIntegList.Font.name = "Consolas"       ' monospace -> poravnate kolone
+    mIntegList.ColumnCount = 2
+    mIntegList.ColumnWidths = "58;" & CStr(CLng(mIntegList.Width) - 76)
+    mIntegList.Clear
+
+    If IsArray(rows) Then
+        Dim i As Long
+        For i = 1 To UBound(rows, 1)
+            mIntegList.AddItem CStr(rows(i, 1))
+            mIntegList.List(mIntegList.ListCount - 1, 1) = CStr(rows(i, 2))
+        Next i
+    Else
+        mIntegList.AddItem "OK"
+        mIntegList.List(0, 1) = "nema neuskladjenosti"
+    End If
+
+    mIntegBg.Visible = True
+    mIntegTitle.Visible = True
+    mIntegClose.Visible = True
+    mIntegList.Visible = True
+
+    On Error Resume Next
+    mIntegBg.ZOrder 0
+    mIntegList.ZOrder 0
+    mIntegTitle.ZOrder 0
+    mIntegClose.ZOrder 0
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.ShowIntegritet"
+End Sub
+
+Private Sub HideIntegritet()
+    On Error Resume Next
+    If Not mIntegList Is Nothing Then mIntegList.Visible = False
+    If Not mIntegTitle Is Nothing Then mIntegTitle.Visible = False
+    If Not mIntegClose Is Nothing Then mIntegClose.Visible = False
+    If Not mIntegBg Is Nothing Then mIntegBg.Visible = False
+End Sub
+
+Private Sub mIntegClose_Click()
+    HideIntegritet
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
@@ -952,6 +1064,8 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal activeBtn As MSForms.CommandButton, _
                             ByVal sectionTitle As String)
     On Error GoTo EH
+
+    HideIntegritet          ' navigacija gasi integritet overlay ako je otvoren
 
     ' --- Kontrola pristupa (opt-in AUTH_ENABLED): prava po oblasti ---
     ' Jedna tacka za sve sekcije. Admin = bypass; AUTH iskljucen = sve dozvoljeno.

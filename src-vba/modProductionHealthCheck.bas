@@ -37,6 +37,8 @@ Public Sub RunProductionHealthCheck()
     Check_PrijemnicaFakturaFlags
     Check_FakturaPaymentConsistency
     Check_OtkupPaymentConsistency
+    Check_KooperantOtkupReconciliation
+    Check_FakturaIznosReconciliation
     Check_OtkupOtpremnicaCrossZbirnaLinks
     Check_SEFOutboundConsistency
     Check_DocumentSoftDeleteReferences
@@ -479,6 +481,257 @@ NextRow:
 
 EH:
     HealthFail "Otkup payment consistency check failed", FormatHealthErr()
+End Sub
+
+' ============================================================
+' CHECK 6b: KOOPERANT LIST <-> tblOtkup RECONCILIATION (Q1)
+' ============================================================
+'
+' Verifies that the per-kooperant sum of (Kolicina * Cena) reconciles to
+' the raw tblOtkup total, both excluding stornirano. Any shortfall is the
+' set of rows that silently drop out of the per-kooperant "Lista
+' kooperanata" and the SaldoOM / Kartica reports:
+'   - blank KooperantID (grouping uses `If key <> ""`),
+'   - KooperantID pointing to a missing / stornirano kooperant.
+' Also flags rows invisible to per-OM reports (blank / orphan StanicaID)
+' and to period reports (non-date Datum). Read-only.
+
+Private Sub Check_KooperantOtkupReconciliation()
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+
+    If IsEmpty(data) Then
+        HealthWarn "Kooperant reconciliation", "tblOtkup is empty."
+        Exit Sub
+    End If
+
+    Dim colKoop As Long, colKol As Long, colCena As Long
+    Dim colStanica As Long, colDatum As Long, colStorno As Long
+
+    colKoop = RequireColumnIndex(TBL_OTKUP, "KooperantID", "Check_KooperantOtkupReconciliation")
+    colKol = RequireColumnIndex(TBL_OTKUP, "Kolicina", "Check_KooperantOtkupReconciliation")
+    colCena = RequireColumnIndex(TBL_OTKUP, "Cena", "Check_KooperantOtkupReconciliation")
+    colStanica = RequireColumnIndex(TBL_OTKUP, "StanicaID", "Check_KooperantOtkupReconciliation")
+    colDatum = RequireColumnIndex(TBL_OTKUP, "Datum", "Check_KooperantOtkupReconciliation")
+    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "Check_KooperantOtkupReconciliation")
+
+    Dim koopDict As Object: Set koopDict = CreateObject("Scripting.Dictionary")
+    Dim staDict As Object: Set staDict = CreateObject("Scripting.Dictionary")
+
+    Dim rawTotal As Double
+    Dim emptyKoopTotal As Double, emptyKoopCount As Long
+    Dim emptyStanicaTotal As Double, emptyStanicaCount As Long
+    Dim badDatumTotal As Double, badDatumCount As Long
+
+    Dim i As Long
+    Dim vrednost As Double
+    Dim koop As String, stanica As String
+
+    For i = 1 To UBound(data, 1)
+
+        If IsStorniranoValue(data(i, colStorno)) Then GoTo NextRow
+
+        vrednost = HealthNumeric(data(i, colKol)) * HealthNumeric(data(i, colCena))
+        rawTotal = rawTotal + vrednost
+
+        koop = Trim$(CStr(data(i, colKoop)))
+        If Len(koop) = 0 Then
+            emptyKoopTotal = emptyKoopTotal + vrednost
+            emptyKoopCount = emptyKoopCount + 1
+        Else
+            If Not koopDict.Exists(koop) Then koopDict.Add koop, 0#
+            koopDict(koop) = koopDict(koop) + vrednost
+        End If
+
+        stanica = Trim$(CStr(data(i, colStanica)))
+        If Len(stanica) = 0 Then
+            emptyStanicaTotal = emptyStanicaTotal + vrednost
+            emptyStanicaCount = emptyStanicaCount + 1
+        Else
+            If Not staDict.Exists(stanica) Then staDict.Add stanica, 0#
+            staDict(stanica) = staDict(stanica) + vrednost
+        End If
+
+        If Not IsDate(data(i, colDatum)) Then
+            badDatumTotal = badDatumTotal + vrednost
+            badDatumCount = badDatumCount + 1
+        End If
+
+NextRow:
+    Next i
+
+    ' Orphan kooperant: grouped, but blank name in lists / dropped by
+    ' kooperanti-joined views.
+    Dim orphanKoopTotal As Double, orphanKoopCount As Long
+    Dim k As Variant
+    For Each k In koopDict.keys
+        If Not ActiveRowExists(TBL_KOOPERANTI, "KooperantID", CStr(k)) Then
+            orphanKoopTotal = orphanKoopTotal + koopDict(k)
+            orphanKoopCount = orphanKoopCount + 1
+        End If
+    Next k
+
+    ' Orphan / missing stanica: rows invisible to per-OM (SaldoOM) reports.
+    Dim orphanStanicaTotal As Double, orphanStanicaCount As Long
+    For Each k In staDict.keys
+        If Not ActiveRowExists(TBL_STANICE, "StanicaID", CStr(k)) Then
+            orphanStanicaTotal = orphanStanicaTotal + staDict(k)
+            orphanStanicaCount = orphanStanicaCount + 1
+        End If
+    Next k
+
+    ' Amount that any per-kooperant list is short vs raw tblOtkup.
+    Dim unattributed As Double
+    unattributed = emptyKoopTotal + orphanKoopTotal
+
+    If unattributed <= 0.005 Then
+        HealthOk "Kooperant list reconciles to tblOtkup", _
+                 "tblOtkup gross (Kol*Cena, excl storno) = " & HealthMoney(rawTotal) & _
+                 " ; every row maps to an active kooperant."
+    Else
+        HealthWarn "Kooperant list does not reconcile to tblOtkup", _
+                   "tblOtkup gross=" & HealthMoney(rawTotal) & _
+                   " ; unattributed=" & HealthMoney(unattributed) & _
+                   " (blank KooperantID: " & CStr(emptyKoopCount) & " rows / " & HealthMoney(emptyKoopTotal) & _
+                   " ; orphan kooperant: " & CStr(orphanKoopCount) & " ids / " & HealthMoney(orphanKoopTotal) & ")"
+    End If
+
+    If emptyStanicaCount > 0 Or orphanStanicaCount > 0 Then
+        HealthWarn "Otkup rows not attributable to an OM (SaldoOM blind spot)", _
+                   "blank StanicaID: " & CStr(emptyStanicaCount) & " / " & HealthMoney(emptyStanicaTotal) & _
+                   " ; orphan StanicaID: " & CStr(orphanStanicaCount) & " / " & HealthMoney(orphanStanicaTotal)
+    End If
+
+    If badDatumCount > 0 Then
+        HealthWarn "Otkup rows with non-date Datum (period-report blind spot)", _
+                   CStr(badDatumCount) & " rows / " & HealthMoney(badDatumTotal)
+    End If
+
+    Exit Sub
+
+EH:
+    HealthFail "Kooperant reconciliation check failed", FormatHealthErr()
+End Sub
+
+' ============================================================
+' CHECK 6c: FAKTURA IZNOS <-> tblPrijemnica RECONCILIATION (Q2)
+' ============================================================
+'
+' tblFakture.Iznos is a denormalized header total, frozen at CreateFaktura
+' as Sum(Prijemnica.Kolicina * Cena). If a linked prijemnica is later
+' edited or stornirano, Iznos no longer matches the canonical source
+' (tblPrijemnica). This recomputes the live sum per FakturaID and flags
+' drift, separating value edits from post-invoicing storno. Read-only.
+
+Private Sub Check_FakturaIznosReconciliation()
+    On Error GoTo EH
+
+    Dim fakData As Variant
+    fakData = GetTableData(TBL_FAKTURE)
+
+    If IsEmpty(fakData) Then
+        HealthWarn "Faktura Iznos reconciliation", "tblFakture is empty."
+        Exit Sub
+    End If
+
+    ' Live prijemnica sums per FakturaID: Array(allLinked, activeOnly).
+    Dim prijData As Variant
+    prijData = GetTableData(TBL_PRIJEMNICA)
+
+    Dim liveDict As Object: Set liveDict = CreateObject("Scripting.Dictionary")
+
+    If Not IsEmpty(prijData) Then
+        Dim pFak As Long, pKol As Long, pCena As Long, pStorno As Long
+        pFak = RequireColumnIndex(TBL_PRIJEMNICA, "FakturaID", "Check_FakturaIznosReconciliation")
+        pKol = RequireColumnIndex(TBL_PRIJEMNICA, "Kolicina", "Check_FakturaIznosReconciliation")
+        pCena = RequireColumnIndex(TBL_PRIJEMNICA, "Cena", "Check_FakturaIznosReconciliation")
+        pStorno = RequireColumnIndex(TBL_PRIJEMNICA, "Stornirano", "Check_FakturaIznosReconciliation")
+
+        Dim p As Long
+        Dim fid As String
+        Dim pv As Double
+        Dim acc As Variant
+        For p = 1 To UBound(prijData, 1)
+            fid = Trim$(CStr(prijData(p, pFak)))
+            If Len(fid) > 0 Then
+                pv = HealthNumeric(prijData(p, pKol)) * HealthNumeric(prijData(p, pCena))
+                If Not liveDict.Exists(fid) Then liveDict.Add fid, Array(0#, 0#)
+                acc = liveDict(fid)
+                acc(0) = acc(0) + pv
+                If Not IsStorniranoValue(prijData(p, pStorno)) Then acc(1) = acc(1) + pv
+                liveDict(fid) = acc
+            End If
+        Next p
+    End If
+
+    Dim colID As Long, colIznos As Long, colStorno As Long
+    colID = RequireColumnIndex(TBL_FAKTURE, "FakturaID", "Check_FakturaIznosReconciliation")
+    colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", "Check_FakturaIznosReconciliation")
+    colStorno = RequireColumnIndex(TBL_FAKTURE, "Stornirano", "Check_FakturaIznosReconciliation")
+
+    Const EPS As Double = 0.01
+    Dim i As Long
+    Dim badCount As Long, detailCount As Long
+    Dim fakturaID As String
+    Dim iznos As Double, liveAll As Double, liveActive As Double
+    Dim accf As Variant
+
+    For i = 1 To UBound(fakData, 1)
+
+        If IsStorniranoValue(fakData(i, colStorno)) Then GoTo NextRow
+
+        fakturaID = Trim$(CStr(fakData(i, colID)))
+        iznos = HealthNumeric(fakData(i, colIznos))
+
+        liveAll = 0#: liveActive = 0#
+        If liveDict.Exists(fakturaID) Then
+            accf = liveDict(fakturaID)
+            liveAll = accf(0)
+            liveActive = accf(1)
+        End If
+
+        If Abs(iznos - liveAll) > EPS Then
+            ' Header does not match even the originally linked prijemnice:
+            ' value edited after invoicing, or linked rows missing.
+            badCount = badCount + 1
+            If detailCount < 25 Then
+                detailCount = detailCount + 1
+                HealthWarn "Faktura Iznos differs from linked prijemnice (value drift)", _
+                           "FakturaID=" & fakturaID & _
+                           " Iznos=" & HealthMoney(iznos) & _
+                           " Prijemnice=" & HealthMoney(liveAll) & _
+                           " Delta=" & HealthMoney(iznos - liveAll)
+            End If
+        ElseIf Abs(iznos - liveActive) > EPS Then
+            ' Header matches original link, but some prijemnice were
+            ' stornirano after invoicing: Iznos overstates current source.
+            badCount = badCount + 1
+            If detailCount < 25 Then
+                detailCount = detailCount + 1
+                HealthWarn "Faktura Iznos includes prijemnice stornirane after invoicing", _
+                           "FakturaID=" & fakturaID & _
+                           " Iznos=" & HealthMoney(iznos) & _
+                           " Active=" & HealthMoney(liveActive) & _
+                           " Delta=" & HealthMoney(iznos - liveActive)
+            End If
+        End If
+
+NextRow:
+    Next i
+
+    If badCount = 0 Then
+        HealthOk "Faktura Iznos reconciles to tblPrijemnica", ""
+    ElseIf badCount > detailCount Then
+        HealthWarn "Faktura Iznos reconciliation overflow", _
+                   "Additional fakture with drift: " & CStr(badCount - detailCount)
+    End If
+
+    Exit Sub
+
+EH:
+    HealthFail "Faktura Iznos reconciliation check failed", FormatHealthErr()
 End Sub
 
 ' ============================================================
@@ -1096,6 +1349,10 @@ Private Function HealthNumeric(ByVal value As Variant) As Double
     Else
         HealthNumeric = 0#
     End If
+End Function
+
+Private Function HealthMoney(ByVal v As Double) As String
+    HealthMoney = Format$(v, "#,##0")
 End Function
 
 Private Function IsStorniranoValue(ByVal value As Variant) As Boolean
