@@ -1107,14 +1107,54 @@ Private Sub btnUnos_Click()
     ' #3 Hladnjaca auto-lanac: ako je OM hladnjaca i toggle ON ->
     ' auto otpremnica+zbirna+prijemnica iz otkupa. Best-effort (pre ClearOtkupFields,
     ' dok combo-i jos drze vrednosti).
+    ' Flow #2 (ispravka autohladnjace): ako postoji pending relink (operater je posle
+    ' storna otkupa-hladnjace izabrao "Uneti ispravku") i ovo je hladnjaca-unos ->
+    ' potvrdi i preskoci svezu paletizaciju novog lanca (palete se prevezuju re-pointom).
+    Dim hlPending As String: hlPending = GetHladnjacaRelinkPending()
+    Dim doHlRelink As Boolean: doHlRelink = False
+    If Len(hlPending) > 0 And IsHladnjacaStanica(stanicaID) Then
+        If MsgBox("Ispravka autohladnjace: prevezati osirocene palete stornirane prijemnice " & _
+                  hlPending & " na ovaj novi unos?" & vbCrLf & _
+                  "(Ista roba - bez ponovne paletizacije.)", _
+                  vbQuestion + vbYesNo, APP_NAME) = vbYes Then
+            doHlRelink = True
+            SetPaletizeSkip True
+        Else
+            SetHladnjacaRelinkPending ""     ' odustao -> ocisti pending
+        End If
+    End If
+
     On Error Resume Next
     Dim hlWarn As String
+    Dim hlNewPrij As String
     hlWarn = AutoChainHladnjaca(datumDok, stanicaID, cmbVrstaVoca.value, cmbSortaVoca.value, _
                        vozacID, cmbTipAmbalaze.value, kolAmb, kolicinaI, cenaI, _
                        chkDveKlase.value, kolicinaII, cenaII, Trim$(txtBrojDokumenta.value), _
-                       result, brutoKgI, kolAmbII, brutoKgII)
+                       result, brutoKgI, kolAmbII, brutoKgII, hlNewPrij)
     On Error GoTo 0
+    SetPaletizeSkip False        ' uvek vrati toggle (AutoChain je best-effort)
     If Len(hlWarn) > 0 Then MsgBox hlWarn, vbExclamation, APP_NAME
+
+    ' Flow #2: prevezi osirocene palete stare prijemnice na tek kreiranu (hlNewPrij).
+    If doHlRelink Then
+        SetHladnjacaRelinkPending ""         ' potrosi (idempotent)
+        If Len(hlNewPrij) > 0 Then
+            Dim hlRelWarn As String
+            If ReassignPaleteToPrijemnica_TX(hlPending, hlNewPrij, hlRelWarn, True) Then
+                MsgBox "Palete stornirane prijemnice " & hlPending & " prevezane na " & hlNewPrij & _
+                       " (bez ponovne paletizacije)." & _
+                       IIf(Len(hlRelWarn) > 0, vbCrLf & "Napomena: " & hlRelWarn, ""), _
+                       vbInformation, APP_NAME
+            Else
+                MsgBox "PAZNJA: auto-prevezivanje paleta nije uspelo:" & vbCrLf & hlRelWarn & vbCrLf & _
+                       "Uradi rucno: Osiroceni dokumenti -> Mod: Palete -> Prevezi palete.", _
+                       vbExclamation, APP_NAME
+            End If
+        Else
+            MsgBox "Novi lanac nije kreirao prijemnicu -> palete NISU prevezane. " & _
+                   "Uradi rucno preko Osiroceni dokumenti -> Palete.", vbExclamation, APP_NAME
+        End If
+    End If
 
     ClearOtkupFields
 
@@ -1131,6 +1171,7 @@ Private Sub btnUnos_Click()
     Exit Sub
 
 EH:
+    SetPaletizeSkip False        ' osiguraj da toggle ne ostane ukljucen ni na gresci
     LogErr "frmOtkup.btnUnos"
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description, vbCritical, APP_NAME
 End Sub

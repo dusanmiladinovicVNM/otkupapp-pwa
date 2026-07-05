@@ -3115,6 +3115,7 @@ Private Sub btnStorno_Click()
     
     Dim Success As Boolean
     Dim palWarn As String        ' palete date prijemnice (za upozorenje posle storna)
+    Dim hlPrijBroj As String     ' autohladnjaca: broj prijemnice lanca (flow #2 relink)
 
     Select Case tipDok
         Case "Otkup"
@@ -3124,8 +3125,18 @@ Private Sub btnStorno_Click()
                 MsgBox "Otkup '" & brDok & "' nije pronadjen!", vbExclamation, APP_NAME
                 Exit Sub
             End If
+            ' Autohladnjaca: storno otkupa kaskadno obara ceo lanac (otpremnica+zbirna+
+            ' prijemnica). Ako je prijemnica lanca (ista BrojZbirne) bila paletizovana,
+            ' zapamti njen broj PRE storna -> posle nudi ispravku kroz Otkup (flow #2).
+            Dim okZbr As String, okSta As String
+            okZbr = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_BROJ_ZBIRNE))
+            okSta = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_STANICA))
+            If Len(okZbr) > 0 And IsHladnjacaStanica(okSta) Then
+                hlPrijBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, okZbr, COL_PRJ_BROJ))
+                If Len(hlPrijBroj) > 0 Then palWarn = GetPaleteInfoForPrijemnicaBroj(hlPrijBroj)
+            End If
             If ConfirmStorno("otkup", brDok) Then Success = StornoOtkupByBrDok_TX(brDok)
-            
+
         Case "Otpremnica"
             Dim otpID As String
             otpID = LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, brDok, COL_OTP_ID)
@@ -3202,9 +3213,25 @@ Private Sub btnStorno_Click()
     
     If Success Then
         Dim doPrefill As Boolean: doPrefill = False
-        If Len(palWarn) > 0 Then
-            ' Paletizovana prijemnica stornirana -> ponudi ISPRAVKU (flow #2): prefill
-            ' polja + auto-prevezivanje osirocenih paleta na novu prijemnicu pri snimanju.
+        If Len(hlPrijBroj) > 0 And Len(palWarn) > 0 Then
+            ' AUTOHLADNJACA: storno otkupa je kaskadno oborio ceo lanac; palete prijemnice
+            ' su osirocene. Ispravka ide kroz sekciju Otkup (novi lanac, nova zbirna) ->
+            ' zapamti broj stornirane prijemnice; frmOtkup ponudi relink pri ponovnom unosu.
+            If MsgBox("Stornirano (autohladnjaca - ceo lanac otpremnica+zbirna+prijemnica)." & vbCrLf & vbCrLf & _
+                      "Prijemnica " & hlPrijBroj & " je bila paletizovana (palete: " & palWarn & ")." & vbCrLf & vbCrLf & _
+                      "Uneti ISPRAVKU kroz Otkup? (ponovi ispravljeni otkup u sekciji Otkup - " & _
+                      "palete se automatski prevezu na novi lanac, bez ponovne paletizacije.)", _
+                      vbQuestion + vbYesNo, APP_NAME) = vbYes Then
+                SetHladnjacaRelinkPending hlPrijBroj
+                MsgBox "Otvori sekciju OTKUP i ponovo unesi ispravljeni otkup." & vbCrLf & _
+                       "Pri snimanju ce te program pitati da prevezes palete.", vbInformation, APP_NAME
+            Else
+                MsgBox "Palete su osirocene (i dalje broje robu). Prevezi ih rucno posle " & _
+                       "ponovnog unosa: Osiroceni dokumenti  ->  Mod: Palete.", vbInformation, APP_NAME
+            End If
+        ElseIf Len(palWarn) > 0 Then
+            ' Paletizovana prijemnica (rucni unos) stornirana -> ISPRAVKA u ovoj formi (flow #2):
+            ' prefill polja + auto-prevezivanje osirocenih paleta na novu prijemnicu pri snimanju.
             If MsgBox("Stornirano." & vbCrLf & vbCrLf & _
                       "Prijemnica je bila paletizovana (palete: " & palWarn & ")." & vbCrLf & vbCrLf & _
                       "Uneti ISPRAVKU ove prijemnice sada?" & vbCrLf & _
