@@ -1049,6 +1049,16 @@ Private Sub WriteLine(ByVal text As String, ByVal boldRow As Boolean)
     m_row = m_row + 1
 End Sub
 
+' Spoji imena kolona u jedan red (za colnames red iznad nalaza u ListBox-u).
+Private Function JoinHeaders(ByVal headers As Variant) As String
+    Dim s As String, c As Long
+    For c = LBound(headers) To UBound(headers)
+        If c > LBound(headers) Then s = s & "  |  "
+        s = s & CStr(headers(c))
+    Next c
+    JoinHeaders = s
+End Function
+
 ' Blok: naslov + (header + data) ili "OK - nema". Azurira summary + total.
 Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
                        ByVal headers As Variant, ByVal dataArr As Variant)
@@ -1058,16 +1068,20 @@ Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
         If Not IsEmpty(dataArr) Then n = UBound(dataArr, 1)
     End If
 
-    ' --- memorijski sink (samo problemi): Array(code, spojene kolone) ---
+    ' --- memorijski sink (samo blokovi sa problemima): podnaslov + kolone + nalazi ---
     Dim i As Long, k As Long, detalj As String
-    For i = 1 To n
-        detalj = ""
-        For k = 1 To UBound(dataArr, 2)
-            If k > 1 Then detalj = detalj & "  |  "
-            detalj = detalj & CStr(dataArr(i, k))
-        Next k
-        m_rows.Add Array(code, detalj)
-    Next i
+    If n > 0 Then
+        m_rows.Add Array(code, "=== " & title & "  (" & CStr(n) & " zapisa) ===")
+        m_rows.Add Array("", JoinHeaders(headers))
+        For i = 1 To n
+            detalj = ""
+            For k = 1 To UBound(dataArr, 2)
+                If k > 1 Then detalj = detalj & "  |  "
+                detalj = detalj & CStr(dataArr(i, k))
+            Next k
+            m_rows.Add Array("", detalj)
+        Next i
+    End If
 
     m_summary = m_summary & "  " & code & ": " & CStr(n) & vbCrLf
     m_totalIssues = m_totalIssues + n

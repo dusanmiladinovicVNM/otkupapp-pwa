@@ -135,21 +135,28 @@ Private Sub ShowIntegritet()
         Set mIntegList = Me.Controls.Add("Forms.ListBox.1", "lstInteg", True)
     End If
 
-    Dim w As Double: w = Me.InsideWidth
-    Dim h As Double: h = Me.InsideHeight
+    ' Overlay samo preko desne content-zone (sidebar + header ostaju vidljivi),
+    ' isto kao ostale content forme. Geometrija iz fraSidebar (SetupShellResponsive).
+    Dim rl As Double, ct As Double, rw As Double, rh As Double
+    ct = fraSidebar.top
+    rl = fraSidebar.Left + fraSidebar.width + 18
+    rw = Me.InsideWidth - rl - 12
+    rh = fraSidebar.Height
+    If rw < 120 Then rw = 120
+    If rh < 120 Then rh = 120
 
-    mIntegTitle.Left = 8: mIntegTitle.top = 8
-    mIntegTitle.Width = w - 130: mIntegTitle.Height = 20
+    mIntegTitle.Left = rl: mIntegTitle.top = ct
+    mIntegTitle.Width = rw - 120: mIntegTitle.Height = 22
     mIntegTitle.Font.Bold = True: mIntegTitle.ForeColor = RGB(255, 80, 80)
 
-    mIntegClose.Left = w - 116: mIntegClose.top = 6
-    mIntegClose.Width = 108: mIntegClose.Height = 24
+    mIntegClose.Left = rl + rw - 108: mIntegClose.top = ct
+    mIntegClose.Width = 108: mIntegClose.Height = 22
     mIntegClose.caption = "Zatvori"
 
-    mIntegList.Left = 8: mIntegList.top = 34
-    mIntegList.Width = w - 16: mIntegList.Height = h - 42
+    mIntegList.Left = rl: mIntegList.top = ct + 28
+    mIntegList.Width = rw: mIntegList.Height = rh - 28
     mIntegList.ColumnCount = 2
-    mIntegList.ColumnWidths = "70;" & CStr(CLng(mIntegList.Width) - 90)
+    mIntegList.ColumnWidths = "60;" & CStr(CLng(rw) - 80)
     mIntegList.Clear
 
     mIntegTitle.caption = "INTEGRITET  --  " & CStr(IntegritetUkupno()) & " neuskladjenih zapisa"
