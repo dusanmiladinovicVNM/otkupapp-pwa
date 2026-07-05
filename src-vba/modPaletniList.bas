@@ -1652,6 +1652,98 @@ EH:
     DetachOsirocenePaletaStavke_TX = 0
 End Function
 
+' ============================================================
+' K1 KONSOLIDACIJA ZBIRNE: 1 zbirna : 1 prijemnica : 1 fizicki set paleta.
+' Ponovni unosi pod istom zbirnom paletizovali istu robu vise puta -> fantomski
+' duplikati. Pravilo (roba primljena prvi put i tu ostala): NAJSTARIJI set paletnih
+' stavki = prava roba; ostalo = fantom.
+'   1) pravi set (prijemnica sa najstarijom stavkom za zbirnu) -> re-point na JEDINU
+'      aktivnu prijemnicu te zbirne, uz KG-sync (reuse ReassignPaleteToPrijemnica_TX;
+'      njen STEP 1 usput skida svezu/fantom paletizaciju aktivne).
+'   2) sve ostale prijemnice-pokusaji te zbirne -> Skini (DetachOsirocenePaletaStavke_TX).
+' Orkestrira postojece, provereno primitive. Vraca rezime u outInfo.
+' ============================================================
+Public Function KonsolidujZbirnu(ByVal brojZbirne As String, _
+                                 Optional ByRef outInfo As String) As Boolean
+    Const SRC As String = "modPaletniList.KonsolidujZbirnu"
+    On Error GoTo EH
+    outInfo = ""
+    brojZbirne = Trim$(brojZbirne)
+    If Len(brojZbirne) = 0 Then Exit Function
+
+    ' Jedina aktivna prijemnica te zbirne (1:1).
+    Dim aBroj As String
+    aBroj = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne, COL_PRJ_BROJ)
+    If Len(aBroj) = 0 Then
+        outInfo = "Nema aktivne prijemnice za zbirnu " & brojZbirne & _
+                  " (ceo blok/zbirna stornirana - vidi Mod: Prijemnice)."
+        Exit Function
+    End If
+
+    ' Distinct BrojPrijemnice sa AKTIVNIM stavkama za zbirnu + najstariji (Bfirst).
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim iZbr As Long, iBr As Long, iCr As Long, iSt As Long
+    iZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
+    iBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)
+    iCr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_CREATED)
+    iSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+
+    Dim attempts As Object: Set attempts = CreateObject("Scripting.Dictionary")
+    attempts.CompareMode = vbTextCompare
+    Dim bFirst As String, minCr As Double, haveMin As Boolean
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, iZbr))) = brojZbirne _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iSt)))) <> "DA" Then
+            Dim bp As String: bp = Trim$(CStr(SafeCell(s, r, iBr)))
+            If Len(bp) > 0 Then attempts(bp) = True
+            Dim cv As Variant: cv = SafeCell(s, r, iCr)
+            If iCr > 0 Then
+                If IsDate(cv) Then
+                    Dim dd As Double: dd = CDbl(CDate(cv))
+                    If Not haveMin Or dd < minCr Then minCr = dd: haveMin = True: bFirst = bp
+                End If
+            End If
+        End If
+    Next r
+    If attempts.count = 0 Then
+        outInfo = "Nema aktivnih paleta-stavki za zbirnu " & brojZbirne & "."
+        Exit Function
+    End If
+    If Len(bFirst) = 0 Then bFirst = CStr(attempts.Keys()(0))   ' fallback ako nema CreatedAt
+
+    ' 1) PRAVI set (Bfirst) -> aktivna A (KG-sync + skidanje sveze fantom paletizacije A unutar Reassign).
+    Dim kept As String: kept = aBroj
+    If StrComp(bFirst, aBroj, vbTextCompare) <> 0 Then
+        Dim w As String: w = ""
+        If ReassignPaleteToPrijemnica_TX(bFirst, aBroj, w, True) Then
+            kept = bFirst
+        Else
+            outInfo = "Prevezivanje pravog seta (" & bFirst & " -> " & aBroj & ") nije uspelo. " & w
+            Exit Function
+        End If
+    End If
+
+    ' 2) OSTALE prijemnice-pokusaji (fantom) -> Skini.
+    Dim dropped As Long, v As Variant
+    For Each v In attempts.Keys
+        Dim b As String: b = CStr(v)
+        If StrComp(b, bFirst, vbTextCompare) <> 0 And StrComp(b, aBroj, vbTextCompare) <> 0 Then
+            Dim di As String: di = ""
+            If DetachOsirocenePaletaStavke_TX(b, di) > 0 Then dropped = dropped + 1
+        End If
+    Next v
+
+    outInfo = "Zbirna " & brojZbirne & ": pravi set (" & kept & ") vezan na aktivnu " & aBroj & _
+              "; skinuto fantom prijemnica: " & dropped & "."
+    KonsolidujZbirnu = True
+    Exit Function
+EH:
+    LogErr SRC
+    KonsolidujZbirnu = False
+End Function
+
 ' Distinct kooperanti za zbirnu (reuse modSledljivost.TraceByZbirna, kol.1).
 Private Function GetKooperantiZaZbirnu(ByVal brojZbirne As String) As String
     On Error Resume Next
