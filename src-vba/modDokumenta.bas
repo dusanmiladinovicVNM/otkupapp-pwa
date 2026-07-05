@@ -3237,11 +3237,32 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     Dim k As Long
     For k = 1 To targetRows.count
         RequireUpdateCell TBL_PRIJEMNICA, targetRows(k), COL_PRJ_BROJ_ZBIRNE, targetBrZbirne, SRC
     Next k
+
+    ' Sledljivost: paletne stavke te prijemnice moraju dobiti NOVU BrojZbirne, inace
+    ' ostaju sa mrtvom zbirnom (paleta -> zbirna -> kooperanti pukne). Ranije se nije
+    ' radilo -> gap. Menja se samo veza (BrojZbirne), roba/pripadnost prijemnici ostaje.
+    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsEmpty(ps) Then
+        Dim pBr As Long, pZb As Long, pSt As Long
+        pBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+        pZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+        pSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        If pBr > 0 And pZb > 0 Then
+            Dim r2 As Long
+            For r2 = 1 To UBound(ps, 1)
+                If Trim$(CStr(ps(r2, pBr))) = brPrijemnice _
+                   And (pSt = 0 Or UCase$(Trim$(CStr(ps(r2, pSt)))) <> "DA") Then
+                    RequireUpdateCell TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, targetBrZbirne, SRC
+                End If
+            Next r2
+        End If
+    End If
 
     tx.CommitTx
     Set tx = Nothing
