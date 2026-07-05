@@ -840,6 +840,18 @@ Private Sub StornoSelectedBlok()
     If MsgBox("Stornirati ceo otkup br. " & brDok & " (" & CStr(mLstBlok.List(li, 2)) & _
               ", sve klase)?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Sub
 
+    ' Flow #2 (autohladnjaca): zapamti kontekst lanca PRE storna. Ako je stanica
+    ' hladnjaca i prijemnica lanca (ista BrojZbirne) bila paletizovana, posle storna
+    ' se nudi ISPRAVKA (prefill otkupa + auto-relink osirocenih paleta pri Unosu).
+    Dim hlPrijBroj As String, hlPalInfo As String
+    Dim hlSta As String, hlZbr As String
+    hlSta = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_STANICA))
+    hlZbr = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_BROJ_ZBIRNE))
+    If Len(hlZbr) > 0 And IsHladnjacaStanica(hlSta) Then
+        hlPrijBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, hlZbr, COL_PRJ_BROJ))
+        If Len(hlPrijBroj) > 0 Then hlPalInfo = GetPaleteInfoForPrijemnicaBroj(hlPrijBroj)
+    End If
+
     Dim ok As Boolean
     If Len(brDok) > 0 Then
         ok = StornoOtkupByBrDok_TX(brDok)
@@ -851,7 +863,11 @@ Private Sub StornoSelectedBlok()
         LoadBlokovi
         LoadOtpremnice
         RefreshSummary
-        MsgBox "Otkup storniran: " & brDok, vbInformation, APP_NAME
+        If Len(hlPrijBroj) > 0 And Len(hlPalInfo) > 0 Then
+            OfferHladnjacaIspravka brDok, hlPrijBroj, hlPalInfo
+        Else
+            MsgBox "Otkup storniran: " & brDok, vbInformation, APP_NAME
+        End If
     Else
         MsgBox "Storno nije uspeo za " & brDok & ".", vbCritical, APP_NAME
     End If
@@ -859,6 +875,138 @@ Private Sub StornoSelectedBlok()
 EH:
     LogErr "modOtkupBlok.StornoSelectedBlok"
     MsgBox "Gre" & ChrW(353) & "ka pri storno bloka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Broj -> string za prefill (0 -> "" ; inace CStr; NormalizeNumericText normalizuje separator).
+Private Function OtkNumStr(ByVal v As Double) As String
+    If v = 0 Then OtkNumStr = "" Else OtkNumStr = CStr(v)
+End Function
+
+' Flow #2 autohladnjaca (single-form): posle storna otkupa-hladnjace sa paletizovanom
+' prijemnicom, ponudi ispravku. Da -> zapamti broj stare prijemnice (relink pending) +
+' prefill otkupni blok iz stornirane; operater menja gresku i klikne Unos (btnUnos onda
+' AutoChain bez paletizacije + prevezivanje osirocenih paleta na novi lanac).
+Private Sub OfferHladnjacaIspravka(ByVal brDok As String, ByVal prijBroj As String, ByVal palInfo As String)
+    On Error GoTo EH
+    If MsgBox("Otkup storniran (autohladnjaca - ceo lanac otpremnica+zbirna+prijemnica)." & vbCrLf & vbCrLf & _
+              "Prijemnica " & prijBroj & " je bila paletizovana (palete: " & palInfo & ")." & vbCrLf & vbCrLf & _
+              "Uneti ISPRAVKU ovog otkupa sada? (polja se popune - menjas samo gresku; palete se " & _
+              "automatski prevezu na novi lanac pri Unosu, bez ponovne paletizacije.)", _
+              vbQuestion + vbYesNo, APP_NAME) = vbYes Then
+        SetHladnjacaRelinkPending prijBroj
+        PrefillOtkupFromStornirano brDok
+        On Error Resume Next
+        mForm.Controls("cmbKooperant").SetFocus
+        On Error GoTo 0
+    Else
+        MsgBox "Palete su osirocene (i dalje broje robu). Prevezi ih rucno: " & _
+               "Osiroceni dokumenti  ->  Mod: Palete.", vbInformation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modOtkupBlok.OfferHladnjacaIspravka"
+End Sub
+
+' Popuni levu (otkup) formu iz (upravo stornirane) otkupa, da operater menja samo
+' gresku. Klasa I -> osnovna polja; ako postoji red Klase II -> ukljuci chkDveKlase
+' i popuni II. Broj otkupa se NE preuzima (predlog sledeceg dolazi iz stanice-Change).
+' Kolicina: u BRUTO modu uzmi BrutoKg (original bruto), inace Kolicina (neto). Cena se
+' postavlja POSLEDNJA (AutoFillCenaOtkup iz _Change eventova bi je inace pregazio).
+' mPrefilling gard: cmbOtkupnoMesto_Change ne sme da resetuje datum/zbirnu (kao PrefillLeftForm).
+Private Sub PrefillOtkupFromStornirano(ByVal brDok As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_OTKUP)
+    If IsEmpty(d) Then Exit Sub
+
+    Dim cBr As Long, cKl As Long, cKoop As Long, cSta As Long, cVoz As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
+    Dim cAmb As Long, cBruto As Long, cPar As Long, cNov As Long, cPrim As Long, cDat As Long
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cVoz = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
+    cVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    cSo = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cTip = GetColumnIndex(TBL_OTKUP, COL_OTK_TIP_AMB)
+    cAmb = GetColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB)
+    cBruto = GetColumnIndex(TBL_OTKUP, COL_OTK_BRUTO)
+    cPar = GetColumnIndex(TBL_OTKUP, COL_OTK_PARCELA)
+    cNov = GetColumnIndex(TBL_OTKUP, COL_OTK_NOVAC)
+    cPrim = GetColumnIndex(TBL_OTKUP, COL_OTK_PRIMALAC)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    If cBr = 0 Then Exit Sub
+
+    Dim rI As Long, rII As Long: rI = 0: rII = 0
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, cBr))) = brDok Then
+            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
+            If kl = "II" Then
+                If rII = 0 Then rII = r
+            Else
+                If rI = 0 Then rI = r
+            End If
+        End If
+    Next r
+    If rI = 0 And rII = 0 Then Exit Sub
+    Dim base As Long: base = rI: If base = 0 Then base = rII
+
+    Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
+
+    mPrefilling = True
+
+    ' Datum PRE stanice.
+    If cDat > 0 Then
+        Dim vDat As Variant: vDat = d(base, cDat)
+        If IsDate(vDat) Then SetLeftCtl "txtDatum", Format$(CDate(vDat), "d.m.yyyy")
+    End If
+
+    ' Stanica (fires _Change: fill kooperant, lock, predlog broja) -> PRE kooperanta/proizvoda.
+    SetComboByIdAny mForm.Controls("cmbOtkupnoMesto"), Trim$(CStr(d(base, cSta)))
+    SetComboByIdAny mForm.Controls("cmbKooperant"), Trim$(CStr(d(base, cKoop)))
+    If cVoz > 0 Then SetComboByIdAny mForm.Controls("cmbVozac"), Trim$(CStr(d(base, cVoz)))
+
+    ' Vrsta PRE Sorte (Vrsta_Change puni listu sorti).
+    mForm.Controls("cmbVrstaVoca").value = NzToText(d(base, cVr))
+    mForm.Controls("cmbSortaVoca").value = NzToText(d(base, cSo))
+    If cTip > 0 Then mForm.Controls("cmbTipAmbalaze").value = NzToText(d(base, cTip))
+
+    ' Klasa II ukljuci PRE punjenja II polja (chkDveKlase_Change omogucava + prikaze txtKolAmbalazeIIRT).
+    mForm.Controls("chkDveKlase").value = (rII > 0)
+
+    ' Klasa I kolicina/amb.
+    If rI > 0 Then
+        Dim kolI As Double
+        If brutoMode And cBruto > 0 And NzD(d(rI, cBruto)) > 0 Then kolI = NzD(d(rI, cBruto)) Else kolI = NzD(d(rI, cKol))
+        SetLeftCtl "txtKolicina", OtkNumStr(kolI)
+        If cAmb > 0 Then SetLeftCtl "txtKolAmbalaze", OtkNumStr(NzL(d(rI, cAmb)))
+    End If
+
+    ' Klasa II kolicina/amb (runtime polje txtKolAmbalazeIIRT).
+    If rII > 0 Then
+        Dim kolII As Double
+        If brutoMode And cBruto > 0 And NzD(d(rII, cBruto)) > 0 Then kolII = NzD(d(rII, cBruto)) Else kolII = NzD(d(rII, cKol))
+        SetLeftCtl "txtKolicinaKLII", OtkNumStr(kolII)
+        If cAmb > 0 Then SetLeftCtl "txtKolAmbalazeIIRT", OtkNumStr(NzL(d(rII, cAmb)))
+    End If
+
+    ' Parcela (ako se prati) + kes (novac/primalac) ako je bio unet.
+    If cPar > 0 Then SetComboByIdAny mForm.Controls("cmbParcela"), Trim$(CStr(d(base, cPar)))
+    If cNov > 0 And NzD(d(base, cNov)) <> 0 Then SetLeftCtl "txtNovac", OtkNumStr(NzD(d(base, cNov)))
+    If cPrim > 0 Then SetLeftCtl "txtPrimalac", NzToText(d(base, cPrim))
+
+    ' Cena POSLEDNJA (override auto-fill iz _Change eventova).
+    If rI > 0 And cCena > 0 Then SetLeftCtl "txtCena", OtkNumStr(NzD(d(rI, cCena)))
+    If rII > 0 And cCena > 0 Then SetLeftCtl "txtCenaKLII", OtkNumStr(NzD(d(rII, cCena)))
+
+    mPrefilling = False
+    Exit Sub
+EH:
+    mPrefilling = False
+    LogErr "modOtkupBlok.PrefillOtkupFromStornirano"
 End Sub
 
 ' Sekcija "Izgubljeni blokovi": blokovi cija je otpremnica stornirana/nestala.

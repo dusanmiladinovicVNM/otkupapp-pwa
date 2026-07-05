@@ -49,6 +49,7 @@ End Sub
 Private Sub UserForm_Terminate()
     On Error Resume Next
     MouseWheel_Detach
+    SetHladnjacaRelinkPending ""      ' flow #2: ne prenosi pending ispravku van zivota forme
 End Sub
 
 Private Sub UserForm_Initialize()
@@ -1107,22 +1108,14 @@ Private Sub btnUnos_Click()
     ' #3 Hladnjaca auto-lanac: ako je OM hladnjaca i toggle ON ->
     ' auto otpremnica+zbirna+prijemnica iz otkupa. Best-effort (pre ClearOtkupFields,
     ' dok combo-i jos drze vrednosti).
-    ' Flow #2 (ispravka autohladnjace): ako postoji pending relink (operater je posle
-    ' storna otkupa-hladnjace izabrao "Uneti ispravku") i ovo je hladnjaca-unos ->
-    ' potvrdi i preskoci svezu paletizaciju novog lanca (palete se prevezuju re-pointom).
+    ' Flow #2 (ispravka autohladnjace): pending relink je postavljen kad je operater na
+    ' storno-u (panel "Otkupni blokovi") izabrao "Uneti ispravku" i forma je prefill-ovana.
+    ' Ovo je taj Unos -> preskoci svezu paletizaciju novog lanca (palete se prevezuju
+    ' re-pointom). Vec potvrdjeno na storno-u, pa bez ponovnog pitanja.
     Dim hlPending As String: hlPending = GetHladnjacaRelinkPending()
-    Dim doHlRelink As Boolean: doHlRelink = False
-    If Len(hlPending) > 0 And IsHladnjacaStanica(stanicaID) Then
-        If MsgBox("Ispravka autohladnjace: prevezati osirocene palete stornirane prijemnice " & _
-                  hlPending & " na ovaj novi unos?" & vbCrLf & _
-                  "(Ista roba - bez ponovne paletizacije.)", _
-                  vbQuestion + vbYesNo, APP_NAME) = vbYes Then
-            doHlRelink = True
-            SetPaletizeSkip True
-        Else
-            SetHladnjacaRelinkPending ""     ' odustao -> ocisti pending
-        End If
-    End If
+    Dim doHlRelink As Boolean
+    doHlRelink = (Len(hlPending) > 0 And IsHladnjacaStanica(stanicaID))
+    If doHlRelink Then SetPaletizeSkip True
 
     On Error Resume Next
     Dim hlWarn As String
