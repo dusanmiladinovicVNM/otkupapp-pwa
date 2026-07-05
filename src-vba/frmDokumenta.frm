@@ -2469,6 +2469,13 @@ Private Sub btnUnosPrij_Click()
         End If
     End If
 
+    ' Flow #2: da li je ovo ispravka (relink)? Ista BrojZbirne kao stornirana + pending
+    ' postavljen -> preskoci svezu paletizaciju (palete se prevezuju re-pointom nize).
+    Dim willCorrect As Boolean
+    willCorrect = (Len(m_pendingRelinkOldPrij) > 0) And _
+                  (Trim$(txtBrojZbirnePrij.value) = m_pendingRelinkZbirne)
+    If willCorrect Then SetPaletizeSkip True
+
     Dim result As String
 
     result = SavePrijemnicaMulti_TX( _
@@ -2491,6 +2498,8 @@ Private Sub btnUnosPrij_Click()
         brutoKgI:=brutoKgI, _
         brutoKgII:=brutoKgII)
 
+    SetPaletizeSkip False        ' uvek vrati toggle (SavePrijemnicaMulti_TX ne re-raise-uje)
+
     If result = "" Then
         MsgBox Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_4"), vbCritical, APP_NAME
         Exit Sub
@@ -2512,15 +2521,14 @@ Private Sub btnUnosPrij_Click()
     ' "Uneti ispravku", ova nova prijemnica preuzima osirocene palete stare (bez ponovne
     ' paletizacije - ista roba). Guard: ista BrojZbirne (1 zbirna : 1 prijemnica) -> ne
     ' okida na nepovezanom kasnijem unosu; ako je zbirna promenjena, odustani od auto-relink-a.
-    Dim isCorrection As Boolean
-    isCorrection = (Len(m_pendingRelinkOldPrij) > 0) And _
-                   (Trim$(txtBrojZbirnePrij.value) = m_pendingRelinkZbirne)
-    If Len(m_pendingRelinkOldPrij) > 0 And Not isCorrection Then
+    ' willCorrect je izracunat pre snimanja (isti ulaz -> ista vrednost). Stale pending
+    ' (zbirna u medjuvremenu promenjena) -> ocisti da ne okine na kasnijem unosu.
+    If Len(m_pendingRelinkOldPrij) > 0 And Not willCorrect Then
         m_pendingRelinkOldPrij = ""
         m_pendingRelinkZbirne = ""
     End If
 
-    If isCorrection Then
+    If willCorrect Then
         Dim oldBrojPrij As String: oldBrojPrij = m_pendingRelinkOldPrij
         Dim newBrojPrij As String: newBrojPrij = Trim$(txtBrojPrij.value)
         m_pendingRelinkOldPrij = ""            ' potrosi odmah (idempotent)
@@ -2583,6 +2591,7 @@ Private Sub btnUnosPrij_Click()
     Exit Sub
 
 EH:
+    SetPaletizeSkip False        ' osiguraj da toggle ne ostane ukljucen ni na gresci
     LogErr "frmDokumenta.btnUnosPrij"
     MsgBox Poruka("DOK_ERR_GRESKA") & Err.description, vbCritical, APP_NAME
 End Sub

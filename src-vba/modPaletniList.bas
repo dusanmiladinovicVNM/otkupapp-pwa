@@ -23,6 +23,17 @@ Option Explicit
 ' Sema tabela: modSetup.EnsurePaletniListSchema (pokrenuti jednom).
 ' ============================================================
 
+' Flow #2 (ispravka stornirane prijemnice): kad se ista roba samo prevezuje na
+' ispravljenu prijemnicu (ReassignPaleteToPrijemnica_TX re-point originalnih paleta),
+' sveza paletizacija u SavePrijemnica*/PaletizePrijemnica se PRESKACE -- inace bi se
+' kreirale palete koje se odmah storniraju (prazna otvorena paleta + potrosen broj).
+' frmDokumenta postavlja True pre snimanja ispravke i False odmah posle. Default False.
+Private mSkipPaletize As Boolean
+
+Public Sub SetPaletizeSkip(ByVal b As Boolean)
+    mSkipPaletize = b
+End Sub
+
 ' Vraca sledeci redni broj palete za TEKUCU godinu (1 ako jos nema palete
 ' u ovoj godini). Prikaz na listu: BrojPalete & "/" & Godina.
 Public Function GenerateBrojPalete() As Long
@@ -85,6 +96,10 @@ Public Function PaletizePrijemnica( _
     ' Toggle: paletiranje iskljuceno (Podesavanja) -> bez paleta/paletnih listova.
     ' Prijemnica se i dalje snima normalno; samo izostaje paletizacija. Default ON.
     If Not IsPaletiranjeEnabled() Then Exit Function
+
+    ' Flow #2 ispravka: preskoci svezu paletizaciju -- palete se prevezuju re-pointom
+    ' (ReassignPaleteToPrijemnica_TX) da se ista roba ne paletizuje pa odmah stornira.
+    If mSkipPaletize Then Exit Function
 
     If brGajbica <= 0 Then Exit Function       ' nema gajbica (Klasa II / bez ambalaze)
 
