@@ -1611,6 +1611,35 @@ End Function
 ' Reuse DecrementPaletaForStavka (isti korak kao STEP 1 re-pointa) + storno stavke.
 ' Vraca broj skinutih stavki; outInfo nosi rezime za UI. Transakciono.
 ' ============================================================
+' Ukupan broj gajbica na AKTIVNIM (osirocenim) paletnim stavkama date prijemnice
+' (sve klase). Flow #2 (autohladnjaca) njime odlucuje: isti broj kao nov unos ->
+' re-point (ista roba); razlicit -> promena kolicine, ne "ista roba" -> sveza
+' paletizacija novog lanca + skini staro (umesto rucnog "aneksa").
+Public Function OsiroceneGajbicaTotal(ByVal broj As String) As Long
+    On Error GoTo EH
+    broj = Trim$(broj)
+    If Len(broj) = 0 Then Exit Function
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sBr As Long, sGa As Long, sSt As Long
+    sBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    sGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    sSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If sBr = 0 Or sGa = 0 Then Exit Function
+    Dim r As Long, tot As Long
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, sBr))) = broj Then
+            If sSt = 0 Or UCase$(Trim$(CStr(SafeCell(s, r, sSt)))) <> "DA" Then
+                tot = tot + NzL(SafeCell(s, r, sGa))
+            End If
+        End If
+    Next r
+    OsiroceneGajbicaTotal = tot
+    Exit Function
+EH:
+    LogErr "modPaletniList.OsiroceneGajbicaTotal"
+End Function
+
 Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
                                                Optional ByRef outInfo As String) As Long
     Const SRC As String = "modPaletniList.DetachOsirocenePaletaStavke_TX"
