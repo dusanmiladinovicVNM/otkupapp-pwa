@@ -1447,6 +1447,22 @@ Private Sub PaletaLog(ByVal palID As String, ByVal action As String, ByVal detai
         message:=action & " paleta=" & palID & " " & detail, _
         moduleName:="modPaletniList", procedureName:="ReassignPaleteToPrijemnica_TX", _
         entityType:="Paleta", entityID:=palID, correlationId:=palID
+
+    ' Vidljivi trag na paleti: append imenovanih parova (act=..;det=..;t=..),
+    ' delimiter-safe (";" u detalju -> ","). Best-effort; samo ako kolona postoji.
+    Dim ci As Long: ci = GetColumnIndex(TBL_PALETA, COL_PAL_ISTORIJA)
+    If ci > 0 Then
+        Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+        If pr > 0 Then
+            Dim d As Variant: d = GetTableData(TBL_PALETA)
+            Dim prev As String: prev = CStr(SafeCell(d, pr, ci))
+            Dim entry As String
+            entry = "act=" & action & ";det=" & Replace(detail, ";", ",") & _
+                    ";t=" & Format$(Now, "yyyy-mm-dd hh:nn")
+            If Len(prev) > 0 Then entry = prev & " | " & entry
+            RequireUpdateCell TBL_PALETA, pr, COL_PAL_ISTORIJA, entry, "modPaletniList.PaletaLog"
+        End If
+    End If
 End Sub
 
 ' Skini gajbica/neto/amb sa palete za jednu ponistenu stavku; reopen ako padne ispod kapaciteta.
@@ -1621,6 +1637,7 @@ Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
         DecrementPaletaForStavka CStr(SafeCell(s, r, sPal)), NzL(SafeCell(s, r, sGa)), _
                                  NzD(SafeCell(s, r, sNe)), NzD(SafeCell(s, r, sAmb)), SRC
         RequireUpdateCell TBL_PALETA_STAVKA, r, COL_STORNIRANO, "Da", SRC
+        PaletaLog CStr(SafeCell(s, r, sPal)), "DETACH", "prij=" & oldBroj & " gajb=" & NzL(SafeCell(s, r, sGa))
         cnt = cnt + 1
     Next k
 

@@ -924,7 +924,8 @@ Public Sub EnsurePaletniListSchema()
               COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
               COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
               COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
-              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO)
+              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO, _
+              COL_PAL_ISTORIJA)
 
     EnsureDataTable TBL_PALETA_STAVKA, "PaleteStavke", _
         Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
@@ -953,6 +954,7 @@ Public Sub EnsurePaletniListSchema()
         Array(COL_VGP_TIP, "Aktivan")
 
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
+    EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach)
 
     EnsureCenovnikSchema
 
