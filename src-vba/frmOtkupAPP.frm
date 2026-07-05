@@ -167,6 +167,7 @@ Private Sub ShowIntegritet()
     mIntegList.Left = rl + 10: mIntegList.top = ct + 42
     mIntegList.Width = rw - 20: mIntegList.Height = rh - 52
     StyleListBox mIntegList
+    mIntegList.Font.name = "Consolas"       ' monospace -> poravnate kolone
     mIntegList.ColumnCount = 2
     mIntegList.ColumnWidths = "58;" & CStr(CLng(mIntegList.Width) - 76)
     mIntegList.Clear

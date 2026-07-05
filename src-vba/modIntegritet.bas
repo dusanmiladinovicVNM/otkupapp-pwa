@@ -1049,14 +1049,9 @@ Private Sub WriteLine(ByVal text As String, ByVal boldRow As Boolean)
     m_row = m_row + 1
 End Sub
 
-' Spoji imena kolona u jedan red (za colnames red iznad nalaza u ListBox-u).
-Private Function JoinHeaders(ByVal headers As Variant) As String
-    Dim s As String, c As Long
-    For c = LBound(headers) To UBound(headers)
-        If c > LBound(headers) Then s = s & "  |  "
-        s = s & CStr(headers(c))
-    Next c
-    JoinHeaders = s
+' Levo poravnaj string na sirinu w (za monospace poravnanje kolona u ListBox-u).
+Private Function PadR(ByVal s As String, ByVal w As Long) As String
+    If Len(s) >= w Then PadR = s Else PadR = s & Space$(w - Len(s))
 End Function
 
 ' Blok: naslov + (header + data) ili "OK - nema". Azurira summary + total.
@@ -1069,17 +1064,39 @@ Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
     End If
 
     ' --- memorijski sink (samo blokovi sa problemima): podnaslov + kolone + nalazi ---
-    Dim i As Long, k As Long, detalj As String
+    ' Polja su padovana na max sirinu kolone u bloku -> poravnato uz monospace font.
+    Dim i As Long, k As Long
     If n > 0 Then
+        If m_rows.count > 0 Then m_rows.Add Array("", "")     ' prazan red izmedju oblasti
+
         m_rows.Add Array(code, "=== " & title & "  (" & CStr(n) & " zapisa) ===")
-        m_rows.Add Array("", JoinHeaders(headers))
+
+        Dim nc As Long: nc = UBound(dataArr, 2)
+        Dim wds() As Long: ReDim wds(1 To nc)
+        For k = 1 To nc
+            wds(k) = Len(CStr(headers(LBound(headers) + k - 1)))
+        Next k
         For i = 1 To n
-            detalj = ""
-            For k = 1 To UBound(dataArr, 2)
-                If k > 1 Then detalj = detalj & "  |  "
-                detalj = detalj & CStr(dataArr(i, k))
+            For k = 1 To nc
+                If Len(CStr(dataArr(i, k))) > wds(k) Then wds(k) = Len(CStr(dataArr(i, k)))
             Next k
-            m_rows.Add Array("", detalj)
+        Next i
+
+        Dim line As String
+        line = ""
+        For k = 1 To nc
+            If k > 1 Then line = line & " | "
+            line = line & PadR(CStr(headers(LBound(headers) + k - 1)), wds(k))
+        Next k
+        m_rows.Add Array("", line)
+
+        For i = 1 To n
+            line = ""
+            For k = 1 To nc
+                If k > 1 Then line = line & " | "
+                line = line & PadR(CStr(dataArr(i, k)), wds(k))
+            Next k
+            m_rows.Add Array("", line)
         Next i
     End If
 
