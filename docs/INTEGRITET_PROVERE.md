@@ -23,7 +23,7 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 | Kod | Značenje | Napomena |
 |---|---|---|
 | A1 | `Σ otpremnica.Kolicina` vs `Σ zbirna.UkupnoKolicina` po `BrojZbirne` | reuse `ValidateZbirna` (prag 0.01 kg) |
-| A2 | Manjak/višak `zbirna → prijemnica`: **VIŠAK** (prijemnica > zbirna), **NIŠTA PRIMLJENO**, **MANJAK > praga** | prag `PRAG_MANJAK_PCT` (10%) |
+| A2 | Manjak/višak `zbirna → prijemnica`: **VIŠAK > 5%** (prijemnica > zbirna), **NIŠTA PRIMLJENO**, **MANJAK > 10%** | pragovi `PRAG_VISAK_PCT` (5%) / `PRAG_MANJAK_PCT` (10%) |
 | A3 | `Σ paleta-stavke.NetoKg` po prijemnici vs `prijemnica.Kolicina` | samo paletizovane; tol 0.5 kg |
 | A4 | `paleta.NetoKg`/`BrojGajbica` (header) vs `Σ stavke` | tol 0.5 kg / 0.001 gajbe |
 | A5 | prerada `NetoUlazKg` vs `Σ stavke.NetoKg`; `NetoIzlaz ≤ NetoUlaz` | tol 0.5 kg |
@@ -54,9 +54,14 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 ## Podesive tolerancije
 
 U `modIntegritet.bas`, vrh modula:
-- `PRAG_MANJAK_PCT` (default 10) — prag za A2 „veliki manjak".
+- `PRAG_MANJAK_PCT` (10) — manjak% iznad ovoga se prijavljuje (A2).
+- `PRAG_VISAK_PCT` (5) — višak do ovoga se **ne** prijavljuje (A2).
 - kg tolerancije (0.5) su inline u A3/A4/A5 — lako promeniti ako po-gajbi
   zaokruživanje pravi šum.
+
+**Poređenje `BrojZbirne` je case-insensitive** (`s5/…` = `S5/…`) — u
+`AllBrojeviInZbirna` i `AggByBroj` (`CompareMode = vbTextCompare`), pa razlika u
+velikom/malom slovu ne pravi lažni „ne postoji" (B4/C2) ni razdvojenu grupu (A1/A2).
 
 ## Odnos prema invarijantama (potvrđeno iz koda)
 

@@ -20,6 +20,7 @@ Option Explicit
 
 Private Const INTEGRITET_SHEET As String = "INTEGRITET_PROVERE"
 Private Const PRAG_MANJAK_PCT As Double = 10#   ' manjak% iznad ovoga = "za proveru"
+Private Const PRAG_VISAK_PCT As Double = 5#     ' visak do ovoga se NE prijavljuje
 
 Private m_ws As Worksheet
 Private m_row As Long
@@ -133,8 +134,8 @@ Private Sub Chk_A2_ManjakAnomalije()
         If zbrKg <> 0 Then pct = manjak / zbrKg * 100 Else pct = 0
 
         razlog = ""
-        If manjak < -0.01 Then
-            razlog = "VISAK (prijemnica > zbirna)"
+        If manjak < 0 And Abs(manjak) > zbrKg * (PRAG_VISAK_PCT / 100#) Then
+            razlog = "VISAK > " & CStr(PRAG_VISAK_PCT) & "% (prijemnica > zbirna)"
         ElseIf prijKg <= 0.01 And zbrKg > 0.01 Then
             razlog = "NISTA PRIMLJENO"
         ElseIf pct > PRAG_MANJAK_PCT Then
@@ -693,6 +694,7 @@ End Sub
 ' Agregat kg po BrojZbirne (bez storniranih). Vraca Dictionary(broj -> Double).
 Private Function AggByBroj(ByVal tbl As String, ByVal brojCol As String, ByVal kgCol As String) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare   ' kljucevi (BrojZbirne/ID) match case-insensitive
 
     Dim data As Variant: data = GetTableData(tbl)
     If Not IsArray(data) Then Set AggByBroj = d: Exit Function
@@ -735,6 +737,7 @@ End Function
 ' Skup SVIH BrojZbirne u tblZbirna (i stornirani se racunaju kao "postoji").
 Private Function AllBrojeviInZbirna() As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare   ' BrojZbirne match case-insensitive (s5 == S5)
 
     Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
     If Not IsArray(data) Then Set AllBrojeviInZbirna = d: Exit Function
