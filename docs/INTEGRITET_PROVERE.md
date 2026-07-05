@@ -35,6 +35,7 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 | B2 | **Otkupi bez otpremnice** (`OtpremnicaID` prazan) — reuse `GetUnlinkedOtkupi` |
 | B4a/B4b | Otpremnica/prijemnica sa `BrojZbirne` koji **uopšte ne postoji** u `tblZbirna` (različito od B1) |
 | B5 | Prijemnica **bez `BrojZbirne`** (obavezna veza) |
+| B6 | `BrojZbirne` se poklapa sa zbirnom **samo do velikog/malog slova** (npr. `s5/…` vs `S5/…`) — advisory za normalizaciju; skenira otpremnicu/prijemnicu/paleta-stavku/otkup |
 
 ### C — Palete
 | Kod | Značenje |

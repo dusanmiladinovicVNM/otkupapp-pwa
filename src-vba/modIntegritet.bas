@@ -46,6 +46,7 @@ Public Sub RunIntegritetProvere()
     Chk_B2_UnlinkedOtkupi
     Chk_B4_DanglingBrojZbirne
     Chk_B5_PrijemnicaBezZbirne
+    Chk_B6_ZbirnaCaseMismatch
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
     Chk_C3_PaletaBezStavke
@@ -257,6 +258,35 @@ Private Sub Chk_B5_PrijemnicaBezZbirne()
 
 EH:
     WriteErr "B5", Err.description
+End Sub
+
+' ============================================================
+' CHECK B6: BrojZbirne case-mismatch (za normalizaciju)
+' ============================================================
+' Zapisi ciji se BrojZbirne poklapa sa zbirnom SAMO ignorisuci veliko/malo
+' slovo (npr. dok "s5/..." vs zbirna "S5/..."). Nije "ne postoji" (to je B4/
+' C2), ali je latentan problem: case-senzitivni delovi app-a (ReportManjak,
+' GetVerwaisteDokumente) ih tretiraju kao razlicite -> tiha greska. Advisory:
+' listaj sve za normalizaciju na tacan zapis iz tblZbirna.
+
+Private Sub Chk_B6_ZbirnaCaseMismatch()
+    On Error GoTo EH
+
+    Dim exactSet As Object, ciMap As Object
+    BuildZbirnaCaseMaps exactSet, ciMap
+
+    Dim bad As Collection: Set bad = New Collection
+    CollectCaseMismatch bad, "Otpremnica", TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ_ZBIRNE, exactSet, ciMap
+    CollectCaseMismatch bad, "Prijemnica", TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ_ZBIRNE, exactSet, ciMap
+    CollectCaseMismatch bad, "PaletaStavka", TBL_PALETA_STAVKA, COL_PALS_ID, COL_PALS_BROJ_ZBIRNE, exactSet, ciMap
+    CollectCaseMismatch bad, "Otkup", TBL_OTKUP, COL_OTK_ID, COL_OTK_BROJ_ZBIRNE, exactSet, ciMap
+
+    WriteBlock "B6", "BrojZbirne se poklapa samo do velikog/malog slova (za normalizaciju)", _
+               Array("Tabela", "DokumentID", "BrojZbirne (napisano)", "Zbirna (kanon)"), CollToArray(bad, 4)
+    Exit Sub
+
+EH:
+    WriteErr "B6", Err.description
 End Sub
 
 ' ============================================================
@@ -754,6 +784,56 @@ Private Function AllBrojeviInZbirna() As Object
 
     Set AllBrojeviInZbirna = d
 End Function
+
+' Gradi dve mape iz tblZbirna: exactSet (case-SENZITIVAN skup tacnih brojeva)
+' i ciMap (UCASE(broj) -> tacan zapis, prvi vidjeni). Za B6.
+Private Sub BuildZbirnaCaseMaps(ByRef exactSet As Object, ByRef ciMap As Object)
+    Set exactSet = CreateObject("Scripting.Dictionary")   ' default = case-senzitivan
+    Set ciMap = CreateObject("Scripting.Dictionary")
+
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim cb As Long: cb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.BuildZbirnaCaseMaps")
+
+    Dim i As Long, b As String, u As String
+    For i = 1 To UBound(data, 1)
+        b = Trim$(CStr(data(i, cb)))
+        If Len(b) > 0 Then
+            If Not exactSet.Exists(b) Then exactSet.Add b, True
+            u = UCase$(b)
+            If Not ciMap.Exists(u) Then ciMap.Add u, b
+        End If
+    Next i
+End Sub
+
+' Za jednu tabelu: dodaj u 'bad' zive redove ciji BrojZbirne NIJE tacan case-match
+' ali postoji ignorisuci case. Array(Tabela, ID, napisano, kanon).
+Private Sub CollectCaseMismatch(ByRef bad As Collection, ByVal labela As String, _
+                                ByVal tbl As String, ByVal idCol As String, ByVal zbrCol As String, _
+                                ByVal exactSet As Object, ByVal ciMap As Object)
+    Dim data As Variant: data = GetTableData(tbl)
+    If Not IsArray(data) Then Exit Sub
+    data = ExcludeStornirano(data, tbl)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim cId As Long, cZbr As Long
+    cId = RequireColumnIndex(tbl, idCol, "modIntegritet.CollectCaseMismatch")
+    cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.CollectCaseMismatch")
+
+    Dim i As Long, b As String, u As String
+    For i = 1 To UBound(data, 1)
+        b = Trim$(CStr(data(i, cZbr)))
+        If Len(b) > 0 Then
+            If Not exactSet.Exists(b) Then
+                u = UCase$(b)
+                If ciMap.Exists(u) Then
+                    bad.Add Array(labela, CStr(data(i, cId)), b, ciMap(u))
+                End If
+            End If
+        End If
+    Next i
+End Sub
 
 ' Zivi dokumenti sa BrojZbirne koji nije u zbrSet. Vraca 2D(1..n,1..4) ili Empty.
 Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
