@@ -1232,7 +1232,8 @@ End Function
 ' ============================================================
 Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                                               ByVal newBroj As String, _
-                                              Optional ByRef outWarn As String) As Boolean
+                                              Optional ByRef outWarn As String, _
+                                              Optional ByVal allowRelabel As Boolean = False) As Boolean
     Const SRC As String = "modPaletniList.ReassignPaleteToPrijemnica_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -1262,6 +1263,12 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     pcAmb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, SRC)
     pcZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     pcSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    ' identitet nove prijemnice (za relabel-u-mestu; svi redovi broja dele isti)
+    Dim pcVr As Long, pcSo As Long, pcTa As Long
+    pcVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    pcSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    pcTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    Dim nVr As String, nSo As String, nTa As String
 
     Dim r As Long
     For r = 1 To UBound(prj, 1)
@@ -1274,7 +1281,12 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                 newById(kl) = Trim$(CStr(prj(r, pcId)))
                 newNeto(kl) = NzD(prj(r, pcKol))
                 newGajb(kl) = NzL(prj(r, pcAmb))
-                If Len(newBrZbr) = 0 Then newBrZbr = Trim$(CStr(prj(r, pcZbr)))
+                If Len(newBrZbr) = 0 Then
+                    newBrZbr = Trim$(CStr(prj(r, pcZbr)))
+                    nVr = Trim$(NzToText(SafeCell(prj, r, pcVr)))
+                    nSo = Trim$(NzToText(SafeCell(prj, r, pcSo)))
+                    If pcTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                End If
             End If
         End If
     Next r
@@ -1320,6 +1332,16 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     Next i
     If oldRows.count = 0 Then
         outWarn = "Nema osirocenih paleta-stavki za prijemnicu " & oldBroj & "."
+        Exit Function
+    End If
+
+    ' Identitet-guard: razlika vrsta/sorta/tipAmb -> re-point bez relabela bi ostavio
+    ' pogresno oznacenu paletu (paleta jos nosi staru etiketu). Trazi potvrdu (allowRelabel).
+    Dim verdict As Variant: verdict = EvaluatePaletaReassign(oldBroj, newBroj)
+    Dim relabelNeeded As Boolean: relabelNeeded = (CStr(verdict(0)) = "RELABEL")
+    If relabelNeeded And Not allowRelabel Then
+        outWarn = "Razlika u identitetu (" & CStr(verdict(2)) & ") - re-point bi ostavio " & _
+                  "pogresno oznacenu paletu. Potrebna potvrda relabela."
         Exit Function
     End If
 
@@ -1369,6 +1391,43 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         End If
     Next k
 
+    ' ---- STEP 2b: relabel-u-mestu (samo uz allowRelabel + razlika identiteta) ----
+    ' Prepravi vrsta/sorta/tipAmb na PREVEZANIM stavkama + njihovim paletama. Roba se
+    ' ne pomera; menja se etiketa da odgovara ispravljenoj prijemnici. Log po paleti.
+    If relabelNeeded And allowRelabel Then
+        Dim doneP As Object: Set doneP = CreateObject("Scripting.Dictionary")
+        For k = 1 To oldRows.count
+            i = oldRows(k)
+            Dim klR As String: klR = Trim$(CStr(ps(i, sKl)))
+            If Len(klR) = 0 Then klR = "I"
+            If newById.Exists(klR) Then          ' samo stavke koje su stvarno prevezane
+                RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_VRSTA, nVr, SRC
+                RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_SORTA, nSo, SRC
+                Dim pidR As String: pidR = CStr(ps(i, sPal))
+                If Not doneP.Exists(pidR) Then
+                    doneP(pidR) = True
+                    Dim pRow As Long: pRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pidR)
+                    If pRow > 0 Then
+                        RequireUpdateCell TBL_PALETA, pRow, COL_PAL_VRSTA, nVr, SRC
+                        RequireUpdateCell TBL_PALETA, pRow, COL_PAL_SORTA, nSo, SRC
+                        If Len(nTa) > 0 Then RequireUpdateCell TBL_PALETA, pRow, COL_PAL_TIP_AMBALAZE, nTa, SRC
+                        PaletaLog pidR, "RELABEL", "prij " & oldBroj & "->" & newBroj & " (" & CStr(verdict(2)) & ")"
+                    End If
+                    ' co-tenant? (u ps snapshotu: aktivna stavka na paleti sa drugom prijemnicom)
+                    Dim q As Long, hasCo As Boolean: hasCo = False
+                    For q = 1 To UBound(ps, 1)
+                        If CStr(ps(q, sPal)) = pidR And UCase$(Trim$(CStr(ps(q, sSt)))) <> "DA" Then
+                            Dim bq As String: bq = Trim$(CStr(ps(q, sBr)))
+                            If bq <> oldBroj And bq <> newBroj Then hasCo = True: Exit For
+                        End If
+                    Next q
+                    If hasCo Then warnMsg = warnMsg & "Paleta " & pidR & _
+                        " nosi i druge prijemnice - proveri i njihov identitet. "
+                End If
+            End If
+        Next k
+    End If
+
     tx.CommitTx
     Set tx = Nothing
     outWarn = warnMsg
@@ -1379,6 +1438,16 @@ EH:
     LogErr SRC
     ReassignPaleteToPrijemnica_TX = False
 End Function
+
+' Audit trag za izmenu palete (relabel/detach/adjust) preko Monitor_Event. Best-effort
+' (nikad ne rusi TX). Vidljiva "Istorija" kolona na tblPaleta dolazi zasebnim commitom.
+Private Sub PaletaLog(ByVal palID As String, ByVal action As String, ByVal detail As String)
+    On Error Resume Next
+    Monitor_Event eventType:="PALETA_" & action, severity:="INFO", _
+        message:=action & " paleta=" & palID & " " & detail, _
+        moduleName:="modPaletniList", procedureName:="ReassignPaleteToPrijemnica_TX", _
+        entityType:="Paleta", entityID:=palID, correlationId:=palID
+End Sub
 
 ' Skini gajbica/neto/amb sa palete za jednu ponistenu stavku; reopen ako padne ispod kapaciteta.
 Private Sub DecrementPaletaForStavka(ByVal palID As String, ByVal gajb As Long, _
