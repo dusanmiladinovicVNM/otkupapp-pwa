@@ -3699,14 +3699,79 @@ Private Function PopulateRecTargets(ByVal oldBroj As String, ByVal fVrsta As Str
         m_lstAktZbr.AddItem "(nema iste vrste/sorte - vidi status ispod)"
         Exit Function
     End If
+
+    ' Precompute STARO stanje (identitet+gajbica) + broj->tipAmb mapu JEDNOM.
+    ' (Ranije se EvaluatePaletaReassign zvao po kandidatu -> stotine citanja tabela = freeze.)
+    Dim oVr As String, oSo As String, oTa As String, oGajb As Long
+    Dim tipMap As Object
+    PrepOcenaContext oldBroj, oVr, oSo, oTa, oGajb, tipMap
+
     ' kolone GetAktivnePrijemnice: 1 Broj,2 Datum,3 Vrsta,4 Sorta,5 Gajb,6 Zbirna,7 Palet
     Dim j As Long
     For j = 1 To UBound(az, 1)
         Dim cand As String: cand = CStr(az(j, 1))
-        Dim vv As Variant: vv = EvaluatePaletaReassign(oldBroj, cand)
-        AddRecRow m_lstAktZbr, Array(cand, az(j, 2), az(j, 5), az(j, 6), az(j, 7), CStr(vv(1)))
+        Dim cTa As String: cTa = ""
+        If tipMap.Exists(cand) Then cTa = CStr(tipMap(cand))
+        Dim oc As String
+        oc = FastOcena(oVr, oSo, oTa, oGajb, CStr(az(j, 3)), CStr(az(j, 4)), cTa, NzL(az(j, 5)))
+        AddRecRow m_lstAktZbr, Array(cand, az(j, 2), az(j, 5), az(j, 6), az(j, 7), oc)
     Next j
     PopulateRecTargets = UBound(az, 1)
+End Function
+
+' Jedno citanje: staro (vrsta/sorta/tipAmb + gajbica po aktivnim stavkama) + mapa
+' broj->tipAmb za sve prijemnice. Sluzi FastOcena da radi bez per-candidate citanja.
+Private Sub PrepOcenaContext(ByVal oldBroj As String, ByRef oVr As String, ByRef oSo As String, _
+                             ByRef oTa As String, ByRef oGajb As Long, ByRef tipMap As Object)
+    On Error Resume Next
+    Set tipMap = CreateObject("Scripting.Dictionary"): tipMap.CompareMode = vbTextCompare
+    Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(prj) Then Exit Sub
+    Dim cBr As Long, cVr As Long, cSo As Long, cTa As Long
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    cSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    cTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    Dim r As Long, b As String
+    For r = 1 To UBound(prj, 1)
+        b = Trim$(CStr(SafeCell(prj, r, cBr)))
+        If Len(b) > 0 Then
+            If Not tipMap.Exists(b) Then tipMap(b) = Trim$(NzToText(SafeCell(prj, r, cTa)))
+            If StrComp(b, oldBroj, vbTextCompare) = 0 And Len(oVr) = 0 Then
+                oVr = Trim$(NzToText(SafeCell(prj, r, cVr)))
+                oSo = Trim$(NzToText(SafeCell(prj, r, cSo)))
+                oTa = Trim$(NzToText(SafeCell(prj, r, cTa)))
+            End If
+        End If
+    Next r
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Sub
+    Dim sBr As Long, sGa As Long, sSt As Long
+    sBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    sGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    sSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, sBr))) = oldBroj _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sSt)))) <> "DA" Then
+            oGajb = oGajb + NzL(SafeCell(s, r, sGa))
+        End If
+    Next r
+End Sub
+
+' Brza ocena iz vec ucitanih vrednosti (bez citanja tabela) - mirror
+' EvaluatePaletaReassign kategorija (RELABEL/GAJBICA/CLEAN).
+Private Function FastOcena(ByVal oVr As String, ByVal oSo As String, ByVal oTa As String, _
+                           ByVal oGajb As Long, ByVal cVr As String, ByVal cSo As String, _
+                           ByVal cTa As String, ByVal cGajb As Long) As String
+    If StrComp(Trim$(oVr), Trim$(cVr), vbTextCompare) <> 0 _
+       Or StrComp(Trim$(oSo), Trim$(cSo), vbTextCompare) <> 0 _
+       Or StrComp(Trim$(oTa), Trim$(cTa), vbTextCompare) <> 0 Then
+        FastOcena = "Prevezi + etiketa"
+    ElseIf oGajb <> cGajb Then
+        FastOcena = "Prevezi + koriguj"
+    Else
+        FastOcena = "Prevezi"
+    End If
 End Function
 
 ' Izbor leve (osirocene) prijemnice u PAL modu -> filtriraj desne ciljeve po
