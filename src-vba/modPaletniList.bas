@@ -112,61 +112,14 @@ Public Function PaletizePrijemnica( _
     EnsurePrijemnicaNotAlreadyPaletized prijemnicaID, SRC
 
     Dim crateW As Double: crateW = GetTezinaGajbice(tipAmb)
-    Dim defCap As Long: defCap = GetKapacitetPalete(vrstaVoca)
 
     Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
     Dim nClosed As Long
-    Dim remaining As Long: remaining = brGajbica
 
-    Do While remaining > 0
-        Dim palRow As Long, palID As String
-        palID = GetOrCreateOpenPaleta(vrstaVoca, sortaVoca, klasa, tipAmb, defCap, palRow)
-        If palID = "" Or palRow = 0 Then
-            Err.Raise vbObjectError + 7331, SRC, _
-                      "Ne mogu da otvorim/nadjem paletu za: " & vrstaVoca
-        End If
-
-        Dim used As Long, curNeto As Double, curAmb As Double
-        Dim palKg As Double, cap As Long
-        GetPaletaAggregates palRow, used, curNeto, curAmb, palKg, cap
-        If cap <= 0 Then cap = defCap
-
-        Dim freeSlots As Long: freeSlots = cap - used
-        If freeSlots <= 0 Then
-            ' puna a jos otvorena -> zatvori i otvori novu u sledecoj iteraciji
-            ClosePaleta palRow, SRC
-            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
-            nClosed = nClosed + 1
-            GoTo NextIter
-        End If
-
-        Dim take As Long: take = remaining
-        If take > freeSlots Then take = freeSlots
-
-        Dim takeNeto As Double, takeAmb As Double
-        takeNeto = netoKg * (take / brGajbica)
-        takeAmb = take * crateW
-
-        AddStavka palID, prijemnicaID, brojPrij, brojZbirne, klasa, _
-                  vrstaVoca, sortaVoca, take, takeNeto, takeAmb
-
-        Dim newGajb As Long: newGajb = used + take
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, newGajb, SRC
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, curNeto + takeNeto, SRC
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, curAmb + takeAmb, SRC
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
-                          (curNeto + takeNeto) + (curAmb + takeAmb) + palKg, SRC
-
-        touched(palID) = True
-        remaining = remaining - take
-
-        If newGajb >= cap Then
-            ClosePaleta palRow, SRC
-            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
-            nClosed = nClosed + 1
-        End If
-NextIter:
-    Loop
+    ' Raspodela = zajednicka petlja SpillGajbice (ista i za korekciju/Adjust).
+    SpillGajbice prijemnicaID, brojPrij, brojZbirne, klasa, vrstaVoca, sortaVoca, _
+                 tipAmb, brGajbica, netoKg / brGajbica, crateW, touched, SRC, _
+                 closedPalIDs, nClosed
 
     PaletizePrijemnica = "palete=" & touched.count & "; zatvoreno=" & nClosed & _
                          "; gajbica=" & brGajbica
@@ -298,11 +251,6 @@ Public Function GetPaleteInfoForPrijemnicaBroj(ByVal brojPrij As String) As Stri
     Next r
     If order.count = 0 Then Exit Function
 
-    Dim dp As Variant: dp = GetTableData(TBL_PALETA)
-    Dim iPBroj As Long, iPGod As Long
-    iPBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
-    iPGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
-
     Const MAXP As Long = 8
     Dim out As String, n As Long
     Dim v As Variant
@@ -312,13 +260,8 @@ Public Function GetPaleteInfoForPrijemnicaBroj(ByVal brojPrij As String) As Stri
             out = out & ", +" & (order.count - MAXP) & " jos"
             Exit For
         End If
-        Dim ri As Long: ri = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, CStr(v))
-        Dim lbl As String: lbl = "?"
-        If ri > 0 And Not IsEmpty(dp) Then
-            lbl = CStr(NzL(SafeCell(dp, ri, iPBroj))) & "/" & CStr(NzL(SafeCell(dp, ri, iPGod)))
-        End If
         If Len(out) > 0 Then out = out & ", "
-        out = out & lbl & " (" & CLng(gaj(CStr(v))) & "g)"
+        out = out & PaletaLabel(CStr(v)) & " (" & CLng(gaj(CStr(v))) & "g)"
     Next v
 
     GetPaleteInfoForPrijemnicaBroj = out
@@ -1711,21 +1654,18 @@ Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
         cnt = cnt + 1
     Next k
 
-    ' Fantom palete: dodirnuta paleta bez ijedne preostale aktivne stavke -> storno.
+    ' Fantom palete: dodirnuta paleta bez ijedne preostale aktivne stavke -> storno
+    ' kroz kanonski modStorno.StornoPaleta (kompozicija u nasem TX, kao sto
+    ' StornoOtkupByBrDok_TX komponuje StornoOtkup). Preradjena se preskace uz napomenu.
     Dim emptied As String
     Dim v As Variant
     For Each v In touched.Keys
-        If CountActiveStavkeForPaleta(CStr(v)) = 0 Then
-            Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, CStr(v))
-            If pr > 0 Then
-                Dim pd As Variant: pd = GetTableData(TBL_PALETA)
-                If UCase$(Trim$(CStr(SafeCell(pd, pr, GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA" Then
-                    emptied = emptied & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
-                Else
-                    RequireUpdateCell TBL_PALETA, pr, COL_STORNIRANO, "Da", SRC
-                    PaletaLog CStr(v), "STORNO_PRAZNA", "detach prij=" & oldBroj
-                    emptied = emptied & PaletaLabel(CStr(v)) & " "
-                End If
+        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then      ' nema aktivnih stavki
+            If IsPaletaPreradjena(CStr(v)) Then
+                emptied = emptied & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
+            ElseIf StornoPaleta(CStr(v)) Then
+                PaletaLog CStr(v), "STORNO_PRAZNA", "detach prij=" & oldBroj
+                emptied = emptied & PaletaLabel(CStr(v)) & " "
             End If
         End If
     Next v
@@ -1740,22 +1680,6 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     DetachOsirocenePaletaStavke_TX = 0
-End Function
-
-' Broj AKTIVNIH stavki na paleti (fresh read; za detekciju ispraznjene palete).
-Private Function CountActiveStavkeForPaleta(ByVal palID As String) As Long
-    On Error Resume Next
-    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
-    If IsEmpty(s) Then Exit Function
-    Dim iPal As Long, iSt As Long, r As Long, n As Long
-    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-    iSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If iPal = 0 Then Exit Function
-    For r = 1 To UBound(s, 1)
-        If CStr(SafeCell(s, r, iPal)) = palID _
-           And UCase$(Trim$(CStr(SafeCell(s, r, iSt)))) <> "DA" Then n = n + 1
-    Next r
-    CountActiveStavkeForPaleta = n
 End Function
 
 ' ============================================================
@@ -2045,36 +1969,67 @@ Private Function IsPaletaPreradjena(ByVal palID As String) As Boolean
         GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA")
 End Function
 
-' Rasporedi "remaining" gajbica na otvorene/nove palete (mirror PaletizePrijemnica
-' petlje) kao NOVE stavke date prijemnice. Za PRELIJ visak i za novu klasu bez stavki.
+' ZAJEDNICKA raspodelna petlja: rasporedi "remaining" gajbica na otvorene/nove
+' palete kao NOVE stavke date prijemnice + inkrementalno azuriraj header palete.
+' Koriste je PaletizePrijemnica (sveza paletizacija; closedPalIDs za post-commit
+' stampu) i AdjustPaletaGajbiceZaPrijemnicu_TX (PRELIJ visak / nova klasa).
+' Jedna implementacija -> geometrija punjenja/zatvaranja ne moze da drift-uje.
 Private Sub SpillGajbice(ByVal prijemnicaID As String, ByVal brojPrij As String, _
         ByVal brojZbirne As String, ByVal klasa As String, ByVal vrsta As String, _
         ByVal sorta As String, ByVal tipAmb As String, ByVal remaining As Long, _
         ByVal perG As Double, ByVal crateW As Double, ByVal touched As Object, _
-        ByVal SRC As String)
+        ByVal SRC As String, _
+        Optional ByVal closedPalIDs As Collection = Nothing, _
+        Optional ByRef nClosed As Long)
     Dim defCap As Long: defCap = GetKapacitetPalete(vrsta)
     Do While remaining > 0
         Dim palRow As Long, palID As String
         palID = GetOrCreateOpenPaleta(vrsta, sorta, klasa, tipAmb, defCap, palRow)
         If palID = "" Or palRow = 0 Then
-            Err.Raise vbObjectError + 7332, SRC, "Ne mogu da otvorim/nadjem paletu za: " & vrsta
+            Err.Raise vbObjectError + 7331, SRC, _
+                      "Ne mogu da otvorim/nadjem paletu za: " & vrsta
         End If
-        Dim used As Long, curNeto As Double, curAmb As Double, palKg As Double, cap As Long
+
+        Dim used As Long, curNeto As Double, curAmb As Double
+        Dim palKg As Double, cap As Long
         GetPaletaAggregates palRow, used, curNeto, curAmb, palKg, cap
         If cap <= 0 Then cap = defCap
+
         Dim freeSlots As Long: freeSlots = cap - used
         If freeSlots <= 0 Then
+            ' puna a jos otvorena -> zatvori i otvori novu u sledecoj iteraciji
             ClosePaleta palRow, SRC
-            touched(palID) = True
-        Else
-            Dim take As Long: take = remaining
-            If take > freeSlots Then take = freeSlots
-            AddStavka palID, prijemnicaID, brojPrij, brojZbirne, klasa, vrsta, sorta, _
-                      take, take * perG, take * crateW
-            touched(palID) = True
-            remaining = remaining - take
-            If used + take >= cap Then ClosePaleta palRow, SRC
+            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
+            nClosed = nClosed + 1
+            GoTo NextIter
         End If
+
+        Dim take As Long: take = remaining
+        If take > freeSlots Then take = freeSlots
+
+        Dim takeNeto As Double, takeAmb As Double
+        takeNeto = take * perG
+        takeAmb = take * crateW
+
+        AddStavka palID, prijemnicaID, brojPrij, brojZbirne, klasa, _
+                  vrsta, sorta, take, takeNeto, takeAmb
+
+        Dim newGajb As Long: newGajb = used + take
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, newGajb, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, curNeto + takeNeto, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, curAmb + takeAmb, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
+                          (curNeto + takeNeto) + (curAmb + takeAmb) + palKg, SRC
+
+        touched(palID) = True
+        remaining = remaining - take
+
+        If newGajb >= cap Then
+            ClosePaleta palRow, SRC
+            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
+            nClosed = nClosed + 1
+        End If
+NextIter:
     Loop
 End Sub
 
