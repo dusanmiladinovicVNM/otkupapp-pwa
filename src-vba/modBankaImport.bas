@@ -336,23 +336,30 @@ Public Function DetectBank(ByRef lines() As String) As String
     Dim i As Long, s As String
     Dim hasProCreditHeader As Boolean, hasProCreditAccount As Boolean
     Dim hasHalkHeader As Boolean, hasHalkAccount As Boolean
+    Dim hasAltaTitle As Boolean, hasAltaAccount As Boolean
 
     ' Fingerprint = NASLOV izvoda + PREFIKS racuna banke (ne naziv banke).
     ' Nazivi "ProCredit"/"HALKBANK" se javljaju kao PARTNER u tudjim izvodima, pa
     ' bi labava detekcija po nazivu pogresno preusmerila ceo izvod (regresija na
-    ' Komercijalna putu). Racun-prefiks 220-/155- je stabilan kod banke izvoda.
+    ' Komercijalna putu). Racun-prefiks 220-/155-/190- je stabilan kod banke izvoda.
+    ' ALTA: naslov "IZVOD BR." (sa tackom) razlikuje Altu od Komercijalne/Halk
+    ' "Izvod broj" (deveti znak "." vs "o") i ProCredit "IZVOD NNN"; racun 190-.
     For i = LBound(lines) To UBound(lines)
         s = lines(i)
         If InStr(1, s, "STANJE I PROMENE SREDSTAVA", vbTextCompare) > 0 Then hasProCreditHeader = True
         If InStr(1, s, "220-", vbTextCompare) > 0 Then hasProCreditAccount = True
         If InStr(1, s, "INFORMACIJE O PLATNIM TRANSAKCIJAMA", vbTextCompare) > 0 Then hasHalkHeader = True
         If InStr(1, s, "155-", vbTextCompare) > 0 Then hasHalkAccount = True
+        If Left$(UCase$(Trim$(s)), 9) = "IZVOD BR." Then hasAltaTitle = True
+        If InStr(1, s, "190-", vbTextCompare) > 0 Then hasAltaAccount = True
     Next i
 
     If hasProCreditHeader And hasProCreditAccount Then
         DetectBank = "PROCREDIT"
     ElseIf hasHalkHeader And hasHalkAccount Then
         DetectBank = "HALK"
+    ElseIf hasAltaTitle And hasAltaAccount Then
+        DetectBank = "ALTA"
     Else
         DetectBank = "KOMERC"
     End If
@@ -436,6 +443,12 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
             brojRacuna = ExtractIzvodRacunHalk(lines)
             saldo = ExtractIzvodSaldoHalk(lines)
             txData = ParseBankaIzvodHalk(txt)
+        Case "ALTA"
+            brojIzvoda = ExtractIzvodBrojAlta(lines)
+            datumIzvoda = ExtractIzvodDatumAlta(lines)
+            brojRacuna = ExtractIzvodRacunAlta(lines)
+            saldo = ExtractIzvodSaldoAlta(lines)
+            txData = ParseBankaIzvodAlta(txt)
         Case Else
             brojIzvoda = ExtractIzvodBrojPdfText(lines)
             datumIzvoda = ExtractIzvodDatumPdfText(lines)
