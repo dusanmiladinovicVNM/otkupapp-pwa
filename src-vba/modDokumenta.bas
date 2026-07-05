@@ -2602,9 +2602,10 @@ EH:
 End Function
 
 ' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
-Private Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
-                                 ByVal nameCol1 As String, _
-                                 Optional ByVal nameCol2 As String = "") As Object
+' Public: reuse i iz modIntegritet (OtkupnoMestoByZbirna).
+Public Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
+                                ByVal nameCol1 As String, _
+                                Optional ByVal nameCol2 As String = "") As Object
     Dim d As Object
     Set d = CreateObject("Scripting.Dictionary")
     d.CompareMode = vbTextCompare

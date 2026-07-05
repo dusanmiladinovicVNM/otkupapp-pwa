@@ -370,12 +370,21 @@ End Sub
 ' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID).
 ' C4 = aktivna stavka ka prijemnici koja postoji ali je STORNIRANA
 '      (kaskadni storno prijemnice ne dira tblPaletaStavka).
+'      + dokumentni tok te prijemnice: BrojZbirne (i sa stornirane prijemnice),
+'      Sigma kg/amb aktivne zbirne, naziv otkupnog mesta (preko otpremnica
+'      zbirne; fallback mirror-stanica zbirna preko tblZbirna.VozacID).
 
 Private Sub Chk_C1_C4_StavkaPrijemnica()
     On Error GoTo EH
 
     Dim allPrij As Object: Set allPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, False)
     Dim actPrij As Object: Set actPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, True)
+
+    ' C4 dokumentni tok: prijemnica -> zbirna (Sigma kg/amb) -> otkupno mesto.
+    Dim prijZbr As Object: Set prijZbr = PrijemnicaZbirnaMap()
+    Dim zbrKg As Object: Set zbrKg = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOLICINA)
+    Dim zbrAmb As Object: Set zbrAmb = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOL_AMB)
+    Dim omByZbr As Object: Set omByZbr = OtkupnoMestoByZbirna()
 
     Dim c1 As Collection: Set c1 = New Collection
     Dim c4 As Collection: Set c4 = New Collection
@@ -391,6 +400,7 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
             cBrPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, "modIntegritet.C1C4")
 
             Dim i As Long, p As String
+            Dim bz As String, kgV As Variant, ambV As Variant, om As String
             For i = 1 To UBound(data, 1)
                 p = Trim$(CStr(data(i, cPrij)))
                 If Len(p) = 0 Then
@@ -398,7 +408,15 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
                 ElseIf Not allPrij.Exists(p) Then
                     c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)))
                 ElseIf Not actPrij.Exists(p) Then
-                    c4.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)))
+                    bz = "": If prijZbr.Exists(p) Then bz = CStr(prijZbr(p))
+                    kgV = "": ambV = "": om = ""
+                    If Len(bz) > 0 Then
+                        If zbrKg.Exists(bz) Then kgV = zbrKg(bz)
+                        If zbrAmb.Exists(bz) Then ambV = zbrAmb(bz)
+                        If omByZbr.Exists(bz) Then om = CStr(omByZbr(bz))
+                    End If
+                    c4.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)), _
+                                 bz, kgV, ambV, om)
                 End If
             Next i
         End If
@@ -407,7 +425,8 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
     WriteBlock "C1", "Paleta-stavke bez zive prijemnice (prazan/nepostojeci PrijemnicaID)", _
                Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice"), CollToArray(c1, 4)
     WriteBlock "C4", "Paleta-stavke ka storniranoj prijemnici", _
-               Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice"), CollToArray(c4, 4)
+               Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice", _
+                     "BrojZbirne", "ZbirnaKg", "ZbirnaAmb", "OtkupnoMesto"), CollToArray(c4, 8)
     Exit Sub
 
 EH:
@@ -1010,6 +1029,89 @@ Private Function PaletaInfoMap() As Object
     Next i
 
     Set PaletaInfoMap = d
+End Function
+
+' PrijemnicaID -> BrojZbirne. Iz SVIH redova tblPrijemnica (i storniranih --
+' C4 cilja bas prijemnice koje su stornirane).
+Private Function PrijemnicaZbirnaMap() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+
+    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(data) Then Set PrijemnicaZbirnaMap = d: Exit Function
+
+    Dim cId As Long, cZbr As Long
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIntegritet.PrijemnicaZbirnaMap")
+    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIntegritet.PrijemnicaZbirnaMap")
+
+    Dim i As Long, pid As String
+    For i = 1 To UBound(data, 1)
+        pid = Trim$(CStr(data(i, cId)))
+        If Len(pid) > 0 Then
+            If Not d.Exists(pid) Then d.Add pid, Trim$(CStr(data(i, cZbr)))
+        End If
+    Next i
+
+    Set PrijemnicaZbirnaMap = d
+End Function
+
+' BrojZbirne -> naziv otkupnog mesta (distinct; ", " join ako ih je vise).
+' Primarno preko AKTIVNIH otpremnica te zbirne (StanicaID -> tblStanice.Naziv;
+' reuse BuildIdNameDict iz modDokumenta). Fallback za mirror-stanica zbirne
+' (malina mod, VozacID == StanicaID, "S" prefiks): tblZbirna.VozacID direktno --
+' pokriva i zbirne bez otpremnica / potpuno stornirane lance.
+Private Function OtkupnoMestoByZbirna() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare   ' BrojZbirne match case-insensitive (s5 == S5)
+
+    Dim stName As Object: Set stName = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
+
+    Dim data As Variant
+    Dim i As Long, b As String, sid As String, nm As String
+
+    ' 1) aktivne otpremnice zbirne: BrojZbirne -> distinct nazivi stanica
+    data = GetTableData(TBL_OTPREMNICA)
+    If IsArray(data) Then
+        data = ExcludeStornirano(data, TBL_OTPREMNICA)
+        If Not IsEmpty(data) Then
+            Dim cZbr As Long, cSt As Long
+            cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "modIntegritet.OtkupnoMestoByZbirna")
+            cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, "modIntegritet.OtkupnoMestoByZbirna")
+
+            For i = 1 To UBound(data, 1)
+                b = Trim$(CStr(data(i, cZbr)))
+                sid = Trim$(CStr(data(i, cSt)))
+                If Len(b) > 0 And Len(sid) > 0 Then
+                    nm = sid
+                    If stName.Exists(sid) Then nm = CStr(stName(sid))
+                    If Not d.Exists(b) Then
+                        d.Add b, nm
+                    ElseIf InStr(1, ", " & d(b) & ", ", ", " & nm & ", ", vbTextCompare) = 0 Then
+                        d(b) = d(b) & ", " & nm
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    ' 2) fallback: zbirne bez pogotka gore, mirror-stanica (VozacID u tblStanice)
+    data = GetTableData(TBL_ZBIRNA)
+    If IsArray(data) Then
+        Dim cBr As Long, cVoz As Long
+        cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.OtkupnoMestoByZbirna")
+        cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIntegritet.OtkupnoMestoByZbirna")
+
+        For i = 1 To UBound(data, 1)
+            b = Trim$(CStr(data(i, cBr)))
+            If Len(b) > 0 Then
+                If Not d.Exists(b) Then
+                    sid = Trim$(CStr(data(i, cVoz)))
+                    If stName.Exists(sid) Then d.Add b, CStr(stName(sid))
+                End If
+            End If
+        Next i
+    End If
+
+    Set OtkupnoMestoByZbirna = d
 End Function
 
 ' ============================================================
