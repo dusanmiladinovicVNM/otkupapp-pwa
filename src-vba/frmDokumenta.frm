@@ -3396,16 +3396,35 @@ Private Sub m_btnRecPrevezi_Click()
             MsgBox "Izaberi storniranu prijemnicu sa osirocenim paletama (levo).", vbExclamation, APP_NAME
             Exit Sub
         End If
-        If Len(newP) = 0 Then
+        If Len(newP) = 0 Or Left$(newP, 1) = "(" Then
             MsgBox "Izaberi ciljnu (novu) prijemnicu (desno).", vbExclamation, APP_NAME
             Exit Sub
         End If
-        If MsgBox("Prevezati palete sa prijemnice " & oldP & " na " & newP & "?" & vbCrLf & _
-                  "(Ponistava svezu paletizaciju nove + re-point starih stavki.)", _
-                  vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+        ' Verdikt gejt: RELABEL -> potvrda + allowRelabel; GAJBICA -> napomena; CLEAN -> obicno.
+        Dim vv As Variant: vv = EvaluatePaletaReassign(oldP, newP)
+        Dim cat As String: cat = CStr(vv(0))
+        Dim allowRl As Boolean: allowRl = False
+        Dim msg As String
+        Select Case cat
+            Case "RELABEL"
+                allowRl = True
+                msg = "Nova prijemnica ima drugi identitet (" & CStr(vv(2)) & ")." & vbCrLf & _
+                      "Prevezati + PREPRAVITI ETIKETU palete na novi identitet?" & vbCrLf & _
+                      "(Roba se NE pomera; menja se samo zapis/etiketa.)"
+            Case "GAJBICA"
+                msg = "Prevezati palete " & oldP & " -> " & newP & "?" & vbCrLf & _
+                      "Napomena: razlika u gajbicama (" & CStr(vv(2)) & ") - posle koriguj aneksom."
+            Case Else
+                msg = "Prevezati palete sa prijemnice " & oldP & " na " & newP & "?" & vbCrLf & _
+                      "(Ponistava svezu paletizaciju nove + re-point starih stavki.)"
+        End Select
+        If MsgBox(msg, vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
         Dim warn As String: warn = ""
-        If ReassignPaleteToPrijemnica_TX(oldP, newP, warn) Then
+        If ReassignPaleteToPrijemnica_TX(oldP, newP, warn, allowRl) Then
             m_recStatus.caption = "Palete prevezane: " & oldP & " -> " & newP & _
+                                  IIf(allowRl, " (+etiketa)", "") & _
                                   IIf(Len(warn) > 0, "  |  " & warn, "")
             PopulateRecoveryPanel
         Else
@@ -3576,8 +3595,8 @@ Private Sub PopulateRecoveryPanel()
         If nL = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih paleta."
 
         ' Desna (ciljna) lista se puni tek po izboru leve prijemnice
-        ' (m_lstOsirPrij_Change -> PopulateRecTargets, filter po vrsti/sorti).
-        PopulateRecTargets "", "", False
+        ' (m_lstOsirPrij_Change -> PopulateRecTargets, filter po vrsti/sorti + Ocena).
+        PopulateRecTargets "", "", "", False
 
         m_recLblPrij.caption = "Stornirane prijemnice (osirocene palete)"
         m_recLblZbr.caption = "Ciljna prijemnica (iste vrste/sorte)"
@@ -3629,13 +3648,16 @@ End Sub
 ' Puni desnu (ciljnu) listu u PAL modu: aktivne prijemnice iste vrste/sorte kao
 ' izabrana leva (i paletizovane i ne), uz kolonu "Palet." (Da/Ne). haveSel=False
 ' -> prazna lista sa uputstvom. Vraca broj ponudjenih ciljeva (0 = nema/placeholder).
-Private Function PopulateRecTargets(ByVal fVrsta As String, ByVal fSorta As String, _
-                                    ByVal haveSel As Boolean) As Long
+' Puni desnu (ciljnu) listu + kolona "Ocena" = verdikt EvaluatePaletaReassign po
+' kandidatu (Prevezi / +koriguj / +etiketa). Filtar vrsta/sorta suzava na iste;
+' oldBroj je izabrana leva prijemnica (za verdikt). Vraca broj ponudjenih ciljeva.
+Private Function PopulateRecTargets(ByVal oldBroj As String, ByVal fVrsta As String, _
+                                    ByVal fSorta As String, ByVal haveSel As Boolean) As Long
     On Error Resume Next
-    m_lstAktZbr.ColumnCount = 7
-    m_lstAktZbr.ColumnWidths = "76;54;56;64;38;64;36"
+    m_lstAktZbr.ColumnCount = 6
+    m_lstAktZbr.ColumnWidths = "72;54;38;68;34;98"
     m_lstAktZbr.Clear
-    AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Vrsta", "Sorta", "Gajb", "Zbirna", "Palet")
+    AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Gajb", "Zbirna", "Palet", "Ocena")
     PopulateRecTargets = 0
     If Not haveSel Then
         m_lstAktZbr.AddItem "(izaberi prijemnicu levo)"
@@ -3646,11 +3668,12 @@ Private Function PopulateRecTargets(ByVal fVrsta As String, ByVal fSorta As Stri
         m_lstAktZbr.AddItem "(nema iste vrste/sorte - vidi status ispod)"
         Exit Function
     End If
-    Dim j As Long, d As Long
+    ' kolone GetAktivnePrijemnice: 1 Broj,2 Datum,3 Vrsta,4 Sorta,5 Gajb,6 Zbirna,7 Palet
+    Dim j As Long
     For j = 1 To UBound(az, 1)
-        Dim r2(0 To 6) As Variant
-        For d = 0 To 6: r2(d) = az(j, d + 1): Next d
-        AddRecRow m_lstAktZbr, r2
+        Dim cand As String: cand = CStr(az(j, 1))
+        Dim vv As Variant: vv = EvaluatePaletaReassign(oldBroj, cand)
+        AddRecRow m_lstAktZbr, Array(cand, az(j, 2), az(j, 5), az(j, 6), az(j, 7), CStr(vv(1)))
     Next j
     PopulateRecTargets = UBound(az, 1)
 End Function
@@ -3673,12 +3696,12 @@ Private Sub m_lstOsirPrij_Change()
     End If
 
     If Len(vr) = 0 And Len(so) = 0 Then     ' header ili placeholder red
-        PopulateRecTargets "", "", False
+        PopulateRecTargets "", "", "", False
         m_recStatus.caption = ""
         Exit Sub
     End If
 
-    Dim nT As Long: nT = PopulateRecTargets(vr, so, True)
+    Dim nT As Long: nT = PopulateRecTargets(broj, vr, so, True)
 
     If nT = 0 Then
         ' Nema cilja iste vrste/sorte: nova prijemnica jos nije uneta ILI je greska
