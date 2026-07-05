@@ -71,6 +71,7 @@ Private m_recHidden As Collection
 Private WithEvents m_btnRecMode As MSForms.CommandButton
 Private m_recMode As String      ' "PRIJ" (default) ili "PAL"
 Private m_recPopulating As Boolean   ' guard: suppress _Change dok programski punimo levu listu
+Private WithEvents m_btnRecSkini As MSForms.CommandButton   ' detach osirocenih stavki (PAL mod)
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -3384,6 +3385,30 @@ Private Sub m_btnRecMode_Click()
     PopulateRecoveryPanel
 End Sub
 
+Private Sub m_btnRecSkini_Click()
+    On Error GoTo EH
+    If m_recMode <> "PAL" Then Exit Sub
+    Dim oldP As String: oldP = SelectedRecKey(m_lstOsirPrij)
+    If Len(oldP) = 0 Or Left$(oldP, 1) = "(" Then
+        MsgBox "Izaberi storniranu prijemnicu (levo) cije osirocene palete skidas.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    If MsgBox("Skinuti osirocene paleta-stavke prijemnice " & oldP & " sa paleta?" & vbCrLf & _
+              "(Za dupli unos / los utovar - bez prevezivanja. Druge prijemnice na " & _
+              "istoj paleti se NE diraju.)", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    Dim info As String: info = ""
+    If DetachOsirocenePaletaStavke_TX(oldP, info) > 0 Then
+        m_recStatus.caption = info
+        PopulateRecoveryPanel
+    Else
+        m_recStatus.caption = "Nista nije skinuto." & IIf(Len(info) > 0, " " & info, "")
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnRecSkini_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
 Private Sub m_btnRecPrevezi_Click()
     On Error GoTo EH
     If Len(m_recMode) = 0 Then m_recMode = "PRIJ"
@@ -3508,6 +3533,9 @@ Private Sub EnsureRecoveryPanel()
     Set m_btnRecPrevezi = Me.Controls.Add("Forms.CommandButton.1", "btnRecPreveziRT", True)
     StylePrimaryButton m_btnRecPrevezi, "Prevezi >>"
 
+    Set m_btnRecSkini = Me.Controls.Add("Forms.CommandButton.1", "btnRecSkiniRT", True)
+    StyleExitButton m_btnRecSkini, "Skini stavke"
+
     Set m_recStatus = Me.Controls.Add("Forms.Label.1", "lblRecStatusRT", True)
     With m_recStatus
         .BackStyle = fmBackStyleTransparent
@@ -3566,7 +3594,8 @@ Private Sub LayoutRecoveryPanel()
     m_recLblZbr.Move w - PAD - colW, PAD + HDR, colW, LBLH
     m_lstAktZbr.Move w - PAD - colW, listTop, colW, listH
 
-    m_btnRecPrevezi.Move PAD + colW + 12, listTop + (listH - 26) / 2, BTNW, 26
+    m_btnRecPrevezi.Move PAD + colW + 12, listTop + (listH - 26) / 2 - 16, BTNW, 26
+    m_btnRecSkini.Move PAD + colW + 12, listTop + (listH - 26) / 2 + 16, BTNW, 24
     m_recStatus.Move PAD, h - PAD - STATH, w - 2 * PAD, STATH
 End Sub
 
@@ -3601,6 +3630,7 @@ Private Sub PopulateRecoveryPanel()
         m_recLblPrij.caption = "Stornirane prijemnice (osirocene palete)"
         m_recLblZbr.caption = "Ciljna prijemnica (iste vrste/sorte)"
         m_btnRecPrevezi.caption = "Prevezi palete >>"
+        m_btnRecSkini.visible = True
         m_recTitle.caption = "Osiroceni dokumenti - PALETE  (" & nL & ")"
     Else
         m_lstOsirPrij.ColumnCount = 7
@@ -3636,6 +3666,7 @@ Private Sub PopulateRecoveryPanel()
         m_recLblPrij.caption = "Osirocene prijemnice"
         m_recLblZbr.caption = "Ciljna (aktivna) zbirna"
         m_btnRecPrevezi.caption = "Prevezi >>"
+        m_btnRecSkini.visible = False
         m_recTitle.caption = "Osiroceni dokumenti - PRIJEMNICE  (" & nL & ")"
     End If
     m_recPopulating = False
@@ -3751,18 +3782,21 @@ Private Sub SetRecoveryPanelVisible(ByVal bShow As Boolean)
         m_lstOsirPrij.visible = True: m_lstAktZbr.visible = True
         m_btnRecClose.visible = True: m_btnRecPrevezi.visible = True
         m_btnRecMode.visible = True
+        m_btnRecSkini.visible = (m_recMode = "PAL")
         m_recStatus.visible = True
         m_recBack.ZOrder 0
         m_lstOsirPrij.ZOrder 0: m_lstAktZbr.ZOrder 0
         m_recTitle.ZOrder 0: m_recLblPrij.ZOrder 0: m_recLblZbr.ZOrder 0
         m_btnRecClose.ZOrder 0: m_btnRecPrevezi.ZOrder 0: m_recStatus.ZOrder 0
         m_btnRecMode.ZOrder 0
+        m_btnRecSkini.ZOrder 0
     Else
         m_recBack.visible = False: m_recTitle.visible = False
         m_recLblPrij.visible = False: m_recLblZbr.visible = False
         m_lstOsirPrij.visible = False: m_lstAktZbr.visible = False
         m_btnRecClose.visible = False: m_btnRecPrevezi.visible = False
         m_btnRecMode.visible = False
+        m_btnRecSkini.visible = False
         m_recStatus.visible = False
         RestoreBehindRecovery
     End If
@@ -3776,7 +3810,7 @@ Private Sub HideBehindRecovery()
         If ctl Is m_recBack Or ctl Is m_recTitle Or ctl Is m_recLblPrij _
            Or ctl Is m_recLblZbr Or ctl Is m_lstOsirPrij Or ctl Is m_lstAktZbr _
            Or ctl Is m_btnRecClose Or ctl Is m_btnRecPrevezi Or ctl Is m_recStatus _
-           Or ctl Is m_btnRecMode Then
+           Or ctl Is m_btnRecMode Or ctl Is m_btnRecSkini Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_recHidden.Add ctl.name
