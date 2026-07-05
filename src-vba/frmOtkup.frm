@@ -1115,16 +1115,10 @@ Private Sub btnUnos_Click()
     Dim hlPending As String: hlPending = GetHladnjacaRelinkPending()
     Dim doHlRelink As Boolean
     doHlRelink = (Len(hlPending) > 0 And IsHladnjacaStanica(stanicaID))
-    ' Isti broj gajbica kao osirocene stare prijemnice? -> ISTA roba -> re-point (bez
-    ' ponovne paletizacije). Razlicit -> promena kolicine (NIJE "ista roba"): pusti svezu
-    ' paletizaciju novog lanca (tacan broj), pa skini stare osirocene (bez rucnog aneksa).
-    Dim hlSameCount As Boolean: hlSameCount = False
-    Dim hlOldG As Long: hlOldG = 0
-    If doHlRelink Then
-        hlOldG = OsiroceneGajbicaTotal(hlPending)
-        hlSameCount = (hlOldG > 0 And (kolAmb + kolAmbII) = hlOldG)
-        If hlSameCount Then SetPaletizeSkip True
-    End If
+    ' Uvek preskoci svezu paletizaciju novog lanca -> palete se prevezuju re-pointom;
+    ' eventualno POVECANJE broja gajbica dopunjuje se na POSTOJECU paletu (autoTopup),
+    ' pa se brojevi/redosled postojecih paleta ne menjaju.
+    If doHlRelink Then SetPaletizeSkip True
 
     On Error Resume Next
     Dim hlWarn As String
@@ -1137,18 +1131,16 @@ Private Sub btnUnos_Click()
     SetPaletizeSkip False        ' uvek vrati toggle (AutoChain je best-effort)
     If Len(hlWarn) > 0 Then MsgBox hlWarn, vbExclamation, APP_NAME
 
-    ' Flow #2: obradi osirocene palete stare prijemnice u odnosu na tek kreirani lanac.
+    ' Flow #2: prevezi originalne palete na novu prijemnicu (autoTopup: povecanje gajbica
+    ' se dopunjuje na postojecu paletu; smanjenje se prijavljuje da se visak skine rucno).
     If doHlRelink Then
         SetHladnjacaRelinkPending ""         ' potrosi (idempotent)
-        If Len(hlNewPrij) = 0 Then
-            MsgBox "Novi lanac nije kreirao prijemnicu -> palete NISU prevezane. " & _
-                   "Uradi rucno preko Osiroceni dokumenti -> Palete.", vbExclamation, APP_NAME
-        ElseIf hlSameCount Then
-            ' Ista roba (isti broj gajbica) -> re-point originalnih paleta (bez re-paletizacije).
+        If Len(hlNewPrij) > 0 Then
             Dim hlRelWarn As String
-            If ReassignPaleteToPrijemnica_TX(hlPending, hlNewPrij, hlRelWarn, True) Then
+            If ReassignPaleteToPrijemnica_TX(hlPending, hlNewPrij, hlRelWarn, True, True) Then
                 MsgBox "Palete stornirane prijemnice " & hlPending & " prevezane na " & hlNewPrij & _
-                       " (bez ponovne paletizacije)." & _
+                       " (postojece palete zadrzane; eventualno povecanje gajbica dopunjeno na " & _
+                       "postojecu paletu)." & _
                        IIf(Len(hlRelWarn) > 0, vbCrLf & "Napomena: " & hlRelWarn, ""), _
                        vbInformation, APP_NAME
             Else
@@ -1157,16 +1149,8 @@ Private Sub btnUnos_Click()
                        vbExclamation, APP_NAME
             End If
         Else
-            ' Promenjen broj gajbica -> nova prijemnica je VEC sveze paletizovana (tacan
-            ' broj); skini stare osirocene palete. Bez rucnog aneksa.
-            Dim hlDetInfo As String
-            DetachOsirocenePaletaStavke_TX hlPending, hlDetInfo
-            MsgBox "Broj gajbica je promenjen (stara prijemnica " & hlPending & ": " & hlOldG & _
-                   " gajbi; nov unos: " & (kolAmb + kolAmbII) & ")." & vbCrLf & vbCrLf & _
-                   "Nova prijemnica " & hlNewPrij & " je SVEZE paletizovana na tacan broj, a stare " & _
-                   "osirocene palete su SKINUTE. Ne treba rucni aneks." & _
-                   IIf(Len(hlDetInfo) > 0, vbCrLf & hlDetInfo, ""), _
-                   vbInformation, APP_NAME
+            MsgBox "Novi lanac nije kreirao prijemnicu -> palete NISU prevezane. " & _
+                   "Uradi rucno preko Osiroceni dokumenti -> Palete.", vbExclamation, APP_NAME
         End If
     End If
 

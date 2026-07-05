@@ -2539,7 +2539,7 @@ Private Sub btnUnosPrij_Click()
             relWarn = "nova prijemnica nema broj"
             relOk = False
         Else
-            relOk = ReassignPaleteToPrijemnica_TX(oldBrojPrij, newBrojPrij, relWarn, True)
+            relOk = ReassignPaleteToPrijemnica_TX(oldBrojPrij, newBrojPrij, relWarn, True, True)
         End If
         If relOk Then
             MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & _

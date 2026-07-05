@@ -1245,10 +1245,15 @@ End Function
 '      vrati upozorenje (operater dodaje/skida aneks rucno).
 ' Sve u jednoj transakciji. outWarn nosi poruke za UI (prazno = bez napomena).
 ' ============================================================
+' autoTopup (flow #2 ispravka): kad nov unos ima VISE gajbica po klasi, razlika se
+' AUTOMATSKI paletizuje na novu prijemnicu (dopuna POSTOJECE otvorene palete do max,
+' pa prelivanje) -> postojeci brojevi/redosled paleta se NE menjaju. Smanjenje se i
+' dalje samo prijavljuje (skini visak rucno). Default False -> staro ponasanje (warn).
 Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                                               ByVal newBroj As String, _
                                               Optional ByRef outWarn As String, _
-                                              Optional ByVal allowRelabel As Boolean = False) As Boolean
+                                              Optional ByVal allowRelabel As Boolean = False, _
+                                              Optional ByVal autoTopup As Boolean = False) As Boolean
     Const SRC As String = "modPaletniList.ReassignPaleteToPrijemnica_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -1373,6 +1378,29 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         RequireUpdateCell TBL_PALETA_STAVKA, i, COL_STORNIRANO, "Da", SRC
     Next k
 
+    ' ---- STEP 1.5: auto-dopuna razlike (autoTopup): kad nov unos ima VISE gajbica po
+    ' klasi, paletizuj RAZLIKU SADA. Posle STEP 1 nova prijemnica nema aktivnih stavki
+    ' (svez paletni unos je suppress-ovan/ponisten) -> EnsurePrijemnicaNotAlreadyPaletized
+    ' prolazi. GetOrCreateOpenPaleta dopunjuje POSTOJECU otvorenu paletu do max pa preliva
+    ' na novu -> brojevi/redosled postojecih paleta ostaju. STEP 2 zatim re-point + KG-sync
+    ' stare stavke na NOVU stopu (newNeto/newGajb), pa je ukupno tacno = newNeto/newGajb. ----
+    If autoTopup Then
+        Dim kt As Variant
+        For Each kt In newGajb.Keys
+            Dim klt As String: klt = CStr(kt)
+            Dim dOld As Long: dOld = NzL(oldGajbByKl(klt))
+            Dim dNew As Long: dNew = NzL(newGajb(klt))
+            If dNew > dOld And newById.Exists(klt) Then
+                Dim dG As Long: dG = dNew - dOld
+                Dim dPerG As Double: dPerG = 0
+                If dNew > 0 Then dPerG = NzD(newNeto(klt)) / dNew
+                PaletizePrijemnica prijemnicaID:=CStr(newById(klt)), brojPrij:=newBroj, _
+                    brojZbirne:=newBrZbr, vrstaVoca:=nVr, sortaVoca:=nSo, klasa:=klt, _
+                    netoKg:=dG * dPerG, brGajbica:=dG, tipAmb:=nTa
+            End If
+        Next kt
+    End If
+
     ' ---- STEP 2: delta-warn + re-point + KG-sync ----
     Dim warnMsg As String: warnMsg = ""
     Dim kk As Variant
@@ -1380,8 +1408,15 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         If Not newById.Exists(kk) Then
             warnMsg = warnMsg & "Klasa " & kk & ": nova prijemnica nema tu klasu (stavke nisu prevezane). "
         ElseIf NzL(oldGajbByKl(kk)) <> NzL(newGajb(kk)) Then
-            warnMsg = warnMsg & "Klasa " & kk & ": gajbica staro=" & NzL(oldGajbByKl(kk)) & " novo=" & _
-                      NzL(newGajb(kk)) & " (razlika - dodaj/skini aneks rucno). "
+            If autoTopup And NzL(newGajb(kk)) > NzL(oldGajbByKl(kk)) Then
+                ' povecanje -> razlika je automatski dopunjena (STEP 1.5, postojeca paleta do max);
+                ' bez upozorenja
+            Else
+                warnMsg = warnMsg & "Klasa " & kk & ": gajbica staro=" & NzL(oldGajbByKl(kk)) & " novo=" & _
+                          NzL(newGajb(kk)) & " (razlika - " & _
+                          IIf(autoTopup, "smanjenje: skini visak rucno (Osiroceni dokumenti)", _
+                                         "dodaj/skini aneks rucno") & "). "
+            End If
         End If
     Next kk
 
@@ -1393,8 +1428,12 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
             RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_PRIJEMNICA_ID, CStr(newById(kl3)), SRC
             RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_BROJ_PRIJ, newBroj, SRC
             If Len(newBrZbr) > 0 Then RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_BROJ_ZBIRNE, newBrZbr, SRC
-            ' KG-sync samo kad se broj gajbica klase poklapa
-            If NzL(oldGajbByKl(kl3)) = NzL(newGajb(kl3)) And NzL(newGajb(kl3)) > 0 Then
+            ' KG-sync: uskladi neto po gajbici na NOVU stopu. Kad se broj gajbica poklapa
+            ' -> kao dosad. autoTopup + POVECANJE -> takodje (razlika je dopunjena u STEP 1.5
+            ' na istu stopu, pa je ukupno tacno = newNeto).
+            Dim isInc As Boolean: isInc = (NzL(newGajb(kl3)) > NzL(oldGajbByKl(kl3)))
+            If NzL(newGajb(kl3)) > 0 And _
+               (NzL(oldGajbByKl(kl3)) = NzL(newGajb(kl3)) Or (autoTopup And isInc)) Then
                 Dim perG As Double: perG = NzD(newNeto(kl3)) / NzL(newGajb(kl3))
                 Dim oldStNeto As Double: oldStNeto = NzD(ps(i, sNeto))
                 Dim newStNeto As Double: newStNeto = NzL(ps(i, sGajb)) * perG
@@ -1611,35 +1650,6 @@ End Function
 ' Reuse DecrementPaletaForStavka (isti korak kao STEP 1 re-pointa) + storno stavke.
 ' Vraca broj skinutih stavki; outInfo nosi rezime za UI. Transakciono.
 ' ============================================================
-' Ukupan broj gajbica na AKTIVNIM (osirocenim) paletnim stavkama date prijemnice
-' (sve klase). Flow #2 (autohladnjaca) njime odlucuje: isti broj kao nov unos ->
-' re-point (ista roba); razlicit -> promena kolicine, ne "ista roba" -> sveza
-' paletizacija novog lanca + skini staro (umesto rucnog "aneksa").
-Public Function OsiroceneGajbicaTotal(ByVal broj As String) As Long
-    On Error GoTo EH
-    broj = Trim$(broj)
-    If Len(broj) = 0 Then Exit Function
-    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
-    If IsEmpty(s) Then Exit Function
-    Dim sBr As Long, sGa As Long, sSt As Long
-    sBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    sGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-    sSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If sBr = 0 Or sGa = 0 Then Exit Function
-    Dim r As Long, tot As Long
-    For r = 1 To UBound(s, 1)
-        If Trim$(CStr(SafeCell(s, r, sBr))) = broj Then
-            If sSt = 0 Or UCase$(Trim$(CStr(SafeCell(s, r, sSt)))) <> "DA" Then
-                tot = tot + NzL(SafeCell(s, r, sGa))
-            End If
-        End If
-    Next r
-    OsiroceneGajbicaTotal = tot
-    Exit Function
-EH:
-    LogErr "modPaletniList.OsiroceneGajbicaTotal"
-End Function
-
 Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
                                                Optional ByRef outInfo As String) As Long
     Const SRC As String = "modPaletniList.DetachOsirocenePaletaStavke_TX"
