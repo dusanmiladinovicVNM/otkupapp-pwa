@@ -1791,19 +1791,20 @@ EH:
     LogErr "modPaletniList.GetOtkupiZaPalete"
 End Function
 
-Private Function NzD(ByVal v As Variant) As Double
+' Public (reuse iz frmDokumenta recovery panela - Ocena/verdikt). Nema duplikata.
+Public Function NzD(ByVal v As Variant) As Double
     On Error Resume Next
     If IsNumeric(v) Then NzD = CDbl(v)
 End Function
 
-Private Function NzL(ByVal v As Variant) As Long
+Public Function NzL(ByVal v As Variant) As Long
     On Error Resume Next
     If IsNumeric(v) Then NzL = CLng(v)
 End Function
 
 ' Bezbedno citanje celije iz GetTableData niza: ako kolona ne postoji
 ' (idx < 1, npr. schema drift), vrati Empty umesto subscript-error.
-Private Function SafeCell(ByVal d As Variant, ByVal r As Long, _
+Public Function SafeCell(ByVal d As Variant, ByVal r As Long, _
                           ByVal idx As Long) As Variant
     If idx >= 1 Then SafeCell = d(r, idx) Else SafeCell = Empty
 End Function
