@@ -3628,22 +3628,23 @@ End Sub
 
 ' Puni desnu (ciljnu) listu u PAL modu: aktivne prijemnice iste vrste/sorte kao
 ' izabrana leva (i paletizovane i ne), uz kolonu "Palet." (Da/Ne). haveSel=False
-' -> prazna lista sa uputstvom (dok se levo ne izabere). Reuse GetAktivnePrijemnice.
-Private Sub PopulateRecTargets(ByVal fVrsta As String, ByVal fSorta As String, _
-                               ByVal haveSel As Boolean)
+' -> prazna lista sa uputstvom. Vraca broj ponudjenih ciljeva (0 = nema/placeholder).
+Private Function PopulateRecTargets(ByVal fVrsta As String, ByVal fSorta As String, _
+                                    ByVal haveSel As Boolean) As Long
     On Error Resume Next
     m_lstAktZbr.ColumnCount = 7
     m_lstAktZbr.ColumnWidths = "76;54;56;64;38;64;36"
     m_lstAktZbr.Clear
     AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Vrsta", "Sorta", "Gajb", "Zbirna", "Palet")
+    PopulateRecTargets = 0
     If Not haveSel Then
         m_lstAktZbr.AddItem "(izaberi prijemnicu levo)"
-        Exit Sub
+        Exit Function
     End If
     Dim az As Variant: az = GetAktivnePrijemnice(fVrsta, fSorta)
     If IsEmpty(az) Then
-        m_lstAktZbr.AddItem "(nema ciljeva iste vrste/sorte)"
-        Exit Sub
+        m_lstAktZbr.AddItem "(nema iste vrste/sorte - vidi status ispod)"
+        Exit Function
     End If
     Dim j As Long, d As Long
     For j = 1 To UBound(az, 1)
@@ -3651,11 +3652,13 @@ Private Sub PopulateRecTargets(ByVal fVrsta As String, ByVal fSorta As String, _
         For d = 0 To 6: r2(d) = az(j, d + 1): Next d
         AddRecRow m_lstAktZbr, r2
     Next j
-End Sub
+    PopulateRecTargets = UBound(az, 1)
+End Function
 
 ' Izbor leve (osirocene) prijemnice u PAL modu -> filtriraj desne ciljeve po
-' vrsti/sorti + prikazi koje fizicke palete se prevoze (m_recStatus). U PRIJ modu
-' i tokom programske populacije (m_recPopulating) ne radi nista.
+' vrsti/sorti + prikazi koje fizicke palete se prevoze (m_recStatus). Ako nema
+' cilja iste vrste/sorte -> uputa: greska u vrsti/sorti se resava storno-om palete
+' (re-point NE menja vrstu/sortu palete). U PRIJ modu / tokom populacije ne radi nista.
 Private Sub m_lstOsirPrij_Change()
     On Error Resume Next
     If m_recPopulating Then Exit Sub
@@ -3675,13 +3678,21 @@ Private Sub m_lstOsirPrij_Change()
         Exit Sub
     End If
 
-    PopulateRecTargets vr, so, True
+    Dim nT As Long: nT = PopulateRecTargets(vr, so, True)
 
-    Dim info As String: info = GetPaleteInfoForPrijemnicaBroj(broj)
-    If Len(info) > 0 Then
-        m_recStatus.caption = "Palete koje se prevoze (" & broj & "): " & info
+    If nT = 0 Then
+        ' Nema cilja iste vrste/sorte: nova prijemnica jos nije uneta ILI je greska
+        ' bila bas u vrsti/sorti. Re-point ne menja vrstu/sortu palete -> tada je
+        ' pravi put storno palete + ponovni unos, ne "Prevezi".
+        m_recStatus.caption = "Nema cilja iste vrste/sorte (" & vr & "/" & so & "). " & _
+            "Ako je greska bila u vrsti/sorti: Palete -> Storniraj paletu, pa ponovo unesi."
     Else
-        m_recStatus.caption = ""
+        Dim info As String: info = GetPaleteInfoForPrijemnicaBroj(broj)
+        If Len(info) > 0 Then
+            m_recStatus.caption = "Palete koje se prevoze (" & broj & "): " & info
+        Else
+            m_recStatus.caption = ""
+        End If
     End If
 End Sub
 
