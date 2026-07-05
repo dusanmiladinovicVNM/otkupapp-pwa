@@ -26,6 +26,8 @@ Private m_ws As Worksheet
 Private m_row As Long
 Private m_summary As String
 Private m_totalIssues As Long
+Private m_rows As Collection      ' ravan spisak nalaza: Array(code, detalj) -- za ListBox
+Private m_toSheet As Boolean      ' True = pisi i u INTEGRITET sheet; False = samo memorija
 
 ' ============================================================
 ' PUBLIC ENTRY POINT
@@ -36,10 +38,59 @@ Public Sub RunIntegritetProvere(Optional ByVal showSummary As Boolean = True)
 
     Application.ScreenUpdating = False
 
+    m_toSheet = True
     InitIntegritetSheet
+    Set m_rows = New Collection
     m_summary = ""
     m_totalIssues = 0
 
+    RunAllChecks
+
+    WriteLine "UKUPNO neuskladjenih zapisa: " & CStr(m_totalIssues), True
+    FinishIntegritetSheet
+
+    Application.ScreenUpdating = True
+
+    If showSummary Then
+        MsgBox "Integritet provere zavrsene." & vbCrLf & vbCrLf & _
+               m_summary & vbCrLf & _
+               "UKUPNO: " & CStr(m_totalIssues) & " neuskladjenih zapisa." & vbCrLf & vbCrLf & _
+               "Detalji: sheet '" & INTEGRITET_SHEET & "'.", _
+               IIf(m_totalIssues > 0, vbExclamation, vbInformation), APP_NAME
+    End If
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "Integritet provere - greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Ravan spisak nalaza (samo problemi) kao 2D(1..n,1..2): Provera | Detalj.
+' Ne dira sheet. Za in-app ListBox prikaz (frmOtkupAPP overlay).
+Public Function GetIntegritetRows() As Variant
+    On Error GoTo EH
+
+    m_toSheet = False
+    Set m_rows = New Collection
+    m_summary = ""
+    m_totalIssues = 0
+
+    RunAllChecks
+
+    GetIntegritetRows = CollToArray(m_rows, 2)
+    Exit Function
+
+EH:
+    LogErr "modIntegritet.GetIntegritetRows"
+    GetIntegritetRows = Empty
+End Function
+
+' Broj problema iz poslednjeg prolaza.
+Public Function IntegritetUkupno() As Long
+    IntegritetUkupno = m_totalIssues
+End Function
+
+Private Sub RunAllChecks()
     Chk_A1_OtpremnicaVsZbirna
     Chk_A2_ManjakAnomalije
     Chk_B1_Verwaiste
@@ -59,24 +110,6 @@ Public Sub RunIntegritetProvere(Optional ByVal showSummary As Boolean = True)
     Chk_D1_PreradjenoBezPrerade
     Chk_D2_PreradaNesvezaPaleta
     Chk_A5_PreradaKg
-
-    WriteLine "UKUPNO neuskladjenih zapisa: " & CStr(m_totalIssues), True
-    FinishIntegritetSheet
-
-    Application.ScreenUpdating = True
-
-    If showSummary Then
-        MsgBox "Integritet provere zavrsene." & vbCrLf & vbCrLf & _
-               m_summary & vbCrLf & _
-               "UKUPNO: " & CStr(m_totalIssues) & " neuskladjenih zapisa." & vbCrLf & vbCrLf & _
-               "Detalji: sheet '" & INTEGRITET_SHEET & "'.", _
-               IIf(m_totalIssues > 0, vbExclamation, vbInformation), APP_NAME
-    End If
-    Exit Sub
-
-EH:
-    Application.ScreenUpdating = True
-    MsgBox "Integritet provere - greska: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1025,6 +1058,23 @@ Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
         If Not IsEmpty(dataArr) Then n = UBound(dataArr, 1)
     End If
 
+    ' --- memorijski sink (samo problemi): Array(code, spojene kolone) ---
+    Dim i As Long, k As Long, detalj As String
+    For i = 1 To n
+        detalj = ""
+        For k = 1 To UBound(dataArr, 2)
+            If k > 1 Then detalj = detalj & "  |  "
+            detalj = detalj & CStr(dataArr(i, k))
+        Next k
+        m_rows.Add Array(code, detalj)
+    Next i
+
+    m_summary = m_summary & "  " & code & ": " & CStr(n) & vbCrLf
+    m_totalIssues = m_totalIssues + n
+
+    ' --- sheet sink ---
+    If Not m_toSheet Then Exit Sub
+
     WriteLine "[" & code & "] " & title & "  --  " & CStr(n) & " zapis(a)", True
 
     If n = 0 Then
@@ -1037,7 +1087,6 @@ Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
         m_ws.rows(m_row).Font.Italic = True
         m_row = m_row + 1
 
-        Dim i As Long, k As Long
         For i = 1 To n
             For k = 1 To UBound(dataArr, 2)
                 m_ws.cells(m_row, k).value = dataArr(i, k)
@@ -1047,13 +1096,12 @@ Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
     End If
 
     m_row = m_row + 1   ' prazan separator
-
-    m_summary = m_summary & "  " & code & ": " & CStr(n) & vbCrLf
-    m_totalIssues = m_totalIssues + n
 End Sub
 
 Private Sub WriteErr(ByVal code As String, ByVal desc As String)
-    WriteLine "[" & code & "] GRESKA: " & desc, True
+    m_rows.Add Array(code, "GRESKA: " & desc)
     m_summary = m_summary & "  " & code & ": GRESKA" & vbCrLf
+    If Not m_toSheet Then Exit Sub
+    WriteLine "[" & code & "] GRESKA: " & desc, True
     m_row = m_row + 1
 End Sub

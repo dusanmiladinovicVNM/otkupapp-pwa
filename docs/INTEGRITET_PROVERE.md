@@ -6,13 +6,16 @@ Ništa ne menja — samo izlistava neusklađene zapise.
 
 ## Pokretanje
 
+- **Crveni baner na startu** (`frmOtkupAPP`): klik → **in-app pregled** (ListBox
+  overlay, kolone `Provera | Detalj`, dugme „Zatvori"). Ne dira sheet.
 - **Admin panel** → grupa „Setup i provere" → **„Integritet provere (tabele)"**, ili
-- `Alt+F8 → RunIntegritetProvere`.
+- `Alt+F8 → RunIntegritetProvere` → upis u **sheet**.
 
-Rezultat se upisuje u sheet **`INTEGRITET_PROVERE`** (obriše se i iznova napiše
-pri svakom pokretanju). Svaki blok: naslov + broj problema, pa „OK – nema" ili
-tabela zapisa. Na kraju „UKUPNO", plus zbirni `MsgBox` sa brojem po proveri.
-Liste se filtriraju/sortiraju/štampaju direktno u Excelu.
+Baner i in-app pregled koriste `GetIntegritetRows()` (samo problemi, u memoriji).
+Admin/Alt+F8 put upisuje u sheet **`INTEGRITET_PROVERE`** (obriše se i iznova napiše
+pri svakom pokretanju): svaki blok naslov + broj problema, pa „OK – nema" ili
+tabela zapisa, na kraju „UKUPNO" + zbirni `MsgBox`. Sheet se filtrira/sortira/
+štampa u Excelu; in-app pregled je brz uvid bez izlaska iz app-a.
 
 Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 `BrojZbirne` (Klasa I + II dele isti broj → zaseban red).

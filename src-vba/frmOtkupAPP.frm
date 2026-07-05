@@ -24,6 +24,12 @@ Private dragOffsetY As Double
 Private mChromeRemoved As Boolean
 
 Private mActiveContent As Object
+
+' Integritet overlay (runtime kontrole; .frx se ne dira)
+Private mIntegList As MSForms.ListBox
+Private mIntegTitle As MSForms.Label
+Private WithEvents mIntegClose As MSForms.CommandButton
+Attribute mIntegClose.VB_VarHelpID = -1
 ' v6.11 UI
 Private Const SIDEBAR_KPI_H As Single = 92
 Private mIsSwitchingContent As Boolean
@@ -72,7 +78,7 @@ Private Sub UserForm_Activate()
         lblStatus.caption = warnText & vbCrLf & "-- KLIK za pun audit (INTEGRITET) --"
         lblStatus.ForeColor = RGB(255, 80, 80)
         lblStatus.Font.Bold = True
-        lblStatus.ControlTipText = "Klik: pun integritet audit (sheet INTEGRITET_PROVERE)"
+        lblStatus.ControlTipText = "Klik: pun integritet audit (in-app pregled)"
     Else
         lblStatus.Visible = False
     End If
@@ -108,15 +114,81 @@ Private Sub lblStatus_Click()
 
     If lblStatus.ForeColor <> RGB(255, 80, 80) Then Exit Sub
 
-    RunIntegritetProvere False        ' izgradi sheet, bez MsgBox-a
-
-    Me.Hide
-    Application.Visible = True
-    frmExcelMini.Show vbModeless
+    ShowIntegritet
     Exit Sub
 
 EH:
     LogErr "frmOtkupAPP.lblStatus_Click"
+End Sub
+
+' In-app integritet pregled: runtime ListBox overlay (Provera | Detalj).
+' Kontrole se prave jednom (Controls.Add) i skrivaju/prikazuju; .frx se ne dira.
+Private Sub ShowIntegritet()
+    On Error GoTo EH
+
+    Dim rows As Variant
+    rows = GetIntegritetRows()          ' 2D(n,2) ili Empty; ne dira sheet
+
+    If mIntegList Is Nothing Then
+        Set mIntegTitle = Me.Controls.Add("Forms.Label.1", "lblIntegT", True)
+        Set mIntegClose = Me.Controls.Add("Forms.CommandButton.1", "btnIntegClose", True)
+        Set mIntegList = Me.Controls.Add("Forms.ListBox.1", "lstInteg", True)
+    End If
+
+    Dim w As Double: w = Me.InsideWidth
+    Dim h As Double: h = Me.InsideHeight
+
+    mIntegTitle.Left = 8: mIntegTitle.top = 8
+    mIntegTitle.Width = w - 130: mIntegTitle.Height = 20
+    mIntegTitle.Font.Bold = True: mIntegTitle.ForeColor = RGB(255, 80, 80)
+
+    mIntegClose.Left = w - 116: mIntegClose.top = 6
+    mIntegClose.Width = 108: mIntegClose.Height = 24
+    mIntegClose.caption = "Zatvori"
+
+    mIntegList.Left = 8: mIntegList.top = 34
+    mIntegList.Width = w - 16: mIntegList.Height = h - 42
+    mIntegList.ColumnCount = 2
+    mIntegList.ColumnWidths = "70;" & CStr(CLng(mIntegList.Width) - 90)
+    mIntegList.Clear
+
+    mIntegTitle.caption = "INTEGRITET  --  " & CStr(IntegritetUkupno()) & " neuskladjenih zapisa"
+
+    If IsArray(rows) Then
+        Dim i As Long
+        For i = 1 To UBound(rows, 1)
+            mIntegList.AddItem CStr(rows(i, 1))
+            mIntegList.List(mIntegList.ListCount - 1, 1) = CStr(rows(i, 2))
+        Next i
+    Else
+        mIntegList.AddItem "OK"
+        mIntegList.List(0, 1) = "nema neuskladjenosti"
+    End If
+
+    mIntegTitle.Visible = True
+    mIntegClose.Visible = True
+    mIntegList.Visible = True
+
+    On Error Resume Next
+    mIntegList.ZOrder 0
+    mIntegTitle.ZOrder 0
+    mIntegClose.ZOrder 0
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogErr "frmOtkupAPP.ShowIntegritet"
+End Sub
+
+Private Sub HideIntegritet()
+    On Error Resume Next
+    If Not mIntegList Is Nothing Then mIntegList.Visible = False
+    If Not mIntegTitle Is Nothing Then mIntegTitle.Visible = False
+    If Not mIntegClose Is Nothing Then mIntegClose.Visible = False
+End Sub
+
+Private Sub mIntegClose_Click()
+    HideIntegritet
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
@@ -971,6 +1043,8 @@ Private Sub OpenContentForm(ByVal contentForm As Object, _
                             ByVal activeBtn As MSForms.CommandButton, _
                             ByVal sectionTitle As String)
     On Error GoTo EH
+
+    HideIntegritet          ' navigacija gasi integritet overlay ako je otvoren
 
     ' --- Kontrola pristupa (opt-in AUTH_ENABLED): prava po oblasti ---
     ' Jedna tacka za sve sekcije. Admin = bypass; AUTH iskljucen = sve dozvoljeno.
