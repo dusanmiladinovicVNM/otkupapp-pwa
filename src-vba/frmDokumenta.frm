@@ -3624,11 +3624,11 @@ Private Sub PopulateRecoveryPanel()
         If nL = 0 Then m_lstOsirPrij.AddItem "Nema osirocenih paleta."
 
         ' Desna (ciljna) lista se puni tek po izboru leve prijemnice
-        ' (m_lstOsirPrij_Change -> PopulateRecTargets, filter po vrsti/sorti + Ocena).
-        PopulateRecTargets "", "", "", False
+        ' (m_lstOsirPrij_Change -> PopulateRecTargets, filter po BrojZbirne + Ocena).
+        PopulateRecTargets "", "", False
 
         m_recLblPrij.caption = "Stornirane prijemnice (osirocene palete)"
-        m_recLblZbr.caption = "Ciljna prijemnica (iste vrste/sorte)"
+        m_recLblZbr.caption = "Ciljna prijemnica (ista zbirna)"
         m_btnRecPrevezi.caption = "Prevezi palete >>"
         m_btnRecSkini.visible = True
         m_recTitle.caption = "Osiroceni dokumenti - PALETE  (" & nL & ")"
@@ -3679,44 +3679,48 @@ End Sub
 ' Puni desnu (ciljnu) listu u PAL modu: aktivne prijemnice iste vrste/sorte kao
 ' izabrana leva (i paletizovane i ne), uz kolonu "Palet." (Da/Ne). haveSel=False
 ' -> prazna lista sa uputstvom. Vraca broj ponudjenih ciljeva (0 = nema/placeholder).
-' Puni desnu (ciljnu) listu + kolona "Ocena" = verdikt EvaluatePaletaReassign po
-' kandidatu (Prevezi / +koriguj / +etiketa). Filtar vrsta/sorta suzava na iste;
-' oldBroj je izabrana leva prijemnica (za verdikt). Vraca broj ponudjenih ciljeva.
-Private Function PopulateRecTargets(ByVal oldBroj As String, ByVal fVrsta As String, _
-                                    ByVal fSorta As String, ByVal haveSel As Boolean) As Long
+' Puni desnu (ciljnu) listu: aktivne prijemnice sa ISTOM BrojZbirne kao stornirana
+' (zbirna je egzaktan kljuc - re-entry pod istom zbirnom = tacan cilj, obicno 1).
+' Kolona "Ocena" = FastOcena (Prevezi/+koriguj/+etiketa). Vraca broj ciljeva.
+Private Function PopulateRecTargets(ByVal oldBroj As String, ByVal oldZbr As String, _
+                                    ByVal haveSel As Boolean) As Long
     On Error Resume Next
     m_lstAktZbr.ColumnCount = 6
     m_lstAktZbr.ColumnWidths = "72;54;38;68;34;98"
     m_lstAktZbr.Clear
     AddRecRow m_lstAktZbr, Array("Broj", "Datum", "Gajb", "Zbirna", "Palet", "Ocena")
     PopulateRecTargets = 0
-    If Not haveSel Then
+    If Not haveSel Or Len(oldZbr) = 0 Then
         m_lstAktZbr.AddItem "(izaberi prijemnicu levo)"
         Exit Function
     End If
-    Dim az As Variant: az = GetAktivnePrijemnice(fVrsta, fSorta)
+    Dim az As Variant: az = GetAktivnePrijemnice("", "")
     If IsEmpty(az) Then
-        m_lstAktZbr.AddItem "(nema iste vrste/sorte - vidi status ispod)"
+        m_lstAktZbr.AddItem "(nema aktivnih prijemnica)"
         Exit Function
     End If
 
     ' Precompute STARO stanje (identitet+gajbica) + broj->tipAmb mapu JEDNOM.
-    ' (Ranije se EvaluatePaletaReassign zvao po kandidatu -> stotine citanja tabela = freeze.)
     Dim oVr As String, oSo As String, oTa As String, oGajb As Long
     Dim tipMap As Object
     PrepOcenaContext oldBroj, oVr, oSo, oTa, oGajb, tipMap
 
     ' kolone GetAktivnePrijemnice: 1 Broj,2 Datum,3 Vrsta,4 Sorta,5 Gajb,6 Zbirna,7 Palet
-    Dim j As Long
+    Dim j As Long, cnt As Long
     For j = 1 To UBound(az, 1)
-        Dim cand As String: cand = CStr(az(j, 1))
-        Dim cTa As String: cTa = ""
-        If tipMap.Exists(cand) Then cTa = CStr(tipMap(cand))
-        Dim oc As String
-        oc = FastOcena(oVr, oSo, oTa, oGajb, CStr(az(j, 3)), CStr(az(j, 4)), cTa, NzL(az(j, 5)))
-        AddRecRow m_lstAktZbr, Array(cand, az(j, 2), az(j, 5), az(j, 6), az(j, 7), oc)
+        If StrComp(Trim$(CStr(az(j, 6))), oldZbr, vbTextCompare) = 0 _
+           And StrComp(Trim$(CStr(az(j, 1))), oldBroj, vbTextCompare) <> 0 Then
+            Dim cand As String: cand = CStr(az(j, 1))
+            Dim cTa As String: cTa = ""
+            If tipMap.Exists(cand) Then cTa = CStr(tipMap(cand))
+            Dim oc As String
+            oc = FastOcena(oVr, oSo, oTa, oGajb, CStr(az(j, 3)), CStr(az(j, 4)), cTa, NzL(az(j, 5)))
+            AddRecRow m_lstAktZbr, Array(cand, az(j, 2), az(j, 5), az(j, 6), az(j, 7), oc)
+            cnt = cnt + 1
+        End If
     Next j
-    PopulateRecTargets = UBound(az, 1)
+    If cnt = 0 Then m_lstAktZbr.AddItem "(nema aktivne prijemnice sa zbirnom " & oldZbr & ")"
+    PopulateRecTargets = cnt
 End Function
 
 ' Jedno citanje: staro (vrsta/sorta/tipAmb + gajbica po aktivnim stavkama) + mapa
@@ -3792,19 +3796,22 @@ Private Sub m_lstOsirPrij_Change()
     End If
 
     If Len(vr) = 0 And Len(so) = 0 Then     ' header ili placeholder red
-        PopulateRecTargets "", "", "", False
+        PopulateRecTargets "", "", False
         m_recStatus.caption = ""
         Exit Sub
     End If
 
-    Dim nT As Long: nT = PopulateRecTargets(broj, vr, so, True)
+    ' BrojZbirne stornirane = kljuc; cilj je aktivna prijemnica sa istom zbirnom.
+    Dim oldZbr As String
+    oldZbr = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_BROJ_ZBIRNE)))
+    Dim nT As Long: nT = PopulateRecTargets(broj, oldZbr, True)
 
     If nT = 0 Then
-        ' Nema cilja iste vrste/sorte: nova prijemnica jos nije uneta ILI je greska
-        ' bila bas u vrsti/sorti. Re-point ne menja vrstu/sortu palete -> tada je
-        ' pravi put storno palete + ponovni unos, ne "Prevezi".
-        m_recStatus.caption = "Nema cilja iste vrste/sorte (" & vr & "/" & so & "). " & _
-            "Ako je greska bila u vrsti/sorti: Palete -> Storniraj paletu, pa ponovo unesi."
+        ' Nema AKTIVNE prijemnice sa istom zbirnom: re-entry pod istom zbirnom jos
+        ' nije napravljen, ILI je storniran ceo blok (i zbirna) -> re-entry ima novu
+        ' zbirnu (koristi "Mod: Prijemnice"), ili je greska u vrsti/sorti -> storno palete.
+        m_recStatus.caption = "Nema aktivne prijemnice sa zbirnom " & oldZbr & _
+            ". Napravi re-entry pod istom zbirnom (ili vidi Mod: Prijemnice / storno palete)."
     Else
         Dim info As String: info = GetPaleteInfoForPrijemnicaBroj(broj)
         If Len(info) > 0 Then
