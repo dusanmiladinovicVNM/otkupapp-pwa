@@ -1840,6 +1840,8 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
+    ' touched: palID -> akumulirana delta gajbica (0 = samo kg/amb re-sync).
+    ' Kljucevi = palete za header-recompute + Istorija/ADJUST log sa vidljivom deltom.
     Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
     Dim doneCnt As Long, infoTxt As String
 
@@ -1866,7 +1868,8 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
                     Else
                         RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_BR_GAJBICA, g - take, SRC
                     End If
-                    touched(CStr(SafeCell(s, r, sPal))) = True
+                    Dim pidD As String: pidD = CStr(SafeCell(s, r, sPal))
+                    touched(pidD) = NzL(touched(pidD)) - take
                     remM = remM - take
                     changedKl = True
                 End If
@@ -1888,7 +1891,7 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
                 If delta <= freeSlots Or spillMode = "PREKO" Or c2 = 0 Then
                     ' sve na istu paletu (staje, ili operater svesno preko kapaciteta)
                     RequireUpdateCell TBL_PALETA_STAVKA, lastRow, COL_PALS_BR_GAJBICA, gLast + delta, SRC
-                    touched(lp) = True
+                    touched(lp) = NzL(touched(lp)) + delta
                     If spillMode = "PREKO" And delta > freeSlots Then _
                         infoTxt = infoTxt & "Paleta " & PaletaLabel(lp) & ": " & (u2 + delta) & _
                                   " gajb. (preko kapaciteta " & c2 & "). "
@@ -1898,7 +1901,7 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
                     Dim fillN As Long: fillN = freeSlots
                     If fillN > 0 Then
                         RequireUpdateCell TBL_PALETA_STAVKA, lastRow, COL_PALS_BR_GAJBICA, gLast + fillN, SRC
-                        touched(lp) = True
+                        touched(lp) = NzL(touched(lp)) + fillN
                     End If
                     If lpR > 0 Then ClosePaleta lpR, SRC   ' puna -> zatvori pre trazenja sledece
                     SpillGajbice CStr(docId(kl)), brojPrij, dZbr, kl, dVr, dSo, dTa, _
@@ -1921,11 +1924,19 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
         End If
     Next vKl
 
-    ' Header-i dodirnutih paleta = suma aktivnih stavki (self-healing, ukljucuje su-stanare).
+    ' Header-i dodirnutih paleta = suma aktivnih stavki (self-healing, ukljucuje
+    ' su-stanare). Log nosi VIDLJIVU deltu gajbica po paleti (+3 / -2 / 0 = samo kg).
     Dim vP As Variant
     For Each vP In touched.Keys
         RecomputePaletaFromStavke CStr(vP), SRC
-        PaletaLog CStr(vP), "ADJUST", "prij=" & brojPrij
+        Dim dG As Long: dG = NzL(touched(vP))
+        Dim dTxt As String
+        If dG = 0 Then
+            dTxt = "0 (samo kg)"
+        Else
+            dTxt = IIf(dG > 0, "+", "") & dG
+        End If
+        PaletaLog CStr(vP), "ADJUST", "prij=" & brojPrij & " gajb=" & dTxt
     Next vP
 
     tx.CommitTx
@@ -2021,7 +2032,7 @@ Private Sub SpillGajbice(ByVal prijemnicaID As String, ByVal brojPrij As String,
         RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
                           (curNeto + takeNeto) + (curAmb + takeAmb) + palKg, SRC
 
-        touched(palID) = True
+        touched(palID) = NzL(touched(palID)) + take   ' akumuliraj +delta gajbica po paleti
         remaining = remaining - take
 
         If newGajb >= cap Then
@@ -2060,12 +2071,12 @@ Private Function ResyncStavkeNetoAmb(ByVal brojPrij As String, ByVal klasa As St
                 Dim tgtA As Double: tgtA = g * crateW
                 If Abs(NzD(SafeCell(s, r, sNe)) - tgtN) > 0.0001 Then
                     RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_NETO, tgtN, SRC
-                    touched(CStr(SafeCell(s, r, sPal))) = True
+                    touched(CStr(SafeCell(s, r, sPal))) = NzL(touched(CStr(SafeCell(s, r, sPal))))
                     ResyncStavkeNetoAmb = True
                 End If
                 If Abs(NzD(SafeCell(s, r, sAm)) - tgtA) > 0.0001 Then
                     RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_AMBALAZA, tgtA, SRC
-                    touched(CStr(SafeCell(s, r, sPal))) = True
+                    touched(CStr(SafeCell(s, r, sPal))) = NzL(touched(CStr(SafeCell(s, r, sPal))))
                     ResyncStavkeNetoAmb = True
                 End If
             End If
