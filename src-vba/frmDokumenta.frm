@@ -3321,11 +3321,47 @@ Private Function ConfirmStorno(ByVal tipText As String, ByVal broj As String) As
                             vbQuestion + vbYesNo, APP_NAME) = vbYes)
 End Function
 
+' SIMPLE PATH (nema nizvodnog toka): jedan confirm + obican storno + tiha
+' zastita invarijante. Bez 4-mod dijaloga (smart trigger). Tanki UI.
+Private Sub RunSimpleStornoUI(ByVal docType As String, ByVal brDok As String, ByVal dokTip As String)
+    Dim lbl As String
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA: lbl = "otpremnicu"
+        Case FLOW_DOC_ZBIRNA:     lbl = "zbirnu"
+        Case FLOW_DOC_REVERS:     lbl = "revers"
+        Case Else:                lbl = "dokument"
+    End Select
+
+    If Not ConfirmStorno(lbl, brDok) Then Exit Sub
+
+    Dim res As Object
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA: Set res = RunSimpleStornoOtpremnica(brDok)
+        Case FLOW_DOC_ZBIRNA:     Set res = RunSimpleStornoZbirna(brDok)
+        Case FLOW_DOC_REVERS:     Set res = RunSimpleStornoRevers(brDok, dokTip)
+    End Select
+
+    If res Is Nothing Then
+        MsgBox "Nepoznat tip dokumenta.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If CBool(res("success")) Then
+        txtStornoBroj.value = ""
+        MsgBox CStr(res("message")), vbInformation, APP_NAME
+    Else
+        MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
+    End If
+    CheckVerwaisteDokumente
+End Sub
+
 ' ============================================================
 ' CENTRALNI STORNO / ISPRAVKA FRAMEWORK -- tanki UI sloj.
 ' Forma samo: gradi preview, skuplja izbor moda (poslovno znacenje storna) i
 ' zove centralne servise (modStornoFlow). Business logika NIJE u formi.
 ' Vraca True ako je tip preuzet frameworkom (btnStorno_Click tada izlazi).
+' Puni dijalog se pokazuje SAMO kad CorrectionNeedsDialog = True (smart trigger);
+' inace ide RunSimpleStornoUI (obican storno).
 ' ============================================================
 Private Function TryRunCorrectionFramework(ByVal tipDok As String, ByVal brDok As String) As Boolean
     On Error GoTo EH
@@ -3334,6 +3370,13 @@ Private Function TryRunCorrectionFramework(ByVal tipDok As String, ByVal brDok A
     docType = ComboToDocType(tipDok, dokTip)
     If Len(docType) = 0 Then Exit Function          ' nije framework tip -> False (stara logika)
     TryRunCorrectionFramework = True                ' preuzimamo obradu
+
+    ' SMART TRIGGER: pun poslovni dijalog SAMO kad ima nizvodni tok (prijemnica/
+    ' palete) koji trazi odluku. Inace obican storno + tiha rekalkulacija/odvezivanje.
+    If Not CorrectionNeedsDialog(docType, brDok, dokTip) Then
+        RunSimpleStornoUI docType, brDok, dokTip
+        Exit Function
+    End If
 
     Dim preview As String
     preview = BuildStornoPreview(docType, brDok, dokTip)

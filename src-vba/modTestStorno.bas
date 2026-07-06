@@ -66,6 +66,8 @@ Public Sub RunStornoTestSuite()
     T06_ReversIspravkaNeDupliraSaldo
     T07_ReversPonistenjeUklanjaSaldo
     T08_PendingCorrectionVidljivNaFail
+    T09_SimpleStornoZbirna
+    T10_SmartTriggerGate
 
     tx.RollbackTx
     Set tx = Nothing
@@ -271,6 +273,54 @@ Private Sub T08_PendingCorrectionVidljivNaFail()
         If CStr(c(i)("id")) = cid Then found = True
     Next i
     Chk found, S & "FAILED context ostaje u recovery listi (vidljiv)"
+End Sub
+
+' ============================================================
+' T09 - SIMPLE storno zbirne (bez dijaloga): storno + odvezivanje otpremnica.
+' ============================================================
+Private Sub T09_SimpleStornoZbirna()
+    Const S As String = "T09 simple storno zbirne: "
+
+    SeedZbirna "SVT-Z9", "I", 100, 10
+    SeedOtpremnica "SVT-OA9", "SVT-Z9", "I", 60, 6
+    SeedOtpremnica "SVT-OB9", "SVT-Z9", "I", 40, 4
+
+    ' Nema prijemnice/paleta -> smart trigger NE trazi dijalog.
+    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, "SVT-Z9"), _
+        S & "CorrectionNeedsDialog = False (nema nizvodnog toka)"
+
+    Dim res As Object
+    Set res = modStornoFlow.RunSimpleStornoZbirna("SVT-Z9")
+    Chk CBool(res("success")), S & "RunSimpleStornoZbirna uspeo"
+
+    Chk Not ZbirnaPostoji("SVT-Z9"), S & "zbirna stornirana"
+    ChkEq OtpBrojZbirne("SVT-OA9"), "", S & "OA9 odvezana ('ceka zbirnu')"
+    ChkEq OtpBrojZbirne("SVT-OB9"), "", S & "OB9 odvezana ('ceka zbirnu')"
+End Sub
+
+' ============================================================
+' T10 - smart trigger gate: dijalog se trazi TEK kad postoji nizvodni tok.
+' ============================================================
+Private Sub T10_SmartTriggerGate()
+    Const S As String = "T10 smart trigger gate: "
+
+    SeedZbirna "SVT-Z10", "I", 100, 10
+    SeedOtpremnica "SVT-OA10", "SVT-Z10", "I", 100, 10
+
+    ' Bez prijemnice/paleta -> otpremnica NE trazi dijalog (obican storno).
+    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_OTPREMNICA, "SVT-OA10"), _
+        S & "otpremnica bez nizvodnog toka -> False"
+
+    ' Dodaj prijemnicu preko zbirne -> sada TRAZI dijalog (odluka o prijemnici).
+    SeedPrijemnica "SVT-P10", "SVT-Z10", "I", 100, 10
+    Chk modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_OTPREMNICA, "SVT-OA10"), _
+        S & "otpremnica sa prijemnicom -> True (eskalira na dijalog)"
+    Chk modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, "SVT-Z10"), _
+        S & "zbirna sa prijemnicom -> True"
+
+    ' Revers nikad ne trazi dijalog (list, bez nizvodnog toka).
+    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_REVERS, "SVT-R10", DOK_TIP_OM_IZLAZ_KOOP), _
+        S & "revers -> uvek False (nema lanca)"
 End Sub
 
 ' ============================================================

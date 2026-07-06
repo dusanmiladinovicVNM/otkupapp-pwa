@@ -145,6 +145,123 @@ EH:
 End Function
 
 ' ============================================================
+' SMART TRIGGER: da li storno TRAZI poslovni dijalog (4 moda)?
+' Da SAMO kad postoji NIZVODNI tok koji trazi odluku operatera (prijemnica ili
+' palete). Inace je obican storno + tiha rekalkulacija/odvezivanje dovoljan
+' (motor cuva invarijantu bez ceremonije). Revers je list -> nikad dijalog.
+' ============================================================
+Public Function CorrectionNeedsDialog(ByVal docType As String, ByVal broj As String, _
+                                      Optional ByVal dokumentTip As String = "") As Boolean
+    On Error GoTo EH
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA
+            Dim so As Object: Set so = ScanOtpremnica(broj)
+            CorrectionNeedsDialog = CBool(so("hasPrijemnica")) Or CBool(so("hasPalete"))
+        Case FLOW_DOC_ZBIRNA
+            Dim sz As Object: Set sz = ScanZbirna(broj)
+            CorrectionNeedsDialog = CBool(sz("hasPrijemnica")) Or CBool(sz("hasPalete"))
+        Case FLOW_DOC_REVERS
+            CorrectionNeedsDialog = False
+    End Select
+    Exit Function
+EH:
+    ' Na gresku budi konzervativan -> ponudi pun dijalog.
+    LogErr MOD_NAME & ".CorrectionNeedsDialog"
+    CorrectionNeedsDialog = True
+End Function
+
+' ============================================================
+' SIMPLE STORNO (bez dijaloga/context-a): obican storno + tiha zastita invarijante.
+' Koristi se kad CorrectionNeedsDialog = False. Reuse postojecih storno funkcija.
+' ============================================================
+
+' Otpremnica: postojeci StornoOtpremnicaByBroj_TX (u malina modu kaskadira zbirnu)
+' + rekalkulacija zbirne AKO je prezivela (non-malina / multi-otpremnica) -> nema
+' tihog mismatch-a. Bez context-a (obican storno nema staro->novo).
+Public Function RunSimpleStornoOtpremnica(ByVal broj As String) As Object
+    Dim r As Object: Set r = NewRes("SIMPLE")
+    Set RunSimpleStornoOtpremnica = r
+    On Error GoTo EH
+    broj = Trim$(broj)
+    Dim s As Object: Set s = ScanOtpremnica(broj)
+    If Not CBool(s("exists")) Then r("message") = "Aktivna otpremnica nije pronadjena: " & broj: Exit Function
+    Dim pz As String: pz = CStr(s("brojZbirne"))
+
+    If Not StornoOtpremnicaByBroj_TX(broj) Then r("message") = "Storno otpremnice nije uspeo.": Exit Function
+
+    Dim zbrRek As Boolean, recOk As Boolean: recOk = True
+    zbrRek = (Len(pz) > 0 And ZbirnaPostoji(pz))
+    If zbrRek Then recOk = RecalculateZbirnaFromOtpremnice_TX(pz)
+
+    r("success") = True
+    r("message") = "Otpremnica " & broj & " stornirana." & IIf(zbrRek, " Zbirna " & pz & " rekalkulisana.", "")
+    If Not recOk Then r("message") = r("message") & " UPOZORENJE: rekalkulacija zbirne nije uspela (vidi Monitor)."
+    MonitorSimple "Otpremnica", broj, CStr(r("message"))
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".RunSimpleStornoOtpremnica"
+    r("message") = "Greska: " & Err.description
+End Function
+
+' Zbirna: storno + odvezivanje otpremnica ("ceka zbirnu") u JEDNOJ transakciji ->
+' ne ostaje zbirna koja nije zbir svojih otpremnica (nema tihog mismatch-a).
+Public Function RunSimpleStornoZbirna(ByVal broj As String) As Object
+    Const SRC As String = MOD_NAME & ".RunSimpleStornoZbirna"
+    Dim r As Object: Set r = NewRes("SIMPLE")
+    Set RunSimpleStornoZbirna = r
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    broj = Trim$(broj)
+    If Not ZbirnaPostoji(broj) Then r("message") = "Aktivna zbirna nije pronadjena: " & broj: Exit Function
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+    If Not StornoZbirna(broj) Then Err.Raise ERR_STORNO_FW_BASE + 30, SRC, "StornoZbirna nije uspeo."
+    Dim det As Long: det = DetachOtpremniceInline(broj, SRC)
+    tx.CommitTx
+    Set tx = Nothing
+
+    r("success") = True
+    r("message") = "Zbirna " & broj & " stornirana." & _
+                   IIf(det > 0, " Otpremnice vracene u 'ceka zbirnu': " & det & ".", "")
+    MonitorSimple "Zbirna", broj, CStr(r("message"))
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    r("message") = "Greska: " & Err.description
+End Function
+
+' Revers: obican storno (saldo vec iskljucuje stornirano -> auto koreguje).
+Public Function RunSimpleStornoRevers(ByVal brDok As String, ByVal dokumentTip As String) As Object
+    Dim r As Object: Set r = NewRes("SIMPLE")
+    Set RunSimpleStornoRevers = r
+    On Error GoTo EH
+    brDok = Trim$(brDok)
+    If Not ActiveAmbalazaDokExists(brDok, dokumentTip) Then
+        r("message") = "Aktivan revers nije pronadjen: " & brDok & " [" & dokumentTip & "]"
+        Exit Function
+    End If
+    If Not StornoOMKoopByBrDok_TX(brDok, dokumentTip) Then r("message") = "Storno reversa nije uspeo.": Exit Function
+    r("success") = True
+    r("message") = "Revers " & brDok & " storniran. Saldo azuriran (bez duple/kontra stavke)."
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".RunSimpleStornoRevers"
+    r("message") = "Greska: " & Err.description
+End Function
+
+Private Sub MonitorSimple(ByVal entityType As String, ByVal id As String, ByVal msg As String)
+    On Error Resume Next
+    Monitor_Event eventType:="STORNO_SIMPLE_" & UCase$(entityType), severity:="INFO", _
+        message:=msg, moduleName:=MOD_NAME, procedureName:="RunSimpleStorno", _
+        entityType:=entityType, entityID:=id, correlationId:=id
+End Sub
+
+' ============================================================
 ' OTPREMNICA - dispatch po modu
 ' ============================================================
 Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As String, _
@@ -687,29 +804,36 @@ Private Function DetachOtpremniceFromZbirna_TX(ByVal brojZbirne As String) As Lo
     brojZbirne = Trim$(brojZbirne)
     If Len(brojZbirne) = 0 Then Exit Function
 
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTKUP
+    Dim n As Long: n = DetachOtpremniceInline(brojZbirne, SRC)
+    tx.CommitTx
+    Set tx = Nothing
+    DetachOtpremniceFromZbirna_TX = n
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    DetachOtpremniceFromZbirna_TX = 0
+End Function
+
+' Telo odvezivanja (bez TX; koristi se unutar vec otvorene transakcije). Aktivne
+' otpremnice sa datom zbirnom -> BrojZbirne = "" ("ceka zbirnu"), + otkup denorm.
+Private Function DetachOtpremniceInline(ByVal brojZbirne As String, ByVal SRC As String) As Long
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
     Dim cZbr As Long, cSt As Long
     cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
     cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
-
-    Dim otpRows As Collection: Set otpRows = New Collection
-    Dim i As Long
+    Dim i As Long, n As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            otpRows.Add i
+            RequireUpdateCell TBL_OTPREMNICA, i, COL_OTP_BROJ_ZBIRNE, "", SRC
+            n = n + 1
         End If
     Next i
-    If otpRows.count = 0 Then Exit Function
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    tx.AddTableSnapshot TBL_OTKUP
-    Dim k As Long
-    For k = 1 To otpRows.count
-        RequireUpdateCell TBL_OTPREMNICA, CLng(otpRows(k)), COL_OTP_BROJ_ZBIRNE, "", SRC
-    Next k
     ' Denormalizovani otkup.BrojZbirne -> takodje prazno.
     Dim od As Variant: od = GetTableData(TBL_OTKUP)
     If Not IsEmpty(od) Then
@@ -727,14 +851,7 @@ Private Function DetachOtpremniceFromZbirna_TX(ByVal brojZbirne As String) As Lo
             Next j
         End If
     End If
-    tx.CommitTx
-    Set tx = Nothing
-    DetachOtpremniceFromZbirna_TX = otpRows.count
-    Exit Function
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
-    DetachOtpremniceFromZbirna_TX = 0
+    DetachOtpremniceInline = n
 End Function
 
 ' Distinktni OtpremnicaID-jevi za dati BrojOtpremnice (ukljucuje i stornirane,
