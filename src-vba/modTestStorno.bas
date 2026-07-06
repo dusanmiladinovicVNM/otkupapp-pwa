@@ -67,8 +67,11 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_SEF_CONFIG
     tx.AddTableSnapshot TBL_STORNO_VEZE
 
-    ' Deterministicki hladnjaca-kupac (rollback vraca original config).
+    ' Deterministicki config (rollback vraca original): hladnjaca-kupac za gate,
+    ' i MALINA_MODE=NO da simple storno otpremnice NE kaskadira zbirnu preko malina
+    ' putanje -> testira se framework-ovo storno/rekalk ponasanje (T22).
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, HLAD_KUP
+    SetConfigValue CFG_KEY_MALINA_MODE, "NO"
 
     T01_StornoOtpremniceRekalkuliseZbirnu
     T02_PrevezivanjeValidiraObeZbirne
@@ -91,6 +94,7 @@ Public Sub RunStornoTestSuite()
     T19_DupliVsPonistenjeZbirnaOtpremnice
     T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu
     T21_PonistenjeOtpremniceJedinaKaskadaCeoTok
+    T22_SimpleStornoOtpremniceNeOstavljaZbirnu00
 
     tx.RollbackTx
     Set tx = Nothing
@@ -457,6 +461,9 @@ End Sub
 ' ============================================================
 ' T15 - PONISTENJE UVEK trazi svesnu potvrdu (blocked) pre nego sto bilo sta uradi,
 ' cak i bez zavisnih dokumenata; sa forceConfirm se izvrsava. (Razlika od DUPLI.)
+' NAPOMENA: ovo je BUSINESS-API garancija (RunOtpremnicaCorrection/RunZbirnaCorrection).
+' UI (frmDokumenta) za dokument BEZ nizvodnog toka ide smart-trigger shortcut na
+' obican storno (RunSimpleStorno*) i ne prikazuje 4-mode dijalog -- svesna odluka.
 ' ============================================================
 Private Sub T15_PonistenjeUvekTraziPotvrdu()
     Const S As String = "T15 ponistenje uvek trazi potvrdu: "
@@ -633,6 +640,31 @@ Private Sub T21_PonistenjeOtpremniceJedinaKaskadaCeoTok()
     ' blok OSLOBODJEN ali AKTIVAN (realna kupovina, za reveze).
     ChkEq OtkOtpremnicaID("SVT-BLK21"), "", S & "blok oslobodjen (OtpremnicaID prazan)"
     Chk LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, "SVT-BLK21", COL_OTK_ID) <> "", S & "blok i dalje aktivan (nije storniran)"
+End Sub
+
+' ============================================================
+' T22 - SIMPLE storno otpremnice (bez nizvodnog toka) NE ostavlja aktivnu zbirnu
+' 0/0: jedina otpremnica, bez prijemnice/paleta -> smart trigger ide simple path;
+' prazna zbirna se STORNIRA (nulling fix i u simple putanji, dosledno DUPLI/
+' PONISTENJE grani). Regres za review tacku 1.
+' ============================================================
+Private Sub T22_SimpleStornoOtpremniceNeOstavljaZbirnu00()
+    Const S As String = "T22 simple storno otpremnice ne ostavlja zbirnu 0/0: "
+
+    ' Eksterni kupac + MALINA_MODE=NO (suite) -> nema auto/malina kaskade zbirne;
+    ' zbirnu mora oboriti sam framework (RecalcOrStornoEmptyZbirna_TX).
+    SeedZbirna "SVT-Z22", "I", 100, 10, "SVT-EXT-KUPAC"
+    SeedOtpremnica "SVT-O22", "SVT-Z22", "I", 100, 10
+
+    Chk Not modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_OTPREMNICA, "SVT-O22"), _
+        S & "CorrectionNeedsDialog = False (nema nizvodnog toka -> simple path)"
+
+    Dim res As Object
+    Set res = modStornoFlow.RunSimpleStornoOtpremnica("SVT-O22")
+    Chk CBool(res("success")), S & "RunSimpleStornoOtpremnica uspeo"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O22", COL_OTP_ID), "", S & "otpremnica stornirana"
+    ' KLJUC: zbirna NIJE ostavljena aktivna 0/0 -> stornirana (nema vise otpremnica).
+    Chk Not ZbirnaPostoji("SVT-Z22"), S & "prazna zbirna STORNIRANA (ne aktivna 0/0)"
 End Sub
 
 ' ============================================================
