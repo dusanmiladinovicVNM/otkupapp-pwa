@@ -72,6 +72,7 @@ Public Sub RunStornoTestSuite()
     T12_ReversCompleteTraziAktivanNoviRevers
     T13_ReversCompleteSaAktivnimNovimReversom
     T14_AutoCompleteNeBiraLatestKadImaVisePending
+    T15_PonistenjeUvekTraziPotvrdu
 
     tx.RollbackTx
     Set tx = Nothing
@@ -433,6 +434,31 @@ Private Sub T14_AutoCompleteNeBiraLatestKadImaVisePending()
         before + 2, S & "count raste tacno za 2"
     Chk modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, SV_MODE_ISPRAVKA) > 1, _
         S & "count > 1 -> UI safe-stop (ne bira naslepo latest)"
+End Sub
+
+' ============================================================
+' T15 - PONISTENJE UVEK trazi svesnu potvrdu (blocked) pre nego sto bilo sta uradi,
+' cak i bez zavisnih dokumenata; sa forceConfirm se izvrsava. (Razlika od DUPLI.)
+' ============================================================
+Private Sub T15_PonistenjeUvekTraziPotvrdu()
+    Const S As String = "T15 ponistenje uvek trazi potvrdu: "
+
+    ' Lone otpremnica (zbirna ne postoji) -> nema zavisnih.
+    SeedOtpremnica "SVT-OP15", "SVT-Z15-NEMA", "I", 50, 5
+
+    ' Bez potvrde -> mora BLOKIRATI (prikaz posledica), nista ne dira.
+    Dim res As Object
+    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OP15", SV_MODE_PONISTENJE)
+    Chk CBool(res("blocked")), S & "PONISTENJE blokira dok se ne potvrdi (i bez zavisnih)"
+    Chk Not CBool(res("success")), S & "nista nije izvrseno pre potvrde"
+    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OP15", COL_OTP_ID) <> "", _
+        S & "otpremnica jos aktivna (nije stornirana)"
+
+    ' Sa svesnom potvrdom (forceConfirm) -> izvrsava se.
+    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OP15", SV_MODE_PONISTENJE, True)
+    Chk CBool(res("success")), S & "sa potvrdom (forceConfirm) ponistava"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OP15", COL_OTP_ID), "", _
+        S & "otpremnica sada stornirana"
 End Sub
 
 ' ============================================================

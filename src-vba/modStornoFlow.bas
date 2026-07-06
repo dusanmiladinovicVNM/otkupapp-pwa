@@ -145,6 +145,39 @@ EH:
 End Function
 
 ' ============================================================
+' PONISTENJE posledice: PUN spisak zavisnih dokumenata koje poistenje gasi.
+' UI ga prikaze PRE nego sto bilo sta uradi (to je ono sto PONISTENJE cini
+' razlicitim od DUPLI -- DUPLI tiho pocisti, PONISTENJE prvo pokaze ceo lanac).
+' ============================================================
+Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As String, _
+                                         Optional ByVal dokumentTip As String = "") As String
+    On Error GoTo EH
+    Dim m As String
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA
+            Dim so As Object: Set so = ScanOtpremnica(broj)
+            m = "PONISTENJE otpremnice " & broj & " gasi ceo tok." & vbCrLf & "Pogodjeno:" & vbCrLf
+            m = m & " - zbirna: " & IIf(CBool(so("hasZbirna")), CStr(so("brojZbirne")), "(nema)") & vbCrLf
+            m = m & " - prijemnice preko zbirne: " & CStr(so("prijCount")) & vbCrLf
+            m = m & " - paletne stavke: " & CStr(so("paleteCount")) & vbCrLf
+            m = m & " - otkupni blokovi (ostaju osiroceni): " & CStr(so("blockCount"))
+        Case FLOW_DOC_ZBIRNA
+            Dim sz As Object: Set sz = ScanZbirna(broj)
+            m = "PONISTENJE zbirne " & broj & " gasi ceo tok." & vbCrLf & "Pogodjeno:" & vbCrLf
+            m = m & " - aktivne otpremnice (odvezuju se): " & CStr(sz("otpCount")) & vbCrLf
+            m = m & " - prijemnice: " & CStr(sz("prijCount")) & vbCrLf
+            m = m & " - paletne stavke: " & CStr(sz("paleteCount"))
+        Case Else
+            m = "PONISTENJE dokumenta " & broj & "."
+    End Select
+    BuildPonistenjePosledice = m
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".BuildPonistenjePosledice"
+    BuildPonistenjePosledice = "PONISTENJE dokumenta " & broj & " (spisak posledica nedostupan)."
+End Function
+
+' ============================================================
 ' SMART TRIGGER: da li storno TRAZI poslovni dijalog (4 moda)?
 ' Da SAMO kad postoji NIZVODNI tok koji trazi odluku operatera (prijemnica ili
 ' palete). Inace je obican storno + tiha rekalkulacija/odvezivanje dovoljan
@@ -335,15 +368,16 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
             If Not recOk Then r("message") = r("message") & " UPOZORENJE: rekalkulacija zbirne nije uspela."
 
         Case SV_MODE_PONISTENJE
-            Dim dep As Boolean
-            dep = CBool(s("hasZbirna")) Or CBool(s("hasPrijemnica")) Or CBool(s("hasPalete"))
-            If dep And Not forceConfirm Then
+            ' PONISTENJE = UVEK prvo prikazi PUN spisak zavisnih dokumenata + trazi
+            ' svesnu potvrdu (bez obzira ima li lanca). Tako je jasno drugacije od
+            ' DUPLI (koji tiho pocisti i oslobodi delove, bez pitanja).
+            If Not forceConfirm Then
                 r("blocked") = True
-                r("message") = "BLOKADA: postoje zavisni dokumenti (" & _
-                    "zbirna=" & YesNo(CBool(s("hasZbirna"))) & ", prijemnica=" & YesNo(CBool(s("hasPrijemnica"))) & _
-                    ", palete=" & YesNo(CBool(s("hasPalete"))) & "). Ponistenje bez zamene trazi svesnu potvrdu."
+                r("message") = BuildPonistenjePosledice(FLOW_DOC_OTPREMNICA, oldBroj, "")
                 Exit Function
             End If
+            Dim dep As Boolean
+            dep = CBool(s("hasZbirna")) Or CBool(s("hasPrijemnica")) Or CBool(s("hasPalete"))
             Dim cidP As String
             cidP = CreateCorrectionContext(mode, FLOW_DOC_OTPREMNICA, CStr(s("otpID")), oldBroj, _
                 , , , FLOW_DOC_ZBIRNA, , parentZbirna, "Ponistenje otpremnice bez zamene.")
@@ -553,15 +587,15 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             r("success") = True
 
         Case SV_MODE_PONISTENJE
-            Dim depz As Boolean
-            depz = (CLng(s("otpCount")) > 0) Or CBool(s("hasPrijemnica")) Or CBool(s("hasPalete"))
-            If depz And Not forceConfirm Then
+            ' PONISTENJE = UVEK prvo prikazi PUN spisak zavisnih dokumenata + trazi
+            ' svesnu potvrdu (bez obzira ima li lanca). Jasno drugacije od DUPLI.
+            If Not forceConfirm Then
                 r("blocked") = True
-                r("message") = "BLOKADA: zbirna ima zavisni tok (otpremnice=" & CStr(s("otpCount")) & _
-                    ", prijemnica=" & YesNo(CBool(s("hasPrijemnica"))) & ", palete=" & YesNo(CBool(s("hasPalete"))) & _
-                    "). Trazi svesnu potvrdu o zavisnim dokumentima."
+                r("message") = BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "")
                 Exit Function
             End If
+            Dim depz As Boolean
+            depz = (CLng(s("otpCount")) > 0) Or CBool(s("hasPrijemnica")) Or CBool(s("hasPalete"))
             Dim cidP As String
             cidP = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, , , , , , , "Ponistenje zbirne bez zamene.")
             r("correctionID") = cidP

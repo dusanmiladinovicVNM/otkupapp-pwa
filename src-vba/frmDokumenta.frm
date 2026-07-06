@@ -3460,10 +3460,11 @@ Private Function TryRunCorrectionFramework(ByVal tipDok As String, ByVal brDok A
     Dim res As Object
     Set res = DispatchCorrection(docType, brDok, dokTip, mode, False)
 
-    ' PONISTENJE uz aktivni zavisni tok -> blokada; ponudi svesnu potvrdu.
+    ' PONISTENJE: prvo prikazi PUN spisak posledica (res.message) pa trazi svesnu
+    ' potvrdu. Tek na DA se stvarno izvrsava (forceConfirm). To je razlika od DUPLI.
     If CBool(res("blocked")) Then
         If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & _
-                  "Ipak nastaviti uz SVE lancane posledice?", _
+                  "PONISTITI dokument i SVE gore navedeno?", _
                   vbExclamation + vbYesNo, APP_NAME) = vbYes Then
             Set res = DispatchCorrection(docType, brDok, dokTip, mode, True)
         Else
@@ -3535,14 +3536,17 @@ Private Function PromptCorrectionMode(ByVal preview As String) As String
     If r = vbCancel Then Exit Function
     If r = vbYes Then PromptCorrectionMode = SV_MODE_ISPRAVKA: Exit Function
 
-    r = MsgBox("DUPLI / FANTOM? (dokument NIKAD nije trebalo da postoji --" & vbCrLf & _
-        "skini/odvezi posledice, bez naslednika; saldo se ne duplira)" & vbCrLf & vbCrLf & _
+    r = MsgBox("DUPLI / FANTOM? (VISAK zapisa -- dokument ne treba, ali roba/delovi SU realni)" & vbCrLf & _
+        "-> TIHO se skloni + delovi se OSLOBODE (blokovi za prevezivanje, otpremnice u 'ceka zbirnu')." & vbCrLf & _
+        "Bez dodatnih pitanja." & vbCrLf & vbCrLf & _
         "DA = Dupli/fantom   |   NE = jos opcija   |   OTKAZI = odustani", _
         vbQuestion + vbYesNoCancel, APP_NAME)
     If r = vbCancel Then Exit Function
     If r = vbYes Then PromptCorrectionMode = SV_MODE_DUPLI: Exit Function
 
-    r = MsgBox("PONISTENJE BEZ ZAMENE? (fizicki tok se ponistava, nema novog dokumenta)" & vbCrLf & vbCrLf & _
+    r = MsgBox("PONISTENJE BEZ ZAMENE? (ceo FIZICKI TOK otpada -- nista ne treba da opstane)" & vbCrLf & _
+        "-> sistem prvo PRIKAZE SVE zavisne dokumente (zbirna/prijemnica/palete) i trazi" & vbCrLf & _
+        "svesnu potvrdu PRE nego sto bilo sta uradi." & vbCrLf & vbCrLf & _
         "DA = Ponistenje bez zamene" & vbCrLf & _
         "NE = RESI KASNIJE (napravi persistent recovery zapis, resi kasnije)" & vbCrLf & _
         "OTKAZI = odustani", vbQuestion + vbYesNoCancel, APP_NAME)
