@@ -312,8 +312,8 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     End If
 
     ' 3) Validacija OBE zbirne (stara i nova ne smeju ostati u mismatch-u).
-    Dim imp As Object: Set imp = ValidateOtpremnicaZbirnaImpact(oldZbirna, newZbirna)
-    If Not CBool(imp("bothValid")) Then
+    Dim impact As Object: Set impact = ValidateOtpremnicaZbirnaImpact(oldZbirna, newZbirna)
+    If Not CBool(impact("bothValid")) Then
         MarkCorrectionManual correctionID, "Proveri zbirnu (mismatch posle ispravke).", _
             "Posle ispravke otpremnice zbirna nije = zbir otpremnica."
         r("message") = "Zbirna nije konzistentna posle ispravke. Oznaceno za recovery."

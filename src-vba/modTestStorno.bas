@@ -116,17 +116,17 @@ Private Sub T02_PrevezivanjeValidiraObeZbirne()
     SeedZbirna "SVT-Z2B", "I", 50, 5
     SeedOtpremnica "SVT-OC2", "SVT-Z2B", "I", 50, 5
 
-    Dim imp As Object
-    Set imp = modDokumentInvariant.ValidateOtpremnicaZbirnaImpact("SVT-Z2A", "SVT-Z2B")
-    Chk CBool(imp("bothValid")), S & "obe zbirne validne pre premestaja"
+    Dim impact As Object
+    Set impact = modDokumentInvariant.ValidateOtpremnicaZbirnaImpact("SVT-Z2A", "SVT-Z2B")
+    Chk CBool(impact("bothValid")), S & "obe zbirne validne pre premestaja"
 
     ' Premesti OB2 (40) sa Z2A na Z2B BEZ rekalkulacije -> obe postaju mismatch.
     ForceSetOtpremnicaZbirna "SVT-OB2", "SVT-Z2B"
 
-    Set imp = modDokumentInvariant.ValidateOtpremnicaZbirnaImpact("SVT-Z2A", "SVT-Z2B")
-    Chk Not CBool(imp("oldValid")), S & "stara zbirna (Z2A) sada mismatch"
-    Chk Not CBool(imp("newValid")), S & "nova zbirna (Z2B) sada mismatch"
-    Chk Not CBool(imp("bothValid")), S & "bothValid = False (uhvacen mismatch)"
+    Set impact = modDokumentInvariant.ValidateOtpremnicaZbirnaImpact("SVT-Z2A", "SVT-Z2B")
+    Chk Not CBool(impact("oldValid")), S & "stara zbirna (Z2A) sada mismatch"
+    Chk Not CBool(impact("newValid")), S & "nova zbirna (Z2B) sada mismatch"
+    Chk Not CBool(impact("bothValid")), S & "bothValid = False (uhvacen mismatch)"
 End Sub
 
 ' ============================================================
