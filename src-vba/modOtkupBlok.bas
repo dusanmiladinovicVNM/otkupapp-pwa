@@ -892,13 +892,12 @@ End Function
 Private Sub OfferHladnjacaIspravka(ByVal brDok As String, ByVal prijBroj As String, ByVal palInfo As String)
     On Error GoTo EH
     Dim ans As VbMsgBoxResult
-    ans = MsgBox("Otkup storniran (autohladnjaca - ceo lanac otpremnica+zbirna+prijemnica)." & vbCrLf & _
-                 "Prijemnica " & prijBroj & " je bila paletizovana (palete: " & palInfo & ")." & vbCrLf & vbCrLf & _
-                 "DA  = ISPRAVKA ovog otkupa sada (polja se popune, menjas samo gresku;" & vbCrLf & _
-                 "         palete se automatski prevezu na novi lanac pri Unosu)" & vbCrLf & _
-                 "NE  = DUPLI UNOS (roba NIJE stvarno primljena drugi put: odmah skini" & vbCrLf & _
-                 "         fantomske stavke sa paleta; prazna paleta se stornira)" & vbCrLf & _
-                 "OTKAZI = nista (palete ostaju osirocene, resi kasnije rucno)", _
+    ans = MsgBox("Otkup storniran (autohladnjaca: ceo lanac oboren)." & vbCrLf & _
+                 "Prijemnica " & prijBroj & " paletizovana (palete: " & palInfo & ")." & vbCrLf & vbCrLf & _
+                 "Sta dalje sa paletama?" & vbCrLf & vbCrLf & _
+                 "DA = ISPRAVKA: izmeni gresku, palete idu na novi lanac" & vbCrLf & _
+                 "NE = DUPLI UNOS: nije primljeno 2x, skini stavke" & vbCrLf & _
+                 "OTKAZI = nista sada (palete ostaju osirocene)", _
                  vbQuestion + vbYesNoCancel, APP_NAME)
     If ans = vbYes Then
         SetHladnjacaRelinkPending prijBroj

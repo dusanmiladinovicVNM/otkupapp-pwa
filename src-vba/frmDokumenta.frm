@@ -3243,12 +3243,11 @@ Private Sub btnStorno_Click()
         Dim doPrefill As Boolean: doPrefill = False
         If tipDok = "Prijemnica" And Len(palWarn) > 0 Then
             ' Paletizovana prijemnica stornirana -> tri puta napred:
-            Select Case MsgBox("Stornirano. Prijemnica je bila paletizovana (palete: " & palWarn & ")." & vbCrLf & vbCrLf & _
-                        "DA  = ISPRAVKA ove prijemnice sada (polja se popune, menjas samo" & vbCrLf & _
-                        "         gresku; palete se automatski prevezu pri snimanju)" & vbCrLf & _
-                        "NE  = DUPLI UNOS (roba NIJE stvarno primljena drugi put: odmah" & vbCrLf & _
-                        "         skini fantomske stavke sa paleta; prazna paleta se stornira)" & vbCrLf & _
-                        "OTKAZI = nista (palete ostaju osirocene, resi kasnije rucno)", _
+            Select Case MsgBox("Stornirano. Prijemnica paletizovana (palete: " & palWarn & ")." & vbCrLf & vbCrLf & _
+                        "Sta dalje sa paletama?" & vbCrLf & vbCrLf & _
+                        "DA = ISPRAVKA: izmeni gresku, palete se prevezu" & vbCrLf & _
+                        "NE = DUPLI UNOS: nije primljeno 2x, skini stavke" & vbCrLf & _
+                        "OTKAZI = nista sada (palete ostaju osirocene)", _
                         vbQuestion + vbYesNoCancel, APP_NAME)
                 Case vbYes
                     doPrefill = True
