@@ -33,6 +33,7 @@ Private Const MOD_NAME As String = "modStornoFlow"
 Public Const FLOW_DOC_OTPREMNICA As String = "Otpremnica"
 Public Const FLOW_DOC_ZBIRNA As String = "Zbirna"
 Public Const FLOW_DOC_REVERS As String = "Revers"
+Public Const FLOW_DOC_PRIJEMNICA As String = "Prijemnica"
 
 ' ============================================================
 ' PREVIEW - multiline tekst za dijalog (UI ga prikaze u MsgBox-u).
@@ -41,10 +42,11 @@ Public Function BuildStornoPreview(ByVal docType As String, ByVal broj As String
                                    Optional ByVal dokumentTip As String = "") As String
     On Error GoTo EH
     Select Case docType
-        Case FLOW_DOC_OTPREMNICA: BuildStornoPreview = PreviewOtpremnica(broj)
-        Case FLOW_DOC_ZBIRNA:     BuildStornoPreview = PreviewZbirna(broj)
-        Case FLOW_DOC_REVERS:     BuildStornoPreview = PreviewRevers(broj, dokumentTip)
-        Case Else:                BuildStornoPreview = "Dokument: " & docType & " " & broj
+        Case FLOW_DOC_OTPREMNICA:  BuildStornoPreview = PreviewOtpremnica(broj)
+        Case FLOW_DOC_ZBIRNA:      BuildStornoPreview = PreviewZbirna(broj)
+        Case FLOW_DOC_REVERS:      BuildStornoPreview = PreviewRevers(broj, dokumentTip)
+        Case FLOW_DOC_PRIJEMNICA:  BuildStornoPreview = PreviewPrijemnica(broj)
+        Case Else:                 BuildStornoPreview = "Dokument: " & docType & " " & broj
     End Select
     Exit Function
 EH:
@@ -103,6 +105,24 @@ Private Function PreviewRevers(ByVal broj As String, ByVal dokumentTip As String
     PreviewRevers = m
 End Function
 
+Private Function PreviewPrijemnica(ByVal broj As String) As String
+    Dim s As Object: Set s = ScanPrijemnica(broj)
+    Dim m As String
+    m = "PRIJEMNICA " & broj & vbCrLf
+    If Not CBool(s("exists")) Then
+        PreviewPrijemnica = m & "(nije pronadjena aktivna prijemnica)"
+        Exit Function
+    End If
+    m = m & "Broj zbirne: " & IIf(Len(CStr(s("brojZbirne"))) > 0, CStr(s("brojZbirne")), "(nema)") & vbCrLf
+    m = m & "Fakturisana: " & YesNo(CBool(s("fakturisano"))) & _
+            IIf(CBool(s("fakturisano")), " (faktura/stavke se oslobadjaju)", "") & vbCrLf
+    m = m & "Palete preko prijemnice: " & YesNo(CBool(s("hasPalete"))) & _
+            " (" & CStr(s("paleteCount")) & ")" & vbCrLf
+    m = m & "Otkupni blokovi (preko zbirne, samostalni): " & CStr(s("blockCount")) & vbCrLf
+    m = m & "Rizik ambalaza: storno vraca ambalazu ove prijemnice (auto)."
+    PreviewPrijemnica = m
+End Function
+
 ' ============================================================
 ' CHAIN FLAGS - UI koristi da odluci koje opcije nudi / da li je PONISTENJE
 ' blokirano. Vraca dict: hasDependents, dependentsText, canPonistenjeClean.
@@ -138,6 +158,14 @@ Public Function GetChainFlags(ByVal docType As String, ByVal broj As String, _
         Case FLOW_DOC_REVERS
             r("hasDependents") = False       ' revers je list (nema nizvodni lanac)
             r("canPonistenjeClean") = True
+        Case FLOW_DOC_PRIJEMNICA
+            Dim sp As Object: Set sp = ScanPrijemnica(broj)
+            Dim depp As Boolean
+            depp = CBool(sp("hasPalete")) Or CBool(sp("fakturisano"))
+            r("hasDependents") = depp
+            r("canPonistenjeClean") = Not depp
+            r("dependentsText") = "palete=" & YesNo(CBool(sp("hasPalete"))) & _
+                ", fakturisana=" & YesNo(CBool(sp("fakturisano")))
     End Select
     Exit Function
 EH:
@@ -176,6 +204,13 @@ Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As 
             m = m & " - paletne stavke: " & CStr(sz("paleteCount")) & _
                     IIf(owz, " (skidaju se sa paleta; prazna paleta stornirana)", " (NETAKNUTE)") & vbCrLf
             m = m & " - otkupni blokovi (OSLOBADJAJU se za reveze, NE storniraju)"
+        Case FLOW_DOC_PRIJEMNICA
+            Dim sp As Object: Set sp = ScanPrijemnica(broj)
+            m = "PONISTENJE prijemnice " & broj & " gasi ulaz (STORNO)." & vbCrLf & "Pogodjeno:" & vbCrLf
+            m = m & " - faktura: " & IIf(CBool(sp("fakturisano")), "oslobadja se (stavke osirocene)", "(nije fakturisana)") & vbCrLf
+            m = m & " - paletne stavke: " & CStr(sp("paleteCount")) & _
+                    IIf(CBool(sp("hasPalete")), " (skidaju se sa paleta; prazna paleta stornirana)", "") & vbCrLf
+            m = m & " - otkupni blokovi (samostalni; NE diraju se osim cekiranih za storno): " & CStr(sp("blockCount"))
         Case Else
             m = "PONISTENJE dokumenta " & broj & "."
     End Select
@@ -204,6 +239,11 @@ Public Function CorrectionNeedsDialog(ByVal docType As String, ByVal broj As Str
             CorrectionNeedsDialog = CBool(sz("hasPrijemnica")) Or CBool(sz("hasPalete"))
         Case FLOW_DOC_REVERS
             CorrectionNeedsDialog = False
+        Case FLOW_DOC_PRIJEMNICA
+            Dim sp As Object: Set sp = ScanPrijemnica(broj)
+            ' Panel (pun dijalog) kad ima palete, fakture ILI otkupnih blokova (multiselect).
+            CorrectionNeedsDialog = CBool(sp("hasPalete")) Or CBool(sp("fakturisano")) _
+                                    Or (CLng(sp("blockCount")) > 0)
     End Select
     Exit Function
 EH:
@@ -291,6 +331,25 @@ Public Function RunSimpleStornoRevers(ByVal brDok As String, ByVal dokumentTip A
     Exit Function
 EH:
     LogErr MOD_NAME & ".RunSimpleStornoRevers"
+    r("message") = "Greska: " & Err.description
+End Function
+
+' Prijemnica: obican storno (nema paleta/fakture/blokova -> nema odluke). Reuse
+' StornoPrijemnicaByBroj_TX (oslobadja fakturu + ambalazu ako ih ima).
+Public Function RunSimpleStornoPrijemnica(ByVal broj As String) As Object
+    Dim r As Object: Set r = NewRes("SIMPLE")
+    Set RunSimpleStornoPrijemnica = r
+    On Error GoTo EH
+    broj = Trim$(broj)
+    Dim s As Object: Set s = ScanPrijemnica(broj)
+    If Not CBool(s("exists")) Then r("message") = "Aktivna prijemnica nije pronadjena: " & broj: Exit Function
+    If Not StornoPrijemnicaByBroj_TX(broj) Then r("message") = "Storno prijemnice nije uspeo.": Exit Function
+    r("success") = True
+    r("message") = "Prijemnica " & broj & " stornirana."
+    MonitorSimple "Prijemnica", broj, CStr(r("message"))
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".RunSimpleStornoPrijemnica"
     r("message") = "Greska: " & Err.description
 End Function
 
@@ -824,6 +883,282 @@ Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBr
 EH:
     LogErr MOD_NAME & ".CompleteReversIspravka"
     r("message") = "Greska: " & Err.description
+End Function
+
+' ============================================================
+' PRIJEMNICA - dispatch po modu. Prijemnica je skoro-list: nizvodni tok = paletne
+' stavke (DetachOsirocenePaletaStavke) + faktura (oslobadja se u StornoPrijemnica).
+' Otkupni blokovi su SAMOSTALNI (vezani preko BrojZbirne) -> NE diraju se automatski;
+' operater ih cekira u panelu za dodatni storno (StornoSelectedBlocks_TX, van ovog).
+' ISPRAVKA: storno + needsForm; prevezivanje paleta radi save-putanja prijemnice
+' (ReassignPaleteToPrijemnica_TX) -> ovde se samo pravi context i stornira stara.
+' ============================================================
+Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As String, _
+                                        Optional ByVal forceConfirm As Boolean = False) As Object
+    Const SRC As String = MOD_NAME & ".RunPrijemnicaCorrection"
+    Dim r As Object: Set r = NewRes(mode)
+    Set RunPrijemnicaCorrection = r
+    On Error GoTo EH
+
+    broj = Trim$(broj)
+    Dim s As Object: Set s = ScanPrijemnica(broj)
+    If Not CBool(s("exists")) Then
+        r("message") = "Aktivna prijemnica nije pronadjena: " & broj
+        Exit Function
+    End If
+    Dim parentZbirna As String: parentZbirna = CStr(s("brojZbirne"))
+    Dim prijID As String: prijID = CStr(s("prijID"))
+
+    Select Case mode
+        Case SV_MODE_RESI_KASNIJE
+            r("correctionID") = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, _
+                , , , FLOW_DOC_ZBIRNA, , parentZbirna, "Prijemnica parkirana za kasnije.")
+            r("success") = (Len(CStr(r("correctionID"))) > 0)
+            r("message") = "Kreiran recovery zapis (RESI_KASNIJE). Vidljiv u: Osiroceni dokumenti."
+
+        Case SV_MODE_ISPRAVKA
+            Dim cid As String
+            cid = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, _
+                FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , parentZbirna, _
+                "Ispravka prijemnice: storno stare, ceka snimanje nove (palete se prevezu).")
+            If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
+            If Not StornoPrijemnicaByBroj_TX(broj) Then
+                FailCorrectionContext cid, "Storno stare prijemnice nije uspeo."
+                r("correctionID") = cid: r("message") = "Storno prijemnice nije uspeo."
+                Exit Function
+            End If
+            r("correctionID") = cid
+            r("needsForm") = True
+            r("success") = True
+            r("message") = "Stara prijemnica stornirana. Popuni i snimi NOVU prijemnicu; " & _
+                           "palete se prevezuju automatski po snimanju."
+
+        Case SV_MODE_DUPLI
+            ' DUPLI = dupli unos: storno prijemnice + skini paletne stavke (roba nije
+            ' primljena 2x). Blokovi ostaju (samostalni; cekirani se storniraju van).
+            Dim cidD As String
+            cidD = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, _
+                , , , FLOW_DOC_ZBIRNA, , parentZbirna, "Dupli/fantom prijemnica.")
+            If Len(cidD) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
+            r("correctionID") = cidD
+            If Not StornoPrijemnicaByBroj_TX(broj) Then
+                FailCorrectionContext cidD, "Storno prijemnice (dupli) nije uspeo."
+                r("message") = "Storno prijemnice nije uspeo.": Exit Function
+            End If
+            Dim detD As Long, infoD As String
+            If CBool(s("hasPalete")) Then detD = DetachOsirocenePaletaStavke_TX(broj, infoD)
+            CompleteCorrectionContext cidD, , , "Dupli prijemnica stornirana; paletne stavke skinute: " & detD & "."
+            r("success") = True
+            r("message") = "Prijemnica stornirana (dupli). Paletne stavke skinute: " & detD & "."
+
+        Case SV_MODE_PONISTENJE
+            ' PONISTENJE = UVEK prvo pun spisak posledica + svesna potvrda (forceConfirm).
+            If Not forceConfirm Then
+                r("blocked") = True
+                r("message") = BuildPonistenjePosledice(FLOW_DOC_PRIJEMNICA, broj, "")
+                Exit Function
+            End If
+            Dim cidP As String
+            cidP = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, _
+                , , , FLOW_DOC_ZBIRNA, , parentZbirna, "Ponistenje prijemnice bez zamene.")
+            r("correctionID") = cidP
+            If Not StornoPrijemnicaByBroj_TX(broj) Then
+                FailCorrectionContext cidP, "Storno prijemnice (ponistenje) nije uspeo."
+                r("message") = "Storno prijemnice nije uspeo.": Exit Function
+            End If
+            Dim detP As Long, infoP As String
+            If CBool(s("hasPalete")) Then detP = DetachOsirocenePaletaStavke_TX(broj, infoP)
+            CompleteCorrectionContext cidP, , , "Ponistena prijemnica; paletne stavke skinute: " & detP & "."
+            r("success") = True
+            r("message") = "Prijemnica ponistena. Paletne stavke skinute: " & detP & "."
+
+        Case Else
+            r("message") = "Nepoznat mod: " & mode
+    End Select
+    Exit Function
+EH:
+    LogErr SRC
+    r("message") = "Greska: " & Err.description
+End Function
+
+Private Function ScanPrijemnica(ByVal broj As String) As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Set ScanPrijemnica = d
+    On Error GoTo EH
+    broj = Trim$(broj)
+    d("broj") = broj
+    Dim prijID As String
+    prijID = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID)
+    d("prijID") = prijID
+    d("exists") = (Len(prijID) > 0)
+    If Len(prijID) = 0 Then
+        d("brojZbirne") = "": d("fakturisano") = False
+        d("hasPalete") = False: d("paleteCount") = 0&: d("blockCount") = 0&
+        Exit Function
+    End If
+    d("brojZbirne") = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_BROJ_ZBIRNE))
+    d("fakturisano") = (UCase$(NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_FAKTURISANO))) = "DA")
+    Dim palc As Long: palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, broj)
+    d("paleteCount") = palc
+    d("hasPalete") = (palc > 0)
+    d("blockCount") = ActiveBlocksForFlow(FLOW_DOC_PRIJEMNICA, broj).count
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".ScanPrijemnica"
+End Function
+
+' ============================================================
+' PANEL DATA - strukturirani podaci za "Storno / potvrda" overlay (frmDokumenta).
+' Zamenjuju MsgBox-preview: chain rows (dotaknuti dokumenti) + block rows (multiselect).
+' ============================================================
+
+' Aktivni otkup blokovi (samostalni) vezani za flow dokument. Otpremnica: preko
+' OtpremnicaID; Zbirna/Prijemnica: preko BrojZbirne. Za multiselect dodatni storno.
+Public Function ActiveBlocksForFlow(ByVal docType As String, ByVal broj As String, _
+                                    Optional ByVal dokumentTip As String = "") As Collection
+    Dim result As New Collection
+    Set ActiveBlocksForFlow = result
+    On Error GoTo EH
+    broj = Trim$(broj)
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA
+            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))
+        Case FLOW_DOC_ZBIRNA
+            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj)
+        Case FLOW_DOC_PRIJEMNICA
+            Dim bz As String
+            bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_BROJ_ZBIRNE))
+            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz)
+    End Select
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".ActiveBlocksForFlow"
+End Function
+
+' Aktivni OtkupID-jevi za dati BrojZbirne (denormalizovani otkup.BrojZbirne).
+Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String) As Collection
+    Dim result As New Collection
+    Set ActiveOtkupIDsByZbirna = result
+    brojZbirne = Trim$(brojZbirne)
+    If Len(brojZbirne) = 0 Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cZbr As Long, cId As Long, cSt As Long
+    cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    If cZbr = 0 Or cId = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cZbr))) = brojZbirne Then
+            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
+                result.Add Trim$(CStr(data(i, cId)))
+            End If
+        End If
+    Next i
+End Function
+
+' Dotaknuti dokumenti (pregled u panelu). Collection nizova(0..2): Dokument|Info|Napomena.
+Public Function GetStornoChainRows(ByVal docType As String, ByVal broj As String, _
+                                   Optional ByVal dokumentTip As String = "") As Collection
+    Dim result As New Collection
+    Set GetStornoChainRows = result
+    On Error GoTo EH
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA
+            Dim so As Object: Set so = ScanOtpremnica(broj)
+            AddChainRow result, "Otpremnica", broj, "stornira se (+ ambalaza)"
+            If CBool(so("hasZbirna")) Then AddChainRow result, "Zbirna", CStr(so("brojZbirne")), "rekalk / storno ako ostane prazna"
+            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", "osirocena / ponistena (po modu)"
+            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", "skidaju se pri ponistenju"
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", "oslobadjaju se (cekiraj za storno)"
+        Case FLOW_DOC_ZBIRNA
+            Dim sz As Object: Set sz = ScanZbirna(broj)
+            AddChainRow result, "Zbirna", broj, "stornira se"
+            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", "storniraju / odvezuju (po modu)"
+            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", "osirocena / ponistena (po modu)"
+            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", "skidaju se pri ponistenju"
+            AddChainRow result, "Otkupni blokovi", "", "oslobadjaju se (cekiraj za storno)"
+        Case FLOW_DOC_PRIJEMNICA
+            Dim sp As Object: Set sp = ScanPrijemnica(broj)
+            AddChainRow result, "Prijemnica", broj, "stornira se (+ ambalaza)"
+            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", "oslobadja se (stavke osirocene)"
+            If CBool(sp("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", "skidaju se (dupli / ponistenje)"
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(sp("blockCount")) & ")", "samostalni (cekiraj za storno)"
+        Case FLOW_DOC_REVERS
+            AddChainRow result, "Revers", broj & " [" & dokumentTip & "]", "stornira se (saldo koriguje, bez kontra-stavke)"
+    End Select
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".GetStornoChainRows"
+End Function
+
+Private Sub AddChainRow(ByRef col As Collection, ByVal dok As String, ByVal info As String, ByVal nap As String)
+    Dim row(0 To 2) As Variant
+    row(0) = dok: row(1) = info: row(2) = nap
+    col.Add row
+End Sub
+
+' Otkupni blokovi za multiselect listu. Collection nizova(0..4):
+' OtkupID | BrojDokumenta | Kolicina | Klasa | Kooperant.
+Public Function GetStornoBlockRows(ByVal docType As String, ByVal broj As String, _
+                                   Optional ByVal dokumentTip As String = "") As Collection
+    Dim result As New Collection
+    Set GetStornoBlockRows = result
+    On Error GoTo EH
+    Dim ids As Collection: Set ids = ActiveBlocksForFlow(docType, broj, dokumentTip)
+    If ids Is Nothing Then Exit Function
+    If ids.count = 0 Then Exit Function
+    Dim pdict As Object: Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Dim k As Long
+    For k = 1 To ids.count
+        Dim oid As String: oid = CStr(ids(k))
+        Dim row(0 To 4) As Variant
+        row(0) = oid
+        row(1) = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_BR_DOK))
+        row(2) = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_KOLICINA))
+        row(3) = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_KLASA))
+        Dim koopID As String: koopID = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_KOOPERANT))
+        If Not pdict Is Nothing Then
+            If pdict.Exists(koopID) Then row(4) = CStr(pdict(koopID)) Else row(4) = koopID
+        Else
+            row(4) = koopID
+        End If
+        result.Add row
+    Next k
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".GetStornoBlockRows"
+End Function
+
+' Storniraj cekirane otkupne blokove (samostalne realne kupovine) u JEDNOJ TX.
+' Reuse modStorno.StornoOtkup (core). Vraca broj storniranih; -1 na gresku.
+Public Function StornoSelectedBlocks_TX(ByVal ids As Collection) As Long
+    Const SRC As String = MOD_NAME & ".StornoSelectedBlocks_TX"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    If ids Is Nothing Then Exit Function
+    If ids.count = 0 Then Exit Function
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    Dim k As Long, n As Long
+    For k = 1 To ids.count
+        If Not StornoOtkup(CStr(ids(k))) Then
+            Err.Raise ERR_STORNO_FW_BASE + 70, SRC, "StornoOtkup (blok) nije uspeo: " & CStr(ids(k))
+        End If
+        n = n + 1
+    Next k
+    tx.CommitTx
+    Set tx = Nothing
+    StornoSelectedBlocks_TX = n
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    StornoSelectedBlocks_TX = -1
 End Function
 
 ' ============================================================
