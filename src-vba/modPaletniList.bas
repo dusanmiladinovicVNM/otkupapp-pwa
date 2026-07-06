@@ -1317,6 +1317,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ' identitet te druge robe. To se NE sme dozvoliti ni uz potvrdu -> blokada (ne warning).
     ' Fizicki ispravno resenje: skini ove stavke sa deljene palete pa unesi kao nov unos
     ' (sveza paletizacija na ispravno oznacenu paletu). Radi i kad je allowRelabel=True.
+    Dim k As Long
     If relabelNeeded Then
         Dim tgtPal As Object: Set tgtPal = CreateObject("Scripting.Dictionary")
         For k = 1 To oldRows.count
@@ -1349,7 +1350,6 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     ' ---- STEP 1: undo sveze (new) paletizacije ----
-    Dim k As Long
     For k = 1 To freshRows.count
         i = freshRows(k)
         DecrementPaletaForStavka CStr(ps(i, sPal)), NzL(ps(i, sGajb)), NzD(ps(i, sNeto)), NzD(ps(i, sAmb)), SRC
