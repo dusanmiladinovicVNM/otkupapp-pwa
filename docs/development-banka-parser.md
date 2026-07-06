@@ -15,7 +15,7 @@ integritet/staging.
 PDF izvoda
   -> ExtractTextFromPdf          (pdftotext -raw -nopgbrk -enc UTF-8; DELJENO)
   -> ParseBankaIzvodForImport    (ORKESTRATOR; modBankaImport)
-        DetectBank(lines)  -> "KOMERC" | "PROCREDIT" | "HALK" | ...
+        DetectBank(lines)  -> "KOMERC" | "PROCREDIT" | "HALK" | "ALTA" | ...
         Select Case bankId -> rutira na parser TE banke (5 funkcija)
         4-nivo integrity check   (DELJENO — saldo vs parsirane sume/brojevi)
         17-kolonski staging       (DELJENO -> tblBankaImport)
@@ -189,6 +189,7 @@ njih integritet ne validira, a auto-map (`frmBankaImport`, Faza 7) koristi
 | Komercijalna | `modBankaImportParserPdfToText` | R.B. = broj `<=3` cifre; STANJE „Prethodno stanje"; blok-terminatori „Ukupno za račun" |
 | ProCredit (`220-…`) | `modBankaProCredit` | R.B. bez tačke; datum-pivot; poziv `003/26`/`2026`; ref na kraju svrhe |
 | Halkbank (`155-…`) | `modBankaHalk` | R.B. „N."; **2 datuma**; saldo u sredini; **NEIZVRŠENI sekcija se odseca**; ref `0870011…` |
+| ALTA (`190-…`) | `modBankaAlta` | naslov **„IZVOD BR."** (fingerprint; Komercijalna/Halk = „Izvod broj"); **2 datuma** (knjiženja/prijema); STANJE „Prethodno stanje"; bound „PROMENE"…„Ukupno za ra"; **smer po „Obr. naknada"** (zaduženje = standalone iznos pre; odobrenje = `<iznos> <šifra>` posle); ref = 15-cifreni „Podaci za reklamaciju" |
 
 Dispatch i test žive u `modBankaImport` (`DetectBank`, `Select Case`,
 `Test_BankParse`).
