@@ -416,11 +416,50 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
         End If
     Next k
 
-    ' 2) Rekalkulacija stare i nove zbirne (izvor istine = otpremnice).
+    ' 2) Zbirna. Dva slucaja:
+    '  (a) ISTA zbirna (multi-otpremnica, non-malina) -> samo rekalkulisi.
+    '  (b) NOVA zbirna (malina 1:1: nova otpremnica nosi novu zbirnu) -> preseli
+    '      PRIJEMNICU (+ paleta-stavke, kroz ReassignPrijemnicaToZbirna_TX) sa stare
+    '      na novu, rekalkulisi novu, a staru STORNIRAJ ako je ostala prazna
+    '      (NE nuliraj je -> to je bio bug: stara zbirna 0 kg + prijemnica/palete
+    '       zaglavljene na njoj).
     Dim recOk As Boolean: recOk = True
-    Dim done As Object: Set done = CreateObject("Scripting.Dictionary")
-    recOk = RecalcIfNeeded(oldZbirna, done) And recOk
-    recOk = RecalcIfNeeded(newZbirna, done) And recOk
+    Dim prijMoved As Long: prijMoved = 0
+    Dim staraStornirana As Boolean: staraStornirana = False
+
+    If StrComp(oldZbirna, newZbirna, vbTextCompare) = 0 Then
+        If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) Then _
+            recOk = RecalculateZbirnaFromOtpremnice_TX(newZbirna)
+    Else
+        ' Preseli nizvodni tok (prijemnica + paleta-stavke) sa stare na novu zbirnu.
+        If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) And Len(oldZbirna) > 0 Then
+            Dim prijBrojevi As Collection
+            Set prijBrojevi = DistinctActiveValues(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, oldZbirna)
+            Dim p As Long
+            For p = 1 To prijBrojevi.count
+                If Not ReassignPrijemnicaToZbirna_TX(CStr(prijBrojevi(p)), newZbirna) Then
+                    MarkCorrectionManual correctionID, "Prevezi prijemnicu na novu zbirnu rucno (Osiroceni dokumenti).", _
+                        "Relink prijemnice " & CStr(prijBrojevi(p)) & " na " & newZbirna & " nije uspeo."
+                    r("message") = "Relink prijemnice nije uspeo: " & CStr(prijBrojevi(p))
+                    Exit Function
+                End If
+                prijMoved = prijMoved + 1
+            Next p
+        End If
+        ' Rekalkulacija nove zbirne.
+        If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) Then recOk = RecalculateZbirnaFromOtpremnice_TX(newZbirna)
+        ' Stara zbirna: prazna (nema otpremnica ni prijemnica) -> STORNO; inace rekalkulisi.
+        If Len(oldZbirna) > 0 And ZbirnaPostoji(oldZbirna) Then
+            If CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, oldZbirna) > 0 Then
+                RecalculateZbirnaFromOtpremnice_TX oldZbirna
+            ElseIf CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, oldZbirna) = 0 Then
+                staraStornirana = StornoZbirna_TX(oldZbirna)
+            Else
+                RecalculateZbirnaFromOtpremnice_TX oldZbirna    ' prijemnica bez cilja -> ne orphanuj
+            End If
+        End If
+    End If
+
     If Not recOk Then
         MarkCorrectionManual correctionID, "Rekalkulisi zbirnu rucno / proveri Monitor.", _
             "Rekalkulacija zbirne posle ispravke otpremnice nije uspela."
@@ -428,19 +467,23 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
         Exit Function
     End If
 
-    ' 3) Validacija OBE zbirne (stara i nova ne smeju ostati u mismatch-u).
-    Dim impact As Object: Set impact = ValidateOtpremnicaZbirnaImpact(oldZbirna, newZbirna)
-    If Not CBool(impact("bothValid")) Then
-        MarkCorrectionManual correctionID, "Proveri zbirnu (mismatch posle ispravke).", _
-            "Posle ispravke otpremnice zbirna nije = zbir otpremnica."
-        r("message") = "Zbirna nije konzistentna posle ispravke. Oznaceno za recovery."
-        Exit Function
+    ' 3) Validacija NOVE zbirne (mora biti = zbir svojih otpremnica).
+    If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) Then
+        Dim inv As Object: Set inv = ValidateZbirnaInvariant(newZbirna)
+        If Not CBool(inv("isValid")) Then
+            MarkCorrectionManual correctionID, "Proveri novu zbirnu (mismatch posle ispravke).", CStr(inv("message"))
+            r("message") = "Nova zbirna nije konzistentna: " & CStr(inv("message"))
+            Exit Function
+        End If
     End If
 
     CompleteCorrectionContext correctionID, newOtpID, newBroj, _
-        "Ispravka otpremnice zavrsena: blokovi prevezani, zbirna rekalkulisana."
+        "Ispravka otpremnice: blokovi prevezani, prijemnica/palete preseljene, stara zbirna " & _
+        IIf(staraStornirana, "stornirana", "rekalkulisana") & "."
     r("success") = True
-    r("message") = "Ispravka zavrsena. Blokovi prevezani na " & newBroj & ", zbirna rekalkulisana."
+    r("message") = "Ispravka zavrsena. Blokovi prevezani na " & newBroj & _
+        IIf(prijMoved > 0, ", prijemnica/palete preseljene na " & newZbirna, "") & _
+        IIf(staraStornirana, ", stara zbirna " & oldZbirna & " stornirana", "") & "."
     Exit Function
 EH:
     LogErr SRC
@@ -1071,16 +1114,6 @@ Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As
     Exit Function
 EH:
     LogErr MOD_NAME & ".DistinctActiveValues"
-End Function
-
-Private Function RecalcIfNeeded(ByVal broj As String, ByRef done As Object) As Boolean
-    RecalcIfNeeded = True
-    broj = Trim$(broj)
-    If Len(broj) = 0 Then Exit Function
-    If done.Exists(broj) Then Exit Function
-    done(broj) = True
-    If Not ZbirnaPostoji(broj) Then Exit Function
-    RecalcIfNeeded = RecalculateZbirnaFromOtpremnice_TX(broj)
 End Function
 
 Private Function NewRes(ByVal mode As String) As Object

@@ -68,6 +68,7 @@ Public Sub RunStornoTestSuite()
     T08_PendingCorrectionVidljivNaFail
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
+    T11_IspravkaOtpremniceNovaZbirna
 
     tx.RollbackTx
     Set tx = Nothing
@@ -324,6 +325,43 @@ Private Sub T10_SmartTriggerGate()
 End Sub
 
 ' ============================================================
+' T11 - ISPRAVKA otpremnice sa NOVOM zbirnom (malina 1:1) + prijemnica/palete.
+' Regres test za bug: stara zbirna nulirana (umesto storno), prijemnica/palete
+' zaglavljene na staroj. Ocekivano: stara zbirna STORNIRANA, prijemnica + paleta-
+' stavke PRESELJENE na novu, blok prevezan, nova zbirna konzistentna.
+' ============================================================
+Private Sub T11_IspravkaOtpremniceNovaZbirna()
+    Const S As String = "T11 ispravka otpremnice -> nova zbirna: "
+
+    ' Stara: otpremnica OA11 (kg 100) u zbirni Z11 + blok + prijemnica + paleta-stavka.
+    SeedZbirna "SVT-Z11", "I", 100, 10
+    SeedOtpremnica "SVT-OA11", "SVT-Z11", "I", 100, 10
+    SeedOtkupBlok "SVT-BLK11", "SVT-OA11-ID-I", "SVT-Z11"
+    SeedPrijemnica "SVT-P11", "SVT-Z11", "I", 100, 10
+    SeedPaletaStavka "SVT-PS11", "SVT-P11", "SVT-Z11", "I", 100, 10
+
+    ' Faza 1: ISPRAVKA -> storno stare otpremnice + context.
+    Dim res As Object
+    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OA11", SV_MODE_ISPRAVKA)
+    Chk CBool(res("needsForm")), S & "ISPRAVKA trazi novu otpremnicu"
+    Dim cid As String: cid = CStr(res("correctionID"))
+
+    ' Operater snima NOVU otpremnicu (kg 90) sa NOVOM zbirnom (malina 1:1).
+    SeedOtpremnica "SVT-OB11", "SVT-Z11B", "I", 90, 9
+    SeedZbirna "SVT-Z11B", "I", 0, 0
+
+    ' Faza 2: complete -> prevezi blok + prijemnicu/palete, recalc nove, storno stare.
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, "SVT-OB11")
+    Chk CBool(res("success")), S & "CompleteOtpremnicaIspravka uspeo"
+
+    Chk Not ZbirnaPostoji("SVT-Z11"), S & "STARA zbirna STORNIRANA (ne nulirana)"
+    ChkEq OtkOtpremnicaID("SVT-BLK11"), "SVT-OB11-ID-I", S & "blok prevezan na novu otpremnicu"
+    ChkEq PrjBrojZbirne("SVT-P11"), "SVT-Z11B", S & "prijemnica preseljena na novu zbirnu"
+    ChkEq PalsBrojZbirne("SVT-PS11"), "SVT-Z11B", S & "paleta-stavka preseljena na novu zbirnu"
+    Chk modDokumentInvariant.IsZbirnaConsistent("SVT-Z11B"), S & "nova zbirna = zbir otpremnica (90)"
+End Sub
+
+' ============================================================
 ' SEED HELPERS (upis po IMENU kolone -> otporno na redosled)
 ' ============================================================
 
@@ -361,6 +399,13 @@ Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String,
         Array(COL_PALS_ID, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
               COL_PALS_NETO, COL_PALS_AMBALAZA), _
         Array(stavkaID, brojPrij, brojZbirne, klasa, kg, amb)
+End Sub
+
+' Otkupni blok ("list") vezan za otpremnicu (OtpremnicaID) + denorm. BrojZbirne.
+Private Sub SeedOtkupBlok(ByVal blkID As String, ByVal otpID As String, ByVal brojZbirne As String)
+    SvAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_OTPREMNICA_ID, COL_OTK_BROJ_ZBIRNE, COL_OTK_BR_DOK), _
+        Array(blkID, otpID, brojZbirne, blkID)
 End Sub
 
 ' Revers = dvojni upis (kooperant Ulaz + stanica Izlaz), oba dele DokumentID+Tip.
@@ -409,6 +454,10 @@ End Function
 
 Private Function PalsBrojZbirne(ByVal stavkaID As String) As String
     PalsBrojZbirne = NzTx(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, stavkaID, COL_PALS_BROJ_ZBIRNE))
+End Function
+
+Private Function OtkOtpremnicaID(ByVal blkID As String) As String
+    OtkOtpremnicaID = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, blkID, COL_OTK_OTPREMNICA_ID))
 End Function
 
 ' Saldo (Ulaz +, Izlaz -) za entitet+tip -> iz produkcijskog GetAmbalazeStanje.
