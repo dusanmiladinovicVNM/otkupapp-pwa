@@ -68,7 +68,7 @@ Public Sub RunStornoTestSuite()
     T08_PendingCorrectionVidljivNaFail
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
-    T11_IspravkaOtpremniceNovaZbirna
+    T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete
 
     tx.RollbackTx
     Set tx = Nothing
@@ -325,28 +325,26 @@ Private Sub T10_SmartTriggerGate()
 End Sub
 
 ' ============================================================
-' T11 - ISPRAVKA otpremnice sa NOVOM zbirnom (malina 1:1) + prijemnica/palete.
-' Regres test za bug: stara zbirna nulirana (umesto storno), prijemnica/palete
-' zaglavljene na staroj. Ocekivano: stara zbirna STORNIRANA, prijemnica + paleta-
-' stavke PRESELJENE na novu, blok prevezan, nova zbirna konzistentna.
+' T11 - ISPRAVKA otpremnice: prevezuje otkupne listove, prijemnicu I paleta-stavke
+' na novu zbirnu; stara zbirna se STORNIRA (ne ostaje aktivna 0/0). Regres test.
 ' ============================================================
-Private Sub T11_IspravkaOtpremniceNovaZbirna()
-    Const S As String = "T11 ispravka otpremnice -> nova zbirna: "
+Private Sub T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete()
+    Const S As String = "T11 ispravka otpremnice prevezuje prijemnicu/palete: "
 
-    ' Stara: otpremnica OA11 (kg 100) u zbirni Z11 + blok + prijemnica + paleta-stavka.
+    ' Stara: otpremnica OA11 (kg 100) u zbirni Z11 + otkupni list + prijemnica + paleta-stavka.
     SeedZbirna "SVT-Z11", "I", 100, 10
     SeedOtpremnica "SVT-OA11", "SVT-Z11", "I", 100, 10
     SeedOtkupBlok "SVT-BLK11", "SVT-OA11-ID-I", "SVT-Z11"
     SeedPrijemnica "SVT-P11", "SVT-Z11", "I", 100, 10
     SeedPaletaStavka "SVT-PS11", "SVT-P11", "SVT-Z11", "I", 100, 10
 
-    ' Faza 1: ISPRAVKA -> storno stare otpremnice + context.
+    ' Faza 1: ISPRAVKA_ODMAH -> storno stare otpremnice + context.
     Dim res As Object
     Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OA11", SV_MODE_ISPRAVKA)
     Chk CBool(res("needsForm")), S & "ISPRAVKA trazi novu otpremnicu"
     Dim cid As String: cid = CStr(res("correctionID"))
 
-    ' Operater snima NOVU otpremnicu (kg 90) sa NOVOM zbirnom (malina 1:1).
+    ' Operater snima NOVU otpremnicu (manji kg 90) sa NOVOM zbirnom (malina 1:1).
     SeedOtpremnica "SVT-OB11", "SVT-Z11B", "I", 90, 9
     SeedZbirna "SVT-Z11B", "I", 0, 0
 
@@ -354,11 +352,19 @@ Private Sub T11_IspravkaOtpremniceNovaZbirna()
     Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, "SVT-OB11")
     Chk CBool(res("success")), S & "CompleteOtpremnicaIspravka uspeo"
 
-    Chk Not ZbirnaPostoji("SVT-Z11"), S & "STARA zbirna STORNIRANA (ne nulirana)"
-    ChkEq OtkOtpremnicaID("SVT-BLK11"), "SVT-OB11-ID-I", S & "blok prevezan na novu otpremnicu"
-    ChkEq PrjBrojZbirne("SVT-P11"), "SVT-Z11B", S & "prijemnica preseljena na novu zbirnu"
-    ChkEq PalsBrojZbirne("SVT-PS11"), "SVT-Z11B", S & "paleta-stavka preseljena na novu zbirnu"
+    ' otkupni listovi na novoj otpremnici
+    ChkEq OtkOtpremnicaID("SVT-BLK11"), "SVT-OB11-ID-I", S & "otkupni list prevezan na novu otpremnicu"
+    ' nova zbirna konzistentna (= zbir svojih otpremnica = 90)
     Chk modDokumentInvariant.IsZbirnaConsistent("SVT-Z11B"), S & "nova zbirna = zbir otpremnica (90)"
+    ' aktivna prijemnica ima BrojZbirne = nova zbirna
+    ChkEq PrjBrojZbirne("SVT-P11"), "SVT-Z11B", S & "prijemnica.BrojZbirne = nova zbirna"
+    ' paletaStavka ima BrojZbirne = nova zbirna
+    ChkEq PalsBrojZbirne("SVT-PS11"), "SVT-Z11B", S & "paletaStavka.BrojZbirne = nova zbirna"
+    ' stara zbirna NE ostaje aktivna 0/0 -> stornirana
+    Chk Not ZbirnaPostoji("SVT-Z11"), S & "stara zbirna STORNIRANA (ne aktivna 0/0)"
+    ' context COMPLETED (jer je downstream relink uspeo)
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
+        S & "context COMPLETED (downstream relink uspeo)"
 End Sub
 
 ' ============================================================
