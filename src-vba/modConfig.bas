@@ -719,6 +719,50 @@ Public Const HTTP_TIMEOUT_CONNECT_MS As Long = 10000
 Public Const HTTP_TIMEOUT_SEND_MS As Long = 30000
 Public Const HTTP_TIMEOUT_RECEIVE_MS As Long = 30000
 
+' ============================================================
+' CENTRALNI STORNO / CORRECTION CONTEXT (tblStornoVeze)
+' Persistentni zapis svake storno/ispravke: staro -> novo trag, mod, status,
+' recovery flag. Zivi nezavisno od module-level UI state-a i prezivljava
+' zatvaranje forme/Excela. Schema: modSetup.EnsureStornoVezeSchema.
+' ============================================================
+Public Const TBL_STORNO_VEZE As String = "tblStornoVeze"
+
+Public Const COL_SV_ID As String = "CorrectionID"
+Public Const COL_SV_MODE As String = "Mode"
+Public Const COL_SV_STATUS As String = "Status"
+Public Const COL_SV_OLD_DOCTYPE As String = "OldDocType"
+Public Const COL_SV_OLD_DOCID As String = "OldDocID"
+Public Const COL_SV_OLD_BROJ As String = "OldBroj"
+Public Const COL_SV_NEW_DOCTYPE As String = "NewDocType"
+Public Const COL_SV_NEW_DOCID As String = "NewDocID"
+Public Const COL_SV_NEW_BROJ As String = "NewBroj"
+Public Const COL_SV_PARENT_DOCTYPE As String = "ParentDocType"
+Public Const COL_SV_PARENT_DOCID As String = "ParentDocID"
+Public Const COL_SV_PARENT_BROJ As String = "ParentBroj"
+Public Const COL_SV_CREATED_AT As String = "CreatedAt"
+Public Const COL_SV_CREATED_BY As String = "CreatedBy"
+Public Const COL_SV_COMPLETED_AT As String = "CompletedAt"
+Public Const COL_SV_MESSAGE As String = "Message"
+Public Const COL_SV_NEEDS_RECOVERY As String = "NeedsRecovery"
+Public Const COL_SV_RECOVERY_ACTION As String = "RecoveryAction"
+
+' Modovi (poslovno znacenje storna) -- vidi modStornoFlow
+Public Const SV_MODE_ISPRAVKA As String = "ISPRAVKA_ODMAH"
+Public Const SV_MODE_DUPLI As String = "DUPLI_FANTOM"
+Public Const SV_MODE_PONISTENJE As String = "PONISTENJE_BEZ_ZAMENE"
+Public Const SV_MODE_RESI_KASNIJE As String = "RESI_KASNIJE"
+
+' Statusi correction context-a
+Public Const SV_STATUS_PENDING As String = "PENDING"
+Public Const SV_STATUS_COMPLETED As String = "COMPLETED"
+Public Const SV_STATUS_FAILED As String = "FAILED"
+Public Const SV_STATUS_MANUAL As String = "MANUAL_REQUIRED"
+Public Const SV_STATUS_CANCELLED As String = "CANCELLED"
+
+' Baza kodova greske za storno framework (modStornoContext / modDokumentInvariant /
+' modStornoFlow); ne preklapa se sa modStorno (2400) ni SEF (3100).
+Public Const ERR_STORNO_FW_BASE As Long = vbObjectError + 2700
+
 Public Function GetConfigValue(ByVal configKey As String) As String
 
     Dim v As Variant
