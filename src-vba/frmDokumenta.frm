@@ -3496,14 +3496,27 @@ Private Sub TryAutoCompleteIspravka(ByVal docType As String, ByVal newBroj As St
     newBroj = Trim$(newBroj)
     If Len(newBroj) = 0 Then Exit Sub
 
-    Dim cid As String
+    Dim cid As String, fromSession As Boolean
     cid = m_activeCorrectionID
+    fromSession = (Len(cid) > 0 And m_activeCorrectionDoc = docType)
     ' Ako UI state ne postoji ILI je za drugi tip -> potrazi persistentnu PENDING
     ' ISPRAVKU tog tipa (preziveljava zatvaranje forme/Excela).
-    If Len(cid) = 0 Or m_activeCorrectionDoc <> docType Then
+    If Not fromSession Then
         cid = FindLatestPending(docType, SV_MODE_ISPRAVKA)
     End If
     If Len(cid) = 0 Then Exit Sub          ' nema ispravke na cekanju -> obican unos
+
+    ' BEZBEDNOST: potvrdi da je BAS ovaj novi dokument zamena. Sprecava pogresan
+    ' auto-relink kad je operater napustio ispravku pa uneo DRUGI dokument.
+    ' (Uvek pitaj za persistentnu/cross-session; za aktivnu u sesiji takodje --
+    '  operater je mozda promenio nameru izmedju storna i ovog unosa.)
+    Dim oldBroj As String
+    oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
+    If MsgBox("Ceka ISPRAVKA za storniran(u) '" & oldBroj & "'." & vbCrLf & vbCrLf & _
+              "Da li je upravo snimljeni '" & newBroj & "' ZAMENA za nju?" & vbCrLf & vbCrLf & _
+              "DA = zavrsi ispravku (prevezi blokove/prijemnicu, rekalkulisi zbirnu)" & vbCrLf & _
+              "NE = obican unos (ispravka ostaje na cekanju: Osiroceni dokumenti)", _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
     Dim res As Object
     Select Case docType
