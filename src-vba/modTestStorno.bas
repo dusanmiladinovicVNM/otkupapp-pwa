@@ -89,6 +89,7 @@ Public Sub RunStornoTestSuite()
     T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu
     T19_DupliVsPonistenjeZbirnaOtpremnice
     T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu
+    T21_PonistenjeOtpremniceJedinaKaskadaCeoTok
 
     tx.RollbackTx
     Set tx = Nothing
@@ -586,6 +587,33 @@ Private Sub T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu()
     Dim inv As Object: Set inv = modDokumentInvariant.ValidateZbirnaInvariant("SVT-Z20")
     ChkEqD CDbl(inv("kgZbrI")), 40, S & "zbirna rekalk na 40 (preostala OB20)"
     Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P20", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (zbirna ziva)"
+End Sub
+
+' ============================================================
+' T21 - malina 1:1 (blok = okidac celog lanca; stanica=hladnjaca -> NIKAD dve
+' otpremnice na zbirnoj / dva bloka na otpremnici): PONISTENJE JEDINE otpremnice
+' ekskluzivno drzi zbirnu -> kaskada celog toka (zbirna+prijemnica+palete),
+' blok oslobodjen (aktivan). Pokriva sole-owner PONISTENJE granu za otpremnicu.
+' ============================================================
+Private Sub T21_PonistenjeOtpremniceJedinaKaskadaCeoTok()
+    Const S As String = "T21 PONISTENJE jedine otpremnice (malina 1:1) kaskada: "
+
+    SeedZbirna "SVT-Z21", "I", 100, 10, HLAD_KUP
+    SeedOtpremnica "SVT-O21", "SVT-Z21", "I", 100, 10
+    SeedOtkupBlok "SVT-BLK21", "SVT-O21-ID-I", "SVT-Z21"
+    SeedPrijemnica "SVT-P21", "SVT-Z21", "I", 100, 10
+    SeedPaletaStavka "SVT-PS21", "SVT-P21", "SVT-Z21", "I", 100, 10
+
+    Dim res As Object
+    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-O21", SV_MODE_PONISTENJE, True)
+    Chk CBool(res("success")), S & "PONISTENJE (forceConfirm) uspeo"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O21", COL_OTP_ID), "", S & "otpremnica stornirana"
+    Chk Not ZbirnaPostoji("SVT-Z21"), S & "zbirna stornirana (jedina otpremnica -> ceo tok)"
+    ChkEq LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P21", COL_PRJ_ID), "", S & "prijemnica stornirana (kaskada)"
+    ChkEq PalsStornirano("SVT-PS21"), "Da", S & "paletna stavka stornirana"
+    ' blok OSLOBODJEN ali AKTIVAN (realna kupovina, za reveze).
+    ChkEq OtkOtpremnicaID("SVT-BLK21"), "", S & "blok oslobodjen (OtpremnicaID prazan)"
+    Chk LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, "SVT-BLK21", COL_OTK_ID) <> "", S & "blok i dalje aktivan (nije storniran)"
 End Sub
 
 ' ============================================================
