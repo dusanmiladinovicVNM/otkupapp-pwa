@@ -29,6 +29,11 @@ Private mFail As Long
 Private mFails As String
 Private mReport As String
 
+' Deterministicki hladnjaca-kupac za testove (config se snapshotuje pa vraca
+' rollback-om). Zbirna sa ovim KupacID = interni hladnjaca-tok (kaskada); bilo koji
+' drugi KupacID = eksterni kupac (prijemnica netaknuta).
+Private Const HLAD_KUP As String = "SVT-HLAD-KUPAC"
+
 Public Sub RunStornoTestSuite()
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -56,7 +61,13 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
     tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_SEF_CONFIG
     tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' Deterministicki hladnjaca-kupac (rollback vraca original config).
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, HLAD_KUP
 
     T01_StornoOtpremniceRekalkuliseZbirnu
     T02_PrevezivanjeValidiraObeZbirne
@@ -73,6 +84,11 @@ Public Sub RunStornoTestSuite()
     T13_ReversCompleteSaAktivnimNovimReversom
     T14_AutoCompleteNeBiraLatestKadImaVisePending
     T15_PonistenjeUvekTraziPotvrdu
+    T16_DupliOtpremniceOslobadjaBlokove
+    T17_PonistenjeZbirnaHladnjacaKaskada
+    T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu
+    T19_DupliVsPonistenjeZbirnaOtpremnice
+    T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu
 
     tx.RollbackTx
     Set tx = Nothing
@@ -462,16 +478,129 @@ Private Sub T15_PonistenjeUvekTraziPotvrdu()
 End Sub
 
 ' ============================================================
+' T16 - DUPLI otpremnica: storno + OSLOBODI otkup blokove (za reveze) + NE dira
+' prijemnicu (nije kaskada); prazna zbirna -> STORNO (ne aktivna 0/0).
+' ============================================================
+Private Sub T16_DupliOtpremniceOslobadjaBlokove()
+    Const S As String = "T16 DUPLI otpremnica oslobadja blokove: "
+
+    SeedZbirna "SVT-Z16", "I", 100, 10, HLAD_KUP
+    SeedOtpremnica "SVT-O16", "SVT-Z16", "I", 100, 10
+    SeedOtkupBlok "SVT-BLK16", "SVT-O16-ID-I", "SVT-Z16"
+    SeedPrijemnica "SVT-P16", "SVT-Z16", "I", 100, 10
+
+    Dim res As Object
+    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-O16", SV_MODE_DUPLI)
+    Chk CBool(res("success")), S & "DUPLI uspeo"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O16", COL_OTP_ID), "", S & "otpremnica stornirana"
+    ' blok OSLOBODJEN (OtpremnicaID prazan) ali i dalje AKTIVAN (realna kupovina).
+    ChkEq OtkOtpremnicaID("SVT-BLK16"), "", S & "blok oslobodjen (OtpremnicaID prazan)"
+    Chk LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, "SVT-BLK16", COL_OTK_ID) <> "", S & "blok i dalje aktivan (nije storniran)"
+    ' DUPLI NE kaskadira -> prijemnica ostaje aktivna (osirocena za reveze).
+    Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P16", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (DUPLI ne kaskadira)"
+    ' prazna zbirna -> STORNO (nulling fix), NE aktivna 0/0.
+    Chk Not ZbirnaPostoji("SVT-Z16"), S & "prazna zbirna STORNIRANA (ne aktivna 0/0)"
+End Sub
+
+' ============================================================
+' T17 - PONISTENJE zbirne (hladnjaca kupac): kaskadno stornira ceo interni tok
+' (otpremnice + prijemnica + paletne stavke).
+' ============================================================
+Private Sub T17_PonistenjeZbirnaHladnjacaKaskada()
+    Const S As String = "T17 PONISTENJE zbirna (hladnjaca) kaskada: "
+
+    SeedZbirna "SVT-Z17", "I", 100, 10, HLAD_KUP
+    SeedOtpremnica "SVT-OA17", "SVT-Z17", "I", 60, 6
+    SeedOtpremnica "SVT-OB17", "SVT-Z17", "I", 40, 4
+    SeedPrijemnica "SVT-P17", "SVT-Z17", "I", 100, 10
+    SeedPaletaStavka "SVT-PS17", "SVT-P17", "SVT-Z17", "I", 100, 10
+
+    Dim res As Object
+    Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z17", SV_MODE_PONISTENJE, True)
+    Chk CBool(res("success")), S & "PONISTENJE (forceConfirm) uspeo"
+    Chk Not ZbirnaPostoji("SVT-Z17"), S & "zbirna stornirana"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OA17", COL_OTP_ID), "", S & "otpremnica OA17 STORNIRANA (kaskada)"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OB17", COL_OTP_ID), "", S & "otpremnica OB17 STORNIRANA (kaskada)"
+    ChkEq LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P17", COL_PRJ_ID), "", S & "prijemnica STORNIRANA (hladnjaca kupac)"
+    ChkEq PalsStornirano("SVT-PS17"), "Da", S & "paletna stavka STORNIRANA"
+End Sub
+
+' ============================================================
+' T18 - PONISTENJE zbirne (EKSTERNI kupac): interne otpremnice se storniraju, ali
+' prijemnica (eksterna) ostaje NETAKNUTA (zbirna je poslednji interni dok).
+' ============================================================
+Private Sub T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu()
+    Const S As String = "T18 PONISTENJE zbirna (eksterni) ne dira prijemnicu: "
+
+    SeedZbirna "SVT-Z18", "I", 100, 10, "SVT-EXT-KUPAC"
+    SeedOtpremnica "SVT-O18", "SVT-Z18", "I", 100, 10
+    SeedPrijemnica "SVT-P18", "SVT-Z18", "I", 100, 10
+
+    Dim res As Object
+    Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z18", SV_MODE_PONISTENJE, True)
+    Chk CBool(res("success")), S & "PONISTENJE uspeo"
+    Chk Not ZbirnaPostoji("SVT-Z18"), S & "zbirna stornirana"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O18", COL_OTP_ID), "", S & "otpremnica STORNIRANA (interno)"
+    Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P18", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (eksterni kupac)"
+End Sub
+
+' ============================================================
+' T19 - funkcionalna razlika: DUPLI zbirne ODVEZUJE otpremnice (prezivljavaju),
+' PONISTENJE zbirne ih STORNIRA.
+' ============================================================
+Private Sub T19_DupliVsPonistenjeZbirnaOtpremnice()
+    Const S As String = "T19 DUPLI odvezuje vs PONISTENJE stornira: "
+
+    ' DUPLI: otpremnica prezivljava (aktivna, BrojZbirne prazno).
+    SeedZbirna "SVT-Z19A", "I", 50, 5, HLAD_KUP
+    SeedOtpremnica "SVT-O19A", "SVT-Z19A", "I", 50, 5
+    modStornoFlow.RunZbirnaCorrection "SVT-Z19A", SV_MODE_DUPLI
+    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O19A", COL_OTP_ID) <> "", S & "DUPLI: otpremnica PREZIVLJAVA (aktivna)"
+    ChkEq OtpBrojZbirne("SVT-O19A"), "", S & "DUPLI: otpremnica odvezana (BrojZbirne prazno)"
+
+    ' PONISTENJE: otpremnica stornirana.
+    SeedZbirna "SVT-Z19B", "I", 50, 5, HLAD_KUP
+    SeedOtpremnica "SVT-O19B", "SVT-Z19B", "I", 50, 5
+    modStornoFlow.RunZbirnaCorrection "SVT-Z19B", SV_MODE_PONISTENJE, True
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O19B", COL_OTP_ID), "", S & "PONISTENJE: otpremnica STORNIRANA"
+End Sub
+
+' ============================================================
+' T20 - PONISTENJE JEDNE otpremnice sa DELJENOM zbirnom NE obara zbirnu (sestre):
+' storno te otpremnice + rekalk; sestra + prijemnica prezivljavaju.
+' ============================================================
+Private Sub T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu()
+    Const S As String = "T20 PONISTENJE otpremnice (deljena) ne obara zbirnu: "
+
+    SeedZbirna "SVT-Z20", "I", 100, 10, HLAD_KUP
+    SeedOtpremnica "SVT-OA20", "SVT-Z20", "I", 60, 6
+    SeedOtpremnica "SVT-OB20", "SVT-Z20", "I", 40, 4
+    SeedPrijemnica "SVT-P20", "SVT-Z20", "I", 100, 10
+
+    Dim res As Object
+    Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-OA20", SV_MODE_PONISTENJE, True)
+    Chk CBool(res("success")), S & "PONISTENJE (forceConfirm) uspeo"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OA20", COL_OTP_ID), "", S & "OA20 stornirana"
+    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OB20", COL_OTP_ID) <> "", S & "OB20 PREZIVLJAVA (deljena zbirna)"
+    Chk ZbirnaPostoji("SVT-Z20"), S & "zbirna PREZIVLJAVA (deljena -> nije oborena)"
+    Dim inv As Object: Set inv = modDokumentInvariant.ValidateZbirnaInvariant("SVT-Z20")
+    ChkEqD CDbl(inv("kgZbrI")), 40, S & "zbirna rekalk na 40 (preostala OB20)"
+    Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P20", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (zbirna ziva)"
+End Sub
+
+' ============================================================
 ' SEED HELPERS (upis po IMENU kolone -> otporno na redosled)
 ' ============================================================
 
 ' Zbirna: jedan red po klasi. BrojZbirne + Klasa + KG + AMB (+ ZbirnaID, Datum).
+' kupac (opciono) = KupacID; = HLAD_KUP -> interni hladnjaca-tok, inace eksterni.
 Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
-                       ByVal kg As Double, ByVal amb As Long)
+                       ByVal kg As Double, ByVal amb As Long, _
+                       Optional ByVal kupac As String = "")
     SvAppend TBL_ZBIRNA, _
-        Array(COL_ZBR_ID, COL_ZBR_DATUM, COL_ZBR_BROJ, COL_ZBR_KOLICINA, _
+        Array(COL_ZBR_ID, COL_ZBR_DATUM, COL_ZBR_BROJ, COL_ZBR_KUPAC, COL_ZBR_KOLICINA, _
               COL_ZBR_TIP_AMB, COL_ZBR_KOL_AMB, COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KLASA), _
-        Array(broj & "-ID-" & klasa, Date, broj, kg, "SVT-A", amb, "SVT-VOCE", "SVT-SORTA", klasa)
+        Array(broj & "-ID-" & klasa, Date, broj, kupac, kg, "SVT-A", amb, "SVT-VOCE", "SVT-SORTA", klasa)
 End Sub
 
 Private Sub SeedOtpremnica(ByVal broj As String, ByVal brojZbirne As String, _
@@ -554,6 +683,10 @@ End Function
 
 Private Function PalsBrojZbirne(ByVal stavkaID As String) As String
     PalsBrojZbirne = NzTx(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, stavkaID, COL_PALS_BROJ_ZBIRNE))
+End Function
+
+Private Function PalsStornirano(ByVal stavkaID As String) As String
+    PalsStornirano = NzTx(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, stavkaID, COL_STORNIRANO))
 End Function
 
 Private Function OtkOtpremnicaID(ByVal blkID As String) As String

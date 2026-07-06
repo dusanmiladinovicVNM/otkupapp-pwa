@@ -51,6 +51,21 @@ Public Function IsHladnjacaStanica(ByVal stanicaID As String) As Boolean
     IsHladnjacaStanica = (StrComp(v, "Da", vbTextCompare) = 0)
 End Function
 
+' Da li je KUPAC oznacen kao hladnjaca-kupac (interni cold-store tok). Isti signal
+' kao frmDokumenta.RefreshBrojPrijSuggestion: kupac == CFG_MALINA_DEFAULT_KUPAC.
+' Eksterni kupci -> False (za njih je zbirna poslednji interni dokument, a prijemnica
+' eksterna -> storno framework ne kaskadira nizvodni tok). Prazan config / prazan
+' kupac -> False.
+Public Function IsHladnjacaKupac(ByVal kupacID As String) As Boolean
+    On Error Resume Next
+    kupacID = Trim$(kupacID)
+    If Len(kupacID) = 0 Then Exit Function
+    Dim h As String
+    h = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    If Len(h) = 0 Then Exit Function
+    IsHladnjacaKupac = (StrComp(kupacID, h, vbTextCompare) = 0)
+End Function
+
 ' Auto-lanac za hladnjacu. Poziva se posle uspesnog SaveOtkupMulti_TX (frmOtkup).
 ' Best-effort: greska NE sme da obori potvrdu otkupa. Vraca "" kad je lanac
 ' kompletan; inace tekst upozorenja (frmOtkup ga prikaze operateru).
