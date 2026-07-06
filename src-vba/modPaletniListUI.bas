@@ -206,6 +206,65 @@ EH:
 End Sub
 
 ' ============================================================
+' KOREKCIJA KOLICINA (Adjust) -- zajednicki UI tok za frmDokumenta/frmOtkup/rucno.
+' Poziva AdjustPaletaGajbiceZaPrijemnicu_TX; ako visak gajbica ne staje na paletu,
+' operater bira: PRELIJ na sledecu paletu ili PREKO kapaciteta na istoj.
+' Vraca tekst-rezime za prikaz (ili "" ako nije bilo nista / operater odustao).
+' ============================================================
+Public Function PaletaAdjustPrompt(ByVal brojPrij As String) As String
+    On Error GoTo EH
+    Dim info As String
+    Dim res As Long
+    res = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+
+    If res = ADJ_NEEDS_CHOICE Then
+        Dim ans As VbMsgBoxResult
+        ans = MsgBox("Korekcija gajbica za prijemnicu " & brojPrij & ":" & vbCrLf & info & vbCrLf & vbCrLf & _
+                     "DA  = preliti visak na sledecu (otvorenu/novu) paletu" & vbCrLf & _
+                     "NE  = slozi SVE na istu paletu, PREKO kapaciteta" & vbCrLf & _
+                     "OTKAZI = ne diraj palete sada", _
+                     vbYesNoCancel + vbQuestion, APP_NAME)
+        If ans = vbYes Then
+            res = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "PRELIJ", info)
+        ElseIf ans = vbNo Then
+            res = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "PREKO", info)
+        Else
+            PaletaAdjustPrompt = "Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: " & _
+                                 "Alt+F8 -> PaletaAdjust_Prompt)."
+            Exit Function
+        End If
+    End If
+
+    If res = ADJ_BLOCKED Then
+        PaletaAdjustPrompt = "Korekcija kolicina NIJE uradjena: " & info
+    ElseIf res > 0 Then
+        PaletaAdjustPrompt = "Kolicine na paletama korigovane. " & info
+    Else
+        PaletaAdjustPrompt = info      ' 0 = nista za korekciju
+    End If
+    Exit Function
+EH:
+    LogErr "modPaletniListUI.PaletaAdjustPrompt"
+    PaletaAdjustPrompt = "Greska pri korekciji kolicina: " & Err.description
+End Function
+
+' Alt+F8: rucna korekcija kolicina na paletama za AKTIVNU prijemnicu (escape kad
+' je auto-korekcija ranije preskocena, ili Integritet A3/A4 prijavi odstupanje).
+Public Sub PaletaAdjust_Prompt()
+    On Error GoTo EH
+    Dim ans As String
+    ans = InputBox("Broj prijemnice cije kolicine treba uskladiti sa paletama:", _
+                   "Korekcija kolicina na paletama")
+    If Trim$(ans) = "" Then Exit Sub
+    Dim msg As String: msg = PaletaAdjustPrompt(Trim$(ans))
+    If Len(msg) > 0 Then MsgBox msg, vbInformation, APP_NAME
+    Exit Sub
+EH:
+    LogErr "modPaletniListUI.PaletaAdjust_Prompt"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' ============================================================
 ' Sifarnik helperi za frmPalete (tip/tezina kutija i kesa, vrste gotovog
 ' proizvoda). Reuse GetLookupList/LookupValue; samo aktivni u izboru.
 ' ============================================================

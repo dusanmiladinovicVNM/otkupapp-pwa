@@ -276,6 +276,7 @@ Public Const COL_PAL_KLASA As String = "Klasa"
 Public Const COL_PAL_TIP_AMBALAZE As String = "TipAmbalaze"
 Public Const COL_PAL_KAPACITET As String = "KapacitetGajbica"
 Public Const COL_PAL_CREATED As String = "CreatedAt"
+Public Const COL_PAL_ISTORIJA As String = "Istorija"
 
 ' tblPaletaStavka (veza paleta -> prijemnica/zbirna)
 Public Const COL_PALS_ID As String = "StavkaID"

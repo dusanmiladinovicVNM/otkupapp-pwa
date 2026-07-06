@@ -3061,13 +3061,16 @@ EH:
     GetPrijemniceSaOsirocenimPaletama = Empty
 End Function
 
-' Aktivne prijemnice koje su paletizovane (imaju aktivnu paleta-stavku) = ciljevi
-' za P1. Kolone 1..6: BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica(KolAmb)|Zbirna
+' Aktivne (ne-stornirane) prijemnice = ciljevi za pallet re-point. Ukljucuje i
+' paletizovane i NEpaletizovane (motor ReassignPaleteToPrijemnica_TX podrzava cilj
+' bez svezih stavki: STEP1 tada ne undo-uje nista). Kolone 1..7:
+'   BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica(KolAmb)|Zbirna|Paletizovana(Da/Ne)
 Public Function GetAktivnePrijemnice() As Variant
     On Error GoTo EH
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
 
+    ' BrojPrijemnice koje imaju bar jednu AKTIVNU paleta-stavku (-> Paletizovana=Da).
     Dim palBr As Object: Set palBr = CreateObject("Scripting.Dictionary"): palBr.CompareMode = vbTextCompare
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
     If Not IsEmpty(ps) Then
@@ -3104,14 +3107,12 @@ Public Function GetAktivnePrijemnice() As Variant
         If Not stp Then
             Dim br As String: br = Trim$(NzToText(prj(i, cBr)))
             If Len(br) > 0 Then
-                If palBr.Exists(br) Then
-                    If Not gSum.Exists(br) Then
-                        gSum(br) = 0&: order.Add br
-                        datD(br) = prj(i, cDat): vrD(br) = Trim$(NzToText(prj(i, cVr)))
-                        soD(br) = Trim$(NzToText(prj(i, cSo))): zbD(br) = Trim$(NzToText(prj(i, cZbr)))
-                    End If
-                    If cAmb > 0 Then If IsNumeric(prj(i, cAmb)) Then gSum(br) = CLng(gSum(br)) + CLng(prj(i, cAmb))
+                If Not gSum.Exists(br) Then
+                    gSum(br) = 0&: order.Add br
+                    datD(br) = prj(i, cDat): vrD(br) = Trim$(NzToText(prj(i, cVr)))
+                    soD(br) = Trim$(NzToText(prj(i, cSo))): zbD(br) = Trim$(NzToText(prj(i, cZbr)))
                 End If
+                If cAmb > 0 Then If IsNumeric(prj(i, cAmb)) Then gSum(br) = CLng(gSum(br)) + CLng(prj(i, cAmb))
             End If
         End If
     Next i
@@ -3120,9 +3121,10 @@ Public Function GetAktivnePrijemnice() As Variant
     Dim v As Variant
     For Each v In order
         Dim br2 As String: br2 = CStr(v)
-        rows.Add Array(br2, datD(br2), CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), CStr(zbD(br2)))
+        rows.Add Array(br2, datD(br2), CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), _
+                       CStr(zbD(br2)), IIf(palBr.Exists(br2), "Da", "Ne"))
     Next v
-    GetAktivnePrijemnice = StornoRowsTo2D(rows, 6)
+    GetAktivnePrijemnice = StornoRowsTo2D(rows, 7)
     Exit Function
 EH:
     LogErr "modDokumenta.GetAktivnePrijemnice"
@@ -3226,11 +3228,32 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     Dim k As Long
     For k = 1 To targetRows.count
         RequireUpdateCell TBL_PRIJEMNICA, targetRows(k), COL_PRJ_BROJ_ZBIRNE, targetBrZbirne, SRC
     Next k
+
+    ' Sledljivost: paletne stavke te prijemnice moraju dobiti NOVU BrojZbirne, inace
+    ' ostaju sa mrtvom zbirnom (paleta -> zbirna -> kooperanti pukne). Menja se samo
+    ' veza (BrojZbirne); roba/pripadnost prijemnici ostaje.
+    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsEmpty(ps) Then
+        Dim pBr As Long, pZb As Long, pSt As Long
+        pBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+        pZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
+        pSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        If pBr > 0 And pZb > 0 Then
+            Dim r2 As Long
+            For r2 = 1 To UBound(ps, 1)
+                If Trim$(CStr(ps(r2, pBr))) = brPrijemnice _
+                   And (pSt = 0 Or UCase$(Trim$(CStr(ps(r2, pSt)))) <> "DA") Then
+                    RequireUpdateCell TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, targetBrZbirne, SRC
+                End If
+            Next r2
+        End If
+    End If
 
     tx.CommitTx
     Set tx = Nothing

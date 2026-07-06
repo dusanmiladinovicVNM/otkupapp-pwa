@@ -27,6 +27,22 @@ Option Explicit
 '        IsAutoPrijemnicaHladnjaca (modConfig).
 ' ============================================================
 
+' Ispravka autohladnjace: posle storna otkupa-hladnjace ceo lanac
+' (otpremnica+zbirna+prijemnica) je oboren, a palete su OSIROCENE. Kad operater
+' izabere "Uneti ispravku", panel Otkupni blokovi zapamti broj te (stornirane)
+' prijemnice ovde. SLEDECI auto-lanac (ponovni Unos otkupa) prevezuje osirocene
+' palete na novu prijemnicu -- ista roba, bez ponovne paletizacije.
+' Cross-form stanje (modOtkupBlok -> frmOtkup); cisti se na Terminate forme.
+Private mPendingRelinkOldPrij As String
+
+Public Sub SetHladnjacaRelinkPending(ByVal oldPrijBroj As String)
+    mPendingRelinkOldPrij = Trim$(oldPrijBroj)
+End Sub
+
+Public Function GetHladnjacaRelinkPending() As String
+    GetHladnjacaRelinkPending = mPendingRelinkOldPrij
+End Function
+
 ' Da li je stanica oznacena kao hladnjaca (tblStanice.JeHladnjaca = "Da").
 Public Function IsHladnjacaStanica(ByVal stanicaID As String) As Boolean
     On Error Resume Next
@@ -49,8 +65,10 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
                               ByVal otkupIDs As String, _
                               Optional ByVal brutoKgI As Double = 0, _
                               Optional ByVal kolAmbII As Long = 0, _
-                              Optional ByVal brutoKgII As Double = 0) As String
+                              Optional ByVal brutoKgII As Double = 0, _
+                              Optional ByRef outBrPrij As String) As String
     On Error GoTo EH
+    outBrPrij = ""       ' broj tek generisane prijemnice (za relink osirocenih paleta)
 
     ' Vraca "" kad je lanac kompletan; inace tekst upozorenja za frmOtkup
     ' (npr. prijemnica nije kreirana -> lanac nepotpun).
@@ -115,6 +133,7 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     ' (GenerateBrojPrijemnice, modBrojevi). Generise se i kad se unosi samo Klasa II.
     Dim brPrij As String
     brPrij = GenerateBrojPrijemnice(kupacID, datum)
+    outBrPrij = brPrij       ' izlozi caller-u za relink osirocenih paleta
 
     ' Klasa I (svoja kolicina ambalaze = kolAmb). Preskace se ako se unosi samo II.
     If hasKlasaI Then

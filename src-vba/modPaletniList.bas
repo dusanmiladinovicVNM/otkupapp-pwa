@@ -23,6 +23,21 @@ Option Explicit
 ' Sema tabela: modSetup.EnsurePaletniListSchema (pokrenuti jednom).
 ' ============================================================
 
+' Ispravka stornirane prijemnice: kad se ista roba samo prevezuje na ispravljenu
+' prijemnicu (ReassignPaleteToPrijemnica_TX re-point originalnih paleta), sveza
+' paletizacija u SavePrijemnica*/PaletizePrijemnica se PRESKACE -- inace bi se
+' kreirale palete koje se odmah storniraju (prazna otvorena paleta + potrosen broj).
+' Forme postavljaju True pre snimanja ispravke i False odmah posle. Default False.
+Private mSkipPaletize As Boolean
+
+' Povratne vrednosti AdjustPaletaGajbiceZaPrijemnicu_TX (pored >=0 = broj korigovanih klasa).
+Public Const ADJ_NEEDS_CHOICE As Long = -1   ' visak ne staje -> UI pita: prelij ili preko kapaciteta
+Public Const ADJ_BLOCKED As Long = -2        ' blokirano (npr. preradjena paleta) -> outInfo nosi razlog
+
+Public Sub SetPaletizeSkip(ByVal b As Boolean)
+    mSkipPaletize = b
+End Sub
+
 ' Vraca sledeci redni broj palete za TEKUCU godinu (1 ako jos nema palete
 ' u ovoj godini). Prikaz na listu: BrojPalete & "/" & Godina.
 Public Function GenerateBrojPalete() As Long
@@ -86,6 +101,10 @@ Public Function PaletizePrijemnica( _
     ' Prijemnica se i dalje snima normalno; samo izostaje paletizacija. Default ON.
     If Not IsPaletiranjeEnabled() Then Exit Function
 
+    ' Ispravka: preskoci svezu paletizaciju -- palete se prevezuju re-pointom
+    ' (ReassignPaleteToPrijemnica_TX) da se ista roba ne paletizuje pa odmah stornira.
+    If mSkipPaletize Then Exit Function
+
     If brGajbica <= 0 Then Exit Function       ' nema gajbica (Klasa II / bez ambalaze)
 
     RequirePaletaSchema SRC
@@ -93,61 +112,14 @@ Public Function PaletizePrijemnica( _
     EnsurePrijemnicaNotAlreadyPaletized prijemnicaID, SRC
 
     Dim crateW As Double: crateW = GetTezinaGajbice(tipAmb)
-    Dim defCap As Long: defCap = GetKapacitetPalete(vrstaVoca)
 
     Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
     Dim nClosed As Long
-    Dim remaining As Long: remaining = brGajbica
 
-    Do While remaining > 0
-        Dim palRow As Long, palID As String
-        palID = GetOrCreateOpenPaleta(vrstaVoca, sortaVoca, klasa, tipAmb, defCap, palRow)
-        If palID = "" Or palRow = 0 Then
-            Err.Raise vbObjectError + 7331, SRC, _
-                      "Ne mogu da otvorim/nadjem paletu za: " & vrstaVoca
-        End If
-
-        Dim used As Long, curNeto As Double, curAmb As Double
-        Dim palKg As Double, cap As Long
-        GetPaletaAggregates palRow, used, curNeto, curAmb, palKg, cap
-        If cap <= 0 Then cap = defCap
-
-        Dim freeSlots As Long: freeSlots = cap - used
-        If freeSlots <= 0 Then
-            ' puna a jos otvorena -> zatvori i otvori novu u sledecoj iteraciji
-            ClosePaleta palRow, SRC
-            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
-            nClosed = nClosed + 1
-            GoTo NextIter
-        End If
-
-        Dim take As Long: take = remaining
-        If take > freeSlots Then take = freeSlots
-
-        Dim takeNeto As Double, takeAmb As Double
-        takeNeto = netoKg * (take / brGajbica)
-        takeAmb = take * crateW
-
-        AddStavka palID, prijemnicaID, brojPrij, brojZbirne, klasa, _
-                  vrstaVoca, sortaVoca, take, takeNeto, takeAmb
-
-        Dim newGajb As Long: newGajb = used + take
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, newGajb, SRC
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, curNeto + takeNeto, SRC
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, curAmb + takeAmb, SRC
-        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
-                          (curNeto + takeNeto) + (curAmb + takeAmb) + palKg, SRC
-
-        touched(palID) = True
-        remaining = remaining - take
-
-        If newGajb >= cap Then
-            ClosePaleta palRow, SRC
-            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
-            nClosed = nClosed + 1
-        End If
-NextIter:
-    Loop
+    ' Raspodela = zajednicka petlja SpillGajbice (ista i za korekciju/Adjust).
+    SpillGajbice prijemnicaID, brojPrij, brojZbirne, klasa, vrstaVoca, sortaVoca, _
+                 tipAmb, brGajbica, netoKg / brGajbica, crateW, touched, SRC, _
+                 closedPalIDs, nClosed
 
     PaletizePrijemnica = "palete=" & touched.count & "; zatvoreno=" & nClosed & _
                          "; gajbica=" & brGajbica
@@ -243,6 +215,60 @@ Public Function GetPaletaStatusForPrijemnica(ByVal prijemnicaID As String) As St
 EH:
     LogErr "modPaletniList.GetPaletaStatusForPrijemnica"
     GetPaletaStatusForPrijemnica = ""
+End Function
+
+' Kompaktan spisak fizickih paleta koje nose AKTIVNE paleta-stavke date prijemnice
+' (po BrojPrijemnice): npr. "12/2026 (10g), 14/2026 (6g)". "" ako nema. Read-only
+' (bez TX). Storno-agnosticno na strani prijemnice: gleda samo aktivne stavke, pa
+' radi i posle storna (osirocene stavke i dalje nose stari BrojPrijemnice).
+' Za: preview u recovery panelu (izbor leve prijemnice) + upozorenje pri stornu.
+Public Function GetPaleteInfoForPrijemnicaBroj(ByVal brojPrij As String) As String
+    On Error GoTo EH
+    brojPrij = Trim$(brojPrij)
+    If Len(brojPrij) = 0 Then Exit Function
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+
+    Dim iBr As Long, iPal As Long, iGajb As Long, iSt As Long
+    iBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    iSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If iBr = 0 Or iPal = 0 Then Exit Function
+
+    ' PaletaID -> gajbice (agregat), uz redosled pojavljivanja.
+    Dim order As Collection: Set order = New Collection
+    Dim gaj As Object: Set gaj = CreateObject("Scripting.Dictionary")
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, iBr))) = brojPrij _
+           And UCase$(Trim$(CStr(SafeCell(s, r, iSt)))) <> "DA" Then
+            Dim pid As String: pid = CStr(SafeCell(s, r, iPal))
+            If Not gaj.Exists(pid) Then gaj.Add pid, 0&: order.Add pid
+            gaj(pid) = CLng(gaj(pid)) + NzL(SafeCell(s, r, iGajb))
+        End If
+    Next r
+    If order.count = 0 Then Exit Function
+
+    Const MAXP As Long = 8
+    Dim out As String, n As Long
+    Dim v As Variant
+    For Each v In order
+        n = n + 1
+        If n > MAXP Then
+            out = out & ", +" & (order.count - MAXP) & " jos"
+            Exit For
+        End If
+        If Len(out) > 0 Then out = out & ", "
+        out = out & PaletaLabel(CStr(v)) & " (" & CLng(gaj(CStr(v))) & "g)"
+    Next v
+
+    GetPaleteInfoForPrijemnicaBroj = out
+    Exit Function
+EH:
+    LogErr "modPaletniList.GetPaleteInfoForPrijemnicaBroj"
+    GetPaleteInfoForPrijemnicaBroj = ""
 End Function
 
 ' ============================================================
@@ -1162,18 +1188,23 @@ End Function
 '   2) RE-POINT osirocenih stavki stare prijemnice -> nova, PO KLASI (stara Kl.X
 '      -> PrijemnicaID nove Kl.X; BrojPrijemnice/BrojZbirne nove).
 '   3) KG-SYNC: ako se broj gajbica PO KLASI poklapa, skaliraj neto stavki na neto
-'      nove prijemnice (+ total palete). Ako se broj gajbica razlikuje -> ne diraj,
-'      vrati upozorenje (operater dodaje/skida aneks rucno).
+'      nove prijemnice (+ total palete). Ako se broj gajbica razlikuje -> ne diraj
+'      kolicine, vrati outGajbDiff=True (UI zatim zove AdjustPaletaGajbiceZaPrijemnicu_TX).
+'   4) RELABEL (STEP 2b, uz allowRelabel): razlika vrsta/sorta/tipAmb -> prepravi
+'      etiketu na prevezanim stavkama + njihovim paletama (roba se ne pomera).
 ' Sve u jednoj transakciji. outWarn nosi poruke za UI (prazno = bez napomena).
 ' ============================================================
 Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                                               ByVal newBroj As String, _
-                                              Optional ByRef outWarn As String) As Boolean
+                                              Optional ByRef outWarn As String, _
+                                              Optional ByVal allowRelabel As Boolean = False, _
+                                              Optional ByRef outGajbDiff As Boolean = False) As Boolean
     Const SRC As String = "modPaletniList.ReassignPaleteToPrijemnica_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
 
     outWarn = ""
+    outGajbDiff = False
     oldBroj = Trim$(oldBroj): newBroj = Trim$(newBroj)
     If Len(oldBroj) = 0 Or Len(newBroj) = 0 Then Exit Function
     If StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then
@@ -1198,6 +1229,12 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     pcAmb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, SRC)
     pcZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     pcSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    ' identitet nove prijemnice (za relabel-u-mestu; svi redovi broja dele isti)
+    Dim pcVr As Long, pcSo As Long, pcTa As Long
+    pcVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    pcSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    pcTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    Dim nVr As String, nSo As String, nTa As String
 
     Dim r As Long
     For r = 1 To UBound(prj, 1)
@@ -1210,7 +1247,12 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                 newById(kl) = Trim$(CStr(prj(r, pcId)))
                 newNeto(kl) = NzD(prj(r, pcKol))
                 newGajb(kl) = NzL(prj(r, pcAmb))
-                If Len(newBrZbr) = 0 Then newBrZbr = Trim$(CStr(prj(r, pcZbr)))
+                If Len(newBrZbr) = 0 Then
+                    newBrZbr = Trim$(CStr(prj(r, pcZbr)))
+                    nVr = Trim$(NzToText(SafeCell(prj, r, pcVr)))
+                    nSo = Trim$(NzToText(SafeCell(prj, r, pcSo)))
+                    If pcTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                End If
             End If
         End If
     Next r
@@ -1259,13 +1301,55 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         Exit Function
     End If
 
+    ' Identitet-guard: razlika vrsta/sorta/tipAmb -> re-point bez relabela bi ostavio
+    ' pogresno oznacenu paletu (paleta jos nosi staru etiketu). Trazi potvrdu (allowRelabel).
+    Dim verdict As Variant: verdict = EvaluatePaletaReassign(oldBroj, newBroj)
+    Dim relabelNeeded As Boolean: relabelNeeded = (CStr(verdict(0)) = "RELABEL")
+    If relabelNeeded And Not allowRelabel Then
+        outWarn = "Razlika u identitetu (" & CStr(verdict(2)) & ") - re-point bi ostavio " & _
+                  "pogresno oznacenu paletu. Potrebna potvrda relabela."
+        Exit Function
+    End If
+
+    ' HARD GUARD (co-tenant relabel): fizicka paleta je HOMOGENA (vrsta/sorta/tipAmb).
+    ' Ako RELABEL, a neka od paleta koje nose ove stavke deli robu sa DRUGOM prijemnicom
+    ' (aktivna stavka bp != oldBroj/newBroj), promena identiteta headera bi TIHO iskvarila
+    ' identitet te druge robe. To se NE sme dozvoliti ni uz potvrdu -> blokada (ne warning).
+    ' Fizicki ispravno resenje: skini ove stavke sa deljene palete pa unesi kao nov unos
+    ' (sveza paletizacija na ispravno oznacenu paletu). Radi i kad je allowRelabel=True.
+    Dim k As Long
+    If relabelNeeded Then
+        Dim tgtPal As Object: Set tgtPal = CreateObject("Scripting.Dictionary")
+        For k = 1 To oldRows.count
+            tgtPal(CStr(ps(oldRows(k), sPal))) = True
+        Next k
+        Dim qg As Long, sharedPal As String
+        For qg = 1 To UBound(ps, 1)
+            If UCase$(Trim$(CStr(ps(qg, sSt)))) <> "DA" Then
+                Dim bpg As String: bpg = Trim$(CStr(ps(qg, sBr)))
+                If bpg <> oldBroj And bpg <> newBroj Then
+                    If tgtPal.Exists(CStr(ps(qg, sPal))) Then
+                        sharedPal = PaletaLabel(CStr(ps(qg, sPal)))
+                        Exit For
+                    End If
+                End If
+            End If
+        Next qg
+        If Len(sharedPal) > 0 Then
+            outWarn = "BLOKIRANO: paleta " & sharedPal & " deli robu sa drugom prijemnicom (" & bpg & _
+                      "). Promena identiteta (" & CStr(verdict(2)) & ") bi iskvarila i tu robu. " & _
+                      "Skini stavke ove prijemnice sa palete (Mod: Palete -> Skini stavke), pa unesi " & _
+                      "robu kao nov unos na ispravno oznacenu paletu."
+            Exit Function
+        End If
+    End If
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     ' ---- STEP 1: undo sveze (new) paletizacije ----
-    Dim k As Long
     For k = 1 To freshRows.count
         i = freshRows(k)
         DecrementPaletaForStavka CStr(ps(i, sPal)), NzL(ps(i, sGajb)), NzD(ps(i, sNeto)), NzD(ps(i, sAmb)), SRC
@@ -1277,11 +1361,18 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     Dim kk As Variant
     For Each kk In oldGajbByKl.Keys
         If Not newById.Exists(kk) Then
-            warnMsg = warnMsg & "Klasa " & kk & ": nova prijemnica nema tu klasu (stavke nisu prevezane). "
+            warnMsg = warnMsg & "Klasa " & kk & ": nova prijemnica nema tu klasu - stavke ostaju " & _
+                      "osirocene (skini ih: Osiroceni dokumenti -> Palete -> Skini stavke). "
+            outGajbDiff = True
         ElseIf NzL(oldGajbByKl(kk)) <> NzL(newGajb(kk)) Then
             warnMsg = warnMsg & "Klasa " & kk & ": gajbica staro=" & NzL(oldGajbByKl(kk)) & " novo=" & _
-                      NzL(newGajb(kk)) & " (razlika - dodaj/skini aneks rucno). "
+                      NzL(newGajb(kk)) & ". "
+            outGajbDiff = True
         End If
+    Next kk
+    ' Nova klasa bez starih stavki (npr. ispravka dodala Klasu II) -> i to je delta.
+    For Each kk In newById.Keys
+        If Not oldGajbByKl.Exists(kk) And NzL(newGajb(kk)) > 0 Then outGajbDiff = True
     Next kk
 
     For k = 1 To oldRows.count
@@ -1304,6 +1395,35 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
             End If
         End If
     Next k
+
+    ' ---- STEP 2b: relabel-u-mestu (samo uz allowRelabel + razlika identiteta) ----
+    ' Prepravi vrsta/sorta/tipAmb na PREVEZANIM stavkama + njihovim paletama. Roba se
+    ' ne pomera; menja se etiketa da odgovara ispravljenoj prijemnici. Log po paleti.
+    ' Deljene palete su vec odbijene hard-guardom gore, pa je relabel ovde bezbedan:
+    ' svaka dodirnuta paleta nosi SAMO ovu prijemnicu (old->new).
+    If relabelNeeded And allowRelabel Then
+        Dim doneP As Object: Set doneP = CreateObject("Scripting.Dictionary")
+        For k = 1 To oldRows.count
+            i = oldRows(k)
+            Dim klR As String: klR = Trim$(CStr(ps(i, sKl)))
+            If Len(klR) = 0 Then klR = "I"
+            If newById.Exists(klR) Then          ' samo stavke koje su stvarno prevezane
+                RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_VRSTA, nVr, SRC
+                RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_SORTA, nSo, SRC
+                Dim pidR As String: pidR = CStr(ps(i, sPal))
+                If Not doneP.Exists(pidR) Then
+                    doneP(pidR) = True
+                    Dim pRow As Long: pRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pidR)
+                    If pRow > 0 Then
+                        RequireUpdateCell TBL_PALETA, pRow, COL_PAL_VRSTA, nVr, SRC
+                        RequireUpdateCell TBL_PALETA, pRow, COL_PAL_SORTA, nSo, SRC
+                        If Len(nTa) > 0 Then RequireUpdateCell TBL_PALETA, pRow, COL_PAL_TIP_AMBALAZE, nTa, SRC
+                        PaletaLog pidR, "RELABEL", "prij " & oldBroj & "->" & newBroj & " (" & CStr(verdict(2)) & ")"
+                    End If
+                End If
+            End If
+        Next k
+    End If
 
     tx.CommitTx
     Set tx = Nothing
@@ -1347,6 +1467,705 @@ Private Sub AdjustPaletaNeto(ByVal palID As String, ByVal deltaNeto As Double, B
     Dim nn As Double: nn = pNeto + deltaNeto: If nn < 0 Then nn = 0
     RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, nn, SRC
     RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, nn + pAmb + palk, SRC
+End Sub
+
+' Audit trag za izmenu palete (relabel/detach/adjust) preko Monitor_Event + vidljiva
+' "Istorija" kolona na tblPaleta. Best-effort (nikad ne rusi TX).
+Private Sub PaletaLog(ByVal palID As String, ByVal action As String, ByVal detail As String)
+    On Error Resume Next
+    Monitor_Event eventType:="PALETA_" & action, severity:="INFO", _
+        message:=action & " paleta=" & palID & " " & detail, _
+        moduleName:="modPaletniList", procedureName:="PaletaLog", _
+        entityType:="Paleta", entityID:=palID, correlationId:=palID
+
+    ' Vidljivi trag na paleti: append imenovanih parova (act=..;det=..;t=..),
+    ' delimiter-safe (";" u detalju -> ","). Best-effort; samo ako kolona postoji.
+    Dim ci As Long: ci = GetColumnIndex(TBL_PALETA, COL_PAL_ISTORIJA)
+    If ci > 0 Then
+        Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+        If pr > 0 Then
+            Dim d As Variant: d = GetTableData(TBL_PALETA)
+            Dim prev As String: prev = CStr(SafeCell(d, pr, ci))
+            Dim entry As String
+            entry = "act=" & action & ";det=" & Replace(detail, ";", ",") & _
+                    ";t=" & Format$(Now, "yyyy-mm-dd hh:nn")
+            If Len(prev) > 0 Then entry = prev & " | " & entry
+            RequireUpdateCell TBL_PALETA, pr, COL_PAL_ISTORIJA, entry, "modPaletniList.PaletaLog"
+        End If
+    End If
+End Sub
+
+' Persistentan business-trag kad ispravka (skip paletizacije) ne uspe da preveze
+' palete: nova prijemnica je snimljena ali NEPALETIZOVANA, a stare palete su
+' osirocene. MsgBox je prolazan; ovo ide u Monitor (WARN) da stanje ostane vidljivo
+' i posle klika. Osirocene palete su i dalje vidljive u recovery panelu (Mod: Palete)
+' i hvata ih Integritet C4 (stavka -> stornirana prijemnica). Best-effort.
+Public Sub LogRelinkFailure(ByVal oldBroj As String, ByVal newBroj As String, _
+                            ByVal razlog As String)
+    On Error Resume Next
+    Monitor_Event eventType:="PALETA_RELINK_FAIL", severity:="WARN", _
+        message:="Ispravka: prijemnica " & newBroj & " snimljena ali NEPALETIZOVANA " & _
+                 "(prevezivanje sa " & oldBroj & " nije uspelo). Osirocene palete " & _
+                 "stare prijemnice cekaju rucni re-point (Mod: Palete). Razlog: " & razlog, _
+        moduleName:="modPaletniList", procedureName:="LogRelinkFailure", _
+        entityType:="Prijemnica", entityID:=newBroj, correlationId:=oldBroj
+End Sub
+
+' "Broj/Godina" oznaka palete za poruke (npr. "12/2026"); "?" ako ne postoji.
+Private Function PaletaLabel(ByVal palID As String) As String
+    On Error Resume Next
+    PaletaLabel = "?"
+    Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+    If pr = 0 Then Exit Function
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    If IsEmpty(d) Then Exit Function
+    PaletaLabel = CStr(NzL(SafeCell(d, pr, GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)))) & "/" & _
+                  CStr(NzL(SafeCell(d, pr, GetColumnIndex(TBL_PALETA, COL_PAL_GODINA))))
+End Function
+
+' ============================================================
+' VERDIKT: presudi kako ciljna prijemnica (newBroj) stoji prema osirocenim
+' paleta-stavkama stornirane (oldBroj). Read-only, bez TX. Jedan izvor istine
+' za UI ocenu + relabel-gejt u ReassignPaleteToPrijemnica_TX.
+'   CLEAN   = isti identitet + iste gajbice po klasi -> obican re-point
+'   GAJBICA = isti identitet, razlicit broj gajbica (PER KLASA) -> re-point + koriguj
+'   RELABEL = razlicit vrsta/sorta/tipAmb (roba ista) -> re-point + prepravi etiketu
+'   NONE    = nova nije aktivna / nema osirocenih stavki
+' Vraca Array(0..2): kategorija, kratka oznaka (za UI kolonu), detalj.
+' ============================================================
+Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
+                                       ByVal newBroj As String) As Variant
+    On Error GoTo EH
+    oldBroj = Trim$(oldBroj): newBroj = Trim$(newBroj)
+    EvaluatePaletaReassign = Array("NONE", "", "")
+    If Len(oldBroj) = 0 Or Len(newBroj) = 0 Then Exit Function
+
+    Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(prj) Then Exit Function
+    Dim pBr As Long, pKl As Long, pVr As Long, pSo As Long, pTa As Long, pAmb As Long, pStt As Long
+    pBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    pKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+    pVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    pSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    pTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    pAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
+    pStt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    If pBr = 0 Then Exit Function
+
+    ' NOVA: identitet (prvi aktivni red) + gajbice PO KLASI. STARA: identitet (prvi red).
+    Dim nVr As String, nSo As String, nTa As String, haveNew As Boolean
+    Dim oVr As String, oSo As String, oTa As String, haveOldId As Boolean
+    Dim newGajb As Object: Set newGajb = CreateObject("Scripting.Dictionary")
+    newGajb.CompareMode = vbTextCompare
+    Dim r As Long, kl As String
+    For r = 1 To UBound(prj, 1)
+        Dim b As String: b = Trim$(CStr(SafeCell(prj, r, pBr)))
+        If b = newBroj Then
+            If Not (pStt > 0 And UCase$(Trim$(CStr(SafeCell(prj, r, pStt)))) = "DA") Then
+                If Not haveNew Then
+                    nVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
+                    nSo = Trim$(NzToText(SafeCell(prj, r, pSo)))
+                    If pTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pTa)))
+                    haveNew = True
+                End If
+                kl = Trim$(CStr(SafeCell(prj, r, pKl))): If Len(kl) = 0 Then kl = "I"
+                newGajb(kl) = NzL(newGajb(kl)) + NzL(SafeCell(prj, r, pAmb))
+            End If
+        ElseIf b = oldBroj Then
+            If Not haveOldId Then
+                oVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
+                oSo = Trim$(NzToText(SafeCell(prj, r, pSo)))
+                If pTa > 0 Then oTa = Trim$(NzToText(SafeCell(prj, r, pTa)))
+                haveOldId = True
+            End If
+        End If
+    Next r
+    If Not haveNew Then EvaluatePaletaReassign = Array("NONE", "nova nije aktivna", ""): Exit Function
+
+    ' STARA: gajbice PO KLASI iz aktivnih (osirocenih) stavki.
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sBr As Long, sKl As Long, sGa As Long, sStt As Long
+    sBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    sKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA)
+    sGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    sStt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    Dim oldGajb As Object: Set oldGajb = CreateObject("Scripting.Dictionary")
+    oldGajb.CompareMode = vbTextCompare
+    Dim haveOld As Boolean
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, sBr))) = oldBroj _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
+            kl = Trim$(CStr(SafeCell(s, r, sKl))): If Len(kl) = 0 Then kl = "I"
+            oldGajb(kl) = NzL(oldGajb(kl)) + NzL(SafeCell(s, r, sGa))
+            haveOld = True
+        End If
+    Next r
+    If Not haveOld Then EvaluatePaletaReassign = Array("NONE", "nema osirocenih stavki", ""): Exit Function
+
+    ' --- presuda: identitet pa gajbice PER KLASA ---
+    Dim idDiff As String
+    If StrComp(oVr, nVr, vbTextCompare) <> 0 Then idDiff = idDiff & "Vrsta " & oVr & "->" & nVr & " "
+    If StrComp(oSo, nSo, vbTextCompare) <> 0 Then idDiff = idDiff & "Sorta " & oSo & "->" & nSo & " "
+    If StrComp(oTa, nTa, vbTextCompare) <> 0 Then idDiff = idDiff & "TipAmb " & oTa & "->" & nTa & " "
+    If Len(idDiff) > 0 Then
+        EvaluatePaletaReassign = Array("RELABEL", "Prevezi + etiketa", Trim$(idDiff))
+        Exit Function
+    End If
+
+    Dim gDiff As String, v As Variant
+    For Each v In oldGajb.Keys
+        If Not newGajb.Exists(v) Then
+            gDiff = gDiff & "Kl." & CStr(v) & " " & NzL(oldGajb(v)) & "->nema; "
+        ElseIf NzL(oldGajb(v)) <> NzL(newGajb(v)) Then
+            gDiff = gDiff & "Kl." & CStr(v) & " " & NzL(oldGajb(v)) & "->" & NzL(newGajb(v)) & "; "
+        End If
+    Next v
+    For Each v In newGajb.Keys
+        If Not oldGajb.Exists(v) And NzL(newGajb(v)) > 0 Then
+            gDiff = gDiff & "Kl." & CStr(v) & " 0->" & NzL(newGajb(v)) & "; "
+        End If
+    Next v
+
+    If Len(gDiff) > 0 Then
+        EvaluatePaletaReassign = Array("GAJBICA", "Prevezi + koriguj", Trim$(gDiff))
+    Else
+        EvaluatePaletaReassign = Array("CLEAN", "Prevezi", "cisto")
+    End If
+    Exit Function
+EH:
+    LogErr "modPaletniList.EvaluatePaletaReassign"
+    EvaluatePaletaReassign = Array("NONE", "", "")
+End Function
+
+' ============================================================
+' DETACH (dupli unos / los utovar): skini osirocene paleta-stavke stornirane
+' prijemnice (oldBroj) sa njihovih paleta -- BEZ prevezivanja. Per-stavka ->
+' su-stanari (druge prijemnice na istoj paleti) ostaju NETAKNUTI. Paleta koja
+' posle skidanja ostane BEZ aktivnih stavki (fantom paleta duplog unosa) se
+' automatski stornira ("storno svega sto je pogresna prijemnica stvorila");
+' preradjena paleta se NE stornira (samo napomena). Transakciono.
+' Vraca broj skinutih stavki; outInfo nosi rezime za UI.
+' ============================================================
+Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
+                                               Optional ByRef outInfo As String) As Long
+    Const SRC As String = "modPaletniList.DetachOsirocenePaletaStavke_TX"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    outInfo = ""
+    oldBroj = Trim$(oldBroj)
+    If Len(oldBroj) = 0 Then Exit Function
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sBr As Long, sPal As Long, sGa As Long, sNe As Long, sAmb As Long, sStt As Long
+    sBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+    sNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
+    sAmb = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+
+    Dim rowsC As Collection: Set rowsC = New Collection
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, sBr))) = oldBroj _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then rowsC.Add r
+    Next r
+    If rowsC.count = 0 Then
+        outInfo = "Nema osirocenih stavki za " & oldBroj & "."
+        Exit Function
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
+    Dim k As Long, cnt As Long
+    For k = 1 To rowsC.count
+        r = rowsC(k)
+        DecrementPaletaForStavka CStr(SafeCell(s, r, sPal)), NzL(SafeCell(s, r, sGa)), _
+                                 NzD(SafeCell(s, r, sNe)), NzD(SafeCell(s, r, sAmb)), SRC
+        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_STORNIRANO, "Da", SRC
+        touched(CStr(SafeCell(s, r, sPal))) = True
+        PaletaLog CStr(SafeCell(s, r, sPal)), "DETACH", "prij=" & oldBroj & " gajb=" & NzL(SafeCell(s, r, sGa))
+        cnt = cnt + 1
+    Next k
+
+    ' Fantom palete: dodirnuta paleta bez ijedne preostale aktivne stavke -> storno
+    ' kroz kanonski modStorno.StornoPaleta (kompozicija u nasem TX, kao sto
+    ' StornoOtkupByBrDok_TX komponuje StornoOtkup). Preradjena se preskace uz napomenu.
+    Dim emptied As String
+    Dim v As Variant
+    For Each v In touched.Keys
+        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then      ' nema aktivnih stavki
+            If IsPaletaPreradjena(CStr(v)) Then
+                emptied = emptied & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
+            ElseIf StornoPaleta(CStr(v)) Then
+                PaletaLog CStr(v), "STORNO_PRAZNA", "detach prij=" & oldBroj
+                emptied = emptied & PaletaLabel(CStr(v)) & " "
+            End If
+        End If
+    Next v
+
+    tx.CommitTx
+    Set tx = Nothing
+    outInfo = "Skinuto stavki: " & cnt & " (prijemnica " & oldBroj & ")."
+    If Len(emptied) > 0 Then outInfo = outInfo & " Ispraznjene palete stornirane: " & Trim$(emptied) & "."
+    DetachOsirocenePaletaStavke_TX = cnt
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    DetachOsirocenePaletaStavke_TX = 0
+End Function
+
+' ============================================================
+' KOREKCIJA KOLICINA U MESTU: uskladi paleta-stavke AKTIVNE prijemnice (brojPrij)
+' sa njenim dokument-vrednostima (KolAmb + Kolicina po klasi) -- roba se NE pomera,
+' koriguje se evidencija na paletama koje je vec nose.
+'   delta < 0: skini sa POSLEDNJE stavke te prijemnice (fizicki vrh); stavka koja
+'              padne na 0 se stornira; paleta ispod kapaciteta se reopen-uje.
+'   delta > 0, staje na paletu poslednje stavke: dopuni tu stavku.
+'   delta > 0, NE staje: spillMode odlucuje:
+'       "PRELIJ" -> dopuni do kapaciteta pa visak na sledecu otvorenu/novu paletu
+'       "PREKO"  -> sve na istu paletu PREKO kapaciteta (operater svesno slaze vise)
+'       ""       -> nista se ne menja; vraca ADJ_NEEDS_CHOICE (UI pita operatera)
+'   klasa bez ijedne stavke (ispravka dodala klasu): normalna sveza paletizacija
+'   te klase (bez pitanja).
+' Neto/ambalaza kg: posle gajbica se SVE stavke klase re-sinhronizuju proporcionalno
+' (neto = gajb * dokNeto/dokGajb; amb = gajb * tezina gajbice), pa se headeri
+' dodirnutih paleta preracunaju iz aktivnih stavki (ukljucuje su-stanare).
+' Preradjena paleta u obuhvatu = ADJ_BLOCKED (prvo storno prerade).
+' Vraca: >=0 broj korigovanih klasa; ADJ_NEEDS_CHOICE; ADJ_BLOCKED.
+' ============================================================
+Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
+        Optional ByVal spillMode As String = "", _
+        Optional ByRef outInfo As String) As Long
+    Const SRC As String = "modPaletniList.AdjustPaletaGajbiceZaPrijemnicu_TX"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    outInfo = ""
+    brojPrij = Trim$(brojPrij)
+    If Len(brojPrij) = 0 Then AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED: Exit Function
+    spillMode = UCase$(Trim$(spillMode))
+
+    ' --- Dokument (aktivni redovi prijemnice) po klasi ---
+    Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(prj) Then AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED: Exit Function
+    Dim pBr As Long, pKl As Long, pId As Long, pKol As Long, pAmb As Long, pStt As Long
+    Dim pVr As Long, pSo As Long, pTa As Long, pZbr As Long
+    pBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    pKl = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
+    pId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    pKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+    pAmb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, SRC)
+    pZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    pVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    pSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    pTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    pStt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+
+    Dim docId As Object, docNeto As Object, docGajb As Object
+    Set docId = CreateObject("Scripting.Dictionary"): docId.CompareMode = vbTextCompare
+    Set docNeto = CreateObject("Scripting.Dictionary"): docNeto.CompareMode = vbTextCompare
+    Set docGajb = CreateObject("Scripting.Dictionary"): docGajb.CompareMode = vbTextCompare
+    Dim dVr As String, dSo As String, dTa As String, dZbr As String
+    Dim r As Long, kl As String
+    For r = 1 To UBound(prj, 1)
+        If Trim$(CStr(SafeCell(prj, r, pBr))) = brojPrij Then
+            If Not (pStt > 0 And UCase$(Trim$(CStr(SafeCell(prj, r, pStt)))) = "DA") Then
+                kl = Trim$(CStr(SafeCell(prj, r, pKl))): If Len(kl) = 0 Then kl = "I"
+                docId(kl) = Trim$(CStr(SafeCell(prj, r, pId)))
+                docNeto(kl) = NzD(SafeCell(prj, r, pKol))
+                docGajb(kl) = NzL(SafeCell(prj, r, pAmb))
+                If Len(dZbr) = 0 Then
+                    dZbr = Trim$(NzToText(SafeCell(prj, r, pZbr)))
+                    dVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
+                    dSo = Trim$(NzToText(SafeCell(prj, r, pSo)))
+                    If pTa > 0 Then dTa = Trim$(NzToText(SafeCell(prj, r, pTa)))
+                End If
+            End If
+        End If
+    Next r
+    If docId.count = 0 Then
+        outInfo = "Prijemnica " & brojPrij & " nije aktivna / ne postoji."
+        AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED
+        Exit Function
+    End If
+
+    ' --- Aktivne stavke prijemnice po klasi (hronoloski = redosled u tabeli) ---
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    Dim sBr As Long, sPal As Long, sKl As Long, sGa As Long, sNe As Long, sAm As Long, sStt As Long
+    Dim stRows As Object: Set stRows = CreateObject("Scripting.Dictionary")   ' kl -> Collection(row)
+    stRows.CompareMode = vbTextCompare
+    Dim stGajb As Object: Set stGajb = CreateObject("Scripting.Dictionary")   ' kl -> suma gajbica
+    stGajb.CompareMode = vbTextCompare
+    If Not IsEmpty(s) Then
+        sBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)
+        sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+        sKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, SRC)
+        sGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+        sNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
+        sAm = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
+        sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+        For r = 1 To UBound(s, 1)
+            If Trim$(CStr(SafeCell(s, r, sBr))) = brojPrij _
+               And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
+                kl = Trim$(CStr(SafeCell(s, r, sKl))): If Len(kl) = 0 Then kl = "I"
+                If Not stRows.Exists(kl) Then stRows.Add kl, New Collection
+                stRows(kl).Add r
+                stGajb(kl) = NzL(stGajb(kl)) + NzL(SafeCell(s, r, sGa))
+            End If
+        Next r
+    End If
+
+    ' --- DRY faza: preradjena blokada + potreba za izborom (visak ne staje) ---
+    Dim crateW As Double: crateW = GetTezinaGajbice(dTa)
+    Dim needTxt As String, blockTxt As String
+    Dim vKl As Variant
+    For Each vKl In docId.Keys
+        Dim dlt As Long: dlt = NzL(docGajb(vKl)) - NzL(stGajb(vKl))
+        Dim netoDiffKl As Boolean: netoDiffKl = ClassNetoOutOfSync(stRows, CStr(vKl), s, sGa, sNe, _
+                                                NzL(docGajb(vKl)), NzD(docNeto(vKl)))
+        If dlt <> 0 Or netoDiffKl Then
+            ' preradjena paleta u obuhvatu klase?
+            If stRows.Exists(vKl) Then
+                Dim ck As Long
+                For ck = 1 To stRows(vKl).count
+                    If IsPaletaPreradjena(CStr(SafeCell(s, stRows(vKl)(ck), sPal))) Then
+                        blockTxt = blockTxt & "Klasa " & CStr(vKl) & ": paleta " & _
+                                   PaletaLabel(CStr(SafeCell(s, stRows(vKl)(ck), sPal))) & " je preradjena. "
+                        Exit For
+                    End If
+                Next ck
+            End If
+            ' izbor potreban? (dodavanje preko slobodnog na poslednjoj paleti)
+            If dlt > 0 And stRows.Exists(vKl) And Len(spillMode) = 0 Then
+                Dim lastPalID As String
+                lastPalID = CStr(SafeCell(s, stRows(vKl)(stRows(vKl).count), sPal))
+                Dim lpRow As Long: lpRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, lastPalID)
+                Dim u As Long, nn As Double, aa As Double, pk As Double, cp As Long
+                GetPaletaAggregates lpRow, u, nn, aa, pk, cp
+                If cp > 0 And dlt > (cp - u) Then
+                    needTxt = needTxt & "Klasa " & CStr(vKl) & ": +" & dlt & " gajb. ne staje na paletu " & _
+                              PaletaLabel(lastPalID) & " (slobodno " & (cp - u) & " od " & cp & "). "
+                End If
+            End If
+        End If
+    Next vKl
+    ' Stavke klase koje dokument vise nema -> ne diramo ovde (Detach/Reassign teren).
+    For Each vKl In stGajb.Keys
+        If Not docId.Exists(vKl) Then
+            blockTxt = blockTxt & "Klasa " & CStr(vKl) & ": stavke postoje a dokument nema tu klasu " & _
+                       "(resi kroz Prevezi/Skini, ne kroz korekciju). "
+        End If
+    Next vKl
+    If Len(blockTxt) > 0 Then
+        outInfo = blockTxt
+        AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED
+        Exit Function
+    End If
+    If Len(needTxt) > 0 Then
+        outInfo = needTxt
+        AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_NEEDS_CHOICE
+        Exit Function
+    End If
+
+    ' --- MUTACIJA (transakciono) ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    ' touched: palID -> akumulirana delta gajbica (0 = samo kg/amb re-sync).
+    ' Kljucevi = palete za header-recompute + Istorija/ADJUST log sa vidljivom deltom.
+    Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
+    Dim doneCnt As Long, infoTxt As String
+
+    For Each vKl In docId.Keys
+        kl = CStr(vKl)
+        Dim delta As Long: delta = NzL(docGajb(kl)) - NzL(stGajb(kl))
+        Dim changedKl As Boolean: changedKl = False
+
+        If delta < 0 Then
+            ' skidanje: od poslednje stavke ka prvoj
+            Dim remM As Long: remM = -delta
+            Dim k As Long
+            For k = stRows(kl).count To 1 Step -1
+                If remM = 0 Then Exit For
+                r = stRows(kl)(k)
+                Dim g As Long: g = NzL(SafeCell(s, r, sGa))
+                Dim take As Long: take = g: If take > remM Then take = remM
+                If take > 0 Then
+                    If g - take = 0 Then
+                        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_STORNIRANO, "Da", SRC
+                        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_BR_GAJBICA, 0, SRC
+                        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_NETO, 0, SRC
+                        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_AMBALAZA, 0, SRC
+                    Else
+                        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_BR_GAJBICA, g - take, SRC
+                    End If
+                    Dim pidD As String: pidD = CStr(SafeCell(s, r, sPal))
+                    touched(pidD) = NzL(touched(pidD)) - take
+                    remM = remM - take
+                    changedKl = True
+                End If
+            Next k
+        ElseIf delta > 0 Then
+            If Not stRows.Exists(kl) Then
+                ' nova klasa bez stavki -> sveza paletizacija te klase
+                SpillGajbice CStr(docId(kl)), brojPrij, dZbr, kl, dVr, dSo, dTa, _
+                             delta, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC
+                changedKl = True
+            Else
+                Dim lp As String: lp = CStr(SafeCell(s, stRows(kl)(stRows(kl).count), sPal))
+                Dim lpR As Long: lpR = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, lp)
+                Dim u2 As Long, n2 As Double, a2 As Double, p2 As Double, c2 As Long
+                GetPaletaAggregates lpR, u2, n2, a2, p2, c2
+                Dim freeSlots As Long: freeSlots = c2 - u2: If freeSlots < 0 Then freeSlots = 0
+                Dim lastRow As Long: lastRow = stRows(kl)(stRows(kl).count)
+                Dim gLast As Long: gLast = NzL(SafeCell(s, lastRow, sGa))
+                If delta <= freeSlots Or spillMode = "PREKO" Or c2 = 0 Then
+                    ' sve na istu paletu (staje, ili operater svesno preko kapaciteta)
+                    RequireUpdateCell TBL_PALETA_STAVKA, lastRow, COL_PALS_BR_GAJBICA, gLast + delta, SRC
+                    touched(lp) = NzL(touched(lp)) + delta
+                    If spillMode = "PREKO" And delta > freeSlots Then _
+                        infoTxt = infoTxt & "Paleta " & PaletaLabel(lp) & ": " & (u2 + delta) & _
+                                  " gajb. (preko kapaciteta " & c2 & "). "
+                    changedKl = True
+                Else
+                    ' PRELIJ: dopuni do kapaciteta pa visak na sledecu/nove palete
+                    Dim fillN As Long: fillN = freeSlots
+                    If fillN > 0 Then
+                        RequireUpdateCell TBL_PALETA_STAVKA, lastRow, COL_PALS_BR_GAJBICA, gLast + fillN, SRC
+                        touched(lp) = NzL(touched(lp)) + fillN
+                    End If
+                    If lpR > 0 Then ClosePaleta lpR, SRC   ' puna -> zatvori pre trazenja sledece
+                    SpillGajbice CStr(docId(kl)), brojPrij, dZbr, kl, dVr, dSo, dTa, _
+                                 delta - fillN, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC
+                    infoTxt = infoTxt & "Klasa " & kl & ": +" & fillN & " na " & PaletaLabel(lp) & _
+                              ", +" & (delta - fillN) & " preliveno na sledecu paletu. "
+                    changedKl = True
+                End If
+            End If
+        End If
+
+        ' KG/amb re-sync svih aktivnih stavki klase (fresh read posle gajbica-izmena)
+        If NzL(docGajb(kl)) > 0 Then
+            If ResyncStavkeNetoAmb(brojPrij, kl, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC) Then changedKl = True
+        End If
+        If changedKl Then
+            doneCnt = doneCnt + 1
+            infoTxt = infoTxt & "Klasa " & kl & ": gajbice " & NzL(stGajb(kl)) & " -> " & NzL(docGajb(kl)) & _
+                      ", neto " & Format$(NzD(docNeto(kl)), "0.##") & " kg. "
+        End If
+    Next vKl
+
+    ' Header-i dodirnutih paleta = suma aktivnih stavki (self-healing, ukljucuje
+    ' su-stanare). Log nosi VIDLJIVU deltu gajbica po paleti (+3 / -2 / 0 = samo kg).
+    Dim vP As Variant
+    For Each vP In touched.Keys
+        RecomputePaletaFromStavke CStr(vP), SRC
+        Dim dG As Long: dG = NzL(touched(vP))
+        Dim dTxt As String
+        If dG = 0 Then
+            dTxt = "0 (samo kg)"
+        Else
+            dTxt = IIf(dG > 0, "+", "") & dG
+        End If
+        PaletaLog CStr(vP), "ADJUST", "prij=" & brojPrij & " gajb=" & dTxt
+    Next vP
+
+    tx.CommitTx
+    Set tx = Nothing
+    If doneCnt = 0 Then infoTxt = "Nista za korekciju (kolicine vec usaglasene)."
+    outInfo = Trim$(infoTxt)
+    AdjustPaletaGajbiceZaPrijemnicu_TX = doneCnt
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    outInfo = "Greska: " & Err.description
+    AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED
+End Function
+
+' Da li neto stavki klase odstupa od dokument-cilja (za dry proveru "ima li posla").
+Private Function ClassNetoOutOfSync(ByVal stRows As Object, ByVal kl As String, _
+        ByVal s As Variant, ByVal sGa As Long, ByVal sNe As Long, _
+        ByVal docG As Long, ByVal docN As Double) As Boolean
+    On Error Resume Next
+    If Not stRows.Exists(kl) Then Exit Function
+    If docG <= 0 Then Exit Function
+    Dim perG As Double: perG = docN / docG
+    Dim k As Long
+    For k = 1 To stRows(kl).count
+        Dim r As Long: r = stRows(kl)(k)
+        If Abs(NzD(SafeCell(s, r, sNe)) - NzL(SafeCell(s, r, sGa)) * perG) > 0.0001 Then
+            ClassNetoOutOfSync = True
+            Exit Function
+        End If
+    Next k
+End Function
+
+' Da li je paleta preradjena (korekcije na njoj su blokirane dok se prerada ne stornira).
+Private Function IsPaletaPreradjena(ByVal palID As String) As Boolean
+    On Error Resume Next
+    Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+    If pr = 0 Then Exit Function
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    IsPaletaPreradjena = (UCase$(Trim$(CStr(SafeCell(d, pr, _
+        GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA")
+End Function
+
+' ZAJEDNICKA raspodelna petlja: rasporedi "remaining" gajbica na otvorene/nove
+' palete kao NOVE stavke date prijemnice + inkrementalno azuriraj header palete.
+' Koriste je PaletizePrijemnica (sveza paletizacija; closedPalIDs za post-commit
+' stampu) i AdjustPaletaGajbiceZaPrijemnicu_TX (PRELIJ visak / nova klasa).
+' Jedna implementacija -> geometrija punjenja/zatvaranja ne moze da drift-uje.
+Private Sub SpillGajbice(ByVal prijemnicaID As String, ByVal brojPrij As String, _
+        ByVal brojZbirne As String, ByVal klasa As String, ByVal vrsta As String, _
+        ByVal sorta As String, ByVal tipAmb As String, ByVal remaining As Long, _
+        ByVal perG As Double, ByVal crateW As Double, ByVal touched As Object, _
+        ByVal SRC As String, _
+        Optional ByVal closedPalIDs As Collection = Nothing, _
+        Optional ByRef nClosed As Long)
+    Dim defCap As Long: defCap = GetKapacitetPalete(vrsta)
+    Do While remaining > 0
+        Dim palRow As Long, palID As String
+        palID = GetOrCreateOpenPaleta(vrsta, sorta, klasa, tipAmb, defCap, palRow)
+        If palID = "" Or palRow = 0 Then
+            Err.Raise vbObjectError + 7331, SRC, _
+                      "Ne mogu da otvorim/nadjem paletu za: " & vrsta
+        End If
+
+        Dim used As Long, curNeto As Double, curAmb As Double
+        Dim palKg As Double, cap As Long
+        GetPaletaAggregates palRow, used, curNeto, curAmb, palKg, cap
+        If cap <= 0 Then cap = defCap
+
+        Dim freeSlots As Long: freeSlots = cap - used
+        If freeSlots <= 0 Then
+            ' puna a jos otvorena -> zatvori i otvori novu u sledecoj iteraciji
+            ClosePaleta palRow, SRC
+            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
+            nClosed = nClosed + 1
+            GoTo NextIter
+        End If
+
+        Dim take As Long: take = remaining
+        If take > freeSlots Then take = freeSlots
+
+        Dim takeNeto As Double, takeAmb As Double
+        takeNeto = take * perG
+        takeAmb = take * crateW
+
+        AddStavka palID, prijemnicaID, brojPrij, brojZbirne, klasa, _
+                  vrsta, sorta, take, takeNeto, takeAmb
+
+        Dim newGajb As Long: newGajb = used + take
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, newGajb, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, curNeto + takeNeto, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, curAmb + takeAmb, SRC
+        RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, _
+                          (curNeto + takeNeto) + (curAmb + takeAmb) + palKg, SRC
+
+        touched(palID) = NzL(touched(palID)) + take   ' akumuliraj +delta gajbica po paleti
+        remaining = remaining - take
+
+        If newGajb >= cap Then
+            ClosePaleta palRow, SRC
+            If Not closedPalIDs Is Nothing Then closedPalIDs.Add palID
+            nClosed = nClosed + 1
+        End If
+NextIter:
+    Loop
+End Sub
+
+' Re-sinhronizuj Neto/Ambalazu SVIH aktivnih stavki (brojPrij, klasa) na
+' proporcionalne vrednosti (gajb * perG / gajb * crateW). Fresh read (posle
+' gajbica-izmena). Vraca True ako je nesto pisano; dodirnute palete u touched.
+Private Function ResyncStavkeNetoAmb(ByVal brojPrij As String, ByVal klasa As String, _
+        ByVal perG As Double, ByVal crateW As Double, ByVal touched As Object, _
+        ByVal SRC As String) As Boolean
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sBr As Long, sPal As Long, sKl As Long, sGa As Long, sNe As Long, sAm As Long, sStt As Long
+    sBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, SRC)
+    sGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+    sNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
+    sAm = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    Dim r As Long, kl As String
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, sBr))) = brojPrij _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
+            kl = Trim$(CStr(SafeCell(s, r, sKl))): If Len(kl) = 0 Then kl = "I"
+            If StrComp(kl, klasa, vbTextCompare) = 0 Then
+                Dim g As Long: g = NzL(SafeCell(s, r, sGa))
+                Dim tgtN As Double: tgtN = g * perG
+                Dim tgtA As Double: tgtA = g * crateW
+                If Abs(NzD(SafeCell(s, r, sNe)) - tgtN) > 0.0001 Then
+                    RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_NETO, tgtN, SRC
+                    touched(CStr(SafeCell(s, r, sPal))) = NzL(touched(CStr(SafeCell(s, r, sPal))))
+                    ResyncStavkeNetoAmb = True
+                End If
+                If Abs(NzD(SafeCell(s, r, sAm)) - tgtA) > 0.0001 Then
+                    RequireUpdateCell TBL_PALETA_STAVKA, r, COL_PALS_AMBALAZA, tgtA, SRC
+                    touched(CStr(SafeCell(s, r, sPal))) = NzL(touched(CStr(SafeCell(s, r, sPal))))
+                    ResyncStavkeNetoAmb = True
+                End If
+            End If
+        End If
+    Next r
+End Function
+
+' Header palete = suma njenih AKTIVNIH stavki (gajbice/neto/amb; bruto = neto+amb+palKg).
+' Status: otvorena i puna -> zatvori; zatvorena ispod kapaciteta -> otvori (mirror
+' DecrementPaletaForStavka reopen semantike). Self-healing, ukljucuje su-stanare.
+Private Sub RecomputePaletaFromStavke(ByVal palID As String, ByVal SRC As String)
+    Dim palRow As Long: palRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
+    If palRow = 0 Then Exit Sub
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    Dim sumG As Long, sumN As Double, sumA As Double
+    If Not IsEmpty(s) Then
+        Dim iPal As Long, iGa As Long, iNe As Long, iAm As Long, iSt As Long, r As Long
+        iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+        iGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+        iNe = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+        iAm = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA)
+        iSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        For r = 1 To UBound(s, 1)
+            If CStr(SafeCell(s, r, iPal)) = palID _
+               And UCase$(Trim$(CStr(SafeCell(s, r, iSt)))) <> "DA" Then
+                sumG = sumG + NzL(SafeCell(s, r, iGa))
+                sumN = sumN + NzD(SafeCell(s, r, iNe))
+                sumA = sumA + NzD(SafeCell(s, r, iAm))
+            End If
+        Next r
+    End If
+
+    Dim used As Long, pNeto As Double, pAmb As Double, palk As Double, cap As Long
+    GetPaletaAggregates palRow, used, pNeto, pAmb, palk, cap
+    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BR_GAJBICA, sumG, SRC
+    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_NETO, sumN, SRC
+    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_AMBALAZA, sumA, SRC
+    RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, sumN + sumA + palk, SRC
+
+    Dim d As Variant: d = GetTableData(TBL_PALETA)
+    Dim st As String: st = CStr(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)))
+    If cap > 0 Then
+        If sumG >= cap And st = PAL_STATUS_OTVORENA Then
+            RequireUpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, SRC
+        ElseIf sumG < cap And st = PAL_STATUS_ZATVORENA Then
+            RequireUpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_OTVORENA, SRC
+        End If
+    End If
 End Sub
 
 ' Distinct kooperanti za zbirnu (reuse modSledljivost.TraceByZbirna, kol.1).
@@ -1488,19 +2307,20 @@ EH:
     LogErr "modPaletniList.GetOtkupiZaPalete"
 End Function
 
-Private Function NzD(ByVal v As Variant) As Double
+' Public (reuse iz frmDokumenta recovery panela i modOtkupBlok prefill-a; nema duplikata).
+Public Function NzD(ByVal v As Variant) As Double
     On Error Resume Next
     If IsNumeric(v) Then NzD = CDbl(v)
 End Function
 
-Private Function NzL(ByVal v As Variant) As Long
+Public Function NzL(ByVal v As Variant) As Long
     On Error Resume Next
     If IsNumeric(v) Then NzL = CLng(v)
 End Function
 
 ' Bezbedno citanje celije iz GetTableData niza: ako kolona ne postoji
 ' (idx < 1, npr. schema drift), vrati Empty umesto subscript-error.
-Private Function SafeCell(ByVal d As Variant, ByVal r As Long, _
+Public Function SafeCell(ByVal d As Variant, ByVal r As Long, _
                           ByVal idx As Long) As Variant
     If idx >= 1 Then SafeCell = d(r, idx) Else SafeCell = Empty
 End Function
