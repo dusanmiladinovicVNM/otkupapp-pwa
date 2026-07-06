@@ -163,7 +163,8 @@ Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As 
                     " (stornira se samo ako je ovo jedina otpremnica; inace ostaje + rekalk)" & vbCrLf
             m = m & " - prijemnice preko zbirne: " & CStr(so("prijCount")) & _
                     IIf(CBool(so("hasZbirna")) And Not owo, " (eksterni kupac -> NETAKNUTE)", "") & vbCrLf
-            m = m & " - paletne stavke: " & CStr(so("paleteCount")) & vbCrLf
+            m = m & " - paletne stavke: " & CStr(so("paleteCount")) & _
+                    IIf(CBool(so("hasZbirna")) And owo, " (skidaju se sa paleta; prazna paleta stornirana)", "") & vbCrLf
             m = m & " - otkupni blokovi (OSLOBADJAJU se za reveze, NE storniraju): " & CStr(so("blockCount"))
         Case FLOW_DOC_ZBIRNA
             Dim sz As Object: Set sz = ScanZbirna(broj)
@@ -172,7 +173,8 @@ Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As 
             m = m & " - aktivne otpremnice (storniraju se): " & CStr(sz("otpCount")) & vbCrLf
             m = m & " - prijemnice: " & CStr(sz("prijCount")) & _
                     IIf(owz, " (storniraju se)", " (eksterni kupac -> NETAKNUTE)") & vbCrLf
-            m = m & " - paletne stavke: " & CStr(sz("paleteCount")) & IIf(owz, " (storniraju se)", " (NETAKNUTE)") & vbCrLf
+            m = m & " - paletne stavke: " & CStr(sz("paleteCount")) & _
+                    IIf(owz, " (skidaju se sa paleta; prazna paleta stornirana)", " (NETAKNUTE)") & vbCrLf
             m = m & " - otkupni blokovi (OSLOBADJAJU se za reveze, NE storniraju)"
         Case Else
             m = "PONISTENJE dokumenta " & broj & "."
@@ -1116,32 +1118,14 @@ EH:
     LogErr SRC
 End Function
 
-' Storniraj (flag) paletne stavke date zbirne (ekskluzivno vlasnistvo preko
-' COL_PALS_BROJ_ZBIRNE). Bez TX (unutar otvorene transakcije). Parent paleta se NE
-' dira (moze drzati stavke drugih zbirni) -> ne siri se paletni motor; isti soft-
-' delete obrazac kao modStorno.StornoPaleta (stavke). Vraca broj oborenih stavki.
-Private Function StornoPaleteStavkeByZbirnaInline(ByVal brojZbirne As String, ByVal SRC As String) As Long
-    Dim data As Variant: data = GetTableData(TBL_PALETA_STAVKA)
-    If IsEmpty(data) Then Exit Function
-    Dim cZbr As Long, cSt As Long
-    cZbr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cZbr = 0 Or cSt = 0 Then Exit Function
-    Dim i As Long, n As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            RequireUpdateCell TBL_PALETA_STAVKA, i, COL_STORNIRANO, "Da", SRC
-            n = n + 1
-        End If
-    Next i
-    StornoPaleteStavkeByZbirnaInline = n
-End Function
-
-' PONISTENJE kaskada: u JEDNOJ transakciji obori ceo interni tok koji zbirna
-' poseduje. ownsChain = da li prijemnica/palete pripadaju zbirni (hladnjaca kupac /
-' malina); eksterni kupac -> prijemnica/palete se NE diraju. Redosled: zbirna ->
-' otpremnice (+oslobodi blokove) -> (ownsChain) prijemnice (faktura osirocena kroz
-' StornoPrijemnica) -> paletne stavke. Vraca dict: ok/otp/prij/pals/blok.
+' PONISTENJE kaskada. ownsChain = da li prijemnica/palete pripadaju zbirni
+' (hladnjaca kupac / malina); eksterni kupac -> prijemnica/palete se NE diraju.
+' Faza A (jedna TX): zbirna -> otpremnice (+oslobodi blokove) -> prijemnice
+' (faktura osirocena kroz StornoPrijemnica). Faza B: paletne stavke idu kroz
+' PALETNI MOTOR (DetachOsirocenePaletaStavke_TX po prijemnici) -> skida gajbe/neto/
+' amb sa palete (reopen ispod kapaciteta), PRAZNA paleta se stornira, su-stanari
+' (druge prijemnice/zbirne na istoj paleti) NETAKNUTI. Motor se samo poziva (isti
+' put kao recovery panel "Skini stavke"), ne dira se. Vraca: ok/otp/prij/pals/blok.
 Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsChain As Boolean) As Object
     Const SRC As String = MOD_NAME & ".PonistiZbirnaChain_TX"
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
@@ -1152,11 +1136,17 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     brojZbirne = Trim$(brojZbirne)
     If Len(brojZbirne) = 0 Then Exit Function
 
-    ' ID-jeve skupi PRE mutacije.
+    ' ID-jeve + prijemnica-brojeve-sa-paletama skupi PRE mutacije.
     Dim otpIDs As Collection: Set otpIDs = ActiveOtpIDsByZbirna(brojZbirne, SRC)
-    Dim prijIDs As Collection
-    If ownsChain Then Set prijIDs = ActivePrijIDsByZbirna(brojZbirne, SRC) Else Set prijIDs = New Collection
+    Dim prijIDs As Collection, prijBrPalete As Collection
+    If ownsChain Then
+        Set prijIDs = ActivePrijIDsByZbirna(brojZbirne, SRC)
+        Set prijBrPalete = DistinctActiveValues(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, brojZbirne)
+    Else
+        Set prijIDs = New Collection: Set prijBrPalete = New Collection
+    End If
 
+    ' --- Faza A: dokument kaskada (zbirna + otpremnice + blokovi + prijemnice) ---
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
@@ -1167,16 +1157,12 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
         tx.AddTableSnapshot TBL_PRIJEMNICA
         tx.AddTableSnapshot TBL_FAKTURE
         tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-        tx.AddTableSnapshot TBL_PALETA_STAVKA
     End If
 
-    ' 1) Zbirna (ako je jos aktivna).
     If ZbirnaPostoji(brojZbirne) Then
         If Not StornoZbirna(brojZbirne) Then _
             Err.Raise ERR_STORNO_FW_BASE + 50, SRC, "StornoZbirna (ponistenje) nije uspeo."
     End If
-
-    ' 2) Otpremnice (core stornira i ambalazu) + oslobodi njihove blokove.
     Dim k As Long
     For k = 1 To otpIDs.count
         If Not StornoOtpremnica(CStr(otpIDs(k))) Then _
@@ -1184,19 +1170,24 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     Next k
     res("otp") = otpIDs.count
     res("blok") = FreeOtkupBloksInline(otpIDs, SRC)
-
-    ' 3) Interni tok (hladnjaca): prijemnice (faktura osirocena) + paletne stavke.
     If ownsChain Then
         For k = 1 To prijIDs.count
             If Not StornoPrijemnica(CStr(prijIDs(k))) Then _
                 Err.Raise ERR_STORNO_FW_BASE + 52, SRC, "StornoPrijemnica (ponistenje) nije uspeo: " & CStr(prijIDs(k))
         Next k
         res("prij") = prijIDs.count
-        res("pals") = StornoPaleteStavkeByZbirnaInline(brojZbirne, SRC)
     End If
-
     tx.CommitTx
     Set tx = Nothing
+
+    ' --- Faza B: paletne stavke kroz paletni motor (header/reopen/storno-prazne) ---
+    If ownsChain Then
+        Dim info As String, b As Long
+        For b = 1 To prijBrPalete.count
+            res("pals") = CLng(res("pals")) + DetachOsirocenePaletaStavke_TX(CStr(prijBrPalete(b)), info)
+        Next b
+    End If
+
     res("ok") = True
     Exit Function
 EH:

@@ -59,6 +59,7 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_FAKTURE
@@ -508,22 +509,38 @@ End Sub
 ' (otpremnice + prijemnica + paletne stavke).
 ' ============================================================
 Private Sub T17_PonistenjeZbirnaHladnjacaKaskada()
-    Const S As String = "T17 PONISTENJE zbirna (hladnjaca) kaskada: "
+    Const S As String = "T17 PONISTENJE zbirna (hladnjaca) kaskada + palete: "
 
     SeedZbirna "SVT-Z17", "I", 100, 10, HLAD_KUP
     SeedOtpremnica "SVT-OA17", "SVT-Z17", "I", 60, 6
     SeedOtpremnica "SVT-OB17", "SVT-Z17", "I", 40, 4
     SeedPrijemnica "SVT-P17", "SVT-Z17", "I", 100, 10
-    SeedPaletaStavka "SVT-PS17", "SVT-P17", "SVT-Z17", "I", 100, 10
+    ' Kao u realnim podacima: DELJENA paleta (co-tenant druge zbirne, tip PAL-00150)
+    ' i paleta koja sadrzi SAMO nasu robu (tip PAL-00151) -> posle skidanja prazna.
+    SeedPaleta "SVT-PAL17A", 100, 200, 20, 100, PAL_STATUS_ZATVORENA
+    SeedPaleta "SVT-PAL17B", 50, 100, 10, 50, PAL_STATUS_ZATVORENA
+    SeedPaletaStavka "SVT-PS17A", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17A", 50
+    SeedPaletaStavka "SVT-PS17X", "SVT-P17X", "SVT-Z17X", "I", 100, 10, "SVT-PAL17A", 50
+    SeedPaletaStavka "SVT-PS17B", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17B", 50
 
     Dim res As Object
     Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z17", SV_MODE_PONISTENJE, True)
     Chk CBool(res("success")), S & "PONISTENJE (forceConfirm) uspeo"
     Chk Not ZbirnaPostoji("SVT-Z17"), S & "zbirna stornirana"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OA17", COL_OTP_ID), "", S & "otpremnica OA17 STORNIRANA (kaskada)"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OB17", COL_OTP_ID), "", S & "otpremnica OB17 STORNIRANA (kaskada)"
-    ChkEq LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P17", COL_PRJ_ID), "", S & "prijemnica STORNIRANA (hladnjaca kupac)"
-    ChkEq PalsStornirano("SVT-PS17"), "Da", S & "paletna stavka STORNIRANA"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OA17", COL_OTP_ID), "", S & "OA17 STORNIRANA (kaskada)"
+    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-OB17", COL_OTP_ID), "", S & "OB17 STORNIRANA (kaskada)"
+    ChkEq LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P17", COL_PRJ_ID), "", S & "prijemnica STORNIRANA (hladnjaca)"
+    ' nase paletne stavke skinute (kroz paletni motor)
+    ChkEq PalsStornirano("SVT-PS17A"), "Da", S & "nasa stavka na deljenoj paleti skinuta"
+    ChkEq PalsStornirano("SVT-PS17B"), "Da", S & "nasa stavka na punoj paleti skinuta"
+    ' co-tenant (druga zbirna) NETAKNUT
+    Chk PalsStornirano("SVT-PS17X") <> "Da", S & "co-tenant stavka (druga zbirna) NETAKNUTA"
+    ' PRAZNA paleta (samo nasa) -> STORNIRANA (kljucni fix: nije ostala 'puna')
+    ChkEq PalStornirano("SVT-PAL17B"), "Da", S & "prazna paleta STORNIRANA (ne ostaje puna)"
+    ' DELJENA paleta -> NE stornirana (co-tenant ostaje), reopen + gajbe 100->50
+    Chk PalStornirano("SVT-PAL17A") <> "Da", S & "deljena paleta NIJE stornirana (co-tenant)"
+    ChkEq PalStatus("SVT-PAL17A"), PAL_STATUS_OTVORENA, S & "deljena paleta reopen (ispod kapaciteta)"
+    ChkEq PalBrGajbica("SVT-PAL17A"), 50, S & "deljena paleta gajbe 100->50 (skinuto nasih 50)"
 End Sub
 
 ' ============================================================
@@ -602,7 +619,8 @@ Private Sub T21_PonistenjeOtpremniceJedinaKaskadaCeoTok()
     SeedOtpremnica "SVT-O21", "SVT-Z21", "I", 100, 10
     SeedOtkupBlok "SVT-BLK21", "SVT-O21-ID-I", "SVT-Z21"
     SeedPrijemnica "SVT-P21", "SVT-Z21", "I", 100, 10
-    SeedPaletaStavka "SVT-PS21", "SVT-P21", "SVT-Z21", "I", 100, 10
+    SeedPaleta "SVT-PAL21", 50, 100, 10, 50, PAL_STATUS_ZATVORENA
+    SeedPaletaStavka "SVT-PS21", "SVT-P21", "SVT-Z21", "I", 100, 10, "SVT-PAL21", 50
 
     Dim res As Object
     Set res = modStornoFlow.RunOtpremnicaCorrection("SVT-O21", SV_MODE_PONISTENJE, True)
@@ -610,7 +628,8 @@ Private Sub T21_PonistenjeOtpremniceJedinaKaskadaCeoTok()
     ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O21", COL_OTP_ID), "", S & "otpremnica stornirana"
     Chk Not ZbirnaPostoji("SVT-Z21"), S & "zbirna stornirana (jedina otpremnica -> ceo tok)"
     ChkEq LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P21", COL_PRJ_ID), "", S & "prijemnica stornirana (kaskada)"
-    ChkEq PalsStornirano("SVT-PS21"), "Da", S & "paletna stavka stornirana"
+    ChkEq PalsStornirano("SVT-PS21"), "Da", S & "paletna stavka skinuta"
+    ChkEq PalStornirano("SVT-PAL21"), "Da", S & "prazna paleta STORNIRANA (ne ostaje puna)"
     ' blok OSLOBODJEN ali AKTIVAN (realna kupovina, za reveze).
     ChkEq OtkOtpremnicaID("SVT-BLK21"), "", S & "blok oslobodjen (OtpremnicaID prazan)"
     Chk LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, "SVT-BLK21", COL_OTK_ID) <> "", S & "blok i dalje aktivan (nije storniran)"
@@ -649,13 +668,27 @@ Private Sub SeedPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
         Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, kg, "SVT-A", amb, klasa)
 End Sub
 
+' paletaID/gajbe opciono: postave se kad test ide kroz paletni motor (DetachOsiroce
+' u PONISTENJE kaskadi). Kad su prazni (ISPRAVKA testovi) stavka je "bez palete".
 Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String, _
                              ByVal brojZbirne As String, ByVal klasa As String, _
-                             ByVal kg As Double, ByVal amb As Long)
+                             ByVal kg As Double, ByVal amb As Long, _
+                             Optional ByVal paletaID As String = "", _
+                             Optional ByVal gajbe As Long = 0)
     SvAppend TBL_PALETA_STAVKA, _
-        Array(COL_PALS_ID, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
-              COL_PALS_NETO, COL_PALS_AMBALAZA), _
-        Array(stavkaID, brojPrij, brojZbirne, klasa, kg, amb)
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, _
+              COL_PALS_KLASA, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_PALS_AMBALAZA), _
+        Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb)
+End Sub
+
+' Minimalna realna paleta (header) da DetachOsirocenePaletaStavke_TX radi end-to-end:
+' skida gajbe/neto/amb, reopen ispod kapaciteta, storno kad ostane prazna.
+Private Sub SeedPaleta(ByVal palID As String, ByVal gajbe As Long, ByVal neto As Double, _
+                       ByVal amb As Double, ByVal kapacitet As Long, ByVal status As String)
+    SvAppend TBL_PALETA, _
+        Array(COL_PAL_ID, COL_PAL_BR_GAJBICA, COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_BRUTO, _
+              COL_PAL_KAPACITET, COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_KLASA), _
+        Array(palID, gajbe, neto, amb, neto + amb, kapacitet, status, "Ne", "I")
 End Sub
 
 ' Otkupni blok ("list") vezan za otpremnicu (OtpremnicaID) + denorm. BrojZbirne.
@@ -715,6 +748,19 @@ End Function
 
 Private Function PalsStornirano(ByVal stavkaID As String) As String
     PalsStornirano = NzTx(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, stavkaID, COL_STORNIRANO))
+End Function
+
+Private Function PalStornirano(ByVal palID As String) As String
+    PalStornirano = NzTx(LookupValue(TBL_PALETA, COL_PAL_ID, palID, COL_STORNIRANO))
+End Function
+
+Private Function PalStatus(ByVal palID As String) As String
+    PalStatus = NzTx(LookupValue(TBL_PALETA, COL_PAL_ID, palID, COL_PAL_STATUS))
+End Function
+
+Private Function PalBrGajbica(ByVal palID As String) As Long
+    Dim v As Variant: v = LookupValue(TBL_PALETA, COL_PAL_ID, palID, COL_PAL_BR_GAJBICA)
+    If IsNumeric(v) Then PalBrGajbica = CLng(v)
 End Function
 
 Private Function OtkOtpremnicaID(ByVal blkID As String) As String
