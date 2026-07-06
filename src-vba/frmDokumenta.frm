@@ -35,12 +35,11 @@ Private m_pendingRelinkZbirne As String
 
 ' Centralni storno/correction framework (modStornoFlow). Aktivna ISPRAVKA_ODMAH
 ' na cekanju u OVOJ sesiji (posle storna stare, pre snimanja nove). Persistentni
-' trag je u tblStornoVeze; ovo je samo UI convenience. "Zavrsi ispravku" dugme
-' (runtime, ne dira .frx) zavrsava relink/rekalkulaciju kad operater snimi novu.
+' trag je u tblStornoVeze; ovo je samo UI convenience. Ispravka se zavrsava
+' AUTOMATSKI po snimanju nove otpremnice/zbirne (TryAutoCompleteIspravka).
 Private m_activeCorrectionID As String
 Private m_activeCorrectionDoc As String
 Private m_activeCorrectionDokTip As String
-Private WithEvents m_btnZavrsiIspravku As MSForms.CommandButton
 
 ' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
 Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
@@ -250,9 +249,6 @@ Private Sub UserForm_Activate()
 
     ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
     SetupRecoveryButton
-
-    ' Runtime dugme "Zavrsi ispravku" (centralni storno framework; ne dira .frx).
-    SetupZavrsiIspravkuButton
 
     ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
     ApplyKesIsplateState
@@ -914,6 +910,11 @@ Private Sub btnUnosOtp_Click()
         If Err.Number <> 0 Then LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
         On Error GoTo EH
     End If
+
+    ' ISPRAVKA_ODMAH (druga faza): ako je otpremnica-ispravka na cekanju, sada je
+    ' snimljena NOVA -> automatski prevezi blokove + rekalkulisi zbirnu. No-op inace.
+    ' (Broj citam PRE ClearOtpremnicaFields jer ono prazni txtBrojOtp.)
+    TryAutoCompleteIspravka FLOW_DOC_OTPREMNICA, txtBrojOtp.value
 
     LoadZbirneListbox   ' osvezi listu zbirnih (nova malina zbirna se odmah vidi)
 
@@ -2090,6 +2091,10 @@ Private Sub btnUnosZbr_Click()
     End If
 
     MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
+
+    ' ISPRAVKA_ODMAH (druga faza): ako je zbirna-ispravka na cekanju, sada je
+    ' snimljena NOVA -> automatski prevezi otpremnice/prijemnicu + rekalkulisi. No-op inace.
+    TryAutoCompleteIspravka FLOW_DOC_ZBIRNA, txtBrojZbirne.value
 
     UpdateValidacija
 
@@ -3407,8 +3412,9 @@ Private Function TryRunCorrectionFramework(ByVal tipDok As String, ByVal brDok A
         m_activeCorrectionDokTip = dokTip
         txtStornoBroj.value = ""
         MsgBox CStr(res("message")) & vbCrLf & vbCrLf & _
-               "SLEDECE: unesi i snimi NOVI dokument (normalno). Zatim upisi njegov " & _
-               "broj u polje 'Broj' i klikni 'Zavrsi ispravku'.", vbInformation, APP_NAME
+               "SLEDECE: samo unesi i snimi NOVI dokument (normalno). Prevezivanje i " & _
+               "rekalkulacija se rade AUTOMATSKI po snimanju -- nema dodatnog koraka.", _
+               vbInformation, APP_NAME
     ElseIf CBool(res("success")) Then
         txtStornoBroj.value = ""
         MsgBox CStr(res("message")), vbInformation, APP_NAME
@@ -3481,91 +3487,45 @@ Private Function PromptCorrectionMode(ByVal preview As String) As String
     End If
 End Function
 
-' Runtime dugme "Zavrsi ispravku" (ISPRAVKA_ODMAH druga faza). Ne dira .frx.
-Private Sub SetupZavrsiIspravkuButton()
-    Const ZI_DY As Single = 6
-    On Error GoTo done
-    If Not m_btnZavrsiIspravku Is Nothing Then Exit Sub
-
-    Dim anchor As MSForms.Control
-    If Not m_btnRecovery Is Nothing Then
-        Set anchor = m_btnRecovery
-    ElseIf Not m_btnStornoPregled Is Nothing Then
-        Set anchor = m_btnStornoPregled
-    Else
-        Set anchor = btnStorno
-    End If
-
-    Set m_btnZavrsiIspravku = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnZavrsiIspravkuRT", True)
-    If m_btnZavrsiIspravku Is Nothing Then GoTo done
-    With m_btnZavrsiIspravku
-        .width = btnStorno.width
-        .Height = btnStorno.Height
-        .Left = anchor.Left
-        .top = anchor.top + anchor.Height + ZI_DY
-        .visible = True
-    End With
-    StylePrimaryButton m_btnZavrsiIspravku, "Zavrsi ispravku"
-
-    On Error Resume Next
-    m_btnZavrsiIspravku.ZOrder 0
-    Exit Sub
-done:
-    LogErr "frmDokumenta.SetupZavrsiIspravkuButton"
-    Set m_btnZavrsiIspravku = Nothing
-End Sub
-
-Private Sub m_btnZavrsiIspravku_Click()
+' ISPRAVKA_ODMAH, druga faza -- AUTOMATSKI po snimanju NOVOG dokumenta (bez dugmeta).
+' Poziva se iz btnUnosOtp_Click / btnUnosZbr_Click posle uspesnog snimanja. Ako ima
+' ISPRAVKA na cekanju (aktivna u sesiji ILI persistentna u tblStornoVeze), prevezuje
+' blokove/prijemnicu i rekalkulise zbirnu; inace no-op (obican unos).
+Private Sub TryAutoCompleteIspravka(ByVal docType As String, ByVal newBroj As String)
     On Error GoTo EH
-    Dim newBroj As String
-    newBroj = Trim$(txtStornoBroj.value)
-    If Len(newBroj) = 0 Then
-        MsgBox "Upisi broj NOVOG (snimljenog) dokumenta u polje 'Broj', pa klikni 'Zavrsi ispravku'.", _
-               vbExclamation, APP_NAME
-        Exit Sub
-    End If
+    newBroj = Trim$(newBroj)
+    If Len(newBroj) = 0 Then Exit Sub
 
-    Dim cid As String, docType As String, dokTip As String
+    Dim cid As String
     cid = m_activeCorrectionID
-    docType = m_activeCorrectionDoc
-    ' Fallback (nova sesija / izgubljen UI state): najsvezija PENDING ISPRAVKA za tip iz combo-a.
-    If Len(cid) = 0 Then
-        docType = ComboToDocType(cmbStornoDokument.value, dokTip)
-        If Len(docType) = 0 Then
-            MsgBox "Izaberi tip dokumenta (Otpremnica / Zbirna / Revers) za ispravku.", vbExclamation, APP_NAME
-            Exit Sub
-        End If
+    ' Ako UI state ne postoji ILI je za drugi tip -> potrazi persistentnu PENDING
+    ' ISPRAVKU tog tipa (preziveljava zatvaranje forme/Excela).
+    If Len(cid) = 0 Or m_activeCorrectionDoc <> docType Then
         cid = FindLatestPending(docType, SV_MODE_ISPRAVKA)
     End If
-    If Len(cid) = 0 Then
-        MsgBox "Nema ispravke na cekanju. Prvo: Storno -> 'Ispravka odmah'.", vbExclamation, APP_NAME
-        Exit Sub
-    End If
+    If Len(cid) = 0 Then Exit Sub          ' nema ispravke na cekanju -> obican unos
 
     Dim res As Object
     Select Case docType
         Case FLOW_DOC_OTPREMNICA: Set res = CompleteOtpremnicaIspravka(cid, newBroj)
         Case FLOW_DOC_ZBIRNA:     Set res = CompleteZbirnaIspravka(cid, newBroj)
-        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj)
-        Case Else
-            MsgBox "Nepoznat tip ispravke.", vbExclamation, APP_NAME
-            Exit Sub
+        Case Else: Exit Sub
     End Select
 
-    If CBool(res("success")) Then
-        MsgBox CStr(res("message")), vbInformation, APP_NAME
-        m_activeCorrectionID = "": m_activeCorrectionDoc = "": m_activeCorrectionDokTip = ""
-        txtStornoBroj.value = ""
-    Else
-        MsgBox "Ispravka NIJE zavrsena: " & CStr(res("message")) & vbCrLf & vbCrLf & _
-               "Stanje ostaje vidljivo: Osiroceni dokumenti / Monitor (nije tihi mismatch).", _
-               vbExclamation, APP_NAME
+    m_activeCorrectionID = "": m_activeCorrectionDoc = "": m_activeCorrectionDokTip = ""
+    If Not res Is Nothing Then
+        If CBool(res("success")) Then
+            MsgBox "Ispravka zavrsena: " & CStr(res("message")), vbInformation, APP_NAME
+        Else
+            MsgBox "Ispravka nije zavrsena automatski: " & CStr(res("message")) & vbCrLf & vbCrLf & _
+                   "Stanje ostaje vidljivo: Osiroceni dokumenti / Monitor (nije tihi mismatch).", _
+                   vbExclamation, APP_NAME
+        End If
     End If
     CheckVerwaisteDokumente
     Exit Sub
 EH:
-    LogErr "frmDokumenta.m_btnZavrsiIspravku_Click"
-    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+    LogErr "frmDokumenta.TryAutoCompleteIspravka"
 End Sub
 
 Private Sub CheckVerwaisteDokumente()
