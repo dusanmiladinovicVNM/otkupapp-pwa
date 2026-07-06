@@ -33,6 +33,14 @@ Private m_OtkupIDs() As String
 Private m_pendingRelinkOldPrij As String
 Private m_pendingRelinkZbirne As String
 
+' Centralni storno/correction framework (modStornoFlow). Aktivna ISPRAVKA_ODMAH
+' na cekanju u OVOJ sesiji (posle storna stare, pre snimanja nove). Persistentni
+' trag je u tblStornoVeze; ovo je samo UI convenience. Ispravka se zavrsava
+' AUTOMATSKI po snimanju nove otpremnice/zbirne (TryAutoCompleteIspravka).
+Private m_activeCorrectionID As String
+Private m_activeCorrectionDoc As String
+Private m_activeCorrectionDokTip As String
+
 ' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
 Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
 Private WithEvents m_tglPrijemKoop As MSForms.ToggleButton
@@ -902,6 +910,11 @@ Private Sub btnUnosOtp_Click()
         If Err.Number <> 0 Then LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
         On Error GoTo EH
     End If
+
+    ' ISPRAVKA_ODMAH (druga faza): ako je otpremnica-ispravka na cekanju, sada je
+    ' snimljena NOVA -> automatski prevezi blokove + rekalkulisi zbirnu. No-op inace.
+    ' (Broj citam PRE ClearOtpremnicaFields jer ono prazni txtBrojOtp.)
+    TryAutoCompleteIspravka FLOW_DOC_OTPREMNICA, txtBrojOtp.value
 
     LoadZbirneListbox   ' osvezi listu zbirnih (nova malina zbirna se odmah vidi)
 
@@ -1835,6 +1848,11 @@ Private Sub btnUnosOMUlaz_Click()
 
     MsgBox "Sacuvano!", vbInformation, APP_NAME
 
+    ' ISPRAVKA reversa (druga faza): ako je revers-ispravka na cekanju, sada je
+    ' snimljen NOVI revers -> automatski zavrsi (uz potvrdu "je li zamena?" i
+    ' validaciju da novi revers postoji). No-op inace (obican unos).
+    TryAutoCompleteIspravka FLOW_DOC_REVERS, brojDok
+
     ' Izdavanje/prijem kooperantu: na "Unesi" izbaci PDF revers (kretanje ambalaze).
     ' Vrednosti se citaju iz forme PRE reseta polja nize. Best-effort (LogErr unutra).
     If izdavanje Or prijemKoop Then
@@ -2078,6 +2096,10 @@ Private Sub btnUnosZbr_Click()
     End If
 
     MsgBox "Zbirna sacuvana: " & result, vbInformation, APP_NAME
+
+    ' ISPRAVKA_ODMAH (druga faza): ako je zbirna-ispravka na cekanju, sada je
+    ' snimljena NOVA -> automatski prevezi otpremnice/prijemnicu + rekalkulisi. No-op inace.
+    TryAutoCompleteIspravka FLOW_DOC_ZBIRNA, txtBrojZbirne.value
 
     UpdateValidacija
 
@@ -3149,7 +3171,12 @@ Private Sub btnStorno_Click()
         MsgBox "Unesite broj dokumenta!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
+
+    ' Centralni storno/ispravka framework (Otpremnica / Zbirna / Revers): prvo se
+    ' bira STA storno poslovno znaci (ISPRAVKA / DUPLI / PONISTENJE / RESI KASNIJE).
+    ' Ostali tipovi (Otkup / Prijemnica / Faktura / Novac) ostaju na postojecoj logici.
+    If TryRunCorrectionFramework(tipDok, brDok) Then Exit Sub
+
     Dim Success As Boolean
     Dim palWarn As String        ' palete date prijemnice (za ponudu ispravke posle storna)
 
@@ -3303,6 +3330,300 @@ Private Function ConfirmStorno(ByVal tipText As String, ByVal broj As String) As
     ConfirmStorno = (MsgBox("Stornirati " & tipText & " " & broj & "?", _
                             vbQuestion + vbYesNo, APP_NAME) = vbYes)
 End Function
+
+' SIMPLE PATH (nema nizvodnog toka): jedan confirm + obican storno + tiha
+' zastita invarijante. Bez 4-mod dijaloga (smart trigger). Tanki UI.
+Private Sub RunSimpleStornoUI(ByVal docType As String, ByVal brDok As String, ByVal dokTip As String)
+    Dim lbl As String
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA: lbl = "otpremnicu"
+        Case FLOW_DOC_ZBIRNA:     lbl = "zbirnu"
+        Case FLOW_DOC_REVERS:     lbl = "revers"
+        Case Else:                lbl = "dokument"
+    End Select
+
+    If Not ConfirmStorno(lbl, brDok) Then Exit Sub
+
+    Dim res As Object
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA: Set res = RunSimpleStornoOtpremnica(brDok)
+        Case FLOW_DOC_ZBIRNA:     Set res = RunSimpleStornoZbirna(brDok)
+        Case FLOW_DOC_REVERS:     Set res = RunSimpleStornoRevers(brDok, dokTip)
+    End Select
+
+    If res Is Nothing Then
+        MsgBox "Nepoznat tip dokumenta.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If CBool(res("success")) Then
+        txtStornoBroj.value = ""
+        MsgBox CStr(res("message")), vbInformation, APP_NAME
+    Else
+        MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
+    End If
+    CheckVerwaisteDokumente
+End Sub
+
+' REVERS: kratak izbor -- storno vs ispravka (bez punog 4-mode dijaloga).
+' DA = obican storno reversa; NE = ISPRAVKA (storno stari, unesi novi -> auto
+' dovrsetak po snimanju novog reversa); OTKAZI = odustani.
+Private Sub RunReversStornoUI(ByVal brDok As String, ByVal dokTip As String)
+    On Error GoTo EH
+    If Not ActiveAmbalazaDokExists(brDok, dokTip) Then
+        MsgBox "Aktivan revers nije pronadjen: " & brDok, vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim preview As String
+    preview = BuildStornoPreview(FLOW_DOC_REVERS, brDok, dokTip)
+
+    Dim r As VbMsgBoxResult
+    r = MsgBox(preview & vbCrLf & vbCrLf & String(28, "-") & vbCrLf & _
+        "Sta radis sa reversom?" & vbCrLf & vbCrLf & _
+        "DA = obican STORNO reversa (saldo se koriguje)" & vbCrLf & _
+        "NE = ISPRAVKA (storno stari, unesi novi -> veze staro->novo)" & vbCrLf & _
+        "OTKAZI = odustani", vbQuestion + vbYesNoCancel, APP_NAME)
+    If r = vbCancel Then Exit Sub
+
+    Dim res As Object
+    If r = vbYes Then
+        Set res = RunSimpleStornoRevers(brDok, dokTip)
+        If Not res Is Nothing Then
+            If CBool(res("success")) Then
+                txtStornoBroj.value = ""
+                MsgBox CStr(res("message")), vbInformation, APP_NAME
+            Else
+                MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
+            End If
+        End If
+    Else
+        Set res = RunReversCorrection(brDok, dokTip, SV_MODE_ISPRAVKA)
+        If Not res Is Nothing Then
+            If CBool(res("needsForm")) Then
+                m_activeCorrectionID = CStr(res("correctionID"))
+                m_activeCorrectionDoc = FLOW_DOC_REVERS
+                m_activeCorrectionDokTip = dokTip
+                txtStornoBroj.value = ""
+                MsgBox CStr(res("message")) & vbCrLf & vbCrLf & _
+                    "SLEDECE: unesi i snimi NOVI revers (normalno). Zavrsetak ispravke je " & _
+                    "AUTOMATSKI po snimanju novog reversa.", vbInformation, APP_NAME
+            Else
+                MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
+            End If
+        End If
+    End If
+    CheckVerwaisteDokumente
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.RunReversStornoUI"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' ============================================================
+' CENTRALNI STORNO / ISPRAVKA FRAMEWORK -- tanki UI sloj.
+' Forma samo: gradi preview, skuplja izbor moda (poslovno znacenje storna) i
+' zove centralne servise (modStornoFlow). Business logika NIJE u formi.
+' Vraca True ako je tip preuzet frameworkom (btnStorno_Click tada izlazi).
+' Puni dijalog se pokazuje SAMO kad CorrectionNeedsDialog = True (smart trigger);
+' inace ide RunSimpleStornoUI (obican storno).
+' ============================================================
+Private Function TryRunCorrectionFramework(ByVal tipDok As String, ByVal brDok As String) As Boolean
+    On Error GoTo EH
+
+    Dim docType As String, dokTip As String
+    docType = ComboToDocType(tipDok, dokTip)
+    If Len(docType) = 0 Then Exit Function          ' nije framework tip -> False (stara logika)
+    TryRunCorrectionFramework = True                ' preuzimamo obradu
+
+    ' REVERS: nema nizvodnog toka, ali ima poslovnu razliku storno vs ispravka ->
+    ' kratak izbor (bez punog 4-mode dijaloga).
+    If docType = FLOW_DOC_REVERS Then
+        RunReversStornoUI brDok, dokTip
+        Exit Function
+    End If
+
+    ' SMART TRIGGER: pun poslovni dijalog SAMO kad ima nizvodni tok (prijemnica/
+    ' palete) koji trazi odluku. Inace obican storno + tiha rekalkulacija/odvezivanje.
+    If Not CorrectionNeedsDialog(docType, brDok, dokTip) Then
+        RunSimpleStornoUI docType, brDok, dokTip
+        Exit Function
+    End If
+
+    Dim preview As String
+    preview = BuildStornoPreview(docType, brDok, dokTip)
+
+    Dim mode As String
+    mode = PromptCorrectionMode(preview)
+    If Len(mode) = 0 Then Exit Function             ' operater odustao
+
+    Dim res As Object
+    Set res = DispatchCorrection(docType, brDok, dokTip, mode, False)
+
+    ' PONISTENJE: prvo prikazi PUN spisak posledica (res.message) pa trazi svesnu
+    ' potvrdu. Tek na DA se stvarno izvrsava (forceConfirm). To je razlika od DUPLI.
+    If CBool(res("blocked")) Then
+        If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & _
+                  "PONISTITI dokument i SVE gore navedeno?", _
+                  vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            Set res = DispatchCorrection(docType, brDok, dokTip, mode, True)
+        Else
+            MsgBox "Ponistenje otkazano. Nista nije promenjeno.", vbInformation, APP_NAME
+            Exit Function
+        End If
+    End If
+
+    If CBool(res("needsForm")) Then
+        ' ISPRAVKA_ODMAH: stara stornirana, ceka se snimanje NOVE.
+        m_activeCorrectionID = CStr(res("correctionID"))
+        m_activeCorrectionDoc = docType
+        m_activeCorrectionDokTip = dokTip
+        txtStornoBroj.value = ""
+        MsgBox CStr(res("message")) & vbCrLf & vbCrLf & _
+               "SLEDECE: samo unesi i snimi NOVI dokument (normalno). Prevezivanje i " & _
+               "rekalkulacija se rade AUTOMATSKI po snimanju -- nema dodatnog koraka.", _
+               vbInformation, APP_NAME
+    ElseIf CBool(res("success")) Then
+        txtStornoBroj.value = ""
+        MsgBox CStr(res("message")), vbInformation, APP_NAME
+    Else
+        MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
+    End If
+
+    CheckVerwaisteDokumente
+    Exit Function
+EH:
+    LogErr "frmDokumenta.TryRunCorrectionFramework"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+    TryRunCorrectionFramework = True
+End Function
+
+' Dispatch na centralne servise po docType/mode (forceConfirm za PONISTENJE).
+Private Function DispatchCorrection(ByVal docType As String, ByVal brDok As String, _
+                                    ByVal dokTip As String, ByVal mode As String, _
+                                    ByVal forceConfirm As Boolean) As Object
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA: Set DispatchCorrection = RunOtpremnicaCorrection(brDok, mode, forceConfirm)
+        Case FLOW_DOC_ZBIRNA:     Set DispatchCorrection = RunZbirnaCorrection(brDok, mode, forceConfirm)
+        Case FLOW_DOC_REVERS:     Set DispatchCorrection = RunReversCorrection(brDok, dokTip, mode)
+    End Select
+End Function
+
+' Mapiraj combo vrednost -> framework docType (+ dokTip za revers). Prazan docType
+' znaci "nije framework tip" (Otkup/Prijemnica/Faktura/Novac idu na staru logiku).
+Private Function ComboToDocType(ByVal comboVal As String, ByRef dokTip As String) As String
+    dokTip = ""
+    Select Case comboVal
+        Case "Otpremnica":                   ComboToDocType = FLOW_DOC_OTPREMNICA
+        Case "Zbirna":                       ComboToDocType = FLOW_DOC_ZBIRNA
+        Case "Revers izdavanje koop.":       ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_IZLAZ_KOOP
+        Case "Revers povrat koop.":          ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_ULAZ_KOOP
+        Case "Revers izdato OM (firma).":    ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_ULAZ_FIRMA
+        Case "Revers prijem od OM (firma).": ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_IZLAZ_FIRMA
+    End Select
+End Function
+
+' Poslovni izbor moda kroz tri pitanja (preview u prvom). Vraca SV_MODE_* ili "".
+Private Function PromptCorrectionMode(ByVal preview As String) As String
+    Dim r As VbMsgBoxResult
+
+    r = MsgBox(preview & vbCrLf & vbCrLf & String(30, "-") & vbCrLf & _
+        "STORNO -- sta poslovno znaci?" & vbCrLf & vbCrLf & _
+        "ISPRAVKA ODMAH? (dokument je POGRESNO UNET, ali dogadjaj je STVARAN --" & vbCrLf & _
+        "storniraj staru, unesi novu, prevezi/rekalkulisi)" & vbCrLf & vbCrLf & _
+        "DA = Ispravka odmah   |   NE = druge opcije   |   OTKAZI = odustani", _
+        vbQuestion + vbYesNoCancel, APP_NAME)
+    If r = vbCancel Then Exit Function
+    If r = vbYes Then PromptCorrectionMode = SV_MODE_ISPRAVKA: Exit Function
+
+    r = MsgBox("DUPLI / FANTOM? (VISAK zapisa -- dokument ne treba, ali roba/delovi SU realni)" & vbCrLf & _
+        "-> TIHO se skloni + delovi se OSLOBODE (blokovi za prevezivanje, otpremnice u 'ceka zbirnu')." & vbCrLf & _
+        "Bez dodatnih pitanja." & vbCrLf & vbCrLf & _
+        "DA = Dupli/fantom   |   NE = jos opcija   |   OTKAZI = odustani", _
+        vbQuestion + vbYesNoCancel, APP_NAME)
+    If r = vbCancel Then Exit Function
+    If r = vbYes Then PromptCorrectionMode = SV_MODE_DUPLI: Exit Function
+
+    r = MsgBox("PONISTENJE BEZ ZAMENE? (ceo FIZICKI TOK otpada -- nista ne treba da opstane)" & vbCrLf & _
+        "-> sistem prvo PRIKAZE SVE zavisne dokumente (zbirna/prijemnica/palete) i trazi" & vbCrLf & _
+        "svesnu potvrdu PRE nego sto bilo sta uradi." & vbCrLf & vbCrLf & _
+        "DA = Ponistenje bez zamene" & vbCrLf & _
+        "NE = RESI KASNIJE (napravi persistent recovery zapis, resi kasnije)" & vbCrLf & _
+        "OTKAZI = odustani", vbQuestion + vbYesNoCancel, APP_NAME)
+    If r = vbCancel Then Exit Function
+    If r = vbYes Then
+        PromptCorrectionMode = SV_MODE_PONISTENJE
+    Else
+        PromptCorrectionMode = SV_MODE_RESI_KASNIJE
+    End If
+End Function
+
+' ISPRAVKA_ODMAH, druga faza -- AUTOMATSKI po snimanju NOVOG dokumenta (bez dugmeta).
+' Poziva se iz btnUnosOtp_Click / btnUnosZbr_Click posle uspesnog snimanja. Ako ima
+' ISPRAVKA na cekanju (aktivna u sesiji ILI persistentna u tblStornoVeze), prevezuje
+' blokove/prijemnicu i rekalkulise zbirnu; inace no-op (obican unos).
+Private Sub TryAutoCompleteIspravka(ByVal docType As String, ByVal newBroj As String)
+    On Error GoTo EH
+    newBroj = Trim$(newBroj)
+    If Len(newBroj) = 0 Then Exit Sub
+
+    Dim cid As String, fromSession As Boolean
+    cid = m_activeCorrectionID
+    fromSession = (Len(cid) > 0 And m_activeCorrectionDoc = docType)
+    ' Ako UI state ne postoji ILI je za drugi tip -> potrazi persistentnu PENDING
+    ' ISPRAVKU tog tipa (preziveljava zatvaranje forme/Excela).
+    If Not fromSession Then
+        ' SAFE-STOP: ako ima VISE otvorenih ispravki istog tipa, ne biraj naslepo
+        ' najnoviju -> stani (da ne povezes pogresan dokument).
+        Dim cnt As Long
+        cnt = modStornoContext.CountPendingCorrectionsByDocType(docType, SV_MODE_ISPRAVKA)
+        If cnt = 0 Then Exit Sub               ' nema ispravke na cekanju -> obican unos
+        If cnt > 1 Then
+            MsgBox "Postoji vise ispravki na cekanju za ovaj tip dokumenta. Automatsko " & _
+                   "prevezivanje NIJE uradjeno da ne bi povezalo pogresan dokument." & vbCrLf & vbCrLf & _
+                   "Otvori Osiroceni dokumenti / recovery i izaberi tacnu ispravku.", _
+                   vbExclamation, APP_NAME
+            Exit Sub
+        End If
+        cid = FindLatestPending(docType, SV_MODE_ISPRAVKA)   ' tacno 1 -> to je taj
+    End If
+    If Len(cid) = 0 Then Exit Sub          ' nema ispravke na cekanju -> obican unos
+
+    ' BEZBEDNOST: potvrdi da je BAS ovaj novi dokument zamena. Sprecava pogresan
+    ' auto-relink kad je operater napustio ispravku pa uneo DRUGI dokument.
+    ' (Uvek pitaj za persistentnu/cross-session; za aktivnu u sesiji takodje --
+    '  operater je mozda promenio nameru izmedju storna i ovog unosa.)
+    Dim oldBroj As String
+    oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
+    If MsgBox("Ceka ISPRAVKA za storniran(u/i) '" & oldBroj & "'." & vbCrLf & vbCrLf & _
+              "Da li je upravo snimljeni '" & newBroj & "' ZAMENA za nju/njega?" & vbCrLf & vbCrLf & _
+              "DA = zavrsi ispravku (poveze staro->novo, prevezi/rekalkulisi)" & vbCrLf & _
+              "NE = obican unos (ispravka ostaje na cekanju: Osiroceni dokumenti)", _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    Dim res As Object
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA: Set res = CompleteOtpremnicaIspravka(cid, newBroj)
+        Case FLOW_DOC_ZBIRNA:     Set res = CompleteZbirnaIspravka(cid, newBroj)
+        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj)
+        Case Else: Exit Sub
+    End Select
+
+    m_activeCorrectionID = "": m_activeCorrectionDoc = "": m_activeCorrectionDokTip = ""
+    If Not res Is Nothing Then
+        If CBool(res("success")) Then
+            MsgBox "Ispravka zavrsena: " & CStr(res("message")), vbInformation, APP_NAME
+        Else
+            MsgBox "Ispravka nije zavrsena automatski: " & CStr(res("message")) & vbCrLf & vbCrLf & _
+                   "Stanje ostaje vidljivo: Osiroceni dokumenti / Monitor (nije tihi mismatch).", _
+                   vbExclamation, APP_NAME
+        End If
+    End If
+    CheckVerwaisteDokumente
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.TryAutoCompleteIspravka"
+End Sub
 
 Private Sub CheckVerwaisteDokumente()
     Dim verwOtp As Variant

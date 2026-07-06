@@ -998,6 +998,40 @@ EH:
 End Sub
 
 ' ============================================================
+' Storno / correction context (tblStornoVeze) -- persistentni zapis svake
+' storno/ispravke (staro -> novo trag, mod, status, recovery). Idempotentno.
+' Silent core se poziva iz EnsureRuntimeSchema (self-heal na svaki start), pa
+' tabela nastane automatski posle self-update-a KODA -- bez rucnog Alt+F8.
+' Alt+F8 -> EnsureStornoVezeSchema (sa MsgBox potvrdom).
+' ============================================================
+Public Sub EnsureStornoVezeSchemaCore()
+    EnsureDataTable TBL_STORNO_VEZE, "StornoVeze", _
+        Array(COL_SV_ID, COL_SV_MODE, COL_SV_STATUS, _
+              COL_SV_OLD_DOCTYPE, COL_SV_OLD_DOCID, COL_SV_OLD_BROJ, _
+              COL_SV_NEW_DOCTYPE, COL_SV_NEW_DOCID, COL_SV_NEW_BROJ, _
+              COL_SV_PARENT_DOCTYPE, COL_SV_PARENT_DOCID, COL_SV_PARENT_BROJ, _
+              COL_SV_CREATED_AT, COL_SV_CREATED_BY, COL_SV_COMPLETED_AT, _
+              COL_SV_MESSAGE, COL_SV_NEEDS_RECOVERY, COL_SV_RECOVERY_ACTION)
+End Sub
+
+Public Sub EnsureStornoVezeSchema()
+    On Error GoTo EH
+
+    EnsureStornoVezeSchemaCore
+
+    LogSetup "OK", "EnsureStornoVezeSchema done"
+    MsgBox "Storno/ispravka kontekst (tblStornoVeze) je kreiran/proveren." & vbCrLf & vbCrLf & _
+           "Ovde se belezi svaka storno/ispravka: staro -> novo, mod, status i " & vbCrLf & _
+           "recovery flag. Pregled: Dokumenta -> Osiroceni dokumenti.", _
+           vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "EnsureStornoVezeSchema failed: " & Err.description
+    MsgBox "Greska u EnsureStornoVezeSchema: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' ============================================================
 ' Audit kolone (timestamp + userstamp) na svim glavnim tabelama.
 ' Idempotentno. Alt+F8 -> EnsureAuditColumns.
 ' Posle ovoga modDataAccess.AppendRow/UpdateCell automatski upisuju
@@ -1111,6 +1145,10 @@ Public Sub EnsureRuntimeSchema()
     ' self-update-a KODA -- bez rucnog Alt+F8 koraka. EnsureColumnOnTable je no-op
     ' kad kolona postoji.
     EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA
+
+    ' Centralni storno/correction context (tblStornoVeze). Idempotentno; nastane
+    ' automatski posle self-update-a KODA. EnsureDataTable je no-op kad postoji.
+    EnsureStornoVezeSchemaCore
 End Sub
 
 ' ============================================================

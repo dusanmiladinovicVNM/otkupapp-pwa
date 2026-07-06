@@ -308,3 +308,37 @@ P3-9 — Palete re-point: višak/deficit gajbica (warn-only za sada)
 Kontekst: P1 — modPaletniList.ReassignPaleteToPrijemnica_TX + UI „Palete“ mod u recovery panelu (frmDokumenta). Re-point + KG-sync (skaliranje neta) rade kad se broj gajbica PO KLASI poklapa. Kad se razlikuje → samo upozorenje u statusnoj liniji; operater rešava ručno.
 Razlog odlaganja (svesno): auto-rutiranje viška preko GetOrCreateOpenPaleta stavilo bi ga na DANAŠNJU otvorenu paletu → pogrešan datum/lokacija za robu od pre par dana.
 Dorada (kad bude vremena): za višak praviti NAMENSKU aneks paletu datiranu na original; za deficit kontrolisano skidanje sa poslednje delimične stavke uz potvrdu. Edge koji „ne bi trebalo da se dešava“ → nizak prioritet.
+
+---
+
+## Storno/ispravka framework (PR: `claude/central-storno-framework-j1ku1h`)
+
+P1-STORNO-1 — Proći / review + merge PR „Centralni storno/ispravka framework" (PR #130)
+Status: 🟡 spremno za merge (0 konflikata sa `main`, `RunStornoTestSuite` = FAIL=0 / **22 testa**, statika čista), čeka review + ručni smoke pa merge + release.
+Sadrži i **redizajn DUPLI vs PONIŠTENJE** (DUPLI = razveži/odvezuje → deca prežive; PONIŠTENJE = kaskadni storno celog nizvodnog toka), **ownership pravilo** (otpremnica obara zbirnu samo ako je jedina), **hladnjača/eksterni gate** (`kupac == MALINA_DEFAULT_KUPAC`; eksterni kupac → prijemnica netaknuta), **palete kroz motor** (`DetachOsirocenePaletaStavke_TX` → header/reopen/storno-prazne, co-tenant netaknut), i **pre-merge review fixeve** (simple-path nulling → STORNO; atomarnost DUPLI zbirne u jednoj TX + guard; block-free guard → MANUAL; revers preview ne duplira dvojni upis).
+Pre merge (ručni smoke onoga što NIJE ručno probano — unit-testovi jesu):
+- Zbirna ISPRAVKA (zbirna sa prijemnicom) → snimi novu → potvrdi „zamena? DA" → proveri: otpremnice+prijemnica+paletne stavke na novoj, stara odvezana/stornirana.
+- Malina 1:1: PONIŠTENJE otpremnice/zbirne → ceo lanac stornian + **prazna paleta stornirana** + deljena paleta umanjena/otvorena; DUPLI → otpremnice u „čeka zbirnu", palete osirоćene.
+- Normalni mod, hladnjača kupac, 2 otpremnice na jednoj zbirni: PONIŠTENJE **jedne** → druga+zbirna+prijemnica žive; PONIŠTENJE **zbirne** → sve stornirano.
+- Eksterni kupac: PONIŠTENJE zbirne → **prijemnica NETAKNUTA**.
+- Ponovo `RunStornoTestSuite` posle importa (mora ostati FAIL=0).
+Posle merge-a: `tools/release.sh <verzija>` (planiran `vba-v2.19.0`) → Excel `ImportAllVBA → Compile → snimi → ship → Fleet`; `RELEASE_NOTES.md` je već pripremljen.
+
+P2-STORNO-2 — Recovery pregled pending/failed ispravki (poseban panel)
+Status: 🟡 delimično. Pending/FAILED/MANUAL_REQUIRED kontekst je vidljiv u `tblStornoVeze` + Monitor (`Monitor_Event`) → zadovoljava zahtev („Monitor ili poseban pregled"). ALI panel „Osiroćeni dokumenti" ga još NE lista (prikazuje osirotele prijemnice/zbirne), a poruke ga pominju. Dorada: ili dopuniti recovery panel da čita `modStornoContext.GetPendingCorrections()`, ili doterati tekst poruka (da ne upućuju na panel koji ih ne prikazuje). `CountPendingRecovery()` već postoji za badge.
+
+P2-STORNO-3 — Audit: „nuliranje" dokumenta umesto storna (isti bag širom koda)
+Status: 🟡 delimično. **Storno flow REŠEN** (PR #130): sve putanje (`modStornoFlow` DUPLI/PONIŠTENJE/ISPRAVKA + **simple** storno otpremnice i zbirne) sada idu kroz `RecalcOrStornoEmptyZbirna_TX` → prazna zbirna se STORNIRA, ne ostaje aktivna 0/0. Ostaje audit OSTATKA koda. Originalni bag: dokument koji treba da nestane ostane AKTIVAN sa 0/0 (tihi mismatch — aktivan „prazan" dokument). Zadatak: pretražiti SVUDA gde se KG/ambalaža/gajbice postavljaju na 0 a red ostaje aktivan (nije stornirano), pa odlučiti treba li storno.
+Ispravan obrazac (referenca): `modPaletniList.bas:1903-1907` — PRVO `COL_STORNIRANO="Da"` PA onda vrednosti na 0.
+Kandidati/polazna tačka (grep `RequireUpdateCell/UpdateCell ... , 0` + `Recalc/Rekalk/nulir`):
+- `modDokumentInvariant.RecalculateZbirnaFromOtpremnice_TX` / `ApplyKlasaRecalc` — cela prazna zbirna: sada je `modStornoFlow` stornira (OK). OSTAJE: PER-KLASA red (npr. Klasa II → 0 dok Klasa I živi) ostaje aktivan 0 — proveriti da li je legitimno (klasa stvarno 0) ili treba čišćenje.
+- `modPaletniList.bas:1905-1907` — OK (storno + 0), samo potvrditi.
+- Proći i: `modOtkupBlok`, `modAmbalaza`, `frmDokumenta`, `modDokumenta` (bilo koji reset KG/amb na 0 bez storna).
+Rezultat: lista mesta + odluka (storno vs legitiman 0) + po potrebi popravka; idealno regres test po nalazu.
+
+P2-STORNO-4 — Jednokratni repair alati za POSTOJEĆE pokvarene podatke (nastale pre framework-a)
+Status: 🔴 otvoreno (opciono, NE blokira merge — novi kod sprečava dalje kvarenje; ovi alati čiste zatečeno stanje).
+Kontekst: podaci pokvareni RANIJIM ručnim stornom / bagovitim run-om pre ovog framework-a ostaju u zatečenom stanju (novi kod ih NE popravlja retroaktivno).
+1) `FixNuliraneZbirne` — prođi `tblZbirna`; svaku AKTIVNU zbirnu bez ijedne aktivne otpremnice (0/0) → `StornoZbirna_TX`. Referenca iz produkcije: ZBR-00643/644/645 (aktivne 0,00 dok prijemnica pokazuje na njih).
+2) `FixStalePaletaHeaders` — prođi `tblPaleta`; preračunaj header (gajbe/neto/amb + Bruto, Status) iz AKTIVNIH `tblPaletaStavka`; paleta bez ijedne aktivne stavke → storno; ispod kapaciteta → reopen. Referenca: run pre palete-fixa `67a4381` (PAL-00150 header 240 a stvarno 206 aktivnih + Zatvorena; PAL-00151 prazna a Otvorena). Reuse paletni motor gde može (`DetachOsirocenePaletaStavke_TX` je per-prijemnica; ovde treba PER-PALETA self-heal — proveriti postoji li već helper `RecomputePaleta*` pre pisanja novog).
+Zajednički zahtevi: idempotentno + transakciono + izveštaj (koliko dirano) + pokreće se svesno (Alt+F8), best-effort (ne rušiti na jednom lošem redu). Ako operater potvrdi da treba — dodati u ovoj ili sledećoj grani.
