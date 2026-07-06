@@ -1105,6 +1105,12 @@ Public Sub EnsureRuntimeSchema()
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_TEZINA_PALETE, "0.00"
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_BRUTO, "0.00"
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_AMBALAZA, "0.00"
+
+    ' Vidljivi audit trag na paleti (relabel/detach/adjust). Deo je i punog
+    ' EnsurePaletniListSchema, ali se dodaje ovde da nastane AUTOMATSKI posle
+    ' self-update-a KODA -- bez rucnog Alt+F8 koraka. EnsureColumnOnTable je no-op
+    ' kad kolona postoji.
+    EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA
 End Sub
 
 ' ============================================================
