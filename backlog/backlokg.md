@@ -308,3 +308,28 @@ P3-9 — Palete re-point: višak/deficit gajbica (warn-only za sada)
 Kontekst: P1 — modPaletniList.ReassignPaleteToPrijemnica_TX + UI „Palete“ mod u recovery panelu (frmDokumenta). Re-point + KG-sync (skaliranje neta) rade kad se broj gajbica PO KLASI poklapa. Kad se razlikuje → samo upozorenje u statusnoj liniji; operater rešava ručno.
 Razlog odlaganja (svesno): auto-rutiranje viška preko GetOrCreateOpenPaleta stavilo bi ga na DANAŠNJU otvorenu paletu → pogrešan datum/lokacija za robu od pre par dana.
 Dorada (kad bude vremena): za višak praviti NAMENSKU aneks paletu datiranu na original; za deficit kontrolisano skidanje sa poslednje delimične stavke uz potvrdu. Edge koji „ne bi trebalo da se dešava“ → nizak prioritet.
+
+---
+
+## Storno/ispravka framework (PR: `claude/central-storno-framework-j1ku1h`)
+
+P1-STORNO-1 — Proći / review + merge PR „Centralni storno/ispravka framework"
+Status: 🟡 spremno za merge (0 konflikata sa `main`, `RunStornoTestSuite` = FAIL=0, statika čista), čeka review + ručni smoke pa merge + release.
+Pre merge (ručni smoke onoga što NIJE ručno probano — unit-testovi jesu):
+- Zbirna ISPRAVKA (zbirna sa prijemnicom) → snimi novu → potvrdi „zamena? DA" → proveri: otpremnice+prijemnica+paletne stavke na novoj, stara odvezana/stornirana.
+- Jedan DUPLI/FANTOM (otpremnica ili zbirna) → nema tihog mismatch-a.
+- Jedan PONIŠTENJE na dokumentu sa prijemnicom → mora BLOKIRATI + tražiti svesnu potvrdu.
+- Ponovo `RunStornoTestSuite` posle importa (mora ostati FAIL=0).
+Posle merge-a: `tools/release.sh <verzija>` (planiran `vba-v2.19.0`) → Excel `ImportAllVBA → Compile → snimi → ship → Fleet`; `RELEASE_NOTES.md` je već pripremljen.
+
+P2-STORNO-2 — Recovery pregled pending/failed ispravki (poseban panel)
+Status: 🟡 delimično. Pending/FAILED/MANUAL_REQUIRED kontekst je vidljiv u `tblStornoVeze` + Monitor (`Monitor_Event`) → zadovoljava zahtev („Monitor ili poseban pregled"). ALI panel „Osiroćeni dokumenti" ga još NE lista (prikazuje osirotele prijemnice/zbirne), a poruke ga pominju. Dorada: ili dopuniti recovery panel da čita `modStornoContext.GetPendingCorrections()`, ili doterati tekst poruka (da ne upućuju na panel koji ih ne prikazuje). `CountPendingRecovery()` već postoji za badge.
+
+P2-STORNO-3 — Audit: „nuliranje" dokumenta umesto storna (isti bag širom koda)
+Status: 🔴 otvoreno. Bag koji je rešen u ispravci otpremnice: dokument koji treba da nestane ostane AKTIVAN sa 0/0 (npr. stara zbirna nulirana umesto stornirana) — tihi mismatch (aktivan „prazan" dokument). Zadatak: pretražiti SVUDA gde se KG/ambalaža/gajbice postavljaju na 0 a red ostaje aktivan (nije stornirano), pa odlučiti treba li storno.
+Ispravan obrazac (referenca): `modPaletniList.bas:1903-1907` — PRVO `COL_STORNIRANO="Da"` PA onda vrednosti na 0.
+Kandidati/polazna tačka (grep `RequireUpdateCell/UpdateCell ... , 0` + `Recalc/Rekalk/nulir`):
+- `modDokumentInvariant.RecalculateZbirnaFromOtpremnice_TX` / `ApplyKlasaRecalc` — postavlja klasu zbirne na 0 kad ta klasa nema otpremnica. Za PRAZNU celu zbirnu sada `modStornoFlow` stornira (OK), ali PER-KLASA red (npr. Klasa II → 0 dok Klasa I živi) ostaje aktivan 0 — proveriti da li je to legitimno (klasa stvarno 0) ili treba čišćenje.
+- `modPaletniList.bas:1905-1907` — OK (storno + 0), samo potvrditi.
+- Proći i: `modOtkupBlok`, `modAmbalaza`, `frmDokumenta`, `modDokumenta` (bilo koji reset KG/amb na 0 bez storna).
+Rezultat: lista mesta + odluka (storno vs legitiman 0) + po potrebi popravka; idealno regres test po nalazu.
