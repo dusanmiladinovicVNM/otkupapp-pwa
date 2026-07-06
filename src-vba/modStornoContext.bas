@@ -304,6 +304,29 @@ EH:
     LogErr MOD_NAME & ".FindLatestPending"
 End Function
 
+' Broj PENDING context-a za dati OldDocType (+ opc. mode). Koristi se za safe-stop
+' u auto-complete: kad ima VISE otvorenih ispravki istog tipa, ne bira se naslepo
+' najnoviji nego se staje (da se ne poveze pogresan dokument).
+Public Function CountPendingCorrectionsByDocType(ByVal docType As String, _
+                                                 Optional ByVal mode As String = "") As Long
+    On Error GoTo EH
+    Dim c As Collection
+    Set c = GetPendingCorrections()
+    If c Is Nothing Then Exit Function
+    Dim i As Long, n As Long, d As Object
+    For i = 1 To c.count
+        Set d = c(i)
+        If UCase$(CStr(d("status"))) = UCase$(SV_STATUS_PENDING) _
+           And StrComp(CStr(d("oldDocType")), docType, vbTextCompare) = 0 Then
+            If Len(mode) = 0 Or StrComp(CStr(d("mode")), mode, vbTextCompare) = 0 Then n = n + 1
+        End If
+    Next i
+    CountPendingCorrectionsByDocType = n
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".CountPendingCorrectionsByDocType"
+End Function
+
 ' ============================================================
 ' PRIVATE
 ' ============================================================

@@ -69,6 +69,9 @@ Public Sub RunStornoTestSuite()
     T09_SimpleStornoZbirna
     T10_SmartTriggerGate
     T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete
+    T12_ReversCompleteTraziAktivanNoviRevers
+    T13_ReversCompleteSaAktivnimNovimReversom
+    T14_AutoCompleteNeBiraLatestKadImaVisePending
 
     tx.RollbackTx
     Set tx = Nothing
@@ -365,6 +368,71 @@ Private Sub T11_OtpremnicaIspravkaPrevezujePrijemnicuIPalete()
     ' context COMPLETED (jer je downstream relink uspeo)
     ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
         S & "context COMPLETED (downstream relink uspeo)"
+End Sub
+
+' ============================================================
+' T12 - CompleteReversIspravka NE sme kompletirati ako novi revers ne postoji.
+' ============================================================
+Private Sub T12_ReversCompleteTraziAktivanNoviRevers()
+    Const S As String = "T12 revers complete trazi aktivan novi revers: "
+
+    SeedRevers "SVT-R12", DOK_TIP_OM_IZLAZ_KOOP, "SVT-K12", "SVT-S12", "SVT-A", 10
+    Dim res As Object
+    Set res = modStornoFlow.RunReversCorrection("SVT-R12", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_ISPRAVKA)
+    Dim cid As String: cid = CStr(res("correctionID"))
+    Chk Len(cid) > 0, S & "context kreiran"
+
+    ' NE seed-ujemo novi revers -> complete mora da odbije.
+    Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-NEMA-REV")
+    Chk Not CBool(res("success")), S & "success=False (novi revers ne postoji)"
+    Chk modStornoContext.GetCorrectionField(cid, COL_SV_STATUS) <> SV_STATUS_COMPLETED, _
+        S & "status NIJE COMPLETED"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_MANUAL, S & "status MANUAL_REQUIRED"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_NEEDS_RECOVERY), "Da", S & "NeedsRecovery = Da"
+End Sub
+
+' ============================================================
+' T13 - CompleteReversIspravka sa AKTIVNIM novim reversom -> COMPLETED; saldo
+' racuna samo novi (ne stari + novi).
+' ============================================================
+Private Sub T13_ReversCompleteSaAktivnimNovimReversom()
+    Const S As String = "T13 revers complete sa aktivnim novim: "
+
+    SeedRevers "SVT-R13", DOK_TIP_OM_IZLAZ_KOOP, "SVT-K13", "SVT-S13", "SVT-A", 10
+    Dim res As Object
+    Set res = modStornoFlow.RunReversCorrection("SVT-R13", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_ISPRAVKA)
+    Dim cid As String: cid = CStr(res("correctionID"))
+    ChkEq AmbSaldo("SVT-K13", "Kooperant", "SVT-A"), 0, S & "posle storna starog saldo = 0"
+
+    ' Operater unosi NOVI revers (12).
+    SeedRevers "SVT-R13B", DOK_TIP_OM_IZLAZ_KOOP, "SVT-K13", "SVT-S13", "SVT-A", 12
+    Set res = modStornoFlow.CompleteReversIspravka(cid, "SVT-R13B")
+    Chk CBool(res("success")), S & "success=True (novi revers aktivan)"
+    ChkEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, S & "status COMPLETED"
+    ChkEq AmbSaldo("SVT-K13", "Kooperant", "SVT-A"), 12, S & "saldo = 12 (samo novi, NE 22)"
+End Sub
+
+' ============================================================
+' T14 - safe-stop: kad ima VISE pending ispravki istog tipa, helper vraca count>1
+' (UI tada ne bira naslepo najnoviji). CountPendingCorrectionsByDocType.
+' ============================================================
+Private Sub T14_AutoCompleteNeBiraLatestKadImaVisePending()
+    Const S As String = "T14 multi-pending safe-stop: "
+
+    Dim before As Long
+    before = modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, SV_MODE_ISPRAVKA)
+
+    Dim c1 As String, c2 As String
+    c1 = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+            "SVT-ID14A", "SVT-OTPA14", , , , FLOW_DOC_ZBIRNA, , "SVT-ZA14", "Test multi 1.")
+    c2 = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+            "SVT-ID14B", "SVT-OTPB14", , , , FLOW_DOC_ZBIRNA, , "SVT-ZB14", "Test multi 2.")
+    Chk Len(c1) > 0 And Len(c2) > 0, S & "dva pending context-a kreirana"
+
+    ChkEq modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, SV_MODE_ISPRAVKA), _
+        before + 2, S & "count raste tacno za 2"
+    Chk modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, SV_MODE_ISPRAVKA) > 1, _
+        S & "count > 1 -> UI safe-stop (ne bira naslepo latest)"
 End Sub
 
 ' ============================================================

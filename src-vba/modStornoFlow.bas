@@ -713,13 +713,33 @@ EH:
     r("message") = "Greska: " & Err.description
 End Function
 
-' Zavrsi ISPRAVKA reversa: povezi novi revers broj u context. Saldo je vec tacan
-' (stari storniran, novi aktivan) -> nema dupliranja.
+' Zavrsi ISPRAVKA reversa: veze novi revers broj u context. Saldo je vec tacan
+' (stari storniran, novi aktivan) -> nema dupliranja. Context postaje COMPLETED
+' SAMO ako novi revers stvarno postoji kao AKTIVAN (inace MANUAL_REQUIRED).
+' dokumentTip se cita iz konteksta (upisan u ParentDocType pri RunReversCorrection).
 Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBrDok As String) As Object
     Dim r As Object: Set r = NewRes(SV_MODE_ISPRAVKA)
     Set CompleteReversIspravka = r
     On Error GoTo EH
+    newBrDok = Trim$(newBrDok)
     r("correctionID") = correctionID
+
+    Dim dokTip As String
+    dokTip = GetCorrectionField(correctionID, COL_SV_PARENT_DOCTYPE)
+    If Len(dokTip) = 0 Then
+        MarkCorrectionManual correctionID, "Nedostaje tip reversa u kontekstu -> zavrsi ispravku rucno.", _
+            "Context reversa nema DokumentTip (ParentDocType prazan)."
+        r("message") = "Ne mogu da odredim tip reversa iz konteksta. Oznaceno za recovery."
+        Exit Function
+    End If
+
+    If Not ActiveAmbalazaDokExists(newBrDok, dokTip) Then
+        MarkCorrectionManual correctionID, "Snimi novi revers pa ponovi zavrsetak ispravke.", _
+            "Novi revers " & newBrDok & " [" & dokTip & "] nije aktivan."
+        r("message") = "Novi revers nije pronadjen kao aktivan. Snimi novi revers pa ponovi zavrsetak ispravke."
+        Exit Function
+    End If
+
     CompleteCorrectionContext correctionID, newBrDok, newBrDok, "Ispravka reversa: novi revers " & newBrDok & "."
     r("success") = True
     r("message") = "Ispravka reversa zavrsena. Saldo racuna samo novi revers."
