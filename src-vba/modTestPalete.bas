@@ -101,6 +101,7 @@ Public Sub RunPaleteTestSuite()
     T08_DetachSuStanarFantom
     T09_AdjustBlokPreradjena
     T10_ZbirnaRepointStavke
+    T11_RelabelBlokNaDeljenojPaleti
 
     tx.RollbackTx                ' UVEK vrati sve - test ne ostavlja podatke
     Set tx = Nothing
@@ -414,6 +415,48 @@ Private Sub T10_ZbirnaRepointStavke()
 
     Dim st As Variant: st = StInfo("TST-P13")
     ChkEq CStr(st(1, 7)), "TST-Z10B", S & "paletna stavka nosi novu zbirnu"
+End Sub
+
+' HARD GUARD: RELABEL na paleti koju dele DVE prijemnice mora biti BLOKIRAN
+' (ne warning) -- promena identiteta headera bi iskvarila robu druge prijemnice.
+' Provera: reassign vraca False, outWarn sadrzi "BLOKIRANO", i NISTA se ne menja
+' (stavke stare prijemnice ostaju, header palete ostaje stara sorta, su-stanar ceo).
+Private Sub T11_RelabelBlokNaDeljenojPaleti()
+    Const S As String = "T11 relabel blok na deljenoj paleti: "
+    ' Dve prijemnice, isti identitet (TST-S11) -> dele istu paletu (4+3 = 7/10).
+    MakePrij "TSTPRJ-20", "TST-P14", "TST-Z11", "I", 40, 4, "TST-S11"
+    Paletize "TSTPRJ-20", "TST-P14", "TST-Z11", "I", 40, 4, "TST-S11"
+    MakePrij "TSTPRJ-21", "TST-P15", "TST-Z11B", "I", 30, 3, "TST-S11"
+    Paletize "TSTPRJ-21", "TST-P15", "TST-Z11B", "I", 30, 3, "TST-S11"
+
+    Dim stA As Variant: stA = StInfo("TST-P14")
+    Dim palID As String: palID = CStr(stA(1, 2))
+    ChkEq CStr(StInfo("TST-P15")(1, 2)), palID, S & "obe prijemnice na istoj paleti"
+
+    ' Storno P14, ispravka sa DRUGOM sortom (RELABEL) -> mora blokada zbog su-stanara.
+    MarkStornoPrij "TST-P14"
+    MakePrij "TSTPRJ-22", "TST-P16", "TST-Z11", "I", 40, 4, "TST-S11X"  ' druga sorta
+
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P14", "TST-P16")
+    ChkEq CStr(vv(0)), "RELABEL", S & "verdikt RELABEL"
+
+    Dim w As String, gd As Boolean
+    Chk Not ReassignPaleteToPrijemnica_TX("TST-P14", "TST-P16", w, True, gd), _
+        S & "BLOKIRANO cak i uz allowRelabel=True"
+    Chk InStr(w, "BLOKIRANO") > 0, S & "outWarn objasnjava blokadu"
+
+    ' Nista se nije promenilo:
+    ChkEq StCnt("TST-P14"), 1, S & "stavka stare prijemnice ostala (nije prevezana)"
+    ChkEq StCnt("TST-P16"), 0, S & "nova prijemnica bez stavki"
+    ChkEq StCnt("TST-P15"), 1, S & "su-stanar netaknut"
+    Dim pi As Variant: pi = PalInfo(palID)
+    ChkEq CStr(pi(7)), "TST-S11", S & "header palete ostao stara sorta (nije iskvaren)"
+    ChkEq pi(1), 7, S & "header gajbice ostao 7 (4+3)"
+
+    ' Bezbedan izlaz postoji: skini stavke stare pa nov unos (detach ne dira su-stanara).
+    Dim info As String
+    ChkEq DetachOsirocenePaletaStavke_TX("TST-P14", info), 1, S & "detach kao bezbedan izlaz radi"
+    ChkEq StCnt("TST-P15"), 1, S & "su-stanar i posle detach-a netaknut"
 End Sub
 
 ' ============================================================

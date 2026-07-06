@@ -1311,6 +1311,38 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         Exit Function
     End If
 
+    ' HARD GUARD (co-tenant relabel): fizicka paleta je HOMOGENA (vrsta/sorta/tipAmb).
+    ' Ako RELABEL, a neka od paleta koje nose ove stavke deli robu sa DRUGOM prijemnicom
+    ' (aktivna stavka bp != oldBroj/newBroj), promena identiteta headera bi TIHO iskvarila
+    ' identitet te druge robe. To se NE sme dozvoliti ni uz potvrdu -> blokada (ne warning).
+    ' Fizicki ispravno resenje: skini ove stavke sa deljene palete pa unesi kao nov unos
+    ' (sveza paletizacija na ispravno oznacenu paletu). Radi i kad je allowRelabel=True.
+    If relabelNeeded Then
+        Dim tgtPal As Object: Set tgtPal = CreateObject("Scripting.Dictionary")
+        For k = 1 To oldRows.count
+            tgtPal(CStr(ps(oldRows(k), sPal))) = True
+        Next k
+        Dim qg As Long, sharedPal As String
+        For qg = 1 To UBound(ps, 1)
+            If UCase$(Trim$(CStr(ps(qg, sSt)))) <> "DA" Then
+                Dim bpg As String: bpg = Trim$(CStr(ps(qg, sBr)))
+                If bpg <> oldBroj And bpg <> newBroj Then
+                    If tgtPal.Exists(CStr(ps(qg, sPal))) Then
+                        sharedPal = PaletaLabel(CStr(ps(qg, sPal)))
+                        Exit For
+                    End If
+                End If
+            End If
+        Next qg
+        If Len(sharedPal) > 0 Then
+            outWarn = "BLOKIRANO: paleta " & sharedPal & " deli robu sa drugom prijemnicom (" & bpg & _
+                      "). Promena identiteta (" & CStr(verdict(2)) & ") bi iskvarila i tu robu. " & _
+                      "Skini stavke ove prijemnice sa palete (Mod: Palete -> Skini stavke), pa unesi " & _
+                      "robu kao nov unos na ispravno oznacenu paletu."
+            Exit Function
+        End If
+    End If
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
@@ -1367,6 +1399,8 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ' ---- STEP 2b: relabel-u-mestu (samo uz allowRelabel + razlika identiteta) ----
     ' Prepravi vrsta/sorta/tipAmb na PREVEZANIM stavkama + njihovim paletama. Roba se
     ' ne pomera; menja se etiketa da odgovara ispravljenoj prijemnici. Log po paleti.
+    ' Deljene palete su vec odbijene hard-guardom gore, pa je relabel ovde bezbedan:
+    ' svaka dodirnuta paleta nosi SAMO ovu prijemnicu (old->new).
     If relabelNeeded And allowRelabel Then
         Dim doneP As Object: Set doneP = CreateObject("Scripting.Dictionary")
         For k = 1 To oldRows.count
@@ -1386,16 +1420,6 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                         If Len(nTa) > 0 Then RequireUpdateCell TBL_PALETA, pRow, COL_PAL_TIP_AMBALAZE, nTa, SRC
                         PaletaLog pidR, "RELABEL", "prij " & oldBroj & "->" & newBroj & " (" & CStr(verdict(2)) & ")"
                     End If
-                    ' su-stanar? (u ps snapshotu: aktivna stavka na paleti sa drugom prijemnicom)
-                    Dim q As Long, hasCo As Boolean: hasCo = False
-                    For q = 1 To UBound(ps, 1)
-                        If CStr(ps(q, sPal)) = pidR And UCase$(Trim$(CStr(ps(q, sSt)))) <> "DA" Then
-                            Dim bq As String: bq = Trim$(CStr(ps(q, sBr)))
-                            If bq <> oldBroj And bq <> newBroj Then hasCo = True: Exit For
-                        End If
-                    Next q
-                    If hasCo Then warnMsg = warnMsg & "Paleta " & pidR & _
-                        " nosi i druge prijemnice - proveri i njihov identitet. "
                 End If
             End If
         Next k
@@ -1469,6 +1493,22 @@ Private Sub PaletaLog(ByVal palID As String, ByVal action As String, ByVal detai
             RequireUpdateCell TBL_PALETA, pr, COL_PAL_ISTORIJA, entry, "modPaletniList.PaletaLog"
         End If
     End If
+End Sub
+
+' Persistentan business-trag kad ispravka (skip paletizacije) ne uspe da preveze
+' palete: nova prijemnica je snimljena ali NEPALETIZOVANA, a stare palete su
+' osirocene. MsgBox je prolazan; ovo ide u Monitor (WARN) da stanje ostane vidljivo
+' i posle klika. Osirocene palete su i dalje vidljive u recovery panelu (Mod: Palete)
+' i hvata ih Integritet C4 (stavka -> stornirana prijemnica). Best-effort.
+Public Sub LogRelinkFailure(ByVal oldBroj As String, ByVal newBroj As String, _
+                            ByVal razlog As String)
+    On Error Resume Next
+    Monitor_Event eventType:="PALETA_RELINK_FAIL", severity:="WARN", _
+        message:="Ispravka: prijemnica " & newBroj & " snimljena ali NEPALETIZOVANA " & _
+                 "(prevezivanje sa " & oldBroj & " nije uspelo). Osirocene palete " & _
+                 "stare prijemnice cekaju rucni re-point (Mod: Palete). Razlog: " & razlog, _
+        moduleName:="modPaletniList", procedureName:="LogRelinkFailure", _
+        entityType:="Prijemnica", entityID:=newBroj, correlationId:=oldBroj
 End Sub
 
 ' "Broj/Godina" oznaka palete za poruke (npr. "12/2026"); "?" ako ne postoji.

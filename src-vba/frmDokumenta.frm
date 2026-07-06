@@ -2576,9 +2576,11 @@ Private Sub btnUnosPrij_Click()
                    IIf(Len(adjMsg) > 0, vbCrLf & vbCrLf & adjMsg, ""), _
                    vbInformation, APP_NAME
         Else
+            LogRelinkFailure oldBrojPrij, newBrojPrij, relWarn
             MsgBox "Prijemnica sacuvana: " & result & vbCrLf & vbCrLf & _
                    "PAZNJA: auto-prevezivanje paleta nije uspelo:" & vbCrLf & relWarn & vbCrLf & vbCrLf & _
-                   "Uradi rucno: Osiroceni dokumenti  ->  Mod: Palete  ->  Prevezi palete.", _
+                   "Uradi rucno: Osiroceni dokumenti  ->  Mod: Palete  ->  Prevezi palete." & vbCrLf & _
+                   "(Stanje je zabelezeno u Monitor logu dok se ne resi.)", _
                    vbExclamation, APP_NAME
         End If
     Else
