@@ -342,6 +342,7 @@ Private Sub BuildPreradaControls()
     On Error GoTo EH
     If mBuilt Then Exit Sub
 
+    ' --- 1) Kreiranje SVIH kontrola (ne zavisi od podataka/sifarnika) ---
     Set mTxtTezinaPalete = Me.Controls.Add("Forms.TextBox.1", "txtTezinaPalete", True)
     Set mTxtBruto = Me.Controls.Add("Forms.TextBox.1", "txtBruto", True)
     Set mDdTipKutije = Me.Controls.Add("Forms.ComboBox.1", "ddTipKutije", True)
@@ -372,12 +373,6 @@ Private Sub BuildPreradaControls()
     Me.txtNeto.TabStop = False
     On Error GoTo EH
 
-    FillCmb mDdTipKutije, GetKutijeOptions()
-    FillCmb mCmbTipKese, GetKeseOptions()
-    FillCmb mCmbFilterTipGP, GetVrstaGPOptions()
-    mCmbFilterTipGP.AddItem "", 0
-    RefreshSortaFilter
-
     ' Pregled preradjenih paleta (desno od stavki); dvoklik = PDF.
     Set mLstPrerade = Me.Controls.Add("Forms.ListBox.1", "lstPrerade", True)
     Set mLblPrerade = Me.Controls.Add("Forms.Label.1", "lblPrerade", True)
@@ -402,11 +397,23 @@ Private Sub BuildPreradaControls()
     Set mBtnStornoPrerada = Me.Controls.Add("Forms.CommandButton.1", "btnStornoPrerada", True)
     StyleStornoButton mBtnStornoPrerada, "Storniraj preradu"
 
-    RefreshPrerade
-
-    SetPreradaTabOrder
-
+    ' Sve kontrole postoje -> od sada LayoutDynamic sme da ih pozicionira. mBuilt
+    ' se postavlja PRE punjenja sifarnika, jer je punjenje (dole) best-effort:
+    ' raniji bug je bio da pad u FillCmb/GetKutijeOptions (schema-drift instalacija)
+    ' prekine build pre mBuilt=True, pa LayoutDynamic tiho izadje i polja za unos
+    ' (tez. palete, kutije/kese, bruto) ostanu nepozicionirana -> "ne vide se".
     mBuilt = True
+
+    ' --- 2) Punjenje sifarnika/lista je best-effort (ne sme sakriti polja) ---
+    On Error Resume Next
+    FillCmb mDdTipKutije, GetKutijeOptions()
+    FillCmb mCmbTipKese, GetKeseOptions()
+    FillCmb mCmbFilterTipGP, GetVrstaGPOptions()
+    mCmbFilterTipGP.AddItem "", 0
+    RefreshSortaFilter
+    RefreshPrerade
+    SetPreradaTabOrder
+    On Error GoTo 0
     Exit Sub
 EH:
     LogErr "frmPalete.BuildPreradaControls"

@@ -519,7 +519,20 @@ Public Function GetLookupList(ByVal tblName As String, ByVal colName As String, 
 
     Dim colIdx As Long, filterIdx As Long, aktIdx As Long
     colIdx = GetColumnIndex(tblName, colName)
-    If filterCol <> "" Then filterIdx = GetColumnIndex(tblName, filterCol)
+    ' Kolona ne postoji (schema drift) -> prazna lista umesto pada na data(i, 0)
+    ' ("Subscript out of range"). Pad je ranije tiho rusio graditelje UI-ja koji
+    ' zovu GetLookupList (npr. frmPalete sifarnici -> polja se ne prikazu).
+    If colIdx < 1 Then
+        GetLookupList = Array()
+        Exit Function
+    End If
+    If filterCol <> "" Then
+        filterIdx = GetColumnIndex(tblName, filterCol)
+        If filterIdx < 1 Then
+            GetLookupList = Array()
+            Exit Function
+        End If
+    End If
     If onlyActive Then aktIdx = GetColumnIndex(tblName, "Aktivan")
 
     Dim dict As Object
