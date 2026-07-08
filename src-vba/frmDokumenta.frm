@@ -2538,6 +2538,35 @@ Private Sub btnUnosPrij_Click()
         End If
     End If
 
+    ' CRASH-SAFE ISPRAVKA: ako in-session pending nije postavljen (forma zatvorena
+    ' izmedju storna i ovog unosa), a postoji persistentna PENDING ISPRAVKA prijemnice
+    ' u tblStornoVeze -> ponudi da ovaj unos bude zamena. Prime-uje m_pendingRelink*
+    ' pa dalji tok (skip paletizacije + relink + completion) radi kao in-session.
+    ' Safe-stop: vise od jedne PENDING -> ne biraj naslepo (moglo bi povezati pogresnu).
+    If Len(m_pendingRelinkOldPrij) = 0 Then
+        Dim cntPI As Long
+        cntPI = modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+        If cntPI = 1 Then
+            Dim cidPI As String: cidPI = FindLatestPending(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+            Dim oldPI As String: oldPI = modStornoContext.GetCorrectionField(cidPI, COL_SV_OLD_BROJ)
+            If Len(oldPI) > 0 Then
+                If MsgBox("Ceka ISPRAVKA za storniranu prijemnicu '" & oldPI & "'." & vbCrLf & vbCrLf & _
+                          "Da li je ovaj unos ZAMENA za nju (palete se prevezu)?" & vbCrLf & vbCrLf & _
+                          "DA = ispravka (prevezi palete, zavrsi ispravku)" & vbCrLf & _
+                          "NE = obican, nepovezan unos", vbQuestion + vbYesNo, APP_NAME) = vbYes Then
+                    m_activeCorrectionID = cidPI
+                    m_activeCorrectionDoc = FLOW_DOC_PRIJEMNICA
+                    m_pendingRelinkOldPrij = oldPI
+                    m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(cidPI, COL_SV_PARENT_BROJ)
+                End If
+            End If
+        ElseIf cntPI > 1 Then
+            MsgBox "Postoji vise ISPRAVKI prijemnice na cekanju. Automatsko prevezivanje NIJE " & _
+                   "uradjeno (da ne poveze pogresnu). Resi kroz: Osiroceni dokumenti.", _
+                   vbExclamation, APP_NAME
+        End If
+    End If
+
     ' Ispravka (pending od storna): ovo je ponovni unos stornirane prijemnice ->
     ' preskoci svezu paletizaciju (palete se prevezuju re-pointom posle snimanja).
     ' Promena zbirne NE gejtuje ispravku -- pita se (zbirna bira default, ne kapiju).
