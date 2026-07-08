@@ -118,6 +118,19 @@ Private m_sc_hasBlk As Boolean
 Private m_scBuilt As Boolean
 Private m_scHidden As Collection
 
+' Faza 2b: "Nadji za storno" browse overlay (pretraga/filter aktivnih dokumenata
+' umesto kucanja broja; klik reda -> Storno panel). Runtime kontrole; .frx se ne dira.
+Private WithEvents m_btnStornoFind As MSForms.CommandButton
+Private WithEvents m_btnFnClose As MSForms.CommandButton
+Private WithEvents m_btnFnOpen As MSForms.CommandButton
+Private WithEvents m_txtFnSearch As MSForms.TextBox
+Private WithEvents m_cmbFnTip As MSForms.ComboBox
+Private WithEvents m_lstFnResults As MSForms.ListBox
+Private m_fnBack As MSForms.Label
+Private m_fnTitle As MSForms.Label
+Private m_fnBuilt As Boolean
+Private m_fnHidden As Collection
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     MouseWheel_Attach Me
@@ -276,6 +289,9 @@ Private Sub UserForm_Activate()
 
     ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
     SetupRecoveryButton
+
+    ' Runtime dugme "Nadji za storno" (browse overlay; Faza 2b; ne dira .frx).
+    SetupStornoFindButton
 
     ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
     ApplyKesIsplateState
@@ -4327,6 +4343,241 @@ Private Sub m_btnScResi_Click()
 End Sub
 Private Sub m_btnScClose_Click()
     SetStornoConfirmPanelVisible False
+End Sub
+
+' ============================================================
+' NADJI ZA STORNO -- browse overlay (Faza 2b). Pretraga/filter aktivnih dokumenata
+' (Prijemnica/Otpremnica/Zbirna); klik/dvoklik/Otvori -> Storno panel za taj dok.
+' Podaci: modStornoFlow.GetActiveDocumentsForStorno. .frx se ne dira.
+' ============================================================
+Private Sub SetupStornoFindButton()
+    On Error GoTo done
+    If Not m_btnStornoFind Is Nothing Then Exit Sub
+    Dim anchor As MSForms.Control
+    If Not m_btnRecovery Is Nothing Then Set anchor = m_btnRecovery Else Set anchor = btnStorno
+    Set m_btnStornoFind = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnStornoFindRT", True)
+    If m_btnStornoFind Is Nothing Then GoTo done
+    With m_btnStornoFind
+        .width = btnStorno.width
+        .Height = btnStorno.Height
+        .Left = btnStorno.Left
+        .Top = anchor.Top + anchor.Height + 6
+    End With
+    StylePrimaryButton m_btnStornoFind, "Nadji za storno"
+    m_btnStornoFind.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupStornoFindButton"
+    Set m_btnStornoFind = Nothing
+End Sub
+
+Private Sub m_btnStornoFind_Click()
+    On Error GoTo EH
+    ShowFindPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnStornoFind_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub ShowFindPanel()
+    EnsureFindPanel
+    If Not m_fnBuilt Then Exit Sub
+    PopulateFindResults
+    SetFindPanelVisible True
+End Sub
+
+Private Sub EnsureFindPanel()
+    On Error GoTo done
+    If m_fnBuilt Then Exit Sub
+
+    Set m_fnBack = Me.Controls.Add("Forms.Label.1", "lblFnBackRT", True)
+    With m_fnBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+
+    Set m_fnTitle = Me.Controls.Add("Forms.Label.1", "lblFnTitleRT", True)
+    With m_fnTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Nadji dokument za storno"
+    End With
+
+    Set m_btnFnClose = Me.Controls.Add("Forms.CommandButton.1", "btnFnCloseRT", True)
+    StyleExitButton m_btnFnClose, "Zatvori"
+
+    Set m_cmbFnTip = Me.Controls.Add("Forms.ComboBox.1", "cmbFnTipRT", True)
+    With m_cmbFnTip
+        .Style = fmStyleDropDownList
+        .AddItem "Svi": .AddItem "Prijemnica": .AddItem "Otpremnica": .AddItem "Zbirna"
+        .value = "Svi"
+    End With
+
+    Set m_txtFnSearch = Me.Controls.Add("Forms.TextBox.1", "txtFnSearchRT", True)
+
+    Set m_lstFnResults = Me.Controls.Add("Forms.ListBox.1", "lstFnResultsRT", True)
+    With m_lstFnResults
+        .ColumnCount = 5
+        .ColumnWidths = "80;110;80;150;70"        ' Tip | Broj | Datum | Partner | Kolicina
+    End With
+    MouseWheel_Register m_lstFnResults
+    StyleListBox m_lstFnResults
+
+    Set m_btnFnOpen = Me.Controls.Add("Forms.CommandButton.1", "btnFnOpenRT", True)
+    StylePrimaryButton m_btnFnOpen, "Otvori storno"
+
+    m_fnBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureFindPanel"
+    m_fnBuilt = False
+End Sub
+
+Private Sub LayoutFindPanel()
+    On Error Resume Next
+    If Not m_fnBuilt Then Exit Sub
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Const ROWH As Single = 22
+    Const BTNH As Single = 28
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+
+    m_fnBack.Move 0, 0, w, h
+    m_fnTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnFnClose.Move w - PAD - 92, PAD, 92, 24
+
+    Dim y As Single: y = PAD + HDR
+    m_cmbFnTip.Move PAD, y, 140, ROWH
+    m_txtFnSearch.Move PAD + 148, y, w - 2 * PAD - 148, ROWH
+    y = y + ROWH + PAD
+
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    m_lstFnResults.Move PAD, y, w - 2 * PAD, bottomRow - y - PAD
+    m_btnFnOpen.Move PAD, bottomRow, 160, BTNH
+End Sub
+
+Private Sub PopulateFindResults()
+    On Error GoTo EH
+    If m_lstFnResults Is Nothing Then Exit Sub
+    m_lstFnResults.Clear
+
+    Dim tip As String: tip = ""
+    If Not m_cmbFnTip Is Nothing Then tip = CStr(m_cmbFnTip.value)
+    Dim txt As String: txt = ""
+    If Not m_txtFnSearch Is Nothing Then txt = CStr(m_txtFnSearch.text)
+
+    Dim docs As Collection: Set docs = GetActiveDocumentsForStorno(tip, txt)
+    Dim i As Long
+    If Not docs Is Nothing Then
+        For i = 1 To docs.count
+            AddFnRow docs(i)
+        Next i
+    End If
+    m_fnTitle.caption = "Nadji dokument za storno  (" & IIf(docs Is Nothing, 0, docs.count) & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateFindResults"
+End Sub
+
+Private Sub AddFnRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_lstFnResults.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_lstFnResults.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_lstFnResults.ColumnCount - 1 Then m_lstFnResults.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+Private Sub SetFindPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_fnBuilt Then Exit Sub
+    If bShow Then
+        LayoutFindPanel
+        HideBehindFind
+        m_fnBack.visible = True: m_fnTitle.visible = True: m_btnFnClose.visible = True
+        m_cmbFnTip.visible = True: m_txtFnSearch.visible = True
+        m_lstFnResults.visible = True: m_btnFnOpen.visible = True
+        m_fnBack.ZOrder 0
+        m_fnTitle.ZOrder 0: m_btnFnClose.ZOrder 0
+        m_cmbFnTip.ZOrder 0: m_txtFnSearch.ZOrder 0
+        m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0
+    Else
+        m_fnBack.visible = False: m_fnTitle.visible = False: m_btnFnClose.visible = False
+        m_cmbFnTip.visible = False: m_txtFnSearch.visible = False
+        m_lstFnResults.visible = False: m_btnFnOpen.visible = False
+        RestoreBehindFind
+    End If
+End Sub
+
+Private Sub HideBehindFind()
+    On Error Resume Next
+    Set m_fnHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_fnBack Or ctl Is m_fnTitle Or ctl Is m_btnFnClose _
+           Or ctl Is m_cmbFnTip Or ctl Is m_txtFnSearch _
+           Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_fnHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindFind()
+    On Error Resume Next
+    If m_fnHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_fnHidden.count
+        Me.Controls(m_fnHidden(i)).visible = True
+    Next i
+    Set m_fnHidden = Nothing
+End Sub
+
+Private Sub m_btnFnClose_Click()
+    SetFindPanelVisible False
+End Sub
+
+Private Sub m_txtFnSearch_Change()
+    PopulateFindResults
+End Sub
+
+Private Sub m_cmbFnTip_Change()
+    PopulateFindResults
+End Sub
+
+Private Sub m_lstFnResults_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    OpenSelectedFindRow
+End Sub
+
+Private Sub m_btnFnOpen_Click()
+    OpenSelectedFindRow
+End Sub
+
+' Otvori Storno panel za izabrani red browse liste.
+Private Sub OpenSelectedFindRow()
+    On Error GoTo EH
+    If m_lstFnResults Is Nothing Then Exit Sub
+    Dim r As Long: r = m_lstFnResults.ListIndex
+    If r < 0 Then
+        MsgBox "Izaberi dokument iz liste.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim tip As String, broj As String
+    tip = Trim$(CStr(m_lstFnResults.List(r, 0)))
+    broj = Trim$(CStr(m_lstFnResults.List(r, 1)))
+    If Len(broj) = 0 Then Exit Sub
+    SetFindPanelVisible False
+    OpenStornoConfirmPanel tip, broj, ""
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.OpenSelectedFindRow"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
 End Sub
 
 ' ============================================================

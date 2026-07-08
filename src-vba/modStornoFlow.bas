@@ -1156,6 +1156,81 @@ Private Function NzTxC(ByVal data As Variant, ByVal r As Long, ByVal c As Long) 
     If c > 0 Then NzTxC = NzTx(data(r, c))
 End Function
 
+' ============================================================
+' BROWSE za Storno centar (Faza 2b): aktivni dokumenti framework-tipova
+' (Prijemnica/Otpremnica/Zbirna) za "Nadji" listu. Distinct po broju (Klasa I/II
+' dele broj). Filter: tip ("" / "Svi" / tacan tip) + tekst (substr broj/partner/datum).
+' Red = niz(0..4): tip, broj, datum, partnerID, kolicina. READ-ONLY.
+' ============================================================
+Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
+                                            ByVal textFilter As String) As Collection
+    Const SRC As String = MOD_NAME & ".GetActiveDocumentsForStorno"
+    Dim result As New Collection
+    Set GetActiveDocumentsForStorno = result
+    On Error GoTo EH
+    tipFilter = Trim$(tipFilter)
+    Dim tf As String: tf = LCase$(Trim$(textFilter))
+
+    If WantTip(tipFilter, FLOW_DOC_PRIJEMNICA) Then _
+        AddStornoDocs result, TBL_PRIJEMNICA, FLOW_DOC_PRIJEMNICA, _
+            COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, tf
+    If WantTip(tipFilter, FLOW_DOC_OTPREMNICA) Then _
+        AddStornoDocs result, TBL_OTPREMNICA, FLOW_DOC_OTPREMNICA, _
+            COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_KOLICINA, tf
+    If WantTip(tipFilter, FLOW_DOC_ZBIRNA) Then _
+        AddStornoDocs result, TBL_ZBIRNA, FLOW_DOC_ZBIRNA, _
+            COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_KUPAC, COL_ZBR_KOLICINA, tf
+    Exit Function
+EH:
+    LogErr SRC
+End Function
+
+Private Function WantTip(ByVal tipFilter As String, ByVal tip As String) As Boolean
+    WantTip = (Len(tipFilter) = 0 Or StrComp(tipFilter, "Svi", vbTextCompare) = 0 _
+               Or StrComp(tipFilter, tip, vbTextCompare) = 0)
+End Function
+
+Private Sub AddStornoDocs(ByRef result As Collection, ByVal tbl As String, ByVal tip As String, _
+        ByVal brojCol As String, ByVal datumCol As String, ByVal partnerCol As String, _
+        ByVal kolCol As String, ByVal tf As String)
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Sub
+    Dim cBr As Long, cDa As Long, cPa As Long, cKo As Long, cSt As Long
+    cBr = GetColumnIndex(tbl, brojCol)
+    cDa = GetColumnIndex(tbl, datumCol)
+    cPa = GetColumnIndex(tbl, partnerCol)
+    cKo = GetColumnIndex(tbl, kolCol)
+    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    If cBr = 0 Then Exit Sub
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
+            Dim broj As String: broj = Trim$(CStr(data(i, cBr)))
+            If Len(broj) > 0 Then
+                If Not seen.Exists(broj) Then
+                    seen(broj) = True
+                    Dim datum As String, partner As String, kol As String
+                    datum = FmtDatum(NzTxC(data, i, cDa))
+                    partner = NzTxC(data, i, cPa)
+                    kol = NzTxC(data, i, cKo)
+                    If Len(tf) = 0 Or InStr(LCase$(broj & " " & partner & " " & datum), tf) > 0 Then
+                        Dim row(0 To 4) As Variant
+                        row(0) = tip: row(1) = broj: row(2) = datum
+                        row(3) = partner: row(4) = kol
+                        result.Add row
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Sub
+
+Private Function FmtDatum(ByVal v As String) As String
+    On Error Resume Next
+    If IsDate(v) Then FmtDatum = Format$(CDate(v), "dd.mm.yyyy") Else FmtDatum = v
+End Function
+
 ' Storniraj cekirane otkupne blokove (samostalne realne kupovine) u JEDNOJ TX.
 ' Reuse modStorno.StornoOtkup (core). Vraca broj storniranih; -1 na gresku.
 Public Function StornoSelectedBlocks_TX(ByVal ids As Collection) As Long
