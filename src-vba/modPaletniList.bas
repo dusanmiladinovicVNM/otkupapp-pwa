@@ -272,6 +272,74 @@ EH:
 End Function
 
 ' ============================================================
+' STORNO CENTAR - uvid u palete (READ-ONLY, ne mutira). Za dati kljuc (fieldCol =
+' COL_PALS_BROJ_PRIJ ili COL_PALS_BROJ_ZBIRNE) vrati po jednu stavku dicta po paleti:
+'   paletaID, label, used, cap, neto, amb, preradjena (agregati palete)
+'   thisGajb, thisNeto, thisAmb (suma AKTIVNIH stavki za ovaj kljuc = detach delta).
+' Reuse GetPaletaAggregates/PaletaLabel/IsPaletaPreradjena (isti modul).
+' ============================================================
+Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As String) As Collection
+    Const SRC As String = "modPaletniList.GetPaleteImpactByField"
+    Dim result As New Collection
+    Set GetPaleteImpactByField = result
+    On Error GoTo EH
+    value = Trim$(value)
+    If Len(value) = 0 Then Exit Function
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim cKey As Long, cPal As Long, cGa As Long, cNe As Long, cAm As Long, cSt As Long
+    cKey = GetColumnIndex(TBL_PALETA_STAVKA, fieldCol)
+    cPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    cNe = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+    cAm = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If cKey = 0 Or cPal = 0 Then Exit Function
+
+    Dim order As Collection: Set order = New Collection
+    Dim thG As Object: Set thG = CreateObject("Scripting.Dictionary")
+    Dim thN As Object: Set thN = CreateObject("Scripting.Dictionary")
+    Dim thA As Object: Set thA = CreateObject("Scripting.Dictionary")
+    Dim r As Long, pid As String
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, cKey))) = value _
+           And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then
+            pid = Trim$(CStr(SafeCell(s, r, cPal)))
+            If Len(pid) > 0 Then
+                If Not thG.Exists(pid) Then thG.Add pid, 0&: thN.Add pid, 0#: thA.Add pid, 0#: order.Add pid
+                thG(pid) = NzL(thG(pid)) + NzL(SafeCell(s, r, cGa))
+                thN(pid) = NzD(thN(pid)) + NzD(SafeCell(s, r, cNe))
+                thA(pid) = NzD(thA(pid)) + NzD(SafeCell(s, r, cAm))
+            End If
+        End If
+    Next r
+
+    Dim v As Variant
+    For Each v In order
+        pid = CStr(v)
+        Dim palRow As Long: palRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pid)
+        Dim used As Long, pNeto As Double, pAmb As Double, palk As Double, cap As Long
+        If palRow > 0 Then GetPaletaAggregates palRow, used, pNeto, pAmb, palk, cap
+        Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+        d("paletaID") = pid
+        d("label") = PaletaLabel(pid)
+        d("used") = used
+        d("cap") = cap
+        d("neto") = pNeto
+        d("amb") = pAmb
+        d("preradjena") = IsPaletaPreradjena(pid)
+        d("thisGajb") = CLng(thG(pid))
+        d("thisNeto") = CDbl(thN(pid))
+        d("thisAmb") = CDbl(thA(pid))
+        result.Add d
+    Next v
+    Exit Function
+EH:
+    LogErr SRC
+End Function
+
+' ============================================================
 ' frmPalete (#44) read-modeli + rucno zatvaranje. Read-modeli su SAMO za
 ' citanje (bez TX); vracaju 0-based 2D Variant (spreman za ListBox.List) ili
 ' Empty. Stornirane palete se ne prikazuju. Sva izmena ide preko TX wrappera.
