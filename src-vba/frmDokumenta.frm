@@ -108,6 +108,13 @@ Private m_scChainLbl As MSForms.Label
 Private m_scBlkLbl As MSForms.Label
 Private m_scChain As MSForms.ListBox
 Private m_scBlocks As MSForms.ListBox
+' Faza 2: uvid (header kontekst + palete sa kapacitetom/detach + summary traka).
+Private m_scHeader As MSForms.Label
+Private m_scPalLbl As MSForms.Label
+Private m_scPalete As MSForms.ListBox
+Private m_scSummary As MSForms.Label
+Private m_sc_hasPal As Boolean
+Private m_sc_hasBlk As Boolean
 Private m_scBuilt As Boolean
 Private m_scHidden As Collection
 
@@ -4021,6 +4028,11 @@ Private Sub EnsureStornoConfirmPanel()
     Set m_btnScClose = Me.Controls.Add("Forms.CommandButton.1", "btnScCloseRT", True)
     StyleExitButton m_btnScClose, "Otkazi"
 
+    Set m_scHeader = Me.Controls.Add("Forms.Label.1", "lblScHeaderRT", True)
+    With m_scHeader
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+    End With
+
     Set m_scChainLbl = Me.Controls.Add("Forms.Label.1", "lblScChainRT", True)
     With m_scChainLbl
         .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
@@ -4051,6 +4063,26 @@ Private Sub EnsureStornoConfirmPanel()
     MouseWheel_Register m_scBlocks
     StyleListBox m_scBlocks
 
+    Set m_scPalLbl = Me.Controls.Add("Forms.Label.1", "lblScPalRT", True)
+    With m_scPalLbl
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
+        .caption = "Palete"
+    End With
+
+    Set m_scPalete = Me.Controls.Add("Forms.ListBox.1", "lstScPaleteRT", True)
+    With m_scPalete
+        .ColumnCount = 5
+        .ColumnWidths = "150;70;70;70;70"          ' Paleta | kapacitet | skida gajb | kg | amb
+    End With
+    MouseWheel_Register m_scPalete
+    StyleListBox m_scPalete
+
+    Set m_scSummary = Me.Controls.Add("Forms.Label.1", "lblScSummaryRT", True)
+    With m_scSummary
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
+        .Font.Bold = True
+    End With
+
     Set m_btnScIspravka = Me.Controls.Add("Forms.CommandButton.1", "btnScIspravkaRT", True)
     StylePrimaryButton m_btnScIspravka, "ISPRAVKA (unesi novi)"
     Set m_btnScDupli = Me.Controls.Add("Forms.CommandButton.1", "btnScDupliRT", True)
@@ -4067,7 +4099,8 @@ done:
     m_scBuilt = False
 End Sub
 
-' Full-bleed raspored: chain lista (gore), blokovi (sredina), 4 moda (dole).
+' Full-bleed raspored: header, pa liste (chain + palete? + blokovi?) proporcionalno,
+' summary traka nad dugmadima, 4 moda (dole). Palete/blokovi samo ako postoje.
 Private Sub LayoutStornoConfirmPanel()
     On Error Resume Next
     If Not m_scBuilt Then Exit Sub
@@ -4075,6 +4108,8 @@ Private Sub LayoutStornoConfirmPanel()
     Const HDR As Single = 30
     Const LBLH As Single = 16
     Const BTNH As Single = 28
+    Const HEADH As Single = 16
+    Const SUMH As Single = 30
     Dim w As Single, h As Single
     w = Me.InsideWidth: h = Me.InsideHeight
 
@@ -4082,18 +4117,34 @@ Private Sub LayoutStornoConfirmPanel()
     m_scTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
     m_btnScClose.Move w - PAD - 92, PAD, 92, 24
 
-    Dim yTop As Single: yTop = PAD + HDR
-    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
-    Dim avail As Single: avail = bottomRow - yTop - PAD - (2 * LBLH) - PAD
-    If avail < 80 Then avail = 80
-    Dim chainH As Single: chainH = avail * 0.45
-    Dim blkH As Single: blkH = avail - chainH
+    Dim y As Single: y = PAD + HDR
+    m_scHeader.Move PAD, y, w - 2 * PAD, HEADH
+    y = y + HEADH + 4
 
-    m_scChainLbl.Move PAD, yTop, w - 2 * PAD, LBLH
-    m_scChain.Move PAD, yTop + LBLH, w - 2 * PAD, chainH
-    Dim yBlk As Single: yBlk = yTop + LBLH + chainH + PAD
-    m_scBlkLbl.Move PAD, yBlk, w - 2 * PAD, LBLH
-    m_scBlocks.Move PAD, yBlk + LBLH, w - 2 * PAD, blkH
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    Dim sumY As Single: sumY = bottomRow - PAD - SUMH
+
+    Dim lists As Long: lists = 1                         ' chain uvek
+    If m_sc_hasPal Then lists = lists + 1
+    If m_sc_hasBlk Then lists = lists + 1
+    Dim avail As Single: avail = sumY - y - (lists * LBLH) - (lists * PAD)
+    If avail < 60 Then avail = 60
+    Dim eachH As Single: eachH = avail / lists
+
+    m_scChainLbl.Move PAD, y, w - 2 * PAD, LBLH: y = y + LBLH
+    m_scChain.Move PAD, y, w - 2 * PAD, eachH: y = y + eachH + PAD
+
+    If m_sc_hasPal Then
+        m_scPalLbl.Move PAD, y, w - 2 * PAD, LBLH: y = y + LBLH
+        m_scPalete.Move PAD, y, w - 2 * PAD, eachH: y = y + eachH + PAD
+    End If
+
+    If m_sc_hasBlk Then
+        m_scBlkLbl.Move PAD, y, w - 2 * PAD, LBLH: y = y + LBLH
+        m_scBlocks.Move PAD, y, w - 2 * PAD, eachH: y = y + eachH + PAD
+    End If
+
+    m_scSummary.Move PAD, sumY, w - 2 * PAD, SUMH
 
     Dim n As Long: n = 4
     Dim gap As Single: gap = 6
@@ -4107,39 +4158,74 @@ End Sub
 
 Private Sub PopulateStornoConfirmPanel()
     On Error GoTo EH
-    m_scTitle.caption = "Storno / potvrda -- " & m_sc_docType & " " & m_sc_brDok
+    ' Jedan poziv agregatora (Faza 1) = ceo uvid: header, chain, palete, blokovi, summary.
+    Dim imp As Object: Set imp = BuildStornoImpact(m_sc_docType, m_sc_brDok, m_sc_dokTip)
+    Dim hdr As Object: Set hdr = imp("header")
+    Dim sm As Object: Set sm = imp("summary")
 
+    m_scTitle.caption = "Storno / potvrda -- " & m_sc_docType & " " & m_sc_brDok
+    Dim partner As String: partner = CStr(hdr("partnerID"))
+    m_scHeader.caption = "Partner/stanica: " & IIf(Len(partner) > 0, partner, "-") & _
+        "     Datum: " & CStr(hdr("datum")) & "     Kolicina: " & CStr(hdr("kolicina"))
+
+    ' --- lanac ---
     m_scChain.Clear
     Dim chdr(0 To 2) As Variant
     chdr(0) = "Dokument": chdr(1) = "Broj / info": chdr(2) = "Sta se desava"
     AddScChainRow chdr
-    Dim chainRows As Collection: Set chainRows = GetStornoChainRows(m_sc_docType, m_sc_brDok, m_sc_dokTip)
-    Dim i As Long
+    Dim chainRows As Collection: Set chainRows = imp("chain")
+    Dim i As Long, nc As Long: nc = 0
     If Not chainRows Is Nothing Then
-        For i = 1 To chainRows.count
-            AddScChainRow chainRows(i)
-        Next i
+        For i = 1 To chainRows.count: AddScChainRow chainRows(i): nc = nc + 1: Next i
     End If
 
+    ' --- palete (kapacitet + detach) ---
+    m_scPalete.Clear
+    Dim pal As Collection: Set pal = imp("palete")
+    Dim np As Long: np = 0
+    If Not pal Is Nothing Then
+        For i = 1 To pal.count: AddScPaleteRow pal(i): np = np + 1: Next i
+    End If
+    m_sc_hasPal = (np > 0)
+    m_scPalLbl.caption = "Palete (" & np & ")   --   Paleta | kapacitet | skida: gajb / kg / amb"
+
+    ' --- otkupni blokovi (multiselect) ---
     m_scBlocks.Clear
-    Dim blkRows As Collection: Set blkRows = GetStornoBlockRows(m_sc_docType, m_sc_brDok, m_sc_dokTip)
+    Dim blkRows As Collection: Set blkRows = imp("blocks")
     Dim nb As Long: nb = 0
     If Not blkRows Is Nothing Then
-        For i = 1 To blkRows.count
-            AddScBlockRow blkRows(i)
-            nb = nb + 1
-        Next i
+        For i = 1 To blkRows.count: AddScBlockRow blkRows(i): nb = nb + 1: Next i
     End If
+    m_sc_hasBlk = (nb > 0)
     m_scBlkLbl.caption = "Otkupni blokovi (samostalni): " & nb & _
-        "  --  BrDok | Kolicina | Klasa | Kooperant  --  cekiraj za DODATNI storno; necekirani ostaju/oslobodjeni"
+        "   --   cekiraj za DODATNI storno; necekirani ostaju/oslobodjeni"
     m_scBlocks.Enabled = (nb > 0)
 
+    ' --- summary traka (uticaj u brojkama) ---
+    m_scSummary.caption = "UKUPNO:  dokumenti u lancu " & nc & "   |   blokovi " & CStr(sm("blockCount")) & _
+        "   |   palete " & CStr(sm("paleteCount")) & _
+        "   (DUPLI/PONISTENJE skida: " & CStr(sm("detachGajb")) & " gajb / " & _
+        Format$(CDbl(sm("detachNeto")), "0.#") & " kg / " & Format$(CDbl(sm("detachAmb")), "0.#") & " amb)"
+
     ' PONISTENJE ima smisla samo kad ima zavisnosti (inace = obican storno = DUPLI put).
-    Dim fl As Object: Set fl = GetChainFlags(m_sc_docType, m_sc_brDok, m_sc_dokTip)
+    Dim fl As Object: Set fl = imp("flags")
     m_btnScPonist.Enabled = CBool(fl("hasDependents"))
     Exit Sub
 EH:
     LogErr "frmDokumenta.PopulateStornoConfirmPanel"
+End Sub
+
+' Red palete: Paleta[+PRERAD] | used/cap | skida gajb | skida kg | skida amb.
+Private Sub AddScPaleteRow(ByVal p As Object)
+    On Error Resume Next
+    Dim lbl As String: lbl = CStr(p("label"))
+    If CBool(p("preradjena")) Then lbl = lbl & " [PRERAD]"
+    m_scPalete.AddItem lbl
+    Dim idx As Long: idx = m_scPalete.ListCount - 1
+    m_scPalete.List(idx, 1) = CStr(p("used")) & "/" & CStr(p("cap"))
+    m_scPalete.List(idx, 2) = CStr(p("thisGajb"))
+    m_scPalete.List(idx, 3) = Format$(CDbl(p("thisNeto")), "0.#")
+    m_scPalete.List(idx, 4) = Format$(CDbl(p("thisAmb")), "0.#")
 End Sub
 
 Private Sub AddScChainRow(ByVal cells As Variant)
@@ -4171,19 +4257,25 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         LayoutStornoConfirmPanel
         HideBehindStornoConfirm
         m_scBack.visible = True: m_scTitle.visible = True: m_btnScClose.visible = True
+        m_scHeader.visible = True: m_scSummary.visible = True
         m_scChainLbl.visible = True: m_scChain.visible = True
-        m_scBlkLbl.visible = True: m_scBlocks.visible = True
+        m_scPalLbl.visible = m_sc_hasPal: m_scPalete.visible = m_sc_hasPal
+        m_scBlkLbl.visible = m_sc_hasBlk: m_scBlocks.visible = m_sc_hasBlk
         m_btnScIspravka.visible = True: m_btnScDupli.visible = True
         m_btnScPonist.visible = True: m_btnScResi.visible = True
         m_scBack.ZOrder 0
         m_scTitle.ZOrder 0: m_btnScClose.ZOrder 0
+        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0
         m_scChainLbl.ZOrder 0: m_scChain.ZOrder 0
+        m_scPalLbl.ZOrder 0: m_scPalete.ZOrder 0
         m_scBlkLbl.ZOrder 0: m_scBlocks.ZOrder 0
         m_btnScIspravka.ZOrder 0: m_btnScDupli.ZOrder 0
         m_btnScPonist.ZOrder 0: m_btnScResi.ZOrder 0
     Else
         m_scBack.visible = False: m_scTitle.visible = False: m_btnScClose.visible = False
+        m_scHeader.visible = False: m_scSummary.visible = False
         m_scChainLbl.visible = False: m_scChain.visible = False
+        m_scPalLbl.visible = False: m_scPalete.visible = False
         m_scBlkLbl.visible = False: m_scBlocks.visible = False
         m_btnScIspravka.visible = False: m_btnScDupli.visible = False
         m_btnScPonist.visible = False: m_btnScResi.visible = False
@@ -4197,7 +4289,9 @@ Private Sub HideBehindStornoConfirm()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_scBack Or ctl Is m_scTitle Or ctl Is m_btnScClose _
+           Or ctl Is m_scHeader Or ctl Is m_scSummary _
            Or ctl Is m_scChainLbl Or ctl Is m_scChain _
+           Or ctl Is m_scPalLbl Or ctl Is m_scPalete _
            Or ctl Is m_scBlkLbl Or ctl Is m_scBlocks _
            Or ctl Is m_btnScIspravka Or ctl Is m_btnScDupli _
            Or ctl Is m_btnScPonist Or ctl Is m_btnScResi Then
