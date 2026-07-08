@@ -1109,26 +1109,51 @@ Public Function GetStornoBlockRows(ByVal docType As String, ByVal broj As String
     Dim ids As Collection: Set ids = ActiveBlocksForFlow(docType, broj, dokumentTip)
     If ids Is Nothing Then Exit Function
     If ids.count = 0 Then Exit Function
+
+    ' Jedan scan tblOtkup + indeks OtkupID->red (umesto 4x LookupValue po bloku).
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cId As Long, cBr As Long, cKol As Long, cKl As Long, cKoop As Long
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    If cId = 0 Then Exit Function
+    Dim idx As Object: Set idx = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        idx(Trim$(CStr(data(i, cId)))) = i
+    Next i
+
     Dim pdict As Object: Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
     Dim k As Long
     For k = 1 To ids.count
         Dim oid As String: oid = CStr(ids(k))
-        Dim row(0 To 4) As Variant
-        row(0) = oid
-        row(1) = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_BR_DOK))
-        row(2) = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_KOLICINA))
-        row(3) = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_KLASA))
-        Dim koopID As String: koopID = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_KOOPERANT))
-        If Not pdict Is Nothing Then
-            If pdict.Exists(koopID) Then row(4) = CStr(pdict(koopID)) Else row(4) = koopID
-        Else
-            row(4) = koopID
+        If idx.Exists(oid) Then
+            Dim rr As Long: rr = CLng(idx(oid))
+            Dim row(0 To 4) As Variant
+            row(0) = oid
+            row(1) = NzTxC(data, rr, cBr)
+            row(2) = NzTxC(data, rr, cKol)
+            row(3) = NzTxC(data, rr, cKl)
+            Dim koopID As String: koopID = NzTxC(data, rr, cKoop)
+            If Not pdict Is Nothing Then
+                If pdict.Exists(koopID) Then row(4) = CStr(pdict(koopID)) Else row(4) = koopID
+            Else
+                row(4) = koopID
+            End If
+            result.Add row
         End If
-        result.Add row
     Next k
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetStornoBlockRows"
+End Function
+
+' Bezbedno citanje celije po indeksu kolone (0 = kolona ne postoji -> "").
+Private Function NzTxC(ByVal data As Variant, ByVal r As Long, ByVal c As Long) As String
+    If c > 0 Then NzTxC = NzTx(data(r, c))
 End Function
 
 ' Storniraj cekirane otkupne blokove (samostalne realne kupovine) u JEDNOJ TX.

@@ -3466,6 +3466,10 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
 
     Dim res As Object
     Set res = DispatchCorrection(docType, brDok, dokTip, mode, False)
+    If res Is Nothing Then
+        MsgBox "Nepoznat tip dokumenta za storno.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
 
     ' PONISTENJE: prvo pun spisak posledica (res.message) + svesna potvrda. Tek na
     ' DA se izvrsava (forceConfirm). Razlika od DUPLI (tiho pocisti).
@@ -3480,7 +3484,7 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
         End If
     End If
 
-    Dim blkMsg As String
+    Dim blkMsg As String, blkN As Long
     If CBool(res("needsForm")) Then
         ' ISPRAVKA_ODMAH: stara stornirana, ceka se snimanje NOVE.
         m_activeCorrectionID = CStr(res("correctionID"))
@@ -3493,7 +3497,9 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
             m_pendingRelinkOldPrij = brDok
             m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_PARENT_BROJ)
         End If
-        blkMsg = ApplySelectedBlockStorno(blkIds)
+        ' ISPRAVKA context je jos PENDING (zavrsava se po snimanju nove) -> pad storna
+        ' blokova se samo javi; ne diramo status contexta ovde.
+        blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
         SetStornoConfirmPanelVisible False
         txtStornoBroj.value = ""
         MsgBox CStr(res("message")) & blkMsg & vbCrLf & vbCrLf & _
@@ -3506,7 +3512,15 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
             On Error GoTo EH
         End If
     ElseIf CBool(res("success")) Then
-        blkMsg = ApplySelectedBlockStorno(blkIds)
+        blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
+        ' Storno dokumenta je vec KOMITOVAN (context terminalno). Ako storno cekiranih
+        ' blokova NIJE uspeo -> ne lazi "zavrseno": oznaci context MANUAL (Nedovrseno).
+        If blkN < 0 And Len(CStr(res("correctionID"))) > 0 Then
+            modStornoContext.MarkCorrectionManual CStr(res("correctionID")), _
+                "Storniraj cekirane otkupne blokove rucno (automatski nisu uspeli).", _
+                "Posle " & mode & " nad " & docType & " " & brDok & _
+                " storno cekiranih otkupnih blokova nije uspeo."
+        End If
         SetStornoConfirmPanelVisible False
         txtStornoBroj.value = ""
         MsgBox CStr(res("message")) & blkMsg, vbInformation, APP_NAME
@@ -3522,16 +3536,22 @@ EH:
     MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
 
-' Storniraj cekirane otkupne blokove (samostalne kupovine). Vraca dodatak za poruku.
-Private Function ApplySelectedBlockStorno(ByVal blkIds As Collection) As String
+' Storniraj cekirane otkupne blokove (samostalne kupovine). Vraca broj storniranih;
+' 0 kad nema cekiranih; -1 na gresku (caller onda oznaci context MANUAL).
+Private Function ApplySelectedBlockStorno(ByVal blkIds As Collection) As Long
     On Error Resume Next
     If blkIds Is Nothing Then Exit Function
     If blkIds.count = 0 Then Exit Function
-    Dim n As Long: n = StornoSelectedBlocks_TX(blkIds)
+    ApplySelectedBlockStorno = StornoSelectedBlocks_TX(blkIds)
+End Function
+
+' Dodatak poruci za rezultat storna cekiranih blokova.
+Private Function BlockStornoMsg(ByVal n As Long) As String
     If n < 0 Then
-        ApplySelectedBlockStorno = vbCrLf & "PAZNJA: storno cekiranih otkupnih blokova NIJE uspeo (vidi Monitor)."
+        BlockStornoMsg = vbCrLf & "PAZNJA: storno cekiranih otkupnih blokova NIJE uspeo " & _
+                         "(vidi Monitor / Nedovrseno)."
     ElseIf n > 0 Then
-        ApplySelectedBlockStorno = vbCrLf & "Otkupni blokovi dodatno stornirani: " & n & "."
+        BlockStornoMsg = vbCrLf & "Otkupni blokovi dodatno stornirani: " & n & "."
     End If
 End Function
 
