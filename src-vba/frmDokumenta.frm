@@ -113,8 +113,10 @@ Private m_scHeader As MSForms.Label
 Private m_scPalLbl As MSForms.Label
 Private m_scPalete As MSForms.ListBox
 Private m_scSummary As MSForms.Label
+Private m_scKeepPal As MSForms.CheckBox     ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
 Private m_sc_hasPal As Boolean
 Private m_sc_hasBlk As Boolean
+Private m_sc_showKeep As Boolean
 Private m_scBuilt As Boolean
 Private m_scHidden As Collection
 
@@ -3486,9 +3488,10 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
     ' Cekirani blokovi PRE izvrsenja (posle storna otpremnice/zbirne se oslobode/
     ' razvezu, ali OtkupID ostaje isti -> storno po ID i dalje radi).
     Dim blkIds As Collection: Set blkIds = SelectedBlockIDs()
+    Dim skipPal As Boolean: skipPal = KeepPalChecked()   ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
 
     Dim res As Object
-    Set res = DispatchCorrection(docType, brDok, dokTip, mode, False)
+    Set res = DispatchCorrection(docType, brDok, dokTip, mode, False, skipPal)
     If res Is Nothing Then
         MsgBox "Nepoznat tip dokumenta za storno.", vbExclamation, APP_NAME
         Exit Sub
@@ -3500,7 +3503,7 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
         If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & _
                   "PONISTITI dokument i SVE gore navedeno?", _
                   vbExclamation + vbYesNo, APP_NAME) = vbYes Then
-            Set res = DispatchCorrection(docType, brDok, dokTip, mode, True)
+            Set res = DispatchCorrection(docType, brDok, dokTip, mode, True, skipPal)
         Else
             MsgBox "Ponistenje otkazano. Nista nije promenjeno.", vbInformation, APP_NAME
             Exit Sub
@@ -3568,6 +3571,12 @@ Private Function ApplySelectedBlockStorno(ByVal blkIds As Collection) As Long
     ApplySelectedBlockStorno = StornoSelectedBlocks_TX(blkIds)
 End Function
 
+' "Ne diraj palete" checkbox (prijemnica DUPLI/PONISTENJE) -> True = preskoci detach.
+Private Function KeepPalChecked() As Boolean
+    On Error Resume Next
+    If Not m_scKeepPal Is Nothing Then KeepPalChecked = CBool(m_scKeepPal.value)
+End Function
+
 ' Dodatak poruci za rezultat storna cekiranih blokova.
 Private Function BlockStornoMsg(ByVal n As Long) As String
     If n < 0 Then
@@ -3581,12 +3590,13 @@ End Function
 ' Dispatch na centralne servise po docType/mode (forceConfirm za PONISTENJE).
 Private Function DispatchCorrection(ByVal docType As String, ByVal brDok As String, _
                                     ByVal dokTip As String, ByVal mode As String, _
-                                    ByVal forceConfirm As Boolean) As Object
+                                    ByVal forceConfirm As Boolean, _
+                                    Optional ByVal skipPalete As Boolean = False) As Object
     Select Case docType
         Case FLOW_DOC_OTPREMNICA:  Set DispatchCorrection = RunOtpremnicaCorrection(brDok, mode, forceConfirm)
         Case FLOW_DOC_ZBIRNA:      Set DispatchCorrection = RunZbirnaCorrection(brDok, mode, forceConfirm)
         Case FLOW_DOC_REVERS:      Set DispatchCorrection = RunReversCorrection(brDok, dokTip, mode)
-        Case FLOW_DOC_PRIJEMNICA:  Set DispatchCorrection = RunPrijemnicaCorrection(brDok, mode, forceConfirm)
+        Case FLOW_DOC_PRIJEMNICA:  Set DispatchCorrection = RunPrijemnicaCorrection(brDok, mode, forceConfirm, skipPalete)
     End Select
 End Function
 
@@ -4099,6 +4109,13 @@ Private Sub EnsureStornoConfirmPanel()
         .Font.Bold = True
     End With
 
+    Set m_scKeepPal = Me.Controls.Add("Forms.CheckBox.1", "chkScKeepPalRT", True)
+    With m_scKeepPal
+        .caption = "Ne diraj palete (ostavi osirocene)"
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+        .value = False
+    End With
+
     Set m_btnScIspravka = Me.Controls.Add("Forms.CommandButton.1", "btnScIspravkaRT", True)
     StylePrimaryButton m_btnScIspravka, "ISPRAVKA (unesi novi)"
     Set m_btnScDupli = Me.Controls.Add("Forms.CommandButton.1", "btnScDupliRT", True)
@@ -4160,7 +4177,12 @@ Private Sub LayoutStornoConfirmPanel()
         m_scBlocks.Move PAD, y, w - 2 * PAD, eachH: y = y + eachH + PAD
     End If
 
-    m_scSummary.Move PAD, sumY, w - 2 * PAD, SUMH
+    If m_sc_showKeep Then
+        m_scSummary.Move PAD, sumY, (w - 2 * PAD) * 0.62, SUMH
+        m_scKeepPal.Move PAD + (w - 2 * PAD) * 0.64, sumY + 6, (w - 2 * PAD) * 0.36, 18
+    Else
+        m_scSummary.Move PAD, sumY, w - 2 * PAD, SUMH
+    End If
 
     Dim n As Long: n = 4
     Dim gap As Single: gap = 6
@@ -4223,6 +4245,10 @@ Private Sub PopulateStornoConfirmPanel()
         "   (DUPLI/PONISTENJE skida: " & CStr(sm("detachGajb")) & " gajb / " & _
         Format$(CDbl(sm("detachNeto")), "0.#") & " kg / " & Format$(CDbl(sm("detachAmb")), "0.#") & " amb)"
 
+    ' "Ne diraj palete" (DUPLI/PONISTENJE) samo za prijemnicu sa paletama.
+    m_sc_showKeep = (m_sc_docType = FLOW_DOC_PRIJEMNICA And m_sc_hasPal)
+    If Not m_scKeepPal Is Nothing Then m_scKeepPal.value = False
+
     ' PONISTENJE ima smisla samo kad ima zavisnosti (inace = obican storno = DUPLI put).
     Dim fl As Object: Set fl = imp("flags")
     m_btnScPonist.Enabled = CBool(fl("hasDependents"))
@@ -4274,6 +4300,7 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         HideBehindStornoConfirm
         m_scBack.visible = True: m_scTitle.visible = True: m_btnScClose.visible = True
         m_scHeader.visible = True: m_scSummary.visible = True
+        m_scKeepPal.visible = m_sc_showKeep
         m_scChainLbl.visible = True: m_scChain.visible = True
         m_scPalLbl.visible = m_sc_hasPal: m_scPalete.visible = m_sc_hasPal
         m_scBlkLbl.visible = m_sc_hasBlk: m_scBlocks.visible = m_sc_hasBlk
@@ -4281,7 +4308,7 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         m_btnScPonist.visible = True: m_btnScResi.visible = True
         m_scBack.ZOrder 0
         m_scTitle.ZOrder 0: m_btnScClose.ZOrder 0
-        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0
+        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0: m_scKeepPal.ZOrder 0
         m_scChainLbl.ZOrder 0: m_scChain.ZOrder 0
         m_scPalLbl.ZOrder 0: m_scPalete.ZOrder 0
         m_scBlkLbl.ZOrder 0: m_scBlocks.ZOrder 0
@@ -4289,7 +4316,7 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         m_btnScPonist.ZOrder 0: m_btnScResi.ZOrder 0
     Else
         m_scBack.visible = False: m_scTitle.visible = False: m_btnScClose.visible = False
-        m_scHeader.visible = False: m_scSummary.visible = False
+        m_scHeader.visible = False: m_scSummary.visible = False: m_scKeepPal.visible = False
         m_scChainLbl.visible = False: m_scChain.visible = False
         m_scPalLbl.visible = False: m_scPalete.visible = False
         m_scBlkLbl.visible = False: m_scBlocks.visible = False
@@ -4305,7 +4332,7 @@ Private Sub HideBehindStornoConfirm()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_scBack Or ctl Is m_scTitle Or ctl Is m_btnScClose _
-           Or ctl Is m_scHeader Or ctl Is m_scSummary _
+           Or ctl Is m_scHeader Or ctl Is m_scSummary Or ctl Is m_scKeepPal _
            Or ctl Is m_scChainLbl Or ctl Is m_scChain _
            Or ctl Is m_scPalLbl Or ctl Is m_scPalete _
            Or ctl Is m_scBlkLbl Or ctl Is m_scBlocks _

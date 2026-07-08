@@ -894,7 +894,8 @@ End Function
 ' (ReassignPaleteToPrijemnica_TX) -> ovde se samo pravi context i stornira stara.
 ' ============================================================
 Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As String, _
-                                        Optional ByVal forceConfirm As Boolean = False) As Object
+                                        Optional ByVal forceConfirm As Boolean = False, _
+                                        Optional ByVal skipPalete As Boolean = False) As Object
     Const SRC As String = MOD_NAME & ".RunPrijemnicaCorrection"
     Dim r As Object: Set r = NewRes(mode)
     Set RunPrijemnicaCorrection = r
@@ -946,10 +947,15 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 r("message") = "Storno prijemnice nije uspeo.": Exit Function
             End If
             Dim detD As Long, infoD As String
-            If CBool(s("hasPalete")) Then detD = DetachOsirocenePaletaStavke_TX(broj, infoD)
-            CompleteCorrectionContext cidD, , , "Dupli prijemnica stornirana; paletne stavke skinute: " & detD & "."
+            If CBool(s("hasPalete")) And Not skipPalete Then detD = DetachOsirocenePaletaStavke_TX(broj, infoD)
+            If skipPalete And CBool(s("hasPalete")) Then
+                CompleteCorrectionContext cidD, , , "Dupli prijemnica stornirana; palete OSTAVLJENE osirocene (izbor operatera)."
+                r("message") = "Prijemnica stornirana (dupli). Palete ostavljene osirocene -> Osiroceni dokumenti (Mod: Palete)."
+            Else
+                CompleteCorrectionContext cidD, , , "Dupli prijemnica stornirana; paletne stavke skinute: " & detD & "."
+                r("message") = "Prijemnica stornirana (dupli). Paletne stavke skinute: " & detD & "."
+            End If
             r("success") = True
-            r("message") = "Prijemnica stornirana (dupli). Paletne stavke skinute: " & detD & "."
 
         Case SV_MODE_PONISTENJE
             ' PONISTENJE = UVEK prvo pun spisak posledica + svesna potvrda (forceConfirm).
@@ -967,10 +973,15 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 r("message") = "Storno prijemnice nije uspeo.": Exit Function
             End If
             Dim detP As Long, infoP As String
-            If CBool(s("hasPalete")) Then detP = DetachOsirocenePaletaStavke_TX(broj, infoP)
-            CompleteCorrectionContext cidP, , , "Ponistena prijemnica; paletne stavke skinute: " & detP & "."
+            If CBool(s("hasPalete")) And Not skipPalete Then detP = DetachOsirocenePaletaStavke_TX(broj, infoP)
+            If skipPalete And CBool(s("hasPalete")) Then
+                CompleteCorrectionContext cidP, , , "Ponistena prijemnica; palete OSTAVLJENE osirocene (izbor operatera)."
+                r("message") = "Prijemnica ponistena. Palete ostavljene osirocene -> Osiroceni dokumenti (Mod: Palete)."
+            Else
+                CompleteCorrectionContext cidP, , , "Ponistena prijemnica; paletne stavke skinute: " & detP & "."
+                r("message") = "Prijemnica ponistena. Paletne stavke skinute: " & detP & "."
+            End If
             r("success") = True
-            r("message") = "Prijemnica ponistena. Paletne stavke skinute: " & detP & "."
 
         Case Else
             r("message") = "Nepoznat mod: " & mode
