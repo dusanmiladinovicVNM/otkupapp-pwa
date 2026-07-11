@@ -127,6 +127,7 @@ Private m_scHidden As Collection
 Private WithEvents m_btnStornoFind As MSForms.CommandButton
 Private WithEvents m_btnFnClose As MSForms.CommandButton
 Private WithEvents m_btnFnOpen As MSForms.CommandButton
+Private WithEvents m_btnFnNed As MSForms.CommandButton     ' "Nedovrseno" iz browse-a
 Private WithEvents m_txtFnSearch As MSForms.TextBox
 Private WithEvents m_cmbFnTip As MSForms.ComboBox
 Private WithEvents m_lstFnResults As MSForms.ListBox
@@ -304,11 +305,9 @@ Private Sub UserForm_Activate()
     ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
     SetupRecoveryButton
 
-    ' Runtime dugme "Nadji za storno" (browse overlay; Faza 2b; ne dira .frx).
-    SetupStornoFindButton
-
-    ' Runtime dugme "Nedovrseno (sve)" (Faza 5; read-only pregled; ne dira .frx).
-    SetupNedovrsenoButton
+    ' Browse "Nadji za storno" (Faza 2b) i "Nedovrseno" (Faza 5) NE dobijaju zasebna
+    ' dugmad (STORNO frame nema mesta -> clip). Pristup: klik "Storno" sa praznim
+    ' poljima -> browse; u browse-u dugme "Nedovrseno".
 
     ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
     ApplyKesIsplateState
@@ -3263,7 +3262,14 @@ Private Sub btnStorno_Click()
     
     Dim brDok As String
     brDok = Trim$(txtStornoBroj.value)
-    
+
+    ' Oba polja prazna -> otvori "Nadji za storno" browse (Faza 2b; pretraga umesto
+    ' kucanja broja). Odatle se otvara Storno panel i "Nedovrseno".
+    If Len(Trim$(tipDok)) = 0 And Len(brDok) = 0 Then
+        ShowFindPanel
+        Exit Sub
+    End If
+
     If tipDok = "" Then
         MsgBox "Izaberite tip dokumenta!", vbExclamation, APP_NAME
         Exit Sub
@@ -4578,6 +4584,9 @@ Private Sub EnsureFindPanel()
     Set m_btnFnOpen = Me.Controls.Add("Forms.CommandButton.1", "btnFnOpenRT", True)
     StylePrimaryButton m_btnFnOpen, "Otvori storno"
 
+    Set m_btnFnNed = Me.Controls.Add("Forms.CommandButton.1", "btnFnNedRT", True)
+    StyleExitButton m_btnFnNed, "Nedovrseno (sve)"
+
     m_fnBuilt = True
     Exit Sub
 done:
@@ -4607,6 +4616,7 @@ Private Sub LayoutFindPanel()
     Dim bottomRow As Single: bottomRow = h - PAD - BTNH
     m_lstFnResults.Move PAD, y, w - 2 * PAD, bottomRow - y - PAD
     m_btnFnOpen.Move PAD, bottomRow, 160, BTNH
+    m_btnFnNed.Move PAD + 170, bottomRow, 160, BTNH
 End Sub
 
 Private Sub PopulateFindResults()
@@ -4651,15 +4661,15 @@ Private Sub SetFindPanelVisible(ByVal bShow As Boolean)
         HideBehindFind
         m_fnBack.visible = True: m_fnTitle.visible = True: m_btnFnClose.visible = True
         m_cmbFnTip.visible = True: m_txtFnSearch.visible = True
-        m_lstFnResults.visible = True: m_btnFnOpen.visible = True
+        m_lstFnResults.visible = True: m_btnFnOpen.visible = True: m_btnFnNed.visible = True
         m_fnBack.ZOrder 0
         m_fnTitle.ZOrder 0: m_btnFnClose.ZOrder 0
         m_cmbFnTip.ZOrder 0: m_txtFnSearch.ZOrder 0
-        m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0
+        m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0: m_btnFnNed.ZOrder 0
     Else
         m_fnBack.visible = False: m_fnTitle.visible = False: m_btnFnClose.visible = False
         m_cmbFnTip.visible = False: m_txtFnSearch.visible = False
-        m_lstFnResults.visible = False: m_btnFnOpen.visible = False
+        m_lstFnResults.visible = False: m_btnFnOpen.visible = False: m_btnFnNed.visible = False
         RestoreBehindFind
     End If
 End Sub
@@ -4671,7 +4681,7 @@ Private Sub HideBehindFind()
     For Each ctl In Me.Controls
         If ctl Is m_fnBack Or ctl Is m_fnTitle Or ctl Is m_btnFnClose _
            Or ctl Is m_cmbFnTip Or ctl Is m_txtFnSearch _
-           Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Then
+           Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Or ctl Is m_btnFnNed Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_fnHidden.Add ctl.name
@@ -4692,6 +4702,11 @@ End Sub
 
 Private Sub m_btnFnClose_Click()
     SetFindPanelVisible False
+End Sub
+
+Private Sub m_btnFnNed_Click()
+    SetFindPanelVisible False
+    ShowNedovrsenoPanel
 End Sub
 
 Private Sub m_txtFnSearch_Change()
