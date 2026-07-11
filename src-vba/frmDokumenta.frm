@@ -64,9 +64,11 @@ Private m_ambIPrijFullW As Single
 ' otvara overlay panel sa listom svih storniranih dokumenata, grupisano po tipu.
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
+Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
 Private m_lstStorno As MSForms.ListBox
+Private m_stornoRowTip As Collection      ' paralelno redovima liste: tip po redu ("" za zaglavlja)
 Private m_stornoBuilt As Boolean
 Private m_stornoHidden As Collection      ' kontrole privremeno sakrivene dok je panel otvoren
 
@@ -132,6 +134,16 @@ Private m_fnBack As MSForms.Label
 Private m_fnTitle As MSForms.Label
 Private m_fnBuilt As Boolean
 Private m_fnHidden As Collection
+
+' Faza 5: "Nedovrseno (sve)" read-only overlay (ujedinjen pregled: contexti +
+' osirocene). Podaci: modStornoRecovery.GetNedovrseno. .frx se ne dira.
+Private WithEvents m_btnNedovrseno As MSForms.CommandButton
+Private WithEvents m_btnNedClose As MSForms.CommandButton
+Private m_nedBack As MSForms.Label
+Private m_nedTitle As MSForms.Label
+Private m_lstNed As MSForms.ListBox
+Private m_nedBuilt As Boolean
+Private m_nedHidden As Collection
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -294,6 +306,9 @@ Private Sub UserForm_Activate()
 
     ' Runtime dugme "Nadji za storno" (browse overlay; Faza 2b; ne dira .frx).
     SetupStornoFindButton
+
+    ' Runtime dugme "Nedovrseno (sve)" (Faza 5; read-only pregled; ne dira .frx).
+    SetupNedovrsenoButton
 
     ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
     ApplyKesIsplateState
@@ -3831,6 +3846,67 @@ Private Sub m_btnStornoClose_Click()
     SetStorniraniPanelVisible False
 End Sub
 
+' "Vrati storno" za izabran red (Faza 5). Radi za OTKUP i REVERS; ostali tipovi
+' se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos). Uz potvrdu.
+Private Sub m_btnStornoVrati_Click()
+    On Error GoTo EH
+    If m_lstStorno Is Nothing Then Exit Sub
+    Dim idx As Long: idx = m_lstStorno.ListIndex
+    If idx < 0 Then
+        MsgBox "Izaberi red (dokument) iz liste.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim tip As String: tip = ""
+    If Not m_stornoRowTip Is Nothing Then
+        If (idx + 1) <= m_stornoRowTip.count Then tip = Trim$(CStr(m_stornoRowTip(idx + 1)))
+    End If
+    If Len(tip) = 0 Then
+        MsgBox "Izaberi konkretan dokument (ne grupno zaglavlje).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim broj As String: broj = Trim$(CStr(m_lstStorno.List(idx, 0)))
+    If Len(broj) = 0 Then Exit Sub
+
+    Dim undoArg As String
+    If Not UndoArgForTip(tip, undoArg) Then
+        MsgBox "Vrati storno je podrzan SAMO za Otkup i Revers." & vbCrLf & _
+               "Za '" & tip & "' koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If MsgBox("Vratiti storno: " & tip & " " & broj & "?" & vbCrLf & vbCrLf & _
+              "(Reaktivira dokument i njegovu ambalazu.)", _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    If UndoStorno_TX(undoArg, broj) Then
+        MsgBox "Vraceno iz storna: " & tip & " " & broj & ".", vbInformation, APP_NAME
+        PopulateStorniraniPanel                  ' osvezi listu
+    Else
+        MsgBox "Nije vraceno: " & tip & " " & broj & "." & vbCrLf & _
+               "Guard/greska (npr. vec postoji aktivan isti broj) -> vidi Monitor.", _
+               vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnStornoVrati_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' Mapiraj tip iz liste storniranih -> argument za UndoStorno_TX (Otkup ili
+' DOK_TIP_OM_* za revers). Vraca False za nepodrzane (chain) tipove.
+Private Function UndoArgForTip(ByVal tip As String, ByRef outArg As String) As Boolean
+    If StrComp(tip, "Otkup", vbTextCompare) = 0 Then
+        outArg = DOK_TIP_OTKUP
+        UndoArgForTip = True
+        Exit Function
+    End If
+    Dim dokTip As String
+    If ComboToDocType(tip, dokTip) = FLOW_DOC_REVERS And Len(dokTip) > 0 Then
+        outArg = dokTip
+        UndoArgForTip = True
+    End If
+End Function
+
 ' Izgradi panel (jednom), napuni svezim podacima i prikazi ga.
 Private Sub ShowStorniraniPanel()
     EnsureStorniraniPanel
@@ -3877,6 +3953,11 @@ Private Sub EnsureStorniraniPanel()
     MouseWheel_Register m_lstStorno
     StyleListBox m_lstStorno
 
+    ' "Vrati storno" (dole levo) - radi za izabran OTKUP ili REVERS red; ostali
+    ' tipovi se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos).
+    Set m_btnStornoVrati = Me.Controls.Add("Forms.CommandButton.1", "btnStornoVratiRT", True)
+    StylePrimaryButton m_btnStornoVrati, "Vrati storno (Otkup/Revers)"
+
     m_stornoBuilt = True
     Exit Sub
 done:
@@ -3895,10 +3976,14 @@ Private Sub LayoutStorniraniPanel()
     w = Me.InsideWidth
     h = Me.InsideHeight
 
+    Const BTNH As Single = 28
     m_stornoBack.Move 0, 0, w, h
     m_stornoTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
     m_btnStornoClose.Move w - PAD - 92, PAD, 92, 24
-    m_lstStorno.Move PAD, PAD + HDR, w - 2 * PAD, h - 2 * PAD - HDR
+    Dim listH As Single: listH = h - 2 * PAD - HDR - BTNH - PAD
+    If listH < 60 Then listH = 60
+    m_lstStorno.Move PAD, PAD + HDR, w - 2 * PAD, listH
+    m_btnStornoVrati.Move PAD, PAD + HDR + listH + PAD, 220, BTNH
 End Sub
 
 ' Napuni listu: header red, pa po tipu grupni naslov + redovi. Total u naslovu.
@@ -3907,7 +3992,9 @@ Private Sub PopulateStorniraniPanel()
     If m_lstStorno Is Nothing Then Exit Sub
 
     m_lstStorno.Clear
+    Set m_stornoRowTip = New Collection
     AddStornoListRow StorniraniHeaders()
+    m_stornoRowTip.Add ""                       ' header red -> nije dokument
 
     Dim grupe As Collection
     Set grupe = GetStorniraniGrupisano()
@@ -3925,12 +4012,14 @@ Private Sub PopulateStorniraniPanel()
             For z = 0 To 11: hdr(z) = "": Next z
             hdr(0) = ChrW$(187) & " " & UCase$(tip) & " (" & cnt & ")"
             AddStornoListRow hdr
+            m_stornoRowTip.Add ""               ' grupno zaglavlje -> nije dokument
 
             Dim r As Long, c As Long
             For r = 1 To cnt
                 Dim one(0 To 11) As Variant
                 For c = 0 To 11: one(c) = rowsv(r, c + 1): Next c
                 AddStornoListRow one
+                m_stornoRowTip.Add tip          ' red dokumenta -> njegov tip
             Next r
 
             total = total + cnt
@@ -3939,7 +4028,9 @@ Private Sub PopulateStorniraniPanel()
 
     If total = 0 Then
         m_lstStorno.Clear
+        Set m_stornoRowTip = New Collection
         m_lstStorno.AddItem "Nema storniranih dokumenata."
+        m_stornoRowTip.Add ""
     End If
 
     m_stornoTitle.caption = "Stornirani dokumenti  (" & total & ")"
@@ -3973,16 +4064,19 @@ Private Sub SetStorniraniPanelVisible(ByVal bShow As Boolean)
         m_lstStorno.visible = True
         m_stornoTitle.visible = True
         m_btnStornoClose.visible = True
+        m_btnStornoVrati.visible = True
         ' Na vrh (redosled: back -> lista -> naslov -> zatvori).
         m_stornoBack.ZOrder 0
         m_lstStorno.ZOrder 0
         m_stornoTitle.ZOrder 0
         m_btnStornoClose.ZOrder 0
+        m_btnStornoVrati.ZOrder 0
     Else
         m_stornoBack.visible = False
         m_lstStorno.visible = False
         m_stornoTitle.visible = False
         m_btnStornoClose.visible = False
+        m_btnStornoVrati.visible = False
         RestoreBehindPanel
     End If
 End Sub
@@ -3994,7 +4088,8 @@ Private Sub HideBehindPanel()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_stornoBack Or ctl Is m_lstStorno _
-           Or ctl Is m_stornoTitle Or ctl Is m_btnStornoClose Then
+           Or ctl Is m_stornoTitle Or ctl Is m_btnStornoClose _
+           Or ctl Is m_btnStornoVrati Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_stornoHidden.Add ctl.name
@@ -4634,6 +4729,176 @@ Private Sub OpenSelectedFindRow()
 EH:
     LogErr "frmDokumenta.OpenSelectedFindRow"
     MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' ============================================================
+' NEDOVRSENO (SVE) -- read-only overlay (Faza 5). Ujedinjen pregled: PENDING/MANUAL
+' contexti (tblStornoVeze) + brojevi osirocenih. Podaci: modStornoRecovery.GetNedovrseno.
+' Detalj/akcije osirocenih su u "Osiroceni dokumenti" panelu.
+' ============================================================
+Private Sub SetupNedovrsenoButton()
+    On Error GoTo done
+    If Not m_btnNedovrseno Is Nothing Then Exit Sub
+    Dim anchor As MSForms.Control
+    If Not m_btnStornoFind Is Nothing Then Set anchor = m_btnStornoFind Else Set anchor = btnStorno
+    Set m_btnNedovrseno = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnNedovrsenoRT", True)
+    If m_btnNedovrseno Is Nothing Then GoTo done
+    With m_btnNedovrseno
+        .width = btnStorno.width
+        .Height = btnStorno.Height
+        .Left = btnStorno.Left
+        .Top = anchor.Top + anchor.Height + 6
+    End With
+    StylePrimaryButton m_btnNedovrseno, "Nedovrseno (sve)"
+    m_btnNedovrseno.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupNedovrsenoButton"
+    Set m_btnNedovrseno = Nothing
+End Sub
+
+Private Sub m_btnNedovrseno_Click()
+    On Error GoTo EH
+    ShowNedovrsenoPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnNedovrseno_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub ShowNedovrsenoPanel()
+    EnsureNedovrsenoPanel
+    If Not m_nedBuilt Then Exit Sub
+    PopulateNedovrsenoPanel
+    SetNedovrsenoPanelVisible True
+End Sub
+
+Private Sub EnsureNedovrsenoPanel()
+    On Error GoTo done
+    If m_nedBuilt Then Exit Sub
+
+    Set m_nedBack = Me.Controls.Add("Forms.Label.1", "lblNedBackRT", True)
+    With m_nedBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+    Set m_nedTitle = Me.Controls.Add("Forms.Label.1", "lblNedTitleRT", True)
+    With m_nedTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Nedovrseno (sve)"
+    End With
+    Set m_btnNedClose = Me.Controls.Add("Forms.CommandButton.1", "btnNedCloseRT", True)
+    StyleExitButton m_btnNedClose, "Zatvori"
+    Set m_lstNed = Me.Controls.Add("Forms.ListBox.1", "lstNedRT", True)
+    With m_lstNed
+        .ColumnCount = 4
+        .ColumnWidths = "150;110;90;320"          ' Vrsta | Ref | Status | Opis
+    End With
+    MouseWheel_Register m_lstNed
+    StyleListBox m_lstNed
+
+    m_nedBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureNedovrsenoPanel"
+    m_nedBuilt = False
+End Sub
+
+Private Sub LayoutNedovrsenoPanel()
+    On Error Resume Next
+    If Not m_nedBuilt Then Exit Sub
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+    m_nedBack.Move 0, 0, w, h
+    m_nedTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnNedClose.Move w - PAD - 92, PAD, 92, 24
+    m_lstNed.Move PAD, PAD + HDR, w - 2 * PAD, h - 2 * PAD - HDR
+End Sub
+
+Private Sub PopulateNedovrsenoPanel()
+    On Error GoTo EH
+    If m_lstNed Is Nothing Then Exit Sub
+    m_lstNed.Clear
+    Dim hdr(0 To 3) As Variant
+    hdr(0) = "Vrsta": hdr(1) = "Ref": hdr(2) = "Status": hdr(3) = "Opis"
+    AddNedListRow hdr
+
+    Dim rows As Collection: Set rows = GetNedovrseno()
+    Dim i As Long, n As Long: n = 0
+    If Not rows Is Nothing Then
+        For i = 1 To rows.count
+            Dim d As Object: Set d = rows(i)
+            Dim one(0 To 3) As Variant
+            one(0) = CStr(d("kind")): one(1) = CStr(d("ref"))
+            one(2) = CStr(d("status")): one(3) = CStr(d("opis"))
+            AddNedListRow one
+            n = n + 1
+        Next i
+    End If
+    If n = 0 Then m_lstNed.AddItem "Nema nedovrsenih stavki."
+    m_nedTitle.caption = "Nedovrseno (sve)  (" & n & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateNedovrsenoPanel"
+End Sub
+
+Private Sub AddNedListRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_lstNed.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_lstNed.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_lstNed.ColumnCount - 1 Then m_lstNed.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+Private Sub SetNedovrsenoPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_nedBuilt Then Exit Sub
+    If bShow Then
+        LayoutNedovrsenoPanel
+        HideBehindNed
+        m_nedBack.visible = True: m_nedTitle.visible = True
+        m_btnNedClose.visible = True: m_lstNed.visible = True
+        m_nedBack.ZOrder 0: m_lstNed.ZOrder 0
+        m_nedTitle.ZOrder 0: m_btnNedClose.ZOrder 0
+    Else
+        m_nedBack.visible = False: m_nedTitle.visible = False
+        m_btnNedClose.visible = False: m_lstNed.visible = False
+        RestoreBehindNed
+    End If
+End Sub
+
+Private Sub HideBehindNed()
+    On Error Resume Next
+    Set m_nedHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_nedBack Or ctl Is m_nedTitle Or ctl Is m_btnNedClose Or ctl Is m_lstNed Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_nedHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindNed()
+    On Error Resume Next
+    If m_nedHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_nedHidden.count
+        Me.Controls(m_nedHidden(i)).visible = True
+    Next i
+    Set m_nedHidden = Nothing
+End Sub
+
+Private Sub m_btnNedClose_Click()
+    SetNedovrsenoPanelVisible False
 End Sub
 
 ' ============================================================
