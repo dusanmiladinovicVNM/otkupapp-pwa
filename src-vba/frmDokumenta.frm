@@ -115,6 +115,7 @@ Private m_scHeader As MSForms.Label
 Private m_scPalLbl As MSForms.Label
 Private m_scPalete As MSForms.ListBox
 Private m_scSummary As MSForms.Label
+Private m_scModeLegend As MSForms.Label      ' legenda: sta koji mod znaci (ljudski jezik)
 Private m_scKeepPal As MSForms.CheckBox     ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
 Private m_sc_hasPal As Boolean
 Private m_sc_hasBlk As Boolean
@@ -4246,14 +4247,24 @@ Private Sub EnsureStornoConfirmPanel()
         .value = False
     End With
 
+    ' Legenda modova (ljudski jezik) - iznad dugmadi.
+    Set m_scModeLegend = Me.Controls.Add("Forms.Label.1", "lblScModeLegRT", True)
+    With m_scModeLegend
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+        .caption = "Zasto storniras?   Pogresio unos = storniraj i unesi ispravan   |   " & _
+                   "Duplikat = visak (roba je realna)   |   Nista se nije desilo = ceo tok otpada (uz potvrdu)   |   " & _
+                   "Resi kasnije = parkiraj (recovery)"
+    End With
+
+    ' Modovi - ljudski jezik na dugmadima (interni SV_MODE_* nepromenjen).
     Set m_btnScIspravka = Me.Controls.Add("Forms.CommandButton.1", "btnScIspravkaRT", True)
-    StylePrimaryButton m_btnScIspravka, "ISPRAVKA (unesi novi)"
+    StylePrimaryButton m_btnScIspravka, "Pogresio sam unos"
     Set m_btnScDupli = Me.Controls.Add("Forms.CommandButton.1", "btnScDupliRT", True)
-    StylePrimaryButton m_btnScDupli, "DUPLI (skloni visak)"
+    StylePrimaryButton m_btnScDupli, "Duplikat (skloni visak)"
     Set m_btnScPonist = Me.Controls.Add("Forms.CommandButton.1", "btnScPonistRT", True)
-    StylePrimaryButton m_btnScPonist, "PONISTENJE (ceo tok)"
+    StylePrimaryButton m_btnScPonist, "Nista se nije desilo (ponisti)"
     Set m_btnScResi = Me.Controls.Add("Forms.CommandButton.1", "btnScResiRT", True)
-    StylePrimaryButton m_btnScResi, "RESI KASNIJE"
+    StylePrimaryButton m_btnScResi, "Resi kasnije"
 
     m_scBuilt = True
     Exit Sub
@@ -4285,7 +4296,9 @@ Private Sub LayoutStornoConfirmPanel()
     y = y + HEADH + 4
 
     Dim bottomRow As Single: bottomRow = h - PAD - BTNH
-    Dim sumY As Single: sumY = bottomRow - PAD - SUMH
+    Const LEGH As Single = 14
+    Dim legY As Single: legY = bottomRow - LEGH - 4      ' legenda modova, tik iznad dugmadi
+    Dim sumY As Single: sumY = legY - 20                 ' summary iznad legende
 
     Dim lists As Long: lists = 1                         ' chain uvek
     If m_sc_hasPal Then lists = lists + 1
@@ -4308,11 +4321,12 @@ Private Sub LayoutStornoConfirmPanel()
     End If
 
     If m_sc_showKeep Then
-        m_scSummary.Move PAD, sumY, (w - 2 * PAD) * 0.62, SUMH
-        m_scKeepPal.Move PAD + (w - 2 * PAD) * 0.64, sumY + 6, (w - 2 * PAD) * 0.36, 18
+        m_scSummary.Move PAD, sumY, (w - 2 * PAD) * 0.62, 18
+        m_scKeepPal.Move PAD + (w - 2 * PAD) * 0.64, sumY, (w - 2 * PAD) * 0.36, 18
     Else
-        m_scSummary.Move PAD, sumY, w - 2 * PAD, SUMH
+        m_scSummary.Move PAD, sumY, w - 2 * PAD, 18
     End If
+    m_scModeLegend.Move PAD, legY, w - 2 * PAD, LEGH
 
     Dim n As Long: n = 4
     Dim gap As Single: gap = 6
@@ -4429,7 +4443,7 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         LayoutStornoConfirmPanel
         HideBehindStornoConfirm
         m_scBack.visible = True: m_scTitle.visible = True: m_btnScClose.visible = True
-        m_scHeader.visible = True: m_scSummary.visible = True
+        m_scHeader.visible = True: m_scSummary.visible = True: m_scModeLegend.visible = True
         m_scKeepPal.visible = m_sc_showKeep
         m_scChainLbl.visible = True: m_scChain.visible = True
         m_scPalLbl.visible = m_sc_hasPal: m_scPalete.visible = m_sc_hasPal
@@ -4438,7 +4452,7 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         m_btnScPonist.visible = True: m_btnScResi.visible = True
         m_scBack.ZOrder 0
         m_scTitle.ZOrder 0: m_btnScClose.ZOrder 0
-        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0: m_scKeepPal.ZOrder 0
+        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0: m_scModeLegend.ZOrder 0: m_scKeepPal.ZOrder 0
         m_scChainLbl.ZOrder 0: m_scChain.ZOrder 0
         m_scPalLbl.ZOrder 0: m_scPalete.ZOrder 0
         m_scBlkLbl.ZOrder 0: m_scBlocks.ZOrder 0
@@ -4446,7 +4460,7 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         m_btnScPonist.ZOrder 0: m_btnScResi.ZOrder 0
     Else
         m_scBack.visible = False: m_scTitle.visible = False: m_btnScClose.visible = False
-        m_scHeader.visible = False: m_scSummary.visible = False: m_scKeepPal.visible = False
+        m_scHeader.visible = False: m_scSummary.visible = False: m_scModeLegend.visible = False: m_scKeepPal.visible = False
         m_scChainLbl.visible = False: m_scChain.visible = False
         m_scPalLbl.visible = False: m_scPalete.visible = False
         m_scBlkLbl.visible = False: m_scBlocks.visible = False
@@ -4462,7 +4476,7 @@ Private Sub HideBehindStornoConfirm()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_scBack Or ctl Is m_scTitle Or ctl Is m_btnScClose _
-           Or ctl Is m_scHeader Or ctl Is m_scSummary Or ctl Is m_scKeepPal _
+           Or ctl Is m_scHeader Or ctl Is m_scSummary Or ctl Is m_scModeLegend Or ctl Is m_scKeepPal _
            Or ctl Is m_scChainLbl Or ctl Is m_scChain _
            Or ctl Is m_scPalLbl Or ctl Is m_scPalete _
            Or ctl Is m_scBlkLbl Or ctl Is m_scBlocks _
