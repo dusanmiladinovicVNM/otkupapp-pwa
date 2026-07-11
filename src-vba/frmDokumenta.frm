@@ -4321,9 +4321,9 @@ End Sub
 Private Sub PopulateStornoConfirmPanel()
     On Error GoTo EH
     ' Jedan poziv agregatora (Faza 1) = ceo uvid: header, chain, palete, blokovi, summary.
-    Dim imp As Object: Set imp = BuildStornoImpact(m_sc_docType, m_sc_brDok, m_sc_dokTip)
-    Dim hdr As Object: Set hdr = imp("header")
-    Dim sm As Object: Set sm = imp("summary")
+    Dim mdl As Object: Set mdl = BuildStornoImpact(m_sc_docType, m_sc_brDok, m_sc_dokTip)
+    Dim hdr As Object: Set hdr = mdl("header")
+    Dim sm As Object: Set sm = mdl("summary")
 
     m_scTitle.caption = "Storno / potvrda -- " & m_sc_docType & " " & m_sc_brDok
     Dim partner As String: partner = CStr(hdr("partnerID"))
@@ -4335,7 +4335,7 @@ Private Sub PopulateStornoConfirmPanel()
     Dim chdr(0 To 2) As Variant
     chdr(0) = "Dokument": chdr(1) = "Broj / info": chdr(2) = "Sta se desava"
     AddScChainRow chdr
-    Dim chainRows As Collection: Set chainRows = imp("chain")
+    Dim chainRows As Collection: Set chainRows = mdl("chain")
     Dim i As Long, nc As Long: nc = 0
     If Not chainRows Is Nothing Then
         For i = 1 To chainRows.count: AddScChainRow chainRows(i): nc = nc + 1: Next i
@@ -4343,7 +4343,7 @@ Private Sub PopulateStornoConfirmPanel()
 
     ' --- palete (kapacitet + detach) ---
     m_scPalete.Clear
-    Dim pal As Collection: Set pal = imp("palete")
+    Dim pal As Collection: Set pal = mdl("palete")
     Dim np As Long: np = 0
     If Not pal Is Nothing Then
         For i = 1 To pal.count: AddScPaleteRow pal(i): np = np + 1: Next i
@@ -4353,7 +4353,7 @@ Private Sub PopulateStornoConfirmPanel()
 
     ' --- otkupni blokovi (multiselect) ---
     m_scBlocks.Clear
-    Dim blkRows As Collection: Set blkRows = imp("blocks")
+    Dim blkRows As Collection: Set blkRows = mdl("blocks")
     Dim nb As Long: nb = 0
     If Not blkRows Is Nothing Then
         For i = 1 To blkRows.count: AddScBlockRow blkRows(i): nb = nb + 1: Next i
@@ -4374,7 +4374,7 @@ Private Sub PopulateStornoConfirmPanel()
     If Not m_scKeepPal Is Nothing Then m_scKeepPal.value = False
 
     ' PONISTENJE ima smisla samo kad ima zavisnosti (inace = obican storno = DUPLI put).
-    Dim fl As Object: Set fl = imp("flags")
+    Dim fl As Object: Set fl = mdl("flags")
     m_btnScPonist.Enabled = CBool(fl("hasDependents"))
     Exit Sub
 EH:
