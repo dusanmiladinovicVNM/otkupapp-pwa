@@ -1170,8 +1170,10 @@ End Function
 ' ============================================================
 ' BROWSE za Storno centar (Faza 2b): aktivni dokumenti framework-tipova
 ' (Prijemnica/Otpremnica/Zbirna) za "Nadji" listu. Distinct po broju (Klasa I/II
-' dele broj). Filter: tip ("" / "Svi" / tacan tip) + tekst (substr broj/partner/datum).
-' Red = niz(0..4): tip, broj, datum, partnerID, kolicina. READ-ONLY.
+' dele broj). Imena razresena preko O(1) dict-ova (BuildLookupDict), otkupna mesta
+' iz pre-izgradjene mape (zbirna -> stanice). Namena: pozvati JEDNOM (kes u formi),
+' pa filtrirati u memoriji -> nema citanja tabela po tasteru.
+' Red = niz(0..7): tip, broj, datum, brojZbirne, kupac, vozac, otkupnaMesta, kolicina.
 ' ============================================================
 Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
                                             ByVal textFilter As String) As Collection
@@ -1182,15 +1184,20 @@ Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
     tipFilter = Trim$(tipFilter)
     Dim tf As String: tf = LCase$(Trim$(textFilter))
 
+    ' Name-dict-ovi + otkupna mesta po zbirni (jednom, O(n)).
+    Dim kupci As Object: Set kupci = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    Dim vozaci As Object: Set vozaci = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
+    Dim stByZbr As Object: Set stByZbr = BuildStationsByZbirna()
+
     If WantTip(tipFilter, FLOW_DOC_PRIJEMNICA) Then _
-        AddStornoDocs result, TBL_PRIJEMNICA, FLOW_DOC_PRIJEMNICA, _
-            COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, tf
+        AddStornoDocs2 result, TBL_PRIJEMNICA, FLOW_DOC_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
+            COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, COL_PRJ_KOLICINA, tf, kupci, vozaci, stByZbr
     If WantTip(tipFilter, FLOW_DOC_OTPREMNICA) Then _
-        AddStornoDocs result, TBL_OTPREMNICA, FLOW_DOC_OTPREMNICA, _
-            COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_KOLICINA, tf
+        AddStornoDocs2 result, TBL_OTPREMNICA, FLOW_DOC_OTPREMNICA, COL_OTP_BROJ, COL_OTP_DATUM, _
+            COL_OTP_BROJ_ZBIRNE, "", COL_OTP_VOZAC, COL_OTP_KOLICINA, tf, kupci, vozaci, stByZbr
     If WantTip(tipFilter, FLOW_DOC_ZBIRNA) Then _
-        AddStornoDocs result, TBL_ZBIRNA, FLOW_DOC_ZBIRNA, _
-            COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_KUPAC, COL_ZBR_KOLICINA, tf
+        AddStornoDocs2 result, TBL_ZBIRNA, FLOW_DOC_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
+            COL_ZBR_BROJ, COL_ZBR_KUPAC, COL_ZBR_VOZAC, COL_ZBR_KOLICINA, tf, kupci, vozaci, stByZbr
     Exit Function
 EH:
     LogErr SRC
@@ -1201,15 +1208,20 @@ Private Function WantTip(ByVal tipFilter As String, ByVal tip As String) As Bool
                Or StrComp(tipFilter, tip, vbTextCompare) = 0)
 End Function
 
-Private Sub AddStornoDocs(ByRef result As Collection, ByVal tbl As String, ByVal tip As String, _
-        ByVal brojCol As String, ByVal datumCol As String, ByVal partnerCol As String, _
-        ByVal kolCol As String, ByVal tf As String)
+' zbirnaCol: za Zbirnu = njen broj; za Prijemnicu/Otpremnicu = njihov BrojZbirne.
+' kupacCol/vozacCol: "" -> preskace (otpremnica nema kupca). Imena preko dict-ova.
+Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVal tip As String, _
+        ByVal brojCol As String, ByVal datumCol As String, ByVal zbirnaCol As String, _
+        ByVal kupacCol As String, ByVal vozacCol As String, ByVal kolCol As String, _
+        ByVal tf As String, ByVal kupci As Object, ByVal vozaci As Object, ByVal stByZbr As Object)
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Sub
-    Dim cBr As Long, cDa As Long, cPa As Long, cKo As Long, cSt As Long
+    Dim cBr As Long, cDa As Long, cZb As Long, cKu As Long, cVo As Long, cKo As Long, cSt As Long
     cBr = GetColumnIndex(tbl, brojCol)
     cDa = GetColumnIndex(tbl, datumCol)
-    cPa = GetColumnIndex(tbl, partnerCol)
+    cZb = GetColumnIndex(tbl, zbirnaCol)
+    If Len(kupacCol) > 0 Then cKu = GetColumnIndex(tbl, kupacCol)
+    If Len(vozacCol) > 0 Then cVo = GetColumnIndex(tbl, vozacCol)
     cKo = GetColumnIndex(tbl, kolCol)
     cSt = GetColumnIndex(tbl, COL_STORNIRANO)
     If cBr = 0 Then Exit Sub
@@ -1221,14 +1233,19 @@ Private Sub AddStornoDocs(ByRef result As Collection, ByVal tbl As String, ByVal
             If Len(broj) > 0 Then
                 If Not seen.Exists(broj) Then
                     seen(broj) = True
-                    Dim datum As String, partner As String, kol As String
-                    datum = FmtDatum(NzTxC(data, i, cDa))
-                    partner = NzTxC(data, i, cPa)
-                    kol = NzTxC(data, i, cKo)
-                    If Len(tf) = 0 Or InStr(LCase$(broj & " " & partner & " " & datum), tf) > 0 Then
-                        Dim row(0 To 4) As Variant
-                        row(0) = tip: row(1) = broj: row(2) = datum
-                        row(3) = partner: row(4) = kol
+                    Dim zbr As String: zbr = NzTxC(data, i, cZb)
+                    Dim kup As String: kup = ""
+                    If cKu > 0 Then kup = DictGet2(kupci, NzTxC(data, i, cKu), NzTxC(data, i, cKu))
+                    Dim voz As String: voz = ""
+                    If cVo > 0 Then voz = DictGet2(vozaci, NzTxC(data, i, cVo), "")
+                    Dim mesta As String: mesta = DictGet2(stByZbr, zbr, "")
+                    Dim datum As String: datum = FmtDatum(NzTxC(data, i, cDa))
+                    Dim kol As String: kol = NzTxC(data, i, cKo)
+                    If Len(tf) = 0 Or _
+                       InStr(LCase$(broj & " " & zbr & " " & kup & " " & mesta & " " & datum), tf) > 0 Then
+                        Dim row(0 To 7) As Variant
+                        row(0) = tip: row(1) = broj: row(2) = datum: row(3) = zbr
+                        row(4) = kup: row(5) = voz: row(6) = mesta: row(7) = kol
                         result.Add row
                     End If
                 End If
@@ -1236,6 +1253,53 @@ Private Sub AddStornoDocs(ByRef result As Collection, ByVal tbl As String, ByVal
         End If
     Next i
 End Sub
+
+' Mapa: brojZbirne -> ";"-spojena distinct otkupna mesta (stanice) te zbirne, iz
+' aktivnih otpremnica. Jednoprolazno; stanice imena preko dict-a.
+Private Function BuildStationsByZbirna() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Set BuildStationsByZbirna = d
+    On Error GoTo EH
+    Dim stanice As Object: Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
+    Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then Exit Function
+    Dim cZb As Long, cSt As Long, cStorno As Long
+    cZb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    cSt = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
+    cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+    If cZb = 0 Or cSt = 0 Then Exit Function
+    Dim seenPair As Object: Set seenPair = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> "DA" Then
+            Dim zbr As String: zbr = Trim$(CStr(data(i, cZb)))
+            If Len(zbr) > 0 Then
+                Dim stId As String: stId = Trim$(CStr(data(i, cSt)))
+                Dim stNm As String: stNm = DictGet2(stanice, stId, stId)
+                If Len(stNm) > 0 Then
+                    Dim pk As String: pk = zbr & "|" & stNm
+                    If Not seenPair.Exists(pk) Then
+                        seenPair(pk) = True
+                        If d.Exists(zbr) Then d(zbr) = CStr(d(zbr)) & ";" & stNm Else d(zbr) = stNm
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".BuildStationsByZbirna"
+End Function
+
+' Dict lookup sa fallback-om (kljuc prazan -> ""; nema u dict -> fb).
+Private Function DictGet2(ByVal d As Object, ByVal key As String, ByVal fb As String) As String
+    If Len(key) = 0 Then Exit Function
+    If Not d Is Nothing Then
+        If d.Exists(key) Then DictGet2 = CStr(d(key)) Else DictGet2 = fb
+    Else
+        DictGet2 = fb
+    End If
+End Function
 
 Private Function FmtDatum(ByVal v As String) As String
     On Error Resume Next

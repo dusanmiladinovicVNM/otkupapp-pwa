@@ -131,11 +131,13 @@ Private WithEvents m_btnFnOpen As MSForms.CommandButton
 Private WithEvents m_btnFnNed As MSForms.CommandButton     ' "Nedovrseno" iz browse-a
 Private WithEvents m_txtFnSearch As MSForms.TextBox
 Private WithEvents m_cmbFnTip As MSForms.ComboBox
+Private m_lstFnHeader As MSForms.ListBox         ' jednoredni header (naslovi kolona)
 Private WithEvents m_lstFnResults As MSForms.ListBox
 Private m_fnBack As MSForms.Label
 Private m_fnTitle As MSForms.Label
 Private m_fnBuilt As Boolean
 Private m_fnHidden As Collection
+Private m_fnAllDocs As Collection                ' kes celog skupa (gradi se jednom pri otvaranju)
 
 ' Faza 5: "Nedovrseno (sve)" read-only overlay (ujedinjen pregled: contexti +
 ' osirocene). Podaci: modStornoRecovery.GetNedovrseno. .frx se ne dira.
@@ -4554,6 +4556,7 @@ End Sub
 Private Sub ShowFindPanel()
     EnsureFindPanel
     If Not m_fnBuilt Then Exit Sub
+    Set m_fnAllDocs = Nothing            ' svez kes pri svakom otvaranju
     PopulateFindResults
     SetFindPanelVisible True
 End Sub
@@ -4587,10 +4590,27 @@ Private Sub EnsureFindPanel()
 
     Set m_txtFnSearch = Me.Controls.Add("Forms.TextBox.1", "txtFnSearchRT", True)
 
+    Const FN_COLW As String = "64;90;66;92;150;130;210;56"    ' Tip Broj Datum Zbirna Kupac Vozac Mesta Kg
+
+    ' Jednoredni header (naslovi kolona) iznad glavne liste.
+    Set m_lstFnHeader = Me.Controls.Add("Forms.ListBox.1", "lstFnHeaderRT", True)
+    With m_lstFnHeader
+        .ColumnCount = 8
+        .ColumnWidths = FN_COLW
+    End With
+    StyleListBox m_lstFnHeader
+    Dim fh(0 To 7) As Variant
+    fh(0) = "Tip": fh(1) = "Broj": fh(2) = "Datum": fh(3) = "Broj zbirne"
+    fh(4) = "Kupac": fh(5) = "Vozac": fh(6) = "Otkupna mesta": fh(7) = "Kg"
+    Dim fhArr() As Variant: ReDim fhArr(0 To 0, 0 To 7)
+    Dim fc As Long
+    For fc = 0 To 7: fhArr(0, fc) = fh(fc): Next fc
+    m_lstFnHeader.List = fhArr
+
     Set m_lstFnResults = Me.Controls.Add("Forms.ListBox.1", "lstFnResultsRT", True)
     With m_lstFnResults
-        .ColumnCount = 5
-        .ColumnWidths = "80;110;80;150;70"        ' Tip | Broj | Datum | Partner | Kolicina
+        .ColumnCount = 8
+        .ColumnWidths = FN_COLW
     End With
     MouseWheel_Register m_lstFnResults
     StyleListBox m_lstFnResults
@@ -4627,30 +4647,56 @@ Private Sub LayoutFindPanel()
     m_txtFnSearch.Move PAD + 148, y, w - 2 * PAD - 148, ROWH
     y = y + ROWH + PAD
 
+    Const HEADH As Single = 15
+    m_lstFnHeader.Move PAD, y, w - 2 * PAD, HEADH
+    y = y + HEADH + 1
+
     Dim bottomRow As Single: bottomRow = h - PAD - BTNH
     m_lstFnResults.Move PAD, y, w - 2 * PAD, bottomRow - y - PAD
     m_btnFnOpen.Move PAD, bottomRow, 160, BTNH
     m_btnFnNed.Move PAD + 170, bottomRow, 160, BTNH
 End Sub
 
+' Kes se gradi JEDNOM (ceo skup, svi tipovi); filter (tip + tekst) radi u memoriji
+' -> nema citanja tabela po tasteru. Render: bulk (.List = 2D niz) umesto petlje.
 Private Sub PopulateFindResults()
     On Error GoTo EH
     If m_lstFnResults Is Nothing Then Exit Sub
-    m_lstFnResults.Clear
+    If m_fnAllDocs Is Nothing Then Set m_fnAllDocs = GetActiveDocumentsForStorno("Svi", "")
 
     Dim tip As String: tip = ""
     If Not m_cmbFnTip Is Nothing Then tip = CStr(m_cmbFnTip.value)
-    Dim txt As String: txt = ""
-    If Not m_txtFnSearch Is Nothing Then txt = CStr(m_txtFnSearch.text)
+    Dim wantAll As Boolean: wantAll = (Len(tip) = 0 Or StrComp(tip, "Svi", vbTextCompare) = 0)
+    Dim tf As String: tf = ""
+    If Not m_txtFnSearch Is Nothing Then tf = LCase$(Trim$(CStr(m_txtFnSearch.text)))
 
-    Dim docs As Collection: Set docs = GetActiveDocumentsForStorno(tip, txt)
+    Dim hits As Collection: Set hits = New Collection
     Dim i As Long
-    If Not docs Is Nothing Then
-        For i = 1 To docs.count
-            AddFnRow docs(i)
+    If Not m_fnAllDocs Is Nothing Then
+        For i = 1 To m_fnAllDocs.count
+            Dim rw As Variant: rw = m_fnAllDocs(i)
+            If wantAll Or StrComp(CStr(rw(0)), tip, vbTextCompare) = 0 Then
+                If Len(tf) = 0 Or InStr(LCase$(CStr(rw(1)) & " " & CStr(rw(3)) & " " & _
+                       CStr(rw(4)) & " " & CStr(rw(6))), tf) > 0 Then
+                    hits.Add rw
+                End If
+            End If
         Next i
     End If
-    m_fnTitle.caption = "Nadji dokument za storno  (" & IIf(docs Is Nothing, 0, docs.count) & ")"
+
+    m_lstFnResults.Clear
+    If hits.count = 0 Then
+        m_lstFnResults.AddItem "Nema dokumenata."
+    Else
+        Dim arr() As Variant: ReDim arr(0 To hits.count - 1, 0 To 7)
+        Dim c As Long
+        For i = 1 To hits.count
+            Dim r2 As Variant: r2 = hits(i)
+            For c = 0 To 7: arr(i - 1, c) = CStr(r2(c)): Next c
+        Next i
+        m_lstFnResults.List = arr
+    End If
+    m_fnTitle.caption = "Nadji dokument za storno  (" & hits.count & ")"
     Exit Sub
 EH:
     LogErr "frmDokumenta.PopulateFindResults"
@@ -4674,15 +4720,15 @@ Private Sub SetFindPanelVisible(ByVal bShow As Boolean)
         LayoutFindPanel
         HideBehindFind
         m_fnBack.visible = True: m_fnTitle.visible = True: m_btnFnClose.visible = True
-        m_cmbFnTip.visible = True: m_txtFnSearch.visible = True
+        m_cmbFnTip.visible = True: m_txtFnSearch.visible = True: m_lstFnHeader.visible = True
         m_lstFnResults.visible = True: m_btnFnOpen.visible = True: m_btnFnNed.visible = True
         m_fnBack.ZOrder 0
         m_fnTitle.ZOrder 0: m_btnFnClose.ZOrder 0
-        m_cmbFnTip.ZOrder 0: m_txtFnSearch.ZOrder 0
+        m_cmbFnTip.ZOrder 0: m_txtFnSearch.ZOrder 0: m_lstFnHeader.ZOrder 0
         m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0: m_btnFnNed.ZOrder 0
     Else
         m_fnBack.visible = False: m_fnTitle.visible = False: m_btnFnClose.visible = False
-        m_cmbFnTip.visible = False: m_txtFnSearch.visible = False
+        m_cmbFnTip.visible = False: m_txtFnSearch.visible = False: m_lstFnHeader.visible = False
         m_lstFnResults.visible = False: m_btnFnOpen.visible = False: m_btnFnNed.visible = False
         RestoreBehindFind
     End If
@@ -4694,7 +4740,7 @@ Private Sub HideBehindFind()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_fnBack Or ctl Is m_fnTitle Or ctl Is m_btnFnClose _
-           Or ctl Is m_cmbFnTip Or ctl Is m_txtFnSearch _
+           Or ctl Is m_cmbFnTip Or ctl Is m_txtFnSearch Or ctl Is m_lstFnHeader _
            Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Or ctl Is m_btnFnNed Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
