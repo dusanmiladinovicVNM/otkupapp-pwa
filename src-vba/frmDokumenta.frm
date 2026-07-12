@@ -135,7 +135,8 @@ Private m_scHidden As Collection
 Private WithEvents m_btnStornoFind As MSForms.CommandButton
 Private WithEvents m_btnFnClose As MSForms.CommandButton
 Private WithEvents m_btnFnOpen As MSForms.CommandButton
-Private WithEvents m_btnFnNed As MSForms.CommandButton     ' "Nedovrseno" iz browse-a
+Private WithEvents m_btnFnNed As MSForms.CommandButton     ' "Osiroceni / za doradu" iz browse-a
+Private WithEvents m_btnFnStornirani As MSForms.CommandButton  ' "Stornirani" iz browse-a
 Private WithEvents m_txtFnSearch As MSForms.TextBox
 Private WithEvents m_cmbFnTip As MSForms.ComboBox
 Private m_lstFnHeader As MSForms.ListBox         ' jednoredni header (naslovi kolona)
@@ -309,15 +310,9 @@ Private Sub UserForm_Activate()
     ' Runtime toggle smera ambalaze u OM-Ulaz frame-u (ne dira .frx).
     SetupOMIzdavanjeToggle
 
-    ' Runtime dugme "Pregled storniranih" u storno sekciji (ne dira .frx).
-    SetupStornoPregledButton
-
-    ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
-    SetupRecoveryButton
-
-    ' Browse "Nadji za storno" (Faza 2b) i "Nedovrseno" (Faza 5) NE dobijaju zasebna
-    ' dugmad (STORNO frame nema mesta -> clip). Pristup: klik "Storno" sa praznim
-    ' poljima -> browse; u browse-u dugme "Nedovrseno".
+    ' KONSOLIDACIJA: "Pregled storniranih" i "Osiroceni dokumenti" NEMAJU vise
+    ' zasebna dugmad na formi. Sve ide kroz "Storno" -> browse ("Nadji za storno"),
+    ' a u browse-u su dugmad "Osiroceni / za doradu" i "Stornirani" (detaljni paneli).
 
     ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
     ApplyKesIsplateState
@@ -4199,7 +4194,7 @@ Private Sub EnsureStornoConfirmPanel()
         .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
     End With
 
-    Const SC_CHAIN_COLW As String = "150;120;300"      ' Dokument | Broj / kolicina | Efekat storna
+    Const SC_CHAIN_COLW As String = "150;120;560"      ' Dokument | Broj / kolicina | Efekat storna
     Const SC_BLK_COLW As String = "0;120;72;54;190"    ' [id skriven] Broj otkupa | Kolicina | Klasa | Kooperant
     Const SC_PAL_COLW As String = "170;84;66;70;70"    ' Paleta | Popunjeno/kap. | Gajbe | Neto kg | Amb. kg
 
@@ -4709,8 +4704,12 @@ Private Sub EnsureFindPanel()
     Set m_btnFnOpen = Me.Controls.Add("Forms.CommandButton.1", "btnFnOpenRT", True)
     StylePrimaryButton m_btnFnOpen, "Otvori storno"
 
+    ' Konsolidacija: umesto count-only "Nedovrseno (sve)" -> ulaz u DETALJNE panele.
     Set m_btnFnNed = Me.Controls.Add("Forms.CommandButton.1", "btnFnNedRT", True)
-    StyleExitButton m_btnFnNed, "Nedovrseno (sve)"
+    StylePrimaryButton m_btnFnNed, "Osiroceni / za doradu"
+
+    Set m_btnFnStornirani = Me.Controls.Add("Forms.CommandButton.1", "btnFnStorniraniRT", True)
+    StylePrimaryButton m_btnFnStornirani, "Stornirani"
 
     m_fnBuilt = True
     Exit Sub
@@ -4745,7 +4744,8 @@ Private Sub LayoutFindPanel()
     Dim bottomRow As Single: bottomRow = h - PAD - BTNH
     m_lstFnResults.Move PAD, y, w - 2 * PAD, bottomRow - y - PAD
     m_btnFnOpen.Move PAD, bottomRow, 160, BTNH
-    m_btnFnNed.Move PAD + 170, bottomRow, 160, BTNH
+    m_btnFnNed.Move PAD + 170, bottomRow, 180, BTNH
+    m_btnFnStornirani.Move PAD + 360, bottomRow, 160, BTNH
 End Sub
 
 ' Kes se gradi JEDNOM (ceo skup, svi tipovi); filter (tip + tekst) radi u memoriji
@@ -4813,14 +4813,16 @@ Private Sub SetFindPanelVisible(ByVal bShow As Boolean)
         m_fnBack.visible = True: m_fnTitle.visible = True: m_btnFnClose.visible = True
         m_cmbFnTip.visible = True: m_txtFnSearch.visible = True: m_lstFnHeader.visible = True
         m_lstFnResults.visible = True: m_btnFnOpen.visible = True: m_btnFnNed.visible = True
+        m_btnFnStornirani.visible = True
         m_fnBack.ZOrder 0
         m_fnTitle.ZOrder 0: m_btnFnClose.ZOrder 0
         m_cmbFnTip.ZOrder 0: m_txtFnSearch.ZOrder 0: m_lstFnHeader.ZOrder 0
-        m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0: m_btnFnNed.ZOrder 0
+        m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0: m_btnFnNed.ZOrder 0: m_btnFnStornirani.ZOrder 0
     Else
         m_fnBack.visible = False: m_fnTitle.visible = False: m_btnFnClose.visible = False
         m_cmbFnTip.visible = False: m_txtFnSearch.visible = False: m_lstFnHeader.visible = False
         m_lstFnResults.visible = False: m_btnFnOpen.visible = False: m_btnFnNed.visible = False
+        m_btnFnStornirani.visible = False
         RestoreBehindFind
     End If
 End Sub
@@ -4832,7 +4834,8 @@ Private Sub HideBehindFind()
     For Each ctl In Me.Controls
         If ctl Is m_fnBack Or ctl Is m_fnTitle Or ctl Is m_btnFnClose _
            Or ctl Is m_cmbFnTip Or ctl Is m_txtFnSearch Or ctl Is m_lstFnHeader _
-           Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Or ctl Is m_btnFnNed Then
+           Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Or ctl Is m_btnFnNed _
+           Or ctl Is m_btnFnStornirani Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_fnHidden.Add ctl.name
@@ -4855,9 +4858,16 @@ Private Sub m_btnFnClose_Click()
     SetFindPanelVisible False
 End Sub
 
+' Browse -> DETALJAN recovery panel (osirocene prijemnice/palete + akcije).
 Private Sub m_btnFnNed_Click()
     SetFindPanelVisible False
-    ShowNedovrsenoPanel
+    ShowRecoveryPanel
+End Sub
+
+' Browse -> DETALJAN pregled storniranih (+ "Vrati storno").
+Private Sub m_btnFnStornirani_Click()
+    SetFindPanelVisible False
+    ShowStorniraniPanel
 End Sub
 
 Private Sub m_txtFnSearch_Change()

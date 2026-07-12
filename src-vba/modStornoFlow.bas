@@ -1109,17 +1109,25 @@ Public Function GetStornoChainRows(ByVal docType As String, ByVal broj As String
         Case FLOW_DOC_OTPREMNICA
             Dim so As Object: Set so = ScanOtpremnica(broj)
             AddChainRow result, "Otpremnica", broj, "Stornira se (uz ambalazu)"
-            If CBool(so("hasZbirna")) Then AddChainRow result, "Zbirna", CStr(so("brojZbirne")), "Preracun; storno ako ostane prazna"
-            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", "Osirocena ili ponistena (po modu)"
-            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", "Skidaju se pri ponistenju"
-            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", "Oslobadjaju se (cekiraj za storno)"
+            If CBool(so("hasZbirna")) Then
+                Dim zEff As String
+                If OtpremnicaIsSoleOwner(CStr(so("brojZbirne")), broj) Then
+                    zEff = "Preracun; storno ako ostane prazna (jedini vlasnik)"
+                Else
+                    zEff = "Preracun; NE pada (deljena zbirna - sestre ostaju)"
+                End If
+                AddChainRow result, "Zbirna", CStr(so("brojZbirne")), zEff
+            End If
+            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", "DUPLIKAT: ostaje osirocena (rucno) | PONISTENJE: stornira se"
+            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", "DUPLIKAT: ostaju osirocene (rucno) | PONISTENJE: skidaju se"
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", "Oslobadjaju se za reveze (cekiraj za storno)"
         Case FLOW_DOC_ZBIRNA
             Dim sz As Object: Set sz = ScanZbirna(broj)
             AddChainRow result, "Zbirna", broj, "Stornira se"
-            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", "Storniraju se ili odvezuju (po modu)"
-            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", "Osirocena ili ponistena (po modu)"
-            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", "Skidaju se pri ponistenju"
-            AddChainRow result, "Otkupni blokovi", "", "Oslobadjaju se (cekiraj za storno)"
+            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", "PONISTENJE: storniraju se | DUPLIKAT: odvezuju se (prezivljavaju)"
+            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", "DUPLIKAT: ostaje osirocena (rucno) | PONISTENJE: stornira se"
+            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", "DUPLIKAT: ostaju osirocene (rucno) | PONISTENJE: skidaju se"
+            AddChainRow result, "Otkupni blokovi", "", "Oslobadjaju se za reveze (cekiraj za storno)"
         Case FLOW_DOC_PRIJEMNICA
             Dim sp As Object: Set sp = ScanPrijemnica(broj)
             AddChainRow result, "Prijemnica", broj, "Stornira se (uz ambalazu)"
