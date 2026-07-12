@@ -1108,30 +1108,30 @@ Public Function GetStornoChainRows(ByVal docType As String, ByVal broj As String
     Select Case docType
         Case FLOW_DOC_OTPREMNICA
             Dim so As Object: Set so = ScanOtpremnica(broj)
-            AddChainRow result, "Otpremnica", broj, "stornira se (+ ambalaza)"
-            If CBool(so("hasZbirna")) Then AddChainRow result, "Zbirna", CStr(so("brojZbirne")), "rekalk / storno ako ostane prazna"
-            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", "osirocena / ponistena (po modu)"
-            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", "skidaju se pri ponistenju"
-            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", "oslobadjaju se (cekiraj za storno)"
+            AddChainRow result, "Otpremnica", broj, "Stornira se (uz ambalazu)"
+            If CBool(so("hasZbirna")) Then AddChainRow result, "Zbirna", CStr(so("brojZbirne")), "Preracun; storno ako ostane prazna"
+            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", "Osirocena ili ponistena (po modu)"
+            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", "Skidaju se pri ponistenju"
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", "Oslobadjaju se (cekiraj za storno)"
         Case FLOW_DOC_ZBIRNA
             Dim sz As Object: Set sz = ScanZbirna(broj)
-            AddChainRow result, "Zbirna", broj, "stornira se"
-            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", "storniraju / odvezuju (po modu)"
-            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", "osirocena / ponistena (po modu)"
-            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", "skidaju se pri ponistenju"
-            AddChainRow result, "Otkupni blokovi", "", "oslobadjaju se (cekiraj za storno)"
+            AddChainRow result, "Zbirna", broj, "Stornira se"
+            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", "Storniraju se ili odvezuju (po modu)"
+            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", "Osirocena ili ponistena (po modu)"
+            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", "Skidaju se pri ponistenju"
+            AddChainRow result, "Otkupni blokovi", "", "Oslobadjaju se (cekiraj za storno)"
         Case FLOW_DOC_PRIJEMNICA
             Dim sp As Object: Set sp = ScanPrijemnica(broj)
-            AddChainRow result, "Prijemnica", broj, "stornira se (+ ambalaza)"
+            AddChainRow result, "Prijemnica", broj, "Stornira se (uz ambalazu)"
             If Len(CStr(sp("brojZbirne"))) > 0 Then _
-                AddChainRow result, "Zbirna", CStr(sp("brojZbirne")), "rekalk / storno ako ostane 0 (ponistenje)"
+                AddChainRow result, "Zbirna", CStr(sp("brojZbirne")), "Preracun; storno ako padne na 0 (ponistenje)"
             If CLng(sp("otpCount")) > 0 Then _
-                AddChainRow result, "Otpremnice", "(" & CStr(sp("otpCount")) & ")", "storniraju se (ponistenje)"
-            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", "oslobadja se (stavke osirocene)"
-            If CBool(sp("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", "skidaju se (dupli / ponistenje)"
-            AddChainRow result, "Otkupni blokovi", "(" & CStr(sp("blockCount")) & ")", "samostalni (cekiraj za storno)"
+                AddChainRow result, "Otpremnice", "(" & CStr(sp("otpCount")) & ")", "Storniraju se (ponistenje)"
+            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", "Oslobadja se (stavke ostaju osirocene)"
+            If CBool(sp("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", "Skidaju se (Duplikat / Ponistenje)"
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(sp("blockCount")) & ")", "Samostalni - cekiraj za dodatni storno"
         Case FLOW_DOC_REVERS
-            AddChainRow result, "Revers", broj & " [" & dokumentTip & "]", "stornira se (saldo koriguje, bez kontra-stavke)"
+            AddChainRow result, "Revers", broj & " [" & dokumentTip & "]", "Stornira se (saldo se koriguje, bez kontra-stavke)"
     End Select
     Exit Function
 EH:
