@@ -118,7 +118,11 @@ Private m_scPalLbl As MSForms.Label
 Private m_scPalete As MSForms.ListBox
 Private m_scPalHdr As MSForms.ListBox        ' jednoredni naslov kolona za palete
 Private m_scSummary As MSForms.Label
-Private m_scModeLegend As MSForms.Label      ' legenda: sta koji mod znaci (ljudski jezik)
+' Opis efekta po modu - 4 zasebna labela, svaki poravnat iznad svog dugmeta.
+Private m_scLegIspravka As MSForms.Label
+Private m_scLegDupli As MSForms.Label
+Private m_scLegPonist As MSForms.Label
+Private m_scLegResi As MSForms.Label
 Private m_scKeepPal As MSForms.CheckBox     ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
 Private m_sc_hasPal As Boolean
 Private m_sc_hasBlk As Boolean
@@ -4281,16 +4285,19 @@ Private Sub EnsureStornoConfirmPanel()
         .value = False
     End With
 
-    ' Legenda modova (ljudski jezik) - iznad dugmadi.
-    Set m_scModeLegend = Me.Controls.Add("Forms.Label.1", "lblScModeLegRT", True)
-    With m_scModeLegend
-        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
-        .caption = "Izaberite razlog storna:      " & _
-                   "Pogresan unos = storniraj i unesi ispravno       " & _
-                   "Duplikat = ukloni visak (roba je stvarna)       " & _
-                   "Nista se nije desilo = ponisti ceo lanac (uz potvrdu)       " & _
-                   "Resi kasnije = odlozi u Nedovrseno"
-    End With
+    ' Opis efekta po modu - svaki labl poravnat tacno iznad svog dugmeta.
+    Set m_scLegIspravka = NewModeLegendLabel("lblScLegIsprRT", _
+        "Pogresan unos: stornira ovaj dokument i odmah otvara unos ispravnog. " & _
+        "Roba je stvarna - palete se prevezu na novi dokument.")
+    Set m_scLegDupli = NewModeLegendLabel("lblScLegDupRT", _
+        "Duplikat: dokument je greskom dupliran. Skida palete i ovaj dokument; " & _
+        "ostatak lanca (otpremnica / zbirna) ostaje jer je roba stvarna.")
+    Set m_scLegPonist = NewModeLegendLabel("lblScLegPonRT", _
+        "Nista se nije desilo: ponistava se ceo lanac - otpremnica, zbirna, " & _
+        "prijemnica i palete (uz potvrdu). Koristi kada transakcije nije bilo.")
+    Set m_scLegResi = NewModeLegendLabel("lblScLegResRT", _
+        "Resi kasnije: dokument ostaje aktivan, samo se belezi u Nedovrseno " & _
+        "da se o njemu odluci naknadno. Palete se ne diraju.")
 
     ' Modovi - kratak, jasan naziv na dugmetu (interni SV_MODE_* nepromenjen).
     Set m_btnScIspravka = Me.Controls.Add("Forms.CommandButton.1", "btnScIspravkaRT", True)
@@ -4332,9 +4339,9 @@ Private Sub LayoutStornoConfirmPanel()
     y = y + HEADH + 4
 
     Dim bottomRow As Single: bottomRow = h - PAD - BTNH
-    Const LEGH As Single = 14
-    Dim legY As Single: legY = bottomRow - LEGH - 4      ' legenda modova, tik iznad dugmadi
-    Dim sumY As Single: sumY = legY - 20                 ' summary iznad legende
+    Const LEGH As Single = 42                            ' blok opisa moda (do 3 reda) iznad dugmeta
+    Dim legY As Single: legY = bottomRow - LEGH - 3      ' opisi modova, tik iznad dugmadi
+    Dim sumY As Single: sumY = legY - 22                 ' summary iznad opisa
 
     Const CHDRH As Single = 15                           ' visina reda-naslova (kolone)
     Dim lists As Long: lists = 1                         ' chain uvek
@@ -4368,16 +4375,24 @@ Private Sub LayoutStornoConfirmPanel()
     Else
         m_scSummary.Move PAD, sumY, w - 2 * PAD, 18
     End If
-    m_scModeLegend.Move PAD, legY, w - 2 * PAD, LEGH
 
+    ' Dugmad + opis moda: opis (LEGH) sedi tacno iznad svog dugmeta (ista x/sirina).
     Dim n As Long: n = 4
     Dim gap As Single: gap = 6
     Dim bw As Single: bw = (w - 2 * PAD - (n - 1) * gap) / n
-    Dim bx As Single: bx = PAD
-    m_btnScIspravka.Move bx, bottomRow, bw, BTNH: bx = bx + bw + gap
-    m_btnScDupli.Move bx, bottomRow, bw, BTNH: bx = bx + bw + gap
-    m_btnScPonist.Move bx, bottomRow, bw, BTNH: bx = bx + bw + gap
-    m_btnScResi.Move bx, bottomRow, bw, BTNH
+    Const LEGPAD As Single = 4                            ' unutrasnji razmak opisa od ivica dugmeta
+    Dim x1 As Single: x1 = PAD
+    Dim x2 As Single: x2 = x1 + bw + gap
+    Dim x3 As Single: x3 = x2 + bw + gap
+    Dim x4 As Single: x4 = x3 + bw + gap
+    m_scLegIspravka.Move x1 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_scLegDupli.Move x2 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_scLegPonist.Move x3 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_scLegResi.Move x4 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_btnScIspravka.Move x1, bottomRow, bw, BTNH
+    m_btnScDupli.Move x2, bottomRow, bw, BTNH
+    m_btnScPonist.Move x3, bottomRow, bw, BTNH
+    m_btnScResi.Move x4, bottomRow, bw, BTNH
 End Sub
 
 Private Sub PopulateStornoConfirmPanel()
@@ -4496,6 +4511,18 @@ Private Sub SetHeaderRow5(ByVal lst As MSForms.ListBox, ByVal c0 As String, ByVa
     lst.List(0, 4) = c4
 End Sub
 
+' Labl opisa moda (iznad dugmeta): mek tekst, prelom u vise redova, poravnat gore.
+Private Function NewModeLegendLabel(ByVal ctlName As String, ByVal txt As String) As MSForms.Label
+    Dim lbl As MSForms.Label
+    Set lbl = Me.Controls.Add("Forms.Label.1", ctlName, True)
+    With lbl
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+        .WordWrap = True: .Font.Size = FONT_SIZE_SMALL
+        .TextAlign = fmTextAlignLeft: .caption = txt
+    End With
+    Set NewModeLegendLabel = lbl
+End Function
+
 Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
     On Error Resume Next
     If Not m_scBuilt Then Exit Sub
@@ -4503,7 +4530,9 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         LayoutStornoConfirmPanel
         HideBehindStornoConfirm
         m_scBack.visible = True: m_scTitle.visible = True: m_btnScClose.visible = True
-        m_scHeader.visible = True: m_scSummary.visible = True: m_scModeLegend.visible = True
+        m_scHeader.visible = True: m_scSummary.visible = True
+        m_scLegIspravka.visible = True: m_scLegDupli.visible = True
+        m_scLegPonist.visible = True: m_scLegResi.visible = True
         m_scKeepPal.visible = m_sc_showKeep
         m_scChainLbl.visible = True: m_scChainHdr.visible = True: m_scChain.visible = True
         m_scPalLbl.visible = m_sc_hasPal: m_scPalHdr.visible = m_sc_hasPal: m_scPalete.visible = m_sc_hasPal
@@ -4512,7 +4541,8 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         m_btnScPonist.visible = True: m_btnScResi.visible = True
         m_scBack.ZOrder 0
         m_scTitle.ZOrder 0: m_btnScClose.ZOrder 0
-        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0: m_scModeLegend.ZOrder 0: m_scKeepPal.ZOrder 0
+        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0: m_scKeepPal.ZOrder 0
+        m_scLegIspravka.ZOrder 0: m_scLegDupli.ZOrder 0: m_scLegPonist.ZOrder 0: m_scLegResi.ZOrder 0
         m_scChainLbl.ZOrder 0: m_scChainHdr.ZOrder 0: m_scChain.ZOrder 0
         m_scPalLbl.ZOrder 0: m_scPalHdr.ZOrder 0: m_scPalete.ZOrder 0
         m_scBlkLbl.ZOrder 0: m_scBlkHdr.ZOrder 0: m_scBlocks.ZOrder 0
@@ -4520,7 +4550,9 @@ Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
         m_btnScPonist.ZOrder 0: m_btnScResi.ZOrder 0
     Else
         m_scBack.visible = False: m_scTitle.visible = False: m_btnScClose.visible = False
-        m_scHeader.visible = False: m_scSummary.visible = False: m_scModeLegend.visible = False: m_scKeepPal.visible = False
+        m_scHeader.visible = False: m_scSummary.visible = False: m_scKeepPal.visible = False
+        m_scLegIspravka.visible = False: m_scLegDupli.visible = False
+        m_scLegPonist.visible = False: m_scLegResi.visible = False
         m_scChainLbl.visible = False: m_scChainHdr.visible = False: m_scChain.visible = False
         m_scPalLbl.visible = False: m_scPalHdr.visible = False: m_scPalete.visible = False
         m_scBlkLbl.visible = False: m_scBlkHdr.visible = False: m_scBlocks.visible = False
@@ -4536,7 +4568,8 @@ Private Sub HideBehindStornoConfirm()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_scBack Or ctl Is m_scTitle Or ctl Is m_btnScClose _
-           Or ctl Is m_scHeader Or ctl Is m_scSummary Or ctl Is m_scModeLegend Or ctl Is m_scKeepPal _
+           Or ctl Is m_scHeader Or ctl Is m_scSummary Or ctl Is m_scKeepPal _
+           Or ctl Is m_scLegIspravka Or ctl Is m_scLegDupli Or ctl Is m_scLegPonist Or ctl Is m_scLegResi _
            Or ctl Is m_scChainLbl Or ctl Is m_scChainHdr Or ctl Is m_scChain _
            Or ctl Is m_scPalLbl Or ctl Is m_scPalHdr Or ctl Is m_scPalete _
            Or ctl Is m_scBlkLbl Or ctl Is m_scBlkHdr Or ctl Is m_scBlocks _
