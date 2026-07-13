@@ -119,10 +119,29 @@ red**. Jedinstven je **medju aktivnim redovima** (v1-stornirano + v2-aktivno del
 `(broj, klasa)`).
 
 Zato:
-- **PWA sync (smer a)** NIJE prost `ZbirnaID -> BrojZbirne` swap: `RequireSingleMasterSyncRow`
-  trazi tacno jedan red, a `BrojZbirne` daje 2 (klase). Migrira se na
-  `(broj, klasa)` -> aktivan red.
 - **Svi citaci** biraju tekucu verziju = aktivan red po `(broj, klasa)`.
+
+### PWA/sync je VEC po BrojZbirne (uvid u `src/js/` + `modMasterSync`, 2026-07-13)
+
+Provera PWA koda (isti repo) je pokazala da je **cross-system ugovor `BrojZbirne`
+(poslovni kljuc), ne `ZbirnaID`**:
+- PWA **generise `brojZbirne` client-side** (`src/js/features/vozac/zbirna.js`), salje
+  ga, backend ga vraca; PWA radi sa `klasa` (I/II/"I+II"). Otpremnica-transport isto
+  po `brojZbirne`.
+- Excel link otpremnica->zbirna ide preko **`BrojZbirne`** (`LinkOtpremnicaToBrojZbirneStrict`);
+  komentar u `modMasterSync` izricito: *"ValidateZbirna/prijemnica/faktura vezu drze
+  preko BrojZbirne."*
+- `RequireSingleMasterSyncRow` se koristi **samo sa row-ID kolonama** (OtkupID/OtpremnicaID/
+  ZbirnaID = jedinstveni), NIKAD sa `BrojZbirne` -> strah "2 klase -> RequireSingle pada"
+  NE vazi za sync.
+- Jedini `ZbirnaID`-ulaz (`GetBrojZbirneForIDStrict`) je **tranzijentan** (Excel tek
+  mintovao ID pa mu trazi broj) i resava se preko reda koji ostaje (storniran) -> broj
+  je stabilan.
+
+**Posledica:** smer (a) **ne trazi PWA izmenu** (ugovor je vec `BrojZbirne`), a
+re-verzija zbirne (novi `ZbirnaID`, isti `BrojZbirne`) **ne lomi sync** jer sve veze
+idu preko `BrojZbirne`. Korak 3.1 se svodi na Excel-stranu proveru da citaci uzimaju
+AKTIVNU verziju (`FindSingleActiveRow`), a ne na rizicnu eksternu migraciju.
 - **Primitiv:** `modDokumentInvariant.FindSingleActiveRow(tbl, brojCol, broj, klasaCol,
   klasa)` -> indeks jedinog aktivnog reda; 0 = nema; -1 = vise aktivnih (integritet
   povreda; u append-only sme najvise jedan aktivan po `(broj, klasa)`). (Faza 7 korak 3.0.)
@@ -133,10 +152,10 @@ Zato:
 2. ✅ Utiskivanje `IspravkaOd`/`ZamenjenSa`/`CorrectionID` na ISPRAVKA. *(korak 2)*
 4. 🟡 Sledljivost vidljiva: panel `[ispravka dokumenta X]` + štampa otpremnice. *(korak 4, deo)*
 3. Korak 3 (append-only zbirne), smer (a), pod-koraci:
-   - **3.0** `FindSingleActiveRow` `(broj, klasa)` → aktivan red + test. *(u toku)*
-   - **3.1** PWA sync (`modMasterSync`) `ZbirnaID` → `(broj, klasa)`-aktivno. *(eksterno; test pre)*
-   - **3.2** `RecalculateZbirnaFromOtpremnice_TX` → storno tekućih `(broj,*)` + append novih.
-   - **3.3** Čitači → aktivna verzija po `(broj, klasa)`.
+   - **3.0** ✅ `FindSingleActiveRow` `(broj, klasa)` → aktivan red + rollback-safe test.
+   - **3.1** ~~PWA migracija~~ → **nije potrebna**: sync je već po `BrojZbirne` (vidi gore). Svodi se na Excel-stranu proveru čitača (deo 3.3).
+   - **3.2** `RecalculateZbirnaFromOtpremnice_TX` → storno tekućih `(broj,*)` + append novih (+ `IspravkaOd`). *Core; test pre.*
+   - **3.3** Čitači → aktivna verzija po `(broj, klasa)` (`FindSingleActiveRow`).
 5. `blok → BrojOtpremnice`; Izdato-status kapija; penzionisati in-place + gard-e.
 6. Testovi (`modTestStornoCentar`) + ADR-0002 → „Prihvaćeno" + ARCHITECTURE_REFERENCE.
 
