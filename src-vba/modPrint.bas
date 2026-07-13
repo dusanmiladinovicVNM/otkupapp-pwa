@@ -164,6 +164,10 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     End If
     h("objekat") = objLine
     h("brDok") = CStr(OtpC(d, fr, COL_OTP_BROJ))
+    ' Sledljivost (Faza 7): ako je otpremnica ispravka drugog dok. -> u naslov (guarded).
+    Dim ispOd As String: ispOd = ""
+    Dim cIsp As Long: cIsp = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_ISPRAVKA_OD)
+    If cIsp > 0 Then ispOd = Trim$(CStr(d(fr, cIsp)))
     Dim datV As Variant: datV = OtpC(d, fr, COL_OTP_DATUM)
     If IsDate(datV) Then h("datum") = Format$(CDate(datV), "dd.mm.yyyy") Else h("datum") = CStr(datV)
     Dim stanicaNaziv As String: stanicaNaziv = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv")))
@@ -191,7 +195,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
     h("klauzula") = kl
 
-    h("naslov") = "OTPREMNICA"
+    h("naslov") = "OTPREMNICA" & IIf(Len(ispOd) > 0, " (ispravka dok. " & ispOd & ")", "")
     h("grupni") = "1"
 
     Application.ScreenUpdating = False
