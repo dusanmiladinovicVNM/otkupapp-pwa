@@ -1149,6 +1149,33 @@ Public Sub EnsureRuntimeSchema()
     ' Centralni storno/correction context (tblStornoVeze). Idempotentno; nastane
     ' automatski posle self-update-a KODA. EnsureDataTable je no-op kad postoji.
     EnsureStornoVezeSchemaCore
+
+    ' Sledljivost ispravki (ADR-0002 / Faza 7). Idempotentno; nastane automatski
+    ' posle self-update-a KODA (bez rucnog Alt+F8).
+    EnsureSledljivostSchema
+End Sub
+
+' ============================================================
+' Sledljivost ispravki (ADR-0002, append-only dokument model; Faza 7 korak 1).
+' Dodaje DELJENE trace-kolone na dokument-tabele lanca. SAMO schema (dodavanje
+' kolona) -- citanje/upis dolaze u kasnijim koracima Faze 7.
+' Idempotentno (EnsureColumnOnTable = no-op kad kolona postoji), pa je jeftino na
+' svakom startu i nastane automatski posle self-update-a KODA.
+' Bez backfill-a (skup na svakom startu): PRAZAN IzdatoStatus se tumaci kao IZDATO
+' (konzervativno -> teski korektivni put) u read-logici kasnijih koraka.
+' ============================================================
+Public Sub EnsureSledljivostSchema()
+    On Error Resume Next
+    Dim tbls As Variant
+    tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_FAKTURE, TBL_NOVAC)
+    Dim i As Long
+    For i = LBound(tbls) To UBound(tbls)
+        Dim t As String: t = CStr(tbls(i))
+        EnsureColumnOnTable t, COL_TRACE_ISPRAVKA_OD
+        EnsureColumnOnTable t, COL_TRACE_ZAMENJEN_SA
+        EnsureColumnOnTable t, COL_TRACE_CORRECTION_ID
+        EnsureColumnOnTable t, COL_TRACE_IZDATO_STATUS
+    Next i
 End Sub
 
 ' ============================================================
