@@ -90,6 +90,17 @@ Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String, _
                 Err.Raise ERR_REC_BASE + 2, SRC, "Vec postoji AKTIVAN otkup " & broj & _
                           " -> reverzija bi duplirala. Odbijeno."
             End If
+            ' Guard (B3 - izgubljeni blok): ako je roditeljski lanac (otpremnica ILI
+            ' zbirna na koje je blok vezan) stornirano, reaktivacija bi napravila siroce
+            ' (aktivan blok bez ziveg roditelja). Kaskadni storno oslobodi SAMO aktivne
+            ' blokove -> vec-storniran blok zadrzi vezu ka mrtvom roditelju. Dup-guard to
+            ' ne hvata. Odbij; koristi ponovni unos / prevezivanje (Osiroceni dokumenti).
+            Dim deadParent As String: deadParent = OtkupBlockDeadParent(broj)
+            If Len(deadParent) > 0 Then
+                Err.Raise ERR_REC_BASE + 5, SRC, "Ne mogu da vratim storno otkupa " & broj & _
+                    ": roditeljski " & deadParent & " je storniran -> blok bi ostao siroce. " & _
+                    "Unesi blok ponovo ili ga prevezi (Osiroceni dokumenti)."
+            End If
             Set tx = New clsTransaction
             tx.BeginTx
             tx.AddTableSnapshot TBL_OTKUP
@@ -152,6 +163,45 @@ Private Function UnmarkStorniranoCollect(ByVal tbl As String, ByVal keyCol As St
         End If
     Next i
     UnmarkStorniranoCollect = n
+End Function
+
+' Da li bi reaktivacija storniranih blokova broja "broj" napravila siroce?
+' Za svaki storniran red proveri vezu: OtpremnicaID -> aktivna otpremnica?
+' BrojZbirne -> aktivna zbirna? Ako je bilo koja veza ka MRTVOM (stornirano/nema)
+' roditelju -> vrati opis (prvog) mrtvog roditelja; inace "". Unbound blok (bez
+' veze) i blok sa zivim roditeljem su bezbedni za undo.
+Private Function OtkupBlockDeadParent(ByVal broj As String) As String
+    On Error Resume Next
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cBr As Long, cSt As Long, cOtp As Long, cZbr As Long
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
+    If cBr = 0 Or cSt = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cBr))) = Trim$(broj) _
+           And UCase$(Trim$(CStr(data(i, cSt)))) = UCase$(STORNO_DA) Then
+            If cOtp > 0 Then
+                Dim otpID As String: otpID = Trim$(CStr(data(i, cOtp)))
+                If Len(otpID) > 0 Then
+                    If Len(LookupActiveID(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_ID)) = 0 Then
+                        OtkupBlockDeadParent = "otpremnica (ID " & otpID & ")": Exit Function
+                    End If
+                End If
+            End If
+            If cZbr > 0 Then
+                Dim brZbr As String: brZbr = Trim$(CStr(data(i, cZbr)))
+                If Len(brZbr) > 0 Then
+                    If Len(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_BROJ)) = 0 Then
+                        OtkupBlockDeadParent = "zbirna " & brZbr: Exit Function
+                    End If
+                End If
+            End If
+        End If
+    Next i
 End Function
 
 ' Reaktiviraj tblAmbalaza redove dokumenta (DokID + DokTip) koji su stornirani.
