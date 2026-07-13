@@ -4409,8 +4409,12 @@ Private Sub PopulateStornoConfirmPanel()
     m_scTitle.caption = "Storno / potvrda -- " & m_sc_docType & " " & m_sc_brDok
     Dim partner As String: partner = CStr(hdr("partner"))
     If Len(partner) = 0 Then partner = CStr(hdr("partnerID"))
+    ' Sledljivost (Faza 7): ako je dokument ispravka drugog / zamenjen drugim -> pokazi.
+    Dim traceTxt As String: traceTxt = ""
+    If Len(CStr(hdr("ispravkaOd"))) > 0 Then traceTxt = "     [ispravka dokumenta " & CStr(hdr("ispravkaOd")) & "]"
+    If Len(CStr(hdr("zamenjenSa"))) > 0 Then traceTxt = traceTxt & "     [zamenjen dokumentom " & CStr(hdr("zamenjenSa")) & "]"
     m_scHeader.caption = "Partner/stanica: " & IIf(Len(partner) > 0, partner, "-") & _
-        "     Datum: " & CStr(hdr("datum")) & "     Kolicina: " & CStr(hdr("kolicina"))
+        "     Datum: " & CStr(hdr("datum")) & "     Kolicina: " & CStr(hdr("kolicina")) & traceTxt
 
     ' --- lanac (naslov kolona je zaseban m_scChainHdr, poravnat sa listom) ---
     m_scChain.Clear

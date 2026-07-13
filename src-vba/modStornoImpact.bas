@@ -48,22 +48,32 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String) As 
     On Error GoTo EH
     h("tip") = docType: h("broj") = broj
     h("partnerID") = "": h("partner") = "": h("datum") = "": h("kolicina") = ""
+    h("ispravkaOd") = "": h("zamenjenSa") = ""
+    Dim tTbl As String, tCol As String: tTbl = "": tCol = ""
     Select Case docType
         Case FLOW_DOC_OTPREMNICA
+            tTbl = TBL_OTPREMNICA: tCol = COL_OTP_BROJ
             h("partnerID") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_STANICA)
             h("datum") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_DATUM)
             h("kolicina") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_KOLICINA)
         Case FLOW_DOC_ZBIRNA
+            tTbl = TBL_ZBIRNA: tCol = COL_ZBR_BROJ
             h("partnerID") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KUPAC)
             h("datum") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_DATUM)
             h("kolicina") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KOLICINA)
         Case FLOW_DOC_PRIJEMNICA
+            tTbl = TBL_PRIJEMNICA: tCol = COL_PRJ_BROJ
             h("partnerID") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KUPAC)
             h("datum") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_DATUM)
             h("kolicina") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KOLICINA)
     End Select
     ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
+    ' Sledljivost (Faza 7): da li je ovaj dokument ispravka drugog / zamenjen drugim.
+    If Len(tTbl) > 0 Then
+        h("ispravkaOd") = HL(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD)
+        h("zamenjenSa") = HL(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA)
+    End If
     Exit Function
 EH:
     LogErr MOD_NAME & ".ImpactHeader"
