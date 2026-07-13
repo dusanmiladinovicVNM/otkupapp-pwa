@@ -104,13 +104,40 @@ Ažurirati `ARCHITECTURE_REFERENCE`, runbook.
 - **Big-bang rizik** — NE raditi odjednom; fazno (dole).
 - **Over-engineering paleta** — svesno izuzete (tačka 5).
 
-## Predložene faze (Faza 7 / v3)
+## Kanonsko adresiranje: `(broj, klasa)` -> AKTIVAN red (dopuna, 2026-07-13)
 
-1. Šema + `IzdatoStatus` backfill (non-breaking).
-2. `blok → BrojOtpremnice` (ukloni jedini row-ID ref).
-3. Agregati zbirne → storno+novi (`modDokumentInvariant`), `IspravkaOd` utisnut.
-4. Čitači/print/PWA → tekuća verzija + „ispravka" baner.
-5. Izdato-status kapija; penzionisati in-place + gard-e.
+Svaki dokument lanca (Otkup/Otpremnica/Prijemnica/Zbirna) je **linijski model**:
+jedan poslovni broj ima **VISE redova, jedan po klasi** (Klasa I / II). To NIJE
+greska modela nego standardni „document lines as rows" obrazac; za append-only je
+i **prednost** (storno jedne klase = storniraj taj red + append novi; „siroki"
+model sa fiksnim KolicinaI/II kolonama bi trazio parcijalni in-place edit deljenog
+reda -> bori immutability).
+
+Posledica: identitet reda nije `broj` (vise redova) ni `RowID` (menja se po verziji),
+nego **kompozitni poslovni kljuc `(broj, klasa)` razresen na AKTIVAN (ne-stornirani)
+red**. Jedinstven je **medju aktivnim redovima** (v1-stornirano + v2-aktivno dele
+`(broj, klasa)`).
+
+Zato:
+- **PWA sync (smer a)** NIJE prost `ZbirnaID -> BrojZbirne` swap: `RequireSingleMasterSyncRow`
+  trazi tacno jedan red, a `BrojZbirne` daje 2 (klase). Migrira se na
+  `(broj, klasa)` -> aktivan red.
+- **Svi citaci** biraju tekucu verziju = aktivan red po `(broj, klasa)`.
+- **Primitiv:** `modDokumentInvariant.FindSingleActiveRow(tbl, brojCol, broj, klasaCol,
+  klasa)` -> indeks jedinog aktivnog reda; 0 = nema; -1 = vise aktivnih (integritet
+  povreda; u append-only sme najvise jedan aktivan po `(broj, klasa)`). (Faza 7 korak 3.0.)
+
+## Predložene faze (Faza 7 / v3) — stanje
+
+1. ✅ Šema (trace kolone) — non-breaking. *(korak 1)*
+2. ✅ Utiskivanje `IspravkaOd`/`ZamenjenSa`/`CorrectionID` na ISPRAVKA. *(korak 2)*
+4. 🟡 Sledljivost vidljiva: panel `[ispravka dokumenta X]` + štampa otpremnice. *(korak 4, deo)*
+3. Korak 3 (append-only zbirne), smer (a), pod-koraci:
+   - **3.0** `FindSingleActiveRow` `(broj, klasa)` → aktivan red + test. *(u toku)*
+   - **3.1** PWA sync (`modMasterSync`) `ZbirnaID` → `(broj, klasa)`-aktivno. *(eksterno; test pre)*
+   - **3.2** `RecalculateZbirnaFromOtpremnice_TX` → storno tekućih `(broj,*)` + append novih.
+   - **3.3** Čitači → aktivna verzija po `(broj, klasa)`.
+5. `blok → BrojOtpremnice`; Izdato-status kapija; penzionisati in-place + gard-e.
 6. Testovi (`modTestStornoCentar`) + ADR-0002 → „Prihvaćeno" + ARCHITECTURE_REFERENCE.
 
 ## Alternativa (odbijena)
