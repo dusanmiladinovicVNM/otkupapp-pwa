@@ -1105,39 +1105,43 @@ Public Function GetStornoChainRows(ByVal docType As String, ByVal broj As String
     Dim result As New Collection
     Set GetStornoChainRows = result
     On Error GoTo EH
+    ' Jedinstven stil "Efekat storna": UVEK Duplikat pa Ponistenje. Isti efekat ->
+    ' "DUPLIKAT i PONISTENJE: X"; razlicit -> "DUPLIKAT: A | PONISTENJE: B".
+    ' Ispravka i Resi kasnije su celo-dokumentni (uniformni) -> objasnjeni u legendi.
+    Const SAM_BLOK As String = "Samostalni - storniraju se samo ako ih cekiras (svaki mod)"
     Select Case docType
         Case FLOW_DOC_OTPREMNICA
             Dim so As Object: Set so = ScanOtpremnica(broj)
-            AddChainRow result, "Otpremnica", broj, "Stornira se (uz ambalazu)"
+            AddChainRow result, "Otpremnica", broj, ChainEff("stornira se (uz ambalazu)", "stornira se (uz ambalazu)")
             If CBool(so("hasZbirna")) Then
                 Dim zEff As String
                 If OtpremnicaIsSoleOwner(CStr(so("brojZbirne")), broj) Then
-                    zEff = "Preracun; storno ako ostane prazna (jedini vlasnik)"
+                    zEff = "preracun, storno ako ostane prazna (jedini vlasnik)"
                 Else
-                    zEff = "Preracun; NE pada (deljena zbirna - sestre ostaju)"
+                    zEff = "preracun, NE pada (deljena - sestre ostaju)"
                 End If
-                AddChainRow result, "Zbirna", CStr(so("brojZbirne")), zEff
+                AddChainRow result, "Zbirna", CStr(so("brojZbirne")), ChainEff(zEff, zEff)
             End If
-            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", "DUPLIKAT: ostaje osirocena (rucno) | PONISTENJE: stornira se"
-            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", "DUPLIKAT: ostaju osirocene (rucno) | PONISTENJE: skidaju se"
-            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", "Oslobadjaju se za reveze (cekiraj za storno)"
+            If CBool(so("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(so("prijCount")) & ")", ChainEff("ostaje osirocena (rucno)", "stornira se")
+            If CBool(so("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(so("paleteCount")) & ")", ChainEff("ostaju osirocene (rucno)", "skidaju se")
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(so("blockCount")) & ")", SAM_BLOK
         Case FLOW_DOC_ZBIRNA
             Dim sz As Object: Set sz = ScanZbirna(broj)
-            AddChainRow result, "Zbirna", broj, "Stornira se"
-            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", "PONISTENJE: storniraju se | DUPLIKAT: odvezuju se (prezivljavaju)"
-            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", "DUPLIKAT: ostaje osirocena (rucno) | PONISTENJE: stornira se"
-            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", "DUPLIKAT: ostaju osirocene (rucno) | PONISTENJE: skidaju se"
-            AddChainRow result, "Otkupni blokovi", "", "Oslobadjaju se za reveze (cekiraj za storno)"
+            AddChainRow result, "Zbirna", broj, ChainEff("stornira se", "stornira se")
+            AddChainRow result, "Otpremnice", "(" & CStr(sz("otpCount")) & ")", ChainEff("odvezuju se (prezivljavaju)", "storniraju se")
+            If CBool(sz("hasPrijemnica")) Then AddChainRow result, "Prijemnica", "(" & CStr(sz("prijCount")) & ")", ChainEff("ostaje osirocena (rucno)", "stornira se")
+            If CBool(sz("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sz("paleteCount")) & ")", ChainEff("ostaju osirocene (rucno)", "skidaju se")
+            AddChainRow result, "Otkupni blokovi", "", SAM_BLOK
         Case FLOW_DOC_PRIJEMNICA
             Dim sp As Object: Set sp = ScanPrijemnica(broj)
-            AddChainRow result, "Prijemnica", broj, "Stornira se (uz ambalazu)"
+            AddChainRow result, "Prijemnica", broj, ChainEff("stornira se (uz ambalazu)", "stornira se (uz ambalazu)")
             If Len(CStr(sp("brojZbirne"))) > 0 Then _
-                AddChainRow result, "Zbirna", CStr(sp("brojZbirne")), "Preracun; storno ako padne na 0 (ponistenje)"
+                AddChainRow result, "Zbirna", CStr(sp("brojZbirne")), ChainEff("ostaje netaknuta", "preracun, storno ako padne na 0")
             If CLng(sp("otpCount")) > 0 Then _
-                AddChainRow result, "Otpremnice", "(" & CStr(sp("otpCount")) & ")", "Storniraju se (ponistenje)"
-            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", "Oslobadja se (stavke ostaju osirocene)"
-            If CBool(sp("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", "Skidaju se (Duplikat / Ponistenje)"
-            AddChainRow result, "Otkupni blokovi", "(" & CStr(sp("blockCount")) & ")", "Samostalni - cekiraj za dodatni storno"
+                AddChainRow result, "Otpremnice", "(" & CStr(sp("otpCount")) & ")", ChainEff("ostaju netaknute", "storniraju se")
+            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", ChainEff("oslobadja se (stavke osirocene)", "oslobadja se (stavke osirocene)")
+            If CBool(sp("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", ChainEff("skidaju se", "skidaju se")
+            AddChainRow result, "Otkupni blokovi", "(" & CStr(sp("blockCount")) & ")", SAM_BLOK
         Case FLOW_DOC_REVERS
             AddChainRow result, "Revers", broj & " [" & dokumentTip & "]", "Stornira se (saldo se koriguje, bez kontra-stavke)"
     End Select
@@ -1151,6 +1155,16 @@ Private Sub AddChainRow(ByRef col As Collection, ByVal dok As String, ByVal info
     row(0) = dok: row(1) = info: row(2) = nap
     col.Add row
 End Sub
+
+' Jedinstven format "Efekat storna": Duplikat UVEK prvo, pa Ponistenje. Isti efekat
+' -> spojeno "DUPLIKAT i PONISTENJE: X" (da se ne ponavlja). Razlicit -> oba, redom.
+Private Function ChainEff(ByVal dup As String, ByVal pon As String) As String
+    If StrComp(Trim$(dup), Trim$(pon), vbTextCompare) = 0 Then
+        ChainEff = "DUPLIKAT i PONISTENJE: " & dup
+    Else
+        ChainEff = "DUPLIKAT: " & dup & "   |   PONISTENJE: " & pon
+    End If
+End Function
 
 ' Otkupni blokovi za multiselect listu. Collection nizova(0..4):
 ' OtkupID | BrojDokumenta | Kolicina | Klasa | Kooperant.

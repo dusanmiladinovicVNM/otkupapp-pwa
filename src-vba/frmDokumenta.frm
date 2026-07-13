@@ -4209,7 +4209,7 @@ Private Sub EnsureStornoConfirmPanel()
         .ColumnCount = 3: .ColumnWidths = SC_CHAIN_COLW: .Locked = True
     End With
     StyleListBox m_scChainHdr
-    SetHeaderRow3 m_scChainHdr, "Dokument", "Broj / kolicina", "Efekat storna"
+    SetHeaderRow3 m_scChainHdr, "Dokument", "Broj / kolicina", "Efekat storna (Duplikat / Ponistenje)"
 
     Set m_scChain = Me.Controls.Add("Forms.ListBox.1", "lstScChainRT", True)
     With m_scChain
