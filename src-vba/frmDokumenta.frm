@@ -3545,6 +3545,14 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
     Dim blkIds As Collection: Set blkIds = SelectedBlockIDs()
     Dim skipPal As Boolean: skipPal = KeepPalChecked()   ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
 
+    ' Guard C (ADR-0001): blok-storno nad zivom otpremnicom bi napravio tihi disbalans.
+    ' Odbij PRE bilo kakve mutacije; preusmeri na otpremnica ISPRAVKA / skini cekiranje.
+    Dim driftMsg As String: driftMsg = BlockStornoDriftReason(docType, mode, blkIds)
+    If Len(driftMsg) > 0 Then
+        MsgBox driftMsg, vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim res As Object
     Set res = DispatchCorrection(docType, brDok, dokTip, mode, False, skipPal)
     If res Is Nothing Then

@@ -1393,6 +1393,72 @@ EH:
 End Function
 
 ' ============================================================
+' GUARD C (ADR-0001): blok-storno nad ZIVOM otpremnicom pravi tihi disbalans
+' (otpremnica/zbirna precenjene). Dozvoljeno je samo kad ova operacija i sama
+' stornira roditeljsku otpremnicu bloka (PONISTENJE kaskada; ili otpremnica-nivo
+' DUPLI/ISPRAVKA). Inace: odbij + preusmeri na otpremnica ISPRAVKA. Unbound blok
+' (bez otpremnice) je uvek bezbedan (ne precenjuje nista).
+' Vraca "" ako je bezbedno; inace razlog odbijanja (za MsgBox).
+' ============================================================
+Public Function BlockStornoDriftReason(ByVal docType As String, ByVal mode As String, _
+                                       ByVal blkIds As Collection) As String
+    On Error GoTo EH
+    If blkIds Is Nothing Then Exit Function
+    If blkIds.count = 0 Then Exit Function
+    If ModeStornoBlokParent(docType, mode) Then Exit Function     ' roditelj umire -> ok
+    Dim liveOtp As String: liveOtp = FirstLiveOtpremnicaForBlocks(blkIds)
+    If Len(liveOtp) > 0 Then
+        BlockStornoDriftReason = _
+            "Cekiran otkupni blok je vezan za AKTIVNU otpremnicu " & liveOtp & "." & vbCrLf & _
+            "Storno bloka bi ostavio otpremnicu i zbirnu precenjene (ADR-0001: izdati " & _
+            "dokument se ne menja u mestu)." & vbCrLf & vbCrLf & _
+            "Skini cekiranje bloka, ILI koristi otpremnica ISPRAVKA (storno cele otpremnice + reizdaj)."
+    End If
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".BlockStornoDriftReason"
+End Function
+
+' True = ova (docType, mode) i sama stornira roditeljsku otpremnicu bloka, pa je
+' dodatni blok-storno bezbedan (nema zive otpremnice da precenjuje).
+Private Function ModeStornoBlokParent(ByVal docType As String, ByVal mode As String) As Boolean
+    If mode = SV_MODE_PONISTENJE Then ModeStornoBlokParent = True: Exit Function
+    If docType = FLOW_DOC_OTPREMNICA And (mode = SV_MODE_DUPLI Or mode = SV_MODE_ISPRAVKA) Then _
+        ModeStornoBlokParent = True
+End Function
+
+' Prvi (citljiv) broj AKTIVNE otpremnice na koju je vezan neki od datih blokova;
+' "" ako su svi blokovi unbound ili im je otpremnica vec stornirana.
+Private Function FirstLiveOtpremnicaForBlocks(ByVal blkIds As Collection) As String
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cId As Long, cOtp As Long
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    If cId = 0 Or cOtp = 0 Then Exit Function
+    Dim idSet As Object: Set idSet = CreateObject("Scripting.Dictionary")
+    Dim k As Long
+    For k = 1 To blkIds.count: idSet(Trim$(CStr(blkIds(k)))) = True: Next k
+    Dim otpSet As Object: Set otpSet = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If idSet.Exists(Trim$(CStr(data(i, cId)))) Then
+            Dim otpID As String: otpID = Trim$(CStr(data(i, cOtp)))
+            If Len(otpID) > 0 Then otpSet(otpID) = True
+        End If
+    Next i
+    Dim key As Variant
+    For Each key In otpSet.keys
+        Dim br As String: br = LookupActiveID(TBL_OTPREMNICA, COL_OTP_ID, CStr(key), COL_OTP_BROJ)
+        If Len(br) > 0 Then FirstLiveOtpremnicaForBlocks = br: Exit Function
+    Next key
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".FirstLiveOtpremnicaForBlocks"
+End Function
+
+' ============================================================
 ' PRIVATE - storno / relink / detach TX helpers (reuse core-a, bez malina kaskade)
 ' ============================================================
 
