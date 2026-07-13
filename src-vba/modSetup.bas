@@ -1176,6 +1176,53 @@ Public Sub EnsureSledljivostSchema()
         EnsureColumnOnTable t, COL_TRACE_CORRECTION_ID
         EnsureColumnOnTable t, COL_TRACE_IZDATO_STATUS
     Next i
+    ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
+    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+End Sub
+
+' ============================================================
+' Backfill BrojOtpremnice na tblOtkup iz OtpremnicaID (Faza 7 korak 5). Alt+F8,
+' jednokratno; idempotentno (samo prazne). Efikasno: dict OtpremnicaID->Broj u
+' jednom prolazu. NE ide u EnsureRuntimeSchema (skup po startu).
+' ============================================================
+Public Sub BackfillOtkupBrojOtpremnice()
+    On Error GoTo EH
+    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+    Dim od As Variant: od = GetTableData(TBL_OTPREMNICA)
+    Dim map As Object: Set map = CreateObject("Scripting.Dictionary")
+    If IsArray(od) Then
+        Dim cOId As Long: cOId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+        Dim cOBr As Long: cOBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+        If cOId > 0 And cOBr > 0 Then
+            Dim r As Long
+            For r = 1 To UBound(od, 1)
+                Dim oid As String: oid = Trim$(CStr(od(r, cOId)))
+                If Len(oid) > 0 And Not map.Exists(oid) Then map(oid) = Trim$(CStr(od(r, cOBr)))
+            Next r
+        End If
+    End If
+    Dim kd As Variant: kd = GetTableData(TBL_OTKUP)
+    Dim n As Long: n = 0
+    If IsArray(kd) Then
+        Dim cKOtp As Long: cKOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+        Dim cKBr As Long: cKBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE)
+        If cKOtp > 0 And cKBr > 0 Then
+            Dim i As Long
+            For i = 1 To UBound(kd, 1)
+                If Len(Trim$(CStr(kd(i, cKBr)))) = 0 Then          ' samo prazne (idempotentno)
+                    Dim oid2 As String: oid2 = Trim$(CStr(kd(i, cKOtp)))
+                    If Len(oid2) > 0 And map.Exists(oid2) Then
+                        UpdateCell TBL_OTKUP, i, COL_OTK_BROJ_OTPREMNICE, map(oid2)
+                        n = n + 1
+                    End If
+                End If
+            Next i
+        End If
+    End If
+    MsgBox "Backfill BrojOtpremnice: popunjeno " & n & " otkupnih redova.", vbInformation, APP_NAME
+    Exit Sub
+EH:
+    LogErr "modSetup.BackfillOtkupBrojOtpremnice"
 End Sub
 
 ' ============================================================

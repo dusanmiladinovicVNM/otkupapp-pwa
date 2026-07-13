@@ -192,6 +192,7 @@ Public Const COL_OTK_BROJ_ZBIRNE As String = "BrojZbirne"
 Public Const COL_OTK_ISPLACENO As String = "Isplaceno"
 Public Const COL_OTK_DATUM_ISPLATE As String = "DatumIsplate"
 Public Const COL_OTK_OTPREMNICA_ID As String = "OtpremnicaID"
+Public Const COL_OTK_BROJ_OTPREMNICE As String = "BrojOtpremnice"  ' Faza 7 korak 5: denorm poslovni kljuc (stabilan kroz re-verziju otpremnice)
 Public Const COL_OTK_PARCELA As String = "ParcelaID"
 
 ' --- Spaltennamen tblOtpremnica (NEU) ---

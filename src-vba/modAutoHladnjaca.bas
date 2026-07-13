@@ -229,6 +229,7 @@ Private Sub LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As Strin
     For k = 1 To rows.count
         r = rows(k)
         If Len(otpID) > 0 Then RequireUpdateCell TBL_OTKUP, r, COL_OTK_OTPREMNICA_ID, otpID, SRC
+        If Len(otpID) > 0 Then SetOtkupBrojOtpremnice r, otpID
         If Len(brZbr) > 0 Then RequireUpdateCell TBL_OTKUP, r, COL_OTK_BROJ_ZBIRNE, brZbr, SRC
         If Len(vozacID) > 0 And curVoz = "" Then _
             RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, vozacID, SRC

@@ -1789,6 +1789,7 @@ Private Function FreeOtkupBloksInline(ByVal otpIDs As Collection, ByVal SRC As S
             If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
                 RequireUpdateCell TBL_OTKUP, i, COL_OTK_OTPREMNICA_ID, "", SRC
                 If cZbr > 0 Then RequireUpdateCell TBL_OTKUP, i, COL_OTK_BROJ_ZBIRNE, "", SRC
+                SetOtkupBrojOtpremnice i, ""      ' Faza 7 korak 5: ocisti denorm kljuc (unbind)
                 n = n + 1
             End If
         End If
