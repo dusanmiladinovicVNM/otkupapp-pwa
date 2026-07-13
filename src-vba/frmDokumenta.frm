@@ -2703,6 +2703,7 @@ Private Sub btnUnosPrij_Click()
             If relOk Then
                 modStornoContext.CompleteCorrectionContext m_activeCorrectionID, "", newBrojPrij, _
                     "Ispravka prijemnice: palete prevezane na " & newBrojPrij & "."
+                StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_BROJ, newBrojPrij, oldBrojPrij, m_activeCorrectionID
             Else
                 modStornoContext.MarkCorrectionManual m_activeCorrectionID, _
                     "Prevezi palete rucno (Osiroceni dokumenti -> Palete).", _

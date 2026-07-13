@@ -608,6 +608,7 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     CompleteCorrectionContext correctionID, newOtpID, newBroj, _
         "Ispravka otpremnice: blokovi prevezani, prijemnica/palete preseljene, stara zbirna " & _
         IIf(staraStornirana, "stornirana", "rekalkulisana") & "."
+    StampIspravkaTrace TBL_OTPREMNICA, COL_OTP_BROJ, newBroj, oldBroj, correctionID
     r("success") = True
     r("message") = "Ispravka zavrsena. Blokovi prevezani na " & newBroj & _
         IIf(prijMoved > 0, ", prijemnica/palete preseljene na " & newZbirna, "") & _
@@ -782,6 +783,7 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
 
     CompleteCorrectionContext correctionID, "", newBroj, _
         "Ispravka zbirne zavrsena: otpremnice/prijemnica prevezane, zbirna rekalkulisana."
+    StampIspravkaTrace TBL_ZBIRNA, COL_ZBR_BROJ, newBroj, oldBroj, correctionID
     r("success") = True
     r("message") = "Ispravka zbirne zavrsena. Sve prevezano na " & newBroj & "."
     Exit Function
@@ -1457,6 +1459,45 @@ Private Function FirstLiveOtpremnicaForBlocks(ByVal blkIds As Collection) As Str
 EH:
     LogErr MOD_NAME & ".FirstLiveOtpremnicaForBlocks"
 End Function
+
+' ============================================================
+' Sledljivost (ADR-0002 / Faza 7 korak 2): utisni na dokument-redove da je NOVI red
+' ispravka STAROG -> IspravkaOd + CorrectionID na AKTIVNOM novom redu; ZamenjenSa na
+' STORNIRANOM starom redu. Best-effort, guarded na postojanje kolona (schema-drift
+' safe). NIJE agregat -> ne menja ponasanje; samo vidljiv audit trag NA dokumentu.
+' newBroj == oldBroj (in-place, bez zamene) -> nema sta da se utisne.
+' ============================================================
+Public Sub StampIspravkaTrace(ByVal tbl As String, ByVal brojCol As String, _
+        ByVal newBroj As String, ByVal oldBroj As String, ByVal correctionID As String)
+    On Error GoTo EH
+    newBroj = Trim$(newBroj): oldBroj = Trim$(oldBroj)
+    If Len(newBroj) = 0 Then Exit Sub
+    If StrComp(newBroj, oldBroj, vbTextCompare) = 0 Then Exit Sub
+    Dim cBr As Long: cBr = GetColumnIndex(tbl, brojCol)
+    If cBr = 0 Then Exit Sub
+    Dim cIsp As Long: cIsp = GetColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD)
+    Dim cZam As Long: cZam = GetColumnIndex(tbl, COL_TRACE_ZAMENJEN_SA)
+    Dim cCid As Long: cCid = GetColumnIndex(tbl, COL_TRACE_CORRECTION_ID)
+    Dim cSt As Long: cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    If cIsp = 0 And cZam = 0 And cCid = 0 Then Exit Sub          ' schema jos nije zdrava
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Sub
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        Dim b As String: b = Trim$(CStr(data(i, cBr)))
+        Dim isStorno As Boolean
+        isStorno = (cSt > 0 And UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
+        If b = newBroj And Not isStorno Then
+            If cIsp > 0 And Len(oldBroj) > 0 Then UpdateCell tbl, i, COL_TRACE_ISPRAVKA_OD, oldBroj
+            If cCid > 0 And Len(correctionID) > 0 Then UpdateCell tbl, i, COL_TRACE_CORRECTION_ID, correctionID
+        ElseIf b = oldBroj And isStorno Then
+            If cZam > 0 Then UpdateCell tbl, i, COL_TRACE_ZAMENJEN_SA, newBroj
+        End If
+    Next i
+    Exit Sub
+EH:
+    LogErr MOD_NAME & ".StampIspravkaTrace"
+End Sub
 
 ' ============================================================
 ' PRIVATE - storno / relink / detach TX helpers (reuse core-a, bez malina kaskade)
