@@ -4398,7 +4398,8 @@ Private Sub PopulateStornoConfirmPanel()
     Dim sm As Object: Set sm = mdl("summary")
 
     m_scTitle.caption = "Storno / potvrda -- " & m_sc_docType & " " & m_sc_brDok
-    Dim partner As String: partner = CStr(hdr("partnerID"))
+    Dim partner As String: partner = CStr(hdr("partner"))
+    If Len(partner) = 0 Then partner = CStr(hdr("partnerID"))
     m_scHeader.caption = "Partner/stanica: " & IIf(Len(partner) > 0, partner, "-") & _
         "     Datum: " & CStr(hdr("datum")) & "     Kolicina: " & CStr(hdr("kolicina"))
 

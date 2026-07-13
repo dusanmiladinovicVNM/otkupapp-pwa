@@ -47,7 +47,7 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String) As 
     Set ImpactHeader = h
     On Error GoTo EH
     h("tip") = docType: h("broj") = broj
-    h("partnerID") = "": h("datum") = "": h("kolicina") = ""
+    h("partnerID") = "": h("partner") = "": h("datum") = "": h("kolicina") = ""
     Select Case docType
         Case FLOW_DOC_OTPREMNICA
             h("partnerID") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_STANICA)
@@ -62,9 +62,27 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String) As 
             h("datum") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_DATUM)
             h("kolicina") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KOLICINA)
     End Select
+    ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
+    h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
     Exit Function
 EH:
     LogErr MOD_NAME & ".ImpactHeader"
+End Function
+
+' ID partnera -> citljiv naziv. Otpremnica: tblStanice (StanicaID -> Naziv);
+' zbirna/prijemnica: tblKupci (KupacID -> Naziv). Ako naziv nema -> vrati ID.
+Private Function ResolvePartnerName(ByVal docType As String, ByVal partnerID As String) As String
+    On Error Resume Next
+    ResolvePartnerName = partnerID
+    If Len(Trim$(partnerID)) = 0 Then Exit Function
+    Dim nm As String
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA
+            nm = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", partnerID, "Naziv")))
+        Case FLOW_DOC_ZBIRNA, FLOW_DOC_PRIJEMNICA
+            nm = Trim$(CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, partnerID, COL_KUP_NAZIV)))
+    End Select
+    If Len(nm) > 0 Then ResolvePartnerName = nm
 End Function
 
 ' ------------------------------------------------------------
