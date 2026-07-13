@@ -77,6 +77,14 @@ Sync (`modStammdatenSync`/`modMasterSync`): prenosi `IspravkaOd`/`Stornirano`/`I
 `IzdatoStatus` (DRAFT/IZDATO/PROSLEDJENO): draft → slobodna izmena; izdato → obavezno
 storno+novi; prosleđeno → i korektivni dokument ka kupcu.
 
+**Nalaz (2026-07-13):** ova app **NEMA draft-fazu** za chain dokumente — svaki je IZDAT
+čim se snimi (grep `draft/nacrt` = samo SEF status fakture, nevezano). Zato je
+`IzdatoStatus` podrazumevano IZDATO; **prazno = IZDATO** (konzervativna konvencija, bez
+backfill-a). Gate primitiv: `modDokumentInvariant.DocIsIssued(tbl, brojCol, broj)` (True
+osim ako je eksplicitno DRAFT) + `SetIzdatoStatus`. DRAFT rezervisan (buduci parkiran
+dokument), PROSLEDJENO za buduci sync-push. Posledica: in-place se NE gejtuje uslovno —
+uvek append-only (Korak 3.2), bez „draft izuzetka".
+
 ### 9. Penzionisati legacy in-place putanje + gard-e
 Kad je storno+novi svuda, drift ne postoji → Guard C / undo-garda (#3) se pojednostave.
 

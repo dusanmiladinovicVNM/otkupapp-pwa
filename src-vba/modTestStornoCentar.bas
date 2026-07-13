@@ -20,7 +20,33 @@ Public Sub Test_StornoCentar_All()
     mPass = 0: mFail = 0
     Test_StampIspravkaTrace_Auto
     Test_BlockStornoDriftReason_Auto
+    Test_DocIsIssued_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' IzdatoStatus gate: prazno/IZDATO -> izdato; DRAFT -> nije izdato.
+Public Sub Test_DocIsIssued_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), _
+              Array("SVT-IZ-1", "SVT-IZ-EMPTY", "I")                 ' prazan IzdatoStatus
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_TRACE_IZDATO_STATUS), _
+              Array("SVT-IZ-2", "SVT-IZ-DRAFT", "I", IZDATO_DRAFT)
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_TRACE_IZDATO_STATUS), _
+              Array("SVT-IZ-3", "SVT-IZ-IZD", "I", IZDATO_IZDATO)
+
+    TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-EMPTY") = True, "prazan IzdatoStatus -> izdato"
+    TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-DRAFT") = False, "DRAFT -> nije izdato"
+    TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-IZD") = True, "IZDATO -> izdato"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_DocIsIssued_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' Sledljivost: novi red nosi IspravkaOd + CorrectionID; stari (storniran) nosi ZamenjenSa.

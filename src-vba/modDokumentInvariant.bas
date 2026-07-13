@@ -505,6 +505,31 @@ EH:
 End Function
 
 ' ============================================================
+' Faza 7 - IzdatoStatus gate (ADR-0001 granica: izdat/prosledjen dokument je
+' nepromenljiv -> koriguje se storno+reizdaj, ne in-place).
+' Ova app NEMA "draft" fazu za chain dokumente -> IzdatoStatus je podrazumevano
+' IZDATO; prazno = IZDATO (konzervativno). DRAFT je rezervisan (buduci parkiran/
+' held dokument), PROSLEDJENO za buduci sync-push ka PWA/kupcu.
+' DocIsIssued: True ako je IZDAT/PROSLEDJEN, False SAMO ako eksplicitno DRAFT.
+' ============================================================
+Public Function DocIsIssued(ByVal tbl As String, ByVal brojCol As String, ByVal broj As String) As Boolean
+    On Error Resume Next
+    DocIsIssued = True                                  ' default: izdato (konzervativno)
+    If GetColumnIndex(tbl, COL_TRACE_IZDATO_STATUS) = 0 Then Exit Function
+    Dim v As String
+    v = UCase$(Trim$(CStr(LookupValue(tbl, brojCol, broj, COL_TRACE_IZDATO_STATUS))))
+    DocIsIssued = (v <> UCase$(IZDATO_DRAFT))
+End Function
+
+' Postavi IzdatoStatus na jedan red (buduci prelazi: PROSLEDJENO pri sync-u ka PWA).
+' Guarded na kolonu (schema-drift safe).
+Public Sub SetIzdatoStatus(ByVal tbl As String, ByVal rowIndex As Long, ByVal status As String)
+    On Error Resume Next
+    If GetColumnIndex(tbl, COL_TRACE_IZDATO_STATUS) = 0 Then Exit Sub
+    UpdateCell tbl, rowIndex, COL_TRACE_IZDATO_STATUS, status
+End Sub
+
+' ============================================================
 ' TEST (Alt+F8) - rollback-safe (clsTransaction snapshot + rollback; fixture ne
 ' ostaje). Automatske asertacije -> Debug.Print (Ctrl+G). Faza 7 (3.0).
 ' ============================================================
