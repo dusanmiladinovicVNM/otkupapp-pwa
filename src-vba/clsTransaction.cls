@@ -72,6 +72,12 @@ Public Sub CommitTx()
     ' Stvarni save i dalje izvrsava AutoSaveAfterCommit. Failure NIKAD
     ' ne propaga jer je TX vec commit-ovan u memoriji.
     Call MarkDirtyAndSchedule(sourceName)
+
+    ' Storno cockpit kes je posle izmene zastareo -> oznaci + prezakazi idle warm.
+    ' Fail-soft: nikad ne diramo commit-ovanu TX (InvalidateStornoWarm guta greske).
+    On Error Resume Next
+    InvalidateStornoWarm
+    On Error GoTo 0
 End Sub
 
 Public Sub RollbackTx()

@@ -147,6 +147,12 @@ Public Sub StartApp()
     End If
     On Error GoTo 0
 
+    ' Idle pre-warm Storno cockpit keza (prvi warm ~60s posle pokretanja); posle
+    ' svake TX se prezakazuje iz CommitTx. Fail-soft. Vidi modStornoWarm.
+    On Error Resume Next
+    ScheduleStornoWarm
+    On Error GoTo 0
+
     ' frmSplash sam sebe Unloaduje i pokrece frmOtkupAPP
     Exit Sub
 
@@ -229,6 +235,8 @@ Public Sub ShutdownApp()
         LogErr "modMain.ShutdownApp.StopScheduledSync"
         Err.Clear
     End If
+    ' Otkazi pending storno-warm OnTime (inace moze da reotvori workbook posle close).
+    StopStornoWarm
     On Error GoTo EH
 
     ' Skini mouse hook pre gasenja (higijena; inace ga skida i QueryClose formi).

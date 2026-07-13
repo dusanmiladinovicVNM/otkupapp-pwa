@@ -4753,7 +4753,8 @@ End Sub
 Private Sub PopulateFindResults()
     On Error GoTo EH
     If m_lstFnResults Is Nothing Then Exit Sub
-    If m_fnAllDocs Is Nothing Then Set m_fnAllDocs = GetActiveDocumentsForStorno("Svi", "")
+    ' Gotov (idle-warm) skup ako je svez -> otvaranje trenutno; inace sinhroni fallback.
+    If m_fnAllDocs Is Nothing Then Set m_fnAllDocs = GetWarmStornoDocs()
 
     Dim tip As String: tip = ""
     If Not m_cmbFnTip Is Nothing Then tip = CStr(m_cmbFnTip.value)
