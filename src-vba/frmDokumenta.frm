@@ -2770,6 +2770,146 @@ End Function
 ' danasnji datum). Kolicina: u BRUTO modu uzmi BrutoKg (original bruto), inace
 ' Kolicina (neto). Cena se postavlja POSLEDNJA (auto-fill iz _Change eventova bi
 ' je inace pregazio cenom iz cenovnika).
+' Prefill OTPREMNICA forme iz stornirane (ISPRAVKA) -- operater ne mora napamet.
+' Ogledalo save-handlera: stanica=cmbOtkupnoMesto, vozac=cmbVozac; bruto-svesno; Klasa I/II.
+' Broj se NE postavlja (ostaje svez predlog; ISPRAVKA = nov broj + trace na stari).
+Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(d) Then Exit Sub
+    Dim cBr As Long, cKl As Long, cSta As Long, cVoz As Long, cZbr As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
+    Dim cAmb As Long, cBruto As Long, cDat As Long
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cKl = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA)
+    cSta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
+    cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
+    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    cVr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA)
+    cSo = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cCena = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA)
+    cTip = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB)
+    cAmb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB)
+    cBruto = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BRUTO)
+    cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    If cBr = 0 Then Exit Sub
+
+    Dim rI As Long, rII As Long: rI = 0: rII = 0
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, cBr))) = brStorn Then
+            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
+            If kl = "II" Then
+                If rII = 0 Then rII = r
+            Else
+                If rI = 0 Then rI = r
+            End If
+        End If
+    Next r
+    If rI = 0 And rII = 0 Then Exit Sub
+    Dim base As Long: base = rI: If base = 0 Then base = rII
+    Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
+
+    If cDat > 0 Then
+        Dim vDat As Variant: vDat = d(base, cDat)
+        If IsDate(vDat) Then txtDatum.value = Format$(CDate(vDat), "d.m.yyyy")
+    End If
+
+    cmbVrstaVoca.value = NzToText(d(base, cVr))
+    cmbSortaVoca.value = NzToText(d(base, cSo))
+    If cSta > 0 Then SelectComboByDisplayID cmbOtkupnoMesto, Trim$(CStr(d(base, cSta)))
+    If cVoz > 0 Then SelectComboByDisplayID cmbVozac, Trim$(CStr(d(base, cVoz)))
+    If cTip > 0 Then cmbTipAmbOtp.value = NzToText(d(base, cTip))
+
+    chkDveKlaseOtp.value = (rII > 0)
+    txtBrojZbirneOtp.value = NzToText(d(base, cZbr))
+
+    If rI > 0 Then
+        Dim kolI As Double
+        If brutoMode And cBruto > 0 And NzD(d(rI, cBruto)) > 0 Then kolI = NzD(d(rI, cBruto)) Else kolI = NzD(d(rI, cKol))
+        txtKolicinaOtp.value = PrefillNumStr(kolI)
+        If cAmb > 0 Then txtKolAmbOtp.value = PrefillNumStr(NzL(d(rI, cAmb)))
+    End If
+    If rII > 0 Then
+        Dim kolII As Double
+        If brutoMode And cBruto > 0 And NzD(d(rII, cBruto)) > 0 Then kolII = NzD(d(rII, cBruto)) Else kolII = NzD(d(rII, cKol))
+        txtKolicinaKlIIOtp.value = PrefillNumStr(kolII)
+        If Not m_txtKolAmbIIOtp Is Nothing And cAmb > 0 Then m_txtKolAmbIIOtp.value = PrefillNumStr(NzL(d(rII, cAmb)))
+    End If
+
+    If rI > 0 And cCena > 0 Then txtCenaOtp.value = PrefillNumStr(NzD(d(rI, cCena)))
+    If rII > 0 And cCena > 0 Then txtCenaKlIIOtp.value = PrefillNumStr(NzD(d(rII, cCena)))
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PrefillOtpremnicaFromStornirana"
+End Sub
+
+' Prefill ZBIRNA forme iz stornirane (ISPRAVKA). Zbirna nema bruto. Kupac/hladnjaca/pogon.
+Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(d) Then Exit Sub
+    Dim cBr As Long, cKl As Long, cVoz As Long, cKup As Long, cHl As Long, cPo As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cTip As Long, cAmb As Long, cDat As Long
+    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cKl = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA)
+    cVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
+    cKup = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
+    cHl = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_HLADNJACA)
+    cPo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_POGON)
+    cVr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
+    cSo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
+    cKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
+    cTip = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_TIP_AMB)
+    cAmb = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB)
+    cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
+    If cBr = 0 Then Exit Sub
+
+    Dim rI As Long, rII As Long: rI = 0: rII = 0
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, cBr))) = brStorn Then
+            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
+            If kl = "II" Then
+                If rII = 0 Then rII = r
+            Else
+                If rI = 0 Then rI = r
+            End If
+        End If
+    Next r
+    If rI = 0 And rII = 0 Then Exit Sub
+    Dim base As Long: base = rI: If base = 0 Then base = rII
+
+    If cDat > 0 Then
+        Dim vDat As Variant: vDat = d(base, cDat)
+        If IsDate(vDat) Then txtDatum.value = Format$(CDate(vDat), "d.m.yyyy")
+    End If
+
+    cmbVrstaVoca.value = NzToText(d(base, cVr))
+    cmbSortaVoca.value = NzToText(d(base, cSo))
+    If cKup > 0 Then SelectComboByDisplayID cmbKupac, Trim$(CStr(d(base, cKup)))
+    If cVoz > 0 Then SelectComboByDisplayID cmbVozac, Trim$(CStr(d(base, cVoz)))
+    If cHl > 0 Then cmbHladnjaca.value = NzToText(d(base, cHl))
+    If cPo > 0 Then cmbPogon.value = NzToText(d(base, cPo))
+    If cTip > 0 Then cmbTipAmbZbr.value = NzToText(d(base, cTip))
+
+    chkDveKlaseZbr.value = (rII > 0)
+    txtBrojZbirne.value = NzToText(d(base, cBr))
+
+    If rI > 0 Then
+        txtUkupnoKGZbr.value = PrefillNumStr(NzD(d(rI, cKol)))
+        If cAmb > 0 Then txtUkupnoAmbZbr.value = PrefillNumStr(NzL(d(rI, cAmb)))
+    End If
+    If rII > 0 Then
+        txtUkupnoKgKlIIZbr.value = PrefillNumStr(NzD(d(rII, cKol)))
+        If Not m_txtKolAmbIIZbr Is Nothing And cAmb > 0 Then m_txtKolAmbIIZbr.value = PrefillNumStr(NzL(d(rII, cAmb)))
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PrefillZbirnaFromStornirana"
+End Sub
+
 Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
@@ -3586,6 +3726,10 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
             PrefillPrijemnicaFromStornirana brDok
             m_pendingRelinkOldPrij = brDok
             m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_PARENT_BROJ)
+        ElseIf docType = FLOW_DOC_OTPREMNICA Then
+            PrefillOtpremnicaFromStornirana brDok
+        ElseIf docType = FLOW_DOC_ZBIRNA Then
+            PrefillZbirnaFromStornirana brDok
         End If
         ' ISPRAVKA context je jos PENDING (zavrsava se po snimanju nove) -> pad storna
         ' blokova se samo javi; ne diramo status contexta ovde.
@@ -3596,11 +3740,13 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
                "SLEDECE: samo unesi i snimi NOVI dokument (normalno). Prevezivanje i " & _
                "rekalkulacija se rade AUTOMATSKI po snimanju -- nema dodatnog koraka.", _
                vbInformation, APP_NAME
+        On Error Resume Next
         If docType = FLOW_DOC_PRIJEMNICA Then
-            On Error Resume Next
             txtKolicinaPrij.SetFocus
-            On Error GoTo EH
+        ElseIf docType = FLOW_DOC_OTPREMNICA Then
+            txtKolicinaOtp.SetFocus
         End If
+        On Error GoTo EH
     ElseIf CBool(res("success")) Then
         blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
         ' Storno dokumenta je vec KOMITOVAN (context terminalno). Ako storno cekiranih
