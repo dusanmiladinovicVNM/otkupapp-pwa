@@ -153,9 +153,11 @@ Private WithEvents m_btnNedovrseno As MSForms.CommandButton
 Private WithEvents m_btnNedClose As MSForms.CommandButton
 Private m_nedBack As MSForms.Label
 Private m_nedTitle As MSForms.Label
-Private m_lstNed As MSForms.ListBox
+Private WithEvents m_lstNed As MSForms.ListBox
+Private WithEvents m_btnNedRecovery As MSForms.CommandButton  ' -> Osiroceni dokumenti (legacy akcije)
 Private m_nedBuilt As Boolean
 Private m_nedHidden As Collection
+Private m_nedRows As Collection    ' strukturirani redovi (1:1 sa list redovima; header je list idx 0)
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -4891,9 +4893,10 @@ Private Sub EnsureFindPanel()
     Set m_btnFnOpen = Me.Controls.Add("Forms.CommandButton.1", "btnFnOpenRT", True)
     StylePrimaryButton m_btnFnOpen, "Otvori storno"
 
-    ' Konsolidacija: umesto count-only "Nedovrseno (sve)" -> ulaz u DETALJNE panele.
+    ' Konsolidacija: JEDAN objedinjeni recovery centar (contexti + osirocene, deduplikovano,
+    ' akcija po redu). Osiroceni panel je dostupan iz njega (dugme "Osiroceni dokumenti").
     Set m_btnFnNed = Me.Controls.Add("Forms.CommandButton.1", "btnFnNedRT", True)
-    StylePrimaryButton m_btnFnNed, "Osiroceni / za doradu"
+    StylePrimaryButton m_btnFnNed, "Nedovrseno / recovery"
 
     Set m_btnFnStornirani = Me.Controls.Add("Forms.CommandButton.1", "btnFnStorniraniRT", True)
     StylePrimaryButton m_btnFnStornirani, "Stornirani"
@@ -5049,7 +5052,7 @@ End Sub
 ' Browse -> DETALJAN recovery panel (osirocene prijemnice/palete + akcije).
 Private Sub m_btnFnNed_Click()
     SetFindPanelVisible False
-    ShowRecoveryPanel
+    ShowNedovrsenoPanel
 End Sub
 
 ' Browse -> DETALJAN pregled storniranih (+ "Vrati storno").
@@ -5154,10 +5157,12 @@ Private Sub EnsureNedovrsenoPanel()
     End With
     Set m_btnNedClose = Me.Controls.Add("Forms.CommandButton.1", "btnNedCloseRT", True)
     StyleExitButton m_btnNedClose, "Zatvori"
+    Set m_btnNedRecovery = Me.Controls.Add("Forms.CommandButton.1", "btnNedRecoveryRT", True)
+    StylePrimaryButton m_btnNedRecovery, "Osiroceni dokumenti"
     Set m_lstNed = Me.Controls.Add("Forms.ListBox.1", "lstNedRT", True)
     With m_lstNed
-        .ColumnCount = 4
-        .ColumnWidths = "150;110;90;320"          ' Vrsta | Ref | Status | Opis
+        .ColumnCount = 5
+        .ColumnWidths = "150;100;80;250;180"      ' Vrsta | Ref | Status | Opis | Akcija
     End With
     MouseWheel_Register m_lstNed
     StyleListBox m_lstNed
@@ -5176,37 +5181,92 @@ Private Sub LayoutNedovrsenoPanel()
     Const HDR As Single = 30
     Dim w As Single, h As Single
     w = Me.InsideWidth: h = Me.InsideHeight
+    Const BTNH As Single = 28
     m_nedBack.Move 0, 0, w, h
     m_nedTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
     m_btnNedClose.Move w - PAD - 92, PAD, 92, 24
-    m_lstNed.Move PAD, PAD + HDR, w - 2 * PAD, h - 2 * PAD - HDR
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    m_lstNed.Move PAD, PAD + HDR, w - 2 * PAD, bottomRow - (PAD + HDR) - PAD
+    m_btnNedRecovery.Move PAD, bottomRow, 180, BTNH
 End Sub
 
 Private Sub PopulateNedovrsenoPanel()
     On Error GoTo EH
     If m_lstNed Is Nothing Then Exit Sub
     m_lstNed.Clear
-    Dim hdr(0 To 3) As Variant
-    hdr(0) = "Vrsta": hdr(1) = "Ref": hdr(2) = "Status": hdr(3) = "Opis"
+    Dim hdr(0 To 4) As Variant
+    hdr(0) = "Vrsta": hdr(1) = "Ref": hdr(2) = "Status": hdr(3) = "Opis": hdr(4) = "Akcija (2xklik)"
     AddNedListRow hdr
 
-    Dim rows As Collection: Set rows = GetNedovrseno()
+    Set m_nedRows = GetNedovrseno()
     Dim i As Long, n As Long: n = 0
-    If Not rows Is Nothing Then
-        For i = 1 To rows.count
-            Dim d As Object: Set d = rows(i)
-            Dim one(0 To 3) As Variant
+    If Not m_nedRows Is Nothing Then
+        For i = 1 To m_nedRows.count
+            Dim d As Object: Set d = m_nedRows(i)
+            Dim one(0 To 4) As Variant
             one(0) = CStr(d("kind")): one(1) = CStr(d("ref"))
-            one(2) = CStr(d("status")): one(3) = CStr(d("opis"))
+            one(2) = CStr(d("status")): one(3) = CStr(d("opis")): one(4) = CStr(d("akcija"))
             AddNedListRow one
             n = n + 1
         Next i
     End If
     If n = 0 Then m_lstNed.AddItem "Nema nedovrsenih stavki."
-    m_nedTitle.caption = "Nedovrseno (sve)  (" & n & ")"
+    m_nedTitle.caption = "Nedovrseno / recovery  (" & n & ")"
     Exit Sub
 EH:
     LogErr "frmDokumenta.PopulateNedovrsenoPanel"
+End Sub
+
+' 2xklik na red -> akcija po tipu. CONTEXT: detalj + izbor (otvori storno / odbaci);
+' osirocene (PRIJ/PAL/BLOK): otvori "Osiroceni dokumenti" panel (postojece akcije).
+Private Sub m_lstNed_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    On Error GoTo EH
+    If m_lstNed Is Nothing Or m_nedRows Is Nothing Then Exit Sub
+    Dim li As Long: li = m_lstNed.ListIndex
+    If li <= 0 Then Exit Sub                 ' 0 = header
+    If li > m_nedRows.count Then Exit Sub
+    Dim d As Object: Set d = m_nedRows(li)   ' list idx = red (header je 0)
+    Select Case CStr(d("actionCode"))
+        Case "CONTEXT": HandleNedContext d
+        Case Else: SetNedovrsenoPanelVisible False: ShowRecoveryPanel
+    End Select
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_lstNed_DblClick"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub HandleNedContext(ByVal d As Object)
+    On Error GoTo EH
+    Dim detalj As String
+    detalj = "Dokument: " & CStr(d("docType")) & " " & CStr(d("ref")) & vbCrLf & _
+             "Mod: " & CStr(d("mode")) & "   Status: " & CStr(d("status")) & vbCrLf & vbCrLf & _
+             CStr(d("opis"))
+    If Len(CStr(d("akcija"))) > 0 Then detalj = detalj & vbCrLf & vbCrLf & "Preporuka: " & CStr(d("akcija"))
+    Dim resp As VbMsgBoxResult
+    resp = MsgBox(detalj & vbCrLf & vbCrLf & _
+        "DA = otvori storno ekran za ovaj dokument (resi)." & vbCrLf & _
+        "NE = odbaci ovaj recovery zapis (odustani)." & vbCrLf & _
+        "OTKAZI = nista.", vbYesNoCancel + vbQuestion, "Recovery zapis")
+    If resp = vbYes Then
+        SetNedovrsenoPanelVisible False
+        OpenStornoConfirmPanel CStr(d("docType")), CStr(d("ref")), ""
+    ElseIf resp = vbNo Then
+        If CancelCorrectionContext(CStr(d("correctionID")), "Operater odbacio recovery zapis iz Nedovrseno panela.") Then
+            PopulateNedovrsenoPanel
+        Else
+            MsgBox "Nije uspelo odbacivanje zapisa.", vbExclamation, APP_NAME
+        End If
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.HandleNedContext"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub m_btnNedRecovery_Click()
+    SetNedovrsenoPanelVisible False
+    ShowRecoveryPanel
 End Sub
 
 Private Sub AddNedListRow(ByVal cells As Variant)
@@ -5228,11 +5288,13 @@ Private Sub SetNedovrsenoPanelVisible(ByVal bShow As Boolean)
         HideBehindNed
         m_nedBack.visible = True: m_nedTitle.visible = True
         m_btnNedClose.visible = True: m_lstNed.visible = True
+        m_btnNedRecovery.visible = True
         m_nedBack.ZOrder 0: m_lstNed.ZOrder 0
-        m_nedTitle.ZOrder 0: m_btnNedClose.ZOrder 0
+        m_nedTitle.ZOrder 0: m_btnNedClose.ZOrder 0: m_btnNedRecovery.ZOrder 0
     Else
         m_nedBack.visible = False: m_nedTitle.visible = False
         m_btnNedClose.visible = False: m_lstNed.visible = False
+        m_btnNedRecovery.visible = False
         RestoreBehindNed
     End If
 End Sub
@@ -5242,7 +5304,8 @@ Private Sub HideBehindNed()
     Set m_nedHidden = New Collection
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
-        If ctl Is m_nedBack Or ctl Is m_nedTitle Or ctl Is m_btnNedClose Or ctl Is m_lstNed Then
+        If ctl Is m_nedBack Or ctl Is m_nedTitle Or ctl Is m_btnNedClose _
+           Or ctl Is m_lstNed Or ctl Is m_btnNedRecovery Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_nedHidden.Add ctl.name

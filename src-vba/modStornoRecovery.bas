@@ -27,49 +27,90 @@ Private Const STORNO_DA As String = "Da"
 ' ============================================================
 ' NEDOVRSENO - ujedinjen read-only pregled.
 ' ============================================================
+' Svaki red nosi PUN strukturirani zapis (ne samo tekst) -> panel moze da deluje po
+' redu. Kljucevi: kind, ref (poslovni broj), status, opis, akcija (tekst), correctionID,
+' docType, newBroj, mode, actionCode (CONTEXT | PRIJ | PAL | BLOK -> UI dispecuje).
+' Dedup: osirocene se izostave ako isti poslovni broj vec nosi PENDING/MANUAL context
+' (isti problem se ne prikazuje dvaput).
 Public Function GetNedovrseno() As Collection
     Dim result As New Collection
     Set GetNedovrseno = result
     On Error GoTo EH
 
-    ' 1) Persistentni contexti (tblStornoVeze) - strukturirano.
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    seen.CompareMode = vbTextCompare
+
+    ' 1) Persistentni contexti (tblStornoVeze) - strukturirano, sa CorrectionID.
     Dim ctx As Collection: Set ctx = GetPendingCorrections()
     If Not ctx Is Nothing Then
         Dim i As Long
         For i = 1 To ctx.count
             Dim c As Object: Set c = ctx(i)
-            AddNedRow result, "CONTEXT/" & CStr(c("mode")), CStr(c("oldBroj")), _
-                      CStr(c("status")), CStr(c("message")), CStr(c("recoveryAction"))
+            Dim oB As String: oB = CStr(c("oldBroj"))
+            AddNedRowFull result, "CONTEXT/" & CStr(c("mode")), oB, CStr(c("status")), _
+                CStr(c("message")), CStr(c("recoveryAction")), _
+                CStr(c("id")), CStr(c("oldDocType")), CStr(c("newBroj")), CStr(c("mode")), "CONTEXT"
+            ' brojevi koje context vec pokriva -> osirocene za njih preskoci (dedup).
+            If Len(oB) > 0 Then seen(oB) = True
+            If Len(CStr(c("newBroj"))) > 0 Then seen(CStr(c("newBroj"))) = True
+            If Len(CStr(c("parentBroj"))) > 0 Then seen(CStr(c("parentBroj"))) = True
         Next i
     End If
 
-    ' 2) Osirocene - samo brojevi (detalj/akcije: Osiroceni dokumenti panel).
-    AddCountRow result, "OSIROCENE_PRIJEMNICE", CountVar(GetOsirocenePrijemnice())
-    AddCountRow result, "OSIROCENE_PALETE", CountVar(GetPrijemniceSaOsirocenimPaletama())
-    AddCountRow result, "IZGUBLJENI_BLOKOVI", CountVar(GetLostOtkupBlokovi())
+    ' 2) Osirocene - PER-STAVKA red (poslovni broj + akcija), deduplikovano protiv contexta.
+    '    Akcija svih: "Osiroceni dokumenti" panel (postojeci re-point / skidanje).
+    AddOsiroceneRows result, GetOsirocenePrijemnice(), "OSIROCENA_PRIJEMNICA", 1, _
+        "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
+    AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, _
+        "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (Mod: Palete)", seen
+    AddOsiroceneRows result, GetLostOtkupBlokovi(), "IZGUBLJEN_BLOK", 2, _
+        "Otkupni blok", "BLOK", "Otkupni blokovi (Preuzmi / prevezi)", seen
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetNedovrseno"
 End Function
 
-Private Sub AddNedRow(ByRef col As Collection, ByVal kind As String, ByVal ref As String, _
-                      ByVal status As String, ByVal opis As String, ByVal akcija As String)
+Private Sub AddNedRowFull(ByRef col As Collection, ByVal kind As String, ByVal ref As String, _
+                          ByVal status As String, ByVal opis As String, ByVal akcija As String, _
+                          ByVal correctionID As String, ByVal docType As String, _
+                          ByVal newBroj As String, ByVal mode As String, ByVal actionCode As String)
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     d("kind") = kind: d("ref") = ref: d("status") = status
     d("opis") = opis: d("akcija") = akcija
+    d("correctionID") = correctionID: d("docType") = docType
+    d("newBroj") = newBroj: d("mode") = mode: d("actionCode") = actionCode
     col.Add d
 End Sub
 
-Private Sub AddCountRow(ByRef col As Collection, ByVal kind As String, ByVal n As Long)
-    If n <= 0 Then Exit Sub
-    AddNedRow col, kind, CStr(n), "", "ukupno: " & n, "Osiroceni dokumenti"
+' Prosiri osirocene (2D niz iz Get*-funkcija) u pojedinacne redove. brojCol = 1-based
+' kolona sa poslovnim brojem. Preskace broj koji je vec u `seen` (context dedup + interni).
+Private Sub AddOsiroceneRows(ByRef result As Collection, ByVal v As Variant, ByVal kind As String, _
+                             ByVal brojCol As Long, ByVal docLabel As String, ByVal actionCode As String, _
+                             ByVal akcija As String, ByRef seen As Object)
+    On Error GoTo done
+    If Not Is2DArray(v) Then Exit Sub
+    Dim r As Long
+    For r = 1 To UBound(v, 1)
+        Dim b As String: b = Trim$(CStr(v(r, brojCol)))
+        If Len(b) > 0 Then
+            If Not seen.Exists(b) Then
+                seen(b) = True
+                AddNedRowFull result, kind, b, "OSIROCENO", docLabel & " " & b & " -- ceka doradu", _
+                    akcija, "", docLabel, "", "", actionCode
+            End If
+        End If
+    Next r
+done:
 End Sub
 
-Private Function CountVar(ByVal v As Variant) As Long
-    On Error Resume Next
-    If Not IsEmpty(v) Then
-        If IsArray(v) Then CountVar = UBound(v, 1)
-    End If
+Private Function Is2DArray(ByVal v As Variant) As Boolean
+    On Error GoTo no
+    If IsEmpty(v) Then Exit Function
+    If Not IsArray(v) Then Exit Function
+    Dim probe As Long: probe = UBound(v, 2)   ' baci gresku ako nije 2D
+    Is2DArray = (UBound(v, 1) >= 1)
+    Exit Function
+no:
 End Function
 
 ' ============================================================
