@@ -26,7 +26,35 @@ Public Sub Test_StornoCentar_All()
     Test_GetActiveDocumentsForStorno_Auto
     Test_StornoSelectedBlocks_Auto
     Test_GetNedovrseno_Auto
+    Test_UndoReverseGuard_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' #5 undo: reverse dup-guard -> ne vraca revers ako vec postoji AKTIVAN isti broj+tip.
+Public Sub Test_UndoReverseGuard_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    ' A: samo storniran revers (nema aktivnog) -> undo prolazi (reaktivira)
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO), _
+              Array("SVT-UR-A1", "SVT-UR-RA", DOK_TIP_OM_IZLAZ_KOOP, "Da")
+    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-UR-RA") = True, "revers undo bez aktivnog -> prolazi"
+
+    ' B: AKTIVAN revers + storniran isti broj+tip -> guard odbija (bez ove garde bi duplirao)
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO), _
+              Array("SVT-UR-B1", "SVT-UR-RB", DOK_TIP_OM_IZLAZ_KOOP, "")
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO), _
+              Array("SVT-UR-B2", "SVT-UR-RB", DOK_TIP_OM_IZLAZ_KOOP, "Da")
+    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-UR-RB") = False, "revers undo uz AKTIVAN duplikat -> odbijeno"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_UndoReverseGuard_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' #4 objedinjeni recovery: GetNedovrseno nosi CorrectionID i DEDUPLIKUJE osirocene
