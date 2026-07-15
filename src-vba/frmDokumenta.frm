@@ -3685,13 +3685,19 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
     ' razvezu, ali OtkupID ostaje isti -> storno po ID i dalje radi).
     Dim blkIds As Collection: Set blkIds = SelectedBlockIDs()
     Dim skipPal As Boolean: skipPal = KeepPalChecked()   ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
+    ' Blok-storno (dodatni storno cekiranih blokova) je dozvoljen SAMO uz DUPLI/PONISTENJE.
+    ' ISPRAVKA/RESI_KASNIJE -> cekirani blokovi se IGNORISU bez mutacije (inace RESI/ISPRAVKA
+    ' krse svoje znacenje: "parkiraj / storno+reunos" ne sme da stornira blokove).
+    Dim allowBlk As Boolean: allowBlk = ModeAllowsBlockStorno(mode)
 
     ' Guard C (ADR-0001): blok-storno nad zivom otpremnicom bi napravio tihi disbalans.
-    ' Odbij PRE bilo kakve mutacije; preusmeri na otpremnica ISPRAVKA / skini cekiranje.
-    Dim driftMsg As String: driftMsg = BlockStornoDriftReason(docType, mode, blkIds)
-    If Len(driftMsg) > 0 Then
-        MsgBox driftMsg, vbExclamation, APP_NAME
-        Exit Sub
+    ' Vazi SAMO kad se blokovi zaista storniraju (DUPLI/PONISTENJE).
+    If allowBlk Then
+        Dim driftMsg As String: driftMsg = BlockStornoDriftReason(docType, mode, blkIds)
+        If Len(driftMsg) > 0 Then
+            MsgBox driftMsg, vbExclamation, APP_NAME
+            Exit Sub
+        End If
     End If
 
     Dim res As Object
@@ -3731,9 +3737,9 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
         ElseIf docType = FLOW_DOC_ZBIRNA Then
             PrefillZbirnaFromStornirana brDok
         End If
-        ' ISPRAVKA context je jos PENDING (zavrsava se po snimanju nove) -> pad storna
-        ' blokova se samo javi; ne diramo status contexta ovde.
-        blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
+        ' ISPRAVKA: cekirani blokovi se NE storniraju (storno+reunos dokumenta je
+        ' celina; blok-storno je moguc iskljucivo uz Duplikat/Ponistenje).
+        blkMsg = IgnoredBlocksNote(blkIds)
         SetStornoConfirmPanelVisible False
         txtStornoBroj.value = ""
         MsgBox CStr(res("message")) & blkMsg & vbCrLf & vbCrLf & _
@@ -3748,14 +3754,19 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
         End If
         On Error GoTo EH
     ElseIf CBool(res("success")) Then
-        blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
-        ' Storno dokumenta je vec KOMITOVAN (context terminalno). Ako storno cekiranih
-        ' blokova NIJE uspeo -> ne lazi "zavrseno": oznaci context MANUAL (Nedovrseno).
-        If blkN < 0 And Len(CStr(res("correctionID"))) > 0 Then
-            modStornoContext.MarkCorrectionManual CStr(res("correctionID")), _
-                "Storniraj cekirane otkupne blokove rucno (automatski nisu uspeli).", _
-                "Posle " & mode & " nad " & docType & " " & brDok & _
-                " storno cekiranih otkupnih blokova nije uspeo."
+        If allowBlk Then
+            ' DUPLI/PONISTENJE: dodatni storno cekiranih blokova. Storno dokumenta je
+            ' vec KOMITOVAN (context terminalno); ako blok-storno padne -> MANUAL, ne lazi.
+            blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
+            If blkN < 0 And Len(CStr(res("correctionID"))) > 0 Then
+                modStornoContext.MarkCorrectionManual CStr(res("correctionID")), _
+                    "Storniraj cekirane otkupne blokove rucno (automatski nisu uspeli).", _
+                    "Posle " & mode & " nad " & docType & " " & brDok & _
+                    " storno cekiranih otkupnih blokova nije uspeo."
+            End If
+        Else
+            ' RESI_KASNIJE (i sl.): cekirani blokovi se IGNORISU bez mutacije.
+            blkMsg = IgnoredBlocksNote(blkIds)
         End If
         SetStornoConfirmPanelVisible False
         txtStornoBroj.value = ""
@@ -3779,6 +3790,20 @@ Private Function ApplySelectedBlockStorno(ByVal blkIds As Collection) As Long
     If blkIds Is Nothing Then Exit Function
     If blkIds.count = 0 Then Exit Function
     ApplySelectedBlockStorno = StornoSelectedBlocks_TX(blkIds)
+End Function
+
+' Blok-storno cekiranih blokova je dozvoljen SAMO uz DUPLI/PONISTENJE (roba stvarno
+' nestaje). ISPRAVKA/RESI_KASNIJE cekirane blokove ignorisu bez mutacije.
+Private Function ModeAllowsBlockStorno(ByVal mode As String) As Boolean
+    ModeAllowsBlockStorno = (mode = SV_MODE_DUPLI Or mode = SV_MODE_PONISTENJE)
+End Function
+
+' Napomena kad su blokovi cekirani a izabrani mod ih NE dira (ISPRAVKA/RESI).
+Private Function IgnoredBlocksNote(ByVal blkIds As Collection) As String
+    If blkIds Is Nothing Then Exit Function
+    If blkIds.count = 0 Then Exit Function
+    IgnoredBlocksNote = vbCrLf & "Napomena: cekirani otkupni blokovi (" & blkIds.count & _
+        ") NISU stornirani -- blok-storno je moguc samo uz Duplikat / Ponistenje."
 End Function
 
 ' "Ne diraj palete" checkbox (prijemnica DUPLI/PONISTENJE) -> True = preskoci detach.
@@ -4593,10 +4618,12 @@ Private Sub PopulateStornoConfirmPanel()
     m_scBlocks.Enabled = (nb > 0)
 
     ' --- summary traka (uticaj u brojkama) ---
+    ' Neutralno PRE izbora moda: prikazi OBUHVAT, ne posledicu. Stvarna akcija po
+    ' paleti/prijemnici zavisi od moda (i "Ne diraj palete") -> vidi kolonu Efekat storna.
     m_scSummary.caption = "Ukupno u lancu: " & nc & " dok.   |   blokova: " & CStr(sm("blockCount")) & _
-        "   |   paleta: " & CStr(sm("paleteCount")) & _
-        "        Skida se (Duplikat / Ponistenje): " & CStr(sm("detachGajb")) & " gajbi, " & _
-        Format$(CDbl(sm("detachNeto")), "0.#") & " kg, " & Format$(CDbl(sm("detachAmb")), "0.#") & " kg amb."
+        "   |   palete u obuhvatu: " & CStr(sm("paleteCount")) & _
+        " (" & CStr(sm("detachGajb")) & " gajbi, " & Format$(CDbl(sm("detachNeto")), "0.#") & " kg, " & _
+        Format$(CDbl(sm("detachAmb")), "0.#") & " kg amb).   Sta se sa njima desava zavisi od moda -> vidi Efekat storna."
 
     ' "Ne diraj palete" (DUPLI/PONISTENJE) samo za prijemnicu sa paletama.
     m_sc_showKeep = (m_sc_docType = FLOW_DOC_PRIJEMNICA And m_sc_hasPal)

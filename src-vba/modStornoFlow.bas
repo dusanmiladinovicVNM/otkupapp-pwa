@@ -898,6 +898,30 @@ End Function
 ' ISPRAVKA: storno + needsForm; prevezivanje paleta radi save-putanja prijemnice
 ' (ReassignPaleteToPrijemnica_TX) -> ovde se samo pravi context i stornira stara.
 ' ============================================================
+' #3: zavrsetak prijemnica-correctiona po ISHODU detach-a. Ne lazi COMPLETED ako
+' palete nisu stvarno skinute:
+'   skipPalete=True (Ne diraj palete) -> MANUAL (palete namerno osirocene; recovery JESTE potreban)
+'   expected>0 i detached<>expected -> MANUAL (ostatak stavki -> recovery)
+'   inace -> COMPLETED.
+' expected = broj AKTIVNIH paletnih stavki PRE storna (ScanPrijemnica.paleteCount).
+Private Sub CompletePrijemnicaByDetach(ByVal cid As String, ByVal hasPalete As Boolean, _
+        ByVal skipPalete As Boolean, ByVal expected As Long, ByVal detached As Long, _
+        ByVal what As String, ByVal r As Object)
+    If hasPalete And skipPalete Then
+        MarkCorrectionManual cid, "Prevezi ili skini palete rucno (Osiroceni dokumenti -> Palete).", _
+            what & ": palete OSTAVLJENE osirocene (izbor operatera) -> recovery potreban."
+        r("message") = what & ". Palete ostavljene osirocene -> Osiroceni dokumenti (Mod: Palete)."
+    ElseIf hasPalete And expected > 0 And detached <> expected Then
+        MarkCorrectionManual cid, "Skini preostale paletne stavke (Osiroceni dokumenti -> Palete).", _
+            what & ": skinuto " & detached & " od " & expected & " paletnih stavki (ostatak -> recovery)."
+        r("message") = what & ", ali skinuto " & detached & "/" & expected & " paletnih stavki -> Osiroceni dokumenti."
+    Else
+        CompleteCorrectionContext cid, , , what & ": paletne stavke skinute: " & detached & "."
+        r("message") = what & ". Paletne stavke skinute: " & detached & "."
+    End If
+    r("success") = True
+End Sub
+
 Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As String, _
                                         Optional ByVal forceConfirm As Boolean = False, _
                                         Optional ByVal skipPalete As Boolean = False) As Object
@@ -953,14 +977,8 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
             End If
             Dim detD As Long, infoD As String
             If CBool(s("hasPalete")) And Not skipPalete Then detD = DetachOsirocenePaletaStavke_TX(broj, infoD)
-            If skipPalete And CBool(s("hasPalete")) Then
-                CompleteCorrectionContext cidD, , , "Dupli prijemnica stornirana; palete OSTAVLJENE osirocene (izbor operatera)."
-                r("message") = "Prijemnica stornirana (dupli). Palete ostavljene osirocene -> Osiroceni dokumenti (Mod: Palete)."
-            Else
-                CompleteCorrectionContext cidD, , , "Dupli prijemnica stornirana; paletne stavke skinute: " & detD & "."
-                r("message") = "Prijemnica stornirana (dupli). Paletne stavke skinute: " & detD & "."
-            End If
-            r("success") = True
+            CompletePrijemnicaByDetach cidD, CBool(s("hasPalete")), skipPalete, _
+                CLng(s("paleteCount")), detD, "Prijemnica stornirana (dupli)", r
 
         Case SV_MODE_PONISTENJE
             ' PONISTENJE = ceo tok otpada. Prijemnica je 1:1 sa zbirnom -> reuse ISTE
@@ -987,14 +1005,22 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 End If
                 ' Eksterni kupac (zbirna ne poseduje prijemnicu u kaskadi) -> prijemnicu
                 ' + njene palete storniramo ovde (retko: prijemnica ~ hladnjaca = internal).
+                Dim detX As Long, extRemainder As Boolean
                 If Not ownsP Then
                     If Len(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID)) > 0 Then
                         StornoPrijemnicaByBroj_TX broj
                         Dim dInfoX As String
-                        If CBool(s("hasPalete")) Then DetachOsirocenePaletaStavke_TX broj, dInfoX
+                        If CBool(s("hasPalete")) Then detX = DetachOsirocenePaletaStavke_TX(broj, dInfoX)
+                        If CBool(s("hasPalete")) And CLng(s("paleteCount")) > 0 And detX <> CLng(s("paleteCount")) Then _
+                            extRemainder = True
                     End If
                 End If
-                CompleteCorrectionContext cidP, , , "Ponistena prijemnica sa CELIM tokom zbirne " & parentZbirna & "."
+                If extRemainder Then
+                    MarkCorrectionManual cidP, "Skini preostale paletne stavke (Osiroceni dokumenti -> Palete).", _
+                        "Ponistenje toka: skinuto " & detX & " od " & CLng(s("paleteCount")) & " paletnih stavki prijemnice (ostatak -> recovery)."
+                Else
+                    CompleteCorrectionContext cidP, , , "Ponistena prijemnica sa CELIM tokom zbirne " & parentZbirna & "."
+                End If
                 r("success") = True
                 r("message") = "Prijemnica ponistena sa CELIM tokom. Zbirna " & parentZbirna & _
                     " (rekalk/storno), otpremnice: " & CStr(cascP("otp")) & ", prijemnice: " & CStr(cascP("prij")) & _
@@ -1007,9 +1033,8 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 End If
                 Dim detP As Long, infoP As String
                 If CBool(s("hasPalete")) Then detP = DetachOsirocenePaletaStavke_TX(broj, infoP)
-                CompleteCorrectionContext cidP, , , "Ponistena prijemnica (bez zbirne); paletne stavke skinute: " & detP & "."
-                r("success") = True
-                r("message") = "Prijemnica ponistena. Paletne stavke skinute: " & detP & "."
+                CompletePrijemnicaByDetach cidP, CBool(s("hasPalete")), False, _
+                    CLng(s("paleteCount")), detP, "Prijemnica ponistena", r
             End If
 
         Case Else
