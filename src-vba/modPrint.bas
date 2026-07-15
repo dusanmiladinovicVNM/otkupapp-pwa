@@ -164,6 +164,10 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     End If
     h("objekat") = objLine
     h("brDok") = CStr(OtpC(d, fr, COL_OTP_BROJ))
+    ' Sledljivost (Faza 7): ako je otpremnica ispravka drugog dok. -> u naslov (guarded).
+    Dim ispOd As String: ispOd = ""
+    Dim cIsp As Long: cIsp = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_ISPRAVKA_OD)
+    If cIsp > 0 Then ispOd = Trim$(CStr(d(fr, cIsp)))
     Dim datV As Variant: datV = OtpC(d, fr, COL_OTP_DATUM)
     If IsDate(datV) Then h("datum") = Format$(CDate(datV), "dd.mm.yyyy") Else h("datum") = CStr(datV)
     Dim stanicaNaziv As String: stanicaNaziv = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv")))
@@ -191,7 +195,7 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
     h("klauzula") = kl
 
-    h("naslov") = "OTPREMNICA"
+    h("naslov") = "OTPREMNICA" & IIf(Len(ispOd) > 0, " (ispravka dok. " & ispOd & ")", "")
     h("grupni") = "1"
 
     Application.ScreenUpdating = False
@@ -1136,11 +1140,13 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     iTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
     iKolAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     iKolAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
+    Dim iIsp As Long: iIsp = GetColumnIndex(TBL_PRIJEMNICA, COL_TRACE_ISPRAVKA_OD)   ' Faza 7: sledljivost
 
     Dim ids() As String: ids = Split(prijemnicaIDs, " + ")
     Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 5)
     Dim cnt As Long: cnt = 0
     Dim kupID As String, vozID As String, brPrij As String, brZbr As String
+    Dim ispPrij As String: ispPrij = ""
     Dim datum As String
     Dim ukKg As Double, ukVred As Double, ukAmb As Double, ambV As Double
     Dim j As Long, r As Long
@@ -1165,6 +1171,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
                         brPrij = CStr(d(r, iBr)): brZbr = CStr(d(r, iBrZbr))
                         datum = Format$(d(r, iDat), "dd.mm.yyyy")
                         ambV = PrNz(d(r, iKolAmbV))
+                        If iIsp > 0 Then ispPrij = Trim$(CStr(d(r, iIsp)))
                     End If
                     cnt = cnt + 1
                     Exit For
@@ -1195,7 +1202,8 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     Dim rr As Long: rr = 1
     rr = DocSellerHeader(ws, rr, 8, 8)
     rr = rr + 1
-    rr = DocTitleBlock(ws, rr, 8, "Prijem robe na hladnjacu", "PRIJEMNICA  br. " & brPrij)
+    rr = DocTitleBlock(ws, rr, 8, "Prijem robe na hladnjacu", _
+                       "PRIJEMNICA  br. " & brPrij & IIf(Len(ispPrij) > 0, "  (ispravka dok. " & ispPrij & ")", ""))
     rr = rr + 1
 
     ' --- podaci o prijemu ---

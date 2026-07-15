@@ -1876,6 +1876,8 @@ Private Sub LinkOtkupToOtpremnicaStrict(ByVal otkupID As String, _
 
     RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_OTPREMNICA_ID, _
                       otpremnicaID, sourceName
+    ' Faza 7 korak 5: dual-write denorm poslovni kljuc (stabilan kroz re-verziju).
+    SetOtkupBrojOtpremnice rowOtkup, otpremnicaID
 End Sub
 
 Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _

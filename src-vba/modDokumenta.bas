@@ -3135,6 +3135,18 @@ End Function
 ' Bezbedan re-point izgubljenog bloka na ciljnu (aktivnu) otpremnicu:
 ' menja SAMO OtpremnicaID + BrojZbirne (cuva OtkupID -> uplate/ambalaza ostaju).
 ' Transakciono. Vraca False ako cilj ne postoji/storniran ili upis padne.
+' Faza 7 korak 5: dual-write BrojOtpremnice na blok (denorm poslovni kljuc, stabilan
+' kroz re-verziju otpremnice). otpID prazan -> ocisti (unbind). Guarded na kolonu
+' (schema-drift safe) -> non-breaking dok se citanje ne prebaci sa OtpremnicaID.
+Public Sub SetOtkupBrojOtpremnice(ByVal rowIndex As Long, ByVal otpID As String)
+    On Error Resume Next
+    If GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE) = 0 Then Exit Sub
+    Dim broj As String: broj = ""
+    If Len(Trim$(otpID)) > 0 Then _
+        broj = Trim$(CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+    UpdateCell TBL_OTKUP, rowIndex, COL_OTK_BROJ_OTPREMNICE, broj
+End Sub
+
 Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
                                              ByVal targetOtpID As String) As Boolean
     Const SRC As String = "modDokumenta.ReassignOtkupToOtpremnica_TX"
@@ -3168,6 +3180,7 @@ Public Function ReassignOtkupToOtpremnica_TX(ByVal otkupID As String, _
     For k = 1 To rows.count
         RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, targetOtpID, SRC
         If hasZbr Then RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_BROJ_ZBIRNE, tZbr, SRC
+        SetOtkupBrojOtpremnice rows(k), targetOtpID
     Next k
 
     tx.CommitTx

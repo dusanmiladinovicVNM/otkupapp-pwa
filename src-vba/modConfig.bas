@@ -192,6 +192,7 @@ Public Const COL_OTK_BROJ_ZBIRNE As String = "BrojZbirne"
 Public Const COL_OTK_ISPLACENO As String = "Isplaceno"
 Public Const COL_OTK_DATUM_ISPLATE As String = "DatumIsplate"
 Public Const COL_OTK_OTPREMNICA_ID As String = "OtpremnicaID"
+Public Const COL_OTK_BROJ_OTPREMNICE As String = "BrojOtpremnice"  ' Faza 7 korak 5: denorm poslovni kljuc (stabilan kroz re-verziju otpremnice)
 Public Const COL_OTK_PARCELA As String = "ParcelaID"
 
 ' --- Spaltennamen tblOtpremnica (NEU) ---
@@ -758,6 +759,21 @@ Public Const SV_STATUS_COMPLETED As String = "COMPLETED"
 Public Const SV_STATUS_FAILED As String = "FAILED"
 Public Const SV_STATUS_MANUAL As String = "MANUAL_REQUIRED"
 Public Const SV_STATUS_CANCELLED As String = "CANCELLED"
+
+' ============================================================
+' Sledljivost ispravki (ADR-0002, append-only dokument model). DELJENE kolone na
+' dokument-tabelama (kao COL_STORNIRANO). Faza 7 korak 1 = samo dodavanje kolona
+' (schema); citanje/upis dolaze u kasnijim koracima. Schema: modSetup.EnsureSledljivostSchema.
+' ============================================================
+Public Const COL_TRACE_ISPRAVKA_OD As String = "IspravkaOd"       ' broj STAROG dok. koji ovaj red zamenjuje (na novom redu)
+Public Const COL_TRACE_ZAMENJEN_SA As String = "ZamenjenSa"       ' broj NOVOG dok. koji zamenjuje ovaj (na storniranom redu)
+Public Const COL_TRACE_CORRECTION_ID As String = "CorrectionID"   ' veza na tblStornoVeze (CorrectionID)
+Public Const COL_TRACE_IZDATO_STATUS As String = "IzdatoStatus"   ' DRAFT / IZDATO / PROSLEDJENO (ADR-0001 granica)
+
+' Vrednosti IzdatoStatus (izdato = kod kupca -> nepromenljivo; koriguje se storno+reizdaj).
+Public Const IZDATO_DRAFT As String = "DRAFT"
+Public Const IZDATO_IZDATO As String = "IZDATO"
+Public Const IZDATO_PROSLEDJENO As String = "PROSLEDJENO"
 
 ' Baza kodova greske za storno framework (modStornoContext / modDokumentInvariant /
 ' modStornoFlow); ne preklapa se sa modStorno (2400) ni SEF (3100).

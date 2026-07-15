@@ -64,9 +64,11 @@ Private m_ambIPrijFullW As Single
 ' otvara overlay panel sa listom svih storniranih dokumenata, grupisano po tipu.
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
+Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
 Private m_lstStorno As MSForms.ListBox
+Private m_stornoRowTip As Collection      ' paralelno redovima liste: tip po redu ("" za zaglavlja)
 Private m_stornoBuilt As Boolean
 Private m_stornoHidden As Collection      ' kontrole privremeno sakrivene dok je panel otvoren
 
@@ -90,6 +92,72 @@ Private m_recPopulating As Boolean   ' guard: suppress _Change dok programski pu
 Private WithEvents m_btnRecSkini As MSForms.CommandButton    ' detach osirocenih stavki (PAL mod)
 Private WithEvents m_btnRecSviCilj As MSForms.CommandButton  ' PAL mod: svi ciljevi (escape od zbirna-filtera)
 Private m_recShowAll As Boolean      ' PAL mod: desna lista bez zbirna-filtera
+
+' "Storno / potvrda" panel (runtime kontrole; .frx se ne dira). Zamena za MsgBox
+' lanac izbora moda: lista dotaknutih dokumenata + multiselect otkupnih blokova +
+' 4 moda kao dugmad. Kontekst (docType/broj/dokTip) zivi dok je panel otvoren.
+Private m_sc_docType As String
+Private m_sc_brDok As String
+Private m_sc_dokTip As String
+Private WithEvents m_btnScIspravka As MSForms.CommandButton
+Private WithEvents m_btnScDupli As MSForms.CommandButton
+Private WithEvents m_btnScPonist As MSForms.CommandButton
+Private WithEvents m_btnScResi As MSForms.CommandButton
+Private WithEvents m_btnScClose As MSForms.CommandButton
+Private m_scBack As MSForms.Label
+Private m_scTitle As MSForms.Label
+Private m_scChainLbl As MSForms.Label
+Private m_scBlkLbl As MSForms.Label
+Private m_scChain As MSForms.ListBox
+Private m_scChainHdr As MSForms.ListBox      ' jednoredni naslov kolona (poravnato sa listom)
+Private m_scBlocks As MSForms.ListBox
+Private m_scBlkHdr As MSForms.ListBox        ' jednoredni naslov kolona za blokove
+' Faza 2: uvid (header kontekst + palete sa kapacitetom/detach + summary traka).
+Private m_scHeader As MSForms.Label
+Private m_scPalLbl As MSForms.Label
+Private m_scPalete As MSForms.ListBox
+Private m_scPalHdr As MSForms.ListBox        ' jednoredni naslov kolona za palete
+Private m_scSummary As MSForms.Label
+' Opis efekta po modu - 4 zasebna labela, svaki poravnat iznad svog dugmeta.
+Private m_scLegIspravka As MSForms.Label
+Private m_scLegDupli As MSForms.Label
+Private m_scLegPonist As MSForms.Label
+Private m_scLegResi As MSForms.Label
+Private m_scKeepPal As MSForms.CheckBox     ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
+Private m_sc_hasPal As Boolean
+Private m_sc_hasBlk As Boolean
+Private m_sc_showKeep As Boolean
+Private m_scBuilt As Boolean
+Private m_scHidden As Collection
+
+' Faza 2b: "Nadji za storno" browse overlay (pretraga/filter aktivnih dokumenata
+' umesto kucanja broja; klik reda -> Storno panel). Runtime kontrole; .frx se ne dira.
+Private WithEvents m_btnStornoFind As MSForms.CommandButton
+Private WithEvents m_btnFnClose As MSForms.CommandButton
+Private WithEvents m_btnFnOpen As MSForms.CommandButton
+Private WithEvents m_btnFnNed As MSForms.CommandButton     ' "Osiroceni / za doradu" iz browse-a
+Private WithEvents m_btnFnStornirani As MSForms.CommandButton  ' "Stornirani" iz browse-a
+Private WithEvents m_txtFnSearch As MSForms.TextBox
+Private WithEvents m_cmbFnTip As MSForms.ComboBox
+Private m_lstFnHeader As MSForms.ListBox         ' jednoredni header (naslovi kolona)
+Private WithEvents m_lstFnResults As MSForms.ListBox
+Private m_fnBack As MSForms.Label
+Private m_fnTitle As MSForms.Label
+Private m_fnBuilt As Boolean
+Private m_fnHidden As Collection
+Private m_fnAllDocs As Collection                ' kes celog skupa (gradi se jednom pri otvaranju)
+
+' Faza 5: "Nedovrseno (sve)" read-only overlay (ujedinjen pregled: contexti +
+' osirocene). Podaci: modStornoRecovery.GetNedovrseno. .frx se ne dira.
+Private WithEvents m_btnNedovrseno As MSForms.CommandButton
+Private WithEvents m_btnNedClose As MSForms.CommandButton
+Private m_nedBack As MSForms.Label
+Private m_nedTitle As MSForms.Label
+Private WithEvents m_lstNed As MSForms.ListBox
+Private WithEvents m_btnNedRecovery As MSForms.CommandButton  ' -> Osiroceni dokumenti (legacy akcije)
+Private m_nedBuilt As Boolean
+Private m_nedHidden As Collection
+Private m_nedRows As Collection    ' strukturirani redovi (1:1 sa list redovima; header je list idx 0)
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -244,11 +312,9 @@ Private Sub UserForm_Activate()
     ' Runtime toggle smera ambalaze u OM-Ulaz frame-u (ne dira .frx).
     SetupOMIzdavanjeToggle
 
-    ' Runtime dugme "Pregled storniranih" u storno sekciji (ne dira .frx).
-    SetupStornoPregledButton
-
-    ' Runtime dugme "Osiroceni dokumenti" (recovery panel; ne dira .frx).
-    SetupRecoveryButton
+    ' KONSOLIDACIJA: "Pregled storniranih" i "Osiroceni dokumenti" NEMAJU vise
+    ' zasebna dugmad na formi. Sve ide kroz "Storno" -> browse ("Nadji za storno"),
+    ' a u browse-u su dugmad "Osiroceni / za doradu" i "Stornirani" (detaljni paneli).
 
     ' Podesavanja: kad kes isplate ne postoje -> disable "Br. otk. blk." u Ulaz OM.
     ApplyKesIsplateState
@@ -2493,6 +2559,35 @@ Private Sub btnUnosPrij_Click()
         End If
     End If
 
+    ' CRASH-SAFE ISPRAVKA: ako in-session pending nije postavljen (forma zatvorena
+    ' izmedju storna i ovog unosa), a postoji persistentna PENDING ISPRAVKA prijemnice
+    ' u tblStornoVeze -> ponudi da ovaj unos bude zamena. Prime-uje m_pendingRelink*
+    ' pa dalji tok (skip paletizacije + relink + completion) radi kao in-session.
+    ' Safe-stop: vise od jedne PENDING -> ne biraj naslepo (moglo bi povezati pogresnu).
+    If Len(m_pendingRelinkOldPrij) = 0 Then
+        Dim cntPI As Long
+        cntPI = modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+        If cntPI = 1 Then
+            Dim cidPI As String: cidPI = FindLatestPending(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+            Dim oldPI As String: oldPI = modStornoContext.GetCorrectionField(cidPI, COL_SV_OLD_BROJ)
+            If Len(oldPI) > 0 Then
+                If MsgBox("Ceka ISPRAVKA za storniranu prijemnicu '" & oldPI & "'." & vbCrLf & vbCrLf & _
+                          "Da li je ovaj unos ZAMENA za nju (palete se prevezu)?" & vbCrLf & vbCrLf & _
+                          "DA = ispravka (prevezi palete, zavrsi ispravku)" & vbCrLf & _
+                          "NE = obican, nepovezan unos", vbQuestion + vbYesNo, APP_NAME) = vbYes Then
+                    m_activeCorrectionID = cidPI
+                    m_activeCorrectionDoc = FLOW_DOC_PRIJEMNICA
+                    m_pendingRelinkOldPrij = oldPI
+                    m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(cidPI, COL_SV_PARENT_BROJ)
+                End If
+            End If
+        ElseIf cntPI > 1 Then
+            MsgBox "Postoji vise ISPRAVKI prijemnice na cekanju. Automatsko prevezivanje NIJE " & _
+                   "uradjeno (da ne poveze pogresnu). Resi kroz: Osiroceni dokumenti.", _
+                   vbExclamation, APP_NAME
+        End If
+    End If
+
     ' Ispravka (pending od storna): ovo je ponovni unos stornirane prijemnice ->
     ' preskoci svezu paletizaciju (palete se prevezuju re-pointom posle snimanja).
     ' Promena zbirne NE gejtuje ispravku -- pita se (zbirna bira default, ne kapiju).
@@ -2605,6 +2700,19 @@ Private Sub btnUnosPrij_Click()
                    "(Stanje je zabelezeno u Monitor logu dok se ne resi.)", _
                    vbExclamation, APP_NAME
         End If
+        ' Zatvori persistentni correction context (ISPRAVKA prijemnice kroz framework).
+        If Len(m_activeCorrectionID) > 0 And m_activeCorrectionDoc = FLOW_DOC_PRIJEMNICA Then
+            If relOk Then
+                modStornoContext.CompleteCorrectionContext m_activeCorrectionID, "", newBrojPrij, _
+                    "Ispravka prijemnice: palete prevezane na " & newBrojPrij & "."
+                StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_BROJ, newBrojPrij, oldBrojPrij, m_activeCorrectionID
+            Else
+                modStornoContext.MarkCorrectionManual m_activeCorrectionID, _
+                    "Prevezi palete rucno (Osiroceni dokumenti -> Palete).", _
+                    "Auto-prevezivanje paleta nije uspelo: " & relWarn
+            End If
+            m_activeCorrectionID = "": m_activeCorrectionDoc = "": m_activeCorrectionDokTip = ""
+        End If
     Else
         ' Status palete (Klasa I prijemnica = prvi token rezultata). Citanje
         ' iskomitovanih tabela; prikaz uz potvrdu snimanja.
@@ -2664,6 +2772,146 @@ End Function
 ' danasnji datum). Kolicina: u BRUTO modu uzmi BrutoKg (original bruto), inace
 ' Kolicina (neto). Cena se postavlja POSLEDNJA (auto-fill iz _Change eventova bi
 ' je inace pregazio cenom iz cenovnika).
+' Prefill OTPREMNICA forme iz stornirane (ISPRAVKA) -- operater ne mora napamet.
+' Ogledalo save-handlera: stanica=cmbOtkupnoMesto, vozac=cmbVozac; bruto-svesno; Klasa I/II.
+' Broj se NE postavlja (ostaje svez predlog; ISPRAVKA = nov broj + trace na stari).
+Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(d) Then Exit Sub
+    Dim cBr As Long, cKl As Long, cSta As Long, cVoz As Long, cZbr As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
+    Dim cAmb As Long, cBruto As Long, cDat As Long
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cKl = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA)
+    cSta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
+    cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
+    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    cVr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA)
+    cSo = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cCena = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA)
+    cTip = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_TIP_AMB)
+    cAmb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB)
+    cBruto = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BRUTO)
+    cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    If cBr = 0 Then Exit Sub
+
+    Dim rI As Long, rII As Long: rI = 0: rII = 0
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, cBr))) = brStorn Then
+            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
+            If kl = "II" Then
+                If rII = 0 Then rII = r
+            Else
+                If rI = 0 Then rI = r
+            End If
+        End If
+    Next r
+    If rI = 0 And rII = 0 Then Exit Sub
+    Dim base As Long: base = rI: If base = 0 Then base = rII
+    Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
+
+    If cDat > 0 Then
+        Dim vDat As Variant: vDat = d(base, cDat)
+        If IsDate(vDat) Then txtDatum.value = Format$(CDate(vDat), "d.m.yyyy")
+    End If
+
+    cmbVrstaVoca.value = NzToText(d(base, cVr))
+    cmbSortaVoca.value = NzToText(d(base, cSo))
+    If cSta > 0 Then SelectComboByDisplayID cmbOtkupnoMesto, Trim$(CStr(d(base, cSta)))
+    If cVoz > 0 Then SelectComboByDisplayID cmbVozac, Trim$(CStr(d(base, cVoz)))
+    If cTip > 0 Then cmbTipAmbOtp.value = NzToText(d(base, cTip))
+
+    chkDveKlaseOtp.value = (rII > 0)
+    txtBrojZbirneOtp.value = NzToText(d(base, cZbr))
+
+    If rI > 0 Then
+        Dim kolI As Double
+        If brutoMode And cBruto > 0 And NzD(d(rI, cBruto)) > 0 Then kolI = NzD(d(rI, cBruto)) Else kolI = NzD(d(rI, cKol))
+        txtKolicinaOtp.value = PrefillNumStr(kolI)
+        If cAmb > 0 Then txtKolAmbOtp.value = PrefillNumStr(NzL(d(rI, cAmb)))
+    End If
+    If rII > 0 Then
+        Dim kolII As Double
+        If brutoMode And cBruto > 0 And NzD(d(rII, cBruto)) > 0 Then kolII = NzD(d(rII, cBruto)) Else kolII = NzD(d(rII, cKol))
+        txtKolicinaKlIIOtp.value = PrefillNumStr(kolII)
+        If Not m_txtKolAmbIIOtp Is Nothing And cAmb > 0 Then m_txtKolAmbIIOtp.value = PrefillNumStr(NzL(d(rII, cAmb)))
+    End If
+
+    If rI > 0 And cCena > 0 Then txtCenaOtp.value = PrefillNumStr(NzD(d(rI, cCena)))
+    If rII > 0 And cCena > 0 Then txtCenaKlIIOtp.value = PrefillNumStr(NzD(d(rII, cCena)))
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PrefillOtpremnicaFromStornirana"
+End Sub
+
+' Prefill ZBIRNA forme iz stornirane (ISPRAVKA). Zbirna nema bruto. Kupac/hladnjaca/pogon.
+Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
+    On Error GoTo EH
+    Dim d As Variant: d = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(d) Then Exit Sub
+    Dim cBr As Long, cKl As Long, cVoz As Long, cKup As Long, cHl As Long, cPo As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cTip As Long, cAmb As Long, cDat As Long
+    cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cKl = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA)
+    cVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
+    cKup = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
+    cHl = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_HLADNJACA)
+    cPo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_POGON)
+    cVr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA)
+    cSo = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA)
+    cKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
+    cTip = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_TIP_AMB)
+    cAmb = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB)
+    cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
+    If cBr = 0 Then Exit Sub
+
+    Dim rI As Long, rII As Long: rI = 0: rII = 0
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, cBr))) = brStorn Then
+            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
+            If kl = "II" Then
+                If rII = 0 Then rII = r
+            Else
+                If rI = 0 Then rI = r
+            End If
+        End If
+    Next r
+    If rI = 0 And rII = 0 Then Exit Sub
+    Dim base As Long: base = rI: If base = 0 Then base = rII
+
+    If cDat > 0 Then
+        Dim vDat As Variant: vDat = d(base, cDat)
+        If IsDate(vDat) Then txtDatum.value = Format$(CDate(vDat), "d.m.yyyy")
+    End If
+
+    cmbVrstaVoca.value = NzToText(d(base, cVr))
+    cmbSortaVoca.value = NzToText(d(base, cSo))
+    If cKup > 0 Then SelectComboByDisplayID cmbKupac, Trim$(CStr(d(base, cKup)))
+    If cVoz > 0 Then SelectComboByDisplayID cmbVozac, Trim$(CStr(d(base, cVoz)))
+    If cHl > 0 Then cmbHladnjaca.value = NzToText(d(base, cHl))
+    If cPo > 0 Then cmbPogon.value = NzToText(d(base, cPo))
+    If cTip > 0 Then cmbTipAmbZbr.value = NzToText(d(base, cTip))
+
+    chkDveKlaseZbr.value = (rII > 0)
+    txtBrojZbirne.value = NzToText(d(base, cBr))
+
+    If rI > 0 Then
+        txtUkupnoKGZbr.value = PrefillNumStr(NzD(d(rI, cKol)))
+        If cAmb > 0 Then txtUkupnoAmbZbr.value = PrefillNumStr(NzL(d(rI, cAmb)))
+    End If
+    If rII > 0 Then
+        txtUkupnoKgKlIIZbr.value = PrefillNumStr(NzD(d(rII, cKol)))
+        If Not m_txtKolAmbIIZbr Is Nothing And cAmb > 0 Then m_txtKolAmbIIZbr.value = PrefillNumStr(NzL(d(rII, cAmb)))
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PrefillZbirnaFromStornirana"
+End Sub
+
 Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
@@ -3162,7 +3410,14 @@ Private Sub btnStorno_Click()
     
     Dim brDok As String
     brDok = Trim$(txtStornoBroj.value)
-    
+
+    ' Oba polja prazna -> otvori "Nadji za storno" browse (Faza 2b; pretraga umesto
+    ' kucanja broja). Odatle se otvara Storno panel i "Nedovrseno".
+    If Len(Trim$(tipDok)) = 0 And Len(brDok) = 0 Then
+        ShowFindPanel
+        Exit Sub
+    End If
+
     If tipDok = "" Then
         MsgBox "Izaberite tip dokumenta!", vbExclamation, APP_NAME
         Exit Sub
@@ -3178,7 +3433,6 @@ Private Sub btnStorno_Click()
     If TryRunCorrectionFramework(tipDok, brDok) Then Exit Sub
 
     Dim Success As Boolean
-    Dim palWarn As String        ' palete date prijemnice (za ponudu ispravke posle storna)
 
     Select Case tipDok
         Case "Otkup"
@@ -3204,18 +3458,6 @@ Private Sub btnStorno_Click()
             
         Case "Zbirna"
             If ConfirmStorno("zbirnu", brDok) Then Success = StornoZbirna_TX(brDok)
-            
-        Case "Prijemnica"
-            Dim prijID As String
-            prijID = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, brDok, COL_PRJ_ID)
-            If prijID = "" Then
-                MsgBox "Prijemnica '" & brDok & "' nije pronadjena!", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-            ' Zapamti palete PRE storna (posle su osirocene, ali stavke ostaju aktivne).
-            palWarn = GetPaleteInfoForPrijemnicaBroj(brDok)
-            ' Klasa I i II dele isti broj (zaseban red) -> storniraj SVE redove broja.
-            If ConfirmStorno("prijemnicu", brDok) Then Success = StornoPrijemnicaByBroj_TX(brDok)
             
         Case "Faktura"
             Dim fakID As String
@@ -3267,30 +3509,7 @@ Private Sub btnStorno_Click()
     End Select
     
     If Success Then
-        Dim doPrefill As Boolean: doPrefill = False
-        If tipDok = "Prijemnica" And Len(palWarn) > 0 Then
-            ' Paletizovana prijemnica stornirana -> tri puta napred:
-            Select Case MsgBox("Stornirano. Prijemnica paletizovana (palete: " & palWarn & ")." & vbCrLf & vbCrLf & _
-                        "Sta dalje sa paletama?" & vbCrLf & vbCrLf & _
-                        "DA = ISPRAVKA: izmeni gresku, palete se prevezu" & vbCrLf & _
-                        "NE = DUPLI UNOS: nije primljeno 2x, skini stavke" & vbCrLf & _
-                        "OTKAZI = nista sada (palete ostaju osirocene)", _
-                        vbQuestion + vbYesNoCancel, APP_NAME)
-                Case vbYes
-                    doPrefill = True
-                Case vbNo
-                    Dim detInfo As String
-                    If DetachOsirocenePaletaStavke_TX(brDok, detInfo) > 0 Then
-                        MsgBox detInfo, vbInformation, APP_NAME
-                    Else
-                        MsgBox "Nista nije skinuto." & IIf(Len(detInfo) > 0, " " & detInfo, ""), _
-                               vbExclamation, APP_NAME
-                    End If
-                Case Else
-                    MsgBox "Palete NISU obrisane - stavke su osirocene (i dalje broje robu)." & vbCrLf & _
-                           "Resi rucno: Osiroceni dokumenti  ->  Mod: Palete.", vbInformation, APP_NAME
-            End Select
-        ElseIf tipDok = "Zbirna" Then
+        If tipDok = "Zbirna" Then
             ' Prijemnica (i njene palete) ostaju vezane za storniranu zbirnu dok se ne
             ' preveze na novu (StornoZbirna namerno ne kaskadira na prijemnice).
             Dim vezPrij As String
@@ -3311,14 +3530,6 @@ Private Sub btnStorno_Click()
         End If
         txtStornoBroj.value = ""
         CheckVerwaisteDokumente
-        If doPrefill Then
-            PrefillPrijemnicaFromStornirana brDok
-            m_pendingRelinkOldPrij = brDok
-            m_pendingRelinkZbirne = Trim$(txtBrojZbirnePrij.value)
-            On Error Resume Next
-            txtKolicinaPrij.SetFocus
-            On Error GoTo EH
-        End If
     End If
     Exit Sub
 EH:
@@ -3336,19 +3547,21 @@ End Function
 Private Sub RunSimpleStornoUI(ByVal docType As String, ByVal brDok As String, ByVal dokTip As String)
     Dim lbl As String
     Select Case docType
-        Case FLOW_DOC_OTPREMNICA: lbl = "otpremnicu"
-        Case FLOW_DOC_ZBIRNA:     lbl = "zbirnu"
-        Case FLOW_DOC_REVERS:     lbl = "revers"
-        Case Else:                lbl = "dokument"
+        Case FLOW_DOC_OTPREMNICA:  lbl = "otpremnicu"
+        Case FLOW_DOC_ZBIRNA:      lbl = "zbirnu"
+        Case FLOW_DOC_REVERS:      lbl = "revers"
+        Case FLOW_DOC_PRIJEMNICA:  lbl = "prijemnicu"
+        Case Else:                 lbl = "dokument"
     End Select
 
     If Not ConfirmStorno(lbl, brDok) Then Exit Sub
 
     Dim res As Object
     Select Case docType
-        Case FLOW_DOC_OTPREMNICA: Set res = RunSimpleStornoOtpremnica(brDok)
-        Case FLOW_DOC_ZBIRNA:     Set res = RunSimpleStornoZbirna(brDok)
-        Case FLOW_DOC_REVERS:     Set res = RunSimpleStornoRevers(brDok, dokTip)
+        Case FLOW_DOC_OTPREMNICA:  Set res = RunSimpleStornoOtpremnica(brDok)
+        Case FLOW_DOC_ZBIRNA:      Set res = RunSimpleStornoZbirna(brDok)
+        Case FLOW_DOC_REVERS:      Set res = RunSimpleStornoRevers(brDok, dokTip)
+        Case FLOW_DOC_PRIJEMNICA:  Set res = RunSimpleStornoPrijemnica(brDok)
     End Select
 
     If res Is Nothing Then
@@ -3450,47 +3663,10 @@ Private Function TryRunCorrectionFramework(ByVal tipDok As String, ByVal brDok A
         Exit Function
     End If
 
-    Dim preview As String
-    preview = BuildStornoPreview(docType, brDok, dokTip)
-
-    Dim mode As String
-    mode = PromptCorrectionMode(preview)
-    If Len(mode) = 0 Then Exit Function             ' operater odustao
-
-    Dim res As Object
-    Set res = DispatchCorrection(docType, brDok, dokTip, mode, False)
-
-    ' PONISTENJE: prvo prikazi PUN spisak posledica (res.message) pa trazi svesnu
-    ' potvrdu. Tek na DA se stvarno izvrsava (forceConfirm). To je razlika od DUPLI.
-    If CBool(res("blocked")) Then
-        If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & _
-                  "PONISTITI dokument i SVE gore navedeno?", _
-                  vbExclamation + vbYesNo, APP_NAME) = vbYes Then
-            Set res = DispatchCorrection(docType, brDok, dokTip, mode, True)
-        Else
-            MsgBox "Ponistenje otkazano. Nista nije promenjeno.", vbInformation, APP_NAME
-            Exit Function
-        End If
-    End If
-
-    If CBool(res("needsForm")) Then
-        ' ISPRAVKA_ODMAH: stara stornirana, ceka se snimanje NOVE.
-        m_activeCorrectionID = CStr(res("correctionID"))
-        m_activeCorrectionDoc = docType
-        m_activeCorrectionDokTip = dokTip
-        txtStornoBroj.value = ""
-        MsgBox CStr(res("message")) & vbCrLf & vbCrLf & _
-               "SLEDECE: samo unesi i snimi NOVI dokument (normalno). Prevezivanje i " & _
-               "rekalkulacija se rade AUTOMATSKI po snimanju -- nema dodatnog koraka.", _
-               vbInformation, APP_NAME
-    ElseIf CBool(res("success")) Then
-        txtStornoBroj.value = ""
-        MsgBox CStr(res("message")), vbInformation, APP_NAME
-    Else
-        MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
-    End If
-
-    CheckVerwaisteDokumente
+    ' Puni pregled + izbor moda kroz OVERLAY PANEL preko celog ekrana (zamena za
+    ' MsgBox lanac): lista dotaknutih dokumenata + multiselect otkupnih blokova +
+    ' 4 moda kao dugmad. Panel sam poziva izvrsenje (ApplyCorrectionFromPanel).
+    OpenStornoConfirmPanel docType, brDok, dokTip
     Exit Function
 EH:
     LogErr "frmDokumenta.TryRunCorrectionFramework"
@@ -3498,14 +3674,166 @@ EH:
     TryRunCorrectionFramework = True
 End Function
 
+' Izvrsenje izabranog moda iz "Storno / potvrda" panela. Skuplja cekirane otkupne
+' blokove (default oslobodjeni; cekiran = DODATNO storniran) i poziva centralne
+' servise (DispatchCorrection + StornoSelectedBlocks_TX). Business logika NIJE ovde.
+Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
+    On Error GoTo EH
+    Dim docType As String, brDok As String, dokTip As String
+    docType = m_sc_docType: brDok = m_sc_brDok: dokTip = m_sc_dokTip
+    If Len(docType) = 0 Or Len(brDok) = 0 Then Exit Sub
+
+    ' Cekirani blokovi PRE izvrsenja (posle storna otpremnice/zbirne se oslobode/
+    ' razvezu, ali OtkupID ostaje isti -> storno po ID i dalje radi).
+    Dim blkIds As Collection: Set blkIds = SelectedBlockIDs()
+    Dim skipPal As Boolean: skipPal = KeepPalChecked()   ' "Ne diraj palete" (prijemnica DUPLI/PONISTENJE)
+    ' Blok-storno (dodatni storno cekiranih blokova) je dozvoljen SAMO uz DUPLI/PONISTENJE.
+    ' ISPRAVKA/RESI_KASNIJE -> cekirani blokovi se IGNORISU bez mutacije (inace RESI/ISPRAVKA
+    ' krse svoje znacenje: "parkiraj / storno+reunos" ne sme da stornira blokove).
+    Dim allowBlk As Boolean: allowBlk = ModeAllowsBlockStorno(mode)
+
+    ' Guard C (ADR-0001): blok-storno nad zivom otpremnicom bi napravio tihi disbalans.
+    ' Vazi SAMO kad se blokovi zaista storniraju (DUPLI/PONISTENJE).
+    If allowBlk Then
+        Dim driftMsg As String: driftMsg = BlockStornoDriftReason(docType, mode, blkIds)
+        If Len(driftMsg) > 0 Then
+            MsgBox driftMsg, vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
+    Dim res As Object
+    Set res = DispatchCorrection(docType, brDok, dokTip, mode, False, skipPal)
+    If res Is Nothing Then
+        MsgBox "Nepoznat tip dokumenta za storno.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    ' PONISTENJE: prvo pun spisak posledica (res.message) + svesna potvrda. Tek na
+    ' DA se izvrsava (forceConfirm). Razlika od DUPLI (tiho pocisti).
+    If CBool(res("blocked")) Then
+        If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & _
+                  "PONISTITI dokument i SVE gore navedeno?", _
+                  vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            Set res = DispatchCorrection(docType, brDok, dokTip, mode, True, skipPal)
+        Else
+            MsgBox "Ponistenje otkazano. Nista nije promenjeno.", vbInformation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
+    Dim blkMsg As String, blkN As Long
+    If CBool(res("needsForm")) Then
+        ' ISPRAVKA_ODMAH: stara stornirana, ceka se snimanje NOVE.
+        m_activeCorrectionID = CStr(res("correctionID"))
+        m_activeCorrectionDoc = docType
+        m_activeCorrectionDokTip = dokTip
+        ' Prijemnica: prefill forme iz stornirane + oznaci pending relink paleta
+        ' (save-putanja radi ReassignPaleteToPrijemnica_TX -> ista roba, ista paleta).
+        If docType = FLOW_DOC_PRIJEMNICA Then
+            PrefillPrijemnicaFromStornirana brDok
+            m_pendingRelinkOldPrij = brDok
+            m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_PARENT_BROJ)
+        ElseIf docType = FLOW_DOC_OTPREMNICA Then
+            PrefillOtpremnicaFromStornirana brDok
+        ElseIf docType = FLOW_DOC_ZBIRNA Then
+            PrefillZbirnaFromStornirana brDok
+        End If
+        ' ISPRAVKA: cekirani blokovi se NE storniraju (storno+reunos dokumenta je
+        ' celina; blok-storno je moguc iskljucivo uz Duplikat/Ponistenje).
+        blkMsg = IgnoredBlocksNote(blkIds)
+        SetStornoConfirmPanelVisible False
+        txtStornoBroj.value = ""
+        MsgBox CStr(res("message")) & blkMsg & vbCrLf & vbCrLf & _
+               "SLEDECE: samo unesi i snimi NOVI dokument (normalno). Prevezivanje i " & _
+               "rekalkulacija se rade AUTOMATSKI po snimanju -- nema dodatnog koraka.", _
+               vbInformation, APP_NAME
+        On Error Resume Next
+        If docType = FLOW_DOC_PRIJEMNICA Then
+            txtKolicinaPrij.SetFocus
+        ElseIf docType = FLOW_DOC_OTPREMNICA Then
+            txtKolicinaOtp.SetFocus
+        End If
+        On Error GoTo EH
+    ElseIf CBool(res("success")) Then
+        If allowBlk Then
+            ' DUPLI/PONISTENJE: dodatni storno cekiranih blokova. Storno dokumenta je
+            ' vec KOMITOVAN (context terminalno); ako blok-storno padne -> MANUAL, ne lazi.
+            blkN = ApplySelectedBlockStorno(blkIds): blkMsg = BlockStornoMsg(blkN)
+            If blkN < 0 And Len(CStr(res("correctionID"))) > 0 Then
+                modStornoContext.MarkCorrectionManual CStr(res("correctionID")), _
+                    "Storniraj cekirane otkupne blokove rucno (automatski nisu uspeli).", _
+                    "Posle " & mode & " nad " & docType & " " & brDok & _
+                    " storno cekiranih otkupnih blokova nije uspeo."
+            End If
+        Else
+            ' RESI_KASNIJE (i sl.): cekirani blokovi se IGNORISU bez mutacije.
+            blkMsg = IgnoredBlocksNote(blkIds)
+        End If
+        SetStornoConfirmPanelVisible False
+        txtStornoBroj.value = ""
+        MsgBox CStr(res("message")) & blkMsg, vbInformation, APP_NAME
+    Else
+        MsgBox "Nije izvrseno: " & CStr(res("message")), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    CheckVerwaisteDokumente
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.ApplyCorrectionFromPanel"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Storniraj cekirane otkupne blokove (samostalne kupovine). Vraca broj storniranih;
+' 0 kad nema cekiranih; -1 na gresku (caller onda oznaci context MANUAL).
+Private Function ApplySelectedBlockStorno(ByVal blkIds As Collection) As Long
+    On Error Resume Next
+    If blkIds Is Nothing Then Exit Function
+    If blkIds.count = 0 Then Exit Function
+    ApplySelectedBlockStorno = StornoSelectedBlocks_TX(blkIds)
+End Function
+
+' Blok-storno cekiranih blokova je dozvoljen SAMO uz DUPLI/PONISTENJE (roba stvarno
+' nestaje). ISPRAVKA/RESI_KASNIJE cekirane blokove ignorisu bez mutacije.
+Private Function ModeAllowsBlockStorno(ByVal mode As String) As Boolean
+    ModeAllowsBlockStorno = (mode = SV_MODE_DUPLI Or mode = SV_MODE_PONISTENJE)
+End Function
+
+' Napomena kad su blokovi cekirani a izabrani mod ih NE dira (ISPRAVKA/RESI).
+Private Function IgnoredBlocksNote(ByVal blkIds As Collection) As String
+    If blkIds Is Nothing Then Exit Function
+    If blkIds.count = 0 Then Exit Function
+    IgnoredBlocksNote = vbCrLf & "Napomena: cekirani otkupni blokovi (" & blkIds.count & _
+        ") NISU stornirani -- blok-storno je moguc samo uz Duplikat / Ponistenje."
+End Function
+
+' "Ne diraj palete" checkbox (prijemnica DUPLI/PONISTENJE) -> True = preskoci detach.
+Private Function KeepPalChecked() As Boolean
+    On Error Resume Next
+    If Not m_scKeepPal Is Nothing Then KeepPalChecked = CBool(m_scKeepPal.value)
+End Function
+
+' Dodatak poruci za rezultat storna cekiranih blokova.
+Private Function BlockStornoMsg(ByVal n As Long) As String
+    If n < 0 Then
+        BlockStornoMsg = vbCrLf & "PAZNJA: storno cekiranih otkupnih blokova NIJE uspeo " & _
+                         "(vidi Monitor / Nedovrseno)."
+    ElseIf n > 0 Then
+        BlockStornoMsg = vbCrLf & "Otkupni blokovi dodatno stornirani: " & n & "."
+    End If
+End Function
+
 ' Dispatch na centralne servise po docType/mode (forceConfirm za PONISTENJE).
 Private Function DispatchCorrection(ByVal docType As String, ByVal brDok As String, _
                                     ByVal dokTip As String, ByVal mode As String, _
-                                    ByVal forceConfirm As Boolean) As Object
+                                    ByVal forceConfirm As Boolean, _
+                                    Optional ByVal skipPalete As Boolean = False) As Object
     Select Case docType
-        Case FLOW_DOC_OTPREMNICA: Set DispatchCorrection = RunOtpremnicaCorrection(brDok, mode, forceConfirm)
-        Case FLOW_DOC_ZBIRNA:     Set DispatchCorrection = RunZbirnaCorrection(brDok, mode, forceConfirm)
-        Case FLOW_DOC_REVERS:     Set DispatchCorrection = RunReversCorrection(brDok, dokTip, mode)
+        Case FLOW_DOC_OTPREMNICA:  Set DispatchCorrection = RunOtpremnicaCorrection(brDok, mode, forceConfirm)
+        Case FLOW_DOC_ZBIRNA:      Set DispatchCorrection = RunZbirnaCorrection(brDok, mode, forceConfirm)
+        Case FLOW_DOC_REVERS:      Set DispatchCorrection = RunReversCorrection(brDok, dokTip, mode)
+        Case FLOW_DOC_PRIJEMNICA:  Set DispatchCorrection = RunPrijemnicaCorrection(brDok, mode, forceConfirm, skipPalete)
     End Select
 End Function
 
@@ -3516,6 +3844,7 @@ Private Function ComboToDocType(ByVal comboVal As String, ByRef dokTip As String
     Select Case comboVal
         Case "Otpremnica":                   ComboToDocType = FLOW_DOC_OTPREMNICA
         Case "Zbirna":                       ComboToDocType = FLOW_DOC_ZBIRNA
+        Case "Prijemnica":                   ComboToDocType = FLOW_DOC_PRIJEMNICA
         Case "Revers izdavanje koop.":       ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_IZLAZ_KOOP
         Case "Revers povrat koop.":          ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_ULAZ_KOOP
         Case "Revers izdato OM (firma).":    ComboToDocType = FLOW_DOC_REVERS: dokTip = DOK_TIP_OM_ULAZ_FIRMA
@@ -3710,6 +4039,67 @@ Private Sub m_btnStornoClose_Click()
     SetStorniraniPanelVisible False
 End Sub
 
+' "Vrati storno" za izabran red (Faza 5). Radi za OTKUP i REVERS; ostali tipovi
+' se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos). Uz potvrdu.
+Private Sub m_btnStornoVrati_Click()
+    On Error GoTo EH
+    If m_lstStorno Is Nothing Then Exit Sub
+    Dim idx As Long: idx = m_lstStorno.ListIndex
+    If idx < 0 Then
+        MsgBox "Izaberi red (dokument) iz liste.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim tip As String: tip = ""
+    If Not m_stornoRowTip Is Nothing Then
+        If (idx + 1) <= m_stornoRowTip.count Then tip = Trim$(CStr(m_stornoRowTip(idx + 1)))
+    End If
+    If Len(tip) = 0 Then
+        MsgBox "Izaberi konkretan dokument (ne grupno zaglavlje).", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim broj As String: broj = Trim$(CStr(m_lstStorno.List(idx, 0)))
+    If Len(broj) = 0 Then Exit Sub
+
+    Dim undoArg As String
+    If Not UndoArgForTip(tip, undoArg) Then
+        MsgBox "Vrati storno je podrzan SAMO za Otkup i Revers." & vbCrLf & _
+               "Za '" & tip & "' koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    If MsgBox("Vratiti storno: " & tip & " " & broj & "?" & vbCrLf & vbCrLf & _
+              "(Reaktivira dokument i njegovu ambalazu.)", _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    If UndoStorno_TX(undoArg, broj) Then
+        MsgBox "Vraceno iz storna: " & tip & " " & broj & ".", vbInformation, APP_NAME
+        PopulateStorniraniPanel                  ' osvezi listu
+    Else
+        MsgBox "Nije vraceno: " & tip & " " & broj & "." & vbCrLf & _
+               "Guard/greska (npr. vec postoji aktivan isti broj) -> vidi Monitor.", _
+               vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnStornoVrati_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' Mapiraj tip iz liste storniranih -> argument za UndoStorno_TX (Otkup ili
+' DOK_TIP_OM_* za revers). Vraca False za nepodrzane (chain) tipove.
+Private Function UndoArgForTip(ByVal tip As String, ByRef outArg As String) As Boolean
+    If StrComp(tip, "Otkup", vbTextCompare) = 0 Then
+        outArg = DOK_TIP_OTKUP
+        UndoArgForTip = True
+        Exit Function
+    End If
+    Dim dokTip As String
+    If ComboToDocType(tip, dokTip) = FLOW_DOC_REVERS And Len(dokTip) > 0 Then
+        outArg = dokTip
+        UndoArgForTip = True
+    End If
+End Function
+
 ' Izgradi panel (jednom), napuni svezim podacima i prikazi ga.
 Private Sub ShowStorniraniPanel()
     EnsureStorniraniPanel
@@ -3756,6 +4146,11 @@ Private Sub EnsureStorniraniPanel()
     MouseWheel_Register m_lstStorno
     StyleListBox m_lstStorno
 
+    ' "Vrati storno" (dole levo) - radi za izabran OTKUP ili REVERS red; ostali
+    ' tipovi se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos).
+    Set m_btnStornoVrati = Me.Controls.Add("Forms.CommandButton.1", "btnStornoVratiRT", True)
+    StylePrimaryButton m_btnStornoVrati, "Vrati storno (Otkup/Revers)"
+
     m_stornoBuilt = True
     Exit Sub
 done:
@@ -3774,10 +4169,14 @@ Private Sub LayoutStorniraniPanel()
     w = Me.InsideWidth
     h = Me.InsideHeight
 
+    Const BTNH As Single = 28
     m_stornoBack.Move 0, 0, w, h
     m_stornoTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
     m_btnStornoClose.Move w - PAD - 92, PAD, 92, 24
-    m_lstStorno.Move PAD, PAD + HDR, w - 2 * PAD, h - 2 * PAD - HDR
+    Dim listH As Single: listH = h - 2 * PAD - HDR - BTNH - PAD
+    If listH < 60 Then listH = 60
+    m_lstStorno.Move PAD, PAD + HDR, w - 2 * PAD, listH
+    m_btnStornoVrati.Move PAD, PAD + HDR + listH + PAD, 220, BTNH
 End Sub
 
 ' Napuni listu: header red, pa po tipu grupni naslov + redovi. Total u naslovu.
@@ -3786,7 +4185,9 @@ Private Sub PopulateStorniraniPanel()
     If m_lstStorno Is Nothing Then Exit Sub
 
     m_lstStorno.Clear
+    Set m_stornoRowTip = New Collection
     AddStornoListRow StorniraniHeaders()
+    m_stornoRowTip.Add ""                       ' header red -> nije dokument
 
     Dim grupe As Collection
     Set grupe = GetStorniraniGrupisano()
@@ -3804,12 +4205,14 @@ Private Sub PopulateStorniraniPanel()
             For z = 0 To 11: hdr(z) = "": Next z
             hdr(0) = ChrW$(187) & " " & UCase$(tip) & " (" & cnt & ")"
             AddStornoListRow hdr
+            m_stornoRowTip.Add ""               ' grupno zaglavlje -> nije dokument
 
             Dim r As Long, c As Long
             For r = 1 To cnt
                 Dim one(0 To 11) As Variant
                 For c = 0 To 11: one(c) = rowsv(r, c + 1): Next c
                 AddStornoListRow one
+                m_stornoRowTip.Add tip          ' red dokumenta -> njegov tip
             Next r
 
             total = total + cnt
@@ -3818,7 +4221,9 @@ Private Sub PopulateStorniraniPanel()
 
     If total = 0 Then
         m_lstStorno.Clear
+        Set m_stornoRowTip = New Collection
         m_lstStorno.AddItem "Nema storniranih dokumenata."
+        m_stornoRowTip.Add ""
     End If
 
     m_stornoTitle.caption = "Stornirani dokumenti  (" & total & ")"
@@ -3852,16 +4257,19 @@ Private Sub SetStorniraniPanelVisible(ByVal bShow As Boolean)
         m_lstStorno.visible = True
         m_stornoTitle.visible = True
         m_btnStornoClose.visible = True
+        m_btnStornoVrati.visible = True
         ' Na vrh (redosled: back -> lista -> naslov -> zatvori).
         m_stornoBack.ZOrder 0
         m_lstStorno.ZOrder 0
         m_stornoTitle.ZOrder 0
         m_btnStornoClose.ZOrder 0
+        m_btnStornoVrati.ZOrder 0
     Else
         m_stornoBack.visible = False
         m_lstStorno.visible = False
         m_stornoTitle.visible = False
         m_btnStornoClose.visible = False
+        m_btnStornoVrati.visible = False
         RestoreBehindPanel
     End If
 End Sub
@@ -3873,7 +4281,8 @@ Private Sub HideBehindPanel()
     Dim ctl As MSForms.Control
     For Each ctl In Me.Controls
         If ctl Is m_stornoBack Or ctl Is m_lstStorno _
-           Or ctl Is m_stornoTitle Or ctl Is m_btnStornoClose Then
+           Or ctl Is m_stornoTitle Or ctl Is m_btnStornoClose _
+           Or ctl Is m_btnStornoVrati Then
             ' panel kontrole -> preskoci
         ElseIf ctl.visible Then
             m_stornoHidden.Add ctl.name
@@ -3891,6 +4300,1032 @@ Private Sub RestoreBehindPanel()
         Me.Controls(m_stornoHidden(i)).visible = True
     Next i
     Set m_stornoHidden = Nothing
+End Sub
+
+' ============================================================
+' STORNO / POTVRDA PANEL -- overlay preko celog ekrana (Controls.Add + WithEvents;
+' .frx se ne dira). Zamena za MsgBox lanac izbora moda: lista DOTAKNUTIH dokumenata
+' (GetStornoChainRows) + MULTISELECT otkupnih blokova (GetStornoBlockRows; default
+' oslobodjeni/netaknuti, cekiran = dodatno storniran) + 4 moda kao dugmad.
+' Izvrsenje: ApplyCorrectionFromPanel. Podaci/logika: modStornoFlow.
+' ============================================================
+Private Sub OpenStornoConfirmPanel(ByVal docType As String, ByVal brDok As String, ByVal dokTip As String)
+    On Error GoTo EH
+    m_sc_docType = docType
+    m_sc_brDok = brDok
+    m_sc_dokTip = dokTip
+    EnsureStornoConfirmPanel
+    If Not m_scBuilt Then
+        RunCorrectionMsgboxFallback docType, brDok, dokTip   ' panel se nije izgradio -> stari MsgBox tok
+        Exit Sub
+    End If
+    PopulateStornoConfirmPanel
+    SetStornoConfirmPanelVisible True
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.OpenStornoConfirmPanel"
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju storno panela: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' Degradirani put ako runtime kontrole ne mogu da se naprave: stari MsgBox izbor
+' moda (bez multiselect blokova). Reuse PromptCorrectionMode + ApplyCorrectionFromPanel.
+Private Sub RunCorrectionMsgboxFallback(ByVal docType As String, ByVal brDok As String, ByVal dokTip As String)
+    Dim preview As String: preview = BuildStornoPreview(docType, brDok, dokTip)
+    Dim mode As String: mode = PromptCorrectionMode(preview)
+    If Len(mode) = 0 Then Exit Sub
+    ApplyCorrectionFromPanel mode      ' SelectedBlockIDs vraca prazno kad panel nije vidljiv
+End Sub
+
+' Cekirani OtkupID-jevi iz multiselect liste blokova (col 0 = OtkupID, skriven).
+Private Function SelectedBlockIDs() As Collection
+    Dim result As New Collection
+    Set SelectedBlockIDs = result
+    On Error Resume Next
+    If m_scBlocks Is Nothing Then Exit Function
+    Dim i As Long
+    For i = 0 To m_scBlocks.ListCount - 1
+        If m_scBlocks.Selected(i) Then
+            Dim oid As String: oid = Trim$(CStr(m_scBlocks.List(i, 0)))
+            If Len(oid) > 0 Then result.Add oid
+        End If
+    Next i
+End Function
+
+Private Sub EnsureStornoConfirmPanel()
+    On Error GoTo done
+    If m_scBuilt Then Exit Sub
+
+    Set m_scBack = Me.Controls.Add("Forms.Label.1", "lblScBackRT", True)
+    With m_scBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+
+    Set m_scTitle = Me.Controls.Add("Forms.Label.1", "lblScTitleRT", True)
+    With m_scTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Storno / potvrda"
+    End With
+
+    Set m_btnScClose = Me.Controls.Add("Forms.CommandButton.1", "btnScCloseRT", True)
+    StyleExitButton m_btnScClose, "Otkazi"
+
+    Set m_scHeader = Me.Controls.Add("Forms.Label.1", "lblScHeaderRT", True)
+    With m_scHeader
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+    End With
+
+    Const SC_CHAIN_COLW As String = "150;120;560"      ' Dokument | Broj / kolicina | Efekat storna
+    Const SC_BLK_COLW As String = "0;120;72;54;190"    ' [id skriven] Broj otkupa | Kolicina | Klasa | Kooperant
+    Const SC_PAL_COLW As String = "170;84;66;70;70"    ' Paleta | Popunjeno/kap. | Gajbe | Neto kg | Amb. kg
+
+    Set m_scChainLbl = Me.Controls.Add("Forms.Label.1", "lblScChainRT", True)
+    With m_scChainLbl
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
+        .caption = "Dokumenti obuhvaceni stornom"
+    End With
+
+    Set m_scChainHdr = Me.Controls.Add("Forms.ListBox.1", "lstScChainHdrRT", True)
+    With m_scChainHdr
+        .ColumnCount = 3: .ColumnWidths = SC_CHAIN_COLW: .Locked = True
+    End With
+    StyleListBox m_scChainHdr
+    SetHeaderRow3 m_scChainHdr, "Dokument", "Broj / kolicina", "Efekat storna (Duplikat / Ponistenje)"
+
+    Set m_scChain = Me.Controls.Add("Forms.ListBox.1", "lstScChainRT", True)
+    With m_scChain
+        .ColumnCount = 3
+        .ColumnWidths = SC_CHAIN_COLW
+    End With
+    MouseWheel_Register m_scChain
+    StyleListBox m_scChain
+
+    Set m_scBlkLbl = Me.Controls.Add("Forms.Label.1", "lblScBlkRT", True)
+    With m_scBlkLbl
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
+        .caption = "Otkupni blokovi"
+    End With
+
+    ' Naslov kolona za blokove - isti checkbox-gutter (Option/Multi) da se kolone poklope.
+    Set m_scBlkHdr = Me.Controls.Add("Forms.ListBox.1", "lstScBlkHdrRT", True)
+    With m_scBlkHdr
+        .ColumnCount = 5: .ColumnWidths = SC_BLK_COLW
+        .MultiSelect = fmMultiSelectMulti
+        .ListStyle = fmListStyleOption
+        .Locked = True
+    End With
+    StyleListBox m_scBlkHdr
+    SetHeaderRow5 m_scBlkHdr, "", "Broj otkupa", "Kolicina", "Klasa", "Kooperant"
+
+    Set m_scBlocks = Me.Controls.Add("Forms.ListBox.1", "lstScBlocksRT", True)
+    With m_scBlocks
+        .ColumnCount = 5
+        .ColumnWidths = SC_BLK_COLW                ' col0 OtkupID skriven
+        .MultiSelect = fmMultiSelectMulti
+        .ListStyle = fmListStyleOption             ' checkbox po redu
+    End With
+    MouseWheel_Register m_scBlocks
+    StyleListBox m_scBlocks
+
+    Set m_scPalLbl = Me.Controls.Add("Forms.Label.1", "lblScPalRT", True)
+    With m_scPalLbl
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
+        .caption = "Palete"
+    End With
+
+    Set m_scPalHdr = Me.Controls.Add("Forms.ListBox.1", "lstScPalHdrRT", True)
+    With m_scPalHdr
+        .ColumnCount = 5: .ColumnWidths = SC_PAL_COLW: .Locked = True
+    End With
+    StyleListBox m_scPalHdr
+    SetHeaderRow5 m_scPalHdr, "Paleta", "Popunjeno/kap.", "Gajbe", "Neto kg", "Amb. kg"
+
+    Set m_scPalete = Me.Controls.Add("Forms.ListBox.1", "lstScPaleteRT", True)
+    With m_scPalete
+        .ColumnCount = 5
+        .ColumnWidths = SC_PAL_COLW                ' Paleta | popunj/kap | skida gajb | kg | amb
+    End With
+    MouseWheel_Register m_scPalete
+    StyleListBox m_scPalete
+
+    Set m_scSummary = Me.Controls.Add("Forms.Label.1", "lblScSummaryRT", True)
+    With m_scSummary
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_LIGHT()
+        .Font.Bold = True
+    End With
+
+    Set m_scKeepPal = Me.Controls.Add("Forms.CheckBox.1", "chkScKeepPalRT", True)
+    With m_scKeepPal
+        .caption = "Ne diraj palete (ostavi osirocene)"
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+        .value = False
+    End With
+
+    ' Opis efekta po modu - svaki labl poravnat tacno iznad svog dugmeta.
+    Set m_scLegIspravka = NewModeLegendLabel("lblScLegIsprRT", _
+        "Pogresan unos: stornira ovaj dokument i odmah otvara unos ispravnog. " & _
+        "Roba je stvarna - palete se prevezu na novi dokument.")
+    Set m_scLegDupli = NewModeLegendLabel("lblScLegDupRT", _
+        "Duplikat: dokument je greskom dupliran. Skida palete i ovaj dokument; " & _
+        "ostatak lanca (otpremnica / zbirna) ostaje jer je roba stvarna.")
+    Set m_scLegPonist = NewModeLegendLabel("lblScLegPonRT", _
+        "Nista se nije desilo: ponistava se ceo lanac - otpremnica, zbirna, " & _
+        "prijemnica i palete (uz potvrdu). Koristi kada transakcije nije bilo.")
+    Set m_scLegResi = NewModeLegendLabel("lblScLegResRT", _
+        "Resi kasnije: dokument ostaje aktivan, samo se belezi u Nedovrseno " & _
+        "da se o njemu odluci naknadno. Palete se ne diraju.")
+
+    ' Modovi - kratak, jasan naziv na dugmetu (interni SV_MODE_* nepromenjen).
+    Set m_btnScIspravka = Me.Controls.Add("Forms.CommandButton.1", "btnScIspravkaRT", True)
+    StylePrimaryButton m_btnScIspravka, "Pogresan unos"
+    Set m_btnScDupli = Me.Controls.Add("Forms.CommandButton.1", "btnScDupliRT", True)
+    StylePrimaryButton m_btnScDupli, "Duplikat"
+    Set m_btnScPonist = Me.Controls.Add("Forms.CommandButton.1", "btnScPonistRT", True)
+    StylePrimaryButton m_btnScPonist, "Nista se nije desilo"
+    Set m_btnScResi = Me.Controls.Add("Forms.CommandButton.1", "btnScResiRT", True)
+    StylePrimaryButton m_btnScResi, "Resi kasnije"
+
+    m_scBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureStornoConfirmPanel"
+    m_scBuilt = False
+End Sub
+
+' Full-bleed raspored: header, pa liste (chain + palete? + blokovi?) proporcionalno,
+' summary traka nad dugmadima, 4 moda (dole). Palete/blokovi samo ako postoje.
+Private Sub LayoutStornoConfirmPanel()
+    On Error Resume Next
+    If Not m_scBuilt Then Exit Sub
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Const LBLH As Single = 16
+    Const BTNH As Single = 28
+    Const HEADH As Single = 16
+    Const SUMH As Single = 30
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+
+    m_scBack.Move 0, 0, w, h
+    m_scTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnScClose.Move w - PAD - 92, PAD, 92, 24
+
+    Dim y As Single: y = PAD + HDR
+    m_scHeader.Move PAD, y, w - 2 * PAD, HEADH
+    y = y + HEADH + 4
+
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    Const LEGH As Single = 42                            ' blok opisa moda (do 3 reda) iznad dugmeta
+    Dim legY As Single: legY = bottomRow - LEGH - 3      ' opisi modova, tik iznad dugmadi
+    Dim sumY As Single: sumY = legY - 22                 ' summary iznad opisa
+
+    Const CHDRH As Single = 15                           ' visina reda-naslova (kolone)
+    Dim lists As Long: lists = 1                         ' chain uvek
+    If m_sc_hasPal Then lists = lists + 1
+    If m_sc_hasBlk Then lists = lists + 1
+    Dim avail As Single
+    avail = sumY - y - (lists * LBLH) - (lists * CHDRH) - (lists * PAD)
+    If avail < 60 Then avail = 60
+    Dim eachH As Single: eachH = avail / lists
+    Dim ww As Single: ww = w - 2 * PAD
+
+    m_scChainLbl.Move PAD, y, ww, LBLH: y = y + LBLH
+    m_scChainHdr.Move PAD, y, ww, CHDRH: y = y + CHDRH
+    m_scChain.Move PAD, y, ww, eachH: y = y + eachH + PAD
+
+    If m_sc_hasPal Then
+        m_scPalLbl.Move PAD, y, ww, LBLH: y = y + LBLH
+        m_scPalHdr.Move PAD, y, ww, CHDRH: y = y + CHDRH
+        m_scPalete.Move PAD, y, ww, eachH: y = y + eachH + PAD
+    End If
+
+    If m_sc_hasBlk Then
+        m_scBlkLbl.Move PAD, y, ww, LBLH: y = y + LBLH
+        m_scBlkHdr.Move PAD, y, ww, CHDRH: y = y + CHDRH
+        m_scBlocks.Move PAD, y, ww, eachH: y = y + eachH + PAD
+    End If
+
+    If m_sc_showKeep Then
+        m_scSummary.Move PAD, sumY, (w - 2 * PAD) * 0.62, 18
+        m_scKeepPal.Move PAD + (w - 2 * PAD) * 0.64, sumY, (w - 2 * PAD) * 0.36, 18
+    Else
+        m_scSummary.Move PAD, sumY, w - 2 * PAD, 18
+    End If
+
+    ' Dugmad + opis moda: opis (LEGH) sedi tacno iznad svog dugmeta (ista x/sirina).
+    Dim n As Long: n = 4
+    Dim gap As Single: gap = 6
+    Dim bw As Single: bw = (w - 2 * PAD - (n - 1) * gap) / n
+    Const LEGPAD As Single = 4                            ' unutrasnji razmak opisa od ivica dugmeta
+    Dim x1 As Single: x1 = PAD
+    Dim x2 As Single: x2 = x1 + bw + gap
+    Dim x3 As Single: x3 = x2 + bw + gap
+    Dim x4 As Single: x4 = x3 + bw + gap
+    m_scLegIspravka.Move x1 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_scLegDupli.Move x2 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_scLegPonist.Move x3 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_scLegResi.Move x4 + LEGPAD, legY, bw - 2 * LEGPAD, LEGH
+    m_btnScIspravka.Move x1, bottomRow, bw, BTNH
+    m_btnScDupli.Move x2, bottomRow, bw, BTNH
+    m_btnScPonist.Move x3, bottomRow, bw, BTNH
+    m_btnScResi.Move x4, bottomRow, bw, BTNH
+End Sub
+
+Private Sub PopulateStornoConfirmPanel()
+    On Error GoTo EH
+    ' Jedan poziv agregatora (Faza 1) = ceo uvid: header, chain, palete, blokovi, summary.
+    Dim mdl As Object: Set mdl = BuildStornoImpact(m_sc_docType, m_sc_brDok, m_sc_dokTip)
+    Dim hdr As Object: Set hdr = mdl("header")
+    Dim sm As Object: Set sm = mdl("summary")
+
+    m_scTitle.caption = "Storno / potvrda -- " & m_sc_docType & " " & m_sc_brDok
+    Dim partner As String: partner = CStr(hdr("partner"))
+    If Len(partner) = 0 Then partner = CStr(hdr("partnerID"))
+    ' Sledljivost (Faza 7): ako je dokument ispravka drugog / zamenjen drugim -> pokazi.
+    Dim traceTxt As String: traceTxt = ""
+    If Len(CStr(hdr("ispravkaOd"))) > 0 Then traceTxt = "     [ispravka dokumenta " & CStr(hdr("ispravkaOd")) & "]"
+    If Len(CStr(hdr("zamenjenSa"))) > 0 Then traceTxt = traceTxt & "     [zamenjen dokumentom " & CStr(hdr("zamenjenSa")) & "]"
+    m_scHeader.caption = "Partner/stanica: " & IIf(Len(partner) > 0, partner, "-") & _
+        "     Datum: " & CStr(hdr("datum")) & "     Kolicina: " & CStr(hdr("kolicina")) & traceTxt
+
+    ' --- lanac (naslov kolona je zaseban m_scChainHdr, poravnat sa listom) ---
+    m_scChain.Clear
+    Dim chainRows As Collection: Set chainRows = mdl("chain")
+    Dim i As Long, nc As Long: nc = 0
+    If Not chainRows Is Nothing Then
+        For i = 1 To chainRows.count: AddScChainRow chainRows(i): nc = nc + 1: Next i
+    End If
+
+    ' --- palete (kapacitet + detach) ---
+    m_scPalete.Clear
+    Dim pal As Collection: Set pal = mdl("palete")
+    Dim np As Long: np = 0
+    If Not pal Is Nothing Then
+        For i = 1 To pal.count: AddScPaleteRow pal(i): np = np + 1: Next i
+    End If
+    m_sc_hasPal = (np > 0)
+    m_scPalLbl.caption = "Palete (" & np & ")"
+
+    ' --- otkupni blokovi (multiselect) ---
+    m_scBlocks.Clear
+    Dim blkRows As Collection: Set blkRows = mdl("blocks")
+    Dim nb As Long: nb = 0
+    If Not blkRows Is Nothing Then
+        For i = 1 To blkRows.count: AddScBlockRow blkRows(i): nb = nb + 1: Next i
+    End If
+    m_sc_hasBlk = (nb > 0)
+    m_scBlkLbl.caption = "Otkupni blokovi -- samostalni (" & nb & ").   " & _
+        "Cekiraj blokove za dodatni storno; necekirani ostaju vezani / oslobadjaju se."
+    m_scBlocks.Enabled = (nb > 0)
+
+    ' --- summary traka (uticaj u brojkama) ---
+    ' Neutralno PRE izbora moda: prikazi OBUHVAT, ne posledicu. Stvarna akcija po
+    ' paleti/prijemnici zavisi od moda (i "Ne diraj palete") -> vidi kolonu Efekat storna.
+    m_scSummary.caption = "Ukupno u lancu: " & nc & " dok.   |   blokova: " & CStr(sm("blockCount")) & _
+        "   |   palete u obuhvatu: " & CStr(sm("paleteCount")) & _
+        " (" & CStr(sm("detachGajb")) & " gajbi, " & Format$(CDbl(sm("detachNeto")), "0.#") & " kg, " & _
+        Format$(CDbl(sm("detachAmb")), "0.#") & " kg amb).   Sta se sa njima desava zavisi od moda -> vidi Efekat storna."
+
+    ' "Ne diraj palete" (DUPLI/PONISTENJE) samo za prijemnicu sa paletama.
+    m_sc_showKeep = (m_sc_docType = FLOW_DOC_PRIJEMNICA And m_sc_hasPal)
+    If Not m_scKeepPal Is Nothing Then m_scKeepPal.value = False
+
+    ' PONISTENJE ima smisla samo kad ima zavisnosti (inace = obican storno = DUPLI put).
+    Dim fl As Object: Set fl = mdl("flags")
+    m_btnScPonist.Enabled = CBool(fl("hasDependents"))
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateStornoConfirmPanel"
+End Sub
+
+' Red palete: Paleta[+PRERAD] | used/cap | skida gajb | skida kg | skida amb.
+Private Sub AddScPaleteRow(ByVal p As Object)
+    On Error Resume Next
+    Dim lbl As String: lbl = CStr(p("label"))
+    If CBool(p("preradjena")) Then lbl = lbl & " (preradjena)"
+    m_scPalete.AddItem lbl
+    Dim idx As Long: idx = m_scPalete.ListCount - 1
+    m_scPalete.List(idx, 1) = CStr(p("used")) & "/" & CStr(p("cap"))
+    m_scPalete.List(idx, 2) = CStr(p("thisGajb"))
+    m_scPalete.List(idx, 3) = Format$(CDbl(p("thisNeto")), "0.#")
+    m_scPalete.List(idx, 4) = Format$(CDbl(p("thisAmb")), "0.#")
+End Sub
+
+Private Sub AddScChainRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_scChain.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_scChain.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_scChain.ColumnCount - 1 Then m_scChain.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+Private Sub AddScBlockRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_scBlocks.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_scBlocks.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_scBlocks.ColumnCount - 1 Then m_scBlocks.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+' Jedan red naslova kolona u zaseban header-listbox (poravnat sa listom ispod).
+Private Sub SetHeaderRow3(ByVal lst As MSForms.ListBox, ByVal c0 As String, _
+                          ByVal c1 As String, ByVal c2 As String)
+    On Error Resume Next
+    lst.Clear
+    lst.AddItem c0
+    lst.List(0, 1) = c1
+    lst.List(0, 2) = c2
+End Sub
+
+Private Sub SetHeaderRow5(ByVal lst As MSForms.ListBox, ByVal c0 As String, ByVal c1 As String, _
+                          ByVal c2 As String, ByVal c3 As String, ByVal c4 As String)
+    On Error Resume Next
+    lst.Clear
+    lst.AddItem c0
+    lst.List(0, 1) = c1
+    lst.List(0, 2) = c2
+    lst.List(0, 3) = c3
+    lst.List(0, 4) = c4
+End Sub
+
+' Labl opisa moda (iznad dugmeta): mek tekst, prelom u vise redova, poravnat gore.
+Private Function NewModeLegendLabel(ByVal ctlName As String, ByVal txt As String) As MSForms.Label
+    Dim lbl As MSForms.Label
+    Set lbl = Me.Controls.Add("Forms.Label.1", ctlName, True)
+    With lbl
+        .BackStyle = fmBackStyleTransparent: .ForeColor = TXT_MUTED()
+        .WordWrap = True: .Font.Size = FONT_SIZE_SMALL
+        .TextAlign = fmTextAlignLeft: .caption = txt
+    End With
+    Set NewModeLegendLabel = lbl
+End Function
+
+Private Sub SetStornoConfirmPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_scBuilt Then Exit Sub
+    If bShow Then
+        LayoutStornoConfirmPanel
+        HideBehindStornoConfirm
+        m_scBack.visible = True: m_scTitle.visible = True: m_btnScClose.visible = True
+        m_scHeader.visible = True: m_scSummary.visible = True
+        m_scLegIspravka.visible = True: m_scLegDupli.visible = True
+        m_scLegPonist.visible = True: m_scLegResi.visible = True
+        m_scKeepPal.visible = m_sc_showKeep
+        m_scChainLbl.visible = True: m_scChainHdr.visible = True: m_scChain.visible = True
+        m_scPalLbl.visible = m_sc_hasPal: m_scPalHdr.visible = m_sc_hasPal: m_scPalete.visible = m_sc_hasPal
+        m_scBlkLbl.visible = m_sc_hasBlk: m_scBlkHdr.visible = m_sc_hasBlk: m_scBlocks.visible = m_sc_hasBlk
+        m_btnScIspravka.visible = True: m_btnScDupli.visible = True
+        m_btnScPonist.visible = True: m_btnScResi.visible = True
+        m_scBack.ZOrder 0
+        m_scTitle.ZOrder 0: m_btnScClose.ZOrder 0
+        m_scHeader.ZOrder 0: m_scSummary.ZOrder 0: m_scKeepPal.ZOrder 0
+        m_scLegIspravka.ZOrder 0: m_scLegDupli.ZOrder 0: m_scLegPonist.ZOrder 0: m_scLegResi.ZOrder 0
+        m_scChainLbl.ZOrder 0: m_scChainHdr.ZOrder 0: m_scChain.ZOrder 0
+        m_scPalLbl.ZOrder 0: m_scPalHdr.ZOrder 0: m_scPalete.ZOrder 0
+        m_scBlkLbl.ZOrder 0: m_scBlkHdr.ZOrder 0: m_scBlocks.ZOrder 0
+        m_btnScIspravka.ZOrder 0: m_btnScDupli.ZOrder 0
+        m_btnScPonist.ZOrder 0: m_btnScResi.ZOrder 0
+    Else
+        m_scBack.visible = False: m_scTitle.visible = False: m_btnScClose.visible = False
+        m_scHeader.visible = False: m_scSummary.visible = False: m_scKeepPal.visible = False
+        m_scLegIspravka.visible = False: m_scLegDupli.visible = False
+        m_scLegPonist.visible = False: m_scLegResi.visible = False
+        m_scChainLbl.visible = False: m_scChainHdr.visible = False: m_scChain.visible = False
+        m_scPalLbl.visible = False: m_scPalHdr.visible = False: m_scPalete.visible = False
+        m_scBlkLbl.visible = False: m_scBlkHdr.visible = False: m_scBlocks.visible = False
+        m_btnScIspravka.visible = False: m_btnScDupli.visible = False
+        m_btnScPonist.visible = False: m_btnScResi.visible = False
+        RestoreBehindStornoConfirm
+    End If
+End Sub
+
+Private Sub HideBehindStornoConfirm()
+    On Error Resume Next
+    Set m_scHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_scBack Or ctl Is m_scTitle Or ctl Is m_btnScClose _
+           Or ctl Is m_scHeader Or ctl Is m_scSummary Or ctl Is m_scKeepPal _
+           Or ctl Is m_scLegIspravka Or ctl Is m_scLegDupli Or ctl Is m_scLegPonist Or ctl Is m_scLegResi _
+           Or ctl Is m_scChainLbl Or ctl Is m_scChainHdr Or ctl Is m_scChain _
+           Or ctl Is m_scPalLbl Or ctl Is m_scPalHdr Or ctl Is m_scPalete _
+           Or ctl Is m_scBlkLbl Or ctl Is m_scBlkHdr Or ctl Is m_scBlocks _
+           Or ctl Is m_btnScIspravka Or ctl Is m_btnScDupli _
+           Or ctl Is m_btnScPonist Or ctl Is m_btnScResi Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_scHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindStornoConfirm()
+    On Error Resume Next
+    If m_scHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_scHidden.count
+        Me.Controls(m_scHidden(i)).visible = True
+    Next i
+    Set m_scHidden = Nothing
+End Sub
+
+Private Sub m_btnScIspravka_Click()
+    ApplyCorrectionFromPanel SV_MODE_ISPRAVKA
+End Sub
+Private Sub m_btnScDupli_Click()
+    ApplyCorrectionFromPanel SV_MODE_DUPLI
+End Sub
+Private Sub m_btnScPonist_Click()
+    ApplyCorrectionFromPanel SV_MODE_PONISTENJE
+End Sub
+Private Sub m_btnScResi_Click()
+    ApplyCorrectionFromPanel SV_MODE_RESI_KASNIJE
+End Sub
+Private Sub m_btnScClose_Click()
+    SetStornoConfirmPanelVisible False
+End Sub
+
+' ============================================================
+' NADJI ZA STORNO -- browse overlay (Faza 2b). Pretraga/filter aktivnih dokumenata
+' (Prijemnica/Otpremnica/Zbirna); klik/dvoklik/Otvori -> Storno panel za taj dok.
+' Podaci: modStornoFlow.GetActiveDocumentsForStorno. .frx se ne dira.
+' ============================================================
+Private Sub SetupStornoFindButton()
+    On Error GoTo done
+    If Not m_btnStornoFind Is Nothing Then Exit Sub
+    Dim anchor As MSForms.Control
+    If Not m_btnRecovery Is Nothing Then Set anchor = m_btnRecovery Else Set anchor = btnStorno
+    Set m_btnStornoFind = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnStornoFindRT", True)
+    If m_btnStornoFind Is Nothing Then GoTo done
+    With m_btnStornoFind
+        .width = btnStorno.width
+        .Height = btnStorno.Height
+        .Left = btnStorno.Left
+        .Top = anchor.Top + anchor.Height + 6
+    End With
+    StylePrimaryButton m_btnStornoFind, "Nadji za storno"
+    m_btnStornoFind.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupStornoFindButton"
+    Set m_btnStornoFind = Nothing
+End Sub
+
+Private Sub m_btnStornoFind_Click()
+    On Error GoTo EH
+    ShowFindPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnStornoFind_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub ShowFindPanel()
+    EnsureFindPanel
+    If Not m_fnBuilt Then Exit Sub
+    Set m_fnAllDocs = Nothing            ' svez kes pri svakom otvaranju
+    PopulateFindResults
+    SetFindPanelVisible True
+End Sub
+
+Private Sub EnsureFindPanel()
+    On Error GoTo done
+    If m_fnBuilt Then Exit Sub
+
+    Set m_fnBack = Me.Controls.Add("Forms.Label.1", "lblFnBackRT", True)
+    With m_fnBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+
+    Set m_fnTitle = Me.Controls.Add("Forms.Label.1", "lblFnTitleRT", True)
+    With m_fnTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Nadji dokument za storno"
+    End With
+
+    Set m_btnFnClose = Me.Controls.Add("Forms.CommandButton.1", "btnFnCloseRT", True)
+    StyleExitButton m_btnFnClose, "Zatvori"
+
+    Set m_cmbFnTip = Me.Controls.Add("Forms.ComboBox.1", "cmbFnTipRT", True)
+    With m_cmbFnTip
+        .Style = fmStyleDropDownList
+        .AddItem "Svi": .AddItem "Prijemnica": .AddItem "Otpremnica": .AddItem "Zbirna"
+        .value = "Svi"
+    End With
+
+    Set m_txtFnSearch = Me.Controls.Add("Forms.TextBox.1", "txtFnSearchRT", True)
+
+    Const FN_COLW As String = "64;90;66;92;150;130;210;56"    ' Tip Broj Datum Zbirna Kupac Vozac Mesta Kg
+
+    ' Jednoredni header (naslovi kolona) iznad glavne liste.
+    Set m_lstFnHeader = Me.Controls.Add("Forms.ListBox.1", "lstFnHeaderRT", True)
+    With m_lstFnHeader
+        .ColumnCount = 8
+        .ColumnWidths = FN_COLW
+    End With
+    StyleListBox m_lstFnHeader
+    Dim fh(0 To 7) As Variant
+    fh(0) = "Tip": fh(1) = "Broj": fh(2) = "Datum": fh(3) = "Broj zbirne"
+    fh(4) = "Kupac": fh(5) = "Vozac": fh(6) = "Otkupna mesta": fh(7) = "Kg"
+    Dim fhArr() As Variant: ReDim fhArr(0 To 0, 0 To 7)
+    Dim fc As Long
+    For fc = 0 To 7: fhArr(0, fc) = fh(fc): Next fc
+    m_lstFnHeader.List = fhArr
+
+    Set m_lstFnResults = Me.Controls.Add("Forms.ListBox.1", "lstFnResultsRT", True)
+    With m_lstFnResults
+        .ColumnCount = 8
+        .ColumnWidths = FN_COLW
+    End With
+    MouseWheel_Register m_lstFnResults
+    StyleListBox m_lstFnResults
+
+    Set m_btnFnOpen = Me.Controls.Add("Forms.CommandButton.1", "btnFnOpenRT", True)
+    StylePrimaryButton m_btnFnOpen, "Otvori storno"
+
+    ' Konsolidacija: JEDAN objedinjeni recovery centar (contexti + osirocene, deduplikovano,
+    ' akcija po redu). Osiroceni panel je dostupan iz njega (dugme "Osiroceni dokumenti").
+    Set m_btnFnNed = Me.Controls.Add("Forms.CommandButton.1", "btnFnNedRT", True)
+    StylePrimaryButton m_btnFnNed, "Nedovrseno / recovery"
+
+    Set m_btnFnStornirani = Me.Controls.Add("Forms.CommandButton.1", "btnFnStorniraniRT", True)
+    StylePrimaryButton m_btnFnStornirani, "Stornirani"
+
+    m_fnBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureFindPanel"
+    m_fnBuilt = False
+End Sub
+
+Private Sub LayoutFindPanel()
+    On Error Resume Next
+    If Not m_fnBuilt Then Exit Sub
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Const ROWH As Single = 22
+    Const BTNH As Single = 28
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+
+    m_fnBack.Move 0, 0, w, h
+    m_fnTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnFnClose.Move w - PAD - 92, PAD, 92, 24
+
+    Dim y As Single: y = PAD + HDR
+    m_cmbFnTip.Move PAD, y, 140, ROWH
+    m_txtFnSearch.Move PAD + 148, y, w - 2 * PAD - 148, ROWH
+    y = y + ROWH + PAD
+
+    Const HEADH As Single = 15
+    m_lstFnHeader.Move PAD, y, w - 2 * PAD, HEADH
+    y = y + HEADH + 1
+
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    m_lstFnResults.Move PAD, y, w - 2 * PAD, bottomRow - y - PAD
+    m_btnFnOpen.Move PAD, bottomRow, 160, BTNH
+    m_btnFnNed.Move PAD + 170, bottomRow, 180, BTNH
+    m_btnFnStornirani.Move PAD + 360, bottomRow, 160, BTNH
+End Sub
+
+' Kes se gradi JEDNOM (ceo skup, svi tipovi); filter (tip + tekst) radi u memoriji
+' -> nema citanja tabela po tasteru. Render: bulk (.List = 2D niz) umesto petlje.
+Private Sub PopulateFindResults()
+    On Error GoTo EH
+    If m_lstFnResults Is Nothing Then Exit Sub
+    ' Gotov (idle-warm) skup ako je svez -> otvaranje trenutno; inace sinhroni fallback.
+    If m_fnAllDocs Is Nothing Then Set m_fnAllDocs = GetWarmStornoDocs()
+
+    Dim tip As String: tip = ""
+    If Not m_cmbFnTip Is Nothing Then tip = CStr(m_cmbFnTip.value)
+    Dim wantAll As Boolean: wantAll = (Len(tip) = 0 Or StrComp(tip, "Svi", vbTextCompare) = 0)
+    Dim tf As String: tf = ""
+    If Not m_txtFnSearch Is Nothing Then tf = LCase$(Trim$(CStr(m_txtFnSearch.text)))
+
+    Dim hits As Collection: Set hits = New Collection
+    Dim i As Long
+    If Not m_fnAllDocs Is Nothing Then
+        For i = 1 To m_fnAllDocs.count
+            Dim rw As Variant: rw = m_fnAllDocs(i)
+            If wantAll Or StrComp(CStr(rw(0)), tip, vbTextCompare) = 0 Then
+                If Len(tf) = 0 Or InStr(LCase$(CStr(rw(1)) & " " & CStr(rw(3)) & " " & _
+                       CStr(rw(4)) & " " & CStr(rw(6))), tf) > 0 Then
+                    hits.Add rw
+                End If
+            End If
+        Next i
+    End If
+
+    m_lstFnResults.Clear
+    If hits.count = 0 Then
+        m_lstFnResults.AddItem "Nema dokumenata."
+    Else
+        Dim arr() As Variant: ReDim arr(0 To hits.count - 1, 0 To 7)
+        Dim c As Long
+        For i = 1 To hits.count
+            Dim r2 As Variant: r2 = hits(i)
+            For c = 0 To 7: arr(i - 1, c) = CStr(r2(c)): Next c
+        Next i
+        m_lstFnResults.List = arr
+    End If
+    m_fnTitle.caption = "Nadji dokument za storno  (" & hits.count & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateFindResults"
+End Sub
+
+Private Sub AddFnRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_lstFnResults.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_lstFnResults.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_lstFnResults.ColumnCount - 1 Then m_lstFnResults.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+Private Sub SetFindPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_fnBuilt Then Exit Sub
+    If bShow Then
+        LayoutFindPanel
+        HideBehindFind
+        m_fnBack.visible = True: m_fnTitle.visible = True: m_btnFnClose.visible = True
+        m_cmbFnTip.visible = True: m_txtFnSearch.visible = True: m_lstFnHeader.visible = True
+        m_lstFnResults.visible = True: m_btnFnOpen.visible = True: m_btnFnNed.visible = True
+        m_btnFnStornirani.visible = True
+        m_fnBack.ZOrder 0
+        m_fnTitle.ZOrder 0: m_btnFnClose.ZOrder 0
+        m_cmbFnTip.ZOrder 0: m_txtFnSearch.ZOrder 0: m_lstFnHeader.ZOrder 0
+        m_lstFnResults.ZOrder 0: m_btnFnOpen.ZOrder 0: m_btnFnNed.ZOrder 0: m_btnFnStornirani.ZOrder 0
+    Else
+        m_fnBack.visible = False: m_fnTitle.visible = False: m_btnFnClose.visible = False
+        m_cmbFnTip.visible = False: m_txtFnSearch.visible = False: m_lstFnHeader.visible = False
+        m_lstFnResults.visible = False: m_btnFnOpen.visible = False: m_btnFnNed.visible = False
+        m_btnFnStornirani.visible = False
+        RestoreBehindFind
+    End If
+End Sub
+
+Private Sub HideBehindFind()
+    On Error Resume Next
+    Set m_fnHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_fnBack Or ctl Is m_fnTitle Or ctl Is m_btnFnClose _
+           Or ctl Is m_cmbFnTip Or ctl Is m_txtFnSearch Or ctl Is m_lstFnHeader _
+           Or ctl Is m_lstFnResults Or ctl Is m_btnFnOpen Or ctl Is m_btnFnNed _
+           Or ctl Is m_btnFnStornirani Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_fnHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindFind()
+    On Error Resume Next
+    If m_fnHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_fnHidden.count
+        Me.Controls(m_fnHidden(i)).visible = True
+    Next i
+    Set m_fnHidden = Nothing
+End Sub
+
+Private Sub m_btnFnClose_Click()
+    SetFindPanelVisible False
+End Sub
+
+' Browse -> DETALJAN recovery panel (osirocene prijemnice/palete + akcije).
+Private Sub m_btnFnNed_Click()
+    SetFindPanelVisible False
+    ShowNedovrsenoPanel
+End Sub
+
+' Browse -> DETALJAN pregled storniranih (+ "Vrati storno").
+Private Sub m_btnFnStornirani_Click()
+    SetFindPanelVisible False
+    ShowStorniraniPanel
+End Sub
+
+Private Sub m_txtFnSearch_Change()
+    PopulateFindResults
+End Sub
+
+Private Sub m_cmbFnTip_Change()
+    PopulateFindResults
+End Sub
+
+Private Sub m_lstFnResults_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    OpenSelectedFindRow
+End Sub
+
+Private Sub m_btnFnOpen_Click()
+    OpenSelectedFindRow
+End Sub
+
+' Otvori Storno panel za izabrani red browse liste.
+Private Sub OpenSelectedFindRow()
+    On Error GoTo EH
+    If m_lstFnResults Is Nothing Then Exit Sub
+    Dim r As Long: r = m_lstFnResults.ListIndex
+    If r < 0 Then
+        MsgBox "Izaberi dokument iz liste.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim tip As String, broj As String
+    tip = Trim$(CStr(m_lstFnResults.List(r, 0)))
+    broj = Trim$(CStr(m_lstFnResults.List(r, 1)))
+    If Len(broj) = 0 Then Exit Sub
+    SetFindPanelVisible False
+    OpenStornoConfirmPanel tip, broj, ""
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.OpenSelectedFindRow"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' ============================================================
+' NEDOVRSENO (SVE) -- read-only overlay (Faza 5). Ujedinjen pregled: PENDING/MANUAL
+' contexti (tblStornoVeze) + brojevi osirocenih. Podaci: modStornoRecovery.GetNedovrseno.
+' Detalj/akcije osirocenih su u "Osiroceni dokumenti" panelu.
+' ============================================================
+Private Sub SetupNedovrsenoButton()
+    On Error GoTo done
+    If Not m_btnNedovrseno Is Nothing Then Exit Sub
+    Dim anchor As MSForms.Control
+    If Not m_btnStornoFind Is Nothing Then Set anchor = m_btnStornoFind Else Set anchor = btnStorno
+    Set m_btnNedovrseno = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnNedovrsenoRT", True)
+    If m_btnNedovrseno Is Nothing Then GoTo done
+    With m_btnNedovrseno
+        .width = btnStorno.width
+        .Height = btnStorno.Height
+        .Left = btnStorno.Left
+        .Top = anchor.Top + anchor.Height + 6
+    End With
+    StylePrimaryButton m_btnNedovrseno, "Nedovrseno (sve)"
+    m_btnNedovrseno.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupNedovrsenoButton"
+    Set m_btnNedovrseno = Nothing
+End Sub
+
+Private Sub m_btnNedovrseno_Click()
+    On Error GoTo EH
+    ShowNedovrsenoPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnNedovrseno_Click"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub ShowNedovrsenoPanel()
+    EnsureNedovrsenoPanel
+    If Not m_nedBuilt Then Exit Sub
+    PopulateNedovrsenoPanel
+    SetNedovrsenoPanelVisible True
+End Sub
+
+Private Sub EnsureNedovrsenoPanel()
+    On Error GoTo done
+    If m_nedBuilt Then Exit Sub
+
+    Set m_nedBack = Me.Controls.Add("Forms.Label.1", "lblNedBackRT", True)
+    With m_nedBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+    Set m_nedTitle = Me.Controls.Add("Forms.Label.1", "lblNedTitleRT", True)
+    With m_nedTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Nedovrseno (sve)"
+    End With
+    Set m_btnNedClose = Me.Controls.Add("Forms.CommandButton.1", "btnNedCloseRT", True)
+    StyleExitButton m_btnNedClose, "Zatvori"
+    Set m_btnNedRecovery = Me.Controls.Add("Forms.CommandButton.1", "btnNedRecoveryRT", True)
+    StylePrimaryButton m_btnNedRecovery, "Osiroceni dokumenti"
+    Set m_lstNed = Me.Controls.Add("Forms.ListBox.1", "lstNedRT", True)
+    With m_lstNed
+        .ColumnCount = 5
+        .ColumnWidths = "150;100;80;250;180"      ' Vrsta | Ref | Status | Opis | Akcija
+    End With
+    MouseWheel_Register m_lstNed
+    StyleListBox m_lstNed
+
+    m_nedBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureNedovrsenoPanel"
+    m_nedBuilt = False
+End Sub
+
+Private Sub LayoutNedovrsenoPanel()
+    On Error Resume Next
+    If Not m_nedBuilt Then Exit Sub
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+    Const BTNH As Single = 28
+    m_nedBack.Move 0, 0, w, h
+    m_nedTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnNedClose.Move w - PAD - 92, PAD, 92, 24
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    m_lstNed.Move PAD, PAD + HDR, w - 2 * PAD, bottomRow - (PAD + HDR) - PAD
+    m_btnNedRecovery.Move PAD, bottomRow, 180, BTNH
+End Sub
+
+Private Sub PopulateNedovrsenoPanel()
+    On Error GoTo EH
+    If m_lstNed Is Nothing Then Exit Sub
+    m_lstNed.Clear
+    Dim hdr(0 To 4) As Variant
+    hdr(0) = "Vrsta": hdr(1) = "Ref": hdr(2) = "Status": hdr(3) = "Opis": hdr(4) = "Akcija (2xklik)"
+    AddNedListRow hdr
+
+    Set m_nedRows = GetNedovrseno()
+    Dim i As Long, n As Long: n = 0
+    If Not m_nedRows Is Nothing Then
+        For i = 1 To m_nedRows.count
+            Dim d As Object: Set d = m_nedRows(i)
+            Dim one(0 To 4) As Variant
+            one(0) = CStr(d("kind")): one(1) = CStr(d("ref"))
+            one(2) = CStr(d("status")): one(3) = CStr(d("opis")): one(4) = CStr(d("akcija"))
+            AddNedListRow one
+            n = n + 1
+        Next i
+    End If
+    If n = 0 Then m_lstNed.AddItem "Nema nedovrsenih stavki."
+    m_nedTitle.caption = "Nedovrseno / recovery  (" & n & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateNedovrsenoPanel"
+End Sub
+
+' 2xklik na red -> akcija po tipu. CONTEXT: detalj + izbor (otvori storno / odbaci);
+' osirocene (PRIJ/PAL/BLOK): otvori "Osiroceni dokumenti" panel (postojece akcije).
+Private Sub m_lstNed_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    On Error GoTo EH
+    If m_lstNed Is Nothing Or m_nedRows Is Nothing Then Exit Sub
+    Dim li As Long: li = m_lstNed.ListIndex
+    If li <= 0 Then Exit Sub                 ' 0 = header
+    If li > m_nedRows.count Then Exit Sub
+    Dim d As Object: Set d = m_nedRows(li)   ' list idx = red (header je 0)
+    Select Case CStr(d("actionCode"))
+        Case "CONTEXT": HandleNedContext d
+        Case Else: SetNedovrsenoPanelVisible False: ShowRecoveryPanel
+    End Select
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_lstNed_DblClick"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub HandleNedContext(ByVal d As Object)
+    On Error GoTo EH
+    Dim detalj As String
+    detalj = "Dokument: " & CStr(d("docType")) & " " & CStr(d("ref")) & vbCrLf & _
+             "Mod: " & CStr(d("mode")) & "   Status: " & CStr(d("status")) & vbCrLf & vbCrLf & _
+             CStr(d("opis"))
+    If Len(CStr(d("akcija"))) > 0 Then detalj = detalj & vbCrLf & vbCrLf & "Preporuka: " & CStr(d("akcija"))
+    Dim resp As VbMsgBoxResult
+    resp = MsgBox(detalj & vbCrLf & vbCrLf & _
+        "DA = otvori storno ekran za ovaj dokument (resi)." & vbCrLf & _
+        "NE = odbaci ovaj recovery zapis (odustani)." & vbCrLf & _
+        "OTKAZI = nista.", vbYesNoCancel + vbQuestion, "Recovery zapis")
+    If resp = vbYes Then
+        SetNedovrsenoPanelVisible False
+        OpenStornoConfirmPanel CStr(d("docType")), CStr(d("ref")), ""
+    ElseIf resp = vbNo Then
+        If CancelCorrectionContext(CStr(d("correctionID")), "Operater odbacio recovery zapis iz Nedovrseno panela.") Then
+            PopulateNedovrsenoPanel
+        Else
+            MsgBox "Nije uspelo odbacivanje zapisa.", vbExclamation, APP_NAME
+        End If
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.HandleNedContext"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub m_btnNedRecovery_Click()
+    SetNedovrsenoPanelVisible False
+    ShowRecoveryPanel
+End Sub
+
+Private Sub AddNedListRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_lstNed.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_lstNed.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_lstNed.ColumnCount - 1 Then m_lstNed.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+Private Sub SetNedovrsenoPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_nedBuilt Then Exit Sub
+    If bShow Then
+        LayoutNedovrsenoPanel
+        HideBehindNed
+        m_nedBack.visible = True: m_nedTitle.visible = True
+        m_btnNedClose.visible = True: m_lstNed.visible = True
+        m_btnNedRecovery.visible = True
+        m_nedBack.ZOrder 0: m_lstNed.ZOrder 0
+        m_nedTitle.ZOrder 0: m_btnNedClose.ZOrder 0: m_btnNedRecovery.ZOrder 0
+    Else
+        m_nedBack.visible = False: m_nedTitle.visible = False
+        m_btnNedClose.visible = False: m_lstNed.visible = False
+        m_btnNedRecovery.visible = False
+        RestoreBehindNed
+    End If
+End Sub
+
+Private Sub HideBehindNed()
+    On Error Resume Next
+    Set m_nedHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_nedBack Or ctl Is m_nedTitle Or ctl Is m_btnNedClose _
+           Or ctl Is m_lstNed Or ctl Is m_btnNedRecovery Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_nedHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindNed()
+    On Error Resume Next
+    If m_nedHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_nedHidden.count
+        Me.Controls(m_nedHidden(i)).visible = True
+    Next i
+    Set m_nedHidden = Nothing
+End Sub
+
+Private Sub m_btnNedClose_Click()
+    SetNedovrsenoPanelVisible False
 End Sub
 
 ' ============================================================

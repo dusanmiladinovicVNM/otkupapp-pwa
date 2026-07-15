@@ -1464,6 +1464,7 @@ Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As St
                 For k = 1 To rows.count
                     RequireUpdateCell TBL_OTKUP, rows(k), COL_OTK_OTPREMNICA_ID, otpID, _
                                       "modOtkupBlok.LinkOtkupIDsToOtpremnica"
+                    SetOtkupBrojOtpremnice rows(k), otpID
                 Next k
             End If
         End If

@@ -467,3 +467,119 @@ Private Function Fmt(ByVal v As Variant) As String
     On Error Resume Next
     Fmt = Format$(CDbl(v), "0.##")
 End Function
+
+' ============================================================
+' Faza 7 (3.0) - KANONSKO ADRESIRANJE append-only modela.
+' Linijski model: jedan poslovni broj ima vise redova (po klasi). Identitet reda =
+' (broj, klasa) -> AKTIVAN red. Vrati indeks tog reda:
+'   0  = nema aktivnog reda za (broj, klasa)
+'   -1 = VISE aktivnih (integritet povreda; u append-only sme najvise jedan)
+' klasa == "" -> ignorisi klasu (match samo po broju; ambiguo kad ima vise klasa).
+' Osnov za: PWA sync migraciju (3.1), append-only re-verziju (3.2), citace (3.3).
+' ============================================================
+Public Function FindSingleActiveRow(ByVal tbl As String, ByVal brojCol As String, _
+        ByVal broj As String, ByVal klasaCol As String, ByVal klasa As String) As Long
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cBr As Long: cBr = GetColumnIndex(tbl, brojCol)
+    If cBr = 0 Then Exit Function
+    Dim cSt As Long: cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    Dim cKl As Long: cKl = 0
+    If Len(klasaCol) > 0 Then cKl = GetColumnIndex(tbl, klasaCol)
+    broj = Trim$(broj): klasa = Trim$(klasa)
+    Dim i As Long, found As Long, cnt As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cBr))) = broj Then
+            If cSt = 0 Or Not IsDaFlag(data(i, cSt)) Then
+                Dim klMatch As Boolean: klMatch = True
+                If Len(klasa) > 0 And cKl > 0 Then klMatch = (Trim$(CStr(data(i, cKl))) = klasa)
+                If klMatch Then found = i: cnt = cnt + 1
+            End If
+        End If
+    Next i
+    If cnt > 1 Then FindSingleActiveRow = -1 Else FindSingleActiveRow = found
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".FindSingleActiveRow"
+End Function
+
+' ============================================================
+' Faza 7 - IzdatoStatus gate (ADR-0001 granica: izdat/prosledjen dokument je
+' nepromenljiv -> koriguje se storno+reizdaj, ne in-place).
+' Ova app NEMA "draft" fazu za chain dokumente -> IzdatoStatus je podrazumevano
+' IZDATO; prazno = IZDATO (konzervativno). DRAFT je rezervisan (buduci parkiran/
+' held dokument), PROSLEDJENO za buduci sync-push ka PWA/kupcu.
+' DocIsIssued: True ako je IZDAT/PROSLEDJEN, False SAMO ako eksplicitno DRAFT.
+' ============================================================
+Public Function DocIsIssued(ByVal tbl As String, ByVal brojCol As String, ByVal broj As String) As Boolean
+    On Error Resume Next
+    DocIsIssued = True                                  ' default: izdato (konzervativno)
+    If GetColumnIndex(tbl, COL_TRACE_IZDATO_STATUS) = 0 Then Exit Function
+    Dim v As String
+    v = UCase$(Trim$(CStr(LookupValue(tbl, brojCol, broj, COL_TRACE_IZDATO_STATUS))))
+    DocIsIssued = (v <> UCase$(IZDATO_DRAFT))
+End Function
+
+' Postavi IzdatoStatus na jedan red (buduci prelazi: PROSLEDJENO pri sync-u ka PWA).
+' Guarded na kolonu (schema-drift safe).
+Public Sub SetIzdatoStatus(ByVal tbl As String, ByVal rowIndex As Long, ByVal status As String)
+    On Error Resume Next
+    If GetColumnIndex(tbl, COL_TRACE_IZDATO_STATUS) = 0 Then Exit Sub
+    UpdateCell tbl, rowIndex, COL_TRACE_IZDATO_STATUS, status
+End Sub
+
+' ============================================================
+' TEST (Alt+F8) - rollback-safe (clsTransaction snapshot + rollback; fixture ne
+' ostaje). Automatske asertacije -> Debug.Print (Ctrl+G). Faza 7 (3.0).
+' ============================================================
+Public Sub Test_FindSingleActiveRow()
+    Dim tx As clsTransaction
+    Dim ok As Boolean: ok = True
+    On Error GoTo EH
+    Const B As String = "SVT-FSAR-Z"
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    ' fixture: KlasaI aktivan, KlasaII aktivan, KlasaI storniran (3 reda, isti broj).
+    FsarSeed B, "I", ""
+    FsarSeed B, "II", ""
+    FsarSeed B, "I", "Da"
+
+    Dim rI As Long: rI = FindSingleActiveRow(TBL_ZBIRNA, COL_ZBR_BROJ, B, COL_ZBR_KLASA, "I")
+    Dim rII As Long: rII = FindSingleActiveRow(TBL_ZBIRNA, COL_ZBR_BROJ, B, COL_ZBR_KLASA, "II")
+    Dim rAmb As Long: rAmb = FindSingleActiveRow(TBL_ZBIRNA, COL_ZBR_BROJ, B, COL_ZBR_KLASA, "")
+    Dim rNone As Long: rNone = FindSingleActiveRow(TBL_ZBIRNA, COL_ZBR_BROJ, B, COL_ZBR_KLASA, "III")
+
+    ok = FsarChk(rI > 0, "KlasaI -> jedan aktivan red (" & rI & ")") And ok
+    ok = FsarChk(rII > 0, "KlasaII -> jedan aktivan red (" & rII & ")") And ok
+    ok = FsarChk(rI <> rII, "KlasaI != KlasaII (razliciti redovi)") And ok
+    Dim dchk As Variant: dchk = GetTableData(TBL_ZBIRNA)
+    Dim cSt As Long: cSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+    ok = FsarChk(rI > 0 And Not IsDaFlag(dchk(rI, cSt)), "KlasaI red je AKTIVAN (ne storniran)") And ok
+    ok = FsarChk(rAmb = -1, "klasa='' + 2 aktivna -> -1 (ambiguous)") And ok
+    ok = FsarChk(rNone = 0, "nepostojeca klasa -> 0") And ok
+
+    tx.RollbackTx: Set tx = Nothing
+    Debug.Print "=== Test_FindSingleActiveRow: " & IIf(ok, "PROSAO", "PAO") & " (fixture rollback-ovan) ==="
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "Test_FindSingleActiveRow GRESKA: " & Err.description
+End Sub
+
+Private Sub FsarSeed(ByVal broj As String, ByVal klasa As String, ByVal storno As String)
+    Dim lo As ListObject: Set lo = GetTable(TBL_ZBIRNA)
+    If lo Is Nothing Then Exit Sub
+    Dim nr As ListRow: Set nr = lo.ListRows.Add
+    Dim ri As Long: ri = nr.Index
+    UpdateCell TBL_ZBIRNA, ri, COL_ZBR_ID, "SVT-FSAR-" & klasa & "-" & IIf(Len(storno) > 0, "S", "A")
+    UpdateCell TBL_ZBIRNA, ri, COL_ZBR_BROJ, broj
+    UpdateCell TBL_ZBIRNA, ri, COL_ZBR_KLASA, klasa
+    If Len(storno) > 0 Then UpdateCell TBL_ZBIRNA, ri, COL_STORNIRANO, storno
+End Sub
+
+Private Function FsarChk(ByVal cond As Boolean, ByVal nm As String) As Boolean
+    Debug.Print IIf(cond, "OK   ", "FAIL ") & nm
+    FsarChk = cond
+End Function
