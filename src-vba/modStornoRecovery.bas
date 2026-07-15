@@ -170,7 +170,7 @@ End Function
 ' BrojZbirne -> aktivna zbirna? Ako je bilo koja veza ka MRTVOM (stornirano/nema)
 ' roditelju -> vrati opis (prvog) mrtvog roditelja; inace "". Unbound blok (bez
 ' veze) i blok sa zivim roditeljem su bezbedni za undo.
-Private Function OtkupBlockDeadParent(ByVal broj As String) As String
+Public Function OtkupBlockDeadParent(ByVal broj As String) As String
     On Error Resume Next
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function

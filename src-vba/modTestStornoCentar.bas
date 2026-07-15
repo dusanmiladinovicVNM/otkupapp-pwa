@@ -21,7 +21,128 @@ Public Sub Test_StornoCentar_All()
     Test_StampIspravkaTrace_Auto
     Test_BlockStornoDriftReason_Auto
     Test_DocIsIssued_Auto
+    Test_OtkupBlockDeadParent_Auto
+    Test_BuildStornoImpact_Auto
+    Test_GetActiveDocumentsForStorno_Auto
+    Test_StornoSelectedBlocks_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' Undo garda: blok sa storniranim roditeljem -> siroce (odbij); ziv roditelj/unbound -> ok.
+Public Sub Test_OtkupBlockDeadParent_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), _
+              Array("SVT-DP-OTP-A", "SVT-DP-OA", "I")                          ' aktivna otpremnica
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_STORNIRANO), _
+              Array("SVT-DP-OTP-D", "SVT-DP-OD", "I", "Da")                    ' stornirana otpremnica
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
+              Array("SVT-DP-K1", "SVT-DP-B1", "SVT-DP-OTP-A", "Da")            ' ziv roditelj
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
+              Array("SVT-DP-K2", "SVT-DP-B2", "SVT-DP-OTP-D", "Da")            ' mrtav roditelj
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
+              Array("SVT-DP-K3", "SVT-DP-B3", "", "Da")                        ' unbound
+
+    TcChk Len(OtkupBlockDeadParent("SVT-DP-B1")) = 0, "blok sa ZIVOM otpremnicom -> undo dozvoljen"
+    TcChk Len(OtkupBlockDeadParent("SVT-DP-B2")) > 0, "blok sa STORNIRANOM otpremnicom -> mrtav roditelj (odbij)"
+    TcChk Len(OtkupBlockDeadParent("SVT-DP-B3")) = 0, "unbound blok -> undo dozvoljen"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_OtkupBlockDeadParent_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' Impact agregator: header + summary iz stvarnih (seed) redova.
+Public Sub Test_BuildStornoImpact_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-BI-ID", "SVT-BI-P1", "I", "SVT-BI-KUP", 123, "SVT-BI-Z1")
+
+    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-BI-P1")
+    Dim h As Object: Set h = m("header")
+    Dim sm As Object: Set sm = m("summary")
+    TcChk NzS(h("partnerID")) = "SVT-BI-KUP", "impact header partnerID iz reda"
+    TcChk Val(NzS(h("kolicina"))) = 123, "impact header kolicina = 123"
+    TcChk CLng(sm("blockCount")) = 0, "impact summary blockCount = 0"
+    TcChk CLng(sm("paleteCount")) = 0, "impact summary paleteCount = 0"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_BuildStornoImpact_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' Browse: distinct po broju (2 klase -> 1x), filter tip, iskljuci stornirano.
+Public Sub Test_GetActiveDocumentsForStorno_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-1", "SVT-GA-P1", "I")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-2", "SVT-GA-P1", "II")   ' isti broj
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-3", "SVT-GA-P2", "I")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_STORNIRANO), Array("SVT-GA-4", "SVT-GA-P3", "I", "Da")
+
+    Dim c As Collection: Set c = GetActiveDocumentsForStorno("Prijemnica", "SVT-GA-")
+    Dim nP1 As Long, nP2 As Long, nP3 As Long, i As Long
+    If Not c Is Nothing Then
+        For i = 1 To c.count
+            Dim br As String: br = NzS(c(i)(1))
+            If br = "SVT-GA-P1" Then nP1 = nP1 + 1
+            If br = "SVT-GA-P2" Then nP2 = nP2 + 1
+            If br = "SVT-GA-P3" Then nP3 = nP3 + 1
+        Next i
+    End If
+    TcChk nP1 = 1, "distinct po broju: P1 (2 klase) -> 1x"
+    TcChk nP2 = 1, "P2 aktivan -> 1x"
+    TcChk nP3 = 0, "stornirana P3 -> iskljucena"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_GetActiveDocumentsForStorno_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' StornoSelectedBlocks_TX: atomican storno N blokova; -1 + rollback na los ID.
+Public Sub Test_StornoSelectedBlocks_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_KLASA), Array("SVT-SB-1", "SVT-SB-D1", 10, "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_KLASA), Array("SVT-SB-2", "SVT-SB-D2", 20, "I")
+
+    Dim good As Collection: Set good = New Collection: good.Add "SVT-SB-1": good.Add "SVT-SB-2"
+    TcChk StornoSelectedBlocks_TX(good) = 2, "storno 2 bloka -> vraca 2"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-1", COL_STORNIRANO))) = "DA", "blok 1 storniran"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-2", COL_STORNIRANO))) = "DA", "blok 2 storniran"
+
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_KLASA), Array("SVT-SB-3", "SVT-SB-D3", 30, "I")
+    Dim mix As Collection: Set mix = New Collection: mix.Add "SVT-SB-3": mix.Add "SVT-SB-BAD"
+    TcChk StornoSelectedBlocks_TX(mix) = -1, "los ID -> -1 (rollback)"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SB-3", COL_STORNIRANO))) <> "DA", "atomicnost: blok 3 ostao AKTIVAN"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoSelectedBlocks_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' IzdatoStatus gate: prazno/IZDATO -> izdato; DRAFT -> nije izdato.
