@@ -25,8 +25,66 @@ Public Sub Test_StornoCentar_All()
     Test_BuildStornoImpact_Auto
     Test_GetActiveDocumentsForStorno_Auto
     Test_StornoSelectedBlocks_Auto
+    Test_GetNedovrseno_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
 End Sub
+
+' #4 objedinjeni recovery: GetNedovrseno nosi CorrectionID i DEDUPLIKUJE osirocene
+' protiv PENDING context-a (isti poslovni broj se ne prikazuje dvaput).
+Public Sub Test_GetNedovrseno_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' aktivna prijemnica cija zbirna ne postoji -> osirocena
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-ND-PID", "SVT-ND-P1", "I", "SVT-ND-ZDEAD")
+
+    ' pre context-a: SVT-ND-P1 vidljiv kao osiroce, bez CorrectionID
+    TcChk NedRefCount("SVT-ND-P1") = 1, "osirocena prijemnica -> 1 red u Nedovrseno"
+    TcChk Len(NedRefCorrectionID("SVT-ND-P1")) = 0, "osirocen red nema CorrectionID"
+
+    ' PENDING context za ISTI broj (RESI_KASNIJE, NeedsRecovery=Da)
+    TcSeedRow TBL_STORNO_VEZE, Array(COL_SV_ID, COL_SV_MODE, COL_SV_STATUS, COL_SV_OLD_DOCTYPE, _
+              COL_SV_OLD_BROJ, COL_SV_NEEDS_RECOVERY), _
+              Array("SVT-ND-COR", SV_MODE_RESI_KASNIJE, SV_STATUS_PENDING, FLOW_DOC_PRIJEMNICA, _
+              "SVT-ND-P1", "Da")
+
+    ' posle: i dalje 1 red (dedup), ali sada nosi CorrectionID (context "pobedi")
+    TcChk NedRefCount("SVT-ND-P1") = 1, "context + osiroce isti broj -> deduplikovano na 1 red"
+    TcChk NedRefCorrectionID("SVT-ND-P1") = "SVT-ND-COR", "dedup red nosi CorrectionID iz context-a"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_GetNedovrseno_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+Private Function NedRefCount(ByVal ref As String) As Long
+    Dim c As Collection: Set c = GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    Dim i As Long, n As Long
+    For i = 1 To c.count
+        If StrComp(Trim$(CStr(c(i)("ref"))), ref, vbTextCompare) = 0 Then n = n + 1
+    Next i
+    NedRefCount = n
+End Function
+
+Private Function NedRefCorrectionID(ByVal ref As String) As String
+    Dim c As Collection: Set c = GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    Dim i As Long
+    For i = 1 To c.count
+        If StrComp(Trim$(CStr(c(i)("ref"))), ref, vbTextCompare) = 0 Then
+            NedRefCorrectionID = CStr(c(i)("correctionID"))
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Undo garda: blok sa storniranim roditeljem -> siroce (odbij); ziv roditelj/unbound -> ok.
 Public Sub Test_OtkupBlockDeadParent_Auto()
