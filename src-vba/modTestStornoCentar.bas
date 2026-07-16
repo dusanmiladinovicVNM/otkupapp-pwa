@@ -28,7 +28,59 @@ Public Sub Test_StornoCentar_All()
     Test_GetNedovrseno_Auto
     Test_UndoReverseGuard_Auto
     Test_ZbirnaRecalcInPlace_Auto
+    Test_PonistenjePrijemniceKaskada_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' PONISTENJE prijemnice = uzvodna kaskada (649e904): zbirna 1:1 -> storno zbirne +
+' njenih otpremnica + prijemnice. DUPLI NAMERNO ostaje list. Egzekucija (ne samo odluka).
+Public Sub Test_PonistenjePrijemniceKaskada_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array("SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
+              Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z", "I", 100, 10)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
+
+    Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True)
+    TcChk CBool(rA("success")), "PONISTENJE prijemnice -> success"
+    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KA-Z") = 0, "zbirna stornirana (uzvodna kaskada)"
+    TcChk TcCountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "SVT-KA-Z") = 0, "otpremnica te zbirne stornirana"
+    TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KA-P") = 0, "prijemnica stornirana"
+
+    ' --- Lanac B: DUPLI -> NAMERNO list (zbirna/otpremnica prezivljavaju) ---
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array("SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
+              Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z", "I", 100, 10)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
+
+    Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True)
+    TcChk CBool(rB("success")), "DUPLI prijemnica -> success"
+    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KB-Z") = 1, "DUPLI: zbirna ostaje AKTIVNA (list, ne kaskada)"
+    TcChk TcCountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "SVT-KB-Z") = 1, "DUPLI: otpremnica ostaje AKTIVNA"
+    TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KB-P") = 0, "DUPLI: prijemnica stornirana (list)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_PonistenjePrijemniceKaskada_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' 3.2 odluka: auto-recalc IZDATE zbirne ostaje IN-PLACE (izveden agregat), NE
