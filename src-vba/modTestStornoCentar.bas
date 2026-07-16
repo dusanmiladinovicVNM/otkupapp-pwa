@@ -48,7 +48,7 @@ Public Sub Test_ZbirnaRecalcInPlace_Auto()
     TcChk RecalculateZbirnaFromOtpremnice_TX("SVT-ZR-Z1", "SVT-ZR-COR", "test") = True, "recalk izdate zbirne -> True"
     TcChk Val(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZR-ID", COL_ZBR_KOLICINA))) = 0, "total spusten na 0 (nema otpremnica)"
     TcChk UCase$(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZR-ID", COL_STORNIRANO))) <> "DA", "isti red ostaje AKTIVAN (in-place, ne re-verzija)"
-    TcChk CountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ZR-Z1") = 1, "nema novog zbirna reda (bez re-verzionisanja)"
+    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ZR-Z1") = 1, "nema novog zbirna reda (bez re-verzionisanja)"
 
     tx.RollbackTx: Set tx = Nothing
     Exit Sub
@@ -373,4 +373,23 @@ End Sub
 
 Private Function NzS(ByVal v As Variant) As String
     If IsError(v) Or IsNull(v) Or IsEmpty(v) Then NzS = "" Else NzS = Trim$(CStr(v))
+End Function
+
+' Broj AKTIVNIH (ne-storniranih) redova gde col=val (CountActive u modStornoFlow je Private).
+Private Function TcCountActive(ByVal tbl As String, ByVal col As String, ByVal val As String) As Long
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cKey As Long, cSt As Long
+    cKey = GetColumnIndex(tbl, col)
+    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    If cKey = 0 Then Exit Function
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKey))) = Trim$(val) Then
+            Dim isStor As Boolean: isStor = False
+            If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
+            If Not isStor Then n = n + 1
+        End If
+    Next i
+    TcCountActive = n
 End Function
