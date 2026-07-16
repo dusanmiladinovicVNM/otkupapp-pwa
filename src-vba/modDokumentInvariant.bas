@@ -24,6 +24,12 @@ Option Explicit
 Private Const MOD_NAME As String = "modDokumentInvariant"
 Private Const EPS_KG As Double = 0.01
 
+' Test-observability seam: Monitor_Event je HTTP (nema lokalni red) i moze biti
+' iskljucen, pa se emisija audita ne moze asertovati direktno. AuditIssuedZbirnaChange
+' usput postavlja ovaj marker (delta poslednjeg audita izdate zbirne) da regres-test
+' potvrdi da je gate-putanja (izdato + promena) stvarno prosla. Ne utice na ponasanje.
+Private mLastIssuedZbirnaAudit As String
+
 ' ============================================================
 ' Per-klasa suma AKTIVNIH otpremnica za dati BrojZbirne.
 ' Vraca Scripting.Dictionary sa kljucevima:
@@ -399,6 +405,10 @@ Private Sub AuditIssuedZbirnaChange(ByVal brojZbirne As String, ByVal klasa As S
         ByVal oldKg As Double, ByVal newKg As Double, ByVal oldAmb As Long, ByVal newAmb As Long, _
         ByVal correctionID As String, ByVal reason As String)
     On Error Resume Next
+    ' Test-observability marker (pre Monitor_Event-a: belezi da je gate prosla, nezavisno od HTTP-a).
+    mLastIssuedZbirnaAudit = brojZbirne & "|K" & klasa & _
+        "|kg " & Format$(oldKg, "0.##") & "->" & Format$(newKg, "0.##") & _
+        "|amb " & oldAmb & "->" & newAmb
     Dim cidLabel As String: cidLabel = correctionID
     If Len(cidLabel) = 0 Then cidLabel = "(auto-recalc)"
     Dim corr As String: corr = correctionID
@@ -411,6 +421,14 @@ Private Sub AuditIssuedZbirnaChange(ByVal brojZbirne As String, ByVal klasa As S
     Monitor_Event eventType:="ZBIRNA_IZDATA_RECALC", severity:="WARN", _
         message:=msg, moduleName:=MOD_NAME, procedureName:="RecalculateZbirnaFromOtpremnice_TX", _
         entityType:="Zbirna", entityID:=brojZbirne, correlationId:=corr
+End Sub
+
+' Test-observability: poslednji audit izdate zbirne (delta) + reset. Samo za regres-test.
+Public Function LastIssuedZbirnaAudit() As String
+    LastIssuedZbirnaAudit = mLastIssuedZbirnaAudit
+End Function
+Public Sub ResetIssuedZbirnaAudit()
+    mLastIssuedZbirnaAudit = ""
 End Sub
 
 Private Function SafeDbl(ByVal v As Variant) As Double
