@@ -29,7 +29,49 @@ Public Sub Test_StornoCentar_All()
     Test_UndoReverseGuard_Auto
     Test_ZbirnaRecalcInPlace_Auto
     Test_PonistenjePrijemniceKaskada_Auto
+    Test_StornoJournalUndo_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' Storno-zurnal: LOSSLESS "Vrati storno" za otkup -> storno obrise tblNovac.OtkupID,
+' undo ga preko zurnala VRACA (glavni bug review #5). Egzekucija: StornoOtkup_TX ->
+' UndoStorno_TX(Otkup, broj). Rollback-safe.
+Public Sub Test_StornoJournalUndo_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore                 ' tabela mora postojati za snapshot
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_KOLICINA), _
+              Array("SVT-SJ-OID", "SVT-SJ-B", "I", 10)
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
+              Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP)
+    TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), _
+              Array("SVT-SJ-NID", "SVT-SJ-OID")
+
+    ' --- STORNO (journaled) ---
+    TcChk StornoOtkup_TX("SVT-SJ-OID") = True, "StornoOtkup_TX -> True"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SJ-OID", COL_STORNIRANO))) = "DA", "otkup stornirano"
+    TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-SJ-AID", COL_STORNIRANO))) = "DA", "ambalaza stornirana"
+    TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-SJ-NID", COL_NOV_OTKUP_ID)) = "", "novac OtkupID obrisan (storno)"
+    TcChk Len(LatestOpFor(DOK_TIP_OTKUP, "SVT-SJ-B")) > 0, "zurnal operacija zabelezena"
+
+    ' --- UNDO (lossless preko zurnala) ---
+    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-SJ-B") = True, "UndoStorno_TX (zurnal) -> True"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SJ-OID", COL_STORNIRANO))) <> "DA", "otkup vracen (aktivan)"
+    TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-SJ-AID", COL_STORNIRANO))) <> "DA", "ambalaza vracena"
+    TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-SJ-NID", COL_NOV_OTKUP_ID)) = "SVT-SJ-OID", "novac OtkupID VRACEN (lossless)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalUndo_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' PONISTENJE prijemnice = uzvodna kaskada (649e904): zbirna 1:1 -> storno zbirne +

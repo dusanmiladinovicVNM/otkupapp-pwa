@@ -1014,6 +1014,13 @@ Public Sub EnsureStornoVezeSchemaCore()
               COL_SV_MESSAGE, COL_SV_NEEDS_RECOVERY, COL_SV_RECOVERY_ACTION)
 End Sub
 
+' Storno operacioni zurnal (append-only cell-level trag za lossless undo).
+Public Sub EnsureStornoZurnalSchemaCore()
+    EnsureDataTable TBL_STORNO_ZURNAL, "StornoZurnal", _
+        Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_TS, COL_SZ_DOCTYPE, COL_SZ_BROJ, _
+              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA)
+End Sub
+
 Public Sub EnsureStornoVezeSchema()
     On Error GoTo EH
 
@@ -1149,6 +1156,10 @@ Public Sub EnsureRuntimeSchema()
     ' Centralni storno/correction context (tblStornoVeze). Idempotentno; nastane
     ' automatski posle self-update-a KODA. EnsureDataTable je no-op kad postoji.
     EnsureStornoVezeSchemaCore
+
+    ' Storno operacioni zurnal (tblStornoZurnal) za lossless "Vrati storno".
+    ' Idempotentno; nastane automatski posle self-update-a KODA.
+    EnsureStornoZurnalSchemaCore
 
     ' Sledljivost ispravki (ADR-0002 / Faza 7). Idempotentno; nastane automatski
     ' posle self-update-a KODA (bez rucnog Alt+F8).

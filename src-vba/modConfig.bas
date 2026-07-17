@@ -747,6 +747,25 @@ Public Const COL_SV_MESSAGE As String = "Message"
 Public Const COL_SV_NEEDS_RECOVERY As String = "NeedsRecovery"
 Public Const COL_SV_RECOVERY_ACTION As String = "RecoveryAction"
 
+' ============================================================
+' STORNO OPERACIONI ZURNAL (tblStornoZurnal) - append-only cell-level trag za
+' lossless "Vrati storno" (pravi inverz). Jedna operacija = jedan OperationID sa
+' vise detalj-redova (Tabela | RowID(PK) | Kolona | StaraVrednost). Undo vraca
+' svaku celiju na StaraVrednost i cilja SAMO tu operaciju (resava reused-broj
+' rizik + vraca tblNovac.OtkupID koji je storno obrisao). Schema: modSetup.
+' Engine: modStornoZurnal.
+' ============================================================
+Public Const TBL_STORNO_ZURNAL As String = "tblStornoZurnal"
+Public Const COL_SZ_ID As String = "ZurnalID"
+Public Const COL_SZ_OP_ID As String = "OperationID"
+Public Const COL_SZ_TS As String = "Timestamp"
+Public Const COL_SZ_DOCTYPE As String = "DocType"
+Public Const COL_SZ_BROJ As String = "Broj"
+Public Const COL_SZ_TABELA As String = "Tabela"
+Public Const COL_SZ_ROWID As String = "RowID"
+Public Const COL_SZ_KOLONA As String = "Kolona"
+Public Const COL_SZ_STARA As String = "StaraVrednost"
+
 ' Modovi (poslovno znacenje storna) -- vidi modStornoFlow
 Public Const SV_MODE_ISPRAVKA As String = "ISPRAVKA_ODMAH"
 Public Const SV_MODE_DUPLI As String = "DUPLI_FANTOM"

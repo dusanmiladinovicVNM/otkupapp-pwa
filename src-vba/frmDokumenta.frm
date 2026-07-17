@@ -65,11 +65,11 @@ Private m_ambIPrijFullW As Single
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
 Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
-' UNDO (Vrati storno) je za sada SAKRIVEN iz produkcije: motor (UndoStorno_TX) je
-' konzervativan i NE vraca tblNovac vezu niti journalise konkretan row-set (review #5).
-' Ostaje dostupan kroz Test_UndoStorno (Alt+F8) dok pun storno-journal ne stigne.
-' Postavi na True TEK kad journal (StornoOperationID + novac veza) bude implementiran.
-Private Const UNDO_UI_ENABLED As Boolean = False
+' UNDO (Vrati storno): sada LOSSLESS za Otkup + Revers preko storno-zurnala
+' (modStornoZurnal) -- UndoStorno_TX vraca i tblNovac.OtkupID i cilja bas tu
+' operaciju. Dugme ukey ukljuceno za te tipove; chain (prijemnica/faktura/paleta)
+' se i dalje odbija u UndoStorno_TX dok se ne instrumentira u sledecem PR-u.
+Private Const UNDO_UI_ENABLED As Boolean = True    ' lossless za Otkup/Revers (zurnal)
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
 Private m_lstStorno As MSForms.ListBox

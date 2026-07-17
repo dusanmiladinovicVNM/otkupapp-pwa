@@ -124,6 +124,15 @@ Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String, _
     broj = Trim$(broj)
     If Len(broj) = 0 Then Err.Raise ERR_REC_BASE + 1, SRC, "Broj dokumenta je obavezan."
 
+    ' LOSSLESS put: ako postoji storno-zurnal operacija za (docType, broj) -> pravi
+    ' inverz preko zurnala (vraca i tblNovac.OtkupID + cilja bas tu generaciju).
+    ' Stara storna (pre zurnala) padaju na legacy best-effort ispod.
+    Dim opID As String: opID = LatestOpFor(docType, broj)
+    If Len(opID) > 0 Then
+        UndoStorno_TX = UndoOperation_TX(opID)
+        Exit Function
+    End If
+
     Select Case docType
         Case DOK_TIP_OTKUP
             ' Guard: ako vec postoji AKTIVAN otkup istog broja -> reverzija bi duplirala.

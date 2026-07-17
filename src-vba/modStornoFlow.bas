@@ -1403,6 +1403,7 @@ Public Function StornoSelectedBlocks_TX(ByVal ids As Collection) As Long
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL    ' zurnal (lossless undo) u istoj TX -> rollback ga povlaci
     Dim k As Long, n As Long
     For k = 1 To ids.count
         If Not StornoOtkup(CStr(ids(k))) Then
