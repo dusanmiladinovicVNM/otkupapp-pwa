@@ -48,11 +48,33 @@ Umesto `OtpremnicaID` (row-ID). Time re-verzija otpremnice ne dira blokove. Dodi
 otkup save, `GetBlokOtkupIDs`, `ActiveBlocksForFlow`, `GetOtpremnicaIDsByBroj`,
 `FreeOtkupBloksInline`, `ReassignOtkupToOtpremnica_TX`.
 
-### 3. Srce — 3 in-place rekalka → storno+novi (`modDokumentInvariant`)
-`RecalculateZbirnaFromOtpremnice_TX`, `RecalcOrStornoEmptyZbirna_TX`, `ApplyKlasaRecalc`:
-umesto upisa na postojeći zbirna red → **storno tekućih zbirna redova (BrojZbirne) +
-append novih** sa preračunom + `IspravkaOd`/`CorrectionID`. Deca (isti BrojZbirne)
-se ne diraju.
+### 3. Srce — auto-recalk zbirne (`modDokumentInvariant`) → AUDIT, ne re-verzija (revidirano 2026-07-15)
+
+> **Revizija posle A0 analize sync-a (2026-07-15).** Prvobitna zamisao (storno tekućih
+> zbirna redova + append novih **sa istim BrojZbirne**) je **odbačena** kao nebezbedna,
+> i sama ideja re-verzionisanja svakog auto-recalk-a je preispitana. Original je bio:
+> *„umesto upisa na postojeći zbirna red → storno + append novih sa preračunom"*.
+
+**Nalazi A0 (dokazano, file:line u analizi):**
+1. **Sync je bezbedan na nov `ZbirnaID`.** `ZbirnaID` je čisto master-interni — nikad
+   ne prelazi sync granicu; ceo lanac (PWA⇄GAS⇄master) ključa na `ClientRecordID`.
+   Nov `ZbirnaID` za istu zbirnu je sync-u nevidljiv (nema duplikata/gubitka veze).
+2. **ALI isti `BrojZbirne` na dva aktivna reda je nebezbedan.** `BrojZbirne` je interni
+   join-ključ celog lanca (otpremnica→zbirna, otkup-blok lookup, recovery, izveštaji);
+   dva živa reda istog broja se sudaraju. `StampIspravkaTrace` k tome **no-op** kad
+   `newBroj == oldBroj`.
+3. **Eksplicitna ISPRAVKA zbirne VEĆ radi pravilan append-only** (`CompleteZbirnaIspravka`):
+   nov `BrojZbirne` + relink otpremnica/prijemnica + rekalk + validacija + trace.
+4. **Auto-recalk je izveden agregat** (zbirna = suma aktivnih otpremnica), ne autorska
+   korekcija. Puno re-verzionisanje pri svakom recalk-u = ogroman churn (broj zbirne se
+   menja pod nogama operatera, sva deca se relinkuju) bez poslovne vrednosti.
+
+**Odluka:** `RecalculateZbirnaFromOtpremnice_TX` / `ApplyKlasaRecalc` **ostaju in-place**
+(izveden agregat), ali kad recalk promeni **IZDATU** zbirnu (`DocIsIssued`) → upisuje
+se **audit-trag** (`Monitor_Event ZBIRNA_IZDATA_RECALC`, WARN): `CorrectionID` + razlog +
+`stara→nova` (kg/amb) po klasi. Tako izmena izdatog dokumenta ostavlja trag (ADR-0001)
+bez nebezbednog re-verzionisanja. Eksplicitne korekcije i dalje idu kroz
+`CompleteZbirnaIspravka` (pravi append-only, nov broj). Test: `Test_ZbirnaRecalcInPlace_Auto`.
 
 ### 4. Relinkovi — VEĆINA NESTAJE
 Sa stabilnim ključem + append-only, re-verzija ne traži relink. Ostaje samo pravi

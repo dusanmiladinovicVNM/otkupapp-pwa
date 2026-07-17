@@ -26,7 +26,124 @@ Public Sub Test_StornoCentar_All()
     Test_GetActiveDocumentsForStorno_Auto
     Test_StornoSelectedBlocks_Auto
     Test_GetNedovrseno_Auto
+    Test_UndoReverseGuard_Auto
+    Test_ZbirnaRecalcInPlace_Auto
+    Test_PonistenjePrijemniceKaskada_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' PONISTENJE prijemnice = uzvodna kaskada (649e904): zbirna 1:1 -> storno zbirne +
+' njenih otpremnica + prijemnice. DUPLI NAMERNO ostaje list. Egzekucija (ne samo odluka).
+Public Sub Test_PonistenjePrijemniceKaskada_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+
+    ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array("SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
+              Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z", "I", 100, 10)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
+
+    Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True)
+    TcChk CBool(rA("success")), "PONISTENJE prijemnice -> success"
+    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KA-Z") = 0, "zbirna stornirana (uzvodna kaskada)"
+    TcChk TcCountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "SVT-KA-Z") = 0, "otpremnica te zbirne stornirana"
+    TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KA-P") = 0, "prijemnica stornirana"
+
+    ' --- Lanac B: DUPLI -> NAMERNO list (zbirna/otpremnica prezivljavaju) ---
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array("SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
+              Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z", "I", 100, 10)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
+
+    Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True)
+    TcChk CBool(rB("success")), "DUPLI prijemnica -> success"
+    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KB-Z") = 1, "DUPLI: zbirna ostaje AKTIVNA (list, ne kaskada)"
+    TcChk TcCountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "SVT-KB-Z") = 1, "DUPLI: otpremnica ostaje AKTIVNA"
+    TcChk TcCountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-KB-P") = 0, "DUPLI: prijemnica stornirana (list)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_PonistenjePrijemniceKaskada_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' 3.2 odluka: auto-recalc IZDATE zbirne ostaje IN-PLACE (izveden agregat), NE
+' re-verzionise se (nov BrojZbirne bi razbio lookup-e; sync je bezbedan ali interni
+' join nije). Audit-trag ide u Monitoring. Test: recalc bez otpremnica -> stara
+' vrednost -> 0 na ISTOM redu, bez novog zbirna reda.
+Public Sub Test_ZbirnaRecalcInPlace_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    ' izdata (default) aktivna zbirna sa zastarelim totalom, bez otpremnica
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array("SVT-ZR-ID", "SVT-ZR-Z1", "I", 999, 9)
+
+    ResetIssuedZbirnaAudit
+    TcChk RecalculateZbirnaFromOtpremnice_TX("SVT-ZR-Z1", "SVT-ZR-COR", "test") = True, "recalk izdate zbirne -> True"
+    TcChk Val(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZR-ID", COL_ZBR_KOLICINA))) = 0, "total spusten na 0 (nema otpremnica)"
+    TcChk UCase$(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZR-ID", COL_STORNIRANO))) <> "DA", "isti red ostaje AKTIVAN (in-place, ne re-verzija)"
+    TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ZR-Z1") = 1, "nema novog zbirna reda (bez re-verzionisanja)"
+    ' promena izdate zbirne (999->0) -> audit MORA da okine (gate: izdato + promena)
+    TcChk InStr(LastIssuedZbirnaAudit(), "SVT-ZR-Z1") > 0, "audit emitovan za izmenu izdate zbirne"
+
+    ' NEGATIVNO: recalk bez promene (total vec 0) -> audit NE sme da okine
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+              Array("SVT-ZR-ID0", "SVT-ZR-Z0", "I", 0, 0)
+    ResetIssuedZbirnaAudit
+    RecalculateZbirnaFromOtpremnice_TX "SVT-ZR-Z0"
+    TcChk Len(LastIssuedZbirnaAudit()) = 0, "nema audita kad se nista ne menja (0->0)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_ZbirnaRecalcInPlace_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' #5 undo: reverse dup-guard -> ne vraca revers ako vec postoji AKTIVAN isti broj+tip.
+Public Sub Test_UndoReverseGuard_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    ' A: samo storniran revers (nema aktivnog) -> undo prolazi (reaktivira)
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO), _
+              Array("SVT-UR-A1", "SVT-UR-RA", DOK_TIP_OM_IZLAZ_KOOP, "Da")
+    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-UR-RA") = True, "revers undo bez aktivnog -> prolazi"
+
+    ' B: AKTIVAN revers + storniran isti broj+tip -> guard odbija (bez ove garde bi duplirao)
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO), _
+              Array("SVT-UR-B1", "SVT-UR-RB", DOK_TIP_OM_IZLAZ_KOOP, "")
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO), _
+              Array("SVT-UR-B2", "SVT-UR-RB", DOK_TIP_OM_IZLAZ_KOOP, "Da")
+    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-UR-RB") = False, "revers undo uz AKTIVAN duplikat -> odbijeno"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_UndoReverseGuard_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' #4 objedinjeni recovery: GetNedovrseno nosi CorrectionID i DEDUPLIKUJE osirocene
@@ -318,4 +435,23 @@ End Sub
 
 Private Function NzS(ByVal v As Variant) As String
     If IsError(v) Or IsNull(v) Or IsEmpty(v) Then NzS = "" Else NzS = Trim$(CStr(v))
+End Function
+
+' Broj AKTIVNIH (ne-storniranih) redova gde col=val (CountActive u modStornoFlow je Private).
+Private Function TcCountActive(ByVal tbl As String, ByVal col As String, ByVal val As String) As Long
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cKey As Long, cSt As Long
+    cKey = GetColumnIndex(tbl, col)
+    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    If cKey = 0 Then Exit Function
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKey))) = Trim$(val) Then
+            Dim isStor As Boolean: isStor = False
+            If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
+            If Not isStor Then n = n + 1
+        End If
+    Next i
+    TcCountActive = n
 End Function

@@ -557,7 +557,7 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
 
     If StrComp(oldZbirna, newZbirna, vbTextCompare) = 0 Then
         If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) Then _
-            recOk = RecalculateZbirnaFromOtpremnice_TX(newZbirna)
+            recOk = RecalculateZbirnaFromOtpremnice_TX(newZbirna, correctionID, "storno/izmena otpremnice (ista zbirna)")
     Else
         ' Preseli nizvodni tok (prijemnica + paleta-stavke) sa stare na novu zbirnu.
         If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) And Len(oldZbirna) > 0 Then
@@ -575,15 +575,16 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
             Next p
         End If
         ' Rekalkulacija nove zbirne.
-        If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) Then recOk = RecalculateZbirnaFromOtpremnice_TX(newZbirna)
+        If Len(newZbirna) > 0 And ZbirnaPostoji(newZbirna) Then _
+            recOk = RecalculateZbirnaFromOtpremnice_TX(newZbirna, correctionID, "prevezivanje otpremnice na novu zbirnu")
         ' Stara zbirna: prazna (nema otpremnica ni prijemnica) -> STORNO; inace rekalkulisi.
         If Len(oldZbirna) > 0 And ZbirnaPostoji(oldZbirna) Then
             If CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, oldZbirna) > 0 Then
-                RecalculateZbirnaFromOtpremnice_TX oldZbirna
+                RecalculateZbirnaFromOtpremnice_TX oldZbirna, correctionID, "stara zbirna posle odlaska otpremnice"
             ElseIf CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, oldZbirna) = 0 Then
                 staraStornirana = StornoZbirna_TX(oldZbirna)
             Else
-                RecalculateZbirnaFromOtpremnice_TX oldZbirna    ' prijemnica bez cilja -> ne orphanuj
+                RecalculateZbirnaFromOtpremnice_TX oldZbirna, correctionID, "stara zbirna (prijemnica bez cilja)"
             End If
         End If
     End If
@@ -767,7 +768,7 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
     End If
 
     ' Rekalkulacija nove zbirne iz (sada prevezanih) otpremnica.
-    If Not RecalculateZbirnaFromOtpremnice_TX(newBroj) Then
+    If Not RecalculateZbirnaFromOtpremnice_TX(newBroj, correctionID, "ISPRAVKA: rekalk nove zbirne") Then
         MarkCorrectionManual correctionID, "Rekalkulisi novu zbirnu rucno / proveri Monitor.", _
             "Rekalkulacija nove zbirne " & newBroj & " nije uspela."
         r("message") = "Rekalkulacija nove zbirne nije uspela."

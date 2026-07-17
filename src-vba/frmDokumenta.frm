@@ -65,6 +65,11 @@ Private m_ambIPrijFullW As Single
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
 Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
+' UNDO (Vrati storno) je za sada SAKRIVEN iz produkcije: motor (UndoStorno_TX) je
+' konzervativan i NE vraca tblNovac vezu niti journalise konkretan row-set (review #5).
+' Ostaje dostupan kroz Test_UndoStorno (Alt+F8) dok pun storno-journal ne stigne.
+' Postavi na True TEK kad journal (StornoOperationID + novac veza) bude implementiran.
+Private Const UNDO_UI_ENABLED As Boolean = False
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
 Private m_lstStorno As MSForms.ListBox
@@ -4043,6 +4048,7 @@ End Sub
 ' se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos). Uz potvrdu.
 Private Sub m_btnStornoVrati_Click()
     On Error GoTo EH
+    If Not UNDO_UI_ENABLED Then Exit Sub          ' undo sakriven iz produkcije
     If m_lstStorno Is Nothing Then Exit Sub
     Dim idx As Long: idx = m_lstStorno.ListIndex
     If idx < 0 Then
@@ -4148,8 +4154,11 @@ Private Sub EnsureStorniraniPanel()
 
     ' "Vrati storno" (dole levo) - radi za izabran OTKUP ili REVERS red; ostali
     ' tipovi se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos).
-    Set m_btnStornoVrati = Me.Controls.Add("Forms.CommandButton.1", "btnStornoVratiRT", True)
-    StylePrimaryButton m_btnStornoVrati, "Vrati storno (Otkup/Revers)"
+    ' Sakriveno iz produkcije dok journal ne stigne (vidi UNDO_UI_ENABLED).
+    If UNDO_UI_ENABLED Then
+        Set m_btnStornoVrati = Me.Controls.Add("Forms.CommandButton.1", "btnStornoVratiRT", True)
+        StylePrimaryButton m_btnStornoVrati, "Vrati storno (Otkup/Revers)"
+    End If
 
     m_stornoBuilt = True
     Exit Sub
@@ -4176,7 +4185,8 @@ Private Sub LayoutStorniraniPanel()
     Dim listH As Single: listH = h - 2 * PAD - HDR - BTNH - PAD
     If listH < 60 Then listH = 60
     m_lstStorno.Move PAD, PAD + HDR, w - 2 * PAD, listH
-    m_btnStornoVrati.Move PAD, PAD + HDR + listH + PAD, 220, BTNH
+    If Not m_btnStornoVrati Is Nothing Then _
+        m_btnStornoVrati.Move PAD, PAD + HDR + listH + PAD, 220, BTNH
 End Sub
 
 ' Napuni listu: header red, pa po tipu grupni naslov + redovi. Total u naslovu.
@@ -4257,19 +4267,19 @@ Private Sub SetStorniraniPanelVisible(ByVal bShow As Boolean)
         m_lstStorno.visible = True
         m_stornoTitle.visible = True
         m_btnStornoClose.visible = True
-        m_btnStornoVrati.visible = True
+        If Not m_btnStornoVrati Is Nothing Then m_btnStornoVrati.visible = True
         ' Na vrh (redosled: back -> lista -> naslov -> zatvori).
         m_stornoBack.ZOrder 0
         m_lstStorno.ZOrder 0
         m_stornoTitle.ZOrder 0
         m_btnStornoClose.ZOrder 0
-        m_btnStornoVrati.ZOrder 0
+        If Not m_btnStornoVrati Is Nothing Then m_btnStornoVrati.ZOrder 0
     Else
         m_stornoBack.visible = False
         m_lstStorno.visible = False
         m_stornoTitle.visible = False
         m_btnStornoClose.visible = False
-        m_btnStornoVrati.visible = False
+        If Not m_btnStornoVrati Is Nothing Then m_btnStornoVrati.visible = False
         RestoreBehindPanel
     End If
 End Sub
