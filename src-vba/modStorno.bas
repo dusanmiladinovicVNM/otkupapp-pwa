@@ -133,6 +133,11 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
         tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     End If
 
+    ' JEDNA zurnal operacija za CEO dokument (obe klase istog broja) -> dvoklasni
+    ' otkup se vraca kao celina (LatestOpFor daje jedan OperationID). Inner StornoOtkup
+    ' pozivi vide aktivan op (owns=False) i dodaju celije istom OperationID-u.
+    ' Zatvara se PRE kaskade da otpremnica/zbirna/prijemnica NE udju u otkup op.
+    Dim ownsOp As Boolean: ownsOp = BeginStornoOp(DOK_TIP_OTKUP, brDok)
     Dim k As Long
     For k = 1 To ids.count
         If Not StornoOtkup(CStr(ids(k))) Then
@@ -140,6 +145,7 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
                       "StornoOtkup nije uspeo. OtkupID=" & CStr(ids(k))
         End If
     Next k
+    EndStornoOp ownsOp
 
     ' Autohladnjaca kaskada: za svaki BrojZbirne bloka obori otpremnicu, zbirnu i
     ' prijemnicu (idempotentno; faktura se NAMERNO ne dira). Van hladnjace: preskace.
@@ -161,6 +167,7 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
     Exit Function
 
 EH:
+    EndStornoOp ownsOp                     ' ne ostavi op-kontekst otvoren posle greske
     HandleStornoTxError SRC, "Otkup", brDok, tx
     StornoOtkupByBrDok_TX = False
 End Function

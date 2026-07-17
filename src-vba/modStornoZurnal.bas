@@ -52,21 +52,33 @@ Public Sub EndStornoOp(ByVal owns As Boolean)
     mActive = False: mOpID = "": mDocType = "": mBroj = ""
 End Sub
 
+' Force-reset op-konteksta (za EH putanje entry _TX-ova) -> nikad ne ostavi op
+' otvoren posle greske (inace bi sledeci storno pisao u pogresnu/mrtvu op).
+Public Sub AbortStornoOp()
+    mActive = False: mOpID = "": mDocType = "": mBroj = ""
+End Sub
+
 Public Function StornoOpActive() As Boolean
     StornoOpActive = mActive
 End Function
 
 ' JournalCell: zabelezi (tabela, RowID(PK), kolona, STARA vrednost) za tekucu op.
 ' No-op ako operacija nije aktivna (backward-compatible za ne-instrumentirane putanje).
+' FAIL-CLOSED: ako upis padne dok je op aktivan, DIZE gresku -> storno primitiva to
+' reraise-uje -> _TX rollback-uje i podatke i (parcijalni) zurnal. Bez tihog gubitka
+' upisa: lossless undo zavisi od KOMPLETNOG zurnala.
 Public Sub JournalCell(ByVal tbl As String, ByVal rowID As String, _
                        ByVal col As String, ByVal oldVal As Variant)
-    On Error Resume Next
+    Const SRC As String = MOD_NAME & ".JournalCell"
     If Not mActive Then Exit Sub
     Dim zid As String: zid = GetNextID(TBL_STORNO_ZURNAL, COL_SZ_ID, "ZUR-")
     ' Redosled MORA pratiti EnsureStornoZurnalSchemaCore:
     ' ZurnalID, OperationID, Timestamp, DocType, Broj, Tabela, RowID, Kolona, StaraVrednost
-    AppendRow TBL_STORNO_ZURNAL, Array(zid, mOpID, Format$(Now, "yyyy-mm-dd hh:nn:ss"), _
-        mDocType, mBroj, tbl, CStr(rowID), col, CStr(oldVal))
+    If AppendRow(TBL_STORNO_ZURNAL, Array(zid, mOpID, Format$(Now, "yyyy-mm-dd hh:nn:ss"), _
+        mDocType, mBroj, tbl, CStr(rowID), col, CStr(oldVal))) = 0 Then
+        Err.Raise ERR_SZ_BASE + 10, SRC, "Zurnal upis nije uspeo (" & tbl & "." & col & _
+            ") -> storno se prekida (lossless garancija)."
+    End If
 End Sub
 
 ' ============================================================
@@ -103,15 +115,23 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
     Next i
     If rows.count = 0 Then Err.Raise ERR_SZ_BASE + 3, SRC, "Operacija nije nadjena: " & opID
 
-    ' Garde (reuse postojecih iz modStornoRecovery): za Otkup ne dozvoli undo ako vec
-    ' postoji AKTIVAN otkup istog broja (dup), niti ako je roditelj bloka mrtav (siroce).
-    If docType = DOK_TIP_OTKUP Then
-        If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) > 0 Then _
-            Err.Raise ERR_SZ_BASE + 4, SRC, "Vec postoji AKTIVAN otkup " & broj & " -> undo bi duplirao. Odbijeno."
-        Dim dead As String: dead = OtkupBlockDeadParent(broj)
-        If Len(dead) > 0 Then _
-            Err.Raise ERR_SZ_BASE + 5, SRC, "Roditelj " & dead & " je storniran -> blok bi ostao siroce. Odbijeno."
-    End If
+    ' ZAJEDNICKA garda (isti guard i za legacy i za zurnal put): Otkup active-dup +
+    ' mrtav-roditelj; revers (OM) active-dup ambalaze (#134 garda - zurnal put ju je
+    ' ranije zaobilazio). Bez ovoga journaled revers undo bi duplirao ledger.
+    Dim gr As String: gr = UndoGuardReason(docType, broj)
+    If Len(gr) > 0 Then Err.Raise ERR_SZ_BASE + 4, SRC, gr
+
+    ' Pre-validacija (SVE-ILI-NISTA): svaka celija mora biti restore-abilna PRE nego
+    ' sto diramo ijedan red -> undo je atomican i ne laze uspeh nad delimicnim vracanjem.
+    For i = 1 To rows.count
+        Dim vt As String: vt = CStr(rows(i)(0))
+        Dim vpk As String: vpk = PkColForTable(vt)
+        If Len(vpk) = 0 Then Err.Raise ERR_SZ_BASE + 7, SRC, "Nepodrzana tabela u zurnalu: " & vt
+        If GetColumnIndex(vt, CStr(rows(i)(2))) = 0 Then _
+            Err.Raise ERR_SZ_BASE + 8, SRC, "Kolona ne postoji: " & vt & "." & CStr(rows(i)(2))
+        If FindRowIndexByKey(vt, vpk, CStr(rows(i)(1))) = 0 Then _
+            Err.Raise ERR_SZ_BASE + 9, SRC, "Ciljni red ne postoji: " & vt & " " & CStr(rows(i)(1))
+    Next i
 
     Set tx = New clsTransaction
     tx.BeginTx

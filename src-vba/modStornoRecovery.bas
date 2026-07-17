@@ -304,6 +304,32 @@ Private Function ActiveAmbalazaDokExists(ByVal dokID As String, ByVal dokTip As 
     Next i
 End Function
 
+' ZAJEDNICKA undo garda (koristi je i legacy put i zurnal-put UndoOperation_TX).
+' Vraca "" ako je undo bezbedan; inace razlog odbijanja. Za Otkup: aktivan-dup +
+' mrtav-roditelj. Za revers (OM): aktivan-dup ambalaze istog broj+tip (#134 garda -
+' zurnal-put ju je ranije zaobilazio). Ostali tipovi: bez posebne garde ovde.
+Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) As String
+    On Error GoTo EH
+    Select Case docType
+        Case DOK_TIP_OTKUP
+            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) > 0 Then
+                UndoGuardReason = "Vec postoji AKTIVAN otkup " & broj & " -> undo bi duplirao. Odbijeno."
+                Exit Function
+            End If
+            Dim dead As String: dead = OtkupBlockDeadParent(broj)
+            If Len(dead) > 0 Then _
+                UndoGuardReason = "Roditelj " & dead & " je storniran -> blok bi ostao siroce. Odbijeno."
+        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
+            If ActiveAmbalazaDokExists(broj, docType) Then _
+                UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " [" & docType & _
+                    "] -> undo bi duplirao. Odbijeno."
+    End Select
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".UndoGuardReason"
+    UndoGuardReason = "Greska pri proveri undo garde."
+End Function
+
 Private Sub MonUndo(ByVal procName As String, ByVal entityType As String, _
                    ByVal entityID As String, ByVal msg As String)
     On Error Resume Next

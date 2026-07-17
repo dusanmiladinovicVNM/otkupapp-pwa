@@ -30,6 +30,9 @@ Public Sub Test_StornoCentar_All()
     Test_ZbirnaRecalcInPlace_Auto
     Test_PonistenjePrijemniceKaskada_Auto
     Test_StornoJournalUndo_Auto
+    Test_StornoJournalDualClass_Auto
+    Test_StornoJournalReversGuard_Auto
+    Test_StornoJournalUndoValidation_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
 End Sub
 
@@ -67,11 +70,90 @@ Public Sub Test_StornoJournalUndo_Auto()
     TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-SJ-AID", COL_STORNIRANO))) <> "DA", "ambalaza vracena"
     TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-SJ-NID", COL_NOV_OTKUP_ID)) = "SVT-SJ-OID", "novac OtkupID VRACEN (lossless)"
 
+    ' P2 7: ponovni undo iste op -> odbijen (active-dup guard; otkup je sada aktivan)
+    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-SJ-B") = False, "ponovni undo iste op -> odbijen (active-dup)"
+
     tx.RollbackTx: Set tx = Nothing
     Exit Sub
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_StornoJournalUndo_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' Blocker 3 fix: dvoklasni otkup (StornoOtkupByBrDok_TX) -> JEDAN OperationID ->
+' undo vraca OBE klase (ranije je LatestOpFor davao samo poslednju klasu).
+Public Sub Test_StornoJournalDualClass_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_KOLICINA), Array("SVT-DC-1", "SVT-DC-B", "I", 10)
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA, COL_OTK_KOLICINA), Array("SVT-DC-2", "SVT-DC-B", "II", 5)
+
+    TcChk StornoOtkupByBrDok_TX("SVT-DC-B") = True, "StornoOtkupByBrDok_TX (dvoklasni) -> True"
+    TcChk Len(LatestOpFor(DOK_TIP_OTKUP, "SVT-DC-B")) > 0, "dvoklasni -> zabelezen op"
+    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-DC-B") = True, "undo dvoklasnog -> True"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-DC-1", COL_STORNIRANO))) <> "DA", "Klasa I vracena"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-DC-2", COL_STORNIRANO))) <> "DA", "Klasa II vracena (isti op)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalDualClass_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' Blocker 2 fix: journaled revers undo NE zaobilazi #134 dup-gardu.
+Public Sub Test_StornoJournalReversGuard_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    ' aktivan revers -> storno (kreira zurnal op)
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), Array("SVT-RG-1", "SVT-RG-R", DOK_TIP_OM_IZLAZ_KOOP)
+    TcChk StornoOMKoopByBrDok_TX("SVT-RG-R", DOK_TIP_OM_IZLAZ_KOOP) = True, "revers storno (journaled) -> True"
+    ' unesi NOVI aktivan revers istog broj+tip
+    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), Array("SVT-RG-2", "SVT-RG-R", DOK_TIP_OM_IZLAZ_KOOP)
+    ' undo preko ZURNALA mora biti ODBIJEN (dup guard #134, ranije zaobidjen)
+    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-RG-R") = False, "journaled revers undo uz aktivan dup -> ODBIJEN"
+    TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RG-1", COL_STORNIRANO))) = "DA", "stari revers ostao storniran (nije dupliran)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalReversGuard_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' P2 5: undo je SVE-ILI-NISTA -> zurnal red sa nepostojecim ciljem -> undo False, bez mutacije.
+Public Sub Test_StornoJournalUndoValidation_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_STORNO_ZURNAL, Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_DOCTYPE, COL_SZ_BROJ, _
+              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA), _
+              Array("ZUR-X", "SOP-VALX", DOK_TIP_OTKUP, "SVT-VL-B", TBL_OTKUP, "SVT-VL-NEPOSTOJI", COL_STORNIRANO, "")
+    TcChk UndoOperation_TX("SOP-VALX") = False, "undo sa nepostojecim ciljem -> False (pre-validacija, sve-ili-nista)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalUndoValidation_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' PONISTENJE prijemnice = uzvodna kaskada (649e904): zbirna 1:1 -> storno zbirne +

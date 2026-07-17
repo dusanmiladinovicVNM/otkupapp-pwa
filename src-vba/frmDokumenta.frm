@@ -4073,8 +4073,18 @@ Private Sub m_btnStornoVrati_Click()
         Exit Sub
     End If
 
+    ' Produkciono dugme radi SAMO lossless (zurnal) undo. Storna napravljena PRE
+    ' zurnala (stariji build) nemaju op -> legacy best-effort NE vraca novac vezu, pa
+    ' se iz produkcije ODBIJA (dostupno je jedino kroz Test_UndoStorno macro za admina).
+    If Len(LatestOpFor(undoArg, broj)) = 0 Then
+        MsgBox "Ovo storno je napravljeno PRE storno-zurnala -> lossless 'Vrati storno' " & _
+               "nije moguc (novac veza se ne bi vratila)." & vbCrLf & vbCrLf & _
+               "Koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     If MsgBox("Vratiti storno: " & tip & " " & broj & "?" & vbCrLf & vbCrLf & _
-              "(Reaktivira dokument i njegovu ambalazu.)", _
+              "(Reaktivira dokument, ambalazu i novac vezu iz zurnala.)", _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
     If UndoStorno_TX(undoArg, broj) Then
