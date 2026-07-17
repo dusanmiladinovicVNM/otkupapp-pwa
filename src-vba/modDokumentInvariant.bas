@@ -24,6 +24,12 @@ Option Explicit
 Private Const MOD_NAME As String = "modDokumentInvariant"
 Private Const EPS_KG As Double = 0.01
 
+' Test-observability seam: Monitor_Event je HTTP (nema lokalni red) i moze biti
+' iskljucen, pa se emisija audita ne moze asertovati direktno. AuditIssuedZbirnaChange
+' usput postavlja ovaj marker (delta poslednjeg audita izdate zbirne) da regres-test
+' potvrdi da je gate-putanja (izdato + promena) stvarno prosla. Ne utice na ponasanje.
+Private mLastIssuedZbirnaAudit As String
+
 ' ============================================================
 ' Per-klasa suma AKTIVNIH otpremnica za dati BrojZbirne.
 ' Vraca Scripting.Dictionary sa kljucevima:
@@ -233,7 +239,8 @@ End Function
 ' True na uspeh. Raise ako uopste nema zbirna reda za broj (nema zaglavlja za
 ' nasledjivanje) -> caller (modStornoFlow) to hvata kao MANUAL_REQUIRED.
 ' ============================================================
-Public Function RecalculateZbirnaFromOtpremnice_TX(ByVal brojZbirne As String) As Boolean
+Public Function RecalculateZbirnaFromOtpremnice_TX(ByVal brojZbirne As String, _
+        Optional ByVal correctionID As String = "", Optional ByVal reason As String = "") As Boolean
     Const SRC As String = MOD_NAME & ".RecalculateZbirnaFromOtpremnice_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -290,12 +297,14 @@ Public Function RecalculateZbirnaFromOtpremnice_TX(ByVal brojZbirne As String) A
     ' Klasa I
     ApplyKlasaRecalc SRC, brojZbirne, KLASA_I, rowI, _
         CDbl(o("kgI")), CLng(o("ambI")), CLng(o("nRowsI")), _
-        CStr(o("vrstaI")), CStr(o("sortaI")), CStr(o("tipAmbI")), templateRow
+        CStr(o("vrstaI")), CStr(o("sortaI")), CStr(o("tipAmbI")), templateRow, _
+        correctionID, reason
 
     ' Klasa II
     ApplyKlasaRecalc SRC, brojZbirne, KLASA_II, rowII, _
         CDbl(o("kgII")), CLng(o("ambII")), CLng(o("nRowsII")), _
-        CStr(o("vrstaII")), CStr(o("sortaII")), CStr(o("tipAmbII")), templateRow
+        CStr(o("vrstaII")), CStr(o("sortaII")), CStr(o("tipAmbII")), templateRow, _
+        correctionID, reason
 
     tx.CommitTx
     Set tx = Nothing
@@ -317,10 +326,32 @@ Private Sub ApplyKlasaRecalc(ByVal SRC As String, ByVal brojZbirne As String, _
                              ByVal klasa As String, ByVal existingRow As Long, _
                              ByVal kg As Double, ByVal amb As Long, ByVal nOtp As Long, _
                              ByVal vrsta As String, ByVal sorta As String, _
-                             ByVal tipAmb As String, ByVal templateRow As Long)
+                             ByVal tipAmb As String, ByVal templateRow As Long, _
+                             Optional ByVal correctionID As String = "", _
+                             Optional ByVal reason As String = "")
     If existingRow > 0 Then
+        ' Audit-trag (bez re-verzije): ako se IZDATA zbirna menja in-place, zabelezi
+        ' staru->novu vrednost + CorrectionID/razlog. Zbirna je izveden agregat (suma
+        ' aktivnih otpremnica) pa se NE re-verzionise, ali izmena izdatog dokumenta
+        ' mora ostaviti trag (ADR-0001/0002). Eksplicitna ISPRAVKA vec nosi svoj trace.
+        Dim oldKg As Double, oldAmb As Long
+        Dim zdata As Variant: zdata = GetTableData(TBL_ZBIRNA)
+        If IsArray(zdata) Then
+            Dim ck As Long, ca As Long
+            ck = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
+            ca = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB)
+            If ck > 0 Then oldKg = SafeDbl(zdata(existingRow, ck))
+            If ca > 0 Then oldAmb = SafeLng(zdata(existingRow, ca))
+        End If
+
         RequireUpdateCell TBL_ZBIRNA, existingRow, COL_ZBR_KOLICINA, kg, SRC
         RequireUpdateCell TBL_ZBIRNA, existingRow, COL_ZBR_KOL_AMB, amb, SRC
+
+        If (Abs(oldKg - kg) > EPS_KG) Or (oldAmb <> amb) Then
+            If DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne) Then
+                AuditIssuedZbirnaChange brojZbirne, klasa, oldKg, kg, oldAmb, amb, correctionID, reason
+            End If
+        End If
         Exit Sub
     End If
 
@@ -366,6 +397,49 @@ Private Sub ApplyKlasaRecalc(ByVal SRC As String, ByVal brojZbirne As String, _
                   "AppendRow zbirna (klasa " & klasa & ") nije uspeo."
     End If
 End Sub
+
+' Audit izmene IZDATE zbirne bez re-verzije (in-place recalc). Durabilan trag u
+' Monitoring-u: stara->nova vrednost + CorrectionID/razlog. WARN jer je dirnut izdat
+' dokument (operater/kupac mozda imaju stariju verziju).
+Private Sub AuditIssuedZbirnaChange(ByVal brojZbirne As String, ByVal klasa As String, _
+        ByVal oldKg As Double, ByVal newKg As Double, ByVal oldAmb As Long, ByVal newAmb As Long, _
+        ByVal correctionID As String, ByVal reason As String)
+    On Error Resume Next
+    ' Test-observability marker (pre Monitor_Event-a: belezi da je gate prosla, nezavisno od HTTP-a).
+    mLastIssuedZbirnaAudit = brojZbirne & "|K" & klasa & _
+        "|kg " & Format$(oldKg, "0.##") & "->" & Format$(newKg, "0.##") & _
+        "|amb " & oldAmb & "->" & newAmb
+    Dim cidLabel As String: cidLabel = correctionID
+    If Len(cidLabel) = 0 Then cidLabel = "(auto-recalc)"
+    Dim corr As String: corr = correctionID
+    If Len(corr) = 0 Then corr = brojZbirne
+    Dim msg As String
+    msg = "IZDATA zbirna " & brojZbirne & " [K" & klasa & "] promenjena in-place (bez re-verzije): " & _
+          "kg " & Format$(oldKg, "0.##") & "->" & Format$(newKg, "0.##") & ", " & _
+          "amb " & oldAmb & "->" & newAmb & ". CorrectionID=" & cidLabel
+    If Len(reason) > 0 Then msg = msg & ". Razlog: " & reason
+    Monitor_Event eventType:="ZBIRNA_IZDATA_RECALC", severity:="WARN", _
+        message:=msg, moduleName:=MOD_NAME, procedureName:="RecalculateZbirnaFromOtpremnice_TX", _
+        entityType:="Zbirna", entityID:=brojZbirne, correlationId:=corr
+End Sub
+
+' Test-observability: poslednji audit izdate zbirne (delta) + reset. Samo za regres-test.
+Public Function LastIssuedZbirnaAudit() As String
+    LastIssuedZbirnaAudit = mLastIssuedZbirnaAudit
+End Function
+Public Sub ResetIssuedZbirnaAudit()
+    mLastIssuedZbirnaAudit = ""
+End Sub
+
+Private Function SafeDbl(ByVal v As Variant) As Double
+    On Error Resume Next
+    If Not IsError(v) And Not IsNull(v) And Not IsEmpty(v) Then SafeDbl = CDbl(Val(CStr(v)))
+End Function
+
+Private Function SafeLng(ByVal v As Variant) As Long
+    On Error Resume Next
+    If Not IsError(v) And Not IsNull(v) And Not IsEmpty(v) Then SafeLng = CLng(Val(CStr(v)))
+End Function
 
 ' ============================================================
 ' ValidateOtpremnicaZbirnaImpact: uticaj prevezivanja otpremnice sa STARE na

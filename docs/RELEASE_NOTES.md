@@ -497,3 +497,14 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Performanse:** idle pre-warm keš browse-a (`Application.OnTime`, ~60s debounce) — otvaranje instant umesto 7–10 s.
 - **Regres-testovi:** `modTestStornoCentar` (`Test_StornoCentar_All`, Alt+F8) — rollback-safe auto-testovi (trace utiskivanje, Guard C, DocIsIssued, mrtvi roditelj bloka, impact agregat, aktivni dokumenti, blok-storno) + `Test_FindSingleActiveRow`.
 - **Rizik za podatke:** nizak — dopuna šeme je aditivna (nove kolone), postojeći tokovi netaknuti. Odloženo za sledeći PR: append-only re-verzionisanje zbirne (korak 3.2), „Vrati storno" (undo, review #5) dorada — trenutno konzervativno i verifikuje se kroz `Test_UndoStorno`. ASCII-only izvori; `.frx` netaknut.
+
+---
+
+## vba-v2.23.0 — 2026-07-15
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **kaljenje storno recovery-ja** — sledljivost izmene izdate zbirne (audit-trag) + zaštita „Vrati storno" (undo). Nastavak na v2.22.0; bez izmene poslovnih tokova, PWA/sync netaknut.
+
+- **Zbirna — audit-trag za in-place preračun izdate zbirne:** kad se **izdata** zbirna promeni automatskim preračunom (npr. storno jedne otpremnice iz zbirne sa više otpremnica), upisuje se durabilan trag u Monitoring (`ZBIRNA_IZDATA_RECALC`, WARN): `CorrectionID` + razlog + **stara→nova** vrednost (kg/amb) po klasi. Zbirna je izveden agregat (suma aktivnih otpremnica) pa se **ne re-verzionise** (nov broj bi razbio interne veze lanca), ali izmena izdatog dokumenta više nije tiha (ADR-0001). Eksplicitna **ISPRAVKA** zbirne i dalje ide punim append-only putem (nov `BrojZbirne` + relink + trace).
+  - Odluka doneta na osnovu analize sync-a: `ZbirnaID` je master-interni (sync ključa na `ClientRecordID`), pa je nov `ZbirnaID` sync-u nevidljiv — ali **isti `BrojZbirne`** na dva živa reda razbija interne lookup-e. Detalji: ADR-0002 sekcija 3 (revidirana).
+- **Undo („Vrati storno") — zaštita i sakrivanje iz produkcije:** motor `UndoStorno_TX` je konzervativan (ne vraća `tblNovac` vezu, ne journališe konkretan row-set — review #5), pa je **dugme sakriveno iz produkcije** (`UNDO_UI_ENABLED=False`); undo ostaje dostupan kroz `Test_UndoStorno` (Alt+F8) dok pun storno-journal ne stigne. Reverse (revers) grana dobija **dup-guard** (`ActiveAmbalazaDokExists`): odbija undo ako već postoji aktivan revers istog broj+tip (ranije bi duplirao).
+- **Regres-testovi:** dodati u `Test_StornoCentar_All` — `Test_ZbirnaRecalcInPlace_Auto` (recalk ostaje in-place, bez novog reda), `Test_UndoReverseGuard_Auto` (reverse dup-guard), `Test_GetNedovrseno_Auto` (recovery dedup/CorrectionID).
+- **Rizik za podatke:** nizak — nema izmene šeme; audit je dodatni upis u Monitoring, recalk ponašanje **nepromenjeno** (i dalje in-place). Odloženo: pun storno-journal (StornoOperationID + novac veza) + ponovno uključivanje undo dugmeta. ASCII-only izvori; `.frx` netaknut.

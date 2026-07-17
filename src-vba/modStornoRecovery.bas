@@ -161,6 +161,13 @@ Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String, _
 
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
             ' Revers je list (samo tblAmbalaza redovi po broj+dokTip). dokTip = docType.
+            ' Guard (paralela otkup dup-guardu): ako vec postoji AKTIVAN revers istog
+            ' broj+tip -> reverzija bi duplirala. Odbij. (Ranije je fantomski unmark-ovao
+            ' sve stornirane redove i bez ove provere.)
+            If ActiveAmbalazaDokExists(broj, docType) Then
+                Err.Raise ERR_REC_BASE + 6, SRC, "Vec postoji AKTIVAN revers " & broj & _
+                    " [" & docType & "] -> reverzija bi duplirala. Odbijeno."
+            End If
             Set tx = New clsTransaction
             tx.BeginTx
             tx.AddTableSnapshot TBL_AMBALAZA
@@ -265,6 +272,27 @@ Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As
         End If
     Next i
     UnmarkAmbalazaByDokument = n
+End Function
+
+' Postoji li AKTIVAN (ne-storniran) ambalaza red za dati dokument (broj) + tip?
+' Guard za reverse undo -> spreci duplikat ako revers vec ima zivu verziju.
+Private Function ActiveAmbalazaDokExists(ByVal dokID As String, ByVal dokTip As String) As Boolean
+    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+    Dim cDok As Long, cTip As Long, cSt As Long
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    cSt = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    If cDok = 0 Or cTip = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cDok))) = Trim$(dokID) _
+           And Trim$(CStr(data(i, cTip))) = Trim$(dokTip) Then
+            Dim isStor As Boolean: isStor = False
+            If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = UCase$(STORNO_DA))
+            If Not isStor Then ActiveAmbalazaDokExists = True: Exit Function
+        End If
+    Next i
 End Function
 
 Private Sub MonUndo(ByVal procName As String, ByVal entityType As String, _
