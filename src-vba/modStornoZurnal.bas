@@ -154,8 +154,11 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
             Err.Raise ERR_SZ_BASE + 13, SRC, "Stanje se promenilo posle storna (" & vt & "." & vcol & _
                 " = '" & curV & "', ocekivano '" & CStr(rows(i)(4)) & "') -> undo odbijen (ne gazi noviju izmenu)."
         End If
-        ' Otkup: PO REDU active-dup (re-izdata ista (broj,klasa) slot) -> odbij.
+        ' Otkup PO REDU: mrtav-roditelj (bas tog reda) + active-dup iste (broj,klasa) slot.
         If StrComp(vt, TBL_OTKUP, vbTextCompare) = 0 And StrComp(vcol, COL_STORNIRANO, vbTextCompare) = 0 Then
+            Dim dpr As String: dpr = OtkupBlockDeadParentByID(CStr(rows(i)(1)))
+            If Len(dpr) > 0 Then Err.Raise ERR_SZ_BASE + 15, SRC, "Roditelj/provera bloka " & _
+                CStr(rows(i)(1)) & ": " & dpr & " -> undo bi ostavio siroce. Odbijeno."
             If OtkupReissueDupExists(CStr(rows(i)(1))) Then _
                 Err.Raise ERR_SZ_BASE + 14, SRC, "Vec postoji AKTIVAN otkup iste (broj,klasa) kao red " & _
                     CStr(rows(i)(1)) & " -> undo bi duplirao. Odbijeno."
@@ -296,4 +299,86 @@ End Function
 Private Function OpNum4(ByVal id As String, ByVal prefix As String) As Long
     On Error Resume Next
     If Left$(id, Len(prefix)) = prefix Then OpNum4 = CLng(Mid$(id, Len(prefix) + 1))
+End Function
+
+' ============================================================
+' READ-MODEL za operation-centric "Vrati storno" UI. Lista undoable operacija
+' (NAJNOVIJE prvo): svaki dict {opID, ts, docType, broj, count, status}. status je
+' informativan (prikaz): "moguce" | "vec vraceno" | "izmenjeno". UI zove
+' UndoOperation_TX(opID) direktno -> cilja KONKRETNU operaciju (ne LatestOpFor po
+' broju) -> resava reused-broj (razne generacije = razliciti OperationID).
+' ============================================================
+Public Function GetUndoableStornoOperations() As Collection
+    Dim result As New Collection
+    Set GetUndoableStornoOperations = result
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_STORNO_ZURNAL)
+    If IsEmpty(data) Then Exit Function
+    Dim cOp As Long, cTs As Long, cDoc As Long, cBroj As Long
+    Dim cTab As Long, cRow As Long, cCol As Long, cOld As Long, cNew As Long
+    cOp = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID)
+    cTs = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TS)
+    cDoc = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_DOCTYPE)
+    cBroj = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_BROJ)
+    cTab = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA)
+    cRow = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID)
+    cCol = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_KOLONA)
+    cOld = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_STARA)
+    cNew = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_NOVA)
+    If cOp = 0 Then Exit Function
+
+    Dim ops As Object: Set ops = CreateObject("Scripting.Dictionary")
+    ops.CompareMode = vbTextCompare
+    Dim order As Collection: Set order = New Collection
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        Dim op As String: op = Trim$(CStr(data(i, cOp)))
+        If Len(op) > 0 Then
+            If Not ops.Exists(op) Then
+                Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+                d("opID") = op
+                d("ts") = TxZ(data, i, cTs)
+                d("docType") = TxZ(data, i, cDoc)
+                d("broj") = TxZ(data, i, cBroj)
+                d("count") = 0&
+                d("firstTab") = TxZ(data, i, cTab)
+                d("firstRow") = TxZ(data, i, cRow)
+                d("firstCol") = TxZ(data, i, cCol)
+                d("firstOld") = TxZ(data, i, cOld)
+                d("firstNew") = TxZ(data, i, cNew)
+                Set ops(op) = d
+                order.Add op
+            End If
+            ops(op)("count") = CLng(ops(op)("count")) + 1
+        End If
+    Next i
+
+    Dim k As Long
+    For k = order.count To 1 Step -1        ' najnovije (poslednji upisan) na vrh
+        Dim o As Object: Set o = ops(CStr(order(k)))
+        o("status") = OpStatusFor(o)
+        result.Add o
+    Next k
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".GetUndoableStornoOperations"
+End Function
+
+' Informativni status operacije po PRVOM redu (trenutna vrednost vs NovaVrednost/StaraVrednost).
+Private Function OpStatusFor(ByVal o As Object) As String
+    On Error GoTo unknown
+    Dim tbl As String: tbl = CStr(o("firstTab"))
+    Dim pk As String: pk = PkColForTable(tbl)
+    If Len(pk) = 0 Then OpStatusFor = "?": Exit Function
+    Dim cur As String: cur = Trim$(CStr(LookupValue(tbl, pk, CStr(o("firstRow")), CStr(o("firstCol")))))
+    If StrComp(cur, Trim$(CStr(o("firstNew"))), vbBinaryCompare) = 0 Then OpStatusFor = "moguce": Exit Function
+    If StrComp(cur, Trim$(CStr(o("firstOld"))), vbBinaryCompare) = 0 Then OpStatusFor = "vec vraceno": Exit Function
+    OpStatusFor = "izmenjeno"
+    Exit Function
+unknown:
+    OpStatusFor = "?"
+End Function
+
+Private Function TxZ(ByVal data As Variant, ByVal r As Long, ByVal c As Long) As String
+    If c > 0 Then TxZ = Trim$(CStr(data(r, c)))
 End Function

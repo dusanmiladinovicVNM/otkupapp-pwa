@@ -269,6 +269,47 @@ EH:
     OtkupBlockDeadParent = "(provera roditelja nije uspela)"     ' fail-closed -> blokira undo
 End Function
 
+' PER-RED verzija: mrtav roditelj za KONKRETAN OtkupID (ne svi redovi istog broja).
+' Koristi je zurnal-put (UndoOperation_TX) da mrtav roditelj DRUGE, nepovezane
+' istorijske generacije istog broja ne preblokira undo bas ove operacije.
+' FAIL-CLOSED: greska/nedostajuca sema -> BLOKIRAJUCI marker. "" = bezbedno.
+Public Function OtkupBlockDeadParentByID(ByVal otkupID As String) As String
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+    Dim cId As Long, cOtp As Long, cZbr As Long
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
+    If cId = 0 Then OtkupBlockDeadParentByID = "(provera roditelja nije moguca - sema)": Exit Function
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cId))) = Trim$(otkupID) Then
+            If cOtp > 0 Then
+                Dim otpID As String: otpID = Trim$(CStr(data(i, cOtp)))
+                If Len(otpID) > 0 Then
+                    If Len(LookupActiveID(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_ID)) = 0 Then
+                        OtkupBlockDeadParentByID = "otpremnica (ID " & otpID & ")": Exit Function
+                    End If
+                End If
+            End If
+            If cZbr > 0 Then
+                Dim brZbr As String: brZbr = Trim$(CStr(data(i, cZbr)))
+                If Len(brZbr) > 0 Then
+                    If Len(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_BROJ)) = 0 Then
+                        OtkupBlockDeadParentByID = "zbirna " & brZbr: Exit Function
+                    End If
+                End If
+            End If
+            Exit For
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".OtkupBlockDeadParentByID"
+    OtkupBlockDeadParentByID = "(provera roditelja nije uspela)"
+End Function
+
 ' Reaktiviraj tblAmbalaza redove dokumenta (DokID + DokTip) koji su stornirani.
 Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As String, _
                                           ByVal SRC As String) As Long
@@ -324,9 +365,9 @@ Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) A
     On Error GoTo EH
     Select Case docType
         Case DOK_TIP_OTKUP
-            Dim dead As String: dead = OtkupBlockDeadParent(broj)
-            If Len(dead) > 0 Then _
-                UndoGuardReason = "Roditelj/provera: " & dead & " -> blok bi ostao siroce / nesigurno. Odbijeno."
+            ' Otkup: mrtav-roditelj se proverava PO REDU u UndoOperation_TX
+            ' (OtkupBlockDeadParentByID) da mrtav roditelj DRUGE generacije istog broja
+            ' ne preblokira ovu operaciju. Ovde nema broj-level otkup garde.
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
             If ActiveAmbalazaDokExists(broj, docType) Then _
                 UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " [" & docType & _
