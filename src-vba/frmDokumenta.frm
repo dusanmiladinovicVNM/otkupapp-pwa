@@ -65,10 +65,12 @@ Private m_ambIPrijFullW As Single
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
 Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
-' UNDO (Vrati storno) je za sada SAKRIVEN iz produkcije: motor (UndoStorno_TX) je
-' konzervativan i NE vraca tblNovac vezu niti journalise konkretan row-set (review #5).
-' Ostaje dostupan kroz Test_UndoStorno (Alt+F8) dok pun storno-journal ne stigne.
-' Postavi na True TEK kad journal (StornoOperationID + novac veza) bude implementiran.
+' UNDO (Vrati storno): storno-zurnal motor (modStornoZurnal) je lossless za Otkup +
+' Revers. ALI produkciono dugme je jos SAKRIVENO: panel je document-centric (nema
+' OperationID po redu), pa bi kod reused poslovnog broja moglo da vrati POGRESNU
+' generaciju (LatestOpFor bira najnoviji SOP). Dugme se ukljucuje TEK sa
+' operation-centric UI-em (lista operacija -> UndoOperation_TX(opID) direktno).
+' Do tada: undo motor se verifikuje kroz Test_StornoCentar_All / Test_UndoStorno.
 Private Const UNDO_UI_ENABLED As Boolean = False
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
@@ -4073,17 +4075,28 @@ Private Sub m_btnStornoVrati_Click()
         Exit Sub
     End If
 
+    ' Produkciono dugme radi SAMO lossless (zurnal) undo, i cilja KONKRETAN OperationID.
+    ' Storna napravljena PRE zurnala (stariji build) nemaju op -> legacy best-effort NE
+    ' vraca novac vezu, pa se iz produkcije ODBIJA (dostupno kroz Test_UndoStorno macro).
+    Dim opID As String: opID = LatestOpFor(undoArg, broj)
+    If Len(opID) = 0 Then
+        MsgBox "Ovo storno je napravljeno PRE storno-zurnala -> lossless 'Vrati storno' " & _
+               "nije moguc (novac veza se ne bi vratila)." & vbCrLf & vbCrLf & _
+               "Koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     If MsgBox("Vratiti storno: " & tip & " " & broj & "?" & vbCrLf & vbCrLf & _
-              "(Reaktivira dokument i njegovu ambalazu.)", _
+              "(Reaktivira dokument, ambalazu i novac vezu iz zurnala.)", _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
-    If UndoStorno_TX(undoArg, broj) Then
+    If UndoOperation_TX(opID) Then
         MsgBox "Vraceno iz storna: " & tip & " " & broj & ".", vbInformation, APP_NAME
         PopulateStorniraniPanel                  ' osvezi listu
     Else
         MsgBox "Nije vraceno: " & tip & " " & broj & "." & vbCrLf & _
-               "Guard/greska (npr. vec postoji aktivan isti broj) -> vidi Monitor.", _
-               vbExclamation, APP_NAME
+               "Guard/drift/greska (npr. stanje promenjeno posle storna, ili vec aktivan " & _
+               "isti (broj,klasa)) -> vidi Monitor.", vbExclamation, APP_NAME
     End If
     Exit Sub
 EH:

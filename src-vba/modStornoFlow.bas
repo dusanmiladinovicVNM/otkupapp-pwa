@@ -1403,18 +1403,46 @@ Public Function StornoSelectedBlocks_TX(ByVal ids As Collection) As Long
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL    ' zurnal (lossless undo) u istoj TX -> rollback ga povlaci
+
+    ' Grupisi po broju dokumenta -> JEDAN OperationID po broju (dvoklasni blok, isti
+    ' BrDok, se stornira/vraca kao celina; inace bi undo-by-broj vratio samo poslednju
+    ' klasu). Ravni dict-ovi (broj->red, red->broj) da izbegnem dict-of-collections.
+    Dim brOf As Object: Set brOf = CreateObject("Scripting.Dictionary"): brOf.CompareMode = vbTextCompare
+    Dim brojList As Collection: Set brojList = New Collection
+    Dim seenB As Object: Set seenB = CreateObject("Scripting.Dictionary"): seenB.CompareMode = vbTextCompare
     Dim k As Long, n As Long
     For k = 1 To ids.count
-        If Not StornoOtkup(CStr(ids(k))) Then
-            Err.Raise ERR_STORNO_FW_BASE + 70, SRC, "StornoOtkup (blok) nije uspeo: " & CStr(ids(k))
-        End If
-        n = n + 1
+        Dim bd As String: bd = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(ids(k)), COL_OTK_BR_DOK))
+        brOf(CStr(ids(k))) = bd
+        If Not seenB.Exists(bd) Then seenB(bd) = True: brojList.Add bd
     Next k
+
+    Dim bi As Long
+    For bi = 1 To brojList.count
+        Dim curBroj As String: curBroj = CStr(brojList(bi))
+        ' Spoljasnji op SAMO za NEPRAZAN broj (grupise dvoklasni dokument). Za unbound
+        ' blokove (prazan BrDok) NE otvaramo zajednicki op -> svaki StornoOtkup sam
+        ' otvara SVOJ op po OtkupID (inace bi svi unbound pali u jednu "" operaciju).
+        Dim owns As Boolean: owns = False
+        If Len(curBroj) > 0 Then owns = BeginStornoOp(DOK_TIP_OTKUP, curBroj)
+        For k = 1 To ids.count
+            If StrComp(CStr(brOf(CStr(ids(k)))), curBroj, vbTextCompare) = 0 Then
+                If Not StornoOtkup(CStr(ids(k))) Then
+                    Err.Raise ERR_STORNO_FW_BASE + 70, SRC, "StornoOtkup (blok) nije uspeo: " & CStr(ids(k))
+                End If
+                n = n + 1
+            End If
+        Next k
+        If owns Then EndStornoOp owns
+    Next bi
+
     tx.CommitTx
     Set tx = Nothing
     StornoSelectedBlocks_TX = n
     Exit Function
 EH:
+    AbortStornoOp                          ' ne ostavi op-kontekst otvoren posle greske
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     StornoSelectedBlocks_TX = -1
