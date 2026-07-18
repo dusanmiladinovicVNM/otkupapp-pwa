@@ -64,14 +64,22 @@ Private m_ambIPrijFullW As Single
 ' otvara overlay panel sa listom svih storniranih dokumenata, grupisano po tipu.
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
-Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
-' UNDO (Vrati storno): storno-zurnal motor (modStornoZurnal) je lossless za Otkup +
-' Revers. ALI produkciono dugme je jos SAKRIVENO: panel je document-centric (nema
-' OperationID po redu), pa bi kod reused poslovnog broja moglo da vrati POGRESNU
-' generaciju (LatestOpFor bira najnoviji SOP). Dugme se ukljucuje TEK sa
-' operation-centric UI-em (lista operacija -> UndoOperation_TX(opID) direktno).
-' Do tada: undo motor se verifikuje kroz Test_StornoCentar_All / Test_UndoStorno.
-Private Const UNDO_UI_ENABLED As Boolean = False
+Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" -> operacije
+' UNDO (Vrati storno): OPERATION-CENTRIC. Dugme otvara listu undoable operacija
+' (modStornoZurnal.GetUndoableStornoOperations) i undo ide po KONKRETNOM OperationID
+' (UndoOperation_TX(opID)) -> nema reused-broj rizika (razne generacije = razliciti op).
+' Lossless za Otkup + Revers; chain (prijemnica/faktura/paleta) jos nije u zurnalu.
+Private Const UNDO_UI_ENABLED As Boolean = True
+
+' Vrati-storno OPERATION-CENTRIC overlay (runtime kontrole; .frx se ne dira).
+Private WithEvents m_lstUndoOps As MSForms.ListBox
+Private WithEvents m_btnUndoOpsDo As MSForms.CommandButton
+Private WithEvents m_btnUndoOpsClose As MSForms.CommandButton
+Private m_undoOpsBack As MSForms.label
+Private m_undoOpsTitle As MSForms.label
+Private m_undoOpsBuilt As Boolean
+Private m_undoOpsHidden As Collection
+Private m_undoOpsRows As Collection       ' op dict-ovi paralelno redovima (header = idx 0)
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
 Private m_lstStorno As MSForms.ListBox
@@ -4046,62 +4054,195 @@ Private Sub m_btnStornoClose_Click()
     SetStorniraniPanelVisible False
 End Sub
 
-' "Vrati storno" za izabran red (Faza 5). Radi za OTKUP i REVERS; ostali tipovi
-' se odbijaju u UndoStorno_TX (chain -> ISPRAVKA/ponovni unos). Uz potvrdu.
+' "Vrati storno" -> OPERATION-CENTRIC lista undoable operacija (ne po redu dokumenta,
+' da reused poslovni broj ne vrati pogresnu generaciju). Undo ide po konkretnom
+' OperationID (UndoOperation_TX). Lossless za Otkup + Revers.
 Private Sub m_btnStornoVrati_Click()
     On Error GoTo EH
-    If Not UNDO_UI_ENABLED Then Exit Sub          ' undo sakriven iz produkcije
-    If m_lstStorno Is Nothing Then Exit Sub
-    Dim idx As Long: idx = m_lstStorno.ListIndex
-    If idx < 0 Then
-        MsgBox "Izaberi red (dokument) iz liste.", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-    Dim tip As String: tip = ""
-    If Not m_stornoRowTip Is Nothing Then
-        If (idx + 1) <= m_stornoRowTip.count Then tip = Trim$(CStr(m_stornoRowTip(idx + 1)))
-    End If
-    If Len(tip) = 0 Then
-        MsgBox "Izaberi konkretan dokument (ne grupno zaglavlje).", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-    Dim broj As String: broj = Trim$(CStr(m_lstStorno.List(idx, 0)))
-    If Len(broj) = 0 Then Exit Sub
-
-    Dim undoArg As String
-    If Not UndoArgForTip(tip, undoArg) Then
-        MsgBox "Vrati storno je podrzan SAMO za Otkup i Revers." & vbCrLf & _
-               "Za '" & tip & "' koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-
-    ' Produkciono dugme radi SAMO lossless (zurnal) undo, i cilja KONKRETAN OperationID.
-    ' Storna napravljena PRE zurnala (stariji build) nemaju op -> legacy best-effort NE
-    ' vraca novac vezu, pa se iz produkcije ODBIJA (dostupno kroz Test_UndoStorno macro).
-    Dim opID As String: opID = LatestOpFor(undoArg, broj)
-    If Len(opID) = 0 Then
-        MsgBox "Ovo storno je napravljeno PRE storno-zurnala -> lossless 'Vrati storno' " & _
-               "nije moguc (novac veza se ne bi vratila)." & vbCrLf & vbCrLf & _
-               "Koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
-        Exit Sub
-    End If
-
-    If MsgBox("Vratiti storno: " & tip & " " & broj & "?" & vbCrLf & vbCrLf & _
-              "(Reaktivira dokument, ambalazu i novac vezu iz zurnala.)", _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
-
-    If UndoOperation_TX(opID) Then
-        MsgBox "Vraceno iz storna: " & tip & " " & broj & ".", vbInformation, APP_NAME
-        PopulateStorniraniPanel                  ' osvezi listu
-    Else
-        MsgBox "Nije vraceno: " & tip & " " & broj & "." & vbCrLf & _
-               "Guard/drift/greska (npr. stanje promenjeno posle storna, ili vec aktivan " & _
-               "isti (broj,klasa)) -> vidi Monitor.", vbExclamation, APP_NAME
-    End If
+    If Not UNDO_UI_ENABLED Then Exit Sub
+    ShowUndoOpsPanel
     Exit Sub
 EH:
     LogErr "frmDokumenta.m_btnStornoVrati_Click"
     MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+' ============================================================
+' VRATI STORNO - operation-centric overlay: lista undoable operacija iz storno-zurnala.
+' Klik/dugme -> UndoOperation_TX(izabrani OperationID). Podaci: GetUndoableStornoOperations.
+' ============================================================
+Private Sub ShowUndoOpsPanel()
+    EnsureUndoOpsPanel
+    If Not m_undoOpsBuilt Then Exit Sub
+    PopulateUndoOpsPanel
+    SetUndoOpsPanelVisible True
+End Sub
+
+Private Sub EnsureUndoOpsPanel()
+    On Error GoTo done
+    If m_undoOpsBuilt Then Exit Sub
+    Set m_undoOpsBack = Me.Controls.Add("Forms.Label.1", "lblUndoOpsBackRT", True)
+    With m_undoOpsBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+    Set m_undoOpsTitle = Me.Controls.Add("Forms.Label.1", "lblUndoOpsTitleRT", True)
+    With m_undoOpsTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Vrati storno - operacije"
+    End With
+    Set m_btnUndoOpsClose = Me.Controls.Add("Forms.CommandButton.1", "btnUndoOpsCloseRT", True)
+    StyleExitButton m_btnUndoOpsClose, "Zatvori"
+    Set m_btnUndoOpsDo = Me.Controls.Add("Forms.CommandButton.1", "btnUndoOpsDoRT", True)
+    StylePrimaryButton m_btnUndoOpsDo, "Vrati izabranu operaciju"
+    Set m_lstUndoOps = Me.Controls.Add("Forms.ListBox.1", "lstUndoOpsRT", True)
+    With m_lstUndoOps
+        .ColumnCount = 6
+        .ColumnWidths = "90;120;110;150;54;90"      ' OpID | Datum | Tip | Broj | #redova | Status
+    End With
+    MouseWheel_Register m_lstUndoOps
+    StyleListBox m_lstUndoOps
+    m_undoOpsBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureUndoOpsPanel"
+    m_undoOpsBuilt = False
+End Sub
+
+Private Sub LayoutUndoOpsPanel()
+    On Error Resume Next
+    If Not m_undoOpsBuilt Then Exit Sub
+    Const PAD As Single = 8
+    Const HDR As Single = 30
+    Const BTNH As Single = 28
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+    m_undoOpsBack.Move 0, 0, w, h
+    m_undoOpsTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnUndoOpsClose.Move w - PAD - 92, PAD, 92, 24
+    Dim bottomRow As Single: bottomRow = h - PAD - BTNH
+    m_lstUndoOps.Move PAD, PAD + HDR, w - 2 * PAD, bottomRow - (PAD + HDR) - PAD
+    m_btnUndoOpsDo.Move PAD, bottomRow, 210, BTNH
+End Sub
+
+Private Sub PopulateUndoOpsPanel()
+    On Error GoTo EH
+    If m_lstUndoOps Is Nothing Then Exit Sub
+    m_lstUndoOps.Clear
+    Dim hdr(0 To 5) As Variant
+    hdr(0) = "OpID": hdr(1) = "Datum": hdr(2) = "Tip": hdr(3) = "Broj": hdr(4) = "Redova": hdr(5) = "Status"
+    AddUndoOpsListRow hdr
+
+    Set m_undoOpsRows = GetUndoableStornoOperations()
+    Dim i As Long, n As Long
+    If Not m_undoOpsRows Is Nothing Then
+        For i = 1 To m_undoOpsRows.count
+            Dim d As Object: Set d = m_undoOpsRows(i)
+            Dim one(0 To 5) As Variant
+            one(0) = CStr(d("opID")): one(1) = CStr(d("ts")): one(2) = CStr(d("docType"))
+            one(3) = CStr(d("broj")): one(4) = CStr(d("count")): one(5) = CStr(d("status"))
+            AddUndoOpsListRow one
+            n = n + 1
+        Next i
+    End If
+    If n = 0 Then m_lstUndoOps.AddItem "Nema zabelezenih storno operacija (zurnal prazan)."
+    m_undoOpsTitle.caption = "Vrati storno - operacije  (" & n & ")"
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateUndoOpsPanel"
+End Sub
+
+Private Sub AddUndoOpsListRow(ByVal cells As Variant)
+    On Error Resume Next
+    Dim lb As Long: lb = LBound(cells)
+    m_lstUndoOps.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = m_lstUndoOps.ListCount - 1
+    Dim c As Long
+    For c = lb + 1 To UBound(cells)
+        If (c - lb) <= m_lstUndoOps.ColumnCount - 1 Then m_lstUndoOps.List(idx, c - lb) = CStr(cells(c))
+    Next c
+End Sub
+
+Private Sub m_lstUndoOps_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    DoSelectedUndoOp
+End Sub
+
+Private Sub m_btnUndoOpsDo_Click()
+    DoSelectedUndoOp
+End Sub
+
+Private Sub DoSelectedUndoOp()
+    On Error GoTo EH
+    If m_lstUndoOps Is Nothing Or m_undoOpsRows Is Nothing Then Exit Sub
+    Dim li As Long: li = m_lstUndoOps.ListIndex
+    If li <= 0 Then MsgBox "Izaberi operaciju iz liste.", vbExclamation, APP_NAME: Exit Sub
+    If li > m_undoOpsRows.count Then Exit Sub
+    Dim d As Object: Set d = m_undoOpsRows(li)      ' list idx = red (header je 0)
+    Dim opID As String: opID = CStr(d("opID"))
+    If MsgBox("Vratiti storno operaciju " & opID & " (" & CStr(d("docType")) & " " & _
+              CStr(d("broj")) & ", " & CStr(d("count")) & " celija)?" & vbCrLf & vbCrLf & _
+              "Reaktivira dokument, ambalazu i novac vezu iz zurnala.", _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    If UndoOperation_TX(opID) Then
+        MsgBox "Operacija " & opID & " vracena iz storna.", vbInformation, APP_NAME
+        PopulateUndoOpsPanel
+    Else
+        MsgBox "Operacija " & opID & " NIJE vracena." & vbCrLf & _
+               "Guard/drift (npr. stanje promenjeno posle storna, vec vraceno, ili aktivan " & _
+               "isti (broj,klasa)/revers) -> vidi Monitor.", vbExclamation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.DoSelectedUndoOp"
+    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub m_btnUndoOpsClose_Click()
+    SetUndoOpsPanelVisible False
+    If m_stornoBuilt Then PopulateStorniraniPanel     ' undo je mozda promenio storno stanje
+End Sub
+
+Private Sub SetUndoOpsPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_undoOpsBuilt Then Exit Sub
+    If bShow Then
+        LayoutUndoOpsPanel
+        HideBehindUndoOps
+        m_undoOpsBack.visible = True: m_undoOpsTitle.visible = True
+        m_btnUndoOpsClose.visible = True: m_lstUndoOps.visible = True: m_btnUndoOpsDo.visible = True
+        m_undoOpsBack.ZOrder 0: m_lstUndoOps.ZOrder 0
+        m_undoOpsTitle.ZOrder 0: m_btnUndoOpsClose.ZOrder 0: m_btnUndoOpsDo.ZOrder 0
+    Else
+        m_undoOpsBack.visible = False: m_undoOpsTitle.visible = False
+        m_btnUndoOpsClose.visible = False: m_lstUndoOps.visible = False: m_btnUndoOpsDo.visible = False
+        RestoreBehindUndoOps
+    End If
+End Sub
+
+Private Sub HideBehindUndoOps()
+    On Error Resume Next
+    Set m_undoOpsHidden = New Collection
+    Dim ctl As MSForms.Control
+    For Each ctl In Me.Controls
+        If ctl Is m_undoOpsBack Or ctl Is m_undoOpsTitle Or ctl Is m_btnUndoOpsClose _
+           Or ctl Is m_lstUndoOps Or ctl Is m_btnUndoOpsDo Then
+            ' panel kontrole -> preskoci
+        ElseIf ctl.visible Then
+            m_undoOpsHidden.Add ctl.name
+            ctl.visible = False
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindUndoOps()
+    On Error Resume Next
+    If m_undoOpsHidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To m_undoOpsHidden.count
+        Me.Controls(m_undoOpsHidden(i)).visible = True
+    Next i
+    Set m_undoOpsHidden = Nothing
 End Sub
 
 ' Mapiraj tip iz liste storniranih -> argument za UndoStorno_TX (Otkup ili

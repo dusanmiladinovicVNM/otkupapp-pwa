@@ -522,3 +522,15 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **„Vrati storno" dugme za sada OSTAJE SAKRIVENO** (`UNDO_UI_ENABLED=False`): motor je lossless, ali je Stornirani panel document-centric (nema `OperationID` po redu), pa bi kod reused poslovnog broja `LatestOpFor` mogao vratiti pogrešnu generaciju. Dugme se uključuje tek uz **operation-centric UI** (lista undoable operacija → `UndoOperation_TX(opID)` direktno) — sledeći mali PR. Do tada undo se verifikuje kroz `Test_StornoCentar_All` / `Test_UndoStorno`.
 - **Regres-testovi** (`Test_StornoCentar_All`): journal undo (novac vraćen), dvoklasni (jedan op), revers-guard, pre-validacija, **drift**, **parcijalna klasa**, pomešan-op, prazan-BrDok (odvojeni op).
 - **„Lossless" — precizno:** važi za storna **posle** ovog builda, pod uslovom da stanje ćelija nije promenjeno posle storna (drift-guard odbija inače). Stara storna nisu lossless-undo-abilna (legacy). **Odloženo:** chain instrumentacija; `UndoneAt` status operacije. Rizik: nizak/srednji (aditivna tabela; dira `modStorno` motor — verifikovano suite-om). ASCII-only; `.frx` netaknut.
+
+---
+
+## vba-v2.25.0 — 2026-07-18
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **operation-centric „Vrati storno" UI** — dugme se uključuje (`UNDO_UI_ENABLED=True`) i undo ide po **konkretnom `OperationID`**, ne po poslovnom broju. Nastavak na v2.24.0 (žurnal motor).
+
+- **Operation-centric panel „Vrati storno":** dugme u pregledu storniranih otvara **listu undoable operacija** (`OperationID | Datum | Tip | Broj | #redova | Status`) iz `GetUndoableStornoOperations`; klik/„Vrati" → `UndoOperation_TX(izabrani opID)` **direktno**. Time reused poslovni broj više ne može da vrati pogrešnu generaciju (razne generacije = različiti `OperationID`) — glavni P1 iz review-a. Status kolona: `moguce` / `vec vraceno` / `izmenjeno`.
+- **Dead-parent guard po redu operacije** (`OtkupBlockDeadParentByID`): mrtav roditelj **druge, nepovezane generacije** istog broja više **ne preblokira** undo bezbedne operacije (ranije broj-level `OtkupBlockDeadParent` je gledao sve stornirane redove istog broja).
+- **`OtkupReissueDupExists` fail-closed** (`RequireColumnIndex` + raise na grešku).
+- **Prazan `BrDok` (unbound blok)** se sada može vratiti kroz UI (undo po `OperationID`, ne treba poslovni broj).
+- **Testovi (+3):** reused-broj (undo starog op vraća staru generaciju), dead-parent druge generacije (undo prolazi), prazan-BrDok end-to-end undo.
+- **Rizik za podatke:** nizak — UI je runtime overlay (`.frx` netaknut); motor nepromenjen osim per-red garde (uža, sigurnija). ASCII-only. **Odloženo:** chain instrumentacija; `UndoneAt` status operacije.
