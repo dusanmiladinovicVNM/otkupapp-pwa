@@ -512,7 +512,7 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 ---
 
 ## vba-v2.24.0 — 2026-07-17
-> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **storno operacioni žurnal → lossless „Vrati storno" (Otkup + Revers).** Rešava review #5: undo sada vraća i `tblNovac.OtkupID` (koji je storno nepovratno brisao) i cilja baš tu operaciju. Dugme „Vrati storno" ponovo uključeno za pokrivene tipove.
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **storno operacioni žurnal → lossless undo motor (Otkup + Revers).** Rešava review #5 na nivou motora: undo sada vraća i `tblNovac.OtkupID` (koji je storno nepovratno brisao) i cilja baš tu operaciju. Produkcijsko dugme „Vrati storno" ostaje SAKRIVENO do operation-centric UI-a (sledeći PR); motor se verifikuje kroz test-suite.
 
 - **Novi append-only ledger `tblStornoZurnal`** (`OperationID | Timestamp | DocType | Broj | Tabela | RowID | Kolona | StaraVrednost | NovaVrednost`): svaka storno operacija zabeleži **staru i novu** vrednost svake dirnute ćelije PRE mutacije. Šema se sama dopunjava (`EnsureStornoZurnalSchemaCore`, u `EnsureRuntimeSchema`).
 - **Instrumentacija (ambient op-kontekst, `modStornoZurnal`):** `StornoOtkup` i `StornoOMKoopByBrDok` (revers) otvore operaciju **po broju** (dvoklasni dokument → **jedan** `OperationID`); primitive (`StornoAmbalazaByDokument`, `ResetNovacOtkupLink`) usput žurnališu. Žurnal upisi teku **unutar iste storno TX** → rollback storna povlači i žurnal red **u Excel tabeli** (napomena: eksterni CSV crash-log `modJournaling` nije transakcion, pa CSV linija ostane — ne dira poslovne podatke, ali je van rollback-a). Ne-instrumentirane putanje (otpremnica/zbirna/prijemnica/faktura) su no-op.
