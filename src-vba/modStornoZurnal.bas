@@ -199,16 +199,17 @@ End Sub
 ' Postoji li AKTIVAN otkup red iste (broj, klasa) kao dati stornirani red, a DRUGI PK?
 ' -> reizdaje isti slot -> undo bi duplirao. (Parcijalno-klasni undo je bezbedan jer
 '  druga klasa ima drugaciju Klasu pa nije dup.)
+' FAIL-CLOSED: greska/nedostajuca sema -> RAISE (UndoOperation_TX to hvata i odbija
+' undo). Ne sme tiho vratiti False ("nema duplikata") kad provera nije izvedena.
 Private Function OtkupReissueDupExists(ByVal otkupID As String) As Boolean
-    On Error GoTo done
+    Const SRC As String = MOD_NAME & ".OtkupReissueDupExists"
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     Dim cId As Long, cBr As Long, cKl As Long, cSt As Long
-    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
     cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    If cId = 0 Or cBr = 0 Then Exit Function
     Dim tBroj As String, tKlasa As String, i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cId))) = Trim$(otkupID) Then
@@ -230,7 +231,6 @@ Private Function OtkupReissueDupExists(ByVal otkupID As String) As Boolean
             End If
         End If
     Next i
-done:
 End Function
 
 ' PK kolona po tabeli (opseg faze 1: Otkup + Revers -> tblOtkup/Ambalaza/Novac).

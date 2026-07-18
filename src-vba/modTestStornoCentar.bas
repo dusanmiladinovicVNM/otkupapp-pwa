@@ -176,8 +176,8 @@ Public Sub Test_StornoJournalUndo_Auto()
     TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-SJ-AID", COL_STORNIRANO))) <> "DA", "ambalaza vracena"
     TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-SJ-NID", COL_NOV_OTKUP_ID)) = "SVT-SJ-OID", "novac OtkupID VRACEN (lossless)"
 
-    ' P2 7: ponovni undo iste op -> odbijen (active-dup guard; otkup je sada aktivan)
-    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-SJ-B") = False, "ponovni undo iste op -> odbijen (active-dup)"
+    ' P2 7: ponovni undo iste op -> odbijen (drift guard: Stornirano je sada "" != NovaVrednost "Da")
+    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-SJ-B") = False, "ponovni undo iste op -> odbijen (drift)"
 
     tx.RollbackTx: Set tx = Nothing
     Exit Sub

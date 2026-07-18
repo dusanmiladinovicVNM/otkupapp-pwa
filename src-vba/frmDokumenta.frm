@@ -65,11 +65,13 @@ Private m_ambIPrijFullW As Single
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
 Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" (Otkup/Revers)
-' UNDO (Vrati storno): sada LOSSLESS za Otkup + Revers preko storno-zurnala
-' (modStornoZurnal) -- UndoStorno_TX vraca i tblNovac.OtkupID i cilja bas tu
-' operaciju. Dugme ukey ukljuceno za te tipove; chain (prijemnica/faktura/paleta)
-' se i dalje odbija u UndoStorno_TX dok se ne instrumentira u sledecem PR-u.
-Private Const UNDO_UI_ENABLED As Boolean = True    ' lossless za Otkup/Revers (zurnal)
+' UNDO (Vrati storno): storno-zurnal motor (modStornoZurnal) je lossless za Otkup +
+' Revers. ALI produkciono dugme je jos SAKRIVENO: panel je document-centric (nema
+' OperationID po redu), pa bi kod reused poslovnog broja moglo da vrati POGRESNU
+' generaciju (LatestOpFor bira najnoviji SOP). Dugme se ukljucuje TEK sa
+' operation-centric UI-em (lista operacija -> UndoOperation_TX(opID) direktno).
+' Do tada: undo motor se verifikuje kroz Test_StornoCentar_All / Test_UndoStorno.
+Private Const UNDO_UI_ENABLED As Boolean = False
 Private m_stornoBack As MSForms.label
 Private m_stornoTitle As MSForms.label
 Private m_lstStorno As MSForms.ListBox
