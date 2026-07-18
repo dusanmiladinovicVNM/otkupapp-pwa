@@ -4073,10 +4073,11 @@ Private Sub m_btnStornoVrati_Click()
         Exit Sub
     End If
 
-    ' Produkciono dugme radi SAMO lossless (zurnal) undo. Storna napravljena PRE
-    ' zurnala (stariji build) nemaju op -> legacy best-effort NE vraca novac vezu, pa
-    ' se iz produkcije ODBIJA (dostupno je jedino kroz Test_UndoStorno macro za admina).
-    If Len(LatestOpFor(undoArg, broj)) = 0 Then
+    ' Produkciono dugme radi SAMO lossless (zurnal) undo, i cilja KONKRETAN OperationID.
+    ' Storna napravljena PRE zurnala (stariji build) nemaju op -> legacy best-effort NE
+    ' vraca novac vezu, pa se iz produkcije ODBIJA (dostupno kroz Test_UndoStorno macro).
+    Dim opID As String: opID = LatestOpFor(undoArg, broj)
+    If Len(opID) = 0 Then
         MsgBox "Ovo storno je napravljeno PRE storno-zurnala -> lossless 'Vrati storno' " & _
                "nije moguc (novac veza se ne bi vratila)." & vbCrLf & vbCrLf & _
                "Koristi ISPRAVKA / ponovni unos.", vbExclamation, APP_NAME
@@ -4087,13 +4088,13 @@ Private Sub m_btnStornoVrati_Click()
               "(Reaktivira dokument, ambalazu i novac vezu iz zurnala.)", _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
 
-    If UndoStorno_TX(undoArg, broj) Then
+    If UndoOperation_TX(opID) Then
         MsgBox "Vraceno iz storna: " & tip & " " & broj & ".", vbInformation, APP_NAME
         PopulateStorniraniPanel                  ' osvezi listu
     Else
         MsgBox "Nije vraceno: " & tip & " " & broj & "." & vbCrLf & _
-               "Guard/greska (npr. vec postoji aktivan isti broj) -> vidi Monitor.", _
-               vbExclamation, APP_NAME
+               "Guard/drift/greska (npr. stanje promenjeno posle storna, ili vec aktivan " & _
+               "isti (broj,klasa)) -> vidi Monitor.", vbExclamation, APP_NAME
     End If
     Exit Sub
 EH:

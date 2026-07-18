@@ -1421,7 +1421,11 @@ Public Function StornoSelectedBlocks_TX(ByVal ids As Collection) As Long
     Dim bi As Long
     For bi = 1 To brojList.count
         Dim curBroj As String: curBroj = CStr(brojList(bi))
-        Dim owns As Boolean: owns = BeginStornoOp(DOK_TIP_OTKUP, curBroj)
+        ' Spoljasnji op SAMO za NEPRAZAN broj (grupise dvoklasni dokument). Za unbound
+        ' blokove (prazan BrDok) NE otvaramo zajednicki op -> svaki StornoOtkup sam
+        ' otvara SVOJ op po OtkupID (inace bi svi unbound pali u jednu "" operaciju).
+        Dim owns As Boolean: owns = False
+        If Len(curBroj) > 0 Then owns = BeginStornoOp(DOK_TIP_OTKUP, curBroj)
         For k = 1 To ids.count
             If StrComp(CStr(brOf(CStr(ids(k)))), curBroj, vbTextCompare) = 0 Then
                 If Not StornoOtkup(CStr(ids(k))) Then
@@ -1430,7 +1434,7 @@ Public Function StornoSelectedBlocks_TX(ByVal ids As Collection) As Long
                 n = n + 1
             End If
         Next k
-        EndStornoOp owns
+        If owns Then EndStornoOp owns
     Next bi
 
     tx.CommitTx

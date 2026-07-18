@@ -185,7 +185,8 @@ Public Function StornoOtkup(ByVal otkupID As String) As Boolean
     ' mutacije; primitive (StornoAmbalazaByDokument/ResetNovacOtkupLink) usput belezene.
     Dim brDok As String: brDok = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BR_DOK))
     owns = BeginStornoOp(DOK_TIP_OTKUP, brDok)
-    JournalCell TBL_OTKUP, otkupID, COL_STORNIRANO, ""
+    JournalCell TBL_OTKUP, otkupID, COL_STORNIRANO, _
+        NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO)), "Da"
 
     MarkRowStornirano TBL_OTKUP, rowOtkup, SRC
     StornoAmbalazaByDokument otkupID, DOK_TIP_OTKUP
@@ -1166,16 +1167,23 @@ Private Sub ResetNovacOtkupLink(ByVal otkupID As String)
 
     Dim colOtkupID As Long
     colOtkupID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
-    Dim colNovID As Long: colNovID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
+    ' PK je OBAVEZAN dok je zurnal-op aktivan (lossless zavisi od stabilnog RowID).
+    Dim colNovID As Long
+    If StornoOpActive() Then colNovID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC) _
+                       Else colNovID = GetColumnIndex(TBL_NOVAC, COL_NOV_ID)
 
     Dim i As Long
 
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colOtkupID))) = Trim$(otkupID) Then
             ' Zurnal: brisanje OtkupID->"" je jedini NEPOVRATNI deo storna otkupa.
-            ' Zabelezi (NovacID, stari OtkupID) PRE brisanja da undo moze da re-linkuje.
-            If colNovID > 0 Then JournalCell TBL_NOVAC, CStr(data(i, colNovID)), _
-                COL_NOV_OTKUP_ID, CStr(data(i, colOtkupID))
+            ' Zabelezi (NovacID, stari OtkupID -> "") PRE brisanja da undo re-linkuje.
+            If StornoOpActive() Then
+                Dim nvID As String: nvID = Trim$(CStr(data(i, colNovID)))
+                If Len(nvID) = 0 Then Err.Raise ERR_STORNO_BASE + 30, SRC, _
+                    "Novac red bez NovacID (PK) -> lossless storno nije moguc. Odbijeno."
+                JournalCell TBL_NOVAC, nvID, COL_NOV_OTKUP_ID, CStr(data(i, colOtkupID)), ""
+            End If
             RequireUpdateCell TBL_NOVAC, i, COL_NOV_OTKUP_ID, "", SRC
         End If
     Next i
@@ -1197,7 +1205,9 @@ Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
     colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
     colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
     colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    Dim colAmbID As Long: colAmbID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    Dim colAmbID As Long
+    If StornoOpActive() Then colAmbID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC) _
+                       Else colAmbID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
 
     Dim i As Long
 
@@ -1206,11 +1216,18 @@ Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
            Trim$(CStr(data(i, colDokTip))) = Trim$(dokumentTip) Then
 
             If Not IsStorniranoValue(data(i, colStorno)) Then
-                If colAmbID > 0 Then JournalCell TBL_AMBALAZA, CStr(data(i, colAmbID)), COL_STORNIRANO, ""
+                If StornoOpActive() Then JournalAmbStorno CStr(data(i, colAmbID)), CStr(data(i, colStorno)), SRC
                 MarkRowStornirano TBL_AMBALAZA, i, SRC
             End If
         End If
     Next i
+End Sub
+
+' Zajednicki zurnal upis za ambalaza soft-delete (otkup + revers). PK obavezan.
+Private Sub JournalAmbStorno(ByVal ambID As String, ByVal oldStorno As String, ByVal SRC As String)
+    If Len(Trim$(ambID)) = 0 Then Err.Raise ERR_STORNO_BASE + 31, SRC, _
+        "Ambalaza red bez AmbID (PK) -> lossless storno nije moguc. Odbijeno."
+    JournalCell TBL_AMBALAZA, ambID, COL_STORNIRANO, oldStorno, "Da"
 End Sub
 
 ' ============================================================
@@ -1275,7 +1292,7 @@ Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
     colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
     colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
     colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    Dim colAmbID As Long: colAmbID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    Dim colAmbID As Long: colAmbID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
 
     ' Zurnal op po broju reversa (lossless undo; revers je cist soft-delete ambalaze).
     owns = BeginStornoOp(dokumentTip, brDok)
@@ -1286,7 +1303,7 @@ Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
            Trim$(CStr(data(i, colDokTip))) = Trim$(dokumentTip) Then
             foundAny = True
             If Not IsStorniranoValue(data(i, colStorno)) Then
-                If colAmbID > 0 Then JournalCell TBL_AMBALAZA, CStr(data(i, colAmbID)), COL_STORNIRANO, ""
+                JournalAmbStorno CStr(data(i, colAmbID)), CStr(data(i, colStorno)), SRC
                 MarkRowStornirano TBL_AMBALAZA, i, SRC
                 changedCount = changedCount + 1
             End If

@@ -33,7 +33,113 @@ Public Sub Test_StornoCentar_All()
     Test_StornoJournalDualClass_Auto
     Test_StornoJournalReversGuard_Auto
     Test_StornoJournalUndoValidation_Auto
+    Test_StornoJournalDrift_Auto
+    Test_StornoJournalPartialClass_Auto
+    Test_StornoJournalMixedOp_Auto
+    Test_StornoJournalEmptyBrDok_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' P1 drift: ako se posle storna novac re-linkuje na drugi otkup, undo NE gazi noviju
+' vezu (optimistic-concurrency: trenutna vrednost != NovaVrednost -> odbij).
+Public Sub Test_StornoJournalDrift_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-DR-OID", "SVT-DR-B", "I")
+    TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), Array("SVT-DR-NID", "SVT-DR-OID")
+    TcChk StornoOtkup_TX("SVT-DR-OID") = True, "storno (drift setup) -> True"
+    ' DRIFT: drugi tok re-linkuje isti novac red na drugi otkup
+    Dim ri As Long: ri = TcRowIndex(TBL_NOVAC, COL_NOV_ID, "SVT-DR-NID")
+    If ri > 0 Then UpdateCell TBL_NOVAC, ri, COL_NOV_OTKUP_ID, "SVT-DR-DRUGI"
+    ' undo MORA biti odbijen (ne gazi noviju vezu)
+    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-DR-B") = False, "undo uz drift novca -> ODBIJEN"
+    TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-DR-NID", COL_NOV_OTKUP_ID)) = "SVT-DR-DRUGI", "novija veza netaknuta"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalDrift_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' P2 partial-class: storno SAMO Klase I; Klasa II ostaje aktivna; undo Klase I mora
+' PROCI (per (broj,klasa) guard, ne broj-level koji bi preblokirao).
+Public Sub Test_StornoJournalPartialClass_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-PC-1", "SVT-PC-B", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-PC-2", "SVT-PC-B", "II")
+    ' storniraj SAMO Klasu I (selektivno)
+    Dim sel As Collection: Set sel = New Collection: sel.Add "SVT-PC-1"
+    TcChk StornoSelectedBlocks_TX(sel) = 1, "selektivni storno Klase I -> 1"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-PC-2", COL_STORNIRANO))) <> "DA", "Klasa II ostaje aktivna"
+    ' undo Klase I MORA proci iako je Klasa II aktivna (nije dup po (broj,klasa))
+    TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-PC-B") = True, "undo Klase I uz aktivnu Klasu II -> PROLAZI"
+    TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-PC-1", COL_STORNIRANO))) <> "DA", "Klasa I vracena"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalPartialClass_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' P2 pomesana operacija: jedan OperationID sa dva razlicita Broja -> undo odbijen (corrupt).
+Public Sub Test_StornoJournalMixedOp_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_STORNO_ZURNAL, Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_DOCTYPE, COL_SZ_BROJ, COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA, COL_SZ_NOVA), _
+              Array("ZUR-M1", "SOP-MIX", DOK_TIP_OTKUP, "SVT-MX-A", TBL_OTKUP, "SVT-MX-1", COL_STORNIRANO, "", "Da")
+    TcSeedRow TBL_STORNO_ZURNAL, Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_DOCTYPE, COL_SZ_BROJ, COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA, COL_SZ_NOVA), _
+              Array("ZUR-M2", "SOP-MIX", DOK_TIP_OTKUP, "SVT-MX-B", TBL_OTKUP, "SVT-MX-2", COL_STORNIRANO, "", "Da")
+    TcChk UndoOperation_TX("SOP-MIX") = False, "pomesan op (dva broja) -> undo odbijen (corrupt)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalMixedOp_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' P2 prazan BrDok: dva unbound bloka (bez broja) -> DVE odvojene operacije (ne spajaju se).
+Public Sub Test_StornoJournalEmptyBrDok_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-EB-1", "", "I")
+    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KLASA), Array("SVT-EB-2", "", "I")
+    Dim sel As Collection: Set sel = New Collection: sel.Add "SVT-EB-1": sel.Add "SVT-EB-2"
+    TcChk StornoSelectedBlocks_TX(sel) = 2, "storno 2 unbound bloka -> 2"
+    ' oba zurnalisana pod ZASEBNIM OperationID (broj je "" ali RowID/PK ih razdvaja)
+    TcChk TcDistinctOpsForRow(TBL_OTKUP, "SVT-EB-1") <> TcDistinctOpsForRow(TBL_OTKUP, "SVT-EB-2"), "unbound blokovi -> razliciti OperationID (ne spojeni)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalEmptyBrDok_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' Storno-zurnal: LOSSLESS "Vrati storno" za otkup -> storno obrise tblNovac.OtkupID,
@@ -145,8 +251,8 @@ Public Sub Test_StornoJournalUndoValidation_Auto()
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
     TcSeedRow TBL_STORNO_ZURNAL, Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_DOCTYPE, COL_SZ_BROJ, _
-              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA), _
-              Array("ZUR-X", "SOP-VALX", DOK_TIP_OTKUP, "SVT-VL-B", TBL_OTKUP, "SVT-VL-NEPOSTOJI", COL_STORNIRANO, "")
+              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA, COL_SZ_NOVA), _
+              Array("ZUR-X", "SOP-VALX", DOK_TIP_OTKUP, "SVT-VL-B", TBL_OTKUP, "SVT-VL-NEPOSTOJI", COL_STORNIRANO, "", "Da")
     TcChk UndoOperation_TX("SOP-VALX") = False, "undo sa nepostojecim ciljem -> False (pre-validacija, sve-ili-nista)"
 
     tx.RollbackTx: Set tx = Nothing
@@ -578,4 +684,33 @@ Private Function TcCountActive(ByVal tbl As String, ByVal col As String, ByVal v
         End If
     Next i
     TcCountActive = n
+End Function
+
+Private Function TcRowIndex(ByVal tbl As String, ByVal col As String, ByVal val As String) As Long
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim c As Long: c = GetColumnIndex(tbl, col)
+    If c = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, c))) = Trim$(val) Then TcRowIndex = i: Exit Function
+    Next i
+End Function
+
+' OperationID koji je u zurnalu zabelezio dati (Tabela, RowID) - za proveru grupisanja.
+Private Function TcDistinctOpsForRow(ByVal tbl As String, ByVal rowID As String) As String
+    Dim data As Variant: data = GetTableData(TBL_STORNO_ZURNAL)
+    If IsEmpty(data) Then Exit Function
+    Dim cTab As Long, cRow As Long, cOp As Long
+    cTab = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA)
+    cRow = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID)
+    cOp = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID)
+    If cTab = 0 Or cRow = 0 Or cOp = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(CStr(data(i, cTab))), tbl, vbTextCompare) = 0 _
+           And Trim$(CStr(data(i, cRow))) = Trim$(rowID) Then
+            TcDistinctOpsForRow = Trim$(CStr(data(i, cOp))): Exit Function
+        End If
+    Next i
 End Function

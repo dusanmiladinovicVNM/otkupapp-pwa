@@ -9,15 +9,17 @@ Option Explicit
 '   contexti (tblStornoVeze, strukturirano) + brojevi osirocenih (prijemnice /
 '   palete / izgubljeni blokovi; detalj i akcije su u recovery panelu).
 '
-' UndoStorno_TX (MUTIRA): konzervativna reverzija soft-delete-a SAMO za SAMOSTALNE
-'   tipove -> Otkup (blok) i Revers (OM-koop ambalaza). Chain dokumenti
-'   (Otpremnica/Zbirna/Prijemnica/Faktura) se NAMERNO odbijaju: njihova reverzija
-'   trazi grupni operativni zurnal koji ne postoji -> koristi ISPRAVKA / ponovni
-'   unos. Guard: ne dozvoli reverziju ako vec postoji AKTIVAN dokument istog broja
-'   (duplo). Reaktivira i ambalaza-ledger dokumenta. Sve u jednoj transakciji.
+' UndoStorno_TX (MUTIRA): reverzija soft-delete-a SAMO za SAMOSTALNE tipove ->
+'   Otkup (blok) i Revers (OM-koop ambalaza). Chain dokumenti (Otpremnica/Zbirna/
+'   Prijemnica/Faktura) se NAMERNO odbijaju -> koristi ISPRAVKA / ponovni unos.
+'   Za storna napravljena POSLE storno-zurnala (modStornoZurnal) prvo pokusava
+'   LOSSLESS put (UndoOperation_TX preko LatestOpFor) -> vraca i tblNovac.OtkupID i
+'   cilja bas tu operaciju. Stara storna (bez zurnala) padaju na legacy best-effort
+'   (ne vraca novac vezu) -> produkciono dugme to ODBIJA (LatestOpFor=""); legacy je
+'   dostupan jedino kroz Test_UndoStorno macro.
 '
-' UI se NAMERNO NE vezuje u prvom prolazu: reverzija se prvo verifikuje kroz
-' Test_UndoStorno (Alt+F8) na realnim podacima, pa se dugme vezuje kasnije.
+' UI dugme "Vrati storno" je uvezano (frmDokumenta, UNDO_UI_ENABLED) i cilja
+' konkretan OperationID; garde su fail-closed. Guard: UndoGuardReason (deljena).
 ' ============================================================
 
 Private Const MOD_NAME As String = "modStornoRecovery"
@@ -227,8 +229,10 @@ End Function
 ' BrojZbirne -> aktivna zbirna? Ako je bilo koja veza ka MRTVOM (stornirano/nema)
 ' roditelju -> vrati opis (prvog) mrtvog roditelja; inace "". Unbound blok (bez
 ' veze) i blok sa zivim roditeljem su bezbedni za undo.
+' FAIL-CLOSED: sada je deo produkcijske undo kapije -> na gresku/nedostajucu semu
+' vraca BLOKIRAJUCI marker (ne prazan string). "" znaci samo "roditelj je ziv/bezbedno".
 Public Function OtkupBlockDeadParent(ByVal broj As String) As String
-    On Error Resume Next
+    On Error GoTo EH
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     Dim cBr As Long, cSt As Long, cOtp As Long, cZbr As Long
@@ -236,7 +240,7 @@ Public Function OtkupBlockDeadParent(ByVal broj As String) As String
     cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
     cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
     cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-    If cBr = 0 Or cSt = 0 Then Exit Function
+    If cBr = 0 Or cSt = 0 Then OtkupBlockDeadParent = "(provera roditelja nije moguca - sema)": Exit Function
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cBr))) = Trim$(broj) _
@@ -259,6 +263,10 @@ Public Function OtkupBlockDeadParent(ByVal broj As String) As String
             End If
         End If
     Next i
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".OtkupBlockDeadParent"
+    OtkupBlockDeadParent = "(provera roditelja nije uspela)"     ' fail-closed -> blokira undo
 End Function
 
 ' Reaktiviraj tblAmbalaza redove dokumenta (DokID + DokTip) koji su stornirani.
@@ -285,14 +293,16 @@ End Function
 
 ' Postoji li AKTIVAN (ne-storniran) ambalaza red za dati dokument (broj) + tip?
 ' Guard za reverse undo -> spreci duplikat ako revers vec ima zivu verziju.
+' FAIL-CLOSED: nedostajuca sema/greska -> RAISE (UndoGuardReason to hvata i BLOKIRA).
+' Ne sme tiho vratiti False ("nema duplikata") kad provera nije izvedena.
 Private Function ActiveAmbalazaDokExists(ByVal dokID As String, ByVal dokTip As String) As Boolean
+    Const SRC As String = MOD_NAME & ".ActiveAmbalazaDokExists"
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
     Dim cDok As Long, cTip As Long, cSt As Long
-    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
-    cSt = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If cDok = 0 Or cTip = 0 Then Exit Function
+    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cDok))) = Trim$(dokID) _
@@ -304,21 +314,19 @@ Private Function ActiveAmbalazaDokExists(ByVal dokID As String, ByVal dokTip As 
     Next i
 End Function
 
-' ZAJEDNICKA undo garda (koristi je i legacy put i zurnal-put UndoOperation_TX).
-' Vraca "" ako je undo bezbedan; inace razlog odbijanja. Za Otkup: aktivan-dup +
-' mrtav-roditelj. Za revers (OM): aktivan-dup ambalaze istog broj+tip (#134 garda -
-' zurnal-put ju je ranije zaobilazio). Ostali tipovi: bez posebne garde ovde.
+' ZAJEDNICKA broj-level undo garda (i legacy put i zurnal-put UndoOperation_TX).
+' Vraca "" ako je bezbedno; inace razlog. Otkup: mrtav-roditelj (fail-closed).
+' Revers (OM): aktivan-dup ambalaze istog broj+tip (#134). Otkup active-dup se NE
+' proverava ovde (bio je broj-level pa je preblokirao parcijalni storno jedne klase)
+' -> zurnal-put to radi PO REDU (OtkupReissueDupExists po (broj,klasa)).
+' FAIL-CLOSED: greska u proveri -> blokirajuci razlog (ne dozvoli tih prolaz).
 Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) As String
     On Error GoTo EH
     Select Case docType
         Case DOK_TIP_OTKUP
-            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) > 0 Then
-                UndoGuardReason = "Vec postoji AKTIVAN otkup " & broj & " -> undo bi duplirao. Odbijeno."
-                Exit Function
-            End If
             Dim dead As String: dead = OtkupBlockDeadParent(broj)
             If Len(dead) > 0 Then _
-                UndoGuardReason = "Roditelj " & dead & " je storniran -> blok bi ostao siroce. Odbijeno."
+                UndoGuardReason = "Roditelj/provera: " & dead & " -> blok bi ostao siroce / nesigurno. Odbijeno."
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
             If ActiveAmbalazaDokExists(broj, docType) Then _
                 UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " [" & docType & _
@@ -327,7 +335,7 @@ Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) A
     Exit Function
 EH:
     LogErr MOD_NAME & ".UndoGuardReason"
-    UndoGuardReason = "Greska pri proveri undo garde."
+    UndoGuardReason = "Greska pri proveri undo garde -> odbijeno (fail-closed)."
 End Function
 
 Private Sub MonUndo(ByVal procName As String, ByVal entityType As String, _

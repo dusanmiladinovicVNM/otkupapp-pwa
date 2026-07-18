@@ -1018,7 +1018,9 @@ End Sub
 Public Sub EnsureStornoZurnalSchemaCore()
     EnsureDataTable TBL_STORNO_ZURNAL, "StornoZurnal", _
         Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_TS, COL_SZ_DOCTYPE, COL_SZ_BROJ, _
-              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA)
+              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA, COL_SZ_NOVA)
+    ' Aditivno za postojece instalacije (v2.24 rani build bez NovaVrednost).
+    EnsureColumnOnTable TBL_STORNO_ZURNAL, COL_SZ_NOVA
 End Sub
 
 Public Sub EnsureStornoVezeSchema()

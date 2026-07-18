@@ -765,6 +765,7 @@ Public Const COL_SZ_TABELA As String = "Tabela"
 Public Const COL_SZ_ROWID As String = "RowID"
 Public Const COL_SZ_KOLONA As String = "Kolona"
 Public Const COL_SZ_STARA As String = "StaraVrednost"
+Public Const COL_SZ_NOVA As String = "NovaVrednost"   ' stanje koje je storno OSTAVIO (drift/optimistic-concurrency guard pri undo)
 
 ' Modovi (poslovno znacenje storna) -- vidi modStornoFlow
 Public Const SV_MODE_ISPRAVKA As String = "ISPRAVKA_ODMAH"
