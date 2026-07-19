@@ -534,3 +534,14 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Prazan `BrDok` (unbound blok)** se sada može vratiti kroz UI (undo po `OperationID`, ne treba poslovni broj).
 - **Testovi (+3):** reused-broj (undo starog op vraća staru generaciju), dead-parent druge generacije (undo prolazi), prazan-BrDok end-to-end undo.
 - **Rizik za podatke:** nizak — UI je runtime overlay (`.frx` netaknut); motor nepromenjen osim per-red garde (uža, sigurnija). ASCII-only. **Odloženo:** chain instrumentacija; `UndoneAt` status operacije.
+
+---
+
+## vba-v2.26.0 — 2026-07-18
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Fokus: **chain instrumentacija — Faza A: Otpremnica + Zbirna** u storno-žurnal. Lossless „Vrati storno" sada pokriva i otpremnicu/zbirnu (leaf, čist soft-delete). Nastavak na v2.25.0.
+
+- **Otpremnica + Zbirna u žurnal:** `StornoOtpremnica`/`StornoZbirna` otvaraju op po broju (dvoklasni dokument → **jedan** `OperationID`) i žurnališu `Stornirano` po redu (PK obavezan); `StornoOtpremnicaByBroj_TX` grupiše obe klase u jedan op (zatvara ga **pre** malina-kaskade). `PkColForTable += Otpremnica/Zbirna`. Operacije se pojave u „Vrati storno" listi i vraćaju preko `UndoOperation_TX`.
+- **Per-red garde proširene:** generička `ReissueDupExists(tabela, red, brojCol, klasaCol)` (otkup/otpremnica/zbirna) — active-dup po (broj, klasa). Nova `OtpremnicaDeadParent` (fail-closed): undo otpremnice se **odbija** ako joj je roditeljska zbirna stornirana (spreči siroče).
+- **Testovi (+3):** otpremnica undo (dvoklasna, jedan op), zbirna undo, otpremnica-dead-parent (undo odbijen uz mrtvu zbirnu).
+- **Opseg / odloženo:** kaskade (malina/autohladnjača) i overwrite-tipovi (**Prijemnica/Faktura/Paleta/Prerada** — clear `FakturaID`/`Fakturisano`, faktura `Status`, `Preradjeno`) su **Faza B/C** (traže relaksaciju op-modela za multi-broj operacije + hvatanje starih vrednosti + novac side-effect). Njihov raw undo se i dalje odbija; profesionalne korekcije idu kroz storno centar.
+- **Rizik:** nizak — isti obrazac kao Otkup/Revers; leaf soft-delete; instrumentacija guardovana (žurnališe samo kad je op aktivan). ASCII-only; `.frx` netaknut.

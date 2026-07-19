@@ -310,6 +310,34 @@ EH:
     OtkupBlockDeadParentByID = "(provera roditelja nije uspela)"
 End Function
 
+' Undo otpremnice bi ostavio siroce ako joj je roditeljska zbirna (BrojZbirne) mrtva
+' (stornirana/ne postoji). "" = bezbedno; inace opis. FAIL-CLOSED (marker na gresku).
+Public Function OtpremnicaDeadParent(ByVal otpID As String) As String
+    On Error GoTo EH
+    Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then Exit Function
+    Dim cId As Long, cZbr As Long
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    If cId = 0 Then OtpremnicaDeadParent = "(provera roditelja nije moguca - sema)": Exit Function
+    If cZbr = 0 Then Exit Function                 ' nema veze ka zbirni -> nista da bude siroce
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cId))) = Trim$(otpID) Then
+            Dim brZbr As String: brZbr = Trim$(CStr(data(i, cZbr)))
+            If Len(brZbr) > 0 Then
+                If Len(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_BROJ)) = 0 Then _
+                    OtpremnicaDeadParent = "zbirna " & brZbr
+            End If
+            Exit For
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".OtpremnicaDeadParent"
+    OtpremnicaDeadParent = "(provera roditelja nije uspela)"
+End Function
+
 ' Reaktiviraj tblAmbalaza redove dokumenta (DokID + DokTip) koji su stornirani.
 Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As String, _
                                           ByVal SRC As String) As Long
@@ -359,7 +387,7 @@ End Function
 ' Vraca "" ako je bezbedno; inace razlog. Otkup: mrtav-roditelj (fail-closed).
 ' Revers (OM): aktivan-dup ambalaze istog broj+tip (#134). Otkup active-dup se NE
 ' proverava ovde (bio je broj-level pa je preblokirao parcijalni storno jedne klase)
-' -> zurnal-put to radi PO REDU (OtkupReissueDupExists po (broj,klasa)).
+' -> zurnal-put to radi PO REDU (ReissueDupExists po (broj,klasa)).
 ' FAIL-CLOSED: greska u proveri -> blokirajuci razlog (ne dozvoli tih prolaz).
 Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String) As String
     On Error GoTo EH

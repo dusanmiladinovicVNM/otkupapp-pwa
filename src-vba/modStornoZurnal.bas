@@ -154,14 +154,24 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
             Err.Raise ERR_SZ_BASE + 13, SRC, "Stanje se promenilo posle storna (" & vt & "." & vcol & _
                 " = '" & curV & "', ocekivano '" & CStr(rows(i)(4)) & "') -> undo odbijen (ne gazi noviju izmenu)."
         End If
-        ' Otkup PO REDU: mrtav-roditelj (bas tog reda) + active-dup iste (broj,klasa) slot.
-        If StrComp(vt, TBL_OTKUP, vbTextCompare) = 0 And StrComp(vcol, COL_STORNIRANO, vbTextCompare) = 0 Then
-            Dim dpr As String: dpr = OtkupBlockDeadParentByID(CStr(rows(i)(1)))
-            If Len(dpr) > 0 Then Err.Raise ERR_SZ_BASE + 15, SRC, "Roditelj/provera bloka " & _
-                CStr(rows(i)(1)) & ": " & dpr & " -> undo bi ostavio siroce. Odbijeno."
-            If OtkupReissueDupExists(CStr(rows(i)(1))) Then _
-                Err.Raise ERR_SZ_BASE + 14, SRC, "Vec postoji AKTIVAN otkup iste (broj,klasa) kao red " & _
-                    CStr(rows(i)(1)) & " -> undo bi duplirao. Odbijeno."
+        ' PO REDU garde po tabeli (Stornirano-flip redovi): mrtav-roditelj + active-dup.
+        If StrComp(vcol, COL_STORNIRANO, vbTextCompare) = 0 Then
+            If StrComp(vt, TBL_OTKUP, vbTextCompare) = 0 Then
+                Dim dpr As String: dpr = OtkupBlockDeadParentByID(CStr(rows(i)(1)))
+                If Len(dpr) > 0 Then Err.Raise ERR_SZ_BASE + 15, SRC, "Roditelj/provera bloka " & _
+                    CStr(rows(i)(1)) & ": " & dpr & " -> undo bi ostavio siroce. Odbijeno."
+                If ReissueDupExists(TBL_OTKUP, CStr(rows(i)(1)), COL_OTK_BR_DOK, COL_OTK_KLASA) Then _
+                    Err.Raise ERR_SZ_BASE + 14, SRC, "Vec postoji AKTIVAN otkup iste (broj,klasa) -> undo bi duplirao. Odbijeno."
+            ElseIf StrComp(vt, TBL_OTPREMNICA, vbTextCompare) = 0 Then
+                Dim dpo As String: dpo = OtpremnicaDeadParent(CStr(rows(i)(1)))
+                If Len(dpo) > 0 Then Err.Raise ERR_SZ_BASE + 16, SRC, "Roditelj/provera otpremnice " & _
+                    CStr(rows(i)(1)) & ": " & dpo & " -> undo bi ostavio siroce. Odbijeno."
+                If ReissueDupExists(TBL_OTPREMNICA, CStr(rows(i)(1)), COL_OTP_BROJ, COL_OTP_KLASA) Then _
+                    Err.Raise ERR_SZ_BASE + 17, SRC, "Vec postoji AKTIVNA otpremnica iste (broj,klasa) -> undo bi duplirao. Odbijeno."
+            ElseIf StrComp(vt, TBL_ZBIRNA, vbTextCompare) = 0 Then
+                If ReissueDupExists(TBL_ZBIRNA, CStr(rows(i)(1)), COL_ZBR_BROJ, COL_ZBR_KLASA) Then _
+                    Err.Raise ERR_SZ_BASE + 18, SRC, "Vec postoji AKTIVNA zbirna iste (broj,klasa) -> undo bi duplirao. Odbijeno."
+            End If
         End If
     Next i
 
@@ -199,49 +209,51 @@ Private Sub RestoreCell(ByVal tbl As String, ByVal rowID As String, _
     If ri > 0 Then RequireUpdateCell tbl, ri, col, oldVal, SRC
 End Sub
 
-' Postoji li AKTIVAN otkup red iste (broj, klasa) kao dati stornirani red, a DRUGI PK?
-' -> reizdaje isti slot -> undo bi duplirao. (Parcijalno-klasni undo je bezbedan jer
-'  druga klasa ima drugaciju Klasu pa nije dup.)
-' FAIL-CLOSED: greska/nedostajuca sema -> RAISE (UndoOperation_TX to hvata i odbija
-' undo). Ne sme tiho vratiti False ("nema duplikata") kad provera nije izvedena.
-Private Function OtkupReissueDupExists(ByVal otkupID As String) As Boolean
-    Const SRC As String = MOD_NAME & ".OtkupReissueDupExists"
-    Dim data As Variant: data = GetTableData(TBL_OTKUP)
+' Postoji li AKTIVAN red iste (broj, klasa) kao dati stornirani red, a DRUGI PK?
+' -> reizdaje isti poslovni slot -> undo bi duplirao. (Parcijalno-klasni undo je
+' bezbedan: druga klasa ima drugaciju Klasu pa nije dup.) Generic po tabeli.
+' FAIL-CLOSED: greska/nedostajuca sema -> RAISE (UndoOperation_TX to hvata i odbija).
+Private Function ReissueDupExists(ByVal tbl As String, ByVal rowID As String, _
+                                  ByVal brojCol As String, ByVal klasaCol As String) As Boolean
+    Const SRC As String = MOD_NAME & ".ReissueDupExists"
+    Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Function
     Dim cId As Long, cBr As Long, cKl As Long, cSt As Long
-    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
-    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
-    cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    cId = RequireColumnIndex(tbl, PkColForTable(tbl), SRC)
+    cBr = RequireColumnIndex(tbl, brojCol, SRC)
+    cKl = GetColumnIndex(tbl, klasaCol)
+    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
     Dim tBroj As String, tKlasa As String, i As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cId))) = Trim$(otkupID) Then
+        If Trim$(CStr(data(i, cId))) = Trim$(rowID) Then
             tBroj = Trim$(CStr(data(i, cBr)))
             If cKl > 0 Then tKlasa = Trim$(CStr(data(i, cKl)))
             Exit For
         End If
     Next i
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cId))) <> Trim$(otkupID) Then
+        If Trim$(CStr(data(i, cId))) <> Trim$(rowID) Then
             If Trim$(CStr(data(i, cBr))) = tBroj Then
                 Dim kMatch As Boolean: kMatch = True
                 If cKl > 0 Then kMatch = (Trim$(CStr(data(i, cKl))) = tKlasa)
                 If kMatch Then
                     Dim isStor As Boolean: isStor = False
                     If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
-                    If Not isStor Then OtkupReissueDupExists = True: Exit Function
+                    If Not isStor Then ReissueDupExists = True: Exit Function
                 End If
             End If
         End If
     Next i
 End Function
 
-' PK kolona po tabeli (opseg faze 1: Otkup + Revers -> tblOtkup/Ambalaza/Novac).
+' PK kolona po tabeli. Faza 1: Otkup + Revers; Faza A: + Otpremnica + Zbirna (leaf).
 Private Function PkColForTable(ByVal tbl As String) As String
     Select Case tbl
         Case TBL_OTKUP: PkColForTable = COL_OTK_ID
         Case TBL_AMBALAZA: PkColForTable = COL_AMB_ID
         Case TBL_NOVAC: PkColForTable = COL_NOV_ID
+        Case TBL_OTPREMNICA: PkColForTable = COL_OTP_ID
+        Case TBL_ZBIRNA: PkColForTable = COL_ZBR_ID
     End Select
 End Function
 

@@ -217,6 +217,7 @@ Public Function StornoOtpremnica_TX(ByVal otpremnicaID As String) As Boolean
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL     ' zurnal upisi u istoj TX -> rollback ih povlaci
 
     If Not StornoOtpremnica(otpremnicaID) Then
         Err.Raise ERR_STORNO_BASE + 2, SRC, _
@@ -238,19 +239,28 @@ End Function
 
 Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
     Const SRC As String = "StornoOtpremnica"
+    Dim owns As Boolean
 
     On Error GoTo EH
 
     Dim rowOtp As Long
     rowOtp = RequireStornoAllowed(TBL_OTPREMNICA, otpremnicaID, COL_OTP_ID, SRC)
 
+    ' Zurnal (lossless undo): op po BROJU otpremnice; journal stare vrednosti PRE mutacije.
+    Dim brOtp As String: brOtp = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_BROJ))
+    owns = BeginStornoOp(FLOW_DOC_OTPREMNICA, brOtp)
+    JournalCell TBL_OTPREMNICA, otpremnicaID, COL_STORNIRANO, _
+        NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_STORNIRANO)), "Da"
+
     MarkRowStornirano TBL_OTPREMNICA, rowOtp, SRC
     StornoAmbalazaByDokument otpremnicaID, DOK_TIP_OTPREMNICA
 
+    EndStornoOp owns
     StornoOtpremnica = True
     Exit Function
 
 EH:
+    EndStornoOp owns
     LogAndReraise SRC
 End Function
 
@@ -272,6 +282,7 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL     ' zurnal upisi u istoj TX -> rollback ih povlaci
     If malinaMode Then tx.AddTableSnapshot TBL_ZBIRNA
 
     Dim data As Variant
@@ -306,6 +317,10 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
                   "Nema aktivne otpremnice za broj: " & brBroj
     End If
 
+    ' JEDNA zurnal operacija za CEO broj otpremnice (obe klase) -> undo vraca obe kao
+    ' celinu. Zatvara se PRE malina kaskade (zbirna je zaseban op; njen storno bi
+    ' pao u pogresan broj i pao na nested-identity gardu).
+    Dim ownsOp As Boolean: ownsOp = BeginStornoOp(FLOW_DOC_OTPREMNICA, brBroj)
     Dim k As Long
     For k = 1 To ids.count
         If Not StornoOtpremnica(CStr(ids(k))) Then
@@ -313,6 +328,7 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
                       "StornoOtpremnica nije uspeo. OtpremnicaID=" & CStr(ids(k))
         End If
     Next k
+    EndStornoOp ownsOp
 
     ' Malina mod: otpremnica je 1:1 sa zbirnom (BrojZbirne izveden iz
     ' BrojOtpremnice), pa storno otpremnice povlaci i njenu zbirnu.
@@ -333,6 +349,7 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
     Exit Function
 
 EH:
+    AbortStornoOp                          ' ne ostavi op-kontekst otvoren posle greske
     HandleStornoTxError SRC, "Otpremnica", brBroj, tx
     StornoOtpremnicaByBroj_TX = False
 End Function
@@ -449,6 +466,7 @@ Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL     ' zurnal upisi u istoj TX -> rollback ih povlaci
 
     If Not StornoZbirna(brojZbirne) Then
         Err.Raise ERR_STORNO_BASE + 3, SRC, _
@@ -470,6 +488,7 @@ End Function
 
 Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
     Const SRC As String = "StornoZbirna"
+    Dim owns As Boolean
 
     On Error GoTo EH
 
@@ -485,9 +504,15 @@ Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
 
     Dim colBroj As Long
     Dim colStorno As Long
+    Dim colID As Long
 
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
     colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, SRC)
+
+    ' Zurnal (lossless undo): op po BROJU zbirne (obe klase = jedan op).
+    owns = BeginStornoOp(FLOW_DOC_ZBIRNA, brojZbirne)
+    If StornoOpActive() Then colID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC) _
+                       Else colID = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
 
     Dim foundAny As Boolean
     Dim changedCount As Long
@@ -498,6 +523,12 @@ Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
             foundAny = True
 
             If Not IsStorniranoValue(data(i, colStorno)) Then
+                If StornoOpActive() Then
+                    Dim zID As String: zID = Trim$(CStr(data(i, colID)))
+                    If Len(zID) = 0 Then Err.Raise ERR_STORNO_BASE + 32, SRC, _
+                        "Zbirna red bez ZbirnaID (PK) -> lossless storno nije moguc. Odbijeno."
+                    JournalCell TBL_ZBIRNA, zID, COL_STORNIRANO, CStr(data(i, colStorno)), "Da"
+                End If
                 MarkRowStornirano TBL_ZBIRNA, i, SRC
                 changedCount = changedCount + 1
             End If
@@ -514,10 +545,12 @@ Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
                   "Zbirna je ve" & ChrW(263) & " stornirana. BrojZbirne=" & brojZbirne
     End If
 
+    EndStornoOp owns
     StornoZbirna = True
     Exit Function
 
 EH:
+    EndStornoOp owns
     LogAndReraise SRC
 End Function
 

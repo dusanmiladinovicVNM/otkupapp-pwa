@@ -40,7 +40,90 @@ Public Sub Test_StornoCentar_All()
     Test_StornoJournalReusedBroj_Auto
     Test_StornoJournalDeadParentOtherGen_Auto
     Test_StornoJournalEmptyBrDokUndo_Auto
+    Test_StornoJournalOtpremnicaUndo_Auto
+    Test_StornoJournalZbirnaUndo_Auto
+    Test_StornoJournalOtpremnicaDeadParent_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' Faza A: lossless undo OTPREMNICE (leaf, cist soft-delete). Dvoklasni -> jedan op.
+Public Sub Test_StornoJournalOtpremnicaUndo_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA: tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_ZBIRNA: tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    ' dvoklasna otpremnica BEZ BrojZbirne (da malina-mod ne kaskadira zbirnu u testu;
+    ' bez roditelja -> OtpremnicaDeadParter vraca "" -> undo dozvoljen)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), Array("SVT-OU-1", "SVT-OU-O", "I")
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), Array("SVT-OU-2", "SVT-OU-O", "II")
+
+    TcChk StornoOtpremnicaByBroj_TX("SVT-OU-O") = True, "storno otpremnice (dvoklasna) -> True"
+    Dim op As String: op = LatestOpFor(FLOW_DOC_OTPREMNICA, "SVT-OU-O")
+    TcChk Len(op) > 0, "otpremnica -> op zabelezen"
+    TcChk UndoOperation_TX(op) = True, "undo otpremnice -> True"
+    TcChk UCase$(NzS(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, "SVT-OU-1", COL_STORNIRANO))) <> "DA", "Klasa I otpremnice vracena"
+    TcChk UCase$(NzS(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, "SVT-OU-2", COL_STORNIRANO))) <> "DA", "Klasa II otpremnice vracena (isti op)"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalOtpremnicaUndo_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' Faza A: lossless undo ZBIRNE (leaf).
+Public Sub Test_StornoJournalZbirnaUndo_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA: tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), Array("SVT-ZU-1", "SVT-ZU-Z", "I")
+    TcChk StornoZbirna_TX("SVT-ZU-Z") = True, "storno zbirne -> True"
+    Dim op As String: op = LatestOpFor(FLOW_DOC_ZBIRNA, "SVT-ZU-Z")
+    TcChk Len(op) > 0, "zbirna -> op zabelezen"
+    TcChk UndoOperation_TX(op) = True, "undo zbirne -> True"
+    TcChk UCase$(NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "SVT-ZU-1", COL_STORNIRANO))) <> "DA", "zbirna vracena"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalZbirnaUndo_Auto GRESKA: " & Err.description: mFail = mFail + 1
+End Sub
+
+' Faza A: undo otpremnice se ODBIJA ako joj je zbirna (roditelj) stornirana (siroce).
+Public Sub Test_StornoJournalOtpremnicaDeadParent_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    EnsureStornoZurnalSchemaCore
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA: tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_ZBIRNA: tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    ' ziva zbirna -> storno otpremnice (journaled) -> pa zbirnu obori -> undo otpremnice odbijen
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), Array("SVT-OD-ZID", "SVT-OD-Z", "I")
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_OTP_BROJ_ZBIRNE), Array("SVT-OD-1", "SVT-OD-O", "I", "SVT-OD-Z")
+    TcChk StornoOtpremnica_TX("SVT-OD-1") = True, "storno otpremnice -> True"
+    Dim op As String: op = LatestOpFor(FLOW_DOC_OTPREMNICA, "SVT-OD-O")
+    ' obori zbirnu (roditelj postaje mrtav)
+    Dim zr As Long: zr = TcRowIndex(TBL_ZBIRNA, COL_ZBR_ID, "SVT-OD-ZID")
+    If zr > 0 Then UpdateCell TBL_ZBIRNA, zr, COL_STORNIRANO, "Da"
+    TcChk UndoOperation_TX(op) = False, "undo otpremnice uz mrtvu zbirnu -> ODBIJEN (siroce)"
+    TcChk UCase$(NzS(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, "SVT-OD-1", COL_STORNIRANO))) = "DA", "otpremnica ostaje stornirana"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_StornoJournalOtpremnicaDeadParent_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' Operation-centric UI koren: reused poslovni broj -> undo STAROG op vraca STARU
