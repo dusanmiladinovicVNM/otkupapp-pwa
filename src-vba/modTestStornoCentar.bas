@@ -40,7 +40,31 @@ Public Sub Test_StornoCentar_All()
     Test_StornoJournalReusedBroj_Auto
     Test_StornoJournalDeadParentOtherGen_Auto
     Test_StornoJournalEmptyBrDokUndo_Auto
+    Test_ImpactHeaderSum_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+End Sub
+
+' #6: impact header kolicina = SUMA aktivnih Klasa I+II (ranije citao samo prvu klasu
+' -> potceni dvoklasni dokument u uvidu pre potvrde). Storniran red se ne broji.
+Public Sub Test_ImpactHeaderSum_Auto()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA), Array("SVT-IH-1", "SVT-IH-P", "I", 100)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA), Array("SVT-IH-2", "SVT-IH-P", "II", 50)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA, COL_STORNIRANO), Array("SVT-IH-3", "SVT-IH-P", "I", 999, "Da")
+
+    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-IH-P")
+    Dim h As Object: Set h = m("header")
+    TcChk Val(NzS(h("kolicina"))) = 150, "impact header kolicina = suma aktivnih Klasa I+II (100+50), storniran izuzet"
+
+    tx.RollbackTx: Set tx = Nothing
+    Exit Sub
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Debug.Print "FAIL Test_ImpactHeaderSum_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' Operation-centric UI koren: reused poslovni broj -> undo STAROG op vraca STARU

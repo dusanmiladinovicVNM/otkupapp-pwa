@@ -534,3 +534,11 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Prazan `BrDok` (unbound blok)** se sada može vratiti kroz UI (undo po `OperationID`, ne treba poslovni broj).
 - **Testovi (+3):** reused-broj (undo starog op vraća staru generaciju), dead-parent druge generacije (undo prolazi), prazan-BrDok end-to-end undo.
 - **Rizik za podatke:** nizak — UI je runtime overlay (`.frx` netaknut); motor nepromenjen osim per-red garde (uža, sigurnija). ASCII-only. **Odloženo:** chain instrumentacija; `UndoneAt` status operacije.
+
+---
+
+## vba-v2.27.0 — 2026-07-19
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Mala UX ispravka u storno „Uvidu".
+
+- **Uvid pre storna — `Kolicina` je sada SUMA aktivnih Klasa I+II** (`modStornoImpact.ImpactHeader`): ranije je čitala samo prvi (jedan) red pa je **potcenjivala** dvoklasni dokument (otpremnica/zbirna/prijemnica). Sada sabira količine aktivnih redova istog broja (storniran red se ne broji). Test: `Test_ImpactHeaderSum_Auto`.
+- **Rizik:** nizak — read-only agregacija u uvidu (ne dira storno/undo motor). ASCII-only; `.frx` netaknut.

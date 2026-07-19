@@ -51,21 +51,24 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String) As 
     h("ispravkaOd") = "": h("zamenjenSa") = ""
     Dim tTbl As String, tCol As String: tTbl = "": tCol = ""
     Select Case docType
+        ' kolicina = SUMA aktivnih redova broja (Klasa I + II dele broj; HL bi vratio
+        ' samo prvu klasu -> potceni dvoklasni dokument u uvidu). partner/datum su
+        ' isti po klasama pa ostaju obican lookup.
         Case FLOW_DOC_OTPREMNICA
             tTbl = TBL_OTPREMNICA: tCol = COL_OTP_BROJ
             h("partnerID") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_STANICA)
             h("datum") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_DATUM)
-            h("kolicina") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_KOLICINA)
+            h("kolicina") = SumActiveNum(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_KOLICINA)
         Case FLOW_DOC_ZBIRNA
             tTbl = TBL_ZBIRNA: tCol = COL_ZBR_BROJ
             h("partnerID") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KUPAC)
             h("datum") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_DATUM)
-            h("kolicina") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KOLICINA)
+            h("kolicina") = SumActiveNum(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KOLICINA)
         Case FLOW_DOC_PRIJEMNICA
             tTbl = TBL_PRIJEMNICA: tCol = COL_PRJ_BROJ
             h("partnerID") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KUPAC)
             h("datum") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_DATUM)
-            h("kolicina") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KOLICINA)
+            h("kolicina") = SumActiveNum(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KOLICINA)
     End Select
     ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
@@ -171,6 +174,38 @@ Private Function HL(ByVal tbl As String, ByVal keyCol As String, _
                     ByVal keyVal As String, ByVal valCol As String) As String
     On Error Resume Next
     HL = Trim$(CStr(LookupValue(tbl, keyCol, keyVal, valCol)))
+End Function
+
+' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno
+' po dokumentu (Klasa I + II). Prazan string ako nema aktivnog reda.
+Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
+                             ByVal keyVal As String, ByVal sumCol As String) As String
+    On Error GoTo done
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cKey As Long, cSum As Long, cSt As Long
+    cKey = GetColumnIndex(tbl, keyCol)
+    cSum = GetColumnIndex(tbl, sumCol)
+    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    If cKey = 0 Or cSum = 0 Then Exit Function
+    Dim i As Long, total As Double, found As Boolean
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) Then
+            Dim isStor As Boolean: isStor = False
+            If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
+            If Not isStor Then
+                total = total + SafeDblZ(data(i, cSum))
+                found = True
+            End If
+        End If
+    Next i
+    If found Then SumActiveNum = Format$(total, "#,##0.##")
+done:
+End Function
+
+Private Function SafeDblZ(ByVal v As Variant) As Double
+    On Error Resume Next
+    If IsNumeric(v) Then SafeDblZ = CDbl(v) Else SafeDblZ = Val(CStr(v))
 End Function
 
 ' ============================================================
