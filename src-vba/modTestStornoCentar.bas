@@ -674,9 +674,16 @@ Public Sub Test_DocIsIssued_Auto()
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_TRACE_IZDATO_STATUS), _
               Array("SVT-IZ-3", "SVT-IZ-IZD", "I", IZDATO_IZDATO)
 
+    ' #7: broj sa DVE generacije -> status se cita sa AKTIVNOG reda, ne sa storniranog
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_TRACE_IZDATO_STATUS, COL_STORNIRANO), _
+              Array("SVT-IZ-4S", "SVT-IZ-MIX", "I", IZDATO_DRAFT, "Da")     ' STORNIRAN red = DRAFT
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_TRACE_IZDATO_STATUS), _
+              Array("SVT-IZ-4A", "SVT-IZ-MIX", "I", IZDATO_IZDATO)          ' AKTIVAN red = IZDATO
+
     TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-EMPTY") = True, "prazan IzdatoStatus -> izdato"
     TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-DRAFT") = False, "DRAFT -> nije izdato"
     TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-IZD") = True, "IZDATO -> izdato"
+    TcChk DocIsIssued(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-IZ-MIX") = True, "#7: status sa aktivnog (IZDATO), ne storniranog (DRAFT)"
 
     tx.RollbackTx: Set tx = Nothing
     Exit Sub

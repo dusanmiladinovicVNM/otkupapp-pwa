@@ -537,8 +537,9 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 
 ---
 
-## vba-v2.27.0 — 2026-07-19
-> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Mala UX ispravka u storno „Uvidu".
+## vba-v2.26.0 — 2026-07-19
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Male, realne UX/robusnost ispravke (uvid + status čitanje).
 
 - **Uvid pre storna — `Kolicina` je sada SUMA aktivnih Klasa I+II** (`modStornoImpact.ImpactHeader`): ranije je čitala samo prvi (jedan) red pa je **potcenjivala** dvoklasni dokument (otpremnica/zbirna/prijemnica). Sada sabira količine aktivnih redova istog broja (storniran red se ne broji). Test: `Test_ImpactHeaderSum_Auto`.
-- **Rizik:** nizak — read-only agregacija u uvidu (ne dira storno/undo motor). ASCII-only; `.frx` netaknut.
+- **`DocIsIssued` čita status sa AKTIVNOG reda** (`modDokumentInvariant`): pređeno sa `LookupValue` na `LookupActiveID` za `IzdatoStatus` — ranije je za broj sa storniranom generacijom mogao pokupiti status STORNIRANOG reda; sada gleda aktivni red (konzervativno „izdato" ako aktivnog nema).
+- **Rizik:** nizak — read-only agregacija/čitanje statusa u uvidu (ne dira storno/undo motor). ASCII-only; `.frx` netaknut.
