@@ -182,6 +182,69 @@ PIN hash + JMBG (VBA+GAS/PWA, migracioni prozor); `saveParcelPolygon` (KI-001);
 sređivanje dokumentacije (AR/CL verzije, `instructions/` istorijski, CLAUDE.md
 reference); `VBA_SRC_PATH` iz LocalConfig. Detalji: ROADMAP §10.4.
 
+---
+
+## 3b. Paketi iz delte v85 (SEF, startup-auth, sync, self-update, cenovnik)
+
+> Detalji: `docs/AUDIT_FM_TRIJAZA.md` DEO II + `KNOWN_ISSUES.md` §8.4 (AUD-030…039).
+> Sidra su `f6313dc`/`a0bc9e2` — pre rada re-bazirati na svež `main` (v2.24.0+).
+
+### RF-21 — SEF correctness [P0/P1 · M]
+**Fajlovi:** `modSEFClient.bas`, `modSEFValidator.bas`, `modSEFMapper.bas`,
+`modSEFPersistance.bas`.
+**Obim:** (P0) 409 izdvojiti iz REJECTED → `apiStatus="CONFLICT"` → TECH_FAILED/manual
+(AUD-030); stornirana faktura sendable — `Stornirano` guard u `ValidateFakturaForSEF` +
+filter u `frmSEF` combu; qty/price odvojeni `XmlQuantity`/`XmlUnitPrice` (3+ dec);
+DueDate ≥ IssueDate uz force-today; `HasSuccessfulSEFSubmission` EH → re-raise
+(fail-closed); resubmit čisti stari `SEFDocumentId`; stavke: samo aktivne (Stornirano≠DA,
+OsirocenoOd prazno) (AUD-031). **Regression:** `RunSEFTestSuite` + demo SEF: duplicate
+submit (409), faktura sa >2 dec, stara faktura (DueDate), storno pa pokušaj slanja.
+
+### RF-22 — SEF UX/lifecycle [P1 · M]
+**Fajlovi:** `frmSEF.frm`, `modSEFService.bas`, `modSEFStatusSync.bas`, (+ `modSEFTests`).
+**Obim:** posle send-a `frmSEF` bira poruku po `SEFWorkflowState` (ne bezuslovno „Faktura
+poslata"); `Test_Cancel/Storno…_TX` iz servisa → `modSEFTests` (ili SEF_ENV guard);
+blank/unknown status → `UNKNOWN_STATUS` + manual review (ne SENT); `cmbFaktura_Change` →
+`ClearSEFInfo`; recovery/refresh vraćaju rezultat, `frmSEF` ga prikazuje; batch summary
+(found/recovered/failed). (AUD-032). **Regression:** ručno slanje odbijene fakture (poruka),
+recovery zaglavljenog SENDING.
+
+### RF-23 — Startup + authorization [P1 · S/M]
+**Fajlovi:** `ThisWorkbook.doccls`, `modTrial.bas`/`modLicense.bas`, `modMaticniLookups.bas`,
+`modAdmin.bas`, `modPodesavanja.bas`, `frmOtkupAPP.frm`, `frmStammdaten.frm`.
+**Obim:** `Workbook_Open` → `If AccessWasDenied() Then Exit Sub` (pre `STARTUP_SUCCESS`)
+(AUD-034); `MozeAdministraciju` guard: proširiti u `MaticniMenu_OnClick` na Admin/Podešavanja
++ vrh `BuildAdminPanel`/`AdminPanel_OnClick`/`BuildConfigEditor`/`ShowConfigSheet` (AUD-033);
+`btnBanka_Click` auth guard pre importa (obrazac iz `btnSyncPWA_Click`) (AUD-034); PasswordChar
+za „secret" polja u Podešavanjima; signal pri plaintext PIN fallbacku. **Regression:** login kao
+ne-admin → probati Matične → Admin panel mora biti blokiran; deny licence → app se zatvara.
+
+### RF-24 — Self-update hardening [P1 · M]
+**Fajlovi:** `modSelfUpdate.bas`, `modRelease.bas`, `modBuildGuard.bas`, `modBuildInfo` gen.
+**Obim:** faza 2 pokriva i failed `.frm` (ili ga ne Remove-uje u fazi 1); manifest `files_count`
++ abort na nepotpun download; `PublishReleaseToDrive` guard: placeholder/`+dirty` deny +
+disk↔workbook `BUILD_SHA` cross-check; `AssertBlankBuild` skenira plain-range logove
+(`SETUP_LOG`, test logovi) (AUD-035, AUD-037). **Regression:** simulirati prekinut download;
+publish sa dirty radnim direktorijumom mora pasti.
+
+### RF-25 — Sync/IO hardening [P2 · M]
+**Fajlovi:** `modGoogleSyncOrchestrator.bas`, `modGoogleSheets.bas`, `modDrive.bas`,
+`modStammdatenSync.bas`.
+**Obim:** `SetPWAMasterSyncLock` → RMW obrazac (ne full-tab overwrite koji briše
+`STANICA_LOCK_*`); dva rename-a u jedan `batchUpdate` (atomski swap); `ReadSheetData`
+EMPTY≠ERROR (ByRef ok); `DriveFindInFolder` error≠not-found; empty-source cloud-wipe guard;
+samostalni Parcele export → geo pull gate. (AUD-038). **Regression:** pun sync sa praznim
+lokalom (ne sme obrisati cloud), paralelni station lock očuvan.
+
+### RF-26 — Cenovnik + E2E gate [P1/P2 · S/M]
+**Fajlovi:** `frmOtkup.frm`, `frmDokumenta.frm`, `modCenovnik.bas`, `modE2EReleaseGate.bas`,
+`modBusinessFlowProTests.bas`.
+**Obim:** stale auto-cena — očistiti polje pre lookup-a, prazno na 0 (AUD-036); `GetVazecaCena`
+`Optional asOfDate` + `Datum` u schema guardu + UI datum fallback → greška; E2E gate: Boolean
+`Core` po suite-u, `E2E_Pass` samo na `m_Failed=0`, ILI deprecirati modul; environment guard u
+shipped test suite-ovima (AUD-039). **Regression:** unos otkupa za dva proizvoda uzastopno
+(cena se ne prenosi); E2E gate mora prijaviti FAIL kad suite padne.
+
 ## 4. Status
 
 | Paket | Naziv | Status | Grana | Napomena |
@@ -202,8 +265,18 @@ reference); `VBA_SRC_PATH` iz LocalConfig. Detalji: ROADMAP §10.4.
 | RF-14 | MasterSync/JSON | ⬜ | — | |
 | RF-15–19 | Konsolidacije | ⬜ | — | posle RF-14 |
 | RF-20 | Bezbednost/proces | ⬜ | — | planirati posebno |
+| RF-21 | SEF correctness | ⬜ | — | **sadrži jedini nov P0 (409)** |
+| RF-22 | SEF UX/lifecycle | ⬜ | — | posle RF-21 |
+| RF-23 | Startup + authorization | ⬜ | — | **P1 auth lanac + AccessWasDenied** |
+| RF-24 | Self-update hardening | ⬜ | — | |
+| RF-25 | Sync/IO hardening | ⬜ | — | |
+| RF-26 | Cenovnik + E2E gate | ⬜ | — | |
 
-**Redosled:** RF-01 → RF-02 → RF-03 → RF-04 → RF-05 → RF-14 → RF-06 → RF-07 →
-RF-08 → RF-09 → RF-10 → RF-11 → RF-12 → RF-13 → RF-15+ (RF-14 ranije jer je P0;
-RF-06/07 posle da bi se izveštaji testirali nad već očišćenim podacima). Redosled se
-sme menjati — pravilo je samo: serijski, jedan po jedan.
+**Redosled:** RF-01 → RF-02 → RF-23 → RF-21 → RF-03* → RF-04* → RF-05 → RF-14 →
+RF-06 → RF-07 → RF-08 → RF-22 → RF-09 → RF-10 → RF-11 → RF-12 → RF-13 → RF-26 →
+RF-24 → RF-25 → RF-15+ → RF-20.
+- **RF-23 i RF-21 podignuti napred:** RF-23 nosi P0-klasu bezbednosti (auth lanac do Admin
+  panela) i P1 `AccessWasDenied`; RF-21 nosi jedini nov P0 (SEF 409). Oba pre storna.
+- **RF-03*/RF-04* (storno):** OBAVEZNO re-verifikovati protiv `origin/main` (v2.24.0, storno
+  PR #134–137 su prepravili `modStornoFlow` +746 linija) — deo nalaza je možda već rešen.
+- Redosled se sme menjati — pravilo je samo: serijski, jedan po jedan, re-baza na svež `main`.

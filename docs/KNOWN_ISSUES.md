@@ -237,3 +237,39 @@ Remediation plan: `ROADMAP.md` §10. AUD items reference FM entries for detail.
   loop is safe (FM-0020 #20); revers hidden-state has no live wrong path (FM-0031 #5).
 - Design-accepted (63 rows): documented in the catalog per entry; notable: saga model of the
   hladnjača chain, VeryHidden config sheets, deferred/best-effort monitoring.
+
+### 8.4 Delta v85 — new findings (FM-0035..FM-0084, 2026-07-19)
+
+Full per-item detail in `docs/AUDIT_FM_TRIJAZA.md` DEO II. Anchors: FM-0035..0075 = `f6313dc`,
+FM-0076..0084 = `a0bc9e2`. Severity calibrated for single-writer desktop. Many delta rows map to
+already-registered AUD-001/003/006/016/018/019 and KI-006 — those are not re-listed here.
+
+**IMPORTANT (RF-03/RF-04 scope):** `main` advanced past the FM anchor to v2.24.0 (`58a5075`) via
+storno PRs #134-137 (`modStornoFlow` +746 lines). The v85 storno entries (FM-0011..0015) predate
+that work; RF-03/RF-04 must be re-verified against `origin/main` before implementation.
+
+| ID | Sev | Finding | Location |
+|---|---|---|---|
+| AUD-030 | P0 | SEF client maps HTTP 409 → REJECTED; a duplicate/conflict permanently marks the faktura rejected while the document exists on SEF (retry reuses same requestId) — risk of duplicate/incorrect invoice toward the tax authority. | `modSEFClient.bas:473-476` |
+| AUD-031 | P1 | SEF correctness cluster: (a) stornirana faktura is end-to-end sendable — validator never reads `Stornirano`, `frmSEF` combo unfiltered, `StornoFaktura` doesn't touch SEF workflow; (b) qty/price truncated to 2 decimals → arithmetically inconsistent UBL; (c) DueDate < IssueDate under force-today; (d) fail-soft `HasSuccessfulSEFSubmission` (EH→False) allows double submit; (e) stale DocumentID carried through resubmit. | `modSEFValidator.bas:130-159`, `modSEFMapper.bas:190/561/577/372/411`, `modSEFPersistance.bas:528-572`, `modSEFValidator.bas:406-414` |
+| AUD-032 | P1 | SEF UX/lifecycle: `modSEFService` returns SubmissionID for REJECTED/TECH_FAILED → `frmSEF` shows "Faktura poslata" for failures; public `Test_Cancel/Storno…_TX` macros with legal side-effect in Alt+F8; blank/unknown status → silent "SENT"; `frmSEF` combo change doesn't reset shown context; recovery/refresh return True on API failure + false "Recovered" event each startup for SENDING+remote-terminal. | `modSEFService.bas:384/652-686/940-960`, `frmSEF.frm:279-283/454-458`, `modSEFStatusSync.bas:144-159/311`, `modSEFClient.bas:597-600` |
+| AUD-033 | P1 | Authorization chain: a user with "Matični podaci" reaches the Admin panel (Očisti tabele, Migracija, VBA import/export, fleet publish with password from `modConfig`). Guard exists only for "Korisnici" (`modMaticniLookups.bas:254-259`); shell lets `frmStammdaten` through (`OblastZaFormu`=""); `modAdmin`/`modPodesavanja`/`ShowConfigSheet` have no own check. Fix: one `MozeAdministraciju` guard (pattern in `modSetup.bas:1429`). | `modMaticniLookups.bas:254-259`, `modAdmin.bas:39/200`, `modPodesavanja.bas:725`, `frmOtkupAPP.frm:1072-1077` |
+| AUD-034 | P1 | Startup/integration: `Workbook_Open` never calls `AccessWasDenied` although the comment and runbook claim it does — deny relies solely on an unchecked `OnTime` close; false `STARTUP_SUCCESS` after deny; `frmOtkupAPP.btnBanka_Click` books money (auto-map on Activate) before the auth check. | `ThisWorkbook.doccls:15-35`, `modLicense.bas:626-628`, `frmOtkupAPP.frm:728 vs 1072` |
+| AUD-035 | P1 | Self-update: phase 1 Removes a failed `.frm` while phase 2 never re-imports it → component vanishes; no download manifest completeness check → mixed-version code set. | `modSelfUpdate.bas:101-105/149/261-281` |
+| AUD-036 | P1 | Cenovnik stale auto-price: `If c > 0 Then txtCena…` never clears the field, so a lookup miss leaves the previous product's price in the input. | `frmOtkup.frm:407-413`, `frmDokumenta.frm:583-591` |
+| AUD-037 | P2 | Release/build guard hardening: `PublishReleaseToDrive` performs no guard (placeholder/`+dirty` build shippable, no disk↔workbook SHA cross-check); `AssertBlankBuild` scans only ListObjects, missing plain-range logs (`SETUP_LOG`, test logs) that carry machine/user/path. | `modRelease.bas:19-77`, `modBuildGuard.bas:29-41`, `tools/release.sh:61` |
+| AUD-038 | P2 | Sync/IO hardening: `SetPWAMasterSyncLock` full-tab overwrite deletes `STANICA_LOCK_*` keys (asymmetric vs modStanicaLock RMW); non-atomic rename-pair in Sheets swap (target name absent between renames); `modDrive` find-error treated as not-found → duplicate release artifact + first-match self-update; empty-source → header-only cloud wipe. | `modGoogleSyncOrchestrator.bas:578-605`, `modGoogleSheets.bas:834-932`, `modDrive.bas:70-94`, `modStammdatenSync.bas:1324-1337` |
+| AUD-039 | P2 | Test suites unsafe as shipped/gate: `modE2EReleaseGate` reports PASS on any non-throwing `Application.Run` (child suites swallow failures internally); `modBusinessFlowProTests`/E2E have no environment guard and are shipped to clients; hard-delete cleanup misses fakture headers + ambalaza ledger. | `modE2EReleaseGate.bas:74-82`, `modBusinessFlowProTests.bas:60-86/2278-2316` |
+
+### 8.5 Delta v85 — recalibrated / refuted highlights
+
+- Most "Kritično"-titled SEF DTO/validator rows (FM-0042..0044, FM-0040 first-match) are P3: mutable DTOs
+  aren't mutated between build and serialize (single sync call), and every write path goes through strict
+  `GetSingleRowIndexByKey` before HTTP, so first-match reads are fail-closed for the send flow.
+- Auth fail-open rows (FM-0053 #2/#3/#9/#15) are documented opt-in design with `EnableAuth` anti-lockout
+  bootstrap → P2 (the silent plaintext-PIN fallback deserves a signal; cheapest delta).
+- WithEvents wrapper "stale-click/race" rows (FM-0056/0058/0060/0062) are neutralized: rebuild resets the
+  wrapper collection, so the old event sink dies and the old button cannot fire → P3.
+- Refuted side-details: FM-0083 #91.23 ("banka error-code constants unused" — they are used); the
+  pre-registration note that `modBusinessFlowProTests` runs inside a rollback TX (it does not — that applies
+  to `RunMasterSyncSmokeSuite`).
