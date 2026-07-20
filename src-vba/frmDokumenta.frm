@@ -6476,6 +6476,11 @@ Private Function SumOtkupKgToday() As Double
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
+    ' data MORA biti 2D niz. Ako GetTableData vrati skalar (npr. tblOtkup se
+    ' tranzientno svede na jednu celiju / degenerisano stanje tabele), UBound i
+    ' indeksiranje nad ne-nizom bacaju Type mismatch (13) -> EH -> ceo dnevni KPI
+    ' padne na 0. Preskoci cisto (0) umesto logovane greske.
+    If Not IsArray(data) Then Exit Function
 
     Dim colDatum As Long, colKg As Long, colStorno As Long
     colDatum = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, "SumOtkupKgToday")
