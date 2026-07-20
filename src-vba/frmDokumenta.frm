@@ -6538,7 +6538,7 @@ Private Sub ReleaseUiSinks()
     Dim k As Variant
     If Not m_uiSinks Is Nothing Then
         For Each k In m_uiSinks.Keys
-            m_uiSinks(k).Release
+            m_uiSinks(k).ReleaseSink
         Next k
         m_uiSinks.RemoveAll
     End If

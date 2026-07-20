@@ -81,7 +81,10 @@ End Sub
 ' Prekini SVE reference (kontrola + forma) -> raskini krug forma<->sink pre nego
 ' sto self-update edituje VBProject. Forma zove ReleaseUiSinks (QueryClose/
 ' Terminate); Class_Terminate je mreza za slucaj da instanca ode van skopa.
-Public Sub Release()
+' NB: ime NIJE "Release" - to je rezervisan clan IUnknown-a (svaki VBA class ga
+' nasledjuje) pa bi dalo "Member already exists ... from which this object module
+' derives". Zato ReleaseSink.
+Public Sub ReleaseSink()
     Set btn = Nothing
     Set lst = Nothing
     Set txt = Nothing
@@ -91,5 +94,5 @@ Public Sub Release()
 End Sub
 
 Private Sub Class_Terminate()
-    Release
+    ReleaseSink
 End Sub
