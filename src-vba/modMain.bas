@@ -37,20 +37,29 @@ Public Sub StartApp()
     ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
     If Not AccessGateOrQuit() Then Exit Sub
 
+    ' --- Self-update (povuci novu verziju koda iz AgriX_Release) ---
+    ' Startup watchdog (RecoverPendingSelfUpdate) se zove IZNUTRA CheckForUpdateOnOpen
+    ' (isti modul). NE zovi ga odavde direktno: modSelfUpdate je u SKIP_MODULES (frozen),
+    ' pa star klijent posle self-update-a ima NOV modMain + STAR modSelfUpdate; direktan
+    ' (early-bound) poziv NOVOG simbola = COMPILE error ("Sub or Function not defined")
+    ' koji obori ceo StartApp. modMain sme early-bind SAMO stabilne modSelfUpdate simbole
+    ' (docs/SELF_UPDATE.md zamka #19).
+    ' VAZNO: ide PRE min-version gate-a. Inace bi enforce=YES blokirao pokretanje
+    ' bas onog klijenta kome je update najpotrebniji (zastarela verzija dobije
+    ' zakazano gasenje pre nego sto stigne do ove provere). Sad: prvo ponudi
+    ' self-update; ako ga korisnik odbije, min-version gate ispod moze da blokira.
+    ' Opt-in na REL_FOLDER_ID; fail-soft. Na "Da" -> import na praznom stack-u pa
+    ' Exit. OnTime workbook-qualified (dve otvorene kopije -> pravi workbook).
+    If CheckForUpdateOnOpen() Then
+        Application.OnTime Now, "'" & Replace$(ThisWorkbook.name, "'", "''") & "'!RunSelfUpdate"
+        Exit Sub
+    End If
+
     ' --- Min-version gate (flota) ---
     ' Server (GAS action "checkVersion") javlja minimalnu dozvoljenu verziju;
     ' zastarela verzija dobija upozorenje, a uz enforce=YES i blok pokretanja.
     ' Opt-in na MONITORING_ENDPOINT+SECRET; fail-open offline. Vidi modUpdateGate.
     If Not UpdateGateOrQuit() Then Exit Sub
-
-    ' --- Self-update (povuci novu verziju koda iz AgriX_Release) ---
-    ' Opt-in na REL_FOLDER_ID; fail-soft. Na "Da" -> import na praznom
-    ' stack-u pa Exit (ne pokrecemo ostatak; restart aktivira nov kod).
-    ' Vidi modSelfUpdate.
-    If CheckForUpdateOnOpen() Then
-        Application.OnTime Now, "RunSelfUpdate"
-        Exit Sub
-    End If
 
     ' --- Per-user prijava (opt-in: AUTH_ENABLED u tblSEFConfig) ---
     ' Dok AUTH_ENABLED != YES -> sve radi kao pre (bez prijave).

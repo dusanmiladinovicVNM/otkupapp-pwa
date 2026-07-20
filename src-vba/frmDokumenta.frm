@@ -17,6 +17,12 @@ Attribute VB_Exposed = False
 
 Option Explicit
 
+' Self-update bezbedno hvatanje evenata RUNTIME kontrola: nove WithEvents
+' deklaracije NE smeju u formu (lome code-merge te forme pri update-u -
+' docs/SELF_UPDATE.md zamka #11), pa event sink zivi u clsUiSink instancama.
+' Vidi WireSink + UiSinkEvent na dnu ovog modula.
+Private m_uiSinks As Object          ' tag -> clsUiSink
+
 ' ============================================================
 ' frmDokumenta v2.1 - Otpremnica + Zbirna + Prijemnica
 ' Ein Form, 6 Frames, kein MultiPage
@@ -64,7 +70,7 @@ Private m_ambIPrijFullW As Single
 ' otvara overlay panel sa listom svih storniranih dokumenata, grupisano po tipu.
 Private WithEvents m_btnStornoPregled As MSForms.CommandButton
 Private WithEvents m_btnStornoClose As MSForms.CommandButton
-Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" -> operacije
+Private m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" -> operacije
 ' UNDO (Vrati storno): OPERATION-CENTRIC. Dugme otvara listu undoable operacija
 ' (modStornoZurnal.GetUndoableStornoOperations) i undo ide po KONKRETNOM OperationID
 ' (UndoOperation_TX(opID)) -> nema reused-broj rizika (razne generacije = razliciti op).
@@ -72,9 +78,9 @@ Private WithEvents m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" 
 Private Const UNDO_UI_ENABLED As Boolean = True
 
 ' Vrati-storno OPERATION-CENTRIC overlay (runtime kontrole; .frx se ne dira).
-Private WithEvents m_lstUndoOps As MSForms.ListBox
-Private WithEvents m_btnUndoOpsDo As MSForms.CommandButton
-Private WithEvents m_btnUndoOpsClose As MSForms.CommandButton
+Private m_lstUndoOps As MSForms.ListBox
+Private m_btnUndoOpsDo As MSForms.CommandButton
+Private m_btnUndoOpsClose As MSForms.CommandButton
 Private m_undoOpsBack As MSForms.label
 Private m_undoOpsTitle As MSForms.label
 Private m_undoOpsBuilt As Boolean
@@ -97,15 +103,15 @@ Private m_recTitle As MSForms.Label
 Private m_recLblPrij As MSForms.Label
 Private m_recLblZbr As MSForms.Label
 Private m_recStatus As MSForms.Label
-Private WithEvents m_lstOsirPrij As MSForms.ListBox
+Private m_lstOsirPrij As MSForms.ListBox
 Private m_lstAktZbr As MSForms.ListBox
 Private m_recBuilt As Boolean
 Private m_recHidden As Collection
 Private WithEvents m_btnRecMode As MSForms.CommandButton
 Private m_recMode As String      ' "PRIJ" (default) ili "PAL"
 Private m_recPopulating As Boolean   ' guard: suppress _Change dok programski punimo levu listu
-Private WithEvents m_btnRecSkini As MSForms.CommandButton    ' detach osirocenih stavki (PAL mod)
-Private WithEvents m_btnRecSviCilj As MSForms.CommandButton  ' PAL mod: svi ciljevi (escape od zbirna-filtera)
+Private m_btnRecSkini As MSForms.CommandButton    ' detach osirocenih stavki (PAL mod)
+Private m_btnRecSviCilj As MSForms.CommandButton  ' PAL mod: svi ciljevi (escape od zbirna-filtera)
 Private m_recShowAll As Boolean      ' PAL mod: desna lista bez zbirna-filtera
 
 ' "Storno / potvrda" panel (runtime kontrole; .frx se ne dira). Zamena za MsgBox
@@ -114,11 +120,11 @@ Private m_recShowAll As Boolean      ' PAL mod: desna lista bez zbirna-filtera
 Private m_sc_docType As String
 Private m_sc_brDok As String
 Private m_sc_dokTip As String
-Private WithEvents m_btnScIspravka As MSForms.CommandButton
-Private WithEvents m_btnScDupli As MSForms.CommandButton
-Private WithEvents m_btnScPonist As MSForms.CommandButton
-Private WithEvents m_btnScResi As MSForms.CommandButton
-Private WithEvents m_btnScClose As MSForms.CommandButton
+Private m_btnScIspravka As MSForms.CommandButton
+Private m_btnScDupli As MSForms.CommandButton
+Private m_btnScPonist As MSForms.CommandButton
+Private m_btnScResi As MSForms.CommandButton
+Private m_btnScClose As MSForms.CommandButton
 Private m_scBack As MSForms.Label
 Private m_scTitle As MSForms.Label
 Private m_scChainLbl As MSForms.Label
@@ -147,15 +153,15 @@ Private m_scHidden As Collection
 
 ' Faza 2b: "Nadji za storno" browse overlay (pretraga/filter aktivnih dokumenata
 ' umesto kucanja broja; klik reda -> Storno panel). Runtime kontrole; .frx se ne dira.
-Private WithEvents m_btnStornoFind As MSForms.CommandButton
-Private WithEvents m_btnFnClose As MSForms.CommandButton
-Private WithEvents m_btnFnOpen As MSForms.CommandButton
-Private WithEvents m_btnFnNed As MSForms.CommandButton     ' "Osiroceni / za doradu" iz browse-a
-Private WithEvents m_btnFnStornirani As MSForms.CommandButton  ' "Stornirani" iz browse-a
-Private WithEvents m_txtFnSearch As MSForms.TextBox
-Private WithEvents m_cmbFnTip As MSForms.ComboBox
+Private m_btnStornoFind As MSForms.CommandButton
+Private m_btnFnClose As MSForms.CommandButton
+Private m_btnFnOpen As MSForms.CommandButton
+Private m_btnFnNed As MSForms.CommandButton     ' "Osiroceni / za doradu" iz browse-a
+Private m_btnFnStornirani As MSForms.CommandButton  ' "Stornirani" iz browse-a
+Private m_txtFnSearch As MSForms.TextBox
+Private m_cmbFnTip As MSForms.ComboBox
 Private m_lstFnHeader As MSForms.ListBox         ' jednoredni header (naslovi kolona)
-Private WithEvents m_lstFnResults As MSForms.ListBox
+Private m_lstFnResults As MSForms.ListBox
 Private m_fnBack As MSForms.Label
 Private m_fnTitle As MSForms.Label
 Private m_fnBuilt As Boolean
@@ -164,12 +170,12 @@ Private m_fnAllDocs As Collection                ' kes celog skupa (gradi se jed
 
 ' Faza 5: "Nedovrseno (sve)" read-only overlay (ujedinjen pregled: contexti +
 ' osirocene). Podaci: modStornoRecovery.GetNedovrseno. .frx se ne dira.
-Private WithEvents m_btnNedovrseno As MSForms.CommandButton
-Private WithEvents m_btnNedClose As MSForms.CommandButton
+Private m_btnNedovrseno As MSForms.CommandButton
+Private m_btnNedClose As MSForms.CommandButton
 Private m_nedBack As MSForms.Label
 Private m_nedTitle As MSForms.Label
-Private WithEvents m_lstNed As MSForms.ListBox
-Private WithEvents m_btnNedRecovery As MSForms.CommandButton  ' -> Osiroceni dokumenti (legacy akcije)
+Private m_lstNed As MSForms.ListBox
+Private m_btnNedRecovery As MSForms.CommandButton  ' -> Osiroceni dokumenti (legacy akcije)
 Private m_nedBuilt As Boolean
 Private m_nedHidden As Collection
 Private m_nedRows As Collection    ' strukturirani redovi (1:1 sa list redovima; header je list idx 0)
@@ -4093,10 +4099,13 @@ Private Sub EnsureUndoOpsPanel()
         .ForeColor = TXT_LIGHT(): .caption = "Vrati storno - operacije"
     End With
     Set m_btnUndoOpsClose = Me.Controls.Add("Forms.CommandButton.1", "btnUndoOpsCloseRT", True)
+    WireSink m_btnUndoOpsClose, "m_btnUndoOpsClose"
     StyleExitButton m_btnUndoOpsClose, "Zatvori"
     Set m_btnUndoOpsDo = Me.Controls.Add("Forms.CommandButton.1", "btnUndoOpsDoRT", True)
+    WireSink m_btnUndoOpsDo, "m_btnUndoOpsDo"
     StylePrimaryButton m_btnUndoOpsDo, "Vrati izabranu operaciju"
     Set m_lstUndoOps = Me.Controls.Add("Forms.ListBox.1", "lstUndoOpsRT", True)
+    WireSink m_lstUndoOps, "m_lstUndoOps"
     With m_lstUndoOps
         .ColumnCount = 6
         .ColumnWidths = "90;120;110;150;54;90"      ' OpID | Datum | Tip | Broj | #redova | Status
@@ -4311,6 +4320,7 @@ Private Sub EnsureStorniraniPanel()
     ' Sakriveno iz produkcije dok journal ne stigne (vidi UNDO_UI_ENABLED).
     If UNDO_UI_ENABLED Then
         Set m_btnStornoVrati = Me.Controls.Add("Forms.CommandButton.1", "btnStornoVratiRT", True)
+        WireSink m_btnStornoVrati, "m_btnStornoVrati"
         StylePrimaryButton m_btnStornoVrati, "Vrati storno (Otkup/Revers)"
     End If
 
@@ -4533,6 +4543,7 @@ Private Sub EnsureStornoConfirmPanel()
     End With
 
     Set m_btnScClose = Me.Controls.Add("Forms.CommandButton.1", "btnScCloseRT", True)
+    WireSink m_btnScClose, "m_btnScClose"
     StyleExitButton m_btnScClose, "Otkazi"
 
     Set m_scHeader = Me.Controls.Add("Forms.Label.1", "lblScHeaderRT", True)
@@ -4642,12 +4653,16 @@ Private Sub EnsureStornoConfirmPanel()
 
     ' Modovi - kratak, jasan naziv na dugmetu (interni SV_MODE_* nepromenjen).
     Set m_btnScIspravka = Me.Controls.Add("Forms.CommandButton.1", "btnScIspravkaRT", True)
+    WireSink m_btnScIspravka, "m_btnScIspravka"
     StylePrimaryButton m_btnScIspravka, "Pogresan unos"
     Set m_btnScDupli = Me.Controls.Add("Forms.CommandButton.1", "btnScDupliRT", True)
+    WireSink m_btnScDupli, "m_btnScDupli"
     StylePrimaryButton m_btnScDupli, "Duplikat"
     Set m_btnScPonist = Me.Controls.Add("Forms.CommandButton.1", "btnScPonistRT", True)
+    WireSink m_btnScPonist, "m_btnScPonist"
     StylePrimaryButton m_btnScPonist, "Nista se nije desilo"
     Set m_btnScResi = Me.Controls.Add("Forms.CommandButton.1", "btnScResiRT", True)
+    WireSink m_btnScResi, "m_btnScResi"
     StylePrimaryButton m_btnScResi, "Resi kasnije"
 
     m_scBuilt = True
@@ -4968,6 +4983,7 @@ Private Sub SetupStornoFindButton()
     Dim anchor As MSForms.Control
     If Not m_btnRecovery Is Nothing Then Set anchor = m_btnRecovery Else Set anchor = btnStorno
     Set m_btnStornoFind = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnStornoFindRT", True)
+    WireSink m_btnStornoFind, "m_btnStornoFind"
     If m_btnStornoFind Is Nothing Then GoTo done
     With m_btnStornoFind
         .width = btnStorno.width
@@ -5018,9 +5034,11 @@ Private Sub EnsureFindPanel()
     End With
 
     Set m_btnFnClose = Me.Controls.Add("Forms.CommandButton.1", "btnFnCloseRT", True)
+    WireSink m_btnFnClose, "m_btnFnClose"
     StyleExitButton m_btnFnClose, "Zatvori"
 
     Set m_cmbFnTip = Me.Controls.Add("Forms.ComboBox.1", "cmbFnTipRT", True)
+    WireSink m_cmbFnTip, "m_cmbFnTip"
     With m_cmbFnTip
         .Style = fmStyleDropDownList
         .AddItem "Svi": .AddItem "Prijemnica": .AddItem "Otpremnica": .AddItem "Zbirna"
@@ -5028,6 +5046,7 @@ Private Sub EnsureFindPanel()
     End With
 
     Set m_txtFnSearch = Me.Controls.Add("Forms.TextBox.1", "txtFnSearchRT", True)
+    WireSink m_txtFnSearch, "m_txtFnSearch"
 
     Const FN_COLW As String = "64;90;66;92;150;130;210;56"    ' Tip Broj Datum Zbirna Kupac Vozac Mesta Kg
 
@@ -5047,6 +5066,7 @@ Private Sub EnsureFindPanel()
     m_lstFnHeader.List = fhArr
 
     Set m_lstFnResults = Me.Controls.Add("Forms.ListBox.1", "lstFnResultsRT", True)
+    WireSink m_lstFnResults, "m_lstFnResults"
     With m_lstFnResults
         .ColumnCount = 8
         .ColumnWidths = FN_COLW
@@ -5055,14 +5075,17 @@ Private Sub EnsureFindPanel()
     StyleListBox m_lstFnResults
 
     Set m_btnFnOpen = Me.Controls.Add("Forms.CommandButton.1", "btnFnOpenRT", True)
+    WireSink m_btnFnOpen, "m_btnFnOpen"
     StylePrimaryButton m_btnFnOpen, "Otvori storno"
 
     ' Konsolidacija: JEDAN objedinjeni recovery centar (contexti + osirocene, deduplikovano,
     ' akcija po redu). Osiroceni panel je dostupan iz njega (dugme "Osiroceni dokumenti").
     Set m_btnFnNed = Me.Controls.Add("Forms.CommandButton.1", "btnFnNedRT", True)
+    WireSink m_btnFnNed, "m_btnFnNed"
     StylePrimaryButton m_btnFnNed, "Nedovrseno / recovery"
 
     Set m_btnFnStornirani = Me.Controls.Add("Forms.CommandButton.1", "btnFnStorniraniRT", True)
+    WireSink m_btnFnStornirani, "m_btnFnStornirani"
     StylePrimaryButton m_btnFnStornirani, "Stornirani"
 
     m_fnBuilt = True
@@ -5273,6 +5296,7 @@ Private Sub SetupNedovrsenoButton()
     Dim anchor As MSForms.Control
     If Not m_btnStornoFind Is Nothing Then Set anchor = m_btnStornoFind Else Set anchor = btnStorno
     Set m_btnNedovrseno = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnNedovrsenoRT", True)
+    WireSink m_btnNedovrseno, "m_btnNedovrseno"
     If m_btnNedovrseno Is Nothing Then GoTo done
     With m_btnNedovrseno
         .width = btnStorno.width
@@ -5320,10 +5344,13 @@ Private Sub EnsureNedovrsenoPanel()
         .ForeColor = TXT_LIGHT(): .caption = "Nedovrseno (sve)"
     End With
     Set m_btnNedClose = Me.Controls.Add("Forms.CommandButton.1", "btnNedCloseRT", True)
+    WireSink m_btnNedClose, "m_btnNedClose"
     StyleExitButton m_btnNedClose, "Zatvori"
     Set m_btnNedRecovery = Me.Controls.Add("Forms.CommandButton.1", "btnNedRecoveryRT", True)
+    WireSink m_btnNedRecovery, "m_btnNedRecovery"
     StylePrimaryButton m_btnNedRecovery, "Osiroceni dokumenti"
     Set m_lstNed = Me.Controls.Add("Forms.ListBox.1", "lstNedRT", True)
+    WireSink m_lstNed, "m_lstNed"
     With m_lstNed
         .ColumnCount = 5
         .ColumnWidths = "150;100;80;250;180"      ' Vrsta | Ref | Status | Opis | Akcija
@@ -5800,9 +5827,11 @@ Private Sub EnsureRecoveryPanel()
     StylePrimaryButton m_btnRecPrevezi, "Prevezi >>"
 
     Set m_btnRecSkini = Me.Controls.Add("Forms.CommandButton.1", "btnRecSkiniRT", True)
+    WireSink m_btnRecSkini, "m_btnRecSkini"
     StyleExitButton m_btnRecSkini, "Skini stavke"
 
     Set m_btnRecSviCilj = Me.Controls.Add("Forms.CommandButton.1", "btnRecSviCiljRT", True)
+    WireSink m_btnRecSviCilj, "m_btnRecSviCilj"
     StyleExitButton m_btnRecSviCilj, "Cilj: ista zbirna"
 
     Set m_recStatus = Me.Controls.Add("Forms.Label.1", "lblRecStatusRT", True)
@@ -5812,6 +5841,7 @@ Private Sub EnsureRecoveryPanel()
     End With
 
     Set m_lstOsirPrij = Me.Controls.Add("Forms.ListBox.1", "lstOsirPrijRT", True)
+    WireSink m_lstOsirPrij, "m_lstOsirPrij"
     With m_lstOsirPrij
         .ColumnCount = 7
         .ColumnWidths = "80;58;60;72;48;82;96"
@@ -6103,6 +6133,7 @@ End Sub
 
 Private Sub UserForm_Terminate()
     On Error Resume Next
+    ReleaseUiSinks                    ' raskini krug forma<->clsUiSink + otpusti kontrole
     MouseWheel_Detach
     m_pendingRelinkOldPrij = ""       ' ne prenosi pending ispravku van zivota forme
     m_pendingRelinkZbirne = ""
@@ -6110,6 +6141,7 @@ End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    ReleaseUiSinks                    ' raskini krug forma<->clsUiSink pre gasenja
     MouseWheel_Detach
 
     If CloseMode = vbFormControlMenu Then
@@ -6474,3 +6506,72 @@ EH:
     SumOtkupKgToday = 0
 End Function
 
+
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamka #11)
+' ------------------------------------------------------------
+
+' Vrati True ako je sink stvarno vezan. Fail-visible (log) - tiho neuspesno
+' vezivanje bi dalo vidljivo dugme koje ne reaguje (opasno u parcijalnom update-u
+' ako clsUiSink nije uvezen). Poziva se kao naredba; povratnu vrednost mogu
+' gledati kriticni paneli.
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
+    If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmDokumenta.WireSink(" & tagName & ")", Err.description
+End Function
+
+' Otpusti sve clsUiSink omotace (raskini krug forma<->sink i reference kontrola).
+' Idempotentno; pozvati iz QueryClose i Terminate.
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).ReleaseSink
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
+End Sub
+
+' Dispatcher za clsUiSink (Public po nuznosti - klasa dobacuje event formi;
+' ne zvati direktno). Rutira na postojece handlere ispod.
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "m_btnStornoVrati.Click":    m_btnStornoVrati_Click
+        Case "m_btnUndoOpsDo.Click":      m_btnUndoOpsDo_Click
+        Case "m_btnUndoOpsClose.Click":   m_btnUndoOpsClose_Click
+        Case "m_btnRecSkini.Click":       m_btnRecSkini_Click
+        Case "m_btnRecSviCilj.Click":     m_btnRecSviCilj_Click
+        Case "m_btnScIspravka.Click":     m_btnScIspravka_Click
+        Case "m_btnScDupli.Click":        m_btnScDupli_Click
+        Case "m_btnScPonist.Click":       m_btnScPonist_Click
+        Case "m_btnScResi.Click":         m_btnScResi_Click
+        Case "m_btnScClose.Click":        m_btnScClose_Click
+        Case "m_btnStornoFind.Click":     m_btnStornoFind_Click
+        Case "m_btnFnClose.Click":        m_btnFnClose_Click
+        Case "m_btnFnOpen.Click":         m_btnFnOpen_Click
+        Case "m_btnFnNed.Click":          m_btnFnNed_Click
+        Case "m_btnFnStornirani.Click":   m_btnFnStornirani_Click
+        Case "m_btnNedovrseno.Click":     m_btnNedovrseno_Click
+        Case "m_btnNedClose.Click":       m_btnNedClose_Click
+        Case "m_btnNedRecovery.Click":    m_btnNedRecovery_Click
+        Case "m_lstUndoOps.DblClick":     m_lstUndoOps_DblClick arg
+        Case "m_lstFnResults.DblClick":   m_lstFnResults_DblClick arg
+        Case "m_lstNed.DblClick":         m_lstNed_DblClick arg
+        Case "m_txtFnSearch.Change":      m_txtFnSearch_Change
+        Case "m_cmbFnTip.Change":         m_cmbFnTip_Change
+        Case "m_lstOsirPrij.Change":      m_lstOsirPrij_Change
+    End Select
+End Sub

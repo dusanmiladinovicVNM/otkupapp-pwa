@@ -1,3 +1,4 @@
+Attribute VB_Name = "modMouseWheel"
 Option Explicit
 ' ============================================================
 ' modMouseWheel - skrolovanje MSForms.ListBox tockicem misa.

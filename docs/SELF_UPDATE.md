@@ -32,6 +32,39 @@ celog `.xlsm` (vidi `RELEASE_PROCEDURE.md` R3) — za izmene **koda**, bez migra
 | Poređenje verzija | `modUpdateGate.VersionCompare` (reuse) |
 | OAuth / HTTP | `modGoogleAuth.GetAccessToken`, WinHttp (reuse) |
 
+### F2 — versioned folderi + `current.json` (lanac poverenja)
+
+Povrh flat kanala postoji **immutable snapshot po verziji** + kriptografski lanac.
+Detaljan plan/status: `docs/SELF_UPDATE_SNAPSHOT_PLAN.md`.
+
+```
+AgriX_Release/                 (REL_FOLDER_ID)
+  current.json                 <- pokazivač: app_version + release_folder_id + manifest_sha256
+  version.json                 <- LEGACY (dual-write, za stare klijente)
+  <flat .bas/.cls/...>         <- LEGACY (dual-write)
+  releases/
+    2.21.0/  manifest.json + svi src-vba fajlovi   (snapshot; bump-per-release)
+    2.22.0/  ...                                    (retention: poslednjih 10)
+```
+
+Lanac: `current.json.manifest_sha256` → verifikuje bajtove `manifest.json` →
+`manifest.files[].sha256` → verifikuje svaki skinuti fajl. **Bilo koji nesklad =
+fail-closed** (prekid pre importa; ništa se ne snima).
+
+- **Klijent** (`modSelfUpdate`): `GetRemoteAppVersion` prvo čita `current.json`
+  (pa `version.json`); `ResolveReleaseSource` bira versioned folder i proverava
+  `manifest_sha256` PRE ijednog download-a koda, inače **flat fallback** (nema
+  `current.json`/`release_folder_id` → stari put). Novi klijent radi i sa starim
+  publisher-om i obrnuto (dual-write) — nema „big bang" cutover-a.
+- **Build** (`modRelease`): `PublishReleaseToDrive` upload-uje u OBA kanala, piše
+  `manifest.json` (versioned) + `version.json` (flat), pa **na kraju** `current.json`
+  (atomski „go live"; piše se samo ako je versioned manifest uspeo). `PruneOldReleases`
+  drži 10 najnovijih. `RollbackReleaseTo` (Alt+F8) prepiše `current.json` na stariji
+  `releases/<v>` (recompute `manifest_sha256`); `ListReleases` (Alt+F8) = pregled.
+- **`manifest_sha256` je heš bajtova UPLOADOVANOG `manifest.json`** (posle
+  `WriteReleaseTextFile`), koje klijent skida `alt=media` (sirovo) i hešuje —
+  bajt-tačan round-trip (ista zamka kao per-file heš, #16).
+
 ---
 
 ## Build strana
@@ -66,13 +99,18 @@ su informativni (placeholder `0.0.0-dev` ako `stamp-build` nije pokrenut — vid
 3. `RunSelfUpdate` (prazan stack):
    - **backup** `<folder>\Backup\AgriX_pre-update_*.xlsm` (lokalno; rollback),
    - **download** svih fajlova u `%TEMP%\AgriX_update`,
-   - **`PrepareRuntimeForSelfUpdate`** (stop sync, release dinamičkih kontrola,
-     unload formi),
-   - **faza 1** `ImportFromFolder`: code-merge (`DeleteLines`+`AddFromString`)
-     svih komponenti; moduli koje ne može idu u `failed`,
-   - **faza 2** (ako ima `failed`): `Remove` njih → `OnTime +2s` →
-     `RunSelfUpdatePhase2` ih `Import`-uje,
-   - **save** + „zatvori i otvori".
+   - **`PrepareRuntimeForSelfUpdate`** (otkaz SVIH `OnTime` tikova — sync +
+     `AutoSaveTick` + StanicaLock heartbeat; release dinamičkih kontrola;
+     unload formi; events/screen OFF),
+   - **faza 1** `ImportFromFolder`: **delta-skip** — komponenta čiji je kod
+     identičan novom telu se NE dira; ostale idu code-merge
+     (`DeleteLines`+`AddFromString`). U `failed` idu SAMO `.bas`/`.cls`;
+     forma/sheet čiji merge padne dobija best-effort **rollback na stari kod**
+     + „potreban reinstall" u izveštaju (nikad `Remove`!),
+   - **faza 2** (ako ima `failed`): `Remove` njih (uz type-guard: samo
+     std/class modul) → `OnTime +2s` → `RunSelfUpdatePhase2` ih `Import`-uje,
+   - **save** + „zatvori i otvori"; `EnableEvents`/`ScreenUpdating` se
+     **vraćaju na svakom izlazu** (uspeh/greška/prekid).
 
 ---
 
@@ -107,7 +145,140 @@ se desio i fix koji radi:
 6. **`PrepareRuntimeForSelfUpdate`** (release dinamičkih panela + unload formi +
    `StopScheduledSync`) je **higijena pre `Remove`-a** (da forma ne drži kontrole
    tih modula) — NE rešava zamku #3 (to rešava `Import`).
-
+7. **Komponenta koja padne u fazi 1 sme u `Remove`/fazu 2 SAMO ako je `.bas`/`.cls`.**
+   Ranije je SVAKA `failed` komponenta išla u `VBComponents.Remove` — uklanjanje
+   FORME u runtime-u je zamka #1 (korupcija + Document Recovery = **crash Excela**),
+   a faza 2 uvozi samo `.bas`/`.cls` pa bi forma i **trajno nestala** iz projekta.
+   Ovo je bila glavna rupa za „self-update crashuje Excel" posle v2.16.1 (prvi
+   release-i sa masivnim izmenama formi: `frmDokumenta` storno framework,
+   `frmOtkupAPP` integritet overlay). Sada: `failedOut` filtrira po ekstenziji,
+   `Remove` ima dodatni type-guard (`Type` 1/2), a forma čiji merge padne dobija
+   **best-effort rollback** starog koda + „potreban reinstall" u izveštaju.
+8. **`Application.OnTime` tikovi van sync-a** (`modJournaling.AutoSaveTick`,
+   `modStanicaLock.HeartbeatStanicaLock` — 90s, `modStornoWarm.StornoWarmTick`)
+   mogu da opale usred importa ili u prozoru između faza (dok su „tvrdi" moduli
+   uklonjeni) → demand-compile polomljenog projekta; `AutoSaveTick`/`StornoWarm`
+   bi uz to i **snimili polu-ažuriran fajl**. `PrepareRuntimeForSelfUpdate` sada
+   otkazuje SVE (`StopAutoSaveTimer`, `StopHeartbeatTimer`, `StopStornoWarm`).
+   **NB:** kad se u `main` doda nov `Application.OnTime` tajmer, MORA se dodati i
+   njegov `Stop*` u `PrepareRuntimeForSelfUpdate` (StornoWarm je bio propušten
+   jer je stigao posle prvog hardening rada).
+9. **`EnableEvents`/`ScreenUpdating` se moraju VRATITI na svakom izlazu update
+   toka** (`RestoreRuntimeAfterSelfUpdate`) — inače `Workbook_Open` ne opali pri
+   sledećem otvaranju fajla u ISTOJ Excel instanci („zatvori i otvori" onda
+   izgleda kao da je update ubio aplikaciju), a `Workbook_BeforeClose` higijena
+   se preskoči. (Tokom prozora faza 1→2 events namerno OSTAJU off; vraća ih
+   `RunSelfUpdatePhase2`.)
+10. **Delta-skip:** komponenta čiji je kod bajt-za-bajt identičan novom telu
+    (`SameCode`, ignoriše samo završne CR/LF) se **ne dira** — ranije se na svaki
+    update prepisivao CEO projekat (~90 komponenti), pa je i najmanji release
+    nosio pun COM-edit rizik. Posledica: faza 2 se sada dešava samo kad je neki
+    „tvrd" modul stvarno izmenjen, a update velikog skoka verzija dira samo
+    stvarno promenjene komponente.
+11. **NOVE `WithEvents` deklaracije u FORMI — utvrđeni krivac za crash
+    2.16.1→2.21.0.** Dodavanje event-sink deklaracija (`Private WithEvents x As
+    MSForms.Y`) u deklaracioni blok POSTOJEĆE forme kroz code-merge je ista
+    klasa kvara kao #3 (bind event interfejsa u toku COM edita), a pad merge-a
+    forme je (pre guard-a #7) vodio u `Remove` forme = korupcija/crash.
+    **Pravilo ubuduće:** event sink za runtime kontrole formi ide kroz
+    **`clsUiSink`** (generički WithEvents omotač; forma ima `WireSink` helper +
+    jedan Public `UiSinkEvent` dispatcher) ili kroz namensku klasu
+    (`clsBlokUI` obrazac) — **NIKAD novi `Private WithEvents` u `.frm`**.
+    Post-2.16.1 form-WithEvents (storno centar/finder/undo/nedovršeno/recovery
+    u `frmDokumenta`; integritet overlay u `frmOtkupAPP`) su prebačeni na
+    `clsUiSink`, čime se deklaracioni blok formi vratio na 2.16.1-kompatibilan
+    oblik (samo inertni dodaci: plain `MSForms.` reference, `String`/`Boolean`,
+    `As Object`). Zatečeni PRE-2.16.1 form-WithEvents su zamrznuti (klijenti ih
+    već imaju — uklanjanje bi opet menjalo deklaracije).
+12. **ATOMARNOST — nikad ne snimaj polu-nov projekat.** Update se snima SAMO pri
+    punom uspehu (`SaveWorkbookVerified`: `Save` bez greške I `ThisWorkbook.Saved`).
+    Svaki fatalni ishod → NE snima se, i **`AbortSelfUpdateClose` auto-zatvara
+    svesku bez snimanja** (`Saved=True` + `Close SaveChanges:=False`) — tehnička
+    garancija, ne oslanja se na to da operater neće `Ctrl+S` ni da OneDrive
+    AutoSave neće upisati polu-nov projekat. Pošto se pre pune uspešnosti nikad ne
+    snima, disk ostaje **stara ispravna verzija**. **Zašto je važno:** `APP_VERSION`
+    živi u `modConfig.bas` (soft `.bas`, merge-uje se u fazi 1); da se snimi
+    parcijalni projekat sa novim `APP_VERSION` a starom formom, `CheckForUpdateOnOpen`
+    bi na sledećem startu video „ažurno" i **nikad više ne bi ponudio isti release**.
+    Fatalno = forma ne može merge (`needsReinstall`), faza-2 `Import` padne ili se
+    ne verifikuje (`ImportedOk`), stara komponenta **još postoji** (`Remove`
+    nedovršen — inače tiho preskočena = mešan build), `imported <> expected`,
+    `Save` ne uspe, ili **download nepotpun** (#13). (Higijena: `AbortSelfUpdateClose`
+    radi jer `ShutdownApp`/`FlushNow` gledaju `.Saved`, koji je postavljen na True.)
+13. **Download mora biti KOMPLETAN.** `DownloadReleaseFiles` vraća i „očekivano"
+    (svi podržani fajlovi iz Drive listinga) i „preuzeto"; `RunSelfUpdate` prekida
+    ako `preuzeto <> očekivano`. Ranije se gledalo samo `n = 0`, pa je i 1/95
+    fajlova prolazilo kao validan release → parcijalan merge (npr. nov `modConfig`
+    bez nove forme).
+14. **Tvrde module PREPOZNAJ UNAPRED, ne kroz pali `AddFromString`.** `IsHardModuleBody`
+    (module-level `WithEvents` ili `As MSForms.`, uz strip stringa/komentara da
+    reč u komentaru ne da lažni pozitiv) rutira tvrde `.bas/.cls` pravo u fazu 2 —
+    `AddFromString` (koji baš i diskonektuje `CodeModule`) se nad njima **nikad ne
+    poziva**. Ranije su išli „error-driven" (prvo pao `AddFromString` pa u fazu 2),
+    što je za NOV tvrd modul (`clsUiSink`) značilo instalaciju baš opasnim putem.
+    Faza 2 dobija **tačnu listu** fajlova (iz Settinga), ne skenira ceo temp (inače
+    `SKIP_MODULES` bypass / uvoz sirovo-palih ili dev modula).
+15. **Startup watchdog za prekinut update.** Ako faza 2 nikad ne opali (Excel
+    zatvoren, OnTime otkazan), `modConfig` je u memoriji nov ali disk je stara
+    (nesnimljena) verzija, a `pending` marker ostaje u registru.
+    `RecoverPendingSelfUpdate` (iz `StartApp`) čisti stale marker + temp i
+    obavesti. **NE pokušava da „dovrši" fazu 2** nad starim projektom — to bi
+    spojilo stari i nov kod. Marker se briše tek na **uspeh ili kontrolisan
+    abort** (ne na početku faze 2), da crash usred importa ostavi trag.
+16. **Multi-copy izolacija (naročito DEV test na kopiji).** Oba `Application.OnTime`
+    poziva (`RunSelfUpdate`, `RunSelfUpdatePhase2`, `AbortSelfUpdateClose`) su
+    **workbook-qualified** (`'Ime.xlsm'!Proc`) — inače Excel može da razreši proc
+    u pogrešnoj otvorenoj kopiji. `phase2` registarsko stanje je **scope-ovano po
+    workbook imenu** (`P2Section`) — dve kopije ne dele/gaze pending. `RunSelfUpdate`
+    ide **PRE min-version enforce gate-a** u `StartApp`: inače bi `enforce=YES`
+    ugasio baš klijenta kome update treba, pre nego što stigne do provere. (Ostaje
+    i operativni stopgap `VERSION_ENFORCE=NO` dok se flota ne digne — sad manje
+    kritičan.)
+17. **Release na Drive-u mora biti KOMPLETAN snapshot** (build strana,
+    `PublishReleaseToDrive`): `version.json` se objavljuje **tek pošto SVI code
+    fajlovi uspešno stignu** (ako makar jedan padne → manifest se ne dira, release
+    ostaje na staroj verziji); zastareli (obrisani) code fajlovi se **prune-uju**
+    (`DriveTrashFile`) da ih klijent ne bi ponovo skidao; manifest nosi `files`
+    listu (ime+veličina). Klijentski „preuzeto = očekivano" (#13) štiti od
+    nepotpunog *download-a*, ali ne od nepotpune *objave* — zato oba kraja.
+18. **SHA-256 verifikacija sadržaja (F1 — implementirano).** Manifest (`files[]`)
+    nosi `sha256` (+ `size`) svakog fajla (`modRelease` reuse `modDrive.Sha256File`
+    — isti `.NET SHA256Managed` kao PIN hash). Klijent je sada **manifest-driven**:
+    skida samo fajlove iz `files[]` i **verifikuje SHA-256** svakog pre importa;
+    nesklad (tiha korupcija/stale) → fajl se ne broji → `n <> expected` → fatalno
+    (`AbortSelfUpdate`). **Fallback:** ako SHA-256 nije dostupan na mašini (retko;
+    `Sha256File=""`, kao PIN plaintext fallback) → prisustvo/broj (kao pre F1), uz
+    log. Stari publisher (manifest bez `files[]`) → legacy listing-download. Self-test:
+    `Alt+F8 → Test_Sha256File`. **F2 (implementirano, `docs/SELF_UPDATE_SNAPSHOT_PLAN.md`):**
+    versioned folderi `releases/<v>/` + `current.json` pokazivač + `manifest_sha256`
+    lanac poverenja → snapshot + rollback.
+19. **Updatable moduli NE smeju early-bind-ovati NOVE simbole iz frozen `modSelfUpdate`.**
+    `modSelfUpdate` je u `SKIP_MODULES` → **ne stiže self-update-om**; klijent ga dobija
+    tek ručnim bootstrap-om (`ImportAllVBA`/nov `.xlsm`). Star klijent koji se
+    self-update-uje dobija **NOV `modMain` + STAR `modSelfUpdate`**. Ako nov `modMain`
+    DIREKTNO (early-bound) zove NOV `modSelfUpdate` simbol koga star `modSelfUpdate`
+    nema → **`Compile error: Sub or Function not defined`** obori CEO `StartApp` (iako
+    je update „prošao uspešno"). Realan kvar: `modMain` je zvao **novi**
+    `RecoverPendingSelfUpdate` → svaki star klijent koji se auto-update-uje crashuje na
+    reopen-u. **Fix:** watchdog se zove **iznutra `CheckForUpdateOnOpen`** (isti modul,
+    uvek razrešen), a `modMain` early-bind-uje SAMO **stabilne** `modSelfUpdate` simbole
+    (`CheckForUpdateOnOpen`; `RunSelfUpdate` je i onako preko `OnTime` **stringa** =
+    late-bound). **Pravilo:** nov cross-modul poziv u `modSelfUpdate` iz updatable
+    modula = ILI ga sakrij iza postojećeg stabilnog simbola, ILI ga zovi late-bound
+    (`Application.Run`) fail-soft.
+20. **Forma/sheet sa module-level `WithEvents`/`MSForms` → `needsReinstall` (NE merge).**
+    `AddFromString` takvog tela diskonektuje CodeModule (zamka #3), a forma se ne sme
+    `Remove`+`Import`-ovati u runtime-u (zamka #1) — pa je jedini bezbedan ishod
+    **reinstall** (fail-closed, ne polu-merge). Guard hvata i **novo** tvrdo telo i
+    **zatečenu** tvrdu formu (`IsHardModuleBody(body) Or IsHardModuleBody(cur)`; radi i
+    nad `CodeModule.Lines` koji koristi lone `vbCr`). **Posledica:** dok god forma ima
+    ijedan module-level `WithEvents`, svaka njena izmena traži reinstall (ne self-update).
+    Zatečene zamrznute forme (`frmDokumenta` 14×, `frmOtkupAPP` 2×, `frmPalete`,
+    `frmIzvestaj`, `frmAgrohemija`, `frmBankaExportPregled`) su zato **reinstall-only**.
+    **Follow-up (zasebna grana, Excel-smoke):** izmestiti te `WithEvents` u `clsUiSink`
+    (kao već urađenih 24 u `frmDokumenta`/`frmOtkupAPP`) da forme postanu self-updatable;
+    tada guard ostaje samo kao zaštita od regresije. Odloženo svesno — flota se za ovaj
+    release ionako bootstrap-uje (#zamka 19 / rollout), pa reinstall-only ne smeta odmah.
 ---
 
 ## Preduslovi i ograničenja
@@ -123,6 +294,11 @@ se desio i fix koji radi:
   - **`modSelfUpdate`** (na call-stack-u) i **`modVbaTools`** (dev tool) —
     `SKIP_MODULES`; ako se menjaju baš oni → reinstall;
   - **nove forme / novi sheetovi** (faza 1 ih prijavi „Preskočeno, reinstall").
+- **VAŽNO — distribucija ispravki samog updatera:** pošto je `modSelfUpdate` u
+  `SKIP_MODULES`, ispravke self-update mehanizma (npr. hardening protiv crash-a)
+  **ne stižu self-update-om**. Klijenti ih dobijaju jednokratno ručno:
+  `ImportAllVBA` iz ažuriranog git klona na klijent mašini, ili zamena `.xlsm`
+  novom kopijom (reinstall). Tek POSLE toga self-update opet sme da se koristi.
 
 ---
 
@@ -140,6 +316,47 @@ Novi/izmenjeni moduli sa `module-level MSForms.` deklaracijama ili `WithEvents`
 5. Otvori formu sa ListBox-om, upali točkić (Podešavanja ili `MouseWheel_On`),
    proveri scroll; otvori/zatvori VBE (ne sme freeze).
 6. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
+
+---
+
+## Lokalni DEV test (najlakše — bez Drive-a, bez publish-a)
+
+Da se self-update **engine** testira na svojoj mašini pre nego što bilo šta ode na
+flotu: `Alt+F8 → **RunSelfUpdateDev**` (u `modSelfUpdate`). Code-merge-uje **ovu**
+svesku iz **lokalnog `src-vba` foldera** (git klon) kroz **isti `RunSelfUpdateCore`**
+kao pravi self-update (faza 1 + faza 2), samo bez Drive download-a, bez
+`REL_FOLDER_ID` i bez Google auth-a.
+
+> **Zašto ne `ImportAllVBA`?** `ImportAllVBA` rekreira komponente (`Import`) i
+> **toleriše sve** — self-update ide **code-merge** (`DeleteLines`+`AddFromString`),
+> a baš tamo su forme pucale. Zato je jedini validan test onaj koji koristi
+> code-merge put; `RunSelfUpdateDev` to radi (deli jezgro sa produkcijom).
+
+**Postupak:**
+1. `git pull` na klonu (da `src-vba` ima verziju koju testiraš).
+2. Otvori **KOPIJU** klijentske sveske (ne build-master; merge menja kod ove sveske).
+3. `Alt+F8 → RunSelfUpdateDev` → u pickeru izaberi svoj `...\otkupapp-pwa\src-vba\`.
+4. Backup se napravi sam; merge teče; na kraju „zatvori i otvori".
+5. Posle restarta: `Alt+F11` → **nema duplikata** (`modX1`); `Debug → Compile` čist;
+   otvori forme koje su menjane (Dokumenta „Storno", Integritet overlay…).
+6. Idempotencija: pokreni `RunSelfUpdateDev` **drugi put** iz istog foldera →
+   izveštaj mora reći „Ažurirano: 0, bez izmene: ~sve" (delta-skip radi).
+7. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
+
+> **GUARD (zaštita od slučajnog klika — NIJE bezbednosna granica):**
+> `RunSelfUpdateDev` radi samo ako je izabran folder oblika git klona — ime
+> `src-vba` + `.git` u roditeljskom folderu (`IsDevCloneFolder`). To sprečava da
+> se iz `Alt+F8` slučajno pokrene nad proizvoljnim folderom i pokvari sveska.
+> **Nije sigurnosna granica** — ko namerno napravi `…\fake\.git` + `…\fake\src-vba`
+> prolazi. Za pravo razdvajanje bio bi potreban dev-only modul koji se ne
+> objavljuje ili build-flag; ovde je svesno zadržan u `modSelfUpdate` (odluka
+> operatera) uz ovaj lagani guard. Svako ko ionako može `Alt+F8` može i `Alt+F11`
+> / `ImportAllVBA` (ista klasa mogućnosti). Prolazi kroz ISTI atomski
+> `RunSelfUpdateCore` kao produkcija (bez Drive-a).
+
+`modSelfUpdate` je u `SKIP_MODULES`, pa se DEV harness pri merge-u **ne prepisuje**
+(ostaje aktivan), isto kao u produkciji. Za test i Drive transporta (download) →
+i dalje `PublishReleaseToDrive` u **test** `AgriX_Release` folder (staged rollout).
 
 ---
 

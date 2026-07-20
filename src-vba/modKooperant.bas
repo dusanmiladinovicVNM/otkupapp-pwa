@@ -1,7 +1,7 @@
 Attribute VB_Name = "modKooperant"
 'Attribute VB_Name = "modKooperant"
 Option Explicit
-
+ ' test delta
 ' ============================================================
 ' modKooperant - razresavanje/kreiranje kooperanta po imenu.
 '

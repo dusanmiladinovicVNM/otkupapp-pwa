@@ -112,6 +112,124 @@ EH:
     LogErr SRC, Err.description
 End Function
 
+' Premesti fajl u Trash (trashed=true). Koristi PublishReleaseToDrive za ciscenje
+' zastarelih (obrisanih) code fajlova iz AgriX_Release-a. Meko brisanje (Trash),
+' ne hard-delete -> greska pri objavi ne unistava fajl trajno. Vrati True na uspeh.
+Public Function DriveTrashFile(ByVal fileID As String) As Boolean
+    Const SRC As String = "modDrive.DriveTrashFile"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "PATCH", DRIVE_FILES & "/" & fileID & "?supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/json"
+    http.Send "{""trashed"":true}"
+
+    If http.status = 200 Then
+        DriveTrashFile = True
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
+' SHA-256 (hex, lowercase) SIROVIH BAJTOVA fajla, ili "" ako SHA nedostupan/greska.
+' Isti .NET primitiv kao modAuth.Sha256Hex (dokazan u produkciji za PIN hash), samo
+' nad bajtovima fajla (ADODB.Stream binarno, isti obrazac kao DriveDownloadToFile).
+' Koristi ga: PublishReleaseToDrive (manifest) + modSelfUpdate (verifikacija skinutog).
+Public Function Sha256File(ByVal path As String) As String
+    On Error GoTo EH
+    Dim stm As Object, sha As Object, bytes() As Byte, hash() As Byte
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1                       ' adTypeBinary
+    stm.Open
+    stm.LoadFromFile path
+    bytes = stm.Read                   ' svi bajtovi (adReadAll)
+    stm.Close
+
+    Set sha = CreateObject("System.Security.Cryptography.SHA256Managed")
+    hash = sha.ComputeHash_2((bytes))
+
+    Dim i As Long, s As String
+    For i = LBound(hash) To UBound(hash)
+        s = s & Right$("0" & Hex$(hash(i) And &HFF), 2)
+    Next i
+    Sha256File = LCase$(s)
+    Exit Function
+EH:
+    Sha256File = vbNullString          ' "" = SHA nedostupan / greska -> pozivalac odlucuje
+End Function
+
+' F0 self-test (RUCNO, Alt+F8): potvrdi da Sha256File radi na OVOJ masini. Hesuje
+' fajl sa "abc" (3 bajta) i poredi sa standardnim vektorom SHA-256("abc").
+Public Sub Test_Sha256File()
+    On Error Resume Next
+    Dim p As String: p = Environ$("TEMP") & "\AgriX_shatest.txt"
+    Dim ff As Integer: ff = FreeFile
+    Open p For Output As #ff
+    Print #ff, "abc";                  ' tacno 3 bajta (bez CRLF/BOM)
+    Close #ff
+    Dim got As String: got = Sha256File(p)
+    Kill p
+    Const WANT As String = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    If LCase$(got) = WANT Then
+        MsgBox "SHA-256 RADI na ovoj masini." & vbCrLf & "Sha256File(""abc"") = " & got, _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "SHA-256 NE radi / nesklad!" & vbCrLf & "Dobijeno: '" & got & "'" & vbCrLf & _
+               "Ocekivano: " & WANT & vbCrLf & vbCrLf & _
+               "Release verifikacija ce pasti na fallback (broj/prisustvo).", _
+               vbExclamation, APP_NAME
+    End If
+End Sub
+
+' Nadji podfolder po imenu u parent-u; ako ne postoji, kreiraj ga. Vrati folderID
+' (ili "" na gresku). Za versioned release layout (AgriX_Release/releases/<verzija>/).
+Public Function DriveEnsureFolder(ByVal parentID As String, ByVal name As String) As String
+    Const SRC As String = "modDrive.DriveEnsureFolder"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    ' 1) find (mimeType = folder)
+    Dim q As String
+    q = "name='" & DriveEscapeQ(name) & "' and '" & parentID & "' in parents and " & _
+        "mimeType='application/vnd.google-apps.folder' and trashed=false"
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "GET", DRIVE_FILES & "?q=" & UrlEncode(q) & _
+              "&fields=files(id,name)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.Send
+    If http.status = 200 Then
+        Dim fid As String: fid = ExtractJsonStringGoogle(http.responseText, "id")
+        If Len(fid) > 0 Then DriveEnsureFolder = fid: Exit Function
+    End If
+
+    ' 2) create
+    Dim body As String
+    body = "{""name"":""" & DriveJsonEsc(name) & """,""mimeType"":""application/vnd.google-apps.folder""," & _
+           """parents"":[""" & parentID & """]}"
+    Set http = DriveNewHttp()
+    http.Open "POST", DRIVE_FILES & "?supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/json; charset=UTF-8"
+    http.Send body
+    If http.status = 200 Then
+        DriveEnsureFolder = ExtractJsonStringGoogle(http.responseText, "id")
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
 ' Vrati Dictionary (ime fajla -> fileID) svih fajlova u folderu.
 ' Jedna strana (pageSize=1000); AgriX_Release ima ~100 src-vba fajlova.
 Public Function DriveListFolder(ByVal folderID As String) As Object
