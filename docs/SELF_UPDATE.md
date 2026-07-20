@@ -139,6 +139,21 @@ se desio i fix koji radi:
     nosio pun COM-edit rizik. Posledica: faza 2 se sada dešava samo kad je neki
     „tvrd" modul stvarno izmenjen, a update velikog skoka verzija dira samo
     stvarno promenjene komponente.
+11. **NOVE `WithEvents` deklaracije u FORMI — utvrđeni krivac za crash
+    2.16.1→2.21.0.** Dodavanje event-sink deklaracija (`Private WithEvents x As
+    MSForms.Y`) u deklaracioni blok POSTOJEĆE forme kroz code-merge je ista
+    klasa kvara kao #3 (bind event interfejsa u toku COM edita), a pad merge-a
+    forme je (pre guard-a #7) vodio u `Remove` forme = korupcija/crash.
+    **Pravilo ubuduće:** event sink za runtime kontrole formi ide kroz
+    **`clsUiSink`** (generički WithEvents omotač; forma ima `WireSink` helper +
+    jedan Public `UiSinkEvent` dispatcher) ili kroz namensku klasu
+    (`clsBlokUI` obrazac) — **NIKAD novi `Private WithEvents` u `.frm`**.
+    Post-2.16.1 form-WithEvents (storno centar/finder/undo/nedovršeno/recovery
+    u `frmDokumenta`; integritet overlay u `frmOtkupAPP`) su prebačeni na
+    `clsUiSink`, čime se deklaracioni blok formi vratio na 2.16.1-kompatibilan
+    oblik (samo inertni dodaci: plain `MSForms.` reference, `String`/`Boolean`,
+    `As Object`). Zatečeni PRE-2.16.1 form-WithEvents su zamrznuti (klijenti ih
+    već imaju — uklanjanje bi opet menjalo deklaracije).
 
 ---
 

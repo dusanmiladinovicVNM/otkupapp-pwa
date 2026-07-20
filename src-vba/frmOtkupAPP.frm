@@ -16,6 +16,12 @@ Attribute VB_Exposed = False
 
 Option Explicit
 
+' Self-update bezbedno hvatanje evenata RUNTIME kontrola: nove WithEvents
+' deklaracije NE smeju u formu (lome code-merge te forme pri update-u -
+' docs/SELF_UPDATE.md zamka #11), pa event sink zivi u clsUiSink instancama.
+' Vidi WireSink + UiSinkEvent na dnu ovog modula.
+Private mUiSinks As Object          ' tag -> clsUiSink
+
 Private navButtons As Collection
 Private isDragging As Boolean
 Private dragOffsetX As Double
@@ -29,8 +35,7 @@ Private mActiveContent As Object
 Private mIntegBg As MSForms.Label
 Private mIntegList As MSForms.ListBox
 Private mIntegTitle As MSForms.Label
-Private WithEvents mIntegClose As MSForms.CommandButton
-Attribute mIntegClose.VB_VarHelpID = -1
+Private mIntegClose As MSForms.CommandButton
 ' v6.11 UI
 Private Const SIDEBAR_KPI_H As Single = 92
 Private mIsSwitchingContent As Boolean
@@ -134,6 +139,7 @@ Private Sub ShowIntegritet()
         Set mIntegBg = Me.Controls.Add("Forms.Label.1", "lblIntegBg", True)
         Set mIntegTitle = Me.Controls.Add("Forms.Label.1", "lblIntegNaslov", True)
         Set mIntegClose = Me.Controls.Add("Forms.CommandButton.1", "btnIntegClose", True)
+        WireSink mIntegClose, "mIntegClose"
         Set mIntegList = Me.Controls.Add("Forms.ListBox.1", "lstInteg", True)
     End If
 
@@ -1652,4 +1658,27 @@ Public Sub FinishPWASyncLog(ByVal ok As Boolean)
 
     DoEvents
     mPWASyncLogActive = False
+End Sub
+
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamka #11)
+' ------------------------------------------------------------
+
+Private Sub WireSink(ByVal ctl As Object, ByVal tagName As String)
+    On Error Resume Next
+    If mUiSinks Is Nothing Then Set mUiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set mUiSinks(tagName) = s
+End Sub
+
+' Dispatcher za clsUiSink (Public po nuznosti - klasa dobacuje event formi;
+' ne zvati direktno). Rutira na postojece handlere ispod.
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "mIntegClose.Click":   mIntegClose_Click
+    End Select
 End Sub
