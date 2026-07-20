@@ -77,12 +77,26 @@ End Sub
 ' fallback (isto kao ranije, ali sada retko - samo ako korisnik pretekne warm).
 Public Function GetWarmStornoDocs() As Collection
     On Error GoTo EH
+    ' Kesu se veruje SAMO ako je svez I NEPRAZAN. Poznata zamka: warm build jednom
+    ' ispadne prazan (tranzientno -- npr. prvi idle tick po startu) pa se g_stornoDocs
+    ' zaglavi prazan (m_stornoDirty=False, nema TX da invalidira) -> panel ostaje prazan
+    ' iako podaci postoje. Prazan kes zato NE koristimo -> rebuild.
     If (Not m_stornoDirty) And (Not g_stornoDocs Is Nothing) Then
-        Set GetWarmStornoDocs = g_stornoDocs
-        Exit Function
+        If g_stornoDocs.count > 0 Then
+            Set GetWarmStornoDocs = g_stornoDocs
+            Exit Function
+        End If
     End If
     BuildWarm
-    Set GetWarmStornoDocs = g_stornoDocs
+    If Not g_stornoDocs Is Nothing Then
+        If g_stornoDocs.count > 0 Then
+            Set GetWarmStornoDocs = g_stornoDocs
+            Exit Function
+        End If
+    End If
+    ' Warm build ispao prazan/nedostupan: direktan (nekeziran) build kao mreza -> forma
+    ' nikad ne ostane prazna kad podaci postoje (ako su podaci stvarno prazni, i ovo je prazno).
+    Set GetWarmStornoDocs = GetActiveDocumentsForStorno("Svi", "")
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetWarmStornoDocs"
