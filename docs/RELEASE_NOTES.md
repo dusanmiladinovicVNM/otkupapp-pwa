@@ -534,3 +534,13 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Prazan `BrDok` (unbound blok)** se sada može vratiti kroz UI (undo po `OperationID`, ne treba poslovni broj).
 - **Testovi (+3):** reused-broj (undo starog op vraća staru generaciju), dead-parent druge generacije (undo prolazi), prazan-BrDok end-to-end undo.
 - **Rizik za podatke:** nizak — UI je runtime overlay (`.frx` netaknut); motor nepromenjen osim per-red garde (uža, sigurnija). ASCII-only. **Odloženo:** chain instrumentacija; `UndoneAt` status operacije.
+
+---
+
+## vba-v2.26.0 — 2026-07-19
+> Tačan broj/datum se potvrđuje pri `tools/release.sh`. Male, realne UX/robusnost ispravke (uvid + status čitanje).
+
+- **Uvid pre storna — `Kolicina` je sada SUMA aktivnih Klasa I+II** (`modStornoImpact.ImpactHeader`): ranije je čitala samo prvi (jedan) red pa je **potcenjivala** dvoklasni dokument (otpremnica/zbirna/prijemnica). Sada sabira količine aktivnih redova istog broja (storniran red se ne broji). Test: `Test_ImpactHeaderSum_Auto`.
+- **`DocIsIssued` čita status sa AKTIVNOG reda** (`modDokumentInvariant`): pređeno sa `LookupValue` na `LookupActiveID` za `IzdatoStatus` — ranije je za broj sa storniranom generacijom mogao pokupiti status STORNIRANOG reda; sada gleda aktivni red (konzervativno „izdato" ako aktivnog nema). Test: prošireni `Test_DocIsIssued_Auto` (broj sa storniran=DRAFT + aktivan=IZDATO → `True`).
+- **Regres-testovi** (`Test_StornoCentar_All`, Alt+F8): **88 OK, 0 FAIL** (uz prethodni `EnsureRuntimeSchema` da trace kolone postoje). Dodati `Test_ImpactHeaderSum_Auto` + prošireni `Test_DocIsIssued_Auto`.
+- **Rizik:** nizak — read-only agregacija/čitanje statusa u uvidu (ne dira storno/undo motor). ASCII-only; `.frx` netaknut.

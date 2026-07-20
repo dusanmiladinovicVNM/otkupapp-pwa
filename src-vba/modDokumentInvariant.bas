@@ -586,12 +586,14 @@ End Function
 ' held dokument), PROSLEDJENO za buduci sync-push ka PWA/kupcu.
 ' DocIsIssued: True ako je IZDAT/PROSLEDJEN, False SAMO ako eksplicitno DRAFT.
 ' ============================================================
+' #7: IzdatoStatus se cita sa AKTIVNOG reda (LookupActiveID), ne sa bilo kog reda
+' (LookupValue je mogao pokupiti STORNIRAN red istog broja i procitati njegov status).
 Public Function DocIsIssued(ByVal tbl As String, ByVal brojCol As String, ByVal broj As String) As Boolean
     On Error Resume Next
     DocIsIssued = True                                  ' default: izdato (konzervativno)
     If GetColumnIndex(tbl, COL_TRACE_IZDATO_STATUS) = 0 Then Exit Function
     Dim v As String
-    v = UCase$(Trim$(CStr(LookupValue(tbl, brojCol, broj, COL_TRACE_IZDATO_STATUS))))
+    v = UCase$(Trim$(LookupActiveID(tbl, brojCol, broj, COL_TRACE_IZDATO_STATUS)))
     DocIsIssued = (v <> UCase$(IZDATO_DRAFT))
 End Function
 
