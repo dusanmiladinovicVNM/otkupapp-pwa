@@ -139,6 +139,16 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
     Const SRC As String = "modSelfUpdate.RunSelfUpdateCore"
     On Error GoTo EH
 
+    ' 0) NO-OP GUARD: ako delta-skip kaze da NEMA promena, ne diraj NISTA - bez
+    '    teardown-a zivog app-a, bez importa, bez save-a. (Ponovljeni update /
+    '    vec-azurna verzija; eliminise rizik Remove+Import modMouseWheel-a.)
+    If Not AnyUpdatePending(tempDir) Then
+        RestoreRuntimeAfterSelfUpdate
+        MsgBox "Nema izmena koda - vec ste na najnovijoj verziji." & vbCrLf & _
+               "Nista nije menjano (delta-skip: 0 promena).", vbInformation, APP_NAME
+        Exit Sub
+    End If
+
     ' 3) Oslobodi runtime stanje (root cause fix) PRE importa
     PrepareRuntimeForSelfUpdate
 
@@ -762,12 +772,60 @@ End Function
 ' komponente, uklj. rizican modMouseWheel Remove+Import (AddressOf hook) -> crash
 ' pri ponovljenom update-u nad vec-azurnim, punim app-om.
 Private Function CanonCode(ByVal s As String) As String
+    ' 1) sve vrste prekida reda -> LF
     s = Replace$(s, vbCrLf, vbLf)
     s = Replace$(s, vbCr, vbLf)
+    ' 2) RTrim svaki red - trailing whitespace nebitan (hvata "ista duzina ali
+    '    razlicit" slucaj: red sa/bez zavrsnog space-a, npr. clsWheelList)
+    Dim arr() As String, i As Long
+    arr = Split(s, vbLf)
+    For i = LBound(arr) To UBound(arr)
+        arr(i) = RTrim$(arr(i))
+    Next i
+    s = Join(arr, vbLf)
+    ' 3) skini VODECE i zavrsne prazne redove - VBE CodeModule.Lines cesto vraca
+    '    vodeci prazan red koga ExtractModuleCode (iz fajla) nema (uzrok #78 lazno
+    '    "razlicito" -> nepotreban re-import -> crash na modMouseWheel Remove).
+    Do While Len(s) > 0
+        If Left$(s, 1) = vbLf Then s = Mid$(s, 2) Else Exit Do
+    Loop
     Do While Len(s) > 0
         If Right$(s, 1) = vbLf Then s = Left$(s, Len(s) - 1) Else Exit Do
     Loop
     CanonCode = s
+End Function
+
+' READ-ONLY: da li ima ista da se azurira (nova komponenta ILI izmenjen kod).
+' Pozvati PRE PrepareRuntime -> ako vrati False, update NE dira nista (bez
+' teardown-a zivog app-a, bez importa, bez save-a). Ponovljeni / vec-azuran
+' update = pravi no-op -> nema Remove+Import (pa ni crash na modMouseWheel).
+Private Function AnyUpdatePending(ByVal folder As String) As Boolean
+    On Error Resume Next
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim skip As String: skip = "," & LCase$(SKIP_MODULES) & ","
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim fil As Object, ext As String, baseName As String, body As String, cur As String
+    Dim vbc As Object
+    For Each fil In fso.GetFolder(folder).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        If ext = "bas" Or ext = "cls" Or ext = "frm" Or ext = "doccls" Then
+            baseName = fso.GetBaseName(fil.name)
+            If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
+                Set vbc = Nothing
+                Set vbc = proj.VBComponents(baseName)
+                If vbc Is Nothing Then
+                    AnyUpdatePending = True: Exit Function        ' nova komponenta
+                Else
+                    body = ExtractModuleCode(fil.path)
+                    cur = ""
+                    If vbc.CodeModule.CountOfLines > 0 Then cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
+                    If Not SameCode(cur, body) Then
+                        AnyUpdatePending = True: Exit Function     ' izmenjen kod
+                    End If
+                End If
+            End If
+        End If
+    Next fil
 End Function
 
 ' Best-effort rollback koda JEDNE forme/sheet komponente na sadrzaj pre merge
