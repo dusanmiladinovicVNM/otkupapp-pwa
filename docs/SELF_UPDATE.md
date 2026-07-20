@@ -266,6 +266,19 @@ se desio i fix koji radi:
     late-bound). **Pravilo:** nov cross-modul poziv u `modSelfUpdate` iz updatable
     modula = ILI ga sakrij iza postojećeg stabilnog simbola, ILI ga zovi late-bound
     (`Application.Run`) fail-soft.
+20. **Forma/sheet sa module-level `WithEvents`/`MSForms` → `needsReinstall` (NE merge).**
+    `AddFromString` takvog tela diskonektuje CodeModule (zamka #3), a forma se ne sme
+    `Remove`+`Import`-ovati u runtime-u (zamka #1) — pa je jedini bezbedan ishod
+    **reinstall** (fail-closed, ne polu-merge). Guard hvata i **novo** tvrdo telo i
+    **zatečenu** tvrdu formu (`IsHardModuleBody(body) Or IsHardModuleBody(cur)`; radi i
+    nad `CodeModule.Lines` koji koristi lone `vbCr`). **Posledica:** dok god forma ima
+    ijedan module-level `WithEvents`, svaka njena izmena traži reinstall (ne self-update).
+    Zatečene zamrznute forme (`frmDokumenta` 14×, `frmOtkupAPP` 2×, `frmPalete`,
+    `frmIzvestaj`, `frmAgrohemija`, `frmBankaExportPregled`) su zato **reinstall-only**.
+    **Follow-up (zasebna grana, Excel-smoke):** izmestiti te `WithEvents` u `clsUiSink`
+    (kao već urađenih 24 u `frmDokumenta`/`frmOtkupAPP`) da forme postanu self-updatable;
+    tada guard ostaje samo kao zaštita od regresije. Odloženo svesno — flota se za ovaj
+    release ionako bootstrap-uje (#zamka 19 / rollout), pa reinstall-only ne smeta odmah.
 ---
 
 ## Preduslovi i ograničenja
