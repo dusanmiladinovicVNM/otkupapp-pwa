@@ -21,8 +21,26 @@ Option Explicit
 ' Nije stvar zivih instanci - Release nije pomogao.) Resenje: njih ide FAZA 2
 ' preko Import-a (rekreacija komponente, podnosi MSForms decls; radi u
 ' ImportAllVBA), uz Remove->flush(OnTime)->Import da nema modX1 duplikata.
-' PrepareRuntimeForSelfUpdate (unload formi + release + stop sync) je higijena
-' pre Remove-a (da forma ne drzi kontrole tih modula).
+' PrepareRuntimeForSelfUpdate (unload formi + release + stop sync/tajmeri) je
+' higijena pre Remove-a (da forma ne drzi kontrole tih modula).
+'
+' HARDENING (posle crash-a na velikim update-ovima, v2.16.1 -> v2.21.0):
+'  - DELTA-SKIP: komponenta ciji je kod IDENTICAN novom telu se NE dira
+'    (ranije se prepisivao CEO projekat ~90 komponenti na svaki update ->
+'    nepotrebni COM editi = nepotreban rizik). Faza 2 se sada desava samo
+'    kad je neki "tvrd" modul stvarno izmenjen.
+'  - FORME/SHEET NIKAD U FAZU 2: u failed (-> VBComponents.Remove) idu SAMO
+'    .bas/.cls. Remove forme u runtime-u = zamka #1 ("Errors during load",
+'    korupcija, Document Recovery = crash Excela), a faza 2 ionako uvozi samo
+'    .bas/.cls pa bi forma i TRAJNO nestala iz projekta. Forma ciji merge
+'    padne: best-effort rollback na STARI kod + poruka "potreban reinstall".
+'  - TAJMERI: pre importa se otkazuju SVI poznati Application.OnTime tikovi
+'    (sync + AutoSaveTick + StanicaLock heartbeat) - tik koji opali izmedju
+'    faza (dok su moduli uklonjeni) forsira compile polomljenog projekta,
+'    a AutoSave bi jos i SNIMIO polu-azuriran fajl.
+'  - EnableEvents/ScreenUpdating se VRACAJU na svakom izlazu update toka -
+'    inace Workbook_Open ne opali pri ponovnom otvaranju u istoj Excel
+'    instanci ("zatvori i otvori" izgleda kao da je update ubio aplikaciju).
 '
 ' OPT-IN: radi samo ako je REL_FOLDER_ID postavljen (modConfig).
 ' FAIL-SOFT: svaka greska u proveri samo se loguje, start ide dalje.
@@ -97,14 +115,23 @@ Public Sub RunSelfUpdate()
     '    drugi mehanizam, podnosi MSForms decls; flush -> bez modX1 duplikata).
     If failed.count > 0 Then
         Dim proj As Object: Set proj = ThisWorkbook.VBProject
-        Dim fk As Variant
+        Dim fk As Variant, remC As Object
         For Each fk In failed.Keys
             On Error Resume Next
-            proj.VBComponents.Remove proj.VBComponents(CStr(fk))
+            Set remC = Nothing
+            Set remC = proj.VBComponents(CStr(fk))
+            ' Bezbednosna brana (zamka #1): Remove SME samo std (1) / class (2)
+            ' modul. Formu/dokument modul NIKAD - Remove forme u runtime-u pravi
+            ' korupciju (Document Recovery), a faza 2 je ne bi ni vratila.
+            If Not remC Is Nothing Then
+                If remC.Type = 1 Or remC.Type = 2 Then proj.VBComponents.Remove remC
+            End If
             On Error GoTo EH
         Next fk
         SaveSetting "AgriXSelfUpdate", "phase2", "dir", tempDir
         SaveSetting "AgriXSelfUpdate", "phase2", "n", CStr(n)
+        ' NAPOMENA: EnableEvents ostaje ISKLJUCEN do kraja faze 2 (zastita
+        ' prozora u kome su moduli uklonjeni); vraca ga RunSelfUpdatePhase2.
         Application.OnTime Now + TimeSerial(0, 0, 2), "RunSelfUpdatePhase2"
         Exit Sub                  ' kraj makroa -> Remove se flush-uje -> faza 2
     End If
@@ -114,14 +141,18 @@ Public Sub RunSelfUpdate()
     ThisWorkbook.Save
     On Error GoTo EH
 
+    RestoreRuntimeAfterSelfUpdate
+
     MsgBox Poruka("SU_ZAVRSENO_FAJLOVA") & n & vbCrLf & _
            summary & vbCrLf & vbCrLf & _
            "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
            vbInformation, APP_NAME
     Exit Sub
 EH:
-    LogErr SRC, Err.description
-    MsgBox Poruka("SU_GRESKA_AZURIRANJE") & Err.description & vbCrLf & vbCrLf & _
+    Dim errTxt As String: errTxt = Err.description   ' pre RestoreRuntime (On Error resetuje Err)
+    RestoreRuntimeAfterSelfUpdate
+    LogErr SRC, errTxt
+    MsgBox Poruka("SU_GRESKA_AZURIRANJE") & errTxt & vbCrLf & vbCrLf & _
            "Ako program ne radi ispravno, vratite kopiju iz 'Backup' foldera " & _
            "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
@@ -137,7 +168,10 @@ Public Sub RunSelfUpdatePhase2()
     Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", "phase2", "dir", "")
     Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", "phase2", "n", "?")
     DeleteSetting "AgriXSelfUpdate", "phase2"
-    If Len(p2dir) = 0 Then Exit Sub
+    If Len(p2dir) = 0 Then
+        RestoreRuntimeAfterSelfUpdate       ' faza 1 je ostavila events OFF
+        Exit Sub
+    End If
 
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
@@ -173,14 +207,18 @@ Public Sub RunSelfUpdatePhase2()
     ThisWorkbook.Save
     On Error GoTo EH
 
+    RestoreRuntimeAfterSelfUpdate
+
     MsgBox Poruka("SU_ZAVRSENO_PREUZETO") & nTxt & ", 2. faza uvezeno: " & imported & _
            IIf(Len(stillFail) > 0, vbCrLf & vbCrLf & "I DALJE NIJE USPELO:" & vbCrLf & stillFail, "") & vbCrLf & vbCrLf & _
            "ZATVORITE i ponovo OTVORITE fajl da se promene aktiviraju.", _
            IIf(Len(stillFail) > 0, vbExclamation, vbInformation), APP_NAME
     Exit Sub
 EH:
-    LogErr SRC, Err.description
-    MsgBox Poruka("SU_GRESKA_2FAZA") & Err.description & vbCrLf & _
+    Dim errTxt As String: errTxt = Err.description   ' pre RestoreRuntime (On Error resetuje Err)
+    RestoreRuntimeAfterSelfUpdate
+    LogErr SRC, errTxt
+    MsgBox Poruka("SU_GRESKA_2FAZA") & errTxt & vbCrLf & _
            "Vratite kopiju iz 'Backup' foldera (AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
 
@@ -194,7 +232,13 @@ Private Sub PrepareRuntimeForSelfUpdate()
     Application.EnableEvents = False
     Application.ScreenUpdating = False
 
+    ' Otkazi SVE poznate Application.OnTime tikove. Tik koji opali usred
+    ' importa (ili u prozoru izmedju faze 1 i 2, dok su "tvrdi" moduli
+    ' uklonjeni) forsira demand-compile polomljenog projekta; AutoSaveTick
+    ' bi uz to jos i SNIMIO polu-azuriran fajl preko radne kopije.
     StopScheduledSync               ' modGoogleSyncOrchestrator (otkazi pending OnTime sync)
+    StopAutoSaveTimer               ' modJournaling (otkazi pending AutoSaveTick)
+    StopHeartbeatTimer              ' modStanicaLock (otkazi 90s heartbeat)
 
     ' Release module-level WithEvents/kontrole (dinamicki paneli)
     OtkupBlok_Release               ' modOtkupBlok (clsBlokUI)
@@ -210,6 +254,17 @@ Private Sub PrepareRuntimeForSelfUpdate()
 
     DoEvents
     On Error GoTo 0
+End Sub
+
+' Vrati aplikaciona podesavanja koja PrepareRuntimeForSelfUpdate gasi. MORA se
+' pozvati na SVAKOM izlazu update toka (uspeh, greska, prekid) - inace
+' Workbook_Open ne opali pri sledecem otvaranju fajla u ISTOJ Excel instanci
+' ("zatvori i otvori" tada izgleda kao da je update ubio aplikaciju), a
+' Workbook_BeforeClose higijena se preskoci.
+Private Sub RestoreRuntimeAfterSelfUpdate()
+    On Error Resume Next
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
 End Sub
 
 ' ---------------- private ----------------
@@ -280,19 +335,27 @@ EH:
     LogErr SRC, Err.description
 End Function
 
-' Cist code-merge u mestu (DeleteLines + AddFromString). Radi za SVE jer je
+' Cist code-merge u mestu (DeleteLines + AddFromString), SAMO za komponente cije
+' se telo stvarno razlikuje od novog (DELTA-SKIP: identican kod se NE dira ->
+' drasticno manje COM edita po update-u, manji rizik, brze). Radi za SVE jer je
 ' runtime stanje oslobodjeno (PrepareRuntimeForSelfUpdate) pa CodeModule edit
 ' vise ne diskonektuje. Bez Remove (nema modX1 duplikata), bez Import (nema
 ' form-load greske). Dizajn formi (.frx) se NE menja - za to treba pun reinstall.
+' failedOut (kandidati za fazu 2 Remove+Import): SAMO .bas/.cls! Forme/sheet
+' komponente NIKAD (Remove forme = korupcija/crash, zamka #1; faza 2 ih ne bi ni
+' vratila jer uvozi samo .bas/.cls). Forma ciji merge padne posle svih prolaza:
+' best-effort rollback na stari kod + "potreban reinstall" u izvestaju.
 ' Retry (3 prolaza) + per-modul greska kao safety net.
 Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As String, ByRef failedOut As Object) As String
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(skipCsv) & ","
-    Dim st As Object: Set st = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> "ok"/"skip"
+    Dim st As Object: Set st = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> "ok"/"same"/"skip"
     Dim er As Object: Set er = CreateObject("Scripting.Dictionary")   ' fajl(lower) -> poslednja greska
+    Dim orig As Object: Set orig = CreateObject("Scripting.Dictionary") ' fajl(lower) -> kod PRE 1. izmene (rollback formi)
     Dim pass As Long, anyLeft As Boolean, usedPass As Long
     Dim fil As Object, ext As String, baseName As String, fkey As String
-    Dim body As String, vbc As Object, proj As Object
+    Dim body As String, cur As String, readOk As Boolean, extractOk As Boolean
+    Dim vbc As Object, proj As Object
 
     For pass = 1 To 3
         usedPass = pass
@@ -307,20 +370,44 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                     On Error Resume Next
                     Err.Clear
                     body = ExtractModuleCode(fil.path)
-                    Set vbc = Nothing
-                    Set vbc = proj.VBComponents(baseName)
-                    If Not vbc Is Nothing Then
-                        If vbc.CodeModule.CountOfLines > 0 Then _
-                            vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
-                        If Len(body) > 0 Then vbc.CodeModule.AddFromString body
-                        If Err.Number = 0 Then st(fkey) = "ok"
-                    ElseIf ext = "bas" Or ext = "cls" Then
-                        Set vbc = proj.VBComponents.Add(IIf(ext = "bas", 1, 2))
-                        vbc.name = baseName
-                        If Len(body) > 0 Then vbc.CodeModule.AddFromString body
-                        If Err.Number = 0 Then st(fkey) = "ok"
+                    ' Ekstrakcija mora biti cista I ne-prazna (sem sheet modula,
+                    ' koji su legitimno prazni) PRE nego sto se komponenta takne -
+                    ' inace bi se DeleteLines uradio bez validnog novog tela.
+                    extractOk = (Err.Number = 0 And (Len(body) > 0 Or ext = "doccls"))
+                    If Not extractOk Then
+                        If Err.Number = 0 Then _
+                            Err.Raise vbObjectError + 2801, , "prazno telo posle ekstrakcije (" & fil.name & ")"
+                        ' (Resume Next: Err ostaje -> zavrsi dole u er + retry)
                     Else
-                        st(fkey) = "skip"     ' nova forma/sheet -> reinstall
+                        Set vbc = Nothing
+                        Set vbc = proj.VBComponents(baseName)
+                        If Not vbc Is Nothing Then
+                            ' Delta-skip: procitaj postojeci kod i uporedi sa novim.
+                            cur = ""
+                            If vbc.CodeModule.CountOfLines > 0 Then _
+                                cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
+                            readOk = (Err.Number = 0)
+                            If readOk And SameCode(cur, body) Then
+                                st(fkey) = "same"              ' identican kod -> NE diraj
+                            Else
+                                Err.Clear                      ' greska citanja nije greska merge-a
+                                ' Zapamti original SAMO iz prvog (jos netaknutog) pokusaja,
+                                ' za rollback formi ciji merge trajno padne.
+                                If readOk And Not orig.Exists(fkey) Then orig(fkey) = cur
+                                If vbc.CodeModule.CountOfLines > 0 Then _
+                                    vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
+                                If Len(body) > 0 Then vbc.CodeModule.AddFromString body
+                                If Err.Number = 0 Then st(fkey) = "ok"
+                            End If
+                        ElseIf ext = "bas" Or ext = "cls" Then
+                            Err.Clear     ' Err 9 od lookup-a iznad ne sme da "oboji" Add put
+                            Set vbc = proj.VBComponents.Add(IIf(ext = "bas", 1, 2))
+                            vbc.name = baseName
+                            If Len(body) > 0 Then vbc.CodeModule.AddFromString body
+                            If Err.Number = 0 Then st(fkey) = "ok"
+                        Else
+                            st(fkey) = "skip"     ' nova forma/sheet -> reinstall
+                        End If
                     End If
                     If Err.Number <> 0 Then
                         er(fkey) = "[" & Err.Number & "] " & Err.description
@@ -334,25 +421,73 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
         If Not anyLeft Then Exit For
     Next pass
 
-    Dim okN As Long, k As Variant, failS As String, skipS As String
+    Dim okN As Long, sameN As Long, k As Variant, failS As String, skipS As String
     For Each k In st.Keys
-        If st(k) = "ok" Then
-            okN = okN + 1
-        Else
-            skipS = skipS & "  " & k & vbCrLf
-        End If
+        Select Case st(k)
+            Case "ok":   okN = okN + 1
+            Case "same": sameN = sameN + 1
+            Case Else:   skipS = skipS & "  " & k & vbCrLf
+        End Select
     Next k
     For Each k In er.Keys
         If Not st.Exists(CStr(k)) Then
-            failS = failS & "  " & k & " -> " & er(k) & vbCrLf
-            If Not failedOut Is Nothing Then failedOut(fso.GetBaseName(CStr(k))) = folder & "\" & CStr(k)
+            ext = LCase$(fso.GetExtensionName(CStr(k)))
+            If ext = "bas" Or ext = "cls" Then
+                ' Kandidat za fazu 2 (Remove+Import podnosi MSForms decls).
+                failS = failS & "  " & k & " -> " & er(k) & vbCrLf
+                If Not failedOut Is Nothing Then failedOut(fso.GetBaseName(CStr(k))) = folder & "\" & CStr(k)
+            Else
+                ' Forma/sheet: NIKAD u fazu 2. Vrati stari (radni) kod da klijent
+                ' ostane upotrebljiv; nova verzija te forme stize reinstall-om.
+                RestoreComponentCode orig, CStr(k)
+                failS = failS & "  " & k & " -> " & er(k) & _
+                        " (forma/sheet - vracen stari kod, potreban reinstall)" & vbCrLf
+            End If
         End If
     Next k
 
-    ImportFromFolder = "Azurirano: " & okN & " (prolaza: " & usedPass & ")" & _
+    ImportFromFolder = "Azurirano: " & okN & ", bez izmene: " & sameN & " (prolaza: " & usedPass & ")" & _
         IIf(Len(skipS) > 0, vbCrLf & "Preskoceno (novo, reinstall):" & vbCrLf & skipS, "") & _
         IIf(Len(failS) > 0, vbCrLf & "GRESKE:" & vbCrLf & failS, "")
 End Function
+
+' Da li su dva tela koda identicna. Ignorise SAMO zavrsne CR/LF (fajl moze da
+' se zavrsava praznim redom koji CodeModule.Lines ne vraca); sve ostalo mora
+' biti bajt-za-bajt isto (izvori su ASCII, exporti iz istog VBE).
+Private Function SameCode(ByVal a As String, ByVal b As String) As Boolean
+    Do While Len(a) > 0
+        Select Case Right$(a, 1)
+            Case vbCr, vbLf: a = Left$(a, Len(a) - 1)
+            Case Else: Exit Do
+        End Select
+    Loop
+    Do While Len(b) > 0
+        Select Case Right$(b, 1)
+            Case vbCr, vbLf: b = Left$(b, Len(b) - 1)
+            Case Else: Exit Do
+        End Select
+    Loop
+    SameCode = (StrComp(a, b, vbBinaryCompare) = 0)
+End Function
+
+' Best-effort rollback koda JEDNE komponente na sadrzaj pre merge pokusaja
+' (orig snimljen u ImportFromFolder pre prvog DeleteLines). Za forme/sheet ciji
+' AddFromString ne prodje ni u 3 prolaza: bolje staro radno telo nego prazno /
+' polu-upisano. Tiho (Resume Next) - rollback ne sme da obori ostatak update-a.
+Private Sub RestoreComponentCode(ByVal orig As Object, ByVal fkey As String)
+    On Error Resume Next
+    If orig Is Nothing Then Exit Sub
+    If Not orig.Exists(fkey) Then Exit Sub
+
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim vbc As Object
+    Set vbc = ThisWorkbook.VBProject.VBComponents(fso.GetBaseName(fkey))
+    If vbc Is Nothing Then Exit Sub
+
+    If vbc.CodeModule.CountOfLines > 0 Then _
+        vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
+    If Len(orig(fkey)) > 0 Then vbc.CodeModule.AddFromString CStr(orig(fkey))
+End Sub
 
 Private Function ReadAllText(ByVal path As String) As String
     Dim ff As Integer: ff = FreeFile

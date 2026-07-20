@@ -66,13 +66,18 @@ su informativni (placeholder `0.0.0-dev` ako `stamp-build` nije pokrenut — vid
 3. `RunSelfUpdate` (prazan stack):
    - **backup** `<folder>\Backup\AgriX_pre-update_*.xlsm` (lokalno; rollback),
    - **download** svih fajlova u `%TEMP%\AgriX_update`,
-   - **`PrepareRuntimeForSelfUpdate`** (stop sync, release dinamičkih kontrola,
-     unload formi),
-   - **faza 1** `ImportFromFolder`: code-merge (`DeleteLines`+`AddFromString`)
-     svih komponenti; moduli koje ne može idu u `failed`,
-   - **faza 2** (ako ima `failed`): `Remove` njih → `OnTime +2s` →
-     `RunSelfUpdatePhase2` ih `Import`-uje,
-   - **save** + „zatvori i otvori".
+   - **`PrepareRuntimeForSelfUpdate`** (otkaz SVIH `OnTime` tikova — sync +
+     `AutoSaveTick` + StanicaLock heartbeat; release dinamičkih kontrola;
+     unload formi; events/screen OFF),
+   - **faza 1** `ImportFromFolder`: **delta-skip** — komponenta čiji je kod
+     identičan novom telu se NE dira; ostale idu code-merge
+     (`DeleteLines`+`AddFromString`). U `failed` idu SAMO `.bas`/`.cls`;
+     forma/sheet čiji merge padne dobija best-effort **rollback na stari kod**
+     + „potreban reinstall" u izveštaju (nikad `Remove`!),
+   - **faza 2** (ako ima `failed`): `Remove` njih (uz type-guard: samo
+     std/class modul) → `OnTime +2s` → `RunSelfUpdatePhase2` ih `Import`-uje,
+   - **save** + „zatvori i otvori"; `EnableEvents`/`ScreenUpdating` se
+     **vraćaju na svakom izlazu** (uspeh/greška/prekid).
 
 ---
 
@@ -107,6 +112,33 @@ se desio i fix koji radi:
 6. **`PrepareRuntimeForSelfUpdate`** (release dinamičkih panela + unload formi +
    `StopScheduledSync`) je **higijena pre `Remove`-a** (da forma ne drži kontrole
    tih modula) — NE rešava zamku #3 (to rešava `Import`).
+7. **Komponenta koja padne u fazi 1 sme u `Remove`/fazu 2 SAMO ako je `.bas`/`.cls`.**
+   Ranije je SVAKA `failed` komponenta išla u `VBComponents.Remove` — uklanjanje
+   FORME u runtime-u je zamka #1 (korupcija + Document Recovery = **crash Excela**),
+   a faza 2 uvozi samo `.bas`/`.cls` pa bi forma i **trajno nestala** iz projekta.
+   Ovo je bila glavna rupa za „self-update crashuje Excel" posle v2.16.1 (prvi
+   release-i sa masivnim izmenama formi: `frmDokumenta` storno framework,
+   `frmOtkupAPP` integritet overlay). Sada: `failedOut` filtrira po ekstenziji,
+   `Remove` ima dodatni type-guard (`Type` 1/2), a forma čiji merge padne dobija
+   **best-effort rollback** starog koda + „potreban reinstall" u izveštaju.
+8. **`Application.OnTime` tikovi van sync-a** (`modJournaling.AutoSaveTick`,
+   `modStanicaLock.HeartbeatStanicaLock` — 90s) mogu da opale usred importa ili
+   u prozoru između faza (dok su „tvrdi" moduli uklonjeni) → demand-compile
+   polomljenog projekta; `AutoSaveTick` bi uz to i **snimio polu-ažuriran fajl**.
+   `PrepareRuntimeForSelfUpdate` sada otkazuje i njih (`StopAutoSaveTimer`,
+   `StopHeartbeatTimer`).
+9. **`EnableEvents`/`ScreenUpdating` se moraju VRATITI na svakom izlazu update
+   toka** (`RestoreRuntimeAfterSelfUpdate`) — inače `Workbook_Open` ne opali pri
+   sledećem otvaranju fajla u ISTOJ Excel instanci („zatvori i otvori" onda
+   izgleda kao da je update ubio aplikaciju), a `Workbook_BeforeClose` higijena
+   se preskoči. (Tokom prozora faza 1→2 events namerno OSTAJU off; vraća ih
+   `RunSelfUpdatePhase2`.)
+10. **Delta-skip:** komponenta čiji je kod bajt-za-bajt identičan novom telu
+    (`SameCode`, ignoriše samo završne CR/LF) se **ne dira** — ranije se na svaki
+    update prepisivao CEO projekat (~90 komponenti), pa je i najmanji release
+    nosio pun COM-edit rizik. Posledica: faza 2 se sada dešava samo kad je neki
+    „tvrd" modul stvarno izmenjen, a update velikog skoka verzija dira samo
+    stvarno promenjene komponente.
 
 ---
 
@@ -123,6 +155,11 @@ se desio i fix koji radi:
   - **`modSelfUpdate`** (na call-stack-u) i **`modVbaTools`** (dev tool) —
     `SKIP_MODULES`; ako se menjaju baš oni → reinstall;
   - **nove forme / novi sheetovi** (faza 1 ih prijavi „Preskočeno, reinstall").
+- **VAŽNO — distribucija ispravki samog updatera:** pošto je `modSelfUpdate` u
+  `SKIP_MODULES`, ispravke self-update mehanizma (npr. hardening protiv crash-a)
+  **ne stižu self-update-om**. Klijenti ih dobijaju jednokratno ručno:
+  `ImportAllVBA` iz ažuriranog git klona na klijent mašini, ili zamena `.xlsm`
+  novom kopijom (reinstall). Tek POSLE toga self-update opet sme da se koristi.
 
 ---
 
