@@ -751,19 +751,23 @@ End Function
 ' Da li su dva tela koda identicna. Ignorise SAMO zavrsne CR/LF; ostalo mora biti
 ' bajt-za-bajt isto (izvori su ASCII, exporti iz istog VBE).
 Private Function SameCode(ByVal a As String, ByVal b As String) As Boolean
-    Do While Len(a) > 0
-        Select Case Right$(a, 1)
-            Case vbCr, vbLf: a = Left$(a, Len(a) - 1)
-            Case Else: Exit Do
-        End Select
+    SameCode = (StrComp(CanonCode(a), CanonCode(b), vbBinaryCompare) = 0)
+End Function
+
+' Kanonizuj kod za poredjenje: SVE vrste prekida reda (CRLF/CR/LF) -> LF, pa skini
+' zavrsne prazne redove. KRITICNO: VBE CodeModule.Lines vraca redove razdvojene
+' sa vbCr, a ExtractModuleCode gradi telo sa vbCrLf. Bez ove normalizacije
+' SameCode uvek vraca False (svaki red se razlikuje po separatoru) -> delta-skip
+' NIKAD ne prijavi "isto" -> svaki update nepotrebno re-merge/re-import-uje SVE
+' komponente, uklj. rizican modMouseWheel Remove+Import (AddressOf hook) -> crash
+' pri ponovljenom update-u nad vec-azurnim, punim app-om.
+Private Function CanonCode(ByVal s As String) As String
+    s = Replace$(s, vbCrLf, vbLf)
+    s = Replace$(s, vbCr, vbLf)
+    Do While Len(s) > 0
+        If Right$(s, 1) = vbLf Then s = Left$(s, Len(s) - 1) Else Exit Do
     Loop
-    Do While Len(b) > 0
-        Select Case Right$(b, 1)
-            Case vbCr, vbLf: b = Left$(b, Len(b) - 1)
-            Case Else: Exit Do
-        End Select
-    Loop
-    SameCode = (StrComp(a, b, vbBinaryCompare) = 0)
+    CanonCode = s
 End Function
 
 ' Best-effort rollback koda JEDNE forme/sheet komponente na sadrzaj pre merge
