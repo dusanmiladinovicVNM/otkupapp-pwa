@@ -240,16 +240,20 @@ Public Sub RunSelfUpdatePhase2()
                 If ComponentExists(proj, baseName) Then
                     stillFail = stillFail & "  " & fn & " -> stara komponenta jos postoji (Remove nedovrsen)" & vbCrLf
                 Else
+                    Dim newC As Object
                     On Error Resume Next
+                    Set newC = Nothing
                     Err.Clear
-                    proj.VBComponents.Import p2dir & "\" & fn
+                    Set newC = proj.VBComponents.Import(p2dir & "\" & fn)
                     Dim impErr As Long: impErr = Err.Number
                     On Error GoTo 0
-                    ' verifikuj: sad postoji, tacnog imena i tipa (bas=std/1, cls=class/2)
-                    If impErr = 0 And ImportedOk(proj, baseName, ext) Then
+                    ' verifikuj VRACENU komponentu (autoritativna; ime iz VB_Name
+                    ' atributa fajla) - tacnog imena i tipa (bas=std/1, cls=class/2).
+                    If impErr = 0 And ImportedOk(newC, baseName, ext) Then
                         imported = imported + 1
                     Else
-                        stillFail = stillFail & "  " & fn & " -> Import nije verifikovan [" & impErr & "]" & vbCrLf
+                        stillFail = stillFail & "  " & fn & " -> Import nije verifikovan [" & impErr & _
+                                    "] (ime='" & SafeCompName(newC) & "')" & vbCrLf
                     End If
                 End If
             End If
@@ -399,12 +403,12 @@ Private Function ComponentExists(ByVal proj As Object, ByVal baseName As String)
     ComponentExists = Not (c Is Nothing)
 End Function
 
-' Posle Import-a: komponenta postoji, tacnog imena, i ocekivanog tipa
-' (bas -> std modul (1), cls -> class modul (2)). Fail-closed verifikacija faze 2.
-Private Function ImportedOk(ByVal proj As Object, ByVal baseName As String, ByVal ext As String) As Boolean
+' Verifikuj VRACENU komponentu iz Import-a (autoritativna - ne re-lookup po imenu):
+' nije Nothing, tacnog imena (VB_Name), i ocekivanog tipa (bas -> std (1),
+' cls -> class (2)). Fail-closed verifikacija faze 2. Hvata i .bas/.cls bez
+' Attribute VB_Name (Import ga tada nazove pogresno -> ime != baseName).
+Private Function ImportedOk(ByVal c As Object, ByVal baseName As String, ByVal ext As String) As Boolean
     On Error Resume Next
-    Dim c As Object
-    Set c = proj.VBComponents(baseName)
     If c Is Nothing Then Exit Function
     If StrComp(c.name, baseName, vbTextCompare) <> 0 Then Exit Function
     If ext = "bas" Then
@@ -412,6 +416,13 @@ Private Function ImportedOk(ByVal proj As Object, ByVal baseName As String, ByVa
     Else
         ImportedOk = (c.Type = 2)
     End If
+End Function
+
+' Ime komponente za dijagnostiku (ili "?" ako Nothing). Da izvestaj pokaze KAKO
+' je Import pogresno nazvao modul (npr. "Module1" kad fali Attribute VB_Name).
+Private Function SafeCompName(ByVal c As Object) As String
+    On Error Resume Next
+    If c Is Nothing Then SafeCompName = "?" Else SafeCompName = c.name
 End Function
 
 ' ---------------- private ----------------
