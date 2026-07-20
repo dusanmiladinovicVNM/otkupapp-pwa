@@ -149,13 +149,18 @@ vrati `""` — manifest bez hešova se ne objavljuje).
 
 ## Faze
 
-### Faza 0 — Spike (mali, GATE za ostalo) · ~0.5 dana
+### Faza 0 — Spike (mali, GATE za ostalo) · ~0.5 dana · ✅ IMPLEMENTIRANO
+> `modDrive.Sha256File` + `Test_Sha256File` (Alt+F8, poredi sa SHA256("abc")).
+> Operater pokrene `Test_Sha256File` na dev + jednoj klijent mašini pre oslanjanja.
 - `Sha256File` na dev mašini: hash test-fajla == `sha256sum`/`certutil` referenca.
 - Potvrdi `SHA256Managed` na **jednoj klijent mašini** (već poznato-radno za PIN;
   osloni se na `Alt+F8 → TestPinHash` koji već postoji).
 - Odluka: potvrđen primitiv → dalje. (Primitiv je već produkcijski, rizik nizak.)
 
-### Faza 1 — SHA-256 u manifestu + klijentska verifikacija (flat layout) · ~1 dan
+### Faza 1 — SHA-256 u manifestu + klijentska verifikacija (flat layout) · ~1 dan · ✅ IMPLEMENTIRANO
+> `modRelease`: `sha256` u `files[]` (fail ako `Sha256File=""`). `modSelfUpdate`:
+> `ParseManifestFiles` + manifest-driven download + per-file SHA verify + SHA-less
+> fallback + legacy (bez `files[]`) fallback. Nesklad → `n<>expected` → `AbortSelfUpdate`.
 Bez strukturne promene Drive-a; „laka proverljivost" odmah.
 - **Build (`modRelease`)**: za svaki fajl dodaj `sha256` (reuse `Sha256File`) u
   `files[]` (već ima name+size). Prekini objavu ako neki `Sha256File=""`.

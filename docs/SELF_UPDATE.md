@@ -208,7 +208,17 @@ se desio i fix koji radi:
     (`DriveTrashFile`) da ih klijent ne bi ponovo skidao; manifest nosi `files`
     listu (ime+veličina). Klijentski „preuzeto = očekivano" (#13) štiti od
     nepotpunog *download-a*, ali ne od nepotpune *objave* — zato oba kraja.
-    (Sledeći korak ka pravom snapshot-u: SHA-256 po fajlu + versioned folderi.)
+18. **SHA-256 verifikacija sadržaja (F1 — implementirano).** Manifest (`files[]`)
+    nosi `sha256` (+ `size`) svakog fajla (`modRelease` reuse `modDrive.Sha256File`
+    — isti `.NET SHA256Managed` kao PIN hash). Klijent je sada **manifest-driven**:
+    skida samo fajlove iz `files[]` i **verifikuje SHA-256** svakog pre importa;
+    nesklad (tiha korupcija/stale) → fajl se ne broji → `n <> expected` → fatalno
+    (`AbortSelfUpdate`). **Fallback:** ako SHA-256 nije dostupan na mašini (retko;
+    `Sha256File=""`, kao PIN plaintext fallback) → prisustvo/broj (kao pre F1), uz
+    log. Stari publisher (manifest bez `files[]`) → legacy listing-download. Self-test:
+    `Alt+F8 → Test_Sha256File`. **F2 (u planu, `docs/SELF_UPDATE_SNAPSHOT_PLAN.md`):**
+    versioned folderi `releases/<v>/` + `current.json` pokazivač + `manifest_sha256`
+    lanac poverenja → immutable snapshot + rollback.
 ---
 
 ## Preduslovi i ograničenja

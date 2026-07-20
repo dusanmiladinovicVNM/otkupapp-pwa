@@ -106,17 +106,19 @@ Public Sub RunSelfUpdate()
     ' 2) Download svih fajlova iz AgriX_Release u temp folder. ATOMARNOST:
     '    mora stici SVAKI fajl iz listinga (inace bi se snimila polu-nova verzija).
     Dim tempDir As String: tempDir = MakeTempDir()
-    Dim expected As Long
-    Dim n As Long: n = DownloadReleaseFiles(tempDir, expected)
+    Dim expected As Long, note As String
+    Dim n As Long: n = DownloadReleaseFiles(tempDir, expected, note)
     If expected = 0 Then
         MsgBox Poruka("SU_PREUZIMANJE_OTKAZANO") & vbCrLf & _
                Poruka("SU_POKUSAJTE"), vbCritical, APP_NAME
         Exit Sub
     End If
     If n <> expected Then
-        MsgBox "Nepotpuno preuzimanje release-a (" & n & "/" & expected & " fajlova)." & vbCrLf & _
+        MsgBox "Nepotpuno ili NEVERIFIKOVANO preuzimanje release-a (" & n & "/" & expected & " fajlova)." & _
+               IIf(Len(note) > 0, vbCrLf & note, "") & vbCrLf & _
                "Azuriranje je PREKINUTO - nista nije menjano, radna verzija je ocuvana." & vbCrLf & _
-               "Proverite internet/Drive pristup pa pokusajte ponovo.", vbCritical, APP_NAME
+               "Proverite internet/Drive pristup (i SHA-256: Alt+F8 -> Test_Sha256File) pa ponovite.", _
+               vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -464,29 +466,113 @@ End Function
 ' Skini sve kod-fajlove iz AgriX_Release u tempDir. Vrati broj USPESNO skinutih,
 ' a kroz expectedOut broj koji je TREBALO da stigne (podrzane ekstenzije iz
 ' listinga). Pozivalac prekida update ako downloaded <> expected (atomarnost).
-Private Function DownloadReleaseFiles(ByVal tempDir As String, ByRef expectedOut As Long) As Long
+' Skini kod-fajlove iz AgriX_Release u tempDir. Vrati broj USPESNO skinutih (i
+' VERIFIKOVANIH), expectedOut = broj koji je TREBALO. Pozivalac prekida ako
+' downloaded <> expected -> nesklad hesa / nedostajuci fajl = fatalno (atomarno).
+'  - Ako manifest ima files[] (F1+): download SAMO tih fajlova + verifikacija
+'    SHA-256 (fallback na prisustvo/broj ako SHA nedostupan na masini).
+'  - Ako nema files[] (stari publisher): legacy listing-download (kao pre F1).
+Private Function DownloadReleaseFiles(ByVal tempDir As String, ByRef expectedOut As Long, ByRef note As String) As Long
     Const SRC As String = "modSelfUpdate.DownloadReleaseFiles"
     On Error GoTo EH
 
     expectedOut = 0
+    note = ""
+
     Dim dict As Object: Set dict = DriveListFolder(REL_FOLDER_ID)
     If dict Is Nothing Then Exit Function
 
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
-    Dim k As Variant, ext As String, n As Long, expected As Long
-    For Each k In dict.Keys
-        ext = LCase$(fso.GetExtensionName(CStr(k)))
-        Select Case ext
-            Case "bas", "cls", "frm", "frx", "doccls"
-                expected = expected + 1
-                If DriveDownloadToFile(CStr(dict(k)), tempDir & "\" & CStr(k)) Then n = n + 1
-        End Select
-    Next k
+    Dim files As Object: Set files = ParseManifestFiles(DownloadManifestText())
+    Dim n As Long, expected As Long
+
+    If files.count = 0 Then
+        ' LEGACY (stari publisher bez files[]) -> listing-driven, bez hash provere.
+        note = "legacy manifest (bez files[]) - bez SHA verifikacije"
+        Dim k As Variant, ext As String
+        For Each k In dict.Keys
+            ext = LCase$(fso.GetExtensionName(CStr(k)))
+            Select Case ext
+                Case "bas", "cls", "frm", "frx", "doccls"
+                    expected = expected + 1
+                    If DriveDownloadToFile(CStr(dict(k)), tempDir & "\" & CStr(k)) Then n = n + 1
+            End Select
+        Next k
+    Else
+        ' MANIFEST-DRIVEN + SHA-256 verifikacija (F1). Manifest je merodavan izvor
+        ' liste; stale fajlovi iz foldera se ignorisu.
+        Dim shaOk As Boolean: shaOk = Sha256Available(tempDir)
+        If Not shaOk Then note = "SHA-256 nedostupan na ovoj masini - fallback na prisustvo/broj (bez hesa)"
+        Dim nm As Variant, dest As String, wantSha As String
+        For Each nm In files.Keys
+            expected = expected + 1
+            wantSha = CStr(files(nm))
+            If Not dict.Exists(CStr(nm)) Then
+                LogErr SRC, "manifest fajl nije na Drive-u: " & CStr(nm)     ' -> n<expected -> fatalno
+            ElseIf DriveDownloadToFile(CStr(dict(CStr(nm))), tempDir & "\" & CStr(nm)) Then
+                dest = tempDir & "\" & CStr(nm)
+                If shaOk And Len(wantSha) > 0 Then
+                    If LCase$(Sha256File(dest)) = LCase$(wantSha) Then
+                        n = n + 1
+                    Else
+                        LogErr SRC, "SHA-256 NESKLAD (korupcija/stale): " & CStr(nm)   ' -> n<expected -> fatalno
+                    End If
+                Else
+                    n = n + 1        ' SHA nedostupan ili manifest bez sha -> prisustvo/broj
+                End If
+            End If
+        Next nm
+    End If
+
     expectedOut = expected
     DownloadReleaseFiles = n
     Exit Function
 EH:
     LogErr SRC, Err.description
+End Function
+
+' Skini version.json (manifest) sa Drive-a i vrati sadrzaj (ili "" ako nedostupno).
+Private Function DownloadManifestText() As String
+    On Error Resume Next
+    Dim id As String: id = DriveFindInFolder(REL_FOLDER_ID, MANIFEST_NAME)
+    If Len(id) = 0 Then Exit Function
+    Dim tmp As String: tmp = Environ$("TEMP") & "\AgriX_manifest.json"
+    If DriveDownloadToFile(id, tmp) Then DownloadManifestText = ReadAllText(tmp)
+End Function
+
+' Parsiraj files[] iz manifesta -> Dictionary(ime -> sha256hex). Prazno ako nema
+' files[] (stari publisher). size se ne parsira (broj; sha256 subsumira duzinu).
+' Reuse ExtractJsonStringGoogle + split-po-"}" (isti obrazac kao DriveListFolder).
+Private Function ParseManifestFiles(ByVal json As String) As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = 1                    ' TextCompare
+    Set ParseManifestFiles = d
+    If Len(json) = 0 Then Exit Function
+
+    Dim p As Long: p = InStr(1, json, """files""", vbTextCompare)
+    If p = 0 Then Exit Function           ' nema files[] -> legacy
+
+    Dim parts() As String, i As Long, nm As String, sh As String
+    parts = Split(Mid$(json, p), "}")
+    For i = LBound(parts) To UBound(parts)
+        nm = ExtractJsonStringGoogle(parts(i), "name")
+        If Len(nm) > 0 Then
+            sh = ExtractJsonStringGoogle(parts(i), "sha256")
+            If Not d.Exists(nm) Then d.Add nm, sh
+        End If
+    Next i
+End Function
+
+' Da li SHA-256 radi na ovoj masini (testira BAS Sha256File put nad "abc" fajlom).
+Private Function Sha256Available(ByVal workDir As String) As Boolean
+    On Error Resume Next
+    Dim p As String: p = workDir & "\_shatest.tmp"
+    Dim ff As Integer: ff = FreeFile
+    Open p For Output As #ff
+    Print #ff, "abc";                    ' tacno 3 bajta
+    Close #ff
+    Sha256Available = (LCase$(Sha256File(p)) = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    Kill p
 End Function
 
 ' Faza 1: delta-skip + pre-rutiranje tvrdih + soft code-merge. Radi za soft module

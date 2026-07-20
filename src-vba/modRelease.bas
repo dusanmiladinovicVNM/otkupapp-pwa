@@ -44,10 +44,16 @@ Public Sub PublishReleaseToDrive()
         Select Case ext
             Case "bas", "cls", "frm", "frx", "doccls"
                 If Not localNames.Exists(fil.name) Then localNames.Add fil.name, True
-                If Len(DriveUploadFile(REL_FOLDER_ID, fil.path, fil.name)) > 0 Then
+                ' SHA-256 sirovih bajtova (reuse modDrive.Sha256File). Build masina
+                ' MORA da hesuje; prazno -> ne objavljuj manifest bez hesa (fail).
+                Dim sh As String: sh = Sha256File(fil.path)
+                If Len(sh) = 0 Then
+                    failed = failed & "  " & fil.name & " (SHA-256 nedostupan na build masini)" & vbCrLf
+                ElseIf Len(DriveUploadFile(REL_FOLDER_ID, fil.path, fil.name)) > 0 Then
                     uploaded = uploaded + 1
                     If Len(filesJson) > 0 Then filesJson = filesJson & ","
-                    filesJson = filesJson & "{""name"":""" & fil.name & """,""size"":" & fil.Size & "}"
+                    filesJson = filesJson & "{""name"":""" & fil.name & """,""size"":" & fil.Size & _
+                                ",""sha256"":""" & sh & """}"
                 Else
                     failed = failed & "  " & fil.name & vbCrLf
                 End If

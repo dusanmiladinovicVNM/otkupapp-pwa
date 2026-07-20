@@ -138,6 +138,56 @@ EH:
     LogErr SRC, Err.description
 End Function
 
+' SHA-256 (hex, lowercase) SIROVIH BAJTOVA fajla, ili "" ako SHA nedostupan/greska.
+' Isti .NET primitiv kao modAuth.Sha256Hex (dokazan u produkciji za PIN hash), samo
+' nad bajtovima fajla (ADODB.Stream binarno, isti obrazac kao DriveDownloadToFile).
+' Koristi ga: PublishReleaseToDrive (manifest) + modSelfUpdate (verifikacija skinutog).
+Public Function Sha256File(ByVal path As String) As String
+    On Error GoTo EH
+    Dim stm As Object, sha As Object, bytes() As Byte, hash() As Byte
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1                       ' adTypeBinary
+    stm.Open
+    stm.LoadFromFile path
+    bytes = stm.Read                   ' svi bajtovi (adReadAll)
+    stm.Close
+
+    Set sha = CreateObject("System.Security.Cryptography.SHA256Managed")
+    hash = sha.ComputeHash_2((bytes))
+
+    Dim i As Long, s As String
+    For i = LBound(hash) To UBound(hash)
+        s = s & Right$("0" & Hex$(hash(i) And &HFF), 2)
+    Next i
+    Sha256File = LCase$(s)
+    Exit Function
+EH:
+    Sha256File = vbNullString          ' "" = SHA nedostupan / greska -> pozivalac odlucuje
+End Function
+
+' F0 self-test (RUCNO, Alt+F8): potvrdi da Sha256File radi na OVOJ masini. Hesuje
+' fajl sa "abc" (3 bajta) i poredi sa standardnim vektorom SHA-256("abc").
+Public Sub Test_Sha256File()
+    On Error Resume Next
+    Dim p As String: p = Environ$("TEMP") & "\AgriX_shatest.txt"
+    Dim ff As Integer: ff = FreeFile
+    Open p For Output As #ff
+    Print #ff, "abc";                  ' tacno 3 bajta (bez CRLF/BOM)
+    Close #ff
+    Dim got As String: got = Sha256File(p)
+    Kill p
+    Const WANT As String = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    If LCase$(got) = WANT Then
+        MsgBox "SHA-256 RADI na ovoj masini." & vbCrLf & "Sha256File(""abc"") = " & got, _
+               vbInformation, APP_NAME
+    Else
+        MsgBox "SHA-256 NE radi / nesklad!" & vbCrLf & "Dobijeno: '" & got & "'" & vbCrLf & _
+               "Ocekivano: " & WANT & vbCrLf & vbCrLf & _
+               "Release verifikacija ce pasti na fallback (broj/prisustvo).", _
+               vbExclamation, APP_NAME
+    End If
+End Sub
+
 ' Vrati Dictionary (ime fajla -> fileID) svih fajlova u folderu.
 ' Jedna strana (pageSize=1000); AgriX_Release ima ~100 src-vba fajlova.
 Public Function DriveListFolder(ByVal folderID As String) As Object
