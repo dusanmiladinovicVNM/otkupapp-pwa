@@ -43,6 +43,19 @@ Public Sub PublishReleaseToDrive()
         Exit Sub
     End If
 
+    ' Immutability upozorenje: ako versioned folder VEC ima manifest.json, ovo je
+    ' re-objava POTPUNE iste verzije -> prepisuje snapshot, a klijenti koji tu
+    ' APP_VERSION vec imaju NECE povuci izmenjene bajtove. (Retry NEUSPELE objave je
+    ' bezbedan: manifest.json se pise tek na kraju, pa ga tada jos nema -> bez pitanja.)
+    If Len(DriveFindInFolder(vfid, "manifest.json")) > 0 Then
+        If MsgBox("Verzija " & APP_VERSION & " je VEC objavljena (releases\" & APP_VERSION & _
+                  " ima manifest.json)." & vbCrLf & _
+                  "Re-objava PREPISUJE postojeci snapshot; klijenti koji tu verziju vec imaju " & _
+                  "NECE povuci izmenjene bajtove (ista APP_VERSION)." & vbCrLf & vbCrLf & _
+                  "Preporuka: bump-uj APP_VERSION. Nastaviti ipak?", _
+                  vbYesNo + vbExclamation, APP_NAME) <> vbYes Then Exit Sub
+    End If
+
     ' 1) Upload svih code fajlova u OBA kanala (flat REL_FOLDER_ID = stari klijenti;
     '    versioned vfid = sledljivost + F2 lanac). Pamti lokalna imena (za prune) +
     '    files JSON (ime+velicina+sha256, deljen za version.json i manifest.json).
@@ -150,7 +163,8 @@ Public Sub PublishReleaseToDrive()
            IIf(Len(relPruneList) > 0, relPruneList, "") & _
            "  manifest.json: " & IIf(okVMan, "OK", "GRESKA") & vbCrLf & _
            "  version.json:  " & IIf(okMan, "OK", "GRESKA") & vbCrLf & _
-           "  current.json:  " & IIf(okCur, "OK", "GRESKA") & vbCrLf & vbCrLf & _
+           "  current.json:  " & IIf(okCur, "OK", "GRESKA") & _
+               IIf(okCur And Len(manSha) <> 64, " (PAZNJA: manifest_sha256 nije 64hex - slab lanac!)", "") & vbCrLf & vbCrLf & _
            IIf(okVMan And okMan And okCur, "Sve OK.", "PAZNJA: neki manifest/pokazivac NIJE objavljen!"), _
            IIf(okVMan And okMan And okCur, vbInformation, vbExclamation), APP_NAME
     Exit Sub

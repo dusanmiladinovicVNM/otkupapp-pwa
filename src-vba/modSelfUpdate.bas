@@ -145,6 +145,10 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
     '    vec-azurna verzija; eliminise rizik Remove+Import modMouseWheel-a.)
     If Not AnyUpdatePending(tempDir) Then
         RestoreRuntimeAfterSelfUpdate
+        On Error Resume Next                          ' no-op: ne ostavljaj skinut temp folder
+        Dim fsoTmp As Object: Set fsoTmp = CreateObject("Scripting.FileSystemObject")
+        If fsoTmp.FolderExists(tempDir) Then fsoTmp.DeleteFolder tempDir, True
+        On Error GoTo EH
         MsgBox "Nema izmena koda - vec ste na najnovijoj verziji." & vbCrLf & _
                "Nista nije menjano (delta-skip: 0 promena).", vbInformation, APP_NAME
         Exit Sub
@@ -226,8 +230,11 @@ Public Sub RunSelfUpdatePhase2()
     ' NB: marker se NE brise ovde na pocetku - brise se tek na uspeh ILI kontrolisan
     ' fatalni izlaz, da crash USRED importa ostavi trag za RecoverPendingSelfUpdate.
     If Len(p2dir) = 0 Then
+        ' Faza 1 je (ako je stigla dovde) uklonila tvrde module; bez temp foldera ne
+        ' mogu da ih uvezem -> memorijski projekat je mozda polovan. Fail-closed:
+        ' auto-close bez snimanja (disk ostaje stara ispravna verzija).
         DeleteSetting "AgriXSelfUpdate", sec
-        RestoreRuntimeAfterSelfUpdate             ' faza 1 je ostavila events OFF
+        AbortSelfUpdate "2. faza: nedostaje temp folder (izgubljen state posle faze 1)."
         Exit Sub
     End If
 
@@ -270,6 +277,16 @@ Public Sub RunSelfUpdatePhase2()
             End If
         End If
     Next i
+
+    ' Faza 2 se zakazuje SAMO kad ima tvrdih modula (failed.count>0 -> filesCsv nije
+    ' prazan -> expected>0). expected=0 ovde = izgubljen/pokvaren registry state POSLE
+    ' faze-1 Remove-ova -> fatalno (inace bi "imported<>expected" bilo 0<>0=False pa bi
+    ' se snimio build BEZ uklonjenih tvrdih modula).
+    If expected = 0 Then
+        DeleteSetting "AgriXSelfUpdate", sec
+        AbortSelfUpdate "2. faza: nema modula za uvoz (izgubljen state) - radna verzija ocuvana."
+        Exit Sub
+    End If
 
     ' ATOMARNOST: SVE mora uspeti (imported = expected, bez stillFail). Inace se NE
     ' snima i workbook se auto-zatvara bez snimanja (disk ostaje stara verzija).
@@ -364,18 +381,25 @@ End Function
 Private Sub AbortSelfUpdate(ByVal msg As String)
     On Error Resume Next
     RestoreRuntimeAfterSelfUpdate
+    ThisWorkbook.Saved = True          ' ODMAH: ni AutoSave ni close-prompt ne upisu polu-nov projekat
     LogErr "modSelfUpdate.AbortSelfUpdate", msg
     MsgBox msg & vbCrLf & vbCrLf & _
            "NISTA nije snimljeno - radna verzija je ocuvana." & vbCrLf & _
            "Program ce se sada ZATVORITI bez snimanja. Otvorite ga ponovo; po zelji " & _
            "ponovite azuriranje ili vratite Backup\AgriX_pre-update_*.xlsm.", _
            vbCritical, APP_NAME
-    Application.OnTime Now, QualifiedProc("AbortSelfUpdateClose")
+    ' Zatvori DIREKTNO iz tekuceg (OnTime-dispatch) stack-a - NE preko novog OnTime
+    ' makroa: polomljen/nekompajlabilan projekat mozda ne bi razresio novi name-dispatch
+    ' (demand-compile bi pao) pa auto-close nikad ne bi opalio. Direktan poziv radi jer
+    ' je modSelfUpdate vec na stack-u (ne trazi re-compile celog projekta).
+    AbortSelfUpdateClose
 End Sub
 
-' Auto-close bez snimanja (Application.OnTime cilj; Public zbog toga). Saved=True
-' pre Close -> ni ShutdownApp/FlushNow (koji gledaju .Saved) ni Close ne upisu
-' polu-nov memorijski projekat preko stare (dobre) kopije na disku.
+' Auto-close bez snimanja. Zove se DIREKTNO iz AbortSelfUpdate (ne vise preko
+' Application.OnTime - polomljen projekat ne bi razresio name-dispatch); Public
+' zadrzan (istorijski OnTime cilj / rucni fallback). Saved=True pre Close -> ni
+' ShutdownApp/FlushNow (koji gledaju .Saved) ni Close ne upisu polu-nov memorijski
+' projekat preko stare (dobre) kopije na disku.
 Public Sub AbortSelfUpdateClose()
     On Error Resume Next
     Application.EnableEvents = True
@@ -537,16 +561,21 @@ Private Function DownloadReleaseFiles(ByVal tempDir As String, ByRef expectedOut
             wantSha = CStr(files(nm))
             If Not dict.Exists(CStr(nm)) Then
                 LogErr SRC, "manifest fajl nije na Drive-u: " & CStr(nm)     ' -> n<expected -> fatalno
+            ElseIf shaOk And Not IsSha256Hex(wantSha) Then
+                ' Hashed manifest na SHA-sposobnoj masini MORA imati validan 64-hex sha
+                ' po fajlu; prazan/nevalidan sha = pokvaren/podmetnut manifest -> ne broj
+                ' (fail-closed; n<expected -> pozivalac prekida update).
+                LogErr SRC, "manifest bez validnog sha256 (64 hex): " & CStr(nm)
             ElseIf DriveDownloadToFile(CStr(dict(CStr(nm))), tempDir & "\" & CStr(nm)) Then
                 dest = tempDir & "\" & CStr(nm)
-                If shaOk And Len(wantSha) > 0 Then
+                If shaOk Then
                     If LCase$(Sha256File(dest)) = LCase$(wantSha) Then
                         n = n + 1
                     Else
                         LogErr SRC, "SHA-256 NESKLAD (korupcija/stale): " & CStr(nm)   ' -> n<expected -> fatalno
                     End If
                 Else
-                    n = n + 1        ' SHA nedostupan ili manifest bez sha -> prisustvo/broj
+                    n = n + 1        ' SHA nedostupan NA KLIJENTU -> prisustvo/broj (dokumentovano)
                 End If
             End If
         Next nm
@@ -673,6 +702,18 @@ Private Function Sha256Available(ByVal workDir As String) As Boolean
     Kill p
 End Function
 
+' True ako je s tacno 64 hex znaka (validan SHA-256 otisak). Prazan/kraci/duzi/
+' ne-hex = nevalidan -> manifest entry se ne prihvata na SHA-sposobnoj masini.
+Private Function IsSha256Hex(ByVal s As String) As Boolean
+    If Len(s) <> 64 Then Exit Function
+    Dim i As Long, c As Long
+    For i = 1 To 64
+        c = AscW(Mid$(s, i, 1))
+        If Not ((c >= 48 And c <= 57) Or (c >= 65 And c <= 70) Or (c >= 97 And c <= 102)) Then Exit Function
+    Next i
+    IsSha256Hex = True
+End Function
+
 ' Faza 1: delta-skip + pre-rutiranje tvrdih + soft code-merge. Radi za soft module
 ' jer je runtime oslobodjen (PrepareRuntime) pa CodeModule edit ne diskonektuje.
 '  - identican kod (SameCode)        -> "same", NE diraj
@@ -737,6 +778,15 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                             ' TVRD modul -> NIKAD AddFromString; pravo u fazu 2 (Remove+Import).
                             st(fkey) = "phase2"
                             If Not failedOut Is Nothing Then failedOut(baseName) = fil.name
+                        ElseIf (ext = "frm" Or ext = "doccls") And _
+                               (IsHardModuleBody(body) Or (compExists And readOk And IsHardModuleBody(cur))) Then
+                            ' Forma/sheet sa MODULE-LEVEL WithEvents/MSForms se NE sme menjati
+                            ' kroz AddFromString (diskonektuje CodeModule; zamka #3) NITI
+                            ' Remove+Import u runtime-u (zamka #1). Ni novo telo tvrdo, ni
+                            ' zatecena forma tvrda (zamrznute forme) -> jedini bezbedan ishod
+                            ' = reinstall (fail-closed; NE polu-merge -> NE crash na wire-up-u).
+                            st(fkey) = "skip"
+                            needsReinstall = True
                         ElseIf compExists Then
                             If readOk And Not orig.Exists(fkey) Then orig(fkey) = cur
                             If vbc.CodeModule.CountOfLines > 0 Then _
@@ -803,8 +853,10 @@ End Function
 ' listu: detekcija radi i za nove module (npr. clsUiSink).
 Private Function IsHardModuleBody(ByVal body As String) As Boolean
     Dim arr() As String, i As Long, u As String, w As String
-    arr = Split(body, vbCrLf)
-    If UBound(arr) <= 0 Then arr = Split(body, vbLf)
+    ' Normalizuj SVE prekide reda (vbCrLf iz fajla; lone vbCr iz CodeModule.Lines) ->
+    ' vbLf, da detekcija radi i nad telom iz fajla i nad kodom procitanim iz projekta.
+    Dim t As String: t = Replace$(Replace$(body, vbCrLf, vbLf), vbCr, vbLf)
+    arr = Split(t, vbLf)
     For i = 0 To UBound(arr)
         u = CodeLineUpper(arr(i))          ' bez stringa/komentara (da "WithEvents"
         If Len(u) > 0 Then                 ' u komentaru ne da lazni pozitiv)
@@ -838,15 +890,13 @@ End Function
 ' Da li su dva tela koda identicna. Ignorise SAMO zavrsne CR/LF; ostalo mora biti
 ' bajt-za-bajt isto (izvori su ASCII, exporti iz istog VBE).
 Private Function SameCode(ByVal a As String, ByVal b As String) As Boolean
-    ' vbTextCompare = case-INSENSITIVE. Razlog: VBE unifikuje casing SVIH istoimenih
-    ' identifikatora projekt-wide (npr. parametar "X" -> "x" jer negde postoji
-    ' lowercase "x"), pa se CodeModule.Lines i fajl razlikuju SAMO u case-u
-    ' identifikatora - funkcionalno isto (VBA je case-insensitive; potvrdjeno:
-    ' AscW proj=120 'x' vs file=88 'X'). Stringove/komentare (gde case JESTE bitan)
-    ' VBE NE dira, pa realna izmena stringa/komentara i dalje menja sadrzaj i
-    ' detektuje se (jedini slepi ugao: izmena SAMO case-a unutar stringa -
-    ' zanemarljivo retko, kozmeticki; bolje nego nepotreban re-import -> crash).
-    SameCode = (StrComp(CanonCode(a), CanonCode(b), vbTextCompare) = 0)
+    ' BINARNO poredjenje kanonizovanih tela. CanonCode lowercase-uje SAMO kod IZVAN
+    ' stringova/komentara -> apsorbuje VBE re-casing identifikatora (VBE unifikuje
+    ' casing istoimenih identifikatora projekt-wide; potvrdjeno AscW proj=120 'x' vs
+    ' file=88 'X'), ali CUVA case unutar string-literala i komentara. Tako izmena
+    ' SAMO case-a u stringu (npr. "DA" -> "da": JSON kljuc, ID prefiks, API vrednost)
+    ' i DALJE menja sadrzaj i detektuje se (vbTextCompare bi je slepo progutao).
+    SameCode = (StrComp(CanonCode(a), CanonCode(b), vbBinaryCompare) = 0)
 End Function
 
 ' Kanonizuj kod za poredjenje: SVE vrste prekida reda (CRLF/CR/LF) -> LF, pa skini
@@ -864,12 +914,14 @@ Private Function CanonCode(ByVal s As String) As String
     '     fajl ima obican space (0x20) -> ista duzina, nevidljiva razlika (uzrok
     '     preostalih ~64 laznih "razlicito" posle vodeci-blank fixa). Normalizuj.
     s = Replace$(s, ChrW$(160), " ")
-    ' 2) RTrim svaki red - trailing whitespace nebitan (hvata "ista duzina ali
-    '    razlicit" slucaj: red sa/bez zavrsnog space-a, npr. clsWheelList)
+    ' 2) RTrim svaki red + lowercase kod IZVAN stringova/komentara (LowerOutsideStrings):
+    '    apsorbuje VBE identifier re-casing bez gubljenja case-a u stringovima/komentarima
+    '    (SameCode posle poredi BINARNO). Trailing whitespace nebitan (hvata "ista
+    '    duzina ali razlicit" slucaj: red sa/bez zavrsnog space-a, npr. clsWheelList).
     Dim arr() As String, i As Long
     arr = Split(s, vbLf)
     For i = LBound(arr) To UBound(arr)
-        arr(i) = RTrim$(arr(i))
+        arr(i) = RTrim$(LowerOutsideStrings(arr(i)))
     Next i
     s = Join(arr, vbLf)
     ' 3) skini VODECE i zavrsne prazne redove - VBE CodeModule.Lines cesto vraca
@@ -884,12 +936,57 @@ Private Function CanonCode(ByVal s As String) As String
     CanonCode = s
 End Function
 
+' Lowercase kod IZVAN string-literala i komentara; case unutar "..." i posle ' se
+' CUVA. Koristi SameCode da absorbuje VBE identifier re-casing (identifikatori se
+' lowercase-uju na obe strane -> match) a da NE proguta case-only izmenu u stringu.
+' VBA string-literal nikad ne prelazi fizicki red (line-continuation je van navodnika),
+' pa je per-red obrada tacna. "" unutar stringa = escaped navodnik (ostaje u stringu).
+Private Function LowerOutsideStrings(ByVal s As String) As String
+    Dim i As Long, n As Long, c As String, out As String, inStr As Boolean
+    n = Len(s)
+    i = 1
+    Do While i <= n
+        c = Mid$(s, i, 1)
+        If inStr Then
+            If c = """" Then
+                If i < n And Mid$(s, i + 1, 1) = """" Then
+                    out = out & """"""            ' escaped "" -> ostaje u stringu
+                    i = i + 2
+                Else
+                    inStr = False
+                    out = out & c
+                    i = i + 1
+                End If
+            Else
+                out = out & c                     ' cuvaj case unutar stringa
+                i = i + 1
+            End If
+        Else
+            If c = """" Then
+                inStr = True
+                out = out & c
+                i = i + 1
+            ElseIf c = "'" Then
+                out = out & Mid$(s, i)            ' komentar do kraja reda -> cuvaj
+                Exit Do
+            Else
+                out = out & LCase$(c)             ' kod van stringa/komentara -> lower
+                i = i + 1
+            End If
+        End If
+    Loop
+    LowerOutsideStrings = out
+End Function
+
 ' READ-ONLY: da li ima ista da se azurira (nova komponenta ILI izmenjen kod).
 ' Pozvati PRE PrepareRuntime -> ako vrati False, update NE dira nista (bez
 ' teardown-a zivog app-a, bez importa, bez save-a). Ponovljeni / vec-azuran
 ' update = pravi no-op -> nema Remove+Import (pa ni crash na modMouseWheel).
 Private Function AnyUpdatePending(ByVal folder As String) As Boolean
-    On Error Resume Next
+    ' FAIL-SAFE: bilo koja greska u proveri -> tretiraj kao "ima izmena" (True) ->
+    ' pun atomarni update put (koji je i sam fail-closed). NIKAD ne prijavljuj lazni
+    ' no-op ("vec ste azurni") na gresku - to bi tiho preskocilo stvaran update.
+    On Error GoTo EH_SAFE
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(SKIP_MODULES) & ","
     Dim proj As Object: Set proj = ThisWorkbook.VBProject
@@ -900,21 +997,22 @@ Private Function AnyUpdatePending(ByVal folder As String) As Boolean
         If ext = "bas" Or ext = "cls" Or ext = "frm" Or ext = "doccls" Then
             baseName = fso.GetBaseName(fil.name)
             If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
-                Set vbc = Nothing
-                Set vbc = proj.VBComponents(baseName)
-                If vbc Is Nothing Then
+                If Not ComponentExists(proj, baseName) Then
                     AnyUpdatePending = True: Exit Function        ' nova komponenta
-                Else
-                    body = ExtractModuleCode(fil.path)
-                    cur = ""
-                    If vbc.CodeModule.CountOfLines > 0 Then cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
-                    If Not SameCode(cur, body) Then
-                        AnyUpdatePending = True: Exit Function     ' izmenjen kod
-                    End If
+                End If
+                Set vbc = proj.VBComponents(baseName)
+                body = ExtractModuleCode(fil.path)
+                cur = ""
+                If vbc.CodeModule.CountOfLines > 0 Then cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
+                If Not SameCode(cur, body) Then
+                    AnyUpdatePending = True: Exit Function     ' izmenjen kod
                 End If
             End If
         End If
     Next fil
+    Exit Function
+EH_SAFE:
+    AnyUpdatePending = True    ' nesigurni smo -> ne preskaci; pun put je atoman/fail-closed
 End Function
 
 ' Best-effort rollback koda JEDNE forme/sheet komponente na sadrzaj pre merge

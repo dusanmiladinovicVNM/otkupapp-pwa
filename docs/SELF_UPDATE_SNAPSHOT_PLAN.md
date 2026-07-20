@@ -48,8 +48,11 @@ AgriX_Release/                         (REL_FOLDER_ID, postojeći)
   <legacy flat .bas/.cls/...>           <- LEGACY (zadržani u tranziciji)
 ```
 
-Svaki `releases/<verzija>/` je **write-once snapshot**. Stare verzije ostaju
-(sledljivost) uz opcionu retention politiku (drži poslednjih N).
+Svaki `releases/<verzija>/` je **snapshot po verziji** (write-once _po konvenciji_:
+bump APP_VERSION za svaki release). Re-objava iste verzije **prepisuje** snapshot —
+`PublishReleaseToDrive` to detektuje (postoji `manifest.json`) i **upozori**
+(vbYesNo) pre prepisa; retry _neuspele_ objave prolazi bez pitanja (manifest.json
+se piše tek na kraju). Stare verzije ostaju (sledljivost) uz retention (drži 10).
 
 ### `manifest.json` (po verziji)
 
@@ -231,8 +234,11 @@ Novi klijent radi i sa starim publisher-om (`current.json` chybí → fallback n
   uploaduje** (posle `WriteReleaseTextFile`), ne in-memory string — inače ANSI/UTF
   neslaganje. Isto važi za `manifest_sha256`: heš bajtova uploadovanog
   `manifest.json`, koje klijent skida `alt=media` (sirovo) i hešuje.
-- **Re-publish iste verzije** = write-once prekršen. Pravilo: verzija je
-  immutable; re-publish → bump verzije ili eksplicitan `--force` (overwrite).
+- **Re-publish iste verzije** = write-once prekršen (klijent koji tu verziju već
+  ima NEĆE povući izmenjene bajtove — `VersionCompare` ne vidi razliku). Zaštita:
+  `PublishReleaseToDrive` **upozorava** (vbYesNo) ako `releases/<v>` već ima
+  `manifest.json`; pravilo ostaje **bump APP_VERSION za svaki release**. (Hard-reject
+  bi slomio retry neuspele objave, pa je namerno upozorenje, ne blokada.)
 - **`current.json` čitanje fail-soft** (offline/korupcija → nema update, kao danas).
 - **Rollback ne „vraća" već ažurirane klijente** (`VersionCompare` ne dozvoljava
   auto-downgrade) — pomaže samo onima koji još nisu povukli. Dokumentovati; za

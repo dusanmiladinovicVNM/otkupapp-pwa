@@ -43,7 +43,7 @@ AgriX_Release/                 (REL_FOLDER_ID)
   version.json                 <- LEGACY (dual-write, za stare klijente)
   <flat .bas/.cls/...>         <- LEGACY (dual-write)
   releases/
-    2.21.0/  manifest.json + svi src-vba fajlovi   (write-once snapshot)
+    2.21.0/  manifest.json + svi src-vba fajlovi   (snapshot; bump-per-release)
     2.22.0/  ...                                    (retention: poslednjih 10)
 ```
 
