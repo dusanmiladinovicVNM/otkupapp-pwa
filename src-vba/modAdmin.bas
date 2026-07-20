@@ -240,7 +240,7 @@ Private Sub AdminCheckUpdate()
                   "A" & ChrW(382) & "urirati sada? (program " & ChrW(263) & "e se zatvoriti i ponovo otvoriti)", _
                   vbYesNo + vbQuestion, APP_NAME) = vbYes Then
             CloseAdminPanel
-            Application.OnTime Now, "RunSelfUpdate"
+            Application.OnTime Now, "'" & Replace$(ThisWorkbook.name, "'", "''") & "'!RunSelfUpdate"
         End If
     Else
         MsgBox "Nema novih a" & ChrW(382) & "uriranja. Koristite najnoviju verziju (" & APP_VERSION & ")." & _

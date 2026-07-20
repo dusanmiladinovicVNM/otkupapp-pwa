@@ -159,14 +159,19 @@ se desio i fix koji radi:
     već imaju — uklanjanje bi opet menjalo deklaracije).
 12. **ATOMARNOST — nikad ne snimaj polu-nov projekat.** Update se snima SAMO pri
     punom uspehu (`SaveWorkbookVerified`: `Save` bez greške I `ThisWorkbook.Saved`).
-    Svaki fatalni ishod → `Exit Sub` bez `Save`. Pošto se pre pune uspešnosti
-    nikad ne snima, fajl na disku ostaje **stara ispravna verzija** → korisnik
-    zatvara bez snimanja i radna verzija je očuvana. **Zašto je važno:**
-    `APP_VERSION` živi u `modConfig.bas` (soft `.bas`, merge-uje se u fazi 1); da
-    se snimi parcijalni projekat sa novim `APP_VERSION` a starom formom, `CheckForUpdateOnOpen`
-    bi na sledećem startu video „ažurno" i **nikad više ne bi ponudio isti release**
-    (tihi trajno-parcijalni klijent). Fatalno = forma/sheet ne može merge (`needsReinstall`),
-    faza-2 `Import` padne, `Save` ne uspe, ili **download nepotpun** (vidi #13).
+    Svaki fatalni ishod → NE snima se, i **`AbortSelfUpdateClose` auto-zatvara
+    svesku bez snimanja** (`Saved=True` + `Close SaveChanges:=False`) — tehnička
+    garancija, ne oslanja se na to da operater neće `Ctrl+S` ni da OneDrive
+    AutoSave neće upisati polu-nov projekat. Pošto se pre pune uspešnosti nikad ne
+    snima, disk ostaje **stara ispravna verzija**. **Zašto je važno:** `APP_VERSION`
+    živi u `modConfig.bas` (soft `.bas`, merge-uje se u fazi 1); da se snimi
+    parcijalni projekat sa novim `APP_VERSION` a starom formom, `CheckForUpdateOnOpen`
+    bi na sledećem startu video „ažurno" i **nikad više ne bi ponudio isti release**.
+    Fatalno = forma ne može merge (`needsReinstall`), faza-2 `Import` padne ili se
+    ne verifikuje (`ImportedOk`), stara komponenta **još postoji** (`Remove`
+    nedovršen — inače tiho preskočena = mešan build), `imported <> expected`,
+    `Save` ne uspe, ili **download nepotpun** (#13). (Higijena: `AbortSelfUpdateClose`
+    radi jer `ShutdownApp`/`FlushNow` gledaju `.Saved`, koji je postavljen na True.)
 13. **Download mora biti KOMPLETAN.** `DownloadReleaseFiles` vraća i „očekivano"
     (svi podržani fajlovi iz Drive listinga) i „preuzeto"; `RunSelfUpdate` prekida
     ako `preuzeto <> očekivano`. Ranije se gledalo samo `n = 0`, pa je i 1/95
@@ -182,11 +187,28 @@ se desio i fix koji radi:
     `SKIP_MODULES` bypass / uvoz sirovo-palih ili dev modula).
 15. **Startup watchdog za prekinut update.** Ako faza 2 nikad ne opali (Excel
     zatvoren, OnTime otkazan), `modConfig` je u memoriji nov ali disk je stara
-    (nesnimljena) verzija, a `phase2/pending` marker ostaje u registru.
-    `RecoverPendingSelfUpdate` (iz `StartApp`, pre `CheckForUpdateOnOpen`) čisti
-    stale marker + temp i obavesti. **NE pokušava da „dovrši" fazu 2** nad starim
-    projektom — to bi spojilo stari i nov kod (mešane verzije). Radna verzija je
-    očuvana; korisnik ponovi update.
+    (nesnimljena) verzija, a `pending` marker ostaje u registru.
+    `RecoverPendingSelfUpdate` (iz `StartApp`) čisti stale marker + temp i
+    obavesti. **NE pokušava da „dovrši" fazu 2** nad starim projektom — to bi
+    spojilo stari i nov kod. Marker se briše tek na **uspeh ili kontrolisan
+    abort** (ne na početku faze 2), da crash usred importa ostavi trag.
+16. **Multi-copy izolacija (naročito DEV test na kopiji).** Oba `Application.OnTime`
+    poziva (`RunSelfUpdate`, `RunSelfUpdatePhase2`, `AbortSelfUpdateClose`) su
+    **workbook-qualified** (`'Ime.xlsm'!Proc`) — inače Excel može da razreši proc
+    u pogrešnoj otvorenoj kopiji. `phase2` registarsko stanje je **scope-ovano po
+    workbook imenu** (`P2Section`) — dve kopije ne dele/gaze pending. `RunSelfUpdate`
+    ide **PRE min-version enforce gate-a** u `StartApp`: inače bi `enforce=YES`
+    ugasio baš klijenta kome update treba, pre nego što stigne do provere. (Ostaje
+    i operativni stopgap `VERSION_ENFORCE=NO` dok se flota ne digne — sad manje
+    kritičan.)
+17. **Release na Drive-u mora biti KOMPLETAN snapshot** (build strana,
+    `PublishReleaseToDrive`): `version.json` se objavljuje **tek pošto SVI code
+    fajlovi uspešno stignu** (ako makar jedan padne → manifest se ne dira, release
+    ostaje na staroj verziji); zastareli (obrisani) code fajlovi se **prune-uju**
+    (`DriveTrashFile`) da ih klijent ne bi ponovo skidao; manifest nosi `files`
+    listu (ime+veličina). Klijentski „preuzeto = očekivano" (#13) štiti od
+    nepotpunog *download-a*, ali ne od nepotpune *objave* — zato oba kraja.
+    (Sledeći korak ka pravom snapshot-u: SHA-256 po fajlu + versioned folderi.)
 ---
 
 ## Preduslovi i ograničenja
@@ -251,11 +273,16 @@ kao pravi self-update (faza 1 + faza 2), samo bez Drive download-a, bez
    izveštaj mora reći „Ažurirano: 0, bez izmene: ~sve" (delta-skip radi).
 7. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
 
-> **GUARD (fail-closed na klijentu):** `RunSelfUpdateDev` radi SAMO ako je izabran
-> folder pravi git klon — ime `src-vba` + `.git` u roditeljskom folderu
-> (`IsDevCloneFolder`). Na klijent mašini (nema git klona) se odbija, pa se ne
-> može slučajno pokrenuti iz `Alt+F8` nad proizvoljnim folderom. Prolazi kroz
-> ISTI atomski `RunSelfUpdateCore` kao produkcija (bez Drive-a).
+> **GUARD (zaštita od slučajnog klika — NIJE bezbednosna granica):**
+> `RunSelfUpdateDev` radi samo ako je izabran folder oblika git klona — ime
+> `src-vba` + `.git` u roditeljskom folderu (`IsDevCloneFolder`). To sprečava da
+> se iz `Alt+F8` slučajno pokrene nad proizvoljnim folderom i pokvari sveska.
+> **Nije sigurnosna granica** — ko namerno napravi `…\fake\.git` + `…\fake\src-vba`
+> prolazi. Za pravo razdvajanje bio bi potreban dev-only modul koji se ne
+> objavljuje ili build-flag; ovde je svesno zadržan u `modSelfUpdate` (odluka
+> operatera) uz ovaj lagani guard. Svako ko ionako može `Alt+F8` može i `Alt+F11`
+> / `ImportAllVBA` (ista klasa mogućnosti). Prolazi kroz ISTI atomski
+> `RunSelfUpdateCore` kao produkcija (bez Drive-a).
 
 `modSelfUpdate` je u `SKIP_MODULES`, pa se DEV harness pri merge-u **ne prepisuje**
 (ostaje aktivan), isto kao u produkciji. Za test i Drive transporta (download) →

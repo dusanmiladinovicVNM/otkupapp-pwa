@@ -112,6 +112,32 @@ EH:
     LogErr SRC, Err.description
 End Function
 
+' Premesti fajl u Trash (trashed=true). Koristi PublishReleaseToDrive za ciscenje
+' zastarelih (obrisanih) code fajlova iz AgriX_Release-a. Meko brisanje (Trash),
+' ne hard-delete -> greska pri objavi ne unistava fajl trajno. Vrati True na uspeh.
+Public Function DriveTrashFile(ByVal fileID As String) As Boolean
+    Const SRC As String = "modDrive.DriveTrashFile"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "PATCH", DRIVE_FILES & "/" & fileID & "?supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/json"
+    http.Send "{""trashed"":true}"
+
+    If http.status = 200 Then
+        DriveTrashFile = True
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
 ' Vrati Dictionary (ime fajla -> fileID) svih fajlova u folderu.
 ' Jedna strana (pageSize=1000); AgriX_Release ima ~100 src-vba fajlova.
 Public Function DriveListFolder(ByVal folderID As String) As Object

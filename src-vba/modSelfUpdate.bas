@@ -76,10 +76,11 @@ End Function
 ' (mesao bi staru i novu verziju). Fail-soft.
 Public Sub RecoverPendingSelfUpdate()
     On Error Resume Next
-    If Len(GetSetting("AgriXSelfUpdate", "phase2", "pending", "")) = 0 Then Exit Sub
+    Dim sec As String: sec = P2Section()
+    If Len(GetSetting("AgriXSelfUpdate", sec, "pending", "")) = 0 Then Exit Sub
 
-    Dim d As String: d = GetSetting("AgriXSelfUpdate", "phase2", "dir", "")
-    DeleteSetting "AgriXSelfUpdate", "phase2"
+    Dim d As String: d = GetSetting("AgriXSelfUpdate", sec, "dir", "")
+    DeleteSetting "AgriXSelfUpdate", sec
     If Len(d) > 0 Then
         Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
         If fso.FolderExists(d) Then fso.DeleteFolder d, True
@@ -146,14 +147,10 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
     summary = ImportFromFolder(tempDir, SKIP_MODULES, failed, needsReinstall)
 
     ' ATOMARNOST #1: forma/sheet se ne moze azurirati kroz self-update -> NISTA se
-    ' ne snima (disk ostaje stara ispravna verzija).
+    ' ne snima; auto-close bez snimanja (disk ostaje stara ispravna verzija).
     If needsReinstall Then
-        RestoreRuntimeAfterSelfUpdate
-        MsgBox "Azuriranje NIJE moguce kroz self-update (forma/sheet zahteva reinstall)." & vbCrLf & _
-               summary & vbCrLf & vbCrLf & _
-               "NISTA nije snimljeno - radna verzija je ocuvana." & vbCrLf & _
-               "ZATVORITE fajl BEZ SNIMANJA. Za punu izmenu: reinstall (.xlsm) ili ImportAllVBA.", _
-               vbCritical, APP_NAME
+        AbortSelfUpdate "Azuriranje NIJE moguce kroz self-update (forma/sheet zahteva reinstall)." & _
+               vbCrLf & summary
         Exit Sub
     End If
 
@@ -162,7 +159,8 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
     '    zapamti TACNU listu fajlova, zakazi Import. NE SNIMA se ovde.
     If failed.count > 0 Then
         Dim proj As Object: Set proj = ThisWorkbook.VBProject
-        Dim fk As Variant, remC As Object, files As String
+        Dim fk As Variant, remC As Object, files As String, sec As String
+        sec = P2Section()
         For Each fk In failed.Keys
             On Error Resume Next
             Set remC = Nothing
@@ -174,20 +172,18 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
             If Len(files) > 0 Then files = files & ","
             files = files & CStr(failed(fk))         ' tacan filename za fazu 2
         Next fk
-        SaveSetting "AgriXSelfUpdate", "phase2", "dir", tempDir
-        SaveSetting "AgriXSelfUpdate", "phase2", "files", files
-        SaveSetting "AgriXSelfUpdate", "phase2", "n", CStr(n)
-        SaveSetting "AgriXSelfUpdate", "phase2", "pending", "1"   ' watchdog marker
-        Application.OnTime Now + TimeSerial(0, 0, 2), "RunSelfUpdatePhase2"
+        SaveSetting "AgriXSelfUpdate", sec, "dir", tempDir
+        SaveSetting "AgriXSelfUpdate", sec, "files", files
+        SaveSetting "AgriXSelfUpdate", sec, "n", CStr(n)
+        SaveSetting "AgriXSelfUpdate", sec, "pending", "1"   ' watchdog marker
+        ' Workbook-qualified (dve otvorene kopije -> pravi workbook hvata proc)
+        Application.OnTime Now + TimeSerial(0, 0, 2), QualifiedProc("RunSelfUpdatePhase2")
         Exit Sub                  ' kraj makroa -> Remove se flush-uje -> faza 2
     End If
 
     ' 6) Sve soft proslo -> ATOMARAN, VERIFIKOVAN save (bez potvrdjenog save = neuspeh)
     If Not SaveWorkbookVerified() Then
-        RestoreRuntimeAfterSelfUpdate
-        MsgBox "Azuriranje NIJE snimljeno (fajl je mozda samo-za-citanje ili zakljucan)." & vbCrLf & _
-               "Radna verzija je ocuvana. ZATVORITE BEZ SNIMANJA i pokusajte ponovo.", _
-               vbCritical, APP_NAME
+        AbortSelfUpdate "Azuriranje NIJE snimljeno (fajl je mozda samo-za-citanje ili zakljucan)."
         Exit Sub
     End If
 
@@ -198,12 +194,7 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
            vbInformation, APP_NAME
     Exit Sub
 EH:
-    Dim errTxt As String: errTxt = Err.description   ' pre RestoreRuntime (On Error resetuje Err)
-    RestoreRuntimeAfterSelfUpdate
-    LogErr SRC, errTxt
-    MsgBox Poruka("SU_GRESKA_AZURIRANJE") & errTxt & vbCrLf & vbCrLf & _
-           "NISTA nije snimljeno - vratite kopiju iz 'Backup' foldera po potrebi " & _
-           "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
+    AbortSelfUpdate Poruka("SU_GRESKA_AZURIRANJE") & Err.description
 End Sub
 
 ' Faza 2 (Application.OnTime; posle flush-a Remove-ova iz faze 1). Uvezi (Import)
@@ -215,11 +206,14 @@ Public Sub RunSelfUpdatePhase2()
     Const SRC As String = "modSelfUpdate.RunSelfUpdatePhase2"
     On Error GoTo EH
 
-    Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", "phase2", "dir", "")
-    Dim filesCsv As String: filesCsv = GetSetting("AgriXSelfUpdate", "phase2", "files", "")
-    Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", "phase2", "n", "?")
-    DeleteSetting "AgriXSelfUpdate", "phase2"     ' opalila -> ocisti (uklj. pending)
+    Dim sec As String: sec = P2Section()
+    Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", sec, "dir", "")
+    Dim filesCsv As String: filesCsv = GetSetting("AgriXSelfUpdate", sec, "files", "")
+    Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", sec, "n", "?")
+    ' NB: marker se NE brise ovde na pocetku - brise se tek na uspeh ILI kontrolisan
+    ' fatalni izlaz, da crash USRED importa ostavi trag za RecoverPendingSelfUpdate.
     If Len(p2dir) = 0 Then
+        DeleteSetting "AgriXSelfUpdate", sec
         RestoreRuntimeAfterSelfUpdate             ' faza 1 je ostavila events OFF
         Exit Sub
     End If
@@ -228,7 +222,7 @@ Public Sub RunSelfUpdatePhase2()
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim skip As String: skip = "," & LCase$(SKIP_MODULES) & ","
     Dim arr() As String, i As Long, fn As String, baseName As String, ext As String
-    Dim imported As Long, stillFail As String, tmpc As Object, comExists As Boolean
+    Dim imported As Long, expected As Long, stillFail As String
 
     arr = Split(filesCsv, ",")
     For i = LBound(arr) To UBound(arr)
@@ -237,47 +231,48 @@ Public Sub RunSelfUpdatePhase2()
             baseName = fso.GetBaseName(fn)
             ext = LCase$(fso.GetExtensionName(fn))
             If (ext = "bas" Or ext = "cls") And InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
-                comExists = True
-                On Error Resume Next
-                Set tmpc = Nothing
-                Set tmpc = proj.VBComponents(baseName)
-                comExists = Not (tmpc Is Nothing)
-                On Error GoTo 0
-                If Not comExists Then              ' uvezi samo uklonjene (faza 1)
+                expected = expected + 1
+                ' Posle faze-1 Remove komponenta MORA biti nestala. Ako jos postoji,
+                ' Remove nije zavrsio -> FATALNO (ranije se tiho preskakala = mesan
+                ' build sa starim modulom + novim ostatkom).
+                If ComponentExists(proj, baseName) Then
+                    stillFail = stillFail & "  " & fn & " -> stara komponenta jos postoji (Remove nedovrsen)" & vbCrLf
+                Else
                     On Error Resume Next
                     Err.Clear
                     proj.VBComponents.Import p2dir & "\" & fn
-                    If Err.Number = 0 Then
+                    Dim impErr As Long: impErr = Err.Number
+                    On Error GoTo 0
+                    ' verifikuj: sad postoji, tacnog imena i tipa (bas=std/1, cls=class/2)
+                    If impErr = 0 And ImportedOk(proj, baseName, ext) Then
                         imported = imported + 1
                     Else
-                        stillFail = stillFail & "  " & fn & " -> [" & Err.Number & "] " & Err.description & vbCrLf
+                        stillFail = stillFail & "  " & fn & " -> Import nije verifikovan [" & impErr & "]" & vbCrLf
                     End If
-                    Err.Clear
-                    On Error GoTo 0
                 End If
             End If
         End If
     Next i
 
-    ' ATOMARNOST: samo pun uspeh -> save. Inace NE snimaj (disk ostaje stara verzija).
-    If Len(stillFail) > 0 Then
-        RestoreRuntimeAfterSelfUpdate
-        MsgBox "2. faza NIJE uspela za sve module:" & vbCrLf & stillFail & vbCrLf & _
-               "NISTA nije snimljeno - radna verzija je ocuvana." & vbCrLf & _
-               "ZATVORITE BEZ SNIMANJA; reinstall (.xlsm) ili ImportAllVBA za pun update.", _
-               vbCritical, APP_NAME
+    ' ATOMARNOST: SVE mora uspeti (imported = expected, bez stillFail). Inace se NE
+    ' snima i workbook se auto-zatvara bez snimanja (disk ostaje stara verzija).
+    If Len(stillFail) > 0 Or imported <> expected Then
+        DeleteSetting "AgriXSelfUpdate", sec
+        AbortSelfUpdate "2. faza NIJE uspela za sve module (uvezeno " & imported & "/" & expected & "):" & _
+               vbCrLf & stillFail
         Exit Sub
     End If
 
     If Not SaveWorkbookVerified() Then
-        RestoreRuntimeAfterSelfUpdate
-        MsgBox "2. faza uspela ali SAVE nije (read-only/zakljucan)." & vbCrLf & _
-               "ZATVORITE BEZ SNIMANJA i ponovite azuriranje.", vbCritical, APP_NAME
+        DeleteSetting "AgriXSelfUpdate", sec
+        AbortSelfUpdate "2. faza uspela ali SAVE nije (read-only/zakljucan)."
         Exit Sub
     End If
 
+    ' Uspeh -> ocisti marker + temp
+    DeleteSetting "AgriXSelfUpdate", sec
     On Error Resume Next
-    If fso.FolderExists(p2dir) Then fso.DeleteFolder p2dir, True   ' cisto
+    If fso.FolderExists(p2dir) Then fso.DeleteFolder p2dir, True
     On Error GoTo EH
 
     RestoreRuntimeAfterSelfUpdate
@@ -286,12 +281,8 @@ Public Sub RunSelfUpdatePhase2()
            vbInformation, APP_NAME
     Exit Sub
 EH:
-    Dim errTxt As String: errTxt = Err.description
-    RestoreRuntimeAfterSelfUpdate
-    LogErr SRC, errTxt
-    MsgBox Poruka("SU_GRESKA_2FAZA") & errTxt & vbCrLf & _
-           "NISTA nije snimljeno - vratite kopiju iz 'Backup' foldera (AgriX_pre-update_*.xlsm).", _
-           vbCritical, APP_NAME
+    DeleteSetting "AgriXSelfUpdate", P2Section()
+    AbortSelfUpdate Poruka("SU_GRESKA_2FAZA") & Err.description
 End Sub
 
 ' Oslobodi runtime stanje pre self-update importa: ugasi evente/sync/tajmere,
@@ -346,6 +337,79 @@ Private Function SaveWorkbookVerified() As Boolean
     ThisWorkbook.Save
     SaveWorkbookVerified = (Err.Number = 0) And ThisWorkbook.Saved
     On Error GoTo 0
+End Function
+
+' Fatalni izlaz update-a: NISTA se ne snima + workbook se AUTO-ZATVARA bez
+' snimanja (tehnicka garancija atomarnosti - ne oslanja se na to da operater
+' nece pritisnuti Ctrl+S / da OneDrive AutoSave nece upisati polu-nov projekat).
+' Disk ostaje stara ISPRAVNA verzija. Poziva se sa fatalnih grana POSLE
+' PrepareRuntime (kad je projekat vec izmenjen u memoriji).
+Private Sub AbortSelfUpdate(ByVal msg As String)
+    On Error Resume Next
+    RestoreRuntimeAfterSelfUpdate
+    LogErr "modSelfUpdate.AbortSelfUpdate", msg
+    MsgBox msg & vbCrLf & vbCrLf & _
+           "NISTA nije snimljeno - radna verzija je ocuvana." & vbCrLf & _
+           "Program ce se sada ZATVORITI bez snimanja. Otvorite ga ponovo; po zelji " & _
+           "ponovite azuriranje ili vratite Backup\AgriX_pre-update_*.xlsm.", _
+           vbCritical, APP_NAME
+    Application.OnTime Now, QualifiedProc("AbortSelfUpdateClose")
+End Sub
+
+' Auto-close bez snimanja (Application.OnTime cilj; Public zbog toga). Saved=True
+' pre Close -> ni ShutdownApp/FlushNow (koji gledaju .Saved) ni Close ne upisu
+' polu-nov memorijski projekat preko stare (dobre) kopije na disku.
+Public Sub AbortSelfUpdateClose()
+    On Error Resume Next
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    ThisWorkbook.Saved = True
+    Application.DisplayAlerts = False
+    ThisWorkbook.Close SaveChanges:=False
+    Application.DisplayAlerts = True
+End Sub
+
+' Workbook-qualified naziv procedure za Application.OnTime ("'Ime.xlsm'!Proc").
+' Da se, kad su dve kopije AgriX-a otvorene (narocito DEV test na kopiji), OnTime
+' razresi u PRAVOM workbooku, a ne u proizvoljnom.
+Private Function QualifiedProc(ByVal procName As String) As String
+    QualifiedProc = "'" & Replace$(ThisWorkbook.name, "'", "''") & "'!" & procName
+End Function
+
+' Sekcija u registru (SaveSetting) scope-ovana po workbook-u -> dve otvorene kopije
+' ne dele phase2 stanje (inace bi RecoverPendingSelfUpdate jedne obrisao pending
+' druge). Ime sanitizovano na alfanumerik.
+Private Function P2Section() As String
+    Dim s As String, i As Long, ch As String, out As String
+    s = ThisWorkbook.name
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If (ch >= "0" And ch <= "9") Or (UCase$(ch) >= "A" And UCase$(ch) <= "Z") Then out = out & ch
+    Next i
+    P2Section = "phase2_" & out
+End Function
+
+' True ako komponenta datog imena postoji u projektu.
+Private Function ComponentExists(ByVal proj As Object, ByVal baseName As String) As Boolean
+    On Error Resume Next
+    Dim c As Object
+    Set c = proj.VBComponents(baseName)
+    ComponentExists = Not (c Is Nothing)
+End Function
+
+' Posle Import-a: komponenta postoji, tacnog imena, i ocekivanog tipa
+' (bas -> std modul (1), cls -> class modul (2)). Fail-closed verifikacija faze 2.
+Private Function ImportedOk(ByVal proj As Object, ByVal baseName As String, ByVal ext As String) As Boolean
+    On Error Resume Next
+    Dim c As Object
+    Set c = proj.VBComponents(baseName)
+    If c Is Nothing Then Exit Function
+    If StrComp(c.name, baseName, vbTextCompare) <> 0 Then Exit Function
+    If ext = "bas" Then
+        ImportedOk = (c.Type = 1)
+    Else
+        ImportedOk = (c.Type = 2)
+    End If
 End Function
 
 ' ---------------- private ----------------
