@@ -634,13 +634,13 @@ Private Function ResolveReleaseSource(ByVal tempDir As String, ByRef folderOut A
 
     ' VERSIONED (F2). Skini manifest.json iz versioned foldera pa proveri njegov
     ' SHA-256 protiv manifest_sha256 iz current.json (koren poverenja) PRE koda.
-    Dim mId As String: mId = DriveFindInFolder(vfid, "manifest.json")
-    If Len(mId) = 0 Then
+    Dim manId As String: manId = DriveFindInFolder(vfid, "manifest.json")
+    If Len(manId) = 0 Then
         note = "F2: manifest.json nije nadjen u versioned folderu (prekid)"
         Exit Function
     End If
     Dim mPath As String: mPath = tempDir & "\_manifest.json"
-    If Not DriveDownloadToFile(mId, mPath) Then
+    If Not DriveDownloadToFile(manId, mPath) Then
         note = "F2: manifest.json se ne moze skinuti (prekid)"
         Exit Function
     End If
@@ -949,18 +949,20 @@ End Function
 ' VBA string-literal nikad ne prelazi fizicki red (line-continuation je van navodnika),
 ' pa je per-red obrada tacna. "" unutar stringa = escaped navodnik (ostaje u stringu).
 Private Function LowerOutsideStrings(ByVal s As String) As String
-    Dim i As Long, n As Long, c As String, out As String, inStr As Boolean
+    ' NB: promenljiva se zove inQ (ne inStr) - "inStr" bi se sudarilo sa ugradjenom
+    ' InStr() funkcijom (VBA case-insensitive) -> "If inStr Then" = Syntax error.
+    Dim i As Long, n As Long, c As String, out As String, inQ As Boolean
     n = Len(s)
     i = 1
     Do While i <= n
         c = Mid$(s, i, 1)
-        If inStr Then
+        If inQ Then
             If c = """" Then
                 If i < n And Mid$(s, i + 1, 1) = """" Then
                     out = out & """"""            ' escaped "" -> ostaje u stringu
                     i = i + 2
                 Else
-                    inStr = False
+                    inQ = False
                     out = out & c
                     i = i + 1
                 End If
@@ -970,7 +972,7 @@ Private Function LowerOutsideStrings(ByVal s As String) As String
             End If
         Else
             If c = """" Then
-                inStr = True
+                inQ = True
                 out = out & c
                 i = i + 1
             ElseIf c = "'" Then

@@ -255,11 +255,11 @@ Public Sub RollbackReleaseTo()
     Dim vfid As String: vfid = CStr(d(ver))
 
     ' skini manifest.json te verzije -> manifest_sha256 STVARNIH bajtova
-    Dim mId As String: mId = DriveFindInFolder(vfid, "manifest.json")
-    If Len(mId) = 0 Then MsgBox "releases\" & ver & " nema manifest.json.", vbCritical, APP_NAME: Exit Sub
+    Dim manId As String: manId = DriveFindInFolder(vfid, "manifest.json")
+    If Len(manId) = 0 Then MsgBox "releases\" & ver & " nema manifest.json.", vbCritical, APP_NAME: Exit Sub
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
     Dim mPath As String: mPath = fso.GetSpecialFolder(2) & "\_rollback_manifest.json"
-    If Not DriveDownloadToFile(mId, mPath) Then MsgBox "Ne mogu da skinem manifest.json.", vbCritical, APP_NAME: Exit Sub
+    If Not DriveDownloadToFile(manId, mPath) Then MsgBox "Ne mogu da skinem manifest.json.", vbCritical, APP_NAME: Exit Sub
     Dim manSha As String: manSha = Sha256File(mPath)
 
     If MsgBox("Prepisati current.json -> releases\" & ver & " ?" & vbCrLf & _
