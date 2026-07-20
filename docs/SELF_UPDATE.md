@@ -249,9 +249,23 @@ se desio i fix koji radi:
     (`AbortSelfUpdate`). **Fallback:** ako SHA-256 nije dostupan na mašini (retko;
     `Sha256File=""`, kao PIN plaintext fallback) → prisustvo/broj (kao pre F1), uz
     log. Stari publisher (manifest bez `files[]`) → legacy listing-download. Self-test:
-    `Alt+F8 → Test_Sha256File`. **F2 (u planu, `docs/SELF_UPDATE_SNAPSHOT_PLAN.md`):**
+    `Alt+F8 → Test_Sha256File`. **F2 (implementirano, `docs/SELF_UPDATE_SNAPSHOT_PLAN.md`):**
     versioned folderi `releases/<v>/` + `current.json` pokazivač + `manifest_sha256`
-    lanac poverenja → immutable snapshot + rollback.
+    lanac poverenja → snapshot + rollback.
+19. **Updatable moduli NE smeju early-bind-ovati NOVE simbole iz frozen `modSelfUpdate`.**
+    `modSelfUpdate` je u `SKIP_MODULES` → **ne stiže self-update-om**; klijent ga dobija
+    tek ručnim bootstrap-om (`ImportAllVBA`/nov `.xlsm`). Star klijent koji se
+    self-update-uje dobija **NOV `modMain` + STAR `modSelfUpdate`**. Ako nov `modMain`
+    DIREKTNO (early-bound) zove NOV `modSelfUpdate` simbol koga star `modSelfUpdate`
+    nema → **`Compile error: Sub or Function not defined`** obori CEO `StartApp` (iako
+    je update „prošao uspešno"). Realan kvar: `modMain` je zvao **novi**
+    `RecoverPendingSelfUpdate` → svaki star klijent koji se auto-update-uje crashuje na
+    reopen-u. **Fix:** watchdog se zove **iznutra `CheckForUpdateOnOpen`** (isti modul,
+    uvek razrešen), a `modMain` early-bind-uje SAMO **stabilne** `modSelfUpdate` simbole
+    (`CheckForUpdateOnOpen`; `RunSelfUpdate` je i onako preko `OnTime` **stringa** =
+    late-bound). **Pravilo:** nov cross-modul poziv u `modSelfUpdate` iz updatable
+    modula = ILI ga sakrij iza postojećeg stabilnog simbola, ILI ga zovi late-bound
+    (`Application.Run`) fail-soft.
 ---
 
 ## Preduslovi i ograničenja

@@ -5,8 +5,8 @@ Option Explicit
 ' modSelfUpdate - KLIJENT strana self-update-a (Funkcija A).
 '
 ' Tok:
-'   Workbook_Open -> StartApp -> RecoverPendingSelfUpdate (watchdog) ->
-'     CheckForUpdateOnOpen() (fail-soft) -> na "Da" OnTime RunSelfUpdate.
+'   Workbook_Open -> StartApp -> CheckForUpdateOnOpen() (koji prvo pozove
+'     RecoverPendingSelfUpdate watchdog; fail-soft) -> na "Da" OnTime RunSelfUpdate.
 '   RunSelfUpdate(): backup -> download (KOMPLETAN) -> RunSelfUpdateCore.
 '   RunSelfUpdateCore: PrepareRuntime -> faza 1 code-merge -> faza 2 (tvrdi) -> save.
 '
@@ -50,6 +50,12 @@ Public Function CheckForUpdateOnOpen() As Boolean
     Const SRC As String = "modSelfUpdate.CheckForUpdateOnOpen"
     On Error GoTo EH
 
+    ' Startup watchdog (prekinuta prethodna faza 2) - zvan ODAVDE (isti modul), NE iz
+    ' modMain: modMain je updatable, modSelfUpdate frozen (SKIP_MODULES); direktan poziv
+    ' NOVOG simbola iz modMain-a obori compile na starom klijentu (zamka #19). Ide PRE
+    ' opt-in provere - recovery ne zavisi od toga da li je remote dostupan.
+    RecoverPendingSelfUpdate
+
     If Len(REL_FOLDER_ID) = 0 Then Exit Function          ' opt-in
 
     Dim remoteVer As String: remoteVer = GetRemoteAppVersion()
@@ -68,8 +74,9 @@ EH:
     LogErr SRC, Err.description                            ' bug u checku ne sme da spreci start
 End Function
 
-' STARTUP WATCHDOG (pozvati iz StartApp pre CheckForUpdateOnOpen). Ako je faza 2
-' iz prethodne sesije ostala "pending" (nikad nije opalila - Excel zatvoren,
+' STARTUP WATCHDOG (zvan iz CheckForUpdateOnOpen, NE iz modMain - compile-safety,
+' zamka #19). Ako je faza 2 iz prethodne sesije ostala "pending" (nikad nije opalila
+' - Excel zatvoren,
 ' OnTime otkazan), ocisti stale stanje. Posto se pre pune uspesnosti nikad ne
 ' snima, fajl na disku je STARA ISPRAVNA verzija -> bezbedno je samo obrisati
 ' pending marker + temp i obavestiti. NE pokrece se faza 2 nad starim projektom

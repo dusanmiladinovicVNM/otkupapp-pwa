@@ -37,12 +37,13 @@ Public Sub StartApp()
     ' (inace fail-open, ne dira postojece instalacije). Detalji: modLicense.
     If Not AccessGateOrQuit() Then Exit Sub
 
-    ' --- Startup watchdog za prekinut self-update ---
-    ' Ako je prethodni update prekinut pre nego sto je faza 2 zavrsila, ocisti
-    ' stale stanje (disk je stara ISPRAVNA verzija) i obavesti. Fail-soft.
-    RecoverPendingSelfUpdate
-
     ' --- Self-update (povuci novu verziju koda iz AgriX_Release) ---
+    ' Startup watchdog (RecoverPendingSelfUpdate) se zove IZNUTRA CheckForUpdateOnOpen
+    ' (isti modul). NE zovi ga odavde direktno: modSelfUpdate je u SKIP_MODULES (frozen),
+    ' pa star klijent posle self-update-a ima NOV modMain + STAR modSelfUpdate; direktan
+    ' (early-bound) poziv NOVOG simbola = COMPILE error ("Sub or Function not defined")
+    ' koji obori ceo StartApp. modMain sme early-bind SAMO stabilne modSelfUpdate simbole
+    ' (docs/SELF_UPDATE.md zamka #19).
     ' VAZNO: ide PRE min-version gate-a. Inace bi enforce=YES blokirao pokretanje
     ' bas onog klijenta kome je update najpotrebniji (zastarela verzija dobije
     ' zakazano gasenje pre nego sto stigne do ove provere). Sad: prvo ponudi
