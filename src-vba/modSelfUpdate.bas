@@ -101,6 +101,25 @@ Public Sub RunSelfUpdate()
         Exit Sub
     End If
 
+    ' 3-6) Zajednicko jezgro (PrepareRuntime -> code-merge -> faza 2 -> save).
+    '      Isti put koristi i RunSelfUpdateDev (lokalni folder umesto Drive-a),
+    '      pa se "tvrda" faza-2 logika ne duplira.
+    RunSelfUpdateCore tempDir, n
+    Exit Sub
+EH:
+    RestoreRuntimeAfterSelfUpdate
+    LogErr SRC, Err.description
+End Sub
+
+' Zajednicko jezgro update-a: uzmi VEC pripremljen folder (tempDir) pun
+' src-vba fajlova - skinut sa Drive-a (RunSelfUpdate) ILI kopiran iz lokalnog
+' git klona (RunSelfUpdateDev) - i odradi IDENTICAN merge: PrepareRuntime ->
+' faza 1 code-merge -> faza 2 (Remove+Import za "tvrde") -> save. n = broj
+' fajlova (za poruku). Ovde su events/screen vec spremni za gasenje.
+Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
+    Const SRC As String = "modSelfUpdate.RunSelfUpdateCore"
+    On Error GoTo EH
+
     ' 3) Oslobodi runtime stanje (root cause fix) PRE importa
     PrepareRuntimeForSelfUpdate
 
@@ -156,6 +175,99 @@ EH:
            "Ako program ne radi ispravno, vratite kopiju iz 'Backup' foldera " & _
            "(AgriX_pre-update_*.xlsm).", vbCritical, APP_NAME
 End Sub
+
+' ============================================================
+' DEV TEST (RUCNO, Alt+F8): RunSelfUpdateDev
+'
+' Najlaksi nacin da se self-update engine testira NA SVOJOJ masini bez Drive-a:
+' code-merge iz LOKALNOG src-vba foldera (git klon), kroz ISTI RunSelfUpdateCore
+' kao pravi self-update. Testira ono sto ImportAllVBA NE testira - bas code-merge
+' put (DeleteLines+AddFromString), gde su forme pucale. Ne dira flotu (bez
+' PublishReleaseToDrive), ne trazi Google auth ni REL_FOLDER_ID.
+'
+' POSTUPAK:
+'   1) Otvori KOPIJU klijentske sveske (ne originalni build-master).
+'   2) Alt+F8 -> RunSelfUpdateDev -> izaberi svoj ...\otkupapp-pwa\src-vba\ folder.
+'   3) Backup se napravi sam; merge tece; na kraju "zatvori i otvori".
+'   4) Posle restarta: Alt+F11 -> nema duplikata (modX1); Debug->Compile cist;
+'      probaj forme (Dokumenta "Storno", Integritet overlay...).
+'   Rollback po potrebi: Backup\AgriX_pre-update_*.xlsm.
+'
+' NB: modSelfUpdate je u SKIP_MODULES -> ovaj DEV kod se pri merge-u NE prepisuje
+' (harness ostaje), isto kao u produkciji.
+' ============================================================
+Public Sub RunSelfUpdateDev()
+    Const SRC As String = "modSelfUpdate.RunSelfUpdateDev"
+    On Error GoTo EH
+
+    If Not SelfVBAAccessible() Then Exit Sub
+
+    If MsgBox("DEV TEST self-update-a iz LOKALNOG foldera (bez Drive-a)." & vbCrLf & vbCrLf & _
+              "Code-merge-uje OVU svesku iz izabranog src-vba foldera, isto kao pravi " & _
+              "self-update (faza 1 + faza 2). Pokreni na KOPIJI klijenta!" & vbCrLf & vbCrLf & _
+              "Nastaviti?", vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+
+    ' 1) Izbor src-vba foldera (git klon)
+    Dim srcFolder As String: srcFolder = PickFolderDev()
+    If Len(srcFolder) = 0 Then Exit Sub
+
+    ' 2) Backup pre svega (rollback ako merge pukne) - reuse produkcijskog
+    If Not MakePreUpdateBackup() Then
+        If MsgBox("Backup nije uspeo. Nastaviti ipak?", _
+                  vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    End If
+
+    ' 3) Kopiraj kod fajlove u cist temp (mesto Drive download-a) -> isti ulaz u core
+    Dim tempDir As String: tempDir = MakeTempDir()
+    Dim n As Long: n = CopyCodeFilesDev(srcFolder, tempDir)
+    If n = 0 Then
+        MsgBox "U izabranom folderu nema src-vba fajlova (.bas/.cls/.frm/.frx/.doccls)." & vbCrLf & _
+               "Folder: " & srcFolder, vbCritical, APP_NAME
+        Exit Sub
+    End If
+
+    ' 4) Isti core kao pravi self-update (PrepareRuntime -> merge -> faza 2 -> save)
+    RunSelfUpdateCore tempDir, n
+    Exit Sub
+EH:
+    RestoreRuntimeAfterSelfUpdate
+    LogErr SRC, Err.description
+    MsgBox "DEV self-update greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Folder picker za DEV test (izaberi src-vba). "" na Cancel / nedostupno.
+Private Function PickFolderDev() As String
+    On Error Resume Next
+    Dim fd As Object: Set fd = Application.FileDialog(4)   ' msoFileDialogFolderPicker
+    If fd Is Nothing Then Exit Function
+    fd.Title = "Izaberi src-vba folder (git klon)"
+    fd.InitialFileName = ThisWorkbook.path & "\"
+    If fd.Show = -1 Then PickFolderDev = fd.SelectedItems(1)
+End Function
+
+' Kopiraj SAMO kod fajlove (isti filter kao DownloadReleaseFiles) iz lokalnog
+' foldera u tempDir. Vrati broj kopiranih. Izvor se NE dira (samo citanje).
+Private Function CopyCodeFilesDev(ByVal srcFolder As String, ByVal tempDir As String) As Long
+    Const SRC As String = "modSelfUpdate.CopyCodeFilesDev"
+    On Error GoTo EH
+
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(srcFolder) Then Exit Function
+
+    Dim fil As Object, ext As String, n As Long
+    For Each fil In fso.GetFolder(srcFolder).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        Select Case ext
+            Case "bas", "cls", "frm", "frx", "doccls"
+                fso.CopyFile fil.path, tempDir & "\" & fil.name, True
+                n = n + 1
+        End Select
+    Next fil
+    CopyCodeFilesDev = n
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
 
 ' Faza 2 (Application.OnTime; posle flush-a Remove-ova iz faze 1). Uvezi (Import)
 ' module uklonjene u fazi 1 - sad stvarno obrisane pa Import pravi cist modul

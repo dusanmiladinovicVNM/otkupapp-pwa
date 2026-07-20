@@ -195,6 +195,36 @@ Novi/izmenjeni moduli sa `module-level MSForms.` deklaracijama ili `WithEvents`
 
 ---
 
+## Lokalni DEV test (najlakše — bez Drive-a, bez publish-a)
+
+Da se self-update **engine** testira na svojoj mašini pre nego što bilo šta ode na
+flotu: `Alt+F8 → **RunSelfUpdateDev**` (u `modSelfUpdate`). Code-merge-uje **ovu**
+svesku iz **lokalnog `src-vba` foldera** (git klon) kroz **isti `RunSelfUpdateCore`**
+kao pravi self-update (faza 1 + faza 2), samo bez Drive download-a, bez
+`REL_FOLDER_ID` i bez Google auth-a.
+
+> **Zašto ne `ImportAllVBA`?** `ImportAllVBA` rekreira komponente (`Import`) i
+> **toleriše sve** — self-update ide **code-merge** (`DeleteLines`+`AddFromString`),
+> a baš tamo su forme pucale. Zato je jedini validan test onaj koji koristi
+> code-merge put; `RunSelfUpdateDev` to radi (deli jezgro sa produkcijom).
+
+**Postupak:**
+1. `git pull` na klonu (da `src-vba` ima verziju koju testiraš).
+2. Otvori **KOPIJU** klijentske sveske (ne build-master; merge menja kod ove sveske).
+3. `Alt+F8 → RunSelfUpdateDev` → u pickeru izaberi svoj `...\otkupapp-pwa\src-vba\`.
+4. Backup se napravi sam; merge teče; na kraju „zatvori i otvori".
+5. Posle restarta: `Alt+F11` → **nema duplikata** (`modX1`); `Debug → Compile` čist;
+   otvori forme koje su menjane (Dokumenta „Storno", Integritet overlay…).
+6. Idempotencija: pokreni `RunSelfUpdateDev` **drugi put** iz istog foldera →
+   izveštaj mora reći „Ažurirano: 0, bez izmene: ~sve" (delta-skip radi).
+7. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
+
+`modSelfUpdate` je u `SKIP_MODULES`, pa se DEV harness pri merge-u **ne prepisuje**
+(ostaje aktivan), isto kao u produkciji. Za test i Drive transporta (download) →
+i dalje `PublishReleaseToDrive` u **test** `AgriX_Release` folder (staged rollout).
+
+---
+
 ## Funkcija B (backlog)
 
 Nedeljni `.xlsx` backup **podataka** u Drive `AgriX_Backup` (`BACKUP_FOLDER_ID`) —
