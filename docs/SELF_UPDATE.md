@@ -122,11 +122,14 @@ se desio i fix koji radi:
    `Remove` ima dodatni type-guard (`Type` 1/2), a forma čiji merge padne dobija
    **best-effort rollback** starog koda + „potreban reinstall" u izveštaju.
 8. **`Application.OnTime` tikovi van sync-a** (`modJournaling.AutoSaveTick`,
-   `modStanicaLock.HeartbeatStanicaLock` — 90s) mogu da opale usred importa ili
-   u prozoru između faza (dok su „tvrdi" moduli uklonjeni) → demand-compile
-   polomljenog projekta; `AutoSaveTick` bi uz to i **snimio polu-ažuriran fajl**.
-   `PrepareRuntimeForSelfUpdate` sada otkazuje i njih (`StopAutoSaveTimer`,
-   `StopHeartbeatTimer`).
+   `modStanicaLock.HeartbeatStanicaLock` — 90s, `modStornoWarm.StornoWarmTick`)
+   mogu da opale usred importa ili u prozoru između faza (dok su „tvrdi" moduli
+   uklonjeni) → demand-compile polomljenog projekta; `AutoSaveTick`/`StornoWarm`
+   bi uz to i **snimili polu-ažuriran fajl**. `PrepareRuntimeForSelfUpdate` sada
+   otkazuje SVE (`StopAutoSaveTimer`, `StopHeartbeatTimer`, `StopStornoWarm`).
+   **NB:** kad se u `main` doda nov `Application.OnTime` tajmer, MORA se dodati i
+   njegov `Stop*` u `PrepareRuntimeForSelfUpdate` (StornoWarm je bio propušten
+   jer je stigao posle prvog hardening rada).
 9. **`EnableEvents`/`ScreenUpdating` se moraju VRATITI na svakom izlazu update
    toka** (`RestoreRuntimeAfterSelfUpdate`) — inače `Workbook_Open` ne opali pri
    sledećem otvaranju fajla u ISTOJ Excel instanci („zatvori i otvori" onda
@@ -154,7 +157,36 @@ se desio i fix koji radi:
     oblik (samo inertni dodaci: plain `MSForms.` reference, `String`/`Boolean`,
     `As Object`). Zatečeni PRE-2.16.1 form-WithEvents su zamrznuti (klijenti ih
     već imaju — uklanjanje bi opet menjalo deklaracije).
-
+12. **ATOMARNOST — nikad ne snimaj polu-nov projekat.** Update se snima SAMO pri
+    punom uspehu (`SaveWorkbookVerified`: `Save` bez greške I `ThisWorkbook.Saved`).
+    Svaki fatalni ishod → `Exit Sub` bez `Save`. Pošto se pre pune uspešnosti
+    nikad ne snima, fajl na disku ostaje **stara ispravna verzija** → korisnik
+    zatvara bez snimanja i radna verzija je očuvana. **Zašto je važno:**
+    `APP_VERSION` živi u `modConfig.bas` (soft `.bas`, merge-uje se u fazi 1); da
+    se snimi parcijalni projekat sa novim `APP_VERSION` a starom formom, `CheckForUpdateOnOpen`
+    bi na sledećem startu video „ažurno" i **nikad više ne bi ponudio isti release**
+    (tihi trajno-parcijalni klijent). Fatalno = forma/sheet ne može merge (`needsReinstall`),
+    faza-2 `Import` padne, `Save` ne uspe, ili **download nepotpun** (vidi #13).
+13. **Download mora biti KOMPLETAN.** `DownloadReleaseFiles` vraća i „očekivano"
+    (svi podržani fajlovi iz Drive listinga) i „preuzeto"; `RunSelfUpdate` prekida
+    ako `preuzeto <> očekivano`. Ranije se gledalo samo `n = 0`, pa je i 1/95
+    fajlova prolazilo kao validan release → parcijalan merge (npr. nov `modConfig`
+    bez nove forme).
+14. **Tvrde module PREPOZNAJ UNAPRED, ne kroz pali `AddFromString`.** `IsHardModuleBody`
+    (module-level `WithEvents` ili `As MSForms.`, uz strip stringa/komentara da
+    reč u komentaru ne da lažni pozitiv) rutira tvrde `.bas/.cls` pravo u fazu 2 —
+    `AddFromString` (koji baš i diskonektuje `CodeModule`) se nad njima **nikad ne
+    poziva**. Ranije su išli „error-driven" (prvo pao `AddFromString` pa u fazu 2),
+    što je za NOV tvrd modul (`clsUiSink`) značilo instalaciju baš opasnim putem.
+    Faza 2 dobija **tačnu listu** fajlova (iz Settinga), ne skenira ceo temp (inače
+    `SKIP_MODULES` bypass / uvoz sirovo-palih ili dev modula).
+15. **Startup watchdog za prekinut update.** Ako faza 2 nikad ne opali (Excel
+    zatvoren, OnTime otkazan), `modConfig` je u memoriji nov ali disk je stara
+    (nesnimljena) verzija, a `phase2/pending` marker ostaje u registru.
+    `RecoverPendingSelfUpdate` (iz `StartApp`, pre `CheckForUpdateOnOpen`) čisti
+    stale marker + temp i obavesti. **NE pokušava da „dovrši" fazu 2** nad starim
+    projektom — to bi spojilo stari i nov kod (mešane verzije). Radna verzija je
+    očuvana; korisnik ponovi update.
 ---
 
 ## Preduslovi i ograničenja
@@ -218,6 +250,12 @@ kao pravi self-update (faza 1 + faza 2), samo bez Drive download-a, bez
 6. Idempotencija: pokreni `RunSelfUpdateDev` **drugi put** iz istog foldera →
    izveštaj mora reći „Ažurirano: 0, bez izmene: ~sve" (delta-skip radi).
 7. Rollback po potrebi: `Backup\AgriX_pre-update_*.xlsm`.
+
+> **GUARD (fail-closed na klijentu):** `RunSelfUpdateDev` radi SAMO ako je izabran
+> folder pravi git klon — ime `src-vba` + `.git` u roditeljskom folderu
+> (`IsDevCloneFolder`). Na klijent mašini (nema git klona) se odbija, pa se ne
+> može slučajno pokrenuti iz `Alt+F8` nad proizvoljnim folderom. Prolazi kroz
+> ISTI atomski `RunSelfUpdateCore` kao produkcija (bez Drive-a).
 
 `modSelfUpdate` je u `SKIP_MODULES`, pa se DEV harness pri merge-u **ne prepisuje**
 (ostaje aktivan), isto kao u produkciji. Za test i Drive transporta (download) →

@@ -6133,7 +6133,7 @@ End Sub
 
 Private Sub UserForm_Terminate()
     On Error Resume Next
-    Set m_uiSinks = Nothing         ' otpusti clsUiSink event omotace
+    ReleaseUiSinks                    ' raskini krug forma<->clsUiSink + otpusti kontrole
     MouseWheel_Detach
     m_pendingRelinkOldPrij = ""       ' ne prenosi pending ispravku van zivota forme
     m_pendingRelinkZbirne = ""
@@ -6141,6 +6141,7 @@ End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    ReleaseUiSinks                    ' raskini krug forma<->clsUiSink pre gasenja
     MouseWheel_Detach
 
     If CloseMode = vbFormControlMenu Then
@@ -6512,13 +6513,36 @@ End Function
 ' (self-update bezbedno; docs/SELF_UPDATE.md zamka #11)
 ' ------------------------------------------------------------
 
-Private Sub WireSink(ByVal ctl As Object, ByVal tagName As String)
-    On Error Resume Next
+' Vrati True ako je sink stvarno vezan. Fail-visible (log) - tiho neuspesno
+' vezivanje bi dalo vidljivo dugme koje ne reaguje (opasno u parcijalnom update-u
+' ako clsUiSink nije uvezen). Poziva se kao naredba; povratnu vrednost mogu
+' gledati kriticni paneli.
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
     If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
     Dim s As clsUiSink
     Set s = New clsUiSink
     s.Bind Me, ctl, tagName
     Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmDokumenta.WireSink(" & tagName & ")", Err.description
+End Function
+
+' Otpusti sve clsUiSink omotace (raskini krug forma<->sink i reference kontrola).
+' Idempotentno; pozvati iz QueryClose i Terminate.
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).Release
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
 End Sub
 
 ' Dispatcher za clsUiSink (Public po nuznosti - klasa dobacuje event formi;

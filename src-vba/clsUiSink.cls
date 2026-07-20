@@ -77,3 +77,19 @@ End Sub
 Private Sub cmb_Change()
     If Not frm Is Nothing Then frm.UiSinkEvent SinkTag, "Change", Nothing
 End Sub
+
+' Prekini SVE reference (kontrola + forma) -> raskini krug forma<->sink pre nego
+' sto self-update edituje VBProject. Forma zove ReleaseUiSinks (QueryClose/
+' Terminate); Class_Terminate je mreza za slucaj da instanca ode van skopa.
+Public Sub Release()
+    Set btn = Nothing
+    Set lst = Nothing
+    Set txt = Nothing
+    Set cmb = Nothing
+    Set frm = Nothing
+    SinkTag = vbNullString
+End Sub
+
+Private Sub Class_Terminate()
+    Release
+End Sub

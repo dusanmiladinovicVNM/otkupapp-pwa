@@ -225,6 +225,14 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     End If
 End Sub
 
+' Otpusti clsUiSink omotace kad se glavna forma stvarno rusi (npr. Unload iz
+' PrepareRuntimeForSelfUpdate pre editovanja VBProject-a). Raskida krug
+' forma<->sink i reference kontrola integritet-overlay-a.
+Private Sub UserForm_Terminate()
+    On Error Resume Next
+    ReleaseUiSinks
+End Sub
+
 ' =========================
 ' UI
 ' =========================
@@ -1666,13 +1674,32 @@ End Sub
 ' (self-update bezbedno; docs/SELF_UPDATE.md zamka #11)
 ' ------------------------------------------------------------
 
-Private Sub WireSink(ByVal ctl As Object, ByVal tagName As String)
-    On Error Resume Next
+' Vrati True ako je sink stvarno vezan. Fail-visible (log) umesto tihog gutanja.
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
     If mUiSinks Is Nothing Then Set mUiSinks = CreateObject("Scripting.Dictionary")
     Dim s As clsUiSink
     Set s = New clsUiSink
     s.Bind Me, ctl, tagName
     Set mUiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmOtkupAPP.WireSink(" & tagName & ")", Err.description
+End Function
+
+' Otpusti sve clsUiSink omotace (raskini krug forma<->sink i reference kontrola).
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not mUiSinks Is Nothing Then
+        For Each k In mUiSinks.Keys
+            mUiSinks(k).Release
+        Next k
+        mUiSinks.RemoveAll
+    End If
+    Set mUiSinks = Nothing
 End Sub
 
 ' Dispatcher za clsUiSink (Public po nuznosti - klasa dobacuje event formi;

@@ -43,6 +43,11 @@ Public Sub StartApp()
     ' Opt-in na MONITORING_ENDPOINT+SECRET; fail-open offline. Vidi modUpdateGate.
     If Not UpdateGateOrQuit() Then Exit Sub
 
+    ' --- Startup watchdog za prekinut self-update ---
+    ' Ako je prethodni update prekinut pre nego sto je faza 2 zavrsila, ocisti
+    ' stale stanje (disk je stara ISPRAVNA verzija) i obavesti. Fail-soft.
+    RecoverPendingSelfUpdate
+
     ' --- Self-update (povuci novu verziju koda iz AgriX_Release) ---
     ' Opt-in na REL_FOLDER_ID; fail-soft. Na "Da" -> import na praznom
     ' stack-u pa Exit (ne pokrecemo ostatak; restart aktivira nov kod).
