@@ -934,6 +934,87 @@ Private Function IsDevCloneFolder(ByVal folder As String) As Boolean
     IsDevCloneFolder = fso.FolderExists(parent & "\.git")
 End Function
 
+' DIJAGNOSTIKA (RUCNO, Alt+F8): READ-ONLY provera sta delta-skip odlucuje. NE
+' menja projekat (nema Remove/Import/AddFromString/PrepareRuntime) -> NE MOZE da
+' srusi Excel. Poredi kod svake komponente u projektu sa telom fajla iz izabranog
+' src-vba (isti SameCode kao update). Pokazuje koliko je "isto" vs "razlicito" i
+' PRVU razliku (poziciju + isecak) - da vidimo da li delta-skip radi i, ako ne,
+' zasto (line-ending? whitespace? struktura?).
+Public Sub Test_DeltaSkip()
+    Const SRC As String = "modSelfUpdate.Test_DeltaSkip"
+    On Error GoTo EH
+
+    Dim srcFolder As String: srcFolder = PickFolderDev()
+    If Len(srcFolder) = 0 Then Exit Sub
+
+    Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
+    Dim proj As Object: Set proj = ThisWorkbook.VBProject
+    Dim skip As String: skip = "," & LCase$(SKIP_MODULES) & ","
+    Dim fil As Object, ext As String, baseName As String
+    Dim body As String, cur As String, ca As String, cb As String
+    Dim vbc As Object
+    Dim sameN As Long, diffN As Long, missN As Long, diffList As String, firstDiff As String
+
+    For Each fil In fso.GetFolder(srcFolder).files
+        ext = LCase$(fso.GetExtensionName(fil.name))
+        If ext = "bas" Or ext = "cls" Or ext = "frm" Or ext = "doccls" Then
+            baseName = fso.GetBaseName(fil.name)
+            If InStr(skip, "," & LCase$(baseName) & ",") = 0 Then
+                Set vbc = Nothing
+                On Error Resume Next
+                Set vbc = proj.VBComponents(baseName)
+                On Error GoTo EH
+                If vbc Is Nothing Then
+                    missN = missN + 1
+                Else
+                    body = ExtractModuleCode(fil.path)
+                    cur = ""
+                    On Error Resume Next
+                    If vbc.CodeModule.CountOfLines > 0 Then cur = vbc.CodeModule.Lines(1, vbc.CodeModule.CountOfLines)
+                    On Error GoTo EH
+                    If SameCode(cur, body) Then
+                        sameN = sameN + 1
+                    Else
+                        diffN = diffN + 1
+                        ca = CanonCode(cur): cb = CanonCode(body)
+                        If Len(diffList) < 600 Then diffList = diffList & "  " & fil.name & _
+                            " (proj=" & Len(ca) & "b, file=" & Len(cb) & "b)" & vbCrLf
+                        If Len(firstDiff) = 0 Then firstDiff = DiffSnippet(fil.name, ca, cb)
+                    End If
+                End If
+            End If
+        End If
+    Next fil
+
+    MsgBox "Delta-skip provera (READ-ONLY, bez izmena):" & vbCrLf & _
+           "  isto:      " & sameN & vbCrLf & _
+           "  RAZLICITO: " & diffN & vbCrLf & _
+           "  nema komp:  " & missN & vbCrLf & vbCrLf & _
+           IIf(diffN = 0, _
+               "SVE ISTO -> delta-skip RADI. (Crash je onda u PrepareRuntime/zivi app, ne u importu.)", _
+               "Razliciti:" & vbCrLf & diffList & vbCrLf & firstDiff), _
+           IIf(diffN = 0, vbInformation, vbExclamation), APP_NAME
+    Exit Sub
+EH:
+    MsgBox "Test_DeltaSkip greska: " & Err.description, vbCritical, APP_NAME
+End Sub
+
+' Prva pozicija razlike dve kanonizovane verzije + isecak (prekidi reda vidljivi
+' kao \n). Za dijagnostiku zasto SameCode ne prijavi "isto".
+Private Function DiffSnippet(ByVal name As String, ByVal a As String, ByVal b As String) As String
+    Dim i As Long, n As Long, s As String
+    n = IIf(Len(a) < Len(b), Len(a), Len(b))
+    For i = 1 To n
+        If Mid$(a, i, 1) <> Mid$(b, i, 1) Then Exit For
+    Next i
+    s = "Prva razlika (" & name & ") @ poz " & i & " od " & n & ":" & vbCrLf & _
+        "  proj: [" & Mid$(a, IIf(i > 15, i - 15, 1), 40) & "]" & vbCrLf & _
+        "  file: [" & Mid$(b, IIf(i > 15, i - 15, 1), 40) & "]"
+    s = Replace$(s, vbLf, "\n")
+    s = Replace$(s, vbTab, "\t")
+    DiffSnippet = s
+End Function
+
 ' Kopiraj SAMO kod fajlove (isti filter kao DownloadReleaseFiles) iz lokalnog
 ' foldera u tempDir. Vrati broj kopiranih. Izvor se NE dira (samo citanje).
 Private Function CopyCodeFilesDev(ByVal srcFolder As String, ByVal tempDir As String) As Long
