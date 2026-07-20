@@ -199,6 +199,11 @@ Private Sub RunSelfUpdateCore(ByVal tempDir As String, ByVal n As Long)
         SaveSetting "AgriXSelfUpdate", sec, "dir", tempDir
         SaveSetting "AgriXSelfUpdate", sec, "files", files
         SaveSetting "AgriXSelfUpdate", sec, "n", CStr(n)
+        ' Integritet handoff-a faza1->faza2: tacan broj tvrdih modula + hash liste.
+        ' Faza 2 MORA da ih potvrdi - inace parcijalno izgubljen/pokvaren registry state
+        ' (npr. filesCsv ostane sa manje tokena) ne bi bio uhvacen samo brojanjem.
+        SaveSetting "AgriXSelfUpdate", sec, "expected", CStr(failed.count)
+        SaveSetting "AgriXSelfUpdate", sec, "fhash", Sha256Hex(files)
         SaveSetting "AgriXSelfUpdate", sec, "pending", "1"   ' watchdog marker
         ' Workbook-qualified (dve otvorene kopije -> pravi workbook hvata proc)
         Application.OnTime Now + TimeSerial(0, 0, 2), QualifiedProc("RunSelfUpdatePhase2")
@@ -234,6 +239,9 @@ Public Sub RunSelfUpdatePhase2()
     Dim p2dir As String: p2dir = GetSetting("AgriXSelfUpdate", sec, "dir", "")
     Dim filesCsv As String: filesCsv = GetSetting("AgriXSelfUpdate", sec, "files", "")
     Dim nTxt As String: nTxt = GetSetting("AgriXSelfUpdate", sec, "n", "?")
+    Dim savedExpected As Long: savedExpected = CLng("0" & GetSetting("AgriXSelfUpdate", sec, "expected", "0"))
+    Dim savedHash As String: savedHash = GetSetting("AgriXSelfUpdate", sec, "fhash", "")
+    Dim pendingMark As String: pendingMark = GetSetting("AgriXSelfUpdate", sec, "pending", "")
     ' NB: marker se NE brise ovde na pocetku - brise se tek na uspeh ILI kontrolisan
     ' fatalni izlaz, da crash USRED importa ostavi trag za RecoverPendingSelfUpdate.
     If Len(p2dir) = 0 Then
@@ -285,13 +293,23 @@ Public Sub RunSelfUpdatePhase2()
         End If
     Next i
 
-    ' Faza 2 se zakazuje SAMO kad ima tvrdih modula (failed.count>0 -> filesCsv nije
-    ' prazan -> expected>0). expected=0 ovde = izgubljen/pokvaren registry state POSLE
-    ' faze-1 Remove-ova -> fatalno (inace bi "imported<>expected" bilo 0<>0=False pa bi
-    ' se snimio build BEZ uklonjenih tvrdih modula).
-    If expected = 0 Then
+    ' INTEGRITET faze 2 (fail-closed). Faza 2 se zakazuje SAMO kad ima tvrdih modula,
+    ' pa svaki uslov koji NE prolazi = izgubljen/pokvaren registry state POSLE faze-1
+    ' Remove-ova -> fatalno (inace bi se mogao snimiti build BEZ uklonjenih modula;
+    ' npr. filesCsv skracen za jedan token: "imported<>expected" bi bilo 2<>2=False):
+    '   pending="1" (faza 1 postavila); savedExpected>0; prebrojan expected=savedExpected
+    '   (lista nije skracena); Sha256Hex(filesCsv)=savedHash (lista nije izmenjena;
+    '   ako hash nedostupan na masini, obe strane "" -> taj deo se preskace).
+    Dim badState As String
+    If pendingMark <> "1" Then badState = "pending != 1"
+    If Len(badState) = 0 And savedExpected <= 0 Then badState = "savedExpected<=0"
+    If Len(badState) = 0 And expected <> savedExpected Then badState = "expected " & expected & " != saved " & savedExpected
+    If Len(badState) = 0 And Len(savedHash) > 0 Then
+        If StrComp(Sha256Hex(filesCsv), savedHash, vbTextCompare) <> 0 Then badState = "hash liste ne odgovara (filesCsv izmenjen)"
+    End If
+    If Len(badState) > 0 Then
         DeleteSetting "AgriXSelfUpdate", sec
-        AbortSelfUpdate "2. faza: nema modula za uvoz (izgubljen state) - radna verzija ocuvana."
+        AbortSelfUpdate "2. faza: integritet state-a pao (" & badState & ") - radna verzija ocuvana."
         Exit Sub
     End If
 
@@ -535,18 +553,26 @@ Private Function DownloadReleaseFiles(ByVal tempDir As String, ByRef expectedOut
     ' F2: odredi IZVOR (versioned preko current.json + provera manifest_sha256,
     ' inace flat/legacy fallback). manifest_sha256 nesklad = fail-closed -> False
     ' -> expected ostaje 0 -> pozivalac javi prekid (nista se ne skida).
-    Dim srcFolder As String, manifestText As String
-    If Not ResolveReleaseSource(tempDir, srcFolder, manifestText, note) Then Exit Function
+    Dim srcFolder As String, manifestText As String, isVersioned As Boolean
+    If Not ResolveReleaseSource(tempDir, srcFolder, manifestText, note, isVersioned) Then Exit Function
 
     Dim dict As Object: Set dict = DriveListFolder(srcFolder)
     If dict Is Nothing Then Exit Function
 
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
-    Dim files As Object: Set files = ParseManifestFiles(manifestText)
+    Dim hadFilesKey As Boolean
+    Dim files As Object: Set files = ParseManifestFiles(manifestText, hadFilesKey)
     Dim n As Long, expected As Long
 
     If files.count = 0 Then
-        ' LEGACY (stari publisher bez files[]) -> listing-driven, bez hash provere.
+        ' TRI-STATE: prazna kolekcija je LEGACY samo za flat kanal BEZ "files" kljuca.
+        ' Versioned kanal ILI prisutan-ali-prazan/nevalidan "files" = INVALID -> prekid
+        ' (NE padaj na listing bez verifikacije; expected ostaje 0 -> pozivalac javi).
+        If isVersioned Or hadFilesKey Then
+            AppendNote note, "manifest INVALID (" & IIf(isVersioned, "versioned bez validnog files[]", "files[] prisutan ali prazan") & ") - prekid"
+            Exit Function
+        End If
+        ' LEGACY (stari flat publisher bez files[]) -> listing-driven, bez hash provere.
         AppendNote note, "legacy manifest (bez files[]) - bez SHA verifikacije"
         Dim k As Variant, ext As String
         For Each k In dict.Keys
@@ -616,7 +642,8 @@ End Function
 '   folder = REL_FOLDER_ID, manifest = version.json (kao pre F2).
 ' True + folderOut + manifestOut (+ note). False = fatalno; note = razlog.
 Private Function ResolveReleaseSource(ByVal tempDir As String, ByRef folderOut As String, _
-                                      ByRef manifestOut As String, ByRef note As String) As Boolean
+                                      ByRef manifestOut As String, ByRef note As String, _
+                                      ByRef isVersioned As Boolean) As Boolean
     Const SRC As String = "modSelfUpdate.ResolveReleaseSource"
     On Error GoTo EH
 
@@ -628,6 +655,7 @@ Private Function ResolveReleaseSource(ByVal tempDir As String, ByRef folderOut A
         ' FLAT/legacy fallback - nema versioned layout-a.
         folderOut = REL_FOLDER_ID
         manifestOut = DownloadNamedText(REL_FOLDER_ID, MANIFEST_NAME)
+        isVersioned = False
         ResolveReleaseSource = True
         Exit Function
     End If
@@ -645,22 +673,27 @@ Private Function ResolveReleaseSource(ByVal tempDir As String, ByRef folderOut A
         Exit Function
     End If
 
-    Dim wantSha As String: wantSha = Trim$(ExtractJsonStringGoogle(cur, "manifest_sha256"))
-    If Len(wantSha) > 0 Then
-        If Sha256Available(tempDir) Then
-            If LCase$(Sha256File(mPath)) <> LCase$(wantSha) Then
-                note = "F2: manifest_sha256 NESKLAD - moguca korupcija/podvala (fail-closed)"
-                Exit Function
-            End If
-        Else
-            AppendNote note, "F2: SHA-256 nedostupan - manifest_sha256 nije proveren"
+    ' F2 versioned = manifest_sha256 OBAVEZAN i validan 64-hex (koren lanca). Prazan
+    ' ili malformiran = pokvaren/podmetnut current.json -> fatalno (ne degradiraj tiho).
+    Dim wantSha As String: wantSha = LCase$(Trim$(ExtractJsonStringGoogle(cur, "manifest_sha256")))
+    If Not IsSha256Hex(wantSha) Then
+        note = "F2: current.json bez validnog manifest_sha256 (64-hex) - prekid"
+        Exit Function
+    End If
+    If Sha256Available(tempDir) Then
+        If LCase$(Sha256File(mPath)) <> wantSha Then
+            note = "F2: manifest_sha256 NESKLAD - moguca korupcija/podvala (fail-closed)"
+            Exit Function
         End If
     Else
-        AppendNote note, "F2: current.json bez manifest_sha256 (manifest kriptografski nevezan)"
+        ' SHA nedostupan NA KLIJENTU (retko; kao PIN plaintext fallback) - manifest hes
+        ' se ne moze proveriti; nastavi uz upozorenje (update > max verifikacija).
+        AppendNote note, "F2: SHA-256 nedostupan na masini - manifest_sha256 nije proveren (degradirano)"
     End If
 
     folderOut = vfid
     manifestOut = ReadAllText(mPath)
+    isVersioned = True
     ResolveReleaseSource = True
     Exit Function
 EH:
@@ -674,17 +707,21 @@ Private Sub AppendNote(ByRef note As String, ByVal s As String)
     If Len(note) > 0 Then note = note & vbCrLf & s Else note = s
 End Sub
 
-' Parsiraj files[] iz manifesta -> Dictionary(ime -> sha256hex). Prazno ako nema
-' files[] (stari publisher). size se ne parsira (broj; sha256 subsumira duzinu).
-' Reuse ExtractJsonStringGoogle + split-po-"}" (isti obrazac kao DriveListFolder).
-Private Function ParseManifestFiles(ByVal json As String) As Object
+' Parsiraj files[] iz manifesta -> Dictionary(ime -> sha256hex). hadFilesKey = da li
+' JSON uopste ima "files" kljuc: razlikuje LEGACY (nema kljuca) od INVALID (kljuc
+' prisutan ali 0 entry-ja) - pozivalac to razdvaja (legacy listing SME samo bez
+' kljuca). size se ne parsira (broj; sha256 subsumira duzinu). Reuse
+' ExtractJsonStringGoogle + split-po-"}" (isti obrazac kao DriveListFolder).
+Private Function ParseManifestFiles(ByVal json As String, ByRef hadFilesKey As Boolean) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     d.CompareMode = 1                    ' TextCompare
     Set ParseManifestFiles = d
+    hadFilesKey = False
     If Len(json) = 0 Then Exit Function
 
     Dim p As Long: p = InStr(1, json, """files""", vbTextCompare)
-    If p = 0 Then Exit Function           ' nema files[] -> legacy
+    If p = 0 Then Exit Function           ' nema "files" kljuca -> (moguce) legacy
+    hadFilesKey = True                    ' "files" kljuc prisutan -> prazna kolekcija = INVALID
 
     Dim parts() As String, i As Long, nm As String, sh As String
     parts = Split(Mid$(json, p), "}")

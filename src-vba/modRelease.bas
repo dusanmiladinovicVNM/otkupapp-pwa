@@ -17,6 +17,12 @@ Option Explicit
 ' Izvorni folder = isti src-vba put kao modVbaTools.ImportAllVBA. IZMENI po masini.
 Private Const SRC_FOLDER As String = "C:\Users\Dusan\Documents\GitHub\otkupapp-pwa\src-vba\"
 
+' Immutability granica: re-objava vec objavljene verzije (releases\<v> ima manifest.json)
+' je ODBIJENA (klijent koji tu APP_VERSION vec ima NECE povuci izmenjene bajtove; snapshot
+' bi bio prepisan). Za NAMERNU re-objavu - iskljucivo TEST kanal / hitna zamena pokvarenog
+' release-a - privremeno postavi True (kao REL_FOLDER_ID=TEST; NE commit-uj True).
+Private Const ALLOW_REPUBLISH As Boolean = False
+
 Public Sub PublishReleaseToDrive()
     Const SRC As String = "modRelease.PublishReleaseToDrive"
     On Error GoTo EH
@@ -43,17 +49,22 @@ Public Sub PublishReleaseToDrive()
         Exit Sub
     End If
 
-    ' Immutability upozorenje: ako versioned folder VEC ima manifest.json, ovo je
-    ' re-objava POTPUNE iste verzije -> prepisuje snapshot, a klijenti koji tu
-    ' APP_VERSION vec imaju NECE povuci izmenjene bajtove. (Retry NEUSPELE objave je
-    ' bezbedan: manifest.json se pise tek na kraju, pa ga tada jos nema -> bez pitanja.)
+    ' Immutability: ako versioned folder VEC ima manifest.json, verzija je POTPUNO
+    ' objavljena. Re-objava = HARD ODBIJENA (prepisala bi snapshot; klijent koji tu
+    ' APP_VERSION vec ima NECE povuci izmenjene bajtove). Za namernu re-objavu (TEST /
+    ' hitna zamena) -> ALLOW_REPUBLISH=True. (Retry NEUSPELE objave je bezbedan i BEZ
+    ' toga: manifest.json se pise tek na kraju, pa ga posle pada jos nema.)
     If Len(DriveFindInFolder(vfid, "manifest.json")) > 0 Then
-        If MsgBox("Verzija " & APP_VERSION & " je VEC objavljena (releases\" & APP_VERSION & _
-                  " ima manifest.json)." & vbCrLf & _
-                  "Re-objava PREPISUJE postojeci snapshot; klijenti koji tu verziju vec imaju " & _
-                  "NECE povuci izmenjene bajtove (ista APP_VERSION)." & vbCrLf & vbCrLf & _
-                  "Preporuka: bump-uj APP_VERSION. Nastaviti ipak?", _
-                  vbYesNo + vbExclamation, APP_NAME) <> vbYes Then Exit Sub
+        If Not ALLOW_REPUBLISH Then
+            MsgBox "Verzija " & APP_VERSION & " je VEC objavljena (releases\" & APP_VERSION & _
+                   " ima manifest.json). Re-objava je ODBIJENA (immutable snapshot)." & vbCrLf & vbCrLf & _
+                   "Klijent koji tu APP_VERSION vec ima NECE povuci izmenjene bajtove." & vbCrLf & _
+                   "Za NOV release: bump APP_VERSION u modConfig." & vbCrLf & _
+                   "Za NAMERNU re-objavu (TEST kanal / hitna zamena): ALLOW_REPUBLISH=True u modRelease.", _
+                   vbCritical, APP_NAME
+            Exit Sub
+        End If
+        LogErr SRC, "REPUBLISH verzije " & APP_VERSION & " (ALLOW_REPUBLISH=True) - snapshot se prepisuje"
     End If
 
     ' 1) Upload svih code fajlova u OBA kanala (flat REL_FOLDER_ID = stari klijenti;
@@ -140,7 +151,10 @@ Public Sub PublishReleaseToDrive()
     '    Pise se SAMO ako je versioned manifest.json uspesno objavljen (inace bi
     '    pokazivao na folder bez validnog manifesta -> klijent fail-closed).
     Dim okCur As Boolean, curJson As String, tmpCur As String
-    If okVMan Then
+    ' current.json se pise SAMO ako je versioned manifest OK I manifest_sha256 validan
+    ' 64-hex (Sha256File vrati "" na neuspeh). Bez validnog hesa nema versioned lanca
+    ' poverenja -> ne objavljuj pokazivac (klijent tada koristi flat; okCur=False).
+    If okVMan And Len(manSha) = 64 Then
         curJson = "{""app_version"":""" & APP_VERSION & """," & _
                   """release_folder_id"":""" & vfid & """," & _
                   """manifest_sha256"":""" & manSha & """," & _
@@ -164,7 +178,7 @@ Public Sub PublishReleaseToDrive()
            "  manifest.json: " & IIf(okVMan, "OK", "GRESKA") & vbCrLf & _
            "  version.json:  " & IIf(okMan, "OK", "GRESKA") & vbCrLf & _
            "  current.json:  " & IIf(okCur, "OK", "GRESKA") & _
-               IIf(okCur And Len(manSha) <> 64, " (PAZNJA: manifest_sha256 nije 64hex - slab lanac!)", "") & vbCrLf & vbCrLf & _
+               IIf(Not okCur And okVMan And Len(manSha) <> 64, " (manifest_sha256 nije 64-hex -> pokazivac PRESKOCEN)", "") & vbCrLf & vbCrLf & _
            IIf(okVMan And okMan And okCur, "Sve OK.", "PAZNJA: neki manifest/pokazivac NIJE objavljen!"), _
            IIf(okVMan And okMan And okCur, vbInformation, vbExclamation), APP_NAME
     Exit Sub
